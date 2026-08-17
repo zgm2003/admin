@@ -10,6 +10,10 @@ router -> middleware -> handler -> service -> repository -> model -> PostgreSQL
 
 首期由 Vue Admin、Go API、Go Worker、PostgreSQL、Redis 和 Asynq 组成。项目不使用 Docker；Git 仓库按基础质量加固计划初始化和绑定远程，但不会自动提交或推送。
 
+## AI 施工规范
+
+AI 和开发者共同遵守根 [`AGENTS.md`](AGENTS.md) 的硬规则。完整任务路由、线性架构、TypeScript 类型、数据库、错误和交接规范见 [`docs/agent/README.md`](docs/agent/README.md)。小型局部任务按需读取相关内容，不要求全量阅读历史 spec 和 plan。
+
 ## 本机前提
 
 - Go 1.26
