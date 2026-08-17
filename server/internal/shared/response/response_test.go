@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"admin/server/internal/shared/apperror"
@@ -53,6 +54,16 @@ func TestFailDoesNotExposeUnknownErrors(t *testing.T) {
 		"data":    nil,
 		"message": "服务内部错误",
 	})
+	var appErr *apperror.Error
+	if len(context.Errors) != 1 || !errors.As(context.Errors.Last().Err, &appErr) {
+		t.Fatalf("context errors = %#v, want one apperror.Error", context.Errors)
+	}
+	if appErr.Cause == nil || appErr.Cause.Error() != "database password leaked" {
+		t.Fatalf("cause = %v, want original internal cause", appErr.Cause)
+	}
+	if strings.Contains(recorder.Body.String(), "database password leaked") {
+		t.Fatal("response leaked internal cause")
+	}
 }
 
 func assertJSON(t *testing.T, recorder *httptest.ResponseRecorder, status int, want map[string]any) {

@@ -13,15 +13,29 @@ export class ProtocolError extends Error {
 
 export class ApiError extends Error {
   readonly code: number
+  readonly httpStatus?: number
 
-  constructor(code: number, message: string) {
+  constructor(code: number, message: string, httpStatus?: number) {
     super(message)
     this.name = 'ApiError'
     this.code = code
+    this.httpStatus = httpStatus
   }
 }
 
 export function unwrapEnvelope<T>(value: unknown): T {
+	return unwrapSuccessEnvelope<T>(value)
+}
+
+function unwrapSuccessEnvelope<T>(value: unknown): T {
+	const envelope = parseEnvelope(value)
+	if (envelope.code !== 0) {
+		throw new ApiError(envelope.code, envelope.message)
+	}
+	return envelope.data as T
+}
+
+function parseEnvelope(value: unknown): ApiResponse<unknown> {
   if (!isRecord(value)) {
     throw new ProtocolError('API response must be an object')
   }
@@ -34,11 +48,7 @@ export function unwrapEnvelope<T>(value: unknown): T {
     throw new ProtocolError('API response code or message has an invalid type')
   }
 
-  const envelope = value as unknown as ApiResponse<T>
-  if (envelope.code !== 0) {
-    throw new ApiError(envelope.code, envelope.message)
-  }
-  return envelope.data
+  return value as unknown as ApiResponse<unknown>
 }
 
 export function createRequestClient(baseURL: string): AxiosInstance {
@@ -47,10 +57,23 @@ export function createRequestClient(baseURL: string): AxiosInstance {
   }
 
   const client = axios.create({ baseURL, withCredentials: true })
-  client.interceptors.response.use((response) => {
-    response.data = unwrapEnvelope(response.data)
-    return response
-  })
+  client.interceptors.response.use(
+    (response) => {
+      response.data = unwrapSuccessEnvelope(response.data)
+      return response
+    },
+    (error: unknown) => {
+      if (!axios.isAxiosError(error) || !error.response) {
+        return Promise.reject(error)
+      }
+
+      const envelope = parseEnvelope(error.response.data)
+      if (envelope.code === 0) {
+        return Promise.reject(new ProtocolError('HTTP error response must use a non-zero business code'))
+      }
+      return Promise.reject(new ApiError(envelope.code, envelope.message, error.response.status))
+    },
+  )
   return client
 }
 
@@ -64,4 +87,3 @@ export async function request<T>(config: AxiosRequestConfig): Promise<T> {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
-

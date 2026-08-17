@@ -22,6 +22,7 @@ func Fail(context *gin.Context, err error) {
 	if !errors.As(err, &appErr) {
 		appErr = apperror.Internal(err)
 	}
+	_ = context.Error(appErr)
 
 	context.AbortWithStatusJSON(appErr.HTTPStatus, Envelope[any]{
 		Code:    appErr.Code,

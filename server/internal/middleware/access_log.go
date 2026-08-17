@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"errors"
 	"log/slog"
 	"time"
 
+	"admin/server/internal/shared/apperror"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,14 +18,23 @@ func AccessLog(logger *slog.Logger) gin.HandlerFunc {
 		if route == "" {
 			route = "unmatched"
 		}
-		logger.InfoContext(
-			context.Request.Context(),
-			"http request",
+
+		attributes := []any{
 			"requestId", GetRequestID(context),
 			"method", context.Request.Method,
 			"route", route,
 			"status", context.Writer.Status(),
-			"latencyMs", float64(time.Since(started).Microseconds())/1000,
-		)
+			"latencyMs", float64(time.Since(started).Microseconds()) / 1000,
+		}
+		if lastError := context.Errors.Last(); lastError != nil {
+			var appErr *apperror.Error
+			if errors.As(lastError.Err, &appErr) {
+				attributes = append(attributes, "errorCode", appErr.Code)
+				if (appErr.HTTPStatus >= 500 || appErr.Code == apperror.CodeDependencyUnavailable) && appErr.Cause != nil {
+					attributes = append(attributes, "error", appErr.Cause)
+				}
+			}
+		}
+		logger.InfoContext(context.Request.Context(), "http request", attributes...)
 	}
 }

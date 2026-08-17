@@ -12,6 +12,7 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/module/taskdemo"
 	"admin/server/internal/queue"
+	projectredis "admin/server/internal/redis"
 	"github.com/hibiken/asynq"
 	"github.com/joho/godotenv"
 )
@@ -40,6 +41,9 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer postgres.Close()
+	if err := checkWorkerRedis(processContext, settings.RedisURL); err != nil {
+		return err
+	}
 
 	repository := taskdemo.NewRepository(postgres.GORM)
 	service := taskdemo.NewService(repository, nil, logger)
@@ -54,5 +58,20 @@ func run(logger *slog.Logger) error {
 	}
 	<-processContext.Done()
 	server.Shutdown()
+	return nil
+}
+
+func checkRedis(ctx context.Context, redisURL string) error {
+	client, err := projectredis.Open(ctx, redisURL)
+	if err != nil {
+		return err
+	}
+	return client.Close()
+}
+
+func checkWorkerRedis(ctx context.Context, redisURL string) error {
+	if err := checkRedis(ctx, redisURL); err != nil {
+		return fmt.Errorf("check Worker Redis: %w", err)
+	}
 	return nil
 }

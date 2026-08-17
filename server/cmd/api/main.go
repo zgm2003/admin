@@ -111,7 +111,7 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 		projectmiddleware.RequestID(),
 		projectmiddleware.CORS(dependencies.CORSOrigin),
 		projectmiddleware.AccessLog(dependencies.Logger),
-		gin.Recovery(),
+		projectmiddleware.Recovery(dependencies.Logger),
 	)
 	health.RegisterRoutes(router, dependencies.Health)
 	taskdemo.RegisterRoutes(router.Group("/api/v1"), dependencies.Task)
