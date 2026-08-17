@@ -1,0 +1,12 @@
+.idea/
+.vscode/
+*.log
+*.exe
+*.out
+.env
+server/bin/
+server/tmp/
+web/node_modules/
+web/dist/
+web/coverage/
+

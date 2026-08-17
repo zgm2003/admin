@@ -1,0 +1,45 @@
+<h2>Admin 推荐架构</h2>
+<p class="subtitle">独立单体 · 学习友好 · Vue 3 + Go + PostgreSQL</p>
+
+<div class="mockup">
+  <div class="mockup-header">方案 A：成熟前端壳 + 自己掌控的轻量 Go 后端</div>
+  <div class="mockup-body">
+    <div class="split">
+      <div class="section">
+        <div class="label">Frontend</div>
+        <h3>v3-admin-vite</h3>
+        <p>Vue 3 · TypeScript · Element Plus</p>
+        <p>Router · Pinia · Axios · Vitest</p>
+      </div>
+      <div class="section">
+        <div class="label">Backend</div>
+        <h3>Go 模块化单体</h3>
+        <p>net/http + chi · slog</p>
+        <p>Handler → Service → Store</p>
+      </div>
+    </div>
+
+    <div class="section" style="text-align:center;padding:18px;border-top:1px solid #d9dee8;border-bottom:1px solid #d9dee8">
+      <strong>页面 → /api → 会话鉴权 → 权限检查 → 业务服务 → SQL → PostgreSQL</strong>
+    </div>
+
+    <div class="split">
+      <div class="section">
+        <div class="label">Modules</div>
+        <p>用户 · 角色 · 菜单 · 操作日志</p>
+        <p>设备 · 产品/物模型 · 质检任务 · 告警 · 版本发布</p>
+      </div>
+      <div class="section">
+        <div class="label">Data</div>
+        <h3>PostgreSQL</h3>
+        <p>pgx · sqlc · goose migrations</p>
+        <p>不引入 Redis、GORM、Casbin</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>主要收益</h4><ul><li>亲手理解 Go 请求生命周期</li><li>显式 SQL、事务与错误处理</li><li>模块边界清楚，容易测试</li><li>前端基础设施开箱即用</li></ul></div>
+  <div class="cons"><h4>刻意舍弃</h4><ul><li>微服务与消息队列</li><li>魔法式 ORM 与代码生成 CRUD</li><li>租户、工作流、组织架构</li><li>无实际需求的通用平台能力</li></ul></div>
+</div>
