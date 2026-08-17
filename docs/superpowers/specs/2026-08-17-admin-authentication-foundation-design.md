@@ -23,6 +23,7 @@
 - 一期 UI 只要求清楚、可用和响应式，不做品牌化精修。
 - PostgreSQL 保存会话真相，Redis 保存当前单会话指针，不使用内存状态兜底。
 - Access Token 使用短有效期 JWT，Refresh Token 使用 HttpOnly Cookie，并在每次刷新时轮换。
+- 后端只配置一个 `APP_SECRET` 根密钥；各密码学用途在进程内使用 HKDF 派生独立子密钥，不直接复用根密钥。
 
 ## 3. 一期范围
 
@@ -236,6 +237,7 @@ Service 不接收 `*gin.Context`。所有 I/O 使用请求或命令入口传入�
 - 不要求人为组合大写、小写、数字和特殊字符；
 - 使用 `bcrypt.DefaultCost`；
 - 不保存明文、独立盐值、确认密码或可逆密文；
+- bcrypt 是带随机盐的单向摘要，不使用 `APP_SECRET`，也不存在可用于解密用户密码的密钥；
 - 不记录密码、密码摘要或请求体；
 - 登录的用户名不存在和密码错误返回同一个公开错误。
 
@@ -243,6 +245,7 @@ Service 不接收 `*gin.Context`。所有 I/O 使用请求或命令入口传入�
 
 - 使用 `github.com/golang-jwt/jwt/v5` 和 HS256；
 - 有效期固定为 15 分钟；
+- HS256 签名密钥由 `APP_SECRET` 使用 HKDF-SHA-256 和固定用途标签 `admin:auth:jwt-signing:v1` 派生，不直接使用根密钥；
 - 只包含 issuer、user ID、session ID、session version、issued-at、not-before 和 expiry；
 - 不包含用户名、邮箱、角色、菜单和按钮权限；
 - 前端只在 Pinia 内存保存，不写入 localStorage、sessionStorage、IndexedDB 或普通 Cookie。
@@ -250,7 +253,7 @@ Service 不接收 `*gin.Context`。所有 I/O 使用请求或命令入口传入�
 ### 7.3 Refresh Token
 
 - 使用 `crypto/rand` 生成至少 32 字节随机值；
-- 数据库只保存使用独立 pepper 计算的 HMAC-SHA-256 摘要；
+- 数据库只保存 HMAC-SHA-256 摘要；HMAC 密钥由 `APP_SECRET` 使用 HKDF-SHA-256 和固定用途标签 `admin:auth:refresh-token-hmac:v1` 派生；
 - 有效期固定为 14 天，轮换不延长最初的绝对过期时间；
 - 每次刷新生成新 Token、替换摘要并递增 session version；
 - Repository 使用旧摘要作为条件更新，同一个旧 Token 并发使用时只能有一个请求成功；
@@ -271,15 +274,18 @@ Cookie 同时写入与 `refresh_expires_at` 一致的 `Expires`。Refresh 轮换
 
 ## 8. 配置
 
-认证上线后，API 增加三个必填环境变量：
+认证上线后，API 增加以下两个必填环境变量，其中只有 `APP_SECRET` 是密码学密钥：
 
 ```text
-AUTH_JWT_SECRET       # 至少 32 字节的随机密钥
-AUTH_REFRESH_PEPPER  # 至少 32 字节，且不得与 JWT secret 相同
-AUTH_COOKIE_SECURE   # 0=本地 HTTP，1=HTTPS
+APP_SECRET           # 唯一根密钥，至少 64 个随机 ASCII 字符
+AUTH_COOKIE_SECURE   # 0=本地 HTTP，1=HTTPS；不是密钥
 ```
 
-三个变量必须加入 `server/.env.example` 的中文说明。本地 `.env` 不提交 Git。缺失、长度不足、两项 secret 相同或 Secure 值不是 0/1 时，API 启动失败。`CORS_ORIGIN` 使用 HTTPS 时 Secure 必须为 1；使用本地 HTTP 时 Secure 必须为 0，配置不一致时启动失败。
+两个变量必须加入 `server/.env.example` 的中文说明。本地 `.env` 不提交 Git。`APP_SECRET` 缺失、少于 64 个 ASCII 字符或仍是示例占位值时，API 启动失败；`AUTH_COOKIE_SECURE` 缺失或不是 0/1 时同样启动失败。`CORS_ORIGIN` 使用 HTTPS 时 Secure 必须为 1；使用本地 HTTP 时 Secure 必须为 0，配置不一致时启动失败。
+
+`APP_SECRET` 只作为 HKDF 输入，不直接交给 JWT、HMAC 或可逆加密算法。第一期只派生当前使用的 JWT 签名密钥和 Refresh Token HMAC 密钥。未来保存 COS、邮件、支付等第三方凭据时，再为实际功能增加固定用途标签 `admin:credential-encryption:v1`，派生 AES-256-GCM 密钥；每条密文使用独立随机 nonce，并保存密文格式版本。不得让业务模块自行发明用途标签，也不得用 JWT 子密钥加密第三方凭据。
+
+第一期不增加 `APP_SECRET_PREVIOUS` 或密钥管理系统。`APP_SECRET` 必须在所有 API 实例中保持一致并由部署方安全备份；更换它会立即使现有 JWT、Refresh Token 失效，未来存在可逆业务密文后还会导致旧密文无法解密。届时必须通过独立的密钥轮换 spec 设计双密钥过渡和重加密，不能直接覆盖线上值。
 
 Access 与 Refresh TTL 在第一期使用代码常量，不创建动态认证平台表或设置页面。
 
@@ -592,6 +598,7 @@ Store 保存 Access Token、过期时间和当前用户 DTO。Store 只提供明
 - Role Repository：幂等初始化、缺失默认角色、多个默认角色和禁用角色明确失败；
 - Session Repository：单会话约束、旧会话撤销、版本条件更新、Refresh 摘要只能轮换一次；
 - Auth Service：注册、bcrypt、错误凭据统一、禁用/删除用户、第二次登录顶号、刷新、退出和依赖失败；
+- Secret Key：根密钥校验、相同根密钥稳定派生、不同用途子密钥严格分离；
 - Middleware：JWT 算法、签名、时间、session ID、version、Redis pointer 和 PostgreSQL 状态；
 - Handler：严格 JSON、空 body、Origin、Cookie 属性、HTTP 状态和精确 envelope；
 - Bootstrap：成功创建、已有管理员、冲突和事务失败；
@@ -648,7 +655,7 @@ pnpm build
 
 技术债不通过预留数据库字段、空接口、TODO 分支、兼容响应或假数据解决。到达回收节点时创建对应 spec、明确模型变更并删除临时代码。
 
-以下事项不允许作为技术债延期：密码摘要、Token 轮换、Cookie 安全属性、Origin 校验、会话撤销、数据库约束、精确错误、TypeScript 类型安全和两套布局入口清理。
+以下事项不允许作为技术债延期：密码摘要、根密钥用途分离、Token 轮换、Cookie 安全属性、Origin 校验、会话撤销、数据库约束、精确错误、TypeScript 类型安全和两套布局入口清理。
 
 ## 16. 后续顺序
 
