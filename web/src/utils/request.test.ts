@@ -1,5 +1,6 @@
 import { AxiosError, AxiosHeaders, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { ElNotification } from 'element-plus'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { pinia } from '../store'
 import { useAuthStore } from '../store/auth'
@@ -9,6 +10,14 @@ import {
   createRequestClient,
   unwrapEnvelope,
 } from './request'
+
+vi.mock('element-plus', () => ({
+  ElNotification: {
+    error: vi.fn(),
+  },
+}))
+
+const notifyErrorMock = vi.mocked(ElNotification.error)
 
 describe('unwrapEnvelope', () => {
   it('returns data from the only accepted success shape', () => {
@@ -44,6 +53,7 @@ describe('unwrapEnvelope', () => {
 describe('createRequestClient', () => {
   beforeEach(() => {
     useAuthStore(pinia).$reset()
+    notifyErrorMock.mockReset()
   })
 
   it('requires an explicit API base URL', () => {
@@ -56,6 +66,7 @@ describe('createRequestClient', () => {
     const client = createRequestClient('http://localhost:16301')
 
     await expect(client.get('/health', { adapter })).rejects.toBe(networkError)
+    expect(notifyErrorMock).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -94,6 +105,54 @@ describe('createRequestClient', () => {
     const client = createRequestClient('http://localhost:16301')
 
     await expect(client.get('/ready', { adapter: failureAdapter(status, data) })).rejects.toBeInstanceOf(ProtocolError)
+  })
+
+  it('notifies when a successful HTTP response has a non-zero business code', async () => {
+    const client = createRequestClient('http://localhost:16301')
+    const adapter: AxiosAdapter = async (config) => successResponse(config, {
+      code: 10005,
+      data: null,
+      message: '用户名已存在',
+    })
+
+    await expect(client.post('/api/v1/auth/register', undefined, { adapter })).rejects.toMatchObject({ code: 10005 })
+    expect(notifyErrorMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: '请求失败',
+      message: '用户名已存在',
+      type: 'error',
+    }))
+  })
+
+  it.each([
+    { status: 401, code: 10002, message: '未登录或登录已失效' },
+    { status: 403, code: 10003, message: '没有访问权限' },
+  ])('notifies HTTP $status failures', async ({ status, code, message }) => {
+    const client = createRequestClient('http://localhost:16301')
+
+    await expect(client.post('/api/v1/auth/login', undefined, {
+      adapter: failureAdapter(status, { code, data: null, message }),
+    })).rejects.toMatchObject({ code, httpStatus: status })
+    expect(notifyErrorMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: '请求失败',
+      message,
+      type: 'error',
+    }))
+  })
+
+  it('does not notify an intermediate 401 that is recovered by Refresh', async () => {
+    let refreshed = false
+    const adapter: AxiosAdapter = async (config) => {
+      if (config.url === '/api/v1/auth/refresh') {
+        refreshed = true
+        return successResponse(config, { code: 0, data: { accessToken: 'new-token', expiresIn: 900 }, message: 'ok' })
+      }
+      if (!refreshed) throw apiFailure(config, 401, 10002, '未登录或登录已失效')
+      return successResponse(config, { code: 0, data: { ok: true }, message: 'ok' })
+    }
+    const client = createRequestClient('http://localhost:16301', adapter)
+
+    await client.get('/api/v1/protected')
+    expect(notifyErrorMock).not.toHaveBeenCalled()
   })
 
   it('adds the in-memory bearer token to protected requests', async () => {
@@ -176,6 +235,7 @@ describe('createRequestClient', () => {
     await expect(client.get('/api/v1/protected')).rejects.toMatchObject({ code: 10002 })
     expect(store.status).toBe('anonymous')
     expect(store.accessToken).toBe('')
+    expect(notifyErrorMock).toHaveBeenCalledTimes(1)
   })
 
   it.each([
@@ -199,6 +259,7 @@ describe('createRequestClient', () => {
     await expect(client.get('/api/v1/protected')).rejects.toBeDefined()
     expect(store.status).toBe('error')
     expect(store.errorMessage).not.toBe('')
+    expect(notifyErrorMock).toHaveBeenCalledTimes(1)
   })
 })
 

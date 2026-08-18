@@ -5,6 +5,7 @@ import axios, {
   type AxiosRequestConfig,
   type InternalAxiosRequestConfig,
 } from 'axios'
+import { ElNotification } from 'element-plus'
 
 import { parseCredential, type AccessCredential } from '../api/auth.contract'
 import { pinia } from '../store'
@@ -93,18 +94,25 @@ function buildRequestClient(baseURL: string, adapter?: AxiosAdapter): RequestCli
 
   client.interceptors.response.use(
     (response) => {
-      response.data = unwrapSuccessEnvelope(response.data)
-      return response
+      try {
+        response.data = unwrapSuccessEnvelope(response.data)
+        return response
+      } catch (error: unknown) {
+        notifyRequestError(error)
+        return Promise.reject(error)
+      }
     },
     async (error: unknown) => {
       const normalizedError = normalizeResponseError(error)
       if (!axios.isAxiosError(error) || error.response?.status !== 401 || error.config === undefined) {
+        notifyRequestError(normalizedError)
         return Promise.reject(normalizedError)
       }
 
       const originalConfig = error.config as AuthRequestConfig
       const path = requestPath(originalConfig.url, baseURL)
       if (originalConfig.authRetried === true || noRefreshPaths.has(path)) {
+        notifyRequestError(normalizedError)
         return Promise.reject(normalizedError)
       }
 
@@ -131,6 +139,7 @@ async function performRefresh(rawClient: AxiosInstance, authStore: ReturnType<ty
     return credential
   } catch (error: unknown) {
     const normalizedError = normalizeResponseError(error)
+    notifyRequestError(normalizedError)
     if (normalizedError instanceof ApiError && normalizedError.httpStatus === 401) {
       authStore.setAnonymous()
     } else {
@@ -138,6 +147,17 @@ async function performRefresh(rawClient: AxiosInstance, authStore: ReturnType<ty
     }
     throw normalizedError
   }
+}
+
+function notifyRequestError(error: unknown): void {
+  if (!(error instanceof ApiError) && !(error instanceof ProtocolError)) {
+    return
+  }
+  ElNotification.error({
+    title: '请求失败',
+    message: error.message,
+    type: 'error',
+  })
 }
 
 function normalizeResponseError(error: unknown): unknown {
