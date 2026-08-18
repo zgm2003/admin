@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { Menu, SwitchButton, User } from '@element-plus/icons-vue'
+import { Menu, Moon, Sunny, SwitchButton, User } from '@element-plus/icons-vue'
+
+import type { ThemeMode } from '../../utils/theme'
 
 defineProps<{
+  theme: ThemeMode
   username: string
   logoutPending: boolean
 }>()
 
 defineEmits<{
   toggleMenu: []
+  toggleTheme: []
   logout: []
 }>()
 </script>
@@ -24,6 +28,18 @@ defineEmits<{
     />
 
     <span class="app-header__location">工作台</span>
+
+    <div class="app-header__actions">
+      <el-tooltip :content="theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'">
+        <el-button
+          data-testid="toggle-theme"
+          text
+          :icon="theme === 'dark' ? Sunny : Moon"
+          :aria-label="theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'"
+          @click="$emit('toggleTheme')"
+        />
+      </el-tooltip>
+    </div>
 
     <div class="app-header__account">
       <el-icon aria-hidden="true"><User /></el-icon>

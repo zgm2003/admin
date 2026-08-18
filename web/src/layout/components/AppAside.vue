@@ -15,7 +15,7 @@ defineProps<{
   >
     <div class="app-aside__brand" aria-label="Admin">
       <span class="app-aside__mark">A</span>
-      <span v-show="!collapsed" class="app-aside__name">ADMIN</span>
+      <span v-show="!collapsed" class="app-aside__name">Admin</span>
     </div>
 
     <el-menu

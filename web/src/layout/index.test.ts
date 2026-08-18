@@ -16,6 +16,9 @@ describe('admin layout', () => {
   beforeEach(() => {
     logoutMock.mockReset()
     logoutMock.mockResolvedValue()
+    localStorage.clear()
+    document.documentElement.classList.remove('dark')
+    document.documentElement.style.removeProperty('color-scheme')
     useAuthStore(pinia).$reset()
     useAuthStore(pinia).setCredential({ accessToken: 'jwt', expiresIn: 900 })
     useAuthStore(pinia).setAuthenticated({ userId: 1, username: 'admin', email: 'admin@example.com' })
@@ -38,6 +41,14 @@ describe('admin layout', () => {
     expect(wrapper.get('[data-testid="app-aside"]').attributes('data-collapsed')).toBe('false')
     await wrapper.get('[data-testid="toggle-menu"]').trigger('click')
     expect(wrapper.get('[data-testid="app-aside"]').attributes('data-collapsed')).toBe('true')
+  })
+
+  it('toggles the Element Plus dark theme from the Header', async () => {
+    const { wrapper } = await mountLayout()
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+    await wrapper.get('[data-testid="toggle-theme"]').trigger('click')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(localStorage.getItem('admin:theme')).toBe('dark')
   })
 
   it('opens a Drawer instead of collapsing on mobile', async () => {

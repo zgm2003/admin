@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { User } from '@element-plus/icons-vue'
+import { Lock, User } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -58,91 +58,357 @@ function safeRedirect(value: unknown): string {
 
 <template>
   <main class="auth-page">
-    <section class="auth-panel" aria-labelledby="login-title">
-      <div class="auth-signature" aria-hidden="true"></div>
-      <el-icon class="auth-icon"><User /></el-icon>
-      <h1 id="login-title">登录管理台</h1>
-      <p class="auth-caption">使用用户名继续</p>
+    <div class="auth-shell">
+      <section class="auth-brand" data-testid="login-brand" aria-label="Admin 管理系统">
+        <div class="auth-brand__identity">
+          <span class="auth-brand__mark" aria-hidden="true">A</span>
+          <span class="auth-brand__name">Admin</span>
+        </div>
 
-      <p v-if="bootstrapError" class="auth-error" data-testid="bootstrap-error">{{ bootstrapError }}</p>
-      <p v-if="submitError" class="auth-error" data-testid="login-error">{{ submitError }}</p>
+        <div class="auth-brand__message">
+          <p class="auth-brand__eyebrow">ADMIN CONSOLE</p>
+          <h1>让系统状态<br>清楚可见</h1>
+          <p>统一管理服务状态、任务与后续权限配置。</p>
+        </div>
 
-      <el-form ref="formReference" :model="form" :rules="rules" label-position="top" @submit.prevent="submit">
-        <el-form-item label="用户名" prop="username">
-          <el-input v-model="form.username" data-testid="login-username" autocomplete="username" />
-        </el-form-item>
-        <el-form-item label="密码" prop="password">
-          <el-input v-model="form.password" data-testid="login-password" type="password" autocomplete="current-password" show-password />
-        </el-form-item>
-        <el-button data-testid="login-submit" type="primary" native-type="submit" :loading="pending" :disabled="pending">
-          登录
-        </el-button>
-      </el-form>
+        <div class="auth-brand__trace" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </section>
 
-      <RouterLink class="auth-link" to="/register">注册新账号</RouterLink>
-    </section>
+      <div class="auth-form-area">
+        <section class="auth-panel" data-testid="login-panel" aria-labelledby="login-title">
+          <header class="auth-panel__header">
+            <el-icon class="auth-icon"><User /></el-icon>
+            <div>
+              <p class="auth-panel__eyebrow">账户登录</p>
+              <h2 id="login-title">欢迎回来</h2>
+            </div>
+          </header>
+          <p class="auth-caption">使用已授权的用户名和密码进入管理台。</p>
+
+          <p v-if="bootstrapError" class="auth-error" data-testid="bootstrap-error">{{ bootstrapError }}</p>
+          <p v-if="submitError" class="auth-error" data-testid="login-error">{{ submitError }}</p>
+
+          <el-form
+            ref="formReference"
+            class="auth-form"
+            :model="form"
+            :rules="rules"
+            label-position="top"
+            @submit.prevent="submit"
+          >
+            <el-form-item label="用户名" prop="username">
+              <el-input
+                v-model="form.username"
+                data-testid="login-username"
+                autocomplete="username"
+                placeholder="请输入用户名"
+                size="large"
+              >
+                <template #prefix><el-icon><User /></el-icon></template>
+              </el-input>
+            </el-form-item>
+            <el-form-item label="密码" prop="password">
+              <el-input
+                v-model="form.password"
+                data-testid="login-password"
+                type="password"
+                autocomplete="current-password"
+                placeholder="请输入密码"
+                size="large"
+                show-password
+              >
+                <template #prefix><el-icon><Lock /></el-icon></template>
+              </el-input>
+            </el-form-item>
+            <el-button
+              data-testid="login-submit"
+              class="auth-submit"
+              type="primary"
+              native-type="submit"
+              size="large"
+              :loading="pending"
+              :disabled="pending"
+            >
+              登录管理台
+            </el-button>
+          </el-form>
+
+          <p class="auth-access-note"><el-icon><Lock /></el-icon>仅限已授权账号访问</p>
+        </section>
+      </div>
+    </div>
   </main>
 </template>
 
 <style scoped>
 .auth-page {
-  display: grid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 100vh;
-  padding: 32px 20px;
+  min-height: 100dvh;
+  padding: 32px;
+  color: var(--el-text-color-primary);
+  background: var(--el-bg-color-page);
+}
+
+.auth-shell {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(420px, 0.78fr);
+  width: min(1080px, 100%);
+  min-height: 620px;
+  overflow: hidden;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 8px;
+  box-shadow: var(--el-box-shadow-lighter);
+}
+
+.auth-brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 48px;
+  overflow: hidden;
+  background: var(--el-fill-color-light);
+  border-right: 1px solid var(--el-border-color-light);
+}
+
+.auth-brand::after {
+  position: absolute;
+  right: 48px;
+  bottom: 48px;
+  width: 132px;
+  height: 132px;
+  content: '';
+  border: 1px solid var(--el-border-color);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+}
+
+.auth-brand__identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-brand__mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
   place-items: center;
-  background: #f4f6f7;
+  color: var(--el-color-white);
+  background: var(--el-color-primary);
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.auth-brand__name {
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.auth-brand__message {
+  margin: auto 0;
+  padding-bottom: 72px;
+}
+
+.auth-brand__eyebrow,
+.auth-panel__eyebrow {
+  margin: 0 0 12px;
+  color: var(--el-color-primary);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.auth-brand h1 {
+  margin: 0;
+  color: var(--el-text-color-primary);
+  font-size: 42px;
+  font-weight: 760;
+  line-height: 1.24;
+}
+
+.auth-brand__message > p:last-child {
+  max-width: 360px;
+  margin: 22px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.auth-brand__trace {
+  position: absolute;
+  right: 32px;
+  bottom: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-brand__trace::before {
+  position: absolute;
+  right: 10px;
+  left: 10px;
+  height: 1px;
+  content: '';
+  background: var(--el-border-color);
+}
+
+.auth-brand__trace span {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  background: var(--el-color-primary);
+  border: 2px solid var(--el-bg-color);
+  border-radius: 50%;
+}
+
+.auth-form-area {
+  display: flex;
+  align-items: center;
+  padding: 48px;
 }
 
 .auth-panel {
-  position: relative;
   width: min(380px, 100%);
-  padding: 32px 0;
+  margin: 0 auto;
 }
 
-.auth-signature {
-  width: 44px;
-  height: 3px;
-  margin-bottom: 28px;
-  background: #16756f;
+.auth-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
-.auth-icon {
-  color: #16756f;
+.auth-panel__header > .auth-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border-radius: 6px;
+  font-size: 20px;
+}
+
+.auth-panel__eyebrow {
+  margin-bottom: 4px;
+}
+
+.auth-panel h2 {
+  margin: 0;
   font-size: 24px;
-}
-
-h1 {
-  margin: 12px 0 0;
-  color: #18212a;
-  font-size: 24px;
-  font-weight: 700;
+  font-weight: 750;
 }
 
 .auth-caption {
-  margin: 8px 0 28px;
-  color: #71808d;
-  font-size: 14px;
+  margin: 16px 0 30px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
-.el-button {
+.auth-form :deep(.el-form-item) {
+  margin-bottom: 22px;
+}
+
+.auth-form :deep(.el-form-item__label) {
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.auth-form :deep(.el-input__wrapper) {
+  border-radius: 6px;
+}
+
+.auth-submit {
   width: 100%;
-  margin-top: 4px;
+  margin-top: 6px;
+  border-radius: 6px;
+  font-weight: 650;
 }
 
-.auth-link {
-  display: inline-block;
-  margin-top: 22px;
-  color: #16756f;
-  font-size: 14px;
-  text-decoration: none;
+.auth-access-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 24px 0 0;
+  gap: 6px;
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
 }
 
 .auth-error {
   margin: 0 0 16px;
   padding: 10px 12px;
-  color: #a92f2f;
-  background: #fff1f1;
-  border-left: 3px solid #c33c3c;
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+  border-left: 3px solid var(--el-color-danger);
+  border-radius: 4px;
   font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .auth-page {
+    align-items: stretch;
+    padding: 16px;
+  }
+
+  .auth-shell {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .auth-brand {
+    min-height: 84px;
+    padding: 22px 24px;
+    border-right: 0;
+    border-bottom: 1px solid var(--el-border-color-light);
+  }
+
+  .auth-brand__message,
+  .auth-brand__trace,
+  .auth-brand::after {
+    display: none;
+  }
+
+  .auth-form-area {
+    padding: 42px 24px;
+  }
+}
+
+@media (max-width: 420px) {
+  .auth-page {
+    padding: 0;
+  }
+
+  .auth-shell {
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .auth-form-area {
+    padding: 34px 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-page *,
+  .auth-page *::before,
+  .auth-page *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
 </style>

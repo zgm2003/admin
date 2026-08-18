@@ -20,10 +20,10 @@ describe('router', () => {
     getCurrentUserMock.mockReset()
   })
 
-  it('declares public auth routes and a protected dashboard', () => {
+  it('declares Login as public, removes Register, and protects Dashboard', () => {
     const router = createAppRouter(createMemoryHistory())
     expect(router.resolve('/login').meta.requiresAuth).toBe(false)
-    expect(router.resolve('/register').meta.requiresAuth).toBe(false)
+    expect(router.resolve('/register').matched).toHaveLength(0)
     expect(router.resolve('/dashboard').meta.requiresAuth).toBe(true)
   })
 

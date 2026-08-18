@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 
 import { logout } from '../api/auth'
 import { useAuthStore } from '../store/auth'
+import { readTheme, toggleTheme, type ThemeMode } from '../utils/theme'
 import AppAside from './components/AppAside.vue'
 import AppFooter from './components/AppFooter.vue'
 import AppHeader from './components/AppHeader.vue'
@@ -16,6 +17,7 @@ const collapsed = ref(false)
 const mobileMenuOpen = ref(false)
 const isMobile = ref(window.innerWidth <= mobileBreakpoint)
 const logoutPending = ref(false)
+const theme = ref<ThemeMode>(readTheme())
 
 const asideWidth = computed(() => collapsed.value ? '64px' : '224px')
 const username = computed(() => auth.user === null ? '' : auth.user.username)
@@ -31,6 +33,10 @@ function toggleMenu(): void {
     return
   }
   collapsed.value = !collapsed.value
+}
+
+function handleToggleTheme(): void {
+  theme.value = toggleTheme(theme.value)
 }
 
 async function handleLogout(): Promise<void> {
@@ -61,9 +67,11 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateViewport))
     <el-container class="admin-layout__workspace">
       <el-header class="admin-layout__header" height="56px">
         <AppHeader
+          :theme="theme"
           :username="username"
           :logout-pending="logoutPending"
           @toggle-menu="toggleMenu"
+          @toggle-theme="handleToggleTheme"
           @logout="handleLogout"
         />
       </el-header>

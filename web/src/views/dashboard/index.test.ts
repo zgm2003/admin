@@ -31,13 +31,23 @@ describe('Dashboard', () => {
 
     await flushPromises()
 
-    const topbar = wrapper.get('section.dashboard-toolbar')
-    expect(topbar.find('[data-testid="api-status"]').exists()).toBe(true)
-    expect(topbar.find('[data-testid="postgresql-status"]').exists()).toBe(true)
-    expect(topbar.find('[data-testid="redis-status"]').exists()).toBe(true)
+    const summary = wrapper.get('[data-testid="dashboard-summary"]')
+    expect(summary.find('[data-testid="api-status"]').exists()).toBe(true)
+    expect(summary.find('[data-testid="postgresql-status"]').exists()).toBe(true)
+    expect(summary.find('[data-testid="redis-status"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="api-status"]').text()).toContain('运行正常')
     expect(wrapper.get('[data-testid="postgresql-status"]').text()).toContain('运行正常')
     expect(wrapper.get('[data-testid="redis-status"]').text()).toContain('运行正常')
+  })
+
+  it('uses the three real dependency results as dashboard summaries', async () => {
+    const wrapper = mountDashboard()
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-testid$="-status"]')).toHaveLength(3)
+    expect(wrapper.get('[data-testid="dashboard-summary"]').text()).toContain('API')
+    expect(wrapper.get('[data-testid="dashboard-summary"]').text()).toContain('PostgreSQL')
+    expect(wrapper.get('[data-testid="dashboard-summary"]').text()).toContain('Redis')
   })
 
   it('shows an explicit readiness failure instead of fake healthy states', async () => {

@@ -12,7 +12,7 @@ export function installPermissionGuard(router: Router): void {
     }
     const auth = useAuthStore(pinia)
     if (!to.meta.requiresAuth) {
-      if (auth.status === 'authenticated' && (to.name === 'login' || to.name === 'register')) {
+      if (auth.status === 'authenticated' && to.name === 'login') {
         return { name: 'dashboard' }
       }
       return true

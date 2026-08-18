@@ -28,6 +28,20 @@ describe('Login page', () => {
     expect(loginMock).not.toHaveBeenCalled()
   })
 
+  it('does not expose a registration entry', async () => {
+    const { wrapper } = await mountLogin()
+    expect(wrapper.find('a[href="/register"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('注册新账号')
+  })
+
+  it('renders the product identity and the existing login form', async () => {
+    const { wrapper } = await mountLogin()
+    expect(wrapper.get('[data-testid="login-brand"]').text()).toContain('Admin')
+    expect(wrapper.find('[data-testid="login-panel"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-username"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-password"]').exists()).toBe(true)
+  })
+
   it('submits exact credentials, loads me, and follows a safe redirect', async () => {
     const order: string[] = []
     loginMock.mockImplementation(async () => {

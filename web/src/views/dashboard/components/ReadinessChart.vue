@@ -18,11 +18,17 @@ echarts.use([PieChart, TooltipComponent, CanvasRenderer])
 
 const chartElement = ref<HTMLDivElement>()
 let chart: ECharts | undefined
+let themeObserver: MutationObserver | undefined
 
-const colors: Record<StatusState, string> = {
-  checking: '#C97822',
-  up: '#16845B',
-  error: '#C33C3C',
+function themeColor(name: string, fallback: string): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return value === '' ? fallback : value
+}
+
+function statusColor(status: StatusState): string {
+  if (status === 'up') return themeColor('--el-color-success', '#67c23a')
+  if (status === 'error') return themeColor('--el-color-danger', '#f56c6c')
+  return themeColor('--el-color-warning', '#e6a23c')
 }
 
 function renderChart(): void {
@@ -39,17 +45,17 @@ function renderChart(): void {
         type: 'pie',
         radius: compact ? ['52%', '74%'] : ['58%', '82%'],
         avoidLabelOverlap: true,
-        itemStyle: { borderColor: '#ffffff', borderWidth: 3 },
+        itemStyle: { borderColor: themeColor('--el-bg-color', '#ffffff'), borderWidth: 3 },
         label: {
-          color: '#44515d',
+          color: themeColor('--el-text-color-regular', '#606266'),
           fontSize: 12,
           formatter: compact ? ({ name }: { name: string }) => (name === 'PostgreSQL' ? 'PG' : name) : undefined,
         },
         labelLine: compact ? { length: 8, length2: 4 } : undefined,
         data: [
-          { value: 1, name: 'API', itemStyle: { color: colors[props.api] } },
-          { value: 1, name: 'PostgreSQL', itemStyle: { color: colors[props.postgresql] } },
-          { value: 1, name: 'Redis', itemStyle: { color: colors[props.redis] } },
+          { value: 1, name: 'API', itemStyle: { color: statusColor(props.api) } },
+          { value: 1, name: 'PostgreSQL', itemStyle: { color: statusColor(props.postgresql) } },
+          { value: 1, name: 'Redis', itemStyle: { color: statusColor(props.redis) } },
         ],
       },
     ],
@@ -65,11 +71,14 @@ watch(() => [props.api, props.postgresql, props.redis], renderChart)
 
 onMounted(() => {
   renderChart()
+  themeObserver = new MutationObserver(renderChart)
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
   window.addEventListener('resize', resizeChart)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeChart)
+  themeObserver?.disconnect()
   chart?.dispose()
 })
 </script>

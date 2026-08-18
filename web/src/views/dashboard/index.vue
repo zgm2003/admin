@@ -89,43 +89,10 @@ onMounted(refreshHealth)
   <div class="dashboard-page">
     <section class="dashboard-toolbar" aria-labelledby="dashboard-title">
       <div class="dashboard-toolbar__title">
-        <el-icon><Monitor /></el-icon>
-        <h1 id="dashboard-title">运行概览</h1>
-      </div>
-
-      <div class="status-track" aria-label="实时状态" aria-live="polite">
-        <div
-          class="status-track__item"
-          :data-state="apiStatus"
-          :aria-label="`API：${statusText(apiStatus)}`"
-          data-testid="api-status"
-        >
-          <el-icon><component :is="statusIcon(apiStatus)" /></el-icon>
-          <span class="status-track__name">API</span>
-          <strong>{{ statusText(apiStatus) }}</strong>
-        </div>
-        <div
-          class="status-track__item"
-          :data-state="postgresqlStatus"
-          :aria-label="`PostgreSQL：${statusText(postgresqlStatus)}`"
-          data-testid="postgresql-status"
-        >
-          <el-icon><component :is="statusIcon(postgresqlStatus)" /></el-icon>
-          <span class="status-track__name">
-            <span class="status-track__label-full">PostgreSQL</span>
-            <span class="status-track__label-short" aria-hidden="true">PG</span>
-          </span>
-          <strong>{{ statusText(postgresqlStatus) }}</strong>
-        </div>
-        <div
-          class="status-track__item"
-          :data-state="redisStatus"
-          :aria-label="`Redis：${statusText(redisStatus)}`"
-          data-testid="redis-status"
-        >
-          <el-icon><component :is="statusIcon(redisStatus)" /></el-icon>
-          <span class="status-track__name">Redis</span>
-          <strong>{{ statusText(redisStatus) }}</strong>
+        <span class="dashboard-toolbar__icon"><el-icon><Monitor /></el-icon></span>
+        <div>
+          <span class="dashboard-toolbar__eyebrow">SYSTEM OVERVIEW</span>
+          <h1 id="dashboard-title">工作台</h1>
         </div>
       </div>
 
@@ -133,11 +100,12 @@ onMounted(refreshHealth)
         class="refresh-button"
         :loading="refreshing"
         :icon="Refresh"
-        circle
         title="刷新状态"
         aria-label="刷新状态"
         @click="refreshHealth"
-      />
+      >
+        刷新状态
+      </el-button>
     </section>
 
     <div class="admin-content">
@@ -146,6 +114,42 @@ onMounted(refreshHealth)
           {{ healthError }}
         </p>
 
+        <section class="status-track" data-testid="dashboard-summary" aria-label="实时状态" aria-live="polite">
+          <div
+            class="status-track__item"
+            :data-state="apiStatus"
+            :aria-label="`API：${statusText(apiStatus)}`"
+            data-testid="api-status"
+          >
+            <el-icon><component :is="statusIcon(apiStatus)" /></el-icon>
+            <span class="status-track__name">API</span>
+            <strong>{{ statusText(apiStatus) }}</strong>
+          </div>
+          <div
+            class="status-track__item"
+            :data-state="postgresqlStatus"
+            :aria-label="`PostgreSQL：${statusText(postgresqlStatus)}`"
+            data-testid="postgresql-status"
+          >
+            <el-icon><component :is="statusIcon(postgresqlStatus)" /></el-icon>
+            <span class="status-track__name">
+              <span class="status-track__label-full">PostgreSQL</span>
+              <span class="status-track__label-short" aria-hidden="true">PG</span>
+            </span>
+            <strong>{{ statusText(postgresqlStatus) }}</strong>
+          </div>
+          <div
+            class="status-track__item"
+            :data-state="redisStatus"
+            :aria-label="`Redis：${statusText(redisStatus)}`"
+            data-testid="redis-status"
+          >
+            <el-icon><component :is="statusIcon(redisStatus)" /></el-icon>
+            <span class="status-track__name">Redis</span>
+            <strong>{{ statusText(redisStatus) }}</strong>
+          </div>
+        </section>
+
         <div class="dashboard-grid">
           <section class="tool-panel readiness-panel">
             <header class="tool-panel__header">
@@ -153,7 +157,7 @@ onMounted(refreshHealth)
                 <span class="section-kicker">DEPENDENCIES</span>
                 <h2>依赖状态</h2>
               </div>
-              <span class="tool-panel__meta">LIVE</span>
+              <el-tag size="small" effect="plain" type="success">实时</el-tag>
             </header>
             <ReadinessChart
               :api="apiStatus"
@@ -168,7 +172,7 @@ onMounted(refreshHealth)
                 <span class="section-kicker">ASYNQ</span>
                 <h2>示例任务</h2>
               </div>
-              <span class="tool-panel__meta">BEST EFFORT</span>
+              <el-tag size="small" effect="plain">异步</el-tag>
             </header>
 
             <form class="task-form" @submit.prevent="submitTask">
