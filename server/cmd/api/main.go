@@ -14,14 +14,17 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	projectmiddleware "admin/server/internal/middleware"
+	"admin/server/internal/module/access"
 	"admin/server/internal/module/auth"
 	"admin/server/internal/module/health"
+	"admin/server/internal/module/menu"
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/taskdemo"
 	"admin/server/internal/module/user"
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/secretkey"
+	"admin/server/internal/shared/i18n"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -32,6 +35,7 @@ type routerDependencies struct {
 	Health       *health.Handler
 	Task         *taskdemo.Handler
 	Auth         *auth.Handler
+	Access       *access.Handler
 	AuthOrigin   gin.HandlerFunc
 	Authenticate gin.HandlerFunc
 }
@@ -45,6 +49,9 @@ func main() {
 }
 
 func run(logger *slog.Logger) error {
+	if err := i18n.ValidateCatalogs(); err != nil {
+		return fmt.Errorf("validate i18n catalogs: %w", err)
+	}
 	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("load .env: %w", err)
 	}
@@ -73,12 +80,17 @@ func run(logger *slog.Logger) error {
 		&user.User{},
 		&role.Role{},
 		&role.UserRole{},
+		&menu.Menu{},
+		&menu.RoleMenu{},
 		&auth.Session{},
 	); err != nil {
 		return err
 	}
 	if err := auth.EnsureSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("ensure authentication schema: %w", err)
+	}
+	if err := menu.EnsureSchema(processContext, postgres.GORM); err != nil {
+		return fmt.Errorf("ensure menu schema: %w", err)
 	}
 
 	roleRepository := role.NewRepository(postgres.GORM)
@@ -109,14 +121,18 @@ func run(logger *slog.Logger) error {
 		auth.NewJWT(keys.JWTSigningKey()),
 		keys.RefreshTokenHMACKey(),
 	)
+	accessRepository := access.NewRepository(postgres.GORM)
+	accessService := access.NewService(accessRepository)
+	authenticate := auth.Authenticate(authService)
 	router := buildRouter(routerDependencies{
 		CORSOrigin:   settings.CORSOrigin,
 		Logger:       logger,
 		Health:       health.NewHandler(healthService),
 		Task:         taskdemo.NewHandler(taskService),
 		Auth:         auth.NewHandler(authService, settings.Auth.CookieSecure),
+		Access:       access.NewHandler(accessService),
 		AuthOrigin:   auth.RequireOrigin(settings.CORSOrigin),
-		Authenticate: auth.Authenticate(authService),
+		Authenticate: authenticate,
 	})
 
 	server := &http.Server{Addr: settings.HTTPAddr, Handler: router, ReadHeaderTimeout: 5 * time.Second}
@@ -152,10 +168,12 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 		projectmiddleware.CORS(dependencies.CORSOrigin),
 		projectmiddleware.AccessLog(dependencies.Logger),
 		projectmiddleware.Recovery(dependencies.Logger),
+		projectmiddleware.Language(),
 	)
 	health.RegisterRoutes(router, dependencies.Health)
 	apiRoutes := router.Group("/api/v1")
-	taskdemo.RegisterRoutes(apiRoutes, dependencies.Task)
 	auth.RegisterRoutes(apiRoutes, dependencies.Auth, dependencies.AuthOrigin, dependencies.Authenticate)
+	access.RegisterRoutes(apiRoutes, dependencies.Access, dependencies.Authenticate)
+	taskdemo.RegisterRoutes(apiRoutes, dependencies.Task, dependencies.Authenticate)
 	return router
 }

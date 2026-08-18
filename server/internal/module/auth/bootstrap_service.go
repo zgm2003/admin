@@ -6,6 +6,7 @@ import (
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/user"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/i18n"
 )
 
 type BootstrapAdminInput struct {
@@ -42,7 +43,7 @@ func (s *BootstrapService) Create(ctx context.Context, input BootstrapAdminInput
 		return Registered{}, apperror.Internal(err)
 	}
 	if exists {
-		return Registered{}, apperror.Conflict("超级管理员已存在", nil)
+		return Registered{}, apperror.Conflict(i18n.KeySuperAdminExists, nil, nil)
 	}
 	normalized, err := validateAccountInput(input.Username, input.Email, input.Password, input.Password)
 	if err != nil {

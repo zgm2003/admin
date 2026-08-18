@@ -1,6 +1,10 @@
 package apperror
 
-import "net/http"
+import (
+	"net/http"
+
+	"admin/server/internal/shared/i18n"
+)
 
 const (
 	CodeInternal              = 10000
@@ -15,12 +19,13 @@ const (
 type Error struct {
 	HTTPStatus int
 	Code       int
-	Message    string
+	MessageKey i18n.MessageKey
+	Params     map[string]string
 	Cause      error
 }
 
 func (e *Error) Error() string {
-	return e.Message
+	return string(e.MessageKey)
 }
 
 func (e *Error) Unwrap() error {
@@ -28,33 +33,37 @@ func (e *Error) Unwrap() error {
 }
 
 func InvalidRequest(cause error) *Error {
-	return newError(http.StatusBadRequest, CodeInvalidRequest, "请求参数错误", cause)
+	return newError(http.StatusBadRequest, CodeInvalidRequest, i18n.KeyInvalidRequest, nil, cause)
 }
 
 func Unauthorized(cause error) *Error {
-	return newError(http.StatusUnauthorized, CodeUnauthorized, "未登录或登录已失效", cause)
+	return newError(http.StatusUnauthorized, CodeUnauthorized, i18n.KeyUnauthorized, nil, cause)
 }
 
 func Forbidden(cause error) *Error {
-	return newError(http.StatusForbidden, CodeForbidden, "无权执行该操作", cause)
+	return newError(http.StatusForbidden, CodeForbidden, i18n.KeyForbidden, nil, cause)
+}
+
+func ForbiddenWithParams(key i18n.MessageKey, params map[string]string, cause error) *Error {
+	return newError(http.StatusForbidden, CodeForbidden, key, params, cause)
 }
 
 func NotFound(cause error) *Error {
-	return newError(http.StatusNotFound, CodeNotFound, "请求的资源不存在", cause)
+	return newError(http.StatusNotFound, CodeNotFound, i18n.KeyNotFound, nil, cause)
 }
 
-func Conflict(message string, cause error) *Error {
-	return newError(http.StatusConflict, CodeConflict, message, cause)
+func Conflict(key i18n.MessageKey, params map[string]string, cause error) *Error {
+	return newError(http.StatusConflict, CodeConflict, key, params, cause)
 }
 
 func DependencyUnavailable(cause error) *Error {
-	return newError(http.StatusServiceUnavailable, CodeDependencyUnavailable, "服务暂未就绪", cause)
+	return newError(http.StatusServiceUnavailable, CodeDependencyUnavailable, i18n.KeyDependencyUnavailable, nil, cause)
 }
 
 func Internal(cause error) *Error {
-	return newError(http.StatusInternalServerError, CodeInternal, "服务内部错误", cause)
+	return newError(http.StatusInternalServerError, CodeInternal, i18n.KeyInternal, nil, cause)
 }
 
-func newError(httpStatus, code int, message string, cause error) *Error {
-	return &Error{HTTPStatus: httpStatus, Code: code, Message: message, Cause: cause}
+func newError(httpStatus, code int, key i18n.MessageKey, params map[string]string, cause error) *Error {
+	return &Error{HTTPStatus: httpStatus, Code: code, MessageKey: key, Params: params, Cause: cause}
 }

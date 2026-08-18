@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { logout } from '../api/auth'
 import { readLocale, setLocale, type AppLocale } from '../i18n'
+import { useAccessStore } from '../store/access'
 import { useAuthStore } from '../store/auth'
 import { ProtocolError } from '../types/http'
 import { readTheme, toggleTheme, type ThemeMode } from '../utils/theme'
@@ -18,6 +19,7 @@ const mobileBreakpoint = 840
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const access = useAccessStore()
 const auth = useAuthStore()
 const collapsed = ref(false)
 const mobileMenuOpen = ref(false)
@@ -66,6 +68,7 @@ async function handleLogout(): Promise<void> {
   logoutPending.value = true
   try {
     await logout()
+    access.reset()
     auth.setAnonymous()
     await router.replace({ name: 'login' })
   } catch (error: unknown) {
@@ -105,6 +108,14 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateViewport))
         <RouteTabs @refresh="handleRefresh" @toggle-fullscreen="handleToggleFullscreen" />
       </div>
       <el-main class="admin-layout__main admin-layout__scroll-owner">
+        <el-alert
+          v-if="access.status === 'error'"
+          data-testid="access-error"
+          type="error"
+          :title="access.errorMessage"
+          :closable="false"
+          show-icon
+        />
         <RouterView :key="`${route.fullPath}::${refreshKey}`" />
       </el-main>
       <el-footer v-if="!contentFullscreen" class="admin-layout__footer" height="40px">

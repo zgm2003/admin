@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/i18n"
 	"github.com/gin-gonic/gin"
 )
 
@@ -22,11 +23,17 @@ func Fail(context *gin.Context, err error) {
 	if !errors.As(err, &appErr) {
 		appErr = apperror.Internal(err)
 	}
+	locale := i18n.LocaleFromContext(context.Request.Context())
+	message, translateErr := i18n.Translate(locale, appErr.MessageKey, appErr.Params)
+	if translateErr != nil {
+		appErr = apperror.Internal(errors.Join(appErr, translateErr))
+		message, _ = i18n.Translate(locale, appErr.MessageKey, nil)
+	}
 	_ = context.Error(appErr)
 
 	context.AbortWithStatusJSON(appErr.HTTPStatus, Envelope[any]{
 		Code:    appErr.Code,
 		Data:    nil,
-		Message: appErr.Message,
+		Message: message,
 	})
 }

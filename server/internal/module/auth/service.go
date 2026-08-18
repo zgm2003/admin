@@ -19,6 +19,7 @@ import (
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/user"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -328,9 +329,9 @@ func validateAccountInput(username, email, password, confirmPassword string) (no
 func mapUserCreateError(err error) error {
 	switch {
 	case errors.Is(err, user.ErrUsernameConflict):
-		return apperror.Conflict("用户名已存在", err)
+		return apperror.Conflict(i18n.KeyUsernameConflict, nil, err)
 	case errors.Is(err, user.ErrEmailConflict):
-		return apperror.Conflict("邮箱已存在", err)
+		return apperror.Conflict(i18n.KeyEmailConflict, nil, err)
 	default:
 		return apperror.DependencyUnavailable(err)
 	}

@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import { Monitor } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
+
+import { useAccessStore } from '../../store/access'
+import AccessMenuNode from './AccessMenuNode.vue'
 
 defineProps<{
   collapsed: boolean
 }>()
 
 const { t } = useI18n()
+const route = useRoute()
+const access = useAccessStore()
 </script>
 
 <template>
@@ -26,12 +32,13 @@ const { t } = useI18n()
       router
       :collapse="collapsed"
       :collapse-transition="false"
-      default-active="/dashboard"
+      :default-active="route.path"
     >
       <el-menu-item index="/dashboard" data-testid="dashboard-menu-item">
         <el-icon><Monitor /></el-icon>
         <template #title>{{ t('navigation.dashboard') }}</template>
       </el-menu-item>
+      <AccessMenuNode v-for="node in access.menuTree" :key="node.code" :node="node" />
     </el-menu>
   </aside>
 </template>

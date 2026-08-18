@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { appI18n, initializeLocale, localeStorageKey, readLocale, setLocale } from './index'
+import { appI18n, initializeLocale, isAppMessageKey, localeStorageKey, readLocale, setLocale } from './index'
 import { enUS } from './messages/en-US'
 import { zhCN } from './messages/zh-CN'
 
@@ -30,5 +30,11 @@ describe('frontend i18n', () => {
     expect(document.documentElement.lang).toBe('en-US')
     expect(appI18n.global.t('navigation.dashboard')).toBe('Dashboard')
     expect(Object.keys(enUS).sort()).toEqual(Object.keys(zhCN).sort())
+  })
+
+  it('recognizes only exact application message keys', () => {
+    expect(isAppMessageKey('navigation.dashboard')).toBe(true)
+    expect(isAppMessageKey('access.loadFailed')).toBe(true)
+    expect(isAppMessageKey('navigation.unknown')).toBe(false)
   })
 })

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/response"
 	"github.com/gin-gonic/gin"
 )
@@ -18,6 +19,7 @@ func TestOKUsesTheOnlySuccessEnvelope(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodGet, "/", nil)
 
 	response.OK(context, http.StatusOK, gin.H{"value": "ok"})
 
@@ -32,6 +34,7 @@ func TestFailUsesStableBusinessError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodGet, "/", nil)
 
 	response.Fail(context, apperror.InvalidRequest(errors.New("bad input")))
 
@@ -42,10 +45,53 @@ func TestFailUsesStableBusinessError(t *testing.T) {
 	})
 }
 
+func TestFailTranslatesTheApplicationErrorUsingTheRequestLocale(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	context.Request = request.WithContext(i18n.WithLocale(request.Context(), i18n.EnUS))
+
+	response.Fail(context, apperror.InvalidRequest(errors.New("bad input")))
+
+	assertJSON(t, recorder, http.StatusBadRequest, map[string]any{
+		"code":    float64(apperror.CodeInvalidRequest),
+		"data":    nil,
+		"message": "Invalid request",
+	})
+}
+
+func TestFailConvertsAnInvalidMessageContractToInternalError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+
+	response.Fail(context, &apperror.Error{
+		HTTPStatus: http.StatusBadRequest,
+		Code:       apperror.CodeInvalidRequest,
+		MessageKey: i18n.MessageKey("unknown.key"),
+	})
+
+	assertJSON(t, recorder, http.StatusInternalServerError, map[string]any{
+		"code":    float64(apperror.CodeInternal),
+		"data":    nil,
+		"message": "服务内部错误",
+	})
+	var appErr *apperror.Error
+	if len(context.Errors) != 1 || !errors.As(context.Errors.Last().Err, &appErr) {
+		t.Fatalf("context errors = %#v, want one apperror.Error", context.Errors)
+	}
+	if appErr.Code != apperror.CodeInternal || appErr.Cause == nil {
+		t.Fatalf("logged application error = %+v", appErr)
+	}
+}
+
 func TestFailDoesNotExposeUnknownErrors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodGet, "/", nil)
 
 	response.Fail(context, errors.New("database password leaked"))
 

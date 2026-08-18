@@ -1,7 +1,7 @@
-package taskdemo
+package access
 
 import "github.com/gin-gonic/gin"
 
 func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc) {
-	routes.POST("/example-tasks", authenticate, handler.Create)
+	routes.GET("/access", authenticate, handler.Current)
 }

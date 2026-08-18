@@ -25,6 +25,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/',
+    name: 'admin-layout',
     component: () => import('../layout/index.vue'),
     redirect: '/dashboard',
     meta: { requiresAuth: true },

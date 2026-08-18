@@ -8,6 +8,7 @@ import (
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/user"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -39,7 +40,8 @@ func TestBootstrapAdminRejectsExistingActiveSuperAdmin(t *testing.T) {
 	roles := &fakeBootstrapRoleStore{found: role.Role{ID: 8}, hasActive: true}
 	service := NewBootstrapService(&fakeBootstrapUserStore{}, roles)
 	_, err := service.Create(context.Background(), BootstrapAdminInput{Username: "admin", Email: "admin@example.com", Password: "password"})
-	if appErrorCode(err) != apperror.CodeConflict {
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) || appErr.Code != apperror.CodeConflict || appErr.MessageKey != i18n.KeySuperAdminExists {
 		t.Fatalf("Create() error = %v", err)
 	}
 }

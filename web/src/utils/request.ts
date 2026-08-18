@@ -8,8 +8,9 @@ import axios, {
 import { ElNotification } from 'element-plus'
 
 import { parseCredential, type AccessCredential } from '../api/auth.contract'
-import { appI18n } from '../i18n'
+import { appI18n, readLocale } from '../i18n'
 import { pinia } from '../store'
+import { useAccessStore } from '../store/access'
 import { useAuthStore } from '../store/auth'
 import { ApiError, ProtocolError, type ApiResponse } from '../types/http'
 
@@ -56,11 +57,19 @@ function parseEnvelope(value: unknown): ApiResponse<unknown> {
   return { code: value.code, data: value.data, message: value.message }
 }
 
-export function createRequestClient(baseURL: string, adapter?: AxiosAdapter): AxiosInstance {
-  return buildRequestClient(baseURL, adapter).client
+export function createRequestClient(
+  baseURL: string,
+  adapter?: AxiosAdapter,
+  onUnauthorized: () => void = () => undefined,
+): AxiosInstance {
+  return buildRequestClient(baseURL, adapter, onUnauthorized).client
 }
 
-function buildRequestClient(baseURL: string, adapter?: AxiosAdapter): RequestClientBundle {
+function buildRequestClient(
+  baseURL: string,
+  adapter: AxiosAdapter | undefined,
+  onUnauthorized: () => void,
+): RequestClientBundle {
   if (baseURL.trim() === '') {
     throw new ProtocolError('VITE_API_BASE_URL is required')
   }
@@ -76,7 +85,7 @@ function buildRequestClient(baseURL: string, adapter?: AxiosAdapter): RequestCli
 
   const coordinatedRefresh = (): Promise<AccessCredential> => {
     if (refreshPromise === null) {
-      refreshPromise = performRefresh(rawClient, authStore)
+      refreshPromise = performRefresh(rawClient, authStore, onUnauthorized)
       refreshPromise.finally(() => {
         refreshPromise = null
       }).catch(() => undefined)
@@ -84,7 +93,10 @@ function buildRequestClient(baseURL: string, adapter?: AxiosAdapter): RequestCli
     return refreshPromise
   }
 
+  rawClient.interceptors.request.use(applyLocaleHeader)
+
   client.interceptors.request.use((config) => {
+    applyLocaleHeader(config)
     const path = requestPath(config.url, baseURL)
     if (authStore.accessToken !== '' && !noBearerPaths.has(path)) {
       config.headers = AxiosHeaders.from(config.headers)
@@ -132,7 +144,11 @@ function buildRequestClient(baseURL: string, adapter?: AxiosAdapter): RequestCli
   return { client, refreshAccessCredential: coordinatedRefresh }
 }
 
-async function performRefresh(rawClient: AxiosInstance, authStore: ReturnType<typeof useAuthStore>): Promise<AccessCredential> {
+async function performRefresh(
+  rawClient: AxiosInstance,
+  authStore: ReturnType<typeof useAuthStore>,
+  onUnauthorized: () => void,
+): Promise<AccessCredential> {
   try {
     const response = await rawClient.post<unknown>('/api/v1/auth/refresh', undefined, { withCredentials: true })
     const credential = parseCredential(unwrapSuccessEnvelope<unknown>(response.data))
@@ -143,11 +159,18 @@ async function performRefresh(rawClient: AxiosInstance, authStore: ReturnType<ty
     notifyRequestError(normalizedError)
     if (normalizedError instanceof ApiError && normalizedError.httpStatus === 401) {
       authStore.setAnonymous()
+      onUnauthorized()
     } else {
       authStore.setError(errorMessage(normalizedError))
     }
     throw normalizedError
   }
+}
+
+function applyLocaleHeader(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {
+  config.headers = AxiosHeaders.from(config.headers)
+  config.headers.set('Accept-Language', readLocale())
+  return config
 }
 
 function notifyRequestError(error: unknown): void {
@@ -199,7 +222,13 @@ function errorMessage(error: unknown): string {
   return appI18n.global.t('auth.login.bootstrapFailed')
 }
 
-const defaultBundle = buildRequestClient(import.meta.env.VITE_API_BASE_URL)
+function handleUnauthorized(): void {
+  useAccessStore(pinia).reset()
+  const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  window.location.assign(`/login?redirect=${encodeURIComponent(redirect)}`)
+}
+
+const defaultBundle = buildRequestClient(import.meta.env.VITE_API_BASE_URL, undefined, handleUnauthorized)
 const client = defaultBundle.client
 
 export async function refreshAccessCredential(): Promise<AccessCredential> {

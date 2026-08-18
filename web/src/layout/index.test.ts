@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { logout } from '../api/auth'
 import { appI18n, setLocale } from '../i18n'
 import { pinia } from '../store'
+import { useAccessStore } from '../store/access'
 import { useAuthStore } from '../store/auth'
 import Layout from './index.vue'
 
@@ -22,6 +23,7 @@ describe('admin layout', () => {
     document.documentElement.classList.remove('dark')
     document.documentElement.style.removeProperty('color-scheme')
     setLocale('zh-CN')
+    useAccessStore(pinia).reset()
     useAuthStore(pinia).$reset()
     useAuthStore(pinia).setCredential({ accessToken: 'jwt', expiresIn: 900 })
     useAuthStore(pinia).setAuthenticated({ userId: 1, username: 'admin', email: 'admin@example.com' })
@@ -98,6 +100,19 @@ describe('admin layout', () => {
   })
 
   it('opens a Drawer instead of collapsing on mobile', async () => {
+    useAccessStore(pinia).applySnapshot({
+      roleCodes: [],
+      menuTree: [{
+        code: 'system:user:list',
+        menuType: 'page',
+        path: '/system/users',
+        viewKey: 'system-users',
+        titleKey: 'navigation.dashboard',
+        icon: 'User',
+        children: [],
+      }],
+      permissionCodes: [],
+    })
     const { wrapper } = await mountLayout()
     window.innerWidth = 600
     window.dispatchEvent(new Event('resize'))
@@ -105,14 +120,35 @@ describe('admin layout', () => {
     await wrapper.get('[data-testid="toggle-menu"]').trigger('click')
     const drawer = wrapper.findComponent({ name: 'ElDrawer' })
     expect(drawer.props('modelValue')).toBe(true)
-    expect(wrapper.get('[data-testid="app-aside"]').attributes('data-collapsed')).toBe('false')
+    const asides = wrapper.findAllComponents({ name: 'AppAside' })
+    expect(asides).toHaveLength(2)
+    expect(asides.every((aside) => aside.findAllComponents({ name: 'AccessMenuNode' }).length === 1)).toBe(true)
+    expect(asides.every((aside) => aside.attributes('data-collapsed') === 'false')).toBe(true)
   })
 
-  it('logs out, clears memory auth, and routes to Login', async () => {
+  it('keeps RouterView mounted and shows one non-closable access error', async () => {
+    useAccessStore(pinia).fail(new Error('权限快照加载失败'))
+    const { wrapper } = await mountLayout()
+
+    expect(wrapper.get('[data-testid="layout-content"]').text()).toContain('dashboard content')
+    expect(wrapper.findAll('[data-testid="access-error"]')).toHaveLength(1)
+    expect(wrapper.get('[data-testid="access-error"]').text()).toContain('加载访问权限失败')
+    expect(wrapper.findComponent({ name: 'ElAlert' }).props('closable')).toBe(false)
+  })
+
+  it('logs out, clears access and memory auth, and routes to Login', async () => {
+    useAccessStore(pinia).applySnapshot({
+      roleCodes: ['admin'],
+      menuTree: [],
+      permissionCodes: ['system:user:list'],
+    })
     const { wrapper, router } = await mountLayout()
     await wrapper.get('[data-testid="logout"]').trigger('click')
     await flushPromises()
     expect(logoutMock).toHaveBeenCalledOnce()
+    expect(useAccessStore(pinia).status).toBe('idle')
+    expect(useAccessStore(pinia).roleCodes).toEqual([])
+    expect(useAccessStore(pinia).permissionCodes).toEqual([])
     expect(useAuthStore(pinia).status).toBe('anonymous')
     expect(router.currentRoute.value.path).toBe('/login')
   })

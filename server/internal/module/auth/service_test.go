@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/user"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -56,16 +58,23 @@ func TestRegisterRejectsInvalidUsernameEmailAndPassword(t *testing.T) {
 }
 
 func TestRegisterMapsUsernameAndEmailConflicts(t *testing.T) {
-	for _, repositoryError := range []error{user.ErrUsernameConflict, user.ErrEmailConflict} {
+	for _, test := range []struct {
+		repositoryError error
+		wantKey         i18n.MessageKey
+	}{
+		{repositoryError: user.ErrUsernameConflict, wantKey: i18n.KeyUsernameConflict},
+		{repositoryError: user.ErrEmailConflict, wantKey: i18n.KeyEmailConflict},
+	} {
 		users := &fakeUserStore{createFn: func(context.Context, user.CreateInput) (user.User, error) {
-			return user.User{}, repositoryError
+			return user.User{}, test.repositoryError
 		}}
 		service := newTestService(t, users, &fakeRoleStore{defaultRole: role.Role{ID: 1}}, &fakeSessionStore{}, &fakePointerStore{})
 		_, err := service.Register(context.Background(), RegisterInput{
 			Username: "valid_user", Email: "user@example.com", Password: "password", ConfirmPassword: "password",
 		})
-		if appErrorCode(err) != apperror.CodeConflict {
-			t.Errorf("repository error %v mapped to %v", repositoryError, err)
+		var appErr *apperror.Error
+		if !errors.As(err, &appErr) || appErr.Code != apperror.CodeConflict || appErr.MessageKey != test.wantKey {
+			t.Errorf("repository error %v mapped to %v", test.repositoryError, err)
 		}
 	}
 }
@@ -140,7 +149,7 @@ func TestLoginUsesTheSamePublicErrorForUnknownUserAndWrongPassword(t *testing.T)
 		}
 		if first == nil {
 			first = appErr
-		} else if appErr.HTTPStatus != first.HTTPStatus || appErr.Code != first.Code || appErr.Message != first.Message {
+		} else if appErr.HTTPStatus != first.HTTPStatus || appErr.Code != first.Code || appErr.MessageKey != first.MessageKey || !reflect.DeepEqual(appErr.Params, first.Params) {
 			t.Fatalf("public credential errors differ: %+v vs %+v", first, appErr)
 		}
 	}

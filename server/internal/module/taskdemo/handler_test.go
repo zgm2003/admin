@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"admin/server/internal/module/taskdemo"
+	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -32,6 +34,7 @@ func TestCreateTaskReturnsAcceptedAndPassesRequestContext(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/example-tasks", strings.NewReader(`{"message":"foundation-check"}`))
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer token")
 
 	router.ServeHTTP(recorder, request)
 
@@ -63,6 +66,7 @@ func TestCreateTaskRejectsInvalidInputWithoutCallingService(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, "/api/v1/example-tasks", strings.NewReader(body))
 			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Authorization", "Bearer token")
 
 			router.ServeHTTP(recorder, request)
 
@@ -76,9 +80,30 @@ func TestCreateTaskRejectsInvalidInputWithoutCallingService(t *testing.T) {
 	}
 }
 
+func TestCreateTaskRequiresAuthentication(t *testing.T) {
+	service := &submissionService{}
+	router := taskRouter(service)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/example-tasks", strings.NewReader(`{"message":"foundation-check"}`))
+	request.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusUnauthorized || service.ctx != nil {
+		t.Fatalf("status=%d service context=%v body=%s", recorder.Code, service.ctx, recorder.Body)
+	}
+}
+
 func taskRouter(service *submissionService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	taskdemo.RegisterRoutes(router.Group("/api/v1"), taskdemo.NewHandler(service))
+	authenticate := func(context *gin.Context) {
+		if context.GetHeader("Authorization") != "Bearer token" {
+			response.Fail(context, apperror.Unauthorized(errors.New("test authentication required")))
+			return
+		}
+		context.Next()
+	}
+	taskdemo.RegisterRoutes(router.Group("/api/v1"), taskdemo.NewHandler(service), authenticate)
 	return router
 }

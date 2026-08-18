@@ -3,6 +3,7 @@ import { ElNotification } from 'element-plus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { pinia } from '../store'
+import { setLocale } from '../i18n'
 import { useAuthStore } from '../store/auth'
 import {
   ApiError,
@@ -52,6 +53,8 @@ describe('unwrapEnvelope', () => {
 
 describe('createRequestClient', () => {
   beforeEach(() => {
+    localStorage.clear()
+    setLocale('zh-CN')
     useAuthStore(pinia).$reset()
     notifyErrorMock.mockReset()
   })
@@ -168,6 +171,40 @@ describe('createRequestClient', () => {
     expect(authorization).toBe('Bearer memory-token')
   })
 
+  it('sends the current locale on normal requests', async () => {
+    setLocale('en-US')
+    let acceptLanguage = ''
+    const adapter: AxiosAdapter = async (config) => {
+      acceptLanguage = AxiosHeaders.from(config.headers).get('Accept-Language')?.toString() ?? ''
+      return successResponse(config, { code: 0, data: { ok: true }, message: 'ok' })
+    }
+    const client = createRequestClient('http://localhost:16301', adapter)
+
+    await client.get('/api/v1/protected')
+
+    expect(acceptLanguage).toBe('en-US')
+  })
+
+  it('sends the current locale on the raw refresh request', async () => {
+    setLocale('en-US')
+    let refreshLanguage = ''
+    let refreshed = false
+    const adapter: AxiosAdapter = async (config) => {
+      if (config.url === '/api/v1/auth/refresh') {
+        refreshLanguage = AxiosHeaders.from(config.headers).get('Accept-Language')?.toString() ?? ''
+        refreshed = true
+        return successResponse(config, { code: 0, data: { accessToken: 'new-token', expiresIn: 900 }, message: 'ok' })
+      }
+      if (!refreshed) throw apiFailure(config, 401, 10002, '未登录或登录已失效')
+      return successResponse(config, { code: 0, data: { ok: true }, message: 'ok' })
+    }
+    const client = createRequestClient('http://localhost:16301', adapter)
+
+    await client.get('/api/v1/protected')
+
+    expect(refreshLanguage).toBe('en-US')
+  })
+
   it('coordinates concurrent 401 responses through one refresh', async () => {
     let refreshCalls = 0
     let protectedCalls = 0
@@ -194,6 +231,42 @@ describe('createRequestClient', () => {
     ])
     expect(refreshCalls).toBe(1)
     expect(protectedCalls).toBe(6)
+  })
+
+  it('coordinates concurrent final 401 responses through one notification and callback', async () => {
+    let refreshCalls = 0
+    const onUnauthorized = vi.fn()
+    const adapter: AxiosAdapter = async (config) => {
+      if (config.url === '/api/v1/auth/refresh') refreshCalls += 1
+      throw apiFailure(config, 401, 10002, '未登录或登录已失效')
+    }
+    const client = createRequestClient('http://localhost:16301', adapter, onUnauthorized)
+
+    const results = await Promise.allSettled([
+      client.get('/api/v1/protected/1'),
+      client.get('/api/v1/protected/2'),
+      client.get('/api/v1/protected/3'),
+    ])
+
+    expect(results.every((result) => result.status === 'rejected')).toBe(true)
+    expect(refreshCalls).toBe(1)
+    expect(notifyErrorMock).toHaveBeenCalledTimes(1)
+    expect(onUnauthorized).toHaveBeenCalledOnce()
+  })
+
+  it('notifies a 403 without refreshing or invoking the unauthorized callback', async () => {
+    let refreshCalls = 0
+    const onUnauthorized = vi.fn()
+    const adapter: AxiosAdapter = async (config) => {
+      if (config.url === '/api/v1/auth/refresh') refreshCalls += 1
+      throw apiFailure(config, 403, 10003, '没有访问权限')
+    }
+    const client = createRequestClient('http://localhost:16301', adapter, onUnauthorized)
+
+    await expect(client.get('/api/v1/protected')).rejects.toMatchObject({ code: 10003, httpStatus: 403 })
+    expect(refreshCalls).toBe(0)
+    expect(notifyErrorMock).toHaveBeenCalledTimes(1)
+    expect(onUnauthorized).not.toHaveBeenCalled()
   })
 
   it('retries each original request at most once', async () => {

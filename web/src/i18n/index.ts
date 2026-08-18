@@ -6,6 +6,11 @@ import { zhCN, type AppMessageKey } from './messages/zh-CN'
 export type AppLocale = 'zh-CN' | 'en-US'
 export type { AppMessageKey }
 export const localeStorageKey = 'admin:locale'
+const appMessageKeys: ReadonlySet<string> = new Set(Object.keys(zhCN))
+
+export function isAppMessageKey(value: string): value is AppMessageKey {
+  return appMessageKeys.has(value)
+}
 
 function isAppLocale(value: string | null): value is AppLocale {
   return value === 'zh-CN' || value === 'en-US'
