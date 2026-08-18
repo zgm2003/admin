@@ -2,11 +2,12 @@
 import { computed, reactive, ref } from 'vue'
 import { Lock, User } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getCurrentUser, login } from '../../../api/auth'
 import { useAuthStore } from '../../../store/auth'
-import { ApiError } from '../../../types/http'
+import { ApiError, ProtocolError } from '../../../types/http'
 
 interface LoginForm {
   username: string
@@ -15,6 +16,7 @@ interface LoginForm {
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const auth = useAuthStore()
 const formReference = ref<FormInstance>()
 const form = reactive<LoginForm>({ username: '', password: '' })
@@ -22,8 +24,8 @@ const pending = ref(false)
 const submitError = ref('')
 const bootstrapError = computed(() => auth.status === 'error' ? auth.errorMessage : '')
 const rules: FormRules<LoginForm> = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+  username: [{ required: true, message: t('auth.login.usernameRequired'), trigger: 'blur' }],
+  password: [{ required: true, message: t('auth.login.passwordRequired'), trigger: 'blur' }],
 }
 
 async function submit(): Promise<void> {
@@ -41,9 +43,11 @@ async function submit(): Promise<void> {
     await router.replace(safeRedirect(route.query.redirect))
   } catch (error: unknown) {
     auth.setAnonymous()
-    submitError.value = error instanceof ApiError && error.code === 10002
-      ? '用户名或密码错误'
-      : error instanceof Error && error.message !== '' ? error.message : '登录失败'
+    submitError.value = error instanceof ProtocolError
+      ? t('request.protocolError')
+      : error instanceof ApiError && error.code === 10002
+      ? t('auth.login.invalidCredentials')
+      : error instanceof Error && error.message !== '' ? error.message : t('auth.login.failed')
   } finally {
     pending.value = false
   }
@@ -59,16 +63,16 @@ function safeRedirect(value: unknown): string {
 <template>
   <main class="auth-page">
     <div class="auth-shell">
-      <section class="auth-brand" data-testid="login-brand" aria-label="Admin 管理系统">
+      <section class="auth-brand" data-testid="login-brand" :aria-label="t('navigation.admin')">
         <div class="auth-brand__identity">
           <span class="auth-brand__mark" aria-hidden="true">A</span>
           <span class="auth-brand__name">Admin</span>
         </div>
 
         <div class="auth-brand__message">
-          <p class="auth-brand__eyebrow">ADMIN CONSOLE</p>
-          <h1>让系统状态<br>清楚可见</h1>
-          <p>统一管理服务状态、任务与后续权限配置。</p>
+          <p class="auth-brand__eyebrow">{{ t('auth.login.eyebrow') }}</p>
+          <h1>{{ t('auth.login.heading') }}</h1>
+          <p>{{ t('auth.login.description') }}</p>
         </div>
 
         <div class="auth-brand__trace" aria-hidden="true">
@@ -83,11 +87,11 @@ function safeRedirect(value: unknown): string {
           <header class="auth-panel__header">
             <el-icon class="auth-icon"><User /></el-icon>
             <div>
-              <p class="auth-panel__eyebrow">账户登录</p>
-              <h2 id="login-title">欢迎回来</h2>
+              <p class="auth-panel__eyebrow">{{ t('auth.login.eyebrow') }}</p>
+              <h2 id="login-title">{{ t('auth.login.title') }}</h2>
             </div>
           </header>
-          <p class="auth-caption">使用已授权的用户名和密码进入管理台。</p>
+          <p class="auth-caption">{{ t('auth.login.caption') }}</p>
 
           <p v-if="bootstrapError" class="auth-error" data-testid="bootstrap-error">{{ bootstrapError }}</p>
           <p v-if="submitError" class="auth-error" data-testid="login-error">{{ submitError }}</p>
@@ -100,24 +104,24 @@ function safeRedirect(value: unknown): string {
             label-position="top"
             @submit.prevent="submit"
           >
-            <el-form-item label="用户名" prop="username">
+            <el-form-item :label="t('auth.login.username')" prop="username">
               <el-input
                 v-model="form.username"
                 data-testid="login-username"
                 autocomplete="username"
-                placeholder="请输入用户名"
+                :placeholder="t('auth.login.usernamePlaceholder')"
                 size="large"
               >
                 <template #prefix><el-icon><User /></el-icon></template>
               </el-input>
             </el-form-item>
-            <el-form-item label="密码" prop="password">
+            <el-form-item :label="t('auth.login.password')" prop="password">
               <el-input
                 v-model="form.password"
                 data-testid="login-password"
                 type="password"
                 autocomplete="current-password"
-                placeholder="请输入密码"
+                :placeholder="t('auth.login.passwordPlaceholder')"
                 size="large"
                 show-password
               >
@@ -133,11 +137,13 @@ function safeRedirect(value: unknown): string {
               :loading="pending"
               :disabled="pending"
             >
-              登录管理台
+              {{ t('auth.login.submit') }}
             </el-button>
           </el-form>
 
-          <p class="auth-access-note"><el-icon><Lock /></el-icon>仅限已授权账号访问</p>
+          <p class="auth-access-note">
+            <el-icon><Lock /></el-icon>{{ t('auth.login.authorizedOnly') }}
+          </p>
         </section>
       </div>
     </div>
@@ -149,9 +155,10 @@ function safeRedirect(value: unknown): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100%;
+  min-height: 0;
   padding: 32px;
+  overflow: auto;
   color: var(--el-text-color-primary);
   background: var(--el-bg-color-page);
 }

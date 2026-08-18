@@ -6,10 +6,13 @@ import {
 } from 'vue-router'
 
 import Dashboard from '../views/dashboard/index.vue'
+import type { AppMessageKey } from '../i18n/messages/zh-CN'
 
 declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth: boolean
+    titleKey?: AppMessageKey
+    affix?: boolean
   }
 }
 
@@ -30,7 +33,7 @@ const routes: RouteRecordRaw[] = [
         path: 'dashboard',
         name: 'dashboard',
         component: Dashboard,
-        meta: { requiresAuth: true },
+        meta: { requiresAuth: true, titleKey: 'navigation.dashboard', affix: true },
       },
     ],
   },

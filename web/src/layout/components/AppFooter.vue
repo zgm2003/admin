@@ -1,3 +1,9 @@
+<script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+</script>
+
 <template>
-  <div class="app-footer">Admin 管理控制台 · 2026</div>
+  <div class="app-footer">{{ t('layout.footer') }}</div>
 </template>

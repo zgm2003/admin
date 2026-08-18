@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getCurrentUser, login } from '../../../api/auth'
+import { appI18n, setLocale } from '../../../i18n'
 import { pinia } from '../../../store'
 import { useAuthStore } from '../../../store/auth'
 import { ApiError } from '../../../types/http'
@@ -16,6 +17,8 @@ const getCurrentUserMock = vi.mocked(getCurrentUser)
 
 describe('Login page', () => {
   beforeEach(() => {
+    localStorage.clear()
+    setLocale('zh-CN')
     useAuthStore(pinia).$reset()
     loginMock.mockReset()
     getCurrentUserMock.mockReset()
@@ -40,6 +43,13 @@ describe('Login page', () => {
     expect(wrapper.find('[data-testid="login-panel"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="login-username"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="login-password"]').exists()).toBe(true)
+  })
+
+  it('renders the selected locale messages', async () => {
+    setLocale('en-US')
+    const { wrapper } = await mountLogin()
+    expect(wrapper.get('[data-testid="login-username"]').attributes('placeholder')).toBe('Enter username')
+    expect(wrapper.get('[data-testid="login-submit"]').text()).toBe('Sign in to console')
   })
 
   it('submits exact credentials, loads me, and follows a safe redirect', async () => {
@@ -98,6 +108,6 @@ async function mountLogin(initialPath = '/login') {
   })
   await router.push(initialPath)
   await router.isReady()
-  const wrapper = mount(LoginPage, { global: { plugins: [ElementPlus, pinia, router] } })
+  const wrapper = mount(LoginPage, { global: { plugins: [ElementPlus, pinia, router, appI18n] } })
   return { wrapper, router }
 }

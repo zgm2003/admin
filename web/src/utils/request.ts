@@ -8,6 +8,7 @@ import axios, {
 import { ElNotification } from 'element-plus'
 
 import { parseCredential, type AccessCredential } from '../api/auth.contract'
+import { appI18n } from '../i18n'
 import { pinia } from '../store'
 import { useAuthStore } from '../store/auth'
 import { ApiError, ProtocolError, type ApiResponse } from '../types/http'
@@ -154,8 +155,10 @@ function notifyRequestError(error: unknown): void {
     return
   }
   ElNotification.error({
-    title: '请求失败',
-    message: error.message,
+    title: appI18n.global.t('request.failed'),
+    message: error instanceof ProtocolError
+      ? appI18n.global.t('request.protocolError')
+      : error.message,
     type: 'error',
   })
 }
@@ -187,10 +190,13 @@ function requestPath(url: string | undefined, baseURL: string): string {
 }
 
 function errorMessage(error: unknown): string {
+  if (error instanceof ProtocolError) {
+    return appI18n.global.t('request.protocolError')
+  }
   if (error instanceof Error && error.message !== '') {
     return error.message
   }
-  return '认证服务响应异常'
+  return appI18n.global.t('auth.login.bootstrapFailed')
 }
 
 const defaultBundle = buildRequestClient(import.meta.env.VITE_API_BASE_URL)

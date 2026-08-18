@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { logout } from '../api/auth'
+import { appI18n, setLocale } from '../i18n'
 import { pinia } from '../store'
 import { useAuthStore } from '../store/auth'
 import Layout from './index.vue'
@@ -11,6 +12,7 @@ import Layout from './index.vue'
 vi.mock('../api/auth', () => ({ logout: vi.fn() }))
 
 const logoutMock = vi.mocked(logout)
+let layoutRenderCount = 0
 
 describe('admin layout', () => {
   beforeEach(() => {
@@ -19,6 +21,7 @@ describe('admin layout', () => {
     localStorage.clear()
     document.documentElement.classList.remove('dark')
     document.documentElement.style.removeProperty('color-scheme')
+    setLocale('zh-CN')
     useAuthStore(pinia).$reset()
     useAuthStore(pinia).setCredential({ accessToken: 'jwt', expiresIn: 900 })
     useAuthStore(pinia).setAuthenticated({ userId: 1, username: 'admin', email: 'admin@example.com' })
@@ -51,6 +54,49 @@ describe('admin layout', () => {
     expect(localStorage.getItem('admin:theme')).toBe('dark')
   })
 
+  it('switches the current interface language from the Header', async () => {
+    const { wrapper } = await mountLayout()
+    wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'en-US')
+    await wrapper.vm.$nextTick()
+    expect(document.documentElement.lang).toBe('en-US')
+    expect(localStorage.getItem('admin:locale')).toBe('en-US')
+    expect(wrapper.get('.app-header__location').text()).toBe('Dashboard')
+  })
+
+  it('renders RouteTabs between Header and Main', async () => {
+    const { wrapper } = await mountLayout()
+    const order = wrapper.findAll('.admin-layout__workspace > *').map((node) => (
+      node.classes().find((name) => name.startsWith('admin-layout__'))
+    ))
+    expect(order).toEqual([
+      'admin-layout__header',
+      'admin-layout__tabs',
+      'admin-layout__main',
+      'admin-layout__footer',
+    ])
+  })
+
+  it('remounts the current view and hides outer chrome in fullscreen', async () => {
+    const { wrapper } = await mountLayout()
+    const before = wrapper.get('[data-testid="layout-content"]').attributes('data-render')
+    await wrapper.get('[data-testid="route-tabs-refresh"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="layout-content"]').attributes('data-render')).not.toBe(before)
+
+    await wrapper.get('[data-testid="route-tabs-fullscreen"]').trigger('click')
+    expect(wrapper.find('.admin-layout__aside').exists()).toBe(false)
+    expect(wrapper.find('.admin-layout__header').exists()).toBe(false)
+    expect(wrapper.find('.admin-layout__footer').exists()).toBe(false)
+    expect(wrapper.find('.admin-layout__tabs').exists()).toBe(true)
+    expect(wrapper.find('.admin-layout__main').exists()).toBe(true)
+  })
+
+  it('exposes Main as the scroll owner and RouteTabs as horizontal scroll', async () => {
+    const { wrapper } = await mountLayout()
+    expect(wrapper.get('.admin-layout__main').classes()).toContain('admin-layout__scroll-owner')
+    expect(wrapper.get('.admin-layout__tabs').classes()).toContain('admin-layout__horizontal-scroll')
+  })
+
   it('opens a Drawer instead of collapsing on mobile', async () => {
     const { wrapper } = await mountLayout()
     window.innerWidth = 600
@@ -73,19 +119,27 @@ describe('admin layout', () => {
 })
 
 async function mountLayout() {
+  const layoutContent = {
+    setup() {
+      const render = ++layoutRenderCount
+      return { render }
+    },
+    template: '<div data-testid="layout-content" :data-render="render">dashboard content</div>',
+  }
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
       {
         path: '/dashboard',
         name: 'dashboard',
-        component: { template: '<div data-testid="layout-content">dashboard content</div>' },
+        component: layoutContent,
+        meta: { requiresAuth: true, titleKey: 'navigation.dashboard', affix: true },
       },
       { path: '/login', name: 'login', component: { template: '<div>login</div>' } },
     ],
   })
   await router.push('/dashboard')
   await router.isReady()
-  const wrapper = mount(Layout, { global: { plugins: [ElementPlus, pinia, router] } })
+  const wrapper = mount(Layout, { global: { plugins: [ElementPlus, pinia, router, appI18n] } })
   return { wrapper, router }
 }

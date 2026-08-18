@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { Monitor } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 
 defineProps<{
   collapsed: boolean
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -11,7 +14,7 @@ defineProps<{
     class="app-aside"
     data-testid="app-aside"
     :data-collapsed="String(collapsed)"
-    aria-label="主导航"
+    :aria-label="t('navigation.main')"
   >
     <div class="app-aside__brand" aria-label="Admin">
       <span class="app-aside__mark">A</span>
@@ -27,7 +30,7 @@ defineProps<{
     >
       <el-menu-item index="/dashboard" data-testid="dashboard-menu-item">
         <el-icon><Monitor /></el-icon>
-        <template #title>工作台</template>
+        <template #title>{{ t('navigation.dashboard') }}</template>
       </el-menu-item>
     </el-menu>
   </aside>

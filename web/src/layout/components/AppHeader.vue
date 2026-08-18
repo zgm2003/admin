@@ -1,19 +1,32 @@
 <script setup lang="ts">
-import { Menu, Moon, Sunny, SwitchButton, User } from '@element-plus/icons-vue'
+import { Connection, Menu, Moon, Sunny, SwitchButton, User } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 
+import type { AppLocale } from '../../i18n'
 import type { ThemeMode } from '../../utils/theme'
 
 defineProps<{
+  locale: AppLocale
   theme: ThemeMode
   username: string
   logoutPending: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   toggleMenu: []
   toggleTheme: []
+  changeLocale: [locale: AppLocale]
   logout: []
 }>()
+
+const { t } = useI18n()
+
+function handleLocaleCommand(command: string | number | object): void {
+  if (command !== 'zh-CN' && command !== 'en-US') {
+    throw new Error(`Unsupported locale command: ${String(command)}`)
+  }
+  emit('changeLocale', command)
+}
 </script>
 
 <template>
@@ -22,20 +35,47 @@ defineEmits<{
       data-testid="toggle-menu"
       :icon="Menu"
       text
-      title="切换菜单"
-      aria-label="切换菜单"
+      :title="t('layout.header.toggleMenu')"
+      :aria-label="t('layout.header.toggleMenu')"
       @click="$emit('toggleMenu')"
     />
 
-    <span class="app-header__location">工作台</span>
+    <span class="app-header__location">{{ t('navigation.dashboard') }}</span>
 
     <div class="app-header__actions">
-      <el-tooltip :content="theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'">
+      <el-dropdown @command="handleLocaleCommand">
+        <el-button
+          data-testid="locale-switch"
+          text
+          :icon="Connection"
+          :aria-label="t('layout.header.switchLanguage')"
+        />
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item
+              command="zh-CN"
+              data-testid="locale-switch-zh"
+              :disabled="locale === 'zh-CN'"
+            >
+              中文
+            </el-dropdown-item>
+            <el-dropdown-item
+              command="en-US"
+              data-testid="locale-switch-en"
+              :disabled="locale === 'en-US'"
+            >
+              English
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+
+      <el-tooltip :content="theme === 'dark' ? t('layout.header.switchToLight') : t('layout.header.switchToDark')">
         <el-button
           data-testid="toggle-theme"
           text
           :icon="theme === 'dark' ? Sunny : Moon"
-          :aria-label="theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'"
+          :aria-label="theme === 'dark' ? t('layout.header.switchToLight') : t('layout.header.switchToDark')"
           @click="$emit('toggleTheme')"
         />
       </el-tooltip>
@@ -50,10 +90,10 @@ defineEmits<{
         text
         :loading="logoutPending"
         :disabled="logoutPending"
-        title="退出登录"
+        :title="t('layout.header.logout')"
         @click="$emit('logout')"
       >
-        退出
+        {{ t('layout.header.logout') }}
       </el-button>
     </div>
   </div>

@@ -1,9 +1,10 @@
 import type { Router } from 'vue-router'
 
 import { getCurrentUser, refresh } from './api/auth'
+import { appI18n } from './i18n'
 import { pinia } from './store'
 import { useAuthStore } from './store/auth'
-import { ApiError } from './types/http'
+import { ApiError, ProtocolError } from './types/http'
 
 export function installPermissionGuard(router: Router): void {
   router.beforeEach(async (to) => {
@@ -41,5 +42,10 @@ function isUnauthorized(error: unknown): boolean {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message !== '' ? error.message : '认证服务响应异常'
+  if (error instanceof ProtocolError) {
+    return appI18n.global.t('request.protocolError')
+  }
+  return error instanceof Error && error.message !== ''
+    ? error.message
+    : appI18n.global.t('auth.login.bootstrapFailed')
 }

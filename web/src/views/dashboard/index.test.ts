@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getHealth, getReadiness } from '../../api/health'
 import { createExampleTask } from '../../api/taskDemo'
+import { appI18n, setLocale } from '../../i18n'
 import Dashboard from './index.vue'
 
 vi.mock('../../api/health', () => ({
@@ -21,6 +22,8 @@ const mockedCreateTask = vi.mocked(createExampleTask)
 
 describe('Dashboard', () => {
   beforeEach(() => {
+    localStorage.clear()
+    setLocale('zh-CN')
     vi.clearAllMocks()
     mockedHealth.mockResolvedValue({ status: 'up' })
     mockedReadiness.mockResolvedValue({ postgresql: 'up', redis: 'up' })
@@ -48,6 +51,14 @@ describe('Dashboard', () => {
     expect(wrapper.get('[data-testid="dashboard-summary"]').text()).toContain('API')
     expect(wrapper.get('[data-testid="dashboard-summary"]').text()).toContain('PostgreSQL')
     expect(wrapper.get('[data-testid="dashboard-summary"]').text()).toContain('Redis')
+  })
+
+  it('renders Dashboard status in the selected locale', async () => {
+    setLocale('en-US')
+    const wrapper = mountDashboard()
+    await flushPromises()
+    expect(wrapper.get('#dashboard-title').text()).toBe('Dashboard')
+    expect(wrapper.get('[data-testid="api-status"]').text()).toContain('Operational')
   })
 
   it('shows an explicit readiness failure instead of fake healthy states', async () => {
@@ -94,7 +105,7 @@ describe('Dashboard', () => {
 function mountDashboard() {
   return mount(Dashboard, {
     global: {
-      plugins: [ElementPlus],
+      plugins: [ElementPlus, appI18n],
       stubs: {
         ReadinessChart: true,
       },

@@ -27,6 +27,15 @@ describe('router', () => {
     expect(router.resolve('/dashboard').meta.requiresAuth).toBe(true)
   })
 
+  it('declares a translated fixed title for Dashboard', () => {
+    const router = createAppRouter(createMemoryHistory())
+    const dashboard = router.resolve('/dashboard')
+    expect(dashboard.meta.requiresAuth).toBe(true)
+    expect(dashboard.meta.titleKey).toBe('navigation.dashboard')
+    expect(dashboard.meta.affix).toBe(true)
+    expect(router.resolve('/login').meta.titleKey).toBeUndefined()
+  })
+
   it('restores a cold protected route through refresh then current user', async () => {
     const order: string[] = []
     refreshMock.mockImplementation(async () => {
