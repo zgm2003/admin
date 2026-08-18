@@ -5,7 +5,6 @@ import {
   type RouteRecordRaw,
 } from 'vue-router'
 
-import AdminLayout from '../layout/AdminLayout.vue'
 import Dashboard from '../views/dashboard/index.vue'
 
 declare module 'vue-router' {
@@ -16,16 +15,28 @@ declare module 'vue-router' {
 
 const routes: RouteRecordRaw[] = [
   {
-    path: '/',
-    component: AdminLayout,
-    redirect: '/dashboard',
+    path: '/login',
+    name: 'login',
+    component: () => import('../views/auth/login/index.vue'),
     meta: { requiresAuth: false },
+  },
+  {
+    path: '/register',
+    name: 'register',
+    component: () => import('../views/auth/register/index.vue'),
+    meta: { requiresAuth: false },
+  },
+  {
+    path: '/',
+    component: () => import('../layout/index.vue'),
+    redirect: '/dashboard',
+    meta: { requiresAuth: true },
     children: [
       {
         path: 'dashboard',
         name: 'dashboard',
         component: Dashboard,
-        meta: { requiresAuth: false },
+        meta: { requiresAuth: true },
       },
     ],
   },

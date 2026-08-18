@@ -31,7 +31,7 @@ describe('Dashboard', () => {
 
     await flushPromises()
 
-    const topbar = wrapper.get('header.admin-header')
+    const topbar = wrapper.get('section.dashboard-toolbar')
     expect(topbar.find('[data-testid="api-status"]').exists()).toBe(true)
     expect(topbar.find('[data-testid="postgresql-status"]').exists()).toBe(true)
     expect(topbar.find('[data-testid="redis-status"]').exists()).toBe(true)

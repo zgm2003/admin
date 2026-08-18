@@ -1,6 +1,8 @@
-import { AxiosError, type AxiosAdapter } from 'axios'
-import { describe, expect, it } from 'vitest'
+import { AxiosError, AxiosHeaders, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios'
+import { beforeEach, describe, expect, it } from 'vitest'
 
+import { pinia } from '../store'
+import { useAuthStore } from '../store/auth'
 import {
   ApiError,
   ProtocolError,
@@ -40,6 +42,10 @@ describe('unwrapEnvelope', () => {
 })
 
 describe('createRequestClient', () => {
+  beforeEach(() => {
+    useAuthStore(pinia).$reset()
+  })
+
   it('requires an explicit API base URL', () => {
     expect(() => createRequestClient('  ')).toThrow(ProtocolError)
   })
@@ -89,6 +95,111 @@ describe('createRequestClient', () => {
 
     await expect(client.get('/ready', { adapter: failureAdapter(status, data) })).rejects.toBeInstanceOf(ProtocolError)
   })
+
+  it('adds the in-memory bearer token to protected requests', async () => {
+    useAuthStore(pinia).setCredential({ accessToken: 'memory-token', expiresIn: 900 })
+    let authorization = ''
+    const adapter: AxiosAdapter = async (config) => {
+      authorization = AxiosHeaders.from(config.headers).get('Authorization')?.toString() ?? ''
+      return successResponse(config, { code: 0, data: { ok: true }, message: 'ok' })
+    }
+    const client = createRequestClient('http://localhost:16301', adapter)
+
+    await client.get('/api/v1/protected')
+    expect(authorization).toBe('Bearer memory-token')
+  })
+
+  it('coordinates concurrent 401 responses through one refresh', async () => {
+    let refreshCalls = 0
+    let protectedCalls = 0
+    let refreshed = false
+    const adapter: AxiosAdapter = async (config) => {
+      if (config.url === '/api/v1/auth/refresh') {
+        refreshCalls += 1
+        refreshed = true
+        return successResponse(config, { code: 0, data: { accessToken: 'new-token', expiresIn: 900 }, message: 'ok' })
+      }
+      protectedCalls += 1
+      if (!refreshed) {
+        throw apiFailure(config, 401, 10002, '未登录或登录已失效')
+      }
+      expect(AxiosHeaders.from(config.headers).get('Authorization')).toBe('Bearer new-token')
+      return successResponse(config, { code: 0, data: { ok: true }, message: 'ok' })
+    }
+    const client = createRequestClient('http://localhost:16301', adapter)
+
+    await Promise.all([
+      client.get('/api/v1/protected/1'),
+      client.get('/api/v1/protected/2'),
+      client.get('/api/v1/protected/3'),
+    ])
+    expect(refreshCalls).toBe(1)
+    expect(protectedCalls).toBe(6)
+  })
+
+  it('retries each original request at most once', async () => {
+    let protectedCalls = 0
+    const adapter: AxiosAdapter = async (config) => {
+      if (config.url === '/api/v1/auth/refresh') {
+        return successResponse(config, { code: 0, data: { accessToken: 'new-token', expiresIn: 900 }, message: 'ok' })
+      }
+      protectedCalls += 1
+      throw apiFailure(config, 401, 10002, '未登录或登录已失效')
+    }
+    const client = createRequestClient('http://localhost:16301', adapter)
+    await expect(client.get('/api/v1/protected')).rejects.toMatchObject({ code: 10002 })
+    expect(protectedCalls).toBe(2)
+  })
+
+  it('does not refresh login register refresh or logout requests', async () => {
+    let refreshCalls = 0
+    const adapter: AxiosAdapter = async (config) => {
+      if (config.url === '/api/v1/auth/refresh') {
+        refreshCalls += 1
+      }
+      throw apiFailure(config, 401, 10002, '未登录或登录已失效')
+    }
+    const client = createRequestClient('http://localhost:16301', adapter)
+    for (const url of ['/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/refresh', '/api/v1/auth/logout']) {
+      await expect(client.post(url)).rejects.toMatchObject({ code: 10002 })
+    }
+    expect(refreshCalls).toBe(1)
+  })
+
+  it('sets anonymous after a refresh 401', async () => {
+    const store = useAuthStore(pinia)
+    store.setCredential({ accessToken: 'expired', expiresIn: 900 })
+    const adapter: AxiosAdapter = async (config) => {
+      throw apiFailure(config, 401, 10002, '未登录或登录已失效')
+    }
+    const client = createRequestClient('http://localhost:16301', adapter)
+    await expect(client.get('/api/v1/protected')).rejects.toMatchObject({ code: 10002 })
+    expect(store.status).toBe('anonymous')
+    expect(store.accessToken).toBe('')
+  })
+
+  it.each([
+    {
+      name: '503',
+      refreshResult: (config: InternalAxiosRequestConfig) => Promise.reject(apiFailure(config, 503, 10006, '服务暂未就绪')),
+    },
+    {
+      name: 'protocol violation',
+      refreshResult: async (config: InternalAxiosRequestConfig) => successResponse(config, { code: 0, data: { expiresIn: 900 }, message: 'ok' }),
+    },
+  ])('sets error after a refresh $name', async ({ refreshResult }) => {
+    const store = useAuthStore(pinia)
+    const adapter: AxiosAdapter = async (config) => {
+      if (config.url === '/api/v1/auth/refresh') {
+        return refreshResult(config)
+      }
+      throw apiFailure(config, 401, 10002, '未登录或登录已失效')
+    }
+    const client = createRequestClient('http://localhost:16301', adapter)
+    await expect(client.get('/api/v1/protected')).rejects.toBeDefined()
+    expect(store.status).toBe('error')
+    expect(store.errorMessage).not.toBe('')
+  })
 })
 
 function failureAdapter(status: number, data: unknown): AxiosAdapter {
@@ -101,4 +212,24 @@ function failureAdapter(status: number, data: unknown): AxiosAdapter {
       config,
     })
   }
+}
+
+function successResponse(config: InternalAxiosRequestConfig, data: unknown) {
+  return {
+    data,
+    status: 200,
+    statusText: 'OK',
+    headers: new AxiosHeaders(),
+    config,
+  }
+}
+
+function apiFailure(config: InternalAxiosRequestConfig, status: number, code: number, message: string): AxiosError {
+  return new AxiosError(`HTTP ${status}`, AxiosError.ERR_BAD_REQUEST, config, undefined, {
+    data: { code, data: null, message },
+    status,
+    statusText: 'failure',
+    headers: new AxiosHeaders(),
+    config,
+  })
 }

@@ -16,6 +16,12 @@ type API struct {
 	PostgresDSN string
 	RedisURL    string
 	CORSOrigin  string
+	AppSecret   string
+	Auth        Auth
+}
+
+type Auth struct {
+	CookieSecure bool
 }
 
 type Worker struct {
@@ -49,12 +55,22 @@ func LoadAPI(lookupEnv LookupEnv) (API, error) {
 	if err := validateOrigin(corsOrigin); err != nil {
 		return API{}, fmt.Errorf("CORS_ORIGIN: %w", err)
 	}
+	appSecret, err := loadAppSecret(lookupEnv)
+	if err != nil {
+		return API{}, err
+	}
+	auth, err := loadAuth(lookupEnv, corsOrigin)
+	if err != nil {
+		return API{}, err
+	}
 
 	return API{
 		HTTPAddr:    httpAddr,
 		PostgresDSN: postgresDSN,
 		RedisURL:    redisURL,
 		CORSOrigin:  corsOrigin,
+		AppSecret:   appSecret,
+		Auth:        auth,
 	}, nil
 }
 
@@ -91,6 +107,61 @@ func loadRedisURL(lookupEnv LookupEnv) (string, error) {
 		return "", fmt.Errorf("REDIS_URL: %w", err)
 	}
 	return value, nil
+}
+
+func loadAppSecret(lookupEnv LookupEnv) (string, error) {
+	value, err := required(lookupEnv, "APP_SECRET")
+	if err != nil {
+		return "", err
+	}
+	if err := validateAppSecret(value); err != nil {
+		return "", fmt.Errorf("APP_SECRET: %w", err)
+	}
+	return value, nil
+}
+
+func loadAuth(lookupEnv LookupEnv, corsOrigin string) (Auth, error) {
+	value, err := required(lookupEnv, "AUTH_COOKIE_SECURE")
+	if err != nil {
+		return Auth{}, err
+	}
+	if value != "0" && value != "1" {
+		return Auth{}, fmt.Errorf("AUTH_COOKIE_SECURE: must be 0 or 1")
+	}
+
+	origin, err := url.Parse(corsOrigin)
+	if err != nil {
+		return Auth{}, fmt.Errorf("CORS_ORIGIN: invalid origin: %w", err)
+	}
+	wantSecure := origin.Scheme == "https"
+	cookieSecure := value == "1"
+	if cookieSecure != wantSecure {
+		return Auth{}, fmt.Errorf("AUTH_COOKIE_SECURE: must be %d when CORS_ORIGIN uses %s", boolCode(wantSecure), origin.Scheme)
+	}
+	return Auth{CookieSecure: cookieSecure}, nil
+}
+
+func validateAppSecret(value string) error {
+	const placeholder = "replace_with_at_least_64_random_characters_before_running_api_server"
+	if value == placeholder {
+		return fmt.Errorf("placeholder value is not allowed")
+	}
+	if len(value) < 64 {
+		return fmt.Errorf("must contain at least 64 ASCII characters")
+	}
+	for _, character := range []byte(value) {
+		if character > 0x7f {
+			return fmt.Errorf("must contain only ASCII characters")
+		}
+	}
+	return nil
+}
+
+func boolCode(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func required(lookupEnv LookupEnv, key string) (string, error) {

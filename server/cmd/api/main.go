@@ -14,19 +14,26 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	projectmiddleware "admin/server/internal/middleware"
+	"admin/server/internal/module/auth"
 	"admin/server/internal/module/health"
+	"admin/server/internal/module/role"
 	"admin/server/internal/module/taskdemo"
+	"admin/server/internal/module/user"
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
+	"admin/server/internal/secretkey"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
 type routerDependencies struct {
-	CORSOrigin string
-	Logger     *slog.Logger
-	Health     *health.Handler
-	Task       *taskdemo.Handler
+	CORSOrigin   string
+	Logger       *slog.Logger
+	Health       *health.Handler
+	Task         *taskdemo.Handler
+	Auth         *auth.Handler
+	AuthOrigin   gin.HandlerFunc
+	Authenticate gin.HandlerFunc
 }
 
 func main() {
@@ -59,8 +66,28 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer redisClient.Close()
-	if err := database.AutoMigrate(processContext, postgres.GORM, &taskdemo.Task{}); err != nil {
+	if err := database.AutoMigrate(
+		processContext,
+		postgres.GORM,
+		&taskdemo.Task{},
+		&user.User{},
+		&role.Role{},
+		&role.UserRole{},
+		&auth.Session{},
+	); err != nil {
 		return err
+	}
+	if err := auth.EnsureSchema(processContext, postgres.GORM); err != nil {
+		return fmt.Errorf("ensure authentication schema: %w", err)
+	}
+
+	roleRepository := role.NewRepository(postgres.GORM)
+	if err := roleRepository.EnsureSystemRoles(processContext); err != nil {
+		return fmt.Errorf("ensure system roles: %w", err)
+	}
+	keys, err := secretkey.New(settings.AppSecret)
+	if err != nil {
+		return fmt.Errorf("derive application keys: %w", err)
 	}
 
 	queueClient, err := queue.NewClient(settings.RedisURL)
@@ -72,11 +99,24 @@ func run(logger *slog.Logger) error {
 	repository := taskdemo.NewRepository(postgres.GORM)
 	taskService := taskdemo.NewService(repository, taskdemo.NewQueueEnqueuer(queueClient), logger)
 	healthService := health.NewService(postgres, redisClient)
+	userRepository := user.NewRepository(postgres.GORM)
+	sessionRepository := auth.NewSessionRepository(postgres.GORM)
+	authService := auth.NewService(
+		userRepository,
+		roleRepository,
+		sessionRepository,
+		redisClient,
+		auth.NewJWT(keys.JWTSigningKey()),
+		keys.RefreshTokenHMACKey(),
+	)
 	router := buildRouter(routerDependencies{
-		CORSOrigin: settings.CORSOrigin,
-		Logger:     logger,
-		Health:     health.NewHandler(healthService),
-		Task:       taskdemo.NewHandler(taskService),
+		CORSOrigin:   settings.CORSOrigin,
+		Logger:       logger,
+		Health:       health.NewHandler(healthService),
+		Task:         taskdemo.NewHandler(taskService),
+		Auth:         auth.NewHandler(authService, settings.Auth.CookieSecure),
+		AuthOrigin:   auth.RequireOrigin(settings.CORSOrigin),
+		Authenticate: auth.Authenticate(authService),
 	})
 
 	server := &http.Server{Addr: settings.HTTPAddr, Handler: router, ReadHeaderTimeout: 5 * time.Second}
@@ -114,6 +154,8 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 		projectmiddleware.Recovery(dependencies.Logger),
 	)
 	health.RegisterRoutes(router, dependencies.Health)
-	taskdemo.RegisterRoutes(router.Group("/api/v1"), dependencies.Task)
+	apiRoutes := router.Group("/api/v1")
+	taskdemo.RegisterRoutes(apiRoutes, dependencies.Task)
+	auth.RegisterRoutes(apiRoutes, dependencies.Auth, dependencies.AuthOrigin, dependencies.Authenticate)
 	return router
 }

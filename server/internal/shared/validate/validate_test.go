@@ -1,6 +1,7 @@
 package validate_test
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -47,6 +48,35 @@ func TestBindJSONRejectsInvalidDocuments(t *testing.T) {
 				t.Fatalf("error code = %d", appErr.Code)
 			}
 		})
+	}
+}
+
+func TestRequireEmptyBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	emptyRequest := httptest.NewRequest(http.MethodPost, "/", nil)
+	emptyContext, _ := gin.CreateTestContext(httptest.NewRecorder())
+	emptyContext.Request = emptyRequest
+	if err := sharedvalidate.RequireEmptyBody(emptyContext); err != nil {
+		t.Fatalf("empty body rejected: %v", err)
+	}
+
+	for _, body := range []string{" ", "{}", `{"value":1}`} {
+		t.Run(body, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+			context, _ := gin.CreateTestContext(httptest.NewRecorder())
+			context.Request = request
+			if err := sharedvalidate.RequireEmptyBody(context); err == nil {
+				t.Fatalf("body %q was accepted", body)
+			}
+		})
+	}
+
+	hiddenBodyRequest := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("x"))
+	hiddenBodyRequest.ContentLength = 0
+	hiddenBodyContext, _ := gin.CreateTestContext(httptest.NewRecorder())
+	hiddenBodyContext.Request = hiddenBodyRequest
+	if err := sharedvalidate.RequireEmptyBody(hiddenBodyContext); err == nil {
+		t.Fatal("non-empty body with zero Content-Length was accepted")
 	}
 }
 

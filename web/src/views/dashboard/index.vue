@@ -87,10 +87,10 @@ onMounted(refreshHealth)
 
 <template>
   <div class="dashboard-page">
-    <header class="admin-header">
-      <div class="admin-header__title">
+    <section class="dashboard-toolbar" aria-labelledby="dashboard-title">
+      <div class="dashboard-toolbar__title">
         <el-icon><Monitor /></el-icon>
-        <h1>运行概览</h1>
+        <h1 id="dashboard-title">运行概览</h1>
       </div>
 
       <div class="status-track" aria-label="实时状态" aria-live="polite">
@@ -138,9 +138,9 @@ onMounted(refreshHealth)
         aria-label="刷新状态"
         @click="refreshHealth"
       />
-    </header>
+    </section>
 
-    <main class="admin-content">
+    <div class="admin-content">
       <div class="dashboard">
         <p v-if="healthError" class="inline-error health-error" data-testid="health-error">
           {{ healthError }}
@@ -201,6 +201,6 @@ onMounted(refreshHealth)
           </section>
         </div>
       </div>
-    </main>
+    </div>
   </div>
 </template>
