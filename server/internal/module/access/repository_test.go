@@ -170,6 +170,54 @@ func TestRepositoryHasPermissionGrantsSuperAdminOnlyExistingEnabledPermissions(t
 	assertPermission(t, fixture, fixture.delete.Code, false)
 }
 
+func TestRepositoryBuiltinMenusAppearForSuperAdmin(t *testing.T) {
+	fixture := openRepositoryFixture(t)
+	if err := fixture.tx.WithContext(fixture.ctx).Delete(&fixture.userRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	roleRepository := role.NewRepository(fixture.tx)
+	if err := roleRepository.EnsureSystemRoles(fixture.ctx); err != nil {
+		t.Fatal(err)
+	}
+	superAdmin, err := roleRepository.FindByCode(fixture.ctx, role.CodeSuperAdmin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.tx.WithContext(fixture.ctx).Create(&role.UserRole{UserID: fixture.user.ID, RoleID: superAdmin.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	menuService := menu.NewService(menu.NewRepository(fixture.tx))
+	if err := menuService.EnsureBuiltin(fixture.ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, err := access.NewService(access.NewRepository(fixture.tx)).Current(fixture.ctx, fixture.user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, code := range []string{menu.PermissionList, menu.PermissionCreate, menu.PermissionUpdate, menu.PermissionDelete} {
+		if !containsString(snapshot.PermissionCodes, code) {
+			t.Errorf("permission %q is missing: %v", code, snapshot.PermissionCodes)
+		}
+	}
+	if !snapshotContainsMenuCode(snapshot.MenuTree, menu.BuiltinSystemCode) || !snapshotContainsMenuCode(snapshot.MenuTree, menu.PermissionList) {
+		t.Fatalf("builtin menu tree is missing system/list: %+v", snapshot.MenuTree)
+	}
+	var directGrantCount int64
+	var builtinIDs []int64
+	if err := fixture.tx.WithContext(fixture.ctx).Model(&menu.Menu{}).Where("code IN ?", []string{
+		menu.BuiltinSystemCode, menu.PermissionList, menu.PermissionCreate, menu.PermissionUpdate, menu.PermissionDelete,
+	}).Pluck("id", &builtinIDs).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.tx.WithContext(fixture.ctx).Model(&menu.RoleMenu{}).Where("role_id = ? AND menu_id IN ?", superAdmin.ID, builtinIDs).Count(&directGrantCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if directGrantCount != 0 {
+		t.Fatalf("super_admin unexpectedly has %d direct builtin grants", directGrantCount)
+	}
+}
+
 func TestRepositoryFindSourceLoadsSortedRolesMenusAndDirectGrantIDs(t *testing.T) {
 	fixture := openRepositoryFixture(t)
 	secondUserRole := role.UserRole{UserID: fixture.user.ID, RoleID: fixture.secondaryRole.ID}
@@ -349,6 +397,29 @@ func containsMenuID(menus []menu.Menu, menuID int64) bool {
 		if item.ID == menuID {
 			return true
 		}
+	}
+	return false
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func snapshotContainsMenuCode(nodes []access.MenuNode, code string) bool {
+	stack := append([]access.MenuNode(nil), nodes...)
+	for len(stack) > 0 {
+		last := len(stack) - 1
+		node := stack[last]
+		stack = stack[:last]
+		if node.Code == code {
+			return true
+		}
+		stack = append(stack, node.Children...)
 	}
 	return false
 }

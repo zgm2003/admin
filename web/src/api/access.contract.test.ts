@@ -5,7 +5,7 @@ import { parseAccessSnapshot } from './access.contract'
 
 vi.mock('../access/route-views', () => ({
   routeViews: {
-    systemUsers: async () => ({ default: {} }),
+		'system-menus': async () => ({ default: {} }),
   },
 }))
 
@@ -42,22 +42,23 @@ describe('access contract', () => {
   })
 
   it.each([
-    { code: 'system', menuType: 'directory', path: null, viewKey: null, titleKey: 'navigation.main', icon: null },
-    { code: 'system', menuType: 'directory', path: null, viewKey: null, titleKey: 'navigation.main', icon: null, children: [], extra: true },
-    { code: 'system', menuType: 'unknown', path: null, viewKey: null, titleKey: 'navigation.main', icon: null, children: [] },
-    { code: 'system:user:create', menuType: 'action', path: null, viewKey: null, titleKey: 'navigation.main', icon: null, children: [] },
-    { code: 'system:user:view', menuType: 'page', path: null, viewKey: 'systemUsers', titleKey: 'navigation.dashboard', icon: null, children: [] },
-    { code: 'system:user:view', menuType: 'page', path: '/system/users', viewKey: null, titleKey: 'navigation.dashboard', icon: null, children: [] },
-    { code: 'system', menuType: 'directory', path: null, viewKey: 'systemUsers', titleKey: 'navigation.main', icon: null, children: [] },
-    { code: 'system', menuType: 'directory', path: null, viewKey: null, titleKey: 'unknown.title', icon: null, children: [] },
-    { code: 'system', menuType: 'directory', path: null, viewKey: null, titleKey: 'navigation.main', icon: 'Unknown', children: [] },
-    { code: 'system:user:view', menuType: 'page', path: '/system/users', viewKey: 'unknownView', titleKey: 'navigation.dashboard', icon: null, children: [] },
+		{ code: 'system', menuType: 'directory', path: null, viewKey: null, titleKey: 'navigation.system', icon: null },
+		{ code: 'system', menuType: 'directory', path: null, viewKey: null, titleKey: 'navigation.system', icon: null, children: [], extra: true },
+		{ code: 'system', menuType: 'unknown', path: null, viewKey: null, titleKey: 'navigation.system', icon: null, children: [] },
+		{ code: 'system:menu:create', menuType: 'action', path: null, viewKey: null, titleKey: 'permission.menuCreate', icon: null, children: [] },
+		{ code: 'system:menu:list', menuType: 'page', path: null, viewKey: 'system-menus', titleKey: 'navigation.systemMenus', icon: null, children: [] },
+		{ code: 'system:menu:list', menuType: 'page', path: '/system/menus', viewKey: null, titleKey: 'navigation.systemMenus', icon: null, children: [] },
+		{ code: 'system', menuType: 'directory', path: null, viewKey: 'system-menus', titleKey: 'navigation.system', icon: null, children: [] },
+		{ code: 'system', menuType: 'directory', path: '/system', viewKey: null, titleKey: 'navigation.system', icon: null, children: [] },
+		{ code: 'system', menuType: 'directory', path: null, viewKey: null, titleKey: 'navigation.dashboard', icon: null, children: [] },
+		{ code: 'system', menuType: 'directory', path: null, viewKey: null, titleKey: 'navigation.system', icon: 'Unknown', children: [] },
+		{ code: 'system:menu:list', menuType: 'page', path: '/system/menus', viewKey: 'unknownView', titleKey: 'navigation.systemMenus', icon: null, children: [] },
   ])('rejects an invalid menu node: %j', (node: unknown) => {
     expect(() => parseAccessSnapshot({ roleCodes: [], menuTree: [node], permissionCodes: [] })).toThrow(ProtocolError)
   })
 
   it('rejects duplicate menu codes across the tree', () => {
-    const child = validPageNode('system:user:view', '/system/users')
+		const child = validPageNode('system:menu:list', '/system/menus')
     const value: unknown = {
       roleCodes: [],
       menuTree: [validDirectoryNode('system', [child]), validDirectoryNode('system', [])],
@@ -67,8 +68,8 @@ describe('access contract', () => {
   })
 
   it('rejects duplicate page paths and page children', () => {
-    const first = validPageNode('system:user:view', '/system/users')
-    const second = validPageNode('system:team:view', '/system/users')
+		const first = validPageNode('system:menu:list', '/system/menus')
+		const second = validPageNode('system:other:list', '/system/menus')
     expect(() => parseAccessSnapshot({
       roleCodes: [],
       menuTree: [validDirectoryNode('system', [first, second])],
@@ -107,7 +108,7 @@ function validDirectoryNode(code: string, children: unknown[]): MenuFixture {
     menuType: 'directory',
     path: null,
     viewKey: null,
-    titleKey: 'navigation.main',
+		titleKey: 'navigation.system',
     icon: 'Folder',
     children,
   }
@@ -118,8 +119,8 @@ function validPageNode(code: string, path: string): MenuFixture {
     code,
     menuType: 'page',
     path,
-    viewKey: 'systemUsers',
-    titleKey: 'navigation.dashboard',
+		viewKey: 'system-menus',
+		titleKey: 'navigation.systemMenus',
     icon: 'User',
     children: [],
   }

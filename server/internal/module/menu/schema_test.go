@@ -56,9 +56,11 @@ func TestMenuSchema(t *testing.T) {
 	}
 
 	checks := map[string][]string{
-		"ck_sys_menu_type":       {"CHECK", "menu_type", "directory", "page", "action"},
-		"ck_sys_menu_shape":      {"CHECK", "menu_type", "path", "view_key"},
-		"ck_sys_menu_is_enabled": {"CHECK", "is_enabled", "0", "1"},
+		"ck_sys_menu_type":         {"CHECK", "menu_type", "directory", "page", "action"},
+		"ck_sys_menu_shape":        {"CHECK", "menu_type", "path", "view_key"},
+		"ck_sys_menu_render_shape": {"CHECK", "directory", "path", "action", "icon"},
+		"ck_sys_menu_sort_order":   {"CHECK", "sort_order", "0"},
+		"ck_sys_menu_is_enabled":   {"CHECK", "is_enabled", "0", "1"},
 	}
 	for name, fragments := range checks {
 		definition := constraintDefinition(t, connection, ctx, name)
@@ -81,9 +83,10 @@ func TestMenuSchema(t *testing.T) {
 	}
 
 	indexes := map[string][]string{
-		"ux_sys_menu_code_active":   {"CREATE UNIQUE INDEX", "(code)", "WHERE (deleted_at IS NULL)"},
-		"ix_sys_menu_parent_active": {"CREATE INDEX", "(parent_id, sort_order, id)", "WHERE (deleted_at IS NULL)"},
-		"ux_sys_role_menu_active":   {"CREATE UNIQUE INDEX", "(role_id, menu_id)", "WHERE (deleted_at IS NULL)"},
+		"ux_sys_menu_code_active":      {"CREATE UNIQUE INDEX", "(code)", "WHERE (deleted_at IS NULL)"},
+		"ux_sys_menu_page_path_active": {"CREATE UNIQUE INDEX", "(path)", "menu_type", "page", "deleted_at IS NULL"},
+		"ix_sys_menu_parent_active":    {"CREATE INDEX", "(parent_id, sort_order, id)", "WHERE (deleted_at IS NULL)"},
+		"ux_sys_role_menu_active":      {"CREATE UNIQUE INDEX", "(role_id, menu_id)", "WHERE (deleted_at IS NULL)"},
 	}
 	for name, fragments := range indexes {
 		definition := indexDefinition(t, connection, ctx, name)

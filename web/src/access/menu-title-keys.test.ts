@@ -1,0 +1,22 @@
+import { describe, expect, it } from 'vitest'
+
+import { isMenuTitleKey, menuTitleKeys } from './menu-title-keys'
+
+describe('menu title key protocol', () => {
+  it('contains exactly the initial core menu title keys', () => {
+    expect(menuTitleKeys).toEqual([
+      'navigation.system',
+      'navigation.systemMenus',
+      'permission.menuCreate',
+      'permission.menuUpdate',
+      'permission.menuDelete',
+    ])
+  })
+
+  it('rejects application messages that are not registered menu titles', () => {
+    expect(isMenuTitleKey('navigation.system')).toBe(true)
+    expect(isMenuTitleKey('navigation.dashboard')).toBe(false)
+    expect(isMenuTitleKey('menu.title')).toBe(false)
+    expect(isMenuTitleKey('')).toBe(false)
+  })
+})

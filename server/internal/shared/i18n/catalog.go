@@ -30,6 +30,16 @@ const (
 	KeySuperAdminExists      MessageKey = "auth.superAdminExists"
 	KeyPermissionDenied      MessageKey = "access.permissionDenied"
 	KeyAccessSnapshotInvalid MessageKey = "access.snapshotInvalid"
+	KeyMenuTreeInvalid       MessageKey = "menu.treeInvalid"
+	KeyMenuNotFound          MessageKey = "menu.notFound"
+	KeyMenuCodeConflict      MessageKey = "menu.codeConflict"
+	KeyMenuPathConflict      MessageKey = "menu.pathConflict"
+	KeyMenuInvalidParent     MessageKey = "menu.invalidParent"
+	KeyMenuCycleDetected     MessageKey = "menu.cycleDetected"
+	KeyMenuBuiltinProtected  MessageKey = "menu.builtinProtected"
+	KeyMenuParentDisabled    MessageKey = "menu.parentDisabled"
+	KeyMenuStructureConflict MessageKey = "menu.structureConflict"
+	KeyMenuInvalidFields     MessageKey = "menu.invalidFields"
 )
 
 var catalogs = map[Locale]map[MessageKey]string{
@@ -46,6 +56,16 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySuperAdminExists:      "超级管理员已存在",
 		KeyPermissionDenied:      "无权执行 {{permission}}",
 		KeyAccessSnapshotInvalid: "访问权限数据无效",
+		KeyMenuTreeInvalid:       "菜单树数据无效",
+		KeyMenuNotFound:          "菜单不存在",
+		KeyMenuCodeConflict:      "菜单编码 {{code}} 已存在",
+		KeyMenuPathConflict:      "页面路径 {{path}} 已存在",
+		KeyMenuInvalidParent:     "父菜单无效",
+		KeyMenuCycleDetected:     "菜单层级存在循环",
+		KeyMenuBuiltinProtected:  "核心菜单 {{code}} 不允许执行该操作",
+		KeyMenuParentDisabled:    "菜单 {{code}} 的父级未全部启用",
+		KeyMenuStructureConflict: "菜单 {{code}} 的结构与现有子节点或授权冲突",
+		KeyMenuInvalidFields:     "菜单字段无效",
 	},
 	EnUS: {
 		KeyInternal:              "Internal server error",
@@ -60,6 +80,16 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySuperAdminExists:      "A super administrator already exists",
 		KeyPermissionDenied:      "Permission denied: {{permission}}",
 		KeyAccessSnapshotInvalid: "Access permission data is invalid",
+		KeyMenuTreeInvalid:       "Menu tree data is invalid",
+		KeyMenuNotFound:          "Menu not found",
+		KeyMenuCodeConflict:      "Menu code {{code}} already exists",
+		KeyMenuPathConflict:      "Page path {{path}} already exists",
+		KeyMenuInvalidParent:     "Invalid parent menu",
+		KeyMenuCycleDetected:     "Menu hierarchy contains a cycle",
+		KeyMenuBuiltinProtected:  "Builtin menu {{code}} cannot be changed by this operation",
+		KeyMenuParentDisabled:    "The parent hierarchy of menu {{code}} is not fully enabled",
+		KeyMenuStructureConflict: "Menu {{code}} conflicts with existing children or grants",
+		KeyMenuInvalidFields:     "Invalid menu fields",
 	},
 }
 

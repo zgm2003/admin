@@ -107,7 +107,7 @@ describe('admin layout', () => {
         menuType: 'page',
         path: '/system/users',
         viewKey: 'system-users',
-        titleKey: 'navigation.dashboard',
+			titleKey: 'navigation.systemMenus',
         icon: 'User',
         children: [],
       }],

@@ -16,26 +16,26 @@ const testViews: RouteViewMap = {
 describe('access route registration', () => {
   it('registers only pages below the named layout and preserves title metadata', () => {
     const router = testRouter()
-    const cleanup = registerAccessRoutes(router, [directory('system', [
-      page('system:user:view', '/system/users', 'systemUsers'),
+		const cleanup = registerAccessRoutes(router, [directory('system', [
+			page('system:menu:list', '/system/menus', 'systemUsers'),
     ])], testViews)
 
     expect(router.hasRoute('access:system')).toBe(false)
-    expect(router.hasRoute('access:system:user:view')).toBe(true)
-    const resolved = router.resolve('/system/users')
-    expect(resolved.name).toBe('access:system:user:view')
+		expect(router.hasRoute('access:system:menu:list')).toBe(true)
+		const resolved = router.resolve('/system/menus')
+		expect(resolved.name).toBe('access:system:menu:list')
     expect(resolved.meta.requiresAuth).toBe(true)
-    expect(resolved.meta.titleKey).toBe('navigation.dashboard')
+		expect(resolved.meta.titleKey).toBe('navigation.systemMenus')
     expect(resolved.matched.map((record) => record.name)).toContain('admin-layout')
 
     cleanup()
-    expect(router.hasRoute('access:system:user:view')).toBe(false)
-    expect(router.resolve('/system/users').matched).toHaveLength(0)
+		expect(router.hasRoute('access:system:menu:list')).toBe(false)
+		expect(router.resolve('/system/menus').matched).toHaveLength(0)
   })
 
   it('rejects an unknown view key before registering anything', () => {
     const router = testRouter()
-    const nodes = [page('system:user:view', '/system/users', 'missingView')]
+		const nodes = [page('system:menu:list', '/system/menus', 'missingView')]
 
     expect(() => registerAccessRoutes(router, nodes, testViews)).toThrow(ProtocolError)
     expect(router.getRoutes().filter((route) => String(route.name).startsWith('access:'))).toHaveLength(0)
@@ -45,15 +45,15 @@ describe('access route registration', () => {
     {
       name: 'duplicate path',
       nodes: [
-        page('system:user:view', '/system/users', 'systemUsers'),
-        page('system:team:view', '/system/users', 'systemTeams'),
+				page('system:menu:list', '/system/menus', 'systemUsers'),
+				page('system:other:list', '/system/menus', 'systemTeams'),
       ],
     },
     {
       name: 'duplicate route name',
       nodes: [
-        page('system:user:view', '/system/users', 'systemUsers'),
-        page('system:user:view', '/system/other-users', 'systemUsers'),
+				page('system:menu:list', '/system/menus', 'systemUsers'),
+				page('system:menu:list', '/system/other-menus', 'systemUsers'),
       ],
     },
   ])('rejects $name before registering anything', ({ nodes }) => {
@@ -65,16 +65,16 @@ describe('access route registration', () => {
   it('returns an idempotent cleanup for multiple flat pages', () => {
     const router = testRouter()
     const cleanup = registerAccessRoutes(router, [directory('system', [
-      page('system:user:view', '/system/users', 'systemUsers'),
-      page('system:team:view', '/system/teams', 'systemTeams'),
+			page('system:menu:list', '/system/menus', 'systemUsers'),
+			page('system:other:list', '/system/other-menus', 'systemTeams'),
     ])], testViews)
 
-    expect(router.hasRoute('access:system:user:view')).toBe(true)
-    expect(router.hasRoute('access:system:team:view')).toBe(true)
+		expect(router.hasRoute('access:system:menu:list')).toBe(true)
+		expect(router.hasRoute('access:system:other:list')).toBe(true)
     cleanup()
     cleanup()
-    expect(router.hasRoute('access:system:user:view')).toBe(false)
-    expect(router.hasRoute('access:system:team:view')).toBe(false)
+		expect(router.hasRoute('access:system:menu:list')).toBe(false)
+		expect(router.hasRoute('access:system:other:list')).toBe(false)
   })
 })
 
@@ -97,7 +97,7 @@ function directory(code: string, children: AccessMenuNode[]): AccessMenuNode {
     menuType: 'directory',
     path: null,
     viewKey: null,
-    titleKey: 'navigation.main',
+		titleKey: 'navigation.system',
     icon: null,
     children,
   }
@@ -109,7 +109,7 @@ function page(code: string, path: string, viewKey: string): AccessMenuNode {
     menuType: 'page',
     path,
     viewKey,
-    titleKey: 'navigation.dashboard',
+		titleKey: 'navigation.systemMenus',
     icon: null,
     children: [],
   }

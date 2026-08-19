@@ -23,6 +23,20 @@ var menuConstraints = []constraintDefinition{
 		)`,
 	},
 	{
+		name:  "ck_sys_menu_render_shape",
+		table: "sys_menu",
+		ddl: `ALTER TABLE sys_menu ADD CONSTRAINT ck_sys_menu_render_shape CHECK (
+			(menu_type = 'directory' AND path IS NULL AND view_key IS NULL)
+			OR (menu_type = 'page' AND path IS NOT NULL AND btrim(path) <> '' AND view_key IS NOT NULL AND btrim(view_key) <> '')
+			OR (menu_type = 'action' AND path IS NULL AND view_key IS NULL AND icon IS NULL)
+		)`,
+	},
+	{
+		name:  "ck_sys_menu_sort_order",
+		table: "sys_menu",
+		ddl:   `ALTER TABLE sys_menu ADD CONSTRAINT ck_sys_menu_sort_order CHECK (sort_order >= 0)`,
+	},
+	{
 		name:  "ck_sys_menu_is_enabled",
 		table: "sys_menu",
 		ddl:   `ALTER TABLE sys_menu ADD CONSTRAINT ck_sys_menu_is_enabled CHECK (is_enabled IN (0, 1))`,
@@ -46,6 +60,7 @@ var menuConstraints = []constraintDefinition{
 
 var menuIndexes = []string{
 	`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_menu_code_active ON sys_menu (code) WHERE deleted_at IS NULL`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_menu_page_path_active ON sys_menu (path) WHERE deleted_at IS NULL AND menu_type = 'page'`,
 	`CREATE INDEX IF NOT EXISTS ix_sys_menu_parent_active ON sys_menu (parent_id, sort_order, id) WHERE deleted_at IS NULL`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_role_menu_active ON sys_role_menu (role_id, menu_id) WHERE deleted_at IS NULL`,
 }

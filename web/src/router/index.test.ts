@@ -242,7 +242,7 @@ function businessAccessSnapshot(): AccessSnapshot {
       menuType: 'directory',
       path: null,
       viewKey: null,
-      titleKey: 'navigation.main',
+		titleKey: 'navigation.system',
       icon: null,
       children: [
         {
@@ -250,7 +250,7 @@ function businessAccessSnapshot(): AccessSnapshot {
           menuType: 'page',
           path: '/system/teams',
           viewKey: 'systemTeams',
-          titleKey: 'navigation.dashboard',
+			titleKey: 'navigation.systemMenus',
           icon: null,
           children: [],
         },
@@ -259,7 +259,7 @@ function businessAccessSnapshot(): AccessSnapshot {
           menuType: 'page',
           path: '/system/users',
           viewKey: 'systemUsers',
-          titleKey: 'navigation.dashboard',
+			titleKey: 'navigation.systemMenus',
           icon: null,
           children: [],
         },

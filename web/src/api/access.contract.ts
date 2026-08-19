@@ -1,6 +1,6 @@
 import { isMenuIconKey, hasRouteViewKey } from '../access/protocol'
 import type { MenuIconKey } from '../access/menu-icons'
-import { isAppMessageKey, type AppMessageKey } from '../i18n'
+import { isMenuTitleKey, type MenuTitleKey } from '../access/menu-title-keys'
 import { ProtocolError } from '../types/http'
 
 export type MenuType = 'directory' | 'page'
@@ -10,7 +10,7 @@ export interface AccessMenuNode {
   menuType: MenuType
   path: string | null
   viewKey: string | null
-  titleKey: AppMessageKey
+  titleKey: MenuTitleKey
   icon: MenuIconKey | null
   children: AccessMenuNode[]
 }
@@ -52,7 +52,7 @@ function parseMenuNode(value: unknown, label: string, state: ParseState): Access
   }
   const menuType = record.menuType
 
-  if (typeof record.titleKey !== 'string' || !isAppMessageKey(record.titleKey)) {
+	if (typeof record.titleKey !== 'string' || !isMenuTitleKey(record.titleKey)) {
     throw new ProtocolError(`${label} titleKey is not registered`)
   }
   const titleKey = record.titleKey
@@ -67,12 +67,11 @@ function parseMenuNode(value: unknown, label: string, state: ParseState): Access
   }
 
   if (menuType === 'directory') {
-    if (record.viewKey !== null) {
-      throw new ProtocolError(`${label} directory viewKey must be null`)
+		if (record.path !== null || record.viewKey !== null) {
+			throw new ProtocolError(`${label} directory path and viewKey must be null`)
     }
-    const path = nullableNonEmptyString(record.path, `${label} path`)
     const children = record.children.map((child, index) => parseMenuNode(child, `${label}.children[${index}]`, state))
-    return { code, menuType, path, viewKey: null, titleKey, icon, children }
+		return { code, menuType, path: null, viewKey: null, titleKey, icon, children }
   }
 
   const path = nonEmptyString(record.path, `${label} page path`)
@@ -110,11 +109,6 @@ function nonEmptyString(value: unknown, label: string): string {
     throw new ProtocolError(`${label} must be a non-empty trimmed string`)
   }
   return value
-}
-
-function nullableNonEmptyString(value: unknown, label: string): string | null {
-  if (value === null) return null
-  return nonEmptyString(value, label)
 }
 
 function closedRecord(value: unknown, expectedKeys: string[], label: string): Record<string, unknown> {

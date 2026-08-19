@@ -39,12 +39,12 @@ describe('AccessMenuNode', () => {
 
   it('updates the menu title from the active frontend locale', async () => {
     const wrapper = mountMenuNode(pageNode())
-    expect(wrapper.text()).toContain('工作台')
+    expect(wrapper.text()).toContain('菜单管理')
 
     setLocale('en-US')
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.text()).toContain('Dashboard')
+    expect(wrapper.text()).toContain('Menu management')
   })
 })
 
@@ -103,7 +103,7 @@ function directoryNode(): AccessMenuNodeDTO {
     menuType: 'directory',
     path: null,
     viewKey: null,
-    titleKey: 'navigation.main',
+    titleKey: 'navigation.system',
     icon: 'Folder',
     children: [pageNode()],
   }
@@ -115,7 +115,7 @@ function pageNode(): AccessMenuNodeDTO {
     menuType: 'page',
     path: '/system/users',
     viewKey: 'system-users',
-    titleKey: 'navigation.dashboard',
+    titleKey: 'navigation.systemMenus',
     icon: 'Setting',
     children: [],
   }

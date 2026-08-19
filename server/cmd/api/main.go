@@ -30,14 +30,16 @@ import (
 )
 
 type routerDependencies struct {
-	CORSOrigin   string
-	Logger       *slog.Logger
-	Health       *health.Handler
-	Task         *taskdemo.Handler
-	Auth         *auth.Handler
-	Access       *access.Handler
-	AuthOrigin   gin.HandlerFunc
-	Authenticate gin.HandlerFunc
+	CORSOrigin        string
+	Logger            *slog.Logger
+	Health            *health.Handler
+	Task              *taskdemo.Handler
+	Auth              *auth.Handler
+	Access            *access.Handler
+	Menu              *menu.Handler
+	AuthOrigin        gin.HandlerFunc
+	Authenticate      gin.HandlerFunc
+	RequirePermission func(string) gin.HandlerFunc
 }
 
 func main() {
@@ -92,6 +94,11 @@ func run(logger *slog.Logger) error {
 	if err := menu.EnsureSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("ensure menu schema: %w", err)
 	}
+	menuRepository := menu.NewRepository(postgres.GORM)
+	menuService := menu.NewService(menuRepository)
+	if err := menuService.EnsureBuiltin(processContext); err != nil {
+		return fmt.Errorf("ensure builtin menus: %w", err)
+	}
 
 	roleRepository := role.NewRepository(postgres.GORM)
 	if err := roleRepository.EnsureSystemRoles(processContext); err != nil {
@@ -131,8 +138,12 @@ func run(logger *slog.Logger) error {
 		Task:         taskdemo.NewHandler(taskService),
 		Auth:         auth.NewHandler(authService, settings.Auth.CookieSecure),
 		Access:       access.NewHandler(accessService),
+		Menu:         menu.NewHandler(menuService),
 		AuthOrigin:   auth.RequireOrigin(settings.CORSOrigin),
 		Authenticate: authenticate,
+		RequirePermission: func(code string) gin.HandlerFunc {
+			return access.RequirePermission(accessService, code)
+		},
 	})
 
 	server := &http.Server{Addr: settings.HTTPAddr, Handler: router, ReadHeaderTimeout: 5 * time.Second}
@@ -174,6 +185,7 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	apiRoutes := router.Group("/api/v1")
 	auth.RegisterRoutes(apiRoutes, dependencies.Auth, dependencies.AuthOrigin, dependencies.Authenticate)
 	access.RegisterRoutes(apiRoutes, dependencies.Access, dependencies.Authenticate)
+	menu.RegisterRoutes(apiRoutes, dependencies.Menu, dependencies.Authenticate, dependencies.RequirePermission)
 	taskdemo.RegisterRoutes(apiRoutes, dependencies.Task, dependencies.Authenticate)
 	return router
 }

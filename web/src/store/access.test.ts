@@ -76,7 +76,7 @@ describe('access store', () => {
       menuType: 'directory',
       path: null,
       viewKey: null,
-      titleKey: 'navigation.main',
+			titleKey: 'navigation.system',
       icon: null,
       children: [],
     })

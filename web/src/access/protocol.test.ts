@@ -9,8 +9,9 @@ describe('access protocol registries', () => {
     expect(isMenuIconKey('Unknown')).toBe(false)
   })
 
-  it('starts with no production business route views', () => {
-    expect(hasRouteViewKey('systemUsers')).toBe(false)
+	it('registers the menu-management view explicitly', () => {
+		expect(hasRouteViewKey('system-menus')).toBe(true)
+		expect(hasRouteViewKey('systemUsers')).toBe(false)
     expect(hasRouteViewKey('')).toBe(false)
   })
 })

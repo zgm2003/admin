@@ -13,6 +13,36 @@ func TestCatalogsHaveTheSameKeysAndParameters(t *testing.T) {
 	}
 }
 
+func TestCatalogsTranslateMenuErrorsWithExactParameters(t *testing.T) {
+	tests := []struct {
+		key    i18n.MessageKey
+		params map[string]string
+	}{
+		{key: i18n.KeyMenuTreeInvalid},
+		{key: i18n.KeyMenuNotFound},
+		{key: i18n.KeyMenuCodeConflict, params: map[string]string{"code": "reports"}},
+		{key: i18n.KeyMenuPathConflict, params: map[string]string{"path": "/reports"}},
+		{key: i18n.KeyMenuInvalidParent},
+		{key: i18n.KeyMenuCycleDetected},
+		{key: i18n.KeyMenuBuiltinProtected, params: map[string]string{"code": "system"}},
+		{key: i18n.KeyMenuParentDisabled, params: map[string]string{"code": "reports"}},
+		{key: i18n.KeyMenuStructureConflict, params: map[string]string{"code": "reports"}},
+		{key: i18n.KeyMenuInvalidFields},
+	}
+
+	for _, locale := range []i18n.Locale{i18n.ZhCN, i18n.EnUS} {
+		for _, test := range tests {
+			message, err := i18n.Translate(locale, test.key, test.params)
+			if err != nil {
+				t.Errorf("Translate(%q, %q) error = %v", locale, test.key, err)
+			}
+			if message == "" {
+				t.Errorf("Translate(%q, %q) returned an empty message", locale, test.key)
+			}
+		}
+	}
+}
+
 func TestTranslateUsesTheRequestedLocale(t *testing.T) {
 	for _, test := range []struct {
 		locale i18n.Locale

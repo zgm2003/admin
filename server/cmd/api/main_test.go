@@ -11,8 +11,10 @@ import (
 	"admin/server/internal/module/access"
 	"admin/server/internal/module/auth"
 	"admin/server/internal/module/health"
+	"admin/server/internal/module/menu"
 	"admin/server/internal/module/taskdemo"
 	"admin/server/internal/module/user"
+	"admin/server/internal/shared/yesno"
 	"github.com/gin-gonic/gin"
 )
 
@@ -32,6 +34,28 @@ type apiAccessService struct{}
 
 func (apiAccessService) Current(context.Context, int64) (access.Snapshot, error) {
 	return access.Snapshot{RoleCodes: []string{}, MenuTree: []access.MenuNode{}, PermissionCodes: []string{}}, nil
+}
+
+type apiMenuService struct{}
+
+func (apiMenuService) List(context.Context) ([]menu.ManagedMenu, error) {
+	return []menu.ManagedMenu{}, nil
+}
+
+func (apiMenuService) Create(context.Context, menu.CreateInput) (int64, error) {
+	return 1, nil
+}
+
+func (apiMenuService) Update(context.Context, int64, menu.UpdateInput) error {
+	return nil
+}
+
+func (apiMenuService) UpdateStatus(context.Context, int64, yesno.Value) error {
+	return nil
+}
+
+func (apiMenuService) Delete(context.Context, int64) error {
+	return nil
 }
 
 type apiAuthService struct{}
@@ -70,20 +94,29 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		Task:         taskdemo.NewHandler(submitService{}),
 		Auth:         auth.NewHandler(apiAuthService{}, false),
 		Access:       access.NewHandler(apiAccessService{}),
+		Menu:         menu.NewHandler(apiMenuService{}),
 		AuthOrigin:   auth.RequireOrigin("http://localhost:16300"),
 		Authenticate: auth.Authenticate(apiAuthService{}),
+		RequirePermission: func(string) gin.HandlerFunc {
+			return func(context *gin.Context) { context.Next() }
+		},
 	})
 
 	want := map[string]int{
-		"GET /health":                1,
-		"GET /ready":                 1,
-		"POST /api/v1/example-tasks": 1,
-		"POST /api/v1/auth/register": 1,
-		"POST /api/v1/auth/login":    1,
-		"POST /api/v1/auth/refresh":  1,
-		"POST /api/v1/auth/logout":   1,
-		"GET /api/v1/auth/me":        1,
-		"GET /api/v1/access":         1,
+		"GET /health":                    1,
+		"GET /ready":                     1,
+		"POST /api/v1/example-tasks":     1,
+		"POST /api/v1/auth/register":     1,
+		"POST /api/v1/auth/login":        1,
+		"POST /api/v1/auth/refresh":      1,
+		"POST /api/v1/auth/logout":       1,
+		"GET /api/v1/auth/me":            1,
+		"GET /api/v1/access":             1,
+		"GET /api/v1/menus":              1,
+		"POST /api/v1/menus":             1,
+		"PUT /api/v1/menus/:id":          1,
+		"PATCH /api/v1/menus/:id/status": 1,
+		"DELETE /api/v1/menus/:id":       1,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path
@@ -111,6 +144,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 	}{
 		{method: http.MethodGet, path: "/api/v1/access"},
 		{method: http.MethodPost, path: "/api/v1/example-tasks"},
+		{method: http.MethodGet, path: "/api/v1/menus"},
 	} {
 		recorder = httptest.NewRecorder()
 		request = httptest.NewRequest(protectedPath.method, protectedPath.path, nil)
