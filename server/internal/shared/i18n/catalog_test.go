@@ -70,6 +70,27 @@ func TestCatalogsTranslateRoleErrorsWithExactParameters(t *testing.T) {
 	}
 }
 
+func TestCatalogsTranslateUserErrorsWithExactParameters(t *testing.T) {
+	keys := []i18n.MessageKey{
+		i18n.KeyUserNotFound,
+		i18n.KeyUserUsernameConflict,
+		i18n.KeyUserSelfOperation,
+		i18n.KeyUserSuperAdminProtected,
+		i18n.KeyUserLastSuperAdmin,
+		i18n.KeyUserInvalidRoles,
+		i18n.KeyUserRoleNotFound,
+		i18n.KeyUserDataInvalid,
+	}
+	for _, locale := range []i18n.Locale{i18n.ZhCN, i18n.EnUS} {
+		for _, key := range keys {
+			message, err := i18n.Translate(locale, key, nil)
+			if err != nil || message == "" {
+				t.Errorf("Translate(%q, %q) = %q,%v", locale, key, message, err)
+			}
+		}
+	}
+}
+
 func TestTranslateUsesTheRequestedLocale(t *testing.T) {
 	for _, test := range []struct {
 		locale i18n.Locale

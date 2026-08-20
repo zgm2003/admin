@@ -78,3 +78,31 @@ func TestAccessLogContainsInternalCauseWithoutLeakingItInResponse(t *testing.T) 
 		t.Fatal("response leaked internal cause")
 	}
 }
+
+func TestAccessLogContainsExplicitUserMutationContextAndBusinessCause(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	router := gin.New()
+	router.Use(projectmiddleware.RequestID(), projectmiddleware.AccessLog(logger))
+	router.PUT("/users/:id", func(context *gin.Context) {
+		projectmiddleware.SetAccessLogOperation(context, "user.username.update", 41, 7)
+		response.Fail(context, &apperror.Error{HTTPStatus: http.StatusConflict, Code: 16001, MessageKey: "user.usernameConflict", Cause: errors.New("constraint detail")})
+	})
+	request := httptest.NewRequest(http.MethodPut, "/users/7", strings.NewReader(`{"password":"secret"}`))
+	request.Header.Set(projectmiddleware.RequestIDHeader, "request-user-mutation")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	var entry map[string]any
+	if err := json.Unmarshal(output.Bytes(), &entry); err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]any{"requestId": "request-user-mutation", "operation": "user.username.update", "actorUserId": float64(41), "targetUserId": float64(7), "errorCode": float64(16001), "error": "constraint detail"} {
+		if entry[key] != want {
+			t.Fatalf("log[%s]=%#v want %#v; entry=%v", key, entry[key], want, entry)
+		}
+	}
+	if strings.Contains(output.String(), "secret") || strings.Contains(output.String(), "password") || strings.Contains(recorder.Body.String(), "constraint detail") {
+		t.Fatalf("sensitive data leaked: log=%s response=%s", output.String(), recorder.Body.String())
+	}
+}

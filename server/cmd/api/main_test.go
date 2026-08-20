@@ -41,6 +41,25 @@ func (apiAccessService) Current(context.Context, int64) (access.Snapshot, error)
 type apiMenuService struct{}
 
 type apiRoleService struct{}
+type apiUserService struct{}
+
+func (apiUserService) List(context.Context, user.ListQuery) (pagination.Result[user.ListItem], error) {
+	return pagination.Result[user.ListItem]{List: []user.ListItem{}}, nil
+}
+func (apiUserService) RoleOptions(context.Context) ([]user.RoleSummary, error) {
+	return []user.RoleSummary{}, nil
+}
+func (apiUserService) Update(context.Context, int64, int64, user.UpdateInput) (user.UpdatedUsername, error) {
+	return user.UpdatedUsername{}, nil
+}
+func (apiUserService) UpdateStatus(context.Context, int64, int64, yesno.Value) error { return nil }
+func (apiUserService) Delete(context.Context, int64, int64) error                    { return nil }
+func (apiUserService) Roles(context.Context, int64) (user.Roles, error) {
+	return user.Roles{Roles: []user.RoleSummary{}, RoleIDs: []int64{}}, nil
+}
+func (apiUserService) UpdateRoles(context.Context, int64, int64, []int64) (int64, error) {
+	return 0, nil
+}
 
 func (apiRoleService) List(context.Context, role.ListQuery) (pagination.Result[role.ListItem], error) {
 	return pagination.Result[role.ListItem]{List: []role.ListItem{}}, nil
@@ -115,6 +134,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		Access:       access.NewHandler(apiAccessService{}),
 		Menu:         menu.NewHandler(apiMenuService{}),
 		Role:         role.NewHandler(apiRoleService{}),
+		User:         user.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
 		AuthOrigin:   auth.RequireOrigin("http://localhost:16300"),
 		Authenticate: auth.Authenticate(apiAuthService{}),
 		RequirePermission: func(string) gin.HandlerFunc {
@@ -145,6 +165,13 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"DELETE /api/v1/roles/:id":          1,
 		"GET /api/v1/roles/:id/permissions": 1,
 		"PUT /api/v1/roles/:id/permissions": 1,
+		"GET /api/v1/users":                 1,
+		"GET /api/v1/users/role-options":    1,
+		"PUT /api/v1/users/:id":             1,
+		"PATCH /api/v1/users/:id/status":    1,
+		"DELETE /api/v1/users/:id":          1,
+		"GET /api/v1/users/:id/roles":       1,
+		"PUT /api/v1/users/:id/roles":       1,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path

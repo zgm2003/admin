@@ -256,6 +256,8 @@ func TestRepositoryBuiltinMenusAppearForSuperAdmin(t *testing.T) {
 		menu.PermissionRoleList, menu.PermissionRoleCreate, menu.PermissionRoleUpdate,
 		menu.PermissionRoleStatus, menu.PermissionRoleDefault, menu.PermissionRoleDelete,
 		menu.PermissionRoleAuthorize,
+		menu.PermissionUserList, menu.PermissionUserUpdate, menu.PermissionUserStatus,
+		menu.PermissionUserDelete, menu.PermissionUserRoles,
 	} {
 		if !containsString(snapshot.PermissionCodes, code) {
 			t.Errorf("permission %q is missing: %v", code, snapshot.PermissionCodes)
@@ -270,6 +272,7 @@ func TestRepositoryBuiltinMenusAppearForSuperAdmin(t *testing.T) {
 		menu.BuiltinSystemCode, menu.PermissionList, menu.PermissionCreate, menu.PermissionUpdate, menu.PermissionDelete,
 		menu.PermissionRoleList, menu.PermissionRoleCreate, menu.PermissionRoleUpdate,
 		menu.PermissionRoleStatus, menu.PermissionRoleDefault, menu.PermissionRoleDelete, menu.PermissionRoleAuthorize,
+		menu.PermissionUserList, menu.PermissionUserUpdate, menu.PermissionUserStatus, menu.PermissionUserDelete, menu.PermissionUserRoles,
 	}).Pluck("id", &builtinIDs).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -320,6 +323,55 @@ func TestRepositoryBuiltinRolePermissionsDeriveAncestorsForOrdinaryRoles(t *test
 			}
 			if !test.wantAuthorize && containsString(snapshot.PermissionCodes, menu.PermissionRoleCreate) {
 				t.Fatal("page grant expanded to a role action")
+			}
+		})
+	}
+}
+
+func TestRepositoryBuiltinUserPermissionsDeriveAncestorsForOrdinaryRoles(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		grantedCode string
+		wantRoles   bool
+	}{
+		{name: "user page", grantedCode: menu.PermissionUserList},
+		{name: "user roles action", grantedCode: menu.PermissionUserRoles, wantRoles: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := openRepositoryFixture(t)
+			if err := fixture.tx.WithContext(fixture.ctx).Delete(&fixture.directGrant).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := menu.NewService(menu.NewRepository(fixture.tx)).EnsureBuiltin(fixture.ctx); err != nil {
+				t.Fatal(err)
+			}
+			var granted menu.Menu
+			if err := fixture.tx.WithContext(fixture.ctx).Where("code = ?", test.grantedCode).Take(&granted).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := fixture.tx.WithContext(fixture.ctx).Create(&menu.RoleMenu{RoleID: fixture.primaryRole.ID, MenuID: granted.ID}).Error; err != nil {
+				t.Fatal(err)
+			}
+			snapshot, err := access.NewService(fixture.repository).Current(fixture.ctx, fixture.user.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, code := range []string{menu.BuiltinSystemCode, menu.PermissionUserList} {
+				if !snapshotContainsMenuCode(snapshot.MenuTree, code) {
+					t.Errorf("snapshot lacks %q: %+v", code, snapshot.MenuTree)
+				}
+			}
+			if containsString(snapshot.PermissionCodes, menu.PermissionUserRoles) != test.wantRoles {
+				t.Fatalf("roles permission mismatch: %v", snapshot.PermissionCodes)
+			}
+			if !test.wantRoles && containsString(snapshot.PermissionCodes, menu.PermissionUserUpdate) {
+				t.Fatal("page grant expanded to an action")
+			}
+			if err := fixture.tx.WithContext(fixture.ctx).Model(&role.Role{}).Where("id = ?", fixture.primaryRole.ID).Update("is_enabled", yesno.No).Error; err != nil {
+				t.Fatal(err)
+			}
+			if _, err := access.NewService(fixture.repository).Current(fixture.ctx, fixture.user.ID); err == nil {
+				t.Fatal("disabled role still contributed user permissions")
 			}
 		})
 	}

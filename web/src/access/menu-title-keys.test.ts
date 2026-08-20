@@ -17,6 +17,11 @@ describe('menu title key protocol', () => {
       'permission.roleSetDefault',
       'permission.roleDelete',
       'permission.roleAuthorize',
+			'navigation.systemUsers',
+			'permission.userUpdate',
+			'permission.userStatus',
+			'permission.userDelete',
+			'permission.userRoles',
     ])
   })
 

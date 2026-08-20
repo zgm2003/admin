@@ -44,4 +44,18 @@ describe('auth store', () => {
     expect(store.accessExpiresAt).toBe(0)
     expect(store.user).toBeNull()
   })
+
+	it('updates only the authenticated current username', () => {
+		const store = useAuthStore()
+		expect(store.updateUsername(7, 'ignored')).toBe(false)
+		store.setCredential({ accessToken: 'jwt', expiresIn: 900 }, 1_000)
+		store.setAuthenticated({ userId: 7, username: 'old', email: 'user@example.com' })
+		expect(store.updateUsername(7, 'new')).toBe(true)
+		expect(store.user).toEqual({ userId: 7, username: 'new', email: 'user@example.com' })
+		expect(store.updateUsername(8, 'ignored')).toBe(false)
+		expect(store.user?.username).toBe('new')
+		expect(store.accessToken).toBe('jwt')
+		expect(store.accessExpiresAt).toBe(901_000)
+		expect(store.status).toBe('authenticated')
+	})
 })

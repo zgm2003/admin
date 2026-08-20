@@ -293,8 +293,8 @@ func loadBuiltinMenus(t *testing.T, tx *gorm.DB, ctx context.Context) map[string
 
 func assertExactBuiltinMenus(t *testing.T, items map[string]Menu) {
 	t.Helper()
-	if len(items) != 12 {
-		t.Fatalf("builtin menu count = %d, want 12: %+v", len(items), items)
+	if len(items) != 17 {
+		t.Fatalf("builtin menu count = %d, want 17: %+v", len(items), items)
 	}
 	system := items[BuiltinSystemCode]
 	list := items[PermissionList]
@@ -302,6 +302,7 @@ func assertExactBuiltinMenus(t *testing.T, items map[string]Menu) {
 	update := items[PermissionUpdate]
 	deleteItem := items[PermissionDelete]
 	roles := items[PermissionRoleList]
+	users := items[PermissionUserList]
 	assertBuiltinMenu(t, system, TypeDirectory, nil, "navigation.system", nil, nil, stringPointer("Setting"), 100)
 	assertBuiltinMenu(t, list, TypePage, &system.ID, "navigation.systemMenus", stringPointer("/system/menus"), stringPointer("system-menus"), stringPointer("Menu"), 10)
 	assertBuiltinMenu(t, create, TypeAction, &list.ID, "permission.menuCreate", nil, nil, nil, 10)
@@ -320,6 +321,15 @@ func assertExactBuiltinMenus(t *testing.T, items map[string]Menu) {
 		{PermissionRoleAuthorize, "permission.roleAuthorize"},
 	} {
 		assertBuiltinMenu(t, items[item.code], TypeAction, &roles.ID, item.key, nil, nil, nil, (index+1)*10)
+	}
+	assertBuiltinMenu(t, users, TypePage, &system.ID, "navigation.systemUsers", stringPointer("/system/users"), stringPointer("system-users"), stringPointer("User"), 30)
+	for index, item := range []struct{ code, key string }{
+		{PermissionUserUpdate, "permission.userUpdate"},
+		{PermissionUserStatus, "permission.userStatus"},
+		{PermissionUserDelete, "permission.userDelete"},
+		{PermissionUserRoles, "permission.userRoles"},
+	} {
+		assertBuiltinMenu(t, items[item.code], TypeAction, &users.ID, item.key, nil, nil, nil, (index+1)*10)
 	}
 }
 
@@ -346,6 +356,7 @@ func builtinMenuCodes() []string {
 		BuiltinSystemCode, PermissionList, PermissionCreate, PermissionUpdate, PermissionDelete,
 		PermissionRoleList, PermissionRoleCreate, PermissionRoleUpdate, PermissionRoleStatus,
 		PermissionRoleDefault, PermissionRoleDelete, PermissionRoleAuthorize,
+		PermissionUserList, PermissionUserUpdate, PermissionUserStatus, PermissionUserDelete, PermissionUserRoles,
 	}
 }
 

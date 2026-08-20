@@ -13,8 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/user"
@@ -143,7 +141,7 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 		}
 		return Credential{}, apperror.DependencyUnavailable(err)
 	}
-	pointerKey := currentSessionPointerKey(credential.ID)
+	pointerKey := user.CurrentSessionPointerKey(credential.ID)
 	if pointerErr := s.pointers.SetString(ctx, pointerKey, strconv.FormatInt(session.ID, 10), refreshExpiresAt.Sub(now)); pointerErr != nil {
 		revokeErr := s.sessions.Revoke(ctx, session.ID, now)
 		return Credential{}, apperror.DependencyUnavailable(errors.Join(pointerErr, revokeErr))
@@ -243,7 +241,7 @@ func (s *Service) Logout(ctx context.Context, identity Identity) error {
 		}
 		return apperror.DependencyUnavailable(err)
 	}
-	if err := s.pointers.Delete(ctx, currentSessionPointerKey(identity.UserID)); err != nil {
+	if err := s.pointers.Delete(ctx, user.CurrentSessionPointerKey(identity.UserID)); err != nil {
 		return apperror.DependencyUnavailable(err)
 	}
 	return nil
@@ -264,7 +262,7 @@ func (s *Service) CurrentUser(ctx context.Context, identity Identity) (user.Curr
 }
 
 func (s *Service) currentSessionID(ctx context.Context, userID int64, now time.Time) (int64, error) {
-	key := currentSessionPointerKey(userID)
+	key := user.CurrentSessionPointerKey(userID)
 	value, found, err := s.pointers.GetString(ctx, key)
 	if err != nil {
 		return 0, apperror.DependencyUnavailable(err)
@@ -301,15 +299,9 @@ type normalizedAccount struct {
 }
 
 func validateAccountInput(username, email, password, confirmPassword string) (normalizedAccount, error) {
-	username = strings.TrimSpace(username)
-	usernameRunes := utf8.RuneCountInString(username)
-	if usernameRunes < 3 || usernameRunes > 64 {
-		return normalizedAccount{}, apperror.InvalidRequest(fmt.Errorf("username must contain 3 to 64 Unicode characters"))
-	}
-	for _, character := range username {
-		if !unicode.IsLetter(character) && !unicode.IsNumber(character) && character != '_' && character != '-' {
-			return normalizedAccount{}, apperror.InvalidRequest(fmt.Errorf("username contains an unsupported character"))
-		}
+	username, err := user.NormalizeUsername(username)
+	if err != nil {
+		return normalizedAccount{}, apperror.InvalidRequest(err)
 	}
 
 	email = strings.ToLower(strings.TrimSpace(email))
@@ -353,8 +345,4 @@ func (s *Service) hashRefreshToken(token string) string {
 	digest := hmac.New(sha256.New, s.refreshTokenHMACKey)
 	_, _ = digest.Write([]byte(token))
 	return hex.EncodeToString(digest.Sum(nil))
-}
-
-func currentSessionPointerKey(userID int64) string {
-	return "auth:current-session:" + strconv.FormatInt(userID, 10)
 }

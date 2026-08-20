@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -15,6 +16,16 @@ import (
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
+
+func TestServiceUsesSharedCurrentSessionPointerKey(t *testing.T) {
+	source, err := os.ReadFile("service.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(source), "func currentSessionPointerKey") {
+		t.Fatal("auth service still declares currentSessionPointerKey")
+	}
+}
 
 func TestRegisterCreatesEnabledUserWithDefaultRole(t *testing.T) {
 	var stored user.CreateInput

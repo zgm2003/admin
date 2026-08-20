@@ -37,4 +37,22 @@ describe('frontend i18n', () => {
     expect(isAppMessageKey('access.loadFailed')).toBe(true)
     expect(isAppMessageKey('navigation.unknown')).toBe(false)
   })
+
+	it('contains the complete bilingual user-management copy', () => {
+		const keys = [
+			'navigation.systemUsers', 'permission.userUpdate', 'permission.userStatus',
+			'permission.userDelete', 'permission.userRoles', 'user.title', 'user.keyword',
+			'user.status', 'user.role', 'user.search', 'user.reset', 'user.refresh',
+			'user.enableConfirm', 'user.disableConfirm', 'user.deleteConfirm',
+		]
+		for (const key of keys) {
+			expect(isAppMessageKey(key)).toBe(true)
+			expect(appI18n.global.t(key), key).toBeTruthy()
+		}
+		expect(appI18n.global.t('user.disableConfirm')).toContain('重新登录')
+		expect(appI18n.global.t('user.deleteConfirm')).toContain('新账号')
+		setLocale('en-US')
+		expect(appI18n.global.t('user.disableConfirm')).toContain('sign in')
+		expect(appI18n.global.t('user.deleteConfirm')).toContain('new account')
+	})
 })

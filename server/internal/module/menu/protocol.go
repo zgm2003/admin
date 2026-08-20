@@ -12,6 +12,11 @@ const (
 	PermissionRoleDefault   = "system:role:default"
 	PermissionRoleDelete    = "system:role:delete"
 	PermissionRoleAuthorize = "system:role:authorize"
+	PermissionUserList      = "system:user:list"
+	PermissionUserUpdate    = "system:user:update"
+	PermissionUserStatus    = "system:user:status"
+	PermissionUserDelete    = "system:user:delete"
+	PermissionUserRoles     = "system:user:roles"
 
 	BuiltinSystemCode   = "system"
 	BuiltinMenuListCode = PermissionList
@@ -30,11 +35,17 @@ var menuTitleKeys = map[string]struct{}{
 	"permission.roleSetDefault": {},
 	"permission.roleDelete":     {},
 	"permission.roleAuthorize":  {},
+	"navigation.systemUsers":    {},
+	"permission.userUpdate":     {},
+	"permission.userStatus":     {},
+	"permission.userDelete":     {},
+	"permission.userRoles":      {},
 }
 
 var menuViewKeys = map[string]struct{}{
 	"system-menus": {},
 	"system-roles": {},
+	"system-users": {},
 }
 
 var menuIconKeys = map[string]struct{}{
@@ -60,6 +71,11 @@ var builtinCodes = map[string]struct{}{
 	PermissionRoleDefault:   {},
 	PermissionRoleDelete:    {},
 	PermissionRoleAuthorize: {},
+	PermissionUserList:      {},
+	PermissionUserUpdate:    {},
+	PermissionUserStatus:    {},
+	PermissionUserDelete:    {},
+	PermissionUserRoles:     {},
 }
 
 func IsMenuTitleKey(value string) bool {

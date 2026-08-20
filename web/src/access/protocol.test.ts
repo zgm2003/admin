@@ -11,6 +11,7 @@ describe('access protocol registries', () => {
 
 	it('registers the menu-management view explicitly', () => {
 		expect(hasRouteViewKey('system-menus')).toBe(true)
+		expect(hasRouteViewKey('system-users')).toBe(true)
 		expect(hasRouteViewKey('systemUsers')).toBe(false)
     expect(hasRouteViewKey('')).toBe(false)
   })

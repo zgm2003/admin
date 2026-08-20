@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -202,7 +203,381 @@ func TestFindCurrentUserRequiresAnEnabledRole(t *testing.T) {
 	}
 }
 
+func TestCountAndListUsersWithStableFiltersAndRoles(t *testing.T) {
+	tx, ctx, _ := openUserTransaction(t)
+	repository := user.NewRepository(tx)
+	unique := fmt.Sprintf("list%d", time.Now().UnixNano())
+	roles := []role.Role{
+		{Code: unique + "_b", Name: "B role", IsEnabled: yesno.No},
+		{Code: unique + "_a", Name: "A role", IsEnabled: yesno.Yes},
+	}
+	if err := tx.WithContext(ctx).Create(&roles).Error; err != nil {
+		t.Fatal(err)
+	}
+	roleB, roleA := roles[0], roles[1]
+	if err := tx.WithContext(ctx).Model(&role.Role{}).Where("id = ?", roleB.ID).Update("is_enabled", yesno.No).Error; err != nil {
+		t.Fatal(err)
+	}
+	roleB.IsEnabled = yesno.No
+	first := createListedUser(t, tx, ctx, unique+"-first", unique+"-FIRST@example.com", yesno.Yes, time.Date(2026, 8, 20, 1, 0, 0, 0, time.UTC), roleB.ID, roleA.ID)
+	second := createListedUser(t, tx, ctx, unique+"-second", "literal%_\\"+unique+"@example.com", yesno.No, time.Date(2026, 8, 20, 2, 0, 0, 0, time.UTC), roleA.ID)
+
+	query := user.ListQuery{Page: 1, PageSize: 20, Keyword: unique}
+	total, err := repository.Count(ctx, query)
+	if err != nil || total != 2 {
+		t.Fatalf("Count() = %d,%v", total, err)
+	}
+	items, err := repository.List(ctx, query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 2 || items[0].ID != first.ID || items[1].ID != second.ID {
+		t.Fatalf("stable list = %+v", items)
+	}
+	if got := []string{items[0].Roles[0].Code, items[0].Roles[1].Code}; !reflect.DeepEqual(got, []string{roleA.Code, roleB.Code}) {
+		t.Fatalf("role order = %v", got)
+	}
+	if items[0].Roles[1].IsEnabled != yesno.No {
+		t.Fatal("disabled role was hidden or changed")
+	}
+
+	for _, keyword := range []string{strings.ToUpper(unique + "-first"), "%", "_", "\\"} {
+		found, listErr := repository.List(ctx, user.ListQuery{Page: 1, PageSize: 20, Keyword: keyword})
+		if listErr != nil || len(found) != 1 {
+			t.Fatalf("List(keyword=%q) = %+v,%v", keyword, found, listErr)
+		}
+	}
+
+	enabled := yesno.Yes
+	items, err = repository.List(ctx, user.ListQuery{Page: 1, PageSize: 20, Keyword: unique, IsEnabled: &enabled})
+	if err != nil || len(items) != 1 || items[0].ID != first.ID {
+		t.Fatalf("enabled list = %+v,%v", items, err)
+	}
+	items, err = repository.List(ctx, user.ListQuery{Page: 1, PageSize: 20, Keyword: unique, RoleID: &roleB.ID})
+	if err != nil || len(items) != 1 || items[0].ID != first.ID {
+		t.Fatalf("role list = %+v,%v", items, err)
+	}
+	missingRoleID := int64(9223372036854770000)
+	items, err = repository.List(ctx, user.ListQuery{Page: 1, PageSize: 20, Keyword: unique, RoleID: &missingRoleID})
+	if err != nil || items == nil || len(items) != 0 {
+		t.Fatalf("unknown role list = %#v,%v", items, err)
+	}
+}
+
+func TestListDetectsInvalidUserRoleData(t *testing.T) {
+	tx, ctx, _ := openUserTransaction(t)
+	repository := user.NewRepository(tx)
+	unique := fmt.Sprintf("invalid_%d", time.Now().UnixNano())
+	withoutRole := user.User{Username: unique + "_none", Email: unique + "_none@example.com", PasswordHash: "hash", IsEnabled: yesno.Yes}
+	if err := tx.WithContext(ctx).Create(&withoutRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.List(ctx, user.ListQuery{Page: 1, PageSize: 20, Keyword: withoutRole.Username}); !errors.Is(err, user.ErrUserDataInvalid) {
+		t.Fatalf("missing relation error = %v", err)
+	}
+
+	deletedRole := role.Role{Code: unique + "_deleted", Name: "Deleted", IsEnabled: yesno.Yes}
+	if err := tx.WithContext(ctx).Create(&deletedRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	withDeletedRole := createListedUser(t, tx, ctx, unique+"_deleted_user", unique+"_deleted@example.com", yesno.Yes, time.Now().UTC(), deletedRole.ID)
+	if err := tx.WithContext(ctx).Delete(&deletedRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.List(ctx, user.ListQuery{Page: 1, PageSize: 20, Keyword: withDeletedRole.Username}); !errors.Is(err, user.ErrUserDataInvalid) {
+		t.Fatalf("deleted role relation error = %v", err)
+	}
+}
+
+func TestFindRoleOptionsIncludesDisabledRolesInStableOrder(t *testing.T) {
+	tx, ctx, _ := openUserTransaction(t)
+	repository := user.NewRepository(tx)
+	unique := fmt.Sprintf("option_%d", time.Now().UnixNano())
+	disabled := role.Role{Code: unique, Name: "Disabled option", IsEnabled: yesno.No}
+	if err := tx.WithContext(ctx).Create(&disabled).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.WithContext(ctx).Model(&role.Role{}).Where("id = ?", disabled.ID).Update("is_enabled", yesno.No).Error; err != nil {
+		t.Fatal(err)
+	}
+	options, err := repository.FindRoleOptions(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for index, option := range options {
+		if index > 0 && (options[index-1].Code > option.Code || options[index-1].Code == option.Code && options[index-1].ID > option.ID) {
+			t.Fatalf("role options are not sorted: %+v", options)
+		}
+		if option.ID == disabled.ID && option.IsEnabled == yesno.No {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("disabled role option was omitted")
+	}
+}
+
+func TestRepositoryTransactionRollsBackPriorWrites(t *testing.T) {
+	tx, ctx, roleRepository := openUserTransaction(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := createListedUser(t, tx, ctx, fmt.Sprintf("rollback%d", time.Now().UnixNano()), fmt.Sprintf("rollback%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
+	repository := user.NewRepository(tx)
+	forced := errors.New("forced rollback")
+	err = repository.Transaction(ctx, func(scoped *user.Repository) error {
+		if err := scoped.UpdateStatus(ctx, created.ID, yesno.No, time.Now().UTC()); err != nil {
+			return err
+		}
+		return forced
+	})
+	if !errors.Is(err, forced) {
+		t.Fatalf("Transaction() error = %v", err)
+	}
+	var stored user.User
+	if err := tx.WithContext(ctx).Take(&stored, created.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.IsEnabled != yesno.Yes {
+		t.Fatal("transaction did not roll back status update")
+	}
+}
+
+func TestRepositoryLockAndCountEffectiveSuperAdmins(t *testing.T) {
+	tx, ctx, roleRepository := openUserTransaction(t)
+	superRole, err := roleRepository.FindByCode(ctx, role.CodeSuperAdmin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := createListedUser(t, tx, ctx, fmt.Sprintf("super%d", time.Now().UnixNano()), fmt.Sprintf("super%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), superRole.ID)
+	repository := user.NewRepository(tx)
+	lockedRole, err := repository.LockSuperAdminRole(ctx)
+	if err != nil || lockedRole.ID != superRole.ID {
+		t.Fatalf("LockSuperAdminRole() = %+v,%v", lockedRole, err)
+	}
+	lockedUser, err := repository.LockUser(ctx, created.ID)
+	if err != nil || lockedUser.ID != created.ID {
+		t.Fatalf("LockUser() = %+v,%v", lockedUser, err)
+	}
+	effective, err := repository.IsEffectiveSuperAdmin(ctx, created.ID, superRole.ID)
+	if err != nil || !effective {
+		t.Fatalf("IsEffectiveSuperAdmin() = %v,%v", effective, err)
+	}
+	activeBinding, err := repository.HasActiveRole(ctx, created.ID, superRole.ID)
+	if err != nil || !activeBinding {
+		t.Fatalf("HasActiveRole() = %v,%v", activeBinding, err)
+	}
+	count, err := repository.CountEffectiveSuperAdmins(ctx, superRole.ID)
+	if err != nil || count < 1 {
+		t.Fatalf("CountEffectiveSuperAdmins() = %d,%v", count, err)
+	}
+	if err := repository.UpdateStatus(ctx, created.ID, yesno.No, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	effective, err = repository.IsEffectiveSuperAdmin(ctx, created.ID, superRole.ID)
+	if err != nil || effective {
+		t.Fatalf("disabled IsEffectiveSuperAdmin() = %v,%v", effective, err)
+	}
+	activeBinding, err = repository.HasActiveRole(ctx, created.ID, superRole.ID)
+	if err != nil || !activeBinding {
+		t.Fatalf("disabled HasActiveRole() = %v,%v", activeBinding, err)
+	}
+	roles, err := repository.FindUserRoles(ctx, created.ID)
+	if err != nil || len(roles) != 1 || roles[0].RoleID != superRole.ID {
+		t.Fatalf("FindUserRoles() = %+v,%v", roles, err)
+	}
+	allRoles, err := repository.LockRoles(ctx)
+	if err != nil || len(allRoles) < 2 {
+		t.Fatalf("LockRoles() = %+v,%v", allRoles, err)
+	}
+}
+
+func TestRepositoryUpdateSoftDeleteCreateUserRolesAndRevoke(t *testing.T) {
+	tx, ctx, roleRepository := openUserTransaction(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	extraRole := role.Role{Code: fmt.Sprintf("extra_%d", time.Now().UnixNano()), Name: "Extra", IsEnabled: yesno.Yes}
+	if err := tx.WithContext(ctx).Create(&extraRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	created := createListedUser(t, tx, ctx, fmt.Sprintf("writes%d", time.Now().UnixNano()), fmt.Sprintf("writes%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
+	repository := user.NewRepository(tx)
+	operationTime := time.Date(2026, 8, 20, 6, 7, 8, 0, time.UTC)
+	if err := repository.UpdateUsername(ctx, created.ID, created.Username+"x", operationTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.UpdateStatus(ctx, created.ID, yesno.No, operationTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.TouchUser(ctx, created.ID, operationTime.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	lockedRelations, err := repository.LockUserRoles(ctx, created.ID)
+	if err != nil || len(lockedRelations) != 1 {
+		t.Fatalf("LockUserRoles() = %+v,%v", lockedRelations, err)
+	}
+	if err := repository.SoftDeleteUserRoleIDs(ctx, []int64{lockedRelations[0].ID}, operationTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.CreateUserRoles(ctx, []role.UserRole{{UserID: created.ID, RoleID: defaultRole.ID}, {UserID: created.ID, RoleID: extraRole.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	activeRelations, err := repository.FindUserRoles(ctx, created.ID)
+	if err != nil || len(activeRelations) != 2 {
+		t.Fatalf("active relationships = %+v,%v", activeRelations, err)
+	}
+	session := auth.Session{UserID: created.ID, RefreshTokenHash: fmt.Sprintf("%064d", created.ID), Version: 1, ClientIP: "127.0.0.1", UserAgent: "test", RefreshExpiresAt: operationTime.Add(time.Hour)}
+	if err := tx.WithContext(ctx).Create(&session).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.RevokeActiveSessions(ctx, created.ID, operationTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.SoftDeleteUser(ctx, created.ID, operationTime); err != nil {
+		t.Fatal(err)
+	}
+	unscoped, err := repository.LockUserUnscoped(ctx, created.ID)
+	if err != nil || !unscoped.DeletedAt.Valid || !unscoped.DeletedAt.Time.Equal(operationTime) || !unscoped.UpdatedAt.Equal(operationTime) {
+		t.Fatalf("deleted user = %+v,%v", unscoped, err)
+	}
+	var storedSession auth.Session
+	if err := tx.WithContext(ctx).Take(&storedSession, session.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if storedSession.RevokedAt == nil || !storedSession.RevokedAt.Equal(operationTime) || !storedSession.UpdatedAt.Equal(operationTime) {
+		t.Fatalf("revoked session = %+v", storedSession)
+	}
+}
+
+func TestRepositoryUpdateUsernameMapsActiveConstraint(t *testing.T) {
+	tx, ctx, roleRepository := openUserTransaction(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := createListedUser(t, tx, ctx, fmt.Sprintf("conflict%d", time.Now().UnixNano()), fmt.Sprintf("conflict%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
+	second := createListedUser(t, tx, ctx, fmt.Sprintf("other%d", time.Now().UnixNano()), fmt.Sprintf("other%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
+	if err := user.NewRepository(tx).UpdateUsername(ctx, second.ID, strings.ToUpper(first.Username), time.Now().UTC()); !errors.Is(err, user.ErrUsernameConflict) {
+		t.Fatalf("UpdateUsername() error = %v", err)
+	}
+}
+
+func TestRepositoryTransactionRollsBackStatusRolesAndSessionsAfterForcedFailure(t *testing.T) {
+	tx, ctx, roleRepository := openUserTransaction(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := createListedUser(t, tx, ctx, fmt.Sprintf("forced%d", time.Now().UnixNano()), fmt.Sprintf("forced%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
+	var relation role.UserRole
+	if err := tx.WithContext(ctx).Where("user_id = ? AND role_id = ?", created.ID, defaultRole.ID).Take(&relation).Error; err != nil {
+		t.Fatal(err)
+	}
+	session := auth.Session{UserID: created.ID, RefreshTokenHash: fmt.Sprintf("%064d", created.ID+10000), Version: 1, ClientIP: "127.0.0.1", UserAgent: "rollback", RefreshExpiresAt: time.Now().UTC().Add(time.Hour)}
+	if err := tx.WithContext(ctx).Create(&session).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.WithContext(ctx).Exec(`
+		CREATE FUNCTION pg_temp.reject_user_session_revoke() RETURNS trigger AS $$
+		BEGIN
+			RAISE EXCEPTION 'forced session revoke failure';
+		END;
+		$$ LANGUAGE plpgsql;
+		CREATE TRIGGER test_reject_user_session_revoke
+		BEFORE UPDATE ON sys_user_session
+		FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_user_session_revoke();`).Error; err != nil {
+		t.Fatal(err)
+	}
+	repository := user.NewRepository(tx)
+	operationTime := time.Now().UTC().Truncate(time.Microsecond)
+	err = repository.Transaction(ctx, func(scoped *user.Repository) error {
+		if err := scoped.UpdateStatus(ctx, created.ID, yesno.No, operationTime); err != nil {
+			return err
+		}
+		if err := scoped.SoftDeleteUserRoleIDs(ctx, []int64{relation.ID}, operationTime); err != nil {
+			return err
+		}
+		return scoped.RevokeActiveSessions(ctx, created.ID, operationTime)
+	})
+	if err == nil {
+		t.Fatal("forced session failure was ignored")
+	}
+	var storedUser user.User
+	if err := tx.WithContext(ctx).Take(&storedUser, created.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	var storedRelation role.UserRole
+	if err := tx.WithContext(ctx).Take(&storedRelation, relation.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	var storedSession auth.Session
+	if err := tx.WithContext(ctx).Take(&storedSession, session.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if storedUser.IsEnabled != yesno.Yes || storedRelation.DeletedAt.Valid || storedSession.RevokedAt != nil {
+		t.Fatalf("partial write survived rollback: user=%+v relation=%+v session=%+v", storedUser, storedRelation, storedSession)
+	}
+}
+
+func TestRepositoryLockSuperAdminRoleSerializesMutationEntry(t *testing.T) {
+	db, ctx, _ := openUserDatabase(t)
+	firstTx := db.WithContext(ctx).Begin()
+	if firstTx.Error != nil {
+		t.Fatal(firstTx.Error)
+	}
+	t.Cleanup(func() { _ = firstTx.Rollback().Error })
+	if _, err := user.NewRepository(firstTx).LockSuperAdminRole(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	secondTx := db.WithContext(ctx).Begin()
+	if secondTx.Error != nil {
+		t.Fatal(secondTx.Error)
+	}
+	t.Cleanup(func() { _ = secondTx.Rollback().Error })
+	waitCtx, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
+	defer cancel()
+	if _, err := user.NewRepository(secondTx).LockSuperAdminRole(waitCtx); err == nil {
+		t.Fatal("second mutation acquired the common first lock before the first transaction completed")
+	}
+}
+
+func createListedUser(t *testing.T, tx *gorm.DB, ctx context.Context, username, email string, enabled yesno.Value, createdAt time.Time, roleIDs ...int64) user.User {
+	t.Helper()
+	created := user.User{Username: username, Email: email, PasswordHash: "hash", IsEnabled: enabled, CreatedAt: createdAt, UpdatedAt: createdAt}
+	if err := tx.WithContext(ctx).Create(&created).Error; err != nil {
+		t.Fatal(err)
+	}
+	if enabled == yesno.No {
+		if err := tx.WithContext(ctx).Model(&user.User{}).Where("id = ?", created.ID).Update("is_enabled", yesno.No).Error; err != nil {
+			t.Fatal(err)
+		}
+		created.IsEnabled = yesno.No
+	}
+	for _, roleID := range roleIDs {
+		if err := tx.WithContext(ctx).Create(&role.UserRole{UserID: created.ID, RoleID: roleID}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	return created
+}
+
 func openUserTransaction(t *testing.T) (*gorm.DB, context.Context, *role.Repository) {
+	t.Helper()
+	db, ctx, _ := openUserDatabase(t)
+	tx := db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		t.Fatalf("begin transaction: %v", tx.Error)
+	}
+	t.Cleanup(func() { _ = tx.Rollback().Error })
+	return tx, ctx, role.NewRepository(tx)
+}
+
+func openUserDatabase(t *testing.T) (*gorm.DB, context.Context, *role.Repository) {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("PostgreSQL integration test")
@@ -230,16 +605,11 @@ func openUserTransaction(t *testing.T) (*gorm.DB, context.Context, *role.Reposit
 	if err := auth.EnsureSchema(ctx, connection.GORM); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
-	tx := connection.GORM.WithContext(ctx).Begin()
-	if tx.Error != nil {
-		t.Fatalf("begin transaction: %v", tx.Error)
-	}
-	t.Cleanup(func() { _ = tx.Rollback().Error })
-	roleRepository := role.NewRepository(tx)
+	roleRepository := role.NewRepository(connection.GORM)
 	if err := role.NewService(roleRepository).EnsureSystemRoles(ctx); err != nil {
 		t.Fatalf("EnsureSystemRoles: %v", err)
 	}
-	return tx, ctx, roleRepository
+	return connection.GORM, ctx, roleRepository
 }
 
 func newCreateInput(prefix string, roleID int64) user.CreateInput {

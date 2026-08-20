@@ -29,6 +29,12 @@ func TestMenuProtocolConstantsAndFiniteValues(t *testing.T) {
 			t.Errorf("role permission %s = %q", name, got)
 		}
 	}
+	userPermissions := map[string]string{"list": PermissionUserList, "update": PermissionUserUpdate, "status": PermissionUserStatus, "delete": PermissionUserDelete, "roles": PermissionUserRoles}
+	for name, got := range userPermissions {
+		if got != "system:user:"+name {
+			t.Errorf("user permission %s = %q", name, got)
+		}
+	}
 
 	for _, key := range []string{
 		"navigation.system",
@@ -43,6 +49,11 @@ func TestMenuProtocolConstantsAndFiniteValues(t *testing.T) {
 		"permission.roleSetDefault",
 		"permission.roleDelete",
 		"permission.roleAuthorize",
+		"navigation.systemUsers",
+		"permission.userUpdate",
+		"permission.userStatus",
+		"permission.userDelete",
+		"permission.userRoles",
 	} {
 		if !IsMenuTitleKey(key) {
 			t.Errorf("IsMenuTitleKey(%q) = false", key)
@@ -52,7 +63,7 @@ func TestMenuProtocolConstantsAndFiniteValues(t *testing.T) {
 		t.Fatal("IsMenuTitleKey accepted an unregistered key")
 	}
 
-	if !IsMenuViewKey("system-menus") || !IsMenuViewKey("system-roles") || IsMenuViewKey("dashboard") || IsMenuViewKey("") {
+	if !IsMenuViewKey("system-menus") || !IsMenuViewKey("system-roles") || !IsMenuViewKey("system-users") || IsMenuViewKey("dashboard") || IsMenuViewKey("") {
 		t.Fatal("menu view protocol accepted an invalid value or rejected system-menus")
 	}
 
@@ -78,12 +89,17 @@ func TestMenuProtocolConstantsAndFiniteValues(t *testing.T) {
 		PermissionRoleDefault,
 		PermissionRoleDelete,
 		PermissionRoleAuthorize,
+		PermissionUserList,
+		PermissionUserUpdate,
+		PermissionUserStatus,
+		PermissionUserDelete,
+		PermissionUserRoles,
 	} {
 		if !IsBuiltinCode(code) {
 			t.Errorf("IsBuiltinCode(%q) = false", code)
 		}
 	}
-	if IsBuiltinCode("system:user:list") || IsBuiltinCode("") {
+	if IsBuiltinCode("system:unknown:list") || IsBuiltinCode("") {
 		t.Fatal("IsBuiltinCode accepted a non-builtin code")
 	}
 }

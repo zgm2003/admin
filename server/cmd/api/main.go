@@ -38,6 +38,7 @@ type routerDependencies struct {
 	Access            *access.Handler
 	Menu              *menu.Handler
 	Role              *role.Handler
+	User              *user.Handler
 	AuthOrigin        gin.HandlerFunc
 	Authenticate      gin.HandlerFunc
 	RequirePermission func(string) gin.HandlerFunc
@@ -133,18 +134,23 @@ func run(logger *slog.Logger) error {
 		auth.NewJWT(keys.JWTSigningKey()),
 		keys.RefreshTokenHMACKey(),
 	)
+	userService := user.NewService(userRepository, redisClient)
 	accessRepository := access.NewRepository(postgres.GORM)
 	accessService := access.NewService(accessRepository)
 	authenticate := auth.Authenticate(authService)
 	router := buildRouter(routerDependencies{
-		CORSOrigin:   settings.CORSOrigin,
-		Logger:       logger,
-		Health:       health.NewHandler(healthService),
-		Task:         taskdemo.NewHandler(taskService),
-		Auth:         auth.NewHandler(authService, settings.Auth.CookieSecure),
-		Access:       access.NewHandler(accessService),
-		Menu:         menu.NewHandler(menuService),
-		Role:         role.NewHandler(roleService),
+		CORSOrigin: settings.CORSOrigin,
+		Logger:     logger,
+		Health:     health.NewHandler(healthService),
+		Task:       taskdemo.NewHandler(taskService),
+		Auth:       auth.NewHandler(authService, settings.Auth.CookieSecure),
+		Access:     access.NewHandler(accessService),
+		Menu:       menu.NewHandler(menuService),
+		Role:       role.NewHandler(roleService),
+		User: user.NewHandler(userService, func(context *gin.Context) (int64, bool) {
+			identity, ok := auth.IdentityFromContext(context)
+			return identity.UserID, ok
+		}),
 		AuthOrigin:   auth.RequireOrigin(settings.CORSOrigin),
 		Authenticate: authenticate,
 		RequirePermission: func(code string) gin.HandlerFunc {
@@ -193,6 +199,7 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	access.RegisterRoutes(apiRoutes, dependencies.Access, dependencies.Authenticate)
 	menu.RegisterRoutes(apiRoutes, dependencies.Menu, dependencies.Authenticate, dependencies.RequirePermission)
 	role.RegisterRoutes(apiRoutes, dependencies.Role, dependencies.Authenticate, dependencies.RequirePermission)
+	user.RegisterRoutes(apiRoutes, dependencies.User, dependencies.Authenticate, dependencies.RequirePermission)
 	taskdemo.RegisterRoutes(apiRoutes, dependencies.Task, dependencies.Authenticate)
 	return router
 }

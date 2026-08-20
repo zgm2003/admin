@@ -50,6 +50,14 @@ const (
 	KeyRoleInvalidPermission       MessageKey = "role.invalidPermission"
 	KeyRoleSuperAdminAuthorization MessageKey = "role.superAdminAuthorization"
 	KeyRoleDataInvalid             MessageKey = "role.dataInvalid"
+	KeyUserNotFound                MessageKey = "user.notFound"
+	KeyUserUsernameConflict        MessageKey = "user.usernameConflict"
+	KeyUserSelfOperation           MessageKey = "user.selfOperation"
+	KeyUserSuperAdminProtected     MessageKey = "user.superAdminProtected"
+	KeyUserLastSuperAdmin          MessageKey = "user.lastSuperAdmin"
+	KeyUserInvalidRoles            MessageKey = "user.invalidRoles"
+	KeyUserRoleNotFound            MessageKey = "user.roleNotFound"
+	KeyUserDataInvalid             MessageKey = "user.dataInvalid"
 )
 
 var catalogs = map[Locale]map[MessageKey]string{
@@ -86,6 +94,14 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyRoleInvalidPermission:       "授权菜单无效",
 		KeyRoleSuperAdminAuthorization: "超级管理员不允许配置角色授权",
 		KeyRoleDataInvalid:             "角色权限数据无效",
+		KeyUserNotFound:                "用户不存在",
+		KeyUserUsernameConflict:        "用户名已存在",
+		KeyUserSelfOperation:           "不能对自己的账号执行该操作",
+		KeyUserSuperAdminProtected:     "只有超级管理员可以操作超级管理员账号",
+		KeyUserLastSuperAdmin:          "系统必须保留至少一个有效超级管理员",
+		KeyUserInvalidRoles:            "用户角色集合无效",
+		KeyUserRoleNotFound:            "角色不存在",
+		KeyUserDataInvalid:             "用户角色数据无效",
 	},
 	EnUS: {
 		KeyInternal:                    "Internal server error",
@@ -120,6 +136,14 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyRoleInvalidPermission:       "Invalid permission menu",
 		KeyRoleSuperAdminAuthorization: "Super administrator permissions cannot be configured",
 		KeyRoleDataInvalid:             "Role permission data is invalid",
+		KeyUserNotFound:                "User not found",
+		KeyUserUsernameConflict:        "Username already exists",
+		KeyUserSelfOperation:           "This operation cannot be performed on your own account",
+		KeyUserSuperAdminProtected:     "Only a super administrator can operate on a super administrator account",
+		KeyUserLastSuperAdmin:          "At least one effective super administrator must remain",
+		KeyUserInvalidRoles:            "Invalid user role set",
+		KeyUserRoleNotFound:            "Role not found",
+		KeyUserDataInvalid:             "User role data is invalid",
 	},
 }
 
