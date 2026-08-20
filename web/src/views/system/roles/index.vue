@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
-import { ElMessageBox, ElNotification, ElTree } from 'element-plus'
+import { computed, onMounted, ref } from 'vue'
+import { ElMessageBox, ElNotification } from 'element-plus'
 import {
   CirclePlus,
   Delete,
@@ -25,11 +25,20 @@ import {
 import type {
   RoleListItem,
   RoleListQuery,
-  RolePermissionTreeNode,
   RolePermissionsResponse,
 } from '../../../api/role.contract'
 import { YesNo } from '../../../enums/yes-no'
 import { useAccessStore } from '../../../store/access'
+import RolePermissionDiffDialog from './components/RolePermissionDiffDialog.vue'
+import RolePermissionMatrix from './components/RolePermissionMatrix.vue'
+import {
+  buildRolePermissionMatrix,
+  diffMenuIDs,
+  expandDirectMenuIDs,
+  getRoleMatrixMenuIDs,
+  normalizeDirectMenuIDs,
+} from './role-permission-matrix'
+import type { RolePermissionDiff } from './role-permission-matrix'
 
 const { t } = useI18n()
 const access = useAccessStore()
@@ -61,8 +70,31 @@ const permissionSaving = ref(false)
 const permissionError = ref('')
 const permissionData = ref<RolePermissionsResponse | null>(null)
 const permissionTargetID = ref<number | null>(null)
-const selectedMenuIDs = ref<Set<number>>(new Set<number>())
-const permissionTree = ref<InstanceType<typeof ElTree> | null>(null)
+const originalEffectiveMenuIDs = ref<number[]>([])
+const selectedEffectiveMenuIDs = ref<number[]>([])
+const permissionDiffVisible = ref(false)
+const permissionDiff = ref<RolePermissionDiff>({ added: [], removed: [] })
+
+const permissionGroups = computed(() => {
+  if (permissionData.value === null) {
+    return []
+  }
+  return buildRolePermissionMatrix(permissionData.value.menuTree)
+})
+const permissionLabelMap = computed(() => {
+  const labels = new Map<number, string>()
+  for (const group of permissionGroups.value) {
+    for (const row of group.rows) {
+      labels.set(row.pageId, `${t(row.pageI18nKey)} · ${row.pageCode}`)
+      for (const action of row.actions) {
+        labels.set(action.id, `${t(action.i18nKey)} · ${action.code}`)
+      }
+    }
+  }
+  return labels
+})
+const addedPermissionLabels = computed(() => permissionLabels(permissionDiff.value.added))
+const removedPermissionLabels = computed(() => permissionLabels(permissionDiff.value.removed))
 
 const canCreate = computed(() => access.hasPermission('system:role:create'))
 const canUpdate = computed(() => access.hasPermission('system:role:update'))
@@ -242,17 +274,21 @@ async function removeRole(role: RoleListItem): Promise<void> {
 async function openPermissions(role: { id: number }): Promise<void> {
   permissionTargetID.value = role.id
   permissionDialogVisible.value = true
+  permissionDiffVisible.value = false
   permissionLoading.value = true
   permissionError.value = ''
   permissionData.value = null
-  selectedMenuIDs.value = new Set<number>()
+  permissionDiff.value = { added: [], removed: [] }
+  originalEffectiveMenuIDs.value = []
+  selectedEffectiveMenuIDs.value = []
 
   try {
     const data = await getRolePermissions(role.id)
+    const groups = buildRolePermissionMatrix(data.menuTree)
+    const effectiveMenuIDs = expandDirectMenuIDs(groups, data.menuIds)
     permissionData.value = data
-    selectedMenuIDs.value = new Set(data.menuIds)
-    await nextTick()
-    permissionTree.value?.setCheckedKeys(data.menuIds, false)
+    originalEffectiveMenuIDs.value = effectiveMenuIDs
+    selectedEffectiveMenuIDs.value = [...effectiveMenuIDs]
   } catch (error: unknown) {
     permissionError.value = errorMessage(error)
   } finally {
@@ -266,69 +302,41 @@ function retryPermissions(): void {
   }
 }
 
-function flattenPermissionNodes(
-  nodes: readonly RolePermissionTreeNode[],
-): RolePermissionTreeNode[] {
-  const result: RolePermissionTreeNode[] = []
-  const stack = [...nodes].reverse()
-
-  while (stack.length > 0) {
-    const node = stack.pop()
-    if (node === undefined) {
-      continue
-    }
-    result.push(node)
-    stack.push(...[...node.children].reverse())
-  }
-
-  return result
+function selectAllPermissions(): void {
+  selectedEffectiveMenuIDs.value = getRoleMatrixMenuIDs(permissionGroups.value)
 }
 
-function handlePermissionCheck(node: RolePermissionTreeNode): void {
-  if (node.menuType !== 'directory' || permissionTree.value === null) {
+function clearPermissions(): void {
+  selectedEffectiveMenuIDs.value = []
+}
+
+function permissionLabels(menuIDs: readonly number[]): string[] {
+  return menuIDs.map((menuID) => {
+    const label = permissionLabelMap.value.get(menuID)
+    if (label === undefined) {
+      throw new Error(`permission menu ${menuID} has no display label`)
+    }
+    return label
+  })
+}
+
+function preparePermissionSave(): void {
+  if (permissionData.value === null || permissionSaving.value) {
     return
   }
 
-  const checkedKeys = permissionTree.value
-    .getCheckedKeys(false)
-    .filter((id): id is number => typeof id === 'number')
-  const keys = new Set(checkedKeys)
-  const checked = keys.has(node.id)
-
-  for (const descendant of flattenPermissionNodes(node.children)) {
-    if (checked) {
-      keys.add(descendant.id)
-    } else {
-      keys.delete(descendant.id)
-    }
-  }
-
-  permissionTree.value.setCheckedKeys([...keys], false)
-}
-
-function normalizedCheckedIDs(): number[] {
-  if (permissionData.value === null) {
-    return []
-  }
-
-  const nodes = flattenPermissionNodes(permissionData.value.menuTree)
-  const nodesByID = new Map(nodes.map((node) => [node.id, node]))
-  const tree = permissionTree.value
-  const checked =
-    tree === null
-      ? [...selectedMenuIDs.value]
-      : tree.getCheckedKeys(false).filter((id): id is number => typeof id === 'number')
-  const selected = new Set(
-    checked.filter((id) => nodesByID.get(id)?.menuType !== 'directory'),
+  permissionError.value = ''
+  const nextDiff = diffMenuIDs(
+    originalEffectiveMenuIDs.value,
+    selectedEffectiveMenuIDs.value,
   )
-
-  for (const node of nodes) {
-    if (node.menuType === 'action' && selected.has(node.id) && node.parentId !== null) {
-      selected.delete(node.parentId)
-    }
+  if (nextDiff.added.length === 0 && nextDiff.removed.length === 0) {
+    permissionDialogVisible.value = false
+    return
   }
 
-  return [...selected].sort((left, right) => left - right)
+  permissionDiff.value = nextDiff
+  permissionDiffVisible.value = true
 }
 
 async function savePermissions(): Promise<void> {
@@ -341,9 +349,13 @@ async function savePermissions(): Promise<void> {
 
   try {
     await updateRolePermissions(permissionData.value.role.id, {
-      menuIds: normalizedCheckedIDs(),
+      menuIds: normalizeDirectMenuIDs(
+        permissionGroups.value,
+        selectedEffectiveMenuIDs.value,
+      ),
     })
     if (await loadRoles()) {
+      permissionDiffVisible.value = false
       permissionDialogVisible.value = false
       ElNotification.success({ title: t('role.success.authorized') })
     }
@@ -574,7 +586,7 @@ onMounted(() => {
     <el-dialog
       v-model="permissionDialogVisible"
       class="role-permission-dialog"
-      width="min(900px, 94vw)"
+      width="min(1040px, 94vw)"
       append-to-body
     >
       <template #header>
@@ -590,30 +602,33 @@ onMounted(() => {
         <div v-if="permissionLoading">
           {{ t('role.permission.loading') }}
         </div>
-        <el-alert v-else-if="permissionError" :title="permissionError" type="error">
+        <template v-else-if="permissionData">
+          <el-alert
+            v-if="permissionError"
+            :title="permissionError"
+            type="error"
+            show-icon
+            closable
+            @close="permissionError = ''"
+          />
+          <div class="permission-toolbar">
+            <el-button @click="selectAllPermissions">
+              {{ t('role.permission.selectAll') }}
+            </el-button>
+            <el-button @click="clearPermissions">
+              {{ t('role.permission.clear') }}
+            </el-button>
+          </div>
+          <RolePermissionMatrix
+            v-model="selectedEffectiveMenuIDs"
+            :groups="permissionGroups"
+          />
+        </template>
+        <el-alert v-else-if="permissionError" :title="permissionError" type="error" show-icon>
           <el-button link @click="retryPermissions">
             {{ t('role.retry') }}
           </el-button>
         </el-alert>
-        <el-tree
-          v-else-if="permissionData"
-          ref="permissionTree"
-          :data="permissionData.menuTree"
-          node-key="id"
-          show-checkbox
-          check-strictly
-          default-expand-all
-          @check="handlePermissionCheck"
-        >
-          <template #default="{ data }">
-            <span>
-              {{ t(data.i18nKey) }} · {{ data.code }}
-              <el-tag v-if="data.isEnabled === YesNo.No" size="small" type="danger">
-                {{ t('role.permission.disabled') }}
-              </el-tag>
-            </span>
-          </template>
-        </el-tree>
         <div v-else>
           {{ t('role.permission.empty') }}
         </div>
@@ -625,14 +640,22 @@ onMounted(() => {
         </el-button>
         <el-button
           type="primary"
-          :loading="permissionSaving"
-          :disabled="permissionData === null"
-          @click="savePermissions"
+          :disabled="permissionData === null || permissionSaving"
+          @click="preparePermissionSave"
         >
           {{ t('role.permission.save') }}
         </el-button>
       </template>
     </el-dialog>
+
+    <RolePermissionDiffDialog
+      v-model="permissionDiffVisible"
+      :added-labels="addedPermissionLabels"
+      :removed-labels="removedPermissionLabels"
+      :saving="permissionSaving"
+      :error="permissionError"
+      @confirm="savePermissions"
+    />
   </section>
 </template>
 
@@ -688,6 +711,13 @@ onMounted(() => {
   max-height: min(62vh, 620px);
   padding-right: 8px;
   overflow-y: auto;
+}
+
+.permission-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 @media (max-width: 720px) {

@@ -1,9 +1,9 @@
 import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import ElementPlus, {
+  ElCheckbox,
   ElPagination,
   ElSelect,
   ElTooltip,
-  ElTree,
 } from 'element-plus'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,6 +22,7 @@ import type { RoleListItem } from '../../../api/role.contract'
 import { YesNo } from '../../../enums/yes-no'
 import { appI18n, setLocale } from '../../../i18n'
 import { useAccessStore } from '../../../store/access'
+import RolePermissionMatrix from './components/RolePermissionMatrix.vue'
 import RoleManagement from './index.vue'
 
 vi.mock('../../../api/role', () => ({
@@ -269,7 +270,8 @@ describe('RoleManagement', () => {
     expect(getRolesMock).toHaveBeenLastCalledWith({ page: 1, pageSize: 20 })
   })
 
-  it('loads disabled permission nodes and submits the minimal direct grant set', async () => {
+  it('expands minimal action grants into a fully selected effective matrix', async () => {
+    getRolePermissionsMock.mockResolvedValue(permissionResponse({ menuIds: [3] }))
     const wrapper = mountPage(['system:role:authorize'])
     await flushPromises()
 
@@ -279,50 +281,133 @@ describe('RoleManagement', () => {
     expect(document.body.textContent).toContain('测试员 (tester)')
     expect(document.body.textContent).toContain('已禁用')
 
+    const matrix = wrapper.getComponent(RolePermissionMatrix)
+    expect(matrix.props('modelValue')).toEqual([2, 3])
+    const groupCheckbox = matrix
+      .findAllComponents(ElCheckbox)
+      .find((checkbox) => checkbox.text().includes('系统管理'))
+    expect(groupCheckbox?.props('modelValue')).toBe(true)
+    expect(groupCheckbox?.props('indeterminate')).toBe(false)
+  })
+
+  it('shows the effective permission diff before submitting minimal direct grants', async () => {
+    const wrapper = mountPage(['system:role:authorize'])
+    await flushPromises()
+    await tooltipButton(wrapper, '授权').trigger('click')
+    await flushPromises()
+
     const accessStore = useAccessStore()
     const loadAccess = vi.spyOn(accessStore, 'load')
     const resetAccess = vi.spyOn(accessStore, 'reset')
-    const tree = wrapper.getComponent(ElTree)
-    tree.vm.setCheckedKeys([1, 2, 3], false)
+    wrapper.getComponent(RolePermissionMatrix).vm.$emit('update:modelValue', [2, 3])
+    await flushPromises()
     await bodyButton('保存授权').trigger('click')
     await flushPromises()
 
+    expect(updateRolePermissionsMock).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('确认权限变更')
+    expect(document.body.textContent).toContain('新增权限')
+    expect(document.body.textContent).toContain('新增角色 · system:role:create')
+    expect(document.body.textContent).toContain('暂无权限变更')
+
+    await bodyButton('确认').trigger('click')
+    await flushPromises()
     expect(updateRolePermissionsMock).toHaveBeenCalledWith(3, { menuIds: [3] })
     expect(accessStore.permissionCodes).toEqual(['system:role:authorize'])
     expect(loadAccess).not.toHaveBeenCalled()
     expect(resetAccess).not.toHaveBeenCalled()
   })
 
-  it('submits an empty direct grant set as a valid authorization', async () => {
+  it('selects and clears the complete matrix from the authorization toolbar', async () => {
+    const wrapper = mountPage(['system:role:authorize'])
+    await flushPromises()
+    await tooltipButton(wrapper, '授权').trigger('click')
+    await flushPromises()
+
+    const matrix = wrapper.getComponent(RolePermissionMatrix)
+    await bodyButton('全选').trigger('click')
+    await flushPromises()
+    expect(matrix.props('modelValue')).toEqual([2, 3])
+
+    await bodyButton('清空').trigger('click')
+    await flushPromises()
+    expect(matrix.props('modelValue')).toEqual([])
+  })
+
+  it('keeps the matrix selection when permission diff confirmation is cancelled', async () => {
+    const wrapper = mountPage(['system:role:authorize'])
+    await flushPromises()
+    await tooltipButton(wrapper, '授权').trigger('click')
+    await flushPromises()
+
+    const matrix = wrapper.getComponent(RolePermissionMatrix)
+    matrix.vm.$emit('update:modelValue', [2, 3])
+    await flushPromises()
+    await bodyButton('保存授权').trigger('click')
+    await flushPromises()
+    await dialogButton('.role-permission-diff-dialog', '取消').trigger('click')
+    await flushPromises()
+
+    expect(updateRolePermissionsMock).not.toHaveBeenCalled()
+    expect(matrix.props('modelValue')).toEqual([2, 3])
+  })
+
+  it('closes an unchanged authorization without sending a write', async () => {
+    const wrapper = mountPage(['system:role:authorize'])
+    await flushPromises()
+    await tooltipButton(wrapper, '授权').trigger('click')
+    await flushPromises()
+
+    await bodyButton('保存授权').trigger('click')
+    await flushPromises()
+
+    expect(updateRolePermissionsMock).not.toHaveBeenCalled()
+    expect(document.body.textContent).not.toContain('确认权限变更')
+    const dialog = document.body.querySelector('.role-permission-dialog')
+    const overlay = dialog?.closest<HTMLElement>('.el-overlay')
+    expect(overlay?.style.display).toBe('none')
+  })
+
+  it('confirms and submits an empty direct grant set as a valid authorization', async () => {
     updateRolePermissionsMock.mockResolvedValue({ id: 3, permissionCount: 0 })
     const wrapper = mountPage(['system:role:authorize'])
     await flushPromises()
     await tooltipButton(wrapper, '授权').trigger('click')
     await flushPromises()
 
-    wrapper.getComponent(ElTree).vm.setCheckedKeys([], false)
+    wrapper.getComponent(RolePermissionMatrix).vm.$emit('update:modelValue', [])
+    await flushPromises()
     await bodyButton('保存授权').trigger('click')
+    await flushPromises()
+
+    expect(updateRolePermissionsMock).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('移除权限')
+    await bodyButton('确认').trigger('click')
     await flushPromises()
 
     expect(updateRolePermissionsMock).toHaveBeenCalledWith(3, { menuIds: [] })
   })
 
-  it('keeps the authorization dialog and selection after a save failure', async () => {
+  it('keeps both dialogs and the effective selection after a save failure', async () => {
     updateRolePermissionsMock.mockRejectedValue(new Error('save failed'))
     const wrapper = mountPage(['system:role:authorize'])
     await flushPromises()
     await tooltipButton(wrapper, '授权').trigger('click')
     await flushPromises()
 
-    const tree = wrapper.getComponent(ElTree)
-    tree.vm.setCheckedKeys([2], false)
+    const matrix = wrapper.getComponent(RolePermissionMatrix)
+    matrix.vm.$emit('update:modelValue', [2, 3])
+    await flushPromises()
     await bodyButton('保存授权').trigger('click')
     await flushPromises()
+    await bodyButton('确认').trigger('click')
+    await flushPromises()
 
-    expect(updateRolePermissionsMock).toHaveBeenCalledWith(3, { menuIds: [2] })
+    expect(updateRolePermissionsMock).toHaveBeenCalledWith(3, { menuIds: [3] })
     expect(document.body.textContent).toContain('save failed')
+    expect(document.body.textContent).toContain('确认权限变更')
     expect(document.body.textContent).toContain('测试员 (tester)')
-    expect(tree.vm.getCheckedKeys(false)).toContain(2)
+    expect(matrix.props('modelValue')).toEqual([2, 3])
   })
 
   it('shows an authorization load error and retries the same role', async () => {
@@ -426,7 +511,7 @@ function baseRoleItem(): RoleListItem {
   }
 }
 
-function permissionResponse() {
+function permissionResponse(overrides: { menuIds?: number[] } = {}) {
   return {
     role: {
       id: 3,
@@ -466,7 +551,7 @@ function permissionResponse() {
         ],
       },
     ],
-    menuIds: [2],
+    menuIds: overrides.menuIds ?? [2],
   }
 }
 
@@ -500,6 +585,17 @@ function bodyButton(text: string): DOMWrapper<HTMLButtonElement> {
   )
   if (button === undefined) {
     throw new Error(`Unable to find body button containing ${text}`)
+  }
+  return new DOMWrapper(button)
+}
+
+function dialogButton(selector: string, text: string): DOMWrapper<HTMLButtonElement> {
+  const dialog = document.body.querySelector(selector)
+  const button = Array.from(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+    (candidate) => candidate.textContent?.includes(text),
+  )
+  if (button === undefined) {
+    throw new Error(`Unable to find ${selector} button containing ${text}`)
   }
   return new DOMWrapper(button)
 }
