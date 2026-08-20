@@ -5,6 +5,7 @@ import {
   Menu as MenuIcon,
   Setting,
   User,
+  UserFilled,
 } from '@element-plus/icons-vue'
 
 export const menuIcons = {
@@ -14,6 +15,7 @@ export const menuIcons = {
   Menu: MenuIcon,
   Setting,
   User,
+  UserFilled,
 } as const
 
 export type MenuIconKey = keyof typeof menuIcons

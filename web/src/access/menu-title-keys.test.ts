@@ -3,13 +3,20 @@ import { describe, expect, it } from 'vitest'
 import { isMenuTitleKey, menuTitleKeys } from './menu-title-keys'
 
 describe('menu title key protocol', () => {
-  it('contains exactly the initial core menu title keys', () => {
+  it('contains exactly the registered core menu title keys', () => {
     expect(menuTitleKeys).toEqual([
       'navigation.system',
       'navigation.systemMenus',
       'permission.menuCreate',
       'permission.menuUpdate',
       'permission.menuDelete',
+      'navigation.systemRoles',
+      'permission.roleCreate',
+      'permission.roleUpdate',
+      'permission.roleStatus',
+      'permission.roleSetDefault',
+      'permission.roleDelete',
+      'permission.roleAuthorize',
     ])
   })
 

@@ -37,6 +37,7 @@ type routerDependencies struct {
 	Auth              *auth.Handler
 	Access            *access.Handler
 	Menu              *menu.Handler
+	Role              *role.Handler
 	AuthOrigin        gin.HandlerFunc
 	Authenticate      gin.HandlerFunc
 	RequirePermission func(string) gin.HandlerFunc
@@ -88,6 +89,9 @@ func run(logger *slog.Logger) error {
 	); err != nil {
 		return err
 	}
+	if err := role.EnsureSchema(processContext, postgres.GORM); err != nil {
+		return fmt.Errorf("ensure role schema: %w", err)
+	}
 	if err := auth.EnsureSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("ensure authentication schema: %w", err)
 	}
@@ -101,7 +105,8 @@ func run(logger *slog.Logger) error {
 	}
 
 	roleRepository := role.NewRepository(postgres.GORM)
-	if err := roleRepository.EnsureSystemRoles(processContext); err != nil {
+	roleService := role.NewService(roleRepository)
+	if err := roleService.EnsureSystemRoles(processContext); err != nil {
 		return fmt.Errorf("ensure system roles: %w", err)
 	}
 	keys, err := secretkey.New(settings.AppSecret)
@@ -139,6 +144,7 @@ func run(logger *slog.Logger) error {
 		Auth:         auth.NewHandler(authService, settings.Auth.CookieSecure),
 		Access:       access.NewHandler(accessService),
 		Menu:         menu.NewHandler(menuService),
+		Role:         role.NewHandler(roleService),
 		AuthOrigin:   auth.RequireOrigin(settings.CORSOrigin),
 		Authenticate: authenticate,
 		RequirePermission: func(code string) gin.HandlerFunc {
@@ -186,6 +192,7 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	auth.RegisterRoutes(apiRoutes, dependencies.Auth, dependencies.AuthOrigin, dependencies.Authenticate)
 	access.RegisterRoutes(apiRoutes, dependencies.Access, dependencies.Authenticate)
 	menu.RegisterRoutes(apiRoutes, dependencies.Menu, dependencies.Authenticate, dependencies.RequirePermission)
+	role.RegisterRoutes(apiRoutes, dependencies.Role, dependencies.Authenticate, dependencies.RequirePermission)
 	taskdemo.RegisterRoutes(apiRoutes, dependencies.Task, dependencies.Authenticate)
 	return router
 }

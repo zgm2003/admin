@@ -80,6 +80,62 @@ func TestRepositoryHasPermissionUnionsMultipleRoles(t *testing.T) {
 	assertPermission(t, fixture, fixture.page.Code, true)
 }
 
+func TestRepositoryReadsCommittedRoleAndMenuChangesOnTheNextRequest(t *testing.T) {
+	fixture := openRepositoryFixture(t)
+	roleService := role.NewService(role.NewRepository(fixture.tx))
+
+	permissionCount, err := roleService.UpdatePermissions(
+		fixture.ctx,
+		fixture.primaryRole.ID,
+		[]int64{fixture.delete.ID},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if permissionCount != 1 {
+		t.Fatalf("permission count = %d, want 1", permissionCount)
+	}
+	assertPermission(t, fixture, fixture.create.Code, false)
+	assertPermission(t, fixture, fixture.delete.Code, true)
+
+	if err := fixture.tx.WithContext(fixture.ctx).
+		Model(&menu.Menu{}).
+		Where("id = ?", fixture.delete.ID).
+		Update("is_enabled", yesno.No).Error; err != nil {
+		t.Fatal(err)
+	}
+	assertPermission(t, fixture, fixture.delete.Code, false)
+
+	var activeGrantCount int64
+	if err := fixture.tx.WithContext(fixture.ctx).
+		Model(&menu.RoleMenu{}).
+		Where("role_id = ? AND menu_id = ?", fixture.primaryRole.ID, fixture.delete.ID).
+		Count(&activeGrantCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if activeGrantCount != 1 {
+		t.Fatalf("disabled menu grant count = %d, want 1", activeGrantCount)
+	}
+
+	if err := fixture.tx.WithContext(fixture.ctx).
+		Model(&menu.Menu{}).
+		Where("id = ?", fixture.delete.ID).
+		Update("is_enabled", yesno.Yes).Error; err != nil {
+		t.Fatal(err)
+	}
+	assertPermission(t, fixture, fixture.delete.Code, true)
+
+	if err := roleService.UpdateStatus(fixture.ctx, fixture.primaryRole.ID, yesno.No); err != nil {
+		t.Fatal(err)
+	}
+	assertPermission(t, fixture, fixture.delete.Code, false)
+
+	if err := roleService.UpdateStatus(fixture.ctx, fixture.primaryRole.ID, yesno.Yes); err != nil {
+		t.Fatal(err)
+	}
+	assertPermission(t, fixture, fixture.delete.Code, true)
+}
+
 func TestRepositoryHasPermissionFiltersInactiveRecords(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -148,7 +204,7 @@ func TestRepositoryHasPermissionGrantsSuperAdminOnlyExistingEnabledPermissions(t
 		t.Fatal(err)
 	}
 	roleRepository := role.NewRepository(fixture.tx)
-	if err := roleRepository.EnsureSystemRoles(fixture.ctx); err != nil {
+	if err := role.NewService(roleRepository).EnsureSystemRoles(fixture.ctx); err != nil {
 		t.Fatal(err)
 	}
 	superAdmin, err := roleRepository.FindByCode(fixture.ctx, role.CodeSuperAdmin)
@@ -176,7 +232,7 @@ func TestRepositoryBuiltinMenusAppearForSuperAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 	roleRepository := role.NewRepository(fixture.tx)
-	if err := roleRepository.EnsureSystemRoles(fixture.ctx); err != nil {
+	if err := role.NewService(roleRepository).EnsureSystemRoles(fixture.ctx); err != nil {
 		t.Fatal(err)
 	}
 	superAdmin, err := roleRepository.FindByCode(fixture.ctx, role.CodeSuperAdmin)
@@ -195,7 +251,12 @@ func TestRepositoryBuiltinMenusAppearForSuperAdmin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, code := range []string{menu.PermissionList, menu.PermissionCreate, menu.PermissionUpdate, menu.PermissionDelete} {
+	for _, code := range []string{
+		menu.PermissionList, menu.PermissionCreate, menu.PermissionUpdate, menu.PermissionDelete,
+		menu.PermissionRoleList, menu.PermissionRoleCreate, menu.PermissionRoleUpdate,
+		menu.PermissionRoleStatus, menu.PermissionRoleDefault, menu.PermissionRoleDelete,
+		menu.PermissionRoleAuthorize,
+	} {
 		if !containsString(snapshot.PermissionCodes, code) {
 			t.Errorf("permission %q is missing: %v", code, snapshot.PermissionCodes)
 		}
@@ -207,6 +268,8 @@ func TestRepositoryBuiltinMenusAppearForSuperAdmin(t *testing.T) {
 	var builtinIDs []int64
 	if err := fixture.tx.WithContext(fixture.ctx).Model(&menu.Menu{}).Where("code IN ?", []string{
 		menu.BuiltinSystemCode, menu.PermissionList, menu.PermissionCreate, menu.PermissionUpdate, menu.PermissionDelete,
+		menu.PermissionRoleList, menu.PermissionRoleCreate, menu.PermissionRoleUpdate,
+		menu.PermissionRoleStatus, menu.PermissionRoleDefault, menu.PermissionRoleDelete, menu.PermissionRoleAuthorize,
 	}).Pluck("id", &builtinIDs).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -215,6 +278,50 @@ func TestRepositoryBuiltinMenusAppearForSuperAdmin(t *testing.T) {
 	}
 	if directGrantCount != 0 {
 		t.Fatalf("super_admin unexpectedly has %d direct builtin grants", directGrantCount)
+	}
+}
+
+func TestRepositoryBuiltinRolePermissionsDeriveAncestorsForOrdinaryRoles(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		grantedCode   string
+		wantAuthorize bool
+	}{
+		{name: "role page", grantedCode: menu.PermissionRoleList},
+		{name: "role authorize action", grantedCode: menu.PermissionRoleAuthorize, wantAuthorize: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := openRepositoryFixture(t)
+			if err := fixture.tx.WithContext(fixture.ctx).Delete(&fixture.directGrant).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := menu.NewService(menu.NewRepository(fixture.tx)).EnsureBuiltin(fixture.ctx); err != nil {
+				t.Fatal(err)
+			}
+			var granted menu.Menu
+			if err := fixture.tx.WithContext(fixture.ctx).Where("code = ?", test.grantedCode).Take(&granted).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := fixture.tx.WithContext(fixture.ctx).Create(&menu.RoleMenu{RoleID: fixture.primaryRole.ID, MenuID: granted.ID}).Error; err != nil {
+				t.Fatal(err)
+			}
+
+			snapshot, err := access.NewService(fixture.repository).Current(fixture.ctx, fixture.user.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, code := range []string{menu.BuiltinSystemCode, menu.PermissionRoleList} {
+				if !snapshotContainsMenuCode(snapshot.MenuTree, code) {
+					t.Errorf("snapshot lacks derived menu %q: %+v", code, snapshot.MenuTree)
+				}
+			}
+			if containsString(snapshot.PermissionCodes, menu.PermissionRoleAuthorize) != test.wantAuthorize {
+				t.Errorf("authorize permission presence = %v, want %v", containsString(snapshot.PermissionCodes, menu.PermissionRoleAuthorize), test.wantAuthorize)
+			}
+			if !test.wantAuthorize && containsString(snapshot.PermissionCodes, menu.PermissionRoleCreate) {
+				t.Fatal("page grant expanded to a role action")
+			}
+		})
 	}
 }
 
@@ -303,6 +410,9 @@ func openRepositoryFixture(t *testing.T) *repositoryFixture {
 		&user.User{}, &role.Role{}, &role.UserRole{}, &menu.Menu{}, &menu.RoleMenu{}, &auth.Session{}); err != nil {
 		t.Fatalf("AutoMigrate access schema: %v", err)
 	}
+	if err := role.EnsureSchema(ctx, connection.GORM); err != nil {
+		t.Fatalf("EnsureSchema role: %v", err)
+	}
 	if err := auth.EnsureSchema(ctx, connection.GORM); err != nil {
 		t.Fatalf("EnsureSchema auth: %v", err)
 	}
@@ -347,24 +457,24 @@ func openRepositoryFixture(t *testing.T) *repositoryFixture {
 		t.Fatalf("create root menu: %v", err)
 	}
 	pagePath := fmt.Sprintf("/repository-%d/users", unique)
-	pageView := "systemUsers"
+	pageView := "system-menus"
 	page := menu.Menu{
 		ParentID: &root.ID, MenuType: menu.TypePage, Code: fmt.Sprintf("repository:%d:user:view", unique),
-		I18nKey: "navigation.systemUsers", Path: &pagePath, ViewKey: &pageView, SortOrder: 10, IsEnabled: yesno.Yes,
+		I18nKey: "navigation.systemMenus", Path: &pagePath, ViewKey: &pageView, SortOrder: 10, IsEnabled: yesno.Yes,
 	}
 	if err := tx.Create(&page).Error; err != nil {
 		t.Fatalf("create page menu: %v", err)
 	}
 	createAction := menu.Menu{
 		ParentID: &page.ID, MenuType: menu.TypeAction, Code: fmt.Sprintf("repository:%d:user:create", unique),
-		I18nKey: "permission.userCreate", SortOrder: 10, IsEnabled: yesno.Yes,
+		I18nKey: "permission.menuCreate", SortOrder: 10, IsEnabled: yesno.Yes,
 	}
 	if err := tx.Create(&createAction).Error; err != nil {
 		t.Fatalf("create create action: %v", err)
 	}
 	deleteAction := menu.Menu{
 		ParentID: &page.ID, MenuType: menu.TypeAction, Code: fmt.Sprintf("repository:%d:user:delete", unique),
-		I18nKey: "permission.userDelete", SortOrder: 20, IsEnabled: yesno.Yes,
+		I18nKey: "permission.menuDelete", SortOrder: 20, IsEnabled: yesno.Yes,
 	}
 	if err := tx.Create(&deleteAction).Error; err != nil {
 		t.Fatalf("create delete action: %v", err)

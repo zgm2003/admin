@@ -10,25 +10,12 @@ import (
 var authenticationIndexes = []string{
 	`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_user_username_active ON sys_user (lower(username)) WHERE deleted_at IS NULL`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_user_email_active ON sys_user (email) WHERE deleted_at IS NULL`,
-	`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_role_code_active ON sys_role (code) WHERE deleted_at IS NULL`,
-	`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_role_default_active ON sys_role (is_default) WHERE is_default = 1 AND deleted_at IS NULL`,
-	`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_user_role_active ON sys_user_role (user_id, role_id) WHERE deleted_at IS NULL`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_user_session_refresh_hash ON sys_user_session (refresh_token_hash)`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_user_session_current ON sys_user_session (user_id) WHERE revoked_at IS NULL`,
 	`CREATE INDEX IF NOT EXISTS ix_sys_user_session_user_created ON sys_user_session (user_id, created_at DESC)`,
 }
 
 var authenticationForeignKeys = []foreignKeyDefinition{
-	{
-		name:  "fk_sys_user_role_user",
-		table: "sys_user_role",
-		ddl:   `ALTER TABLE sys_user_role ADD CONSTRAINT fk_sys_user_role_user FOREIGN KEY (user_id) REFERENCES sys_user(id) ON DELETE RESTRICT`,
-	},
-	{
-		name:  "fk_sys_user_role_role",
-		table: "sys_user_role",
-		ddl:   `ALTER TABLE sys_user_role ADD CONSTRAINT fk_sys_user_role_role FOREIGN KEY (role_id) REFERENCES sys_role(id) ON DELETE RESTRICT`,
-	},
 	{
 		name:  "fk_sys_user_session_user",
 		table: "sys_user_session",

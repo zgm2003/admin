@@ -10,11 +10,23 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
-	"admin/server/internal/module/role"
 	"admin/server/internal/shared/yesno"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 )
+
+type testRole struct {
+	ID        int64          `gorm:"column:id;primaryKey;autoIncrement"`
+	Code      string         `gorm:"column:code;type:varchar(64);not null"`
+	Name      string         `gorm:"column:name;type:varchar(64);not null"`
+	IsDefault yesno.Value    `gorm:"column:is_default;type:smallint;not null;default:0"`
+	IsEnabled yesno.Value    `gorm:"column:is_enabled;type:smallint;not null;default:1"`
+	CreatedAt time.Time      `gorm:"column:created_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt time.Time      `gorm:"column:updated_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
+	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz"`
+}
+
+func (testRole) TableName() string { return "sys_role" }
 
 func TestEnsureBuiltinCreatesExactCoreTreeAndIsIdempotent(t *testing.T) {
 	tx, ctx := openMenuTransaction(t)
@@ -209,7 +221,7 @@ func openMenuTransaction(t *testing.T) (*gorm.DB, context.Context) {
 		t.Fatalf("open PostgreSQL: %v", err)
 	}
 	t.Cleanup(func() { _ = connection.Close() })
-	if err := database.AutoMigrate(ctx, connection.GORM, &role.Role{}, &Menu{}, &RoleMenu{}); err != nil {
+	if err := database.AutoMigrate(ctx, connection.GORM, &testRole{}, &Menu{}, &RoleMenu{}); err != nil {
 		t.Fatalf("AutoMigrate menu test schema: %v", err)
 	}
 	if err := EnsureSchema(ctx, connection.GORM); err != nil {
@@ -281,19 +293,34 @@ func loadBuiltinMenus(t *testing.T, tx *gorm.DB, ctx context.Context) map[string
 
 func assertExactBuiltinMenus(t *testing.T, items map[string]Menu) {
 	t.Helper()
-	if len(items) != 5 {
-		t.Fatalf("builtin menu count = %d, want 5: %+v", len(items), items)
+	if len(items) != 12 {
+		t.Fatalf("builtin menu count = %d, want 12: %+v", len(items), items)
 	}
 	system := items[BuiltinSystemCode]
 	list := items[PermissionList]
 	create := items[PermissionCreate]
 	update := items[PermissionUpdate]
 	deleteItem := items[PermissionDelete]
+	roles := items[PermissionRoleList]
 	assertBuiltinMenu(t, system, TypeDirectory, nil, "navigation.system", nil, nil, stringPointer("Setting"), 100)
 	assertBuiltinMenu(t, list, TypePage, &system.ID, "navigation.systemMenus", stringPointer("/system/menus"), stringPointer("system-menus"), stringPointer("Menu"), 10)
 	assertBuiltinMenu(t, create, TypeAction, &list.ID, "permission.menuCreate", nil, nil, nil, 10)
 	assertBuiltinMenu(t, update, TypeAction, &list.ID, "permission.menuUpdate", nil, nil, nil, 20)
 	assertBuiltinMenu(t, deleteItem, TypeAction, &list.ID, "permission.menuDelete", nil, nil, nil, 30)
+	assertBuiltinMenu(t, roles, TypePage, &system.ID, "navigation.systemRoles", stringPointer("/system/roles"), stringPointer("system-roles"), stringPointer("UserFilled"), 20)
+	for index, item := range []struct {
+		code string
+		key  string
+	}{
+		{PermissionRoleCreate, "permission.roleCreate"},
+		{PermissionRoleUpdate, "permission.roleUpdate"},
+		{PermissionRoleStatus, "permission.roleStatus"},
+		{PermissionRoleDefault, "permission.roleSetDefault"},
+		{PermissionRoleDelete, "permission.roleDelete"},
+		{PermissionRoleAuthorize, "permission.roleAuthorize"},
+	} {
+		assertBuiltinMenu(t, items[item.code], TypeAction, &roles.ID, item.key, nil, nil, nil, (index+1)*10)
+	}
 }
 
 func assertBuiltinMenu(t *testing.T, item Menu, menuType Type, parentID *int64, i18nKey string, path, viewKey, icon *string, sortOrder int) {
@@ -315,7 +342,11 @@ func updateMenuColumns(t *testing.T, tx *gorm.DB, ctx context.Context, id int64,
 }
 
 func builtinMenuCodes() []string {
-	return []string{BuiltinSystemCode, PermissionList, PermissionCreate, PermissionUpdate, PermissionDelete}
+	return []string{
+		BuiltinSystemCode, PermissionList, PermissionCreate, PermissionUpdate, PermissionDelete,
+		PermissionRoleList, PermissionRoleCreate, PermissionRoleUpdate, PermissionRoleStatus,
+		PermissionRoleDefault, PermissionRoleDelete, PermissionRoleAuthorize,
+	}
 }
 
 func stringPointer(value string) *string {

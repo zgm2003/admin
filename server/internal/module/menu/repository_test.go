@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/role"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -183,7 +182,7 @@ func TestRepositoryRoleMenuSoftDeleteTouchesOnlyActiveTargetLinks(t *testing.T) 
 	tx, ctx := openMenuTransaction(t)
 	repository := NewRepository(tx)
 	unique := time.Now().UnixNano()
-	createdRole := role.Role{
+	createdRole := testRole{
 		Code: fmt.Sprintf("repository_role_%d", unique), Name: "Repository Role",
 		IsDefault: yesno.No, IsEnabled: yesno.Yes,
 	}

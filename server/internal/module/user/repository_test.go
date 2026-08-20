@@ -224,6 +224,9 @@ func openUserTransaction(t *testing.T) (*gorm.DB, context.Context, *role.Reposit
 	if err := database.AutoMigrate(ctx, connection.GORM, &user.User{}, &role.Role{}, &role.UserRole{}, &auth.Session{}); err != nil {
 		t.Fatalf("AutoMigrate: %v", err)
 	}
+	if err := role.EnsureSchema(ctx, connection.GORM); err != nil {
+		t.Fatalf("Ensure role schema: %v", err)
+	}
 	if err := auth.EnsureSchema(ctx, connection.GORM); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
@@ -233,7 +236,7 @@ func openUserTransaction(t *testing.T) (*gorm.DB, context.Context, *role.Reposit
 	}
 	t.Cleanup(func() { _ = tx.Rollback().Error })
 	roleRepository := role.NewRepository(tx)
-	if err := roleRepository.EnsureSystemRoles(ctx); err != nil {
+	if err := role.NewService(roleRepository).EnsureSystemRoles(ctx); err != nil {
 		t.Fatalf("EnsureSystemRoles: %v", err)
 	}
 	return tx, ctx, roleRepository

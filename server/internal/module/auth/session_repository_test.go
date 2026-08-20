@@ -119,7 +119,7 @@ func TestFindByRefreshHashRequiresActiveIdentity(t *testing.T) {
 func TestRotateByRefreshHashCanWinOnlyOnce(t *testing.T) {
 	connection, ctx := openAuthenticationSchema(t)
 	roleRepository := role.NewRepository(connection.GORM)
-	if err := roleRepository.EnsureSystemRoles(ctx); err != nil {
+	if err := role.NewService(roleRepository).EnsureSystemRoles(ctx); err != nil {
 		t.Fatal(err)
 	}
 	createdUser := createAuthUser(t, connection.GORM, ctx, "rotate")
@@ -211,7 +211,7 @@ func openAuthTransaction(t *testing.T) (*gorm.DB, context.Context) {
 		t.Fatalf("begin transaction: %v", tx.Error)
 	}
 	t.Cleanup(func() { _ = tx.Rollback().Error })
-	if err := role.NewRepository(tx).EnsureSystemRoles(ctx); err != nil {
+	if err := role.NewService(role.NewRepository(tx)).EnsureSystemRoles(ctx); err != nil {
 		t.Fatalf("EnsureSystemRoles: %v", err)
 	}
 	return tx, ctx

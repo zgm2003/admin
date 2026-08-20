@@ -19,6 +19,16 @@ func TestMenuProtocolConstantsAndFiniteValues(t *testing.T) {
 		BuiltinMenuListCode != "system:menu:list" {
 		t.Fatal("menu protocol constants changed")
 	}
+	rolePermissions := map[string]string{
+		"list": PermissionRoleList, "create": PermissionRoleCreate, "update": PermissionRoleUpdate,
+		"status": PermissionRoleStatus, "default": PermissionRoleDefault,
+		"delete": PermissionRoleDelete, "authorize": PermissionRoleAuthorize,
+	}
+	for name, got := range rolePermissions {
+		if got != "system:role:"+name {
+			t.Errorf("role permission %s = %q", name, got)
+		}
+	}
 
 	for _, key := range []string{
 		"navigation.system",
@@ -26,6 +36,13 @@ func TestMenuProtocolConstantsAndFiniteValues(t *testing.T) {
 		"permission.menuCreate",
 		"permission.menuUpdate",
 		"permission.menuDelete",
+		"navigation.systemRoles",
+		"permission.roleCreate",
+		"permission.roleUpdate",
+		"permission.roleStatus",
+		"permission.roleSetDefault",
+		"permission.roleDelete",
+		"permission.roleAuthorize",
 	} {
 		if !IsMenuTitleKey(key) {
 			t.Errorf("IsMenuTitleKey(%q) = false", key)
@@ -35,11 +52,11 @@ func TestMenuProtocolConstantsAndFiniteValues(t *testing.T) {
 		t.Fatal("IsMenuTitleKey accepted an unregistered key")
 	}
 
-	if !IsMenuViewKey("system-menus") || IsMenuViewKey("dashboard") || IsMenuViewKey("") {
+	if !IsMenuViewKey("system-menus") || !IsMenuViewKey("system-roles") || IsMenuViewKey("dashboard") || IsMenuViewKey("") {
 		t.Fatal("menu view protocol accepted an invalid value or rejected system-menus")
 	}
 
-	for _, icon := range []string{"Cpu", "Folder", "Key", "Menu", "Setting", "User"} {
+	for _, icon := range []string{"Cpu", "Folder", "Key", "Menu", "Setting", "User", "UserFilled"} {
 		if !IsMenuIconKey(icon) {
 			t.Errorf("IsMenuIconKey(%q) = false", icon)
 		}
@@ -54,6 +71,13 @@ func TestMenuProtocolConstantsAndFiniteValues(t *testing.T) {
 		PermissionCreate,
 		PermissionUpdate,
 		PermissionDelete,
+		PermissionRoleList,
+		PermissionRoleCreate,
+		PermissionRoleUpdate,
+		PermissionRoleStatus,
+		PermissionRoleDefault,
+		PermissionRoleDelete,
+		PermissionRoleAuthorize,
 	} {
 		if !IsBuiltinCode(code) {
 			t.Errorf("IsBuiltinCode(%q) = false", code)

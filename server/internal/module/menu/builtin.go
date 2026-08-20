@@ -99,6 +99,35 @@ func builtinMenuDefinitions() []builtinMenuDefinition {
 			code: PermissionDelete, menuType: TypeAction, parentCode: PermissionList,
 			i18nKey: "permission.menuDelete", sortOrder: 30,
 		},
+		{
+			code: PermissionRoleList, menuType: TypePage, parentCode: BuiltinSystemCode,
+			i18nKey: "navigation.systemRoles", path: builtinString("/system/roles"),
+			viewKey: builtinString("system-roles"), icon: builtinString("UserFilled"), sortOrder: 20,
+		},
+		{
+			code: PermissionRoleCreate, menuType: TypeAction, parentCode: PermissionRoleList,
+			i18nKey: "permission.roleCreate", sortOrder: 10,
+		},
+		{
+			code: PermissionRoleUpdate, menuType: TypeAction, parentCode: PermissionRoleList,
+			i18nKey: "permission.roleUpdate", sortOrder: 20,
+		},
+		{
+			code: PermissionRoleStatus, menuType: TypeAction, parentCode: PermissionRoleList,
+			i18nKey: "permission.roleStatus", sortOrder: 30,
+		},
+		{
+			code: PermissionRoleDefault, menuType: TypeAction, parentCode: PermissionRoleList,
+			i18nKey: "permission.roleSetDefault", sortOrder: 40,
+		},
+		{
+			code: PermissionRoleDelete, menuType: TypeAction, parentCode: PermissionRoleList,
+			i18nKey: "permission.roleDelete", sortOrder: 50,
+		},
+		{
+			code: PermissionRoleAuthorize, menuType: TypeAction, parentCode: PermissionRoleList,
+			i18nKey: "permission.roleAuthorize", sortOrder: 60,
+		},
 	}
 }
 

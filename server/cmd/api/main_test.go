@@ -12,8 +12,10 @@ import (
 	"admin/server/internal/module/auth"
 	"admin/server/internal/module/health"
 	"admin/server/internal/module/menu"
+	"admin/server/internal/module/role"
 	"admin/server/internal/module/taskdemo"
 	"admin/server/internal/module/user"
+	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
 	"github.com/gin-gonic/gin"
 )
@@ -37,6 +39,23 @@ func (apiAccessService) Current(context.Context, int64) (access.Snapshot, error)
 }
 
 type apiMenuService struct{}
+
+type apiRoleService struct{}
+
+func (apiRoleService) List(context.Context, role.ListQuery) (pagination.Result[role.ListItem], error) {
+	return pagination.Result[role.ListItem]{List: []role.ListItem{}}, nil
+}
+func (apiRoleService) Create(context.Context, role.CreateInput) (int64, error) { return 1, nil }
+func (apiRoleService) Update(context.Context, int64, role.UpdateInput) error   { return nil }
+func (apiRoleService) UpdateStatus(context.Context, int64, yesno.Value) error  { return nil }
+func (apiRoleService) SetDefault(context.Context, int64) error                 { return nil }
+func (apiRoleService) Delete(context.Context, int64) error                     { return nil }
+func (apiRoleService) Permissions(context.Context, int64) (role.Permissions, error) {
+	return role.Permissions{MenuTree: []role.PermissionTreeNode{}, MenuIDs: []int64{}}, nil
+}
+func (apiRoleService) UpdatePermissions(context.Context, int64, []int64) (int64, error) {
+	return 0, nil
+}
 
 func (apiMenuService) List(context.Context) ([]menu.ManagedMenu, error) {
 	return []menu.ManagedMenu{}, nil
@@ -95,6 +114,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		Auth:         auth.NewHandler(apiAuthService{}, false),
 		Access:       access.NewHandler(apiAccessService{}),
 		Menu:         menu.NewHandler(apiMenuService{}),
+		Role:         role.NewHandler(apiRoleService{}),
 		AuthOrigin:   auth.RequireOrigin("http://localhost:16300"),
 		Authenticate: auth.Authenticate(apiAuthService{}),
 		RequirePermission: func(string) gin.HandlerFunc {
@@ -103,20 +123,28 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 	})
 
 	want := map[string]int{
-		"GET /health":                    1,
-		"GET /ready":                     1,
-		"POST /api/v1/example-tasks":     1,
-		"POST /api/v1/auth/register":     1,
-		"POST /api/v1/auth/login":        1,
-		"POST /api/v1/auth/refresh":      1,
-		"POST /api/v1/auth/logout":       1,
-		"GET /api/v1/auth/me":            1,
-		"GET /api/v1/access":             1,
-		"GET /api/v1/menus":              1,
-		"POST /api/v1/menus":             1,
-		"PUT /api/v1/menus/:id":          1,
-		"PATCH /api/v1/menus/:id/status": 1,
-		"DELETE /api/v1/menus/:id":       1,
+		"GET /health":                       1,
+		"GET /ready":                        1,
+		"POST /api/v1/example-tasks":        1,
+		"POST /api/v1/auth/register":        1,
+		"POST /api/v1/auth/login":           1,
+		"POST /api/v1/auth/refresh":         1,
+		"POST /api/v1/auth/logout":          1,
+		"GET /api/v1/auth/me":               1,
+		"GET /api/v1/access":                1,
+		"GET /api/v1/menus":                 1,
+		"POST /api/v1/menus":                1,
+		"PUT /api/v1/menus/:id":             1,
+		"PATCH /api/v1/menus/:id/status":    1,
+		"DELETE /api/v1/menus/:id":          1,
+		"GET /api/v1/roles":                 1,
+		"POST /api/v1/roles":                1,
+		"PUT /api/v1/roles/:id":             1,
+		"PATCH /api/v1/roles/:id/status":    1,
+		"PATCH /api/v1/roles/:id/default":   1,
+		"DELETE /api/v1/roles/:id":          1,
+		"GET /api/v1/roles/:id/permissions": 1,
+		"PUT /api/v1/roles/:id/permissions": 1,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path

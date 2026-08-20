@@ -43,6 +43,33 @@ func TestCatalogsTranslateMenuErrorsWithExactParameters(t *testing.T) {
 	}
 }
 
+func TestCatalogsTranslateRoleErrorsWithExactParameters(t *testing.T) {
+	tests := []struct {
+		key    i18n.MessageKey
+		params map[string]string
+	}{
+		{key: i18n.KeyRoleNotFound},
+		{key: i18n.KeyRoleCodeConflict, params: map[string]string{"code": "ai_tester"}},
+		{key: i18n.KeyRoleNameConflict, params: map[string]string{"name": "AI Tester"}},
+		{key: i18n.KeyRoleSystemProtected, params: map[string]string{"code": "super_admin"}},
+		{key: i18n.KeyRoleDefaultProtected, params: map[string]string{"code": "member"}},
+		{key: i18n.KeyRoleUsersAttached, params: map[string]string{"code": "member"}},
+		{key: i18n.KeyRoleInvalidState},
+		{key: i18n.KeyRoleInvalidPermission},
+		{key: i18n.KeyRoleSuperAdminAuthorization},
+		{key: i18n.KeyRoleDataInvalid},
+	}
+
+	for _, locale := range []i18n.Locale{i18n.ZhCN, i18n.EnUS} {
+		for _, test := range tests {
+			message, err := i18n.Translate(locale, test.key, test.params)
+			if err != nil || message == "" {
+				t.Errorf("Translate(%q, %q) = %q,%v", locale, test.key, message, err)
+			}
+		}
+	}
+}
+
 func TestTranslateUsesTheRequestedLocale(t *testing.T) {
 	for _, test := range []struct {
 		locale i18n.Locale

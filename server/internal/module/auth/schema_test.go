@@ -3,6 +3,7 @@ package auth_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -35,24 +36,6 @@ func TestAuthenticationSchema(t *testing.T) {
 			"updated_at":    {dataType: "timestamp with time zone", nullable: "NO"},
 			"deleted_at":    {dataType: "timestamp with time zone", nullable: "YES"},
 		},
-		"sys_role": {
-			"id":         {dataType: "bigint", nullable: "NO"},
-			"code":       {dataType: "character varying", nullable: "NO", length: 64},
-			"name":       {dataType: "character varying", nullable: "NO", length: 64},
-			"is_default": {dataType: "smallint", nullable: "NO"},
-			"is_enabled": {dataType: "smallint", nullable: "NO"},
-			"created_at": {dataType: "timestamp with time zone", nullable: "NO"},
-			"updated_at": {dataType: "timestamp with time zone", nullable: "NO"},
-			"deleted_at": {dataType: "timestamp with time zone", nullable: "YES"},
-		},
-		"sys_user_role": {
-			"id":         {dataType: "bigint", nullable: "NO"},
-			"user_id":    {dataType: "bigint", nullable: "NO"},
-			"role_id":    {dataType: "bigint", nullable: "NO"},
-			"created_at": {dataType: "timestamp with time zone", nullable: "NO"},
-			"updated_at": {dataType: "timestamp with time zone", nullable: "NO"},
-			"deleted_at": {dataType: "timestamp with time zone", nullable: "YES"},
-		},
 		"sys_user_session": {
 			"id":                 {dataType: "bigint", nullable: "NO"},
 			"user_id":            {dataType: "bigint", nullable: "NO"},
@@ -75,8 +58,6 @@ func TestAuthenticationSchema(t *testing.T) {
 
 	checks := map[string]string{
 		"ck_sys_user_is_enabled":      "is_enabled",
-		"ck_sys_role_is_default":      "is_default",
-		"ck_sys_role_is_enabled":      "is_enabled",
 		"ck_sys_user_session_version": "version",
 	}
 	for name, expression := range checks {
@@ -86,11 +67,7 @@ func TestAuthenticationSchema(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{
-		"fk_sys_user_role_user",
-		"fk_sys_user_role_role",
-		"fk_sys_user_session_user",
-	} {
+	for _, name := range []string{"fk_sys_user_session_user"} {
 		definition := constraintDefinition(t, connection, ctx, name)
 		if !strings.Contains(definition, "FOREIGN KEY") || !strings.Contains(definition, "ON DELETE RESTRICT") {
 			t.Errorf("constraint %s = %q", name, definition)
@@ -100,9 +77,6 @@ func TestAuthenticationSchema(t *testing.T) {
 	indexes := map[string][]string{
 		"ux_sys_user_username_active":      {"CREATE UNIQUE INDEX", "lower((username)::text)", "WHERE (deleted_at IS NULL)"},
 		"ux_sys_user_email_active":         {"CREATE UNIQUE INDEX", "(email)", "WHERE (deleted_at IS NULL)"},
-		"ux_sys_role_code_active":          {"CREATE UNIQUE INDEX", "(code)", "WHERE (deleted_at IS NULL)"},
-		"ux_sys_role_default_active":       {"CREATE UNIQUE INDEX", "(is_default)", "is_default = 1", "deleted_at IS NULL"},
-		"ux_sys_user_role_active":          {"CREATE UNIQUE INDEX", "(user_id, role_id)", "WHERE (deleted_at IS NULL)"},
 		"ux_sys_user_session_refresh_hash": {"CREATE UNIQUE INDEX", "(refresh_token_hash)"},
 		"ux_sys_user_session_current":      {"CREATE UNIQUE INDEX", "(user_id)", "WHERE (revoked_at IS NULL)"},
 		"ix_sys_user_session_user_created": {"CREATE INDEX", "(user_id, created_at DESC)"},
@@ -113,6 +87,18 @@ func TestAuthenticationSchema(t *testing.T) {
 			if !strings.Contains(definition, fragment) {
 				t.Errorf("index %s = %q, missing %q", name, definition, fragment)
 			}
+		}
+	}
+}
+
+func TestAuthenticationSchemaSourceDoesNotOwnRoleObjects(t *testing.T) {
+	source, err := os.ReadFile(filepath.Join("schema.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"ux_sys_role_", "ux_sys_user_role_", "fk_sys_user_role_"} {
+		if strings.Contains(string(source), forbidden) {
+			t.Errorf("auth/schema.go still owns %q", forbidden)
 		}
 	}
 }
@@ -139,6 +125,9 @@ func openAuthenticationSchema(t *testing.T) (*database.Connection, context.Conte
 	if err := database.AutoMigrate(ctx, connection.GORM,
 		&user.User{}, &role.Role{}, &role.UserRole{}, &auth.Session{}); err != nil {
 		t.Fatalf("AutoMigrate auth schema: %v", err)
+	}
+	if err := role.EnsureSchema(ctx, connection.GORM); err != nil {
+		t.Fatalf("Ensure role schema: %v", err)
 	}
 	if err := auth.EnsureSchema(ctx, connection.GORM); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)

@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/role"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
@@ -166,7 +165,7 @@ func TestServiceUpdateRejectsCyclesStructureGrantsAndDisabledAncestors(t *testin
 		path := "/reports"
 		view := "system-menus"
 		pageID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Code: "reports:list", I18nKey: "navigation.systemMenus", Path: &path, ViewKey: &view, IsEnabled: yesno.Yes})
-		createdRole := role.Role{Code: fmt.Sprintf("menu_service_role_%d", time.Now().UnixNano()), Name: "Menu Service Role", IsDefault: yesno.No, IsEnabled: yesno.Yes}
+		createdRole := testRole{Code: fmt.Sprintf("menu_service_role_%d", time.Now().UnixNano()), Name: "Menu Service Role", IsDefault: yesno.No, IsEnabled: yesno.Yes}
 		if err := tx.WithContext(ctx).Create(&createdRole).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -263,7 +262,7 @@ func TestServiceUpdateStatusDisablesSubtreeAndPreservesGrants(t *testing.T) {
 	path := "/reports"
 	view := "system-menus"
 	pageID, _ := service.Create(ctx, CreateInput{ParentID: &childID, MenuType: TypePage, Code: "reports:list", I18nKey: "navigation.systemMenus", Path: &path, ViewKey: &view, IsEnabled: yesno.Yes})
-	createdRole := role.Role{Code: fmt.Sprintf("menu_status_role_%d", time.Now().UnixNano()), Name: "Menu Status Role", IsDefault: yesno.No, IsEnabled: yesno.Yes}
+	createdRole := testRole{Code: fmt.Sprintf("menu_status_role_%d", time.Now().UnixNano()), Name: "Menu Status Role", IsDefault: yesno.No, IsEnabled: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&createdRole).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +350,7 @@ func TestServiceDeleteSoftDeletesSubtreeAndRoleMenusTogether(t *testing.T) {
 	view := "system-menus"
 	pageID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Code: "reports:list", I18nKey: "navigation.systemMenus", Path: &path, ViewKey: &view, IsEnabled: yesno.Yes})
 	actionID, _ := service.Create(ctx, CreateInput{ParentID: &pageID, MenuType: TypeAction, Code: "reports:create", I18nKey: "permission.menuCreate", IsEnabled: yesno.Yes})
-	createdRole := role.Role{Code: fmt.Sprintf("menu_delete_role_%d", time.Now().UnixNano()), Name: "Menu Delete Role", IsDefault: yesno.No, IsEnabled: yesno.Yes}
+	createdRole := testRole{Code: fmt.Sprintf("menu_delete_role_%d", time.Now().UnixNano()), Name: "Menu Delete Role", IsDefault: yesno.No, IsEnabled: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&createdRole).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +397,7 @@ func TestServiceDeleteSoftDeletesSubtreeAndRoleMenusTogether(t *testing.T) {
 func TestServiceDeleteRollsBackRoleMenusWhenMenuWriteFails(t *testing.T) {
 	tx, ctx, service := openCleanMenuService(t)
 	rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
-	createdRole := role.Role{Code: fmt.Sprintf("menu_delete_rollback_role_%d", time.Now().UnixNano()), Name: "Menu Delete Rollback Role", IsDefault: yesno.No, IsEnabled: yesno.Yes}
+	createdRole := testRole{Code: fmt.Sprintf("menu_delete_rollback_role_%d", time.Now().UnixNano()), Name: "Menu Delete Rollback Role", IsDefault: yesno.No, IsEnabled: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&createdRole).Error; err != nil {
 		t.Fatal(err)
 	}
