@@ -15,6 +15,21 @@ type input struct {
 	Name string `json:"name" binding:"required,min=2"`
 }
 
+func TestParsePositiveInt64UsesStrictDecimalSyntax(t *testing.T) {
+	for _, value := range []string{"1", "001", "9223372036854775807"} {
+		got, err := sharedvalidate.ParsePositiveInt64(value, "id")
+		if err != nil || got < 1 {
+			t.Fatalf("ParsePositiveInt64(%q) = %d,%v", value, got, err)
+		}
+	}
+
+	for _, value := range []string{"", "+1", "-1", "1.0", "abc", "9223372036854775808"} {
+		if _, err := sharedvalidate.ParsePositiveInt64(value, "id"); err == nil {
+			t.Fatalf("ParsePositiveInt64(%q) accepted invalid input", value)
+		}
+	}
+}
+
 func TestBindJSONAcceptsOneStrictValidDocument(t *testing.T) {
 	var got input
 	err := sharedvalidate.BindJSON(contextWithBody(`{"name":"ok"}`), &got)

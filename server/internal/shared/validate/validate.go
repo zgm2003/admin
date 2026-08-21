@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"admin/server/internal/shared/apperror"
 	"github.com/gin-gonic/gin"
@@ -119,6 +120,23 @@ func RequireEmptyBody(context *gin.Context) error {
 		return apperror.InvalidRequest(err)
 	}
 	return nil
+}
+
+// ParsePositiveInt64 accepts only a positive base-10 int64 without signs or whitespace.
+func ParsePositiveInt64(value, field string) (int64, error) {
+	if value == "" {
+		return 0, apperror.InvalidRequest(fmt.Errorf("%s is required", field))
+	}
+	for _, character := range value {
+		if character < '0' || character > '9' {
+			return 0, apperror.InvalidRequest(fmt.Errorf("%s must be a positive base-10 integer", field))
+		}
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed < 1 {
+		return 0, apperror.InvalidRequest(fmt.Errorf("%s must be a positive base-10 integer", field))
+	}
+	return parsed, nil
 }
 
 func newBindingValidator() *playground.Validate {

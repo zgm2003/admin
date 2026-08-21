@@ -8,6 +8,8 @@ import (
 	"unicode/utf8"
 
 	"admin/server/internal/shared/apperror"
+	sharedpagination "admin/server/internal/shared/pagination"
+	sharedvalidate "admin/server/internal/shared/validate"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -50,19 +52,7 @@ func (r rolesRequest) values() ([]int64, error) {
 }
 
 func parseUserID(value string) (int64, error) {
-	if value == "" {
-		return 0, apperror.InvalidRequest(fmt.Errorf("user id is required"))
-	}
-	for _, character := range value {
-		if character < '0' || character > '9' {
-			return 0, apperror.InvalidRequest(fmt.Errorf("user id must be a positive base-10 integer"))
-		}
-	}
-	id, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || id <= 0 {
-		return 0, apperror.InvalidRequest(fmt.Errorf("user id must be a positive base-10 integer"))
-	}
-	return id, nil
+	return sharedvalidate.ParsePositiveInt64(value, "user id")
 }
 
 func parseListQuery(values url.Values) (ListQuery, error) {
@@ -72,15 +62,11 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("invalid or repeated query parameter"))
 		}
 	}
-	page, err := parseRequiredUserQueryInt(values, "page")
+	paginationRequest, err := sharedpagination.ParseRequest(values)
 	if err != nil {
 		return ListQuery{}, err
 	}
-	pageSize, err := parseRequiredUserQueryInt(values, "pageSize")
-	if err != nil {
-		return ListQuery{}, err
-	}
-	query := ListQuery{Page: page, PageSize: pageSize}
+	query := ListQuery{Page: paginationRequest.Page, PageSize: paginationRequest.PageSize}
 	if entries, exists := values["keyword"]; exists {
 		query.Keyword = strings.TrimSpace(entries[0])
 		if utf8.RuneCountInString(query.Keyword) > 254 {
@@ -96,26 +82,11 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 		query.IsEnabled = &value
 	}
 	if entries, exists := values["roleId"]; exists {
-		roleID, parseErr := parseUserID(entries[0])
+		roleID, parseErr := sharedvalidate.ParsePositiveInt64(entries[0], "role id")
 		if parseErr != nil {
 			return ListQuery{}, parseErr
 		}
 		query.RoleID = &roleID
 	}
-	if page < 1 || pageSize < 1 || pageSize > 100 {
-		return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("pagination is invalid"))
-	}
 	return query, nil
-}
-
-func parseRequiredUserQueryInt(values url.Values, key string) (int, error) {
-	entries, exists := values[key]
-	if !exists || len(entries) != 1 || entries[0] == "" {
-		return 0, apperror.InvalidRequest(fmt.Errorf("%s is required once", key))
-	}
-	value, err := strconv.Atoi(entries[0])
-	if err != nil {
-		return 0, apperror.InvalidRequest(err)
-	}
-	return value, nil
 }

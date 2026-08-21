@@ -8,6 +8,8 @@ import (
 	"unicode/utf8"
 
 	"admin/server/internal/shared/apperror"
+	sharedpagination "admin/server/internal/shared/pagination"
+	sharedvalidate "admin/server/internal/shared/validate"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -67,11 +69,7 @@ func (r permissionsRequest) values() ([]int64, error) {
 }
 
 func parseRoleID(value string) (int64, error) {
-	id, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || id < 1 {
-		return 0, apperror.InvalidRequest(fmt.Errorf("role id must be a positive integer"))
-	}
-	return id, nil
+	return sharedvalidate.ParsePositiveInt64(value, "role id")
 }
 
 func parseListQuery(values url.Values) (ListQuery, error) {
@@ -81,15 +79,11 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("invalid or repeated query parameter"))
 		}
 	}
-	page, err := parseRequiredQueryInt(values, "page")
+	paginationRequest, err := sharedpagination.ParseRequest(values)
 	if err != nil {
 		return ListQuery{}, err
 	}
-	pageSize, err := parseRequiredQueryInt(values, "pageSize")
-	if err != nil {
-		return ListQuery{}, err
-	}
-	query := ListQuery{Page: page, PageSize: pageSize}
+	query := ListQuery{Page: paginationRequest.Page, PageSize: paginationRequest.PageSize}
 	if entries, ok := values["keyword"]; ok {
 		query.Keyword = strings.TrimSpace(entries[0])
 		if utf8.RuneCountInString(query.Keyword) > 64 {
@@ -104,20 +98,5 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 		}
 		query.IsEnabled = &value
 	}
-	if page < 1 || pageSize < 1 || pageSize > 100 {
-		return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("pagination is invalid"))
-	}
 	return query, nil
-}
-
-func parseRequiredQueryInt(values url.Values, key string) (int, error) {
-	entries, ok := values[key]
-	if !ok || len(entries) != 1 {
-		return 0, apperror.InvalidRequest(fmt.Errorf("%s is required once", key))
-	}
-	value, err := strconv.Atoi(entries[0])
-	if err != nil {
-		return 0, apperror.InvalidRequest(err)
-	}
-	return value, nil
 }

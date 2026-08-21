@@ -2,6 +2,7 @@ package pagination_test
 
 import (
 	"encoding/json"
+	"net/url"
 	"testing"
 
 	"admin/server/internal/shared/pagination"
@@ -41,5 +42,31 @@ func TestResultUsesTheOnlyPaginationShape(t *testing.T) {
 	want := `{"list":["one"],"total":1,"page":1,"pageSize":20}`
 	if string(encoded) != want {
 		t.Fatalf("result JSON = %s, want %s", encoded, want)
+	}
+}
+
+func TestParseRequestValidatesOnlyThePaginationFields(t *testing.T) {
+	request, err := pagination.ParseRequest(url.Values{
+		"page":     {"2"},
+		"pageSize": {"20"},
+		"keyword":  {"alice"},
+	})
+	if err != nil {
+		t.Fatalf("ParseRequest() error = %v", err)
+	}
+	if request.Page != 2 || request.PageSize != 20 {
+		t.Fatalf("ParseRequest() = %+v", request)
+	}
+
+	for _, values := range []url.Values{
+		{"pageSize": {"20"}},
+		{"page": {"1", "2"}, "pageSize": {"20"}},
+		{"page": {""}, "pageSize": {"20"}},
+		{"page": {"0"}, "pageSize": {"20"}},
+		{"page": {"1"}, "pageSize": {"101"}},
+	} {
+		if _, err := pagination.ParseRequest(values); err == nil {
+			t.Fatalf("ParseRequest(%v) accepted invalid pagination", values)
+		}
 	}
 }
