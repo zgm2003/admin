@@ -66,6 +66,7 @@ type Service struct {
 	states              *authstate.Store
 	invalidator         *authstate.Invalidator
 	sessionCache        *SessionCache
+	adminSessions       adminSessionRepository
 	redis               *projectredis.Client
 	jwt                 *JWT
 	refreshTokenHMACKey []byte
@@ -91,6 +92,10 @@ func NewService(
 		invalidator: invalidator, sessionCache: sessionCache, redis: redis, jwt: jwt,
 		refreshTokenHMACKey: append([]byte(nil), refreshTokenHMACKey...), logger: logger, now: time.Now,
 	}
+}
+
+func (s *Service) SetSessionAdminRepository(repository adminSessionRepository) {
+	s.adminSessions = repository
 }
 
 func (s *Service) Register(ctx context.Context, input RegisterInput) (Registered, error) {

@@ -27,6 +27,9 @@ describe('menu title key protocol', () => {
       'permission.authPlatformUpdate',
       'permission.authPlatformStatus',
       'permission.authPlatformDelete',
+			'navigation.systemSessions',
+			'permission.sessionRevoke',
+			'navigation.systemOperationLogs',
     ])
   })
 

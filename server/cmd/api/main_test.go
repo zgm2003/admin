@@ -14,6 +14,7 @@ import (
 	"admin/server/internal/module/authplatform"
 	"admin/server/internal/module/health"
 	"admin/server/internal/module/menu"
+	"admin/server/internal/module/operationlog"
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/taskdemo"
 	"admin/server/internal/module/user"
@@ -45,6 +46,21 @@ type apiMenuService struct{}
 type apiRoleService struct{}
 type apiUserService struct{}
 type apiAuthPlatformService struct{}
+type apiOperationLogService struct{}
+type apiSessionAdminService struct{}
+
+func (apiOperationLogService) List(context.Context, operationlog.ListQuery) (operationlog.ListResult, error) {
+	return operationlog.ListResult{List: []operationlog.Item{}}, nil
+}
+func (apiSessionAdminService) ListSessions(context.Context, auth.AdminSessionQuery) ([]auth.AdminSession, int64, error) {
+	return []auth.AdminSession{}, 0, nil
+}
+func (apiSessionAdminService) SessionStats(context.Context) (auth.AdminSessionStats, error) {
+	return auth.AdminSessionStats{Platforms: map[string]int64{}}, nil
+}
+func (apiSessionAdminService) RevokeSessions(context.Context, auth.Identity, []int64) (auth.AdminRevokeResult, error) {
+	return auth.AdminRevokeResult{}, nil
+}
 
 func (apiAuthPlatformService) CurrentPolicy(context.Context, string) (authplatform.Policy, error) {
 	return authplatform.Policy{}, nil
@@ -157,6 +173,8 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		Menu:         menu.NewHandler(apiMenuService{}),
 		Role:         role.NewHandler(apiRoleService{}),
 		User:         user.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
+		OperationLog: operationlog.NewHandler(apiOperationLogService{}),
+		SessionAdmin: auth.NewSessionAdminHandler(apiSessionAdminService{}),
 		AuthOrigin:   auth.RequireOrigin("http://localhost:16300"),
 		Authenticate: auth.Authenticate(apiAuthService{}),
 		RequirePermission: func(string) gin.HandlerFunc {
@@ -201,6 +219,11 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"DELETE /api/v1/users/:id":                1,
 		"GET /api/v1/users/:id/roles":             1,
 		"PUT /api/v1/users/:id/roles":             1,
+		"GET /api/v1/operation-logs":              1,
+		"GET /api/v1/sessions":                    1,
+		"GET /api/v1/sessions/stats":              1,
+		"DELETE /api/v1/sessions/:id":             1,
+		"DELETE /api/v1/sessions":                 1,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path

@@ -29,6 +29,38 @@ type authenticationLog struct {
 	accessVersion int64
 }
 
+type AuthenticationLogInfo struct {
+	Platform  string
+	UserID    int64
+	SessionID int64
+}
+
+type AccessLogOperationInfo struct {
+	Operation    string
+	ActorUserID  int64
+	TargetUserID int64
+}
+
+func GetAuthenticationLog(context *gin.Context) (AuthenticationLogInfo, bool) {
+	value, ok := authenticationLogFromContext(context)
+	if !ok {
+		return AuthenticationLogInfo{}, false
+	}
+	return AuthenticationLogInfo{Platform: value.platform, UserID: value.userID, SessionID: value.sessionID}, true
+}
+
+func GetAccessLogOperation(context *gin.Context) (AccessLogOperationInfo, bool) {
+	value, exists := context.Get(accessLogOperationKey)
+	if !exists {
+		return AccessLogOperationInfo{}, false
+	}
+	operation, ok := value.(accessLogOperation)
+	if !ok {
+		return AccessLogOperationInfo{}, false
+	}
+	return AccessLogOperationInfo{Operation: operation.operation, ActorUserID: operation.actorUserID, TargetUserID: operation.targetUserID}, true
+}
+
 func SetAccessLogOperation(context *gin.Context, operation string, actorUserID, targetUserID int64) {
 	context.Set(accessLogOperationKey, accessLogOperation{operation: operation, actorUserID: actorUserID, targetUserID: targetUserID})
 }

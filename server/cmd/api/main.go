@@ -22,6 +22,7 @@ import (
 	"admin/server/internal/module/authstate"
 	"admin/server/internal/module/health"
 	"admin/server/internal/module/menu"
+	"admin/server/internal/module/operationlog"
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/taskdemo"
 	"admin/server/internal/module/user"
@@ -45,6 +46,9 @@ type routerDependencies struct {
 	Menu              *menu.Handler
 	Role              *role.Handler
 	User              *user.Handler
+	OperationLog      *operationlog.Handler
+	OperationEnqueuer operationlog.Enqueuer
+	SessionAdmin      *auth.SessionAdminHandler
 	AuthOrigin        gin.HandlerFunc
 	Authenticate      gin.HandlerFunc
 	RequirePermission func(string) gin.HandlerFunc
@@ -97,6 +101,7 @@ func run(logger *slog.Logger) error {
 		&menu.RoleMenu{},
 		&authplatform.Platform{},
 		&auth.Session{},
+		&operationlog.OperationLog{},
 		&access.Version{},
 	); err != nil {
 		return err
@@ -115,6 +120,9 @@ func run(logger *slog.Logger) error {
 	}
 	if err := access.EnsureSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("ensure access schema: %w", err)
+	}
+	if err := operationlog.EnsureSchema(processContext, postgres.GORM); err != nil {
+		return fmt.Errorf("ensure operation log schema: %w", err)
 	}
 	if err := auth.CleanupLegacySessionPointers(processContext, redisClient); err != nil {
 		return fmt.Errorf("remove legacy current session keys: %w", err)
@@ -169,9 +177,13 @@ func run(logger *slog.Logger) error {
 		keys.RefreshTokenHMACKey(),
 		logger,
 	)
+	authService.SetSessionAdminRepository(sessionRepository)
 	userService := user.NewService(userRepository, authStateStore, authInvalidator, accessStateStore, accessInvalidator)
 	accessRepository := access.NewRepository(postgres.GORM)
 	accessService := access.NewService(accessRepository, accessStateStore, access.NewSnapshotCache(redisClient), logger)
+	operationLogRepository := operationlog.NewRepository(postgres.GORM)
+	operationLogService := operationlog.NewService(operationLogRepository)
+	operationLogEnqueuer := operationlog.NewQueueEnqueuer(queueClient)
 	authenticate := auth.Authenticate(authService)
 	router := buildRouter(routerDependencies{
 		CORSOrigin:     settings.CORSOrigin,
@@ -188,8 +200,11 @@ func run(logger *slog.Logger) error {
 			identity, ok := auth.IdentityFromContext(context)
 			return identity.UserID, ok
 		}),
-		AuthOrigin:   auth.RequireOrigin(settings.CORSOrigin),
-		Authenticate: authenticate,
+		OperationLog:      operationlog.NewHandler(operationLogService),
+		OperationEnqueuer: operationLogEnqueuer,
+		SessionAdmin:      auth.NewSessionAdminHandler(authService),
+		AuthOrigin:        auth.RequireOrigin(settings.CORSOrigin),
+		Authenticate:      authenticate,
 		RequirePermission: func(code string) gin.HandlerFunc {
 			return access.RequirePermission(accessService, code)
 		},
@@ -232,6 +247,7 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 		projectmiddleware.AccessLog(dependencies.Logger),
 		projectmiddleware.Recovery(dependencies.Logger),
 		projectmiddleware.Language(),
+		operationlog.Middleware(dependencies.Logger, dependencies.OperationEnqueuer),
 	)
 	health.RegisterRoutes(router, dependencies.Health)
 	apiRoutes := router.Group("/api/v1")
@@ -243,6 +259,8 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	menu.RegisterRoutes(apiRoutes, dependencies.Menu, dependencies.Authenticate, dependencies.RequirePermission)
 	role.RegisterRoutes(apiRoutes, dependencies.Role, dependencies.Authenticate, dependencies.RequirePermission)
 	user.RegisterRoutes(apiRoutes, dependencies.User, dependencies.Authenticate, dependencies.RequirePermission)
+	operationlog.RegisterRoutes(apiRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
+	auth.RegisterSessionAdminRoutes(apiRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
 	taskdemo.RegisterRoutes(apiRoutes, dependencies.Task, dependencies.Authenticate)
 	return router
 }

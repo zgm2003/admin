@@ -10,6 +10,7 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
+	"admin/server/internal/module/operationlog"
 	"admin/server/internal/module/taskdemo"
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
@@ -47,8 +48,9 @@ func run(logger *slog.Logger) error {
 
 	repository := taskdemo.NewRepository(postgres.GORM)
 	service := taskdemo.NewService(repository, nil, logger)
-	mux := asynq.NewServeMux()
-	taskdemo.Register(mux, service)
+	operationLogRepository := operationlog.NewRepository(postgres.GORM)
+	operationLogService := operationlog.NewService(operationLogRepository)
+	mux := buildWorkerMux(service, operationLogService)
 	server, err := queue.NewServer(settings.RedisURL)
 	if err != nil {
 		return err
@@ -59,6 +61,13 @@ func run(logger *slog.Logger) error {
 	<-processContext.Done()
 	server.Shutdown()
 	return nil
+}
+
+func buildWorkerMux(taskProcessor taskdemo.Processor, operationLogProcessor operationlog.Processor) *asynq.ServeMux {
+	mux := asynq.NewServeMux()
+	taskdemo.Register(mux, taskProcessor)
+	operationlog.Register(mux, operationLogProcessor)
+	return mux
 }
 
 func checkRedis(ctx context.Context, redisURL string) error {

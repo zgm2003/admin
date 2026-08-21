@@ -66,6 +66,11 @@ const (
 	KeyAuthPlatformDisabled         MessageKey = "authPlatform.disabled"
 	KeyAuthSessionUpdating          MessageKey = "auth.sessionUpdating"
 	KeyAuthPlatformUnavailable      MessageKey = "authPlatform.unavailable"
+	KeySessionInvalidID             MessageKey = "session.invalidId"
+	KeySessionCurrentProtected      MessageKey = "session.currentProtected"
+	KeySessionQueryFailed           MessageKey = "session.queryFailed"
+	KeySessionRevokeFailed          MessageKey = "session.revokeFailed"
+	KeyOperationLogQueryFailed      MessageKey = "operationLog.queryFailed"
 )
 
 var catalogs = map[Locale]map[MessageKey]string{
@@ -118,6 +123,11 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyAuthPlatformDisabled:         "认证平台已停用",
 		KeyAuthSessionUpdating:          "会话状态正在更新",
 		KeyAuthPlatformUnavailable:      "认证平台服务暂不可用",
+		KeySessionInvalidID:             "会话 ID 无效",
+		KeySessionCurrentProtected:      "当前登录会话不能被踢出",
+		KeySessionQueryFailed:           "会话查询失败",
+		KeySessionRevokeFailed:          "会话撤销失败",
+		KeyOperationLogQueryFailed:      "操作日志查询失败",
 	},
 	EnUS: {
 		KeyInternal:                     "Internal server error",
@@ -168,6 +178,11 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyAuthPlatformDisabled:         "Authentication platform is disabled",
 		KeyAuthSessionUpdating:          "Authentication session state is updating",
 		KeyAuthPlatformUnavailable:      "Authentication platform service is temporarily unavailable",
+		KeySessionInvalidID:             "Invalid session ID",
+		KeySessionCurrentProtected:      "The current login session cannot be revoked",
+		KeySessionQueryFailed:           "Failed to query sessions",
+		KeySessionRevokeFailed:          "Failed to revoke session",
+		KeyOperationLogQueryFailed:      "Failed to query operation logs",
 	},
 }
 

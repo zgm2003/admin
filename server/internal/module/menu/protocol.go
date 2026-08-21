@@ -22,6 +22,9 @@ const (
 	PermissionAuthPlatformUpdate = "system:auth-platform:update"
 	PermissionAuthPlatformStatus = "system:auth-platform:status"
 	PermissionAuthPlatformDelete = "system:auth-platform:delete"
+	PermissionSessionList        = "system:session:list"
+	PermissionSessionRevoke      = "system:session:revoke"
+	PermissionOperationLogList   = "system:operation-log:list"
 
 	BuiltinSystemCode   = "system"
 	BuiltinMenuListCode = PermissionList
@@ -50,6 +53,9 @@ var menuTitleKeys = map[string]struct{}{
 	"permission.authPlatformUpdate":  {},
 	"permission.authPlatformStatus":  {},
 	"permission.authPlatformDelete":  {},
+	"navigation.systemSessions":      {},
+	"permission.sessionRevoke":       {},
+	"navigation.systemOperationLogs": {},
 }
 
 var menuViewKeys = map[string]struct{}{
@@ -57,6 +63,8 @@ var menuViewKeys = map[string]struct{}{
 	"system-roles":          {},
 	"system-users":          {},
 	"system-auth-platforms": {},
+	"system-sessions":       {},
+	"system-operation-logs": {},
 }
 
 var menuIconKeys = map[string]struct{}{
@@ -67,6 +75,7 @@ var menuIconKeys = map[string]struct{}{
 	"Setting":    {},
 	"User":       {},
 	"UserFilled": {},
+	"List":       {},
 }
 
 var builtinCodes = map[string]struct{}{
@@ -92,6 +101,9 @@ var builtinCodes = map[string]struct{}{
 	PermissionAuthPlatformUpdate: {},
 	PermissionAuthPlatformStatus: {},
 	PermissionAuthPlatformDelete: {},
+	PermissionSessionList:        {},
+	PermissionSessionRevoke:      {},
+	PermissionOperationLogList:   {},
 }
 
 func IsMenuTitleKey(value string) bool {

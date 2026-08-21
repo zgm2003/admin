@@ -179,6 +179,105 @@ func TestRevokeIsIdempotentForTheSameSession(t *testing.T) {
 	}
 }
 
+func TestListAdminSessionsCalculatesStatusFromPostgres(t *testing.T) {
+	tx, ctx := openAuthTransaction(t)
+	createdUser := createAuthUserWithoutRole(t, tx, ctx, "admin-list")
+	repository := auth.NewSessionRepository(tx)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	policy := updateTestPolicy(t, tx, ctx, "admin", 0)
+	active, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "a", now.Add(time.Hour)), policy, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expired, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "b", now.Add(-time.Hour)), policy, now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Model(&auth.Session{}).Where("id = ?", expired.ID).Updates(map[string]any{"refresh_expires_at": now.Add(-time.Minute)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	revoked, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "c", now.Add(time.Hour)), policy, now.Add(2*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.Revoke(ctx, revoked.ID, now.Add(3*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	rows, total, err := repository.ListAdmin(ctx, auth.AdminSessionQuery{Page: 1, PageSize: 20}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 3 || len(rows) != 3 {
+		t.Fatalf("rows total=%d len=%d", total, len(rows))
+	}
+	statuses := map[int64]auth.SessionStatus{}
+	for _, row := range rows {
+		statuses[row.ID] = row.Status
+		if row.Username != createdUser.Username {
+			t.Fatalf("username = %q", row.Username)
+		}
+	}
+	if statuses[active.ID] != auth.SessionStatusActive || statuses[expired.ID] != auth.SessionStatusExpired || statuses[revoked.ID] != auth.SessionStatusRevoked {
+		t.Fatalf("statuses = %+v", statuses)
+	}
+}
+
+func TestAdminSessionRevokeRejectsCurrentSession(t *testing.T) {
+	tx, ctx := openAuthTransaction(t)
+	createdUser := createAuthUserWithoutRole(t, tx, ctx, "admin-current")
+	repository := auth.NewSessionRepository(tx)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	policy := updateTestPolicy(t, tx, ctx, "admin", 0)
+	current, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "d", now.Add(time.Hour)), policy, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "e", now.Add(time.Hour)), policy, now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := repository.RevokeAdmin(ctx, []int64{current.ID, other.ID}, current.ID, now.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SkippedCurrent != 1 || len(result.Revoked) != 1 || result.Revoked[0].ID != other.ID {
+		t.Fatalf("revoke result = %+v", result)
+	}
+	var stored auth.Session
+	if err := tx.Unscoped().Take(&stored, current.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.RevokedAt != nil {
+		t.Fatalf("current session revoked at %v", stored.RevokedAt)
+	}
+}
+
+func TestBulkAdminSessionRevokeDeduplicatesAndLimits(t *testing.T) {
+	tx, ctx := openAuthTransaction(t)
+	createdUser := createAuthUserWithoutRole(t, tx, ctx, "admin-bulk")
+	repository := auth.NewSessionRepository(tx)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	policy := updateTestPolicy(t, tx, ctx, "admin", 0)
+	first, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "f", now.Add(time.Hour)), policy, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "g", now.Add(time.Hour)), policy, now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.Revoke(ctx, first.ID, now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	result, err := repository.RevokeAdmin(ctx, []int64{first.ID, first.ID, second.ID}, 0, now.Add(2*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SkippedRevoked != 1 || len(result.Revoked) != 1 || result.Revoked[0].ID != second.ID {
+		t.Fatalf("bulk result = %+v", result)
+	}
+}
+
 func openAuthTransaction(t *testing.T) (*gorm.DB, context.Context) {
 	t.Helper()
 	connection, ctx := openAuthenticationSchema(t)

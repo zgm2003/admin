@@ -170,6 +170,20 @@ func builtinMenuDefinitions() []builtinMenuDefinition {
 			code: PermissionAuthPlatformDelete, menuType: TypeAction, parentCode: PermissionAuthPlatformList,
 			i18nKey: "permission.authPlatformDelete", sortOrder: 40,
 		},
+		{
+			code: PermissionSessionList, menuType: TypePage, parentCode: BuiltinSystemCode,
+			i18nKey: "navigation.systemSessions", path: builtinString("/system/sessions"),
+			viewKey: builtinString("system-sessions"), icon: builtinString("List"), sortOrder: 50,
+		},
+		{
+			code: PermissionSessionRevoke, menuType: TypeAction, parentCode: PermissionSessionList,
+			i18nKey: "permission.sessionRevoke", sortOrder: 10,
+		},
+		{
+			code: PermissionOperationLogList, menuType: TypePage, parentCode: BuiltinSystemCode,
+			i18nKey: "navigation.systemOperationLogs", path: builtinString("/system/operation-logs"),
+			viewKey: builtinString("system-operation-logs"), icon: builtinString("List"), sortOrder: 60,
+		},
 	}
 }
 

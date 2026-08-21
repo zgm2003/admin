@@ -70,4 +70,20 @@ describe('frontend i18n', () => {
     setLocale('en-US')
     expect(appI18n.global.t('authPlatform.title')).toBe('Authentication platforms')
   })
+
+	it('contains the complete bilingual session and operation-log copy', () => {
+		const keys = [
+			'navigation.systemSessions', 'permission.sessionRevoke', 'session.title',
+			'session.loading', 'session.batchRevoke', 'session.revokeFailed',
+			'navigation.systemOperationLogs', 'operationLog.title', 'operationLog.userId',
+			'operationLog.timeRange', 'operationLog.detailTitle', 'operationLog.loading',
+		]
+		for (const key of keys) {
+			expect(isAppMessageKey(key), key).toBe(true)
+			expect(appI18n.global.t(key), key).toBeTruthy()
+		}
+		setLocale('en-US')
+		expect(appI18n.global.t('session.title')).toBe('Session management')
+		expect(appI18n.global.t('operationLog.title')).toBe('Operation logs')
+	})
 })
