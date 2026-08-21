@@ -58,7 +58,7 @@ func TestBuildWorkerMuxRegistersFoundationAndOperationLogTasks(t *testing.T) {
 		t.Fatalf("process foundation task: %v", err)
 	}
 	operationPayload, err := json.Marshal(operationlog.TaskPayload{
-		SchemaVersion: 1, RequestID: "request-1", Method: "PUT", Route: "/api/v1/users/:id",
+		SchemaVersion: 2, EventID: "worker-operation-event", RequestID: "request-1", Method: "PUT", Route: "/api/v1/users/:id",
 		Module: "user", Action: "user.update", ClientIP: "127.0.0.1", UserAgent: "test",
 		StatusCode: 200, IsSuccess: 1, LatencyMs: 1, CreatedAt: time.Now().UTC(),
 	})

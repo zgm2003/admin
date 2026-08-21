@@ -12,7 +12,8 @@ import (
 
 func validTaskPayload() TaskPayload {
 	return TaskPayload{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
+		EventID:       "event-1",
 		RequestID:     "request-1",
 		Method:        "PUT",
 		Route:         "/api/v1/users/:id",
@@ -37,7 +38,8 @@ func TestDecodePayloadRejectsUnknownOrMissingFields(t *testing.T) {
 	cases := []string{
 		string(valid) + `{"trailing":true}`,
 		strings.Replace(string(valid), `"requestId":"request-1"`, `"unknownId":"request-1"`, 1),
-		strings.Replace(string(valid), `"schemaVersion":1`, `"schemaVersion":2`, 1),
+		strings.Replace(string(valid), `"eventId":"event-1"`, `"unknownId":"event-1"`, 1),
+		strings.Replace(string(valid), `"schemaVersion":2`, `"schemaVersion":1`, 1),
 		strings.Replace(string(valid), `"statusCode":200`, `"statusCode":-1`, 1),
 	}
 	for _, payload := range cases {
@@ -55,19 +57,35 @@ func TestTaskHandlerMarksMalformedPayloadSkipRetry(t *testing.T) {
 	}
 }
 
-func TestEnqueueUsesStableOperationLogTaskType(t *testing.T) {
+func TestEnqueueUsesEventIDAsTaskID(t *testing.T) {
 	payload := validTaskPayload()
-	encoded, err := json.Marshal(payload)
-	if err != nil {
+	queue := &recordingQueueClient{}
+	enqueuer := &QueueEnqueuer{client: queue}
+	if err := enqueuer.Enqueue(context.Background(), payload); err != nil {
 		t.Fatal(err)
 	}
-	task := asynq.NewTask(Type, encoded, asynq.TaskID(payload.RequestID), asynq.MaxRetry(3), asynq.Timeout(30*time.Second))
-	if task.Type() != "system:operation-log:v1" {
+	task := queue.task
+	if task.Type() != "system:operation-log:v2" {
 		t.Fatalf("task type = %q", task.Type())
 	}
-	if string(task.Payload()) != string(encoded) {
-		t.Fatalf("task payload changed")
+	if queue.taskID != payload.EventID {
+		t.Fatalf("task ID = %q, want %q", queue.taskID, payload.EventID)
 	}
+}
+
+type recordingQueueClient struct {
+	task   *asynq.Task
+	taskID string
+}
+
+func (c *recordingQueueClient) Enqueue(_ context.Context, task *asynq.Task, options ...asynq.Option) (*asynq.TaskInfo, error) {
+	c.task = task
+	for _, option := range options {
+		if option.Type() == asynq.TaskIDOpt {
+			c.taskID, _ = option.Value().(string)
+		}
+	}
+	return &asynq.TaskInfo{ID: c.taskID}, nil
 }
 
 type recordingProcessor struct {

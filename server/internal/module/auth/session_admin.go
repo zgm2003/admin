@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -58,6 +59,7 @@ type AdminRevokeResult struct {
 type adminSessionRepository interface {
 	ListAdmin(context.Context, AdminSessionQuery, time.Time) ([]AdminSession, int64, error)
 	StatsAdmin(context.Context, time.Time) (AdminSessionStats, error)
+	FindAdminRevokeTargets(context.Context, []int64) ([]Session, error)
 	RevokeAdmin(context.Context, []int64, int64, time.Time) (AdminRevokeResult, error)
 }
 
@@ -86,7 +88,15 @@ func (s *Service) SessionStats(ctx context.Context) (AdminSessionStats, error) {
 	return stats, nil
 }
 
+func (s *Service) RevokeSession(ctx context.Context, actor Identity, id int64) (AdminRevokeResult, error) {
+	return s.revokeAdminSessions(ctx, actor, []int64{id}, true)
+}
+
 func (s *Service) RevokeSessions(ctx context.Context, actor Identity, ids []int64) (AdminRevokeResult, error) {
+	return s.revokeAdminSessions(ctx, actor, ids, false)
+}
+
+func (s *Service) revokeAdminSessions(ctx context.Context, actor Identity, ids []int64, single bool) (AdminRevokeResult, error) {
 	if actor.SessionID < 1 || actor.UserID < 1 {
 		return AdminRevokeResult{}, apperror.Unauthorized(fmt.Errorf("authentication identity is missing"))
 	}
@@ -108,16 +118,38 @@ func (s *Service) RevokeSessions(ctx context.Context, actor Identity, ids []int6
 	if s.adminSessions == nil {
 		return AdminRevokeResult{}, apperror.DependencyUnavailable(fmt.Errorf("session administration repository is unavailable"))
 	}
-	result, err := s.adminSessions.RevokeAdmin(ctx, normalized, actor.SessionID, s.now().UTC())
+	targets, err := s.adminSessions.FindAdminRevokeTargets(ctx, normalized)
 	if err != nil {
 		return AdminRevokeResult{}, apperror.DependencyUnavailable(err)
 	}
-	if len(result.Revoked) == 0 {
+	if single {
+		if len(targets) == 0 {
+			return AdminRevokeResult{}, sessionNotFound(fmt.Errorf("session %d does not exist", normalized[0]))
+		}
+		if targets[0].ID == actor.SessionID {
+			return AdminRevokeResult{}, sessionCurrentProtected(fmt.Errorf("session %d is the current session", normalized[0]))
+		}
+	}
+
+	mutationTargets := make([]Session, 0, len(targets))
+	for _, target := range targets {
+		if target.ID != actor.SessionID && target.RevokedAt == nil {
+			mutationTargets = append(mutationTargets, target)
+		}
+	}
+	if len(mutationTargets) == 0 {
+		result, revokeErr := s.adminSessions.RevokeAdmin(ctx, normalized, actor.SessionID, s.now().UTC())
+		if revokeErr != nil {
+			return AdminRevokeResult{}, apperror.DependencyUnavailable(revokeErr)
+		}
 		return result, nil
+	}
+	if s.invalidator == nil || s.states == nil || s.sessionCache == nil {
+		return AdminRevokeResult{}, apperror.DependencyUnavailable(fmt.Errorf("session invalidation dependencies are unavailable"))
 	}
 
 	groups := make(map[string]authstate.SessionsFact)
-	for _, session := range result.Revoked {
+	for _, session := range mutationTargets {
 		key := fmt.Sprintf("%d:%s", session.UserID, session.Platform)
 		if _, exists := groups[key]; exists {
 			continue
@@ -128,21 +160,35 @@ func (s *Service) RevokeSessions(ctx context.Context, actor Identity, ids []int6
 		}
 		groups[key] = fact
 	}
+	priorFacts := make([]authstate.SessionsFact, 0, len(groups))
+	nextFacts := make([]authstate.SessionsFact, 0, len(groups))
 	for _, fact := range groups {
-		lease, acquireErr := s.invalidator.Acquire(ctx, authstate.MutationFacts{Sessions: []authstate.SessionsFact{fact}})
-		if acquireErr != nil {
-			return AdminRevokeResult{}, apperror.DependencyUnavailable(acquireErr)
-		}
 		nextGeneration, generationErr := authstate.NewGeneration()
 		if generationErr != nil {
-			_ = lease.Rollback(ctx)
 			return AdminRevokeResult{}, apperror.Internal(generationErr)
 		}
-		if commitErr := lease.Commit(ctx, authstate.MutationFacts{Sessions: []authstate.SessionsFact{{
-			Platform: fact.Platform, UserID: fact.UserID, Generation: nextGeneration,
-		}}}); commitErr != nil {
-			return AdminRevokeResult{}, apperror.DependencyUnavailable(commitErr)
+		priorFacts = append(priorFacts, fact)
+		nextFacts = append(nextFacts, authstate.SessionsFact{Platform: fact.Platform, UserID: fact.UserID, Generation: nextGeneration})
+	}
+	lease, acquireErr := s.invalidator.Acquire(ctx, authstate.MutationFacts{Sessions: priorFacts})
+	if acquireErr != nil {
+		return AdminRevokeResult{}, apperror.DependencyUnavailable(acquireErr)
+	}
+	mutationCtx, stopRenewal := lease.StartRenewal(ctx)
+	result, revokeErr := s.adminSessions.RevokeAdmin(mutationCtx, normalized, actor.SessionID, s.now().UTC())
+	renewalCause := context.Cause(mutationCtx)
+	stopRenewal()
+	if revokeErr != nil || renewalCause != nil {
+		return AdminRevokeResult{}, apperror.DependencyUnavailable(errors.Join(revokeErr, renewalCause, lease.Rollback(ctx)))
+	}
+	if len(result.Revoked) == 0 {
+		if rollbackErr := lease.Rollback(ctx); rollbackErr != nil {
+			return AdminRevokeResult{}, apperror.DependencyUnavailable(rollbackErr)
 		}
+		return result, nil
+	}
+	if commitErr := lease.Commit(ctx, authstate.MutationFacts{Sessions: nextFacts}); commitErr != nil {
+		return AdminRevokeResult{}, apperror.DependencyUnavailable(commitErr)
 	}
 	if err := s.sessionCache.DeleteMany(ctx, result.Revoked); err != nil {
 		return AdminRevokeResult{}, apperror.DependencyUnavailable(err)
@@ -279,6 +325,14 @@ func (r *SessionRepository) RevokeAdmin(ctx context.Context, ids []int64, curren
 		return AdminRevokeResult{}, err
 	}
 	return result, nil
+}
+
+func (r *SessionRepository) FindAdminRevokeTargets(ctx context.Context, ids []int64) ([]Session, error) {
+	rows := make([]Session, 0, len(ids))
+	if err := r.db.WithContext(ctx).Unscoped().Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("find sessions for admin revoke: %w", err)
+	}
+	return rows, nil
 }
 
 func adminPrefixPattern(value string) string {

@@ -67,6 +67,7 @@ func (j *JSON) UnmarshalJSON(value []byte) error {
 
 type OperationLog struct {
 	ID           int64       `gorm:"column:id;primaryKey;autoIncrement"`
+	EventID      string      `gorm:"column:event_id;type:varchar(64);not null"`
 	RequestID    string      `gorm:"column:request_id;type:varchar(128);not null"`
 	UserID       *int64      `gorm:"column:user_id"`
 	SessionID    *int64      `gorm:"column:session_id"`

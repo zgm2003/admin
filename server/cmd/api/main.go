@@ -90,6 +90,9 @@ func run(logger *slog.Logger) error {
 	if err := auth.PrepareSessionSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("prepare authentication schema: %w", err)
 	}
+	if err := operationlog.PrepareSchema(processContext, postgres.GORM); err != nil {
+		return fmt.Errorf("prepare operation log schema: %w", err)
+	}
 	if err := database.AutoMigrate(
 		processContext,
 		postgres.GORM,
@@ -245,9 +248,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 		projectmiddleware.RequestID(),
 		projectmiddleware.CORS(dependencies.CORSOrigin),
 		projectmiddleware.AccessLog(dependencies.Logger),
+		operationlog.Middleware(dependencies.Logger, dependencies.OperationEnqueuer),
 		projectmiddleware.Recovery(dependencies.Logger),
 		projectmiddleware.Language(),
-		operationlog.Middleware(dependencies.Logger, dependencies.OperationEnqueuer),
 	)
 	health.RegisterRoutes(router, dependencies.Health)
 	apiRoutes := router.Group("/api/v1")

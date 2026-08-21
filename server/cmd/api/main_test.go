@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"admin/server/internal/module/access"
@@ -35,6 +36,21 @@ func (submitService) Create(context.Context, string) (taskdemo.Created, error) {
 	return taskdemo.Created{TaskID: "task-1"}, nil
 }
 
+type panicSubmitService struct{}
+
+func (panicSubmitService) Create(context.Context, string) (taskdemo.Created, error) {
+	panic("operation failed unexpectedly")
+}
+
+type recordingOperationEnqueuer struct {
+	payloads []operationlog.TaskPayload
+}
+
+func (e *recordingOperationEnqueuer) Enqueue(_ context.Context, payload operationlog.TaskPayload) error {
+	e.payloads = append(e.payloads, payload)
+	return nil
+}
+
 type apiAccessService struct{}
 
 func (apiAccessService) Current(context.Context, auth.Identity) (access.Snapshot, error) {
@@ -58,8 +74,53 @@ func (apiSessionAdminService) ListSessions(context.Context, auth.AdminSessionQue
 func (apiSessionAdminService) SessionStats(context.Context) (auth.AdminSessionStats, error) {
 	return auth.AdminSessionStats{Platforms: map[string]int64{}}, nil
 }
+func (apiSessionAdminService) RevokeSession(context.Context, auth.Identity, int64) (auth.AdminRevokeResult, error) {
+	return auth.AdminRevokeResult{}, nil
+}
 func (apiSessionAdminService) RevokeSessions(context.Context, auth.Identity, []int64) (auth.AdminRevokeResult, error) {
 	return auth.AdminRevokeResult{}, nil
+}
+
+func TestBuildRouterAuditsPanickingOperation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	enqueuer := &recordingOperationEnqueuer{}
+	router := buildRouter(routerDependencies{
+		CORSOrigin:        "http://localhost:16300",
+		Logger:            logger,
+		Health:            health.NewHandler(readyService{}),
+		Task:              taskdemo.NewHandler(panicSubmitService{}),
+		Auth:              auth.NewHandler(apiAuthService{}, false),
+		AuthPlatform:      authplatform.NewHandler(apiAuthPlatformService{}),
+		Access:            access.NewHandler(apiAccessService{}),
+		Menu:              menu.NewHandler(apiMenuService{}),
+		Role:              role.NewHandler(apiRoleService{}),
+		User:              user.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
+		OperationLog:      operationlog.NewHandler(apiOperationLogService{}),
+		OperationEnqueuer: enqueuer,
+		SessionAdmin:      auth.NewSessionAdminHandler(apiSessionAdminService{}),
+		AuthOrigin:        func(context *gin.Context) { context.Next() },
+		Authenticate:      func(context *gin.Context) { context.Next() },
+		RequirePermission: func(string) gin.HandlerFunc { return func(context *gin.Context) { context.Next() } },
+	})
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/example-tasks", strings.NewReader(`{"message":"panic"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(authclient.PlatformHeader, "admin")
+	request.Header.Set(authclient.DeviceIDHeader, "550e8400-e29b-41d4-a716-446655440000")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusInternalServerError || !strings.Contains(recorder.Body.String(), `"code":10000`) {
+		t.Fatalf("panic response status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if len(enqueuer.payloads) != 1 {
+		t.Fatalf("operation log payload count = %d, want 1", len(enqueuer.payloads))
+	}
+	payload := enqueuer.payloads[0]
+	if payload.StatusCode != http.StatusInternalServerError || payload.IsSuccess != 0 || payload.Action != "task.create" {
+		t.Fatalf("panic operation payload = %+v", payload)
+	}
 }
 
 func (apiAuthPlatformService) CurrentPolicy(context.Context, string) (authplatform.Policy, error) {

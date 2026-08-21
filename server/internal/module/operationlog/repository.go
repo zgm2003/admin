@@ -20,14 +20,14 @@ func NewRepository(db *gorm.DB) *Repository {
 
 func (r *Repository) Insert(ctx context.Context, payload TaskPayload) error {
 	value := OperationLog{
-		RequestID: payload.RequestID, UserID: payload.UserID, SessionID: payload.SessionID,
+		EventID: payload.EventID, RequestID: payload.RequestID, UserID: payload.UserID, SessionID: payload.SessionID,
 		Platform: payload.Platform, Method: payload.Method, Route: payload.Route, Module: payload.Module,
 		Action: payload.Action, ClientIP: payload.ClientIP, UserAgent: payload.UserAgent,
 		StatusCode: int32(payload.StatusCode), IsSuccess: yesno.Value(payload.IsSuccess), LatencyMs: payload.LatencyMs,
 		RequestData: payload.RequestData, ResponseData: payload.ResponseData,
 		CreatedAt: payload.CreatedAt.UTC(), UpdatedAt: payload.CreatedAt.UTC(),
 	}
-	result := r.db.WithContext(ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "request_id"}}, DoNothing: true}).Create(&value)
+	result := r.db.WithContext(ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "event_id"}}, DoNothing: true}).Create(&value)
 	if result.Error != nil {
 		return fmt.Errorf("insert operation log: %w", result.Error)
 	}

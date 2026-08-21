@@ -1,5 +1,7 @@
 # 操作日志与会话管理设计
 
+> 2026-08-21 加固说明：操作日志幂等标识、摘要上限、panic 审计和会话撤销顺序以 `2026-08-21-operation-log-session-hardening-design.md` 为准；下文已同步最终契约。
+
 ## 1. 目标
 
 本切片同时补齐 Admin 的两项安全基础能力：
@@ -58,14 +60,15 @@ router
 -> permission middleware
 -> session handler
 -> session service
+-> authstate invalidating lease
 -> session repository
 -> sys_user_session / sys_user
 -> PostgreSQL
--> authstate invalidation
+-> authstate generation publish
 -> Redis session snapshot deletion
 ```
 
-会话踢出必须先完成 PostgreSQL 的 `revoked_at` 更新，再完成现有认证状态失效和会话快照删除。Redis 失败不回滚 PostgreSQL；后续认证回源 PostgreSQL 时仍拒绝被撤销的会话。
+会话踢出必须先获取 `invalidating` lease，再完成 PostgreSQL 的 `revoked_at` 更新，提交后发布新 generation 并删除会话快照。Redis 失败不回滚已经提交的 PostgreSQL；generation 发布失败时不能恢复旧 ready state，后续认证只能遇到 invalidating 或回源 PostgreSQL并拒绝被撤销的会话。
 
 ## 4. 操作日志路由监控
 
@@ -103,13 +106,14 @@ router
 - 脱敏后的响应 envelope 摘要；
 - 任务创建时间。
 
-请求和响应摘要使用明确的 JSON 结构，不把原始 body 直接写入日志。字段名包含 `password`、`confirmPassword`、`accessToken`、`refreshToken`、`authorization`、`cookie`、`secret`、`key` 的值统一替换为固定掩码。单个摘要限制最大字节数，超出时记录截断状态并丢弃超出的内容，不把完整敏感 body 作为兜底数据保存。
+请求和响应摘要使用明确的 JSON 结构，不把原始 body 直接写入日志。字段名包含 `password`、`confirmPassword`、`accessToken`、`refreshToken`、`authorization`、`cookie`、`secret`、`key` 的值统一替换为固定掩码。单个摘要限制最大字节数，超出时只记录 `{"truncated":true}` 并丢弃内容；响应 writer 只保留固定上限字节，不把完整或未经解析的敏感 body 作为兜底数据保存。
 
 ### 4.3 异步任务
 
-新增明确的 Asynq 任务类型 `system:operation-log:v1`，任务 payload 使用固定 DTO，至少包含：
+使用明确的 Asynq 任务类型 `system:operation-log:v2`，任务 payload 使用 schema version 2 的固定 DTO，至少包含：
 
 - schema version；
+- 服务端生成的 event ID；
 - request ID；
 - actor/session/platform 字段；
 - method、route、module、action；
@@ -128,7 +132,8 @@ API 进程只负责采集和入队，Worker 负责解码、验证和落库。入
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | `BIGSERIAL` | 主键 |
-| `request_id` | `VARCHAR(128)` | 请求唯一标识，建立唯一索引，保证任务重试幂等 |
+| `event_id` | `VARCHAR(64)` | 服务端操作事件标识，建立唯一索引，保证任务重试幂等 |
+| `request_id` | `VARCHAR(128)` | 链路关联标识，允许客户端复用 |
 | `user_id` | `BIGINT NULL` | 操作者，匿名登录失败可为空 |
 | `session_id` | `BIGINT NULL` | 当前会话，可为空 |
 | `platform` | `VARCHAR(49) NULL` | 认证平台 |
@@ -150,7 +155,8 @@ API 进程只负责采集和入队，Worker 负责解码、验证和落库。入
 
 只为真实查询建立索引：
 
-- `ux_sys_operation_log_request_id`：`request_id` 唯一；
+- `ux_sys_operation_log_event_id`：`event_id` 唯一；
+- `ix_sys_operation_log_request_id`：按链路标识查询；
 - `ix_sys_operation_log_created_at`：按创建时间倒序分页；
 - `ix_sys_operation_log_user_created`：按用户和时间筛选；
 - `ix_sys_operation_log_action_created`：按操作码和时间筛选。
@@ -238,13 +244,14 @@ DELETE /api/v1/sessions/:id
 请求体必须为空。Service 按以下顺序执行：
 
 1. 验证 session ID；
-2. 查询并锁定会话；
+2. 查询目标会话，不存在返回 404；
 3. 拒绝当前操作者自己的 `session_id`；
 4. 已撤销会话返回幂等结果，不重复修改时间；
-5. 在 PostgreSQL 设置 `revoked_at` 和 `updated_at`；
-6. 通过现有 authstate invalidator 使用户该平台的会话状态失效；
-7. 删除对应 Redis session snapshot；
-8. 返回撤销结果。
+5. 获取并续租该用户平台的 authstate invalidating lease；
+6. 在 PostgreSQL 事务内锁定会话并设置 `revoked_at` 和 `updated_at`；
+7. 发布新的 sessions generation；
+8. 删除对应 Redis session snapshot；
+9. 返回撤销结果。
 
 ### 7.4 批量踢出
 
@@ -315,7 +322,8 @@ ID 去重后最多 100 个。当前会话和已经撤销的会话不执行写入
 - 请求和响应敏感字段被掩码，原始密码和 Token 不进入任务或数据库；
 - 操作日志入队成功时 API 响应保持原状态；Redis 不可用时 API 业务响应仍保持原状态并产生结构化 enqueue error；
 - Worker 能解码合法任务、插入 PostgreSQL、对数据库错误重试，对非法 payload 跳过重试；
-- `request_id` 唯一约束保证同一任务重试不会产生重复日志；
+- 服务端 `event_id` 唯一约束保证同一任务重试不会产生重复日志，重复客户端 `request_id` 仍产生独立日志；
+- 大请求和大响应只产生有界合法 JSON 摘要，操作路由 panic 产生 status 500 的失败日志；
 - 会话 active/expired/revoked 状态和分页筛选正确；
 - 单条和批量踢出不能撤销当前会话；
 - PostgreSQL 撤销成功后 Redis 删除失败返回明确依赖错误，后续认证仍拒绝旧 Token；
@@ -340,4 +348,3 @@ ID 去重后最多 100 个。当前会话和已经撤销的会话不执行写入
 - 操作日志全文搜索和导出；
 - 邮箱验证码、找回密码、登录限流和注册防滥用；
 - 通用 CRUD、全局 Dialog、全局 Table 或无真实重复依据的抽象。
-

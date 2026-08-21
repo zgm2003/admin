@@ -67,6 +67,7 @@ const (
 	KeyAuthSessionUpdating          MessageKey = "auth.sessionUpdating"
 	KeyAuthPlatformUnavailable      MessageKey = "authPlatform.unavailable"
 	KeySessionInvalidID             MessageKey = "session.invalidId"
+	KeySessionNotFound              MessageKey = "session.notFound"
 	KeySessionCurrentProtected      MessageKey = "session.currentProtected"
 	KeySessionQueryFailed           MessageKey = "session.queryFailed"
 	KeySessionRevokeFailed          MessageKey = "session.revokeFailed"
@@ -124,6 +125,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyAuthSessionUpdating:          "会话状态正在更新",
 		KeyAuthPlatformUnavailable:      "认证平台服务暂不可用",
 		KeySessionInvalidID:             "会话 ID 无效",
+		KeySessionNotFound:              "会话不存在",
 		KeySessionCurrentProtected:      "当前登录会话不能被踢出",
 		KeySessionQueryFailed:           "会话查询失败",
 		KeySessionRevokeFailed:          "会话撤销失败",
@@ -179,6 +181,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyAuthSessionUpdating:          "Authentication session state is updating",
 		KeyAuthPlatformUnavailable:      "Authentication platform service is temporarily unavailable",
 		KeySessionInvalidID:             "Invalid session ID",
+		KeySessionNotFound:              "Session not found",
 		KeySessionCurrentProtected:      "The current login session cannot be revoked",
 		KeySessionQueryFailed:           "Failed to query sessions",
 		KeySessionRevokeFailed:          "Failed to revoke session",

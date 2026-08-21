@@ -3,6 +3,8 @@ package operationlog
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +21,7 @@ const maxSummaryBytes = 32 * 1024
 
 type TaskPayload struct {
 	SchemaVersion int       `json:"schemaVersion"`
+	EventID       string    `json:"eventId"`
 	RequestID     string    `json:"requestId"`
 	UserID        *int64    `json:"userId"`
 	SessionID     *int64    `json:"sessionId"`
@@ -62,12 +65,18 @@ func Middleware(logger *slog.Logger, enqueuer Enqueuer) gin.HandlerFunc {
 
 		authInfo, _ := projectmiddleware.GetAuthenticationLog(ginContext)
 		requestID := projectmiddleware.GetRequestID(ginContext)
+		eventID, eventIDErr := newEventID()
+		if eventIDErr != nil {
+			logger.ErrorContext(ginContext.Request.Context(), "generate operation log event ID failed", "requestId", requestID, "route", route, "action", rule.Action, "error", eventIDErr)
+			return
+		}
 		statusCode := captureWriter.Status()
 		if statusCode == 0 {
 			statusCode = http.StatusOK
 		}
 		payload := TaskPayload{
-			SchemaVersion: 1,
+			SchemaVersion: 2,
+			EventID:       eventID,
 			RequestID:     requestID,
 			Method:        ginContext.Request.Method,
 			Route:         route,
@@ -97,7 +106,7 @@ func Middleware(logger *slog.Logger, enqueuer Enqueuer) gin.HandlerFunc {
 			payload.IsSuccess = 1
 		}
 		if rule.CaptureResponse {
-			payload.ResponseData = sanitizeWithLimit(captureWriter.body.Bytes())
+			payload.ResponseData = captureWriter.summary()
 		}
 		if enqueuer == nil {
 			logger.ErrorContext(ginContext.Request.Context(), "enqueue operation log failed", "requestId", requestID, "route", route, "action", rule.Action, "error", "operation log enqueuer is nil")
@@ -111,19 +120,54 @@ func Middleware(logger *slog.Logger, enqueuer Enqueuer) gin.HandlerFunc {
 	}
 }
 
+func newEventID() (string, error) {
+	value := make([]byte, 16)
+	if _, err := rand.Read(value); err != nil {
+		return "", fmt.Errorf("generate operation log event ID: %w", err)
+	}
+	return hex.EncodeToString(value), nil
+}
+
 type summaryWriter struct {
 	gin.ResponseWriter
-	body bytes.Buffer
+	body      bytes.Buffer
+	truncated bool
 }
 
 func (w *summaryWriter) Write(data []byte) (int, error) {
-	_, _ = w.body.Write(data)
-	return w.ResponseWriter.Write(data)
+	written, err := w.ResponseWriter.Write(data)
+	w.capture(data[:written])
+	return written, err
 }
 
 func (w *summaryWriter) WriteString(value string) (int, error) {
-	_, _ = w.body.WriteString(value)
-	return w.ResponseWriter.WriteString(value)
+	written, err := w.ResponseWriter.WriteString(value)
+	w.capture([]byte(value[:written]))
+	return written, err
+}
+
+func (w *summaryWriter) capture(data []byte) {
+	remaining := maxSummaryBytes - w.body.Len()
+	if remaining > len(data) {
+		remaining = len(data)
+	}
+	if remaining > 0 {
+		_, _ = w.body.Write(data[:remaining])
+	}
+	if remaining < len(data) {
+		w.truncated = true
+	}
+}
+
+func (w *summaryWriter) summary() JSON {
+	if w.truncated {
+		return truncatedSummary()
+	}
+	summary, err := SanitizeJSON(w.body.Bytes())
+	if err != nil {
+		return nil
+	}
+	return summary
 }
 
 func readRequestSummary(context *gin.Context) JSON {
@@ -135,6 +179,9 @@ func readRequestSummary(context *gin.Context) JSON {
 		return nil
 	}
 	context.Request.Body = io.NopCloser(io.MultiReader(bytes.NewReader(body), context.Request.Body))
+	if len(body) > maxSummaryBytes {
+		return truncatedSummary()
+	}
 	sanitized, err := SanitizeJSON(body)
 	if err != nil {
 		return nil
@@ -193,13 +240,9 @@ func sanitizeWithLimit(raw []byte) JSON {
 	if len(raw) <= maxSummaryBytes {
 		return append(JSON(nil), raw...)
 	}
-	value := map[string]interface{}{
-		"truncated": true,
-		"prefix":    string(raw[:maxSummaryBytes]),
-	}
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return JSON(`{"truncated":true}`)
-	}
-	return JSON(encoded)
+	return truncatedSummary()
+}
+
+func truncatedSummary() JSON {
+	return JSON(`{"truncated":true}`)
 }

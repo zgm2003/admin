@@ -24,7 +24,7 @@ func TestOperationLogWorkerPersistsIdempotently(t *testing.T) {
 	sessionID := int64(9)
 	platform := "admin"
 	payload := operationlog.TaskPayload{
-		SchemaVersion: 1, RequestID: "operation-integration-1", UserID: &userID, SessionID: &sessionID,
+		SchemaVersion: 2, EventID: "operation-event-1", RequestID: "operation-integration-1", UserID: &userID, SessionID: &sessionID,
 		Platform: &platform, Method: "PUT", Route: "/api/v1/users/:id", Module: "user", Action: "user.update",
 		ClientIP: "127.0.0.1", UserAgent: "integration", StatusCode: 200, IsSuccess: 1, LatencyMs: 4,
 		RequestData: operationlog.JSON(`{"password":"***"}`), ResponseData: operationlog.JSON(`{"code":0}`),
@@ -45,14 +45,14 @@ func TestOperationLogWorkerPersistsIdempotently(t *testing.T) {
 
 	var count int64
 	if err := connection.GORM.WithContext(ctx).Model(&operationlog.OperationLog{}).
-		Where("request_id = ?", payload.RequestID).Count(&count).Error; err != nil {
+		Where("event_id = ?", payload.EventID).Count(&count).Error; err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
 		t.Fatalf("operation log count = %d, want 1", count)
 	}
 	var stored operationlog.OperationLog
-	if err := connection.GORM.WithContext(ctx).Where("request_id = ?", payload.RequestID).Take(&stored).Error; err != nil {
+	if err := connection.GORM.WithContext(ctx).Where("event_id = ?", payload.EventID).Take(&stored).Error; err != nil {
 		t.Fatal(err)
 	}
 	var storedRequest, expectedRequest map[string]string

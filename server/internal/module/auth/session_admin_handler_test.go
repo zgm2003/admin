@@ -25,6 +25,11 @@ func (f *fakeSessionAdminService) SessionStats(context.Context) (AdminSessionSta
 	return AdminSessionStats{Platforms: map[string]int64{}}, nil
 }
 
+func (f *fakeSessionAdminService) RevokeSession(context.Context, Identity, int64) (AdminRevokeResult, error) {
+	f.revokeCalls++
+	return AdminRevokeResult{}, nil
+}
+
 func (f *fakeSessionAdminService) RevokeSessions(context.Context, Identity, []int64) (AdminRevokeResult, error) {
 	f.revokeCalls++
 	return AdminRevokeResult{}, nil

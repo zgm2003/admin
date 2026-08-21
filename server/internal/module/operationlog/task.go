@@ -13,7 +13,7 @@ import (
 	"github.com/hibiken/asynq"
 )
 
-const Type = "system:operation-log:v1"
+const Type = "system:operation-log:v2"
 
 type Processor interface {
 	Process(context.Context, TaskPayload) error
@@ -37,7 +37,7 @@ func (e *QueueEnqueuer) Enqueue(ctx context.Context, payload TaskPayload) error 
 	if err != nil {
 		return fmt.Errorf("encode operation log task: %w", err)
 	}
-	_, err = e.client.Enqueue(ctx, asynq.NewTask(Type, encoded), asynq.TaskID(payload.RequestID), asynq.MaxRetry(3), asynq.Timeout(30*time.Second))
+	_, err = e.client.Enqueue(ctx, asynq.NewTask(Type, encoded), asynq.TaskID(payload.EventID), asynq.MaxRetry(3), asynq.Timeout(30*time.Second))
 	if err != nil {
 		return fmt.Errorf("enqueue operation log task: %w", err)
 	}
@@ -84,8 +84,11 @@ func decodePayload(data []byte) (TaskPayload, error) {
 }
 
 func validateTaskPayload(payload TaskPayload) error {
-	if payload.SchemaVersion != 1 {
+	if payload.SchemaVersion != 2 {
 		return fmt.Errorf("schemaVersion is invalid")
+	}
+	if strings.TrimSpace(payload.EventID) == "" || len(payload.EventID) > 64 {
+		return fmt.Errorf("eventId is invalid")
 	}
 	if strings.TrimSpace(payload.RequestID) == "" || len(payload.RequestID) > 128 {
 		return fmt.Errorf("requestId is invalid")

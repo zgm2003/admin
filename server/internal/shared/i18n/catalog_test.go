@@ -91,6 +91,21 @@ func TestCatalogsTranslateUserErrorsWithExactParameters(t *testing.T) {
 	}
 }
 
+func TestCatalogsTranslateSessionAdministrationErrors(t *testing.T) {
+	keys := []i18n.MessageKey{
+		i18n.KeySessionNotFound,
+		i18n.KeySessionCurrentProtected,
+	}
+	for _, locale := range []i18n.Locale{i18n.ZhCN, i18n.EnUS} {
+		for _, key := range keys {
+			message, err := i18n.Translate(locale, key, nil)
+			if err != nil || message == "" {
+				t.Errorf("Translate(%q, %q) = %q,%v", locale, key, message, err)
+			}
+		}
+	}
+}
+
 func TestTranslateUsesTheRequestedLocale(t *testing.T) {
 	for _, test := range []struct {
 		locale i18n.Locale

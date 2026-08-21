@@ -20,6 +20,9 @@ import (
 
 func TestEnsureSchemaCreatesOperationLogContract(t *testing.T) {
 	connection, ctx := openOperationLogDatabase(t)
+	if err := operationlog.PrepareSchema(ctx, connection.GORM); err != nil {
+		t.Fatal(err)
+	}
 	if err := database.AutoMigrate(ctx, connection.GORM, &operationlog.OperationLog{}); err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +34,7 @@ func TestEnsureSchemaCreatesOperationLogContract(t *testing.T) {
 	}
 
 	expectedColumns := map[string]string{
-		"id": "bigint", "request_id": "character varying", "user_id": "bigint",
+		"id": "bigint", "event_id": "character varying", "request_id": "character varying", "user_id": "bigint",
 		"session_id": "bigint", "platform": "character varying", "method": "character varying",
 		"route": "character varying", "module": "character varying", "action": "character varying",
 		"client_ip": "character varying", "user_agent": "character varying", "status_code": "integer",
@@ -61,7 +64,8 @@ func TestEnsureSchemaCreatesOperationLogContract(t *testing.T) {
 	}
 
 	for _, indexName := range []string{
-		"ux_sys_operation_log_request_id",
+		"ux_sys_operation_log_event_id",
+		"ix_sys_operation_log_request_id",
 		"ix_sys_operation_log_created_at",
 		"ix_sys_operation_log_user_created",
 		"ix_sys_operation_log_action_created",
@@ -76,6 +80,15 @@ func TestEnsureSchemaCreatesOperationLogContract(t *testing.T) {
 			t.Fatalf("index %s does not exist", indexName)
 		}
 	}
+	var requestIDIsUnique bool
+	if err := connection.GORM.WithContext(ctx).Raw(
+		"SELECT indisunique FROM pg_index WHERE indexrelid = to_regclass(current_schema() || '.ix_sys_operation_log_request_id')",
+	).Row().Scan(&requestIDIsUnique); err != nil {
+		t.Fatal(err)
+	}
+	if requestIDIsUnique {
+		t.Fatal("request_id index must not be unique")
+	}
 
 	var constraint string
 	if err := connection.GORM.WithContext(ctx).Raw(
@@ -89,10 +102,66 @@ func TestEnsureSchemaCreatesOperationLogContract(t *testing.T) {
 	}
 	if err := connection.GORM.WithContext(ctx).Exec(
 		"INSERT INTO sys_operation_log " +
-			"(request_id, method, route, module, action, client_ip, user_agent, status_code, is_success, latency_ms) " +
-			"VALUES ('schema-invalid-success', 'POST', '/test', 'test', 'test.create', '127.0.0.1', 'test', 200, 2, 0)",
+			"(event_id, request_id, method, route, module, action, client_ip, user_agent, status_code, is_success, latency_ms) " +
+			"VALUES ('schema-invalid-event', 'schema-invalid-success', 'POST', '/test', 'test', 'test.create', '127.0.0.1', 'test', 200, 2, 0)",
 	).Error; err == nil {
 		t.Fatal("is_success=2 was accepted")
+	}
+}
+
+func TestPrepareSchemaMigratesLegacyRequestIDUniqueness(t *testing.T) {
+	connection, ctx := openOperationLogDatabase(t)
+	for _, statement := range []string{
+		`CREATE TABLE sys_operation_log (
+			id BIGSERIAL PRIMARY KEY,
+			request_id VARCHAR(128) NOT NULL,
+			method VARCHAR(10) NOT NULL,
+			route VARCHAR(255) NOT NULL,
+			module VARCHAR(64) NOT NULL,
+			action VARCHAR(128) NOT NULL,
+			client_ip VARCHAR(64) NOT NULL,
+			user_agent VARCHAR(512) NOT NULL,
+			status_code INTEGER NOT NULL,
+			is_success SMALLINT NOT NULL,
+			latency_ms BIGINT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE UNIQUE INDEX ux_sys_operation_log_request_id ON sys_operation_log (request_id)`,
+		`INSERT INTO sys_operation_log
+			(request_id, method, route, module, action, client_ip, user_agent, status_code, is_success, latency_ms)
+			VALUES ('legacy-request', 'PUT', '/api/v1/users/:id', 'user', 'user.update', '127.0.0.1', 'test', 200, 1, 1)`,
+	} {
+		if err := connection.GORM.WithContext(ctx).Exec(statement).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := operationlog.PrepareSchema(ctx, connection.GORM); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.AutoMigrate(ctx, connection.GORM, &operationlog.OperationLog{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := operationlog.EnsureSchema(ctx, connection.GORM); err != nil {
+		t.Fatal(err)
+	}
+
+	var eventID string
+	if err := connection.GORM.WithContext(ctx).Raw("SELECT event_id FROM sys_operation_log WHERE request_id = 'legacy-request'").Row().Scan(&eventID); err != nil {
+		t.Fatal(err)
+	}
+	if eventID == "" {
+		t.Fatal("legacy operation log event_id was not backfilled")
+	}
+	for index, requestID := range []string{"shared-request", "shared-request"} {
+		if err := connection.GORM.WithContext(ctx).Exec(
+			"INSERT INTO sys_operation_log (event_id, request_id, method, route, module, action, client_ip, user_agent, status_code, is_success, latency_ms) "+
+				"VALUES (?, ?, 'PUT', '/api/v1/users/:id', 'user', 'user.update', '127.0.0.1', 'test', 200, 1, 1)",
+			"event-"+fmt.Sprint(index), requestID,
+		).Error; err != nil {
+			t.Fatalf("insert repeated request_id: %v", err)
+		}
 	}
 }
 

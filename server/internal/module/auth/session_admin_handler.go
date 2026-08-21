@@ -14,6 +14,7 @@ import (
 type sessionAdminService interface {
 	ListSessions(context.Context, AdminSessionQuery) ([]AdminSession, int64, error)
 	SessionStats(context.Context) (AdminSessionStats, error)
+	RevokeSession(context.Context, Identity, int64) (AdminRevokeResult, error)
 	RevokeSessions(context.Context, Identity, []int64) (AdminRevokeResult, error)
 }
 
@@ -68,7 +69,7 @@ func (h *SessionAdminHandler) RevokeOne(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	result, err := h.service.RevokeSessions(context.Request.Context(), identity, []int64{id})
+	result, err := h.service.RevokeSession(context.Request.Context(), identity, id)
 	if err != nil {
 		response.Fail(context, err)
 		return

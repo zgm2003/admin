@@ -20,10 +20,49 @@ import (
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 )
 
 type integrationPolicyStore struct {
 	policy authplatform.Policy
+}
+
+type invalidationObservingSessionRepository struct {
+	repository           *auth.SessionRepository
+	states               *authstate.Store
+	redis                *projectredis.Client
+	platform             string
+	userID               int64
+	sawInvalidating      bool
+	dropStateAfterRevoke bool
+}
+
+func (r *invalidationObservingSessionRepository) ListAdmin(ctx context.Context, query auth.AdminSessionQuery, now time.Time) ([]auth.AdminSession, int64, error) {
+	return r.repository.ListAdmin(ctx, query, now)
+}
+
+func (r *invalidationObservingSessionRepository) StatsAdmin(ctx context.Context, now time.Time) (auth.AdminSessionStats, error) {
+	return r.repository.StatsAdmin(ctx, now)
+}
+
+func (r *invalidationObservingSessionRepository) FindAdminRevokeTargets(ctx context.Context, ids []int64) ([]auth.Session, error) {
+	return r.repository.FindAdminRevokeTargets(ctx, ids)
+}
+
+func (r *invalidationObservingSessionRepository) RevokeAdmin(ctx context.Context, ids []int64, currentSessionID int64, now time.Time) (auth.AdminRevokeResult, error) {
+	state, found, err := r.states.ReadSessions(ctx, r.platform, r.userID)
+	if err != nil {
+		return auth.AdminRevokeResult{}, err
+	}
+	if !found || state.State != authstate.StateInvalidating {
+		return auth.AdminRevokeResult{}, errors.New("sessions state was not invalidating before PostgreSQL revoke")
+	}
+	r.sawInvalidating = true
+	result, err := r.repository.RevokeAdmin(ctx, ids, currentSessionID, now)
+	if err == nil && r.dropStateAfterRevoke {
+		err = r.redis.Delete(ctx, authstate.SessionsStateKey(r.platform, r.userID))
+	}
+	return result, err
 }
 
 func (s integrationPolicyStore) CurrentPolicy(_ context.Context, platform string) (authplatform.Policy, error) {
@@ -34,6 +73,54 @@ func (s integrationPolicyStore) CurrentPolicy(_ context.Context, platform string
 }
 
 func TestAdminSessionRevokePersistsDeletesSnapshotAndRejectsOldToken(t *testing.T) {
+	fixture := newAdminSessionRevokeFixture(t)
+	result, err := fixture.service.RevokeSessions(fixture.ctx, fixture.actor, []int64{fixture.targetSession.ID})
+	if err != nil || len(result.Revoked) != 1 {
+		t.Fatalf("RevokeSessions() = %+v, %v", result, err)
+	}
+	if !fixture.observingRepository.sawInvalidating {
+		t.Fatal("PostgreSQL revoke did not run under an invalidating sessions lease")
+	}
+	assertPostgreSQLSessionRevoked(t, fixture)
+	if _, found, err := fixture.cache.Read(fixture.ctx, "admin", fixture.targetSession.ID); err != nil || found {
+		t.Fatalf("revoked session snapshot = found %v, error %v", found, err)
+	}
+	assertOldAccessTokenRejected(t, fixture)
+}
+
+func TestAdminSessionRevokeCommitFailureLeavesOldSnapshotUnreachable(t *testing.T) {
+	fixture := newAdminSessionRevokeFixture(t)
+	fixture.observingRepository.dropStateAfterRevoke = true
+
+	_, err := fixture.service.RevokeSessions(fixture.ctx, fixture.actor, []int64{fixture.targetSession.ID})
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) || appErr.Code != apperror.CodeDependencyUnavailable {
+		t.Fatalf("RevokeSessions() error = %v", err)
+	}
+	assertPostgreSQLSessionRevoked(t, fixture)
+	if _, found, err := fixture.states.ReadSessions(fixture.ctx, "admin", fixture.targetSession.UserID); err != nil || found {
+		t.Fatalf("sessions state after failed publish = found %v, error %v", found, err)
+	}
+	if _, found, err := fixture.cache.Read(fixture.ctx, "admin", fixture.targetSession.ID); err != nil || !found {
+		t.Fatalf("old snapshot = found %v, error %v; failure injection should leave it in place", found, err)
+	}
+	assertOldAccessTokenRejected(t, fixture)
+}
+
+type adminSessionRevokeFixture struct {
+	ctx                 context.Context
+	tx                  *gorm.DB
+	states              *authstate.Store
+	cache               *auth.SessionCache
+	service             *auth.Service
+	observingRepository *invalidationObservingSessionRepository
+	actor               auth.Identity
+	targetSession       auth.Session
+	oldToken            string
+	client              authclient.Client
+}
+
+func newAdminSessionRevokeFixture(t *testing.T) adminSessionRevokeFixture {
 	tx, ctx := openAuthTransaction(t)
 	redisClient := openSessionAdminRedis(t)
 	actorUser := createAuthUserWithoutRole(t, tx, ctx, "session-admin-actor")
@@ -94,24 +181,36 @@ func TestAdminSessionRevokePersistsDeletesSnapshotAndRejectsOldToken(t *testing.
 		states, authstate.NewInvalidator(states), cache, redisClient, jwt, []byte(strings.Repeat("h", 32)),
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 	)
-	service.SetSessionAdminRepository(repository)
-	result, err := service.RevokeSessions(ctx, auth.Identity{UserID: actorUser.ID, SessionID: actorSession.ID, Platform: "admin", Version: actorSession.Version}, []int64{targetSession.ID})
-	if err != nil || len(result.Revoked) != 1 {
-		t.Fatalf("RevokeSessions() = %+v, %v", result, err)
+	observingRepository := &invalidationObservingSessionRepository{
+		repository: repository,
+		states:     states,
+		redis:      redisClient,
+		platform:   targetSession.Platform,
+		userID:     targetUser.ID,
 	}
+	service.SetSessionAdminRepository(observingRepository)
+	return adminSessionRevokeFixture{
+		ctx: ctx, tx: tx, states: states, cache: cache, service: service, observingRepository: observingRepository,
+		actor:         auth.Identity{UserID: actorUser.ID, SessionID: actorSession.ID, Platform: "admin", Version: actorSession.Version},
+		targetSession: targetSession, oldToken: oldToken,
+		client: authclient.Client{Platform: "admin", DeviceID: targetSession.DeviceID, ClientIP: targetSession.ClientIP, UserAgent: targetSession.UserAgent},
+	}
+}
+
+func assertPostgreSQLSessionRevoked(t *testing.T, fixture adminSessionRevokeFixture) {
+	t.Helper()
 	var stored auth.Session
-	if err := tx.WithContext(ctx).Take(&stored, targetSession.ID).Error; err != nil {
+	if err := fixture.tx.WithContext(fixture.ctx).Take(&stored, fixture.targetSession.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	if stored.RevokedAt == nil {
 		t.Fatal("PostgreSQL session was not revoked")
 	}
-	if _, found, err := cache.Read(ctx, "admin", targetSession.ID); err != nil || found {
-		t.Fatalf("revoked session snapshot = found %v, error %v", found, err)
-	}
-	_, err = service.Authenticate(ctx, oldToken, authclient.Client{
-		Platform: "admin", DeviceID: targetSession.DeviceID, ClientIP: targetSession.ClientIP, UserAgent: targetSession.UserAgent,
-	})
+}
+
+func assertOldAccessTokenRejected(t *testing.T, fixture adminSessionRevokeFixture) {
+	t.Helper()
+	_, err := fixture.service.Authenticate(fixture.ctx, fixture.oldToken, fixture.client)
 	var appErr *apperror.Error
 	if !errors.As(err, &appErr) || appErr.Code != apperror.CodeUnauthorized {
 		t.Fatalf("old Access Token error = %v", err)
