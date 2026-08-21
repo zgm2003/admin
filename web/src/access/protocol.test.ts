@@ -6,6 +6,7 @@ describe('access protocol registries', () => {
   it('accepts only explicitly registered menu icons', () => {
     expect(isMenuIconKey('Folder')).toBe(true)
     expect(isMenuIconKey('User')).toBe(true)
+		expect(isMenuIconKey('List')).toBe(true)
     expect(isMenuIconKey('Unknown')).toBe(false)
   })
 
