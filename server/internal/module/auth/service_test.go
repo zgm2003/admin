@@ -3,414 +3,401 @@ package auth
 import (
 	"context"
 	"errors"
-	"os"
-	"reflect"
+	"io"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
 
+	"admin/server/internal/module/authclient"
+	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/authstate"
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/user"
+	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
 
-func TestServiceUsesSharedCurrentSessionPointerKey(t *testing.T) {
-	source, err := os.ReadFile("service.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(source), "func currentSessionPointerKey") {
-		t.Fatal("auth service still declares currentSessionPointerKey")
-	}
-}
-
-func TestRegisterCreatesEnabledUserWithDefaultRole(t *testing.T) {
-	var stored user.CreateInput
+func TestRegisterUsesPlatformPolicyAndRequiresRedis(t *testing.T) {
+	redisClient := openAuthRedis(t)
 	users := &fakeUserStore{createFn: func(_ context.Context, input user.CreateInput) (user.User, error) {
-		stored = input
-		return user.User{ID: 7, Username: input.Username, Email: input.Email, IsEnabled: yesno.Yes}, nil
+		return user.User{ID: 81001, Username: input.Username, Email: input.Email, IsEnabled: yesno.Yes}, nil
 	}}
-	service := newTestService(t, users, &fakeRoleStore{defaultRole: role.Role{ID: 5}}, &fakeSessionStore{}, &fakePointerStore{})
-
+	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{defaultRole: role.Role{ID: 3}}, &fakeSessionStore{}, &fakePolicyStore{policy: testPolicy()})
 	registered, err := service.Register(context.Background(), RegisterInput{
-		Username:        "  张三_01  ",
-		Email:           "  USER@Example.COM ",
-		Password:        "password123",
-		ConfirmPassword: "password123",
+		Username: "  张三_01  ", Email: " USER@Example.COM ", Password: "password123", ConfirmPassword: "password123", Client: testAuthClient(),
 	})
-	if err != nil {
-		t.Fatal(err)
+	if err != nil || registered.UserID != 81001 || users.created.RoleID != 3 || users.created.PasswordHash == "" {
+		t.Fatalf("Register() = %+v,%v input=%+v", registered, err, users.created)
 	}
-	if stored.Username != "张三_01" || stored.Email != "user@example.com" || stored.RoleID != 5 || stored.PasswordHash == "" {
-		t.Fatalf("CreateWithRole input = %+v", stored)
-	}
-	if registered.UserID != 7 || registered.Username != stored.Username || registered.Email != stored.Email {
-		t.Fatalf("registered = %+v", registered)
+
+	disabled := testPolicy()
+	disabled.AllowRegister = false
+	service = newRedisTestService(t, redisClient, users, &fakeRoleStore{defaultRole: role.Role{ID: 3}}, &fakeSessionStore{}, &fakePolicyStore{policy: disabled})
+	if _, err := service.Register(context.Background(), RegisterInput{
+		Username: "valid_user", Email: "valid@example.com", Password: "password123", ConfirmPassword: "password123", Client: testAuthClient(),
+	}); appErrorCode(err) != apperror.CodeForbidden {
+		t.Fatalf("registration-disabled error = %v", err)
 	}
 }
 
-func TestRegisterRejectsInvalidUsernameEmailAndPassword(t *testing.T) {
-	tests := []RegisterInput{
-		{Username: "ab", Email: "user@example.com", Password: "password", ConfirmPassword: "password"},
-		{Username: "bad name", Email: "user@example.com", Password: "password", ConfirmPassword: "password"},
-		{Username: "valid_user", Email: "not-an-email", Password: "password", ConfirmPassword: "password"},
-		{Username: "valid_user", Email: "user@example.com", Password: "password", ConfirmPassword: "different"},
-		{Username: "valid_user", Email: "user@example.com", Password: "short", ConfirmPassword: "short"},
-	}
-	service := newTestService(t, &fakeUserStore{}, &fakeRoleStore{}, &fakeSessionStore{}, &fakePointerStore{})
-	for _, input := range tests {
+func TestRegisterMapsValidationAndConflicts(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	for _, input := range []RegisterInput{
+		{Username: "ab", Email: "user@example.com", Password: "password", ConfirmPassword: "password", Client: testAuthClient()},
+		{Username: "valid_user", Email: "not-an-email", Password: "password", ConfirmPassword: "password", Client: testAuthClient()},
+		{Username: "valid_user", Email: "user@example.com", Password: "password", ConfirmPassword: "different", Client: testAuthClient()},
+	} {
+		service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: testPolicy()})
 		if _, err := service.Register(context.Background(), input); appErrorCode(err) != apperror.CodeInvalidRequest {
 			t.Errorf("Register(%+v) error = %v", input, err)
 		}
 	}
-}
-
-func TestRegisterMapsUsernameAndEmailConflicts(t *testing.T) {
-	for _, test := range []struct {
-		repositoryError error
-		wantKey         i18n.MessageKey
-	}{
-		{repositoryError: user.ErrUsernameConflict, wantKey: i18n.KeyUsernameConflict},
-		{repositoryError: user.ErrEmailConflict, wantKey: i18n.KeyEmailConflict},
-	} {
-		users := &fakeUserStore{createFn: func(context.Context, user.CreateInput) (user.User, error) {
-			return user.User{}, test.repositoryError
-		}}
-		service := newTestService(t, users, &fakeRoleStore{defaultRole: role.Role{ID: 1}}, &fakeSessionStore{}, &fakePointerStore{})
+	for _, repositoryError := range []error{user.ErrUsernameConflict, user.ErrEmailConflict} {
+		users := &fakeUserStore{createErr: repositoryError}
+		service := newRedisTestService(t, redisClient, users, &fakeRoleStore{defaultRole: role.Role{ID: 1}}, &fakeSessionStore{}, &fakePolicyStore{policy: testPolicy()})
 		_, err := service.Register(context.Background(), RegisterInput{
-			Username: "valid_user", Email: "user@example.com", Password: "password", ConfirmPassword: "password",
+			Username: "valid_user", Email: "user@example.com", Password: "password", ConfirmPassword: "password", Client: testAuthClient(),
 		})
-		var appErr *apperror.Error
-		if !errors.As(err, &appErr) || appErr.Code != apperror.CodeConflict || appErr.MessageKey != test.wantKey {
-			t.Errorf("repository error %v mapped to %v", test.repositoryError, err)
+		if appErrorCode(err) != apperror.CodeConflict {
+			t.Errorf("repository error %v mapped to %v", repositoryError, err)
 		}
 	}
 }
 
-func TestRegisterDoesNotCreateSession(t *testing.T) {
-	sessions := &fakeSessionStore{}
-	users := &fakeUserStore{createFn: func(_ context.Context, input user.CreateInput) (user.User, error) {
-		return user.User{ID: 1, Username: input.Username, Email: input.Email}, nil
-	}}
-	service := newTestService(t, users, &fakeRoleStore{defaultRole: role.Role{ID: 1}}, sessions, &fakePointerStore{})
-	_, err := service.Register(context.Background(), RegisterInput{
-		Username: "valid_user", Email: "user@example.com", Password: "password", ConfirmPassword: "password",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sessions.createCalls != 0 {
-		t.Fatalf("session create calls = %d", sessions.createCalls)
-	}
-}
-
-func TestLoginReturnsCredentialAndCurrentSession(t *testing.T) {
+func TestLoginUsesPolicyTTLAndPublishesSessionSnapshot(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	cleanupAuthRedisKeys(t, redisClient, 82001, "admin", 82002)
 	passwordHash, err := HashPassword("password")
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixedNow := time.Date(2026, time.August, 17, 11, 0, 0, 0, time.UTC)
-	callOrder := make([]string, 0, 2)
-	users := &fakeUserStore{credential: user.Credential{ID: 9, Username: "admin", Email: "admin@example.com", PasswordHash: passwordHash, IsEnabled: yesno.Yes}}
-	sessions := &fakeSessionStore{createFn: func(_ context.Context, input SessionCreate, now time.Time) (Session, error) {
-		callOrder = append(callOrder, "session")
-		return Session{ID: 12, UserID: input.UserID, Version: 1, RefreshExpiresAt: input.RefreshExpiresAt}, nil
-	}}
-	pointers := &fakePointerStore{setFn: func(_ context.Context, key, value string, ttl time.Duration) error {
-		callOrder = append(callOrder, "pointer")
-		if key != "auth:current-session:9" || value != "12" || ttl != RefreshTTL {
-			t.Fatalf("SetString(%q,%q,%v)", key, value, ttl)
-		}
-		return nil
-	}}
-	service := newTestService(t, users, &fakeRoleStore{}, sessions, pointers)
+	fixedNow := time.Date(2026, time.August, 20, 10, 0, 0, 0, time.UTC)
+	policy := testPolicy()
+	policy.AccessTTL = 23 * time.Minute
+	policy.RefreshTTL = 5 * time.Minute
+	sessions := &fakeSessionStore{createSession: Session{ID: 82002, UserID: 82001, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: "127.0.0.1"}}
+	users := &fakeUserStore{credential: user.Credential{ID: 82001, Username: "admin", Email: "admin@example.com", PasswordHash: passwordHash, IsEnabled: yesno.Yes}}
+	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
 	service.now = func() time.Time { return fixedNow }
 	service.jwt.now = service.now
 
-	credential, err := service.Login(context.Background(), LoginInput{Username: "admin", Password: "password", ClientIP: "127.0.0.1", UserAgent: "test"})
+	credential, err := service.Login(context.Background(), LoginInput{Username: "admin", Password: "password", Client: testAuthClient()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if credential.AccessToken == "" || credential.ExpiresIn != int(AccessTTL.Seconds()) || credential.RefreshToken == "" || !credential.RefreshExpiresAt.Equal(fixedNow.Add(RefreshTTL)) {
-		t.Fatalf("credential = %+v", credential)
-	}
-	if strings.Join(callOrder, ",") != "session,pointer" {
-		t.Fatalf("call order = %v", callOrder)
-	}
-}
-
-func TestLoginUsesTheSamePublicErrorForUnknownUserAndWrongPassword(t *testing.T) {
-	wrongHash, err := HashPassword("correct-password")
-	if err != nil {
-		t.Fatal(err)
-	}
-	services := []*Service{
-		newTestService(t, &fakeUserStore{credentialErr: gorm.ErrRecordNotFound}, &fakeRoleStore{}, &fakeSessionStore{}, &fakePointerStore{}),
-		newTestService(t, &fakeUserStore{credential: user.Credential{ID: 1, PasswordHash: wrongHash, IsEnabled: yesno.Yes}}, &fakeRoleStore{}, &fakeSessionStore{}, &fakePointerStore{}),
-	}
-	var first *apperror.Error
-	for index, service := range services {
-		_, loginErr := service.Login(context.Background(), LoginInput{Username: "missing", Password: "wrong"})
-		var appErr *apperror.Error
-		if !errors.As(loginErr, &appErr) || appErr.Code != apperror.CodeUnauthorized {
-			t.Fatalf("login error %d = %v", index, loginErr)
-		}
-		if first == nil {
-			first = appErr
-		} else if appErr.HTTPStatus != first.HTTPStatus || appErr.Code != first.Code || appErr.MessageKey != first.MessageKey || !reflect.DeepEqual(appErr.Params, first.Params) {
-			t.Fatalf("public credential errors differ: %+v vs %+v", first, appErr)
-		}
-	}
-}
-
-func TestLoginRejectsDisabledUser(t *testing.T) {
-	service := newTestService(t, &fakeUserStore{credential: user.Credential{ID: 1, IsEnabled: yesno.No}}, &fakeRoleStore{}, &fakeSessionStore{}, &fakePointerStore{})
-	if _, err := service.Login(context.Background(), LoginInput{Username: "disabled", Password: "password"}); appErrorCode(err) != apperror.CodeForbidden {
-		t.Fatalf("disabled user error = %v", err)
-	}
-}
-
-func TestLoginRevokesNewSessionWhenRedisWriteFails(t *testing.T) {
-	passwordHash, err := HashPassword("password")
-	if err != nil {
-		t.Fatal(err)
-	}
-	sessions := &fakeSessionStore{createFn: func(_ context.Context, input SessionCreate, _ time.Time) (Session, error) {
-		return Session{ID: 44, UserID: input.UserID, Version: 1, RefreshExpiresAt: input.RefreshExpiresAt}, nil
-	}}
-	pointers := &fakePointerStore{setFn: func(context.Context, string, string, time.Duration) error {
-		return errors.New("redis unavailable")
-	}}
-	service := newTestService(t, &fakeUserStore{credential: user.Credential{ID: 3, PasswordHash: passwordHash, IsEnabled: yesno.Yes}}, &fakeRoleStore{}, sessions, pointers)
-
-	if _, err := service.Login(context.Background(), LoginInput{Username: "admin", Password: "password"}); appErrorCode(err) != apperror.CodeDependencyUnavailable {
-		t.Fatalf("Login() error = %v", err)
-	}
-	if len(sessions.revokedIDs) != 1 || sessions.revokedIDs[0] != 44 {
-		t.Fatalf("revoked session IDs = %v", sessions.revokedIDs)
-	}
-}
-
-func TestAuthenticateChecksPointerAndDatabaseVersion(t *testing.T) {
-	fixedNow := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
-	want := Identity{UserID: 5, SessionID: 8, Version: 2}
-	sessions := &fakeSessionStore{activeIdentity: want}
-	pointers := &fakePointerStore{getValue: "8", getFound: true}
-	service := newTestService(t, &fakeUserStore{}, &fakeRoleStore{}, sessions, pointers)
-	service.now = func() time.Time { return fixedNow }
-	service.jwt.now = service.now
-	accessToken, _, err := service.jwt.Issue(want)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := service.Authenticate(context.Background(), accessToken)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != want || sessions.activeSessionID != want.SessionID || sessions.activeVersion != want.Version {
-		t.Fatalf("Authenticate() = %+v, calls session=%d version=%d", got, sessions.activeSessionID, sessions.activeVersion)
-	}
-	if pointers.getKey != "auth:current-session:5" {
-		t.Fatalf("pointer key = %q", pointers.getKey)
-	}
-}
-
-func TestAuthenticateRebuildsOnlyAMissingPointer(t *testing.T) {
-	fixedNow := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
-	want := Identity{UserID: 5, SessionID: 8, Version: 2}
-	sessions := &fakeSessionStore{
-		activeIdentity: want,
-		currentSession: Session{ID: 8, UserID: 5, Version: 2, RefreshExpiresAt: fixedNow.Add(time.Hour)},
-	}
-	pointers := &fakePointerStore{getFound: false}
-	service := newTestService(t, &fakeUserStore{}, &fakeRoleStore{}, sessions, pointers)
-	service.now = func() time.Time { return fixedNow }
-	service.jwt.now = service.now
-	accessToken, _, err := service.jwt.Issue(want)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := service.Authenticate(context.Background(), accessToken); err != nil {
-		t.Fatal(err)
-	}
-	if sessions.findCurrentCalls != 1 || pointers.setKey != "auth:current-session:5" || pointers.setValue != "8" || pointers.setTTL != time.Hour {
-		t.Fatalf("rebuild calls=%d pointer=%q,%q,%v", sessions.findCurrentCalls, pointers.setKey, pointers.setValue, pointers.setTTL)
-	}
-}
-
-func TestAuthenticateReturns503ForRedisErrors(t *testing.T) {
-	pointers := &fakePointerStore{getErr: errors.New("redis down")}
-	sessions := &fakeSessionStore{}
-	service := newTestService(t, &fakeUserStore{}, &fakeRoleStore{}, sessions, pointers)
-	accessToken, _, err := service.jwt.Issue(Identity{UserID: 1, SessionID: 2, Version: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.Authenticate(context.Background(), accessToken); appErrorCode(err) != apperror.CodeDependencyUnavailable {
-		t.Fatalf("Authenticate() error = %v", err)
-	}
-	if sessions.findCurrentCalls != 0 {
-		t.Fatal("Redis error was treated as a cache miss")
-	}
-}
-
-func TestAuthenticateRejectsAReplacedSession(t *testing.T) {
-	pointers := &fakePointerStore{getValue: "99", getFound: true}
-	service := newTestService(t, &fakeUserStore{}, &fakeRoleStore{}, &fakeSessionStore{}, pointers)
-	accessToken, _, err := service.jwt.Issue(Identity{UserID: 1, SessionID: 2, Version: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.Authenticate(context.Background(), accessToken); appErrorCode(err) != apperror.CodeUnauthorized {
-		t.Fatalf("replaced session error = %v", err)
-	}
-}
-
-func TestAuthenticateRejectsDisabledUserOrRole(t *testing.T) {
-	sessions := &fakeSessionStore{activeErr: gorm.ErrRecordNotFound}
-	service := newTestService(t, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePointerStore{getValue: "2", getFound: true})
-	accessToken, _, err := service.jwt.Issue(Identity{UserID: 1, SessionID: 2, Version: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.Authenticate(context.Background(), accessToken); appErrorCode(err) != apperror.CodeUnauthorized {
-		t.Fatalf("inactive identity error = %v", err)
-	}
-}
-
-func TestRefreshRotatesHashAndIncrementsVersion(t *testing.T) {
-	fixedNow := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
-	originalExpiry := fixedNow.Add(2 * time.Hour)
-	sessions := &fakeSessionStore{
-		refreshSession: Session{ID: 4, UserID: 3, Version: 7, RefreshExpiresAt: originalExpiry},
-		rotateSession:  Session{ID: 4, UserID: 3, Version: 8, RefreshExpiresAt: originalExpiry},
-		rotated:        true,
-	}
-	service := newTestService(t, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePointerStore{getValue: "4", getFound: true})
-	service.now = func() time.Time { return fixedNow }
-	service.jwt.now = service.now
-
-	credential, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: "old-refresh", ClientIP: "127.0.0.2", UserAgent: "agent"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sessions.rotateOldHash != service.hashRefreshToken("old-refresh") || sessions.rotateNewHash == sessions.rotateOldHash || len(sessions.rotateNewHash) != 64 {
-		t.Fatalf("rotation hashes old=%q new=%q", sessions.rotateOldHash, sessions.rotateNewHash)
-	}
-	if credential.RefreshToken == "" || credential.RefreshToken == "old-refresh" || !credential.RefreshExpiresAt.Equal(originalExpiry) {
+	if credential.ExpiresIn != int(policy.AccessTTL.Seconds()) || !credential.RefreshExpiresAt.Equal(fixedNow.Add(policy.RefreshTTL)) {
 		t.Fatalf("credential = %+v", credential)
 	}
 	identity, err := service.jwt.Parse(credential.AccessToken)
-	if err != nil || identity != (Identity{UserID: 3, SessionID: 4, Version: 8}) {
-		t.Fatalf("new access identity = %+v,%v", identity, err)
+	if err != nil || identity.SessionID != 82002 || identity.Platform != "admin" {
+		t.Fatalf("access identity = %+v,%v", identity, err)
+	}
+	state, found, err := service.states.ReadSessions(context.Background(), "admin", 82001)
+	if err != nil || !found || state.State != authstate.StateReady {
+		t.Fatalf("sessions state = %+v,%v,%v", state, found, err)
+	}
+	snapshot, found, err := service.sessionCache.Read(context.Background(), "admin", 82002)
+	if err != nil || !found || snapshot.SessionVersion != 1 || snapshot.SessionsGeneration != state.Generation {
+		t.Fatalf("session snapshot = %+v,%v,%v", snapshot, found, err)
+	}
+	ttl, found, err := redisClient.TTL(context.Background(), SessionKey("admin", 82002))
+	if err != nil || !found || ttl > policy.RefreshTTL || ttl < policy.RefreshTTL-30*time.Second {
+		t.Fatalf("session snapshot TTL = %v,%v,%v", ttl, found, err)
 	}
 }
 
-func TestRefreshKeepsAbsoluteRefreshExpiry(t *testing.T) {
-	fixedNow := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
-	originalExpiry := fixedNow.Add(30 * time.Minute)
-	sessions := &fakeSessionStore{
-		refreshSession: Session{ID: 4, UserID: 3, Version: 1, RefreshExpiresAt: originalExpiry},
-		rotateSession:  Session{ID: 4, UserID: 3, Version: 2, RefreshExpiresAt: originalExpiry},
-		rotated:        true,
-	}
-	service := newTestService(t, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePointerStore{getValue: "4", getFound: true})
+func TestAuthenticateUsesWarmRedisWithoutPostgreSQL(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	cleanupAuthRedisKeys(t, redisClient, 83001, "admin", 83002)
+	policy := testPolicy()
+	sessions := &fakeSessionStore{}
+	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
+	fixedNow := time.Date(2026, time.August, 20, 10, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return fixedNow }
 	service.jwt.now = service.now
-	credential, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: "old-refresh"})
+	installWarmSession(t, service, SessionAuthority{
+		Session: Session{ID: 83002, UserID: 83001, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 4, ClientIP: "127.0.0.1", RefreshExpiresAt: fixedNow.Add(time.Hour)},
+		UserID:  83001, UserIsEnabled: yesno.Yes,
+	}, policy)
+	rawToken, _, err := service.jwt.Issue(TokenIdentity{UserID: 83001, SessionID: 83002, Platform: "admin", Version: 4}, policy.AccessTTL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !credential.RefreshExpiresAt.Equal(originalExpiry) {
-		t.Fatalf("refresh expiry = %v", credential.RefreshExpiresAt)
-	}
-}
 
-func TestRefreshRejectsReusedToken(t *testing.T) {
-	sessions := &fakeSessionStore{refreshSession: Session{ID: 4, UserID: 3, Version: 1, RefreshExpiresAt: time.Now().Add(time.Hour)}, rotated: false}
-	service := newTestService(t, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePointerStore{getValue: "4", getFound: true})
-	if _, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: "reused"}); appErrorCode(err) != apperror.CodeUnauthorized {
-		t.Fatalf("reused refresh error = %v", err)
-	}
-}
-
-func TestRefreshRejectsANonCurrentSession(t *testing.T) {
-	sessions := &fakeSessionStore{refreshSession: Session{ID: 4, UserID: 3, Version: 1, RefreshExpiresAt: time.Now().Add(time.Hour)}}
-	service := newTestService(t, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePointerStore{getValue: "5", getFound: true})
-	if _, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: "old"}); appErrorCode(err) != apperror.CodeUnauthorized {
-		t.Fatalf("non-current refresh error = %v", err)
-	}
-	if sessions.rotateCalls != 0 {
-		t.Fatal("non-current session was mutated")
-	}
-}
-
-func TestRefreshReturns503BeforeMutationWhenRedisFails(t *testing.T) {
-	sessions := &fakeSessionStore{refreshSession: Session{ID: 4, UserID: 3, Version: 1, RefreshExpiresAt: time.Now().Add(time.Hour)}}
-	service := newTestService(t, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePointerStore{getErr: errors.New("redis down")})
-	if _, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: "old"}); appErrorCode(err) != apperror.CodeDependencyUnavailable {
-		t.Fatalf("Redis refresh error = %v", err)
-	}
-	if sessions.rotateCalls != 0 {
-		t.Fatal("session mutated after Redis failure")
-	}
-}
-
-func TestLogoutRevokesPostgreSQLBeforeDeletingPointer(t *testing.T) {
-	order := make([]string, 0, 2)
-	sessions := &fakeSessionStore{revokeFn: func(context.Context, int64, time.Time) error {
-		order = append(order, "revoke")
-		return nil
-	}}
-	pointers := &fakePointerStore{deleteFn: func(_ context.Context, key string) error {
-		order = append(order, "delete")
-		if key != "auth:current-session:1" {
-			t.Fatalf("delete key = %q", key)
-		}
-		return nil
-	}}
-	service := newTestService(t, &fakeUserStore{}, &fakeRoleStore{}, sessions, pointers)
-	if err := service.Logout(context.Background(), Identity{UserID: 1, SessionID: 2, Version: 1}); err != nil {
+	identity, err := service.Authenticate(context.Background(), rawToken, testAuthClient())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(order, ",") != "revoke,delete" {
-		t.Fatalf("logout order = %v", order)
+	if sessions.authorityCalls != 0 || identity.UserID != 83001 || identity.PolicyVersion != policy.PolicyVersion || identity.AccessCacheTTL != policy.AccessCacheTTL || identity.CacheResult != "hit" {
+		t.Fatalf("Authenticate() = %+v calls=%d", identity, sessions.authorityCalls)
 	}
 }
 
-func TestLogoutReturns503WhenPointerDeleteFails(t *testing.T) {
+func TestAuthenticateFallsBackToPostgreSQLAndRebuildsRedis(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	cleanupAuthRedisKeys(t, redisClient, 84001, "admin", 84002)
+	fixedNow := time.Date(2026, time.August, 20, 10, 0, 0, 0, time.UTC)
+	policy := testPolicy()
+	authority := SessionAuthority{
+		Session: Session{ID: 84002, UserID: 84001, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 2, ClientIP: "127.0.0.1", RefreshExpiresAt: fixedNow.Add(time.Hour)},
+		UserID:  84001, UserIsEnabled: yesno.Yes,
+	}
+	sessions := &fakeSessionStore{authority: authority}
+	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
+	service.now = func() time.Time { return fixedNow }
+	service.jwt.now = service.now
+	rawToken, _, _ := service.jwt.Issue(TokenIdentity{UserID: 84001, SessionID: 84002, Platform: "admin", Version: 2}, policy.AccessTTL)
+
+	first, err := service.Authenticate(context.Background(), rawToken, testAuthClient())
+	if err != nil || first.CacheResult != "miss" || sessions.authorityCalls != 1 {
+		t.Fatalf("fallback Authenticate() = %+v,%v calls=%d", first, err, sessions.authorityCalls)
+	}
+	second, err := service.Authenticate(context.Background(), rawToken, testAuthClient())
+	if err != nil || second.CacheResult != "hit" || sessions.authorityCalls != 1 {
+		t.Fatalf("warm Authenticate() = %+v,%v calls=%d", second, err, sessions.authorityCalls)
+	}
+}
+
+func TestAuthenticateRepairsCorruptStateAfterPostgreSQLFallback(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	cleanupAuthRedisKeys(t, redisClient, 84501, "admin", 84502)
+	fixedNow := time.Date(2026, time.August, 20, 10, 0, 0, 0, time.UTC)
+	policy := testPolicy()
+	authority := SessionAuthority{
+		Session: Session{ID: 84502, UserID: 84501, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 2, ClientIP: "127.0.0.1", RefreshExpiresAt: fixedNow.Add(time.Hour)},
+		UserID:  84501, UserIsEnabled: yesno.Yes,
+	}
+	sessions := &fakeSessionStore{authority: authority}
+	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
+	service.now = func() time.Time { return fixedNow }
+	service.jwt.now = service.now
+	if err := redisClient.SetString(context.Background(), authstate.UserStateKey(84501), `{"schemaVersion":1,"state":"ready","unknown":true}`, 0); err != nil {
+		t.Fatal(err)
+	}
+	rawToken, _, _ := service.jwt.Issue(TokenIdentity{UserID: 84501, SessionID: 84502, Platform: "admin", Version: 2}, policy.AccessTTL)
+
+	first, err := service.Authenticate(context.Background(), rawToken, testAuthClient())
+	if err != nil || sessions.authorityCalls != 1 {
+		t.Fatalf("corrupt fallback = %+v,%v calls=%d", first, err, sessions.authorityCalls)
+	}
+	second, err := service.Authenticate(context.Background(), rawToken, testAuthClient())
+	if err != nil || second.CacheResult != "hit" || sessions.authorityCalls != 1 {
+		t.Fatalf("repaired cache = %+v,%v calls=%d", second, err, sessions.authorityCalls)
+	}
+}
+
+func TestAuthenticateUsesPostgreSQLAuthorityWhenRedisFails(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	fixedNow := time.Date(2026, time.August, 20, 10, 0, 0, 0, time.UTC)
+	policy := testPolicy()
+	authority := SessionAuthority{
+		Session: Session{ID: 85002, UserID: 85001, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: "127.0.0.1", RefreshExpiresAt: fixedNow.Add(time.Hour)},
+		UserID:  85001, UserIsEnabled: yesno.Yes,
+	}
+	sessions := &fakeSessionStore{authority: authority}
+	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
+	service.now = func() time.Time { return fixedNow }
+	service.jwt.now = service.now
+	rawToken, _, _ := service.jwt.Issue(TokenIdentity{UserID: 85001, SessionID: 85002, Platform: "admin", Version: 1}, policy.AccessTTL)
+	if err := redisClient.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	identity, err := service.Authenticate(context.Background(), rawToken, testAuthClient())
+	if err != nil || identity.UserID != 85001 || identity.CacheResult != "error" || sessions.authorityCalls != 1 {
+		t.Fatalf("Redis error fallback = %+v,%v calls=%d", identity, err, sessions.authorityCalls)
+	}
+	sessions.authorityErr = errors.New("postgres down")
+	if _, err := service.Authenticate(context.Background(), rawToken, testAuthClient()); appErrorCode(err) != apperror.CodeDependencyUnavailable {
+		t.Fatalf("Redis and PostgreSQL error = %v", err)
+	}
+}
+
+func TestAuthenticateRejectsInvalidatingStateWithoutPostgreSQL(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	cleanupAuthRedisKeys(t, redisClient, 86001, "admin", 86002)
+	policy := testPolicy()
 	sessions := &fakeSessionStore{}
-	pointers := &fakePointerStore{deleteFn: func(context.Context, string) error { return errors.New("redis down") }}
-	service := newTestService(t, &fakeUserStore{}, &fakeRoleStore{}, sessions, pointers)
-	if err := service.Logout(context.Background(), Identity{UserID: 1, SessionID: 2, Version: 1}); appErrorCode(err) != apperror.CodeDependencyUnavailable {
-		t.Fatalf("Logout() error = %v", err)
-	}
-	if len(sessions.revokedIDs) != 1 {
-		t.Fatal("PostgreSQL session was not revoked")
-	}
-}
-
-func TestCurrentUserReturnsOnlyIDUsernameAndEmail(t *testing.T) {
-	users := &fakeUserStore{current: user.Current{ID: 1, Username: "admin", Email: "admin@example.com"}}
-	service := newTestService(t, users, &fakeRoleStore{}, &fakeSessionStore{}, &fakePointerStore{})
-	current, err := service.CurrentUser(context.Background(), Identity{UserID: 1, SessionID: 2, Version: 1})
+	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
+	fixedNow := time.Date(2026, time.August, 20, 10, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return fixedNow }
+	service.jwt.now = service.now
+	userFact := authstate.UserFact{UserID: 86001, Generation: "user-ready", IsEnabled: true}
+	_, _, _ = service.states.InstallUserReadyIfMissing(context.Background(), userFact)
+	lease, err := service.invalidator.Acquire(context.Background(), authstate.MutationFacts{Users: []authstate.UserFact{userFact}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if current != users.current {
-		t.Fatalf("CurrentUser() = %+v", current)
+	t.Cleanup(func() { _ = lease.Rollback(context.Background()) })
+	rawToken, _, _ := service.jwt.Issue(TokenIdentity{UserID: 86001, SessionID: 86002, Platform: "admin", Version: 1}, policy.AccessTTL)
+
+	_, err = service.Authenticate(context.Background(), rawToken, testAuthClient())
+	if appErrorCode(err) != authplatform.CodeSessionUpdating || sessions.authorityCalls != 0 {
+		t.Fatalf("invalidating Authenticate() error=%v calls=%d", err, sessions.authorityCalls)
 	}
 }
 
-func newTestService(t *testing.T, users userStore, roles roleStore, sessions sessionStore, pointers pointerStore) *Service {
+func TestAuthenticateRevokesDeviceMismatchOnlyAfterRedisInvalidation(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	cleanupAuthRedisKeys(t, redisClient, 86501, "admin", 86502)
+	policy := testPolicy()
+	policy.BindDevice = true
+	fixedNow := time.Date(2026, time.August, 20, 10, 0, 0, 0, time.UTC)
+	authority := SessionAuthority{
+		Session: Session{ID: 86502, UserID: 86501, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: "127.0.0.1", RefreshExpiresAt: fixedNow.Add(time.Hour)},
+		UserID:  86501, UserIsEnabled: yesno.Yes,
+	}
+	sessions := &fakeSessionStore{authority: authority}
+	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
+	service.now = func() time.Time { return fixedNow }
+	service.jwt.now = service.now
+	installWarmSession(t, service, authority, policy)
+	rawToken, _, _ := service.jwt.Issue(TokenIdentity{UserID: 86501, SessionID: 86502, Platform: "admin", Version: 1}, policy.AccessTTL)
+	mismatched := testAuthClient()
+	mismatched.DeviceID = "650e8400-e29b-41d4-a716-446655440000"
+
+	if _, err := service.Authenticate(context.Background(), rawToken, mismatched); appErrorCode(err) != apperror.CodeUnauthorized {
+		t.Fatalf("device mismatch error = %v", err)
+	}
+	if sessions.revokeCalls != 1 {
+		t.Fatalf("device mismatch revoke calls = %d", sessions.revokeCalls)
+	}
+	if _, found, err := service.sessionCache.Read(context.Background(), "admin", 86502); err != nil || found {
+		t.Fatalf("revoked snapshot still available = %v,%v", found, err)
+	}
+
+	closedRedis := openAuthRedis(t)
+	closedSessions := &fakeSessionStore{authority: authority}
+	closedService := newRedisTestService(t, closedRedis, &fakeUserStore{}, &fakeRoleStore{}, closedSessions, &fakePolicyStore{policy: policy})
+	closedService.now = func() time.Time { return fixedNow }
+	closedService.jwt.now = closedService.now
+	if err := closedRedis.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := closedService.Authenticate(context.Background(), rawToken, mismatched); appErrorCode(err) != apperror.CodeDependencyUnavailable {
+		t.Fatalf("Redis failure device mismatch error = %v", err)
+	}
+	if closedSessions.revokeCalls != 0 {
+		t.Fatal("device mismatch revoked PostgreSQL after Redis coordination failure")
+	}
+}
+
+func TestRefreshRotatesWithinSessionInvalidationAndKeepsAbsoluteExpiry(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	cleanupAuthRedisKeys(t, redisClient, 86801, "admin", 86802)
+	policy := testPolicy()
+	policy.AccessTTL = 7 * time.Minute
+	fixedNow := time.Date(2026, time.August, 20, 10, 0, 0, 0, time.UTC)
+	expiresAt := fixedNow.Add(2 * time.Hour)
+	authority := SessionAuthority{
+		Session: Session{ID: 86802, UserID: 86801, Platform: "admin", DeviceID: testAuthClient().DeviceID, RefreshTokenHash: strings.Repeat("a", 64), Version: 3, ClientIP: "127.0.0.1", RefreshExpiresAt: expiresAt},
+		UserID:  86801, UserIsEnabled: yesno.Yes,
+	}
+	rotated := authority.Session
+	rotated.Version++
+	sessions := &fakeSessionStore{refresh: authority, rotateSession: rotated, rotateWon: true}
+	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
+	service.now = func() time.Time { return fixedNow }
+	service.jwt.now = service.now
+	_, _, _ = service.states.InstallUserReadyIfMissing(context.Background(), authstate.UserFact{UserID: 86801, Generation: "user-ready", IsEnabled: true})
+	_, _, _ = service.states.InstallSessionsReadyIfMissing(context.Background(), authstate.SessionsFact{Platform: "admin", UserID: 86801, Generation: "sessions-ready"})
+
+	credential, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: "old-refresh", Client: testAuthClient()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sessions.rotateCalls != 1 || credential.ExpiresIn != int(policy.AccessTTL.Seconds()) || !credential.RefreshExpiresAt.Equal(expiresAt) {
+		t.Fatalf("Refresh() = %+v rotateCalls=%d", credential, sessions.rotateCalls)
+	}
+	identity, err := service.jwt.Parse(credential.AccessToken)
+	if err != nil || identity.Version != rotated.Version || identity.SessionID != rotated.ID {
+		t.Fatalf("rotated identity = %+v,%v", identity, err)
+	}
+}
+
+func TestLogoutRequiresRedisInvalidationBeforePostgreSQL(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	cleanupAuthRedisKeys(t, redisClient, 87001, "admin", 87002)
+	policy := testPolicy()
+	sessions := &fakeSessionStore{}
+	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
+	_, _, _ = service.states.InstallSessionsReadyIfMissing(context.Background(), authstate.SessionsFact{Platform: "admin", UserID: 87001, Generation: "sessions-ready"})
+	if err := service.Logout(context.Background(), Identity{UserID: 87001, SessionID: 87002, Platform: "admin", Version: 1}, testAuthClient()); err != nil {
+		t.Fatal(err)
+	}
+	if sessions.revokeCalls != 1 {
+		t.Fatalf("revoke calls = %d", sessions.revokeCalls)
+	}
+
+	closedRedis := openAuthRedis(t)
+	closedService := newRedisTestService(t, closedRedis, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
+	if err := closedRedis.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := closedService.Logout(context.Background(), Identity{UserID: 87001, SessionID: 87003, Platform: "admin", Version: 1}, testAuthClient()); appErrorCode(err) != apperror.CodeDependencyUnavailable {
+		t.Fatalf("Redis failure Logout() = %v", err)
+	}
+	if sessions.revokeCalls != 1 {
+		t.Fatal("PostgreSQL revoke ran after Redis coordination failure")
+	}
+}
+
+func TestCurrentUserReturnsClosedIdentity(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	users := &fakeUserStore{current: user.Current{ID: 1, Username: "admin", Email: "admin@example.com"}}
+	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: testPolicy()})
+	current, err := service.CurrentUser(context.Background(), Identity{UserID: 1, SessionID: 2, Platform: "admin", Version: 1})
+	if err != nil || current != users.current {
+		t.Fatalf("CurrentUser() = %+v,%v", current, err)
+	}
+}
+
+func newRedisTestService(t *testing.T, redisClient *projectredis.Client, users userStore, roles roleStore, sessions sessionStore, policies policyStore) *Service {
 	t.Helper()
-	jwtCodec := NewJWT([]byte(strings.Repeat("j", 32)))
-	return NewService(users, roles, sessions, pointers, jwtCodec, []byte(strings.Repeat("h", 32)))
+	states := authstate.NewStore(redisClient)
+	return NewService(
+		users, roles, sessions, policies, states, authstate.NewInvalidator(states), NewSessionCache(redisClient), redisClient,
+		NewJWT([]byte(strings.Repeat("j", 32))), []byte(strings.Repeat("h", 32)), slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+}
+
+func testPolicy() authplatform.Policy {
+	return authplatform.Policy{
+		ID: 1, Code: "admin", Name: "Admin", PolicyVersion: 1, AccessTTL: 15 * time.Minute,
+		RefreshTTL: 14 * 24 * time.Hour, SessionCacheTTL: 30 * time.Minute, AccessCacheTTL: 30 * time.Minute,
+		MaxSessions: 1, AllowRegister: true, IsEnabled: true, IsBuiltin: true,
+	}
+}
+
+func installWarmSession(t *testing.T, service *Service, authority SessionAuthority, policy authplatform.Policy) {
+	t.Helper()
+	userGeneration, _ := authstate.NewGeneration()
+	sessionsGeneration, _ := authstate.NewGeneration()
+	userFact := authstate.UserFact{UserID: authority.UserID, Generation: userGeneration, IsEnabled: authority.UserIsEnabled == yesno.Yes, Deleted: authority.UserDeleted}
+	sessionsFact := authstate.SessionsFact{Platform: authority.Session.Platform, UserID: authority.UserID, Generation: sessionsGeneration}
+	if _, _, err := service.states.InstallUserReadyIfMissing(context.Background(), userFact); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := service.states.InstallSessionsReadyIfMissing(context.Background(), sessionsFact); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := snapshotFromAuthority(authority, policy, userFact.Generation, sessionsFact.Generation)
+	if published, err := service.sessionCache.PublishIfCurrent(context.Background(), snapshot, policy.SessionCacheTTL); err != nil || !published {
+		t.Fatalf("publish warm session = %v,%v", published, err)
+	}
+}
+
+func cleanupAuthRedisKeys(t *testing.T, client *projectredis.Client, userID int64, platform string, sessionID int64) {
+	t.Helper()
+	keys := []string{authstate.UserStateKey(userID), authstate.SessionsStateKey(platform, userID), SessionKey(platform, sessionID)}
+	if err := client.DeleteMany(context.Background(), keys); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), keys) })
 }
 
 func appErrorCode(err error) int {
@@ -421,8 +408,21 @@ func appErrorCode(err error) int {
 	return 0
 }
 
+type fakePolicyStore struct {
+	policy authplatform.Policy
+	err    error
+	calls  int
+}
+
+func (f *fakePolicyStore) CurrentPolicy(context.Context, string) (authplatform.Policy, error) {
+	f.calls++
+	return f.policy, f.err
+}
+
 type fakeUserStore struct {
+	created       user.CreateInput
 	createFn      func(context.Context, user.CreateInput) (user.User, error)
+	createErr     error
 	credential    user.Credential
 	credentialErr error
 	current       user.Current
@@ -430,10 +430,11 @@ type fakeUserStore struct {
 }
 
 func (f *fakeUserStore) CreateWithRole(ctx context.Context, input user.CreateInput) (user.User, error) {
+	f.created = input
 	if f.createFn != nil {
 		return f.createFn(ctx, input)
 	}
-	return user.User{}, errors.New("unexpected CreateWithRole call")
+	return user.User{}, f.createErr
 }
 
 func (f *fakeUserStore) FindCredentialByUsername(context.Context, string) (user.Credential, error) {
@@ -454,96 +455,50 @@ func (f *fakeRoleStore) FindDefault(context.Context) (role.Role, error) {
 }
 
 type fakeSessionStore struct {
-	createFn         func(context.Context, SessionCreate, time.Time) (Session, error)
-	createCalls      int
-	revokedIDs       []int64
-	revokeErr        error
-	revokeFn         func(context.Context, int64, time.Time) error
-	activeIdentity   Identity
-	activeErr        error
-	activeSessionID  int64
-	activeVersion    int64
-	currentSession   Session
-	currentErr       error
-	findCurrentCalls int
-	refreshSession   Session
-	refreshErr       error
-	rotateSession    Session
-	rotated          bool
-	rotateErr        error
-	rotateCalls      int
-	rotateOldHash    string
-	rotateNewHash    string
+	createSession  Session
+	createRevoked  []Session
+	createErr      error
+	createCalls    int
+	authority      SessionAuthority
+	authorityErr   error
+	authorityCalls int
+	refresh        SessionAuthority
+	refreshErr     error
+	rotateSession  Session
+	rotateWon      bool
+	rotateErr      error
+	rotateCalls    int
+	revokeCalls    int
+	revokeErr      error
 }
 
-func (f *fakeSessionStore) CreateReplacingActive(ctx context.Context, input SessionCreate, now time.Time) (Session, error) {
+func (f *fakeSessionStore) CreateWithinLimit(context.Context, SessionCreate, authplatform.Policy, time.Time) (Session, []Session, error) {
 	f.createCalls++
-	if f.createFn != nil {
-		return f.createFn(ctx, input, now)
-	}
-	return Session{}, errors.New("unexpected CreateReplacingActive call")
+	return f.createSession, f.createRevoked, f.createErr
 }
 
-func (f *fakeSessionStore) FindActiveIdentity(_ context.Context, sessionID int64, version int64, _ time.Time) (Identity, error) {
-	f.activeSessionID = sessionID
-	f.activeVersion = version
-	return f.activeIdentity, f.activeErr
+func (f *fakeSessionStore) FindAuthoritative(context.Context, TokenIdentity, time.Time) (SessionAuthority, error) {
+	f.authorityCalls++
+	return f.authority, f.authorityErr
 }
 
-func (f *fakeSessionStore) FindCurrentByUser(context.Context, int64, time.Time) (Session, error) {
-	f.findCurrentCalls++
-	return f.currentSession, f.currentErr
+func (f *fakeSessionStore) FindByRefreshHash(context.Context, string, string, time.Time) (SessionAuthority, error) {
+	return f.refresh, f.refreshErr
 }
 
-func (f *fakeSessionStore) FindByRefreshHash(context.Context, string, time.Time) (Session, error) {
-	return f.refreshSession, f.refreshErr
-}
-
-func (f *fakeSessionStore) RotateByRefreshHash(_ context.Context, _ int64, oldHash, newHash string, _ time.Time, _, _ string) (Session, bool, error) {
+func (f *fakeSessionStore) RotateByRefreshHash(context.Context, int64, string, string, string, time.Time, authclient.Client) (Session, bool, error) {
 	f.rotateCalls++
-	f.rotateOldHash = oldHash
-	f.rotateNewHash = newHash
-	return f.rotateSession, f.rotated, f.rotateErr
+	return f.rotateSession, f.rotateWon, f.rotateErr
 }
 
-func (f *fakeSessionStore) Revoke(ctx context.Context, sessionID int64, now time.Time) error {
-	f.revokedIDs = append(f.revokedIDs, sessionID)
-	if f.revokeFn != nil {
-		return f.revokeFn(ctx, sessionID, now)
-	}
+func (f *fakeSessionStore) Revoke(context.Context, int64, time.Time) error {
+	f.revokeCalls++
 	return f.revokeErr
 }
 
-type fakePointerStore struct {
-	setFn    func(context.Context, string, string, time.Duration) error
-	getValue string
-	getFound bool
-	getErr   error
-	getKey   string
-	setKey   string
-	setValue string
-	setTTL   time.Duration
-	deleteFn func(context.Context, string) error
+func testAuthClient() authclient.Client {
+	return authclient.Client{Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440000", ClientIP: "127.0.0.1", UserAgent: "test-agent"}
 }
 
-func (f *fakePointerStore) GetString(_ context.Context, key string) (string, bool, error) {
-	f.getKey = key
-	return f.getValue, f.getFound, f.getErr
-}
-
-func (f *fakePointerStore) SetString(ctx context.Context, key, value string, ttl time.Duration) error {
-	f.setKey = key
-	f.setValue = value
-	f.setTTL = ttl
-	if f.setFn != nil {
-		return f.setFn(ctx, key, value, ttl)
-	}
-	return nil
-}
-
-func (f *fakePointerStore) Delete(ctx context.Context, key string) error {
-	if f.deleteFn != nil {
-		return f.deleteFn(ctx, key)
-	}
-	return nil
-}
+var _ = gorm.ErrRecordNotFound
+var _ = i18n.KeyUnauthorized

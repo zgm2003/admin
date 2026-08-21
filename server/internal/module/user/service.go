@@ -9,6 +9,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"admin/server/internal/module/accessstate"
+	"admin/server/internal/module/authstate"
 	"admin/server/internal/module/role"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/pagination"
@@ -16,13 +18,12 @@ import (
 	"gorm.io/gorm"
 )
 
-type sessionPointerStore interface {
-	Delete(context.Context, string) error
-}
-
 type Service struct {
-	repository *Repository
-	pointers   sessionPointerStore
+	repository        *Repository
+	authStates        *authstate.Store
+	authInvalidator   *authstate.Invalidator
+	accessStates      *accessstate.Store
+	accessInvalidator *accessstate.Invalidator
 }
 
 type ListQuery struct {
@@ -73,8 +74,17 @@ type UpdatedUsername struct {
 	UpdatedAt time.Time
 }
 
-func NewService(repository *Repository, pointers sessionPointerStore) *Service {
-	return &Service{repository: repository, pointers: pointers}
+func NewService(
+	repository *Repository,
+	authStates *authstate.Store,
+	authInvalidator *authstate.Invalidator,
+	accessStates *accessstate.Store,
+	accessInvalidator *accessstate.Invalidator,
+) *Service {
+	return &Service{
+		repository: repository, authStates: authStates, authInvalidator: authInvalidator,
+		accessStates: accessStates, accessInvalidator: accessInvalidator,
+	}
 }
 
 func (s *Service) List(ctx context.Context, query ListQuery) (pagination.Result[ListItem], error) {
@@ -128,6 +138,9 @@ func (s *Service) Update(ctx context.Context, actorUserID, targetUserID int64, i
 	}
 	var updated UpdatedUsername
 	err = s.repository.Transaction(ctx, func(repository *Repository) error {
+		if err := repository.LockUserWriteTable(ctx); err != nil {
+			return err
+		}
 		superAdminRole, err := repository.LockSuperAdminRole(ctx)
 		if err != nil {
 			return err
@@ -200,7 +213,7 @@ func (s *Service) Roles(ctx context.Context, targetUserID int64) (Roles, error) 
 }
 
 func (s *Service) UpdateRoles(ctx context.Context, actorUserID, targetUserID int64, requestedRoleIDs []int64) (int64, error) {
-	if s == nil || s.repository == nil {
+	if s == nil || s.repository == nil || s.accessStates == nil || s.accessInvalidator == nil {
 		return 0, apperror.DependencyUnavailable(fmt.Errorf("update user roles requires a repository"))
 	}
 	if actorUserID <= 0 || targetUserID <= 0 {
@@ -211,7 +224,26 @@ func (s *Service) UpdateRoles(ctx context.Context, actorUserID, targetUserID int
 		return 0, userInvalidRoles(err)
 	}
 	roleCount := int64(len(normalized))
-	err = s.repository.Transaction(ctx, func(repository *Repository) error {
+	candidate, err := s.repository.FindAccessVersion(ctx, targetUserID)
+	if err != nil {
+		return 0, mapUserRepositoryError(err)
+	}
+	if err := s.ensureAccessReady(ctx, candidate); err != nil {
+		return 0, apperror.DependencyUnavailable(err)
+	}
+	lease, err := s.accessInvalidator.Acquire(ctx, []accessstate.Version{candidate})
+	if err != nil {
+		return 0, apperror.DependencyUnavailable(err)
+	}
+	parentCtx := ctx
+	mutationCtx, stopRenewal := lease.StartRenewal(parentCtx)
+	ctx = mutationCtx
+	changed := false
+	newVersion := int64(0)
+	err = s.repository.Transaction(mutationCtx, func(repository *Repository) error {
+		if err := repository.LockUserWriteTable(mutationCtx); err != nil {
+			return err
+		}
 		superAdminRole, err := repository.LockSuperAdminRole(ctx)
 		if err != nil {
 			return err
@@ -319,22 +351,65 @@ func (s *Service) UpdateRoles(ctx context.Context, actorUserID, targetUserID int
 		if err := repository.CreateUserRoles(ctx, additions); err != nil {
 			return err
 		}
-		return repository.TouchUser(ctx, target.ID, operationTime)
+		if err := repository.TouchUser(ctx, target.ID, operationTime); err != nil {
+			return err
+		}
+		lockedVersion, err := repository.LockAccessVersion(ctx, target.ID)
+		if err != nil {
+			return err
+		}
+		if lockedVersion != candidate.Version {
+			return accessstate.ErrVersionChanged
+		}
+		newVersion, err = repository.IncrementAccessVersion(ctx, target.ID, operationTime)
+		if err != nil {
+			return err
+		}
+		changed = true
+		return nil
 	})
+	ctx = parentCtx
+	renewalCause := context.Cause(mutationCtx)
+	stopRenewal()
 	if err != nil {
-		return 0, mapUserRepositoryError(err)
+		return 0, mapUserRepositoryError(errors.Join(err, renewalCause, lease.Rollback(ctx)))
+	}
+	if renewalCause != nil {
+		return 0, apperror.DependencyUnavailable(errors.Join(renewalCause, lease.Rollback(ctx)))
+	}
+	if !changed {
+		if err := lease.Rollback(ctx); err != nil {
+			return 0, apperror.DependencyUnavailable(err)
+		}
+		return roleCount, nil
+	}
+	if err := lease.Commit(ctx, map[int64]int64{targetUserID: newVersion}); err != nil {
+		return 0, apperror.DependencyUnavailable(err)
 	}
 	return roleCount, nil
 }
 
 func (s *Service) UpdateStatus(ctx context.Context, actorUserID, targetUserID int64, value yesno.Value) error {
-	if s == nil || s.repository == nil {
+	if s == nil || s.repository == nil || s.authStates == nil || s.authInvalidator == nil || s.accessStates == nil || s.accessInvalidator == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("update user status requires a repository"))
 	}
 	if actorUserID <= 0 || targetUserID <= 0 || !yesno.IsValid(value) {
 		return apperror.InvalidRequest(fmt.Errorf("actor, target, or user status is invalid"))
 	}
-	err := s.repository.Transaction(ctx, func(repository *Repository) error {
+	candidate, authFacts, authLease, accessLease, err := s.prepareFullMutation(ctx, targetUserID)
+	if err != nil {
+		return err
+	}
+	parentCtx := ctx
+	mutationCtx, stopAuthRenewal := authLease.StartRenewal(parentCtx)
+	mutationCtx, stopAccessRenewal := accessLease.StartRenewal(mutationCtx)
+	ctx = mutationCtx
+	changed := false
+	newVersion := int64(0)
+	err = s.repository.Transaction(mutationCtx, func(repository *Repository) error {
+		if err := repository.LockUserWriteTable(ctx); err != nil {
+			return err
+		}
 		superAdminRole, err := repository.LockSuperAdminRole(ctx)
 		if err != nil {
 			return err
@@ -379,7 +454,17 @@ func (s *Service) UpdateStatus(ctx context.Context, actorUserID, targetUserID in
 			if target.IsEnabled == yesno.Yes {
 				return nil
 			}
-			return repository.UpdateStatus(ctx, target.ID, yesno.Yes, time.Now().UTC().Truncate(time.Microsecond))
+			operationTime := time.Now().UTC().Truncate(time.Microsecond)
+			if err := repository.UpdateStatus(ctx, target.ID, yesno.Yes, operationTime); err != nil {
+				return err
+			}
+			changed = true
+			lockedVersion, err := repository.LockAccessVersion(ctx, target.ID)
+			if err != nil || lockedVersion != candidate.access.Version {
+				return errors.Join(err, accessstate.ErrVersionChanged)
+			}
+			newVersion, err = repository.IncrementAccessVersion(ctx, target.ID, operationTime)
+			return err
 		}
 		if targetHasSuperAdmin && target.IsEnabled == yesno.Yes {
 			count, err := repository.CountEffectiveSuperAdmins(ctx, superAdminRole.ID)
@@ -391,30 +476,59 @@ func (s *Service) UpdateStatus(ctx context.Context, actorUserID, targetUserID in
 			}
 		}
 		operationTime := time.Now().UTC().Truncate(time.Microsecond)
+		if target.IsEnabled == yesno.No && len(candidate.platforms) == 0 {
+			return nil
+		}
 		if target.IsEnabled != yesno.No {
 			if err := repository.UpdateStatus(ctx, target.ID, yesno.No, operationTime); err != nil {
 				return err
 			}
 		}
-		return repository.RevokeActiveSessions(ctx, target.ID, operationTime)
+		if err := repository.RevokeActiveSessions(ctx, target.ID, operationTime); err != nil {
+			return err
+		}
+		lockedVersion, err := repository.LockAccessVersion(ctx, target.ID)
+		if err != nil || lockedVersion != candidate.access.Version {
+			return errors.Join(err, accessstate.ErrVersionChanged)
+		}
+		newVersion, err = repository.IncrementAccessVersion(ctx, target.ID, operationTime)
+		changed = true
+		return err
 	})
+	ctx = parentCtx
+	renewalCause := errors.Join(context.Cause(mutationCtx))
+	stopAccessRenewal()
+	stopAuthRenewal()
 	if err != nil {
-		return mapUserRepositoryError(err)
+		return mapUserRepositoryError(errors.Join(err, renewalCause, authLease.Rollback(ctx), accessLease.Rollback(ctx)))
 	}
-	if value == yesno.No {
-		return s.deleteSessionPointer(ctx, targetUserID)
+	if renewalCause != nil {
+		return apperror.DependencyUnavailable(errors.Join(renewalCause, authLease.Rollback(ctx), accessLease.Rollback(ctx)))
 	}
-	return nil
+	return s.finishFullMutation(ctx, candidate, authFacts, authLease, accessLease, changed, value == yesno.Yes, false, newVersion)
 }
 
 func (s *Service) Delete(ctx context.Context, actorUserID, targetUserID int64) error {
-	if s == nil || s.repository == nil {
+	if s == nil || s.repository == nil || s.authStates == nil || s.authInvalidator == nil || s.accessStates == nil || s.accessInvalidator == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("delete user requires a repository"))
 	}
 	if actorUserID <= 0 || targetUserID <= 0 {
 		return apperror.InvalidRequest(fmt.Errorf("actor or target user id is invalid"))
 	}
-	err := s.repository.Transaction(ctx, func(repository *Repository) error {
+	candidate, authFacts, authLease, accessLease, err := s.prepareFullMutation(ctx, targetUserID)
+	if err != nil {
+		return err
+	}
+	parentCtx := ctx
+	mutationCtx, stopAuthRenewal := authLease.StartRenewal(parentCtx)
+	mutationCtx, stopAccessRenewal := accessLease.StartRenewal(mutationCtx)
+	ctx = mutationCtx
+	changed := false
+	newVersion := int64(0)
+	err = s.repository.Transaction(mutationCtx, func(repository *Repository) error {
+		if err := repository.LockUserWriteTable(ctx); err != nil {
+			return err
+		}
 		superAdminRole, err := repository.LockSuperAdminRole(ctx)
 		if err != nil {
 			return err
@@ -478,20 +592,181 @@ func (s *Service) Delete(ctx context.Context, actorUserID, targetUserID int64) e
 		if err := repository.RevokeActiveSessions(ctx, target.ID, operationTime); err != nil {
 			return err
 		}
-		return repository.SoftDeleteUser(ctx, target.ID, operationTime)
+		if err := repository.SoftDeleteUser(ctx, target.ID, operationTime); err != nil {
+			return err
+		}
+		lockedVersion, err := repository.LockAccessVersion(ctx, target.ID)
+		if err != nil || lockedVersion != candidate.access.Version {
+			return errors.Join(err, accessstate.ErrVersionChanged)
+		}
+		newVersion, err = repository.IncrementAccessVersion(ctx, target.ID, operationTime)
+		changed = true
+		return err
 	})
+	ctx = parentCtx
+	renewalCause := errors.Join(context.Cause(mutationCtx))
+	stopAccessRenewal()
+	stopAuthRenewal()
 	if err != nil {
-		return mapUserRepositoryError(err)
+		return mapUserRepositoryError(errors.Join(err, renewalCause, authLease.Rollback(ctx), accessLease.Rollback(ctx)))
 	}
-	return s.deleteSessionPointer(ctx, targetUserID)
+	if renewalCause != nil {
+		return apperror.DependencyUnavailable(errors.Join(renewalCause, authLease.Rollback(ctx), accessLease.Rollback(ctx)))
+	}
+	return s.finishFullMutation(ctx, candidate, authFacts, authLease, accessLease, changed, false, true, newVersion)
 }
 
-func (s *Service) deleteSessionPointer(ctx context.Context, userID int64) error {
-	if s.pointers == nil {
-		return apperror.DependencyUnavailable(fmt.Errorf("delete current session pointer requires Redis"))
+type fullMutationCandidate struct {
+	user      User
+	access    accessstate.Version
+	platforms []string
+}
+
+func (s *Service) prepareFullMutation(ctx context.Context, userID int64) (
+	fullMutationCandidate,
+	authstate.MutationFacts,
+	*authstate.MutationLease,
+	*accessstate.MutationLease,
+	error,
+) {
+	target, err := s.repository.FindUserUnscoped(ctx, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fullMutationCandidate{}, authstate.MutationFacts{}, nil, nil, userNotFound(err)
+		}
+		return fullMutationCandidate{}, authstate.MutationFacts{}, nil, nil, mapUserRepositoryError(err)
 	}
-	if err := s.pointers.Delete(ctx, CurrentSessionPointerKey(userID)); err != nil {
+	version, err := s.repository.FindAccessVersion(ctx, userID)
+	if err != nil {
+		return fullMutationCandidate{}, authstate.MutationFacts{}, nil, nil, mapUserRepositoryError(err)
+	}
+	platforms, err := s.repository.FindActiveSessionPlatforms(ctx, userID)
+	if err != nil {
+		return fullMutationCandidate{}, authstate.MutationFacts{}, nil, nil, mapUserRepositoryError(err)
+	}
+	userFact, err := s.ensureUserReady(ctx, target)
+	if err != nil {
+		return fullMutationCandidate{}, authstate.MutationFacts{}, nil, nil, apperror.DependencyUnavailable(err)
+	}
+	facts := authstate.MutationFacts{Users: []authstate.UserFact{userFact}, Sessions: make([]authstate.SessionsFact, 0, len(platforms))}
+	for _, platform := range platforms {
+		fact, stateErr := s.ensureSessionsReady(ctx, platform, userID)
+		if stateErr != nil {
+			return fullMutationCandidate{}, authstate.MutationFacts{}, nil, nil, apperror.DependencyUnavailable(stateErr)
+		}
+		facts.Sessions = append(facts.Sessions, fact)
+	}
+	if err := s.ensureAccessReady(ctx, version); err != nil {
+		return fullMutationCandidate{}, authstate.MutationFacts{}, nil, nil, apperror.DependencyUnavailable(err)
+	}
+	authLease, err := s.authInvalidator.Acquire(ctx, facts)
+	if err != nil {
+		return fullMutationCandidate{}, authstate.MutationFacts{}, nil, nil, apperror.DependencyUnavailable(err)
+	}
+	accessLease, err := s.accessInvalidator.Acquire(ctx, []accessstate.Version{version})
+	if err != nil {
+		return fullMutationCandidate{}, authstate.MutationFacts{}, nil, nil, apperror.DependencyUnavailable(errors.Join(err, authLease.Rollback(ctx)))
+	}
+	return fullMutationCandidate{user: target, access: version, platforms: platforms}, facts, authLease, accessLease, nil
+}
+
+func (s *Service) finishFullMutation(
+	ctx context.Context,
+	candidate fullMutationCandidate,
+	prior authstate.MutationFacts,
+	authLease *authstate.MutationLease,
+	accessLease *accessstate.MutationLease,
+	changed bool,
+	enabled bool,
+	deleted bool,
+	newVersion int64,
+) error {
+	if !changed {
+		return errors.Join(authLease.Rollback(ctx), accessLease.Rollback(ctx))
+	}
+	userGeneration, err := authstate.NewGeneration()
+	if err != nil {
+		return apperror.Internal(err)
+	}
+	next := authstate.MutationFacts{Users: []authstate.UserFact{{
+		UserID: candidate.user.ID, Generation: userGeneration, IsEnabled: enabled, Deleted: deleted,
+	}}, Sessions: make([]authstate.SessionsFact, 0, len(prior.Sessions))}
+	for _, session := range prior.Sessions {
+		generation, generationErr := authstate.NewGeneration()
+		if generationErr != nil {
+			return apperror.Internal(generationErr)
+		}
+		next.Sessions = append(next.Sessions, authstate.SessionsFact{
+			Platform: session.Platform, UserID: session.UserID, Generation: generation,
+		})
+	}
+	if err := authLease.Commit(ctx, next); err != nil {
 		return apperror.DependencyUnavailable(err)
+	}
+	if err := accessLease.Commit(ctx, map[int64]int64{candidate.user.ID: newVersion}); err != nil {
+		return apperror.DependencyUnavailable(err)
+	}
+	return nil
+}
+
+func (s *Service) ensureUserReady(ctx context.Context, target User) (authstate.UserFact, error) {
+	state, found, err := s.authStates.ReadUser(ctx, target.ID)
+	if err == nil && found {
+		if state.State != authstate.StateReady {
+			return authstate.UserFact{}, authstate.ErrUpdating
+		}
+		return state.Fact(), nil
+	}
+	generation, generationErr := authstate.NewGeneration()
+	if generationErr != nil {
+		return authstate.UserFact{}, generationErr
+	}
+	fact := authstate.UserFact{
+		UserID: target.ID, Generation: generation, IsEnabled: target.IsEnabled == yesno.Yes, Deleted: target.DeletedAt.Valid,
+	}
+	actual, _, installErr := s.authStates.InstallUserReadyIfMissing(ctx, fact)
+	if installErr != nil {
+		return authstate.UserFact{}, errors.Join(err, installErr)
+	}
+	if actual.State != authstate.StateReady {
+		return authstate.UserFact{}, authstate.ErrUpdating
+	}
+	return actual.Fact(), nil
+}
+
+func (s *Service) ensureSessionsReady(ctx context.Context, platform string, userID int64) (authstate.SessionsFact, error) {
+	state, found, err := s.authStates.ReadSessions(ctx, platform, userID)
+	if err == nil && found {
+		if state.State != authstate.StateReady {
+			return authstate.SessionsFact{}, authstate.ErrUpdating
+		}
+		return state.Fact(), nil
+	}
+	generation, generationErr := authstate.NewGeneration()
+	if generationErr != nil {
+		return authstate.SessionsFact{}, generationErr
+	}
+	fact := authstate.SessionsFact{Platform: platform, UserID: userID, Generation: generation}
+	actual, _, installErr := s.authStates.InstallSessionsReadyIfMissing(ctx, fact)
+	if installErr != nil {
+		return authstate.SessionsFact{}, errors.Join(err, installErr)
+	}
+	if actual.State != authstate.StateReady {
+		return authstate.SessionsFact{}, authstate.ErrUpdating
+	}
+	return actual.Fact(), nil
+}
+
+func (s *Service) ensureAccessReady(ctx context.Context, version accessstate.Version) error {
+	state, _, err := s.accessStates.InstallReadyIfMissing(ctx, version)
+	if err != nil {
+		return err
+	}
+	if state.State != accessstate.StateReady {
+		return accessstate.ErrUpdating
+	}
+	if state.Version != version.Version {
+		return accessstate.ErrVersionChanged
 	}
 	return nil
 }

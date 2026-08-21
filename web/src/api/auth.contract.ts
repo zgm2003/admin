@@ -1,4 +1,6 @@
 import { ProtocolError } from '../types/http'
+import { isYesNo, type YesNo } from '../enums/yes-no'
+import { authPlatform } from '../auth/platform'
 
 export interface RegisterInput {
   username: string
@@ -27,6 +29,26 @@ export interface CurrentUser {
   userId: number
   username: string
   email: string
+}
+
+export interface AuthPolicy {
+  code: typeof authPlatform
+  name: string
+  allowRegister: YesNo
+}
+
+export function parseAuthPolicy(value: unknown): AuthPolicy {
+  const record = closedRecord(value, ['allowRegister', 'code', 'name'], 'authentication policy')
+  if (record.code !== authPlatform) {
+    throw new ProtocolError('authentication policy code must be admin')
+  }
+  if (typeof record.name !== 'string' || record.name.trim() === '') {
+    throw new ProtocolError('authentication policy name must be non-empty')
+  }
+  if (!isYesNo(record.allowRegister)) {
+    throw new ProtocolError('authentication policy allowRegister must be a YesNo value')
+  }
+  return { code: authPlatform, name: record.name, allowRegister: record.allowRegister }
 }
 
 export function parseRegisteredUser(value: unknown): RegisteredUser {

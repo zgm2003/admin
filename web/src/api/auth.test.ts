@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { refreshAccessCredential, request } from '../utils/request'
-import { getCurrentUser, login, logout, refresh, register } from './auth'
+import { getAuthPolicy, getCurrentUser, login, logout, refresh, register } from './auth'
 
 vi.mock('../utils/request', () => ({ request: vi.fn(), refreshAccessCredential: vi.fn() }))
 
@@ -42,5 +42,12 @@ describe('auth API', () => {
     requestMock.mockResolvedValue({ userId: 1, username: 'admin', email: 'admin@example.com' })
     await expect(getCurrentUser()).resolves.toEqual({ userId: 1, username: 'admin', email: 'admin@example.com' })
     expect(requestMock).toHaveBeenCalledWith({ method: 'GET', url: '/api/v1/auth/me' })
+  })
+
+  it('loads and validates the public authentication policy', async () => {
+    requestMock.mockResolvedValue({ code: 'admin', name: 'Admin', allowRegister: 1 })
+
+    await expect(getAuthPolicy()).resolves.toEqual({ code: 'admin', name: 'Admin', allowRegister: 1 })
+    expect(requestMock).toHaveBeenCalledWith({ method: 'GET', url: '/api/v1/auth/policy' })
   })
 })

@@ -2,6 +2,7 @@ package menu
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -11,7 +12,10 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	"admin/server/internal/shared/yesno"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -28,9 +32,30 @@ type testRole struct {
 
 func (testRole) TableName() string { return "sys_role" }
 
+type testUser struct {
+	ID        int64          `gorm:"column:id;primaryKey;autoIncrement"`
+	Username  string         `gorm:"column:username;type:varchar(64);not null"`
+	Email     string         `gorm:"column:email;type:varchar(254);not null"`
+	IsEnabled yesno.Value    `gorm:"column:is_enabled;type:smallint;not null;default:1"`
+	CreatedAt time.Time      `gorm:"column:created_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt time.Time      `gorm:"column:updated_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
+	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz"`
+}
+
+func (testUser) TableName() string { return "sys_user" }
+
+type testAccessVersion struct {
+	UserID    int64     `gorm:"column:user_id;primaryKey"`
+	Version   int64     `gorm:"column:version;not null;default:1"`
+	CreatedAt time.Time `gorm:"column:created_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt time.Time `gorm:"column:updated_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
+}
+
+func (testAccessVersion) TableName() string { return "sys_access_version" }
+
 func TestEnsureBuiltinCreatesExactCoreTreeAndIsIdempotent(t *testing.T) {
 	tx, ctx := openMenuTransaction(t)
-	service := NewService(NewRepository(tx))
+	service := NewService(NewRepository(tx), nil)
 
 	if err := service.EnsureBuiltin(ctx); err != nil {
 		t.Fatalf("EnsureBuiltin() first call error = %v", err)
@@ -55,7 +80,7 @@ func TestEnsureBuiltinCreatesExactCoreTreeAndIsIdempotent(t *testing.T) {
 
 func TestEnsureBuiltinRecreatesOnlyMissingChild(t *testing.T) {
 	tx, ctx := openMenuTransaction(t)
-	service := NewService(NewRepository(tx))
+	service := NewService(NewRepository(tx), nil)
 	if err := service.EnsureBuiltin(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +184,7 @@ func TestEnsureBuiltinRejectsCorruptCoreRecords(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			tx, ctx := openMenuTransaction(t)
-			service := NewService(NewRepository(tx))
+			service := NewService(NewRepository(tx), nil)
 			if err := service.EnsureBuiltin(ctx); err != nil {
 				t.Fatalf("initial EnsureBuiltin() error = %v", err)
 			}
@@ -178,7 +203,7 @@ func TestEnsureBuiltinRejectsCorruptCoreRecords(t *testing.T) {
 
 func TestEnsureBuiltinPreservesOperatorIconAndSortChanges(t *testing.T) {
 	tx, ctx := openMenuTransaction(t)
-	service := NewService(NewRepository(tx))
+	service := NewService(NewRepository(tx), nil)
 	if err := service.EnsureBuiltin(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -204,6 +229,18 @@ func TestEnsureBuiltinPreservesOperatorIconAndSortChanges(t *testing.T) {
 
 func openMenuTransaction(t *testing.T) (*gorm.DB, context.Context) {
 	t.Helper()
+	db, ctx := openMenuDatabase(t)
+	tx := db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		t.Fatalf("begin transaction: %v", tx.Error)
+	}
+	t.Cleanup(func() { _ = tx.Rollback().Error })
+	clearBuiltinMenus(t, tx, ctx)
+	return tx, ctx
+}
+
+func openMenuDatabase(t *testing.T) (*gorm.DB, context.Context) {
+	t.Helper()
 	if testing.Short() {
 		t.Skip("PostgreSQL integration test")
 	}
@@ -216,24 +253,41 @@ func openMenuTransaction(t *testing.T) (*gorm.DB, context.Context) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
-	connection, err := database.Open(ctx, settings.PostgresDSN)
+	root, err := database.Open(ctx, settings.PostgresDSN)
 	if err != nil {
 		t.Fatalf("open PostgreSQL: %v", err)
 	}
-	t.Cleanup(func() { _ = connection.Close() })
-	if err := database.AutoMigrate(ctx, connection.GORM, &testRole{}, &Menu{}, &RoleMenu{}); err != nil {
+	schema := fmt.Sprintf("test_menu_%d", time.Now().UnixNano())
+	if err := root.GORM.WithContext(ctx).Exec("CREATE SCHEMA " + schema).Error; err != nil {
+		t.Fatal(err)
+	}
+	pgxConfig, err := pgx.ParseConfig(settings.PostgresDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pgxConfig.RuntimeParams["search_path"] = schema
+	sqlDB := stdlib.OpenDB(*pgxConfig)
+	if err := sqlDB.PingContext(ctx); err != nil {
+		t.Fatal(err)
+	}
+	db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = sqlDB.Close()
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = root.GORM.WithContext(cleanupCtx).Exec("DROP SCHEMA IF EXISTS " + schema + " CASCADE").Error
+		_ = root.Close()
+	})
+	if err := database.AutoMigrate(ctx, db, &testRole{}, &testUser{}, &testAccessVersion{}, &Menu{}, &RoleMenu{}); err != nil {
 		t.Fatalf("AutoMigrate menu test schema: %v", err)
 	}
-	if err := EnsureSchema(ctx, connection.GORM); err != nil {
+	if err := EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
-	tx := connection.GORM.WithContext(ctx).Begin()
-	if tx.Error != nil {
-		t.Fatalf("begin transaction: %v", tx.Error)
-	}
-	t.Cleanup(func() { _ = tx.Rollback().Error })
-	clearBuiltinMenus(t, tx, ctx)
-	return tx, ctx
+	return db, ctx
 }
 
 func clearBuiltinMenus(t *testing.T, tx *gorm.DB, ctx context.Context) {
@@ -293,8 +347,8 @@ func loadBuiltinMenus(t *testing.T, tx *gorm.DB, ctx context.Context) map[string
 
 func assertExactBuiltinMenus(t *testing.T, items map[string]Menu) {
 	t.Helper()
-	if len(items) != 17 {
-		t.Fatalf("builtin menu count = %d, want 17: %+v", len(items), items)
+	if len(items) != 22 {
+		t.Fatalf("builtin menu count = %d, want 22: %+v", len(items), items)
 	}
 	system := items[BuiltinSystemCode]
 	list := items[PermissionList]
@@ -303,6 +357,7 @@ func assertExactBuiltinMenus(t *testing.T, items map[string]Menu) {
 	deleteItem := items[PermissionDelete]
 	roles := items[PermissionRoleList]
 	users := items[PermissionUserList]
+	authPlatforms := items[PermissionAuthPlatformList]
 	assertBuiltinMenu(t, system, TypeDirectory, nil, "navigation.system", nil, nil, stringPointer("Setting"), 100)
 	assertBuiltinMenu(t, list, TypePage, &system.ID, "navigation.systemMenus", stringPointer("/system/menus"), stringPointer("system-menus"), stringPointer("Menu"), 10)
 	assertBuiltinMenu(t, create, TypeAction, &list.ID, "permission.menuCreate", nil, nil, nil, 10)
@@ -331,6 +386,15 @@ func assertExactBuiltinMenus(t *testing.T, items map[string]Menu) {
 	} {
 		assertBuiltinMenu(t, items[item.code], TypeAction, &users.ID, item.key, nil, nil, nil, (index+1)*10)
 	}
+	assertBuiltinMenu(t, authPlatforms, TypePage, &system.ID, "navigation.systemAuthPlatforms", stringPointer("/system/auth-platforms"), stringPointer("system-auth-platforms"), stringPointer("Key"), 40)
+	for index, item := range []struct{ code, key string }{
+		{PermissionAuthPlatformCreate, "permission.authPlatformCreate"},
+		{PermissionAuthPlatformUpdate, "permission.authPlatformUpdate"},
+		{PermissionAuthPlatformStatus, "permission.authPlatformStatus"},
+		{PermissionAuthPlatformDelete, "permission.authPlatformDelete"},
+	} {
+		assertBuiltinMenu(t, items[item.code], TypeAction, &authPlatforms.ID, item.key, nil, nil, nil, (index+1)*10)
+	}
 }
 
 func assertBuiltinMenu(t *testing.T, item Menu, menuType Type, parentID *int64, i18nKey string, path, viewKey, icon *string, sortOrder int) {
@@ -357,6 +421,8 @@ func builtinMenuCodes() []string {
 		PermissionRoleList, PermissionRoleCreate, PermissionRoleUpdate, PermissionRoleStatus,
 		PermissionRoleDefault, PermissionRoleDelete, PermissionRoleAuthorize,
 		PermissionUserList, PermissionUserUpdate, PermissionUserStatus, PermissionUserDelete, PermissionUserRoles,
+		PermissionAuthPlatformList, PermissionAuthPlatformCreate, PermissionAuthPlatformUpdate,
+		PermissionAuthPlatformStatus, PermissionAuthPlatformDelete,
 	}
 }
 

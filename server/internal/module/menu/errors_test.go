@@ -35,6 +35,15 @@ func TestMenuProtocolConstantsAndFiniteValues(t *testing.T) {
 			t.Errorf("user permission %s = %q", name, got)
 		}
 	}
+	authPlatformPermissions := map[string]string{
+		"list": PermissionAuthPlatformList, "create": PermissionAuthPlatformCreate,
+		"update": PermissionAuthPlatformUpdate, "status": PermissionAuthPlatformStatus, "delete": PermissionAuthPlatformDelete,
+	}
+	for name, got := range authPlatformPermissions {
+		if got != "system:auth-platform:"+name {
+			t.Errorf("authentication platform permission %s = %q", name, got)
+		}
+	}
 
 	for _, key := range []string{
 		"navigation.system",
@@ -54,6 +63,11 @@ func TestMenuProtocolConstantsAndFiniteValues(t *testing.T) {
 		"permission.userStatus",
 		"permission.userDelete",
 		"permission.userRoles",
+		"navigation.systemAuthPlatforms",
+		"permission.authPlatformCreate",
+		"permission.authPlatformUpdate",
+		"permission.authPlatformStatus",
+		"permission.authPlatformDelete",
 	} {
 		if !IsMenuTitleKey(key) {
 			t.Errorf("IsMenuTitleKey(%q) = false", key)
@@ -63,7 +77,7 @@ func TestMenuProtocolConstantsAndFiniteValues(t *testing.T) {
 		t.Fatal("IsMenuTitleKey accepted an unregistered key")
 	}
 
-	if !IsMenuViewKey("system-menus") || !IsMenuViewKey("system-roles") || !IsMenuViewKey("system-users") || IsMenuViewKey("dashboard") || IsMenuViewKey("") {
+	if !IsMenuViewKey("system-menus") || !IsMenuViewKey("system-roles") || !IsMenuViewKey("system-users") || !IsMenuViewKey("system-auth-platforms") || IsMenuViewKey("dashboard") || IsMenuViewKey("") {
 		t.Fatal("menu view protocol accepted an invalid value or rejected system-menus")
 	}
 
@@ -94,6 +108,11 @@ func TestMenuProtocolConstantsAndFiniteValues(t *testing.T) {
 		PermissionUserStatus,
 		PermissionUserDelete,
 		PermissionUserRoles,
+		PermissionAuthPlatformList,
+		PermissionAuthPlatformCreate,
+		PermissionAuthPlatformUpdate,
+		PermissionAuthPlatformStatus,
+		PermissionAuthPlatformDelete,
 	} {
 		if !IsBuiltinCode(code) {
 			t.Errorf("IsBuiltinCode(%q) = false", code)

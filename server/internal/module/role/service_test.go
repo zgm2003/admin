@@ -1,23 +1,32 @@
 package role_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/url"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"admin/server/internal/config"
+	"admin/server/internal/module/access"
+	"admin/server/internal/module/accessstate"
 	"admin/server/internal/module/menu"
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/user"
+	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/yesno"
+	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 )
 
 func TestServiceListValidatesAndNormalizesQuery(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
+	service := newRoleTestService(t, role.NewRepository(tx))
 	unique := " service_list_keyword "
 	created := role.Role{Code: "service_list_keyword", Name: "Service List", IsEnabled: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&created).Error; err != nil {
@@ -46,7 +55,7 @@ func TestServiceListValidatesAndNormalizesQuery(t *testing.T) {
 
 func TestServiceListReturnsNonNilEmptyPage(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	result, err := role.NewService(role.NewRepository(tx)).List(ctx, role.ListQuery{
+	result, err := newRoleTestService(t, role.NewRepository(tx)).List(ctx, role.ListQuery{
 		Page: 1, PageSize: 20, Keyword: "missing_service_list_value",
 	})
 	if err != nil || result.List == nil || result.Total != 0 {
@@ -56,7 +65,7 @@ func TestServiceListReturnsNonNilEmptyPage(t *testing.T) {
 
 func TestServiceCreateNormalizesAndInitializesRole(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
+	service := newRoleTestService(t, role.NewRepository(tx))
 	unique := time.Now().UnixNano()
 	id, err := service.Create(ctx, role.CreateInput{Code: fmt.Sprintf(" ai_tester_%d ", unique), Name: " AI 测试员 "})
 	if err != nil {
@@ -77,7 +86,7 @@ func TestServiceCreateNormalizesAndInitializesRole(t *testing.T) {
 
 func TestServiceCreateRejectsInvalidAndConflictingProfiles(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
+	service := newRoleTestService(t, role.NewRepository(tx))
 	for _, input := range []role.CreateInput{
 		{Code: "ab", Name: "Valid"},
 		{Code: "Bad", Name: "Valid"},
@@ -100,7 +109,7 @@ func TestServiceCreateRejectsInvalidAndConflictingProfiles(t *testing.T) {
 	} {
 		t.Run(conflict.name, func(t *testing.T) {
 			conflictTX, conflictContext := openRoleTransaction(t)
-			conflictService := role.NewService(role.NewRepository(conflictTX))
+			conflictService := newRoleTestService(t, role.NewRepository(conflictTX))
 			unique := time.Now().UnixNano()
 			code := fmt.Sprintf("profile_%d", unique)
 			name := fmt.Sprintf("Profile %d", unique)
@@ -116,7 +125,7 @@ func TestServiceCreateRejectsInvalidAndConflictingProfiles(t *testing.T) {
 
 func TestServiceUpdateChangesOnlyCustomRoleName(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
+	service := newRoleTestService(t, role.NewRepository(tx))
 	unique := time.Now().UnixNano()
 	code := fmt.Sprintf("update_%d", unique)
 	id, err := service.Create(ctx, role.CreateInput{Code: code, Name: "Before"})
@@ -144,7 +153,7 @@ func TestServiceUpdateChangesOnlyCustomRoleName(t *testing.T) {
 
 func TestServiceUpdateProtectsSystemAndMissingRoles(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
+	service := newRoleTestService(t, role.NewRepository(tx))
 	if err := service.EnsureSystemRoles(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +171,7 @@ func TestServiceUpdateProtectsSystemAndMissingRoles(t *testing.T) {
 
 func TestServiceUpdateStatusProtectsRolesAndPreservesRelations(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
+	service, accessStates, _ := newRoleMutationTestService(t, role.NewRepository(tx))
 	if err := service.EnsureSystemRoles(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -184,6 +193,9 @@ func TestServiceUpdateStatusProtectsRolesAndPreservesRelations(t *testing.T) {
 	if err := tx.WithContext(ctx).Create(&createdUser).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := tx.WithContext(ctx).Create(&access.Version{UserID: createdUser.ID, Version: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
 	userRole := role.UserRole{UserID: createdUser.ID, RoleID: customID}
 	if err := tx.WithContext(ctx).Create(&userRole).Error; err != nil {
 		t.Fatal(err)
@@ -201,6 +213,7 @@ func TestServiceUpdateStatusProtectsRolesAndPreservesRelations(t *testing.T) {
 	if err := service.UpdateStatus(ctx, customID, yesno.No); err != nil {
 		t.Fatal(err)
 	}
+	assertRoleAccessState(t, accessStates, createdUser.ID, 2)
 	var stored role.Role
 	if err := tx.WithContext(ctx).First(&stored, customID).Error; err != nil || stored.IsEnabled != yesno.No {
 		t.Fatalf("disabled role = %+v,%v", stored, err)
@@ -209,12 +222,16 @@ func TestServiceUpdateStatusProtectsRolesAndPreservesRelations(t *testing.T) {
 	if err := service.UpdateStatus(ctx, customID, yesno.No); err != nil {
 		t.Fatal(err)
 	}
+	if got := readRoleAccessVersion(t, tx, ctx, createdUser.ID); got != 2 {
+		t.Fatalf("same-status access version = %d", got)
+	}
 	if err := tx.WithContext(ctx).First(&stored, customID).Error; err != nil || !stored.UpdatedAt.Equal(disabledAt) {
 		t.Fatalf("same status rewrote role = %+v,%v", stored, err)
 	}
 	if err := service.UpdateStatus(ctx, customID, yesno.Yes); err != nil {
 		t.Fatal(err)
 	}
+	assertRoleAccessState(t, accessStates, createdUser.ID, 3)
 	var relationCount, grantCount int64
 	if err := tx.WithContext(ctx).Model(&role.UserRole{}).Where("id = ?", userRole.ID).Count(&relationCount).Error; err != nil {
 		t.Fatal(err)
@@ -227,9 +244,176 @@ func TestServiceUpdateStatusProtectsRolesAndPreservesRelations(t *testing.T) {
 	}
 }
 
+func TestServiceRoleProfileAndDefaultChangesDoNotAdvanceAccessVersion(t *testing.T) {
+	tx, ctx := openRoleTransaction(t)
+	service := newRoleTestService(t, role.NewRepository(tx))
+	if err := service.EnsureSystemRoles(ctx); err != nil {
+		t.Fatal(err)
+	}
+	roleID, err := service.Create(ctx, role.CreateInput{Code: fmt.Sprintf("profile_only_%d", time.Now().UnixNano()), Name: "Before"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	boundUser := createRoleAccessUser(t, tx, ctx, roleID, yesno.Yes, false)
+	if err := service.Update(ctx, roleID, role.UpdateInput{Name: "After"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.SetDefault(ctx, roleID); err != nil {
+		t.Fatal(err)
+	}
+	if got := readRoleAccessVersion(t, tx, ctx, boundUser.ID); got != 1 {
+		t.Fatalf("profile/default access version = %d", got)
+	}
+}
+
+func TestServiceUpdateStatusRedisFailurePreventsPostgreSQLMutation(t *testing.T) {
+	tx, ctx := openRoleTransaction(t)
+	service, _, redisClient := newRoleMutationTestService(t, role.NewRepository(tx))
+	roleID, err := service.Create(ctx, role.CreateInput{Code: fmt.Sprintf("redis_status_%d", time.Now().UnixNano()), Name: "Redis status"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	boundUser := createRoleAccessUser(t, tx, ctx, roleID, yesno.Yes, false)
+	if err := redisClient.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.UpdateStatus(ctx, roleID, yesno.No); roleErrorCode(err) != apperror.CodeDependencyUnavailable {
+		t.Fatalf("UpdateStatus() error = %v", err)
+	}
+	var stored role.Role
+	if err := tx.WithContext(ctx).Take(&stored, roleID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.IsEnabled != yesno.Yes || readRoleAccessVersion(t, tx, ctx, boundUser.ID) != 1 {
+		t.Fatalf("PostgreSQL mutated without Redis coordination: role=%+v", stored)
+	}
+}
+
+func TestServiceUpdateStatusRollbackRestoresAccessStateAndVersion(t *testing.T) {
+	tx, ctx := openRoleTransaction(t)
+	service, accessStates, _ := newRoleMutationTestService(t, role.NewRepository(tx))
+	roleID, err := service.Create(ctx, role.CreateInput{Code: fmt.Sprintf("rollback_status_%d", time.Now().UnixNano()), Name: "Rollback status"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	boundUser := createRoleAccessUser(t, tx, ctx, roleID, yesno.Yes, false)
+	if err := tx.WithContext(ctx).Exec(`ALTER TABLE sys_role ADD CONSTRAINT ck_test_role_status_rollback CHECK (is_enabled = 1)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := service.UpdateStatus(ctx, roleID, yesno.No); roleErrorCode(err) != apperror.CodeDependencyUnavailable {
+		t.Fatalf("UpdateStatus() error = %v", err)
+	}
+	if got := readRoleAccessVersion(t, tx, ctx, boundUser.ID); got != 1 {
+		t.Fatalf("rolled-back access version = %d", got)
+	}
+	assertRoleAccessState(t, accessStates, boundUser.ID, 1)
+}
+
+func TestConcurrentRoleMutationRechecksChangedCandidate(t *testing.T) {
+	db, ctx := openRoleDatabase(t)
+	setupService := newRoleTestService(t, role.NewRepository(db))
+	if err := setupService.EnsureSystemRoles(ctx); err != nil {
+		t.Fatal(err)
+	}
+	roleID, err := setupService.Create(ctx, role.CreateInput{Code: fmt.Sprintf("candidate_%d", time.Now().UnixNano()), Name: "Candidate"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	boundUser := createRoleAccessUser(t, db, ctx, roleID, yesno.Yes, false)
+	var relation role.UserRole
+	if err := db.WithContext(ctx).Where("user_id = ? AND role_id = ?", boundUser.ID, roleID).Take(&relation).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	blocker := db.WithContext(ctx).Begin()
+	if blocker.Error != nil {
+		t.Fatal(blocker.Error)
+	}
+	t.Cleanup(func() { _ = blocker.Rollback().Error })
+	if _, err := role.NewRepository(blocker).LockActiveRole(ctx, roleID); err != nil {
+		t.Fatal(err)
+	}
+
+	service, accessStates, _ := newRoleMutationTestService(t, role.NewRepository(db))
+	done := make(chan error, 1)
+	go func() { done <- service.UpdateStatus(ctx, roleID, yesno.No) }()
+	waitForRoleAccessState(t, accessStates, boundUser.ID, accessstate.StateInvalidating)
+	if err := db.WithContext(ctx).Delete(&relation).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := blocker.Commit().Error; err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("UpdateStatus() error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("role mutation did not finish")
+	}
+	var stored role.Role
+	if err := db.WithContext(ctx).Take(&stored, roleID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.IsEnabled != yesno.No {
+		t.Fatalf("role status = %d", stored.IsEnabled)
+	}
+	if got := readRoleAccessVersion(t, db, ctx, boundUser.ID); got != 1 {
+		t.Fatalf("removed candidate access version = %d", got)
+	}
+	assertRoleAccessState(t, accessStates, boundUser.ID, 1)
+}
+
+func TestServiceUpdateStatusPublishFailureLeavesCommittedVersionUnreachable(t *testing.T) {
+	db, ctx := openRoleDatabase(t)
+	service, accessStates, redisClient := newRoleMutationTestService(t, role.NewRepository(db))
+	roleID, err := service.Create(ctx, role.CreateInput{Code: fmt.Sprintf("publish_%d", time.Now().UnixNano()), Name: "Publish"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	boundUser := createRoleAccessUser(t, db, ctx, roleID, yesno.Yes, false)
+	if err := db.WithContext(ctx).Exec(`
+		CREATE FUNCTION delay_role_status_publish() RETURNS trigger AS $$
+		BEGIN
+			PERFORM pg_sleep(0.5);
+			RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+		CREATE TRIGGER delay_role_status_publish
+		BEFORE UPDATE OF is_enabled ON sys_role
+		FOR EACH ROW EXECUTE FUNCTION delay_role_status_publish()`).Error; err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- service.UpdateStatus(ctx, roleID, yesno.No) }()
+	waitForRoleAccessState(t, accessStates, boundUser.ID, accessstate.StateInvalidating)
+	if err := redisClient.Delete(ctx, accessstate.StateKey(boundUser.ID)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if roleErrorCode(err) != apperror.CodeDependencyUnavailable {
+			t.Fatalf("UpdateStatus() error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("role mutation did not finish")
+	}
+	var stored role.Role
+	if err := db.WithContext(ctx).Take(&stored, roleID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.IsEnabled != yesno.No || readRoleAccessVersion(t, db, ctx, boundUser.ID) != 2 {
+		t.Fatalf("committed PostgreSQL state = %+v", stored)
+	}
+	if _, found, err := accessStates.Read(ctx, boundUser.ID); err != nil || found {
+		t.Fatalf("old access state remained reachable: found=%v error=%v", found, err)
+	}
+}
+
 func TestServiceSetDefaultMaintainsExactlyOneEnabledDefault(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
+	service := newRoleTestService(t, role.NewRepository(tx))
 	if err := service.EnsureSystemRoles(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +460,7 @@ func TestServiceSetDefaultMaintainsExactlyOneEnabledDefault(t *testing.T) {
 
 func TestServiceDeleteProtectsSystemDefaultAndAttachedRoles(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
+	service, accessStates, _ := newRoleMutationTestService(t, role.NewRepository(tx))
 	if err := service.EnsureSystemRoles(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -295,8 +479,11 @@ func TestServiceDeleteProtectsSystemDefaultAndAttachedRoles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdUser := user.User{Username: fmt.Sprintf("delete_user_%d", time.Now().UnixNano()), Email: fmt.Sprintf("delete_user_%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", IsEnabled: yesno.No}
+	createdUser := user.User{Username: fmt.Sprintf("delete_user_%d", time.Now().UnixNano()), Email: fmt.Sprintf("delete_user_%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", IsEnabled: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&createdUser).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.WithContext(ctx).Create(&access.Version{UserID: createdUser.ID, Version: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.WithContext(ctx).Create(&role.UserRole{UserID: createdUser.ID, RoleID: customID}).Error; err != nil {
@@ -305,11 +492,12 @@ func TestServiceDeleteProtectsSystemDefaultAndAttachedRoles(t *testing.T) {
 	if err := service.Delete(ctx, customID); roleErrorCode(err) != role.CodeRoleUsersAttached {
 		t.Fatalf("delete attached role error = %v", err)
 	}
+	assertRoleAccessState(t, accessStates, createdUser.ID, 1)
 }
 
 func TestServiceDeleteSoftDeletesRoleAndGrantsWithOneTimestamp(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
+	service := newRoleTestService(t, role.NewRepository(tx))
 	roleID, err := service.Create(ctx, role.CreateInput{Code: fmt.Sprintf("delete_%d", time.Now().UnixNano()), Name: fmt.Sprintf("Delete %d", time.Now().UnixNano())})
 	if err != nil {
 		t.Fatal(err)
@@ -344,7 +532,7 @@ func TestServiceDeleteSoftDeletesRoleAndGrantsWithOneTimestamp(t *testing.T) {
 
 func TestServiceDeleteRollsBackWhenRoleWriteFails(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
+	service := newRoleTestService(t, role.NewRepository(tx))
 	roleID, err := service.Create(ctx, role.CreateInput{Code: fmt.Sprintf("delete_rollback_%d", time.Now().UnixNano()), Name: fmt.Sprintf("Delete Rollback %d", time.Now().UnixNano())})
 	if err != nil {
 		t.Fatal(err)
@@ -379,8 +567,8 @@ func TestServiceDeleteRollsBackWhenRoleWriteFails(t *testing.T) {
 
 func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
-	menuService := menu.NewService(menu.NewRepository(tx))
+	service, accessStates, _ := newRoleMutationTestService(t, role.NewRepository(tx))
+	menuService := menu.NewService(menu.NewRepository(tx), nil)
 	if err := menuService.EnsureBuiltin(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -391,6 +579,7 @@ func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
 	if err := service.UpdateStatus(ctx, roleID, yesno.No); err != nil {
 		t.Fatal(err)
 	}
+	boundUser := createRoleAccessUser(t, tx, ctx, roleID, yesno.Yes, false)
 	var page, action menu.Menu
 	if err := tx.WithContext(ctx).Where("code = ?", menu.PermissionRoleList).Take(&page).Error; err != nil {
 		t.Fatal(err)
@@ -402,6 +591,7 @@ func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
 	if err != nil || count != 1 {
 		t.Fatalf("UpdatePermissions() = %d,%v", count, err)
 	}
+	assertRoleAccessState(t, accessStates, boundUser.ID, 2)
 	permissions, err := service.Permissions(ctx, roleID)
 	if err != nil || len(permissions.MenuTree) == 0 || !reflect.DeepEqual(permissions.MenuIDs, []int64{action.ID}) {
 		t.Fatalf("Permissions() = %+v,%v", permissions, err)
@@ -413,6 +603,9 @@ func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
 	if _, err := service.UpdatePermissions(ctx, roleID, []int64{action.ID}); err != nil {
 		t.Fatal(err)
 	}
+	if got := readRoleAccessVersion(t, tx, ctx, boundUser.ID); got != 2 {
+		t.Fatalf("idempotent permission access version = %d", got)
+	}
 	var after menu.RoleMenu
 	if err := tx.WithContext(ctx).First(&after, before.ID).Error; err != nil || !reflect.DeepEqual(before, after) {
 		t.Fatalf("unchanged grant was rewritten: before=%+v after=%+v err=%v", before, after, err)
@@ -420,11 +613,12 @@ func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
 	if count, err := service.UpdatePermissions(ctx, roleID, []int64{}); err != nil || count != 0 {
 		t.Fatalf("clear permissions = %d,%v", count, err)
 	}
+	assertRoleAccessState(t, accessStates, boundUser.ID, 3)
 }
 
 func TestServicePermissionsRejectsSuperAdminAndInvalidMenus(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
+	service := newRoleTestService(t, role.NewRepository(tx))
 	if err := service.EnsureSystemRoles(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -442,6 +636,80 @@ func TestServicePermissionsRejectsSuperAdminAndInvalidMenus(t *testing.T) {
 	if _, err := service.UpdatePermissions(ctx, customID, []int64{999999999}); roleErrorCode(err) != role.CodeRoleInvalidPermission {
 		t.Fatalf("missing menu grant error = %v", err)
 	}
+}
+
+func newRoleTestService(t *testing.T, repository *role.Repository) *role.Service {
+	t.Helper()
+	service, _, _ := newRoleMutationTestService(t, repository)
+	return service
+}
+
+func newRoleMutationTestService(t *testing.T, repository *role.Repository) (*role.Service, *accessstate.Store, *projectredis.Client) {
+	t.Helper()
+	redisClient := openRoleTestRedis(t)
+	accessStates := accessstate.NewStore(redisClient)
+	return role.NewService(repository, accessstate.NewInvalidator(accessStates)), accessStates, redisClient
+}
+
+func openRoleTestRedis(t *testing.T) *projectredis.Client {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("Redis integration test")
+	}
+	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("load server .env: %v", err)
+	}
+	settings, err := config.LoadWorker(os.LookupEnv)
+	if err != nil {
+		t.Fatalf("load worker config: %v", err)
+	}
+	redisURL, err := url.Parse(settings.RedisURL)
+	if err != nil {
+		t.Fatalf("parse Redis URL: %v", err)
+	}
+	redisURL.Path = "/13"
+	redisURL.RawPath = ""
+	client, err := projectredis.Open(context.Background(), redisURL.String())
+	if err != nil {
+		t.Fatalf("open test Redis database 13: %v", err)
+	}
+	if err := client.ScanDelete(context.Background(), "authz:access-state:*"); err != nil {
+		_ = client.Close()
+		t.Fatalf("clean test Redis database 13: %v", err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	return client
+}
+
+func readRoleAccessVersion(t *testing.T, tx *gorm.DB, ctx context.Context, userID int64) int64 {
+	t.Helper()
+	var version int64
+	result := tx.WithContext(ctx).Raw("SELECT version FROM sys_access_version WHERE user_id = ?", userID).Scan(&version)
+	if result.Error != nil || result.RowsAffected != 1 {
+		t.Fatalf("read access version: rows=%d error=%v", result.RowsAffected, result.Error)
+	}
+	return version
+}
+
+func assertRoleAccessState(t *testing.T, store *accessstate.Store, userID, version int64) {
+	t.Helper()
+	state, found, err := store.Read(context.Background(), userID)
+	if err != nil || !found || state.State != accessstate.StateReady || state.Version != version {
+		t.Fatalf("access state = %+v found=%v error=%v", state, found, err)
+	}
+}
+
+func waitForRoleAccessState(t *testing.T, store *accessstate.Store, userID int64, wanted string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		state, found, err := store.Read(context.Background(), userID)
+		if err == nil && found && state.State == wanted {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("access state for user %d did not become %s", userID, wanted)
 }
 
 func roleErrorCode(err error) int {

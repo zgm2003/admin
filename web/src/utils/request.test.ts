@@ -185,6 +185,24 @@ describe('createRequestClient', () => {
     expect(acceptLanguage).toBe('en-US')
   })
 
+  it('attaches platform and device headers to public Policy without a bearer token', async () => {
+    useAuthStore(pinia).setCredential({ accessToken: 'stale-token', expiresIn: 900 })
+    localStorage.setItem('admin:device-id', '550e8400-e29b-41d4-a716-446655440000')
+    let headers = new AxiosHeaders()
+    const adapter: AxiosAdapter = async (config) => {
+      headers = AxiosHeaders.from(config.headers)
+      return successResponse(config, { code: 0, data: { code: 'admin', name: 'Admin', allowRegister: 1 }, message: 'ok' })
+    }
+    const client = createRequestClient('http://localhost:16301', adapter)
+
+    await client.get('/api/v1/auth/policy')
+
+    expect(headers.get('Accept-Language')).toBe('zh-CN')
+    expect(headers.get('X-Auth-Platform')).toBe('admin')
+    expect(headers.get('X-Device-ID')).toBe('550e8400-e29b-41d4-a716-446655440000')
+    expect(headers.get('Authorization')).toBeUndefined()
+  })
+
   it('sends the current locale on the raw refresh request', async () => {
     setLocale('en-US')
     let refreshLanguage = ''
@@ -296,6 +314,25 @@ describe('createRequestClient', () => {
       await expect(client.post(url)).rejects.toMatchObject({ code: 10002 })
     }
     expect(refreshCalls).toBe(1)
+  })
+
+  it('does not refresh or mutate credentials when public Policy returns 401', async () => {
+    const store = useAuthStore(pinia)
+    store.setCredential({ accessToken: 'stale-token', expiresIn: 900 })
+    let refreshCalls = 0
+    const adapter: AxiosAdapter = async (config) => {
+      if (config.url === '/api/v1/auth/refresh') {
+        refreshCalls += 1
+        return successResponse(config, { code: 0, data: { accessToken: 'new-token', expiresIn: 900 }, message: 'ok' })
+      }
+      throw apiFailure(config, 401, 10002, '未登录或登录已失效')
+    }
+    const client = createRequestClient('http://localhost:16301', adapter)
+
+    await expect(client.get('/api/v1/auth/policy')).rejects.toMatchObject({ code: 10002, httpStatus: 401 })
+
+    expect(refreshCalls).toBe(0)
+    expect(store.accessToken).toBe('stale-token')
   })
 
   it('sets anonymous after a refresh 401', async () => {

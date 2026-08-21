@@ -8,8 +8,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"admin/server/internal/module/accessstate"
 	"admin/server/internal/module/menu"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
@@ -21,7 +23,8 @@ const (
 )
 
 type Service struct {
-	repository *Repository
+	repository        *Repository
+	accessInvalidator *accessstate.Invalidator
 }
 
 type ListQuery struct {
@@ -52,8 +55,8 @@ type UpdateInput struct {
 	Name string
 }
 
-func NewService(repository *Repository) *Service {
-	return &Service{repository: repository}
+func NewService(repository *Repository, accessInvalidator *accessstate.Invalidator) *Service {
+	return &Service{repository: repository, accessInvalidator: accessInvalidator}
 }
 
 func (s *Service) EnsureSystemRoles(ctx context.Context) error {
@@ -177,30 +180,42 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 }
 
 func (s *Service) UpdateStatus(ctx context.Context, id int64, value yesno.Value) error {
-	if s == nil || s.repository == nil {
+	if s == nil || s.repository == nil || s.accessInvalidator == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("update role status requires a repository"))
 	}
 	if id < 1 || !yesno.IsValid(value) {
 		return roleInvalidState(fmt.Errorf("role id or status is invalid"))
 	}
-	err := s.repository.Transaction(ctx, func(repository *Repository) error {
-		stored, err := repository.LockActiveRole(ctx, id)
+	err := s.mutateAffectedUsers(ctx, id, func(mutationCtx context.Context, repository *Repository, candidates []accessstate.Version) (bool, map[int64]int64, error) {
+		stored, err := repository.LockActiveRole(mutationCtx, id)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return roleNotFound(err)
+				return false, nil, roleNotFound(err)
 			}
-			return err
+			return false, nil, err
+		}
+		actual, err := repository.LockEffectiveAccessVersionsByRole(mutationCtx, id)
+		if err != nil {
+			return false, nil, err
+		}
+		if !equalAccessVersions(candidates, actual) {
+			return false, nil, errRoleAffectedUsersChanged
 		}
 		if stored.Code == CodeSuperAdmin {
-			return roleSystemProtected(stored.Code, fmt.Errorf("super administrator status is immutable"))
+			return false, nil, roleSystemProtected(stored.Code, fmt.Errorf("super administrator status is immutable"))
 		}
 		if stored.IsEnabled == value {
-			return nil
+			return false, nil, nil
 		}
 		if value == yesno.No && stored.IsDefault == yesno.Yes {
-			return roleDefaultProtected(stored.Code, fmt.Errorf("default role cannot be disabled"))
+			return false, nil, roleDefaultProtected(stored.Code, fmt.Errorf("default role cannot be disabled"))
 		}
-		return repository.UpdateStatus(ctx, stored.ID, value, time.Now().UTC())
+		updatedAt := time.Now().UTC().Truncate(time.Microsecond)
+		if err := repository.UpdateStatus(mutationCtx, stored.ID, value, updatedAt); err != nil {
+			return false, nil, err
+		}
+		versions, err := repository.IncrementAccessVersions(mutationCtx, accessUserIDs(actual), updatedAt)
+		return true, versions, err
 	})
 	return mapRoleRepositoryError(err, "", "")
 }
@@ -260,38 +275,49 @@ func (s *Service) SetDefault(ctx context.Context, id int64) error {
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {
-	if s == nil || s.repository == nil {
+	if s == nil || s.repository == nil || s.accessInvalidator == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("delete role requires a repository"))
 	}
 	if id < 1 {
 		return roleInvalidState(fmt.Errorf("role id is invalid"))
 	}
-	err := s.repository.Transaction(ctx, func(repository *Repository) error {
-		stored, err := repository.LockActiveRole(ctx, id)
+	err := s.mutateAffectedUsers(ctx, id, func(mutationCtx context.Context, repository *Repository, candidates []accessstate.Version) (bool, map[int64]int64, error) {
+		stored, err := repository.LockActiveRole(mutationCtx, id)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return roleNotFound(err)
+				return false, nil, roleNotFound(err)
 			}
-			return err
+			return false, nil, err
+		}
+		actual, err := repository.LockEffectiveAccessVersionsByRole(mutationCtx, id)
+		if err != nil {
+			return false, nil, err
+		}
+		if !equalAccessVersions(candidates, actual) {
+			return false, nil, errRoleAffectedUsersChanged
 		}
 		if IsSystemCode(stored.Code) {
-			return roleSystemProtected(stored.Code, fmt.Errorf("system role cannot be deleted"))
+			return false, nil, roleSystemProtected(stored.Code, fmt.Errorf("system role cannot be deleted"))
 		}
 		if stored.IsDefault == yesno.Yes {
-			return roleDefaultProtected(stored.Code, fmt.Errorf("default role cannot be deleted"))
+			return false, nil, roleDefaultProtected(stored.Code, fmt.Errorf("default role cannot be deleted"))
 		}
-		userCount, err := repository.CountEffectiveUsers(ctx, stored.ID)
+		userCount, err := repository.CountEffectiveUsers(mutationCtx, stored.ID)
 		if err != nil {
-			return err
+			return false, nil, err
 		}
 		if userCount > 0 {
-			return roleUsersAttached(stored.Code, fmt.Errorf("role has %d effective users", userCount))
+			return false, nil, roleUsersAttached(stored.Code, fmt.Errorf("role has %d effective users", userCount))
 		}
-		deletedAt := time.Now().UTC()
-		if err := repository.SoftDeleteRoleMenus(ctx, stored.ID, deletedAt); err != nil {
-			return err
+		deletedAt := time.Now().UTC().Truncate(time.Microsecond)
+		if err := repository.SoftDeleteRoleMenus(mutationCtx, stored.ID, deletedAt); err != nil {
+			return false, nil, err
 		}
-		return repository.SoftDeleteRole(ctx, stored.ID, deletedAt)
+		if err := repository.SoftDeleteRole(mutationCtx, stored.ID, deletedAt); err != nil {
+			return false, nil, err
+		}
+		versions, err := repository.IncrementAccessVersions(mutationCtx, accessUserIDs(actual), deletedAt)
+		return true, versions, err
 	})
 	return mapRoleRepositoryError(err, "", "")
 }
@@ -340,47 +366,54 @@ func (s *Service) Permissions(ctx context.Context, roleID int64) (Permissions, e
 }
 
 func (s *Service) UpdatePermissions(ctx context.Context, roleID int64, menuIDs []int64) (int64, error) {
-	if s == nil || s.repository == nil {
+	if s == nil || s.repository == nil || s.accessInvalidator == nil {
 		return 0, apperror.DependencyUnavailable(fmt.Errorf("update role permissions requires a repository"))
 	}
 	if roleID < 1 || menuIDs == nil {
 		return 0, roleInvalidPermission(fmt.Errorf("role id or menu ids are invalid"))
 	}
 	var permissionCount int64
-	err := s.repository.Transaction(ctx, func(repository *Repository) error {
-		stored, err := repository.LockActiveRole(ctx, roleID)
+	err := s.mutateAffectedUsers(ctx, roleID, func(mutationCtx context.Context, repository *Repository, candidates []accessstate.Version) (bool, map[int64]int64, error) {
+		stored, err := repository.LockActiveRole(mutationCtx, roleID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return roleNotFound(err)
+				return false, nil, roleNotFound(err)
 			}
-			return err
+			return false, nil, err
 		}
 		if stored.Code == CodeSuperAdmin {
-			return roleSuperAdminAuthorization(fmt.Errorf("super administrator has implicit permissions"))
+			return false, nil, roleSuperAdminAuthorization(fmt.Errorf("super administrator has implicit permissions"))
 		}
-		menus, err := repository.LockActiveMenus(ctx)
+		menus, err := repository.LockActiveMenus(mutationCtx)
 		if err != nil {
-			return err
+			return false, nil, err
+		}
+		actual, err := repository.LockEffectiveAccessVersionsByRole(mutationCtx, roleID)
+		if err != nil {
+			return false, nil, err
+		}
+		if !equalAccessVersions(candidates, actual) {
+			return false, nil, errRoleAffectedUsersChanged
 		}
 		index, err := buildPermissionIndex(menus)
 		if err != nil {
-			return roleDataInvalid(err)
+			return false, nil, roleDataInvalid(err)
 		}
 		normalized, err := index.normalizeRequested(menuIDs)
 		if err != nil {
-			return roleInvalidPermission(err)
+			return false, nil, roleInvalidPermission(err)
 		}
-		grants, err := repository.FindActiveRoleMenus(ctx, roleID)
+		grants, err := repository.FindActiveRoleMenus(mutationCtx, roleID)
 		if err != nil {
-			return err
+			return false, nil, err
 		}
 		storedIDs, err := index.validateStored(grants)
 		if err != nil {
-			return roleDataInvalid(err)
+			return false, nil, roleDataInvalid(err)
 		}
 		permissionCount = int64(len(normalized))
 		if equalInt64Slices(storedIDs, normalized) {
-			return nil
+			return false, nil, nil
 		}
 		wanted := make(map[int64]struct{}, len(normalized))
 		for _, id := range normalized {
@@ -400,19 +433,95 @@ func (s *Service) UpdatePermissions(ctx context.Context, roleID int64, menuIDs [
 				additions = append(additions, menu.RoleMenu{RoleID: roleID, MenuID: id})
 			}
 		}
-		updatedAt := time.Now().UTC()
-		if err := repository.SoftDeleteRoleMenuIDs(ctx, removeIDs, updatedAt); err != nil {
-			return err
+		updatedAt := time.Now().UTC().Truncate(time.Microsecond)
+		if err := repository.SoftDeleteRoleMenuIDs(mutationCtx, removeIDs, updatedAt); err != nil {
+			return false, nil, err
 		}
-		if err := repository.CreateRoleMenus(ctx, additions); err != nil {
-			return err
+		if err := repository.CreateRoleMenus(mutationCtx, additions); err != nil {
+			return false, nil, err
 		}
-		return repository.TouchRole(ctx, roleID, updatedAt)
+		if err := repository.TouchRole(mutationCtx, roleID, updatedAt); err != nil {
+			return false, nil, err
+		}
+		versions, err := repository.IncrementAccessVersions(mutationCtx, accessUserIDs(actual), updatedAt)
+		return true, versions, err
 	})
 	if err != nil {
 		return 0, mapRoleRepositoryError(err, "", "")
 	}
 	return permissionCount, nil
+}
+
+var errRoleAffectedUsersChanged = errors.New("role affected users changed")
+
+const roleMutationAttempts = 3
+
+type roleAccessMutation func(context.Context, *Repository, []accessstate.Version) (bool, map[int64]int64, error)
+
+func (s *Service) mutateAffectedUsers(ctx context.Context, roleID int64, mutate roleAccessMutation) error {
+	for attempt := 0; attempt < roleMutationAttempts; attempt++ {
+		candidates, err := s.repository.FindEffectiveAccessVersionsByRole(ctx, roleID)
+		if err != nil {
+			return apperror.DependencyUnavailable(err)
+		}
+		lease, err := s.accessInvalidator.Acquire(ctx, candidates)
+		if err != nil {
+			return apperror.DependencyUnavailable(err)
+		}
+		mutationCtx, stopRenewal := lease.StartRenewal(ctx)
+		changed := false
+		advanced := map[int64]int64{}
+		err = s.repository.Transaction(mutationCtx, func(repository *Repository) error {
+			var mutationErr error
+			changed, advanced, mutationErr = mutate(mutationCtx, repository, candidates)
+			return mutationErr
+		})
+		renewalCause := context.Cause(mutationCtx)
+		stopRenewal()
+		if errors.Is(err, errRoleAffectedUsersChanged) {
+			if rollbackErr := lease.Rollback(ctx); rollbackErr != nil {
+				return apperror.DependencyUnavailable(errors.Join(err, renewalCause, rollbackErr))
+			}
+			continue
+		}
+		if err != nil {
+			return errors.Join(err, renewalCause, lease.Rollback(ctx))
+		}
+		if renewalCause != nil {
+			return apperror.DependencyUnavailable(errors.Join(renewalCause, lease.Rollback(ctx)))
+		}
+		if !changed {
+			if err := lease.Rollback(ctx); err != nil {
+				return apperror.DependencyUnavailable(err)
+			}
+			return nil
+		}
+		if err := lease.Commit(ctx, advanced); err != nil {
+			return apperror.DependencyUnavailable(err)
+		}
+		return nil
+	}
+	return apperror.Conflict(i18n.KeyConflict, nil, errRoleAffectedUsersChanged)
+}
+
+func equalAccessVersions(left, right []accessstate.Version) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func accessUserIDs(versions []accessstate.Version) []int64 {
+	userIDs := make([]int64, len(versions))
+	for index, version := range versions {
+		userIDs[index] = version.UserID
+	}
+	return userIDs
 }
 
 func equalInt64Slices(left, right []int64) bool {

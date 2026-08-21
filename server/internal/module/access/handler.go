@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	projectmiddleware "admin/server/internal/middleware"
 	"admin/server/internal/module/auth"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
@@ -12,7 +13,7 @@ import (
 )
 
 type currentService interface {
-	Current(context.Context, int64) (Snapshot, error)
+	Current(context.Context, auth.Identity) (Snapshot, error)
 }
 
 type Handler struct {
@@ -29,10 +30,11 @@ func (h *Handler) Current(context *gin.Context) {
 		response.Fail(context, apperror.Unauthorized(fmt.Errorf("authentication identity is missing")))
 		return
 	}
-	snapshot, err := h.service.Current(context.Request.Context(), identity.UserID)
+	snapshot, err := h.service.Current(context.Request.Context(), identity)
 	if err != nil {
 		response.Fail(context, err)
 		return
 	}
+	projectmiddleware.SetCacheLog(context, "access", snapshot.CacheResult, snapshot.Version)
 	response.OK(context, http.StatusOK, newCurrentResponse(snapshot))
 }

@@ -12,11 +12,15 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
+	"admin/server/internal/module/access"
 	"admin/server/internal/module/auth"
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/user"
 	"admin/server/internal/shared/yesno"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -39,6 +43,13 @@ func TestCreateWithRolePersistsUserAndRoleAtomically(t *testing.T) {
 	var relation role.UserRole
 	if err := tx.WithContext(ctx).Where("user_id = ? AND role_id = ?", created.ID, defaultRole.ID).Take(&relation).Error; err != nil {
 		t.Fatalf("find user role: %v", err)
+	}
+	var version access.Version
+	if err := tx.WithContext(ctx).Take(&version, "user_id = ?", created.ID).Error; err != nil {
+		t.Fatalf("find access version: %v", err)
+	}
+	if version.Version != 1 || version.CreatedAt.IsZero() || version.UpdatedAt.IsZero() || !version.CreatedAt.Equal(created.CreatedAt) || !version.UpdatedAt.Equal(created.UpdatedAt) {
+		t.Fatalf("access version = %+v user=%+v", version, created)
 	}
 }
 
@@ -122,6 +133,17 @@ func TestCreateWithRoleRollsBackAfterRelationshipFailure(t *testing.T) {
 		t.Fatal("forced relationship failure was ignored")
 	}
 	assertUserCount(t, tx, ctx, input.Username, 0)
+	var orphanVersions int64
+	if err := tx.WithContext(ctx).Raw(`
+		SELECT count(*)
+		FROM sys_access_version AS access_version
+		LEFT JOIN sys_user AS app_user ON app_user.id = access_version.user_id
+		WHERE app_user.id IS NULL`).Scan(&orphanVersions).Error; err != nil {
+		t.Fatal(err)
+	}
+	if orphanVersions != 0 {
+		t.Fatalf("orphan access versions = %d", orphanVersions)
+	}
 }
 
 func TestFindCredentialUsesCaseInsensitiveUsername(t *testing.T) {
@@ -430,7 +452,11 @@ func TestRepositoryUpdateSoftDeleteCreateUserRolesAndRevoke(t *testing.T) {
 	if err != nil || len(activeRelations) != 2 {
 		t.Fatalf("active relationships = %+v,%v", activeRelations, err)
 	}
-	session := auth.Session{UserID: created.ID, RefreshTokenHash: fmt.Sprintf("%064d", created.ID), Version: 1, ClientIP: "127.0.0.1", UserAgent: "test", RefreshExpiresAt: operationTime.Add(time.Hour)}
+	session := auth.Session{
+		UserID: created.ID, Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440000",
+		RefreshTokenHash: fmt.Sprintf("%064d", created.ID), Version: 1, ClientIP: "127.0.0.1",
+		UserAgent: "test", RefreshExpiresAt: operationTime.Add(time.Hour),
+	}
 	if err := tx.WithContext(ctx).Create(&session).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -450,6 +476,70 @@ func TestRepositoryUpdateSoftDeleteCreateUserRolesAndRevoke(t *testing.T) {
 	}
 	if storedSession.RevokedAt == nil || !storedSession.RevokedAt.Equal(operationTime) || !storedSession.UpdatedAt.Equal(operationTime) {
 		t.Fatalf("revoked session = %+v", storedSession)
+	}
+}
+
+func TestRepositoryFindActiveSessionPlatformsReturnsSortedDistinctValues(t *testing.T) {
+	tx, ctx, roleRepository := openUserTransaction(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := createListedUser(
+		t, tx, ctx, fmt.Sprintf("platforms%d", time.Now().UnixNano()),
+		fmt.Sprintf("platforms%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID,
+	)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	sessions := []auth.Session{
+		{UserID: created.ID, Platform: "app", DeviceID: "550e8400-e29b-41d4-a716-446655440001", RefreshTokenHash: fmt.Sprintf("%064d", now.UnixNano()+1), Version: 1, ClientIP: "127.0.0.1", UserAgent: "app", RefreshExpiresAt: now.Add(time.Hour)},
+		{UserID: created.ID, Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440002", RefreshTokenHash: fmt.Sprintf("%064d", now.UnixNano()+2), Version: 1, ClientIP: "127.0.0.1", UserAgent: "admin-a", RefreshExpiresAt: now.Add(time.Hour)},
+		{UserID: created.ID, Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440003", RefreshTokenHash: fmt.Sprintf("%064d", now.UnixNano()+3), Version: 1, ClientIP: "127.0.0.1", UserAgent: "admin-b", RefreshExpiresAt: now.Add(time.Hour)},
+		{UserID: created.ID, Platform: "legacy", DeviceID: "550e8400-e29b-41d4-a716-446655440004", RefreshTokenHash: fmt.Sprintf("%064d", now.UnixNano()+4), Version: 1, ClientIP: "127.0.0.1", UserAgent: "revoked", RefreshExpiresAt: now.Add(time.Hour), RevokedAt: &now},
+	}
+	if err := tx.WithContext(ctx).Create(&sessions).Error; err != nil {
+		t.Fatal(err)
+	}
+	platforms, err := user.NewRepository(tx).FindActiveSessionPlatforms(ctx, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(platforms, []string{"admin", "app"}) {
+		t.Fatalf("active platforms = %v", platforms)
+	}
+}
+
+func TestRepositoryAccessVersionOperationsAdvanceOnlyTarget(t *testing.T) {
+	tx, ctx, roleRepository := openUserTransaction(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := createListedUser(t, tx, ctx, fmt.Sprintf("versiona%d", time.Now().UnixNano()), fmt.Sprintf("versiona%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
+	second := createListedUser(t, tx, ctx, fmt.Sprintf("versionb%d", time.Now().UnixNano()), fmt.Sprintf("versionb%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
+	repository := user.NewRepository(tx)
+	candidate, err := repository.FindAccessVersion(ctx, first.ID)
+	if err != nil || candidate.UserID != first.ID || candidate.Version != 1 {
+		t.Fatalf("FindAccessVersion() = %+v,%v", candidate, err)
+	}
+	err = repository.Transaction(ctx, func(scoped *user.Repository) error {
+		locked, lockErr := scoped.LockAccessVersion(ctx, first.ID)
+		if lockErr != nil || locked != candidate.Version {
+			return fmt.Errorf("LockAccessVersion() = %d,%v", locked, lockErr)
+		}
+		advanced, incrementErr := scoped.IncrementAccessVersion(ctx, first.ID, time.Now().UTC().Truncate(time.Microsecond))
+		if incrementErr != nil || advanced != 2 {
+			return fmt.Errorf("IncrementAccessVersion() = %d,%v", advanced, incrementErr)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := readUserAccessVersion(t, tx, ctx, first.ID); got != 2 {
+		t.Fatalf("first access version = %d", got)
+	}
+	if got := readUserAccessVersion(t, tx, ctx, second.ID); got != 1 {
+		t.Fatalf("second access version = %d", got)
 	}
 }
 
@@ -477,7 +567,11 @@ func TestRepositoryTransactionRollsBackStatusRolesAndSessionsAfterForcedFailure(
 	if err := tx.WithContext(ctx).Where("user_id = ? AND role_id = ?", created.ID, defaultRole.ID).Take(&relation).Error; err != nil {
 		t.Fatal(err)
 	}
-	session := auth.Session{UserID: created.ID, RefreshTokenHash: fmt.Sprintf("%064d", created.ID+10000), Version: 1, ClientIP: "127.0.0.1", UserAgent: "rollback", RefreshExpiresAt: time.Now().UTC().Add(time.Hour)}
+	session := auth.Session{
+		UserID: created.ID, Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440000",
+		RefreshTokenHash: fmt.Sprintf("%064d", created.ID+10000), Version: 1, ClientIP: "127.0.0.1",
+		UserAgent: "rollback", RefreshExpiresAt: time.Now().UTC().Add(time.Hour),
+	}
 	if err := tx.WithContext(ctx).Create(&session).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -501,6 +595,12 @@ func TestRepositoryTransactionRollsBackStatusRolesAndSessionsAfterForcedFailure(
 		if err := scoped.SoftDeleteUserRoleIDs(ctx, []int64{relation.ID}, operationTime); err != nil {
 			return err
 		}
+		if _, err := scoped.LockAccessVersion(ctx, created.ID); err != nil {
+			return err
+		}
+		if _, err := scoped.IncrementAccessVersion(ctx, created.ID, operationTime); err != nil {
+			return err
+		}
 		return scoped.RevokeActiveSessions(ctx, created.ID, operationTime)
 	})
 	if err == nil {
@@ -520,6 +620,9 @@ func TestRepositoryTransactionRollsBackStatusRolesAndSessionsAfterForcedFailure(
 	}
 	if storedUser.IsEnabled != yesno.Yes || storedRelation.DeletedAt.Valid || storedSession.RevokedAt != nil {
 		t.Fatalf("partial write survived rollback: user=%+v relation=%+v session=%+v", storedUser, storedRelation, storedSession)
+	}
+	if got := readUserAccessVersion(t, tx, ctx, created.ID); got != 1 {
+		t.Fatalf("access version survived rollback: %d", got)
 	}
 }
 
@@ -558,6 +661,11 @@ func createListedUser(t *testing.T, tx *gorm.DB, ctx context.Context, username, 
 		}
 		created.IsEnabled = yesno.No
 	}
+	if err := tx.WithContext(ctx).Create(&access.Version{
+		UserID: created.ID, Version: 1, CreatedAt: created.CreatedAt, UpdatedAt: created.UpdatedAt,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
 	for _, roleID := range roleIDs {
 		if err := tx.WithContext(ctx).Create(&role.UserRole{UserID: created.ID, RoleID: roleID}).Error; err != nil {
 			t.Fatal(err)
@@ -591,25 +699,54 @@ func openUserDatabase(t *testing.T) (*gorm.DB, context.Context, *role.Repository
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	t.Cleanup(cancel)
-	connection, err := database.Open(ctx, settings.PostgresDSN)
+	root, err := database.Open(ctx, settings.PostgresDSN)
 	if err != nil {
 		t.Fatalf("open PostgreSQL: %v", err)
 	}
-	t.Cleanup(func() { _ = connection.Close() })
-	if err := database.AutoMigrate(ctx, connection.GORM, &user.User{}, &role.Role{}, &role.UserRole{}, &auth.Session{}); err != nil {
+	schema := fmt.Sprintf("test_user_%d", time.Now().UnixNano())
+	if err := root.GORM.WithContext(ctx).Exec("CREATE SCHEMA " + schema).Error; err != nil {
+		t.Fatal(err)
+	}
+	pgxConfig, err := pgx.ParseConfig(settings.PostgresDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pgxConfig.RuntimeParams["search_path"] = schema
+	sqlDB := stdlib.OpenDB(*pgxConfig)
+	if err := sqlDB.PingContext(ctx); err != nil {
+		t.Fatal(err)
+	}
+	db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = sqlDB.Close()
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = root.GORM.WithContext(cleanupCtx).Exec("DROP SCHEMA IF EXISTS " + schema + " CASCADE").Error
+		_ = root.Close()
+	})
+	if err := auth.PrepareSessionSchema(ctx, db); err != nil {
+		t.Fatalf("PrepareSessionSchema: %v", err)
+	}
+	if err := database.AutoMigrate(ctx, db, &user.User{}, &role.Role{}, &role.UserRole{}, &auth.Session{}, &access.Version{}); err != nil {
 		t.Fatalf("AutoMigrate: %v", err)
 	}
-	if err := role.EnsureSchema(ctx, connection.GORM); err != nil {
+	if err := role.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("Ensure role schema: %v", err)
 	}
-	if err := auth.EnsureSchema(ctx, connection.GORM); err != nil {
+	if err := auth.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
-	roleRepository := role.NewRepository(connection.GORM)
-	if err := role.NewService(roleRepository).EnsureSystemRoles(ctx); err != nil {
+	if err := access.EnsureSchema(ctx, db); err != nil {
+		t.Fatalf("Ensure access schema: %v", err)
+	}
+	roleRepository := role.NewRepository(db)
+	if err := role.NewService(roleRepository, nil).EnsureSystemRoles(ctx); err != nil {
 		t.Fatalf("EnsureSystemRoles: %v", err)
 	}
-	return connection.GORM, ctx, roleRepository
+	return db, ctx, roleRepository
 }
 
 func newCreateInput(prefix string, roleID int64) user.CreateInput {

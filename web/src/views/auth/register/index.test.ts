@@ -3,19 +3,23 @@ import ElementPlus from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { register } from '../../../api/auth'
+import { getAuthPolicy, register } from '../../../api/auth'
+import { appI18n } from '../../../i18n'
 import { pinia } from '../../../store'
 import { useAuthStore } from '../../../store/auth'
 import RegisterPage from './index.vue'
 
-vi.mock('../../../api/auth', () => ({ register: vi.fn() }))
+vi.mock('../../../api/auth', () => ({ getAuthPolicy: vi.fn(), register: vi.fn() }))
 
 const registerMock = vi.mocked(register)
+const getAuthPolicyMock = vi.mocked(getAuthPolicy)
 
 describe('Register page', () => {
   beforeEach(() => {
     useAuthStore(pinia).$reset()
     registerMock.mockReset()
+    getAuthPolicyMock.mockReset()
+    getAuthPolicyMock.mockResolvedValue({ code: 'admin', name: 'Admin', allowRegister: 1 })
   })
 
   it('requires all fields and exact password confirmation', async () => {
@@ -57,6 +61,22 @@ describe('Register page', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="register-error"]').text()).toContain('用户名已存在')
   })
+
+  it('redirects to Login when registration is disabled', async () => {
+    getAuthPolicyMock.mockResolvedValue({ code: 'admin', name: 'Admin', allowRegister: 0 })
+    const { wrapper, router } = await mountRegister()
+
+    expect(router.currentRoute.value.path).toBe('/login')
+    expect(wrapper.find('[data-testid="register-submit"]').exists()).toBe(false)
+  })
+
+  it('shows an explicit policy failure before the form can be used', async () => {
+    getAuthPolicyMock.mockRejectedValue(new Error('认证策略不可用'))
+    const { wrapper } = await mountRegister()
+
+    expect(wrapper.get('[data-testid="register-error"]').text()).toContain('认证策略不可用')
+    expect(wrapper.find('[data-testid="register-submit"]').exists()).toBe(false)
+  })
 })
 
 async function mountRegister() {
@@ -69,7 +89,8 @@ async function mountRegister() {
   })
   await router.push('/register')
   await router.isReady()
-  const wrapper = mount(RegisterPage, { global: { plugins: [ElementPlus, pinia, router] } })
+  const wrapper = mount(RegisterPage, { global: { plugins: [ElementPlus, pinia, router, appI18n] } })
+  await flushPromises()
   return { wrapper, router }
 }
 

@@ -5,16 +5,14 @@ import (
 	"net/http"
 	"time"
 
+	"admin/server/internal/module/authclient"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
 	"admin/server/internal/shared/validate"
 	"github.com/gin-gonic/gin"
 )
 
-const (
-	refreshCookieName = "admin_refresh"
-	refreshCookiePath = "/api/v1/auth"
-)
+const refreshCookiePath = "/api/v1/auth"
 
 type Handler struct {
 	service      authenticationService
@@ -27,6 +25,11 @@ func NewHandler(service authenticationService, cookieSecure bool) *Handler {
 }
 
 func (h *Handler) Register(context *gin.Context) {
+	client, ok := authclient.FromContext(context)
+	if !ok {
+		response.Fail(context, apperror.InvalidRequest(fmt.Errorf("authentication client metadata is missing")))
+		return
+	}
 	var request RegisterRequest
 	if err := validate.BindJSON(context, &request); err != nil {
 		response.Fail(context, err)
@@ -37,6 +40,7 @@ func (h *Handler) Register(context *gin.Context) {
 		Email:           request.Email,
 		Password:        request.Password,
 		ConfirmPassword: request.ConfirmPassword,
+		Client:          client,
 	})
 	if err != nil {
 		response.Fail(context, err)
@@ -50,22 +54,26 @@ func (h *Handler) Register(context *gin.Context) {
 }
 
 func (h *Handler) Login(context *gin.Context) {
+	client, ok := authclient.FromContext(context)
+	if !ok {
+		response.Fail(context, apperror.InvalidRequest(fmt.Errorf("authentication client metadata is missing")))
+		return
+	}
 	var request LoginRequest
 	if err := validate.BindJSON(context, &request); err != nil {
 		response.Fail(context, err)
 		return
 	}
 	credential, err := h.service.Login(context.Request.Context(), LoginInput{
-		Username:  request.Username,
-		Password:  request.Password,
-		ClientIP:  context.ClientIP(),
-		UserAgent: context.GetHeader("User-Agent"),
+		Username: request.Username,
+		Password: request.Password,
+		Client:   client,
 	})
 	if err != nil {
 		response.Fail(context, err)
 		return
 	}
-	if err := h.setRefreshCookie(context, credential); err != nil {
+	if err := h.setRefreshCookie(context, client.Platform, credential); err != nil {
 		response.Fail(context, err)
 		return
 	}
@@ -73,25 +81,29 @@ func (h *Handler) Login(context *gin.Context) {
 }
 
 func (h *Handler) Refresh(context *gin.Context) {
+	client, ok := authclient.FromContext(context)
+	if !ok {
+		response.Fail(context, apperror.InvalidRequest(fmt.Errorf("authentication client metadata is missing")))
+		return
+	}
 	if err := validate.RequireEmptyBody(context); err != nil {
 		response.Fail(context, err)
 		return
 	}
-	refreshToken, err := context.Cookie(refreshCookieName)
+	refreshToken, err := context.Cookie(refreshCookieName(client.Platform))
 	if err != nil {
 		response.Fail(context, apperror.Unauthorized(fmt.Errorf("Refresh Cookie is required: %w", err)))
 		return
 	}
 	credential, err := h.service.Refresh(context.Request.Context(), RefreshInput{
 		RefreshToken: refreshToken,
-		ClientIP:     context.ClientIP(),
-		UserAgent:    context.GetHeader("User-Agent"),
+		Client:       client,
 	})
 	if err != nil {
 		response.Fail(context, err)
 		return
 	}
-	if err := h.setRefreshCookie(context, credential); err != nil {
+	if err := h.setRefreshCookie(context, client.Platform, credential); err != nil {
 		response.Fail(context, err)
 		return
 	}
@@ -99,6 +111,11 @@ func (h *Handler) Refresh(context *gin.Context) {
 }
 
 func (h *Handler) Logout(context *gin.Context) {
+	client, ok := authclient.FromContext(context)
+	if !ok {
+		response.Fail(context, apperror.InvalidRequest(fmt.Errorf("authentication client metadata is missing")))
+		return
+	}
 	if err := validate.RequireEmptyBody(context); err != nil {
 		response.Fail(context, err)
 		return
@@ -108,8 +125,8 @@ func (h *Handler) Logout(context *gin.Context) {
 		response.Fail(context, apperror.Unauthorized(fmt.Errorf("authentication identity is missing")))
 		return
 	}
-	err := h.service.Logout(context.Request.Context(), identity)
-	h.expireRefreshCookie(context)
+	err := h.service.Logout(context.Request.Context(), identity, client)
+	h.expireRefreshCookie(context, client.Platform)
 	if err != nil {
 		response.Fail(context, err)
 		return
@@ -135,13 +152,13 @@ func (h *Handler) Me(context *gin.Context) {
 	})
 }
 
-func (h *Handler) setRefreshCookie(context *gin.Context, credential Credential) error {
+func (h *Handler) setRefreshCookie(context *gin.Context, platform string, credential Credential) error {
 	maxAge := int(credential.RefreshExpiresAt.Sub(h.now()).Seconds())
 	if maxAge <= 0 {
 		return apperror.Internal(fmt.Errorf("Refresh Cookie expiry must be in the future"))
 	}
 	http.SetCookie(context.Writer, &http.Cookie{
-		Name:     refreshCookieName,
+		Name:     refreshCookieName(platform),
 		Value:    credential.RefreshToken,
 		Path:     refreshCookiePath,
 		Expires:  credential.RefreshExpiresAt.UTC(),
@@ -153,9 +170,9 @@ func (h *Handler) setRefreshCookie(context *gin.Context, credential Credential) 
 	return nil
 }
 
-func (h *Handler) expireRefreshCookie(context *gin.Context) {
+func (h *Handler) expireRefreshCookie(context *gin.Context, platform string) {
 	http.SetCookie(context.Writer, &http.Cookie{
-		Name:     refreshCookieName,
+		Name:     refreshCookieName(platform),
 		Path:     refreshCookiePath,
 		Expires:  time.Unix(1, 0).UTC(),
 		MaxAge:   -1,
@@ -163,6 +180,10 @@ func (h *Handler) expireRefreshCookie(context *gin.Context) {
 		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+func refreshCookieName(platform string) string {
+	return "admin_refresh_" + platform
 }
 
 func writeCredential(context *gin.Context, credential Credential) {

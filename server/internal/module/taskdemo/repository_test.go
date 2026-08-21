@@ -19,6 +19,11 @@ func TestRepositoryPersistsAndUpdatesTask(t *testing.T) {
 	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
 		t.Fatalf("load server .env: %v", err)
 	}
+	if _, exists := os.LookupEnv("TRUSTED_PROXIES"); !exists {
+		if err := os.Setenv("TRUSTED_PROXIES", "none"); err != nil {
+			t.Fatalf("set test trusted proxy mode: %v", err)
+		}
+	}
 	settings, err := config.LoadAPI(os.LookupEnv)
 	if err != nil {
 		t.Fatalf("load API config: %v", err)

@@ -1,23 +1,24 @@
 package auth
 
+import "admin/server/internal/module/authclient"
+
 type RegisterInput struct {
 	Username        string
 	Email           string
 	Password        string
 	ConfirmPassword string
+	Client          authclient.Client
 }
 
 type LoginInput struct {
-	Username  string
-	Password  string
-	ClientIP  string
-	UserAgent string
+	Username string
+	Password string
+	Client   authclient.Client
 }
 
 type RefreshInput struct {
 	RefreshToken string
-	ClientIP     string
-	UserAgent    string
+	Client       authclient.Client
 }
 
 type RegisterRequest struct {

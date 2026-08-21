@@ -149,6 +149,27 @@ func builtinMenuDefinitions() []builtinMenuDefinition {
 			code: PermissionUserRoles, menuType: TypeAction, parentCode: PermissionUserList,
 			i18nKey: "permission.userRoles", sortOrder: 40,
 		},
+		{
+			code: PermissionAuthPlatformList, menuType: TypePage, parentCode: BuiltinSystemCode,
+			i18nKey: "navigation.systemAuthPlatforms", path: builtinString("/system/auth-platforms"),
+			viewKey: builtinString("system-auth-platforms"), icon: builtinString("Key"), sortOrder: 40,
+		},
+		{
+			code: PermissionAuthPlatformCreate, menuType: TypeAction, parentCode: PermissionAuthPlatformList,
+			i18nKey: "permission.authPlatformCreate", sortOrder: 10,
+		},
+		{
+			code: PermissionAuthPlatformUpdate, menuType: TypeAction, parentCode: PermissionAuthPlatformList,
+			i18nKey: "permission.authPlatformUpdate", sortOrder: 20,
+		},
+		{
+			code: PermissionAuthPlatformStatus, menuType: TypeAction, parentCode: PermissionAuthPlatformList,
+			i18nKey: "permission.authPlatformStatus", sortOrder: 30,
+		},
+		{
+			code: PermissionAuthPlatformDelete, menuType: TypeAction, parentCode: PermissionAuthPlatformList,
+			i18nKey: "permission.authPlatformDelete", sortOrder: 40,
+		},
 	}
 }
 

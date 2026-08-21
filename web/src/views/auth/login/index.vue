@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { Lock, User } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import { getCurrentUser, login } from '../../../api/auth'
+import { getAuthPolicy, getCurrentUser, login } from '../../../api/auth'
+import { YesNo } from '../../../enums/yes-no'
 import { useAuthStore } from '../../../store/auth'
 import { ApiError, ProtocolError } from '../../../types/http'
 
@@ -22,11 +23,24 @@ const formReference = ref<FormInstance>()
 const form = reactive<LoginForm>({ username: '', password: '' })
 const pending = ref(false)
 const submitError = ref('')
+const policyAllowRegister = ref(false)
+const policyError = ref('')
 const bootstrapError = computed(() => auth.status === 'error' ? auth.errorMessage : '')
 const rules: FormRules<LoginForm> = {
   username: [{ required: true, message: t('auth.login.usernameRequired'), trigger: 'blur' }],
   password: [{ required: true, message: t('auth.login.passwordRequired'), trigger: 'blur' }],
 }
+
+onMounted(async () => {
+  try {
+    const policy = await getAuthPolicy()
+    policyAllowRegister.value = policy.allowRegister === YesNo.Yes
+  } catch (error: unknown) {
+    policyError.value = error instanceof Error && error.message !== ''
+      ? error.message
+      : t('auth.login.bootstrapFailed')
+  }
+})
 
 async function submit(): Promise<void> {
   if (pending.value || formReference.value === undefined) return
@@ -94,6 +108,7 @@ function safeRedirect(value: unknown): string {
           <p class="auth-caption">{{ t('auth.login.caption') }}</p>
 
           <p v-if="bootstrapError" class="auth-error" data-testid="bootstrap-error">{{ bootstrapError }}</p>
+          <p v-if="policyError" class="auth-error" data-testid="policy-error">{{ policyError }}</p>
           <p v-if="submitError" class="auth-error" data-testid="login-error">{{ submitError }}</p>
 
           <el-form
@@ -144,6 +159,9 @@ function safeRedirect(value: unknown): string {
           <p class="auth-access-note">
             <el-icon><Lock /></el-icon>{{ t('auth.login.authorizedOnly') }}
           </p>
+          <RouterLink v-if="policyAllowRegister" class="auth-register-link" to="/register">
+            {{ t('auth.login.register') }}
+          </RouterLink>
         </section>
       </div>
     </div>

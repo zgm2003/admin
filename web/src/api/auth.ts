@@ -2,9 +2,11 @@ import { ProtocolError } from '../types/http'
 import { refreshAccessCredential, request } from '../utils/request'
 import {
   parseCredential,
+  parseAuthPolicy,
   parseCurrentUser,
   parseRegisteredUser,
   type AccessCredential,
+  type AuthPolicy,
   type CurrentUser,
   type LoginInput,
   type RegisteredUser,
@@ -35,4 +37,9 @@ export async function logout(): Promise<void> {
 export async function getCurrentUser(): Promise<CurrentUser> {
   const data = await request<unknown>({ method: 'GET', url: '/api/v1/auth/me' })
   return parseCurrentUser(data)
+}
+
+export async function getAuthPolicy(): Promise<AuthPolicy> {
+  const data = await request<unknown>({ method: 'GET', url: '/api/v1/auth/policy' })
+  return parseAuthPolicy(data)
 }

@@ -20,7 +20,7 @@ var (
 	errMenuFields      = errors.New("menu fields are invalid")
 )
 
-var menuCodePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?::[a-z][a-z0-9]*)*$`)
+var menuCodePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?::[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
 
 type menuIndex struct {
 	byID     map[int64]Menu

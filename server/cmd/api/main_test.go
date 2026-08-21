@@ -10,6 +10,8 @@ import (
 
 	"admin/server/internal/module/access"
 	"admin/server/internal/module/auth"
+	"admin/server/internal/module/authclient"
+	"admin/server/internal/module/authplatform"
 	"admin/server/internal/module/health"
 	"admin/server/internal/module/menu"
 	"admin/server/internal/module/role"
@@ -34,7 +36,7 @@ func (submitService) Create(context.Context, string) (taskdemo.Created, error) {
 
 type apiAccessService struct{}
 
-func (apiAccessService) Current(context.Context, int64) (access.Snapshot, error) {
+func (apiAccessService) Current(context.Context, auth.Identity) (access.Snapshot, error) {
 	return access.Snapshot{RoleCodes: []string{}, MenuTree: []access.MenuNode{}, PermissionCodes: []string{}}, nil
 }
 
@@ -42,6 +44,25 @@ type apiMenuService struct{}
 
 type apiRoleService struct{}
 type apiUserService struct{}
+type apiAuthPlatformService struct{}
+
+func (apiAuthPlatformService) CurrentPolicy(context.Context, string) (authplatform.Policy, error) {
+	return authplatform.Policy{}, nil
+}
+func (apiAuthPlatformService) List(context.Context, authplatform.ListQuery) (pagination.Result[authplatform.ListItem], error) {
+	return pagination.Result[authplatform.ListItem]{List: []authplatform.ListItem{}}, nil
+}
+func (apiAuthPlatformService) Deployment(context.Context) (authplatform.Deployment, error) {
+	return authplatform.Deployment{}, nil
+}
+func (apiAuthPlatformService) Create(context.Context, authplatform.CreateInput) (int64, error) {
+	return 1, nil
+}
+func (apiAuthPlatformService) Update(context.Context, int64, authplatform.UpdateInput) error {
+	return nil
+}
+func (apiAuthPlatformService) UpdateStatus(context.Context, int64, yesno.Value) error { return nil }
+func (apiAuthPlatformService) Delete(context.Context, int64) error                    { return nil }
 
 func (apiUserService) List(context.Context, user.ListQuery) (pagination.Result[user.ListItem], error) {
 	return pagination.Result[user.ListItem]{List: []user.ListItem{}}, nil
@@ -110,11 +131,11 @@ func (apiAuthService) Refresh(context.Context, auth.RefreshInput) (auth.Credenti
 	return auth.Credential{}, nil
 }
 
-func (apiAuthService) Authenticate(context.Context, string) (auth.Identity, error) {
+func (apiAuthService) Authenticate(context.Context, string, authclient.Client) (auth.Identity, error) {
 	return auth.Identity{}, nil
 }
 
-func (apiAuthService) Logout(context.Context, auth.Identity) error {
+func (apiAuthService) Logout(context.Context, auth.Identity, authclient.Client) error {
 	return nil
 }
 
@@ -131,6 +152,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		Health:       health.NewHandler(readyService{}),
 		Task:         taskdemo.NewHandler(submitService{}),
 		Auth:         auth.NewHandler(apiAuthService{}, false),
+		AuthPlatform: authplatform.NewHandler(apiAuthPlatformService{}),
 		Access:       access.NewHandler(apiAccessService{}),
 		Menu:         menu.NewHandler(apiMenuService{}),
 		Role:         role.NewHandler(apiRoleService{}),
@@ -143,35 +165,42 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 	})
 
 	want := map[string]int{
-		"GET /health":                       1,
-		"GET /ready":                        1,
-		"POST /api/v1/example-tasks":        1,
-		"POST /api/v1/auth/register":        1,
-		"POST /api/v1/auth/login":           1,
-		"POST /api/v1/auth/refresh":         1,
-		"POST /api/v1/auth/logout":          1,
-		"GET /api/v1/auth/me":               1,
-		"GET /api/v1/access":                1,
-		"GET /api/v1/menus":                 1,
-		"POST /api/v1/menus":                1,
-		"PUT /api/v1/menus/:id":             1,
-		"PATCH /api/v1/menus/:id/status":    1,
-		"DELETE /api/v1/menus/:id":          1,
-		"GET /api/v1/roles":                 1,
-		"POST /api/v1/roles":                1,
-		"PUT /api/v1/roles/:id":             1,
-		"PATCH /api/v1/roles/:id/status":    1,
-		"PATCH /api/v1/roles/:id/default":   1,
-		"DELETE /api/v1/roles/:id":          1,
-		"GET /api/v1/roles/:id/permissions": 1,
-		"PUT /api/v1/roles/:id/permissions": 1,
-		"GET /api/v1/users":                 1,
-		"GET /api/v1/users/role-options":    1,
-		"PUT /api/v1/users/:id":             1,
-		"PATCH /api/v1/users/:id/status":    1,
-		"DELETE /api/v1/users/:id":          1,
-		"GET /api/v1/users/:id/roles":       1,
-		"PUT /api/v1/users/:id/roles":       1,
+		"GET /health":                             1,
+		"GET /ready":                              1,
+		"POST /api/v1/example-tasks":              1,
+		"GET /api/v1/auth/policy":                 1,
+		"POST /api/v1/auth/register":              1,
+		"POST /api/v1/auth/login":                 1,
+		"POST /api/v1/auth/refresh":               1,
+		"POST /api/v1/auth/logout":                1,
+		"GET /api/v1/auth/me":                     1,
+		"GET /api/v1/auth-platforms":              1,
+		"GET /api/v1/auth-platforms/deployment":   1,
+		"POST /api/v1/auth-platforms":             1,
+		"PUT /api/v1/auth-platforms/:id":          1,
+		"PATCH /api/v1/auth-platforms/:id/status": 1,
+		"DELETE /api/v1/auth-platforms/:id":       1,
+		"GET /api/v1/access":                      1,
+		"GET /api/v1/menus":                       1,
+		"POST /api/v1/menus":                      1,
+		"PUT /api/v1/menus/:id":                   1,
+		"PATCH /api/v1/menus/:id/status":          1,
+		"DELETE /api/v1/menus/:id":                1,
+		"GET /api/v1/roles":                       1,
+		"POST /api/v1/roles":                      1,
+		"PUT /api/v1/roles/:id":                   1,
+		"PATCH /api/v1/roles/:id/status":          1,
+		"PATCH /api/v1/roles/:id/default":         1,
+		"DELETE /api/v1/roles/:id":                1,
+		"GET /api/v1/roles/:id/permissions":       1,
+		"PUT /api/v1/roles/:id/permissions":       1,
+		"GET /api/v1/users":                       1,
+		"GET /api/v1/users/role-options":          1,
+		"PUT /api/v1/users/:id":                   1,
+		"PATCH /api/v1/users/:id/status":          1,
+		"DELETE /api/v1/users/:id":                1,
+		"GET /api/v1/users/:id/roles":             1,
+		"PUT /api/v1/users/:id/roles":             1,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path
@@ -204,8 +233,16 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		recorder = httptest.NewRecorder()
 		request = httptest.NewRequest(protectedPath.method, protectedPath.path, nil)
 		router.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("%s %s without client headers status = %d body=%s", protectedPath.method, protectedPath.path, recorder.Code, recorder.Body)
+		}
+		recorder = httptest.NewRecorder()
+		request = httptest.NewRequest(protectedPath.method, protectedPath.path, nil)
+		request.Header[authclient.PlatformHeader] = []string{"admin"}
+		request.Header[authclient.DeviceIDHeader] = []string{"550e8400-e29b-41d4-a716-446655440000"}
+		router.ServeHTTP(recorder, request)
 		if recorder.Code != http.StatusUnauthorized {
-			t.Fatalf("%s %s status = %d body=%s", protectedPath.method, protectedPath.path, recorder.Code, recorder.Body)
+			t.Fatalf("%s %s without Bearer status = %d body=%s", protectedPath.method, protectedPath.path, recorder.Code, recorder.Body)
 		}
 	}
 }

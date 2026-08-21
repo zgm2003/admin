@@ -3,17 +3,18 @@ import ElementPlus from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getCurrentUser, login } from '../../../api/auth'
+import { getAuthPolicy, getCurrentUser, login } from '../../../api/auth'
 import { appI18n, setLocale } from '../../../i18n'
 import { pinia } from '../../../store'
 import { useAuthStore } from '../../../store/auth'
 import { ApiError } from '../../../types/http'
 import LoginPage from './index.vue'
 
-vi.mock('../../../api/auth', () => ({ login: vi.fn(), getCurrentUser: vi.fn() }))
+vi.mock('../../../api/auth', () => ({ getAuthPolicy: vi.fn(), login: vi.fn(), getCurrentUser: vi.fn() }))
 
 const loginMock = vi.mocked(login)
 const getCurrentUserMock = vi.mocked(getCurrentUser)
+const getAuthPolicyMock = vi.mocked(getAuthPolicy)
 
 describe('Login page', () => {
   beforeEach(() => {
@@ -22,6 +23,8 @@ describe('Login page', () => {
     useAuthStore(pinia).$reset()
     loginMock.mockReset()
     getCurrentUserMock.mockReset()
+    getAuthPolicyMock.mockReset()
+    getAuthPolicyMock.mockResolvedValue({ code: 'admin', name: 'Admin', allowRegister: 0 })
   })
 
   it('requires username and password', async () => {
@@ -31,10 +34,25 @@ describe('Login page', () => {
     expect(loginMock).not.toHaveBeenCalled()
   })
 
-  it('does not expose a registration entry', async () => {
+  it('hides the registration entry when policy disables registration', async () => {
     const { wrapper } = await mountLogin()
     expect(wrapper.find('a[href="/register"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('注册新账号')
+  })
+
+  it('shows a registration entry when policy enables registration', async () => {
+    getAuthPolicyMock.mockResolvedValue({ code: 'admin', name: 'Admin', allowRegister: 1 })
+    const { wrapper } = await mountLogin()
+
+    expect(wrapper.find('a[href="/register"]').exists()).toBe(true)
+  })
+
+  it('shows an explicit policy failure instead of treating registration as disabled', async () => {
+    getAuthPolicyMock.mockRejectedValue(new ApiError(10006, '服务暂未就绪', 503))
+    const { wrapper } = await mountLogin()
+
+    expect(wrapper.get('[data-testid="policy-error"]').text()).toContain('服务暂未就绪')
+    expect(wrapper.find('a[href="/register"]').exists()).toBe(false)
   })
 
   it('renders the product identity and the existing login form', async () => {
@@ -109,5 +127,6 @@ async function mountLogin(initialPath = '/login') {
   await router.push(initialPath)
   await router.isReady()
   const wrapper = mount(LoginPage, { global: { plugins: [ElementPlus, pinia, router, appI18n] } })
+  await flushPromises()
   return { wrapper, router }
 }

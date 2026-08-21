@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
+	"admin/server/internal/module/accessstate"
 	"admin/server/internal/module/menu"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -196,6 +198,114 @@ func (r *Repository) CountEffectiveUsers(ctx context.Context, roleID int64) (int
 		return 0, fmt.Errorf("count effective role users: %w", err)
 	}
 	return count, nil
+}
+
+func (r *Repository) FindEffectiveAccessVersionsByRole(ctx context.Context, roleID int64) ([]accessstate.Version, error) {
+	versions := make([]accessstate.Version, 0)
+	if err := r.db.WithContext(ctx).Raw(`
+		SELECT app_user.id AS user_id, COALESCE(access_version.version, 0) AS version
+		FROM sys_user_role AS user_role
+		JOIN sys_user AS app_user
+		  ON app_user.id = user_role.user_id
+		 AND app_user.deleted_at IS NULL
+		 AND app_user.is_enabled = ?
+		LEFT JOIN sys_access_version AS access_version
+		  ON access_version.user_id = app_user.id
+		WHERE user_role.role_id = ?
+		  AND user_role.deleted_at IS NULL
+		ORDER BY app_user.id ASC`, yesno.Yes, roleID).Scan(&versions).Error; err != nil {
+		return nil, fmt.Errorf("find effective role access versions: %w", err)
+	}
+	if err := validateAccessVersions(versions); err != nil {
+		return nil, fmt.Errorf("find effective role access versions: %w", err)
+	}
+	return versions, nil
+}
+
+func (r *Repository) LockEffectiveAccessVersionsByRole(ctx context.Context, roleID int64) ([]accessstate.Version, error) {
+	versions := make([]accessstate.Version, 0)
+	if err := r.db.WithContext(ctx).Raw(`
+		SELECT app_user.id AS user_id, access_version.version
+		FROM sys_user_role AS user_role
+		JOIN sys_user AS app_user
+		  ON app_user.id = user_role.user_id
+		 AND app_user.deleted_at IS NULL
+		 AND app_user.is_enabled = ?
+		JOIN sys_access_version AS access_version
+		  ON access_version.user_id = app_user.id
+		WHERE user_role.role_id = ?
+		  AND user_role.deleted_at IS NULL
+		ORDER BY app_user.id ASC
+		FOR UPDATE OF app_user, access_version`, yesno.Yes, roleID).Scan(&versions).Error; err != nil {
+		return nil, fmt.Errorf("lock effective role access versions: %w", err)
+	}
+	if err := validateAccessVersions(versions); err != nil {
+		return nil, fmt.Errorf("lock effective role access versions: %w", err)
+	}
+	return versions, nil
+}
+
+func (r *Repository) IncrementAccessVersions(ctx context.Context, userIDs []int64, now time.Time) (map[int64]int64, error) {
+	userIDs, err := normalizeAccessUserIDs(userIDs)
+	if err != nil {
+		return nil, err
+	}
+	if len(userIDs) == 0 {
+		return map[int64]int64{}, nil
+	}
+	advanced := make([]accessstate.Version, 0, len(userIDs))
+	if err := r.db.WithContext(ctx).Raw(`
+		UPDATE sys_access_version
+		SET version = version + 1, updated_at = ?
+		WHERE user_id IN ?
+		RETURNING user_id, version`, now.UTC(), userIDs).Scan(&advanced).Error; err != nil {
+		return nil, fmt.Errorf("increment role access versions: %w", err)
+	}
+	if err := validateAccessVersions(advanced); err != nil {
+		return nil, fmt.Errorf("increment role access versions: %w", err)
+	}
+	result := make(map[int64]int64, len(advanced))
+	for _, version := range advanced {
+		result[version.UserID] = version.Version
+	}
+	if len(result) != len(userIDs) {
+		return nil, fmt.Errorf("increment role access versions returned %d users, want %d", len(result), len(userIDs))
+	}
+	for _, userID := range userIDs {
+		if result[userID] < 2 {
+			return nil, fmt.Errorf("increment role access version for user %d is missing", userID)
+		}
+	}
+	return result, nil
+}
+
+func validateAccessVersions(versions []accessstate.Version) error {
+	previousUserID := int64(0)
+	for index, version := range versions {
+		if version.UserID < 1 || version.Version < 1 {
+			return fmt.Errorf("role access version at index %d is invalid", index)
+		}
+		if index > 0 && version.UserID <= previousUserID {
+			return fmt.Errorf("role access versions are not unique and sorted")
+		}
+		previousUserID = version.UserID
+	}
+	return nil
+}
+
+func normalizeAccessUserIDs(userIDs []int64) ([]int64, error) {
+	normalized := append([]int64(nil), userIDs...)
+	sort.Slice(normalized, func(left, right int) bool { return normalized[left] < normalized[right] })
+	result := normalized[:0]
+	for _, userID := range normalized {
+		if userID < 1 {
+			return nil, fmt.Errorf("role access user id is invalid")
+		}
+		if len(result) == 0 || result[len(result)-1] != userID {
+			result = append(result, userID)
+		}
+	}
+	return result, nil
 }
 
 func (r *Repository) SoftDeleteRoleMenus(ctx context.Context, roleID int64, deletedAt time.Time) error {

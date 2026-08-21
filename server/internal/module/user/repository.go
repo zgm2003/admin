@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"admin/server/internal/module/accessstate"
 	"admin/server/internal/module/role"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -57,6 +58,69 @@ func (r *Repository) Transaction(ctx context.Context, fn func(*Repository) error
 		return fmt.Errorf("user transaction: %w", err)
 	}
 	return nil
+}
+
+func (r *Repository) LockUserWriteTable(ctx context.Context) error {
+	if err := r.db.WithContext(ctx).Exec("LOCK TABLE sys_user IN ROW EXCLUSIVE MODE").Error; err != nil {
+		return fmt.Errorf("lock user write table: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) FindAccessVersion(ctx context.Context, userID int64) (accessstate.Version, error) {
+	var version accessstate.Version
+	result := r.db.WithContext(ctx).Raw(`
+		SELECT user_id, version
+		FROM sys_access_version
+		WHERE user_id = ?`, userID).Scan(&version)
+	if result.Error != nil {
+		return accessstate.Version{}, fmt.Errorf("find user access version: %w", result.Error)
+	}
+	if result.RowsAffected != 1 || version.UserID != userID || version.Version < 1 {
+		return accessstate.Version{}, fmt.Errorf("find user access version: %w", gorm.ErrRecordNotFound)
+	}
+	return version, nil
+}
+
+func (r *Repository) LockAccessVersion(ctx context.Context, userID int64) (int64, error) {
+	var version int64
+	result := r.db.WithContext(ctx).Raw(`
+		SELECT version
+		FROM sys_access_version
+		WHERE user_id = ?
+		FOR UPDATE`, userID).Scan(&version)
+	if result.Error != nil {
+		return 0, fmt.Errorf("lock user access version: %w", result.Error)
+	}
+	if result.RowsAffected != 1 || version < 1 {
+		return 0, fmt.Errorf("lock user access version: %w", gorm.ErrRecordNotFound)
+	}
+	return version, nil
+}
+
+func (r *Repository) IncrementAccessVersion(ctx context.Context, userID int64, now time.Time) (int64, error) {
+	var version int64
+	result := r.db.WithContext(ctx).Raw(`
+		UPDATE sys_access_version
+		SET version = version + 1, updated_at = ?
+		WHERE user_id = ?
+		RETURNING version`, now.UTC(), userID).Scan(&version)
+	if result.Error != nil {
+		return 0, fmt.Errorf("increment user access version: %w", result.Error)
+	}
+	if result.RowsAffected != 1 || version < 2 {
+		return 0, fmt.Errorf("increment user access version: %w", gorm.ErrRecordNotFound)
+	}
+	return version, nil
+}
+
+func (r *Repository) FindActiveSessionPlatforms(ctx context.Context, userID int64) ([]string, error) {
+	platforms := make([]string, 0)
+	if err := r.db.WithContext(ctx).Table("sys_user_session").Distinct("platform").
+		Where("user_id = ? AND revoked_at IS NULL", userID).Order("platform").Pluck("platform", &platforms).Error; err != nil {
+		return nil, fmt.Errorf("find active user session platforms: %w", err)
+	}
+	return platforms, nil
 }
 
 func (r *Repository) LockSuperAdminRole(ctx context.Context) (role.Role, error) {
@@ -127,6 +191,14 @@ func (r *Repository) FindUser(ctx context.Context, userID int64) (User, error) {
 	var found User
 	if err := r.db.WithContext(ctx).Where("id = ?", userID).Take(&found).Error; err != nil {
 		return User{}, fmt.Errorf("find user %d: %w", userID, err)
+	}
+	return found, nil
+}
+
+func (r *Repository) FindUserUnscoped(ctx context.Context, userID int64) (User, error) {
+	var found User
+	if err := r.db.WithContext(ctx).Unscoped().Where("id = ?", userID).Take(&found).Error; err != nil {
+		return User{}, fmt.Errorf("find user unscoped: %w", err)
 	}
 	return found, nil
 }
@@ -253,6 +325,9 @@ func (r *Repository) SoftDeleteUser(ctx context.Context, userID int64, deletedAt
 func (r *Repository) CreateWithRole(ctx context.Context, input CreateInput) (User, error) {
 	var created User
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`LOCK TABLE sys_user IN ROW EXCLUSIVE MODE`).Error; err != nil {
+			return fmt.Errorf("lock user writes: %w", err)
+		}
 		var effectiveRole role.Role
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ? AND is_enabled = ?", input.RoleID, yesno.Yes).
@@ -260,18 +335,26 @@ func (r *Repository) CreateWithRole(ctx context.Context, input CreateInput) (Use
 			return fmt.Errorf("lock enabled role: %w", err)
 		}
 
+		now := time.Now().UTC().Truncate(time.Microsecond)
 		created = User{
 			Username:     input.Username,
 			Email:        input.Email,
 			PasswordHash: input.PasswordHash,
 			IsEnabled:    yesno.Yes,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		}
 		if err := tx.Create(&created).Error; err != nil {
 			return mapCreateError(err)
 		}
-		userRole := role.UserRole{UserID: created.ID, RoleID: effectiveRole.ID}
+		userRole := role.UserRole{UserID: created.ID, RoleID: effectiveRole.ID, CreatedAt: now, UpdatedAt: now}
 		if err := tx.Create(&userRole).Error; err != nil {
 			return fmt.Errorf("create user role relationship: %w", err)
+		}
+		if err := tx.Exec(`
+			INSERT INTO sys_access_version (user_id, version, created_at, updated_at)
+			VALUES (?, 1, ?, ?)`, created.ID, now, now).Error; err != nil {
+			return fmt.Errorf("create user access version: %w", err)
 		}
 		return nil
 	})

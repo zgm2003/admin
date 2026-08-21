@@ -2,12 +2,15 @@ package access
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
 
-	"admin/server/internal/module/menu"
+	"admin/server/internal/module/accessstate"
+	"admin/server/internal/module/auth"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
@@ -15,66 +18,145 @@ import (
 
 const CodeAccessSnapshotInvalid = 14000
 
-type store interface {
-	FindSource(context.Context, int64) (Source, error)
-	HasPermission(context.Context, int64, string) (bool, error)
+type sourceStore interface {
+	FindSourceWithVersion(context.Context, int64) (Source, error)
 }
 
 type MenuNode struct {
-	Code     string
-	MenuType menu.Type
-	Path     *string
-	ViewKey  *string
-	TitleKey string
-	Icon     *string
-	Children []MenuNode
+	Code     string     `json:"code"`
+	MenuType MenuType   `json:"menuType"`
+	Path     *string    `json:"path"`
+	ViewKey  *string    `json:"viewKey"`
+	TitleKey string     `json:"titleKey"`
+	Icon     *string    `json:"icon"`
+	Children []MenuNode `json:"children"`
 }
 
 type Snapshot struct {
 	RoleCodes       []string
 	MenuTree        []MenuNode
 	PermissionCodes []string
+	Version         int64
+	CacheResult     string
 }
 
 type Service struct {
-	store store
+	store  sourceStore
+	states *accessstate.Store
+	cache  *SnapshotCache
+	logger *slog.Logger
 }
 
-func NewService(store store) *Service {
-	return &Service{store: store}
+func NewService(store sourceStore, states *accessstate.Store, cache *SnapshotCache, logger *slog.Logger) *Service {
+	return &Service{store: store, states: states, cache: cache, logger: logger}
 }
 
-func (s *Service) Current(ctx context.Context, userID int64) (Snapshot, error) {
-	if userID <= 0 {
-		return Snapshot{}, apperror.InvalidRequest(fmt.Errorf("access snapshot requires a positive user ID"))
+func (s *Service) Current(ctx context.Context, identity auth.Identity) (Snapshot, error) {
+	if err := validateAccessIdentity(identity); err != nil {
+		return Snapshot{}, apperror.InvalidRequest(err)
 	}
-	source, err := s.store.FindSource(ctx, userID)
-	if err != nil {
-		return Snapshot{}, apperror.DependencyUnavailable(err)
-	}
-	snapshot, err := buildSnapshot(source)
-	if err != nil {
-		return Snapshot{}, accessSnapshotInvalid(err)
-	}
-	return snapshot, nil
+	return s.loadSnapshot(ctx, identity)
 }
 
-func (s *Service) Allowed(ctx context.Context, userID int64, permissionCode string) (bool, error) {
-	if userID <= 0 {
-		return false, apperror.InvalidRequest(fmt.Errorf("permission check requires a positive user ID"))
+func (s *Service) Allowed(ctx context.Context, identity auth.Identity, permissionCode string) (bool, error) {
+	if err := validateAccessIdentity(identity); err != nil {
+		return false, apperror.InvalidRequest(err)
 	}
 	if strings.TrimSpace(permissionCode) == "" {
 		return false, apperror.InvalidRequest(fmt.Errorf("permission check requires a permission code"))
 	}
-	allowed, err := s.store.HasPermission(ctx, userID, permissionCode)
+	snapshot, err := s.loadSnapshot(ctx, identity)
 	if err != nil {
-		return false, apperror.DependencyUnavailable(err)
+		return false, err
 	}
+	permissions := make(map[string]struct{}, len(snapshot.PermissionCodes))
+	for _, code := range snapshot.PermissionCodes {
+		permissions[code] = struct{}{}
+	}
+	_, allowed := permissions[permissionCode]
 	return allowed, nil
 }
 
+func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Snapshot, error) {
+	cacheResult := "miss"
+	state, found, stateErr := s.states.Read(ctx, identity.UserID)
+	if stateErr != nil {
+		cacheResult = "error"
+		s.logCacheError(ctx, "accessState", "error", stateErr)
+	} else if found {
+		if state.State == accessstate.StateInvalidating {
+			return Snapshot{}, accessUpdating(accessstate.ErrUpdating)
+		}
+		cached, cacheFound, cacheErr := s.cache.Read(ctx, identity.Platform, identity.PolicyVersion, identity.UserID, state.Version)
+		if cacheErr != nil {
+			cacheResult = "error"
+			s.logCacheError(ctx, "accessSnapshot", "error", cacheErr)
+		} else if cacheFound {
+			return snapshotFromCache(cached, "hit"), nil
+		}
+	}
+
+	for attempt := 0; attempt < 3; attempt++ {
+		source, err := s.store.FindSourceWithVersion(ctx, identity.UserID)
+		if err != nil {
+			return Snapshot{}, apperror.DependencyUnavailable(err)
+		}
+		snapshot, err := buildSnapshot(source)
+		if err != nil {
+			return Snapshot{}, accessSnapshotInvalid(err)
+		}
+		snapshot.Version = source.Version
+		snapshot.CacheResult = cacheResult
+
+		current, currentFound, currentErr := s.states.Read(ctx, identity.UserID)
+		if currentErr != nil || !currentFound {
+			installed, _, installErr := s.states.InstallReadyIfMissing(ctx, accessstate.Version{UserID: identity.UserID, Version: source.Version})
+			if installErr != nil {
+				s.logCacheError(ctx, "accessState", "error", errors.Join(currentErr, installErr))
+				snapshot.CacheResult = "error"
+				return snapshot, nil
+			}
+			current = installed
+		}
+		if current.State == accessstate.StateInvalidating {
+			return Snapshot{}, accessUpdating(accessstate.ErrUpdating)
+		}
+		if current.Version != source.Version {
+			cacheResult = "miss"
+			continue
+		}
+
+		published, publishErr := s.cache.PublishIfCurrent(ctx, newCachedSnapshot(identity.UserID, identity.Platform, identity.PolicyVersion, snapshot), identity.AccessCacheTTL)
+		if publishErr != nil {
+			s.logCacheError(ctx, "accessSnapshot", "error", publishErr)
+			snapshot.CacheResult = "error"
+			return snapshot, nil
+		}
+		if !published {
+			cacheResult = "miss"
+			continue
+		}
+		return snapshot, nil
+	}
+	return Snapshot{}, accessUpdating(fmt.Errorf("access version kept changing during snapshot rebuild"))
+}
+
+func validateAccessIdentity(identity auth.Identity) error {
+	if identity.UserID < 1 || identity.SessionID < 1 || identity.Platform == "" || identity.PolicyVersion < 1 || identity.AccessCacheTTL <= 0 {
+		return fmt.Errorf("access snapshot requires a complete authentication identity")
+	}
+	return nil
+}
+
+func (s *Service) logCacheError(ctx context.Context, kind, result string, err error) {
+	s.logger.ErrorContext(ctx, "access cache operation failed", "cacheKind", kind, "cacheResult", result, "error", err)
+}
+
 func buildSnapshot(source Source) (Snapshot, error) {
-	menusByID := make(map[int64]menu.Menu, len(source.Menus))
+	if source.Version < 1 {
+		return Snapshot{}, fmt.Errorf("access source version is invalid")
+	}
+	menusByID := make(map[int64]SourceMenu, len(source.Menus))
 	for _, item := range source.Menus {
 		if item.ID <= 0 {
 			return Snapshot{}, fmt.Errorf("menu has invalid ID %d", item.ID)
@@ -82,7 +164,7 @@ func buildSnapshot(source Source) (Snapshot, error) {
 		if _, exists := menusByID[item.ID]; exists {
 			return Snapshot{}, fmt.Errorf("menu ID %d is duplicated", item.ID)
 		}
-		if item.MenuType != menu.TypeDirectory && item.MenuType != menu.TypePage && item.MenuType != menu.TypeAction {
+		if item.MenuType != MenuDirectory && item.MenuType != MenuPage && item.MenuType != MenuAction {
 			return Snapshot{}, fmt.Errorf("menu %d has invalid type %q", item.ID, item.MenuType)
 		}
 		if item.IsEnabled != yesno.Yes {
@@ -94,7 +176,7 @@ func buildSnapshot(source Source) (Snapshot, error) {
 	startIDs := make([]int64, 0, len(source.GrantedMenuIDs))
 	if source.SuperAdmin {
 		for _, item := range source.Menus {
-			if item.MenuType == menu.TypePage || item.MenuType == menu.TypeAction {
+			if item.MenuType == MenuPage || item.MenuType == MenuAction {
 				startIDs = append(startIDs, item.ID)
 			}
 		}
@@ -102,13 +184,13 @@ func buildSnapshot(source Source) (Snapshot, error) {
 		startIDs = append(startIDs, source.GrantedMenuIDs...)
 	}
 
-	selected := make(map[int64]menu.Menu)
+	selected := make(map[int64]SourceMenu)
 	for _, startID := range startIDs {
 		start, exists := menusByID[startID]
 		if !exists {
 			return Snapshot{}, fmt.Errorf("direct grant menu %d is missing", startID)
 		}
-		if start.MenuType == menu.TypeDirectory {
+		if start.MenuType == MenuDirectory {
 			return Snapshot{}, fmt.Errorf("directory menu %d was directly granted", startID)
 		}
 
@@ -134,25 +216,27 @@ func buildSnapshot(source Source) (Snapshot, error) {
 	if err := validateSelectedMenus(selected); err != nil {
 		return Snapshot{}, err
 	}
-
-	roleCodes := append(make([]string, 0, len(source.RoleCodes)), source.RoleCodes...)
-	sort.Strings(roleCodes)
+	roleCodes, err := sortUniqueStrings(source.RoleCodes)
+	if err != nil {
+		return Snapshot{}, err
+	}
 	permissionCodes := make([]string, 0)
 	for _, item := range selected {
-		if item.MenuType == menu.TypePage || item.MenuType == menu.TypeAction {
+		if item.MenuType == MenuPage || item.MenuType == MenuAction {
 			permissionCodes = append(permissionCodes, item.Code)
 		}
 	}
-	sort.Strings(permissionCodes)
+	permissionCodes, err = sortUniqueStrings(permissionCodes)
+	if err != nil {
+		return Snapshot{}, err
+	}
 
 	return Snapshot{
-		RoleCodes:       roleCodes,
-		MenuTree:        buildMenuTree(selected),
-		PermissionCodes: permissionCodes,
+		RoleCodes: roleCodes, MenuTree: buildMenuTree(selected), PermissionCodes: permissionCodes, Version: source.Version,
 	}, nil
 }
 
-func validateSelectedMenus(selected map[int64]menu.Menu) error {
+func validateSelectedMenus(selected map[int64]SourceMenu) error {
 	codes := make(map[string]int64, len(selected))
 	paths := make(map[string]int64)
 	for id, item := range selected {
@@ -168,30 +252,22 @@ func validateSelectedMenus(selected map[int64]menu.Menu) error {
 		}
 
 		switch item.MenuType {
-		case menu.TypeDirectory:
+		case MenuDirectory:
 			if item.ViewKey != nil {
 				return fmt.Errorf("directory menu %d has a view key", id)
 			}
-		case menu.TypePage:
-			if item.Path == nil || strings.TrimSpace(*item.Path) == "" {
-				return fmt.Errorf("page menu %d has no path", id)
-			}
-			if item.ViewKey == nil || strings.TrimSpace(*item.ViewKey) == "" {
-				return fmt.Errorf("page menu %d has no view key", id)
+		case MenuPage:
+			if item.Path == nil || strings.TrimSpace(*item.Path) == "" || item.ViewKey == nil || strings.TrimSpace(*item.ViewKey) == "" {
+				return fmt.Errorf("page menu %d is incomplete", id)
 			}
 			if existingID, exists := paths[*item.Path]; exists {
 				return fmt.Errorf("page menus %d and %d share path %q", existingID, id, *item.Path)
 			}
 			paths[*item.Path] = id
-		case menu.TypeAction:
-			if item.Path != nil || item.ViewKey != nil {
-				return fmt.Errorf("action menu %d has a path or view key", id)
+		case MenuAction:
+			if item.Path != nil || item.ViewKey != nil || item.ParentID == nil {
+				return fmt.Errorf("action menu %d shape is invalid", id)
 			}
-			if item.ParentID == nil {
-				return fmt.Errorf("action menu %d has no parent page", id)
-			}
-		default:
-			return fmt.Errorf("menu %d has invalid type %q", id, item.MenuType)
 		}
 
 		if item.ParentID == nil {
@@ -202,28 +278,26 @@ func validateSelectedMenus(selected map[int64]menu.Menu) error {
 			return fmt.Errorf("selected menu %d has missing parent %d", id, *item.ParentID)
 		}
 		switch parent.MenuType {
-		case menu.TypeDirectory:
-			if item.MenuType != menu.TypeDirectory && item.MenuType != menu.TypePage {
+		case MenuDirectory:
+			if item.MenuType != MenuDirectory && item.MenuType != MenuPage {
 				return fmt.Errorf("directory menu %d has invalid child type %q", parent.ID, item.MenuType)
 			}
-		case menu.TypePage:
-			if item.MenuType != menu.TypeAction {
+		case MenuPage:
+			if item.MenuType != MenuAction {
 				return fmt.Errorf("page menu %d has invalid child type %q", parent.ID, item.MenuType)
 			}
-		case menu.TypeAction:
+		case MenuAction:
 			return fmt.Errorf("action menu %d has child %d", parent.ID, item.ID)
-		default:
-			return fmt.Errorf("parent menu %d has invalid type %q", parent.ID, parent.MenuType)
 		}
 	}
 	return nil
 }
 
-func buildMenuTree(selected map[int64]menu.Menu) []MenuNode {
-	childrenByParent := make(map[int64][]menu.Menu)
-	roots := make([]menu.Menu, 0)
+func buildMenuTree(selected map[int64]SourceMenu) []MenuNode {
+	childrenByParent := make(map[int64][]SourceMenu)
+	roots := make([]SourceMenu, 0)
 	for _, item := range selected {
-		if item.MenuType == menu.TypeAction {
+		if item.MenuType == MenuAction {
 			continue
 		}
 		if item.ParentID == nil {
@@ -236,7 +310,6 @@ func buildMenuTree(selected map[int64]menu.Menu) []MenuNode {
 	for parentID := range childrenByParent {
 		sortMenus(childrenByParent[parentID])
 	}
-
 	result := make([]MenuNode, 0, len(roots))
 	for _, root := range roots {
 		result = append(result, buildMenuNode(root, childrenByParent))
@@ -244,36 +317,32 @@ func buildMenuTree(selected map[int64]menu.Menu) []MenuNode {
 	return result
 }
 
-func buildMenuNode(item menu.Menu, childrenByParent map[int64][]menu.Menu) MenuNode {
+func buildMenuNode(item SourceMenu, childrenByParent map[int64][]SourceMenu) MenuNode {
 	children := make([]MenuNode, 0, len(childrenByParent[item.ID]))
 	for _, child := range childrenByParent[item.ID] {
 		children = append(children, buildMenuNode(child, childrenByParent))
 	}
 	return MenuNode{
-		Code:     item.Code,
-		MenuType: item.MenuType,
-		Path:     item.Path,
-		ViewKey:  item.ViewKey,
-		TitleKey: item.I18nKey,
-		Icon:     item.Icon,
-		Children: children,
+		Code: item.Code, MenuType: item.MenuType, Path: item.Path, ViewKey: item.ViewKey,
+		TitleKey: item.I18nKey, Icon: item.Icon, Children: children,
 	}
 }
 
-func sortMenus(menus []menu.Menu) {
+func sortMenus(menus []SourceMenu) {
 	sort.Slice(menus, func(left, right int) bool {
 		if menus[left].SortOrder != menus[right].SortOrder {
 			return menus[left].SortOrder < menus[right].SortOrder
 		}
-		return menus[left].Code < menus[right].Code
+		if menus[left].Code != menus[right].Code {
+			return menus[left].Code < menus[right].Code
+		}
+		return menus[left].ID < menus[right].ID
 	})
 }
 
 func accessSnapshotInvalid(cause error) *apperror.Error {
 	return &apperror.Error{
-		HTTPStatus: http.StatusInternalServerError,
-		Code:       CodeAccessSnapshotInvalid,
-		MessageKey: i18n.KeyAccessSnapshotInvalid,
-		Cause:      cause,
+		HTTPStatus: http.StatusInternalServerError, Code: CodeAccessSnapshotInvalid,
+		MessageKey: i18n.KeyAccessSnapshotInvalid, Cause: cause,
 	}
 }

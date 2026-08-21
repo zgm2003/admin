@@ -18,132 +18,156 @@ const (
 )
 
 const (
-	KeyInternal                    MessageKey = "error.internal"
-	KeyInvalidRequest              MessageKey = "error.invalidRequest"
-	KeyUnauthorized                MessageKey = "error.unauthorized"
-	KeyForbidden                   MessageKey = "error.forbidden"
-	KeyNotFound                    MessageKey = "error.notFound"
-	KeyConflict                    MessageKey = "error.conflict"
-	KeyDependencyUnavailable       MessageKey = "error.dependencyUnavailable"
-	KeyUsernameConflict            MessageKey = "auth.usernameConflict"
-	KeyEmailConflict               MessageKey = "auth.emailConflict"
-	KeySuperAdminExists            MessageKey = "auth.superAdminExists"
-	KeyPermissionDenied            MessageKey = "access.permissionDenied"
-	KeyAccessSnapshotInvalid       MessageKey = "access.snapshotInvalid"
-	KeyMenuTreeInvalid             MessageKey = "menu.treeInvalid"
-	KeyMenuNotFound                MessageKey = "menu.notFound"
-	KeyMenuCodeConflict            MessageKey = "menu.codeConflict"
-	KeyMenuPathConflict            MessageKey = "menu.pathConflict"
-	KeyMenuInvalidParent           MessageKey = "menu.invalidParent"
-	KeyMenuCycleDetected           MessageKey = "menu.cycleDetected"
-	KeyMenuBuiltinProtected        MessageKey = "menu.builtinProtected"
-	KeyMenuParentDisabled          MessageKey = "menu.parentDisabled"
-	KeyMenuStructureConflict       MessageKey = "menu.structureConflict"
-	KeyMenuInvalidFields           MessageKey = "menu.invalidFields"
-	KeyRoleNotFound                MessageKey = "role.notFound"
-	KeyRoleCodeConflict            MessageKey = "role.codeConflict"
-	KeyRoleNameConflict            MessageKey = "role.nameConflict"
-	KeyRoleSystemProtected         MessageKey = "role.systemProtected"
-	KeyRoleDefaultProtected        MessageKey = "role.defaultProtected"
-	KeyRoleUsersAttached           MessageKey = "role.usersAttached"
-	KeyRoleInvalidState            MessageKey = "role.invalidState"
-	KeyRoleInvalidPermission       MessageKey = "role.invalidPermission"
-	KeyRoleSuperAdminAuthorization MessageKey = "role.superAdminAuthorization"
-	KeyRoleDataInvalid             MessageKey = "role.dataInvalid"
-	KeyUserNotFound                MessageKey = "user.notFound"
-	KeyUserUsernameConflict        MessageKey = "user.usernameConflict"
-	KeyUserSelfOperation           MessageKey = "user.selfOperation"
-	KeyUserSuperAdminProtected     MessageKey = "user.superAdminProtected"
-	KeyUserLastSuperAdmin          MessageKey = "user.lastSuperAdmin"
-	KeyUserInvalidRoles            MessageKey = "user.invalidRoles"
-	KeyUserRoleNotFound            MessageKey = "user.roleNotFound"
-	KeyUserDataInvalid             MessageKey = "user.dataInvalid"
+	KeyInternal                     MessageKey = "error.internal"
+	KeyInvalidRequest               MessageKey = "error.invalidRequest"
+	KeyUnauthorized                 MessageKey = "error.unauthorized"
+	KeyForbidden                    MessageKey = "error.forbidden"
+	KeyNotFound                     MessageKey = "error.notFound"
+	KeyConflict                     MessageKey = "error.conflict"
+	KeyDependencyUnavailable        MessageKey = "error.dependencyUnavailable"
+	KeyUsernameConflict             MessageKey = "auth.usernameConflict"
+	KeyEmailConflict                MessageKey = "auth.emailConflict"
+	KeySuperAdminExists             MessageKey = "auth.superAdminExists"
+	KeyPermissionDenied             MessageKey = "access.permissionDenied"
+	KeyAccessSnapshotInvalid        MessageKey = "access.snapshotInvalid"
+	KeyAccessUpdating               MessageKey = "access.updating"
+	KeyMenuTreeInvalid              MessageKey = "menu.treeInvalid"
+	KeyMenuNotFound                 MessageKey = "menu.notFound"
+	KeyMenuCodeConflict             MessageKey = "menu.codeConflict"
+	KeyMenuPathConflict             MessageKey = "menu.pathConflict"
+	KeyMenuInvalidParent            MessageKey = "menu.invalidParent"
+	KeyMenuCycleDetected            MessageKey = "menu.cycleDetected"
+	KeyMenuBuiltinProtected         MessageKey = "menu.builtinProtected"
+	KeyMenuParentDisabled           MessageKey = "menu.parentDisabled"
+	KeyMenuStructureConflict        MessageKey = "menu.structureConflict"
+	KeyMenuInvalidFields            MessageKey = "menu.invalidFields"
+	KeyRoleNotFound                 MessageKey = "role.notFound"
+	KeyRoleCodeConflict             MessageKey = "role.codeConflict"
+	KeyRoleNameConflict             MessageKey = "role.nameConflict"
+	KeyRoleSystemProtected          MessageKey = "role.systemProtected"
+	KeyRoleDefaultProtected         MessageKey = "role.defaultProtected"
+	KeyRoleUsersAttached            MessageKey = "role.usersAttached"
+	KeyRoleInvalidState             MessageKey = "role.invalidState"
+	KeyRoleInvalidPermission        MessageKey = "role.invalidPermission"
+	KeyRoleSuperAdminAuthorization  MessageKey = "role.superAdminAuthorization"
+	KeyRoleDataInvalid              MessageKey = "role.dataInvalid"
+	KeyUserNotFound                 MessageKey = "user.notFound"
+	KeyUserUsernameConflict         MessageKey = "user.usernameConflict"
+	KeyUserSelfOperation            MessageKey = "user.selfOperation"
+	KeyUserSuperAdminProtected      MessageKey = "user.superAdminProtected"
+	KeyUserLastSuperAdmin           MessageKey = "user.lastSuperAdmin"
+	KeyUserInvalidRoles             MessageKey = "user.invalidRoles"
+	KeyUserRoleNotFound             MessageKey = "user.roleNotFound"
+	KeyUserDataInvalid              MessageKey = "user.dataInvalid"
+	KeyAuthPlatformNotFound         MessageKey = "authPlatform.notFound"
+	KeyAuthPlatformCodeConflict     MessageKey = "authPlatform.codeConflict"
+	KeyAuthPlatformBuiltinProtected MessageKey = "authPlatform.builtinProtected"
+	KeyAuthPlatformInvalidPolicy    MessageKey = "authPlatform.invalidPolicy"
+	KeyAuthPlatformDisabled         MessageKey = "authPlatform.disabled"
+	KeyAuthSessionUpdating          MessageKey = "auth.sessionUpdating"
+	KeyAuthPlatformUnavailable      MessageKey = "authPlatform.unavailable"
 )
 
 var catalogs = map[Locale]map[MessageKey]string{
 	ZhCN: {
-		KeyInternal:                    "服务内部错误",
-		KeyInvalidRequest:              "请求参数错误",
-		KeyUnauthorized:                "未登录或登录已失效",
-		KeyForbidden:                   "无权执行该操作",
-		KeyNotFound:                    "请求的资源不存在",
-		KeyConflict:                    "数据冲突",
-		KeyDependencyUnavailable:       "服务暂未就绪",
-		KeyUsernameConflict:            "用户名已存在",
-		KeyEmailConflict:               "邮箱已存在",
-		KeySuperAdminExists:            "超级管理员已存在",
-		KeyPermissionDenied:            "无权执行 {{permission}}",
-		KeyAccessSnapshotInvalid:       "访问权限数据无效",
-		KeyMenuTreeInvalid:             "菜单树数据无效",
-		KeyMenuNotFound:                "菜单不存在",
-		KeyMenuCodeConflict:            "菜单编码 {{code}} 已存在",
-		KeyMenuPathConflict:            "页面路径 {{path}} 已存在",
-		KeyMenuInvalidParent:           "父菜单无效",
-		KeyMenuCycleDetected:           "菜单层级存在循环",
-		KeyMenuBuiltinProtected:        "核心菜单 {{code}} 不允许执行该操作",
-		KeyMenuParentDisabled:          "菜单 {{code}} 的父级未全部启用",
-		KeyMenuStructureConflict:       "菜单 {{code}} 的结构与现有子节点或授权冲突",
-		KeyMenuInvalidFields:           "菜单字段无效",
-		KeyRoleNotFound:                "角色不存在",
-		KeyRoleCodeConflict:            "角色编码 {{code}} 已存在",
-		KeyRoleNameConflict:            "角色名称 {{name}} 已存在",
-		KeyRoleSystemProtected:         "系统角色 {{code}} 不允许执行该操作",
-		KeyRoleDefaultProtected:        "默认角色 {{code}} 不允许执行该操作",
-		KeyRoleUsersAttached:           "角色 {{code}} 仍绑定用户",
-		KeyRoleInvalidState:            "角色状态无效",
-		KeyRoleInvalidPermission:       "授权菜单无效",
-		KeyRoleSuperAdminAuthorization: "超级管理员不允许配置角色授权",
-		KeyRoleDataInvalid:             "角色权限数据无效",
-		KeyUserNotFound:                "用户不存在",
-		KeyUserUsernameConflict:        "用户名已存在",
-		KeyUserSelfOperation:           "不能对自己的账号执行该操作",
-		KeyUserSuperAdminProtected:     "只有超级管理员可以操作超级管理员账号",
-		KeyUserLastSuperAdmin:          "系统必须保留至少一个有效超级管理员",
-		KeyUserInvalidRoles:            "用户角色集合无效",
-		KeyUserRoleNotFound:            "角色不存在",
-		KeyUserDataInvalid:             "用户角色数据无效",
+		KeyInternal:                     "服务内部错误",
+		KeyInvalidRequest:               "请求参数错误",
+		KeyUnauthorized:                 "未登录或登录已失效",
+		KeyForbidden:                    "无权执行该操作",
+		KeyNotFound:                     "请求的资源不存在",
+		KeyConflict:                     "数据冲突",
+		KeyDependencyUnavailable:        "服务暂未就绪",
+		KeyUsernameConflict:             "用户名已存在",
+		KeyEmailConflict:                "邮箱已存在",
+		KeySuperAdminExists:             "超级管理员已存在",
+		KeyPermissionDenied:             "无权执行 {{permission}}",
+		KeyAccessSnapshotInvalid:        "访问权限数据无效",
+		KeyAccessUpdating:               "访问权限正在更新",
+		KeyMenuTreeInvalid:              "菜单树数据无效",
+		KeyMenuNotFound:                 "菜单不存在",
+		KeyMenuCodeConflict:             "菜单编码 {{code}} 已存在",
+		KeyMenuPathConflict:             "页面路径 {{path}} 已存在",
+		KeyMenuInvalidParent:            "父菜单无效",
+		KeyMenuCycleDetected:            "菜单层级存在循环",
+		KeyMenuBuiltinProtected:         "核心菜单 {{code}} 不允许执行该操作",
+		KeyMenuParentDisabled:           "菜单 {{code}} 的父级未全部启用",
+		KeyMenuStructureConflict:        "菜单 {{code}} 的结构与现有子节点或授权冲突",
+		KeyMenuInvalidFields:            "菜单字段无效",
+		KeyRoleNotFound:                 "角色不存在",
+		KeyRoleCodeConflict:             "角色编码 {{code}} 已存在",
+		KeyRoleNameConflict:             "角色名称 {{name}} 已存在",
+		KeyRoleSystemProtected:          "系统角色 {{code}} 不允许执行该操作",
+		KeyRoleDefaultProtected:         "默认角色 {{code}} 不允许执行该操作",
+		KeyRoleUsersAttached:            "角色 {{code}} 仍绑定用户",
+		KeyRoleInvalidState:             "角色状态无效",
+		KeyRoleInvalidPermission:        "授权菜单无效",
+		KeyRoleSuperAdminAuthorization:  "超级管理员不允许配置角色授权",
+		KeyRoleDataInvalid:              "角色权限数据无效",
+		KeyUserNotFound:                 "用户不存在",
+		KeyUserUsernameConflict:         "用户名已存在",
+		KeyUserSelfOperation:            "不能对自己的账号执行该操作",
+		KeyUserSuperAdminProtected:      "只有超级管理员可以操作超级管理员账号",
+		KeyUserLastSuperAdmin:           "系统必须保留至少一个有效超级管理员",
+		KeyUserInvalidRoles:             "用户角色集合无效",
+		KeyUserRoleNotFound:             "角色不存在",
+		KeyUserDataInvalid:              "用户角色数据无效",
+		KeyAuthPlatformNotFound:         "认证平台不存在",
+		KeyAuthPlatformCodeConflict:     "认证平台编码已存在",
+		KeyAuthPlatformBuiltinProtected: "内置认证平台不允许删除",
+		KeyAuthPlatformInvalidPolicy:    "认证平台策略无效",
+		KeyAuthPlatformDisabled:         "认证平台已停用",
+		KeyAuthSessionUpdating:          "会话状态正在更新",
+		KeyAuthPlatformUnavailable:      "认证平台服务暂不可用",
 	},
 	EnUS: {
-		KeyInternal:                    "Internal server error",
-		KeyInvalidRequest:              "Invalid request",
-		KeyUnauthorized:                "Authentication is required or has expired",
-		KeyForbidden:                   "Permission denied",
-		KeyNotFound:                    "Resource not found",
-		KeyConflict:                    "Data conflict",
-		KeyDependencyUnavailable:       "Service is temporarily unavailable",
-		KeyUsernameConflict:            "Username already exists",
-		KeyEmailConflict:               "Email already exists",
-		KeySuperAdminExists:            "A super administrator already exists",
-		KeyPermissionDenied:            "Permission denied: {{permission}}",
-		KeyAccessSnapshotInvalid:       "Access permission data is invalid",
-		KeyMenuTreeInvalid:             "Menu tree data is invalid",
-		KeyMenuNotFound:                "Menu not found",
-		KeyMenuCodeConflict:            "Menu code {{code}} already exists",
-		KeyMenuPathConflict:            "Page path {{path}} already exists",
-		KeyMenuInvalidParent:           "Invalid parent menu",
-		KeyMenuCycleDetected:           "Menu hierarchy contains a cycle",
-		KeyMenuBuiltinProtected:        "Builtin menu {{code}} cannot be changed by this operation",
-		KeyMenuParentDisabled:          "The parent hierarchy of menu {{code}} is not fully enabled",
-		KeyMenuStructureConflict:       "Menu {{code}} conflicts with existing children or grants",
-		KeyMenuInvalidFields:           "Invalid menu fields",
-		KeyRoleNotFound:                "Role not found",
-		KeyRoleCodeConflict:            "Role code {{code}} already exists",
-		KeyRoleNameConflict:            "Role name {{name}} already exists",
-		KeyRoleSystemProtected:         "System role {{code}} cannot be changed by this operation",
-		KeyRoleDefaultProtected:        "Default role {{code}} cannot be changed by this operation",
-		KeyRoleUsersAttached:           "Role {{code}} still has assigned users",
-		KeyRoleInvalidState:            "Invalid role state",
-		KeyRoleInvalidPermission:       "Invalid permission menu",
-		KeyRoleSuperAdminAuthorization: "Super administrator permissions cannot be configured",
-		KeyRoleDataInvalid:             "Role permission data is invalid",
-		KeyUserNotFound:                "User not found",
-		KeyUserUsernameConflict:        "Username already exists",
-		KeyUserSelfOperation:           "This operation cannot be performed on your own account",
-		KeyUserSuperAdminProtected:     "Only a super administrator can operate on a super administrator account",
-		KeyUserLastSuperAdmin:          "At least one effective super administrator must remain",
-		KeyUserInvalidRoles:            "Invalid user role set",
-		KeyUserRoleNotFound:            "Role not found",
-		KeyUserDataInvalid:             "User role data is invalid",
+		KeyInternal:                     "Internal server error",
+		KeyInvalidRequest:               "Invalid request",
+		KeyUnauthorized:                 "Authentication is required or has expired",
+		KeyForbidden:                    "Permission denied",
+		KeyNotFound:                     "Resource not found",
+		KeyConflict:                     "Data conflict",
+		KeyDependencyUnavailable:        "Service is temporarily unavailable",
+		KeyUsernameConflict:             "Username already exists",
+		KeyEmailConflict:                "Email already exists",
+		KeySuperAdminExists:             "A super administrator already exists",
+		KeyPermissionDenied:             "Permission denied: {{permission}}",
+		KeyAccessSnapshotInvalid:        "Access permission data is invalid",
+		KeyAccessUpdating:               "Access permissions are updating",
+		KeyMenuTreeInvalid:              "Menu tree data is invalid",
+		KeyMenuNotFound:                 "Menu not found",
+		KeyMenuCodeConflict:             "Menu code {{code}} already exists",
+		KeyMenuPathConflict:             "Page path {{path}} already exists",
+		KeyMenuInvalidParent:            "Invalid parent menu",
+		KeyMenuCycleDetected:            "Menu hierarchy contains a cycle",
+		KeyMenuBuiltinProtected:         "Builtin menu {{code}} cannot be changed by this operation",
+		KeyMenuParentDisabled:           "The parent hierarchy of menu {{code}} is not fully enabled",
+		KeyMenuStructureConflict:        "Menu {{code}} conflicts with existing children or grants",
+		KeyMenuInvalidFields:            "Invalid menu fields",
+		KeyRoleNotFound:                 "Role not found",
+		KeyRoleCodeConflict:             "Role code {{code}} already exists",
+		KeyRoleNameConflict:             "Role name {{name}} already exists",
+		KeyRoleSystemProtected:          "System role {{code}} cannot be changed by this operation",
+		KeyRoleDefaultProtected:         "Default role {{code}} cannot be changed by this operation",
+		KeyRoleUsersAttached:            "Role {{code}} still has assigned users",
+		KeyRoleInvalidState:             "Invalid role state",
+		KeyRoleInvalidPermission:        "Invalid permission menu",
+		KeyRoleSuperAdminAuthorization:  "Super administrator permissions cannot be configured",
+		KeyRoleDataInvalid:              "Role permission data is invalid",
+		KeyUserNotFound:                 "User not found",
+		KeyUserUsernameConflict:         "Username already exists",
+		KeyUserSelfOperation:            "This operation cannot be performed on your own account",
+		KeyUserSuperAdminProtected:      "Only a super administrator can operate on a super administrator account",
+		KeyUserLastSuperAdmin:           "At least one effective super administrator must remain",
+		KeyUserInvalidRoles:             "Invalid user role set",
+		KeyUserRoleNotFound:             "Role not found",
+		KeyUserDataInvalid:              "User role data is invalid",
+		KeyAuthPlatformNotFound:         "Authentication platform not found",
+		KeyAuthPlatformCodeConflict:     "Authentication platform code already exists",
+		KeyAuthPlatformBuiltinProtected: "Builtin authentication platform cannot be deleted",
+		KeyAuthPlatformInvalidPolicy:    "Invalid authentication platform policy",
+		KeyAuthPlatformDisabled:         "Authentication platform is disabled",
+		KeyAuthSessionUpdating:          "Authentication session state is updating",
+		KeyAuthPlatformUnavailable:      "Authentication platform service is temporarily unavailable",
 	},
 }
 

@@ -15,7 +15,11 @@ import (
 	"admin/server/internal/database"
 	projectmiddleware "admin/server/internal/middleware"
 	"admin/server/internal/module/access"
+	"admin/server/internal/module/accessstate"
 	"admin/server/internal/module/auth"
+	"admin/server/internal/module/authclient"
+	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/authstate"
 	"admin/server/internal/module/health"
 	"admin/server/internal/module/menu"
 	"admin/server/internal/module/role"
@@ -31,10 +35,12 @@ import (
 
 type routerDependencies struct {
 	CORSOrigin        string
+	TrustedProxies    []string
 	Logger            *slog.Logger
 	Health            *health.Handler
 	Task              *taskdemo.Handler
 	Auth              *auth.Handler
+	AuthPlatform      *authplatform.Handler
 	Access            *access.Handler
 	Menu              *menu.Handler
 	Role              *role.Handler
@@ -77,6 +83,9 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer redisClient.Close()
+	if err := auth.PrepareSessionSchema(processContext, postgres.GORM); err != nil {
+		return fmt.Errorf("prepare authentication schema: %w", err)
+	}
 	if err := database.AutoMigrate(
 		processContext,
 		postgres.GORM,
@@ -86,12 +95,17 @@ func run(logger *slog.Logger) error {
 		&role.UserRole{},
 		&menu.Menu{},
 		&menu.RoleMenu{},
+		&authplatform.Platform{},
 		&auth.Session{},
+		&access.Version{},
 	); err != nil {
 		return err
 	}
 	if err := role.EnsureSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("ensure role schema: %w", err)
+	}
+	if err := authplatform.EnsureSchema(processContext, postgres.GORM); err != nil {
+		return fmt.Errorf("ensure authentication platform schema: %w", err)
 	}
 	if err := auth.EnsureSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("ensure authentication schema: %w", err)
@@ -99,14 +113,22 @@ func run(logger *slog.Logger) error {
 	if err := menu.EnsureSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("ensure menu schema: %w", err)
 	}
+	if err := access.EnsureSchema(processContext, postgres.GORM); err != nil {
+		return fmt.Errorf("ensure access schema: %w", err)
+	}
+	if err := auth.CleanupLegacySessionPointers(processContext, redisClient); err != nil {
+		return fmt.Errorf("remove legacy current session keys: %w", err)
+	}
+	accessStateStore := accessstate.NewStore(redisClient)
+	accessInvalidator := accessstate.NewInvalidator(accessStateStore)
 	menuRepository := menu.NewRepository(postgres.GORM)
-	menuService := menu.NewService(menuRepository)
+	menuService := menu.NewService(menuRepository, accessInvalidator)
 	if err := menuService.EnsureBuiltin(processContext); err != nil {
 		return fmt.Errorf("ensure builtin menus: %w", err)
 	}
 
 	roleRepository := role.NewRepository(postgres.GORM)
-	roleService := role.NewService(roleRepository)
+	roleService := role.NewService(roleRepository, accessInvalidator)
 	if err := roleService.EnsureSystemRoles(processContext); err != nil {
 		return fmt.Errorf("ensure system roles: %w", err)
 	}
@@ -126,27 +148,42 @@ func run(logger *slog.Logger) error {
 	healthService := health.NewService(postgres, redisClient)
 	userRepository := user.NewRepository(postgres.GORM)
 	sessionRepository := auth.NewSessionRepository(postgres.GORM)
+	authPlatformRepository := authplatform.NewRepository(postgres.GORM)
+	policyStore := authplatform.NewPolicyStore(redisClient)
+	authStateStore := authstate.NewStore(redisClient)
+	authInvalidator := authstate.NewInvalidator(authStateStore)
+	authPlatformService := authplatform.NewService(authPlatformRepository, policyStore, redisClient, authStateStore, authInvalidator, auth.NewSessionCache(redisClient).Delete, logger, authplatform.Deployment{
+		CookieSecure: settings.Auth.CookieSecure, CORSOrigin: settings.CORSOrigin,
+		TrustedProxyMode: settings.TrustedProxyMode, TrustedProxyCount: len(settings.TrustedProxies),
+	})
 	authService := auth.NewService(
 		userRepository,
 		roleRepository,
 		sessionRepository,
+		authPlatformService,
+		authStateStore,
+		authInvalidator,
+		auth.NewSessionCache(redisClient),
 		redisClient,
 		auth.NewJWT(keys.JWTSigningKey()),
 		keys.RefreshTokenHMACKey(),
+		logger,
 	)
-	userService := user.NewService(userRepository, redisClient)
+	userService := user.NewService(userRepository, authStateStore, authInvalidator, accessStateStore, accessInvalidator)
 	accessRepository := access.NewRepository(postgres.GORM)
-	accessService := access.NewService(accessRepository)
+	accessService := access.NewService(accessRepository, accessStateStore, access.NewSnapshotCache(redisClient), logger)
 	authenticate := auth.Authenticate(authService)
 	router := buildRouter(routerDependencies{
-		CORSOrigin: settings.CORSOrigin,
-		Logger:     logger,
-		Health:     health.NewHandler(healthService),
-		Task:       taskdemo.NewHandler(taskService),
-		Auth:       auth.NewHandler(authService, settings.Auth.CookieSecure),
-		Access:     access.NewHandler(accessService),
-		Menu:       menu.NewHandler(menuService),
-		Role:       role.NewHandler(roleService),
+		CORSOrigin:     settings.CORSOrigin,
+		TrustedProxies: settings.TrustedProxies,
+		Logger:         logger,
+		Health:         health.NewHandler(healthService),
+		Task:           taskdemo.NewHandler(taskService),
+		Auth:           auth.NewHandler(authService, settings.Auth.CookieSecure),
+		AuthPlatform:   authplatform.NewHandler(authPlatformService),
+		Access:         access.NewHandler(accessService),
+		Menu:           menu.NewHandler(menuService),
+		Role:           role.NewHandler(roleService),
 		User: user.NewHandler(userService, func(context *gin.Context) (int64, bool) {
 			identity, ok := auth.IdentityFromContext(context)
 			return identity.UserID, ok
@@ -186,6 +223,9 @@ func run(logger *slog.Logger) error {
 
 func buildRouter(dependencies routerDependencies) *gin.Engine {
 	router := gin.New()
+	if err := router.SetTrustedProxies(dependencies.TrustedProxies); err != nil {
+		panic(fmt.Sprintf("set trusted proxies: %v", err))
+	}
 	router.Use(
 		projectmiddleware.RequestID(),
 		projectmiddleware.CORS(dependencies.CORSOrigin),
@@ -195,7 +235,10 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	)
 	health.RegisterRoutes(router, dependencies.Health)
 	apiRoutes := router.Group("/api/v1")
+	apiRoutes.Use(authclient.Require())
 	auth.RegisterRoutes(apiRoutes, dependencies.Auth, dependencies.AuthOrigin, dependencies.Authenticate)
+	authplatform.RegisterPublicRoutes(apiRoutes, dependencies.AuthPlatform)
+	authplatform.RegisterManagementRoutes(apiRoutes, dependencies.AuthPlatform, dependencies.Authenticate, dependencies.RequirePermission)
 	access.RegisterRoutes(apiRoutes, dependencies.Access, dependencies.Authenticate)
 	menu.RegisterRoutes(apiRoutes, dependencies.Menu, dependencies.Authenticate, dependencies.RequirePermission)
 	role.RegisterRoutes(apiRoutes, dependencies.Role, dependencies.Authenticate, dependencies.RequirePermission)

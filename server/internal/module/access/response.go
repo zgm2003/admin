@@ -1,7 +1,5 @@
 package access
 
-import "admin/server/internal/module/menu"
-
 type currentResponse struct {
 	RoleCodes       []string           `json:"roleCodes"`
 	MenuTree        []menuNodeResponse `json:"menuTree"`
@@ -10,7 +8,7 @@ type currentResponse struct {
 
 type menuNodeResponse struct {
 	Code     string             `json:"code"`
-	MenuType menu.Type          `json:"menuType"`
+	MenuType MenuType           `json:"menuType"`
 	Path     *string            `json:"path"`
 	ViewKey  *string            `json:"viewKey"`
 	TitleKey string             `json:"titleKey"`

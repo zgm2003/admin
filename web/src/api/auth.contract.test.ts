@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ProtocolError } from '../types/http'
-import { parseCredential, parseCurrentUser, parseRegisteredUser } from './auth.contract'
+import { parseAuthPolicy, parseCredential, parseCurrentUser, parseRegisteredUser } from './auth.contract'
 
 describe('auth contracts', () => {
   it('parses each exact DTO', () => {
@@ -12,6 +12,20 @@ describe('auth contracts', () => {
     const user = { userId: 1, username: 'admin', email: 'admin@example.com' }
     expect(parseRegisteredUser(user)).toEqual(user)
     expect(parseCurrentUser(user)).toEqual(user)
+    expect(parseAuthPolicy({ code: 'admin', name: 'Admin', allowRegister: 1 })).toEqual({
+      code: 'admin', name: 'Admin', allowRegister: 1,
+    })
+  })
+
+  it.each([
+    null,
+    {},
+    { code: 'other', name: 'Admin', allowRegister: 1 },
+    { code: 'admin', name: '  ', allowRegister: 1 },
+    { code: 'admin', name: 'Admin', allowRegister: 2 },
+    { code: 'admin', name: 'Admin', allowRegister: 1, extra: true },
+  ])('rejects invalid authentication policies: %j', (value) => {
+    expect(() => parseAuthPolicy(value)).toThrow(ProtocolError)
   })
 
   it.each([

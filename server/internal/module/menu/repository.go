@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
+	"admin/server/internal/module/accessstate"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
@@ -105,6 +107,113 @@ func (r *Repository) LockActiveMenus(ctx context.Context) ([]Menu, error) {
 		return nil, fmt.Errorf("lock active menus: %w", err)
 	}
 	return rows, nil
+}
+
+func (r *Repository) FindActiveAccessVersions(ctx context.Context) ([]accessstate.Version, error) {
+	versions := make([]accessstate.Version, 0)
+	if err := r.db.WithContext(ctx).Raw(`
+		SELECT app_user.id AS user_id, COALESCE(access_version.version, 0) AS version
+		FROM sys_user AS app_user
+		LEFT JOIN sys_access_version AS access_version
+		  ON access_version.user_id = app_user.id
+		WHERE app_user.deleted_at IS NULL
+		  AND app_user.is_enabled = ?
+		ORDER BY app_user.id ASC`, yesno.Yes).Scan(&versions).Error; err != nil {
+		return nil, fmt.Errorf("find active menu access versions: %w", err)
+	}
+	if err := validateMenuAccessVersions(versions); err != nil {
+		return nil, fmt.Errorf("find active menu access versions: %w", err)
+	}
+	return versions, nil
+}
+
+func (r *Repository) LockUserMutationTables(ctx context.Context) error {
+	if err := r.db.WithContext(ctx).Exec("LOCK TABLE sys_user IN SHARE ROW EXCLUSIVE MODE").Error; err != nil {
+		return fmt.Errorf("lock user table for menu mutation: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) LockActiveAccessVersions(ctx context.Context) ([]accessstate.Version, error) {
+	versions := make([]accessstate.Version, 0)
+	if err := r.db.WithContext(ctx).Raw(`
+		SELECT app_user.id AS user_id, access_version.version
+		FROM sys_user AS app_user
+		JOIN sys_access_version AS access_version
+		  ON access_version.user_id = app_user.id
+		WHERE app_user.deleted_at IS NULL
+		  AND app_user.is_enabled = ?
+		ORDER BY app_user.id ASC
+		FOR UPDATE OF app_user, access_version`, yesno.Yes).Scan(&versions).Error; err != nil {
+		return nil, fmt.Errorf("lock active menu access versions: %w", err)
+	}
+	if err := validateMenuAccessVersions(versions); err != nil {
+		return nil, fmt.Errorf("lock active menu access versions: %w", err)
+	}
+	return versions, nil
+}
+
+func (r *Repository) IncrementAccessVersions(ctx context.Context, userIDs []int64, now time.Time) (map[int64]int64, error) {
+	userIDs, err := normalizeMenuAccessUserIDs(userIDs)
+	if err != nil {
+		return nil, err
+	}
+	if len(userIDs) == 0 {
+		return map[int64]int64{}, nil
+	}
+	advanced := make([]accessstate.Version, 0, len(userIDs))
+	if err := r.db.WithContext(ctx).Raw(`
+		UPDATE sys_access_version
+		SET version = version + 1, updated_at = ?
+		WHERE user_id IN ?
+		RETURNING user_id, version`, now.UTC(), userIDs).Scan(&advanced).Error; err != nil {
+		return nil, fmt.Errorf("increment menu access versions: %w", err)
+	}
+	if err := validateMenuAccessVersions(advanced); err != nil {
+		return nil, fmt.Errorf("increment menu access versions: %w", err)
+	}
+	result := make(map[int64]int64, len(advanced))
+	for _, version := range advanced {
+		result[version.UserID] = version.Version
+	}
+	if len(result) != len(userIDs) {
+		return nil, fmt.Errorf("increment menu access versions returned %d users, want %d", len(result), len(userIDs))
+	}
+	for _, userID := range userIDs {
+		if result[userID] < 2 {
+			return nil, fmt.Errorf("increment menu access version for user %d is missing", userID)
+		}
+	}
+	return result, nil
+}
+
+func validateMenuAccessVersions(versions []accessstate.Version) error {
+	previousUserID := int64(0)
+	for index, version := range versions {
+		if version.UserID < 1 || version.Version < 1 {
+			return fmt.Errorf("menu access version at index %d is invalid", index)
+		}
+		if index > 0 && version.UserID <= previousUserID {
+			return fmt.Errorf("menu access versions are not unique and sorted")
+		}
+		previousUserID = version.UserID
+	}
+	return nil
+}
+
+func normalizeMenuAccessUserIDs(userIDs []int64) ([]int64, error) {
+	normalized := append([]int64(nil), userIDs...)
+	sort.Slice(normalized, func(left, right int) bool { return normalized[left] < normalized[right] })
+	result := normalized[:0]
+	for _, userID := range normalized {
+		if userID < 1 {
+			return nil, fmt.Errorf("menu access user id is invalid")
+		}
+		if len(result) == 0 || result[len(result)-1] != userID {
+			result = append(result, userID)
+		}
+	}
+	return result, nil
 }
 
 func (r *Repository) UpdateMenu(ctx context.Context, id int64, values UpdateValues, updatedAt time.Time) error {

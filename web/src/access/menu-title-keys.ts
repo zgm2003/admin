@@ -18,6 +18,11 @@ export const menuTitleKeys = [
 	'permission.userStatus',
 	'permission.userDelete',
 	'permission.userRoles',
+  'navigation.systemAuthPlatforms',
+  'permission.authPlatformCreate',
+  'permission.authPlatformUpdate',
+  'permission.authPlatformStatus',
+  'permission.authPlatformDelete',
 ] as const satisfies readonly AppMessageKey[]
 
 export type MenuTitleKey = (typeof menuTitleKeys)[number]

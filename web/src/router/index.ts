@@ -24,6 +24,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false },
   },
   {
+    path: '/register',
+    name: 'register',
+    component: () => import('../views/auth/register/index.vue'),
+    meta: { requiresAuth: false },
+  },
+  {
     path: '/',
     name: 'admin-layout',
     component: () => import('../layout/index.vue'),

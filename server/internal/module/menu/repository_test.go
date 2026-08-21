@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
+	"admin/server/internal/module/accessstate"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -246,6 +248,65 @@ func TestRepositoryRoleMenuSoftDeleteTouchesOnlyActiveTargetLinks(t *testing.T) 
 	}
 }
 
+func TestRepositoryGlobalAccessVersionsAreSortedLockedAndAdvanced(t *testing.T) {
+	tx, ctx := openMenuTransaction(t)
+	repository := NewRepository(tx)
+	first := createMenuAccessUser(t, tx, ctx, yesno.Yes, false)
+	second := createMenuAccessUser(t, tx, ctx, yesno.Yes, false)
+	_ = createMenuAccessUser(t, tx, ctx, yesno.No, false)
+	_ = createMenuAccessUser(t, tx, ctx, yesno.Yes, true)
+	want := []accessstate.Version{{UserID: first.ID, Version: 1}, {UserID: second.ID, Version: 1}}
+	candidates, err := repository.FindActiveAccessVersions(ctx)
+	if err != nil || !reflect.DeepEqual(candidates, want) {
+		t.Fatalf("FindActiveAccessVersions() = %+v,%v", candidates, err)
+	}
+	if err := repository.LockUserMutationTables(ctx); err != nil {
+		t.Fatal(err)
+	}
+	locked, err := repository.LockActiveAccessVersions(ctx)
+	if err != nil || !reflect.DeepEqual(locked, want) {
+		t.Fatalf("LockActiveAccessVersions() = %+v,%v", locked, err)
+	}
+	advanced, err := repository.IncrementAccessVersions(ctx, []int64{second.ID, first.ID, first.ID}, time.Now().UTC().Truncate(time.Microsecond))
+	if err != nil || !reflect.DeepEqual(advanced, map[int64]int64{first.ID: 2, second.ID: 2}) {
+		t.Fatalf("IncrementAccessVersions() = %+v,%v", advanced, err)
+	}
+}
+
+func TestRepositoryGlobalAccessVersionsRejectMissingVersion(t *testing.T) {
+	tx, ctx := openMenuTransaction(t)
+	unique := time.Now().UnixNano()
+	created := testUser{Username: fmt.Sprintf("missing_%d", unique), Email: fmt.Sprintf("missing_%d@example.com", unique), IsEnabled: yesno.Yes}
+	if err := tx.WithContext(ctx).Create(&created).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewRepository(tx).FindActiveAccessVersions(ctx); err == nil {
+		t.Fatal("active user without access version was accepted")
+	}
+}
+
+func TestRepositoryGlobalMenuLockBlocksUserWrites(t *testing.T) {
+	db, ctx := openMenuDatabase(t)
+	menuTx := db.WithContext(ctx).Begin()
+	if menuTx.Error != nil {
+		t.Fatal(menuTx.Error)
+	}
+	t.Cleanup(func() { _ = menuTx.Rollback().Error })
+	if err := NewRepository(menuTx).LockUserMutationTables(ctx); err != nil {
+		t.Fatal(err)
+	}
+	userTx := db.WithContext(ctx).Begin()
+	if userTx.Error != nil {
+		t.Fatal(userTx.Error)
+	}
+	t.Cleanup(func() { _ = userTx.Rollback().Error })
+	waitCtx, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
+	defer cancel()
+	if err := userTx.WithContext(waitCtx).Exec("LOCK TABLE sys_user IN ROW EXCLUSIVE MODE").Error; err == nil {
+		t.Fatal("user write table lock bypassed global menu mutation lock")
+	}
+}
+
 func TestRepositoryConvertsActiveUniqueViolations(t *testing.T) {
 	t.Run("code on create", func(t *testing.T) {
 		tx, ctx := openMenuTransaction(t)
@@ -303,6 +364,32 @@ func TestRepositoryConvertsActiveUniqueViolations(t *testing.T) {
 			t.Fatalf("duplicate update path error = %v", err)
 		}
 	})
+}
+
+func createMenuAccessUser(t *testing.T, tx *gorm.DB, ctx context.Context, enabled yesno.Value, deleted bool) testUser {
+	t.Helper()
+	unique := time.Now().UnixNano()
+	created := testUser{
+		Username: fmt.Sprintf("menu_access_%d", unique), Email: fmt.Sprintf("menu_access_%d@example.com", unique),
+		IsEnabled: enabled,
+	}
+	if err := tx.WithContext(ctx).Create(&created).Error; err != nil {
+		t.Fatal(err)
+	}
+	if enabled == yesno.No {
+		if err := tx.WithContext(ctx).Model(&testUser{}).Where("id = ?", created.ID).Update("is_enabled", yesno.No).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.WithContext(ctx).Create(&testAccessVersion{UserID: created.ID, Version: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if deleted {
+		if err := tx.WithContext(ctx).Delete(&created).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	return created
 }
 
 func createRepositoryDirectory(t *testing.T, repository *Repository, ctx context.Context, code string, sortOrder int) Menu {

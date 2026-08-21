@@ -1,6 +1,7 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -17,12 +18,12 @@ func TestLoadAPI(t *testing.T) {
 			t.Fatalf("LoadAPI() error = %v", err)
 		}
 
-		if got.HTTPAddr != ":16301" || got.PostgresDSN != validPostgresDSN || got.RedisURL != validRedisURL || got.CORSOrigin != "http://localhost:16300" || got.AppSecret != strings.Repeat("s", 64) || got.Auth.CookieSecure {
+		if got.HTTPAddr != ":16301" || got.PostgresDSN != validPostgresDSN || got.RedisURL != validRedisURL || got.CORSOrigin != "http://localhost:16300" || got.AppSecret != strings.Repeat("s", 64) || len(got.TrustedProxies) != 0 || got.TrustedProxyMode != "none" || got.Auth.CookieSecure {
 			t.Fatalf("LoadAPI() = %+v", got)
 		}
 	})
 
-	for _, key := range []string{"HTTP_ADDR", "POSTGRES_DSN", "REDIS_URL", "CORS_ORIGIN", "APP_SECRET", "AUTH_COOKIE_SECURE"} {
+	for _, key := range []string{"HTTP_ADDR", "POSTGRES_DSN", "REDIS_URL", "CORS_ORIGIN", "APP_SECRET", "AUTH_COOKIE_SECURE", "TRUSTED_PROXIES"} {
 		t.Run("rejects missing "+key, func(t *testing.T) {
 			values := validAPIValues()
 			delete(values, key)
@@ -59,6 +60,33 @@ func TestLoadAPI(t *testing.T) {
 
 			_, err := LoadAPI(lookup(values))
 			assertErrorContains(t, err, tt.key)
+		})
+	}
+}
+
+func TestLoadAPIParsesTrustedProxies(t *testing.T) {
+	values := validAPIValues()
+	values["TRUSTED_PROXIES"] = "10.0.0.8, 10.20.0.0/16,10.0.0.8"
+
+	got, err := LoadAPI(lookup(values))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"10.0.0.8", "10.20.0.0/16"}
+	if !reflect.DeepEqual(got.TrustedProxies, want) || got.TrustedProxyMode != "allowlist" {
+		t.Fatalf("trusted proxies = %v mode=%q", got.TrustedProxies, got.TrustedProxyMode)
+	}
+}
+
+func TestLoadAPIRejectsUnsafeTrustedProxies(t *testing.T) {
+	for _, value := range []string{"", "bad", "0.0.0.0/0", "::/0", "none,127.0.0.1"} {
+		t.Run(value, func(t *testing.T) {
+			values := validAPIValues()
+			values["TRUSTED_PROXIES"] = value
+
+			_, err := LoadAPI(lookup(values))
+			assertErrorContains(t, err, "TRUSTED_PROXIES")
 		})
 	}
 }
@@ -145,6 +173,7 @@ func validAPIValues() map[string]string {
 		"CORS_ORIGIN":        "http://localhost:16300",
 		"APP_SECRET":         strings.Repeat("s", 64),
 		"AUTH_COOKIE_SECURE": "0",
+		"TRUSTED_PROXIES":    "none",
 	}
 }
 

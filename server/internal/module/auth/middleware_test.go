@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"admin/server/internal/module/authclient"
 	"admin/server/internal/shared/apperror"
 	"github.com/gin-gonic/gin"
 )
@@ -51,7 +52,7 @@ func TestAuthenticateMiddlewareRequiresBearerToken(t *testing.T) {
 }
 
 func TestAuthenticateMiddlewareStoresIdentity(t *testing.T) {
-	want := Identity{UserID: 1, SessionID: 2, Version: 3}
+	want := Identity{UserID: 1, SessionID: 2, Platform: "admin", Version: 3}
 	service := &stubAuthenticationService{authenticateIdentity: want}
 	responseRecorder := serveAuthenticatedRequest(t, service, "Bearer token", func(context *gin.Context) {
 		got, ok := IdentityFromContext(context)
@@ -62,6 +63,9 @@ func TestAuthenticateMiddlewareStoresIdentity(t *testing.T) {
 	})
 	if responseRecorder.Code != http.StatusNoContent || service.authenticateToken != "token" {
 		t.Fatalf("status=%d token=%q", responseRecorder.Code, service.authenticateToken)
+	}
+	if service.authenticateClient.Platform != "admin" || service.authenticateClient.DeviceID != "550e8400-e29b-41d4-a716-446655440000" {
+		t.Fatalf("authenticate client = %+v", service.authenticateClient)
 	}
 }
 
@@ -78,12 +82,14 @@ func serveAuthenticatedRequest(t *testing.T, service *stubAuthenticationService,
 		next = func(context *gin.Context) { context.Status(http.StatusNoContent) }
 	}
 	router := gin.New()
-	router.Use(Authenticate(service))
+	router.Use(authclient.Require(), Authenticate(service))
 	router.GET("/", next)
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
 	if authorization != "" {
 		request.Header.Set("Authorization", authorization)
 	}
+	request.Header[authclient.PlatformHeader] = []string{"admin"}
+	request.Header[authclient.DeviceIDHeader] = []string{"550e8400-e29b-41d4-a716-446655440000"}
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, request)
 	return responseRecorder

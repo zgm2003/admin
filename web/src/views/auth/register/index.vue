@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { EditPen } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance, type FormItemRule, type FormRules } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
-import { register } from '../../../api/auth'
+import { getAuthPolicy, register } from '../../../api/auth'
+import { YesNo } from '../../../enums/yes-no'
 
 interface RegisterForm {
   username: string
@@ -14,32 +16,52 @@ interface RegisterForm {
 }
 
 const router = useRouter()
+const { t } = useI18n()
 const formReference = ref<FormInstance>()
 const form = reactive<RegisterForm>({ username: '', email: '', password: '', confirmPassword: '' })
 const pending = ref(false)
 const submitError = ref('')
+const policyAllowed = ref(false)
+const policyLoaded = ref(false)
 const confirmPasswordValidator: FormItemRule['validator'] = (_rule, value, callback) => {
   if (value !== form.password) {
-    callback(new Error('两次输入的密码不一致'))
+    callback(new Error(t('auth.register.passwordMismatch')))
     return
   }
   callback()
 }
 const rules: FormRules<RegisterForm> = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  username: [{ required: true, message: t('auth.register.usernameRequired'), trigger: 'blur' }],
   email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '请输入有效邮箱', trigger: 'blur' },
+    { required: true, message: t('auth.register.emailRequired'), trigger: 'blur' },
+    { type: 'email', message: t('auth.register.emailInvalid'), trigger: 'blur' },
   ],
   password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 8, message: '密码至少 8 个字符', trigger: 'blur' },
+    { required: true, message: t('auth.register.passwordRequired'), trigger: 'blur' },
+    { min: 8, message: t('auth.register.passwordMin'), trigger: 'blur' },
   ],
   confirmPassword: [
-    { required: true, message: '请再次输入密码', trigger: 'blur' },
+    { required: true, message: t('auth.register.confirmPasswordRequired'), trigger: 'blur' },
     { validator: confirmPasswordValidator, trigger: 'blur' },
   ],
 }
+
+onMounted(async () => {
+  try {
+    const policy = await getAuthPolicy()
+    if (policy.allowRegister === YesNo.No) {
+      await router.replace('/login')
+      return
+    }
+    policyAllowed.value = true
+  } catch (error: unknown) {
+    submitError.value = error instanceof Error && error.message !== ''
+      ? error.message
+      : t('auth.register.policyFailed')
+  } finally {
+    policyLoaded.value = true
+  }
+})
 
 async function submit(): Promise<void> {
   if (pending.value || formReference.value === undefined) return
@@ -55,10 +77,10 @@ async function submit(): Promise<void> {
       password: form.password,
       confirmPassword: form.confirmPassword,
     })
-    ElMessage.success('注册成功')
+    ElMessage.success(t('auth.register.success'))
     await router.replace('/login')
   } catch (error: unknown) {
-    submitError.value = error instanceof Error && error.message !== '' ? error.message : '注册失败'
+    submitError.value = error instanceof Error && error.message !== '' ? error.message : t('auth.register.failed')
   } finally {
     pending.value = false
   }
@@ -67,33 +89,32 @@ async function submit(): Promise<void> {
 
 <template>
   <main class="auth-page">
-    <section class="auth-panel" aria-labelledby="register-title">
+    <p v-if="submitError" class="auth-error" data-testid="register-error">{{ submitError }}</p>
+    <section v-if="policyLoaded && policyAllowed" class="auth-panel" aria-labelledby="register-title">
       <div class="auth-signature" aria-hidden="true"></div>
       <el-icon class="auth-icon"><EditPen /></el-icon>
-      <h1 id="register-title">注册账号</h1>
-      <p class="auth-caption">创建管理台登录身份</p>
-
-      <p v-if="submitError" class="auth-error" data-testid="register-error">{{ submitError }}</p>
+      <h1 id="register-title">{{ t('auth.register.title') }}</h1>
+      <p class="auth-caption">{{ t('auth.register.caption') }}</p>
 
       <el-form ref="formReference" :model="form" :rules="rules" label-position="top" @submit.prevent="submit">
-        <el-form-item label="用户名" prop="username">
+        <el-form-item :label="t('auth.register.username')" prop="username">
           <el-input v-model="form.username" data-testid="register-username" autocomplete="username" />
         </el-form-item>
-        <el-form-item label="邮箱" prop="email">
+        <el-form-item :label="t('auth.register.email')" prop="email">
           <el-input v-model="form.email" data-testid="register-email" autocomplete="email" />
         </el-form-item>
-        <el-form-item label="密码" prop="password">
+        <el-form-item :label="t('auth.register.password')" prop="password">
           <el-input v-model="form.password" data-testid="register-password" type="password" autocomplete="new-password" show-password />
         </el-form-item>
-        <el-form-item label="确认密码" prop="confirmPassword">
+        <el-form-item :label="t('auth.register.confirmPassword')" prop="confirmPassword">
           <el-input v-model="form.confirmPassword" data-testid="register-confirm-password" type="password" autocomplete="new-password" show-password />
         </el-form-item>
         <el-button data-testid="register-submit" type="primary" native-type="submit" :loading="pending" :disabled="pending">
-          注册
+          {{ t('auth.register.submit') }}
         </el-button>
       </el-form>
 
-      <RouterLink class="auth-link" to="/login">返回登录</RouterLink>
+      <RouterLink class="auth-link" to="/login">{{ t('auth.register.backToLogin') }}</RouterLink>
     </section>
   </main>
 </template>

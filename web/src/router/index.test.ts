@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getAccess } from '../api/access'
 import type { AccessSnapshot } from '../api/access.contract'
-import { getCurrentUser, refresh } from '../api/auth'
+import { getAuthPolicy, getCurrentUser, refresh } from '../api/auth'
 import { installPermissionGuard } from '../permission'
 import { pinia } from '../store'
 import { useAccessStore } from '../store/access'
@@ -11,7 +11,7 @@ import { useAuthStore } from '../store/auth'
 import { ApiError } from '../types/http'
 import { createAppRouter } from './index'
 
-vi.mock('../api/auth', () => ({ refresh: vi.fn(), getCurrentUser: vi.fn() }))
+vi.mock('../api/auth', () => ({ getAuthPolicy: vi.fn(), refresh: vi.fn(), getCurrentUser: vi.fn() }))
 vi.mock('../api/access', () => ({ getAccess: vi.fn() }))
 vi.mock('../access/route-views', () => ({
   routeViews: {
@@ -22,6 +22,7 @@ vi.mock('../access/route-views', () => ({
 
 const refreshMock = vi.mocked(refresh)
 const getCurrentUserMock = vi.mocked(getCurrentUser)
+const getAuthPolicyMock = vi.mocked(getAuthPolicy)
 const getAccessMock = vi.mocked(getAccess)
 
 describe('router', () => {
@@ -30,14 +31,16 @@ describe('router', () => {
     useAccessStore(pinia).reset()
     refreshMock.mockReset()
     getCurrentUserMock.mockReset()
+    getAuthPolicyMock.mockReset()
+    getAuthPolicyMock.mockResolvedValue({ code: 'admin', name: 'Admin', allowRegister: 1 })
     getAccessMock.mockReset()
     getAccessMock.mockResolvedValue(emptyAccessSnapshot())
   })
 
-  it('declares Login as public, removes Register, names the layout, and protects Dashboard', () => {
+  it('declares Login and Register as public, names the layout, and protects Dashboard', () => {
     const router = createAppRouter(createMemoryHistory())
     expect(router.resolve('/login').meta.requiresAuth).toBe(false)
-    expect(router.resolve('/register').matched).toHaveLength(0)
+    expect(router.resolve('/register').meta.requiresAuth).toBe(false)
     expect(router.resolve('/dashboard').meta.requiresAuth).toBe(true)
     expect(router.hasRoute('admin-layout')).toBe(true)
   })
@@ -173,6 +176,39 @@ describe('router', () => {
     expect(router.currentRoute.value.path).toBe('/login')
     expect(refreshMock).not.toHaveBeenCalled()
     expect(getAccessMock).not.toHaveBeenCalled()
+  })
+
+  it('redirects public Register to Login when registration is disabled', async () => {
+    getAuthPolicyMock.mockResolvedValue({ code: 'admin', name: 'Admin', allowRegister: 0 })
+    const router = createAppRouter(createMemoryHistory())
+    installPermissionGuard(router)
+
+    await router.push('/register')
+
+    expect(router.currentRoute.value.path).toBe('/login')
+    expect(getAuthPolicyMock).toHaveBeenCalledOnce()
+  })
+
+  it('allows public Register when registration is enabled', async () => {
+    const router = createAppRouter(createMemoryHistory())
+    installPermissionGuard(router)
+
+    await router.push('/register')
+
+    expect(router.currentRoute.value.path).toBe('/register')
+    expect(getAuthPolicyMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a registration policy failure as an explicit auth error', async () => {
+    getAuthPolicyMock.mockRejectedValue(new ApiError(10006, '服务暂未就绪', 503))
+    const router = createAppRouter(createMemoryHistory())
+    installPermissionGuard(router)
+
+    await router.push('/register')
+
+    expect(router.currentRoute.value.path).toBe('/login')
+    expect(useAuthStore(pinia).status).toBe('error')
+    expect(useAuthStore(pinia).errorMessage).toBe('服务暂未就绪')
   })
 
   it('redirects a refresh 401 to Login as anonymous', async () => {

@@ -9,6 +9,7 @@ import (
 
 	"admin/server/internal/module/access"
 	"admin/server/internal/module/auth"
+	"admin/server/internal/module/authclient"
 	"admin/server/internal/shared/apperror"
 	"github.com/gin-gonic/gin"
 )
@@ -28,8 +29,8 @@ func TestRequirePermissionAllowsTheNextHandler(t *testing.T) {
 	if recorder.Code != http.StatusNoContent || !called {
 		t.Fatalf("status=%d next=%v body=%s", recorder.Code, called, recorder.Body)
 	}
-	if service.userID != 41 || service.code != "system:user:create" || service.ctx == nil {
-		t.Fatalf("service userID=%d code=%q context=%v", service.userID, service.code, service.ctx)
+	if service.identity.UserID != 41 || service.identity.Platform != "admin" || service.code != "system:user:create" || service.ctx == nil {
+		t.Fatalf("service identity=%+v code=%q context=%v", service.identity, service.code, service.ctx)
 	}
 }
 
@@ -61,18 +62,18 @@ func TestRequirePermissionPanicsForEmptyPermissionCode(t *testing.T) {
 }
 
 type permissionAccessService struct {
-	allowed bool
-	err     error
-	calls   int
-	ctx     context.Context
-	userID  int64
-	code    string
+	allowed  bool
+	err      error
+	calls    int
+	ctx      context.Context
+	identity auth.Identity
+	code     string
 }
 
-func (s *permissionAccessService) Allowed(ctx context.Context, userID int64, code string) (bool, error) {
+func (s *permissionAccessService) Allowed(ctx context.Context, identity auth.Identity, code string) (bool, error) {
 	s.calls++
 	s.ctx = ctx
-	s.userID = userID
+	s.identity = identity
 	s.code = code
 	return s.allowed, s.err
 }
@@ -83,7 +84,7 @@ func servePermissionRequest(t *testing.T, service *permissionAccessService, auth
 	called := false
 	router := gin.New()
 	if authenticated {
-		router.Use(auth.Authenticate(accessAuthService{}))
+		router.Use(authclient.Require(), auth.Authenticate(accessAuthService{}))
 	}
 	router.Use(access.RequirePermission(service, permissionCode))
 	router.GET("/", func(context *gin.Context) {
@@ -93,6 +94,8 @@ func servePermissionRequest(t *testing.T, service *permissionAccessService, auth
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
 	if authenticated {
 		request.Header.Set("Authorization", "Bearer token")
+		request.Header[authclient.PlatformHeader] = []string{"admin"}
+		request.Header[authclient.DeviceIDHeader] = []string{"550e8400-e29b-41d4-a716-446655440000"}
 	}
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)

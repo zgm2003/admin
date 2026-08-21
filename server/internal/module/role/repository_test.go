@@ -4,24 +4,30 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
+	"admin/server/internal/module/access"
+	"admin/server/internal/module/accessstate"
 	"admin/server/internal/module/auth"
 	"admin/server/internal/module/menu"
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/user"
 	"admin/server/internal/shared/yesno"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func TestEnsureSystemRolesCreatesAndValidatesRoles(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
 	repository := role.NewRepository(tx)
-	service := role.NewService(repository)
+	service := role.NewService(repository, nil)
 
 	if err := service.EnsureSystemRoles(ctx); err != nil {
 		t.Fatalf("EnsureSystemRoles() error = %v", err)
@@ -55,7 +61,7 @@ func TestEnsureSystemRolesCreatesAndValidatesRoles(t *testing.T) {
 func TestEnsureSystemRolesRejectsMutatedSystemRole(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
 	repository := role.NewRepository(tx)
-	service := role.NewService(repository)
+	service := role.NewService(repository, nil)
 	if err := service.EnsureSystemRoles(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +78,7 @@ func TestFindDefaultRequiresExactlyOneEnabledRole(t *testing.T) {
 	t.Run("finds the configured default", func(t *testing.T) {
 		tx, ctx := openRoleTransaction(t)
 		repository := role.NewRepository(tx)
-		if err := role.NewService(repository).EnsureSystemRoles(ctx); err != nil {
+		if err := role.NewService(repository, nil).EnsureSystemRoles(ctx); err != nil {
 			t.Fatal(err)
 		}
 		found, err := repository.FindDefault(ctx)
@@ -87,7 +93,7 @@ func TestFindDefaultRequiresExactlyOneEnabledRole(t *testing.T) {
 	t.Run("rejects no enabled default", func(t *testing.T) {
 		tx, ctx := openRoleTransaction(t)
 		repository := role.NewRepository(tx)
-		if err := role.NewService(repository).EnsureSystemRoles(ctx); err != nil {
+		if err := role.NewService(repository, nil).EnsureSystemRoles(ctx); err != nil {
 			t.Fatal(err)
 		}
 		if err := tx.WithContext(ctx).Model(&role.Role{}).Where("code = ?", role.CodeRegisteredUser).Update("is_enabled", yesno.No).Error; err != nil {
@@ -101,7 +107,7 @@ func TestFindDefaultRequiresExactlyOneEnabledRole(t *testing.T) {
 	t.Run("rejects multiple enabled defaults", func(t *testing.T) {
 		tx, ctx := openRoleTransaction(t)
 		repository := role.NewRepository(tx)
-		if err := role.NewService(repository).EnsureSystemRoles(ctx); err != nil {
+		if err := role.NewService(repository, nil).EnsureSystemRoles(ctx); err != nil {
 			t.Fatal(err)
 		}
 		if err := tx.WithContext(ctx).Exec("DROP INDEX ux_sys_role_default_active").Error; err != nil {
@@ -120,7 +126,7 @@ func TestFindByCodeRejectsDeletedOrDisabledRole(t *testing.T) {
 	t.Run("disabled", func(t *testing.T) {
 		tx, ctx := openRoleTransaction(t)
 		repository := role.NewRepository(tx)
-		if err := role.NewService(repository).EnsureSystemRoles(ctx); err != nil {
+		if err := role.NewService(repository, nil).EnsureSystemRoles(ctx); err != nil {
 			t.Fatal(err)
 		}
 		if err := tx.WithContext(ctx).Model(&role.Role{}).Where("code = ?", role.CodeSuperAdmin).Update("is_enabled", yesno.No).Error; err != nil {
@@ -134,7 +140,7 @@ func TestFindByCodeRejectsDeletedOrDisabledRole(t *testing.T) {
 	t.Run("deleted", func(t *testing.T) {
 		tx, ctx := openRoleTransaction(t)
 		repository := role.NewRepository(tx)
-		if err := role.NewService(repository).EnsureSystemRoles(ctx); err != nil {
+		if err := role.NewService(repository, nil).EnsureSystemRoles(ctx); err != nil {
 			t.Fatal(err)
 		}
 		if err := tx.WithContext(ctx).Where("code = ?", role.CodeSuperAdmin).Delete(&role.Role{}).Error; err != nil {
@@ -149,7 +155,7 @@ func TestFindByCodeRejectsDeletedOrDisabledRole(t *testing.T) {
 func TestHasActiveUserWithRole(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
 	repository := role.NewRepository(tx)
-	if err := role.NewService(repository).EnsureSystemRoles(ctx); err != nil {
+	if err := role.NewService(repository, nil).EnsureSystemRoles(ctx); err != nil {
 		t.Fatal(err)
 	}
 	testRole := role.Role{
@@ -183,6 +189,54 @@ func TestHasActiveUserWithRole(t *testing.T) {
 	found, err = repository.HasActiveUserWithRole(ctx, testRole.ID)
 	if err != nil || found {
 		t.Fatalf("after relation deletion = %v,%v", found, err)
+	}
+}
+
+func TestRepositoryEffectiveAccessVersionsByRoleAreSortedAndExact(t *testing.T) {
+	tx, ctx := openRoleTransaction(t)
+	repository := role.NewRepository(tx)
+	testRole := role.Role{Code: fmt.Sprintf("access_scope_%d", time.Now().UnixNano()), Name: "Access scope", IsEnabled: yesno.Yes}
+	if err := tx.WithContext(ctx).Create(&testRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	first := createRoleAccessUser(t, tx, ctx, testRole.ID, yesno.Yes, false)
+	second := createRoleAccessUser(t, tx, ctx, testRole.ID, yesno.Yes, false)
+	_ = createRoleAccessUser(t, tx, ctx, testRole.ID, yesno.No, false)
+	_ = createRoleAccessUser(t, tx, ctx, testRole.ID, yesno.Yes, true)
+
+	want := []accessstate.Version{{UserID: first.ID, Version: 1}, {UserID: second.ID, Version: 1}}
+	candidates, err := repository.FindEffectiveAccessVersionsByRole(ctx, testRole.ID)
+	if err != nil || !reflect.DeepEqual(candidates, want) {
+		t.Fatalf("FindEffectiveAccessVersionsByRole() = %+v,%v", candidates, err)
+	}
+	locked, err := repository.LockEffectiveAccessVersionsByRole(ctx, testRole.ID)
+	if err != nil || !reflect.DeepEqual(locked, want) {
+		t.Fatalf("LockEffectiveAccessVersionsByRole() = %+v,%v", locked, err)
+	}
+	advanced, err := repository.IncrementAccessVersions(ctx, []int64{second.ID, first.ID, first.ID}, time.Now().UTC().Truncate(time.Microsecond))
+	if err != nil || !reflect.DeepEqual(advanced, map[int64]int64{first.ID: 2, second.ID: 2}) {
+		t.Fatalf("IncrementAccessVersions() = %+v,%v", advanced, err)
+	}
+}
+
+func TestRepositoryEffectiveAccessVersionsRejectMissingVersion(t *testing.T) {
+	tx, ctx := openRoleTransaction(t)
+	testRole := role.Role{Code: fmt.Sprintf("missing_version_%d", time.Now().UnixNano()), Name: "Missing version", IsEnabled: yesno.Yes}
+	if err := tx.WithContext(ctx).Create(&testRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	created := user.User{
+		Username: fmt.Sprintf("missing_version_%d", time.Now().UnixNano()),
+		Email:    fmt.Sprintf("missing_version_%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", IsEnabled: yesno.Yes,
+	}
+	if err := tx.WithContext(ctx).Create(&created).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.WithContext(ctx).Create(&role.UserRole{UserID: created.ID, RoleID: testRole.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := role.NewRepository(tx).FindEffectiveAccessVersionsByRole(ctx, testRole.ID); err == nil {
+		t.Fatal("missing access version was accepted")
 	}
 }
 
@@ -289,7 +343,7 @@ func TestRepositoryListTreatsPercentAndUnderscoreLiterally(t *testing.T) {
 
 func TestEnsureSystemRolesRejectsPartialSystemRoleStateAtomically(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
+	service := role.NewService(role.NewRepository(tx), nil)
 	if err := service.EnsureSystemRoles(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +365,7 @@ func TestEnsureSystemRolesRejectsPartialSystemRoleStateAtomically(t *testing.T) 
 
 func TestEnsureSystemRolesPreservesCustomDefault(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	service := role.NewService(role.NewRepository(tx))
+	service := role.NewService(role.NewRepository(tx), nil)
 	if err := service.EnsureSystemRoles(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -334,6 +388,17 @@ func TestEnsureSystemRolesPreservesCustomDefault(t *testing.T) {
 
 func openRoleTransaction(t *testing.T) (*gorm.DB, context.Context) {
 	t.Helper()
+	db, ctx := openRoleDatabase(t)
+	tx := db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		t.Fatalf("begin transaction: %v", tx.Error)
+	}
+	t.Cleanup(func() { _ = tx.Rollback().Error })
+	return tx, ctx
+}
+
+func openRoleDatabase(t *testing.T) (*gorm.DB, context.Context) {
+	t.Helper()
 	if testing.Short() {
 		t.Skip("PostgreSQL integration test")
 	}
@@ -346,27 +411,80 @@ func openRoleTransaction(t *testing.T) (*gorm.DB, context.Context) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	t.Cleanup(cancel)
-	connection, err := database.Open(ctx, settings.PostgresDSN)
+	root, err := database.Open(ctx, settings.PostgresDSN)
 	if err != nil {
 		t.Fatalf("open PostgreSQL: %v", err)
 	}
-	t.Cleanup(func() { _ = connection.Close() })
-	if err := database.AutoMigrate(ctx, connection.GORM, &user.User{}, &role.Role{}, &role.UserRole{}, &menu.Menu{}, &menu.RoleMenu{}, &auth.Session{}); err != nil {
+	schema := fmt.Sprintf("test_role_%d", time.Now().UnixNano())
+	if err := root.GORM.WithContext(ctx).Exec("CREATE SCHEMA " + schema).Error; err != nil {
+		t.Fatal(err)
+	}
+	pgxConfig, err := pgx.ParseConfig(settings.PostgresDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pgxConfig.RuntimeParams["search_path"] = schema
+	sqlDB := stdlib.OpenDB(*pgxConfig)
+	if err := sqlDB.PingContext(ctx); err != nil {
+		t.Fatal(err)
+	}
+	db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = sqlDB.Close()
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = root.GORM.WithContext(cleanupCtx).Exec("DROP SCHEMA IF EXISTS " + schema + " CASCADE").Error
+		_ = root.Close()
+	})
+	if err := auth.PrepareSessionSchema(ctx, db); err != nil {
+		t.Fatalf("PrepareSessionSchema: %v", err)
+	}
+	if err := database.AutoMigrate(ctx, db, &user.User{}, &role.Role{}, &role.UserRole{}, &menu.Menu{}, &menu.RoleMenu{}, &auth.Session{}, &access.Version{}); err != nil {
 		t.Fatalf("AutoMigrate: %v", err)
 	}
-	if err := role.EnsureSchema(ctx, connection.GORM); err != nil {
+	if err := role.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("Ensure role schema: %v", err)
 	}
-	if err := auth.EnsureSchema(ctx, connection.GORM); err != nil {
+	if err := auth.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
-	if err := menu.EnsureSchema(ctx, connection.GORM); err != nil {
+	if err := menu.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("Ensure menu schema: %v", err)
 	}
-	tx := connection.GORM.WithContext(ctx).Begin()
-	if tx.Error != nil {
-		t.Fatalf("begin transaction: %v", tx.Error)
+	if err := access.EnsureSchema(ctx, db); err != nil {
+		t.Fatalf("Ensure access schema: %v", err)
 	}
-	t.Cleanup(func() { _ = tx.Rollback().Error })
-	return tx, ctx
+	return db, ctx
+}
+
+func createRoleAccessUser(t *testing.T, tx *gorm.DB, ctx context.Context, roleID int64, enabled yesno.Value, deleted bool) user.User {
+	t.Helper()
+	unique := time.Now().UnixNano()
+	created := user.User{
+		Username: fmt.Sprintf("role_access_%d", unique), Email: fmt.Sprintf("role_access_%d@example.com", unique),
+		PasswordHash: "hash", IsEnabled: enabled,
+	}
+	if err := tx.WithContext(ctx).Create(&created).Error; err != nil {
+		t.Fatal(err)
+	}
+	if enabled == yesno.No {
+		if err := tx.WithContext(ctx).Model(&user.User{}).Where("id = ?", created.ID).Update("is_enabled", yesno.No).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.WithContext(ctx).Create(&access.Version{UserID: created.ID, Version: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.WithContext(ctx).Create(&role.UserRole{UserID: created.ID, RoleID: roleID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if deleted {
+		if err := tx.WithContext(ctx).Delete(&created).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	return created
 }

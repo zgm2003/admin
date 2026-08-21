@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	projectmiddleware "admin/server/internal/middleware"
+	"admin/server/internal/module/authclient"
 	"admin/server/internal/module/user"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
@@ -17,8 +19,8 @@ type authenticationService interface {
 	Register(context.Context, RegisterInput) (Registered, error)
 	Login(context.Context, LoginInput) (Credential, error)
 	Refresh(context.Context, RefreshInput) (Credential, error)
-	Authenticate(context.Context, string) (Identity, error)
-	Logout(context.Context, Identity) error
+	Authenticate(context.Context, string, authclient.Client) (Identity, error)
+	Logout(context.Context, Identity, authclient.Client) error
 	CurrentUser(context.Context, Identity) (user.Current, error)
 }
 
@@ -34,6 +36,11 @@ func RequireOrigin(allowedOrigin string) gin.HandlerFunc {
 
 func Authenticate(service authenticationService) gin.HandlerFunc {
 	return func(context *gin.Context) {
+		client, ok := authclient.FromContext(context)
+		if !ok {
+			response.Fail(context, apperror.InvalidRequest(fmt.Errorf("authentication client metadata is missing")))
+			return
+		}
 		header := context.GetHeader("Authorization")
 		if !strings.HasPrefix(header, "Bearer ") {
 			response.Fail(context, apperror.Unauthorized(fmt.Errorf("Bearer Token is required")))
@@ -44,12 +51,14 @@ func Authenticate(service authenticationService) gin.HandlerFunc {
 			response.Fail(context, apperror.Unauthorized(fmt.Errorf("Bearer Token is malformed")))
 			return
 		}
-		identity, err := service.Authenticate(context.Request.Context(), rawToken)
+		identity, err := service.Authenticate(context.Request.Context(), rawToken, client)
 		if err != nil {
 			response.Fail(context, err)
 			return
 		}
 		context.Set(identityContextKey, identity)
+		projectmiddleware.SetAuthenticationLog(context, identity.Platform, identity.UserID, identity.SessionID)
+		projectmiddleware.SetCacheLog(context, "session", identity.CacheResult, 0)
 		context.Next()
 	}
 }

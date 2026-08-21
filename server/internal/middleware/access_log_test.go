@@ -52,6 +52,43 @@ func TestAccessLogContainsOperationalFieldsButNoSecrets(t *testing.T) {
 	}
 }
 
+func TestAccessLogContainsSafeAuthenticationAndCacheFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	router := gin.New()
+	router.Use(projectmiddleware.AccessLog(logger))
+	router.GET("/access", func(context *gin.Context) {
+		projectmiddleware.SetAuthenticationLog(context, "admin", 7, 11)
+		projectmiddleware.SetCacheLog(context, "accessSnapshot", "hit", 4)
+		context.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(http.MethodGet, "/access", nil)
+	request.Header.Set("Authorization", "Bearer access-secret")
+	request.Header.Set("Cookie", "admin_refresh_admin=refresh-secret")
+	request.Header.Set("X-Device-ID", "550e8400-e29b-41d4-a716-446655440000")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	var entry map[string]any
+	if err := json.Unmarshal(output.Bytes(), &entry); err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]any{
+		"authPlatform": "admin", "userID": float64(7), "sessionID": float64(11),
+		"cacheKind": "accessSnapshot", "cacheResult": "hit", "accessVersion": float64(4),
+	} {
+		if entry[key] != want {
+			t.Fatalf("log[%s]=%#v want %#v; entry=%v", key, entry[key], want, entry)
+		}
+	}
+	for _, forbidden := range []string{"access-secret", "refresh-secret", "550e8400-e29b-41d4-a716-446655440000", "Authorization", "Cookie", "X-Device-ID"} {
+		if strings.Contains(output.String(), forbidden) {
+			t.Fatalf("log leaked %q: %s", forbidden, output.String())
+		}
+	}
+}
+
 func TestAccessLogContainsInternalCauseWithoutLeakingItInResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	var output bytes.Buffer

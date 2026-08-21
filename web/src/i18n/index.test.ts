@@ -55,4 +55,19 @@ describe('frontend i18n', () => {
 		expect(appI18n.global.t('user.disableConfirm')).toContain('sign in')
 		expect(appI18n.global.t('user.deleteConfirm')).toContain('new account')
 	})
+
+  it('contains the complete bilingual authentication-platform copy', () => {
+    const keys = [
+      'navigation.systemAuthPlatforms', 'permission.authPlatformCreate',
+      'permission.authPlatformUpdate', 'permission.authPlatformStatus',
+      'permission.authPlatformDelete', 'authPlatform.title', 'authPlatform.search',
+      'authPlatform.deployment', 'authPlatform.confirm.disable',
+    ]
+    for (const key of keys) {
+      expect(isAppMessageKey(key), key).toBe(true)
+      expect(appI18n.global.t(key), key).toBeTruthy()
+    }
+    setLocale('en-US')
+    expect(appI18n.global.t('authPlatform.title')).toBe('Authentication platforms')
+  })
 })

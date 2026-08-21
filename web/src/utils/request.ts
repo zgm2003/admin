@@ -8,6 +8,8 @@ import axios, {
 import { ElNotification } from 'element-plus'
 
 import { parseCredential, type AccessCredential } from '../api/auth.contract'
+import { authPlatform } from '../auth/platform'
+import { readDeviceID } from '../auth/device-id'
 import { appI18n, readLocale } from '../i18n'
 import { pinia } from '../store'
 import { useAccessStore } from '../store/access'
@@ -17,7 +19,7 @@ import { ApiError, ProtocolError, type ApiResponse } from '../types/http'
 export { ApiError, ProtocolError } from '../types/http'
 
 const envelopeKeys = ['code', 'data', 'message']
-const noBearerPaths = new Set(['/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/refresh'])
+const noBearerPaths = new Set(['/api/v1/auth/policy', '/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/refresh'])
 const noRefreshPaths = new Set([...noBearerPaths, '/api/v1/auth/logout'])
 
 interface AuthRequestConfig extends InternalAxiosRequestConfig {
@@ -93,10 +95,10 @@ function buildRequestClient(
     return refreshPromise
   }
 
-  rawClient.interceptors.request.use(applyLocaleHeader)
+  rawClient.interceptors.request.use(applyClientHeaders)
 
   client.interceptors.request.use((config) => {
-    applyLocaleHeader(config)
+    applyClientHeaders(config)
     const path = requestPath(config.url, baseURL)
     if (authStore.accessToken !== '' && !noBearerPaths.has(path)) {
       config.headers = AxiosHeaders.from(config.headers)
@@ -167,9 +169,11 @@ async function performRefresh(
   }
 }
 
-function applyLocaleHeader(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {
+function applyClientHeaders(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {
   config.headers = AxiosHeaders.from(config.headers)
   config.headers.set('Accept-Language', readLocale())
+  config.headers.set('X-Auth-Platform', authPlatform)
+  config.headers.set('X-Device-ID', readDeviceID())
   return config
 }
 

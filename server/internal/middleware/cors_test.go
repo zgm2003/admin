@@ -40,7 +40,33 @@ func TestCORSAllowsOnlyConfiguredOriginWithCredentials(t *testing.T) {
 	}
 }
 
-func TestCORSAllowsTheLanguageRequestHeader(t *testing.T) {
+func TestCORSAllowsAuthenticationHeadersAndPatch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(projectmiddleware.CORS("http://localhost:16300"))
+	router.PATCH("/", func(context *gin.Context) { context.Status(http.StatusNoContent) })
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodOptions, "/", nil)
+	request.Header.Set("Origin", "http://localhost:16300")
+	request.Header.Set("Access-Control-Request-Method", http.MethodPatch)
+	request.Header.Set("Access-Control-Request-Headers", "accept-language,x-auth-platform,x-device-id")
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("preflight status = %d, want %d", recorder.Code, http.StatusNoContent)
+	}
+	if got := recorder.Header().Get("Access-Control-Allow-Methods"); !headerListContains(got, http.MethodPatch) {
+		t.Fatalf("allow methods = %q, want PATCH", got)
+	}
+	for _, header := range []string{"Accept-Language", "X-Auth-Platform", "X-Device-ID"} {
+		if got := recorder.Header().Get("Access-Control-Allow-Headers"); !headerListContains(got, header) {
+			t.Fatalf("allow headers = %q, want %s", got, header)
+		}
+	}
+}
+
+func TestCORSRejectsUnlistedRequestHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(projectmiddleware.CORS("http://localhost:16300"))
@@ -50,14 +76,11 @@ func TestCORSAllowsTheLanguageRequestHeader(t *testing.T) {
 	request := httptest.NewRequest(http.MethodOptions, "/", nil)
 	request.Header.Set("Origin", "http://localhost:16300")
 	request.Header.Set("Access-Control-Request-Method", http.MethodGet)
-	request.Header.Set("Access-Control-Request-Headers", "accept-language")
+	request.Header.Set("Access-Control-Request-Headers", "x-unlisted-header")
 	router.ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusNoContent {
-		t.Fatalf("preflight status = %d, want %d", recorder.Code, http.StatusNoContent)
-	}
-	if got := recorder.Header().Get("Access-Control-Allow-Headers"); !headerListContains(got, "Accept-Language") {
-		t.Fatalf("allow headers = %q, want Accept-Language", got)
+	if got := recorder.Header().Get("Access-Control-Allow-Headers"); headerListContains(got, "X-Unlisted-Header") {
+		t.Fatalf("allow headers = %q, must not contain X-Unlisted-Header", got)
 	}
 }
 

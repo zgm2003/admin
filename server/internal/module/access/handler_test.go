@@ -8,10 +8,11 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	"admin/server/internal/module/access"
 	"admin/server/internal/module/auth"
-	"admin/server/internal/module/menu"
+	"admin/server/internal/module/authclient"
 	"admin/server/internal/module/user"
 	"admin/server/internal/shared/apperror"
 	"github.com/gin-gonic/gin"
@@ -23,8 +24,8 @@ func TestAccessHandlerReturnsClosedSnapshot(t *testing.T) {
 	service := &currentAccessService{snapshot: access.Snapshot{
 		RoleCodes: []string{"ai_tester", "registered_user"},
 		MenuTree: []access.MenuNode{{
-			Code: "system", MenuType: menu.TypeDirectory, TitleKey: "navigation.system", Children: []access.MenuNode{{
-				Code: "system:user:view", MenuType: menu.TypePage, Path: &pagePath, ViewKey: &pageView,
+			Code: "system", MenuType: access.MenuDirectory, TitleKey: "navigation.system", Children: []access.MenuNode{{
+				Code: "system:user:view", MenuType: access.MenuPage, Path: &pagePath, ViewKey: &pageView,
 				TitleKey: "navigation.systemUsers", Children: []access.MenuNode{},
 			}},
 		}},
@@ -62,8 +63,8 @@ func TestAccessHandlerReturnsClosedSnapshot(t *testing.T) {
 		t.Fatalf("children = %v error=%v", children, err)
 	}
 	assertClosedMenuNode(t, children[0])
-	if service.userID != 41 || service.ctx == nil {
-		t.Fatalf("service userID=%d context=%v", service.userID, service.ctx)
+	if service.identity.UserID != 41 || service.identity.Platform != "admin" || service.ctx == nil {
+		t.Fatalf("service identity=%+v context=%v", service.identity, service.ctx)
 	}
 }
 
@@ -100,14 +101,14 @@ type currentAccessService struct {
 	snapshot access.Snapshot
 	err      error
 	ctx      context.Context
-	userID   int64
+	identity auth.Identity
 	calls    int
 }
 
-func (s *currentAccessService) Current(ctx context.Context, userID int64) (access.Snapshot, error) {
+func (s *currentAccessService) Current(ctx context.Context, identity auth.Identity) (access.Snapshot, error) {
 	s.calls++
 	s.ctx = ctx
-	s.userID = userID
+	s.identity = identity
 	return s.snapshot, s.err
 }
 
@@ -125,11 +126,11 @@ func (accessAuthService) Refresh(context.Context, auth.RefreshInput) (auth.Crede
 	return auth.Credential{}, nil
 }
 
-func (accessAuthService) Authenticate(context.Context, string) (auth.Identity, error) {
-	return auth.Identity{UserID: 41, SessionID: 42, Version: 1}, nil
+func (accessAuthService) Authenticate(context.Context, string, authclient.Client) (auth.Identity, error) {
+	return auth.Identity{UserID: 41, SessionID: 42, Platform: "admin", Version: 1, PolicyVersion: 4, AccessCacheTTL: time.Hour}, nil
 }
 
-func (accessAuthService) Logout(context.Context, auth.Identity) error {
+func (accessAuthService) Logout(context.Context, auth.Identity, authclient.Client) error {
 	return nil
 }
 
@@ -141,11 +142,13 @@ func serveAccessRoute(t *testing.T, service *currentAccessService, authorization
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	access.RegisterRoutes(router.Group("/api/v1"), access.NewHandler(service), auth.Authenticate(accessAuthService{}))
+	access.RegisterRoutes(router.Group("/api/v1", authclient.Require()), access.NewHandler(service), auth.Authenticate(accessAuthService{}))
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/access", nil)
 	if authorization != "" {
 		request.Header.Set("Authorization", authorization)
 	}
+	request.Header[authclient.PlatformHeader] = []string{"admin"}
+	request.Header[authclient.DeviceIDHeader] = []string{"550e8400-e29b-41d4-a716-446655440000"}
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
 	return recorder

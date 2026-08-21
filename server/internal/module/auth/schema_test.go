@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,10 +11,16 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
+	"admin/server/internal/module/access"
 	"admin/server/internal/module/auth"
+	"admin/server/internal/module/authplatform"
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/user"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type expectedColumn struct {
@@ -39,6 +46,8 @@ func TestAuthenticationSchema(t *testing.T) {
 		"sys_user_session": {
 			"id":                 {dataType: "bigint", nullable: "NO"},
 			"user_id":            {dataType: "bigint", nullable: "NO"},
+			"platform":           {dataType: "character varying", nullable: "NO", length: 49},
+			"device_id":          {dataType: "character varying", nullable: "NO", length: 36},
 			"refresh_token_hash": {dataType: "character", nullable: "NO", length: 64},
 			"version":            {dataType: "bigint", nullable: "NO"},
 			"client_ip":          {dataType: "character varying", nullable: "NO", length: 64},
@@ -75,11 +84,10 @@ func TestAuthenticationSchema(t *testing.T) {
 	}
 
 	indexes := map[string][]string{
-		"ux_sys_user_username_active":      {"CREATE UNIQUE INDEX", "lower((username)::text)", "WHERE (deleted_at IS NULL)"},
-		"ux_sys_user_email_active":         {"CREATE UNIQUE INDEX", "(email)", "WHERE (deleted_at IS NULL)"},
-		"ux_sys_user_session_refresh_hash": {"CREATE UNIQUE INDEX", "(refresh_token_hash)"},
-		"ux_sys_user_session_current":      {"CREATE UNIQUE INDEX", "(user_id)", "WHERE (revoked_at IS NULL)"},
-		"ix_sys_user_session_user_created": {"CREATE INDEX", "(user_id, created_at DESC)"},
+		"ux_sys_user_username_active":              {"CREATE UNIQUE INDEX", "lower((username)::text)", "WHERE (deleted_at IS NULL)"},
+		"ux_sys_user_email_active":                 {"CREATE UNIQUE INDEX", "(email)", "WHERE (deleted_at IS NULL)"},
+		"ux_sys_user_session_refresh_hash":         {"CREATE UNIQUE INDEX", "(refresh_token_hash)"},
+		"ix_sys_user_session_user_platform_active": {"CREATE INDEX", "(user_id, platform, created_at DESC, id DESC)", "WHERE (revoked_at IS NULL)"},
 	}
 	for name, fragments := range indexes {
 		definition := indexDefinition(t, connection, ctx, name)
@@ -88,6 +96,88 @@ func TestAuthenticationSchema(t *testing.T) {
 				t.Errorf("index %s = %q, missing %q", name, definition, fragment)
 			}
 		}
+	}
+	if definition := optionalIndexDefinition(t, connection, ctx, "ux_sys_user_session_current"); definition != "" {
+		t.Fatalf("legacy current-session index still exists: %s", definition)
+	}
+}
+
+func TestPrepareSessionSchemaRevokesOnlyLegacySessions(t *testing.T) {
+	connection, ctx := openIsolatedAuthenticationDatabase(t)
+	if err := database.AutoMigrate(ctx, connection.GORM, &user.User{}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	createdUser := user.User{Username: fmt.Sprintf("migration-%d", now.UnixNano()), Email: fmt.Sprintf("migration-%d@example.com", now.UnixNano()), PasswordHash: "hash", IsEnabled: 1, CreatedAt: now, UpdatedAt: now}
+	if err := connection.GORM.WithContext(ctx).Create(&createdUser).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := connection.GORM.WithContext(ctx).Exec(`
+		CREATE TABLE sys_user_session (
+			id BIGSERIAL PRIMARY KEY,
+			user_id BIGINT NOT NULL,
+			refresh_token_hash CHAR(64) NOT NULL,
+			version BIGINT NOT NULL DEFAULT 1,
+			client_ip VARCHAR(64) NOT NULL,
+			user_agent VARCHAR(512) NOT NULL,
+			refresh_expires_at TIMESTAMPTZ NOT NULL,
+			revoked_at TIMESTAMPTZ NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE UNIQUE INDEX ux_sys_user_session_current
+		ON sys_user_session (user_id) WHERE revoked_at IS NULL;`).Error; err != nil {
+		t.Fatal(err)
+	}
+	var legacySessionID int64
+	if err := connection.GORM.WithContext(ctx).Raw(`
+		INSERT INTO sys_user_session
+			(user_id, refresh_token_hash, version, client_ip, user_agent, refresh_expires_at, created_at, updated_at)
+		VALUES (?, ?, 1, '127.0.0.1', 'legacy', ?, ?, ?)
+		RETURNING id`, createdUser.ID, strings.Repeat("a", 64), now.Add(time.Hour), now, now).Scan(&legacySessionID).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if err := auth.PrepareSessionSchema(ctx, connection.GORM); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.AutoMigrate(ctx, connection.GORM, &auth.Session{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := auth.EnsureSchema(ctx, connection.GORM); err != nil {
+		t.Fatal(err)
+	}
+	var legacy auth.Session
+	if err := connection.GORM.WithContext(ctx).Take(&legacy, legacySessionID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if legacy.Platform != "admin" || legacy.DeviceID != "" || legacy.RevokedAt == nil {
+		t.Fatalf("migrated legacy session = %+v", legacy)
+	}
+	if definition := optionalIndexDefinition(t, connection, ctx, "ux_sys_user_session_current"); definition != "" {
+		t.Fatalf("legacy current-session index still exists: %s", definition)
+	}
+	if definition := optionalIndexDefinition(t, connection, ctx, "ix_sys_user_session_user_platform_active"); definition == "" {
+		t.Fatal("platform session index does not exist")
+	}
+
+	postMigration := auth.Session{
+		UserID: createdUser.ID, Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440000",
+		RefreshTokenHash: strings.Repeat("b", 64), Version: 1, ClientIP: "127.0.0.1", UserAgent: "current",
+		RefreshExpiresAt: now.Add(time.Hour), CreatedAt: now.Add(time.Minute), UpdatedAt: now.Add(time.Minute),
+	}
+	if err := connection.GORM.WithContext(ctx).Create(&postMigration).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := auth.PrepareSessionSchema(ctx, connection.GORM); err != nil {
+		t.Fatal(err)
+	}
+	var stored auth.Session
+	if err := connection.GORM.WithContext(ctx).Take(&stored, postMigration.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.RevokedAt != nil {
+		t.Fatalf("post-migration session was revoked at %v", stored.RevokedAt)
 	}
 }
 
@@ -105,6 +195,31 @@ func TestAuthenticationSchemaSourceDoesNotOwnRoleObjects(t *testing.T) {
 
 func openAuthenticationSchema(t *testing.T) (*database.Connection, context.Context) {
 	t.Helper()
+	connection, ctx := openIsolatedAuthenticationDatabase(t)
+	if err := auth.PrepareSessionSchema(ctx, connection.GORM); err != nil {
+		t.Fatalf("PrepareSessionSchema: %v", err)
+	}
+	if err := database.AutoMigrate(ctx, connection.GORM,
+		&user.User{}, &role.Role{}, &role.UserRole{}, &authplatform.Platform{}, &auth.Session{}, &access.Version{}); err != nil {
+		t.Fatalf("AutoMigrate auth schema: %v", err)
+	}
+	if err := role.EnsureSchema(ctx, connection.GORM); err != nil {
+		t.Fatalf("Ensure role schema: %v", err)
+	}
+	if err := authplatform.EnsureSchema(ctx, connection.GORM); err != nil {
+		t.Fatalf("Ensure authentication platform schema: %v", err)
+	}
+	if err := auth.EnsureSchema(ctx, connection.GORM); err != nil {
+		t.Fatalf("EnsureSchema: %v", err)
+	}
+	if err := access.EnsureSchema(ctx, connection.GORM); err != nil {
+		t.Fatalf("Ensure access schema: %v", err)
+	}
+	return connection, ctx
+}
+
+func openIsolatedAuthenticationDatabase(t *testing.T) (*database.Connection, context.Context) {
+	t.Helper()
 	if testing.Short() {
 		t.Skip("PostgreSQL integration test")
 	}
@@ -117,21 +232,35 @@ func openAuthenticationSchema(t *testing.T) (*database.Connection, context.Conte
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	t.Cleanup(cancel)
-	connection, err := database.Open(ctx, settings.PostgresDSN)
+	root, err := database.Open(ctx, settings.PostgresDSN)
 	if err != nil {
 		t.Fatalf("open PostgreSQL: %v", err)
 	}
-	t.Cleanup(func() { _ = connection.Close() })
-	if err := database.AutoMigrate(ctx, connection.GORM,
-		&user.User{}, &role.Role{}, &role.UserRole{}, &auth.Session{}); err != nil {
-		t.Fatalf("AutoMigrate auth schema: %v", err)
+	schema := fmt.Sprintf("test_auth_%d", time.Now().UnixNano())
+	if err := root.GORM.WithContext(ctx).Exec("CREATE SCHEMA " + schema).Error; err != nil {
+		t.Fatal(err)
 	}
-	if err := role.EnsureSchema(ctx, connection.GORM); err != nil {
-		t.Fatalf("Ensure role schema: %v", err)
+	pgxConfig, err := pgx.ParseConfig(settings.PostgresDSN)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := auth.EnsureSchema(ctx, connection.GORM); err != nil {
-		t.Fatalf("EnsureSchema: %v", err)
+	pgxConfig.RuntimeParams["search_path"] = schema
+	sqlDB := stdlib.OpenDB(*pgxConfig)
+	if err := sqlDB.PingContext(ctx); err != nil {
+		t.Fatal(err)
 	}
+	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	connection := &database.Connection{GORM: gormDB, SQL: sqlDB}
+	t.Cleanup(func() {
+		_ = connection.Close()
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = root.GORM.WithContext(cleanupCtx).Exec("DROP SCHEMA IF EXISTS " + schema + " CASCADE").Error
+		_ = root.Close()
+	})
 	return connection, ctx
 }
 
@@ -186,6 +315,17 @@ func indexDefinition(t *testing.T, connection *database.Connection, ctx context.
 	}
 	if definition == "" {
 		t.Fatalf("index %s does not exist", name)
+	}
+	return definition
+}
+
+func optionalIndexDefinition(t *testing.T, connection *database.Connection, ctx context.Context, name string) string {
+	t.Helper()
+	var definition string
+	if err := connection.GORM.WithContext(ctx).Raw(`
+		SELECT indexdef FROM pg_indexes
+		WHERE schemaname = current_schema() AND indexname = ?`, name).Scan(&definition).Error; err != nil {
+		t.Fatalf("inspect index %s: %v", name, err)
 	}
 	return definition
 }

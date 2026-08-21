@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	projectmiddleware "admin/server/internal/middleware"
 	"admin/server/internal/module/auth"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
@@ -13,7 +14,7 @@ import (
 )
 
 type permissionService interface {
-	Allowed(context.Context, int64, string) (bool, error)
+	Allowed(context.Context, auth.Identity, string) (bool, error)
 }
 
 func RequirePermission(service permissionService, permissionCode string) gin.HandlerFunc {
@@ -26,7 +27,7 @@ func RequirePermission(service permissionService, permissionCode string) gin.Han
 			response.Fail(context, apperror.Unauthorized(fmt.Errorf("authentication identity is missing")))
 			return
 		}
-		allowed, err := service.Allowed(context.Request.Context(), identity.UserID, permissionCode)
+		allowed, err := service.Allowed(context.Request.Context(), identity, permissionCode)
 		if err != nil {
 			response.Fail(context, err)
 			return
@@ -39,6 +40,7 @@ func RequirePermission(service permissionService, permissionCode string) gin.Han
 			))
 			return
 		}
+		projectmiddleware.SetCacheLog(context, "access", "checked", 0)
 		context.Next()
 	}
 }

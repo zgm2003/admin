@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -14,13 +15,14 @@ func TestJWTIssueAndParseRoundTrip(t *testing.T) {
 	codec := NewJWT(key)
 	codec.now = func() time.Time { return fixedNow }
 	key[0] = 'x'
-	want := Identity{UserID: 11, SessionID: 22, Version: 3}
+	want := TokenIdentity{UserID: 11, SessionID: 22, Platform: "admin", Version: 3}
+	ttl := 23 * time.Minute
 
-	raw, expiresAt, err := codec.Issue(want)
+	raw, expiresAt, err := codec.Issue(want, ttl)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if raw == "" || !expiresAt.Equal(fixedNow.Add(AccessTTL)) {
+	if raw == "" || !expiresAt.Equal(fixedNow.Add(ttl)) {
 		t.Fatalf("Issue() = token %q expires %v", raw, expiresAt)
 	}
 	got, err := codec.Parse(raw)
@@ -29,6 +31,27 @@ func TestJWTIssueAndParseRoundTrip(t *testing.T) {
 	}
 	if got != want {
 		t.Fatalf("Parse() = %+v, want %+v", got, want)
+	}
+	parts := strings.Split(raw, ".")
+	if len(parts) != 3 {
+		t.Fatalf("JWT parts = %d", len(parts))
+	}
+	payload, err := jwtlib.NewParser().DecodeSegment(parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var claims map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		t.Fatal(err)
+	}
+	wantClaims := []string{"iss", "uid", "sid", "platform", "ver", "iat", "nbf", "exp"}
+	if len(claims) != len(wantClaims) {
+		t.Fatalf("claims = %v", claims)
+	}
+	for _, key := range wantClaims {
+		if claims[key] == nil {
+			t.Fatalf("claim %q is missing: %v", key, claims)
+		}
 	}
 }
 
@@ -89,6 +112,8 @@ func TestJWTRejectsMalformedClaims(t *testing.T) {
 		func(claims *Claims) { claims.UserID = 0 },
 		func(claims *Claims) { claims.SessionID = -1 },
 		func(claims *Claims) { claims.Version = 0 },
+		func(claims *Claims) { claims.Platform = "" },
+		func(claims *Claims) { claims.Platform = "Admin" },
 		func(claims *Claims) { claims.Issuer = "another-service" },
 	} {
 		claims := validClaims(fixedNow)
@@ -96,8 +121,14 @@ func TestJWTRejectsMalformedClaims(t *testing.T) {
 		assertJWTRejected(t, codec, key, claims)
 	}
 
-	if _, _, err := codec.Issue(Identity{}); err == nil {
+	if _, _, err := codec.Issue(TokenIdentity{}, AccessTTL); err == nil {
 		t.Fatal("Issue accepted zero identity")
+	}
+	if _, _, err := codec.Issue(TokenIdentity{UserID: 1, SessionID: 2, Platform: "admin", Version: 1}, 59*time.Second); err == nil {
+		t.Fatal("Issue accepted a short TTL")
+	}
+	if _, _, err := codec.Issue(TokenIdentity{UserID: 1, SessionID: 2, Platform: "admin", Version: 1}, 30*24*time.Hour+time.Second); err == nil {
+		t.Fatal("Issue accepted a long TTL")
 	}
 }
 
@@ -105,6 +136,7 @@ func validClaims(now time.Time) Claims {
 	return Claims{
 		UserID:    1,
 		SessionID: 2,
+		Platform:  "admin",
 		Version:   1,
 		RegisteredClaims: jwtlib.RegisteredClaims{
 			Issuer:    jwtIssuer,

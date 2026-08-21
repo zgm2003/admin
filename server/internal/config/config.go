@@ -12,12 +12,14 @@ import (
 )
 
 type API struct {
-	HTTPAddr    string
-	PostgresDSN string
-	RedisURL    string
-	CORSOrigin  string
-	AppSecret   string
-	Auth        Auth
+	HTTPAddr         string
+	PostgresDSN      string
+	RedisURL         string
+	CORSOrigin       string
+	AppSecret        string
+	TrustedProxies   []string
+	TrustedProxyMode string
+	Auth             Auth
 }
 
 type Auth struct {
@@ -59,18 +61,24 @@ func LoadAPI(lookupEnv LookupEnv) (API, error) {
 	if err != nil {
 		return API{}, err
 	}
+	trustedProxies, trustedProxyMode, err := loadTrustedProxies(lookupEnv)
+	if err != nil {
+		return API{}, err
+	}
 	auth, err := loadAuth(lookupEnv, corsOrigin)
 	if err != nil {
 		return API{}, err
 	}
 
 	return API{
-		HTTPAddr:    httpAddr,
-		PostgresDSN: postgresDSN,
-		RedisURL:    redisURL,
-		CORSOrigin:  corsOrigin,
-		AppSecret:   appSecret,
-		Auth:        auth,
+		HTTPAddr:         httpAddr,
+		PostgresDSN:      postgresDSN,
+		RedisURL:         redisURL,
+		CORSOrigin:       corsOrigin,
+		AppSecret:        appSecret,
+		TrustedProxies:   trustedProxies,
+		TrustedProxyMode: trustedProxyMode,
+		Auth:             auth,
 	}, nil
 }
 
@@ -118,6 +126,44 @@ func loadAppSecret(lookupEnv LookupEnv) (string, error) {
 		return "", fmt.Errorf("APP_SECRET: %w", err)
 	}
 	return value, nil
+}
+
+func loadTrustedProxies(lookupEnv LookupEnv) ([]string, string, error) {
+	raw, err := required(lookupEnv, "TRUSTED_PROXIES")
+	if err != nil {
+		return nil, "", err
+	}
+	if raw == "none" {
+		return []string{}, "none", nil
+	}
+
+	seen := make(map[string]struct{})
+	values := make([]string, 0)
+	for _, rawEntry := range strings.Split(raw, ",") {
+		entry := strings.TrimSpace(rawEntry)
+		if entry == "" || entry == "none" {
+			return nil, "", fmt.Errorf("TRUSTED_PROXIES: unsafe entry %q", entry)
+		}
+		if net.ParseIP(entry) == nil {
+			_, network, parseErr := net.ParseCIDR(entry)
+			if parseErr != nil {
+				return nil, "", fmt.Errorf("TRUSTED_PROXIES: invalid entry %q", entry)
+			}
+			ones, _ := network.Mask.Size()
+			if ones == 0 {
+				return nil, "", fmt.Errorf("TRUSTED_PROXIES: unsafe entry %q", entry)
+			}
+		}
+		if _, exists := seen[entry]; exists {
+			continue
+		}
+		seen[entry] = struct{}{}
+		values = append(values, entry)
+	}
+	if len(values) == 0 {
+		return nil, "", fmt.Errorf("TRUSTED_PROXIES: allowlist is empty")
+	}
+	return values, "allowlist", nil
 }
 
 func loadAuth(lookupEnv LookupEnv, corsOrigin string) (Auth, error) {

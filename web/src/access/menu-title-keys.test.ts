@@ -22,6 +22,11 @@ describe('menu title key protocol', () => {
 			'permission.userStatus',
 			'permission.userDelete',
 			'permission.userRoles',
+      'navigation.systemAuthPlatforms',
+      'permission.authPlatformCreate',
+      'permission.authPlatformUpdate',
+      'permission.authPlatformStatus',
+      'permission.authPlatformDelete',
     ])
   })
 
