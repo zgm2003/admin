@@ -194,9 +194,8 @@ onMounted(()=>{ void loadRoleOptions(); void loadUsers() })
 </script>
 
 <template>
-  <section class="user-management">
-    <header class="user-toolbar"><h1>{{ t('user.title') }}</h1><el-button :icon="Refresh" :loading="loading" @click="loadUsers">{{ t('user.refresh') }}</el-button></header>
-    <div class="user-filters">
+  <section class="user-management system-page">
+    <div class="user-filters system-page__filters">
       <el-input v-model="keyword" clearable :placeholder="t('user.keyword')" @keyup.enter="search" />
       <el-select v-model="statusFilter"><el-option :label="t('user.status')" value="" /><el-option :label="t('user.enabled')" :value="YesNo.Yes" /><el-option :label="t('user.disabled')" :value="YesNo.No" /></el-select>
       <el-select v-model="roleFilter" :loading="roleOptionsLoading" clearable><el-option :label="t('user.role')" value="" /><el-option v-for="role in roleOptions" :key="role.id" :label="`${role.name} (${role.code})${role.isEnabled===YesNo.No?` · ${t('user.roleDisabled')}`:''}`" :value="role.id" /></el-select>
@@ -204,6 +203,9 @@ onMounted(()=>{ void loadRoleOptions(); void loadUsers() })
     </div>
     <el-alert v-if="roleOptionsError" :title="roleOptionsError" type="error" show-icon /><el-alert v-if="loadError" :title="loadError" type="error" show-icon /><el-alert v-if="mutationError" :title="mutationError" type="error" show-icon closable @close="mutationError=''" />
     <AppTable class="user-table" :columns="tableColumns" :data="rows" :loading="loading" :pagination="tablePagination" result-state="success" :aria-label="t('user.title')" @update:pagination="updateTablePagination">
+      <template #toolbar-right>
+        <el-button :icon="Refresh" :loading="loading" @click="loadUsers">{{ t('user.refresh') }}</el-button>
+      </template>
       <template #cell-roles="{ row }: { row: UserListItem }"><div v-if="row.id > 0" class="role-tags"><el-tooltip v-for="role in row.roles" :key="role.id" :content="role.code"><el-tag :type="role.isEnabled===YesNo.Yes?'primary':'info'">{{ role.name }}<span v-if="role.isEnabled===YesNo.No"> · {{ t('user.roleDisabled') }}</span></el-tag></el-tooltip></div></template>
       <template #cell-status="{ row }: { row: UserListItem }"><el-tag v-if="row.id > 0" :type="row.isEnabled===YesNo.Yes?'success':'danger'">{{ t(row.isEnabled===YesNo.Yes?'user.enabled':'user.disabled') }}</el-tag></template>
       <template #cell-actions="{ row }: { row: UserListItem }"><template v-if="row.id > 0">
@@ -227,5 +229,5 @@ onMounted(()=>{ void loadRoleOptions(); void loadUsers() })
 </template>
 
 <style scoped>
-.user-management{min-height:0;min-width:0;display:flex;flex-direction:column;gap:14px}.user-toolbar,.user-filters{display:flex;align-items:center;gap:12px}.user-toolbar{justify-content:space-between}.user-toolbar h1{margin:0;font-size:20px}.user-filters{flex-wrap:wrap}.user-filters .el-input{width:280px}.user-filters .el-select{width:190px}.user-table{width:100%}.role-tags{display:flex;flex-wrap:wrap;gap:6px}.el-pagination{justify-content:flex-end}.role-dialog-scroll{max-height:min(62vh,620px);padding-right:8px;overflow-y:auto}.role-dialog-toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px}.role-checks{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}.role-checks .el-checkbox{height:auto;margin-right:0}.role-checks span{margin-right:8px}@media(max-width:720px){.user-toolbar{align-items:flex-start}.user-filters .el-input,.user-filters .el-select{width:100%}.el-pagination{justify-content:flex-start;overflow-x:auto}}
+.user-management{min-height:0;min-width:0}.user-filters{display:flex;align-items:center;flex-wrap:wrap;gap:12px}.user-filters .el-input{width:280px}.user-filters .el-select{width:190px}.user-table{width:100%}.role-tags{display:flex;flex-wrap:wrap;gap:6px}.el-pagination{justify-content:flex-end}.role-dialog-scroll{max-height:min(62vh,620px);padding-right:8px;overflow-y:auto}.role-dialog-toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px}.role-checks{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}.role-checks .el-checkbox{height:auto;margin-right:0}.role-checks span{margin-right:8px}@media(max-width:720px){.user-filters .el-input,.user-filters .el-select{width:100%}.el-pagination{justify-content:flex-start;overflow-x:auto}}
 </style>

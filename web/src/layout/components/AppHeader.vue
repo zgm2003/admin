@@ -1,25 +1,30 @@
 <script setup lang="ts">
-import { Connection, Menu, Moon, Sunny, SwitchButton, User } from '@element-plus/icons-vue'
+import { Connection, Menu, Setting, SwitchButton, User } from '@element-plus/icons-vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { AppLocale } from '../../i18n'
-import type { ThemeMode } from '../../utils/theme'
+import type { HeaderBreadcrumb } from '../breadcrumbs'
+import SettingDrawer from './SettingDrawer.vue'
 
 defineProps<{
   locale: AppLocale
-  theme: ThemeMode
+  breadcrumbs: HeaderBreadcrumb[]
+  showBreadcrumb: boolean
+  showMenuToggle: boolean
+  contentFullscreen: boolean
   username: string
   logoutPending: boolean
 }>()
 
 const emit = defineEmits<{
   toggleMenu: []
-  toggleTheme: []
   changeLocale: [locale: AppLocale]
   logout: []
 }>()
 
 const { t } = useI18n()
+const settingsOpen = ref(false)
 
 function handleLocaleCommand(command: string | number | object): void {
   if (command !== 'zh-CN' && command !== 'en-US') {
@@ -31,16 +36,23 @@ function handleLocaleCommand(command: string | number | object): void {
 
 <template>
   <div class="app-header">
-    <el-button
-      data-testid="toggle-menu"
-      :icon="Menu"
-      text
-      :title="t('layout.header.toggleMenu')"
-      :aria-label="t('layout.header.toggleMenu')"
-      @click="$emit('toggleMenu')"
-    />
+    <div class="app-header__leading">
+      <el-button
+        v-if="showMenuToggle"
+        data-testid="toggle-menu"
+        :icon="Menu"
+        text
+        :title="t('layout.header.toggleMenu')"
+        :aria-label="t('layout.header.toggleMenu')"
+        @click="emit('toggleMenu')"
+      />
 
-    <span class="app-header__location">{{ t('navigation.dashboard') }}</span>
+      <el-breadcrumb v-if="showBreadcrumb" class="app-header__breadcrumb" separator="/">
+        <el-breadcrumb-item v-for="breadcrumb in breadcrumbs" :key="`${breadcrumb.path ?? 'directory'}:${breadcrumb.titleKey}`" :to="breadcrumb.path ?? undefined">
+          {{ t(breadcrumb.titleKey) }}
+        </el-breadcrumb-item>
+      </el-breadcrumb>
+    </div>
 
     <div class="app-header__actions">
       <el-dropdown @command="handleLocaleCommand">
@@ -70,13 +82,13 @@ function handleLocaleCommand(command: string | number | object): void {
         </template>
       </el-dropdown>
 
-      <el-tooltip :content="theme === 'dark' ? t('layout.header.switchToLight') : t('layout.header.switchToDark')">
+      <el-tooltip :content="t('layout.header.settings')">
         <el-button
-          data-testid="toggle-theme"
+          data-testid="open-settings"
           text
-          :icon="theme === 'dark' ? Sunny : Moon"
-          :aria-label="theme === 'dark' ? t('layout.header.switchToLight') : t('layout.header.switchToDark')"
-          @click="$emit('toggleTheme')"
+          :icon="Setting"
+          :aria-label="t('layout.header.settings')"
+          @click="settingsOpen = true"
         />
       </el-tooltip>
     </div>
@@ -91,10 +103,86 @@ function handleLocaleCommand(command: string | number | object): void {
         :loading="logoutPending"
         :disabled="logoutPending"
         :title="t('layout.header.logout')"
-        @click="$emit('logout')"
+        @click="emit('logout')"
       >
         {{ t('layout.header.logout') }}
       </el-button>
     </div>
+
+    <SettingDrawer v-model="settingsOpen" :content-fullscreen="contentFullscreen" />
   </div>
 </template>
+
+<style scoped lang="scss">
+.app-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  gap: 14px;
+  padding: 0 18px;
+  color: var(--admin-text);
+}
+
+.app-header__leading,
+.app-header__actions,
+.app-header__account {
+  display: flex;
+  align-items: center;
+}
+
+.app-header__leading {
+  min-width: 0;
+  gap: 12px;
+}
+
+.app-header__breadcrumb {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.app-header__breadcrumb :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
+  color: var(--el-text-color-primary);
+  font-weight: 700;
+}
+
+.app-header__actions {
+  gap: 4px;
+  margin-left: auto;
+}
+
+.app-header__account {
+  flex: 0 0 auto;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.app-header__username {
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--el-text-color-regular);
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 650px) {
+  .app-header {
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .app-header__username {
+    max-width: 90px;
+  }
+
+  .app-header__account .el-button {
+    padding-right: 0;
+    padding-left: 0;
+    font-size: 0;
+  }
+
+  .app-header__account .el-button :deep(.el-icon) {
+    margin: 0;
+    font-size: 16px;
+  }
+}
+</style>

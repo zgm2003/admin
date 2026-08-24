@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox, ElNotification } from 'element-plus'
-import { CirclePlus, Delete, Edit, Menu as MenuIcon, Refresh, SwitchButton } from '@element-plus/icons-vue'
+import { CirclePlus, Delete, Edit, Refresh, SwitchButton } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import { menuIcons } from '../../../access/menu-icons'
@@ -300,16 +300,8 @@ onMounted(loadMenus)
 </script>
 
 <template>
-  <section class="menu-management-page" aria-labelledby="menu-management-title">
-    <header class="menu-management__toolbar">
-      <div class="menu-management__heading">
-        <span class="menu-management__heading-icon" aria-hidden="true">
-          <el-icon><MenuIcon /></el-icon>
-        </span>
-        <h1 id="menu-management-title">{{ t('menu.title') }}</h1>
-      </div>
-
-      <div class="menu-management__toolbar-actions">
+  <section class="menu-management-page system-page" :aria-label="t('menu.title')">
+      <div class="menu-management__toolbar-actions system-page__actions">
         <el-button
           v-if="canCreate"
           data-testid="add-root-menu"
@@ -328,8 +320,6 @@ onMounted(loadMenus)
           {{ t('menu.refresh') }}
         </el-button>
       </div>
-    </header>
-
     <div class="menu-management__content">
       <el-alert
         v-if="loadError !== ''"
@@ -581,46 +571,11 @@ onMounted(loadMenus)
   min-width: 0;
 }
 
-.menu-management__toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 72px;
-  padding: 16px 24px;
-  gap: 16px;
-  background: var(--admin-page);
-  border-bottom: 1px solid var(--admin-border);
-}
-
-.menu-management__heading,
 .menu-management__toolbar-actions,
 .menu-row-actions,
 .menu-icon-cell {
   display: flex;
   align-items: center;
-}
-
-.menu-management__heading {
-  min-width: 0;
-  gap: 10px;
-}
-
-.menu-management__heading-icon {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  place-items: center;
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  border-radius: 6px;
-}
-
-.menu-management__heading h1 {
-  margin: 0;
-  color: var(--admin-text);
-  font-size: 19px;
-  font-weight: 750;
 }
 
 .menu-management__toolbar-actions,
@@ -630,7 +585,7 @@ onMounted(loadMenus)
 
 .menu-management__content {
   min-width: 0;
-  padding: 20px 24px 28px;
+  padding: 0;
 }
 
 .menu-management__table {
@@ -703,26 +658,13 @@ onMounted(loadMenus)
 }
 
 @media (max-width: 720px) {
-  .menu-management__toolbar {
-    align-items: flex-start;
-    padding: 14px 16px;
-  }
-
   .menu-management__toolbar-actions {
     flex-wrap: wrap;
     justify-content: flex-end;
   }
-
-  .menu-management__content {
-    padding: 16px;
-  }
 }
 
 @media (max-width: 480px) {
-  .menu-management__toolbar {
-    flex-direction: column;
-  }
-
   .menu-management__toolbar-actions {
     width: 100%;
     justify-content: flex-start;

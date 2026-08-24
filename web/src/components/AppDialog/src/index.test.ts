@@ -20,6 +20,7 @@ describe('AppDialog', () => {
     expect(document.body.textContent).toContain('Save')
     wrapper.findComponent({ name: 'ElDialog' }).vm.$emit('update:modelValue', false)
     expect(visible.value).toBe(false)
+    wrapper.unmount()
   })
 
   it('renders a scroll body and restores the trigger focus after close', async () => {
@@ -37,5 +38,6 @@ describe('AppDialog', () => {
     wrapper.findComponent({ name: 'ElDialog' }).vm.$emit('closed')
     await flushPromises()
     expect(document.activeElement).toBe(trigger)
+    wrapper.unmount()
   })
 })

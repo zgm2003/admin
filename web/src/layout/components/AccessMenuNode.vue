@@ -14,7 +14,7 @@ const icon = computed(() => props.node.icon === null ? null : menuIcons[props.no
 </script>
 
 <template>
-  <el-sub-menu v-if="node.menuType === 'directory'" :index="node.code">
+  <el-sub-menu v-if="node.menuType === 'directory'" class="app-aside__menu-node" :index="node.code">
     <template #title>
       <el-icon v-if="icon !== null"><component :is="icon" /></el-icon>
       <span>{{ t(node.titleKey) }}</span>
@@ -22,7 +22,7 @@ const icon = computed(() => props.node.icon === null ? null : menuIcons[props.no
     <AccessMenuNode v-for="child in node.children" :key="child.code" :node="child" />
   </el-sub-menu>
 
-  <el-menu-item v-else-if="node.path !== null" :index="node.path">
+  <el-menu-item v-else-if="node.path !== null" class="app-aside__menu-node" :index="node.path">
     <el-icon v-if="icon !== null"><component :is="icon" /></el-icon>
     <template #title>{{ t(node.titleKey) }}</template>
   </el-menu-item>

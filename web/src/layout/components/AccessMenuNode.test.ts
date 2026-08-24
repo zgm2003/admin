@@ -62,7 +62,7 @@ describe('AppAside access menu', () => {
     })
 
     const wrapper = mount(AppAside, {
-      props: { collapsed: false },
+      props: { collapsed: false, uniqueOpened: true },
       global: { plugins: [ElementPlus, pinia, createTestRouter(), appI18n] },
     })
     const items = wrapper.findAllComponents({ name: 'ElMenuItem' })
@@ -74,12 +74,21 @@ describe('AppAside access menu', () => {
     useAccessStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: [] })
 
     const wrapper = mount(AppAside, {
-      props: { collapsed: true },
+      props: { collapsed: true, uniqueOpened: true },
       global: { plugins: [ElementPlus, pinia, createTestRouter(), appI18n] },
     })
 
     expect(wrapper.findAllComponents({ name: 'ElMenuItem' })).toHaveLength(1)
     expect(wrapper.findComponent({ name: 'ElMenuItem' }).props('index')).toBe('/dashboard')
+  })
+
+  it('passes the unique-opened preference to Element Plus menu', () => {
+    const wrapper = mount(AppAside, {
+      props: { collapsed: false, uniqueOpened: false },
+      global: { plugins: [ElementPlus, pinia, createTestRouter(), appI18n] },
+    })
+
+    expect(wrapper.findComponent({ name: 'ElMenu' }).props('uniqueOpened')).toBe(false)
   })
 })
 

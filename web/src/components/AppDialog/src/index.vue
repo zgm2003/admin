@@ -73,7 +73,7 @@ watch(() => props.modelValue, (visible, previousVisible) => {
   if (visible && !previousVisible && document.activeElement instanceof HTMLElement) {
     returnFocusTarget = document.activeElement
   }
-})
+}, { flush: 'sync' })
 
 function restoreTriggerFocus(): void {
   const target = returnFocusTarget

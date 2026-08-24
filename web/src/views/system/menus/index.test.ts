@@ -49,7 +49,8 @@ describe('MenuManagement', () => {
     await flushPromises()
 
     expect(getMenusMock).toHaveBeenCalledOnce()
-    expect(wrapper.get('#menu-management-title').text()).toBe('菜单管理')
+    expect(wrapper.find('h1').exists()).toBe(false)
+    expect(wrapper.get('.menu-management-page').classes()).toContain('system-page')
     const table = wrapper.get('[data-testid="menu-table"]')
     expect(table.text()).toContain('系统管理')
     expect(table.text()).toContain('菜单管理')

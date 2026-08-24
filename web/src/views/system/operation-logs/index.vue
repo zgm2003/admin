@@ -132,13 +132,8 @@ onMounted(() => { void loadLogs() })
 </script>
 
 <template>
-	<section class="operation-log-page">
-		<header class="operation-log-toolbar">
-			<h1>{{ t('operationLog.title') }}</h1>
-			<el-button :icon="Refresh" :loading="loading" @click="loadLogs">{{ t('operationLog.refresh') }}</el-button>
-		</header>
-
-		<div class="operation-log-filters">
+	<section class="operation-log-page system-page">
+		<div class="operation-log-filters system-page__filters">
 			<el-input v-model="userID" data-testid="operation-log-user-id" clearable :placeholder="t('operationLog.userId')" @keyup.enter="search" />
 			<el-input v-model="action" data-testid="operation-log-action" clearable :placeholder="t('operationLog.action')" @keyup.enter="search" />
 			<el-input v-model="route" data-testid="operation-log-route" clearable :placeholder="t('operationLog.route')" @keyup.enter="search" />
@@ -158,6 +153,7 @@ onMounted(() => { void loadLogs() })
 			/>
 			<el-button data-testid="operation-log-search" type="primary" :icon="Search" @click="search">{{ t('operationLog.search') }}</el-button>
 			<el-button @click="reset">{{ t('operationLog.reset') }}</el-button>
+			<el-button :icon="Refresh" :loading="loading" @click="loadLogs">{{ t('operationLog.refresh') }}</el-button>
 		</div>
 
 			<el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
@@ -199,10 +195,8 @@ onMounted(() => { void loadLogs() })
 </template>
 
 <style scoped>
-.operation-log-page { display: flex; min-width: 0; flex-direction: column; gap: 16px; }
-.operation-log-toolbar, .operation-log-filters { display: flex; align-items: center; gap: 12px; }
-.operation-log-toolbar { justify-content: space-between; }
-.operation-log-toolbar h1 { margin: 0; font-size: 22px; }
+.operation-log-page { min-width: 0; }
+.operation-log-filters { display: flex; align-items: center; gap: 12px; }
 .operation-log-filters { flex-wrap: wrap; }
 .operation-log-filters .el-input { width: 190px; }
 .operation-log-filters .el-select { width: 130px; }
@@ -217,7 +211,7 @@ onMounted(() => { void loadLogs() })
 .operation-log-summaries pre { min-height: 88px; margin: 0; padding: 12px; overflow: auto; border: 1px solid var(--el-border-color-light); border-radius: 4px; background: var(--el-fill-color-light); white-space: pre-wrap; overflow-wrap: anywhere; }
 .el-pagination { justify-content: flex-end; }
 @media (max-width: 900px) {
-	.operation-log-toolbar, .operation-log-filters { align-items: stretch; flex-direction: column; }
+	.operation-log-filters { align-items: stretch; flex-direction: column; }
 	.operation-log-filters .el-input, .operation-log-filters .el-select { width: 100%; }
 	.operation-log-detail dl, .operation-log-summaries { grid-template-columns: 1fr; }
 }

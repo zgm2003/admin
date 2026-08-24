@@ -188,10 +188,8 @@ onMounted(() => {
 </script>
 
 <template>
-	<section class="session-page">
-		<header class="session-toolbar">
-			<h1>{{ t('session.title') }}</h1>
-			<div class="session-toolbar-actions">
+	<section class="session-page system-page">
+		<div class="session-toolbar-actions system-page__actions">
 				<el-button
 					v-if="canRevoke"
 					data-testid="session-batch-revoke"
@@ -206,8 +204,7 @@ onMounted(() => {
 				<el-button :icon="Refresh" :loading="listLoading || statsLoading" @click="reloadAuthoritativeData">
 					{{ t('session.refresh') }}
 				</el-button>
-			</div>
-		</header>
+		</div>
 
 		<div class="session-stats" v-loading="statsLoading">
 			<div class="session-stat-primary">
@@ -221,7 +218,7 @@ onMounted(() => {
 		</div>
 		<el-alert v-if="statsError" :title="statsError" type="error" :closable="false" show-icon />
 
-		<div class="session-filters">
+		<div class="session-filters system-page__filters">
 			<el-input v-model="username" data-testid="session-username" clearable :placeholder="t('session.username')" @keyup.enter="search" />
 			<el-input v-model="platform" data-testid="session-platform" clearable :placeholder="t('session.platform')" @keyup.enter="search" />
 			<el-select v-model="status" data-testid="session-status" :placeholder="t('session.statusLabel')" clearable>
@@ -281,10 +278,8 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.session-page { display: flex; min-width: 0; flex-direction: column; gap: 16px; }
-.session-toolbar, .session-toolbar-actions, .session-filters, .session-stats, .session-platform-stats { display: flex; align-items: center; gap: 12px; }
-.session-toolbar { justify-content: space-between; }
-.session-toolbar h1 { margin: 0; font-size: 22px; }
+.session-page { min-width: 0; }
+.session-toolbar-actions, .session-filters, .session-stats, .session-platform-stats { display: flex; align-items: center; gap: 12px; }
 .session-stats { min-height: 72px; padding: 12px 16px; border: 1px solid var(--el-border-color-light); border-radius: 6px; }
 .session-stat-primary { display: flex; min-width: 140px; flex-direction: column; gap: 4px; }
 .session-stat-primary span, .session-platform-title, small { color: var(--el-text-color-secondary); font-size: 12px; }
@@ -295,7 +290,7 @@ onMounted(() => {
 .el-table strong, .el-table small { display: block; }
 .el-pagination { justify-content: flex-end; }
 @media (max-width: 900px) {
-	.session-toolbar, .session-filters, .session-stats { align-items: stretch; flex-direction: column; }
+	.session-filters, .session-stats { align-items: stretch; flex-direction: column; }
 	.session-filters .el-input, .session-filters .el-select { width: 100%; }
 }
 </style>

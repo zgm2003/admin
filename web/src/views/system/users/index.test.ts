@@ -41,6 +41,8 @@ describe('user management', () => {
     await flushPromises()
     expect(getRoleOptions).toHaveBeenCalledTimes(1)
     expect(getUsers).toHaveBeenCalledWith({ page:1, pageSize:20 })
+    expect(wrapper.find('h1').exists()).toBe(false)
+    expect(wrapper.get('.user-management').classes()).toContain('system-page')
     expect(wrapper.text()).toContain('alice@example.com')
     expect(wrapper.text()).toContain('角色已禁用')
     await wrapper.get('.user-filters input').setValue(' alice ')

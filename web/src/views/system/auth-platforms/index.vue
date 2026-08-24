@@ -282,16 +282,8 @@ onMounted(() => { void loadPage() })
 </script>
 
 <template>
-  <section class="auth-platform-page">
-    <header class="auth-platform-toolbar">
-      <h1>{{ t('authPlatform.title') }}</h1>
-      <div class="auth-platform-toolbar__actions">
-        <el-button :icon="Refresh" data-testid="auth-platform-refresh" @click="refresh">{{ t('authPlatform.refresh') }}</el-button>
-        <el-button v-if="canCreate" type="primary" :icon="CirclePlus" data-testid="auth-platform-create" @click="openCreate">{{ t('authPlatform.create') }}</el-button>
-      </div>
-    </header>
-
-    <div class="auth-platform-filters">
+  <section class="auth-platform-page system-page">
+    <div class="auth-platform-filters system-page__filters">
       <el-input v-model="keyword" data-testid="auth-platform-keyword" :placeholder="t('authPlatform.keyword')" @keyup.enter="search" />
       <el-select v-model="statusFilter" data-testid="auth-platform-status-filter">
         <el-option :label="t('authPlatform.status.all')" value="" />
@@ -306,6 +298,10 @@ onMounted(() => { void loadPage() })
     <el-alert v-if="mutationError" :title="mutationError" type="error" show-icon closable @close="mutationError = ''" />
 
     <AppTable class="auth-platform-table" :columns="tableColumns" :data="rows" :loading="loading" :pagination="tablePagination" result-state="success" :aria-label="t('authPlatform.title')" @update:pagination="updateTablePagination">
+      <template #toolbar-right>
+        <el-button :icon="Refresh" data-testid="auth-platform-refresh" @click="refresh">{{ t('authPlatform.refresh') }}</el-button>
+        <el-button v-if="canCreate" type="primary" :icon="CirclePlus" data-testid="auth-platform-create" @click="openCreate">{{ t('authPlatform.create') }}</el-button>
+      </template>
       <template #cell-platform="{ row }: { row: AuthPlatformListItem }">
           <strong>{{ row.name }}</strong>
           <code>{{ row.code }}</code>
@@ -359,10 +355,8 @@ onMounted(() => { void loadPage() })
 </template>
 
 <style scoped>
-.auth-platform-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.auth-platform-toolbar, .auth-platform-filters { display: flex; align-items: center; gap: 12px; }
-.auth-platform-toolbar { justify-content: space-between; }
-.auth-platform-toolbar h1 { margin: 0; font-size: 22px; }
+.auth-platform-page { min-width: 0; }
+.auth-platform-filters { display: flex; align-items: center; gap: 12px; }
 .auth-platform-filters .el-input { width: 260px; }
 .auth-platform-filters .el-select { width: 150px; }
 .auth-platform-table code { display: block; margin-top: 4px; color: var(--el-text-color-secondary); }
@@ -374,5 +368,5 @@ onMounted(() => { void loadPage() })
 .auth-platform-deployment dt { color: var(--el-text-color-secondary); font-size: 12px; }
 .auth-platform-deployment dd { margin: 4px 0 0; }
 .auth-platform-dialog-body { max-height: min(68vh, 680px); overflow-y: auto; padding-right: 8px; }
-@media (max-width: 760px) { .auth-platform-toolbar, .auth-platform-filters { align-items: stretch; flex-direction: column; } .auth-platform-filters .el-input, .auth-platform-filters .el-select { width: 100%; } }
+@media (max-width: 760px) { .auth-platform-filters { align-items: stretch; flex-direction: column; } .auth-platform-filters .el-input, .auth-platform-filters .el-select { width: 100%; } }
 </style>

@@ -444,20 +444,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="role-page">
-    <header class="role-toolbar">
-      <h1>{{ t('role.title') }}</h1>
-      <div>
-        <el-button :icon="Refresh" @click="loadRoles">
-          {{ t('role.refresh') }}
-        </el-button>
-        <el-button v-if="canCreate" type="primary" :icon="CirclePlus" @click="openCreate">
-          {{ t('role.create') }}
-        </el-button>
-      </div>
-    </header>
-
-    <div class="role-filters">
+  <section class="role-page system-page">
+    <div class="role-filters system-page__filters">
       <el-input
         v-model="keyword"
         clearable
@@ -501,6 +489,14 @@ onMounted(() => {
       :aria-label="t('role.title')"
       @update:pagination="updateTablePagination"
     >
+      <template #toolbar-right>
+        <el-button :icon="Refresh" @click="loadRoles">
+          {{ t('role.refresh') }}
+        </el-button>
+        <el-button v-if="canCreate" type="primary" :icon="CirclePlus" @click="openCreate">
+          {{ t('role.create') }}
+        </el-button>
+      </template>
       <template #cell-default="{ row }: { row: RoleListItem }">
           <el-tag :type="row.isDefault === YesNo.Yes ? 'success' : 'info'">
             {{ t(row.isDefault === YesNo.Yes ? 'role.default.yes' : 'role.default.no') }}
@@ -666,23 +662,13 @@ onMounted(() => {
 
 <style scoped>
 .role-page {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
+  min-height: 0;
 }
 
-.role-toolbar,
 .role-filters {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-}
-
-.role-toolbar h1 {
-  margin: 0;
-  font-size: 20px;
 }
 
 .role-filters {
@@ -726,10 +712,6 @@ onMounted(() => {
 }
 
 @media (max-width: 720px) {
-  .role-toolbar {
-    align-items: flex-start;
-  }
-
   .role-filters .el-input,
   .role-filters .el-select {
     width: 100%;

@@ -5,13 +5,11 @@ import 'element-plus/theme-chalk/dark/css-vars.css'
 
 import App from './App.vue'
 import { appI18n, initializeLocale } from './i18n'
-import { initializeTheme } from './utils/theme'
 import { router } from './router'
 import { pinia } from './store'
 import { installPermissionGuard } from './permission'
 import './styles/index.scss'
 
-initializeTheme()
 initializeLocale()
 installPermissionGuard(router)
 

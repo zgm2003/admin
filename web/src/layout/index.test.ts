@@ -8,6 +8,7 @@ import { appI18n, setLocale } from '../i18n'
 import { pinia } from '../store'
 import { useAccessStore } from '../store/access'
 import { useAuthStore } from '../store/auth'
+import { useUIPreferencesStore } from '../store/ui-preferences'
 import Layout from './index.vue'
 
 vi.mock('../api/auth', () => ({ logout: vi.fn() }))
@@ -25,6 +26,7 @@ describe('admin layout', () => {
     setLocale('zh-CN')
     useAccessStore(pinia).reset()
     useAuthStore(pinia).$reset()
+    useUIPreferencesStore(pinia).initializeSafely()
     useAuthStore(pinia).setCredential({ accessToken: 'jwt', expiresIn: 900 })
     useAuthStore(pinia).setAuthenticated({ userId: 1, username: 'admin', email: 'admin@example.com' })
     Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1200 })
@@ -48,12 +50,9 @@ describe('admin layout', () => {
     expect(wrapper.get('[data-testid="app-aside"]').attributes('data-collapsed')).toBe('true')
   })
 
-  it('toggles the Element Plus dark theme from the Header', async () => {
+  it('exposes the system settings entry in the Header', async () => {
     const { wrapper } = await mountLayout()
-    expect(document.documentElement.classList.contains('dark')).toBe(false)
-    await wrapper.get('[data-testid="toggle-theme"]').trigger('click')
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
-    expect(localStorage.getItem('admin:theme')).toBe('dark')
+    expect(wrapper.find('[data-testid="open-settings"]').exists()).toBe(true)
   })
 
   it('switches the current interface language from the Header', async () => {
@@ -62,7 +61,7 @@ describe('admin layout', () => {
     await wrapper.vm.$nextTick()
     expect(document.documentElement.lang).toBe('en-US')
     expect(localStorage.getItem('admin:locale')).toBe('en-US')
-    expect(wrapper.get('.app-header__location').text()).toBe('Dashboard')
+    expect(wrapper.get('.app-header__breadcrumb').text()).toContain('Dashboard')
   })
 
   it('renders RouteTabs between Header and Main', async () => {
@@ -104,6 +103,70 @@ describe('admin layout', () => {
     expect(wrapper.get('.admin-layout__tabs').classes()).toContain('admin-layout__horizontal-scroll')
   })
 
+  it('renders directory and leaf breadcrumbs from the RBAC menu tree', async () => {
+    useAccessStore(pinia).applySnapshot({
+      roleCodes: [],
+      menuTree: [{
+        code: 'system',
+        menuType: 'directory',
+        path: null,
+        viewKey: null,
+        titleKey: 'navigation.system',
+        icon: 'Folder',
+        children: [{
+          code: 'system:user:list',
+          menuType: 'page',
+          path: '/system/users',
+          viewKey: 'system-users',
+          titleKey: 'navigation.systemUsers',
+          icon: 'User',
+          children: [],
+        }],
+      }],
+      permissionCodes: [],
+    })
+    const { wrapper } = await mountLayout('/system/users')
+
+    expect(wrapper.get('.app-header__breadcrumb').text()).toContain('系统管理')
+    expect(wrapper.get('.app-header__breadcrumb').text()).toContain('用户管理')
+  })
+
+  it('applies display preferences to the shell and prevents a stuck collapsed Aside', async () => {
+    const { wrapper } = await mountLayout()
+    const uiPreferences = useUIPreferencesStore(pinia)
+
+    await wrapper.get('[data-testid="toggle-menu"]').trigger('click')
+    uiPreferences.update({ showRouteTabs: false, showFooter: false, showBreadcrumb: false, showMenuToggle: false })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.admin-layout__tabs').exists()).toBe(false)
+    expect(wrapper.find('.admin-layout__footer').exists()).toBe(false)
+    expect(wrapper.find('.app-header__breadcrumb').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="app-aside"]').attributes('data-collapsed')).toBe('false')
+  })
+
+  it('keeps RouteTabs mounted as the fullscreen exit path', async () => {
+    const { wrapper } = await mountLayout()
+    const uiPreferences = useUIPreferencesStore(pinia)
+    wrapper.findComponent({ name: 'RouteTabs' }).vm.$emit('toggle-fullscreen')
+    await wrapper.vm.$nextTick()
+    uiPreferences.update({ showRouteTabs: false })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.admin-layout__tabs').exists()).toBe(true)
+  })
+
+  it('shows visible preference and missing-breadcrumb errors', async () => {
+    const uiPreferences = useUIPreferencesStore(pinia)
+    localStorage.setItem('admin:ui-preferences', '{broken')
+    uiPreferences.initializeSafely()
+    const { wrapper } = await mountLayout('/system/missing')
+    useAccessStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: [] })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-testid="preference-error"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="breadcrumb-missing"]').exists()).toBe(true)
+  })
+
   it('opens a Drawer instead of collapsing on mobile', async () => {
     useAccessStore(pinia).applySnapshot({
       roleCodes: [],
@@ -123,7 +186,8 @@ describe('admin layout', () => {
     window.dispatchEvent(new Event('resize'))
     await wrapper.vm.$nextTick()
     await wrapper.get('[data-testid="toggle-menu"]').trigger('click')
-    const drawer = wrapper.findComponent({ name: 'ElDrawer' })
+    const drawer = wrapper.findAllComponents({ name: 'ElDrawer' }).find((component) => component.props('size') === '264px')
+    if (drawer === undefined) throw new Error('Missing mobile menu drawer')
     expect(drawer.props('modelValue')).toBe(true)
     const asides = wrapper.findAllComponents({ name: 'AppAside' })
     expect(asides).toHaveLength(2)
@@ -159,7 +223,7 @@ describe('admin layout', () => {
   })
 })
 
-async function mountLayout() {
+async function mountLayout(path = '/dashboard') {
   const layoutContent = {
     setup() {
       const render = ++layoutRenderCount
@@ -176,10 +240,22 @@ async function mountLayout() {
         component: layoutContent,
         meta: { requiresAuth: true, titleKey: 'navigation.dashboard', affix: true },
       },
+      {
+        path: '/system/users',
+        name: 'system-users',
+        component: layoutContent,
+        meta: { requiresAuth: true, titleKey: 'navigation.systemUsers' },
+      },
+      {
+        path: '/system/missing',
+        name: 'system-missing',
+        component: layoutContent,
+        meta: { requiresAuth: true, titleKey: 'navigation.systemUsers' },
+      },
       { path: '/login', name: 'login', component: { template: '<div>login</div>' } },
     ],
   })
-  await router.push('/dashboard')
+  await router.push(path)
   await router.isReady()
   const wrapper = mount(Layout, { global: { plugins: [ElementPlus, pinia, router, appI18n] } })
   return { wrapper, router }

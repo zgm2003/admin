@@ -64,6 +64,8 @@ describe('authentication platform page', () => {
 
     expect(getAuthPlatformsMock).toHaveBeenCalledWith({ page: 1, pageSize: 20 })
     expect(getAuthPlatformDeploymentMock).toHaveBeenCalledOnce()
+    expect(wrapper.find('h1').exists()).toBe(false)
+    expect(wrapper.get('.auth-platform-page').classes()).toContain('system-page')
     expect(wrapper.text()).toContain('Admin')
     expect(wrapper.text()).toContain('不限')
   })

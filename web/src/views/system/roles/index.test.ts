@@ -82,7 +82,9 @@ describe('RoleManagement', () => {
 
     expect(getRolesMock).toHaveBeenCalledOnce()
     expect(getRolesMock).toHaveBeenCalledWith({ page: 1, pageSize: 20 })
-    expect(wrapper.text()).toContain('角色管理')
+    expect(wrapper.find('h1').exists()).toBe(false)
+    expect(wrapper.get('.role-page').classes()).toContain('system-page')
+    expect(wrapper.find('[aria-label="角色管理"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('测试员')
     expect(wrapper.text()).toContain('tester')
   })

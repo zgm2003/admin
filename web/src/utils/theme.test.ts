@@ -1,34 +1,41 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { applyTheme, initializeTheme, readTheme, toggleTheme } from './theme'
+import { applyPrimaryColor, applyTheme, mixHexColor } from './theme'
 
 describe('theme', () => {
   beforeEach(() => {
-    localStorage.clear()
     document.documentElement.classList.remove('dark')
     document.documentElement.style.removeProperty('color-scheme')
   })
 
-  it('defaults to the light Element Plus theme', () => {
-    expect(initializeTheme()).toBe('light')
+  it('applies the light Element Plus theme', () => {
+    applyTheme('light')
     expect(document.documentElement.classList.contains('dark')).toBe(false)
     expect(document.documentElement.style.colorScheme).toBe('light')
   })
 
-  it('restores and applies a stored dark theme', () => {
-    localStorage.setItem('admin:theme', 'dark')
-
-    expect(initializeTheme()).toBe('dark')
+  it('applies the dark Element Plus theme', () => {
+    applyTheme('dark')
     expect(document.documentElement.classList.contains('dark')).toBe(true)
     expect(document.documentElement.style.colorScheme).toBe('dark')
   })
 
-  it('persists an explicit toggle', () => {
-    expect(toggleTheme('light')).toBe('dark')
-    expect(readTheme()).toBe('dark')
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
+  it('derives the Element Plus primary palette from one six-digit hex color', () => {
+    applyPrimaryColor('#409EFF')
 
-    applyTheme('light')
-    expect(document.documentElement.classList.contains('dark')).toBe(false)
+    const style = document.documentElement.style
+    expect(style.getPropertyValue('--el-color-primary')).toBe('#409EFF')
+    expect(style.getPropertyValue('--el-color-primary-rgb')).toBe('64, 158, 255')
+    expect(style.getPropertyValue('--el-color-primary-light-3')).toBe('#79BBFF')
+    expect(style.getPropertyValue('--el-color-primary-light-5')).toBe('#A0CFFF')
+    expect(style.getPropertyValue('--el-color-primary-dark-2')).toBe('#337ECC')
+  })
+
+  it('rejects malformed colors instead of applying a partial palette', () => {
+    expect(() => applyPrimaryColor('blue')).toThrow('primary color must be a six-digit hex color')
+  })
+
+  it('mixes channels deterministically', () => {
+    expect(mixHexColor('#000000', '#FFFFFF', 0.5)).toBe('#808080')
   })
 })

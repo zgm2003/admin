@@ -41,6 +41,8 @@ describe('session management', () => {
 		await flushPromises()
 		expect(getSessions).toHaveBeenCalledWith({ page: 1, pageSize: 20 })
 		expect(getSessionStats).toHaveBeenCalledOnce()
+		expect(wrapper.find('h1').exists()).toBe(false)
+		expect(wrapper.get('.session-page').classes()).toContain('system-page')
 		expect(wrapper.text()).toContain('当前会话')
 		expect(wrapper.text()).toContain('admin')
 
