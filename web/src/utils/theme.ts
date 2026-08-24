@@ -2,6 +2,10 @@ export type ThemeMode = 'light' | 'dark'
 
 const sixDigitHex = /^#[0-9a-fA-F]{6}$/
 
+export function isSixDigitHexColor(value: unknown): value is string {
+  return typeof value === 'string' && sixDigitHex.test(value)
+}
+
 export function applyTheme(theme: ThemeMode): void {
   document.documentElement.classList.toggle('dark', theme === 'dark')
   document.documentElement.style.colorScheme = theme
@@ -21,7 +25,7 @@ export function mixHexColor(base: string, target: string, weight: number): strin
 }
 
 export function applyPrimaryColor(color: string): void {
-  if (!sixDigitHex.test(color)) {
+  if (!isSixDigitHexColor(color)) {
     throw new Error('primary color must be a six-digit hex color')
   }
   const normalized = color.toUpperCase()
@@ -36,7 +40,7 @@ export function applyPrimaryColor(color: string): void {
 }
 
 function parseHex(value: string): [number, number, number] {
-  if (!sixDigitHex.test(value)) {
+  if (!isSixDigitHexColor(value)) {
     throw new Error('color must be a six-digit hex color')
   }
   return [

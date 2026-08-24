@@ -1,4 +1,4 @@
-import type { ThemeMode } from './theme'
+import { isSixDigitHexColor, type ThemeMode } from './theme'
 
 export type PageTransitionName = 'fade' | 'slide-left' | 'zoom'
 
@@ -45,8 +45,6 @@ const preferenceKeys = [
 ] as const
 
 const transitionNames: readonly PageTransitionName[] = ['fade', 'slide-left', 'zoom']
-const sixDigitHex = /^#[0-9a-fA-F]{6}$/
-
 export class UIPreferencesError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
@@ -67,7 +65,7 @@ export function parseStoredUIPreferences(value: unknown): UIPreferences {
   }
 
   const primaryColor = preferences.primaryColor
-  if (typeof primaryColor !== 'string' || !sixDigitHex.test(primaryColor)) {
+  if (!isSixDigitHexColor(primaryColor)) {
     throw new UIPreferencesError('stored UI preferences primaryColor is invalid')
   }
 

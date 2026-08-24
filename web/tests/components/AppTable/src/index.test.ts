@@ -21,8 +21,11 @@ describe('AppTable', () => {
       global: { plugins: [ElementPlus] },
     })
     await flushPromises()
-    expect(wrapper.findComponent({ name: 'ElTable' }).text()).toContain('alice')
-    expect(wrapper.findComponent({ name: 'ElTable' }).text()).toContain('Enabled')
+    const table = wrapper.findComponent({ name: 'ElTable' })
+    expect(table.props('border')).toBe(true)
+    expect(table.props('headerCellStyle')).toEqual({ background: 'var(--el-fill-color-light)' })
+    expect(table.text()).toContain('alice')
+    expect(table.text()).toContain('Enabled')
     expect(wrapper.findAll('.hidden').length).toBe(0)
   })
 

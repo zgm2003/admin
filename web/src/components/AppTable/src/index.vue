@@ -74,6 +74,7 @@ const failed = computed(() => props.resultState === 'error')
 const tableClasses = computed(() => ({ 'app-table__table--fixed': props.fixedFooter }))
 const paginationLayout = computed(() => isMobile.value ? 'total, prev, pager, next' : 'total, sizes, prev, pager, next')
 const pageSizes = computed(() => isMobile.value ? [20, 50] : [20, 50, 100])
+const tableHeaderCellStyle = { background: 'var(--el-fill-color-light)' }
 
 function columnKey(column: TableColumn<Row>): TableColumnKey {
   return tableColumnKey<Row>(column)
@@ -144,7 +145,9 @@ function onSelectionChange(selection: Row[]): void {
     <el-table
       ref="tableRef"
       v-loading="busy"
+      border
       :data="data"
+      :header-cell-style="tableHeaderCellStyle"
       :row-key="rowKey"
       :class="tableClasses"
       @row-click="onRowClick"

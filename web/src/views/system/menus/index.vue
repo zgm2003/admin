@@ -11,6 +11,7 @@ import { createMenu, deleteMenu, getMenus, updateMenu, updateMenuStatus } from '
 import type { CreateMenuInput, ManagedMenuNode, ManagedMenuType, UpdateMenuInput } from '../../../api/menu.contract'
 import { YesNo } from '../../../enums/yes-no'
 import { useAccessStore } from '../../../store/access'
+import { AppDialog } from '../../../components/AppDialog'
 import { IconSelect } from '../../../components/IconSelect'
 
 const { t } = useI18n()
@@ -19,11 +20,10 @@ const access = useAccessStore()
 const menus = ref<ManagedMenuNode[]>([])
 const loading = ref(false)
 const loadError = ref('')
-const expandedRowKeys = ref<number[]>([])
 const mutationError = ref('')
-const drawerVisible = ref(false)
+const dialogVisible = ref(false)
 const iconSelectVisible = ref(false)
-const drawerMode = ref<'create' | 'edit'>('create')
+const dialogMode = ref<'create' | 'edit'>('create')
 const editingID = ref<number | null>(null)
 
 interface MenuFormState {
@@ -134,6 +134,7 @@ const menuTypeOptions: Array<{ label: string; value: ManagedMenuType }> = [
 const titleSelectOptions = computed(() => titleKeys.map((key) => ({ label: t(key), value: key })))
 const viewSelectOptions = computed(() => viewKeys.map((key) => ({ label: key, value: key })))
 const menuIconOptions = iconKeys.map((key) => ({ name: key, label: key }))
+const tableHeaderCellStyle = { background: 'var(--el-fill-color-light)' }
 
 const parentSelection = computed<number | typeof rootParentValue>({
   get: () => form.value.parentId ?? rootParentValue,
@@ -188,15 +189,15 @@ function openCreate(parent: ManagedMenuNode | null = null): void {
       next.viewKey = 'system-menus'
     }
   }
-  drawerMode.value = 'create'
+  dialogMode.value = 'create'
   editingID.value = null
   mutationError.value = ''
   form.value = next
-  drawerVisible.value = true
+  dialogVisible.value = true
 }
 
 function openEdit(node: ManagedMenuNode): void {
-  drawerMode.value = 'edit'
+  dialogMode.value = 'edit'
   editingID.value = node.id
   mutationError.value = ''
   form.value = {
@@ -210,11 +211,11 @@ function openEdit(node: ManagedMenuNode): void {
     sortOrder: node.sortOrder,
     isEnabled: node.isEnabled,
   }
-  drawerVisible.value = true
+  dialogVisible.value = true
 }
 
-function closeDrawer(): void {
-  drawerVisible.value = false
+function closeDialog(): void {
+  dialogVisible.value = false
   editingID.value = null
 }
 
@@ -222,11 +223,11 @@ async function submitForm(): Promise<void> {
   if (!canSubmitForm.value) return
   mutationError.value = ''
   try {
-    if (drawerMode.value === 'create') {
+    if (dialogMode.value === 'create') {
       const input: CreateMenuInput = { ...form.value }
       await createMenu(input)
       await loadMenus()
-      closeDrawer()
+      closeDialog()
       notifyMutation('menu.success.created')
       return
     }
@@ -242,7 +243,7 @@ async function submitForm(): Promise<void> {
     }
     await updateMenu(editingID.value, input)
     await loadMenus()
-    closeDrawer()
+    closeDialog()
     notifyMutation('menu.success.updated')
   } catch (error: unknown) {
     mutationError.value = publicErrorMessage(error)
@@ -291,25 +292,12 @@ async function removeNode(node: ManagedMenuNode): Promise<void> {
   }
 }
 
-function collectExpandedIDs(nodes: readonly ManagedMenuNode[]): number[] {
-  const ids: number[] = []
-  const stack = [...nodes]
-  while (stack.length > 0) {
-    const node = stack.pop()
-    if (node === undefined) continue
-    if (node.children.length > 0) ids.push(node.id)
-    stack.push(...node.children)
-  }
-  return ids
-}
-
 async function loadMenus(): Promise<void> {
   loading.value = true
   loadError.value = ''
   try {
     const result = await getMenus()
     menus.value = result
-    expandedRowKeys.value = collectExpandedIDs(result)
   } catch (error: unknown) {
     loadError.value = publicErrorMessage(error)
   } finally {
@@ -369,11 +357,13 @@ onMounted(loadMenus)
       <el-table
         v-if="loadError === ''"
         v-loading="loading"
+        border
+        default-expand-all
         data-testid="menu-table"
         class="menu-management__table"
         :data="menus"
+        :header-cell-style="tableHeaderCellStyle"
         row-key="id"
-        :expand-row-keys="expandedRowKeys"
         :tree-props="{ children: 'children' }"
         table-layout="fixed"
       >
@@ -461,12 +451,12 @@ onMounted(loadMenus)
       </el-table>
     </div>
 
-    <el-drawer
-      v-model="drawerVisible"
-      :title="drawerMode === 'create' ? t('menu.form.createTitle') : t('menu.form.editTitle')"
-      direction="rtl"
-      size="min(520px, 100%)"
-      data-testid="menu-drawer"
+    <AppDialog
+      v-model="dialogVisible"
+      :title="dialogMode === 'create' ? t('menu.form.createTitle') : t('menu.form.editTitle')"
+      width="900px"
+      height="min(68vh, 620px)"
+      data-testid="menu-dialog"
     >
       <el-alert
         v-if="mutationError !== ''"
@@ -476,14 +466,15 @@ onMounted(loadMenus)
         :closable="false"
         show-icon
       />
-      <el-form label-position="top" @submit.prevent="submitForm">
+      <el-form class="menu-form" label-position="right" label-width="96px" @submit.prevent="submitForm">
+        <div class="menu-form__grid">
         <el-form-item :label="t('menu.form.parent')">
           <el-select-v2
             v-model="parentSelection"
             data-testid="menu-form-parent"
             clearable
             :options="parentSelectOptions"
-            :disabled="editingNode?.isBuiltin === true && drawerMode === 'edit'"
+            :disabled="editingNode?.isBuiltin === true && dialogMode === 'edit'"
           />
         </el-form-item>
 
@@ -492,7 +483,7 @@ onMounted(loadMenus)
             :model-value="form.menuType"
             data-testid="menu-form-type"
             :options="menuTypeOptions"
-            :disabled="editingNode?.isBuiltin === true && drawerMode === 'edit'"
+            :disabled="editingNode?.isBuiltin === true && dialogMode === 'edit'"
             @update:model-value="handleFormTypeChange"
           />
         </el-form-item>
@@ -501,7 +492,7 @@ onMounted(loadMenus)
           <el-input
             v-model="form.code"
             data-testid="menu-form-code"
-            :readonly="drawerMode === 'edit'"
+            :readonly="dialogMode === 'edit'"
             :placeholder="t('menu.form.codePlaceholder')"
           />
         </el-form-item>
@@ -532,18 +523,20 @@ onMounted(loadMenus)
           <el-input-number v-model="form.sortOrder" data-testid="menu-form-sort-order" :min="0" :step="10" />
         </el-form-item>
 
-        <el-form-item v-if="drawerMode === 'create'" :label="t('menu.form.isEnabled')">
+        <el-form-item v-if="dialogMode === 'create'" :label="t('menu.form.isEnabled')">
           <el-switch v-model="form.isEnabled" :active-value="YesNo.Yes" :inactive-value="YesNo.No" data-testid="menu-form-enabled" />
         </el-form-item>
-
+        </div>
+      </el-form>
+      <template #footer>
         <div class="menu-form-actions">
-          <el-button data-testid="menu-form-cancel" @click="closeDrawer">{{ t('menu.form.cancel') }}</el-button>
+          <el-button data-testid="menu-form-cancel" @click="closeDialog">{{ t('menu.form.cancel') }}</el-button>
           <el-button data-testid="menu-form-submit" type="primary" :disabled="!canSubmitForm" @click="submitForm">
             {{ t('menu.form.submit') }}
           </el-button>
         </div>
-      </el-form>
-    </el-drawer>
+      </template>
+    </AppDialog>
 
     <IconSelect v-model="iconSelectVisible" :icons="menuIconOptions" :title="t('menu.form.icon')" :empty-text="t('menu.form.noIcon')" @select-icon="selectMenuIcon" />
   </section>
@@ -626,8 +619,18 @@ onMounted(loadMenus)
 .menu-form-actions {
   display: flex;
   justify-content: flex-end;
-  padding-top: 12px;
   gap: 8px;
+}
+
+.menu-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+
+.menu-form__grid :deep(.el-select),
+.menu-form__grid :deep(.el-input-number) {
+  width: 100%;
 }
 
 .menu-icon-picker {
@@ -637,6 +640,10 @@ onMounted(loadMenus)
 }
 
 @media (max-width: 720px) {
+  .menu-form__grid {
+    grid-template-columns: 1fr;
+  }
+
   .menu-management__toolbar-actions {
     flex-wrap: wrap;
     justify-content: flex-end;

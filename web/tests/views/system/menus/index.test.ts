@@ -65,6 +65,19 @@ describe('MenuManagement', () => {
     expect(table.text()).toContain('已启用')
     expect(table.text()).toContain('已禁用')
     expect(table.text()).toContain('是')
+    const elementTable = wrapper.findComponent({ name: 'ElTable' })
+    expect(elementTable.props('defaultExpandAll')).toBe(true)
+    expect(elementTable.props('border')).toBe(true)
+    expect(elementTable.props('headerCellStyle')).toEqual({ background: 'var(--el-fill-color-light)' })
+    const centeredLabels = ['类型', '图标', '状态', '操作']
+    const centeredColumns = wrapper.findAllComponents({ name: 'ElTableColumn' })
+      .filter((column) => centeredLabels.includes(String(column.props('label'))))
+    expect(centeredColumns).toHaveLength(centeredLabels.length)
+    for (const column of centeredColumns) {
+      expect(column.props('align')).toBe('center')
+      expect(column.props('headerAlign')).toBe('center')
+    }
+    expect(wrapper.find('[data-testid="menu-drawer"]').exists()).toBe(false)
   })
 
   it('keeps disabled rows visible and accepts explicit empty leaf children', async () => {
@@ -131,6 +144,8 @@ describe('MenuManagement', () => {
     await flushPromises()
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
+    expect(document.body.querySelector('[data-testid="menu-dialog"]')).not.toBeNull()
+    expect(document.body.querySelector('[data-testid="menu-drawer"]')).toBeNull()
     await bodyGet('[data-testid="menu-form-code"]').setValue('reports')
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
     await flushPromises()

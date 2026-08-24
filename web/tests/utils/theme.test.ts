@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { applyPrimaryColor, applyTheme, mixHexColor } from '@src/utils/theme'
+import { applyPrimaryColor, applyTheme, isSixDigitHexColor, mixHexColor } from '@src/utils/theme'
 
 describe('theme', () => {
   beforeEach(() => {
@@ -33,6 +33,14 @@ describe('theme', () => {
 
   it('rejects malformed colors instead of applying a partial palette', () => {
     expect(() => applyPrimaryColor('blue')).toThrow('primary color must be a six-digit hex color')
+  })
+
+  it('recognizes only six-digit hex colors', () => {
+    expect(isSixDigitHexColor('#FFFFFF')).toBe(true)
+    expect(isSixDigitHexColor('#1a2B3c')).toBe(true)
+    expect(isSixDigitHexColor('#fff')).toBe(false)
+    expect(isSixDigitHexColor('#12345678')).toBe(false)
+    expect(isSixDigitHexColor(null)).toBe(false)
   })
 
   it('mixes channels deterministically', () => {
