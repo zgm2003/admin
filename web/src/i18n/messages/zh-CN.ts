@@ -95,6 +95,7 @@ export const zhCN = {
   'authPlatform.status.all': '全部状态',
   'authPlatform.status.enabled': '已启用',
   'authPlatform.status.disabled': '已停用',
+  'authPlatform.empty': '暂无认证平台',
   'authPlatform.column.platform': '平台',
   'authPlatform.column.tokenTTL': 'Token TTL',
   'authPlatform.column.cacheTTL': '缓存 TTL',

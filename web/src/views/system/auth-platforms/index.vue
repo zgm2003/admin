@@ -21,6 +21,9 @@ import type {
 } from '../../../api/auth-platform.contract'
 import { YesNo } from '../../../enums/yes-no'
 import { useAccessStore } from '../../../store/access'
+import { AppDialog } from '../../../components/AppDialog'
+import { AppTable } from '../../../components/AppTable'
+import type { TableColumn, TablePaginationState } from '../../../components/AppTable'
 
 const { t } = useI18n()
 const access = useAccessStore()
@@ -39,6 +42,18 @@ const dialogVisible = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
 const editingPlatform = ref<AuthPlatformListItem | null>(null)
 const submitting = ref(false)
+
+const tablePagination = computed<TablePaginationState>(() => ({ currentPage: query.value.page, pageSize: query.value.pageSize, total: total.value }))
+const tableColumns = computed<TableColumn<AuthPlatformListItem>[]>(() => [
+  { key: 'platform', prop: 'id', label: t('authPlatform.column.platform'), minWidth: 180 },
+  { key: 'tokenTTL', prop: 'id', label: t('authPlatform.column.tokenTTL'), minWidth: 160 },
+  { key: 'cacheTTL', prop: 'id', label: t('authPlatform.column.cacheTTL'), minWidth: 170 },
+  { key: 'security', prop: 'id', label: t('authPlatform.column.security'), minWidth: 150 },
+  { key: 'sessions', prop: 'id', label: t('authPlatform.column.sessions'), width: 130 },
+  { key: 'status', prop: 'id', label: t('authPlatform.column.status'), width: 110 },
+  { prop: 'updatedAt', label: t('authPlatform.column.updatedAt'), width: 190 },
+  { key: 'actions', prop: 'id', label: t('authPlatform.column.actions'), width: 180 },
+])
 
 interface AuthPlatformForm {
   code: string
@@ -116,6 +131,11 @@ function changePage(page: number): void {
 function changePageSize(pageSize: number): void {
   query.value = { ...query.value, page: 1, pageSize }
   void loadPage()
+}
+
+function updateTablePagination(next: TablePaginationState): void {
+  if (next.pageSize !== query.value.pageSize) { changePageSize(next.pageSize); return }
+  changePage(next.currentPage)
 }
 
 function openCreate(): void {
@@ -285,50 +305,24 @@ onMounted(() => { void loadPage() })
     <el-alert v-if="loadError" :title="loadError" type="error" show-icon />
     <el-alert v-if="mutationError" :title="mutationError" type="error" show-icon closable @close="mutationError = ''" />
 
-    <el-table v-loading="loading" :data="rows" row-key="id" class="auth-platform-table">
-      <el-table-column :label="t('authPlatform.column.platform')" min-width="180">
-        <template #default="{ row }">
+    <AppTable class="auth-platform-table" :columns="tableColumns" :data="rows" :loading="loading" :pagination="tablePagination" result-state="success" :aria-label="t('authPlatform.title')" @update:pagination="updateTablePagination">
+      <template #cell-platform="{ row }: { row: AuthPlatformListItem }">
           <strong>{{ row.name }}</strong>
           <code>{{ row.code }}</code>
           <el-tag v-if="row.isBuiltin === YesNo.Yes" size="small" type="info">{{ t('authPlatform.builtin') }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('authPlatform.column.tokenTTL')" min-width="160">
-        <template #default="{ row }">{{ ttlLabel(row.accessTTLSeconds) }} / {{ ttlLabel(row.refreshTTLSeconds) }}</template>
-      </el-table-column>
-      <el-table-column :label="t('authPlatform.column.cacheTTL')" min-width="170">
-        <template #default="{ row }">{{ ttlLabel(row.sessionCacheTTLSeconds) }} / {{ ttlLabel(row.accessCacheTTLSeconds) }}</template>
-      </el-table-column>
-      <el-table-column :label="t('authPlatform.column.security')" min-width="150">
-        <template #default="{ row }">{{ row.bindDevice === YesNo.Yes ? t('authPlatform.bindDevice') : '' }} {{ row.bindIP === YesNo.Yes ? t('authPlatform.bindIP') : '' }}</template>
-      </el-table-column>
-      <el-table-column :label="t('authPlatform.column.sessions')" width="130">
-        <template #default="{ row }">{{ sessionLabel(row.maxSessions) }}</template>
-      </el-table-column>
-      <el-table-column :label="t('authPlatform.column.status')" width="110">
-        <template #default="{ row }"><el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">{{ t(row.isEnabled === YesNo.Yes ? 'authPlatform.enabled' : 'authPlatform.disabled') }}</el-tag></template>
-      </el-table-column>
-      <el-table-column prop="updatedAt" :label="t('authPlatform.column.updatedAt')" width="190" />
-      <el-table-column :label="t('authPlatform.column.actions')" fixed="right" width="180">
-        <template #default="{ row }">
+      </template>
+      <template #cell-tokenTTL="{ row }: { row: AuthPlatformListItem }">{{ ttlLabel(row.accessTTLSeconds) }} / {{ ttlLabel(row.refreshTTLSeconds) }}</template>
+      <template #cell-cacheTTL="{ row }: { row: AuthPlatformListItem }">{{ ttlLabel(row.sessionCacheTTLSeconds) }} / {{ ttlLabel(row.accessCacheTTLSeconds) }}</template>
+      <template #cell-security="{ row }: { row: AuthPlatformListItem }">{{ row.bindDevice === YesNo.Yes ? t('authPlatform.bindDevice') : '' }} {{ row.bindIP === YesNo.Yes ? t('authPlatform.bindIP') : '' }}</template>
+      <template #cell-sessions="{ row }: { row: AuthPlatformListItem }">{{ sessionLabel(row.maxSessions) }}</template>
+      <template #cell-status="{ row }: { row: AuthPlatformListItem }"><el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">{{ t(row.isEnabled === YesNo.Yes ? 'authPlatform.enabled' : 'authPlatform.disabled') }}</el-tag></template>
+      <template #cell-actions="{ row }: { row: AuthPlatformListItem }"><template v-if="row.id > 0">
           <el-button v-if="canUpdate" link :icon="Edit" data-testid="auth-platform-update" @click="openEdit(row)">{{ t('authPlatform.edit') }}</el-button>
           <el-button v-if="canStatus" link :icon="SwitchButton" data-testid="auth-platform-status" @click="toggleStatus(row)">{{ t('authPlatform.statusAction') }}</el-button>
           <el-button v-if="canDelete && row.isBuiltin === YesNo.No" link type="danger" :icon="Delete" data-testid="auth-platform-delete" @click="remove(row)">{{ t('authPlatform.delete') }}</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-
-    <el-pagination
-      v-if="canList"
-      data-testid="auth-platform-pagination"
-      :current-page="query.page"
-      :page-size="query.pageSize"
-      :page-sizes="[20, 50, 100]"
-      :total="total"
-      layout="total, sizes, prev, pager, next"
-      @current-change="changePage"
-      @size-change="changePageSize"
-    />
+      </template></template>
+      <template #empty><el-empty :description="t('authPlatform.empty')" /></template>
+    </AppTable>
 
     <section v-if="deployment !== null" class="auth-platform-deployment" aria-labelledby="auth-platform-deployment-title">
       <h2 id="auth-platform-deployment-title">{{ t('authPlatform.deployment') }}</h2>
@@ -340,7 +334,7 @@ onMounted(() => { void loadPage() })
       </dl>
     </section>
 
-    <el-dialog v-model="dialogVisible" :title="t(dialogMode === 'create' ? 'authPlatform.createTitle' : 'authPlatform.editTitle')" width="560px">
+    <AppDialog v-model="dialogVisible" :title="t(dialogMode === 'create' ? 'authPlatform.createTitle' : 'authPlatform.editTitle')" width="560px" height="min(68vh, 680px)" :append-to-body="false">
       <div class="auth-platform-dialog-body">
         <el-form label-position="top">
           <el-form-item :label="t('authPlatform.code')"><el-input v-model="form.code" data-testid="auth-platform-code" :disabled="isEditing" /></el-form-item>
@@ -360,7 +354,7 @@ onMounted(() => { void loadPage() })
         <el-button @click="dialogVisible = false">{{ t('authPlatform.cancel') }}</el-button>
         <el-button type="primary" :loading="submitting" :disabled="!formValid" @click="submit">{{ t('authPlatform.save') }}</el-button>
       </template>
-    </el-dialog>
+    </AppDialog>
   </section>
 </template>
 

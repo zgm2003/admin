@@ -81,11 +81,16 @@ describe('admin layout', () => {
   it('remounts the current view and hides outer chrome in fullscreen', async () => {
     const { wrapper } = await mountLayout()
     const before = wrapper.get('[data-testid="layout-content"]').attributes('data-render')
-    await wrapper.get('[data-testid="route-tabs-refresh"]').trigger('click')
+    await wrapper.get('[data-testid="route-tabs-settings"]').trigger('click')
+    await flushPromises()
+    getPopupItem('route-tabs-refresh').click()
     await flushPromises()
     expect(wrapper.get('[data-testid="layout-content"]').attributes('data-render')).not.toBe(before)
 
-    await wrapper.get('[data-testid="route-tabs-fullscreen"]').trigger('click')
+    await wrapper.get('[data-testid="route-tabs-settings"]').trigger('click')
+    await flushPromises()
+    getPopupItem('route-tabs-fullscreen').click()
+    await flushPromises()
     expect(wrapper.find('.admin-layout__aside').exists()).toBe(false)
     expect(wrapper.find('.admin-layout__header').exists()).toBe(false)
     expect(wrapper.find('.admin-layout__footer').exists()).toBe(false)
@@ -178,4 +183,11 @@ async function mountLayout() {
   await router.isReady()
   const wrapper = mount(Layout, { global: { plugins: [ElementPlus, pinia, router, appI18n] } })
   return { wrapper, router }
+}
+
+function getPopupItem(testId: string): HTMLElement {
+  const items = Array.from(document.body.querySelectorAll<HTMLElement>(`[data-testid="${testId}"]`))
+  const item = items.at(-1)
+  if (item === undefined) throw new Error(`Missing dropdown item: ${testId}`)
+  return item
 }

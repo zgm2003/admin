@@ -29,6 +29,9 @@ import type {
 } from '../../../api/role.contract'
 import { YesNo } from '../../../enums/yes-no'
 import { useAccessStore } from '../../../store/access'
+import { AppDialog } from '../../../components/AppDialog'
+import { AppTable } from '../../../components/AppTable'
+import type { TableColumn, TablePaginationState } from '../../../components/AppTable'
 import RolePermissionDiffDialog from './components/RolePermissionDiffDialog.vue'
 import RolePermissionMatrix from './components/RolePermissionMatrix.vue'
 import {
@@ -74,6 +77,23 @@ const originalEffectiveMenuIDs = ref<number[]>([])
 const selectedEffectiveMenuIDs = ref<number[]>([])
 const permissionDiffVisible = ref(false)
 const permissionDiff = ref<RolePermissionDiff>({ added: [], removed: [] })
+
+const tablePagination = computed<TablePaginationState>(() => ({
+  currentPage: query.value.page,
+  pageSize: query.value.pageSize,
+  total: total.value,
+}))
+const tableColumns = computed<TableColumn<RoleListItem>[]>(() => [
+  { prop: 'name', label: t('role.column.name'), minWidth: 150 },
+  { prop: 'code', label: t('role.column.code'), minWidth: 170 },
+  { key: 'default', prop: 'id', label: t('role.column.default'), width: 100 },
+  { key: 'status', prop: 'id', label: t('role.column.status'), width: 100 },
+  { prop: 'userCount', label: t('role.column.users'), width: 100 },
+  { prop: 'permissionCount', label: t('role.column.permissions'), width: 130 },
+  { prop: 'createdAt', label: t('role.column.createdAt'), minWidth: 190 },
+  { prop: 'updatedAt', label: t('role.column.updatedAt'), minWidth: 190 },
+  { key: 'actions', prop: 'id', label: t('role.column.actions'), width: 230 },
+])
 
 const permissionGroups = computed(() => {
   if (permissionData.value === null) {
@@ -163,6 +183,14 @@ function changePage(page: number): void {
 function changePageSize(pageSize: number): void {
   query.value = { ...query.value, page: 1, pageSize }
   void loadRoles()
+}
+
+function updateTablePagination(next: TablePaginationState): void {
+  if (next.pageSize !== query.value.pageSize) {
+    changePageSize(next.pageSize)
+    return
+  }
+  changePage(next.currentPage)
 }
 
 function openCreate(): void {
@@ -463,39 +491,28 @@ onMounted(() => {
       @close="mutationError = ''"
     />
 
-    <el-table
-      v-loading="loading"
-      :data="rows"
-      row-key="id"
+    <AppTable
       class="role-table"
-      empty-text=""
+      :columns="tableColumns"
+      :data="rows"
+      :loading="loading"
+      :pagination="tablePagination"
+      result-state="success"
+      :aria-label="t('role.title')"
+      @update:pagination="updateTablePagination"
     >
-      <el-table-column prop="name" :label="t('role.column.name')" min-width="150" />
-      <el-table-column prop="code" :label="t('role.column.code')" min-width="170" />
-      <el-table-column :label="t('role.column.default')" width="100">
-        <template #default="{ row }">
+      <template #cell-default="{ row }: { row: RoleListItem }">
           <el-tag :type="row.isDefault === YesNo.Yes ? 'success' : 'info'">
             {{ t(row.isDefault === YesNo.Yes ? 'role.default.yes' : 'role.default.no') }}
           </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('role.column.status')" width="100">
-        <template #default="{ row }">
+      </template>
+      <template #cell-status="{ row }: { row: RoleListItem }">
           <el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">
             {{ t(row.isEnabled === YesNo.Yes ? 'role.status.enabled' : 'role.status.disabled') }}
           </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="userCount" :label="t('role.column.users')" width="100" />
-      <el-table-column
-        prop="permissionCount"
-        :label="t('role.column.permissions')"
-        width="130"
-      />
-      <el-table-column prop="createdAt" :label="t('role.column.createdAt')" min-width="190" />
-      <el-table-column prop="updatedAt" :label="t('role.column.updatedAt')" min-width="190" />
-      <el-table-column fixed="right" :label="t('role.column.actions')" width="230">
-        <template #default="{ row }">
+      </template>
+      <template #cell-actions="{ row }: { row: RoleListItem }">
+        <template v-if="row.id > 0">
           <el-tooltip v-if="canUpdate" :content="editTooltip(row)">
             <el-button circle :icon="Edit" :disabled="isSystem(row)" @click="openEdit(row)" />
           </el-tooltip>
@@ -536,24 +553,11 @@ onMounted(() => {
             />
           </el-tooltip>
         </template>
-      </el-table-column>
-    </el-table>
+      </template>
+      <template #empty><div class="role-empty">{{ t('role.empty') }}</div></template>
+    </AppTable>
 
-    <div v-if="!loading && rows.length === 0 && !loadError" class="role-empty">
-      {{ t('role.empty') }}
-    </div>
-
-    <el-pagination
-      :current-page="query.page"
-      :page-size="query.pageSize"
-      :total="total"
-      :page-sizes="[20, 50, 100]"
-      layout="total, sizes, prev, pager, next"
-      @current-change="changePage"
-      @size-change="changePageSize"
-    />
-
-    <el-dialog
+    <AppDialog
       v-model="dialogVisible"
       :title="t(dialogMode === 'create' ? 'role.form.createTitle' : 'role.form.editTitle')"
       width="520px"
@@ -581,12 +585,13 @@ onMounted(() => {
           {{ t('role.form.submit') }}
         </el-button>
       </template>
-    </el-dialog>
+    </AppDialog>
 
-    <el-dialog
+    <AppDialog
       v-model="permissionDialogVisible"
       class="role-permission-dialog"
       width="min(1040px, 94vw)"
+      height="min(62vh, 620px)"
       append-to-body
     >
       <template #header>
@@ -646,7 +651,7 @@ onMounted(() => {
           {{ t('role.permission.save') }}
         </el-button>
       </template>
-    </el-dialog>
+    </AppDialog>
 
     <RolePermissionDiffDialog
       v-model="permissionDiffVisible"

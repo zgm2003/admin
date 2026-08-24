@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { ArrowLeft, ArrowRight, Close, DArrowLeft, DArrowRight, FullScreen, MoreFilled, Refresh } from '@element-plus/icons-vue'
+import {
+  CircleClose,
+  Close,
+  DArrowLeft,
+  DArrowRight,
+  FolderDelete,
+  FullScreen,
+  Refresh,
+  Setting,
+} from '@element-plus/icons-vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -12,7 +21,17 @@ interface RouteTab {
   affix: boolean
 }
 
+interface ScrollbarHandle {
+  wrapRef?: HTMLElement
+  setScrollLeft: (value: number) => void
+}
+
+type TabCommand = 'refresh' | 'fullscreen' | 'closeOthers' | 'closeAll'
+
+const props = withDefaults(defineProps<{ fullscreen?: boolean }>(), { fullscreen: false })
 const root = ref<HTMLElement>()
+const tagsInnerRef = ref<HTMLElement | null>(null)
+const scrollPaneRef = ref<ScrollbarHandle>()
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
@@ -27,9 +46,12 @@ const emit = defineEmits<{
 }>()
 
 const activeIndex = computed(() => tabs.value.findIndex((tab) => tab.path === route.path))
+const previousTab = computed(() => activeIndex.value > 0 ? tabs.value[activeIndex.value - 1] : undefined)
+const nextTab = computed(() => activeIndex.value >= 0 && activeIndex.value < tabs.value.length - 1
+  ? tabs.value[activeIndex.value + 1]
+  : undefined)
 const contextTab = computed(() => tabs.value.find((tab) => tab.path === contextPath.value))
-const previousDisabled = computed(() => activeIndex.value <= 0)
-const nextDisabled = computed(() => activeIndex.value < 0 || activeIndex.value >= tabs.value.length - 1)
+const tagSignature = computed(() => tabs.value.map((tab) => tab.path).join('|'))
 
 function slug(path: string): string {
   return path.replace(/^\//, '').replace(/[^a-zA-Z0-9_-]+/g, '-') || 'root'
@@ -38,20 +60,12 @@ function slug(path: string): string {
 function getCurrentTab(): RouteTab | null {
   const matched = [...route.matched].reverse().find((record) => record.meta.titleKey !== undefined)
   if (matched === undefined) {
-    if (route.meta.requiresAuth === true) {
-      throw new Error(`Route ${route.fullPath} must declare titleKey`)
-    }
+    if (route.meta.requiresAuth === true) throw new Error(`Route ${route.fullPath} must declare titleKey`)
     return null
   }
   const titleKey = matched.meta.titleKey
-  if (titleKey === undefined) {
-    throw new Error(`Route ${route.fullPath} must declare titleKey`)
-  }
-  return {
-    path: route.path,
-    titleKey,
-    affix: matched.meta.affix === true,
-  }
+  if (titleKey === undefined) throw new Error(`Route ${route.fullPath} must declare titleKey`)
+  return { path: route.path, titleKey, affix: matched.meta.affix === true }
 }
 
 function prefersReducedMotion(): boolean {
@@ -61,16 +75,13 @@ function prefersReducedMotion(): boolean {
 
 function scrollActiveTab(): void {
   void nextTick(() => {
-    const activeElement = root.value?.querySelector<HTMLElement>(
-      `[data-testid="route-tab-${slug(route.path)}"]`,
-    )
-    if (typeof activeElement?.scrollIntoView === 'function') {
-      activeElement.scrollIntoView({
-        block: 'nearest',
-        inline: 'nearest',
-        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-      })
-    }
+    const activeElement = tagsInnerRef.value?.querySelector<HTMLElement>('.tag-item.active')
+    if (typeof activeElement?.scrollIntoView !== 'function') return
+    activeElement.scrollIntoView({
+      block: 'nearest',
+      inline: 'center',
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+    })
   })
 }
 
@@ -78,11 +89,9 @@ function syncCurrentTab(): void {
   const currentTab = getCurrentTab()
   contextMenuOpen.value = false
   if (currentTab === null) return
-
   const existing = tabs.value.find((tab) => tab.path === currentTab.path)
-  if (existing === undefined) {
-    tabs.value.push(currentTab)
-  } else {
+  if (existing === undefined) tabs.value.push(currentTab)
+  else {
     existing.titleKey = currentTab.titleKey
     existing.affix = currentTab.affix
   }
@@ -98,12 +107,10 @@ async function closeTab(path: string): Promise<void> {
   const index = tabs.value.findIndex((tab) => tab.path === path)
   const tab = tabs.value[index]
   if (index < 0 || tab === undefined || tab.affix) return
-
   const isActive = route.path === path
   tabs.value.splice(index, 1)
   dismissContextMenu()
   if (!isActive) return
-
   const destination = tabs.value[index - 1] ?? tabs.value[index] ?? tabs.value.find((item) => item.affix)
   await router.push(destination?.path ?? '/dashboard')
 }
@@ -112,9 +119,7 @@ async function closeOthers(path: string): Promise<void> {
   const selected = tabs.value.find((tab) => tab.path === path)
   tabs.value = tabs.value.filter((tab) => tab.affix || tab.path === path)
   dismissContextMenu()
-  if (selected !== undefined && route.path !== selected.path) {
-    await router.push(selected.path)
-  }
+  if (selected !== undefined && route.path !== selected.path) await router.push(selected.path)
 }
 
 async function closeAll(): Promise<void> {
@@ -123,10 +128,8 @@ async function closeAll(): Promise<void> {
   await router.push('/dashboard')
 }
 
-async function navigateRelative(offset: -1 | 1): Promise<void> {
-  const target = tabs.value[activeIndex.value + offset]
-  if (target === undefined) return
-  await router.push(target.path)
+async function navigateRelative(target: RouteTab | undefined): Promise<void> {
+  if (target !== undefined) await router.push(target.path)
 }
 
 function refreshCurrent(): void {
@@ -139,17 +142,44 @@ function toggleFullscreen(): void {
   emit('toggleFullscreen')
 }
 
+function handleScroll(event: WheelEvent): void {
+  const wrap = scrollPaneRef.value?.wrapRef
+  if (wrap === undefined) return
+  const delta = event.deltaY || -event.detail
+  scrollPaneRef.value?.setScrollLeft(wrap.scrollLeft + delta / 4)
+}
+
 function openContextMenu(event: MouseEvent, path: string): void {
   event.preventDefault()
   contextPath.value = path
   contextPosition.x = Math.max(8, Math.min(event.clientX, window.innerWidth - 188))
-  contextPosition.y = Math.max(8, Math.min(event.clientY, window.innerHeight - 170))
+  contextPosition.y = Math.max(8, Math.min(event.clientY + 10, window.innerHeight - 170))
   contextMenuOpen.value = true
 }
 
 function dismissContextMenu(): void {
   contextMenuOpen.value = false
   contextPath.value = ''
+}
+
+function handleCommand(command: string | number | object): void {
+  if (typeof command !== 'string') throw new Error(`Unsupported route tab command: ${String(command)}`)
+  const value = command as TabCommand
+  switch (value) {
+    case 'refresh': refreshCurrent(); break
+    case 'fullscreen': toggleFullscreen(); break
+    case 'closeOthers': void closeOthers(route.path); break
+    case 'closeAll': void closeAll(); break
+    default: throw new Error(`Unsupported route tab command: ${command}`)
+  }
+}
+
+async function handleContextRefresh(): Promise<void> {
+  const selected = contextTab.value
+  if (selected === undefined) return
+  dismissContextMenu()
+  if (selected.path !== route.path) await router.push(selected.path)
+  emit('refresh')
 }
 
 function handleDocumentPointerDown(event: PointerEvent): void {
@@ -164,6 +194,7 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
 }
 
 watch(() => route.fullPath, syncCurrentTab, { immediate: true })
+watch(tagSignature, () => { scrollActiveTab() })
 
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
@@ -177,114 +208,101 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div
-    ref="root"
-    class="route-tabs"
-    data-testid="route-tabs"
-    tabindex="-1"
-    @keydown.esc="dismissContextMenu"
-  >
-    <div class="route-tabs__toolbar">
+  <div ref="root" class="route-tabs" data-testid="route-tabs" tabindex="-1" @keydown.esc="dismissContextMenu">
+    <div class="route-tabs__previous">
       <el-tooltip :content="t('layout.routeTabs.previous')">
         <el-button
           data-testid="route-tabs-previous"
           text
-          :icon="ArrowLeft"
-          :disabled="previousDisabled"
-          :aria-label="t('layout.routeTabs.previous')"
-          @click="navigateRelative(-1)"
-        />
-      </el-tooltip>
-      <el-tooltip :content="t('layout.routeTabs.next')">
-        <el-button
-          data-testid="route-tabs-next"
-          text
-          :icon="ArrowRight"
-          :disabled="nextDisabled"
-          :aria-label="t('layout.routeTabs.next')"
-          @click="navigateRelative(1)"
-        />
-      </el-tooltip>
-      <el-tooltip :content="t('layout.routeTabs.refresh')">
-        <el-button
-          data-testid="route-tabs-refresh"
-          text
-          :icon="Refresh"
-          :aria-label="t('layout.routeTabs.refresh')"
-          @click="refreshCurrent"
-        />
-      </el-tooltip>
-      <el-tooltip :content="t('layout.routeTabs.fullscreen')">
-        <el-button
-          data-testid="route-tabs-fullscreen"
-          text
-          :icon="FullScreen"
-          :aria-label="t('layout.routeTabs.fullscreen')"
-          @click="toggleFullscreen"
-        />
-      </el-tooltip>
-      <el-tooltip :content="t('layout.routeTabs.closeOthers')">
-        <el-button
-          data-testid="route-tabs-close-others"
-          text
           :icon="DArrowLeft"
-          :aria-label="t('layout.routeTabs.closeOthers')"
-          @click="closeOthers(route.path)"
-        />
-      </el-tooltip>
-      <el-tooltip :content="t('layout.routeTabs.closeAll')">
-        <el-button
-          data-testid="route-tabs-close-all"
-          text
-          :icon="DArrowRight"
-          :aria-label="t('layout.routeTabs.closeAll')"
-          @click="closeAll"
+          :disabled="previousTab === undefined"
+          :aria-label="t('layout.routeTabs.previous')"
+          @click="navigateRelative(previousTab)"
         />
       </el-tooltip>
     </div>
 
-    <nav class="route-tabs__list route-tabs__horizontal-scroll" :aria-label="t('layout.routeTabs.contextMenu')">
-      <div
-        v-for="tab in tabs"
-        :key="tab.path"
-        class="route-tabs__item"
-        data-testid="route-tab"
-        :data-affix="String(tab.affix)"
-        :data-active="String(tab.path === route.path)"
-        @contextmenu="openContextMenu($event, tab.path)"
-      >
-        <button
-          class="route-tabs__tab"
-          :data-testid="`route-tab-${slug(tab.path)}`"
-          :data-affix="String(tab.affix)"
-          :aria-current="tab.path === route.path ? 'page' : undefined"
-          :data-active="String(tab.path === route.path)"
-          @click="navigateTo(tab.path)"
-        >
-          <span>{{ t(tab.titleKey) }}</span>
-        </button>
-        <button
-          v-if="!tab.affix"
-          class="route-tabs__close"
-          :data-testid="`route-tab-${slug(tab.path)}-close`"
-          :aria-label="t('layout.routeTabs.close')"
-          @click.stop="closeTab(tab.path)"
-        >
-          <el-icon aria-hidden="true"><Close /></el-icon>
-        </button>
-        <button
-          class="route-tabs__menu-trigger"
-          :data-testid="`route-tab-${slug(tab.path)}-menu`"
-          :aria-label="t('layout.routeTabs.contextMenu')"
-          @click.stop="openContextMenu($event, tab.path)"
-          @contextmenu.stop="openContextMenu($event, tab.path)"
-        >
-          <el-icon aria-hidden="true"><MoreFilled /></el-icon>
-        </button>
-      </div>
-    </nav>
+    <div class="route-tabs__scroll route-tabs__horizontal-scroll">
+      <el-scrollbar ref="scrollPaneRef" class="route-tabs__scrollbar" @wheel.prevent="handleScroll">
+        <div ref="tagsInnerRef" class="route-tabs__inner">
+          <TransitionGroup name="route-tab" tag="div" class="route-tabs__list">
+            <div
+              v-for="tab in tabs"
+              :key="tab.path"
+              class="route-tabs__item tag-item"
+              :class="{ active: tab.path === route.path }"
+              data-testid="route-tab"
+              :data-path="tab.path"
+              :data-affix="String(tab.affix)"
+              :data-active="String(tab.path === route.path)"
+              role="button"
+              tabindex="0"
+              :aria-current="tab.path === route.path ? 'page' : undefined"
+              @click="navigateTo(tab.path)"
+              @keydown.enter.prevent="navigateTo(tab.path)"
+              @keydown.space.prevent="navigateTo(tab.path)"
+              @contextmenu="openContextMenu($event, tab.path)"
+            >
+              <span v-if="tab.path === route.path" class="route-tabs__dot" />
+              <span class="route-tabs__label">{{ t(tab.titleKey) }}</span>
+              <span
+                v-if="!tab.affix"
+                class="route-tabs__close"
+                :data-testid="`route-tab-${slug(tab.path)}-close`"
+                :aria-label="t('layout.routeTabs.close')"
+                role="button"
+                tabindex="0"
+                @click.stop="closeTab(tab.path)"
+              >
+                <el-icon aria-hidden="true"><Close /></el-icon>
+              </span>
+            </div>
+          </TransitionGroup>
+        </div>
+      </el-scrollbar>
+    </div>
 
-    <div
+    <div class="route-tabs__next">
+      <el-tooltip :content="t('layout.routeTabs.next')">
+        <el-button
+          data-testid="route-tabs-next"
+          text
+          :icon="DArrowRight"
+          :disabled="nextTab === undefined"
+          :aria-label="t('layout.routeTabs.next')"
+          @click="navigateRelative(nextTab)"
+        />
+      </el-tooltip>
+    </div>
+
+    <el-dropdown class="route-tabs__actions" trigger="click" @command="handleCommand">
+      <button
+        data-testid="route-tabs-settings"
+        type="button"
+        class="route-tabs__action"
+        :aria-label="t('layout.routeTabs.contextMenu')"
+      >
+        <el-icon aria-hidden="true"><Setting /></el-icon>
+      </button>
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item data-testid="route-tabs-refresh" command="refresh" :icon="Refresh">
+            {{ t('layout.routeTabs.refresh') }}
+          </el-dropdown-item>
+          <el-dropdown-item data-testid="route-tabs-fullscreen" command="fullscreen" :icon="FullScreen">
+            {{ props.fullscreen ? t('layout.routeTabs.exitFullscreen') : t('layout.routeTabs.fullscreen') }}
+          </el-dropdown-item>
+          <el-dropdown-item data-testid="route-tabs-close-others" command="closeOthers" :icon="CircleClose">
+            {{ t('layout.routeTabs.closeOthers') }}
+          </el-dropdown-item>
+          <el-dropdown-item data-testid="route-tabs-close-all" command="closeAll" :icon="FolderDelete">
+            {{ t('layout.routeTabs.closeAll') }}
+          </el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
+
+    <ul
       v-if="contextMenuOpen"
       class="route-tabs__context-menu"
       role="menu"
@@ -292,168 +310,133 @@ onBeforeUnmount(() => {
       :style="{ left: `${contextPosition.x}px`, top: `${contextPosition.y}px` }"
       @pointerdown.stop
     >
-      <button
-        data-testid="route-tabs-refresh-context"
-        role="menuitem"
-        @click="refreshCurrent"
-      >
-        {{ t('layout.routeTabs.refresh') }}
-      </button>
-      <button
+      <li data-testid="route-tabs-refresh-context" role="menuitem" @click="handleContextRefresh">
+        <el-icon><Refresh /></el-icon>{{ t('layout.routeTabs.refresh') }}
+      </li>
+      <li
+        v-if="contextTab?.affix !== true"
         data-testid="route-tabs-close"
         role="menuitem"
-        :disabled="contextTab?.affix === true"
         @click="closeTab(contextPath)"
       >
-        {{ t('layout.routeTabs.close') }}
-      </button>
-      <button
-        data-testid="route-tabs-close-others-context"
-        role="menuitem"
-        @click="closeOthers(contextPath)"
-      >
-        {{ t('layout.routeTabs.closeOthers') }}
-      </button>
-      <button
-        data-testid="route-tabs-close-all-context"
-        role="menuitem"
-        @click="closeAll"
-      >
-        {{ t('layout.routeTabs.closeAll') }}
-      </button>
-    </div>
+        <el-icon><Close /></el-icon>{{ t('layout.routeTabs.close') }}
+      </li>
+      <li data-testid="route-tabs-close-others-context" role="menuitem" @click="closeOthers(contextPath)">
+        <el-icon><CircleClose /></el-icon>{{ t('layout.routeTabs.closeOthers') }}
+      </li>
+      <li data-testid="route-tabs-close-all-context" role="menuitem" @click="closeAll">
+        <el-icon><FolderDelete /></el-icon>{{ t('layout.routeTabs.closeAll') }}
+      </li>
+    </ul>
   </div>
 </template>
 
 <style scoped>
 .route-tabs {
-  position: relative;
   display: flex;
   align-items: center;
   min-width: 0;
-  height: 42px;
-  padding: 0 10px;
-  gap: 8px;
+  height: 40px;
+  padding: 0 10px 0 8px;
+  gap: 4px;
   color: var(--el-text-color-regular);
-  background: var(--el-bg-color);
-  border-bottom: 1px solid var(--el-border-color-light);
+  background: transparent;
 }
 
-.route-tabs__toolbar {
-  display: flex;
+.route-tabs__previous,
+.route-tabs__next,
+.route-tabs__actions {
   flex: 0 0 auto;
-  align-items: center;
-  gap: 2px;
 }
 
-.route-tabs__toolbar .el-button {
-  width: 28px;
-  height: 28px;
+.route-tabs__previous .el-button,
+.route-tabs__next .el-button {
+  width: 30px;
+  height: 30px;
   margin: 0;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 9px;
+  color: var(--el-text-color-secondary);
 }
 
-.route-tabs__list {
-  display: flex;
-  align-items: center;
+.route-tabs__previous .el-button:hover:not(:disabled),
+.route-tabs__next .el-button:hover:not(:disabled),
+.route-tabs__action:hover {
+  color: var(--el-text-color-primary);
+  background: var(--el-fill-color-light);
+  border-color: var(--el-border-color);
+}
+
+.route-tabs__scroll {
+  flex: 1 1 auto;
   min-width: 0;
   height: 100%;
-  overflow-x: auto;
-  gap: 4px;
+  overflow: hidden;
 }
 
+.route-tabs__scrollbar { height: 100%; }
+.route-tabs__scrollbar :deep(.el-scrollbar__view) { height: 100%; }
+.route-tabs__inner { display: flex; align-items: center; height: 100%; }
+.route-tabs__list { display: flex; align-items: center; min-width: max-content; gap: 4px; padding: 0 2px; }
+
 .route-tabs__item {
-  display: flex;
-  flex: 0 0 auto;
+  position: relative;
+  display: inline-flex;
   align-items: center;
   height: 30px;
   max-width: 220px;
-  background: var(--el-fill-color-light);
+  padding: 0 12px;
+  gap: 7px;
   border: 1px solid transparent;
-  border-radius: 4px;
-}
-
-.route-tabs__item[data-active='true'] {
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  border-color: var(--el-color-primary-light-7);
-}
-
-.route-tabs__tab,
-.route-tabs__close,
-.route-tabs__menu-trigger {
-  height: 28px;
-  border: 0;
-  color: inherit;
+  border-radius: 9px;
   background: transparent;
+  color: var(--el-text-color-secondary);
   cursor: pointer;
-}
-
-.route-tabs__tab {
-  min-width: 74px;
-  max-width: 180px;
-  padding: 0 8px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  user-select: none;
   white-space: nowrap;
-  font: inherit;
-  font-size: 12px;
+  transition: all 160ms ease;
 }
 
-.route-tabs__close {
+.route-tabs__item:hover { color: var(--el-text-color-primary); background: var(--el-fill-color-light); border-color: var(--el-border-color-light); }
+.route-tabs__item.active { color: var(--el-text-color-primary); background: var(--el-bg-color); border-color: var(--el-border-color-light); }
+.route-tabs__item:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 1px; }
+.route-tabs__dot { width: 5px; height: 5px; flex: 0 0 5px; border-radius: 50%; background: var(--el-color-primary); }
+.route-tabs__label { max-width: 144px; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 500; }
+.route-tabs__close { display: grid; width: 16px; height: 16px; flex: 0 0 16px; place-items: center; margin-right: -4px; border-radius: 6px; color: currentColor; opacity: 0; transform: scale(0.88); transition: all 160ms ease; }
+.route-tabs__item:hover .route-tabs__close, .route-tabs__item.active .route-tabs__close { opacity: 1; transform: scale(1); }
+.route-tabs__close:hover { background: var(--el-fill-color); }
+
+.route-tabs__action {
+  position: relative;
   display: grid;
-  width: 24px;
-  flex: 0 0 24px;
+  width: 30px;
+  height: 30px;
   place-items: center;
   padding: 0;
-  font-size: 12px;
-}
-
-.route-tabs__menu-trigger {
-  display: grid;
-  width: 22px;
-  flex: 0 0 22px;
-  place-items: center;
-  padding: 0;
-  font-size: 12px;
-}
-
-.route-tabs__tab:hover,
-.route-tabs__close:hover,
-.route-tabs__menu-trigger:hover {
-  color: var(--el-color-primary);
-}
-
-.route-tabs__context-menu {
-  position: fixed;
-  z-index: 100;
-  display: grid;
-  width: 180px;
-  padding: 4px;
-  background: var(--el-bg-color-overlay);
   border: 1px solid var(--el-border-color-light);
-  border-radius: 4px;
-  box-shadow: var(--el-box-shadow-light);
-}
-
-.route-tabs__context-menu button {
-  min-height: 30px;
-  padding: 0 10px;
-  color: var(--el-text-color-regular);
-  text-align: left;
-  background: transparent;
-  border: 0;
-  border-radius: 3px;
+  border-radius: 9px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-bg-color);
   cursor: pointer;
-  font: inherit;
-  font-size: 12px;
 }
+.route-tabs__actions { position: relative; margin-left: 6px; }
+.route-tabs__actions::before { position: absolute; width: 1px; height: 18px; margin-left: -8px; background: var(--el-border-color-light); content: ''; }
 
-.route-tabs__context-menu button:hover:not(:disabled) {
-  background: var(--el-fill-color-light);
-}
+.route-tabs__context-menu { position: fixed; z-index: 3000; min-width: 132px; margin: 0; padding: 8px 0; list-style: none; background: var(--el-bg-color-overlay); border: 1px solid var(--el-border-color-light); border-radius: 12px; box-shadow: var(--el-box-shadow-light); }
+.route-tabs__context-menu li { display: flex; align-items: center; gap: 8px; padding: 9px 16px; color: var(--el-text-color-primary); font-size: 13px; cursor: pointer; }
+.route-tabs__context-menu li:hover { background: var(--el-fill-color-light); }
+.route-tabs__context-menu .el-icon { color: var(--el-text-color-regular); }
 
-.route-tabs__context-menu button:disabled {
-  color: var(--el-text-color-placeholder);
-  cursor: not-allowed;
+.route-tab-enter-active, .route-tab-leave-active, .route-tab-move { transition: transform 160ms ease, opacity 120ms ease; }
+.route-tab-enter-from, .route-tab-leave-to { opacity: 0; transform: translateY(6px) scale(0.96); }
+.route-tab-leave-active { position: absolute; pointer-events: none; }
+
+@media (max-width: 768px) {
+  .route-tabs { height: 34px; padding-inline: 6px; }
+  .route-tabs__previous .el-button, .route-tabs__next .el-button, .route-tabs__action { width: 26px; height: 26px; border-radius: 7px; }
+  .route-tabs__list { gap: 3px; }
+  .route-tabs__item { height: 26px; padding: 0 10px; border-radius: 7px; }
+  .route-tabs__label { max-width: 88px; font-size: 12px; }
+  .route-tabs__dot { width: 4px; height: 4px; flex-basis: 4px; }
 }
 </style>

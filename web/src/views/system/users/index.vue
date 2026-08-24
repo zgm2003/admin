@@ -9,6 +9,9 @@ import type { UserListItem, UserListQuery, UserRolesResponse, UserRoleSummary } 
 import { YesNo } from '../../../enums/yes-no'
 import { useAccessStore } from '../../../store/access'
 import { useAuthStore } from '../../../store/auth'
+import { AppDialog } from '../../../components/AppDialog'
+import { AppTable } from '../../../components/AppTable'
+import type { TableColumn, TablePaginationState } from '../../../components/AppTable'
 
 const { t } = useI18n()
 const access = useAccessStore()
@@ -42,6 +45,18 @@ const selectedRoleIDs = ref<number[]>([])
 const roleLoading = ref(false)
 const roleSaving = ref(false)
 const roleError = ref('')
+
+const tablePagination = computed<TablePaginationState>(() => ({ currentPage: query.value.page, pageSize: query.value.pageSize, total: total.value }))
+const tableColumns = computed<TableColumn<UserListItem>[]>(() => [
+  { prop: 'id', label: t('user.id'), width: 80 },
+  { prop: 'username', label: t('user.username'), minWidth: 140 },
+  { prop: 'email', label: t('user.email'), minWidth: 210 },
+  { key: 'roles', prop: 'id', label: t('user.roles'), minWidth: 240 },
+  { key: 'status', prop: 'id', label: t('user.status'), width: 100 },
+  { prop: 'createdAt', label: t('user.createdAt'), minWidth: 190 },
+  { prop: 'updatedAt', label: t('user.updatedAt'), minWidth: 190 },
+  { key: 'actions', prop: 'id', label: t('user.actions'), width: 190 },
+])
 
 const canUpdate = computed(() => access.hasPermission('system:user:update'))
 const canStatus = computed(() => access.hasPermission('system:user:status'))
@@ -89,6 +104,10 @@ function search(): void {
 function reset(): void { keyword.value=''; statusFilter.value=''; roleFilter.value=''; query.value={page:1,pageSize:query.value.pageSize}; void loadUsers() }
 function changePage(page:number):void { query.value={...query.value,page}; void loadUsers() }
 function changePageSize(pageSize:number):void { query.value={...query.value,page:1,pageSize}; void loadUsers() }
+function updateTablePagination(next: TablePaginationState): void {
+  if (next.pageSize !== query.value.pageSize) { changePageSize(next.pageSize); return }
+  changePage(next.currentPage)
+}
 function isSelf(row:UserListItem):boolean { return auth.user?.userId === row.id }
 function hasSuperAdmin(row:UserListItem):boolean { return row.roles.some((role)=>role.code==='super_admin') }
 function targetProtected(row:UserListItem):boolean { return hasSuperAdmin(row) && !isSuperAdminActor.value }
@@ -184,29 +203,26 @@ onMounted(()=>{ void loadRoleOptions(); void loadUsers() })
       <el-button type="primary" @click="search">{{ t('user.search') }}</el-button><el-button @click="reset">{{ t('user.reset') }}</el-button>
     </div>
     <el-alert v-if="roleOptionsError" :title="roleOptionsError" type="error" show-icon /><el-alert v-if="loadError" :title="loadError" type="error" show-icon /><el-alert v-if="mutationError" :title="mutationError" type="error" show-icon closable @close="mutationError=''" />
-    <el-table v-loading="loading" :data="rows" row-key="id" class="user-table" empty-text="">
-      <el-table-column prop="id" :label="t('user.id')" width="80" /><el-table-column prop="username" :label="t('user.username')" min-width="140" /><el-table-column prop="email" :label="t('user.email')" min-width="210" />
-      <el-table-column :label="t('user.roles')" min-width="240"><template #default="{row}"><div class="role-tags"><el-tooltip v-for="role in row.roles" :key="role.id" :content="role.code"><el-tag :type="role.isEnabled===YesNo.Yes?'primary':'info'">{{ role.name }}<span v-if="role.isEnabled===YesNo.No"> · {{ t('user.roleDisabled') }}</span></el-tag></el-tooltip></div></template></el-table-column>
-      <el-table-column :label="t('user.status')" width="100"><template #default="{row}"><el-tag :type="row.isEnabled===YesNo.Yes?'success':'danger'">{{ t(row.isEnabled===YesNo.Yes?'user.enabled':'user.disabled') }}</el-tag></template></el-table-column>
-      <el-table-column prop="createdAt" :label="t('user.createdAt')" min-width="190" /><el-table-column prop="updatedAt" :label="t('user.updatedAt')" min-width="190" />
-      <el-table-column fixed="right" :label="t('user.actions')" width="190"><template #default="{row}">
+    <AppTable class="user-table" :columns="tableColumns" :data="rows" :loading="loading" :pagination="tablePagination" result-state="success" :aria-label="t('user.title')" @update:pagination="updateTablePagination">
+      <template #cell-roles="{ row }: { row: UserListItem }"><div v-if="row.id > 0" class="role-tags"><el-tooltip v-for="role in row.roles" :key="role.id" :content="role.code"><el-tag :type="role.isEnabled===YesNo.Yes?'primary':'info'">{{ role.name }}<span v-if="role.isEnabled===YesNo.No"> · {{ t('user.roleDisabled') }}</span></el-tag></el-tooltip></div></template>
+      <template #cell-status="{ row }: { row: UserListItem }"><el-tag v-if="row.id > 0" :type="row.isEnabled===YesNo.Yes?'success':'danger'">{{ t(row.isEnabled===YesNo.Yes?'user.enabled':'user.disabled') }}</el-tag></template>
+      <template #cell-actions="{ row }: { row: UserListItem }"><template v-if="row.id > 0">
         <el-tooltip v-if="canUpdate" :content="editDisabled(row)?t('user.superAdminBlocked'):t('user.edit')"><el-button circle :icon="Edit" :aria-label="t('user.edit')" :disabled="editDisabled(row)" @click="openEdit(row)" /></el-tooltip>
         <el-tooltip v-if="canStatus" :content="protectionText(row,'status')"><el-button circle :icon="SwitchButton" :aria-label="t('permission.userStatus')" :disabled="dangerDisabled(row)||mutating" @click="changeStatus(row)" /></el-tooltip>
         <el-tooltip v-if="canRoles" :content="protectionText(row,'roles')"><el-button circle :icon="UserFilled" :aria-label="t('user.assignRoles')" :disabled="dangerDisabled(row)" @click="openRoles(row)" /></el-tooltip>
         <el-tooltip v-if="canDelete" :content="protectionText(row,'delete')"><el-button circle type="danger" plain :icon="Delete" :aria-label="t('permission.userDelete')" :disabled="dangerDisabled(row)||mutating" @click="removeUser(row)" /></el-tooltip>
-      </template></el-table-column>
-    </el-table>
-    <el-empty v-if="!loading&&rows.length===0&&!loadError" :description="t('user.noRoles')" />
-    <el-pagination :current-page="query.page" :page-size="query.pageSize" :total="total" :page-sizes="[20,50,100]" layout="total, sizes, prev, pager, next" @current-change="changePage" @size-change="changePageSize" />
+      </template></template>
+      <template #empty><el-empty :description="t('user.noRoles')" /></template>
+    </AppTable>
 
-    <el-dialog v-model="editVisible" class="user-edit-dialog" :title="t('user.editTitle')" width="min(520px, 94vw)" append-to-body>
+    <AppDialog v-model="editVisible" class="user-edit-dialog" :title="t('user.editTitle')" width="min(520px, 94vw)" append-to-body>
       <el-alert v-if="editError" :title="editError" type="error" /><el-form label-position="top"><el-form-item :label="t('user.email')"><el-input :model-value="editingUser?.email??''" disabled /></el-form-item><el-form-item :label="t('user.username')" :error="userForm.username!==''&&!usernameValid?t('user.invalidUsername'):''"><el-input v-model="userForm.username" maxlength="64" /></el-form-item></el-form>
       <template #footer><el-button @click="editVisible=false">{{ t('user.cancel') }}</el-button><el-button type="primary" :loading="editSaving" :disabled="!usernameValid" @click="saveEdit">{{ t('user.save') }}</el-button></template>
-    </el-dialog>
-    <el-dialog v-model="roleDialogVisible" class="user-role-dialog" :title="t('user.assignRolesTitle')" width="min(680px, 94vw)" append-to-body>
+    </AppDialog>
+    <AppDialog v-model="roleDialogVisible" class="user-role-dialog" :title="t('user.assignRolesTitle')" width="min(680px, 94vw)" height="min(62vh, 620px)" append-to-body>
       <div class="role-dialog-scroll"><div v-if="roleLoading">{{ t('user.roleLoadFailed') }}</div><el-alert v-if="roleError" :title="roleError" type="error" show-icon /><template v-if="roleData"><div class="role-dialog-toolbar"><el-button @click="selectAllRoles">{{ t('user.selectAll') }}</el-button><el-button @click="clearRoles">{{ t('user.clear') }}</el-button></div><el-checkbox-group v-model="selectedRoleIDs" class="role-checks"><el-checkbox v-for="role in roleData.roles" :key="role.id" :value="role.id" :disabled="roleToggleDisabled(role)"><span>{{ role.name }} ({{ role.code }})</span><el-tag v-if="role.isEnabled===YesNo.No" type="info" size="small">{{ t('user.roleDisabled') }}</el-tag></el-checkbox></el-checkbox-group><el-alert v-if="!hasEnabledSelection" :title="t('user.enabledRoleRequired')" type="warning" /></template></div>
       <template #footer><el-button @click="roleDialogVisible=false">{{ t('user.cancel') }}</el-button><el-button type="primary" :loading="roleSaving" :disabled="roleData===null||!hasEnabledSelection" @click="saveRoles">{{ t('user.save') }}</el-button></template>
-    </el-dialog>
+    </AppDialog>
   </section>
 </template>
 

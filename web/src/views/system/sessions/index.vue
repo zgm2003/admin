@@ -7,6 +7,8 @@ import { useI18n } from 'vue-i18n'
 import { getSessions, getSessionStats, revokeSession, revokeSessions } from '../../../api/session'
 import type { SessionItem, SessionListQuery, SessionStats, SessionStatus } from '../../../api/session.contract'
 import { useAccessStore } from '../../../store/access'
+import { AppTable } from '../../../components/AppTable'
+import type { TableColumn, TablePaginationState } from '../../../components/AppTable'
 
 const { t } = useI18n()
 const access = useAccessStore()
@@ -25,6 +27,21 @@ const mutating = ref(false)
 const loadError = ref('')
 const statsError = ref('')
 const mutationError = ref('')
+
+const tablePagination = computed<TablePaginationState | null>(() => total.value > 0
+  ? { currentPage: query.value.page, pageSize: query.value.pageSize, total: total.value }
+  : null)
+const tableColumns = computed<TableColumn<SessionItem>[]>(() => [
+  { key: 'user', prop: 'id', label: t('session.column.user'), minWidth: 150 },
+  { prop: 'platform', label: t('session.column.platform'), minWidth: 110 },
+  { key: 'device', prop: 'id', label: t('session.column.device'), minWidth: 180 },
+  { prop: 'clientIp', label: t('session.column.ip'), minWidth: 130 },
+  { prop: 'userAgent', label: t('session.column.userAgent'), minWidth: 180, overflowTooltip: true },
+  { key: 'createdAt', prop: 'id', label: t('session.column.createdAt'), minWidth: 180 },
+  { key: 'expiresAt', prop: 'id', label: t('session.column.expiresAt'), minWidth: 180 },
+  { key: 'status', prop: 'id', label: t('session.statusLabel'), width: 100 },
+  { key: 'actions', prop: 'id', label: t('session.column.actions'), width: 120 },
+])
 
 const canRevoke = computed(() => access.hasPermission('system:session:revoke'))
 const platformStats = computed(() => Object.entries(stats.value.platforms).sort(([left], [right]) => left.localeCompare(right)))
@@ -99,6 +116,11 @@ function changePage(page: number): void {
 function changePageSize(pageSize: number): void {
 	query.value = { ...query.value, page: 1, pageSize }
 	void loadSessions()
+}
+
+function updateTablePagination(next: TablePaginationState): void {
+  if (next.pageSize !== query.value.pageSize) { changePageSize(next.pageSize); return }
+  changePage(next.currentPage)
 }
 
 function selectable(row: SessionItem): boolean {
@@ -217,40 +239,30 @@ onMounted(() => {
 			<el-skeleton :rows="6" animated />
 		</div>
 		<el-empty v-else-if="rows.length === 0" :description="t('session.empty')" />
-		<el-table
+		<AppTable
 			v-else
-			:data="rows"
 			data-testid="session-table"
-			row-key="id"
-			stripe
+			:columns="tableColumns"
+			:data="rows"
+			:selectable="canRevoke"
+			:selection-selectable="selectable"
+			:pagination="tablePagination"
+			result-state="success"
+			:aria-label="t('session.title')"
 			@selection-change="selectionChanged"
+			@update:pagination="updateTablePagination"
 		>
-			<el-table-column v-if="canRevoke" type="selection" width="48" :selectable="selectable" />
-			<el-table-column :label="t('session.column.user')" min-width="150">
-				<template #default="{ row }: { row: SessionItem }">
+			<template #cell-user="{ row }: { row: SessionItem }">
 					<strong>{{ row.username }}</strong>
 					<small>#{{ row.userId }}</small>
-				</template>
-			</el-table-column>
-			<el-table-column prop="platform" :label="t('session.column.platform')" min-width="110" />
-			<el-table-column :label="t('session.column.device')" min-width="180">
-				<template #default="{ row }: { row: SessionItem }"><code>{{ row.deviceId }}</code></template>
-			</el-table-column>
-			<el-table-column prop="clientIp" :label="t('session.column.ip')" min-width="130" />
-			<el-table-column prop="userAgent" :label="t('session.column.userAgent')" min-width="180" show-overflow-tooltip />
-			<el-table-column :label="t('session.column.createdAt')" min-width="180">
-				<template #default="{ row }: { row: SessionItem }">{{ formatTime(row.createdAt) }}</template>
-			</el-table-column>
-			<el-table-column :label="t('session.column.expiresAt')" min-width="180">
-				<template #default="{ row }: { row: SessionItem }">{{ formatTime(row.refreshExpiresAt) }}</template>
-			</el-table-column>
-			<el-table-column :label="t('session.statusLabel')" width="100">
-				<template #default="{ row }: { row: SessionItem }">
-					<el-tag :type="statusTagType(row.status)" effect="light">{{ t(`session.status.${row.status}`) }}</el-tag>
-				</template>
-			</el-table-column>
-			<el-table-column :label="t('session.column.actions')" fixed="right" width="120">
-				<template #default="{ row }: { row: SessionItem }">
+			</template>
+			<template #cell-device="{ row }: { row: SessionItem }"><code v-if="row.id > 0">{{ row.deviceId }}</code></template>
+			<template #cell-createdAt="{ row }: { row: SessionItem }">{{ row.id > 0 ? formatTime(row.createdAt) : '' }}</template>
+			<template #cell-expiresAt="{ row }: { row: SessionItem }">{{ row.id > 0 ? formatTime(row.refreshExpiresAt) : '' }}</template>
+			<template #cell-status="{ row }: { row: SessionItem }">
+					<el-tag v-if="row.id > 0" :type="statusTagType(row.status)" effect="light">{{ t(`session.status.${row.status}`) }}</el-tag>
+			</template>
+			<template #cell-actions="{ row }: { row: SessionItem }"><template v-if="row.id > 0">
 					<el-tag v-if="row.isCurrent" type="primary" effect="plain">{{ t('session.current') }}</el-tag>
 					<el-button
 						v-else-if="canRevoke && row.status === 'active'"
@@ -262,22 +274,9 @@ onMounted(() => {
 					>
 						{{ t('session.revoke') }}
 					</el-button>
-				</template>
-			</el-table-column>
-		</el-table>
-
-		<el-pagination
-			v-if="total > 0"
-			data-testid="session-pagination"
-			background
-			layout="total, sizes, prev, pager, next"
-			:current-page="query.page"
-			:page-size="query.pageSize"
-			:page-sizes="[20, 50, 100]"
-			:total="total"
-			@current-change="changePage"
-			@size-change="changePageSize"
-		/>
+			</template></template>
+			<template #empty><el-empty :description="t('session.empty')" /></template>
+		</AppTable>
 	</section>
 </template>
 

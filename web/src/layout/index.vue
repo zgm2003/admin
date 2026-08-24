@@ -105,7 +105,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateViewport))
         />
       </el-header>
       <div class="admin-layout__tabs admin-layout__horizontal-scroll">
-        <RouteTabs @refresh="handleRefresh" @toggle-fullscreen="handleToggleFullscreen" />
+        <RouteTabs :fullscreen="contentFullscreen" @refresh="handleRefresh" @toggle-fullscreen="handleToggleFullscreen" />
       </div>
       <el-main class="admin-layout__main admin-layout__scroll-owner">
         <el-alert

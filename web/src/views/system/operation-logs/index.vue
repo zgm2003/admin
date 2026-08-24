@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import { getOperationLogs } from '../../../api/operation-log'
 import type { OperationLogItem, OperationLogListQuery } from '../../../api/operation-log.contract'
 import { YesNo } from '../../../enums/yes-no'
+import { AppTable } from '../../../components/AppTable'
+import type { TableColumn, TablePaginationState } from '../../../components/AppTable'
 
 const { t } = useI18n()
 
@@ -19,6 +21,19 @@ const success = ref<'' | YesNo>('')
 const timeRange = ref<[] | [string, string]>([])
 const loading = ref(false)
 const loadError = ref('')
+
+const tablePagination = computed<TablePaginationState>(() => ({ currentPage: query.value.page, pageSize: query.value.pageSize, total: total.value }))
+const tableColumns = computed<TableColumn<OperationLogItem>[]>(() => [
+  { key: 'expand', prop: 'id', label: '', width: 48, expand: true },
+  { key: 'method', prop: 'id', label: t('operationLog.column.method'), width: 90 },
+  { prop: 'action', label: t('operationLog.column.action'), minWidth: 160, overflowTooltip: true },
+  { prop: 'route', label: t('operationLog.column.route'), minWidth: 220, overflowTooltip: true },
+  { key: 'user', prop: 'id', label: t('operationLog.column.user'), width: 100 },
+  { prop: 'clientIp', label: t('operationLog.column.ip'), minWidth: 130 },
+  { key: 'status', prop: 'id', label: t('operationLog.column.status'), width: 100 },
+  { key: 'latency', prop: 'id', label: t('operationLog.column.latency'), width: 100 },
+  { key: 'createdAt', prop: 'id', label: t('operationLog.column.createdAt'), minWidth: 180 },
+])
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error && error.message !== '' ? error.message : t('operationLog.loadFailed')
@@ -91,6 +106,11 @@ function changePageSize(pageSize: number): void {
 	void loadLogs()
 }
 
+function updateTablePagination(next: TablePaginationState): void {
+  if (next.pageSize !== query.value.pageSize) { changePageSize(next.pageSize); return }
+  changePage(next.currentPage)
+}
+
 function formatTime(value: string): string {
 	return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(value))
 }
@@ -140,15 +160,22 @@ onMounted(() => { void loadLogs() })
 			<el-button @click="reset">{{ t('operationLog.reset') }}</el-button>
 		</div>
 
-		<el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
-		<div v-if="loading" data-testid="operation-log-loading" :aria-label="t('operationLog.loading')">
-			<el-skeleton :rows="6" animated />
-		</div>
-		<el-empty v-else-if="rows.length === 0" :description="t('operationLog.empty')" />
-		<el-table v-else :data="rows" data-testid="operation-log-table" row-key="id" stripe>
-			<el-table-column type="expand">
-				<template #default="{ row }: { row: OperationLogItem }">
-					<div class="operation-log-detail">
+			<el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
+			<div v-if="loading" data-testid="operation-log-loading" :aria-label="t('operationLog.loading')">
+				<el-skeleton :rows="6" animated />
+			</div>
+			<AppTable
+				v-else
+				data-testid="operation-log-table"
+				:columns="tableColumns"
+				:data="rows"
+				:pagination="tablePagination"
+				result-state="success"
+				:aria-label="t('operationLog.title')"
+				@update:pagination="updateTablePagination"
+			>
+				<template #expand="{ row }: { row: OperationLogItem }">
+						<div class="operation-log-detail">
 						<h2>{{ t('operationLog.detailTitle') }}</h2>
 						<dl>
 							<div><dt>{{ t('operationLog.requestId') }}</dt><dd><code>{{ row.requestId }}</code></dd></div>
@@ -161,41 +188,13 @@ onMounted(() => { void loadLogs() })
 						</div>
 					</div>
 				</template>
-			</el-table-column>
-			<el-table-column :label="t('operationLog.column.method')" width="90">
-				<template #default="{ row }: { row: OperationLogItem }"><el-tag :type="methodTagType(row.method)" effect="plain">{{ row.method }}</el-tag></template>
-			</el-table-column>
-			<el-table-column prop="action" :label="t('operationLog.column.action')" min-width="160" show-overflow-tooltip />
-			<el-table-column prop="route" :label="t('operationLog.column.route')" min-width="220" show-overflow-tooltip />
-			<el-table-column :label="t('operationLog.column.user')" width="100">
-				<template #default="{ row }: { row: OperationLogItem }">{{ row.userId === null ? '-' : `#${row.userId}` }}</template>
-			</el-table-column>
-			<el-table-column prop="clientIp" :label="t('operationLog.column.ip')" min-width="130" />
-			<el-table-column :label="t('operationLog.column.status')" width="100">
-				<template #default="{ row }: { row: OperationLogItem }">
-					<el-tag :type="row.isSuccess === YesNo.Yes ? 'success' : 'danger'" effect="light">{{ row.statusCode }}</el-tag>
-				</template>
-			</el-table-column>
-			<el-table-column :label="t('operationLog.column.latency')" width="100">
-				<template #default="{ row }: { row: OperationLogItem }">{{ row.latencyMs }} ms</template>
-			</el-table-column>
-			<el-table-column :label="t('operationLog.column.createdAt')" min-width="180">
-				<template #default="{ row }: { row: OperationLogItem }">{{ formatTime(row.createdAt) }}</template>
-			</el-table-column>
-		</el-table>
-
-		<el-pagination
-			v-if="total > 0"
-			data-testid="operation-log-pagination"
-			background
-			layout="total, sizes, prev, pager, next"
-			:current-page="query.page"
-			:page-size="query.pageSize"
-			:page-sizes="[20, 50, 100]"
-			:total="total"
-			@current-change="changePage"
-			@size-change="changePageSize"
-		/>
+				<template #cell-method="{ row }: { row: OperationLogItem }"><el-tag :type="methodTagType(row.method)" effect="plain">{{ row.method }}</el-tag></template>
+				<template #cell-user="{ row }: { row: OperationLogItem }">{{ row.userId === null ? '-' : `#${row.userId}` }}</template>
+				<template #cell-status="{ row }: { row: OperationLogItem }"><el-tag :type="row.isSuccess === YesNo.Yes ? 'success' : 'danger'" effect="light">{{ row.statusCode }}</el-tag></template>
+				<template #cell-latency="{ row }: { row: OperationLogItem }">{{ row.latencyMs }} ms</template>
+				<template #cell-createdAt="{ row }: { row: OperationLogItem }">{{ formatTime(row.createdAt) }}</template>
+				<template #empty><el-empty :description="t('operationLog.empty')" /></template>
+			</AppTable>
 	</section>
 </template>
 

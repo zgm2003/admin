@@ -42,6 +42,17 @@ describe('RouteTabs', () => {
     })
   })
 
+  it('keeps the TabTag composition with navigation around the scroll pane and one settings action', async () => {
+    const { wrapper } = await mountTabs('/dashboard')
+
+    expect(wrapper.find('.route-tabs__previous').exists()).toBe(true)
+    expect(wrapper.find('.route-tabs__scroll').exists()).toBe(true)
+    expect(wrapper.find('.route-tabs__next').exists()).toBe(true)
+    expect(wrapper.find('.route-tabs__actions').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="route-tabs-settings"]').exists()).toBe(true)
+    expect(wrapper.findAll('.route-tabs__menu-trigger')).toHaveLength(0)
+  })
+
   it('adds each visited leaf once and keeps Dashboard fixed', async () => {
     const { wrapper, router } = await mountTabs('/dashboard')
     await router.push('/users')
@@ -50,7 +61,7 @@ describe('RouteTabs', () => {
     await flushPromises()
 
     expect(wrapper.findAll('[data-testid="route-tab"]')).toHaveLength(2)
-    expect(wrapper.get('[data-testid="route-tab-dashboard"]').attributes('data-affix')).toBe('true')
+    expect(wrapper.get('[data-testid="route-tab"][data-path="/dashboard"]').attributes('data-affix')).toBe('true')
     expect(wrapper.find('[data-testid="route-tab-dashboard-close"]').exists()).toBe(false)
   })
 
@@ -70,11 +81,11 @@ describe('RouteTabs', () => {
     await router.push('/users')
     await router.push('/roles')
     await flushPromises()
-    await wrapper.get('[data-testid="route-tab-roles-menu"]').trigger('contextmenu')
+    await wrapper.get('[data-testid="route-tab"][data-path="/roles"]').trigger('contextmenu')
     await wrapper.get('[data-testid="route-tabs-close-others-context"]').trigger('click')
     expect(wrapper.findAll('[data-testid="route-tab"]')).toHaveLength(2)
 
-    await wrapper.get('[data-testid="route-tab-roles-menu"]').trigger('contextmenu')
+    await wrapper.get('[data-testid="route-tab"][data-path="/roles"]').trigger('contextmenu')
     await wrapper.get('[data-testid="route-tabs-close-all-context"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/dashboard')
@@ -98,8 +109,14 @@ describe('RouteTabs', () => {
 
   it('emits refresh and fullscreen commands', async () => {
     const { wrapper } = await mountTabs('/dashboard')
-    await wrapper.get('[data-testid="route-tabs-refresh"]').trigger('click')
-    await wrapper.get('[data-testid="route-tabs-fullscreen"]').trigger('click')
+    await wrapper.get('[data-testid="route-tabs-settings"]').trigger('click')
+    await flushPromises()
+    getPopupItem('route-tabs-refresh').click()
+    await flushPromises()
+    await wrapper.get('[data-testid="route-tabs-settings"]').trigger('click')
+    await flushPromises()
+    getPopupItem('route-tabs-fullscreen').click()
+    await flushPromises()
 
     expect(wrapper.emitted('refresh')).toHaveLength(1)
     expect(wrapper.emitted('toggleFullscreen')).toHaveLength(1)
@@ -107,18 +124,18 @@ describe('RouteTabs', () => {
 
   it('dismisses context menu and scrolls the active tab into view', async () => {
     const { wrapper, router } = await mountTabs('/dashboard')
-    await wrapper.get('[data-testid="route-tab-dashboard-menu"]').trigger('contextmenu')
+    await wrapper.get('[data-testid="route-tab"][data-path="/dashboard"]').trigger('contextmenu')
     expect(wrapper.find('[role="menu"]').exists()).toBe(true)
-    await wrapper.get('[data-testid="route-tab-dashboard"]').trigger('click')
+    await wrapper.get('[data-testid="route-tab"][data-path="/dashboard"]').trigger('click')
     expect(wrapper.find('[role="menu"]').exists()).toBe(false)
 
     await router.push('/users')
     await flushPromises()
     expect(scrollIntoViewMock).toHaveBeenCalled()
-    await wrapper.get('[data-testid="route-tab-users"]').trigger('contextmenu')
+    await wrapper.get('[data-testid="route-tab"][data-path="/users"]').trigger('contextmenu')
     await wrapper.get('[data-testid="route-tabs-close"]').trigger('click')
     expect(wrapper.find('[role="menu"]').exists()).toBe(false)
-    await wrapper.get('[data-testid="route-tab-dashboard-menu"]').trigger('contextmenu')
+    await wrapper.get('[data-testid="route-tab"][data-path="/dashboard"]').trigger('contextmenu')
     await wrapper.trigger('keydown', { key: 'Escape' })
     expect(wrapper.find('[role="menu"]').exists()).toBe(false)
   })
@@ -133,4 +150,11 @@ async function mountTabs(initialPath: string) {
   })
   await flushPromises()
   return { wrapper, router }
+}
+
+function getPopupItem(testId: string): HTMLElement {
+  const items = Array.from(document.body.querySelectorAll<HTMLElement>(`[data-testid="${testId}"]`))
+  const item = items.at(-1)
+  if (item === undefined) throw new Error(`Missing dropdown item: ${testId}`)
+  return item
 }

@@ -97,6 +97,7 @@ export const enUS = {
   'authPlatform.status.all': 'All statuses',
   'authPlatform.status.enabled': 'Enabled',
   'authPlatform.status.disabled': 'Disabled',
+  'authPlatform.empty': 'No authentication platforms',
   'authPlatform.column.platform': 'Platform',
   'authPlatform.column.tokenTTL': 'Token TTL',
   'authPlatform.column.cacheTTL': 'Cache TTL',
