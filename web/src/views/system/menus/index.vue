@@ -373,7 +373,7 @@ onMounted(loadMenus)
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('menu.column.type')" width="116">
+        <el-table-column :label="t('menu.column.type')" width="116" align="center" header-align="center">
           <template #default="{ row }: { row: ManagedMenuNode }">
             <el-tag size="small" effect="plain" :type="menuTypeTag(row.menuType)">
               {{ menuTypeLabel(row.menuType) }}
@@ -393,7 +393,7 @@ onMounted(loadMenus)
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('menu.column.icon')" width="112">
+        <el-table-column :label="t('menu.column.icon')" width="112" align="center" header-align="center">
           <template #default="{ row }: { row: ManagedMenuNode }">
             <span v-if="row.icon !== null" class="menu-icon-cell">
               <el-icon><component :is="menuIcons[row.icon]" /></el-icon>
@@ -405,7 +405,7 @@ onMounted(loadMenus)
 
         <el-table-column prop="sortOrder" :label="t('menu.column.sortOrder')" width="88" align="center" />
 
-        <el-table-column :label="t('menu.column.status')" width="104">
+        <el-table-column :label="t('menu.column.status')" width="104" align="center" header-align="center">
           <template #default="{ row }: { row: ManagedMenuNode }">
             <span :data-menu-enabled="row.isEnabled">
               <el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'" size="small" effect="plain">
@@ -421,7 +421,7 @@ onMounted(loadMenus)
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('menu.column.actions')" width="176" fixed="right" align="right">
+        <el-table-column :label="t('menu.column.actions')" width="176" fixed="right" align="center" header-align="center">
           <template #default="{ row }: { row: ManagedMenuNode }">
             <div class="menu-row-actions">
               <el-button
