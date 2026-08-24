@@ -201,15 +201,16 @@ function resetPreferences(): void {
             @change="updateBoolean('pageTransition', $event)"
           />
         </label>
-        <el-select
+        <el-select-v2
           data-testid="transition-name"
           :model-value="uiPreferences.preferences.transitionName"
+          :options="[
+            { value: 'fade', label: t('layout.settings.transitionFade') },
+            { value: 'slide-left', label: t('layout.settings.transitionSlideLeft') },
+            { value: 'zoom', label: t('layout.settings.transitionZoom') },
+          ]"
           @change="updateTransitionName"
-        >
-          <el-option value="fade" :label="t('layout.settings.transitionFade')" />
-          <el-option value="slide-left" :label="t('layout.settings.transitionSlideLeft')" />
-          <el-option value="zoom" :label="t('layout.settings.transitionZoom')" />
-        </el-select>
+        />
         <p v-if="contentFullscreen" class="setting-drawer__hint">
           {{ t('layout.settings.fullscreenTabsLocked') }}
         </p>

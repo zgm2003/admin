@@ -90,6 +90,14 @@ API 先在 PostgreSQL 创建 `pending` 记录，再向 Asynq 投递只包含 `ta
 
 ## 验证
 
+前端生产代码位于 `web/src`，测试代码统一位于 `web/tests`，并按 `src` 的目录结构镜像组织。测试只由 `web/vite.config.ts` 扫描 `tests/**/*.{test,spec}.{ts,tsx,js,jsx}`，不会进入生产源码目录或 Vite 生产入口。
+
+```text
+web/
+├─ src/       # Vue 生产源码
+└─ tests/     # Vitest 测试，镜像 src 结构
+```
+
 ```powershell
 cd D:\admin\server
 go fmt ./...
@@ -102,6 +110,13 @@ go build ./...
 cd D:\admin\web
 pnpm vitest run
 pnpm build
+```
+
+资源受限的 Windows 环境若在 Vitest 并行 worker 启动或页面测试上出现超时，可使用单 worker 完整运行同一套测试：
+
+```powershell
+cd D:\admin\web
+pnpm vitest run --pool=threads --maxWorkers=1
 ```
 
 完整设计见 `docs/superpowers/specs/2026-08-17-admin-foundation-design.md` 和 `docs/superpowers/specs/2026-08-17-admin-foundation-hardening-design.md`。当前仓库远程由项目所有者确认，根 `.gitignore` 持续生效；项目不会自动创建提交或推送历史。

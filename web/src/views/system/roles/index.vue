@@ -3,12 +3,6 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox, ElNotification } from 'element-plus'
 import {
   CirclePlus,
-  Delete,
-  Edit,
-  Key,
-  Refresh,
-  Star,
-  SwitchButton,
 } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
@@ -32,6 +26,8 @@ import { useAccessStore } from '../../../store/access'
 import { AppDialog } from '../../../components/AppDialog'
 import { AppTable } from '../../../components/AppTable'
 import type { TableColumn, TablePaginationState } from '../../../components/AppTable'
+import { Search } from '../../../components/Search'
+import type { SearchField, SearchFormModel } from '../../../components/Search'
 import RolePermissionDiffDialog from './components/RolePermissionDiffDialog.vue'
 import RolePermissionMatrix from './components/RolePermissionMatrix.vue'
 import {
@@ -54,6 +50,18 @@ const statusFilter = ref<'' | YesNo>('')
 const loading = ref(false)
 const loadError = ref('')
 const mutationError = ref('')
+
+const searchModel = computed<SearchFormModel>({
+  get: () => ({ keyword: keyword.value, status: statusFilter.value }),
+  set: (value) => {
+    keyword.value = typeof value.keyword === 'string' ? value.keyword : ''
+    statusFilter.value = value.status === YesNo.Yes || value.status === YesNo.No ? value.status : ''
+  },
+})
+const searchFields = computed<SearchField[]>(() => [
+  { key: 'keyword', type: 'input', label: t('role.keyword'), placeholder: t('role.keyword'), width: 260, testId: 'role-keyword' },
+  { key: 'status', type: 'select-v2', label: t('role.status.all'), options: [{ label: t('role.status.all'), value: '' }, { label: t('role.status.enabled'), value: YesNo.Yes }, { label: t('role.status.disabled'), value: YesNo.No }], width: 160 },
+])
 
 const submitting = ref(false)
 const dialogVisible = ref(false)
@@ -92,7 +100,7 @@ const tableColumns = computed<TableColumn<RoleListItem>[]>(() => [
   { prop: 'permissionCount', label: t('role.column.permissions'), width: 130 },
   { prop: 'createdAt', label: t('role.column.createdAt'), minWidth: 190 },
   { prop: 'updatedAt', label: t('role.column.updatedAt'), minWidth: 190 },
-  { key: 'actions', prop: 'id', label: t('role.column.actions'), width: 230 },
+  { key: 'actions', prop: 'id', label: t('role.column.actions'), width: 360 },
 ])
 
 const permissionGroups = computed(() => {
@@ -445,28 +453,20 @@ onMounted(() => {
 
 <template>
   <section class="role-page system-page">
-    <div class="role-filters system-page__filters">
-      <el-input
-        v-model="keyword"
-        clearable
-        :placeholder="t('role.keyword')"
-        @keyup.enter="search"
-      />
-      <el-select v-model="statusFilter">
-        <el-option :label="t('role.status.all')" value="" />
-        <el-option :label="t('role.status.enabled')" :value="YesNo.Yes" />
-        <el-option :label="t('role.status.disabled')" :value="YesNo.No" />
-      </el-select>
-      <el-button type="primary" @click="search">
-        {{ t('role.search') }}
-      </el-button>
-      <el-button @click="reset">
-        {{ t('role.reset') }}
-      </el-button>
-    </div>
+    <Search
+      v-model="searchModel"
+      class="role-filters system-page__filters"
+      :fields="searchFields"
+      :query-label="t('role.search')"
+      :reset-label="t('role.reset')"
+      query-test-id="role-search"
+      reset-test-id="role-reset"
+      @query="search"
+      @reset="reset"
+    />
 
     <el-alert v-if="loadError" :title="loadError" type="error" show-icon>
-      <el-button link @click="loadRoles">
+      <el-button text @click="loadRoles">
         {{ t('role.retry') }}
       </el-button>
     </el-alert>
@@ -487,12 +487,11 @@ onMounted(() => {
       :pagination="tablePagination"
       result-state="success"
       :aria-label="t('role.title')"
+      :refresh-label="t('role.refresh')"
+      @refresh="loadRoles"
       @update:pagination="updateTablePagination"
     >
       <template #toolbar-right>
-        <el-button :icon="Refresh" @click="loadRoles">
-          {{ t('role.refresh') }}
-        </el-button>
         <el-button v-if="canCreate" type="primary" :icon="CirclePlus" @click="openCreate">
           {{ t('role.create') }}
         </el-button>
@@ -510,43 +509,41 @@ onMounted(() => {
       <template #cell-actions="{ row }: { row: RoleListItem }">
         <template v-if="row.id > 0">
           <el-tooltip v-if="canUpdate" :content="editTooltip(row)">
-            <el-button circle :icon="Edit" :disabled="isSystem(row)" @click="openEdit(row)" />
+          <el-button text type="primary" :disabled="isSystem(row)" @click="openEdit(row)">{{ t('role.action.edit') }}</el-button>
           </el-tooltip>
           <el-tooltip v-if="canStatus" :content="statusTooltip(row)">
             <el-button
-              circle
-              :icon="SwitchButton"
+              text
+              type="warning"
               :disabled="row.code === 'super_admin' || row.isDefault === YesNo.Yes"
               @click="changeStatus(row)"
-            />
+            >{{ row.isEnabled === YesNo.Yes ? t('role.action.disable') : t('role.action.enable') }}</el-button>
           </el-tooltip>
           <el-tooltip v-if="canDefault" :content="defaultTooltip(row)">
             <el-button
-              circle
-              :icon="Star"
+              text
+              type="success"
               :disabled="
                 row.code === 'super_admin' ||
                 row.isDefault === YesNo.Yes ||
                 row.isEnabled === YesNo.No
               "
               @click="makeDefault(row)"
-            />
+            >{{ t('role.action.default') }}</el-button>
           </el-tooltip>
           <el-tooltip
             v-if="canAuthorize && row.code !== 'super_admin'"
             :content="t('role.action.authorize')"
           >
-            <el-button circle :icon="Key" @click="openPermissions(row)" />
+            <el-button text type="primary" @click="openPermissions(row)">{{ t('role.action.authorize') }}</el-button>
           </el-tooltip>
           <el-tooltip v-if="canDelete" :content="deleteTooltip(row)">
             <el-button
-              circle
+              text
               type="danger"
-              plain
-              :icon="Delete"
               :disabled="isSystem(row) || row.isDefault === YesNo.Yes || row.userCount > 0"
               @click="removeRole(row)"
-            />
+            >{{ t('role.action.delete') }}</el-button>
           </el-tooltip>
         </template>
       </template>
@@ -626,7 +623,7 @@ onMounted(() => {
           />
         </template>
         <el-alert v-else-if="permissionError" :title="permissionError" type="error" show-icon>
-          <el-button link @click="retryPermissions">
+          <el-button text @click="retryPermissions">
             {{ t('role.retry') }}
           </el-button>
         </el-alert>

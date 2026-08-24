@@ -1,6 +1,7 @@
 <script setup lang="ts" generic="Row extends TableRow">
-import { computed, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
-import { ElTable, ElTableColumn, ElPagination } from 'element-plus'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ElButton, ElTable, ElTableColumn, ElPagination } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 
 import {
   formatTableColumnValue,
@@ -27,6 +28,7 @@ const props = withDefaults(defineProps<{
   statusMessage?: string
   ariaLabel?: string
   fixedFooter?: boolean
+  refreshLabel?: string
 }>(), {
   loading: false,
   rowKey: 'id',
@@ -37,6 +39,7 @@ const props = withDefaults(defineProps<{
   statusMessage: '',
   ariaLabel: 'Data table',
   fixedFooter: false,
+  refreshLabel: '刷新',
 })
 
 const emit = defineEmits<{
@@ -47,7 +50,6 @@ const emit = defineEmits<{
   'column-change': [keys: TableColumnKey[]]
 }>()
 
-const slots = useSlots()
 const paginationState = ref<TablePaginationState | null>(props.pagination ? { ...props.pagination } : null)
 const isMobile = ref(false)
 
@@ -87,6 +89,8 @@ function columnBindings(column: TableColumn<Row>): Record<string, unknown> {
   return {
     ...(prop === undefined ? {} : { prop }),
     label: column.label,
+    align: 'center',
+    headerAlign: 'center',
     width: column.width,
     minWidth: column.minWidth,
     fixed: column.fixed,
@@ -122,9 +126,20 @@ function onSelectionChange(selection: Row[]): void {
     :aria-label="ariaLabel"
     :aria-busy="busy"
   >
-    <div v-if="slots['toolbar-left'] || slots['toolbar-right']" class="app-table__toolbar">
+    <div class="app-table__toolbar">
       <div class="app-table__toolbar-left"><slot name="toolbar-left" /></div>
-      <div class="app-table__toolbar-right"><slot name="toolbar-right" /></div>
+      <div class="app-table__toolbar-right">
+        <slot name="toolbar-right" />
+        <el-button
+          data-testid="app-table-refresh"
+          type="primary"
+          :icon="Refresh"
+          :loading="busy"
+          @click="emit('refresh')"
+        >
+          {{ refreshLabel }}
+        </el-button>
+      </div>
     </div>
     <el-table
       ref="tableRef"
@@ -139,6 +154,8 @@ function onSelectionChange(selection: Row[]): void {
         v-if="selectable"
         type="selection"
         width="48"
+        align="center"
+        header-align="center"
         :selectable="selectionSelectable"
       />
       <el-table-column

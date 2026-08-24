@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { CirclePlus, Delete, Edit, Refresh, SwitchButton } from '@element-plus/icons-vue'
+import { CirclePlus } from '@element-plus/icons-vue'
 import { ElMessageBox, ElNotification } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
@@ -24,6 +24,8 @@ import { useAccessStore } from '../../../store/access'
 import { AppDialog } from '../../../components/AppDialog'
 import { AppTable } from '../../../components/AppTable'
 import type { TableColumn, TablePaginationState } from '../../../components/AppTable'
+import { Search } from '../../../components/Search'
+import type { SearchField, SearchFormModel } from '../../../components/Search'
 
 const { t } = useI18n()
 const access = useAccessStore()
@@ -37,6 +39,17 @@ const loading = ref(false)
 const loadError = ref('')
 const mutationError = ref('')
 const deployment = ref<AuthPlatformDeployment | null>(null)
+const searchModel = computed<SearchFormModel>({
+  get: () => ({ keyword: keyword.value, status: statusFilter.value }),
+  set: (value) => {
+    keyword.value = typeof value.keyword === 'string' ? value.keyword : ''
+    statusFilter.value = value.status === YesNo.Yes || value.status === YesNo.No ? value.status : ''
+  },
+})
+const searchFields = computed<SearchField[]>(() => [
+  { key: 'keyword', type: 'input', label: t('authPlatform.keyword'), placeholder: t('authPlatform.keyword'), width: 260, testId: 'auth-platform-keyword' },
+  { key: 'status', type: 'select-v2', label: t('authPlatform.status.all'), options: [{ label: t('authPlatform.status.all'), value: '' }, { label: t('authPlatform.status.enabled'), value: YesNo.Yes }, { label: t('authPlatform.status.disabled'), value: YesNo.No }], width: 160, testId: 'auth-platform-status-filter' },
+])
 
 const dialogVisible = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
@@ -283,23 +296,23 @@ onMounted(() => { void loadPage() })
 
 <template>
   <section class="auth-platform-page system-page">
-    <div class="auth-platform-filters system-page__filters">
-      <el-input v-model="keyword" data-testid="auth-platform-keyword" :placeholder="t('authPlatform.keyword')" @keyup.enter="search" />
-      <el-select v-model="statusFilter" data-testid="auth-platform-status-filter">
-        <el-option :label="t('authPlatform.status.all')" value="" />
-        <el-option :label="t('authPlatform.status.enabled')" :value="YesNo.Yes" />
-        <el-option :label="t('authPlatform.status.disabled')" :value="YesNo.No" />
-      </el-select>
-      <el-button type="primary" data-testid="auth-platform-search" @click="search">{{ t('authPlatform.search') }}</el-button>
-      <el-button data-testid="auth-platform-reset" @click="reset">{{ t('authPlatform.reset') }}</el-button>
-    </div>
+    <Search
+      v-model="searchModel"
+      class="auth-platform-filters system-page__filters"
+      :fields="searchFields"
+      :query-label="t('authPlatform.search')"
+      :reset-label="t('authPlatform.reset')"
+      query-test-id="auth-platform-search"
+      reset-test-id="auth-platform-reset"
+      @query="search"
+      @reset="reset"
+    />
 
     <el-alert v-if="loadError" :title="loadError" type="error" show-icon />
     <el-alert v-if="mutationError" :title="mutationError" type="error" show-icon closable @close="mutationError = ''" />
 
-    <AppTable class="auth-platform-table" :columns="tableColumns" :data="rows" :loading="loading" :pagination="tablePagination" result-state="success" :aria-label="t('authPlatform.title')" @update:pagination="updateTablePagination">
+    <AppTable class="auth-platform-table" :columns="tableColumns" :data="rows" :loading="loading" :pagination="tablePagination" result-state="success" :aria-label="t('authPlatform.title')" :refresh-label="t('authPlatform.refresh')" @refresh="refresh" @update:pagination="updateTablePagination">
       <template #toolbar-right>
-        <el-button :icon="Refresh" data-testid="auth-platform-refresh" @click="refresh">{{ t('authPlatform.refresh') }}</el-button>
         <el-button v-if="canCreate" type="primary" :icon="CirclePlus" data-testid="auth-platform-create" @click="openCreate">{{ t('authPlatform.create') }}</el-button>
       </template>
       <template #cell-platform="{ row }: { row: AuthPlatformListItem }">
@@ -313,9 +326,9 @@ onMounted(() => { void loadPage() })
       <template #cell-sessions="{ row }: { row: AuthPlatformListItem }">{{ sessionLabel(row.maxSessions) }}</template>
       <template #cell-status="{ row }: { row: AuthPlatformListItem }"><el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">{{ t(row.isEnabled === YesNo.Yes ? 'authPlatform.enabled' : 'authPlatform.disabled') }}</el-tag></template>
       <template #cell-actions="{ row }: { row: AuthPlatformListItem }"><template v-if="row.id > 0">
-          <el-button v-if="canUpdate" link :icon="Edit" data-testid="auth-platform-update" @click="openEdit(row)">{{ t('authPlatform.edit') }}</el-button>
-          <el-button v-if="canStatus" link :icon="SwitchButton" data-testid="auth-platform-status" @click="toggleStatus(row)">{{ t('authPlatform.statusAction') }}</el-button>
-          <el-button v-if="canDelete && row.isBuiltin === YesNo.No" link type="danger" :icon="Delete" data-testid="auth-platform-delete" @click="remove(row)">{{ t('authPlatform.delete') }}</el-button>
+          <el-button v-if="canUpdate" text type="primary" data-testid="auth-platform-update" @click="openEdit(row)">{{ t('authPlatform.edit') }}</el-button>
+          <el-button v-if="canStatus" text type="warning" data-testid="auth-platform-status" @click="toggleStatus(row)">{{ t('authPlatform.statusAction') }}</el-button>
+          <el-button v-if="canDelete && row.isBuiltin === YesNo.No" text type="danger" data-testid="auth-platform-delete" @click="remove(row)">{{ t('authPlatform.delete') }}</el-button>
       </template></template>
       <template #empty><el-empty :description="t('authPlatform.empty')" /></template>
     </AppTable>
@@ -358,7 +371,7 @@ onMounted(() => { void loadPage() })
 .auth-platform-page { min-width: 0; }
 .auth-platform-filters { display: flex; align-items: center; gap: 12px; }
 .auth-platform-filters .el-input { width: 260px; }
-.auth-platform-filters .el-select { width: 150px; }
+.auth-platform-filters .el-select-v2 { width: 150px; }
 .auth-platform-table code { display: block; margin-top: 4px; color: var(--el-text-color-secondary); }
 .auth-platform-table .el-tag { margin-left: 8px; }
 .auth-platform-deployment { padding-top: 8px; border-top: 1px solid var(--el-border-color-light); }

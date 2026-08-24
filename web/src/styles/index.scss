@@ -39,10 +39,7 @@ textarea {
   font: inherit;
 }
 
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-textarea:focus-visible {
+a:focus-visible {
   outline: 2px solid $color-action;
   outline-offset: 2px;
 }

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox, ElNotification } from 'element-plus'
-import { Refresh, Search } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import { getSessions, getSessionStats, revokeSession, revokeSessions } from '../../../api/session'
@@ -9,6 +8,8 @@ import type { SessionItem, SessionListQuery, SessionStats, SessionStatus } from 
 import { useAccessStore } from '../../../store/access'
 import { AppTable } from '../../../components/AppTable'
 import type { TableColumn, TablePaginationState } from '../../../components/AppTable'
+import { Search } from '../../../components/Search'
+import type { SearchField, SearchFormModel } from '../../../components/Search'
 
 const { t } = useI18n()
 const access = useAccessStore()
@@ -45,6 +46,19 @@ const tableColumns = computed<TableColumn<SessionItem>[]>(() => [
 
 const canRevoke = computed(() => access.hasPermission('system:session:revoke'))
 const platformStats = computed(() => Object.entries(stats.value.platforms).sort(([left], [right]) => left.localeCompare(right)))
+const searchModel = computed<SearchFormModel>({
+  get: () => ({ username: username.value, platform: platform.value, status: status.value }),
+  set: (value) => {
+    username.value = typeof value.username === 'string' ? value.username : ''
+    platform.value = typeof value.platform === 'string' ? value.platform : ''
+    status.value = value.status === 'active' || value.status === 'expired' || value.status === 'revoked' ? value.status : ''
+  },
+})
+const searchFields = computed<SearchField[]>(() => [
+  { key: 'username', type: 'input', label: t('session.username'), placeholder: t('session.username'), width: 220, testId: 'session-username' },
+  { key: 'platform', type: 'input', label: t('session.platform'), placeholder: t('session.platform'), width: 180, testId: 'session-platform' },
+  { key: 'status', type: 'select-v2', label: t('session.statusLabel'), placeholder: t('session.statusLabel'), options: [{ label: t('session.status.active'), value: 'active' }, { label: t('session.status.expired'), value: 'expired' }, { label: t('session.status.revoked'), value: 'revoked' }], width: 160, testId: 'session-status' },
+])
 
 function errorMessage(error: unknown, fallback: string): string {
 	return error instanceof Error && error.message !== '' ? error.message : t(fallback)
@@ -201,9 +215,6 @@ onMounted(() => {
 				>
 					{{ t('session.batchRevoke') }}
 				</el-button>
-				<el-button :icon="Refresh" :loading="listLoading || statsLoading" @click="reloadAuthoritativeData">
-					{{ t('session.refresh') }}
-				</el-button>
 		</div>
 
 		<div class="session-stats" v-loading="statsLoading">
@@ -218,17 +229,17 @@ onMounted(() => {
 		</div>
 		<el-alert v-if="statsError" :title="statsError" type="error" :closable="false" show-icon />
 
-		<div class="session-filters system-page__filters">
-			<el-input v-model="username" data-testid="session-username" clearable :placeholder="t('session.username')" @keyup.enter="search" />
-			<el-input v-model="platform" data-testid="session-platform" clearable :placeholder="t('session.platform')" @keyup.enter="search" />
-			<el-select v-model="status" data-testid="session-status" :placeholder="t('session.statusLabel')" clearable>
-				<el-option :label="t('session.status.active')" value="active" />
-				<el-option :label="t('session.status.expired')" value="expired" />
-				<el-option :label="t('session.status.revoked')" value="revoked" />
-			</el-select>
-			<el-button data-testid="session-search" type="primary" :icon="Search" @click="search">{{ t('session.search') }}</el-button>
-			<el-button @click="reset">{{ t('session.reset') }}</el-button>
-		</div>
+		<Search
+			v-model="searchModel"
+			class="session-filters system-page__filters"
+			:fields="searchFields"
+			:query-label="t('session.search')"
+			:reset-label="t('session.reset')"
+			query-test-id="session-search"
+			reset-test-id="session-reset"
+			@query="search"
+			@reset="reset"
+		/>
 
 		<el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
 		<el-alert v-if="mutationError" :title="mutationError" type="error" :closable="false" show-icon />
@@ -246,6 +257,8 @@ onMounted(() => {
 			:pagination="tablePagination"
 			result-state="success"
 			:aria-label="t('session.title')"
+			:refresh-label="t('session.refresh')"
+			@refresh="reloadAuthoritativeData"
 			@selection-change="selectionChanged"
 			@update:pagination="updateTablePagination"
 		>
@@ -265,7 +278,7 @@ onMounted(() => {
 						v-else-if="canRevoke && row.status === 'active'"
 						:data-testid="`session-revoke-${row.id}`"
 						type="danger"
-						link
+						text
 						:loading="mutating"
 						@click="revokeOne(row)"
 					>
@@ -286,11 +299,11 @@ onMounted(() => {
 .session-stat-primary strong { font-size: 24px; }
 .session-platform-stats { flex-wrap: wrap; }
 .session-filters .el-input { width: 220px; }
-.session-filters .el-select { width: 150px; }
+.session-filters .el-select-v2 { width: 150px; }
 .el-table strong, .el-table small { display: block; }
 .el-pagination { justify-content: flex-end; }
 @media (max-width: 900px) {
 	.session-filters, .session-stats { align-items: stretch; flex-direction: column; }
-	.session-filters .el-input, .session-filters .el-select { width: 100%; }
+	.session-filters .el-input, .session-filters .el-select-v2 { width: 100%; }
 }
 </style>

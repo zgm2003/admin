@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Refresh, Search } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import { getOperationLogs } from '../../../api/operation-log'
@@ -8,6 +7,8 @@ import type { OperationLogItem, OperationLogListQuery } from '../../../api/opera
 import { YesNo } from '../../../enums/yes-no'
 import { AppTable } from '../../../components/AppTable'
 import type { TableColumn, TablePaginationState } from '../../../components/AppTable'
+import { Search } from '../../../components/Search'
+import type { SearchField, SearchFormModel } from '../../../components/Search'
 
 const { t } = useI18n()
 
@@ -21,6 +22,23 @@ const success = ref<'' | YesNo>('')
 const timeRange = ref<[] | [string, string]>([])
 const loading = ref(false)
 const loadError = ref('')
+const searchModel = computed<SearchFormModel>({
+  get: () => ({ userID: userID.value, action: action.value, route: route.value, success: success.value, timeRange: timeRange.value }),
+  set: (value) => {
+    userID.value = typeof value.userID === 'string' ? value.userID : ''
+    action.value = typeof value.action === 'string' ? value.action : ''
+    route.value = typeof value.route === 'string' ? value.route : ''
+    success.value = value.success === YesNo.Yes || value.success === YesNo.No ? value.success : ''
+    timeRange.value = Array.isArray(value.timeRange) && value.timeRange.length === 2 && value.timeRange.every((item) => typeof item === 'string') ? [value.timeRange[0] as string, value.timeRange[1] as string] : []
+  },
+})
+const searchFields = computed<SearchField[]>(() => [
+  { key: 'userID', type: 'input', label: t('operationLog.userId'), placeholder: t('operationLog.userId'), width: 180, testId: 'operation-log-user-id' },
+  { key: 'action', type: 'input', label: t('operationLog.action'), placeholder: t('operationLog.action'), width: 190, testId: 'operation-log-action' },
+  { key: 'route', type: 'input', label: t('operationLog.route'), placeholder: t('operationLog.route'), width: 220, testId: 'operation-log-route' },
+  { key: 'success', type: 'select-v2', label: t('operationLog.successLabel'), options: [{ label: t('operationLog.all'), value: '' }, { label: t('operationLog.success.yes'), value: YesNo.Yes }, { label: t('operationLog.success.no'), value: YesNo.No }], width: 130, testId: 'operation-log-success' },
+  { key: 'timeRange', type: 'date-range', label: t('operationLog.timeRange'), placeholder: t('operationLog.timeRange'), valueFormat: 'YYYY-MM-DDTHH:mm:ssZ', rangeSeparator: '-', width: 360, testId: 'operation-log-time' },
+])
 
 const tablePagination = computed<TablePaginationState>(() => ({ currentPage: query.value.page, pageSize: query.value.pageSize, total: total.value }))
 const tableColumns = computed<TableColumn<OperationLogItem>[]>(() => [
@@ -133,28 +151,17 @@ onMounted(() => { void loadLogs() })
 
 <template>
 	<section class="operation-log-page system-page">
-		<div class="operation-log-filters system-page__filters">
-			<el-input v-model="userID" data-testid="operation-log-user-id" clearable :placeholder="t('operationLog.userId')" @keyup.enter="search" />
-			<el-input v-model="action" data-testid="operation-log-action" clearable :placeholder="t('operationLog.action')" @keyup.enter="search" />
-			<el-input v-model="route" data-testid="operation-log-route" clearable :placeholder="t('operationLog.route')" @keyup.enter="search" />
-			<el-select v-model="success" data-testid="operation-log-success" clearable :placeholder="t('operationLog.successLabel')">
-				<el-option :label="t('operationLog.all')" value="" />
-				<el-option :label="t('operationLog.success.yes')" :value="YesNo.Yes" />
-				<el-option :label="t('operationLog.success.no')" :value="YesNo.No" />
-			</el-select>
-			<el-date-picker
-				v-model="timeRange"
-				data-testid="operation-log-time"
-				type="datetimerange"
-				value-format="YYYY-MM-DDTHH:mm:ssZ"
-				:range-separator="'-'"
-				:start-placeholder="t('operationLog.timeRange')"
-				:end-placeholder="t('operationLog.timeRange')"
-			/>
-			<el-button data-testid="operation-log-search" type="primary" :icon="Search" @click="search">{{ t('operationLog.search') }}</el-button>
-			<el-button @click="reset">{{ t('operationLog.reset') }}</el-button>
-			<el-button :icon="Refresh" :loading="loading" @click="loadLogs">{{ t('operationLog.refresh') }}</el-button>
-		</div>
+		<Search
+			v-model="searchModel"
+			class="operation-log-filters system-page__filters"
+			:fields="searchFields"
+			:query-label="t('operationLog.search')"
+			:reset-label="t('operationLog.reset')"
+			query-test-id="operation-log-search"
+			reset-test-id="operation-log-reset"
+			@query="search"
+			@reset="reset"
+		/>
 
 			<el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
 			<div v-if="loading" data-testid="operation-log-loading" :aria-label="t('operationLog.loading')">
@@ -168,6 +175,8 @@ onMounted(() => { void loadLogs() })
 				:pagination="tablePagination"
 				result-state="success"
 				:aria-label="t('operationLog.title')"
+				:refresh-label="t('operationLog.refresh')"
+				@refresh="loadLogs"
 				@update:pagination="updateTablePagination"
 			>
 				<template #expand="{ row }: { row: OperationLogItem }">
@@ -199,7 +208,7 @@ onMounted(() => { void loadLogs() })
 .operation-log-filters { display: flex; align-items: center; gap: 12px; }
 .operation-log-filters { flex-wrap: wrap; }
 .operation-log-filters .el-input { width: 190px; }
-.operation-log-filters .el-select { width: 130px; }
+.operation-log-filters .el-select-v2 { width: 130px; }
 .operation-log-detail { padding: 4px 24px 18px; }
 .operation-log-detail h2 { margin: 0 0 12px; font-size: 16px; }
 .operation-log-detail dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
@@ -212,7 +221,7 @@ onMounted(() => { void loadLogs() })
 .el-pagination { justify-content: flex-end; }
 @media (max-width: 900px) {
 	.operation-log-filters { align-items: stretch; flex-direction: column; }
-	.operation-log-filters .el-input, .operation-log-filters .el-select { width: 100%; }
+	.operation-log-filters .el-input, .operation-log-filters .el-select-v2 { width: 100%; }
 	.operation-log-detail dl, .operation-log-summaries { grid-template-columns: 1fr; }
 }
 </style>

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox, ElNotification } from 'element-plus'
-import { Delete, Edit, Refresh, SwitchButton, UserFilled } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import { deleteUser, getUserRoleOptions, getUserRoles, getUsers, updateUser, updateUserRoles, updateUserStatus } from '../../../api/user'
@@ -12,6 +11,8 @@ import { useAuthStore } from '../../../store/auth'
 import { AppDialog } from '../../../components/AppDialog'
 import { AppTable } from '../../../components/AppTable'
 import type { TableColumn, TablePaginationState } from '../../../components/AppTable'
+import { Search } from '../../../components/Search'
+import type { SearchField, SearchFormModel } from '../../../components/Search'
 
 const { t } = useI18n()
 const access = useAccessStore()
@@ -55,7 +56,7 @@ const tableColumns = computed<TableColumn<UserListItem>[]>(() => [
   { key: 'status', prop: 'id', label: t('user.status'), width: 100 },
   { prop: 'createdAt', label: t('user.createdAt'), minWidth: 190 },
   { prop: 'updatedAt', label: t('user.updatedAt'), minWidth: 190 },
-  { key: 'actions', prop: 'id', label: t('user.actions'), width: 190 },
+  { key: 'actions', prop: 'id', label: t('user.actions'), width: 330 },
 ])
 
 const canUpdate = computed(() => access.hasPermission('system:user:update'))
@@ -73,6 +74,20 @@ const hasEnabledSelection = computed(() => {
   const selected = new Set(selectedRoleIDs.value)
   return roleData.value.roles.some((role) => role.isEnabled === YesNo.Yes && selected.has(role.id))
 })
+
+const searchModel = computed<SearchFormModel>({
+  get: () => ({ keyword: keyword.value, status: statusFilter.value, role: roleFilter.value }),
+  set: (value) => {
+    keyword.value = typeof value.keyword === 'string' ? value.keyword : ''
+    statusFilter.value = value.status === YesNo.Yes || value.status === YesNo.No ? value.status : ''
+    roleFilter.value = typeof value.role === 'number' ? value.role : ''
+  },
+})
+const searchFields = computed<SearchField[]>(() => [
+  { key: 'keyword', type: 'input', label: t('user.keyword'), placeholder: t('user.keyword'), width: 280, testId: 'user-keyword' },
+  { key: 'status', type: 'select-v2', label: t('user.status'), options: [{ label: t('user.status'), value: '' }, { label: t('user.enabled'), value: YesNo.Yes }, { label: t('user.disabled'), value: YesNo.No }], width: 190 },
+  { key: 'role', type: 'select-v2', label: t('user.role'), options: [{ label: t('user.role'), value: '' }, ...roleOptions.value.map((role) => ({ label: `${role.name} (${role.code})${role.isEnabled === YesNo.No ? ` · ${t('user.roleDisabled')}` : ''}`, value: role.id }))], width: 220 },
+])
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message !== '' ? error.message : t(fallback)
@@ -195,24 +210,26 @@ onMounted(()=>{ void loadRoleOptions(); void loadUsers() })
 
 <template>
   <section class="user-management system-page">
-    <div class="user-filters system-page__filters">
-      <el-input v-model="keyword" clearable :placeholder="t('user.keyword')" @keyup.enter="search" />
-      <el-select v-model="statusFilter"><el-option :label="t('user.status')" value="" /><el-option :label="t('user.enabled')" :value="YesNo.Yes" /><el-option :label="t('user.disabled')" :value="YesNo.No" /></el-select>
-      <el-select v-model="roleFilter" :loading="roleOptionsLoading" clearable><el-option :label="t('user.role')" value="" /><el-option v-for="role in roleOptions" :key="role.id" :label="`${role.name} (${role.code})${role.isEnabled===YesNo.No?` · ${t('user.roleDisabled')}`:''}`" :value="role.id" /></el-select>
-      <el-button type="primary" @click="search">{{ t('user.search') }}</el-button><el-button @click="reset">{{ t('user.reset') }}</el-button>
-    </div>
+    <Search
+      v-model="searchModel"
+      class="user-filters system-page__filters"
+      :fields="searchFields"
+      :query-label="t('user.search')"
+      :reset-label="t('user.reset')"
+      query-test-id="user-search"
+      reset-test-id="user-reset"
+      @query="search"
+      @reset="reset"
+    />
     <el-alert v-if="roleOptionsError" :title="roleOptionsError" type="error" show-icon /><el-alert v-if="loadError" :title="loadError" type="error" show-icon /><el-alert v-if="mutationError" :title="mutationError" type="error" show-icon closable @close="mutationError=''" />
-    <AppTable class="user-table" :columns="tableColumns" :data="rows" :loading="loading" :pagination="tablePagination" result-state="success" :aria-label="t('user.title')" @update:pagination="updateTablePagination">
-      <template #toolbar-right>
-        <el-button :icon="Refresh" :loading="loading" @click="loadUsers">{{ t('user.refresh') }}</el-button>
-      </template>
+    <AppTable class="user-table" :columns="tableColumns" :data="rows" :loading="loading" :pagination="tablePagination" result-state="success" :aria-label="t('user.title')" :refresh-label="t('user.refresh')" @refresh="loadUsers" @update:pagination="updateTablePagination">
       <template #cell-roles="{ row }: { row: UserListItem }"><div v-if="row.id > 0" class="role-tags"><el-tooltip v-for="role in row.roles" :key="role.id" :content="role.code"><el-tag :type="role.isEnabled===YesNo.Yes?'primary':'info'">{{ role.name }}<span v-if="role.isEnabled===YesNo.No"> · {{ t('user.roleDisabled') }}</span></el-tag></el-tooltip></div></template>
       <template #cell-status="{ row }: { row: UserListItem }"><el-tag v-if="row.id > 0" :type="row.isEnabled===YesNo.Yes?'success':'danger'">{{ t(row.isEnabled===YesNo.Yes?'user.enabled':'user.disabled') }}</el-tag></template>
       <template #cell-actions="{ row }: { row: UserListItem }"><template v-if="row.id > 0">
-        <el-tooltip v-if="canUpdate" :content="editDisabled(row)?t('user.superAdminBlocked'):t('user.edit')"><el-button circle :icon="Edit" :aria-label="t('user.edit')" :disabled="editDisabled(row)" @click="openEdit(row)" /></el-tooltip>
-        <el-tooltip v-if="canStatus" :content="protectionText(row,'status')"><el-button circle :icon="SwitchButton" :aria-label="t('permission.userStatus')" :disabled="dangerDisabled(row)||mutating" @click="changeStatus(row)" /></el-tooltip>
-        <el-tooltip v-if="canRoles" :content="protectionText(row,'roles')"><el-button circle :icon="UserFilled" :aria-label="t('user.assignRoles')" :disabled="dangerDisabled(row)" @click="openRoles(row)" /></el-tooltip>
-        <el-tooltip v-if="canDelete" :content="protectionText(row,'delete')"><el-button circle type="danger" plain :icon="Delete" :aria-label="t('permission.userDelete')" :disabled="dangerDisabled(row)||mutating" @click="removeUser(row)" /></el-tooltip>
+        <el-tooltip v-if="canUpdate" :content="editDisabled(row)?t('user.superAdminBlocked'):t('user.edit')"><el-button text type="primary" :disabled="editDisabled(row)" @click="openEdit(row)">{{ t('user.edit') }}</el-button></el-tooltip>
+        <el-tooltip v-if="canStatus" :content="protectionText(row,'status')"><el-button text type="warning" :disabled="dangerDisabled(row)||mutating" @click="changeStatus(row)">{{ row.isEnabled === YesNo.Yes ? t('user.disabled') : t('user.enabled') }}</el-button></el-tooltip>
+        <el-tooltip v-if="canRoles" :content="protectionText(row,'roles')"><el-button text type="primary" :disabled="dangerDisabled(row)" @click="openRoles(row)">{{ t('user.assignRoles') }}</el-button></el-tooltip>
+        <el-tooltip v-if="canDelete" :content="protectionText(row,'delete')"><el-button text type="danger" :disabled="dangerDisabled(row)||mutating" @click="removeUser(row)">{{ t('permission.userDelete') }}</el-button></el-tooltip>
       </template></template>
       <template #empty><el-empty :description="t('user.noRoles')" /></template>
     </AppTable>
@@ -229,5 +246,5 @@ onMounted(()=>{ void loadRoleOptions(); void loadUsers() })
 </template>
 
 <style scoped>
-.user-management{min-height:0;min-width:0}.user-filters{display:flex;align-items:center;flex-wrap:wrap;gap:12px}.user-filters .el-input{width:280px}.user-filters .el-select{width:190px}.user-table{width:100%}.role-tags{display:flex;flex-wrap:wrap;gap:6px}.el-pagination{justify-content:flex-end}.role-dialog-scroll{max-height:min(62vh,620px);padding-right:8px;overflow-y:auto}.role-dialog-toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px}.role-checks{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}.role-checks .el-checkbox{height:auto;margin-right:0}.role-checks span{margin-right:8px}@media(max-width:720px){.user-filters .el-input,.user-filters .el-select{width:100%}.el-pagination{justify-content:flex-start;overflow-x:auto}}
+.user-management{min-height:0;min-width:0}.user-filters{display:flex;align-items:center;flex-wrap:wrap;gap:12px}.user-table{width:100%}.role-tags{display:flex;flex-wrap:wrap;gap:6px}.el-pagination{justify-content:flex-end}.role-dialog-scroll{max-height:min(62vh,620px);padding-right:8px;overflow-y:auto}.role-dialog-toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px}.role-checks{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}.role-checks .el-checkbox{height:auto;margin-right:0}.role-checks span{margin-right:8px}@media(max-width:720px){.el-pagination{justify-content:flex-start;overflow-x:auto}}
 </style>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox, ElNotification } from 'element-plus'
-import { CirclePlus, Delete, Edit, Refresh, SwitchButton } from '@element-plus/icons-vue'
+import { CirclePlus, Refresh } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import { menuIcons } from '../../../access/menu-icons'
@@ -11,6 +11,7 @@ import { createMenu, deleteMenu, getMenus, updateMenu, updateMenuStatus } from '
 import type { CreateMenuInput, ManagedMenuNode, ManagedMenuType, UpdateMenuInput } from '../../../api/menu.contract'
 import { YesNo } from '../../../enums/yes-no'
 import { useAccessStore } from '../../../store/access'
+import { IconSelect } from '../../../components/IconSelect'
 
 const { t } = useI18n()
 const access = useAccessStore()
@@ -21,6 +22,7 @@ const loadError = ref('')
 const expandedRowKeys = ref<number[]>([])
 const mutationError = ref('')
 const drawerVisible = ref(false)
+const iconSelectVisible = ref(false)
 const drawerMode = ref<'create' | 'edit'>('create')
 const editingID = ref<number | null>(null)
 
@@ -119,7 +121,19 @@ const iconKeys = Object.keys(menuIcons) as Array<keyof typeof menuIcons>
 const titleKeys = [...menuTitleKeys]
 const viewKeys = Object.keys(routeViews) as RouteViewKey[]
 const rootParentValue = '__root__' as const
-const noIconValue = '__no_icon__' as const
+
+const parentSelectOptions = computed<Array<{ label: string; value: number | typeof rootParentValue }>>(() => [
+  { label: t('menu.form.root'), value: rootParentValue },
+  ...parentOptions.value.map((node) => ({ label: parentLabel(node), value: node.id })),
+])
+const menuTypeOptions: Array<{ label: string; value: ManagedMenuType }> = [
+  { label: t('menu.type.directory'), value: 'directory' },
+  { label: t('menu.type.page'), value: 'page' },
+  { label: t('menu.type.action'), value: 'action' },
+]
+const titleSelectOptions = computed(() => titleKeys.map((key) => ({ label: t(key), value: key })))
+const viewSelectOptions = computed(() => viewKeys.map((key) => ({ label: key, value: key })))
+const menuIconOptions = iconKeys.map((key) => ({ name: key, label: key }))
 
 const parentSelection = computed<number | typeof rootParentValue>({
   get: () => form.value.parentId ?? rootParentValue,
@@ -128,12 +142,19 @@ const parentSelection = computed<number | typeof rootParentValue>({
   },
 })
 
-const iconSelection = computed<keyof typeof menuIcons | typeof noIconValue>({
-  get: () => form.value.icon ?? noIconValue,
-  set: (value) => {
-    form.value.icon = value === noIconValue ? null : value
-  },
-})
+function openIconSelect(): void {
+  iconSelectVisible.value = true
+}
+
+function selectMenuIcon(value: string): void {
+  if (Object.prototype.hasOwnProperty.call(menuIcons, value)) {
+    form.value.icon = value as keyof typeof menuIcons
+  }
+}
+
+function clearMenuIcon(): void {
+  form.value.icon = null
+}
 
 function parentLabel(node: ManagedMenuNode): string {
   return `${t(node.i18nKey)} (${node.code})`
@@ -413,45 +434,23 @@ onMounted(loadMenus)
         <el-table-column :label="t('menu.column.actions')" width="176" fixed="right" align="right">
           <template #default="{ row }: { row: ManagedMenuNode }">
             <div class="menu-row-actions">
-              <el-tooltip v-if="canCreate && row.menuType !== 'action'" :content="t('menu.addChild')">
-                <el-button
-                  :data-testid="`add-child-${row.id}`"
-                  text
-                  :icon="CirclePlus"
-                  :aria-label="t('menu.addChild')"
-                  @click="openCreate(row)"
-                />
-              </el-tooltip>
-              <el-tooltip v-if="canUpdate" :content="t('menu.edit')">
-                <el-button
-                  :data-testid="`edit-${row.id}`"
-                  text
-                  :icon="Edit"
-                  :aria-label="t('menu.edit')"
-                  @click="openEdit(row)"
-                />
-              </el-tooltip>
-              <el-tooltip v-if="canUpdate" :content="row.isEnabled === YesNo.Yes ? t('menu.disable') : t('menu.enable')">
-                <el-button
-                  :data-testid="`status-${row.id}`"
-                  text
-                  :icon="SwitchButton"
-                  :disabled="row.isBuiltin"
-                  :aria-label="row.isEnabled === YesNo.Yes ? t('menu.disable') : t('menu.enable')"
-                  @click="changeStatus(row)"
-                />
-              </el-tooltip>
-              <el-tooltip v-if="canDelete" :content="t('menu.delete')">
-                <el-button
-                  :data-testid="`delete-${row.id}`"
-                  text
-                  type="danger"
-                  :icon="Delete"
-                  :disabled="row.isBuiltin"
-                  :aria-label="t('menu.delete')"
-                  @click="removeNode(row)"
-                />
-              </el-tooltip>
+              <el-button
+                v-if="canCreate && row.menuType !== 'action'"
+                :data-testid="`add-child-${row.id}`"
+                text
+                type="primary"
+                @click="openCreate(row)"
+              >{{ t('menu.addChild') }}</el-button>
+              <el-button v-if="canUpdate" :data-testid="`edit-${row.id}`" text type="primary" @click="openEdit(row)">{{ t('menu.edit') }}</el-button>
+              <el-button
+                v-if="canUpdate"
+                :data-testid="`status-${row.id}`"
+                text
+                type="warning"
+                :disabled="row.isBuiltin"
+                @click="changeStatus(row)"
+              >{{ row.isEnabled === YesNo.Yes ? t('menu.disable') : t('menu.enable') }}</el-button>
+              <el-button v-if="canDelete" :data-testid="`delete-${row.id}`" text type="danger" :disabled="row.isBuiltin" @click="removeNode(row)">{{ t('menu.delete') }}</el-button>
             </div>
           </template>
         </el-table-column>
@@ -479,33 +478,23 @@ onMounted(loadMenus)
       />
       <el-form label-position="top" @submit.prevent="submitForm">
         <el-form-item :label="t('menu.form.parent')">
-          <el-select
+          <el-select-v2
             v-model="parentSelection"
             data-testid="menu-form-parent"
             clearable
+            :options="parentSelectOptions"
             :disabled="editingNode?.isBuiltin === true && drawerMode === 'edit'"
-          >
-            <el-option :label="t('menu.form.root')" :value="rootParentValue" />
-            <el-option
-              v-for="node in parentOptions"
-              :key="node.id"
-              :label="parentLabel(node)"
-              :value="node.id"
-            />
-          </el-select>
+          />
         </el-form-item>
 
         <el-form-item :label="t('menu.form.menuType')">
-          <el-select
+          <el-select-v2
             :model-value="form.menuType"
             data-testid="menu-form-type"
+            :options="menuTypeOptions"
             :disabled="editingNode?.isBuiltin === true && drawerMode === 'edit'"
             @update:model-value="handleFormTypeChange"
-          >
-            <el-option :label="t('menu.type.directory')" value="directory" />
-            <el-option :label="t('menu.type.page')" value="page" />
-            <el-option :label="t('menu.type.action')" value="action" />
-          </el-select>
+          />
         </el-form-item>
 
         <el-form-item :label="t('menu.form.code')">
@@ -518,14 +507,7 @@ onMounted(loadMenus)
         </el-form-item>
 
         <el-form-item :label="t('menu.form.i18nKey')">
-          <el-select v-model="form.i18nKey" data-testid="menu-form-i18n-key">
-            <el-option
-              v-for="key in titleKeys"
-              :key="key"
-              :label="t(key)"
-              :value="key"
-            />
-          </el-select>
+          <el-select-v2 v-model="form.i18nKey" data-testid="menu-form-i18n-key" :options="titleSelectOptions" />
         </el-form-item>
 
         <el-form-item v-if="form.menuType === 'page'" :label="t('menu.form.path')">
@@ -533,18 +515,17 @@ onMounted(loadMenus)
         </el-form-item>
 
         <el-form-item v-if="form.menuType === 'page'" :label="t('menu.form.viewKey')">
-          <el-select v-model="form.viewKey" data-testid="menu-form-view-key">
-            <el-option v-for="key in viewKeys" :key="key" :label="key" :value="key" />
-          </el-select>
+          <el-select-v2 v-model="form.viewKey" data-testid="menu-form-view-key" :options="viewSelectOptions" />
         </el-form-item>
 
         <el-form-item v-if="form.menuType !== 'action'" :label="t('menu.form.icon')">
-          <el-select v-model="iconSelection" data-testid="menu-form-icon" clearable>
-            <el-option :label="t('menu.form.noIcon')" :value="noIconValue" />
-            <el-option v-for="key in iconKeys" :key="key" :label="key" :value="key">
-              <span class="menu-option-icon"><el-icon><component :is="menuIcons[key]" /></el-icon>{{ key }}</span>
-            </el-option>
-          </el-select>
+          <div class="menu-icon-picker">
+            <el-button data-testid="menu-form-icon" @click="openIconSelect">
+              <el-icon v-if="form.icon !== null"><component :is="menuIcons[form.icon]" /></el-icon>
+              {{ form.icon ?? t('menu.form.noIcon') }}
+            </el-button>
+            <el-button v-if="form.icon !== null" text type="danger" @click="clearMenuIcon">{{ t('menu.form.noIcon') }}</el-button>
+          </div>
         </el-form-item>
 
         <el-form-item :label="t('menu.form.sortOrder')">
@@ -563,6 +544,8 @@ onMounted(loadMenus)
         </div>
       </el-form>
     </el-drawer>
+
+    <IconSelect v-model="iconSelectVisible" :icons="menuIconOptions" :title="t('menu.form.icon')" :empty-text="t('menu.form.noIcon')" @select-icon="selectMenuIcon" />
   </section>
 </template>
 
@@ -634,11 +617,7 @@ onMounted(loadMenus)
   min-height: 32px;
 }
 
-.menu-row-actions .el-button {
-  width: 30px;
-  height: 30px;
-  margin: 0;
-}
+.menu-row-actions .el-button { margin: 0; }
 
 .menu-management__empty {
   color: var(--admin-text-soft);
@@ -651,7 +630,7 @@ onMounted(loadMenus)
   gap: 8px;
 }
 
-.menu-option-icon {
+.menu-icon-picker {
   display: inline-flex;
   align-items: center;
   gap: 6px;
