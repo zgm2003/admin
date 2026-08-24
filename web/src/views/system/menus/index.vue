@@ -421,27 +421,25 @@ onMounted(loadMenus)
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('menu.column.actions')" width="176" fixed="right" align="center" header-align="center">
+        <el-table-column :label="t('menu.column.actions')" :width="280" fixed="right" align="center" header-align="center">
           <template #default="{ row }: { row: ManagedMenuNode }">
-            <div class="menu-row-actions">
-              <el-button
-                v-if="canCreate && row.menuType !== 'action'"
-                :data-testid="`add-child-${row.id}`"
-                text
-                type="primary"
-                @click="openCreate(row)"
-              >{{ t('menu.addChild') }}</el-button>
-              <el-button v-if="canUpdate" :data-testid="`edit-${row.id}`" text type="primary" @click="openEdit(row)">{{ t('menu.edit') }}</el-button>
-              <el-button
-                v-if="canUpdate"
-                :data-testid="`status-${row.id}`"
-                text
-                type="warning"
-                :disabled="row.isBuiltin"
-                @click="changeStatus(row)"
-              >{{ row.isEnabled === YesNo.Yes ? t('menu.disable') : t('menu.enable') }}</el-button>
-              <el-button v-if="canDelete" :data-testid="`delete-${row.id}`" text type="danger" :disabled="row.isBuiltin" @click="removeNode(row)">{{ t('menu.delete') }}</el-button>
-            </div>
+            <el-button
+              v-if="canCreate && row.menuType !== 'action'"
+              :data-testid="`add-child-${row.id}`"
+              text
+              type="primary"
+              @click="openCreate(row)"
+            >{{ t('menu.addChild') }}</el-button>
+            <el-button v-if="canUpdate" :data-testid="`edit-${row.id}`" text type="primary" @click="openEdit(row)">{{ t('menu.edit') }}</el-button>
+            <el-button
+              v-if="canUpdate"
+              :data-testid="`status-${row.id}`"
+              text
+              type="warning"
+              :disabled="row.isBuiltin"
+              @click="changeStatus(row)"
+            >{{ row.isEnabled === YesNo.Yes ? t('menu.disable') : t('menu.enable') }}</el-button>
+            <el-button v-if="canDelete" :data-testid="`delete-${row.id}`" text type="danger" :disabled="row.isBuiltin" @click="removeNode(row)">{{ t('menu.delete') }}</el-button>
           </template>
         </el-table-column>
 
@@ -455,7 +453,6 @@ onMounted(loadMenus)
       v-model="dialogVisible"
       :title="dialogMode === 'create' ? t('menu.form.createTitle') : t('menu.form.editTitle')"
       width="900px"
-      height="min(68vh, 620px)"
       data-testid="menu-dialog"
     >
       <el-alert
@@ -548,14 +545,12 @@ onMounted(loadMenus)
 }
 
 .menu-management__toolbar-actions,
-.menu-row-actions,
 .menu-icon-cell {
   display: flex;
   align-items: center;
 }
 
-.menu-management__toolbar-actions,
-.menu-row-actions {
+.menu-management__toolbar-actions {
   gap: 8px;
 }
 
@@ -604,13 +599,6 @@ onMounted(loadMenus)
   min-width: 0;
   gap: 6px;
 }
-
-.menu-row-actions {
-  justify-content: flex-end;
-  min-height: 32px;
-}
-
-.menu-row-actions .el-button { margin: 0; }
 
 .menu-management__empty {
   color: var(--admin-text-soft);

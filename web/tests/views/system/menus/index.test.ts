@@ -77,6 +77,9 @@ describe('MenuManagement', () => {
       expect(column.props('align')).toBe('center')
       expect(column.props('headerAlign')).toBe('center')
     }
+    const actionsColumn = centeredColumns.find((column) => column.props('label') === '操作')
+    expect(actionsColumn?.props('width')).toBe(280)
+    expect(wrapper.find('.menu-row-actions').exists()).toBe(false)
     expect(wrapper.find('[data-testid="menu-drawer"]').exists()).toBe(false)
   })
 
@@ -164,6 +167,15 @@ describe('MenuManagement', () => {
     expect(createMenuMock).toHaveBeenCalledWith(expected)
     expect(getMenusMock).toHaveBeenCalledTimes(2)
     expect(document.body.textContent ?? '').toContain('刷新页面后侧边栏和路由生效')
+  })
+
+  it('lets the menu dialog size itself to the form content', async () => {
+    const wrapper = mountPage(pinia, ['system:menu:create'])
+    await flushPromises()
+    await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findComponent({ name: 'AppDialog' }).props('height')).toBeUndefined()
   })
 
   it('shows only type-valid fields and clears incompatible values on type changes', async () => {
