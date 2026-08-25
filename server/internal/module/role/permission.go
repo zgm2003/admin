@@ -47,7 +47,7 @@ func buildPermissionIndex(rows []menu.Menu) (permissionIndex, error) {
 	}
 	codes := make(map[string]struct{}, len(rows))
 	for _, row := range rows {
-		if row.ID < 1 || row.DeletedAt.Valid || strings.TrimSpace(row.Code) == "" || !yesno.IsValid(row.IsEnabled) || !menu.IsMenuTitleKey(row.I18nKey) {
+		if row.ID < 1 || row.DeletedAt.Valid || strings.TrimSpace(row.Code) == "" || strings.TrimSpace(row.I18nKey) == "" || !yesno.IsValid(row.IsEnabled) {
 			return permissionIndex{}, fmt.Errorf("menu %d has invalid stored values", row.ID)
 		}
 		if _, exists := index.byID[row.ID]; exists {

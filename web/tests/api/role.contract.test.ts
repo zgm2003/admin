@@ -83,6 +83,17 @@ describe('role contract', () => {
     expect(parseRolePermissions(value)).toEqual(value)
   })
 
+  it('accepts custom i18n keys that follow the menu key format', () => {
+    const value = rolePermissions()
+    const directory = value.menuTree[0]
+    const custom = {
+      ...value,
+      menuTree: [{ ...directory, i18nKey: 'reports.orders.list' }],
+    }
+
+    expect(parseRolePermissions(custom)).toEqual(custom)
+  })
+
   it('rejects corrupt permission tree shapes and protocols', () => {
     const value = rolePermissions()
     const directory = value.menuTree[0]
@@ -94,7 +105,7 @@ describe('role contract', () => {
       { ...value, role: { ...value.role, extra: true } },
       { ...value, menuTree: [{ ...directory, id: 0 }] },
       { ...value, menuTree: [{ ...directory, menuType: 'page' }] },
-      { ...value, menuTree: [{ ...directory, i18nKey: 'role.title' }] },
+      { ...value, menuTree: [{ ...directory, i18nKey: 'role' }] },
       { ...value, menuTree: [{ ...directory, isEnabled: 2 }] },
       { ...value, menuTree: [{ ...directory, children: null }] },
       { ...value, menuTree: [{ ...directory, children: [{ ...page, parentId: 99 }] }] },

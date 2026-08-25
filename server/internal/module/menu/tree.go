@@ -3,7 +3,6 @@ package menu
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -20,7 +19,16 @@ var (
 	errMenuFields      = errors.New("menu fields are invalid")
 )
 
-var menuCodePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?::[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
+var (
+	menuCodePattern          = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?::[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
+	menuI18nKeyPattern       = regexp.MustCompile(`^[a-z][a-z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$`)
+	menuPathPattern          = regexp.MustCompile(`^/[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
+	menuComponentPathPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
+)
+
+var staticPagePaths = map[string]struct{}{
+	"/login": {}, "/register": {}, "/dashboard": {}, "/system/menus": {},
+}
 
 type menuIndex struct {
 	byID     map[int64]Menu
@@ -190,8 +198,8 @@ func (index menuIndex) buildManagedTree() ([]ManagedMenu, error) {
 		}
 		return ManagedMenu{
 			ID: item.ID, ParentID: item.ParentID, MenuType: item.MenuType, Code: item.Code,
-			I18nKey: item.I18nKey, Path: item.Path, ViewKey: item.ViewKey, Icon: item.Icon,
-			SortOrder: item.SortOrder, IsEnabled: item.IsEnabled, IsBuiltin: IsBuiltinCode(item.Code),
+			I18nKey: item.I18nKey, Path: item.Path, ComponentPath: item.ComponentPath, Icon: item.Icon,
+			SortOrder: item.SortOrder, IsEnabled: item.IsEnabled, IsHidden: item.IsHidden,
 			CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt, Children: children,
 		}, nil
 	}
@@ -206,33 +214,30 @@ func (index menuIndex) buildManagedTree() ([]ManagedMenu, error) {
 }
 
 func validateStoredMenu(item Menu) error {
-	if item.ID < 1 || !yesno.IsValid(item.IsEnabled) || item.Code != strings.TrimSpace(item.Code) || !validMenuCode(item.Code) {
+	if item.ID < 1 || !yesno.IsValid(item.IsEnabled) || !yesno.IsValid(item.IsHidden) || !validMenuCode(item.Code) {
 		return fmt.Errorf("%w: code or stored scalar is invalid", errMenuFields)
 	}
-	if item.I18nKey != strings.TrimSpace(item.I18nKey) || !IsMenuTitleKey(item.I18nKey) {
+	if !validMenuI18nKey(item.I18nKey) {
 		return fmt.Errorf("%w: i18n key is invalid", errMenuFields)
 	}
-	if item.Icon != nil && (*item.Icon != strings.TrimSpace(*item.Icon) || !IsMenuIconKey(*item.Icon)) {
+	if item.Icon != nil && !validMenuIcon(*item.Icon) {
 		return fmt.Errorf("%w: icon is invalid", errMenuFields)
 	}
 	switch item.MenuType {
 	case TypeDirectory:
-		if item.Path != nil || item.ViewKey != nil {
+		if item.Path != nil || item.ComponentPath != nil {
 			return fmt.Errorf("%w: directory render fields are invalid", errMenuFields)
 		}
 	case TypePage:
-		if item.Path == nil || item.ViewKey == nil || !validMenuPath(*item.Path) || !IsMenuViewKey(*item.ViewKey) || *item.ViewKey != strings.TrimSpace(*item.ViewKey) {
+		if item.Path == nil || item.ComponentPath == nil || !validMenuPath(*item.Path) || !validMenuComponentPath(*item.ComponentPath) {
 			return fmt.Errorf("%w: page render fields are invalid", errMenuFields)
 		}
 	case TypeAction:
-		if item.Path != nil || item.ViewKey != nil || item.Icon != nil {
+		if item.Path != nil || item.ComponentPath != nil || item.Icon != nil || item.IsHidden != yesno.Yes {
 			return fmt.Errorf("%w: action render fields are invalid", errMenuFields)
 		}
 	default:
 		return fmt.Errorf("%w: menu type is invalid", errMenuFields)
-	}
-	if item.Path != nil && *item.Path != strings.TrimSpace(*item.Path) {
-		return fmt.Errorf("%w: path has surrounding whitespace", errMenuFields)
 	}
 	return nil
 }
@@ -263,66 +268,60 @@ func sortMenuIDs(ids []int64, byID map[int64]Menu) {
 }
 
 func validMenuCode(value string) bool {
-	return utf8.RuneCountInString(value) <= 128 && menuCodePattern.MatchString(value)
+	return value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 128 && menuCodePattern.MatchString(value)
+}
+
+func validMenuI18nKey(value string) bool {
+	return value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 128 && menuI18nKeyPattern.MatchString(value)
 }
 
 func validMenuPath(value string) bool {
-	if utf8.RuneCountInString(value) > 255 || value == "/" || value == "/login" || value == "/dashboard" || !strings.HasPrefix(value, "/") || strings.ContainsAny(value, "?#") {
-		return false
-	}
-	parsed, err := url.ParseRequestURI(value)
-	return err == nil && parsed.Path == value && parsed.RawQuery == "" && parsed.Fragment == ""
+	_, reserved := staticPagePaths[value]
+	return !reserved && value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 255 && menuPathPattern.MatchString(value)
+}
+
+func validMenuComponentPath(value string) bool {
+	return value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 255 && menuComponentPathPattern.MatchString(value)
+}
+
+func validMenuIcon(value string) bool {
+	return value != "" && value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 128
 }
 
 func normalizeCreateInput(input CreateInput) (CreateInput, error) {
-	input.Code = strings.TrimSpace(input.Code)
-	input.I18nKey = strings.TrimSpace(input.I18nKey)
-	input.Path = normalizeOptionalString(input.Path)
-	input.ViewKey = normalizeOptionalString(input.ViewKey)
-	input.Icon = normalizeOptionalString(input.Icon)
-	if !validMenuCode(input.Code) || !IsMenuTitleKey(input.I18nKey) || !yesno.IsValid(input.IsEnabled) || input.SortOrder < 0 {
+	if !validMenuCode(input.Code) || !validMenuI18nKey(input.I18nKey) || !yesno.IsValid(input.IsEnabled) ||
+		!yesno.IsValid(input.IsHidden) || input.SortOrder < 0 {
 		return CreateInput{}, fmt.Errorf("%w: create scalar is invalid", errMenuFields)
 	}
-	if err := validateInputShape(input.MenuType, input.Path, input.ViewKey, input.Icon); err != nil {
+	if err := validateInputShape(input.MenuType, input.Path, input.ComponentPath, input.Icon, input.IsHidden); err != nil {
 		return CreateInput{}, err
 	}
 	return input, nil
 }
 
 func normalizeUpdateInput(input UpdateInput) (UpdateInput, error) {
-	input.I18nKey = strings.TrimSpace(input.I18nKey)
-	input.Path = normalizeOptionalString(input.Path)
-	input.ViewKey = normalizeOptionalString(input.ViewKey)
-	input.Icon = normalizeOptionalString(input.Icon)
-	if !IsMenuTitleKey(input.I18nKey) || input.SortOrder < 0 {
+	if !validMenuI18nKey(input.I18nKey) || !yesno.IsValid(input.IsHidden) || input.SortOrder < 0 {
 		return UpdateInput{}, fmt.Errorf("%w: update scalar is invalid", errMenuFields)
 	}
-	if err := validateInputShape(input.MenuType, input.Path, input.ViewKey, input.Icon); err != nil {
+	if err := validateInputShape(input.MenuType, input.Path, input.ComponentPath, input.Icon, input.IsHidden); err != nil {
 		return UpdateInput{}, err
 	}
 	return input, nil
 }
 
-func normalizeOptionalString(value *string) *string {
-	if value == nil {
-		return nil
-	}
-	normalized := strings.TrimSpace(*value)
-	return &normalized
-}
-
-func validateInputShape(menuType Type, path, viewKey, icon *string) error {
+func validateInputShape(menuType Type, path, componentPath, icon *string, isHidden yesno.Value) error {
 	switch menuType {
 	case TypeDirectory:
-		if path != nil || viewKey != nil || (icon != nil && !IsMenuIconKey(*icon)) {
+		if path != nil || componentPath != nil || (icon != nil && !validMenuIcon(*icon)) || !yesno.IsValid(isHidden) {
 			return fmt.Errorf("%w: directory fields are invalid", errMenuFields)
 		}
 	case TypePage:
-		if path == nil || viewKey == nil || !validMenuPath(*path) || !IsMenuViewKey(*viewKey) || (icon != nil && !IsMenuIconKey(*icon)) {
+		if path == nil || componentPath == nil || !validMenuPath(*path) || !validMenuComponentPath(*componentPath) ||
+			(icon != nil && !validMenuIcon(*icon)) || !yesno.IsValid(isHidden) {
 			return fmt.Errorf("%w: page fields are invalid", errMenuFields)
 		}
 	case TypeAction:
-		if path != nil || viewKey != nil || icon != nil {
+		if path != nil || componentPath != nil || icon != nil || isHidden != yesno.Yes {
 			return fmt.Errorf("%w: action fields are invalid", errMenuFields)
 		}
 	default:

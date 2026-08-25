@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { logout } from '@src/api/auth'
+import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
 import { pinia } from '@src/store'
 import { useAccessStore } from '@src/store/access'
@@ -110,16 +111,18 @@ describe('admin layout', () => {
         code: 'system',
         menuType: 'directory',
         path: null,
-        viewKey: null,
-        titleKey: 'navigation.system',
+		componentPath: null,
+		i18nKey: 'navigation.system',
         icon: 'Folder',
+		isHidden: YesNo.No,
         children: [{
           code: 'system:user:list',
           menuType: 'page',
           path: '/system/users',
-          viewKey: 'system-users',
-          titleKey: 'navigation.systemUsers',
+			componentPath: 'system/users',
+			i18nKey: 'navigation.systemUsers',
           icon: 'User',
+			isHidden: YesNo.Yes,
           children: [],
         }],
       }],
@@ -174,9 +177,10 @@ describe('admin layout', () => {
         code: 'system:user:list',
         menuType: 'page',
         path: '/system/users',
-        viewKey: 'system-users',
-			titleKey: 'navigation.systemMenus',
+		componentPath: 'system/users',
+		i18nKey: 'navigation.systemMenus',
         icon: 'User',
+		isHidden: YesNo.No,
         children: [],
       }],
       permissionCodes: [],
@@ -238,19 +242,19 @@ async function mountLayout(path = '/dashboard') {
         path: '/dashboard',
         name: 'dashboard',
         component: layoutContent,
-        meta: { requiresAuth: true, titleKey: 'navigation.dashboard', affix: true },
+		meta: { requiresAuth: true, i18nKey: 'navigation.dashboard', affix: true },
       },
       {
         path: '/system/users',
         name: 'system-users',
         component: layoutContent,
-        meta: { requiresAuth: true, titleKey: 'navigation.systemUsers' },
+		meta: { requiresAuth: true, i18nKey: 'navigation.systemUsers' },
       },
       {
         path: '/system/missing',
         name: 'system-missing',
         component: layoutContent,
-        meta: { requiresAuth: true, titleKey: 'navigation.systemUsers' },
+		meta: { requiresAuth: true, i18nKey: 'navigation.systemUsers' },
       },
       { path: '/login', name: 'login', component: { template: '<div>login</div>' } },
     ],

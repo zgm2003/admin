@@ -139,12 +139,12 @@ func openAccessRepositoryFixture(t *testing.T) *accessRepositoryFixture {
 	if err := connection.GORM.WithContext(ctx).Create(&root).Error; err != nil {
 		t.Fatal(err)
 	}
-	path, viewKey := "/system/users", "system-users"
-	page := menu.Menu{ParentID: &root.ID, MenuType: menu.TypePage, Code: "system:user:list", I18nKey: "navigation.systemUsers", Path: &path, ViewKey: &viewKey, SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	path, componentPath := "/system/users", "system/users"
+	page := menu.Menu{ParentID: &root.ID, MenuType: menu.TypePage, Code: "system:user:list", I18nKey: "navigation.systemUsers", Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
-	action := menu.Menu{ParentID: &page.ID, MenuType: menu.TypeAction, Code: "system:user:create", I18nKey: "permission.userCreate", SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	action := menu.Menu{ParentID: &page.ID, MenuType: menu.TypeAction, Code: "system:user:create", I18nKey: "permission.userCreate", SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&action).Error; err != nil {
 		t.Fatal(err)
 	}

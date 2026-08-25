@@ -92,6 +92,14 @@ export function installPermissionGuard(router: Router): void {
       return to.name === 'dashboard' ? true : { name: 'dashboard' }
     }
 
+		const protectedRecord = [...to.matched]
+			.reverse()
+			.find((record) => record.meta.requiredPermission !== undefined)
+		const requiredPermission = protectedRecord?.meta.requiredPermission
+		if (requiredPermission !== undefined && !access.hasPermission(requiredPermission)) {
+			return { name: 'dashboard' }
+		}
+
     if (to.matched.length === 0) {
       const resolved = router.resolve(to.fullPath)
       return resolved.matched.length === 0

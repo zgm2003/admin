@@ -5,7 +5,8 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { AccessMenuNode as AccessMenuNodeDTO } from '@src/api/access.contract'
-import { menuIcons } from '@src/access/menu-icons'
+import { DIcon } from '@src/components/DIcon'
+import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
 import { pinia } from '@src/store'
 import { useAccessStore } from '@src/store/access'
@@ -31,11 +32,12 @@ describe('AccessMenuNode', () => {
     expect(wrapper.findComponent({ name: 'ElMenuItem' }).props('index')).toBe('/system/users')
   })
 
-  it('renders the registered icon through menuIcons', () => {
-    const wrapper = mountMenuNode(pageNode())
-
-    expect(wrapper.findComponent(menuIcons.Setting).exists()).toBe(true)
-  })
+	it.each(['Setting', 'mdi:shield'])('passes icon name %s directly to DIcon', (icon) => {
+		const node = pageNode()
+		node.icon = icon
+		const wrapper = mountMenuNode(node)
+		expect(wrapper.findComponent(DIcon).props('icon')).toBe(icon)
+	})
 
   it('updates the menu title from the active frontend locale', async () => {
     const wrapper = mountMenuNode(pageNode())
@@ -44,8 +46,26 @@ describe('AccessMenuNode', () => {
     setLocale('en-US')
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.text()).toContain('Menu management')
-  })
+		expect(wrapper.text()).toContain('Menu management')
+	})
+
+	it('renders a missing dynamic translation as its i18n key', () => {
+		const node = pageNode()
+		node.i18nKey = 'reports.orders.list'
+		expect(mountMenuNode(node).text()).toContain('reports.orders.list')
+	})
+
+	it('does not render hidden pages or lift children from a hidden directory', () => {
+		const hiddenPage = pageNode()
+		hiddenPage.isHidden = YesNo.Yes
+		expect(mountMenuNode(hiddenPage).findComponent({ name: 'ElMenuItem' }).exists()).toBe(false)
+
+		const hiddenDirectory = directoryNode()
+		hiddenDirectory.isHidden = YesNo.Yes
+		const wrapper = mountMenuNode(hiddenDirectory)
+		expect(wrapper.findComponent({ name: 'ElSubMenu' }).exists()).toBe(false)
+		expect(wrapper.findComponent({ name: 'ElMenuItem' }).exists()).toBe(false)
+	})
 })
 
 describe('AppAside access menu', () => {
@@ -70,17 +90,29 @@ describe('AppAside access menu', () => {
     expect(items.map((item) => item.props('index'))).toEqual(['/dashboard', '/system/users'])
   })
 
-  it('still shows Dashboard when the access tree is empty', () => {
+	it('still shows Dashboard when the access tree is empty', () => {
     useAccessStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: [] })
 
     const wrapper = mount(AppAside, {
       props: { collapsed: true, uniqueOpened: true },
       global: { plugins: [ElementPlus, pinia, createTestRouter(), appI18n] },
-    })
+	})
 
-    expect(wrapper.findAllComponents({ name: 'ElMenuItem' })).toHaveLength(1)
-    expect(wrapper.findComponent({ name: 'ElMenuItem' }).props('index')).toBe('/dashboard')
-  })
+		expect(wrapper.findAllComponents({ name: 'ElMenuItem' })).toHaveLength(1)
+		expect(wrapper.findComponent({ name: 'ElMenuItem' }).props('index')).toBe('/dashboard')
+	})
+
+	it('shows static menu management after Dashboard only with its permission', () => {
+		useAccessStore(pinia).applySnapshot({
+			roleCodes: [], menuTree: [], permissionCodes: ['system:menu:list'],
+		})
+		const wrapper = mount(AppAside, {
+			props: { collapsed: false, uniqueOpened: true },
+			global: { plugins: [ElementPlus, pinia, createTestRouter(), appI18n] },
+		})
+		expect(wrapper.findAllComponents({ name: 'ElMenuItem' }).map((item) => item.props('index')))
+			.toEqual(['/dashboard', '/system/menus'])
+	})
 
   it('passes the unique-opened preference to Element Plus menu', () => {
     const wrapper = mount(AppAside, {
@@ -111,9 +143,10 @@ function directoryNode(): AccessMenuNodeDTO {
     code: 'system',
     menuType: 'directory',
     path: null,
-    viewKey: null,
-    titleKey: 'navigation.system',
+		componentPath: null,
+		i18nKey: 'navigation.system',
     icon: 'Folder',
+		isHidden: YesNo.No,
     children: [pageNode()],
   }
 }
@@ -123,9 +156,10 @@ function pageNode(): AccessMenuNodeDTO {
     code: 'system:user:list',
     menuType: 'page',
     path: '/system/users',
-    viewKey: 'system-users',
-    titleKey: 'navigation.systemMenus',
+		componentPath: 'system/users',
+		i18nKey: 'navigation.systemMenus',
     icon: 'Setting',
+		isHidden: YesNo.No,
     children: [],
   }
 }

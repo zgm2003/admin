@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"admin/server/internal/module/accessstate"
@@ -14,42 +13,44 @@ import (
 )
 
 type CreateInput struct {
-	ParentID  *int64
-	MenuType  Type
-	Code      string
-	I18nKey   string
-	Path      *string
-	ViewKey   *string
-	Icon      *string
-	SortOrder int
-	IsEnabled yesno.Value
+	ParentID      *int64
+	MenuType      Type
+	Code          string
+	I18nKey       string
+	Path          *string
+	ComponentPath *string
+	Icon          *string
+	SortOrder     int
+	IsEnabled     yesno.Value
+	IsHidden      yesno.Value
 }
 
 type UpdateInput struct {
-	ParentID  *int64
-	MenuType  Type
-	I18nKey   string
-	Path      *string
-	ViewKey   *string
-	Icon      *string
-	SortOrder int
+	ParentID      *int64
+	MenuType      Type
+	I18nKey       string
+	Path          *string
+	ComponentPath *string
+	Icon          *string
+	SortOrder     int
+	IsHidden      yesno.Value
 }
 
 type ManagedMenu struct {
-	ID        int64
-	ParentID  *int64
-	MenuType  Type
-	Code      string
-	I18nKey   string
-	Path      *string
-	ViewKey   *string
-	Icon      *string
-	SortOrder int
-	IsEnabled yesno.Value
-	IsBuiltin bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Children  []ManagedMenu
+	ID            int64
+	ParentID      *int64
+	MenuType      Type
+	Code          string
+	I18nKey       string
+	Path          *string
+	ComponentPath *string
+	Icon          *string
+	SortOrder     int
+	IsEnabled     yesno.Value
+	IsHidden      yesno.Value
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	Children      []ManagedMenu
 }
 
 type Service struct {
@@ -111,8 +112,8 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		}
 		created := Menu{
 			ParentID: normalized.ParentID, MenuType: normalized.MenuType, Code: normalized.Code,
-			I18nKey: normalized.I18nKey, Path: normalized.Path, ViewKey: normalized.ViewKey,
-			Icon: normalized.Icon, SortOrder: normalized.SortOrder, IsEnabled: normalized.IsEnabled,
+			I18nKey: normalized.I18nKey, Path: normalized.Path, ComponentPath: normalized.ComponentPath,
+			Icon: normalized.Icon, SortOrder: normalized.SortOrder, IsEnabled: normalized.IsEnabled, IsHidden: normalized.IsHidden,
 		}
 		if err := repository.Create(mutationCtx, &created); err != nil {
 			return false, mapServiceRepositoryError(err, normalized.Code, stringValue(normalized.Path))
@@ -141,11 +142,6 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		target, exists := index.byID[id]
 		if !exists {
 			return false, menuNotFound(fmt.Errorf("menu id %d is not active", id))
-		}
-		if IsBuiltinCode(target.Code) {
-			if err := validateBuiltinUpdate(target, input); err != nil {
-				return false, err
-			}
 		}
 		normalized, err := normalizeUpdateInput(input)
 		if err != nil {
@@ -177,9 +173,10 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		candidate.MenuType = normalized.MenuType
 		candidate.I18nKey = normalized.I18nKey
 		candidate.Path = normalized.Path
-		candidate.ViewKey = normalized.ViewKey
+		candidate.ComponentPath = normalized.ComponentPath
 		candidate.Icon = normalized.Icon
 		candidate.SortOrder = normalized.SortOrder
+		candidate.IsHidden = normalized.IsHidden
 		candidateIndex, err := replaceMenuInIndex(index, candidate)
 		if err != nil {
 			return false, menuTreeInvalid(err)
@@ -193,8 +190,8 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		}
 		if err := repository.UpdateMenu(mutationCtx, id, UpdateValues{
 			ParentID: normalized.ParentID, MenuType: normalized.MenuType, I18nKey: normalized.I18nKey,
-			Path: normalized.Path, ViewKey: normalized.ViewKey, Icon: normalized.Icon,
-			SortOrder: normalized.SortOrder,
+			Path: normalized.Path, ComponentPath: normalized.ComponentPath, Icon: normalized.Icon,
+			SortOrder: normalized.SortOrder, IsHidden: normalized.IsHidden,
 		}, operationTime); err != nil {
 			return false, mapServiceRepositoryError(err, target.Code, stringValue(normalized.Path))
 		}
@@ -221,9 +218,6 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, value yesno.Value)
 		target, exists := index.byID[id]
 		if !exists {
 			return false, menuNotFound(fmt.Errorf("menu id %d is not active", id))
-		}
-		if IsBuiltinCode(target.Code) && value == yesno.No {
-			return false, menuBuiltinProtected(target.Code, fmt.Errorf("builtin menu cannot be disabled"))
 		}
 		if target.IsEnabled == value {
 			return false, nil
@@ -277,11 +271,6 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 			return false, mapTreeMutationError(err)
 		}
 		ids := append([]int64{id}, descendants...)
-		for _, menuID := range ids {
-			if IsBuiltinCode(index.byID[menuID].Code) {
-				return false, menuBuiltinProtected(index.byID[menuID].Code, fmt.Errorf("builtin menu cannot be deleted"))
-			}
-		}
 		if err := repository.SoftDeleteRoleMenus(mutationCtx, ids, operationTime); err != nil {
 			return false, apperror.DependencyUnavailable(err)
 		}
@@ -386,8 +375,8 @@ func menuAccessUserIDs(versions []accessstate.Version) []int64 {
 func sameMenuUpdate(stored Menu, input UpdateInput) bool {
 	return sameInt64Pointer(stored.ParentID, input.ParentID) &&
 		stored.MenuType == input.MenuType && stored.I18nKey == input.I18nKey &&
-		sameStringPointerTrim(stored.Path, input.Path) && sameStringPointerTrim(stored.ViewKey, input.ViewKey) &&
-		sameStringPointerTrim(stored.Icon, input.Icon) && stored.SortOrder == input.SortOrder
+		sameStringPointer(stored.Path, input.Path) && sameStringPointer(stored.ComponentPath, input.ComponentPath) &&
+		sameStringPointer(stored.Icon, input.Icon) && stored.SortOrder == input.SortOrder && stored.IsHidden == input.IsHidden
 }
 
 func validateCreateParent(index menuIndex, input CreateInput) error {
@@ -468,18 +457,6 @@ func validateUpdateChildren(index menuIndex, target Menu, menuType Type) error {
 	return nil
 }
 
-func validateBuiltinUpdate(target Menu, input UpdateInput) error {
-	if input.MenuType != target.MenuType || !sameInt64Pointer(input.ParentID, target.ParentID) ||
-		stringsTrim(input.I18nKey) != target.I18nKey || !sameStringPointerTrim(input.Path, target.Path) ||
-		!sameStringPointerTrim(input.ViewKey, target.ViewKey) {
-		return menuBuiltinProtected(target.Code, fmt.Errorf("builtin immutable field changed"))
-	}
-	if target.MenuType == TypeAction && input.Icon != nil {
-		return menuBuiltinProtected(target.Code, fmt.Errorf("builtin action icon is immutable"))
-	}
-	return nil
-}
-
 func replaceMenuInIndex(index menuIndex, replacement Menu) (menuIndex, error) {
 	index.byID[replacement.ID] = replacement
 	return buildMenuIndex(menuIndexRows(index))
@@ -548,15 +525,11 @@ func mapTransactionError(err error) error {
 	return apperror.DependencyUnavailable(err)
 }
 
-func stringsTrim(value string) string {
-	return strings.TrimSpace(value)
-}
-
-func sameStringPointerTrim(left, right *string) bool {
+func sameStringPointer(left, right *string) bool {
 	if left == nil || right == nil {
 		return left == nil && right == nil
 	}
-	return strings.TrimSpace(*left) == *right
+	return *left == *right
 }
 
 func sameInt64Pointer(left, right *int64) bool {

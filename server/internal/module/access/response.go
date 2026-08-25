@@ -7,13 +7,14 @@ type currentResponse struct {
 }
 
 type menuNodeResponse struct {
-	Code     string             `json:"code"`
-	MenuType MenuType           `json:"menuType"`
-	Path     *string            `json:"path"`
-	ViewKey  *string            `json:"viewKey"`
-	TitleKey string             `json:"titleKey"`
-	Icon     *string            `json:"icon"`
-	Children []menuNodeResponse `json:"children"`
+	Code          string             `json:"code"`
+	MenuType      MenuType           `json:"menuType"`
+	Path          *string            `json:"path"`
+	ComponentPath *string            `json:"componentPath"`
+	I18nKey       string             `json:"i18nKey"`
+	Icon          *string            `json:"icon"`
+	IsHidden      int16              `json:"isHidden"`
+	Children      []menuNodeResponse `json:"children"`
 }
 
 func newCurrentResponse(snapshot Snapshot) currentResponse {
@@ -34,7 +35,7 @@ func newMenuNodeResponse(node MenuNode) menuNodeResponse {
 		children = append(children, newMenuNodeResponse(child))
 	}
 	return menuNodeResponse{
-		Code: node.Code, MenuType: node.MenuType, Path: node.Path, ViewKey: node.ViewKey,
-		TitleKey: node.TitleKey, Icon: node.Icon, Children: children,
+		Code: node.Code, MenuType: node.MenuType, Path: node.Path, ComponentPath: node.ComponentPath,
+		I18nKey: node.I18nKey, Icon: node.Icon, IsHidden: node.IsHidden, Children: children,
 	}
 }

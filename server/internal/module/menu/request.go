@@ -49,60 +49,63 @@ func (value *nullableString) UnmarshalJSON(data []byte) error {
 }
 
 type createRequest struct {
-	ParentID  nullableInt64  `json:"parentId"`
-	MenuType  *Type          `json:"menuType"`
-	Code      *string        `json:"code"`
-	I18nKey   *string        `json:"i18nKey"`
-	Path      nullableString `json:"path"`
-	ViewKey   nullableString `json:"viewKey"`
-	Icon      nullableString `json:"icon"`
-	SortOrder *int           `json:"sortOrder"`
-	IsEnabled *yesno.Value   `json:"isEnabled"`
+	ParentID      nullableInt64  `json:"parentId"`
+	MenuType      *Type          `json:"menuType"`
+	Code          *string        `json:"code"`
+	I18nKey       *string        `json:"i18nKey"`
+	Path          nullableString `json:"path"`
+	ComponentPath nullableString `json:"componentPath"`
+	Icon          nullableString `json:"icon"`
+	SortOrder     *int           `json:"sortOrder"`
+	IsEnabled     *yesno.Value   `json:"isEnabled"`
+	IsHidden      *yesno.Value   `json:"isHidden"`
 }
 
 func (request createRequest) input() (CreateInput, error) {
 	if !request.ParentID.Present || request.MenuType == nil || request.Code == nil || request.I18nKey == nil ||
-		!request.Path.Present || !request.ViewKey.Present || !request.Icon.Present || request.SortOrder == nil || request.IsEnabled == nil {
+		!request.Path.Present || !request.ComponentPath.Present || !request.Icon.Present || request.SortOrder == nil ||
+		request.IsEnabled == nil || request.IsHidden == nil {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("all create menu fields are required"))
 	}
 	if request.ParentID.Value != nil && *request.ParentID.Value < 1 {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("parentId must be null or a positive integer"))
 	}
-	if *request.SortOrder < 0 || !yesno.IsValid(*request.IsEnabled) {
-		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("sortOrder or isEnabled is invalid"))
+	if *request.SortOrder < 0 || !yesno.IsValid(*request.IsEnabled) || !yesno.IsValid(*request.IsHidden) {
+		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("sortOrder, isEnabled, or isHidden is invalid"))
 	}
 	return CreateInput{
 		ParentID: request.ParentID.Value, MenuType: *request.MenuType, Code: *request.Code,
-		I18nKey: *request.I18nKey, Path: request.Path.Value, ViewKey: request.ViewKey.Value,
-		Icon: request.Icon.Value, SortOrder: *request.SortOrder, IsEnabled: *request.IsEnabled,
+		I18nKey: *request.I18nKey, Path: request.Path.Value, ComponentPath: request.ComponentPath.Value,
+		Icon: request.Icon.Value, SortOrder: *request.SortOrder, IsEnabled: *request.IsEnabled, IsHidden: *request.IsHidden,
 	}, nil
 }
 
 type updateRequest struct {
-	ParentID  nullableInt64  `json:"parentId"`
-	MenuType  *Type          `json:"menuType"`
-	I18nKey   *string        `json:"i18nKey"`
-	Path      nullableString `json:"path"`
-	ViewKey   nullableString `json:"viewKey"`
-	Icon      nullableString `json:"icon"`
-	SortOrder *int           `json:"sortOrder"`
+	ParentID      nullableInt64  `json:"parentId"`
+	MenuType      *Type          `json:"menuType"`
+	I18nKey       *string        `json:"i18nKey"`
+	Path          nullableString `json:"path"`
+	ComponentPath nullableString `json:"componentPath"`
+	Icon          nullableString `json:"icon"`
+	SortOrder     *int           `json:"sortOrder"`
+	IsHidden      *yesno.Value   `json:"isHidden"`
 }
 
 func (request updateRequest) input() (UpdateInput, error) {
 	if !request.ParentID.Present || request.MenuType == nil || request.I18nKey == nil ||
-		!request.Path.Present || !request.ViewKey.Present || !request.Icon.Present || request.SortOrder == nil {
+		!request.Path.Present || !request.ComponentPath.Present || !request.Icon.Present || request.SortOrder == nil || request.IsHidden == nil {
 		return UpdateInput{}, apperror.InvalidRequest(fmt.Errorf("all update menu fields are required"))
 	}
 	if request.ParentID.Value != nil && *request.ParentID.Value < 1 {
 		return UpdateInput{}, apperror.InvalidRequest(fmt.Errorf("parentId must be null or a positive integer"))
 	}
-	if *request.SortOrder < 0 {
-		return UpdateInput{}, apperror.InvalidRequest(fmt.Errorf("sortOrder must not be negative"))
+	if *request.SortOrder < 0 || !yesno.IsValid(*request.IsHidden) {
+		return UpdateInput{}, apperror.InvalidRequest(fmt.Errorf("sortOrder or isHidden is invalid"))
 	}
 	return UpdateInput{
 		ParentID: request.ParentID.Value, MenuType: *request.MenuType, I18nKey: *request.I18nKey,
-		Path: request.Path.Value, ViewKey: request.ViewKey.Value, Icon: request.Icon.Value,
-		SortOrder: *request.SortOrder,
+		Path: request.Path.Value, ComponentPath: request.ComponentPath.Value, Icon: request.Icon.Value,
+		SortOrder: *request.SortOrder, IsHidden: *request.IsHidden,
 	}, nil
 }
 

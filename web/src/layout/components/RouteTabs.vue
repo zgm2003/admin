@@ -13,11 +13,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import type { AppMessageKey } from '../../i18n'
-
 interface RouteTab {
   path: string
-  titleKey: AppMessageKey
+	i18nKey: string
   affix: boolean
 }
 
@@ -58,14 +56,14 @@ function slug(path: string): string {
 }
 
 function getCurrentTab(): RouteTab | null {
-  const matched = [...route.matched].reverse().find((record) => record.meta.titleKey !== undefined)
+	const matched = [...route.matched].reverse().find((record) => record.meta.i18nKey !== undefined)
   if (matched === undefined) {
-    if (route.meta.requiresAuth === true) throw new Error(`Route ${route.fullPath} must declare titleKey`)
+		if (route.meta.requiresAuth === true) throw new Error(`Route ${route.fullPath} must declare i18nKey`)
     return null
   }
-  const titleKey = matched.meta.titleKey
-  if (titleKey === undefined) throw new Error(`Route ${route.fullPath} must declare titleKey`)
-  return { path: route.path, titleKey, affix: matched.meta.affix === true }
+	const i18nKey = matched.meta.i18nKey
+	if (i18nKey === undefined) throw new Error(`Route ${route.fullPath} must declare i18nKey`)
+	return { path: route.path, i18nKey, affix: matched.meta.affix === true }
 }
 
 function prefersReducedMotion(): boolean {
@@ -92,7 +90,7 @@ function syncCurrentTab(): void {
   const existing = tabs.value.find((tab) => tab.path === currentTab.path)
   if (existing === undefined) tabs.value.push(currentTab)
   else {
-    existing.titleKey = currentTab.titleKey
+		existing.i18nKey = currentTab.i18nKey
     existing.affix = currentTab.affix
   }
   scrollActiveTab()
@@ -244,7 +242,7 @@ onBeforeUnmount(() => {
               @contextmenu="openContextMenu($event, tab.path)"
             >
               <span v-if="tab.path === route.path" class="route-tabs__dot" />
-              <span class="route-tabs__label">{{ t(tab.titleKey) }}</span>
+				<span class="route-tabs__label">{{ t(tab.i18nKey) }}</span>
               <span
                 v-if="!tab.affix"
                 class="route-tabs__close"

@@ -201,8 +201,8 @@ func TestServiceUpdateStatusProtectsRolesAndPreservesRelations(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := fmt.Sprintf("/status-%d", time.Now().UnixNano())
-	view := "system-menus"
-	page := menu.Menu{MenuType: menu.TypePage, Code: fmt.Sprintf("status:%d:list", time.Now().UnixNano()), I18nKey: "navigation.systemMenus", Path: &path, ViewKey: &view, IsEnabled: yesno.Yes}
+	componentPath := "system/menus"
+	page := menu.Menu{MenuType: menu.TypePage, Code: fmt.Sprintf("status:%d:list", time.Now().UnixNano()), I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -503,8 +503,8 @@ func TestServiceDeleteSoftDeletesRoleAndGrantsWithOneTimestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := fmt.Sprintf("/delete-%d", time.Now().UnixNano())
-	view := "system-menus"
-	page := menu.Menu{MenuType: menu.TypePage, Code: fmt.Sprintf("delete:%d:list", time.Now().UnixNano()), I18nKey: "navigation.systemMenus", Path: &path, ViewKey: &view, IsEnabled: yesno.Yes}
+	componentPath := "system/menus"
+	page := menu.Menu{MenuType: menu.TypePage, Code: fmt.Sprintf("delete:%d:list", time.Now().UnixNano()), I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -538,8 +538,8 @@ func TestServiceDeleteRollsBackWhenRoleWriteFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := fmt.Sprintf("/delete-rollback-%d", time.Now().UnixNano())
-	view := "system-menus"
-	page := menu.Menu{MenuType: menu.TypePage, Code: fmt.Sprintf("delete:rollback:%d", time.Now().UnixNano()), I18nKey: "navigation.systemMenus", Path: &path, ViewKey: &view, IsEnabled: yesno.Yes}
+	componentPath := "system/menus"
+	page := menu.Menu{MenuType: menu.TypePage, Code: fmt.Sprintf("delete:rollback:%d", time.Now().UnixNano()), I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -568,8 +568,18 @@ func TestServiceDeleteRollsBackWhenRoleWriteFails(t *testing.T) {
 func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
 	service, accessStates, _ := newRoleMutationTestService(t, role.NewRepository(tx))
-	menuService := menu.NewService(menu.NewRepository(tx), nil)
-	if err := menuService.EnsureBuiltin(ctx); err != nil {
+	root := menu.Menu{MenuType: menu.TypeDirectory, Code: "system", I18nKey: "navigation.system", IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	if err := tx.WithContext(ctx).Create(&root).Error; err != nil {
+		t.Fatal(err)
+	}
+	path := "/system/roles"
+	componentPath := "system/roles"
+	page := menu.Menu{ParentID: &root.ID, MenuType: menu.TypePage, Code: menu.PermissionRoleList, I18nKey: "navigation.systemRoles", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
+		t.Fatal(err)
+	}
+	action := menu.Menu{ParentID: &page.ID, MenuType: menu.TypeAction, Code: menu.PermissionRoleAuthorize, I18nKey: "permission.roleAuthorize", IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
+	if err := tx.WithContext(ctx).Create(&action).Error; err != nil {
 		t.Fatal(err)
 	}
 	roleID, err := service.Create(ctx, role.CreateInput{Code: fmt.Sprintf("permission_%d", time.Now().UnixNano()), Name: fmt.Sprintf("Permission %d", time.Now().UnixNano())})
@@ -580,13 +590,6 @@ func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
 		t.Fatal(err)
 	}
 	boundUser := createRoleAccessUser(t, tx, ctx, roleID, yesno.Yes, false)
-	var page, action menu.Menu
-	if err := tx.WithContext(ctx).Where("code = ?", menu.PermissionRoleList).Take(&page).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.WithContext(ctx).Where("code = ?", menu.PermissionRoleAuthorize).Take(&action).Error; err != nil {
-		t.Fatal(err)
-	}
 	count, err := service.UpdatePermissions(ctx, roleID, []int64{page.ID, action.ID})
 	if err != nil || count != 1 {
 		t.Fatalf("UpdatePermissions() = %d,%v", count, err)

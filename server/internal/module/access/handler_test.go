@@ -20,13 +20,13 @@ import (
 
 func TestAccessHandlerReturnsClosedSnapshot(t *testing.T) {
 	pagePath := "/system/users"
-	pageView := "systemUsers"
+	componentPath := "system/users"
 	service := &currentAccessService{snapshot: access.Snapshot{
 		RoleCodes: []string{"ai_tester", "registered_user"},
 		MenuTree: []access.MenuNode{{
-			Code: "system", MenuType: access.MenuDirectory, TitleKey: "navigation.system", Children: []access.MenuNode{{
-				Code: "system:user:view", MenuType: access.MenuPage, Path: &pagePath, ViewKey: &pageView,
-				TitleKey: "navigation.systemUsers", Children: []access.MenuNode{},
+			Code: "system", MenuType: access.MenuDirectory, I18nKey: "navigation.system", IsHidden: 0, Children: []access.MenuNode{{
+				Code: "system:user:view", MenuType: access.MenuPage, Path: &pagePath, ComponentPath: &componentPath,
+				I18nKey: "navigation.systemUsers", IsHidden: 1, Children: []access.MenuNode{},
 			}},
 		}},
 		PermissionCodes: []string{"system:user:create", "system:user:view"},
@@ -156,7 +156,7 @@ func serveAccessRoute(t *testing.T, service *currentAccessService, authorization
 
 func assertClosedMenuNode(t *testing.T, node map[string]json.RawMessage) {
 	t.Helper()
-	want := []string{"code", "menuType", "path", "viewKey", "titleKey", "icon", "children"}
+	want := []string{"code", "menuType", "path", "componentPath", "i18nKey", "icon", "isHidden", "children"}
 	if len(node) != len(want) {
 		t.Fatalf("menu node keys = %v", node)
 	}

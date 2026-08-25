@@ -88,12 +88,12 @@ func TestRepositoryCreateWritesNullableFieldsAndTimestamps(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := fmt.Sprintf("/repository-create-%d", unique)
-	viewKey := "system-menus"
+	componentPath := "reports"
 	icon := "Menu"
 	page := Menu{
 		ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:create:%d:list", unique),
-		I18nKey: "navigation.systemMenus", Path: &path, ViewKey: &viewKey, Icon: &icon,
-		SortOrder: 2, IsEnabled: yesno.No,
+		I18nKey: "reports.list", Path: &path, ComponentPath: &componentPath, Icon: &icon,
+		SortOrder: 2, IsEnabled: yesno.No, IsHidden: yesno.No,
 	}
 	if err := repository.Create(ctx, &page); err != nil {
 		t.Fatal(err)
@@ -104,7 +104,7 @@ func TestRepositoryCreateWritesNullableFieldsAndTimestamps(t *testing.T) {
 		t.Fatal(err)
 	}
 	if stored.ParentID == nil || *stored.ParentID != root.ID || value(stored.Path) != path ||
-		value(stored.ViewKey) != viewKey || value(stored.Icon) != icon || stored.IsEnabled != yesno.No ||
+		value(stored.ComponentPath) != componentPath || value(stored.Icon) != icon || stored.IsEnabled != yesno.No ||
 		stored.CreatedAt.IsZero() || stored.UpdatedAt.IsZero() || stored.DeletedAt.Valid {
 		t.Fatalf("stored page = %+v", stored)
 	}
@@ -116,12 +116,12 @@ func TestRepositoryUpdateMenuWritesExplicitSQLNulls(t *testing.T) {
 	unique := time.Now().UnixNano()
 	root := createRepositoryDirectory(t, repository, ctx, fmt.Sprintf("repository:update:%d", unique), 1)
 	path := fmt.Sprintf("/repository-update-%d", unique)
-	viewKey := "system-menus"
+	componentPath := "reports"
 	icon := "Menu"
 	page := Menu{
 		ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:update:%d:list", unique),
-		I18nKey: "navigation.systemMenus", Path: &path, ViewKey: &viewKey, Icon: &icon,
-		SortOrder: 2, IsEnabled: yesno.Yes,
+		I18nKey: "reports.list", Path: &path, ComponentPath: &componentPath, Icon: &icon,
+		SortOrder: 2, IsEnabled: yesno.Yes, IsHidden: yesno.No,
 	}
 	if err := repository.Create(ctx, &page); err != nil {
 		t.Fatal(err)
@@ -129,7 +129,7 @@ func TestRepositoryUpdateMenuWritesExplicitSQLNulls(t *testing.T) {
 	updatedAt := time.Now().UTC().Truncate(time.Microsecond)
 	if err := repository.UpdateMenu(ctx, page.ID, UpdateValues{
 		ParentID: nil, MenuType: TypeDirectory, I18nKey: "navigation.system",
-		Path: nil, ViewKey: nil, Icon: nil, SortOrder: 9,
+		Path: nil, ComponentPath: nil, Icon: nil, SortOrder: 9, IsHidden: yesno.Yes,
 	}, updatedAt); err != nil {
 		t.Fatal(err)
 	}
@@ -138,9 +138,9 @@ func TestRepositoryUpdateMenuWritesExplicitSQLNulls(t *testing.T) {
 	if err := tx.WithContext(ctx).First(&stored, page.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.ParentID != nil || stored.Path != nil || stored.ViewKey != nil || stored.Icon != nil ||
+	if stored.ParentID != nil || stored.Path != nil || stored.ComponentPath != nil || stored.Icon != nil ||
 		stored.MenuType != TypeDirectory || stored.I18nKey != "navigation.system" || stored.SortOrder != 9 ||
-		!stored.UpdatedAt.Equal(updatedAt) {
+		stored.IsHidden != yesno.Yes || !stored.UpdatedAt.Equal(updatedAt) {
 		t.Fatalf("updated row = %+v", stored)
 	}
 }
@@ -328,8 +328,8 @@ func TestRepositoryConvertsActiveUniqueViolations(t *testing.T) {
 		unique := time.Now().UnixNano()
 		root := createRepositoryDirectory(t, repository, ctx, fmt.Sprintf("repository:path:%d", unique), 1)
 		path := fmt.Sprintf("/repository-path-%d", unique)
-		view := "system-menus"
-		first := Menu{ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:path:%d:a", unique), I18nKey: "navigation.systemMenus", Path: &path, ViewKey: &view, IsEnabled: yesno.Yes}
+		componentPath := "reports"
+		first := Menu{ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:path:%d:a", unique), I18nKey: "reports.list", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes}
 		second := first
 		second.Code = fmt.Sprintf("repository:path:%d:b", unique)
 		if err := repository.Create(ctx, &first); err != nil {
@@ -347,9 +347,9 @@ func TestRepositoryConvertsActiveUniqueViolations(t *testing.T) {
 		root := createRepositoryDirectory(t, repository, ctx, fmt.Sprintf("repository:update-path:%d", unique), 1)
 		firstPath := fmt.Sprintf("/repository-update-path-%d-a", unique)
 		secondPath := fmt.Sprintf("/repository-update-path-%d-b", unique)
-		view := "system-menus"
-		first := Menu{ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:update-path:%d:a", unique), I18nKey: "navigation.systemMenus", Path: &firstPath, ViewKey: &view, IsEnabled: yesno.Yes}
-		second := Menu{ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:update-path:%d:b", unique), I18nKey: "navigation.systemMenus", Path: &secondPath, ViewKey: &view, IsEnabled: yesno.Yes}
+		componentPath := "reports"
+		first := Menu{ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:update-path:%d:a", unique), I18nKey: "reports.list", Path: &firstPath, ComponentPath: &componentPath, IsEnabled: yesno.Yes}
+		second := Menu{ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:update-path:%d:b", unique), I18nKey: "reports.list", Path: &secondPath, ComponentPath: &componentPath, IsEnabled: yesno.Yes}
 		if err := repository.Create(ctx, &first); err != nil {
 			t.Fatal(err)
 		}
@@ -358,7 +358,7 @@ func TestRepositoryConvertsActiveUniqueViolations(t *testing.T) {
 		}
 		err := repository.UpdateMenu(ctx, second.ID, UpdateValues{
 			ParentID: &root.ID, MenuType: TypePage, I18nKey: second.I18nKey,
-			Path: &firstPath, ViewKey: &view, SortOrder: second.SortOrder,
+			Path: &firstPath, ComponentPath: &componentPath, SortOrder: second.SortOrder, IsHidden: yesno.No,
 		}, time.Now().UTC().Truncate(time.Microsecond))
 		if !errors.Is(err, ErrMenuPathConflict) {
 			t.Fatalf("duplicate update path error = %v", err)

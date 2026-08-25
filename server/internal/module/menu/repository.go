@@ -20,13 +20,14 @@ var (
 )
 
 type UpdateValues struct {
-	ParentID  *int64
-	MenuType  Type
-	I18nKey   string
-	Path      *string
-	ViewKey   *string
-	Icon      *string
-	SortOrder int
+	ParentID      *int64
+	MenuType      Type
+	I18nKey       string
+	Path          *string
+	ComponentPath *string
+	Icon          *string
+	SortOrder     int
+	IsHidden      yesno.Value
 }
 
 type Repository struct {
@@ -49,21 +50,6 @@ func (r *Repository) Transaction(ctx context.Context, fn func(*Repository) error
 	})
 }
 
-func (r *Repository) LockMenuTableForBuiltin(ctx context.Context) error {
-	if err := r.db.WithContext(ctx).Exec("LOCK TABLE sys_menu IN SHARE ROW EXCLUSIVE MODE").Error; err != nil {
-		return fmt.Errorf("lock menu table for builtin initialization: %w", err)
-	}
-	return nil
-}
-
-func (r *Repository) FindBuiltinRecords(ctx context.Context, codes []string) ([]Menu, error) {
-	var rows []Menu
-	if err := r.db.WithContext(ctx).Unscoped().Where("code IN ?", codes).Order("code, id").Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("find builtin menu records: %w", err)
-	}
-	return rows, nil
-}
-
 func (r *Repository) Create(ctx context.Context, value *Menu) error {
 	var created struct {
 		ID        int64
@@ -72,11 +58,11 @@ func (r *Repository) Create(ctx context.Context, value *Menu) error {
 	}
 	result := r.db.WithContext(ctx).Raw(`
 		INSERT INTO sys_menu (
-			parent_id, menu_type, code, i18n_key, path, view_key, icon, sort_order, is_enabled
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			parent_id, menu_type, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING id, created_at, updated_at`,
 		value.ParentID, value.MenuType, value.Code, value.I18nKey, value.Path,
-		value.ViewKey, value.Icon, value.SortOrder, value.IsEnabled,
+		value.ComponentPath, value.Icon, value.SortOrder, value.IsEnabled, value.IsHidden,
 	).Scan(&created)
 	if result.Error != nil {
 		return mapMenuWriteError("create menu", result.Error)
@@ -218,14 +204,15 @@ func normalizeMenuAccessUserIDs(userIDs []int64) ([]int64, error) {
 
 func (r *Repository) UpdateMenu(ctx context.Context, id int64, values UpdateValues, updatedAt time.Time) error {
 	result := r.db.WithContext(ctx).Model(&Menu{}).Where("id = ?", id).Updates(map[string]any{
-		"parent_id":  values.ParentID,
-		"menu_type":  values.MenuType,
-		"i18n_key":   values.I18nKey,
-		"path":       values.Path,
-		"view_key":   values.ViewKey,
-		"icon":       values.Icon,
-		"sort_order": values.SortOrder,
-		"updated_at": updatedAt,
+		"parent_id":      values.ParentID,
+		"menu_type":      values.MenuType,
+		"i18n_key":       values.I18nKey,
+		"path":           values.Path,
+		"component_path": values.ComponentPath,
+		"icon":           values.Icon,
+		"sort_order":     values.SortOrder,
+		"is_hidden":      values.IsHidden,
+		"updated_at":     updatedAt.UTC(),
 	})
 	if result.Error != nil {
 		return mapMenuWriteError("update menu", result.Error)

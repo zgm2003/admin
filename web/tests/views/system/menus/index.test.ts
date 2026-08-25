@@ -14,6 +14,8 @@ import type { CreateMenuInput, UpdateMenuInput } from '@src/api/menu.contract'
 import type { ManagedMenuNode } from '@src/api/menu.contract'
 import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
+import { DIcon } from '@src/components/DIcon'
+import { IconSelect } from '@src/components/IconSelect'
 import { useAccessStore } from '@src/store/access'
 import MenuManagement from '@src/views/system/menus/index.vue'
 
@@ -53,23 +55,25 @@ describe('MenuManagement', () => {
     expect(wrapper.get('.menu-management-page').classes()).toContain('system-page')
     const table = wrapper.get('[data-testid="menu-table"]')
     expect(table.text()).toContain('系统管理')
-    expect(table.text()).toContain('菜单管理')
-    expect(table.text()).toContain('新增菜单')
+		expect(table.text()).toContain('用户管理')
+		expect(table.text()).toContain('修改用户')
     expect(table.text()).toContain('目录')
     expect(table.text()).toContain('页面')
     expect(table.text()).toContain('按钮权限')
-    expect(table.text()).toContain('system:menu:list')
-    expect(table.text()).toContain('/system/menus')
-    expect(table.text()).toContain('system-menus')
+		expect(table.text()).toContain('system:user:list')
+		expect(table.text()).toContain('/system/users')
+		expect(table.text()).toContain('system/users')
     expect(table.text()).toContain('Setting')
     expect(table.text()).toContain('已启用')
     expect(table.text()).toContain('已禁用')
-    expect(table.text()).toContain('是')
+		expect(table.text()).toContain('显示')
+		expect(table.text()).toContain('隐藏')
+		expect(table.text()).not.toContain('内置')
     const elementTable = wrapper.findComponent({ name: 'ElTable' })
     expect(elementTable.props('defaultExpandAll')).toBe(true)
     expect(elementTable.props('border')).toBe(true)
     expect(elementTable.props('headerCellStyle')).toEqual({ background: 'var(--el-fill-color-light)' })
-    const centeredLabels = ['类型', '图标', '状态', '操作']
+		const centeredLabels = ['类型', '图标', '显示状态', '状态', '操作']
     const centeredColumns = wrapper.findAllComponents({ name: 'ElTableColumn' })
       .filter((column) => centeredLabels.includes(String(column.props('label'))))
     expect(centeredColumns).toHaveLength(centeredLabels.length)
@@ -124,13 +128,13 @@ describe('MenuManagement', () => {
     expect(deleteWrapper.find('[data-testid^="delete-"]').exists()).toBe(true)
   })
 
-  it('keeps builtin mutation controls visibly disabled while edit remains available', async () => {
+	it('allows every ordinary menu record to be edited, disabled, and deleted', async () => {
     const wrapper = mountPage(pinia, ['system:menu:update', 'system:menu:delete'])
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="edit-1"]').attributes('disabled')).toBeUndefined()
-    expect(wrapper.get('[data-testid="status-1"]').attributes('disabled')).toBeDefined()
-    expect(wrapper.get('[data-testid="delete-1"]').attributes('disabled')).toBeDefined()
+		expect(wrapper.get('[data-testid="edit-1"]').attributes('disabled')).toBeUndefined()
+		expect(wrapper.get('[data-testid="status-1"]').attributes('disabled')).toBeUndefined()
+		expect(wrapper.get('[data-testid="delete-1"]').attributes('disabled')).toBeUndefined()
   })
 
   it('does not create a page or body-level scroll owner', async () => {
@@ -159,15 +163,58 @@ describe('MenuManagement', () => {
       code: 'reports',
       i18nKey: 'navigation.system',
       path: null,
-      viewKey: null,
+		componentPath: null,
       icon: null,
       sortOrder: 100,
       isEnabled: YesNo.Yes,
+		isHidden: YesNo.No,
     }
-    expect(createMenuMock).toHaveBeenCalledWith(expected)
+		expect(createMenuMock).toHaveBeenCalledWith(expected)
     expect(getMenusMock).toHaveBeenCalledTimes(2)
     expect(document.body.textContent ?? '').toContain('刷新页面后侧边栏和路由生效')
-  })
+	})
+
+	it('stores an IconSelect value as a string and previews it with DIcon', async () => {
+		createMenuMock.mockResolvedValue({ id: 9 })
+		const wrapper = mountPage(pinia, ['system:menu:create'])
+		await flushPromises()
+		await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
+		await flushPromises()
+		wrapper.findComponent(IconSelect).vm.$emit('select-icon', 'mdi:shield')
+		await flushPromises()
+
+		expect(wrapper.findAllComponents(DIcon).some((icon) => icon.props('icon') === 'mdi:shield')).toBe(true)
+		await bodyGet('[data-testid="menu-form-code"]').setValue('reports')
+		await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
+		await flushPromises()
+		expect(createMenuMock.mock.calls[0]?.[0].icon).toBe('mdi:shield')
+	})
+
+	it('forces action menus hidden without displaying a visibility control', async () => {
+		createMenuMock.mockResolvedValue({ id: 9 })
+		const wrapper = mountPage(pinia, ['system:menu:create'])
+		await flushPromises()
+		await wrapper.get('[data-testid="add-child-2"]').trigger('click')
+		await flushPromises()
+
+		expect(bodyFind('[data-testid="menu-form-hidden"]').exists()).toBe(false)
+		await bodyGet('[data-testid="menu-form-code"]').setValue('system:user:create')
+		await bodyGet('[data-testid="menu-form-i18n-key"]').setValue('permission.userCreate')
+		await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
+		await flushPromises()
+		expect(createMenuMock).toHaveBeenCalledWith({
+			parentId: 2,
+			menuType: 'action',
+			code: 'system:user:create',
+			i18nKey: 'permission.userCreate',
+			path: null,
+			componentPath: null,
+			icon: null,
+			sortOrder: 100,
+			isEnabled: YesNo.Yes,
+			isHidden: YesNo.Yes,
+		})
+	})
 
   it('lets the menu dialog size itself to the form content', async () => {
     const wrapper = mountPage(pinia, ['system:menu:create'])
@@ -178,30 +225,41 @@ describe('MenuManagement', () => {
     expect(wrapper.findComponent({ name: 'AppDialog' }).props('height')).toBeUndefined()
   })
 
-  it('shows only type-valid fields and clears incompatible values on type changes', async () => {
+	it('uses text protocol fields with exact hints and clears incompatible values without deriving paths', async () => {
     const wrapper = mountPage(pinia, ['system:menu:create'])
     await flushPromises()
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
-    expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(false)
-    expect(bodyFind('[data-testid="menu-form-view-key"]').exists()).toBe(false)
+		expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(false)
+		expect(bodyFind('[data-testid="menu-form-component-path"]').exists()).toBe(false)
+		const i18nKeyInput = bodyGet('[data-testid="menu-form-i18n-key"]')
+		expect(i18nKeyInput.element.tagName).toBe('INPUT')
+		expect(i18nKeyInput.element.closest('.el-select-v2')).toBeNull()
+		expect(document.body.textContent).toContain('i18nKey：至少两段点号路径，例如 navigation.systemUsers')
+		expect(document.body.textContent).toContain('权限码：小写冒号分段，例如 system:user:list')
 
     await bodyGet('[data-testid="menu-form-type"]').trigger('click')
     const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find((item) => item.textContent?.trim() === '页面')
     expect(pageOption).not.toBeNull()
     if (pageOption !== null) await new DOMWrapper(pageOption).trigger('click')
     await flushPromises()
-    expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(true)
-    expect(bodyFind('[data-testid="menu-form-view-key"]').exists()).toBe(true)
+		expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(true)
+		expect(bodyFind('[data-testid="menu-form-component-path"]').exists()).toBe(true)
+		expect(bodyFind('[data-testid="menu-form-hidden"]').exists()).toBe(true)
+		expect(document.body.textContent).toContain('路由：必须以 / 开头，例如 /system/users')
+		expect(document.body.textContent).toContain('页面路径：不能以 / 开头，页面文件为 web/src/views/<页面路径>/index.vue')
+		expect(bodyGet('[data-testid="menu-form-component-path"]').text()).not.toContain('/reports')
 
-    await bodyGet('[data-testid="menu-form-path"]').setValue('/reports')
+		await bodyGet('[data-testid="menu-form-path"]').setValue('/reports')
+		await bodyGet('[data-testid="menu-form-component-path"]').setValue('reports/orders')
     await bodyGet('[data-testid="menu-form-type"]').trigger('click')
     const actionOption = Array.from(document.body.querySelectorAll('.el-select-dropdown__item')).find((item) => item.textContent?.includes('按钮权限'))
     expect(actionOption).not.toBeUndefined()
     if (actionOption !== undefined) await new DOMWrapper(actionOption).trigger('click')
     await flushPromises()
-    expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(false)
-    expect(bodyFind('[data-testid="menu-form-view-key"]').exists()).toBe(false)
+		expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(false)
+		expect(bodyFind('[data-testid="menu-form-component-path"]').exists()).toBe(false)
+		expect(bodyFind('[data-testid="menu-form-hidden"]').exists()).toBe(false)
   })
 
   it('keeps code readonly on edit and excludes it from the update payload', async () => {
@@ -220,14 +278,15 @@ describe('MenuManagement', () => {
     const expected: UpdateMenuInput = {
       parentId: 1,
       menuType: 'page',
-      i18nKey: 'navigation.systemMenus',
-      path: '/system/menus',
-      viewKey: 'system-menus',
+		i18nKey: 'navigation.systemUsers',
+		path: '/system/users',
+		componentPath: 'system/users',
       icon: 'Menu',
       sortOrder: 12,
+		isHidden: YesNo.No,
     }
-    expect(updateMenuMock).toHaveBeenCalledWith(2, expected)
-    expect(JSON.stringify(updateMenuMock.mock.calls[0]?.[1])).not.toContain('code')
+		expect(updateMenuMock).toHaveBeenCalledWith(2, expected)
+		expect(JSON.stringify(updateMenuMock.mock.calls[0]?.[1])).not.toContain('code')
   })
 
   it('filters parent options to valid nodes and excludes the edited subtree', async () => {
@@ -256,8 +315,7 @@ describe('MenuManagement', () => {
   })
 
   it('uses exact status/delete APIs, reloads once, and preserves the table on failure', async () => {
-    const mutableTree = menuTree()
-    mutableTree[0].children[0].children[0].isBuiltin = false
+		const mutableTree = menuTree()
     getMenusMock.mockResolvedValueOnce(mutableTree).mockResolvedValue(mutableTree)
     updateMenuStatusMock.mockResolvedValue({ id: 3, isEnabled: YesNo.Yes })
     deleteMenuMock.mockResolvedValue({ id: 3 })
@@ -284,7 +342,7 @@ describe('MenuManagement', () => {
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
     await flushPromises()
     expect(getMenusMock).not.toHaveBeenCalled()
-    expect(wrapper.get('[data-testid="menu-table"]').text()).toContain('菜单管理')
+		expect(wrapper.get('[data-testid="menu-table"]').text()).toContain('用户管理')
     expect(wrapper.get('[data-testid="menu-mutation-error"]').text()).toContain('update failed')
   })
 })
@@ -317,39 +375,39 @@ function menuTree(): ManagedMenuNode[] {
     code: 'system',
     i18nKey: 'navigation.system',
     path: null,
-    viewKey: null,
+		componentPath: null,
     icon: 'Setting',
     sortOrder: 100,
     isEnabled: YesNo.Yes,
-    isBuiltin: true,
+		isHidden: YesNo.No,
     createdAt: timestamp,
     updatedAt: timestamp,
     children: [{
       id: 2,
       parentId: 1,
       menuType: 'page',
-      code: 'system:menu:list',
-      i18nKey: 'navigation.systemMenus',
-      path: '/system/menus',
-      viewKey: 'system-menus',
+		code: 'system:user:list',
+		i18nKey: 'navigation.systemUsers',
+		path: '/system/users',
+		componentPath: 'system/users',
       icon: 'Menu',
       sortOrder: 10,
       isEnabled: YesNo.Yes,
-      isBuiltin: true,
+		isHidden: YesNo.No,
       createdAt: timestamp,
       updatedAt: timestamp,
       children: [{
         id: 3,
         parentId: 2,
         menuType: 'action',
-        code: 'system:menu:create',
-        i18nKey: 'permission.menuCreate',
+		code: 'system:user:update',
+		i18nKey: 'permission.userUpdate',
         path: null,
-        viewKey: null,
+		componentPath: null,
         icon: null,
         sortOrder: 10,
         isEnabled: YesNo.No,
-        isBuiltin: true,
+		isHidden: YesNo.Yes,
         createdAt: timestamp,
         updatedAt: timestamp,
         children: [],
@@ -367,11 +425,11 @@ function rootWithEditableSubtree(): ManagedMenuNode {
     code: 'reports',
     i18nKey: 'navigation.system',
     path: null,
-    viewKey: null,
+		componentPath: null,
     icon: 'Folder',
     sortOrder: 200,
     isEnabled: YesNo.Yes,
-    isBuiltin: false,
+		isHidden: YesNo.No,
     createdAt: root.createdAt,
     updatedAt: root.updatedAt,
     children: [{
@@ -381,11 +439,11 @@ function rootWithEditableSubtree(): ManagedMenuNode {
       code: 'reports:list',
       i18nKey: 'navigation.systemMenus',
       path: '/reports',
-      viewKey: 'system-menus',
+		componentPath: 'system/users',
       icon: 'Menu',
       sortOrder: 10,
       isEnabled: YesNo.Yes,
-      isBuiltin: false,
+		isHidden: YesNo.No,
       createdAt: root.createdAt,
       updatedAt: root.updatedAt,
       children: [],

@@ -10,16 +10,10 @@ import { useAccessStore } from '@src/store/access'
 import { useAuthStore } from '@src/store/auth'
 import { ApiError } from '@src/types/http'
 import { createAppRouter } from '@src/router/index'
+import { YesNo } from '@src/enums/yes-no'
 
 vi.mock('@src/api/auth', () => ({ getAuthPolicy: vi.fn(), refresh: vi.fn(), getCurrentUser: vi.fn() }))
 vi.mock('@src/api/access', () => ({ getAccess: vi.fn() }))
-vi.mock('@src/access/route-views', () => ({
-  routeViews: {
-    systemUsers: async () => ({ template: '<div>users</div>' }),
-    systemTeams: async () => ({ template: '<div>teams</div>' }),
-  },
-}))
-
 const refreshMock = vi.mocked(refresh)
 const getCurrentUserMock = vi.mocked(getCurrentUser)
 const getAuthPolicyMock = vi.mocked(getAuthPolicy)
@@ -37,22 +31,39 @@ describe('router', () => {
     getAccessMock.mockResolvedValue(emptyAccessSnapshot())
   })
 
-  it('declares Login and Register as public, names the layout, and protects Dashboard', () => {
+	it('declares public auth routes and static protected Dashboard and menu management routes', () => {
     const router = createAppRouter(createMemoryHistory())
     expect(router.resolve('/login').meta.requiresAuth).toBe(false)
     expect(router.resolve('/register').meta.requiresAuth).toBe(false)
-    expect(router.resolve('/dashboard').meta.requiresAuth).toBe(true)
+		expect(router.resolve('/dashboard').meta.requiresAuth).toBe(true)
+		expect(router.resolve('/system/menus').meta.requiresAuth).toBe(true)
+		expect(router.resolve('/system/menus').meta.requiredPermission).toBe('system:menu:list')
     expect(router.hasRoute('admin-layout')).toBe(true)
   })
 
-  it('declares a translated fixed title for Dashboard', () => {
+	it('declares translated i18n keys for fixed pages', () => {
     const router = createAppRouter(createMemoryHistory())
     const dashboard = router.resolve('/dashboard')
     expect(dashboard.meta.requiresAuth).toBe(true)
-    expect(dashboard.meta.titleKey).toBe('navigation.dashboard')
+		expect(dashboard.meta.i18nKey).toBe('navigation.dashboard')
     expect(dashboard.meta.affix).toBe(true)
-    expect(router.resolve('/login').meta.titleKey).toBeUndefined()
-  })
+		expect(router.resolve('/login').meta.i18nKey).toBeUndefined()
+		expect(router.resolve('/system/menus').meta.i18nKey).toBe('navigation.systemMenus')
+	})
+
+	it('guards the static menu page with its exact permission after loading access', async () => {
+		setAuthenticated()
+		const router = createAppRouter(createMemoryHistory())
+		installPermissionGuard(router)
+
+		await router.push('/system/menus')
+		expect(router.currentRoute.value.path).toBe('/dashboard')
+
+		useAccessStore(pinia).reset()
+		getAccessMock.mockResolvedValue({ ...emptyAccessSnapshot(), permissionCodes: ['system:menu:list'] })
+		await router.push('/system/menus')
+		expect(router.currentRoute.value.path).toBe('/system/menus')
+	})
 
   it('restores a cold dynamic URL through auth, access, route registration, and the original URL', async () => {
     const order: string[] = []
@@ -277,26 +288,29 @@ function businessAccessSnapshot(): AccessSnapshot {
       code: 'system',
       menuType: 'directory',
       path: null,
-      viewKey: null,
-		titleKey: 'navigation.system',
+		componentPath: null,
+		i18nKey: 'navigation.system',
       icon: null,
+		isHidden: YesNo.No,
       children: [
         {
           code: 'system:team:view',
           menuType: 'page',
           path: '/system/teams',
-          viewKey: 'systemTeams',
-			titleKey: 'navigation.systemMenus',
+			componentPath: 'system/users',
+			i18nKey: 'navigation.systemMenus',
           icon: null,
+			isHidden: YesNo.Yes,
           children: [],
         },
         {
           code: 'system:user:view',
           menuType: 'page',
           path: '/system/users',
-          viewKey: 'systemUsers',
-			titleKey: 'navigation.systemMenus',
+			componentPath: 'system/users',
+			i18nKey: 'navigation.systemMenus',
           icon: null,
+			isHidden: YesNo.No,
           children: [],
         },
       ],

@@ -1,21 +1,29 @@
+import type { Component } from 'vue'
 import type { Router } from 'vue-router'
 
-import { routeViews, type RouteViewLoader, type RouteViewMap } from '../access/route-views'
 import type { AccessMenuNode } from '../api/access.contract'
-import type { AppMessageKey } from '../i18n'
 import { ProtocolError } from '../types/http'
+
+export interface PageModule {
+  default: Component
+}
+
+export type PageModuleLoader = () => Promise<PageModule>
+export type PageModuleMap = Readonly<Record<string, PageModuleLoader>>
 
 interface PageRoute {
   path: string
   name: string
-  component: RouteViewLoader
-  titleKey: AppMessageKey
+  component: PageModuleLoader
+  i18nKey: string
 }
+
+const pageModules: PageModuleMap = import.meta.glob<PageModule>('../views/**/index.vue')
 
 export function registerAccessRoutes(
   router: Router,
   menuTree: readonly AccessMenuNode[],
-  views: RouteViewMap = routeViews,
+  views: PageModuleMap = pageModules,
 ): () => void {
   if (!router.hasRoute('admin-layout')) {
     throw new ProtocolError('admin-layout route is required before access routes')
@@ -24,9 +32,11 @@ export function registerAccessRoutes(
   const pages: PageRoute[] = []
   const paths = new Set<string>()
   const names = new Set<string>()
-  const existingPaths = new Set(router.getRoutes().map((route) => route.path))
+  const existingRoutes = router.getRoutes()
+  const existingPaths = new Set(existingRoutes.map((route) => route.path))
+  const existingNames = new Set(existingRoutes.flatMap((route) => route.name === undefined ? [] : [String(route.name)]))
 
-  collectPages(menuTree, views, pages, paths, names, existingPaths)
+  collectPages(menuTree, views, pages, paths, names, existingPaths, existingNames)
 
   const removers: Array<() => void> = []
   try {
@@ -35,7 +45,7 @@ export function registerAccessRoutes(
         path: page.path,
         name: page.name,
         component: page.component,
-        meta: { requiresAuth: true, titleKey: page.titleKey },
+        meta: { requiresAuth: true, i18nKey: page.i18nKey },
       })
       removers.push(remove)
     }
@@ -54,34 +64,40 @@ export function registerAccessRoutes(
 
 function collectPages(
   nodes: readonly AccessMenuNode[],
-  views: RouteViewMap,
+  views: PageModuleMap,
   pages: PageRoute[],
   paths: Set<string>,
   names: Set<string>,
   existingPaths: Set<string>,
+  existingNames: Set<string>,
 ): void {
   for (const node of nodes) {
     if (node.menuType === 'directory') {
-      collectPages(node.children, views, pages, paths, names, existingPaths)
+      collectPages(node.children, views, pages, paths, names, existingPaths, existingNames)
       continue
     }
-    if (node.path === null || !node.path.startsWith('/') || node.path === '/') {
-      throw new ProtocolError(`access page ${node.code} must use an absolute non-root path`)
+    if (node.path === null || node.componentPath === null) {
+      throw new ProtocolError(`access page ${node.code} is incomplete`)
     }
-    if (node.viewKey === null || !Object.prototype.hasOwnProperty.call(views, node.viewKey)) {
-      throw new ProtocolError(`access page ${node.code} has an unknown viewKey`)
+    const key = moduleKey(node.componentPath)
+    if (!Object.prototype.hasOwnProperty.call(views, key)) {
+      throw new ProtocolError(`access page ${node.code} has an unknown componentPath`)
     }
     const name = `access:${node.code}`
     if (paths.has(node.path) || existingPaths.has(node.path)) {
       throw new ProtocolError(`access page path ${node.path} is duplicated`)
     }
-    if (names.has(name)) {
+    if (names.has(name) || existingNames.has(name)) {
       throw new ProtocolError(`access route name ${name} is duplicated`)
     }
     paths.add(node.path)
     names.add(name)
-    pages.push({ path: node.path, name, component: views[node.viewKey], titleKey: node.titleKey })
+    pages.push({ path: node.path, name, component: views[key], i18nKey: node.i18nKey })
   }
+}
+
+function moduleKey(componentPath: string): string {
+  return `../views/${componentPath}/index.vue`
 }
 
 function removeRoutes(removers: Array<() => void>): void {

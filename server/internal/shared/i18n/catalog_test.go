@@ -24,7 +24,6 @@ func TestCatalogsTranslateMenuErrorsWithExactParameters(t *testing.T) {
 		{key: i18n.KeyMenuPathConflict, params: map[string]string{"path": "/reports"}},
 		{key: i18n.KeyMenuInvalidParent},
 		{key: i18n.KeyMenuCycleDetected},
-		{key: i18n.KeyMenuBuiltinProtected, params: map[string]string{"code": "system"}},
 		{key: i18n.KeyMenuParentDisabled, params: map[string]string{"code": "reports"}},
 		{key: i18n.KeyMenuStructureConflict, params: map[string]string{"code": "reports"}},
 		{key: i18n.KeyMenuInvalidFields},

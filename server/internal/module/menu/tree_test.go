@@ -9,14 +9,14 @@ import (
 
 func TestBuildMenuIndexBuildsStableTreeWithNonNilLeafChildren(t *testing.T) {
 	now := time.Now().UTC()
-	pagePath := "/system/menus"
-	viewKey := "system-menus"
+	pagePath := "/system/roles"
+	componentPath := "system/roles"
 	menus := []Menu{
-		{ID: 4, ParentID: int64Pointer(2), MenuType: TypeAction, Code: PermissionCreate, I18nKey: "permission.menuCreate", SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{ID: 3, ParentID: int64Pointer(2), MenuType: TypeAction, Code: PermissionDelete, I18nKey: "permission.menuDelete", SortOrder: 20, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{ID: 2, ParentID: int64Pointer(1), MenuType: TypePage, Code: PermissionList, I18nKey: "navigation.systemMenus", Path: &pagePath, ViewKey: &viewKey, SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 4, ParentID: int64Pointer(2), MenuType: TypeAction, Code: PermissionRoleUpdate, I18nKey: "permission.roleUpdate", SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 3, ParentID: int64Pointer(2), MenuType: TypeAction, Code: PermissionRoleDelete, I18nKey: "permission.roleDelete", SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 2, ParentID: int64Pointer(1), MenuType: TypePage, Code: PermissionRoleList, I18nKey: "navigation.systemRoles", Path: &pagePath, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 		{ID: 5, MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", SortOrder: 200, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{ID: 1, MenuType: TypeDirectory, Code: BuiltinSystemCode, I18nKey: "navigation.system", SortOrder: 100, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 1, MenuType: TypeDirectory, Code: "system", I18nKey: "navigation.system", SortOrder: 100, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 	}
 
 	index, err := buildMenuIndex(menus)
@@ -42,8 +42,8 @@ func TestBuildMenuIndexBuildsStableTreeWithNonNilLeafChildren(t *testing.T) {
 	if tree[0].Children[0].Children[0].Children == nil || tree[1].Children == nil {
 		t.Fatal("leaf children must be a non-nil empty slice")
 	}
-	if !tree[0].IsBuiltin || tree[1].IsBuiltin {
-		t.Fatal("computed builtin flags are incorrect")
+	if tree[0].Children[0].ComponentPath == nil || *tree[0].Children[0].ComponentPath != componentPath {
+		t.Fatal("component path was not preserved")
 	}
 
 	descendants, err := index.descendants(1)
@@ -59,21 +59,21 @@ func TestBuildMenuIndexBuildsStableTreeWithNonNilLeafChildren(t *testing.T) {
 func TestBuildMenuIndexRejectsInvalidStoredTrees(t *testing.T) {
 	now := time.Now().UTC()
 	validRoot := Menu{ID: 1, MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
-	pagePath := "/system/menus"
-	viewKey := "system-menus"
-	validPage := Menu{ID: 2, ParentID: int64Pointer(1), MenuType: TypePage, Code: "reports:list", I18nKey: "navigation.systemMenus", Path: &pagePath, ViewKey: &viewKey, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	pagePath := "/reports"
+	componentPath := "reports"
+	validPage := Menu{ID: 2, ParentID: int64Pointer(1), MenuType: TypePage, Code: "reports:list", I18nKey: "reports.list", Path: &pagePath, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	tests := []struct {
 		name  string
 		menus []Menu
 	}{
 		{name: "duplicate id", menus: []Menu{validRoot, validRoot}},
 		{name: "orphan", menus: []Menu{{ID: 2, ParentID: int64Pointer(99), MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "root page", menus: []Menu{{ID: 1, MenuType: TypePage, Code: "reports:list", I18nKey: "navigation.systemMenus", Path: &pagePath, ViewKey: &viewKey, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "action under directory", menus: []Menu{validRoot, {ID: 2, ParentID: int64Pointer(1), MenuType: TypeAction, Code: "reports:create", I18nKey: "permission.menuCreate", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "action has child", menus: []Menu{validRoot, validPage, {ID: 3, ParentID: int64Pointer(2), MenuType: TypeAction, Code: "reports:create", I18nKey: "permission.menuCreate", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}, {ID: 4, ParentID: int64Pointer(3), MenuType: TypeAction, Code: "reports:update", I18nKey: "permission.menuUpdate", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "root page", menus: []Menu{{ID: 1, MenuType: TypePage, Code: "reports:list", I18nKey: "reports.list", Path: &pagePath, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "action under directory", menus: []Menu{validRoot, {ID: 2, ParentID: int64Pointer(1), MenuType: TypeAction, Code: "reports:create", I18nKey: "permission.menuCreate", IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "action has child", menus: []Menu{validRoot, validPage, {ID: 3, ParentID: int64Pointer(2), MenuType: TypeAction, Code: "reports:create", I18nKey: "permission.menuCreate", IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}, {ID: 4, ParentID: int64Pointer(3), MenuType: TypeAction, Code: "reports:update", I18nKey: "permission.menuUpdate", IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
 		{name: "cycle", menus: []Menu{{ID: 1, ParentID: int64Pointer(2), MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}, {ID: 2, ParentID: int64Pointer(1), MenuType: TypeDirectory, Code: "settings", I18nKey: "navigation.system", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "unknown title", menus: []Menu{{ID: 1, MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.unknown", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "invalid action icon", menus: []Menu{validRoot, validPage, {ID: 3, ParentID: int64Pointer(2), MenuType: TypeAction, Code: "reports:create", I18nKey: "permission.menuCreate", Icon: stringPointer("Key"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "malformed title", menus: []Menu{{ID: 1, MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation_unknown", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "invalid action icon", menus: []Menu{validRoot, validPage, {ID: 3, ParentID: int64Pointer(2), MenuType: TypeAction, Code: "reports:create", I18nKey: "permission.menuCreate", Icon: stringPointer("Key"), IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
 	}
 
 	for _, test := range tests {

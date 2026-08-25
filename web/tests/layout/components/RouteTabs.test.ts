@@ -16,19 +16,19 @@ const routes: RouteRecordRaw[] = [
     path: '/dashboard',
     name: 'dashboard',
     component: views,
-    meta: { requiresAuth: true, titleKey: 'navigation.dashboard', affix: true },
+		meta: { requiresAuth: true, i18nKey: 'navigation.dashboard', affix: true },
   },
   {
     path: '/users',
     name: 'users',
     component: views,
-    meta: { requiresAuth: true, titleKey: 'navigation.main' },
+		meta: { requiresAuth: true, i18nKey: 'navigation.main' },
   },
   {
     path: '/roles',
     name: 'roles',
     component: views,
-    meta: { requiresAuth: true, titleKey: 'layout.routeTabs.contextMenu' },
+		meta: { requiresAuth: true, i18nKey: 'reports.orders.list' },
   },
 ]
 
@@ -53,7 +53,7 @@ describe('RouteTabs', () => {
     expect(wrapper.findAll('.route-tabs__menu-trigger')).toHaveLength(0)
   })
 
-  it('adds each visited leaf once and keeps Dashboard fixed', async () => {
+	it('adds each visited leaf once and keeps Dashboard fixed', async () => {
     const { wrapper, router } = await mountTabs('/dashboard')
     await router.push('/users')
     await flushPromises()
@@ -63,7 +63,14 @@ describe('RouteTabs', () => {
     expect(wrapper.findAll('[data-testid="route-tab"]')).toHaveLength(2)
     expect(wrapper.get('[data-testid="route-tab"][data-path="/dashboard"]').attributes('data-affix')).toBe('true')
     expect(wrapper.find('[data-testid="route-tab-dashboard-close"]').exists()).toBe(false)
-  })
+	})
+
+	it('renders an unknown dynamic i18n key instead of inventing a title', async () => {
+		const { wrapper, router } = await mountTabs('/dashboard')
+		await router.push('/roles')
+		await flushPromises()
+		expect(wrapper.get('[data-testid="route-tab"][data-path="/roles"]').text()).toContain('reports.orders.list')
+	})
 
   it('closes the active tab and selects the nearest remaining tab', async () => {
     const { wrapper, router } = await mountTabs('/dashboard')

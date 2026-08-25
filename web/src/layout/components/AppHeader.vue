@@ -48,8 +48,8 @@ function handleLocaleCommand(command: string | number | object): void {
       />
 
       <el-breadcrumb v-if="showBreadcrumb" class="app-header__breadcrumb" separator="/">
-        <el-breadcrumb-item v-for="breadcrumb in breadcrumbs" :key="`${breadcrumb.path ?? 'directory'}:${breadcrumb.titleKey}`" :to="breadcrumb.path ?? undefined">
-          {{ t(breadcrumb.titleKey) }}
+		<el-breadcrumb-item v-for="breadcrumb in breadcrumbs" :key="`${breadcrumb.path ?? 'directory'}:${breadcrumb.i18nKey}`" :to="breadcrumb.path ?? undefined">
+			{{ t(breadcrumb.i18nKey) }}
         </el-breadcrumb-item>
       </el-breadcrumb>
     </div>

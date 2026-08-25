@@ -6,6 +6,7 @@ import type { AccessSnapshot } from '@src/api/access.contract'
 import { setLocale } from '@src/i18n'
 import { ApiError, ProtocolError } from '@src/types/http'
 import { useAccessStore } from '@src/store/access'
+import { YesNo } from '@src/enums/yes-no'
 
 vi.mock('@src/api/access', () => ({ getAccess: vi.fn() }))
 
@@ -75,9 +76,10 @@ describe('access store', () => {
       code: 'old',
       menuType: 'directory',
       path: null,
-      viewKey: null,
-			titleKey: 'navigation.system',
+		componentPath: null,
+		i18nKey: 'navigation.system',
       icon: null,
+		isHidden: YesNo.No,
       children: [],
     })
     store.permissionCodes.push('old:permission')

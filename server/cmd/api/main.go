@@ -134,9 +134,6 @@ func run(logger *slog.Logger) error {
 	accessInvalidator := accessstate.NewInvalidator(accessStateStore)
 	menuRepository := menu.NewRepository(postgres.GORM)
 	menuService := menu.NewService(menuRepository, accessInvalidator)
-	if err := menuService.EnsureBuiltin(processContext); err != nil {
-		return fmt.Errorf("ensure builtin menus: %w", err)
-	}
 
 	roleRepository := role.NewRepository(postgres.GORM)
 	roleService := role.NewService(roleRepository, accessInvalidator)

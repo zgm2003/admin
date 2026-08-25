@@ -1,7 +1,6 @@
-import { isMenuIconKey, hasRouteViewKey } from '../access/protocol'
-import type { MenuIconKey } from '../access/menu-icons'
-import { isMenuTitleKey, type MenuTitleKey } from '../access/menu-title-keys'
+import { isYesNo, type YesNo } from '../enums/yes-no'
 import { ProtocolError } from '../types/http'
+import { isComponentPath, isMenuI18nKey, isMenuIcon, isMenuPath } from './menu-fields'
 
 export type MenuType = 'directory' | 'page'
 
@@ -9,9 +8,10 @@ export interface AccessMenuNode {
   code: string
   menuType: MenuType
   path: string | null
-  viewKey: string | null
-  titleKey: MenuTitleKey
-  icon: MenuIconKey | null
+	componentPath: string | null
+	i18nKey: string
+	icon: string | null
+	isHidden: YesNo
   children: AccessMenuNode[]
 }
 
@@ -40,7 +40,7 @@ export function parseAccessSnapshot(value: unknown): AccessSnapshot {
 }
 
 function parseMenuNode(value: unknown, label: string, state: ParseState): AccessMenuNode {
-  const record = closedRecord(value, ['children', 'code', 'icon', 'menuType', 'path', 'titleKey', 'viewKey'], label)
+	const record = closedRecord(value, ['children', 'code', 'componentPath', 'i18nKey', 'icon', 'isHidden', 'menuType', 'path'], label)
   const code = nonEmptyString(record.code, `${label} code`)
   if (state.codes.has(code)) {
     throw new ProtocolError(`${label} duplicates menu code ${code}`)
@@ -52,33 +52,40 @@ function parseMenuNode(value: unknown, label: string, state: ParseState): Access
   }
   const menuType = record.menuType
 
-	if (typeof record.titleKey !== 'string' || !isMenuTitleKey(record.titleKey)) {
-    throw new ProtocolError(`${label} titleKey is not registered`)
-  }
-  const titleKey = record.titleKey
+	if (typeof record.i18nKey !== 'string' || !isMenuI18nKey(record.i18nKey)) {
+		throw new ProtocolError(`${label} i18nKey has an invalid format`)
+	}
+	const i18nKey = record.i18nKey
 
-  if (record.icon !== null && (typeof record.icon !== 'string' || !isMenuIconKey(record.icon))) {
-    throw new ProtocolError(`${label} icon is not registered`)
-  }
-  const icon = record.icon
+	if (record.icon !== null && (typeof record.icon !== 'string' || !isMenuIcon(record.icon))) {
+		throw new ProtocolError(`${label} icon has an invalid format`)
+	}
+	const icon = record.icon
+	if (!isYesNo(record.isHidden)) {
+		throw new ProtocolError(`${label} isHidden must be 0 or 1`)
+	}
+	const isHidden = record.isHidden
 
   if (!Array.isArray(record.children)) {
     throw new ProtocolError(`${label} children must be an array`)
   }
 
-  if (menuType === 'directory') {
-		if (record.path !== null || record.viewKey !== null) {
-			throw new ProtocolError(`${label} directory path and viewKey must be null`)
-    }
-    const children = record.children.map((child, index) => parseMenuNode(child, `${label}.children[${index}]`, state))
-		return { code, menuType, path: null, viewKey: null, titleKey, icon, children }
-  }
+	if (menuType === 'directory') {
+		if (record.path !== null || record.componentPath !== null) {
+			throw new ProtocolError(`${label} directory path and componentPath must be null`)
+		}
+		const children = record.children.map((child, index) => parseMenuNode(child, `${label}.children[${index}]`, state))
+		return { code, menuType, path: null, componentPath: null, i18nKey, icon, isHidden, children }
+	}
 
-  const path = nonEmptyString(record.path, `${label} page path`)
-  const viewKey = nonEmptyString(record.viewKey, `${label} page viewKey`)
-  if (!hasRouteViewKey(viewKey)) {
-    throw new ProtocolError(`${label} page viewKey is not registered`)
-  }
+	if (typeof record.path !== 'string' || !isMenuPath(record.path)) {
+		throw new ProtocolError(`${label} page path has an invalid format`)
+	}
+	const path = record.path
+	if (typeof record.componentPath !== 'string' || !isComponentPath(record.componentPath)) {
+		throw new ProtocolError(`${label} page componentPath has an invalid format`)
+	}
+	const componentPath = record.componentPath
   if (record.children.length !== 0) {
     throw new ProtocolError(`${label} page children must be empty`)
   }
@@ -86,7 +93,7 @@ function parseMenuNode(value: unknown, label: string, state: ParseState): Access
     throw new ProtocolError(`${label} duplicates page path ${path}`)
   }
   state.pagePaths.add(path)
-  return { code, menuType, path, viewKey, titleKey, icon, children: [] }
+	return { code, menuType, path, componentPath, i18nKey, icon, isHidden, children: [] }
 }
 
 function parseSortedUniqueStrings(value: unknown, label: string): string[] {

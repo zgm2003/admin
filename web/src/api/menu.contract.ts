@@ -1,7 +1,10 @@
-import type { MenuIconKey } from '../access/menu-icons'
-import { type MenuTitleKey, isMenuTitleKey } from '../access/menu-title-keys'
-import { hasRouteViewKey, isMenuIconKey } from '../access/protocol'
-import type { RouteViewKey } from '../access/route-views'
+import {
+  isComponentPath,
+  isMenuI18nKey,
+  isMenuIcon,
+  isMenuPath,
+  menuCodePattern,
+} from './menu-fields'
 import { isYesNo, type YesNo } from '../enums/yes-no'
 import { ProtocolError } from '../types/http'
 
@@ -12,13 +15,13 @@ export interface ManagedMenuNode {
   parentId: number | null
   menuType: ManagedMenuType
   code: string
-  i18nKey: MenuTitleKey
+	i18nKey: string
   path: string | null
-  viewKey: RouteViewKey | null
-  icon: MenuIconKey | null
+	componentPath: string | null
+	icon: string | null
   sortOrder: number
   isEnabled: YesNo
-  isBuiltin: boolean
+	isHidden: YesNo
   createdAt: string
   updatedAt: string
   children: ManagedMenuNode[]
@@ -28,22 +31,24 @@ export interface CreateMenuInput {
   parentId: number | null
   menuType: ManagedMenuType
   code: string
-  i18nKey: MenuTitleKey
+	i18nKey: string
   path: string | null
-  viewKey: RouteViewKey | null
-  icon: MenuIconKey | null
+	componentPath: string | null
+	icon: string | null
   sortOrder: number
   isEnabled: YesNo
+	isHidden: YesNo
 }
 
 export interface UpdateMenuInput {
   parentId: number | null
   menuType: ManagedMenuType
-  i18nKey: MenuTitleKey
+	i18nKey: string
   path: string | null
-  viewKey: RouteViewKey | null
-  icon: MenuIconKey | null
+	componentPath: string | null
+	icon: string | null
   sortOrder: number
+	isHidden: YesNo
 }
 
 export interface MenuIDResult {
@@ -64,18 +69,18 @@ interface ParseState {
 const menuNodeKeys = [
   'children',
   'code',
+	'componentPath',
   'createdAt',
   'icon',
   'id',
   'i18nKey',
-  'isBuiltin',
   'isEnabled',
+	'isHidden',
   'menuType',
   'parentId',
   'path',
   'sortOrder',
   'updatedAt',
-  'viewKey',
 ]
 
 const rfc3339Pattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
@@ -126,26 +131,29 @@ function parseMenuNode(
   if (!isAllowedChild(parentType, menuType)) {
     throw new ProtocolError(`${label} has an invalid root or parent type`)
   }
-  const code = nonEmptyTrimmedString(record.code, `${label} code`)
+	const code = nonEmptyTrimmedString(record.code, `${label} code`)
+	if (code.length > 128 || !menuCodePattern.test(code)) {
+		throw new ProtocolError(`${label} code has an invalid format`)
+	}
   if (state.codes.has(code)) {
     throw new ProtocolError(`${label} duplicates menu code ${code}`)
   }
   state.codes.add(code)
 
-  if (typeof record.i18nKey !== 'string' || !isMenuTitleKey(record.i18nKey)) {
-    throw new ProtocolError(`${label} i18nKey is not a registered menu title`)
+	if (typeof record.i18nKey !== 'string' || !isMenuI18nKey(record.i18nKey)) {
+		throw new ProtocolError(`${label} i18nKey has an invalid format`)
   }
   const i18nKey = record.i18nKey
-  if (record.icon !== null && (typeof record.icon !== 'string' || !isMenuIconKey(record.icon))) {
-    throw new ProtocolError(`${label} icon is not registered`)
+	if (record.icon !== null && (typeof record.icon !== 'string' || !isMenuIcon(record.icon))) {
+		throw new ProtocolError(`${label} icon has an invalid format`)
   }
   const icon = record.icon
   const sortOrder = nonNegativeInteger(record.sortOrder, `${label} sortOrder`)
-  if (!isYesNo(record.isEnabled)) {
-    throw new ProtocolError(`${label} isEnabled must be 0 or 1`)
-  }
-  if (typeof record.isBuiltin !== 'boolean') {
-    throw new ProtocolError(`${label} isBuiltin must be boolean`)
+	if (!isYesNo(record.isEnabled)) {
+		throw new ProtocolError(`${label} isEnabled must be 0 or 1`)
+	}
+	if (!isYesNo(record.isHidden)) {
+		throw new ProtocolError(`${label} isHidden must be 0 or 1`)
   }
   const createdAt = timestamp(record.createdAt, `${label} createdAt`)
   const updatedAt = timestamp(record.updatedAt, `${label} updatedAt`)
@@ -153,24 +161,27 @@ function parseMenuNode(
     throw new ProtocolError(`${label} children must be an array`)
   }
 
-  let path: string | null = null
-  let viewKey: RouteViewKey | null = null
-  if (menuType === 'directory') {
-    if (record.path !== null || record.viewKey !== null) {
-      throw new ProtocolError(`${label} directory path and viewKey must be null`)
-    }
-  } else if (menuType === 'page') {
-    path = pagePath(record.path, `${label} path`)
-    if (state.pagePaths.has(path)) {
+	let path: string | null = null
+	let componentPath: string | null = null
+	if (menuType === 'directory') {
+		if (record.path !== null || record.componentPath !== null) {
+			throw new ProtocolError(`${label} directory path and componentPath must be null`)
+		}
+	} else if (menuType === 'page') {
+		if (typeof record.path !== 'string' || !isMenuPath(record.path)) {
+			throw new ProtocolError(`${label} path has an invalid format`)
+		}
+		path = record.path
+		if (state.pagePaths.has(path)) {
       throw new ProtocolError(`${label} duplicates page path ${path}`)
     }
     state.pagePaths.add(path)
-    if (typeof record.viewKey !== 'string' || !hasRouteViewKey(record.viewKey)) {
-      throw new ProtocolError(`${label} viewKey is not registered`)
-    }
-    viewKey = record.viewKey
-  } else if (record.path !== null || record.viewKey !== null || record.icon !== null) {
-    throw new ProtocolError(`${label} action path, viewKey, and icon must be null`)
+		if (typeof record.componentPath !== 'string' || !isComponentPath(record.componentPath)) {
+			throw new ProtocolError(`${label} componentPath has an invalid format`)
+		}
+		componentPath = record.componentPath
+	} else if (record.path !== null || record.componentPath !== null || record.icon !== null || record.isHidden !== 1) {
+		throw new ProtocolError(`${label} action path, componentPath, and icon must be null and isHidden must be 1`)
   }
 
   const children = record.children.map((child, index) => parseMenuNode(
@@ -192,11 +203,11 @@ function parseMenuNode(
     code,
     i18nKey,
     path,
-    viewKey,
+		componentPath,
     icon,
     sortOrder,
-    isEnabled: record.isEnabled,
-    isBuiltin: record.isBuiltin,
+		isEnabled: record.isEnabled,
+		isHidden: record.isHidden,
     createdAt,
     updatedAt,
     children,
@@ -258,14 +269,6 @@ function nonEmptyTrimmedString(value: unknown, label: string): string {
     throw new ProtocolError(`${label} must be a non-empty trimmed string`)
   }
   return value
-}
-
-function pagePath(value: unknown, label: string): string {
-  const path = nonEmptyTrimmedString(value, label)
-  if (!path.startsWith('/') || path === '/' || path.includes('?') || path.includes('#')) {
-    throw new ProtocolError(`${label} must be an absolute non-root path without query or hash`)
-  }
-  return path
 }
 
 function timestamp(value: unknown, label: string): string {

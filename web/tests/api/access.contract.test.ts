@@ -1,13 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { ProtocolError } from '@src/types/http'
 import { parseAccessSnapshot } from '@src/api/access.contract'
-
-vi.mock('@src/access/route-views', () => ({
-  routeViews: {
-		'system-menus': async () => ({ default: {} }),
-  },
-}))
 
 describe('access contract', () => {
   it('parses an exact directory-only snapshot', () => {
@@ -41,24 +35,25 @@ describe('access contract', () => {
     expect(() => parseAccessSnapshot({ roleCodes: [], menuTree: [], permissionCodes })).toThrow(ProtocolError)
   })
 
-  it.each([
-		{ code: 'system', menuType: 'directory', path: null, viewKey: null, titleKey: 'navigation.system', icon: null },
-		{ code: 'system', menuType: 'directory', path: null, viewKey: null, titleKey: 'navigation.system', icon: null, children: [], extra: true },
-		{ code: 'system', menuType: 'unknown', path: null, viewKey: null, titleKey: 'navigation.system', icon: null, children: [] },
-		{ code: 'system:menu:create', menuType: 'action', path: null, viewKey: null, titleKey: 'permission.menuCreate', icon: null, children: [] },
-		{ code: 'system:menu:list', menuType: 'page', path: null, viewKey: 'system-menus', titleKey: 'navigation.systemMenus', icon: null, children: [] },
-		{ code: 'system:menu:list', menuType: 'page', path: '/system/menus', viewKey: null, titleKey: 'navigation.systemMenus', icon: null, children: [] },
-		{ code: 'system', menuType: 'directory', path: null, viewKey: 'system-menus', titleKey: 'navigation.system', icon: null, children: [] },
-		{ code: 'system', menuType: 'directory', path: '/system', viewKey: null, titleKey: 'navigation.system', icon: null, children: [] },
-		{ code: 'system', menuType: 'directory', path: null, viewKey: null, titleKey: 'navigation.dashboard', icon: null, children: [] },
-		{ code: 'system', menuType: 'directory', path: null, viewKey: null, titleKey: 'navigation.system', icon: 'Unknown', children: [] },
-		{ code: 'system:menu:list', menuType: 'page', path: '/system/menus', viewKey: 'unknownView', titleKey: 'navigation.systemMenus', icon: null, children: [] },
-  ])('rejects an invalid menu node: %j', (node: unknown) => {
+	it.each([
+		{ code: 'system', menuType: 'directory', path: null, componentPath: null, i18nKey: 'navigation.system', icon: null, isHidden: 0 },
+		{ code: 'system', menuType: 'directory', path: null, componentPath: null, i18nKey: 'navigation.system', icon: null, isHidden: 0, children: [], extra: true },
+		{ code: 'system', menuType: 'unknown', path: null, componentPath: null, i18nKey: 'navigation.system', icon: null, isHidden: 0, children: [] },
+		{ code: 'system:menu:create', menuType: 'action', path: null, componentPath: null, i18nKey: 'permission.menuCreate', icon: null, isHidden: 1, children: [] },
+		{ code: 'system:user:list', menuType: 'page', path: null, componentPath: 'system/users', i18nKey: 'navigation.systemUsers', icon: null, isHidden: 0, children: [] },
+		{ code: 'system:user:list', menuType: 'page', path: '/system/users', componentPath: null, i18nKey: 'navigation.systemUsers', icon: null, isHidden: 0, children: [] },
+		{ code: 'system', menuType: 'directory', path: null, componentPath: 'system', i18nKey: 'navigation.system', icon: null, isHidden: 0, children: [] },
+		{ code: 'system', menuType: 'directory', path: '/system', componentPath: null, i18nKey: 'navigation.system', icon: null, isHidden: 0, children: [] },
+		{ code: 'system', menuType: 'directory', path: null, componentPath: null, i18nKey: 'navigation_system', icon: null, isHidden: 0, children: [] },
+		{ code: 'system', menuType: 'directory', path: null, componentPath: null, i18nKey: 'navigation.system', icon: ' Unknown ', isHidden: 0, children: [] },
+		{ code: 'system:user:list', menuType: 'page', path: '/system/users', componentPath: '/system/users', i18nKey: 'navigation.systemUsers', icon: null, isHidden: 0, children: [] },
+		{ code: 'system', menuType: 'directory', path: null, componentPath: null, i18nKey: 'navigation.system', icon: null, isHidden: 2, children: [] },
+	])('rejects an invalid menu node: %j', (node: unknown) => {
     expect(() => parseAccessSnapshot({ roleCodes: [], menuTree: [node], permissionCodes: [] })).toThrow(ProtocolError)
   })
 
   it('rejects duplicate menu codes across the tree', () => {
-		const child = validPageNode('system:menu:list', '/system/menus')
+		const child = validPageNode('system:user:list', '/system/users')
     const value: unknown = {
       roleCodes: [],
       menuTree: [validDirectoryNode('system', [child]), validDirectoryNode('system', [])],
@@ -68,8 +63,8 @@ describe('access contract', () => {
   })
 
   it('rejects duplicate page paths and page children', () => {
-		const first = validPageNode('system:menu:list', '/system/menus')
-		const second = validPageNode('system:other:list', '/system/menus')
+		const first = validPageNode('system:user:list', '/system/users')
+		const second = validPageNode('system:other:list', '/system/users')
     expect(() => parseAccessSnapshot({
       roleCodes: [],
       menuTree: [validDirectoryNode('system', [first, second])],
@@ -81,7 +76,24 @@ describe('access contract', () => {
       menuTree: [{ ...first, children: [validDirectoryNode('nested', [])] }],
       permissionCodes: [],
     })).toThrow(ProtocolError)
-  })
+	})
+
+	it('allows custom i18n keys, arbitrary valid icons, hidden pages, and shared component paths', () => {
+		const first = { ...validPageNode('reports:orders:list', '/reports/orders'), i18nKey: 'reports.orders.list', icon: 'mdi:shield', isHidden: 1 }
+		const second = { ...validPageNode('reports:archive:list', '/reports/archive'), componentPath: first.componentPath }
+		const snapshot = parseAccessSnapshot({
+			roleCodes: [],
+			menuTree: [validDirectoryNode('reports', [first, second])],
+			permissionCodes: [],
+		})
+		expect(snapshot.menuTree[0].children).toHaveLength(2)
+	})
+
+	it('rejects unexpected menu node fields', () => {
+		expect(() => parseAccessSnapshot({
+			roleCodes: [], menuTree: [{ ...validDirectoryNode('system', []), unexpected: true }], permissionCodes: [],
+		})).toThrow(ProtocolError)
+	})
 })
 
 function validDirectorySnapshot(): unknown {
@@ -96,9 +108,10 @@ interface MenuFixture {
   code: string
   menuType: string
   path: string | null
-  viewKey: string | null
-  titleKey: string
+	componentPath: string | null
+	i18nKey: string
   icon: string | null
+	isHidden: number
   children: unknown[]
 }
 
@@ -107,9 +120,10 @@ function validDirectoryNode(code: string, children: unknown[]): MenuFixture {
     code,
     menuType: 'directory',
     path: null,
-    viewKey: null,
-		titleKey: 'navigation.system',
+		componentPath: null,
+		i18nKey: 'navigation.system',
     icon: 'Folder',
+		isHidden: 0,
     children,
   }
 }
@@ -119,9 +133,10 @@ function validPageNode(code: string, path: string): MenuFixture {
     code,
     menuType: 'page',
     path,
-		viewKey: 'system-menus',
-		titleKey: 'navigation.systemMenus',
+		componentPath: 'system/users',
+		i18nKey: 'navigation.systemUsers',
     icon: 'User',
+		isHidden: 0,
     children: [],
   }
 }

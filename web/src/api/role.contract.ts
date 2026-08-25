@@ -1,4 +1,4 @@
-import { isMenuTitleKey, type MenuTitleKey } from '../access/menu-title-keys'
+import { isMenuI18nKey } from './menu-fields'
 import { isYesNo, type YesNo } from '../enums/yes-no'
 import { ProtocolError } from '../types/http'
 import type { PageRequest, PageResult } from '../types/pagination'
@@ -27,7 +27,7 @@ export interface RolePermissionTreeNode {
   parentId: number | null
   menuType: RolePermissionMenuType
   code: string
-  i18nKey: MenuTitleKey
+  i18nKey: string
   isEnabled: YesNo
   children: RolePermissionTreeNode[]
 }
@@ -234,7 +234,7 @@ export function parseRolePermissions(value: unknown): RolePermissionsResponse {
 
     if (
       typeof node.i18nKey !== 'string' ||
-      !isMenuTitleKey(node.i18nKey) ||
+      !isMenuI18nKey(node.i18nKey) ||
       !isYesNo(node.isEnabled) ||
       !Array.isArray(node.children)
     ) {

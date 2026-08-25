@@ -31,25 +31,25 @@ describe('menu management contract', () => {
     { field: 'menuType', value: 'unknown' },
     { field: 'code', value: '' },
     { field: 'code', value: ' reports' },
-    { field: 'i18nKey', value: 'navigation.dashboard' },
-    { field: 'icon', value: 'Unknown' },
+		{ field: 'i18nKey', value: 'navigation_system' },
+		{ field: 'icon', value: ' Unknown ' },
     { field: 'sortOrder', value: -1 },
     { field: 'sortOrder', value: 1.5 },
     { field: 'isEnabled', value: 2 },
-    { field: 'isBuiltin', value: 1 },
+		{ field: 'isHidden', value: 2 },
     { field: 'createdAt', value: 'not-a-time' },
     { field: 'updatedAt', value: '' },
   ])('rejects invalid scalar $field=$value', ({ field, value }) => {
     expect(() => parseManagedMenus([{ ...directoryNode(), [field]: value }])).toThrow(ProtocolError)
   })
 
-  it('rejects illegal nullability and node render shapes', () => {
-    const root = directoryNode()
-    expect(() => parseManagedMenus([{ ...root, path: '/system' }])).toThrow(ProtocolError)
-    expect(() => parseManagedMenus([{ ...root, viewKey: 'system-menus' }])).toThrow(ProtocolError)
-    expect(() => parseManagedMenus([{ ...pageNode(), parentId: null }])).toThrow(ProtocolError)
-    expect(() => parseManagedMenus([{ ...pageNode(), path: null }])).toThrow(ProtocolError)
-    expect(() => parseManagedMenus([{ ...pageNode(), viewKey: 'unknown' }])).toThrow(ProtocolError)
+	it('rejects illegal nullability and node render shapes', () => {
+		const root = directoryNode()
+		expect(() => parseManagedMenus([{ ...root, path: '/system' }])).toThrow(ProtocolError)
+		expect(() => parseManagedMenus([{ ...root, componentPath: 'system' }])).toThrow(ProtocolError)
+		expect(() => parseManagedMenus([{ ...pageNode(), parentId: null }])).toThrow(ProtocolError)
+		expect(() => parseManagedMenus([{ ...pageNode(), path: null }])).toThrow(ProtocolError)
+		expect(() => parseManagedMenus([{ ...pageNode(), componentPath: '/system/users' }])).toThrow(ProtocolError)
 
     const tree = validTree()
     const directory = tree[0]
@@ -66,13 +66,13 @@ describe('menu management contract', () => {
     const action = page.children[0]
 
     expect(() => parseManagedMenus([{ ...root, parentId: 99 }])).toThrow(ProtocolError)
-    expect(() => parseManagedMenus([{ ...root, menuType: 'page', path: '/system', viewKey: 'system-menus' }])).toThrow(ProtocolError)
+		expect(() => parseManagedMenus([{ ...root, menuType: 'page', path: '/system', componentPath: 'system' }])).toThrow(ProtocolError)
     expect(() => parseManagedMenus([{ ...root, children: [{ ...page, parentId: 99 }] }])).toThrow(ProtocolError)
     expect(() => parseManagedMenus([{ ...root, children: [{ ...action, parentId: root.id }] }])).toThrow(ProtocolError)
     expect(() => parseManagedMenus([{ ...root, children: [{ ...page, children: [{ ...action, children: [action] }] }] }])).toThrow(ProtocolError)
   })
 
-  it('rejects duplicate IDs, codes, and active page paths across the tree', () => {
+	it('rejects duplicate IDs, codes, and active page paths across the tree', () => {
     const first = directoryNode()
     const second = { ...directoryNode(), id: 10, code: 'reports' }
     expect(() => parseManagedMenus([first, { ...second, id: first.id }])).toThrow(ProtocolError)
@@ -81,7 +81,18 @@ describe('menu management contract', () => {
     const tree = validTree()
     const duplicatePathPage = { ...pageNode(), id: 20, code: 'reports:list', parentId: second.id }
     expect(() => parseManagedMenus([tree[0], { ...second, children: [duplicatePathPage] }])).toThrow(ProtocolError)
-  })
+	})
+
+	it('allows pages to share a component path', () => {
+		const firstRoot = { ...directoryNode(), id: 1, code: 'system', children: [pageNode()] }
+		const secondPage = { ...pageNode(), id: 20, parentId: 10, code: 'reports:list', path: '/reports' }
+		const secondRoot = { ...directoryNode(), id: 10, code: 'reports', children: [secondPage] }
+		expect(parseManagedMenus([secondRoot, firstRoot])).toHaveLength(2)
+	})
+
+	it('rejects unexpected menu protocol fields', () => {
+		expect(() => parseManagedMenus([{ ...directoryNode(), unexpected: null }])).toThrow(ProtocolError)
+	})
 
   it('rejects siblings not sorted by sortOrder, code, and id', () => {
     const first = { ...directoryNode(), id: 1, code: 'zeta', sortOrder: 20 }
@@ -114,11 +125,11 @@ interface MenuFixture {
   code: string
   i18nKey: string
   path: string | null
-  viewKey: string | null
+	componentPath: string | null
   icon: string | null
   sortOrder: number
   isEnabled: number
-  isBuiltin: boolean
+	isHidden: number
   createdAt: string
   updatedAt: string
   children: MenuFixture[]
@@ -132,11 +143,11 @@ function directoryNode(): MenuFixture {
     code: 'system',
     i18nKey: 'navigation.system',
     path: null,
-    viewKey: null,
+		componentPath: null,
     icon: 'Setting',
     sortOrder: 100,
     isEnabled: 1,
-    isBuiltin: true,
+		isHidden: 0,
     createdAt: timestamp,
     updatedAt: timestamp,
     children: [],
@@ -150,12 +161,12 @@ function pageNode(): MenuFixture {
     menuType: 'page',
     code: 'system:menu:list',
     i18nKey: 'navigation.systemMenus',
-    path: '/system/menus',
-    viewKey: 'system-menus',
+		path: '/system/users',
+		componentPath: 'system/users',
     icon: 'Menu',
     sortOrder: 10,
     isEnabled: 1,
-    isBuiltin: true,
+		isHidden: 0,
     createdAt: timestamp,
     updatedAt: timestamp,
     children: [],
@@ -170,11 +181,11 @@ function validTree(): MenuFixture[] {
     code: 'system:menu:create',
     i18nKey: 'permission.menuCreate',
     path: null,
-    viewKey: null,
+		componentPath: null,
     icon: null,
     sortOrder: 10,
     isEnabled: 1,
-    isBuiltin: true,
+		isHidden: 1,
     createdAt: timestamp,
     updatedAt: timestamp,
     children: [],

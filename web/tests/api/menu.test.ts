@@ -37,10 +37,11 @@ describe('menu API', () => {
       code: 'reports',
       i18nKey: 'navigation.system',
       path: null,
-      viewKey: null,
+		componentPath: null,
       icon: 'Folder',
       sortOrder: 10,
       isEnabled: YesNo.Yes,
+		isHidden: YesNo.No,
     }
     requestMock.mockResolvedValue({ id: 7 })
     await expect(createMenu(input)).resolves.toEqual({ id: 7 })
@@ -52,10 +53,11 @@ describe('menu API', () => {
       parentId: 1,
       menuType: 'page',
       i18nKey: 'navigation.systemMenus',
-      path: '/system/menus',
-      viewKey: 'system-menus',
+		path: '/system/users',
+		componentPath: 'system/users',
       icon: 'Menu',
       sortOrder: 10,
+		isHidden: YesNo.No,
     }
     requestMock.mockResolvedValue({ id: 7 })
     await expect(updateMenu(7, input)).resolves.toEqual({ id: 7 })

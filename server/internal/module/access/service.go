@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"admin/server/internal/module/accessstate"
 	"admin/server/internal/module/auth"
+	"admin/server/internal/module/menu"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
@@ -23,14 +26,24 @@ type sourceStore interface {
 }
 
 type MenuNode struct {
-	Code     string     `json:"code"`
-	MenuType MenuType   `json:"menuType"`
-	Path     *string    `json:"path"`
-	ViewKey  *string    `json:"viewKey"`
-	TitleKey string     `json:"titleKey"`
-	Icon     *string    `json:"icon"`
-	Children []MenuNode `json:"children"`
+	Code          string     `json:"code"`
+	MenuType      MenuType   `json:"menuType"`
+	Path          *string    `json:"path"`
+	ComponentPath *string    `json:"componentPath"`
+	I18nKey       string     `json:"i18nKey"`
+	Icon          *string    `json:"icon"`
+	IsHidden      int16      `json:"isHidden"`
+	Children      []MenuNode `json:"children"`
 }
+
+var (
+	accessI18nKeyPattern       = regexp.MustCompile(`^[a-z][a-z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$`)
+	accessPathPattern          = regexp.MustCompile(`^/[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
+	accessComponentPathPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
+	staticAccessPagePaths      = map[string]struct{}{
+		"/login": {}, "/register": {}, "/dashboard": {}, "/system/menus": {},
+	}
+)
 
 type Snapshot struct {
 	RoleCodes       []string
@@ -226,6 +239,14 @@ func buildSnapshot(source Source) (Snapshot, error) {
 			permissionCodes = append(permissionCodes, item.Code)
 		}
 	}
+	if source.SuperAdmin {
+		permissionCodes = append(permissionCodes,
+			menu.PermissionList,
+			menu.PermissionCreate,
+			menu.PermissionUpdate,
+			menu.PermissionDelete,
+		)
+	}
 	permissionCodes, err = sortUniqueStrings(permissionCodes)
 	if err != nil {
 		return Snapshot{}, err
@@ -247,17 +268,23 @@ func validateSelectedMenus(selected map[int64]SourceMenu) error {
 			return fmt.Errorf("menus %d and %d share code %q", existingID, id, item.Code)
 		}
 		codes[item.Code] = id
-		if strings.TrimSpace(item.I18nKey) == "" {
-			return fmt.Errorf("menu %d has an empty i18n key", id)
+		if !validAccessI18nKey(item.I18nKey) {
+			return fmt.Errorf("menu %d has an invalid i18n key", id)
+		}
+		if !yesno.IsValid(item.IsHidden) {
+			return fmt.Errorf("menu %d has an invalid hidden state", id)
+		}
+		if item.Icon != nil && !validAccessIcon(*item.Icon) {
+			return fmt.Errorf("menu %d has an invalid icon", id)
 		}
 
 		switch item.MenuType {
 		case MenuDirectory:
-			if item.ViewKey != nil {
-				return fmt.Errorf("directory menu %d has a view key", id)
+			if item.Path != nil || item.ComponentPath != nil {
+				return fmt.Errorf("directory menu %d has render fields", id)
 			}
 		case MenuPage:
-			if item.Path == nil || strings.TrimSpace(*item.Path) == "" || item.ViewKey == nil || strings.TrimSpace(*item.ViewKey) == "" {
+			if item.Path == nil || item.ComponentPath == nil || !validAccessPath(*item.Path) || !validAccessComponentPath(*item.ComponentPath) {
 				return fmt.Errorf("page menu %d is incomplete", id)
 			}
 			if existingID, exists := paths[*item.Path]; exists {
@@ -265,12 +292,15 @@ func validateSelectedMenus(selected map[int64]SourceMenu) error {
 			}
 			paths[*item.Path] = id
 		case MenuAction:
-			if item.Path != nil || item.ViewKey != nil || item.ParentID == nil {
+			if item.Path != nil || item.ComponentPath != nil || item.Icon != nil || item.ParentID == nil || item.IsHidden != yesno.Yes {
 				return fmt.Errorf("action menu %d shape is invalid", id)
 			}
 		}
 
 		if item.ParentID == nil {
+			if item.MenuType != MenuDirectory {
+				return fmt.Errorf("root menu %d is not a directory", id)
+			}
 			continue
 		}
 		parent, exists := selected[*item.ParentID]
@@ -323,9 +353,26 @@ func buildMenuNode(item SourceMenu, childrenByParent map[int64][]SourceMenu) Men
 		children = append(children, buildMenuNode(child, childrenByParent))
 	}
 	return MenuNode{
-		Code: item.Code, MenuType: item.MenuType, Path: item.Path, ViewKey: item.ViewKey,
-		TitleKey: item.I18nKey, Icon: item.Icon, Children: children,
+		Code: item.Code, MenuType: item.MenuType, Path: item.Path, ComponentPath: item.ComponentPath,
+		I18nKey: item.I18nKey, Icon: item.Icon, IsHidden: int16(item.IsHidden), Children: children,
 	}
+}
+
+func validAccessI18nKey(value string) bool {
+	return value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 128 && accessI18nKeyPattern.MatchString(value)
+}
+
+func validAccessPath(value string) bool {
+	_, reserved := staticAccessPagePaths[value]
+	return !reserved && value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 255 && accessPathPattern.MatchString(value)
+}
+
+func validAccessComponentPath(value string) bool {
+	return value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 255 && accessComponentPathPattern.MatchString(value)
+}
+
+func validAccessIcon(value string) bool {
+	return value != "" && value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 128
 }
 
 func sortMenus(menus []SourceMenu) {

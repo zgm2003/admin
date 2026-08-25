@@ -6,12 +6,12 @@ import {
 } from 'vue-router'
 
 import Dashboard from '../views/dashboard/index.vue'
-import type { AppMessageKey } from '../i18n/messages/zh-CN'
 
 declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth: boolean
-    titleKey?: AppMessageKey
+		i18nKey?: string
+		requiredPermission?: string
     affix?: boolean
   }
 }
@@ -40,7 +40,17 @@ const routes: RouteRecordRaw[] = [
         path: 'dashboard',
         name: 'dashboard',
         component: Dashboard,
-        meta: { requiresAuth: true, titleKey: 'navigation.dashboard', affix: true },
+			meta: { requiresAuth: true, i18nKey: 'navigation.dashboard', affix: true },
+		},
+		{
+			path: 'system/menus',
+			name: 'system-menus',
+			component: () => import('../views/system/menus/index.vue'),
+			meta: {
+				requiresAuth: true,
+				i18nKey: 'navigation.systemMenus',
+				requiredPermission: 'system:menu:list',
+			},
       },
     ],
   },

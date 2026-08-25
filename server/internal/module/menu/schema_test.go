@@ -25,19 +25,20 @@ func TestMenuSchema(t *testing.T) {
 
 	tables := map[string]map[string]expectedColumn{
 		"sys_menu": {
-			"id":         {dataType: "bigint", nullable: "NO"},
-			"parent_id":  {dataType: "bigint", nullable: "YES"},
-			"menu_type":  {dataType: "character varying", nullable: "NO", length: 16},
-			"code":       {dataType: "character varying", nullable: "NO", length: 128},
-			"i18n_key":   {dataType: "character varying", nullable: "NO", length: 128},
-			"path":       {dataType: "character varying", nullable: "YES", length: 255},
-			"view_key":   {dataType: "character varying", nullable: "YES", length: 128},
-			"icon":       {dataType: "character varying", nullable: "YES", length: 64},
-			"sort_order": {dataType: "integer", nullable: "NO"},
-			"is_enabled": {dataType: "smallint", nullable: "NO"},
-			"created_at": {dataType: "timestamp with time zone", nullable: "NO"},
-			"updated_at": {dataType: "timestamp with time zone", nullable: "NO"},
-			"deleted_at": {dataType: "timestamp with time zone", nullable: "YES"},
+			"id":             {dataType: "bigint", nullable: "NO"},
+			"parent_id":      {dataType: "bigint", nullable: "YES"},
+			"menu_type":      {dataType: "character varying", nullable: "NO", length: 16},
+			"code":           {dataType: "character varying", nullable: "NO", length: 128},
+			"i18n_key":       {dataType: "character varying", nullable: "NO", length: 128},
+			"path":           {dataType: "character varying", nullable: "YES", length: 255},
+			"component_path": {dataType: "character varying", nullable: "YES", length: 255},
+			"icon":           {dataType: "character varying", nullable: "YES", length: 128},
+			"sort_order":     {dataType: "integer", nullable: "NO"},
+			"is_enabled":     {dataType: "smallint", nullable: "NO"},
+			"is_hidden":      {dataType: "smallint", nullable: "NO"},
+			"created_at":     {dataType: "timestamp with time zone", nullable: "NO"},
+			"updated_at":     {dataType: "timestamp with time zone", nullable: "NO"},
+			"deleted_at":     {dataType: "timestamp with time zone", nullable: "YES"},
 		},
 		"sys_role_menu": {
 			"id":         {dataType: "bigint", nullable: "NO"},
@@ -54,13 +55,14 @@ func TestMenuSchema(t *testing.T) {
 			assertColumn(t, connection, ctx, tableName, columnName, want)
 		}
 	}
+	assertColumnMissing(t, connection, ctx, "sys_menu", "view_key")
 
 	checks := map[string][]string{
-		"ck_sys_menu_type":         {"CHECK", "menu_type", "directory", "page", "action"},
-		"ck_sys_menu_shape":        {"CHECK", "menu_type", "path", "view_key"},
-		"ck_sys_menu_render_shape": {"CHECK", "directory", "path", "action", "icon"},
-		"ck_sys_menu_sort_order":   {"CHECK", "sort_order", "0"},
-		"ck_sys_menu_is_enabled":   {"CHECK", "is_enabled", "0", "1"},
+		"ck_sys_menu_type":       {"CHECK", "menu_type", "directory", "page", "action"},
+		"ck_sys_menu_shape":      {"CHECK", "component_path", "is_hidden", "action", "icon"},
+		"ck_sys_menu_sort_order": {"CHECK", "sort_order", "0"},
+		"ck_sys_menu_is_enabled": {"CHECK", "is_enabled", "0", "1"},
+		"ck_sys_menu_is_hidden":  {"CHECK", "is_hidden", "0", "1"},
 	}
 	for name, fragments := range checks {
 		definition := constraintDefinition(t, connection, ctx, name)
@@ -95,6 +97,21 @@ func TestMenuSchema(t *testing.T) {
 				t.Errorf("index %s = %q, missing %q", name, definition, fragment)
 			}
 		}
+	}
+}
+
+func assertColumnMissing(t *testing.T, connection *database.Connection, ctx context.Context, tableName, columnName string) {
+	t.Helper()
+	var count int64
+	if err := connection.GORM.WithContext(ctx).Raw(`
+		SELECT COUNT(*)
+		FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?`,
+		tableName, columnName).Scan(&count).Error; err != nil {
+		t.Fatalf("inspect missing %s.%s: %v", tableName, columnName, err)
+	}
+	if count != 0 {
+		t.Fatalf("column %s.%s still exists", tableName, columnName)
 	}
 }
 

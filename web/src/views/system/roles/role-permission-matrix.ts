@@ -1,18 +1,17 @@
-import type { MenuTitleKey } from '../../../access/menu-title-keys'
 import type { RolePermissionTreeNode } from '../../../api/role.contract'
 import type { YesNo } from '../../../enums/yes-no'
 
 export interface RoleMatrixAction {
   id: number
   code: string
-  i18nKey: MenuTitleKey
+  i18nKey: string
   isEnabled: YesNo
 }
 
 export interface RoleMatrixRow {
   pageId: number
   pageCode: string
-  pageI18nKey: MenuTitleKey
+  pageI18nKey: string
   pageIsEnabled: YesNo
   actions: RoleMatrixAction[]
 }
@@ -20,7 +19,7 @@ export interface RoleMatrixRow {
 export interface RoleMatrixGroup {
   groupId: number
   groupCode: string
-  groupI18nKey: MenuTitleKey
+  groupI18nKey: string
   groupIsEnabled: YesNo
   rows: RoleMatrixRow[]
 }

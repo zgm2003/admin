@@ -19,16 +19,17 @@ const (
 )
 
 type SourceMenu struct {
-	ID        int64
-	ParentID  *int64
-	MenuType  MenuType
-	Code      string
-	I18nKey   string
-	Path      *string
-	ViewKey   *string
-	Icon      *string
-	SortOrder int
-	IsEnabled yesno.Value
+	ID            int64
+	ParentID      *int64
+	MenuType      MenuType
+	Code          string
+	I18nKey       string
+	Path          *string
+	ComponentPath *string
+	Icon          *string
+	SortOrder     int
+	IsEnabled     yesno.Value
+	IsHidden      yesno.Value
 }
 
 type Source struct {
@@ -95,7 +96,8 @@ func (r *Repository) FindSourceWithVersion(ctx context.Context, userID int64) (S
 
 	menus := make([]SourceMenu, 0)
 	if err := db.Raw(`
-		SELECT id, parent_id, menu_type, code, i18n_key, path, view_key, icon, sort_order, is_enabled
+		SELECT id, parent_id, menu_type, code, i18n_key, path,
+		       component_path, icon, sort_order, is_enabled, is_hidden
 		FROM sys_menu
 		WHERE is_enabled = ? AND deleted_at IS NULL
 		ORDER BY sort_order, code, id`, yesno.Yes).Scan(&menus).Error; err != nil {

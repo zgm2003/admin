@@ -14,9 +14,10 @@ import (
 	"admin/server/internal/module/accessstate"
 	"admin/server/internal/module/authclient"
 	projectredis "admin/server/internal/redis"
+	"admin/server/internal/shared/yesno"
 )
 
-const accessSnapshotSchemaVersion = 1
+const accessSnapshotSchemaVersion = 2
 
 type CachedSnapshot struct {
 	SchemaVersion   int        `json:"schemaVersion"`
@@ -173,7 +174,8 @@ func validateSortedUniqueStrings(values []string, name string) error {
 
 func validateCachedMenuNodes(nodes []MenuNode, codes, paths map[string]struct{}) error {
 	for _, node := range nodes {
-		if node.Children == nil || strings.TrimSpace(node.Code) == "" || strings.TrimSpace(node.TitleKey) == "" {
+		if node.Children == nil || strings.TrimSpace(node.Code) == "" || !validAccessI18nKey(node.I18nKey) ||
+			!yesno.IsValid(yesno.Value(node.IsHidden)) || (node.Icon != nil && !validAccessIcon(*node.Icon)) {
 			return fmt.Errorf("cached access menu node is invalid")
 		}
 		if _, exists := codes[node.Code]; exists {
@@ -182,11 +184,11 @@ func validateCachedMenuNodes(nodes []MenuNode, codes, paths map[string]struct{})
 		codes[node.Code] = struct{}{}
 		switch node.MenuType {
 		case MenuDirectory:
-			if node.ViewKey != nil {
-				return fmt.Errorf("cached directory menu has a view key")
+			if node.Path != nil || node.ComponentPath != nil {
+				return fmt.Errorf("cached directory menu has render fields")
 			}
 		case MenuPage:
-			if node.Path == nil || strings.TrimSpace(*node.Path) == "" || node.ViewKey == nil || strings.TrimSpace(*node.ViewKey) == "" {
+			if node.Path == nil || node.ComponentPath == nil || !validAccessPath(*node.Path) || !validAccessComponentPath(*node.ComponentPath) {
 				return fmt.Errorf("cached page menu is incomplete")
 			}
 			if _, exists := paths[*node.Path]; exists {
