@@ -206,7 +206,7 @@ func TestServicePlatformRollbackRestoresPolicyAndSessionState(t *testing.T) {
 	}
 	createdUser := createPlatformUser(t, connection.GORM, ctx, "rollback_user")
 	session := createPlatformSessions(t, connection.GORM, ctx, createdUser.ID, code, time.Now().UTC().Add(-time.Hour), 1)[0]
-	if err := connection.GORM.WithContext(ctx).Exec("ALTER TABLE sys_auth_platform ADD CONSTRAINT ck_test_auth_platform_rollback CHECK (is_enabled = 1)").Error; err != nil {
+	if err := connection.GORM.WithContext(ctx).Exec("ALTER TABLE auth_platform ADD CONSTRAINT ck_test_auth_platform_rollback CHECK (is_enabled = 1)").Error; err != nil {
 		t.Fatal(err)
 	}
 	err = service.UpdateStatus(ctx, platformID, yesno.No)
@@ -262,7 +262,7 @@ func TestServicePlatformPublishFailureLeavesCommittedSessionStateWithoutOldPolic
 		END;
 		$$ LANGUAGE plpgsql;
 		CREATE TRIGGER delay_auth_platform_publish
-		BEFORE UPDATE OF is_enabled ON sys_auth_platform
+		BEFORE UPDATE OF is_enabled ON auth_platform
 		FOR EACH ROW EXECUTE FUNCTION delay_auth_platform_publish()`).Error; err != nil {
 		t.Fatal(err)
 	}

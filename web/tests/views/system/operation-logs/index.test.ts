@@ -26,7 +26,7 @@ describe('operation logs', () => {
 		await flushPromises()
 		expect(getOperationLogs).toHaveBeenCalledWith({ page: 1, pageSize: 20 })
 		expect(wrapper.find('h1').exists()).toBe(false)
-		expect(wrapper.get('.operation-log-page').classes()).toContain('system-page')
+		expect(wrapper.get('.operation-log-page').classes()).toContain('management-page')
 		await wrapper.get('[data-testid="operation-log-user-id"]').setValue('7')
 		await wrapper.get('[data-testid="operation-log-action"]').setValue('user.update')
 		await wrapper.get('[data-testid="operation-log-route"]').setValue('/api/v1/users')

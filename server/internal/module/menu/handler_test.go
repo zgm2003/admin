@@ -22,9 +22,9 @@ import (
 func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 	now := time.Date(2026, 8, 19, 2, 0, 0, 0, time.UTC)
 	service := &menuHTTPService{listResult: []menu.ManagedMenu{{
-		ID: 1, MenuType: menu.TypeDirectory, Code: "reports", I18nKey: "navigation.system",
+		ID: 1, MenuType: menu.TypeDirectory, Name: "报表", Code: "reports", I18nKey: menuTestStringPointer("navigation.system"),
 		SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now,
-		Children: []menu.ManagedMenu{},
+		IsProtected: true, Children: []menu.ManagedMenu{},
 	}}}
 	recorder := serveMenuRequest(t, service, http.MethodGet, "/api/v1/menus", nil)
 	assertMenuEnvelope(t, recorder, http.StatusOK, 0)
@@ -37,7 +37,7 @@ func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 	if err := json.Unmarshal(envelope["data"], &rows); err != nil || len(rows) != 1 {
 		t.Fatalf("data = %s error=%v", envelope["data"], err)
 	}
-	wantKeys := []string{"id", "parentId", "menuType", "code", "i18nKey", "path", "componentPath", "icon", "sortOrder", "isEnabled", "isHidden", "createdAt", "updatedAt", "children"}
+	wantKeys := []string{"id", "parentId", "menuType", "name", "code", "i18nKey", "path", "componentPath", "icon", "sortOrder", "isEnabled", "isHidden", "createdAt", "updatedAt", "isProtected", "children"}
 	if len(rows[0]) != len(wantKeys) {
 		t.Fatalf("menu response keys = %v", rows[0])
 	}
@@ -50,13 +50,17 @@ func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 	if err := json.Unmarshal(rows[0]["children"], &children); err != nil || children == nil || len(children) != 0 {
 		t.Fatalf("leaf children = %s error=%v", rows[0]["children"], err)
 	}
+	var isProtected int16
+	if err := json.Unmarshal(rows[0]["isProtected"], &isProtected); err != nil || isProtected != int16(yesno.Yes) {
+		t.Fatalf("isProtected = %s error=%v", rows[0]["isProtected"], err)
+	}
 	if service.listContext == nil {
 		t.Fatal("handler did not pass the request context")
 	}
 }
 
 func TestMenuHandlerCreateRequiresEveryFieldAndExplicitNull(t *testing.T) {
-	valid := `{"parentId":null,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"mdi:folder","sortOrder":0,"isEnabled":0,"isHidden":0}`
+	valid := `{"parentId":null,"menuType":"directory","name":"报表","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"mdi:folder","sortOrder":0,"isEnabled":0,"isHidden":0}`
 	service := &menuHTTPService{createID: 41}
 	recorder := serveMenuRequest(t, service, http.MethodPost, "/api/v1/menus", []byte(valid))
 	assertMenuEnvelope(t, recorder, http.StatusCreated, 0)
@@ -91,7 +95,7 @@ func TestMenuHandlerCreateRequiresEveryFieldAndExplicitNull(t *testing.T) {
 
 func TestMenuHandlerUpdateStatusAndDeleteUseExactContracts(t *testing.T) {
 	service := &menuHTTPService{}
-	updateBody := []byte(`{"parentId":1,"menuType":"page","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0}`)
+	updateBody := []byte(`{"parentId":1,"menuType":"page","name":"报表列表","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0}`)
 	recorder := serveMenuRequest(t, service, http.MethodPut, "/api/v1/menus/7", updateBody)
 	assertMenuEnvelope(t, recorder, http.StatusOK, 0)
 	if service.updateID != 7 || service.updateInput.ParentID == nil || *service.updateInput.ParentID != 1 {
@@ -131,6 +135,10 @@ func TestMenuHandlerUpdateStatusAndDeleteUseExactContracts(t *testing.T) {
 			assertMenuEnvelope(t, responseRecorder, http.StatusBadRequest, apperror.CodeInvalidRequest)
 		})
 	}
+}
+
+func menuTestStringPointer(value string) *string {
+	return &value
 }
 
 func TestMenuHandlerPreservesLocalizedServiceError(t *testing.T) {

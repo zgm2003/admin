@@ -202,7 +202,7 @@ func TestServiceUpdateStatusProtectsRolesAndPreservesRelations(t *testing.T) {
 	}
 	path := fmt.Sprintf("/status-%d", time.Now().UnixNano())
 	componentPath := "system/menus"
-	page := menu.Menu{MenuType: menu.TypePage, Code: fmt.Sprintf("status:%d:list", time.Now().UnixNano()), I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := menu.Menu{MenuType: menu.TypePage, Name: "Status", Code: fmt.Sprintf("status:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestServiceUpdateStatusRollbackRestoresAccessStateAndVersion(t *testing.T) 
 		t.Fatal(err)
 	}
 	boundUser := createRoleAccessUser(t, tx, ctx, roleID, yesno.Yes, false)
-	if err := tx.WithContext(ctx).Exec(`ALTER TABLE sys_role ADD CONSTRAINT ck_test_role_status_rollback CHECK (is_enabled = 1)`).Error; err != nil {
+	if err := tx.WithContext(ctx).Exec(`ALTER TABLE rbac_role ADD CONSTRAINT ck_test_role_status_rollback CHECK (is_enabled = 1)`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := service.UpdateStatus(ctx, roleID, yesno.No); roleErrorCode(err) != apperror.CodeDependencyUnavailable {
@@ -381,7 +381,7 @@ func TestServiceUpdateStatusPublishFailureLeavesCommittedVersionUnreachable(t *t
 		END;
 		$$ LANGUAGE plpgsql;
 		CREATE TRIGGER delay_role_status_publish
-		BEFORE UPDATE OF is_enabled ON sys_role
+		BEFORE UPDATE OF is_enabled ON rbac_role
 		FOR EACH ROW EXECUTE FUNCTION delay_role_status_publish()`).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -504,7 +504,7 @@ func TestServiceDeleteSoftDeletesRoleAndGrantsWithOneTimestamp(t *testing.T) {
 	}
 	path := fmt.Sprintf("/delete-%d", time.Now().UnixNano())
 	componentPath := "system/menus"
-	page := menu.Menu{MenuType: menu.TypePage, Code: fmt.Sprintf("delete:%d:list", time.Now().UnixNano()), I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := menu.Menu{MenuType: menu.TypePage, Name: "Delete", Code: fmt.Sprintf("delete:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -539,7 +539,7 @@ func TestServiceDeleteRollsBackWhenRoleWriteFails(t *testing.T) {
 	}
 	path := fmt.Sprintf("/delete-rollback-%d", time.Now().UnixNano())
 	componentPath := "system/menus"
-	page := menu.Menu{MenuType: menu.TypePage, Code: fmt.Sprintf("delete:rollback:%d", time.Now().UnixNano()), I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := menu.Menu{MenuType: menu.TypePage, Name: "Delete rollback", Code: fmt.Sprintf("delete:rollback:%d", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -547,7 +547,7 @@ func TestServiceDeleteRollsBackWhenRoleWriteFails(t *testing.T) {
 	if err := tx.WithContext(ctx).Create(&grant).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.WithContext(ctx).Exec(`ALTER TABLE sys_role ADD CONSTRAINT ck_test_role_delete_rollback CHECK (deleted_at IS NULL)`).Error; err != nil {
+	if err := tx.WithContext(ctx).Exec(`ALTER TABLE rbac_role ADD CONSTRAINT ck_test_role_delete_rollback CHECK (deleted_at IS NULL)`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := service.Delete(ctx, roleID); roleErrorCode(err) != apperror.CodeDependencyUnavailable {
@@ -568,17 +568,17 @@ func TestServiceDeleteRollsBackWhenRoleWriteFails(t *testing.T) {
 func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
 	service, accessStates, _ := newRoleMutationTestService(t, role.NewRepository(tx))
-	root := menu.Menu{MenuType: menu.TypeDirectory, Code: "system", I18nKey: "navigation.system", IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	root := menu.Menu{MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: roleTestStringPointer("navigation.access"), IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&root).Error; err != nil {
 		t.Fatal(err)
 	}
 	path := "/system/roles"
 	componentPath := "system/roles"
-	page := menu.Menu{ParentID: &root.ID, MenuType: menu.TypePage, Code: menu.PermissionRoleList, I18nKey: "navigation.systemRoles", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := menu.Menu{ParentID: &root.ID, MenuType: menu.TypePage, Name: "角色管理", Code: role.PermissionList, I18nKey: roleTestStringPointer("navigation.accessRoles"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
-	action := menu.Menu{ParentID: &page.ID, MenuType: menu.TypeAction, Code: menu.PermissionRoleAuthorize, I18nKey: "permission.roleAuthorize", IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
+	action := menu.Menu{ParentID: &page.ID, MenuType: menu.TypeAction, Name: "配置角色权限", Code: role.PermissionAuthorize, IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&action).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -687,7 +687,7 @@ func openRoleTestRedis(t *testing.T) *projectredis.Client {
 func readRoleAccessVersion(t *testing.T, tx *gorm.DB, ctx context.Context, userID int64) int64 {
 	t.Helper()
 	var version int64
-	result := tx.WithContext(ctx).Raw("SELECT version FROM sys_access_version WHERE user_id = ?", userID).Scan(&version)
+	result := tx.WithContext(ctx).Raw("SELECT version FROM rbac_access_version WHERE user_id = ?", userID).Scan(&version)
 	if result.Error != nil || result.RowsAffected != 1 {
 		t.Fatalf("read access version: rows=%d error=%v", result.RowsAffected, result.Error)
 	}
@@ -721,4 +721,8 @@ func roleErrorCode(err error) int {
 		return 0
 	}
 	return appErr.Code
+}
+
+func roleTestStringPointer(value string) *string {
+	return &value
 }

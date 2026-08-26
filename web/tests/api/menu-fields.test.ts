@@ -9,37 +9,37 @@ import {
 } from '@src/api/menu-fields'
 
 describe('menu field protocol', () => {
-  it.each(['navigation.systemUsers', 'reports.orders.list', 'permission.roleUpdate'])(
+  it.each(['navigation.accountUsers', 'reports.orders.list', 'permission.roleUpdate'])(
     'accepts i18n key %s',
     (value) => expect(isMenuI18nKey(value)).toBe(true),
   )
 
-  it.each(['navigation', 'Navigation.users', 'navigation.system_users', ' navigation.systemUsers', 'navigation.systemUsers '])(
+  it.each(['navigation', 'Navigation.users', 'navigation.system_users', ' navigation.accountUsers', 'navigation.accountUsers '])(
     'rejects i18n key %s',
     (value) => expect(isMenuI18nKey(value)).toBe(false),
   )
 
-  it.each(['system', 'system:user:list', 'reports:order-items:list'])(
+  it.each(['system', 'account:user:list', 'reports:order-items:list'])(
     'accepts menu code %s',
 		(value) => expect(menuCodePattern.test(value)).toBe(true),
   )
 
-  it.each(['/system/users', '/reports/order-items'])(
+	it.each(['/account/users', '/access/menus', '/reports/order-items'])(
     'accepts route path %s',
     (value) => expect(isMenuPath(value)).toBe(true),
   )
 
-  it.each(['/login', '/register', '/dashboard', '/system/menus', 'system/users', '/system/users/', '/system/:id', '/system//users', '/system/users?tab=1', '/system/users#top'])(
+	it.each(['/login', '/register', '/dashboard', 'account/users', '/account/users/', '/system/:id', '/system//users', '/account/users?tab=1', '/account/users#top'])(
     'rejects route path %s',
     (value) => expect(isMenuPath(value)).toBe(false),
   )
 
-  it.each(['system/users', 'reports/order-items'])(
+  it.each(['account/users', 'reports/order-items'])(
     'accepts component path %s',
     (value) => expect(isComponentPath(value)).toBe(true),
   )
 
-  it.each(['/system/users', 'system/users.vue', 'system/users/', 'system/:id', 'system/../users', 'system//users'])(
+  it.each(['/account/users', 'account/users.vue', 'account/users/', 'system/:id', 'system/../users', 'system//users'])(
     'rejects component path %s',
     (value) => expect(isComponentPath(value)).toBe(false),
   )

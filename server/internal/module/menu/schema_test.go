@@ -5,10 +5,10 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
+	"admin/server/internal/database/testschema"
 	"admin/server/internal/module/menu"
 	"admin/server/internal/module/role"
 	"github.com/joho/godotenv"
@@ -22,14 +22,21 @@ type expectedColumn struct {
 
 func TestMenuSchema(t *testing.T) {
 	connection, ctx := openMenuSchema(t)
+	if got := (menu.Menu{}).TableName(); got != "rbac_menu" {
+		t.Fatalf("Menu.TableName() = %q", got)
+	}
+	if got := (menu.RoleMenu{}).TableName(); got != "rbac_role_menu" {
+		t.Fatalf("RoleMenu.TableName() = %q", got)
+	}
 
 	tables := map[string]map[string]expectedColumn{
-		"sys_menu": {
+		"rbac_menu": {
 			"id":             {dataType: "bigint", nullable: "NO"},
 			"parent_id":      {dataType: "bigint", nullable: "YES"},
 			"menu_type":      {dataType: "character varying", nullable: "NO", length: 16},
+			"name":           {dataType: "character varying", nullable: "NO", length: 128},
 			"code":           {dataType: "character varying", nullable: "NO", length: 128},
-			"i18n_key":       {dataType: "character varying", nullable: "NO", length: 128},
+			"i18n_key":       {dataType: "character varying", nullable: "YES", length: 128},
 			"path":           {dataType: "character varying", nullable: "YES", length: 255},
 			"component_path": {dataType: "character varying", nullable: "YES", length: 255},
 			"icon":           {dataType: "character varying", nullable: "YES", length: 128},
@@ -40,7 +47,7 @@ func TestMenuSchema(t *testing.T) {
 			"updated_at":     {dataType: "timestamp with time zone", nullable: "NO"},
 			"deleted_at":     {dataType: "timestamp with time zone", nullable: "YES"},
 		},
-		"sys_role_menu": {
+		"rbac_role_menu": {
 			"id":         {dataType: "bigint", nullable: "NO"},
 			"role_id":    {dataType: "bigint", nullable: "NO"},
 			"menu_id":    {dataType: "bigint", nullable: "NO"},
@@ -55,14 +62,16 @@ func TestMenuSchema(t *testing.T) {
 			assertColumn(t, connection, ctx, tableName, columnName, want)
 		}
 	}
-	assertColumnMissing(t, connection, ctx, "sys_menu", "view_key")
+	assertColumnMissing(t, connection, ctx, "rbac_menu", "view_key")
+	assertMenuRelationMissing(t, connection, ctx, "sys_menu")
+	assertMenuRelationMissing(t, connection, ctx, "sys_role_menu")
 
 	checks := map[string][]string{
-		"ck_sys_menu_type":       {"CHECK", "menu_type", "directory", "page", "action"},
-		"ck_sys_menu_shape":      {"CHECK", "component_path", "is_hidden", "action", "icon"},
-		"ck_sys_menu_sort_order": {"CHECK", "sort_order", "0"},
-		"ck_sys_menu_is_enabled": {"CHECK", "is_enabled", "0", "1"},
-		"ck_sys_menu_is_hidden":  {"CHECK", "is_hidden", "0", "1"},
+		"ck_rbac_menu_type":       {"CHECK", "menu_type", "directory", "page", "action"},
+		"ck_rbac_menu_shape":      {"CHECK", "name", "i18n_key", "component_path", "is_hidden", "action", "icon"},
+		"ck_rbac_menu_sort_order": {"CHECK", "sort_order", "0"},
+		"ck_rbac_menu_is_enabled": {"CHECK", "is_enabled", "0", "1"},
+		"ck_rbac_menu_is_hidden":  {"CHECK", "is_hidden", "0", "1"},
 	}
 	for name, fragments := range checks {
 		definition := constraintDefinition(t, connection, ctx, name)
@@ -74,9 +83,9 @@ func TestMenuSchema(t *testing.T) {
 	}
 
 	for _, name := range []string{
-		"fk_sys_menu_parent",
-		"fk_sys_role_menu_role",
-		"fk_sys_role_menu_menu",
+		"fk_rbac_menu_parent",
+		"fk_rbac_role_menu_role",
+		"fk_rbac_role_menu_menu",
 	} {
 		definition := constraintDefinition(t, connection, ctx, name)
 		if !strings.Contains(definition, "FOREIGN KEY") || !strings.Contains(definition, "ON DELETE RESTRICT") {
@@ -85,10 +94,10 @@ func TestMenuSchema(t *testing.T) {
 	}
 
 	indexes := map[string][]string{
-		"ux_sys_menu_code_active":      {"CREATE UNIQUE INDEX", "(code)", "WHERE (deleted_at IS NULL)"},
-		"ux_sys_menu_page_path_active": {"CREATE UNIQUE INDEX", "(path)", "menu_type", "page", "deleted_at IS NULL"},
-		"ix_sys_menu_parent_active":    {"CREATE INDEX", "(parent_id, sort_order, id)", "WHERE (deleted_at IS NULL)"},
-		"ux_sys_role_menu_active":      {"CREATE UNIQUE INDEX", "(role_id, menu_id)", "WHERE (deleted_at IS NULL)"},
+		"ux_rbac_menu_code_active":      {"CREATE UNIQUE INDEX", "(code)", "WHERE (deleted_at IS NULL)"},
+		"ux_rbac_menu_page_path_active": {"CREATE UNIQUE INDEX", "(path)", "menu_type", "page", "deleted_at IS NULL"},
+		"ix_rbac_menu_parent_active":    {"CREATE INDEX", "(parent_id, sort_order, id)", "WHERE (deleted_at IS NULL)"},
+		"ux_rbac_role_menu_active":      {"CREATE UNIQUE INDEX", "(role_id, menu_id)", "WHERE (deleted_at IS NULL)"},
 	}
 	for name, fragments := range indexes {
 		definition := indexDefinition(t, connection, ctx, name)
@@ -97,6 +106,19 @@ func TestMenuSchema(t *testing.T) {
 				t.Errorf("index %s = %q, missing %q", name, definition, fragment)
 			}
 		}
+	}
+}
+
+func assertMenuRelationMissing(t *testing.T, connection *database.Connection, ctx context.Context, name string) {
+	t.Helper()
+	var exists bool
+	if err := connection.GORM.WithContext(ctx).Raw(
+		`SELECT to_regclass(current_schema() || '.' || ?) IS NOT NULL`, name,
+	).Scan(&exists).Error; err != nil {
+		t.Fatalf("inspect relation %s: %v", name, err)
+	}
+	if exists {
+		t.Fatalf("legacy relation %s still exists", name)
 	}
 }
 
@@ -127,18 +149,13 @@ func openMenuSchema(t *testing.T) (*database.Connection, context.Context) {
 	if err != nil {
 		t.Fatalf("load worker config: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	t.Cleanup(cancel)
-	connection, err := database.Open(ctx, settings.PostgresDSN)
-	if err != nil {
-		t.Fatalf("open PostgreSQL: %v", err)
-	}
-	t.Cleanup(func() { _ = connection.Close() })
-	if err := database.AutoMigrate(ctx, connection.GORM,
+	db, ctx := testschema.Open(t, settings.PostgresDSN, "test_menu_schema")
+	connection := &database.Connection{GORM: db}
+	if err := database.AutoMigrate(ctx, db,
 		&role.Role{}, &menu.Menu{}, &menu.RoleMenu{}); err != nil {
 		t.Fatalf("AutoMigrate menu schema: %v", err)
 	}
-	if err := menu.EnsureSchema(ctx, connection.GORM); err != nil {
+	if err := menu.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
 	return connection, ctx

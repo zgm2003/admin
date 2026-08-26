@@ -23,7 +23,7 @@ type SourceMenu struct {
 	ParentID      *int64
 	MenuType      MenuType
 	Code          string
-	I18nKey       string
+	I18nKey       *string
 	Path          *string
 	ComponentPath *string
 	Icon          *string
@@ -53,8 +53,8 @@ func (r *Repository) FindSourceWithVersion(ctx context.Context, userID int64) (S
 	var version int64
 	result := db.Raw(`
 		SELECT access_version.version
-		FROM sys_user AS app_user
-		JOIN sys_access_version AS access_version ON access_version.user_id = app_user.id
+		FROM user_account AS app_user
+		JOIN rbac_access_version AS access_version ON access_version.user_id = app_user.id
 		WHERE app_user.id = ?
 		  AND app_user.is_enabled = ?
 		  AND app_user.deleted_at IS NULL`, userID, yesno.Yes).Scan(&version)
@@ -72,8 +72,8 @@ func (r *Repository) FindSourceWithVersion(ctx context.Context, userID int64) (S
 	activeRoles := make([]activeRole, 0)
 	if err := db.Raw(`
 		SELECT DISTINCT app_role.id, app_role.code
-		FROM sys_user_role AS user_role
-		JOIN sys_role AS app_role
+		FROM rbac_user_role AS user_role
+		JOIN rbac_role AS app_role
 		  ON app_role.id = user_role.role_id
 		 AND app_role.is_enabled = ?
 		 AND app_role.deleted_at IS NULL
@@ -98,7 +98,7 @@ func (r *Repository) FindSourceWithVersion(ctx context.Context, userID int64) (S
 	if err := db.Raw(`
 		SELECT id, parent_id, menu_type, code, i18n_key, path,
 		       component_path, icon, sort_order, is_enabled, is_hidden
-		FROM sys_menu
+		FROM rbac_menu
 		WHERE is_enabled = ? AND deleted_at IS NULL
 		ORDER BY sort_order, code, id`, yesno.Yes).Scan(&menus).Error; err != nil {
 		return Source{}, fmt.Errorf("find access source menus: %w", err)
@@ -108,8 +108,8 @@ func (r *Repository) FindSourceWithVersion(ctx context.Context, userID int64) (S
 	if len(roleIDs) > 0 && !superAdmin {
 		if err := db.Raw(`
 			SELECT DISTINCT role_menu.menu_id
-			FROM sys_role_menu AS role_menu
-			JOIN sys_menu AS app_menu
+			FROM rbac_role_menu AS role_menu
+			JOIN rbac_menu AS app_menu
 			  ON app_menu.id = role_menu.menu_id
 			 AND app_menu.is_enabled = ?
 			 AND app_menu.deleted_at IS NULL

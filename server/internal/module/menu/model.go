@@ -19,8 +19,9 @@ type Menu struct {
 	ID            int64          `gorm:"column:id;primaryKey;autoIncrement"`
 	ParentID      *int64         `gorm:"column:parent_id"`
 	MenuType      Type           `gorm:"column:menu_type;type:varchar(16);not null"`
+	Name          string         `gorm:"column:name;type:varchar(128);not null"`
 	Code          string         `gorm:"column:code;type:varchar(128);not null"`
-	I18nKey       string         `gorm:"column:i18n_key;type:varchar(128);not null"`
+	I18nKey       *string        `gorm:"column:i18n_key;type:varchar(128)"`
 	Path          *string        `gorm:"column:path;type:varchar(255)"`
 	ComponentPath *string        `gorm:"column:component_path;type:varchar(255)"`
 	Icon          *string        `gorm:"column:icon;type:varchar(128)"`
@@ -33,7 +34,7 @@ type Menu struct {
 }
 
 func (Menu) TableName() string {
-	return "sys_menu"
+	return "rbac_menu"
 }
 
 type RoleMenu struct {
@@ -46,5 +47,5 @@ type RoleMenu struct {
 }
 
 func (RoleMenu) TableName() string {
-	return "sys_role_menu"
+	return "rbac_role_menu"
 }

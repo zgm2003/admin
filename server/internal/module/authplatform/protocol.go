@@ -8,6 +8,12 @@ import (
 )
 
 const (
+	PermissionList   = "auth:platform:list"
+	PermissionCreate = "auth:platform:create"
+	PermissionUpdate = "auth:platform:update"
+	PermissionStatus = "auth:platform:status"
+	PermissionDelete = "auth:platform:delete"
+
 	BuiltinAdminCode              = "admin"
 	MinimumAccessTTLSeconds       = 60
 	MaximumAccessTTLSeconds       = 2_592_000

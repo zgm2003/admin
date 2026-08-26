@@ -14,6 +14,7 @@ const (
 	CodeMenuPathConflict      = 14003
 	CodeMenuInvalidParent     = 14004
 	CodeMenuCycleDetected     = 14005
+	CodeMenuProtected         = 14006
 	CodeMenuParentDisabled    = 14007
 	CodeMenuStructureConflict = 14008
 	CodeMenuInvalidFields     = 14009
@@ -41,6 +42,10 @@ func menuInvalidParent(cause error) *apperror.Error {
 
 func menuCycleDetected(cause error) *apperror.Error {
 	return newMenuError(http.StatusBadRequest, CodeMenuCycleDetected, i18n.KeyMenuCycleDetected, nil, cause)
+}
+
+func menuProtected(code string, cause error) *apperror.Error {
+	return newMenuError(http.StatusConflict, CodeMenuProtected, i18n.KeyMenuProtected, map[string]string{"code": code}, cause)
 }
 
 func menuParentDisabled(code string, cause error) *apperror.Error {

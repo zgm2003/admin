@@ -1,258 +1,725 @@
-# 菜单 RBAC 与界面回收实施计划
+# Admin 业务域命名与动态菜单实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 恢复以 `sys_menu/sys_role_menu` 为唯一事实来源的菜单 RBAC，区分数据库名称与导航翻译键，并完成菜单管理和角色授权界面的样式回收。
+**Goal:** 将现有 `sys_* + system:* + views/system/*` 管理功能一次性迁移为 account/auth/rbac/audit 真实业务域，并交付以 PostgreSQL 为唯一事实来源的多根菜单、动态页面、角色授权、菜单搜索和本地 Lucide 图标。
 
-**Architecture:** 后端继续使用 `router -> middleware -> handler -> service -> repository -> model -> PostgreSQL`，菜单变更继续通过 access invalidating lease 推进 PostgreSQL version 与 Redis generation。前端保留 `/system/menus` 静态组件挂载点，但菜单树、权限、面包屑和业务名称全部来自 access/menu/role API；其他页面继续按 `path + componentPath` 动态注册。
+**Architecture:** 启动阶段先由 `database.PrepareDomainNames` 在 PostgreSQL 事务内重命名九张表及其对象，再由各模块按新表名完成 PrepareSchema、AutoMigrate 和 EnsureSchema。菜单协议迁移复用原 row ID 更新 code/parent/path/componentPath，所有在线请求继续遵守 `router -> middleware -> handler -> service -> repository -> model -> PostgreSQL`；前端使用静态 `/access/menus` 冷启动绑定和数据库多根菜单树。
 
-**Tech Stack:** Go、Gin、GORM、PostgreSQL、Redis、Vue 3、TypeScript、Pinia、Vue Router、vue-i18n、Element Plus、Vitest。
+**Tech Stack:** Go 1.26、Gin、GORM、PostgreSQL、Redis、Asynq、Vue 3、TypeScript 6、Pinia、Vue Router、vue-i18n、Element Plus、Lucide Vue、Vitest。
 
 ---
 
 ## 执行约束
 
-- 在 `D:\admin` 当前工作区的 main 主线程执行，不创建 worktree，不使用 subagent。
-- 使用 TDD：失败测试 -> 确认目标原因失败 -> 最小实现 -> 定向测试通过 -> 再重构。
-- 不使用 Docker，不升级依赖，不引入 Adapter、Manager、Factory、BaseService 或通用 Repository。
-- 不使用显式 `any`、`as any`、`any[]`、`Record<string, any>` 或 `@ts-ignore`。
-- 计划中的 Git 标题只是 owner-controlled checkpoint。除非用户再次明确授权，不执行 `git add`、`git commit` 或 `git push`。
-- 当前旧计划中的“软删除菜单管理节点、侧栏静态插入菜单、超级管理员硬塞权限”全部作废。
+- 规范来源：`docs/superpowers/specs/2026-08-24-menu-protocol-dynamic-page-design.md`。
+- 本计划是一次性破坏性协议切换；不实现旧表、旧权限、旧页面或旧任务类型兼容。
+- 保留已有账号、角色、菜单 row ID、角色授权和操作日志数据。
+- 使用 TDD：失败测试 -> 确认目标原因失败 -> 最小实现 -> 定向测试通过 -> 再整理代码。
+- PostgreSQL 迁移和 schema 测试必须使用真实 PostgreSQL 的独立 schema，不允许 SQLite 或内存替代。
+- 不使用 Docker，不引入 Adapter、Manager、Factory、BaseService、BaseRepository 或 DI 容器。
+- TypeScript 禁止显式 `any`、`any[]`、`as any`、`Record<string, any>` 和 `@ts-ignore`。
+- 计划中的提交标题仅是 owner-controlled checkpoint。除非用户明确授权，不执行 `git add`、`git commit`、`rebase`、`push`、`fetch` 或 `pull`。
+- 不停止来源不明的用户进程；执行维护窗口前先确认 API、Worker 和前端服务归属。
+- 不使用 `FLUSHDB`。Redis 删除只允许命中本文列出的项目 key/type。
 
 ## 文件职责
 
-### 后端
+### 数据库与启动
 
-- `server/internal/module/menu/model.go`：`sys_menu/sys_role_menu` 映射，只定义字段。
-- `server/internal/module/menu/schema.go`：菜单协议的显式 PostgreSQL 迁移、约束和索引。
-- `server/internal/module/menu/foundation.go`：五个基础 RBAC 节点的定义、恢复、校验和保护判断。
-- `server/internal/module/menu/request.go`、`response.go`：菜单管理 HTTP DTO。
-- `server/internal/module/menu/tree.go`：名称、翻译键、节点形状和树结构校验。
-- `server/internal/module/menu/service.go`：菜单写入、基础保护和 access generation 变更顺序。
-- `server/internal/module/menu/repository.go`：菜单、历史基础节点和角色关系的 PostgreSQL 操作。
-- `server/internal/module/access/repository.go`、`service.go`：从数据库角色关系生成 access 快照。
-- `server/internal/module/role/permission.go`、`response.go`：角色授权树及其数据库名称。
-- `server/cmd/api/main.go`：PrepareSchema、AutoMigrate、EnsureSchema、EnsureFoundation 的明确启动顺序。
+- Create `server/internal/database/domain_names.go`：九张表和相关 PostgreSQL 对象的一次性显式改名。
+- Create `server/internal/database/domain_names_test.go`：旧 schema、重复执行和冲突状态的真实 PostgreSQL 测试。
+- Create `server/internal/database/testschema/schema.go`：仅供测试使用的独立 PostgreSQL schema 连接辅助函数。
+- Modify `server/cmd/api/main.go`：固定 domain rename、PrepareSchema、AutoMigrate、EnsureSchema 和 foundation 顺序。
 
-### 前端
+### 后端业务模块
 
-- `web/src/api/menu-fields.ts`：菜单名称、权限码、翻译键、路由和页面路径校验。
-- `web/src/api/menu.contract.ts`：菜单管理的严格 DTO。
-- `web/src/api/role.contract.ts`：角色授权树的严格 DTO。
-- `web/src/router/access-routes.ts`：数据库 page 到 Vue route 的映射和静态页面绑定校验。
-- `web/src/layout/components/AppAside.vue`：只渲染 Dashboard 与 access 菜单树。
-- `web/src/layout/breadcrumbs.ts`：从完整 access 树解析导航层级。
-- `web/src/layout/components/RouteTabs.vue`：优先从 access 树读取当前页面翻译键。
-- `web/src/views/system/roles/role-permission-matrix.ts`：把数据库权限树转换成角色授权矩阵。
-- `web/src/views/system/menus/index.vue`：树状菜单管理页面，不拆成通用 CRUD。
+- `server/internal/module/*/model.go`：只定义新表映射和显式字段。
+- `server/internal/module/*/schema.go`：只维护新约束、索引和模块自身结构迁移。
+- `server/internal/module/*/repository.go`：全部原始 SQL 使用新表名。
+- `server/internal/module/{menu,role,user,auth,authplatform,operationlog}/protocol.go`：各模块拥有自己的权限常量。
+- Create `server/internal/module/menu/foundation.go`：受保护基础节点、首次空库种子 DTO 和保护判断。
+- `server/internal/module/menu/schema.go`：菜单 name/i18n/icon 和 old code -> new code 的一次性数据迁移。
+- Create `server/cmd/api/menu_foundation.go`：composition root 使用各模块常量组装当前内置菜单。
+- `server/internal/module/access/*`、`accessstate/*`：从新 RBAC 表生成快照并拒绝旧缓存协议。
+- `server/internal/module/operationlog/task.go`：只生产和消费 `audit:operation-log:v2`。
+
+### 前端协议与页面
+
+- `web/src/api/*.contract.ts`：严格解析新字段和多根树，不接受旧权限或路径。
+- `web/src/router/index.ts`、`access-routes.ts`：静态 `/access/menus` 精确绑定，其余页面动态注册。
+- `web/src/layout/*`：只从 access tree 渲染侧栏、面包屑和 RouteTabs。
+- Move `web/src/views/system/{users,sessions}` -> `web/src/views/account/*`。
+- Move `web/src/views/system/{menus,roles,auth-platforms}` -> `web/src/views/access/*`。
+- Keep `web/src/views/system/operation-logs`，只更新权限码和导航键。
+- Move 对应 `web/tests/views/*` 到相同业务域目录。
+- Rename `web/src/styles/system-pages.scss` -> `management-pages.scss`，class 改为 `management-page*`。
+- Create `web/src/icons/menu-icons.ts`：本地 Lucide 菜单图标唯一目录和解析器。
+- Create `web/src/views/access/menus/filter-menu-tree.ts`：菜单搜索和祖先/后代保留算法。
 
 ---
 
-### Task 1: 落地菜单名称与可空翻译键的后端协议
+### Task 1: 建立独立 PostgreSQL 测试环境和领域表名迁移
 
 **Files:**
-- Modify: `server/cmd/api/main.go`
-- Modify: `server/internal/module/menu/model.go`
-- Modify: `server/internal/module/menu/schema.go`
-- Modify: `server/internal/module/menu/request.go`
-- Modify: `server/internal/module/menu/response.go`
-- Modify: `server/internal/module/menu/tree.go`
-- Modify: `server/internal/module/menu/service.go`
-- Modify: `server/internal/module/menu/repository.go`
-- Modify: `server/internal/module/access/repository.go`
-- Modify: `server/internal/module/access/service.go`
-- Modify: `server/internal/module/role/permission.go`
-- Modify: `server/internal/module/role/response.go`
-- Test: `server/internal/module/menu/schema_migration_test.go`
-- Test: `server/internal/module/menu/schema_test.go`
-- Test: `server/internal/module/menu/protocol_v2_test.go`
-- Test: `server/internal/module/menu/tree_test.go`
-- Test: `server/internal/module/menu/handler_test.go`
-- Test: `server/internal/module/menu/repository_test.go`
-- Test: `server/internal/module/menu/service_test.go`
-- Test: `server/internal/module/access/repository_test.go`
-- Test: `server/internal/module/access/service_test.go`
-- Test: `server/internal/module/role/permission_test.go`
-- Test: `server/internal/module/role/handler_test.go`
-- Test: `server/internal/module/role/service_test.go`
+- Create: `server/internal/database/testschema/schema.go`
+- Create: `server/internal/database/domain_names.go`
+- Create: `server/internal/database/domain_names_test.go`
+- Test: `server/internal/database/domain_names_test.go`
 
-- [ ] **Step 1: 先写 PostgreSQL 迁移失败测试**
+- [ ] **Step 1: 创建独立 schema 测试辅助函数**
 
-把 `schema_migration_test.go` 的旧断言反转并补齐以下场景：
+`testschema.Open` 接收 DSN 和安全前缀，创建随机 schema，并为 pgx/GORM 设置独立
+`search_path`：
 
 ```go
-func TestMenuProtocolMigrationAddsNamesAndNullableActionI18nKeys(t *testing.T) {
-	connection, ctx := openMenuSchema(t)
-	tx := openLegacyMenuSchema(t, connection.GORM, "name_protocol")
+package testschema
 
-	if err := menu.PrepareSchema(ctx, tx); err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.AutoMigrate(&menu.Menu{}, &menu.RoleMenu{}); err != nil {
-		t.Fatal(err)
-	}
-	if err := menu.EnsureSchema(ctx, tx); err != nil {
-		t.Fatal(err)
-	}
+import (
+	"context"
+	"fmt"
+	"regexp"
+	"testing"
+	"time"
 
-	var rows []struct {
-		Code     string
-		MenuType menu.Type
-		Name     string
-		I18nKey  *string `gorm:"column:i18n_key"`
+	"admin/server/internal/database"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+)
+
+var prefixPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+func Open(t *testing.T, dsn, prefix string) (*gorm.DB, context.Context) {
+	t.Helper()
+	if !prefixPattern.MatchString(prefix) {
+		t.Fatalf("invalid PostgreSQL test schema prefix %q", prefix)
 	}
-	if err := tx.Unscoped().Table("sys_menu").Order("id").Find(&rows).Error; err != nil {
-		t.Fatal(err)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	root, err := database.Open(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open PostgreSQL: %v", err)
 	}
-	for _, row := range rows {
-		if row.Name == "" {
-			t.Fatalf("menu %s has no migrated name", row.Code)
-		}
-		if row.MenuType == menu.TypeAction && row.I18nKey != nil {
-			t.Fatalf("action %s i18n_key = %v, want NULL", row.Code, row.I18nKey)
-		}
+	schema := fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
+	if err := root.GORM.WithContext(ctx).Exec(`CREATE SCHEMA "` + schema + `"`).Error; err != nil {
+		t.Fatalf("create PostgreSQL test schema: %v", err)
 	}
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		t.Fatalf("parse PostgreSQL DSN: %v", err)
+	}
+	config.RuntimeParams["search_path"] = schema
+	sqlDB := stdlib.OpenDB(*config)
+	if err := sqlDB.PingContext(ctx); err != nil {
+		t.Fatalf("ping isolated PostgreSQL schema: %v", err)
+	}
+	db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatalf("open isolated GORM: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = sqlDB.Close()
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = root.GORM.WithContext(cleanupCtx).Exec(`DROP SCHEMA IF EXISTS "` + schema + `" CASCADE`).Error
+		_ = root.Close()
+	})
+	return db, ctx
 }
 ```
 
-同时增加：
+只允许经过正则校验的内部测试前缀进入标识符拼接；业务值继续使用 SQL 参数。
 
-- `sys_menu.name` 是 `VARCHAR(128) NOT NULL`；
-- `sys_menu.i18n_key` 允许 NULL；
-- directory/page 的 i18nKey 必填，action 必须为 NULL；
-- 迁移重复执行不重置 `is_hidden`；
-- 首次新增 name 列时，存在未知 code 的历史节点会列出 code 并回滚；
-- name 列已经存在时，管理员新增的非空自定义名称不会被映射表覆盖。
+- [ ] **Step 2: 写九表改名失败测试**
 
-- [ ] **Step 2: 运行迁移测试并确认按目标原因失败**
+在独立 schema 创建九张 legacy 表、九个历史序列、主键、现有 CHECK/FK 和全部独立索引，并插入
+可追踪 ID。核心测试：
+
+```go
+func TestPrepareDomainNamesRenamesTablesAndOwnedObjects(t *testing.T) {
+	db, ctx := openDomainNamesDatabase(t, "complete")
+	createLegacyDomainSchema(t, db)
+
+	if err := database.PrepareDomainNames(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+
+	for oldName, newName := range expectedTableRenames {
+		assertRelationMissing(t, db, oldName)
+		assertRelationExists(t, db, newName)
+	}
+	assertNoOwnedObjectPrefix(t, db, "sys_")
+	assertRowPreserved(t, db, "user_account", 101)
+	assertRowPreserved(t, db, "rbac_menu", 301)
+	assertRowPreserved(t, db, "audit_operation_log", 901)
+}
+```
+
+再增加：
+
+- `TestPrepareDomainNamesIsIdempotentForCompleteNewSchema`：第二次只验证，不执行 DDL；
+- `TestPrepareDomainNamesAllowsCompletelyEmptySchema`：空库返回 nil，交给 AutoMigrate；
+- `TestPrepareDomainNamesRejectsOldAndNewTableTogether`：同一 pair 并存时失败；
+- `TestPrepareDomainNamesRejectsMixedGeneration`：部分 old、部分 new 时失败；
+- `TestPrepareDomainNamesRollsBackAllRenames`：制造目标对象冲突后，九张旧表全部仍存在。
+
+- [ ] **Step 3: 运行测试并确认目标失败**
 
 ```powershell
 cd D:\admin\server
-go test ./internal/module/menu -run 'TestMenuProtocolMigration|TestMenuSchema' -count=1
+go test ./internal/database -run TestPrepareDomainNames -count=1
 ```
 
-预期：因为没有 `PrepareSchema`、没有 `name` 且 action 的 `i18n_key` 仍为非空而失败。
+预期：编译失败，提示 `database.PrepareDomainNames` 尚不存在。
 
-- [ ] **Step 3: 修改模型和启动迁移顺序**
+- [ ] **Step 4: 实现显式表映射和状态机**
 
-模型精确改为：
+`domain_names.go` 固定映射：
+
+```go
+type domainRename struct {
+	Old string
+	New string
+}
+
+var domainTableRenames = []domainRename{
+	{Old: "sys_user", New: "user_account"},
+	{Old: "sys_user_session", New: "auth_session"},
+	{Old: "sys_menu", New: "rbac_menu"},
+	{Old: "sys_role", New: "rbac_role"},
+	{Old: "sys_user_role", New: "rbac_user_role"},
+	{Old: "sys_role_menu", New: "rbac_role_menu"},
+	{Old: "sys_access_version", New: "rbac_access_version"},
+	{Old: "sys_auth_platform", New: "auth_platform"},
+	{Old: "sys_operation_log", New: "audit_operation_log"},
+}
+
+func PrepareDomainNames(ctx context.Context, db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("prepare domain names requires a database")
+	}
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		state, err := inspectDomainRenameState(tx, domainTableRenames)
+		if err != nil {
+			return err
+		}
+		switch state {
+		case domainSchemaEmpty, domainSchemaCurrent:
+			return verifyDomainObjectNames(tx)
+		case domainSchemaLegacy:
+			return renameLegacyDomainObjects(tx)
+		default:
+			return fmt.Errorf("domain schema mixes legacy and current names")
+		}
+	})
+}
+```
+
+`inspectDomainRenameState` 必须逐 pair 查询 `to_regclass(current_schema() || '.' || ?)`；不根据
+单张表猜整个 schema 状态。
+
+- [ ] **Step 5: 实现约束、索引和序列显式映射**
+
+九个序列必须全部显式映射；`rbac_access_version.user_id` 当前虽不再自增，现有开发库仍有
+历史 sequence，迁移不能把它遗留为 `sys_*` 对象：
+
+```go
+var domainSequenceRenames = []domainRename{
+	{Old: "sys_user_id_seq", New: "user_account_id_seq"},
+	{Old: "sys_user_session_id_seq", New: "auth_session_id_seq"},
+	{Old: "sys_menu_id_seq", New: "rbac_menu_id_seq"},
+	{Old: "sys_role_id_seq", New: "rbac_role_id_seq"},
+	{Old: "sys_user_role_id_seq", New: "rbac_user_role_id_seq"},
+	{Old: "sys_role_menu_id_seq", New: "rbac_role_menu_id_seq"},
+	{Old: "sys_access_version_user_id_seq", New: "rbac_access_version_user_id_seq"},
+	{Old: "sys_auth_platform_id_seq", New: "auth_platform_id_seq"},
+	{Old: "sys_operation_log_id_seq", New: "audit_operation_log_id_seq"},
+}
+```
+
+约束使用完整、闭合的 old/new 映射。除下面列出的对象外，迁移不得根据 catalog 名称做前缀
+替换。九个主键约束：
+
+```text
+sys_user_pkey           -> user_account_pkey
+sys_user_session_pkey   -> auth_session_pkey
+sys_menu_pkey           -> rbac_menu_pkey
+sys_role_pkey           -> rbac_role_pkey
+sys_user_role_pkey      -> rbac_user_role_pkey
+sys_role_menu_pkey      -> rbac_role_menu_pkey
+sys_access_version_pkey -> rbac_access_version_pkey
+sys_auth_platform_pkey  -> auth_platform_pkey
+sys_operation_log_pkey  -> audit_operation_log_pkey
+```
+
+业务 CHECK/FK 约束的闭合映射：
+
+```text
+ck_sys_user_is_enabled                    -> ck_user_account_is_enabled
+ck_sys_user_session_version               -> ck_auth_session_version
+fk_sys_user_session_user                  -> fk_auth_session_user
+ck_sys_menu_type                          -> ck_rbac_menu_type
+ck_sys_menu_shape                         -> ck_rbac_menu_shape
+ck_sys_menu_render_shape                  -> ck_rbac_menu_render_shape
+ck_sys_menu_sort_order                    -> ck_rbac_menu_sort_order
+ck_sys_menu_is_enabled                    -> ck_rbac_menu_is_enabled
+ck_sys_menu_is_hidden                     -> ck_rbac_menu_is_hidden
+fk_sys_menu_parent                        -> fk_rbac_menu_parent
+ck_sys_role_is_default                    -> ck_rbac_role_is_default
+ck_sys_role_is_enabled                    -> ck_rbac_role_is_enabled
+fk_sys_user_role_user                     -> fk_rbac_user_role_user
+fk_sys_user_role_role                     -> fk_rbac_user_role_role
+fk_sys_role_menu_role                     -> fk_rbac_role_menu_role
+fk_sys_role_menu_menu                     -> fk_rbac_role_menu_menu
+ck_sys_access_version_version             -> ck_rbac_access_version_version
+fk_sys_access_version_user                -> fk_rbac_access_version_user
+ck_sys_auth_platform_code                 -> ck_auth_platform_code
+ck_sys_auth_platform_policy_version       -> ck_auth_platform_policy_version
+ck_sys_auth_platform_access_ttl_seconds   -> ck_auth_platform_access_ttl_seconds
+ck_sys_auth_platform_refresh_ttl_seconds  -> ck_auth_platform_refresh_ttl_seconds
+ck_sys_auth_platform_session_cache_ttl_seconds -> ck_auth_platform_session_cache_ttl_seconds
+ck_sys_auth_platform_access_cache_ttl_seconds  -> ck_auth_platform_access_cache_ttl_seconds
+ck_sys_auth_platform_bind_device          -> ck_auth_platform_bind_device
+ck_sys_auth_platform_bind_ip              -> ck_auth_platform_bind_ip
+ck_sys_auth_platform_max_sessions         -> ck_auth_platform_max_sessions
+ck_sys_auth_platform_allow_register       -> ck_auth_platform_allow_register
+ck_sys_auth_platform_is_enabled           -> ck_auth_platform_is_enabled
+ck_sys_auth_platform_is_builtin           -> ck_auth_platform_is_builtin
+ck_sys_operation_log_is_success           -> ck_audit_operation_log_is_success
+ck_sys_operation_log_latency_ms           -> ck_audit_operation_log_latency_ms
+```
+
+PostgreSQL 18 暴露的命名 NOT NULL 约束也属于迁移对象。以下花括号是闭合集合，不是通配符；
+实现时展开成逐项 `domainConstraintRename`，old/new 名称都写成编译期常量：
+
+```text
+sys_user_{id,username,email,password_hash,is_enabled,created_at,updated_at}_not_null
+  -> user_account_{同名字段}_not_null
+sys_user_session_{id,user_id,platform,device_id,refresh_token_hash,version,client_ip,user_agent,refresh_expires_at,created_at,updated_at}_not_null
+  -> auth_session_{同名字段}_not_null
+sys_menu_{id,menu_type,code,i18n_key,sort_order,is_enabled,is_hidden,created_at,updated_at}_not_null
+  -> rbac_menu_{同名字段}_not_null
+sys_role_{id,code,name,is_default,is_enabled,created_at,updated_at}_not_null
+  -> rbac_role_{同名字段}_not_null
+sys_user_role_{id,user_id,role_id,created_at,updated_at}_not_null
+  -> rbac_user_role_{同名字段}_not_null
+sys_role_menu_{id,role_id,menu_id,created_at,updated_at}_not_null
+  -> rbac_role_menu_{同名字段}_not_null
+sys_access_version_{user_id,version,created_at,updated_at}_not_null
+  -> rbac_access_version_{同名字段}_not_null
+sys_auth_platform_{id,code,name,policy_version,access_ttl_seconds,refresh_ttl_seconds,session_cache_ttl_seconds,access_cache_ttl_seconds,bind_device,bind_ip,max_sessions,allow_register,is_enabled,is_builtin,created_at,updated_at}_not_null
+  -> auth_platform_{同名字段}_not_null
+sys_operation_log_{id,event_id,request_id,method,route,module,action,client_ip,user_agent,status_code,is_success,latency_ms,created_at,updated_at}_not_null
+  -> audit_operation_log_{同名字段}_not_null
+```
+
+独立索引的闭合映射；主键 backing index 随 `RENAME CONSTRAINT` 同步改名，不在这里重复执行：
+
+```text
+ux_sys_user_username_active              -> ux_user_account_username_active
+ux_sys_user_email_active                 -> ux_user_account_email_active
+ux_sys_user_session_refresh_hash         -> ux_auth_session_refresh_hash
+ix_sys_user_session_user_created         -> ix_auth_session_user_created
+ix_sys_user_session_user_platform_active -> ix_auth_session_user_platform_active
+ux_sys_user_session_current              -> ux_auth_session_current
+ux_sys_menu_code_active                  -> ux_rbac_menu_code_active
+ux_sys_menu_page_path_active             -> ux_rbac_menu_page_path_active
+ix_sys_menu_parent_active                -> ix_rbac_menu_parent_active
+ux_sys_role_code_active                  -> ux_rbac_role_code_active
+ux_sys_role_name_active                  -> ux_rbac_role_name_active
+ux_sys_role_default_active               -> ux_rbac_role_default_active
+ux_sys_user_role_active                  -> ux_rbac_user_role_active
+ux_sys_role_menu_active                  -> ux_rbac_role_menu_active
+ux_sys_auth_platform_code_active         -> ux_auth_platform_code_active
+ux_sys_operation_log_event_id            -> ux_audit_operation_log_event_id
+ux_sys_operation_log_request_id          -> ux_audit_operation_log_request_id
+ix_sys_operation_log_request_id          -> ix_audit_operation_log_request_id
+ix_sys_operation_log_created_at          -> ix_audit_operation_log_created_at
+ix_sys_operation_log_user_created        -> ix_audit_operation_log_user_created
+ix_sys_operation_log_action_created      -> ix_audit_operation_log_action_created
+```
+
+实现分别用 `ALTER TABLE ... RENAME CONSTRAINT`、`ALTER INDEX ... RENAME TO`、
+`ALTER SEQUENCE ... RENAME TO` 和 `ALTER TABLE ... RENAME TO`。标识符只来自编译期常量，
+每次执行前查询精确 old/new 对象状态；不得对 catalog 结果做字符串前缀替换。迁移顺序固定为
+约束 -> 独立索引 -> sequence -> table；可选的历史过渡对象
+`ck_sys_menu_render_shape`、`ux_sys_user_session_current`、`ux_sys_operation_log_request_id` 不存在时
+跳过，但 old/new 同时存在时仍然失败。其余当前对象缺失或目标对象冲突时整体回滚。
+
+- [ ] **Step 6: 运行数据库迁移测试**
+
+```powershell
+cd D:\admin\server
+go fmt ./internal/database/...
+go test ./internal/database -run TestPrepareDomainNames -count=1
+```
+
+预期：六个迁移场景全部通过，测试 schema 在 cleanup 中删除。
+
+**Owner-controlled commit checkpoint:** `feat!: 增加业务域表名迁移`
+
+---
+
+### Task 2: 将 Model、Schema 和 Repository 全面切换到新表名
+
+**Files:**
+- Modify: `server/cmd/api/main.go`
+- Modify: `server/internal/module/user/model.go`
+- Modify: `server/internal/module/user/repository.go`
+- Modify: `server/internal/module/user/repository_test.go`
+- Modify: `server/internal/module/user/service_test.go`
+- Modify: `server/internal/module/auth/session_model.go`
+- Modify: `server/internal/module/auth/schema.go`
+- Modify: `server/internal/module/auth/schema_test.go`
+- Modify: `server/internal/module/auth/session_repository.go`
+- Modify: `server/internal/module/auth/session_repository_test.go`
+- Modify: `server/internal/module/auth/session_admin.go`
+- Modify: `server/internal/module/auth/session_admin_integration_test.go`
+- Modify: `server/internal/module/role/model.go`
+- Modify: `server/internal/module/role/schema.go`
+- Modify: `server/internal/module/role/schema_test.go`
+- Modify: `server/internal/module/role/repository.go`
+- Modify: `server/internal/module/role/repository_test.go`
+- Modify: `server/internal/module/role/service_test.go`
+- Modify: `server/internal/module/menu/model.go`
+- Modify: `server/internal/module/menu/schema.go`
+- Modify: `server/internal/module/menu/schema_test.go`
+- Modify: `server/internal/module/menu/repository.go`
+- Modify: `server/internal/module/menu/repository_test.go`
+- Modify: `server/internal/module/menu/test_models_test.go`
+- Modify: `server/internal/module/access/model.go`
+- Modify: `server/internal/module/access/schema.go`
+- Modify: `server/internal/module/access/schema_test.go`
+- Modify: `server/internal/module/access/repository.go`
+- Modify: `server/internal/module/access/repository_test.go`
+- Modify: `server/internal/module/authplatform/model.go`
+- Modify: `server/internal/module/authplatform/schema.go`
+- Modify: `server/internal/module/authplatform/schema_test.go`
+- Modify: `server/internal/module/authplatform/repository.go`
+- Modify: `server/internal/module/authplatform/repository_test.go`
+- Modify: `server/internal/module/authplatform/service_test.go`
+- Modify: `server/internal/module/operationlog/model.go`
+- Modify: `server/internal/module/operationlog/schema.go`
+- Modify: `server/internal/module/operationlog/schema_test.go`
+- Modify: `server/internal/module/operationlog/repository.go`
+- Modify: `server/internal/module/operationlog/integration_test.go`
+- Test: all `server/internal/module/*/*_test.go` files containing a legacy table literal
+
+- [ ] **Step 1: 将 TableName 和 schema 测试断言先改为目标名称**
+
+目标 Model 映射：
+
+```go
+func (User) TableName() string         { return "user_account" }
+func (Session) TableName() string      { return "auth_session" }
+func (Menu) TableName() string         { return "rbac_menu" }
+func (Role) TableName() string         { return "rbac_role" }
+func (UserRole) TableName() string     { return "rbac_user_role" }
+func (RoleMenu) TableName() string     { return "rbac_role_menu" }
+func (Version) TableName() string      { return "rbac_access_version" }
+func (Platform) TableName() string     { return "auth_platform" }
+func (OperationLog) TableName() string { return "audit_operation_log" }
+```
+
+各 schema test 同步断言新表、新 `ck_*`/`fk_*`/`ux_*`/`ix_*` 名称，并断言对应旧表名不存在。
+
+- [ ] **Step 2: 运行模块测试并确认因旧实现失败**
+
+```powershell
+cd D:\admin\server
+go test ./internal/module/user ./internal/module/auth ./internal/module/role ./internal/module/menu ./internal/module/access ./internal/module/authplatform ./internal/module/operationlog -count=1
+```
+
+预期：TableName、schema 对象和原始 SQL 仍引用 `sys_*`，测试按目标原因失败。
+
+- [ ] **Step 3: 更新 Model tag 和 TableName**
+
+除表名和约束名外不改变业务字段。GORM tag 中的 CHECK 名同步，例如：
+
+```go
+IsEnabled yesno.Value `gorm:"column:is_enabled;type:smallint;not null;default:1;check:ck_user_account_is_enabled,is_enabled IN (0,1)"`
+
+Version int64 `gorm:"column:version;not null;default:1;check:ck_auth_session_version,version >= 1"`
+
+IsDefault yesno.Value `gorm:"column:is_default;type:smallint;not null;default:0;check:ck_rbac_role_is_default,is_default IN (0,1)"`
+```
+
+每个 Model 继续直接声明 `CreatedAt` 和 `UpdatedAt` 的非空 TIMESTAMPTZ；不得顺便引入
+BaseModel 或删除现有 `deleted_at`。
+
+- [ ] **Step 4: 更新各模块 Schema DDL**
+
+按以下关系修改所有 DDL 和 catalog 检查：
+
+```text
+auth:         user_account + auth_session
+role:         rbac_role + rbac_user_role -> user_account
+menu:         rbac_menu + rbac_role_menu -> rbac_role/rbac_menu
+access:       rbac_access_version -> user_account
+authplatform: auth_platform
+operationlog: audit_operation_log
+```
+
+示例：
+
+```sql
+CREATE UNIQUE INDEX IF NOT EXISTS ux_user_account_username_active
+ON user_account (lower(username)) WHERE deleted_at IS NULL;
+
+ALTER TABLE rbac_role_menu ADD CONSTRAINT fk_rbac_role_menu_menu
+FOREIGN KEY (menu_id) REFERENCES rbac_menu(id) ON DELETE RESTRICT;
+
+ALTER TABLE rbac_access_version ADD CONSTRAINT fk_rbac_access_version_user
+FOREIGN KEY (user_id) REFERENCES user_account(id) ON DELETE RESTRICT;
+```
+
+所有 `to_regclass`、`information_schema` 和 `pg_constraint.conrelid` 查询也改为新表名。
+
+- [ ] **Step 5: 定向更新 Repository 原始 SQL**
+
+逐文件修改，不做不受控的全仓替换。完成后运行：
+
+```powershell
+cd D:\admin
+rg -n "sys_(user|user_session|menu|role|user_role|role_menu|access_version|auth_platform|operation_log)" server\internal\module -g "*.go"
+```
+
+预期：只允许 `database/domain_names.go`、一次性 menu legacy migration 和对应迁移测试出现旧名；
+Model、Schema 当前 DDL、Repository、Service 和普通测试夹具不得出现旧名。
+
+- [ ] **Step 6: 把领域迁移接到 AutoMigrate 之前**
+
+`server/cmd/api/main.go` 在打开 PostgreSQL 后立即执行：
+
+```go
+if err := database.PrepareDomainNames(processContext, postgres.GORM); err != nil {
+	return fmt.Errorf("prepare domain database names: %w", err)
+}
+if err := auth.PrepareSessionSchema(processContext, postgres.GORM); err != nil {
+	return fmt.Errorf("prepare authentication schema: %w", err)
+}
+if err := operationlog.PrepareSchema(processContext, postgres.GORM); err != nil {
+	return fmt.Errorf("prepare operation log schema: %w", err)
+}
+```
+
+Task 3 会在同一位置补 `menu.PrepareSchema`。当前 `database.AutoMigrate` 模型列表保持完整，
+但全部 Model 已返回新表名。
+
+- [ ] **Step 7: 运行新表名后端测试**
+
+```powershell
+cd D:\admin\server
+go fmt ./...
+go test ./internal/database ./internal/module/user ./internal/module/auth ./internal/module/role ./internal/module/menu ./internal/module/access ./internal/module/authplatform ./internal/module/operationlog ./cmd/api ./cmd/worker -count=1
+```
+
+预期：全部通过；任何共享 public schema 污染应先改为 `testschema.Open`，不能通过删除开发数据
+掩盖测试隔离问题。
+
+**Owner-controlled commit checkpoint:** `refactor!: 统一后端业务域表名`
+
+---
+
+### Task 3: 原地迁移菜单协议、权限所有权和缓存任务版本
+
+**Files:**
+- Modify: `server/cmd/api/main.go`
+- Create: `server/cmd/api/menu_foundation.go`
+- Modify: `server/cmd/api/main_test.go`
+- Modify: `server/internal/module/menu/model.go`
+- Modify: `server/internal/module/menu/protocol.go`
+- Create: `server/internal/module/menu/foundation.go`
+- Modify: `server/internal/module/menu/schema.go`
+- Modify: `server/internal/module/menu/schema_migration_test.go`
+- Modify: `server/internal/module/menu/schema_test.go`
+- Modify: `server/internal/module/menu/request.go`
+- Modify: `server/internal/module/menu/response.go`
+- Modify: `server/internal/module/menu/tree.go`
+- Modify: `server/internal/module/menu/tree_test.go`
+- Modify: `server/internal/module/menu/repository.go`
+- Modify: `server/internal/module/menu/repository_test.go`
+- Modify: `server/internal/module/menu/service.go`
+- Modify: `server/internal/module/menu/service_test.go`
+- Modify: `server/internal/module/menu/errors.go`
+- Modify: `server/internal/module/menu/errors_test.go`
+- Modify: `server/internal/module/menu/handler_test.go`
+- Modify: `server/internal/module/role/protocol.go`
+- Modify: `server/internal/module/role/route.go`
+- Modify: `server/internal/module/role/permission.go`
+- Modify: `server/internal/module/role/response.go`
+- Modify: `server/internal/module/role/*_test.go`
+- Modify: `server/internal/module/user/protocol.go`
+- Modify: `server/internal/module/user/protocol_test.go`
+- Modify: `server/internal/module/user/route.go`
+- Modify: `server/internal/module/user/handler_test.go`
+- Create: `server/internal/module/auth/protocol.go`
+- Modify: `server/internal/module/auth/session_admin_route.go`
+- Modify: `server/internal/module/auth/session_admin_handler_test.go`
+- Modify: `server/internal/module/authplatform/protocol.go`
+- Modify: `server/internal/module/authplatform/route.go`
+- Modify: `server/internal/module/authplatform/handler_test.go`
+- Create: `server/internal/module/operationlog/protocol.go`
+- Modify: `server/internal/module/operationlog/route.go`
+- Modify: `server/internal/module/operationlog/handler_test.go`
+- Modify: `server/internal/module/operationlog/task.go`
+- Modify: `server/internal/module/operationlog/task_test.go`
+- Modify: `server/internal/module/access/service.go`
+- Modify: `server/internal/module/access/service_test.go`
+- Modify: `server/internal/module/access/redis.go`
+- Modify: `server/internal/module/access/redis_test.go`
+- Modify: `server/internal/module/accessstate/state.go`
+- Modify: `server/internal/module/accessstate/state_test.go`
+- Modify: `server/internal/shared/i18n/catalog.go`
+
+- [ ] **Step 1: 写完整 legacy menu rekey 失败测试**
+
+重写 `openLegacyMenuSchema`，在独立 schema 创建当前 25 个 legacy 节点、角色关系和 access
+version。fixture 将 `system:menu:*` 四行及其一组 role-menu 关系用同一个 `retiredAt` 软删除，
+另建一条删除时间不同的历史 role-menu 关系，证明迁移不会泛化恢复。测试调用顺序：
+
+```go
+if err := database.PrepareDomainNames(ctx, db); err != nil {
+	t.Fatal(err)
+}
+if err := menu.PrepareSchema(ctx, db); err != nil {
+	t.Fatal(err)
+}
+if err := database.AutoMigrate(ctx, db, currentModels()...); err != nil {
+	t.Fatal(err)
+}
+if err := menu.EnsureSchema(ctx, db); err != nil {
+	t.Fatal(err)
+}
+```
+
+断言：
+
+- legacy `system` row ID 原地变为 `access`；
+- 新 `account` 和新 `system` 是另外两行；
+- 所有旧 page/action ID 不变；
+- `rbac_role_menu.menu_id` 不变；
+- 被错误软删除的四个 `system:menu:*` row 原 ID 恢复为有效数据；
+- 只有 `deleted_at == retiredAt` 的对应 role-menu row 原 ID 被恢复，其他已删除授权保持删除；
+- 所有 `rbac_access_version.version` 精确 `+1`；
+- 三个 root、六个 page 和全部 action 的 code/parent/path/componentPath 精确匹配 Spec；
+- action `i18n_key IS NULL`、`icon IS NULL`、`is_hidden = 1`；
+- `name` 非空，未知 code 或未知 icon 会列出值并回滚；
+- 重复 `PrepareSchema` 不再次推进 version 或覆盖管理员展示字段。
+
+- [ ] **Step 2: 写权限所有权和超级管理员失败测试**
+
+每个模块 route test 捕获 `requirePermission` 参数，精确断言本模块常量。示例：
+
+```go
+func TestRoleRoutesUseRBACPermissions(t *testing.T) {
+	want := []string{
+		role.PermissionList,
+		role.PermissionCreate,
+		role.PermissionUpdate,
+		role.PermissionStatus,
+		role.PermissionDefault,
+		role.PermissionDelete,
+		role.PermissionAuthorize,
+		role.PermissionAuthorize,
+	}
+	// 使用现有 route registration helper 收集并比较。
+}
+```
+
+`access/service_test.go` 新增：数据库 source 不包含菜单管理节点时，超级管理员的
+`PermissionCodes` 也不包含任何 `rbac:menu:*`；source 包含节点时才包含。
+
+- [ ] **Step 3: 运行后端协议测试并确认失败**
+
+```powershell
+cd D:\admin\server
+go test ./internal/module/menu ./internal/module/role ./internal/module/user ./internal/module/auth ./internal/module/authplatform ./internal/module/operationlog ./internal/module/access ./internal/module/accessstate -count=1
+```
+
+预期：缺少 name、旧 code/path、权限常量仍集中在 menu、旧缓存版本和旧 task type 导致失败。
+
+- [ ] **Step 4: 将权限常量归还业务模块**
+
+精确常量：
+
+```go
+// menu/protocol.go
+const (
+	PermissionList   = "rbac:menu:list"
+	PermissionCreate = "rbac:menu:create"
+	PermissionUpdate = "rbac:menu:update"
+	PermissionDelete = "rbac:menu:delete"
+)
+
+// role/protocol.go
+const (
+	PermissionList      = "rbac:role:list"
+	PermissionCreate    = "rbac:role:create"
+	PermissionUpdate    = "rbac:role:update"
+	PermissionStatus    = "rbac:role:status"
+	PermissionDefault   = "rbac:role:default"
+	PermissionDelete    = "rbac:role:delete"
+	PermissionAuthorize = "rbac:role:authorize"
+)
+
+// user/protocol.go
+const (
+	PermissionList   = "account:user:list"
+	PermissionUpdate = "account:user:update"
+	PermissionStatus = "account:user:status"
+	PermissionDelete = "account:user:delete"
+	PermissionRoles  = "account:user:roles"
+)
+
+// auth/protocol.go
+const (
+	PermissionSessionList   = "auth:session:list"
+	PermissionSessionRevoke = "auth:session:revoke"
+)
+
+// authplatform/protocol.go
+const (
+	PermissionList   = "auth:platform:list"
+	PermissionCreate = "auth:platform:create"
+	PermissionUpdate = "auth:platform:update"
+	PermissionStatus = "auth:platform:status"
+	PermissionDelete = "auth:platform:delete"
+)
+
+// operationlog/protocol.go
+const PermissionList = "audit:operation-log:list"
+const TaskType = "audit:operation-log:v2"
+```
+
+route.go 只引用同包常量。删除 menu 中所有 Role/User/AuthPlatform/Session/OperationLog 权限
+常量；删除其他模块对 `menu.Permission*` 的引用。
+
+- [ ] **Step 5: 增加 menu name 和可空 i18nKey 协议**
+
+Model 和 Service 类型：
 
 ```go
 type Menu struct {
-	ID            int64          `gorm:"column:id;primaryKey;autoIncrement"`
-	ParentID      *int64         `gorm:"column:parent_id"`
-	MenuType      Type           `gorm:"column:menu_type;type:varchar(16);not null"`
-	Name          string         `gorm:"column:name;type:varchar(128);not null"`
-	Code          string         `gorm:"column:code;type:varchar(128);not null"`
-	I18nKey       *string        `gorm:"column:i18n_key;type:varchar(128)"`
-	Path          *string        `gorm:"column:path;type:varchar(255)"`
-	ComponentPath *string        `gorm:"column:component_path;type:varchar(255)"`
-	Icon          *string        `gorm:"column:icon;type:varchar(128)"`
-	SortOrder     int            `gorm:"column:sort_order;type:integer;not null;default:0"`
-	IsEnabled     yesno.Value    `gorm:"column:is_enabled;type:smallint;not null;default:1"`
-	IsHidden      yesno.Value    `gorm:"column:is_hidden;type:smallint;not null;default:0"`
-	CreatedAt     time.Time      `gorm:"column:created_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
-	UpdatedAt     time.Time      `gorm:"column:updated_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
-	DeletedAt     gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz"`
+	ID            int64
+	ParentID      *int64
+	MenuType      Type
+	Name          string
+	Code          string
+	I18nKey       *string
+	Path          *string
+	ComponentPath *string
+	Icon          *string
+	SortOrder     int
+	IsEnabled     yesno.Value
+	IsHidden      yesno.Value
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	DeletedAt     gorm.DeletedAt
 }
-```
 
-在 `main.go` 中把菜单准备放到 AutoMigrate 之前：
-
-```go
-if err := menu.PrepareSchema(processContext, postgres.GORM); err != nil {
-	return fmt.Errorf("prepare menu schema: %w", err)
-}
-```
-
-启动顺序固定为：
-
-```text
-menu.PrepareSchema
--> database.AutoMigrate（保留 main.go 当前完整模型列表，其中包含 Menu 和 RoleMenu）
--> menu.EnsureSchema
--> 创建 access store/invalidator 和 menu service
--> menuService.EnsureFoundation（Task 2）
-```
-
-- [ ] **Step 4: 实现显式名称迁移**
-
-`PrepareSchema` 只在已存在 `sys_menu` 时执行事务迁移。新增列、旧字段迁移和约束前数据整理使用明确 SQL：
-
-```sql
-ALTER TABLE sys_menu ADD COLUMN IF NOT EXISTS name VARCHAR(128) NULL;
-ALTER TABLE sys_menu ADD COLUMN IF NOT EXISTS component_path VARCHAR(255) NULL;
-ALTER TABLE sys_menu ADD COLUMN IF NOT EXISTS is_hidden SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE sys_menu ALTER COLUMN i18n_key DROP NOT NULL;
-UPDATE sys_menu SET i18n_key = NULL WHERE menu_type = 'action';
-UPDATE sys_menu SET is_hidden = 1 WHERE menu_type = 'action' AND is_hidden <> 1;
-ALTER TABLE sys_menu ALTER COLUMN name SET NOT NULL;
-```
-
-只有本次新增 `name` 列时才使用下面的完整历史映射；不得用 code 或 i18nKey 兜底：
-
-```go
-var legacyMenuNames = map[string]string{
-	"system": "系统管理",
-	"system:menu:list": "菜单管理",
-	"system:menu:create": "新增菜单",
-	"system:menu:update": "修改菜单",
-	"system:menu:delete": "删除菜单",
-	"system:role:list": "角色管理",
-	"system:role:create": "新增角色",
-	"system:role:update": "修改角色",
-	"system:role:status": "修改角色状态",
-	"system:role:default": "设置默认角色",
-	"system:role:delete": "删除角色",
-	"system:role:authorize": "角色授权",
-	"system:user:list": "用户管理",
-	"system:user:update": "修改用户",
-	"system:user:status": "修改用户状态",
-	"system:user:delete": "删除用户",
-	"system:user:roles": "分配用户角色",
-	"system:auth-platform:list": "认证平台",
-	"system:auth-platform:create": "新增认证平台",
-	"system:auth-platform:update": "修改认证平台",
-	"system:auth-platform:status": "修改认证平台状态",
-	"system:auth-platform:delete": "删除认证平台",
-	"system:session:list": "会话管理",
-	"system:session:revoke": "踢出会话",
-	"system:operation-log:list": "操作日志",
-}
-```
-
-完成映射后查询 `name IS NULL OR btrim(name) = ''`，有结果就返回包含全部 code 的错误并让事务回滚。
-旧 `migrateMenuProtocol` 保留 `view_key -> component_path` 的明确映射和删列逻辑，但删除
-`retireLegacyMenuManagementNode` 调用及函数本身；结构迁移不得再软删除菜单或角色关系。
-
-- [ ] **Step 5: 替换数据库形状约束**
-
-`ck_sys_menu_shape` 精确包含名称和翻译键职责：
-
-```sql
-CHECK (
-  btrim(name) <> ''
-  AND (
-    (menu_type = 'directory' AND i18n_key IS NOT NULL AND btrim(i18n_key) <> ''
-      AND path IS NULL AND component_path IS NULL)
-    OR
-    (menu_type = 'page' AND i18n_key IS NOT NULL AND btrim(i18n_key) <> ''
-      AND path IS NOT NULL AND btrim(path) <> ''
-      AND component_path IS NOT NULL AND btrim(component_path) <> '')
-    OR
-    (menu_type = 'action' AND i18n_key IS NULL AND path IS NULL
-      AND component_path IS NULL AND icon IS NULL AND is_hidden = 1)
-  )
-)
-```
-
-保留现有类型、排序、YesNo、外键和部分唯一索引；不重新创建 `view_key`。
-
-- [ ] **Step 6: 贯通 menu HTTP 与业务类型**
-
-输入和输出字段统一为：
-
-```go
 type CreateInput struct {
 	ParentID *int64
 	MenuType Type
@@ -266,553 +733,356 @@ type CreateInput struct {
 	IsEnabled yesno.Value
 	IsHidden yesno.Value
 }
+```
 
-type UpdateInput struct {
-	ParentID *int64
+`UpdateInput` 同样增加 `Name`、把 `I18nKey` 改为 `*string`，但继续不允许更新 code。
+request 使用 `nullableString` 要求 `i18nKey` 字段显式出现；response 返回
+`name`、`i18nKey: string | null` 和 `isProtected`。
+
+`validMenuName` 使用 trim、UTF-8 rune 1-128；directory/page 要求合法 i18nKey，action 要求
+nil。PostgreSQL `ck_rbac_menu_shape` 同步校验 name、i18n_key 和三种 shape。
+
+- [ ] **Step 6: 实现 old code -> new code 原地迁移**
+
+`menu.PrepareSchema` 在 `rbac_menu` 存在时执行事务。核心 code 映射必须完整：
+
+```go
+var legacyPermissionCodes = map[string]string{
+	"system:menu:list": "rbac:menu:list",
+	"system:menu:create": "rbac:menu:create",
+	"system:menu:update": "rbac:menu:update",
+	"system:menu:delete": "rbac:menu:delete",
+	"system:role:list": "rbac:role:list",
+	"system:role:create": "rbac:role:create",
+	"system:role:update": "rbac:role:update",
+	"system:role:status": "rbac:role:status",
+	"system:role:default": "rbac:role:default",
+	"system:role:delete": "rbac:role:delete",
+	"system:role:authorize": "rbac:role:authorize",
+	"system:user:list": "account:user:list",
+	"system:user:update": "account:user:update",
+	"system:user:status": "account:user:status",
+	"system:user:delete": "account:user:delete",
+	"system:user:roles": "account:user:roles",
+	"system:session:list": "auth:session:list",
+	"system:session:revoke": "auth:session:revoke",
+	"system:auth-platform:list": "auth:platform:list",
+	"system:auth-platform:create": "auth:platform:create",
+	"system:auth-platform:update": "auth:platform:update",
+	"system:auth-platform:status": "auth:platform:status",
+	"system:auth-platform:delete": "auth:platform:delete",
+	"system:operation-log:list": "audit:operation-log:list",
+}
+```
+
+`name` 回填不读取 i18n 语言包，也不把 code 机械转成人类文案。当前 25 个 legacy 节点使用
+以下闭合映射；缺少任一当前节点映射时列出 code 并回滚：
+
+```go
+var legacyMenuNames = map[string]string{
+	"system":                         "权限与认证",
+	"system:menu:list":               "菜单管理",
+	"system:menu:create":             "新增菜单",
+	"system:menu:update":             "修改菜单",
+	"system:menu:delete":             "删除菜单",
+	"system:role:list":               "角色管理",
+	"system:role:create":             "新增角色",
+	"system:role:update":             "修改角色",
+	"system:role:status":             "修改角色状态",
+	"system:role:default":            "设置默认角色",
+	"system:role:delete":             "删除角色",
+	"system:role:authorize":          "配置角色权限",
+	"system:user:list":               "用户管理",
+	"system:user:update":             "修改用户",
+	"system:user:status":             "修改用户状态",
+	"system:user:delete":             "删除用户",
+	"system:user:roles":              "分配用户角色",
+	"system:session:list":            "会话管理",
+	"system:session:revoke":          "踢出会话",
+	"system:auth-platform:list":      "认证平台",
+	"system:auth-platform:create":    "新增认证平台",
+	"system:auth-platform:update":    "编辑认证平台",
+	"system:auth-platform:status":    "变更认证平台状态",
+	"system:auth-platform:delete":    "删除认证平台",
+	"system:operation-log:list":      "操作日志",
+}
+```
+
+当前开发库的已知图标按 legacy code 校验并迁移，不能只按旧图标字符串全局替换，因为两个
+`List` 的目标语义不同：
+
+```go
+type legacyIconTarget struct {
+	Old string
+	New string
+}
+
+var legacyMenuIcons = map[string]legacyIconTarget{
+	"system":                    {Old: "Setting", New: "lucide:shield-check"},
+	"system:menu:list":          {Old: "Menu", New: "lucide:panel-left"},
+	"system:role:list":          {Old: "UserFilled", New: "lucide:user-cog"},
+	"system:user:list":          {Old: "User", New: "lucide:user-round-cog"},
+	"system:auth-platform:list": {Old: "Key", New: "lucide:key-round"},
+	"system:session:list":       {Old: "List", New: "lucide:monitor-smartphone"},
+	"system:operation-log:list": {Old: "List", New: "lucide:scroll-text"},
+}
+```
+
+这七个节点只接受表中写明的旧值；其余 action 必须为 `NULL`。先完成旧值校验，再更新 icon；
+遇到其他非空 icon 时错误必须包含 code 和原值。复用的 `system` row 同时更新为
+`code=access`、`name=权限与认证`、`i18n_key=navigation.access`、`sort_order=200`；新插入的
+`account` 和 `system` root 使用 Spec 第 6.1 节的 name/i18nKey/icon/sortOrder。
+
+page 目标：
+
+```go
+var migratedPages = map[string]pageTarget{
+	"account:user:list": {ParentCode: "account", Path: "/account/users", ComponentPath: "account/users", I18nKey: "navigation.accountUsers", Icon: "lucide:user-round-cog", SortOrder: 10},
+	"auth:session:list": {ParentCode: "account", Path: "/account/sessions", ComponentPath: "account/sessions", I18nKey: "navigation.accountSessions", Icon: "lucide:monitor-smartphone", SortOrder: 20},
+	"rbac:menu:list": {ParentCode: "access", Path: "/access/menus", ComponentPath: "access/menus", I18nKey: "navigation.accessMenus", Icon: "lucide:panel-left", SortOrder: 10},
+	"rbac:role:list": {ParentCode: "access", Path: "/access/roles", ComponentPath: "access/roles", I18nKey: "navigation.accessRoles", Icon: "lucide:user-cog", SortOrder: 20},
+	"auth:platform:list": {ParentCode: "access", Path: "/access/auth-platforms", ComponentPath: "access/auth-platforms", I18nKey: "navigation.accessAuthPlatforms", Icon: "lucide:key-round", SortOrder: 30},
+	"audit:operation-log:list": {ParentCode: "system", Path: "/system/operation-logs", ComponentPath: "system/operation-logs", I18nKey: "navigation.systemOperationLogs", Icon: "lucide:scroll-text", SortOrder: 10},
+}
+```
+
+复用旧 `system` ID 作为 access；插入 account/system root 后按 parent code 更新 page，再按 page
+更新 action parent。先校验目标 code 不被其他 ID 占用，再更新 code，必要时使用事务内临时
+code 避免唯一索引碰撞。最后：
+
+```sql
+UPDATE rbac_access_version
+SET version = version + 1, updated_at = CURRENT_TIMESTAMP;
+```
+
+只有实际发生 legacy rekey 时推进一次。保留 `view_key -> component_path` 历史迁移，但删除
+`retireLegacyMenuManagementNode` 及其软删除行为。rekey 查询必须使用 unscoped 数据，保证当前
+已被错误删除的 `system:menu:*` 四行仍按原 ID 更新。在清除这些 menu row 的 `deleted_at` 之前，
+先用精确时间相等恢复关联授权：
+
+```sql
+UPDATE rbac_role_menu AS role_menu
+SET deleted_at = NULL,
+    updated_at = CURRENT_TIMESTAMP
+FROM rbac_menu AS menu
+WHERE role_menu.menu_id = menu.id
+  AND menu.code IN (
+    'system:menu:list',
+    'system:menu:create',
+    'system:menu:update',
+    'system:menu:delete'
+  )
+  AND menu.deleted_at IS NOT NULL
+  AND role_menu.deleted_at = menu.deleted_at;
+```
+
+随后只恢复这四个受保护 menu row。不得使用 `menu_id IN (...) AND deleted_at IS NOT NULL` 泛化
+恢复授权；删除时间不同的历史关系和其他普通软删除数据必须保持不变。
+
+- [ ] **Step 7: 实现受保护基础节点和空库首次种子**
+
+`menu/foundation.go` 定义：
+
+```go
+type FoundationDefinition struct {
+	ParentCode string
 	MenuType Type
 	Name string
+	Code string
 	I18nKey *string
 	Path *string
 	ComponentPath *string
 	Icon *string
 	SortOrder int
+	IsEnabled yesno.Value
 	IsHidden yesno.Value
+	Protected bool
+}
+
+func IsProtectedCode(code string) bool {
+	return code == "access" || code == PermissionList ||
+		code == PermissionCreate || code == PermissionUpdate || code == PermissionDelete
 }
 ```
 
-`createRequest/updateRequest` 增加必传 `name`，把 `i18nKey` 改为 `nullableString` 且必须显式出现。`managedMenuResponse` 在本 Task 返回：
+`cmd/api/menu_foundation.go` 使用 menu/role/user/auth/authplatform/operationlog 常量构造三个 root、
+六个 page 和全部 action。空表时在一个事务中创建完整 catalog；非空表只恢复/创建五个
+protected 定义，不复活被管理员删除的普通节点。
+
+Service 的 `EnsureFoundation(ctx, definitions)` 继续使用 repository 锁、access invalidating
+lease 和 version 推进。基础节点无变化时零写入、零 version 变化。Update 只允许受保护节点
+展示字段变化；UpdateStatus/Delete/结构变化返回 `CodeMenuProtected`。
+
+- [ ] **Step 8: 删除超级管理员权限硬编码并更新角色名称 DTO**
+
+删除 `access.buildSnapshot` 中：
 
 ```go
-Name string `json:"name"`
-I18nKey *string `json:"i18nKey"`
+permissionCodes = append(permissionCodes,
+	menu.PermissionList,
+	menu.PermissionCreate,
+	menu.PermissionUpdate,
+	menu.PermissionDelete,
+)
 ```
 
-`validMenuName` 使用 `TrimSpace`、UTF-8 rune 计数和 128 字符限制。directory/page 要求合法非空 i18nKey；action 要求 nil。`/system/menus` 从通用禁止路径集合移除，`/login`、`/register`、`/dashboard` 继续禁止。
+`role.PermissionTreeNode` 改为：
 
-- [ ] **Step 7: 同步 access/role 的 Go 类型以保持编译期一致**
+```go
+type PermissionTreeNode struct {
+	ID int64
+	ParentID *int64
+	MenuType menu.Type
+	Code string
+	Name string
+	IsEnabled yesno.Value
+	Children []PermissionTreeNode
+}
+```
 
-- `access.SourceMenu.I18nKey` 改为 `*string`；只有 directory/page 在构建 `MenuNode` 时解引用；action 必须为 nil。
-- `role.PermissionTreeNode` 增加 `Name string` 并删除 `I18nKey`；`permissionTreeResponse` 同步返回 name；角色权限树校验所有节点的 name 非空。
-- 更新所有 Go fixture：每个 `menu.Menu` 都填写 `Name`，directory/page 使用字符串指针 i18nKey，action 使用 nil。
-- 不在这一步删除超级管理员硬编码权限；该行为由 Task 3 的独立失败测试驱动。
+`access.SourceMenu.I18nKey` 同步改为 `*string`，Repository 才能扫描 action 的 `NULL`。构建
+access tree 时只对 directory/page 解引用：这两类为 nil 时明确返回协议错误，再写入仍保持
+`I18nKey string` 的 `access.MenuNode`/HTTP DTO；action 不进入 menu tree，只进入
+`permissionCodes`。角色授权树展示 name，不再返回 action i18nKey。
 
-- [ ] **Step 8: 运行后端三个模块测试**
+- [ ] **Step 9: 提升缓存协议并重命名 Asynq task**
+
+```go
+// accessstate/state.go
+const SchemaVersion = 2
+
+// access/redis.go
+const accessSnapshotSchemaVersion = 3
+```
+
+旧 state 必须解码失败并由现有 repair 流程使用 PostgreSQL version 重建。operationlog
+`task.go` 全部使用 `TaskType`；payload 的 `schemaVersion = 2`、闭合 DTO、脱敏和未知字段拒绝
+规则保持不变。
+
+- [ ] **Step 10: 固定 API 启动顺序**
+
+```go
+database.PrepareDomainNames
+-> auth.PrepareSessionSchema
+-> operationlog.PrepareSchema
+-> menu.PrepareSchema
+-> database.AutoMigrate
+-> role/authplatform/auth/menu/access/operationlog EnsureSchema
+-> open Redis and Queue
+-> construct access invalidator/menu service
+-> menuService.EnsureFoundation(processContext, menuFoundation())
+-> build router
+```
+
+当前代码中提前打开 Redis/Queue 的逻辑必须下移到全部 Schema/AutoMigrate/EnsureSchema 成功
+之后，不允许保留提前连接。foundation 必须在 router 和 HTTP server 之前完成；任何步骤失败
+都关闭已经打开的资源并返回错误，不启动部分 API。
+
+- [ ] **Step 11: 运行后端完整定向测试**
 
 ```powershell
 cd D:\admin\server
 go fmt ./...
-go test ./internal/module/menu ./internal/module/access ./internal/module/role -count=1
-go test ./cmd/api -count=1
+go test ./internal/module/menu ./internal/module/role ./internal/module/user ./internal/module/auth ./internal/module/authplatform ./internal/module/operationlog ./internal/module/access ./internal/module/accessstate ./cmd/api ./cmd/worker -count=1
 ```
 
-预期：全部通过；数据库测试实际连接 PostgreSQL。不得用 SQLite 或内存数据库替代。
+预期：迁移、权限所有权、foundation、角色名称、缓存协议和 task type 测试全部通过。
 
-**Owner-controlled commit checkpoint:** `feat!: 调整菜单名称与翻译键协议`
+**Owner-controlled commit checkpoint:** `feat!: 切换业务域权限与菜单协议`
 
 ---
 
-### Task 2: 恢复并保护数据库基础 RBAC 节点
+### Task 4: 同步前端业务域目录、路由、权限与 DTO
 
 **Files:**
-- Create: `server/internal/module/menu/foundation.go`
-- Modify: `server/internal/module/menu/repository.go`
-- Modify: `server/internal/module/menu/service.go`
-- Modify: `server/internal/module/menu/response.go`
-- Modify: `server/internal/module/menu/errors.go`
-- Modify: `server/internal/shared/i18n/catalog.go`
-- Modify: `server/cmd/api/main.go`
-- Test: `server/internal/module/menu/service_test.go`
-- Test: `server/internal/module/menu/repository_test.go`
-- Test: `server/internal/module/menu/errors_test.go`
-- Test: `server/internal/module/menu/schema_migration_test.go`
-
-- [ ] **Step 1: 写基础节点恢复与保护失败测试**
-
-使用现有 `openMenuTransaction`、真实 PostgreSQL 和 Redis access-state 测试辅助函数新增以下测试：
-
-| 测试名 | 准备数据 | 精确结果 |
-| --- | --- | --- |
-| `TestEnsureFoundationRestoresDatabaseMenusAndMatchingRoleGrants` | 先用同一时间软删除 menu page/actions 和当前 role_menu，再插入一个更早删除的历史 grant | 恢复四个 menu 节点及同时间 grant；更早 grant 保持删除 |
-| `TestEnsureFoundationCreatesMissingNodesAndIsIdempotent` | 只保留空菜单表和有效 access version | 第一次创建五个节点并推进 version；第二次零写入且 version 不变 |
-| `TestEnsureFoundationRejectsConflictingActiveShape` | 创建 code 为 `system:menu:list` 但 path 错误的活动 page | 返回结构冲突，事务与 Redis state 均不改变 |
-| `TestProtectedMenuAllowsDisplayUpdateOnly` | 完整基础树 | name/i18n/icon/sort 更新成功，结构字段保持原值 |
-| `TestProtectedMenuRejectsStructureStatusAndDelete` | 完整基础树 | 改父级/类型/path/componentPath/hidden、禁用、删除均返回 `CodeMenuProtected` |
-
-关键断言：
-
-- 恢复后五个 code 都是活动 `sys_menu` 行；
-- `system:menu:list` 的父级是 `system`，path/componentPath 精确匹配；
-- action 的 i18nKey/path/componentPath/icon 为 NULL、isHidden=1；
-- 只恢复 `sys_role_menu.deleted_at = 对应菜单错误删除时间` 的关系；更早历史关系仍软删除；
-- 恢复或创建节点后推进所有受影响用户的 `sys_access_version` 和 Redis ready generation；
-- 第二次执行不写数据库、不推进 version；
-- 修改 name/i18n/icon/sort 成功，结构字段、状态和删除返回新保护错误。
-
-- [ ] **Step 2: 运行测试并确认失败**
-
-```powershell
-cd D:\admin\server
-go test ./internal/module/menu -run 'TestEnsureFoundation|TestProtectedMenu' -count=1
-```
-
-预期：因为没有基础定义、恢复逻辑和保护错误而失败。
-
-- [ ] **Step 3: 创建唯一基础节点定义**
-
-`foundation.go` 只定义五个真实节点：
-
-```go
-const FoundationSystemCode = "system"
-
-var foundationMenus = []foundationDefinition{
-	{Code: FoundationSystemCode, Type: TypeDirectory, Name: "系统管理", I18nKey: stringPointer("navigation.system"), Icon: stringPointer("Setting"), SortOrder: 100, IsEnabled: yesno.Yes, IsHidden: yesno.No},
-	{Code: PermissionList, ParentCode: FoundationSystemCode, Type: TypePage, Name: "菜单管理", I18nKey: stringPointer("navigation.systemMenus"), Path: stringPointer("/system/menus"), ComponentPath: stringPointer("system/menus"), Icon: stringPointer("Menu"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
-	{Code: PermissionCreate, ParentCode: PermissionList, Type: TypeAction, Name: "新增菜单", SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-	{Code: PermissionUpdate, ParentCode: PermissionList, Type: TypeAction, Name: "修改菜单", SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-	{Code: PermissionDelete, ParentCode: PermissionList, Type: TypeAction, Name: "删除菜单", SortOrder: 30, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-}
-```
-
-提供：
-
-```go
-func IsProtectedCode(code string) bool
-func protectedValue(code string) yesno.Value
-func (s *Service) EnsureFoundation(ctx context.Context) error
-```
-
-基础定义不是通用注册器，不接受运行时扩展，也不包含角色、用户等普通业务菜单。
-
-- [ ] **Step 4: 实现历史恢复与创建**
-
-Repository 增加明确方法：
-
-```go
-func (r *Repository) LockFoundationHistory(ctx context.Context, codes []string) ([]Menu, error)
-func (r *Repository) RestoreFoundationRoleMenus(ctx context.Context, menuIDs []int64, deletedAtByMenu map[int64]time.Time, now time.Time) error
-func (r *Repository) RestoreFoundationMenus(ctx context.Context, menuIDs []int64, now time.Time) error
-```
-
-恢复顺序必须是：
-
-```text
-锁 active menus/用户/access versions
--> Unscoped 锁基础节点历史
--> 校验 active/历史记录唯一
--> 先按相同 deleted_at 恢复 sys_role_menu
--> 再恢复 sys_menu
--> 创建完全缺失节点
--> 再构建完整树校验
--> 推进 PostgreSQL access version
--> 提交事务
--> 发布 Redis generation
-```
-
-任何唯一索引冲突、重复历史或父节点错误都返回显式错误并回滚。
-
-- [ ] **Step 5: 实现后端保护错误**
-
-新增错误：
-
-```go
-const CodeMenuProtected = 14010
-
-func menuProtected(code string, cause error) *apperror.Error {
-	return newMenuError(
-		http.StatusConflict,
-		CodeMenuProtected,
-		i18n.KeyMenuProtected,
-		map[string]string{"code": code},
-		cause,
-	)
-}
-```
-
-中英文 catalog 明确为“基础菜单 {{code}} 不允许执行该操作”及对应英文。Service 规则：
-
-- Update 基础节点时，结构字段必须与数据库当前值一致；
-- Update 允许 name/i18n/icon/sortOrder；action 只允许 name/sortOrder；
-- UpdateStatus 改变基础节点状态直接拒绝；
-- Delete 基础节点直接拒绝；
-- `ManagedMenu.IsProtected` 由 code 计算，不增加数据库列；`managedMenuResponse` 在本 Task 增加 `IsProtected int16 json:"isProtected"`。
-
-- [ ] **Step 6: 在 API 启动前确保基础节点**
-
-创建 `menuService` 后立即执行：
-
-```go
-if err := menuService.EnsureFoundation(processContext); err != nil {
-	return fmt.Errorf("ensure foundation menus: %w", err)
-}
-```
-
-该调用发生在 HTTP Server 启动前；Redis 故障或 generation 发布失败会阻止 API 启动，不允许带旧权限快照运行。
-
-- [ ] **Step 7: 运行定向测试**
-
-```powershell
-cd D:\admin\server
-go fmt ./...
-go test ./internal/module/menu ./cmd/api -count=1
-```
-
-预期：全部通过。
-
-**Owner-controlled commit checkpoint:** `fix: 恢复并保护菜单管理数据库节点`
-
----
-
-### Task 3: 删除 access 中硬编码菜单权限
-
-**Files:**
-- Modify: `server/internal/module/access/service.go`
-- Modify: `server/internal/module/access/repository.go`
-- Test: `server/internal/module/access/service_test.go`
-- Test: `server/internal/module/access/repository_test.go`
-- Test: `server/internal/module/access/handler_test.go`
-- Test: `server/internal/module/access/redis_test.go`
-
-- [ ] **Step 1: 写数据库权限来源失败测试**
-
-替换旧的 `TestBuildSnapshotAddsStaticMenuPermissionsForSuperAdminWithoutMenuRows`：
-
-```go
-func TestBuildSnapshotDoesNotInventPermissionsForSuperAdmin(t *testing.T) {
-	snapshot, err := buildSnapshot(Source{
-		Version: 1,
-		RoleCodes: []string{"super_admin"},
-		SuperAdmin: true,
-		Menus: []SourceMenu{},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(snapshot.PermissionCodes) != 0 || len(snapshot.MenuTree) != 0 {
-		t.Fatalf("snapshot invented database permissions: %+v", snapshot)
-	}
-}
-```
-
-另测：
-
-- 超级管理员在基础节点存在时从 page/action 行获得四个 `system:menu:*` code；
-- 普通角色只有 `sys_role_menu` 直接授权的 page/action 及有效祖先；
-- action 的 nil i18nKey 合法，但 directory/page 的 nil i18nKey 让快照失败；
-- access JSON 和 Redis cache 仍只包含 directory/page 且 i18nKey 为 string；
-- `/system/menus` 是合法 access page path。
-
-- [ ] **Step 2: 运行 access 测试并确认旧硬编码导致失败**
-
-```powershell
-cd D:\admin\server
-go test ./internal/module/access -run 'TestBuildSnapshot|TestFindSourceWithVersion' -count=1
-```
-
-预期：空菜单超级管理员仍得到四个权限，因此失败。
-
-- [ ] **Step 3: 删除硬编码追加并按节点类型校验 i18nKey**
-
-从 `buildSnapshot` 删除：
-
-```go
-if source.SuperAdmin {
-	permissionCodes = append(permissionCodes,
-		menu.PermissionList,
-		menu.PermissionCreate,
-		menu.PermissionUpdate,
-		menu.PermissionDelete,
-	)
-}
-```
-
-同时删除不再需要的 `menu` import。`validateSelectedMenus` 改为：
-
-```go
-switch item.MenuType {
-case MenuDirectory, MenuPage:
-	if item.I18nKey == nil || !validAccessI18nKey(*item.I18nKey) {
-		return fmt.Errorf("menu %d has an invalid i18n key", id)
-	}
-case MenuAction:
-	if item.I18nKey != nil {
-		return fmt.Errorf("action menu %d has an i18n key", id)
-	}
-}
-```
-
-`buildMenuNode` 只接收 directory/page，显式检查指针后解引用。`staticAccessPagePaths` 只保留 `/login`、`/register`、`/dashboard`。
-
-- [ ] **Step 4: 运行 access 完整测试**
-
-```powershell
-cd D:\admin\server
-go fmt ./...
-go test ./internal/module/access -count=1
-```
-
-预期：全部通过；Redis snapshot schema 不需要增加未使用的 `name`。
-
-**Owner-controlled commit checkpoint:** `fix: 统一从数据库菜单生成访问权限`
-
----
-
-### Task 4: 让前端角色授权矩阵显示数据库名称
-
-**Files:**
-- Modify: `web/src/api/role.contract.ts`
-- Modify: `web/src/views/system/roles/role-permission-matrix.ts`
-- Modify: `web/src/views/system/roles/components/RolePermissionMatrix.vue`
-- Test: `web/tests/api/role.contract.test.ts`
-- Test: `web/tests/views/system/roles/role-permission-matrix.test.ts`
-- Test: `web/tests/views/system/roles/components/RolePermissionMatrix.test.ts`
-- Test: `web/tests/views/system/roles/index.test.ts`
-
-- [ ] **Step 1: 写角色授权名称失败测试**
-
-使用 Task 1 已经落地的后端响应节点夹具：
-
-```json
-{
-  "id": 3,
-  "parentId": 2,
-  "menuType": "action",
-  "code": "system:menu:create",
-  "name": "新增菜单",
-  "isEnabled": 1,
-  "children": []
-}
-```
-
-前端测试把 locale 切换为 `en-US`，仍断言矩阵显示“系统管理 / 菜单管理 / 新增菜单”，同时页面控件文案可以变成英文。closed parser 必须拒绝旧 `i18nKey` 字段和缺少 `name` 的节点。
-
-- [ ] **Step 2: 运行角色定向测试并确认失败**
-
-```powershell
-cd D:\admin\web
-pnpm vitest run tests/api/role.contract.test.ts tests/views/system/roles/role-permission-matrix.test.ts tests/views/system/roles/components/RolePermissionMatrix.test.ts
-```
-
-预期：前端协议仍读取 i18nKey，矩阵仍调用 `t(...)`，测试失败。
-
-- [ ] **Step 3: 修改前端角色权限 DTO 和矩阵类型**
-
-```ts
-export interface RolePermissionTreeNode {
-  id: number
-  parentId: number | null
-  menuType: RolePermissionMenuType
-  code: string
-  name: string
-  isEnabled: YesNo
-  children: RolePermissionTreeNode[]
-}
-```
-
-矩阵类型统一为 `groupName/pageName/action.name`，模板直接渲染：
-
-```vue
-<strong>{{ group.groupName }}</strong>
-<strong>{{ row.pageName }}</strong>
-<strong>{{ action.name }}</strong>
-```
-
-code 继续作为次要信息显示；数据库名称不经过 `t()`。
-
-- [ ] **Step 4: 运行角色前端测试和构建**
-
-```powershell
-cd D:\admin\web
-pnpm vitest run tests/api/role.contract.test.ts tests/views/system/roles/role-permission-matrix.test.ts tests/views/system/roles/components/RolePermissionMatrix.test.ts tests/views/system/roles/index.test.ts
-pnpm build
-```
-
-预期：全部通过。
-
-**Owner-controlled commit checkpoint:** `fix: 使用数据库名称展示角色权限`
-
----
-
-### Task 5: 恢复数据库菜单的路由和布局链
-
-**Files:**
+- Move: `web/src/views/system/users` -> `web/src/views/account/users`
+- Move: `web/src/views/system/sessions` -> `web/src/views/account/sessions`
+- Move: `web/src/views/system/menus` -> `web/src/views/access/menus`
+- Move: `web/src/views/system/roles` -> `web/src/views/access/roles`
+- Move: `web/src/views/system/auth-platforms` -> `web/src/views/access/auth-platforms`
+- Move matching tests under `web/tests/views/system/*` to `web/tests/views/account/*` or `web/tests/views/access/*`
+- Move: `web/src/styles/system-pages.scss` -> `web/src/styles/management-pages.scss`
+- Modify: `web/src/styles/index.scss`
+- Modify: all moved Vue/test imports
 - Modify: `web/src/api/menu-fields.ts`
+- Modify: `web/src/api/menu.contract.ts`
+- Modify: `web/src/api/role.contract.ts`
+- Modify: `web/src/api/access.contract.ts`
+- Modify: `web/src/router/index.ts`
 - Modify: `web/src/router/access-routes.ts`
 - Modify: `web/src/layout/components/AppAside.vue`
 - Modify: `web/src/layout/breadcrumbs.ts`
 - Modify: `web/src/layout/components/RouteTabs.vue`
 - Modify: `web/src/layout/index.vue`
-- Test: `web/tests/router/access-routes.test.ts`
-- Test: `web/tests/router/index.test.ts`
-- Test: `web/tests/layout/components/AccessMenuNode.test.ts`
-- Test: `web/tests/layout/components/RouteTabs.test.ts`
-- Test: `web/tests/layout/breadcrumbs.test.ts`
-- Test: `web/tests/layout/index.test.ts`
-
-- [ ] **Step 1: 写静态组件绑定但动态菜单来源的失败测试**
-
-测试覆盖：
-
-1. `AppAside` 不存在手工 `/system/menus` 菜单项；
-2. access 树中的 `system -> system:menu:list` 在系统管理下自然渲染；
-3. `/system/menus + system/menus + system:menu:list` 复用静态 route record，不执行 `addRoute`；
-4. 相同 path 但错误 code/componentPath 明确抛 `ProtocolError`；
-5. 其他数据库 page 继续动态 `addRoute`，失败时倒序清理；
-6. 菜单管理面包屑为“系统管理 -> 菜单管理”，不走 path 特例；
-7. 静态 route meta 即使是固定 key，RouteTabs 仍优先使用 access 节点的实时 i18nKey。
-
-- [ ] **Step 2: 运行路由和布局测试确认失败**
-
-```powershell
-cd D:\admin\web
-pnpm vitest run tests/router/access-routes.test.ts tests/router/index.test.ts tests/layout/components/AccessMenuNode.test.ts tests/layout/components/RouteTabs.test.ts tests/layout/breadcrumbs.test.ts tests/layout/index.test.ts
-```
-
-预期：静态 path 被当作重复、Aside 手工插入菜单、breadcrumb 使用特例而失败。
-
-- [ ] **Step 3: 在动态路由注册器中校验静态绑定**
-
-定义唯一绑定：
-
-```ts
-const staticPageBinding = {
-  code: 'system:menu:list',
-  path: '/system/menus',
-  componentPath: 'system/menus',
-  routeName: 'system-menus',
-} as const
-```
-
-收集 page 时先判断 exact binding：
-
-```ts
-if (node.path === staticPageBinding.path) {
-  if (
-    node.code !== staticPageBinding.code
-    || node.componentPath !== staticPageBinding.componentPath
-    || !existingNames.has(staticPageBinding.routeName)
-  ) {
-    throw new ProtocolError(`access page ${node.code} conflicts with the static menu binding`)
-  }
-  paths.add(node.path)
-  continue
-}
-```
-
-精确绑定不加入 `pages`，所以不会重复 addRoute；其他 existing path 仍报错。`menu-fields.ts` 的静态禁止集合删除 `/system/menus`。
-
-- [ ] **Step 4: 删除 Aside 和 breadcrumb 特例**
-
-`AppAside.vue` 删除当前 `index="/system/menus"` 且依赖 `access.hasPermission('system:menu:list')`
-的完整 `el-menu-item`，同时删除不再使用的 `DIcon` import。
-
-保留 Dashboard，然后直接递归 `access.menuTree`。`resolveBreadcrumbs` 删除 `/system/menus` 分支，所有非 Dashboard 页面都查树。
-
-- [ ] **Step 5: 让 RouteTabs 从 access 树取当前页面 key**
-
-在 `breadcrumbs.ts` 导出严格查找函数：
-
-```ts
-export function findAccessPageByPath(
-  routePath: string,
-  menuTree: readonly AccessMenuNode[],
-): AccessMenuNode | null
-```
-
-`RouteTabs.vue` 使用 access store：
-
-```ts
-const access = useAccessStore()
-
-function currentI18nKey(): string {
-  const accessPage = findAccessPageByPath(route.path, access.menuTree)
-  if (accessPage !== null) return accessPage.i18nKey
-  const matched = [...route.matched].reverse().find((record) => record.meta.i18nKey !== undefined)
-  if (matched?.meta.i18nKey === undefined) {
-    throw new Error(`Route ${route.fullPath} must declare i18nKey`)
-  }
-  return matched.meta.i18nKey
-}
-```
-
-Dashboard 继续使用静态 meta。数据库页面包括菜单管理都优先使用 access i18nKey。
-
-- [ ] **Step 6: 运行路由和布局测试**
-
-```powershell
-cd D:\admin\web
-pnpm vitest run tests/router/access-routes.test.ts tests/router/index.test.ts tests/layout/components/AccessMenuNode.test.ts tests/layout/components/RouteTabs.test.ts tests/layout/breadcrumbs.test.ts tests/layout/index.test.ts
-```
-
-预期：全部通过。
-
-**Owner-controlled commit checkpoint:** `fix: 恢复数据库菜单的导航链路`
-
----
-
-### Task 6: 回收菜单管理表格与 Dialog 样式
-
-**Files:**
-- Modify: `web/src/api/menu-fields.ts`
-- Modify: `web/src/api/menu.contract.ts`
-- Modify: `web/src/api/menu.ts`
-- Modify: `web/src/views/system/menus/index.vue`
 - Modify: `web/src/i18n/messages/zh-CN.ts`
 - Modify: `web/src/i18n/messages/en-US.ts`
-- Test: `web/tests/api/menu.contract.test.ts`
-- Test: `web/tests/api/menu.test.ts`
-- Test: `web/tests/views/system/menus/index.test.ts`
-- Test: `web/tests/i18n/index.test.ts`
-- Test: `web/tests/components/DIcon/src/index.test.ts`
-- Test: `web/tests/components/IconSelect/src/index.test.ts`
+- Test: `web/tests/router/index.test.ts`
+- Test: `web/tests/router/access-routes.test.ts`
+- Test: `web/tests/layout/breadcrumbs.test.ts`
+- Test: `web/tests/layout/components/AccessMenuNode.test.ts`
+- Test: `web/tests/layout/components/RouteTabs.test.ts`
+- Test: `web/tests/layout/index.test.ts`
+- Test: `web/tests/api/*.test.ts`
 
-- [ ] **Step 1: 写菜单 DTO 和页面失败测试**
+- [ ] **Step 1: 先移动测试并改成新路径/权限断言**
 
-DTO 测试覆盖三种节点精确形状：
+目标测试路径：
 
-```ts
-const action = {
-  id: 3,
-  parentId: 2,
-  menuType: 'action',
-  name: '新增菜单',
-  code: 'system:menu:create',
-  i18nKey: null,
-  path: null,
-  componentPath: null,
-  icon: null,
-  sortOrder: 10,
-  isEnabled: YesNo.Yes,
-  isHidden: YesNo.Yes,
-  isProtected: YesNo.Yes,
-  createdAt: '2026-08-25T00:00:00Z',
-  updatedAt: '2026-08-25T00:00:00Z',
-  children: [],
-}
+```text
+web/tests/views/account/users/index.test.ts
+web/tests/views/account/sessions/index.test.ts
+web/tests/views/access/menus/index.test.ts
+web/tests/views/access/roles/index.test.ts
+web/tests/views/access/roles/components/RolePermissionMatrix.test.ts
+web/tests/views/access/roles/role-permission-matrix.test.ts
+web/tests/views/access/auth-platforms/index.test.ts
+web/tests/views/system/operation-logs/index.test.ts
 ```
 
-页面测试必须断言：
+路由测试固定映射：
 
-- 表格和父节点选项显示 `name`，不是 `t(i18nKey)`；
-- 切换语言后数据库名称保持中文；
-- directory/page/action 分别显示“目录名称/页面名称/权限名称”；
-- action 不渲染 i18nKey、路由、页面路径、图标、是否隐藏；
-- action payload 精确提交 `i18nKey:null/isHidden:1`；
-- directory/page i18nKey 必须合法；所有类型 name 必填且不超过 128 字符；
-- 基础节点可打开编辑，但结构控件禁用并显示保护原因；状态和删除命令禁用；
-- `border`、浅色表头、全部列居中、固定操作列和足够宽度真实存在；
-- 异步数据加载后全部节点真实展开，展开/收起按钮可切换；
-- 使用 `AppDialog`、`DIcon`、`IconSelect`，不出现 Drawer 或手写图标表。
+```ts
+const expectedPages = [
+  ['account:user:list', '/account/users', 'account/users'],
+  ['auth:session:list', '/account/sessions', 'account/sessions'],
+  ['rbac:menu:list', '/access/menus', 'access/menus'],
+  ['rbac:role:list', '/access/roles', 'access/roles'],
+  ['auth:platform:list', '/access/auth-platforms', 'access/auth-platforms'],
+  ['audit:operation-log:list', '/system/operation-logs', 'system/operation-logs'],
+] as const
+```
 
-- [ ] **Step 2: 运行菜单前端测试确认失败**
+增加多根 fixture，断言 account/access/system 都能递归注册和渲染。
+
+- [ ] **Step 2: 运行前端测试确认旧路径失败**
 
 ```powershell
 cd D:\admin\web
-pnpm vitest run tests/api/menu.contract.test.ts tests/api/menu.test.ts tests/views/system/menus/index.test.ts
+pnpm vitest run tests/router/index.test.ts tests/router/access-routes.test.ts tests/layout tests/api
 ```
 
-预期：缺少 name/isProtected、action 仍要求 i18nKey、页面仍翻译数据库内容而失败。
+预期：静态 route、componentPath、DTO closed keys 和权限判断仍为旧协议而失败。
 
-- [ ] **Step 3: 修改严格 DTO**
+- [ ] **Step 3: 移动页面并更新通用样式名称**
+
+移动页面后更新相对 import。所有管理页面 class：
+
+```text
+system-page          -> management-page
+system-page__filters -> management-page__filters
+system-page__actions -> management-page__actions
+```
+
+`styles/index.scss` 改为：
+
+```scss
+@use './variables';
+@use './management-pages';
+```
+
+`operation-logs` 虽然仍在 system 目录，也使用领域无关的 `management-page` 公共样式。
+
+- [ ] **Step 4: 更新菜单和角色严格 DTO**
 
 ```ts
 export interface ManagedMenuNode {
@@ -833,17 +1103,406 @@ export interface ManagedMenuNode {
   updatedAt: string
   children: ManagedMenuNode[]
 }
-```
 
-Create/Update 输入增加 `name`，i18nKey 改为 `string | null`。closed keys 加入 name/isProtected；directory/page 校验字符串 key，action 校验 null。`menu-fields.ts` 增加：
-
-```ts
-export function isMenuName(value: string): boolean {
-  return value.length > 0 && value.length <= 128 && value.trim() === value
+export interface RolePermissionTreeNode {
+  id: number
+  parentId: number | null
+  menuType: RolePermissionMenuType
+  code: string
+  name: string
+  isEnabled: YesNo
+  children: RolePermissionTreeNode[]
 }
 ```
 
-- [ ] **Step 4: 重写表单状态和按类型字段矩阵**
+Create/Update menu DTO 增加 name，i18nKey 改为 `string | null`。closed parser 拒绝旧 role
+`i18nKey`、缺少 name/isProtected 和 action 非 null i18nKey。
+
+- [ ] **Step 5: 修改静态菜单管理绑定**
+
+`router/index.ts`：
+
+```ts
+{
+  path: 'access/menus',
+  name: 'access-menus',
+  component: () => import('../views/access/menus/index.vue'),
+  meta: {
+    requiresAuth: true,
+    i18nKey: 'navigation.accessMenus',
+    requiredPermission: 'rbac:menu:list',
+  },
+}
+```
+
+`access-routes.ts` 唯一静态 binding：
+
+```ts
+const staticPageBinding = {
+  code: 'rbac:menu:list',
+  path: '/access/menus',
+  componentPath: 'access/menus',
+  routeName: 'access-menus',
+} as const
+```
+
+精确匹配时复用 record；code/path/componentPath/routeName 任一不一致都抛 `ProtocolError`。
+其他数据库页面继续 `addRoute`，失败时倒序清理。
+
+- [ ] **Step 6: 删除布局特例并支持三根菜单**
+
+`AppAside.vue` 删除手工 `/system/menus` 项，只保留 Dashboard 和：
+
+```vue
+<AccessMenuNode
+  v-for="node in access.menuTree"
+  :key="node.code"
+  :node="node"
+/>
+```
+
+`breadcrumbs.ts` 删除 `/system/menus` 特例。RouteTabs 先按当前 path 查完整 access tree，再对
+Dashboard 使用静态 meta。多根遍历必须从全部 roots 开始，不假设唯一 `system`。
+
+- [ ] **Step 7: 更新所有页面权限判断和导航 i18n**
+
+页面权限精确替换：
+
+```text
+users          -> account:user:*
+sessions       -> auth:session:*
+menus          -> rbac:menu:*
+roles          -> rbac:role:*
+auth-platforms -> auth:platform:*
+operation-logs -> audit:operation-log:list
+```
+
+导航 key：
+
+```text
+navigation.account
+navigation.accountUsers
+navigation.accountSessions
+navigation.access
+navigation.accessMenus
+navigation.accessRoles
+navigation.accessAuthPlatforms
+navigation.system
+navigation.systemOperationLogs
+```
+
+中英文 key 集合必须完全一致。删除旧 `navigation.systemUsers/systemSessions/systemMenus/
+systemRoles/systemAuthPlatforms`，不保留 alias。
+
+- [ ] **Step 8: 运行路由、布局、DTO 和页面定向测试**
+
+```powershell
+cd D:\admin\web
+pnpm vitest run tests/api tests/router tests/layout tests/views/account tests/views/access tests/views/system/operation-logs
+pnpm build
+```
+
+预期：全部通过，`import.meta.glob` 能找到所有新 componentPath，TypeScript 无旧目录 import。
+
+**Owner-controlled commit checkpoint:** `refactor!: 统一前端业务域命名`
+
+---
+
+### Task 5: 建立完全本地的 Lucide 菜单图标协议
+
+**Files:**
+- Modify: `web/package.json`
+- Modify: `web/pnpm-lock.yaml`
+- Create: `web/src/icons/menu-icons.ts`
+- Modify: `web/src/api/menu-fields.ts`
+- Modify: `web/src/api/menu.contract.ts`
+- Modify: `web/src/api/access.contract.ts`
+- Modify: `web/src/components/DIcon/src/types.ts`
+- Modify: `web/src/components/DIcon/src/index.vue`
+- Modify: `web/src/components/IconSelect/src/types.ts`
+- Modify: `web/src/components/IconSelect/src/index.vue`
+- Modify: `web/src/layout/components/AccessMenuNode.vue`
+- Test: `web/tests/api/menu-fields.test.ts`
+- Test: `web/tests/api/menu.contract.test.ts`
+- Test: `web/tests/api/access.contract.test.ts`
+- Test: `web/tests/components/DIcon/src/index.test.ts`
+- Test: `web/tests/components/IconSelect/src/index.test.ts`
+- Test: `web/tests/layout/components/AccessMenuNode.test.ts`
+- Modify: `server/internal/module/menu/tree.go`
+- Modify: `server/internal/module/menu/tree_test.go`
+
+- [ ] **Step 1: 写本地解析和禁止混合协议失败测试**
+
+测试固定要求：
+
+```ts
+expect(isMenuIcon('lucide:shield-check')).toBe(true)
+expect(isMenuIcon('Setting')).toBe(false)
+expect(isMenuIcon('mdi:shield')).toBe(false)
+expect(isMenuIcon('lucide:not-in-registry')).toBe(false)
+```
+
+挂载 `DIcon` 时 mock `global.fetch` 并断言零调用；每个 foundation icon 都实际渲染 SVG；未知
+图标触发明确错误状态。IconSelect 测试搜索中文语义、英文 code、选择、清除和空态。
+
+后端 `tree_test.go` 同样拒绝非 registry icon，防止绕过前端直接写入数据库。
+
+- [ ] **Step 2: 运行图标测试并确认失败**
+
+```powershell
+cd D:\admin\web
+pnpm vitest run tests/api/menu-fields.test.ts tests/api/menu.contract.test.ts tests/api/access.contract.test.ts tests/components/DIcon/src/index.test.ts tests/components/IconSelect/src/index.test.ts
+```
+
+预期：当前 DIcon 仍支持 Element Plus/Iconify 字符串，测试失败。
+
+- [ ] **Step 3: 切换依赖到 Lucide Vue**
+
+```powershell
+cd D:\admin\web
+pnpm remove @iconify/vue
+pnpm add lucide-vue-next
+```
+
+不从 CDN、Iconify API 或远程 JSON 加载图标。
+
+- [ ] **Step 4: 创建唯一前端图标目录**
+
+`menu-icons.ts` 静态 import 并导出稳定 code：
+
+```ts
+import {
+  Activity, Bell, Bot, BrainCircuit, CircleDollarSign, Cloud, CloudUpload,
+  Cpu, Database, FileStack, Folder, Gauge, HardDrive, House, Images,
+  KeyRound, LayoutDashboard, ListTree, LockKeyhole, MessageSquareMore,
+  MonitorSmartphone, PanelLeft, ScrollText, Server, Settings2, ShieldCheck,
+  Sparkles, UserCog, UserRound, UserRoundCog, Users, UsersRound, WalletCards,
+} from 'lucide-vue-next'
+import type { Component } from 'vue'
+
+export const menuIcons = {
+  'lucide:activity': { component: Activity, label: '活动' },
+  'lucide:bell': { component: Bell, label: '通知' },
+  'lucide:bot': { component: Bot, label: 'AI 助手' },
+  'lucide:brain-circuit': { component: BrainCircuit, label: 'AI 模型' },
+  'lucide:circle-dollar-sign': { component: CircleDollarSign, label: '支付' },
+  'lucide:cloud': { component: Cloud, label: '云服务' },
+  'lucide:cloud-upload': { component: CloudUpload, label: '上传' },
+  'lucide:cpu': { component: Cpu, label: '算力' },
+  'lucide:database': { component: Database, label: '数据库' },
+  'lucide:file-stack': { component: FileStack, label: '文件' },
+  'lucide:folder': { component: Folder, label: '目录' },
+  'lucide:gauge': { component: Gauge, label: '仪表盘' },
+  'lucide:hard-drive': { component: HardDrive, label: '存储' },
+  'lucide:house': { component: House, label: '首页' },
+  'lucide:images': { component: Images, label: '图片' },
+  'lucide:key-round': { component: KeyRound, label: '认证密钥' },
+  'lucide:layout-dashboard': { component: LayoutDashboard, label: '控制台' },
+  'lucide:list-tree': { component: ListTree, label: '层级列表' },
+  'lucide:lock-keyhole': { component: LockKeyhole, label: '安全' },
+  'lucide:message-square-more': { component: MessageSquareMore, label: '对话' },
+  'lucide:monitor-smartphone': { component: MonitorSmartphone, label: '会话设备' },
+  'lucide:panel-left': { component: PanelLeft, label: '菜单' },
+  'lucide:scroll-text': { component: ScrollText, label: '操作日志' },
+  'lucide:server': { component: Server, label: '服务器' },
+  'lucide:settings-2': { component: Settings2, label: '系统设置' },
+  'lucide:shield-check': { component: ShieldCheck, label: '权限认证' },
+  'lucide:sparkles': { component: Sparkles, label: '智能能力' },
+  'lucide:user-cog': { component: UserCog, label: '角色' },
+  'lucide:user-round': { component: UserRound, label: '用户' },
+  'lucide:user-round-cog': { component: UserRoundCog, label: '用户管理' },
+  'lucide:users': { component: Users, label: '用户组' },
+  'lucide:users-round': { component: UsersRound, label: '用户与账号' },
+  'lucide:wallet-cards': { component: WalletCards, label: '钱包' },
+} as const satisfies Record<string, { component: Component; label: string }>
+
+export type MenuIconName = keyof typeof menuIcons
+
+export function isMenuIconName(value: string): value is MenuIconName {
+  return Object.prototype.hasOwnProperty.call(menuIcons, value)
+}
+```
+
+- [ ] **Step 5: 重写 DIcon 和 IconSelect**
+
+`DIcon` 字符串分支只接受 `MenuIconName` 并同步解析：
+
+```ts
+const resolvedComponent = computed<Component | null>(() => {
+  if (props.component !== undefined) return props.component
+  if (props.icon === undefined || !isMenuIconName(props.icon)) return null
+  return menuIcons[props.icon].component
+})
+```
+
+无异步 import、无 Iconify `<Icon>`、无联网。invalid 状态使用明确 title/console error；协议 parser
+应在业务入口更早拒绝未知字符串。
+
+IconSelect 的 options 由 `Object.entries(menuIcons)` 生成，搜索 `code + label`。选择后 emit 精确
+`MenuIconName`；清除由父表单设置 null，不使用空字符串。
+
+- [ ] **Step 6: 后端使用同一明确 allowlist**
+
+`menu/tree.go` 建立与前端 code 完全一致的 `map[string]struct{}`，`validMenuIcon` 只接受集合成员：
+
+```go
+var menuIconNames = map[string]struct{}{
+	"lucide:activity": {},
+	"lucide:bell": {},
+	"lucide:bot": {},
+	"lucide:brain-circuit": {},
+	"lucide:circle-dollar-sign": {},
+	"lucide:cloud": {},
+	"lucide:cloud-upload": {},
+	"lucide:cpu": {},
+	"lucide:database": {},
+	"lucide:file-stack": {},
+	"lucide:folder": {},
+	"lucide:gauge": {},
+	"lucide:hard-drive": {},
+	"lucide:house": {},
+	"lucide:images": {},
+	"lucide:key-round": {},
+	"lucide:layout-dashboard": {},
+	"lucide:list-tree": {},
+	"lucide:lock-keyhole": {},
+	"lucide:message-square-more": {},
+	"lucide:monitor-smartphone": {},
+	"lucide:panel-left": {},
+	"lucide:scroll-text": {},
+	"lucide:server": {},
+	"lucide:settings-2": {},
+	"lucide:shield-check": {},
+	"lucide:sparkles": {},
+	"lucide:user-cog": {},
+	"lucide:user-round": {},
+	"lucide:user-round-cog": {},
+	"lucide:users": {},
+	"lucide:users-round": {},
+	"lucide:wallet-cards": {},
+}
+```
+
+这不是动态图标注册器，而是数据库协议 allowlist。旧值转换只使用 Task 3 中按 legacy code
+定义的七条 `legacyMenuIcons`，不得再创建 `map[oldIcon]newIcon`；未知 legacy 值让 menu
+migration 失败并列出 code/value，尤其不能把两个 `List` 映射为同一图标。
+
+- [ ] **Step 7: 运行图标测试和构建**
+
+```powershell
+cd D:\admin\server
+go test ./internal/module/menu -count=1
+
+cd D:\admin\web
+pnpm vitest run tests/api/menu-fields.test.ts tests/api/menu.contract.test.ts tests/api/access.contract.test.ts tests/components/DIcon/src/index.test.ts tests/components/IconSelect/src/index.test.ts tests/layout/components/AccessMenuNode.test.ts
+pnpm build
+```
+
+预期：全部通过，构建依赖中不再存在 `@iconify/vue`。
+
+**Owner-controlled commit checkpoint:** `feat!: 统一本地菜单图标协议`
+
+---
+
+### Task 6: 完成菜单搜索、稳定展开、Dialog 和角色名称界面
+
+**Files:**
+- Create: `web/src/views/access/menus/filter-menu-tree.ts`
+- Create: `web/tests/views/access/menus/filter-menu-tree.test.ts`
+- Modify: `web/src/views/access/menus/index.vue`
+- Modify: `web/tests/views/access/menus/index.test.ts`
+- Modify: `web/src/views/access/roles/role-permission-matrix.ts`
+- Modify: `web/src/views/access/roles/components/RolePermissionMatrix.vue`
+- Modify: `web/src/views/access/roles/components/RolePermissionDiffDialog.vue`
+- Modify: `web/src/views/access/roles/index.vue`
+- Modify: matching role tests under `web/tests/views/access/roles`
+- Modify: `web/src/i18n/messages/zh-CN.ts`
+- Modify: `web/src/i18n/messages/en-US.ts`
+- Test: `web/tests/api/menu.contract.test.ts`
+- Test: `web/tests/api/role.contract.test.ts`
+- Test: all menu/role view tests
+
+- [ ] **Step 1: 写纯函数搜索失败测试**
+
+固定行为：
+
+```ts
+it('keeps matches, ancestors, and matched-node descendants without siblings', () => {
+  const result = filterManagedMenuTree(menuTree(), 'rbac:menu:create')
+  expect(codes(result)).toEqual(['access', 'rbac:menu:list', 'rbac:menu:create'])
+
+  const parentResult = filterManagedMenuTree(menuTree(), '权限与认证')
+  expect(codes(parentResult)).toEqual([
+    'access',
+    'rbac:menu:list', 'rbac:menu:create', 'rbac:menu:update', 'rbac:menu:delete',
+    'rbac:role:list',
+    'auth:platform:list',
+  ])
+})
+```
+
+再覆盖 name、code、path 不区分英文大小写、trim、空关键词返回完整树、无结果空数组，并断言
+输入节点和 children 不被原地修改。
+
+- [ ] **Step 2: 实现搜索纯函数**
+
+```ts
+export function filterManagedMenuTree(
+  nodes: readonly ManagedMenuNode[],
+  rawKeyword: string,
+): ManagedMenuNode[] {
+  const keyword = rawKeyword.trim().toLocaleLowerCase()
+  if (keyword === '') return nodes.map(cloneNode)
+  return nodes.flatMap((node) => {
+    const ownValues = [node.name, node.code, node.path ?? '']
+    const ownMatch = ownValues.some((value) => value.toLocaleLowerCase().includes(keyword))
+    if (ownMatch) return [cloneNode(node)]
+    const children = filterManagedMenuTree(node.children, keyword)
+    return children.length === 0 ? [] : [{ ...node, children }]
+  })
+}
+```
+
+`cloneNode` 递归复制 children；不得修改 API store 中的权威树。
+
+- [ ] **Step 3: 写菜单页面交互失败测试**
+
+必须断言：
+
+- 首次加载只展开 account/access/system 三个 root；
+- 不存在 `default-expand-all`；
+- 搜索 name/code/path 显示过滤树并自动展开结果祖先；
+- 清空搜索恢复搜索前 expanded IDs；
+- 全部展开/收起操作真实更新每个 row key；
+- 表格和父节点选项显示数据库 name，不调用 `t(name)`；
+- action i18nKey/null shape 正确；
+- protected 节点结构、状态和删除命令禁用并显示原因；
+- Dialog 根据 directory/page/action 渲染精确字段；
+- payload 不包含旧 code/path 或兼容字段；
+- loading、空态、失败和重试入口存在。
+
+- [ ] **Step 4: 重构菜单页面状态**
+
+```ts
+const sourceMenus = ref<ManagedMenuNode[]>([])
+const keyword = ref('')
+const expandedIDs = ref<Set<number>>(new Set())
+const expansionBeforeSearch = ref<Set<number> | null>(null)
+
+const displayedMenus = computed(() => filterManagedMenuTree(sourceMenus.value, keyword.value))
+const expandedRowKeys = computed(() => [...expandedIDs.value])
+```
+
+首次成功加载设置 root IDs。进入搜索前复制展开集合；搜索时将过滤结果中所有有 children 的
+节点和匹配路径祖先加入 expandedIDs；清空后恢复副本。使用 Element Plus
+`:expand-row-keys="expandedRowKeys"` 和 row-key，不使用初次渲染专用 `default-expand-all`。
+
+工具栏包含关键词输入、清除、新增根目录、展开/收起、刷新；不增加页面 hero、说明卡片或
+自动轮询。
+
+- [ ] **Step 5: 完成按类型 Dialog 和保护规则**
+
+表单类型：
 
 ```ts
 interface MenuFormState {
@@ -854,174 +1513,351 @@ interface MenuFormState {
   i18nKey: string | null
   path: string | null
   componentPath: string | null
-  icon: string | null
+  icon: MenuIconName | null
   sortOrder: number
   isEnabled: YesNo
   isHidden: YesNo
 }
 ```
 
-类型切换规则：
+directory/page 保证 i18nKey string；action 设置 i18nKey/path/componentPath/icon 为 null 且
+isHidden=1。编辑 code 只读。protected 节点只允许 name/i18nKey/icon/sortOrder；action 只允许
+name/sortOrder。前端禁用只是提示，后端错误仍必须展示。
+
+表格使用 border、浅色表头、稳定列宽、树名称列和 fixed right 操作列；权限码、path、
+componentPath 使用等宽文本。移动端 Dialog 单列，任何文案不得溢出按钮或控件。
+
+- [ ] **Step 6: 角色授权全部显示数据库 name**
+
+矩阵转换类型使用：
 
 ```ts
-if (nextType === 'directory') {
-  form.value.i18nKey ??= ''
-  form.value.path = null
-  form.value.componentPath = null
-  form.value.isHidden = YesNo.No
-} else if (nextType === 'page') {
-  form.value.i18nKey ??= ''
-  form.value.path ??= ''
-  form.value.componentPath ??= ''
-  form.value.isHidden = YesNo.No
-} else {
-  form.value.i18nKey = null
-  form.value.path = null
-  form.value.componentPath = null
-  form.value.icon = null
-  form.value.isHidden = YesNo.Yes
+export interface RolePermissionMatrixAction {
+  id: number
+  code: string
+  name: string
+  isEnabled: YesNo
 }
 ```
 
-不要从 path 自动生成 componentPath。编辑 code 只读；受保护节点的 parent/type/path/componentPath/status/hidden 额外禁用。
+group/page/action 均直接渲染 name，同时把 code 作为次要信息；不得 `t(node.i18nKey)`。切换
+locale 时只有页面控件变化，数据库业务名称保持。
 
-- [ ] **Step 5: 按老项目基线整理树表格**
+- [ ] **Step 7: 更新中英文文案并运行菜单/角色测试**
 
-使用 Element Plus 官方属性：
-
-```vue
-<el-table
-  ref="tableRef"
-  v-loading="loading"
-  :data="menus"
-  row-key="id"
-  border
-  default-expand-all
-  :header-cell-style="{ background: 'var(--el-fill-color-light)' }"
-  :tree-props="{ children: 'children' }"
-  table-layout="fixed"
->
-```
-
-每个 column 明确 `align="center" header-align="center"`。名称列显示 `row.name`，权限码/路由/页面路径用等宽文本。操作列 `fixed="right"`，宽度以四个可见命令不截断为准。
-
-异步展开使用 `TableInstance`：
-
-```ts
-const tableRef = ref<TableInstance>()
-const expanded = ref(true)
-
-function applyExpansion(nodes: readonly ManagedMenuNode[], value: boolean): void {
-  void nextTick(() => {
-    const visit = (items: readonly ManagedMenuNode[]): void => {
-      for (const item of items) {
-        tableRef.value?.toggleRowExpansion(item, value)
-        visit(item.children)
-      }
-    }
-    visit(nodes)
-  })
-}
-
-watch(menus, (nodes) => applyExpansion(nodes, expanded.value))
-```
-
-工具栏只保留清楚命令：新增根目录、全部展开/收起、刷新。不增加页面标题或嵌套 Card。
-
-- [ ] **Step 6: 使用 AppDialog 和全宽协议输入**
-
-- 父节点、类型使用 `el-select-v2`，不覆盖官方内部样式；
-- 名称、i18nKey、code、path、componentPath 使用全宽 `el-input`；
-- 图标使用已有 `DIcon + IconSelect`；
-- 二元设置使用 Switch/Radio；
-- Dialog 桌面 800-900px、移动端由 AppDialog 自适应；不设置固定高度；
-- CSS 只包含双列/单列网格、间距、全宽和帮助文本：
-
-```css
-.menu-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
-.menu-form__wide { grid-column: 1 / -1; }
-.menu-form__control, .menu-icon-picker { width: 100%; }
-.menu-form__hint { width: 100%; margin: 4px 0 0; color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.5; }
-@media (max-width: 768px) { .menu-form__grid { grid-template-columns: 1fr; } .menu-form__wide { grid-column: auto; } }
-```
-
-不得新增硬编码主题色、el-select-v2 深层样式、渐变或装饰卡片。
-
-- [ ] **Step 7: 更新中英文界面文案**
-
-两个语言包保持键集合完全一致，至少新增：
+新增并保持双语 key 集合一致：
 
 ```text
-menu.column.name
+menu.search.placeholder
+menu.search.clear
+menu.expandAll
+menu.collapseAll
 menu.form.directoryName
 menu.form.pageName
 menu.form.actionName
-menu.form.nameRequired
 menu.form.protectedHint
-menu.expandAll
-menu.collapseAll
+menu.form.iconInvalid
 ```
 
-保留并校对协议提示：
-
-```text
-i18nKey：至少两段点号路径，例如 navigation.systemUsers
-权限码：小写冒号分段，例如 system:user:list
-路由：必须以 / 开头，例如 /system/users
-页面路径：不能以 / 开头，页面文件为 web/src/views/<页面路径>/index.vue
-```
-
-- [ ] **Step 8: 运行菜单 UI 和类型构建**
+协议示例必须使用 `/account/users`、`account/users`、`account:user:list` 和
+`navigation.accountUsers`，不再展示旧 system 示例。
 
 ```powershell
 cd D:\admin\web
-pnpm vitest run tests/api/menu.contract.test.ts tests/api/menu.test.ts tests/views/system/menus/index.test.ts tests/i18n/index.test.ts tests/components/DIcon/src/index.test.ts tests/components/IconSelect/src/index.test.ts
+pnpm vitest run tests/api/menu.contract.test.ts tests/api/role.contract.test.ts tests/views/access/menus tests/views/access/roles tests/i18n/index.test.ts
 pnpm build
 ```
 
-预期：测试和 `vue-tsc -b`/Vite build 全部成功。
+预期：全部通过。
 
-**Owner-controlled commit checkpoint:** `feat!: 重构数据库菜单管理界面`
+**Owner-controlled commit checkpoint:** `feat: 完善菜单检索与角色授权界面`
 
 ---
 
-### Task 7: 清理残留、全量验证与浏览器验收
+### Task 7: 执行开发环境切换、清零旧协议并完成全量验收
 
 **Files:**
-- No planned runtime files; stale search results must be fixed back in their owning Task before continuing
-- Inspect: `server/internal/module/menu`
-- Inspect: `server/internal/module/access`
-- Inspect: `server/internal/module/role`
-- Inspect: `web/src`
-- Inspect: `web/tests`
-- Inspect: `docs/superpowers/specs/2026-08-24-menu-protocol-dynamic-page-design.md`
-- Inspect: `docs/superpowers/plans/2026-08-25-menu-protocol-dynamic-page.md`
+- Inspect: `server/internal/database/domain_names.go`
+- Inspect: `server/internal/module/{user,auth,menu,role,access,authplatform,operationlog}`
+- Inspect: `web/src`, `web/tests`, `web/package.json`, `web/pnpm-lock.yaml`
+- Inspect: approved Spec and this Plan
+- Temporary create/remove: `server/.tmp/cleanup_operation_log_tasks/main.go`
+- No persistent maintenance file; the one-time helper must be removed before completion
 
-- [ ] **Step 1: 搜索旧错误协议和显示逻辑**
+- [ ] **Step 1: 确认工作区和进程边界**
 
 ```powershell
 cd D:\admin
-rg -n "retireLegacyMenuManagementNode|AddsStaticMenuPermissions|static menu management|static-menu-management" server web\src web\tests -g "*.go" -g "*.ts" -g "*.vue"
-rg -n "t\((row|node|action)\.i18nKey\)|groupI18nKey|pageI18nKey|action\.i18nKey" web\src\views\system\menus web\src\views\system\roles web\tests\views\system -g "*.ts" -g "*.vue"
-rg -n "system:menu:(list|create|update|delete)" server\internal\module\access web\src\layout -g "*.go" -g "*.ts" -g "*.vue"
+git status --short
+Get-CimInstance Win32_Process | Where-Object {
+  $_.CommandLine -match 'D:\\admin' -and $_.Name -match 'go|node|pnpm'
+} | Select-Object ProcessId, Name, CommandLine
 ```
 
-预期：
+确认 diff 只包含本计划范围。只停止本次执行启动或用户已明确允许停止的 API/Worker/Web
+进程；记录 PID，避免误停其他项目。
 
-- 第一条无输出；
-- 第二条无业务数据翻译残留；导航组件使用 `t(i18nKey)` 不属于该搜索范围；
-- 第三条只允许静态 route 的 `requiredPermission`、静态绑定校验和后端测试数据，不能存在权限追加或 Aside 手工菜单。
+- [ ] **Step 2: 备份开发 PostgreSQL**
 
-- [ ] **Step 2: 搜索字段和 TypeScript 禁止写法**
+在当前 PowerShell 会话设置 `POSTGRES_DSN`，不得输出其值：
 
 ```powershell
-rg -n "viewKey|view_key|menuTitleKeys|routeViews|menuIcons" server web\src web\tests -g "*.go" -g "*.ts" -g "*.vue"
+$taskPgDsn = ($env:POSTGRES_DSN -replace '(?i)(^|\s)TimeZone=\S+', '$1').Trim()
+$taskBackup = Join-Path $env:TEMP ("admin-before-domain-rename-{0}.dump" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+pg_dump --format=custom --file=$taskBackup --dbname=$taskPgDsn
+Get-Item -LiteralPath $taskBackup | Select-Object FullName, Length, LastWriteTime
+```
+
+`taskPgDsn` 只去掉 GORM 专用、libpq 不识别的 `TimeZone` 选项，不输出转换后的 DSN。预期：
+`pg_dump` 退出码 0，备份文件长度大于 0。若环境没有 `pg_dump`，停止真实数据库迁移并报告
+阻塞；不能因为项目未上线就跳过后声称已备份。
+
+- [ ] **Step 3: 运行新 API 一次触发显式迁移**
+
+先执行后端构建，再在当前专用 PowerShell 前台启动 API；启动日志必须越过 foundation 并开始
+监听：
+
+```powershell
+cd D:\admin\server
+go build ./...
+go run ./cmd/api
+```
+
+记录开始监听的日志后，用 `Ctrl+C` 停止本次 `go run`，确认该命令及其子进程退出，再进入
+Step 4。`go run ./cmd/api` 是观察型阻塞命令，不能与后续 Redis/Asynq 清理并行，也不能把
+仍在运行的 API 当作该步骤完成。
+
+若迁移失败，保留事务错误和数据库现场，不手工创建缺失表或兼容视图。修复代码/fixture 后
+从对应 Task 的失败测试重新执行。
+
+- [ ] **Step 4: 定向清理 authz 缓存**
+
+API/Worker 停止后，只删除两个模式：
+
+```powershell
+$taskPatterns = @('authz:access-state:*', 'authz:access:*')
+foreach ($taskPattern in $taskPatterns) {
+  $taskKeys = @(redis-cli -u $env:REDIS_URL --scan --pattern $taskPattern)
+  foreach ($taskKey in $taskKeys) {
+    if ($taskKey -notlike $taskPattern) { throw "unexpected Redis key: $taskKey" }
+    redis-cli -u $env:REDIS_URL DEL $taskKey | Out-Null
+  }
+}
+```
+
+禁止 `FLUSHDB`，禁止删除 `auth:*` 会话 key。
+
+- [ ] **Step 5: 检查并清除旧 operation-log task type**
+
+用 `apply_patch` 创建一次性 `server/.tmp/cleanup_operation_log_tasks/main.go`：
+
+```go
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/hibiken/asynq"
+)
+
+const (
+	legacyType = "system:operation-log:v2"
+	pageSize   = 100
+)
+
+type taskLister func(string, ...asynq.ListOption) ([]*asynq.TaskInfo, error)
+
+type queueState struct {
+	name string
+	list taskLister
+}
+
+func main() {
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		fatalf("REDIS_URL is required")
+	}
+	redisOptions, err := asynq.ParseRedisURI(redisURL)
+	if err != nil {
+		fatalf("parse REDIS_URL: %v", err)
+	}
+	inspector := asynq.NewInspector(redisOptions)
+	defer func() {
+		if err := inspector.Close(); err != nil {
+			fatalf("close inspector: %v", err)
+		}
+	}()
+
+	queues, err := inspector.Queues()
+	if err != nil {
+		fatalf("list queues: %v", err)
+	}
+	deletable := []queueState{
+		{name: "pending", list: inspector.ListPendingTasks},
+		{name: "scheduled", list: inspector.ListScheduledTasks},
+		{name: "retry", list: inspector.ListRetryTasks},
+		{name: "archived", list: inspector.ListArchivedTasks},
+		{name: "completed", list: inspector.ListCompletedTasks},
+	}
+
+	for _, queueName := range queues {
+		activeCount, err := countLegacy(inspector.ListActiveTasks, queueName)
+		if err != nil {
+			fatalf("scan active queue %s: %v", queueName, err)
+		}
+		if activeCount != 0 {
+			fatalf("queue %s still has %d active %s tasks", queueName, activeCount, legacyType)
+		}
+		for _, state := range deletable {
+			deleted, err := deleteLegacy(inspector, state.list, queueName)
+			if err != nil {
+				fatalf("clean %s queue %s: %v", state.name, queueName, err)
+			}
+			fmt.Printf("queue=%s state=%s deleted=%d\n", queueName, state.name, deleted)
+		}
+	}
+
+	for _, queueName := range queues {
+		states := append([]queueState{{name: "active", list: inspector.ListActiveTasks}}, deletable...)
+		for _, state := range states {
+			count, err := countLegacy(state.list, queueName)
+			if err != nil {
+				fatalf("verify %s queue %s: %v", state.name, queueName, err)
+			}
+			if count != 0 {
+				fatalf("queue %s state %s still has %d %s tasks", queueName, state.name, count, legacyType)
+			}
+		}
+	}
+}
+
+func deleteLegacy(inspector *asynq.Inspector, list taskLister, queueName string) (int, error) {
+	deleted := 0
+	for page := 1; ; {
+		tasks, err := list(queueName, asynq.Page(page), asynq.PageSize(pageSize))
+		if err != nil {
+			return 0, err
+		}
+		deletedOnPage := 0
+		for _, task := range tasks {
+			if task.Type != legacyType {
+				continue
+			}
+			if err := inspector.DeleteTask(queueName, task.ID); err != nil {
+				return 0, fmt.Errorf("delete task %s: %w", task.ID, err)
+			}
+			deleted++
+			deletedOnPage++
+		}
+		if deletedOnPage != 0 {
+			continue
+		}
+		if len(tasks) < pageSize {
+			return deleted, nil
+		}
+		page++
+	}
+}
+
+func countLegacy(list taskLister, queueName string) (int, error) {
+	count := 0
+	for page := 1; ; page++ {
+		tasks, err := list(queueName, asynq.Page(page), asynq.PageSize(pageSize))
+		if err != nil {
+			return 0, err
+		}
+		for _, task := range tasks {
+			if task.Type == legacyType {
+				count++
+			}
+		}
+		if len(tasks) < pageSize {
+			return count, nil
+		}
+	}
+}
+
+func fatalf(format string, values ...any) {
+	fmt.Fprintf(os.Stderr, format+"\n", values...)
+	os.Exit(1)
+}
+```
+
+API/Worker 必须保持停止。运行并删除明确临时目录：
+
+```powershell
+cd D:\admin\server
+go run .\.tmp\cleanup_operation_log_tasks
+Remove-Item -LiteralPath 'D:\admin\server\.tmp\cleanup_operation_log_tasks\main.go'
+Remove-Item -LiteralPath 'D:\admin\server\.tmp\cleanup_operation_log_tasks'
+if ((Get-ChildItem -LiteralPath 'D:\admin\server\.tmp' -Force | Measure-Object).Count -eq 0) {
+  Remove-Item -LiteralPath 'D:\admin\server\.tmp'
+}
+```
+
+预期：程序输出每个 queue/state 的删除计数并退出 0，二次扫描确认 active、pending、scheduled、
+retry、archived、completed 中旧 type 均为 0。只逐 ID 删除 `system:operation-log:v2`，禁止 purge
+queue。最终 `rg` 不得在运行时代码残留旧 task type 或 cleanup 分支。
+
+- [ ] **Step 6: 查询真实 PostgreSQL 迁移结果**
+
+```sql
+SELECT tablename
+FROM pg_tables
+WHERE schemaname = current_schema()
+  AND tablename IN (
+    'user_account','auth_session','rbac_menu','rbac_role','rbac_user_role',
+    'rbac_role_menu','rbac_access_version','auth_platform','audit_operation_log'
+  )
+ORDER BY tablename;
+
+SELECT id, parent_id, menu_type, name, code, i18n_key, path, component_path,
+       icon, sort_order, is_enabled, is_hidden, deleted_at
+FROM rbac_menu
+ORDER BY sort_order, code, id;
+
+SELECT role_id, menu_id, deleted_at
+FROM rbac_role_menu
+ORDER BY role_id, menu_id, id;
+
+SELECT object_type, object_name
+FROM (
+  SELECT 'relation' AS object_type, class.relname AS object_name
+  FROM pg_class AS class
+  JOIN pg_namespace AS namespace ON namespace.oid = class.relnamespace
+  WHERE namespace.nspname = current_schema()
+    AND class.relkind IN ('r', 'p', 'i', 'I', 'S')
+  UNION ALL
+  SELECT 'constraint' AS object_type, constraint_row.conname AS object_name
+  FROM pg_constraint AS constraint_row
+  WHERE constraint_row.connamespace = current_schema()::regnamespace
+) AS objects
+WHERE object_name LIKE '%sys\_%' ESCAPE '\'
+ORDER BY object_type, object_name;
+```
+
+使用 `psql --dbname=$taskPgDsn -v ON_ERROR_STOP=1` 执行以上 SQL。预期第一条精确返回九行，
+catalog 查询返回零行；三个 root 和六个 page 精确匹配 Spec，role-menu menu_id 仍指向原 ID，
+只有与错误软删除时间匹配的菜单管理授权恢复为有效。
+
+- [ ] **Step 7: 扫描旧协议和禁止写法**
+
+```powershell
+cd D:\admin
+rg -n "sys_(user|user_session|menu|role|user_role|role_menu|access_version|auth_platform|operation_log)" server web
+rg -n "system:(user|session|menu|role|auth-platform|operation-log):" server web
+rg -n '"/system/(users|sessions|menus|roles|auth-platforms)' web
+rg -n "system/(users|sessions|menus|roles|auth-platforms)" web
+rg -n "system:operation-log:v2|mdi:|@iconify/vue" server web
 rg -n "\bas any\b|\bany\[\]|Record<[^>]*,\s*any>|@ts-ignore" web\src web\tests -g "*.ts" -g "*.vue"
 ```
 
-预期：第一条只允许一次性历史迁移测试/SQL 中的 `view_key`；第二条本次修改文件无输出。
+旧值只允许出现在 `database/domain_names.go`、menu 一次性 legacy migration、迁移测试和本
+计划/Spec 的历史映射说明中。除这两个显式启动迁移外，普通请求运行时代码、当前 fixture、
+前端页面和 package dependency 不得残留。
 
-- [ ] **Step 3: 运行后端完整验证**
+- [ ] **Step 8: 运行后端完整验证**
 
 ```powershell
 cd D:\admin\server
@@ -1031,9 +1867,9 @@ go test ./...
 go build ./...
 ```
 
-预期：四条命令全部成功。任何 PostgreSQL/Redis 环境失败如实报告，不得跳过后宣称通过。
+预期：四条命令全部退出 0。PostgreSQL/Redis 环境错误必须单独报告，不能跳过后宣称通过。
 
-- [ ] **Step 4: 运行前端完整验证**
+- [ ] **Step 9: 运行前端完整验证**
 
 ```powershell
 cd D:\admin\web
@@ -1041,84 +1877,56 @@ pnpm vitest run --pool=threads --maxWorkers=1
 pnpm build
 ```
 
-预期：全部 Vitest 和生产构建成功。已有 Vue Router warning 或 chunk size warning 单独记录，不掩盖失败。
+预期：Vitest、vue-tsc 和 Vite build 全部成功。warning 单独记录。
 
-- [ ] **Step 5: 检查真实 PostgreSQL 结果**
+- [ ] **Step 10: 启动本地服务并进行双角色浏览器验收**
 
-```sql
-SELECT column_name, data_type, is_nullable, character_maximum_length
-FROM information_schema.columns
-WHERE table_schema = current_schema() AND table_name = 'sys_menu'
-ORDER BY ordinal_position;
+使用空闲端口启动 API、Worker 和 Vite；Windows 后台进程使用隐藏窗口并记录 PID。至少验收：
 
-SELECT id, parent_id, menu_type, name, code, i18n_key, path,
-       component_path, is_enabled, is_hidden, deleted_at
-FROM sys_menu
-ORDER BY id;
-
-SELECT role_id, menu_id, deleted_at
-FROM sys_role_menu
-WHERE menu_id IN (
-  SELECT id FROM sys_menu
-  WHERE code IN ('system:menu:list', 'system:menu:create', 'system:menu:update', 'system:menu:delete')
-)
-ORDER BY role_id, menu_id, id;
-```
-
-预期：
-
-- `name` 非空，`i18n_key` 可空；
-- 五个基础节点活动且结构正确；
-- action 的 i18nKey 为 NULL、isHidden=1；
-- 没有重新出现 `view_key`；
-- 角色关系只恢复目标错误迁移删除的记录。
-
-- [ ] **Step 6: 浏览器按两个用户视角验收**
-
+```text
 超级管理员：
-
-1. 侧边栏显示“系统管理 -> 菜单管理”，不存在独立一级菜单管理；
-2. 菜单页显示系统管理、菜单管理和三个 action；
-3. 可以编辑基础节点展示字段，不能修改结构、禁用或删除；
-4. 新建普通 directory/page/action 后能在角色授权矩阵看到数据库名称；
-5. 切换语言只改变导航与界面控件，菜单表和角色矩阵的数据库名称不变。
+- 三个根目录顺序、名称、Lucide 图标正确
+- 六个页面位于正确根目录
+- 菜单页默认只展开 roots，可搜索 name/code/path
+- protected 节点只能修改展示字段
+- 角色矩阵显示数据库 name + code
 
 普通角色：
+- 无 list 权限时侧栏不可见、API 403
+- list 与 action 权限独立控制页面和按钮
+- 隐藏 page 不在侧栏，但有权限时新路径可直接访问
 
-1. 无 `system:menu:list` 时侧栏不可见，直接访问 `/system/menus` 跳 Dashboard，API 返回 403；
-2. 只授予 list 后可以查看，但没有 create/update/delete 命令；
-3. 分别授予 action 后只出现对应命令；
-4. 修改授权后按现有提示手动刷新，下次请求使用新 generation；
-5. 隐藏 page 不出现在侧栏，但有权限时可以直接访问。
+路由：
+- /access/menus 精确复用静态页面
+- 旧 /system/users、/system/menus 等不跳转
+- breadcrumb、RouteTabs、刷新和直接访问一致
+```
 
-- [ ] **Step 7: 最终差异审查**
+完成后向用户提供实际 Vite URL。不得停止用户原先启动的其他服务；本次启动的后台进程在
+交付中列出 PID 和是否仍运行。
+
+- [ ] **Step 11: 最终差异和文档一致性检查**
 
 ```powershell
 cd D:\admin
 git diff --check
 git status --short
 git diff --stat
-git diff -- server/internal/module/menu server/internal/module/access server/internal/module/role web/src/api web/src/router web/src/layout web/src/views/system/menus web/src/views/system/roles docs/superpowers
+git diff -- docs/superpowers/specs/2026-08-24-menu-protocol-dynamic-page-design.md docs/superpowers/plans/2026-08-25-menu-protocol-dynamic-page.md
 ```
 
-确认：
-
-- 没有 `.env`、密钥、`web/dist`、日志、测试缓存或临时截图；
-- 没有无关格式化和业务改动；
-- spec、plan、代码、测试使用相同字段和相同基础节点定义；
-- 未经用户明确授权没有创建提交或推送。
-
-- [ ] **Step 8: 交付报告**
-
-报告分别列出：数据库迁移结果、基础节点/角色关系结果、后端四条命令、前端两条命令、浏览器双角色验收、warning、未运行项和剩余风险。
+确认没有 `.env`、密钥、备份 dump、`web/dist`、日志、测试缓存、临时 cleanup helper 或截图
+进入工作区；未经授权没有提交或重写历史。
 
 ## 实施完成标准
 
-- `sys_menu.name` 是真实非空数据库字段，action 的 `i18n_key` 为 NULL。
-- 菜单管理五个基础节点和可恢复角色关系存在于 PostgreSQL，并受后端结构保护。
-- access 不硬编码追加 `system:menu:*`，普通角色权限来自 `sys_role_menu`，超级管理员权限来自活动 `sys_menu`。
-- `/system/menus` 只静态挂载组件；菜单、权限、breadcrumb 和 tab 标题仍从 access 数据生成。
-- 菜单管理和角色授权显示数据库 name，导航显示 `t(i18nKey)`。
-- 菜单页使用 Element Plus border/浅色表头/居中列、真实异步展开、AppDialog、DIcon 和 IconSelect。
-- 后端 fmt/vet/test/build、前端全量 Vitest/build、真实 PostgreSQL 检查和双角色浏览器验收全部完成。
+- 九张表和相关 PostgreSQL 对象全部使用 account/auth/rbac/audit 真实业务域名称。
+- Model、Repository SQL、权限常量、route、DTO、页面目录、componentPath、i18n 和测试可顺着同一映射查找。
+- 三个根目录和六个当前页面使用新 code/path/componentPath，旧协议没有运行时兼容。
+- 菜单和角色授权 ID 保持，`rbac_menu`/`rbac_role_menu` 是唯一事实来源。
+- 超级管理员权限只来自有效数据库 page/action。
+- 菜单管理拥有 name/i18nKey 分离、protected foundation、搜索、稳定展开和完整 Dialog。
+- 菜单图标完全本地、统一为 Lucide，不依赖 Iconify API。
+- operation log Worker 只处理 `audit:operation-log:v2`。
+- 后端 fmt/vet/test/build、前端 Vitest/build、真实 PostgreSQL 检查和双角色浏览器验收全部完成。
 - Git 历史仍由仓库所有者控制。

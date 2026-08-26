@@ -122,7 +122,7 @@ func TestCreateWithRoleRollsBackAfterRelationshipFailure(t *testing.T) {
 		END;
 		$$ LANGUAGE plpgsql;
 		CREATE TRIGGER test_reject_user_role_insert
-		BEFORE INSERT ON sys_user_role
+		BEFORE INSERT ON rbac_user_role
 		FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_user_role_insert();`).Error; err != nil {
 		t.Fatalf("create rejection trigger: %v", err)
 	}
@@ -136,8 +136,8 @@ func TestCreateWithRoleRollsBackAfterRelationshipFailure(t *testing.T) {
 	var orphanVersions int64
 	if err := tx.WithContext(ctx).Raw(`
 		SELECT count(*)
-		FROM sys_access_version AS access_version
-		LEFT JOIN sys_user AS app_user ON app_user.id = access_version.user_id
+		FROM rbac_access_version AS access_version
+		LEFT JOIN user_account AS app_user ON app_user.id = access_version.user_id
 		WHERE app_user.id IS NULL`).Scan(&orphanVersions).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -582,7 +582,7 @@ func TestRepositoryTransactionRollsBackStatusRolesAndSessionsAfterForcedFailure(
 		END;
 		$$ LANGUAGE plpgsql;
 		CREATE TRIGGER test_reject_user_session_revoke
-		BEFORE UPDATE ON sys_user_session
+		BEFORE UPDATE ON auth_session
 		FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_user_session_revoke();`).Error; err != nil {
 		t.Fatal(err)
 	}

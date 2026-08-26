@@ -34,6 +34,7 @@ describe('menu API', () => {
     const input: CreateMenuInput = {
       parentId: null,
       menuType: 'directory',
+		name: '报表',
       code: 'reports',
       i18nKey: 'navigation.system',
       path: null,
@@ -52,9 +53,10 @@ describe('menu API', () => {
     const input: UpdateMenuInput = {
       parentId: 1,
       menuType: 'page',
-      i18nKey: 'navigation.systemMenus',
-		path: '/system/users',
-		componentPath: 'system/users',
+		name: '用户管理',
+      i18nKey: 'navigation.accessMenus',
+		path: '/account/users',
+		componentPath: 'account/users',
       icon: 'Menu',
       sortOrder: 10,
 		isHidden: YesNo.No,

@@ -15,8 +15,9 @@ import (
 type CreateInput struct {
 	ParentID      *int64
 	MenuType      Type
+	Name          string
 	Code          string
-	I18nKey       string
+	I18nKey       *string
 	Path          *string
 	ComponentPath *string
 	Icon          *string
@@ -28,7 +29,8 @@ type CreateInput struct {
 type UpdateInput struct {
 	ParentID      *int64
 	MenuType      Type
-	I18nKey       string
+	Name          string
+	I18nKey       *string
 	Path          *string
 	ComponentPath *string
 	Icon          *string
@@ -40,8 +42,9 @@ type ManagedMenu struct {
 	ID            int64
 	ParentID      *int64
 	MenuType      Type
+	Name          string
 	Code          string
-	I18nKey       string
+	I18nKey       *string
 	Path          *string
 	ComponentPath *string
 	Icon          *string
@@ -50,6 +53,7 @@ type ManagedMenu struct {
 	IsHidden      yesno.Value
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	IsProtected   bool
 	Children      []ManagedMenu
 }
 
@@ -111,7 +115,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 			return false, menuPathConflict(*normalized.Path, ErrMenuPathConflict)
 		}
 		created := Menu{
-			ParentID: normalized.ParentID, MenuType: normalized.MenuType, Code: normalized.Code,
+			ParentID: normalized.ParentID, MenuType: normalized.MenuType, Name: normalized.Name, Code: normalized.Code,
 			I18nKey: normalized.I18nKey, Path: normalized.Path, ComponentPath: normalized.ComponentPath,
 			Icon: normalized.Icon, SortOrder: normalized.SortOrder, IsEnabled: normalized.IsEnabled, IsHidden: normalized.IsHidden,
 		}
@@ -147,6 +151,9 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		if err != nil {
 			return false, menuInvalidFields(err)
 		}
+		if IsProtectedCode(target.Code) && !allowedProtectedUpdate(target, normalized) {
+			return false, menuProtected(target.Code, fmt.Errorf("protected menu structure cannot change"))
+		}
 		if err := validateUpdateParent(index, target, normalized); err != nil {
 			return false, err
 		}
@@ -171,6 +178,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		candidate := target
 		candidate.ParentID = normalized.ParentID
 		candidate.MenuType = normalized.MenuType
+		candidate.Name = normalized.Name
 		candidate.I18nKey = normalized.I18nKey
 		candidate.Path = normalized.Path
 		candidate.ComponentPath = normalized.ComponentPath
@@ -189,7 +197,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 			return false, menuTreeInvalid(err)
 		}
 		if err := repository.UpdateMenu(mutationCtx, id, UpdateValues{
-			ParentID: normalized.ParentID, MenuType: normalized.MenuType, I18nKey: normalized.I18nKey,
+			ParentID: normalized.ParentID, MenuType: normalized.MenuType, Name: normalized.Name, I18nKey: normalized.I18nKey,
 			Path: normalized.Path, ComponentPath: normalized.ComponentPath, Icon: normalized.Icon,
 			SortOrder: normalized.SortOrder, IsHidden: normalized.IsHidden,
 		}, operationTime); err != nil {
@@ -218,6 +226,9 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, value yesno.Value)
 		target, exists := index.byID[id]
 		if !exists {
 			return false, menuNotFound(fmt.Errorf("menu id %d is not active", id))
+		}
+		if IsProtectedCode(target.Code) && value != yesno.Yes {
+			return false, menuProtected(target.Code, fmt.Errorf("protected menu cannot be disabled"))
 		}
 		if target.IsEnabled == value {
 			return false, nil
@@ -262,9 +273,12 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		if err != nil {
 			return false, menuTreeInvalid(err)
 		}
-		_, exists := index.byID[id]
+		target, exists := index.byID[id]
 		if !exists {
 			return false, menuNotFound(fmt.Errorf("menu id %d is not active", id))
+		}
+		if IsProtectedCode(target.Code) {
+			return false, menuProtected(target.Code, fmt.Errorf("protected menu cannot be deleted"))
 		}
 		descendants, err := index.descendants(id)
 		if err != nil {
@@ -374,9 +388,15 @@ func menuAccessUserIDs(versions []accessstate.Version) []int64 {
 
 func sameMenuUpdate(stored Menu, input UpdateInput) bool {
 	return sameInt64Pointer(stored.ParentID, input.ParentID) &&
-		stored.MenuType == input.MenuType && stored.I18nKey == input.I18nKey &&
+		stored.MenuType == input.MenuType && stored.Name == input.Name && sameStringPointer(stored.I18nKey, input.I18nKey) &&
 		sameStringPointer(stored.Path, input.Path) && sameStringPointer(stored.ComponentPath, input.ComponentPath) &&
 		sameStringPointer(stored.Icon, input.Icon) && stored.SortOrder == input.SortOrder && stored.IsHidden == input.IsHidden
+}
+
+func allowedProtectedUpdate(stored Menu, input UpdateInput) bool {
+	return sameInt64Pointer(stored.ParentID, input.ParentID) && stored.MenuType == input.MenuType &&
+		sameStringPointer(stored.Path, input.Path) && sameStringPointer(stored.ComponentPath, input.ComponentPath) &&
+		stored.IsHidden == input.IsHidden
 }
 
 func validateCreateParent(index menuIndex, input CreateInput) error {

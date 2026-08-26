@@ -70,7 +70,7 @@ func TestRegisterRoutesRequiresOperationLogListPermission(t *testing.T) {
 	})
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/operation-logs?page=1&pageSize=20", nil))
-	if permission != "system:operation-log:list" {
+	if permission != PermissionList {
 		t.Fatalf("permission = %q", permission)
 	}
 }

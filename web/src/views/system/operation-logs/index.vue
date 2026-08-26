@@ -150,10 +150,10 @@ onMounted(() => { void loadLogs() })
 </script>
 
 <template>
-	<section class="operation-log-page system-page">
+	<section class="operation-log-page management-page">
 		<Search
 			v-model="searchModel"
-			class="operation-log-filters system-page__filters"
+			class="operation-log-filters management-page__filters"
 			:fields="searchFields"
 			:query-label="t('operationLog.search')"
 			:reset-label="t('operationLog.reset')"

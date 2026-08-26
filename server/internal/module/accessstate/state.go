@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	SchemaVersion     = 1
+	SchemaVersion     = 2
 	StateReady        = "ready"
 	StateInvalidating = "invalidating"
 )

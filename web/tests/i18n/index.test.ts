@@ -38,9 +38,32 @@ describe('frontend i18n', () => {
     expect(isAppMessageKey('navigation.unknown')).toBe(false)
   })
 
+	it('contains only the current business-domain navigation keys', () => {
+		const currentKeys = [
+			'navigation.account',
+			'navigation.accountUsers',
+			'navigation.accountSessions',
+			'navigation.access',
+			'navigation.accessMenus',
+			'navigation.accessRoles',
+			'navigation.accessAuthPlatforms',
+			'navigation.system',
+			'navigation.systemOperationLogs',
+		]
+		const removedKeys = [
+			'navigation.systemUsers',
+			'navigation.systemSessions',
+			'navigation.systemMenus',
+			'navigation.systemRoles',
+			'navigation.systemAuthPlatforms',
+		]
+		for (const key of currentKeys) expect(isAppMessageKey(key), key).toBe(true)
+		for (const key of removedKeys) expect(isAppMessageKey(key), key).toBe(false)
+	})
+
 	it('contains the complete bilingual user-management copy', () => {
 		const keys = [
-			'navigation.systemUsers', 'permission.userUpdate', 'permission.userStatus',
+			'navigation.accountUsers', 'permission.userUpdate', 'permission.userStatus',
 			'permission.userDelete', 'permission.userRoles', 'user.title', 'user.keyword',
 			'user.status', 'user.role', 'user.search', 'user.reset', 'user.refresh',
 			'user.enableConfirm', 'user.disableConfirm', 'user.deleteConfirm',
@@ -58,7 +81,7 @@ describe('frontend i18n', () => {
 
   it('contains the complete bilingual authentication-platform copy', () => {
     const keys = [
-      'navigation.systemAuthPlatforms', 'permission.authPlatformCreate',
+      'navigation.accessAuthPlatforms', 'permission.authPlatformCreate',
       'permission.authPlatformUpdate', 'permission.authPlatformStatus',
       'permission.authPlatformDelete', 'authPlatform.title', 'authPlatform.search',
       'authPlatform.deployment', 'authPlatform.confirm.disable',
@@ -73,7 +96,7 @@ describe('frontend i18n', () => {
 
 	it('contains the complete bilingual session and operation-log copy', () => {
 		const keys = [
-			'navigation.systemSessions', 'permission.sessionRevoke', 'session.title',
+			'navigation.accountSessions', 'permission.sessionRevoke', 'session.title',
 			'session.loading', 'session.batchRevoke', 'session.revokeFailed',
 			'navigation.systemOperationLogs', 'operationLog.title', 'operationLog.userId',
 			'operationLog.timeRange', 'operationLog.detailTitle', 'operationLog.loading',

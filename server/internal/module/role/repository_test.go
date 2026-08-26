@@ -110,7 +110,7 @@ func TestFindDefaultRequiresExactlyOneEnabledRole(t *testing.T) {
 		if err := role.NewService(repository, nil).EnsureSystemRoles(ctx); err != nil {
 			t.Fatal(err)
 		}
-		if err := tx.WithContext(ctx).Exec("DROP INDEX ux_sys_role_default_active").Error; err != nil {
+		if err := tx.WithContext(ctx).Exec("DROP INDEX ux_rbac_role_default_active").Error; err != nil {
 			t.Fatal(err)
 		}
 		if err := tx.WithContext(ctx).Model(&role.Role{}).Where("code = ?", role.CodeSuperAdmin).Update("is_default", yesno.Yes).Error; err != nil {
@@ -269,7 +269,7 @@ func TestRepositoryListUsesStableFiltersAndExactCounts(t *testing.T) {
 	}
 	path := "/" + unique
 	componentPath := "system/menus"
-	page := menu.Menu{MenuType: menu.TypePage, Code: unique + ":list", I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.No, IsHidden: yesno.No}
+	page := menu.Menu{MenuType: menu.TypePage, Name: "List", Code: unique + ":list", I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.No, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}

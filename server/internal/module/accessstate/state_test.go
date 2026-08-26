@@ -11,6 +11,12 @@ func TestStateKey(t *testing.T) {
 	}
 }
 
+func TestSchemaVersionIsCurrent(t *testing.T) {
+	if SchemaVersion != 2 {
+		t.Fatalf("SchemaVersion = %d, want 2", SchemaVersion)
+	}
+}
+
 func TestNormalizeVersionsSortsDeduplicatesAndRejectsConflicts(t *testing.T) {
 	versions, err := normalizeVersions([]Version{{UserID: 9, Version: 4}, {UserID: 7, Version: 3}, {UserID: 9, Version: 4}})
 	if err != nil {

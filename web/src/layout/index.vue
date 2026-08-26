@@ -121,7 +121,12 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateViewport))
       </el-header>
 
       <div v-if="uiPreferences.preferences.showRouteTabs || contentFullscreen" class="admin-layout__tabs admin-layout__horizontal-scroll">
-        <RouteTabs :fullscreen="contentFullscreen" @refresh="handleRefresh" @toggle-fullscreen="handleToggleFullscreen" />
+		<RouteTabs
+			:fullscreen="contentFullscreen"
+			:menu-tree="access.menuTree"
+			@refresh="handleRefresh"
+			@toggle-fullscreen="handleToggleFullscreen"
+		/>
       </div>
 
       <el-main class="admin-layout__main admin-layout__scroll-owner">

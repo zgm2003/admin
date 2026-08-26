@@ -39,7 +39,7 @@ func (r *Repository) Transaction(ctx context.Context, fn func(*Repository) error
 }
 
 func (r *Repository) LockRoleTable(ctx context.Context) error {
-	if err := r.db.WithContext(ctx).Exec("LOCK TABLE sys_role IN SHARE ROW EXCLUSIVE MODE").Error; err != nil {
+	if err := r.db.WithContext(ctx).Exec("LOCK TABLE rbac_role IN SHARE ROW EXCLUSIVE MODE").Error; err != nil {
 		return fmt.Errorf("lock role table: %w", err)
 	}
 	return nil
@@ -108,7 +108,7 @@ func (r *Repository) SoftDeleteRoleMenuIDs(ctx context.Context, ids []int64, del
 	if len(ids) == 0 {
 		return nil
 	}
-	if err := r.db.WithContext(ctx).Table("sys_role_menu").Where("id IN ? AND deleted_at IS NULL", ids).Updates(map[string]any{
+	if err := r.db.WithContext(ctx).Table("rbac_role_menu").Where("id IN ? AND deleted_at IS NULL", ids).Updates(map[string]any{
 		"updated_at": deletedAt.UTC(), "deleted_at": deletedAt.UTC(),
 	}).Error; err != nil {
 		return fmt.Errorf("soft delete selected role menus: %w", err)
@@ -191,8 +191,8 @@ func (r *Repository) SetDefault(ctx context.Context, id int64, updatedAt time.Ti
 
 func (r *Repository) CountEffectiveUsers(ctx context.Context, roleID int64) (int64, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).Table("sys_user_role AS user_role").
-		Joins("JOIN sys_user AS app_user ON app_user.id = user_role.user_id AND app_user.deleted_at IS NULL").
+	if err := r.db.WithContext(ctx).Table("rbac_user_role AS user_role").
+		Joins("JOIN user_account AS app_user ON app_user.id = user_role.user_id AND app_user.deleted_at IS NULL").
 		Where("user_role.role_id = ? AND user_role.deleted_at IS NULL", roleID).
 		Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("count effective role users: %w", err)
@@ -204,12 +204,12 @@ func (r *Repository) FindEffectiveAccessVersionsByRole(ctx context.Context, role
 	versions := make([]accessstate.Version, 0)
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT app_user.id AS user_id, COALESCE(access_version.version, 0) AS version
-		FROM sys_user_role AS user_role
-		JOIN sys_user AS app_user
+		FROM rbac_user_role AS user_role
+		JOIN user_account AS app_user
 		  ON app_user.id = user_role.user_id
 		 AND app_user.deleted_at IS NULL
 		 AND app_user.is_enabled = ?
-		LEFT JOIN sys_access_version AS access_version
+		LEFT JOIN rbac_access_version AS access_version
 		  ON access_version.user_id = app_user.id
 		WHERE user_role.role_id = ?
 		  AND user_role.deleted_at IS NULL
@@ -226,12 +226,12 @@ func (r *Repository) LockEffectiveAccessVersionsByRole(ctx context.Context, role
 	versions := make([]accessstate.Version, 0)
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT app_user.id AS user_id, access_version.version
-		FROM sys_user_role AS user_role
-		JOIN sys_user AS app_user
+		FROM rbac_user_role AS user_role
+		JOIN user_account AS app_user
 		  ON app_user.id = user_role.user_id
 		 AND app_user.deleted_at IS NULL
 		 AND app_user.is_enabled = ?
-		JOIN sys_access_version AS access_version
+		JOIN rbac_access_version AS access_version
 		  ON access_version.user_id = app_user.id
 		WHERE user_role.role_id = ?
 		  AND user_role.deleted_at IS NULL
@@ -255,7 +255,7 @@ func (r *Repository) IncrementAccessVersions(ctx context.Context, userIDs []int6
 	}
 	advanced := make([]accessstate.Version, 0, len(userIDs))
 	if err := r.db.WithContext(ctx).Raw(`
-		UPDATE sys_access_version
+		UPDATE rbac_access_version
 		SET version = version + 1, updated_at = ?
 		WHERE user_id IN ?
 		RETURNING user_id, version`, now.UTC(), userIDs).Scan(&advanced).Error; err != nil {
@@ -309,7 +309,7 @@ func normalizeAccessUserIDs(userIDs []int64) ([]int64, error) {
 }
 
 func (r *Repository) SoftDeleteRoleMenus(ctx context.Context, roleID int64, deletedAt time.Time) error {
-	if err := r.db.WithContext(ctx).Table("sys_role_menu").Where("role_id = ? AND deleted_at IS NULL", roleID).Updates(map[string]any{
+	if err := r.db.WithContext(ctx).Table("rbac_role_menu").Where("role_id = ? AND deleted_at IS NULL", roleID).Updates(map[string]any{
 		"updated_at": deletedAt.UTC(), "deleted_at": deletedAt.UTC(),
 	}).Error; err != nil {
 		return fmt.Errorf("soft delete role menu grants: %w", err)
@@ -318,7 +318,7 @@ func (r *Repository) SoftDeleteRoleMenus(ctx context.Context, roleID int64, dele
 }
 
 func (r *Repository) SoftDeleteRole(ctx context.Context, roleID int64, deletedAt time.Time) error {
-	result := r.db.WithContext(ctx).Table("sys_role").Where("id = ? AND deleted_at IS NULL", roleID).Updates(map[string]any{
+	result := r.db.WithContext(ctx).Table("rbac_role").Where("id = ? AND deleted_at IS NULL", roleID).Updates(map[string]any{
 		"updated_at": deletedAt.UTC(), "deleted_at": deletedAt.UTC(),
 	})
 	if result.Error != nil {
@@ -351,8 +351,8 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 			app_role.updated_at,
 			(
 				SELECT count(*)
-				FROM sys_user_role AS user_role
-				JOIN sys_user AS app_user
+				FROM rbac_user_role AS user_role
+				JOIN user_account AS app_user
 				  ON app_user.id = user_role.user_id
 				 AND app_user.deleted_at IS NULL
 				WHERE user_role.role_id = app_role.id
@@ -360,8 +360,8 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 			) AS user_count,
 			(
 				SELECT count(*)
-				FROM sys_role_menu AS role_menu
-				JOIN sys_menu AS app_menu
+				FROM rbac_role_menu AS role_menu
+				JOIN rbac_menu AS app_menu
 				  ON app_menu.id = role_menu.menu_id
 				 AND app_menu.deleted_at IS NULL
 				 AND app_menu.menu_type IN ('page', 'action')
@@ -379,7 +379,7 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 }
 
 func applyRoleListFilter(db *gorm.DB, query ListQuery) *gorm.DB {
-	db = db.Table("sys_role AS app_role").Where("app_role.deleted_at IS NULL")
+	db = db.Table("rbac_role AS app_role").Where("app_role.deleted_at IS NULL")
 	if query.Keyword != "" {
 		pattern := "%" + escapeRoleLike(query.Keyword) + "%"
 		db = db.Where(`(app_role.code ILIKE ? ESCAPE E'\\' OR app_role.name ILIKE ? ESCAPE E'\\')`, pattern, pattern)
@@ -399,9 +399,9 @@ func mapRoleWriteError(operation string, err error) error {
 	var postgresError *pgconn.PgError
 	if errors.As(err, &postgresError) {
 		switch postgresError.ConstraintName {
-		case "ux_sys_role_code_active":
+		case "ux_rbac_role_code_active":
 			return fmt.Errorf("%s: %w", operation, ErrRoleCodeConflict)
-		case "ux_sys_role_name_active":
+		case "ux_rbac_role_name_active":
 			return fmt.Errorf("%s: %w", operation, ErrRoleNameConflict)
 		}
 	}
@@ -437,12 +437,12 @@ func (r *Repository) HasActiveUserWithRole(ctx context.Context, roleID int64) (b
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT EXISTS (
 			SELECT 1
-			FROM sys_user_role AS user_role
-			JOIN sys_user AS app_user
+			FROM rbac_user_role AS user_role
+			JOIN user_account AS app_user
 			  ON app_user.id = user_role.user_id
 			 AND app_user.deleted_at IS NULL
 			 AND app_user.is_enabled = ?
-			JOIN sys_role AS app_role
+			JOIN rbac_role AS app_role
 			  ON app_role.id = user_role.role_id
 			 AND app_role.deleted_at IS NULL
 			 AND app_role.is_enabled = ?

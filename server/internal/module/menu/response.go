@@ -1,13 +1,18 @@
 package menu
 
-import "time"
+import (
+	"time"
+
+	"admin/server/internal/shared/yesno"
+)
 
 type managedMenuResponse struct {
 	ID            int64                 `json:"id"`
 	ParentID      *int64                `json:"parentId"`
 	MenuType      Type                  `json:"menuType"`
+	Name          string                `json:"name"`
 	Code          string                `json:"code"`
-	I18nKey       string                `json:"i18nKey"`
+	I18nKey       *string               `json:"i18nKey"`
 	Path          *string               `json:"path"`
 	ComponentPath *string               `json:"componentPath"`
 	Icon          *string               `json:"icon"`
@@ -16,6 +21,7 @@ type managedMenuResponse struct {
 	IsHidden      int16                 `json:"isHidden"`
 	CreatedAt     string                `json:"createdAt"`
 	UpdatedAt     string                `json:"updatedAt"`
+	IsProtected   int16                 `json:"isProtected"`
 	Children      []managedMenuResponse `json:"children"`
 }
 
@@ -42,10 +48,17 @@ func newManagedMenuResponse(item ManagedMenu) managedMenuResponse {
 		children = append(children, newManagedMenuResponse(child))
 	}
 	return managedMenuResponse{
-		ID: item.ID, ParentID: item.ParentID, MenuType: item.MenuType, Code: item.Code,
+		ID: item.ID, ParentID: item.ParentID, MenuType: item.MenuType, Name: item.Name, Code: item.Code,
 		I18nKey: item.I18nKey, Path: item.Path, ComponentPath: item.ComponentPath, Icon: item.Icon,
 		SortOrder: item.SortOrder, IsEnabled: int16(item.IsEnabled), IsHidden: int16(item.IsHidden),
 		CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339Nano),
-		UpdatedAt: item.UpdatedAt.UTC().Format(time.RFC3339Nano), Children: children,
+		UpdatedAt: item.UpdatedAt.UTC().Format(time.RFC3339Nano), IsProtected: protectedValue(item.IsProtected), Children: children,
 	}
+}
+
+func protectedValue(isProtected bool) int16 {
+	if isProtected {
+		return int16(yesno.Yes)
+	}
+	return int16(yesno.No)
 }

@@ -601,7 +601,7 @@ func openUserTestRedis(t *testing.T) *projectredis.Client {
 func readUserAccessVersion(t *testing.T, tx *gorm.DB, ctx context.Context, userID int64) int64 {
 	t.Helper()
 	var version int64
-	result := tx.WithContext(ctx).Raw("SELECT version FROM sys_access_version WHERE user_id = ?", userID).Scan(&version)
+	result := tx.WithContext(ctx).Raw("SELECT version FROM rbac_access_version WHERE user_id = ?", userID).Scan(&version)
 	if result.Error != nil || result.RowsAffected != 1 {
 		t.Fatalf("read access version: rows=%d error=%v", result.RowsAffected, result.Error)
 	}

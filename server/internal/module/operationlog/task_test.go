@@ -51,7 +51,7 @@ func TestDecodePayloadRejectsUnknownOrMissingFields(t *testing.T) {
 
 func TestTaskHandlerMarksMalformedPayloadSkipRetry(t *testing.T) {
 	handler := NewTaskHandler(&recordingProcessor{})
-	err := handler.ProcessTask(context.Background(), asynq.NewTask(Type, []byte(`{"schemaVersion":1}`)))
+	err := handler.ProcessTask(context.Background(), asynq.NewTask(TaskType, []byte(`{"schemaVersion":1}`)))
 	if err == nil || !strings.Contains(err.Error(), "skip retry") {
 		t.Fatalf("malformed payload error = %v", err)
 	}
@@ -65,7 +65,7 @@ func TestEnqueueUsesEventIDAsTaskID(t *testing.T) {
 		t.Fatal(err)
 	}
 	task := queue.task
-	if task.Type() != "system:operation-log:v2" {
+	if task.Type() != TaskType {
 		t.Fatalf("task type = %q", task.Type())
 	}
 	if queue.taskID != payload.EventID {

@@ -18,7 +18,7 @@ type testRole struct {
 	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz"`
 }
 
-func (testRole) TableName() string { return "sys_role" }
+func (testRole) TableName() string { return "rbac_role" }
 
 type testUser struct {
 	ID        int64          `gorm:"column:id;primaryKey;autoIncrement"`
@@ -30,7 +30,7 @@ type testUser struct {
 	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz"`
 }
 
-func (testUser) TableName() string { return "sys_user" }
+func (testUser) TableName() string { return "user_account" }
 
 type testAccessVersion struct {
 	UserID    int64     `gorm:"column:user_id;primaryKey"`
@@ -39,4 +39,4 @@ type testAccessVersion struct {
 	UpdatedAt time.Time `gorm:"column:updated_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
 }
 
-func (testAccessVersion) TableName() string { return "sys_access_version" }
+func (testAccessVersion) TableName() string { return "rbac_access_version" }

@@ -65,7 +65,7 @@ func TestBuildWorkerMuxRegistersFoundationAndOperationLogTasks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := mux.ProcessTask(context.Background(), asynq.NewTask(operationlog.Type, operationPayload)); err != nil {
+	if err := mux.ProcessTask(context.Background(), asynq.NewTask(operationlog.TaskType, operationPayload)); err != nil {
 		t.Fatalf("process operation log task: %v", err)
 	}
 	if taskProcessor.processed != "task-1" || operationProcessor.processed != "request-1" {

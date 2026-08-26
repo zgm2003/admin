@@ -27,7 +27,7 @@ func TestStoreInstallsAndStrictlyReadsReadyState(t *testing.T) {
 		t.Fatalf("second install = %+v,%v,%v", actual, installed, err)
 	}
 
-	if err := client.SetString(ctx, key, `{"schemaVersion":1,"state":"ready","version":3,"unknown":true}`, 0); err != nil {
+	if err := client.SetString(ctx, key, `{"schemaVersion":2,"state":"ready","version":3,"unknown":true}`, 0); err != nil {
 		t.Fatal(err)
 	}
 	if _, found, err := store.Read(ctx, 91001); err == nil || !found {

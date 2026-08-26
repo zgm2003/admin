@@ -22,7 +22,8 @@ var (
 type UpdateValues struct {
 	ParentID      *int64
 	MenuType      Type
-	I18nKey       string
+	Name          string
+	I18nKey       *string
 	Path          *string
 	ComponentPath *string
 	Icon          *string
@@ -57,11 +58,11 @@ func (r *Repository) Create(ctx context.Context, value *Menu) error {
 		UpdatedAt time.Time
 	}
 	result := r.db.WithContext(ctx).Raw(`
-		INSERT INTO sys_menu (
-			parent_id, menu_type, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO rbac_menu (
+			parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING id, created_at, updated_at`,
-		value.ParentID, value.MenuType, value.Code, value.I18nKey, value.Path,
+		value.ParentID, value.MenuType, value.Name, value.Code, value.I18nKey, value.Path,
 		value.ComponentPath, value.Icon, value.SortOrder, value.IsEnabled, value.IsHidden,
 	).Scan(&created)
 	if result.Error != nil {
@@ -95,12 +96,65 @@ func (r *Repository) LockActiveMenus(ctx context.Context) ([]Menu, error) {
 	return rows, nil
 }
 
+func (r *Repository) CountAllMenus(ctx context.Context) (int64, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Unscoped().Model(&Menu{}).Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("count all menus: %w", err)
+	}
+	return count, nil
+}
+
+func (r *Repository) LockMenusByCodesUnscoped(ctx context.Context, codes []string) ([]Menu, error) {
+	rows := make([]Menu, 0, len(codes))
+	if len(codes) == 0 {
+		return rows, nil
+	}
+	if err := r.db.WithContext(ctx).Unscoped().
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("code IN ?", codes).
+		Order("code, id").Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("lock menus by codes: %w", err)
+	}
+	return rows, nil
+}
+
+func (r *Repository) UpdateFoundationStructure(ctx context.Context, id int64, value Menu, updatedAt time.Time) error {
+	result := r.db.WithContext(ctx).Model(&Menu{}).Where("id = ?", id).Updates(map[string]any{
+		"parent_id": value.ParentID, "menu_type": value.MenuType, "path": value.Path,
+		"component_path": value.ComponentPath, "is_enabled": value.IsEnabled,
+		"is_hidden": value.IsHidden, "updated_at": updatedAt.UTC(),
+	})
+	if result.Error != nil {
+		return fmt.Errorf("update foundation menu structure: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("update foundation menu structure %d: %w", id, gorm.ErrRecordNotFound)
+	}
+	return nil
+}
+
+func (r *Repository) RestoreFoundationMenu(ctx context.Context, id int64, value Menu, updatedAt time.Time) error {
+	result := r.db.WithContext(ctx).Unscoped().Model(&Menu{}).Where("id = ?", id).Updates(map[string]any{
+		"parent_id": value.ParentID, "menu_type": value.MenuType, "name": value.Name, "code": value.Code,
+		"i18n_key": value.I18nKey, "path": value.Path, "component_path": value.ComponentPath,
+		"icon": value.Icon, "sort_order": value.SortOrder, "is_enabled": value.IsEnabled,
+		"is_hidden": value.IsHidden, "updated_at": updatedAt.UTC(), "deleted_at": nil,
+	})
+	if result.Error != nil {
+		return mapMenuWriteError("restore foundation menu", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("restore foundation menu %d: %w", id, gorm.ErrRecordNotFound)
+	}
+	return nil
+}
+
 func (r *Repository) FindActiveAccessVersions(ctx context.Context) ([]accessstate.Version, error) {
 	versions := make([]accessstate.Version, 0)
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT app_user.id AS user_id, COALESCE(access_version.version, 0) AS version
-		FROM sys_user AS app_user
-		LEFT JOIN sys_access_version AS access_version
+		FROM user_account AS app_user
+		LEFT JOIN rbac_access_version AS access_version
 		  ON access_version.user_id = app_user.id
 		WHERE app_user.deleted_at IS NULL
 		  AND app_user.is_enabled = ?
@@ -114,7 +168,7 @@ func (r *Repository) FindActiveAccessVersions(ctx context.Context) ([]accessstat
 }
 
 func (r *Repository) LockUserMutationTables(ctx context.Context) error {
-	if err := r.db.WithContext(ctx).Exec("LOCK TABLE sys_user IN SHARE ROW EXCLUSIVE MODE").Error; err != nil {
+	if err := r.db.WithContext(ctx).Exec("LOCK TABLE user_account IN SHARE ROW EXCLUSIVE MODE").Error; err != nil {
 		return fmt.Errorf("lock user table for menu mutation: %w", err)
 	}
 	return nil
@@ -124,8 +178,8 @@ func (r *Repository) LockActiveAccessVersions(ctx context.Context) ([]accessstat
 	versions := make([]accessstate.Version, 0)
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT app_user.id AS user_id, access_version.version
-		FROM sys_user AS app_user
-		JOIN sys_access_version AS access_version
+		FROM user_account AS app_user
+		JOIN rbac_access_version AS access_version
 		  ON access_version.user_id = app_user.id
 		WHERE app_user.deleted_at IS NULL
 		  AND app_user.is_enabled = ?
@@ -149,7 +203,7 @@ func (r *Repository) IncrementAccessVersions(ctx context.Context, userIDs []int6
 	}
 	advanced := make([]accessstate.Version, 0, len(userIDs))
 	if err := r.db.WithContext(ctx).Raw(`
-		UPDATE sys_access_version
+		UPDATE rbac_access_version
 		SET version = version + 1, updated_at = ?
 		WHERE user_id IN ?
 		RETURNING user_id, version`, now.UTC(), userIDs).Scan(&advanced).Error; err != nil {
@@ -206,6 +260,7 @@ func (r *Repository) UpdateMenu(ctx context.Context, id int64, values UpdateValu
 	result := r.db.WithContext(ctx).Model(&Menu{}).Where("id = ?", id).Updates(map[string]any{
 		"parent_id":      values.ParentID,
 		"menu_type":      values.MenuType,
+		"name":           values.Name,
 		"i18n_key":       values.I18nKey,
 		"path":           values.Path,
 		"component_path": values.ComponentPath,
@@ -274,9 +329,9 @@ func mapMenuWriteError(operation string, err error) error {
 	var postgresError *pgconn.PgError
 	if errors.As(err, &postgresError) {
 		switch postgresError.ConstraintName {
-		case "ux_sys_menu_code_active":
+		case "ux_rbac_menu_code_active":
 			return fmt.Errorf("%s: %w: %w", operation, ErrMenuCodeConflict, err)
-		case "ux_sys_menu_page_path_active":
+		case "ux_rbac_menu_page_path_active":
 			return fmt.Errorf("%s: %w: %w", operation, ErrMenuPathConflict, err)
 		}
 	}

@@ -11,10 +11,10 @@ import (
 func TestPermissionIndexBuildsStableTreeAndNormalizesDirectGrants(t *testing.T) {
 	rootID, pageID := int64(1), int64(2)
 	rows := []menu.Menu{
-		{ID: 4, ParentID: &pageID, MenuType: menu.TypeAction, Code: "system:role:update", I18nKey: "permission.roleUpdate", SortOrder: 20, IsEnabled: yesno.Yes},
-		{ID: rootID, MenuType: menu.TypeDirectory, Code: "system", I18nKey: "navigation.system", SortOrder: 100, IsEnabled: yesno.Yes},
-		{ID: 3, ParentID: &pageID, MenuType: menu.TypeAction, Code: "system:role:create", I18nKey: "permission.roleCreate", SortOrder: 10, IsEnabled: yesno.No},
-		{ID: pageID, ParentID: &rootID, MenuType: menu.TypePage, Code: "system:role:list", I18nKey: "navigation.systemRoles", SortOrder: 20, IsEnabled: yesno.Yes},
+		{ID: 4, ParentID: &pageID, MenuType: menu.TypeAction, Name: "修改角色", Code: "rbac:role:update", SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+		{ID: rootID, MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: roleStringPointer("navigation.access"), SortOrder: 100, IsEnabled: yesno.Yes},
+		{ID: 3, ParentID: &pageID, MenuType: menu.TypeAction, Name: "新增角色", Code: "rbac:role:create", SortOrder: 10, IsEnabled: yesno.No, IsHidden: yesno.Yes},
+		{ID: pageID, ParentID: &rootID, MenuType: menu.TypePage, Name: "角色管理", Code: "rbac:role:list", I18nKey: roleStringPointer("navigation.accessRoles"), SortOrder: 20, IsEnabled: yesno.Yes},
 	}
 	index, err := buildPermissionIndex(rows)
 	if err != nil {
@@ -23,6 +23,9 @@ func TestPermissionIndexBuildsStableTreeAndNormalizesDirectGrants(t *testing.T) 
 	tree, err := index.tree()
 	if err != nil || len(tree) != 1 || len(tree[0].Children) != 1 || len(tree[0].Children[0].Children) != 2 || tree[0].Children[0].Children[0].ID != 3 {
 		t.Fatalf("tree = %+v,%v", tree, err)
+	}
+	if tree[0].Name != "权限与认证" || tree[0].Children[0].Name != "角色管理" || tree[0].Children[0].Children[0].Name != "新增角色" {
+		t.Fatalf("tree names = %+v", tree)
 	}
 	for _, test := range []struct {
 		input []int64
@@ -48,11 +51,11 @@ func TestPermissionIndexBuildsStableTreeAndNormalizesDirectGrants(t *testing.T) 
 
 func TestPermissionIndexRejectsInvalidTreesAndStoredGrants(t *testing.T) {
 	rootID := int64(1)
-	valid := menu.Menu{ID: rootID, MenuType: menu.TypeDirectory, Code: "system", I18nKey: "navigation.system", IsEnabled: yesno.Yes}
+	valid := menu.Menu{ID: rootID, MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: roleStringPointer("navigation.access"), IsEnabled: yesno.Yes}
 	for _, rows := range [][]menu.Menu{
 		{valid, valid},
-		{{ID: 1, MenuType: menu.TypePage, Code: "system:role:list", I18nKey: "navigation.systemRoles", IsEnabled: yesno.Yes}},
-		{valid, {ID: 2, ParentID: func() *int64 { value := int64(99); return &value }(), MenuType: menu.TypePage, Code: "system:role:list", I18nKey: "navigation.systemRoles", IsEnabled: yesno.Yes}},
+		{{ID: 1, MenuType: menu.TypePage, Name: "角色管理", Code: "rbac:role:list", I18nKey: roleStringPointer("navigation.accessRoles"), IsEnabled: yesno.Yes}},
+		{valid, {ID: 2, ParentID: func() *int64 { value := int64(99); return &value }(), MenuType: menu.TypePage, Name: "角色管理", Code: "rbac:role:list", I18nKey: roleStringPointer("navigation.accessRoles"), IsEnabled: yesno.Yes}},
 	} {
 		if _, err := buildPermissionIndex(rows); err == nil {
 			t.Errorf("invalid tree accepted: %+v", rows)
@@ -65,4 +68,8 @@ func TestPermissionIndexRejectsInvalidTreesAndStoredGrants(t *testing.T) {
 	if _, err := index.validateStored([]menu.RoleMenu{{ID: 1, MenuID: rootID}}); err == nil {
 		t.Fatal("directory stored grant accepted")
 	}
+}
+
+func roleStringPointer(value string) *string {
+	return &value
 }

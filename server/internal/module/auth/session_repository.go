@@ -43,7 +43,7 @@ func (r *SessionRepository) CreateWithinLimit(ctx context.Context, input Session
 	revoked := make([]Session, 0)
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var lockedUser userSessionStatus
-		if err := tx.Unscoped().Table("sys_user").Select("id, is_enabled, deleted_at").
+		if err := tx.Unscoped().Table("user_account").Select("id, is_enabled, deleted_at").
 			Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", input.UserID).Take(&lockedUser).Error; err != nil {
 			return fmt.Errorf("lock session user: %w", err)
 		}
@@ -129,8 +129,8 @@ func (r *SessionRepository) FindAuthoritative(ctx context.Context, token TokenId
 			session.refresh_expires_at, session.revoked_at, session.created_at, session.updated_at,
 			app_user.is_enabled AS user_is_enabled,
 			(app_user.deleted_at IS NOT NULL) AS user_deleted
-		FROM sys_user_session AS session
-		JOIN sys_user AS app_user ON app_user.id = session.user_id
+		FROM auth_session AS session
+		JOIN user_account AS app_user ON app_user.id = session.user_id
 		WHERE session.id = ? AND session.user_id = ? AND session.platform = ? AND session.version = ?
 		  AND session.revoked_at IS NULL AND session.refresh_expires_at > ?`,
 		token.SessionID, token.UserID, token.Platform, token.Version, now.UTC()).Scan(&row)
@@ -163,8 +163,8 @@ func (r *SessionRepository) FindByRefreshHash(ctx context.Context, platform, has
 			session.refresh_expires_at, session.revoked_at, session.created_at, session.updated_at,
 			app_user.is_enabled AS user_is_enabled,
 			(app_user.deleted_at IS NOT NULL) AS user_deleted
-		FROM sys_user_session AS session
-		JOIN sys_user AS app_user ON app_user.id = session.user_id
+		FROM auth_session AS session
+		JOIN user_account AS app_user ON app_user.id = session.user_id
 		WHERE session.platform = ? AND session.refresh_token_hash = ?
 		  AND session.revoked_at IS NULL AND session.refresh_expires_at > ?`, platform, hash, now.UTC()).Scan(&row)
 	if result.Error != nil {
@@ -187,7 +187,7 @@ func (r *SessionRepository) RotateByRefreshHash(
 ) (Session, bool, error) {
 	var rotated Session
 	result := r.db.WithContext(ctx).Raw(`
-		UPDATE sys_user_session AS session
+		UPDATE auth_session AS session
 		SET refresh_token_hash = ?,
 			version = session.version + 1,
 			client_ip = ?,
@@ -200,7 +200,7 @@ func (r *SessionRepository) RotateByRefreshHash(
 		  AND session.refresh_expires_at > ?
 		  AND EXISTS (
 			SELECT 1
-			FROM sys_user AS app_user
+			FROM user_account AS app_user
 			WHERE app_user.id = session.user_id
 			  AND app_user.deleted_at IS NULL
 			  AND app_user.is_enabled = ?
@@ -220,7 +220,7 @@ func (r *SessionRepository) RotateByRefreshHash(
 
 func (r *SessionRepository) Revoke(ctx context.Context, sessionID int64, now time.Time) error {
 	result := r.db.WithContext(ctx).Exec(`
-		UPDATE sys_user_session
+		UPDATE auth_session
 		SET revoked_at = COALESCE(revoked_at, ?),
 			updated_at = CASE WHEN revoked_at IS NULL THEN ? ELSE updated_at END
 		WHERE id = ?`, now, now, sessionID)

@@ -12,9 +12,9 @@ describe('resolveBreadcrumbs', () => {
   })
 
   it('returns directory to leaf order without inventing a directory path', () => {
-    expect(resolveBreadcrumbs('/system/users', [systemDirectory()])).toEqual([
-		{ path: null, i18nKey: 'navigation.system' },
-		{ path: '/system/users', i18nKey: 'navigation.systemUsers' },
+    expect(resolveBreadcrumbs('/account/users', [accountDirectory()])).toEqual([
+		{ path: null, i18nKey: 'navigation.account' },
+		{ path: '/account/users', i18nKey: 'navigation.accountUsers' },
     ])
   })
 
@@ -24,24 +24,31 @@ describe('resolveBreadcrumbs', () => {
 
     expect(resolveBreadcrumbs('/system/security/sessions', tree)).toEqual([
 		{ path: null, i18nKey: 'navigation.system' },
-		{ path: null, i18nKey: 'navigation.systemAuthPlatforms' },
-		{ path: '/system/security/sessions', i18nKey: 'navigation.systemSessions' },
+		{ path: null, i18nKey: 'navigation.accessAuthPlatforms' },
+		{ path: '/system/security/sessions', i18nKey: 'navigation.accountSessions' },
     ])
     expect(JSON.stringify(tree)).toBe(before)
 	})
 
-	it('returns the fixed menu management breadcrumb without an access node', () => {
-		expect(resolveBreadcrumbs('/system/menus', [])).toEqual([
-			{ path: '/system/menus', i18nKey: 'navigation.systemMenus' },
+	it('resolves every business root and does not invent a static menu breadcrumb', () => {
+		const tree = [accountDirectory(), accessDirectory(), systemDirectory()]
+		expect(resolveBreadcrumbs('/access/menus', [])).toBeNull()
+		expect(resolveBreadcrumbs('/access/menus', tree)).toEqual([
+			{ path: null, i18nKey: 'navigation.access' },
+			{ path: '/access/menus', i18nKey: 'navigation.accessMenus' },
+		])
+		expect(resolveBreadcrumbs('/system/operation-logs', tree)).toEqual([
+			{ path: null, i18nKey: 'navigation.system' },
+			{ path: '/system/operation-logs', i18nKey: 'navigation.systemOperationLogs' },
 		])
 	})
 
 	it('keeps hidden pages in the breadcrumb source tree', () => {
-		const root = systemDirectory()
+		const root = accountDirectory()
 		root.children[0].isHidden = YesNo.Yes
-		expect(resolveBreadcrumbs('/system/users', [root])).toEqual([
-			{ path: null, i18nKey: 'navigation.system' },
-			{ path: '/system/users', i18nKey: 'navigation.systemUsers' },
+		expect(resolveBreadcrumbs('/account/users', [root])).toEqual([
+			{ path: null, i18nKey: 'navigation.account' },
+			{ path: '/account/users', i18nKey: 'navigation.accountUsers' },
 		])
 	})
 
@@ -50,26 +57,70 @@ describe('resolveBreadcrumbs', () => {
   })
 })
 
-function systemDirectory(): AccessMenuNode {
+function accountDirectory(): AccessMenuNode {
   return {
-    code: 'system',
+		code: 'account',
     menuType: 'directory',
     path: null,
 		componentPath: null,
-		i18nKey: 'navigation.system',
+		i18nKey: 'navigation.account',
     icon: 'Folder',
 		isHidden: YesNo.No,
     children: [{
-      code: 'system:user:list',
+      code: 'account:user:list',
       menuType: 'page',
-      path: '/system/users',
-		componentPath: 'system/users',
-		i18nKey: 'navigation.systemUsers',
+      path: '/account/users',
+		componentPath: 'account/users',
+		i18nKey: 'navigation.accountUsers',
       icon: 'User',
 		isHidden: YesNo.No,
       children: [],
     }],
   }
+}
+
+function accessDirectory(): AccessMenuNode {
+	return directoryNode('access', 'navigation.access', pageNode(
+		'rbac:menu:list',
+		'/access/menus',
+		'access/menus',
+		'navigation.accessMenus',
+	))
+}
+
+function systemDirectory(): AccessMenuNode {
+	return directoryNode('system', 'navigation.system', pageNode(
+		'audit:operation-log:list',
+		'/system/operation-logs',
+		'system/operation-logs',
+		'navigation.systemOperationLogs',
+	))
+}
+
+function directoryNode(code: string, i18nKey: string, child: AccessMenuNode): AccessMenuNode {
+	return {
+		code,
+		menuType: 'directory',
+		path: null,
+		componentPath: null,
+		i18nKey,
+		icon: 'Folder',
+		isHidden: YesNo.No,
+		children: [child],
+	}
+}
+
+function pageNode(code: string, path: string, componentPath: string, i18nKey: string): AccessMenuNode {
+	return {
+		code,
+		menuType: 'page',
+		path,
+		componentPath,
+		i18nKey,
+		icon: null,
+		isHidden: YesNo.No,
+		children: [],
+	}
 }
 
 function nestedDirectory(): AccessMenuNode {
@@ -86,15 +137,15 @@ function nestedDirectory(): AccessMenuNode {
       menuType: 'directory',
       path: null,
 		componentPath: null,
-		i18nKey: 'navigation.systemAuthPlatforms',
+		i18nKey: 'navigation.accessAuthPlatforms',
       icon: 'Key',
 		isHidden: YesNo.No,
       children: [{
         code: 'system:security:sessions',
         menuType: 'page',
         path: '/system/security/sessions',
-			componentPath: 'system/sessions',
-			i18nKey: 'navigation.systemSessions',
+			componentPath: 'account/sessions',
+			i18nKey: 'navigation.accountSessions',
         icon: 'List',
 			isHidden: YesNo.No,
         children: [],

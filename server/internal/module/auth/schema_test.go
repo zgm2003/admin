@@ -31,9 +31,15 @@ type expectedColumn struct {
 
 func TestAuthenticationSchema(t *testing.T) {
 	connection, ctx := openAuthenticationSchema(t)
+	if got := (user.User{}).TableName(); got != "user_account" {
+		t.Fatalf("User.TableName() = %q", got)
+	}
+	if got := (auth.Session{}).TableName(); got != "auth_session" {
+		t.Fatalf("Session.TableName() = %q", got)
+	}
 
 	tables := map[string]map[string]expectedColumn{
-		"sys_user": {
+		"user_account": {
 			"id":            {dataType: "bigint", nullable: "NO"},
 			"username":      {dataType: "character varying", nullable: "NO", length: 64},
 			"email":         {dataType: "character varying", nullable: "NO", length: 254},
@@ -43,7 +49,7 @@ func TestAuthenticationSchema(t *testing.T) {
 			"updated_at":    {dataType: "timestamp with time zone", nullable: "NO"},
 			"deleted_at":    {dataType: "timestamp with time zone", nullable: "YES"},
 		},
-		"sys_user_session": {
+		"auth_session": {
 			"id":                 {dataType: "bigint", nullable: "NO"},
 			"user_id":            {dataType: "bigint", nullable: "NO"},
 			"platform":           {dataType: "character varying", nullable: "NO", length: 49},
@@ -64,10 +70,12 @@ func TestAuthenticationSchema(t *testing.T) {
 			assertColumn(t, connection, ctx, tableName, columnName, want)
 		}
 	}
+	assertRelationMissing(t, connection, ctx, "sys_user")
+	assertRelationMissing(t, connection, ctx, "sys_user_session")
 
 	checks := map[string]string{
-		"ck_sys_user_is_enabled":      "is_enabled",
-		"ck_sys_user_session_version": "version",
+		"ck_user_account_is_enabled": "is_enabled",
+		"ck_auth_session_version":    "version",
 	}
 	for name, expression := range checks {
 		definition := constraintDefinition(t, connection, ctx, name)
@@ -76,7 +84,7 @@ func TestAuthenticationSchema(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"fk_sys_user_session_user"} {
+	for _, name := range []string{"fk_auth_session_user"} {
 		definition := constraintDefinition(t, connection, ctx, name)
 		if !strings.Contains(definition, "FOREIGN KEY") || !strings.Contains(definition, "ON DELETE RESTRICT") {
 			t.Errorf("constraint %s = %q", name, definition)
@@ -84,10 +92,10 @@ func TestAuthenticationSchema(t *testing.T) {
 	}
 
 	indexes := map[string][]string{
-		"ux_sys_user_username_active":              {"CREATE UNIQUE INDEX", "lower((username)::text)", "WHERE (deleted_at IS NULL)"},
-		"ux_sys_user_email_active":                 {"CREATE UNIQUE INDEX", "(email)", "WHERE (deleted_at IS NULL)"},
-		"ux_sys_user_session_refresh_hash":         {"CREATE UNIQUE INDEX", "(refresh_token_hash)"},
-		"ix_sys_user_session_user_platform_active": {"CREATE INDEX", "(user_id, platform, created_at DESC, id DESC)", "WHERE (revoked_at IS NULL)"},
+		"ux_user_account_username_active":      {"CREATE UNIQUE INDEX", "lower((username)::text)", "WHERE (deleted_at IS NULL)"},
+		"ux_user_account_email_active":         {"CREATE UNIQUE INDEX", "(email)", "WHERE (deleted_at IS NULL)"},
+		"ux_auth_session_refresh_hash":         {"CREATE UNIQUE INDEX", "(refresh_token_hash)"},
+		"ix_auth_session_user_platform_active": {"CREATE INDEX", "(user_id, platform, created_at DESC, id DESC)", "WHERE (revoked_at IS NULL)"},
 	}
 	for name, fragments := range indexes {
 		definition := indexDefinition(t, connection, ctx, name)
@@ -97,8 +105,21 @@ func TestAuthenticationSchema(t *testing.T) {
 			}
 		}
 	}
-	if definition := optionalIndexDefinition(t, connection, ctx, "ux_sys_user_session_current"); definition != "" {
+	if definition := optionalIndexDefinition(t, connection, ctx, "ux_auth_session_current"); definition != "" {
 		t.Fatalf("legacy current-session index still exists: %s", definition)
+	}
+}
+
+func assertRelationMissing(t *testing.T, connection *database.Connection, ctx context.Context, name string) {
+	t.Helper()
+	var exists bool
+	if err := connection.GORM.WithContext(ctx).Raw(
+		`SELECT to_regclass(current_schema() || '.' || ?) IS NOT NULL`, name,
+	).Scan(&exists).Error; err != nil {
+		t.Fatalf("inspect relation %s: %v", name, err)
+	}
+	if exists {
+		t.Fatalf("legacy relation %s still exists", name)
 	}
 }
 
@@ -113,7 +134,7 @@ func TestPrepareSessionSchemaRevokesOnlyLegacySessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := connection.GORM.WithContext(ctx).Exec(`
-		CREATE TABLE sys_user_session (
+		CREATE TABLE auth_session (
 			id BIGSERIAL PRIMARY KEY,
 			user_id BIGINT NOT NULL,
 			refresh_token_hash CHAR(64) NOT NULL,
@@ -125,13 +146,13 @@ func TestPrepareSessionSchemaRevokesOnlyLegacySessions(t *testing.T) {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
-		CREATE UNIQUE INDEX ux_sys_user_session_current
-		ON sys_user_session (user_id) WHERE revoked_at IS NULL;`).Error; err != nil {
+		CREATE UNIQUE INDEX ux_auth_session_current
+		ON auth_session (user_id) WHERE revoked_at IS NULL;`).Error; err != nil {
 		t.Fatal(err)
 	}
 	var legacySessionID int64
 	if err := connection.GORM.WithContext(ctx).Raw(`
-		INSERT INTO sys_user_session
+		INSERT INTO auth_session
 			(user_id, refresh_token_hash, version, client_ip, user_agent, refresh_expires_at, created_at, updated_at)
 		VALUES (?, ?, 1, '127.0.0.1', 'legacy', ?, ?, ?)
 		RETURNING id`, createdUser.ID, strings.Repeat("a", 64), now.Add(time.Hour), now, now).Scan(&legacySessionID).Error; err != nil {
@@ -154,10 +175,10 @@ func TestPrepareSessionSchemaRevokesOnlyLegacySessions(t *testing.T) {
 	if legacy.Platform != "admin" || legacy.DeviceID != "" || legacy.RevokedAt == nil {
 		t.Fatalf("migrated legacy session = %+v", legacy)
 	}
-	if definition := optionalIndexDefinition(t, connection, ctx, "ux_sys_user_session_current"); definition != "" {
+	if definition := optionalIndexDefinition(t, connection, ctx, "ux_auth_session_current"); definition != "" {
 		t.Fatalf("legacy current-session index still exists: %s", definition)
 	}
-	if definition := optionalIndexDefinition(t, connection, ctx, "ix_sys_user_session_user_platform_active"); definition == "" {
+	if definition := optionalIndexDefinition(t, connection, ctx, "ix_auth_session_user_platform_active"); definition == "" {
 		t.Fatal("platform session index does not exist")
 	}
 
@@ -186,7 +207,7 @@ func TestAuthenticationSchemaSourceDoesNotOwnRoleObjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{"ux_sys_role_", "ux_sys_user_role_", "fk_sys_user_role_"} {
+	for _, forbidden := range []string{"ux_rbac_role_", "ux_rbac_user_role_", "fk_rbac_user_role_"} {
 		if strings.Contains(string(source), forbidden) {
 			t.Errorf("auth/schema.go still owns %q", forbidden)
 		}

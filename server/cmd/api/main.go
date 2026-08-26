@@ -82,16 +82,17 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer postgres.Close()
-	redisClient, err := projectredis.Open(processContext, settings.RedisURL)
-	if err != nil {
-		return err
+	if err := database.PrepareDomainNames(processContext, postgres.GORM); err != nil {
+		return fmt.Errorf("prepare domain database names: %w", err)
 	}
-	defer redisClient.Close()
 	if err := auth.PrepareSessionSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("prepare authentication schema: %w", err)
 	}
 	if err := operationlog.PrepareSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("prepare operation log schema: %w", err)
+	}
+	if err := menu.PrepareSchema(processContext, postgres.GORM); err != nil {
+		return fmt.Errorf("prepare menu schema: %w", err)
 	}
 	if err := database.AutoMigrate(
 		processContext,
@@ -127,6 +128,17 @@ func run(logger *slog.Logger) error {
 	if err := operationlog.EnsureSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("ensure operation log schema: %w", err)
 	}
+
+	redisClient, err := projectredis.Open(processContext, settings.RedisURL)
+	if err != nil {
+		return err
+	}
+	defer redisClient.Close()
+	queueClient, err := queue.NewClient(settings.RedisURL)
+	if err != nil {
+		return err
+	}
+	defer queueClient.Close()
 	if err := auth.CleanupLegacySessionPointers(processContext, redisClient); err != nil {
 		return fmt.Errorf("remove legacy current session keys: %w", err)
 	}
@@ -134,6 +146,9 @@ func run(logger *slog.Logger) error {
 	accessInvalidator := accessstate.NewInvalidator(accessStateStore)
 	menuRepository := menu.NewRepository(postgres.GORM)
 	menuService := menu.NewService(menuRepository, accessInvalidator)
+	if err := menuService.EnsureFoundation(processContext, menuFoundation()); err != nil {
+		return fmt.Errorf("ensure menu foundation: %w", err)
+	}
 
 	roleRepository := role.NewRepository(postgres.GORM)
 	roleService := role.NewService(roleRepository, accessInvalidator)
@@ -144,12 +159,6 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("derive application keys: %w", err)
 	}
-
-	queueClient, err := queue.NewClient(settings.RedisURL)
-	if err != nil {
-		return err
-	}
-	defer queueClient.Close()
 
 	repository := taskdemo.NewRepository(postgres.GORM)
 	taskService := taskdemo.NewService(repository, taskdemo.NewQueueEnqueuer(queueClient), logger)

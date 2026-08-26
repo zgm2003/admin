@@ -23,14 +23,14 @@ describe('access store', () => {
     const store = useAccessStore()
     const snapshot = emptySnapshot()
     snapshot.roleCodes.push('registered_user')
-    snapshot.permissionCodes.push('system:user:create')
+    snapshot.permissionCodes.push('account:user:create')
 
     store.applySnapshot(snapshot)
 
     expect(store.status).toBe('ready')
     expect(store.roleCodes).toEqual(['registered_user'])
-    expect(store.hasPermission('system:user:create')).toBe(true)
-    expect(store.hasPermission('system:user:delete')).toBe(false)
+    expect(store.hasPermission('account:user:create')).toBe(true)
+    expect(store.hasPermission('account:user:delete')).toBe(false)
   })
 
   it('shares one in-flight request across concurrent loads', async () => {

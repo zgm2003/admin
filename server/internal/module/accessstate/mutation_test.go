@@ -84,7 +84,7 @@ func TestMutationTokenMismatchNeverOverwritesAnotherWriter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	other := `{"schemaVersion":1,"state":"invalidating","version":0,"mutationToken":"other-writer","baseVersion":1}`
+	other := `{"schemaVersion":2,"state":"invalidating","version":0,"mutationToken":"other-writer","baseVersion":1}`
 	if err := client.SetString(ctx, key, other, time.Minute); err != nil {
 		t.Fatal(err)
 	}

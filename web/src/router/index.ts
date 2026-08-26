@@ -43,13 +43,13 @@ const routes: RouteRecordRaw[] = [
 			meta: { requiresAuth: true, i18nKey: 'navigation.dashboard', affix: true },
 		},
 		{
-			path: 'system/menus',
-			name: 'system-menus',
-			component: () => import('../views/system/menus/index.vue'),
+			path: 'access/menus',
+			name: 'access-menus',
+			component: () => import('../views/access/menus/index.vue'),
 			meta: {
 				requiresAuth: true,
-				i18nKey: 'navigation.systemMenus',
-				requiredPermission: 'system:menu:list',
+				i18nKey: 'navigation.accessMenus',
+				requiredPermission: 'rbac:menu:list',
 			},
       },
     ],

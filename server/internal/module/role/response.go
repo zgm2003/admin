@@ -54,7 +54,7 @@ type permissionTreeResponse struct {
 	ParentID  *int64                   `json:"parentId"`
 	MenuType  string                   `json:"menuType"`
 	Code      string                   `json:"code"`
-	I18nKey   string                   `json:"i18nKey"`
+	Name      string                   `json:"name"`
 	IsEnabled int16                    `json:"isEnabled"`
 	Children  []permissionTreeResponse `json:"children"`
 }
@@ -111,7 +111,7 @@ func permissionTreeResponses(nodes []PermissionTreeNode) []permissionTreeRespons
 			ParentID:  node.ParentID,
 			MenuType:  string(node.MenuType),
 			Code:      node.Code,
-			I18nKey:   node.I18nKey,
+			Name:      node.Name,
 			IsEnabled: int16(node.IsEnabled),
 			Children:  permissionTreeResponses(node.Children),
 		})

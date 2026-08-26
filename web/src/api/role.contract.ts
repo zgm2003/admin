@@ -1,4 +1,3 @@
-import { isMenuI18nKey } from './menu-fields'
 import { isYesNo, type YesNo } from '../enums/yes-no'
 import { ProtocolError } from '../types/http'
 import type { PageRequest, PageResult } from '../types/pagination'
@@ -27,7 +26,7 @@ export interface RolePermissionTreeNode {
   parentId: number | null
   menuType: RolePermissionMenuType
   code: string
-  i18nKey: string
+	name: string
   isEnabled: YesNo
   children: RolePermissionTreeNode[]
 }
@@ -200,7 +199,7 @@ export function parseRolePermissions(value: unknown): RolePermissionsResponse {
   ): RolePermissionTreeNode {
     const node = closed(
       value,
-      ['children', 'code', 'i18nKey', 'id', 'isEnabled', 'menuType', 'parentId'],
+			['children', 'code', 'id', 'isEnabled', 'menuType', 'name', 'parentId'],
       'permission node',
     )
     const id = positive(node.id, 'menu id')
@@ -214,6 +213,10 @@ export function parseRolePermissions(value: unknown): RolePermissionsResponse {
       throw new ProtocolError('duplicate permission menu code')
     }
     codes.add(code)
+		const name = text(node.name, 'menu name')
+		if (name.length > 128) {
+			throw new ProtocolError('menu name is too long')
+		}
 
     if (node.parentId !== parentID) {
       throw new ProtocolError('permission parent mismatch')
@@ -232,10 +235,8 @@ export function parseRolePermissions(value: unknown): RolePermissionsResponse {
       throw new ProtocolError('illegal permission tree shape')
     }
 
-    if (
-      typeof node.i18nKey !== 'string' ||
-      !isMenuI18nKey(node.i18nKey) ||
-      !isYesNo(node.isEnabled) ||
+		if (
+			!isYesNo(node.isEnabled) ||
       !Array.isArray(node.children)
     ) {
       throw new ProtocolError('invalid permission node protocol')
@@ -251,7 +252,7 @@ export function parseRolePermissions(value: unknown): RolePermissionsResponse {
       parentId: parentID,
       menuType,
       code,
-      i18nKey: node.i18nKey,
+			name,
       isEnabled: node.isEnabled,
       children,
     }

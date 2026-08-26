@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -194,6 +195,28 @@ func TestManagementDeleteRequiresEmptyBodyAndDeploymentIsSafe(t *testing.T) {
 	want := `{"code":0,"data":{"cookieSecure":false,"corsOrigin":"http://localhost:16300","trustedProxyMode":"none","trustedProxyCount":0,"redisStatus":"up"},"message":"ok"}`
 	if recorder.Code != http.StatusOK || recorder.Body.String() != want {
 		t.Fatalf("deployment status=%d body=%s", recorder.Code, recorder.Body)
+	}
+}
+
+func TestManagementRoutesUseAuthenticationPlatformPermissions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	permissions := make([]string, 0)
+	pass := func(context *gin.Context) { context.Next() }
+	authplatform.RegisterManagementRoutes(router.Group("/api/v1"), authplatform.NewHandler(&platformHTTPService{}), pass, func(code string) gin.HandlerFunc {
+		permissions = append(permissions, code)
+		return pass
+	})
+	want := []string{
+		authplatform.PermissionList,
+		authplatform.PermissionList,
+		authplatform.PermissionCreate,
+		authplatform.PermissionUpdate,
+		authplatform.PermissionStatus,
+		authplatform.PermissionDelete,
+	}
+	if !reflect.DeepEqual(permissions, want) {
+		t.Fatalf("permissions = %v, want %v", permissions, want)
 	}
 }
 

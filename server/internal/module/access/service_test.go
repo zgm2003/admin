@@ -11,7 +11,6 @@ import (
 
 	"admin/server/internal/module/accessstate"
 	"admin/server/internal/module/auth"
-	"admin/server/internal/module/menu"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/yesno"
@@ -31,11 +30,11 @@ func TestCurrentAndAllowedShareWarmSnapshotWithoutPostgreSQL(t *testing.T) {
 	if repository.calls != 1 || snapshot.CacheResult != "miss" || snapshot.Version != 3 {
 		t.Fatalf("first Current() = %+v calls=%d", snapshot, repository.calls)
 	}
-	allowed, err := service.Allowed(context.Background(), identity, "system:user:create")
+	allowed, err := service.Allowed(context.Background(), identity, "account:user:create")
 	if err != nil || !allowed {
 		t.Fatalf("Allowed(create) = %v,%v", allowed, err)
 	}
-	denied, err := service.Allowed(context.Background(), identity, "system:user:delete")
+	denied, err := service.Allowed(context.Background(), identity, "account:user:delete")
 	if err != nil || denied {
 		t.Fatalf("Allowed(delete) = %v,%v", denied, err)
 	}
@@ -142,7 +141,7 @@ func TestBuildSnapshotPreservesLeafGrantSemanticsAndStableArrays(t *testing.T) {
 	if !reflect.DeepEqual(snapshot.RoleCodes, []string{"ai_tester", "registered_user"}) {
 		t.Fatalf("role codes = %v", snapshot.RoleCodes)
 	}
-	if !reflect.DeepEqual(snapshot.PermissionCodes, []string{"system:user:create", "system:user:list"}) {
+	if !reflect.DeepEqual(snapshot.PermissionCodes, []string{"account:user:create", "account:user:list"}) {
 		t.Fatalf("permission codes = %v", snapshot.PermissionCodes)
 	}
 	if len(snapshot.MenuTree) != 1 || len(snapshot.MenuTree[0].Children) != 1 {
@@ -152,7 +151,7 @@ func TestBuildSnapshotPreservesLeafGrantSemanticsAndStableArrays(t *testing.T) {
 	pageOnly := baseSource(3)
 	pageOnly.GrantedMenuIDs = []int64{2}
 	snapshot, err = buildSnapshot(pageOnly)
-	if err != nil || !reflect.DeepEqual(snapshot.PermissionCodes, []string{"system:user:list"}) {
+	if err != nil || !reflect.DeepEqual(snapshot.PermissionCodes, []string{"account:user:list"}) {
 		t.Fatalf("page-only snapshot = %+v,%v", snapshot, err)
 	}
 
@@ -161,21 +160,20 @@ func TestBuildSnapshotPreservesLeafGrantSemanticsAndStableArrays(t *testing.T) {
 	superAdmin.GrantedMenuIDs = nil
 	snapshot, err = buildSnapshot(superAdmin)
 	if err != nil || !reflect.DeepEqual(snapshot.PermissionCodes, []string{
-		menu.PermissionCreate, menu.PermissionDelete, menu.PermissionList, menu.PermissionUpdate,
-		"system:user:create", "system:user:delete", "system:user:list",
+		"account:user:create", "account:user:delete", "account:user:list",
 	}) {
 		t.Fatalf("super-admin snapshot = %+v,%v", snapshot, err)
 	}
 }
 
-func TestBuildSnapshotAddsStaticMenuPermissionsForSuperAdminWithoutMenuRows(t *testing.T) {
+func TestBuildSnapshotDoesNotInventMenuPermissionsForSuperAdminWithoutMenuRows(t *testing.T) {
 	snapshot, err := buildSnapshot(Source{
 		Version: 1, RoleCodes: []string{"super_admin"}, SuperAdmin: true, Menus: []SourceMenu{},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{menu.PermissionCreate, menu.PermissionDelete, menu.PermissionList, menu.PermissionUpdate}
+	want := []string{}
 	if !reflect.DeepEqual(snapshot.PermissionCodes, want) {
 		t.Fatalf("permissions = %v, want %v", snapshot.PermissionCodes, want)
 	}
@@ -194,18 +192,18 @@ func TestBuildSnapshotKeepsHiddenMenusAndExcludesActionsFromTree(t *testing.T) {
 		t.Fatalf("hidden menu tree = %+v", snapshot.MenuTree)
 	}
 	if len(snapshot.MenuTree[0].Children[0].Children) != 0 ||
-		!reflect.DeepEqual(snapshot.PermissionCodes, []string{"system:user:create", "system:user:list"}) {
+		!reflect.DeepEqual(snapshot.PermissionCodes, []string{"account:user:create", "account:user:list"}) {
 		t.Fatalf("action tree/permissions = %+v / %v", snapshot.MenuTree, snapshot.PermissionCodes)
 	}
 }
 
 func TestBuildSnapshotAllowsSharedComponentPathButRejectsSharedRoutePath(t *testing.T) {
 	source := baseSource(1)
-	secondPath := "/system/accounts"
-	sharedComponentPath := "system/users"
+	secondPath := "/account/accounts"
+	sharedComponentPath := "account/users"
 	source.Menus = append(source.Menus, SourceMenu{
-		ID: 5, ParentID: int64Pointer(1), MenuType: MenuPage, Code: "system:account:list",
-		I18nKey: "navigation.systemAccounts", Path: &secondPath, ComponentPath: &sharedComponentPath,
+		ID: 5, ParentID: int64Pointer(1), MenuType: MenuPage, Code: "account:account:list",
+		I18nKey: accessStringPointer("navigation.accountAccounts"), Path: &secondPath, ComponentPath: &sharedComponentPath,
 		SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.No,
 	})
 	source.GrantedMenuIDs = []int64{2, 5}
@@ -244,21 +242,25 @@ func TestServiceValidatesIdentityAndPermissionCode(t *testing.T) {
 func baseSource(version int64) Source {
 	rootID := int64(1)
 	pageID := int64(2)
-	path := "/system/users"
-	componentPath := "system/users"
+	path := "/account/users"
+	componentPath := "account/users"
 	return Source{
 		Version: version, RoleCodes: []string{"registered_user", "ai_tester", "registered_user"},
 		Menus: []SourceMenu{
-			{ID: rootID, MenuType: MenuDirectory, Code: "system", I18nKey: "navigation.system", SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
-			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "system:user:list", I18nKey: "navigation.systemUsers", Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
-			{ID: 3, ParentID: &pageID, MenuType: MenuAction, Code: "system:user:create", I18nKey: "permission.userCreate", SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-			{ID: 4, ParentID: &pageID, MenuType: MenuAction, Code: "system:user:delete", I18nKey: "permission.userDelete", SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: rootID, MenuType: MenuDirectory, Code: "account", I18nKey: accessStringPointer("navigation.account"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "account:user:list", I18nKey: accessStringPointer("navigation.accountUsers"), Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+			{ID: 3, ParentID: &pageID, MenuType: MenuAction, Code: "account:user:create", I18nKey: nil, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: 4, ParentID: &pageID, MenuType: MenuAction, Code: "account:user:delete", I18nKey: nil, SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
 		},
 		GrantedMenuIDs: []int64{3, 3},
 	}
 }
 
 func int64Pointer(value int64) *int64 {
+	return &value
+}
+
+func accessStringPointer(value string) *string {
 	return &value
 }
 

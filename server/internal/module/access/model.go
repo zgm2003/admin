@@ -10,5 +10,5 @@ type Version struct {
 }
 
 func (Version) TableName() string {
-	return "sys_access_version"
+	return "rbac_access_version"
 }

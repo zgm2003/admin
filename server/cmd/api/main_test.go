@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -328,5 +330,83 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		if recorder.Code != http.StatusUnauthorized {
 			t.Fatalf("%s %s without Bearer status = %d body=%s", protectedPath.method, protectedPath.path, recorder.Code, recorder.Body)
 		}
+	}
+}
+
+func TestMenuFoundationDefinesCompleteBusinessCatalog(t *testing.T) {
+	definitions := menuFoundation()
+	if len(definitions) != 27 {
+		t.Fatalf("foundation definitions = %d, want 27", len(definitions))
+	}
+	byCode := make(map[string]menu.FoundationDefinition, len(definitions))
+	for _, definition := range definitions {
+		if _, duplicate := byCode[definition.Code]; duplicate {
+			t.Fatalf("duplicate foundation code %s", definition.Code)
+		}
+		if strings.HasPrefix(definition.Code, "system:user:") || strings.HasPrefix(definition.Code, "system:role:") || strings.HasPrefix(definition.Code, "system:menu:") {
+			t.Fatalf("legacy foundation code %s", definition.Code)
+		}
+		byCode[definition.Code] = definition
+	}
+	wantParents := map[string]string{
+		user.PermissionList: "account", auth.PermissionSessionList: "account",
+		menu.PermissionList: "access", role.PermissionList: "access", authplatform.PermissionList: "access",
+		operationlog.PermissionList: "system",
+		user.PermissionUpdate:       user.PermissionList, user.PermissionStatus: user.PermissionList,
+		user.PermissionDelete: user.PermissionList, user.PermissionRoles: user.PermissionList,
+		auth.PermissionSessionRevoke: auth.PermissionSessionList,
+		menu.PermissionCreate:        menu.PermissionList, menu.PermissionUpdate: menu.PermissionList, menu.PermissionDelete: menu.PermissionList,
+		role.PermissionCreate: role.PermissionList, role.PermissionUpdate: role.PermissionList,
+		role.PermissionStatus: role.PermissionList, role.PermissionDefault: role.PermissionList,
+		role.PermissionDelete: role.PermissionList, role.PermissionAuthorize: role.PermissionList,
+		authplatform.PermissionCreate: authplatform.PermissionList, authplatform.PermissionUpdate: authplatform.PermissionList,
+		authplatform.PermissionStatus: authplatform.PermissionList, authplatform.PermissionDelete: authplatform.PermissionList,
+	}
+	for code, parentCode := range wantParents {
+		definition, exists := byCode[code]
+		if !exists || definition.ParentCode != parentCode {
+			t.Errorf("foundation %s = %+v, want parent %s", code, definition, parentCode)
+		}
+	}
+	protected := make([]string, 0, 5)
+	for _, definition := range definitions {
+		if definition.Protected {
+			protected = append(protected, definition.Code)
+		}
+	}
+	if !reflect.DeepEqual(protected, []string{"access", menu.PermissionList, menu.PermissionCreate, menu.PermissionUpdate, menu.PermissionDelete}) {
+		t.Fatalf("protected foundation = %v", protected)
+	}
+}
+
+func TestRunKeepsSchemaDependenciesBeforeRedisAndFoundationBeforeRouter(t *testing.T) {
+	content, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(content)
+	wantOrder := []string{
+		"database.PrepareDomainNames(",
+		"auth.PrepareSessionSchema(",
+		"operationlog.PrepareSchema(",
+		"menu.PrepareSchema(",
+		"database.AutoMigrate(",
+		"role.EnsureSchema(",
+		"operationlog.EnsureSchema(",
+		"projectredis.Open(",
+		"queue.NewClient(",
+		"menuService.EnsureFoundation(",
+		"buildRouter(",
+	}
+	previous := -1
+	for _, fragment := range wantOrder {
+		position := strings.Index(source, fragment)
+		if position < 0 {
+			t.Fatalf("run source lacks %s", fragment)
+		}
+		if position <= previous {
+			t.Fatalf("run source order is invalid at %s", fragment)
+		}
+		previous = position
 	}
 }

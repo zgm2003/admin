@@ -18,6 +18,12 @@ func TestSnapshotKey(t *testing.T) {
 	}
 }
 
+func TestSnapshotSchemaVersionIsCurrent(t *testing.T) {
+	if accessSnapshotSchemaVersion != 3 {
+		t.Fatalf("accessSnapshotSchemaVersion = %d, want 3", accessSnapshotSchemaVersion)
+	}
+}
+
 func TestSnapshotCachePublishesOnlyForMatchingReadyVersion(t *testing.T) {
 	client := openAccessRedis(t)
 	states := accessstate.NewStore(client)
@@ -59,10 +65,10 @@ func TestSnapshotCacheRejectsUnknownFieldsAndMismatchedIdentity(t *testing.T) {
 	key := SnapshotKey("admin", 4, 94002, 3)
 	t.Cleanup(func() { _ = client.Delete(context.Background(), key) })
 	for _, payload := range []string{
-		`{"schemaVersion":2,"userId":94002,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[],"unknown":true}`,
-		`{"schemaVersion":2,"userId":999,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[]}`,
-		`{"schemaVersion":1,"userId":94002,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[]}`,
-		`{"schemaVersion":2,"userId":94002,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[{"code":"system:user:list","menuType":"page","path":"/system/users","componentPath":"system/users","i18nKey":"navigation.systemUsers","icon":null,"isHidden":0,"children":[],"unexpected":true}],"permissionCodes":[]}`,
+		`{"schemaVersion":3,"userId":94002,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[],"unknown":true}`,
+		`{"schemaVersion":3,"userId":999,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[]}`,
+		`{"schemaVersion":2,"userId":94002,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[]}`,
+		`{"schemaVersion":3,"userId":94002,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[{"code":"account:user:list","menuType":"page","path":"/account/users","componentPath":"account/users","i18nKey":"navigation.accountUsers","icon":null,"isHidden":0,"children":[],"unexpected":true}],"permissionCodes":[]}`,
 	} {
 		if err := client.SetString(ctx, key, payload, time.Minute); err != nil {
 			t.Fatal(err)

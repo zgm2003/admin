@@ -8,7 +8,7 @@ type Session struct {
 	Platform         string     `gorm:"column:platform;type:varchar(49);not null"`
 	DeviceID         string     `gorm:"column:device_id;type:varchar(36);not null"`
 	RefreshTokenHash string     `gorm:"column:refresh_token_hash;type:char(64);not null"`
-	Version          int64      `gorm:"column:version;not null;default:1;check:ck_sys_user_session_version,version >= 1"`
+	Version          int64      `gorm:"column:version;not null;default:1;check:ck_auth_session_version,version >= 1"`
 	ClientIP         string     `gorm:"column:client_ip;type:varchar(64);not null"`
 	UserAgent        string     `gorm:"column:user_agent;type:varchar(512);not null"`
 	RefreshExpiresAt time.Time  `gorm:"column:refresh_expires_at;type:timestamptz;not null"`
@@ -18,5 +18,5 @@ type Session struct {
 }
 
 func (Session) TableName() string {
-	return "sys_user_session"
+	return "auth_session"
 }

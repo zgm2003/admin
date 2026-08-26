@@ -3,7 +3,6 @@ import { Monitor } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
-import { DIcon } from '../../components/DIcon'
 import { useAccessStore } from '../../store/access'
 import AccessMenuNode from './AccessMenuNode.vue'
 
@@ -41,10 +40,6 @@ const access = useAccessStore()
         <el-icon><Monitor /></el-icon>
         <template #title>{{ t('navigation.dashboard') }}</template>
       </el-menu-item>
-		<el-menu-item v-if="access.hasPermission('system:menu:list')" index="/system/menus">
-			<DIcon icon="Menu" />
-			<template #title>{{ t('navigation.systemMenus') }}</template>
-		</el-menu-item>
       <AccessMenuNode v-for="node in access.menuTree" :key="node.code" :node="node" />
     </el-menu>
   </aside>

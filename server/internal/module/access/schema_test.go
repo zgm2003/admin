@@ -21,7 +21,7 @@ import (
 )
 
 func TestAccessVersionTableName(t *testing.T) {
-	if got := (access.Version{}).TableName(); got != "sys_access_version" {
+	if got := (access.Version{}).TableName(); got != "rbac_access_version" {
 		t.Fatalf("TableName() = %q", got)
 	}
 }
@@ -41,6 +41,15 @@ func TestAccessVersionSchemaBackfillsUsers(t *testing.T) {
 	}
 	if err := access.EnsureSchema(ctx, connection.GORM); err != nil {
 		t.Fatal(err)
+	}
+	var legacyTableExists bool
+	if err := connection.GORM.WithContext(ctx).Raw(
+		`SELECT to_regclass(current_schema() || '.sys_access_version') IS NOT NULL`,
+	).Scan(&legacyTableExists).Error; err != nil {
+		t.Fatal(err)
+	}
+	if legacyTableExists {
+		t.Fatal("legacy relation sys_access_version still exists")
 	}
 	if err := access.EnsureSchema(ctx, connection.GORM); err != nil {
 		t.Fatalf("second EnsureSchema() error = %v", err)
@@ -63,7 +72,7 @@ func TestAccessVersionSchemaBackfillsUsers(t *testing.T) {
 		}
 		if err := connection.GORM.WithContext(ctx).Raw(`
 			SELECT data_type, is_nullable FROM information_schema.columns
-			WHERE table_schema = current_schema() AND table_name = 'sys_access_version' AND column_name = ?`, column).Scan(&got).Error; err != nil {
+			WHERE table_schema = current_schema() AND table_name = 'rbac_access_version' AND column_name = ?`, column).Scan(&got).Error; err != nil {
 			t.Fatal(err)
 		}
 		if got.DataType != wantType || got.IsNullable != "NO" {
@@ -73,15 +82,15 @@ func TestAccessVersionSchemaBackfillsUsers(t *testing.T) {
 	var deletedAtCount int64
 	if err := connection.GORM.WithContext(ctx).Raw(`
 		SELECT count(*) FROM information_schema.columns
-		WHERE table_schema = current_schema() AND table_name = 'sys_access_version' AND column_name = 'deleted_at'`).Scan(&deletedAtCount).Error; err != nil {
+		WHERE table_schema = current_schema() AND table_name = 'rbac_access_version' AND column_name = 'deleted_at'`).Scan(&deletedAtCount).Error; err != nil {
 		t.Fatal(err)
 	}
 	if deletedAtCount != 0 {
-		t.Fatal("sys_access_version must not have deleted_at")
+		t.Fatal("rbac_access_version must not have deleted_at")
 	}
 	for name, fragments := range map[string][]string{
-		"ck_sys_access_version_version": {"CHECK", "version", ">= 1"},
-		"fk_sys_access_version_user":    {"FOREIGN KEY", "user_id", "ON DELETE RESTRICT"},
+		"ck_rbac_access_version_version": {"CHECK", "version", ">= 1"},
+		"fk_rbac_access_version_user":    {"FOREIGN KEY", "user_id", "ON DELETE RESTRICT"},
 	} {
 		var definition string
 		if err := connection.GORM.WithContext(ctx).Raw(`

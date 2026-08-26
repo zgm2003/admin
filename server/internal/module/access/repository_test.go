@@ -135,16 +135,18 @@ func openAccessRepositoryFixture(t *testing.T) *accessRepositoryFixture {
 	if err := connection.GORM.WithContext(ctx).Create(&userRole).Error; err != nil {
 		t.Fatal(err)
 	}
-	root := menu.Menu{MenuType: menu.TypeDirectory, Code: "system", I18nKey: "navigation.system", SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	accountI18nKey := "navigation.account"
+	root := menu.Menu{MenuType: menu.TypeDirectory, Name: "用户与账号", Code: "account", I18nKey: &accountI18nKey, SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&root).Error; err != nil {
 		t.Fatal(err)
 	}
-	path, componentPath := "/system/users", "system/users"
-	page := menu.Menu{ParentID: &root.ID, MenuType: menu.TypePage, Code: "system:user:list", I18nKey: "navigation.systemUsers", Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now}
+	path, componentPath := "/account/users", "account/users"
+	pageI18nKey := "navigation.accountUsers"
+	page := menu.Menu{ParentID: &root.ID, MenuType: menu.TypePage, Name: "用户管理", Code: "account:user:list", I18nKey: &pageI18nKey, Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
-	action := menu.Menu{ParentID: &page.ID, MenuType: menu.TypeAction, Code: "system:user:create", I18nKey: "permission.userCreate", SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	action := menu.Menu{ParentID: &page.ID, MenuType: menu.TypeAction, Name: "新增用户", Code: "account:user:create", SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&action).Error; err != nil {
 		t.Fatal(err)
 	}

@@ -7,6 +7,14 @@ import (
 	"unicode/utf8"
 )
 
+const (
+	PermissionList   = "account:user:list"
+	PermissionUpdate = "account:user:update"
+	PermissionStatus = "account:user:status"
+	PermissionDelete = "account:user:delete"
+	PermissionRoles  = "account:user:roles"
+)
+
 func NormalizeUsername(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	count := utf8.RuneCountInString(value)

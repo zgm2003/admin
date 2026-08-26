@@ -61,7 +61,7 @@ func (r *Repository) Transaction(ctx context.Context, fn func(*Repository) error
 }
 
 func (r *Repository) LockUserWriteTable(ctx context.Context) error {
-	if err := r.db.WithContext(ctx).Exec("LOCK TABLE sys_user IN ROW EXCLUSIVE MODE").Error; err != nil {
+	if err := r.db.WithContext(ctx).Exec("LOCK TABLE user_account IN ROW EXCLUSIVE MODE").Error; err != nil {
 		return fmt.Errorf("lock user write table: %w", err)
 	}
 	return nil
@@ -71,7 +71,7 @@ func (r *Repository) FindAccessVersion(ctx context.Context, userID int64) (acces
 	var version accessstate.Version
 	result := r.db.WithContext(ctx).Raw(`
 		SELECT user_id, version
-		FROM sys_access_version
+		FROM rbac_access_version
 		WHERE user_id = ?`, userID).Scan(&version)
 	if result.Error != nil {
 		return accessstate.Version{}, fmt.Errorf("find user access version: %w", result.Error)
@@ -86,7 +86,7 @@ func (r *Repository) LockAccessVersion(ctx context.Context, userID int64) (int64
 	var version int64
 	result := r.db.WithContext(ctx).Raw(`
 		SELECT version
-		FROM sys_access_version
+		FROM rbac_access_version
 		WHERE user_id = ?
 		FOR UPDATE`, userID).Scan(&version)
 	if result.Error != nil {
@@ -101,7 +101,7 @@ func (r *Repository) LockAccessVersion(ctx context.Context, userID int64) (int64
 func (r *Repository) IncrementAccessVersion(ctx context.Context, userID int64, now time.Time) (int64, error) {
 	var version int64
 	result := r.db.WithContext(ctx).Raw(`
-		UPDATE sys_access_version
+		UPDATE rbac_access_version
 		SET version = version + 1, updated_at = ?
 		WHERE user_id = ?
 		RETURNING version`, now.UTC(), userID).Scan(&version)
@@ -116,7 +116,7 @@ func (r *Repository) IncrementAccessVersion(ctx context.Context, userID int64, n
 
 func (r *Repository) FindActiveSessionPlatforms(ctx context.Context, userID int64) ([]string, error) {
 	platforms := make([]string, 0)
-	if err := r.db.WithContext(ctx).Table("sys_user_session").Distinct("platform").
+	if err := r.db.WithContext(ctx).Table("auth_session").Distinct("platform").
 		Where("user_id = ? AND revoked_at IS NULL", userID).Order("platform").Pluck("platform", &platforms).Error; err != nil {
 		return nil, fmt.Errorf("find active user session platforms: %w", err)
 	}
@@ -157,11 +157,11 @@ func (r *Repository) IsEffectiveSuperAdmin(ctx context.Context, userID, superAdm
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT EXISTS (
 			SELECT 1
-			FROM sys_user AS app_user
-			JOIN sys_user_role AS user_role
+			FROM user_account AS app_user
+			JOIN rbac_user_role AS user_role
 			  ON user_role.user_id = app_user.id
 			 AND user_role.deleted_at IS NULL
-			JOIN sys_role AS app_role
+			JOIN rbac_role AS app_role
 			  ON app_role.id = user_role.role_id
 			 AND app_role.deleted_at IS NULL
 			 AND app_role.is_enabled = ?
@@ -179,7 +179,7 @@ func (r *Repository) HasActiveRole(ctx context.Context, userID, roleID int64) (b
 	var exists bool
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT EXISTS (
-			SELECT 1 FROM sys_user_role
+			SELECT 1 FROM rbac_user_role
 			WHERE user_id = ? AND role_id = ? AND deleted_at IS NULL
 		)`, userID, roleID).Scan(&exists).Error; err != nil {
 		return false, fmt.Errorf("check active user role: %w", err)
@@ -230,9 +230,9 @@ func (r *Repository) LockUserRoles(ctx context.Context, userID int64) ([]role.Us
 
 func (r *Repository) CountEffectiveSuperAdmins(ctx context.Context, superAdminRoleID int64) (int64, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).Table("sys_user AS app_user").
-		Joins("JOIN sys_user_role AS user_role ON user_role.user_id = app_user.id AND user_role.deleted_at IS NULL").
-		Joins("JOIN sys_role AS app_role ON app_role.id = user_role.role_id AND app_role.deleted_at IS NULL AND app_role.is_enabled = ?", yesno.Yes).
+	if err := r.db.WithContext(ctx).Table("user_account AS app_user").
+		Joins("JOIN rbac_user_role AS user_role ON user_role.user_id = app_user.id AND user_role.deleted_at IS NULL").
+		Joins("JOIN rbac_role AS app_role ON app_role.id = user_role.role_id AND app_role.deleted_at IS NULL AND app_role.is_enabled = ?", yesno.Yes).
 		Where("app_user.deleted_at IS NULL AND app_user.is_enabled = ? AND app_role.id = ?", yesno.Yes, superAdminRoleID).
 		Distinct("app_user.id").Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("count effective super administrators: %w", err)
@@ -281,7 +281,7 @@ func (r *Repository) SoftDeleteUserRoleIDs(ctx context.Context, ids []int64, del
 	if len(ids) == 0 {
 		return nil
 	}
-	if err := r.db.WithContext(ctx).Table("sys_user_role").Where("id IN ? AND deleted_at IS NULL", ids).Updates(map[string]any{
+	if err := r.db.WithContext(ctx).Table("rbac_user_role").Where("id IN ? AND deleted_at IS NULL", ids).Updates(map[string]any{
 		"updated_at": deletedAt.UTC(), "deleted_at": deletedAt.UTC(),
 	}).Error; err != nil {
 		return fmt.Errorf("soft delete user roles: %w", err)
@@ -301,7 +301,7 @@ func (r *Repository) CreateUserRoles(ctx context.Context, values []role.UserRole
 
 func (r *Repository) RevokeActiveSessions(ctx context.Context, userID int64, revokedAt time.Time) error {
 	if err := r.db.WithContext(ctx).Exec(`
-		UPDATE sys_user_session
+		UPDATE auth_session
 		SET revoked_at = ?, updated_at = ?
 		WHERE user_id = ? AND revoked_at IS NULL`, revokedAt.UTC(), revokedAt.UTC(), userID).Error; err != nil {
 		return fmt.Errorf("revoke active user sessions: %w", err)
@@ -310,7 +310,7 @@ func (r *Repository) RevokeActiveSessions(ctx context.Context, userID int64, rev
 }
 
 func (r *Repository) SoftDeleteUser(ctx context.Context, userID int64, deletedAt time.Time) error {
-	result := r.db.WithContext(ctx).Table("sys_user").Where("id = ? AND deleted_at IS NULL", userID).Updates(map[string]any{
+	result := r.db.WithContext(ctx).Table("user_account").Where("id = ? AND deleted_at IS NULL", userID).Updates(map[string]any{
 		"updated_at": deletedAt.UTC(), "deleted_at": deletedAt.UTC(),
 	})
 	if result.Error != nil {
@@ -325,7 +325,7 @@ func (r *Repository) SoftDeleteUser(ctx context.Context, userID int64, deletedAt
 func (r *Repository) CreateWithRole(ctx context.Context, input CreateInput) (User, error) {
 	var created User
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`LOCK TABLE sys_user IN ROW EXCLUSIVE MODE`).Error; err != nil {
+		if err := tx.Exec(`LOCK TABLE user_account IN ROW EXCLUSIVE MODE`).Error; err != nil {
 			return fmt.Errorf("lock user writes: %w", err)
 		}
 		var effectiveRole role.Role
@@ -352,7 +352,7 @@ func (r *Repository) CreateWithRole(ctx context.Context, input CreateInput) (Use
 			return fmt.Errorf("create user role relationship: %w", err)
 		}
 		if err := tx.Exec(`
-			INSERT INTO sys_access_version (user_id, version, created_at, updated_at)
+			INSERT INTO rbac_access_version (user_id, version, created_at, updated_at)
 			VALUES (?, 1, ?, ?)`, created.ID, now, now).Error; err != nil {
 			return fmt.Errorf("create user access version: %w", err)
 		}
@@ -380,14 +380,14 @@ func (r *Repository) FindCurrent(ctx context.Context, userID int64) (Current, er
 	var current Current
 	result := r.db.WithContext(ctx).Raw(`
 		SELECT app_user.id, app_user.username, app_user.email
-		FROM sys_user AS app_user
+		FROM user_account AS app_user
 		WHERE app_user.id = ?
 		  AND app_user.deleted_at IS NULL
 		  AND app_user.is_enabled = ?
 		  AND EXISTS (
 			SELECT 1
-			FROM sys_user_role AS user_role
-			JOIN sys_role AS app_role
+			FROM rbac_user_role AS user_role
+			JOIN rbac_role AS app_role
 			  ON app_role.id = user_role.role_id
 			 AND app_role.deleted_at IS NULL
 			 AND app_role.is_enabled = ?
@@ -455,11 +455,11 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 		RoleDeletedAt  sql.NullTime
 	}
 	rows := make([]relationshipRow, 0)
-	if err := r.db.WithContext(ctx).Table("sys_user_role AS user_role").
+	if err := r.db.WithContext(ctx).Table("rbac_user_role AS user_role").
 		Select(`user_role.user_id, user_role.id AS relationship_id,
 			app_role.id AS role_id, app_role.code, app_role.name,
 			app_role.is_enabled, app_role.deleted_at AS role_deleted_at`).
-		Joins("LEFT JOIN sys_role AS app_role ON app_role.id = user_role.role_id").
+		Joins("LEFT JOIN rbac_role AS app_role ON app_role.id = user_role.role_id").
 		Where("user_role.user_id IN ? AND user_role.deleted_at IS NULL", userIDs).
 		Order("user_role.user_id ASC, app_role.code ASC, app_role.id ASC, user_role.id ASC").
 		Scan(&rows).Error; err != nil {
@@ -494,7 +494,7 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 
 func (r *Repository) FindRoleOptions(ctx context.Context) ([]RoleSummary, error) {
 	options := make([]RoleSummary, 0)
-	if err := r.db.WithContext(ctx).Table("sys_role AS app_role").
+	if err := r.db.WithContext(ctx).Table("rbac_role AS app_role").
 		Select("app_role.id, app_role.code, app_role.name, app_role.is_enabled").
 		Where("app_role.deleted_at IS NULL").
 		Order("app_role.code ASC, app_role.id ASC").
@@ -510,7 +510,7 @@ func (r *Repository) FindRoleOptions(ctx context.Context) ([]RoleSummary, error)
 }
 
 func applyUserListFilter(db *gorm.DB, query ListQuery) *gorm.DB {
-	db = db.Table("sys_user AS app_user").Where("app_user.deleted_at IS NULL")
+	db = db.Table("user_account AS app_user").Where("app_user.deleted_at IS NULL")
 	if query.Keyword != "" {
 		pattern := "%" + escapeUserLike(query.Keyword) + "%"
 		db = db.Where(`(app_user.username ILIKE ? ESCAPE E'\\' OR app_user.email ILIKE ? ESCAPE E'\\')`, pattern, pattern)
@@ -520,7 +520,7 @@ func applyUserListFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 	}
 	if query.RoleID != nil {
 		db = db.Where(`EXISTS (
-			SELECT 1 FROM sys_user_role AS user_role
+			SELECT 1 FROM rbac_user_role AS user_role
 			WHERE user_role.user_id = app_user.id
 			  AND user_role.role_id = ?
 			  AND user_role.deleted_at IS NULL
@@ -537,9 +537,9 @@ func mapCreateError(err error) error {
 	var postgresError *pgconn.PgError
 	if errors.As(err, &postgresError) {
 		switch postgresError.ConstraintName {
-		case "ux_sys_user_username_active":
+		case "ux_user_account_username_active":
 			return ErrUsernameConflict
-		case "ux_sys_user_email_active":
+		case "ux_user_account_email_active":
 			return ErrEmailConflict
 		}
 	}
@@ -548,7 +548,7 @@ func mapCreateError(err error) error {
 
 func mapUserWriteError(operation string, err error) error {
 	var postgresError *pgconn.PgError
-	if errors.As(err, &postgresError) && postgresError.ConstraintName == "ux_sys_user_username_active" {
+	if errors.As(err, &postgresError) && postgresError.ConstraintName == "ux_user_account_username_active" {
 		return fmt.Errorf("%s: %w", operation, ErrUsernameConflict)
 	}
 	return fmt.Errorf("%s: %w", operation, err)

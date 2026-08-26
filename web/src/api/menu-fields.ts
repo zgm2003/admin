@@ -3,7 +3,7 @@ export const menuCodePattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?::[a-z][a-z0-9]*
 export const menuPathPattern = /^\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$/
 export const componentPathPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$/
 
-const staticPaths: ReadonlySet<string> = new Set(['/login', '/register', '/dashboard', '/system/menus'])
+const staticPaths: ReadonlySet<string> = new Set(['/login', '/register', '/dashboard'])
 
 export function isMenuI18nKey(value: string): boolean {
   return value.length <= 128 && menuI18nKeyPattern.test(value)

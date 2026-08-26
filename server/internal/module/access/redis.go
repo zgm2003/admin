@@ -17,7 +17,7 @@ import (
 	"admin/server/internal/shared/yesno"
 )
 
-const accessSnapshotSchemaVersion = 2
+const accessSnapshotSchemaVersion = 3
 
 type CachedSnapshot struct {
 	SchemaVersion   int        `json:"schemaVersion"`
@@ -216,7 +216,7 @@ func cloneMenuTree(nodes []MenuNode) []MenuNode {
 }
 
 func sortUniqueStrings(values []string) ([]string, error) {
-	result := append([]string(nil), values...)
+	result := append(make([]string, 0, len(values)), values...)
 	sort.Strings(result)
 	deduplicated := result[:0]
 	for _, value := range result {

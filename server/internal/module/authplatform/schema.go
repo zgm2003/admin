@@ -15,18 +15,18 @@ type constraintDefinition struct {
 }
 
 var platformConstraints = []constraintDefinition{
-	{name: "ck_sys_auth_platform_code", ddl: `ALTER TABLE sys_auth_platform ADD CONSTRAINT ck_sys_auth_platform_code CHECK (code ~ '^[a-z][a-z0-9_]{1,48}$')`},
-	{name: "ck_sys_auth_platform_policy_version", ddl: `ALTER TABLE sys_auth_platform ADD CONSTRAINT ck_sys_auth_platform_policy_version CHECK (policy_version >= 1)`},
-	{name: "ck_sys_auth_platform_access_ttl_seconds", ddl: `ALTER TABLE sys_auth_platform ADD CONSTRAINT ck_sys_auth_platform_access_ttl_seconds CHECK (access_ttl_seconds BETWEEN 60 AND 2592000)`},
-	{name: "ck_sys_auth_platform_refresh_ttl_seconds", ddl: `ALTER TABLE sys_auth_platform ADD CONSTRAINT ck_sys_auth_platform_refresh_ttl_seconds CHECK (refresh_ttl_seconds BETWEEN 60 AND 31536000)`},
-	{name: "ck_sys_auth_platform_session_cache_ttl_seconds", ddl: `ALTER TABLE sys_auth_platform ADD CONSTRAINT ck_sys_auth_platform_session_cache_ttl_seconds CHECK (session_cache_ttl_seconds BETWEEN 60 AND 86400)`},
-	{name: "ck_sys_auth_platform_access_cache_ttl_seconds", ddl: `ALTER TABLE sys_auth_platform ADD CONSTRAINT ck_sys_auth_platform_access_cache_ttl_seconds CHECK (access_cache_ttl_seconds BETWEEN 60 AND 86400)`},
-	{name: "ck_sys_auth_platform_bind_device", ddl: `ALTER TABLE sys_auth_platform ADD CONSTRAINT ck_sys_auth_platform_bind_device CHECK (bind_device IN (0, 1))`},
-	{name: "ck_sys_auth_platform_bind_ip", ddl: `ALTER TABLE sys_auth_platform ADD CONSTRAINT ck_sys_auth_platform_bind_ip CHECK (bind_ip IN (0, 1))`},
-	{name: "ck_sys_auth_platform_max_sessions", ddl: `ALTER TABLE sys_auth_platform ADD CONSTRAINT ck_sys_auth_platform_max_sessions CHECK (max_sessions BETWEEN 0 AND 100)`},
-	{name: "ck_sys_auth_platform_allow_register", ddl: `ALTER TABLE sys_auth_platform ADD CONSTRAINT ck_sys_auth_platform_allow_register CHECK (allow_register IN (0, 1))`},
-	{name: "ck_sys_auth_platform_is_enabled", ddl: `ALTER TABLE sys_auth_platform ADD CONSTRAINT ck_sys_auth_platform_is_enabled CHECK (is_enabled IN (0, 1))`},
-	{name: "ck_sys_auth_platform_is_builtin", ddl: `ALTER TABLE sys_auth_platform ADD CONSTRAINT ck_sys_auth_platform_is_builtin CHECK (is_builtin IN (0, 1))`},
+	{name: "ck_auth_platform_code", ddl: `ALTER TABLE auth_platform ADD CONSTRAINT ck_auth_platform_code CHECK (code ~ '^[a-z][a-z0-9_]{1,48}$')`},
+	{name: "ck_auth_platform_policy_version", ddl: `ALTER TABLE auth_platform ADD CONSTRAINT ck_auth_platform_policy_version CHECK (policy_version >= 1)`},
+	{name: "ck_auth_platform_access_ttl_seconds", ddl: `ALTER TABLE auth_platform ADD CONSTRAINT ck_auth_platform_access_ttl_seconds CHECK (access_ttl_seconds BETWEEN 60 AND 2592000)`},
+	{name: "ck_auth_platform_refresh_ttl_seconds", ddl: `ALTER TABLE auth_platform ADD CONSTRAINT ck_auth_platform_refresh_ttl_seconds CHECK (refresh_ttl_seconds BETWEEN 60 AND 31536000)`},
+	{name: "ck_auth_platform_session_cache_ttl_seconds", ddl: `ALTER TABLE auth_platform ADD CONSTRAINT ck_auth_platform_session_cache_ttl_seconds CHECK (session_cache_ttl_seconds BETWEEN 60 AND 86400)`},
+	{name: "ck_auth_platform_access_cache_ttl_seconds", ddl: `ALTER TABLE auth_platform ADD CONSTRAINT ck_auth_platform_access_cache_ttl_seconds CHECK (access_cache_ttl_seconds BETWEEN 60 AND 86400)`},
+	{name: "ck_auth_platform_bind_device", ddl: `ALTER TABLE auth_platform ADD CONSTRAINT ck_auth_platform_bind_device CHECK (bind_device IN (0, 1))`},
+	{name: "ck_auth_platform_bind_ip", ddl: `ALTER TABLE auth_platform ADD CONSTRAINT ck_auth_platform_bind_ip CHECK (bind_ip IN (0, 1))`},
+	{name: "ck_auth_platform_max_sessions", ddl: `ALTER TABLE auth_platform ADD CONSTRAINT ck_auth_platform_max_sessions CHECK (max_sessions BETWEEN 0 AND 100)`},
+	{name: "ck_auth_platform_allow_register", ddl: `ALTER TABLE auth_platform ADD CONSTRAINT ck_auth_platform_allow_register CHECK (allow_register IN (0, 1))`},
+	{name: "ck_auth_platform_is_enabled", ddl: `ALTER TABLE auth_platform ADD CONSTRAINT ck_auth_platform_is_enabled CHECK (is_enabled IN (0, 1))`},
+	{name: "ck_auth_platform_is_builtin", ddl: `ALTER TABLE auth_platform ADD CONSTRAINT ck_auth_platform_is_builtin CHECK (is_builtin IN (0, 1))`},
 }
 
 func EnsureSchema(ctx context.Context, db *gorm.DB) error {
@@ -39,11 +39,11 @@ func EnsureSchema(ctx context.Context, db *gorm.DB) error {
 			return err
 		}
 	}
-	if err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_auth_platform_code_active ON sys_auth_platform (code) WHERE deleted_at IS NULL`).Error; err != nil {
+	if err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS ux_auth_platform_code_active ON auth_platform (code) WHERE deleted_at IS NULL`).Error; err != nil {
 		return fmt.Errorf("create authentication platform index: %w", err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`LOCK TABLE sys_auth_platform IN SHARE ROW EXCLUSIVE MODE`).Error; err != nil {
+		if err := tx.Exec(`LOCK TABLE auth_platform IN SHARE ROW EXCLUSIVE MODE`).Error; err != nil {
 			return fmt.Errorf("lock authentication platforms: %w", err)
 		}
 		rows := make([]Platform, 0, 2)
@@ -73,7 +73,7 @@ func ensureConstraint(db *gorm.DB, definition constraintDefinition) error {
 	if err := db.Raw(`
 		SELECT EXISTS (
 			SELECT 1 FROM pg_constraint
-			WHERE conname = ? AND conrelid = to_regclass(current_schema() || '.sys_auth_platform')
+			WHERE conname = ? AND conrelid = to_regclass(current_schema() || '.auth_platform')
 		)`, definition.name).Scan(&exists).Error; err != nil {
 		return fmt.Errorf("inspect authentication platform constraint %s: %w", definition.name, err)
 	}

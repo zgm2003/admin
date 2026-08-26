@@ -20,7 +20,7 @@ import (
 )
 
 func TestPlatformTableName(t *testing.T) {
-	if got := (authplatform.Platform{}).TableName(); got != "sys_auth_platform" {
+	if got := (authplatform.Platform{}).TableName(); got != "auth_platform" {
 		t.Fatalf("TableName() = %q", got)
 	}
 }
@@ -32,6 +32,15 @@ func TestAuthenticationPlatformSchemaAndBuiltinAdmin(t *testing.T) {
 	}
 	if err := authplatform.EnsureSchema(ctx, connection.GORM); err != nil {
 		t.Fatal(err)
+	}
+	var legacyTableExists bool
+	if err := connection.GORM.WithContext(ctx).Raw(
+		`SELECT to_regclass(current_schema() || '.sys_auth_platform') IS NOT NULL`,
+	).Scan(&legacyTableExists).Error; err != nil {
+		t.Fatal(err)
+	}
+	if legacyTableExists {
+		t.Fatal("legacy relation sys_auth_platform still exists")
 	}
 	if err := authplatform.EnsureSchema(ctx, connection.GORM); err != nil {
 		t.Fatalf("second EnsureSchema() error = %v", err)
@@ -68,7 +77,7 @@ func TestAuthenticationPlatformSchemaAndBuiltinAdmin(t *testing.T) {
 		if err := connection.GORM.WithContext(ctx).Raw(`
 			SELECT data_type, is_nullable, column_default
 			FROM information_schema.columns
-			WHERE table_schema = current_schema() AND table_name = 'sys_auth_platform' AND column_name = ?`, column).Scan(&got).Error; err != nil {
+			WHERE table_schema = current_schema() AND table_name = 'auth_platform' AND column_name = ?`, column).Scan(&got).Error; err != nil {
 			t.Fatal(err)
 		}
 		if got.DataType != want.dataType || got.IsNullable != want.nullable {
@@ -80,18 +89,18 @@ func TestAuthenticationPlatformSchemaAndBuiltinAdmin(t *testing.T) {
 	}
 
 	constraints := map[string][]string{
-		"ck_sys_auth_platform_code":                      {"CHECK", "code"},
-		"ck_sys_auth_platform_policy_version":            {"CHECK", "policy_version", ">= 1"},
-		"ck_sys_auth_platform_access_ttl_seconds":        {"CHECK", "access_ttl_seconds", "2592000"},
-		"ck_sys_auth_platform_refresh_ttl_seconds":       {"CHECK", "refresh_ttl_seconds", "31536000"},
-		"ck_sys_auth_platform_session_cache_ttl_seconds": {"CHECK", "session_cache_ttl_seconds", "86400"},
-		"ck_sys_auth_platform_access_cache_ttl_seconds":  {"CHECK", "access_cache_ttl_seconds", "86400"},
-		"ck_sys_auth_platform_bind_device":               {"CHECK", "bind_device"},
-		"ck_sys_auth_platform_bind_ip":                   {"CHECK", "bind_ip"},
-		"ck_sys_auth_platform_max_sessions":              {"CHECK", "max_sessions", "100"},
-		"ck_sys_auth_platform_allow_register":            {"CHECK", "allow_register"},
-		"ck_sys_auth_platform_is_enabled":                {"CHECK", "is_enabled"},
-		"ck_sys_auth_platform_is_builtin":                {"CHECK", "is_builtin"},
+		"ck_auth_platform_code":                      {"CHECK", "code"},
+		"ck_auth_platform_policy_version":            {"CHECK", "policy_version", ">= 1"},
+		"ck_auth_platform_access_ttl_seconds":        {"CHECK", "access_ttl_seconds", "2592000"},
+		"ck_auth_platform_refresh_ttl_seconds":       {"CHECK", "refresh_ttl_seconds", "31536000"},
+		"ck_auth_platform_session_cache_ttl_seconds": {"CHECK", "session_cache_ttl_seconds", "86400"},
+		"ck_auth_platform_access_cache_ttl_seconds":  {"CHECK", "access_cache_ttl_seconds", "86400"},
+		"ck_auth_platform_bind_device":               {"CHECK", "bind_device"},
+		"ck_auth_platform_bind_ip":                   {"CHECK", "bind_ip"},
+		"ck_auth_platform_max_sessions":              {"CHECK", "max_sessions", "100"},
+		"ck_auth_platform_allow_register":            {"CHECK", "allow_register"},
+		"ck_auth_platform_is_enabled":                {"CHECK", "is_enabled"},
+		"ck_auth_platform_is_builtin":                {"CHECK", "is_builtin"},
 	}
 	for name, fragments := range constraints {
 		definition := platformConstraintDefinition(t, connection, ctx, name)
@@ -104,7 +113,7 @@ func TestAuthenticationPlatformSchemaAndBuiltinAdmin(t *testing.T) {
 	var indexDefinition string
 	if err := connection.GORM.WithContext(ctx).Raw(`
 		SELECT indexdef FROM pg_indexes
-		WHERE schemaname = current_schema() AND indexname = 'ux_sys_auth_platform_code_active'`).Scan(&indexDefinition).Error; err != nil {
+		WHERE schemaname = current_schema() AND indexname = 'ux_auth_platform_code_active'`).Scan(&indexDefinition).Error; err != nil {
 		t.Fatal(err)
 	}
 	for _, fragment := range []string{"CREATE UNIQUE INDEX", "(code)", "WHERE (deleted_at IS NULL)"} {

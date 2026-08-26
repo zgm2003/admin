@@ -83,12 +83,12 @@ describe('role contract', () => {
     expect(parseRolePermissions(value)).toEqual(value)
   })
 
-  it('accepts custom i18n keys that follow the menu key format', () => {
+  it('accepts non-empty database names without requiring translation keys', () => {
     const value = rolePermissions()
     const directory = value.menuTree[0]
     const custom = {
       ...value,
-      menuTree: [{ ...directory, i18nKey: 'reports.orders.list' }],
+			menuTree: [{ ...directory, name: '业务报表' }],
     }
 
     expect(parseRolePermissions(custom)).toEqual(custom)
@@ -105,7 +105,9 @@ describe('role contract', () => {
       { ...value, role: { ...value.role, extra: true } },
       { ...value, menuTree: [{ ...directory, id: 0 }] },
       { ...value, menuTree: [{ ...directory, menuType: 'page' }] },
-      { ...value, menuTree: [{ ...directory, i18nKey: 'role' }] },
+			{ ...value, menuTree: [{ ...directory, name: '' }] },
+			{ ...value, menuTree: [{ ...directory, i18nKey: 'navigation.system' }] },
+			{ ...value, menuTree: [{ ...withoutKey(directory, 'name') }] },
       { ...value, menuTree: [{ ...directory, isEnabled: 2 }] },
       { ...value, menuTree: [{ ...directory, children: null }] },
       { ...value, menuTree: [{ ...directory, children: [{ ...page, parentId: 99 }] }] },
@@ -186,23 +188,23 @@ function rolePermissions() {
         parentId: null,
         menuType: 'directory' as const,
         code: 'system',
-        i18nKey: 'navigation.system' as const,
+				name: '系统管理',
         isEnabled: YesNo.Yes,
         children: [
           {
             id: 2,
             parentId: 1,
             menuType: 'page' as const,
-            code: 'system:role:list',
-            i18nKey: 'navigation.systemRoles' as const,
+            code: 'rbac:role:list',
+					name: '角色管理',
             isEnabled: YesNo.Yes,
             children: [
               {
                 id: 3,
                 parentId: 2,
                 menuType: 'action' as const,
-                code: 'system:role:create',
-                i18nKey: 'permission.roleCreate' as const,
+                code: 'rbac:role:create',
+						name: '新增角色',
                 isEnabled: YesNo.No,
                 children: [],
               },
@@ -213,4 +215,8 @@ function rolePermissions() {
     ],
     menuIds: [2],
   }
+}
+
+function withoutKey(value: object, key: string): Record<string, unknown> {
+	return Object.fromEntries(Object.entries(value).filter(([entryKey]) => entryKey !== key))
 }

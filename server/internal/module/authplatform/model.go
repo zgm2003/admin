@@ -28,5 +28,5 @@ type Platform struct {
 }
 
 func (Platform) TableName() string {
-	return "sys_auth_platform"
+	return "auth_platform"
 }

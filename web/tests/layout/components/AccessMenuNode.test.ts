@@ -27,9 +27,9 @@ describe('AccessMenuNode', () => {
   it('renders a directory as a submenu and its page child as a navigable item', () => {
     const wrapper = mountMenuNode(directoryNode())
 
-    expect(wrapper.findComponent({ name: 'ElSubMenu' }).props('index')).toBe('system')
+    expect(wrapper.findComponent({ name: 'ElSubMenu' }).props('index')).toBe('account')
     expect(wrapper.findAllComponents({ name: 'ElSubMenu' })).toHaveLength(1)
-    expect(wrapper.findComponent({ name: 'ElMenuItem' }).props('index')).toBe('/system/users')
+    expect(wrapper.findComponent({ name: 'ElMenuItem' }).props('index')).toBe('/account/users')
   })
 
 	it.each(['Setting', 'mdi:shield'])('passes icon name %s directly to DIcon', (icon) => {
@@ -41,12 +41,12 @@ describe('AccessMenuNode', () => {
 
   it('updates the menu title from the active frontend locale', async () => {
     const wrapper = mountMenuNode(pageNode())
-    expect(wrapper.text()).toContain('菜单管理')
+    expect(wrapper.text()).toContain('用户管理')
 
     setLocale('en-US')
     await wrapper.vm.$nextTick()
 
-		expect(wrapper.text()).toContain('Menu management')
+		expect(wrapper.text()).toContain('User management')
 	})
 
 	it('renders a missing dynamic translation as its i18n key', () => {
@@ -74,10 +74,10 @@ describe('AppAside access menu', () => {
     useAccessStore(pinia).reset()
   })
 
-  it('keeps Dashboard first and appends the access tree', () => {
+  it('keeps Dashboard first and appends every access-tree root', () => {
     useAccessStore(pinia).applySnapshot({
       roleCodes: [],
-      menuTree: [pageNode()],
+			menuTree: navigationRoots(),
       permissionCodes: [],
     })
 
@@ -87,7 +87,14 @@ describe('AppAside access menu', () => {
     })
     const items = wrapper.findAllComponents({ name: 'ElMenuItem' })
 
-    expect(items.map((item) => item.props('index'))).toEqual(['/dashboard', '/system/users'])
+		expect(items.map((item) => item.props('index'))).toEqual([
+			'/dashboard',
+			'/account/users',
+			'/access/roles',
+			'/system/operation-logs',
+		])
+		expect(wrapper.findAllComponents({ name: 'ElSubMenu' }).map((item) => item.props('index')))
+			.toEqual(['account', 'access', 'system'])
   })
 
 	it('still shows Dashboard when the access tree is empty', () => {
@@ -100,18 +107,6 @@ describe('AppAside access menu', () => {
 
 		expect(wrapper.findAllComponents({ name: 'ElMenuItem' })).toHaveLength(1)
 		expect(wrapper.findComponent({ name: 'ElMenuItem' }).props('index')).toBe('/dashboard')
-	})
-
-	it('shows static menu management after Dashboard only with its permission', () => {
-		useAccessStore(pinia).applySnapshot({
-			roleCodes: [], menuTree: [], permissionCodes: ['system:menu:list'],
-		})
-		const wrapper = mount(AppAside, {
-			props: { collapsed: false, uniqueOpened: true },
-			global: { plugins: [ElementPlus, pinia, createTestRouter(), appI18n] },
-		})
-		expect(wrapper.findAllComponents({ name: 'ElMenuItem' }).map((item) => item.props('index')))
-			.toEqual(['/dashboard', '/system/menus'])
 	})
 
   it('passes the unique-opened preference to Element Plus menu', () => {
@@ -140,11 +135,11 @@ function createTestRouter() {
 
 function directoryNode(): AccessMenuNodeDTO {
   return {
-    code: 'system',
+		code: 'account',
     menuType: 'directory',
     path: null,
 		componentPath: null,
-		i18nKey: 'navigation.system',
+		i18nKey: 'navigation.account',
     icon: 'Folder',
 		isHidden: YesNo.No,
     children: [pageNode()],
@@ -153,13 +148,46 @@ function directoryNode(): AccessMenuNodeDTO {
 
 function pageNode(): AccessMenuNodeDTO {
   return {
-    code: 'system:user:list',
+    code: 'account:user:list',
     menuType: 'page',
-    path: '/system/users',
-		componentPath: 'system/users',
-		i18nKey: 'navigation.systemMenus',
+    path: '/account/users',
+		componentPath: 'account/users',
+		i18nKey: 'navigation.accountUsers',
     icon: 'Setting',
 		isHidden: YesNo.No,
     children: [],
   }
+}
+
+function navigationRoots(): AccessMenuNodeDTO[] {
+	return [
+		directoryWithPage('account', 'navigation.account', pageNode()),
+		directoryWithPage('access', 'navigation.access', {
+			...pageNode(),
+			code: 'rbac:role:list',
+			path: '/access/roles',
+			componentPath: 'access/roles',
+			i18nKey: 'navigation.accessRoles',
+		}),
+		directoryWithPage('system', 'navigation.system', {
+			...pageNode(),
+			code: 'audit:operation-log:list',
+			path: '/system/operation-logs',
+			componentPath: 'system/operation-logs',
+			i18nKey: 'navigation.systemOperationLogs',
+		}),
+	]
+}
+
+function directoryWithPage(code: string, i18nKey: string, child: AccessMenuNodeDTO): AccessMenuNodeDTO {
+	return {
+		code,
+		menuType: 'directory',
+		path: null,
+		componentPath: null,
+		i18nKey,
+		icon: 'Folder',
+		isHidden: YesNo.No,
+		children: [child],
+	}
 }

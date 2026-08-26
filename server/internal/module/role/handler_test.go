@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"testing"
 
-	"admin/server/internal/module/menu"
 	"admin/server/internal/module/role"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/pagination"
@@ -102,14 +101,14 @@ func TestRoleRoutesBindExactPermissions(t *testing.T) {
 		return pass
 	})
 	want := []string{
-		menu.PermissionRoleList,
-		menu.PermissionRoleCreate,
-		menu.PermissionRoleUpdate,
-		menu.PermissionRoleStatus,
-		menu.PermissionRoleDefault,
-		menu.PermissionRoleDelete,
-		menu.PermissionRoleAuthorize,
-		menu.PermissionRoleAuthorize,
+		role.PermissionList,
+		role.PermissionCreate,
+		role.PermissionUpdate,
+		role.PermissionStatus,
+		role.PermissionDefault,
+		role.PermissionDelete,
+		role.PermissionAuthorize,
+		role.PermissionAuthorize,
 	}
 	if !reflect.DeepEqual(permissions, want) {
 		t.Fatalf("registered permissions = %v, want %v", permissions, want)

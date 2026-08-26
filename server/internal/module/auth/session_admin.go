@@ -212,13 +212,13 @@ type sessionAdminRow struct {
 }
 
 func (r *SessionRepository) ListAdmin(ctx context.Context, query AdminSessionQuery, now time.Time) ([]AdminSession, int64, error) {
-	db := r.db.WithContext(ctx).Table("sys_user_session AS session").
+	db := r.db.WithContext(ctx).Table("auth_session AS session").
 		Select("session.id, session.user_id, app_user.username, session.platform, session.device_id, "+
 			"session.client_ip, session.user_agent, session.created_at, session.updated_at, "+
 			"session.refresh_expires_at, session.revoked_at, "+
 			"CASE WHEN session.revoked_at IS NOT NULL THEN 'revoked' "+
 			"WHEN session.refresh_expires_at <= ? THEN 'expired' ELSE 'active' END AS status", now.UTC()).
-		Joins("JOIN sys_user AS app_user ON app_user.id = session.user_id").
+		Joins("JOIN user_account AS app_user ON app_user.id = session.user_id").
 		Where("app_user.deleted_at IS NULL")
 	if query.Username != "" {
 		db = db.Where("app_user.username LIKE ? ESCAPE '\\'", adminPrefixPattern(query.Username))
@@ -262,8 +262,8 @@ func (r *SessionRepository) ListAdmin(ctx context.Context, query AdminSessionQue
 
 func (r *SessionRepository) StatsAdmin(ctx context.Context, now time.Time) (AdminSessionStats, error) {
 	stats := AdminSessionStats{Platforms: make(map[string]int64)}
-	if err := r.db.WithContext(ctx).Table("sys_user_session AS session").
-		Joins("JOIN sys_user AS app_user ON app_user.id = session.user_id").
+	if err := r.db.WithContext(ctx).Table("auth_session AS session").
+		Joins("JOIN user_account AS app_user ON app_user.id = session.user_id").
 		Where("app_user.deleted_at IS NULL AND session.revoked_at IS NULL AND session.refresh_expires_at > ?", now.UTC()).
 		Count(&stats.ActiveTotal).Error; err != nil {
 		return AdminSessionStats{}, fmt.Errorf("count active sessions: %w", err)
@@ -273,9 +273,9 @@ func (r *SessionRepository) StatsAdmin(ctx context.Context, now time.Time) (Admi
 		Count    int64
 	}
 	rows := make([]platformCount, 0)
-	if err := r.db.WithContext(ctx).Table("sys_user_session AS session").
+	if err := r.db.WithContext(ctx).Table("auth_session AS session").
 		Select("session.platform, COUNT(*) AS count").
-		Joins("JOIN sys_user AS app_user ON app_user.id = session.user_id").
+		Joins("JOIN user_account AS app_user ON app_user.id = session.user_id").
 		Where("app_user.deleted_at IS NULL AND session.revoked_at IS NULL AND session.refresh_expires_at > ?", now.UTC()).
 		Group("session.platform").Scan(&rows).Error; err != nil {
 		return AdminSessionStats{}, fmt.Errorf("count active sessions by platform: %w", err)

@@ -108,19 +108,19 @@ describe('admin layout', () => {
     useAccessStore(pinia).applySnapshot({
       roleCodes: [],
       menuTree: [{
-        code: 'system',
+				code: 'account',
         menuType: 'directory',
         path: null,
 		componentPath: null,
-		i18nKey: 'navigation.system',
+		i18nKey: 'navigation.account',
         icon: 'Folder',
 		isHidden: YesNo.No,
         children: [{
-          code: 'system:user:list',
+          code: 'account:user:list',
           menuType: 'page',
-          path: '/system/users',
-			componentPath: 'system/users',
-			i18nKey: 'navigation.systemUsers',
+          path: '/account/users',
+			componentPath: 'account/users',
+			i18nKey: 'navigation.accountUsers',
           icon: 'User',
 			isHidden: YesNo.Yes,
           children: [],
@@ -128,9 +128,9 @@ describe('admin layout', () => {
       }],
       permissionCodes: [],
     })
-    const { wrapper } = await mountLayout('/system/users')
+    const { wrapper } = await mountLayout('/account/users')
 
-    expect(wrapper.get('.app-header__breadcrumb').text()).toContain('系统管理')
+		expect(wrapper.get('.app-header__breadcrumb').text()).toContain('用户与账号')
     expect(wrapper.get('.app-header__breadcrumb').text()).toContain('用户管理')
   })
 
@@ -174,11 +174,11 @@ describe('admin layout', () => {
     useAccessStore(pinia).applySnapshot({
       roleCodes: [],
       menuTree: [{
-        code: 'system:user:list',
+        code: 'account:user:list',
         menuType: 'page',
-        path: '/system/users',
-		componentPath: 'system/users',
-		i18nKey: 'navigation.systemMenus',
+        path: '/account/users',
+		componentPath: 'account/users',
+		i18nKey: 'navigation.accessMenus',
         icon: 'User',
 		isHidden: YesNo.No,
         children: [],
@@ -213,7 +213,7 @@ describe('admin layout', () => {
     useAccessStore(pinia).applySnapshot({
       roleCodes: ['admin'],
       menuTree: [],
-      permissionCodes: ['system:user:list'],
+      permissionCodes: ['account:user:list'],
     })
     const { wrapper, router } = await mountLayout()
     await wrapper.get('[data-testid="logout"]').trigger('click')
@@ -245,16 +245,16 @@ async function mountLayout(path = '/dashboard') {
 		meta: { requiresAuth: true, i18nKey: 'navigation.dashboard', affix: true },
       },
       {
-        path: '/system/users',
-        name: 'system-users',
+        path: '/account/users',
+				name: 'account-users',
         component: layoutContent,
-		meta: { requiresAuth: true, i18nKey: 'navigation.systemUsers' },
+		meta: { requiresAuth: true, i18nKey: 'navigation.accountUsers' },
       },
       {
         path: '/system/missing',
         name: 'system-missing',
         component: layoutContent,
-		meta: { requiresAuth: true, i18nKey: 'navigation.systemUsers' },
+		meta: { requiresAuth: true, i18nKey: 'navigation.accountUsers' },
       },
       { path: '/login', name: 'login', component: { template: '<div>login</div>' } },
     ],

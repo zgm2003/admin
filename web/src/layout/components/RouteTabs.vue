@@ -13,6 +13,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
+import type { AccessMenuNode } from '../../api/access.contract'
+
 interface RouteTab {
   path: string
 	i18nKey: string
@@ -26,7 +28,10 @@ interface ScrollbarHandle {
 
 type TabCommand = 'refresh' | 'fullscreen' | 'closeOthers' | 'closeAll'
 
-const props = withDefaults(defineProps<{ fullscreen?: boolean }>(), { fullscreen: false })
+const props = withDefaults(defineProps<{
+	fullscreen?: boolean
+	menuTree: readonly AccessMenuNode[]
+}>(), { fullscreen: false })
 const root = ref<HTMLElement>()
 const tagsInnerRef = ref<HTMLElement | null>(null)
 const scrollPaneRef = ref<ScrollbarHandle>()
@@ -56,7 +61,12 @@ function slug(path: string): string {
 }
 
 function getCurrentTab(): RouteTab | null {
-	const matched = [...route.matched].reverse().find((record) => record.meta.i18nKey !== undefined)
+	const menuPage = findMenuPage(route.path, props.menuTree)
+	if (menuPage !== null) {
+		return { path: route.path, i18nKey: menuPage.i18nKey, affix: false }
+	}
+	if (route.path !== '/dashboard') return null
+	const matched = [...route.matched].reverse().find((record) => record.name === 'dashboard')
   if (matched === undefined) {
 		if (route.meta.requiresAuth === true) throw new Error(`Route ${route.fullPath} must declare i18nKey`)
     return null
@@ -64,6 +74,17 @@ function getCurrentTab(): RouteTab | null {
 	const i18nKey = matched.meta.i18nKey
 	if (i18nKey === undefined) throw new Error(`Route ${route.fullPath} must declare i18nKey`)
 	return { path: route.path, i18nKey, affix: matched.meta.affix === true }
+}
+
+function findMenuPage(path: string, roots: readonly AccessMenuNode[]): AccessMenuNode | null {
+	const stack = [...roots].reverse()
+	while (stack.length > 0) {
+		const node = stack.pop()
+		if (node === undefined) continue
+		if (node.menuType === 'page' && node.path === path) return node
+		if (node.menuType === 'directory') stack.push(...[...node.children].reverse())
+	}
+	return null
 }
 
 function prefersReducedMotion(): boolean {
@@ -191,7 +212,7 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') dismissContextMenu()
 }
 
-watch(() => route.fullPath, syncCurrentTab, { immediate: true })
+watch([() => route.fullPath, () => props.menuTree], syncCurrentTab, { immediate: true })
 watch(tagSignature, () => { scrollActiveTab() })
 
 onMounted(() => {

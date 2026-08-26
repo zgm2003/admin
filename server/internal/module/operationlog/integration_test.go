@@ -36,7 +36,7 @@ func TestOperationLogWorkerPersistsIdempotently(t *testing.T) {
 	}
 	mux := asynq.NewServeMux()
 	operationlog.Register(mux, operationlog.NewService(operationlog.NewRepository(connection.GORM)))
-	task := asynq.NewTask(operationlog.Type, encoded)
+	task := asynq.NewTask(operationlog.TaskType, encoded)
 	for index := 0; index < 2; index++ {
 		if err := mux.ProcessTask(context.Background(), task); err != nil {
 			t.Fatalf("ProcessTask(%d): %v", index, err)

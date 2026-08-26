@@ -14,14 +14,16 @@ export interface ManagedMenuNode {
   id: number
   parentId: number | null
   menuType: ManagedMenuType
+	name: string
   code: string
-	i18nKey: string
+	i18nKey: string | null
   path: string | null
 	componentPath: string | null
 	icon: string | null
   sortOrder: number
   isEnabled: YesNo
 	isHidden: YesNo
+	isProtected: YesNo
   createdAt: string
   updatedAt: string
   children: ManagedMenuNode[]
@@ -30,8 +32,9 @@ export interface ManagedMenuNode {
 export interface CreateMenuInput {
   parentId: number | null
   menuType: ManagedMenuType
+	name: string
   code: string
-	i18nKey: string
+	i18nKey: string | null
   path: string | null
 	componentPath: string | null
 	icon: string | null
@@ -43,7 +46,8 @@ export interface CreateMenuInput {
 export interface UpdateMenuInput {
   parentId: number | null
   menuType: ManagedMenuType
-	i18nKey: string
+	name: string
+	i18nKey: string | null
   path: string | null
 	componentPath: string | null
 	icon: string | null
@@ -76,7 +80,9 @@ const menuNodeKeys = [
   'i18nKey',
   'isEnabled',
 	'isHidden',
+	'isProtected',
   'menuType',
+	'name',
   'parentId',
   'path',
   'sortOrder',
@@ -131,6 +137,10 @@ function parseMenuNode(
   if (!isAllowedChild(parentType, menuType)) {
     throw new ProtocolError(`${label} has an invalid root or parent type`)
   }
+	const name = nonEmptyTrimmedString(record.name, `${label} name`)
+	if (name.length > 128) {
+		throw new ProtocolError(`${label} name is too long`)
+	}
 	const code = nonEmptyTrimmedString(record.code, `${label} code`)
 	if (code.length > 128 || !menuCodePattern.test(code)) {
 		throw new ProtocolError(`${label} code has an invalid format`)
@@ -140,10 +150,17 @@ function parseMenuNode(
   }
   state.codes.add(code)
 
-	if (typeof record.i18nKey !== 'string' || !isMenuI18nKey(record.i18nKey)) {
-		throw new ProtocolError(`${label} i18nKey has an invalid format`)
-  }
-  const i18nKey = record.i18nKey
+	let i18nKey: string | null = null
+	if (menuType === 'action') {
+		if (record.i18nKey !== null) {
+			throw new ProtocolError(`${label} action i18nKey must be null`)
+		}
+	} else {
+		if (typeof record.i18nKey !== 'string' || !isMenuI18nKey(record.i18nKey)) {
+			throw new ProtocolError(`${label} i18nKey has an invalid format`)
+		}
+		i18nKey = record.i18nKey
+	}
 	if (record.icon !== null && (typeof record.icon !== 'string' || !isMenuIcon(record.icon))) {
 		throw new ProtocolError(`${label} icon has an invalid format`)
   }
@@ -155,6 +172,9 @@ function parseMenuNode(
 	if (!isYesNo(record.isHidden)) {
 		throw new ProtocolError(`${label} isHidden must be 0 or 1`)
   }
+	if (!isYesNo(record.isProtected)) {
+		throw new ProtocolError(`${label} isProtected must be 0 or 1`)
+	}
   const createdAt = timestamp(record.createdAt, `${label} createdAt`)
   const updatedAt = timestamp(record.updatedAt, `${label} updatedAt`)
   if (!Array.isArray(record.children)) {
@@ -200,6 +220,7 @@ function parseMenuNode(
     id,
     parentId,
     menuType,
+		name,
     code,
     i18nKey,
     path,
@@ -208,6 +229,7 @@ function parseMenuNode(
     sortOrder,
 		isEnabled: record.isEnabled,
 		isHidden: record.isHidden,
+		isProtected: record.isProtected,
     createdAt,
     updatedAt,
     children,

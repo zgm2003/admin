@@ -63,7 +63,7 @@ func TestSessionRoutesUseExactPermissions(t *testing.T) {
 		}
 		router.ServeHTTP(recorder, request)
 	}
-	want := []string{"system:session:list", "system:session:list", "system:session:revoke", "system:session:revoke"}
+	want := []string{PermissionSessionList, PermissionSessionList, PermissionSessionRevoke, PermissionSessionRevoke}
 	if len(permissions) != len(want) {
 		t.Fatalf("permissions = %v", permissions)
 	}

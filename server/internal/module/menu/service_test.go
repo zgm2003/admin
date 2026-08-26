@@ -26,7 +26,7 @@ func TestServiceListReturnsCompleteSortedTree(t *testing.T) {
 	rootA := createRepositoryDirectory(t, repository, ctx, "settings", 10)
 	path := "/settings"
 	componentPath := "settings"
-	page := Menu{ParentID: &rootA.ID, MenuType: TypePage, Code: "settings:list", I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.No, IsHidden: yesno.No}
+	page := Menu{ParentID: &rootA.ID, MenuType: TypePage, Name: "Settings", Code: "settings:list", I18nKey: stringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.No, IsHidden: yesno.No}
 	if err := repository.Create(ctx, &page); err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestServiceListReturnsCompleteSortedTree(t *testing.T) {
 func TestServiceCreateSupportsExplicitNullRootAndDisabledChild(t *testing.T) {
 	_, ctx, service := openCleanMenuService(t)
 	rootID, err := service.Create(ctx, CreateInput{
-		ParentID: nil, MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system",
+		ParentID: nil, MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"),
 		Icon: stringPointer("Folder"), SortOrder: 10, IsEnabled: yesno.No,
 	})
 	if err != nil || rootID < 1 {
@@ -55,13 +55,13 @@ func TestServiceCreateSupportsExplicitNullRootAndDisabledChild(t *testing.T) {
 	path := "/reports"
 	componentPath := "reports"
 	if _, err := service.Create(ctx, CreateInput{
-		ParentID: &rootID, MenuType: TypePage, Code: "reports:list", I18nKey: "navigation.systemMenus",
+		ParentID: &rootID, MenuType: TypePage, Name: "Reports", Code: "reports:list", I18nKey: stringPointer("navigation.systemMenus"),
 		Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No,
 	}); menuServiceErrorCode(err) != CodeMenuParentDisabled {
 		t.Fatalf("enabled child below disabled root error = %v", err)
 	}
 	childID, err := service.Create(ctx, CreateInput{
-		ParentID: &rootID, MenuType: TypePage, Code: "reports:list", I18nKey: "navigation.systemMenus",
+		ParentID: &rootID, MenuType: TypePage, Name: "Reports", Code: "reports:list", I18nKey: stringPointer("navigation.systemMenus"),
 		Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.No, IsHidden: yesno.No,
 	})
 	if err != nil || childID < 1 {
@@ -71,13 +71,13 @@ func TestServiceCreateSupportsExplicitNullRootAndDisabledChild(t *testing.T) {
 
 func TestServiceCreateRejectsInvalidFieldsParentsAndConflicts(t *testing.T) {
 	_, ctx, service := openCleanMenuService(t)
-	rootID, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", SortOrder: 10, IsEnabled: yesno.Yes})
+	rootID, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), SortOrder: 10, IsEnabled: yesno.Yes})
 	if err != nil {
 		t.Fatal(err)
 	}
 	path := "/reports"
 	componentPath := "reports"
-	pageID, err := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Code: "reports:list", I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No})
+	pageID, err := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Name: "Reports", Code: "reports:list", I18nKey: stringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,17 +88,17 @@ func TestServiceCreateRejectsInvalidFieldsParentsAndConflicts(t *testing.T) {
 		input CreateInput
 		code  int
 	}{
-		{name: "missing parent", input: CreateInput{ParentID: &missingID, MenuType: TypePage, Code: "missing:list", I18nKey: "navigation.systemMenus", Path: stringPointer("/missing"), ComponentPath: stringPointer("missing"), IsEnabled: yesno.Yes, IsHidden: yesno.No}, code: CodeMenuInvalidParent},
-		{name: "page under page", input: CreateInput{ParentID: &pageID, MenuType: TypePage, Code: "nested:list", I18nKey: "navigation.systemMenus", Path: stringPointer("/nested"), ComponentPath: stringPointer("nested"), IsEnabled: yesno.Yes, IsHidden: yesno.No}, code: CodeMenuInvalidParent},
-		{name: "action under directory", input: CreateInput{ParentID: &rootID, MenuType: TypeAction, Code: "reports:create", I18nKey: "permission.menuCreate", IsEnabled: yesno.Yes, IsHidden: yesno.Yes}, code: CodeMenuInvalidParent},
-		{name: "page root", input: CreateInput{MenuType: TypePage, Code: "root:list", I18nKey: "navigation.systemMenus", Path: stringPointer("/root-list"), ComponentPath: stringPointer("root-list"), IsEnabled: yesno.Yes, IsHidden: yesno.No}, code: CodeMenuInvalidParent},
-		{name: "invalid code", input: CreateInput{MenuType: TypeDirectory, Code: "Reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes}, code: CodeMenuInvalidFields},
-		{name: "invalid i18n key", input: CreateInput{MenuType: TypeDirectory, Code: "unknown", I18nKey: "navigation.system_users", IsEnabled: yesno.Yes}, code: CodeMenuInvalidFields},
-		{name: "invalid icon whitespace", input: CreateInput{MenuType: TypeDirectory, Code: "icons", I18nKey: "navigation.system", Icon: stringPointer(" Unknown "), IsEnabled: yesno.Yes}, code: CodeMenuInvalidFields},
-		{name: "invalid component path", input: CreateInput{ParentID: &rootID, MenuType: TypePage, Code: "unknown:view", I18nKey: "navigation.systemMenus", Path: stringPointer("/unknown-view"), ComponentPath: stringPointer("/unknown-view"), IsEnabled: yesno.Yes, IsHidden: yesno.No}, code: CodeMenuInvalidFields},
-		{name: "static path", input: CreateInput{ParentID: &rootID, MenuType: TypePage, Code: "dashboard:list", I18nKey: "navigation.systemMenus", Path: stringPointer("/dashboard"), ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}, code: CodeMenuInvalidFields},
-		{name: "negative sort", input: CreateInput{MenuType: TypeDirectory, Code: "sort", I18nKey: "navigation.system", SortOrder: -1, IsEnabled: yesno.Yes}, code: CodeMenuInvalidFields},
-		{name: "invalid yes no", input: CreateInput{MenuType: TypeDirectory, Code: "status", I18nKey: "navigation.system", IsEnabled: yesno.Value(2)}, code: CodeMenuInvalidFields},
+		{name: "missing parent", input: CreateInput{ParentID: &missingID, MenuType: TypePage, Name: "Missing", Code: "missing:list", I18nKey: stringPointer("navigation.systemMenus"), Path: stringPointer("/missing"), ComponentPath: stringPointer("missing"), IsEnabled: yesno.Yes, IsHidden: yesno.No}, code: CodeMenuInvalidParent},
+		{name: "page under page", input: CreateInput{ParentID: &pageID, MenuType: TypePage, Name: "Nested", Code: "nested:list", I18nKey: stringPointer("navigation.systemMenus"), Path: stringPointer("/nested"), ComponentPath: stringPointer("nested"), IsEnabled: yesno.Yes, IsHidden: yesno.No}, code: CodeMenuInvalidParent},
+		{name: "action under directory", input: CreateInput{ParentID: &rootID, MenuType: TypeAction, Name: "Create report", Code: "reports:create", IsEnabled: yesno.Yes, IsHidden: yesno.Yes}, code: CodeMenuInvalidParent},
+		{name: "page root", input: CreateInput{MenuType: TypePage, Name: "Root", Code: "root:list", I18nKey: stringPointer("navigation.systemMenus"), Path: stringPointer("/root-list"), ComponentPath: stringPointer("root-list"), IsEnabled: yesno.Yes, IsHidden: yesno.No}, code: CodeMenuInvalidParent},
+		{name: "invalid code", input: CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "Reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes}, code: CodeMenuInvalidFields},
+		{name: "invalid i18n key", input: CreateInput{MenuType: TypeDirectory, Name: "Unknown", Code: "unknown", I18nKey: stringPointer("navigation.system_users"), IsEnabled: yesno.Yes}, code: CodeMenuInvalidFields},
+		{name: "invalid icon whitespace", input: CreateInput{MenuType: TypeDirectory, Name: "Icons", Code: "icons", I18nKey: stringPointer("navigation.system"), Icon: stringPointer(" Unknown "), IsEnabled: yesno.Yes}, code: CodeMenuInvalidFields},
+		{name: "invalid component path", input: CreateInput{ParentID: &rootID, MenuType: TypePage, Name: "Unknown", Code: "unknown:view", I18nKey: stringPointer("navigation.systemMenus"), Path: stringPointer("/unknown-view"), ComponentPath: stringPointer("/unknown-view"), IsEnabled: yesno.Yes, IsHidden: yesno.No}, code: CodeMenuInvalidFields},
+		{name: "static path", input: CreateInput{ParentID: &rootID, MenuType: TypePage, Name: "Dashboard", Code: "dashboard:list", I18nKey: stringPointer("navigation.systemMenus"), Path: stringPointer("/dashboard"), ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}, code: CodeMenuInvalidFields},
+		{name: "negative sort", input: CreateInput{MenuType: TypeDirectory, Name: "Sort", Code: "sort", I18nKey: stringPointer("navigation.system"), SortOrder: -1, IsEnabled: yesno.Yes}, code: CodeMenuInvalidFields},
+		{name: "invalid yes no", input: CreateInput{MenuType: TypeDirectory, Name: "Status", Code: "status", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Value(2)}, code: CodeMenuInvalidFields},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -108,29 +108,29 @@ func TestServiceCreateRejectsInvalidFieldsParentsAndConflicts(t *testing.T) {
 		})
 	}
 
-	if _, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: " reports ", I18nKey: " navigation.system ", SortOrder: 10, IsEnabled: yesno.Yes}); menuServiceErrorCode(err) != CodeMenuInvalidFields {
+	if _, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: " reports ", I18nKey: stringPointer(" navigation.system "), SortOrder: 10, IsEnabled: yesno.Yes}); menuServiceErrorCode(err) != CodeMenuInvalidFields {
 		t.Fatalf("whitespace code error = %v", err)
 	}
-	if _, err := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Code: "reports:second", I18nKey: "navigation.systemMenus", Path: stringPointer(" /reports "), ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}); menuServiceErrorCode(err) != CodeMenuInvalidFields {
+	if _, err := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Name: "Reports", Code: "reports:second", I18nKey: stringPointer("navigation.systemMenus"), Path: stringPointer(" /reports "), ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}); menuServiceErrorCode(err) != CodeMenuInvalidFields {
 		t.Fatalf("whitespace path error = %v", err)
 	}
-	if _, err := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Code: "reports:second", I18nKey: "reports.orders.list", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}); menuServiceErrorCode(err) != CodeMenuPathConflict {
+	if _, err := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Name: "Reports", Code: "reports:second", I18nKey: stringPointer("reports.orders.list"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}); menuServiceErrorCode(err) != CodeMenuPathConflict {
 		t.Fatalf("duplicate path error = %v", err)
 	}
 }
 
 func TestServiceUpdateMovesCandidateTreeAndKeepsCodeStable(t *testing.T) {
 	tx, ctx, service := openCleanMenuService(t)
-	rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
-	otherID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "settings", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
+	rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
+	otherID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Settings", Code: "settings", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
 	path := "/reports"
 	componentPath := "reports"
-	pageID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Code: "reports:list", I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
+	pageID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Name: "Reports", Code: "reports:list", I18nKey: stringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
 	newPath := "/settings/reports"
 	newComponentPath := "settings/reports"
 	icon := "Menu"
 	if err := service.Update(ctx, pageID, UpdateInput{
-		ParentID: &otherID, MenuType: TypePage, I18nKey: "navigation.systemMenus",
+		ParentID: &otherID, MenuType: TypePage, Name: "Reports", I18nKey: stringPointer("navigation.systemMenus"),
 		Path: &newPath, ComponentPath: &newComponentPath, Icon: &icon, SortOrder: 9, IsHidden: yesno.Yes,
 	}); err != nil {
 		t.Fatal(err)
@@ -148,9 +148,9 @@ func TestServiceUpdateMovesCandidateTreeAndKeepsCodeStable(t *testing.T) {
 func TestServiceUpdateRejectsCyclesStructureGrantsAndDisabledAncestors(t *testing.T) {
 	t.Run("cycle through descendant", func(t *testing.T) {
 		_, ctx, service := openCleanMenuService(t)
-		rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
-		childID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypeDirectory, Code: "reports:section", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
-		err := service.Update(ctx, rootID, UpdateInput{ParentID: &childID, MenuType: TypeDirectory, I18nKey: "navigation.system", SortOrder: 1})
+		rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
+		childID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypeDirectory, Name: "Section", Code: "reports:section", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
+		err := service.Update(ctx, rootID, UpdateInput{ParentID: &childID, MenuType: TypeDirectory, Name: "Reports", I18nKey: stringPointer("navigation.system"), SortOrder: 1})
 		if menuServiceErrorCode(err) != CodeMenuCycleDetected {
 			t.Fatalf("cycle error = %v", err)
 		}
@@ -158,14 +158,14 @@ func TestServiceUpdateRejectsCyclesStructureGrantsAndDisabledAncestors(t *testin
 
 	t.Run("existing child conflicts with new type", func(t *testing.T) {
 		_, ctx, service := openCleanMenuService(t)
-		rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "settings", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
-		reportsID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
+		rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Settings", Code: "settings", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
+		reportsID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
 		path := "/reports"
 		componentPath := "reports"
-		_, _ = service.Create(ctx, CreateInput{ParentID: &reportsID, MenuType: TypePage, Code: "reports:list", I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
+		_, _ = service.Create(ctx, CreateInput{ParentID: &reportsID, MenuType: TypePage, Name: "Reports", Code: "reports:list", I18nKey: stringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
 		sectionPath := "/reports/section"
 		sectionComponentPath := "reports/section"
-		err := service.Update(ctx, reportsID, UpdateInput{ParentID: &rootID, MenuType: TypePage, I18nKey: "navigation.systemMenus", Path: &sectionPath, ComponentPath: &sectionComponentPath, SortOrder: 1, IsHidden: yesno.No})
+		err := service.Update(ctx, reportsID, UpdateInput{ParentID: &rootID, MenuType: TypePage, Name: "Reports", I18nKey: stringPointer("navigation.systemMenus"), Path: &sectionPath, ComponentPath: &sectionComponentPath, SortOrder: 1, IsHidden: yesno.No})
 		if menuServiceErrorCode(err) != CodeMenuStructureConflict {
 			t.Fatalf("structure error = %v", err)
 		}
@@ -173,10 +173,10 @@ func TestServiceUpdateRejectsCyclesStructureGrantsAndDisabledAncestors(t *testin
 
 	t.Run("direct grant blocks directory conversion", func(t *testing.T) {
 		tx, ctx, service := openCleanMenuService(t)
-		rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
+		rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
 		path := "/reports"
 		componentPath := "reports"
-		pageID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Code: "reports:list", I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
+		pageID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Name: "Reports", Code: "reports:list", I18nKey: stringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
 		createdRole := testRole{Code: fmt.Sprintf("menu_service_role_%d", time.Now().UnixNano()), Name: "Menu Service Role", IsDefault: yesno.No, IsEnabled: yesno.Yes}
 		if err := tx.WithContext(ctx).Create(&createdRole).Error; err != nil {
 			t.Fatal(err)
@@ -184,7 +184,7 @@ func TestServiceUpdateRejectsCyclesStructureGrantsAndDisabledAncestors(t *testin
 		if err := tx.WithContext(ctx).Create(&RoleMenu{RoleID: createdRole.ID, MenuID: pageID}).Error; err != nil {
 			t.Fatal(err)
 		}
-		err := service.Update(ctx, pageID, UpdateInput{MenuType: TypeDirectory, I18nKey: "navigation.system", SortOrder: 1, IsHidden: yesno.No})
+		err := service.Update(ctx, pageID, UpdateInput{MenuType: TypeDirectory, Name: "Reports", I18nKey: stringPointer("navigation.system"), SortOrder: 1, IsHidden: yesno.No})
 		if menuServiceErrorCode(err) != CodeMenuStructureConflict {
 			t.Fatalf("grant conflict error = %v", err)
 		}
@@ -192,9 +192,9 @@ func TestServiceUpdateRejectsCyclesStructureGrantsAndDisabledAncestors(t *testin
 
 	t.Run("enabled subtree cannot move below disabled parent", func(t *testing.T) {
 		_, ctx, service := openCleanMenuService(t)
-		rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
-		disabledID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "disabled", I18nKey: "navigation.system", IsEnabled: yesno.No})
-		err := service.Update(ctx, rootID, UpdateInput{ParentID: &disabledID, MenuType: TypeDirectory, I18nKey: "navigation.system", SortOrder: 1})
+		rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
+		disabledID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Disabled", Code: "disabled", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.No})
+		err := service.Update(ctx, rootID, UpdateInput{ParentID: &disabledID, MenuType: TypeDirectory, Name: "Reports", I18nKey: stringPointer("navigation.system"), SortOrder: 1})
 		if menuServiceErrorCode(err) != CodeMenuParentDisabled {
 			t.Fatalf("disabled parent error = %v", err)
 		}
@@ -204,7 +204,7 @@ func TestServiceUpdateRejectsCyclesStructureGrantsAndDisabledAncestors(t *testin
 func TestServiceUpdateAllowsChangingAnyActiveMenuRecord(t *testing.T) {
 	tx, ctx, service := openCleanMenuService(t)
 	rootID, err := service.Create(ctx, CreateInput{
-		MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system",
+		MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"),
 		Icon: stringPointer("Folder"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No,
 	})
 	if err != nil {
@@ -213,7 +213,7 @@ func TestServiceUpdateAllowsChangingAnyActiveMenuRecord(t *testing.T) {
 	path := "/reports"
 	componentPath := "reports"
 	pageID, err := service.Create(ctx, CreateInput{
-		ParentID: &rootID, MenuType: TypePage, Code: "reports:list", I18nKey: "reports.orders.list",
+		ParentID: &rootID, MenuType: TypePage, Name: "Reports", Code: "reports:list", I18nKey: stringPointer("reports.orders.list"),
 		Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No,
 	})
 	if err != nil {
@@ -222,7 +222,7 @@ func TestServiceUpdateAllowsChangingAnyActiveMenuRecord(t *testing.T) {
 	newPath := "/reports/order-items"
 	newComponentPath := "reports/order-items"
 	if err := service.Update(ctx, pageID, UpdateInput{
-		ParentID: &rootID, MenuType: TypePage, I18nKey: "reports.orderItems.list",
+		ParentID: &rootID, MenuType: TypePage, Name: "Order items", I18nKey: stringPointer("reports.orderItems.list"),
 		Path: &newPath, ComponentPath: &newComponentPath, Icon: stringPointer("mdi:shield"),
 		SortOrder: 55, IsHidden: yesno.Yes,
 	}); err != nil {
@@ -232,7 +232,7 @@ func TestServiceUpdateAllowsChangingAnyActiveMenuRecord(t *testing.T) {
 	if err := tx.WithContext(ctx).First(&stored, pageID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.I18nKey != "reports.orderItems.list" || value(stored.Path) != newPath ||
+	if stored.Name != "Order items" || value(stored.I18nKey) != "reports.orderItems.list" || value(stored.Path) != newPath ||
 		value(stored.ComponentPath) != newComponentPath || stored.IsHidden != yesno.Yes {
 		t.Fatalf("updated ordinary page = %+v", stored)
 	}
@@ -240,7 +240,7 @@ func TestServiceUpdateAllowsChangingAnyActiveMenuRecord(t *testing.T) {
 
 func TestServiceUpdateRollsBackDatabaseWriteFailure(t *testing.T) {
 	tx, ctx, service := openCleanMenuService(t)
-	id, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", Icon: stringPointer("Folder"), SortOrder: 10, IsEnabled: yesno.Yes})
+	id, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), Icon: stringPointer("Folder"), SortOrder: 10, IsEnabled: yesno.Yes})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,10 +248,10 @@ func TestServiceUpdateRollsBackDatabaseWriteFailure(t *testing.T) {
 	if err := tx.WithContext(ctx).First(&before, id).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.WithContext(ctx).Exec(`ALTER TABLE sys_menu ADD CONSTRAINT ck_test_menu_update_rollback CHECK (i18n_key <> 'navigation.systemMenus')`).Error; err != nil {
+	if err := tx.WithContext(ctx).Exec(`ALTER TABLE rbac_menu ADD CONSTRAINT ck_test_menu_update_rollback CHECK (i18n_key <> 'navigation.systemMenus')`).Error; err != nil {
 		t.Fatal(err)
 	}
-	err = service.Update(ctx, id, UpdateInput{MenuType: TypeDirectory, I18nKey: "navigation.systemMenus", Icon: stringPointer("Cpu"), SortOrder: 99, IsHidden: yesno.No})
+	err = service.Update(ctx, id, UpdateInput{MenuType: TypeDirectory, Name: "Reports", I18nKey: stringPointer("navigation.systemMenus"), Icon: stringPointer("Cpu"), SortOrder: 99, IsHidden: yesno.No})
 	if menuServiceErrorCode(err) != apperror.CodeDependencyUnavailable {
 		t.Fatalf("write failure error = %v", err)
 	}
@@ -266,11 +266,11 @@ func TestServiceUpdateRollsBackDatabaseWriteFailure(t *testing.T) {
 
 func TestServiceUpdateStatusDisablesSubtreeAndPreservesGrants(t *testing.T) {
 	tx, ctx, service := openCleanMenuService(t)
-	rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
-	childID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypeDirectory, Code: "reports:section", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
+	rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
+	childID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypeDirectory, Name: "Section", Code: "reports:section", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
 	path := "/reports"
 	componentPath := "reports"
-	pageID, _ := service.Create(ctx, CreateInput{ParentID: &childID, MenuType: TypePage, Code: "reports:list", I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
+	pageID, _ := service.Create(ctx, CreateInput{ParentID: &childID, MenuType: TypePage, Name: "Reports", Code: "reports:list", I18nKey: stringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
 	createdRole := testRole{Code: fmt.Sprintf("menu_status_role_%d", time.Now().UnixNano()), Name: "Menu Status Role", IsDefault: yesno.No, IsEnabled: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&createdRole).Error; err != nil {
 		t.Fatal(err)
@@ -304,8 +304,8 @@ func TestServiceUpdateStatusDisablesSubtreeAndPreservesGrants(t *testing.T) {
 func TestServiceUpdateStatusEnablesOnlyCurrentNodeAndChecksAncestors(t *testing.T) {
 	t.Run("rejects child below disabled ancestor", func(t *testing.T) {
 		_, ctx, service := openCleanMenuService(t)
-		rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.No})
-		childID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypeDirectory, Code: "reports:section", I18nKey: "navigation.system", IsEnabled: yesno.No})
+		rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.No})
+		childID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypeDirectory, Name: "Section", Code: "reports:section", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.No})
 		if err := service.UpdateStatus(ctx, childID, yesno.Yes); menuServiceErrorCode(err) != CodeMenuParentDisabled {
 			t.Fatalf("enable child error = %v", err)
 		}
@@ -320,8 +320,8 @@ func TestServiceUpdateStatusEnablesOnlyCurrentNodeAndChecksAncestors(t *testing.
 
 	t.Run("enables only parent", func(t *testing.T) {
 		_, ctx, service := openCleanMenuService(t)
-		rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.No})
-		childID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypeDirectory, Code: "reports:section", I18nKey: "navigation.system", IsEnabled: yesno.No})
+		rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.No})
+		childID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypeDirectory, Name: "Section", Code: "reports:section", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.No})
 		if err := service.UpdateStatus(ctx, rootID, yesno.Yes); err != nil {
 			t.Fatal(err)
 		}
@@ -340,14 +340,14 @@ func TestServiceUpdateStatusEnablesOnlyCurrentNodeAndChecksAncestors(t *testing.
 
 func TestServiceUpdateStatusAndDeleteAllowOrdinaryMenus(t *testing.T) {
 	tx, ctx, service := openCleanMenuService(t)
-	disabledID, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes, IsHidden: yesno.No})
+	disabledID, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, IsHidden: yesno.No})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := service.UpdateStatus(ctx, disabledID, yesno.No); err != nil {
 		t.Fatalf("disable ordinary menu: %v", err)
 	}
-	deletedID, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "settings", I18nKey: "navigation.settings", IsEnabled: yesno.Yes, IsHidden: yesno.No})
+	deletedID, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Settings", Code: "settings", I18nKey: stringPointer("navigation.settings"), IsEnabled: yesno.Yes, IsHidden: yesno.No})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,11 +366,11 @@ func TestServiceUpdateStatusAndDeleteAllowOrdinaryMenus(t *testing.T) {
 
 func TestServiceDeleteSoftDeletesSubtreeAndRoleMenusTogether(t *testing.T) {
 	tx, ctx, service := openCleanMenuService(t)
-	rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
+	rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
 	path := "/reports"
 	componentPath := "reports"
-	pageID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Code: "reports:list", I18nKey: "navigation.systemMenus", Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
-	actionID, _ := service.Create(ctx, CreateInput{ParentID: &pageID, MenuType: TypeAction, Code: "reports:create", I18nKey: "permission.menuCreate", IsEnabled: yesno.Yes, IsHidden: yesno.Yes})
+	pageID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Name: "Reports", Code: "reports:list", I18nKey: stringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
+	actionID, _ := service.Create(ctx, CreateInput{ParentID: &pageID, MenuType: TypeAction, Name: "Create report", Code: "reports:create", IsEnabled: yesno.Yes, IsHidden: yesno.Yes})
 	createdRole := testRole{Code: fmt.Sprintf("menu_delete_role_%d", time.Now().UnixNano()), Name: "Menu Delete Role", IsDefault: yesno.No, IsEnabled: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&createdRole).Error; err != nil {
 		t.Fatal(err)
@@ -417,7 +417,7 @@ func TestServiceDeleteSoftDeletesSubtreeAndRoleMenusTogether(t *testing.T) {
 
 func TestServiceDeleteRollsBackRoleMenusWhenMenuWriteFails(t *testing.T) {
 	tx, ctx, service := openCleanMenuService(t)
-	rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
+	rootID, _ := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
 	createdRole := testRole{Code: fmt.Sprintf("menu_delete_rollback_role_%d", time.Now().UnixNano()), Name: "Menu Delete Rollback Role", IsDefault: yesno.No, IsEnabled: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&createdRole).Error; err != nil {
 		t.Fatal(err)
@@ -426,7 +426,7 @@ func TestServiceDeleteRollsBackRoleMenusWhenMenuWriteFails(t *testing.T) {
 	if err := tx.WithContext(ctx).Create(&grant).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.WithContext(ctx).Exec(`ALTER TABLE sys_menu ADD CONSTRAINT ck_test_menu_delete_rollback CHECK (deleted_at IS NULL)`).Error; err != nil {
+	if err := tx.WithContext(ctx).Exec(`ALTER TABLE rbac_menu ADD CONSTRAINT ck_test_menu_delete_rollback CHECK (deleted_at IS NULL)`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := service.Delete(ctx, rootID); menuServiceErrorCode(err) != apperror.CodeDependencyUnavailable {
@@ -447,10 +447,10 @@ func TestServiceDeleteRollsBackRoleMenusWhenMenuWriteFails(t *testing.T) {
 
 func TestServiceMenuMutationsAdvanceAllActiveAccessVersions(t *testing.T) {
 	tx, ctx := openMenuTransaction(t)
-	if err := tx.WithContext(ctx).Unscoped().Exec("DELETE FROM sys_role_menu").Error; err != nil {
+	if err := tx.WithContext(ctx).Unscoped().Exec("DELETE FROM rbac_role_menu").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.WithContext(ctx).Unscoped().Exec("DELETE FROM sys_menu").Error; err != nil {
+	if err := tx.WithContext(ctx).Unscoped().Exec("DELETE FROM rbac_menu").Error; err != nil {
 		t.Fatal(err)
 	}
 	service, accessStates, _ := newMenuMutationTestService(t, NewRepository(tx))
@@ -459,7 +459,7 @@ func TestServiceMenuMutationsAdvanceAllActiveAccessVersions(t *testing.T) {
 	disabled := createMenuAccessUser(t, tx, ctx, yesno.No, false)
 
 	id, err := service.Create(ctx, CreateInput{
-		MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", SortOrder: 10, IsEnabled: yesno.Yes,
+		MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), SortOrder: 10, IsEnabled: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -469,7 +469,7 @@ func TestServiceMenuMutationsAdvanceAllActiveAccessVersions(t *testing.T) {
 		t.Fatalf("disabled user access version = %d", got)
 	}
 
-	update := UpdateInput{MenuType: TypeDirectory, I18nKey: "navigation.system", Icon: stringPointer("Folder"), SortOrder: 20}
+	update := UpdateInput{MenuType: TypeDirectory, Name: "Reports", I18nKey: stringPointer("navigation.system"), Icon: stringPointer("Folder"), SortOrder: 20}
 	if err := service.Update(ctx, id, update); err != nil {
 		t.Fatal(err)
 	}
@@ -513,7 +513,7 @@ func TestServiceMenuRedisFailurePreventsPostgreSQLMutation(t *testing.T) {
 	if err := redisClient.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "redis:blocked", I18nKey: "navigation.system", IsEnabled: yesno.Yes}); menuServiceErrorCode(err) != apperror.CodeDependencyUnavailable {
+	if _, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Blocked", Code: "redis:blocked", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes}); menuServiceErrorCode(err) != apperror.CodeDependencyUnavailable {
 		t.Fatalf("Create() error = %v", err)
 	}
 	var count int64
@@ -528,7 +528,7 @@ func TestServiceMenuRedisFailurePreventsPostgreSQLMutation(t *testing.T) {
 func TestConcurrentMenuMutationRechecksChangedActiveUsers(t *testing.T) {
 	db, ctx := openMenuDatabase(t)
 	repository := NewRepository(db)
-	base := Menu{MenuType: TypeDirectory, Code: "base", I18nKey: "navigation.system", IsEnabled: yesno.Yes}
+	base := Menu{MenuType: TypeDirectory, Name: "Base", Code: "base", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes}
 	if err := repository.Create(ctx, &base); err != nil {
 		t.Fatal(err)
 	}
@@ -544,7 +544,7 @@ func TestConcurrentMenuMutationRechecksChangedActiveUsers(t *testing.T) {
 	service, states, _ := newMenuMutationTestService(t, NewRepository(db))
 	done := make(chan error, 1)
 	go func() {
-		_, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "reports", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
+		_, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
 		done <- err
 	}()
 	waitForMenuAccessState(t, states, active.ID, accessstate.StateInvalidating)
@@ -575,10 +575,10 @@ func TestServiceMenuTransactionFailureRestoresAccessStateAndVersion(t *testing.T
 	tx, ctx := openMenuTransaction(t)
 	service, states, _ := newMenuMutationTestService(t, NewRepository(tx))
 	active := createMenuAccessUser(t, tx, ctx, yesno.Yes, false)
-	if err := tx.WithContext(ctx).Exec(`ALTER TABLE sys_menu ADD CONSTRAINT ck_test_menu_create_rollback CHECK (code <> 'rollback:create')`).Error; err != nil {
+	if err := tx.WithContext(ctx).Exec(`ALTER TABLE rbac_menu ADD CONSTRAINT ck_test_menu_create_rollback CHECK (code <> 'rollback:create')`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "rollback:create", I18nKey: "navigation.system", IsEnabled: yesno.Yes}); menuServiceErrorCode(err) != apperror.CodeDependencyUnavailable {
+	if _, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Rollback", Code: "rollback:create", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes}); menuServiceErrorCode(err) != apperror.CodeDependencyUnavailable {
 		t.Fatalf("Create() error = %v", err)
 	}
 	if got := readMenuAccessVersion(t, tx, ctx, active.ID); got != 1 {
@@ -602,13 +602,13 @@ func TestServiceMenuPublishFailureLeavesCommittedVersionUnreachable(t *testing.T
 		END;
 		$$ LANGUAGE plpgsql;
 		CREATE TRIGGER delay_menu_create_publish
-		BEFORE INSERT ON sys_menu
+		BEFORE INSERT ON rbac_menu
 		FOR EACH ROW EXECUTE FUNCTION delay_menu_create_publish()`).Error; err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Code: "publish:failure", I18nKey: "navigation.system", IsEnabled: yesno.Yes})
+		_, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Publish", Code: "publish:failure", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
 		done <- err
 	}()
 	waitForMenuAccessState(t, states, active.ID, accessstate.StateInvalidating)
@@ -638,10 +638,10 @@ func TestServiceMenuPublishFailureLeavesCommittedVersionUnreachable(t *testing.T
 func openCleanMenuService(t *testing.T) (*gorm.DB, context.Context, *Service) {
 	t.Helper()
 	tx, ctx := openMenuTransaction(t)
-	if err := tx.WithContext(ctx).Unscoped().Exec("DELETE FROM sys_role_menu").Error; err != nil {
+	if err := tx.WithContext(ctx).Unscoped().Exec("DELETE FROM rbac_role_menu").Error; err != nil {
 		t.Fatalf("clear role menus: %v", err)
 	}
-	if err := tx.WithContext(ctx).Unscoped().Exec("DELETE FROM sys_menu").Error; err != nil {
+	if err := tx.WithContext(ctx).Unscoped().Exec("DELETE FROM rbac_menu").Error; err != nil {
 		t.Fatalf("clear menus: %v", err)
 	}
 	return tx, ctx, newMenuTestService(t, NewRepository(tx))
@@ -693,7 +693,7 @@ func openMenuTestRedis(t *testing.T) *projectredis.Client {
 func readMenuAccessVersion(t *testing.T, tx *gorm.DB, ctx context.Context, userID int64) int64 {
 	t.Helper()
 	var version int64
-	result := tx.WithContext(ctx).Raw("SELECT version FROM sys_access_version WHERE user_id = ?", userID).Scan(&version)
+	result := tx.WithContext(ctx).Raw("SELECT version FROM rbac_access_version WHERE user_id = ?", userID).Scan(&version)
 	if result.Error != nil || result.RowsAffected != 1 {
 		t.Fatalf("read access version: rows=%d error=%v", result.RowsAffected, result.Error)
 	}

@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/menu"
 	"admin/server/internal/module/user"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/pagination"
@@ -89,7 +88,7 @@ func TestRegisterRoutesUsesExactUserPermissions(t *testing.T) {
 		permissions = append(permissions, code)
 		return pass
 	})
-	want := []string{menu.PermissionUserList, menu.PermissionUserList, menu.PermissionUserUpdate, menu.PermissionUserStatus, menu.PermissionUserDelete, menu.PermissionUserRoles, menu.PermissionUserRoles}
+	want := []string{user.PermissionList, user.PermissionList, user.PermissionUpdate, user.PermissionStatus, user.PermissionDelete, user.PermissionRoles, user.PermissionRoles}
 	if !reflect.DeepEqual(permissions, want) {
 		t.Fatalf("permissions = %v, want %v", permissions, want)
 	}

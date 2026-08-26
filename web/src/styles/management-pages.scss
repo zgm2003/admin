@@ -1,0 +1,39 @@
+.management-page {
+  display: flex;
+  min-width: 0;
+  min-height: 100%;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+}
+
+.management-page__filters,
+.management-page__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.management-page__actions {
+  justify-content: flex-end;
+}
+
+.management-page > .app-table {
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+	.management-page {
+    min-height: 100%;
+    padding: 12px;
+  }
+
+	.management-page__filters,
+	.management-page__actions {
+    align-items: stretch;
+  }
+}

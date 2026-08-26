@@ -13,8 +13,6 @@ import (
 	"github.com/hibiken/asynq"
 )
 
-const Type = "system:operation-log:v2"
-
 type Processor interface {
 	Process(context.Context, TaskPayload) error
 }
@@ -37,7 +35,7 @@ func (e *QueueEnqueuer) Enqueue(ctx context.Context, payload TaskPayload) error 
 	if err != nil {
 		return fmt.Errorf("encode operation log task: %w", err)
 	}
-	_, err = e.client.Enqueue(ctx, asynq.NewTask(Type, encoded), asynq.TaskID(payload.EventID), asynq.MaxRetry(3), asynq.Timeout(30*time.Second))
+	_, err = e.client.Enqueue(ctx, asynq.NewTask(TaskType, encoded), asynq.TaskID(payload.EventID), asynq.MaxRetry(3), asynq.Timeout(30*time.Second))
 	if err != nil {
 		return fmt.Errorf("enqueue operation log task: %w", err)
 	}
@@ -64,7 +62,7 @@ func (h *TaskHandler) ProcessTask(ctx context.Context, task *asynq.Task) error {
 }
 
 func Register(mux *asynq.ServeMux, processor Processor) {
-	mux.Handle(Type, NewTaskHandler(processor))
+	mux.Handle(TaskType, NewTaskHandler(processor))
 }
 
 func decodePayload(data []byte) (TaskPayload, error) {

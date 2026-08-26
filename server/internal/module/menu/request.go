@@ -51,8 +51,9 @@ func (value *nullableString) UnmarshalJSON(data []byte) error {
 type createRequest struct {
 	ParentID      nullableInt64  `json:"parentId"`
 	MenuType      *Type          `json:"menuType"`
+	Name          *string        `json:"name"`
 	Code          *string        `json:"code"`
-	I18nKey       *string        `json:"i18nKey"`
+	I18nKey       nullableString `json:"i18nKey"`
 	Path          nullableString `json:"path"`
 	ComponentPath nullableString `json:"componentPath"`
 	Icon          nullableString `json:"icon"`
@@ -62,7 +63,7 @@ type createRequest struct {
 }
 
 func (request createRequest) input() (CreateInput, error) {
-	if !request.ParentID.Present || request.MenuType == nil || request.Code == nil || request.I18nKey == nil ||
+	if !request.ParentID.Present || request.MenuType == nil || request.Name == nil || request.Code == nil || !request.I18nKey.Present ||
 		!request.Path.Present || !request.ComponentPath.Present || !request.Icon.Present || request.SortOrder == nil ||
 		request.IsEnabled == nil || request.IsHidden == nil {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("all create menu fields are required"))
@@ -74,8 +75,8 @@ func (request createRequest) input() (CreateInput, error) {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("sortOrder, isEnabled, or isHidden is invalid"))
 	}
 	return CreateInput{
-		ParentID: request.ParentID.Value, MenuType: *request.MenuType, Code: *request.Code,
-		I18nKey: *request.I18nKey, Path: request.Path.Value, ComponentPath: request.ComponentPath.Value,
+		ParentID: request.ParentID.Value, MenuType: *request.MenuType, Name: *request.Name, Code: *request.Code,
+		I18nKey: request.I18nKey.Value, Path: request.Path.Value, ComponentPath: request.ComponentPath.Value,
 		Icon: request.Icon.Value, SortOrder: *request.SortOrder, IsEnabled: *request.IsEnabled, IsHidden: *request.IsHidden,
 	}, nil
 }
@@ -83,7 +84,8 @@ func (request createRequest) input() (CreateInput, error) {
 type updateRequest struct {
 	ParentID      nullableInt64  `json:"parentId"`
 	MenuType      *Type          `json:"menuType"`
-	I18nKey       *string        `json:"i18nKey"`
+	Name          *string        `json:"name"`
+	I18nKey       nullableString `json:"i18nKey"`
 	Path          nullableString `json:"path"`
 	ComponentPath nullableString `json:"componentPath"`
 	Icon          nullableString `json:"icon"`
@@ -92,7 +94,7 @@ type updateRequest struct {
 }
 
 func (request updateRequest) input() (UpdateInput, error) {
-	if !request.ParentID.Present || request.MenuType == nil || request.I18nKey == nil ||
+	if !request.ParentID.Present || request.MenuType == nil || request.Name == nil || !request.I18nKey.Present ||
 		!request.Path.Present || !request.ComponentPath.Present || !request.Icon.Present || request.SortOrder == nil || request.IsHidden == nil {
 		return UpdateInput{}, apperror.InvalidRequest(fmt.Errorf("all update menu fields are required"))
 	}
@@ -103,7 +105,7 @@ func (request updateRequest) input() (UpdateInput, error) {
 		return UpdateInput{}, apperror.InvalidRequest(fmt.Errorf("sortOrder or isHidden is invalid"))
 	}
 	return UpdateInput{
-		ParentID: request.ParentID.Value, MenuType: *request.MenuType, I18nKey: *request.I18nKey,
+		ParentID: request.ParentID.Value, MenuType: *request.MenuType, Name: *request.Name, I18nKey: request.I18nKey.Value,
 		Path: request.Path.Value, ComponentPath: request.ComponentPath.Value, Icon: request.Icon.Value,
 		SortOrder: *request.SortOrder, IsHidden: *request.IsHidden,
 	}, nil

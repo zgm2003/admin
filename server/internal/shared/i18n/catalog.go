@@ -37,6 +37,7 @@ const (
 	KeyMenuPathConflict             MessageKey = "menu.pathConflict"
 	KeyMenuInvalidParent            MessageKey = "menu.invalidParent"
 	KeyMenuCycleDetected            MessageKey = "menu.cycleDetected"
+	KeyMenuProtected                MessageKey = "menu.protected"
 	KeyMenuParentDisabled           MessageKey = "menu.parentDisabled"
 	KeyMenuStructureConflict        MessageKey = "menu.structureConflict"
 	KeyMenuInvalidFields            MessageKey = "menu.invalidFields"
@@ -94,6 +95,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyMenuPathConflict:             "页面路径 {{path}} 已存在",
 		KeyMenuInvalidParent:            "父菜单无效",
 		KeyMenuCycleDetected:            "菜单层级存在循环",
+		KeyMenuProtected:                "基础菜单 {{code}} 不允许执行该操作",
 		KeyMenuParentDisabled:           "菜单 {{code}} 的父级未全部启用",
 		KeyMenuStructureConflict:        "菜单 {{code}} 的结构与现有子节点或授权冲突",
 		KeyMenuInvalidFields:            "菜单字段无效",
@@ -149,6 +151,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyMenuPathConflict:             "Page path {{path}} already exists",
 		KeyMenuInvalidParent:            "Invalid parent menu",
 		KeyMenuCycleDetected:            "Menu hierarchy contains a cycle",
+		KeyMenuProtected:                "Protected menu {{code}} cannot be changed by this operation",
 		KeyMenuParentDisabled:           "The parent hierarchy of menu {{code}} is not fully enabled",
 		KeyMenuStructureConflict:        "Menu {{code}} conflicts with existing children or grants",
 		KeyMenuInvalidFields:            "Invalid menu fields",

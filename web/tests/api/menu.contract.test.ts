@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { YesNo, type YesNo as YesNoValue } from '@src/enums/yes-no'
 import { ProtocolError } from '@src/types/http'
 import {
   parseManagedMenus,
@@ -19,6 +20,8 @@ describe('menu management contract', () => {
     [null],
     [{ ...directoryNode(), children: null }],
     [{ ...directoryNode(), extra: true }],
+		[withoutKey(directoryNode(), 'name')],
+		[withoutKey(directoryNode(), 'isProtected')],
     [withoutKey(directoryNode(), 'updatedAt')],
   ])('rejects malformed roots or closed records: %j', (value: unknown) => {
     expect(() => parseManagedMenus(value)).toThrow(ProtocolError)
@@ -29,6 +32,8 @@ describe('menu management contract', () => {
     { field: 'id', value: 1.5 },
     { field: 'parentId', value: 0 },
     { field: 'menuType', value: 'unknown' },
+		{ field: 'name', value: '' },
+		{ field: 'name', value: ' 报表' },
     { field: 'code', value: '' },
     { field: 'code', value: ' reports' },
 		{ field: 'i18nKey', value: 'navigation_system' },
@@ -37,6 +42,7 @@ describe('menu management contract', () => {
     { field: 'sortOrder', value: 1.5 },
     { field: 'isEnabled', value: 2 },
 		{ field: 'isHidden', value: 2 },
+		{ field: 'isProtected', value: 2 },
     { field: 'createdAt', value: 'not-a-time' },
     { field: 'updatedAt', value: '' },
   ])('rejects invalid scalar $field=$value', ({ field, value }) => {
@@ -49,7 +55,9 @@ describe('menu management contract', () => {
 		expect(() => parseManagedMenus([{ ...root, componentPath: 'system' }])).toThrow(ProtocolError)
 		expect(() => parseManagedMenus([{ ...pageNode(), parentId: null }])).toThrow(ProtocolError)
 		expect(() => parseManagedMenus([{ ...pageNode(), path: null }])).toThrow(ProtocolError)
-		expect(() => parseManagedMenus([{ ...pageNode(), componentPath: '/system/users' }])).toThrow(ProtocolError)
+		expect(() => parseManagedMenus([{ ...pageNode(), componentPath: '/account/users' }])).toThrow(ProtocolError)
+		expect(() => parseManagedMenus([{ ...root, i18nKey: null }])).toThrow(ProtocolError)
+		expect(() => parseManagedMenus([{ ...pageNode(), i18nKey: null }])).toThrow(ProtocolError)
 
     const tree = validTree()
     const directory = tree[0]
@@ -57,6 +65,7 @@ describe('menu management contract', () => {
     const action = page.children[0]
     expect(() => parseManagedMenus([{ ...directory, children: [{ ...page, children: [{ ...action, icon: 'Key' }] }] }])).toThrow(ProtocolError)
     expect(() => parseManagedMenus([{ ...directory, children: [{ ...page, children: [{ ...action, path: '/action' }] }] }])).toThrow(ProtocolError)
+		expect(() => parseManagedMenus([{ ...directory, children: [{ ...page, children: [{ ...action, i18nKey: 'permission.menuCreate' }] }] }])).toThrow(ProtocolError)
   })
 
   it('rejects invalid root, parent links, parent types, and action children', () => {
@@ -122,14 +131,16 @@ interface MenuFixture {
   id: number
   parentId: number | null
   menuType: string
+	name: string
   code: string
-  i18nKey: string
+	i18nKey: string | null
   path: string | null
 	componentPath: string | null
   icon: string | null
   sortOrder: number
   isEnabled: number
 	isHidden: number
+	isProtected: YesNoValue
   createdAt: string
   updatedAt: string
   children: MenuFixture[]
@@ -140,6 +151,7 @@ function directoryNode(): MenuFixture {
     id: 1,
     parentId: null,
     menuType: 'directory',
+		name: '系统管理',
     code: 'system',
     i18nKey: 'navigation.system',
     path: null,
@@ -148,6 +160,7 @@ function directoryNode(): MenuFixture {
     sortOrder: 100,
     isEnabled: 1,
 		isHidden: 0,
+		isProtected: YesNo.No,
     createdAt: timestamp,
     updatedAt: timestamp,
     children: [],
@@ -159,14 +172,16 @@ function pageNode(): MenuFixture {
     id: 2,
     parentId: 1,
     menuType: 'page',
-    code: 'system:menu:list',
-    i18nKey: 'navigation.systemMenus',
-		path: '/system/users',
-		componentPath: 'system/users',
+		name: '菜单管理',
+    code: 'rbac:menu:list',
+    i18nKey: 'navigation.accessMenus',
+		path: '/account/users',
+		componentPath: 'account/users',
     icon: 'Menu',
     sortOrder: 10,
     isEnabled: 1,
 		isHidden: 0,
+		isProtected: YesNo.Yes,
     createdAt: timestamp,
     updatedAt: timestamp,
     children: [],
@@ -178,14 +193,16 @@ function validTree(): MenuFixture[] {
     id: 3,
     parentId: 2,
     menuType: 'action',
-    code: 'system:menu:create',
-    i18nKey: 'permission.menuCreate',
+		name: '新增菜单',
+    code: 'rbac:menu:create',
+		i18nKey: null,
     path: null,
 		componentPath: null,
     icon: null,
     sortOrder: 10,
     isEnabled: 1,
 		isHidden: 1,
+		isProtected: YesNo.Yes,
     createdAt: timestamp,
     updatedAt: timestamp,
     children: [],

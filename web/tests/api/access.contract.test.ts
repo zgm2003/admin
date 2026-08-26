@@ -28,8 +28,8 @@ describe('access contract', () => {
   })
 
   it.each([
-    { permissionCodes: ['system:user:view', 'system:user:view'] },
-    { permissionCodes: ['system:user:view', 'system:user:create'] },
+		{ permissionCodes: ['account:user:list', 'account:user:list'] },
+		{ permissionCodes: ['account:user:list', 'account:user:create'] },
     { permissionCodes: [''] },
   ])('rejects invalid permission code arrays: $permissionCodes', ({ permissionCodes }: { permissionCodes: unknown }) => {
     expect(() => parseAccessSnapshot({ roleCodes: [], menuTree: [], permissionCodes })).toThrow(ProtocolError)
@@ -39,21 +39,21 @@ describe('access contract', () => {
 		{ code: 'system', menuType: 'directory', path: null, componentPath: null, i18nKey: 'navigation.system', icon: null, isHidden: 0 },
 		{ code: 'system', menuType: 'directory', path: null, componentPath: null, i18nKey: 'navigation.system', icon: null, isHidden: 0, children: [], extra: true },
 		{ code: 'system', menuType: 'unknown', path: null, componentPath: null, i18nKey: 'navigation.system', icon: null, isHidden: 0, children: [] },
-		{ code: 'system:menu:create', menuType: 'action', path: null, componentPath: null, i18nKey: 'permission.menuCreate', icon: null, isHidden: 1, children: [] },
-		{ code: 'system:user:list', menuType: 'page', path: null, componentPath: 'system/users', i18nKey: 'navigation.systemUsers', icon: null, isHidden: 0, children: [] },
-		{ code: 'system:user:list', menuType: 'page', path: '/system/users', componentPath: null, i18nKey: 'navigation.systemUsers', icon: null, isHidden: 0, children: [] },
+		{ code: 'rbac:menu:create', menuType: 'action', path: null, componentPath: null, i18nKey: 'permission.menuCreate', icon: null, isHidden: 1, children: [] },
+		{ code: 'account:user:list', menuType: 'page', path: null, componentPath: 'account/users', i18nKey: 'navigation.accountUsers', icon: null, isHidden: 0, children: [] },
+		{ code: 'account:user:list', menuType: 'page', path: '/account/users', componentPath: null, i18nKey: 'navigation.accountUsers', icon: null, isHidden: 0, children: [] },
 		{ code: 'system', menuType: 'directory', path: null, componentPath: 'system', i18nKey: 'navigation.system', icon: null, isHidden: 0, children: [] },
 		{ code: 'system', menuType: 'directory', path: '/system', componentPath: null, i18nKey: 'navigation.system', icon: null, isHidden: 0, children: [] },
 		{ code: 'system', menuType: 'directory', path: null, componentPath: null, i18nKey: 'navigation_system', icon: null, isHidden: 0, children: [] },
 		{ code: 'system', menuType: 'directory', path: null, componentPath: null, i18nKey: 'navigation.system', icon: ' Unknown ', isHidden: 0, children: [] },
-		{ code: 'system:user:list', menuType: 'page', path: '/system/users', componentPath: '/system/users', i18nKey: 'navigation.systemUsers', icon: null, isHidden: 0, children: [] },
+		{ code: 'account:user:list', menuType: 'page', path: '/account/users', componentPath: '/account/users', i18nKey: 'navigation.accountUsers', icon: null, isHidden: 0, children: [] },
 		{ code: 'system', menuType: 'directory', path: null, componentPath: null, i18nKey: 'navigation.system', icon: null, isHidden: 2, children: [] },
 	])('rejects an invalid menu node: %j', (node: unknown) => {
     expect(() => parseAccessSnapshot({ roleCodes: [], menuTree: [node], permissionCodes: [] })).toThrow(ProtocolError)
   })
 
   it('rejects duplicate menu codes across the tree', () => {
-		const child = validPageNode('system:user:list', '/system/users')
+		const child = validPageNode('account:user:list', '/account/users')
     const value: unknown = {
       roleCodes: [],
       menuTree: [validDirectoryNode('system', [child]), validDirectoryNode('system', [])],
@@ -63,8 +63,8 @@ describe('access contract', () => {
   })
 
   it('rejects duplicate page paths and page children', () => {
-		const first = validPageNode('system:user:list', '/system/users')
-		const second = validPageNode('system:other:list', '/system/users')
+		const first = validPageNode('account:user:list', '/account/users')
+		const second = validPageNode('system:other:list', '/account/users')
     expect(() => parseAccessSnapshot({
       roleCodes: [],
       menuTree: [validDirectoryNode('system', [first, second])],
@@ -99,7 +99,17 @@ describe('access contract', () => {
 function validDirectorySnapshot(): unknown {
   return {
     roleCodes: ['registered_user'],
-    menuTree: [validDirectoryNode('system', [])],
+		menuTree: [
+			validDirectoryNode('account', [
+				validPageNode('account:user:list', '/account/users', 'account/users', 'navigation.accountUsers'),
+			]),
+			validDirectoryNode('access', [
+				validPageNode('rbac:menu:list', '/access/menus', 'access/menus', 'navigation.accessMenus'),
+			]),
+			validDirectoryNode('system', [
+				validPageNode('audit:operation-log:list', '/system/operation-logs', 'system/operation-logs', 'navigation.systemOperationLogs'),
+			]),
+		],
     permissionCodes: [],
   }
 }
@@ -121,20 +131,25 @@ function validDirectoryNode(code: string, children: unknown[]): MenuFixture {
     menuType: 'directory',
     path: null,
 		componentPath: null,
-		i18nKey: 'navigation.system',
+		i18nKey: `navigation.${code}`,
     icon: 'Folder',
 		isHidden: 0,
     children,
   }
 }
 
-function validPageNode(code: string, path: string): MenuFixture {
+function validPageNode(
+	code: string,
+	path: string,
+	componentPath = 'account/users',
+	i18nKey = 'navigation.accountUsers',
+): MenuFixture {
   return {
     code,
     menuType: 'page',
     path,
-		componentPath: 'system/users',
-		i18nKey: 'navigation.systemUsers',
+		componentPath,
+		i18nKey,
     icon: 'User',
 		isHidden: 0,
     children: [],

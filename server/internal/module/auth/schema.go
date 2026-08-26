@@ -8,18 +8,18 @@ import (
 )
 
 var authenticationIndexes = []string{
-	`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_user_username_active ON sys_user (lower(username)) WHERE deleted_at IS NULL`,
-	`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_user_email_active ON sys_user (email) WHERE deleted_at IS NULL`,
-	`CREATE UNIQUE INDEX IF NOT EXISTS ux_sys_user_session_refresh_hash ON sys_user_session (refresh_token_hash)`,
-	`CREATE INDEX IF NOT EXISTS ix_sys_user_session_user_created ON sys_user_session (user_id, created_at DESC)`,
-	`CREATE INDEX IF NOT EXISTS ix_sys_user_session_user_platform_active ON sys_user_session (user_id, platform, created_at DESC, id DESC) WHERE revoked_at IS NULL`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS ux_user_account_username_active ON user_account (lower(username)) WHERE deleted_at IS NULL`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS ux_user_account_email_active ON user_account (email) WHERE deleted_at IS NULL`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS ux_auth_session_refresh_hash ON auth_session (refresh_token_hash)`,
+	`CREATE INDEX IF NOT EXISTS ix_auth_session_user_created ON auth_session (user_id, created_at DESC)`,
+	`CREATE INDEX IF NOT EXISTS ix_auth_session_user_platform_active ON auth_session (user_id, platform, created_at DESC, id DESC) WHERE revoked_at IS NULL`,
 }
 
 var authenticationForeignKeys = []foreignKeyDefinition{
 	{
-		name:  "fk_sys_user_session_user",
-		table: "sys_user_session",
-		ddl:   `ALTER TABLE sys_user_session ADD CONSTRAINT fk_sys_user_session_user FOREIGN KEY (user_id) REFERENCES sys_user(id) ON DELETE RESTRICT`,
+		name:  "fk_auth_session_user",
+		table: "auth_session",
+		ddl:   `ALTER TABLE auth_session ADD CONSTRAINT fk_auth_session_user FOREIGN KEY (user_id) REFERENCES user_account(id) ON DELETE RESTRICT`,
 	},
 }
 
@@ -35,7 +35,7 @@ func PrepareSessionSchema(ctx context.Context, db *gorm.DB) error {
 	}
 	db = db.WithContext(ctx)
 	var tableExists bool
-	if err := db.Raw(`SELECT to_regclass(current_schema() || '.sys_user_session') IS NOT NULL`).Scan(&tableExists).Error; err != nil {
+	if err := db.Raw(`SELECT to_regclass(current_schema() || '.auth_session') IS NOT NULL`).Scan(&tableExists).Error; err != nil {
 		return fmt.Errorf("inspect session table: %w", err)
 	}
 	if !tableExists {
@@ -45,7 +45,7 @@ func PrepareSessionSchema(ctx context.Context, db *gorm.DB) error {
 	if err := db.Raw(`
 		SELECT count(*) FROM information_schema.columns
 		WHERE table_schema = current_schema()
-		  AND table_name = 'sys_user_session'
+		  AND table_name = 'auth_session'
 		  AND column_name IN ('platform', 'device_id')`).Scan(&columnCount).Error; err != nil {
 		return fmt.Errorf("inspect session migration columns: %w", err)
 	}
@@ -54,15 +54,15 @@ func PrepareSessionSchema(ctx context.Context, db *gorm.DB) error {
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		for _, statement := range []string{
-			`ALTER TABLE sys_user_session ADD COLUMN IF NOT EXISTS platform VARCHAR(49) NOT NULL DEFAULT 'admin'`,
-			`ALTER TABLE sys_user_session ADD COLUMN IF NOT EXISTS device_id VARCHAR(36) NOT NULL DEFAULT ''`,
-			`UPDATE sys_user_session
+			`ALTER TABLE auth_session ADD COLUMN IF NOT EXISTS platform VARCHAR(49) NOT NULL DEFAULT 'admin'`,
+			`ALTER TABLE auth_session ADD COLUMN IF NOT EXISTS device_id VARCHAR(36) NOT NULL DEFAULT ''`,
+			`UPDATE auth_session
 			 SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP),
 			     updated_at = CASE WHEN revoked_at IS NULL THEN CURRENT_TIMESTAMP ELSE updated_at END
 			 WHERE revoked_at IS NULL`,
-			`DROP INDEX IF EXISTS ux_sys_user_session_current`,
-			`ALTER TABLE sys_user_session ALTER COLUMN platform DROP DEFAULT`,
-			`ALTER TABLE sys_user_session ALTER COLUMN device_id DROP DEFAULT`,
+			`DROP INDEX IF EXISTS ux_auth_session_current`,
+			`ALTER TABLE auth_session ALTER COLUMN platform DROP DEFAULT`,
+			`ALTER TABLE auth_session ALTER COLUMN device_id DROP DEFAULT`,
 		} {
 			if err := tx.Exec(statement).Error; err != nil {
 				return err

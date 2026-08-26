@@ -41,7 +41,7 @@ type platformSession struct {
 	CreatedAt time.Time
 }
 
-func (platformSession) TableName() string { return "sys_user_session" }
+func (platformSession) TableName() string { return "auth_session" }
 
 func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
@@ -109,7 +109,7 @@ func (r *Repository) LockByCodeUnscoped(ctx context.Context, code string) ([]Pla
 
 func (r *Repository) FindActiveSessionUsers(ctx context.Context, platform string) ([]int64, error) {
 	userIDs := make([]int64, 0)
-	if err := r.db.WithContext(ctx).Table("sys_user_session").Distinct("user_id").
+	if err := r.db.WithContext(ctx).Table("auth_session").Distinct("user_id").
 		Where("platform = ? AND revoked_at IS NULL", platform).Order("user_id ASC").Pluck("user_id", &userIDs).Error; err != nil {
 		return nil, fmt.Errorf("find authentication platform session users: %w", err)
 	}
@@ -123,7 +123,7 @@ func (r *Repository) FindSessionLimitCandidates(ctx context.Context, platform st
 	userIDs := make([]int64, 0)
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT user_id
-		FROM sys_user_session
+		FROM auth_session
 		WHERE platform = ? AND revoked_at IS NULL
 		GROUP BY user_id
 		HAVING count(*) > ?
@@ -137,9 +137,9 @@ func (r *Repository) LockActiveSessionUsers(ctx context.Context, platform string
 	userIDs := make([]int64, 0)
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT app_user.id
-		FROM sys_user AS app_user
+		FROM user_account AS app_user
 		WHERE app_user.id IN (
-			SELECT user_id FROM sys_user_session WHERE platform = ? AND revoked_at IS NULL
+			SELECT user_id FROM auth_session WHERE platform = ? AND revoked_at IS NULL
 		)
 		ORDER BY app_user.id ASC
 		FOR UPDATE OF app_user`, platform).Scan(&userIDs).Error; err != nil {
@@ -200,7 +200,7 @@ func (r *Repository) revokeSessions(ctx context.Context, sessions []platformSess
 		ids[index] = session.ID
 		refs[index] = SessionRef{UserID: session.UserID, SessionID: session.ID}
 	}
-	result := r.db.WithContext(ctx).Table("sys_user_session").Where("id IN ? AND revoked_at IS NULL", ids).Updates(map[string]any{
+	result := r.db.WithContext(ctx).Table("auth_session").Where("id IN ? AND revoked_at IS NULL", ids).Updates(map[string]any{
 		"revoked_at": now.UTC(), "updated_at": now.UTC(),
 	})
 	if result.Error != nil {
@@ -228,7 +228,7 @@ func (r *Repository) Create(ctx context.Context, value *Platform) error {
 func (r *Repository) UpdatePolicy(ctx context.Context, id int64, values UpdateValues, updatedAt time.Time) (int64, error) {
 	var version int64
 	result := r.db.WithContext(ctx).Raw(`
-		UPDATE sys_auth_platform
+		UPDATE auth_platform
 		SET name = ?, access_ttl_seconds = ?, refresh_ttl_seconds = ?,
 			session_cache_ttl_seconds = ?, access_cache_ttl_seconds = ?,
 			bind_device = ?, bind_ip = ?, max_sessions = ?, allow_register = ?,
@@ -249,7 +249,7 @@ func (r *Repository) UpdatePolicy(ctx context.Context, id int64, values UpdateVa
 func (r *Repository) UpdateStatus(ctx context.Context, id int64, value yesno.Value, updatedAt time.Time) (int64, error) {
 	var version int64
 	result := r.db.WithContext(ctx).Raw(`
-		UPDATE sys_auth_platform
+		UPDATE auth_platform
 		SET is_enabled = ?, policy_version = policy_version + 1, updated_at = ?
 		WHERE id = ? AND deleted_at IS NULL
 		RETURNING policy_version`, value, updatedAt.UTC(), id).Scan(&version)
@@ -265,7 +265,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, value yesno.Val
 func (r *Repository) SoftDelete(ctx context.Context, id int64, deletedAt time.Time) (int64, error) {
 	var version int64
 	result := r.db.WithContext(ctx).Raw(`
-		UPDATE sys_auth_platform
+		UPDATE auth_platform
 		SET policy_version = policy_version + 1, updated_at = ?, deleted_at = ?
 		WHERE id = ? AND deleted_at IS NULL
 		RETURNING policy_version`, deletedAt.UTC(), deletedAt.UTC(), id).Scan(&version)
@@ -280,7 +280,7 @@ func (r *Repository) SoftDelete(ctx context.Context, id int64, deletedAt time.Ti
 
 func mapWriteError(operation string, err error) error {
 	var postgresError *pgconn.PgError
-	if errors.As(err, &postgresError) && postgresError.Code == "23505" && postgresError.ConstraintName == "ux_sys_auth_platform_code_active" {
+	if errors.As(err, &postgresError) && postgresError.Code == "23505" && postgresError.ConstraintName == "ux_auth_platform_code_active" {
 		return fmt.Errorf("%s: %w", operation, ErrCodeConflict)
 	}
 	return fmt.Errorf("%s: %w", operation, err)
