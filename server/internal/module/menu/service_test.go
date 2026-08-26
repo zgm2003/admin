@@ -47,7 +47,7 @@ func TestServiceCreateSupportsExplicitNullRootAndDisabledChild(t *testing.T) {
 	_, ctx, service := openCleanMenuService(t)
 	rootID, err := service.Create(ctx, CreateInput{
 		ParentID: nil, MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"),
-		Icon: stringPointer("Folder"), SortOrder: 10, IsEnabled: yesno.No,
+		Icon: stringPointer("lucide:folder"), SortOrder: 10, IsEnabled: yesno.No,
 	})
 	if err != nil || rootID < 1 {
 		t.Fatalf("Create(root) = %d,%v", rootID, err)
@@ -128,7 +128,7 @@ func TestServiceUpdateMovesCandidateTreeAndKeepsCodeStable(t *testing.T) {
 	pageID, _ := service.Create(ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Name: "Reports", Code: "reports:list", I18nKey: stringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
 	newPath := "/settings/reports"
 	newComponentPath := "settings/reports"
-	icon := "Menu"
+	icon := "lucide:panel-left"
 	if err := service.Update(ctx, pageID, UpdateInput{
 		ParentID: &otherID, MenuType: TypePage, Name: "Reports", I18nKey: stringPointer("navigation.systemMenus"),
 		Path: &newPath, ComponentPath: &newComponentPath, Icon: &icon, SortOrder: 9, IsHidden: yesno.Yes,
@@ -205,7 +205,7 @@ func TestServiceUpdateAllowsChangingAnyActiveMenuRecord(t *testing.T) {
 	tx, ctx, service := openCleanMenuService(t)
 	rootID, err := service.Create(ctx, CreateInput{
 		MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"),
-		Icon: stringPointer("Folder"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No,
+		Icon: stringPointer("lucide:folder"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -223,7 +223,7 @@ func TestServiceUpdateAllowsChangingAnyActiveMenuRecord(t *testing.T) {
 	newComponentPath := "reports/order-items"
 	if err := service.Update(ctx, pageID, UpdateInput{
 		ParentID: &rootID, MenuType: TypePage, Name: "Order items", I18nKey: stringPointer("reports.orderItems.list"),
-		Path: &newPath, ComponentPath: &newComponentPath, Icon: stringPointer("mdi:shield"),
+		Path: &newPath, ComponentPath: &newComponentPath, Icon: stringPointer("lucide:shield-check"),
 		SortOrder: 55, IsHidden: yesno.Yes,
 	}); err != nil {
 		t.Fatalf("update ordinary page: %v", err)
@@ -240,7 +240,7 @@ func TestServiceUpdateAllowsChangingAnyActiveMenuRecord(t *testing.T) {
 
 func TestServiceUpdateRollsBackDatabaseWriteFailure(t *testing.T) {
 	tx, ctx, service := openCleanMenuService(t)
-	id, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), Icon: stringPointer("Folder"), SortOrder: 10, IsEnabled: yesno.Yes})
+	id, err := service.Create(ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), Icon: stringPointer("lucide:folder"), SortOrder: 10, IsEnabled: yesno.Yes})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestServiceUpdateRollsBackDatabaseWriteFailure(t *testing.T) {
 	if err := tx.WithContext(ctx).Exec(`ALTER TABLE rbac_menu ADD CONSTRAINT ck_test_menu_update_rollback CHECK (i18n_key <> 'navigation.systemMenus')`).Error; err != nil {
 		t.Fatal(err)
 	}
-	err = service.Update(ctx, id, UpdateInput{MenuType: TypeDirectory, Name: "Reports", I18nKey: stringPointer("navigation.systemMenus"), Icon: stringPointer("Cpu"), SortOrder: 99, IsHidden: yesno.No})
+	err = service.Update(ctx, id, UpdateInput{MenuType: TypeDirectory, Name: "Reports", I18nKey: stringPointer("navigation.systemMenus"), Icon: stringPointer("lucide:cpu"), SortOrder: 99, IsHidden: yesno.No})
 	if menuServiceErrorCode(err) != apperror.CodeDependencyUnavailable {
 		t.Fatalf("write failure error = %v", err)
 	}
@@ -469,7 +469,7 @@ func TestServiceMenuMutationsAdvanceAllActiveAccessVersions(t *testing.T) {
 		t.Fatalf("disabled user access version = %d", got)
 	}
 
-	update := UpdateInput{MenuType: TypeDirectory, Name: "Reports", I18nKey: stringPointer("navigation.system"), Icon: stringPointer("Folder"), SortOrder: 20}
+	update := UpdateInput{MenuType: TypeDirectory, Name: "Reports", I18nKey: stringPointer("navigation.system"), Icon: stringPointer("lucide:folder"), SortOrder: 20}
 	if err := service.Update(ctx, id, update); err != nil {
 		t.Fatal(err)
 	}

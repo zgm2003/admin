@@ -25,11 +25,11 @@ func TestAccessHandlerReturnsClosedSnapshot(t *testing.T) {
 		RoleCodes: []string{"ai_tester", "registered_user"},
 		MenuTree: []access.MenuNode{{
 			Code: "system", MenuType: access.MenuDirectory, I18nKey: "navigation.system", IsHidden: 0, Children: []access.MenuNode{{
-				Code: "system:user:view", MenuType: access.MenuPage, Path: &pagePath, ComponentPath: &componentPath,
+				Code: "account:user:view", MenuType: access.MenuPage, Path: &pagePath, ComponentPath: &componentPath,
 				I18nKey: "navigation.systemUsers", IsHidden: 1, Children: []access.MenuNode{},
 			}},
 		}},
-		PermissionCodes: []string{"system:user:create", "system:user:view"},
+		PermissionCodes: []string{"account:user:create", "account:user:view"},
 	}}
 	recorder := serveAccessRoute(t, service, "Bearer token")
 

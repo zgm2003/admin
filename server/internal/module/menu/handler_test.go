@@ -60,7 +60,7 @@ func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 }
 
 func TestMenuHandlerCreateRequiresEveryFieldAndExplicitNull(t *testing.T) {
-	valid := `{"parentId":null,"menuType":"directory","name":"报表","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"mdi:folder","sortOrder":0,"isEnabled":0,"isHidden":0}`
+	valid := `{"parentId":null,"menuType":"directory","name":"报表","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"lucide:folder","sortOrder":0,"isEnabled":0,"isHidden":0}`
 	service := &menuHTTPService{createID: 41}
 	recorder := serveMenuRequest(t, service, http.MethodPost, "/api/v1/menus", []byte(valid))
 	assertMenuEnvelope(t, recorder, http.StatusCreated, 0)

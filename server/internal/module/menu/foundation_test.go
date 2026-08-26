@@ -91,7 +91,7 @@ func TestProtectedMenusAllowOnlyPresentationUpdates(t *testing.T) {
 	}
 
 	changedI18nKey := "navigation.customMenus"
-	changedIcon := "lucide:menu"
+	changedIcon := "lucide:panel-left"
 	if err := service.Update(ctx, page.ID, UpdateInput{
 		ParentID: page.ParentID, MenuType: page.MenuType, Name: "自定义菜单中心", I18nKey: &changedI18nKey,
 		Path: page.Path, ComponentPath: page.ComponentPath, Icon: &changedIcon, SortOrder: 99, IsHidden: page.IsHidden,

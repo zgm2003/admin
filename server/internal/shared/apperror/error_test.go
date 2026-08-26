@@ -44,7 +44,7 @@ func TestApplicationErrorConstructorsUseMessageKeys(t *testing.T) {
 
 func TestApplicationErrorConstructorsPreserveExplicitParameters(t *testing.T) {
 	cause := errors.New("cause")
-	params := map[string]string{"permission": "system:user:create"}
+	params := map[string]string{"permission": "account:user:create"}
 
 	conflict := apperror.Conflict(i18n.KeyUsernameConflict, nil, cause)
 	if conflict.MessageKey != i18n.KeyUsernameConflict || conflict.Code != apperror.CodeConflict {

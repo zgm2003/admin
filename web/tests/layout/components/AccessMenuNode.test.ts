@@ -32,7 +32,7 @@ describe('AccessMenuNode', () => {
     expect(wrapper.findComponent({ name: 'ElMenuItem' }).props('index')).toBe('/account/users')
   })
 
-	it.each(['Setting', 'mdi:shield'])('passes icon name %s directly to DIcon', (icon) => {
+	it.each(['lucide:settings-2', 'lucide:shield-check'])('passes local icon name %s directly to DIcon', (icon) => {
 		const node = pageNode()
 		node.icon = icon
 		const wrapper = mountMenuNode(node)
@@ -140,7 +140,7 @@ function directoryNode(): AccessMenuNodeDTO {
     path: null,
 		componentPath: null,
 		i18nKey: 'navigation.account',
-    icon: 'Folder',
+    icon: 'lucide:folder',
 		isHidden: YesNo.No,
     children: [pageNode()],
   }
@@ -153,7 +153,7 @@ function pageNode(): AccessMenuNodeDTO {
     path: '/account/users',
 		componentPath: 'account/users',
 		i18nKey: 'navigation.accountUsers',
-    icon: 'Setting',
+    icon: 'lucide:settings-2',
 		isHidden: YesNo.No,
     children: [],
   }
@@ -186,7 +186,7 @@ function directoryWithPage(code: string, i18nKey: string, child: AccessMenuNodeD
 		path: null,
 		componentPath: null,
 		i18nKey,
-		icon: 'Folder',
+		icon: 'lucide:folder',
 		isHidden: YesNo.No,
 		children: [child],
 	}

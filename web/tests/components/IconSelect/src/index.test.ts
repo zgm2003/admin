@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import IconSelect from '@src/components/IconSelect/src/index.vue'
 
 describe('IconSelect', () => {
-  const icons = [{ name: 'Folder', label: 'Folder' }, { name: 'mdi:home', label: 'Home' }]
+  const icons = [{ name: 'lucide:folder', label: '目录' }, { name: 'lucide:house', label: '首页' }] as const
 
   it('filters icons and emits the selected name', async () => {
     const wrapper = mount(IconSelect, {
@@ -17,7 +17,7 @@ describe('IconSelect', () => {
     expect(input).not.toBeNull()
     input?.focus()
     if (input !== null) {
-      input.value = 'home'
+      input.value = '首页'
       input.dispatchEvent(new Event('input'))
     }
     await flushPromises()
@@ -25,7 +25,7 @@ describe('IconSelect', () => {
     expect(item).toHaveLength(1)
     item[0]?.dispatchEvent(new Event('click'))
     await flushPromises()
-    expect(wrapper.emitted('select-icon')?.[0]?.[0]).toBe('mdi:home')
+    expect(wrapper.emitted('select-icon')?.[0]?.[0]).toBe('lucide:house')
     expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toBe(false)
   })
 

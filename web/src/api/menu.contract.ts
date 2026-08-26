@@ -7,6 +7,7 @@ import {
 } from './menu-fields'
 import { isYesNo, type YesNo } from '../enums/yes-no'
 import { ProtocolError } from '../types/http'
+import type { MenuIconName } from '../icons/menu-icons'
 
 export type ManagedMenuType = 'directory' | 'page' | 'action'
 
@@ -19,7 +20,7 @@ export interface ManagedMenuNode {
 	i18nKey: string | null
   path: string | null
 	componentPath: string | null
-	icon: string | null
+	icon: MenuIconName | null
   sortOrder: number
   isEnabled: YesNo
 	isHidden: YesNo
@@ -37,7 +38,7 @@ export interface CreateMenuInput {
 	i18nKey: string | null
   path: string | null
 	componentPath: string | null
-	icon: string | null
+	icon: MenuIconName | null
   sortOrder: number
   isEnabled: YesNo
 	isHidden: YesNo
@@ -50,7 +51,7 @@ export interface UpdateMenuInput {
 	i18nKey: string | null
   path: string | null
 	componentPath: string | null
-	icon: string | null
+	icon: MenuIconName | null
   sortOrder: number
 	isHidden: YesNo
 }
@@ -161,10 +162,13 @@ function parseMenuNode(
 		}
 		i18nKey = record.i18nKey
 	}
-	if (record.icon !== null && (typeof record.icon !== 'string' || !isMenuIcon(record.icon))) {
-		throw new ProtocolError(`${label} icon has an invalid format`)
-  }
-  const icon = record.icon
+	let icon: MenuIconName | null = null
+	if (record.icon !== null) {
+		if (typeof record.icon !== 'string' || !isMenuIcon(record.icon)) {
+			throw new ProtocolError(`${label} icon has an invalid format`)
+		}
+		icon = record.icon
+	}
   const sortOrder = nonNegativeInteger(record.sortOrder, `${label} sortOrder`)
 	if (!isYesNo(record.isEnabled)) {
 		throw new ProtocolError(`${label} isEnabled must be 0 or 1`)

@@ -1,4 +1,5 @@
 import type { Component } from 'vue'
+import type { MenuIconName } from '../../../icons/menu-icons'
 
 interface DIconSharedProps {
   size?: string | number
@@ -10,5 +11,5 @@ export type DIconProps = DIconSharedProps & ({
   icon?: never
 } | {
   component?: never
-  icon: string
+  icon: MenuIconName
 })

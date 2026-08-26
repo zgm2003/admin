@@ -12,11 +12,16 @@ import { YesNo } from '../../../enums/yes-no'
 import { useAccessStore } from '../../../store/access'
 import { AppDialog } from '../../../components/AppDialog'
 import { IconSelect } from '../../../components/IconSelect'
+import type { MenuIconName } from '../../../icons/menu-icons'
+import { filterManagedMenuTree } from './filter-menu-tree'
 
 const { t } = useI18n()
 const access = useAccessStore()
 
 const menus = ref<ManagedMenuNode[]>([])
+const keyword = ref('')
+const expandedIDs = ref<Set<number>>(new Set())
+const expansionBeforeSearch = ref<Set<number> | null>(null)
 const loading = ref(false)
 const loadError = ref('')
 const mutationError = ref('')
@@ -33,10 +38,11 @@ interface MenuFormState {
 	i18nKey: string
   path: string | null
 	componentPath: string | null
-	icon: string | null
+	icon: MenuIconName | null
   sortOrder: number
-  isEnabled: YesNo
+	isEnabled: YesNo
 	isHidden: YesNo
+	isProtected: YesNo
 }
 
 const form = ref<MenuFormState>(newForm())
@@ -70,8 +76,9 @@ function newForm(): MenuFormState {
 		componentPath: null,
     icon: null,
     sortOrder: 100,
-    isEnabled: YesNo.Yes,
-		isHidden: YesNo.No,
+	isEnabled: YesNo.Yes,
+	isHidden: YesNo.No,
+	isProtected: YesNo.No,
   }
 }
 
@@ -103,6 +110,7 @@ const editingNode = computed(() => {
   if (editingID.value === null) return null
   return flattenMenus(menus.value).find((node) => node.id === editingID.value) ?? null
 })
+const editingProtected = computed(() => dialogMode.value === 'edit' && form.value.isProtected === YesNo.Yes)
 
 const parentOptions = computed(() => {
   const excluded = editingNode.value === null ? new Set<number>() : collectSubtreeIDs(editingNode.value)
@@ -113,6 +121,33 @@ const parentOptions = computed(() => {
     return node.menuType === 'page'
   })
 })
+const displayedMenus = computed(() => filterManagedMenuTree(menus.value, keyword.value))
+const expandedRowKeys = computed(() => [...expandedIDs.value])
+
+function flattenWithChildren(nodes: readonly ManagedMenuNode[]): ManagedMenuNode[] {
+  return flattenMenus(nodes)
+}
+
+function setExpandedForRoots(): void {
+  expandedIDs.value = new Set(menus.value.filter((node) => node.children.length > 0).map((node) => node.id))
+}
+
+function expandAll(): void {
+  expandedIDs.value = new Set(flattenWithChildren(displayedMenus.value).filter((node) => node.children.length > 0).map((node) => node.id))
+}
+
+function collapseAll(): void {
+  expandedIDs.value = new Set()
+}
+
+function updateKeyword(value: string): void {
+  const wasEmpty = keyword.value.trim() === ''
+  const isEmpty = value.trim() === ''
+  if (wasEmpty && !isEmpty) expansionBeforeSearch.value = new Set(expandedIDs.value)
+  keyword.value = value
+  if (!isEmpty) expandAll()
+  else if (!wasEmpty) expandedIDs.value = expansionBeforeSearch.value ?? new Set()
+}
 
 const canSubmitForm = computed(() => {
 	if (form.value.name === '' || form.value.name.trim() !== form.value.name || form.value.name.length > 128) return false
@@ -153,7 +188,7 @@ function openIconSelect(): void {
   iconSelectVisible.value = true
 }
 
-function selectMenuIcon(value: string): void {
+function selectMenuIcon(value: MenuIconName): void {
 	form.value.icon = value
 }
 
@@ -223,8 +258,9 @@ function openEdit(node: ManagedMenuNode): void {
 		componentPath: node.componentPath,
     icon: node.icon,
     sortOrder: node.sortOrder,
-    isEnabled: node.isEnabled,
+	isEnabled: node.isEnabled,
 		isHidden: node.isHidden,
+		isProtected: node.isProtected,
   }
   dialogVisible.value = true
 }
@@ -237,11 +273,20 @@ function closeDialog(): void {
 async function submitForm(): Promise<void> {
   if (!canSubmitForm.value) return
   mutationError.value = ''
-  try {
+	try {
     if (dialogMode.value === 'create') {
 			const input: CreateMenuInput = {
-				...form.value,
+				parentId: form.value.parentId,
+				menuType: form.value.menuType,
+				name: form.value.name,
+				code: form.value.code,
 				i18nKey: form.value.menuType === 'action' ? null : form.value.i18nKey,
+				path: form.value.path,
+				componentPath: form.value.componentPath,
+				icon: form.value.icon,
+				sortOrder: form.value.sortOrder,
+				isEnabled: form.value.isEnabled,
+				isHidden: form.value.isHidden,
 			}
       await createMenu(input)
       await loadMenus()
@@ -318,6 +363,7 @@ async function loadMenus(): Promise<void> {
   try {
     const result = await getMenus()
     menus.value = result
+    if (keyword.value.trim() === '') setExpandedForRoots()
   } catch (error: unknown) {
     loadError.value = publicErrorMessage(error)
   } finally {
@@ -331,6 +377,15 @@ onMounted(loadMenus)
 <template>
 	<section class="menu-management-page management-page" :aria-label="t('menu.title')">
 		<div class="menu-management__toolbar-actions management-page__actions">
+        <el-input
+          data-testid="menu-search"
+          :model-value="keyword"
+          clearable
+          :placeholder="t('menu.search.placeholder')"
+          @update:model-value="updateKeyword"
+        />
+        <el-button data-testid="menu-expand-all" @click="expandAll">{{ t('menu.expandAll') }}</el-button>
+        <el-button data-testid="menu-collapse-all" @click="collapseAll">{{ t('menu.collapseAll') }}</el-button>
         <el-button
           v-if="canCreate"
           data-testid="add-root-menu"
@@ -378,10 +433,10 @@ onMounted(loadMenus)
         v-if="loadError === ''"
         v-loading="loading"
         border
-        default-expand-all
         data-testid="menu-table"
         class="menu-management__table"
-        :data="menus"
+        :data="displayedMenus"
+        :expand-row-keys="expandedRowKeys"
         :header-cell-style="tableHeaderCellStyle"
         row-key="id"
         :tree-props="{ children: 'children' }"
@@ -462,9 +517,11 @@ onMounted(loadMenus)
               :data-testid="`status-${row.id}`"
               text
               type="warning"
+              :disabled="row.isProtected === YesNo.Yes"
+              :title="row.isProtected === YesNo.Yes ? t('menu.form.protectedHint') : undefined"
               @click="changeStatus(row)"
             >{{ row.isEnabled === YesNo.Yes ? t('menu.disable') : t('menu.enable') }}</el-button>
-			<el-button v-if="canDelete" :data-testid="`delete-${row.id}`" text type="danger" @click="removeNode(row)">{{ t('menu.delete') }}</el-button>
+			<el-button v-if="canDelete" :data-testid="`delete-${row.id}`" text type="danger" :disabled="row.isProtected === YesNo.Yes" :title="row.isProtected === YesNo.Yes ? t('menu.form.protectedHint') : undefined" @click="removeNode(row)">{{ t('menu.delete') }}</el-button>
           </template>
         </el-table-column>
 
@@ -488,6 +545,14 @@ onMounted(loadMenus)
         :closable="false"
         show-icon
       />
+      <el-alert
+        v-if="editingProtected"
+        data-testid="menu-form-protected-hint"
+        type="info"
+        :title="t('menu.form.protectedHint')"
+        :closable="false"
+        show-icon
+      />
       <el-form class="menu-form" label-position="right" label-width="96px" @submit.prevent="submitForm">
         <div class="menu-form__grid">
         <el-form-item :label="t('menu.form.parent')">
@@ -495,6 +560,8 @@ onMounted(loadMenus)
             v-model="parentSelection"
             data-testid="menu-form-parent"
             clearable
+            :disabled="editingProtected"
+            :title="editingProtected ? t('menu.form.protectedHint') : undefined"
             :options="parentSelectOptions"
           />
         </el-form-item>
@@ -503,6 +570,8 @@ onMounted(loadMenus)
           <el-select-v2
             :model-value="form.menuType"
             data-testid="menu-form-type"
+            :disabled="editingProtected"
+            :title="editingProtected ? t('menu.form.protectedHint') : undefined"
             :options="menuTypeOptions"
             @update:model-value="handleFormTypeChange"
           />
@@ -510,7 +579,7 @@ onMounted(loadMenus)
 
 		<el-form-item class="menu-form__wide" :label="t('menu.form.code')">
 			<div class="menu-form__control">
-				<el-input v-model="form.code" data-testid="menu-form-code" :readonly="dialogMode === 'edit'" :placeholder="t('menu.form.codePlaceholder')" />
+				<el-input v-model="form.code" data-testid="menu-form-code" :readonly="dialogMode === 'edit'" :disabled="editingProtected" :title="editingProtected ? t('menu.form.protectedHint') : undefined" :placeholder="t('menu.form.codePlaceholder')" />
 				<p class="menu-form__hint">{{ t('menu.form.codeHint') }}</p>
 			</div>
 		</el-form-item>
@@ -528,25 +597,25 @@ onMounted(loadMenus)
 
 		<el-form-item v-if="form.menuType === 'page'" class="menu-form__wide" :label="t('menu.form.path')">
 			<div class="menu-form__control">
-				<el-input v-model="form.path" data-testid="menu-form-path" :placeholder="t('menu.form.pathPlaceholder')" />
+				<el-input v-model="form.path" data-testid="menu-form-path" :disabled="editingProtected" :title="editingProtected ? t('menu.form.protectedHint') : undefined" :placeholder="t('menu.form.pathPlaceholder')" />
 				<p class="menu-form__hint">{{ t('menu.form.pathHint') }}</p>
 			</div>
 		</el-form-item>
 
 		<el-form-item v-if="form.menuType === 'page'" class="menu-form__wide" :label="t('menu.form.componentPath')">
 			<div class="menu-form__control">
-				<el-input v-model="form.componentPath" data-testid="menu-form-component-path" :placeholder="t('menu.form.componentPathPlaceholder')" />
+				<el-input v-model="form.componentPath" data-testid="menu-form-component-path" :disabled="editingProtected" :title="editingProtected ? t('menu.form.protectedHint') : undefined" :placeholder="t('menu.form.componentPathPlaceholder')" />
 				<p class="menu-form__hint">{{ t('menu.form.componentPathHint') }}</p>
 			</div>
 		</el-form-item>
 
         <el-form-item v-if="form.menuType !== 'action'" :label="t('menu.form.icon')">
           <div class="menu-icon-picker">
-            <el-button data-testid="menu-form-icon" @click="openIconSelect">
+            <el-button data-testid="menu-form-icon" :disabled="editingProtected" @click="openIconSelect">
 				<DIcon v-if="form.icon !== null" :icon="form.icon" />
               {{ form.icon ?? t('menu.form.noIcon') }}
             </el-button>
-            <el-button v-if="form.icon !== null" text type="danger" @click="clearMenuIcon">{{ t('menu.form.noIcon') }}</el-button>
+            <el-button v-if="form.icon !== null" text type="danger" :disabled="editingProtected" @click="clearMenuIcon">{{ t('menu.form.noIcon') }}</el-button>
           </div>
         </el-form-item>
 
@@ -559,7 +628,7 @@ onMounted(loadMenus)
 		</el-form-item>
 
 		<el-form-item v-if="form.menuType !== 'action'" :label="t('menu.form.isHidden')">
-			<el-switch v-model="form.isHidden" :active-value="YesNo.No" :inactive-value="YesNo.Yes" data-testid="menu-form-hidden" />
+			<el-switch v-model="form.isHidden" :active-value="YesNo.No" :inactive-value="YesNo.Yes" :disabled="editingProtected" :title="editingProtected ? t('menu.form.protectedHint') : undefined" data-testid="menu-form-hidden" />
 		</el-form-item>
         </div>
       </el-form>

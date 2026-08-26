@@ -64,7 +64,7 @@ function accountDirectory(): AccessMenuNode {
     path: null,
 		componentPath: null,
 		i18nKey: 'navigation.account',
-    icon: 'Folder',
+      icon: 'lucide:folder',
 		isHidden: YesNo.No,
     children: [{
       code: 'account:user:list',
@@ -104,7 +104,7 @@ function directoryNode(code: string, i18nKey: string, child: AccessMenuNode): Ac
 		path: null,
 		componentPath: null,
 		i18nKey,
-		icon: 'Folder',
+		icon: 'lucide:folder',
 		isHidden: YesNo.No,
 		children: [child],
 	}
@@ -130,7 +130,7 @@ function nestedDirectory(): AccessMenuNode {
     path: null,
 		componentPath: null,
 		i18nKey: 'navigation.system',
-    icon: 'Folder',
+    icon: 'lucide:folder',
 		isHidden: YesNo.No,
     children: [{
       code: 'system:security',
@@ -138,7 +138,7 @@ function nestedDirectory(): AccessMenuNode {
       path: null,
 		componentPath: null,
 		i18nKey: 'navigation.accessAuthPlatforms',
-      icon: 'Key',
+      icon: 'lucide:key-round',
 		isHidden: YesNo.No,
       children: [{
         code: 'system:security:sessions',
@@ -146,7 +146,7 @@ function nestedDirectory(): AccessMenuNode {
         path: '/system/security/sessions',
 			componentPath: 'account/sessions',
 			i18nKey: 'navigation.accountSessions',
-        icon: 'List',
+        icon: 'lucide:list-tree',
 			isHidden: YesNo.No,
         children: [],
       }],

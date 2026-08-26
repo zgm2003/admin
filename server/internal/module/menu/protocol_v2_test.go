@@ -37,7 +37,7 @@ func TestMenuProtocolV2UsesNameNullableI18nAndRenderState(t *testing.T) {
 }
 
 func TestMenuProtocolV2AcceptsCustomI18nKeyAndIconName(t *testing.T) {
-	icon := "mdi:shield"
+	icon := "lucide:shield-check"
 	input := CreateInput{
 		MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("reports.orders.list"),
 		Icon: &icon, SortOrder: 10, IsEnabled: yesno.Yes,
@@ -48,7 +48,7 @@ func TestMenuProtocolV2AcceptsCustomI18nKeyAndIconName(t *testing.T) {
 }
 
 func TestMenuProtocolV2RejectsStaticAndNonKebabPagePaths(t *testing.T) {
-	for _, value := range []string{"/login", "/register", "/dashboard", "/system/menus", "/System/users", "/system/users/", "/system/:id"} {
+	for _, value := range []string{"/login", "/register", "/dashboard", "/System/users", "/system/users/", "/system/:id"} {
 		if validMenuPath(value) {
 			t.Errorf("validMenuPath(%q) = true", value)
 		}

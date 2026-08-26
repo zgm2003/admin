@@ -40,7 +40,7 @@ var (
 	accessPathPattern          = regexp.MustCompile(`^/[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
 	accessComponentPathPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
 	staticAccessPagePaths      = map[string]struct{}{
-		"/login": {}, "/register": {}, "/dashboard": {}, "/system/menus": {},
+		"/login": {}, "/register": {}, "/dashboard": {},
 	}
 )
 

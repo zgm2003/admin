@@ -44,11 +44,11 @@ describe('menu field protocol', () => {
     (value) => expect(isComponentPath(value)).toBe(false),
   )
 
-  it('validates icon names without a component whitelist', () => {
-    expect(isMenuIcon('Setting')).toBe(true)
-    expect(isMenuIcon('mdi:shield')).toBe(true)
+  it('accepts only registered local Lucide icon names', () => {
+    expect(isMenuIcon('lucide:shield-check')).toBe(true)
+    expect(isMenuIcon('Setting')).toBe(false)
+    expect(isMenuIcon('mdi:shield')).toBe(false)
+    expect(isMenuIcon('lucide:not-in-registry')).toBe(false)
     expect(isMenuIcon('')).toBe(false)
-    expect(isMenuIcon(' Setting ')).toBe(false)
-    expect(isMenuIcon('x'.repeat(129))).toBe(false)
   })
 })

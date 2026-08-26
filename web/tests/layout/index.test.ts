@@ -113,7 +113,7 @@ describe('admin layout', () => {
         path: null,
 		componentPath: null,
 		i18nKey: 'navigation.account',
-        icon: 'Folder',
+        icon: 'lucide:folder',
 		isHidden: YesNo.No,
         children: [{
           code: 'account:user:list',

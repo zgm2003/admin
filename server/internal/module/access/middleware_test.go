@@ -16,7 +16,7 @@ import (
 
 func TestRequirePermissionRejectsMissingIdentityWithoutCallingService(t *testing.T) {
 	service := &permissionAccessService{}
-	recorder, called := servePermissionRequest(t, service, false, "system:user:create")
+	recorder, called := servePermissionRequest(t, service, false, "account:user:create")
 	assertHTTPCode(t, recorder, http.StatusUnauthorized, apperror.CodeUnauthorized)
 	if called || service.calls != 0 {
 		t.Fatalf("next=%v service calls=%d", called, service.calls)
@@ -25,18 +25,18 @@ func TestRequirePermissionRejectsMissingIdentityWithoutCallingService(t *testing
 
 func TestRequirePermissionAllowsTheNextHandler(t *testing.T) {
 	service := &permissionAccessService{allowed: true}
-	recorder, called := servePermissionRequest(t, service, true, "system:user:create")
+	recorder, called := servePermissionRequest(t, service, true, "account:user:create")
 	if recorder.Code != http.StatusNoContent || !called {
 		t.Fatalf("status=%d next=%v body=%s", recorder.Code, called, recorder.Body)
 	}
-	if service.identity.UserID != 41 || service.identity.Platform != "admin" || service.code != "system:user:create" || service.ctx == nil {
+	if service.identity.UserID != 41 || service.identity.Platform != "admin" || service.code != "account:user:create" || service.ctx == nil {
 		t.Fatalf("service identity=%+v code=%q context=%v", service.identity, service.code, service.ctx)
 	}
 }
 
 func TestRequirePermissionReturnsTranslatedForbidden(t *testing.T) {
 	service := &permissionAccessService{allowed: false}
-	recorder, called := servePermissionRequest(t, service, true, "system:user:delete")
+	recorder, called := servePermissionRequest(t, service, true, "account:user:delete")
 	assertHTTPCode(t, recorder, http.StatusForbidden, apperror.CodeForbidden)
 	if called {
 		t.Fatal("next handler ran for a denied permission")
@@ -45,7 +45,7 @@ func TestRequirePermissionReturnsTranslatedForbidden(t *testing.T) {
 
 func TestRequirePermissionPreservesServiceFailure(t *testing.T) {
 	service := &permissionAccessService{err: apperror.DependencyUnavailable(errors.New("postgres down"))}
-	recorder, called := servePermissionRequest(t, service, true, "system:user:create")
+	recorder, called := servePermissionRequest(t, service, true, "account:user:create")
 	assertHTTPCode(t, recorder, http.StatusServiceUnavailable, apperror.CodeDependencyUnavailable)
 	if called {
 		t.Fatal("next handler ran after a permission service failure")

@@ -39,7 +39,7 @@ describe('menu API', () => {
       i18nKey: 'navigation.system',
       path: null,
 		componentPath: null,
-      icon: 'Folder',
+      icon: 'lucide:folder',
       sortOrder: 10,
       isEnabled: YesNo.Yes,
 		isHidden: YesNo.No,
@@ -57,7 +57,7 @@ describe('menu API', () => {
       i18nKey: 'navigation.accessMenus',
 		path: '/account/users',
 		componentPath: 'account/users',
-      icon: 'Menu',
+      icon: 'lucide:panel-left',
       sortOrder: 10,
 		isHidden: YesNo.No,
     }

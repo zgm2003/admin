@@ -79,7 +79,7 @@ describe('access contract', () => {
 	})
 
 	it('allows custom i18n keys, arbitrary valid icons, hidden pages, and shared component paths', () => {
-		const first = { ...validPageNode('reports:orders:list', '/reports/orders'), i18nKey: 'reports.orders.list', icon: 'mdi:shield', isHidden: 1 }
+		const first = { ...validPageNode('reports:orders:list', '/reports/orders'), i18nKey: 'reports.orders.list', icon: 'lucide:shield-check', isHidden: 1 }
 		const second = { ...validPageNode('reports:archive:list', '/reports/archive'), componentPath: first.componentPath }
 		const snapshot = parseAccessSnapshot({
 			roleCodes: [],
@@ -132,7 +132,7 @@ function validDirectoryNode(code: string, children: unknown[]): MenuFixture {
     path: null,
 		componentPath: null,
 		i18nKey: `navigation.${code}`,
-    icon: 'Folder',
+    icon: 'lucide:folder',
 		isHidden: 0,
     children,
   }
@@ -150,7 +150,7 @@ function validPageNode(
     path,
 		componentPath,
 		i18nKey,
-    icon: 'User',
+    icon: 'lucide:user-round',
 		isHidden: 0,
     children: [],
   }

@@ -201,7 +201,7 @@ func TestServiceUpdateStatusProtectsRolesAndPreservesRelations(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := fmt.Sprintf("/status-%d", time.Now().UnixNano())
-	componentPath := "system/menus"
+	componentPath := "access/menus"
 	page := menu.Menu{MenuType: menu.TypePage, Name: "Status", Code: fmt.Sprintf("status:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
@@ -503,7 +503,7 @@ func TestServiceDeleteSoftDeletesRoleAndGrantsWithOneTimestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := fmt.Sprintf("/delete-%d", time.Now().UnixNano())
-	componentPath := "system/menus"
+	componentPath := "access/menus"
 	page := menu.Menu{MenuType: menu.TypePage, Name: "Delete", Code: fmt.Sprintf("delete:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
@@ -538,7 +538,7 @@ func TestServiceDeleteRollsBackWhenRoleWriteFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := fmt.Sprintf("/delete-rollback-%d", time.Now().UnixNano())
-	componentPath := "system/menus"
+	componentPath := "access/menus"
 	page := menu.Menu{MenuType: menu.TypePage, Name: "Delete rollback", Code: fmt.Sprintf("delete:rollback:%d", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)

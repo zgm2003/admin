@@ -63,14 +63,15 @@ describe('MenuManagement', () => {
 		expect(table.text()).toContain('account:user:list')
 		expect(table.text()).toContain('/account/users')
 		expect(table.text()).toContain('account/users')
-    expect(table.text()).toContain('Setting')
+    expect(table.text()).toContain('lucide:settings-2')
     expect(table.text()).toContain('已启用')
     expect(table.text()).toContain('已禁用')
 		expect(table.text()).toContain('显示')
 		expect(table.text()).toContain('隐藏')
 		expect(table.text()).not.toContain('内置')
     const elementTable = wrapper.findComponent({ name: 'ElTable' })
-    expect(elementTable.props('defaultExpandAll')).toBe(true)
+    expect(elementTable.props('defaultExpandAll')).toBe(false)
+    expect(elementTable.props('expandRowKeys')).toEqual([1])
     expect(elementTable.props('border')).toBe(true)
     expect(elementTable.props('headerCellStyle')).toEqual({ background: 'var(--el-fill-color-light)' })
 		const centeredLabels = ['类型', '图标', '显示状态', '状态', '操作']
@@ -176,21 +177,38 @@ describe('MenuManagement', () => {
     expect(document.body.textContent ?? '').toContain('刷新页面后侧边栏和路由生效')
 	})
 
+	it('locks protected structure, status, and deletion while keeping presentation fields editable', async () => {
+		getMenusMock.mockResolvedValue(protectedMenuTree())
+		const wrapper = mountPage(pinia, ['rbac:menu:update', 'rbac:menu:delete'])
+		await flushPromises()
+
+		expect(wrapper.get('[data-testid="status-2"]').attributes('disabled')).toBeDefined()
+		expect(wrapper.get('[data-testid="delete-2"]').attributes('disabled')).toBeDefined()
+		await wrapper.get('[data-testid="edit-2"]').trigger('click')
+		await flushPromises()
+		expect(document.body.querySelector('[data-testid="menu-form-protected-hint"]')).not.toBeNull()
+		expect(bodyGet('[data-testid="menu-form-code"]').attributes('disabled')).toBeDefined()
+		expect(bodyGet('[data-testid="menu-form-path"]').attributes('disabled')).toBeDefined()
+		expect(bodyGet('[data-testid="menu-form-component-path"]').attributes('disabled')).toBeDefined()
+		expect(bodyGet('[data-testid="menu-form-hidden"]').classes()).toContain('is-disabled')
+		expect(bodyGet('[data-testid="menu-form-sort-order"]').attributes('disabled')).toBeUndefined()
+	})
+
 	it('stores an IconSelect value as a string and previews it with DIcon', async () => {
 		createMenuMock.mockResolvedValue({ id: 9 })
 		const wrapper = mountPage(pinia, ['rbac:menu:create'])
 		await flushPromises()
 		await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
 		await flushPromises()
-		wrapper.findComponent(IconSelect).vm.$emit('select-icon', 'mdi:shield')
+		wrapper.findComponent(IconSelect).vm.$emit('select-icon', 'lucide:shield-check')
 		await flushPromises()
 
-		expect(wrapper.findAllComponents(DIcon).some((icon) => icon.props('icon') === 'mdi:shield')).toBe(true)
+		expect(wrapper.findAllComponents(DIcon).some((icon) => icon.props('icon') === 'lucide:shield-check')).toBe(true)
 		await bodyGet('[data-testid="menu-form-name"]').setValue('报表')
 		await bodyGet('[data-testid="menu-form-code"]').setValue('reports')
 		await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
 		await flushPromises()
-		expect(createMenuMock.mock.calls[0]?.[0].icon).toBe('mdi:shield')
+		expect(createMenuMock.mock.calls[0]?.[0].icon).toBe('lucide:shield-check')
 	})
 
 	it('forces action menus hidden without displaying a visibility control', async () => {
@@ -287,7 +305,7 @@ describe('MenuManagement', () => {
 		i18nKey: 'navigation.accountUsers',
 		path: '/account/users',
 		componentPath: 'account/users',
-      icon: 'Menu',
+      icon: 'lucide:panel-left',
       sortOrder: 12,
 		isHidden: YesNo.No,
     }
@@ -383,7 +401,7 @@ function menuTree(): ManagedMenuNode[] {
     i18nKey: 'navigation.system',
     path: null,
 		componentPath: null,
-    icon: 'Setting',
+    icon: 'lucide:settings-2',
     sortOrder: 100,
     isEnabled: YesNo.Yes,
 		isHidden: YesNo.No,
@@ -399,7 +417,7 @@ function menuTree(): ManagedMenuNode[] {
 		i18nKey: 'navigation.accountUsers',
 		path: '/account/users',
 		componentPath: 'account/users',
-      icon: 'Menu',
+    icon: 'lucide:panel-left',
       sortOrder: 10,
       isEnabled: YesNo.Yes,
 		isHidden: YesNo.No,
@@ -428,6 +446,16 @@ function menuTree(): ManagedMenuNode[] {
   }]
 }
 
+function protectedMenuTree(): ManagedMenuNode[] {
+	const tree = menuTree()
+	const root = tree[0]
+	if (root === undefined || root.children[0] === undefined) throw new Error('test menu tree is incomplete')
+	return [{
+		...root,
+		children: [{ ...root.children[0], isProtected: YesNo.Yes }],
+	}]
+}
+
 function rootWithEditableSubtree(): ManagedMenuNode {
   const root = menuTree()[0]
   const directory: ManagedMenuNode = {
@@ -439,7 +467,7 @@ function rootWithEditableSubtree(): ManagedMenuNode {
     i18nKey: 'navigation.system',
     path: null,
 		componentPath: null,
-    icon: 'Folder',
+    icon: 'lucide:folder',
     sortOrder: 200,
     isEnabled: YesNo.Yes,
 		isHidden: YesNo.No,
@@ -455,7 +483,7 @@ function rootWithEditableSubtree(): ManagedMenuNode {
       i18nKey: 'navigation.accessMenus',
       path: '/reports',
 		componentPath: 'account/users',
-      icon: 'Menu',
+    icon: 'lucide:panel-left',
       sortOrder: 10,
       isEnabled: YesNo.Yes,
 		isHidden: YesNo.No,

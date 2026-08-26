@@ -73,7 +73,7 @@ func TestBuildMenuIndexRejectsInvalidStoredTrees(t *testing.T) {
 		{name: "action has child", menus: []Menu{validRoot, validPage, {ID: 3, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "新增报表", Code: "reports:create", IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}, {ID: 4, ParentID: int64Pointer(3), MenuType: TypeAction, Name: "修改报表", Code: "reports:update", IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
 		{name: "cycle", menus: []Menu{{ID: 1, ParentID: int64Pointer(2), MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}, {ID: 2, ParentID: int64Pointer(1), MenuType: TypeDirectory, Name: "设置", Code: "settings", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
 		{name: "malformed title", menus: []Menu{{ID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation_unknown"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "invalid action icon", menus: []Menu{validRoot, validPage, {ID: 3, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "新增报表", Code: "reports:create", Icon: stringPointer("Key"), IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "invalid action icon", menus: []Menu{validRoot, validPage, {ID: 3, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "新增报表", Code: "reports:create", Icon: stringPointer("lucide:key-round"), IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
 	}
 
 	for _, test := range tests {

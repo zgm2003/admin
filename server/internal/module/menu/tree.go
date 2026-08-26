@@ -27,7 +27,19 @@ var (
 )
 
 var staticPagePaths = map[string]struct{}{
-	"/login": {}, "/register": {}, "/dashboard": {}, "/system/menus": {},
+	"/login": {}, "/register": {}, "/dashboard": {},
+}
+
+var menuIconNames = map[string]struct{}{
+	"lucide:activity": {}, "lucide:bell": {}, "lucide:bot": {}, "lucide:brain-circuit": {},
+	"lucide:circle-dollar-sign": {}, "lucide:cloud": {}, "lucide:cloud-upload": {}, "lucide:cpu": {},
+	"lucide:database": {}, "lucide:file-stack": {}, "lucide:folder": {}, "lucide:gauge": {},
+	"lucide:hard-drive": {}, "lucide:house": {}, "lucide:images": {}, "lucide:key-round": {},
+	"lucide:layout-dashboard": {}, "lucide:list-tree": {}, "lucide:lock-keyhole": {},
+	"lucide:message-square-more": {}, "lucide:monitor-smartphone": {}, "lucide:panel-left": {},
+	"lucide:scroll-text": {}, "lucide:server": {}, "lucide:settings-2": {}, "lucide:shield-check": {},
+	"lucide:sparkles": {}, "lucide:user-cog": {}, "lucide:user-round": {}, "lucide:user-round-cog": {},
+	"lucide:users": {}, "lucide:users-round": {}, "lucide:wallet-cards": {},
 }
 
 type menuIndex struct {
@@ -287,7 +299,8 @@ func validMenuComponentPath(value string) bool {
 }
 
 func validMenuIcon(value string) bool {
-	return value != "" && value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 128
+	_, ok := menuIconNames[value]
+	return ok
 }
 
 func normalizeCreateInput(input CreateInput) (CreateInput, error) {
