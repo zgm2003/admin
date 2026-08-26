@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"admin/server/internal/module/menu"
+	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
 
@@ -63,6 +64,10 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 	system := byCode["system"]
 	if account.ID < 26 || access.ID != 1 || system.ID < 26 || account.ID == system.ID {
 		t.Fatalf("root ids account=%d access=%d system=%d", account.ID, access.ID, system.ID)
+	}
+	if access.I18nKey == nil || *access.I18nKey != "navigation.access" ||
+		access.Icon == nil || *access.Icon != "lucide:shield-check" {
+		t.Fatalf("access root render fields = %+v", access)
 	}
 	assertRekeyedPage(t, byCode["account:user:list"], account.ID, "/account/users", "account/users", "navigation.accountUsers", "lucide:user-round-cog", 10)
 	assertRekeyedPage(t, byCode["auth:session:list"], account.ID, "/account/sessions", "account/sessions", "navigation.accountSessions", "lucide:monitor-smartphone", 20)
@@ -120,6 +125,32 @@ func TestPrepareSchemaRejectsUnknownLegacyIconAndRollsBack(t *testing.T) {
 	}
 	if code != "system" {
 		t.Fatalf("rollback root code = %q", code)
+	}
+}
+
+func TestPrepareSchemaRepairsCorruptedAccessRootI18nKey(t *testing.T) {
+	connection, ctx := openMenuSchema(t)
+	db := connection.GORM.WithContext(ctx)
+	corrupted := "lucide:shield-check"
+	access := menu.Menu{
+		MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access",
+		I18nKey: &corrupted, Icon: &corrupted, SortOrder: 200,
+		IsEnabled: yesno.Yes, IsHidden: yesno.No,
+	}
+	if err := db.Create(&access).Error; err != nil {
+		t.Fatalf("create corrupted access root: %v", err)
+	}
+
+	if err := menu.PrepareSchema(ctx, connection.GORM); err != nil {
+		t.Fatalf("PrepareSchema() error = %v", err)
+	}
+
+	var stored menu.Menu
+	if err := db.Where("id = ?", access.ID).Take(&stored).Error; err != nil {
+		t.Fatalf("read repaired access root: %v", err)
+	}
+	if stored.I18nKey == nil || *stored.I18nKey != "navigation.access" {
+		t.Fatalf("repaired access i18n key = %v", stored.I18nKey)
 	}
 }
 

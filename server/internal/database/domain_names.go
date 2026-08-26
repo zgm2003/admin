@@ -149,7 +149,9 @@ var domainConstraintRenames = []domainConstraintRename{
 	{Table: "sys_menu", Old: "sys_menu_id_not_null", New: "rbac_menu_id_not_null"},
 	{Table: "sys_menu", Old: "sys_menu_menu_type_not_null", New: "rbac_menu_menu_type_not_null"},
 	{Table: "sys_menu", Old: "sys_menu_code_not_null", New: "rbac_menu_code_not_null"},
-	{Table: "sys_menu", Old: "sys_menu_i18n_key_not_null", New: "rbac_menu_i18n_key_not_null"},
+	// The menu protocol makes i18n_key nullable for action nodes, so the
+	// legacy NOT NULL constraint is intentionally removed by menu schema setup.
+	{Table: "sys_menu", Old: "sys_menu_i18n_key_not_null", New: "rbac_menu_i18n_key_not_null", Optional: true},
 	{Table: "sys_menu", Old: "sys_menu_sort_order_not_null", New: "rbac_menu_sort_order_not_null"},
 	{Table: "sys_menu", Old: "sys_menu_is_enabled_not_null", New: "rbac_menu_is_enabled_not_null"},
 	{Table: "sys_menu", Old: "sys_menu_is_hidden_not_null", New: "rbac_menu_is_hidden_not_null"},

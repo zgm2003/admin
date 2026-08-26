@@ -136,6 +136,20 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 		if len(oldCodes) != 0 {
 			return fmt.Errorf("menu catalog mixes legacy and current codes: %s", strings.Join(oldCodes, ", "))
 		}
+		result := db.Exec(`
+			UPDATE rbac_menu
+			SET i18n_key = 'navigation.access', updated_at = CURRENT_TIMESTAMP
+			WHERE code = 'access'
+			  AND menu_type = 'directory'
+			  AND i18n_key = 'lucide:shield-check'
+			  AND icon = 'lucide:shield-check'
+			  AND deleted_at IS NULL`)
+		if result.Error != nil {
+			return fmt.Errorf("repair corrupted access root i18n key: %w", result.Error)
+		}
+		if result.RowsAffected > 1 {
+			return fmt.Errorf("repair corrupted access root i18n key affected %d rows", result.RowsAffected)
+		}
 		return nil
 	}
 
@@ -271,10 +285,10 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 		sortOrder := row.SortOrder
 		isHidden := yesno.Yes
 		if row.Code == "system" {
-			value := "navigation.access"
-			i18nKey = &value
-			value = legacyMenuIcons[row.Code].New
-			icon = &value
+			i18nValue := "navigation.access"
+			iconValue := legacyMenuIcons[row.Code].New
+			i18nKey = &i18nValue
+			icon = &iconValue
 			sortOrder = 200
 			isHidden = yesno.No
 		} else {

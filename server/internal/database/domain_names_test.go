@@ -94,6 +94,18 @@ func TestPrepareDomainNamesIsIdempotentForCompleteNewSchema(t *testing.T) {
 	assertCurrentDomainSchema(t, db)
 }
 
+func TestPrepareDomainNamesAllowsProtocolRemovedMenuI18nConstraint(t *testing.T) {
+	db, ctx := openDomainNamesDatabase(t, "nullable_menu_i18n")
+	createLegacyDomainSchema(t, db)
+	if err := database.PrepareDomainNames(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, db, `ALTER TABLE rbac_menu DROP CONSTRAINT rbac_menu_i18n_key_not_null`)
+	if err := database.PrepareDomainNames(ctx, db); err != nil {
+		t.Fatalf("PrepareDomainNames() after protocol schema update = %v", err)
+	}
+}
+
 func TestPrepareDomainNamesAllowsCompletelyEmptySchema(t *testing.T) {
 	db, ctx := openDomainNamesDatabase(t, "empty")
 	if err := database.PrepareDomainNames(ctx, db); err != nil {
