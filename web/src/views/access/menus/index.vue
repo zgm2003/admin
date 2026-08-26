@@ -8,6 +8,11 @@ import {
   createMenu,
   deleteMenu,
   getMenus,
+  isComponentPath,
+  isMenuI18nKey,
+  isMenuIcon,
+  isMenuPath,
+  menuCodePattern,
   updateMenu,
   updateMenuStatus,
 } from "../../../api/menu";
@@ -17,13 +22,6 @@ import type {
   ManagedMenuType,
   UpdateMenuInput,
 } from "../../../api/menu";
-import {
-  isComponentPath,
-  isMenuI18nKey,
-  isMenuIcon,
-  isMenuPath,
-  menuCodePattern,
-} from "../../../api/menu-fields";
 import { DIcon } from "../../../components/DIcon";
 import { YesNo } from "../../../enums/yes-no";
 import { useAccessStore } from "../../../store/access";

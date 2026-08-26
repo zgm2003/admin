@@ -19,13 +19,17 @@ import { IconSelect } from '@src/components/IconSelect'
 import { useAccessStore } from '@src/store/access'
 import MenuManagement from '@src/views/access/menus/index.vue'
 
-vi.mock('@src/api/menu', () => ({
-  getMenus: vi.fn(),
-  createMenu: vi.fn(),
-  updateMenu: vi.fn(),
-  updateMenuStatus: vi.fn(),
-  deleteMenu: vi.fn(),
-}))
+vi.mock('@src/api/menu', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@src/api/menu')>()
+  return {
+    ...actual,
+    getMenus: vi.fn(),
+    createMenu: vi.fn(),
+    updateMenu: vi.fn(),
+    updateMenuStatus: vi.fn(),
+    deleteMenu: vi.fn(),
+  }
+})
 
 const getMenusMock = vi.mocked(getMenus)
 const createMenuMock = vi.mocked(createMenu)

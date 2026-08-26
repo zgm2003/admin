@@ -6,7 +6,7 @@ import {
   isMenuIcon,
   isMenuPath,
 	menuCodePattern,
-} from '@src/api/menu-fields'
+} from '@src/api/menu'
 
 describe('menu field protocol', () => {
   it.each(['navigation.accountUsers', 'reports.orders.list', 'permission.roleUpdate'])(
