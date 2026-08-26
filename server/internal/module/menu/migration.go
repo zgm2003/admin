@@ -140,11 +140,16 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 	}
 
 	var rows []legacyMigrationRow
-	if err := db.Raw(`
-		SELECT id, menu_type, code, view_key, icon, sort_order
+	viewExpression, err := legacyMenuViewExpression(db)
+	if err != nil {
+		return err
+	}
+	legacyRowsQuery := `
+		SELECT id, menu_type, code, ` + viewExpression + ` AS view_key, icon, sort_order
 		FROM rbac_menu
 		WHERE code = 'system' OR code LIKE 'system:%'
-		ORDER BY id`).Scan(&rows).Error; err != nil {
+		ORDER BY id`
+	if err := db.Raw(legacyRowsQuery).Scan(&rows).Error; err != nil {
 		return fmt.Errorf("read legacy menu catalog: %w", err)
 	}
 	if len(rows) == 0 {
@@ -184,11 +189,9 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 			return fmt.Errorf("legacy menu %s has unsupported icon %q", row.Code, *row.Icon)
 		}
 		if row.MenuType == TypePage {
-			expected, exists := legacyComponentPaths[pointerString(row.ViewKey)]
-			if !exists {
+			if !isLegacyComponentPath(pointerString(row.ViewKey)) {
 				return fmt.Errorf("legacy menu %s view_key %q has no component path mapping", row.Code, pointerString(row.ViewKey))
 			}
-			_ = expected
 		}
 	}
 
@@ -313,6 +316,46 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 		return fmt.Errorf("advance access versions after menu rekey: %w", err)
 	}
 	return nil
+}
+
+func isLegacyComponentPath(value string) bool {
+	if _, exists := legacyComponentPaths[value]; exists {
+		return true
+	}
+	for _, path := range legacyComponentPaths {
+		if path == value {
+			return true
+		}
+	}
+	return false
+}
+
+func legacyMenuViewExpression(db *gorm.DB) (string, error) {
+	var hasViewKey, hasComponentPath bool
+	if err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema = current_schema() AND table_name = 'rbac_menu' AND column_name = 'view_key'
+		)`).Scan(&hasViewKey).Error; err != nil {
+		return "", fmt.Errorf("inspect legacy menu view_key column: %w", err)
+	}
+	if err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema = current_schema() AND table_name = 'rbac_menu' AND column_name = 'component_path'
+		)`).Scan(&hasComponentPath).Error; err != nil {
+		return "", fmt.Errorf("inspect legacy menu component_path column: %w", err)
+	}
+	switch {
+	case hasViewKey && hasComponentPath:
+		return "COALESCE(view_key, component_path)", nil
+	case hasViewKey:
+		return "view_key", nil
+	case hasComponentPath:
+		return "component_path", nil
+	default:
+		return "", fmt.Errorf("legacy menu catalog requires view_key or component_path")
+	}
 }
 
 func currentPermissionCodes() []string {
