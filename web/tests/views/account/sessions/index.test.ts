@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 
 import * as sessionAPI from '@src/api/session'
-import type { SessionItem } from '@src/api/session.contract'
+import type { SessionItem } from '@src/api/session'
 import { appI18n, setLocale } from '@src/i18n'
 import { useAccessStore } from '@src/store/access'
 import SessionManagement from '@src/views/account/sessions/index.vue'

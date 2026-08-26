@@ -1,7 +1,7 @@
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { AccessMenuNode } from '@src/api/access.contract'
+import type { AccessMenuNode } from '@src/api/access'
 import { YesNo } from '@src/enums/yes-no'
 import { registerAccessRoutes, type PageModuleMap } from '@src/router/access-routes'
 import { ProtocolError } from '@src/types/http'

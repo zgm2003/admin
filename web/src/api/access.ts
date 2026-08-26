@@ -1,7 +1,10 @@
 import { request } from '../utils/request'
-import { parseAccessSnapshot, type AccessSnapshot } from './access.contract'
+import type { YesNo } from '../enums/yes-no'
 
-export async function getAccess(): Promise<AccessSnapshot> {
-  const data = await request<unknown>({ method: 'GET', url: '/api/v1/access' })
-  return parseAccessSnapshot(data)
+export type MenuType = 'directory' | 'page'
+export interface AccessMenuNode { code: string; menuType: MenuType; path: string | null; componentPath: string | null; i18nKey: string; icon: string | null; isHidden: YesNo; children: AccessMenuNode[] }
+export interface AccessSnapshot { roleCodes: string[]; menuTree: AccessMenuNode[]; permissionCodes: string[] }
+
+export function getAccess(): Promise<AccessSnapshot> {
+  return request<AccessSnapshot>({ method: 'GET', url: '/api/v1/access' })
 }

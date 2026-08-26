@@ -1,26 +1,48 @@
-import { ProtocolError } from '../types/http'
+import { authPlatform } from '../auth/platform'
+import type { YesNo } from '../enums/yes-no'
 import { refreshAccessCredential, request } from '../utils/request'
-import {
-  parseCredential,
-  parseAuthPolicy,
-  parseCurrentUser,
-  parseRegisteredUser,
-  type AccessCredential,
-  type AuthPolicy,
-  type CurrentUser,
-  type LoginInput,
-  type RegisteredUser,
-  type RegisterInput,
-} from './auth.contract'
+
+export interface RegisterInput {
+  username: string
+  email: string
+  password: string
+  confirmPassword: string
+}
+
+export interface LoginInput {
+  username: string
+  password: string
+}
+
+export interface RegisteredUser {
+  userId: number
+  username: string
+  email: string
+}
+
+export interface AccessCredential {
+  accessToken: string
+  expiresIn: number
+}
+
+export interface CurrentUser {
+  userId: number
+  username: string
+  email: string
+}
+
+export interface AuthPolicy {
+  code: typeof authPlatform
+  name: string
+  allowRegister: YesNo
+}
 
 export async function register(input: RegisterInput): Promise<RegisteredUser> {
-  const data = await request<unknown>({ method: 'POST', url: '/api/v1/auth/register', data: input })
-  return parseRegisteredUser(data)
+  return request<RegisteredUser>({ method: 'POST', url: '/api/v1/auth/register', data: input })
 }
 
 export async function login(input: LoginInput): Promise<AccessCredential> {
-  const data = await request<unknown>({ method: 'POST', url: '/api/v1/auth/login', data: input })
-  return parseCredential(data)
+  return request<AccessCredential>({ method: 'POST', url: '/api/v1/auth/login', data: input })
 }
 
 export async function refresh(): Promise<AccessCredential> {
@@ -28,18 +50,13 @@ export async function refresh(): Promise<AccessCredential> {
 }
 
 export async function logout(): Promise<void> {
-  const data = await request<unknown>({ method: 'POST', url: '/api/v1/auth/logout' })
-  if (typeof data !== 'object' || data === null || Array.isArray(data) || Object.keys(data).length !== 0) {
-    throw new ProtocolError('logout response data must be an empty object')
-  }
+  await request<Record<string, never>>({ method: 'POST', url: '/api/v1/auth/logout' })
 }
 
 export async function getCurrentUser(): Promise<CurrentUser> {
-  const data = await request<unknown>({ method: 'GET', url: '/api/v1/auth/me' })
-  return parseCurrentUser(data)
+  return request<CurrentUser>({ method: 'GET', url: '/api/v1/auth/me' })
 }
 
 export async function getAuthPolicy(): Promise<AuthPolicy> {
-  const data = await request<unknown>({ method: 'GET', url: '/api/v1/auth/policy' })
-  return parseAuthPolicy(data)
+  return request<AuthPolicy>({ method: 'GET', url: '/api/v1/auth/policy' })
 }

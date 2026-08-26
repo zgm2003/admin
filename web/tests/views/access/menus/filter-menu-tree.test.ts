@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ManagedMenuNode } from '@src/api/menu.contract'
+import type { ManagedMenuNode } from '@src/api/menu'
 import { filterManagedMenuTree } from '@src/views/access/menus/filter-menu-tree'
 
 const action = (id: number, code: string, name: string): ManagedMenuNode => ({ id, parentId: 2, menuType: 'action', name, code, i18nKey: null, path: null, componentPath: null, icon: null, sortOrder: id, isEnabled: 1, isHidden: 1, isProtected: 0, createdAt: '2026-08-19T02:00:00Z', updatedAt: '2026-08-19T02:00:00Z', children: [] })

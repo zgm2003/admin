@@ -10,8 +10,8 @@ import {
   updateMenu,
   updateMenuStatus,
 } from '@src/api/menu'
-import type { CreateMenuInput, UpdateMenuInput } from '@src/api/menu.contract'
-import type { ManagedMenuNode } from '@src/api/menu.contract'
+import type { CreateMenuInput, UpdateMenuInput } from '@src/api/menu'
+import type { ManagedMenuNode } from '@src/api/menu'
 import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
 import { DIcon } from '@src/components/DIcon'

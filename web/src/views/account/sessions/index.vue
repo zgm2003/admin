@@ -4,7 +4,7 @@ import { ElMessageBox, ElNotification } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import { getSessions, getSessionStats, revokeSession, revokeSessions } from '../../../api/session'
-import type { SessionItem, SessionListQuery, SessionStats, SessionStatus } from '../../../api/session.contract'
+import type { SessionItem, SessionListQuery, SessionStats, SessionStatus } from '../../../api/session'
 import { useAccessStore } from '../../../store/access'
 import { AppTable } from '../../../components/AppTable'
 import type { TableColumn, TablePaginationState } from '../../../components/AppTable'

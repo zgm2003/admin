@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 
-import type { AccessCredential, CurrentUser } from '../api/auth.contract'
+import type { AccessCredential, CurrentUser } from '../api/auth'
 
 export type AuthStatus = 'unknown' | 'anonymous' | 'authenticated' | 'error'
 

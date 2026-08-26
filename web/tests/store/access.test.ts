@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getAccess } from '@src/api/access'
-import type { AccessSnapshot } from '@src/api/access.contract'
+import type { AccessSnapshot } from '@src/api/access'
 import { setLocale } from '@src/i18n'
 import { ApiError, ProtocolError } from '@src/types/http'
 import { useAccessStore } from '@src/store/access'

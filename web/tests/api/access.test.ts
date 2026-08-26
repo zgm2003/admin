@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { request } from '@src/utils/request'
-import { ProtocolError } from '@src/types/http'
 import { getAccess } from '@src/api/access'
 
 vi.mock('@src/utils/request', () => ({ request: vi.fn() }))
@@ -21,8 +20,9 @@ describe('access API', () => {
     expect(requestMock).toHaveBeenCalledWith({ method: 'GET', url: '/api/v1/access' })
   })
 
-  it('rejects an invalid access response', async () => {
-    requestMock.mockResolvedValue({ roleCodes: null, menuTree: [], permissionCodes: [] })
-    await expect(getAccess()).rejects.toBeInstanceOf(ProtocolError)
+  it('returns the backend snapshot without rebuilding it', async () => {
+    const snapshot = { roleCodes: null, menuTree: [], permissionCodes: [] }
+    requestMock.mockResolvedValue(snapshot)
+    await expect(getAccess()).resolves.toBe(snapshot)
   })
 })

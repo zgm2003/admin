@@ -3,7 +3,7 @@ import ElementPlus from 'element-plus'
 import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { AccessMenuNode } from '@src/api/access.contract'
+import type { AccessMenuNode } from '@src/api/access'
 import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
 import RouteTabs from '@src/layout/components/RouteTabs.vue'

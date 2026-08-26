@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { AccessMenuNode } from '@src/api/access.contract'
+import type { AccessMenuNode } from '@src/api/access'
 import { YesNo } from '@src/enums/yes-no'
 import { resolveBreadcrumbs } from '@src/layout/breadcrumbs'
 

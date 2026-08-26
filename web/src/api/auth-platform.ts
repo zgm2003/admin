@@ -1,32 +1,25 @@
 import type { YesNo } from '../enums/yes-no'
 import { request } from '../utils/request'
-import {
-  parseAuthPlatformDeployment,
-  parseAuthPlatformIDResult,
-  parseAuthPlatformPage,
-  parseAuthPlatformStatusResult,
-  parseEmptyAuthPlatformResult,
-  type AuthPlatformDeployment,
-  type AuthPlatformListItem,
-  type AuthPlatformListQuery,
-  type AuthPlatformStatusResult,
-  type CreateAuthPlatformInput,
-  type UpdateAuthPlatformInput,
-} from './auth-platform.contract'
 import type { PageResult } from '../types/pagination'
+import type { PageRequest } from '../types/pagination'
+
+export interface AuthPlatformListQuery extends PageRequest { keyword?: string; isEnabled?: YesNo }
+export interface AuthPlatformListItem { id:number; code:string; name:string; policyVersion:number; accessTTLSeconds:number; refreshTTLSeconds:number; sessionCacheTTLSeconds:number; accessCacheTTLSeconds:number; bindDevice:YesNo; bindIP:YesNo; maxSessions:number; allowRegister:YesNo; isEnabled:YesNo; isBuiltin:YesNo; createdAt:string; updatedAt:string }
+export interface AuthPlatformDeployment { cookieSecure:boolean; corsOrigin:string; trustedProxyMode:'none'|'allowlist'; trustedProxyCount:number; redisStatus:'up'|'down' }
+export interface CreateAuthPlatformInput { code:string; name:string; accessTTLSeconds:number; refreshTTLSeconds:number; sessionCacheTTLSeconds:number; accessCacheTTLSeconds:number; bindDevice:YesNo; bindIP:YesNo; maxSessions:number; allowRegister:YesNo; isEnabled:YesNo }
+export interface UpdateAuthPlatformInput { name:string; accessTTLSeconds:number; refreshTTLSeconds:number; sessionCacheTTLSeconds:number; accessCacheTTLSeconds:number; bindDevice:YesNo; bindIP:YesNo; maxSessions:number; allowRegister:YesNo }
+export interface AuthPlatformStatusResult { id:number; isEnabled:YesNo }
 
 export async function getAuthPlatforms(query: AuthPlatformListQuery): Promise<PageResult<AuthPlatformListItem>> {
-  const data = await request<unknown>({ method: 'GET', url: '/api/v1/auth-platforms', params: query })
-  return parseAuthPlatformPage(data)
+  return request<PageResult<AuthPlatformListItem>>({ method: 'GET', url: '/api/v1/auth-platforms', params: query })
 }
 
 export async function getAuthPlatformDeployment(): Promise<AuthPlatformDeployment> {
-  const data = await request<unknown>({ method: 'GET', url: '/api/v1/auth-platforms/deployment' })
-  return parseAuthPlatformDeployment(data)
+  return request<AuthPlatformDeployment>({ method: 'GET', url: '/api/v1/auth-platforms/deployment' })
 }
 
 export async function createAuthPlatform(input: CreateAuthPlatformInput): Promise<{ id: number }> {
-  const data = await request<unknown>({
+  return request<{ id: number }>({
     method: 'POST',
     url: '/api/v1/auth-platforms',
     data: {
@@ -43,11 +36,10 @@ export async function createAuthPlatform(input: CreateAuthPlatformInput): Promis
       isEnabled: input.isEnabled,
     },
   })
-  return parseAuthPlatformIDResult(data)
 }
 
 export async function updateAuthPlatform(id: number, input: UpdateAuthPlatformInput): Promise<Record<string, never>> {
-  const data = await request<unknown>({
+  return request<Record<string, never>>({
     method: 'PUT',
     url: `/api/v1/auth-platforms/${id}`,
     data: {
@@ -62,15 +54,12 @@ export async function updateAuthPlatform(id: number, input: UpdateAuthPlatformIn
       allowRegister: input.allowRegister,
     },
   })
-  return parseEmptyAuthPlatformResult(data)
 }
 
 export async function updateAuthPlatformStatus(id: number, isEnabled: YesNo): Promise<AuthPlatformStatusResult> {
-  const data = await request<unknown>({ method: 'PATCH', url: `/api/v1/auth-platforms/${id}/status`, data: { isEnabled } })
-  return parseAuthPlatformStatusResult(data)
+  return request<AuthPlatformStatusResult>({ method: 'PATCH', url: `/api/v1/auth-platforms/${id}/status`, data: { isEnabled } })
 }
 
 export async function deleteAuthPlatform(id: number): Promise<Record<string, never>> {
-  const data = await request<unknown>({ method: 'DELETE', url: `/api/v1/auth-platforms/${id}` })
-  return parseEmptyAuthPlatformResult(data)
+  return request<Record<string, never>>({ method: 'DELETE', url: `/api/v1/auth-platforms/${id}` })
 }

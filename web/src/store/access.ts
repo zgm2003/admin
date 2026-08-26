@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 import { getAccess } from '../api/access'
-import type { AccessMenuNode, AccessSnapshot } from '../api/access.contract'
+import type { AccessMenuNode, AccessSnapshot } from '../api/access'
 import { appI18n } from '../i18n'
 import { ApiError, ProtocolError } from '../types/http'
 

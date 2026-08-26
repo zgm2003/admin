@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 
 import * as operationLogAPI from '@src/api/operation-log'
-import type { OperationLogItem } from '@src/api/operation-log.contract'
+import type { OperationLogItem } from '@src/api/operation-log'
 import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
 import OperationLogs from '@src/views/system/operation-logs/index.vue'

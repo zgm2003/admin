@@ -18,7 +18,7 @@ import type {
   AuthPlatformListQuery,
   CreateAuthPlatformInput,
   UpdateAuthPlatformInput,
-} from "../../../api/auth-platform.contract";
+} from "../../../api/auth-platform";
 import { YesNo } from "../../../enums/yes-no";
 import { useAccessStore } from "../../../store/access";
 import { AppDialog } from "../../../components/AppDialog";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { RolePermissionTreeNode } from '@src/api/role.contract'
+import type { RolePermissionTreeNode } from '@src/api/role'
 import { YesNo } from '@src/enums/yes-no'
 import {
   buildRolePermissionMatrix,

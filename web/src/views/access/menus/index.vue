@@ -16,7 +16,7 @@ import type {
   ManagedMenuNode,
   ManagedMenuType,
   UpdateMenuInput,
-} from "../../../api/menu.contract";
+} from "../../../api/menu";
 import {
   isComponentPath,
   isMenuI18nKey,

@@ -13,7 +13,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import type { AccessMenuNode } from '../../api/access.contract'
+import type { AccessMenuNode } from '../../api/access'
 
 interface RouteTab {
   path: string

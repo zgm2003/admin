@@ -1,4 +1,4 @@
-import type { RolePermissionTreeNode } from '../../../api/role.contract'
+import type { RolePermissionTreeNode } from '../../../api/role'
 import type { YesNo } from '../../../enums/yes-no'
 
 export interface RoleMatrixAction {

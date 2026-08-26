@@ -1,4 +1,4 @@
-import { ProtocolError, request } from '../utils/request'
+import { request } from '../utils/request'
 
 export interface HealthStatus {
   status: 'up'
@@ -10,29 +10,9 @@ export interface Readiness {
 }
 
 export async function getHealth(): Promise<HealthStatus> {
-  const data = await request<unknown>({ method: 'GET', url: '/health' })
-  if (!isHealthStatus(data)) {
-    throw new ProtocolError('GET /health returned invalid data')
-  }
-  return data
+  return request<HealthStatus>({ method: 'GET', url: '/health' })
 }
 
 export async function getReadiness(): Promise<Readiness> {
-  const data = await request<unknown>({ method: 'GET', url: '/ready' })
-  if (!isReadiness(data)) {
-    throw new ProtocolError('GET /ready returned invalid data')
-  }
-  return data
-}
-
-function isHealthStatus(value: unknown): value is HealthStatus {
-  return isRecord(value) && value.status === 'up'
-}
-
-function isReadiness(value: unknown): value is Readiness {
-  return isRecord(value) && value.postgresql === 'up' && value.redis === 'up'
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return request<Readiness>({ method: 'GET', url: '/ready' })
 }

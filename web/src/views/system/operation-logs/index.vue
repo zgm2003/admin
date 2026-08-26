@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { getOperationLogs } from '../../../api/operation-log'
-import type { OperationLogItem, OperationLogListQuery } from '../../../api/operation-log.contract'
+import type { OperationLogItem, OperationLogListQuery } from '../../../api/operation-log'
 import { YesNo } from '../../../enums/yes-no'
 import { AppTable } from '../../../components/AppTable'
 import type { TableColumn, TablePaginationState } from '../../../components/AppTable'

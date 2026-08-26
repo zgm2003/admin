@@ -1,7 +1,7 @@
 import type { Component } from 'vue'
 import type { Router } from 'vue-router'
 
-import type { AccessMenuNode } from '../api/access.contract'
+import type { AccessMenuNode } from '../api/access'
 import { ProtocolError } from '../types/http'
 
 export interface PageModule {

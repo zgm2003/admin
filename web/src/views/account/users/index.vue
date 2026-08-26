@@ -17,7 +17,7 @@ import type {
   UserListQuery,
   UserRolesResponse,
   UserRoleSummary,
-} from "../../../api/user.contract";
+} from "../../../api/user";
 import { YesNo } from "../../../enums/yes-no";
 import { useAccessStore } from "../../../store/access";
 import { useAuthStore } from "../../../store/auth";

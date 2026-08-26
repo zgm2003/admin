@@ -18,7 +18,7 @@ import {
   updateRolePermissions,
   updateRoleStatus,
 } from '@src/api/role'
-import type { RoleListItem } from '@src/api/role.contract'
+import type { RoleListItem } from '@src/api/role'
 import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
 import { useAccessStore } from '@src/store/access'

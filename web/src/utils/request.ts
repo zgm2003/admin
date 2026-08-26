@@ -7,7 +7,7 @@ import axios, {
 } from 'axios'
 import { ElNotification } from 'element-plus'
 
-import { parseCredential, type AccessCredential } from '../api/auth.contract'
+import type { AccessCredential } from '../api/auth'
 import { authPlatform } from '../auth/platform'
 import { readDeviceID } from '../auth/device-id'
 import { appI18n, readLocale } from '../i18n'
@@ -153,7 +153,10 @@ async function performRefresh(
 ): Promise<AccessCredential> {
   try {
     const response = await rawClient.post<unknown>('/api/v1/auth/refresh', undefined, { withCredentials: true })
-    const credential = parseCredential(unwrapSuccessEnvelope<unknown>(response.data))
+    const credential = unwrapSuccessEnvelope<unknown>(response.data)
+    if (!isAccessCredential(credential)) {
+      throw new ProtocolError('access credential response is invalid')
+    }
     authStore.setCredential(credential)
     return credential
   } catch (error: unknown) {
@@ -246,4 +249,10 @@ export async function request<T>(config: AxiosRequestConfig): Promise<T> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isAccessCredential(value: unknown): value is AccessCredential {
+  if (!isRecord(value)) return false
+  return typeof value.accessToken === 'string' && value.accessToken !== '' &&
+    typeof value.expiresIn === 'number' && Number.isInteger(value.expiresIn) && value.expiresIn > 0
 }

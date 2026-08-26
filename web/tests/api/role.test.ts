@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { YesNo } from '@src/enums/yes-no'
-import { ProtocolError } from '@src/types/http'
 import { request } from '@src/utils/request'
 import {
   createRole,
@@ -116,10 +115,10 @@ describe('role API', () => {
     })
   })
 
-  it('rejects malformed responses instead of returning compatibility data', async () => {
-    requestMock.mockResolvedValue({ id: 7, permission_count: 1 })
-
-    await expect(updateRolePermissions(7, { menuIds: [] })).rejects.toBeInstanceOf(ProtocolError)
+  it('returns the backend result without rebuilding it', async () => {
+    const result = { id: 7, permission_count: 1 }
+    requestMock.mockResolvedValue(result)
+    await expect(updateRolePermissions(7, { menuIds: [] })).resolves.toBe(result)
   })
 })
 

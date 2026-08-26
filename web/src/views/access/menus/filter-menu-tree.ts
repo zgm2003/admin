@@ -1,4 +1,4 @@
-import type { ManagedMenuNode } from '../../../api/menu.contract'
+import type { ManagedMenuNode } from '../../../api/menu'
 
 function cloneNode(node: ManagedMenuNode): ManagedMenuNode {
   return { ...node, children: node.children.map(cloneNode) }

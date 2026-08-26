@@ -18,7 +18,7 @@ import type {
   RoleListItem,
   RoleListQuery,
   RolePermissionsResponse,
-} from "../../../api/role.contract";
+} from "../../../api/role";
 import { YesNo } from "../../../enums/yes-no";
 import { useAccessStore } from "../../../store/access";
 import { AppDialog } from "../../../components/AppDialog";

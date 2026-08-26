@@ -2,7 +2,7 @@ import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-rout
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getAccess } from '@src/api/access'
-import type { AccessSnapshot } from '@src/api/access.contract'
+import type { AccessSnapshot } from '@src/api/access'
 import { getAuthPolicy, getCurrentUser, refresh } from '@src/api/auth'
 import { installPermissionGuard } from '@src/permission'
 import { pinia } from '@src/store'

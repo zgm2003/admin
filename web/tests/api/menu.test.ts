@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { request } from '@src/utils/request'
 import { YesNo } from '@src/enums/yes-no'
-import { ProtocolError } from '@src/types/http'
 import {
   createMenu,
   deleteMenu,
@@ -10,7 +9,7 @@ import {
   updateMenu,
   updateMenuStatus,
 } from '@src/api/menu'
-import type { CreateMenuInput, UpdateMenuInput } from '@src/api/menu.contract'
+import type { CreateMenuInput, UpdateMenuInput } from '@src/api/menu'
 
 vi.mock('@src/utils/request', () => ({ request: vi.fn() }))
 
@@ -21,13 +20,13 @@ describe('menu API', () => {
     requestMock.mockReset()
   })
 
-  it('loads and validates the managed menu tree', async () => {
+  it('loads the managed menu tree', async () => {
     requestMock.mockResolvedValue([])
     await expect(getMenus()).resolves.toEqual([])
     expect(requestMock).toHaveBeenCalledWith({ method: 'GET', url: '/api/v1/menus' })
 
     requestMock.mockResolvedValue(null)
-    await expect(getMenus()).rejects.toBeInstanceOf(ProtocolError)
+    await expect(getMenus()).resolves.toBeNull()
   })
 
   it('creates a menu with the exact payload and validates the result', async () => {
@@ -72,12 +71,13 @@ describe('menu API', () => {
     expect(requestMock).toHaveBeenCalledWith({ method: 'PATCH', url: '/api/v1/menus/7/status', data: { isEnabled: YesNo.No } })
   })
 
-  it('deletes without a request body and rejects malformed mutation results', async () => {
+  it('deletes without a request body and returns the backend result', async () => {
     requestMock.mockResolvedValue({ id: 7 })
     await expect(deleteMenu(7)).resolves.toEqual({ id: 7 })
     expect(requestMock).toHaveBeenCalledWith({ method: 'DELETE', url: '/api/v1/menus/7' })
 
-    requestMock.mockResolvedValue({ id: 7, extra: true })
-    await expect(deleteMenu(7)).rejects.toBeInstanceOf(ProtocolError)
+    const result = { id: 7, extra: true }
+    requestMock.mockResolvedValue(result)
+    await expect(deleteMenu(7)).resolves.toBe(result)
   })
 })

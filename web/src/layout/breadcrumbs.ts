@@ -1,4 +1,4 @@
-import type { AccessMenuNode } from '../api/access.contract'
+import type { AccessMenuNode } from '../api/access'
 
 export interface HeaderBreadcrumb {
   path: string | null
