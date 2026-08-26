@@ -31,12 +31,12 @@ const invalidMessage = computed(() => {
 </script>
 
 <template>
-  <span v-bind="$attrs" class="d-icon" :style="iconStyle" data-testid="d-icon">
+  <i v-bind="$attrs" class="d-icon" :style="iconStyle" data-testid="d-icon">
     <ElIcon v-if="resolvedComponent">
       <component :is="resolvedComponent" />
     </ElIcon>
     <span v-else data-testid="d-icon-empty" :title="invalidMessage">?</span>
-  </span>
+  </i>
 </template>
 
 <style scoped>

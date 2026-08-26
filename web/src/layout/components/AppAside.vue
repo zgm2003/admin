@@ -32,7 +32,7 @@ const access = useAccessStore()
       class="app-aside__menu"
       router
       :collapse="collapsed"
-      :collapse-transition="false"
+      :collapse-transition="true"
       :default-active="route.path"
       :unique-opened="uniqueOpened"
     >
@@ -124,4 +124,5 @@ const access = useAccessStore()
 .app-aside__menu :deep(.el-menu--collapse .el-sub-menu__title .el-icon) {
   margin: 0;
 }
+
 </style>

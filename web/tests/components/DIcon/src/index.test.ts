@@ -7,6 +7,7 @@ describe('DIcon', () => {
   it('renders an explicit Element Plus component', () => {
     const wrapper = mount(DIcon, { props: { component: House } })
     expect(wrapper.find('[data-testid="d-icon"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="d-icon"]').element.tagName).toBe('I')
     expect(wrapper.find('[data-testid="d-icon-empty"]').exists()).toBe(false)
   })
 

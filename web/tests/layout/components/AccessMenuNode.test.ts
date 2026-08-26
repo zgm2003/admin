@@ -109,14 +109,23 @@ describe('AppAside access menu', () => {
 		expect(wrapper.findComponent({ name: 'ElMenuItem' }).props('index')).toBe('/dashboard')
 	})
 
-  it('passes the unique-opened preference to Element Plus menu', () => {
+	it('passes the unique-opened preference to Element Plus menu', () => {
     const wrapper = mount(AppAside, {
       props: { collapsed: false, uniqueOpened: false },
       global: { plugins: [ElementPlus, pinia, createTestRouter(), appI18n] },
     })
 
-    expect(wrapper.findComponent({ name: 'ElMenu' }).props('uniqueOpened')).toBe(false)
-  })
+		expect(wrapper.findComponent({ name: 'ElMenu' }).props('uniqueOpened')).toBe(false)
+	})
+
+	it('keeps the collapse transition enabled for the sidebar', () => {
+		const wrapper = mount(AppAside, {
+			props: { collapsed: true, uniqueOpened: true },
+			global: { plugins: [ElementPlus, pinia, createTestRouter(), appI18n] },
+		})
+
+		expect(wrapper.findComponent({ name: 'ElMenu' }).props('collapseTransition')).toBe(true)
+	})
 })
 
 function mountMenuNode(node: AccessMenuNodeDTO) {
