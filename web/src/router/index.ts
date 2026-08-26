@@ -3,61 +3,65 @@ import {
   createWebHistory,
   type RouterHistory,
   type RouteRecordRaw,
-} from 'vue-router'
+} from "vue-router";
 
-import Dashboard from '../views/dashboard/index.vue'
+import Dashboard from "../views/dashboard/index.vue";
 
-declare module 'vue-router' {
+declare module "vue-router" {
   interface RouteMeta {
-    requiresAuth: boolean
-		i18nKey?: string
-		requiredPermission?: string
-    affix?: boolean
+    requiresAuth: boolean;
+    i18nKey?: string;
+    requiredPermission?: string;
+    affix?: boolean;
   }
 }
 
 const routes: RouteRecordRaw[] = [
   {
-    path: '/login',
-    name: 'login',
-    component: () => import('../views/auth/login/index.vue'),
+    path: "/login",
+    name: "login",
+    component: () => import("../views/auth/login/index.vue"),
     meta: { requiresAuth: false },
   },
   {
-    path: '/register',
-    name: 'register',
-    component: () => import('../views/auth/register/index.vue'),
+    path: "/register",
+    name: "register",
+    component: () => import("../views/auth/register/index.vue"),
     meta: { requiresAuth: false },
   },
   {
-    path: '/',
-    name: 'admin-layout',
-    component: () => import('../layout/index.vue'),
-    redirect: '/dashboard',
+    path: "/",
+    name: "admin-layout",
+    component: () => import("../layout/index.vue"),
+    redirect: "/dashboard",
     meta: { requiresAuth: true },
     children: [
       {
-        path: 'dashboard',
-        name: 'dashboard',
+        path: "dashboard",
+        name: "dashboard",
         component: Dashboard,
-			meta: { requiresAuth: true, i18nKey: 'navigation.dashboard', affix: true },
-		},
-		{
-			path: 'access/menus',
-			name: 'access-menus',
-			component: () => import('../views/access/menus/index.vue'),
-			meta: {
-				requiresAuth: true,
-				i18nKey: 'navigation.accessMenus',
-				requiredPermission: 'rbac:menu:list',
-			},
+        meta: {
+          requiresAuth: true,
+          i18nKey: "navigation.dashboard",
+          affix: true,
+        },
+      },
+      {
+        path: "access/menus",
+        name: "access-menus",
+        component: () => import("../views/access/menus/index.vue"),
+        meta: {
+          requiresAuth: true,
+          i18nKey: "navigation.accessMenus",
+          requiredPermission: "rbac:menu:list",
+        },
       },
     ],
   },
-]
+];
 
 export function createAppRouter(history: RouterHistory = createWebHistory()) {
-  return createRouter({ history, routes })
+  return createRouter({ history, routes });
 }
 
-export const router = createAppRouter()
+export const router = createAppRouter();
