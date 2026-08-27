@@ -24,12 +24,12 @@ describe('menu field protocol', () => {
 		(value) => expect(menuCodePattern.test(value)).toBe(true),
   )
 
-	it.each(['/account/users', '/access/menus', '/reports/order-items'])(
+	it.each(['/account/users', '/access/menus', '/register', '/reports/order-items'])(
     'accepts route path %s',
     (value) => expect(isMenuPath(value)).toBe(true),
   )
 
-	it.each(['/login', '/register', '/dashboard', 'account/users', '/account/users/', '/system/:id', '/system//users', '/account/users?tab=1', '/account/users#top'])(
+	it.each(['/login', '/dashboard', 'account/users', '/account/users/', '/system/:id', '/system//users', '/account/users?tab=1', '/account/users#top'])(
     'rejects route path %s',
     (value) => expect(isMenuPath(value)).toBe(false),
   )

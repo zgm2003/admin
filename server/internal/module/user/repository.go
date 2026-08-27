@@ -41,6 +41,7 @@ type Current struct {
 	ID       int64
 	Username string
 	Email    string
+	Phone    *string
 }
 
 type Repository struct {
@@ -240,15 +241,15 @@ func (r *Repository) CountEffectiveSuperAdmins(ctx context.Context, superAdminRo
 	return count, nil
 }
 
-func (r *Repository) UpdateUsername(ctx context.Context, userID int64, username string, updatedAt time.Time) error {
+func (r *Repository) UpdateProfile(ctx context.Context, userID int64, username string, phone *string, updatedAt time.Time) error {
 	result := r.db.WithContext(ctx).Model(&User{}).Where("id = ?", userID).Updates(map[string]any{
-		"username": username, "updated_at": updatedAt.UTC(),
+		"username": username, "phone": phone, "updated_at": updatedAt.UTC(),
 	})
 	if result.Error != nil {
-		return mapUserWriteError("update username", result.Error)
+		return mapUserWriteError("update profile", result.Error)
 	}
 	if result.RowsAffected != 1 {
-		return fmt.Errorf("update username %d: %w", userID, gorm.ErrRecordNotFound)
+		return fmt.Errorf("update profile %d: %w", userID, gorm.ErrRecordNotFound)
 	}
 	return nil
 }
@@ -364,12 +365,12 @@ func (r *Repository) CreateWithRole(ctx context.Context, input CreateInput) (Use
 	return created, nil
 }
 
-func (r *Repository) FindCredentialByUsername(ctx context.Context, username string) (Credential, error) {
+func (r *Repository) FindCredentialByEmail(ctx context.Context, email string) (Credential, error) {
 	var credential Credential
 	if err := r.db.WithContext(ctx).
 		Model(&User{}).
 		Select("id", "username", "email", "password_hash", "is_enabled").
-		Where("lower(username) = lower(?)", username).
+		Where("email = ?", email).
 		Take(&credential).Error; err != nil {
 		return Credential{}, fmt.Errorf("find user credential: %w", err)
 	}
@@ -379,7 +380,7 @@ func (r *Repository) FindCredentialByUsername(ctx context.Context, username stri
 func (r *Repository) FindCurrent(ctx context.Context, userID int64) (Current, error) {
 	var current Current
 	result := r.db.WithContext(ctx).Raw(`
-		SELECT app_user.id, app_user.username, app_user.email
+		SELECT app_user.id, app_user.username, app_user.email, app_user.phone
 		FROM user_account AS app_user
 		WHERE app_user.id = ?
 		  AND app_user.deleted_at IS NULL
@@ -416,13 +417,14 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 		ID        int64
 		Username  string
 		Email     string
+		Phone     *string
 		IsEnabled yesno.Value
 		CreatedAt time.Time
 		UpdatedAt time.Time
 	}
 	userRows := make([]userRow, 0)
 	result := applyUserListFilter(r.db.WithContext(ctx), query).
-		Select("app_user.id, app_user.username, app_user.email, app_user.is_enabled, app_user.created_at, app_user.updated_at").
+		Select("app_user.id, app_user.username, app_user.email, app_user.phone, app_user.is_enabled, app_user.created_at, app_user.updated_at").
 		Order("app_user.created_at ASC, app_user.id ASC").
 		Offset((query.Page - 1) * query.PageSize).
 		Limit(query.PageSize).
@@ -439,7 +441,7 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 	itemByUserID := make(map[int64]*ListItem, len(userRows))
 	for index, row := range userRows {
 		items[index] = ListItem{
-			ID: row.ID, Username: row.Username, Email: row.Email, IsEnabled: row.IsEnabled,
+			ID: row.ID, Username: row.Username, Email: row.Email, Phone: row.Phone, IsEnabled: row.IsEnabled,
 			Roles: make([]RoleSummary, 0), CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 		}
 		userIDs[index] = items[index].ID
@@ -513,7 +515,11 @@ func applyUserListFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 	db = db.Table("user_account AS app_user").Where("app_user.deleted_at IS NULL")
 	if query.Keyword != "" {
 		pattern := "%" + escapeUserLike(query.Keyword) + "%"
-		db = db.Where(`(app_user.username ILIKE ? ESCAPE E'\\' OR app_user.email ILIKE ? ESCAPE E'\\')`, pattern, pattern)
+		db = db.Where(`(
+			app_user.username ILIKE ? ESCAPE E'\\'
+			OR app_user.email ILIKE ? ESCAPE E'\\'
+			OR app_user.phone ILIKE ? ESCAPE E'\\'
+		)`, pattern, pattern, pattern)
 	}
 	if query.IsEnabled != nil {
 		db = db.Where("app_user.is_enabled = ?", *query.IsEnabled)

@@ -243,6 +243,9 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 
 func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error {
 	return s.mutate(ctx, id, func(_ Platform, current Policy) (mutationPlan, error) {
+		if current.Code == BuiltinAdminCode && current.IsBuiltin && input.AllowRegister != yesno.No {
+			return mutationPlan{}, invalidPolicy(fmt.Errorf("builtin admin registration must remain disabled"))
+		}
 		candidate := current
 		candidate.Name = strings.TrimSpace(input.Name)
 		candidate.AccessTTL = time.Duration(input.AccessTTLSeconds) * time.Second

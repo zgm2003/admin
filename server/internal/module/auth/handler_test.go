@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -29,9 +30,23 @@ func TestLoginReturnsCredentialAndSecureRefreshCookie(t *testing.T) {
 	fixedNow := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
 	refreshTTL := 14 * 24 * time.Hour
 	service := &stubAuthenticationService{credential: Credential{AccessToken: "access", ExpiresIn: 900, RefreshToken: "refresh", RefreshExpiresAt: fixedNow.Add(refreshTTL)}}
-	responseRecorder := serveAuthRouteAt(t, service, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"password"}`, nil, true, fixedNow)
+	responseRecorder := serveAuthRouteAt(t, service, http.MethodPost, "/api/v1/auth/login", `{"email":"admin@example.com","password":"password"}`, nil, true, fixedNow)
 	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusOK, 0, []string{"accessToken", "expiresIn"})
 	assertRefreshCookie(t, responseRecorder, "refresh", true, int(refreshTTL.Seconds()), fixedNow.Add(refreshTTL))
+}
+
+func TestLoginAcceptsOnlyEmailAndPassword(t *testing.T) {
+	service := &stubAuthenticationService{credential: Credential{
+		AccessToken: "access", ExpiresIn: 900, RefreshToken: "refresh", RefreshExpiresAt: time.Now().Add(time.Hour),
+	}}
+	success := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/login", `{"email":" Admin@Example.COM ","password":"password"}`, nil, false)
+	assertEnvelopeKeysAndCode(t, success, http.StatusOK, 0, []string{"accessToken", "expiresIn"})
+	if service.loginInput.Email != " Admin@Example.COM " {
+		t.Fatalf("handler changed email before service: %+v", service.loginInput)
+	}
+
+	legacy := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"password"}`, nil, false)
+	assertEnvelopeKeysAndCode(t, legacy, http.StatusBadRequest, apperror.CodeInvalidRequest, nil)
 }
 
 func TestRefreshRejectsEveryNonEmptyBody(t *testing.T) {
@@ -86,19 +101,31 @@ func TestLogoutExpiresOnlySelectedPlatformCookie(t *testing.T) {
 }
 
 func TestMeReturnsClosedCurrentUserShape(t *testing.T) {
-	service := &stubAuthenticationService{
-		authenticateIdentity: Identity{UserID: 1, SessionID: 2, Platform: "admin", Version: 1},
-		current:              user.Current{ID: 1, Username: "admin", Email: "admin@example.com"},
+	phone := "+86 138-0000-0000"
+	for _, test := range []struct {
+		name     string
+		phone    *string
+		wantJSON string
+	}{
+		{name: "null phone", wantJSON: `{"userId":1,"username":"admin","email":"admin@example.com","phone":null}`},
+		{name: "stored phone", phone: &phone, wantJSON: `{"userId":1,"username":"admin","email":"admin@example.com","phone":"+86 138-0000-0000"}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service := &stubAuthenticationService{
+				authenticateIdentity: Identity{UserID: 1, SessionID: 2, Platform: "admin", Version: 1},
+				current:              user.Current{ID: 1, Username: "admin", Email: "admin@example.com", Phone: test.phone},
+			}
+			headers := map[string]string{"Authorization": "Bearer token"}
+			responseRecorder := serveAuthRouteWithHeaders(t, service, http.MethodGet, "/api/v1/auth/me", "", nil, false, time.Now(), headers)
+			assertEnvelopeDataJSON(t, responseRecorder, test.wantJSON)
+		})
 	}
-	headers := map[string]string{"Authorization": "Bearer token"}
-	responseRecorder := serveAuthRouteWithHeaders(t, service, http.MethodGet, "/api/v1/auth/me", "", nil, false, time.Now(), headers)
-	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusOK, 0, []string{"userId", "username", "email"})
 }
 
 func TestAuthHandlersRejectUnknownJSONFields(t *testing.T) {
 	for _, route := range []string{"/api/v1/auth/register", "/api/v1/auth/login"} {
 		service := &stubAuthenticationService{}
-		body := `{"username":"admin","password":"password","unknown":true}`
+		body := `{"email":"admin@example.com","password":"password","unknown":true}`
 		if strings.HasSuffix(route, "register") {
 			body = `{"username":"admin","email":"admin@example.com","password":"password","confirmPassword":"password","unknown":true}`
 		}
@@ -112,7 +139,7 @@ func TestAuthHandlersRejectUnknownJSONFields(t *testing.T) {
 func TestAuthHandlersPassExactClientMetadata(t *testing.T) {
 	service := &stubAuthenticationService{registered: Registered{UserID: 1}, credential: Credential{AccessToken: "access", ExpiresIn: 900, RefreshToken: "refresh", RefreshExpiresAt: time.Now().Add(time.Hour)}}
 	serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/register", `{"username":"admin","email":"admin@example.com","password":"password","confirmPassword":"password"}`, nil, false)
-	serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"password"}`, nil, false)
+	serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/login", `{"email":"admin@example.com","password":"password"}`, nil, false)
 	serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/refresh", "", &http.Cookie{Name: refreshCookieName("admin"), Value: "refresh"}, false)
 	want := authclient.Client{Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440000", ClientIP: "192.0.2.1", UserAgent: ""}
 	for name, got := range map[string]authclient.Client{
@@ -129,7 +156,7 @@ func TestAuthHandlersPassExactClientMetadata(t *testing.T) {
 func TestPlatformRefreshCookiesDoNotOverwriteEachOther(t *testing.T) {
 	fixedNow := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
 	service := &stubAuthenticationService{credential: Credential{AccessToken: "access", ExpiresIn: 900, RefreshToken: "refresh", RefreshExpiresAt: fixedNow.Add(time.Hour)}}
-	admin := serveAuthRouteAt(t, service, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"password"}`, nil, false, fixedNow)
+	admin := serveAuthRouteAt(t, service, http.MethodPost, "/api/v1/auth/login", `{"email":"admin@example.com","password":"password"}`, nil, false, fixedNow)
 	if got := admin.Result().Cookies()[0].Name; got != "admin_refresh_admin" {
 		t.Fatalf("admin cookie = %q", got)
 	}
@@ -140,7 +167,7 @@ func TestPlatformRefreshCookiesDoNotOverwriteEachOther(t *testing.T) {
 	router := gin.New()
 	apiRoutes := router.Group("/api/v1", authclient.Require())
 	RegisterRoutes(apiRoutes, handler, RequireOrigin("http://localhost:16300"), Authenticate(service))
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"admin","password":"password"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"admin@example.com","password":"password"}`))
 	request.Header.Set("Origin", "http://localhost:16300")
 	request.Header[authclient.PlatformHeader] = []string{"app"}
 	request.Header[authclient.DeviceIDHeader] = []string{"550e8400-e29b-41d4-a716-446655440000"}
@@ -265,6 +292,27 @@ func assertEnvelopeKeysAndCode(t *testing.T, responseRecorder *httptest.Response
 				t.Fatalf("data missing %q: %v", key, data)
 			}
 		}
+	}
+}
+
+func assertEnvelopeDataJSON(t *testing.T, responseRecorder *httptest.ResponseRecorder, want string) {
+	t.Helper()
+	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusOK, 0, nil)
+	var envelope struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	var gotValue, wantValue any
+	if err := json.Unmarshal(envelope.Data, &gotValue); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(want), &wantValue); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gotValue, wantValue) {
+		t.Fatalf("data=%s want=%s", envelope.Data, want)
 	}
 }
 

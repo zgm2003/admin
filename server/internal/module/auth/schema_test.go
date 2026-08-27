@@ -110,6 +110,37 @@ func TestAuthenticationSchema(t *testing.T) {
 	}
 }
 
+func TestAuthenticationSchemaCreatesNullablePhoneWithoutIndex(t *testing.T) {
+	connection, ctx := openAuthenticationSchema(t)
+	var column struct {
+		DataType               string
+		CharacterMaximumLength int
+		IsNullable             string
+	}
+	if err := connection.GORM.WithContext(ctx).Raw(`
+		SELECT data_type, character_maximum_length, is_nullable
+		FROM information_schema.columns
+		WHERE table_schema = current_schema()
+		  AND table_name = 'user_account'
+		  AND column_name = 'phone'`).Scan(&column).Error; err != nil {
+		t.Fatal(err)
+	}
+	if column.DataType != "character varying" || column.CharacterMaximumLength != 32 || column.IsNullable != "YES" {
+		t.Fatalf("phone column = %+v", column)
+	}
+	var indexCount int64
+	if err := connection.GORM.WithContext(ctx).Raw(`
+		SELECT count(*)
+		FROM pg_indexes
+		WHERE schemaname = current_schema()
+		  AND indexdef ILIKE '%phone%'`).Scan(&indexCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if indexCount != 0 {
+		t.Fatalf("phone index count = %d", indexCount)
+	}
+}
+
 func assertRelationMissing(t *testing.T, connection *database.Connection, ctx context.Context, name string) {
 	t.Helper()
 	var exists bool

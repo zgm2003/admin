@@ -45,6 +45,7 @@ type ListItem struct {
 	ID        int64
 	Username  string
 	Email     string
+	Phone     *string
 	IsEnabled yesno.Value
 	Roles     []RoleSummary
 	CreatedAt time.Time
@@ -55,6 +56,7 @@ type Summary struct {
 	ID        int64
 	Username  string
 	Email     string
+	Phone     *string
 	IsEnabled yesno.Value
 }
 
@@ -66,11 +68,13 @@ type Roles struct {
 
 type UpdateInput struct {
 	Username string
+	Phone    *string
 }
 
-type UpdatedUsername struct {
+type UpdatedProfile struct {
 	ID        int64
 	Username  string
+	Phone     *string
 	UpdatedAt time.Time
 }
 
@@ -125,18 +129,22 @@ func (s *Service) RoleOptions(ctx context.Context) ([]RoleSummary, error) {
 	return options, nil
 }
 
-func (s *Service) Update(ctx context.Context, actorUserID, targetUserID int64, input UpdateInput) (UpdatedUsername, error) {
+func (s *Service) Update(ctx context.Context, actorUserID, targetUserID int64, input UpdateInput) (UpdatedProfile, error) {
 	if s == nil || s.repository == nil {
-		return UpdatedUsername{}, apperror.DependencyUnavailable(fmt.Errorf("update user requires a repository"))
+		return UpdatedProfile{}, apperror.DependencyUnavailable(fmt.Errorf("update user requires a repository"))
 	}
 	if actorUserID <= 0 || targetUserID <= 0 {
-		return UpdatedUsername{}, apperror.InvalidRequest(fmt.Errorf("actor or target user id is invalid"))
+		return UpdatedProfile{}, apperror.InvalidRequest(fmt.Errorf("actor or target user id is invalid"))
 	}
 	username, err := NormalizeUsername(input.Username)
 	if err != nil {
-		return UpdatedUsername{}, apperror.InvalidRequest(err)
+		return UpdatedProfile{}, apperror.InvalidRequest(err)
 	}
-	var updated UpdatedUsername
+	phone, err := NormalizePhone(input.Phone)
+	if err != nil {
+		return UpdatedProfile{}, apperror.InvalidRequest(err)
+	}
+	var updated UpdatedProfile
 	err = s.repository.Transaction(ctx, func(repository *Repository) error {
 		if err := repository.LockUserWriteTable(ctx); err != nil {
 			return err
@@ -163,21 +171,32 @@ func (s *Service) Update(ctx context.Context, actorUserID, targetUserID int64, i
 		if targetHasSuperAdmin && !actorIsSuperAdmin {
 			return userSuperAdminProtected(fmt.Errorf("ordinary actor cannot update a super administrator target"))
 		}
-		if target.Username == username {
-			updated = UpdatedUsername{ID: target.ID, Username: target.Username, UpdatedAt: target.UpdatedAt}
+		if target.Username == username && equalOptionalString(target.Phone, phone) {
+			updated = currentUpdatedProfile(target)
 			return nil
 		}
 		updatedAt := time.Now().UTC().Truncate(time.Microsecond)
-		if err := repository.UpdateUsername(ctx, target.ID, username, updatedAt); err != nil {
+		if err := repository.UpdateProfile(ctx, target.ID, username, phone, updatedAt); err != nil {
 			return err
 		}
-		updated = UpdatedUsername{ID: target.ID, Username: username, UpdatedAt: updatedAt}
+		updated = UpdatedProfile{ID: target.ID, Username: username, Phone: phone, UpdatedAt: updatedAt}
 		return nil
 	})
 	if err != nil {
-		return UpdatedUsername{}, mapUserRepositoryError(err)
+		return UpdatedProfile{}, mapUserRepositoryError(err)
 	}
 	return updated, nil
+}
+
+func currentUpdatedProfile(value User) UpdatedProfile {
+	return UpdatedProfile{ID: value.ID, Username: value.Username, Phone: value.Phone, UpdatedAt: value.UpdatedAt}
+}
+
+func equalOptionalString(left, right *string) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 func (s *Service) Roles(ctx context.Context, targetUserID int64) (Roles, error) {
@@ -207,7 +226,7 @@ func (s *Service) Roles(ctx context.Context, targetUserID int64) (Roles, error) 
 		return Roles{}, userDataInvalid(err)
 	}
 	return Roles{
-		User:  Summary{ID: target.ID, Username: target.Username, Email: target.Email, IsEnabled: target.IsEnabled},
+		User:  Summary{ID: target.ID, Username: target.Username, Email: target.Email, Phone: target.Phone, IsEnabled: target.IsEnabled},
 		Roles: options, RoleIDs: roleIDs,
 	}, nil
 }

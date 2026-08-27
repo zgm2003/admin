@@ -153,6 +153,14 @@ const canUpdate = computed(() => access.hasPermission("auth:platform:update"));
 const canStatus = computed(() => access.hasPermission("auth:platform:status"));
 const canDelete = computed(() => access.hasPermission("auth:platform:delete"));
 const isEditing = computed(() => dialogMode.value === "edit");
+const isBuiltinAdminEdit = computed(() => {
+  const platform = editingPlatform.value;
+  return (
+    dialogMode.value === "edit" &&
+    platform?.code === "admin" &&
+    platform.isBuiltin === YesNo.Yes
+  );
+});
 const formValid = computed(() => {
   const codeValid =
     dialogMode.value === "edit" ||
@@ -249,7 +257,10 @@ function openEdit(platform: AuthPlatformListItem): void {
     bindDevice: platform.bindDevice,
     bindIP: platform.bindIP,
     maxSessions: platform.maxSessions,
-    allowRegister: platform.allowRegister,
+    allowRegister:
+      platform.code === "admin" && platform.isBuiltin === YesNo.Yes
+        ? YesNo.No
+        : platform.allowRegister,
     isEnabled: platform.isEnabled,
   });
   mutationError.value = "";
@@ -383,7 +394,7 @@ function updateInput(): UpdateAuthPlatformInput {
     bindDevice: form.bindDevice,
     bindIP: form.bindIP,
     maxSessions: form.maxSessions,
-    allowRegister: form.allowRegister,
+    allowRegister: isBuiltinAdminEdit.value ? YesNo.No : form.allowRegister,
   };
 }
 
@@ -661,7 +672,12 @@ onMounted(() => {
               v-model="form.allowRegister"
               :active-value="YesNo.Yes"
               :inactive-value="YesNo.No"
-          /></el-form-item>
+              :disabled="isBuiltinAdminEdit"
+              data-testid="auth-platform-allow-register"
+            />
+            <span v-if="isBuiltinAdminEdit" class="auth-platform-form-help">{{
+              t("authPlatform.adminRegistrationLocked")
+            }}</span></el-form-item>
           <el-form-item
             v-if="dialogMode === 'create'"
             :label="t('authPlatform.isEnabled')"
@@ -691,6 +707,11 @@ onMounted(() => {
 <style scoped>
 .auth-platform-page {
   min-width: 0;
+}
+.auth-platform-form-help {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.4;
 }
 .auth-platform-filters {
   display: flex;

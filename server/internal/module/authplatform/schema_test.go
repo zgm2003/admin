@@ -122,29 +122,150 @@ func TestAuthenticationPlatformSchemaAndBuiltinAdmin(t *testing.T) {
 		}
 	}
 
-	var admin authplatform.Platform
-	if err := connection.GORM.WithContext(ctx).Where("code = ?", "admin").Take(&admin).Error; err != nil {
-		t.Fatal(err)
-	}
-	if admin.Name != "Admin" || admin.PolicyVersion != 1 || admin.AccessTTLSeconds != 900 || admin.RefreshTTLSeconds != 1209600 || admin.SessionCacheTTLSeconds != 1800 || admin.AccessCacheTTLSeconds != 1800 || admin.BindDevice != yesno.No || admin.BindIP != yesno.No || admin.MaxSessions != 1 || admin.AllowRegister != yesno.Yes || admin.IsEnabled != yesno.Yes || admin.IsBuiltin != yesno.Yes || admin.DeletedAt.Valid {
+	admin := readAdmin(t, connection.GORM)
+	if admin.Name != "Admin" || admin.PolicyVersion != 1 || admin.AccessTTLSeconds != 900 || admin.RefreshTTLSeconds != 1209600 || admin.SessionCacheTTLSeconds != 1800 || admin.AccessCacheTTLSeconds != 1800 || admin.BindDevice != yesno.No || admin.BindIP != yesno.No || admin.MaxSessions != 1 || admin.AllowRegister != yesno.No || admin.IsEnabled != yesno.Yes || admin.IsBuiltin != yesno.Yes || admin.DeletedAt.Valid {
 		t.Fatalf("builtin admin = %+v", admin)
 	}
 }
 
-func TestAuthenticationPlatformSchemaRejectsDamagedBuiltin(t *testing.T) {
+func TestEnsureSchemaMigratesBuiltinAdminRegistrationOnce(t *testing.T) {
 	connection, ctx := openAuthenticationPlatformDatabase(t)
 	if err := database.AutoMigrate(ctx, connection.GORM, &authplatform.Platform{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := authplatform.EnsureSchema(ctx, connection.GORM); err != nil {
+	db := connection.GORM.WithContext(ctx)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	historical := validHistoricalAdmin(now)
+	historical.PolicyVersion = 7
+	historical.Name = "Operations Admin"
+	historical.AccessTTLSeconds = 1200
+	historical.RefreshTTLSeconds = 1_300_000
+	historical.SessionCacheTTLSeconds = 1_900
+	historical.AccessCacheTTLSeconds = 2_000
+	historical.BindDevice = yesno.Yes
+	historical.BindIP = yesno.Yes
+	historical.MaxSessions = 2
+	historical.IsEnabled = yesno.No
+	if err := db.Create(&historical).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := connection.GORM.WithContext(ctx).Model(&authplatform.Platform{}).Where("code = ?", "admin").Update("name", "Damaged").Error; err != nil {
+	if err := authplatform.EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	if err := authplatform.EnsureSchema(ctx, connection.GORM); err == nil {
-		t.Fatal("damaged builtin admin was silently accepted")
+	first := readAdmin(t, db)
+	if first.AllowRegister != yesno.No || first.PolicyVersion != 8 {
+		t.Fatalf("first migration = %+v", first)
 	}
+	if first.Name != historical.Name || first.AccessTTLSeconds != historical.AccessTTLSeconds || first.RefreshTTLSeconds != historical.RefreshTTLSeconds || first.SessionCacheTTLSeconds != historical.SessionCacheTTLSeconds || first.AccessCacheTTLSeconds != historical.AccessCacheTTLSeconds || first.BindDevice != historical.BindDevice || first.BindIP != historical.BindIP || first.MaxSessions != historical.MaxSessions || first.IsEnabled != historical.IsEnabled || !first.CreatedAt.Equal(historical.CreatedAt) {
+		t.Fatalf("editable policy values were reset: historical=%+v migrated=%+v", historical, first)
+	}
+	if err := authplatform.EnsureSchema(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	second := readAdmin(t, db)
+	if second.PolicyVersion != first.PolicyVersion || !second.UpdatedAt.Equal(first.UpdatedAt) {
+		t.Fatalf("migration was not idempotent: first=%+v second=%+v", first, second)
+	}
+}
+
+func TestEnsureSchemaPreservesValidBuiltinAdminDisplayName(t *testing.T) {
+	connection, ctx := openAuthenticationPlatformDatabase(t)
+	if err := database.AutoMigrate(ctx, connection.GORM, &authplatform.Platform{}); err != nil {
+		t.Fatal(err)
+	}
+	db := connection.GORM.WithContext(ctx)
+	historical := validHistoricalAdmin(time.Now().UTC().Truncate(time.Microsecond))
+	historical.Name = "Control Center"
+	historical.AllowRegister = yesno.No
+	if err := db.Create(&historical).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := authplatform.EnsureSchema(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	admin := readAdmin(t, db)
+	if admin.Name != historical.Name || admin.PolicyVersion != historical.PolicyVersion || !admin.UpdatedAt.Equal(historical.UpdatedAt) {
+		t.Fatalf("display name was reset: historical=%+v current=%+v", historical, admin)
+	}
+}
+
+func TestEnsureSchemaRejectsDamagedBuiltinHistory(t *testing.T) {
+	tests := []struct {
+		name  string
+		alter func(*authplatform.Platform)
+		rows  int
+	}{
+		{name: "duplicate rows", rows: 2},
+		{name: "soft-deleted history", rows: 1, alter: func(value *authplatform.Platform) {
+			value.DeletedAt = gorm.DeletedAt{Time: value.UpdatedAt, Valid: true}
+		}},
+		{name: "not builtin", rows: 1, alter: func(value *authplatform.Platform) { value.IsBuiltin = yesno.No }},
+		{name: "invalid runtime values", rows: 1, alter: func(value *authplatform.Platform) { value.Name = "" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			connection, ctx := openAuthenticationPlatformDatabase(t)
+			if err := database.AutoMigrate(ctx, connection.GORM, &authplatform.Platform{}); err != nil {
+				t.Fatal(err)
+			}
+			db := connection.GORM.WithContext(ctx)
+			for index := 0; index < test.rows; index++ {
+				value := validHistoricalAdmin(time.Now().UTC().Add(time.Duration(index) * time.Microsecond).Truncate(time.Microsecond))
+				if test.alter != nil {
+					test.alter(&value)
+				}
+				if err := db.Create(&value).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := authplatform.EnsureSchema(ctx, db); err == nil {
+				t.Fatal("damaged builtin admin history was silently accepted")
+			}
+		})
+	}
+}
+
+func TestEnsureSchemaRollsBackBuiltinAdminMigrationFailure(t *testing.T) {
+	connection, ctx := openAuthenticationPlatformDatabase(t)
+	if err := database.AutoMigrate(ctx, connection.GORM, &authplatform.Platform{}); err != nil {
+		t.Fatal(err)
+	}
+	db := connection.GORM.WithContext(ctx)
+	historical := validHistoricalAdmin(time.Now().UTC().Truncate(time.Microsecond))
+	historical.PolicyVersion = 4
+	if err := db.Create(&historical).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`ALTER TABLE auth_platform ADD CONSTRAINT ck_test_admin_registration_migration CHECK (allow_register = 1)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := authplatform.EnsureSchema(ctx, db); err == nil {
+		t.Fatal("migration unexpectedly succeeded")
+	}
+	admin := readAdmin(t, db)
+	if admin.AllowRegister != yesno.Yes || admin.PolicyVersion != historical.PolicyVersion || !admin.UpdatedAt.Equal(historical.UpdatedAt) {
+		t.Fatalf("failed migration was not rolled back: historical=%+v current=%+v", historical, admin)
+	}
+}
+
+func validHistoricalAdmin(now time.Time) authplatform.Platform {
+	return authplatform.Platform{
+		Code: authplatform.BuiltinAdminCode, Name: "Admin", PolicyVersion: 1,
+		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
+		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
+		AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+		CreatedAt: now, UpdatedAt: now,
+	}
+}
+
+func readAdmin(t *testing.T, db *gorm.DB) authplatform.Platform {
+	t.Helper()
+	var value authplatform.Platform
+	if err := db.Unscoped().Where("code = ?", authplatform.BuiltinAdminCode).Take(&value).Error; err != nil {
+		t.Fatal(err)
+	}
+	return value
 }
 
 func platformConstraintDefinition(t *testing.T, connection *database.Connection, ctx context.Context, name string) string {

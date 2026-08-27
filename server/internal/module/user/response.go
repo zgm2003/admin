@@ -15,6 +15,7 @@ type listItemResponse struct {
 	ID        int64                 `json:"id"`
 	Username  string                `json:"username"`
 	Email     string                `json:"email"`
+	Phone     *string               `json:"phone"`
 	IsEnabled int16                 `json:"isEnabled"`
 	Roles     []roleSummaryResponse `json:"roles"`
 	CreatedAt string                `json:"createdAt"`
@@ -31,20 +32,22 @@ type listResponse struct {
 type roleOptionsResponse struct {
 	Roles []roleSummaryResponse `json:"roles"`
 }
-type updatedUsernameResponse struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	UpdatedAt string `json:"updatedAt"`
+type updatedProfileResponse struct {
+	ID        int64   `json:"id"`
+	Username  string  `json:"username"`
+	Phone     *string `json:"phone"`
+	UpdatedAt string  `json:"updatedAt"`
 }
 type statusResponse struct {
 	ID        int64 `json:"id"`
 	IsEnabled int16 `json:"isEnabled"`
 }
 type summaryResponse struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	IsEnabled int16  `json:"isEnabled"`
+	ID        int64   `json:"id"`
+	Username  string  `json:"username"`
+	Email     string  `json:"email"`
+	Phone     *string `json:"phone"`
+	IsEnabled int16   `json:"isEnabled"`
 }
 type rolesResponse struct {
 	User    summaryResponse       `json:"user"`
@@ -59,7 +62,7 @@ type roleResultResponse struct {
 func userListResponse(items []ListItem, total int64, page, pageSize int) listResponse {
 	rows := make([]listItemResponse, 0, len(items))
 	for _, item := range items {
-		rows = append(rows, listItemResponse{ID: item.ID, Username: item.Username, Email: item.Email, IsEnabled: int16(item.IsEnabled), Roles: roleSummaryResponses(item.Roles), CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: item.UpdatedAt.UTC().Format(time.RFC3339Nano)})
+		rows = append(rows, listItemResponse{ID: item.ID, Username: item.Username, Email: item.Email, Phone: item.Phone, IsEnabled: int16(item.IsEnabled), Roles: roleSummaryResponses(item.Roles), CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: item.UpdatedAt.UTC().Format(time.RFC3339Nano)})
 	}
 	return listResponse{List: rows, Total: total, Page: page, PageSize: pageSize}
 }
@@ -73,5 +76,5 @@ func roleSummaryResponses(values []RoleSummary) []roleSummaryResponse {
 }
 
 func newRolesResponse(value Roles) rolesResponse {
-	return rolesResponse{User: summaryResponse{ID: value.User.ID, Username: value.User.Username, Email: value.User.Email, IsEnabled: int16(value.User.IsEnabled)}, Roles: roleSummaryResponses(value.Roles), RoleIDs: append([]int64(nil), value.RoleIDs...)}
+	return rolesResponse{User: summaryResponse{ID: value.User.ID, Username: value.User.Username, Email: value.User.Email, Phone: value.User.Phone, IsEnabled: int16(value.User.IsEnabled)}, Roles: roleSummaryResponses(value.Roles), RoleIDs: append([]int64{}, value.RoleIDs...)}
 }

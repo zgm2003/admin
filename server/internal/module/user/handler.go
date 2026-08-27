@@ -18,7 +18,7 @@ import (
 type userService interface {
 	List(context.Context, ListQuery) (pagination.Result[ListItem], error)
 	RoleOptions(context.Context) ([]RoleSummary, error)
-	Update(context.Context, int64, int64, UpdateInput) (UpdatedUsername, error)
+	Update(context.Context, int64, int64, UpdateInput) (UpdatedProfile, error)
 	UpdateStatus(context.Context, int64, int64, yesno.Value) error
 	Delete(context.Context, int64, int64) error
 	Roles(context.Context, int64) (Roles, error)
@@ -76,13 +76,13 @@ func (h *Handler) Update(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	projectmiddleware.SetAccessLogOperation(context, "user.username.update", actor, target)
+	projectmiddleware.SetAccessLogOperation(context, "user.profile.update", actor, target)
 	updated, err := h.service.Update(context.Request.Context(), actor, target, input)
 	if err != nil {
 		response.Fail(context, err)
 		return
 	}
-	response.OK(context, http.StatusOK, updatedUsernameResponse{ID: updated.ID, Username: updated.Username, UpdatedAt: updated.UpdatedAt.UTC().Format(time.RFC3339Nano)})
+	response.OK(context, http.StatusOK, updatedProfileResponse{ID: updated.ID, Username: updated.Username, Phone: updated.Phone, UpdatedAt: updated.UpdatedAt.UTC().Format(time.RFC3339Nano)})
 }
 
 func (h *Handler) UpdateStatus(context *gin.Context) {

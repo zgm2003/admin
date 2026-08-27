@@ -102,6 +102,63 @@ describe('authentication platform page', () => {
 
     expect(wrapper.get('[data-testid="auth-platform-code"]').attributes('disabled')).toBeDefined()
   })
+
+  it('locks builtin admin registration off while preserving non-builtin registration choices', async () => {
+    setPermissions(['auth:platform:list', 'auth:platform:update'])
+    updateAuthPlatformMock.mockResolvedValue({})
+    const staleAdminRow = { ...adminRow, allowRegister: YesNo.Yes }
+    getAuthPlatformsMock.mockResolvedValue({ list: [staleAdminRow], total: 1, page: 1, pageSize: 20 })
+    const { wrapper } = await mountPage()
+
+    await wrapper.get('[data-testid="auth-platform-update"]').trigger('click')
+    await flushPromises()
+    const adminSwitch = wrapper.get('[data-testid="auth-platform-allow-register"]')
+    expect(adminSwitch.get('input').attributes('disabled')).toBeDefined()
+    expect(adminSwitch.get('input').attributes('aria-checked')).toBe('false')
+
+    const adminSwitchComponent = findAllowRegisterSwitch(wrapper)
+    await adminSwitchComponent.vm.$emit('update:modelValue', YesNo.Yes)
+    await wrapper.get('.el-dialog__footer .el-button--primary').trigger('click')
+    await flushPromises()
+    expect(updateAuthPlatformMock).toHaveBeenCalledWith(2, expect.objectContaining({ allowRegister: YesNo.No }))
+
+    wrapper.unmount()
+    const appRow = { ...adminRow, id: 3, code: 'app', isBuiltin: YesNo.No, allowRegister: YesNo.Yes }
+    getAuthPlatformsMock.mockResolvedValue({ list: [appRow], total: 1, page: 1, pageSize: 20 })
+    const { wrapper: appWrapper } = await mountPage()
+
+    await appWrapper.get('[data-testid="auth-platform-update"]').trigger('click')
+    await flushPromises()
+    const appSwitch = appWrapper.get('[data-testid="auth-platform-allow-register"]')
+    expect(appSwitch.get('input').attributes('disabled')).toBeUndefined()
+
+    const appSwitchComponent = findAllowRegisterSwitch(appWrapper)
+    await appSwitchComponent.vm.$emit('update:modelValue', YesNo.No)
+    await appWrapper.get('.el-dialog__footer .el-button--primary').trigger('click')
+    await flushPromises()
+    expect(updateAuthPlatformMock).toHaveBeenLastCalledWith(3, expect.objectContaining({ allowRegister: YesNo.No }))
+  })
+
+  it('keeps registration editable and submits the selected value for a new platform', async () => {
+    setPermissions(['auth:platform:list', 'auth:platform:create'])
+    createAuthPlatformMock.mockResolvedValue({ id: 3 })
+    const { wrapper } = await mountPage()
+
+    await wrapper.get('[data-testid="auth-platform-create"]').trigger('click')
+    await wrapper.get('[data-testid="auth-platform-code"]').setValue('portal')
+    await wrapper.get('[data-testid="auth-platform-name"]').setValue('Portal')
+    const allowRegisterSwitch = wrapper.get('[data-testid="auth-platform-allow-register"]')
+    expect(allowRegisterSwitch.get('input').attributes('disabled')).toBeUndefined()
+
+    const allowRegisterSwitchComponent = findAllowRegisterSwitch(wrapper)
+    await allowRegisterSwitchComponent.vm.$emit('update:modelValue', YesNo.Yes)
+    await wrapper.get('.el-dialog__footer .el-button--primary').trigger('click')
+    await flushPromises()
+
+    expect(createAuthPlatformMock).toHaveBeenCalledWith(expect.objectContaining({
+      code: 'portal', name: 'Portal', allowRegister: YesNo.Yes,
+    }))
+  })
 })
 
 function setPermissions(codes: string[]): void {
@@ -118,4 +175,12 @@ async function mountPage() {
   const wrapper = mount(AuthPlatformsPage, { global: { plugins: [ElementPlus, pinia, appI18n, router] } })
   await flushPromises()
   return { wrapper, router }
+}
+
+function findAllowRegisterSwitch(wrapper: Awaited<ReturnType<typeof mountPage>>['wrapper']) {
+  const allowRegisterSwitch = wrapper
+    .findAllComponents({ name: 'ElSwitch' })
+    .find((switchWrapper) => switchWrapper.attributes('data-testid') === 'auth-platform-allow-register')
+  if (allowRegisterSwitch === undefined) throw new Error('allow registration switch is missing')
+  return allowRegisterSwitch
 }

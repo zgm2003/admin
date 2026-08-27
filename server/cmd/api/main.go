@@ -134,6 +134,9 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer redisClient.Close()
+	if err := authplatform.ClearBuiltinAdminPolicy(processContext, redisClient); err != nil {
+		return fmt.Errorf("clear builtin admin policy cache: %w", err)
+	}
 	queueClient, err := queue.NewClient(settings.RedisURL)
 	if err != nil {
 		return err

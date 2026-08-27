@@ -1,7 +1,6 @@
 import type { Router } from 'vue-router'
 
-import { getAuthPolicy, getCurrentUser, refresh } from './api/auth'
-import { YesNo } from './enums/yes-no'
+import { getCurrentUser, refresh } from './api/auth'
 import { appI18n } from './i18n'
 import { registerAccessRoutes } from './router/access-routes'
 import { pinia } from './store'
@@ -33,18 +32,6 @@ export function installPermissionGuard(router: Router): void {
       }
       if (auth.status === 'authenticated' && to.name === 'login') {
         return { name: 'dashboard' }
-      }
-      if (to.name === 'register') {
-        try {
-          const policy = await getAuthPolicy()
-          if (policy.allowRegister === YesNo.No) {
-            return { name: 'login' }
-          }
-        } catch (error: unknown) {
-          auth.setError(errorMessage(error))
-          clearAccess()
-          return { name: 'login' }
-        }
       }
       return true
     }

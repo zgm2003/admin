@@ -19,7 +19,7 @@ import { ApiError, ProtocolError, type ApiResponse } from '../types/http'
 export { ApiError, ProtocolError } from '../types/http'
 
 const envelopeKeys = ['code', 'data', 'message']
-const noBearerPaths = new Set(['/api/v1/auth/policy', '/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/refresh'])
+const noBearerPaths = new Set(['/api/v1/auth/login', '/api/v1/auth/refresh'])
 const noRefreshPaths = new Set([...noBearerPaths, '/api/v1/auth/logout'])
 
 interface AuthRequestConfig extends InternalAxiosRequestConfig {

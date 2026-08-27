@@ -3,18 +3,17 @@ import ElementPlus from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getAuthPolicy, getCurrentUser, login } from '@src/api/auth'
+import { getCurrentUser, login } from '@src/api/auth'
 import { appI18n, setLocale } from '@src/i18n'
 import { pinia } from '@src/store'
 import { useAuthStore } from '@src/store/auth'
 import { ApiError } from '@src/types/http'
 import LoginPage from '@src/views/auth/login/index.vue'
 
-vi.mock('@src/api/auth', () => ({ getAuthPolicy: vi.fn(), login: vi.fn(), getCurrentUser: vi.fn() }))
+vi.mock('@src/api/auth', () => ({ login: vi.fn(), getCurrentUser: vi.fn() }))
 
 const loginMock = vi.mocked(login)
 const getCurrentUserMock = vi.mocked(getCurrentUser)
-const getAuthPolicyMock = vi.mocked(getAuthPolicy)
 
 describe('Login page', () => {
   beforeEach(() => {
@@ -23,54 +22,31 @@ describe('Login page', () => {
     useAuthStore(pinia).$reset()
     loginMock.mockReset()
     getCurrentUserMock.mockReset()
-    getAuthPolicyMock.mockReset()
-    getAuthPolicyMock.mockResolvedValue({ code: 'admin', name: 'Admin', allowRegister: 0 })
   })
 
-  it('requires username and password', async () => {
+  it('requires email and password', async () => {
     const { wrapper } = await mountLogin()
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(loginMock).not.toHaveBeenCalled()
   })
 
-  it('hides the registration entry when policy disables registration', async () => {
-    const { wrapper } = await mountLogin()
-    expect(wrapper.find('a[href="/register"]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('注册新账号')
-  })
-
-  it('shows a registration entry when policy enables registration', async () => {
-    getAuthPolicyMock.mockResolvedValue({ code: 'admin', name: 'Admin', allowRegister: 1 })
-    const { wrapper } = await mountLogin()
-
-    expect(wrapper.find('a[href="/register"]').exists()).toBe(true)
-  })
-
-  it('shows an explicit policy failure instead of treating registration as disabled', async () => {
-    getAuthPolicyMock.mockRejectedValue(new ApiError(10006, '服务暂未就绪', 503))
-    const { wrapper } = await mountLogin()
-
-    expect(wrapper.get('[data-testid="policy-error"]').text()).toContain('服务暂未就绪')
-    expect(wrapper.find('a[href="/register"]').exists()).toBe(false)
-  })
-
   it('renders the product identity and the existing login form', async () => {
     const { wrapper } = await mountLogin()
     expect(wrapper.get('[data-testid="login-brand"]').text()).toContain('Admin')
     expect(wrapper.find('[data-testid="login-panel"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="login-username"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-email"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="login-password"]').exists()).toBe(true)
   })
 
   it('renders the selected locale messages', async () => {
     setLocale('en-US')
     const { wrapper } = await mountLogin()
-    expect(wrapper.get('[data-testid="login-username"]').attributes('placeholder')).toBe('Enter username')
+    expect(wrapper.get('[data-testid="login-email"]').attributes('placeholder')).toBe('Enter email address')
     expect(wrapper.get('[data-testid="login-submit"]').text()).toBe('Sign in to console')
   })
 
-  it('submits exact credentials, loads me, and follows a safe redirect', async () => {
+  it('submits trimmed email and original password, loads me, and follows a safe redirect', async () => {
     const order: string[] = []
     loginMock.mockImplementation(async () => {
       order.push('login')
@@ -78,15 +54,16 @@ describe('Login page', () => {
     })
     getCurrentUserMock.mockImplementation(async () => {
       order.push('me')
-      return { userId: 1, username: 'admin', email: 'admin@example.com' }
+      return { userId: 1, username: 'admin', email: 'admin@example.com', phone: null }
     })
     const { wrapper, router } = await mountLogin('/login?redirect=/secure')
-    await wrapper.get('[data-testid="login-username"]').setValue('admin')
-    await wrapper.get('[data-testid="login-password"]').setValue('password')
+    await wrapper.get('[data-testid="login-email"]').setValue(' Admin@Example.COM ')
+    await wrapper.get('[data-testid="login-password"]').setValue('  password  ')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(loginMock).toHaveBeenCalledWith({ username: 'admin', password: 'password' })
+    expect(loginMock).toHaveBeenCalledWith({ email: 'Admin@Example.COM', password: '  password  ' })
+    expect(wrapper.find('a[href="/register"]').exists()).toBe(false)
     expect(order).toEqual(['login', 'me'])
     expect(useAuthStore(pinia).status).toBe('authenticated')
     expect(router.currentRoute.value.path).toBe('/secure')
@@ -96,7 +73,7 @@ describe('Login page', () => {
     let rejectLogin: (error: Error) => void = () => undefined
     loginMock.mockImplementation(() => new Promise((_, reject) => { rejectLogin = reject }))
     const { wrapper } = await mountLogin()
-    await wrapper.get('[data-testid="login-username"]').setValue('admin')
+    await wrapper.get('[data-testid="login-email"]').setValue('admin@example.com')
     await wrapper.get('[data-testid="login-password"]').setValue('wrong')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -104,7 +81,7 @@ describe('Login page', () => {
 
     rejectLogin(new ApiError(10002, '未登录或登录已失效', 401))
     await flushPromises()
-    expect(wrapper.get('[data-testid="login-error"]').text()).toContain('用户名或密码错误')
+    expect(wrapper.get('[data-testid="login-error"]').text()).toContain('邮箱或密码错误')
   })
 
   it('shows the explicit cold-start service error', async () => {
@@ -119,7 +96,6 @@ async function mountLogin(initialPath = '/login') {
     history: createMemoryHistory(),
     routes: [
       { path: '/login', component: LoginPage },
-      { path: '/register', component: { template: '<div />' } },
       { path: '/dashboard', component: { template: '<div />' } },
       { path: '/secure', component: { template: '<div />' } },
     ],

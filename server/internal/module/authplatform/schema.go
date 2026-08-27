@@ -58,8 +58,24 @@ func EnsureSchema(ctx context.Context, db *gorm.DB) error {
 			}
 			return nil
 		}
-		if len(rows) != 1 || !matchesBuiltinAdmin(rows[0]) {
+		if len(rows) != 1 {
 			return fmt.Errorf("builtin authentication platform admin is missing or damaged")
+		}
+		current := rows[0]
+		if err := validateBuiltinAdmin(current); err != nil {
+			return err
+		}
+		if current.AllowRegister == yesno.No {
+			return nil
+		}
+		now := time.Now().UTC().Truncate(time.Microsecond)
+		if err := tx.Exec(`
+			UPDATE auth_platform
+			SET allow_register = 0,
+			    policy_version = policy_version + 1,
+			    updated_at = ?
+			WHERE id = ? AND deleted_at IS NULL`, now, current.ID).Error; err != nil {
+			return fmt.Errorf("disable builtin admin registration: %w", err)
 		}
 		return nil
 	}); err != nil {
@@ -92,16 +108,14 @@ func builtinAdmin(now time.Time) Platform {
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
 		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
-		AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+		AllowRegister: yesno.No, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
 		CreatedAt: now, UpdatedAt: now,
 	}
 }
 
-func matchesBuiltinAdmin(value Platform) bool {
-	return value.Code == BuiltinAdminCode && value.Name == "Admin" && value.PolicyVersion == 1 &&
-		value.AccessTTLSeconds == 900 && value.RefreshTTLSeconds == 1_209_600 &&
-		value.SessionCacheTTLSeconds == 1_800 && value.AccessCacheTTLSeconds == 1_800 &&
-		value.BindDevice == yesno.No && value.BindIP == yesno.No && value.MaxSessions == 1 &&
-		value.AllowRegister == yesno.Yes && value.IsEnabled == yesno.Yes && value.IsBuiltin == yesno.Yes &&
-		!value.DeletedAt.Valid
+func validateBuiltinAdmin(value Platform) error {
+	if value.Code != BuiltinAdminCode || value.IsBuiltin != yesno.Yes || value.DeletedAt.Valid {
+		return fmt.Errorf("builtin authentication platform identity is invalid")
+	}
+	return ValidatePlatform(value)
 }

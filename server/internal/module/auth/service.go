@@ -28,7 +28,7 @@ import (
 
 type userStore interface {
 	CreateWithRole(context.Context, user.CreateInput) (user.User, error)
-	FindCredentialByUsername(context.Context, string) (user.Credential, error)
+	FindCredentialByEmail(context.Context, string) (user.Credential, error)
 	FindCurrent(context.Context, int64) (user.Current, error)
 }
 
@@ -70,6 +70,7 @@ type Service struct {
 	redis               *projectredis.Client
 	jwt                 *JWT
 	refreshTokenHMACKey []byte
+	comparePassword     func(string, string) error
 	logger              *slog.Logger
 	now                 func() time.Time
 }
@@ -90,7 +91,7 @@ func NewService(
 	return &Service{
 		users: users, roles: roles, sessions: sessions, policies: policies, states: states,
 		invalidator: invalidator, sessionCache: sessionCache, redis: redis, jwt: jwt,
-		refreshTokenHMACKey: append([]byte(nil), refreshTokenHMACKey...), logger: logger, now: time.Now,
+		refreshTokenHMACKey: append([]byte(nil), refreshTokenHMACKey...), comparePassword: VerifyPassword, logger: logger, now: time.Now,
 	}
 }
 
@@ -135,13 +136,17 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 	if err != nil {
 		return Credential{}, err
 	}
-	username := strings.TrimSpace(input.Username)
-	if username == "" || input.Password == "" {
-		return Credential{}, apperror.InvalidRequest(fmt.Errorf("username and password are required"))
+	email, err := normalizeEmail(input.Email)
+	if err != nil {
+		return Credential{}, apperror.InvalidRequest(err)
 	}
-	credential, err := s.users.FindCredentialByUsername(ctx, username)
+	if input.Password == "" {
+		return Credential{}, apperror.InvalidRequest(fmt.Errorf("email and password are required"))
+	}
+	credential, err := s.users.FindCredentialByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			_ = s.comparePassword(missingCredentialPasswordHash, input.Password)
 			return Credential{}, invalidCredentialError(err)
 		}
 		return Credential{}, apperror.DependencyUnavailable(err)
@@ -149,7 +154,7 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 	if credential.IsEnabled != yesno.Yes {
 		return Credential{}, apperror.Forbidden(fmt.Errorf("user is disabled"))
 	}
-	if err := VerifyPassword(credential.PasswordHash, input.Password); err != nil {
+	if err := s.comparePassword(credential.PasswordHash, input.Password); err != nil {
 		return Credential{}, invalidCredentialError(err)
 	}
 
@@ -619,10 +624,9 @@ func validateAccountInput(username, email, password, confirmPassword string) (no
 		return normalizedAccount{}, apperror.InvalidRequest(err)
 	}
 
-	email = strings.ToLower(strings.TrimSpace(email))
-	parsedAddress, err := mail.ParseAddress(email)
-	if err != nil || parsedAddress.Name != "" || parsedAddress.Address != email || len(email) > 254 {
-		return normalizedAccount{}, apperror.InvalidRequest(fmt.Errorf("email address is invalid"))
+	email, err = normalizeEmail(email)
+	if err != nil {
+		return normalizedAccount{}, apperror.InvalidRequest(err)
 	}
 	if password != confirmPassword {
 		return normalizedAccount{}, apperror.InvalidRequest(fmt.Errorf("password confirmation does not match"))
@@ -631,6 +635,15 @@ func validateAccountInput(username, email, password, confirmPassword string) (no
 		return normalizedAccount{}, apperror.InvalidRequest(err)
 	}
 	return normalizedAccount{Username: username, Email: email, Password: password}, nil
+}
+
+func normalizeEmail(value string) (string, error) {
+	email := strings.ToLower(strings.TrimSpace(value))
+	parsed, err := mail.ParseAddress(email)
+	if err != nil || parsed.Name != "" || parsed.Address != email || len(email) > 254 {
+		return "", fmt.Errorf("email address is invalid")
+	}
+	return email, nil
 }
 
 func mapUserCreateError(err error) error {

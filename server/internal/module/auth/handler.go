@@ -65,7 +65,7 @@ func (h *Handler) Login(context *gin.Context) {
 		return
 	}
 	credential, err := h.service.Login(context.Request.Context(), LoginInput{
-		Username: request.Username,
+		Email:    request.Email,
 		Password: request.Password,
 		Client:   client,
 	})
@@ -149,6 +149,7 @@ func (h *Handler) Me(context *gin.Context) {
 		UserID:   current.ID,
 		Username: current.Username,
 		Email:    current.Email,
+		Phone:    current.Phone,
 	})
 }
 

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getAccess } from '@src/api/access'
 import type { AccessSnapshot } from '@src/api/access'
-import { getAuthPolicy, getCurrentUser, refresh } from '@src/api/auth'
+import { getCurrentUser, refresh } from '@src/api/auth'
 import { installPermissionGuard } from '@src/permission'
 import { pinia } from '@src/store'
 import { useAccessStore } from '@src/store/access'
@@ -12,11 +12,10 @@ import { ApiError } from '@src/types/http'
 import { createAppRouter } from '@src/router/index'
 import { YesNo } from '@src/enums/yes-no'
 
-vi.mock('@src/api/auth', () => ({ getAuthPolicy: vi.fn(), refresh: vi.fn(), getCurrentUser: vi.fn() }))
+vi.mock('@src/api/auth', () => ({ refresh: vi.fn(), getCurrentUser: vi.fn() }))
 vi.mock('@src/api/access', () => ({ getAccess: vi.fn() }))
 const refreshMock = vi.mocked(refresh)
 const getCurrentUserMock = vi.mocked(getCurrentUser)
-const getAuthPolicyMock = vi.mocked(getAuthPolicy)
 const getAccessMock = vi.mocked(getAccess)
 
 describe('router', () => {
@@ -25,8 +24,6 @@ describe('router', () => {
     useAccessStore(pinia).reset()
     refreshMock.mockReset()
     getCurrentUserMock.mockReset()
-    getAuthPolicyMock.mockReset()
-    getAuthPolicyMock.mockResolvedValue({ code: 'admin', name: 'Admin', allowRegister: 1 })
     getAccessMock.mockReset()
     getAccessMock.mockResolvedValue(emptyAccessSnapshot())
   })
@@ -34,7 +31,8 @@ describe('router', () => {
 	it('declares public auth routes and static protected Dashboard and menu management routes', () => {
     const router = createAppRouter(createMemoryHistory())
     expect(router.resolve('/login').meta.requiresAuth).toBe(false)
-    expect(router.resolve('/register').meta.requiresAuth).toBe(false)
+	  expect(router.hasRoute('register')).toBe(false)
+	  expect(router.resolve('/register').matched).toHaveLength(0)
 		expect(router.resolve('/dashboard').meta.requiresAuth).toBe(true)
 		expect(router.resolve('/access/menus').meta.requiresAuth).toBe(true)
 		expect(router.resolve('/access/menus').meta.requiredPermission).toBe('rbac:menu:list')
@@ -74,7 +72,7 @@ describe('router', () => {
     })
     getCurrentUserMock.mockImplementation(async () => {
       order.push('me')
-      return { userId: 1, username: 'admin', email: 'admin@example.com' }
+      return { userId: 1, username: 'admin', email: 'admin@example.com', phone: null }
     })
     getAccessMock.mockImplementation(async () => {
       order.push('access')
@@ -190,39 +188,6 @@ describe('router', () => {
     expect(getAccessMock).not.toHaveBeenCalled()
   })
 
-  it('redirects public Register to Login when registration is disabled', async () => {
-    getAuthPolicyMock.mockResolvedValue({ code: 'admin', name: 'Admin', allowRegister: 0 })
-    const router = createAppRouter(createMemoryHistory())
-    installPermissionGuard(router)
-
-    await router.push('/register')
-
-    expect(router.currentRoute.value.path).toBe('/login')
-    expect(getAuthPolicyMock).toHaveBeenCalledOnce()
-  })
-
-  it('allows public Register when registration is enabled', async () => {
-    const router = createAppRouter(createMemoryHistory())
-    installPermissionGuard(router)
-
-    await router.push('/register')
-
-    expect(router.currentRoute.value.path).toBe('/register')
-    expect(getAuthPolicyMock).toHaveBeenCalledOnce()
-  })
-
-  it('keeps a registration policy failure as an explicit auth error', async () => {
-    getAuthPolicyMock.mockRejectedValue(new ApiError(10006, '服务暂未就绪', 503))
-    const router = createAppRouter(createMemoryHistory())
-    installPermissionGuard(router)
-
-    await router.push('/register')
-
-    expect(router.currentRoute.value.path).toBe('/login')
-    expect(useAuthStore(pinia).status).toBe('error')
-    expect(useAuthStore(pinia).errorMessage).toBe('服务暂未就绪')
-  })
-
   it('redirects a refresh 401 to Login as anonymous', async () => {
     refreshMock.mockRejectedValue(new ApiError(10002, '未登录或登录已失效', 401))
     const router = createAppRouter(createMemoryHistory())
@@ -275,7 +240,7 @@ describe('router', () => {
 function setAuthenticated(): void {
   const store = useAuthStore(pinia)
   store.setCredential({ accessToken: 'jwt', expiresIn: 900 })
-  store.setAuthenticated({ userId: 1, username: 'admin', email: 'admin@example.com' })
+  store.setAuthenticated({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null })
 }
 
 function emptyAccessSnapshot(): AccessSnapshot {

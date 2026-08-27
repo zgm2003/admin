@@ -28,3 +28,19 @@ func NormalizeUsername(value string) (string, error) {
 	}
 	return value, nil
 }
+
+func NormalizePhone(value *string) (*string, error) {
+	if value == nil {
+		return nil, nil
+	}
+	normalized := strings.TrimSpace(*value)
+	if normalized == "" || utf8.RuneCountInString(normalized) > 32 {
+		return nil, fmt.Errorf("phone must contain 1 to 32 Unicode characters")
+	}
+	for _, character := range normalized {
+		if unicode.IsControl(character) {
+			return nil, fmt.Errorf("phone contains a control character")
+		}
+	}
+	return &normalized, nil
+}

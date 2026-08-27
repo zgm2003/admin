@@ -18,6 +18,7 @@ import (
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -85,7 +86,7 @@ func TestLoginUsesPolicyTTLAndPublishesSessionSnapshot(t *testing.T) {
 	service.now = func() time.Time { return fixedNow }
 	service.jwt.now = service.now
 
-	credential, err := service.Login(context.Background(), LoginInput{Username: "admin", Password: "password", Client: testAuthClient()})
+	credential, err := service.Login(context.Background(), LoginInput{Email: "admin@example.com", Password: "password", Client: testAuthClient()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,6 +108,115 @@ func TestLoginUsesPolicyTTLAndPublishesSessionSnapshot(t *testing.T) {
 	ttl, found, err := redisClient.TTL(context.Background(), SessionKey("admin", 82002))
 	if err != nil || !found || ttl > policy.RefreshTTL || ttl < policy.RefreshTTL-30*time.Second {
 		t.Fatalf("session snapshot TTL = %v,%v,%v", ttl, found, err)
+	}
+}
+
+func TestLoginNormalizesEmailAndKeepsCredentialErrorsUniform(t *testing.T) {
+	ctx := context.Background()
+	redisClient := openAuthRedis(t)
+	passwordHash, err := HashPassword("password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	users := &fakeUserStore{credential: user.Credential{
+		ID: 1, Username: "admin", Email: "admin@example.com", PasswordHash: passwordHash, IsEnabled: yesno.Yes,
+	}}
+	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: testPolicy()})
+	_, wrongErr := service.Login(ctx, LoginInput{Email: " Admin@Example.COM ", Password: "wrong", Client: testAuthClient()})
+	if appErrorCode(wrongErr) != apperror.CodeUnauthorized {
+		t.Fatalf("wrong password error = %v", wrongErr)
+	}
+	if users.credentialEmail != "admin@example.com" {
+		t.Fatalf("credential email = %q", users.credentialEmail)
+	}
+
+	users.credentialErr = gorm.ErrRecordNotFound
+	_, missingErr := service.Login(ctx, LoginInput{Email: "missing@example.com", Password: "wrong", Client: testAuthClient()})
+	var wrongPublic, missingPublic *apperror.Error
+	if !errors.As(wrongErr, &wrongPublic) || !errors.As(missingErr, &missingPublic) ||
+		wrongPublic.HTTPStatus != missingPublic.HTTPStatus || wrongPublic.Code != missingPublic.Code ||
+		wrongPublic.MessageKey != missingPublic.MessageKey {
+		t.Fatalf("public errors differ: wrong=%v missing=%v", wrongErr, missingErr)
+	}
+}
+
+func TestLoginComparesPasswordWithValidBcryptHashWhenEmailDoesNotExist(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	service := newRedisTestService(t, redisClient, &fakeUserStore{credentialErr: gorm.ErrRecordNotFound}, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: testPolicy()})
+	compareCalls := 0
+	comparedPassword := ""
+	comparedCost := 0
+	var comparedCostErr error
+	service.comparePassword = func(hash, password string) error {
+		compareCalls++
+		comparedPassword = password
+		comparedCost, comparedCostErr = bcrypt.Cost([]byte(hash))
+		return VerifyPassword(hash, password)
+	}
+
+	_, err := service.Login(context.Background(), LoginInput{Email: "missing@example.com", Password: "  supplied password  ", Client: testAuthClient()})
+	if appErrorCode(err) != apperror.CodeUnauthorized {
+		t.Fatalf("missing email error = %v", err)
+	}
+	if compareCalls != 1 || comparedPassword != "  supplied password  " || comparedCostErr != nil || comparedCost != bcrypt.DefaultCost {
+		t.Fatalf("password compare calls=%d password=%q cost=%d costErr=%v", compareCalls, comparedPassword, comparedCost, comparedCostErr)
+	}
+}
+
+func TestLoginPreservesPasswordWhitespaceForBcrypt(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	cleanupAuthRedisKeys(t, redisClient, 82501, "admin", 82502)
+	password := "  password  "
+	passwordHash, err := HashPassword(password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	users := &fakeUserStore{credential: user.Credential{
+		ID: 82501, Username: "admin", Email: "admin@example.com", PasswordHash: passwordHash, IsEnabled: yesno.Yes,
+	}}
+	sessions := &fakeSessionStore{createSession: Session{
+		ID: 82502, UserID: 82501, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: "127.0.0.1",
+	}}
+	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: testPolicy()})
+
+	if _, err := service.Login(context.Background(), LoginInput{Email: "admin@example.com", Password: strings.TrimSpace(password), Client: testAuthClient()}); appErrorCode(err) != apperror.CodeUnauthorized {
+		t.Fatalf("trimmed password error = %v", err)
+	}
+	if _, err := service.Login(context.Background(), LoginInput{Email: "admin@example.com", Password: password, Client: testAuthClient()}); err != nil {
+		t.Fatalf("original password error = %v", err)
+	}
+}
+
+func TestLoginRejectsInvalidEmailBeforeCredentialLookup(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	users := &fakeUserStore{}
+	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: testPolicy()})
+
+	for _, email := range []string{"", "not-an-email", strings.Repeat("a", 243) + "@example.com"} {
+		if _, err := service.Login(context.Background(), LoginInput{Email: email, Password: "password", Client: testAuthClient()}); appErrorCode(err) != apperror.CodeInvalidRequest {
+			t.Errorf("Login(%q) error = %v", email, err)
+		}
+	}
+	if users.credentialEmail != "" {
+		t.Fatalf("invalid email reached credential lookup: %q", users.credentialEmail)
+	}
+}
+
+func TestLoginMapsDisabledAndRepositoryCredentialErrors(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	passwordHash, err := HashPassword("password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	users := &fakeUserStore{credential: user.Credential{ID: 1, Email: "admin@example.com", PasswordHash: passwordHash, IsEnabled: yesno.No}}
+	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: testPolicy()})
+	if _, err := service.Login(context.Background(), LoginInput{Email: "admin@example.com", Password: "password", Client: testAuthClient()}); appErrorCode(err) != apperror.CodeForbidden {
+		t.Fatalf("disabled user error = %v", err)
+	}
+
+	users.credentialErr = errors.New("postgres unavailable")
+	if _, err := service.Login(context.Background(), LoginInput{Email: "admin@example.com", Password: "password", Client: testAuthClient()}); appErrorCode(err) != apperror.CodeDependencyUnavailable {
+		t.Fatalf("repository error = %v", err)
 	}
 }
 
@@ -348,7 +458,8 @@ func TestLogoutRequiresRedisInvalidationBeforePostgreSQL(t *testing.T) {
 
 func TestCurrentUserReturnsClosedIdentity(t *testing.T) {
 	redisClient := openAuthRedis(t)
-	users := &fakeUserStore{current: user.Current{ID: 1, Username: "admin", Email: "admin@example.com"}}
+	phone := "+86 138-0000-0000"
+	users := &fakeUserStore{current: user.Current{ID: 1, Username: "admin", Email: "admin@example.com", Phone: &phone}}
 	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: testPolicy()})
 	current, err := service.CurrentUser(context.Background(), Identity{UserID: 1, SessionID: 2, Platform: "admin", Version: 1})
 	if err != nil || current != users.current {
@@ -420,13 +531,14 @@ func (f *fakePolicyStore) CurrentPolicy(context.Context, string) (authplatform.P
 }
 
 type fakeUserStore struct {
-	created       user.CreateInput
-	createFn      func(context.Context, user.CreateInput) (user.User, error)
-	createErr     error
-	credential    user.Credential
-	credentialErr error
-	current       user.Current
-	currentErr    error
+	created         user.CreateInput
+	createFn        func(context.Context, user.CreateInput) (user.User, error)
+	createErr       error
+	credential      user.Credential
+	credentialErr   error
+	credentialEmail string
+	current         user.Current
+	currentErr      error
 }
 
 func (f *fakeUserStore) CreateWithRole(ctx context.Context, input user.CreateInput) (user.User, error) {
@@ -437,7 +549,8 @@ func (f *fakeUserStore) CreateWithRole(ctx context.Context, input user.CreateInp
 	return user.User{}, f.createErr
 }
 
-func (f *fakeUserStore) FindCredentialByUsername(context.Context, string) (user.Credential, error) {
+func (f *fakeUserStore) FindCredentialByEmail(_ context.Context, email string) (user.Credential, error) {
+	f.credentialEmail = email
 	return f.credential, f.credentialErr
 }
 

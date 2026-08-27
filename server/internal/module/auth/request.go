@@ -11,7 +11,7 @@ type RegisterInput struct {
 }
 
 type LoginInput struct {
-	Username string
+	Email    string
 	Password string
 	Client   authclient.Client
 }
@@ -29,6 +29,6 @@ type RegisterRequest struct {
 }
 
 type LoginRequest struct {
-	Username string `json:"username" binding:"required,max=64"`
+	Email    string `json:"email" binding:"required,max=254"`
 	Password string `json:"password" binding:"required"`
 }

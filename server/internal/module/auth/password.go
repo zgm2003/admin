@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	minimumPasswordRunes = 8
-	maximumPasswordBytes = 72
+	minimumPasswordRunes          = 8
+	maximumPasswordBytes          = 72
+	missingCredentialPasswordHash = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
 )
 
 func ValidatePassword(password string) error {

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { refreshAccessCredential, request } from '@src/utils/request'
-import { getAuthPolicy, getCurrentUser, login, logout, refresh, register } from '@src/api/auth'
+import { getCurrentUser, login, logout, refresh } from '@src/api/auth'
 
-vi.mock('@src/utils/request', () => ({ request: vi.fn(), refreshAccessCredential: vi.fn() }))
+vi.mock('@src/utils/request', () => ({ request: vi.fn(), refreshAccessCredential: vi.fn(), ProtocolError: class ProtocolError extends Error {} }))
 
 const requestMock = vi.mocked(request)
 const refreshAccessCredentialMock = vi.mocked(refreshAccessCredential)
@@ -14,16 +14,9 @@ describe('auth API', () => {
     refreshAccessCredentialMock.mockReset()
   })
 
-  it('registers and validates the response', async () => {
-    requestMock.mockResolvedValue({ userId: 1, username: 'admin', email: 'admin@example.com' })
-    const input = { username: 'admin', email: 'admin@example.com', password: 'password', confirmPassword: 'password' }
-    await expect(register(input)).resolves.toEqual({ userId: 1, username: 'admin', email: 'admin@example.com' })
-    expect(requestMock).toHaveBeenCalledWith({ method: 'POST', url: '/api/v1/auth/register', data: input })
-  })
-
-  it('logs in and validates the credential', async () => {
+  it('logs in with only email and password', async () => {
     requestMock.mockResolvedValue({ accessToken: 'jwt', expiresIn: 900 })
-    const input = { username: 'admin', password: 'password' }
+    const input = { email: 'admin@example.com', password: 'password' }
     await expect(login(input)).resolves.toEqual({ accessToken: 'jwt', expiresIn: 900 })
     expect(requestMock).toHaveBeenCalledWith({ method: 'POST', url: '/api/v1/auth/login', data: input })
   })
@@ -39,15 +32,21 @@ describe('auth API', () => {
   })
 
   it('loads and validates the current user', async () => {
-    requestMock.mockResolvedValue({ userId: 1, username: 'admin', email: 'admin@example.com' })
-    await expect(getCurrentUser()).resolves.toEqual({ userId: 1, username: 'admin', email: 'admin@example.com' })
+    requestMock.mockResolvedValue({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null })
+    await expect(getCurrentUser()).resolves.toEqual({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null })
     expect(requestMock).toHaveBeenCalledWith({ method: 'GET', url: '/api/v1/auth/me' })
   })
 
-  it('loads and validates the public authentication policy', async () => {
-    requestMock.mockResolvedValue({ code: 'admin', name: 'Admin', allowRegister: 1 })
+  it('rejects a current user response without the required phone field', async () => {
+    requestMock.mockResolvedValue({ userId: 1, username: 'admin', email: 'admin@example.com' })
 
-    await expect(getAuthPolicy()).resolves.toEqual({ code: 'admin', name: 'Admin', allowRegister: 1 })
-    expect(requestMock).toHaveBeenCalledWith({ method: 'GET', url: '/api/v1/auth/policy' })
+    await expect(getCurrentUser()).rejects.toThrow('current user response is invalid')
   })
+
+  it('rejects a current user response with a non-string phone', async () => {
+    requestMock.mockResolvedValue({ userId: 1, username: 'admin', email: 'admin@example.com', phone: 1 })
+
+    await expect(getCurrentUser()).rejects.toThrow('current user response is invalid')
+  })
+
 })

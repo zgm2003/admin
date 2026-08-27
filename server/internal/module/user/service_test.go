@@ -71,7 +71,7 @@ func TestRoleOptionsServiceReturnsRepositoryOptions(t *testing.T) {
 	}
 }
 
-func TestServiceUpdateUsernameAllowsSelfAndIsIdempotent(t *testing.T) {
+func TestServiceUpdateProfileNormalizesPhoneAndPreservesNoOpTimestamp(t *testing.T) {
 	tx, ctx, roleRepository := openUserTransaction(t)
 	defaultRole, err := roleRepository.FindDefault(ctx)
 	if err != nil {
@@ -79,17 +79,65 @@ func TestServiceUpdateUsernameAllowsSelfAndIsIdempotent(t *testing.T) {
 	}
 	created := createListedUser(t, tx, ctx, fmt.Sprintf("self%d", time.Now().UnixNano()), fmt.Sprintf("self%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC().Add(-time.Hour), defaultRole.ID)
 	service := newUserTestService(t, user.NewRepository(tx))
-	updated, err := service.Update(ctx, created.ID, created.ID, user.UpdateInput{Username: "  新用户名_01  "})
-	if err != nil || updated.ID != created.ID || updated.Username != "新用户名_01" || !updated.UpdatedAt.After(created.UpdatedAt) {
+	phone := "  +86 138-0000-0000  "
+	updated, err := service.Update(ctx, created.ID, created.ID, user.UpdateInput{Username: "  新用户名_01  ", Phone: &phone})
+	if err != nil || updated.ID != created.ID || updated.Username != "新用户名_01" || updated.Phone == nil || *updated.Phone != "+86 138-0000-0000" || !updated.UpdatedAt.After(created.UpdatedAt) {
 		t.Fatalf("Update() = %+v,%v", updated, err)
 	}
-	idempotent, err := service.Update(ctx, created.ID, created.ID, user.UpdateInput{Username: "新用户名_01"})
+	idempotent, err := service.Update(ctx, created.ID, created.ID, user.UpdateInput{Username: "新用户名_01", Phone: updated.Phone})
 	if err != nil || !idempotent.UpdatedAt.Equal(updated.UpdatedAt) {
 		t.Fatalf("idempotent Update() = %+v,%v", idempotent, err)
 	}
 }
 
-func TestServiceUpdateUsernameValidatesTargetAndConflicts(t *testing.T) {
+func TestServiceUpdateProfileSetsPhoneWhenUsernameIsUnchanged(t *testing.T) {
+	tx, ctx, roleRepository := openUserTransaction(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unique := fmt.Sprintf("phoneset%d", time.Now().UnixNano())
+	created := createListedUser(t, tx, ctx, unique, unique+"@example.com", yesno.Yes, time.Now().UTC(), defaultRole.ID)
+	phone := "+86 138-0000-0000"
+	updated, err := newUserTestService(t, user.NewRepository(tx)).Update(ctx, created.ID, created.ID, user.UpdateInput{Username: created.Username, Phone: &phone})
+	if err != nil || updated.Phone == nil || *updated.Phone != phone {
+		t.Fatalf("Update() = %+v,%v", updated, err)
+	}
+	var stored user.User
+	if err := tx.WithContext(ctx).Take(&stored, created.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Username != created.Username || stored.Phone == nil || *stored.Phone != phone {
+		t.Fatalf("stored profile = %+v", stored)
+	}
+}
+
+func TestServiceUpdateProfileClearsPhoneWhenUsernameIsUnchanged(t *testing.T) {
+	tx, ctx, roleRepository := openUserTransaction(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unique := fmt.Sprintf("phoneclear%d", time.Now().UnixNano())
+	created := createListedUser(t, tx, ctx, unique, unique+"@example.com", yesno.Yes, time.Now().UTC(), defaultRole.ID)
+	phone := "+86 138-0000-0000"
+	if err := tx.WithContext(ctx).Model(&user.User{}).Where("id = ?", created.ID).Update("phone", &phone).Error; err != nil {
+		t.Fatal(err)
+	}
+	updated, err := newUserTestService(t, user.NewRepository(tx)).Update(ctx, created.ID, created.ID, user.UpdateInput{Username: created.Username, Phone: nil})
+	if err != nil || updated.Phone != nil {
+		t.Fatalf("Update() = %+v,%v", updated, err)
+	}
+	var stored user.User
+	if err := tx.WithContext(ctx).Take(&stored, created.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Username != created.Username || stored.Phone != nil {
+		t.Fatalf("stored profile = %+v", stored)
+	}
+}
+
+func TestServiceUpdateProfileValidatesTargetAndConflicts(t *testing.T) {
 	tx, ctx, roleRepository := openUserTransaction(t)
 	defaultRole, err := roleRepository.FindDefault(ctx)
 	if err != nil {
@@ -99,28 +147,33 @@ func TestServiceUpdateUsernameValidatesTargetAndConflicts(t *testing.T) {
 	target := createListedUser(t, tx, ctx, fmt.Sprintf("target%d", time.Now().UnixNano()), fmt.Sprintf("target%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
 	service := newUserTestService(t, user.NewRepository(tx))
 	for _, name := range []string{"ab", "bad name", strings.Repeat("a", 65)} {
-		if _, err := service.Update(ctx, actor.ID, target.ID, user.UpdateInput{Username: name}); appErrorCodeForUser(err) != apperror.CodeInvalidRequest {
+		if _, err := service.Update(ctx, actor.ID, target.ID, user.UpdateInput{Username: name, Phone: nil}); appErrorCodeForUser(err) != apperror.CodeInvalidRequest {
 			t.Errorf("Update(%q) error = %v", name, err)
 		}
 	}
-	if _, err := service.Update(ctx, actor.ID, 9223372036854770000, user.UpdateInput{Username: "valid_name"}); appErrorCodeForUser(err) != user.CodeUserNotFound {
+	for _, phone := range []string{"", "  ", "123\n456", strings.Repeat("1", 33)} {
+		if _, err := service.Update(ctx, actor.ID, target.ID, user.UpdateInput{Username: target.Username, Phone: &phone}); appErrorCodeForUser(err) != apperror.CodeInvalidRequest {
+			t.Errorf("Update(phone=%q) error = %v", phone, err)
+		}
+	}
+	if _, err := service.Update(ctx, actor.ID, 9223372036854770000, user.UpdateInput{Username: "valid_name", Phone: nil}); appErrorCodeForUser(err) != user.CodeUserNotFound {
 		t.Fatalf("unknown target error = %v", err)
 	}
-	if _, err := service.Update(ctx, actor.ID, target.ID, user.UpdateInput{Username: strings.ToUpper(actor.Username)}); appErrorCodeForUser(err) != user.CodeUserUsernameConflict {
+	if _, err := service.Update(ctx, actor.ID, target.ID, user.UpdateInput{Username: strings.ToUpper(actor.Username), Phone: nil}); appErrorCodeForUser(err) != user.CodeUserUsernameConflict {
 		t.Fatalf("conflict error = %v", err)
 	}
 	if err := tx.WithContext(ctx).Delete(&target).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Update(ctx, actor.ID, target.ID, user.UpdateInput{Username: "deleted_target"}); appErrorCodeForUser(err) != user.CodeUserNotFound {
+	if _, err := service.Update(ctx, actor.ID, target.ID, user.UpdateInput{Username: "deleted_target", Phone: nil}); appErrorCodeForUser(err) != user.CodeUserNotFound {
 		t.Fatalf("deleted target error = %v", err)
 	}
-	if _, err := service.Update(ctx, actor.ID, actor.ID, user.UpdateInput{Username: target.Username}); err != nil {
+	if _, err := service.Update(ctx, actor.ID, actor.ID, user.UpdateInput{Username: target.Username, Phone: nil}); err != nil {
 		t.Fatalf("soft-deleted username was not reusable: %v", err)
 	}
 }
 
-func TestServiceUpdateUsernameProtectsSuperAdminTarget(t *testing.T) {
+func TestServiceUpdateProfileProtectsSuperAdminTarget(t *testing.T) {
 	tx, ctx, roleRepository := openUserTransaction(t)
 	defaultRole, err := roleRepository.FindDefault(ctx)
 	if err != nil {
@@ -134,16 +187,16 @@ func TestServiceUpdateUsernameProtectsSuperAdminTarget(t *testing.T) {
 	superActor := createListedUser(t, tx, ctx, fmt.Sprintf("superactor%d", time.Now().UnixNano()), fmt.Sprintf("superactor%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), superRole.ID)
 	superTarget := createListedUser(t, tx, ctx, fmt.Sprintf("supertarget%d", time.Now().UnixNano()), fmt.Sprintf("supertarget%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), superRole.ID)
 	service := newUserTestService(t, user.NewRepository(tx))
-	if _, err := service.Update(ctx, ordinary.ID, superTarget.ID, user.UpdateInput{Username: "blocked_super"}); appErrorCodeForUser(err) != user.CodeUserSuperAdminProtected {
+	if _, err := service.Update(ctx, ordinary.ID, superTarget.ID, user.UpdateInput{Username: "blocked_super", Phone: nil}); appErrorCodeForUser(err) != user.CodeUserSuperAdminProtected {
 		t.Fatalf("ordinary actor error = %v", err)
 	}
-	updated, err := service.Update(ctx, superActor.ID, superTarget.ID, user.UpdateInput{Username: "allowed_super"})
+	updated, err := service.Update(ctx, superActor.ID, superTarget.ID, user.UpdateInput{Username: "allowed_super", Phone: nil})
 	if err != nil || updated.Username != "allowed_super" {
 		t.Fatalf("super actor Update() = %+v,%v", updated, err)
 	}
 }
 
-func TestServiceUpdateUsernameMapsRepositoryFailure(t *testing.T) {
+func TestServiceUpdateProfileMapsRepositoryFailure(t *testing.T) {
 	tx, ctx, roleRepository := openUserTransaction(t)
 	defaultRole, err := roleRepository.FindDefault(ctx)
 	if err != nil {
@@ -152,9 +205,44 @@ func TestServiceUpdateUsernameMapsRepositoryFailure(t *testing.T) {
 	actor := createListedUser(t, tx, ctx, fmt.Sprintf("failure%d", time.Now().UnixNano()), fmt.Sprintf("failure%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	_, err = newUserTestService(t, user.NewRepository(tx)).Update(canceled, actor.ID, actor.ID, user.UpdateInput{Username: "failure_name"})
+	_, err = newUserTestService(t, user.NewRepository(tx)).Update(canceled, actor.ID, actor.ID, user.UpdateInput{Username: "failure_name", Phone: nil})
 	if appErrorCodeForUser(err) != apperror.CodeDependencyUnavailable {
 		t.Fatalf("repository failure error = %v", err)
+	}
+}
+
+func TestServiceUpdateProfileRollsBackUsernameAndPhoneOnWriteFailure(t *testing.T) {
+	tx, ctx, roleRepository := openUserTransaction(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldPhone := "+86 139-0000-0000"
+	target := createListedUser(t, tx, ctx, fmt.Sprintf("rollback%d", time.Now().UnixNano()), fmt.Sprintf("rollback%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
+	if err := tx.WithContext(ctx).Model(&user.User{}).Where("id = ?", target.ID).Update("phone", &oldPhone).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.WithContext(ctx).Exec(`
+		CREATE FUNCTION pg_temp.reject_user_profile_update() RETURNS trigger AS $$
+		BEGIN
+			RAISE EXCEPTION 'forced profile update failure';
+		END;
+		$$ LANGUAGE plpgsql;
+		CREATE TRIGGER test_reject_user_profile_update
+		AFTER UPDATE OF username, phone ON user_account
+		FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_user_profile_update();`).Error; err != nil {
+		t.Fatalf("create profile rejection trigger: %v", err)
+	}
+	newPhone := "+86 138-0000-0000"
+	if _, err := newUserTestService(t, user.NewRepository(tx)).Update(ctx, target.ID, target.ID, user.UpdateInput{Username: "rollback_new", Phone: &newPhone}); appErrorCodeForUser(err) != apperror.CodeDependencyUnavailable {
+		t.Fatalf("Update() error = %v", err)
+	}
+	var stored user.User
+	if err := tx.WithContext(ctx).Take(&stored, target.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Username != target.Username || stored.Phone == nil || *stored.Phone != oldPhone {
+		t.Fatalf("profile write was not rolled back: %+v", stored)
 	}
 }
 

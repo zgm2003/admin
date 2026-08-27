@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"admin/server/internal/module/role"
@@ -60,6 +61,9 @@ func TestBootstrapAdminUsesRegistrationValidationAndConflictMapping(t *testing.T
 	invalidService := NewBootstrapService(&fakeBootstrapUserStore{}, roles)
 	if _, err := invalidService.Create(context.Background(), BootstrapAdminInput{Username: "bad name", Email: "invalid", Password: "short"}); appErrorCode(err) != apperror.CodeInvalidRequest {
 		t.Fatalf("invalid input error = %v", err)
+	}
+	if _, err := invalidService.Create(context.Background(), BootstrapAdminInput{Username: "admin", Email: strings.Repeat("a", 243) + "@example.com", Password: "password"}); appErrorCode(err) != apperror.CodeInvalidRequest {
+		t.Fatalf("255-byte email error = %v", err)
 	}
 
 	for _, conflict := range []error{user.ErrUsernameConflict, user.ErrEmailConflict} {

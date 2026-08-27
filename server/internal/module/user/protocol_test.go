@@ -27,3 +27,37 @@ func TestNormalizeUsername(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizePhone(t *testing.T) {
+	tooLong := strings.Repeat("a", 33)
+	for _, test := range []struct {
+		name  string
+		input *string
+		want  *string
+		valid bool
+	}{
+		{name: "nil", valid: true},
+		{name: "trims whitespace", input: pointerTo("  +86 138-0000-0000  "), want: pointerTo("+86 138-0000-0000"), valid: true},
+		{name: "accepts phone characters", input: pointerTo("+86 138-0000-0000"), want: pointerTo("+86 138-0000-0000"), valid: true},
+		{name: "rejects empty", input: pointerTo("  ")},
+		{name: "rejects more than 32 runes", input: &tooLong},
+		{name: "rejects control character", input: pointerTo("138\n0000")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := NormalizePhone(test.input)
+			if test.valid {
+				if err != nil || (got == nil) != (test.want == nil) || got != nil && *got != *test.want {
+					t.Fatalf("NormalizePhone(%v) = %v,%v, want %v,nil", test.input, got, err, test.want)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("NormalizePhone(%v) accepted invalid input", test.input)
+			}
+		})
+	}
+}
+
+func pointerTo(value string) *string {
+	return &value
+}

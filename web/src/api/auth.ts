@@ -1,23 +1,8 @@
-import { authPlatform } from '../auth/platform'
-import type { YesNo } from '../enums/yes-no'
-import { refreshAccessCredential, request } from '../utils/request'
-
-export interface RegisterInput {
-  username: string
-  email: string
-  password: string
-  confirmPassword: string
-}
+import { ProtocolError, refreshAccessCredential, request } from '../utils/request'
 
 export interface LoginInput {
-  username: string
-  password: string
-}
-
-export interface RegisteredUser {
-  userId: number
-  username: string
   email: string
+  password: string
 }
 
 export interface AccessCredential {
@@ -29,16 +14,7 @@ export interface CurrentUser {
   userId: number
   username: string
   email: string
-}
-
-export interface AuthPolicy {
-  code: typeof authPlatform
-  name: string
-  allowRegister: YesNo
-}
-
-export async function register(input: RegisterInput): Promise<RegisteredUser> {
-  return request<RegisteredUser>({ method: 'POST', url: '/api/v1/auth/register', data: input })
+  phone: string | null
 }
 
 export async function login(input: LoginInput): Promise<AccessCredential> {
@@ -54,9 +30,29 @@ export async function logout(): Promise<void> {
 }
 
 export async function getCurrentUser(): Promise<CurrentUser> {
-  return request<CurrentUser>({ method: 'GET', url: '/api/v1/auth/me' })
+  return parseCurrentUser(await request<unknown>({ method: 'GET', url: '/api/v1/auth/me' }))
 }
 
-export async function getAuthPolicy(): Promise<AuthPolicy> {
-  return request<AuthPolicy>({ method: 'GET', url: '/api/v1/auth/policy' })
+function parseCurrentUser(value: unknown): CurrentUser {
+  if (!isExactRecord(value, ['userId', 'username', 'email', 'phone']) ||
+    !isPositiveInteger(value.userId) || typeof value.username !== 'string' ||
+    typeof value.email !== 'string' || !isNullableString(value.phone)) {
+    throw new ProtocolError('current user response is invalid')
+  }
+  return { userId: value.userId, username: value.username, email: value.email, phone: value.phone }
+}
+
+function isExactRecord(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const actual = Object.keys(value).sort()
+  const expected = [...keys].sort()
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index])
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === 'string'
 }

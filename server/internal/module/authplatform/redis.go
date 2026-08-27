@@ -36,6 +36,16 @@ func PolicyKey(code string) string {
 	return "auth:policy:" + code
 }
 
+func ClearBuiltinAdminPolicy(ctx context.Context, redis *projectredis.Client) error {
+	if redis == nil {
+		return fmt.Errorf("clear builtin admin policy requires Redis")
+	}
+	if err := redis.Delete(ctx, PolicyKey(BuiltinAdminCode)); err != nil {
+		return fmt.Errorf("clear builtin admin policy: %w", err)
+	}
+	return nil
+}
+
 func (s *PolicyStore) read(ctx context.Context, code string) (policyState, bool, error) {
 	raw, found, err := s.redis.GetString(ctx, PolicyKey(code))
 	if err != nil || !found {

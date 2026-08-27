@@ -146,7 +146,7 @@ func TestCreateWithRoleRollsBackAfterRelationshipFailure(t *testing.T) {
 	}
 }
 
-func TestFindCredentialUsesCaseInsensitiveUsername(t *testing.T) {
+func TestFindCredentialUsesExactNormalizedEmail(t *testing.T) {
 	tx, ctx, roleRepository := openUserTransaction(t)
 	defaultRole, err := roleRepository.FindDefault(ctx)
 	if err != nil {
@@ -159,12 +159,15 @@ func TestFindCredentialUsesCaseInsensitiveUsername(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	credential, err := repository.FindCredentialByUsername(ctx, strings.ToUpper(input.Username))
+	credential, err := repository.FindCredentialByEmail(ctx, input.Email)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if credential.ID != created.ID || credential.PasswordHash != input.PasswordHash || credential.Email != input.Email {
 		t.Fatalf("credential = %+v", credential)
+	}
+	if _, err := repository.FindCredentialByEmail(ctx, input.Username); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("username unexpectedly resolved as a credential: %v", err)
 	}
 }
 
@@ -183,7 +186,7 @@ func TestFindCredentialReturnsDisabledStateAndExcludesDeletedUsers(t *testing.T)
 	if err := tx.WithContext(ctx).Model(&user.User{}).Where("id = ?", created.ID).Update("is_enabled", yesno.No).Error; err != nil {
 		t.Fatal(err)
 	}
-	credential, err := repository.FindCredentialByUsername(ctx, input.Username)
+	credential, err := repository.FindCredentialByEmail(ctx, input.Email)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +196,7 @@ func TestFindCredentialReturnsDisabledStateAndExcludesDeletedUsers(t *testing.T)
 	if err := tx.WithContext(ctx).Delete(&user.User{}, created.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repository.FindCredentialByUsername(ctx, input.Username); !errors.Is(err, gorm.ErrRecordNotFound) {
+	if _, err := repository.FindCredentialByEmail(ctx, input.Email); !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("deleted credential error = %v", err)
 	}
 }
@@ -222,6 +225,40 @@ func TestFindCurrentUserRequiresAnEnabledRole(t *testing.T) {
 	}
 	if _, err := repository.FindCurrent(ctx, created.ID); !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("disabled-role current user error = %v", err)
+	}
+}
+
+func TestRepositoryProfilePhoneRoundTripAndKeywordSearch(t *testing.T) {
+	tx, ctx, roleRepository := openUserTransaction(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := user.NewRepository(tx)
+	input := newCreateInput("phone", defaultRole.ID)
+	created, err := repository.CreateWithRole(ctx, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Phone != nil {
+		t.Fatalf("new user phone = %v, want nil", created.Phone)
+	}
+	phone := "+86 138-0000-0000"
+	updatedAt := time.Date(2026, 8, 27, 1, 2, 3, 0, time.UTC)
+	if err := repository.UpdateProfile(ctx, created.ID, created.Username+"x", &phone, updatedAt); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := repository.FindUser(ctx, created.ID)
+	if err != nil || stored.Username != created.Username+"x" || stored.Phone == nil || *stored.Phone != phone || !stored.UpdatedAt.Equal(updatedAt) {
+		t.Fatalf("stored=%+v err=%v", stored, err)
+	}
+	current, err := repository.FindCurrent(ctx, created.ID)
+	if err != nil || current.Phone == nil || *current.Phone != phone {
+		t.Fatalf("current=%+v err=%v", current, err)
+	}
+	rows, err := repository.List(ctx, user.ListQuery{Page: 1, PageSize: 20, Keyword: "138-0000"})
+	if err != nil || len(rows) != 1 || rows[0].ID != created.ID || rows[0].Phone == nil || *rows[0].Phone != phone {
+		t.Fatalf("rows=%+v err=%v", rows, err)
 	}
 }
 
@@ -429,7 +466,7 @@ func TestRepositoryUpdateSoftDeleteCreateUserRolesAndRevoke(t *testing.T) {
 	created := createListedUser(t, tx, ctx, fmt.Sprintf("writes%d", time.Now().UnixNano()), fmt.Sprintf("writes%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
 	repository := user.NewRepository(tx)
 	operationTime := time.Date(2026, 8, 20, 6, 7, 8, 0, time.UTC)
-	if err := repository.UpdateUsername(ctx, created.ID, created.Username+"x", operationTime); err != nil {
+	if err := repository.UpdateProfile(ctx, created.ID, created.Username+"x", nil, operationTime); err != nil {
 		t.Fatal(err)
 	}
 	if err := repository.UpdateStatus(ctx, created.ID, yesno.No, operationTime); err != nil {
@@ -543,7 +580,7 @@ func TestRepositoryAccessVersionOperationsAdvanceOnlyTarget(t *testing.T) {
 	}
 }
 
-func TestRepositoryUpdateUsernameMapsActiveConstraint(t *testing.T) {
+func TestRepositoryUpdateProfileMapsActiveUsernameConstraint(t *testing.T) {
 	tx, ctx, roleRepository := openUserTransaction(t)
 	defaultRole, err := roleRepository.FindDefault(ctx)
 	if err != nil {
@@ -551,8 +588,8 @@ func TestRepositoryUpdateUsernameMapsActiveConstraint(t *testing.T) {
 	}
 	first := createListedUser(t, tx, ctx, fmt.Sprintf("conflict%d", time.Now().UnixNano()), fmt.Sprintf("conflict%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
 	second := createListedUser(t, tx, ctx, fmt.Sprintf("other%d", time.Now().UnixNano()), fmt.Sprintf("other%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
-	if err := user.NewRepository(tx).UpdateUsername(ctx, second.ID, strings.ToUpper(first.Username), time.Now().UTC()); !errors.Is(err, user.ErrUsernameConflict) {
-		t.Fatalf("UpdateUsername() error = %v", err)
+	if err := user.NewRepository(tx).UpdateProfile(ctx, second.ID, strings.ToUpper(first.Username), nil, time.Now().UTC()); !errors.Is(err, user.ErrUsernameConflict) {
+		t.Fatalf("UpdateProfile() error = %v", err)
 	}
 }
 

@@ -50,10 +50,11 @@ const mutating = ref(false);
 
 interface UserFormState {
   username: string;
+  phone: string;
 }
 const editVisible = ref(false);
 const editingUser = ref<UserListItem | null>(null);
-const userForm = ref<UserFormState>({ username: "" });
+const userForm = ref<UserFormState>({ username: "", phone: "" });
 const editSaving = ref(false);
 const editError = ref("");
 
@@ -74,6 +75,7 @@ const tableColumns = computed<TableColumn<UserListItem>[]>(() => [
   { prop: "id", label: t("user.id"), width: 80 },
   { prop: "username", label: t("user.username"), minWidth: 140 },
   { prop: "email", label: t("user.email"), minWidth: 210 },
+  { prop: "phone", label: t("user.phone"), minWidth: 170 },
   { key: "roles", prop: "id", label: t("user.roles"), minWidth: 240 },
   { key: "status", prop: "id", label: t("user.status"), width: 100 },
   { prop: "createdAt", label: t("user.createdAt"), minWidth: 190 },
@@ -89,6 +91,7 @@ const isSuperAdminActor = computed(() =>
   access.roleCodes.includes("super_admin"),
 );
 const normalizedUsername = computed(() => userForm.value.username.trim());
+const normalizedPhone = computed(() => userForm.value.phone.trim());
 const usernameValid = computed(() => {
   const characters = [...normalizedUsername.value];
   return (
@@ -97,6 +100,13 @@ const usernameValid = computed(() => {
     characters.every((character) => /[\p{L}\p{N}_-]/u.test(character))
   );
 });
+const phoneValid = computed(() => {
+  const value = normalizedPhone.value;
+  return value === "" || ([...value].length <= 32 && !/\p{Cc}/u.test(value));
+});
+const submittedPhone = computed<string | null>(() =>
+  normalizedPhone.value === "" ? null : normalizedPhone.value,
+);
 const hasEnabledSelection = computed(() => {
   if (roleData.value === null) return false;
   const selected = new Set(selectedRoleIDs.value);
@@ -259,20 +269,27 @@ function protectionText(
 function openEdit(row: UserListItem): void {
   if (editDisabled(row)) return;
   editingUser.value = row;
-  userForm.value = { username: row.username };
+  userForm.value = { username: row.username, phone: row.phone ?? "" };
   editError.value = "";
   editVisible.value = true;
 }
 async function saveEdit(): Promise<void> {
   const target = editingUser.value;
-  if (target === null || !usernameValid.value || editSaving.value) return;
+  if (
+    target === null ||
+    !usernameValid.value ||
+    !phoneValid.value ||
+    editSaving.value
+  )
+    return;
   editSaving.value = true;
   editError.value = "";
   try {
     const result = await updateUser(target.id, {
       username: normalizedUsername.value,
+      phone: submittedPhone.value,
     });
-    auth.updateUsername(result.id, result.username);
+    auth.updateProfile(result.id, result.username, result.phone);
     if (await loadUsers()) {
       editVisible.value = false;
       ElNotification.success({ title: t("user.updateSuccess") });
@@ -473,6 +490,9 @@ onMounted(() => {
           }}</el-tag
         ></template
       >
+      <template #cell-phone="{ row }: { row: UserListItem }">
+        {{ row.phone ?? "-" }}
+      </template>
       <template #cell-actions="{ row }: { row: UserListItem }"
         ><template v-if="row.id > 0">
           <el-tooltip
@@ -545,6 +565,16 @@ onMounted(() => {
               : ''
           "
           ><el-input v-model="userForm.username" maxlength="64" /></el-form-item
+        ><el-form-item
+          :label="t('user.phone')"
+          :error="
+            userForm.phone !== '' && !phoneValid
+              ? t('user.invalidPhone')
+              : ''
+          "
+          ><el-input
+            v-model="userForm.phone"
+            data-testid="user-phone" /></el-form-item
       ></el-form>
       <template #footer
         ><el-button @click="editVisible = false">{{
@@ -553,7 +583,7 @@ onMounted(() => {
         ><el-button
           type="primary"
           :loading="editSaving"
-          :disabled="!usernameValid"
+          :disabled="!usernameValid || !phoneValid"
           @click="saveEdit"
           >{{ t("user.save") }}</el-button
         ></template

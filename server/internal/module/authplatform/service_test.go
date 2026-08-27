@@ -2,6 +2,7 @@ package authplatform_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"admin/server/internal/module/authplatform"
 	"admin/server/internal/module/authstate"
 	projectredis "admin/server/internal/redis"
+	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -34,7 +36,7 @@ func TestServiceUpdateBuildsMissingReadyStateBeforeMutation(t *testing.T) {
 	input := authplatform.UpdateInput{
 		Name: "Admin Updated", AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
-		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.No,
 	}
 	if err := service.Update(ctx, 1, input); err != nil {
 		t.Fatal(err)
@@ -61,7 +63,7 @@ func TestServiceUpdateDoesNotMutatePostgreSQLWhenRedisIsUnavailable(t *testing.T
 	input := authplatform.UpdateInput{
 		Name: "Must Not Persist", AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
-		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.No,
 	}
 	if err := service.Update(ctx, 1, input); err == nil {
 		t.Fatal("update succeeded with Redis unavailable")
@@ -72,6 +74,78 @@ func TestServiceUpdateDoesNotMutatePostgreSQLWhenRedisIsUnavailable(t *testing.T
 	}
 	if stored.Name != "Admin" || stored.PolicyVersion != 1 {
 		t.Fatalf("PostgreSQL was mutated: %+v", stored)
+	}
+}
+
+func TestServiceUpdateRejectsBuiltinAdminRegistrationBeforeRedisMutation(t *testing.T) {
+	connection, ctx := openAuthenticationPlatformDatabase(t)
+	if err := database.AutoMigrate(ctx, connection.GORM, &authplatform.Platform{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := authplatform.EnsureSchema(ctx, connection.GORM); err != nil {
+		t.Fatal(err)
+	}
+	repository := authplatform.NewRepository(connection.GORM)
+	stored, err := repository.FindPolicy(ctx, authplatform.BuiltinAdminCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redisClient := openPlatformRedis(t)
+	if err := redisClient.Close(); err != nil {
+		t.Fatal(err)
+	}
+	service := authplatform.NewService(repository, authplatform.NewPolicyStore(redisClient), redisClient, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{})
+	input := authplatform.UpdateInput{
+		Name: stored.Name, AccessTTLSeconds: stored.AccessTTLSeconds, RefreshTTLSeconds: stored.RefreshTTLSeconds,
+		SessionCacheTTLSeconds: stored.SessionCacheTTLSeconds, AccessCacheTTLSeconds: stored.AccessCacheTTLSeconds,
+		BindDevice: stored.BindDevice, BindIP: stored.BindIP, MaxSessions: stored.MaxSessions, AllowRegister: yesno.Yes,
+	}
+	err = service.Update(ctx, stored.ID, input)
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) || appErr.Code != authplatform.CodeInvalidPolicy {
+		t.Fatalf("Update() error = %v, want code %d", err, authplatform.CodeInvalidPolicy)
+	}
+	after, err := repository.FindPolicy(ctx, authplatform.BuiltinAdminCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.PolicyVersion != stored.PolicyVersion || !after.UpdatedAt.Equal(stored.UpdatedAt) || after.AllowRegister != stored.AllowRegister {
+		t.Fatalf("builtin admin was mutated: before=%+v after=%+v", stored, after)
+	}
+}
+
+func TestServiceUpdateAllowsNonBuiltinRegistration(t *testing.T) {
+	connection, ctx := openAuthenticationPlatformDatabase(t)
+	preparePlatformSessionSchema(t, connection.GORM, ctx)
+	redisClient := openPlatformRedis(t)
+	authStates := authstate.NewStore(redisClient)
+	service := authplatform.NewService(
+		authplatform.NewRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
+		authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete,
+		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
+	)
+	code := fmt.Sprintf("registration_%d", time.Now().UnixNano())
+	platformID, err := service.Create(ctx, authplatform.CreateInput{
+		Code: code, Name: "Registration", AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
+		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.No, IsEnabled: yesno.Yes,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Update(ctx, platformID, authplatform.UpdateInput{
+		Name: "Registration", AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
+		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := authplatform.NewRepository(connection.GORM).FindPolicy(ctx, code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.AllowRegister != yesno.Yes || stored.PolicyVersion != 2 {
+		t.Fatalf("non-builtin registration policy = %+v", stored)
 	}
 }
 

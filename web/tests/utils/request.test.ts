@@ -118,7 +118,7 @@ describe('createRequestClient', () => {
       message: '用户名已存在',
     })
 
-    await expect(client.post('/api/v1/auth/register', undefined, { adapter })).rejects.toMatchObject({ code: 10005 })
+    await expect(client.post('/api/v1/protected', undefined, { adapter })).rejects.toMatchObject({ code: 10005 })
     expect(notifyErrorMock).toHaveBeenCalledWith(expect.objectContaining({
       title: '请求失败',
       message: '用户名已存在',
@@ -185,22 +185,22 @@ describe('createRequestClient', () => {
     expect(acceptLanguage).toBe('en-US')
   })
 
-  it('attaches platform and device headers to public Policy without a bearer token', async () => {
+  it('attaches platform and device headers to protected requests with a bearer token', async () => {
     useAuthStore(pinia).setCredential({ accessToken: 'stale-token', expiresIn: 900 })
     localStorage.setItem('admin:device-id', '550e8400-e29b-41d4-a716-446655440000')
     let headers = new AxiosHeaders()
     const adapter: AxiosAdapter = async (config) => {
       headers = AxiosHeaders.from(config.headers)
-      return successResponse(config, { code: 0, data: { code: 'admin', name: 'Admin', allowRegister: 1 }, message: 'ok' })
+      return successResponse(config, { code: 0, data: {}, message: 'ok' })
     }
     const client = createRequestClient('http://localhost:16301', adapter)
 
-    await client.get('/api/v1/auth/policy')
+    await client.get('/api/v1/protected')
 
     expect(headers.get('Accept-Language')).toBe('zh-CN')
     expect(headers.get('X-Auth-Platform')).toBe('admin')
     expect(headers.get('X-Device-ID')).toBe('550e8400-e29b-41d4-a716-446655440000')
-    expect(headers.get('Authorization')).toBeUndefined()
+    expect(headers.get('Authorization')).toBe('Bearer stale-token')
   })
 
   it('sends the current locale on the raw refresh request', async () => {
@@ -301,7 +301,7 @@ describe('createRequestClient', () => {
     expect(protectedCalls).toBe(2)
   })
 
-  it('does not refresh login register refresh or logout requests', async () => {
+  it('does not refresh login refresh or logout requests', async () => {
     let refreshCalls = 0
     const adapter: AxiosAdapter = async (config) => {
       if (config.url === '/api/v1/auth/refresh') {
@@ -310,29 +310,10 @@ describe('createRequestClient', () => {
       throw apiFailure(config, 401, 10002, '未登录或登录已失效')
     }
     const client = createRequestClient('http://localhost:16301', adapter)
-    for (const url of ['/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/refresh', '/api/v1/auth/logout']) {
+    for (const url of ['/api/v1/auth/login', '/api/v1/auth/refresh', '/api/v1/auth/logout']) {
       await expect(client.post(url)).rejects.toMatchObject({ code: 10002 })
     }
     expect(refreshCalls).toBe(1)
-  })
-
-  it('does not refresh or mutate credentials when public Policy returns 401', async () => {
-    const store = useAuthStore(pinia)
-    store.setCredential({ accessToken: 'stale-token', expiresIn: 900 })
-    let refreshCalls = 0
-    const adapter: AxiosAdapter = async (config) => {
-      if (config.url === '/api/v1/auth/refresh') {
-        refreshCalls += 1
-        return successResponse(config, { code: 0, data: { accessToken: 'new-token', expiresIn: 900 }, message: 'ok' })
-      }
-      throw apiFailure(config, 401, 10002, '未登录或登录已失效')
-    }
-    const client = createRequestClient('http://localhost:16301', adapter)
-
-    await expect(client.get('/api/v1/auth/policy')).rejects.toMatchObject({ code: 10002, httpStatus: 401 })
-
-    expect(refreshCalls).toBe(0)
-    expect(store.accessToken).toBe('stale-token')
   })
 
   it('sets anonymous after a refresh 401', async () => {

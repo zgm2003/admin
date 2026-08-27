@@ -25,10 +25,10 @@ describe('user management', () => {
     setLocale('zh-CN')
     getRoleOptions.mockResolvedValue({ roles: roles() })
     getUsers.mockResolvedValue({ list:[row()], total:1, page:1, pageSize:20 })
-    updateUser.mockResolvedValue({ id:7, username:'new_name', updatedAt:'2026-08-20T02:00:00Z' })
+    updateUser.mockResolvedValue({ id:7, username:'new_name', phone:'+86 139-0000-0000', updatedAt:'2026-08-20T02:00:00Z' })
     updateStatus.mockResolvedValue({ id:7, isEnabled:YesNo.No })
     deleteUser.mockResolvedValue({})
-    getUserRoles.mockResolvedValue({ user:{id:7,username:'alice',email:'alice@example.com',isEnabled:YesNo.Yes}, roles:roles(), roleIds:[2,3] })
+    getUserRoles.mockResolvedValue({ user:{id:7,username:'alice',email:'alice@example.com',phone:'+86 138-0000-0000',isEnabled:YesNo.Yes}, roles:roles(), roleIds:[2,3] })
     updateRoles.mockResolvedValue({ id:7, roleCount:2 })
     vi.spyOn(ElMessageBox, 'confirm').mockImplementation(async () =>
       Object.assign('confirm' as const, { value: '', action: 'confirm' as const }),
@@ -44,7 +44,14 @@ describe('user management', () => {
     expect(wrapper.find('h1').exists()).toBe(false)
 		expect(wrapper.get('.user-management').classes()).toContain('management-page')
     expect(wrapper.text()).toContain('alice@example.com')
+    expect(wrapper.text()).toContain('+86 138-0000-0000')
     expect(wrapper.text()).toContain('角色已禁用')
+		expect(wrapper.get('[data-testid="user-keyword"]').attributes('placeholder')).toBe('用户名、邮箱或手机号')
+		setLocale('en-US')
+		await flushPromises()
+		expect(wrapper.get('[data-testid="user-keyword"]').attributes('placeholder')).toBe('Username, email, or phone')
+		setLocale('zh-CN')
+		await flushPromises()
     await wrapper.get('.user-filters input').setValue(' alice ')
     const selects = wrapper.findAllComponents({ name:'ElSelectV2' })
     selects[0].vm.$emit('update:modelValue', YesNo.No)
@@ -63,19 +70,61 @@ describe('user management', () => {
     expect(dangerous.every((button) => button.attributes('disabled') !== undefined)).toBe(true)
   })
 
-  it('edits the current username and synchronizes auth without loading access', async () => {
+  it('edits the current username and phone, then synchronizes auth without loading access', async () => {
     const wrapper = mountPage(['account:user:update'])
     await flushPromises()
     const access = useAccessStore()
     const loadAccess = vi.spyOn(access, 'load')
     await findAriaButton(wrapper, '编辑').trigger('click'); await flushPromises()
-    const input = document.body.querySelector<HTMLInputElement>('.user-edit-dialog input:not([disabled])')
-    expect(input).not.toBeNull(); if (input === null) return
-    input.value = ' new_name '; input.dispatchEvent(new Event('input'))
+    const usernameInput = document.body.querySelector<HTMLInputElement>('.user-edit-dialog input:not([disabled])')
+    expect(usernameInput).not.toBeNull(); if (usernameInput === null) return
+    usernameInput.value = ' new_name '; usernameInput.dispatchEvent(new Event('input'))
+    const phoneInput = document.body.querySelector<HTMLInputElement>('[data-testid="user-phone"]')
+    if (phoneInput === null) throw new Error('phone input missing')
+    phoneInput.value = '  +86 139-0000-0000  '; phoneInput.dispatchEvent(new Event('input'))
     await bodyButton('保存').trigger('click'); await flushPromises()
-    expect(updateUser).toHaveBeenCalledWith(7, { username:'new_name' })
+    expect(updateUser).toHaveBeenCalledWith(7, { username:'new_name', phone:'+86 139-0000-0000' })
     expect(useAuthStore().user?.username).toBe('new_name')
+    expect(useAuthStore().user?.phone).toBe('+86 139-0000-0000')
     expect(loadAccess).not.toHaveBeenCalled()
+  })
+
+  it('clears a user phone as null', async () => {
+    const wrapper = mountPage(['account:user:update'])
+    await flushPromises()
+    await findAriaButton(wrapper, '编辑').trigger('click'); await flushPromises()
+    const phoneInput = document.body.querySelector<HTMLInputElement>('[data-testid="user-phone"]')
+    if (phoneInput === null) throw new Error('phone input missing')
+    phoneInput.value = '   '; phoneInput.dispatchEvent(new Event('input'))
+    await bodyButton('保存').trigger('click'); await flushPromises()
+    expect(updateUser).toHaveBeenCalledWith(7, { username:'alice', phone:null })
+  })
+
+  it('submits exactly 32 astral phone runes without native length truncation', async () => {
+    const wrapper = mountPage(['account:user:update'])
+    const phone = '😀'.repeat(32)
+    await flushPromises()
+    await findAriaButton(wrapper, '编辑').trigger('click'); await flushPromises()
+    const phoneInput = document.body.querySelector<HTMLInputElement>('[data-testid="user-phone"]')
+    if (phoneInput === null) throw new Error('phone input missing')
+    expect(phoneInput.maxLength).toBe(-1)
+    phoneInput.value = phone; phoneInput.dispatchEvent(new Event('input'))
+    expect(phoneInput.value).toBe(phone)
+    await bodyButton('保存').trigger('click'); await flushPromises()
+    expect(updateUser).toHaveBeenCalledWith(7, { username:'alice', phone })
+  })
+
+  it.each(['+86\u0007139', '1'.repeat(33)])('does not save an invalid phone value', async (phone) => {
+    const wrapper = mountPage(['account:user:update'])
+    await flushPromises()
+    await findAriaButton(wrapper, '编辑').trigger('click'); await flushPromises()
+    const phoneInput = document.body.querySelector<HTMLInputElement>('[data-testid="user-phone"]')
+    if (phoneInput === null) throw new Error('phone input missing')
+    phoneInput.value = phone; phoneInput.dispatchEvent(new Event('input'))
+    await flushPromises()
+    expect(bodyButton('保存').attributes('disabled')).toBeDefined()
+    await bodyButton('保存').trigger('click'); await flushPromises()
+    expect(updateUser).not.toHaveBeenCalled()
   })
 
   it('loads and saves unique sorted user roles without refreshing access', async () => {
@@ -91,7 +140,7 @@ describe('user management', () => {
 
   it('does not change the super administrator selection when an ordinary actor selects all roles', async () => {
     getUserRoles.mockResolvedValue({
-      user: { id: 7, username: 'alice', email: 'alice@example.com', isEnabled: YesNo.Yes },
+      user: { id: 7, username: 'alice', email: 'alice@example.com', phone: '+86 138-0000-0000', isEnabled: YesNo.Yes },
       roles: [
         { id: 3, code: 'ai_tester', name: 'AI Tester', isEnabled: YesNo.No },
         { id: 2, code: 'member', name: 'Member', isEnabled: YesNo.Yes },
@@ -129,10 +178,10 @@ describe('user management', () => {
 function mountPage(permissions: string[], currentUserID = 7): VueWrapper {
   const pinia = createPinia(); setActivePinia(pinia)
   useAccessStore(pinia).applySnapshot({ roleCodes:[], menuTree:[], permissionCodes:permissions })
-  useAuthStore(pinia).setAuthenticated({ userId:currentUserID, username:'alice', email:'alice@example.com' })
+  useAuthStore(pinia).setAuthenticated({ userId:currentUserID, username:'alice', email:'alice@example.com', phone:'+86 138-0000-0000' })
   return mount(UserManagement, { attachTo:document.body, global:{ plugins:[pinia, appI18n, ElementPlus] } })
 }
-function row() { return { id:7, username:'alice', email:'alice@example.com', isEnabled:YesNo.Yes, roles:roles(), createdAt:'2026-08-20T00:00:00Z', updatedAt:'2026-08-20T01:00:00Z' } }
+function row() { return { id:7, username:'alice', email:'alice@example.com', phone:'+86 138-0000-0000', isEnabled:YesNo.Yes, roles:roles(), createdAt:'2026-08-20T00:00:00Z', updatedAt:'2026-08-20T01:00:00Z' } }
 function roles() { return [{id:3,code:'ai_tester',name:'AI Tester',isEnabled:YesNo.No},{id:2,code:'member',name:'Member',isEnabled:YesNo.Yes}].sort((a,b)=>a.code.localeCompare(b.code)||a.id-b.id) }
 function findButton(wrapper: VueWrapper, text: string) { const button=wrapper.findAll('button').find((item)=>item.text().includes(text)); if(button===undefined) throw new Error(`button ${text} missing`); return button }
 function findAriaButton(wrapper: VueWrapper, label: string) {
@@ -140,4 +189,4 @@ function findAriaButton(wrapper: VueWrapper, label: string) {
   if (aria.exists()) return aria
   return wrapper.findAll('button').find((button) => button.text().includes(label)) ?? wrapper.get(`button[aria-label="${label}"]`)
 }
-function bodyButton(text: string) { const button=Array.from(document.body.querySelectorAll<HTMLButtonElement>('button')).find((item)=>item.textContent?.includes(text)); if(button===undefined) throw new Error(`body button ${text} missing`); return { trigger: async (event:string) => { button.click(); await Promise.resolve(event) } } }
+function bodyButton(text: string) { const button=Array.from(document.body.querySelectorAll<HTMLButtonElement>('button')).find((item)=>item.textContent?.includes(text)); if(button===undefined) throw new Error(`body button ${text} missing`); return { attributes: (name: string) => button.getAttribute(name), trigger: async (event:string) => { button.click(); await Promise.resolve(event) } } }

@@ -149,8 +149,8 @@ func (apiUserService) List(context.Context, user.ListQuery) (pagination.Result[u
 func (apiUserService) RoleOptions(context.Context) ([]user.RoleSummary, error) {
 	return []user.RoleSummary{}, nil
 }
-func (apiUserService) Update(context.Context, int64, int64, user.UpdateInput) (user.UpdatedUsername, error) {
-	return user.UpdatedUsername{}, nil
+func (apiUserService) Update(context.Context, int64, int64, user.UpdateInput) (user.UpdatedProfile, error) {
+	return user.UpdatedProfile{}, nil
 }
 func (apiUserService) UpdateStatus(context.Context, int64, int64, yesno.Value) error { return nil }
 func (apiUserService) Delete(context.Context, int64, int64) error                    { return nil }
@@ -455,6 +455,7 @@ func TestRunKeepsSchemaDependenciesBeforeRedisAndFoundationBeforeRouter(t *testi
 		"role.EnsureSchema(",
 		"operationlog.EnsureSchema(",
 		"projectredis.Open(",
+		"authplatform.ClearBuiltinAdminPolicy(",
 		"queue.NewClient(",
 		"menuService.EnsureFoundation(",
 		"buildRouter(",

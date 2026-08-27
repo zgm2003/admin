@@ -31,9 +31,9 @@ export const useAuthStore = defineStore('auth', {
       this.status = 'authenticated'
       this.errorMessage = ''
     },
-		updateUsername(userId: number, username: string): boolean {
+		updateProfile(userId: number, username: string, phone: string | null): boolean {
 			if (this.user === null || this.user.userId !== userId) return false
-			this.user = { userId: this.user.userId, username, email: this.user.email }
+			this.user = { userId: this.user.userId, username, email: this.user.email, phone }
 			return true
 		},
     setAnonymous() {

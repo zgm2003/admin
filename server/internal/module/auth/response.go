@@ -27,7 +27,8 @@ type CredentialResponse struct {
 }
 
 type CurrentUserResponse struct {
-	UserID   int64  `json:"userId"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
+	UserID   int64   `json:"userId"`
+	Username string  `json:"username"`
+	Email    string  `json:"email"`
+	Phone    *string `json:"phone"`
 }
