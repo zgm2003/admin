@@ -391,6 +391,15 @@ func (s *Service) mutate(ctx context.Context, id int64, planner func(Platform, P
 		if locked.PolicyVersion != currentRow.PolicyVersion || locked.Code != current.Code {
 			return ErrUpdating
 		}
+		if plan.deletePlatform {
+			hasMenus, menuErr := scoped.HasActiveMenus(mutationCtx, id)
+			if menuErr != nil {
+				return menuErr
+			}
+			if hasMenus {
+				return menusAttached(fmt.Errorf("authentication platform has active menus"))
+			}
+		}
 		if authLease != nil {
 			lockedUsers, userErr := scoped.LockActiveSessionUsers(mutationCtx, current.Code)
 			if userErr != nil {

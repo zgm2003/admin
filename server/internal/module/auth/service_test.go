@@ -242,7 +242,7 @@ func TestAuthenticateUsesWarmRedisWithoutPostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sessions.authorityCalls != 0 || identity.UserID != 83001 || identity.PolicyVersion != policy.PolicyVersion || identity.AccessCacheTTL != policy.AccessCacheTTL || identity.CacheResult != "hit" {
+	if sessions.authorityCalls != 0 || identity.UserID != 83001 || identity.PlatformID != policy.ID || identity.Platform != policy.Code || identity.PolicyVersion != policy.PolicyVersion || identity.AccessCacheTTL != policy.AccessCacheTTL || identity.CacheResult != "hit" {
 		t.Fatalf("Authenticate() = %+v calls=%d", identity, sessions.authorityCalls)
 	}
 }
@@ -263,11 +263,11 @@ func TestAuthenticateFallsBackToPostgreSQLAndRebuildsRedis(t *testing.T) {
 	rawToken, _, _ := service.jwt.Issue(TokenIdentity{UserID: 84001, SessionID: 84002, Platform: "admin", Version: 2}, policy.AccessTTL)
 
 	first, err := service.Authenticate(context.Background(), rawToken, testAuthClient())
-	if err != nil || first.CacheResult != "miss" || sessions.authorityCalls != 1 {
+	if err != nil || first.PlatformID != policy.ID || first.Platform != policy.Code || first.CacheResult != "miss" || sessions.authorityCalls != 1 {
 		t.Fatalf("fallback Authenticate() = %+v,%v calls=%d", first, err, sessions.authorityCalls)
 	}
 	second, err := service.Authenticate(context.Background(), rawToken, testAuthClient())
-	if err != nil || second.CacheResult != "hit" || sessions.authorityCalls != 1 {
+	if err != nil || second.PlatformID != policy.ID || second.Platform != policy.Code || second.CacheResult != "hit" || sessions.authorityCalls != 1 {
 		t.Fatalf("warm Authenticate() = %+v,%v calls=%d", second, err, sessions.authorityCalls)
 	}
 }

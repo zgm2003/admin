@@ -3,11 +3,22 @@ package menu
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 )
 
 var menuConstraints = []constraintDefinition{
+	{
+		name:  "fk_rbac_menu_platform",
+		table: "rbac_menu",
+		ddl:   `ALTER TABLE rbac_menu ADD CONSTRAINT fk_rbac_menu_platform FOREIGN KEY (platform_id) REFERENCES auth_platform(id) ON DELETE RESTRICT`,
+	},
+	{
+		name:  "uq_rbac_menu_id_platform",
+		table: "rbac_menu",
+		ddl:   `ALTER TABLE rbac_menu ADD CONSTRAINT uq_rbac_menu_id_platform UNIQUE (id, platform_id)`,
+	},
 	{
 		name:  "ck_rbac_menu_type",
 		table: "rbac_menu",
@@ -40,9 +51,9 @@ var menuConstraints = []constraintDefinition{
 		ddl:   `ALTER TABLE rbac_menu ADD CONSTRAINT ck_rbac_menu_is_hidden CHECK (is_hidden IN (0, 1))`,
 	},
 	{
-		name:  "fk_rbac_menu_parent",
+		name:  "fk_rbac_menu_parent_platform",
 		table: "rbac_menu",
-		ddl:   `ALTER TABLE rbac_menu ADD CONSTRAINT fk_rbac_menu_parent FOREIGN KEY (parent_id) REFERENCES rbac_menu(id) ON DELETE RESTRICT`,
+		ddl:   `ALTER TABLE rbac_menu ADD CONSTRAINT fk_rbac_menu_parent_platform FOREIGN KEY (parent_id, platform_id) REFERENCES rbac_menu(id, platform_id) ON DELETE RESTRICT`,
 	},
 	{
 		name:  "fk_rbac_role_menu_role",
@@ -56,11 +67,17 @@ var menuConstraints = []constraintDefinition{
 	},
 }
 
-var menuIndexes = []string{
-	`CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_menu_code_active ON rbac_menu (code) WHERE deleted_at IS NULL`,
-	`CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_menu_page_path_active ON rbac_menu (path) WHERE deleted_at IS NULL AND menu_type = 'page'`,
-	`CREATE INDEX IF NOT EXISTS ix_rbac_menu_parent_active ON rbac_menu (parent_id, sort_order, id) WHERE deleted_at IS NULL`,
-	`CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_role_menu_active ON rbac_role_menu (role_id, menu_id) WHERE deleted_at IS NULL`,
+var menuIndexes = []indexDefinition{
+	{name: "ux_rbac_menu_code_active", ddl: `CREATE UNIQUE INDEX ux_rbac_menu_code_active ON rbac_menu (platform_id, code) WHERE deleted_at IS NULL`, fragments: []string{"(platform_id, code)", "WHERE (deleted_at IS NULL)"}},
+	{name: "ux_rbac_menu_page_path_active", ddl: `CREATE UNIQUE INDEX ux_rbac_menu_page_path_active ON rbac_menu (platform_id, path) WHERE deleted_at IS NULL AND menu_type = 'page'`, fragments: []string{"(platform_id, path)", "menu_type", "page", "deleted_at IS NULL"}},
+	{name: "ix_rbac_menu_parent_active", ddl: `CREATE INDEX ix_rbac_menu_parent_active ON rbac_menu (platform_id, parent_id, sort_order, id) WHERE deleted_at IS NULL`, fragments: []string{"(platform_id, parent_id, sort_order, id)", "WHERE (deleted_at IS NULL)"}},
+	{name: "ux_rbac_role_menu_active", ddl: `CREATE UNIQUE INDEX ux_rbac_role_menu_active ON rbac_role_menu (role_id, menu_id) WHERE deleted_at IS NULL`, fragments: []string{"(role_id, menu_id)", "WHERE (deleted_at IS NULL)"}},
+}
+
+type indexDefinition struct {
+	name      string
+	ddl       string
+	fragments []string
 }
 
 type constraintDefinition struct {
@@ -91,7 +108,7 @@ var legacyComponentPaths = map[string]string{
 }
 
 func replaceMenuConstraints(db *gorm.DB) error {
-	for _, name := range []string{"ck_rbac_menu_shape", "ck_rbac_menu_render_shape", "ck_rbac_menu_is_hidden"} {
+	for _, name := range []string{"ck_rbac_menu_shape", "ck_rbac_menu_render_shape", "ck_rbac_menu_is_hidden", "fk_rbac_menu_parent"} {
 		if err := db.Exec(`ALTER TABLE rbac_menu DROP CONSTRAINT IF EXISTS ` + name).Error; err != nil {
 			return fmt.Errorf("drop menu constraint %s: %w", name, err)
 		}
@@ -105,8 +122,24 @@ func replaceMenuConstraints(db *gorm.DB) error {
 }
 
 func ensureMenuIndexes(db *gorm.DB) error {
-	for _, statement := range menuIndexes {
-		if err := db.Exec(statement).Error; err != nil {
+	for _, definition := range menuIndexes {
+		var current string
+		if err := db.Raw(`SELECT indexdef FROM pg_indexes WHERE schemaname = current_schema() AND indexname = ?`, definition.name).Scan(&current).Error; err != nil {
+			return fmt.Errorf("inspect menu index %s: %w", definition.name, err)
+		}
+		matches := current != ""
+		for _, fragment := range definition.fragments {
+			matches = matches && strings.Contains(current, fragment)
+		}
+		if matches {
+			continue
+		}
+		if current != "" {
+			if err := db.Exec(`DROP INDEX ` + definition.name).Error; err != nil {
+				return fmt.Errorf("replace menu index %s: %w", definition.name, err)
+			}
+		}
+		if err := db.Exec(definition.ddl).Error; err != nil {
 			return fmt.Errorf("create menu index: %w", err)
 		}
 	}

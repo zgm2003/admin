@@ -8,6 +8,9 @@ import (
 
 type managedMenuResponse struct {
 	ID            int64                 `json:"id"`
+	PlatformID    int64                 `json:"platformId"`
+	PlatformCode  string                `json:"platformCode"`
+	PlatformName  string                `json:"platformName"`
 	ParentID      *int64                `json:"parentId"`
 	MenuType      Type                  `json:"menuType"`
 	Name          string                `json:"name"`
@@ -23,6 +26,18 @@ type managedMenuResponse struct {
 	UpdatedAt     string                `json:"updatedAt"`
 	IsProtected   int16                 `json:"isProtected"`
 	Children      []managedMenuResponse `json:"children"`
+}
+
+type platformOptionResponse struct {
+	ID        int64  `json:"id"`
+	Code      string `json:"code"`
+	Name      string `json:"name"`
+	IsEnabled int16  `json:"isEnabled"`
+}
+
+type menuCatalogResponse struct {
+	Platforms []platformOptionResponse `json:"platforms"`
+	MenuTree  []managedMenuResponse    `json:"menuTree"`
 }
 
 type menuIDResponse struct {
@@ -48,12 +63,23 @@ func newManagedMenuResponse(item ManagedMenu) managedMenuResponse {
 		children = append(children, newManagedMenuResponse(child))
 	}
 	return managedMenuResponse{
-		ID: item.ID, ParentID: item.ParentID, MenuType: item.MenuType, Name: item.Name, Code: item.Code,
+		ID: item.ID, PlatformID: item.PlatformID, PlatformCode: item.PlatformCode, PlatformName: item.PlatformName,
+		ParentID: item.ParentID, MenuType: item.MenuType, Name: item.Name, Code: item.Code,
 		I18nKey: item.I18nKey, Path: item.Path, ComponentPath: item.ComponentPath, Icon: item.Icon,
 		SortOrder: item.SortOrder, IsEnabled: int16(item.IsEnabled), IsHidden: int16(item.IsHidden),
 		CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: item.UpdatedAt.UTC().Format(time.RFC3339Nano), IsProtected: protectedValue(item.IsProtected), Children: children,
 	}
+}
+
+func newMenuCatalogResponse(catalog Catalog) menuCatalogResponse {
+	platforms := make([]platformOptionResponse, 0, len(catalog.Platforms))
+	for _, platform := range catalog.Platforms {
+		platforms = append(platforms, platformOptionResponse{
+			ID: platform.ID, Code: platform.Code, Name: platform.Name, IsEnabled: int16(platform.IsEnabled),
+		})
+	}
+	return menuCatalogResponse{Platforms: platforms, MenuTree: newManagedMenuResponses(catalog.MenuTree)}
 }
 
 func protectedValue(isProtected bool) int16 {

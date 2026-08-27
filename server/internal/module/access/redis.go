@@ -17,11 +17,12 @@ import (
 	"admin/server/internal/shared/yesno"
 )
 
-const accessSnapshotSchemaVersion = 3
+const accessSnapshotSchemaVersion = 4
 
 type CachedSnapshot struct {
 	SchemaVersion   int        `json:"schemaVersion"`
 	UserID          int64      `json:"userId"`
+	PlatformID      int64      `json:"platformId"`
 	Platform        string     `json:"platform"`
 	PolicyVersion   int64      `json:"policyVersion"`
 	Version         int64      `json:"version"`
@@ -43,7 +44,7 @@ func SnapshotKey(platform string, policyVersion, userID, version int64) string {
 		strconv.FormatInt(userID, 10) + ":" + strconv.FormatInt(version, 10)
 }
 
-func (c *SnapshotCache) Read(ctx context.Context, platform string, policyVersion, userID, version int64) (CachedSnapshot, bool, error) {
+func (c *SnapshotCache) Read(ctx context.Context, platformID int64, platform string, policyVersion, userID, version int64) (CachedSnapshot, bool, error) {
 	key := SnapshotKey(platform, policyVersion, userID, version)
 	raw, found, err := c.redis.GetString(ctx, key)
 	if err != nil || !found {
@@ -53,7 +54,7 @@ func (c *SnapshotCache) Read(ctx context.Context, platform string, policyVersion
 	if err != nil {
 		return CachedSnapshot{}, true, err
 	}
-	if snapshot.Platform != platform || snapshot.PolicyVersion != policyVersion || snapshot.UserID != userID || snapshot.Version != version {
+	if snapshot.PlatformID != platformID || snapshot.Platform != platform || snapshot.PolicyVersion != policyVersion || snapshot.UserID != userID || snapshot.Version != version {
 		return CachedSnapshot{}, true, fmt.Errorf("cached access snapshot identity is invalid")
 	}
 	return snapshot, true, nil
@@ -87,9 +88,9 @@ func (c *SnapshotCache) PublishIfCurrent(ctx context.Context, snapshot CachedSna
 	}
 }
 
-func newCachedSnapshot(userID int64, platform string, policyVersion int64, snapshot Snapshot) CachedSnapshot {
+func newCachedSnapshot(userID, platformID int64, platform string, policyVersion int64, snapshot Snapshot) CachedSnapshot {
 	return CachedSnapshot{
-		SchemaVersion: accessSnapshotSchemaVersion, UserID: userID, Platform: platform,
+		SchemaVersion: accessSnapshotSchemaVersion, UserID: userID, PlatformID: platformID, Platform: platform,
 		PolicyVersion: policyVersion, Version: snapshot.Version,
 		RoleCodes: append([]string(nil), snapshot.RoleCodes...), MenuTree: cloneMenuTree(snapshot.MenuTree),
 		PermissionCodes: append([]string(nil), snapshot.PermissionCodes...),
@@ -103,12 +104,12 @@ func snapshotFromCache(cached CachedSnapshot, cacheResult string) Snapshot {
 	}
 }
 
-func cachedSnapshot(userID int64, platform string, policyVersion int64, snapshot Snapshot) CachedSnapshot {
-	return newCachedSnapshot(userID, platform, policyVersion, snapshot)
+func cachedSnapshot(userID, platformID int64, platform string, policyVersion int64, snapshot Snapshot) CachedSnapshot {
+	return newCachedSnapshot(userID, platformID, platform, policyVersion, snapshot)
 }
 
 func decodeCachedSnapshot(raw string) (CachedSnapshot, error) {
-	expected := []string{"schemaVersion", "userId", "platform", "policyVersion", "version", "roleCodes", "menuTree", "permissionCodes"}
+	expected := []string{"schemaVersion", "userId", "platformId", "platform", "policyVersion", "version", "roleCodes", "menuTree", "permissionCodes"}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(raw), &fields); err != nil {
 		return CachedSnapshot{}, fmt.Errorf("decode access snapshot fields: %w", err)
@@ -137,7 +138,7 @@ func decodeCachedSnapshot(raw string) (CachedSnapshot, error) {
 }
 
 func validateCachedSnapshot(snapshot CachedSnapshot) error {
-	if snapshot.SchemaVersion != accessSnapshotSchemaVersion || snapshot.UserID < 1 || snapshot.PolicyVersion < 1 || snapshot.Version < 1 {
+	if snapshot.SchemaVersion != accessSnapshotSchemaVersion || snapshot.UserID < 1 || snapshot.PlatformID < 1 || snapshot.PolicyVersion < 1 || snapshot.Version < 1 {
 		return fmt.Errorf("cached access snapshot identity is invalid")
 	}
 	if authclient.ValidatePlatform(snapshot.Platform) != nil {

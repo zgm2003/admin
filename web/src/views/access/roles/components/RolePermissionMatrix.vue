@@ -32,10 +32,10 @@ interface GroupRuntimeState {
 
 const { t } = useI18n();
 const selectedMenuIDSet = computed(() => new Set(selectedMenuIDs.value));
-const collapsedGroupIDs = shallowRef(new Set<number>());
+const collapsedGroupKeys = shallowRef(new Set<string>());
 
 const groupRuntimeStateMap = computed(() => {
-  const states = new Map<number, GroupRuntimeState>();
+  const states = new Map<string, GroupRuntimeState>();
   const selected = selectedMenuIDSet.value;
 
   for (const group of props.groups) {
@@ -43,7 +43,7 @@ const groupRuntimeStateMap = computed(() => {
     const actionIDs = group.rows.flatMap((row) =>
       row.actions.map((action) => action.id),
     );
-    states.set(group.groupId, {
+    states.set(group.groupKey, {
       selection: getRoleMatrixSelectionState(
         getRoleMatrixGroupMenuIDs(group),
         selected,
@@ -59,9 +59,9 @@ const groupRuntimeStateMap = computed(() => {
 });
 
 function groupRuntimeState(group: RoleMatrixGroup): GroupRuntimeState {
-  const state = groupRuntimeStateMap.value.get(group.groupId);
+  const state = groupRuntimeStateMap.value.get(group.groupKey);
   if (state === undefined) {
-    throw new Error(`permission group ${group.groupId} has no runtime state`);
+    throw new Error(`permission group ${group.groupKey} has no runtime state`);
   }
   return state;
 }
@@ -101,17 +101,17 @@ function setGroupChecked(group: RoleMatrixGroup, checked: boolean): void {
 }
 
 function isGroupCollapsed(group: RoleMatrixGroup): boolean {
-  return collapsedGroupIDs.value.has(group.groupId);
+  return collapsedGroupKeys.value.has(group.groupKey);
 }
 
 function toggleGroupCollapse(group: RoleMatrixGroup): void {
-  const next = new Set(collapsedGroupIDs.value);
-  if (next.has(group.groupId)) {
-    next.delete(group.groupId);
+  const next = new Set(collapsedGroupKeys.value);
+  if (next.has(group.groupKey)) {
+    next.delete(group.groupKey);
   } else {
-    next.add(group.groupId);
+    next.add(group.groupKey);
   }
-  collapsedGroupIDs.value = next;
+  collapsedGroupKeys.value = next;
 }
 </script>
 
@@ -123,7 +123,7 @@ function toggleGroupCollapse(group: RoleMatrixGroup): void {
   <div v-else class="role-permission-matrix">
     <section
       v-for="group in groups"
-      :key="group.groupId"
+      :key="group.groupKey"
       class="role-permission-matrix__group"
     >
       <div class="role-permission-matrix__group-header">

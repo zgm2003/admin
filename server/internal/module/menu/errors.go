@@ -8,16 +8,17 @@ import (
 )
 
 const (
-	CodeMenuTreeInvalid       = 14000
-	CodeMenuNotFound          = 14001
-	CodeMenuCodeConflict      = 14002
-	CodeMenuPathConflict      = 14003
-	CodeMenuInvalidParent     = 14004
-	CodeMenuCycleDetected     = 14005
-	CodeMenuProtected         = 14006
-	CodeMenuParentDisabled    = 14007
-	CodeMenuStructureConflict = 14008
-	CodeMenuInvalidFields     = 14009
+	CodeMenuTreeInvalid         = 14000
+	CodeMenuNotFound            = 14001
+	CodeMenuCodeConflict        = 14002
+	CodeMenuPathConflict        = 14003
+	CodeMenuInvalidParent       = 14004
+	CodeMenuCycleDetected       = 14005
+	CodeMenuProtected           = 14006
+	CodeMenuParentDisabled      = 14007
+	CodeMenuStructureConflict   = 14008
+	CodeMenuInvalidFields       = 14009
+	CodeMenuPlatformUnavailable = 14010
 )
 
 func menuTreeInvalid(cause error) *apperror.Error {
@@ -58,6 +59,10 @@ func menuStructureConflict(code string, cause error) *apperror.Error {
 
 func menuInvalidFields(cause error) *apperror.Error {
 	return newMenuError(http.StatusBadRequest, CodeMenuInvalidFields, i18n.KeyMenuInvalidFields, nil, cause)
+}
+
+func menuPlatformUnavailable(cause error) *apperror.Error {
+	return newMenuError(http.StatusBadRequest, CodeMenuPlatformUnavailable, i18n.KeyMenuPlatformUnavailable, nil, cause)
 }
 
 func newMenuError(httpStatus, code int, key i18n.MessageKey, params map[string]string, cause error) *apperror.Error {

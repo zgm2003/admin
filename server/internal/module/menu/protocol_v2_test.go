@@ -39,7 +39,7 @@ func TestMenuProtocolV2UsesNameNullableI18nAndRenderState(t *testing.T) {
 func TestMenuProtocolV2AcceptsCustomI18nKeyAndIconName(t *testing.T) {
 	icon := "lucide:shield-check"
 	input := CreateInput{
-		MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("reports.orders.list"),
+		PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("reports.orders.list"),
 		Icon: &icon, SortOrder: 10, IsEnabled: yesno.Yes,
 	}
 	if _, err := normalizeCreateInput(input); err != nil {
@@ -63,7 +63,7 @@ func TestMenuProtocolV2RejectsStaticAndNonKebabPagePaths(t *testing.T) {
 func TestMenuProtocolV2RequiresActionsToBeHidden(t *testing.T) {
 	now := time.Now().UTC()
 	action := Menu{
-		ID: 7, ParentID: int64Pointer(3), MenuType: TypeAction,
+		ID: 7, PlatformID: 1, ParentID: int64Pointer(3), MenuType: TypeAction,
 		Name: "修改角色", Code: "rbac:role:update", I18nKey: nil,
 		IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now,
 	}

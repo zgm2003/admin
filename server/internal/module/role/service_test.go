@@ -202,7 +202,7 @@ func TestServiceUpdateStatusProtectsRolesAndPreservesRelations(t *testing.T) {
 	}
 	path := fmt.Sprintf("/status-%d", time.Now().UnixNano())
 	componentPath := "access/menus"
-	page := menu.Menu{MenuType: menu.TypePage, Name: "Status", Code: fmt.Sprintf("status:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "Status", Code: fmt.Sprintf("status:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -504,7 +504,7 @@ func TestServiceDeleteSoftDeletesRoleAndGrantsWithOneTimestamp(t *testing.T) {
 	}
 	path := fmt.Sprintf("/delete-%d", time.Now().UnixNano())
 	componentPath := "access/menus"
-	page := menu.Menu{MenuType: menu.TypePage, Name: "Delete", Code: fmt.Sprintf("delete:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "Delete", Code: fmt.Sprintf("delete:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -539,7 +539,7 @@ func TestServiceDeleteRollsBackWhenRoleWriteFails(t *testing.T) {
 	}
 	path := fmt.Sprintf("/delete-rollback-%d", time.Now().UnixNano())
 	componentPath := "access/menus"
-	page := menu.Menu{MenuType: menu.TypePage, Name: "Delete rollback", Code: fmt.Sprintf("delete:rollback:%d", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "Delete rollback", Code: fmt.Sprintf("delete:rollback:%d", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -568,18 +568,30 @@ func TestServiceDeleteRollsBackWhenRoleWriteFails(t *testing.T) {
 func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
 	service, accessStates, _ := newRoleMutationTestService(t, role.NewRepository(tx))
-	root := menu.Menu{MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: roleTestStringPointer("navigation.access"), IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	adminPlatformID := roleTestAdminPlatformID(t, tx, ctx)
+	canvasPlatform := createRoleTestPlatform(t, tx, ctx, "canvas", "Canvas", yesno.No)
+	root := menu.Menu{PlatformID: adminPlatformID, MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: roleTestStringPointer("navigation.access"), IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&root).Error; err != nil {
 		t.Fatal(err)
 	}
 	path := "/system/roles"
 	componentPath := "system/roles"
-	page := menu.Menu{ParentID: &root.ID, MenuType: menu.TypePage, Name: "角色管理", Code: role.PermissionList, I18nKey: roleTestStringPointer("navigation.accessRoles"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := menu.Menu{PlatformID: adminPlatformID, ParentID: &root.ID, MenuType: menu.TypePage, Name: "角色管理", Code: role.PermissionList, I18nKey: roleTestStringPointer("navigation.accessRoles"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
-	action := menu.Menu{ParentID: &page.ID, MenuType: menu.TypeAction, Name: "配置角色权限", Code: role.PermissionAuthorize, IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
+	action := menu.Menu{PlatformID: adminPlatformID, ParentID: &page.ID, MenuType: menu.TypeAction, Name: "配置角色权限", Code: role.PermissionAuthorize, IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&action).Error; err != nil {
+		t.Fatal(err)
+	}
+	canvasPath := "/test"
+	canvasComponentPath := "test"
+	canvasPage := menu.Menu{PlatformID: canvasPlatform.ID, MenuType: menu.TypePage, Name: "Test", Code: role.PermissionList, I18nKey: roleTestStringPointer("navigation.test"), Path: &canvasPath, ComponentPath: &canvasComponentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	if err := tx.WithContext(ctx).Create(&canvasPage).Error; err != nil {
+		t.Fatal(err)
+	}
+	canvasAction := menu.Menu{PlatformID: canvasPlatform.ID, ParentID: &canvasPage.ID, MenuType: menu.TypeAction, Name: "Test Button", Code: role.PermissionAuthorize, IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
+	if err := tx.WithContext(ctx).Create(&canvasAction).Error; err != nil {
 		t.Fatal(err)
 	}
 	roleID, err := service.Create(ctx, role.CreateInput{Code: fmt.Sprintf("permission_%d", time.Now().UnixNano()), Name: fmt.Sprintf("Permission %d", time.Now().UnixNano())})
@@ -590,20 +602,27 @@ func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
 		t.Fatal(err)
 	}
 	boundUser := createRoleAccessUser(t, tx, ctx, roleID, yesno.Yes, false)
-	count, err := service.UpdatePermissions(ctx, roleID, []int64{page.ID, action.ID})
-	if err != nil || count != 1 {
+	count, err := service.UpdatePermissions(ctx, roleID, []int64{page.ID, action.ID, canvasPage.ID, canvasAction.ID})
+	if err != nil || count != 2 {
 		t.Fatalf("UpdatePermissions() = %d,%v", count, err)
 	}
 	assertRoleAccessState(t, accessStates, boundUser.ID, 2)
 	permissions, err := service.Permissions(ctx, roleID)
-	if err != nil || len(permissions.MenuTree) == 0 || !reflect.DeepEqual(permissions.MenuIDs, []int64{action.ID}) {
+	if err != nil || len(permissions.Platforms) != 2 || !reflect.DeepEqual(permissions.MenuIDs, []int64{action.ID, canvasAction.ID}) {
 		t.Fatalf("Permissions() = %+v,%v", permissions, err)
+	}
+	adminPermissions, canvasPermissions := permissions.Platforms[0], permissions.Platforms[1]
+	if adminPermissions.ID != adminPlatformID || adminPermissions.Code != "admin" || len(adminPermissions.MenuTree) != 1 || adminPermissions.MenuTree[0].ID != root.ID {
+		t.Fatalf("Admin permissions = %+v", adminPermissions)
+	}
+	if canvasPermissions.ID != canvasPlatform.ID || canvasPermissions.Code != "canvas" || canvasPermissions.IsEnabled != yesno.No || len(canvasPermissions.MenuTree) != 1 || canvasPermissions.MenuTree[0].ID != canvasPage.ID || len(canvasPermissions.MenuTree[0].Children) != 1 {
+		t.Fatalf("Canvas permissions = %+v", canvasPermissions)
 	}
 	var before menu.RoleMenu
 	if err := tx.WithContext(ctx).Where("role_id = ?", roleID).Take(&before).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.UpdatePermissions(ctx, roleID, []int64{action.ID}); err != nil {
+	if _, err := service.UpdatePermissions(ctx, roleID, []int64{action.ID, canvasAction.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if got := readRoleAccessVersion(t, tx, ctx, boundUser.ID); got != 2 {

@@ -84,7 +84,7 @@ function checkboxContaining(
 
 function matrixGroups(): RoleMatrixGroup[] {
   return [{
-    groupId: 1,
+    groupKey: 'menu:1',
     groupCode: 'system',
 		groupName: '系统管理',
     groupIsEnabled: YesNo.Yes,

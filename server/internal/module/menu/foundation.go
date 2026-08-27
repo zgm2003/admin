@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"admin/server/internal/module/authplatform"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/yesno"
 )
@@ -37,6 +38,23 @@ func (s *Service) EnsureFoundation(ctx context.Context, definitions []Foundation
 	if err != nil {
 		return menuInvalidFields(err)
 	}
+	platforms, err := s.repository.FindPlatformOptions(ctx)
+	if err != nil {
+		return apperror.DependencyUnavailable(err)
+	}
+	adminPlatformID := int64(0)
+	for _, platform := range platforms {
+		if platform.Code != authplatform.BuiltinAdminCode {
+			continue
+		}
+		if adminPlatformID != 0 {
+			return apperror.DependencyUnavailable(fmt.Errorf("multiple active Admin platforms exist"))
+		}
+		adminPlatformID = platform.ID
+	}
+	if adminPlatformID < 1 {
+		return apperror.DependencyUnavailable(fmt.Errorf("builtin Admin platform is unavailable"))
+	}
 	err = s.mutateAllAccessUsers(ctx, func(mutationCtx context.Context, repository *Repository, activeMenus []Menu, operationTime time.Time) (bool, error) {
 		allCount, err := repository.CountAllMenus(mutationCtx)
 		if err != nil {
@@ -50,7 +68,7 @@ func (s *Service) EnsureFoundation(ctx context.Context, definitions []Foundation
 		for index, definition := range selected {
 			codes[index] = definition.Code
 		}
-		stored, err := repository.LockMenusByCodesUnscoped(mutationCtx, codes)
+		stored, err := repository.LockMenusByCodesUnscoped(mutationCtx, adminPlatformID, codes)
 		if err != nil {
 			return false, err
 		}
@@ -63,12 +81,15 @@ func (s *Service) EnsureFoundation(ctx context.Context, definitions []Foundation
 		}
 		activeByCode := make(map[string]Menu, len(activeMenus)+len(selected))
 		for _, row := range activeMenus {
+			if row.PlatformID != adminPlatformID {
+				continue
+			}
 			activeByCode[row.Code] = row
 		}
 
 		changed := false
 		for _, definition := range selected {
-			candidate, err := foundationMenu(definition, activeByCode)
+			candidate, err := foundationMenu(adminPlatformID, definition, activeByCode)
 			if err != nil {
 				return false, err
 			}
@@ -130,7 +151,7 @@ func validateFoundationDefinitions(definitions []FoundationDefinition) ([]Founda
 			return nil, fmt.Errorf("foundation menu code %s is duplicated", definition.Code)
 		}
 		input := CreateInput{
-			MenuType: definition.MenuType, Name: definition.Name, Code: definition.Code, I18nKey: definition.I18nKey,
+			PlatformID: 1, MenuType: definition.MenuType, Name: definition.Name, Code: definition.Code, I18nKey: definition.I18nKey,
 			Path: definition.Path, ComponentPath: definition.ComponentPath, Icon: definition.Icon,
 			SortOrder: definition.SortOrder, IsEnabled: definition.IsEnabled, IsHidden: definition.IsHidden,
 		}
@@ -168,7 +189,7 @@ func protectedFoundationDefinitions(definitions []FoundationDefinition) []Founda
 	return result
 }
 
-func foundationMenu(definition FoundationDefinition, activeByCode map[string]Menu) (Menu, error) {
+func foundationMenu(platformID int64, definition FoundationDefinition, activeByCode map[string]Menu) (Menu, error) {
 	var parentID *int64
 	if definition.ParentCode != "" {
 		parent, exists := activeByCode[definition.ParentCode]
@@ -179,14 +200,14 @@ func foundationMenu(definition FoundationDefinition, activeByCode map[string]Men
 		parentID = &value
 	}
 	return Menu{
-		ParentID: parentID, MenuType: definition.MenuType, Name: definition.Name, Code: definition.Code,
+		PlatformID: platformID, ParentID: parentID, MenuType: definition.MenuType, Name: definition.Name, Code: definition.Code,
 		I18nKey: definition.I18nKey, Path: definition.Path, ComponentPath: definition.ComponentPath,
 		Icon: definition.Icon, SortOrder: definition.SortOrder, IsEnabled: definition.IsEnabled, IsHidden: definition.IsHidden,
 	}, nil
 }
 
 func sameFoundationStructure(left, right Menu) bool {
-	return sameInt64Pointer(left.ParentID, right.ParentID) && left.MenuType == right.MenuType &&
+	return left.PlatformID == right.PlatformID && sameInt64Pointer(left.ParentID, right.ParentID) && left.MenuType == right.MenuType &&
 		sameStringPointer(left.Path, right.Path) && sameStringPointer(left.ComponentPath, right.ComponentPath) &&
 		left.IsEnabled == right.IsEnabled && left.IsHidden == right.IsHidden
 }

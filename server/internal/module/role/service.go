@@ -339,6 +339,10 @@ func (s *Service) Permissions(ctx context.Context, roleID int64) (Permissions, e
 	if stored.Code == CodeSuperAdmin {
 		return Permissions{}, roleSuperAdminAuthorization(fmt.Errorf("super administrator has implicit permissions"))
 	}
+	platforms, err := s.repository.FindPermissionPlatforms(ctx)
+	if err != nil {
+		return Permissions{}, apperror.DependencyUnavailable(err)
+	}
 	menus, err := s.repository.LockActiveMenus(ctx)
 	if err != nil {
 		return Permissions{}, apperror.DependencyUnavailable(err)
@@ -355,13 +359,30 @@ func (s *Service) Permissions(ctx context.Context, roleID int64) (Permissions, e
 	if err != nil {
 		return Permissions{}, roleDataInvalid(err)
 	}
-	tree, err := index.tree()
-	if err != nil {
-		return Permissions{}, roleDataInvalid(err)
+	platformIDs := make(map[int64]struct{}, len(platforms))
+	for platformIndex := range platforms {
+		platform := &platforms[platformIndex]
+		if platform.ID < 1 || strings.TrimSpace(platform.Code) == "" || strings.TrimSpace(platform.Name) == "" || !yesno.IsValid(platform.IsEnabled) {
+			return Permissions{}, roleDataInvalid(fmt.Errorf("permission platform %d has invalid stored values", platform.ID))
+		}
+		if _, exists := platformIDs[platform.ID]; exists {
+			return Permissions{}, roleDataInvalid(fmt.Errorf("permission platform %d is duplicated", platform.ID))
+		}
+		platformIDs[platform.ID] = struct{}{}
+		tree, treeErr := index.tree(platform.ID)
+		if treeErr != nil {
+			return Permissions{}, roleDataInvalid(treeErr)
+		}
+		platform.MenuTree = tree
+	}
+	for _, row := range menus {
+		if _, exists := platformIDs[row.PlatformID]; !exists {
+			return Permissions{}, roleDataInvalid(fmt.Errorf("menu %d references an unavailable platform", row.ID))
+		}
 	}
 	return Permissions{
-		Role:     Summary{ID: stored.ID, Code: stored.Code, Name: stored.Name, IsDefault: stored.IsDefault, IsEnabled: stored.IsEnabled},
-		MenuTree: tree, MenuIDs: menuIDs,
+		Role:      Summary{ID: stored.ID, Code: stored.Code, Name: stored.Name, IsDefault: stored.IsDefault, IsEnabled: stored.IsEnabled},
+		Platforms: platforms, MenuIDs: menuIDs,
 	}, nil
 }
 

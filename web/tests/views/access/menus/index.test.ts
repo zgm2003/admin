@@ -10,8 +10,7 @@ import {
   updateMenu,
   updateMenuStatus,
 } from '@src/api/menu'
-import type { CreateMenuInput, UpdateMenuInput } from '@src/api/menu'
-import type { ManagedMenuNode } from '@src/api/menu'
+import type { CreateMenuInput, ManagedMenuNode, MenuCatalogResponse, UpdateMenuInput } from '@src/api/menu'
 import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
 import { DIcon } from '@src/components/DIcon'
@@ -47,7 +46,7 @@ describe('MenuManagement', () => {
     localStorage.clear()
     setLocale('zh-CN')
     vi.clearAllMocks()
-    getMenusMock.mockResolvedValue(menuTree())
+    getMenusMock.mockResolvedValue(menuCatalog())
   })
 
   it('loads once and renders the complete database-named tree table', async () => {
@@ -55,6 +54,9 @@ describe('MenuManagement', () => {
     await flushPromises()
 
     expect(getMenusMock).toHaveBeenCalledOnce()
+    expect(getMenusMock).toHaveBeenCalledWith()
+    expect(wrapper.get('[data-testid="menu-platform-tabs"]').text()).toContain('Admin')
+    expect(wrapper.get('[data-testid="menu-platform-tabs"]').text()).toContain('Canvas')
     expect(wrapper.find('h1').exists()).toBe(false)
 		expect(wrapper.get('.menu-management-page').classes()).toContain('management-page')
     const table = wrapper.get('[data-testid="menu-table"]')
@@ -90,6 +92,23 @@ describe('MenuManagement', () => {
     expect(actionsColumn?.props('width')).toBe(280)
     expect(wrapper.find('.menu-row-actions').exists()).toBe(false)
     expect(wrapper.find('[data-testid="menu-drawer"]').exists()).toBe(false)
+  })
+
+  it('switches the top platform tab and reloads only that platform tree', async () => {
+    getMenusMock
+      .mockResolvedValueOnce(menuCatalog())
+      .mockResolvedValueOnce(menuCatalog(canvasMenuTree()))
+    const wrapper = mountPage(pinia, ['rbac:menu:list'])
+    await flushPromises()
+
+    const canvasTab = wrapper.findAll('[role="tab"]').find((tab) => tab.text().includes('Canvas'))
+    expect(canvasTab).toBeDefined()
+    await canvasTab?.trigger('click')
+    await flushPromises()
+
+    expect(getMenusMock).toHaveBeenNthCalledWith(2, { platformId: 2 })
+    expect(wrapper.get('[data-testid="menu-table"]').text()).toContain('Test')
+    expect(wrapper.get('[data-testid="menu-table"]').text()).not.toContain('系统管理')
   })
 
   it('keeps disabled rows visible and accepts explicit empty leaf children', async () => {
@@ -150,7 +169,7 @@ describe('MenuManagement', () => {
   })
 
   it('creates a root with explicit nulls and reloads only the management tree', async () => {
-    getMenusMock.mockResolvedValueOnce(menuTree()).mockResolvedValueOnce(menuTree())
+    getMenusMock.mockResolvedValueOnce(menuCatalog()).mockResolvedValueOnce(menuCatalog())
     createMenuMock.mockResolvedValue({ id: 9 })
     const wrapper = mountPage(pinia, ['rbac:menu:create'])
     await flushPromises()
@@ -164,6 +183,7 @@ describe('MenuManagement', () => {
     await flushPromises()
 
     const expected: CreateMenuInput = {
+      platformId: 1,
       parentId: null,
       menuType: 'directory',
 			name: '报表',
@@ -181,8 +201,44 @@ describe('MenuManagement', () => {
     expect(document.body.textContent ?? '').toContain('刷新页面后侧边栏和路由生效')
 	})
 
+  it('creates a root page in the active platform without a platform selector', async () => {
+    getMenusMock
+      .mockResolvedValueOnce(menuCatalog())
+      .mockResolvedValueOnce(menuCatalog(canvasMenuTree()))
+      .mockResolvedValueOnce(menuCatalog(canvasMenuTree()))
+    createMenuMock.mockResolvedValue({ id: 9 })
+    const wrapper = mountPage(pinia, ['rbac:menu:create'])
+    await flushPromises()
+    const canvasTab = wrapper.findAll('[role="tab"]').find((tab) => tab.text().includes('Canvas'))
+    await canvasTab?.trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
+    await flushPromises()
+
+    expect(bodyFind('[data-testid="menu-form-platform-select"]').exists()).toBe(false)
+    await bodyGet('[data-testid="menu-form-type"]').trigger('click')
+    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')]
+      .find((item) => item.textContent?.trim() === '页面')
+    expect(pageOption).toBeDefined()
+    if (pageOption !== undefined) await new DOMWrapper(pageOption).trigger('click')
+    await bodyGet('[data-testid="menu-form-name"]').setValue('Test')
+    await bodyGet('[data-testid="menu-form-code"]').setValue('canvas:test')
+    await bodyGet('[data-testid="menu-form-path"]').setValue('/test')
+    await bodyGet('[data-testid="menu-form-component-path"]').setValue('test')
+    await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(createMenuMock).toHaveBeenCalledWith(expect.objectContaining({
+      platformId: 2,
+      parentId: null,
+      menuType: 'page',
+      code: 'canvas:test',
+    }))
+    expect(getMenusMock).toHaveBeenLastCalledWith({ platformId: 2 })
+  })
+
 	it('locks protected structure, status, and deletion while keeping presentation fields editable', async () => {
-		getMenusMock.mockResolvedValue(protectedMenuTree())
+		getMenusMock.mockResolvedValue(menuCatalog(protectedMenuTree()))
 		const wrapper = mountPage(pinia, ['rbac:menu:update', 'rbac:menu:delete'])
 		await flushPromises()
 
@@ -229,6 +285,7 @@ describe('MenuManagement', () => {
 		await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
 		await flushPromises()
 		expect(createMenuMock).toHaveBeenCalledWith({
+			platformId: 1,
 			parentId: 2,
 			menuType: 'action',
 			name: '新增用户',
@@ -291,13 +348,14 @@ describe('MenuManagement', () => {
 
   it('keeps code readonly on edit and excludes it from the update payload', async () => {
     updateMenuMock.mockResolvedValue({ id: 2 })
-    getMenusMock.mockResolvedValueOnce(menuTree()).mockResolvedValueOnce(menuTree())
+    getMenusMock.mockResolvedValueOnce(menuCatalog()).mockResolvedValueOnce(menuCatalog())
     const wrapper = mountPage(pinia, ['rbac:menu:update'])
     await flushPromises()
     await wrapper.get('[data-testid="edit-2"]').trigger('click')
     await flushPromises()
     const codeInput = bodyGet('[data-testid="menu-form-code"]')
     expect(codeInput.attributes('readonly')).toBeDefined()
+    expect(bodyGet('[data-testid="menu-form-platform"]').text()).toContain('Admin')
     await bodyGet('[data-testid="menu-form-sort-order"] input').setValue('12')
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
     await flushPromises()
@@ -315,10 +373,11 @@ describe('MenuManagement', () => {
     }
 		expect(updateMenuMock).toHaveBeenCalledWith(2, expected)
 		expect(JSON.stringify(updateMenuMock.mock.calls[0]?.[1])).not.toContain('code')
+		expect(JSON.stringify(updateMenuMock.mock.calls[0]?.[1])).not.toContain('platformId')
   })
 
   it('filters parent options to valid nodes and excludes the edited subtree', async () => {
-    getMenusMock.mockResolvedValue([rootWithEditableSubtree()])
+    getMenusMock.mockResolvedValue(menuCatalog([rootWithEditableSubtree()]))
     const wrapper = mountPage(pinia, ['rbac:menu:create', 'rbac:menu:update'])
     await flushPromises()
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
@@ -343,8 +402,8 @@ describe('MenuManagement', () => {
   })
 
   it('uses exact status/delete APIs, reloads once, and preserves the table on failure', async () => {
-		const mutableTree = menuTree()
-    getMenusMock.mockResolvedValueOnce(mutableTree).mockResolvedValue(mutableTree)
+		const mutableCatalog = menuCatalog(menuTree())
+    getMenusMock.mockResolvedValueOnce(mutableCatalog).mockResolvedValue(mutableCatalog)
     updateMenuStatusMock.mockResolvedValue({ id: 3, isEnabled: YesNo.Yes })
     deleteMenuMock.mockResolvedValue({ id: 3 })
     const wrapper = mountPage(pinia, ['rbac:menu:update', 'rbac:menu:delete'])
@@ -398,6 +457,9 @@ function menuTree(): ManagedMenuNode[] {
   const timestamp = '2026-08-19T02:00:00Z'
   return [{
     id: 1,
+    platformId: 1,
+    platformCode: 'admin',
+    platformName: 'Admin',
     parentId: null,
     menuType: 'directory',
 		name: '系统管理',
@@ -414,6 +476,9 @@ function menuTree(): ManagedMenuNode[] {
     updatedAt: timestamp,
     children: [{
       id: 2,
+      platformId: 1,
+      platformCode: 'admin',
+      platformName: 'Admin',
       parentId: 1,
       menuType: 'page',
 			name: '用户管理',
@@ -430,6 +495,9 @@ function menuTree(): ManagedMenuNode[] {
       updatedAt: timestamp,
       children: [{
         id: 3,
+        platformId: 1,
+        platformCode: 'admin',
+        platformName: 'Admin',
         parentId: 2,
         menuType: 'action',
 				name: '修改用户',
@@ -450,6 +518,41 @@ function menuTree(): ManagedMenuNode[] {
   }]
 }
 
+function menuCatalog(menuTreeValue: ManagedMenuNode[] = menuTree()): MenuCatalogResponse {
+  return {
+    platforms: [
+      { id: 1, code: 'admin', name: 'Admin', isEnabled: YesNo.Yes },
+      { id: 2, code: 'canvas', name: 'Canvas', isEnabled: YesNo.No },
+    ],
+    menuTree: menuTreeValue,
+  }
+}
+
+function canvasMenuTree(): ManagedMenuNode[] {
+  const timestamp = '2026-08-19T02:00:00Z'
+  return [{
+    id: 20,
+    platformId: 2,
+    platformCode: 'canvas',
+    platformName: 'Canvas',
+    parentId: null,
+    menuType: 'page',
+    name: 'Test',
+    code: 'canvas:test',
+    i18nKey: 'navigation.test',
+    path: '/test',
+    componentPath: 'test',
+    icon: null,
+    sortOrder: 10,
+    isEnabled: YesNo.Yes,
+    isHidden: YesNo.No,
+    isProtected: YesNo.No,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    children: [],
+  }]
+}
+
 function protectedMenuTree(): ManagedMenuNode[] {
 	const tree = menuTree()
 	const root = tree[0]
@@ -464,6 +567,9 @@ function rootWithEditableSubtree(): ManagedMenuNode {
   const root = menuTree()[0]
   const directory: ManagedMenuNode = {
     id: 10,
+    platformId: 1,
+    platformCode: 'admin',
+    platformName: 'Admin',
     parentId: null,
     menuType: 'directory',
 		name: '可编辑目录',
@@ -480,6 +586,9 @@ function rootWithEditableSubtree(): ManagedMenuNode {
     updatedAt: root.updatedAt,
     children: [{
       id: 11,
+      platformId: 1,
+      platformCode: 'admin',
+      platformName: 'Admin',
       parentId: 10,
       menuType: 'page',
 			name: '可编辑页面',

@@ -101,6 +101,15 @@ describe('role API', () => {
     })
   })
 
+  it.each([
+    { role: permissionResponse().role, menuTree: [], menuIds: [] },
+    { role: permissionResponse().role, platforms: [{ id: 1, code: 'admin', name: 'Admin', menuTree: [] }], menuIds: [] },
+    { role: permissionResponse().role, platforms: [], menuIds: [], extra: true },
+  ])('rejects invalid permission responses: %j', async (value) => {
+    requestMock.mockResolvedValue(value)
+    await expect(getRolePermissions(7)).rejects.toThrow('role permissions response is invalid')
+  })
+
   it('updates permissions with only menuIds', async () => {
     requestMock.mockResolvedValue({ id: 7, permissionCount: 1 })
 
@@ -131,7 +140,10 @@ function permissionResponse() {
       isDefault: YesNo.No,
       isEnabled: YesNo.Yes,
     },
-    menuTree: [],
-    menuIds: [],
+    platforms: [
+      { id: 1, code: 'admin', name: 'Admin', isEnabled: YesNo.Yes, menuTree: [{ id: 3, parentId: null, menuType: 'page', code: 'admin:test', name: 'Admin Test', isEnabled: YesNo.Yes, children: [] }] },
+      { id: 2, code: 'canvas', name: 'Canvas', isEnabled: YesNo.No, menuTree: [{ id: 20, parentId: null, menuType: 'page', code: 'canvas:test', name: 'Canvas Test', isEnabled: YesNo.Yes, children: [] }] },
+    ],
+    menuIds: [3, 20],
   }
 }

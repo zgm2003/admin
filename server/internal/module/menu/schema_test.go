@@ -9,6 +9,7 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	"admin/server/internal/database/testschema"
+	"admin/server/internal/module/authplatform"
 	"admin/server/internal/module/menu"
 	"admin/server/internal/module/role"
 	"github.com/joho/godotenv"
@@ -32,6 +33,7 @@ func TestMenuSchema(t *testing.T) {
 	tables := map[string]map[string]expectedColumn{
 		"rbac_menu": {
 			"id":             {dataType: "bigint", nullable: "NO"},
+			"platform_id":    {dataType: "bigint", nullable: "NO"},
 			"parent_id":      {dataType: "bigint", nullable: "YES"},
 			"menu_type":      {dataType: "character varying", nullable: "NO", length: 16},
 			"name":           {dataType: "character varying", nullable: "NO", length: 128},
@@ -82,21 +84,27 @@ func TestMenuSchema(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{
-		"fk_rbac_menu_parent",
-		"fk_rbac_role_menu_role",
-		"fk_rbac_role_menu_menu",
-	} {
+	constraints := map[string][]string{
+		"fk_rbac_menu_platform":        {"FOREIGN KEY (platform_id)", "auth_platform(id)", "ON DELETE RESTRICT"},
+		"uq_rbac_menu_id_platform":     {"UNIQUE (id, platform_id)"},
+		"fk_rbac_menu_parent_platform": {"FOREIGN KEY (parent_id, platform_id)", "rbac_menu(id, platform_id)", "ON DELETE RESTRICT"},
+		"fk_rbac_role_menu_role":       {"FOREIGN KEY", "ON DELETE RESTRICT"},
+		"fk_rbac_role_menu_menu":       {"FOREIGN KEY", "ON DELETE RESTRICT"},
+	}
+	for name, fragments := range constraints {
 		definition := constraintDefinition(t, connection, ctx, name)
-		if !strings.Contains(definition, "FOREIGN KEY") || !strings.Contains(definition, "ON DELETE RESTRICT") {
-			t.Errorf("constraint %s = %q", name, definition)
+		for _, fragment := range fragments {
+			if !strings.Contains(definition, fragment) {
+				t.Errorf("constraint %s = %q, missing %q", name, definition, fragment)
+			}
 		}
 	}
+	assertConstraintMissing(t, connection, ctx, "fk_rbac_menu_parent")
 
 	indexes := map[string][]string{
-		"ux_rbac_menu_code_active":      {"CREATE UNIQUE INDEX", "(code)", "WHERE (deleted_at IS NULL)"},
-		"ux_rbac_menu_page_path_active": {"CREATE UNIQUE INDEX", "(path)", "menu_type", "page", "deleted_at IS NULL"},
-		"ix_rbac_menu_parent_active":    {"CREATE INDEX", "(parent_id, sort_order, id)", "WHERE (deleted_at IS NULL)"},
+		"ux_rbac_menu_code_active":      {"CREATE UNIQUE INDEX", "(platform_id, code)", "WHERE (deleted_at IS NULL)"},
+		"ux_rbac_menu_page_path_active": {"CREATE UNIQUE INDEX", "(platform_id, path)", "menu_type", "page", "deleted_at IS NULL"},
+		"ix_rbac_menu_parent_active":    {"CREATE INDEX", "(platform_id, parent_id, sort_order, id)", "WHERE (deleted_at IS NULL)"},
 		"ux_rbac_role_menu_active":      {"CREATE UNIQUE INDEX", "(role_id, menu_id)", "WHERE (deleted_at IS NULL)"},
 	}
 	for name, fragments := range indexes {
@@ -151,14 +159,34 @@ func openMenuSchema(t *testing.T) (*database.Connection, context.Context) {
 	}
 	db, ctx := testschema.Open(t, settings.PostgresDSN, "test_menu_schema")
 	connection := &database.Connection{GORM: db}
-	if err := database.AutoMigrate(ctx, db,
-		&role.Role{}, &menu.Menu{}, &menu.RoleMenu{}); err != nil {
+	if err := database.AutoMigrate(ctx, db, &authplatform.Platform{}); err != nil {
+		t.Fatalf("AutoMigrate authentication platform schema: %v", err)
+	}
+	if err := authplatform.EnsureSchema(ctx, db); err != nil {
+		t.Fatalf("Ensure authentication platform schema: %v", err)
+	}
+	if err := database.AutoMigrate(ctx, db, &role.Role{}, &menu.Menu{}, &menu.RoleMenu{}); err != nil {
 		t.Fatalf("AutoMigrate menu schema: %v", err)
 	}
 	if err := menu.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
 	return connection, ctx
+}
+
+func assertConstraintMissing(t *testing.T, connection *database.Connection, ctx context.Context, name string) {
+	t.Helper()
+	var exists bool
+	if err := connection.GORM.WithContext(ctx).Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM pg_constraint
+			WHERE conname = ? AND connamespace = current_schema()::regnamespace
+		)`, name).Scan(&exists).Error; err != nil {
+		t.Fatalf("inspect missing constraint %s: %v", name, err)
+	}
+	if exists {
+		t.Fatalf("obsolete constraint %s still exists", name)
+	}
 }
 
 func assertColumn(t *testing.T, connection *database.Connection, ctx context.Context, tableName, columnName string, want expectedColumn) {

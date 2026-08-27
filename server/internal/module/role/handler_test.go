@@ -91,6 +91,48 @@ func TestRoleHandlerMutationsUseClosedContracts(t *testing.T) {
 	}
 }
 
+func TestRoleHandlerPermissionsReturnsPlatformGroups(t *testing.T) {
+	service := &roleHTTPService{permissionsResult: role.Permissions{
+		Role: role.Summary{ID: 7, Code: "operator", Name: "Operator", IsDefault: yesno.No, IsEnabled: yesno.Yes},
+		Platforms: []role.PermissionPlatform{{
+			ID: 2, Code: "canvas", Name: "Canvas", IsEnabled: yesno.No, MenuTree: []role.PermissionTreeNode{},
+		}},
+		MenuIDs: []int64{11},
+	}}
+	recorder := serveRoleRequest(t, service, http.MethodGet, "/api/admin/v1/roles/7/permissions", nil)
+	assertRoleEnvelope(t, recorder, http.StatusOK, 0)
+
+	var envelope struct {
+		Data map[string]json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Data) != 3 {
+		t.Fatalf("permission data keys = %v", envelope.Data)
+	}
+	for _, key := range []string{"role", "platforms", "menuIds"} {
+		if _, exists := envelope.Data[key]; !exists {
+			t.Fatalf("permission data is missing %q: %s", key, recorder.Body.String())
+		}
+	}
+	if _, legacy := envelope.Data["menuTree"]; legacy {
+		t.Fatalf("permission data contains legacy menuTree: %s", recorder.Body.String())
+	}
+	var platforms []map[string]json.RawMessage
+	if err := json.Unmarshal(envelope.Data["platforms"], &platforms); err != nil {
+		t.Fatal(err)
+	}
+	if len(platforms) != 1 || len(platforms[0]) != 5 {
+		t.Fatalf("permission platforms = %v", platforms)
+	}
+	for _, key := range []string{"id", "code", "name", "isEnabled", "menuTree"} {
+		if _, exists := platforms[0][key]; !exists {
+			t.Fatalf("permission platform is missing %q: %s", key, recorder.Body.String())
+		}
+	}
+}
+
 func TestRoleRoutesBindExactPermissions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -116,20 +158,21 @@ func TestRoleRoutesBindExactPermissions(t *testing.T) {
 }
 
 type roleHTTPService struct {
-	listResult      pagination.Result[role.ListItem]
-	listQuery       role.ListQuery
-	listCalls       int
-	createID        int64
-	createInput     role.CreateInput
-	updateID        int64
-	updateInput     role.UpdateInput
-	statusID        int64
-	statusValue     yesno.Value
-	defaultID       int64
-	deleteID        int64
-	permissionID    int64
-	permissionIDs   []int64
-	permissionCount int64
+	listResult        pagination.Result[role.ListItem]
+	listQuery         role.ListQuery
+	listCalls         int
+	createID          int64
+	createInput       role.CreateInput
+	updateID          int64
+	updateInput       role.UpdateInput
+	statusID          int64
+	statusValue       yesno.Value
+	defaultID         int64
+	deleteID          int64
+	permissionID      int64
+	permissionIDs     []int64
+	permissionCount   int64
+	permissionsResult role.Permissions
 }
 
 func (s *roleHTTPService) List(_ context.Context, query role.ListQuery) (pagination.Result[role.ListItem], error) {
@@ -154,7 +197,10 @@ func (s *roleHTTPService) UpdateStatus(_ context.Context, id int64, value yesno.
 func (s *roleHTTPService) SetDefault(_ context.Context, id int64) error { s.defaultID = id; return nil }
 func (s *roleHTTPService) Delete(_ context.Context, id int64) error     { s.deleteID = id; return nil }
 func (s *roleHTTPService) Permissions(_ context.Context, _ int64) (role.Permissions, error) {
-	return role.Permissions{MenuTree: []role.PermissionTreeNode{}, MenuIDs: []int64{}}, nil
+	if s.permissionsResult.Platforms == nil {
+		return role.Permissions{Platforms: []role.PermissionPlatform{}, MenuIDs: []int64{}}, nil
+	}
+	return s.permissionsResult, nil
 }
 func (s *roleHTTPService) UpdatePermissions(_ context.Context, id int64, ids []int64) (int64, error) {
 	s.permissionID = id

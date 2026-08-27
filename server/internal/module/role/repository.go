@@ -96,6 +96,30 @@ func (r *Repository) LockActiveMenus(ctx context.Context) ([]menu.Menu, error) {
 	return rows, nil
 }
 
+func (r *Repository) FindPermissionPlatforms(ctx context.Context) ([]PermissionPlatform, error) {
+	type permissionPlatformRow struct {
+		ID        int64
+		Code      string
+		Name      string
+		IsEnabled yesno.Value
+	}
+	rows := make([]permissionPlatformRow, 0)
+	if err := r.db.WithContext(ctx).Table("auth_platform").
+		Select("id, code, name, is_enabled").
+		Where("deleted_at IS NULL").
+		Order("is_builtin DESC, code ASC, id ASC").
+		Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("find role permission platforms: %w", err)
+	}
+	platforms := make([]PermissionPlatform, 0, len(rows))
+	for _, row := range rows {
+		platforms = append(platforms, PermissionPlatform{
+			ID: row.ID, Code: row.Code, Name: row.Name, IsEnabled: row.IsEnabled,
+		})
+	}
+	return platforms, nil
+}
+
 func (r *Repository) FindActiveRoleMenus(ctx context.Context, roleID int64) ([]menu.RoleMenu, error) {
 	rows := make([]menu.RoleMenu, 0)
 	if err := r.db.WithContext(ctx).Where("role_id = ?", roleID).Order("menu_id ASC, id ASC").Find(&rows).Error; err != nil {

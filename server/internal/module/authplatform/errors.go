@@ -15,6 +15,7 @@ const (
 	CodeInvalidPolicy    = 17003
 	CodeDisabled         = 17004
 	CodeSessionUpdating  = 17005
+	CodeMenusAttached    = 17006
 )
 
 var (
@@ -44,6 +45,10 @@ func disabled(cause error) error {
 
 func sessionUpdating(cause error) error {
 	return &apperror.Error{HTTPStatus: http.StatusServiceUnavailable, Code: CodeSessionUpdating, MessageKey: i18n.KeyAuthSessionUpdating, Cause: cause}
+}
+
+func menusAttached(cause error) error {
+	return &apperror.Error{HTTPStatus: http.StatusConflict, Code: CodeMenusAttached, MessageKey: i18n.KeyAuthPlatformMenusAttached, Cause: cause}
 }
 
 func SessionUpdating(cause error) error {

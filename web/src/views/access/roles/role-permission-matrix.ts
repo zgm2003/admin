@@ -1,4 +1,4 @@
-import type { RolePermissionTreeNode } from '../../../api/role'
+import type { RolePermissionPlatform, RolePermissionTreeNode } from '../../../api/role'
 import type { YesNo } from '../../../enums/yes-no'
 
 export interface RoleMatrixAction {
@@ -17,11 +17,19 @@ export interface RoleMatrixRow {
 }
 
 export interface RoleMatrixGroup {
-  groupId: number
+  groupKey: string
   groupCode: string
 	groupName: string
   groupIsEnabled: YesNo
   rows: RoleMatrixRow[]
+}
+
+export interface RoleMatrixPlatform {
+  platformId: number
+  platformCode: string
+  platformName: string
+  platformIsEnabled: YesNo
+  groups: RoleMatrixGroup[]
 }
 
 export interface RoleMatrixSelectionState {
@@ -37,24 +45,50 @@ export interface RolePermissionDiff {
 }
 
 export function buildRolePermissionMatrix(
-  nodes: readonly RolePermissionTreeNode[],
-): RoleMatrixGroup[] {
-  return nodes.map((node) => {
-    if (node.menuType !== 'directory') {
-      throw new Error(`root permission menu ${node.id} must be a directory`)
-    }
+  platforms: readonly RolePermissionPlatform[],
+): RoleMatrixPlatform[] {
+  return platforms.map((platform) => ({
+    platformId: platform.id,
+    platformCode: platform.code,
+    platformName: platform.name,
+    platformIsEnabled: platform.isEnabled,
+    groups: buildPlatformGroups(platform),
+  }))
+}
 
+function buildPlatformGroups(platform: RolePermissionPlatform): RoleMatrixGroup[] {
+  const groups: RoleMatrixGroup[] = []
+  const rootPageRows: RoleMatrixRow[] = []
+  for (const node of platform.menuTree) {
+    if (node.menuType === 'action') {
+      throw new Error(`root permission menu ${node.id} cannot be an action`)
+    }
+    if (node.menuType === 'page') {
+      rootPageRows.push(buildRow(node))
+      continue
+    }
     const rows: RoleMatrixRow[] = []
     collectRows(node.children, rows)
-
-    return {
-      groupId: node.id,
-      groupCode: node.code,
-			groupName: node.name,
-      groupIsEnabled: node.isEnabled,
-      rows,
+    if (rows.length > 0) {
+      groups.push({
+        groupKey: `menu:${node.id}`,
+        groupCode: node.code,
+				groupName: node.name,
+        groupIsEnabled: node.isEnabled,
+        rows,
+      })
     }
-  }).filter((group) => group.rows.length > 0)
+  }
+  if (rootPageRows.length > 0) {
+    groups.unshift({
+      groupKey: `platform:${platform.id}`,
+      groupCode: platform.code,
+      groupName: platform.name,
+      groupIsEnabled: platform.isEnabled,
+      rows: rootPageRows,
+    })
+  }
+  return groups
 }
 
 function collectRows(
@@ -70,23 +104,30 @@ function collectRows(
       throw new Error(`permission menu ${node.id} must be grouped under a page`)
     }
 
-    rows.push({
-      pageId: node.id,
-      pageCode: node.code,
-			pageName: node.name,
-      pageIsEnabled: node.isEnabled,
-      actions: node.children.map((action) => {
-        if (action.menuType !== 'action') {
-          throw new Error(`page permission menu ${node.id} contains a non-action child`)
-        }
-        return {
-          id: action.id,
-          code: action.code,
-					name: action.name,
-          isEnabled: action.isEnabled,
-        }
-      }),
-    })
+    rows.push(buildRow(node))
+  }
+}
+
+function buildRow(node: RolePermissionTreeNode): RoleMatrixRow {
+  if (node.menuType !== 'page') {
+    throw new Error(`permission menu ${node.id} is not a page`)
+  }
+  return {
+    pageId: node.id,
+    pageCode: node.code,
+		pageName: node.name,
+    pageIsEnabled: node.isEnabled,
+    actions: node.children.map((action) => {
+      if (action.menuType !== 'action' || action.children.length !== 0) {
+        throw new Error(`page permission menu ${node.id} contains an invalid action child`)
+      }
+      return {
+        id: action.id,
+        code: action.code,
+				name: action.name,
+        isEnabled: action.isEnabled,
+      }
+    }),
   }
 }
 

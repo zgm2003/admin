@@ -52,7 +52,7 @@ func TestAuthenticateMiddlewareRequiresBearerToken(t *testing.T) {
 }
 
 func TestAuthenticateMiddlewareStoresIdentity(t *testing.T) {
-	want := Identity{UserID: 1, SessionID: 2, Platform: "admin", Version: 3}
+	want := Identity{UserID: 1, SessionID: 2, PlatformID: 17, Platform: "admin", Version: 3}
 	service := &stubAuthenticationService{authenticateIdentity: want}
 	responseRecorder := serveAuthenticatedRequest(t, service, "Bearer token", func(context *gin.Context) {
 		got, ok := IdentityFromContext(context)

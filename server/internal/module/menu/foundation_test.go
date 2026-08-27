@@ -22,6 +22,12 @@ func TestEnsureFoundationSeedsFullCatalogAndIsIdempotent(t *testing.T) {
 	if len(rows) != len(definitions) {
 		t.Fatalf("seeded menus = %d, want %d", len(rows), len(definitions))
 	}
+	adminPlatformID := testAdminPlatformID(t, tx, ctx)
+	for _, row := range rows {
+		if row.PlatformID != adminPlatformID {
+			t.Fatalf("foundation menu %s platform = %d, want Admin %d", row.Code, row.PlatformID, adminPlatformID)
+		}
+	}
 	if got := readMenuAccessVersion(t, tx, ctx, activeUser.ID); got != 2 {
 		t.Fatalf("seed access version = %d, want 2", got)
 	}
@@ -44,6 +50,40 @@ func TestEnsureFoundationSeedsFullCatalogAndIsIdempotent(t *testing.T) {
 		if !row.UpdatedAt.Equal(updatedAt[row.Code]) {
 			t.Fatalf("idempotent foundation rewrote %s", row.Code)
 		}
+	}
+}
+
+func TestEnsureFoundationDoesNotClaimSameCodeFromAnotherPlatform(t *testing.T) {
+	tx, ctx, service := openCleanMenuService(t)
+	adminPlatformID := testAdminPlatformID(t, tx, ctx)
+	canvas := createRepositoryPlatform(t, tx, ctx, "canvas", "Canvas", yesno.Yes, false)
+	canvasAccess := Menu{
+		PlatformID: canvas.ID, MenuType: TypeDirectory, Name: "Canvas Access", Code: "access",
+		I18nKey: stringPointer("navigation.access"), IsEnabled: yesno.Yes, IsHidden: yesno.No,
+	}
+	if err := NewRepository(tx).Create(ctx, &canvasAccess); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := service.EnsureFoundation(ctx, testFoundationDefinitions()); err != nil {
+		t.Fatalf("EnsureFoundation() error = %v", err)
+	}
+
+	var storedCanvas Menu
+	if err := tx.WithContext(ctx).Where("id = ?", canvasAccess.ID).Take(&storedCanvas).Error; err != nil {
+		t.Fatal(err)
+	}
+	if storedCanvas.PlatformID != canvas.ID || storedCanvas.Name != "Canvas Access" {
+		t.Fatalf("Canvas menu was claimed by Admin foundation: %+v", storedCanvas)
+	}
+	var adminProtectedCount int64
+	if err := tx.WithContext(ctx).Model(&Menu{}).
+		Where("platform_id = ? AND code IN ?", adminPlatformID, []string{"access", PermissionList, PermissionCreate, PermissionUpdate, PermissionDelete}).
+		Count(&adminProtectedCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if adminProtectedCount != 5 {
+		t.Fatalf("Admin protected foundation count = %d, want 5", adminProtectedCount)
 	}
 }
 

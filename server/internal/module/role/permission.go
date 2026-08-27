@@ -27,10 +27,18 @@ type PermissionTreeNode struct {
 	Children  []PermissionTreeNode
 }
 
+type PermissionPlatform struct {
+	ID        int64
+	Code      string
+	Name      string
+	IsEnabled yesno.Value
+	MenuTree  []PermissionTreeNode
+}
+
 type Permissions struct {
-	Role     Summary
-	MenuTree []PermissionTreeNode
-	MenuIDs  []int64
+	Role      Summary
+	Platforms []PermissionPlatform
+	MenuIDs   []int64
 }
 
 type permissionIndex struct {
@@ -40,29 +48,35 @@ type permissionIndex struct {
 	pageByAction map[int64]int64
 }
 
+type platformCodeKey struct {
+	PlatformID int64
+	Code       string
+}
+
 func buildPermissionIndex(rows []menu.Menu) (permissionIndex, error) {
 	index := permissionIndex{
 		byID: make(map[int64]menu.Menu, len(rows)), children: make(map[int64][]int64),
 		roots: make([]int64, 0), pageByAction: make(map[int64]int64),
 	}
-	codes := make(map[string]struct{}, len(rows))
+	codes := make(map[platformCodeKey]struct{}, len(rows))
 	for _, row := range rows {
-		if row.ID < 1 || row.DeletedAt.Valid || strings.TrimSpace(row.Code) == "" || strings.TrimSpace(row.Name) == "" || !yesno.IsValid(row.IsEnabled) {
+		if row.ID < 1 || row.PlatformID < 1 || row.DeletedAt.Valid || strings.TrimSpace(row.Code) == "" || strings.TrimSpace(row.Name) == "" || !yesno.IsValid(row.IsEnabled) {
 			return permissionIndex{}, fmt.Errorf("menu %d has invalid stored values", row.ID)
 		}
 		if _, exists := index.byID[row.ID]; exists {
 			return permissionIndex{}, fmt.Errorf("menu id %d is duplicated", row.ID)
 		}
-		if _, exists := codes[row.Code]; exists {
+		codeKey := platformCodeKey{PlatformID: row.PlatformID, Code: row.Code}
+		if _, exists := codes[codeKey]; exists {
 			return permissionIndex{}, fmt.Errorf("menu code %s is duplicated", row.Code)
 		}
-		codes[row.Code] = struct{}{}
+		codes[codeKey] = struct{}{}
 		index.byID[row.ID] = row
 	}
 	for _, row := range rows {
 		if row.ParentID == nil {
-			if row.MenuType != menu.TypeDirectory {
-				return permissionIndex{}, fmt.Errorf("root menu %d is not a directory", row.ID)
+			if row.MenuType == menu.TypeAction {
+				return permissionIndex{}, fmt.Errorf("root menu %d is an action", row.ID)
 			}
 			index.roots = append(index.roots, row.ID)
 			continue
@@ -70,6 +84,9 @@ func buildPermissionIndex(rows []menu.Menu) (permissionIndex, error) {
 		parent, exists := index.byID[*row.ParentID]
 		if !exists {
 			return permissionIndex{}, fmt.Errorf("menu %d has missing parent", row.ID)
+		}
+		if parent.PlatformID != row.PlatformID {
+			return permissionIndex{}, fmt.Errorf("menu %d and parent use different platforms", row.ID)
 		}
 		validChild := (parent.MenuType == menu.TypeDirectory && (row.MenuType == menu.TypeDirectory || row.MenuType == menu.TypePage)) ||
 			(parent.MenuType == menu.TypePage && row.MenuType == menu.TypeAction)
@@ -116,7 +133,7 @@ func (index permissionIndex) sortIDs(ids []int64) {
 	})
 }
 
-func (index permissionIndex) tree() ([]PermissionTreeNode, error) {
+func (index permissionIndex) tree(platformID int64) ([]PermissionTreeNode, error) {
 	var build func(int64) (PermissionTreeNode, error)
 	build = func(id int64) (PermissionTreeNode, error) {
 		row, exists := index.byID[id]
@@ -135,6 +152,9 @@ func (index permissionIndex) tree() ([]PermissionTreeNode, error) {
 	}
 	result := make([]PermissionTreeNode, 0, len(index.roots))
 	for _, rootID := range index.roots {
+		if index.byID[rootID].PlatformID != platformID {
+			continue
+		}
 		root, err := build(rootID)
 		if err != nil {
 			return nil, err

@@ -63,7 +63,7 @@ func TestAccessHandlerReturnsClosedSnapshot(t *testing.T) {
 		t.Fatalf("children = %v error=%v", children, err)
 	}
 	assertClosedMenuNode(t, children[0])
-	if service.identity.UserID != 41 || service.identity.Platform != "admin" || service.ctx == nil {
+	if service.identity.UserID != 41 || service.identity.PlatformID != 17 || service.identity.Platform != "admin" || service.ctx == nil {
 		t.Fatalf("service identity=%+v context=%v", service.identity, service.ctx)
 	}
 }
@@ -127,7 +127,7 @@ func (accessAuthService) Refresh(context.Context, auth.RefreshInput) (auth.Crede
 }
 
 func (accessAuthService) Authenticate(context.Context, string, authclient.Client) (auth.Identity, error) {
-	return auth.Identity{UserID: 41, SessionID: 42, Platform: "admin", Version: 1, PolicyVersion: 4, AccessCacheTTL: time.Hour}, nil
+	return auth.Identity{UserID: 41, SessionID: 42, PlatformID: 17, Platform: "admin", Version: 1, PolicyVersion: 4, AccessCacheTTL: time.Hour}, nil
 }
 
 func (accessAuthService) Logout(context.Context, auth.Identity, authclient.Client) error {

@@ -51,6 +51,7 @@ type policyStore interface {
 type Identity struct {
 	UserID         int64
 	SessionID      int64
+	PlatformID     int64
 	Platform       string
 	Version        int64
 	PolicyVersion  int64
@@ -579,7 +580,7 @@ func snapshotFromAuthority(authority SessionAuthority, policy authplatform.Polic
 
 func identityFromAuthority(authority SessionAuthority, policy authplatform.Policy, cacheResult string) Identity {
 	return Identity{
-		UserID: authority.UserID, SessionID: authority.Session.ID, Platform: authority.Session.Platform,
+		UserID: authority.UserID, SessionID: authority.Session.ID, PlatformID: policy.ID, Platform: authority.Session.Platform,
 		Version: authority.Session.Version, PolicyVersion: policy.PolicyVersion, AccessCacheTTL: policy.AccessCacheTTL,
 		CacheResult: cacheResult,
 	}

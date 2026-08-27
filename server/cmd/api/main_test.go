@@ -170,14 +170,14 @@ func (apiRoleService) UpdateStatus(context.Context, int64, yesno.Value) error  {
 func (apiRoleService) SetDefault(context.Context, int64) error                 { return nil }
 func (apiRoleService) Delete(context.Context, int64) error                     { return nil }
 func (apiRoleService) Permissions(context.Context, int64) (role.Permissions, error) {
-	return role.Permissions{MenuTree: []role.PermissionTreeNode{}, MenuIDs: []int64{}}, nil
+	return role.Permissions{Platforms: []role.PermissionPlatform{}, MenuIDs: []int64{}}, nil
 }
 func (apiRoleService) UpdatePermissions(context.Context, int64, []int64) (int64, error) {
 	return 0, nil
 }
 
-func (apiMenuService) List(context.Context) ([]menu.ManagedMenu, error) {
-	return []menu.ManagedMenu{}, nil
+func (apiMenuService) List(context.Context, menu.ListQuery) (menu.Catalog, error) {
+	return menu.Catalog{Platforms: []menu.PlatformOption{}, MenuTree: []menu.ManagedMenu{}}, nil
 }
 
 func (apiMenuService) Create(context.Context, menu.CreateInput) (int64, error) {

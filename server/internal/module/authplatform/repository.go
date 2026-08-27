@@ -116,6 +116,16 @@ func (r *Repository) FindActiveSessionUsers(ctx context.Context, platform string
 	return userIDs, nil
 }
 
+func (r *Repository) HasActiveMenus(ctx context.Context, platformID int64) (bool, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Table("rbac_menu").
+		Where("platform_id = ? AND deleted_at IS NULL", platformID).
+		Count(&count).Error; err != nil {
+		return false, fmt.Errorf("inspect authentication platform active menus: %w", err)
+	}
+	return count > 0, nil
+}
+
 func (r *Repository) FindSessionLimitCandidates(ctx context.Context, platform string, maxSessions int16) ([]int64, error) {
 	if maxSessions < 1 {
 		return []int64{}, nil

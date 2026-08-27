@@ -48,7 +48,10 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) FindSourceWithVersion(ctx context.Context, userID int64) (Source, error) {
+func (r *Repository) FindSourceWithVersion(ctx context.Context, userID, platformID int64) (Source, error) {
+	if platformID < 1 {
+		return Source{}, fmt.Errorf("find access source requires a positive platform id")
+	}
 	db := r.db.WithContext(ctx)
 	var version int64
 	result := db.Raw(`
@@ -99,8 +102,8 @@ func (r *Repository) FindSourceWithVersion(ctx context.Context, userID int64) (S
 		SELECT id, parent_id, menu_type, code, i18n_key, path,
 		       component_path, icon, sort_order, is_enabled, is_hidden
 		FROM rbac_menu
-		WHERE is_enabled = ? AND deleted_at IS NULL
-		ORDER BY sort_order, code, id`, yesno.Yes).Scan(&menus).Error; err != nil {
+		WHERE platform_id = ? AND is_enabled = ? AND deleted_at IS NULL
+		ORDER BY sort_order, code, id`, platformID, yesno.Yes).Scan(&menus).Error; err != nil {
 		return Source{}, fmt.Errorf("find access source menus: %w", err)
 	}
 
@@ -111,11 +114,12 @@ func (r *Repository) FindSourceWithVersion(ctx context.Context, userID int64) (S
 			FROM rbac_role_menu AS role_menu
 			JOIN rbac_menu AS app_menu
 			  ON app_menu.id = role_menu.menu_id
+			 AND app_menu.platform_id = ?
 			 AND app_menu.is_enabled = ?
 			 AND app_menu.deleted_at IS NULL
 			WHERE role_menu.role_id IN ?
 			  AND role_menu.deleted_at IS NULL
-			ORDER BY role_menu.menu_id`, yesno.Yes, roleIDs).Scan(&grantedMenuIDs).Error; err != nil {
+			ORDER BY role_menu.menu_id`, platformID, yesno.Yes, roleIDs).Scan(&grantedMenuIDs).Error; err != nil {
 			return Source{}, fmt.Errorf("find access source direct grants: %w", err)
 		}
 	}

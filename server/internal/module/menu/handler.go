@@ -11,7 +11,7 @@ import (
 )
 
 type menuService interface {
-	List(context.Context) ([]ManagedMenu, error)
+	List(context.Context, ListQuery) (Catalog, error)
 	Create(context.Context, CreateInput) (int64, error)
 	Update(context.Context, int64, UpdateInput) error
 	UpdateStatus(context.Context, int64, yesno.Value) error
@@ -27,12 +27,17 @@ func NewHandler(service menuService) *Handler {
 }
 
 func (h *Handler) List(context *gin.Context) {
-	items, err := h.service.List(context.Request.Context())
+	query, err := parseListQuery(context.Request.URL.Query())
 	if err != nil {
 		response.Fail(context, err)
 		return
 	}
-	response.OK(context, http.StatusOK, newManagedMenuResponses(items))
+	catalog, err := h.service.List(context.Request.Context(), query)
+	if err != nil {
+		response.Fail(context, err)
+		return
+	}
+	response.OK(context, http.StatusOK, newMenuCatalogResponse(catalog))
 }
 
 func (h *Handler) Create(context *gin.Context) {

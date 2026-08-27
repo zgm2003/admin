@@ -31,6 +31,13 @@ type UpdateValues struct {
 	IsHidden      yesno.Value
 }
 
+type PlatformOption struct {
+	ID        int64
+	Code      string
+	Name      string
+	IsEnabled yesno.Value
+}
+
 type Repository struct {
 	db *gorm.DB
 }
@@ -59,10 +66,10 @@ func (r *Repository) Create(ctx context.Context, value *Menu) error {
 	}
 	result := r.db.WithContext(ctx).Raw(`
 		INSERT INTO rbac_menu (
-			parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING id, created_at, updated_at`,
-		value.ParentID, value.MenuType, value.Name, value.Code, value.I18nKey, value.Path,
+		value.PlatformID, value.ParentID, value.MenuType, value.Name, value.Code, value.I18nKey, value.Path,
 		value.ComponentPath, value.Icon, value.SortOrder, value.IsEnabled, value.IsHidden,
 	).Scan(&created)
 	if result.Error != nil {
@@ -77,9 +84,48 @@ func (r *Repository) Create(ctx context.Context, value *Menu) error {
 	return nil
 }
 
-func (r *Repository) FindActiveMenus(ctx context.Context) ([]Menu, error) {
+func (r *Repository) FindPlatformOptions(ctx context.Context) ([]PlatformOption, error) {
+	rows := make([]PlatformOption, 0)
+	if err := r.db.WithContext(ctx).Table("auth_platform").
+		Select("id, code, name, is_enabled").
+		Where("deleted_at IS NULL").
+		Order("is_builtin DESC, code ASC, id ASC").
+		Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("find menu platform options: %w", err)
+	}
+	return rows, nil
+}
+
+func (r *Repository) FindPlatform(ctx context.Context, id int64) (PlatformOption, error) {
+	var found PlatformOption
+	if err := r.db.WithContext(ctx).Table("auth_platform").
+		Select("id, code, name, is_enabled").
+		Where("id = ? AND deleted_at IS NULL", id).
+		Take(&found).Error; err != nil {
+		return PlatformOption{}, fmt.Errorf("find menu platform: %w", err)
+	}
+	return found, nil
+}
+
+func (r *Repository) LockPlatform(ctx context.Context, id int64) (PlatformOption, error) {
+	var found PlatformOption
+	if err := r.db.WithContext(ctx).Table("auth_platform").
+		Select("id, code, name, is_enabled").
+		Clauses(clause.Locking{Strength: "SHARE"}).
+		Where("id = ? AND deleted_at IS NULL", id).
+		Take(&found).Error; err != nil {
+		return PlatformOption{}, fmt.Errorf("lock menu platform: %w", err)
+	}
+	return found, nil
+}
+
+func (r *Repository) FindActiveMenus(ctx context.Context, platformID *int64) ([]Menu, error) {
 	var rows []Menu
-	if err := r.db.WithContext(ctx).Order("sort_order, code, id").Find(&rows).Error; err != nil {
+	query := r.db.WithContext(ctx)
+	if platformID != nil {
+		query = query.Where("platform_id = ?", *platformID)
+	}
+	if err := query.Order("sort_order, code, id").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("find active menus: %w", err)
 	}
 	return rows, nil
@@ -104,14 +150,14 @@ func (r *Repository) CountAllMenus(ctx context.Context) (int64, error) {
 	return count, nil
 }
 
-func (r *Repository) LockMenusByCodesUnscoped(ctx context.Context, codes []string) ([]Menu, error) {
+func (r *Repository) LockMenusByCodesUnscoped(ctx context.Context, platformID int64, codes []string) ([]Menu, error) {
 	rows := make([]Menu, 0, len(codes))
 	if len(codes) == 0 {
 		return rows, nil
 	}
 	if err := r.db.WithContext(ctx).Unscoped().
 		Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("code IN ?", codes).
+		Where("platform_id = ? AND code IN ?", platformID, codes).
 		Order("code, id").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("lock menus by codes: %w", err)
 	}

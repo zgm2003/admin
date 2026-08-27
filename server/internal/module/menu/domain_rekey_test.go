@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"admin/server/internal/module/authplatform"
 	"admin/server/internal/module/menu"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
@@ -131,9 +132,13 @@ func TestPrepareSchemaRejectsUnknownLegacyIconAndRollsBack(t *testing.T) {
 func TestPrepareSchemaRepairsCorruptedAccessRootI18nKey(t *testing.T) {
 	connection, ctx := openMenuSchema(t)
 	db := connection.GORM.WithContext(ctx)
+	var adminPlatform authplatform.Platform
+	if err := db.Where("code = ?", authplatform.BuiltinAdminCode).Take(&adminPlatform).Error; err != nil {
+		t.Fatal(err)
+	}
 	corrupted := "lucide:shield-check"
 	access := menu.Menu{
-		MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access",
+		PlatformID: adminPlatform.ID, MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access",
 		I18nKey: &corrupted, Icon: &corrupted, SortOrder: 200,
 		IsEnabled: yesno.Yes, IsHidden: yesno.No,
 	}

@@ -14,10 +14,49 @@ import (
 	"admin/server/internal/module/auth"
 	"admin/server/internal/module/authplatform"
 	"admin/server/internal/module/authstate"
+	"admin/server/internal/module/menu"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/yesno"
 )
+
+func TestServiceDeleteRejectsPlatformWithActiveMenus(t *testing.T) {
+	connection, ctx := openAuthenticationPlatformDatabase(t)
+	preparePlatformSessionSchema(t, connection.GORM, ctx)
+	redisClient := openPlatformRedis(t)
+	authStates := authstate.NewStore(redisClient)
+	service := authplatform.NewService(
+		authplatform.NewRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
+		authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete,
+		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
+	)
+	code := fmt.Sprintf("menu_guard_%d", time.Now().UnixNano())
+	platformID, err := service.Create(ctx, authplatform.CreateInput{
+		Code: code, Name: "Menu Guard", AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
+		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800, BindDevice: yesno.No, BindIP: yesno.No,
+		MaxSessions: 1, AllowRegister: yesno.No, IsEnabled: yesno.Yes,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	i18nKey := "navigation.system"
+	storedMenu := menu.Menu{PlatformID: platformID, MenuType: menu.TypeDirectory, Name: "Menu Guard", Code: "menu-guard", I18nKey: &i18nKey, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	if err := connection.GORM.WithContext(ctx).Create(&storedMenu).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Delete(ctx, platformID); platformErrorCode(err) != authplatform.CodeMenusAttached {
+		t.Fatalf("Delete(active menus) error = %v", err)
+	}
+	if _, err := authplatform.NewRepository(connection.GORM).FindPolicy(ctx, code); err != nil {
+		t.Fatalf("platform changed after rejected delete: %v", err)
+	}
+	if err := connection.GORM.WithContext(ctx).Delete(&storedMenu).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Delete(ctx, platformID); err != nil {
+		t.Fatalf("Delete(after menu cleanup) error = %v", err)
+	}
+}
 
 func TestServiceUpdateBuildsMissingReadyStateBeforeMutation(t *testing.T) {
 	connection, ctx := openAuthenticationPlatformDatabase(t)
@@ -395,4 +434,12 @@ func waitForPolicyInvalidating(t *testing.T, redisClient *projectredis.Client, c
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("policy %s did not become invalidating", code)
+}
+
+func platformErrorCode(err error) int {
+	var appErr *apperror.Error
+	if errors.As(err, &appErr) {
+		return appErr.Code
+	}
+	return 0
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { RolePermissionTreeNode } from '@src/api/role'
+import type { RolePermissionPlatform, RolePermissionTreeNode } from '@src/api/role'
 import { YesNo } from '@src/enums/yes-no'
 import {
   buildRolePermissionMatrix,
@@ -16,26 +16,33 @@ import {
 } from '@src/views/access/roles/role-permission-matrix'
 
 describe('role permission matrix', () => {
-  it('builds one stable root group and keeps nested and disabled permissions', () => {
-    const groups = buildRolePermissionMatrix(menuTree())
+  it('builds platform groups and supports a Canvas root page', () => {
+    const platforms = buildRolePermissionMatrix(permissionPlatforms())
+    const groups = platforms.flatMap((platform) => platform.groups)
 
-    expect(groups).toHaveLength(1)
-    expect(groups[0]?.groupId).toBe(1)
+    expect(platforms.map((platform) => platform.platformCode)).toEqual(['admin', 'canvas'])
+    expect(groups).toHaveLength(2)
+    expect(groups[0]?.groupKey).toBe('menu:1')
     expect(groups[0]?.rows.map((row) => row.pageId)).toEqual([2, 5])
     expect(groups[0]?.rows[1]?.actions[0]).toMatchObject({
       id: 6,
       isEnabled: YesNo.No,
     })
+    expect(platforms[1]?.platformIsEnabled).toBe(YesNo.No)
+    expect(platforms[1]?.groups[0]).toMatchObject({
+      groupKey: 'platform:2',
+      rows: [{ pageId: 7, actions: [{ id: 8 }] }],
+    })
   })
 
   it('expands action grants with their page and preserves direct page grants', () => {
-    const groups = buildRolePermissionMatrix(menuTree())
+    const groups = matrixGroups()
 
-    expect(expandDirectMenuIDs(groups, [3, 5])).toEqual([2, 3, 5])
+    expect(expandDirectMenuIDs(groups, [3, 5, 8])).toEqual([2, 3, 5, 7, 8])
   })
 
   it('keeps page and action selection semantically valid', () => {
-    const row = buildRolePermissionMatrix(menuTree())[0]?.rows[0]
+    const row = matrixGroups()[0]?.rows[0]
     expect(row).toBeDefined()
     if (row === undefined) {
       return
@@ -48,7 +55,7 @@ describe('role permission matrix', () => {
   })
 
   it('selects and clears complete groups', () => {
-    const group = buildRolePermissionMatrix(menuTree())[0]
+    const group = matrixGroups()[0]
     expect(group).toBeDefined()
     if (group === undefined) {
       return
@@ -84,7 +91,7 @@ describe('role permission matrix', () => {
   })
 
   it('normalizes effective permissions to minimal direct grants', () => {
-    const groups = buildRolePermissionMatrix(menuTree())
+    const groups = matrixGroups()
 
     expect(normalizeDirectMenuIDs(groups, [2, 3])).toEqual([3])
     expect(normalizeDirectMenuIDs(groups, [2])).toEqual([2])
@@ -95,6 +102,39 @@ describe('role permission matrix', () => {
     expect(diffMenuIDs([2, 3], [2, 4])).toEqual({ added: [4], removed: [3] })
   })
 })
+
+function matrixGroups() {
+  return buildRolePermissionMatrix(permissionPlatforms()).flatMap((platform) => platform.groups)
+}
+
+function permissionPlatforms(): RolePermissionPlatform[] {
+  return [
+    { id: 1, code: 'admin', name: 'Admin', isEnabled: YesNo.Yes, menuTree: menuTree() },
+    {
+      id: 2,
+      code: 'canvas',
+      name: 'Canvas',
+      isEnabled: YesNo.No,
+      menuTree: [{
+        id: 7,
+        parentId: null,
+        menuType: 'page',
+        code: 'canvas:test',
+        name: 'Test',
+        isEnabled: YesNo.Yes,
+        children: [{
+          id: 8,
+          parentId: 7,
+          menuType: 'action',
+          code: 'canvas:test:button',
+          name: 'Test Button',
+          isEnabled: YesNo.Yes,
+          children: [],
+        }],
+      }],
+    },
+  ]
+}
 
 function menuTree(): RolePermissionTreeNode[] {
   return [

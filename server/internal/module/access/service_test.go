@@ -30,6 +30,9 @@ func TestCurrentAndAllowedShareWarmSnapshotWithoutPostgreSQL(t *testing.T) {
 	if repository.calls != 1 || snapshot.CacheResult != "miss" || snapshot.Version != 3 {
 		t.Fatalf("first Current() = %+v calls=%d", snapshot, repository.calls)
 	}
+	if !reflect.DeepEqual(repository.platformIDs, []int64{identity.PlatformID}) {
+		t.Fatalf("permission source platform IDs = %v", repository.platformIDs)
+	}
 	allowed, err := service.Allowed(context.Background(), identity, "account:user:create")
 	if err != nil || !allowed {
 		t.Fatalf("Allowed(create) = %v,%v", allowed, err)
@@ -128,7 +131,7 @@ func TestReadThroughRechecksVersionBeforePublishing(t *testing.T) {
 	if err != nil || snapshot.Version != 4 || repository.calls != 2 {
 		t.Fatalf("version recheck = %+v,%v calls=%d", snapshot, err, repository.calls)
 	}
-	if _, found, err := service.cache.Read(context.Background(), "admin", 4, 93005, 3); err != nil || found {
+	if _, found, err := service.cache.Read(context.Background(), 1, "admin", 4, 93005, 3); err != nil || found {
 		t.Fatalf("stale version snapshot published = %v,%v", found, err)
 	}
 }
@@ -176,6 +179,27 @@ func TestBuildSnapshotDoesNotInventMenuPermissionsForSuperAdminWithoutMenuRows(t
 	want := []string{}
 	if !reflect.DeepEqual(snapshot.PermissionCodes, want) {
 		t.Fatalf("permissions = %v, want %v", snapshot.PermissionCodes, want)
+	}
+}
+
+func TestBuildSnapshotSupportsCanvasRootPageAndAction(t *testing.T) {
+	pageID := int64(41)
+	path, componentPath := "/test", "test"
+	snapshot, err := buildSnapshot(Source{
+		Version:   1,
+		RoleCodes: []string{"canvas_user"},
+		Menus: []SourceMenu{
+			{ID: pageID, MenuType: MenuPage, Code: "canvas:test", I18nKey: accessStringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+			{ID: 42, ParentID: &pageID, MenuType: MenuAction, Code: "canvas:test:button", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+		},
+		GrantedMenuIDs: []int64{42},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.MenuTree) != 1 || snapshot.MenuTree[0].Code != "canvas:test" || snapshot.MenuTree[0].MenuType != MenuPage ||
+		!reflect.DeepEqual(snapshot.PermissionCodes, []string{"canvas:test", "canvas:test:button"}) {
+		t.Fatalf("Canvas snapshot = %+v", snapshot)
 	}
 }
 
@@ -234,6 +258,11 @@ func TestServiceValidatesIdentityAndPermissionCode(t *testing.T) {
 	if _, err := service.Current(context.Background(), auth.Identity{}); appErrorCode(err) != apperror.CodeInvalidRequest {
 		t.Fatalf("invalid identity error = %v", err)
 	}
+	missingPlatformID := accessIdentity(1)
+	missingPlatformID.PlatformID = 0
+	if _, err := service.Current(context.Background(), missingPlatformID); appErrorCode(err) != apperror.CodeInvalidRequest {
+		t.Fatalf("missing platform id error = %v", err)
+	}
 	if _, err := service.Allowed(context.Background(), accessIdentity(1), " "); appErrorCode(err) != apperror.CodeInvalidRequest {
 		t.Fatalf("empty permission error = %v", err)
 	}
@@ -265,7 +294,7 @@ func accessStringPointer(value string) *string {
 }
 
 func accessIdentity(userID int64) auth.Identity {
-	return auth.Identity{UserID: userID, SessionID: userID + 1000, Platform: "admin", Version: 1, PolicyVersion: 4, AccessCacheTTL: time.Hour}
+	return auth.Identity{UserID: userID, SessionID: userID + 1000, PlatformID: 1, Platform: "admin", Version: 1, PolicyVersion: 4, AccessCacheTTL: time.Hour}
 }
 
 func newAccessTestService(redisClient *projectredis.Client, repository sourceStore) *Service {
@@ -274,14 +303,16 @@ func newAccessTestService(redisClient *projectredis.Client, repository sourceSto
 }
 
 type countingSourceStore struct {
-	sources   []Source
-	err       error
-	calls     int
-	afterFind func(int)
+	sources     []Source
+	err         error
+	calls       int
+	platformIDs []int64
+	afterFind   func(int)
 }
 
-func (s *countingSourceStore) FindSourceWithVersion(context.Context, int64) (Source, error) {
+func (s *countingSourceStore) FindSourceWithVersion(_ context.Context, _ int64, platformID int64) (Source, error) {
 	s.calls++
+	s.platformIDs = append(s.platformIDs, platformID)
 	if s.err != nil {
 		return Source{}, s.err
 	}

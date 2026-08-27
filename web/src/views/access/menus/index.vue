@@ -20,6 +20,7 @@ import type {
   CreateMenuInput,
   ManagedMenuNode,
   ManagedMenuType,
+  MenuPlatformOption,
   UpdateMenuInput,
 } from "../../../api/menu";
 import { DIcon } from "../../../components/DIcon";
@@ -34,6 +35,8 @@ const { t } = useI18n();
 const access = useAccessStore();
 
 const menus = ref<ManagedMenuNode[]>([]);
+const platforms = ref<MenuPlatformOption[]>([]);
+const activePlatformID = ref<number | null>(null);
 const keyword = ref("");
 const expandedIDs = ref<Set<number>>(new Set());
 const expansionBeforeSearch = ref<Set<number> | null>(null);
@@ -65,6 +68,14 @@ const form = ref<MenuFormState>(newForm());
 const canCreate = computed(() => access.hasPermission("rbac:menu:create"));
 const canUpdate = computed(() => access.hasPermission("rbac:menu:update"));
 const canDelete = computed(() => access.hasPermission("rbac:menu:delete"));
+const activePlatform = computed(() => {
+  if (activePlatformID.value === null) return null;
+  return (
+    platforms.value.find(
+      (platform) => platform.id === activePlatformID.value,
+    ) ?? null
+  );
+});
 
 function menuTypeLabel(menuType: ManagedMenuType): string {
   return t(`menu.type.${menuType}`);
@@ -341,7 +352,12 @@ async function submitForm(): Promise<void> {
   mutationError.value = "";
   try {
     if (dialogMode.value === "create") {
+      if (activePlatformID.value === null) {
+        mutationError.value = t("menu.platform.unavailable");
+        return;
+      }
       const input: CreateMenuInput = {
+        platformId: activePlatformID.value,
         parentId: form.value.parentId,
         menuType: form.value.menuType,
         name: form.value.name,
@@ -355,7 +371,7 @@ async function submitForm(): Promise<void> {
         isHidden: form.value.isHidden,
       };
       await createMenu(input);
-      await loadMenus();
+      await reloadMenus();
       closeDialog();
       notifyMutation("menu.success.created");
       return;
@@ -373,7 +389,7 @@ async function submitForm(): Promise<void> {
       isHidden: form.value.isHidden,
     };
     await updateMenu(editingID.value, input);
-    await loadMenus();
+    await reloadMenus();
     closeDialog();
     notifyMutation("menu.success.updated");
   } catch (error: unknown) {
@@ -403,7 +419,7 @@ async function changeStatus(node: ManagedMenuNode): Promise<void> {
       );
     }
     await updateMenuStatus(node.id, nextValue);
-    await loadMenus();
+    await reloadMenus();
     notifyMutation("menu.success.statusChanged");
   } catch (error: unknown) {
     if (error === "cancel" || error === "close") return;
@@ -423,7 +439,7 @@ async function removeNode(node: ManagedMenuNode): Promise<void> {
       },
     );
     await deleteMenu(node.id);
-    await loadMenus();
+    await reloadMenus();
     notifyMutation("menu.success.deleted");
   } catch (error: unknown) {
     if (error === "cancel" || error === "close") return;
@@ -431,12 +447,25 @@ async function removeNode(node: ManagedMenuNode): Promise<void> {
   }
 }
 
-async function loadMenus(): Promise<void> {
+async function loadMenus(platformID?: number): Promise<void> {
   loading.value = true;
   loadError.value = "";
   try {
-    const result = await getMenus();
-    menus.value = result;
+    const result =
+      platformID === undefined
+        ? await getMenus()
+        : await getMenus({ platformId: platformID });
+    const selectedPlatform =
+      platformID === undefined
+        ? (result.platforms.find((platform) => platform.code === "admin") ??
+          result.platforms[0])
+        : result.platforms.find((platform) => platform.id === platformID);
+    if (selectedPlatform === undefined) {
+      throw new Error(t("menu.platform.unavailable"));
+    }
+    platforms.value = result.platforms;
+    activePlatformID.value = selectedPlatform.id;
+    menus.value = result.menuTree;
     if (keyword.value.trim() === "") setExpandedForRoots();
   } catch (error: unknown) {
     loadError.value = publicErrorMessage(error);
@@ -445,7 +474,27 @@ async function loadMenus(): Promise<void> {
   }
 }
 
-onMounted(loadMenus);
+async function reloadMenus(): Promise<void> {
+  if (activePlatformID.value === null) {
+    await loadMenus();
+    return;
+  }
+  await loadMenus(activePlatformID.value);
+}
+
+async function switchPlatform(value: string | number): Promise<void> {
+  const platformID = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(platformID) || platformID < 1) {
+    loadError.value = t("menu.platform.unavailable");
+    return;
+  }
+  menus.value = [];
+  expandedIDs.value = new Set();
+  expansionBeforeSearch.value = null;
+  await loadMenus(platformID);
+}
+
+onMounted(() => loadMenus());
 </script>
 
 <template>
@@ -453,6 +502,34 @@ onMounted(loadMenus);
     class="menu-management-page management-page"
     :aria-label="t('menu.title')"
   >
+    <el-tabs
+      v-if="platforms.length > 0"
+      v-model="activePlatformID"
+      data-testid="menu-platform-tabs"
+      class="menu-platform-tabs"
+      @tab-change="switchPlatform"
+    >
+      <el-tab-pane
+        v-for="platform in platforms"
+        :key="platform.id"
+        :name="platform.id"
+      >
+        <template #label>
+          <span class="menu-platform-tab">
+            <span>{{ platform.name }}</span>
+            <code>{{ platform.code }}</code>
+            <el-tag
+              v-if="platform.isEnabled === YesNo.No"
+              size="small"
+              type="info"
+              effect="plain"
+            >
+              {{ t("menu.platform.disabled") }}
+            </el-tag>
+          </span>
+        </template>
+      </el-tab-pane>
+    </el-tabs>
     <div class="menu-management__toolbar-actions management-page__actions">
       <el-input
         data-testid="menu-search"
@@ -472,6 +549,7 @@ onMounted(loadMenus);
         data-testid="add-root-menu"
         type="primary"
         :icon="CirclePlus"
+        :disabled="activePlatform === null"
         @click="openCreate()"
       >
         {{ t("menu.addRoot") }}
@@ -480,7 +558,7 @@ onMounted(loadMenus);
         data-testid="refresh-menus"
         :icon="Refresh"
         :loading="loading"
-        @click="loadMenus"
+        @click="reloadMenus"
       >
         {{ t("menu.refresh") }}
       </el-button>
@@ -495,7 +573,7 @@ onMounted(loadMenus);
         show-icon
       >
         <template #default>
-          <el-button size="small" :icon="Refresh" @click="loadMenus">
+          <el-button size="small" :icon="Refresh" @click="reloadMenus">
             {{ t("menu.retry") }}
           </el-button>
         </template>
@@ -755,6 +833,17 @@ onMounted(loadMenus);
         @submit.prevent="submitForm"
       >
         <div class="menu-form__grid">
+          <el-form-item
+            v-if="dialogMode === 'edit'"
+            class="menu-form__wide"
+            :label="t('menu.form.platform')"
+          >
+            <div data-testid="menu-form-platform" class="menu-form__readonly">
+              <span>{{ activePlatform?.name }}</span>
+              <code>{{ activePlatform?.code }}</code>
+            </div>
+          </el-form-item>
+
           <el-form-item :label="t('menu.form.parent')">
             <el-select-v2
               v-model="parentSelection"
@@ -950,6 +1039,31 @@ onMounted(loadMenus);
 <style scoped>
 .menu-management-page {
   min-width: 0;
+}
+
+.menu-platform-tabs {
+  min-width: 0;
+  margin-bottom: 8px;
+}
+
+.menu-platform-tab,
+.menu-form__readonly {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.menu-platform-tab code,
+.menu-form__readonly code {
+  color: var(--admin-text-soft);
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 12px;
+}
+
+.menu-form__readonly {
+  min-height: 32px;
+  color: var(--admin-text);
 }
 
 .menu-management__toolbar-actions,

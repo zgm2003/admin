@@ -273,7 +273,7 @@ describe('RoleManagement', () => {
   })
 
   it('expands minimal action grants into a fully selected effective matrix', async () => {
-    getRolePermissionsMock.mockResolvedValue(permissionResponse({ menuIds: [3] }))
+    getRolePermissionsMock.mockResolvedValue(permissionResponse({ menuIds: [3, 8] }))
     const wrapper = mountPage(['rbac:role:authorize'])
     await flushPromises()
 
@@ -282,14 +282,36 @@ describe('RoleManagement', () => {
     expect(getRolePermissionsMock).toHaveBeenCalledWith(3)
     expect(document.body.textContent).toContain('测试员 (tester)')
     expect(document.body.textContent).toContain('已禁用')
+    expect(document.body.querySelector('[data-testid="role-permission-platform-tabs"]')?.textContent).toContain('Admin')
+    expect(document.body.querySelector('[data-testid="role-permission-platform-tabs"]')?.textContent).toContain('Canvas')
 
     const matrix = wrapper.getComponent(RolePermissionMatrix)
-    expect(matrix.props('modelValue')).toEqual([2, 3])
+    expect(matrix.props('modelValue')).toEqual([2, 3, 7, 8])
     const groupCheckbox = matrix
       .findAllComponents(ElCheckbox)
       .find((checkbox) => checkbox.text().includes('系统管理'))
     expect(groupCheckbox?.props('modelValue')).toBe(true)
     expect(groupCheckbox?.props('indeterminate')).toBe(false)
+  })
+
+  it('switches platform tabs and renders the Canvas root page matrix', async () => {
+    const wrapper = mountPage(['rbac:role:authorize'])
+    await flushPromises()
+    await tooltipButton(wrapper, '授权').trigger('click')
+    await flushPromises()
+
+    const canvasTab = Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]'))
+      .find((tab) => tab.textContent?.includes('Canvas'))
+    expect(canvasTab).toBeDefined()
+    if (canvasTab === undefined) throw new Error('Canvas permission tab is missing')
+    await new DOMWrapper(canvasTab).trigger('click')
+    await flushPromises()
+
+    const matrix = wrapper.getComponent(RolePermissionMatrix)
+    expect(matrix.text()).toContain('Test')
+    expect(matrix.text()).toContain('canvas:test')
+    expect(matrix.text()).toContain('Test Button')
+    expect(matrix.text()).not.toContain('系统管理')
   })
 
   it('shows the effective permission diff before submitting minimal direct grants', async () => {
@@ -321,6 +343,7 @@ describe('RoleManagement', () => {
   })
 
   it('selects and clears the complete matrix from the authorization toolbar', async () => {
+    getRolePermissionsMock.mockResolvedValue(permissionResponse({ menuIds: [8] }))
     const wrapper = mountPage(['rbac:role:authorize'])
     await flushPromises()
     await tooltipButton(wrapper, '授权').trigger('click')
@@ -329,11 +352,11 @@ describe('RoleManagement', () => {
     const matrix = wrapper.getComponent(RolePermissionMatrix)
     await bodyButton('全选').trigger('click')
     await flushPromises()
-    expect(matrix.props('modelValue')).toEqual([2, 3])
+    expect(matrix.props('modelValue')).toEqual([2, 3, 7, 8])
 
     await bodyButton('清空').trigger('click')
     await flushPromises()
-    expect(matrix.props('modelValue')).toEqual([])
+    expect(matrix.props('modelValue')).toEqual([7, 8])
   })
 
   it('keeps the matrix selection when permission diff confirmation is cancelled', async () => {
@@ -522,35 +545,60 @@ function permissionResponse(overrides: { menuIds?: number[] } = {}) {
       isDefault: YesNo.No,
       isEnabled: YesNo.Yes,
     },
-    menuTree: [
+    platforms: [
       {
         id: 1,
-        parentId: null,
-        menuType: 'directory' as const,
-        code: 'system',
-				name: '系统管理',
+        code: 'admin',
+        name: 'Admin',
         isEnabled: YesNo.Yes,
-        children: [
-          {
+        menuTree: [{
+          id: 1,
+          parentId: null,
+          menuType: 'directory' as const,
+          code: 'system',
+					name: '系统管理',
+          isEnabled: YesNo.Yes,
+          children: [{
             id: 2,
             parentId: 1,
             menuType: 'page' as const,
             code: 'rbac:role:list',
 						name: '角色管理',
             isEnabled: YesNo.Yes,
-            children: [
-              {
-                id: 3,
-                parentId: 2,
-                menuType: 'action' as const,
-                code: 'rbac:role:create',
-								name: '新增角色',
-                isEnabled: YesNo.No,
-                children: [],
-              },
-            ],
-          },
-        ],
+            children: [{
+              id: 3,
+              parentId: 2,
+              menuType: 'action' as const,
+              code: 'rbac:role:create',
+							name: '新增角色',
+              isEnabled: YesNo.No,
+              children: [],
+            }],
+          }],
+        }],
+      },
+      {
+        id: 2,
+        code: 'canvas',
+        name: 'Canvas',
+        isEnabled: YesNo.No,
+        menuTree: [{
+          id: 7,
+          parentId: null,
+          menuType: 'page' as const,
+          code: 'canvas:test',
+          name: 'Test',
+          isEnabled: YesNo.Yes,
+          children: [{
+            id: 8,
+            parentId: 7,
+            menuType: 'action' as const,
+            code: 'canvas:test:button',
+            name: 'Test Button',
+            isEnabled: YesNo.Yes,
+            children: [],
+          }],
+        }],
       },
     ],
     menuIds: overrides.menuIds ?? [2],

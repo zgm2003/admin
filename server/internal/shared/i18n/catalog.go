@@ -41,6 +41,7 @@ const (
 	KeyMenuParentDisabled           MessageKey = "menu.parentDisabled"
 	KeyMenuStructureConflict        MessageKey = "menu.structureConflict"
 	KeyMenuInvalidFields            MessageKey = "menu.invalidFields"
+	KeyMenuPlatformUnavailable      MessageKey = "menu.platformUnavailable"
 	KeyRoleNotFound                 MessageKey = "role.notFound"
 	KeyRoleCodeConflict             MessageKey = "role.codeConflict"
 	KeyRoleNameConflict             MessageKey = "role.nameConflict"
@@ -63,6 +64,7 @@ const (
 	KeyAuthPlatformCodeConflict     MessageKey = "authPlatform.codeConflict"
 	KeyAuthPlatformBuiltinProtected MessageKey = "authPlatform.builtinProtected"
 	KeyAuthPlatformInvalidPolicy    MessageKey = "authPlatform.invalidPolicy"
+	KeyAuthPlatformMenusAttached    MessageKey = "authPlatform.menusAttached"
 	KeyAuthPlatformDisabled         MessageKey = "authPlatform.disabled"
 	KeyAuthSessionUpdating          MessageKey = "auth.sessionUpdating"
 	KeyAuthPlatformUnavailable      MessageKey = "authPlatform.unavailable"
@@ -99,6 +101,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyMenuParentDisabled:           "菜单 {{code}} 的父级未全部启用",
 		KeyMenuStructureConflict:        "菜单 {{code}} 的结构与现有子节点或授权冲突",
 		KeyMenuInvalidFields:            "菜单字段无效",
+		KeyMenuPlatformUnavailable:      "菜单所属平台不存在或已删除",
 		KeyRoleNotFound:                 "角色不存在",
 		KeyRoleCodeConflict:             "角色编码 {{code}} 已存在",
 		KeyRoleNameConflict:             "角色名称 {{name}} 已存在",
@@ -121,6 +124,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyAuthPlatformCodeConflict:     "认证平台编码已存在",
 		KeyAuthPlatformBuiltinProtected: "内置认证平台不允许删除",
 		KeyAuthPlatformInvalidPolicy:    "认证平台策略无效",
+		KeyAuthPlatformMenusAttached:    "认证平台仍有关联菜单，请先删除菜单",
 		KeyAuthPlatformDisabled:         "认证平台已停用",
 		KeyAuthSessionUpdating:          "会话状态正在更新",
 		KeyAuthPlatformUnavailable:      "认证平台服务暂不可用",
@@ -155,6 +159,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyMenuParentDisabled:           "The parent hierarchy of menu {{code}} is not fully enabled",
 		KeyMenuStructureConflict:        "Menu {{code}} conflicts with existing children or grants",
 		KeyMenuInvalidFields:            "Invalid menu fields",
+		KeyMenuPlatformUnavailable:      "The menu platform does not exist or has been deleted",
 		KeyRoleNotFound:                 "Role not found",
 		KeyRoleCodeConflict:             "Role code {{code}} already exists",
 		KeyRoleNameConflict:             "Role name {{name}} already exists",
@@ -177,6 +182,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyAuthPlatformCodeConflict:     "Authentication platform code already exists",
 		KeyAuthPlatformBuiltinProtected: "Builtin authentication platform cannot be deleted",
 		KeyAuthPlatformInvalidPolicy:    "Invalid authentication platform policy",
+		KeyAuthPlatformMenusAttached:    "Authentication platform still has active menus",
 		KeyAuthPlatformDisabled:         "Authentication platform is disabled",
 		KeyAuthSessionUpdating:          "Authentication session state is updating",
 		KeyAuthPlatformUnavailable:      "Authentication platform service is temporarily unavailable",

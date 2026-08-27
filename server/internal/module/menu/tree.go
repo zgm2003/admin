@@ -48,6 +48,11 @@ type menuIndex struct {
 	roots    []int64
 }
 
+type platformValueKey struct {
+	PlatformID int64
+	Value      string
+}
+
 type menuParentDisabledViolation struct {
 	code string
 }
@@ -62,8 +67,8 @@ func buildMenuIndex(menus []Menu) (menuIndex, error) {
 		children: make(map[int64][]int64),
 		roots:    make([]int64, 0),
 	}
-	codeSet := make(map[string]struct{}, len(menus))
-	pathSet := make(map[string]struct{}, len(menus))
+	codeSet := make(map[platformValueKey]struct{}, len(menus))
+	pathSet := make(map[platformValueKey]struct{}, len(menus))
 	for _, item := range menus {
 		if _, exists := index.byID[item.ID]; exists {
 			return menuIndex{}, fmt.Errorf("%w: duplicate id %d", errMenuTreeInvalid, item.ID)
@@ -71,23 +76,25 @@ func buildMenuIndex(menus []Menu) (menuIndex, error) {
 		if err := validateStoredMenu(item); err != nil {
 			return menuIndex{}, fmt.Errorf("%w: %w", errMenuTreeInvalid, err)
 		}
-		if _, exists := codeSet[item.Code]; exists {
+		codeKey := platformValueKey{PlatformID: item.PlatformID, Value: item.Code}
+		if _, exists := codeSet[codeKey]; exists {
 			return menuIndex{}, fmt.Errorf("%w: duplicate code %s", errMenuTreeInvalid, item.Code)
 		}
-		codeSet[item.Code] = struct{}{}
+		codeSet[codeKey] = struct{}{}
 		if item.Path != nil {
-			if _, exists := pathSet[*item.Path]; exists {
+			pathKey := platformValueKey{PlatformID: item.PlatformID, Value: *item.Path}
+			if _, exists := pathSet[pathKey]; exists {
 				return menuIndex{}, fmt.Errorf("%w: duplicate page path %s", errMenuTreeInvalid, *item.Path)
 			}
-			pathSet[*item.Path] = struct{}{}
+			pathSet[pathKey] = struct{}{}
 		}
 		index.byID[item.ID] = item
 	}
 
 	for _, item := range menus {
 		if item.ParentID == nil {
-			if item.MenuType != TypeDirectory {
-				return menuIndex{}, fmt.Errorf("%w: root %d is not a directory", errMenuTreeInvalid, item.ID)
+			if item.MenuType == TypeAction {
+				return menuIndex{}, fmt.Errorf("%w: root %d is an action", errMenuTreeInvalid, item.ID)
 			}
 			index.roots = append(index.roots, item.ID)
 			continue
@@ -95,6 +102,9 @@ func buildMenuIndex(menus []Menu) (menuIndex, error) {
 		parent, exists := index.byID[*item.ParentID]
 		if !exists {
 			return menuIndex{}, fmt.Errorf("%w: menu %d has an orphan parent %d", errMenuTreeInvalid, item.ID, *item.ParentID)
+		}
+		if parent.PlatformID != item.PlatformID {
+			return menuIndex{}, fmt.Errorf("%w: menu %d and parent %d use different platforms", errMenuTreeInvalid, item.ID, parent.ID)
 		}
 		if !allowedMenuChild(parent.MenuType, item.MenuType) {
 			return menuIndex{}, fmt.Errorf("%w: menu %d cannot be a child of %d", errMenuTreeInvalid, item.ID, parent.ID)
@@ -209,7 +219,7 @@ func (index menuIndex) buildManagedTree() ([]ManagedMenu, error) {
 			children = append(children, child)
 		}
 		return ManagedMenu{
-			ID: item.ID, ParentID: item.ParentID, MenuType: item.MenuType, Name: item.Name, Code: item.Code,
+			ID: item.ID, PlatformID: item.PlatformID, ParentID: item.ParentID, MenuType: item.MenuType, Name: item.Name, Code: item.Code,
 			I18nKey: item.I18nKey, Path: item.Path, ComponentPath: item.ComponentPath, Icon: item.Icon,
 			SortOrder: item.SortOrder, IsEnabled: item.IsEnabled, IsHidden: item.IsHidden,
 			CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt, IsProtected: IsProtectedCode(item.Code), Children: children,
@@ -226,7 +236,7 @@ func (index menuIndex) buildManagedTree() ([]ManagedMenu, error) {
 }
 
 func validateStoredMenu(item Menu) error {
-	if item.ID < 1 || !yesno.IsValid(item.IsEnabled) || !yesno.IsValid(item.IsHidden) || !validMenuName(item.Name) || !validMenuCode(item.Code) {
+	if item.ID < 1 || item.PlatformID < 1 || !yesno.IsValid(item.IsEnabled) || !yesno.IsValid(item.IsHidden) || !validMenuName(item.Name) || !validMenuCode(item.Code) {
 		return fmt.Errorf("%w: code or stored scalar is invalid", errMenuFields)
 	}
 	if item.Icon != nil && !validMenuIcon(*item.Icon) {
@@ -304,7 +314,7 @@ func validMenuIcon(value string) bool {
 }
 
 func normalizeCreateInput(input CreateInput) (CreateInput, error) {
-	if !validMenuName(input.Name) || !validMenuCode(input.Code) || !yesno.IsValid(input.IsEnabled) ||
+	if input.PlatformID < 1 || !validMenuName(input.Name) || !validMenuCode(input.Code) || !yesno.IsValid(input.IsEnabled) ||
 		!yesno.IsValid(input.IsHidden) || input.SortOrder < 0 {
 		return CreateInput{}, fmt.Errorf("%w: create scalar is invalid", errMenuFields)
 	}

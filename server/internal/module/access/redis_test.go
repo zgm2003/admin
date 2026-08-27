@@ -19,8 +19,8 @@ func TestSnapshotKey(t *testing.T) {
 }
 
 func TestSnapshotSchemaVersionIsCurrent(t *testing.T) {
-	if accessSnapshotSchemaVersion != 3 {
-		t.Fatalf("accessSnapshotSchemaVersion = %d, want 3", accessSnapshotSchemaVersion)
+	if accessSnapshotSchemaVersion != 4 {
+		t.Fatalf("accessSnapshotSchemaVersion = %d, want 4", accessSnapshotSchemaVersion)
 	}
 }
 
@@ -35,13 +35,13 @@ func TestSnapshotCachePublishesOnlyForMatchingReadyVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cached := cachedSnapshot(94001, "admin", 4, snapshot)
+	cached := cachedSnapshot(94001, 1, "admin", 4, snapshot)
 	published, err := cache.PublishIfCurrent(ctx, cached, time.Minute)
 	if err != nil || !published {
 		t.Fatalf("PublishIfCurrent() = %v,%v", published, err)
 	}
-	read, found, err := cache.Read(ctx, "admin", 4, 94001, 3)
-	if err != nil || !found || read.Version != 3 {
+	read, found, err := cache.Read(ctx, 1, "admin", 4, 94001, 3)
+	if err != nil || !found || read.PlatformID != 1 || read.Version != 3 {
 		t.Fatalf("Read() = %+v,%v,%v", read, found, err)
 	}
 
@@ -65,15 +65,16 @@ func TestSnapshotCacheRejectsUnknownFieldsAndMismatchedIdentity(t *testing.T) {
 	key := SnapshotKey("admin", 4, 94002, 3)
 	t.Cleanup(func() { _ = client.Delete(context.Background(), key) })
 	for _, payload := range []string{
-		`{"schemaVersion":3,"userId":94002,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[],"unknown":true}`,
-		`{"schemaVersion":3,"userId":999,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[]}`,
-		`{"schemaVersion":2,"userId":94002,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[]}`,
-		`{"schemaVersion":3,"userId":94002,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[{"code":"account:user:list","menuType":"page","path":"/account/users","componentPath":"account/users","i18nKey":"navigation.accountUsers","icon":null,"isHidden":0,"children":[],"unexpected":true}],"permissionCodes":[]}`,
+		`{"schemaVersion":4,"userId":94002,"platformId":1,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[],"unknown":true}`,
+		`{"schemaVersion":4,"userId":999,"platformId":1,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[]}`,
+		`{"schemaVersion":4,"userId":94002,"platformId":2,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[]}`,
+		`{"schemaVersion":3,"userId":94002,"platformId":1,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[]}`,
+		`{"schemaVersion":4,"userId":94002,"platformId":1,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[{"code":"account:user:list","menuType":"page","path":"/account/users","componentPath":"account/users","i18nKey":"navigation.accountUsers","icon":null,"isHidden":0,"children":[],"unexpected":true}],"permissionCodes":[]}`,
 	} {
 		if err := client.SetString(ctx, key, payload, time.Minute); err != nil {
 			t.Fatal(err)
 		}
-		if _, found, err := cache.Read(ctx, "admin", 4, 94002, 3); err == nil || !found {
+		if _, found, err := cache.Read(ctx, 1, "admin", 4, 94002, 3); err == nil || !found {
 			t.Fatalf("invalid cached snapshot accepted: %s", payload)
 		}
 	}

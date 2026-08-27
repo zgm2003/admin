@@ -12,6 +12,7 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/module/auth"
 	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/menu"
 	"admin/server/internal/module/user"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
@@ -178,7 +179,7 @@ func preparePlatformSessionSchema(t *testing.T, db *gorm.DB, ctx context.Context
 	if err := auth.PrepareSessionSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	if err := database.AutoMigrate(ctx, db, &user.User{}, &auth.Session{}, &authplatform.Platform{}); err != nil {
+	if err := database.AutoMigrate(ctx, db, &user.User{}, &auth.Session{}, &authplatform.Platform{}, &menu.Menu{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := auth.EnsureSchema(ctx, db); err != nil {

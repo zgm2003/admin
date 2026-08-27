@@ -17,6 +17,7 @@ const (
 
 type Menu struct {
 	ID            int64          `gorm:"column:id;primaryKey;autoIncrement"`
+	PlatformID    int64          `gorm:"column:platform_id;not null"`
 	ParentID      *int64         `gorm:"column:parent_id"`
 	MenuType      Type           `gorm:"column:menu_type;type:varchar(16);not null"`
 	Name          string         `gorm:"column:name;type:varchar(128);not null"`

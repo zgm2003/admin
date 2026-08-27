@@ -38,7 +38,7 @@ import {
   getRoleMatrixMenuIDs,
   normalizeDirectMenuIDs,
 } from "./role-permission-matrix";
-import type { RolePermissionDiff } from "./role-permission-matrix";
+import type { RolePermissionDiff, RoleMatrixPlatform } from "./role-permission-matrix";
 
 const { t } = useI18n();
 const access = useAccessStore();
@@ -104,6 +104,7 @@ const permissionData = ref<RolePermissionsResponse | null>(null);
 const permissionTargetID = ref<number | null>(null);
 const originalEffectiveMenuIDs = ref<number[]>([]);
 const selectedEffectiveMenuIDs = ref<number[]>([]);
+const activePermissionPlatformID = ref<number | null>(null);
 const permissionDiffVisible = ref(false);
 const permissionDiff = ref<RolePermissionDiff>({ added: [], removed: [] });
 
@@ -125,18 +126,23 @@ const tableColumns = computed<TableColumn<RoleListItem>[]>(() => [
 ]);
 
 const permissionGroups = computed(() => {
-  if (permissionData.value === null) {
-    return [];
-  }
-  return buildRolePermissionMatrix(permissionData.value.menuTree);
+  return permissionPlatforms.value.find(
+    (platform) => platform.platformId === activePermissionPlatformID.value,
+  )?.groups ?? [];
+});
+const permissionPlatforms = computed<RoleMatrixPlatform[]>(() => {
+  if (permissionData.value === null) return [];
+  return buildRolePermissionMatrix(permissionData.value.platforms);
 });
 const permissionLabelMap = computed(() => {
   const labels = new Map<number, string>();
-  for (const group of permissionGroups.value) {
-    for (const row of group.rows) {
-      labels.set(row.pageId, `${row.pageName} · ${row.pageCode}`);
-      for (const action of row.actions) {
-        labels.set(action.id, `${action.name} · ${action.code}`);
+  for (const platform of permissionPlatforms.value) {
+    for (const group of platform.groups) {
+      for (const row of group.rows) {
+        labels.set(row.pageId, `${platform.platformName} · ${row.pageName} · ${row.pageCode}`);
+        for (const action of row.actions) {
+          labels.set(action.id, `${platform.platformName} · ${action.name} · ${action.code}`);
+        }
       }
     }
   }
@@ -366,9 +372,11 @@ async function openPermissions(role: { id: number }): Promise<void> {
 
   try {
     const data = await getRolePermissions(role.id);
-    const groups = buildRolePermissionMatrix(data.menuTree);
-    const effectiveMenuIDs = expandDirectMenuIDs(groups, data.menuIds);
+    const matrixPlatforms = buildRolePermissionMatrix(data.platforms);
+    const allGroups = matrixPlatforms.flatMap((platform) => platform.groups);
+    const effectiveMenuIDs = expandDirectMenuIDs(allGroups, data.menuIds);
     permissionData.value = data;
+    activePermissionPlatformID.value = matrixPlatforms[0]?.platformId ?? null;
     originalEffectiveMenuIDs.value = effectiveMenuIDs;
     selectedEffectiveMenuIDs.value = [...effectiveMenuIDs];
   } catch (error: unknown) {
@@ -385,11 +393,14 @@ function retryPermissions(): void {
 }
 
 function selectAllPermissions(): void {
-  selectedEffectiveMenuIDs.value = getRoleMatrixMenuIDs(permissionGroups.value);
+  const currentIDs = new Set(selectedEffectiveMenuIDs.value);
+  for (const menuID of getRoleMatrixMenuIDs(permissionGroups.value)) currentIDs.add(menuID);
+  selectedEffectiveMenuIDs.value = [...currentIDs].sort((left, right) => left - right);
 }
 
 function clearPermissions(): void {
-  selectedEffectiveMenuIDs.value = [];
+  const currentIDs = new Set(getRoleMatrixMenuIDs(permissionGroups.value));
+  selectedEffectiveMenuIDs.value = selectedEffectiveMenuIDs.value.filter((menuID) => !currentIDs.has(menuID));
 }
 
 function permissionLabels(menuIDs: readonly number[]): string[] {
@@ -430,11 +441,9 @@ async function savePermissions(): Promise<void> {
   permissionError.value = "";
 
   try {
+    const allGroups = permissionPlatforms.value.flatMap((platform) => platform.groups);
     await updateRolePermissions(permissionData.value.role.id, {
-      menuIds: normalizeDirectMenuIDs(
-        permissionGroups.value,
-        selectedEffectiveMenuIDs.value,
-      ),
+      menuIds: normalizeDirectMenuIDs(allGroups, selectedEffectiveMenuIDs.value),
     });
     if (await loadRoles()) {
       permissionDiffVisible.value = false;
@@ -705,6 +714,27 @@ onMounted(() => {
             closable
             @close="permissionError = ''"
           />
+          <el-tabs
+            v-model="activePermissionPlatformID"
+            data-testid="role-permission-platform-tabs"
+            class="role-permission-platform-tabs"
+          >
+            <el-tab-pane
+              v-for="platform in permissionPlatforms"
+              :key="platform.platformId"
+              :name="platform.platformId"
+            >
+              <template #label>
+                <span class="role-permission-platform-tab">
+                  <span>{{ platform.platformName }}</span>
+                  <code>{{ platform.platformCode }}</code>
+                  <el-tag v-if="platform.platformIsEnabled === YesNo.No" size="small" type="info" effect="plain">
+                    {{ t("role.permission.disabled") }}
+                  </el-tag>
+                </span>
+              </template>
+            </el-tab-pane>
+          </el-tabs>
           <div class="permission-toolbar">
             <el-button @click="selectAllPermissions">
               {{ t("role.permission.selectAll") }}
@@ -807,6 +837,22 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.role-permission-platform-tabs {
+  margin-bottom: 8px;
+}
+
+.role-permission-platform-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.role-permission-platform-tab code {
+  color: var(--admin-text-soft);
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 12px;
 }
 
 @media (max-width: 720px) {

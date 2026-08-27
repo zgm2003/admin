@@ -29,7 +29,7 @@ func TestRequirePermissionAllowsTheNextHandler(t *testing.T) {
 	if recorder.Code != http.StatusNoContent || !called {
 		t.Fatalf("status=%d next=%v body=%s", recorder.Code, called, recorder.Body)
 	}
-	if service.identity.UserID != 41 || service.identity.Platform != "admin" || service.code != "account:user:create" || service.ctx == nil {
+	if service.identity.UserID != 41 || service.identity.PlatformID != 17 || service.identity.Platform != "admin" || service.code != "account:user:create" || service.ctx == nil {
 		t.Fatalf("service identity=%+v code=%q context=%v", service.identity, service.code, service.ctx)
 	}
 }

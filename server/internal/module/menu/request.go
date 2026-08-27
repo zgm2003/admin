@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 
 	"admin/server/internal/shared/apperror"
@@ -49,6 +50,7 @@ func (value *nullableString) UnmarshalJSON(data []byte) error {
 }
 
 type createRequest struct {
+	PlatformID    *int64         `json:"platformId"`
 	ParentID      nullableInt64  `json:"parentId"`
 	MenuType      *Type          `json:"menuType"`
 	Name          *string        `json:"name"`
@@ -63,22 +65,39 @@ type createRequest struct {
 }
 
 func (request createRequest) input() (CreateInput, error) {
-	if !request.ParentID.Present || request.MenuType == nil || request.Name == nil || request.Code == nil || !request.I18nKey.Present ||
+	if request.PlatformID == nil || !request.ParentID.Present || request.MenuType == nil || request.Name == nil || request.Code == nil || !request.I18nKey.Present ||
 		!request.Path.Present || !request.ComponentPath.Present || !request.Icon.Present || request.SortOrder == nil ||
 		request.IsEnabled == nil || request.IsHidden == nil {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("all create menu fields are required"))
 	}
-	if request.ParentID.Value != nil && *request.ParentID.Value < 1 {
+	if *request.PlatformID < 1 || (request.ParentID.Value != nil && *request.ParentID.Value < 1) {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("parentId must be null or a positive integer"))
 	}
 	if *request.SortOrder < 0 || !yesno.IsValid(*request.IsEnabled) || !yesno.IsValid(*request.IsHidden) {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("sortOrder, isEnabled, or isHidden is invalid"))
 	}
 	return CreateInput{
-		ParentID: request.ParentID.Value, MenuType: *request.MenuType, Name: *request.Name, Code: *request.Code,
+		PlatformID: *request.PlatformID, ParentID: request.ParentID.Value, MenuType: *request.MenuType, Name: *request.Name, Code: *request.Code,
 		I18nKey: request.I18nKey.Value, Path: request.Path.Value, ComponentPath: request.ComponentPath.Value,
 		Icon: request.Icon.Value, SortOrder: *request.SortOrder, IsEnabled: *request.IsEnabled, IsHidden: *request.IsHidden,
 	}, nil
+}
+
+func parseListQuery(values url.Values) (ListQuery, error) {
+	for key, entries := range values {
+		if key != "platformId" || len(entries) != 1 {
+			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("invalid or repeated query parameter"))
+		}
+	}
+	entries, exists := values["platformId"]
+	if !exists {
+		return ListQuery{}, nil
+	}
+	platformID, err := strconv.ParseInt(entries[0], 10, 64)
+	if err != nil || platformID < 1 {
+		return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("platformId must be a positive integer"))
+	}
+	return ListQuery{PlatformID: &platformID}, nil
 }
 
 type updateRequest struct {

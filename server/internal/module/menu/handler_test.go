@@ -21,23 +21,38 @@ import (
 
 func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 	now := time.Date(2026, 8, 19, 2, 0, 0, 0, time.UTC)
-	service := &menuHTTPService{listResult: []menu.ManagedMenu{{
-		ID: 1, MenuType: menu.TypeDirectory, Name: "报表", Code: "reports", I18nKey: menuTestStringPointer("navigation.system"),
-		SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now,
-		IsProtected: true, Children: []menu.ManagedMenu{},
-	}}}
-	recorder := serveMenuRequest(t, service, http.MethodGet, "/api/admin/v1/menus", nil)
+	service := &menuHTTPService{listResult: menu.Catalog{
+		Platforms: []menu.PlatformOption{{ID: 1, Code: "admin", Name: "Admin", IsEnabled: yesno.Yes}},
+		MenuTree: []menu.ManagedMenu{{
+			ID: 1, PlatformID: 1, PlatformCode: "admin", PlatformName: "Admin", MenuType: menu.TypeDirectory, Name: "报表", Code: "reports", I18nKey: menuTestStringPointer("navigation.system"),
+			SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now,
+			IsProtected: true, Children: []menu.ManagedMenu{},
+		}}}}
+	recorder := serveMenuRequest(t, service, http.MethodGet, "/api/admin/v1/menus?platformId=1", nil)
 	assertMenuEnvelope(t, recorder, http.StatusOK, 0)
 
 	var envelope map[string]json.RawMessage
 	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil {
 		t.Fatal(err)
 	}
-	var rows []map[string]json.RawMessage
-	if err := json.Unmarshal(envelope["data"], &rows); err != nil || len(rows) != 1 {
+	var data map[string]json.RawMessage
+	if err := json.Unmarshal(envelope["data"], &data); err != nil || len(data) != 2 || data["platforms"] == nil || data["menuTree"] == nil {
 		t.Fatalf("data = %s error=%v", envelope["data"], err)
 	}
-	wantKeys := []string{"id", "parentId", "menuType", "name", "code", "i18nKey", "path", "componentPath", "icon", "sortOrder", "isEnabled", "isHidden", "createdAt", "updatedAt", "isProtected", "children"}
+	var platforms []map[string]json.RawMessage
+	if err := json.Unmarshal(data["platforms"], &platforms); err != nil || len(platforms) != 1 || len(platforms[0]) != 4 {
+		t.Fatalf("platforms = %s error=%v", data["platforms"], err)
+	}
+	for _, key := range []string{"id", "code", "name", "isEnabled"} {
+		if platforms[0][key] == nil {
+			t.Fatalf("platform response missing %q", key)
+		}
+	}
+	var rows []map[string]json.RawMessage
+	if err := json.Unmarshal(data["menuTree"], &rows); err != nil || len(rows) != 1 {
+		t.Fatalf("menuTree = %s error=%v", data["menuTree"], err)
+	}
+	wantKeys := []string{"id", "platformId", "platformCode", "platformName", "parentId", "menuType", "name", "code", "i18nKey", "path", "componentPath", "icon", "sortOrder", "isEnabled", "isHidden", "createdAt", "updatedAt", "isProtected", "children"}
 	if len(rows[0]) != len(wantKeys) {
 		t.Fatalf("menu response keys = %v", rows[0])
 	}
@@ -57,19 +72,39 @@ func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 	if service.listContext == nil {
 		t.Fatal("handler did not pass the request context")
 	}
+	if service.listQuery.PlatformID == nil || *service.listQuery.PlatformID != 1 {
+		t.Fatalf("list query = %+v", service.listQuery)
+	}
+}
+
+func TestMenuHandlerListRejectsInvalidPlatformQuery(t *testing.T) {
+	for _, path := range []string{
+		"/api/admin/v1/menus?platformId=0",
+		"/api/admin/v1/menus?platformId=abc",
+		"/api/admin/v1/menus?platformId=1&platformId=2",
+		"/api/admin/v1/menus?platformId=1&unknown=true",
+	} {
+		service := &menuHTTPService{}
+		recorder := serveMenuRequest(t, service, http.MethodGet, path, nil)
+		assertMenuEnvelope(t, recorder, http.StatusBadRequest, apperror.CodeInvalidRequest)
+		if service.listCalls != 0 {
+			t.Fatalf("invalid query reached Service: %s", path)
+		}
+	}
 }
 
 func TestMenuHandlerCreateRequiresEveryFieldAndExplicitNull(t *testing.T) {
-	valid := `{"parentId":null,"menuType":"directory","name":"报表","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"lucide:folder","sortOrder":0,"isEnabled":0,"isHidden":0}`
+	valid := `{"platformId":2,"parentId":null,"menuType":"directory","name":"报表","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"lucide:folder","sortOrder":0,"isEnabled":0,"isHidden":0}`
 	service := &menuHTTPService{createID: 41}
 	recorder := serveMenuRequest(t, service, http.MethodPost, "/api/admin/v1/menus", []byte(valid))
 	assertMenuEnvelope(t, recorder, http.StatusCreated, 0)
-	if service.createCalls != 1 || service.createInput.ParentID != nil || service.createInput.SortOrder != 0 || service.createInput.IsEnabled != yesno.No || service.createInput.IsHidden != yesno.No {
+	if service.createCalls != 1 || service.createInput.PlatformID != 2 || service.createInput.ParentID != nil || service.createInput.SortOrder != 0 || service.createInput.IsEnabled != yesno.No || service.createInput.IsHidden != yesno.No {
 		t.Fatalf("create input = %+v calls=%d", service.createInput, service.createCalls)
 	}
 	assertMutationData(t, recorder, map[string]float64{"id": 41})
 
 	invalidBodies := []string{
+		`{"platformId":0,"parentId":null,"menuType":"directory","name":"报表","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"lucide:folder","sortOrder":0,"isEnabled":0,"isHidden":0}`,
 		`{"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"Folder","sortOrder":0,"isEnabled":0,"isHidden":0}`,
 		`{"parentId":0,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"Folder","sortOrder":0,"isEnabled":0,"isHidden":0}`,
 		`{"parentId":"1","menuType":"page","code":"reports:list","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":0,"isEnabled":1,"isHidden":0}`,
@@ -124,6 +159,7 @@ func TestMenuHandlerUpdateStatusAndDeleteUseExactContracts(t *testing.T) {
 	}{
 		{method: http.MethodPut, path: "/api/admin/v1/menus/0", body: updateBody},
 		{method: http.MethodPut, path: "/api/admin/v1/menus/7", body: []byte(`{"parentId":1,"menuType":"page","code":"forbidden","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0}`)},
+		{method: http.MethodPut, path: "/api/admin/v1/menus/7", body: []byte(`{"platformId":2,"parentId":1,"menuType":"page","name":"报表列表","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0}`)},
 		{method: http.MethodPut, path: "/api/admin/v1/menus/7", body: []byte(`{"parentId":1,"menuType":"page","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0,"isEnabled":1}`)},
 		{method: http.MethodPatch, path: "/api/admin/v1/menus/7/status", body: []byte(`{"isEnabled":2}`)},
 		{method: http.MethodPatch, path: "/api/admin/v1/menus/7/status", body: []byte(`{"isEnabled":0,"other":true}`)},
@@ -161,7 +197,7 @@ func TestMenuHandlerPreservesLocalizedServiceError(t *testing.T) {
 }
 
 func TestMenuRoutesBindExactPermissionsInMiddlewareOrder(t *testing.T) {
-	service := &menuHTTPService{listResult: []menu.ManagedMenu{}}
+	service := &menuHTTPService{listResult: menu.Catalog{Platforms: []menu.PlatformOption{}, MenuTree: []menu.ManagedMenu{}}}
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	registeredPermissions := make([]string, 0)
@@ -235,7 +271,7 @@ func TestMenuRoutesStopBeforeHandlerOnAuthenticationOrPermissionFailure(t *testi
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			service := &menuHTTPService{listResult: []menu.ManagedMenu{}}
+			service := &menuHTTPService{listResult: menu.Catalog{Platforms: []menu.PlatformOption{}, MenuTree: []menu.ManagedMenu{}}}
 			gin.SetMode(gin.TestMode)
 			router := gin.New()
 			menu.RegisterRoutes(router.Group("/api/admin/v1"), menu.NewHandler(service), test.auth, func(string) gin.HandlerFunc { return test.permission })
@@ -250,10 +286,11 @@ func TestMenuRoutesStopBeforeHandlerOnAuthenticationOrPermissionFailure(t *testi
 }
 
 type menuHTTPService struct {
-	listResult  []menu.ManagedMenu
+	listResult  menu.Catalog
 	listError   error
 	listContext context.Context
 	listCalls   int
+	listQuery   menu.ListQuery
 
 	createID    int64
 	createInput menu.CreateInput
@@ -268,9 +305,10 @@ type menuHTTPService struct {
 	deleteID int64
 }
 
-func (s *menuHTTPService) List(ctx context.Context) ([]menu.ManagedMenu, error) {
+func (s *menuHTTPService) List(ctx context.Context, query menu.ListQuery) (menu.Catalog, error) {
 	s.listCalls++
 	s.listContext = ctx
+	s.listQuery = query
 	return s.listResult, s.listError
 }
 

@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"admin/server/internal/module/authplatform"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -119,6 +120,53 @@ func PrepareSchema(ctx context.Context, db *gorm.DB) error {
 		return nil
 	}); err != nil {
 		return fmt.Errorf("prepare menu schema: %w", err)
+	}
+	return nil
+}
+
+func PreparePlatformSchema(ctx context.Context, db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("prepare menu platform schema requires a database")
+	}
+	db = db.WithContext(ctx)
+	var exists bool
+	if err := db.Raw(`SELECT to_regclass(current_schema() || '.rbac_menu') IS NOT NULL`).Scan(&exists).Error; err != nil {
+		return fmt.Errorf("inspect menu table for platform migration: %w", err)
+	}
+	if !exists {
+		return nil
+	}
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`LOCK TABLE auth_platform IN SHARE ROW EXCLUSIVE MODE`).Error; err != nil {
+			return fmt.Errorf("lock authentication platforms for menu migration: %w", err)
+		}
+		if err := tx.Exec(`LOCK TABLE rbac_menu IN SHARE ROW EXCLUSIVE MODE`).Error; err != nil {
+			return fmt.Errorf("lock menus for platform migration: %w", err)
+		}
+		adminIDs := make([]int64, 0, 2)
+		if err := tx.Raw(`
+			SELECT id
+			FROM auth_platform
+			WHERE code = ? AND is_builtin = 1 AND deleted_at IS NULL
+			ORDER BY id
+			LIMIT 2`, authplatform.BuiltinAdminCode).Scan(&adminIDs).Error; err != nil {
+			return fmt.Errorf("find builtin Admin platform for menu migration: %w", err)
+		}
+		if len(adminIDs) != 1 || adminIDs[0] < 1 {
+			return fmt.Errorf("menu platform migration requires exactly one builtin Admin platform")
+		}
+		if err := tx.Exec(`ALTER TABLE rbac_menu ADD COLUMN IF NOT EXISTS platform_id BIGINT`).Error; err != nil {
+			return fmt.Errorf("add menu platform column: %w", err)
+		}
+		if err := tx.Exec(`UPDATE rbac_menu SET platform_id = ? WHERE platform_id IS NULL`, adminIDs[0]).Error; err != nil {
+			return fmt.Errorf("backfill menu platform column: %w", err)
+		}
+		if err := tx.Exec(`ALTER TABLE rbac_menu ALTER COLUMN platform_id SET NOT NULL`).Error; err != nil {
+			return fmt.Errorf("require menu platform column: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("prepare menu platform schema: %w", err)
 	}
 	return nil
 }

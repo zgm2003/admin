@@ -21,7 +21,7 @@ import (
 const CodeAccessSnapshotInvalid = 14000
 
 type sourceStore interface {
-	FindSourceWithVersion(context.Context, int64) (Source, error)
+	FindSourceWithVersion(context.Context, int64, int64) (Source, error)
 }
 
 type MenuNode struct {
@@ -99,7 +99,7 @@ func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Sna
 		if state.State == accessstate.StateInvalidating {
 			return Snapshot{}, accessUpdating(accessstate.ErrUpdating)
 		}
-		cached, cacheFound, cacheErr := s.cache.Read(ctx, identity.Platform, identity.PolicyVersion, identity.UserID, state.Version)
+		cached, cacheFound, cacheErr := s.cache.Read(ctx, identity.PlatformID, identity.Platform, identity.PolicyVersion, identity.UserID, state.Version)
 		if cacheErr != nil {
 			cacheResult = "error"
 			s.logCacheError(ctx, "accessSnapshot", "error", cacheErr)
@@ -109,7 +109,7 @@ func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Sna
 	}
 
 	for attempt := 0; attempt < 3; attempt++ {
-		source, err := s.store.FindSourceWithVersion(ctx, identity.UserID)
+		source, err := s.store.FindSourceWithVersion(ctx, identity.UserID, identity.PlatformID)
 		if err != nil {
 			return Snapshot{}, apperror.DependencyUnavailable(err)
 		}
@@ -138,7 +138,7 @@ func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Sna
 			continue
 		}
 
-		published, publishErr := s.cache.PublishIfCurrent(ctx, newCachedSnapshot(identity.UserID, identity.Platform, identity.PolicyVersion, snapshot), identity.AccessCacheTTL)
+		published, publishErr := s.cache.PublishIfCurrent(ctx, newCachedSnapshot(identity.UserID, identity.PlatformID, identity.Platform, identity.PolicyVersion, snapshot), identity.AccessCacheTTL)
 		if publishErr != nil {
 			s.logCacheError(ctx, "accessSnapshot", "error", publishErr)
 			snapshot.CacheResult = "error"
@@ -154,7 +154,7 @@ func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Sna
 }
 
 func validateAccessIdentity(identity auth.Identity) error {
-	if identity.UserID < 1 || identity.SessionID < 1 || identity.Platform == "" || identity.PolicyVersion < 1 || identity.AccessCacheTTL <= 0 {
+	if identity.UserID < 1 || identity.SessionID < 1 || identity.PlatformID < 1 || identity.Platform == "" || identity.PolicyVersion < 1 || identity.AccessCacheTTL <= 0 {
 		return fmt.Errorf("access snapshot requires a complete authentication identity")
 	}
 	return nil
@@ -286,8 +286,8 @@ func validateSelectedMenus(selected map[int64]SourceMenu) error {
 		}
 
 		if item.ParentID == nil {
-			if item.MenuType != MenuDirectory {
-				return fmt.Errorf("root menu %d is not a directory", id)
+			if item.MenuType == MenuAction {
+				return fmt.Errorf("root menu %d is an action", id)
 			}
 			continue
 		}

@@ -59,10 +59,18 @@ type permissionTreeResponse struct {
 	Children  []permissionTreeResponse `json:"children"`
 }
 
+type permissionPlatformResponse struct {
+	ID        int64                    `json:"id"`
+	Code      string                   `json:"code"`
+	Name      string                   `json:"name"`
+	IsEnabled int16                    `json:"isEnabled"`
+	MenuTree  []permissionTreeResponse `json:"menuTree"`
+}
+
 type permissionsResponse struct {
-	Role     summaryResponse          `json:"role"`
-	MenuTree []permissionTreeResponse `json:"menuTree"`
-	MenuIDs  []int64                  `json:"menuIds"`
+	Role      summaryResponse              `json:"role"`
+	Platforms []permissionPlatformResponse `json:"platforms"`
+	MenuIDs   []int64                      `json:"menuIds"`
 }
 
 func roleListResponse(items []ListItem, total int64, page, pageSize int) listResponse {
@@ -98,9 +106,20 @@ func newPermissionsResponse(value Permissions) permissionsResponse {
 			IsDefault: int16(value.Role.IsDefault),
 			IsEnabled: int16(value.Role.IsEnabled),
 		},
-		MenuTree: permissionTreeResponses(value.MenuTree),
-		MenuIDs:  append(make([]int64, 0, len(value.MenuIDs)), value.MenuIDs...),
+		Platforms: permissionPlatformResponses(value.Platforms),
+		MenuIDs:   append(make([]int64, 0, len(value.MenuIDs)), value.MenuIDs...),
 	}
+}
+
+func permissionPlatformResponses(platforms []PermissionPlatform) []permissionPlatformResponse {
+	result := make([]permissionPlatformResponse, 0, len(platforms))
+	for _, platform := range platforms {
+		result = append(result, permissionPlatformResponse{
+			ID: platform.ID, Code: platform.Code, Name: platform.Name, IsEnabled: int16(platform.IsEnabled),
+			MenuTree: permissionTreeResponses(platform.MenuTree),
+		})
+	}
+	return result
 }
 
 func permissionTreeResponses(nodes []PermissionTreeNode) []permissionTreeResponse {

@@ -9,6 +9,7 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
+	"admin/server/internal/module/authplatform"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
@@ -69,6 +70,12 @@ func openMenuDatabase(t *testing.T) (*gorm.DB, context.Context) {
 		_ = root.GORM.WithContext(cleanupCtx).Exec("DROP SCHEMA IF EXISTS " + schema + " CASCADE").Error
 		_ = root.Close()
 	})
+	if err := database.AutoMigrate(ctx, db, &authplatform.Platform{}); err != nil {
+		t.Fatalf("AutoMigrate authentication platform test schema: %v", err)
+	}
+	if err := authplatform.EnsureSchema(ctx, db); err != nil {
+		t.Fatalf("Ensure authentication platform schema: %v", err)
+	}
 	if err := database.AutoMigrate(ctx, db, &testRole{}, &testUser{}, &testAccessVersion{}, &Menu{}, &RoleMenu{}); err != nil {
 		t.Fatalf("AutoMigrate menu test schema: %v", err)
 	}
@@ -76,6 +83,18 @@ func openMenuDatabase(t *testing.T) (*gorm.DB, context.Context) {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
 	return db, ctx
+}
+
+func testAdminPlatformID(t *testing.T, db *gorm.DB, ctx context.Context) int64 {
+	t.Helper()
+	var platform authplatform.Platform
+	if err := db.WithContext(ctx).Where("code = ?", authplatform.BuiltinAdminCode).Take(&platform).Error; err != nil {
+		t.Fatalf("find builtin Admin platform: %v", err)
+	}
+	if platform.ID < 1 {
+		t.Fatalf("builtin Admin platform id = %d", platform.ID)
+	}
+	return platform.ID
 }
 
 func stringPointer(value string) *string {

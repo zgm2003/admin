@@ -94,6 +94,15 @@ func run(logger *slog.Logger) error {
 	if err := menu.PrepareSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("prepare menu schema: %w", err)
 	}
+	if err := database.AutoMigrate(processContext, postgres.GORM, &authplatform.Platform{}); err != nil {
+		return err
+	}
+	if err := authplatform.EnsureSchema(processContext, postgres.GORM); err != nil {
+		return fmt.Errorf("ensure authentication platform schema: %w", err)
+	}
+	if err := menu.PreparePlatformSchema(processContext, postgres.GORM); err != nil {
+		return fmt.Errorf("prepare menu platform schema: %w", err)
+	}
 	if err := database.AutoMigrate(
 		processContext,
 		postgres.GORM,
@@ -103,7 +112,6 @@ func run(logger *slog.Logger) error {
 		&role.UserRole{},
 		&menu.Menu{},
 		&menu.RoleMenu{},
-		&authplatform.Platform{},
 		&auth.Session{},
 		&operationlog.OperationLog{},
 		&access.Version{},
@@ -112,9 +120,6 @@ func run(logger *slog.Logger) error {
 	}
 	if err := role.EnsureSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("ensure role schema: %w", err)
-	}
-	if err := authplatform.EnsureSchema(processContext, postgres.GORM); err != nil {
-		return fmt.Errorf("ensure authentication platform schema: %w", err)
 	}
 	if err := auth.EnsureSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("ensure authentication schema: %w", err)

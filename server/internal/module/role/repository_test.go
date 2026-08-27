@@ -13,6 +13,7 @@ import (
 	"admin/server/internal/module/access"
 	"admin/server/internal/module/accessstate"
 	"admin/server/internal/module/auth"
+	"admin/server/internal/module/authplatform"
 	"admin/server/internal/module/menu"
 	"admin/server/internal/module/role"
 	"admin/server/internal/module/user"
@@ -55,6 +56,23 @@ func TestEnsureSystemRolesCreatesAndValidatesRoles(t *testing.T) {
 		if stored.Name != expected.name || stored.IsDefault != expected.isDefault || stored.IsEnabled != yesno.Yes {
 			t.Errorf("role %s = %+v", stored.Code, stored)
 		}
+	}
+}
+
+func TestRepositoryFindPermissionPlatformsIncludesDisabledAndExcludesDeleted(t *testing.T) {
+	tx, ctx := openRoleTransaction(t)
+	canvas := createRoleTestPlatform(t, tx, ctx, "canvas", "Canvas", yesno.No)
+	deleted := createRoleTestPlatform(t, tx, ctx, "deleted", "Deleted", yesno.Yes)
+	if err := tx.WithContext(ctx).Delete(&deleted).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	platforms, err := role.NewRepository(tx).FindPermissionPlatforms(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(platforms) != 2 || platforms[0].Code != authplatform.BuiltinAdminCode || platforms[1].ID != canvas.ID || platforms[1].IsEnabled != yesno.No {
+		t.Fatalf("permission platforms = %+v", platforms)
 	}
 }
 
@@ -269,7 +287,7 @@ func TestRepositoryListUsesStableFiltersAndExactCounts(t *testing.T) {
 	}
 	path := "/" + unique
 	componentPath := "access/menus"
-	page := menu.Menu{MenuType: menu.TypePage, Name: "List", Code: unique + ":list", I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.No, IsHidden: yesno.No}
+	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "List", Code: unique + ":list", I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.No, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -442,6 +460,12 @@ func openRoleDatabase(t *testing.T) (*gorm.DB, context.Context) {
 	if err := auth.PrepareSessionSchema(ctx, db); err != nil {
 		t.Fatalf("PrepareSessionSchema: %v", err)
 	}
+	if err := database.AutoMigrate(ctx, db, &authplatform.Platform{}); err != nil {
+		t.Fatalf("AutoMigrate authentication platforms: %v", err)
+	}
+	if err := authplatform.EnsureSchema(ctx, db); err != nil {
+		t.Fatalf("Ensure authentication platform schema: %v", err)
+	}
 	if err := database.AutoMigrate(ctx, db, &user.User{}, &role.Role{}, &role.UserRole{}, &menu.Menu{}, &menu.RoleMenu{}, &auth.Session{}, &access.Version{}); err != nil {
 		t.Fatalf("AutoMigrate: %v", err)
 	}
@@ -458,6 +482,30 @@ func openRoleDatabase(t *testing.T) (*gorm.DB, context.Context) {
 		t.Fatalf("Ensure access schema: %v", err)
 	}
 	return db, ctx
+}
+
+func roleTestAdminPlatformID(t *testing.T, db *gorm.DB, ctx context.Context) int64 {
+	t.Helper()
+	var platform authplatform.Platform
+	if err := db.WithContext(ctx).Where("code = ?", authplatform.BuiltinAdminCode).Take(&platform).Error; err != nil {
+		t.Fatalf("find test Admin platform: %v", err)
+	}
+	return platform.ID
+}
+
+func createRoleTestPlatform(t *testing.T, db *gorm.DB, ctx context.Context, code, name string, isEnabled yesno.Value) authplatform.Platform {
+	t.Helper()
+	platform := authplatform.Platform{
+		Code: code, Name: name, PolicyVersion: 1,
+		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
+		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
+		AllowRegister: yesno.Yes, IsEnabled: isEnabled, IsBuiltin: yesno.No,
+	}
+	if err := db.WithContext(ctx).Create(&platform).Error; err != nil {
+		t.Fatalf("create test authentication platform: %v", err)
+	}
+	return platform
 }
 
 func createRoleAccessUser(t *testing.T, tx *gorm.DB, ctx context.Context, roleID int64, enabled yesno.Value, deleted bool) user.User {

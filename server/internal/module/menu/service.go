@@ -7,12 +7,15 @@ import (
 	"time"
 
 	"admin/server/internal/module/accessstate"
+	"admin/server/internal/module/authplatform"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
+	"gorm.io/gorm"
 )
 
 type CreateInput struct {
+	PlatformID    int64
 	ParentID      *int64
 	MenuType      Type
 	Name          string
@@ -40,6 +43,9 @@ type UpdateInput struct {
 
 type ManagedMenu struct {
 	ID            int64
+	PlatformID    int64
+	PlatformCode  string
+	PlatformName  string
 	ParentID      *int64
 	MenuType      Type
 	Name          string
@@ -57,6 +63,15 @@ type ManagedMenu struct {
 	Children      []ManagedMenu
 }
 
+type ListQuery struct {
+	PlatformID *int64
+}
+
+type Catalog struct {
+	Platforms []PlatformOption
+	MenuTree  []ManagedMenu
+}
+
 type Service struct {
 	repository        *Repository
 	accessInvalidator *accessstate.Invalidator
@@ -66,26 +81,51 @@ func NewService(repository *Repository, accessInvalidator *accessstate.Invalidat
 	return &Service{repository: repository, accessInvalidator: accessInvalidator}
 }
 
-func (s *Service) List(ctx context.Context) ([]ManagedMenu, error) {
+func (s *Service) List(ctx context.Context, query ListQuery) (Catalog, error) {
 	if s == nil || s.repository == nil {
-		return nil, apperror.DependencyUnavailable(fmt.Errorf("list menus requires a repository"))
+		return Catalog{}, apperror.DependencyUnavailable(fmt.Errorf("list menus requires a repository"))
 	}
-	menus, err := s.repository.FindActiveMenus(ctx)
+	platforms, err := s.repository.FindPlatformOptions(ctx)
 	if err != nil {
-		return nil, apperror.DependencyUnavailable(err)
+		return Catalog{}, apperror.DependencyUnavailable(err)
+	}
+	var selected PlatformOption
+	for _, platform := range platforms {
+		if (query.PlatformID != nil && platform.ID == *query.PlatformID) ||
+			(query.PlatformID == nil && platform.Code == authplatform.BuiltinAdminCode) {
+			selected = platform
+			break
+		}
+	}
+	if selected.ID < 1 {
+		return Catalog{}, menuInvalidFields(fmt.Errorf("menu platform is unavailable"))
+	}
+	menus, err := s.repository.FindActiveMenus(ctx, &selected.ID)
+	if err != nil {
+		return Catalog{}, apperror.DependencyUnavailable(err)
 	}
 	index, err := buildMenuIndex(menus)
 	if err != nil {
-		return nil, menuTreeInvalid(err)
+		return Catalog{}, menuTreeInvalid(err)
 	}
 	if err := index.validateEnabledAncestors(); err != nil {
-		return nil, menuTreeInvalid(err)
+		return Catalog{}, menuTreeInvalid(err)
 	}
 	tree, err := index.buildManagedTree()
 	if err != nil {
-		return nil, menuTreeInvalid(err)
+		return Catalog{}, menuTreeInvalid(err)
 	}
-	return tree, nil
+	applyManagedMenuPlatform(tree, selected)
+	return Catalog{Platforms: platforms, MenuTree: tree}, nil
+}
+
+func applyManagedMenuPlatform(items []ManagedMenu, platform PlatformOption) {
+	for index := range items {
+		items[index].PlatformID = platform.ID
+		items[index].PlatformCode = platform.Code
+		items[index].PlatformName = platform.Name
+		applyManagedMenuPlatform(items[index].Children, platform)
+	}
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) {
@@ -98,6 +138,12 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 	}
 	var createdID int64
 	err = s.mutateAllAccessUsers(ctx, func(mutationCtx context.Context, repository *Repository, menus []Menu, _ time.Time) (bool, error) {
+		if _, err := repository.LockPlatform(mutationCtx, normalized.PlatformID); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return false, menuPlatformUnavailable(err)
+			}
+			return false, apperror.DependencyUnavailable(err)
+		}
 		index, err := buildMenuIndex(menus)
 		if err != nil {
 			return false, menuTreeInvalid(err)
@@ -108,14 +154,14 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		if err := validateCreateEnabledParentChain(index, normalized); err != nil {
 			return false, err
 		}
-		if menuCodeExists(menus, normalized.Code) {
+		if menuCodeExists(menus, normalized.PlatformID, normalized.Code) {
 			return false, menuCodeConflict(normalized.Code, ErrMenuCodeConflict)
 		}
-		if normalized.Path != nil && menuPathExists(menus, *normalized.Path, nil) {
+		if normalized.Path != nil && menuPathExists(menus, normalized.PlatformID, *normalized.Path, nil) {
 			return false, menuPathConflict(*normalized.Path, ErrMenuPathConflict)
 		}
 		created := Menu{
-			ParentID: normalized.ParentID, MenuType: normalized.MenuType, Name: normalized.Name, Code: normalized.Code,
+			PlatformID: normalized.PlatformID, ParentID: normalized.ParentID, MenuType: normalized.MenuType, Name: normalized.Name, Code: normalized.Code,
 			I18nKey: normalized.I18nKey, Path: normalized.Path, ComponentPath: normalized.ComponentPath,
 			Icon: normalized.Icon, SortOrder: normalized.SortOrder, IsEnabled: normalized.IsEnabled, IsHidden: normalized.IsHidden,
 		}
@@ -169,7 +215,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 				return false, menuStructureConflict(target.Code, fmt.Errorf("menu has a direct role grant"))
 			}
 		}
-		if normalized.Path != nil && menuPathExists(menus, *normalized.Path, &target.ID) {
+		if normalized.Path != nil && menuPathExists(menus, target.PlatformID, *normalized.Path, &target.ID) {
 			return false, menuPathConflict(*normalized.Path, ErrMenuPathConflict)
 		}
 		if sameMenuUpdate(target, normalized) {
@@ -401,8 +447,8 @@ func allowedProtectedUpdate(stored Menu, input UpdateInput) bool {
 
 func validateCreateParent(index menuIndex, input CreateInput) error {
 	if input.ParentID == nil {
-		if input.MenuType != TypeDirectory {
-			return menuInvalidParent(fmt.Errorf("root menu must be a directory"))
+		if input.MenuType == TypeAction {
+			return menuInvalidParent(fmt.Errorf("root menu cannot be an action"))
 		}
 		return nil
 	}
@@ -410,7 +456,7 @@ func validateCreateParent(index menuIndex, input CreateInput) error {
 		return menuInvalidParent(fmt.Errorf("parent id %d is invalid", *input.ParentID))
 	}
 	parent, exists := index.byID[*input.ParentID]
-	if !exists || !allowedMenuChild(parent.MenuType, input.MenuType) {
+	if !exists || parent.PlatformID != input.PlatformID || !allowedMenuChild(parent.MenuType, input.MenuType) {
 		return menuInvalidParent(fmt.Errorf("parent does not accept menu type"))
 	}
 	return nil
@@ -441,8 +487,8 @@ func validateCreateEnabledParentChain(index menuIndex, input CreateInput) error 
 
 func validateUpdateParent(index menuIndex, target Menu, input UpdateInput) error {
 	if input.ParentID == nil {
-		if input.MenuType != TypeDirectory {
-			return menuInvalidParent(fmt.Errorf("root menu must be a directory"))
+		if input.MenuType == TypeAction {
+			return menuInvalidParent(fmt.Errorf("root menu cannot be an action"))
 		}
 		return nil
 	}
@@ -462,7 +508,7 @@ func validateUpdateParent(index menuIndex, target Menu, input UpdateInput) error
 		}
 	}
 	parent, exists := index.byID[*input.ParentID]
-	if !exists || !allowedMenuChild(parent.MenuType, input.MenuType) {
+	if !exists || parent.PlatformID != target.PlatformID || !allowedMenuChild(parent.MenuType, input.MenuType) {
 		return menuInvalidParent(fmt.Errorf("parent does not accept menu type"))
 	}
 	return nil
@@ -490,18 +536,18 @@ func menuIndexRows(index menuIndex) []Menu {
 	return rows
 }
 
-func menuCodeExists(menus []Menu, code string) bool {
+func menuCodeExists(menus []Menu, platformID int64, code string) bool {
 	for _, item := range menus {
-		if item.Code == code {
+		if item.PlatformID == platformID && item.Code == code {
 			return true
 		}
 	}
 	return false
 }
 
-func menuPathExists(menus []Menu, path string, excludedID *int64) bool {
+func menuPathExists(menus []Menu, platformID int64, path string, excludedID *int64) bool {
 	for _, item := range menus {
-		if item.Path != nil && *item.Path == path && (excludedID == nil || item.ID != *excludedID) {
+		if item.PlatformID == platformID && item.Path != nil && *item.Path == path && (excludedID == nil || item.ID != *excludedID) {
 			return true
 		}
 	}
