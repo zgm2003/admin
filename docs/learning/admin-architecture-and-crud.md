@@ -80,7 +80,7 @@ menuHandler := menu.NewHandler(menuService)
 
 ## 3. 一次 HTTP 请求如何走完整条链
 
-以 `POST /api/v1/menus` 为例：
+以 `POST /api/admin/v1/menus` 为例：
 
 ```mermaid
 sequenceDiagram
@@ -97,7 +97,7 @@ sequenceDiagram
     V->>A: createMenu(input)
     A->>X: request({ POST, data: input })
     X->>R: HTTP + Bearer + Client Headers
-    R->>M: authclient -> authenticate -> permission
+    R->>M: authclient.Require -> RequireAdminPlatform -> Authenticate -> RequirePermission
     M->>H: 已通过认证与权限校验
     H->>H: BindJSON + request.input()
     H->>S: Create(ctx, CreateInput)
@@ -125,11 +125,28 @@ RequestID
 -> Language
 ```
 
-进入 `/api/v1` 后先执行 `authclient.Require()`，读取并验证认证平台、设备等客户端信息。
-具体受保护路由再执行：
+`main.go` 明确创建两个 Router Group：共享身份和权限快照使用 `/api/v1`，Admin 管理资源使用
+`/api/admin/v1`。两个 Group 都先执行 `authclient.Require()`，读取并验证认证平台、设备等客户端信息；
+Admin Group 随后执行 `authclient.RequireAdminPlatform()`，只允许 `X-Auth-Platform: admin` 的请求继续。
+
+共享受保护路由的顺序是：
 
 ```text
-Authenticate -> RequirePermission("rbac:menu:create") -> Handler
+全局 Middleware -> authclient.Require -> Authenticate -> route middleware -> Handler
+```
+
+共享 `POST /api/v1/auth/logout` 还要求精确 Origin，因此它的顺序是：
+
+```text
+全局 Middleware -> authclient.Require -> RequireOrigin -> Authenticate -> Handler
+```
+
+`RequireOrigin` 必须先于 `Authenticate`，使不匹配的浏览器 Origin 在解析 Bearer Token 前被拒绝。
+
+Admin 受保护路由的顺序是：
+
+```text
+全局 Middleware -> authclient.Require -> RequireAdminPlatform -> Authenticate -> RequirePermission("rbac:menu:create") -> Handler
 ```
 
 顺序很重要：权限中间件需要认证中间件先把 `auth.Identity` 放进 Gin Context。
@@ -199,11 +216,11 @@ response.go   HTTP Response DTO
 ### 5.1 先决定接口
 
 ```text
-GET    /api/v1/articles       列表
-GET    /api/v1/articles/:id   详情
-POST   /api/v1/articles       创建
-PUT    /api/v1/articles/:id   更新
-DELETE /api/v1/articles/:id   软删除
+GET    /api/admin/v1/articles       列表
+GET    /api/admin/v1/articles/:id   详情
+POST   /api/admin/v1/articles       创建
+PUT    /api/admin/v1/articles/:id   更新
+DELETE /api/admin/v1/articles/:id   软删除
 ```
 
 ### 5.2 Model：只映射 PostgreSQL
@@ -706,7 +723,7 @@ articleRepository := article.NewRepository(postgres.GORM)
 articleService := article.NewService(articleRepository)
 articleHandler := article.NewHandler(articleService)
 
-article.RegisterRoutes(apiRoutes, articleHandler, authenticate, requirePermission)
+article.RegisterRoutes(adminRoutes, articleHandler, authenticate, requirePermission)
 ```
 
 如果这个模块真实加入项目，还必须补 Model migration、数据库约束、权限菜单、测试和前端接入。这里只演示数据流，不是在偷偷引入 Article 功能。
@@ -1011,7 +1028,7 @@ views/access/menus/index.vue
 也就是说，下面的泛型不会验证服务器真的返回了 `{ id: number }`：
 
 ```ts
-return request<MenuIDResult>({ method: 'POST', url: '/api/v1/menus', data: input })
+return request<MenuIDResult>({ method: 'POST', url: '/api/admin/v1/menus', data: input })
 ```
 
 它只是告诉 TypeScript “开发者认为结果是 MenuIDResult”。严格 envelope 仍然存在，但业务 `data` 可能在字段错误时晚到页面才暴露。
@@ -1022,7 +1039,7 @@ return request<MenuIDResult>({ method: 'POST', url: '/api/v1/menus', data: input
 export async function createArticle(input: CreateArticleInput): Promise<ArticleIDResult> {
   const value: unknown = await request<unknown>({
     method: 'POST',
-    url: '/api/v1/articles',
+    url: '/api/admin/v1/articles',
     data: input,
   })
   return parseArticleIDResult(value)

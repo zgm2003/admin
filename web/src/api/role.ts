@@ -14,11 +14,11 @@ export interface RolePermissionsResponse { role:{id:number;code:string;name:stri
 export interface UpdateRolePermissionsInput { menuIds:number[] }
 export interface RolePermissionResult { id:number; permissionCount:number }
 
-export function getRoles(query: RoleListQuery): Promise<PageResult<RoleListItem>> { return request<PageResult<RoleListItem>>({ method: 'GET', url: '/api/v1/roles', params: query }) }
-export function createRole(input: CreateRoleInput): Promise<{ id: number }> { return request<{ id: number }>({ method: 'POST', url: '/api/v1/roles', data: { code: input.code, name: input.name } }) }
-export function updateRole(id: number, input: UpdateRoleInput): Promise<Record<string, never>> { return request<Record<string, never>>({ method: 'PUT', url: `/api/v1/roles/${id}`, data: { name: input.name } }) }
-export function updateRoleStatus(id: number, isEnabled: YesNo): Promise<RoleStatusResult> { return request<RoleStatusResult>({ method: 'PATCH', url: `/api/v1/roles/${id}/status`, data: { isEnabled } }) }
-export function setDefaultRole(id: number): Promise<RoleDefaultResult> { return request<RoleDefaultResult>({ method: 'PATCH', url: `/api/v1/roles/${id}/default` }) }
-export function deleteRole(id: number): Promise<Record<string, never>> { return request<Record<string, never>>({ method: 'DELETE', url: `/api/v1/roles/${id}` }) }
-export function getRolePermissions(id: number): Promise<RolePermissionsResponse> { return request<RolePermissionsResponse>({ method: 'GET', url: `/api/v1/roles/${id}/permissions` }) }
-export function updateRolePermissions(id: number, input: UpdateRolePermissionsInput): Promise<RolePermissionResult> { return request<RolePermissionResult>({ method: 'PUT', url: `/api/v1/roles/${id}/permissions`, data: { menuIds: input.menuIds } }) }
+export function getRoles(query: RoleListQuery): Promise<PageResult<RoleListItem>> { return request<PageResult<RoleListItem>>({ method: 'GET', url: '/api/admin/v1/roles', params: query }) }
+export function createRole(input: CreateRoleInput): Promise<{ id: number }> { return request<{ id: number }>({ method: 'POST', url: '/api/admin/v1/roles', data: { code: input.code, name: input.name } }) }
+export function updateRole(id: number, input: UpdateRoleInput): Promise<Record<string, never>> { return request<Record<string, never>>({ method: 'PUT', url: `/api/admin/v1/roles/${id}`, data: { name: input.name } }) }
+export function updateRoleStatus(id: number, isEnabled: YesNo): Promise<RoleStatusResult> { return request<RoleStatusResult>({ method: 'PATCH', url: `/api/admin/v1/roles/${id}/status`, data: { isEnabled } }) }
+export function setDefaultRole(id: number): Promise<RoleDefaultResult> { return request<RoleDefaultResult>({ method: 'PATCH', url: `/api/admin/v1/roles/${id}/default` }) }
+export function deleteRole(id: number): Promise<Record<string, never>> { return request<Record<string, never>>({ method: 'DELETE', url: `/api/admin/v1/roles/${id}` }) }
+export function getRolePermissions(id: number): Promise<RolePermissionsResponse> { return request<RolePermissionsResponse>({ method: 'GET', url: `/api/admin/v1/roles/${id}/permissions` }) }
+export function updateRolePermissions(id: number, input: UpdateRolePermissionsInput): Promise<RolePermissionResult> { return request<RolePermissionResult>({ method: 'PUT', url: `/api/admin/v1/roles/${id}/permissions`, data: { menuIds: input.menuIds } }) }

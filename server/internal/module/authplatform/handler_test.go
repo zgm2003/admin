@@ -107,7 +107,7 @@ func TestPolicyRejectsInvalidClientBeforeService(t *testing.T) {
 func TestManagementListRequiresStrictQueryAndReturnsClosedPage(t *testing.T) {
 	service, router := managementRouter(t)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/auth-platforms?page=1&pageSize=20&keyword=admin&isEnabled=1", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/auth-platforms?page=1&pageSize=20&keyword=admin&isEnabled=1", nil)
 	router.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK || service.listCalls != 1 || service.listQuery.Page != 1 || service.listQuery.PageSize != 20 || service.listQuery.Keyword != "admin" || service.listQuery.IsEnabled == nil || *service.listQuery.IsEnabled != yesno.Yes {
 		t.Fatalf("status=%d calls=%d query=%+v body=%s", recorder.Code, service.listCalls, service.listQuery, recorder.Body)
@@ -122,11 +122,11 @@ func TestManagementListRequiresStrictQueryAndReturnsClosedPage(t *testing.T) {
 	}
 
 	for _, path := range []string{
-		"/api/v1/auth-platforms?page=1",
-		"/api/v1/auth-platforms?page=1&page=2&pageSize=20",
-		"/api/v1/auth-platforms?page=1&pageSize=20&unknown=1",
-		"/api/v1/auth-platforms?page=0&pageSize=20",
-		"/api/v1/auth-platforms?page=1&pageSize=101",
+		"/api/admin/v1/auth-platforms?page=1",
+		"/api/admin/v1/auth-platforms?page=1&page=2&pageSize=20",
+		"/api/admin/v1/auth-platforms?page=1&pageSize=20&unknown=1",
+		"/api/admin/v1/auth-platforms?page=0&pageSize=20",
+		"/api/admin/v1/auth-platforms?page=1&pageSize=101",
 	} {
 		recorder = httptest.NewRecorder()
 		router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
@@ -139,7 +139,7 @@ func TestManagementListRequiresStrictQueryAndReturnsClosedPage(t *testing.T) {
 func TestManagementJSONContractsRejectMissingAndUnknownFields(t *testing.T) {
 	service, router := managementRouter(t)
 	validCreate := `{"code":"app","name":"App","accessTTLSeconds":900,"refreshTTLSeconds":1209600,"sessionCacheTTLSeconds":1800,"accessCacheTTLSeconds":1800,"bindDevice":0,"bindIP":0,"maxSessions":1,"allowRegister":1,"isEnabled":1}`
-	recorder := performJSON(router, http.MethodPost, "/api/v1/auth-platforms", validCreate)
+	recorder := performJSON(router, http.MethodPost, "/api/admin/v1/auth-platforms", validCreate)
 	if recorder.Code != http.StatusCreated || service.createCalls != 1 || recorder.Body.String() != `{"code":0,"data":{"id":2},"message":"ok"}` {
 		t.Fatalf("create status=%d calls=%d body=%s", recorder.Code, service.createCalls, recorder.Body)
 	}
@@ -149,30 +149,30 @@ func TestManagementJSONContractsRejectMissingAndUnknownFields(t *testing.T) {
 		strings.TrimSuffix(validCreate, "}") + `,"code":"other"}`,
 		validCreate + `{}`,
 	} {
-		recorder = performJSON(router, http.MethodPost, "/api/v1/auth-platforms", body)
+		recorder = performJSON(router, http.MethodPost, "/api/admin/v1/auth-platforms", body)
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("invalid create status=%d body=%s input=%s", recorder.Code, recorder.Body, body)
 		}
 	}
 
 	validUpdate := `{"name":"App 2","accessTTLSeconds":900,"refreshTTLSeconds":1209600,"sessionCacheTTLSeconds":1800,"accessCacheTTLSeconds":1800,"bindDevice":1,"bindIP":0,"maxSessions":2,"allowRegister":0}`
-	recorder = performJSON(router, http.MethodPut, "/api/v1/auth-platforms/2", validUpdate)
+	recorder = performJSON(router, http.MethodPut, "/api/admin/v1/auth-platforms/2", validUpdate)
 	if recorder.Code != http.StatusOK || service.updateCalls != 1 {
 		t.Fatalf("update status=%d calls=%d body=%s", recorder.Code, service.updateCalls, recorder.Body)
 	}
 	for _, extra := range []string{`"code":"changed"`, `"isBuiltin":1`, `"policyVersion":2`} {
 		body := strings.TrimSuffix(validUpdate, "}") + "," + extra + "}"
-		recorder = performJSON(router, http.MethodPut, "/api/v1/auth-platforms/2", body)
+		recorder = performJSON(router, http.MethodPut, "/api/admin/v1/auth-platforms/2", body)
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("update with %s status=%d body=%s", extra, recorder.Code, recorder.Body)
 		}
 	}
 
-	recorder = performJSON(router, http.MethodPatch, "/api/v1/auth-platforms/2/status", `{"isEnabled":0}`)
+	recorder = performJSON(router, http.MethodPatch, "/api/admin/v1/auth-platforms/2/status", `{"isEnabled":0}`)
 	if recorder.Code != http.StatusOK || service.statusCalls != 1 {
 		t.Fatalf("status update=%d calls=%d body=%s", recorder.Code, service.statusCalls, recorder.Body)
 	}
-	recorder = performJSON(router, http.MethodPatch, "/api/v1/auth-platforms/2/status", `{"isEnabled":0,"name":"bad"}`)
+	recorder = performJSON(router, http.MethodPatch, "/api/admin/v1/auth-platforms/2/status", `{"isEnabled":0,"name":"bad"}`)
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status unknown field status=%d body=%s", recorder.Code, recorder.Body)
 	}
@@ -181,17 +181,17 @@ func TestManagementJSONContractsRejectMissingAndUnknownFields(t *testing.T) {
 func TestManagementDeleteRequiresEmptyBodyAndDeploymentIsSafe(t *testing.T) {
 	service, router := managementRouter(t)
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, "/api/v1/auth-platforms/2", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, "/api/admin/v1/auth-platforms/2", nil))
 	if recorder.Code != http.StatusOK || service.deleteCalls != 1 {
 		t.Fatalf("delete status=%d calls=%d body=%s", recorder.Code, service.deleteCalls, recorder.Body)
 	}
-	recorder = performJSON(router, http.MethodDelete, "/api/v1/auth-platforms/2", `{}`)
+	recorder = performJSON(router, http.MethodDelete, "/api/admin/v1/auth-platforms/2", `{}`)
 	if recorder.Code != http.StatusBadRequest || service.deleteCalls != 1 {
 		t.Fatalf("delete body status=%d calls=%d body=%s", recorder.Code, service.deleteCalls, recorder.Body)
 	}
 
 	recorder = httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/auth-platforms/deployment", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/auth-platforms/deployment", nil))
 	want := `{"code":0,"data":{"cookieSecure":false,"corsOrigin":"http://localhost:16300","trustedProxyMode":"none","trustedProxyCount":0,"redisStatus":"up"},"message":"ok"}`
 	if recorder.Code != http.StatusOK || recorder.Body.String() != want {
 		t.Fatalf("deployment status=%d body=%s", recorder.Code, recorder.Body)
@@ -203,7 +203,7 @@ func TestManagementRoutesUseAuthenticationPlatformPermissions(t *testing.T) {
 	router := gin.New()
 	permissions := make([]string, 0)
 	pass := func(context *gin.Context) { context.Next() }
-	authplatform.RegisterManagementRoutes(router.Group("/api/v1"), authplatform.NewHandler(&platformHTTPService{}), pass, func(code string) gin.HandlerFunc {
+	authplatform.RegisterManagementRoutes(router.Group("/api/admin/v1"), authplatform.NewHandler(&platformHTTPService{}), pass, func(code string) gin.HandlerFunc {
 		permissions = append(permissions, code)
 		return pass
 	})
@@ -225,7 +225,7 @@ func managementRouter(t *testing.T) (*platformHTTPService, *gin.Engine) {
 	gin.SetMode(gin.TestMode)
 	service := &platformHTTPService{}
 	router := gin.New()
-	routes := router.Group("/api/v1")
+	routes := router.Group("/api/admin/v1")
 	authplatform.RegisterManagementRoutes(routes, authplatform.NewHandler(service), func(context *gin.Context) { context.Next() }, func(string) gin.HandlerFunc {
 		return func(context *gin.Context) { context.Next() }
 	})

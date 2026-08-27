@@ -75,5 +75,5 @@ function mountPage(): VueWrapper {
 }
 
 function row(): OperationLogItem {
-	return { id: 1, requestId: 'request-id-1', userId: 7, sessionId: 9, platform: 'admin', method: 'PUT', route: '/api/v1/users/:id', module: 'user', action: 'user.update', clientIp: '127.0.0.1', userAgent: 'Chrome', statusCode: 200, isSuccess: YesNo.Yes, latencyMs: 12, requestData: { password: '***' }, responseData: { code: 0 }, createdAt: '2026-08-21T00:00:00Z', updatedAt: '2026-08-21T00:00:00Z' }
+	return { id: 1, requestId: 'request-id-1', userId: 7, sessionId: 9, platform: 'admin', method: 'PUT', route: '/api/admin/v1/users/:id', module: 'user', action: 'user.update', clientIp: '127.0.0.1', userAgent: 'Chrome', statusCode: 200, isSuccess: YesNo.Yes, latencyMs: 12, requestData: { password: '***' }, responseData: { code: 0 }, createdAt: '2026-08-21T00:00:00Z', updatedAt: '2026-08-21T00:00:00Z' }
 }

@@ -26,10 +26,10 @@ describe('authentication platform API', () => {
     await getAuthPlatformDeployment()
 
     expect(requestMock).toHaveBeenNthCalledWith(1, {
-      method: 'GET', url: '/api/v1/auth-platforms',
+      method: 'GET', url: '/api/admin/v1/auth-platforms',
       params: { page: 1, pageSize: 20, keyword: 'admin', isEnabled: YesNo.Yes },
     })
-    expect(requestMock).toHaveBeenNthCalledWith(2, { method: 'GET', url: '/api/v1/auth-platforms/deployment' })
+    expect(requestMock).toHaveBeenNthCalledWith(2, { method: 'GET', url: '/api/admin/v1/auth-platforms/deployment' })
   })
 
   it('uses exact mutation methods and allowlisted bodies', async () => {
@@ -52,11 +52,11 @@ describe('authentication platform API', () => {
     await updateAuthPlatformStatus(3, YesNo.No)
     await deleteAuthPlatform(3)
 
-    expect(requestMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ method: 'POST', url: '/api/v1/auth-platforms' }))
+    expect(requestMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ method: 'POST', url: '/api/admin/v1/auth-platforms' }))
     expect(requestMock.mock.calls[0]?.[0]).toMatchObject({ data: expect.objectContaining({ code: 'portal' }) })
-    expect(requestMock.mock.calls[1]?.[0]).toMatchObject({ method: 'PUT', url: '/api/v1/auth-platforms/3' })
+    expect(requestMock.mock.calls[1]?.[0]).toMatchObject({ method: 'PUT', url: '/api/admin/v1/auth-platforms/3' })
     expect(requestMock.mock.calls[1]?.[0]).not.toHaveProperty('data.code')
-    expect(requestMock).toHaveBeenNthCalledWith(3, { method: 'PATCH', url: '/api/v1/auth-platforms/3/status', data: { isEnabled: YesNo.No } })
-    expect(requestMock).toHaveBeenNthCalledWith(4, { method: 'DELETE', url: '/api/v1/auth-platforms/3' })
+    expect(requestMock).toHaveBeenNthCalledWith(3, { method: 'PATCH', url: '/api/admin/v1/auth-platforms/3/status', data: { isEnabled: YesNo.No } })
+    expect(requestMock).toHaveBeenNthCalledWith(4, { method: 'DELETE', url: '/api/admin/v1/auth-platforms/3' })
   })
 })

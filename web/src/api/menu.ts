@@ -21,8 +21,8 @@ export interface UpdateMenuInput { parentId:number|null; menuType:ManagedMenuTyp
 export interface MenuIDResult { id:number }
 export interface MenuStatusResult { id:number; isEnabled:YesNo }
 
-export function getMenus(): Promise<ManagedMenuNode[]> { return request<ManagedMenuNode[]>({ method: 'GET', url: '/api/v1/menus' }) }
-export function createMenu(input: CreateMenuInput): Promise<MenuIDResult> { return request<MenuIDResult>({ method: 'POST', url: '/api/v1/menus', data: input }) }
-export function updateMenu(id: number, input: UpdateMenuInput): Promise<MenuIDResult> { return request<MenuIDResult>({ method: 'PUT', url: `/api/v1/menus/${id}`, data: input }) }
-export function updateMenuStatus(id: number, isEnabled: YesNo): Promise<MenuStatusResult> { return request<MenuStatusResult>({ method: 'PATCH', url: `/api/v1/menus/${id}/status`, data: { isEnabled } }) }
-export function deleteMenu(id: number): Promise<MenuIDResult> { return request<MenuIDResult>({ method: 'DELETE', url: `/api/v1/menus/${id}` }) }
+export function getMenus(): Promise<ManagedMenuNode[]> { return request<ManagedMenuNode[]>({ method: 'GET', url: '/api/admin/v1/menus' }) }
+export function createMenu(input: CreateMenuInput): Promise<MenuIDResult> { return request<MenuIDResult>({ method: 'POST', url: '/api/admin/v1/menus', data: input }) }
+export function updateMenu(id: number, input: UpdateMenuInput): Promise<MenuIDResult> { return request<MenuIDResult>({ method: 'PUT', url: `/api/admin/v1/menus/${id}`, data: input }) }
+export function updateMenuStatus(id: number, isEnabled: YesNo): Promise<MenuStatusResult> { return request<MenuStatusResult>({ method: 'PATCH', url: `/api/admin/v1/menus/${id}/status`, data: { isEnabled } }) }
+export function deleteMenu(id: number): Promise<MenuIDResult> { return request<MenuIDResult>({ method: 'DELETE', url: `/api/admin/v1/menus/${id}` }) }

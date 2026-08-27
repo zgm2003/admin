@@ -16,7 +16,7 @@ describe('task demo API', () => {
     await expect(createExampleTask({ message: 'foundation-check' })).resolves.toBe(data)
     expect(mockedRequest).toHaveBeenCalledWith({
       method: 'POST',
-      url: '/api/v1/example-tasks',
+      url: '/api/admin/v1/example-tasks',
       data: { message: 'foundation-check' },
     })
   })

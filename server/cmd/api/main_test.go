@@ -106,7 +106,7 @@ func TestBuildRouterAuditsPanickingOperation(t *testing.T) {
 		RequirePermission: func(string) gin.HandlerFunc { return func(context *gin.Context) { context.Next() } },
 	})
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/example-tasks", strings.NewReader(`{"message":"panic"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/example-tasks", strings.NewReader(`{"message":"panic"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set(authclient.PlatformHeader, "admin")
 	request.Header.Set(authclient.DeviceIDHeader, "550e8400-e29b-41d4-a716-446655440000")
@@ -222,6 +222,40 @@ func (apiAuthService) CurrentUser(context.Context, auth.Identity) (user.Current,
 	return user.Current{}, nil
 }
 
+func routeSetDiff(routes []gin.RouteInfo, want map[string]int) (map[string]int, []string) {
+	remaining := make(map[string]int, len(want))
+	for route, count := range want {
+		remaining[route] = count
+	}
+	var unexpected []string
+	for _, route := range routes {
+		key := route.Method + " " + route.Path
+		if count, ok := remaining[key]; ok && count > 0 {
+			remaining[key]--
+			continue
+		}
+		unexpected = append(unexpected, key)
+	}
+	return remaining, unexpected
+}
+
+func TestRouteSetDiffRejectsUnexpectedRoutes(t *testing.T) {
+	remaining, unexpected := routeSetDiff([]gin.RouteInfo{
+		{Method: http.MethodGet, Path: "/health"},
+		{Method: http.MethodGet, Path: "/health"},
+		{Method: http.MethodGet, Path: "/api/v1/unexpected"},
+	}, map[string]int{
+		"GET /health": 1,
+		"GET /ready":  1,
+	})
+	if remaining["GET /ready"] != 1 {
+		t.Fatalf("missing route count = %d", remaining["GET /ready"])
+	}
+	if !reflect.DeepEqual(unexpected, []string{"GET /health", "GET /api/v1/unexpected"}) {
+		t.Fatalf("unexpected routes = %#v", unexpected)
+	}
+}
+
 func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -246,62 +280,89 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 	})
 
 	want := map[string]int{
-		"GET /health":                             1,
-		"GET /ready":                              1,
-		"POST /api/v1/example-tasks":              1,
-		"GET /api/v1/auth/policy":                 1,
-		"POST /api/v1/auth/register":              1,
-		"POST /api/v1/auth/login":                 1,
-		"POST /api/v1/auth/refresh":               1,
-		"POST /api/v1/auth/logout":                1,
-		"GET /api/v1/auth/me":                     1,
-		"GET /api/v1/auth-platforms":              1,
-		"GET /api/v1/auth-platforms/deployment":   1,
-		"POST /api/v1/auth-platforms":             1,
-		"PUT /api/v1/auth-platforms/:id":          1,
-		"PATCH /api/v1/auth-platforms/:id/status": 1,
-		"DELETE /api/v1/auth-platforms/:id":       1,
-		"GET /api/v1/access":                      1,
-		"GET /api/v1/menus":                       1,
-		"POST /api/v1/menus":                      1,
-		"PUT /api/v1/menus/:id":                   1,
-		"PATCH /api/v1/menus/:id/status":          1,
-		"DELETE /api/v1/menus/:id":                1,
-		"GET /api/v1/roles":                       1,
-		"POST /api/v1/roles":                      1,
-		"PUT /api/v1/roles/:id":                   1,
-		"PATCH /api/v1/roles/:id/status":          1,
-		"PATCH /api/v1/roles/:id/default":         1,
-		"DELETE /api/v1/roles/:id":                1,
-		"GET /api/v1/roles/:id/permissions":       1,
-		"PUT /api/v1/roles/:id/permissions":       1,
-		"GET /api/v1/users":                       1,
-		"GET /api/v1/users/role-options":          1,
-		"PUT /api/v1/users/:id":                   1,
-		"PATCH /api/v1/users/:id/status":          1,
-		"DELETE /api/v1/users/:id":                1,
-		"GET /api/v1/users/:id/roles":             1,
-		"PUT /api/v1/users/:id/roles":             1,
-		"GET /api/v1/operation-logs":              1,
-		"GET /api/v1/sessions":                    1,
-		"GET /api/v1/sessions/stats":              1,
-		"DELETE /api/v1/sessions/:id":             1,
-		"DELETE /api/v1/sessions":                 1,
+		"GET /health":                                   1,
+		"GET /ready":                                    1,
+		"GET /api/v1/auth/policy":                       1,
+		"POST /api/v1/auth/register":                    1,
+		"POST /api/v1/auth/login":                       1,
+		"POST /api/v1/auth/refresh":                     1,
+		"POST /api/v1/auth/logout":                      1,
+		"GET /api/v1/auth/me":                           1,
+		"GET /api/v1/access":                            1,
+		"GET /api/admin/v1/auth-platforms":              1,
+		"GET /api/admin/v1/auth-platforms/deployment":   1,
+		"POST /api/admin/v1/auth-platforms":             1,
+		"PUT /api/admin/v1/auth-platforms/:id":          1,
+		"PATCH /api/admin/v1/auth-platforms/:id/status": 1,
+		"DELETE /api/admin/v1/auth-platforms/:id":       1,
+		"GET /api/admin/v1/menus":                       1,
+		"POST /api/admin/v1/menus":                      1,
+		"PUT /api/admin/v1/menus/:id":                   1,
+		"PATCH /api/admin/v1/menus/:id/status":          1,
+		"DELETE /api/admin/v1/menus/:id":                1,
+		"GET /api/admin/v1/roles":                       1,
+		"POST /api/admin/v1/roles":                      1,
+		"PUT /api/admin/v1/roles/:id":                   1,
+		"PATCH /api/admin/v1/roles/:id/status":          1,
+		"PATCH /api/admin/v1/roles/:id/default":         1,
+		"DELETE /api/admin/v1/roles/:id":                1,
+		"GET /api/admin/v1/roles/:id/permissions":       1,
+		"PUT /api/admin/v1/roles/:id/permissions":       1,
+		"GET /api/admin/v1/users":                       1,
+		"GET /api/admin/v1/users/role-options":          1,
+		"PUT /api/admin/v1/users/:id":                   1,
+		"PATCH /api/admin/v1/users/:id/status":          1,
+		"DELETE /api/admin/v1/users/:id":                1,
+		"GET /api/admin/v1/users/:id/roles":             1,
+		"PUT /api/admin/v1/users/:id/roles":             1,
+		"GET /api/admin/v1/sessions":                    1,
+		"GET /api/admin/v1/sessions/stats":              1,
+		"DELETE /api/admin/v1/sessions/:id":             1,
+		"DELETE /api/admin/v1/sessions":                 1,
+		"GET /api/admin/v1/operation-logs":              1,
+		"POST /api/admin/v1/example-tasks":              1,
 	}
-	for _, route := range router.Routes() {
-		key := route.Method + " " + route.Path
-		if _, ok := want[key]; ok {
-			want[key]--
-		}
+	remaining, unexpected := routeSetDiff(router.Routes(), want)
+	if len(unexpected) != 0 {
+		t.Fatalf("unexpected routes = %#v; routes=%+v", unexpected, router.Routes())
 	}
-	for route, remaining := range want {
+	for route, remaining := range remaining {
 		if remaining != 0 {
 			t.Fatalf("route %s remaining count = %d; routes=%+v", route, remaining, router.Routes())
 		}
 	}
 
+	for _, oldRoute := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/v1/auth-platforms"},
+		{method: http.MethodGet, path: "/api/v1/menus"},
+		{method: http.MethodGet, path: "/api/v1/roles"},
+		{method: http.MethodGet, path: "/api/v1/users"},
+		{method: http.MethodGet, path: "/api/v1/sessions"},
+		{method: http.MethodGet, path: "/api/v1/operation-logs"},
+		{method: http.MethodPost, path: "/api/v1/example-tasks"},
+	} {
+		request := httptest.NewRequest(oldRoute.method, oldRoute.path, nil)
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusNotFound {
+			t.Fatalf("old route %s %s status=%d", oldRoute.method, oldRoute.path, recorder.Code)
+		}
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/menus", nil)
+	request.Header.Set(authclient.PlatformHeader, "portal")
+	request.Header.Set(authclient.DeviceIDHeader, "550e8400-e29b-41d4-a716-446655440000")
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/health", nil)
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden || !strings.Contains(recorder.Body.String(), `"code":10003`) {
+		t.Fatalf("non-admin response status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	recorder = httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodGet, "/health", nil)
 	request.Header.Set("Accept-Language", "en-US")
 	router.ServeHTTP(recorder, request)
 	if got := recorder.Header().Get("Content-Language"); got != "en-US" {
@@ -313,8 +374,8 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		path   string
 	}{
 		{method: http.MethodGet, path: "/api/v1/access"},
-		{method: http.MethodPost, path: "/api/v1/example-tasks"},
-		{method: http.MethodGet, path: "/api/v1/menus"},
+		{method: http.MethodPost, path: "/api/admin/v1/example-tasks"},
+		{method: http.MethodGet, path: "/api/admin/v1/menus"},
 	} {
 		recorder = httptest.NewRecorder()
 		request = httptest.NewRequest(protectedPath.method, protectedPath.path, nil)

@@ -69,3 +69,37 @@ func TestRequireRejectsInvalidPlatformAndDeviceHeaders(t *testing.T) {
 		})
 	}
 }
+
+func TestRequireAdminPlatformAllowsOnlyAdmin(t *testing.T) {
+	tests := []struct {
+		platform   string
+		wantStatus int
+		wantCalls  int
+	}{
+		{platform: "admin", wantStatus: http.StatusNoContent, wantCalls: 1},
+		{platform: "portal", wantStatus: http.StatusForbidden, wantCalls: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.platform, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			calls := 0
+			router := gin.New()
+			router.Use(authclient.Require(), authclient.RequireAdminPlatform())
+			router.GET("/", func(context *gin.Context) {
+				calls++
+				context.Status(http.StatusNoContent)
+			})
+			request := httptest.NewRequest(http.MethodGet, "/", nil)
+			request.Header.Set(authclient.PlatformHeader, tt.platform)
+			request.Header.Set(authclient.DeviceIDHeader, "550e8400-e29b-41d4-a716-446655440000")
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, request)
+			if recorder.Code != tt.wantStatus || calls != tt.wantCalls {
+				t.Fatalf("status=%d calls=%d body=%s", recorder.Code, calls, recorder.Body.String())
+			}
+			if tt.wantStatus == http.StatusForbidden && recorder.Body.String() != `{"code":10003,"data":null,"message":"无权执行该操作"}` {
+				t.Fatalf("body=%s", recorder.Body.String())
+			}
+		})
+	}
+}

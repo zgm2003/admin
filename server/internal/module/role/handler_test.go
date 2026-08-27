@@ -20,7 +20,7 @@ func TestRoleHandlerListParsesOnlyTheExactQuery(t *testing.T) {
 	service := &roleHTTPService{listResult: pagination.Result[role.ListItem]{
 		List: []role.ListItem{}, Total: 0, Page: 1, PageSize: 20,
 	}}
-	recorder := serveRoleRequest(t, service, http.MethodGet, "/api/v1/roles?page=1&pageSize=20&keyword=test&isEnabled=0", nil)
+	recorder := serveRoleRequest(t, service, http.MethodGet, "/api/admin/v1/roles?page=1&pageSize=20&keyword=test&isEnabled=0", nil)
 	assertRoleEnvelope(t, recorder, http.StatusOK, 0)
 	if service.listCalls != 1 || service.listQuery.Page != 1 || service.listQuery.PageSize != 20 ||
 		service.listQuery.Keyword != "test" || service.listQuery.IsEnabled == nil || *service.listQuery.IsEnabled != yesno.No {
@@ -28,12 +28,12 @@ func TestRoleHandlerListParsesOnlyTheExactQuery(t *testing.T) {
 	}
 
 	for _, path := range []string{
-		"/api/v1/roles",
-		"/api/v1/roles?page=0&pageSize=20",
-		"/api/v1/roles?page=1&pageSize=101",
-		"/api/v1/roles?page=1&pageSize=20&unknown=1",
-		"/api/v1/roles?page=1&page=2&pageSize=20",
-		"/api/v1/roles?page=1&pageSize=20&isEnabled=2",
+		"/api/admin/v1/roles",
+		"/api/admin/v1/roles?page=0&pageSize=20",
+		"/api/admin/v1/roles?page=1&pageSize=101",
+		"/api/admin/v1/roles?page=1&pageSize=20&unknown=1",
+		"/api/admin/v1/roles?page=1&page=2&pageSize=20",
+		"/api/admin/v1/roles?page=1&pageSize=20&isEnabled=2",
 	} {
 		invalidService := &roleHTTPService{}
 		responseRecorder := serveRoleRequest(t, invalidService, http.MethodGet, path, nil)
@@ -52,12 +52,12 @@ func TestRoleHandlerMutationsUseClosedContracts(t *testing.T) {
 		body   []byte
 		status int
 	}{
-		{method: http.MethodPost, path: "/api/v1/roles", body: []byte(`{"code":"tester","name":"Tester"}`), status: http.StatusCreated},
-		{method: http.MethodPut, path: "/api/v1/roles/7", body: []byte(`{"name":"Updated"}`), status: http.StatusOK},
-		{method: http.MethodPatch, path: "/api/v1/roles/7/status", body: []byte(`{"isEnabled":0}`), status: http.StatusOK},
-		{method: http.MethodPatch, path: "/api/v1/roles/7/default", status: http.StatusOK},
-		{method: http.MethodDelete, path: "/api/v1/roles/7", status: http.StatusOK},
-		{method: http.MethodPut, path: "/api/v1/roles/7/permissions", body: []byte(`{"menuIds":[2,3]}`), status: http.StatusOK},
+		{method: http.MethodPost, path: "/api/admin/v1/roles", body: []byte(`{"code":"tester","name":"Tester"}`), status: http.StatusCreated},
+		{method: http.MethodPut, path: "/api/admin/v1/roles/7", body: []byte(`{"name":"Updated"}`), status: http.StatusOK},
+		{method: http.MethodPatch, path: "/api/admin/v1/roles/7/status", body: []byte(`{"isEnabled":0}`), status: http.StatusOK},
+		{method: http.MethodPatch, path: "/api/admin/v1/roles/7/default", status: http.StatusOK},
+		{method: http.MethodDelete, path: "/api/admin/v1/roles/7", status: http.StatusOK},
+		{method: http.MethodPut, path: "/api/admin/v1/roles/7/permissions", body: []byte(`{"menuIds":[2,3]}`), status: http.StatusOK},
 	}
 	for _, request := range tests {
 		recorder := serveRoleRequest(t, service, request.method, request.path, request.body)
@@ -76,14 +76,14 @@ func TestRoleHandlerMutationsUseClosedContracts(t *testing.T) {
 		path   string
 		body   []byte
 	}{
-		{method: http.MethodPost, path: "/api/v1/roles", body: []byte(`{"code":"tester"}`)},
-		{method: http.MethodPost, path: "/api/v1/roles", body: []byte(`{"code":"tester","name":"Tester","msg":"old"}`)},
-		{method: http.MethodPut, path: "/api/v1/roles/0", body: []byte(`{"name":"Tester"}`)},
-		{method: http.MethodPatch, path: "/api/v1/roles/7/status", body: []byte(`{"isEnabled":2}`)},
-		{method: http.MethodPatch, path: "/api/v1/roles/7/default", body: []byte(`{}`)},
-		{method: http.MethodDelete, path: "/api/v1/roles/7", body: []byte(`{}`)},
-		{method: http.MethodPut, path: "/api/v1/roles/7/permissions", body: []byte(`{"menuIds":null}`)},
-		{method: http.MethodPut, path: "/api/v1/roles/7/permissions", body: []byte(`{"menuIds":[2,2]}`)},
+		{method: http.MethodPost, path: "/api/admin/v1/roles", body: []byte(`{"code":"tester"}`)},
+		{method: http.MethodPost, path: "/api/admin/v1/roles", body: []byte(`{"code":"tester","name":"Tester","msg":"old"}`)},
+		{method: http.MethodPut, path: "/api/admin/v1/roles/0", body: []byte(`{"name":"Tester"}`)},
+		{method: http.MethodPatch, path: "/api/admin/v1/roles/7/status", body: []byte(`{"isEnabled":2}`)},
+		{method: http.MethodPatch, path: "/api/admin/v1/roles/7/default", body: []byte(`{}`)},
+		{method: http.MethodDelete, path: "/api/admin/v1/roles/7", body: []byte(`{}`)},
+		{method: http.MethodPut, path: "/api/admin/v1/roles/7/permissions", body: []byte(`{"menuIds":null}`)},
+		{method: http.MethodPut, path: "/api/admin/v1/roles/7/permissions", body: []byte(`{"menuIds":[2,2]}`)},
 	}
 	for _, request := range invalid {
 		recorder := serveRoleRequest(t, &roleHTTPService{}, request.method, request.path, request.body)
@@ -96,7 +96,7 @@ func TestRoleRoutesBindExactPermissions(t *testing.T) {
 	router := gin.New()
 	permissions := make([]string, 0)
 	pass := func(context *gin.Context) { context.Next() }
-	role.RegisterRoutes(router.Group("/api/v1"), role.NewHandler(&roleHTTPService{}), pass, func(code string) gin.HandlerFunc {
+	role.RegisterRoutes(router.Group("/api/admin/v1"), role.NewHandler(&roleHTTPService{}), pass, func(code string) gin.HandlerFunc {
 		permissions = append(permissions, code)
 		return pass
 	})
@@ -167,7 +167,7 @@ func serveRoleRequest(t *testing.T, service *roleHTTPService, method, path strin
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	pass := func(context *gin.Context) { context.Next() }
-	role.RegisterRoutes(router.Group("/api/v1"), role.NewHandler(service), pass, func(string) gin.HandlerFunc { return pass })
+	role.RegisterRoutes(router.Group("/api/admin/v1"), role.NewHandler(service), pass, func(string) gin.HandlerFunc { return pass })
 	request := httptest.NewRequest(method, path, bytes.NewReader(body))
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")

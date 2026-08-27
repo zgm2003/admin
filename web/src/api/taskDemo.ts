@@ -11,7 +11,7 @@ export interface CreatedTask {
 export async function createExampleTask(input: CreateExampleTaskInput): Promise<CreatedTask> {
   return request<CreatedTask>({
     method: 'POST',
-    url: '/api/v1/example-tasks',
+    url: '/api/admin/v1/example-tasks',
     data: input,
   })
 }

@@ -28,13 +28,13 @@ func TestHandlerUserSuccessContracts(t *testing.T) {
 		roleCount:   2,
 	}
 	tests := []struct{ method, path, body string }{
-		{http.MethodGet, "/api/v1/users?page=1&pageSize=20", ""},
-		{http.MethodGet, "/api/v1/users/role-options", ""},
-		{http.MethodPut, "/api/v1/users/7", `{"username":"alice_new"}`},
-		{http.MethodPatch, "/api/v1/users/7/status", `{"isEnabled":0}`},
-		{http.MethodDelete, "/api/v1/users/7", ""},
-		{http.MethodGet, "/api/v1/users/7/roles", ""},
-		{http.MethodPut, "/api/v1/users/7/roles", `{"roleIds":[5,2,5]}`},
+		{http.MethodGet, "/api/admin/v1/users?page=1&pageSize=20", ""},
+		{http.MethodGet, "/api/admin/v1/users/role-options", ""},
+		{http.MethodPut, "/api/admin/v1/users/7", `{"username":"alice_new"}`},
+		{http.MethodPatch, "/api/admin/v1/users/7/status", `{"isEnabled":0}`},
+		{http.MethodDelete, "/api/admin/v1/users/7", ""},
+		{http.MethodGet, "/api/admin/v1/users/7/roles", ""},
+		{http.MethodPut, "/api/admin/v1/users/7/roles", `{"roleIds":[5,2,5]}`},
 	}
 	for _, test := range tests {
 		recorder := serveUserRequest(t, service, test.method, test.path, test.body, true)
@@ -50,20 +50,20 @@ func TestHandlerUserRejectsMalformedQueriesIDsBodiesAndIdentity(t *testing.T) {
 		method, path, body string
 		actor              bool
 	}{
-		{http.MethodGet, "/api/v1/users", "", true},
-		{http.MethodGet, "/api/v1/users?page=1&pageSize=20&unknown=1", "", true},
-		{http.MethodGet, "/api/v1/users?page=1&page=2&pageSize=20", "", true},
-		{http.MethodGet, "/api/v1/users?page=1&pageSize=20&isEnabled=2", "", true},
-		{http.MethodGet, "/api/v1/users?page=1&pageSize=20&roleId=0", "", true},
-		{http.MethodPut, "/api/v1/users/0", `{"username":"alice"}`, true},
-		{http.MethodPut, "/api/v1/users/+7", `{"username":"alice"}`, true},
-		{http.MethodPut, "/api/v1/users/7", `{}`, true},
-		{http.MethodPut, "/api/v1/users/7", `{"username":"alice","email":"x"}`, true},
-		{http.MethodPatch, "/api/v1/users/7/status", `{"isEnabled":2}`, true},
-		{http.MethodDelete, "/api/v1/users/7", `{}`, true},
-		{http.MethodPut, "/api/v1/users/7/roles", `{}`, true},
-		{http.MethodPut, "/api/v1/users/7/roles", `{"roleIds":[0]}`, true},
-		{http.MethodPut, "/api/v1/users/7", `{"username":"alice"}`, false},
+		{http.MethodGet, "/api/admin/v1/users", "", true},
+		{http.MethodGet, "/api/admin/v1/users?page=1&pageSize=20&unknown=1", "", true},
+		{http.MethodGet, "/api/admin/v1/users?page=1&page=2&pageSize=20", "", true},
+		{http.MethodGet, "/api/admin/v1/users?page=1&pageSize=20&isEnabled=2", "", true},
+		{http.MethodGet, "/api/admin/v1/users?page=1&pageSize=20&roleId=0", "", true},
+		{http.MethodPut, "/api/admin/v1/users/0", `{"username":"alice"}`, true},
+		{http.MethodPut, "/api/admin/v1/users/+7", `{"username":"alice"}`, true},
+		{http.MethodPut, "/api/admin/v1/users/7", `{}`, true},
+		{http.MethodPut, "/api/admin/v1/users/7", `{"username":"alice","email":"x"}`, true},
+		{http.MethodPatch, "/api/admin/v1/users/7/status", `{"isEnabled":2}`, true},
+		{http.MethodDelete, "/api/admin/v1/users/7", `{}`, true},
+		{http.MethodPut, "/api/admin/v1/users/7/roles", `{}`, true},
+		{http.MethodPut, "/api/admin/v1/users/7/roles", `{"roleIds":[0]}`, true},
+		{http.MethodPut, "/api/admin/v1/users/7", `{"username":"alice"}`, false},
 	}
 	for _, test := range tests {
 		service := &userHTTPService{}
@@ -84,7 +84,7 @@ func TestRegisterRoutesUsesExactUserPermissions(t *testing.T) {
 	router := gin.New()
 	permissions := make([]string, 0)
 	pass := func(context *gin.Context) { context.Next() }
-	user.RegisterRoutes(router.Group("/api/v1"), user.NewHandler(&userHTTPService{}, func(*gin.Context) (int64, bool) { return 41, true }), pass, func(code string) gin.HandlerFunc {
+	user.RegisterRoutes(router.Group("/api/admin/v1"), user.NewHandler(&userHTTPService{}, func(*gin.Context) (int64, bool) { return 41, true }), pass, func(code string) gin.HandlerFunc {
 		permissions = append(permissions, code)
 		return pass
 	})
@@ -149,7 +149,7 @@ func serveUserRequest(t *testing.T, service *userHTTPService, method, path, body
 	router := gin.New()
 	pass := func(context *gin.Context) { context.Next() }
 	actorReader := func(*gin.Context) (int64, bool) { return 41, actor }
-	user.RegisterRoutes(router.Group("/api/v1"), user.NewHandler(service, actorReader), pass, func(string) gin.HandlerFunc { return pass })
+	user.RegisterRoutes(router.Group("/api/admin/v1"), user.NewHandler(service, actorReader), pass, func(string) gin.HandlerFunc { return pass })
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
 	if body != "" {
 		request.Header.Set("Content-Type", "application/json")

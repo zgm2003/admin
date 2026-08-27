@@ -11,17 +11,17 @@ export interface UpdateAuthPlatformInput { name:string; accessTTLSeconds:number;
 export interface AuthPlatformStatusResult { id:number; isEnabled:YesNo }
 
 export async function getAuthPlatforms(query: AuthPlatformListQuery): Promise<PageResult<AuthPlatformListItem>> {
-  return request<PageResult<AuthPlatformListItem>>({ method: 'GET', url: '/api/v1/auth-platforms', params: query })
+  return request<PageResult<AuthPlatformListItem>>({ method: 'GET', url: '/api/admin/v1/auth-platforms', params: query })
 }
 
 export async function getAuthPlatformDeployment(): Promise<AuthPlatformDeployment> {
-  return request<AuthPlatformDeployment>({ method: 'GET', url: '/api/v1/auth-platforms/deployment' })
+  return request<AuthPlatformDeployment>({ method: 'GET', url: '/api/admin/v1/auth-platforms/deployment' })
 }
 
 export async function createAuthPlatform(input: CreateAuthPlatformInput): Promise<{ id: number }> {
   return request<{ id: number }>({
     method: 'POST',
-    url: '/api/v1/auth-platforms',
+    url: '/api/admin/v1/auth-platforms',
     data: {
       code: input.code,
       name: input.name,
@@ -41,7 +41,7 @@ export async function createAuthPlatform(input: CreateAuthPlatformInput): Promis
 export async function updateAuthPlatform(id: number, input: UpdateAuthPlatformInput): Promise<Record<string, never>> {
   return request<Record<string, never>>({
     method: 'PUT',
-    url: `/api/v1/auth-platforms/${id}`,
+    url: `/api/admin/v1/auth-platforms/${id}`,
     data: {
       name: input.name,
       accessTTLSeconds: input.accessTTLSeconds,
@@ -57,9 +57,9 @@ export async function updateAuthPlatform(id: number, input: UpdateAuthPlatformIn
 }
 
 export async function updateAuthPlatformStatus(id: number, isEnabled: YesNo): Promise<AuthPlatformStatusResult> {
-  return request<AuthPlatformStatusResult>({ method: 'PATCH', url: `/api/v1/auth-platforms/${id}/status`, data: { isEnabled } })
+  return request<AuthPlatformStatusResult>({ method: 'PATCH', url: `/api/admin/v1/auth-platforms/${id}/status`, data: { isEnabled } })
 }
 
 export async function deleteAuthPlatform(id: number): Promise<Record<string, never>> {
-  return request<Record<string, never>>({ method: 'DELETE', url: `/api/v1/auth-platforms/${id}` })
+  return request<Record<string, never>>({ method: 'DELETE', url: `/api/admin/v1/auth-platforms/${id}` })
 }

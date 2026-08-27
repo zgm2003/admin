@@ -16,7 +16,7 @@ func validTaskPayload() TaskPayload {
 		EventID:       "event-1",
 		RequestID:     "request-1",
 		Method:        "PUT",
-		Route:         "/api/v1/users/:id",
+		Route:         "/api/admin/v1/users/:id",
 		Module:        "user",
 		Action:        "user.update",
 		ClientIP:      "127.0.0.1",

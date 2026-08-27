@@ -23,7 +23,7 @@ describe('menu API', () => {
   it('loads the managed menu tree', async () => {
     requestMock.mockResolvedValue([])
     await expect(getMenus()).resolves.toEqual([])
-    expect(requestMock).toHaveBeenCalledWith({ method: 'GET', url: '/api/v1/menus' })
+    expect(requestMock).toHaveBeenCalledWith({ method: 'GET', url: '/api/admin/v1/menus' })
 
     requestMock.mockResolvedValue(null)
     await expect(getMenus()).resolves.toBeNull()
@@ -45,7 +45,7 @@ describe('menu API', () => {
     }
     requestMock.mockResolvedValue({ id: 7 })
     await expect(createMenu(input)).resolves.toEqual({ id: 7 })
-    expect(requestMock).toHaveBeenCalledWith({ method: 'POST', url: '/api/v1/menus', data: input })
+    expect(requestMock).toHaveBeenCalledWith({ method: 'POST', url: '/api/admin/v1/menus', data: input })
   })
 
   it('updates a menu without code or status', async () => {
@@ -62,19 +62,19 @@ describe('menu API', () => {
     }
     requestMock.mockResolvedValue({ id: 7 })
     await expect(updateMenu(7, input)).resolves.toEqual({ id: 7 })
-    expect(requestMock).toHaveBeenCalledWith({ method: 'PUT', url: '/api/v1/menus/7', data: input })
+    expect(requestMock).toHaveBeenCalledWith({ method: 'PUT', url: '/api/admin/v1/menus/7', data: input })
   })
 
   it('updates status with only isEnabled', async () => {
     requestMock.mockResolvedValue({ id: 7, isEnabled: 0 })
     await expect(updateMenuStatus(7, YesNo.No)).resolves.toEqual({ id: 7, isEnabled: 0 })
-    expect(requestMock).toHaveBeenCalledWith({ method: 'PATCH', url: '/api/v1/menus/7/status', data: { isEnabled: YesNo.No } })
+    expect(requestMock).toHaveBeenCalledWith({ method: 'PATCH', url: '/api/admin/v1/menus/7/status', data: { isEnabled: YesNo.No } })
   })
 
   it('deletes without a request body and returns the backend result', async () => {
     requestMock.mockResolvedValue({ id: 7 })
     await expect(deleteMenu(7)).resolves.toEqual({ id: 7 })
-    expect(requestMock).toHaveBeenCalledWith({ method: 'DELETE', url: '/api/v1/menus/7' })
+    expect(requestMock).toHaveBeenCalledWith({ method: 'DELETE', url: '/api/admin/v1/menus/7' })
 
     const result = { id: 7, extra: true }
     requestMock.mockResolvedValue(result)

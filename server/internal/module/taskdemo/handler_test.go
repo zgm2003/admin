@@ -32,7 +32,7 @@ func TestCreateTaskReturnsAcceptedAndPassesRequestContext(t *testing.T) {
 	service := &submissionService{created: taskdemo.Created{TaskID: "task-1"}}
 	router := taskRouter(service)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/example-tasks", strings.NewReader(`{"message":"foundation-check"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/example-tasks", strings.NewReader(`{"message":"foundation-check"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer token")
 
@@ -64,7 +64,7 @@ func TestCreateTaskRejectsInvalidInputWithoutCallingService(t *testing.T) {
 			service := &submissionService{err: errors.New("must not be called")}
 			router := taskRouter(service)
 			recorder := httptest.NewRecorder()
-			request := httptest.NewRequest(http.MethodPost, "/api/v1/example-tasks", strings.NewReader(body))
+			request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/example-tasks", strings.NewReader(body))
 			request.Header.Set("Content-Type", "application/json")
 			request.Header.Set("Authorization", "Bearer token")
 
@@ -84,7 +84,7 @@ func TestCreateTaskRequiresAuthentication(t *testing.T) {
 	service := &submissionService{}
 	router := taskRouter(service)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/example-tasks", strings.NewReader(`{"message":"foundation-check"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/example-tasks", strings.NewReader(`{"message":"foundation-check"}`))
 	request.Header.Set("Content-Type", "application/json")
 
 	router.ServeHTTP(recorder, request)
@@ -104,6 +104,6 @@ func taskRouter(service *submissionService) *gin.Engine {
 		}
 		context.Next()
 	}
-	taskdemo.RegisterRoutes(router.Group("/api/v1"), taskdemo.NewHandler(service), authenticate)
+	taskdemo.RegisterRoutes(router.Group("/api/admin/v1"), taskdemo.NewHandler(service), authenticate)
 	return router
 }

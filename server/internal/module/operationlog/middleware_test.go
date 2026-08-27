@@ -26,13 +26,19 @@ func (e *failingEnqueuer) Enqueue(_ context.Context, payload TaskPayload) error 
 }
 
 func TestRulesMatchOnlyExplicitMutations(t *testing.T) {
-	if rule, ok := FindRule(http.MethodPut, "/api/v1/users/:id"); !ok || rule.Action != "user.update" {
+	if rule, ok := FindRule(http.MethodPut, "/api/admin/v1/users/:id"); !ok || rule.Action != "user.update" {
 		t.Fatalf("user update rule = %+v,%v", rule, ok)
 	}
-	if rule, ok := FindRule(http.MethodDelete, "/api/v1/sessions/:id"); !ok || rule.Action != "session.revoke" {
+	if _, ok := FindRule(http.MethodPut, "/api/v1/users/:id"); ok {
+		t.Fatal("legacy user update rule remains registered")
+	}
+	if _, ok := FindRule(http.MethodPost, "/api/v1/auth/login"); !ok {
+		t.Fatal("shared login audit rule is missing")
+	}
+	if rule, ok := FindRule(http.MethodDelete, "/api/admin/v1/sessions/:id"); !ok || rule.Action != "session.revoke" {
 		t.Fatalf("session revoke rule = %+v,%v", rule, ok)
 	}
-	for _, route := range []string{"/api/v1/users", "/api/v1/access", "/api/v1/users/:id/roles"} {
+	for _, route := range []string{"/api/admin/v1/users", "/api/v1/access", "/api/admin/v1/users/:id/roles"} {
 		if _, ok := FindRule(http.MethodGet, route); ok {
 			t.Fatalf("read route %s was registered as operation", route)
 		}
@@ -63,11 +69,11 @@ func TestMiddlewareKeepsBusinessStatusWhenEnqueueFails(t *testing.T) {
 	enqueuer := &failingEnqueuer{}
 	router := gin.New()
 	router.Use(projectmiddleware.RequestID(), Middleware(logger, enqueuer))
-	router.PUT("/api/v1/users/:id", func(context *gin.Context) {
+	router.PUT("/api/admin/v1/users/:id", func(context *gin.Context) {
 		context.JSON(http.StatusCreated, gin.H{"code": 0, "data": gin.H{"id": 7}, "message": "ok"})
 	})
 
-	request := httptest.NewRequest(http.MethodPut, "/api/v1/users/7", strings.NewReader(`{"password":"should-not-leak"}`))
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/users/7", strings.NewReader(`{"password":"should-not-leak"}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
@@ -96,12 +102,12 @@ func TestMiddlewareGeneratesDistinctEventIDsForRepeatedRequestID(t *testing.T) {
 	enqueuer := &failingEnqueuer{}
 	router := gin.New()
 	router.Use(projectmiddleware.RequestID(), Middleware(slog.Default(), enqueuer))
-	router.PUT("/api/v1/users/:id", func(context *gin.Context) {
+	router.PUT("/api/admin/v1/users/:id", func(context *gin.Context) {
 		context.JSON(http.StatusOK, gin.H{"code": 0, "data": nil, "message": "ok"})
 	})
 
 	for _, id := range []string{"7", "8"} {
-		request := httptest.NewRequest(http.MethodPut, "/api/v1/users/"+id, strings.NewReader(`{"username":"member"}`))
+		request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/users/"+id, strings.NewReader(`{"username":"member"}`))
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set(projectmiddleware.RequestIDHeader, "client-reused-request")
 		router.ServeHTTP(httptest.NewRecorder(), request)
@@ -150,7 +156,7 @@ func TestSummaryWriterBoundsCapturedResponse(t *testing.T) {
 func TestReadRequestSummaryMarksLargeBodyAndPreservesRequest(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	original := []byte(`{"visible":"` + strings.Repeat("x", maxSummaryBytes) + `"}`)
-	request := httptest.NewRequest(http.MethodPut, "/api/v1/users/7", bytes.NewReader(original))
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/users/7", bytes.NewReader(original))
 	context, _ := gin.CreateTestContext(httptest.NewRecorder())
 	context.Request = request
 
@@ -172,10 +178,10 @@ func TestMiddlewareSanitizesCapturedResponse(t *testing.T) {
 	enqueuer := &failingEnqueuer{}
 	router := gin.New()
 	router.Use(projectmiddleware.RequestID(), Middleware(slog.Default(), enqueuer))
-	router.PUT("/api/v1/users/:id", func(context *gin.Context) {
+	router.PUT("/api/admin/v1/users/:id", func(context *gin.Context) {
 		context.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"secretKey": "must-not-leak"}, "message": "ok"})
 	})
-	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/api/v1/users/7", strings.NewReader(`{"username":"member"}`)))
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/api/admin/v1/users/7", strings.NewReader(`{"username":"member"}`)))
 
 	if len(enqueuer.payloads) != 1 {
 		t.Fatalf("payload count = %d", len(enqueuer.payloads))

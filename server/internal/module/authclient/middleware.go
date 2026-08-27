@@ -49,6 +49,21 @@ func FromContext(context *gin.Context) (Client, bool) {
 	return client, ok
 }
 
+func RequireAdminPlatform() gin.HandlerFunc {
+	return func(context *gin.Context) {
+		client, ok := FromContext(context)
+		if !ok {
+			response.Fail(context, apperror.Internal(fmt.Errorf("authentication client context is missing")))
+			return
+		}
+		if client.Platform != "admin" {
+			response.Fail(context, apperror.Forbidden(fmt.Errorf("authentication platform cannot access admin API")))
+			return
+		}
+		context.Next()
+	}
+}
+
 func exactHeader(context *gin.Context, name string) (string, error) {
 	values := make([]string, 0, 1)
 	for key, entries := range context.Request.Header {

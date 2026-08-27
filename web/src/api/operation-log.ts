@@ -5,5 +5,5 @@ export interface OperationLogItem { id: number; requestId: string; userId: numbe
 export interface OperationLogPage { list: OperationLogItem[]; total: number; page: number; pageSize: number }
 
 export async function getOperationLogs(query: OperationLogListQuery): Promise<OperationLogPage> {
-  return request<OperationLogPage>({ method: 'GET', url: '/api/v1/operation-logs', params: query })
+  return request<OperationLogPage>({ method: 'GET', url: '/api/admin/v1/operation-logs', params: query })
 }

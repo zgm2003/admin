@@ -20,29 +20,29 @@ export interface UserRoleOptions { roles: UserRoleSummary[] }
 export interface UserRoleResult { id: number; roleCount: number }
 
 export async function getUsers(query: UserListQuery): Promise<UserPage> {
-  return request<UserPage>({ method: 'GET', url: '/api/v1/users', params: query })
+  return request<UserPage>({ method: 'GET', url: '/api/admin/v1/users', params: query })
 }
 
 export async function getUserRoleOptions(): Promise<UserRoleOptions> {
-  return request<UserRoleOptions>({ method: 'GET', url: '/api/v1/users/role-options' })
+  return request<UserRoleOptions>({ method: 'GET', url: '/api/admin/v1/users/role-options' })
 }
 
 export async function updateUser(id: number, input: UpdateUserInput): Promise<UpdatedUsername> {
-  return request<UpdatedUsername>({ method: 'PUT', url: `/api/v1/users/${id}`, data: { username: input.username } })
+  return request<UpdatedUsername>({ method: 'PUT', url: `/api/admin/v1/users/${id}`, data: { username: input.username } })
 }
 
 export async function updateUserStatus(id: number, isEnabled: YesNo): Promise<UserStatusResult> {
-  return request<UserStatusResult>({ method: 'PATCH', url: `/api/v1/users/${id}/status`, data: { isEnabled } })
+  return request<UserStatusResult>({ method: 'PATCH', url: `/api/admin/v1/users/${id}/status`, data: { isEnabled } })
 }
 
 export async function deleteUser(id: number): Promise<Record<string, never>> {
-  return request<Record<string, never>>({ method: 'DELETE', url: `/api/v1/users/${id}` })
+  return request<Record<string, never>>({ method: 'DELETE', url: `/api/admin/v1/users/${id}` })
 }
 
 export async function getUserRoles(id: number): Promise<UserRolesResponse> {
-  return request<UserRolesResponse>({ method: 'GET', url: `/api/v1/users/${id}/roles` })
+  return request<UserRolesResponse>({ method: 'GET', url: `/api/admin/v1/users/${id}/roles` })
 }
 
 export async function updateUserRoles(id: number, input: UpdateUserRolesInput): Promise<UserRoleResult> {
-  return request<UserRoleResult>({ method: 'PUT', url: `/api/v1/users/${id}/roles`, data: { roleIds: input.roleIds } })
+  return request<UserRoleResult>({ method: 'PUT', url: `/api/admin/v1/users/${id}/roles`, data: { roleIds: input.roleIds } })
 }

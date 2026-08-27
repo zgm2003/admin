@@ -7,14 +7,14 @@ export interface SessionStats { activeTotal: number; platforms: Record<string, n
 export interface SessionRevokeResult { revoked: number; skippedCurrent: number; skippedRevoked: number }
 
 export async function getSessions(query: SessionListQuery): Promise<SessionPage> {
-  return request<SessionPage>({ method: 'GET', url: '/api/v1/sessions', params: query })
+  return request<SessionPage>({ method: 'GET', url: '/api/admin/v1/sessions', params: query })
 }
 export async function getSessionStats(): Promise<SessionStats> {
-  return request<SessionStats>({ method: 'GET', url: '/api/v1/sessions/stats' })
+  return request<SessionStats>({ method: 'GET', url: '/api/admin/v1/sessions/stats' })
 }
 export async function revokeSession(id: number): Promise<SessionRevokeResult> {
-  return request<SessionRevokeResult>({ method: 'DELETE', url: '/api/v1/sessions/' + id })
+  return request<SessionRevokeResult>({ method: 'DELETE', url: '/api/admin/v1/sessions/' + id })
 }
 export async function revokeSessions(ids: number[]): Promise<SessionRevokeResult> {
-  return request<SessionRevokeResult>({ method: 'DELETE', url: '/api/v1/sessions', data: { ids } })
+  return request<SessionRevokeResult>({ method: 'DELETE', url: '/api/admin/v1/sessions', data: { ids } })
 }

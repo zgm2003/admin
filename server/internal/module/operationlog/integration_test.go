@@ -25,7 +25,7 @@ func TestOperationLogWorkerPersistsIdempotently(t *testing.T) {
 	platform := "admin"
 	payload := operationlog.TaskPayload{
 		SchemaVersion: 2, EventID: "operation-event-1", RequestID: "operation-integration-1", UserID: &userID, SessionID: &sessionID,
-		Platform: &platform, Method: "PUT", Route: "/api/v1/users/:id", Module: "user", Action: "user.update",
+		Platform: &platform, Method: "PUT", Route: "/api/admin/v1/users/:id", Module: "user", Action: "user.update",
 		ClientIP: "127.0.0.1", UserAgent: "integration", StatusCode: 200, IsSuccess: 1, LatencyMs: 4,
 		RequestData: operationlog.JSON(`{"password":"***"}`), ResponseData: operationlog.JSON(`{"code":0}`),
 		CreatedAt: time.Now().UTC().Truncate(time.Microsecond),
