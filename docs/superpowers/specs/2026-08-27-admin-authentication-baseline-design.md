@@ -2,7 +2,7 @@
 
 日期：2026-08-27
 
-状态：设计决策已确认，文档待审阅
+状态：设计已确认，实施计划已编写；等待 API 命名空间基线先行实施
 
 ## 1. 目的
 
@@ -22,6 +22,10 @@
   `allowRegister=1`、Admin 根据 Policy 展示注册入口和允许直接进入注册页的条款；
 - 保留上述设计未被本文件明确修改的密码摘要、Token、Cookie、会话、Redis、Origin、设备、
   平台 Header、权限缓存和安全边界。
+
+本设计依赖 `2026-08-27-admin-api-namespace-baseline-design.md`。共享认证和 `/access` 继续使用
+`/api/v1`；用户、角色、菜单、认证平台、会话与操作日志等 Admin 管理接口使用
+`/api/admin/v1`。必须先完成命名空间基线，再执行本设计的实施计划。
 
 ## 2. 已确认决策
 
@@ -72,7 +76,7 @@
 - 后端登录请求、Service 和 Repository 改为按规范化邮箱认证；
 - 内置 `admin` 平台注册开关的数据库迁移、基础数据校验、管理接口约束和缓存协调；
 - `user_account.phone` 可空字段及数据库契约；
-- `/api/v1/auth/me`、用户列表、用户角色摘要和用户编辑协议中的手机号；
+- `/api/v1/auth/me`、Admin 用户列表、用户角色摘要和用户编辑协议中的手机号；
 - Admin 用户管理页面展示和编辑手机号；
 - 相关后端、前端、真实 PostgreSQL 和 Redis 定向测试。
 
@@ -321,7 +325,7 @@ GET /api/v1/auth/me
 
 ### 8.3 用户列表与角色摘要
 
-`GET /api/v1/users` 的每个列表项增加：
+`GET /api/admin/v1/users` 的每个列表项增加：
 
 ```json
 {
@@ -334,10 +338,10 @@ GET /api/v1/auth/me
 
 ### 8.4 用户编辑
 
-现有接口路径保持：
+命名空间基线完成后的管理接口路径固定为：
 
 ```text
-PUT /api/v1/users/:id
+PUT /api/admin/v1/users/:id
 ```
 
 请求精确为：
@@ -429,12 +433,13 @@ Admin 登录页不再读取公开 Policy；提交登录时由后端按现有流�
 
 实施顺序固定为：
 
-1. 为 `user_account` 增加可空 `phone` 并验证数据库类型；
-2. 幂等迁移内置 `admin.allow_register`，递增真实变化的策略版本；
-3. Redis 可用后删除 Admin Policy 快照，后续读取按 PostgreSQL 权威数据重建；
-4. 后端上线邮箱登录契约及手机号 DTO；
-5. 同一次交付上线 Admin 前端邮箱表单并删除注册入口；
-6. 完整验证后才允许使用新版本。
+1. 完成并完整验证 Admin API 命名空间基线；
+2. 为 `user_account` 增加可空 `phone` 并验证数据库类型；
+3. 幂等迁移内置 `admin.allow_register`，递增真实变化的策略版本；
+4. Redis 可用后删除 Admin Policy 快照，后续读取按 PostgreSQL 权威数据重建；
+5. 后端上线邮箱登录契约及手机号 DTO；
+6. 同一次交付上线 Admin 前端邮箱表单并删除注册入口；
+7. 完整验证后才允许使用新版本。
 
 登录请求是有意的破坏性协议变更：旧 `{ username, password }` 请求会失败，不提供双字段过渡。
 因此前后端必须作为同一发布单元部署。现有会话、Refresh Token 和已登录管理员不强制退出；
