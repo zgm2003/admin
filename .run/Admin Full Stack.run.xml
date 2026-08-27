@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Admin Full Stack" type="CompoundRunConfigurationType">
+    <toRun name="Admin API" type="GoApplicationRunConfiguration" />
+    <toRun name="Admin Worker" type="GoApplicationRunConfiguration" />
+    <toRun name="Admin Web" type="js.build_tools.npm" />
+    <method v="2" />
+  </configuration>
+</component>

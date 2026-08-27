@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Admin Worker" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="admin" />
+    <working_directory value="$PROJECT_DIR$/server" />
+    <parameters value="" />
+    <kind value="PACKAGE" />
+    <package value="admin/server/cmd/worker" />
+    <directory value="$PROJECT_DIR$/server" />
+    <filePath value="$PROJECT_DIR$/server" />
+    <method v="2" />
+  </configuration>
+</component>
