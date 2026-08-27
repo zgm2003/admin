@@ -98,7 +98,7 @@ function resetPreferences(): void {
         show-icon
       />
 
-      <section class="setting-drawer__section">
+      <section class="setting-drawer__section" data-testid="settings-theme-section">
         <h3>{{ t('layout.settings.theme') }}</h3>
         <div class="setting-drawer__segmented" role="group" :aria-label="t('layout.settings.theme')">
           <el-button
@@ -146,7 +146,7 @@ function resetPreferences(): void {
         </div>
       </section>
 
-      <section class="setting-drawer__section">
+      <section class="setting-drawer__section" data-testid="settings-display-section">
         <h3>{{ t('layout.settings.display') }}</h3>
         <label class="setting-drawer__row">
           <span>{{ t('layout.settings.breadcrumb') }}</span>
@@ -191,7 +191,7 @@ function resetPreferences(): void {
         </label>
       </section>
 
-      <section class="setting-drawer__section">
+      <section class="setting-drawer__section" data-testid="settings-transition-section">
         <h3>{{ t('layout.settings.transition') }}</h3>
         <label class="setting-drawer__row">
           <span>{{ t('layout.settings.transitionEnabled') }}</span>
@@ -230,7 +230,7 @@ function resetPreferences(): void {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  gap: 18px;
+  gap: 16px;
 }
 
 .setting-drawer__header,
@@ -255,15 +255,18 @@ function resetPreferences(): void {
 .setting-drawer__section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-extra-light);
 }
 
 .setting-drawer__section h3 {
   margin: 0;
   color: var(--el-text-color-primary);
   font-size: 14px;
+  font-weight: 700;
 }
 
 .setting-drawer__segmented {
@@ -274,6 +277,11 @@ function resetPreferences(): void {
 
 .setting-drawer__segmented .el-button {
   margin: 0;
+  min-height: 68px;
+  padding: 10px;
+  border-radius: 6px;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .setting-drawer__color-label {
@@ -282,9 +290,8 @@ function resetPreferences(): void {
 }
 
 .setting-drawer__colors {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
 
@@ -292,12 +299,12 @@ function resetPreferences(): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 100%;
+  height: 32px;
   padding: 0;
   color: white;
   border: 2px solid transparent;
-  border-radius: 50%;
+  border-radius: 6px;
   cursor: pointer;
 }
 
@@ -308,8 +315,12 @@ function resetPreferences(): void {
 }
 
 .setting-drawer__row {
+  min-height: 38px;
   justify-content: space-between;
   gap: 12px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--el-bg-color);
   color: var(--el-text-color-regular);
   font-size: 13px;
 }
@@ -323,6 +334,30 @@ function resetPreferences(): void {
 
 .setting-drawer__footer {
   justify-content: flex-end;
+  padding-top: 4px;
   margin-top: auto;
+}
+
+.setting-drawer__footer .el-button {
+  width: 100%;
+}
+
+.setting-drawer__section :deep(.el-select) {
+  width: 100%;
+}
+
+.setting-drawer__colors :deep(.el-color-picker),
+.setting-drawer__colors :deep(.el-color-picker__trigger) {
+  width: 100%;
+  height: 32px;
+}
+
+.setting-drawer__colors :deep(.el-color-picker__trigger) {
+  padding: 2px;
+  border-radius: 6px;
+}
+
+:deep(.setting-drawer .el-drawer__body) {
+  padding: 18px;
 }
 </style>

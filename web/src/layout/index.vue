@@ -33,6 +33,7 @@ const contentFullscreen = ref(false);
 
 const asideWidth = computed(() => (collapsed.value ? "80px" : "248px"));
 const username = computed(() => (auth.user === null ? "" : auth.user.username));
+const email = computed(() => (auth.user === null ? "" : auth.user.email));
 const breadcrumbs = computed(
   () => resolveBreadcrumbs(route.path, access.menuTree) ?? [],
 );
@@ -77,6 +78,16 @@ function handleToggleFullscreen(): void {
   contentFullscreen.value = !contentFullscreen.value;
 }
 
+function handleDocumentKeydown(event: KeyboardEvent): void {
+  if (
+    event.key === "Escape" &&
+    contentFullscreen.value &&
+    !event.defaultPrevented
+  ) {
+    contentFullscreen.value = false;
+  }
+}
+
 async function handleLogout(): Promise<void> {
   if (logoutPending.value) return;
   logoutPending.value = true;
@@ -106,8 +117,14 @@ watch(
   { immediate: true },
 );
 
-onMounted(() => window.addEventListener("resize", updateViewport));
-onBeforeUnmount(() => window.removeEventListener("resize", updateViewport));
+onMounted(() => {
+  window.addEventListener("resize", updateViewport);
+  document.addEventListener("keydown", handleDocumentKeydown);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", updateViewport);
+  document.removeEventListener("keydown", handleDocumentKeydown);
+});
 </script>
 
 <template>
@@ -120,14 +137,18 @@ onBeforeUnmount(() => window.removeEventListener("resize", updateViewport));
       <AppAside
         :collapsed="collapsed"
         :unique-opened="uiPreferences.preferences.uniqueOpened"
+        :username="username"
+        :email="email"
+        :logout-pending="logoutPending"
+        @logout="handleLogout"
       />
     </el-aside>
 
-    <el-container class="admin-layout__workspace">
+    <el-container class="admin-layout__workspace" direction="vertical">
       <el-header
         v-if="!contentFullscreen"
         class="admin-layout__header"
-        height="56px"
+        height="52px"
       >
         <AppHeader
           :locale="locale"
@@ -135,11 +156,8 @@ onBeforeUnmount(() => window.removeEventListener("resize", updateViewport));
           :show-breadcrumb="uiPreferences.preferences.showBreadcrumb"
           :show-menu-toggle="uiPreferences.preferences.showMenuToggle"
           :content-fullscreen="contentFullscreen"
-          :username="username"
-          :logout-pending="logoutPending"
           @toggle-menu="toggleMenu"
           @change-locale="handleLocaleChange"
-          @logout="handleLogout"
         />
       </el-header>
 
@@ -219,7 +237,12 @@ onBeforeUnmount(() => window.removeEventListener("resize", updateViewport));
       <AppAside
         :collapsed="false"
         :unique-opened="uiPreferences.preferences.uniqueOpened"
+        :username="username"
+        :email="email"
+        :logout-pending="logoutPending"
+        @logout="handleLogout"
       />
     </el-drawer>
+
   </el-container>
 </template>

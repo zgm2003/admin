@@ -118,7 +118,7 @@ describe('AppAside access menu', () => {
 		expect(wrapper.findComponent({ name: 'ElMenu' }).props('uniqueOpened')).toBe(false)
 	})
 
-	it('keeps the collapse transition enabled for the sidebar', () => {
+  it('keeps the collapse transition enabled for the sidebar', () => {
 		const wrapper = mount(AppAside, {
 			props: { collapsed: true, uniqueOpened: true },
 			global: { plugins: [ElementPlus, pinia, createTestRouter(), appI18n] },
@@ -126,6 +126,23 @@ describe('AppAside access menu', () => {
 
 		expect(wrapper.findComponent({ name: 'ElMenu' }).props('collapseTransition')).toBe(true)
 	})
+
+  it('renders the signed-in account in the sidebar footer and emits logout', () => {
+    const wrapper = mount(AppAside, {
+      props: {
+        collapsed: false,
+        uniqueOpened: true,
+        username: 'admin',
+        email: 'admin@example.com',
+      },
+      global: { plugins: [ElementPlus, pinia, createTestRouter(), appI18n] },
+    })
+
+    expect(wrapper.get('[data-testid="aside-account-name"]').text()).toBe('admin')
+    wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'logout')
+
+    expect(wrapper.emitted('logout')).toHaveLength(1)
+  })
 })
 
 function mountMenuNode(node: AccessMenuNodeDTO) {

@@ -281,6 +281,8 @@ export const zhCN = {
   'layout.header.switchLanguage': '切换语言',
   'layout.header.settings': '系统设置',
   'layout.header.logout': '退出登录',
+  'layout.account.title': '账号菜单',
+  'layout.account.profile': '个人中心',
   'layout.footer': 'Admin 管理控制台 · 2026',
   'layout.routeTabs.previous': '上一个页面',
   'layout.routeTabs.next': '下一个页面',

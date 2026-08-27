@@ -75,7 +75,7 @@ a:focus-visible {
   padding: 0;
   background: $color-surface;
   border-bottom: 1px solid $color-border;
-  flex: 0 0 $header-height;
+  flex: 0 0 52px;
 }
 
 .admin-layout__tabs {
@@ -393,6 +393,11 @@ h2 {
 }
 
 @media (max-width: 840px) {
+  .admin-layout__header {
+    --el-header-height: 48px !important;
+    flex-basis: 48px;
+  }
+
   .admin-layout__aside {
     display: none;
   }

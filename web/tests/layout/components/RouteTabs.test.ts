@@ -153,6 +153,17 @@ describe('RouteTabs', () => {
     expect(wrapper.emitted('toggleFullscreen')).toHaveLength(1)
   })
 
+  it('shows a direct exit action while content fullscreen is active', async () => {
+    const { wrapper } = await mountTabs('/dashboard')
+
+    expect(wrapper.find('[data-testid="exit-content-fullscreen"]').exists()).toBe(false)
+
+    await wrapper.setProps({ fullscreen: true })
+    await wrapper.get('[data-testid="exit-content-fullscreen"]').trigger('click')
+
+    expect(wrapper.emitted('toggleFullscreen')).toHaveLength(1)
+  })
+
   it('dismisses context menu and scrolls the active tab into view', async () => {
     const { wrapper, router } = await mountTabs('/dashboard')
     await wrapper.get('[data-testid="route-tab"][data-path="/dashboard"]').trigger('contextmenu')

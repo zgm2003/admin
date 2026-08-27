@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Connection, Menu, Setting, SwitchButton, User } from '@element-plus/icons-vue'
+import { Connection, Menu, Setting } from '@element-plus/icons-vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -13,14 +13,11 @@ defineProps<{
   showBreadcrumb: boolean
   showMenuToggle: boolean
   contentFullscreen: boolean
-  username: string
-  logoutPending: boolean
 }>()
 
 const emit = defineEmits<{
   toggleMenu: []
   changeLocale: [locale: AppLocale]
-  logout: []
 }>()
 
 const { t } = useI18n()
@@ -93,22 +90,6 @@ function handleLocaleCommand(command: string | number | object): void {
       </el-tooltip>
     </div>
 
-    <div class="app-header__account">
-      <el-icon aria-hidden="true"><User /></el-icon>
-      <span data-testid="current-username" class="app-header__username">{{ username }}</span>
-      <el-button
-        data-testid="logout"
-        :icon="SwitchButton"
-        text
-        :loading="logoutPending"
-        :disabled="logoutPending"
-        :title="t('layout.header.logout')"
-        @click="emit('logout')"
-      >
-        {{ t('layout.header.logout') }}
-      </el-button>
-    </div>
-
     <SettingDrawer v-model="settingsOpen" :content-fullscreen="contentFullscreen" />
   </div>
 </template>
@@ -125,8 +106,7 @@ function handleLocaleCommand(command: string | number | object): void {
 }
 
 .app-header__leading,
-.app-header__actions,
-.app-header__account {
+.app-header__actions {
   display: flex;
   align-items: center;
 }
@@ -151,38 +131,10 @@ function handleLocaleCommand(command: string | number | object): void {
   margin-left: auto;
 }
 
-.app-header__account {
-  flex: 0 0 auto;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.app-header__username {
-  max-width: 180px;
-  overflow: hidden;
-  color: var(--el-text-color-regular);
-  text-overflow: ellipsis;
-}
-
 @media (max-width: 650px) {
   .app-header {
     gap: 8px;
     padding: 0 12px;
-  }
-
-  .app-header__username {
-    max-width: 90px;
-  }
-
-  .app-header__account .el-button {
-    padding-right: 0;
-    padding-left: 0;
-    font-size: 0;
-  }
-
-  .app-header__account .el-button :deep(.el-icon) {
-    margin: 0;
-    font-size: 16px;
   }
 }
 </style>

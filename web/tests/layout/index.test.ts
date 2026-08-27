@@ -33,13 +33,14 @@ describe('admin layout', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1200 })
   })
 
-  it('renders one Aside, Header, Main, Footer, RouterView, username, and Dashboard item', async () => {
+  it('renders one Aside, Header, Main, Footer, RouterView, sidebar account, and Dashboard item', async () => {
     const { wrapper } = await mountLayout()
     expect(wrapper.findAll('.admin-layout__aside')).toHaveLength(1)
     expect(wrapper.findAll('.admin-layout__header')).toHaveLength(1)
     expect(wrapper.findAll('.admin-layout__main')).toHaveLength(1)
     expect(wrapper.findAll('.admin-layout__footer')).toHaveLength(1)
-    expect(wrapper.get('[data-testid="current-username"]').text()).toBe('admin')
+    expect(wrapper.get('[data-testid="aside-account-name"]').text()).toBe('admin')
+    expect(wrapper.find('[data-testid="current-username"]').exists()).toBe(false)
     expect(wrapper.findAll('[data-testid="dashboard-menu-item"]')).toHaveLength(1)
     expect(wrapper.get('[data-testid="layout-content"]').text()).toContain('dashboard content')
   })
@@ -56,9 +57,21 @@ describe('admin layout', () => {
     expect(wrapper.find('[data-testid="open-settings"]').exists()).toBe(true)
   })
 
+  it('groups theme, display, and transition preferences in the settings drawer', async () => {
+    const { wrapper } = await mountLayout()
+
+    await wrapper.get('[data-testid="open-settings"]').trigger('click')
+
+    expect(wrapper.find('[data-testid="settings-theme-section"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="settings-display-section"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="settings-transition-section"]').exists()).toBe(true)
+  })
+
   it('switches the current interface language from the Header', async () => {
     const { wrapper } = await mountLayout()
-    wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'en-US')
+    await wrapper.get('[data-testid="locale-switch"]').trigger('click')
+    await flushPromises()
+    getPopupItem('locale-switch-en').click()
     await wrapper.vm.$nextTick()
     expect(document.documentElement.lang).toBe('en-US')
     expect(localStorage.getItem('admin:locale')).toBe('en-US')
@@ -94,6 +107,7 @@ describe('admin layout', () => {
     expect(wrapper.find('.admin-layout__aside').exists()).toBe(false)
     expect(wrapper.find('.admin-layout__header').exists()).toBe(false)
     expect(wrapper.find('.admin-layout__footer').exists()).toBe(false)
+    expect(wrapper.get('.admin-layout__workspace').classes()).toContain('is-vertical')
     expect(wrapper.find('.admin-layout__tabs').exists()).toBe(true)
     expect(wrapper.find('.admin-layout__main').exists()).toBe(true)
   })
@@ -158,6 +172,20 @@ describe('admin layout', () => {
     expect(wrapper.find('.admin-layout__tabs').exists()).toBe(true)
   })
 
+  it('exits content fullscreen with Escape while keeping RouteTabs mounted', async () => {
+    const { wrapper } = await mountLayout()
+
+    wrapper.findComponent({ name: 'RouteTabs' }).vm.$emit('toggle-fullscreen')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.admin-layout__header').exists()).toBe(false)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.admin-layout__header').exists()).toBe(true)
+    expect(wrapper.find('.admin-layout__tabs').exists()).toBe(true)
+  })
+
   it('shows visible preference and missing-breadcrumb errors', async () => {
     const uiPreferences = useUIPreferencesStore(pinia)
     localStorage.setItem('admin:ui-preferences', '{broken')
@@ -216,7 +244,9 @@ describe('admin layout', () => {
       permissionCodes: ['account:user:list'],
     })
     const { wrapper, router } = await mountLayout()
-    await wrapper.get('[data-testid="logout"]').trigger('click')
+    await wrapper.get('[data-testid="aside-account-menu"]').trigger('click')
+    await flushPromises()
+    getPopupItem('aside-account-logout').click()
     await flushPromises()
     expect(logoutMock).toHaveBeenCalledOnce()
     expect(useAccessStore(pinia).status).toBe('idle')

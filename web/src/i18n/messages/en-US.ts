@@ -283,6 +283,8 @@ export const enUS = {
   'layout.header.switchLanguage': 'Switch language',
   'layout.header.settings': 'System settings',
   'layout.header.logout': 'Sign out',
+  'layout.account.title': 'Account menu',
+  'layout.account.profile': 'Personal center',
   'layout.footer': 'Admin Console · 2026',
   'layout.routeTabs.previous': 'Previous page',
   'layout.routeTabs.next': 'Next page',

@@ -209,7 +209,10 @@ function handleDocumentPointerDown(event: PointerEvent): void {
 }
 
 function handleDocumentKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') dismissContextMenu()
+  if (event.key === 'Escape' && contextMenuOpen.value) {
+    dismissContextMenu()
+    event.preventDefault()
+  }
 }
 
 watch([() => route.fullPath, () => props.menuTree], syncCurrentTab, { immediate: true })
@@ -294,6 +297,17 @@ onBeforeUnmount(() => {
       </el-tooltip>
     </div>
 
+    <el-tooltip v-if="props.fullscreen" :content="t('layout.routeTabs.exitFullscreen')">
+      <el-button
+        data-testid="exit-content-fullscreen"
+        class="route-tabs__exit-fullscreen"
+        text
+        :icon="Close"
+        :aria-label="t('layout.routeTabs.exitFullscreen')"
+        @click="toggleFullscreen"
+      />
+    </el-tooltip>
+
     <el-dropdown class="route-tabs__actions" trigger="click" @command="handleCommand">
       <button
         data-testid="route-tabs-settings"
@@ -364,12 +378,14 @@ onBeforeUnmount(() => {
 
 .route-tabs__previous,
 .route-tabs__next,
+.route-tabs__exit-fullscreen,
 .route-tabs__actions {
   flex: 0 0 auto;
 }
 
 .route-tabs__previous .el-button,
-.route-tabs__next .el-button {
+.route-tabs__next .el-button,
+.route-tabs__exit-fullscreen {
   width: 30px;
   height: 30px;
   margin: 0;
@@ -380,6 +396,7 @@ onBeforeUnmount(() => {
 
 .route-tabs__previous .el-button:hover:not(:disabled),
 .route-tabs__next .el-button:hover:not(:disabled),
+.route-tabs__exit-fullscreen:hover,
 .route-tabs__action:hover {
   color: var(--el-text-color-primary);
   background: var(--el-fill-color-light);
@@ -452,7 +469,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 768px) {
   .route-tabs { height: 34px; padding-inline: 6px; }
-  .route-tabs__previous .el-button, .route-tabs__next .el-button, .route-tabs__action { width: 26px; height: 26px; border-radius: 7px; }
+  .route-tabs__previous .el-button, .route-tabs__next .el-button, .route-tabs__exit-fullscreen, .route-tabs__action { width: 26px; height: 26px; border-radius: 7px; }
   .route-tabs__list { gap: 3px; }
   .route-tabs__item { height: 26px; padding: 0 10px; border-radius: 7px; }
   .route-tabs__label { max-width: 88px; font-size: 12px; }

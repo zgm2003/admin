@@ -1,19 +1,37 @@
 <script setup lang="ts">
-import { Monitor } from '@element-plus/icons-vue'
+import { ArrowUp, Monitor, SwitchButton, User } from '@element-plus/icons-vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import { useAccessStore } from '../../store/access'
 import AccessMenuNode from './AccessMenuNode.vue'
 
-defineProps<{
+const props = withDefaults(defineProps<{
   collapsed: boolean
   uniqueOpened: boolean
+  username?: string
+  email?: string
+  logoutPending?: boolean
+}>(), {
+  username: '',
+  email: '',
+  logoutPending: false,
+})
+
+const emit = defineEmits<{
+  logout: []
 }>()
 
 const { t } = useI18n()
 const route = useRoute()
 const access = useAccessStore()
+const avatarText = computed(() => props.username.slice(0, 1).toUpperCase() || 'A')
+
+function handleAccountCommand(command: string | number | object): void {
+  if (command !== 'logout') throw new Error(`Unsupported account command: ${String(command)}`)
+  emit('logout')
+}
 </script>
 
 <template>
@@ -42,6 +60,45 @@ const access = useAccessStore()
       </el-menu-item>
       <AccessMenuNode v-for="node in access.menuTree" :key="node.code" :node="node" />
     </el-menu>
+
+    <div class="app-aside__account">
+      <el-dropdown
+        trigger="click"
+        placement="top-start"
+        @command="handleAccountCommand"
+      >
+        <button
+          type="button"
+          class="app-aside__account-trigger"
+          data-testid="aside-account-menu"
+          :title="t('layout.account.title')"
+          :aria-label="t('layout.account.title')"
+        >
+          <el-avatar class="app-aside__avatar" :size="34">{{ avatarText }}</el-avatar>
+          <span v-show="!collapsed" class="app-aside__account-copy">
+            <strong data-testid="aside-account-name">{{ username }}</strong>
+            <small>{{ email }}</small>
+          </span>
+          <el-icon v-show="!collapsed" class="app-aside__account-arrow" aria-hidden="true"><ArrowUp /></el-icon>
+        </button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item data-testid="aside-account-profile" :icon="User" disabled>
+              {{ t('layout.account.profile') }}
+            </el-dropdown-item>
+            <el-dropdown-item
+              data-testid="aside-account-logout"
+              command="logout"
+              :icon="SwitchButton"
+              divided
+              :disabled="logoutPending"
+            >
+              {{ t('layout.header.logout') }}
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+    </div>
   </aside>
 </template>
 
@@ -123,6 +180,82 @@ const access = useAccessStore()
 .app-aside__menu :deep(.el-menu--collapse .el-menu-item .el-icon),
 .app-aside__menu :deep(.el-menu--collapse .el-sub-menu__title .el-icon) {
   margin: 0;
+}
+
+.app-aside__account {
+  flex: 0 0 auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--admin-border);
+}
+
+.app-aside__account :deep(.el-dropdown) {
+  display: block;
+  width: 100%;
+}
+
+.app-aside__account-trigger {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 56px;
+  padding: 9px;
+  gap: 9px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface-soft);
+  cursor: pointer;
+}
+
+.app-aside__account-trigger:hover {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+}
+
+.app-aside__account-trigger:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
+.app-aside__avatar {
+  flex: 0 0 auto;
+  color: var(--el-color-white);
+  background: var(--el-color-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.app-aside__account-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.app-aside__account-copy strong,
+.app-aside__account-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-aside__account-copy strong {
+  color: var(--admin-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.app-aside__account-copy small {
+  color: var(--admin-text-soft);
+  font-size: 11px;
+}
+
+.app-aside__account-arrow {
+  flex: 0 0 auto;
+  color: var(--admin-text-soft);
+  font-size: 13px;
 }
 
 </style>
