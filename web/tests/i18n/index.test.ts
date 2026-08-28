@@ -17,7 +17,6 @@ describe('frontend i18n', () => {
     expect(document.documentElement.lang).toBe('zh-CN')
     expect(appI18n.global.t('navigation.dashboard')).toBe('工作台')
   })
-
   it('normalizes an invalid stored locale to Chinese', () => {
     localStorage.setItem(localeStorageKey, 'fr-FR')
     expect(initializeLocale()).toBe('zh-CN')

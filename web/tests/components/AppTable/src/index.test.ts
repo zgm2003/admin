@@ -45,6 +45,19 @@ describe('AppTable', () => {
     expect(wrapper.text()).toContain('No users')
   })
 
+  it('marks pagination for mobile end distribution', () => {
+    const wrapper = mount(AppTable<UserRow>, {
+      props: {
+        columns,
+        data: [],
+        pagination: { currentPage: 1, pageSize: 20, total: 2 },
+      },
+      global: { plugins: [ElementPlus] },
+    })
+
+    expect(wrapper.get('.app-table__pagination').classes()).toContain('app-table__pagination--distributed')
+  })
+
   it('forwards selection and row events without making requests', async () => {
     const wrapper = mount(AppTable<UserRow>, {
       props: { columns, data: [{ id: 1, username: 'alice', enabled: true }], selectable: true },

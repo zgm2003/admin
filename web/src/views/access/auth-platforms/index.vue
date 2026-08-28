@@ -526,7 +526,7 @@ onMounted(() => {
         >
       </template>
       <template #cell-platform="{ row }: { row: AuthPlatformListItem }">
-        <div class="auth-platform-identity">
+        <div class="auth-platform-identity auth-platform-identity--centered">
           <strong>{{ row.name }}</strong>
           <div class="auth-platform-identity__meta">
             <code>{{ row.code }}</code>
@@ -655,7 +655,7 @@ onMounted(() => {
           <div class="auth-platform-form-grid auth-platform-form-grid--four">
             <el-form-item>
               <template #label>
-                <span class="auth-platform-field-label">{{ t("authPlatform.accessTTL") }}
+                <span class="auth-platform-field-label auth-platform-field-label--nowrap">{{ t("authPlatform.accessTTL") }}
                   <el-tooltip :content="t('authPlatform.form.accessTTLHelp')" placement="top">
                     <CircleHelp data-testid="auth-platform-ttl-help" aria-hidden="true" />
                   </el-tooltip>
@@ -665,7 +665,7 @@ onMounted(() => {
             </el-form-item>
             <el-form-item>
               <template #label>
-                <span class="auth-platform-field-label">{{ t("authPlatform.refreshTTL") }}
+                <span class="auth-platform-field-label auth-platform-field-label--nowrap">{{ t("authPlatform.refreshTTL") }}
                   <el-tooltip :content="t('authPlatform.form.refreshTTLHelp')" placement="top">
                     <CircleHelp data-testid="auth-platform-ttl-help" aria-hidden="true" />
                   </el-tooltip>
@@ -675,7 +675,7 @@ onMounted(() => {
             </el-form-item>
             <el-form-item>
               <template #label>
-                <span class="auth-platform-field-label">{{ t("authPlatform.sessionCacheTTL") }}
+                <span class="auth-platform-field-label auth-platform-field-label--nowrap">{{ t("authPlatform.sessionCacheTTL") }}
                   <el-tooltip :content="t('authPlatform.form.sessionCacheTTLHelp')" placement="top">
                     <CircleHelp data-testid="auth-platform-ttl-help" aria-hidden="true" />
                   </el-tooltip>
@@ -685,7 +685,7 @@ onMounted(() => {
             </el-form-item>
             <el-form-item>
               <template #label>
-                <span class="auth-platform-field-label">{{ t("authPlatform.accessCacheTTL") }}
+                <span class="auth-platform-field-label auth-platform-field-label--nowrap">{{ t("authPlatform.accessCacheTTL") }}
                   <el-tooltip :content="t('authPlatform.form.accessCacheTTLHelp')" placement="top">
                     <CircleHelp data-testid="auth-platform-ttl-help" aria-hidden="true" />
                   </el-tooltip>
@@ -697,7 +697,7 @@ onMounted(() => {
         </div>
         <div class="auth-platform-form-section">
           <h3>{{ t("authPlatform.form.policySection") }}</h3>
-          <div class="auth-platform-form-grid auth-platform-form-grid--four">
+          <div class="auth-platform-form-grid auth-platform-form-grid--four auth-platform-policy-grid auth-platform-policy-grid--three-up">
             <el-form-item :label="t('authPlatform.bindDevice')">
               <el-switch v-model="form.bindDevice" :active-value="YesNo.Yes" :inactive-value="YesNo.No" />
             </el-form-item>
@@ -766,6 +766,9 @@ onMounted(() => {
   align-items: center;
   gap: 5px;
   text-align: center;
+}
+.auth-platform-identity--centered {
+  width: 100%;
 }
 .auth-platform-identity__meta {
   display: flex;
@@ -847,6 +850,9 @@ onMounted(() => {
   align-items: center;
   gap: 5px;
 }
+.auth-platform-field-label--nowrap {
+  white-space: nowrap;
+}
 .auth-platform-field-label svg {
   width: 15px;
   height: 15px;
@@ -862,6 +868,9 @@ onMounted(() => {
 }
 .auth-platform-form-grid--four {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.auth-platform-policy-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .auth-platform-form-grid--session {
   grid-template-columns: minmax(0, 240px);
@@ -887,11 +896,18 @@ onMounted(() => {
   .auth-platform-form-grid--four {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .auth-platform-policy-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 @media (max-width: 480px) {
   .auth-platform-form-grid--basic,
   .auth-platform-form-grid--four {
     grid-template-columns: 1fr;
+  }
+  .auth-platform-policy-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
   }
 }
 </style>

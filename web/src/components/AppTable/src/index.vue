@@ -192,7 +192,7 @@ function onSelectionChange(selection: Row[]): void {
         <slot v-else name="empty"><el-empty :description="statusMessage || 'No data'" /></slot>
       </template>
     </el-table>
-    <div v-if="paginationState !== null" class="app-table__pagination">
+    <div v-if="paginationState !== null" class="app-table__pagination app-table__pagination--distributed">
       <el-pagination
         background
         :layout="paginationLayout"
@@ -219,6 +219,8 @@ function onSelectionChange(selection: Row[]): void {
 @media (max-width: 768px) {
   .app-table__toolbar { align-items: stretch; flex-direction: column; }
   .app-table__toolbar-left, .app-table__toolbar-right { flex-wrap: wrap; }
-  .app-table__pagination { justify-content: flex-start; overflow-x: auto; }
+  .app-table__pagination { justify-content: space-between; overflow-x: auto; }
+  .app-table__pagination--distributed :deep(.el-pagination) { width: 100%; justify-content: flex-start; }
+  .app-table__pagination--distributed :deep(.el-pagination__total) { margin-right: auto; }
 }
 </style>

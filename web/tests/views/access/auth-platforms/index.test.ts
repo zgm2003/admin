@@ -87,6 +87,28 @@ describe('authentication platform page', () => {
     expect(wrapper.get('[data-testid="auth-platform-security"]').text()).toContain('未绑定 IP')
     expect(wrapper.get('[data-testid="auth-platform-registration"]').text()).toContain('禁止注册')
     expect(wrapper.get('[data-testid="auth-platform-status"]').text()).toBe('停用')
+    expect(wrapper.get('.auth-platform-identity').attributes('style')).toBeUndefined()
+  })
+
+  it('keeps table identity and TTL labels centered without wrapping', async () => {
+    setPermissions(['auth:platform:list', 'auth:platform:update'])
+    const { wrapper } = await mountPage()
+
+    expect(wrapper.get('.auth-platform-identity').classes()).toContain('auth-platform-identity--centered')
+    await wrapper.get('[data-testid="auth-platform-update"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.auth-platform-field-label').classes()).toContain('auth-platform-field-label--nowrap')
+  })
+
+  it('keeps mobile policy switches in one row and distributes pagination ends', async () => {
+    setPermissions(['auth:platform:list', 'auth:platform:update'])
+    const { wrapper } = await mountPage()
+
+    await wrapper.get('[data-testid="auth-platform-update"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('.auth-platform-policy-grid').classes()).toContain('auth-platform-policy-grid--three-up')
+    expect(wrapper.find('.app-table__pagination--distributed').exists()).toBe(true)
   })
 
   it('uses one scroll container and removes the unused deployment panel', async () => {
