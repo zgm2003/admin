@@ -7,13 +7,11 @@ import { useI18n } from "vue-i18n";
 import {
   createAuthPlatform,
   deleteAuthPlatform,
-  getAuthPlatformDeployment,
   getAuthPlatforms,
   updateAuthPlatform,
   updateAuthPlatformStatus,
 } from "../../../api/auth-platform";
 import type {
-  AuthPlatformDeployment,
   AuthPlatformListItem,
   AuthPlatformListQuery,
   CreateAuthPlatformInput,
@@ -30,7 +28,7 @@ import type {
 import { Search } from "../../../components/Search";
 import type { SearchField, SearchFormModel } from "../../../components/Search";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const access = useAccessStore();
 
 const rows = ref<AuthPlatformListItem[]>([]);
@@ -41,7 +39,6 @@ const statusFilter = ref<"" | YesNo>("");
 const loading = ref(false);
 const loadError = ref("");
 const mutationError = ref("");
-const deployment = ref<AuthPlatformDeployment | null>(null);
 const searchModel = computed<SearchFormModel>({
   get: () => ({ keyword: keyword.value, status: statusFilter.value }),
   set: (value) => {
@@ -65,6 +62,7 @@ const searchFields = computed<SearchField[]>(() => [
     key: "status",
     type: "select-v2",
     label: t("authPlatform.status.all"),
+    placeholder: t("authPlatform.status.all"),
     options: [
       { label: t("authPlatform.status.all"), value: "" },
       { label: t("authPlatform.status.enabled"), value: YesNo.Yes },
@@ -90,44 +88,51 @@ const tableColumns = computed<TableColumn<AuthPlatformListItem>[]>(() => [
     key: "platform",
     prop: "id",
     label: t("authPlatform.column.platform"),
-    minWidth: 180,
+    minWidth: 160,
   },
   {
     key: "tokenTTL",
     prop: "id",
     label: t("authPlatform.column.tokenTTL"),
-    minWidth: 160,
+    minWidth: 175,
   },
   {
     key: "cacheTTL",
     prop: "id",
     label: t("authPlatform.column.cacheTTL"),
-    minWidth: 170,
+    minWidth: 175,
   },
   {
     key: "security",
     prop: "id",
     label: t("authPlatform.column.security"),
-    minWidth: 150,
+    minWidth: 165,
   },
   {
     key: "sessions",
     prop: "id",
     label: t("authPlatform.column.sessions"),
-    width: 130,
+    width: 110,
+  },
+  {
+    key: "registration",
+    prop: "id",
+    label: t("authPlatform.column.registration"),
+    width: 105,
   },
   {
     key: "status",
     prop: "id",
     label: t("authPlatform.column.status"),
-    width: 110,
+    width: 90,
   },
-  { prop: "updatedAt", label: t("authPlatform.column.updatedAt"), width: 190 },
+  { prop: "updatedAt", label: t("authPlatform.column.updatedAt"), width: 140 },
   {
     key: "actions",
     prop: "id",
     label: t("authPlatform.column.actions"),
-    width: 180,
+    width: 190,
+    fixed: "right",
   },
 ]);
 
@@ -182,13 +187,9 @@ async function loadPage(): Promise<void> {
   loading.value = true;
   loadError.value = "";
   try {
-    const [result, status] = await Promise.all([
-      getAuthPlatforms(query.value),
-      getAuthPlatformDeployment(),
-    ]);
+    const result = await getAuthPlatforms(query.value);
     rows.value = result.list;
     total.value = result.total;
-    deployment.value = status;
   } catch (error: unknown) {
     loadError.value = errorMessage(error, "authPlatform.loadFailed");
   } finally {
@@ -406,12 +407,33 @@ function sessionLabel(value: number): string {
 
 function ttlLabel(value: number): string {
   if (value % 86_400 === 0)
-    return `${t("authPlatform.seconds", { count: value })} · ${t("authPlatform.readableDays", { count: value / 86_400 })}`;
+    return t("authPlatform.readableDays", { count: value / 86_400 });
   if (value % 3_600 === 0)
-    return `${t("authPlatform.seconds", { count: value })} · ${t("authPlatform.readableHours", { count: value / 3_600 })}`;
+    return t("authPlatform.readableHours", { count: value / 3_600 });
   if (value % 60 === 0)
-    return `${t("authPlatform.seconds", { count: value })} · ${t("authPlatform.readableMinutes", { count: value / 60 })}`;
+    return t("authPlatform.readableMinutes", { count: value / 60 });
   return t("authPlatform.seconds", { count: value });
+}
+
+function formatUpdatedDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat(locale.value, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(parsed);
+}
+
+function formatUpdatedTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return new Intl.DateTimeFormat(locale.value, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(parsed);
 }
 
 function defaultForm(): AuthPlatformForm {
@@ -484,7 +506,7 @@ onMounted(() => {
       @refresh="refresh"
       @update:pagination="updateTablePagination"
     >
-      <template #toolbar-right>
+      <template #toolbar-left>
         <el-button
           v-if="canCreate"
           type="primary"
@@ -495,29 +517,51 @@ onMounted(() => {
         >
       </template>
       <template #cell-platform="{ row }: { row: AuthPlatformListItem }">
-        <strong>{{ row.name }}</strong>
-        <code>{{ row.code }}</code>
-        <el-tag v-if="row.isBuiltin === YesNo.Yes" size="small" type="info">{{
-          t("authPlatform.builtin")
-        }}</el-tag>
+        <div class="auth-platform-identity">
+          <strong>{{ row.name }}</strong>
+          <div class="auth-platform-identity__meta">
+            <code>{{ row.code }}</code>
+            <el-tag v-if="row.isBuiltin === YesNo.Yes" size="small" type="info" effect="plain">{{
+              t("authPlatform.builtin")
+            }}</el-tag>
+          </div>
+        </div>
       </template>
-      <template #cell-tokenTTL="{ row }: { row: AuthPlatformListItem }"
-        >{{ ttlLabel(row.accessTTLSeconds) }} /
-        {{ ttlLabel(row.refreshTTLSeconds) }}</template
-      >
-      <template #cell-cacheTTL="{ row }: { row: AuthPlatformListItem }"
-        >{{ ttlLabel(row.sessionCacheTTLSeconds) }} /
-        {{ ttlLabel(row.accessCacheTTLSeconds) }}</template
-      >
-      <template #cell-security="{ row }: { row: AuthPlatformListItem }"
-        >{{ row.bindDevice === YesNo.Yes ? t("authPlatform.bindDevice") : "" }}
-        {{ row.bindIP === YesNo.Yes ? t("authPlatform.bindIP") : "" }}</template
-      >
-      <template #cell-sessions="{ row }: { row: AuthPlatformListItem }">{{
-        sessionLabel(row.maxSessions)
-      }}</template>
+      <template #cell-tokenTTL="{ row }: { row: AuthPlatformListItem }">
+        <div class="auth-platform-policy-stack">
+          <div><span>{{ t("authPlatform.accessToken") }}</span><strong :title="t('authPlatform.seconds', { count: row.accessTTLSeconds })">{{ ttlLabel(row.accessTTLSeconds) }}</strong></div>
+          <div><span>{{ t("authPlatform.refreshToken") }}</span><strong :title="t('authPlatform.seconds', { count: row.refreshTTLSeconds })">{{ ttlLabel(row.refreshTTLSeconds) }}</strong></div>
+        </div>
+      </template>
+      <template #cell-cacheTTL="{ row }: { row: AuthPlatformListItem }">
+        <div class="auth-platform-policy-stack">
+          <div><span>{{ t("authPlatform.sessionCache") }}</span><strong :title="t('authPlatform.seconds', { count: row.sessionCacheTTLSeconds })">{{ ttlLabel(row.sessionCacheTTLSeconds) }}</strong></div>
+          <div><span>{{ t("authPlatform.accessCache") }}</span><strong :title="t('authPlatform.seconds', { count: row.accessCacheTTLSeconds })">{{ ttlLabel(row.accessCacheTTLSeconds) }}</strong></div>
+        </div>
+      </template>
+      <template #cell-security="{ row }: { row: AuthPlatformListItem }">
+        <div class="auth-platform-tag-list" data-testid="auth-platform-security">
+          <el-tag size="small" effect="plain" :type="row.bindDevice === YesNo.Yes ? 'success' : 'info'">{{
+            t(row.bindDevice === YesNo.Yes ? "authPlatform.deviceBound" : "authPlatform.deviceUnbound")
+          }}</el-tag>
+          <el-tag size="small" effect="plain" :type="row.bindIP === YesNo.Yes ? 'success' : 'info'">{{
+            t(row.bindIP === YesNo.Yes ? "authPlatform.ipBound" : "authPlatform.ipUnbound")
+          }}</el-tag>
+        </div>
+      </template>
+      <template #cell-sessions="{ row }: { row: AuthPlatformListItem }">
+        <el-tag size="small" effect="plain">{{ sessionLabel(row.maxSessions) }}</el-tag>
+      </template>
+      <template #cell-registration="{ row }: { row: AuthPlatformListItem }">
+        <el-tag
+          size="small"
+          effect="plain"
+          :type="row.allowRegister === YesNo.Yes ? 'success' : 'info'"
+          data-testid="auth-platform-registration"
+        >{{ t(row.allowRegister === YesNo.Yes ? "authPlatform.registrationAllowed" : "authPlatform.registrationDenied") }}</el-tag>
+      </template>
       <template #cell-status="{ row }: { row: AuthPlatformListItem }"
-        ><el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">{{
+        ><el-tag size="small" :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">{{
           t(
             row.isEnabled === YesNo.Yes
               ? "authPlatform.enabled"
@@ -525,6 +569,12 @@ onMounted(() => {
           )
         }}</el-tag></template
       >
+      <template #cell-updatedAt="{ row }: { row: AuthPlatformListItem }">
+        <time class="auth-platform-updated" :datetime="row.updatedAt">
+          <span>{{ formatUpdatedDate(row.updatedAt) }}</span>
+          <small>{{ formatUpdatedTime(row.updatedAt) }}</small>
+        </time>
+      </template>
       <template #cell-actions="{ row }: { row: AuthPlatformListItem }"
         ><template v-if="row.id > 0">
           <el-button
@@ -541,7 +591,7 @@ onMounted(() => {
             type="warning"
             data-testid="auth-platform-status"
             @click="toggleStatus(row)"
-            >{{ t("authPlatform.statusAction") }}</el-button
+            >{{ t(row.isEnabled === YesNo.Yes ? "authPlatform.disable" : "authPlatform.enable") }}</el-button
           >
           <el-button
             v-if="canDelete && row.isBuiltin === YesNo.No"
@@ -558,52 +608,6 @@ onMounted(() => {
       /></template>
     </AppTable>
 
-    <section
-      v-if="deployment !== null"
-      class="auth-platform-deployment"
-      aria-labelledby="auth-platform-deployment-title"
-    >
-      <h2 id="auth-platform-deployment-title">
-        {{ t("authPlatform.deployment") }}
-      </h2>
-      <dl>
-        <div>
-          <dt>{{ t("authPlatform.cookieSecure") }}</dt>
-          <dd>
-            {{
-              deployment.cookieSecure
-                ? t("authPlatform.enabled")
-                : t("authPlatform.disabled")
-            }}
-          </dd>
-        </div>
-        <div>
-          <dt>{{ t("authPlatform.corsOrigin") }}</dt>
-          <dd>{{ deployment.corsOrigin }}</dd>
-        </div>
-        <div>
-          <dt>{{ t("authPlatform.trustedProxy") }}</dt>
-          <dd>
-            {{ deployment.trustedProxyMode }} ({{
-              deployment.trustedProxyCount
-            }})
-          </dd>
-        </div>
-        <div>
-          <dt>{{ t("authPlatform.redis") }}</dt>
-          <dd>
-            {{
-              t(
-                deployment.redisStatus === "up"
-                  ? "authPlatform.up"
-                  : "authPlatform.down",
-              )
-            }}
-          </dd>
-        </div>
-      </dl>
-    </section>
-
     <AppDialog
       v-model="dialogVisible"
       :title="
@@ -613,81 +617,62 @@ onMounted(() => {
             : 'authPlatform.editTitle',
         )
       "
-      width="560px"
-      height="min(68vh, 680px)"
+      width="800px"
       :append-to-body="false"
     >
-      <div class="auth-platform-dialog-body">
-        <el-form label-position="top">
-          <el-form-item :label="t('authPlatform.code')"
-            ><el-input
-              v-model="form.code"
-              data-testid="auth-platform-code"
-              :disabled="isEditing"
-          /></el-form-item>
-          <el-form-item :label="t('authPlatform.name')"
-            ><el-input v-model="form.name" data-testid="auth-platform-name"
-          /></el-form-item>
-          <el-form-item :label="t('authPlatform.accessTTL')"
-            ><el-input-number
-              v-model="form.accessTTLSeconds"
-              :min="60"
-              :max="2_592_000"
-          /></el-form-item>
-          <el-form-item :label="t('authPlatform.refreshTTL')"
-            ><el-input-number
-              v-model="form.refreshTTLSeconds"
-              :min="60"
-              :max="31_536_000"
-          /></el-form-item>
-          <el-form-item :label="t('authPlatform.sessionCacheTTL')"
-            ><el-input-number
-              v-model="form.sessionCacheTTLSeconds"
-              :min="60"
-              :max="86_400"
-          /></el-form-item>
-          <el-form-item :label="t('authPlatform.accessCacheTTL')"
-            ><el-input-number
-              v-model="form.accessCacheTTLSeconds"
-              :min="60"
-              :max="86_400"
-          /></el-form-item>
-          <el-form-item :label="t('authPlatform.bindDevice')"
-            ><el-switch
-              v-model="form.bindDevice"
-              :active-value="YesNo.Yes"
-              :inactive-value="YesNo.No"
-          /></el-form-item>
-          <el-form-item :label="t('authPlatform.bindIP')"
-            ><el-switch
-              v-model="form.bindIP"
-              :active-value="YesNo.Yes"
-              :inactive-value="YesNo.No"
-          /></el-form-item>
-          <el-form-item :label="t('authPlatform.maxSessionsField')"
-            ><el-input-number v-model="form.maxSessions" :min="0" :max="100"
-          /></el-form-item>
-          <el-form-item :label="t('authPlatform.allowRegister')"
-            ><el-switch
-              v-model="form.allowRegister"
-              :active-value="YesNo.Yes"
-              :inactive-value="YesNo.No"
-              :disabled="isBuiltinAdminEdit"
-              data-testid="auth-platform-allow-register"
-            />
-            <span v-if="isBuiltinAdminEdit" class="auth-platform-form-help">{{
-              t("authPlatform.adminRegistrationLocked")
-            }}</span></el-form-item>
-          <el-form-item
-            v-if="dialogMode === 'create'"
-            :label="t('authPlatform.isEnabled')"
-            ><el-switch
-              v-model="form.isEnabled"
-              :active-value="YesNo.Yes"
-              :inactive-value="YesNo.No"
-          /></el-form-item>
-        </el-form>
-      </div>
+      <el-form label-position="top" class="auth-platform-form auth-platform-form-scroll" data-testid="auth-platform-form">
+        <div class="auth-platform-form-section">
+          <h3>{{ t("authPlatform.form.basicSection") }}</h3>
+          <div class="auth-platform-form-grid auth-platform-form-grid--basic" data-testid="auth-platform-form-grid">
+            <el-form-item :label="t('authPlatform.code')">
+              <el-input v-model="form.code" data-testid="auth-platform-code" :disabled="isEditing" />
+            </el-form-item>
+            <el-form-item :label="t('authPlatform.name')">
+              <el-input v-model="form.name" data-testid="auth-platform-name" />
+            </el-form-item>
+          </div>
+        </div>
+        <div class="auth-platform-form-section">
+          <h3>{{ t("authPlatform.form.tokenSection") }}</h3>
+          <div class="auth-platform-form-grid auth-platform-form-grid--four">
+            <el-form-item :label="t('authPlatform.accessTTL')">
+              <el-input-number v-model="form.accessTTLSeconds" :min="60" :max="2_592_000" class="auth-platform-number" />
+            </el-form-item>
+            <el-form-item :label="t('authPlatform.refreshTTL')">
+              <el-input-number v-model="form.refreshTTLSeconds" :min="60" :max="31_536_000" class="auth-platform-number" />
+            </el-form-item>
+            <el-form-item :label="t('authPlatform.sessionCacheTTL')">
+              <el-input-number v-model="form.sessionCacheTTLSeconds" :min="60" :max="86_400" class="auth-platform-number" />
+            </el-form-item>
+            <el-form-item :label="t('authPlatform.accessCacheTTL')">
+              <el-input-number v-model="form.accessCacheTTLSeconds" :min="60" :max="86_400" class="auth-platform-number" />
+            </el-form-item>
+          </div>
+        </div>
+        <div class="auth-platform-form-section">
+          <h3>{{ t("authPlatform.form.policySection") }}</h3>
+          <div class="auth-platform-form-grid auth-platform-form-grid--four">
+            <el-form-item :label="t('authPlatform.bindDevice')">
+              <el-switch v-model="form.bindDevice" :active-value="YesNo.Yes" :inactive-value="YesNo.No" />
+            </el-form-item>
+            <el-form-item :label="t('authPlatform.bindIP')">
+              <el-switch v-model="form.bindIP" :active-value="YesNo.Yes" :inactive-value="YesNo.No" />
+            </el-form-item>
+            <el-form-item :label="t('authPlatform.allowRegister')">
+              <el-switch v-model="form.allowRegister" :active-value="YesNo.Yes" :inactive-value="YesNo.No" :disabled="isBuiltinAdminEdit" data-testid="auth-platform-allow-register" />
+              <span v-if="isBuiltinAdminEdit" class="auth-platform-form-help">{{ t("authPlatform.adminRegistrationLocked") }}</span>
+            </el-form-item>
+            <el-form-item v-if="dialogMode === 'create'" :label="t('authPlatform.isEnabled')">
+              <el-switch v-model="form.isEnabled" :active-value="YesNo.Yes" :inactive-value="YesNo.No" />
+            </el-form-item>
+          </div>
+          <div class="auth-platform-form-grid auth-platform-form-grid--session">
+            <el-form-item :label="t('authPlatform.maxSessionsField')">
+              <el-input-number v-model="form.maxSessions" :min="0" :max="100" class="auth-platform-number" />
+            </el-form-item>
+          </div>
+        </div>
+      </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">{{
           t("authPlatform.cancel")
@@ -724,42 +709,98 @@ onMounted(() => {
 .auth-platform-filters .el-select-v2 {
   width: 150px;
 }
-.auth-platform-table code {
-  display: block;
-  margin-top: 4px;
-  color: var(--el-text-color-secondary);
-}
-.auth-platform-table .el-tag {
-  margin-left: 8px;
-}
-.auth-platform-deployment {
-  padding-top: 8px;
-  border-top: 1px solid var(--el-border-color-light);
-}
-.auth-platform-deployment h2 {
-  margin: 0 0 12px;
-  font-size: 16px;
-}
-.auth-platform-deployment dl {
+.auth-platform-identity,
+.auth-platform-policy-stack,
+.auth-platform-updated {
   display: flex;
-  flex-wrap: wrap;
-  gap: 16px 32px;
-  margin: 0;
+  min-width: 0;
+  flex-direction: column;
 }
-.auth-platform-deployment dl div {
-  min-width: 180px;
+.auth-platform-identity {
+  align-items: flex-start;
+  gap: 5px;
+  text-align: left;
 }
-.auth-platform-deployment dt {
+.auth-platform-identity__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.auth-platform-identity code {
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }
-.auth-platform-deployment dd {
-  margin: 4px 0 0;
+.auth-platform-policy-stack {
+  gap: 6px;
+  text-align: left;
 }
-.auth-platform-dialog-body {
-  max-height: min(68vh, 680px);
+.auth-platform-policy-stack > div {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+}
+.auth-platform-policy-stack span,
+.auth-platform-updated small {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.auth-platform-policy-stack strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.auth-platform-tag-list {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.auth-platform-updated {
+  gap: 3px;
+  line-height: 1.25;
+}
+.auth-platform-form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.auth-platform-form-scroll {
+  max-height: min(68vh, 620px);
   overflow-y: auto;
   padding-right: 8px;
+}
+.auth-platform-form-section {
+  min-width: 0;
+}
+.auth-platform-form-section h3 {
+  margin: 0 0 14px;
+  color: var(--el-text-color-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+.auth-platform-form-grid {
+  display: grid;
+  gap: 12px 16px;
+}
+.auth-platform-form-grid--basic {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.auth-platform-form-grid--four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.auth-platform-form-grid--session {
+  grid-template-columns: minmax(0, 240px);
+  margin-top: 12px;
+}
+.auth-platform-form :deep(.el-form-item) {
+  min-width: 0;
+  margin-bottom: 0;
+}
+.auth-platform-form :deep(.el-input-number),
+.auth-platform-number {
+  width: 100%;
 }
 @media (max-width: 760px) {
   .auth-platform-filters {
@@ -769,6 +810,15 @@ onMounted(() => {
   .auth-platform-filters .el-input,
   .auth-platform-filters .el-select {
     width: 100%;
+  }
+  .auth-platform-form-grid--four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .auth-platform-form-grid--basic,
+  .auth-platform-form-grid--four {
+    grid-template-columns: 1fr;
   }
 }
 </style>

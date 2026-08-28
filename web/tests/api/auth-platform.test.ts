@@ -5,7 +5,6 @@ import { YesNo } from '@src/enums/yes-no'
 import {
   createAuthPlatform,
   deleteAuthPlatform,
-  getAuthPlatformDeployment,
   getAuthPlatforms,
   updateAuthPlatform,
   updateAuthPlatformStatus,
@@ -18,18 +17,15 @@ const requestMock = vi.mocked(request)
 describe('authentication platform API', () => {
   beforeEach(() => requestMock.mockReset())
 
-  it('uses exact list and deployment requests', async () => {
+  it('uses the exact list request', async () => {
     requestMock.mockResolvedValueOnce({ list: [], total: 0, page: 1, pageSize: 20 })
-    requestMock.mockResolvedValueOnce({ cookieSecure: false, corsOrigin: 'http://localhost', trustedProxyMode: 'none', trustedProxyCount: 0, redisStatus: 'up' })
 
     await getAuthPlatforms({ page: 1, pageSize: 20, keyword: 'admin', isEnabled: YesNo.Yes })
-    await getAuthPlatformDeployment()
 
     expect(requestMock).toHaveBeenNthCalledWith(1, {
       method: 'GET', url: '/api/admin/v1/auth-platforms',
       params: { page: 1, pageSize: 20, keyword: 'admin', isEnabled: YesNo.Yes },
     })
-    expect(requestMock).toHaveBeenNthCalledWith(2, { method: 'GET', url: '/api/admin/v1/auth-platforms/deployment' })
   })
 
   it('uses exact mutation methods and allowlisted bodies', async () => {

@@ -84,7 +84,8 @@ describe('frontend i18n', () => {
       'navigation.accessAuthPlatforms', 'permission.authPlatformCreate',
       'permission.authPlatformUpdate', 'permission.authPlatformStatus',
       'permission.authPlatformDelete', 'authPlatform.title', 'authPlatform.search',
-      'authPlatform.deployment', 'authPlatform.confirm.disable',
+      'authPlatform.form.basicSection', 'authPlatform.form.tokenSection',
+      'authPlatform.form.policySection', 'authPlatform.confirm.disable',
     ]
     for (const key of keys) {
       expect(isAppMessageKey(key), key).toBe(true)

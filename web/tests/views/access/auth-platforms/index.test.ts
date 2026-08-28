@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createAuthPlatform,
   deleteAuthPlatform,
-  getAuthPlatformDeployment,
   getAuthPlatforms,
   updateAuthPlatform,
   updateAuthPlatformStatus,
@@ -20,14 +19,12 @@ import AuthPlatformsPage from '@src/views/access/auth-platforms/index.vue'
 vi.mock('@src/api/auth-platform', () => ({
   createAuthPlatform: vi.fn(),
   deleteAuthPlatform: vi.fn(),
-  getAuthPlatformDeployment: vi.fn(),
   getAuthPlatforms: vi.fn(),
   updateAuthPlatform: vi.fn(),
   updateAuthPlatformStatus: vi.fn(),
 }))
 
 const getAuthPlatformsMock = vi.mocked(getAuthPlatforms)
-const getAuthPlatformDeploymentMock = vi.mocked(getAuthPlatformDeployment)
 const createAuthPlatformMock = vi.mocked(createAuthPlatform)
 const updateAuthPlatformMock = vi.mocked(updateAuthPlatform)
 const updateAuthPlatformStatusMock = vi.mocked(updateAuthPlatformStatus)
@@ -46,24 +43,19 @@ describe('authentication platform page', () => {
     const access = useAccessStore(pinia)
     access.reset()
     getAuthPlatformsMock.mockReset()
-    getAuthPlatformDeploymentMock.mockReset()
     createAuthPlatformMock.mockReset()
     updateAuthPlatformMock.mockReset()
     updateAuthPlatformStatusMock.mockReset()
     deleteAuthPlatformMock.mockReset()
     getAuthPlatformsMock.mockResolvedValue({ list: [adminRow], total: 1, page: 1, pageSize: 20 })
-    getAuthPlatformDeploymentMock.mockResolvedValue({
-      cookieSecure: false, corsOrigin: 'http://localhost:16300', trustedProxyMode: 'none',
-      trustedProxyCount: 0, redisStatus: 'up',
-    })
   })
 
-  it('loads list and deployment with list permission', async () => {
+  it('loads the platform list with list permission', async () => {
     setPermissions(['auth:platform:list'])
     const { wrapper } = await mountPage()
 
     expect(getAuthPlatformsMock).toHaveBeenCalledWith({ page: 1, pageSize: 20 })
-    expect(getAuthPlatformDeploymentMock).toHaveBeenCalledOnce()
+    expect(getAuthPlatformsMock).toHaveBeenCalledOnce()
     expect(wrapper.find('h1').exists()).toBe(false)
 		expect(wrapper.get('.auth-platform-page').classes()).toContain('management-page')
     expect(wrapper.text()).toContain('Admin')
@@ -83,6 +75,30 @@ describe('authentication platform page', () => {
     expect(wrapper.find('[data-testid="auth-platform-delete"]').exists()).toBe(false)
   })
 
+  it('uses the old-project table density with explicit policy states and actions', async () => {
+    setPermissions([
+      'auth:platform:list', 'auth:platform:create',
+      'auth:platform:update', 'auth:platform:status',
+    ])
+    const { wrapper } = await mountPage()
+
+    expect(wrapper.find('.app-table__toolbar-left [data-testid="auth-platform-create"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="auth-platform-security"]').text()).toContain('绑定设备')
+    expect(wrapper.get('[data-testid="auth-platform-security"]').text()).toContain('未绑定 IP')
+    expect(wrapper.get('[data-testid="auth-platform-registration"]').text()).toContain('禁止注册')
+    expect(wrapper.get('[data-testid="auth-platform-status"]').text()).toBe('停用')
+  })
+
+  it('uses one scroll container and removes the unused deployment panel', async () => {
+    setPermissions(['auth:platform:list'])
+    const { wrapper } = await mountPage()
+
+    expect(wrapper.find('.auth-platform-deployment-strip').exists()).toBe(false)
+    expect(wrapper.find('.auth-platform-dialog-body').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="auth-platform-form-grid"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('2026-08-20T10:00:00Z')
+  })
+
   it('submits search and pagination using exact queries', async () => {
     setPermissions(['auth:platform:list'])
     const { wrapper } = await mountPage()
@@ -100,6 +116,9 @@ describe('authentication platform page', () => {
     await wrapper.get('[data-testid="auth-platform-update"]').trigger('click')
     await flushPromises()
 
+    expect(wrapper.find('.app-dialog__body--scroll').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="auth-platform-form"]').classes()).toContain('auth-platform-form-scroll')
+    expect(wrapper.get('[data-testid="auth-platform-form"] .auth-platform-form-grid').classes()).toContain('auth-platform-form-grid')
     expect(wrapper.get('[data-testid="auth-platform-code"]').attributes('disabled')).toBeDefined()
   })
 

@@ -301,6 +301,23 @@ func TestRepositoryGlobalAccessVersionsAreSortedLockedAndAdvanced(t *testing.T) 
 	}
 }
 
+func TestSortMenuAccessVersionsOrdersReturningRowsByUserID(t *testing.T) {
+	versions := []accessstate.Version{
+		{UserID: 169, Version: 3},
+		{UserID: 67, Version: 4},
+	}
+
+	sortMenuAccessVersions(versions)
+
+	want := []accessstate.Version{
+		{UserID: 67, Version: 4},
+		{UserID: 169, Version: 3},
+	}
+	if !reflect.DeepEqual(versions, want) {
+		t.Fatalf("sorted access versions = %+v, want %+v", versions, want)
+	}
+}
+
 func TestRepositoryGlobalAccessVersionsRejectMissingVersion(t *testing.T) {
 	tx, ctx := openMenuTransaction(t)
 	unique := time.Now().UnixNano()

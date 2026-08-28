@@ -5,17 +5,12 @@ import type { PageRequest } from '../types/pagination'
 
 export interface AuthPlatformListQuery extends PageRequest { keyword?: string; isEnabled?: YesNo }
 export interface AuthPlatformListItem { id:number; code:string; name:string; policyVersion:number; accessTTLSeconds:number; refreshTTLSeconds:number; sessionCacheTTLSeconds:number; accessCacheTTLSeconds:number; bindDevice:YesNo; bindIP:YesNo; maxSessions:number; allowRegister:YesNo; isEnabled:YesNo; isBuiltin:YesNo; createdAt:string; updatedAt:string }
-export interface AuthPlatformDeployment { cookieSecure:boolean; corsOrigin:string; trustedProxyMode:'none'|'allowlist'; trustedProxyCount:number; redisStatus:'up'|'down' }
 export interface CreateAuthPlatformInput { code:string; name:string; accessTTLSeconds:number; refreshTTLSeconds:number; sessionCacheTTLSeconds:number; accessCacheTTLSeconds:number; bindDevice:YesNo; bindIP:YesNo; maxSessions:number; allowRegister:YesNo; isEnabled:YesNo }
 export interface UpdateAuthPlatformInput { name:string; accessTTLSeconds:number; refreshTTLSeconds:number; sessionCacheTTLSeconds:number; accessCacheTTLSeconds:number; bindDevice:YesNo; bindIP:YesNo; maxSessions:number; allowRegister:YesNo }
 export interface AuthPlatformStatusResult { id:number; isEnabled:YesNo }
 
 export async function getAuthPlatforms(query: AuthPlatformListQuery): Promise<PageResult<AuthPlatformListItem>> {
   return request<PageResult<AuthPlatformListItem>>({ method: 'GET', url: '/api/admin/v1/auth-platforms', params: query })
-}
-
-export async function getAuthPlatformDeployment(): Promise<AuthPlatformDeployment> {
-  return request<AuthPlatformDeployment>({ method: 'GET', url: '/api/admin/v1/auth-platforms/deployment' })
 }
 
 export async function createAuthPlatform(input: CreateAuthPlatformInput): Promise<{ id: number }> {

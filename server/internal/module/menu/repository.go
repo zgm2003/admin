@@ -255,6 +255,7 @@ func (r *Repository) IncrementAccessVersions(ctx context.Context, userIDs []int6
 		RETURNING user_id, version`, now.UTC(), userIDs).Scan(&advanced).Error; err != nil {
 		return nil, fmt.Errorf("increment menu access versions: %w", err)
 	}
+	sortMenuAccessVersions(advanced)
 	if err := validateMenuAccessVersions(advanced); err != nil {
 		return nil, fmt.Errorf("increment menu access versions: %w", err)
 	}
@@ -271,6 +272,12 @@ func (r *Repository) IncrementAccessVersions(ctx context.Context, userIDs []int6
 		}
 	}
 	return result, nil
+}
+
+func sortMenuAccessVersions(versions []accessstate.Version) {
+	sort.Slice(versions, func(left, right int) bool {
+		return versions[left].UserID < versions[right].UserID
+	})
 }
 
 func validateMenuAccessVersions(versions []accessstate.Version) error {
