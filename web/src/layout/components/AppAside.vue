@@ -2,7 +2,7 @@
 import { ArrowUp, Monitor, SwitchButton, User } from '@element-plus/icons-vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { useAccessStore } from '../../store/access'
 import AccessMenuNode from './AccessMenuNode.vue'
@@ -25,12 +25,20 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const access = useAccessStore()
 const avatarText = computed(() => props.username.slice(0, 1).toUpperCase() || 'A')
 
 function handleAccountCommand(command: string | number | object): void {
-  if (command !== 'logout') throw new Error(`Unsupported account command: ${String(command)}`)
-  emit('logout')
+  if (command === 'logout') {
+    emit('logout')
+    return
+  }
+  if (command === 'profile') {
+    void router.push({ name: 'account-profile' })
+    return
+  }
+  throw new Error(`Unsupported account command: ${String(command)}`)
 }
 </script>
 
@@ -83,7 +91,7 @@ function handleAccountCommand(command: string | number | object): void {
         </button>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item data-testid="aside-account-profile" :icon="User" disabled>
+            <el-dropdown-item data-testid="aside-account-profile" :icon="User" command="profile">
               {{ t('layout.account.profile') }}
             </el-dropdown-item>
             <el-dropdown-item

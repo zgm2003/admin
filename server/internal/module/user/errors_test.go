@@ -21,6 +21,7 @@ func TestUserErrorsHaveStableContractsAndPreserveCauses(t *testing.T) {
 	}{
 		{name: "not found", got: userNotFound(cause), wantStatus: http.StatusNotFound, wantCode: 16000, wantKey: i18n.KeyUserNotFound},
 		{name: "username conflict", got: userUsernameConflict(cause), wantStatus: http.StatusConflict, wantCode: 16001, wantKey: i18n.KeyUserUsernameConflict},
+		{name: "phone conflict", got: userPhoneConflict(cause), wantStatus: http.StatusConflict, wantCode: 16008, wantKey: i18n.KeyUserPhoneConflict},
 		{name: "self operation", got: userSelfOperation(cause), wantStatus: http.StatusConflict, wantCode: 16002, wantKey: i18n.KeyUserSelfOperation},
 		{name: "super admin protected", got: userSuperAdminProtected(cause), wantStatus: http.StatusForbidden, wantCode: 16003, wantKey: i18n.KeyUserSuperAdminProtected},
 		{name: "last super admin", got: userLastSuperAdmin(cause), wantStatus: http.StatusConflict, wantCode: 16004, wantKey: i18n.KeyUserLastSuperAdmin},

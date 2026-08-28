@@ -43,6 +43,7 @@ func TestAuthenticationSchema(t *testing.T) {
 			"id":            {dataType: "bigint", nullable: "NO"},
 			"username":      {dataType: "character varying", nullable: "NO", length: 64},
 			"email":         {dataType: "character varying", nullable: "NO", length: 254},
+			"phone":         {dataType: "character varying", nullable: "YES", length: 32},
 			"password_hash": {dataType: "character varying", nullable: "NO", length: 255},
 			"is_enabled":    {dataType: "smallint", nullable: "NO"},
 			"created_at":    {dataType: "timestamp with time zone", nullable: "NO"},
@@ -94,6 +95,7 @@ func TestAuthenticationSchema(t *testing.T) {
 	indexes := map[string][]string{
 		"ux_user_account_username_active":      {"CREATE UNIQUE INDEX", "lower((username)::text)", "WHERE (deleted_at IS NULL)"},
 		"ux_user_account_email_active":         {"CREATE UNIQUE INDEX", "(email)", "WHERE (deleted_at IS NULL)"},
+		"ux_user_account_phone_active":         {"CREATE UNIQUE INDEX", "(phone)", "phone IS NOT NULL", "deleted_at IS NULL"},
 		"ux_auth_session_refresh_hash":         {"CREATE UNIQUE INDEX", "(refresh_token_hash)"},
 		"ix_auth_session_user_platform_active": {"CREATE INDEX", "(user_id, platform, created_at DESC, id DESC)", "WHERE (revoked_at IS NULL)"},
 	}
@@ -110,7 +112,7 @@ func TestAuthenticationSchema(t *testing.T) {
 	}
 }
 
-func TestAuthenticationSchemaCreatesNullablePhoneWithoutIndex(t *testing.T) {
+func TestAuthenticationSchemaCreatesNullableUniquePhone(t *testing.T) {
 	connection, ctx := openAuthenticationSchema(t)
 	var column struct {
 		DataType               string
@@ -128,16 +130,11 @@ func TestAuthenticationSchemaCreatesNullablePhoneWithoutIndex(t *testing.T) {
 	if column.DataType != "character varying" || column.CharacterMaximumLength != 32 || column.IsNullable != "YES" {
 		t.Fatalf("phone column = %+v", column)
 	}
-	var indexCount int64
-	if err := connection.GORM.WithContext(ctx).Raw(`
-		SELECT count(*)
-		FROM pg_indexes
-		WHERE schemaname = current_schema()
-		  AND indexdef ILIKE '%phone%'`).Scan(&indexCount).Error; err != nil {
-		t.Fatal(err)
-	}
-	if indexCount != 0 {
-		t.Fatalf("phone index count = %d", indexCount)
+	definition := indexDefinition(t, connection, ctx, "ux_user_account_phone_active")
+	for _, fragment := range []string{"CREATE UNIQUE INDEX", "(phone)", "phone IS NOT NULL", "deleted_at IS NULL"} {
+		if !strings.Contains(definition, fragment) {
+			t.Errorf("phone index = %q, missing %q", definition, fragment)
+		}
 	}
 }
 

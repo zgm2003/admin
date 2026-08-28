@@ -10,6 +10,7 @@ import (
 var authenticationIndexes = []string{
 	`CREATE UNIQUE INDEX IF NOT EXISTS ux_user_account_username_active ON user_account (lower(username)) WHERE deleted_at IS NULL`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS ux_user_account_email_active ON user_account (email) WHERE deleted_at IS NULL`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS ux_user_account_phone_active ON user_account (phone) WHERE phone IS NOT NULL AND deleted_at IS NULL`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS ux_auth_session_refresh_hash ON auth_session (refresh_token_hash)`,
 	`CREATE INDEX IF NOT EXISTS ix_auth_session_user_created ON auth_session (user_id, created_at DESC)`,
 	`CREATE INDEX IF NOT EXISTS ix_auth_session_user_platform_active ON auth_session (user_id, platform, created_at DESC, id DESC) WHERE revoked_at IS NULL`,

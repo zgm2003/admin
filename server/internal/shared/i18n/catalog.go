@@ -54,6 +54,7 @@ const (
 	KeyRoleDataInvalid              MessageKey = "role.dataInvalid"
 	KeyUserNotFound                 MessageKey = "user.notFound"
 	KeyUserUsernameConflict         MessageKey = "user.usernameConflict"
+	KeyUserPhoneConflict            MessageKey = "user.phoneConflict"
 	KeyUserSelfOperation            MessageKey = "user.selfOperation"
 	KeyUserSuperAdminProtected      MessageKey = "user.superAdminProtected"
 	KeyUserLastSuperAdmin           MessageKey = "user.lastSuperAdmin"
@@ -114,6 +115,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyRoleDataInvalid:              "角色权限数据无效",
 		KeyUserNotFound:                 "用户不存在",
 		KeyUserUsernameConflict:         "用户名已存在",
+		KeyUserPhoneConflict:            "手机号已存在",
 		KeyUserSelfOperation:            "不能对自己的账号执行该操作",
 		KeyUserSuperAdminProtected:      "只有超级管理员可以操作超级管理员账号",
 		KeyUserLastSuperAdmin:           "系统必须保留至少一个有效超级管理员",
@@ -172,6 +174,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyRoleDataInvalid:              "Role permission data is invalid",
 		KeyUserNotFound:                 "User not found",
 		KeyUserUsernameConflict:         "Username already exists",
+		KeyUserPhoneConflict:            "Phone number already exists",
 		KeyUserSelfOperation:            "This operation cannot be performed on your own account",
 		KeyUserSuperAdminProtected:      "Only a super administrator can operate on a super administrator account",
 		KeyUserLastSuperAdmin:           "At least one effective super administrator must remain",

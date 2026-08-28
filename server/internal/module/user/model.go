@@ -19,6 +19,16 @@ type User struct {
 	DeletedAt    gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz"`
 }
 
+type Profile struct {
+	UserID    int64      `gorm:"column:user_id;primaryKey"`
+	Birthday  *time.Time `gorm:"column:birthday;type:date"`
+	Gender    int16      `gorm:"column:gender;type:smallint;not null;default:0"`
+	CreatedAt time.Time  `gorm:"column:created_at;not null"`
+	UpdatedAt time.Time  `gorm:"column:updated_at;not null"`
+}
+
+func (Profile) TableName() string { return "user_profile" }
+
 func (User) TableName() string {
 	return "user_account"
 }

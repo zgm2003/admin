@@ -162,6 +162,13 @@ func TestServiceUpdateProfileValidatesTargetAndConflicts(t *testing.T) {
 	if _, err := service.Update(ctx, actor.ID, target.ID, user.UpdateInput{Username: strings.ToUpper(actor.Username), Phone: nil}); appErrorCodeForUser(err) != user.CodeUserUsernameConflict {
 		t.Fatalf("conflict error = %v", err)
 	}
+	phone := "+86 138-0000-0000"
+	if _, err := service.Update(ctx, actor.ID, actor.ID, user.UpdateInput{Username: actor.Username, Phone: &phone}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Update(ctx, target.ID, target.ID, user.UpdateInput{Username: target.Username, Phone: &phone}); appErrorCodeForUser(err) != user.CodeUserPhoneConflict {
+		t.Fatalf("phone conflict error = %v", err)
+	}
 	if err := tx.WithContext(ctx).Delete(&target).Error; err != nil {
 		t.Fatal(err)
 	}

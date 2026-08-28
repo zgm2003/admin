@@ -32,6 +32,12 @@ type userStore interface {
 	FindCurrent(context.Context, int64) (user.Current, error)
 }
 
+type passwordStore interface {
+	FindCredentialByID(context.Context, int64) (user.Credential, error)
+	FindActiveSessionPlatforms(context.Context, int64) ([]string, error)
+	ChangePasswordAndRevokeSessions(context.Context, int64, string, time.Time) ([]user.RevokedSessionRef, error)
+}
+
 type roleStore interface {
 	FindDefault(context.Context) (role.Role, error)
 }
@@ -61,6 +67,7 @@ type Identity struct {
 
 type Service struct {
 	users               userStore
+	passwords           passwordStore
 	roles               roleStore
 	sessions            sessionStore
 	policies            policyStore
@@ -98,6 +105,82 @@ func NewService(
 
 func (s *Service) SetSessionAdminRepository(repository adminSessionRepository) {
 	s.adminSessions = repository
+}
+
+func (s *Service) SetPasswordStore(store passwordStore) {
+	s.passwords = store
+}
+
+type ChangePasswordInput struct {
+	CurrentPassword string
+	NewPassword     string
+	ConfirmPassword string
+}
+
+func (s *Service) ChangePassword(ctx context.Context, identity Identity, input ChangePasswordInput) error {
+	if identity.UserID < 1 || identity.SessionID < 1 || identity.Platform == "" {
+		return apperror.Unauthorized(fmt.Errorf("authentication identity is missing"))
+	}
+	if s.passwords == nil || s.states == nil || s.invalidator == nil || s.sessionCache == nil {
+		return apperror.DependencyUnavailable(fmt.Errorf("password change dependencies are unavailable"))
+	}
+	if input.NewPassword != input.ConfirmPassword {
+		return apperror.InvalidRequest(fmt.Errorf("password confirmation does not match"))
+	}
+	if err := ValidatePassword(input.NewPassword); err != nil {
+		return apperror.InvalidRequest(err)
+	}
+	credential, err := s.passwords.FindCredentialByID(ctx, identity.UserID)
+	if err != nil {
+		return apperror.DependencyUnavailable(err)
+	}
+	if err := s.comparePassword(credential.PasswordHash, input.CurrentPassword); err != nil {
+		return apperror.Unauthorized(fmt.Errorf("current password is incorrect"))
+	}
+	passwordHash, err := HashPassword(input.NewPassword)
+	if err != nil {
+		return apperror.Internal(err)
+	}
+	platforms, err := s.passwords.FindActiveSessionPlatforms(ctx, identity.UserID)
+	if err != nil {
+		return apperror.DependencyUnavailable(err)
+	}
+	facts := make([]authstate.SessionsFact, 0, len(platforms))
+	for _, platform := range platforms {
+		fact, factErr := s.ensureSessionsReady(ctx, platform, identity.UserID)
+		if factErr != nil {
+			return mapStateMutationError(factErr)
+		}
+		facts = append(facts, fact)
+	}
+	lease, err := s.invalidator.Acquire(ctx, authstate.MutationFacts{Sessions: facts})
+	if err != nil {
+		return mapStateMutationError(err)
+	}
+	mutationCtx, stopRenewal := lease.StartRenewal(ctx)
+	revoked, updateErr := s.passwords.ChangePasswordAndRevokeSessions(mutationCtx, identity.UserID, passwordHash, s.now().UTC())
+	renewalCause := context.Cause(mutationCtx)
+	stopRenewal()
+	if updateErr != nil || renewalCause != nil {
+		return apperror.DependencyUnavailable(errors.Join(updateErr, renewalCause, lease.Rollback(ctx)))
+	}
+	nextFacts := make([]authstate.SessionsFact, 0, len(facts))
+	for _, fact := range facts {
+		generation, generationErr := authstate.NewGeneration()
+		if generationErr != nil {
+			return apperror.Internal(generationErr)
+		}
+		nextFacts = append(nextFacts, authstate.SessionsFact{Platform: fact.Platform, UserID: fact.UserID, Generation: generation})
+	}
+	if err := lease.Commit(ctx, authstate.MutationFacts{Sessions: nextFacts}); err != nil {
+		return apperror.DependencyUnavailable(err)
+	}
+	for _, session := range revoked {
+		if err := s.sessionCache.Delete(ctx, session.Platform, session.ID); err != nil {
+			return apperror.DependencyUnavailable(err)
+		}
+	}
+	return nil
 }
 
 func (s *Service) Register(ctx context.Context, input RegisterInput) (Registered, error) {

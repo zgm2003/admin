@@ -50,6 +50,15 @@ const routes: RouteRecordRaw[] = [
                     requiredPermission: "rbac:menu:list",
                 },
             },
+            {
+                path: "account/profile",
+                name: "account-profile",
+                component: () => import("../views/account/profile/index.vue"),
+                meta: {
+                    requiresAuth: true,
+                    i18nKey: "layout.account.profile",
+                },
+            },
         ],
     },
 ];

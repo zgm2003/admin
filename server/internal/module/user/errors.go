@@ -16,6 +16,7 @@ const (
 	CodeUserInvalidRoles        = 16005
 	CodeUserRoleNotFound        = 16006
 	CodeUserDataInvalid         = 16007
+	CodeUserPhoneConflict       = 16008
 )
 
 func userNotFound(cause error) *apperror.Error {
@@ -24,6 +25,10 @@ func userNotFound(cause error) *apperror.Error {
 
 func userUsernameConflict(cause error) *apperror.Error {
 	return newUserError(http.StatusConflict, CodeUserUsernameConflict, i18n.KeyUserUsernameConflict, cause)
+}
+
+func userPhoneConflict(cause error) *apperror.Error {
+	return newUserError(http.StatusConflict, CodeUserPhoneConflict, i18n.KeyUserPhoneConflict, cause)
 }
 
 func userSelfOperation(cause error) *apperror.Error {

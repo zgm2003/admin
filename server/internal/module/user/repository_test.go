@@ -262,6 +262,24 @@ func TestRepositoryProfilePhoneRoundTripAndKeywordSearch(t *testing.T) {
 	}
 }
 
+func TestUpdateProfileMapsPhoneConstraint(t *testing.T) {
+	tx, ctx, roleRepository := openUserTransaction(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := createListedUser(t, tx, ctx, fmt.Sprintf("phone-first%d", time.Now().UnixNano()), fmt.Sprintf("phone-first%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
+	second := createListedUser(t, tx, ctx, fmt.Sprintf("phone-second%d", time.Now().UnixNano()), fmt.Sprintf("phone-second%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
+	phone := "+86 138-0000-0000"
+	repository := user.NewRepository(tx)
+	if err := repository.UpdateProfile(ctx, first.ID, first.Username, &phone, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.UpdateProfile(ctx, second.ID, second.Username, &phone, time.Now().UTC()); !errors.Is(err, user.ErrPhoneConflict) {
+		t.Fatalf("UpdateProfile() error = %v", err)
+	}
+}
+
 func TestCountAndListUsersWithStableFiltersAndRoles(t *testing.T) {
 	tx, ctx, _ := openUserTransaction(t)
 	repository := user.NewRepository(tx)
@@ -767,7 +785,7 @@ func openUserDatabase(t *testing.T) (*gorm.DB, context.Context, *role.Repository
 	if err := auth.PrepareSessionSchema(ctx, db); err != nil {
 		t.Fatalf("PrepareSessionSchema: %v", err)
 	}
-	if err := database.AutoMigrate(ctx, db, &user.User{}, &role.Role{}, &role.UserRole{}, &auth.Session{}, &access.Version{}); err != nil {
+	if err := database.AutoMigrate(ctx, db, &user.User{}, &user.Profile{}, &role.Role{}, &role.UserRole{}, &auth.Session{}, &access.Version{}); err != nil {
 		t.Fatalf("AutoMigrate: %v", err)
 	}
 	if err := role.EnsureSchema(ctx, db); err != nil {
@@ -793,6 +811,72 @@ func newCreateInput(prefix string, roleID int64) user.CreateInput {
 		Email:        fmt.Sprintf("%s-%d@example.com", prefix, unique),
 		PasswordHash: "$2a$10$placeholder",
 		RoleID:       roleID,
+	}
+}
+
+func TestPersonalProfileRepositoryPersistsAndReadsBirthdayAndGender(t *testing.T) {
+	db, ctx, roleRepository := openUserDatabase(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := user.NewRepository(db)
+	created, err := repository.CreateWithRole(ctx, newCreateInput("profile", defaultRole.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	birthday := time.Date(2000, 1, 2, 0, 0, 0, 0, time.UTC)
+	updatedAt := time.Date(2026, 8, 28, 1, 2, 3, 0, time.UTC)
+	updated, err := repository.UpdatePersonalProfile(ctx, created.ID, "profile-user", nil, &birthday, 2, updatedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Username != "profile-user" || updated.Gender != 2 || updated.Birthday == nil || !updated.Birthday.Equal(birthday) {
+		t.Fatalf("updated profile=%+v", updated)
+	}
+	read, err := repository.FindPersonalProfile(ctx, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read.Email != created.Email || read.Gender != 2 || read.Birthday == nil || read.Birthday.Format("2006-01-02") != "2000-01-02" {
+		t.Fatalf("read profile=%+v", read)
+	}
+}
+
+func TestChangePasswordAndRevokeSessionsUpdatesHashAndAllPlatforms(t *testing.T) {
+	db, ctx, roleRepository := openUserDatabase(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := user.NewRepository(db)
+	created, err := repository.CreateWithRole(ctx, newCreateInput("password", defaultRole.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 28, 2, 3, 4, 0, time.UTC)
+	for _, platform := range []string{"admin", "canvas"} {
+		if err := db.WithContext(ctx).Create(&auth.Session{UserID: created.ID, Platform: platform, DeviceID: "device-" + platform, RefreshTokenHash: fmt.Sprintf("%064d", len(platform)), Version: 1, ClientIP: "127.0.0.1", UserAgent: "test", RefreshExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	revoked, err := repository.ChangePasswordAndRevokeSessions(ctx, created.ID, "new-hash", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revoked) != 2 {
+		t.Fatalf("revoked sessions=%+v", revoked)
+	}
+	credential, err := repository.FindCredentialByID(ctx, created.ID)
+	if err != nil || credential.PasswordHash != "new-hash" {
+		t.Fatalf("credential=%+v err=%v", credential, err)
+	}
+	var active int64
+	if err := db.WithContext(ctx).Table("auth_session").Where("user_id = ? AND revoked_at IS NULL", created.ID).Count(&active).Error; err != nil {
+		t.Fatal(err)
+	}
+	if active != 0 {
+		t.Fatalf("active sessions=%d", active)
 	}
 }
 

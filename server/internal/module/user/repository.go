@@ -19,6 +19,7 @@ import (
 var (
 	ErrUsernameConflict = errors.New("active username already exists")
 	ErrEmailConflict    = errors.New("active email already exists")
+	ErrPhoneConflict    = errors.New("active phone already exists")
 	ErrUserDataInvalid  = errors.New("user or user-role data is invalid")
 )
 
@@ -42,6 +43,12 @@ type Current struct {
 	Username string
 	Email    string
 	Phone    *string
+}
+
+type RevokedSessionRef struct {
+	ID       int64
+	UserID   int64
+	Platform string
 }
 
 type Repository struct {
@@ -377,6 +384,44 @@ func (r *Repository) FindCredentialByEmail(ctx context.Context, email string) (C
 	return credential, nil
 }
 
+func (r *Repository) FindCredentialByID(ctx context.Context, userID int64) (Credential, error) {
+	var credential Credential
+	result := r.db.WithContext(ctx).Table("user_account").
+		Select("id, username, email, password_hash, is_enabled").
+		Where("id = ? AND deleted_at IS NULL", userID).Take(&credential)
+	if result.Error != nil {
+		return Credential{}, fmt.Errorf("find credential by id: %w", result.Error)
+	}
+	return credential, nil
+}
+
+func (r *Repository) ChangePasswordAndRevokeSessions(ctx context.Context, userID int64, passwordHash string, now time.Time) ([]RevokedSessionRef, error) {
+	revoked := make([]RevokedSessionRef, 0)
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Table("user_account").Where("id = ? AND deleted_at IS NULL", userID).
+			Updates(map[string]any{"password_hash": passwordHash, "updated_at": now.UTC()})
+		if result.Error != nil {
+			return fmt.Errorf("update password: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("update password %d: %w", userID, gorm.ErrRecordNotFound)
+		}
+		if err := tx.Table("auth_session").Select("id, user_id, platform").
+			Where("user_id = ? AND revoked_at IS NULL", userID).Find(&revoked).Error; err != nil {
+			return fmt.Errorf("find active sessions for password change: %w", err)
+		}
+		if err := tx.Table("auth_session").Where("user_id = ? AND revoked_at IS NULL", userID).
+			Updates(map[string]any{"revoked_at": now.UTC(), "updated_at": now.UTC()}).Error; err != nil {
+			return fmt.Errorf("revoke sessions after password change: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return revoked, nil
+}
+
 func (r *Repository) FindCurrent(ctx context.Context, userID int64) (Current, error) {
 	var current Current
 	result := r.db.WithContext(ctx).Raw(`
@@ -402,6 +447,68 @@ func (r *Repository) FindCurrent(ctx context.Context, userID int64) (Current, er
 		return Current{}, fmt.Errorf("find current user: %w", gorm.ErrRecordNotFound)
 	}
 	return current, nil
+}
+
+func (r *Repository) FindPersonalProfile(ctx context.Context, userID int64) (PersonalProfile, error) {
+	var row struct {
+		ID        int64
+		Username  string
+		Email     string
+		Phone     *string
+		Birthday  *time.Time
+		Gender    int16
+		UpdatedAt time.Time
+	}
+	result := r.db.WithContext(ctx).Table("user_account AS app_user").
+		Select("app_user.id, app_user.username, app_user.email, app_user.phone, profile.birthday, COALESCE(profile.gender, 0) AS gender, COALESCE(profile.updated_at, app_user.updated_at) AS updated_at").
+		Joins("LEFT JOIN user_profile AS profile ON profile.user_id = app_user.id").
+		Where("app_user.id = ? AND app_user.deleted_at IS NULL AND app_user.is_enabled = ?", userID, yesno.Yes).Take(&row)
+	if result.Error != nil {
+		return PersonalProfile{}, fmt.Errorf("find personal profile: %w", result.Error)
+	}
+	return PersonalProfile{Current: Current{ID: row.ID, Username: row.Username, Email: row.Email, Phone: row.Phone}, Birthday: row.Birthday, Gender: row.Gender, UpdatedAt: row.UpdatedAt}, nil
+}
+
+func (r *Repository) UpdatePersonalProfile(ctx context.Context, userID int64, username string, phone *string, birthday *time.Time, gender int16, updatedAt time.Time) (PersonalProfile, error) {
+	var updated PersonalProfile
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Table("user_account").Where("id = ? AND deleted_at IS NULL AND is_enabled = ?", userID, yesno.Yes).
+			Updates(map[string]any{"username": username, "phone": phone, "updated_at": updatedAt.UTC()})
+		if result.Error != nil {
+			return mapUserWriteError("update personal account", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("update personal account %d: %w", userID, gorm.ErrRecordNotFound)
+		}
+		if err := tx.Exec(`
+			INSERT INTO user_profile (user_id, birthday, gender, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT (user_id) DO UPDATE SET birthday = EXCLUDED.birthday, gender = EXCLUDED.gender, updated_at = EXCLUDED.updated_at`,
+			userID, birthday, gender, updatedAt.UTC(), updatedAt.UTC()).Error; err != nil {
+			return fmt.Errorf("upsert personal profile: %w", err)
+		}
+		var row struct {
+			ID        int64
+			Username  string
+			Email     string
+			Phone     *string
+			Birthday  *time.Time
+			Gender    int16
+			UpdatedAt time.Time
+		}
+		if err := tx.Table("user_account AS app_user").
+			Select("app_user.id, app_user.username, app_user.email, app_user.phone, profile.birthday, profile.gender, profile.updated_at").
+			Joins("JOIN user_profile AS profile ON profile.user_id = app_user.id").
+			Where("app_user.id = ?", userID).Take(&row).Error; err != nil {
+			return fmt.Errorf("read updated personal profile: %w", err)
+		}
+		updated = PersonalProfile{Current: Current{ID: row.ID, Username: row.Username, Email: row.Email, Phone: row.Phone}, Birthday: row.Birthday, Gender: row.Gender, UpdatedAt: row.UpdatedAt}
+		return nil
+	})
+	if err != nil {
+		return PersonalProfile{}, err
+	}
+	return updated, nil
 }
 
 func (r *Repository) Count(ctx context.Context, query ListQuery) (int64, error) {
@@ -547,6 +654,8 @@ func mapCreateError(err error) error {
 			return ErrUsernameConflict
 		case "ux_user_account_email_active":
 			return ErrEmailConflict
+		case "ux_user_account_phone_active":
+			return ErrPhoneConflict
 		}
 	}
 	return fmt.Errorf("create user: %w", err)
@@ -554,8 +663,13 @@ func mapCreateError(err error) error {
 
 func mapUserWriteError(operation string, err error) error {
 	var postgresError *pgconn.PgError
-	if errors.As(err, &postgresError) && postgresError.ConstraintName == "ux_user_account_username_active" {
-		return fmt.Errorf("%s: %w", operation, ErrUsernameConflict)
+	if errors.As(err, &postgresError) {
+		switch postgresError.ConstraintName {
+		case "ux_user_account_username_active":
+			return fmt.Errorf("%s: %w", operation, ErrUsernameConflict)
+		case "ux_user_account_phone_active":
+			return fmt.Errorf("%s: %w", operation, ErrPhoneConflict)
+		}
 	}
 	return fmt.Errorf("%s: %w", operation, err)
 }

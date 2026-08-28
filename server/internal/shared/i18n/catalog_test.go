@@ -73,6 +73,7 @@ func TestCatalogsTranslateUserErrorsWithExactParameters(t *testing.T) {
 	keys := []i18n.MessageKey{
 		i18n.KeyUserNotFound,
 		i18n.KeyUserUsernameConflict,
+		i18n.KeyUserPhoneConflict,
 		i18n.KeyUserSelfOperation,
 		i18n.KeyUserSuperAdminProtected,
 		i18n.KeyUserLastSuperAdmin,
