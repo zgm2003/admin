@@ -50,7 +50,31 @@ CREATE TABLE IF NOT EXISTS user_profile (
 );
 
 DO $$
+DECLARE missing BIGINT;
 BEGIN
+  IF to_regclass(current_schema() || '.user_profile') IS NOT NULL THEN
+    SELECT count(*) INTO missing
+    FROM (VALUES
+      ('user_id', 'bigint', 'NO'),
+      ('birthday', 'date', 'YES'),
+      ('gender', 'smallint', 'NO'),
+      ('created_at', 'timestamp with time zone', 'NO'),
+      ('updated_at', 'timestamp with time zone', 'NO')) expected(column_name, data_type, is_nullable)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM information_schema.columns c
+      WHERE c.table_schema = current_schema()
+        AND c.table_name = 'user_profile'
+        AND c.column_name = expected.column_name
+        AND c.data_type = expected.data_type
+        AND c.is_nullable = expected.is_nullable
+    );
+    IF missing > 0 THEN RAISE EXCEPTION 'user_profile structure mismatch'; END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint c
+      WHERE c.conrelid = to_regclass(current_schema() || '.user_profile')
+        AND c.conname = 'ck_user_profile_gender'
+    ) THEN RAISE EXCEPTION 'user_profile gender constraint missing'; END IF;
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_user_profile_account' AND conrelid = to_regclass(current_schema() || '.user_profile')) THEN
     ALTER TABLE user_profile ADD CONSTRAINT fk_user_profile_account FOREIGN KEY (user_id) REFERENCES user_account(id) ON DELETE RESTRICT;
   END IF;
@@ -160,6 +184,7 @@ CREATE INDEX IF NOT EXISTS ix_user_session_user_platform_created_at ON user_sess
 CREATE INDEX IF NOT EXISTS ix_user_login_log_created_at ON user_login_log (created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_user_login_log_user_created_at ON user_login_log (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_user_login_log_platform_created_at ON user_login_log (platform_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_user_login_log_account_created_at ON user_login_log (login_account, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_auth_platform_code_active ON auth_platform (code) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_role_code_active ON rbac_role (code) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_role_name_active ON rbac_role (name) WHERE deleted_at IS NULL;
@@ -174,6 +199,6 @@ CREATE INDEX IF NOT EXISTS ix_audit_operation_log_request_id ON audit_operation_
 CREATE INDEX IF NOT EXISTS ix_audit_operation_log_created_at ON audit_operation_log (created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_audit_operation_log_user_created_at ON audit_operation_log (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_audit_operation_log_action_created_at ON audit_operation_log (action, created_at DESC);
-CREATE INDEX IF NOT EXISTS ix_audit_operation_log_platform_created_at ON audit_operation_log (platform_id, created_at DESC);
+DROP INDEX IF EXISTS ux_audit_operation_log_request_id;
 
 COMMIT;
