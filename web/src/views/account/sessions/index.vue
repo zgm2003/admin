@@ -203,29 +203,15 @@ onMounted(() => {
 
 <template>
 	<section class="session-page management-page">
-		<el-space class="session-toolbar-actions management-page__actions" wrap :size="8">
-				<el-button
-					v-if="canRevoke"
-					data-testid="session-batch-revoke"
-					type="danger"
-					plain
-					:disabled="selectedIDs.length === 0"
-					:loading="mutating"
-					@click="revokeSelected"
-				>
-					{{ t('session.batchRevoke') }}
-				</el-button>
-		</el-space>
-
-		<el-row :gutter="16" class="session-stats" v-loading="statsLoading">
+		<el-row :gutter="16" class="session-stats session-stats--compact" v-loading="statsLoading">
 			<el-col :xs="24" :sm="8">
-			<div class="session-stat-primary">
+			<div class="session-stat-primary session-stat-primary--inline">
 				<span>{{ t('session.activeTotal') }}</span>
 				<strong>{{ stats.activeTotal }}</strong>
 			</div>
 			</el-col>
 			<el-col :xs="24" :sm="16">
-			<div class="session-platform-stats">
+			<div class="session-platform-stats session-platform-stats--inline">
 				<span class="session-platform-title">{{ t('session.platformDistribution') }}</span>
 				<el-space wrap :size="8">
 					<el-tag v-for="([code, count]) in platformStats" :key="code" effect="plain">{{ code }} · {{ count }}</el-tag>
@@ -268,6 +254,19 @@ onMounted(() => {
 			@selection-change="selectionChanged"
 			@update:pagination="updateTablePagination"
 		>
+			<template #toolbar-left>
+				<el-button
+					v-if="canRevoke"
+					data-testid="session-batch-revoke"
+					type="danger"
+					plain
+					:disabled="selectedIDs.length === 0"
+					:loading="mutating"
+					@click="revokeSelected"
+				>
+					{{ t('session.batchRevoke') }}
+				</el-button>
+			</template>
 			<template #cell-user="{ row }: { row: SessionItem }">
 					<strong>{{ row.username }}</strong>
 					<small>#{{ row.userId }}</small>
@@ -298,11 +297,13 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .session-page { min-width: 0; }
-.session-toolbar-actions, .session-platform-stats { align-items: center; }
-.session-stats { min-height: 72px; padding: 12px 16px; border: 1px solid var(--el-border-color-light); border-radius: 6px; }
+.session-platform-stats { align-items: center; }
+.session-stats { align-items: center; min-height: 0; padding: 8px 14px; border: 1px solid var(--el-border-color-light); border-radius: 6px; }
 .session-stat-primary { display: flex; min-width: 140px; flex-direction: column; gap: 4px; }
+.session-stat-primary--inline { flex-direction: row; align-items: baseline; gap: 10px; min-height: 36px; }
 .session-stat-primary span, .session-platform-title, small { color: var(--el-text-color-secondary); font-size: 12px; }
-.session-stat-primary strong { font-size: 24px; }
+.session-stat-primary strong { font-size: 24px; line-height: 1; }
+.session-platform-stats--inline { display: flex; align-items: center; gap: 12px; min-height: 36px; }
 .session-filters .el-input { width: 220px; }
 .session-filters .el-select-v2 { width: 150px; }
 .el-table strong, .el-table small { display: block; }

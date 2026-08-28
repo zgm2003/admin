@@ -60,6 +60,24 @@ describe('session management', () => {
 		expect(getSessions).toHaveBeenLastCalledWith({ page: 2, pageSize: 20, username: 'member', platform: 'portal', status: 'active' })
 	})
 
+	it('keeps the statistics strip compact and vertically centered', async () => {
+		const wrapper = mountPage(['auth:session:list'])
+		await flushPromises()
+
+		const stats = wrapper.get('.session-stats')
+		expect(stats.classes()).toContain('session-stats--compact')
+		expect(stats.get('.session-stat-primary').classes()).toContain('session-stat-primary--inline')
+		expect(stats.get('.session-platform-stats').classes()).toContain('session-platform-stats--inline')
+	})
+
+	it('keeps batch revoke in the table action toolbar', async () => {
+		const wrapper = mountPage(['auth:session:list', 'auth:session:revoke'])
+		await flushPromises()
+
+		expect(wrapper.find('.management-page__actions').exists()).toBe(false)
+		expect(wrapper.find('.app-table__toolbar-left [data-testid="session-batch-revoke"]').exists()).toBe(true)
+	})
+
 	it('never offers the current session and reloads list and stats after revoke', async () => {
 		const wrapper = mountPage(['auth:session:list', 'auth:session:revoke'])
 		await flushPromises()

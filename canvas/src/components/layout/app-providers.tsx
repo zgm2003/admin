@@ -9,6 +9,17 @@ import { getAntThemeConfig } from '@/lib/app-theme'
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const currentTheme = useThemeStore((state) => state.theme)
-  useEffect(() => { document.documentElement.classList.toggle('dark', currentTheme === 'dark'); document.documentElement.style.colorScheme = currentTheme }, [currentTheme])
-  return <I18nextProvider i18n={i18n}><ConfigProvider theme={getAntThemeConfig(currentTheme === 'dark')}><App>{children}</App></ConfigProvider></I18nextProvider>
+  useEffect(() => {
+    const dark = currentTheme === 'dark'
+    document.documentElement.classList.toggle('dark', dark)
+    document.documentElement.style.colorScheme = currentTheme
+  }, [currentTheme])
+
+  return (
+    <I18nextProvider i18n={i18n}>
+      <ConfigProvider theme={getAntThemeConfig(currentTheme === 'dark')}>
+        <App>{children}</App>
+      </ConfigProvider>
+    </I18nextProvider>
+  )
 }
