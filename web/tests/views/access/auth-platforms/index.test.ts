@@ -122,6 +122,31 @@ describe('authentication platform page', () => {
     expect(wrapper.get('[data-testid="auth-platform-code"]').attributes('disabled')).toBeDefined()
   })
 
+  it('explains every TTL and restores the system defaults without submitting', async () => {
+    setPermissions(['auth:platform:list', 'auth:platform:update'])
+    const customizedRow = {
+      ...adminRow,
+      accessTTLSeconds: 1_800,
+      refreshTTLSeconds: 1_209_600,
+      sessionCacheTTLSeconds: 1_800,
+      accessCacheTTLSeconds: 1_800,
+    }
+    getAuthPlatformsMock.mockResolvedValue({ list: [customizedRow], total: 1, page: 1, pageSize: 20 })
+    const { wrapper } = await mountPage()
+
+    await wrapper.get('[data-testid="auth-platform-update"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-testid="auth-platform-ttl-help"]')).toHaveLength(4)
+    await wrapper.get('[data-testid="auth-platform-ttl-defaults"]').trigger('click')
+
+    expect(ttlInputValue(wrapper, 'access')).toBe(900)
+    expect(ttlInputValue(wrapper, 'refresh')).toBe(86_400)
+    expect(ttlInputValue(wrapper, 'session-cache')).toBe(7_200)
+    expect(ttlInputValue(wrapper, 'access-cache')).toBe(600)
+    expect(updateAuthPlatformMock).not.toHaveBeenCalled()
+  })
+
   it('locks builtin admin registration off while preserving non-builtin registration choices', async () => {
     setPermissions(['auth:platform:list', 'auth:platform:update'])
     updateAuthPlatformMock.mockResolvedValue({})
@@ -202,4 +227,14 @@ function findAllowRegisterSwitch(wrapper: Awaited<ReturnType<typeof mountPage>>[
     .find((switchWrapper) => switchWrapper.attributes('data-testid') === 'auth-platform-allow-register')
   if (allowRegisterSwitch === undefined) throw new Error('allow registration switch is missing')
   return allowRegisterSwitch
+}
+
+function ttlInputValue(
+  wrapper: Awaited<ReturnType<typeof mountPage>>['wrapper'],
+  name: 'access' | 'refresh' | 'session-cache' | 'access-cache',
+): number {
+  const input = wrapper
+    .get(`[data-testid="auth-platform-${name}-ttl"]`)
+    .get('input').element as HTMLInputElement
+  return Number(input.value)
 }

@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { CirclePlus } from "@element-plus/icons-vue";
 import { ElMessageBox, ElNotification } from "element-plus";
+import { CircleHelp, RotateCcw } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
 
 import {
@@ -149,6 +150,13 @@ interface AuthPlatformForm {
   allowRegister: YesNo;
   isEnabled: YesNo;
 }
+
+const defaultTTL = Object.freeze({
+  accessTTLSeconds: 900,
+  refreshTTLSeconds: 86_400,
+  sessionCacheTTLSeconds: 7_200,
+  accessCacheTTLSeconds: 600,
+});
 
 const form = reactive<AuthPlatformForm>(defaultForm());
 
@@ -440,16 +448,17 @@ function defaultForm(): AuthPlatformForm {
   return {
     code: "",
     name: "",
-    accessTTLSeconds: 900,
-    refreshTTLSeconds: 86_400,
-    sessionCacheTTLSeconds: 7_200,
-    accessCacheTTLSeconds: 600,
+    ...defaultTTL,
     bindDevice: YesNo.Yes,
     bindIP: YesNo.No,
     maxSessions: 1,
     allowRegister: YesNo.No,
     isEnabled: YesNo.Yes,
   };
+}
+
+function restoreDefaultTTL(): void {
+  Object.assign(form, defaultTTL);
 }
 
 function inRange(value: number, minimum: number, maximum: number): boolean {
@@ -633,19 +642,56 @@ onMounted(() => {
           </div>
         </div>
         <div class="auth-platform-form-section">
-          <h3>{{ t("authPlatform.form.tokenSection") }}</h3>
+          <div class="auth-platform-form-section__heading">
+            <h3>{{ t("authPlatform.form.tokenSection") }}</h3>
+            <el-button
+              text
+              type="primary"
+              :icon="RotateCcw"
+              data-testid="auth-platform-ttl-defaults"
+              @click="restoreDefaultTTL"
+            >{{ t("authPlatform.form.restoreTTLDefaults") }}</el-button>
+          </div>
           <div class="auth-platform-form-grid auth-platform-form-grid--four">
-            <el-form-item :label="t('authPlatform.accessTTL')">
-              <el-input-number v-model="form.accessTTLSeconds" :min="60" :max="2_592_000" class="auth-platform-number" />
+            <el-form-item>
+              <template #label>
+                <span class="auth-platform-field-label">{{ t("authPlatform.accessTTL") }}
+                  <el-tooltip :content="t('authPlatform.form.accessTTLHelp')" placement="top">
+                    <CircleHelp data-testid="auth-platform-ttl-help" aria-hidden="true" />
+                  </el-tooltip>
+                </span>
+              </template>
+              <el-input-number v-model="form.accessTTLSeconds" :min="60" :max="2_592_000" class="auth-platform-number" data-testid="auth-platform-access-ttl" />
             </el-form-item>
-            <el-form-item :label="t('authPlatform.refreshTTL')">
-              <el-input-number v-model="form.refreshTTLSeconds" :min="60" :max="31_536_000" class="auth-platform-number" />
+            <el-form-item>
+              <template #label>
+                <span class="auth-platform-field-label">{{ t("authPlatform.refreshTTL") }}
+                  <el-tooltip :content="t('authPlatform.form.refreshTTLHelp')" placement="top">
+                    <CircleHelp data-testid="auth-platform-ttl-help" aria-hidden="true" />
+                  </el-tooltip>
+                </span>
+              </template>
+              <el-input-number v-model="form.refreshTTLSeconds" :min="60" :max="31_536_000" class="auth-platform-number" data-testid="auth-platform-refresh-ttl" />
             </el-form-item>
-            <el-form-item :label="t('authPlatform.sessionCacheTTL')">
-              <el-input-number v-model="form.sessionCacheTTLSeconds" :min="60" :max="86_400" class="auth-platform-number" />
+            <el-form-item>
+              <template #label>
+                <span class="auth-platform-field-label">{{ t("authPlatform.sessionCacheTTL") }}
+                  <el-tooltip :content="t('authPlatform.form.sessionCacheTTLHelp')" placement="top">
+                    <CircleHelp data-testid="auth-platform-ttl-help" aria-hidden="true" />
+                  </el-tooltip>
+                </span>
+              </template>
+              <el-input-number v-model="form.sessionCacheTTLSeconds" :min="60" :max="86_400" class="auth-platform-number" data-testid="auth-platform-session-cache-ttl" />
             </el-form-item>
-            <el-form-item :label="t('authPlatform.accessCacheTTL')">
-              <el-input-number v-model="form.accessCacheTTLSeconds" :min="60" :max="86_400" class="auth-platform-number" />
+            <el-form-item>
+              <template #label>
+                <span class="auth-platform-field-label">{{ t("authPlatform.accessCacheTTL") }}
+                  <el-tooltip :content="t('authPlatform.form.accessCacheTTLHelp')" placement="top">
+                    <CircleHelp data-testid="auth-platform-ttl-help" aria-hidden="true" />
+                  </el-tooltip>
+                </span>
+              </template>
+              <el-input-number v-model="form.accessCacheTTLSeconds" :min="60" :max="86_400" class="auth-platform-number" data-testid="auth-platform-access-cache-ttl" />
             </el-form-item>
           </div>
         </div>
@@ -717,9 +763,9 @@ onMounted(() => {
   flex-direction: column;
 }
 .auth-platform-identity {
-  align-items: flex-start;
+  align-items: center;
   gap: 5px;
-  text-align: left;
+  text-align: center;
 }
 .auth-platform-identity__meta {
   display: flex;
@@ -731,7 +777,10 @@ onMounted(() => {
   font-size: 12px;
 }
 .auth-platform-policy-stack {
+  width: max-content;
+  max-width: 100%;
   gap: 6px;
+  margin: 0 auto;
   text-align: left;
 }
 .auth-platform-policy-stack > div {
@@ -758,7 +807,9 @@ onMounted(() => {
   gap: 6px;
 }
 .auth-platform-updated {
+  align-items: center;
   gap: 3px;
+  text-align: center;
   line-height: 1.25;
 }
 .auth-platform-form {
@@ -775,10 +826,32 @@ onMounted(() => {
   min-width: 0;
 }
 .auth-platform-form-section h3 {
-  margin: 0 0 14px;
+  margin: 0;
   color: var(--el-text-color-primary);
   font-size: 14px;
   font-weight: 600;
+}
+.auth-platform-form-section__heading {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.auth-platform-form-section > h3 {
+  margin-bottom: 14px;
+}
+.auth-platform-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.auth-platform-field-label svg {
+  width: 15px;
+  height: 15px;
+  color: var(--el-text-color-secondary);
+  cursor: help;
 }
 .auth-platform-form-grid {
   display: grid;
