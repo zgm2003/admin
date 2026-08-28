@@ -53,6 +53,49 @@ func TestEnsureFoundationSeedsFullCatalogAndIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestEnsurePlatformFoundationSeedsCanvasRootPageAndAction(t *testing.T) {
+	tx, ctx, service := openCleanMenuService(t)
+	if err := service.EnsureFoundation(ctx, testFoundationDefinitions()); err != nil {
+		t.Fatal(err)
+	}
+	canvas := createRepositoryPlatform(t, tx, ctx, "canvas", "Canvas", yesno.Yes, false)
+	unrelated := Menu{
+		PlatformID: canvas.ID, MenuType: TypeDirectory, Name: "Existing", Code: "canvas:existing",
+		I18nKey: stringPointer("navigation.test"), IsEnabled: yesno.Yes, IsHidden: yesno.No,
+	}
+	if err := NewRepository(tx).Create(ctx, &unrelated); err != nil {
+		t.Fatal(err)
+	}
+	definitions := []FoundationDefinition{
+		{MenuType: TypePage, Name: "Test", Code: "canvas:test", I18nKey: stringPointer("navigation.test"), Path: stringPointer("/test"), ComponentPath: stringPointer("test"), IsEnabled: yesno.Yes, IsHidden: yesno.No},
+		{ParentCode: "canvas:test", MenuType: TypeAction, Name: "Test Button", Code: "canvas:test:button", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+	}
+
+	if err := service.EnsurePlatformFoundation(ctx, "canvas", definitions); err != nil {
+		t.Fatalf("EnsurePlatformFoundation() error = %v", err)
+	}
+	var rows []Menu
+	if err := tx.WithContext(ctx).Where("platform_id = ? AND code IN ?", canvas.ID, []string{"canvas:test", "canvas:test:button"}).Order("id").Find(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0].ParentID != nil || rows[0].MenuType != TypePage || rows[0].Code != "canvas:test" ||
+		rows[1].ParentID == nil || *rows[1].ParentID != rows[0].ID || rows[1].MenuType != TypeAction || rows[1].Code != "canvas:test:button" {
+		t.Fatalf("Canvas foundation = %+v", rows)
+	}
+	firstPageUpdatedAt, firstActionUpdatedAt := rows[0].UpdatedAt, rows[1].UpdatedAt
+
+	if err := service.EnsurePlatformFoundation(ctx, "canvas", definitions); err != nil {
+		t.Fatalf("repeat EnsurePlatformFoundation() error = %v", err)
+	}
+	rows = nil
+	if err := tx.WithContext(ctx).Where("platform_id = ? AND code IN ?", canvas.ID, []string{"canvas:test", "canvas:test:button"}).Order("id").Find(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || !rows[0].UpdatedAt.Equal(firstPageUpdatedAt) || !rows[1].UpdatedAt.Equal(firstActionUpdatedAt) {
+		t.Fatalf("Canvas foundation was not idempotent: %+v", rows)
+	}
+}
+
 func TestEnsureFoundationDoesNotClaimSameCodeFromAnotherPlatform(t *testing.T) {
 	tx, ctx, service := openCleanMenuService(t)
 	adminPlatformID := testAdminPlatformID(t, tx, ctx)

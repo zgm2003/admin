@@ -142,10 +142,10 @@ func (r *Repository) LockActiveMenus(ctx context.Context) ([]Menu, error) {
 	return rows, nil
 }
 
-func (r *Repository) CountAllMenus(ctx context.Context) (int64, error) {
+func (r *Repository) CountAllMenusForPlatform(ctx context.Context, platformID int64) (int64, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).Unscoped().Model(&Menu{}).Count(&count).Error; err != nil {
-		return 0, fmt.Errorf("count all menus: %w", err)
+	if err := r.db.WithContext(ctx).Unscoped().Model(&Menu{}).Where("platform_id = ?", platformID).Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("count all platform menus: %w", err)
 	}
 	return count, nil
 }

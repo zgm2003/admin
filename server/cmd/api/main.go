@@ -100,6 +100,9 @@ func run(logger *slog.Logger) error {
 	if err := authplatform.EnsureSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("ensure authentication platform schema: %w", err)
 	}
+	if err := authplatform.EnsureCanvasPreset(processContext, postgres.GORM); err != nil {
+		return fmt.Errorf("ensure Canvas authentication platform: %w", err)
+	}
 	if err := menu.PreparePlatformSchema(processContext, postgres.GORM); err != nil {
 		return fmt.Errorf("prepare menu platform schema: %w", err)
 	}
@@ -139,8 +142,8 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer redisClient.Close()
-	if err := authplatform.ClearBuiltinAdminPolicy(processContext, redisClient); err != nil {
-		return fmt.Errorf("clear builtin admin policy cache: %w", err)
+	if err := authplatform.ClearBuiltinPolicies(processContext, redisClient); err != nil {
+		return fmt.Errorf("clear builtin authentication policy caches: %w", err)
 	}
 	queueClient, err := queue.NewClient(settings.RedisURL)
 	if err != nil {
@@ -156,6 +159,9 @@ func run(logger *slog.Logger) error {
 	menuService := menu.NewService(menuRepository, accessInvalidator)
 	if err := menuService.EnsureFoundation(processContext, menuFoundation()); err != nil {
 		return fmt.Errorf("ensure menu foundation: %w", err)
+	}
+	if err := menuService.EnsurePlatformFoundation(processContext, authplatform.BuiltinCanvasCode, canvasMenuFoundation()); err != nil {
+		return fmt.Errorf("ensure Canvas menu foundation: %w", err)
 	}
 
 	roleRepository := role.NewRepository(postgres.GORM)

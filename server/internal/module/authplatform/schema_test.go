@@ -128,6 +128,88 @@ func TestAuthenticationPlatformSchemaAndBuiltinAdmin(t *testing.T) {
 	}
 }
 
+func TestEnsureCanvasPresetCreatesBuiltinRegistrationPlatformAndIsIdempotent(t *testing.T) {
+	connection, ctx := openAuthenticationPlatformDatabase(t)
+	if err := database.AutoMigrate(ctx, connection.GORM, &authplatform.Platform{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := authplatform.EnsureSchema(ctx, connection.GORM); err != nil {
+		t.Fatal(err)
+	}
+	if err := authplatform.EnsureCanvasPreset(ctx, connection.GORM); err != nil {
+		t.Fatal(err)
+	}
+
+	var first authplatform.Platform
+	if err := connection.GORM.WithContext(ctx).Where("code = ?", "canvas").Take(&first).Error; err != nil {
+		t.Fatal(err)
+	}
+	if first.Name != "Canvas" || first.PolicyVersion != 1 || first.AccessTTLSeconds != 900 ||
+		first.RefreshTTLSeconds != 1_209_600 || first.SessionCacheTTLSeconds != 1_800 ||
+		first.AccessCacheTTLSeconds != 1_800 || first.BindDevice != yesno.No || first.BindIP != yesno.No ||
+		first.MaxSessions != 1 || first.AllowRegister != yesno.Yes || first.IsEnabled != yesno.Yes ||
+		first.IsBuiltin != yesno.Yes || first.DeletedAt.Valid {
+		t.Fatalf("Canvas preset = %+v", first)
+	}
+
+	if err := authplatform.EnsureCanvasPreset(ctx, connection.GORM); err != nil {
+		t.Fatalf("second EnsureCanvasPreset() error = %v", err)
+	}
+	var second authplatform.Platform
+	if err := connection.GORM.WithContext(ctx).Where("code = ?", "canvas").Take(&second).Error; err != nil {
+		t.Fatal(err)
+	}
+	if second.ID != first.ID || second.PolicyVersion != first.PolicyVersion || !second.UpdatedAt.Equal(first.UpdatedAt) {
+		t.Fatalf("Canvas preset was not idempotent: first=%+v second=%+v", first, second)
+	}
+}
+
+func TestEnsureCanvasPresetPromotesExistingPlatformWithoutResettingPolicy(t *testing.T) {
+	connection, ctx := openAuthenticationPlatformDatabase(t)
+	if err := database.AutoMigrate(ctx, connection.GORM, &authplatform.Platform{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := authplatform.EnsureSchema(ctx, connection.GORM); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	existing := validHistoricalAdmin(now)
+	existing.ID = 0
+	existing.Code = "canvas"
+	existing.Name = "Canvas Local"
+	existing.PolicyVersion = 7
+	existing.AccessTTLSeconds = 1_200
+	existing.RefreshTTLSeconds = 1_300_000
+	existing.SessionCacheTTLSeconds = 1_900
+	existing.AccessCacheTTLSeconds = 2_000
+	existing.BindDevice = yesno.Yes
+	existing.BindIP = yesno.Yes
+	existing.MaxSessions = 3
+	existing.AllowRegister = yesno.No
+	existing.IsEnabled = yesno.No
+	existing.IsBuiltin = yesno.No
+	if err := connection.GORM.WithContext(ctx).Create(&existing).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if err := authplatform.EnsureCanvasPreset(ctx, connection.GORM); err != nil {
+		t.Fatal(err)
+	}
+	var promoted authplatform.Platform
+	if err := connection.GORM.WithContext(ctx).Where("code = ?", "canvas").Take(&promoted).Error; err != nil {
+		t.Fatal(err)
+	}
+	if promoted.ID != existing.ID || promoted.IsBuiltin != yesno.Yes || promoted.PolicyVersion != 8 ||
+		promoted.Name != existing.Name || promoted.AccessTTLSeconds != existing.AccessTTLSeconds ||
+		promoted.RefreshTTLSeconds != existing.RefreshTTLSeconds || promoted.SessionCacheTTLSeconds != existing.SessionCacheTTLSeconds ||
+		promoted.AccessCacheTTLSeconds != existing.AccessCacheTTLSeconds || promoted.BindDevice != existing.BindDevice ||
+		promoted.BindIP != existing.BindIP || promoted.MaxSessions != existing.MaxSessions ||
+		promoted.AllowRegister != existing.AllowRegister || promoted.IsEnabled != existing.IsEnabled ||
+		!promoted.CreatedAt.Equal(existing.CreatedAt) || !promoted.UpdatedAt.After(existing.UpdatedAt) {
+		t.Fatalf("promoted Canvas platform = %+v, existing = %+v", promoted, existing)
+	}
+}
+
 func TestEnsureSchemaMigratesBuiltinAdminRegistrationOnce(t *testing.T) {
 	connection, ctx := openAuthenticationPlatformDatabase(t)
 	if err := database.AutoMigrate(ctx, connection.GORM, &authplatform.Platform{}); err != nil {

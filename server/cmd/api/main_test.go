@@ -440,6 +440,23 @@ func TestMenuFoundationDefinesCompleteBusinessCatalog(t *testing.T) {
 	}
 }
 
+func TestCanvasMenuFoundationDefinesRootTestPageAndAction(t *testing.T) {
+	definitions := canvasMenuFoundation()
+	if len(definitions) != 2 {
+		t.Fatalf("Canvas foundation definitions = %d, want 2", len(definitions))
+	}
+	page, action := definitions[0], definitions[1]
+	if page.ParentCode != "" || page.MenuType != menu.TypePage || page.Code != "canvas:test" ||
+		page.Path == nil || *page.Path != "/test" || page.ComponentPath == nil || *page.ComponentPath != "test" ||
+		page.IsEnabled != yesno.Yes || page.IsHidden != yesno.No {
+		t.Fatalf("Canvas page definition = %+v", page)
+	}
+	if action.ParentCode != page.Code || action.MenuType != menu.TypeAction || action.Code != "canvas:test:button" ||
+		action.IsEnabled != yesno.Yes || action.IsHidden != yesno.Yes {
+		t.Fatalf("Canvas action definition = %+v", action)
+	}
+}
+
 func TestRunKeepsSchemaDependenciesBeforeRedisAndFoundationBeforeRouter(t *testing.T) {
 	content, err := os.ReadFile("main.go")
 	if err != nil {
@@ -452,12 +469,14 @@ func TestRunKeepsSchemaDependenciesBeforeRedisAndFoundationBeforeRouter(t *testi
 		"operationlog.PrepareSchema(",
 		"menu.PrepareSchema(",
 		"database.AutoMigrate(",
+		"authplatform.EnsureCanvasPreset(",
 		"role.EnsureSchema(",
 		"operationlog.EnsureSchema(",
 		"projectredis.Open(",
-		"authplatform.ClearBuiltinAdminPolicy(",
+		"authplatform.ClearBuiltinPolicies(",
 		"queue.NewClient(",
 		"menuService.EnsureFoundation(",
+		"menuService.EnsurePlatformFoundation(",
 		"buildRouter(",
 	}
 	previous := -1

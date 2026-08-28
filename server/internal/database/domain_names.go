@@ -102,7 +102,7 @@ var domainConstraintRenames = []domainConstraintRename{
 	{Table: "sys_menu", Old: "ck_sys_menu_sort_order", New: "ck_rbac_menu_sort_order"},
 	{Table: "sys_menu", Old: "ck_sys_menu_is_enabled", New: "ck_rbac_menu_is_enabled"},
 	{Table: "sys_menu", Old: "ck_sys_menu_is_hidden", New: "ck_rbac_menu_is_hidden"},
-	{Table: "sys_menu", Old: "fk_sys_menu_parent", New: "fk_rbac_menu_parent"},
+	{Table: "sys_menu", Old: "fk_sys_menu_parent", New: "fk_rbac_menu_parent", Optional: true},
 	{Table: "sys_role", Old: "ck_sys_role_is_default", New: "ck_rbac_role_is_default"},
 	{Table: "sys_role", Old: "ck_sys_role_is_enabled", New: "ck_rbac_role_is_enabled"},
 	{Table: "sys_user_role", Old: "fk_sys_user_role_user", New: "fk_rbac_user_role_user"},

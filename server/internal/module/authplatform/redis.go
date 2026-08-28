@@ -36,12 +36,13 @@ func PolicyKey(code string) string {
 	return "auth:policy:" + code
 }
 
-func ClearBuiltinAdminPolicy(ctx context.Context, redis *projectredis.Client) error {
+func ClearBuiltinPolicies(ctx context.Context, redis *projectredis.Client) error {
 	if redis == nil {
-		return fmt.Errorf("clear builtin admin policy requires Redis")
+		return fmt.Errorf("clear builtin authentication policies requires Redis")
 	}
-	if err := redis.Delete(ctx, PolicyKey(BuiltinAdminCode)); err != nil {
-		return fmt.Errorf("clear builtin admin policy: %w", err)
+	keys := []string{PolicyKey(BuiltinAdminCode), PolicyKey(BuiltinCanvasCode)}
+	if err := redis.DeleteMany(ctx, keys); err != nil {
+		return fmt.Errorf("clear builtin authentication policies: %w", err)
 	}
 	return nil
 }

@@ -106,6 +106,18 @@ func TestPrepareDomainNamesAllowsProtocolRemovedMenuI18nConstraint(t *testing.T)
 	}
 }
 
+func TestPrepareDomainNamesAllowsPlatformMigrationToReplaceMenuParentConstraint(t *testing.T) {
+	db, ctx := openDomainNamesDatabase(t, "platform_menu_parent")
+	createLegacyDomainSchema(t, db)
+	if err := database.PrepareDomainNames(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, db, `ALTER TABLE rbac_menu DROP CONSTRAINT fk_rbac_menu_parent`)
+	if err := database.PrepareDomainNames(ctx, db); err != nil {
+		t.Fatalf("PrepareDomainNames() after platform menu migration = %v", err)
+	}
+}
+
 func TestPrepareDomainNamesAllowsCompletelyEmptySchema(t *testing.T) {
 	db, ctx := openDomainNamesDatabase(t, "empty")
 	if err := database.PrepareDomainNames(ctx, db); err != nil {

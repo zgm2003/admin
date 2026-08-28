@@ -44,6 +44,17 @@ func menuFoundation() []menu.FoundationDefinition {
 	}
 }
 
+func canvasMenuFoundation() []menu.FoundationDefinition {
+	return []menu.FoundationDefinition{
+		{
+			MenuType: menu.TypePage, Name: "Test", Code: "canvas:test", I18nKey: stringPointer("navigation.test"),
+			Path: stringPointer("/test"), ComponentPath: stringPointer("test"),
+			IsEnabled: yesno.Yes, IsHidden: yesno.No,
+		},
+		menuAction("canvas:test", "Test Button", "canvas:test:button", 10, false),
+	}
+}
+
 func menuDirectory(name, code, i18nKey, icon string, sortOrder int, protected bool) menu.FoundationDefinition {
 	return menu.FoundationDefinition{
 		MenuType: menu.TypeDirectory, Name: name, Code: code, I18nKey: stringPointer(i18nKey), Icon: stringPointer(icon),

@@ -84,6 +84,59 @@ func EnsureSchema(ctx context.Context, db *gorm.DB) error {
 	return nil
 }
 
+func EnsureCanvasPreset(ctx context.Context, db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("ensure Canvas authentication platform requires a database")
+	}
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`LOCK TABLE auth_platform IN SHARE ROW EXCLUSIVE MODE`).Error; err != nil {
+			return fmt.Errorf("lock authentication platforms: %w", err)
+		}
+		rows := make([]Platform, 0, 2)
+		if err := tx.Unscoped().Where("code = ?", BuiltinCanvasCode).Order("id ASC").Limit(2).Find(&rows).Error; err != nil {
+			return fmt.Errorf("find Canvas authentication platform: %w", err)
+		}
+		if len(rows) == 0 {
+			now := time.Now().UTC().Truncate(time.Microsecond)
+			value := builtinCanvas(now)
+			if err := tx.Create(&value).Error; err != nil {
+				return fmt.Errorf("create Canvas authentication platform: %w", err)
+			}
+			return nil
+		}
+		if len(rows) != 1 || rows[0].DeletedAt.Valid {
+			return fmt.Errorf("Canvas authentication platform is missing or damaged")
+		}
+		current := rows[0]
+		candidate := current
+		candidate.IsBuiltin = yesno.Yes
+		if err := ValidatePlatform(candidate); err != nil {
+			return fmt.Errorf("validate Canvas authentication platform: %w", err)
+		}
+		if current.IsBuiltin == yesno.Yes {
+			return nil
+		}
+		now := time.Now().UTC().Truncate(time.Microsecond)
+		result := tx.Exec(`
+			UPDATE auth_platform
+			SET is_builtin = 1,
+			    policy_version = policy_version + 1,
+			    updated_at = ?
+			WHERE id = ? AND deleted_at IS NULL`, now, current.ID)
+		if result.Error != nil {
+			return fmt.Errorf("promote Canvas authentication platform: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("promote Canvas authentication platform: expected one updated row, got %d", result.RowsAffected)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("ensure Canvas authentication platform: %w", err)
+	}
+	return nil
+}
+
 func ensureConstraint(db *gorm.DB, definition constraintDefinition) error {
 	var exists bool
 	if err := db.Raw(`
@@ -109,6 +162,17 @@ func builtinAdmin(now time.Time) Platform {
 		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
 		AllowRegister: yesno.No, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+		CreatedAt: now, UpdatedAt: now,
+	}
+}
+
+func builtinCanvas(now time.Time) Platform {
+	return Platform{
+		Code: BuiltinCanvasCode, Name: "Canvas", PolicyVersion: 1,
+		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
+		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
+		AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
 		CreatedAt: now, UpdatedAt: now,
 	}
 }

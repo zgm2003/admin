@@ -31,8 +31,19 @@ func IsProtectedCode(code string) bool {
 }
 
 func (s *Service) EnsureFoundation(ctx context.Context, definitions []FoundationDefinition) error {
+	return s.ensurePlatformFoundation(ctx, authplatform.BuiltinAdminCode, definitions, false)
+}
+
+func (s *Service) EnsurePlatformFoundation(ctx context.Context, platformCode string, definitions []FoundationDefinition) error {
+	return s.ensurePlatformFoundation(ctx, platformCode, definitions, true)
+}
+
+func (s *Service) ensurePlatformFoundation(ctx context.Context, platformCode string, definitions []FoundationDefinition, ensureAll bool) error {
 	if s == nil || s.repository == nil || s.accessInvalidator == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("ensure menu foundation requires a repository"))
+	}
+	if err := authplatform.ValidateCode(platformCode); err != nil {
+		return menuInvalidFields(fmt.Errorf("menu foundation platform code: %w", err))
 	}
 	ordered, err := validateFoundationDefinitions(definitions)
 	if err != nil {
@@ -42,33 +53,33 @@ func (s *Service) EnsureFoundation(ctx context.Context, definitions []Foundation
 	if err != nil {
 		return apperror.DependencyUnavailable(err)
 	}
-	adminPlatformID := int64(0)
+	platformID := int64(0)
 	for _, platform := range platforms {
-		if platform.Code != authplatform.BuiltinAdminCode {
+		if platform.Code != platformCode {
 			continue
 		}
-		if adminPlatformID != 0 {
-			return apperror.DependencyUnavailable(fmt.Errorf("multiple active Admin platforms exist"))
+		if platformID != 0 {
+			return apperror.DependencyUnavailable(fmt.Errorf("multiple active %s platforms exist", platformCode))
 		}
-		adminPlatformID = platform.ID
+		platformID = platform.ID
 	}
-	if adminPlatformID < 1 {
-		return apperror.DependencyUnavailable(fmt.Errorf("builtin Admin platform is unavailable"))
+	if platformID < 1 {
+		return apperror.DependencyUnavailable(fmt.Errorf("authentication platform %s is unavailable", platformCode))
 	}
 	err = s.mutateAllAccessUsers(ctx, func(mutationCtx context.Context, repository *Repository, activeMenus []Menu, operationTime time.Time) (bool, error) {
-		allCount, err := repository.CountAllMenus(mutationCtx)
+		allCount, err := repository.CountAllMenusForPlatform(mutationCtx, platformID)
 		if err != nil {
 			return false, err
 		}
 		selected := ordered
-		if allCount != 0 {
+		if !ensureAll && allCount != 0 {
 			selected = protectedFoundationDefinitions(ordered)
 		}
 		codes := make([]string, len(selected))
 		for index, definition := range selected {
 			codes[index] = definition.Code
 		}
-		stored, err := repository.LockMenusByCodesUnscoped(mutationCtx, adminPlatformID, codes)
+		stored, err := repository.LockMenusByCodesUnscoped(mutationCtx, platformID, codes)
 		if err != nil {
 			return false, err
 		}
@@ -81,7 +92,7 @@ func (s *Service) EnsureFoundation(ctx context.Context, definitions []Foundation
 		}
 		activeByCode := make(map[string]Menu, len(activeMenus)+len(selected))
 		for _, row := range activeMenus {
-			if row.PlatformID != adminPlatformID {
+			if row.PlatformID != platformID {
 				continue
 			}
 			activeByCode[row.Code] = row
@@ -89,7 +100,7 @@ func (s *Service) EnsureFoundation(ctx context.Context, definitions []Foundation
 
 		changed := false
 		for _, definition := range selected {
-			candidate, err := foundationMenu(adminPlatformID, definition, activeByCode)
+			candidate, err := foundationMenu(platformID, definition, activeByCode)
 			if err != nil {
 				return false, err
 			}
@@ -159,8 +170,8 @@ func validateFoundationDefinitions(definitions []FoundationDefinition) ([]Founda
 			return nil, fmt.Errorf("foundation menu %s: %w", definition.Code, err)
 		}
 		if definition.ParentCode == "" {
-			if definition.MenuType != TypeDirectory {
-				return nil, fmt.Errorf("foundation root %s is not a directory", definition.Code)
+			if definition.MenuType == TypeAction {
+				return nil, fmt.Errorf("foundation root %s is an action", definition.Code)
 			}
 		} else {
 			parent, exists := byCode[definition.ParentCode]

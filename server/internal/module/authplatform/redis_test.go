@@ -100,35 +100,43 @@ func TestCurrentPolicyRejectsInvalidatingState(t *testing.T) {
 	}
 }
 
-func TestClearBuiltinAdminPolicyDeletesOnlyAdminKey(t *testing.T) {
+func TestClearBuiltinPoliciesDeletesAdminAndCanvasKeysOnly(t *testing.T) {
 	ctx := context.Background()
 	redisClient := openPlatformRedis(t)
 	adminKey := authplatform.PolicyKey(authplatform.BuiltinAdminCode)
+	canvasKey := authplatform.PolicyKey("canvas")
 	appKey := authplatform.PolicyKey("app")
 	t.Cleanup(func() {
 		_ = redisClient.Delete(context.Background(), adminKey)
+		_ = redisClient.Delete(context.Background(), canvasKey)
 		_ = redisClient.Delete(context.Background(), appKey)
 	})
 	if err := redisClient.SetString(ctx, adminKey, `{"state":"old-admin"}`, 0); err != nil {
 		t.Fatal(err)
 	}
+	if err := redisClient.SetString(ctx, canvasKey, `{"state":"old-canvas"}`, 0); err != nil {
+		t.Fatal(err)
+	}
 	if err := redisClient.SetString(ctx, appKey, `{"state":"app"}`, 0); err != nil {
 		t.Fatal(err)
 	}
-	if err := authplatform.ClearBuiltinAdminPolicy(ctx, redisClient); err != nil {
+	if err := authplatform.ClearBuiltinPolicies(ctx, redisClient); err != nil {
 		t.Fatal(err)
 	}
 	if _, found, err := redisClient.GetString(ctx, adminKey); err != nil || found {
 		t.Fatalf("admin key found=%v err=%v", found, err)
+	}
+	if _, found, err := redisClient.GetString(ctx, canvasKey); err != nil || found {
+		t.Fatalf("Canvas key found=%v err=%v", found, err)
 	}
 	if _, found, err := redisClient.GetString(ctx, appKey); err != nil || !found {
 		t.Fatalf("app key found=%v err=%v", found, err)
 	}
 }
 
-func TestClearBuiltinAdminPolicyRequiresRedis(t *testing.T) {
-	if err := authplatform.ClearBuiltinAdminPolicy(context.Background(), nil); err == nil {
-		t.Fatal("ClearBuiltinAdminPolicy() succeeded without Redis")
+func TestClearBuiltinPoliciesRequiresRedis(t *testing.T) {
+	if err := authplatform.ClearBuiltinPolicies(context.Background(), nil); err == nil {
+		t.Fatal("ClearBuiltinPolicies() succeeded without Redis")
 	}
 }
 

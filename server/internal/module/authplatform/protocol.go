@@ -15,6 +15,7 @@ const (
 	PermissionDelete = "auth:platform:delete"
 
 	BuiltinAdminCode              = "admin"
+	BuiltinCanvasCode             = "canvas"
 	MinimumAccessTTLSeconds       = 60
 	MaximumAccessTTLSeconds       = 2_592_000
 	MinimumRefreshTTLSeconds      = 60
