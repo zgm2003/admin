@@ -170,6 +170,7 @@ describe('user management', () => {
   it('keeps main as scroll owner and dialogs use body scrolling', async () => {
     const wrapper = mountPage(['account:user:roles'], 9); await flushPromises()
     expect(wrapper.get('.user-management').attributes('style') ?? '').not.toContain('overflow')
+    expect(wrapper.findComponent({ name: 'ElSpace' }).exists()).toBe(true)
     await findAriaButton(wrapper, '分配角色').trigger('click'); await flushPromises()
     expect(document.body.querySelector('.role-dialog-scroll')).not.toBeNull()
   })

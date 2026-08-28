@@ -5,6 +5,7 @@ import ElementPlus from 'element-plus'
 import { describe, expect, it } from 'vitest'
 import Search from '@src/components/Search/src/index.vue'
 import type { SearchField, SearchFormModel } from '@src/components/Search/src/types'
+import { appI18n, setLocale } from '@src/i18n'
 
 describe('Search', () => {
   const fields: SearchField[] = [
@@ -16,7 +17,7 @@ describe('Search', () => {
   it('renders select-v2 fields and collapses extra fields', async () => {
     const wrapper = mount(Search, {
       props: { modelValue: { keyword: '', status: '', role: '' }, fields, collapseCount: 2 },
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus, appI18n] },
     })
     expect(wrapper.findComponent({ name: 'ElSelectV2' }).exists()).toBe(true)
     expect(wrapper.findAll('.el-form-item')).toHaveLength(4)
@@ -34,7 +35,7 @@ describe('Search', () => {
     const model: SearchFormModel = { keyword: 'alice', status: 1 }
     const wrapper = mount(Search, {
       props: { modelValue: model, fields: fields.slice(0, 2) },
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus, appI18n] },
     })
     await wrapper.find('form').trigger('submit')
     expect(wrapper.emitted('query')?.[0]?.[0]).toEqual(model)
@@ -45,11 +46,26 @@ describe('Search', () => {
   it('emits query when the query button is clicked', async () => {
     const wrapper = mount(Search, {
       props: { modelValue: { keyword: 'portal' }, fields: fields.slice(0, 1) },
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus, appI18n] },
     })
 
     await wrapper.find('button').trigger('click')
 
     expect(wrapper.emitted('query')?.[0]?.[0]).toEqual({ keyword: 'portal' })
+  })
+
+  it('uses Element Plus spacing for actions and updates default labels by locale', async () => {
+    setLocale('zh-CN')
+    const wrapper = mount(Search, {
+      props: { modelValue: { keyword: '' }, fields: fields.slice(0, 1) },
+      global: { plugins: [ElementPlus, appI18n] },
+    })
+    expect(wrapper.findComponent({ name: 'ElSpace' }).exists()).toBe(true)
+    expect(wrapper.text()).toContain('查询')
+
+    setLocale('en-US')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('Search')
+    expect(wrapper.text()).toContain('Reset')
   })
 })

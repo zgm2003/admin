@@ -23,13 +23,13 @@ const form = reactive<LoginForm>({ email: '', password: '' })
 const pending = ref(false)
 const submitError = ref('')
 const bootstrapError = computed(() => auth.status === 'error' ? auth.errorMessage : '')
-const rules: FormRules<LoginForm> = {
+const rules = computed<FormRules<LoginForm>>(() => ({
   email: [
     { required: true, message: t('auth.login.emailRequired'), trigger: 'blur' },
     { type: 'email', message: t('auth.login.emailInvalid'), trigger: 'blur' },
   ],
   password: [{ required: true, message: t('auth.login.passwordRequired'), trigger: 'blur' }],
-}
+}))
 
 async function submit(): Promise<void> {
   if (pending.value || formReference.value === undefined) return
@@ -65,7 +65,8 @@ function safeRedirect(value: unknown): string {
 
 <template>
   <main class="auth-page">
-    <div class="auth-shell">
+    <el-row class="auth-shell">
+      <el-col :xs="24" :sm="24" :md="12" class="auth-brand-col">
       <section class="auth-brand" data-testid="login-brand" :aria-label="t('navigation.admin')">
         <div class="auth-brand__identity">
           <span class="auth-brand__mark" aria-hidden="true">A</span>
@@ -84,7 +85,9 @@ function safeRedirect(value: unknown): string {
           <span></span>
         </div>
       </section>
+      </el-col>
 
+      <el-col :xs="24" :sm="24" :md="12" class="auth-form-col">
       <div class="auth-form-area">
         <section class="auth-panel" data-testid="login-panel" aria-labelledby="login-title">
           <header class="auth-panel__header">
@@ -151,11 +154,12 @@ function safeRedirect(value: unknown): string {
           </p>
         </section>
       </div>
-    </div>
+      </el-col>
+    </el-row>
   </main>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .auth-page {
   display: flex;
   align-items: center;
@@ -169,8 +173,7 @@ function safeRedirect(value: unknown): string {
 }
 
 .auth-shell {
-  display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(420px, 0.78fr);
+  display: flex;
   width: min(1080px, 100%);
   min-height: 620px;
   overflow: hidden;
@@ -178,6 +181,16 @@ function safeRedirect(value: unknown): string {
   border: 1px solid var(--el-border-color-light);
   border-radius: 8px;
   box-shadow: var(--el-box-shadow-lighter);
+}
+
+.auth-brand-col,
+.auth-form-col {
+  display: flex;
+  min-width: 0;
+}
+
+.auth-brand-col {
+  border-right: 1px solid var(--el-border-color-light);
 }
 
 .auth-brand {
@@ -188,7 +201,6 @@ function safeRedirect(value: unknown): string {
   padding: 48px;
   overflow: hidden;
   background: var(--el-fill-color-light);
-  border-right: 1px solid var(--el-border-color-light);
 }
 
 .auth-brand::after {
@@ -286,6 +298,7 @@ function safeRedirect(value: unknown): string {
   display: flex;
   align-items: center;
   padding: 48px;
+  width: 100%;
 }
 
 .auth-panel {
@@ -375,15 +388,13 @@ function safeRedirect(value: unknown): string {
     padding: 16px;
   }
 
-  .auth-shell {
-    grid-template-columns: 1fr;
-    min-height: 0;
-  }
+  .auth-shell { min-height: 0; }
+
+  .auth-brand-col { border-right: 0; }
 
   .auth-brand {
     min-height: 84px;
     padding: 22px 24px;
-    border-right: 0;
     border-bottom: 1px solid var(--el-border-color-light);
   }
 

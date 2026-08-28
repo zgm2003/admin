@@ -37,6 +37,9 @@ describe('Login page', () => {
     expect(wrapper.find('[data-testid="login-panel"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="login-email"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="login-password"]').exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'ElRow' }).exists()).toBe(true)
+    expect(wrapper.findAllComponents({ name: 'ElCol' })).toHaveLength(2)
+    expect(wrapper.find('[data-testid="login-locale-switch"]').exists()).toBe(false)
   })
 
   it('renders the selected locale messages', async () => {
@@ -44,6 +47,27 @@ describe('Login page', () => {
     const { wrapper } = await mountLogin()
     expect(wrapper.get('[data-testid="login-email"]').attributes('placeholder')).toBe('Enter email address')
     expect(wrapper.get('[data-testid="login-submit"]').text()).toBe('Sign in to console')
+  })
+
+  it('updates validation messages when the locale changes', async () => {
+    const { wrapper } = await mountLogin()
+    const form = wrapper.findComponent({ name: 'ElForm' })
+    const initialRules = form.props('rules') as { email: Array<{ message: string }> }
+    expect(initialRules.email[0]?.message).toBe('请输入邮箱')
+
+    setLocale('en-US')
+    await wrapper.vm.$nextTick()
+
+    const englishRules = form.props('rules') as { email: Array<{ message: string }> }
+    expect(englishRules.email[0]?.message).toBe('Email is required')
+  })
+
+  it('reads the remembered locale before authentication', async () => {
+    setLocale('en-US')
+    const { wrapper } = await mountLogin()
+
+    expect(wrapper.text()).toContain('Welcome back')
+    expect(wrapper.get('[data-testid="login-email"]').attributes('placeholder')).toBe('Enter email address')
   })
 
   it('submits trimmed email and original password, loads me, and follows a safe redirect', async () => {
@@ -102,7 +126,7 @@ async function mountLogin(initialPath = '/login') {
   })
   await router.push(initialPath)
   await router.isReady()
-  const wrapper = mount(LoginPage, { global: { plugins: [ElementPlus, pinia, router, appI18n] } })
+  const wrapper = mount(LoginPage, { attachTo: document.body, global: { plugins: [ElementPlus, pinia, router, appI18n] } })
   await flushPromises()
   return { wrapper, router }
 }

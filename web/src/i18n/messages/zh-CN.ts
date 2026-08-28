@@ -1,4 +1,12 @@
 export const zhCN = {
+  'appTable.ariaLabel': '数据表格',
+  'appTable.refresh': '刷新',
+  'appTable.requestFailed': '请求失败',
+  'appTable.empty': '暂无数据',
+  'search.query': '查询',
+  'search.reset': '重置',
+  'search.expand': '展开',
+  'search.collapse': '收起',
   'navigation.dashboard': '工作台',
   'navigation.main': '主导航',
   'navigation.admin': 'Admin',

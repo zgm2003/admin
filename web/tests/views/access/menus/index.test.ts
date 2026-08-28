@@ -1,6 +1,8 @@
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -92,6 +94,13 @@ describe('MenuManagement', () => {
     expect(actionsColumn?.props('width')).toBe(280)
     expect(wrapper.find('.menu-row-actions').exists()).toBe(false)
     expect(wrapper.find('[data-testid="menu-drawer"]').exists()).toBe(false)
+  })
+
+  it('defines menu type labels as a computed locale-dependent value', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/access/menus/index.vue'), 'utf8')
+
+    expect(source).toContain('const menuTypeOptions = computed<Array<{ label: string; value: ManagedMenuType }>>')
+    expect(source).not.toContain('const menuTypeOptions: Array<{ label: string; value: ManagedMenuType }>')
   })
 
   it('switches the top platform tab and reloads only that platform tree', async () => {
@@ -307,6 +316,8 @@ describe('MenuManagement', () => {
     await flushPromises()
 
     expect(wrapper.findComponent({ name: 'AppDialog' }).props('height')).toBeUndefined()
+    expect(wrapper.findComponent({ name: 'ElRow' }).exists()).toBe(true)
+    expect(wrapper.findAllComponents({ name: 'ElCol' }).length).toBeGreaterThan(0)
   })
 
 	it('uses text protocol fields with exact hints and clears incompatible values without deriving paths', async () => {

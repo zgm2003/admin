@@ -203,7 +203,7 @@ onMounted(() => {
 
 <template>
 	<section class="session-page management-page">
-		<div class="session-toolbar-actions management-page__actions">
+		<el-space class="session-toolbar-actions management-page__actions" wrap :size="8">
 				<el-button
 					v-if="canRevoke"
 					data-testid="session-batch-revoke"
@@ -215,18 +215,24 @@ onMounted(() => {
 				>
 					{{ t('session.batchRevoke') }}
 				</el-button>
-		</div>
+		</el-space>
 
-		<div class="session-stats" v-loading="statsLoading">
+		<el-row :gutter="16" class="session-stats" v-loading="statsLoading">
+			<el-col :xs="24" :sm="8">
 			<div class="session-stat-primary">
 				<span>{{ t('session.activeTotal') }}</span>
 				<strong>{{ stats.activeTotal }}</strong>
 			</div>
+			</el-col>
+			<el-col :xs="24" :sm="16">
 			<div class="session-platform-stats">
 				<span class="session-platform-title">{{ t('session.platformDistribution') }}</span>
-				<el-tag v-for="([code, count]) in platformStats" :key="code" effect="plain">{{ code }} · {{ count }}</el-tag>
+				<el-space wrap :size="8">
+					<el-tag v-for="([code, count]) in platformStats" :key="code" effect="plain">{{ code }} · {{ count }}</el-tag>
+				</el-space>
 			</div>
-		</div>
+			</el-col>
+		</el-row>
 		<el-alert v-if="statsError" :title="statsError" type="error" :closable="false" show-icon />
 
 		<Search
@@ -290,20 +296,18 @@ onMounted(() => {
 	</section>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .session-page { min-width: 0; }
-.session-toolbar-actions, .session-filters, .session-stats, .session-platform-stats { display: flex; align-items: center; gap: 12px; }
+.session-toolbar-actions, .session-platform-stats { align-items: center; }
 .session-stats { min-height: 72px; padding: 12px 16px; border: 1px solid var(--el-border-color-light); border-radius: 6px; }
 .session-stat-primary { display: flex; min-width: 140px; flex-direction: column; gap: 4px; }
 .session-stat-primary span, .session-platform-title, small { color: var(--el-text-color-secondary); font-size: 12px; }
 .session-stat-primary strong { font-size: 24px; }
-.session-platform-stats { flex-wrap: wrap; }
 .session-filters .el-input { width: 220px; }
 .session-filters .el-select-v2 { width: 150px; }
 .el-table strong, .el-table small { display: block; }
 .el-pagination { justify-content: flex-end; }
 @media (max-width: 900px) {
-	.session-filters, .session-stats { align-items: stretch; flex-direction: column; }
 	.session-filters .el-input, .session-filters .el-select-v2 { width: 100%; }
 }
 </style>

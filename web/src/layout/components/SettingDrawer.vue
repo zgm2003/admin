@@ -20,6 +20,11 @@ const { t } = useI18n()
 const uiPreferences = useUIPreferencesStore()
 const themeColors = ['#409EFF', '#3B82F6', '#475569', '#059669', '#0891B2', '#7C3AED', '#EA580C'] as const
 const transitionNames: readonly PageTransitionName[] = ['fade', 'slide-left', 'zoom']
+const transitionOptions = computed(() => [
+  { value: 'fade', label: t('layout.settings.transitionFade') },
+  { value: 'slide-left', label: t('layout.settings.transitionSlideLeft') },
+  { value: 'zoom', label: t('layout.settings.transitionZoom') },
+])
 type BooleanPreferenceKey = 'showBreadcrumb' | 'showMenuToggle' | 'showRouteTabs' | 'uniqueOpened' | 'showFooter' | 'pageTransition'
 
 const persistenceErrorMessage = computed(() => {
@@ -100,7 +105,7 @@ function resetPreferences(): void {
 
       <section class="setting-drawer__section" data-testid="settings-theme-section">
         <h3>{{ t('layout.settings.theme') }}</h3>
-        <div class="setting-drawer__segmented" role="group" :aria-label="t('layout.settings.theme')">
+        <el-space class="setting-drawer__segmented" wrap fill :size="8" role="group" :aria-label="t('layout.settings.theme')">
           <el-button
             data-testid="theme-light"
             :type="uiPreferences.preferences.theme === 'light' ? 'primary' : 'default'"
@@ -119,10 +124,10 @@ function resetPreferences(): void {
           >
             {{ t('layout.settings.dark') }}
           </el-button>
-        </div>
+        </el-space>
 
         <div class="setting-drawer__color-label">{{ t('layout.settings.primaryColor') }}</div>
-        <div class="setting-drawer__colors">
+        <el-space class="setting-drawer__colors" wrap :size="10">
           <button
             v-for="color in themeColors"
             :key="color"
@@ -143,72 +148,50 @@ function resetPreferences(): void {
             :aria-label="t('layout.settings.primaryColor')"
             @change="handleColorChange"
           />
-        </div>
+        </el-space>
       </section>
 
       <section class="setting-drawer__section" data-testid="settings-display-section">
         <h3>{{ t('layout.settings.display') }}</h3>
-        <label class="setting-drawer__row">
-          <span>{{ t('layout.settings.breadcrumb') }}</span>
-          <el-switch
-            data-testid="show-breadcrumb"
-            :model-value="uiPreferences.preferences.showBreadcrumb"
-            @change="updateBoolean('showBreadcrumb', $event)"
-          />
-        </label>
-        <label class="setting-drawer__row">
-          <span>{{ t('layout.settings.menuToggle') }}</span>
-          <el-switch
-            data-testid="show-menu-toggle"
-            :model-value="uiPreferences.preferences.showMenuToggle"
-            @change="updateBoolean('showMenuToggle', $event)"
-          />
-        </label>
-        <label class="setting-drawer__row">
-          <span>{{ t('layout.settings.routeTabs') }}</span>
-          <el-switch
-            data-testid="show-route-tabs"
-            :model-value="uiPreferences.preferences.showRouteTabs"
-            :disabled="contentFullscreen"
-            @change="updateBoolean('showRouteTabs', $event)"
-          />
-        </label>
-        <label class="setting-drawer__row">
-          <span>{{ t('layout.settings.uniqueOpened') }}</span>
-          <el-switch
-            data-testid="unique-opened"
-            :model-value="uiPreferences.preferences.uniqueOpened"
-            @change="updateBoolean('uniqueOpened', $event)"
-          />
-        </label>
-        <label class="setting-drawer__row">
-          <span>{{ t('layout.settings.footer') }}</span>
-          <el-switch
-            data-testid="show-footer"
-            :model-value="uiPreferences.preferences.showFooter"
-            @change="updateBoolean('showFooter', $event)"
-          />
-        </label>
+        <el-row :gutter="8" class="setting-drawer__display-grid">
+          <el-col v-for="item in [
+            { key: 'showBreadcrumb', testId: 'show-breadcrumb', label: t('layout.settings.breadcrumb') },
+            { key: 'showMenuToggle', testId: 'show-menu-toggle', label: t('layout.settings.menuToggle') },
+            { key: 'showRouteTabs', testId: 'show-route-tabs', label: t('layout.settings.routeTabs') },
+            { key: 'uniqueOpened', testId: 'unique-opened', label: t('layout.settings.uniqueOpened') },
+            { key: 'showFooter', testId: 'show-footer', label: t('layout.settings.footer') },
+          ]" :key="item.key" :xs="24" :sm="12">
+            <label class="setting-drawer__row">
+              <span>{{ item.label }}</span>
+              <el-switch
+                :data-testid="item.testId"
+                :model-value="uiPreferences.preferences[item.key as BooleanPreferenceKey]"
+                :disabled="item.key === 'showRouteTabs' && contentFullscreen"
+                @change="updateBoolean(item.key as BooleanPreferenceKey, $event)"
+              />
+            </label>
+          </el-col>
+        </el-row>
       </section>
 
       <section class="setting-drawer__section" data-testid="settings-transition-section">
         <h3>{{ t('layout.settings.transition') }}</h3>
-        <label class="setting-drawer__row">
-          <span>{{ t('layout.settings.transitionEnabled') }}</span>
-          <el-switch
-            data-testid="page-transition"
-            :model-value="uiPreferences.preferences.pageTransition"
-            @change="updateBoolean('pageTransition', $event)"
-          />
-        </label>
+        <el-row :gutter="8">
+          <el-col :span="24">
+            <label class="setting-drawer__row">
+              <span>{{ t('layout.settings.transitionEnabled') }}</span>
+              <el-switch
+                data-testid="page-transition"
+                :model-value="uiPreferences.preferences.pageTransition"
+                @change="updateBoolean('pageTransition', $event)"
+              />
+            </label>
+          </el-col>
+        </el-row>
         <el-select-v2
           data-testid="transition-name"
           :model-value="uiPreferences.preferences.transitionName"
-          :options="[
-            { value: 'fade', label: t('layout.settings.transitionFade') },
-            { value: 'slide-left', label: t('layout.settings.transitionSlideLeft') },
-            { value: 'zoom', label: t('layout.settings.transitionZoom') },
-          ]"
+          :options="transitionOptions"
           @change="updateTransitionName"
         />
         <p v-if="contentFullscreen" class="setting-drawer__hint">
@@ -269,11 +252,7 @@ function resetPreferences(): void {
   font-weight: 700;
 }
 
-.setting-drawer__segmented {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
+.setting-drawer__segmented { width: 100%; }
 
 .setting-drawer__segmented .el-button {
   margin: 0;
@@ -290,9 +269,7 @@ function resetPreferences(): void {
 }
 
 .setting-drawer__colors {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  width: 100%;
 }
 
 .setting-drawer__swatch {
@@ -325,6 +302,10 @@ function resetPreferences(): void {
   font-size: 13px;
 }
 
+.setting-drawer__display-grid {
+  width: 100%;
+}
+
 .setting-drawer__hint {
   margin: 0;
   color: var(--el-text-color-secondary);
@@ -350,6 +331,10 @@ function resetPreferences(): void {
 .setting-drawer__colors :deep(.el-color-picker__trigger) {
   width: 100%;
   height: 32px;
+}
+
+.setting-drawer__colors :deep(.el-space__item) {
+  flex: 1 0 48px;
 }
 
 .setting-drawer__colors :deep(.el-color-picker__trigger) {

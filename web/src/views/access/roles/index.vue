@@ -584,6 +584,7 @@ onMounted(() => {
       </template>
       <template #cell-actions="{ row }: { row: RoleListItem }">
         <template v-if="row.id > 0">
+          <el-space wrap :size="6">
           <el-tooltip v-if="canUpdate" :content="editTooltip(row)">
             <el-button
               text
@@ -642,6 +643,7 @@ onMounted(() => {
               >{{ t("role.action.delete") }}</el-button
             >
           </el-tooltip>
+          </el-space>
         </template>
       </template>
       <template #empty
@@ -735,14 +737,14 @@ onMounted(() => {
               </template>
             </el-tab-pane>
           </el-tabs>
-          <div class="permission-toolbar">
+          <el-space class="permission-toolbar" wrap :size="8">
             <el-button @click="selectAllPermissions">
               {{ t("role.permission.selectAll") }}
             </el-button>
             <el-button @click="clearPermissions">
               {{ t("role.permission.clear") }}
             </el-button>
-          </div>
+          </el-space>
           <RolePermissionMatrix
             v-model="selectedEffectiveMenuIDs"
             :groups="permissionGroups"
@@ -788,7 +790,7 @@ onMounted(() => {
   </section>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .role-page {
   min-height: 0;
 }
@@ -833,9 +835,7 @@ onMounted(() => {
 }
 
 .permission-toolbar {
-  display: flex;
   justify-content: flex-end;
-  gap: 8px;
   margin-bottom: 12px;
 }
 

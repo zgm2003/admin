@@ -69,6 +69,7 @@ describe('admin layout', () => {
 
   it('switches the current interface language from the Header', async () => {
     const { wrapper } = await mountLayout()
+    expect(wrapper.findComponent({ name: 'AppHeader' }).props()).not.toHaveProperty('locale')
     await wrapper.get('[data-testid="locale-switch"]').trigger('click')
     await flushPromises()
     getPopupItem('locale-switch-en').click()

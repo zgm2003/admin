@@ -5,6 +5,7 @@ import { applyPrimaryColor, applyTheme } from '../utils/theme'
 import {
   defaultUIPreferences,
   readUIPreferences,
+  UIPreferencesError,
   writeUIPreferences,
   type UIPreferences,
 } from '../utils/ui-preferences'
@@ -25,15 +26,21 @@ export const useUIPreferencesStore = defineStore('uiPreferences', () => {
   function initializeSafely(): void {
     try {
       initialize()
-    } catch {
+    } catch (error: unknown) {
       replace(defaultUIPreferences)
-      persistenceError.value = 'invalid'
+      persistenceError.value = error instanceof UIPreferencesError && error.operation === 'write' ? 'write' : 'invalid'
       initialized.value = true
     }
   }
 
   function update(patch: Partial<UIPreferences>): void {
     const next = { ...preferences.value, ...patch }
+    const hasPersistedUpdate = Object.keys(patch).some((key) => key !== 'theme')
+    if (!hasPersistedUpdate) {
+      replace(next)
+      persistenceError.value = null
+      return
+    }
     try {
       writeUIPreferences(next)
     } catch {

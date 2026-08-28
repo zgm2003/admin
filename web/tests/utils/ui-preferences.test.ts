@@ -18,30 +18,34 @@ describe('ui preferences storage contract', () => {
     expect(readUIPreferences()).toEqual(defaultUIPreferences)
   })
 
-  it('parses a valid versioned record', () => {
-    expect(parseStoredUIPreferences({ version: 1, preferences: defaultUIPreferences })).toEqual(defaultUIPreferences)
+  it('parses a valid v2 record with the light runtime theme', () => {
+    expect(parseStoredUIPreferences({ version: 2, preferences: persistedDefaults() })).toEqual(defaultUIPreferences)
   })
 
-  it('rejects unknown and missing persisted fields', () => {
-    const valid = { version: 1, preferences: defaultUIPreferences }
+  it('rejects unknown and missing v2 persisted fields', () => {
+    const valid = { version: 2, preferences: persistedDefaults() }
     expect(() => parseStoredUIPreferences({ ...valid, extra: true })).toThrow(UIPreferencesError)
-    const { showFooter: _removed, ...incomplete } = defaultUIPreferences
-    expect(() => parseStoredUIPreferences({ version: 1, preferences: incomplete })).toThrow(UIPreferencesError)
+    const { showFooter: _removed, ...incomplete } = persistedDefaults()
+    expect(() => parseStoredUIPreferences({ version: 2, preferences: incomplete })).toThrow(UIPreferencesError)
   })
 
-  it('rejects invalid version, enums, and colors', () => {
-    expect(() => parseStoredUIPreferences({ version: 2, preferences: defaultUIPreferences })).toThrow(UIPreferencesError)
+  it('rejects theme, invalid versions, enums, and colors in v2 records', () => {
     expect(() => parseStoredUIPreferences({
-      version: 1,
-      preferences: { ...defaultUIPreferences, theme: 'system' },
+      version: 2,
+      preferences: { ...persistedDefaults(), theme: 'dark' },
+    })).toThrow(UIPreferencesError)
+    expect(() => parseStoredUIPreferences({ version: 1, preferences: defaultUIPreferences })).toThrow(UIPreferencesError)
+    expect(() => parseStoredUIPreferences({
+      version: 3,
+      preferences: persistedDefaults(),
     })).toThrow(UIPreferencesError)
     expect(() => parseStoredUIPreferences({
-      version: 1,
-      preferences: { ...defaultUIPreferences, primaryColor: 'blue' },
+      version: 2,
+      preferences: { ...persistedDefaults(), primaryColor: 'blue' },
     })).toThrow(UIPreferencesError)
     expect(() => parseStoredUIPreferences({
-      version: 1,
-      preferences: { ...defaultUIPreferences, transitionName: 'none' },
+      version: 2,
+      preferences: { ...persistedDefaults(), transitionName: 'none' },
     })).toThrow(UIPreferencesError)
   })
 
@@ -50,10 +54,32 @@ describe('ui preferences storage contract', () => {
     expect(() => readUIPreferences()).toThrow(UIPreferencesError)
   })
 
-  it('round trips one versioned record', () => {
+  it('writes v2 without the runtime-only theme', () => {
     writeUIPreferences({ ...defaultUIPreferences, theme: 'dark', primaryColor: '#059669' })
-    expect(JSON.parse(localStorage.getItem(uiPreferencesStorageKey) ?? '')).toMatchObject({ version: 1 })
-    expect(readUIPreferences()).toEqual({ ...defaultUIPreferences, theme: 'dark', primaryColor: '#059669' })
+    const stored = JSON.parse(localStorage.getItem(uiPreferencesStorageKey) ?? '') as {
+      version: number
+      preferences: Record<string, unknown>
+    }
+
+    expect(stored.version).toBe(2)
+    expect(stored.preferences.theme).toBeUndefined()
+    expect(stored.preferences.primaryColor).toBe('#059669')
+  })
+
+  it('migrates a valid v1 record once and uses light for the cold start theme', () => {
+    localStorage.setItem(uiPreferencesStorageKey, JSON.stringify({
+      version: 1,
+      preferences: { ...defaultUIPreferences, theme: 'dark', showFooter: false },
+    }))
+
+    expect(readUIPreferences()).toEqual({ ...defaultUIPreferences, theme: 'light', showFooter: false })
+
+    const stored = JSON.parse(localStorage.getItem(uiPreferencesStorageKey) ?? '') as {
+      version: number
+      preferences: Record<string, unknown>
+    }
+    expect(stored.version).toBe(2)
+    expect(stored.preferences.theme).toBeUndefined()
   })
 
   it('surfaces storage write failures', () => {
@@ -63,3 +89,8 @@ describe('ui preferences storage contract', () => {
     expect(() => writeUIPreferences({ ...defaultUIPreferences })).toThrow(UIPreferencesError)
   })
 })
+
+function persistedDefaults(): Omit<typeof defaultUIPreferences, 'theme'> {
+  const { theme: _theme, ...preferences } = defaultUIPreferences
+  return preferences
+}

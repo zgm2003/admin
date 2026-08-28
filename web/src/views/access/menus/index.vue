@@ -244,11 +244,11 @@ const parentSelectOptions = computed<
     value: node.id,
   })),
 ]);
-const menuTypeOptions: Array<{ label: string; value: ManagedMenuType }> = [
+const menuTypeOptions = computed<Array<{ label: string; value: ManagedMenuType }>>(() => [
   { label: t("menu.type.directory"), value: "directory" },
   { label: t("menu.type.page"), value: "page" },
   { label: t("menu.type.action"), value: "action" },
-];
+]);
 const tableHeaderCellStyle = { background: "var(--el-fill-color-light)" };
 
 const parentSelection = computed<number | typeof rootParentValue>({
@@ -832,10 +832,9 @@ onMounted(() => loadMenus());
         label-width="96px"
         @submit.prevent="submitForm"
       >
-        <div class="menu-form__grid">
+        <el-row :gutter="24" class="menu-form__grid">
+          <el-col v-if="dialogMode === 'edit'" :span="24">
           <el-form-item
-            v-if="dialogMode === 'edit'"
-            class="menu-form__wide"
             :label="t('menu.form.platform')"
           >
             <div data-testid="menu-form-platform" class="menu-form__readonly">
@@ -843,7 +842,9 @@ onMounted(() => loadMenus());
               <code>{{ activePlatform?.code }}</code>
             </div>
           </el-form-item>
+          </el-col>
 
+          <el-col :xs="24" :sm="12">
           <el-form-item :label="t('menu.form.parent')">
             <el-select-v2
               v-model="parentSelection"
@@ -856,7 +857,9 @@ onMounted(() => loadMenus());
               :options="parentSelectOptions"
             />
           </el-form-item>
+          </el-col>
 
+          <el-col :xs="24" :sm="12">
           <el-form-item :label="t('menu.form.menuType')">
             <el-select-v2
               :model-value="form.menuType"
@@ -869,8 +872,10 @@ onMounted(() => loadMenus());
               @update:model-value="handleFormTypeChange"
             />
           </el-form-item>
+          </el-col>
 
-          <el-form-item class="menu-form__wide" :label="t('menu.form.code')">
+          <el-col :span="24">
+          <el-form-item :label="t('menu.form.code')">
             <div class="menu-form__control">
               <el-input
                 v-model="form.code"
@@ -885,18 +890,20 @@ onMounted(() => loadMenus());
               <p class="menu-form__hint">{{ t("menu.form.codeHint") }}</p>
             </div>
           </el-form-item>
+          </el-col>
 
-          <el-form-item class="menu-form__wide" :label="t('menu.form.name')">
+          <el-col :span="24">
+          <el-form-item :label="t('menu.form.name')">
             <el-input
               v-model="form.name"
               data-testid="menu-form-name"
               maxlength="128"
             />
           </el-form-item>
+          </el-col>
 
+          <el-col v-if="form.menuType !== 'action'" :span="24">
           <el-form-item
-            v-if="form.menuType !== 'action'"
-            class="menu-form__wide"
             :label="t('menu.form.i18nKey')"
           >
             <div class="menu-form__control">
@@ -907,10 +914,11 @@ onMounted(() => loadMenus());
               <p class="menu-form__hint">{{ t("menu.form.i18nKeyHint") }}</p>
             </div>
           </el-form-item>
+          </el-col>
 
+          <el-col v-if="form.menuType === 'page'" :span="24">
           <el-form-item
             v-if="form.menuType === 'page'"
-            class="menu-form__wide"
             :label="t('menu.form.path')"
           >
             <div class="menu-form__control">
@@ -926,10 +934,11 @@ onMounted(() => loadMenus());
               <p class="menu-form__hint">{{ t("menu.form.pathHint") }}</p>
             </div>
           </el-form-item>
+          </el-col>
 
+          <el-col v-if="form.menuType === 'page'" :span="24">
           <el-form-item
             v-if="form.menuType === 'page'"
-            class="menu-form__wide"
             :label="t('menu.form.componentPath')"
           >
             <div class="menu-form__control">
@@ -947,7 +956,9 @@ onMounted(() => loadMenus());
               </p>
             </div>
           </el-form-item>
+          </el-col>
 
+          <el-col :xs="24" :sm="12">
           <el-form-item
             v-if="form.menuType !== 'action'"
             :label="t('menu.form.icon')"
@@ -971,7 +982,9 @@ onMounted(() => loadMenus());
               >
             </div>
           </el-form-item>
+          </el-col>
 
+          <el-col :xs="24" :sm="12">
           <el-form-item :label="t('menu.form.sortOrder')">
             <el-input-number
               v-model="form.sortOrder"
@@ -980,7 +993,9 @@ onMounted(() => loadMenus());
               :step="10"
             />
           </el-form-item>
+          </el-col>
 
+          <el-col v-if="dialogMode === 'create'" :xs="24" :sm="12">
           <el-form-item
             v-if="dialogMode === 'create'"
             :label="t('menu.form.isEnabled')"
@@ -992,9 +1007,10 @@ onMounted(() => loadMenus());
               data-testid="menu-form-enabled"
             />
           </el-form-item>
+          </el-col>
 
+          <el-col v-if="form.menuType !== 'action'" :xs="24" :sm="12">
           <el-form-item
-            v-if="form.menuType !== 'action'"
             :label="t('menu.form.isHidden')"
           >
             <el-switch
@@ -1008,7 +1024,8 @@ onMounted(() => loadMenus());
               data-testid="menu-form-hidden"
             />
           </el-form-item>
-        </div>
+          </el-col>
+        </el-row>
       </el-form>
       <template #footer>
         <div class="menu-form-actions">
@@ -1036,7 +1053,7 @@ onMounted(() => loadMenus());
   </section>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .menu-management-page {
   min-width: 0;
 }
@@ -1127,13 +1144,7 @@ onMounted(() => loadMenus());
 }
 
 .menu-form__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 24px;
-}
-
-.menu-form__wide {
-  grid-column: 1 / -1;
+  width: 100%;
 }
 
 .menu-form__control,
@@ -1165,10 +1176,6 @@ onMounted(() => loadMenus());
 }
 
 @media (max-width: 720px) {
-  .menu-form__grid {
-    grid-template-columns: 1fr;
-  }
-
   .menu-management__toolbar-actions {
     flex-wrap: wrap;
     justify-content: flex-end;

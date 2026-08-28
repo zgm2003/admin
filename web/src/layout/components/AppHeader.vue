@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { Connection, Menu, Setting } from '@element-plus/icons-vue'
+import { Menu, Setting } from '@element-plus/icons-vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { AppLocale } from '../../i18n'
 import type { HeaderBreadcrumb } from '../breadcrumbs'
+import { LocaleSwitch } from '../../components/LocaleSwitch'
 import SettingDrawer from './SettingDrawer.vue'
 
 defineProps<{
-  locale: AppLocale
   breadcrumbs: HeaderBreadcrumb[]
   showBreadcrumb: boolean
   showMenuToggle: boolean
@@ -17,18 +16,11 @@ defineProps<{
 
 const emit = defineEmits<{
   toggleMenu: []
-  changeLocale: [locale: AppLocale]
 }>()
 
 const { t } = useI18n()
 const settingsOpen = ref(false)
 
-function handleLocaleCommand(command: string | number | object): void {
-  if (command !== 'zh-CN' && command !== 'en-US') {
-    throw new Error(`Unsupported locale command: ${String(command)}`)
-  }
-  emit('changeLocale', command)
-}
 </script>
 
 <template>
@@ -52,32 +44,7 @@ function handleLocaleCommand(command: string | number | object): void {
     </div>
 
     <div class="app-header__actions">
-      <el-dropdown @command="handleLocaleCommand">
-        <el-button
-          data-testid="locale-switch"
-          text
-          :icon="Connection"
-          :aria-label="t('layout.header.switchLanguage')"
-        />
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item
-              command="zh-CN"
-              data-testid="locale-switch-zh"
-              :disabled="locale === 'zh-CN'"
-            >
-              中文
-            </el-dropdown-item>
-            <el-dropdown-item
-              command="en-US"
-              data-testid="locale-switch-en"
-              :disabled="locale === 'en-US'"
-            >
-              English
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+      <LocaleSwitch />
 
       <el-tooltip :content="t('layout.header.settings')">
         <el-button

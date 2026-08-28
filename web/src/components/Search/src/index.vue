@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { ElSpace } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import type { SearchDateRange, SearchField, SearchFormModel, SearchFormValue } from './types'
 
 const props = withDefaults(defineProps<{
@@ -15,10 +17,10 @@ const props = withDefaults(defineProps<{
   resetTestId?: string
 }>(), {
   collapseCount: 2,
-  queryLabel: '查询',
-  resetLabel: '重置',
-  expandLabel: '展开',
-  collapseLabel: '收起',
+  queryLabel: undefined,
+  resetLabel: undefined,
+  expandLabel: undefined,
+  collapseLabel: undefined,
   queryTestId: undefined,
   resetTestId: undefined,
 })
@@ -28,6 +30,12 @@ const emit = defineEmits<{
   query: [value: SearchFormModel]
   reset: [value: SearchFormModel]
 }>()
+
+const { t } = useI18n()
+const resolvedQueryLabel = computed(() => props.queryLabel ?? t('search.query'))
+const resolvedResetLabel = computed(() => props.resetLabel ?? t('search.reset'))
+const resolvedExpandLabel = computed(() => props.expandLabel ?? t('search.expand'))
+const resolvedCollapseLabel = computed(() => props.collapseLabel ?? t('search.collapse'))
 
 const form = reactive<SearchFormModel>({ ...props.modelValue })
 const collapsed = ref(false)
@@ -129,24 +137,26 @@ function reset(): void {
       </el-form-item>
     </template>
     <el-form-item>
-      <el-button type="primary" :data-testid="queryTestId" @click="emitForm('query')">{{ queryLabel }}</el-button>
-      <el-button :data-testid="resetTestId" @click="reset">{{ resetLabel }}</el-button>
-      <el-button
-        v-if="showToggle"
-        text
-        :aria-expanded="!collapsed"
-        @click="collapsed = !collapsed"
-      >
-        <el-icon>
-          <component :is="collapsed ? ArrowDown : ArrowUp" />
-        </el-icon>
-        {{ collapsed ? expandLabel : collapseLabel }}
-      </el-button>
+      <el-space wrap size="small">
+        <el-button type="primary" :data-testid="queryTestId" @click="emitForm('query')">{{ resolvedQueryLabel }}</el-button>
+        <el-button :data-testid="resetTestId" @click="reset">{{ resolvedResetLabel }}</el-button>
+        <el-button
+          v-if="showToggle"
+          text
+          :aria-expanded="!collapsed"
+          @click="collapsed = !collapsed"
+        >
+          <el-icon>
+            <component :is="collapsed ? ArrowDown : ArrowUp" />
+          </el-icon>
+          {{ collapsed ? resolvedExpandLabel : resolvedCollapseLabel }}
+        </el-button>
+      </el-space>
     </el-form-item>
   </el-form>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .search-form {
   display: flex;
   flex-wrap: wrap;

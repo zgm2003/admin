@@ -44,6 +44,7 @@ describe('operation logs', () => {
 	it('expands sanitized details and never renders a delete command', async () => {
 		const wrapper = mountPage()
 		await flushPromises()
+		expect(wrapper.findComponent({ name: 'ElSpace' }).exists()).toBe(true)
 		expect(wrapper.find('[data-testid="operation-log-delete"]').exists()).toBe(false)
 		await wrapper.get('button[aria-label="Expand this row"]').trigger('click')
 		await flushPromises()

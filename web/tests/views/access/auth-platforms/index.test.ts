@@ -140,7 +140,8 @@ describe('authentication platform page', () => {
 
     expect(wrapper.find('.app-dialog__body--scroll').exists()).toBe(false)
     expect(wrapper.get('[data-testid="auth-platform-form"]').classes()).toContain('auth-platform-form-scroll')
-    expect(wrapper.get('[data-testid="auth-platform-form"] .auth-platform-form-grid').classes()).toContain('auth-platform-form-grid')
+    expect(wrapper.find('[data-testid="auth-platform-form"] .el-row').exists()).toBe(true)
+    expect(wrapper.findAllComponents({ name: 'ElCol' }).length).toBeGreaterThanOrEqual(8)
     expect(wrapper.get('[data-testid="auth-platform-code"]').attributes('disabled')).toBeDefined()
   })
 

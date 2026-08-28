@@ -1,4 +1,7 @@
 import { createI18n } from 'vue-i18n'
+import type { Language } from 'element-plus/es/locale'
+import enUs from 'element-plus/es/locale/lang/en'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
 import { enUS } from './messages/en-US'
 import { zhCN, type AppMessageKey } from './messages/zh-CN'
@@ -39,4 +42,8 @@ export function initializeLocale(): AppLocale {
   const locale = readLocale()
   setLocale(locale)
   return locale
+}
+
+export function elementPlusLocaleFor(locale: AppLocale): Language {
+  return locale === 'en-US' ? enUs : zhCn
 }

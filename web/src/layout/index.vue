@@ -5,7 +5,6 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import { logout } from "../api/auth";
-import { readLocale, setLocale, type AppLocale } from "../i18n";
 import { useAccessStore } from "../store/access";
 import { useAuthStore } from "../store/auth";
 import { useUIPreferencesStore } from "../store/ui-preferences";
@@ -27,7 +26,6 @@ const collapsed = ref(false);
 const mobileMenuOpen = ref(false);
 const isMobile = ref(window.innerWidth <= mobileBreakpoint);
 const logoutPending = ref(false);
-const locale = ref<AppLocale>(readLocale());
 const refreshKey = ref(0);
 const contentFullscreen = ref(false);
 
@@ -63,11 +61,6 @@ function toggleMenu(): void {
     return;
   }
   collapsed.value = !collapsed.value;
-}
-
-function handleLocaleChange(nextLocale: AppLocale): void {
-  locale.value = nextLocale;
-  setLocale(nextLocale);
 }
 
 function handleRefresh(): void {
@@ -151,13 +144,11 @@ onBeforeUnmount(() => {
         height="52px"
       >
         <AppHeader
-          :locale="locale"
           :breadcrumbs="breadcrumbs"
           :show-breadcrumb="uiPreferences.preferences.showBreadcrumb"
           :show-menu-toggle="uiPreferences.preferences.showMenuToggle"
           :content-fullscreen="contentFullscreen"
           @toggle-menu="toggleMenu"
-          @change-locale="handleLocaleChange"
         />
       </el-header>
 

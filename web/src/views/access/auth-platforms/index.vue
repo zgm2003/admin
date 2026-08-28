@@ -632,14 +632,18 @@ onMounted(() => {
       <el-form label-position="top" class="auth-platform-form auth-platform-form-scroll" data-testid="auth-platform-form">
         <div class="auth-platform-form-section">
           <h3>{{ t("authPlatform.form.basicSection") }}</h3>
-          <div class="auth-platform-form-grid auth-platform-form-grid--basic" data-testid="auth-platform-form-grid">
-            <el-form-item :label="t('authPlatform.code')">
-              <el-input v-model="form.code" data-testid="auth-platform-code" :disabled="isEditing" />
-            </el-form-item>
-            <el-form-item :label="t('authPlatform.name')">
-              <el-input v-model="form.name" data-testid="auth-platform-name" />
-            </el-form-item>
-          </div>
+          <el-row :gutter="16" class="auth-platform-form-grid auth-platform-form-grid--basic">
+            <el-col :xs="24" :sm="12">
+              <el-form-item :label="t('authPlatform.code')">
+                <el-input v-model="form.code" data-testid="auth-platform-code" :disabled="isEditing" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12">
+              <el-form-item :label="t('authPlatform.name')">
+                <el-input v-model="form.name" data-testid="auth-platform-name" />
+              </el-form-item>
+            </el-col>
+          </el-row>
         </div>
         <div class="auth-platform-form-section">
           <div class="auth-platform-form-section__heading">
@@ -652,71 +656,58 @@ onMounted(() => {
               @click="restoreDefaultTTL"
             >{{ t("authPlatform.form.restoreTTLDefaults") }}</el-button>
           </div>
-          <div class="auth-platform-form-grid auth-platform-form-grid--four">
+          <el-row :gutter="16" class="auth-platform-form-grid auth-platform-form-grid--four">
+            <el-col v-for="field in [
+              { key: 'accessTTLSeconds', testId: 'auth-platform-access-ttl', label: 'authPlatform.accessTTL', help: 'authPlatform.form.accessTTLHelp', min: 60, max: 2_592_000 },
+              { key: 'refreshTTLSeconds', testId: 'auth-platform-refresh-ttl', label: 'authPlatform.refreshTTL', help: 'authPlatform.form.refreshTTLHelp', min: 60, max: 31_536_000 },
+              { key: 'sessionCacheTTLSeconds', testId: 'auth-platform-session-cache-ttl', label: 'authPlatform.sessionCacheTTL', help: 'authPlatform.form.sessionCacheTTLHelp', min: 60, max: 86_400 },
+              { key: 'accessCacheTTLSeconds', testId: 'auth-platform-access-cache-ttl', label: 'authPlatform.accessCacheTTL', help: 'authPlatform.form.accessCacheTTLHelp', min: 60, max: 86_400 },
+            ]" :key="field.key" :xs="24" :sm="12" :lg="6">
             <el-form-item>
               <template #label>
-                <span class="auth-platform-field-label auth-platform-field-label--nowrap">{{ t("authPlatform.accessTTL") }}
-                  <el-tooltip :content="t('authPlatform.form.accessTTLHelp')" placement="top">
+                <span class="auth-platform-field-label auth-platform-field-label--nowrap">{{ t(field.label) }}
+                  <el-tooltip :content="t(field.help)" placement="top">
                     <CircleHelp data-testid="auth-platform-ttl-help" aria-hidden="true" />
                   </el-tooltip>
                 </span>
               </template>
-              <el-input-number v-model="form.accessTTLSeconds" :min="60" :max="2_592_000" class="auth-platform-number" data-testid="auth-platform-access-ttl" />
+              <el-input-number v-model="form[field.key]" :min="field.min" :max="field.max" class="auth-platform-number" :data-testid="field.testId" />
             </el-form-item>
-            <el-form-item>
-              <template #label>
-                <span class="auth-platform-field-label auth-platform-field-label--nowrap">{{ t("authPlatform.refreshTTL") }}
-                  <el-tooltip :content="t('authPlatform.form.refreshTTLHelp')" placement="top">
-                    <CircleHelp data-testid="auth-platform-ttl-help" aria-hidden="true" />
-                  </el-tooltip>
-                </span>
-              </template>
-              <el-input-number v-model="form.refreshTTLSeconds" :min="60" :max="31_536_000" class="auth-platform-number" data-testid="auth-platform-refresh-ttl" />
-            </el-form-item>
-            <el-form-item>
-              <template #label>
-                <span class="auth-platform-field-label auth-platform-field-label--nowrap">{{ t("authPlatform.sessionCacheTTL") }}
-                  <el-tooltip :content="t('authPlatform.form.sessionCacheTTLHelp')" placement="top">
-                    <CircleHelp data-testid="auth-platform-ttl-help" aria-hidden="true" />
-                  </el-tooltip>
-                </span>
-              </template>
-              <el-input-number v-model="form.sessionCacheTTLSeconds" :min="60" :max="86_400" class="auth-platform-number" data-testid="auth-platform-session-cache-ttl" />
-            </el-form-item>
-            <el-form-item>
-              <template #label>
-                <span class="auth-platform-field-label auth-platform-field-label--nowrap">{{ t("authPlatform.accessCacheTTL") }}
-                  <el-tooltip :content="t('authPlatform.form.accessCacheTTLHelp')" placement="top">
-                    <CircleHelp data-testid="auth-platform-ttl-help" aria-hidden="true" />
-                  </el-tooltip>
-                </span>
-              </template>
-              <el-input-number v-model="form.accessCacheTTLSeconds" :min="60" :max="86_400" class="auth-platform-number" data-testid="auth-platform-access-cache-ttl" />
-            </el-form-item>
-          </div>
+            </el-col>
+          </el-row>
         </div>
         <div class="auth-platform-form-section">
           <h3>{{ t("authPlatform.form.policySection") }}</h3>
-          <div class="auth-platform-form-grid auth-platform-form-grid--four auth-platform-policy-grid auth-platform-policy-grid--three-up">
+          <el-row :gutter="16" class="auth-platform-form-grid auth-platform-form-grid--four auth-platform-policy-grid auth-platform-policy-grid--three-up">
+            <el-col :xs="8" :sm="8" :lg="8">
             <el-form-item :label="t('authPlatform.bindDevice')">
               <el-switch v-model="form.bindDevice" :active-value="YesNo.Yes" :inactive-value="YesNo.No" />
             </el-form-item>
+            </el-col>
+            <el-col :xs="8" :sm="8" :lg="8">
             <el-form-item :label="t('authPlatform.bindIP')">
               <el-switch v-model="form.bindIP" :active-value="YesNo.Yes" :inactive-value="YesNo.No" />
             </el-form-item>
+            </el-col>
+            <el-col :xs="8" :sm="8" :lg="8">
             <el-form-item :label="t('authPlatform.allowRegister')">
               <el-switch v-model="form.allowRegister" :active-value="YesNo.Yes" :inactive-value="YesNo.No" :disabled="isBuiltinAdminEdit" data-testid="auth-platform-allow-register" />
               <span v-if="isBuiltinAdminEdit" class="auth-platform-form-help">{{ t("authPlatform.adminRegistrationLocked") }}</span>
             </el-form-item>
-            <el-form-item v-if="dialogMode === 'create'" :label="t('authPlatform.isEnabled')">
+            </el-col>
+            <el-col v-if="dialogMode === 'create'" :xs="8" :sm="8" :lg="8">
+            <el-form-item :label="t('authPlatform.isEnabled')">
               <el-switch v-model="form.isEnabled" :active-value="YesNo.Yes" :inactive-value="YesNo.No" />
             </el-form-item>
-          </div>
-          <div class="auth-platform-form-grid auth-platform-form-grid--session">
+            </el-col>
+          </el-row>
+          <el-row :gutter="16" class="auth-platform-form-grid auth-platform-form-grid--session">
+            <el-col :xs="24" :sm="12" :lg="8">
             <el-form-item :label="t('authPlatform.maxSessionsField')">
               <el-input-number v-model="form.maxSessions" :min="0" :max="100" class="auth-platform-number" />
             </el-form-item>
-          </div>
+            </el-col>
+          </el-row>
         </div>
       </el-form>
       <template #footer>
@@ -735,7 +726,7 @@ onMounted(() => {
   </section>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .auth-platform-page {
   min-width: 0;
 }
@@ -860,20 +851,9 @@ onMounted(() => {
   cursor: help;
 }
 .auth-platform-form-grid {
-  display: grid;
-  gap: 12px 16px;
-}
-.auth-platform-form-grid--basic {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.auth-platform-form-grid--four {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-.auth-platform-policy-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
 }
 .auth-platform-form-grid--session {
-  grid-template-columns: minmax(0, 240px);
   margin-top: 12px;
 }
 .auth-platform-form :deep(.el-form-item) {
@@ -893,21 +873,10 @@ onMounted(() => {
   .auth-platform-filters .el-select {
     width: 100%;
   }
-  .auth-platform-form-grid--four {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .auth-platform-policy-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 @media (max-width: 480px) {
-  .auth-platform-form-grid--basic,
-  .auth-platform-form-grid--four {
-    grid-template-columns: 1fr;
-  }
   .auth-platform-policy-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
+    --el-row-gutter: 8px;
   }
 }
 </style>

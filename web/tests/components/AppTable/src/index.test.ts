@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import AppTable from '@src/components/AppTable/src/index.vue'
 import type { TableColumn, TablePaginationState } from '@src/components/AppTable/src/types'
+import { appI18n, setLocale } from '@src/i18n'
 
 interface UserRow { id: number; username: string; enabled: boolean }
 
@@ -18,7 +19,7 @@ describe('AppTable', () => {
     const wrapper = mount(AppTable<UserRow>, {
       props: { columns, data: [{ id: 1, username: 'alice', enabled: true }] },
       slots: { 'cell-username': '<strong>{{ row.username }}</strong>' },
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus, appI18n] },
     })
     await flushPromises()
     const table = wrapper.findComponent({ name: 'ElTable' })
@@ -33,7 +34,7 @@ describe('AppTable', () => {
     const pagination: TablePaginationState = { currentPage: 1, pageSize: 20, total: 40 }
     const wrapper = mount(AppTable<UserRow>, {
       props: { columns, data: [], loading: true, resultState: 'loading', pagination, statusMessage: 'No users' },
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus, appI18n] },
     })
     expect(wrapper.find('[aria-busy="true"]').exists()).toBe(true)
     await wrapper.setProps({ loading: false, resultState: 'empty' })
@@ -52,7 +53,7 @@ describe('AppTable', () => {
         data: [],
         pagination: { currentPage: 1, pageSize: 20, total: 2 },
       },
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus, appI18n] },
     })
 
     expect(wrapper.get('.app-table__pagination').classes()).toContain('app-table__pagination--distributed')
@@ -61,7 +62,7 @@ describe('AppTable', () => {
   it('forwards selection and row events without making requests', async () => {
     const wrapper = mount(AppTable<UserRow>, {
       props: { columns, data: [{ id: 1, username: 'alice', enabled: true }], selectable: true },
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus, appI18n] },
     })
     const table = wrapper.findComponent({ name: 'ElTable' })
     const row = { id: 1, username: 'alice', enabled: true }
@@ -84,7 +85,7 @@ describe('AppTable', () => {
         ],
         data: [{ id: 1, username: 'alice', enabled: true }],
       },
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus, appI18n] },
     })
 
     const columns = wrapper.findAllComponents({ name: 'ElTableColumn' })
@@ -97,7 +98,7 @@ describe('AppTable', () => {
   it('renders an internal refresh button and emits refresh without making requests', async () => {
     const wrapper = mount(AppTable<UserRow>, {
       props: { columns, data: [] },
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus, appI18n] },
     })
 
     const refreshButton = wrapper.find('button[data-testid="app-table-refresh"]')
@@ -107,5 +108,28 @@ describe('AppTable', () => {
 
     await wrapper.setProps({ loading: true })
     expect(wrapper.findComponent({ name: 'ElButton' }).props('loading')).toBe(true)
+  })
+
+  it('keeps toolbar actions in an Element Plus spacing container', () => {
+    const wrapper = mount(AppTable<UserRow>, {
+      props: { columns, data: [] },
+      global: { plugins: [ElementPlus, appI18n] },
+    })
+
+    expect(wrapper.findComponent({ name: 'ElSpace' }).exists()).toBe(true)
+  })
+
+  it('updates default state labels when the locale changes', async () => {
+    setLocale('zh-CN')
+    const wrapper = mount(AppTable<UserRow>, {
+      props: { columns, data: [], resultState: 'empty' },
+      global: { plugins: [ElementPlus, appI18n] },
+    })
+    expect(wrapper.text()).toContain('暂无数据')
+
+    setLocale('en-US')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('No data')
+    expect(wrapper.get('[data-testid="app-table-refresh"]').text()).toContain('Refresh')
   })
 })

@@ -1,6 +1,14 @@
 import type { AppMessageKey } from './zh-CN'
 
 export const enUS = {
+  'appTable.ariaLabel': 'Data table',
+  'appTable.refresh': 'Refresh',
+  'appTable.requestFailed': 'Request failed',
+  'appTable.empty': 'No data',
+  'search.query': 'Search',
+  'search.reset': 'Reset',
+  'search.expand': 'Expand',
+  'search.collapse': 'Collapse',
   'navigation.dashboard': 'Dashboard',
   'navigation.main': 'Main navigation',
   'navigation.admin': 'Admin',

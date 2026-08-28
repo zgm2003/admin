@@ -39,6 +39,8 @@ describe('session management', () => {
 	it('loads list and stats, applies filters, and changes pages', async () => {
 		const wrapper = mountPage(['auth:session:list'])
 		await flushPromises()
+		expect(wrapper.findComponent({ name: 'ElRow' }).exists()).toBe(true)
+		expect(wrapper.findAllComponents({ name: 'ElCol' }).length).toBeGreaterThan(0)
 		expect(getSessions).toHaveBeenCalledWith({ page: 1, pageSize: 20 })
 		expect(getSessionStats).toHaveBeenCalledOnce()
 		expect(wrapper.find('h1').exists()).toBe(false)

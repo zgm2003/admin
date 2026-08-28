@@ -182,15 +182,15 @@ onMounted(() => { void loadLogs() })
 				<template #expand="{ row }: { row: OperationLogItem }">
 						<div class="operation-log-detail">
 						<h2>{{ t('operationLog.detailTitle') }}</h2>
-						<dl>
-							<div><dt>{{ t('operationLog.requestId') }}</dt><dd><code>{{ row.requestId }}</code></dd></div>
-							<div><dt>{{ t('operationLog.platform') }}</dt><dd>{{ row.platform }}</dd></div>
-							<div><dt>{{ t('operationLog.userAgent') }}</dt><dd>{{ row.userAgent }}</dd></div>
-						</dl>
-						<div class="operation-log-summaries">
-							<section><h3>{{ t('operationLog.detail.request') }}</h3><pre>{{ formatJSON(row.requestData) }}</pre></section>
-							<section><h3>{{ t('operationLog.detail.response') }}</h3><pre>{{ formatJSON(row.responseData) }}</pre></section>
-						</div>
+						<el-row :gutter="12" class="operation-log-detail__meta">
+							<el-col :xs="24" :sm="8"><dt>{{ t('operationLog.requestId') }}</dt><dd><code>{{ row.requestId }}</code></dd></el-col>
+							<el-col :xs="24" :sm="8"><dt>{{ t('operationLog.platform') }}</dt><dd>{{ row.platform }}</dd></el-col>
+							<el-col :xs="24" :sm="8"><dt>{{ t('operationLog.userAgent') }}</dt><dd>{{ row.userAgent }}</dd></el-col>
+						</el-row>
+						<el-row :gutter="16" class="operation-log-summaries">
+							<el-col :xs="24" :sm="12"><section><h3>{{ t('operationLog.detail.request') }}</h3><pre>{{ formatJSON(row.requestData) }}</pre></section></el-col>
+							<el-col :xs="24" :sm="12"><section><h3>{{ t('operationLog.detail.response') }}</h3><pre>{{ formatJSON(row.responseData) }}</pre></section></el-col>
+						</el-row>
 					</div>
 				</template>
 				<template #cell-method="{ row }: { row: OperationLogItem }"><el-tag :type="methodTagType(row.method)" effect="plain">{{ row.method }}</el-tag></template>
@@ -203,7 +203,7 @@ onMounted(() => { void loadLogs() })
 	</section>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .operation-log-page { min-width: 0; }
 .operation-log-filters { display: flex; align-items: center; gap: 12px; }
 .operation-log-filters { flex-wrap: wrap; }
@@ -211,17 +211,16 @@ onMounted(() => { void loadLogs() })
 .operation-log-filters .el-select-v2 { width: 130px; }
 .operation-log-detail { padding: 4px 24px 18px; }
 .operation-log-detail h2 { margin: 0 0 12px; font-size: 16px; }
-.operation-log-detail dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
-.operation-log-detail dl div { min-width: 0; }
+.operation-log-detail__meta { margin: 0 0 16px; }
+.operation-log-detail__meta :deep(.el-col) { min-width: 0; }
 .operation-log-detail dt { color: var(--el-text-color-secondary); font-size: 12px; }
 .operation-log-detail dd { margin: 4px 0 0; overflow-wrap: anywhere; }
-.operation-log-summaries { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.operation-log-summaries { width: 100%; }
 .operation-log-summaries h3 { margin: 0 0 8px; font-size: 14px; }
 .operation-log-summaries pre { min-height: 88px; margin: 0; padding: 12px; overflow: auto; border: 1px solid var(--el-border-color-light); border-radius: 4px; background: var(--el-fill-color-light); white-space: pre-wrap; overflow-wrap: anywhere; }
 .el-pagination { justify-content: flex-end; }
 @media (max-width: 900px) {
 	.operation-log-filters { align-items: stretch; flex-direction: column; }
 	.operation-log-filters .el-input, .operation-log-filters .el-select-v2 { width: 100%; }
-	.operation-log-detail dl, .operation-log-summaries { grid-template-columns: 1fr; }
 }
 </style>

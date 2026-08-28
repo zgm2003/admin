@@ -1,7 +1,8 @@
 <script setup lang="ts" generic="Row extends TableRow">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ElButton, ElTable, ElTableColumn, ElPagination } from 'element-plus'
+import { ElButton, ElTable, ElTableColumn, ElPagination, ElSpace } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 
 import {
   formatTableColumnValue,
@@ -37,9 +38,9 @@ const props = withDefaults(defineProps<{
   pagination: null,
   resultState: 'idle',
   statusMessage: '',
-  ariaLabel: 'Data table',
+  ariaLabel: undefined,
   fixedFooter: false,
-  refreshLabel: '刷新',
+  refreshLabel: undefined,
 })
 
 const emit = defineEmits<{
@@ -49,6 +50,8 @@ const emit = defineEmits<{
   'update:pagination': [pagination: TablePaginationState]
   'column-change': [keys: TableColumnKey[]]
 }>()
+
+const { t } = useI18n()
 
 const paginationState = ref<TablePaginationState | null>(props.pagination ? { ...props.pagination } : null)
 const isMobile = ref(false)
@@ -75,6 +78,10 @@ const tableClasses = computed(() => ({ 'app-table__table--fixed': props.fixedFoo
 const paginationLayout = computed(() => isMobile.value ? 'total, prev, pager, next' : 'total, sizes, prev, pager, next')
 const pageSizes = computed(() => isMobile.value ? [20, 50] : [20, 50, 100])
 const tableHeaderCellStyle = { background: 'var(--el-fill-color-light)' }
+const resolvedAriaLabel = computed(() => props.ariaLabel ?? t('appTable.ariaLabel'))
+const resolvedRefreshLabel = computed(() => props.refreshLabel ?? t('appTable.refresh'))
+const resolvedErrorMessage = computed(() => props.statusMessage || t('appTable.requestFailed'))
+const resolvedEmptyMessage = computed(() => props.statusMessage || t('appTable.empty'))
 
 function columnKey(column: TableColumn<Row>): TableColumnKey {
   return tableColumnKey<Row>(column)
@@ -124,12 +131,12 @@ function onSelectionChange(selection: Row[]): void {
     class="app-table"
     :class="{ 'app-table--fixed-footer': fixedFooter }"
     role="region"
-    :aria-label="ariaLabel"
+    :aria-label="resolvedAriaLabel"
     :aria-busy="busy"
   >
     <div class="app-table__toolbar">
-      <div class="app-table__toolbar-left"><slot name="toolbar-left" /></div>
-      <div class="app-table__toolbar-right">
+      <el-space class="app-table__toolbar-left" wrap size="small"><slot name="toolbar-left" /></el-space>
+      <el-space class="app-table__toolbar-right" wrap size="small">
         <slot name="toolbar-right" />
         <el-button
           data-testid="app-table-refresh"
@@ -138,9 +145,9 @@ function onSelectionChange(selection: Row[]): void {
           :loading="busy"
           @click="emit('refresh')"
         >
-          {{ refreshLabel }}
+          {{ resolvedRefreshLabel }}
         </el-button>
-      </div>
+      </el-space>
     </div>
     <el-table
       ref="tableRef"
@@ -188,8 +195,8 @@ function onSelectionChange(selection: Row[]): void {
         </template>
       </el-table-column>
       <template #empty>
-        <div v-if="failed" class="app-table__error" role="alert">{{ statusMessage || 'Request failed' }}</div>
-        <slot v-else name="empty"><el-empty :description="statusMessage || 'No data'" /></slot>
+        <div v-if="failed" class="app-table__error" role="alert">{{ resolvedErrorMessage }}</div>
+        <slot v-else name="empty"><el-empty :description="resolvedEmptyMessage" /></slot>
       </template>
     </el-table>
     <div v-if="paginationState !== null" class="app-table__pagination app-table__pagination--distributed">
@@ -208,7 +215,7 @@ function onSelectionChange(selection: Row[]): void {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .app-table { display: flex; min-width: 0; flex-direction: column; }
 .app-table--fixed-footer { height: 100%; min-height: 0; overflow: hidden; }
 .app-table__toolbar { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; }

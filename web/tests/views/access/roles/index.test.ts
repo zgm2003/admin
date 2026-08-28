@@ -456,6 +456,7 @@ describe('RoleManagement', () => {
   it('keeps page and dialog scrolling in their approved owners', async () => {
     const wrapper = mountPage(['rbac:role:authorize'])
     await flushPromises()
+    expect(wrapper.findComponent({ name: 'ElSpace' }).exists()).toBe(true)
     expect(wrapper.get('.role-page').attributes('style') ?? '').not.toContain('overflow')
 
     await tooltipButton(wrapper, '授权').trigger('click')

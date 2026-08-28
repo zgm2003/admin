@@ -495,6 +495,7 @@ onMounted(() => {
       </template>
       <template #cell-actions="{ row }: { row: UserListItem }"
         ><template v-if="row.id > 0">
+          <el-space wrap :size="6">
           <el-tooltip
             v-if="canUpdate"
             :content="
@@ -539,6 +540,7 @@ onMounted(() => {
               >{{ t("permission.userDelete") }}</el-button
             ></el-tooltip
           >
+          </el-space>
         </template></template
       >
       <template #empty><el-empty :description="t('user.noRoles')" /></template>
@@ -605,12 +607,12 @@ onMounted(() => {
           type="error"
           show-icon
         /><template v-if="roleData">
-          <div class="role-dialog-toolbar">
+          <el-space class="role-dialog-toolbar" wrap :size="8">
             <el-button @click="selectAllRoles">{{
               t("user.selectAll")
             }}</el-button
             ><el-button @click="clearRoles">{{ t("user.clear") }}</el-button>
-          </div>
+          </el-space>
           <el-checkbox-group v-model="selectedRoleIDs" class="role-checks"
             ><el-checkbox
               v-for="role in roleData.roles"
@@ -648,7 +650,7 @@ onMounted(() => {
   </section>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .user-management {
   min-height: 0;
   min-width: 0;
@@ -682,9 +684,7 @@ onMounted(() => {
 }
 
 .role-dialog-toolbar {
-  display: flex;
   justify-content: flex-end;
-  gap: 8px;
   margin-bottom: 12px;
 }
 
