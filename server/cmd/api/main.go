@@ -82,93 +82,24 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer postgres.Close()
-	if err := database.PrepareDomainNames(processContext, postgres.GORM); err != nil {
-		return fmt.Errorf("prepare domain database names: %w", err)
-	}
-	if err := auth.PrepareSessionSchema(processContext, postgres.GORM); err != nil {
-		return fmt.Errorf("prepare authentication schema: %w", err)
-	}
-	if err := operationlog.PrepareSchema(processContext, postgres.GORM); err != nil {
-		return fmt.Errorf("prepare operation log schema: %w", err)
-	}
-	if err := menu.PrepareSchema(processContext, postgres.GORM); err != nil {
-		return fmt.Errorf("prepare menu schema: %w", err)
-	}
-	if err := database.AutoMigrate(processContext, postgres.GORM, &authplatform.Platform{}); err != nil {
-		return err
-	}
-	if err := authplatform.EnsureSchema(processContext, postgres.GORM); err != nil {
-		return fmt.Errorf("ensure authentication platform schema: %w", err)
-	}
-	if err := authplatform.EnsureCanvasPreset(processContext, postgres.GORM); err != nil {
-		return fmt.Errorf("ensure Canvas authentication platform: %w", err)
-	}
-	if err := menu.PreparePlatformSchema(processContext, postgres.GORM); err != nil {
-		return fmt.Errorf("prepare menu platform schema: %w", err)
-	}
-	if err := database.AutoMigrate(
-		processContext,
-		postgres.GORM,
-		&taskdemo.Task{},
-		&user.User{},
-		&role.Role{},
-		&role.UserRole{},
-		&menu.Menu{},
-		&menu.RoleMenu{},
-		&auth.Session{},
-		&operationlog.OperationLog{},
-		&access.Version{},
-	); err != nil {
-		return err
-	}
-	if err := role.EnsureSchema(processContext, postgres.GORM); err != nil {
-		return fmt.Errorf("ensure role schema: %w", err)
-	}
-	if err := auth.EnsureSchema(processContext, postgres.GORM); err != nil {
-		return fmt.Errorf("ensure authentication schema: %w", err)
-	}
-	if err := menu.EnsureSchema(processContext, postgres.GORM); err != nil {
-		return fmt.Errorf("ensure menu schema: %w", err)
-	}
-	if err := access.EnsureSchema(processContext, postgres.GORM); err != nil {
-		return fmt.Errorf("ensure access schema: %w", err)
-	}
-	if err := operationlog.EnsureSchema(processContext, postgres.GORM); err != nil {
-		return fmt.Errorf("ensure operation log schema: %w", err)
-	}
 
 	redisClient, err := projectredis.Open(processContext, settings.RedisURL)
 	if err != nil {
 		return err
 	}
 	defer redisClient.Close()
-	if err := authplatform.ClearBuiltinPolicies(processContext, redisClient); err != nil {
-		return fmt.Errorf("clear builtin authentication policy caches: %w", err)
-	}
 	queueClient, err := queue.NewClient(settings.RedisURL)
 	if err != nil {
 		return err
 	}
 	defer queueClient.Close()
-	if err := auth.CleanupLegacySessionPointers(processContext, redisClient); err != nil {
-		return fmt.Errorf("remove legacy current session keys: %w", err)
-	}
 	accessStateStore := accessstate.NewStore(redisClient)
 	accessInvalidator := accessstate.NewInvalidator(accessStateStore)
 	menuRepository := menu.NewRepository(postgres.GORM)
 	menuService := menu.NewService(menuRepository, accessInvalidator)
-	if err := menuService.EnsureFoundation(processContext, menuFoundation()); err != nil {
-		return fmt.Errorf("ensure menu foundation: %w", err)
-	}
-	if err := menuService.EnsurePlatformFoundation(processContext, authplatform.BuiltinCanvasCode, canvasMenuFoundation()); err != nil {
-		return fmt.Errorf("ensure Canvas menu foundation: %w", err)
-	}
 
 	roleRepository := role.NewRepository(postgres.GORM)
 	roleService := role.NewService(roleRepository, accessInvalidator)
-	if err := roleService.EnsureSystemRoles(processContext); err != nil {
-		return fmt.Errorf("ensure system roles: %w", err)
-	}
 	keys, err := secretkey.New(settings.AppSecret)
 	if err != nil {
 		return fmt.Errorf("derive application keys: %w", err)

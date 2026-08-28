@@ -394,89 +394,41 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 	}
 }
 
-func TestMenuFoundationDefinesCompleteBusinessCatalog(t *testing.T) {
-	definitions := menuFoundation()
-	if len(definitions) != 27 {
-		t.Fatalf("foundation definitions = %d, want 27", len(definitions))
-	}
-	byCode := make(map[string]menu.FoundationDefinition, len(definitions))
-	for _, definition := range definitions {
-		if _, duplicate := byCode[definition.Code]; duplicate {
-			t.Fatalf("duplicate foundation code %s", definition.Code)
-		}
-		if strings.HasPrefix(definition.Code, "system:user:") || strings.HasPrefix(definition.Code, "system:role:") || strings.HasPrefix(definition.Code, "system:menu:") {
-			t.Fatalf("legacy foundation code %s", definition.Code)
-		}
-		byCode[definition.Code] = definition
-	}
-	wantParents := map[string]string{
-		user.PermissionList: "account", auth.PermissionSessionList: "account",
-		menu.PermissionList: "access", role.PermissionList: "access", authplatform.PermissionList: "access",
-		operationlog.PermissionList: "system",
-		user.PermissionUpdate:       user.PermissionList, user.PermissionStatus: user.PermissionList,
-		user.PermissionDelete: user.PermissionList, user.PermissionRoles: user.PermissionList,
-		auth.PermissionSessionRevoke: auth.PermissionSessionList,
-		menu.PermissionCreate:        menu.PermissionList, menu.PermissionUpdate: menu.PermissionList, menu.PermissionDelete: menu.PermissionList,
-		role.PermissionCreate: role.PermissionList, role.PermissionUpdate: role.PermissionList,
-		role.PermissionStatus: role.PermissionList, role.PermissionDefault: role.PermissionList,
-		role.PermissionDelete: role.PermissionList, role.PermissionAuthorize: role.PermissionList,
-		authplatform.PermissionCreate: authplatform.PermissionList, authplatform.PermissionUpdate: authplatform.PermissionList,
-		authplatform.PermissionStatus: authplatform.PermissionList, authplatform.PermissionDelete: authplatform.PermissionList,
-	}
-	for code, parentCode := range wantParents {
-		definition, exists := byCode[code]
-		if !exists || definition.ParentCode != parentCode {
-			t.Errorf("foundation %s = %+v, want parent %s", code, definition, parentCode)
-		}
-	}
-	protected := make([]string, 0, 5)
-	for _, definition := range definitions {
-		if definition.Protected {
-			protected = append(protected, definition.Code)
-		}
-	}
-	if !reflect.DeepEqual(protected, []string{"access", menu.PermissionList, menu.PermissionCreate, menu.PermissionUpdate, menu.PermissionDelete}) {
-		t.Fatalf("protected foundation = %v", protected)
-	}
-}
-
-func TestCanvasMenuFoundationDefinesRootTestPageAndAction(t *testing.T) {
-	definitions := canvasMenuFoundation()
-	if len(definitions) != 2 {
-		t.Fatalf("Canvas foundation definitions = %d, want 2", len(definitions))
-	}
-	page, action := definitions[0], definitions[1]
-	if page.ParentCode != "" || page.MenuType != menu.TypePage || page.Code != "canvas:test" ||
-		page.Path == nil || *page.Path != "/test" || page.ComponentPath == nil || *page.ComponentPath != "test" ||
-		page.IsEnabled != yesno.Yes || page.IsHidden != yesno.No {
-		t.Fatalf("Canvas page definition = %+v", page)
-	}
-	if action.ParentCode != page.Code || action.MenuType != menu.TypeAction || action.Code != "canvas:test:button" ||
-		action.IsEnabled != yesno.Yes || action.IsHidden != yesno.Yes {
-		t.Fatalf("Canvas action definition = %+v", action)
-	}
-}
-
-func TestRunKeepsSchemaDependenciesBeforeRedisAndFoundationBeforeRouter(t *testing.T) {
+func TestRunDoesNotMutatePersistentStateDuringStartup(t *testing.T) {
 	content, err := os.ReadFile("main.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(content)
-	wantOrder := []string{
+	forbidden := []string{
 		"database.PrepareDomainNames(",
 		"auth.PrepareSessionSchema(",
 		"operationlog.PrepareSchema(",
 		"menu.PrepareSchema(",
 		"database.AutoMigrate(",
+		"authplatform.EnsureSchema(",
 		"authplatform.EnsureCanvasPreset(",
+		"menu.PreparePlatformSchema(",
 		"role.EnsureSchema(",
+		"auth.EnsureSchema(",
+		"menu.EnsureSchema(",
+		"access.EnsureSchema(",
 		"operationlog.EnsureSchema(",
-		"projectredis.Open(",
 		"authplatform.ClearBuiltinPolicies(",
-		"queue.NewClient(",
+		"auth.CleanupLegacySessionPointers(",
 		"menuService.EnsureFoundation(",
 		"menuService.EnsurePlatformFoundation(",
+		"roleService.EnsureSystemRoles(",
+	}
+	for _, fragment := range forbidden {
+		if strings.Contains(source, fragment) {
+			t.Errorf("runtime startup contains state mutation %s", fragment)
+		}
+	}
+	wantOrder := []string{
+		"database.Open(",
+		"projectredis.Open(",
+		"queue.NewClient(",
 		"buildRouter(",
 	}
 	previous := -1
