@@ -17,13 +17,14 @@ type Repository struct{ db *gorm.DB }
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db} }
 
 type UploadTarget struct {
-	RuleID, PlatformID, CosConfigID                                                        int64
-	PathPrefix                                                                             string
-	MaxFileSizeBytes                                                                       int64
-	MaxFileCount                                                                           int
-	AllowedExtensions, AllowedMimeTypes                                                    StringArray
-	AccessMode                                                                             string
-	Bucket, Region, AppID, Endpoint, BucketDomain, SecretIDCiphertext, SecretKeyCiphertext string
+	RuleID, PlatformID, CosConfigID                                 int64
+	PathPrefix                                                      string
+	MaxFileSizeBytes                                                int64
+	MaxFileCount                                                    int
+	AllowedExtensions, AllowedMimeTypes                             StringArray
+	AccessMode                                                      string
+	Bucket, Region, AppID                                           string
+	Endpoint, BucketDomain, SecretIDCiphertext, SecretKeyCiphertext *string
 }
 
 func (r *Repository) PlatformEnabled(ctx context.Context, id int64) (bool, error) {

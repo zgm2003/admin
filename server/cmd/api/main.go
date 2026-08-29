@@ -34,6 +34,7 @@ import (
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/i18n"
+	storagecos "admin/server/internal/storage/cos"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -141,8 +142,9 @@ func run(logger *slog.Logger) error {
 	sessionService := usersession.NewService(sessionRepository, authStateStore, authInvalidator, auth.NewSessionCache(redisClient))
 	userService := account.NewService(userRepository, authStateStore, authInvalidator, accessStateStore, accessInvalidator)
 	profileService := profile.NewService(profileRepository)
-	cosConfigService := cosconfig.NewService(cosconfig.NewRepository(postgres.GORM), keys, nil)
-	uploadRuleService := uploadrule.NewService(uploadrule.NewRepository(postgres.GORM))
+	cosClient := storagecos.NewClient(nil)
+	cosConfigService := cosconfig.NewService(cosconfig.NewRepository(postgres.GORM), keys, cosClient)
+	uploadRuleService := uploadrule.NewService(uploadrule.NewRepository(postgres.GORM), keys, cosClient)
 	loginLogService := loginlog.NewService(loginlog.NewRepository(postgres.GORM))
 	authService.SetLoginLogRecorder(loginLogService)
 	accessRepository := access.NewRepository(postgres.GORM)
@@ -240,6 +242,7 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	profile.RegisterRoutes(adminRoutes, dependencies.Account, dependencies.Authenticate, dependencies.RequirePermission)
 	cosconfig.RegisterRoutes(adminRoutes, dependencies.COSConfig, dependencies.Authenticate, dependencies.RequirePermission)
 	uploadrule.RegisterRoutes(adminRoutes, dependencies.UploadRule, dependencies.Authenticate, dependencies.RequirePermission)
+	uploadrule.RegisterCredentialRoute(sharedRoutes, dependencies.UploadRule, dependencies.Authenticate, dependencies.RequirePermission)
 	loginlog.RegisterRoutes(adminRoutes, dependencies.LoginLog, dependencies.Authenticate, dependencies.RequirePermission)
 	operationlog.RegisterRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
 	usersession.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)

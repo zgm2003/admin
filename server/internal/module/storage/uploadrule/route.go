@@ -12,3 +12,7 @@ func RegisterRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, req fu
 	g.PATCH("/:id/status", auth, req(PermissionStatus), h.Status)
 	g.DELETE("/:id", auth, req(PermissionDelete), h.Delete)
 }
+
+func RegisterCredentialRoute(r *gin.RouterGroup, h *Handler, authMiddleware gin.HandlerFunc, req func(string) gin.HandlerFunc) {
+	r.POST("/storage/upload-credentials", authMiddleware, req("storage:object:upload"), h.Credentials)
+}

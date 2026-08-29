@@ -1,19 +1,34 @@
 package uploadrule
 
 import (
+	"admin/server/internal/module/auth/login"
+	"admin/server/internal/module/storage/cosconfig"
+	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
+	storagecos "admin/server/internal/storage/cos"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"gorm.io/gorm"
+	"net/http"
+	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
-type Service struct{ repository *Repository }
+type Service struct {
+	repository *Repository
+	keys       *secretkey.KeyRing
+	signer     storagecos.Presigner
+}
 
-func NewService(r *Repository) *Service { return &Service{r} }
+func NewService(repository *Repository, keys *secretkey.KeyRing, signer storagecos.Presigner) *Service {
+	return &Service{repository: repository, keys: keys, signer: signer}
+}
 func (s *Service) List(ctx context.Context, q ListQuery) (pagination.Result[RuleValue], error) {
 	if q.Page < 1 || q.PageSize < 1 || q.PageSize > 100 {
 		return pagination.Result[RuleValue]{}, invalid(fmt.Errorf("pagination invalid"))
@@ -230,4 +245,93 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		}
 		return nil
 	})
+}
+
+func (s *Service) IssueCredentials(ctx context.Context, identity auth.Identity, input CredentialInput) (CredentialResponse, error) {
+	if identity.PlatformID < 1 || strings.TrimSpace(input.RuleCode) == "" || len(input.Files) == 0 {
+		return CredentialResponse{}, invalid(fmt.Errorf("credential request invalid"))
+	}
+	target, err := s.repository.FindUploadTarget(ctx, identity.PlatformID, strings.TrimSpace(input.RuleCode))
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return CredentialResponse{}, notFound(err)
+	}
+	if err != nil {
+		return CredentialResponse{}, dependency(err)
+	}
+	if len(input.Files) > target.MaxFileCount {
+		return CredentialResponse{}, invalid(fmt.Errorf("file count exceeds rule"))
+	}
+	if s.keys == nil || s.signer == nil {
+		return CredentialResponse{}, dependency(fmt.Errorf("COS signer unavailable"))
+	}
+	if target.SecretIDCiphertext == nil || target.SecretKeyCiphertext == nil {
+		return CredentialResponse{}, dependency(fmt.Errorf("COS credentials unavailable"))
+	}
+	secretID, secretKey, err := cosconfig.DecryptCredentials(s.keys.StorageEncryptionKey(), *target.SecretIDCiphertext, *target.SecretKeyCiphertext)
+	if err != nil {
+		return CredentialResponse{}, dependency(err)
+	}
+	credentials := storagecos.Credentials{AppID: target.AppID, SecretID: secretID, SecretKey: secretKey, Bucket: target.Bucket, Region: target.Region}
+	if target.Endpoint != nil {
+		credentials.Endpoint = *target.Endpoint
+	}
+	items := make([]CredentialItem, 0, len(input.Files))
+	now := time.Now().UTC()
+	for _, file := range input.Files {
+		ext, err := validateCredentialFile(file, target)
+		if err != nil {
+			return CredentialResponse{}, invalid(err)
+		}
+		key, err := generateObjectKey(target.PathPrefix, ext, now)
+		if err != nil {
+			return CredentialResponse{}, dependency(err)
+		}
+		signed, err := s.signer.PresignPut(ctx, credentials, storagecos.PutRequest{ObjectKey: key, ContentType: strings.ToLower(strings.TrimSpace(file.ContentType)), ContentLength: file.FileSizeBytes, PublicRead: target.AccessMode == "public"})
+		if err != nil {
+			return CredentialResponse{}, dependency(err)
+		}
+		item := CredentialItem{UploadURL: signed.URL, ObjectKey: key, Method: http.MethodPut, Headers: signed.Headers, ExpiresAt: now.Add(storagecos.PresignValidity)}
+		if target.AccessMode == "public" {
+			if target.BucketDomain == nil || strings.TrimSpace(*target.BucketDomain) == "" {
+				return CredentialResponse{}, conflict(fmt.Errorf("public bucket domain unavailable"))
+			}
+			public := strings.TrimRight(*target.BucketDomain, "/") + "/" + strings.ReplaceAll(url.PathEscape(key), "%2F", "/")
+			item.PublicURL = &public
+		}
+		items = append(items, item)
+	}
+	return CredentialResponse{Items: items}, nil
+}
+func validateCredentialFile(file FileInput, target UploadTarget) (string, error) {
+	name := strings.TrimSpace(file.FileName)
+	if name == "" || strings.ContainsAny(name, "/\\\r\n\t") || strings.Contains(name, "..") {
+		return "", fmt.Errorf("fileName invalid")
+	}
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), ".")
+	if ext == "" || !contains(target.AllowedExtensions, ext) {
+		return "", fmt.Errorf("extension invalid")
+	}
+	mime := strings.ToLower(strings.TrimSpace(file.ContentType))
+	if len(target.AllowedMimeTypes) > 0 && !contains(target.AllowedMimeTypes, mime) {
+		return "", fmt.Errorf("contentType invalid")
+	}
+	if file.FileSizeBytes < 1 || file.FileSizeBytes > target.MaxFileSizeBytes {
+		return "", fmt.Errorf("fileSizeBytes invalid")
+	}
+	return ext, nil
+}
+func contains(values StringArray, value string) bool {
+	for _, candidate := range values {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
+}
+func generateObjectKey(prefix, extension string, now time.Time) (string, error) {
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/%04d/%02d/%02d/%s.%s", strings.Trim(prefix, "/"), now.Year(), now.Month(), now.Day(), hex.EncodeToString(random), extension), nil
 }

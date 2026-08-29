@@ -55,3 +55,15 @@ func decryptCredential(key []byte, encoded string) (string, error) {
 	}
 	return string(plaintext), nil
 }
+
+func DecryptCredentials(key []byte, secretIDCiphertext, secretKeyCiphertext string) (string, string, error) {
+	secretID, err := decryptCredential(key, secretIDCiphertext)
+	if err != nil {
+		return "", "", err
+	}
+	secretKey, err := decryptCredential(key, secretKeyCiphertext)
+	if err != nil {
+		return "", "", err
+	}
+	return secretID, secretKey, nil
+}

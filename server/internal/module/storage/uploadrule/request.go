@@ -37,6 +37,15 @@ type UpdateInput struct {
 	AllowedExtensions, AllowedMimeTypes []string
 	AccessMode, Remark                  string
 }
+type FileInput struct {
+	FileName      string `json:"fileName"`
+	ContentType   string `json:"contentType"`
+	FileSizeBytes int64  `json:"fileSizeBytes"`
+}
+type CredentialInput struct {
+	RuleCode string      `json:"ruleCode"`
+	Files    []FileInput `json:"files"`
+}
 type createRequest struct {
 	PlatformID        int64       `json:"platformId"`
 	Code              string      `json:"code"`

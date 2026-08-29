@@ -24,7 +24,7 @@ func TestServiceValidatesTargetsAndMaintainsOneEnabledRule(t *testing.T) {
 	configID := insertConfig(t, db, ctx, "main", yesno.Yes, "https://cdn.example.com")
 	privateConfigID := insertConfig(t, db, ctx, "private", yesno.Yes, "")
 	disabledConfigID := insertConfig(t, db, ctx, "disabled", yesno.No, "")
-	service := NewService(NewRepository(db))
+	service := NewService(NewRepository(db), nil, nil)
 
 	firstID, err := service.Create(ctx, validCreate(platformID, configID, "avatar", yesno.Yes))
 	if err != nil {
@@ -69,7 +69,7 @@ func TestConcurrentEnableKeepsAtMostOneRuleEnabled(t *testing.T) {
 	db, ctx := openRuleDatabase(t)
 	platformID := insertPlatform(t, db, ctx, "admin", yesno.Yes)
 	configID := insertConfig(t, db, ctx, "main", yesno.Yes, "")
-	service := NewService(NewRepository(db))
+	service := NewService(NewRepository(db), nil, nil)
 	firstID, err := service.Create(ctx, validCreate(platformID, configID, "one", yesno.No))
 	if err != nil {
 		t.Fatal(err)

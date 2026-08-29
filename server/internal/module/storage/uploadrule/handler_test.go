@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"admin/server/internal/module/auth/login"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
 	"github.com/gin-gonic/gin"
@@ -16,6 +17,10 @@ import (
 type ruleHTTPService struct {
 	query   ListQuery
 	creates int
+}
+
+func (*ruleHTTPService) IssueCredentials(context.Context, auth.Identity, CredentialInput) (CredentialResponse, error) {
+	return CredentialResponse{}, nil
 }
 
 func (s *ruleHTTPService) List(_ context.Context, q ListQuery) (pagination.Result[RuleValue], error) {
@@ -40,7 +45,8 @@ func TestRoutesUseExactUploadRulePermissions(t *testing.T) {
 	permissions := []string{}
 	pass := func(c *gin.Context) { c.Next() }
 	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(&ruleHTTPService{}), pass, func(code string) gin.HandlerFunc { permissions = append(permissions, code); return pass })
-	want := []string{PermissionList, PermissionList, PermissionCreate, PermissionList, PermissionUpdate, PermissionStatus, PermissionDelete}
+	RegisterCredentialRoute(router.Group("/api/v1"), NewHandler(&ruleHTTPService{}), pass, func(code string) gin.HandlerFunc { permissions = append(permissions, code); return pass })
+	want := []string{PermissionList, PermissionList, PermissionCreate, PermissionList, PermissionUpdate, PermissionStatus, PermissionDelete, "storage:object:upload"}
 	if !reflect.DeepEqual(permissions, want) {
 		t.Fatalf("permissions=%v want=%v", permissions, want)
 	}

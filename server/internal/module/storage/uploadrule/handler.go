@@ -1,6 +1,8 @@
 package uploadrule
 
 import (
+	"admin/server/internal/module/auth/login"
+	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/response"
 	"admin/server/internal/shared/validate"
@@ -19,6 +21,7 @@ type handlerService interface {
 	Update(context.Context, int64, UpdateInput) error
 	UpdateStatus(context.Context, int64, yesno.Value) error
 	Delete(context.Context, int64) error
+	IssueCredentials(context.Context, auth.Identity, CredentialInput) (CredentialResponse, error)
 }
 type Handler struct{ s handlerService }
 
@@ -141,4 +144,23 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 	response.OK(c, http.StatusOK, emptyResponse{})
+}
+
+func (h *Handler) Credentials(c *gin.Context) {
+	identity, ok := auth.IdentityFromContext(c)
+	if !ok {
+		response.Fail(c, apperror.Unauthorized(fmt.Errorf("identity unavailable")))
+		return
+	}
+	var request CredentialInput
+	if err := validate.BindJSON(c, &request); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	result, err := h.s.IssueCredentials(c, identity, request)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, result)
 }

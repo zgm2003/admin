@@ -3,6 +3,7 @@ package uploadrule
 import (
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
+	"time"
 )
 
 type listResponse struct {
@@ -41,3 +42,14 @@ type statusResponse struct {
 	IsEnabled int16 `json:"isEnabled"`
 }
 type emptyResponse struct{}
+type CredentialItem struct {
+	UploadURL string            `json:"uploadUrl"`
+	ObjectKey string            `json:"objectKey"`
+	Method    string            `json:"method"`
+	Headers   map[string]string `json:"headers"`
+	ExpiresAt time.Time         `json:"expiresAt"`
+	PublicURL *string           `json:"publicUrl,omitempty"`
+}
+type CredentialResponse struct {
+	Items []CredentialItem `json:"items"`
+}
