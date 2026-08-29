@@ -146,6 +146,9 @@ CREATE TABLE IF NOT EXISTS user_login_log (
 );
 
 ALTER TABLE audit_operation_log ADD COLUMN IF NOT EXISTS platform_id BIGINT;
+DROP INDEX IF EXISTS ux_audit_operation_log_request_id;
+DROP INDEX IF EXISTS ix_audit_operation_log_user_created;
+DROP INDEX IF EXISTS ix_audit_operation_log_action_created;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='audit_operation_log' AND column_name='platform') THEN
@@ -199,6 +202,5 @@ CREATE INDEX IF NOT EXISTS ix_audit_operation_log_request_id ON audit_operation_
 CREATE INDEX IF NOT EXISTS ix_audit_operation_log_created_at ON audit_operation_log (created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_audit_operation_log_user_created_at ON audit_operation_log (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_audit_operation_log_action_created_at ON audit_operation_log (action, created_at DESC);
-DROP INDEX IF EXISTS ux_audit_operation_log_request_id;
 
 COMMIT;
