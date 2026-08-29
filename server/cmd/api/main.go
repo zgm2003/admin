@@ -140,7 +140,7 @@ func run(logger *slog.Logger) error {
 	loginLogService := loginlog.NewService(loginlog.NewRepository(postgres.GORM))
 	authService.SetLoginLogRecorder(loginLogService)
 	accessRepository := access.NewRepository(postgres.GORM)
-	accessService := access.NewService(accessRepository, accessStateStore, access.NewSnapshotCache(redisClient), logger)
+	accessService := access.NewService(accessRepository, accessStateStore, access.NewSnapshotCache(redisClient), access.NewLocalSnapshotCache(1024), logger)
 	operationLogRepository := operationlog.NewRepository(postgres.GORM)
 	operationLogService := operationlog.NewService(operationLogRepository)
 	operationLogEnqueuer := operationlog.NewQueueEnqueuer(queueClient)

@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"admin/server/internal/module/auth/login"
@@ -56,11 +57,12 @@ type Service struct {
 	store  sourceStore
 	states *accessstate.Store
 	cache  *SnapshotCache
+	local  *LocalSnapshotCache
 	logger *slog.Logger
 }
 
-func NewService(store sourceStore, states *accessstate.Store, cache *SnapshotCache, logger *slog.Logger) *Service {
-	return &Service{store: store, states: states, cache: cache, logger: logger}
+func NewService(store sourceStore, states *accessstate.Store, cache *SnapshotCache, local *LocalSnapshotCache, logger *slog.Logger) *Service {
+	return &Service{store: store, states: states, cache: cache, local: local, logger: logger}
 }
 
 func (s *Service) Current(ctx context.Context, identity auth.Identity) (Snapshot, error) {
@@ -99,11 +101,16 @@ func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Sna
 		if state.State == accessstate.StateInvalidating {
 			return Snapshot{}, accessUpdating(accessstate.ErrUpdating)
 		}
+		key := snapshotCacheKey(identity, state.Version)
+		if cached, localFound := s.local.Read(key, time.Now()); localFound {
+			return snapshotFromCache(cached, "hit"), nil
+		}
 		cached, cacheFound, cacheErr := s.cache.Read(ctx, identity.PlatformID, identity.Platform, identity.PolicyVersion, identity.UserID, state.Version)
 		if cacheErr != nil {
 			cacheResult = "error"
 			s.logCacheError(ctx, "accessSnapshot", "error", cacheErr)
 		} else if cacheFound {
+			s.local.Put(key, cached, time.Now().Add(identity.AccessCacheTTL))
 			return snapshotFromCache(cached, "hit"), nil
 		}
 	}
@@ -138,7 +145,8 @@ func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Sna
 			continue
 		}
 
-		published, publishErr := s.cache.PublishIfCurrent(ctx, newCachedSnapshot(identity.UserID, identity.PlatformID, identity.Platform, identity.PolicyVersion, snapshot), identity.AccessCacheTTL)
+		cached := newCachedSnapshot(identity.UserID, identity.PlatformID, identity.Platform, identity.PolicyVersion, snapshot)
+		published, publishErr := s.cache.PublishIfCurrent(ctx, cached, identity.AccessCacheTTL)
 		if publishErr != nil {
 			s.logCacheError(ctx, "accessSnapshot", "error", publishErr)
 			snapshot.CacheResult = "error"
@@ -148,9 +156,20 @@ func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Sna
 			cacheResult = "miss"
 			continue
 		}
+		s.local.Put(snapshotCacheKey(identity, source.Version), cached, time.Now().Add(identity.AccessCacheTTL))
 		return snapshot, nil
 	}
 	return Snapshot{}, accessUpdating(fmt.Errorf("access version kept changing during snapshot rebuild"))
+}
+
+func snapshotCacheKey(identity auth.Identity, accessVersion int64) SnapshotCacheKey {
+	return SnapshotCacheKey{
+		UserID:        identity.UserID,
+		PlatformID:    identity.PlatformID,
+		Platform:      identity.Platform,
+		PolicyVersion: identity.PolicyVersion,
+		AccessVersion: accessVersion,
+	}
 }
 
 func validateAccessIdentity(identity auth.Identity) error {

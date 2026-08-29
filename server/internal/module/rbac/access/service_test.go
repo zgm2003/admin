@@ -46,6 +46,40 @@ func TestCurrentAndAllowedShareWarmSnapshotWithoutPostgreSQL(t *testing.T) {
 	}
 }
 
+func TestLoadSnapshotUsesRedisStateGateBeforeLocalCache(t *testing.T) {
+	serviceRedis := openAccessRedis(t)
+	cleanupRedis := openAccessRedis(t)
+	cleanupAccessKeys(t, cleanupRedis, 93006, "admin", 4, 3)
+	repository := &countingSourceStore{sources: []Source{baseSource(3), baseSource(3)}}
+	service := NewService(
+		repository,
+		accessstate.NewStore(serviceRedis),
+		NewSnapshotCache(serviceRedis),
+		NewLocalSnapshotCache(8),
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+	identity := accessIdentity(93006)
+
+	if _, err := service.Current(context.Background(), identity); err != nil {
+		t.Fatal(err)
+	}
+	if err := cleanupRedis.Delete(context.Background(), SnapshotKey("admin", 4, 93006, 3)); err != nil {
+		t.Fatal(err)
+	}
+	warm, err := service.Current(context.Background(), identity)
+	if err != nil || warm.CacheResult != "hit" || repository.calls != 1 {
+		t.Fatalf("L1 read = %+v,%v calls=%d", warm, err, repository.calls)
+	}
+
+	if err := serviceRedis.Close(); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := service.Current(context.Background(), identity)
+	if err != nil || fresh.CacheResult != "error" || repository.calls != 2 {
+		t.Fatalf("Redis gate failure = %+v,%v calls=%d", fresh, err, repository.calls)
+	}
+}
+
 func TestLoadSnapshotFallsBackForMissErrorAndCorruption(t *testing.T) {
 	redisClient := openAccessRedis(t)
 	cleanupAccessKeys(t, redisClient, 93002, "admin", 4, 3)
@@ -60,6 +94,7 @@ func TestLoadSnapshotFallsBackForMissErrorAndCorruption(t *testing.T) {
 	if err := redisClient.SetString(context.Background(), key, `{"schemaVersion":1,"unknown":true}`, time.Minute); err != nil {
 		t.Fatal(err)
 	}
+	service.local = NewLocalSnapshotCache(8)
 	snapshot, err := service.Current(context.Background(), identity)
 	if err != nil || snapshot.CacheResult != "error" || repository.calls != 2 {
 		t.Fatalf("corrupt fallback = %+v,%v calls=%d", snapshot, err, repository.calls)
@@ -67,6 +102,109 @@ func TestLoadSnapshotFallsBackForMissErrorAndCorruption(t *testing.T) {
 	warm, err := service.Current(context.Background(), identity)
 	if err != nil || warm.CacheResult != "hit" || repository.calls != 2 {
 		t.Fatalf("rebuilt snapshot = %+v,%v calls=%d", warm, err, repository.calls)
+	}
+}
+
+func TestLoadSnapshotBypassesLocalCacheForMissingOrCorruptState(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		userID      int64
+		mutateState func(*testing.T, *projectredis.Client, int64)
+		cacheResult string
+	}{
+		{
+			name:   "missing",
+			userID: 93007,
+			mutateState: func(t *testing.T, client *projectredis.Client, userID int64) {
+				t.Helper()
+				if err := client.Delete(context.Background(), accessstate.StateKey(userID)); err != nil {
+					t.Fatal(err)
+				}
+			},
+			cacheResult: "miss",
+		},
+		{
+			name:   "corrupt",
+			userID: 93008,
+			mutateState: func(t *testing.T, client *projectredis.Client, userID int64) {
+				t.Helper()
+				if err := client.SetString(context.Background(), accessstate.StateKey(userID), `{"state":"ready","unknown":true}`, time.Minute); err != nil {
+					t.Fatal(err)
+				}
+			},
+			cacheResult: "error",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			redisClient := openAccessRedis(t)
+			cleanupAccessKeys(t, redisClient, test.userID, "admin", 4, 3)
+			repository := &countingSourceStore{sources: []Source{baseSource(3), baseSource(3)}}
+			service := newAccessTestService(redisClient, repository)
+			identity := accessIdentity(test.userID)
+			if _, err := service.Current(context.Background(), identity); err != nil {
+				t.Fatal(err)
+			}
+			if err := redisClient.Delete(context.Background(), SnapshotKey("admin", 4, test.userID, 3)); err != nil {
+				t.Fatal(err)
+			}
+			test.mutateState(t, redisClient, test.userID)
+
+			snapshot, err := service.Current(context.Background(), identity)
+			if err != nil || snapshot.CacheResult != test.cacheResult || repository.calls != 2 {
+				t.Fatalf("state %s fallback = %+v,%v calls=%d", test.name, snapshot, err, repository.calls)
+			}
+		})
+	}
+}
+
+func TestLoadSnapshotBypassesLocalCacheAfterAccessVersionChanges(t *testing.T) {
+	redisClient := openAccessRedis(t)
+	cleanupAccessKeys(t, redisClient, 93009, "admin", 4, 3)
+	t.Cleanup(func() { _ = redisClient.Delete(context.Background(), SnapshotKey("admin", 4, 93009, 4)) })
+	repository := &countingSourceStore{sources: []Source{baseSource(3), baseSource(4)}}
+	service := newAccessTestService(redisClient, repository)
+	identity := accessIdentity(93009)
+	if _, err := service.Current(context.Background(), identity); err != nil {
+		t.Fatal(err)
+	}
+	stateStore := accessstate.NewStore(redisClient)
+	lease, err := accessstate.NewInvalidator(stateStore).Acquire(context.Background(), []accessstate.Version{{UserID: identity.UserID, Version: 3}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := lease.Commit(context.Background(), map[int64]int64{identity.UserID: 4}); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, err := service.Current(context.Background(), identity)
+	if err != nil || snapshot.Version != 4 || repository.calls != 2 {
+		t.Fatalf("version change = %+v,%v calls=%d", snapshot, err, repository.calls)
+	}
+}
+
+func TestLoadSnapshotDoesNotUseLocalCacheWhileInvalidating(t *testing.T) {
+	redisClient := openAccessRedis(t)
+	cleanupAccessKeys(t, redisClient, 93010, "admin", 4, 3)
+	repository := &countingSourceStore{sources: []Source{baseSource(3)}}
+	service := newAccessTestService(redisClient, repository)
+	identity := accessIdentity(93010)
+	if _, err := service.Current(context.Background(), identity); err != nil {
+		t.Fatal(err)
+	}
+	lease, err := accessstate.NewInvalidator(accessstate.NewStore(redisClient)).Acquire(
+		context.Background(),
+		[]accessstate.Version{{UserID: identity.UserID, Version: 3}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lease.Rollback(context.Background()) })
+
+	if _, err := service.Current(context.Background(), identity); appErrorCode(err) != CodeAccessUpdating {
+		t.Fatalf("invalidating access error = %v", err)
+	}
+	if repository.calls != 1 {
+		t.Fatalf("invalidating state PostgreSQL calls = %d, want 1", repository.calls)
 	}
 }
 
@@ -299,7 +437,7 @@ func accessIdentity(userID int64) auth.Identity {
 
 func newAccessTestService(redisClient *projectredis.Client, repository sourceStore) *Service {
 	stateStore := accessstate.NewStore(redisClient)
-	return NewService(repository, stateStore, NewSnapshotCache(redisClient), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return NewService(repository, stateStore, NewSnapshotCache(redisClient), NewLocalSnapshotCache(8), slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 type countingSourceStore struct {
