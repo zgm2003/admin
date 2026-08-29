@@ -231,7 +231,8 @@ web/src/
       platform/      # 认证平台管理
     audit/
       operationlog/  # 操作日志页面
-  api/
+  api/               # 业务 API 文件按领域归位，不放 Axios 基础实现
+  utils/
     request.ts       # 现有 Axios/envelope 基础，不放业务 API
   layout/            # 现有布局、RouterTabs、主题和个人中心
   components/        # 现有真实复用公共组件
