@@ -422,6 +422,7 @@ func TestServiceConcurrentSuperAdminRemovalsCannotBothCommit(t *testing.T) {
 	second := createListedUser(t, db, ctx, fmt.Sprintf("concurrentsuperb%d", time.Now().UnixNano()), fmt.Sprintf("concurrentsuperb%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), superRole.ID, defaultRole.ID)
 	t.Cleanup(func() {
 		_ = db.Unscoped().Where("user_id IN ?", []int64{first.ID, second.ID}).Delete(&role.UserRole{}).Error
+		_ = db.Unscoped().Where("user_id IN ?", []int64{first.ID, second.ID}).Delete("rbac_access_version").Error
 		_ = db.Unscoped().Where("id IN ?", []int64{first.ID, second.ID}).Delete(&account.User{}).Error
 	})
 	service := newUserTestService(t, account.NewRepository(db))
@@ -628,7 +629,7 @@ func createUserSession(t *testing.T, tx *gorm.DB, ctx context.Context, userID in
 func createUserSessionForPlatform(t *testing.T, tx *gorm.DB, ctx context.Context, userID int64, platform, deviceID string) auth.Session {
 	t.Helper()
 	session := auth.Session{
-		UserID: userID, Platform: platform, DeviceID: deviceID,
+		UserID: userID, PlatformID: testPlatformID(t, tx, ctx, platform), Platform: platform, DeviceID: deviceID,
 		RefreshTokenHash: fmt.Sprintf("%064d", time.Now().UnixNano()), Version: 1,
 		ClientIP: "127.0.0.1", UserAgent: "test", RefreshExpiresAt: time.Now().UTC().Add(time.Hour),
 	}

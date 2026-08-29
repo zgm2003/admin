@@ -236,6 +236,11 @@ type sessionAdminRow struct {
 	Status           string
 }
 
+type sessionPlatformRow struct {
+	Session
+	Platform string
+}
+
 func (r *Repository) ListAdmin(ctx context.Context, query AdminSessionQuery, now time.Time) ([]AdminSession, int64, error) {
 	db := r.db.WithContext(ctx).Table("user_session AS session").
 		Select("session.id, session.user_id, app_user.username, platform.code AS platform, session.device_id, "+
@@ -316,7 +321,7 @@ func (r *Repository) StatsAdmin(ctx context.Context, now time.Time) (AdminSessio
 func (r *Repository) RevokeAdmin(ctx context.Context, ids []int64, currentSessionID int64, now time.Time) (AdminRevokeResult, error) {
 	result := AdminRevokeResult{}
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		rows := make([]Record, 0, len(ids))
+		rows := make([]sessionPlatformRow, 0, len(ids))
 		if err := tx.Unscoped().Table("user_session AS session").
 			Select("session.*, platform.code AS platform").
 			Joins("JOIN auth_platform AS platform ON platform.id = session.platform_id").
@@ -324,7 +329,9 @@ func (r *Repository) RevokeAdmin(ctx context.Context, ids []int64, currentSessio
 			Where("session.id IN ?", ids).Scan(&rows).Error; err != nil {
 			return fmt.Errorf("lock sessions for revoke: %w", err)
 		}
-		for _, session := range rows {
+		for _, row := range rows {
+			session := row.Session
+			session.Platform = row.Platform
 			switch {
 			case session.ID == currentSessionID:
 				result.SkippedCurrent++
@@ -359,14 +366,19 @@ func (r *Repository) RevokeAdmin(ctx context.Context, ids []int64, currentSessio
 }
 
 func (r *Repository) FindAdminRevokeTargets(ctx context.Context, ids []int64) ([]Record, error) {
-	rows := make([]Record, 0, len(ids))
+	rows := make([]sessionPlatformRow, 0, len(ids))
 	if err := r.db.WithContext(ctx).Unscoped().Table("user_session AS session").
 		Select("session.*, platform.code AS platform").
 		Joins("JOIN auth_platform AS platform ON platform.id = session.platform_id").
 		Where("session.id IN ?", ids).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("find sessions for admin revoke: %w", err)
 	}
-	return rows, nil
+	result := make([]Record, 0, len(rows))
+	for _, row := range rows {
+		row.Session.Platform = row.Platform
+		result = append(result, row.Session)
+	}
+	return result, nil
 }
 
 func (s *Service) ensureSessionsReady(ctx context.Context, platform string, userID int64) (authstate.SessionsFact, error) {

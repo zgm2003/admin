@@ -13,6 +13,7 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	"admin/server/internal/module/auth/login"
+	authplatform "admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/rbac/access"
 	"admin/server/internal/module/rbac/role"
 	"admin/server/internal/module/user/account"
@@ -509,7 +510,7 @@ func TestRepositoryUpdateSoftDeleteCreateUserRolesAndRevoke(t *testing.T) {
 		t.Fatalf("active relationships = %+v,%v", activeRelations, err)
 	}
 	session := auth.Session{
-		UserID: created.ID, Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440000",
+		UserID: created.ID, PlatformID: testPlatformID(t, tx, ctx, "admin"), Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440000",
 		RefreshTokenHash: fmt.Sprintf("%064d", created.ID), Version: 1, ClientIP: "127.0.0.1",
 		UserAgent: "test", RefreshExpiresAt: operationTime.Add(time.Hour),
 	}
@@ -551,6 +552,9 @@ func TestRepositoryFindActiveSessionPlatformsReturnsSortedDistinctValues(t *test
 		{UserID: created.ID, Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440002", RefreshTokenHash: fmt.Sprintf("%064d", now.UnixNano()+2), Version: 1, ClientIP: "127.0.0.1", UserAgent: "admin-a", RefreshExpiresAt: now.Add(time.Hour)},
 		{UserID: created.ID, Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440003", RefreshTokenHash: fmt.Sprintf("%064d", now.UnixNano()+3), Version: 1, ClientIP: "127.0.0.1", UserAgent: "admin-b", RefreshExpiresAt: now.Add(time.Hour)},
 		{UserID: created.ID, Platform: "legacy", DeviceID: "550e8400-e29b-41d4-a716-446655440004", RefreshTokenHash: fmt.Sprintf("%064d", now.UnixNano()+4), Version: 1, ClientIP: "127.0.0.1", UserAgent: "revoked", RefreshExpiresAt: now.Add(time.Hour), RevokedAt: &now},
+	}
+	for index := range sessions {
+		sessions[index].PlatformID = testPlatformID(t, tx, ctx, sessions[index].Platform)
 	}
 	if err := tx.WithContext(ctx).Create(&sessions).Error; err != nil {
 		t.Fatal(err)
@@ -624,7 +628,7 @@ func TestRepositoryTransactionRollsBackStatusRolesAndSessionsAfterForcedFailure(
 		t.Fatal(err)
 	}
 	session := auth.Session{
-		UserID: created.ID, Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440000",
+		UserID: created.ID, PlatformID: testPlatformID(t, tx, ctx, "admin"), Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440000",
 		RefreshTokenHash: fmt.Sprintf("%064d", created.ID+10000), Version: 1, ClientIP: "127.0.0.1",
 		UserAgent: "rollback", RefreshExpiresAt: time.Now().UTC().Add(time.Hour),
 	}
@@ -638,7 +642,7 @@ func TestRepositoryTransactionRollsBackStatusRolesAndSessionsAfterForcedFailure(
 		END;
 		$$ LANGUAGE plpgsql;
 		CREATE TRIGGER test_reject_user_session_revoke
-		BEFORE UPDATE ON auth_session
+		BEFORE UPDATE ON user_session
 		FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_user_session_revoke();`).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -783,8 +787,26 @@ func openUserDatabase(t *testing.T) (*gorm.DB, context.Context, *role.Repository
 		_ = root.GORM.WithContext(cleanupCtx).Exec("DROP SCHEMA IF EXISTS " + schema + " CASCADE").Error
 		_ = root.Close()
 	})
-	if err := database.AutoMigrate(ctx, db, &account.User{}, &profile.Profile{}, &role.Role{}, &role.UserRole{}, &auth.Session{}, &access.Version{}); err != nil {
+	if err := database.AutoMigrate(ctx, db, &account.User{}, &profile.Profile{}, &role.Role{}, &role.UserRole{}, &authplatform.Platform{}, &auth.Session{}, &access.Version{}); err != nil {
 		t.Fatalf("AutoMigrate: %v", err)
+	}
+	if err := authplatform.EnsureSchema(ctx, db); err != nil {
+		t.Fatalf("Ensure platform schema: %v", err)
+	}
+	for _, statement := range []string{
+		`CREATE UNIQUE INDEX ux_user_account_username_active ON user_account (lower(username)) WHERE deleted_at IS NULL`,
+		`CREATE UNIQUE INDEX ux_user_account_email_active ON user_account (lower(email)) WHERE deleted_at IS NULL`,
+		`CREATE UNIQUE INDEX ux_user_account_phone_active ON user_account (phone) WHERE phone IS NOT NULL AND deleted_at IS NULL`,
+	} {
+		if err := db.WithContext(ctx).Exec(statement).Error; err != nil {
+			t.Fatalf("create account test index: %v", err)
+		}
+	}
+	for _, code := range []string{"app", "canvas", "legacy"} {
+		value := authplatform.Platform{Code: code, Name: code, PolicyVersion: 1, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600, SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800, BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 0, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.No}
+		if err := db.WithContext(ctx).Create(&value).Error; err != nil {
+			t.Fatalf("create test platform %s: %v", code, err)
+		}
 	}
 	if err := role.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("Ensure role schema: %v", err)
@@ -807,6 +829,15 @@ func newCreateInput(prefix string, roleID int64) account.CreateInput {
 		PasswordHash: "$2a$10$placeholder",
 		RoleID:       roleID,
 	}
+}
+
+func testPlatformID(t *testing.T, db *gorm.DB, ctx context.Context, code string) int64 {
+	t.Helper()
+	var value authplatform.Platform
+	if err := db.WithContext(ctx).Where("code = ?", code).Take(&value).Error; err != nil {
+		t.Fatalf("find test platform %s: %v", code, err)
+	}
+	return value.ID
 }
 
 func TestPersonalProfileRepositoryPersistsAndReadsBirthdayAndGender(t *testing.T) {
@@ -852,7 +883,7 @@ func TestChangePasswordAndRevokeSessionsUpdatesHashAndAllPlatforms(t *testing.T)
 	}
 	now := time.Date(2026, 8, 28, 2, 3, 4, 0, time.UTC)
 	for _, platform := range []string{"admin", "canvas"} {
-		if err := db.WithContext(ctx).Create(&auth.Session{UserID: created.ID, Platform: platform, DeviceID: "device-" + platform, RefreshTokenHash: fmt.Sprintf("%064d", len(platform)), Version: 1, ClientIP: "127.0.0.1", UserAgent: "test", RefreshExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		if err := db.WithContext(ctx).Create(&auth.Session{UserID: created.ID, PlatformID: testPlatformID(t, db, ctx, platform), Platform: platform, DeviceID: "device-" + platform, RefreshTokenHash: fmt.Sprintf("%064d", len(platform)), Version: 1, ClientIP: "127.0.0.1", UserAgent: "test", RefreshExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -868,7 +899,7 @@ func TestChangePasswordAndRevokeSessionsUpdatesHashAndAllPlatforms(t *testing.T)
 		t.Fatalf("credential=%+v err=%v", credential, err)
 	}
 	var active int64
-	if err := db.WithContext(ctx).Table("auth_session").Where("user_id = ? AND revoked_at IS NULL", created.ID).Count(&active).Error; err != nil {
+	if err := db.WithContext(ctx).Table("user_session").Where("user_id = ? AND revoked_at IS NULL", created.ID).Count(&active).Error; err != nil {
 		t.Fatal(err)
 	}
 	if active != 0 {

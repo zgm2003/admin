@@ -182,6 +182,16 @@ func preparePlatformSessionSchema(t *testing.T, db *gorm.DB, ctx context.Context
 	if err := authplatform.EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
+	var existing int64
+	if err := db.WithContext(ctx).Model(&authplatform.Platform{}).Where("code = ?", "app").Count(&existing).Error; err != nil {
+		t.Fatal(err)
+	}
+	if existing == 0 {
+		value := testPlatform("app", "App", time.Now().UTC().Truncate(time.Microsecond))
+		if err := db.WithContext(ctx).Create(&value).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func createPlatformUser(t *testing.T, db *gorm.DB, ctx context.Context, prefix string) user.User {
@@ -199,12 +209,16 @@ func createPlatformUser(t *testing.T, db *gorm.DB, ctx context.Context, prefix s
 
 func createPlatformSessions(t *testing.T, db *gorm.DB, ctx context.Context, userID int64, platform string, base time.Time, count int) []auth.Session {
 	t.Helper()
+	var platformRow authplatform.Platform
+	if err := db.WithContext(ctx).Where("code = ?", platform).Take(&platformRow).Error; err != nil {
+		t.Fatalf("find test platform %s: %v", platform, err)
+	}
 	sessions := make([]auth.Session, count)
 	for index := range sessions {
 		createdAt := base.Add(time.Duration(index) * time.Minute)
 		refreshHash := sha256.Sum256([]byte(fmt.Sprintf("%s:%d:%d:%d", platform, userID, index, base.UnixNano())))
 		sessions[index] = auth.Session{
-			UserID: userID, Platform: platform, DeviceID: fmt.Sprintf("550e8400-e29b-41d4-a716-%012d", userID*100+int64(index)),
+			UserID: userID, PlatformID: platformRow.ID, Platform: platform, DeviceID: fmt.Sprintf("550e8400-e29b-41d4-a716-%012d", userID*100+int64(index)),
 			RefreshTokenHash: fmt.Sprintf("%x", refreshHash), Version: 1,
 			ClientIP: "127.0.0.1", UserAgent: "test", RefreshExpiresAt: base.Add(24 * time.Hour),
 			CreatedAt: createdAt, UpdatedAt: createdAt,
@@ -219,7 +233,7 @@ func createPlatformSessions(t *testing.T, db *gorm.DB, ctx context.Context, user
 func assertActivePlatformSessionIDs(t *testing.T, db *gorm.DB, ctx context.Context, platform string, want []int64) {
 	t.Helper()
 	got := make([]int64, 0)
-	if err := db.WithContext(ctx).Model(&auth.Session{}).Where("platform = ? AND revoked_at IS NULL", platform).Order("id ASC").Pluck("id", &got).Error; err != nil {
+	if err := db.WithContext(ctx).Table("user_session AS session").Joins("JOIN auth_platform AS platform_ref ON platform_ref.id = session.platform_id").Where("platform_ref.code = ? AND session.revoked_at IS NULL", platform).Order("session.id ASC").Pluck("session.id", &got).Error; err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(got, want) {
