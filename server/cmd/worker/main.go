@@ -11,7 +11,6 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	"admin/server/internal/module/operationlog"
-	"admin/server/internal/module/taskdemo"
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
 	"github.com/hibiken/asynq"
@@ -46,11 +45,9 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	repository := taskdemo.NewRepository(postgres.GORM)
-	service := taskdemo.NewService(repository, nil, logger)
 	operationLogRepository := operationlog.NewRepository(postgres.GORM)
 	operationLogService := operationlog.NewService(operationLogRepository)
-	mux := buildWorkerMux(service, operationLogService)
+	mux := buildWorkerMux(operationLogService)
 	server, err := queue.NewServer(settings.RedisURL)
 	if err != nil {
 		return err
@@ -63,9 +60,8 @@ func run(logger *slog.Logger) error {
 	return nil
 }
 
-func buildWorkerMux(taskProcessor taskdemo.Processor, operationLogProcessor operationlog.Processor) *asynq.ServeMux {
+func buildWorkerMux(operationLogProcessor operationlog.Processor) *asynq.ServeMux {
 	mux := asynq.NewServeMux()
-	taskdemo.Register(mux, taskProcessor)
 	operationlog.Register(mux, operationLogProcessor)
 	return mux
 }

@@ -34,7 +34,6 @@ var routeRules = []RouteRule{
 	{http.MethodPatch, "/api/admin/v1/users/:id/status", "user", "user.status", true, true},
 	{http.MethodDelete, "/api/admin/v1/users/:id", "user", "user.delete", false, true},
 	{http.MethodPut, "/api/admin/v1/users/:id/roles", "user", "user.roles.update", true, true},
-	{http.MethodPost, "/api/admin/v1/example-tasks", "task", "task.create", true, true},
 	{http.MethodDelete, "/api/admin/v1/sessions/:id", "session", "session.revoke", false, true},
 	{http.MethodDelete, "/api/admin/v1/sessions", "session", "session.revoke.bulk", true, true},
 }

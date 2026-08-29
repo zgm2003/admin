@@ -288,6 +288,10 @@ h2 {
   gap: 20px;
 }
 
+.dashboard-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .tool-panel {
   min-width: 0;
   padding: 22px;
@@ -300,47 +304,6 @@ h2 {
   padding: 0;
 }
 
-.task-form {
-  display: grid;
-  margin-top: 30px;
-  gap: 12px;
-}
-
-.task-form label {
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.task-form .el-button {
-  justify-self: start;
-  min-width: 124px;
-}
-
-.task-result {
-  display: grid;
-  margin-top: 24px;
-  padding-top: 18px;
-  gap: 8px;
-  border-top: 1px solid $color-border;
-}
-
-.task-result span {
-  color: $color-muted;
-  font-size: 12px;
-}
-
-.task-result code {
-  display: block;
-  max-width: 100%;
-  padding: 10px 12px;
-  overflow-wrap: anywhere;
-  color: var(--admin-text);
-  background: var(--el-fill-color-light);
-  border-radius: 4px;
-  font-family: Consolas, 'SFMono-Regular', monospace;
-  font-size: 12px;
-}
-
 .inline-error {
   margin: 14px 22px 18px;
   color: $color-danger;
@@ -349,11 +312,6 @@ h2 {
 
 .health-error {
   margin: 0;
-}
-
-.task-panel .inline-error {
-  margin-right: 0;
-  margin-left: 0;
 }
 
 .fade-enter-active,

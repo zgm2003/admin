@@ -69,7 +69,7 @@ pnpm dev
 
 本地页面为 `http://localhost:16300`，API 为 `http://localhost:16301`。Vite 使用固定端口并开启 `strictPort`，端口被占用时会明确退出，不会自动切换。
 
-开发阶段只有 API 启动时执行 `AutoMigrate`；Worker 连接 PostgreSQL 更新任务状态，但不执行迁移。因此首次启动或模型变化后，应先启动 API，再启动 Worker。
+API 和 Worker 启动时都不会执行数据库迁移、数据预设或回填。首次启动或数据库结构变化前，必须由维护者先执行 `docs/database` 中对应的人工 migration，再启动 API 和 Worker。
 
 ## 健康检查
 
@@ -77,16 +77,6 @@ pnpm dev
 - `GET /ready`：同时探测 PostgreSQL 和 Redis；任一不可用时返回 HTTP 503。
 
 Redis 就绪表示 Asynq 的队列存储可访问，不代表 Worker 一定正在消费。首期直接检查 Worker 进程和日志，不伪造 Worker 心跳。
-
-## 示例任务
-
-```powershell
-Invoke-RestMethod -Method Post -Uri http://localhost:16301/api/v1/example-tasks -ContentType 'application/json' -Body '{"message":"foundation-check"}'
-```
-
-API 先在 PostgreSQL 创建 `pending` 记录，再向 Asynq 投递只包含 `taskId` 的消息。Worker 从 PostgreSQL 读取任务内容，并将状态更新为 `running`、`completed` 或 `failed`。PostgreSQL 是任务事实来源，Redis 不是。
-
-首期示例采用尽力投递，不承诺 PostgreSQL 与 Redis 之间的原子一致性。需要可靠投递的正式业务任务出现后，再按设计引入事务 Outbox。
 
 ## 验证
 

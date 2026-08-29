@@ -923,25 +923,9 @@ Redis 中的会话/权限快照可以加速读取，但不能反过来成为用�
 
 ## 11. Asynq 异步数据流
 
-项目有两种很好的任务载荷示例。
+当前 Worker 只消费操作日志任务。正式业务任务出现后，应根据事实归属单独设计任务 payload 和事务边界，不保留演示性实体或接口。
 
-### 11.1 实体状态类：taskdemo
-
-```text
-POST /example-tasks
--> Service 在 PostgreSQL 创建 pending 任务
--> Asynq payload 只带 taskId
--> Redis 保存队列任务
--> Worker TaskHandler 严格解码 taskId
--> Service 从 PostgreSQL 重新读取任务事实
--> pending -> running -> completed/failed
-```
-
-只带 `taskId` 的原因：消息可能晚到，任务内容和状态应以 PostgreSQL 当前事实为准。
-
-当前示例是尽力投递：PostgreSQL 创建成功后再入队；入队失败会把任务标为 failed，但两者不是一个原子事务。正式业务需要可靠投递时，应单独设计事务 Outbox，而不是假装 PostgreSQL 和 Redis 能共享事务。
-
-### 11.2 不可变事件类：operationlog
+### 11.1 不可变事件类：operationlog
 
 操作日志在请求结束后已经形成一个不可变事件，所以 payload 可以携带闭合 DTO：
 

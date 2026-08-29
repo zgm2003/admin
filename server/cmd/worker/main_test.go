@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"admin/server/internal/module/operationlog"
-	"admin/server/internal/module/taskdemo"
 	"github.com/hibiken/asynq"
 )
 
@@ -27,15 +26,6 @@ func TestCheckWorkerRedisReturnsFullStartupContext(t *testing.T) {
 	}
 }
 
-type workerTaskProcessor struct {
-	processed string
-}
-
-func (p *workerTaskProcessor) Process(_ context.Context, taskID string) error {
-	p.processed = taskID
-	return nil
-}
-
 type workerOperationLogProcessor struct {
 	processed string
 }
@@ -45,18 +35,10 @@ func (p *workerOperationLogProcessor) Process(_ context.Context, payload operati
 	return nil
 }
 
-func TestBuildWorkerMuxRegistersFoundationAndOperationLogTasks(t *testing.T) {
-	taskProcessor := &workerTaskProcessor{}
+func TestBuildWorkerMuxRegistersOnlyOperationLogTasks(t *testing.T) {
 	operationProcessor := &workerOperationLogProcessor{}
-	mux := buildWorkerMux(taskProcessor, operationProcessor)
+	mux := buildWorkerMux(operationProcessor)
 
-	foundationPayload, err := json.Marshal(taskdemo.Payload{TaskID: "task-1"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := mux.ProcessTask(context.Background(), asynq.NewTask(taskdemo.Type, foundationPayload)); err != nil {
-		t.Fatalf("process foundation task: %v", err)
-	}
 	operationPayload, err := json.Marshal(operationlog.TaskPayload{
 		SchemaVersion: 2, EventID: "worker-operation-event", RequestID: "request-1", Method: "PUT", Route: "/api/admin/v1/users/:id",
 		Module: "user", Action: "user.update", ClientIP: "127.0.0.1", UserAgent: "test",
@@ -68,7 +50,7 @@ func TestBuildWorkerMuxRegistersFoundationAndOperationLogTasks(t *testing.T) {
 	if err := mux.ProcessTask(context.Background(), asynq.NewTask(operationlog.TaskType, operationPayload)); err != nil {
 		t.Fatalf("process operation log task: %v", err)
 	}
-	if taskProcessor.processed != "task-1" || operationProcessor.processed != "request-1" {
-		t.Fatalf("processed foundation=%q operation=%q", taskProcessor.processed, operationProcessor.processed)
+	if operationProcessor.processed != "request-1" {
+		t.Fatalf("processed operation=%q", operationProcessor.processed)
 	}
 }

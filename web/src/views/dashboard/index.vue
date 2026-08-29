@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { Check, Monitor, Refresh, Right, Warning } from '@element-plus/icons-vue'
+import { onMounted, ref } from 'vue'
+import { Check, Monitor, Refresh, Warning } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import { getHealth, getReadiness } from '../../api/health'
-import { createExampleTask } from '../../api/taskDemo'
 import { ProtocolError } from '../../types/http'
 import ReadinessChart from './components/ReadinessChart.vue'
 
@@ -17,16 +16,6 @@ const postgresqlStatus = ref<StatusState>('checking')
 const redisStatus = ref<StatusState>('checking')
 const healthError = ref('')
 const refreshing = ref(false)
-
-const message = ref('')
-const submitting = ref(false)
-const taskID = ref('')
-const taskError = ref('')
-
-const canSubmit = computed(() => {
-  const length = Array.from(message.value.trim()).length
-  return length > 0 && length <= 200 && !submitting.value
-})
 
 function statusText(status: StatusState): string {
   if (status === 'up') return t('dashboard.status.up')
@@ -70,21 +59,6 @@ async function refreshHealth(): Promise<void> {
     healthError.value = errorMessage(readinessResult.reason)
   }
   refreshing.value = false
-}
-
-async function submitTask(): Promise<void> {
-  if (!canSubmit.value) return
-  submitting.value = true
-  taskID.value = ''
-  taskError.value = ''
-  try {
-    const created = await createExampleTask({ message: message.value.trim() })
-    taskID.value = created.taskId
-  } catch (error) {
-    taskError.value = errorMessage(error)
-  } finally {
-    submitting.value = false
-  }
 }
 
 onMounted(refreshHealth)
@@ -160,7 +134,7 @@ onMounted(refreshHealth)
           </div>
         </section>
 
-        <div class="dashboard-grid">
+        <div class="dashboard-grid dashboard-grid--single">
           <section class="tool-panel readiness-panel">
             <header class="tool-panel__header">
               <div>
@@ -176,43 +150,6 @@ onMounted(refreshHealth)
             />
           </section>
 
-          <section class="tool-panel task-panel">
-            <header class="tool-panel__header">
-              <div>
-                <span class="section-kicker">{{ t('dashboard.asynq') }}</span>
-                <h2>{{ t('dashboard.exampleTask') }}</h2>
-              </div>
-              <el-tag size="small" effect="plain">{{ t('dashboard.async') }}</el-tag>
-            </header>
-
-            <form class="task-form" @submit.prevent="submitTask">
-              <label for="task-message">{{ t('dashboard.message') }}</label>
-              <el-input
-                id="task-message"
-                v-model="message"
-                data-testid="task-message"
-                maxlength="200"
-                show-word-limit
-                :placeholder="t('dashboard.messagePlaceholder')"
-              />
-              <el-button
-                data-testid="task-submit"
-                type="primary"
-                native-type="submit"
-                :icon="Right"
-                :loading="submitting"
-                :disabled="!canSubmit"
-              >
-                {{ t('dashboard.submitTask') }}
-              </el-button>
-            </form>
-
-            <div v-if="taskID" class="task-result" data-testid="task-id">
-              <span>{{ t('dashboard.taskId') }}</span>
-              <code>{{ taskID }}</code>
-            </div>
-            <p v-if="taskError" class="inline-error">{{ taskError }}</p>
-          </section>
         </div>
       </div>
     </div>

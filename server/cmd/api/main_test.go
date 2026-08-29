@@ -19,7 +19,6 @@ import (
 	"admin/server/internal/module/rbac/access"
 	"admin/server/internal/module/rbac/menu"
 	"admin/server/internal/module/rbac/role"
-	"admin/server/internal/module/taskdemo"
 	"admin/server/internal/module/user/account"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
@@ -30,18 +29,6 @@ type readyService struct{}
 
 func (readyService) Readiness(context.Context) (health.Readiness, error) {
 	return health.Readiness{PostgreSQL: "up", Redis: "up"}, nil
-}
-
-type submitService struct{}
-
-func (submitService) Create(context.Context, string) (taskdemo.Created, error) {
-	return taskdemo.Created{TaskID: "task-1"}, nil
-}
-
-type panicSubmitService struct{}
-
-func (panicSubmitService) Create(context.Context, string) (taskdemo.Created, error) {
-	panic("operation failed unexpectedly")
 }
 
 type recordingOperationEnqueuer struct {
@@ -83,7 +70,7 @@ func (apiSessionAdminService) RevokeSessions(context.Context, auth.Identity, []i
 	return auth.AdminRevokeResult{}, nil
 }
 
-func TestBuildRouterAuditsPanickingOperation(t *testing.T) {
+func TestBuildRouterDoesNotRegisterExampleTask(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	enqueuer := &recordingOperationEnqueuer{}
@@ -91,7 +78,6 @@ func TestBuildRouterAuditsPanickingOperation(t *testing.T) {
 		CORSOrigin:        "http://localhost:16300",
 		Logger:            logger,
 		Health:            health.NewHandler(readyService{}),
-		Task:              taskdemo.NewHandler(panicSubmitService{}),
 		Auth:              auth.NewHandler(apiAuthService{}, false),
 		AuthPlatform:      authplatform.NewHandler(apiAuthPlatformService{}),
 		Access:            access.NewHandler(apiAccessService{}),
@@ -106,22 +92,18 @@ func TestBuildRouterAuditsPanickingOperation(t *testing.T) {
 		RequirePermission: func(string) gin.HandlerFunc { return func(context *gin.Context) { context.Next() } },
 	})
 
-	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/example-tasks", strings.NewReader(`{"message":"panic"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/example-tasks", strings.NewReader(`{"message":"removed"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set(authclient.PlatformHeader, "admin")
 	request.Header.Set(authclient.DeviceIDHeader, "550e8400-e29b-41d4-a716-446655440000")
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusInternalServerError || !strings.Contains(recorder.Body.String(), `"code":10000`) {
-		t.Fatalf("panic response status=%d body=%s", recorder.Code, recorder.Body.String())
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("removed route status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
-	if len(enqueuer.payloads) != 1 {
-		t.Fatalf("operation log payload count = %d, want 1", len(enqueuer.payloads))
-	}
-	payload := enqueuer.payloads[0]
-	if payload.StatusCode != http.StatusInternalServerError || payload.IsSuccess != 0 || payload.Action != "task.create" {
-		t.Fatalf("panic operation payload = %+v", payload)
+	if len(enqueuer.payloads) != 0 {
+		t.Fatalf("removed route operation log payload count = %d", len(enqueuer.payloads))
 	}
 }
 
@@ -263,7 +245,6 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		CORSOrigin:   "http://localhost:16300",
 		Logger:       logger,
 		Health:       health.NewHandler(readyService{}),
-		Task:         taskdemo.NewHandler(submitService{}),
 		Auth:         auth.NewHandler(apiAuthService{}, false),
 		AuthPlatform: authplatform.NewHandler(apiAuthPlatformService{}),
 		Access:       access.NewHandler(apiAccessService{}),
@@ -323,7 +304,6 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"DELETE /api/admin/v1/sessions/:id":             1,
 		"DELETE /api/admin/v1/sessions":                 1,
 		"GET /api/admin/v1/operation-logs":              1,
-		"POST /api/admin/v1/example-tasks":              1,
 	}
 	remaining, unexpected := routeSetDiff(router.Routes(), want)
 	if len(unexpected) != 0 {
@@ -346,6 +326,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		{method: http.MethodGet, path: "/api/v1/sessions"},
 		{method: http.MethodGet, path: "/api/v1/operation-logs"},
 		{method: http.MethodPost, path: "/api/v1/example-tasks"},
+		{method: http.MethodPost, path: "/api/admin/v1/example-tasks"},
 	} {
 		request := httptest.NewRequest(oldRoute.method, oldRoute.path, nil)
 		recorder := httptest.NewRecorder()
@@ -377,7 +358,6 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		path   string
 	}{
 		{method: http.MethodGet, path: "/api/v1/access"},
-		{method: http.MethodPost, path: "/api/admin/v1/example-tasks"},
 		{method: http.MethodGet, path: "/api/admin/v1/menus"},
 	} {
 		recorder = httptest.NewRecorder()

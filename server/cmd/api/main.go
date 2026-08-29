@@ -24,7 +24,6 @@ import (
 	"admin/server/internal/module/rbac/menu"
 	"admin/server/internal/module/rbac/role"
 	"admin/server/internal/module/rbac/state"
-	"admin/server/internal/module/taskdemo"
 	account "admin/server/internal/module/user/account"
 	profile "admin/server/internal/module/user/profile"
 	"admin/server/internal/queue"
@@ -40,7 +39,6 @@ type routerDependencies struct {
 	TrustedProxies    []string
 	Logger            *slog.Logger
 	Health            *health.Handler
-	Task              *taskdemo.Handler
 	Auth              *auth.Handler
 	AuthPlatform      *authplatform.Handler
 	Access            *access.Handler
@@ -107,8 +105,6 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("derive application keys: %w", err)
 	}
 
-	repository := taskdemo.NewRepository(postgres.GORM)
-	taskService := taskdemo.NewService(repository, taskdemo.NewQueueEnqueuer(queueClient), logger)
 	healthService := health.NewService(postgres, redisClient)
 	userRepository := account.NewRepository(postgres.GORM)
 	profileRepository := profile.NewRepository(postgres.GORM)
@@ -149,7 +145,6 @@ func run(logger *slog.Logger) error {
 		TrustedProxies: settings.TrustedProxies,
 		Logger:         logger,
 		Health:         health.NewHandler(healthService),
-		Task:           taskdemo.NewHandler(taskService),
 		Auth:           auth.NewHandler(authService, settings.Auth.CookieSecure),
 		AuthPlatform:   authplatform.NewHandler(authPlatformService),
 		Access:         access.NewHandler(accessService),
@@ -228,6 +223,5 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	profile.RegisterRoutes(adminRoutes, dependencies.Account, dependencies.Authenticate)
 	operationlog.RegisterRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
 	auth.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
-	taskdemo.RegisterRoutes(adminRoutes, dependencies.Task, dependencies.Authenticate)
 	return router
 }

@@ -3,7 +3,6 @@ import ElementPlus from 'element-plus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getHealth, getReadiness } from '@src/api/health'
-import { createExampleTask } from '@src/api/taskDemo'
 import { appI18n, setLocale } from '@src/i18n'
 import Dashboard from '@src/views/dashboard/index.vue'
 
@@ -12,13 +11,8 @@ vi.mock('@src/api/health', () => ({
   getReadiness: vi.fn(),
 }))
 
-vi.mock('@src/api/taskDemo', () => ({
-  createExampleTask: vi.fn(),
-}))
-
 const mockedHealth = vi.mocked(getHealth)
 const mockedReadiness = vi.mocked(getReadiness)
-const mockedCreateTask = vi.mocked(createExampleTask)
 
 describe('Dashboard', () => {
   beforeEach(() => {
@@ -73,32 +67,13 @@ describe('Dashboard', () => {
     expect(wrapper.get('[data-testid="health-error"]').text()).toContain('connection refused')
   })
 
-  it('requires a message and displays the returned task ID', async () => {
-    mockedCreateTask.mockResolvedValue({ taskId: 'task-123' })
+  it('does not render the removed example task controls', async () => {
     const wrapper = mountDashboard()
     await flushPromises()
 
-    const submit = wrapper.get('[data-testid="task-submit"]')
-    expect(submit.attributes('disabled')).toBeDefined()
-
-    await wrapper.get('[data-testid="task-message"]').setValue('foundation-check')
-    await wrapper.get('form').trigger('submit')
-    await flushPromises()
-
-    expect(mockedCreateTask).toHaveBeenCalledWith({ message: 'foundation-check' })
-    expect(wrapper.get('[data-testid="task-id"]').text()).toContain('task-123')
-  })
-
-  it('shows an explicit task submission failure', async () => {
-    mockedCreateTask.mockRejectedValue(new Error('queue unavailable'))
-    const wrapper = mountDashboard()
-    await flushPromises()
-
-    await wrapper.get('[data-testid="task-message"]').setValue('foundation-check')
-    await wrapper.get('form').trigger('submit')
-    await flushPromises()
-
-    expect(wrapper.get('.task-panel .inline-error').text()).toContain('queue unavailable')
+    expect(wrapper.find('[data-testid="task-submit"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="task-message"]').exists()).toBe(false)
+    expect(wrapper.find('.task-panel').exists()).toBe(false)
   })
 })
 
