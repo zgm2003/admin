@@ -67,3 +67,18 @@ func TestAccessorsReturnKeyCopies(t *testing.T) {
 		t.Fatal("RefreshTokenHMACKey returned internal storage")
 	}
 }
+
+func TestStorageEncryptionKeyIsStableSeparateAndCopied(t *testing.T) {
+	keys, err := New(strings.Repeat("s", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, second := keys.StorageEncryptionKey(), keys.StorageEncryptionKey()
+	if len(first) != 32 || !bytes.Equal(first, second) || bytes.Equal(first, keys.JWTSigningKey()) || bytes.Equal(first, keys.RefreshTokenHMACKey()) {
+		t.Fatal("storage key derivation invalid")
+	}
+	first[0] ^= 0xff
+	if bytes.Equal(first, keys.StorageEncryptionKey()) {
+		t.Fatal("StorageEncryptionKey returned internal storage")
+	}
+}

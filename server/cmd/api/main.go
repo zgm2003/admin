@@ -24,6 +24,7 @@ import (
 	"admin/server/internal/module/rbac/menu"
 	"admin/server/internal/module/rbac/role"
 	"admin/server/internal/module/rbac/state"
+	"admin/server/internal/module/storage/cosconfig"
 	account "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/loginlog"
 	profile "admin/server/internal/module/user/profile"
@@ -48,6 +49,7 @@ type routerDependencies struct {
 	Role              *role.Handler
 	User              *account.Handler
 	Account           *profile.Handler
+	COSConfig         *cosconfig.Handler
 	OperationLog      *operationlog.Handler
 	LoginLog          *loginlog.Handler
 	OperationEnqueuer operationlog.Enqueuer
@@ -137,6 +139,7 @@ func run(logger *slog.Logger) error {
 	sessionService := usersession.NewService(sessionRepository, authStateStore, authInvalidator, auth.NewSessionCache(redisClient))
 	userService := account.NewService(userRepository, authStateStore, authInvalidator, accessStateStore, accessInvalidator)
 	profileService := profile.NewService(profileRepository)
+	cosConfigService := cosconfig.NewService(cosconfig.NewRepository(postgres.GORM), keys, nil)
 	loginLogService := loginlog.NewService(loginlog.NewRepository(postgres.GORM))
 	authService.SetLoginLogRecorder(loginLogService)
 	accessRepository := access.NewRepository(postgres.GORM)
@@ -163,6 +166,7 @@ func run(logger *slog.Logger) error {
 			identity, ok := auth.IdentityFromContext(context)
 			return identity.UserID, ok
 		}),
+		COSConfig:         cosconfig.NewHandler(cosConfigService),
 		OperationLog:      operationlog.NewHandler(operationLogService),
 		LoginLog:          loginlog.NewHandler(loginLogService),
 		OperationEnqueuer: operationLogEnqueuer,
@@ -230,6 +234,7 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	role.RegisterRoutes(adminRoutes, dependencies.Role, dependencies.Authenticate, dependencies.RequirePermission)
 	account.RegisterRoutes(adminRoutes, dependencies.User, dependencies.Authenticate, dependencies.RequirePermission)
 	profile.RegisterRoutes(adminRoutes, dependencies.Account, dependencies.Authenticate, dependencies.RequirePermission)
+	cosconfig.RegisterRoutes(adminRoutes, dependencies.COSConfig, dependencies.Authenticate, dependencies.RequirePermission)
 	loginlog.RegisterRoutes(adminRoutes, dependencies.LoginLog, dependencies.Authenticate, dependencies.RequirePermission)
 	operationlog.RegisterRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
 	usersession.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)

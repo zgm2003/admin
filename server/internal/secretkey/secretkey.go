@@ -7,16 +7,18 @@ import (
 )
 
 const (
-	keyLength             = 32
-	minimumRootLength     = 64
-	rootSecretPlaceholder = "replace_with_at_least_64_random_characters_before_running_api_server"
-	jwtSigningPurpose     = "admin:auth:jwt-signing:v1"
-	refreshHMACPurpose    = "admin:auth:refresh-token-hmac:v1"
+	keyLength                = 32
+	minimumRootLength        = 64
+	rootSecretPlaceholder    = "replace_with_at_least_64_random_characters_before_running_api_server"
+	jwtSigningPurpose        = "admin:auth:jwt-signing:v1"
+	refreshHMACPurpose       = "admin:auth:refresh-token-hmac:v1"
+	storageEncryptionPurpose = "admin:storage:cos-encryption:v1"
 )
 
 type KeyRing struct {
-	jwtSigningKey       []byte
-	refreshTokenHMACKey []byte
+	jwtSigningKey        []byte
+	refreshTokenHMACKey  []byte
+	storageEncryptionKey []byte
 }
 
 func New(rootSecret string) (*KeyRing, error) {
@@ -32,11 +34,20 @@ func New(rootSecret string) (*KeyRing, error) {
 	if err != nil {
 		return nil, fmt.Errorf("derive Refresh Token HMAC key: %w", err)
 	}
+	storageEncryptionKey, err := hkdf.Key(sha256.New, []byte(rootSecret), nil, storageEncryptionPurpose, keyLength)
+	if err != nil {
+		return nil, fmt.Errorf("derive storage encryption key: %w", err)
+	}
 
 	return &KeyRing{
-		jwtSigningKey:       jwtSigningKey,
-		refreshTokenHMACKey: refreshTokenHMACKey,
+		jwtSigningKey:        jwtSigningKey,
+		refreshTokenHMACKey:  refreshTokenHMACKey,
+		storageEncryptionKey: storageEncryptionKey,
 	}, nil
+}
+
+func (k *KeyRing) StorageEncryptionKey() []byte {
+	return append([]byte(nil), k.storageEncryptionKey...)
 }
 
 func (k *KeyRing) JWTSigningKey() []byte {

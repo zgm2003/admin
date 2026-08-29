@@ -38,6 +38,11 @@ var routeRules = []RouteRule{
 	{http.MethodDelete, "/api/admin/v1/sessions", "session", "session.revoke.bulk", true, true},
 	{http.MethodPut, "/api/admin/v1/account/profile", "account", "account.profile.update", true, true},
 	{http.MethodPost, "/api/admin/v1/account/password", "account", "account.password.change", true, true},
+	{http.MethodPost, "/api/admin/v1/storage/cos-configs", "storage", "storage.cos-config.create", true, true},
+	{http.MethodPut, "/api/admin/v1/storage/cos-configs/:id", "storage", "storage.cos-config.update", true, true},
+	{http.MethodPatch, "/api/admin/v1/storage/cos-configs/:id/status", "storage", "storage.cos-config.status", true, true},
+	{http.MethodPost, "/api/admin/v1/storage/cos-configs/:id/test", "storage", "storage.cos-config.test", false, true},
+	{http.MethodDelete, "/api/admin/v1/storage/cos-configs/:id", "storage", "storage.cos-config.delete", false, true},
 }
 
 func FindRule(method, route string) (RouteRule, bool) {

@@ -68,6 +68,44 @@ func TestSanitizeSummaryMasksSecrets(t *testing.T) {
 	}
 }
 
+func TestCOSConfigRulesAndSanitizerNeverCaptureCredentials(t *testing.T) {
+	for _, test := range []struct {
+		method string
+		route  string
+		action string
+	}{
+		{http.MethodPost, "/api/admin/v1/storage/cos-configs", "storage.cos-config.create"},
+		{http.MethodPut, "/api/admin/v1/storage/cos-configs/:id", "storage.cos-config.update"},
+		{http.MethodPatch, "/api/admin/v1/storage/cos-configs/:id/status", "storage.cos-config.status"},
+		{http.MethodPost, "/api/admin/v1/storage/cos-configs/:id/test", "storage.cos-config.test"},
+		{http.MethodDelete, "/api/admin/v1/storage/cos-configs/:id", "storage.cos-config.delete"},
+	} {
+		rule, ok := FindRule(test.method, test.route)
+		if !ok || rule.Module != "storage" || rule.Action != test.action {
+			t.Fatalf("COS config rule %s %s = %+v,%v", test.method, test.route, rule, ok)
+		}
+	}
+	for _, route := range []string{"/api/admin/v1/storage/cos-configs", "/api/admin/v1/storage/cos-configs/:id"} {
+		if _, ok := FindRule(http.MethodGet, route); ok {
+			t.Fatalf("COS config read route %s was registered as operation", route)
+		}
+	}
+
+	summary, err := SanitizeJSON([]byte(`{"secretId":"plain-id","secretKey":"plain-key","secretIdCiphertext":"cipher-id","secret_key_ciphertext":"cipher-key","name":"main"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(summary)
+	for _, secret := range []string{"plain-id", "plain-key", "cipher-id", "cipher-key"} {
+		if strings.Contains(text, secret) {
+			t.Fatalf("COS credential %q leaked in %s", secret, text)
+		}
+	}
+	if !strings.Contains(text, `"name":"main"`) {
+		t.Fatalf("safe field was removed from %s", text)
+	}
+}
+
 func TestMiddlewareKeepsBusinessStatusWhenEnqueueFails(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	var logs bytes.Buffer
