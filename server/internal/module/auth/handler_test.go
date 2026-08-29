@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"admin/server/internal/module/authclient"
-	"admin/server/internal/module/user"
+	user "admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"github.com/gin-gonic/gin"
 )

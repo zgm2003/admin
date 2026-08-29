@@ -7,7 +7,7 @@ import (
 
 	projectmiddleware "admin/server/internal/middleware"
 	"admin/server/internal/module/authclient"
-	"admin/server/internal/module/user"
+	user "admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
 	"github.com/gin-gonic/gin"

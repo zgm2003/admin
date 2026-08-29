@@ -14,7 +14,7 @@ import (
 	"admin/server/internal/module/auth"
 	"admin/server/internal/module/authplatform"
 	"admin/server/internal/module/authstate"
-	"admin/server/internal/module/menu"
+	"admin/server/internal/module/rbac/menu"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/yesno"

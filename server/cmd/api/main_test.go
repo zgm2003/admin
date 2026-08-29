@@ -11,16 +11,16 @@ import (
 	"strings"
 	"testing"
 
-	"admin/server/internal/module/access"
 	"admin/server/internal/module/auth"
 	"admin/server/internal/module/authclient"
 	"admin/server/internal/module/authplatform"
 	"admin/server/internal/module/health"
-	"admin/server/internal/module/menu"
 	"admin/server/internal/module/operationlog"
-	"admin/server/internal/module/role"
+	"admin/server/internal/module/rbac/access"
+	"admin/server/internal/module/rbac/menu"
+	"admin/server/internal/module/rbac/role"
 	"admin/server/internal/module/taskdemo"
-	"admin/server/internal/module/user"
+	"admin/server/internal/module/user/account"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
 	"github.com/gin-gonic/gin"
@@ -97,7 +97,7 @@ func TestBuildRouterAuditsPanickingOperation(t *testing.T) {
 		Access:            access.NewHandler(apiAccessService{}),
 		Menu:              menu.NewHandler(apiMenuService{}),
 		Role:              role.NewHandler(apiRoleService{}),
-		User:              user.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
+		User:              account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
 		OperationLog:      operationlog.NewHandler(apiOperationLogService{}),
 		OperationEnqueuer: enqueuer,
 		SessionAdmin:      auth.NewSessionAdminHandler(apiSessionAdminService{}),
@@ -143,19 +143,19 @@ func (apiAuthPlatformService) Update(context.Context, int64, authplatform.Update
 func (apiAuthPlatformService) UpdateStatus(context.Context, int64, yesno.Value) error { return nil }
 func (apiAuthPlatformService) Delete(context.Context, int64) error                    { return nil }
 
-func (apiUserService) List(context.Context, user.ListQuery) (pagination.Result[user.ListItem], error) {
-	return pagination.Result[user.ListItem]{List: []user.ListItem{}}, nil
+func (apiUserService) List(context.Context, account.ListQuery) (pagination.Result[account.ListItem], error) {
+	return pagination.Result[account.ListItem]{List: []account.ListItem{}}, nil
 }
-func (apiUserService) RoleOptions(context.Context) ([]user.RoleSummary, error) {
-	return []user.RoleSummary{}, nil
+func (apiUserService) RoleOptions(context.Context) ([]account.RoleSummary, error) {
+	return []account.RoleSummary{}, nil
 }
-func (apiUserService) Update(context.Context, int64, int64, user.UpdateInput) (user.UpdatedProfile, error) {
-	return user.UpdatedProfile{}, nil
+func (apiUserService) Update(context.Context, int64, int64, account.UpdateInput) (account.UpdatedProfile, error) {
+	return account.UpdatedProfile{}, nil
 }
 func (apiUserService) UpdateStatus(context.Context, int64, int64, yesno.Value) error { return nil }
 func (apiUserService) Delete(context.Context, int64, int64) error                    { return nil }
-func (apiUserService) Roles(context.Context, int64) (user.Roles, error) {
-	return user.Roles{Roles: []user.RoleSummary{}, RoleIDs: []int64{}}, nil
+func (apiUserService) Roles(context.Context, int64) (account.Roles, error) {
+	return account.Roles{Roles: []account.RoleSummary{}, RoleIDs: []int64{}}, nil
 }
 func (apiUserService) UpdateRoles(context.Context, int64, int64, []int64) (int64, error) {
 	return 0, nil
@@ -218,8 +218,8 @@ func (apiAuthService) Logout(context.Context, auth.Identity, authclient.Client) 
 	return nil
 }
 
-func (apiAuthService) CurrentUser(context.Context, auth.Identity) (user.Current, error) {
-	return user.Current{}, nil
+func (apiAuthService) CurrentUser(context.Context, auth.Identity) (account.Current, error) {
+	return account.Current{}, nil
 }
 
 func routeSetDiff(routes []gin.RouteInfo, want map[string]int) (map[string]int, []string) {
@@ -269,7 +269,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		Access:       access.NewHandler(apiAccessService{}),
 		Menu:         menu.NewHandler(apiMenuService{}),
 		Role:         role.NewHandler(apiRoleService{}),
-		User:         user.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
+		User:         account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
 		OperationLog: operationlog.NewHandler(apiOperationLogService{}),
 		SessionAdmin: auth.NewSessionAdminHandler(apiSessionAdminService{}),
 		AuthOrigin:   auth.RequireOrigin("http://localhost:16300"),

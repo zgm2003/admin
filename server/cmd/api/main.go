@@ -14,19 +14,19 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	projectmiddleware "admin/server/internal/middleware"
-	"admin/server/internal/module/access"
-	"admin/server/internal/module/accessstate"
-	"admin/server/internal/module/account"
 	"admin/server/internal/module/auth"
 	"admin/server/internal/module/authclient"
 	"admin/server/internal/module/authplatform"
 	"admin/server/internal/module/authstate"
 	"admin/server/internal/module/health"
-	"admin/server/internal/module/menu"
 	"admin/server/internal/module/operationlog"
-	"admin/server/internal/module/role"
+	"admin/server/internal/module/rbac/access"
+	"admin/server/internal/module/rbac/menu"
+	"admin/server/internal/module/rbac/role"
+	"admin/server/internal/module/rbac/state"
 	"admin/server/internal/module/taskdemo"
-	"admin/server/internal/module/user"
+	account "admin/server/internal/module/user/account"
+	profile "admin/server/internal/module/user/profile"
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/secretkey"
@@ -46,8 +46,8 @@ type routerDependencies struct {
 	Access            *access.Handler
 	Menu              *menu.Handler
 	Role              *role.Handler
-	User              *user.Handler
-	Account           *account.Handler
+	User              *account.Handler
+	Account           *profile.Handler
 	OperationLog      *operationlog.Handler
 	OperationEnqueuer operationlog.Enqueuer
 	SessionAdmin      *auth.SessionAdminHandler
@@ -110,7 +110,7 @@ func run(logger *slog.Logger) error {
 	repository := taskdemo.NewRepository(postgres.GORM)
 	taskService := taskdemo.NewService(repository, taskdemo.NewQueueEnqueuer(queueClient), logger)
 	healthService := health.NewService(postgres, redisClient)
-	userRepository := user.NewRepository(postgres.GORM)
+	userRepository := account.NewRepository(postgres.GORM)
 	sessionRepository := auth.NewSessionRepository(postgres.GORM)
 	authPlatformRepository := authplatform.NewRepository(postgres.GORM)
 	policyStore := authplatform.NewPolicyStore(redisClient)
@@ -135,7 +135,7 @@ func run(logger *slog.Logger) error {
 	)
 	authService.SetSessionAdminRepository(sessionRepository)
 	authService.SetPasswordStore(userRepository)
-	userService := user.NewService(userRepository, authStateStore, authInvalidator, accessStateStore, accessInvalidator)
+	userService := account.NewService(userRepository, authStateStore, authInvalidator, accessStateStore, accessInvalidator)
 	accessRepository := access.NewRepository(postgres.GORM)
 	accessService := access.NewService(accessRepository, accessStateStore, access.NewSnapshotCache(redisClient), logger)
 	operationLogRepository := operationlog.NewRepository(postgres.GORM)
@@ -153,11 +153,11 @@ func run(logger *slog.Logger) error {
 		Access:         access.NewHandler(accessService),
 		Menu:           menu.NewHandler(menuService),
 		Role:           role.NewHandler(roleService),
-		User: user.NewHandler(userService, func(context *gin.Context) (int64, bool) {
+		User: account.NewHandler(userService, func(context *gin.Context) (int64, bool) {
 			identity, ok := auth.IdentityFromContext(context)
 			return identity.UserID, ok
 		}),
-		Account: account.NewHandler(userService, authService, func(context *gin.Context) (int64, bool) {
+		Account: profile.NewHandler(userService, authService, func(context *gin.Context) (int64, bool) {
 			identity, ok := auth.IdentityFromContext(context)
 			return identity.UserID, ok
 		}),
@@ -222,8 +222,8 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	authplatform.RegisterManagementRoutes(adminRoutes, dependencies.AuthPlatform, dependencies.Authenticate, dependencies.RequirePermission)
 	menu.RegisterRoutes(adminRoutes, dependencies.Menu, dependencies.Authenticate, dependencies.RequirePermission)
 	role.RegisterRoutes(adminRoutes, dependencies.Role, dependencies.Authenticate, dependencies.RequirePermission)
-	user.RegisterRoutes(adminRoutes, dependencies.User, dependencies.Authenticate, dependencies.RequirePermission)
-	account.RegisterRoutes(adminRoutes, dependencies.Account, dependencies.Authenticate)
+	account.RegisterRoutes(adminRoutes, dependencies.User, dependencies.Authenticate, dependencies.RequirePermission)
+	profile.RegisterRoutes(adminRoutes, dependencies.Account, dependencies.Authenticate)
 	operationlog.RegisterRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
 	auth.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
 	taskdemo.RegisterRoutes(adminRoutes, dependencies.Task, dependencies.Authenticate)

@@ -3,8 +3,8 @@ package auth
 import (
 	"context"
 
-	"admin/server/internal/module/role"
-	"admin/server/internal/module/user"
+	"admin/server/internal/module/rbac/role"
+	user "admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
 )

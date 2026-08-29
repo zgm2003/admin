@@ -11,8 +11,8 @@ import (
 
 	"admin/server/internal/database"
 	"admin/server/internal/module/auth"
-	"admin/server/internal/module/role"
-	"admin/server/internal/module/user"
+	"admin/server/internal/module/rbac/role"
+	"admin/server/internal/module/user/account"
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
 )
@@ -52,7 +52,7 @@ func run() error {
 		return err
 	}
 	defer postgres.Close()
-	creator := auth.NewBootstrapService(user.NewRepository(postgres.GORM), role.NewRepository(postgres.GORM))
+	creator := auth.NewBootstrapService(account.NewRepository(postgres.GORM), role.NewRepository(postgres.GORM))
 	return execute(ctx, creator, settings, os.Stdout)
 }
 

@@ -12,8 +12,8 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/module/auth"
 	"admin/server/internal/module/authplatform"
-	"admin/server/internal/module/menu"
-	"admin/server/internal/module/user"
+	"admin/server/internal/module/rbac/menu"
+	user "admin/server/internal/module/user/account"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
