@@ -19,6 +19,7 @@ import (
 	"admin/server/internal/module/authstate"
 	"admin/server/internal/module/rbac/role"
 	user "admin/server/internal/module/user/account"
+	"admin/server/internal/module/user/loginlog"
 	usersession "admin/server/internal/module/user/session"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
@@ -81,6 +82,11 @@ type Service struct {
 	comparePassword     func(string, string) error
 	logger              *slog.Logger
 	now                 func() time.Time
+	loginLogs           loginLogRecorder
+}
+
+type loginLogRecorder interface {
+	Record(context.Context, loginlog.Event) error
 }
 
 func NewService(
@@ -102,6 +108,20 @@ func NewService(
 		refreshTokenHMACKey: append([]byte(nil), refreshTokenHMACKey...), comparePassword: VerifyPassword, logger: logger, now: time.Now,
 	}
 }
+
+func (s *Service) SetLoginLogRecorder(recorder loginLogRecorder) { s.loginLogs = recorder }
+
+func (s *Service) recordLoginEvent(ctx context.Context, event loginlog.Event) error {
+	if s.loginLogs == nil {
+		return nil
+	}
+	if err := s.loginLogs.Record(ctx, event); err != nil {
+		return apperror.DependencyUnavailable(err)
+	}
+	return nil
+}
+
+func stringPointer(value string) *string { return &value }
 
 func (s *Service) SetPasswordStore(store passwordStore) {
 	s.passwords = store
@@ -227,14 +247,23 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			_ = s.comparePassword(missingCredentialPasswordHash, input.Password)
+			if logErr := s.recordLoginEvent(ctx, loginlog.Event{PlatformID: policy.ID, LoginAccount: email, EventType: loginlog.EventLogin, LoginType: stringPointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "invalid_credentials", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent}); logErr != nil {
+				return Credential{}, logErr
+			}
 			return Credential{}, invalidCredentialError(err)
 		}
 		return Credential{}, apperror.DependencyUnavailable(err)
 	}
 	if credential.IsEnabled != yesno.Yes {
+		if logErr := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, PlatformID: policy.ID, LoginAccount: email, EventType: loginlog.EventLogin, LoginType: stringPointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "account_disabled", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent}); logErr != nil {
+			return Credential{}, logErr
+		}
 		return Credential{}, apperror.Forbidden(fmt.Errorf("user is disabled"))
 	}
 	if err := s.comparePassword(credential.PasswordHash, input.Password); err != nil {
+		if logErr := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, PlatformID: policy.ID, LoginAccount: email, EventType: loginlog.EventLogin, LoginType: stringPointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "invalid_credentials", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent}); logErr != nil {
+			return Credential{}, logErr
+		}
 		return Credential{}, invalidCredentialError(err)
 	}
 
@@ -293,6 +322,9 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 	}
 	if created.ClientIP == "" {
 		created.ClientIP = input.Client.ClientIP
+	}
+	if err := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, SessionID: &created.ID, PlatformID: policy.ID, LoginAccount: email, EventType: loginlog.EventLogin, LoginType: stringPointer(loginlog.LoginPassword), IsSuccess: yesno.Yes, ReasonCode: "success", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent}); err != nil {
+		return Credential{}, err
 	}
 	authority := usersession.Authority{Session: created, UserID: credential.ID, UserIsEnabled: credential.IsEnabled}
 	if err := s.publishAuthority(ctx, authority, policy, userFact.Generation, nextSessionsFact.Generation, now); err != nil {
@@ -465,7 +497,19 @@ func (s *Service) Logout(ctx context.Context, identity Identity, client authclie
 	if identity.Platform != client.Platform {
 		return apperror.Unauthorized(fmt.Errorf("session platform does not match request platform"))
 	}
-	return s.revokeSession(ctx, identity.UserID, identity.SessionID, identity.Platform)
+	if err := s.revokeSession(ctx, identity.UserID, identity.SessionID, identity.Platform); err != nil {
+		return err
+	}
+	if s.loginLogs != nil {
+		if err := s.loginLogs.Record(ctx, loginlog.Event{
+			UserID: &identity.UserID, SessionID: &identity.SessionID, PlatformID: identity.PlatformID,
+			EventType: loginlog.EventLogout, IsSuccess: yesno.Yes, ReasonCode: "success",
+			ClientIP: client.ClientIP, UserAgent: client.UserAgent,
+		}); err != nil {
+			return apperror.DependencyUnavailable(err)
+		}
+	}
+	return nil
 }
 
 func (s *Service) CurrentUser(ctx context.Context, identity Identity) (user.Current, error) {

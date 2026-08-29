@@ -25,6 +25,7 @@ import (
 	"admin/server/internal/module/rbac/role"
 	"admin/server/internal/module/rbac/state"
 	account "admin/server/internal/module/user/account"
+	"admin/server/internal/module/user/loginlog"
 	profile "admin/server/internal/module/user/profile"
 	usersession "admin/server/internal/module/user/session"
 	"admin/server/internal/queue"
@@ -48,6 +49,7 @@ type routerDependencies struct {
 	User              *account.Handler
 	Account           *profile.Handler
 	OperationLog      *operationlog.Handler
+	LoginLog          *loginlog.Handler
 	OperationEnqueuer operationlog.Enqueuer
 	SessionAdmin      *usersession.SessionAdminHandler
 	AuthOrigin        gin.HandlerFunc
@@ -135,6 +137,8 @@ func run(logger *slog.Logger) error {
 	sessionService := usersession.NewService(sessionRepository, authStateStore, authInvalidator, auth.NewSessionCache(redisClient))
 	userService := account.NewService(userRepository, authStateStore, authInvalidator, accessStateStore, accessInvalidator)
 	profileService := profile.NewService(profileRepository)
+	loginLogService := loginlog.NewService(loginlog.NewRepository(postgres.GORM))
+	authService.SetLoginLogRecorder(loginLogService)
 	accessRepository := access.NewRepository(postgres.GORM)
 	accessService := access.NewService(accessRepository, accessStateStore, access.NewSnapshotCache(redisClient), logger)
 	operationLogRepository := operationlog.NewRepository(postgres.GORM)
@@ -160,6 +164,7 @@ func run(logger *slog.Logger) error {
 			return identity.UserID, ok
 		}),
 		OperationLog:      operationlog.NewHandler(operationLogService),
+		LoginLog:          loginlog.NewHandler(loginLogService),
 		OperationEnqueuer: operationLogEnqueuer,
 		SessionAdmin: usersession.NewSessionAdminHandler(sessionService, func(context *gin.Context) (usersession.Actor, bool) {
 			identity, ok := auth.IdentityFromContext(context)
@@ -225,6 +230,7 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	role.RegisterRoutes(adminRoutes, dependencies.Role, dependencies.Authenticate, dependencies.RequirePermission)
 	account.RegisterRoutes(adminRoutes, dependencies.User, dependencies.Authenticate, dependencies.RequirePermission)
 	profile.RegisterRoutes(adminRoutes, dependencies.Account, dependencies.Authenticate)
+	loginlog.RegisterRoutes(adminRoutes, dependencies.LoginLog, dependencies.Authenticate, dependencies.RequirePermission)
 	operationlog.RegisterRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
 	usersession.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
 	return router

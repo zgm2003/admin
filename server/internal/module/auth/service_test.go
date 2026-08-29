@@ -14,6 +14,7 @@ import (
 	"admin/server/internal/module/authstate"
 	"admin/server/internal/module/rbac/role"
 	user "admin/server/internal/module/user/account"
+	"admin/server/internal/module/user/loginlog"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
@@ -163,6 +164,21 @@ func TestLoginComparesPasswordWithValidBcryptHashWhenEmailDoesNotExist(t *testin
 	}
 }
 
+func TestLoginRecordsFailedLoginWithoutCreatingSession(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	recorder := &recordingLoginLog{}
+	service := newRedisTestService(t, redisClient, &fakeUserStore{credentialErr: gorm.ErrRecordNotFound}, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: testPolicy()})
+	service.SetLoginLogRecorder(recorder)
+	_, err := service.Login(context.Background(), LoginInput{Email: "missing@example.com", Password: "wrong", Client: testAuthClient()})
+	if appErrorCode(err) != apperror.CodeUnauthorized || len(recorder.events) != 1 {
+		t.Fatalf("login error=%v events=%+v", err, recorder.events)
+	}
+	event := recorder.events[0]
+	if event.EventType != loginlog.EventLogin || event.IsSuccess != yesno.No || event.LoginType == nil || *event.LoginType != loginlog.LoginPassword || event.UserID != nil || event.SessionID != nil {
+		t.Fatalf("failed login event=%+v", event)
+	}
+}
+
 func TestLoginPreservesPasswordWhitespaceForBcrypt(t *testing.T) {
 	redisClient := openAuthRedis(t)
 	cleanupAuthRedisKeys(t, redisClient, 82501, "admin", 82502)
@@ -237,7 +253,6 @@ func TestAuthenticateUsesWarmRedisWithoutPostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	identity, err := service.Authenticate(context.Background(), rawToken, testAuthClient())
 	if err != nil {
 		t.Fatal(err)
@@ -411,6 +426,8 @@ func TestRefreshRotatesWithinSessionInvalidationAndKeepsAbsoluteExpiry(t *testin
 	rotated.Version++
 	sessions := &fakeSessionStore{refresh: authority, rotateSession: rotated, rotateWon: true}
 	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
+	recorder := &recordingLoginLog{}
+	service.SetLoginLogRecorder(recorder)
 	service.now = func() time.Time { return fixedNow }
 	service.jwt.now = service.now
 	_, _, _ = service.states.InstallUserReadyIfMissing(context.Background(), authstate.UserFact{UserID: 86801, Generation: "user-ready", IsEnabled: true})
@@ -419,6 +436,9 @@ func TestRefreshRotatesWithinSessionInvalidationAndKeepsAbsoluteExpiry(t *testin
 	credential, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: "old-refresh", Client: testAuthClient()})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(recorder.events) != 0 {
+		t.Fatalf("refresh produced login events: %+v", recorder.events)
 	}
 	if sessions.rotateCalls != 1 || credential.ExpiresIn != int(policy.AccessTTL.Seconds()) || !credential.RefreshExpiresAt.Equal(expiresAt) {
 		t.Fatalf("Refresh() = %+v rotateCalls=%d", credential, sessions.rotateCalls)
@@ -523,6 +543,13 @@ type fakePolicyStore struct {
 	policy authplatform.Policy
 	err    error
 	calls  int
+}
+
+type recordingLoginLog struct{ events []loginlog.Event }
+
+func (r *recordingLoginLog) Record(_ context.Context, event loginlog.Event) error {
+	r.events = append(r.events, event)
+	return nil
 }
 
 func (f *fakePolicyStore) CurrentPolicy(context.Context, string) (authplatform.Policy, error) {
