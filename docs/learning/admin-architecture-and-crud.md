@@ -85,7 +85,7 @@ menuHandler := menu.NewHandler(menuService)
 ```mermaid
 sequenceDiagram
     participant V as 菜单页面
-    participant A as api/menu.ts
+    participant A as api/rbac/menu.ts
     participant X as request.ts
     participant R as Gin Router
     participant M as Middleware
@@ -786,13 +786,13 @@ GORM 默认会给包含 `gorm.DeletedAt` 的查询加 `deleted_at IS NULL`，所
 真实文件对应：
 
 ```text
-server/internal/module/menu/route.go       路由和权限码
-server/internal/module/menu/request.go     严格请求 DTO
-server/internal/module/menu/handler.go     HTTP 边界
-server/internal/module/menu/service.go     菜单树业务和权限失效编排
-server/internal/module/menu/repository.go  PostgreSQL、锁和事务内查询
-server/internal/module/menu/model.go       rbac_menu / rbac_role_menu
-server/internal/module/menu/response.go    返回 DTO
+server/internal/module/rbac/menu/route.go       路由和权限码
+server/internal/module/rbac/menu/request.go     严格请求 DTO
+server/internal/module/rbac/menu/handler.go     HTTP 边界
+server/internal/module/rbac/menu/service.go     菜单树业务和权限失效编排
+server/internal/module/rbac/menu/repository.go  PostgreSQL、锁和事务内查询
+server/internal/module/rbac/menu/model.go       rbac_menu / rbac_role_menu
+server/internal/module/rbac/menu/response.go    返回 DTO
 ```
 
 最近协议调整后的关键点：
@@ -800,7 +800,7 @@ server/internal/module/menu/response.go    返回 DTO
 - `i18nKey` 在数据库和管理 DTO 中可为 `null`，但可渲染的目录/页面进入 access snapshot 时仍必须具备合法 i18n key。
 - 页面用 `componentPath` 指向 `web/src/views/<componentPath>/index.vue`。
 - 图标只能来自前端 `menu-icons` 白名单。
-- 菜单管理 API 的字段校验函数现在收拢在 `web/src/api/menu.ts`。
+- 菜单管理 API 的字段校验函数现在收拢在 `web/src/api/rbac/menu.ts`。
 
 不要把 `menu.Service` 的复杂度复制到普通 CRUD。复杂是因为业务规则复杂，不是每个 Service 都应该复杂。
 
@@ -995,7 +995,7 @@ flowchart RL
 
 ```text
 views/access/menus/index.vue
--> api/menu.ts 的 createMenu()
+-> api/rbac/menu.ts 的 createMenu()
 -> utils/request.ts 的 request<T>()
 -> Axios 请求拦截器添加 Accept-Language、X-Auth-Platform、X-Device-ID、Bearer
 -> Go API
@@ -1096,12 +1096,12 @@ SQL 看 Repository
 按这个顺序读，不容易迷路：
 
 1. `server/cmd/api/main.go`：先看依赖怎样组装、路由怎样注册。
-2. `server/internal/module/menu/route.go`：看 URL 和权限。
-3. `server/internal/module/menu/handler.go`：看 HTTP 边界。
-4. `server/internal/module/menu/request.go`、`response.go`：看协议。
-5. `server/internal/module/menu/service.go`：看业务规则和失效编排。
-6. `server/internal/module/menu/repository.go`：看 SQL、锁和事务。
-7. `server/internal/module/menu/model.go`：看 PostgreSQL 映射。
+2. `server/internal/module/rbac/menu/route.go`：看 URL 和权限。
+3. `server/internal/module/rbac/menu/handler.go`：看 HTTP 边界。
+4. `server/internal/module/rbac/menu/request.go`、`response.go`：看协议。
+5. `server/internal/module/rbac/menu/service.go`：看业务规则和失效编排。
+6. `server/internal/module/rbac/menu/repository.go`：看 SQL、锁和事务。
+7. `server/internal/module/rbac/menu/model.go`：看 PostgreSQL 映射。
 8. `web/src/utils/request.ts`：看 HTTP envelope、Token 和 refresh。
 9. `web/src/permission.ts`：看认证恢复和权限快照加载。
 10. `web/src/router/access-routes.ts`：看 componentPath 如何变成 Vue 页面。

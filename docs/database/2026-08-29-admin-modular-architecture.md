@@ -29,3 +29,11 @@ SELECT 'audit_operation_log', count(*) FROM audit_operation_log;
 ```
 
 执行前后应记录用户、角色、菜单、授权、平台、会话和审计日志的 ID 与计数，确认历史 ID 保留。
+
+## 当前实施结果
+
+- `auth_session` 已迁移为 `user_session`，持久化平台使用 `platform_id` 外键。
+- 已创建 `user_profile`、`user_login_log`，并删除示例表 `foundation_task`。
+- `audit_operation_log` 已使用 `platform_id`，历史 ID 与记录保留。
+- API 和 Worker 启动路径不执行本 migration，也不执行 DDL、seed 或数据回填。
+- 本脚本已在 2026-08-29 对当前本地数据库重复执行并通过，第二次执行未插入重复数据。
