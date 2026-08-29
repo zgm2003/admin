@@ -1,5 +1,10 @@
 package userrole
 
-// Service owns user-to-role relationship operations; concrete behavior remains
-// in the role service until the relationship API is introduced.
-type Service struct{}
+import "context"
+
+type Service struct{ repository *Repository }
+
+func NewService(repository *Repository) *Service { return &Service{repository: repository} }
+func (s *Service) FindByUser(ctx context.Context, userID int64) ([]UserRole, error) {
+	return s.repository.FindByUser(ctx, userID)
+}

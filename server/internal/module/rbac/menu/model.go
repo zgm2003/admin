@@ -3,6 +3,7 @@ package menu
 import (
 	"time"
 
+	"admin/server/internal/module/rbac/rolemenu"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -38,15 +39,4 @@ func (Menu) TableName() string {
 	return "rbac_menu"
 }
 
-type RoleMenu struct {
-	ID        int64          `gorm:"column:id;primaryKey;autoIncrement"`
-	RoleID    int64          `gorm:"column:role_id;not null"`
-	MenuID    int64          `gorm:"column:menu_id;not null"`
-	CreatedAt time.Time      `gorm:"column:created_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
-	UpdatedAt time.Time      `gorm:"column:updated_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
-	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz"`
-}
-
-func (RoleMenu) TableName() string {
-	return "rbac_role_menu"
-}
+type RoleMenu = rolemenu.RoleMenu
