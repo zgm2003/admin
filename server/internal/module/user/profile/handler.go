@@ -7,7 +7,6 @@ import (
 
 	projectmiddleware "admin/server/internal/middleware"
 	"admin/server/internal/module/auth"
-	"admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
 	"admin/server/internal/shared/validate"
@@ -15,8 +14,8 @@ import (
 )
 
 type profileService interface {
-	CurrentProfile(context.Context, int64) (account.PersonalProfile, error)
-	UpdatePersonalProfile(context.Context, int64, int64, account.PersonalProfileInput) (account.PersonalProfile, error)
+	Current(context.Context, int64) (Value, error)
+	Update(context.Context, int64, int64, Input) (Value, error)
 }
 
 type passwordService interface {
@@ -39,7 +38,7 @@ func (h *Handler) CurrentProfile(c *gin.Context) {
 		response.Fail(c, apperror.Unauthorized(fmt.Errorf("authentication identity is missing")))
 		return
 	}
-	profile, err := h.profile.CurrentProfile(c.Request.Context(), actor)
+	profile, err := h.profile.Current(c.Request.Context(), actor)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -64,7 +63,7 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 	projectmiddleware.SetAccessLogOperation(c, "account.profile.update", actor, actor)
-	updated, err := h.profile.UpdatePersonalProfile(c.Request.Context(), actor, actor, input)
+	updated, err := h.profile.Update(c.Request.Context(), actor, actor, input)
 	if err != nil {
 		response.Fail(c, err)
 		return

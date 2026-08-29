@@ -78,20 +78,6 @@ type UpdatedProfile struct {
 	UpdatedAt time.Time
 }
 
-type PersonalProfile struct {
-	Current
-	Birthday  *time.Time
-	Gender    int16
-	UpdatedAt time.Time
-}
-
-type PersonalProfileInput struct {
-	Username string
-	Phone    *string
-	Birthday *time.Time
-	Gender   int16
-}
-
 func NewService(
 	repository *Repository,
 	authStates *authstate.Store,
@@ -155,45 +141,6 @@ func (s *Service) Current(ctx context.Context, userID int64) (Current, error) {
 		return Current{}, mapUserRepositoryError(err)
 	}
 	return value, nil
-}
-
-func (s *Service) CurrentProfile(ctx context.Context, userID int64) (PersonalProfile, error) {
-	if s == nil || s.repository == nil || userID <= 0 {
-		return PersonalProfile{}, apperror.DependencyUnavailable(fmt.Errorf("current profile requires a repository"))
-	}
-	value, err := s.repository.FindPersonalProfile(ctx, userID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return PersonalProfile{}, userNotFound(err)
-		}
-		return PersonalProfile{}, mapUserRepositoryError(err)
-	}
-	return value, nil
-}
-
-func (s *Service) UpdatePersonalProfile(ctx context.Context, actorUserID, targetUserID int64, input PersonalProfileInput) (PersonalProfile, error) {
-	if s == nil || s.repository == nil {
-		return PersonalProfile{}, apperror.DependencyUnavailable(fmt.Errorf("update profile requires a repository"))
-	}
-	if actorUserID <= 0 || targetUserID <= 0 || actorUserID != targetUserID {
-		return PersonalProfile{}, apperror.InvalidRequest(fmt.Errorf("profile target is invalid"))
-	}
-	username, err := NormalizeUsername(input.Username)
-	if err != nil {
-		return PersonalProfile{}, apperror.InvalidRequest(err)
-	}
-	phone, err := NormalizePhone(input.Phone)
-	if err != nil {
-		return PersonalProfile{}, apperror.InvalidRequest(err)
-	}
-	if input.Gender < 0 || input.Gender > 2 {
-		return PersonalProfile{}, apperror.InvalidRequest(fmt.Errorf("gender is invalid"))
-	}
-	updated, err := s.repository.UpdatePersonalProfile(ctx, targetUserID, username, phone, input.Birthday, input.Gender, time.Now().UTC().Truncate(time.Microsecond))
-	if err != nil {
-		return PersonalProfile{}, mapUserRepositoryError(err)
-	}
-	return updated, nil
 }
 
 func (s *Service) Update(ctx context.Context, actorUserID, targetUserID int64, input UpdateInput) (UpdatedProfile, error) {

@@ -10,23 +10,22 @@ import (
 	"time"
 
 	"admin/server/internal/module/auth"
-	"admin/server/internal/module/user/account"
 	"github.com/gin-gonic/gin"
 )
 
 type profileServiceStub struct {
-	current account.PersonalProfile
-	updated account.PersonalProfile
+	current Value
+	updated Value
 	actor   int64
 	target  int64
-	input   account.PersonalProfileInput
+	input   Input
 }
 
-func (s *profileServiceStub) CurrentProfile(context.Context, int64) (account.PersonalProfile, error) {
+func (s *profileServiceStub) Current(context.Context, int64) (Value, error) {
 	return s.current, nil
 }
 
-func (s *profileServiceStub) UpdatePersonalProfile(_ context.Context, actor, target int64, input account.PersonalProfileInput) (account.PersonalProfile, error) {
+func (s *profileServiceStub) Update(_ context.Context, actor, target int64, input Input) (Value, error) {
 	s.actor, s.target, s.input = actor, target, input
 	return s.updated, nil
 }
@@ -44,8 +43,8 @@ func (s *passwordServiceStub) ChangePassword(_ context.Context, identity auth.Id
 func TestProfileRoutesReadAndUpdateCurrentAdmin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	profile := &profileServiceStub{
-		current: account.PersonalProfile{Current: account.Current{ID: 7, Username: "alice", Email: "alice@example.com", Phone: nil}},
-		updated: account.PersonalProfile{Current: account.Current{ID: 7, Username: "alice-new", Email: "alice@example.com", Phone: nil}, UpdatedAt: time.Date(2026, 8, 28, 0, 0, 0, 0, time.UTC)},
+		current: Value{UserID: 7, Username: "alice", Email: "alice@example.com", Phone: nil},
+		updated: Value{UserID: 7, Username: "alice-new", Email: "alice@example.com", Phone: nil, UpdatedAt: time.Date(2026, 8, 28, 0, 0, 0, 0, time.UTC)},
 	}
 	password := &passwordServiceStub{}
 	router := gin.New()

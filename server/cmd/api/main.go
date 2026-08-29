@@ -111,6 +111,7 @@ func run(logger *slog.Logger) error {
 	taskService := taskdemo.NewService(repository, taskdemo.NewQueueEnqueuer(queueClient), logger)
 	healthService := health.NewService(postgres, redisClient)
 	userRepository := account.NewRepository(postgres.GORM)
+	profileRepository := profile.NewRepository(postgres.GORM)
 	sessionRepository := auth.NewSessionRepository(postgres.GORM)
 	authPlatformRepository := authplatform.NewRepository(postgres.GORM)
 	policyStore := authplatform.NewPolicyStore(redisClient)
@@ -136,6 +137,7 @@ func run(logger *slog.Logger) error {
 	authService.SetSessionAdminRepository(sessionRepository)
 	authService.SetPasswordStore(userRepository)
 	userService := account.NewService(userRepository, authStateStore, authInvalidator, accessStateStore, accessInvalidator)
+	profileService := profile.NewService(profileRepository)
 	accessRepository := access.NewRepository(postgres.GORM)
 	accessService := access.NewService(accessRepository, accessStateStore, access.NewSnapshotCache(redisClient), logger)
 	operationLogRepository := operationlog.NewRepository(postgres.GORM)
@@ -157,7 +159,7 @@ func run(logger *slog.Logger) error {
 			identity, ok := auth.IdentityFromContext(context)
 			return identity.UserID, ok
 		}),
-		Account: profile.NewHandler(userService, authService, func(context *gin.Context) (int64, bool) {
+		Account: profile.NewHandler(profileService, authService, func(context *gin.Context) (int64, bool) {
 			identity, ok := auth.IdentityFromContext(context)
 			return identity.UserID, ok
 		}),

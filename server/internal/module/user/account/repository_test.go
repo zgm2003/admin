@@ -821,21 +821,22 @@ func TestPersonalProfileRepositoryPersistsAndReadsBirthdayAndGender(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	repository := account.NewRepository(db)
-	created, err := repository.CreateWithRole(ctx, newCreateInput("profile", defaultRole.ID))
+	accountRepository := account.NewRepository(db)
+	created, err := accountRepository.CreateWithRole(ctx, newCreateInput("profile", defaultRole.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
 	birthday := time.Date(2000, 1, 2, 0, 0, 0, 0, time.UTC)
 	updatedAt := time.Date(2026, 8, 28, 1, 2, 3, 0, time.UTC)
-	updated, err := repository.UpdatePersonalProfile(ctx, created.ID, "profile-user", nil, &birthday, 2, updatedAt)
+	profileRepository := profile.NewRepository(db)
+	updated, err := profileRepository.Update(ctx, created.ID, "profile-user", nil, &birthday, 2, updatedAt)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if updated.Username != "profile-user" || updated.Gender != 2 || updated.Birthday == nil || !updated.Birthday.Equal(birthday) {
 		t.Fatalf("updated profile=%+v", updated)
 	}
-	read, err := repository.FindPersonalProfile(ctx, created.ID)
+	read, err := profileRepository.Find(ctx, created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

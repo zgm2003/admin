@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"admin/server/internal/module/auth"
-	"admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 )
 
@@ -16,19 +15,19 @@ type updateRequest struct {
 	Gender   int16   `json:"gender"`
 }
 
-func (r updateRequest) input() (account.PersonalProfileInput, error) {
+func (r updateRequest) input() (Input, error) {
 	if r.Username == "" {
-		return account.PersonalProfileInput{}, apperror.InvalidRequest(fmt.Errorf("username is required"))
+		return Input{}, apperror.InvalidRequest(fmt.Errorf("username is required"))
 	}
 	var birthday *time.Time
 	if r.Birthday != nil {
 		parsed, err := time.Parse("2006-01-02", *r.Birthday)
 		if err != nil {
-			return account.PersonalProfileInput{}, apperror.InvalidRequest(fmt.Errorf("birthday is invalid"))
+			return Input{}, apperror.InvalidRequest(fmt.Errorf("birthday is invalid"))
 		}
 		birthday = &parsed
 	}
-	return account.PersonalProfileInput{Username: r.Username, Phone: r.Phone, Birthday: birthday, Gender: r.Gender}, nil
+	return Input{Username: r.Username, Phone: r.Phone, Birthday: birthday, Gender: r.Gender}, nil
 }
 
 type passwordRequest struct {
