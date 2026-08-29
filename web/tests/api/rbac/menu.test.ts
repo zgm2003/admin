@@ -107,7 +107,7 @@ function menuCatalog() {
       parentId: null,
       menuType: 'page',
       name: 'Test',
-      code: 'canvas:test',
+      code: 'canvas:test:list',
       i18nKey: 'navigation.test',
       path: '/test',
       componentPath: 'test',

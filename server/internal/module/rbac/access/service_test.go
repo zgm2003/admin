@@ -327,7 +327,7 @@ func TestBuildSnapshotSupportsCanvasRootPageAndAction(t *testing.T) {
 		Version:   1,
 		RoleCodes: []string{"canvas_user"},
 		Menus: []SourceMenu{
-			{ID: pageID, MenuType: MenuPage, Code: "canvas:test", I18nKey: accessStringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+			{ID: pageID, MenuType: MenuPage, Code: "canvas:test:list", I18nKey: accessStringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No},
 			{ID: 42, ParentID: &pageID, MenuType: MenuAction, Code: "canvas:test:button", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
 		},
 		GrantedMenuIDs: []int64{42},
@@ -335,8 +335,8 @@ func TestBuildSnapshotSupportsCanvasRootPageAndAction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(snapshot.MenuTree) != 1 || snapshot.MenuTree[0].Code != "canvas:test" || snapshot.MenuTree[0].MenuType != MenuPage ||
-		!reflect.DeepEqual(snapshot.PermissionCodes, []string{"canvas:test", "canvas:test:button"}) {
+	if len(snapshot.MenuTree) != 1 || snapshot.MenuTree[0].Code != "canvas:test:list" || snapshot.MenuTree[0].MenuType != MenuPage ||
+		!reflect.DeepEqual(snapshot.PermissionCodes, []string{"canvas:test:button", "canvas:test:list"}) {
 		t.Fatalf("Canvas snapshot = %+v", snapshot)
 	}
 }

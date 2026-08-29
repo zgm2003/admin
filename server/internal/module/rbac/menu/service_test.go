@@ -62,7 +62,7 @@ func TestServiceCreateEnforcesPlatformAndSupportsRootPage(t *testing.T) {
 	}
 	path, componentPath := "/test", "test"
 	canvasPageID, err := service.Create(ctx, CreateInput{
-		PlatformID: canvas.ID, MenuType: TypePage, Name: "Canvas Test", Code: "canvas:test",
+		PlatformID: canvas.ID, MenuType: TypePage, Name: "Canvas Test", Code: "canvas:test:list",
 		I18nKey: stringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath,
 		IsEnabled: yesno.Yes, IsHidden: yesno.No,
 	})

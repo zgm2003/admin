@@ -309,7 +309,7 @@ describe('RoleManagement', () => {
 
     const matrix = wrapper.getComponent(RolePermissionMatrix)
     expect(matrix.text()).toContain('Test')
-    expect(matrix.text()).toContain('canvas:test')
+    expect(matrix.text()).toContain('canvas:test:list')
     expect(matrix.text()).toContain('Test Button')
     expect(matrix.text()).not.toContain('系统管理')
   })
@@ -587,7 +587,7 @@ function permissionResponse(overrides: { menuIds?: number[] } = {}) {
           id: 7,
           parentId: null,
           menuType: 'page' as const,
-          code: 'canvas:test',
+          code: 'canvas:test:list',
           name: 'Test',
           isEnabled: YesNo.Yes,
           children: [{

@@ -38,8 +38,8 @@ const menus = ref<ManagedMenuNode[]>([]);
 const platforms = ref<MenuPlatformOption[]>([]);
 const activePlatformID = ref<number | null>(null);
 const keyword = ref("");
-const expandedIDs = ref<Set<number>>(new Set());
-const expansionBeforeSearch = ref<Set<number> | null>(null);
+const expandedIDs = ref<Set<string>>(new Set());
+const expansionBeforeSearch = ref<Set<string> | null>(null);
 const loading = ref(false);
 const loadError = ref("");
 const mutationError = ref("");
@@ -165,6 +165,10 @@ const displayedMenus = computed(() =>
 );
 const expandedRowKeys = computed(() => [...expandedIDs.value]);
 
+function menuRowKey(id: number): string {
+  return String(id);
+}
+
 function flattenWithChildren(
   nodes: readonly ManagedMenuNode[],
 ): ManagedMenuNode[] {
@@ -175,7 +179,7 @@ function setExpandedForRoots(): void {
   expandedIDs.value = new Set(
     menus.value
       .filter((node) => node.children.length > 0)
-      .map((node) => node.id),
+      .map((node) => menuRowKey(node.id)),
   );
 }
 
@@ -183,7 +187,7 @@ function expandAll(): void {
   expandedIDs.value = new Set(
     flattenWithChildren(displayedMenus.value)
       .filter((node) => node.children.length > 0)
-      .map((node) => node.id),
+      .map((node) => menuRowKey(node.id)),
   );
 }
 

@@ -79,7 +79,7 @@ describe('MenuManagement', () => {
 		expect(table.text()).not.toContain('内置')
     const elementTable = wrapper.findComponent({ name: 'ElTable' })
     expect(elementTable.props('defaultExpandAll')).toBe(false)
-    expect(elementTable.props('expandRowKeys')).toEqual([1])
+    expect(elementTable.props('expandRowKeys')).toEqual(['1'])
     expect(elementTable.props('border')).toBe(true)
     expect(elementTable.props('headerCellStyle')).toEqual({ background: 'var(--el-fill-color-light)' })
 		const centeredLabels = ['类型', '图标', '显示状态', '状态', '操作']
@@ -118,6 +118,34 @@ describe('MenuManagement', () => {
     expect(getMenusMock).toHaveBeenNthCalledWith(2, { platformId: 2 })
     expect(wrapper.get('[data-testid="menu-table"]').text()).toContain('Test')
     expect(wrapper.get('[data-testid="menu-table"]').text()).not.toContain('系统管理')
+  })
+
+  it('keeps controlled expansion keys as strings across expand, search, and platform changes', async () => {
+    getMenusMock
+      .mockResolvedValueOnce(menuCatalog())
+      .mockResolvedValueOnce(menuCatalog(canvasMenuTree()))
+    const wrapper = mountPage(pinia, ['rbac:menu:list'])
+    await flushPromises()
+    const table = wrapper.findComponent({ name: 'ElTable' })
+
+    await wrapper.get('[data-testid="menu-expand-all"]').trigger('click')
+    expect(table.props('expandRowKeys')).toEqual(['1', '2'])
+    expect(table.props('expandRowKeys').every((key: unknown) => typeof key === 'string')).toBe(true)
+
+    await wrapper.get('[data-testid="menu-collapse-all"]').trigger('click')
+    expect(table.props('expandRowKeys')).toEqual([])
+    await wrapper.get('[data-testid="menu-expand-all"]').trigger('click')
+    await wrapper.get('input[data-testid="menu-search"]').setValue('用户')
+    expect(table.props('expandRowKeys').every((key: unknown) => typeof key === 'string')).toBe(true)
+    await wrapper.get('input[data-testid="menu-search"]').setValue('')
+    expect(table.props('expandRowKeys')).toEqual(['1', '2'])
+
+    const canvasTab = wrapper.findAll('[role="tab"]').find((tab) => tab.text().includes('Canvas'))
+    await canvasTab?.trigger('click')
+    await flushPromises()
+    expect(table.props('expandRowKeys')).toEqual([])
+    expect(table.props('expandRowKeys').every((key: unknown) => typeof key === 'string')).toBe(true)
+    wrapper.unmount()
   })
 
   it('keeps disabled rows visible and accepts explicit empty leaf children', async () => {
@@ -231,7 +259,7 @@ describe('MenuManagement', () => {
     expect(pageOption).toBeDefined()
     if (pageOption !== undefined) await new DOMWrapper(pageOption).trigger('click')
     await bodyGet('[data-testid="menu-form-name"]').setValue('Test')
-    await bodyGet('[data-testid="menu-form-code"]').setValue('canvas:test')
+    await bodyGet('[data-testid="menu-form-code"]').setValue('canvas:test:list')
     await bodyGet('[data-testid="menu-form-path"]').setValue('/test')
     await bodyGet('[data-testid="menu-form-component-path"]').setValue('test')
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
@@ -241,7 +269,7 @@ describe('MenuManagement', () => {
       platformId: 2,
       parentId: null,
       menuType: 'page',
-      code: 'canvas:test',
+      code: 'canvas:test:list',
     }))
     expect(getMenusMock).toHaveBeenLastCalledWith({ platformId: 2 })
   })
@@ -549,7 +577,7 @@ function canvasMenuTree(): ManagedMenuNode[] {
     parentId: null,
     menuType: 'page',
     name: 'Test',
-    code: 'canvas:test',
+    code: 'canvas:test:list',
     i18nKey: 'navigation.test',
     path: '/test',
     componentPath: 'test',

@@ -80,7 +80,7 @@ func TestFindSourceWithVersionRecognizesSuperAdminWithoutDirectGrants(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !canvasSource.SuperAdmin || len(canvasSource.Menus) != 2 || canvasSource.Menus[0].ID != fixture.canvasPage.ID || len(canvasSource.GrantedMenuIDs) != 0 {
+	if !canvasSource.SuperAdmin || len(canvasSource.Menus) != 2 || canvasSource.Menus[0].ID != fixture.canvasAction.ID || canvasSource.Menus[1].ID != fixture.canvasPage.ID || len(canvasSource.GrantedMenuIDs) != 0 {
 		t.Fatalf("super-admin Canvas source = %+v", canvasSource)
 	}
 }
@@ -131,7 +131,7 @@ func TestRepositoryFiltersMenusAndDeduplicatesGrantsByPlatform(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(canvasSource.Menus) != 2 || canvasSource.Menus[0].ID != fixture.canvasPage.ID ||
+	if len(canvasSource.Menus) != 2 || canvasSource.Menus[0].ID != fixture.canvasAction.ID || canvasSource.Menus[1].ID != fixture.canvasPage.ID ||
 		!reflect.DeepEqual(canvasSource.GrantedMenuIDs, []int64{fixture.canvasAction.ID}) {
 		t.Fatalf("Canvas source = %+v", canvasSource)
 	}
@@ -227,7 +227,7 @@ func openAccessRepositoryFixture(t *testing.T) *accessRepositoryFixture {
 	}
 	canvasPath, canvasComponentPath := "/test", "test"
 	canvasI18nKey := "navigation.system"
-	canvasPage := menu.Menu{PlatformID: canvasPlatform.ID, MenuType: menu.TypePage, Name: "Canvas Test", Code: "canvas:test", I18nKey: &canvasI18nKey, Path: &canvasPath, ComponentPath: &canvasComponentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now}
+	canvasPage := menu.Menu{PlatformID: canvasPlatform.ID, MenuType: menu.TypePage, Name: "Canvas Test", Code: "canvas:test:list", I18nKey: &canvasI18nKey, Path: &canvasPath, ComponentPath: &canvasComponentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&canvasPage).Error; err != nil {
 		t.Fatal(err)
 	}

@@ -119,7 +119,7 @@ function permissionPlatforms(): RolePermissionPlatform[] {
         id: 7,
         parentId: null,
         menuType: 'page',
-        code: 'canvas:test',
+        code: 'canvas:test:list',
         name: 'Test',
         isEnabled: YesNo.Yes,
         children: [{

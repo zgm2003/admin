@@ -142,7 +142,7 @@ function permissionResponse() {
     },
     platforms: [
       { id: 1, code: 'admin', name: 'Admin', isEnabled: YesNo.Yes, menuTree: [{ id: 3, parentId: null, menuType: 'page', code: 'admin:test', name: 'Admin Test', isEnabled: YesNo.Yes, children: [] }] },
-      { id: 2, code: 'canvas', name: 'Canvas', isEnabled: YesNo.No, menuTree: [{ id: 20, parentId: null, menuType: 'page', code: 'canvas:test', name: 'Canvas Test', isEnabled: YesNo.Yes, children: [] }] },
+      { id: 2, code: 'canvas', name: 'Canvas', isEnabled: YesNo.No, menuTree: [{ id: 20, parentId: null, menuType: 'page', code: 'canvas:test:list', name: 'Canvas Test', isEnabled: YesNo.Yes, children: [] }] },
     ],
     menuIds: [3, 20],
   }
