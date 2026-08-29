@@ -10,7 +10,6 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
-	authschema "admin/server/internal/module/auth"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/rbac/access"
@@ -458,9 +457,6 @@ func openRoleDatabase(t *testing.T) (*gorm.DB, context.Context) {
 		_ = root.GORM.WithContext(cleanupCtx).Exec("DROP SCHEMA IF EXISTS " + schema + " CASCADE").Error
 		_ = root.Close()
 	})
-	if err := authschema.PrepareSessionSchema(ctx, db); err != nil {
-		t.Fatalf("PrepareSessionSchema: %v", err)
-	}
 	if err := database.AutoMigrate(ctx, db, &authplatform.Platform{}); err != nil {
 		t.Fatalf("AutoMigrate authentication platforms: %v", err)
 	}
@@ -472,9 +468,6 @@ func openRoleDatabase(t *testing.T) (*gorm.DB, context.Context) {
 	}
 	if err := role.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("Ensure role schema: %v", err)
-	}
-	if err := authschema.EnsureSchema(ctx, db); err != nil {
-		t.Fatalf("EnsureSchema: %v", err)
 	}
 	if err := menu.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("Ensure menu schema: %v", err)

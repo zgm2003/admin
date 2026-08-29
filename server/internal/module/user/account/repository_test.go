@@ -12,7 +12,6 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
-	authschema "admin/server/internal/module/auth"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/rbac/access"
 	"admin/server/internal/module/rbac/role"
@@ -784,17 +783,11 @@ func openUserDatabase(t *testing.T) (*gorm.DB, context.Context, *role.Repository
 		_ = root.GORM.WithContext(cleanupCtx).Exec("DROP SCHEMA IF EXISTS " + schema + " CASCADE").Error
 		_ = root.Close()
 	})
-	if err := authschema.PrepareSessionSchema(ctx, db); err != nil {
-		t.Fatalf("PrepareSessionSchema: %v", err)
-	}
 	if err := database.AutoMigrate(ctx, db, &account.User{}, &profile.Profile{}, &role.Role{}, &role.UserRole{}, &auth.Session{}, &access.Version{}); err != nil {
 		t.Fatalf("AutoMigrate: %v", err)
 	}
 	if err := role.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("Ensure role schema: %v", err)
-	}
-	if err := authschema.EnsureSchema(ctx, db); err != nil {
-		t.Fatalf("EnsureSchema: %v", err)
 	}
 	if err := access.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("Ensure access schema: %v", err)
