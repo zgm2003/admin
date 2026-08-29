@@ -309,6 +309,8 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"DELETE /api/admin/v1/sessions/:id":             1,
 		"DELETE /api/admin/v1/sessions":                 1,
 		"GET /api/admin/v1/operation-logs":              1,
+		"GET /api/admin/v1/users/login-logs":            1,
+		"GET /api/admin/v1/users/login-logs/page-init":  1,
 	}
 	remaining, unexpected := routeSetDiff(router.Routes(), want)
 	if len(unexpected) != 0 {
