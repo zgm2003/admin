@@ -107,5 +107,7 @@ func registerTestRoutes(router *gin.Engine, profile profileService, password pas
 	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(profile, password, actor), func(c *gin.Context) {
 		identity(c)
 		pass(c)
+	}, func(code string) gin.HandlerFunc {
+		return func(c *gin.Context) { c.Set("permission", code); c.Next() }
 	})
 }

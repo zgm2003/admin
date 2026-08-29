@@ -2,9 +2,9 @@ package profile
 
 import "github.com/gin-gonic/gin"
 
-func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc) {
+func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
 	accountRoutes := routes.Group("/account")
-	accountRoutes.GET("/profile", authenticate, handler.CurrentProfile)
-	accountRoutes.PUT("/profile", authenticate, handler.UpdateProfile)
-	accountRoutes.POST("/password", authenticate, handler.ChangePassword)
+	accountRoutes.GET("/profile", authenticate, requirePermission(PermissionList), handler.CurrentProfile)
+	accountRoutes.PUT("/profile", authenticate, requirePermission(PermissionUpdate), handler.UpdateProfile)
+	accountRoutes.POST("/password", authenticate, requirePermission(PermissionPasswordUpdate), handler.ChangePassword)
 }

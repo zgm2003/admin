@@ -36,6 +36,8 @@ var routeRules = []RouteRule{
 	{http.MethodPut, "/api/admin/v1/users/:id/roles", "user", "user.roles.update", true, true},
 	{http.MethodDelete, "/api/admin/v1/sessions/:id", "session", "session.revoke", false, true},
 	{http.MethodDelete, "/api/admin/v1/sessions", "session", "session.revoke.bulk", true, true},
+	{http.MethodPut, "/api/admin/v1/account/profile", "account", "account.profile.update", true, true},
+	{http.MethodPost, "/api/admin/v1/account/password", "account", "account.password.change", true, true},
 }
 
 func FindRule(method, route string) (RouteRule, bool) {

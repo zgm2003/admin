@@ -37,6 +37,8 @@ describe('router', () => {
 		expect(router.resolve('/access/menus').meta.requiresAuth).toBe(true)
 		expect(router.resolve('/access/menus').meta.requiredPermission).toBe('rbac:menu:list')
 		expect(router.resolve('/access/menus').name).toBe('access-menus')
+    expect(router.hasRoute('account-profile')).toBe(false)
+    expect(router.resolve('/account/profile').matched).toHaveLength(0)
     expect(router.hasRoute('admin-layout')).toBe(true)
   })
 

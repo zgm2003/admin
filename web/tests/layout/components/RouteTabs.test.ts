@@ -20,7 +20,7 @@ const routes: RouteRecordRaw[] = [
     component: views,
 		meta: { requiresAuth: true, i18nKey: 'navigation.dashboard', affix: true },
   },
-  {
+	{
 		path: '/account/users',
 		name: 'account-users',
     component: views,
@@ -35,6 +35,12 @@ const routes: RouteRecordRaw[] = [
 	{
 		path: '/system/operation-logs',
 		name: 'system-operation-logs',
+		component: views,
+		meta: { requiresAuth: true, i18nKey: 'navigation.main' },
+	},
+	{
+		path: '/account/profile',
+		name: 'account-profile',
 		component: views,
 		meta: { requiresAuth: true, i18nKey: 'navigation.main' },
 	},
@@ -83,6 +89,18 @@ describe('RouteTabs', () => {
 		await router.push('/system/operation-logs')
 		await flushPromises()
 		expect(wrapper.get('[data-testid="route-tab"][data-path="/system/operation-logs"]').text()).toContain('操作日志')
+	})
+
+	it('uses the hidden profile access node metadata without a route special case', async () => {
+		const tree = accessTree()
+		const account = tree[0]
+		if (account === undefined) throw new Error('missing account fixture')
+		account.children.push(page('account:profile:list', '/account/profile', 'account/profile', 'layout.account.profile'))
+		account.children[1].isHidden = YesNo.Yes
+		const { wrapper, router } = await mountTabs('/dashboard', tree)
+		await router.push('/account/profile')
+		await flushPromises()
+		expect(wrapper.get('[data-testid="route-tab"][data-path="/account/profile"]').text()).toContain('个人中心')
 	})
 
 	it('renders an unknown access-tree i18n key instead of inventing a title', async () => {

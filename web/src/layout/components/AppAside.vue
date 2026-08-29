@@ -28,6 +28,7 @@ const route = useRoute()
 const router = useRouter()
 const access = useAccessStore()
 const avatarText = computed(() => props.username.slice(0, 1).toUpperCase() || 'A')
+const canOpenProfile = computed(() => access.hasPermission('account:profile:list'))
 
 function handleAccountCommand(command: string | number | object): void {
   if (command === 'logout') {
@@ -35,7 +36,7 @@ function handleAccountCommand(command: string | number | object): void {
     return
   }
   if (command === 'profile') {
-    void router.push({ name: 'account-profile' })
+    void router.push('/account/profile')
     return
   }
   throw new Error(`Unsupported account command: ${String(command)}`)
@@ -91,7 +92,7 @@ function handleAccountCommand(command: string | number | object): void {
         </button>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item data-testid="aside-account-profile" :icon="User" command="profile">
+            <el-dropdown-item v-if="canOpenProfile" data-testid="aside-account-profile" :icon="User" command="profile">
               {{ t('layout.account.profile') }}
             </el-dropdown-item>
             <el-dropdown-item

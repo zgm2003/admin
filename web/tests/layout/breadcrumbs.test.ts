@@ -52,6 +52,16 @@ describe('resolveBreadcrumbs', () => {
 		])
 	})
 
+	it('resolves the hidden profile breadcrumb from the access tree', () => {
+		const root = accountDirectory()
+		root.children = [pageNode('account:profile:list', '/account/profile', 'account/profile', 'layout.account.profile')]
+		root.children[0].isHidden = YesNo.Yes
+		expect(resolveBreadcrumbs('/account/profile', [root])).toEqual([
+			{ path: null, i18nKey: 'navigation.account' },
+			{ path: '/account/profile', i18nKey: 'layout.account.profile' },
+		])
+	})
+
   it('returns null for an authenticated path missing from the access tree', () => {
     expect(resolveBreadcrumbs('/system/missing', [systemDirectory()])).toBeNull()
   })

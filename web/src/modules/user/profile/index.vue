@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -13,6 +13,8 @@ const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
 const access = useAccessStore()
+const canUpdateProfile = computed(() => access.hasPermission('account:profile:update'))
+const canUpdatePassword = computed(() => access.hasPermission('account:password:update'))
 const loading = ref(false)
 const savingProfile = ref(false)
 const changingPassword = ref(false)
@@ -113,7 +115,7 @@ void loadProfile()
                 </el-form-item>
               </el-col>
             </el-row>
-            <div class="account-profile__actions"><el-button type="primary" :loading="savingProfile" @click="saveProfile">{{ t('account.profile.save') }}</el-button></div>
+            <div v-if="canUpdateProfile" class="account-profile__actions"><el-button data-testid="account-profile-save" type="primary" :loading="savingProfile" @click="saveProfile">{{ t('account.profile.save') }}</el-button></div>
           </el-form>
         </el-card>
       </el-col>
@@ -125,7 +127,7 @@ void loadProfile()
             <el-form-item :label="t('account.password.current')"><el-input v-model="passwordForm.currentPassword" type="password" show-password autocomplete="current-password" /></el-form-item>
             <el-form-item :label="t('account.password.new')"><el-input v-model="passwordForm.newPassword" type="password" show-password autocomplete="new-password" /></el-form-item>
             <el-form-item :label="t('account.password.confirm')"><el-input v-model="passwordForm.confirmPassword" type="password" show-password autocomplete="new-password" /></el-form-item>
-            <div class="account-profile__actions"><el-button type="primary" :loading="changingPassword" @click="submitPassword">{{ t('account.password.submit') }}</el-button></div>
+            <div v-if="canUpdatePassword" class="account-profile__actions"><el-button data-testid="account-password-submit" type="primary" :loading="changingPassword" @click="submitPassword">{{ t('account.password.submit') }}</el-button></div>
           </el-form>
         </el-card>
       </el-col>

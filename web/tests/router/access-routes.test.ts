@@ -10,6 +10,7 @@ const TestLayout = { template: '<router-view />' }
 const TestView = { template: '<div>test view</div>' }
 const testViews: PageModuleMap = {
 	'../modules/user/account/index.vue': async () => ({ default: TestView }),
+	'../modules/user/profile/index.vue': async () => ({ default: TestView }),
 	'../modules/user/session/index.vue': async () => ({ default: TestView }),
 	'../modules/auth/platform/index.vue': async () => ({ default: TestView }),
 	'../modules/rbac/menu/index.vue': async () => ({ default: TestView }),
@@ -67,7 +68,7 @@ describe('access route registration', () => {
 		expect(accessRoutes(router)).toHaveLength(0)
 	})
 
-  it('allows two URLs to reuse one component and ignores hidden state', () => {
+	it('allows two URLs to reuse one component and ignores hidden state', () => {
     const router = testRouter()
     const hidden = page('system:account:list', '/system/accounts', 'account/users')
     hidden.isHidden = YesNo.Yes
@@ -128,6 +129,20 @@ describe('access route registration', () => {
 			directory('access', [page('rbac:menu:list', '/access/menus', 'access/menus')]),
 		], testViews)).toThrow(ProtocolError)
 		expect(accessRoutes(router)).toHaveLength(0)
+	})
+
+	it('registers the hidden profile page dynamically with its access route name', () => {
+		const router = testRouter()
+		const profile = page('account:profile:list', '/account/profile', 'account/profile')
+		profile.i18nKey = 'layout.account.profile'
+		profile.isHidden = YesNo.Yes
+		const cleanup = registerAccessRoutes(router, [directory('account', [profile])], testViews)
+
+		expect(router.hasRoute('account-profile')).toBe(false)
+		expect(router.hasRoute('access:account:profile:list')).toBe(true)
+		expect(router.resolve('/account/profile').name).toBe('access:account:profile:list')
+		cleanup()
+		expect(router.resolve('/account/profile').matched).toHaveLength(0)
 	})
 
   it('removes routes in reverse when addRoute fails partway through', () => {
@@ -214,6 +229,7 @@ function page(code: string, path: string, componentPath: string): AccessMenuNode
 
 function pageI18nKey(code: string): string {
 	const keys: Readonly<Record<string, string>> = {
+		'account:profile:list': 'layout.account.profile',
 		'account:user:list': 'navigation.accountUsers',
 		'audit:operation-log:list': 'navigation.systemOperationLogs',
 		'auth:platform:list': 'navigation.accessAuthPlatforms',

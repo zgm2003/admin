@@ -38,7 +38,13 @@ func TestRulesMatchOnlyExplicitMutations(t *testing.T) {
 	if rule, ok := FindRule(http.MethodDelete, "/api/admin/v1/sessions/:id"); !ok || rule.Action != "session.revoke" {
 		t.Fatalf("session revoke rule = %+v,%v", rule, ok)
 	}
-	for _, route := range []string{"/api/admin/v1/users", "/api/v1/access", "/api/admin/v1/users/:id/roles"} {
+	if rule, ok := FindRule(http.MethodPut, "/api/admin/v1/account/profile"); !ok || rule.Action != "account.profile.update" || !rule.CaptureRequest || !rule.CaptureResponse {
+		t.Fatalf("profile update rule = %+v,%v", rule, ok)
+	}
+	if rule, ok := FindRule(http.MethodPost, "/api/admin/v1/account/password"); !ok || rule.Action != "account.password.change" || !rule.CaptureRequest || !rule.CaptureResponse {
+		t.Fatalf("password update rule = %+v,%v", rule, ok)
+	}
+	for _, route := range []string{"/api/admin/v1/users", "/api/v1/access", "/api/admin/v1/users/:id/roles", "/api/admin/v1/account/profile"} {
 		if _, ok := FindRule(http.MethodGet, route); ok {
 			t.Fatalf("read route %s was registered as operation", route)
 		}
@@ -46,13 +52,13 @@ func TestRulesMatchOnlyExplicitMutations(t *testing.T) {
 }
 
 func TestSanitizeSummaryMasksSecrets(t *testing.T) {
-	raw := []byte(`{"password":"p","confirmPassword":"cp","accessToken":"at","refreshToken":"rt","authorization":"a","cookie":"c","secret":"s","key":"k","visible":"v","nested":[{"password":"nested"}]}`)
+	raw := []byte(`{"password":"p","currentPassword":"current","newPassword":"new","confirmPassword":"cp","accessToken":"at","refreshToken":"rt","authorization":"a","cookie":"c","secret":"s","key":"k","visible":"v","nested":[{"password":"nested"}]}`)
 	summary, err := SanitizeJSON(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := string(summary)
-	for _, value := range []string{`"password":"p"`, `"confirmPassword":"cp"`, `"accessToken":"at"`, `"refreshToken":"rt"`, `"authorization":"a"`, `"cookie":"c"`, `"secret":"s"`, `"key":"k"`} {
+	for _, value := range []string{`"password":"p"`, `"currentPassword":"current"`, `"newPassword":"new"`, `"confirmPassword":"cp"`, `"accessToken":"at"`, `"refreshToken":"rt"`, `"authorization":"a"`, `"cookie":"c"`, `"secret":"s"`, `"key":"k"`} {
 		if strings.Contains(text, value) {
 			t.Fatalf("sensitive value %s leaked in %s", value, text)
 		}

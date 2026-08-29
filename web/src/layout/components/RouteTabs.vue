@@ -65,11 +65,6 @@ function getCurrentTab(): RouteTab | null {
 	if (menuPage !== null) {
 		return { path: route.path, i18nKey: menuPage.i18nKey, affix: false }
 	}
-	if (route.path === '/account/profile') {
-		const i18nKey = route.meta.i18nKey
-		if (i18nKey === undefined) throw new Error(`Route ${route.fullPath} must declare i18nKey`)
-		return { path: route.path, i18nKey, affix: false }
-	}
 	if (route.path !== '/dashboard') return null
 	const matched = [...route.matched].reverse().find((record) => record.name === 'dashboard')
   if (matched === undefined) {
