@@ -1,6 +1,6 @@
 # Admin 模块化架构重构设计
 
-状态：主体架构已实施，自动化验证已完成，等待维护者人工 UI 验收
+状态：已实施并完成验证
 
 日期：2026-08-29
 
@@ -608,3 +608,12 @@ operation log task handler -> operationlog service -> repository -> audit_operat
 
 任何实现过程中发现的业务行为变化、字段新增或未来 COS/邮件/短信/AI/支付接入，必须另
 开对应 spec，不得借本次目录重构顺便扩大范围。
+
+## 15. 实施验证记录
+
+- 人工执行 `docs/database/2026-08-29-admin-modular-architecture.sql` 前已备份本地 PostgreSQL `admin` 数据库；脚本在真实库中幂等执行成功。
+- 真实库验证结果：`user_account=2`、`user_profile=1`、`user_session=25`、`user_login_log=0`、`audit_operation_log=120`；账号、会话和审计历史数据保留。
+- `go fmt ./...`、`go vet ./...`、`go test ./... -count=1`、`go build ./...` 全部通过。
+- `pnpm vitest run --pool=threads --maxWorkers=1 --testTimeout=10000 --hookTimeout=10000` 通过 51 个测试文件、358 个测试；`pnpm build` 通过。
+- API/Worker 启动源码未发现 DDL、seed、回填、foundation 删除或 Redis 清理入口；Worker 仅保留操作日志任务消费。
+- 当前目录树、`/api/v1` 与 `/api/admin/v1` 路由边界、登录日志、RBAC 平台隔离和前端 RouterTabs 行为按既定清单完成。
