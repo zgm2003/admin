@@ -1,7 +1,7 @@
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { AccessMenuNode } from '@src/api/access'
+import type { AccessMenuNode } from '@src/api/rbac/access'
 import { YesNo } from '@src/enums/yes-no'
 import { registerAccessRoutes, type PageModuleMap } from '@src/router/access-routes'
 import { ProtocolError } from '@src/types/http'
@@ -9,12 +9,12 @@ import { ProtocolError } from '@src/types/http'
 const TestLayout = { template: '<router-view />' }
 const TestView = { template: '<div>test view</div>' }
 const testViews: PageModuleMap = {
-  '../views/account/users/index.vue': async () => ({ default: TestView }),
-	'../views/account/sessions/index.vue': async () => ({ default: TestView }),
-	'../views/access/auth-platforms/index.vue': async () => ({ default: TestView }),
-	'../views/access/menus/index.vue': async () => ({ default: TestView }),
-  '../views/access/roles/index.vue': async () => ({ default: TestView }),
-	'../views/system/operation-logs/index.vue': async () => ({ default: TestView }),
+	'../modules/user/account/index.vue': async () => ({ default: TestView }),
+	'../modules/user/session/index.vue': async () => ({ default: TestView }),
+	'../modules/auth/platform/index.vue': async () => ({ default: TestView }),
+	'../modules/rbac/menu/index.vue': async () => ({ default: TestView }),
+	'../modules/rbac/role/index.vue': async () => ({ default: TestView }),
+	'../modules/audit/operationlog/index.vue': async () => ({ default: TestView }),
 }
 
 describe('access route registration', () => {

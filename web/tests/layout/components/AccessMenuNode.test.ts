@@ -4,7 +4,7 @@ import { defineComponent, type PropType } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { AccessMenuNode as AccessMenuNodeDTO } from '@src/api/access'
+import type { AccessMenuNode as AccessMenuNodeDTO } from '@src/api/rbac/access'
 import { DIcon } from '@src/components/DIcon'
 import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'

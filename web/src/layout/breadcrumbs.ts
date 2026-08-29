@@ -1,4 +1,4 @@
-import type { AccessMenuNode } from '../api/access'
+import type { AccessMenuNode } from '../api/rbac/access'
 
 export interface HeaderBreadcrumb {
   path: string | null

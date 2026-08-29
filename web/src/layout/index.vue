@@ -4,7 +4,7 @@ import { ElMessage } from "element-plus";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
-import { logout } from "../api/auth";
+import { logout } from "../api/auth/login";
 import { useAccessStore } from "../store/access";
 import { useAuthStore } from "../store/auth";
 import { useUIPreferencesStore } from "../store/ui-preferences";

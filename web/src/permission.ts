@@ -1,6 +1,6 @@
 import type { Router } from 'vue-router'
 
-import { getCurrentUser, refresh } from './api/auth'
+import { getCurrentUser, refresh } from './api/auth/login'
 import { appI18n } from './i18n'
 import { registerAccessRoutes } from './router/access-routes'
 import { pinia } from './store'

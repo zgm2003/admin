@@ -3,7 +3,7 @@ import ElementPlus from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { logout } from '@src/api/auth'
+import { logout } from '@src/api/auth/login'
 import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
 import { pinia } from '@src/store'
@@ -12,7 +12,7 @@ import { useAuthStore } from '@src/store/auth'
 import { useUIPreferencesStore } from '@src/store/ui-preferences'
 import Layout from '@src/layout/index.vue'
 
-vi.mock('@src/api/auth', () => ({ logout: vi.fn() }))
+vi.mock('@src/api/auth/login', () => ({ logout: vi.fn() }))
 
 const logoutMock = vi.mocked(logout)
 let layoutRenderCount = 0

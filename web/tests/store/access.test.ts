@@ -1,14 +1,14 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getAccess } from '@src/api/access'
-import type { AccessSnapshot } from '@src/api/access'
+import { getAccess } from '@src/api/rbac/access'
+import type { AccessSnapshot } from '@src/api/rbac/access'
 import { setLocale } from '@src/i18n'
 import { ApiError, ProtocolError } from '@src/types/http'
 import { useAccessStore } from '@src/store/access'
 import { YesNo } from '@src/enums/yes-no'
 
-vi.mock('@src/api/access', () => ({ getAccess: vi.fn() }))
+vi.mock('@src/api/rbac/access', () => ({ getAccess: vi.fn() }))
 
 const getAccessMock = vi.mocked(getAccess)
 

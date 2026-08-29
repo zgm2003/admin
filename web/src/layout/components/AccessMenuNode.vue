@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import type { AccessMenuNode as AccessMenuNodeDTO } from '../../api/access'
+import type { AccessMenuNode as AccessMenuNodeDTO } from '../../api/rbac/access'
 import { DIcon } from '../../components/DIcon'
 import { YesNo } from '../../enums/yes-no'
 

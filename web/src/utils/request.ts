@@ -7,7 +7,7 @@ import axios, {
 } from 'axios'
 import { ElNotification } from 'element-plus'
 
-import type { AccessCredential } from '../api/auth'
+import type { AccessCredential } from '../api/auth/login'
 import { authPlatform } from '../auth/platform'
 import { readDeviceID } from '../auth/device-id'
 import { appI18n, readLocale } from '../i18n'

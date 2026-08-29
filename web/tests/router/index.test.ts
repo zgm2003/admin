@@ -1,9 +1,9 @@
 import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getAccess } from '@src/api/access'
-import type { AccessSnapshot } from '@src/api/access'
-import { getCurrentUser, refresh } from '@src/api/auth'
+import { getAccess } from '@src/api/rbac/access'
+import type { AccessSnapshot } from '@src/api/rbac/access'
+import { getCurrentUser, refresh } from '@src/api/auth/login'
 import { installPermissionGuard } from '@src/permission'
 import { pinia } from '@src/store'
 import { useAccessStore } from '@src/store/access'
@@ -12,8 +12,8 @@ import { ApiError } from '@src/types/http'
 import { createAppRouter } from '@src/router/index'
 import { YesNo } from '@src/enums/yes-no'
 
-vi.mock('@src/api/auth', () => ({ refresh: vi.fn(), getCurrentUser: vi.fn() }))
-vi.mock('@src/api/access', () => ({ getAccess: vi.fn() }))
+vi.mock('@src/api/auth/login', () => ({ refresh: vi.fn(), getCurrentUser: vi.fn() }))
+vi.mock('@src/api/rbac/access', () => ({ getAccess: vi.fn() }))
 const refreshMock = vi.mocked(refresh)
 const getCurrentUserMock = vi.mocked(getCurrentUser)
 const getAccessMock = vi.mocked(getAccess)
