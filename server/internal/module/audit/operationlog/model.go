@@ -71,7 +71,7 @@ type OperationLog struct {
 	RequestID    string      `gorm:"column:request_id;type:varchar(128);not null"`
 	UserID       *int64      `gorm:"column:user_id"`
 	SessionID    *int64      `gorm:"column:session_id"`
-	Platform     *string     `gorm:"column:platform;type:varchar(49)"`
+	PlatformID   *int64      `gorm:"column:platform_id"`
 	Method       string      `gorm:"column:method;type:varchar(10);not null"`
 	Route        string      `gorm:"column:route;type:varchar(255);not null"`
 	Module       string      `gorm:"column:module;type:varchar(64);not null"`

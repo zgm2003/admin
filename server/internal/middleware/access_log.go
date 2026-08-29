@@ -21,6 +21,7 @@ type accessLogOperation struct {
 }
 
 type authenticationLog struct {
+	platformID    int64
 	platform      string
 	userID        int64
 	sessionID     int64
@@ -30,9 +31,10 @@ type authenticationLog struct {
 }
 
 type AuthenticationLogInfo struct {
-	Platform  string
-	UserID    int64
-	SessionID int64
+	PlatformID int64
+	Platform   string
+	UserID     int64
+	SessionID  int64
 }
 
 type AccessLogOperationInfo struct {
@@ -46,7 +48,7 @@ func GetAuthenticationLog(context *gin.Context) (AuthenticationLogInfo, bool) {
 	if !ok {
 		return AuthenticationLogInfo{}, false
 	}
-	return AuthenticationLogInfo{Platform: value.platform, UserID: value.userID, SessionID: value.sessionID}, true
+	return AuthenticationLogInfo{PlatformID: value.platformID, Platform: value.platform, UserID: value.userID, SessionID: value.sessionID}, true
 }
 
 func GetAccessLogOperation(context *gin.Context) (AccessLogOperationInfo, bool) {
@@ -65,8 +67,8 @@ func SetAccessLogOperation(context *gin.Context, operation string, actorUserID, 
 	context.Set(accessLogOperationKey, accessLogOperation{operation: operation, actorUserID: actorUserID, targetUserID: targetUserID})
 }
 
-func SetAuthenticationLog(context *gin.Context, platform string, userID, sessionID int64) {
-	value := authenticationLog{platform: platform, userID: userID, sessionID: sessionID}
+func SetAuthenticationLog(context *gin.Context, platformID int64, platform string, userID, sessionID int64) {
+	value := authenticationLog{platformID: platformID, platform: platform, userID: userID, sessionID: sessionID}
 	if current, ok := authenticationLogFromContext(context); ok {
 		value.cacheKind = current.cacheKind
 		value.cacheResult = current.cacheResult
@@ -78,6 +80,7 @@ func SetAuthenticationLog(context *gin.Context, platform string, userID, session
 func SetCacheLog(context *gin.Context, kind, result string, accessVersion int64) {
 	value := authenticationLog{cacheKind: kind, cacheResult: result, accessVersion: accessVersion}
 	if current, ok := authenticationLogFromContext(context); ok {
+		value.platformID = current.platformID
 		value.platform = current.platform
 		value.userID = current.userID
 		value.sessionID = current.sessionID

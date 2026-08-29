@@ -25,7 +25,7 @@ type TaskPayload struct {
 	RequestID     string    `json:"requestId"`
 	UserID        *int64    `json:"userId"`
 	SessionID     *int64    `json:"sessionId"`
-	Platform      *string   `json:"platform"`
+	PlatformID    *int64    `json:"platformId"`
 	Method        string    `json:"method"`
 	Route         string    `json:"route"`
 	Module        string    `json:"module"`
@@ -98,9 +98,9 @@ func Middleware(logger *slog.Logger, enqueuer Enqueuer) gin.HandlerFunc {
 			value := authInfo.SessionID
 			payload.SessionID = &value
 		}
-		if authInfo.Platform != "" {
-			value := authInfo.Platform
-			payload.Platform = &value
+		if authInfo.PlatformID > 0 {
+			value := authInfo.PlatformID
+			payload.PlatformID = &value
 		}
 		if statusCode < http.StatusBadRequest {
 			payload.IsSuccess = 1

@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
+	"admin/server/internal/module/audit/operationlog"
 	"admin/server/internal/module/auth"
 	"admin/server/internal/module/authclient"
 	"admin/server/internal/module/authplatform"
 	"admin/server/internal/module/health"
-	"admin/server/internal/module/operationlog"
 	"admin/server/internal/module/rbac/access"
 	"admin/server/internal/module/rbac/menu"
 	"admin/server/internal/module/rbac/role"

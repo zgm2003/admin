@@ -59,7 +59,7 @@ func TestAccessLogContainsSafeAuthenticationAndCacheFields(t *testing.T) {
 	router := gin.New()
 	router.Use(projectmiddleware.AccessLog(logger))
 	router.GET("/access", func(context *gin.Context) {
-		projectmiddleware.SetAuthenticationLog(context, "admin", 7, 11)
+		projectmiddleware.SetAuthenticationLog(context, 17, "admin", 7, 11)
 		projectmiddleware.SetCacheLog(context, "accessSnapshot", "hit", 4)
 		context.Status(http.StatusNoContent)
 	})

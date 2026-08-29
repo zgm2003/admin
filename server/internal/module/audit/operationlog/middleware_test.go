@@ -125,6 +125,27 @@ func TestMiddlewareGeneratesDistinctEventIDsForRepeatedRequestID(t *testing.T) {
 	}
 }
 
+func TestMiddlewareUsesPlatformIDFromAuthenticationContext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	enqueuer := &failingEnqueuer{}
+	router := gin.New()
+	router.Use(projectmiddleware.RequestID(), Middleware(slog.Default(), enqueuer))
+	router.PUT("/api/admin/v1/users/:id", func(context *gin.Context) {
+		projectmiddleware.SetAuthenticationLog(context, 17, "admin", 7, 11)
+		context.JSON(http.StatusOK, gin.H{"code": 0, "data": nil, "message": "ok"})
+	})
+
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/api/admin/v1/users/7", strings.NewReader(`{"username":"member"}`)))
+
+	if len(enqueuer.payloads) != 1 {
+		t.Fatalf("payload count = %d, want 1", len(enqueuer.payloads))
+	}
+	platformID := enqueuer.payloads[0].PlatformID
+	if platformID == nil || *platformID != 17 {
+		t.Fatalf("platform ID = %v, want 17", platformID)
+	}
+}
+
 func TestSanitizeSummaryLimitReturnsBoundedValidJSON(t *testing.T) {
 	raw := []byte(`{"visible":"` + strings.Repeat("界", maxSummaryBytes) + `"}`)
 	summary, err := SanitizeJSON(raw)

@@ -103,6 +103,9 @@ func validateTaskPayload(payload TaskPayload) error {
 	if payload.LatencyMs < 0 {
 		return fmt.Errorf("latencyMs is invalid")
 	}
+	if payload.PlatformID != nil && *payload.PlatformID < 1 {
+		return fmt.Errorf("platformId is invalid")
+	}
 	if payload.CreatedAt.IsZero() {
 		return fmt.Errorf("createdAt is required")
 	}

@@ -57,7 +57,7 @@ func Authenticate(service authenticationService) gin.HandlerFunc {
 			return
 		}
 		context.Set(identityContextKey, identity)
-		projectmiddleware.SetAuthenticationLog(context, identity.Platform, identity.UserID, identity.SessionID)
+		projectmiddleware.SetAuthenticationLog(context, identity.PlatformID, identity.Platform, identity.UserID, identity.SessionID)
 		projectmiddleware.SetCacheLog(context, "session", identity.CacheResult, 0)
 		context.Next()
 	}
