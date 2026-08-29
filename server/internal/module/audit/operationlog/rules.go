@@ -43,6 +43,10 @@ var routeRules = []RouteRule{
 	{http.MethodPatch, "/api/admin/v1/storage/cos-configs/:id/status", "storage", "storage.cos-config.status", true, true},
 	{http.MethodPost, "/api/admin/v1/storage/cos-configs/:id/test", "storage", "storage.cos-config.test", false, true},
 	{http.MethodDelete, "/api/admin/v1/storage/cos-configs/:id", "storage", "storage.cos-config.delete", false, true},
+	{http.MethodPost, "/api/admin/v1/storage/upload-rules", "storage", "storage.upload-rule.create", true, true},
+	{http.MethodPut, "/api/admin/v1/storage/upload-rules/:id", "storage", "storage.upload-rule.update", true, true},
+	{http.MethodPatch, "/api/admin/v1/storage/upload-rules/:id/status", "storage", "storage.upload-rule.status", true, true},
+	{http.MethodDelete, "/api/admin/v1/storage/upload-rules/:id", "storage", "storage.upload-rule.delete", false, true},
 }
 
 func FindRule(method, route string) (RouteRule, bool) {

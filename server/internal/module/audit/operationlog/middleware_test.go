@@ -106,6 +106,23 @@ func TestCOSConfigRulesAndSanitizerNeverCaptureCredentials(t *testing.T) {
 	}
 }
 
+func TestUploadRuleMutationRulesExcludeCredentialIssuance(t *testing.T) {
+	for _, test := range []struct{ method, route, action string }{
+		{http.MethodPost, "/api/admin/v1/storage/upload-rules", "storage.upload-rule.create"},
+		{http.MethodPut, "/api/admin/v1/storage/upload-rules/:id", "storage.upload-rule.update"},
+		{http.MethodPatch, "/api/admin/v1/storage/upload-rules/:id/status", "storage.upload-rule.status"},
+		{http.MethodDelete, "/api/admin/v1/storage/upload-rules/:id", "storage.upload-rule.delete"},
+	} {
+		rule, ok := FindRule(test.method, test.route)
+		if !ok || rule.Action != test.action || rule.Module != "storage" {
+			t.Fatalf("rule=%+v ok=%v", rule, ok)
+		}
+	}
+	if _, ok := FindRule(http.MethodPost, "/api/v1/storage/upload-credentials"); ok {
+		t.Fatal("credential issuance must not be operation logged")
+	}
+}
+
 func TestMiddlewareKeepsBusinessStatusWhenEnqueueFails(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	var logs bytes.Buffer
