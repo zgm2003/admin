@@ -10,8 +10,9 @@ import (
 	"time"
 
 	"admin/server/internal/database"
-	"admin/server/internal/module/auth"
-	"admin/server/internal/module/authplatform"
+	authschema "admin/server/internal/module/auth"
+	"admin/server/internal/module/auth/login"
+	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/rbac/menu"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/shared/yesno"
@@ -176,13 +177,13 @@ func testPlatform(code, name string, now time.Time) authplatform.Platform {
 
 func preparePlatformSessionSchema(t *testing.T, db *gorm.DB, ctx context.Context) {
 	t.Helper()
-	if err := auth.PrepareSessionSchema(ctx, db); err != nil {
+	if err := authschema.PrepareSessionSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.AutoMigrate(ctx, db, &user.User{}, &auth.Session{}, &authplatform.Platform{}, &menu.Menu{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := auth.EnsureSchema(ctx, db); err != nil {
+	if err := authschema.EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	if err := authplatform.EnsureSchema(ctx, db); err != nil {

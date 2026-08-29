@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sort"
 
-	"admin/server/internal/module/authclient"
+	"admin/server/internal/module/auth/client"
 )
 
 const (

@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"admin/server/internal/database"
-	"admin/server/internal/module/auth"
-	"admin/server/internal/module/authplatform"
-	"admin/server/internal/module/authstate"
+	"admin/server/internal/module/auth/login"
+	"admin/server/internal/module/auth/platform"
+	"admin/server/internal/module/auth/state"
 	"admin/server/internal/module/rbac/menu"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"

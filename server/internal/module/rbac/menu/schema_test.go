@@ -9,7 +9,7 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	"admin/server/internal/database/testschema"
-	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/rbac/menu"
 	"admin/server/internal/module/rbac/role"
 	"github.com/joho/godotenv"
@@ -150,7 +150,7 @@ func openMenuSchema(t *testing.T) (*database.Connection, context.Context) {
 	if testing.Short() {
 		t.Skip("PostgreSQL integration test")
 	}
-	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+	if err := godotenv.Load("../../../../.env"); err != nil && !os.IsNotExist(err) {
 		t.Fatalf("load server .env: %v", err)
 	}
 	settings, err := config.LoadWorker(os.LookupEnv)

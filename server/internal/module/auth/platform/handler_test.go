@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/authclient"
-	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/auth/client"
+	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
 	"github.com/gin-gonic/gin"

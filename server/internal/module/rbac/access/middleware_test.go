@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"admin/server/internal/module/auth"
-	"admin/server/internal/module/authclient"
+	"admin/server/internal/module/auth/client"
+	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/rbac/access"
 	"admin/server/internal/shared/apperror"
 	"github.com/gin-gonic/gin"

@@ -9,7 +9,7 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
-	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/auth/platform"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
@@ -33,7 +33,7 @@ func openMenuDatabase(t *testing.T) (*gorm.DB, context.Context) {
 	if testing.Short() {
 		t.Skip("PostgreSQL integration test")
 	}
-	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+	if err := godotenv.Load("../../../../.env"); err != nil && !os.IsNotExist(err) {
 		t.Fatalf("load server .env: %v", err)
 	}
 	settings, err := config.LoadWorker(os.LookupEnv)

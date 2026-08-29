@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/rbac/menu"
 	"admin/server/internal/module/rbac/role"
 	"admin/server/internal/shared/yesno"

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/auth"
+	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/rbac/state"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"

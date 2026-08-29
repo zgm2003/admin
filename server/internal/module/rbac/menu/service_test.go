@@ -725,7 +725,7 @@ func openMenuTestRedis(t *testing.T) *projectredis.Client {
 	if testing.Short() {
 		t.Skip("Redis integration test")
 	}
-	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+	if err := godotenv.Load("../../../../.env"); err != nil && !os.IsNotExist(err) {
 		t.Fatalf("load server .env: %v", err)
 	}
 	settings, err := config.LoadWorker(os.LookupEnv)

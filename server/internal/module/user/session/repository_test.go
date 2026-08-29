@@ -12,8 +12,8 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	"admin/server/internal/database/testschema"
-	"admin/server/internal/module/authclient"
-	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/auth/client"
+	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/rbac/access"
 	"admin/server/internal/module/rbac/role"
 	user "admin/server/internal/module/user/account"
@@ -303,7 +303,7 @@ func openAuthenticationSchema(t *testing.T) (*gorm.DB, context.Context) {
 	if testing.Short() {
 		t.Skip("PostgreSQL integration test")
 	}
-	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+	if err := godotenv.Load("../../../../.env"); err != nil && !os.IsNotExist(err) {
 		t.Fatalf("load server .env: %v", err)
 	}
 	settings, err := config.LoadWorker(os.LookupEnv)

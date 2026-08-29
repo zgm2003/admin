@@ -85,7 +85,7 @@ func openAccessRedis(t *testing.T) *projectredis.Client {
 	if testing.Short() {
 		t.Skip("Redis integration test")
 	}
-	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+	if err := godotenv.Load("../../../../.env"); err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
 	settings, err := config.LoadWorker(os.LookupEnv)

@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"admin/server/internal/module/authclient"
+	"admin/server/internal/module/auth/client"
 	"github.com/gin-gonic/gin"
 )
 

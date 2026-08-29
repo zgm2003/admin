@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"admin/server/internal/module/authstate"
+	"admin/server/internal/module/auth/state"
 	"admin/server/internal/module/rbac/role"
 	"admin/server/internal/module/rbac/state"
 	"admin/server/internal/shared/apperror"

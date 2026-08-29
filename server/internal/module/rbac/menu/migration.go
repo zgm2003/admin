@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )

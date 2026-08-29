@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"admin/server/internal/module/authclient"
+	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/rbac/state"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/yesno"

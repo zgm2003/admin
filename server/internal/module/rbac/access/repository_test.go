@@ -10,7 +10,7 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
-	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/rbac/access"
 	"admin/server/internal/module/rbac/menu"
 	"admin/server/internal/module/rbac/role"
@@ -247,7 +247,7 @@ func openIsolatedAccessDatabase(t *testing.T) (*database.Connection, context.Con
 	if testing.Short() {
 		t.Skip("PostgreSQL integration test")
 	}
-	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+	if err := godotenv.Load("../../../../.env"); err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
 	settings, err := config.LoadWorker(os.LookupEnv)

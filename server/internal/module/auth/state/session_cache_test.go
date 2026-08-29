@@ -1,4 +1,4 @@
-package auth
+package authstate
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"admin/server/internal/config"
-	"admin/server/internal/module/authstate"
 	projectredis "admin/server/internal/redis"
 	"github.com/joho/godotenv"
 )
@@ -23,7 +22,7 @@ func openAuthRedis(t *testing.T) *projectredis.Client {
 	if testing.Short() {
 		t.Skip("Redis integration test")
 	}
-	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+	if err := godotenv.Load("../../../../.env"); err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
 	settings, err := config.LoadWorker(os.LookupEnv)
@@ -40,16 +39,16 @@ func openAuthRedis(t *testing.T) *projectredis.Client {
 
 func TestSessionCachePublishesOnlyAgainstMatchingReadyStates(t *testing.T) {
 	client := openAuthRedis(t)
-	states := authstate.NewStore(client)
+	states := NewStore(client)
 	cache := NewSessionCache(client)
 	ctx := context.Background()
 	keys := []string{
-		authstate.UserStateKey(73001), authstate.SessionsStateKey("admin", 73001), SessionKey("admin", 73002),
+		UserStateKey(73001), SessionsStateKey("admin", 73001), SessionKey("admin", 73002),
 	}
 	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), keys) })
 	_ = client.DeleteMany(ctx, keys)
-	userFact := authstate.UserFact{UserID: 73001, Generation: "user-generation", IsEnabled: true}
-	sessionsFact := authstate.SessionsFact{Platform: "admin", UserID: 73001, Generation: "sessions-generation"}
+	userFact := UserFact{UserID: 73001, Generation: "user-generation", IsEnabled: true}
+	sessionsFact := SessionsFact{Platform: "admin", UserID: 73001, Generation: "sessions-generation"}
 	_, _, _ = states.InstallUserReadyIfMissing(ctx, userFact)
 	_, _, _ = states.InstallSessionsReadyIfMissing(ctx, sessionsFact)
 
@@ -68,10 +67,10 @@ func TestSessionCachePublishesOnlyAgainstMatchingReadyStates(t *testing.T) {
 		t.Fatalf("Read() = %+v,%v,%v", read, found, err)
 	}
 
-	if err := client.Delete(ctx, authstate.SessionsStateKey("admin", 73001)); err != nil {
+	if err := client.Delete(ctx, SessionsStateKey("admin", 73001)); err != nil {
 		t.Fatal(err)
 	}
-	_, _, _ = states.InstallSessionsReadyIfMissing(ctx, authstate.SessionsFact{Platform: "admin", UserID: 73001, Generation: "new-generation"})
+	_, _, _ = states.InstallSessionsReadyIfMissing(ctx, SessionsFact{Platform: "admin", UserID: 73001, Generation: "new-generation"})
 	published, err = cache.PublishIfCurrent(ctx, snapshot, time.Minute)
 	if err != nil || published {
 		t.Fatalf("stale PublishIfCurrent() = %v,%v", published, err)

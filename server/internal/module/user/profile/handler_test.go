@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/auth"
+	"admin/server/internal/module/auth/login"
 	"github.com/gin-gonic/gin"
 )
 

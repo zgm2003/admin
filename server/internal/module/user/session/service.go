@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"admin/server/internal/module/authclient"
-	"admin/server/internal/module/authstate"
+	"admin/server/internal/module/auth/client"
+	"admin/server/internal/module/auth/state"
 	"admin/server/internal/shared/apperror"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -62,7 +62,7 @@ type Actor struct {
 }
 
 type cacheDeleter interface {
-	DeleteMany(context.Context, []Record) error
+	DeleteMany(context.Context, []authstate.SessionReference) error
 }
 
 type adminRepository interface {
@@ -211,7 +211,11 @@ func (s *Service) revokeAdminSessions(ctx context.Context, actor Actor, ids []in
 	if commitErr := lease.Commit(ctx, authstate.MutationFacts{Sessions: nextFacts}); commitErr != nil {
 		return AdminRevokeResult{}, apperror.DependencyUnavailable(commitErr)
 	}
-	if err := s.cache.DeleteMany(ctx, result.Revoked); err != nil {
+	refs := make([]authstate.SessionReference, 0, len(result.Revoked))
+	for _, session := range result.Revoked {
+		refs = append(refs, authstate.SessionReference{Platform: session.Platform, SessionID: session.ID})
+	}
+	if err := s.cache.DeleteMany(ctx, refs); err != nil {
 		return AdminRevokeResult{}, apperror.DependencyUnavailable(err)
 	}
 	return result, nil

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/rbac/state"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"

@@ -3,7 +3,7 @@ package authplatform
 import (
 	"fmt"
 
-	"admin/server/internal/module/authclient"
+	"admin/server/internal/module/auth/client"
 	"admin/server/internal/shared/yesno"
 )
 

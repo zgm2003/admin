@@ -12,7 +12,7 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
-	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/auth/platform"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"github.com/joho/godotenv"
@@ -145,7 +145,7 @@ func openPlatformRedis(t *testing.T) *projectredis.Client {
 	if testing.Short() {
 		t.Skip("Redis integration test")
 	}
-	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+	if err := godotenv.Load("../../../../.env"); err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
 	settings, err := config.LoadWorker(os.LookupEnv)

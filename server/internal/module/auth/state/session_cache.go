@@ -1,4 +1,4 @@
-package auth
+package authstate
 
 import (
 	"bytes"
@@ -9,13 +9,11 @@ import (
 	"strconv"
 	"time"
 
-	"admin/server/internal/module/authclient"
-	"admin/server/internal/module/authstate"
-	usersession "admin/server/internal/module/user/session"
+	authclient "admin/server/internal/module/auth/client"
 	projectredis "admin/server/internal/redis"
 )
 
-const sessionSnapshotSchemaVersion = 1
+const SessionSnapshotSchemaVersion = 1
 
 type SessionSnapshot struct {
 	SchemaVersion      int       `json:"schemaVersion"`
@@ -34,6 +32,11 @@ type SessionSnapshot struct {
 
 type SessionCache struct {
 	redis *projectredis.Client
+}
+
+type SessionReference struct {
+	Platform  string
+	SessionID int64
 }
 
 func NewSessionCache(redis *projectredis.Client) *SessionCache {
@@ -72,8 +75,8 @@ func (c *SessionCache) PublishIfCurrent(ctx context.Context, snapshot SessionSna
 	}
 	result, err := c.redis.EvalString(ctx, publishSessionSnapshotScript, []string{
 		SessionKey(snapshot.Platform, snapshot.SessionID),
-		authstate.UserStateKey(snapshot.UserID),
-		authstate.SessionsStateKey(snapshot.Platform, snapshot.UserID),
+		UserStateKey(snapshot.UserID),
+		SessionsStateKey(snapshot.Platform, snapshot.UserID),
 	}, string(payload), snapshot.UserGeneration, snapshot.SessionsGeneration, ttl.Milliseconds())
 	if err != nil {
 		return false, err
@@ -92,13 +95,13 @@ func (c *SessionCache) Delete(ctx context.Context, platform string, sessionID in
 	return c.redis.Delete(ctx, SessionKey(platform, sessionID))
 }
 
-func (c *SessionCache) DeleteMany(ctx context.Context, sessions []usersession.Record) error {
+func (c *SessionCache) DeleteMany(ctx context.Context, sessions []SessionReference) error {
 	keys := make([]string, 0, len(sessions))
 	for _, session := range sessions {
-		if session.ID < 1 || authclient.ValidatePlatform(session.Platform) != nil {
+		if session.SessionID < 1 || authclient.ValidatePlatform(session.Platform) != nil {
 			return fmt.Errorf("session cache delete identity is invalid")
 		}
-		keys = append(keys, SessionKey(session.Platform, session.ID))
+		keys = append(keys, SessionKey(session.Platform, session.SessionID))
 	}
 	return c.redis.DeleteMany(ctx, keys)
 }
@@ -108,7 +111,7 @@ func CleanupLegacySessionPointers(ctx context.Context, redis *projectredis.Clien
 }
 
 func validateSessionSnapshot(expectedPlatform string, expectedSessionID int64, snapshot SessionSnapshot) error {
-	if snapshot.SchemaVersion != sessionSnapshotSchemaVersion || snapshot.UserID < 1 || snapshot.SessionID != expectedSessionID ||
+	if snapshot.SchemaVersion != SessionSnapshotSchemaVersion || snapshot.UserID < 1 || snapshot.SessionID != expectedSessionID ||
 		snapshot.SessionVersion < 1 || snapshot.PolicyVersion < 1 || snapshot.UserGeneration == "" || snapshot.SessionsGeneration == "" {
 		return fmt.Errorf("session snapshot identity is invalid")
 	}

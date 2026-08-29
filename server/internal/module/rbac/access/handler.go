@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	projectmiddleware "admin/server/internal/middleware"
-	"admin/server/internal/module/auth"
+	"admin/server/internal/module/auth/login"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
 	"github.com/gin-gonic/gin"

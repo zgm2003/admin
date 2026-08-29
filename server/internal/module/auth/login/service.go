@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"admin/server/internal/module/authclient"
-	"admin/server/internal/module/authplatform"
-	"admin/server/internal/module/authstate"
+	"admin/server/internal/module/auth/client"
+	"admin/server/internal/module/auth/platform"
+	"admin/server/internal/module/auth/state"
 	"admin/server/internal/module/rbac/role"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/loginlog"
@@ -310,7 +310,11 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 	if err := lease.Commit(ctx, authstate.MutationFacts{Sessions: []authstate.SessionsFact{nextSessionsFact}}); err != nil {
 		return Credential{}, apperror.DependencyUnavailable(err)
 	}
-	if err := s.sessionCache.DeleteMany(ctx, revoked); err != nil {
+	refs := make([]authstate.SessionReference, 0, len(revoked))
+	for _, session := range revoked {
+		refs = append(refs, authstate.SessionReference{Platform: session.Platform, SessionID: session.ID})
+	}
+	if err := s.sessionCache.DeleteMany(ctx, refs); err != nil {
 		return Credential{}, apperror.DependencyUnavailable(err)
 	}
 	created.RefreshExpiresAt = refreshExpiresAt

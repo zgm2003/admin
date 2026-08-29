@@ -111,7 +111,7 @@ func openAccessSchemaDatabase(t *testing.T) (*database.Connection, context.Conte
 	if testing.Short() {
 		t.Skip("PostgreSQL integration test")
 	}
-	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+	if err := godotenv.Load("../../../../.env"); err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
 	settings, err := config.LoadWorker(os.LookupEnv)

@@ -3,7 +3,7 @@ package authplatform
 import (
 	"net/http"
 
-	"admin/server/internal/module/authclient"
+	"admin/server/internal/module/auth/client"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
 	"admin/server/internal/shared/validate"

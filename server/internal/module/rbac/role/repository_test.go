@@ -10,8 +10,9 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
-	"admin/server/internal/module/auth"
-	"admin/server/internal/module/authplatform"
+	authschema "admin/server/internal/module/auth"
+	"admin/server/internal/module/auth/login"
+	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/rbac/access"
 	"admin/server/internal/module/rbac/menu"
 	"admin/server/internal/module/rbac/role"
@@ -420,7 +421,7 @@ func openRoleDatabase(t *testing.T) (*gorm.DB, context.Context) {
 	if testing.Short() {
 		t.Skip("PostgreSQL integration test")
 	}
-	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+	if err := godotenv.Load("../../../../.env"); err != nil && !os.IsNotExist(err) {
 		t.Fatalf("load server .env: %v", err)
 	}
 	settings, err := config.LoadWorker(os.LookupEnv)
@@ -457,7 +458,7 @@ func openRoleDatabase(t *testing.T) (*gorm.DB, context.Context) {
 		_ = root.GORM.WithContext(cleanupCtx).Exec("DROP SCHEMA IF EXISTS " + schema + " CASCADE").Error
 		_ = root.Close()
 	})
-	if err := auth.PrepareSessionSchema(ctx, db); err != nil {
+	if err := authschema.PrepareSessionSchema(ctx, db); err != nil {
 		t.Fatalf("PrepareSessionSchema: %v", err)
 	}
 	if err := database.AutoMigrate(ctx, db, &authplatform.Platform{}); err != nil {
@@ -472,7 +473,7 @@ func openRoleDatabase(t *testing.T) (*gorm.DB, context.Context) {
 	if err := role.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("Ensure role schema: %v", err)
 	}
-	if err := auth.EnsureSchema(ctx, db); err != nil {
+	if err := authschema.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
 	if err := menu.EnsureSchema(ctx, db); err != nil {

@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"admin/server/internal/config"
-	"admin/server/internal/module/auth"
-	"admin/server/internal/module/authclient"
-	"admin/server/internal/module/authplatform"
-	"admin/server/internal/module/authstate"
+	"admin/server/internal/module/auth/client"
+	"admin/server/internal/module/auth/login"
+	"admin/server/internal/module/auth/platform"
+	"admin/server/internal/module/auth/state"
 	"admin/server/internal/module/rbac/role"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/session"
@@ -224,7 +224,7 @@ func openSessionAdminRedis(t *testing.T) *projectredis.Client {
 	if testing.Short() {
 		t.Skip("Redis integration test")
 	}
-	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+	if err := godotenv.Load("../../../../.env"); err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
 	settings, err := config.LoadWorker(os.LookupEnv)

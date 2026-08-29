@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"admin/server/internal/module/auth"
+	"admin/server/internal/module/auth/login"
 	"admin/server/internal/shared/apperror"
 )
 

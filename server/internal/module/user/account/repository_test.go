@@ -12,7 +12,8 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
-	"admin/server/internal/module/auth"
+	authschema "admin/server/internal/module/auth"
+	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/rbac/access"
 	"admin/server/internal/module/rbac/role"
 	"admin/server/internal/module/user/account"
@@ -746,7 +747,7 @@ func openUserDatabase(t *testing.T) (*gorm.DB, context.Context, *role.Repository
 	if testing.Short() {
 		t.Skip("PostgreSQL integration test")
 	}
-	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+	if err := godotenv.Load("../../../../.env"); err != nil && !os.IsNotExist(err) {
 		t.Fatalf("load server .env: %v", err)
 	}
 	settings, err := config.LoadWorker(os.LookupEnv)
@@ -783,7 +784,7 @@ func openUserDatabase(t *testing.T) (*gorm.DB, context.Context, *role.Repository
 		_ = root.GORM.WithContext(cleanupCtx).Exec("DROP SCHEMA IF EXISTS " + schema + " CASCADE").Error
 		_ = root.Close()
 	})
-	if err := auth.PrepareSessionSchema(ctx, db); err != nil {
+	if err := authschema.PrepareSessionSchema(ctx, db); err != nil {
 		t.Fatalf("PrepareSessionSchema: %v", err)
 	}
 	if err := database.AutoMigrate(ctx, db, &account.User{}, &profile.Profile{}, &role.Role{}, &role.UserRole{}, &auth.Session{}, &access.Version{}); err != nil {
@@ -792,7 +793,7 @@ func openUserDatabase(t *testing.T) (*gorm.DB, context.Context, *role.Repository
 	if err := role.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("Ensure role schema: %v", err)
 	}
-	if err := auth.EnsureSchema(ctx, db); err != nil {
+	if err := authschema.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
 	if err := access.EnsureSchema(ctx, db); err != nil {

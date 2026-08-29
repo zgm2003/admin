@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"admin/server/internal/module/authstate"
+	"admin/server/internal/module/auth/state"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/pagination"

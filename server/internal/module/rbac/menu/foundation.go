@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/yesno"
 )

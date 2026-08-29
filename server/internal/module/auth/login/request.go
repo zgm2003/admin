@@ -1,6 +1,6 @@
 package auth
 
-import "admin/server/internal/module/authclient"
+import "admin/server/internal/module/auth/client"
 
 type RegisterInput struct {
 	Username        string

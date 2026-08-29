@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"admin/server/internal/module/auth"
+	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/rbac/state"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"

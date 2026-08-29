@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"admin/server/internal/module/auth"
+	"admin/server/internal/module/auth/login"
 )
 
 func TestLoadBootstrapSettingsRequiresEveryValue(t *testing.T) {
