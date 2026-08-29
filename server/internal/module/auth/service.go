@@ -19,6 +19,7 @@ import (
 	"admin/server/internal/module/authstate"
 	"admin/server/internal/module/rbac/role"
 	user "admin/server/internal/module/user/account"
+	usersession "admin/server/internal/module/user/session"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
@@ -43,10 +44,10 @@ type roleStore interface {
 }
 
 type sessionStore interface {
-	CreateWithinLimit(context.Context, SessionCreate, authplatform.Policy, time.Time) (Session, []Session, error)
-	FindAuthoritative(context.Context, TokenIdentity, time.Time) (SessionAuthority, error)
-	FindByRefreshHash(context.Context, string, string, time.Time) (SessionAuthority, error)
-	RotateByRefreshHash(context.Context, int64, string, string, string, time.Time, authclient.Client) (Session, bool, error)
+	CreateWithinLimit(context.Context, usersession.CreateInput, authplatform.Policy, time.Time) (usersession.Record, []usersession.Record, error)
+	FindAuthoritative(context.Context, int64, int64, string, int64, time.Time) (usersession.Authority, error)
+	FindByRefreshHash(context.Context, string, string, time.Time) (usersession.Authority, error)
+	RotateByRefreshHash(context.Context, int64, string, string, string, time.Time, authclient.Client) (usersession.Record, bool, error)
 	Revoke(context.Context, int64, time.Time) error
 }
 
@@ -74,7 +75,6 @@ type Service struct {
 	states              *authstate.Store
 	invalidator         *authstate.Invalidator
 	sessionCache        *SessionCache
-	adminSessions       adminSessionRepository
 	redis               *projectredis.Client
 	jwt                 *JWT
 	refreshTokenHMACKey []byte
@@ -101,10 +101,6 @@ func NewService(
 		invalidator: invalidator, sessionCache: sessionCache, redis: redis, jwt: jwt,
 		refreshTokenHMACKey: append([]byte(nil), refreshTokenHMACKey...), comparePassword: VerifyPassword, logger: logger, now: time.Now,
 	}
-}
-
-func (s *Service) SetSessionAdminRepository(repository adminSessionRepository) {
-	s.adminSessions = repository
 }
 
 func (s *Service) SetPasswordStore(store passwordStore) {
@@ -263,7 +259,7 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 	}
 	refreshExpiresAt := now.Add(policy.RefreshTTL)
 	mutationCtx, stopRenewal := lease.StartRenewal(ctx)
-	created, revoked, createErr := s.sessions.CreateWithinLimit(mutationCtx, SessionCreate{
+	created, revoked, createErr := s.sessions.CreateWithinLimit(mutationCtx, usersession.CreateInput{
 		UserID: credential.ID, Platform: input.Client.Platform, DeviceID: input.Client.DeviceID,
 		RefreshTokenHash: s.hashRefreshToken(refreshToken), ClientIP: input.Client.ClientIP,
 		UserAgent: input.Client.UserAgent, RefreshExpiresAt: refreshExpiresAt,
@@ -298,7 +294,7 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 	if created.ClientIP == "" {
 		created.ClientIP = input.Client.ClientIP
 	}
-	authority := SessionAuthority{Session: created, UserID: credential.ID, UserIsEnabled: credential.IsEnabled}
+	authority := usersession.Authority{Session: created, UserID: credential.ID, UserIsEnabled: credential.IsEnabled}
 	if err := s.publishAuthority(ctx, authority, policy, userFact.Generation, nextSessionsFact.Generation, now); err != nil {
 		return Credential{}, err
 	}
@@ -336,7 +332,7 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string, client a
 		return cached, nil
 	}
 
-	authority, err := s.sessions.FindAuthoritative(ctx, token, now)
+	authority, err := s.sessions.FindAuthoritative(ctx, token.UserID, token.SessionID, token.Platform, token.Version, now)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return Identity{}, apperror.Unauthorized(err)
@@ -446,7 +442,7 @@ func (s *Service) Refresh(ctx context.Context, input RefreshInput) (Credential, 
 	if err := lease.Commit(ctx, authstate.MutationFacts{Sessions: []authstate.SessionsFact{nextSessionsFact}}); err != nil {
 		return Credential{}, apperror.DependencyUnavailable(err)
 	}
-	rotatedAuthority := SessionAuthority{Session: rotated, UserID: authority.UserID, UserIsEnabled: authority.UserIsEnabled, UserDeleted: authority.UserDeleted}
+	rotatedAuthority := usersession.Authority{Session: rotated, UserID: authority.UserID, UserIsEnabled: authority.UserIsEnabled, UserDeleted: authority.UserDeleted}
 	if err := s.publishAuthority(ctx, rotatedAuthority, policy, userFact.Generation, nextSessionsFact.Generation, now); err != nil {
 		return Credential{}, err
 	}
@@ -527,10 +523,11 @@ func (s *Service) cachedIdentity(ctx context.Context, token TokenIdentity, clien
 	if snapshot.Revoked || !snapshot.RefreshExpiresAt.After(now) {
 		return Identity{}, false, "", apperror.Unauthorized(fmt.Errorf("session is unavailable"))
 	}
-	authority := SessionAuthority{
-		Session: Session{
-			ID: snapshot.SessionID, UserID: snapshot.UserID, Platform: snapshot.Platform, DeviceID: snapshot.DeviceID,
+	authority := usersession.Authority{
+		Session: usersession.Record{
+			ID: snapshot.SessionID, UserID: snapshot.UserID, PlatformID: policy.ID, DeviceID: snapshot.DeviceID,
 			Version: snapshot.SessionVersion, ClientIP: snapshot.ClientIP, RefreshExpiresAt: snapshot.RefreshExpiresAt,
+			Platform: snapshot.Platform,
 		},
 		UserID: snapshot.UserID, UserIsEnabled: yesno.Yes,
 	}
@@ -540,7 +537,7 @@ func (s *Service) cachedIdentity(ctx context.Context, token TokenIdentity, clien
 	return identityFromAuthority(authority, policy, "hit"), true, "hit", nil
 }
 
-func (s *Service) enforceClient(ctx context.Context, authority SessionAuthority, policy authplatform.Policy, client authclient.Client) error {
+func (s *Service) enforceClient(ctx context.Context, authority usersession.Authority, policy authplatform.Policy, client authclient.Client) error {
 	if (!policy.BindDevice || authority.Session.DeviceID == client.DeviceID) && (!policy.BindIP || authority.Session.ClientIP == client.ClientIP) {
 		return nil
 	}
@@ -633,7 +630,7 @@ func (s *Service) ensureSessionsReady(ctx context.Context, platform string, user
 	return installed.Fact(), nil
 }
 
-func (s *Service) publishAuthority(ctx context.Context, authority SessionAuthority, policy authplatform.Policy, userGeneration, sessionsGeneration string, now time.Time) error {
+func (s *Service) publishAuthority(ctx context.Context, authority usersession.Authority, policy authplatform.Policy, userGeneration, sessionsGeneration string, now time.Time) error {
 	snapshot := snapshotFromAuthority(authority, policy, userGeneration, sessionsGeneration)
 	ttl := policy.SessionCacheTTL
 	if remaining := snapshot.RefreshExpiresAt.Sub(now); remaining < ttl {
@@ -652,7 +649,7 @@ func (s *Service) publishAuthority(ctx context.Context, authority SessionAuthori
 	return nil
 }
 
-func snapshotFromAuthority(authority SessionAuthority, policy authplatform.Policy, userGeneration, sessionsGeneration string) SessionSnapshot {
+func snapshotFromAuthority(authority usersession.Authority, policy authplatform.Policy, userGeneration, sessionsGeneration string) SessionSnapshot {
 	return SessionSnapshot{
 		SchemaVersion: sessionSnapshotSchemaVersion, UserID: authority.UserID, SessionID: authority.Session.ID,
 		Platform: authority.Session.Platform, SessionVersion: authority.Session.Version, PolicyVersion: policy.PolicyVersion,
@@ -661,7 +658,7 @@ func snapshotFromAuthority(authority SessionAuthority, policy authplatform.Polic
 	}
 }
 
-func identityFromAuthority(authority SessionAuthority, policy authplatform.Policy, cacheResult string) Identity {
+func identityFromAuthority(authority usersession.Authority, policy authplatform.Policy, cacheResult string) Identity {
 	return Identity{
 		UserID: authority.UserID, SessionID: authority.Session.ID, PlatformID: policy.ID, Platform: authority.Session.Platform,
 		Version: authority.Session.Version, PolicyVersion: policy.PolicyVersion, AccessCacheTTL: policy.AccessCacheTTL,
@@ -669,7 +666,7 @@ func identityFromAuthority(authority SessionAuthority, policy authplatform.Polic
 	}
 }
 
-func validateAuthority(authority SessionAuthority) error {
+func validateAuthority(authority usersession.Authority) error {
 	if authority.UserID < 1 || authority.Session.UserID != authority.UserID || authority.Session.ID < 1 || authority.Session.Version < 1 ||
 		authority.UserDeleted || authority.UserIsEnabled != yesno.Yes || authority.Session.RevokedAt != nil {
 		return fmt.Errorf("authoritative session is unavailable")

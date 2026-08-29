@@ -1,4 +1,4 @@
-package auth
+package session
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 )
 
 type sessionAdminRepositoryStub struct {
-	targets     []Session
+	targets     []Record
 	revokeCalls int
 }
 
@@ -24,8 +24,8 @@ func (s *sessionAdminRepositoryStub) StatsAdmin(context.Context, time.Time) (Adm
 	return AdminSessionStats{}, nil
 }
 
-func (s *sessionAdminRepositoryStub) FindAdminRevokeTargets(context.Context, []int64) ([]Session, error) {
-	return append([]Session(nil), s.targets...), nil
+func (s *sessionAdminRepositoryStub) FindAdminRevokeTargets(context.Context, []int64) ([]Record, error) {
+	return append([]Record(nil), s.targets...), nil
 }
 
 func (s *sessionAdminRepositoryStub) RevokeAdmin(context.Context, []int64, int64, time.Time) (AdminRevokeResult, error) {
@@ -35,9 +35,9 @@ func (s *sessionAdminRepositoryStub) RevokeAdmin(context.Context, []int64, int64
 
 func TestRevokeSessionReturnsNotFoundBeforeMutation(t *testing.T) {
 	repository := &sessionAdminRepositoryStub{}
-	service := &Service{adminSessions: repository}
+	service := &Service{repository: repository, now: time.Now}
 
-	_, err := service.RevokeSession(context.Background(), Identity{UserID: 1, SessionID: 10}, 99)
+	_, err := service.RevokeSession(context.Background(), Actor{UserID: 1, SessionID: 10}, 99)
 	assertSessionAdminError(t, err, http.StatusNotFound, apperror.CodeNotFound, i18n.KeySessionNotFound)
 	if repository.revokeCalls != 0 {
 		t.Fatalf("RevokeAdmin() calls = %d, want 0", repository.revokeCalls)
@@ -45,10 +45,10 @@ func TestRevokeSessionReturnsNotFoundBeforeMutation(t *testing.T) {
 }
 
 func TestRevokeSessionRejectsCurrentSessionBeforeMutation(t *testing.T) {
-	repository := &sessionAdminRepositoryStub{targets: []Session{{ID: 10, UserID: 1, Platform: "admin"}}}
-	service := &Service{adminSessions: repository}
+	repository := &sessionAdminRepositoryStub{targets: []Record{{ID: 10, UserID: 1, Platform: "admin"}}}
+	service := &Service{repository: repository, now: time.Now}
 
-	_, err := service.RevokeSession(context.Background(), Identity{UserID: 1, SessionID: 10}, 10)
+	_, err := service.RevokeSession(context.Background(), Actor{UserID: 1, SessionID: 10}, 10)
 	assertSessionAdminError(t, err, http.StatusForbidden, apperror.CodeForbidden, i18n.KeySessionCurrentProtected)
 	if repository.revokeCalls != 0 {
 		t.Fatalf("RevokeAdmin() calls = %d, want 0", repository.revokeCalls)

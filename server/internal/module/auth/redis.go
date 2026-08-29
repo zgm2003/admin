@@ -11,6 +11,7 @@ import (
 
 	"admin/server/internal/module/authclient"
 	"admin/server/internal/module/authstate"
+	usersession "admin/server/internal/module/user/session"
 	projectredis "admin/server/internal/redis"
 )
 
@@ -91,7 +92,7 @@ func (c *SessionCache) Delete(ctx context.Context, platform string, sessionID in
 	return c.redis.Delete(ctx, SessionKey(platform, sessionID))
 }
 
-func (c *SessionCache) DeleteMany(ctx context.Context, sessions []Session) error {
+func (c *SessionCache) DeleteMany(ctx context.Context, sessions []usersession.Record) error {
 	keys := make([]string, 0, len(sessions))
 	for _, session := range sessions {
 		if session.ID < 1 || authclient.ValidatePlatform(session.Platform) != nil {

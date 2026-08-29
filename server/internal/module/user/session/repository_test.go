@@ -1,19 +1,25 @@
-package auth_test
+package session_test
 
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"admin/server/internal/module/auth"
+	"admin/server/internal/config"
+	"admin/server/internal/database"
+	"admin/server/internal/database/testschema"
 	"admin/server/internal/module/authclient"
 	"admin/server/internal/module/authplatform"
+	"admin/server/internal/module/rbac/access"
 	"admin/server/internal/module/rbac/role"
 	user "admin/server/internal/module/user/account"
+	"admin/server/internal/module/user/session"
 	"admin/server/internal/shared/yesno"
+	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 )
 
@@ -21,7 +27,7 @@ func TestCreateWithinLimitRetainsNewestSessionsPerPlatform(t *testing.T) {
 	tx, ctx := openAuthTransaction(t)
 	createdUser := createAuthUserWithoutRole(t, tx, ctx, "limit")
 	policy := updateTestPolicy(t, tx, ctx, "admin", 2)
-	repository := auth.NewSessionRepository(tx)
+	repository := session.NewRepository(tx)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
 	first, revoked, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "1", now.Add(time.Hour)), policy, now)
@@ -39,8 +45,8 @@ func TestCreateWithinLimitRetainsNewestSessionsPerPlatform(t *testing.T) {
 	if len(revoked) != 1 || revoked[0].ID != first.ID {
 		t.Fatalf("revoked sessions = %+v", revoked)
 	}
-	var active []auth.Session
-	if err := tx.WithContext(ctx).Where("user_id = ? AND platform = ? AND revoked_at IS NULL", createdUser.ID, "admin").Order("created_at DESC, id DESC").Find(&active).Error; err != nil {
+	var active []session.Session
+	if err := tx.WithContext(ctx).Where("user_id = ? AND platform_id = ? AND revoked_at IS NULL", createdUser.ID, policy.ID).Order("created_at DESC, id DESC").Find(&active).Error; err != nil {
 		t.Fatal(err)
 	}
 	if len(active) != 2 || active[0].ID != third.ID || active[1].ID != second.ID {
@@ -53,7 +59,7 @@ func TestCreateWithinLimitKeepsPlatformsIndependentAndSupportsUnlimited(t *testi
 	createdUser := createAuthUserWithoutRole(t, tx, ctx, "platform-limit")
 	adminPolicy := updateTestPolicy(t, tx, ctx, "admin", 0)
 	appPolicy := createTestPolicy(t, tx, ctx, "app", 1)
-	repository := auth.NewSessionRepository(tx)
+	repository := session.NewRepository(tx)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
 	for index, hash := range []string{"4", "5", "6"} {
@@ -67,10 +73,10 @@ func TestCreateWithinLimitKeepsPlatformsIndependentAndSupportsUnlimited(t *testi
 		t.Fatalf("app login = %+v,%v", revoked, err)
 	}
 	var adminCount, appCount int64
-	if err := tx.WithContext(ctx).Model(&auth.Session{}).Where("user_id = ? AND platform = ? AND revoked_at IS NULL", createdUser.ID, "admin").Count(&adminCount).Error; err != nil {
+	if err := tx.WithContext(ctx).Model(&session.Session{}).Where("user_id = ? AND platform_id = ? AND revoked_at IS NULL", createdUser.ID, adminPolicy.ID).Count(&adminCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.WithContext(ctx).Model(&auth.Session{}).Where("user_id = ? AND platform = ? AND revoked_at IS NULL", createdUser.ID, "app").Count(&appCount).Error; err != nil {
+	if err := tx.WithContext(ctx).Model(&session.Session{}).Where("user_id = ? AND platform_id = ? AND revoked_at IS NULL", createdUser.ID, appPolicy.ID).Count(&appCount).Error; err != nil {
 		t.Fatal(err)
 	}
 	if adminCount != 3 || appCount != 1 {
@@ -79,10 +85,10 @@ func TestCreateWithinLimitKeepsPlatformsIndependentAndSupportsUnlimited(t *testi
 }
 
 func TestCreateWithinLimitSerializesConcurrentLogins(t *testing.T) {
-	connection, ctx := openAuthenticationSchema(t)
-	createdUser := createAuthUserWithoutRole(t, connection.GORM, ctx, "concurrent-limit")
-	policy := updateTestPolicy(t, connection.GORM, ctx, "admin", 2)
-	repository := auth.NewSessionRepository(connection.GORM)
+	db, ctx := openAuthenticationSchema(t)
+	createdUser := createAuthUserWithoutRole(t, db, ctx, "concurrent-limit")
+	policy := updateTestPolicy(t, db, ctx, "admin", 2)
+	repository := session.NewRepository(db)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	start := make(chan struct{})
 	errorsChannel := make(chan error, 3)
@@ -105,8 +111,8 @@ func TestCreateWithinLimitSerializesConcurrentLogins(t *testing.T) {
 		}
 	}
 	var activeCount int64
-	if err := connection.GORM.WithContext(ctx).Model(&auth.Session{}).
-		Where("user_id = ? AND platform = ? AND revoked_at IS NULL", createdUser.ID, "admin").Count(&activeCount).Error; err != nil {
+	if err := db.WithContext(ctx).Model(&session.Session{}).
+		Where("user_id = ? AND platform_id = ? AND revoked_at IS NULL", createdUser.ID, policy.ID).Count(&activeCount).Error; err != nil {
 		t.Fatal(err)
 	}
 	if activeCount != 2 {
@@ -118,13 +124,13 @@ func TestFindAuthoritativeDoesNotRequireAnEnabledRole(t *testing.T) {
 	tx, ctx := openAuthTransaction(t)
 	createdUser := createAuthUserWithoutRole(t, tx, ctx, "authority")
 	policy := updateTestPolicy(t, tx, ctx, "admin", 1)
-	repository := auth.NewSessionRepository(tx)
+	repository := session.NewRepository(tx)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	created, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "8", now.Add(time.Hour)), policy, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	authority, err := repository.FindAuthoritative(ctx, auth.TokenIdentity{UserID: createdUser.ID, SessionID: created.ID, Platform: "admin", Version: created.Version}, now)
+	authority, err := repository.FindAuthoritative(ctx, createdUser.ID, created.ID, "admin", created.Version, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +143,7 @@ func TestRotateByRefreshHashUsesExactPlatformAndClientMetadata(t *testing.T) {
 	tx, ctx := openAuthTransaction(t)
 	createdUser := createAuthUserWithoutRole(t, tx, ctx, "rotate-client")
 	policy := updateTestPolicy(t, tx, ctx, "admin", 1)
-	repository := auth.NewSessionRepository(tx)
+	repository := session.NewRepository(tx)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	created, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "9", now.Add(time.Hour)), policy, now)
 	if err != nil {
@@ -156,7 +162,7 @@ func TestRotateByRefreshHashUsesExactPlatformAndClientMetadata(t *testing.T) {
 func TestRevokeIsIdempotentForTheSameSession(t *testing.T) {
 	tx, ctx := openAuthTransaction(t)
 	createdUser := createAuthUserWithoutRole(t, tx, ctx, "revoke")
-	repository := auth.NewSessionRepository(tx)
+	repository := session.NewRepository(tx)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	policy := updateTestPolicy(t, tx, ctx, "admin", 1)
 	created, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "i", now.Add(time.Hour)), policy, now)
@@ -170,7 +176,7 @@ func TestRevokeIsIdempotentForTheSameSession(t *testing.T) {
 	if err := repository.Revoke(ctx, created.ID, revokedAt.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	var stored auth.Session
+	var stored session.Session
 	if err := tx.WithContext(ctx).Take(&stored, created.ID).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +188,7 @@ func TestRevokeIsIdempotentForTheSameSession(t *testing.T) {
 func TestListAdminSessionsCalculatesStatusFromPostgres(t *testing.T) {
 	tx, ctx := openAuthTransaction(t)
 	createdUser := createAuthUserWithoutRole(t, tx, ctx, "admin-list")
-	repository := auth.NewSessionRepository(tx)
+	repository := session.NewRepository(tx)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	policy := updateTestPolicy(t, tx, ctx, "admin", 0)
 	active, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "a", now.Add(time.Hour)), policy, now)
@@ -193,7 +199,7 @@ func TestListAdminSessionsCalculatesStatusFromPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.Model(&auth.Session{}).Where("id = ?", expired.ID).Updates(map[string]any{"refresh_expires_at": now.Add(-time.Minute)}).Error; err != nil {
+	if err := tx.Model(&session.Session{}).Where("id = ?", expired.ID).Updates(map[string]any{"refresh_expires_at": now.Add(-time.Minute)}).Error; err != nil {
 		t.Fatal(err)
 	}
 	revoked, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "c", now.Add(time.Hour)), policy, now.Add(2*time.Second))
@@ -203,21 +209,21 @@ func TestListAdminSessionsCalculatesStatusFromPostgres(t *testing.T) {
 	if err := repository.Revoke(ctx, revoked.ID, now.Add(3*time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	rows, total, err := repository.ListAdmin(ctx, auth.AdminSessionQuery{Page: 1, PageSize: 20}, now)
+	rows, total, err := repository.ListAdmin(ctx, session.AdminSessionQuery{Page: 1, PageSize: 20}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if total != 3 || len(rows) != 3 {
 		t.Fatalf("rows total=%d len=%d", total, len(rows))
 	}
-	statuses := map[int64]auth.SessionStatus{}
+	statuses := map[int64]session.SessionStatus{}
 	for _, row := range rows {
 		statuses[row.ID] = row.Status
 		if row.Username != createdUser.Username {
 			t.Fatalf("username = %q", row.Username)
 		}
 	}
-	if statuses[active.ID] != auth.SessionStatusActive || statuses[expired.ID] != auth.SessionStatusExpired || statuses[revoked.ID] != auth.SessionStatusRevoked {
+	if statuses[active.ID] != session.SessionStatusActive || statuses[expired.ID] != session.SessionStatusExpired || statuses[revoked.ID] != session.SessionStatusRevoked {
 		t.Fatalf("statuses = %+v", statuses)
 	}
 }
@@ -225,7 +231,7 @@ func TestListAdminSessionsCalculatesStatusFromPostgres(t *testing.T) {
 func TestAdminSessionRevokeRejectsCurrentSession(t *testing.T) {
 	tx, ctx := openAuthTransaction(t)
 	createdUser := createAuthUserWithoutRole(t, tx, ctx, "admin-current")
-	repository := auth.NewSessionRepository(tx)
+	repository := session.NewRepository(tx)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	policy := updateTestPolicy(t, tx, ctx, "admin", 0)
 	current, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "d", now.Add(time.Hour)), policy, now)
@@ -243,7 +249,7 @@ func TestAdminSessionRevokeRejectsCurrentSession(t *testing.T) {
 	if result.SkippedCurrent != 1 || len(result.Revoked) != 1 || result.Revoked[0].ID != other.ID {
 		t.Fatalf("revoke result = %+v", result)
 	}
-	var stored auth.Session
+	var stored session.Session
 	if err := tx.Unscoped().Take(&stored, current.ID).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +261,7 @@ func TestAdminSessionRevokeRejectsCurrentSession(t *testing.T) {
 func TestBulkAdminSessionRevokeDeduplicatesAndLimits(t *testing.T) {
 	tx, ctx := openAuthTransaction(t)
 	createdUser := createAuthUserWithoutRole(t, tx, ctx, "admin-bulk")
-	repository := auth.NewSessionRepository(tx)
+	repository := session.NewRepository(tx)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	policy := updateTestPolicy(t, tx, ctx, "admin", 0)
 	first, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "f", now.Add(time.Hour)), policy, now)
@@ -280,8 +286,8 @@ func TestBulkAdminSessionRevokeDeduplicatesAndLimits(t *testing.T) {
 
 func openAuthTransaction(t *testing.T) (*gorm.DB, context.Context) {
 	t.Helper()
-	connection, ctx := openAuthenticationSchema(t)
-	tx := connection.GORM.WithContext(ctx).Begin()
+	db, ctx := openAuthenticationSchema(t)
+	tx := db.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		t.Fatalf("begin transaction: %v", tx.Error)
 	}
@@ -290,6 +296,31 @@ func openAuthTransaction(t *testing.T) (*gorm.DB, context.Context) {
 		t.Fatalf("EnsureSystemRoles: %v", err)
 	}
 	return tx, ctx
+}
+
+func openAuthenticationSchema(t *testing.T) (*gorm.DB, context.Context) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("PostgreSQL integration test")
+	}
+	if err := godotenv.Load("../../../.env"); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("load server .env: %v", err)
+	}
+	settings, err := config.LoadWorker(os.LookupEnv)
+	if err != nil {
+		t.Fatalf("load worker config: %v", err)
+	}
+	db, ctx := testschema.Open(t, settings.PostgresDSN, "test_user_session")
+	if err := database.AutoMigrate(ctx, db, &user.User{}, &role.Role{}, &role.UserRole{}, &authplatform.Platform{}, &session.Session{}, &access.Version{}); err != nil {
+		t.Fatalf("create session test schema: %v", err)
+	}
+	if err := role.EnsureSchema(ctx, db); err != nil {
+		t.Fatalf("ensure role test schema: %v", err)
+	}
+	if err := authplatform.EnsureSchema(ctx, db); err != nil {
+		t.Fatalf("ensure platform test schema: %v", err)
+	}
+	return db, ctx
 }
 
 func createAuthUser(t *testing.T, db *gorm.DB, ctx context.Context, prefix string) user.User {
@@ -365,8 +396,8 @@ func testRuntimePolicy(value authplatform.Platform) authplatform.Policy {
 	}
 }
 
-func sessionInput(userID int64, hashCharacter string, expiresAt time.Time) auth.SessionCreate {
-	return auth.SessionCreate{
+func sessionInput(userID int64, hashCharacter string, expiresAt time.Time) session.CreateInput {
+	return session.CreateInput{
 		UserID:           userID,
 		Platform:         "admin",
 		DeviceID:         "550e8400-e29b-41d4-a716-446655440000",

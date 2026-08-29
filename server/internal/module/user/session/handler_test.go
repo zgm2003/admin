@@ -1,4 +1,4 @@
-package auth
+package session
 
 import (
 	"context"
@@ -25,12 +25,12 @@ func (f *fakeSessionAdminService) SessionStats(context.Context) (AdminSessionSta
 	return AdminSessionStats{Platforms: map[string]int64{}}, nil
 }
 
-func (f *fakeSessionAdminService) RevokeSession(context.Context, Identity, int64) (AdminRevokeResult, error) {
+func (f *fakeSessionAdminService) RevokeSession(context.Context, Actor, int64) (AdminRevokeResult, error) {
 	f.revokeCalls++
 	return AdminRevokeResult{}, nil
 }
 
-func (f *fakeSessionAdminService) RevokeSessions(context.Context, Identity, []int64) (AdminRevokeResult, error) {
+func (f *fakeSessionAdminService) RevokeSessions(context.Context, Actor, []int64) (AdminRevokeResult, error) {
 	f.revokeCalls++
 	return AdminRevokeResult{}, nil
 }
@@ -39,8 +39,7 @@ func TestSessionRoutesUseExactPermissions(t *testing.T) {
 	router := gin.New()
 	service := &fakeSessionAdminService{}
 	var permissions []string
-	RegisterSessionAdminRoutes(router.Group("/api/admin/v1"), NewSessionAdminHandler(service), func(context *gin.Context) {
-		context.Set(identityContextKey, Identity{UserID: 1, SessionID: 2, Platform: "admin", Version: 1})
+	RegisterSessionAdminRoutes(router.Group("/api/admin/v1"), NewSessionAdminHandler(service, testActor), func(context *gin.Context) {
 		context.Next()
 	}, func(permission string) gin.HandlerFunc {
 		permissions = append(permissions, permission)
@@ -63,7 +62,7 @@ func TestSessionRoutesUseExactPermissions(t *testing.T) {
 		}
 		router.ServeHTTP(recorder, request)
 	}
-	want := []string{PermissionSessionList, PermissionSessionList, PermissionSessionRevoke, PermissionSessionRevoke}
+	want := []string{PermissionList, PermissionList, PermissionRevoke, PermissionRevoke}
 	if len(permissions) != len(want) {
 		t.Fatalf("permissions = %v", permissions)
 	}
@@ -77,7 +76,7 @@ func TestSessionRoutesUseExactPermissions(t *testing.T) {
 func TestBulkRevokeRequiresExactIDsBody(t *testing.T) {
 	for _, body := range []string{`{}`, `{"ids":[]}`, `{"ids":[1],"unknown":true}`} {
 		router := gin.New()
-		router.DELETE("/api/admin/v1/sessions", NewSessionAdminHandler(&fakeSessionAdminService{}).RevokeMany)
+		router.DELETE("/api/admin/v1/sessions", NewSessionAdminHandler(&fakeSessionAdminService{}, testActor).RevokeMany)
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodDelete, "/api/admin/v1/sessions", strings.NewReader(body))
 		request.Header.Set("Content-Type", "application/json")
@@ -91,7 +90,7 @@ func TestBulkRevokeRequiresExactIDsBody(t *testing.T) {
 		ids[index] = "1"
 	}
 	router := gin.New()
-	router.DELETE("/api/admin/v1/sessions", NewSessionAdminHandler(&fakeSessionAdminService{}).RevokeMany)
+	router.DELETE("/api/admin/v1/sessions", NewSessionAdminHandler(&fakeSessionAdminService{}, testActor).RevokeMany)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodDelete, "/api/admin/v1/sessions", strings.NewReader(`{"ids":[`+strings.Join(ids, ",")+`]}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -103,10 +102,9 @@ func TestBulkRevokeRequiresExactIDsBody(t *testing.T) {
 
 func TestSessionHandlerUsesRequestContext(t *testing.T) {
 	service := &fakeSessionAdminService{}
-	handler := NewSessionAdminHandler(service)
+	handler := NewSessionAdminHandler(service, testActor)
 	router := gin.New()
 	router.GET("/api/admin/v1/sessions", func(context *gin.Context) {
-		context.Set(identityContextKey, Identity{UserID: 1, SessionID: 2, Platform: "admin", Version: 1})
 		context.Next()
 	}, handler.List)
 	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/sessions?page=1&pageSize=20", nil).WithContext(context.WithValue(context.Background(), struct{}{}, "request"))
@@ -121,10 +119,9 @@ func TestSessionListMarksCurrentSession(t *testing.T) {
 		{ID: 2, UserID: 1, Username: "admin", Platform: "admin"},
 		{ID: 3, UserID: 2, Username: "member", Platform: "admin"},
 	}}
-	handler := NewSessionAdminHandler(service)
+	handler := NewSessionAdminHandler(service, testActor)
 	router := gin.New()
 	router.GET("/api/admin/v1/sessions", func(context *gin.Context) {
-		context.Set(identityContextKey, Identity{UserID: 1, SessionID: 2, Platform: "admin", Version: 1})
 		context.Next()
 	}, handler.List)
 	recorder := httptest.NewRecorder()
@@ -141,4 +138,8 @@ func TestSessionListMarksCurrentSession(t *testing.T) {
 	if !strings.Contains(body, `"status":"","isCurrent":false`) {
 		t.Fatalf("other session was not marked: %s", body)
 	}
+}
+
+func testActor(*gin.Context) (Actor, bool) {
+	return Actor{UserID: 1, SessionID: 2}, true
 }

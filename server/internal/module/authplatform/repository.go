@@ -41,7 +41,7 @@ type platformSession struct {
 	CreatedAt time.Time
 }
 
-func (platformSession) TableName() string { return "auth_session" }
+func (platformSession) TableName() string { return "user_session" }
 
 func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
@@ -109,8 +109,9 @@ func (r *Repository) LockByCodeUnscoped(ctx context.Context, code string) ([]Pla
 
 func (r *Repository) FindActiveSessionUsers(ctx context.Context, platform string) ([]int64, error) {
 	userIDs := make([]int64, 0)
-	if err := r.db.WithContext(ctx).Table("auth_session").Distinct("user_id").
-		Where("platform = ? AND revoked_at IS NULL", platform).Order("user_id ASC").Pluck("user_id", &userIDs).Error; err != nil {
+	if err := r.db.WithContext(ctx).Table("user_session AS session").Distinct("session.user_id").
+		Joins("JOIN auth_platform AS platform_ref ON platform_ref.id = session.platform_id").
+		Where("platform_ref.code = ? AND session.revoked_at IS NULL", platform).Order("session.user_id ASC").Pluck("session.user_id", &userIDs).Error; err != nil {
 		return nil, fmt.Errorf("find authentication platform session users: %w", err)
 	}
 	return userIDs, nil
@@ -133,8 +134,9 @@ func (r *Repository) FindSessionLimitCandidates(ctx context.Context, platform st
 	userIDs := make([]int64, 0)
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT user_id
-		FROM auth_session
-		WHERE platform = ? AND revoked_at IS NULL
+		FROM user_session AS session
+		JOIN auth_platform AS platform_ref ON platform_ref.id = session.platform_id
+		WHERE platform_ref.code = ? AND session.revoked_at IS NULL
 		GROUP BY user_id
 		HAVING count(*) > ?
 		ORDER BY user_id ASC`, platform, maxSessions).Scan(&userIDs).Error; err != nil {
@@ -149,7 +151,7 @@ func (r *Repository) LockActiveSessionUsers(ctx context.Context, platform string
 		SELECT app_user.id
 		FROM user_account AS app_user
 		WHERE app_user.id IN (
-			SELECT user_id FROM auth_session WHERE platform = ? AND revoked_at IS NULL
+			SELECT session.user_id FROM user_session AS session JOIN auth_platform AS platform_ref ON platform_ref.id = session.platform_id WHERE platform_ref.code = ? AND session.revoked_at IS NULL
 		)
 		ORDER BY app_user.id ASC
 		FOR UPDATE OF app_user`, platform).Scan(&userIDs).Error; err != nil {
@@ -160,7 +162,7 @@ func (r *Repository) LockActiveSessionUsers(ctx context.Context, platform string
 
 func (r *Repository) RevokePlatformSessions(ctx context.Context, platform string, now time.Time) ([]SessionRef, error) {
 	rows := make([]platformSession, 0)
-	if err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("platform = ? AND revoked_at IS NULL", platform).
+	if err := r.db.WithContext(ctx).Table("user_session AS session").Joins("JOIN auth_platform AS platform_ref ON platform_ref.id = session.platform_id").Clauses(clause.Locking{Strength: "UPDATE"}).Where("platform_ref.code = ? AND session.revoked_at IS NULL", platform).
 		Order("user_id ASC, created_at DESC, id DESC").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("find authentication platform sessions for revocation: %w", err)
 	}
@@ -176,7 +178,7 @@ func (r *Repository) EnforcePlatformLimit(ctx context.Context, platform string, 
 	}
 	rows := make([]platformSession, 0)
 	if err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("platform = ? AND revoked_at IS NULL", platform).
+		Table("user_session AS session").Joins("JOIN auth_platform AS platform_ref ON platform_ref.id = session.platform_id").Where("platform_ref.code = ? AND session.revoked_at IS NULL", platform).
 		Order("user_id ASC, created_at DESC, id DESC").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("lock authentication platform sessions for limit: %w", err)
 	}
@@ -210,7 +212,7 @@ func (r *Repository) revokeSessions(ctx context.Context, sessions []platformSess
 		ids[index] = session.ID
 		refs[index] = SessionRef{UserID: session.UserID, SessionID: session.ID}
 	}
-	result := r.db.WithContext(ctx).Table("auth_session").Where("id IN ? AND revoked_at IS NULL", ids).Updates(map[string]any{
+	result := r.db.WithContext(ctx).Table("user_session").Where("id IN ? AND revoked_at IS NULL", ids).Updates(map[string]any{
 		"revoked_at": now.UTC(), "updated_at": now.UTC(),
 	})
 	if result.Error != nil {

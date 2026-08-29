@@ -1,4 +1,4 @@
-package auth
+package session
 
 import (
 	"context"
@@ -14,20 +14,21 @@ import (
 type sessionAdminService interface {
 	ListSessions(context.Context, AdminSessionQuery) ([]AdminSession, int64, error)
 	SessionStats(context.Context) (AdminSessionStats, error)
-	RevokeSession(context.Context, Identity, int64) (AdminRevokeResult, error)
-	RevokeSessions(context.Context, Identity, []int64) (AdminRevokeResult, error)
+	RevokeSession(context.Context, Actor, int64) (AdminRevokeResult, error)
+	RevokeSessions(context.Context, Actor, []int64) (AdminRevokeResult, error)
 }
 
 type SessionAdminHandler struct {
 	service sessionAdminService
+	actor   func(*gin.Context) (Actor, bool)
 }
 
-func NewSessionAdminHandler(service sessionAdminService) *SessionAdminHandler {
-	return &SessionAdminHandler{service: service}
+func NewSessionAdminHandler(service sessionAdminService, actor func(*gin.Context) (Actor, bool)) *SessionAdminHandler {
+	return &SessionAdminHandler{service: service, actor: actor}
 }
 
 func (h *SessionAdminHandler) List(context *gin.Context) {
-	identity, ok := IdentityFromContext(context)
+	identity, ok := h.actor(context)
 	if !ok {
 		response.Fail(context, apperror.Unauthorized(fmt.Errorf("authentication identity is missing")))
 		return
@@ -59,7 +60,7 @@ func (h *SessionAdminHandler) RevokeOne(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	identity, ok := IdentityFromContext(context)
+	identity, ok := h.actor(context)
 	if !ok {
 		response.Fail(context, apperror.Unauthorized(fmt.Errorf("authentication identity is missing")))
 		return
@@ -88,7 +89,7 @@ func (h *SessionAdminHandler) RevokeMany(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	identity, ok := IdentityFromContext(context)
+	identity, ok := h.actor(context)
 	if !ok {
 		response.Fail(context, apperror.Unauthorized(fmt.Errorf("authentication identity is missing")))
 		return

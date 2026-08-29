@@ -124,8 +124,9 @@ func (r *Repository) IncrementAccessVersion(ctx context.Context, userID int64, n
 
 func (r *Repository) FindActiveSessionPlatforms(ctx context.Context, userID int64) ([]string, error) {
 	platforms := make([]string, 0)
-	if err := r.db.WithContext(ctx).Table("auth_session").Distinct("platform").
-		Where("user_id = ? AND revoked_at IS NULL", userID).Order("platform").Pluck("platform", &platforms).Error; err != nil {
+	if err := r.db.WithContext(ctx).Table("user_session AS session").Distinct("platform_ref.code").
+		Joins("JOIN auth_platform AS platform_ref ON platform_ref.id = session.platform_id").
+		Where("session.user_id = ? AND session.revoked_at IS NULL", userID).Order("platform_ref.code").Pluck("platform_ref.code", &platforms).Error; err != nil {
 		return nil, fmt.Errorf("find active user session platforms: %w", err)
 	}
 	return platforms, nil
@@ -309,7 +310,7 @@ func (r *Repository) CreateUserRoles(ctx context.Context, values []role.UserRole
 
 func (r *Repository) RevokeActiveSessions(ctx context.Context, userID int64, revokedAt time.Time) error {
 	if err := r.db.WithContext(ctx).Exec(`
-		UPDATE auth_session
+		UPDATE user_session
 		SET revoked_at = ?, updated_at = ?
 		WHERE user_id = ? AND revoked_at IS NULL`, revokedAt.UTC(), revokedAt.UTC(), userID).Error; err != nil {
 		return fmt.Errorf("revoke active user sessions: %w", err)
@@ -406,11 +407,12 @@ func (r *Repository) ChangePasswordAndRevokeSessions(ctx context.Context, userID
 		if result.RowsAffected != 1 {
 			return fmt.Errorf("update password %d: %w", userID, gorm.ErrRecordNotFound)
 		}
-		if err := tx.Table("auth_session").Select("id, user_id, platform").
-			Where("user_id = ? AND revoked_at IS NULL", userID).Find(&revoked).Error; err != nil {
+		if err := tx.Table("user_session AS session").Select("session.id, session.user_id, platform_ref.code AS platform").
+			Joins("JOIN auth_platform AS platform_ref ON platform_ref.id = session.platform_id").
+			Where("session.user_id = ? AND session.revoked_at IS NULL", userID).Find(&revoked).Error; err != nil {
 			return fmt.Errorf("find active sessions for password change: %w", err)
 		}
-		if err := tx.Table("auth_session").Where("user_id = ? AND revoked_at IS NULL", userID).
+		if err := tx.Table("user_session").Where("user_id = ? AND revoked_at IS NULL", userID).
 			Updates(map[string]any{"revoked_at": now.UTC(), "updated_at": now.UTC()}).Error; err != nil {
 			return fmt.Errorf("revoke sessions after password change: %w", err)
 		}

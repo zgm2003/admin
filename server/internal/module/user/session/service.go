@@ -1,4 +1,4 @@
-package auth
+package session
 
 import (
 	"context"
@@ -51,26 +51,47 @@ type AdminSessionStats struct {
 }
 
 type AdminRevokeResult struct {
-	Revoked        []Session
+	Revoked        []Record
 	SkippedCurrent int
 	SkippedRevoked int
 }
 
-type adminSessionRepository interface {
+type Actor struct {
+	UserID    int64
+	SessionID int64
+}
+
+type cacheDeleter interface {
+	DeleteMany(context.Context, []Record) error
+}
+
+type adminRepository interface {
 	ListAdmin(context.Context, AdminSessionQuery, time.Time) ([]AdminSession, int64, error)
 	StatsAdmin(context.Context, time.Time) (AdminSessionStats, error)
-	FindAdminRevokeTargets(context.Context, []int64) ([]Session, error)
+	FindAdminRevokeTargets(context.Context, []int64) ([]Record, error)
 	RevokeAdmin(context.Context, []int64, int64, time.Time) (AdminRevokeResult, error)
+}
+
+type Service struct {
+	repository  adminRepository
+	states      *authstate.Store
+	invalidator *authstate.Invalidator
+	cache       cacheDeleter
+	now         func() time.Time
+}
+
+func NewService(repository adminRepository, states *authstate.Store, invalidator *authstate.Invalidator, cache cacheDeleter) *Service {
+	return &Service{repository: repository, states: states, invalidator: invalidator, cache: cache, now: time.Now}
 }
 
 func (s *Service) ListSessions(ctx context.Context, query AdminSessionQuery) ([]AdminSession, int64, error) {
 	if err := validateAdminSessionQuery(query); err != nil {
 		return nil, 0, err
 	}
-	if s.adminSessions == nil {
+	if s == nil || s.repository == nil {
 		return nil, 0, apperror.DependencyUnavailable(fmt.Errorf("session administration repository is unavailable"))
 	}
-	rows, total, err := s.adminSessions.ListAdmin(ctx, query, s.now().UTC())
+	rows, total, err := s.repository.ListAdmin(ctx, query, s.now().UTC())
 	if err != nil {
 		return nil, 0, apperror.DependencyUnavailable(err)
 	}
@@ -78,25 +99,25 @@ func (s *Service) ListSessions(ctx context.Context, query AdminSessionQuery) ([]
 }
 
 func (s *Service) SessionStats(ctx context.Context) (AdminSessionStats, error) {
-	if s.adminSessions == nil {
+	if s == nil || s.repository == nil {
 		return AdminSessionStats{}, apperror.DependencyUnavailable(fmt.Errorf("session administration repository is unavailable"))
 	}
-	stats, err := s.adminSessions.StatsAdmin(ctx, s.now().UTC())
+	stats, err := s.repository.StatsAdmin(ctx, s.now().UTC())
 	if err != nil {
 		return AdminSessionStats{}, apperror.DependencyUnavailable(err)
 	}
 	return stats, nil
 }
 
-func (s *Service) RevokeSession(ctx context.Context, actor Identity, id int64) (AdminRevokeResult, error) {
+func (s *Service) RevokeSession(ctx context.Context, actor Actor, id int64) (AdminRevokeResult, error) {
 	return s.revokeAdminSessions(ctx, actor, []int64{id}, true)
 }
 
-func (s *Service) RevokeSessions(ctx context.Context, actor Identity, ids []int64) (AdminRevokeResult, error) {
+func (s *Service) RevokeSessions(ctx context.Context, actor Actor, ids []int64) (AdminRevokeResult, error) {
 	return s.revokeAdminSessions(ctx, actor, ids, false)
 }
 
-func (s *Service) revokeAdminSessions(ctx context.Context, actor Identity, ids []int64, single bool) (AdminRevokeResult, error) {
+func (s *Service) revokeAdminSessions(ctx context.Context, actor Actor, ids []int64, single bool) (AdminRevokeResult, error) {
 	if actor.SessionID < 1 || actor.UserID < 1 {
 		return AdminRevokeResult{}, apperror.Unauthorized(fmt.Errorf("authentication identity is missing"))
 	}
@@ -115,10 +136,10 @@ func (s *Service) revokeAdminSessions(ctx context.Context, actor Identity, ids [
 	if len(normalized) == 0 || len(normalized) > 100 {
 		return AdminRevokeResult{}, apperror.InvalidRequest(fmt.Errorf("session ids must contain 1 to 100 items"))
 	}
-	if s.adminSessions == nil {
+	if s.repository == nil {
 		return AdminRevokeResult{}, apperror.DependencyUnavailable(fmt.Errorf("session administration repository is unavailable"))
 	}
-	targets, err := s.adminSessions.FindAdminRevokeTargets(ctx, normalized)
+	targets, err := s.repository.FindAdminRevokeTargets(ctx, normalized)
 	if err != nil {
 		return AdminRevokeResult{}, apperror.DependencyUnavailable(err)
 	}
@@ -131,20 +152,20 @@ func (s *Service) revokeAdminSessions(ctx context.Context, actor Identity, ids [
 		}
 	}
 
-	mutationTargets := make([]Session, 0, len(targets))
+	mutationTargets := make([]Record, 0, len(targets))
 	for _, target := range targets {
 		if target.ID != actor.SessionID && target.RevokedAt == nil {
 			mutationTargets = append(mutationTargets, target)
 		}
 	}
 	if len(mutationTargets) == 0 {
-		result, revokeErr := s.adminSessions.RevokeAdmin(ctx, normalized, actor.SessionID, s.now().UTC())
+		result, revokeErr := s.repository.RevokeAdmin(ctx, normalized, actor.SessionID, s.now().UTC())
 		if revokeErr != nil {
 			return AdminRevokeResult{}, apperror.DependencyUnavailable(revokeErr)
 		}
 		return result, nil
 	}
-	if s.invalidator == nil || s.states == nil || s.sessionCache == nil {
+	if s.invalidator == nil || s.states == nil || s.cache == nil {
 		return AdminRevokeResult{}, apperror.DependencyUnavailable(fmt.Errorf("session invalidation dependencies are unavailable"))
 	}
 
@@ -175,7 +196,7 @@ func (s *Service) revokeAdminSessions(ctx context.Context, actor Identity, ids [
 		return AdminRevokeResult{}, apperror.DependencyUnavailable(acquireErr)
 	}
 	mutationCtx, stopRenewal := lease.StartRenewal(ctx)
-	result, revokeErr := s.adminSessions.RevokeAdmin(mutationCtx, normalized, actor.SessionID, s.now().UTC())
+	result, revokeErr := s.repository.RevokeAdmin(mutationCtx, normalized, actor.SessionID, s.now().UTC())
 	renewalCause := context.Cause(mutationCtx)
 	stopRenewal()
 	if revokeErr != nil || renewalCause != nil {
@@ -190,7 +211,7 @@ func (s *Service) revokeAdminSessions(ctx context.Context, actor Identity, ids [
 	if commitErr := lease.Commit(ctx, authstate.MutationFacts{Sessions: nextFacts}); commitErr != nil {
 		return AdminRevokeResult{}, apperror.DependencyUnavailable(commitErr)
 	}
-	if err := s.sessionCache.DeleteMany(ctx, result.Revoked); err != nil {
+	if err := s.cache.DeleteMany(ctx, result.Revoked); err != nil {
 		return AdminRevokeResult{}, apperror.DependencyUnavailable(err)
 	}
 	return result, nil
@@ -211,14 +232,15 @@ type sessionAdminRow struct {
 	Status           string
 }
 
-func (r *SessionRepository) ListAdmin(ctx context.Context, query AdminSessionQuery, now time.Time) ([]AdminSession, int64, error) {
-	db := r.db.WithContext(ctx).Table("auth_session AS session").
-		Select("session.id, session.user_id, app_user.username, session.platform, session.device_id, "+
+func (r *Repository) ListAdmin(ctx context.Context, query AdminSessionQuery, now time.Time) ([]AdminSession, int64, error) {
+	db := r.db.WithContext(ctx).Table("user_session AS session").
+		Select("session.id, session.user_id, app_user.username, platform.code AS platform, session.device_id, "+
 			"session.client_ip, session.user_agent, session.created_at, session.updated_at, "+
 			"session.refresh_expires_at, session.revoked_at, "+
 			"CASE WHEN session.revoked_at IS NOT NULL THEN 'revoked' "+
 			"WHEN session.refresh_expires_at <= ? THEN 'expired' ELSE 'active' END AS status", now.UTC()).
 		Joins("JOIN user_account AS app_user ON app_user.id = session.user_id").
+		Joins("JOIN auth_platform AS platform ON platform.id = session.platform_id").
 		Where("app_user.deleted_at IS NULL")
 	if query.Username != "" {
 		db = db.Where("app_user.username LIKE ? ESCAPE '\\'", adminPrefixPattern(query.Username))
@@ -227,7 +249,7 @@ func (r *SessionRepository) ListAdmin(ctx context.Context, query AdminSessionQue
 		if err := authclient.ValidatePlatform(query.Platform); err != nil {
 			return nil, 0, apperror.InvalidRequest(err)
 		}
-		db = db.Where("session.platform = ?", query.Platform)
+		db = db.Where("platform.code = ?", query.Platform)
 	}
 	switch query.Status {
 	case SessionStatusActive:
@@ -260,9 +282,9 @@ func (r *SessionRepository) ListAdmin(ctx context.Context, query AdminSessionQue
 	return items, total, nil
 }
 
-func (r *SessionRepository) StatsAdmin(ctx context.Context, now time.Time) (AdminSessionStats, error) {
+func (r *Repository) StatsAdmin(ctx context.Context, now time.Time) (AdminSessionStats, error) {
 	stats := AdminSessionStats{Platforms: make(map[string]int64)}
-	if err := r.db.WithContext(ctx).Table("auth_session AS session").
+	if err := r.db.WithContext(ctx).Table("user_session AS session").
 		Joins("JOIN user_account AS app_user ON app_user.id = session.user_id").
 		Where("app_user.deleted_at IS NULL AND session.revoked_at IS NULL AND session.refresh_expires_at > ?", now.UTC()).
 		Count(&stats.ActiveTotal).Error; err != nil {
@@ -273,11 +295,12 @@ func (r *SessionRepository) StatsAdmin(ctx context.Context, now time.Time) (Admi
 		Count    int64
 	}
 	rows := make([]platformCount, 0)
-	if err := r.db.WithContext(ctx).Table("auth_session AS session").
-		Select("session.platform, COUNT(*) AS count").
+	if err := r.db.WithContext(ctx).Table("user_session AS session").
+		Select("platform.code AS platform, COUNT(*) AS count").
 		Joins("JOIN user_account AS app_user ON app_user.id = session.user_id").
+		Joins("JOIN auth_platform AS platform ON platform.id = session.platform_id").
 		Where("app_user.deleted_at IS NULL AND session.revoked_at IS NULL AND session.refresh_expires_at > ?", now.UTC()).
-		Group("session.platform").Scan(&rows).Error; err != nil {
+		Group("platform.code").Scan(&rows).Error; err != nil {
 		return AdminSessionStats{}, fmt.Errorf("count active sessions by platform: %w", err)
 	}
 	for _, row := range rows {
@@ -286,11 +309,15 @@ func (r *SessionRepository) StatsAdmin(ctx context.Context, now time.Time) (Admi
 	return stats, nil
 }
 
-func (r *SessionRepository) RevokeAdmin(ctx context.Context, ids []int64, currentSessionID int64, now time.Time) (AdminRevokeResult, error) {
+func (r *Repository) RevokeAdmin(ctx context.Context, ids []int64, currentSessionID int64, now time.Time) (AdminRevokeResult, error) {
 	result := AdminRevokeResult{}
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		rows := make([]Session, 0, len(ids))
-		if err := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		rows := make([]Record, 0, len(ids))
+		if err := tx.Unscoped().Table("user_session AS session").
+			Select("session.*, platform.code AS platform").
+			Joins("JOIN auth_platform AS platform ON platform.id = session.platform_id").
+			Clauses(clause.Locking{Strength: "UPDATE", Table: clause.Table{Name: "session"}}).
+			Where("session.id IN ?", ids).Scan(&rows).Error; err != nil {
 			return fmt.Errorf("lock sessions for revoke: %w", err)
 		}
 		for _, session := range rows {
@@ -327,12 +354,38 @@ func (r *SessionRepository) RevokeAdmin(ctx context.Context, ids []int64, curren
 	return result, nil
 }
 
-func (r *SessionRepository) FindAdminRevokeTargets(ctx context.Context, ids []int64) ([]Session, error) {
-	rows := make([]Session, 0, len(ids))
-	if err := r.db.WithContext(ctx).Unscoped().Where("id IN ?", ids).Find(&rows).Error; err != nil {
+func (r *Repository) FindAdminRevokeTargets(ctx context.Context, ids []int64) ([]Record, error) {
+	rows := make([]Record, 0, len(ids))
+	if err := r.db.WithContext(ctx).Unscoped().Table("user_session AS session").
+		Select("session.*, platform.code AS platform").
+		Joins("JOIN auth_platform AS platform ON platform.id = session.platform_id").
+		Where("session.id IN ?", ids).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("find sessions for admin revoke: %w", err)
 	}
 	return rows, nil
+}
+
+func (s *Service) ensureSessionsReady(ctx context.Context, platform string, userID int64) (authstate.SessionsFact, error) {
+	state, found, err := s.states.ReadSessions(ctx, platform, userID)
+	if err == nil && found {
+		if state.State == authstate.StateInvalidating {
+			return authstate.SessionsFact{}, authstate.ErrUpdating
+		}
+		return state.Fact(), nil
+	}
+	generation, generationErr := authstate.NewGeneration()
+	if generationErr != nil {
+		return authstate.SessionsFact{}, generationErr
+	}
+	fact := authstate.SessionsFact{Platform: platform, UserID: userID, Generation: generation}
+	installed, _, installErr := s.states.InstallSessionsReadyIfMissing(ctx, fact)
+	if installErr != nil {
+		return authstate.SessionsFact{}, errors.Join(err, installErr)
+	}
+	if installed.State == authstate.StateInvalidating {
+		return authstate.SessionsFact{}, authstate.ErrUpdating
+	}
+	return installed.Fact(), nil
 }
 
 func adminPrefixPattern(value string) string {

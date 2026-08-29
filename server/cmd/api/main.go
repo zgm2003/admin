@@ -26,6 +26,7 @@ import (
 	"admin/server/internal/module/rbac/state"
 	account "admin/server/internal/module/user/account"
 	profile "admin/server/internal/module/user/profile"
+	usersession "admin/server/internal/module/user/session"
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/secretkey"
@@ -48,7 +49,7 @@ type routerDependencies struct {
 	Account           *profile.Handler
 	OperationLog      *operationlog.Handler
 	OperationEnqueuer operationlog.Enqueuer
-	SessionAdmin      *auth.SessionAdminHandler
+	SessionAdmin      *usersession.SessionAdminHandler
 	AuthOrigin        gin.HandlerFunc
 	Authenticate      gin.HandlerFunc
 	RequirePermission func(string) gin.HandlerFunc
@@ -108,7 +109,7 @@ func run(logger *slog.Logger) error {
 	healthService := health.NewService(postgres, redisClient)
 	userRepository := account.NewRepository(postgres.GORM)
 	profileRepository := profile.NewRepository(postgres.GORM)
-	sessionRepository := auth.NewSessionRepository(postgres.GORM)
+	sessionRepository := usersession.NewRepository(postgres.GORM)
 	authPlatformRepository := authplatform.NewRepository(postgres.GORM)
 	policyStore := authplatform.NewPolicyStore(redisClient)
 	authStateStore := authstate.NewStore(redisClient)
@@ -130,8 +131,8 @@ func run(logger *slog.Logger) error {
 		keys.RefreshTokenHMACKey(),
 		logger,
 	)
-	authService.SetSessionAdminRepository(sessionRepository)
 	authService.SetPasswordStore(userRepository)
+	sessionService := usersession.NewService(sessionRepository, authStateStore, authInvalidator, auth.NewSessionCache(redisClient))
 	userService := account.NewService(userRepository, authStateStore, authInvalidator, accessStateStore, accessInvalidator)
 	profileService := profile.NewService(profileRepository)
 	accessRepository := access.NewRepository(postgres.GORM)
@@ -160,9 +161,12 @@ func run(logger *slog.Logger) error {
 		}),
 		OperationLog:      operationlog.NewHandler(operationLogService),
 		OperationEnqueuer: operationLogEnqueuer,
-		SessionAdmin:      auth.NewSessionAdminHandler(authService),
-		AuthOrigin:        auth.RequireOrigin(settings.CORSOrigin),
-		Authenticate:      authenticate,
+		SessionAdmin: usersession.NewSessionAdminHandler(sessionService, func(context *gin.Context) (usersession.Actor, bool) {
+			identity, ok := auth.IdentityFromContext(context)
+			return usersession.Actor{UserID: identity.UserID, SessionID: identity.SessionID}, ok
+		}),
+		AuthOrigin:   auth.RequireOrigin(settings.CORSOrigin),
+		Authenticate: authenticate,
 		RequirePermission: func(code string) gin.HandlerFunc {
 			return access.RequirePermission(accessService, code)
 		},
@@ -222,6 +226,6 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	account.RegisterRoutes(adminRoutes, dependencies.User, dependencies.Authenticate, dependencies.RequirePermission)
 	profile.RegisterRoutes(adminRoutes, dependencies.Account, dependencies.Authenticate)
 	operationlog.RegisterRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
-	auth.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
+	usersession.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
 	return router
 }

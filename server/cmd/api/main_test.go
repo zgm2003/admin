@@ -20,6 +20,7 @@ import (
 	"admin/server/internal/module/rbac/menu"
 	"admin/server/internal/module/rbac/role"
 	"admin/server/internal/module/user/account"
+	usersession "admin/server/internal/module/user/session"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
 	"github.com/gin-gonic/gin"
@@ -54,20 +55,24 @@ type apiAuthPlatformService struct{}
 type apiOperationLogService struct{}
 type apiSessionAdminService struct{}
 
+func apiSessionActor(*gin.Context) (usersession.Actor, bool) {
+	return usersession.Actor{UserID: 1, SessionID: 2}, true
+}
+
 func (apiOperationLogService) List(context.Context, operationlog.ListQuery) (operationlog.ListResult, error) {
 	return operationlog.ListResult{List: []operationlog.Item{}}, nil
 }
-func (apiSessionAdminService) ListSessions(context.Context, auth.AdminSessionQuery) ([]auth.AdminSession, int64, error) {
-	return []auth.AdminSession{}, 0, nil
+func (apiSessionAdminService) ListSessions(context.Context, usersession.AdminSessionQuery) ([]usersession.AdminSession, int64, error) {
+	return []usersession.AdminSession{}, 0, nil
 }
-func (apiSessionAdminService) SessionStats(context.Context) (auth.AdminSessionStats, error) {
-	return auth.AdminSessionStats{Platforms: map[string]int64{}}, nil
+func (apiSessionAdminService) SessionStats(context.Context) (usersession.AdminSessionStats, error) {
+	return usersession.AdminSessionStats{Platforms: map[string]int64{}}, nil
 }
-func (apiSessionAdminService) RevokeSession(context.Context, auth.Identity, int64) (auth.AdminRevokeResult, error) {
-	return auth.AdminRevokeResult{}, nil
+func (apiSessionAdminService) RevokeSession(context.Context, usersession.Actor, int64) (usersession.AdminRevokeResult, error) {
+	return usersession.AdminRevokeResult{}, nil
 }
-func (apiSessionAdminService) RevokeSessions(context.Context, auth.Identity, []int64) (auth.AdminRevokeResult, error) {
-	return auth.AdminRevokeResult{}, nil
+func (apiSessionAdminService) RevokeSessions(context.Context, usersession.Actor, []int64) (usersession.AdminRevokeResult, error) {
+	return usersession.AdminRevokeResult{}, nil
 }
 
 func TestBuildRouterDoesNotRegisterExampleTask(t *testing.T) {
@@ -86,7 +91,7 @@ func TestBuildRouterDoesNotRegisterExampleTask(t *testing.T) {
 		User:              account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
 		OperationLog:      operationlog.NewHandler(apiOperationLogService{}),
 		OperationEnqueuer: enqueuer,
-		SessionAdmin:      auth.NewSessionAdminHandler(apiSessionAdminService{}),
+		SessionAdmin:      usersession.NewSessionAdminHandler(apiSessionAdminService{}, apiSessionActor),
 		AuthOrigin:        func(context *gin.Context) { context.Next() },
 		Authenticate:      func(context *gin.Context) { context.Next() },
 		RequirePermission: func(string) gin.HandlerFunc { return func(context *gin.Context) { context.Next() } },
@@ -252,7 +257,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		Role:         role.NewHandler(apiRoleService{}),
 		User:         account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
 		OperationLog: operationlog.NewHandler(apiOperationLogService{}),
-		SessionAdmin: auth.NewSessionAdminHandler(apiSessionAdminService{}),
+		SessionAdmin: usersession.NewSessionAdminHandler(apiSessionAdminService{}, apiSessionActor),
 		AuthOrigin:   auth.RequireOrigin("http://localhost:16300"),
 		Authenticate: auth.Authenticate(apiAuthService{}),
 		RequirePermission: func(string) gin.HandlerFunc {

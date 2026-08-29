@@ -1,4 +1,4 @@
-package auth_test
+package session_test
 
 import (
 	"context"
@@ -17,6 +17,7 @@ import (
 	"admin/server/internal/module/authstate"
 	"admin/server/internal/module/rbac/role"
 	user "admin/server/internal/module/user/account"
+	"admin/server/internal/module/user/session"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"github.com/joho/godotenv"
@@ -28,7 +29,7 @@ type integrationPolicyStore struct {
 }
 
 type invalidationObservingSessionRepository struct {
-	repository           *auth.SessionRepository
+	repository           *session.Repository
 	states               *authstate.Store
 	redis                *projectredis.Client
 	platform             string
@@ -37,25 +38,25 @@ type invalidationObservingSessionRepository struct {
 	dropStateAfterRevoke bool
 }
 
-func (r *invalidationObservingSessionRepository) ListAdmin(ctx context.Context, query auth.AdminSessionQuery, now time.Time) ([]auth.AdminSession, int64, error) {
+func (r *invalidationObservingSessionRepository) ListAdmin(ctx context.Context, query session.AdminSessionQuery, now time.Time) ([]session.AdminSession, int64, error) {
 	return r.repository.ListAdmin(ctx, query, now)
 }
 
-func (r *invalidationObservingSessionRepository) StatsAdmin(ctx context.Context, now time.Time) (auth.AdminSessionStats, error) {
+func (r *invalidationObservingSessionRepository) StatsAdmin(ctx context.Context, now time.Time) (session.AdminSessionStats, error) {
 	return r.repository.StatsAdmin(ctx, now)
 }
 
-func (r *invalidationObservingSessionRepository) FindAdminRevokeTargets(ctx context.Context, ids []int64) ([]auth.Session, error) {
+func (r *invalidationObservingSessionRepository) FindAdminRevokeTargets(ctx context.Context, ids []int64) ([]session.Record, error) {
 	return r.repository.FindAdminRevokeTargets(ctx, ids)
 }
 
-func (r *invalidationObservingSessionRepository) RevokeAdmin(ctx context.Context, ids []int64, currentSessionID int64, now time.Time) (auth.AdminRevokeResult, error) {
+func (r *invalidationObservingSessionRepository) RevokeAdmin(ctx context.Context, ids []int64, currentSessionID int64, now time.Time) (session.AdminRevokeResult, error) {
 	state, found, err := r.states.ReadSessions(ctx, r.platform, r.userID)
 	if err != nil {
-		return auth.AdminRevokeResult{}, err
+		return session.AdminRevokeResult{}, err
 	}
 	if !found || state.State != authstate.StateInvalidating {
-		return auth.AdminRevokeResult{}, errors.New("sessions state was not invalidating before PostgreSQL revoke")
+		return session.AdminRevokeResult{}, errors.New("sessions state was not invalidating before PostgreSQL revoke")
 	}
 	r.sawInvalidating = true
 	result, err := r.repository.RevokeAdmin(ctx, ids, currentSessionID, now)
@@ -112,10 +113,11 @@ type adminSessionRevokeFixture struct {
 	tx                  *gorm.DB
 	states              *authstate.Store
 	cache               *auth.SessionCache
-	service             *auth.Service
+	service             *session.Service
+	authService         *auth.Service
 	observingRepository *invalidationObservingSessionRepository
-	actor               auth.Identity
-	targetSession       auth.Session
+	actor               session.Actor
+	targetSession       session.Record
 	oldToken            string
 	client              authclient.Client
 }
@@ -126,7 +128,7 @@ func newAdminSessionRevokeFixture(t *testing.T) adminSessionRevokeFixture {
 	actorUser := createAuthUserWithoutRole(t, tx, ctx, "session-admin-actor")
 	targetUser := createAuthUserWithoutRole(t, tx, ctx, "session-admin-target")
 	policy := updateTestPolicy(t, tx, ctx, "admin", 0)
-	repository := auth.NewSessionRepository(tx)
+	repository := session.NewRepository(tx)
 	now := time.Now().UTC().Truncate(time.Second)
 	actorSession, _, err := repository.CreateWithinLimit(ctx, sessionInput(actorUser.ID, "i", now.Add(time.Hour)), policy, now)
 	if err != nil {
@@ -176,7 +178,7 @@ func newAdminSessionRevokeFixture(t *testing.T) adminSessionRevokeFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := auth.NewService(
+	authService := auth.NewService(
 		user.NewRepository(tx), role.NewRepository(tx), repository, integrationPolicyStore{policy: policy},
 		states, authstate.NewInvalidator(states), cache, redisClient, jwt, []byte(strings.Repeat("h", 32)),
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -188,10 +190,10 @@ func newAdminSessionRevokeFixture(t *testing.T) adminSessionRevokeFixture {
 		platform:   targetSession.Platform,
 		userID:     targetUser.ID,
 	}
-	service.SetSessionAdminRepository(observingRepository)
+	service := session.NewService(observingRepository, states, authstate.NewInvalidator(states), cache)
 	return adminSessionRevokeFixture{
-		ctx: ctx, tx: tx, states: states, cache: cache, service: service, observingRepository: observingRepository,
-		actor:         auth.Identity{UserID: actorUser.ID, SessionID: actorSession.ID, Platform: "admin", Version: actorSession.Version},
+		ctx: ctx, tx: tx, states: states, cache: cache, service: service, authService: authService, observingRepository: observingRepository,
+		actor:         session.Actor{UserID: actorUser.ID, SessionID: actorSession.ID},
 		targetSession: targetSession, oldToken: oldToken,
 		client: authclient.Client{Platform: "admin", DeviceID: targetSession.DeviceID, ClientIP: targetSession.ClientIP, UserAgent: targetSession.UserAgent},
 	}
@@ -199,7 +201,7 @@ func newAdminSessionRevokeFixture(t *testing.T) adminSessionRevokeFixture {
 
 func assertPostgreSQLSessionRevoked(t *testing.T, fixture adminSessionRevokeFixture) {
 	t.Helper()
-	var stored auth.Session
+	var stored session.Session
 	if err := fixture.tx.WithContext(fixture.ctx).Take(&stored, fixture.targetSession.ID).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +212,7 @@ func assertPostgreSQLSessionRevoked(t *testing.T, fixture adminSessionRevokeFixt
 
 func assertOldAccessTokenRejected(t *testing.T, fixture adminSessionRevokeFixture) {
 	t.Helper()
-	_, err := fixture.service.Authenticate(fixture.ctx, fixture.oldToken, fixture.client)
+	_, err := fixture.authService.Authenticate(fixture.ctx, fixture.oldToken, fixture.client)
 	var appErr *apperror.Error
 	if !errors.As(err, &appErr) || appErr.Code != apperror.CodeUnauthorized {
 		t.Fatalf("old Access Token error = %v", err)

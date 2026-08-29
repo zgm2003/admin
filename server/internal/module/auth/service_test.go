@@ -590,7 +590,7 @@ func (f *fakeSessionStore) CreateWithinLimit(context.Context, SessionCreate, aut
 	return f.createSession, f.createRevoked, f.createErr
 }
 
-func (f *fakeSessionStore) FindAuthoritative(context.Context, TokenIdentity, time.Time) (SessionAuthority, error) {
+func (f *fakeSessionStore) FindAuthoritative(context.Context, int64, int64, string, int64, time.Time) (SessionAuthority, error) {
 	f.authorityCalls++
 	return f.authority, f.authorityErr
 }
