@@ -11,6 +11,8 @@
 - 用 `AGENTS.md` 作为项目级硬规则入口；
 - 用 `docs/agent/README.md` 保存完整施工流程、边界和检查清单；
 - 将 TypeScript 类型安全，特别是禁止业务 `any`，提升为硬规则；
+- 将 RBAC 页面 `:list`、页面内动作权限和隐藏页面动态路由提升为硬规则；
+- 明确 PostgreSQL、Redis、进程内缓存的 RBAC 三层关系和本地缓存失效边界；
 - 让 spec、plan、代码、测试和 Git 操作有明确路由，小任务不加载无关上下文；
 - 让 AI 遇到不确定性时停下来报告，而不是猜默认值或静默兜底。
 
@@ -84,7 +86,18 @@ type Payload = Record<string, any>
 
 现有 HTTP 响应 envelope 仍严格是 `code`、`data`、`message`。Axios 只能把经过协议校验的 `data` 交给业务 API，页面不能重新猜字段或使用 `??` 掩盖必填字段缺失。
 
-### 3.3 类型检查验收
+### 3.3 RBAC 页面与动作权限命名
+
+页面权限是路由入口的稳定协议，统一使用资源级 `:list` 后缀，不因页面是列表、详情还是
+单例资料页而改变。例如个人资料页面固定使用 `account:profile:list`，禁止新增
+`account:profile:view` 或 `account:profile:read`。页面内按钮和对应后端接口使用独立动作权限，
+例如 `account:profile:update` 与 `account:password:update`。
+
+隐藏页面的 `is_hidden=1` 只影响侧边菜单展示。动态路由仍须由 Access 快照注册，前端按钮和
+后端 Middleware 都必须检查同一权限码；任何静态路由、前端 `v-if` 或强制跳转都不能替代后端
+授权。新增或迁移菜单时，计划和测试必须明确页面 `:list` 权限、动作权限及其 API 对应关系。
+
+### 3.4 类型检查验收
 
 每次前端改动至少运行：
 
@@ -101,6 +114,13 @@ rg -n "\bas any\b|\bany\[\]|Record<[^>]*,\s*any>" web\src -g "*.ts" -g "*.vue"
 ```
 
 命令有输出时，AI 必须逐处解释并移除；测试夹具也不能用 `any` 逃避类型检查。
+
+### 3.5 Element Plus 树表状态
+
+Element Plus 树/表格组件的行 key 统一在进入状态层时规范化为字符串。全部展开、全部收起、
+搜索恢复和平台切换必须使用同一 `String(id)` 集合；不得把数字 ID 直接传给
+`expand-row-keys`。这条规则属于 UI 协议，不通过额外通用组件或隐式类型转换规避，并且必须
+有对应的交互回归测试。
 
 ## 4. 线性架构硬规则
 
@@ -129,7 +149,16 @@ HTTP 或 Asynq 入口取得的 `context.Context` 必须原样传过 Service、Re
 - 为兼容旧代码同时接受 `msg` 和 `message`；
 - 把数据库错误、堆栈、Token 或密码写入 HTTP 响应。
 
-### 4.3 命名
+### 4.3 RBAC 三层缓存
+
+RBAC 权限事实和失效版本的来源顺序固定为 PostgreSQL -> Redis -> 进程内缓存。进程内缓存是
+有界、带 TTL 的不可变快照，只能在本次请求先从 Redis 确认 `accessVersion` 为 `ready` 且版本
+匹配后读取；key 至少包括平台 ID、平台 code、policy version、用户 ID 和 access version。
+Redis 状态为 `invalidating`、读取失败或版本无法确认时，禁止使用旧的进程快照，按已确认的
+降级规则回源 PostgreSQL 并记录缓存结果。不得为了省一次 Redis 访问而引入无界或不可观察的
+本地权限缓存。
+
+### 4.4 命名
 
 - Go 导出名称使用 PascalCase，initialism 使用 `ID`、`HTTP`、`API`；
 - PostgreSQL 使用 lower snake case；
@@ -199,6 +228,8 @@ HTTP 或 Asynq 入口取得的 `context.Context` 必须原样传过 Service、Re
 - 是否需要软删除、Yes/No 编码或 `TIMESTAMPTZ`？
 - 前端 DTO、Props 和返回值的明确类型在哪里？
 - 已运行哪些验证，哪些验证因环境没有运行？
+- 当前页面入口是否使用 `:list`，按钮/接口是否使用独立动作权限？
+- RBAC 读取是否经过 Redis 版本门控，进程缓存 key 和失效边界是什么？
 
 只回答局部问题时不要求回答全部 7 项。需要修改代码时，如果与本次范围相关的问题无法回答，不能直接写代码，应补读对应内容或向用户提问；不相关的问题不扩展阅读。
 
@@ -207,9 +238,21 @@ HTTP 或 Asynq 入口取得的 `context.Context` 必须原样传过 Service、Re
 本设计批准后只做以下文档落地：
 
 - 修改根 `AGENTS.md`：加入 `docs/agent/README.md` 入口、TypeScript 禁止 `any` 规则，并把“改代码前全量读取基础 spec/plan”改为 2.2 的渐进式路由；
-- 创建 `docs/agent/README.md`：写入任务分类、按需阅读路由、线性架构、类型、数据库、错误、TDD、Git 和交接清单；
+- 创建 `docs/agent/README.md`：写入任务分类、按需阅读路由、线性架构、RBAC 页面/动作权限、三层缓存、类型、数据库、错误、TDD、Git 和交接清单；
 - 修改根 `README.md`：增加 Agent 施工指南入口，方便人类开发者知道 AI 受哪些规则约束；
 - 不修改 Go、Vue、数据库模型或运行时行为。
+
+### 9.1 2026-08-29 规则增补
+
+后续实现发现页面入口权限被误写成 `:view`，且 RBAC 进程内缓存和隐藏页面路由边界未在统一
+入口中明确。因此本框架增补以下不可协商规则，并同步落地到 `AGENTS.md` 和
+`docs/agent/README.md`：
+
+- 每个页面节点（包括个人资料等单例页面）必须以 `:list` 作为入口权限；
+- 页面内按钮和后端接口必须使用独立动作权限，前端显示控制不能替代后端鉴权；
+- `is_hidden=1` 只影响菜单展示，路由仍由 Access 快照动态注册；
+- 进程内权限快照必须先经过 Redis access version 门控，不能以旧本地值静默放行；
+- 菜单展开状态必须统一使用字符串 row key，全部展开不能退化为全部收起。
 
 ## 10. 非目标
 

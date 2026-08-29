@@ -71,6 +71,20 @@ view -> api/<module>.ts -> utils/request.ts -> Go API
 - Vue Props、Emits、Pinia 状态、API 请求响应和组合式函数返回值必须使用明确类型。
 - 公共组件只抽取多个真实页面已经复用的稳定交互；优先使用当前已有的 `AppDialog`、`AppTable`、
   `Search`、`DIcon` 和 `IconSelect`，不创建万能组件。
+- RBAC 页面菜单的权限码必须使用资源级 `:list` 后缀；单例页面也不例外，禁止用 `:view`、
+  `:read` 或其他同义后缀表示页面入口。页面内按钮和接口动作必须使用独立的动作权限码，
+  例如 `:create`、`:update`、`:status`、`:delete` 或 `:authorize`。
+- 个人资料不是静态路由：固定使用隐藏 page `account:profile:list`，资料保存按钮/API 使用
+  `account:profile:update`，修改密码按钮/API 使用 `account:password:update`；页面权限、动作
+  权限和对应后端 Middleware 必须一一对应。
+- `is_hidden = 1` 只表示不显示在侧边菜单，不表示路由或接口公开。隐藏页面仍由 Access 快照
+  动态注册，前端入口和按钮按权限码显示，后端路由必须用同一页面/动作权限再次校验。
+- Access 快照的 `menuTree` 只放 directory/page，action 只进入 `permissionCodes`；页面入口缺少
+  `:list` 或把页面权限当作按钮权限时，视为协议错误而不是兼容场景。
+- Element Plus 树/表格的行 key 统一按字符串处理；展开状态、搜索恢复和平台切换不得混用数字
+  ID 与字符串 ID。
+- RBAC Access 的权威层级固定为 PostgreSQL -> Redis -> 进程内缓存。进程内缓存只能在 Redis
+  校验当前 access version 后读取；Redis 故障或版本无法确认时不得使用旧的进程缓存兜底。
 
 ## Database And Error Rules
 
@@ -100,6 +114,8 @@ view -> api/<module>.ts -> utils/request.ts -> Go API
 - 行为变化和缺陷遵循：失败测试 -> 确认因目标行为缺失而失败 -> 最小实现 -> 通过 -> 再重构。
 - 新功能、跨模块契约、数据库或认证权限变化遵循：理解需求与相关老项目实现 -> 方案 -> 用户确认
   -> spec -> plan -> 实现。简单局部修改按 `docs/agent/README.md` 的渐进规则处理。
+- 涉及菜单、路由或权限时，写代码前必须在 spec/plan 中列出页面 `:list` 权限、动作权限、隐藏
+  状态和对应 API；发现页面使用 `:view`/`:read` 等后缀时先修正文档和迁移设计。
 - 修改前检查 `git status --short`，保留用户和其他开发者的现有改动，不为干净工作区删除或回退它们。
 - 不自动 commit、fetch、pull 或 push；除非维护者明确要求，不得 amend、rebase 或以其他方式重写
   既有提交历史。

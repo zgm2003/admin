@@ -98,6 +98,54 @@ task handler -> service -> repository -> model -> PostgreSQL
 
 禁止引入 `Platform Adapter`、通用 Adapter、`infra`、Manager、Factory、BaseService、BaseRepository、DI 容器、运行时注册器或为了未来替换而存在的接口。只有当前存在多个真实实现，或者测试确有替换边界时，才定义覆盖当前需求的最小接口。
 
+### 2.1 RBAC 页面、按钮与路由契约
+
+权限码是前后端共同使用的稳定协议，不是页面显示文案。所有 `menuType=page` 的菜单节点都
+必须使用资源级 `:list` 作为页面入口权限；即使页面只展示一条个人资料，也必须使用
+`account:profile:list`，不能发明 `account:profile:view` 或 `account:profile:read`。页面内按钮和
+对应接口使用独立的动作权限码，例如：
+
+```text
+account:profile:list       页面进入权限
+account:profile:update     保存资料按钮和 PUT 接口
+account:password:update    修改密码按钮和 POST 接口
+```
+
+实现前先完成以下映射表（新页面按同样格式追加，不能只写一个“查看”权限）：
+
+| 页面节点 | 页面权限 | 隐藏 | 页面 API | 按钮/动作权限与 API |
+| --- | --- | --- | --- | --- |
+| 个人资料 | `account:profile:list` | `1` | `GET /api/admin/v1/account/profile` | `account:profile:update` -> `PUT /api/admin/v1/account/profile`；`account:password:update` -> `POST /api/admin/v1/account/password` |
+
+页面权限只负责进入页面；action 权限只负责对应按钮和写操作。页面权限、动作权限、
+`is_hidden`、动态路由、前端按钮和后端 Middleware 任一项缺失，都不能开始实现。
+
+页面权限、动作权限和后端 Middleware 必须保持一一映射。以个人资料为例，GET 使用
+`account:profile:list`，PUT 使用 `account:profile:update`，POST 密码接口使用
+`account:password:update`；页面节点进入 `menuTree`，action 节点只进入 `permissionCodes`。
+Dashboard 和登录页是应用壳的静态入口，不得以此为由给其他业务页面绕过 RBAC。
+
+Element Plus 树/表格行 key 在状态层统一规范化为 `String(id)`；全部展开、全部收起、搜索恢复
+和平台切换必须复用同一字符串 key 集合，不能把数字 ID 直接传给 `expand-row-keys`。
+
+页面权限和动作权限必须同时落实：
+
+- 页面路由由当前 Access 快照动态注册，不能在静态路由表中绕过 RBAC；
+- `is_hidden=1` 只隐藏侧边菜单，不删除动态路由和权限矩阵中的页面节点；
+- 前端隐藏按钮只是界面行为，后端 Middleware 必须使用同一动作权限码拒绝越权请求；
+- 设计和迁移时检查 `:view`、`:read` 等错误页面后缀，发现冲突先更新规范和协议，不静默兼容。
+- 代码审查前运行页面权限扫描：每个 `menuType=page` 都必须能在映射表中找到 `:list` code、
+  path、component、`is_hidden` 和 API；旧 code 必须有保留 ID/授权关系的人工 migration。
+
+### 2.2 RBAC 三层访问缓存
+
+PostgreSQL 保存权限事实，Redis 保存跨进程的 access version 和快照，进程内缓存保存有界的
+不可变快照副本。请求先从 Redis 读取并确认当前用户的 access version，再尝试进程内快照，
+随后才读取 Redis 快照，最后从 PostgreSQL 重建。进程缓存 key 至少包含 `platformID`、平台
+code、`policyVersion`、`userID` 和 `accessVersion`；读写必须复制切片和菜单树，设置容量与 TTL。
+Redis 不可用、状态为 `invalidating` 或版本无法确认时，不能返回旧进程缓存、空权限或假成功，
+只允许按明确策略回源 PostgreSQL，并记录可观察的缓存结果。
+
 ## 3. TypeScript 类型安全
 
 前端使用 TypeScript，业务代码不得退化为 AnyScript。禁止：
@@ -244,6 +292,10 @@ HTTP Handler 使用 `context.Request.Context()`，Asynq Handler 使用任务 Con
 
 不在设计获批前修改运行时代码。方案必须说明哪些行为直接继承、哪些只做当前架构适配、
 哪些历史设计被明确替换；不得为了体现“新实现”而制造无产品价值的差异。
+
+涉及菜单、路由或权限时，设计阶段必须先列出页面节点和动作节点的完整映射，并逐项检查：
+页面权限是否以 `:list` 结尾、隐藏页面是否仍动态注册、每个按钮和后端接口是否有独立动作权限、
+以及 `/api/v1/access` 与后端 Middleware 是否使用同一权限码。未完成这张映射表不得开始实现。
 
 ### 8.4 行为变化和 bug
 

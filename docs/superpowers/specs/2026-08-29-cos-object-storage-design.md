@@ -63,9 +63,15 @@ icon:           lucide:cloud-upload
 `rbac_menu` 的同平台父子关系，菜单的 `platform_id` 只指向 Admin 平台；不为 Canvas 预置
 同名菜单。
 
+该约定也适用于已有的 Canvas 测试页面。当前历史设计中的 `canvas:test` 页面码属于旧命名，
+正式数据必须通过人工、事务化 migration 改为 `canvas:test:list`；保留原菜单 ID、父子关系和
+角色授权，只更新 code 及其所有协议/测试引用。`canvas:test:button` 作为页面下的 action 可以
+保留。测试夹具若不是持久化数据则直接使用新 code，不为旧 code 增加运行时兼容分支。
+
 ### 3.2 动作权限
 
-页面权限负责进入对象存储页面；动作权限只控制真实操作，不为两个 Tab 额外制造页面节点：
+页面权限负责进入对象存储页面；动作权限只控制真实操作，不为两个 Tab 额外制造页面节点。
+所有页面节点的入口权限统一使用资源级 `:list` 后缀，不能使用 `:view` 或 `:read`：
 
 | 权限码 | 用途 |
 | --- | --- |
@@ -97,6 +103,73 @@ web/src/api/storage/uploadrule.ts
 
 页面使用现有 Element Plus 表格、Tabs、表单、确认框和空态组件。配置和规则是两个页面内部
 视图，连接测试、恢复编辑态、启停和删除都是 Tab 内按钮，不单独占左侧菜单。
+
+### 3.4 本批次先行修复的 Admin/RBAC 基线
+
+COS 页面和接口进入实现前，先在同一份 plan 中完成以下既有基线整改。它们不是新的业务范围，
+而是保证 COS 菜单、动态路由和权限缓存不会建立在绕过 RBAC 或错误前端状态之上的必要前置。
+本节明确替代旧认证/RBAC 设计中“**不存在进程级权限缓存**”的历史约束；其余 PostgreSQL
+权威、Redis 失效协调和失败关闭语义继续保留。
+
+#### 3.4.1 个人资料页面与按钮权限
+
+个人资料不再出现在静态路由表中，作为 Admin 平台 `account` 目录下的隐藏页面节点写入人工
+菜单 migration：
+
+```text
+account:profile:list       page   path=/account/profile   is_hidden=1
+account:profile:update     action parent=account:profile:list
+account:password:update    action parent=account:profile:list
+```
+
+页面权限命名遵守全局 `:list` 约定，即使个人资料不是列表页也不能改成 `:view`。页面节点
+仍进入 Access 快照和动态路由注册，但 `is_hidden=1` 时不显示在侧边菜单。头像个人中心入口
+只有在 `account:profile:list` 存在时才显示；没有该权限的已登录用户直接访问旧 URL 或强制
+跳转时回到 Dashboard，不产生“路由存在但接口报错”的假页面。
+
+页面内保存资料按钮只在 `account:profile:update` 存在时显示/可用，修改密码区域只在
+`account:password:update` 存在时显示。后端 `GET /account/profile`、`PUT /account/profile` 和
+`POST /account/password` 分别由认证中间件和对应的页面/动作权限中间件保护；前端隐藏不是安全
+边界。面包屑、RouterTabs 和组件映射通过 Access 菜单查找，不再为个人资料保留硬编码分支。
+
+#### 3.4.2 RBAC 三层访问缓存
+
+信任层级固定为：
+
+```text
+PostgreSQL（权限事实） -> Redis（跨进程版本与快照） -> 进程内缓存（本机快照副本）
+```
+
+这里的箭头表示事实来源和降级关系；严格一致性下的请求查找顺序是：先从 Redis 读取当前用户
+的 `accessVersion`，确认状态为 `ready` 且版本有效，再读进程内快照，之后读 Redis 快照，最后
+从 PostgreSQL 重建。这样本地命中仍能省掉 Redis 大快照读取和 JSON 解码，同时不会跳过分布式
+失效协调。
+
+进程内缓存实现为 RBAC Access 包内的有界 `map + mutex`，每条记录包含不可变快照副本、创建
+时间和过期时间；至少限制最大条目数和 TTL，并在读写时复制角色数组、权限数组和菜单树。key
+必须包含 `platformID`、平台 code、`policyVersion`、`userID` 和 `accessVersion`，不能只用用户
+ID。缓存命中、未命中、过期、版本切换和淘汰都可观察但不记录权限快照原文。
+
+Redis 状态为 `invalidating`、读取失败、损坏或版本无法确认时，禁止使用旧进程缓存；普通读取
+按现有策略回源 PostgreSQL 并重建结果。PostgreSQL 失败时失败关闭，不返回旧权限、空数组或
+假成功。权限 mutation 继续先推进 Redis invalidating/version，再提交 PostgreSQL 事务并发布
+新版本；旧本地条目因 version 不匹配自然失效。该设计保留“权限变更后下一次新请求不能使用
+旧版本”的语义，分布式部署不依赖不可靠的本地通知。
+
+#### 3.4.3 菜单管理全部展开
+
+菜单管理树表使用字符串化的行 key。`expandedIDs`、`expandedRowKeys`、平台切换、搜索期间
+保存/恢复展开状态全部使用 `String(menu.id)`；不能把数字 ID 直接传给 Element Plus 的
+`expand-row-keys`。Element Plus 内部以 `Object.keys()` 产生字符串 key，数字数组会导致
+`includes` 比较失败，从而把“全部展开”表现成全部收起。实现必须补充全部展开、全部收起、
+搜索恢复和平台切换的回归测试。
+
+#### 3.4.4 默认角色并发基线
+
+默认角色已有的部分唯一索引 `ux_rbac_role_default_active`、事务内按 ID 升序锁定有效角色、
+先清旧默认再设新默认和业务完整性校验继续保留。本批次增加并发切换回归测试，证明两个并发
+`SetDefault` 请求提交后最多一个有效默认角色，且不会把默认角色置于不可恢复的中间状态；不
+引入乐观锁或第二套状态字段。
 
 ## 4. 模块和依赖方向
 
@@ -436,6 +509,12 @@ foundation、数据回填或 Redis 清理。COS 只在连接测试和凭证申�
 
 ### 11.1 后端
 
+- 个人资料路由不在静态路由表中；`account:profile:list` 缺失时，已认证用户访问
+  `/account/profile` 被导向 Dashboard，且 GET/PUT/密码接口分别执行页面或动作权限校验。
+- Access 三层缓存覆盖 Redis version 门控、本地命中、过期/淘汰、`invalidating`、Redis 故障回源
+  PostgreSQL、版本切换和不可变快照复制；验证 PostgreSQL 故障时不返回旧本地权限。
+- 默认角色使用真实 PostgreSQL 并发测试验证两个 `SetDefault` 请求最终最多一个有效默认角色，
+  并且失败事务不会留下零默认或多默认状态。
 - Model/Repository 使用真实 PostgreSQL 验证两表、字段、CHECK、外键、部分唯一索引和软删
   查询；验证 `ON DELETE RESTRICT` 阻止物理删除引用配置。
 - Service 覆盖：创建和编辑、密钥替换、连接测试成功/失败、规则 code 冲突、无效配置绑定、
@@ -448,6 +527,11 @@ foundation、数据回填或 Redis 清理。COS 只在连接测试和凭证申�
 
 ### 11.2 前端
 
+- 动态路由只从 Access 菜单注册；隐藏的 `account:profile:list` 不出现在侧边栏，但有权限时
+  头像菜单可以进入，缺权限时强制 URL 回 Dashboard。
+- 个人资料保存和修改密码按钮分别按 `account:profile:update`、`account:password:update`
+  控制，页面级权限统一断言为 `account:profile:list`，不接受 `:view` 变体。
+- 菜单管理验证全部展开、全部收起、搜索恢复和平台切换均使用字符串 row key。
 - API DTO 运行时解析拒绝缺字段、额外字段和错误类型；配置响应只能消费 `hasCredentials`
   和非敏感配置元数据。
 - 对象存储页面只展示两个 Tab，配置和规则的按钮按 action permission 控制；删除和连接
@@ -464,18 +548,27 @@ foundation、数据回填或 Redis 清理。COS 只在连接测试和凭证申�
 5. 凭证申请只返回短时 URL 和 object key，浏览器直接 PUT 到 COS；日志中没有 URL 签名、Secret
    或 Authorization。
 6. Admin 平台以外的 `/api/v1/access` 响应不包含 Admin 的 COS 菜单或权限。
-7. API/Worker 重启不执行任何 DDL、seed、回填或菜单插入。
+7. 个人资料页面只有在 `account:profile:list` 授权时才可动态进入；保存资料和修改密码分别
+   受对应动作权限保护，未授权强制 URL 回 Dashboard。
+8. RBAC 进程内缓存每次使用前经过 Redis access version 门控，权限变更后不会返回旧版本；
+   Redis 故障时只回源 PostgreSQL。
+9. 菜单管理“全部展开”实际展开全部目录，“全部收起”实际收起，搜索和平台切换不会恢复错误
+   状态；默认角色并发切换最终最多一个有效默认角色。
+10. API/Worker 重启不执行任何 DDL、seed、回填或菜单插入。
 
 ## 12. 后续拆分顺序
 
 得到本 spec 书面确认后，实施 plan 按以下顺序拆分：
 
-1. 人工 SQL migration、真实 PostgreSQL schema 测试和回滚/幂等验证；
-2. `storage/cosconfig` 表模块、密钥加解密和管理 API；
-3. `storage/uploadrule` 表模块、规则校验和管理 API；
-4. `storage/cos` 腾讯云客户端与预签名凭证接口；
-5. Admin 对象存储页面、两个 Tab、权限菜单和中英文文案；
-6. 全量后端/前端验证、日志脱敏扫描和人工验收。
+1. 个人资料 RBAC 路由/按钮权限闭环、权限命名校验和相关回归测试；
+2. Access 进程内 L1 缓存、Redis version 门控、失效边界和并发测试；
+3. 菜单管理字符串 row key 修复、展开交互测试及默认角色并发回归测试；
+4. 人工 SQL migration、真实 PostgreSQL schema 测试和回滚/幂等验证；
+5. `storage/cosconfig` 表模块、密钥加解密和管理 API；
+6. `storage/uploadrule` 表模块、规则校验和管理 API；
+7. `storage/cos` 腾讯云客户端与预签名凭证接口；
+8. Admin 对象存储页面、两个 Tab、权限菜单和中英文文案；
+9. 全量后端/前端验证、日志脱敏扫描和人工验收。
 
 任何一步发现需要文件表、STS、分片上传、业务对象引用或多平台菜单，都必须暂停并另开
 spec，不把复杂度偷偷并入本模块。

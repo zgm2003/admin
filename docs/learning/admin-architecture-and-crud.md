@@ -697,6 +697,9 @@ Handler 里的 `articleService` 小接口主要服务于 Handler 单元测试。
 
 `server/internal/module/article/route.go`：
 
+下面的 `content:article:read` 仅是接口动作权限示例，不是 `menuType=page` 的页面入口；任何
+页面菜单节点仍必须使用资源级 `:list`（详情页也不能命名为 `:view`/`:read`）。
+
 ```go
 package article
 

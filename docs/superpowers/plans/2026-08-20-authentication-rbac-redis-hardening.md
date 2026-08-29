@@ -1,5 +1,9 @@
 # Authentication, RBAC, and Redis Hardening Implementation Plan
 
+> 历史计划说明（2026-08-29）：本计划早期禁止进程级 RBAC 缓存的约束已由最新模块化架构
+> 基线替代。后续实现允许且必须采用 Redis access version 门控后的有界本机快照；其他
+> PostgreSQL 权威、失效协调和失败关闭规则继续有效。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` in the main thread to implement this plan task-by-task. Do not use subagents. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build multi-platform authentication policy management while making PostgreSQL authoritative and Redis a rebuildable zero-PostgreSQL fast path for healthy authentication and RBAC reads.
@@ -1942,7 +1946,7 @@ Expected: no runtime-code matches. A migration cleanup pattern or plan/spec pros
 
 - [ ] **Step 6: Review every spec section against the coverage matrix**
 
-Check all 20 acceptance criteria in spec section 18 and record any failed criterion as an implementation failure, not a future task. Confirm technical debt items in section 16 remain absent: no login-mode field, captcha field, email auto-registration, session-management UI, operation-log persistence, or process-level cache.
+Check all 20 acceptance criteria in spec section 18 and record any failed criterion as an implementation failure, not a future task. Confirm technical debt items in section 16 remain absent: no login-mode field, captcha field, email auto-registration, session-management UI, or operation-log persistence. The later Access baseline permits only a bounded, Redis-version-gated process-local snapshot; an unbounded or ungated process cache remains prohibited.
 
 - [ ] **Step 7: Inspect final changes without committing**
 

@@ -1643,7 +1643,9 @@ Do not implement any of those items in this plan.
 
 - No admin-created users, user restore, email/password editing, profiles, export, or batch operations.
 - No session list, active kick-out command, login log, operation-log table, or empty audit hook.
-- No RBAC Redis cache, permission version, process-local cache, or change to current authentication read/fallback semantics.
+- This historical slice did not implement RBAC caching. Current work must follow the later three-layer
+  Access baseline: Redis access-version gating plus a bounded process-local immutable snapshot; no
+  unbounded or ungated cache and no change to the documented authentication fallback semantics.
 - No `AppDialog`, `AppTable`, `usePagedList`, generic search form, generic CRUD, BaseService, BaseRepository, Manager, Factory, Adapter, DI container, or registry.
 - No forced access refresh, route hot swap, or browser reload after a role mutation.
 - No Docker, worktree, automatic commit, fetch, pull, push, or service lifecycle command.

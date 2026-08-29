@@ -1,5 +1,9 @@
 # Backend i18n and RBAC Foundation Design
 
+> 历史规则说明（2026-08-29）：本文早期示例中的页面权限 `:view` 已被项目级 Agent 规则替代。
+> 任何 `menuType=page` 必须使用资源级 `:list`；页面内按钮和接口动作另用独立 action code。
+> 下文保留为历史实现记录，新增或迁移代码以最新 spec、plan 和 `AGENTS.md` 为准。
+
 ## 1. 目标
 
 为当前单体 Admin 系统建立一套可直接落地的后端国际化和 RBAC 基础，
@@ -157,7 +161,7 @@ deleted_at
 权限码使用冒号分段，例如：
 
 ```text
-system:user:view
+system:user:list
 system:user:create
 system:user:update
 system:user:delete
@@ -204,7 +208,7 @@ GET /api/v1/access
   ],
   "permissionCodes": [
     "ai:model:create",
-    "ai:model:view"
+    "ai:model:list"
   ]
 }
 ```

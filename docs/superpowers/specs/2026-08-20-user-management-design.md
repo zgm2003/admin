@@ -1,5 +1,9 @@
 # Admin 用户管理与用户角色分配设计说明
 
+> 历史设计说明（2026-08-29）：页面入口权限统一使用资源级 `:list`，按钮和接口必须使用
+> 独立 action code。本文历史缓存范围不替代最新三层 Access 基线；用户资料页面遵守
+> `account:profile:list` + `account:profile:update`/`account:password:update` 的 RBAC 映射。
+
 ## 1. 背景与目标
 
 菜单管理、角色管理和角色菜单授权已经落地，但用户模块目前只有认证所需的
@@ -598,7 +602,8 @@ PostgreSQL 事务：
 调用，不能各自拼接字符串。`user.Service` 只依赖现有 Redis client 所满足的最小
 `Delete(context.Context, string) error` 测试边界，不增加 Adapter 或缓存 Manager。
 
-权威关系明确为：
+权威关系明确为（本节记录用户切片当时的局部边界；当前 Access 三层缓存以最新模块化架构
+spec 为准）：
 
 ```text
 用户、角色、用户角色关系 -> PostgreSQL
@@ -875,8 +880,10 @@ rg -n "\bas any\b|\bany\[\]|Record<[^>]*,\s*any>" src -g "*.ts" -g "*.vue"
 | 分页、筛选、加载状态重复 | 基于真实重复评估 `usePagedList` 和搜索组件，不预设万能 CRUD |
 | role/user 后端 CRUD 相似 | 做机械重复审查，只提取具体纯函数或协议 helper，禁止 BaseService/BaseRepository |
 
-不得增加进程级权限缓存。Redis 权限缓存的 key、permission version、角色/菜单/用户
-mutation 失效范围、多实例一致性、故障日志和指标必须由缓存 spec 明确定义。
+权限缓存必须遵守最新三层 Access 基线：PostgreSQL 保存权限事实，Redis 负责跨进程版本门控
+和快照，有界进程内快照只能在 Redis version 确认后使用。Redis 故障或版本无法确认时不得
+返回旧权限、空权限或假成功；key、失效范围、多实例一致性、故障日志和指标由最新缓存 spec
+明确定义。
 
 技术债验证完成后再做 UI 专项整改。UI 整改统一颜色、间距、字号、表格密度、搜索区、
 工具栏、分页、Dialog、加载/空/错误状态、滚动、响应式、明暗主题以及前端代码格式，

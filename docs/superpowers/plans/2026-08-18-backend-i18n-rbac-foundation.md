@@ -1,10 +1,14 @@
 # Backend i18n and RBAC Foundation Implementation Plan
 
+> 历史计划说明（2026-08-29）：所有页面入口权限统一使用 `:list`，禁止 `:view`、`:read` 或无
+> 后缀页面码；页面按钮和接口必须使用独立 action permission。本文旧示例已按该规则更新，
+> 后续实现以最新 Agent 规则和功能 spec 为准。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add backend Chinese/English error localization, PostgreSQL-backed RBAC access calculation and authorization, and a typed frontend access bootstrap that installs dynamic menus, routes, and button permissions once per authenticated application load.
 
-**Architecture:** Keep the backend flow linear: `router -> middleware -> handler -> service -> repository -> model -> PostgreSQL`. `sys_role_menu` stores only direct page/action grants; the access service derives ancestors for menu visibility and effective page permission, while each protected backend request checks PostgreSQL directly. The frontend performs `auth -> GET /access -> validate -> store -> register routes -> navigate`, with Dashboard remaining a static protected route and no fallback component or guessed view import.
+**Architecture:** Keep the backend flow linear: `router -> middleware -> handler -> service -> repository -> model -> PostgreSQL`. `sys_role_menu` stores only direct page/action grants; the access service derives ancestors for menu visibility and effective page permission, while each protected backend request checks the current Access Snapshot. The frontend performs `auth -> GET /access -> validate -> store -> register routes -> navigate`, with Dashboard remaining a static protected route and no fallback component or guessed view import.
 
 **Tech Stack:** Go 1.26, Gin, GORM, PostgreSQL, Vue 3, TypeScript 6, Pinia, Vue Router 4, Element Plus, vue-i18n, Vitest, Vue Test Utils.
 
@@ -22,7 +26,8 @@
 - Do not introduce `platform`, `infra`, generic adapters, Manager, Factory, BaseService, BaseRepository, a DI container, a policy engine, or a runtime registry.
 - Do not introduce explicit TypeScript `any`, `any[]`, `as any`, `Record<string, any>`, `@ts-ignore`, or a silent fallback.
 - Do not seed fake production menus. PostgreSQL tests create fixtures inside transactions and roll them back.
-- Do not add Redis or process-level RBAC caching in this plan.
+- This historical plan predates the Redis-gated process cache; use the latest Agent rules for the
+  current three-layer Access cache and do not implement a second cache policy here.
 
 ## File Map
 
@@ -472,7 +477,7 @@ Build a fixture inside one rollback transaction:
 
 ```text
 system(directory)
-`-- users(page, system:user:view)
+`-- users(page, system:user:list)
     |-- create(action, system:user:create)
     `-- delete(action, system:user:delete)
 ```
@@ -481,10 +486,10 @@ Create two enabled roles and one enabled user. Store only the create action in `
 
 ```go
 hasCreate, _ := repository.HasPermission(ctx, userID, "system:user:create")
-hasView, _ := repository.HasPermission(ctx, userID, "system:user:view")
+hasList, _ := repository.HasPermission(ctx, userID, "system:user:list")
 hasDelete, _ := repository.HasPermission(ctx, userID, "system:user:delete")
-if !hasCreate || !hasView || hasDelete {
-	t.Fatalf("permissions create=%v view=%v delete=%v, want true true false", hasCreate, hasView, hasDelete)
+if !hasCreate || !hasList || hasDelete {
+	t.Fatalf("permissions create=%v list=%v delete=%v, want true true false", hasCreate, hasList, hasDelete)
 }
 ```
 
@@ -559,12 +564,12 @@ Snapshot{
 	MenuTree: []MenuNode{{
 		Code: "system", MenuType: menu.TypeDirectory, TitleKey: "navigation.system",
 		Children: []MenuNode{{
-			Code: "system:user:view", MenuType: menu.TypePage,
+			Code: "system:user:list", MenuType: menu.TypePage,
 			Path: stringPointer("/system/users"), ViewKey: stringPointer("systemUsers"),
 			TitleKey: "navigation.systemUsers", Children: []MenuNode{},
 		}},
 	}},
-	PermissionCodes: []string{"system:user:create", "system:user:view"},
+	PermissionCodes: []string{"system:user:create", "system:user:list"},
 }
 ```
 

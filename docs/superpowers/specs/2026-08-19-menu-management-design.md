@@ -1,5 +1,9 @@
 # Menu Management Phase One Design
 
+> 历史设计说明（2026-08-29）：页面入口权限统一使用资源级 `:list`，包括详情和单例页面；
+> 页面按钮/API 使用独立 action code。本文早期的 Redis/进程缓存范围仅适用于当时切片，当前
+> Access 三层缓存和个人资料 RBAC 规则以最新 Agent/模块化架构 spec 为准。
+
 ## 1. 目标
 
 实现系统管理一期的第一个完整业务切片：菜单管理。
@@ -41,7 +45,7 @@ Adapter、Platform 或运行时注册框架。
 ## 3. 非目标和硬约束
 
 - 不实现用户管理、角色管理或角色授权页面；
-- 不实现 Redis 权限缓存或进程级权限缓存；
+- 不在本菜单切片单独实现缓存；Access 的 Redis version 门控和有界进程缓存由最新架构切片统一实现；
 - 不修改登录、会话或邮箱注册流程；
 - 不把 Dashboard、Login、Forgot Password 等固定页面写入 `sys_menu`；
 - 不做分页式平面菜单列表；

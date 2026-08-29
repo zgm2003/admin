@@ -4,6 +4,13 @@
 
 状态：设计已确认，实施计划已完成，等待执行
 
+> 历史约束说明（2026-08-29）：本文关于“RBAC 不存在进程级权限缓存”的表述已由
+> `docs/superpowers/specs/2026-08-29-admin-modular-architecture-design.md` 与
+> `docs/superpowers/specs/2026-08-29-cos-object-storage-design.md` 的三层 Access 缓存基线替代。
+> 本文后续章节中“不得增加进程级缓存”“不得尝试内存缓存”等表述仅是历史范围记录；当前
+> 实现必须使用 Redis access version 门控后的有界进程内不可变快照。PostgreSQL 权威、Redis
+> 版本门控、失效协调和失败关闭语义继续有效。
+
 ## 1. 目的
 
 本设计一次回收两个已经确认的技术债，并落地多平台认证策略管理：
@@ -47,7 +54,8 @@
 - Redis 可用且缓存命中时，认证和权限判断不查询 PostgreSQL；
 - 影响缓存事实的写操作必须先建立 Redis 失效状态，失败时不得进入 PostgreSQL 写事务；
 - 权限变更后，目标用户的下一次权限请求不得接受旧权限；
-- 不增加进程级认证或权限缓存；
+- 本认证加固切片不增加进程级认证缓存；RBAC 权限缓存由后续三层 Access 基线统一负责，不能
+  在本切片另造第二套实现；
 - `AUTH_COOKIE_SECURE`、`CORS_ORIGIN`、可信代理和 Redis 连接属于部署配置，不由数据库热修改；
 - 登录方式、验证码类型和邮箱免注册登录作为明确技术债，不创建无运行时用途的字段。
 
@@ -77,7 +85,7 @@
 - 管理员会话列表和踢出用户页面；
 - 登录日志、持久化操作日志和安全事件中心；
 - APP_SECRET、Cookie Secure、CORS、Redis URL 或可信代理的在线修改；
-- 进程级 L1 缓存；
+- 进程级 L1 缓存（当时未纳入本切片；已由 2026-08-29 三层 Access 基线补入）；
 - 通用 Cache Manager、Adapter、BaseService、BaseRepository 或事件总线；
 - 前端全局 AppDialog、AppTable 或通用 CRUD 回收。
 
@@ -410,8 +418,9 @@ permissionCodes
 `access_cache_ttl_seconds`、使缓存 TTL 变更后旧 Snapshot 立即不可达，以及隔离不同客户端
 缓存；所有平台都从相同的 userID + access version PostgreSQL 权威数据构建权限并集。
 
-权限码在 Snapshot 内按字典序排序且唯一。Service 可以在一次请求内构造具体 `map[string]struct{}`
-完成判断，但不得把该集合保存为进程级缓存。
+权限码在 Snapshot 内按字典序排序且唯一。本文当时只允许请求级 `map[string]struct{}`；该历史
+限制已由 2026-08-29 三层 Access 基线替代，当前进程缓存只能保存有界、不可变、经 Redis
+version 门控的完整快照。
 
 ### 7.5 缓存写入校验
 
@@ -998,7 +1007,7 @@ web/src/views/system/auth-platforms/index.vue
 14. RBAC 多角色并集、`/access` 和权限 Middleware 使用同一 Snapshot；
 15. 权限 mutation 在同一事务推进正确用户的 access version；
 16. 权限变更后的下一次请求不接受旧权限；
-17. 不存在进程级权限缓存、通用 Adapter、Manager 或缓存框架；
+17. 不引入无界或未经 Redis version 门控的进程级权限缓存；通用 Adapter、Manager 或缓存框架仍禁止；
 18. 前端 DTO 严格校验且业务 TypeScript 不出现 forbidden any；
 19. 旧无平台会话在迁移时明确撤销，用户重新登录成功；
 20. 后端和前端完整测试、构建及真实 PostgreSQL/Redis 集成验证通过。
