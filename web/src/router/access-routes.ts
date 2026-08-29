@@ -36,6 +36,7 @@ const componentPathMap: Readonly<Record<string, string>> = {
 	'access/roles': 'rbac/role',
 	'access/auth-platforms': 'auth/platform',
 	'system/operation-logs': 'audit/operationlog',
+	'storage/object': 'storage/object',
 }
 
 export function registerAccessRoutes(
