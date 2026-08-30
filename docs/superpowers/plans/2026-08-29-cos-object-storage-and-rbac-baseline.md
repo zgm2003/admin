@@ -10,6 +10,9 @@
 
 **Spec:**
 - `docs/superpowers/specs/2026-08-29-cos-object-storage-design.md`
+
+**设计修订（2026-08-30）：** 上传规则统一使用 `code` 作为业务权限编码和 COS 对象前缀，删除
+`path_prefix`、`max_file_count` 及每个平台单启用规则约束；文件单选/多选由业务组件控制。
 - `docs/superpowers/specs/2026-08-29-admin-modular-architecture-design.md`
 - `AGENTS.md`
 

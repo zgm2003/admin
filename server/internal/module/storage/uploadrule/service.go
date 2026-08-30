@@ -66,11 +66,11 @@ func (s *Service) Get(ctx context.Context, id int64) (RuleValue, error) {
 	if e != nil {
 		return RuleValue{}, dependency(e)
 	}
-	return RuleValue{ID: m.ID, PlatformID: m.PlatformID, Code: m.Code, Name: m.Name, CosConfigID: m.CosConfigID, PathPrefix: m.PathPrefix, MaxFileSizeBytes: m.MaxFileSizeBytes, MaxFileCount: m.MaxFileCount, AllowedExtensions: []string(m.AllowedExtensions), AllowedMimeTypes: []string(m.AllowedMimeTypes), AccessMode: m.AccessMode, IsEnabled: m.IsEnabled, Remark: m.Remark, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
+	return RuleValue{ID: m.ID, PlatformID: m.PlatformID, Code: m.Code, Name: m.Name, CosConfigID: m.CosConfigID, MaxFileSizeBytes: m.MaxFileSizeBytes, AllowedExtensions: []string(m.AllowedExtensions), AllowedMimeTypes: []string(m.AllowedMimeTypes), AccessMode: m.AccessMode, IsEnabled: m.IsEnabled, Remark: m.Remark, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
 }
 func (s *Service) Create(ctx context.Context, in CreateInput) (int64, error) {
 	in = normalizeCreateInput(in)
-	if e := validateFields(in.PlatformID, in.Code, in.Name, in.CosConfigID, in.PathPrefix, in.MaxFileSizeBytes, in.MaxFileCount, in.AllowedExtensions, in.AllowedMimeTypes, in.AccessMode, in.Remark, true); e != nil {
+	if e := validateFields(in.PlatformID, in.Code, in.Name, in.CosConfigID, in.MaxFileSizeBytes, in.AllowedExtensions, in.AllowedMimeTypes, in.AccessMode, in.Remark, true); e != nil {
 		return 0, invalid(e)
 	}
 	platformOK, err := s.repository.PlatformEnabled(ctx, in.PlatformID)
@@ -90,28 +90,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (int64, error) {
 	return s.repositoryCreate(ctx, in)
 }
 func (s *Service) repositoryCreate(ctx context.Context, in CreateInput) (int64, error) {
-	m := &Model{PlatformID: in.PlatformID, Code: in.Code, Name: in.Name, CosConfigID: in.CosConfigID, PathPrefix: in.PathPrefix, MaxFileSizeBytes: in.MaxFileSizeBytes, MaxFileCount: in.MaxFileCount, AllowedExtensions: StringArray(in.AllowedExtensions), AllowedMimeTypes: StringArray(in.AllowedMimeTypes), AccessMode: in.AccessMode, IsEnabled: in.IsEnabled, Remark: in.Remark, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	if in.IsEnabled == yesno.Yes {
-		if e := s.repository.Transaction(ctx, func(r *Repository) error {
-			rows, e := r.LockActiveByPlatform(ctx, in.PlatformID)
-			if e != nil {
-				return e
-			}
-			for _, row := range rows {
-				if row.IsEnabled == yesno.Yes {
-					if e = r.Update(ctx, row.ID, map[string]any{"is_enabled": yesno.No, "updated_at": m.UpdatedAt}); e != nil {
-						return e
-					}
-				}
-			}
-			return r.Create(ctx, m)
-		}); e != nil {
-			if errors.Is(e, ErrConflict) {
-				return 0, conflict(e)
-			}
-			return 0, dependency(e)
-		}
-	} else if e := s.repository.Create(ctx, m); e != nil {
+	m := &Model{PlatformID: in.PlatformID, Code: in.Code, Name: in.Name, CosConfigID: in.CosConfigID, MaxFileSizeBytes: in.MaxFileSizeBytes, AllowedExtensions: StringArray(in.AllowedExtensions), AllowedMimeTypes: StringArray(in.AllowedMimeTypes), AccessMode: in.AccessMode, IsEnabled: in.IsEnabled, Remark: in.Remark, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	if e := s.repository.Create(ctx, m); e != nil {
 		if errors.Is(e, ErrConflict) {
 			return 0, conflict(e)
 		}
@@ -124,7 +104,7 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) error {
 		return invalid(fmt.Errorf("id invalid"))
 	}
 	in = normalizeUpdateInput(in)
-	if e := validateFields(1, "x", in.Name, in.CosConfigID, in.PathPrefix, in.MaxFileSizeBytes, in.MaxFileCount, in.AllowedExtensions, in.AllowedMimeTypes, in.AccessMode, in.Remark, false); e != nil {
+	if e := validateFields(1, "x", in.Name, in.CosConfigID, in.MaxFileSizeBytes, in.AllowedExtensions, in.AllowedMimeTypes, in.AccessMode, in.Remark, false); e != nil {
 		return invalid(e)
 	}
 	return s.repository.Transaction(ctx, func(r *Repository) error {
@@ -146,7 +126,7 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) error {
 		if in.AccessMode == "public" && (config.BucketDomain == nil || strings.TrimSpace(*config.BucketDomain) == "") {
 			return conflict(fmt.Errorf("public rule requires bucket domain"))
 		}
-		if e = r.Update(ctx, id, map[string]any{"name": in.Name, "cos_config_id": in.CosConfigID, "path_prefix": in.PathPrefix, "max_file_size_bytes": in.MaxFileSizeBytes, "max_file_count": in.MaxFileCount, "allowed_extensions": StringArray(in.AllowedExtensions), "allowed_mime_types": StringArray(in.AllowedMimeTypes), "access_mode": in.AccessMode, "remark": in.Remark, "updated_at": time.Now().UTC()}); e != nil {
+		if e = r.Update(ctx, id, map[string]any{"name": in.Name, "cos_config_id": in.CosConfigID, "max_file_size_bytes": in.MaxFileSizeBytes, "allowed_extensions": StringArray(in.AllowedExtensions), "allowed_mime_types": StringArray(in.AllowedMimeTypes), "access_mode": in.AccessMode, "remark": in.Remark, "updated_at": time.Now().UTC()}); e != nil {
 			return dependency(e)
 		}
 		_ = m
@@ -164,7 +144,6 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, v yesno.Value) err
 		var m Model
 		var e error
 		if v == yesno.Yes {
-			var rows []Model
 			m, e = r.FindByID(ctx, id)
 			if e != nil {
 				if errors.Is(e, gorm.ErrRecordNotFound) {
@@ -172,19 +151,8 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, v yesno.Value) err
 				}
 				return dependency(e)
 			}
-			rows, e = r.LockActiveByPlatform(ctx, m.PlatformID)
-			if e != nil {
-				return dependency(e)
-			}
 			if _, e = r.Config(ctx, m.CosConfigID); e != nil {
 				return conflict(fmt.Errorf("COS config unavailable"))
-			}
-			for _, row := range rows {
-				if row.ID != id && row.IsEnabled == yesno.Yes {
-					if e = r.Update(ctx, row.ID, map[string]any{"is_enabled": yesno.No, "updated_at": time.Now().UTC()}); e != nil {
-						return dependency(e)
-					}
-				}
 			}
 		} else {
 			m, e = r.LockByID(ctx, id)
@@ -208,7 +176,6 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, v yesno.Value) err
 func normalizeCreateInput(in CreateInput) CreateInput {
 	in.Code = strings.TrimSpace(in.Code)
 	in.Name = strings.TrimSpace(in.Name)
-	in.PathPrefix = strings.Trim(strings.TrimSpace(in.PathPrefix), "/")
 	in.Remark = strings.TrimSpace(in.Remark)
 	in.AllowedExtensions = normalize(in.AllowedExtensions, true)
 	in.AllowedMimeTypes = normalize(in.AllowedMimeTypes, false)
@@ -216,7 +183,6 @@ func normalizeCreateInput(in CreateInput) CreateInput {
 }
 func normalizeUpdateInput(in UpdateInput) UpdateInput {
 	in.Name = strings.TrimSpace(in.Name)
-	in.PathPrefix = strings.Trim(strings.TrimSpace(in.PathPrefix), "/")
 	in.Remark = strings.TrimSpace(in.Remark)
 	in.AllowedExtensions = normalize(in.AllowedExtensions, true)
 	in.AllowedMimeTypes = normalize(in.AllowedMimeTypes, false)
@@ -258,9 +224,6 @@ func (s *Service) IssueCredentials(ctx context.Context, identity auth.Identity, 
 	if err != nil {
 		return CredentialResponse{}, dependency(err)
 	}
-	if len(input.Files) > target.MaxFileCount {
-		return CredentialResponse{}, invalid(fmt.Errorf("file count exceeds rule"))
-	}
 	if s.keys == nil || s.signer == nil {
 		return CredentialResponse{}, dependency(fmt.Errorf("COS signer unavailable"))
 	}
@@ -282,7 +245,7 @@ func (s *Service) IssueCredentials(ctx context.Context, identity auth.Identity, 
 		if err != nil {
 			return CredentialResponse{}, invalid(err)
 		}
-		key, err := generateObjectKey(target.PathPrefix, ext, now)
+		key, err := generateObjectKey(target.Code, ext, now)
 		if err != nil {
 			return CredentialResponse{}, dependency(err)
 		}

@@ -1,9 +1,9 @@
 import { request } from '../../utils/request'
 import type { YesNo } from '../../enums/yes-no'
 import type { PageRequest, PageResult } from '../../types/pagination'
-export interface UploadRule { id:number; platformId:number; platformCode:string; platformName:string; code:string; name:string; cosConfigId:number; cosConfigName:string; pathPrefix:string; maxFileSizeBytes:number; maxFileCount:number; allowedExtensions:string[]; allowedMimeTypes:string[]; accessMode:'private'|'public'; isEnabled:YesNo; remark:string; createdAt:string; updatedAt:string }
+export interface UploadRule { id:number; platformId:number; platformCode:string; platformName:string; code:string; name:string; cosConfigId:number; cosConfigName:string; maxFileSizeBytes:number; allowedExtensions:string[]; allowedMimeTypes:string[]; accessMode:'private'|'public'; isEnabled:YesNo; remark:string; createdAt:string; updatedAt:string }
 export interface UploadRuleQuery extends PageRequest { platformId?:number; cosConfigId?:number; keyword?:string; isEnabled?:YesNo }
-export interface UploadRuleInput { platformId?:number; code?:string; name:string; cosConfigId:number; pathPrefix:string; maxFileSizeBytes:number; maxFileCount:number; allowedExtensions:string[]; allowedMimeTypes:string[]; accessMode:'private'|'public'; isEnabled?:YesNo; remark:string }
+export interface UploadRuleInput { platformId?:number; code?:string; name:string; cosConfigId:number; maxFileSizeBytes:number; allowedExtensions:string[]; allowedMimeTypes:string[]; accessMode:'private'|'public'; isEnabled?:YesNo; remark:string }
 export interface PlatformOption {id:number;code:string;name:string;isEnabled:YesNo};export interface ConfigSummary {id:number;name:string;bucket:string;region:string;isEnabled:YesNo};export interface UploadRulePageInit {platforms:PlatformOption[];configs:ConfigSummary[]}
 export async function listUploadRules(query:UploadRuleQuery):Promise<PageResult<UploadRule>>{return request({method:'GET',url:'/api/admin/v1/storage/upload-rules',params:query})}
 export async function getUploadRule(id:number):Promise<UploadRule>{return request({method:'GET',url:`/api/admin/v1/storage/upload-rules/${id}`})}

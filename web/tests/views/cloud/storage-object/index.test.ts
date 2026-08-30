@@ -162,9 +162,8 @@ describe("ObjectStorage", () => {
     await flushPromises();
 
     const form = wrapper.find('[data-testid="storage-rule-form"]');
-    expect(form.findAll(".el-form-item.is-required")).toHaveLength(9);
+    expect(form.findAll(".el-form-item.is-required")).toHaveLength(7);
     expect(form.find('[data-testid="storage-rule-code"]').attributes("placeholder")).toContain("业务申请上传凭证时使用");
-    expect(form.find('[data-testid="storage-rule-path-prefix"]').attributes("placeholder")).toContain("avatars");
     expect(form.find('[data-testid="storage-rule-extensions"]').classes()).toContain("el-select");
     expect(form.find('[data-testid="storage-rule-mime-types"]').classes()).toContain("el-select");
     expect(form.text()).toContain("可选择常用值，也可以直接输入自定义值");
@@ -188,7 +187,6 @@ describe("ObjectStorage", () => {
     const form = wrapper.find('[data-testid="storage-rule-form"]');
     await form.find('[data-testid="storage-rule-code"]').setValue("avatar");
     await form.find('[data-testid="storage-rule-name"]').setValue("头像上传");
-    await form.find('[data-testid="storage-rule-path-prefix"]').setValue("avatars");
     await wrapper.findAllComponents(AppDialog)[1]?.find('.el-dialog__footer .el-button--primary').trigger("click");
     await flushPromises();
 
@@ -363,9 +361,7 @@ describe("ObjectStorage", () => {
         name: "头像上传",
         cosConfigId: 8,
         cosConfigName: "默认 COS",
-        pathPrefix: "avatars",
         maxFileSizeBytes: 1048576,
-        maxFileCount: 1,
         allowedExtensions: ["png"],
         allowedMimeTypes: ["image/png"],
         accessMode: "private",
@@ -394,9 +390,7 @@ describe("ObjectStorage", () => {
     expect(updateUploadRule).toHaveBeenCalledWith(9, {
       name: "头像上传",
       cosConfigId: 8,
-      pathPrefix: "avatars",
       maxFileSizeBytes: 1048576,
-      maxFileCount: 1,
       allowedExtensions: ["png"],
       allowedMimeTypes: ["image/png"],
       accessMode: "private",

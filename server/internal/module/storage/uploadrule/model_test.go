@@ -6,11 +6,11 @@ import (
 )
 
 func TestRequestNormalizationAndValidation(t *testing.T) {
-	input, err := (createRequest{PlatformID: 1, Code: " avatar ", Name: " Avatar ", CosConfigID: 2, PathPrefix: " avatars ", MaxFileSizeBytes: 1024, MaxFileCount: 2, AllowedExtensions: []string{".PNG", " png ", "JPG"}, AllowedMimeTypes: []string{" Image/PNG ", "image/png"}, AccessMode: "private", IsEnabled: 1, Remark: " avatar files "}).input()
+	input, err := (createRequest{PlatformID: 1, Code: " avatar ", Name: " Avatar ", CosConfigID: 2, MaxFileSizeBytes: 1024, AllowedExtensions: []string{".PNG", " png ", "JPG"}, AllowedMimeTypes: []string{" Image/PNG ", "image/png"}, AccessMode: "private", IsEnabled: 1, Remark: " avatar files "}).input()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.Code != "avatar" || input.Name != "Avatar" || input.PathPrefix != "avatars" || input.Remark != "avatar files" {
+	if input.Code != "avatar" || input.Name != "Avatar" || input.Remark != "avatar files" {
 		t.Fatalf("text normalization = %+v", input)
 	}
 	if !reflect.DeepEqual(input.AllowedExtensions, []string{"png", "jpg"}) || !reflect.DeepEqual(input.AllowedMimeTypes, []string{"image/png"}) {
@@ -18,13 +18,12 @@ func TestRequestNormalizationAndValidation(t *testing.T) {
 	}
 
 	invalid := []createRequest{
-		{PlatformID: 1, Code: "avatar", Name: "Avatar", CosConfigID: 2, PathPrefix: "/", MaxFileSizeBytes: 1, MaxFileCount: 1, AllowedExtensions: []string{"png"}, AccessMode: "private", IsEnabled: 1},
-		{PlatformID: 1, Code: "avatar", Name: "Avatar", CosConfigID: 2, PathPrefix: "a/../b", MaxFileSizeBytes: 1, MaxFileCount: 1, AllowedExtensions: []string{"png"}, AccessMode: "private", IsEnabled: 1},
-		{PlatformID: 1, Code: "avatar", Name: "Avatar", CosConfigID: 2, PathPrefix: "avatars", MaxFileSizeBytes: 5*1024*1024*1024 + 1, MaxFileCount: 1, AllowedExtensions: []string{"png"}, AccessMode: "private", IsEnabled: 1},
-		{PlatformID: 1, Code: "avatar", Name: "Avatar", CosConfigID: 2, PathPrefix: "avatars", MaxFileSizeBytes: 1, MaxFileCount: 0, AllowedExtensions: []string{"png"}, AccessMode: "private", IsEnabled: 1},
-		{PlatformID: 1, Code: "avatar", Name: "Avatar", CosConfigID: 2, PathPrefix: "avatars", MaxFileSizeBytes: 1, MaxFileCount: 1, AllowedExtensions: nil, AccessMode: "private", IsEnabled: 1},
-		{PlatformID: 1, Code: "avatar", Name: "Avatar", CosConfigID: 2, PathPrefix: "avatars", MaxFileSizeBytes: 1, MaxFileCount: 1, AllowedExtensions: []string{"png"}, AccessMode: "shared", IsEnabled: 1},
-		{PlatformID: 1, Code: "avatar", Name: "Avatar", CosConfigID: 2, PathPrefix: "avatars", MaxFileSizeBytes: 1, MaxFileCount: 1, AllowedExtensions: []string{"png"}, AccessMode: "private", IsEnabled: 2},
+		{PlatformID: 1, Code: "/avatar", Name: "Avatar", CosConfigID: 2, MaxFileSizeBytes: 1, AllowedExtensions: []string{"png"}, AccessMode: "private", IsEnabled: 1},
+		{PlatformID: 1, Code: "a/../b", Name: "Avatar", CosConfigID: 2, MaxFileSizeBytes: 1, AllowedExtensions: []string{"png"}, AccessMode: "private", IsEnabled: 1},
+		{PlatformID: 1, Code: "avatar", Name: "Avatar", CosConfigID: 2, MaxFileSizeBytes: 5*1024*1024*1024 + 1, AllowedExtensions: []string{"png"}, AccessMode: "private", IsEnabled: 1},
+		{PlatformID: 1, Code: "avatar", Name: "Avatar", CosConfigID: 2, MaxFileSizeBytes: 1, AllowedExtensions: nil, AccessMode: "private", IsEnabled: 1},
+		{PlatformID: 1, Code: "avatar", Name: "Avatar", CosConfigID: 2, MaxFileSizeBytes: 1, AllowedExtensions: []string{"png"}, AccessMode: "shared", IsEnabled: 1},
+		{PlatformID: 1, Code: "avatar", Name: "Avatar", CosConfigID: 2, MaxFileSizeBytes: 1, AllowedExtensions: []string{"png"}, AccessMode: "private", IsEnabled: 2},
 	}
 	for index, request := range invalid {
 		if _, err := request.input(); err == nil {

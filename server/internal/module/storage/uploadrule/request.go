@@ -20,9 +20,7 @@ type CreateInput struct {
 	PlatformID                          int64
 	Code, Name                          string
 	CosConfigID                         int64
-	PathPrefix                          string
 	MaxFileSizeBytes                    int64
-	MaxFileCount                        int
 	AllowedExtensions, AllowedMimeTypes []string
 	AccessMode                          string
 	IsEnabled                           yesno.Value
@@ -31,9 +29,7 @@ type CreateInput struct {
 type UpdateInput struct {
 	Name                                string
 	CosConfigID                         int64
-	PathPrefix                          string
 	MaxFileSizeBytes                    int64
-	MaxFileCount                        int
 	AllowedExtensions, AllowedMimeTypes []string
 	AccessMode, Remark                  string
 }
@@ -51,9 +47,7 @@ type createRequest struct {
 	Code              string      `json:"code"`
 	Name              string      `json:"name"`
 	CosConfigID       int64       `json:"cosConfigId"`
-	PathPrefix        string      `json:"pathPrefix"`
 	MaxFileSizeBytes  int64       `json:"maxFileSizeBytes"`
-	MaxFileCount      int         `json:"maxFileCount"`
 	AllowedExtensions []string    `json:"allowedExtensions"`
 	AllowedMimeTypes  []string    `json:"allowedMimeTypes"`
 	AccessMode        string      `json:"accessMode"`
@@ -63,9 +57,7 @@ type createRequest struct {
 type updateRequest struct {
 	Name              string   `json:"name"`
 	CosConfigID       int64    `json:"cosConfigId"`
-	PathPrefix        string   `json:"pathPrefix"`
 	MaxFileSizeBytes  int64    `json:"maxFileSizeBytes"`
-	MaxFileCount      int      `json:"maxFileCount"`
 	AllowedExtensions []string `json:"allowedExtensions"`
 	AllowedMimeTypes  []string `json:"allowedMimeTypes"`
 	AccessMode        string   `json:"accessMode"`
@@ -90,17 +82,14 @@ func normalize(input []string, ext bool) []string {
 	}
 	return out
 }
-func validateFields(platformID int64, code, name string, configID int64, prefix string, size int64, count int, ext, mime []string, mode, remark string, requirePlatform bool) error {
+func validateFields(platformID int64, code, name string, configID int64, size int64, ext, mime []string, mode, remark string, requirePlatform bool) error {
 	if requirePlatform && platformID < 1 || configID < 1 {
 		return fmt.Errorf("platformId/cosConfigId invalid")
 	}
-	if strings.TrimSpace(code) == "" || len(code) > 64 || strings.TrimSpace(name) == "" || len(name) > 128 {
+	if strings.TrimSpace(code) == "" || len(code) > 64 || strings.HasPrefix(code, "/") || strings.HasSuffix(code, "/") || strings.Contains(code, "..") || strings.IndexFunc(code, func(r rune) bool { return unicode.IsControl(r) }) >= 0 || strings.TrimSpace(name) == "" || len(name) > 128 {
 		return fmt.Errorf("code/name invalid")
 	}
-	if prefix == "" || strings.HasPrefix(prefix, "/") || strings.Contains(prefix, "..") || strings.IndexFunc(prefix, func(r rune) bool { return unicode.IsControl(r) }) >= 0 {
-		return fmt.Errorf("pathPrefix invalid")
-	}
-	if size < 1 || size > 5*1024*1024*1024 || count < 1 {
+	if size < 1 || size > 5*1024*1024*1024 {
 		return fmt.Errorf("file limits invalid")
 	}
 	if len(ext) == 0 {
@@ -117,28 +106,26 @@ func validateFields(platformID int64, code, name string, configID int64, prefix 
 func (r createRequest) input() (CreateInput, error) {
 	r.Code = strings.TrimSpace(r.Code)
 	r.Name = strings.TrimSpace(r.Name)
-	r.PathPrefix = strings.Trim(strings.TrimSpace(r.PathPrefix), "/")
 	r.Remark = strings.TrimSpace(r.Remark)
 	r.AllowedExtensions = normalize(r.AllowedExtensions, true)
 	r.AllowedMimeTypes = normalize(r.AllowedMimeTypes, false)
-	if err := validateFields(r.PlatformID, r.Code, r.Name, r.CosConfigID, r.PathPrefix, r.MaxFileSizeBytes, r.MaxFileCount, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark, true); err != nil {
+	if err := validateFields(r.PlatformID, r.Code, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark, true); err != nil {
 		return CreateInput{}, err
 	}
 	if !yesno.IsValid(r.IsEnabled) {
 		return CreateInput{}, fmt.Errorf("isEnabled invalid")
 	}
-	return CreateInput{r.PlatformID, r.Code, r.Name, r.CosConfigID, r.PathPrefix, r.MaxFileSizeBytes, r.MaxFileCount, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.IsEnabled, r.Remark}, nil
+	return CreateInput{r.PlatformID, r.Code, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.IsEnabled, r.Remark}, nil
 }
 func (r updateRequest) input() (UpdateInput, error) {
 	r.Name = strings.TrimSpace(r.Name)
-	r.PathPrefix = strings.Trim(strings.TrimSpace(r.PathPrefix), "/")
 	r.Remark = strings.TrimSpace(r.Remark)
 	r.AllowedExtensions = normalize(r.AllowedExtensions, true)
 	r.AllowedMimeTypes = normalize(r.AllowedMimeTypes, false)
-	if err := validateFields(1, "x", r.Name, r.CosConfigID, r.PathPrefix, r.MaxFileSizeBytes, r.MaxFileCount, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark, false); err != nil {
+	if err := validateFields(1, "x", r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark, false); err != nil {
 		return UpdateInput{}, err
 	}
-	return UpdateInput{r.Name, r.CosConfigID, r.PathPrefix, r.MaxFileSizeBytes, r.MaxFileCount, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark}, nil
+	return UpdateInput{r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark}, nil
 }
 func parseListQuery(v url.Values) (ListQuery, error) {
 	allowed := map[string]bool{"page": true, "pageSize": true, "platformId": true, "cosConfigId": true, "keyword": true, "isEnabled": true}

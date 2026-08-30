@@ -83,9 +83,7 @@ interface RuleForm {
   code: string;
   name: string;
   cosConfigId: number;
-  pathPrefix: string;
   maxFileSizeBytes: number;
-  maxFileCount: number;
   allowedExtensions: string[];
   allowedMimeTypes: string[];
   accessMode: "private" | "public";
@@ -140,9 +138,7 @@ const ruleRules = computed<FormRules<RuleForm>>(() => ({
   cosConfigId: [{ required: true, type: "number", min: 1, message: t("storage.ruleConfigRequired"), trigger: "change" }],
   code: [{ required: editingRule.value === null, whitespace: true, message: t("storage.ruleCodeRequired"), trigger: "blur" }],
   name: [{ required: true, whitespace: true, message: t("storage.ruleNameRequired"), trigger: "blur" }],
-  pathPrefix: [{ required: true, whitespace: true, message: t("storage.pathPrefixRequired"), trigger: "blur" }],
   maxFileSizeBytes: [{ required: true, type: "number", min: 1, message: t("storage.maxFileSizeRequired"), trigger: "change" }],
-  maxFileCount: [{ required: true, type: "number", min: 1, message: t("storage.maxFileCountRequired"), trigger: "change" }],
   allowedExtensions: [{ required: true, validator: (_rule, value, callback) => Array.isArray(value) && value.length > 0 ? callback() : callback(new Error(t("storage.extensionsRequired"))), trigger: "change" }],
   accessMode: [{ required: true, message: t("storage.accessModeRequired"), trigger: "change" }],
 }));
@@ -164,9 +160,7 @@ const blankRule = (): RuleForm => ({
   code: "",
   name: "",
   cosConfigId: 0,
-  pathPrefix: "",
   maxFileSizeBytes: 1_048_576,
-  maxFileCount: 1,
   allowedExtensions: [],
   allowedMimeTypes: [],
   accessMode: "private",
@@ -220,7 +214,7 @@ const ruleColumns = computed<TableColumn<UploadRule>[]>(() => [
   { prop: "name", label: t("storage.name"), minWidth: 150 },
   { prop: "platformName", label: t("storage.platform"), width: 150 },
   { prop: "cosConfigName", label: t("storage.config"), width: 170 },
-  { prop: "pathPrefix", label: t("storage.pathPrefix"), minWidth: 180 },
+  { prop: "code", label: t("storage.code"), minWidth: 180 },
   { key: "status", prop: "id", label: t("storage.status"), width: 110 },
   { key: "actions", prop: "id", label: t("storage.actions"), width: 250 },
 ]);
@@ -290,7 +284,7 @@ async function saveRule(): Promise<void> {
   ruleExtensionsError.value = "";
   const valid = await ruleFormRef.value?.validate().catch(() => false);
   if (!valid) return;
-  const normalized = { name: ruleForm.value.name.trim(), cosConfigId: ruleForm.value.cosConfigId, pathPrefix: ruleForm.value.pathPrefix.trim(), maxFileSizeBytes: ruleForm.value.maxFileSizeBytes, maxFileCount: ruleForm.value.maxFileCount, allowedExtensions, allowedMimeTypes, accessMode: ruleForm.value.accessMode, remark: ruleForm.value.remark.trim() };
+  const normalized = { name: ruleForm.value.name.trim(), cosConfigId: ruleForm.value.cosConfigId, maxFileSizeBytes: ruleForm.value.maxFileSizeBytes, allowedExtensions, allowedMimeTypes, accessMode: ruleForm.value.accessMode, remark: ruleForm.value.remark.trim() };
   try {
     if (editingRule.value) await updateUploadRule(editingRule.value, normalized);
     else await createUploadRule({ ...normalized, platformId: ruleForm.value.platformId, code: ruleForm.value.code.trim(), isEnabled: ruleForm.value.isEnabled });
@@ -377,18 +371,8 @@ onMounted(() => { void loadConfigs(); });
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12">
-            <el-form-item :label="t('storage.pathPrefix')" prop="pathPrefix">
-              <el-input v-model="ruleForm.pathPrefix" data-testid="storage-rule-path-prefix" :placeholder="t('storage.pathPrefixPlaceholder')" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="12">
             <el-form-item :label="t('storage.maxFileSizeBytes')" prop="maxFileSizeBytes">
               <el-input-number v-model="ruleForm.maxFileSizeBytes" :min="1" :max="1073741824" controls-position="right" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="12">
-            <el-form-item :label="t('storage.maxFileCount')" prop="maxFileCount">
-              <el-input-number v-model="ruleForm.maxFileCount" :min="1" :max="100" controls-position="right" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12">

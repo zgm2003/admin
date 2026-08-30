@@ -43,9 +43,7 @@ type Model struct {
 	Code              string         `gorm:"column:code;type:varchar(64);not null"`
 	Name              string         `gorm:"column:name;type:varchar(128);not null"`
 	CosConfigID       int64          `gorm:"column:cos_config_id;not null"`
-	PathPrefix        string         `gorm:"column:path_prefix;type:varchar(255);not null"`
 	MaxFileSizeBytes  int64          `gorm:"column:max_file_size_bytes;not null"`
-	MaxFileCount      int            `gorm:"column:max_file_count;not null"`
 	AllowedExtensions StringArray    `gorm:"column:allowed_extensions;type:text[];not null"`
 	AllowedMimeTypes  StringArray    `gorm:"column:allowed_mime_types;type:text[];not null"`
 	AccessMode        string         `gorm:"column:access_mode;type:varchar(16);not null"`
@@ -67,9 +65,7 @@ type RuleValue struct {
 	Name              string      `json:"name"`
 	CosConfigID       int64       `json:"cosConfigId"`
 	CosConfigName     string      `json:"cosConfigName"`
-	PathPrefix        string      `json:"pathPrefix"`
 	MaxFileSizeBytes  int64       `json:"maxFileSizeBytes"`
-	MaxFileCount      int         `json:"maxFileCount"`
 	AllowedExtensions []string    `json:"allowedExtensions"`
 	AllowedMimeTypes  []string    `json:"allowedMimeTypes"`
 	AccessMode        string      `json:"accessMode"`

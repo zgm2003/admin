@@ -6,7 +6,7 @@
 psql "$POSTGRES_DSN" -v ON_ERROR_STOP=1 -f docs/database/2026-08-29-cos-object-storage.sql
 ```
 
-本迁移创建 `storage_cos_config`、`storage_upload_rule`、命名检查约束和索引，并在 Admin 平台创建 `cloud -> storage:object:list` 菜单及十个隐藏动作。`ux_storage_upload_rule_platform_enabled` 保证每个平台最多一个启用规则，也允许全部停用。API 和 Worker 启动不会执行本迁移。
+本迁移创建初始 `storage_cos_config`、`storage_upload_rule`、命名检查约束和索引，并在 Admin 平台创建 `cloud -> storage:object:list` 菜单及十个隐藏动作。历史初始结构包含单启用规则与数量字段；请继续执行下方后续修订迁移完成当前设计。API 和 Worker 启动不会执行本迁移。
 
 验证：
 
@@ -20,3 +20,7 @@ WHERE code IN ('cloud', 'storage:object:list') OR code LIKE 'storage:%' ORDER BY
 ```
 
 Execute twice in the maintenance test or staging rehearsal and confirm counts, IDs, menu parents, and role grants do not change.
+
+后续修订：请在已执行本迁移的环境继续执行 `2026-08-30-cos-upload-rule-code-unification.sql`。
+该修订将规则 `code` 统一为业务权限编码和 COS 对象前缀，移除 `path_prefix`、`max_file_count`
+及每个平台单启用规则索引。

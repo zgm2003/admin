@@ -47,20 +47,19 @@ func TestIssueCredentialsValidatesAndSignsPlatformRule(t *testing.T) {
 	service := NewService(NewRepository(db), keys, signer)
 	rule := validCreate(platformID, configID, "avatar", yesno.Yes)
 	rule.AccessMode = "public"
-	rule.MaxFileCount = 2
 	if _, err := service.Create(ctx, rule); err != nil {
 		t.Fatal(err)
 	}
 	before := time.Now().UTC()
-	result, err := service.IssueCredentials(ctx, auth.Identity{PlatformID: platformID}, CredentialInput{RuleCode: "avatar", Files: []FileInput{{FileName: "photo.PNG", ContentType: "image/png", FileSizeBytes: 100}}})
+	result, err := service.IssueCredentials(ctx, auth.Identity{PlatformID: platformID}, CredentialInput{RuleCode: "avatar", Files: []FileInput{{FileName: "photo.PNG", ContentType: "image/png", FileSizeBytes: 100}, {FileName: "cover.PNG", ContentType: "image/png", FileSizeBytes: 100}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Items) != 1 || len(signer.requests) != 1 {
+	if len(result.Items) != 2 || len(signer.requests) != 2 {
 		t.Fatalf("result=%+v requests=%+v", result, signer.requests)
 	}
 	item := result.Items[0]
-	if item.Method != "PUT" || !strings.HasPrefix(item.ObjectKey, "uploads/") || strings.Contains(item.ObjectKey, "photo") || !strings.HasSuffix(item.ObjectKey, ".png") || item.PublicURL == nil || !strings.HasPrefix(*item.PublicURL, "https://cdn.example.com/uploads/") {
+	if item.Method != "PUT" || !strings.HasPrefix(item.ObjectKey, "avatar/") || strings.Contains(item.ObjectKey, "photo") || !strings.HasSuffix(item.ObjectKey, ".png") || item.PublicURL == nil || !strings.HasPrefix(*item.PublicURL, "https://cdn.example.com/avatar/") {
 		t.Fatalf("item=%+v", item)
 	}
 	if item.ExpiresAt.Before(before.Add(9*time.Minute+50*time.Second)) || item.ExpiresAt.After(time.Now().UTC().Add(10*time.Minute+time.Second)) {

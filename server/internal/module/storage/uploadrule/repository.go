@@ -18,9 +18,8 @@ func NewRepository(db *gorm.DB) *Repository { return &Repository{db} }
 
 type UploadTarget struct {
 	RuleID, PlatformID, CosConfigID                                 int64
-	PathPrefix                                                      string
+	Code                                                            string
 	MaxFileSizeBytes                                                int64
-	MaxFileCount                                                    int
 	AllowedExtensions, AllowedMimeTypes                             StringArray
 	AccessMode                                                      string
 	Bucket, Region, AppID                                           string
@@ -74,9 +73,7 @@ func (r *Repository) List(ctx context.Context, q ListQuery) ([]RuleValue, error)
 		Name              string
 		CosConfigID       int64
 		CosConfigName     string
-		PathPrefix        string
 		MaxFileSizeBytes  int64
-		MaxFileCount      int
 		AllowedExtensions StringArray
 		AllowedMimeTypes  StringArray
 		AccessMode        string
@@ -92,7 +89,7 @@ func (r *Repository) List(ctx context.Context, q ListQuery) ([]RuleValue, error)
 	}
 	out := make([]RuleValue, 0, len(rows))
 	for _, v := range rows {
-		out = append(out, RuleValue{ID: v.ID, PlatformID: v.PlatformID, PlatformCode: v.PlatformCode, PlatformName: v.PlatformName, Code: v.Code, Name: v.Name, CosConfigID: v.CosConfigID, CosConfigName: v.CosConfigName, PathPrefix: v.PathPrefix, MaxFileSizeBytes: v.MaxFileSizeBytes, MaxFileCount: v.MaxFileCount, AllowedExtensions: []string(v.AllowedExtensions), AllowedMimeTypes: []string(v.AllowedMimeTypes), AccessMode: v.AccessMode, IsEnabled: yesno.Value(v.IsEnabled), Remark: v.Remark, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt})
+		out = append(out, RuleValue{ID: v.ID, PlatformID: v.PlatformID, PlatformCode: v.PlatformCode, PlatformName: v.PlatformName, Code: v.Code, Name: v.Name, CosConfigID: v.CosConfigID, CosConfigName: v.CosConfigName, MaxFileSizeBytes: v.MaxFileSizeBytes, AllowedExtensions: []string(v.AllowedExtensions), AllowedMimeTypes: []string(v.AllowedMimeTypes), AccessMode: v.AccessMode, IsEnabled: yesno.Value(v.IsEnabled), Remark: v.Remark, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt})
 	}
 	return out, nil
 }
@@ -157,7 +154,7 @@ func (r *Repository) FindConfigSummaries(ctx context.Context) ([]ConfigSummary, 
 }
 func (r *Repository) FindUploadTarget(ctx context.Context, pid int64, code string) (UploadTarget, error) {
 	var t UploadTarget
-	err := r.db.WithContext(ctx).Table("storage_upload_rule r").Select("r.id as rule_id,r.platform_id,r.cos_config_id,r.path_prefix,r.max_file_size_bytes,r.max_file_count,r.allowed_extensions,r.allowed_mime_types,r.access_mode,c.bucket,c.region,c.app_id,c.endpoint,c.bucket_domain,c.secret_id_ciphertext,c.secret_key_ciphertext").Joins("JOIN storage_cos_config c ON c.id=r.cos_config_id").Where("r.platform_id=? AND r.code=? AND r.is_enabled=1 AND r.deleted_at IS NULL AND c.is_enabled=1 AND c.deleted_at IS NULL", pid, code).Take(&t).Error
+	err := r.db.WithContext(ctx).Table("storage_upload_rule r").Select("r.id as rule_id,r.platform_id,r.cos_config_id,r.code,r.max_file_size_bytes,r.allowed_extensions,r.allowed_mime_types,r.access_mode,c.bucket,c.region,c.app_id,c.endpoint,c.bucket_domain,c.secret_id_ciphertext,c.secret_key_ciphertext").Joins("JOIN storage_cos_config c ON c.id=r.cos_config_id").Where("r.platform_id=? AND r.code=? AND r.is_enabled=1 AND r.deleted_at IS NULL AND c.is_enabled=1 AND c.deleted_at IS NULL", pid, code).Take(&t).Error
 	return t, err
 }
 func (r *Repository) Transaction(ctx context.Context, fn func(*Repository) error) error {
