@@ -54,6 +54,12 @@ func (h *Handler) PageInit(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
+	if r.Platforms == nil {
+		r.Platforms = []PlatformOption{}
+	}
+	if r.Configs == nil {
+		r.Configs = []ConfigSummary{}
+	}
 	response.OK(c, http.StatusOK, r)
 }
 func (h *Handler) Get(c *gin.Context) {

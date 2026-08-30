@@ -39,7 +39,7 @@ var menuIconNames = map[string]struct{}{
 	"lucide:message-square-more": {}, "lucide:monitor-smartphone": {}, "lucide:panel-left": {},
 	"lucide:scroll-text": {}, "lucide:server": {}, "lucide:settings-2": {}, "lucide:shield-check": {},
 	"lucide:sparkles": {}, "lucide:user-cog": {}, "lucide:user-round": {}, "lucide:user-round-cog": {},
-	"lucide:users": {}, "lucide:users-round": {}, "lucide:wallet-cards": {},
+	"lucide:user-circle": {}, "lucide:users": {}, "lucide:users-round": {}, "lucide:wallet-cards": {},
 }
 
 type menuIndex struct {

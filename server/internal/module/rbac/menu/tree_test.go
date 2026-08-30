@@ -149,6 +149,19 @@ func TestMenuIndexRejectsEnabledNodeBelowDisabledAncestor(t *testing.T) {
 	}
 }
 
+func TestBuildMenuIndexAcceptsProfileMenuIcon(t *testing.T) {
+	now := time.Now().UTC()
+	icon := "lucide:user-circle"
+	menu := Menu{
+		ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "个人中心", Code: "account:profile",
+		I18nKey: stringPointer("navigation.account"), Icon: &icon, IsEnabled: yesno.Yes,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if _, err := buildMenuIndex([]Menu{menu}); err != nil {
+		t.Fatalf("profile menu icon rejected: %v", err)
+	}
+}
+
 func int64Pointer(value int64) *int64 {
 	return &value
 }

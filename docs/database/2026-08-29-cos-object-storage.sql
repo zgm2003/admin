@@ -55,6 +55,7 @@ DECLARE
   cloud_id BIGINT;
   object_id BIGINT;
   action_code TEXT;
+  action_name TEXT;
 BEGIN
   SELECT id INTO admin_id FROM auth_platform WHERE code = 'admin' AND deleted_at IS NULL AND is_enabled = 1;
   IF admin_id IS NULL THEN RAISE EXCEPTION 'active Admin platform is required'; END IF;
@@ -85,9 +86,26 @@ BEGIN
     'storage:cos-config:create','storage:cos-config:update','storage:cos-config:status','storage:cos-config:test','storage:cos-config:delete',
     'storage:upload-rule:create','storage:upload-rule:update','storage:upload-rule:status','storage:upload-rule:delete','storage:object:upload'
   ] LOOP
+    action_name := CASE action_code
+      WHEN 'storage:cos-config:create' THEN '新增 COS 配置'
+      WHEN 'storage:cos-config:update' THEN '编辑 COS 配置'
+      WHEN 'storage:cos-config:status' THEN '变更 COS 配置状态'
+      WHEN 'storage:cos-config:test' THEN '测试 COS 连接'
+      WHEN 'storage:cos-config:delete' THEN '删除 COS 配置'
+      WHEN 'storage:upload-rule:create' THEN '新增上传规则'
+      WHEN 'storage:upload-rule:update' THEN '编辑上传规则'
+      WHEN 'storage:upload-rule:status' THEN '变更上传规则状态'
+      WHEN 'storage:upload-rule:delete' THEN '删除上传规则'
+      WHEN 'storage:object:upload' THEN '上传对象'
+      ELSE action_code
+    END;
     IF NOT EXISTS (SELECT 1 FROM rbac_menu WHERE platform_id = admin_id AND code = action_code AND deleted_at IS NULL) THEN
       INSERT INTO rbac_menu (platform_id, parent_id, menu_type, name, code, sort_order, is_enabled, is_hidden, created_at, updated_at)
-      VALUES (admin_id, object_id, 'action', action_code, action_code, 100, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+      VALUES (admin_id, object_id, 'action', action_name, action_code, 100, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+    ELSE
+      UPDATE rbac_menu
+      SET name = action_name, parent_id = object_id, menu_type = 'action', is_enabled = 1, is_hidden = 1, updated_at = CURRENT_TIMESTAMP
+      WHERE platform_id = admin_id AND code = action_code AND deleted_at IS NULL;
     END IF;
   END LOOP;
 END $$;

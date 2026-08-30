@@ -28,7 +28,7 @@ func (s *ruleHTTPService) List(_ context.Context, q ListQuery) (pagination.Resul
 	return pagination.Result[RuleValue]{List: []RuleValue{}, Page: q.Page, PageSize: q.PageSize}, nil
 }
 func (*ruleHTTPService) PageInit(context.Context) (PageInit, error) {
-	return PageInit{Platforms: []PlatformOption{}, Configs: []ConfigSummary{}}, nil
+	return PageInit{}, nil
 }
 func (*ruleHTTPService) Get(context.Context, int64) (RuleValue, error) { return RuleValue{ID: 1}, nil }
 func (s *ruleHTTPService) Create(context.Context, CreateInput) (int64, error) {
@@ -72,6 +72,15 @@ func TestHandlerRejectsInvalidQueriesAndJSON(t *testing.T) {
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("body=%s status=%d response=%s", body, rec.Code, rec.Body)
 		}
+	}
+}
+
+func TestPageInitSerializesEmptyCollectionsAsArrays(t *testing.T) {
+	_, router := ruleRouter()
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/storage/upload-rules/page-init", nil))
+	if recorder.Code != http.StatusOK || recorder.Body.String() != `{"code":0,"data":{"platforms":[],"configs":[]},"message":"ok"}` {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 func ruleRouter() (*ruleHTTPService, *gin.Engine) {

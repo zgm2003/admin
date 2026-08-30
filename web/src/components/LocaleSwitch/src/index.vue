@@ -19,7 +19,7 @@ function handleCommand(command: string | number | object): void {
   setLocale(command)
 }
 </script>
-
+ 了
 <template>
   <el-dropdown @command="handleCommand">
     <el-button
