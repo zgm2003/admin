@@ -1,6 +1,6 @@
 # Admin 腾讯云 COS 对象存储设计
 
-状态：设计已按业务讨论落稿，等待用户审阅
+状态：设计已确认，进入实施计划
 
 日期：2026-08-29
 
@@ -228,6 +228,8 @@ deleted_at             TIMESTAMPTZ NULL
   `hasCredentials`，不返回任何密钥片段、密文或提示值。
 - `is_enabled` 和 `deleted_at` 是两种不同语义：停用保留可恢复配置，删除表示不再参与正常
   查询。删除操作会同时把配置置为停用。
+- 配置停用前必须在同一事务内锁定配置并检查是否存在启用且未删除的规则引用；存在引用时返回
+  冲突且配置状态不变，避免已发布规则在下一次凭证申请时突然失效。
 
 ### 5.2 `storage_upload_rule`
 
@@ -281,6 +283,14 @@ storage_upload_rule.platform_id
   的底线约束。单文件大小上限不得超过 COS 单个 PUT 对象的 5 GiB 上限。
 - 创建、更新或启用规则时，目标 `platform_id` 必须是未删除且启用的认证平台；`access_mode`
   为 `public` 时，其 COS 配置必须具有有效 `bucket_domain`。
+- 创建时若请求 `is_enabled = 1`，必须执行与“启用规则”相同的事务锁顺序，并在插入新规则前将
+  该平台原有启用规则置为 `0`；创建停用规则不会改变其他规则。更新规则绑定的配置时，目标
+  配置也必须未删除且启用。
+
+数据库约束名称固定为 `fk_storage_upload_rule_platform`、`fk_storage_upload_rule_cos_config`、
+`ck_storage_cos_config_is_enabled`、`ck_storage_upload_rule_is_enabled`、
+`ck_storage_upload_rule_max_file_size`、`ck_storage_upload_rule_max_file_count` 和
+`ck_storage_upload_rule_access_mode`，便于 migration 对已有结构做精确校验而不掩盖漂移。
 
 ### 5.3 索引
 
@@ -295,6 +305,10 @@ ix_storage_cos_config_enabled_created_at
 
 ux_storage_upload_rule_platform_code_active
   UNIQUE (platform_id, code) WHERE deleted_at IS NULL
+
+ux_storage_upload_rule_platform_enabled
+  UNIQUE (platform_id)
+  WHERE is_enabled = 1 AND deleted_at IS NULL
 
 ix_storage_upload_rule_config_enabled_created_at
   (cos_config_id, is_enabled, created_at DESC, id DESC)
@@ -342,6 +356,7 @@ AND storage_upload_rule.cos_config_id = :config_id
 - 规则也只软删除；删除后从正常列表和按 code 查询中消失。
 - 删除启用规则时要求先停用，避免请求方在配置变更窗口中继续申请凭证。
 - 启用规则时必须锁定并验证其 COS 配置存在、未删除且已启用；否则返回明确冲突。
+- 停用 COS 配置时若存在启用规则引用必须返回冲突；不能留下启用规则指向停用配置的状态。
 - 更新 `cos_config_id`、路径前缀、访问模式或大小限制属于配置变更，必须记录操作审计。
 
 ## 7. 上传凭证流程
