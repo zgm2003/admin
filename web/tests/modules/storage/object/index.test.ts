@@ -159,6 +159,47 @@ describe("ObjectStorage", () => {
     expect(form?.textContent).not.toContain("认证平台");
   });
 
+  it("marks required COS fields and defaults the region selector to Guangzhou", async () => {
+    const wrapper = mountPage([
+      "storage:object:list",
+      "storage:cos-config:create",
+    ]);
+    await flushPromises();
+    await wrapper.find('[data-testid="storage-add-config"]').trigger("click");
+    await flushPromises();
+
+    const form = wrapper.find('[data-testid="storage-config-form"]');
+    expect(form.findAll(".el-form-item.is-required")).toHaveLength(6);
+    expect(form.find('[data-testid="storage-config-region"]').exists()).toBe(true);
+    expect(form.find('[data-testid="storage-config-region"]').text()).toContain("广州");
+    expect(form.find('[data-testid="storage-config-endpoint"]').attributes("placeholder")).toBe("例如：https://cos.ap-guangzhou.myqcloud.com");
+    expect(form.find('[data-testid="storage-config-domain"]').attributes("placeholder")).toBe("例如：https://cdn.example.com");
+  });
+
+  it("rejects a COS domain without an HTTPS scheme before creating", async () => {
+    const wrapper = mountPage([
+      "storage:object:list",
+      "storage:cos-config:create",
+    ]);
+    await flushPromises();
+    await wrapper.find('[data-testid="storage-add-config"]').trigger("click");
+    await flushPromises();
+
+    const form = wrapper.find('[data-testid="storage-config-form"]');
+    await form.find('[data-testid="storage-config-name"]').setValue("腾讯云 COS");
+    await form.find('[data-testid="storage-config-app-id"]').setValue("1314542588");
+    await form.find('[data-testid="storage-config-secret-id"]').setValue("secret-id");
+    await form.find('[data-testid="storage-config-secret-key"]').setValue("secret-key");
+    await form.find('[data-testid="storage-config-bucket"]').setValue("zgm");
+    await form.find('[data-testid="storage-config-domain"]').setValue("cos.zgm2003.cn");
+    await wrapper.findAllComponents(AppDialog)[0]?.find('.el-dialog__footer .el-button--primary').trigger("click");
+    await flushPromises();
+
+    expect(createCosConfig).not.toHaveBeenCalled();
+    const domainItem = wrapper.findAllComponents({ name: "ElFormItem" }).find((item) => item.props("label") === "访问域名");
+    expect(domainItem?.props("error")).toBe("请输入以 https:// 开头的完整访问域名");
+  });
+
   it("sends COS keyword and status through the real list query", async () => {
     const wrapper = mountPage();
     await flushPromises();

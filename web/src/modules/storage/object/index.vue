@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { CirclePlus } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox, ElNotification } from "element-plus";
+import type { FormInstance, FormRules } from "element-plus";
 import { useI18n } from "vue-i18n";
 
 import { AppDialog } from "../../../components/AppDialog";
@@ -57,6 +58,8 @@ const loading = ref(false);
 const loadError = ref("");
 const mutationError = ref("");
 const configDialog = ref(false);
+const configFormRef = ref<FormInstance>();
+const configUrlErrors = ref({ endpoint: "", bucketDomain: "" });
 const ruleDialog = ref(false);
 const editingConfig = ref<number | null>(null);
 const editingRule = ref<number | null>(null);
@@ -90,13 +93,52 @@ interface RuleForm {
   remark: string;
 }
 
+const cosRegionOptions = [
+  { value: "ap-guangzhou", label: "广州（ap-guangzhou）" },
+  { value: "ap-shanghai", label: "上海（ap-shanghai）" },
+  { value: "ap-nanjing", label: "南京（ap-nanjing）" },
+  { value: "ap-beijing", label: "北京（ap-beijing）" },
+  { value: "ap-chengdu", label: "成都（ap-chengdu）" },
+  { value: "ap-chongqing", label: "重庆（ap-chongqing）" },
+  { value: "ap-hongkong", label: "中国香港（ap-hongkong）" },
+  { value: "ap-singapore", label: "新加坡（ap-singapore）" },
+  { value: "ap-tokyo", label: "东京（ap-tokyo）" },
+  { value: "ap-seoul", label: "首尔（ap-seoul）" },
+  { value: "eu-frankfurt", label: "法兰克福（eu-frankfurt）" },
+  { value: "na-siliconvalley", label: "硅谷（na-siliconvalley）" },
+] as const;
+
+function httpsURLError(value: string | null, message: string): string {
+  const normalized = value?.trim() ?? "";
+  if (normalized === "") return "";
+  try {
+    const url = new URL(normalized);
+    if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.search !== "" || url.hash !== "" || (url.pathname !== "" && url.pathname !== "/")) throw new Error(message);
+    return "";
+  } catch { return message; }
+}
+
+function validateConfigURLField(field: "endpoint" | "bucketDomain"): void {
+  const message = field === "endpoint" ? t("storage.endpointHttpsRequired") : t("storage.domainHttpsRequired");
+  configUrlErrors.value[field] = httpsURLError(configForm.value[field], message);
+}
+
+const configRules = computed<FormRules<ConfigForm>>(() => ({
+  name: [{ required: true, whitespace: true, message: t("storage.nameRequired"), trigger: "blur" }],
+  appId: [{ required: true, whitespace: true, message: t("storage.appIdRequired"), trigger: "blur" }],
+  secretId: [{ required: editingConfig.value === null, whitespace: true, message: t("storage.secretIdRequired"), trigger: "blur" }],
+  secretKey: [{ required: editingConfig.value === null, whitespace: true, message: t("storage.secretKeyRequired"), trigger: "blur" }],
+  bucket: [{ required: true, whitespace: true, message: t("storage.bucketRequired"), trigger: "blur" }],
+  region: [{ required: true, message: t("storage.regionRequired"), trigger: "change" }],
+}));
+
 const blankConfig = (): ConfigForm => ({
   name: "",
   appId: "",
   secretId: "",
   secretKey: "",
   bucket: "",
-  region: "",
+  region: "ap-guangzhou",
   endpoint: null,
   bucketDomain: null,
   isEnabled: YesNo.Yes,
@@ -191,7 +233,7 @@ function searchRules(): void { ruleQuery.value = { page: 1, pageSize: ruleQuery.
 function resetRules(): void { ruleKeyword.value = ""; ruleStatus.value = ""; rulePlatform.value = ""; ruleConfig.value = ""; ruleQuery.value = { page: 1, pageSize: ruleQuery.value.pageSize }; void loadRules(); }
 function updateConfigPagination(next: TablePaginationState): void { configQuery.value = { ...configQuery.value, page: next.currentPage, pageSize: next.pageSize }; void loadConfigs(); }
 function updateRulePagination(next: TablePaginationState): void { ruleQuery.value = { ...ruleQuery.value, page: next.currentPage, pageSize: next.pageSize }; void loadRules(); }
-function openConfig(row?: CosConfig): void { editingConfig.value = row?.id ?? null; configForm.value = row ? { ...blankConfig(), ...row, secretId: "", secretKey: "" } : blankConfig(); configDialog.value = true; }
+function openConfig(row?: CosConfig): void { editingConfig.value = row?.id ?? null; configForm.value = row ? { ...blankConfig(), ...row, secretId: "", secretKey: "" } : blankConfig(); configUrlErrors.value = { endpoint: "", bucketDomain: "" }; mutationError.value = ""; configDialog.value = true; }
 function openRule(row?: UploadRule): void {
   if (!row && !canAddRule.value) { ElMessage.warning(t("storage.rulePrerequisite")); return; }
   editingRule.value = row?.id ?? null;
@@ -199,8 +241,13 @@ function openRule(row?: UploadRule): void {
   extensionText.value = ruleForm.value.allowedExtensions.join(","); mimeText.value = ruleForm.value.allowedMimeTypes.join(","); ruleDialog.value = true;
 }
 async function saveConfig(): Promise<void> {
+  const valid = await configFormRef.value?.validate().catch(() => false);
+  configUrlErrors.value = {
+    endpoint: httpsURLError(configForm.value.endpoint, t("storage.endpointHttpsRequired")),
+    bucketDomain: httpsURLError(configForm.value.bucketDomain, t("storage.domainHttpsRequired")),
+  };
+  if (!valid || configUrlErrors.value.endpoint !== "" || configUrlErrors.value.bucketDomain !== "") return;
   const base = { name: configForm.value.name.trim(), appId: configForm.value.appId.trim(), bucket: configForm.value.bucket.trim(), region: configForm.value.region.trim(), endpoint: configForm.value.endpoint || null, bucketDomain: configForm.value.bucketDomain || null, remark: configForm.value.remark.trim() };
-  if (!base.name || !base.appId || !base.bucket || !base.region || (!editingConfig.value && (!configForm.value.secretId || !configForm.value.secretKey))) { mutationError.value = t("storage.required"); return; }
   try {
     if (editingConfig.value) {
       const data: UpdateCosConfigInput = { ...base, ...(configForm.value.secretId ? { secretId: configForm.value.secretId } : {}), ...(configForm.value.secretKey ? { secretKey: configForm.value.secretKey } : {}) };
@@ -258,7 +305,19 @@ onMounted(() => { void loadConfigs(); });
     </el-tabs>
 
     <AppDialog v-model="configDialog" :title="editingConfig ? t('storage.editConfig') : t('storage.addConfig')" width="min(720px, 94vw)" :append-to-body="false">
-      <el-form label-position="top" data-testid="storage-config-form"><el-row :gutter="16"><el-col :xs="24" :sm="12"><el-form-item :label="t('storage.name')"><el-input v-model="configForm.name" /></el-form-item></el-col><el-col :xs="24" :sm="12"><el-form-item :label="t('storage.appId')"><el-input v-model="configForm.appId" /></el-form-item></el-col><el-col :xs="24" :sm="12"><el-form-item :label="t('storage.secretId')"><el-input v-model="configForm.secretId" type="password" show-password /></el-form-item></el-col><el-col :xs="24" :sm="12"><el-form-item :label="t('storage.secretKey')"><el-input v-model="configForm.secretKey" type="password" show-password /></el-form-item></el-col><el-col :xs="24" :sm="12"><el-form-item :label="t('storage.bucket')"><el-input v-model="configForm.bucket" /></el-form-item></el-col><el-col :xs="24" :sm="12"><el-form-item :label="t('storage.region')"><el-input v-model="configForm.region" /></el-form-item></el-col><el-col :xs="24" :sm="12"><el-form-item :label="t('storage.endpoint')"><el-input v-model="configForm.endpoint" /></el-form-item></el-col><el-col :xs="24" :sm="12"><el-form-item :label="t('storage.bucketDomain')"><el-input v-model="configForm.bucketDomain" /></el-form-item></el-col><el-col :xs="24"><el-form-item :label="t('storage.remark')"><el-input v-model="configForm.remark" type="textarea" :rows="2" /></el-form-item></el-col></el-row></el-form>
+      <el-form ref="configFormRef" :model="configForm" :rules="configRules" label-position="top" data-testid="storage-config-form">
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="12"><el-form-item :label="t('storage.name')" prop="name"><el-input v-model="configForm.name" data-testid="storage-config-name" :placeholder="t('storage.namePlaceholder')" /></el-form-item></el-col>
+          <el-col :xs="24" :sm="12"><el-form-item :label="t('storage.appId')" prop="appId"><el-input v-model="configForm.appId" data-testid="storage-config-app-id" :placeholder="t('storage.appIdPlaceholder')" /></el-form-item></el-col>
+          <el-col :xs="24" :sm="12"><el-form-item :label="t('storage.secretId')" prop="secretId"><el-input v-model="configForm.secretId" data-testid="storage-config-secret-id" type="password" show-password :placeholder="editingConfig ? t('storage.secretKeepPlaceholder') : t('storage.secretIdPlaceholder')" /></el-form-item></el-col>
+          <el-col :xs="24" :sm="12"><el-form-item :label="t('storage.secretKey')" prop="secretKey"><el-input v-model="configForm.secretKey" data-testid="storage-config-secret-key" type="password" show-password :placeholder="editingConfig ? t('storage.secretKeepPlaceholder') : t('storage.secretKeyPlaceholder')" /></el-form-item></el-col>
+          <el-col :xs="24" :sm="12"><el-form-item :label="t('storage.bucket')" prop="bucket"><el-input v-model="configForm.bucket" data-testid="storage-config-bucket" :placeholder="t('storage.bucketPlaceholder')" /></el-form-item></el-col>
+          <el-col :xs="24" :sm="12"><el-form-item :label="t('storage.region')" prop="region"><el-select v-model="configForm.region" data-testid="storage-config-region" :placeholder="t('storage.regionPlaceholder')"><el-option v-for="item in cosRegionOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
+          <el-col :xs="24" :sm="12"><el-form-item :label="t('storage.endpoint')" :error="configUrlErrors.endpoint"><el-input v-model="configForm.endpoint" data-testid="storage-config-endpoint" :placeholder="t('storage.endpointPlaceholder')" @blur="validateConfigURLField('endpoint')" /></el-form-item></el-col>
+          <el-col :xs="24" :sm="12"><el-form-item :label="t('storage.bucketDomain')" :error="configUrlErrors.bucketDomain"><el-input v-model="configForm.bucketDomain" data-testid="storage-config-domain" :placeholder="t('storage.domainPlaceholder')" @blur="validateConfigURLField('bucketDomain')" /></el-form-item></el-col>
+          <el-col :xs="24"><el-form-item :label="t('storage.remark')"><el-input v-model="configForm.remark" type="textarea" :rows="2" :placeholder="t('storage.remarkPlaceholder')" /></el-form-item></el-col>
+        </el-row>
+      </el-form>
       <template #footer><el-button @click="configDialog = false">{{ t('storage.cancel') }}</el-button><el-button type="primary" @click="saveConfig">{{ t('storage.save') }}</el-button></template>
     </AppDialog>
     <AppDialog v-model="ruleDialog" :title="editingRule ? t('storage.editRule') : t('storage.addRule')" width="min(760px, 94vw)" :append-to-body="false">
