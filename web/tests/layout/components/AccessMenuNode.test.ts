@@ -5,7 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { AccessMenuNode as AccessMenuNodeDTO } from '@src/api/rbac/access'
-import { DIcon } from '@src/components/DIcon'
+import { AppDIcon } from '@src/components/AppDIcon'
 import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
 import { pinia } from '@src/store'
@@ -32,11 +32,11 @@ describe('AccessMenuNode', () => {
     expect(wrapper.findComponent({ name: 'ElMenuItem' }).props('index')).toBe('/account/users')
   })
 
-	it.each(['lucide:settings-2', 'lucide:shield-check'])('passes local icon name %s directly to DIcon', (icon) => {
+	it.each(['lucide:settings-2', 'lucide:shield-check'])('passes local icon name %s directly to AppDIcon', (icon) => {
 		const node = pageNode()
 		node.icon = icon
 		const wrapper = mountMenuNode(node)
-		expect(wrapper.findComponent(DIcon).props('icon')).toBe(icon)
+		expect(wrapper.findComponent(AppDIcon).props('icon')).toBe(icon)
 	})
 
   it('updates the menu title from the active frontend locale', async () => {

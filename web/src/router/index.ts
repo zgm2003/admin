@@ -5,7 +5,7 @@ import {
     type RouteRecordRaw,
 } from "vue-router";
 
-import Dashboard from "../modules/dashboard/index.vue";
+import Dashboard from "../views/dashboard/index.vue";
 
 declare module "vue-router" {
     interface RouteMeta {
@@ -20,7 +20,7 @@ const routes: RouteRecordRaw[] = [
     {
         path: "/login",
         name: "login",
-        component: () => import("../modules/auth/login/index.vue"),
+        component: () => import("../views/auth/login/index.vue"),
         meta: {requiresAuth: false},
     },
     {
@@ -43,7 +43,7 @@ const routes: RouteRecordRaw[] = [
             {
                 path: "access/menus",
                 name: "access-menus",
-                component: () => import("../modules/rbac/menu/index.vue"),
+                component: () => import("../views/access/menus/index.vue"),
                 meta: {
                     requiresAuth: true,
                     i18nKey: "navigation.accessMenus",

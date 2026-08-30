@@ -9,13 +9,15 @@ import { ProtocolError } from '@src/types/http'
 const TestLayout = { template: '<router-view />' }
 const TestView = { template: '<div>test view</div>' }
 const testViews: PageModuleMap = {
-	'../modules/user/account/index.vue': async () => ({ default: TestView }),
-	'../modules/user/profile/index.vue': async () => ({ default: TestView }),
-	'../modules/user/session/index.vue': async () => ({ default: TestView }),
-	'../modules/auth/platform/index.vue': async () => ({ default: TestView }),
-	'../modules/rbac/menu/index.vue': async () => ({ default: TestView }),
-	'../modules/rbac/role/index.vue': async () => ({ default: TestView }),
-	'../modules/audit/operationlog/index.vue': async () => ({ default: TestView }),
+	'../views/account/users/index.vue': async () => ({ default: TestView }),
+	'../views/account/profile/index.vue': async () => ({ default: TestView }),
+	'../views/account/sessions/index.vue': async () => ({ default: TestView }),
+	'../views/system/login-logs/index.vue': async () => ({ default: TestView }),
+	'../views/access/auth-platforms/index.vue': async () => ({ default: TestView }),
+	'../views/access/menus/index.vue': async () => ({ default: TestView }),
+	'../views/access/roles/index.vue': async () => ({ default: TestView }),
+	'../views/system/operation-logs/index.vue': async () => ({ default: TestView }),
+	'../views/cloud/storage-object/index.vue': async () => ({ default: TestView }),
 }
 
 describe('access route registration', () => {

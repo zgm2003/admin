@@ -96,7 +96,7 @@ icon:           lucide:cloud-upload
 页面归位为：
 
 ```text
-web/src/modules/storage/object/index.vue
+web/src/views/cloud/storage-object/index.vue
 web/src/api/storage/cosconfig.ts
 web/src/api/storage/uploadrule.ts
 ```

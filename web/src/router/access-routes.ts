@@ -25,18 +25,18 @@ const staticPageBinding = {
 	routeName: 'access-menus',
 } as const
 
-const pageModules: PageModuleMap = import.meta.glob<PageModule>('../modules/**/index.vue')
+const pageModules: PageModuleMap = import.meta.glob<PageModule>('../views/**/index.vue')
 
 const componentPathMap: Readonly<Record<string, string>> = {
-	'account/users': 'user/account',
-	'account/profile': 'user/profile',
-	'account/sessions': 'user/session',
-	'user/login-logs': 'user/loginlog',
-	'access/menus': 'rbac/menu',
-	'access/roles': 'rbac/role',
-	'access/auth-platforms': 'auth/platform',
-	'system/operation-logs': 'audit/operationlog',
-	'storage/object': 'storage/object',
+	'account/users': 'account/users',
+	'account/profile': 'account/profile',
+	'account/sessions': 'account/sessions',
+	'user/login-logs': 'system/login-logs',
+	'access/menus': 'access/menus',
+	'access/roles': 'access/roles',
+	'access/auth-platforms': 'access/auth-platforms',
+	'system/operation-logs': 'system/operation-logs',
+	'storage/object': 'cloud/storage-object',
 }
 
 export function registerAccessRoutes(
@@ -152,7 +152,7 @@ function validateStaticBinding(
 
 function moduleKey(componentPath: string): string {
   const mappedPath = componentPathMap[componentPath] ?? componentPath
-  return `../modules/${mappedPath}/index.vue`
+  return `../views/${mappedPath}/index.vue`
 }
 
 function removeRoutes(removers: Array<() => void>): void {

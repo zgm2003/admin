@@ -505,7 +505,7 @@ export const zhCN = {
 	'menu.form.i18nKeyHint': 'i18nKey：至少两段点号路径，例如 navigation.accountUsers',
 	'menu.form.codeHint': '权限码：小写冒号分段，例如 account:user:list',
 	'menu.form.pathHint': '路由：必须以 / 开头，例如 /account/users',
-	'menu.form.componentPathHint': '页面路径：不能以 / 开头，页面文件为 web/src/modules/<页面路径>/index.vue',
+	'menu.form.componentPathHint': '页面路径：不能以 / 开头，页面文件为 web/src/views/<页面路径>/index.vue',
 	'menu.form.protectedHint': '这是受保护的基础菜单，只能修改名称、i18nKey、图标和排序；结构、状态与删除操作已锁定。',
 	'menu.confirm.disableTitle': '禁用菜单节点',
 	'menu.confirm.disableMessage': '该节点及全部后代将被禁用，已有角色授权会保留。',

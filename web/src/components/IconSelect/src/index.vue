@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { AppDialog } from '../../AppDialog'
-import { DIcon } from '../../DIcon'
+import { AppDIcon } from '../../AppDIcon'
 import { menuIcons, type MenuIconName } from '../../../icons/menu-icons'
 import type { IconSelectIcon } from './types'
 
@@ -41,7 +41,7 @@ function selectIcon(name: MenuIconName): void {
     <el-input v-model="search" clearable placeholder="搜索图标" />
     <div v-if="filteredIcons.length > 0" class="icon-select-grid">
       <button v-for="icon in filteredIcons" :key="icon.name" type="button" class="icon-select-item" :class="{ 'is-selected': selected === icon.name }" :aria-label="icon.label" @click="selectIcon(icon.name)">
-        <DIcon :icon="icon.name" :size="24" />
+        <AppDIcon :icon="icon.name" :size="24" />
         <span>{{ icon.label }}</span>
       </button>
     </div>

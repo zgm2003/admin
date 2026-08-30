@@ -64,13 +64,13 @@
 - Modify: `web/src/layout/components/AppAside.vue`
 - Modify: `web/src/layout/breadcrumbs.ts`
 - Modify: `web/src/layout/components/RouteTabs.vue`
-- Modify: `web/src/modules/user/profile/index.vue`
+- Modify: `web/src/views/account/profile/index.vue`
 - Modify: `web/tests/router/index.test.ts`
 - Modify: `web/tests/router/access-routes.test.ts`
 - Modify: `web/tests/layout/breadcrumbs.test.ts`
 - Modify: `web/tests/layout/index.test.ts`
 - Create: `web/tests/layout/components/AppAside.test.ts`
-- Create: `web/tests/modules/user/profile/index.test.ts`
+- Create: `web/tests/views/account/profile/index.test.ts`
 
 **Interfaces:**
 - Produces the route registration signature `RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc)`.
@@ -137,7 +137,7 @@
 
 - [ ] **Step 6: Remove static and hard-coded profile behavior.**
 
-  Remove the `/account/profile` child from `web/src/router/index.ts`. Keep `account/profile` in `componentPathMap` so the Access page can resolve `web/src/modules/user/profile/index.vue`. Remove the profile special cases from `resolveBreadcrumbs` and `RouteTabs.vue`; both must find profile metadata from `menuTree` like every other hidden page. In `AppAside.vue`, compute `canOpenProfile = access.hasPermission('account:profile:list')`, render the profile dropdown item conditionally, and navigate with `router.push('/account/profile')` so the dynamic route name is not hard-coded. Keep `web/src/permission.ts` redirect behavior: an authenticated URL absent from the Access tree resolves to Dashboard.
+  Remove the `/account/profile` child from `web/src/router/index.ts`. Keep `account/profile` in `componentPathMap` so the Access page can resolve `web/src/views/account/profile/index.vue`. Remove the profile special cases from `resolveBreadcrumbs` and `RouteTabs.vue`; both must find profile metadata from `menuTree` like every other hidden page. In `AppAside.vue`, compute `canOpenProfile = access.hasPermission('account:profile:list')`, render the profile dropdown item conditionally, and navigate with `router.push('/account/profile')` so the dynamic route name is not hard-coded. Keep `web/src/permission.ts` redirect behavior: an authenticated URL absent from the Access tree resolves to Dashboard.
 
 - [ ] **Step 7: Run the frontend and backend focused tests.**
 
@@ -252,10 +252,10 @@
 ### Task 3: Fix menu row keys, Canvas permission codes, and default-role concurrency coverage
 
 **Files:**
-- Modify: `web/src/modules/rbac/menu/index.vue`
-- Modify: `web/tests/modules/rbac/menu/index.test.ts`
-- Modify: `web/tests/modules/rbac/role/index.test.ts`
-- Modify: `web/tests/modules/rbac/role/role-permission-matrix.test.ts`
+- Modify: `web/src/views/access/menus/index.vue`
+- Modify: `web/tests/views/access/menus/index.test.ts`
+- Modify: `web/tests/views/access/roles/index.test.ts`
+- Modify: `web/tests/views/access/roles/role-permission-matrix.test.ts`
 - Modify: `server/internal/module/rbac/access/service_test.go`
 - Modify: `server/internal/module/rbac/access/repository_test.go`
 - Modify: `server/internal/module/rbac/menu/foundation_test.go`
@@ -306,8 +306,8 @@
   Update only these non-persistent fixtures and assertions: `server/internal/module/rbac/access/repository_test.go`,
   `server/internal/module/rbac/access/service_test.go`, `server/internal/module/rbac/menu/foundation_test.go`,
   `server/internal/module/rbac/menu/service_test.go`, `web/tests/api/rbac/menu.test.ts`,
-  `web/tests/api/rbac/role.test.ts`, `web/tests/modules/rbac/menu/index.test.ts`,
-  `web/tests/modules/rbac/role/index.test.ts`, and `web/tests/modules/rbac/role/role-permission-matrix.test.ts`.
+  `web/tests/api/rbac/role.test.ts`, `web/tests/views/access/menus/index.test.ts`,
+  `web/tests/views/access/roles/index.test.ts`, and `web/tests/views/access/roles/role-permission-matrix.test.ts`.
   Replace page fixtures and expected permission arrays with `canvas:test:list`, retain `canvas:test:button`,
   and leave migration/spec documents that mention the old code as historical preflight cases. Do not add a
   runtime fallback that accepts both codes; the persistent row is changed only by the manual migration in Task 4.
@@ -329,7 +329,7 @@
 
   ```powershell
   cd D:\admin
-  git add web/src/modules/rbac/menu/index.vue web/tests/api/rbac/menu.test.ts web/tests/api/rbac/role.test.ts web/tests/modules/rbac/menu/index.test.ts web/tests/modules/rbac/role/index.test.ts web/tests/modules/rbac/role/role-permission-matrix.test.ts server/internal/module/rbac/access/repository_test.go server/internal/module/rbac/access/service_test.go server/internal/module/rbac/menu/foundation_test.go server/internal/module/rbac/menu/service_test.go server/internal/module/rbac/menu/repository_test.go server/internal/module/rbac/role/default_concurrency_test.go
+  git add web/src/views/access/menus/index.vue web/tests/api/rbac/menu.test.ts web/tests/api/rbac/role.test.ts web/tests/views/access/menus/index.test.ts web/tests/views/access/roles/index.test.ts web/tests/views/access/roles/role-permission-matrix.test.ts server/internal/module/rbac/access/repository_test.go server/internal/module/rbac/access/service_test.go server/internal/module/rbac/menu/foundation_test.go server/internal/module/rbac/menu/service_test.go server/internal/module/rbac/menu/repository_test.go server/internal/module/rbac/role/default_concurrency_test.go
   git commit -m "fix: 统一菜单行键并保障默认角色并发唯一"
   ```
 
@@ -888,10 +888,10 @@
 **Files:**
 - Create: `web/src/api/storage/cosconfig.ts`
 - Create: `web/src/api/storage/uploadrule.ts`
-- Create: `web/src/modules/storage/object/index.vue`
+- Create: `web/src/views/cloud/storage-object/index.vue`
 - Create: `web/tests/api/storage/cosconfig.test.ts`
 - Create: `web/tests/api/storage/uploadrule.test.ts`
-- Create: `web/tests/modules/storage/object/index.test.ts`
+- Create: `web/tests/views/cloud/storage-object/index.test.ts`
 - Modify: `web/src/i18n/messages/zh-CN.ts`
 - Modify: `web/src/i18n/messages/en-US.ts`
 - Modify: `web/tests/i18n/index.test.ts`
@@ -935,7 +935,7 @@
 
   ```powershell
   cd D:\admin
-  git add web/src/api/storage web/src/modules/storage/object/index.vue web/tests/api/storage web/tests/modules/storage/object/index.test.ts web/src/i18n/messages/zh-CN.ts web/src/i18n/messages/en-US.ts web/tests/i18n/index.test.ts
+  git add web/src/api/storage web/src/views/cloud/storage-object/index.vue web/tests/api/storage web/tests/views/cloud/storage-object/index.test.ts web/src/i18n/messages/zh-CN.ts web/src/i18n/messages/en-US.ts web/tests/i18n/index.test.ts
   git commit -m "feat: 增加 Admin 对象存储管理页面"
   ```
 

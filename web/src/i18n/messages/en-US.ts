@@ -499,7 +499,7 @@ export const enUS = {
 	'menu.form.i18nKeyHint': 'i18nKey: use at least two dot-separated segments, for example navigation.accountUsers',
 	'menu.form.codeHint': 'Permission code: lowercase colon-separated segments, for example account:user:list',
 	'menu.form.pathHint': 'Route: start with /, for example /account/users',
-	'menu.form.componentPathHint': 'Component path: omit the leading /. The file is web/src/modules/<component path>/index.vue',
+	'menu.form.componentPathHint': 'Component path: omit the leading /. The file is web/src/views/<component path>/index.vue',
 	'menu.form.protectedHint': 'This is a protected foundation menu. Only the name, i18nKey, icon, and sort order can change; structure, status, and deletion are locked.',
 	'menu.confirm.disableTitle': 'Disable menu node',
 	'menu.confirm.disableMessage': 'This node and all descendants will be disabled. Existing role grants are retained.',
