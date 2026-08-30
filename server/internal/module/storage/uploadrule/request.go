@@ -18,7 +18,8 @@ type ListQuery struct {
 }
 type CreateInput struct {
 	PlatformID                          int64
-	Code, Name                          string
+	Codes                               []string
+	Name                                string
 	CosConfigID                         int64
 	MaxFileSizeBytes                    int64
 	AllowedExtensions, AllowedMimeTypes []string
@@ -44,7 +45,7 @@ type CredentialInput struct {
 }
 type createRequest struct {
 	PlatformID        int64       `json:"platformId"`
-	Code              string      `json:"code"`
+	Codes             []string    `json:"codes"`
 	Name              string      `json:"name"`
 	CosConfigID       int64       `json:"cosConfigId"`
 	MaxFileSizeBytes  int64       `json:"maxFileSizeBytes"`
@@ -82,12 +83,17 @@ func normalize(input []string, ext bool) []string {
 	}
 	return out
 }
-func validateFields(platformID int64, code, name string, configID int64, size int64, ext, mime []string, mode, remark string, requirePlatform bool) error {
+func validateFields(platformID int64, codes []string, name string, configID int64, size int64, ext, mime []string, mode, remark string, requirePlatform bool) error {
 	if requirePlatform && platformID < 1 || configID < 1 {
 		return fmt.Errorf("platformId/cosConfigId invalid")
 	}
-	if strings.TrimSpace(code) == "" || len(code) > 64 || strings.HasPrefix(code, "/") || strings.HasSuffix(code, "/") || strings.Contains(code, "..") || strings.IndexFunc(code, func(r rune) bool { return unicode.IsControl(r) }) >= 0 || strings.TrimSpace(name) == "" || len(name) > 128 {
+	if len(codes) == 0 || strings.TrimSpace(name) == "" || len(name) > 128 {
 		return fmt.Errorf("code/name invalid")
+	}
+	for _, code := range codes {
+		if code == "" || len(code) > 64 || strings.HasPrefix(code, "/") || strings.HasSuffix(code, "/") || strings.Contains(code, "..") || strings.IndexFunc(code, func(r rune) bool { return unicode.IsControl(r) }) >= 0 {
+			return fmt.Errorf("code/name invalid")
+		}
 	}
 	if size < 1 || size > 5*1024*1024*1024 {
 		return fmt.Errorf("file limits invalid")
@@ -104,25 +110,25 @@ func validateFields(platformID int64, code, name string, configID int64, size in
 	return nil
 }
 func (r createRequest) input() (CreateInput, error) {
-	r.Code = strings.TrimSpace(r.Code)
+	r.Codes = normalize(r.Codes, false)
 	r.Name = strings.TrimSpace(r.Name)
 	r.Remark = strings.TrimSpace(r.Remark)
 	r.AllowedExtensions = normalize(r.AllowedExtensions, true)
 	r.AllowedMimeTypes = normalize(r.AllowedMimeTypes, false)
-	if err := validateFields(r.PlatformID, r.Code, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark, true); err != nil {
+	if err := validateFields(r.PlatformID, r.Codes, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark, true); err != nil {
 		return CreateInput{}, err
 	}
 	if !yesno.IsValid(r.IsEnabled) {
 		return CreateInput{}, fmt.Errorf("isEnabled invalid")
 	}
-	return CreateInput{r.PlatformID, r.Code, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.IsEnabled, r.Remark}, nil
+	return CreateInput{r.PlatformID, r.Codes, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.IsEnabled, r.Remark}, nil
 }
 func (r updateRequest) input() (UpdateInput, error) {
 	r.Name = strings.TrimSpace(r.Name)
 	r.Remark = strings.TrimSpace(r.Remark)
 	r.AllowedExtensions = normalize(r.AllowedExtensions, true)
 	r.AllowedMimeTypes = normalize(r.AllowedMimeTypes, false)
-	if err := validateFields(1, "x", r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark, false); err != nil {
+	if err := validateFields(1, []string{"x"}, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark, false); err != nil {
 		return UpdateInput{}, err
 	}
 	return UpdateInput{r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark}, nil

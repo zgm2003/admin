@@ -36,9 +36,21 @@ describe('UpMedia', () => {
 
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['gallery/old.png', 'gallery/a.png', 'gallery/b.png']])
   })
+
+  it('renders dedicated avatar actions instead of the generic square uploader', () => {
+    const empty = mountComponent({ modelValue: '', ruleCode: 'avatar', variant: 'avatar' })
+    expect(empty.find('.avatar-uploader').exists()).toBe(true)
+    expect(empty.find('.avatar-uploader .el-upload').exists()).toBe(true)
+    expect(empty.find('.avatar-uploader-icon').exists()).toBe(true)
+
+    const filled = mountComponent({ modelValue: 'avatar/alice.png', ruleCode: 'avatar', variant: 'avatar' })
+    expect(filled.find('.avatar-uploader').exists()).toBe(true)
+    expect(filled.find('.up-media__avatar-clear').exists()).toBe(true)
+    expect(filled.find('.up-media__trigger').exists()).toBe(false)
+  })
 })
 
-function mountComponent(props: { modelValue: string | string[]; ruleCode: string; multiple?: boolean }) {
+function mountComponent(props: { modelValue: string | string[]; ruleCode: string; multiple?: boolean; variant?: 'default' | 'avatar' }) {
   return mount(UpMedia, { props, global: { plugins: [ElementPlus, appI18n] } })
 }
 

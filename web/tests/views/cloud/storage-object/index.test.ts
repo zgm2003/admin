@@ -163,10 +163,69 @@ describe("ObjectStorage", () => {
 
     const form = wrapper.find('[data-testid="storage-rule-form"]');
     expect(form.findAll(".el-form-item.is-required")).toHaveLength(7);
-    expect(form.find('[data-testid="storage-rule-code"]').attributes("placeholder")).toContain("业务申请上传凭证时使用");
+    expect(form.find('[data-testid="storage-rule-codes"]').attributes("placeholder")).toContain("输入后按回车添加");
     expect(form.find('[data-testid="storage-rule-extensions"]').classes()).toContain("el-select");
     expect(form.find('[data-testid="storage-rule-mime-types"]').classes()).toContain("el-select");
     expect(form.text()).toContain("可选择常用值，也可以直接输入自定义值");
+  });
+
+  it("shows the file size in MB and converts it back to bytes when creating", async () => {
+    vi.mocked(getUploadRulePageInit).mockResolvedValue({
+      platforms: [{ id: 1, code: "admin", name: "Admin", isEnabled: 1 }],
+      configs: [{ id: 8, name: "默认 COS", bucket: "admin-assets", region: "ap-guangzhou", isEnabled: 1 }],
+    });
+    const wrapper = mountPage(["storage:object:list", "storage:upload-rule:create"]);
+    await flushPromises();
+    await wrapper.findAll(".el-tabs__item")[1]?.trigger("click");
+    await flushPromises();
+    await wrapper.find('[data-testid="storage-add-rule"]').trigger("click");
+    await flushPromises();
+
+    const form = wrapper.find('[data-testid="storage-rule-form"]');
+    const sizeInput = form.findAllComponents({ name: "ElInputNumber" }).find((item: VueWrapper) => item.attributes("data-testid") === "storage-rule-max-file-size-mb");
+    expect(form.text()).toContain("单文件大小上限（MB）");
+    expect(sizeInput?.props("modelValue")).toBe(1);
+
+    sizeInput?.vm.$emit("update:modelValue", 2);
+    form.findComponent({ name: "ElInputTag" }).vm.$emit("update:modelValue", ["avatar"]);
+    await form.find('[data-testid="storage-rule-name"]').setValue("头像上传");
+    const extensionSelect = form.findAllComponents({ name: "ElSelect" }).find((item: VueWrapper) => item.attributes("data-testid") === "storage-rule-extensions");
+    extensionSelect?.vm.$emit("update:modelValue", ["png"]);
+    await wrapper.findAllComponents(AppDialog)[1]?.find('.el-dialog__footer .el-button--primary').trigger("click");
+    await flushPromises();
+
+    expect(createUploadRule).toHaveBeenCalledWith(expect.objectContaining({ maxFileSizeBytes: 2_097_152 }));
+  });
+
+  it("selects all built-in extensions and MIME types from the dropdown headers", async () => {
+    vi.mocked(getUploadRulePageInit).mockResolvedValue({
+      platforms: [{ id: 1, code: "admin", name: "Admin", isEnabled: 1 }],
+      configs: [{ id: 8, name: "默认 COS", bucket: "admin-assets", region: "ap-guangzhou", isEnabled: 1 }],
+    });
+    const wrapper = mountPage(["storage:object:list", "storage:upload-rule:create"]);
+    await flushPromises();
+    await wrapper.findAll(".el-tabs__item")[1]?.trigger("click");
+    await flushPromises();
+    await wrapper.find('[data-testid="storage-add-rule"]').trigger("click");
+    await flushPromises();
+
+    const form = wrapper.find('[data-testid="storage-rule-form"]');
+    const extensionSelect = form.findAllComponents({ name: "ElSelect" }).find((item: VueWrapper) => item.attributes("data-testid") === "storage-rule-extensions");
+    const mimeSelect = form.findAllComponents({ name: "ElSelect" }).find((item: VueWrapper) => item.attributes("data-testid") === "storage-rule-mime-types");
+    await extensionSelect?.find(".el-select__wrapper").trigger("click");
+    await flushPromises();
+    const extensionSelectAll = document.querySelector<HTMLElement>('[data-testid="storage-rule-extensions-select-all"]');
+    expect(extensionSelectAll).not.toBeNull();
+    extensionSelectAll?.click();
+    await mimeSelect?.find(".el-select__wrapper").trigger("click");
+    await flushPromises();
+    const mimeSelectAll = document.querySelector<HTMLElement>('[data-testid="storage-rule-mime-types-select-all"]');
+    expect(mimeSelectAll).not.toBeNull();
+    mimeSelectAll?.click();
+    await flushPromises();
+
+    expect(extensionSelect?.props("modelValue")).toEqual(["jpg", "jpeg", "png", "gif", "webp", "pdf", "doc", "docx", "xls", "xlsx", "zip"]);
+    expect(mimeSelect?.props("modelValue")).toEqual(["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "application/zip"]);
   });
 
   it("rejects an upload rule without allowed extensions before creating", async () => {
@@ -185,7 +244,7 @@ describe("ObjectStorage", () => {
     await flushPromises();
 
     const form = wrapper.find('[data-testid="storage-rule-form"]');
-    await form.find('[data-testid="storage-rule-code"]').setValue("avatar");
+    form.findComponent({ name: "ElInputTag" }).vm.$emit("update:modelValue", ["avatar"]);
     await form.find('[data-testid="storage-rule-name"]').setValue("头像上传");
     await wrapper.findAllComponents(AppDialog)[1]?.find('.el-dialog__footer .el-button--primary').trigger("click");
     await flushPromises();
@@ -357,7 +416,7 @@ describe("ObjectStorage", () => {
         platformId: 1,
         platformCode: "admin",
         platformName: "Admin",
-        code: "avatar",
+        codes: ["avatar", "article-cover"],
         name: "头像上传",
         cosConfigId: 8,
         cosConfigName: "默认 COS",

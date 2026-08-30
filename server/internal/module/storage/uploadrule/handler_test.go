@@ -66,7 +66,7 @@ func TestHandlerRejectsInvalidQueriesAndJSON(t *testing.T) {
 			t.Fatalf("path=%s status=%d body=%s", path, rec.Code, rec.Body)
 		}
 	}
-	valid := `{"platformId":1,"code":"avatar","name":"Avatar","cosConfigId":1,"maxFileSizeBytes":1024,"allowedExtensions":["png"],"allowedMimeTypes":["image/png"],"accessMode":"private","isEnabled":1,"remark":""}`
+	valid := `{"platformId":1,"codes":["avatar","article-cover"],"name":"Avatar","cosConfigId":1,"maxFileSizeBytes":1024,"allowedExtensions":["png"],"allowedMimeTypes":["image/png"],"accessMode":"private","isEnabled":1,"remark":""}`
 	for _, body := range []string{valid + `{}`, valid[:len(valid)-1] + `,"unknown":1}`, `{"platformId":1}`} {
 		rec = ruleJSON(router, http.MethodPost, "/api/admin/v1/storage/upload-rules", body)
 		if rec.Code != http.StatusBadRequest {

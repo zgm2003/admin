@@ -14,7 +14,7 @@ func TestFindUploadTargetIsPlatformScopedAndRequiresEnabledRows(t *testing.T) {
 	canvasID := insertPlatform(t, db, ctx, "canvas", yesno.Yes)
 	configID := insertConfig(t, db, ctx, "main", yesno.Yes, "")
 	service := NewService(NewRepository(db), nil, nil)
-	ruleID, err := service.Create(ctx, validCreate(adminID, configID, "avatar", yesno.Yes))
+	ruleID, err := service.Create(ctx, validCreate(adminID, configID, []string{"avatar"}, yesno.Yes))
 	if err != nil {
 		t.Fatal(err)
 	}

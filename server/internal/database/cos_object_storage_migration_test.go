@@ -24,20 +24,12 @@ func TestCOSObjectStorageMigration(t *testing.T) {
 	admin := ensureCOSAdmin(t, db, ctx)
 	script := readCOSMigration(t)
 	delta := readCOSRuleUnificationMigration(t)
+	multipleCodes := readCOSRuleMultipleCodesMigration(t)
 	if err := db.WithContext(ctx).Exec(script).Error; err != nil {
 		t.Fatalf("execute COS migration: %v", err)
 	}
 	if err := db.WithContext(ctx).Exec(delta).Error; err != nil {
 		t.Fatalf("execute COS rule unification migration: %v", err)
-	}
-	for _, table := range []string{"storage_cos_config", "storage_upload_rule"} {
-		assertRelation(t, db, ctx, table, true)
-	}
-	for _, name := range []string{"fk_storage_upload_rule_platform", "fk_storage_upload_rule_cos_config", "ck_storage_cos_config_is_enabled", "ck_storage_upload_rule_is_enabled", "ck_storage_upload_rule_max_file_size", "ck_storage_upload_rule_access_mode"} {
-		assertNamedConstraint(t, db, ctx, name)
-	}
-	for _, name := range []string{"ux_storage_cos_config_name_active", "ix_storage_cos_config_enabled_created_at", "ux_storage_upload_rule_platform_code_active", "ix_storage_upload_rule_config_enabled_created_at"} {
-		assertNamedIndex(t, db, ctx, name)
 	}
 	var configID int64
 	if err := db.WithContext(ctx).Raw(`INSERT INTO storage_cos_config (name, app_id, secret_id_ciphertext, secret_key_ciphertext, bucket, region) VALUES ('main', 'app', 'sid', 'skey', 'bucket', 'region') RETURNING id`).Scan(&configID).Error; err != nil {
@@ -48,6 +40,32 @@ func TestCOSObjectStorageMigration(t *testing.T) {
 	}
 	if err := db.WithContext(ctx).Exec(`INSERT INTO storage_upload_rule (platform_id, code, name, cos_config_id, max_file_size_bytes, allowed_extensions, allowed_mime_types, access_mode, is_enabled) VALUES (?, 'avatar-disabled', 'Disabled', ?, 100, ARRAY['png']::text[], ARRAY['image/png']::text[], 'private', 0)`, admin.ID, configID).Error; err != nil {
 		t.Fatal(err)
+	}
+	if err := db.WithContext(ctx).Exec(multipleCodes).Error; err != nil {
+		t.Fatalf("execute COS multiple-code migration: %v", err)
+	}
+	for _, table := range []string{"storage_cos_config", "storage_upload_rule", "storage_upload_rule_code"} {
+		assertRelation(t, db, ctx, table, true)
+	}
+	for _, name := range []string{"fk_storage_upload_rule_platform", "fk_storage_upload_rule_cos_config", "ck_storage_cos_config_is_enabled", "ck_storage_upload_rule_is_enabled", "ck_storage_upload_rule_max_file_size", "ck_storage_upload_rule_access_mode"} {
+		assertNamedConstraint(t, db, ctx, name)
+	}
+	for _, name := range []string{"ux_storage_cos_config_name_active", "ix_storage_cos_config_enabled_created_at", "ux_storage_upload_rule_code_platform_code", "ix_storage_upload_rule_code_rule", "ix_storage_upload_rule_config_enabled_created_at"} {
+		assertNamedIndex(t, db, ctx, name)
+	}
+	var migratedCodes []string
+	if err := db.WithContext(ctx).Table("storage_upload_rule_code").Order("code").Pluck("code", &migratedCodes).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(migratedCodes) != 2 || migratedCodes[0] != "avatar" || migratedCodes[1] != "avatar-disabled" {
+		t.Fatalf("migrated codes = %v", migratedCodes)
+	}
+	var oldColumnExists bool
+	if err := db.WithContext(ctx).Raw(`SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='storage_upload_rule' AND column_name='code')`).Scan(&oldColumnExists).Error; err != nil {
+		t.Fatal(err)
+	}
+	if oldColumnExists {
+		t.Fatal("storage_upload_rule.code still exists")
 	}
 }
 
@@ -60,19 +78,33 @@ func TestCOSObjectStorageMigrationAllowsMultipleEnabledRules(t *testing.T) {
 	if err := db.WithContext(ctx).Exec(readCOSRuleUnificationMigration(t)).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.WithContext(ctx).Exec(readCOSRuleMultipleCodesMigration(t)).Error; err != nil {
+		t.Fatal(err)
+	}
 	var configID int64
 	if err := db.WithContext(ctx).Raw(`INSERT INTO storage_cos_config (name, app_id, secret_id_ciphertext, secret_key_ciphertext, bucket, region) VALUES ('main', 'app', 'sid', 'skey', 'bucket', 'region') RETURNING id`).Scan(&configID).Error; err != nil {
 		t.Fatal(err)
 	}
-	insert := `INSERT INTO storage_upload_rule (platform_id, code, name, cos_config_id, max_file_size_bytes, allowed_extensions, allowed_mime_types, access_mode) VALUES (?, ?, ?, ?, 100, ARRAY['png']::text[], ARRAY['image/png']::text[], ?)`
-	if err := db.WithContext(ctx).Exec(insert, admin.ID, "one", "One", configID, "private").Error; err != nil {
+	insert := `INSERT INTO storage_upload_rule (platform_id, name, cos_config_id, max_file_size_bytes, allowed_extensions, allowed_mime_types, access_mode) VALUES (?, ?, ?, 100, ARRAY['png']::text[], ARRAY['image/png']::text[], ?) RETURNING id`
+	var firstID int64
+	if err := db.WithContext(ctx).Raw(insert, admin.ID, "One", configID, "private").Scan(&firstID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(ctx).Exec(insert, admin.ID, "two", "Two", configID, "private").Error; err != nil {
+	if err := db.WithContext(ctx).Exec(`INSERT INTO storage_upload_rule_code(rule_id,platform_id,code) VALUES(?,?,?)`, firstID, admin.ID, "one").Error; err != nil {
+		t.Fatal(err)
+	}
+	var secondID int64
+	if err := db.WithContext(ctx).Raw(insert, admin.ID, "Two", configID, "private").Scan(&secondID).Error; err != nil {
 		t.Fatalf("second enabled rule rejected: %v", err)
 	}
-	disabledInsert := `INSERT INTO storage_upload_rule (platform_id, code, name, cos_config_id, max_file_size_bytes, allowed_extensions, allowed_mime_types, access_mode, is_enabled) VALUES (?, ?, ?, ?, 100, ARRAY['png']::text[], ARRAY['image/png']::text[], ?, 0)`
-	if err := db.WithContext(ctx).Exec(disabledInsert, admin.ID, "disabled", "Disabled", configID, "private").Error; err != nil {
+	if err := db.WithContext(ctx).Exec(`INSERT INTO storage_upload_rule_code(rule_id,platform_id,code) VALUES(?,?,?)`, secondID, admin.ID, "two").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.WithContext(ctx).Exec(`INSERT INTO storage_upload_rule_code(rule_id,platform_id,code) VALUES(?,?,?)`, secondID, admin.ID, "one").Error; err == nil {
+		t.Fatal("duplicate platform code accepted")
+	}
+	disabledInsert := `INSERT INTO storage_upload_rule (platform_id, name, cos_config_id, max_file_size_bytes, allowed_extensions, allowed_mime_types, access_mode, is_enabled) VALUES (?, ?, ?, 100, ARRAY['png']::text[], ARRAY['image/png']::text[], ?, 0)`
+	if err := db.WithContext(ctx).Exec(disabledInsert, admin.ID, "Disabled", configID, "private").Error; err != nil {
 		t.Fatal(err)
 	}
 }
@@ -120,6 +152,15 @@ func readCOSMigration(t *testing.T) string {
 func readCOSRuleUnificationMigration(t *testing.T) string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(cosRepoRoot(t), "docs", "database", "2026-08-30-cos-upload-rule-code-unification.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func readCOSRuleMultipleCodesMigration(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(cosRepoRoot(t), "docs", "database", "2026-08-30-cos-upload-rule-multiple-codes.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}

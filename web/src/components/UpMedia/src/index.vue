@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { CircleCloseFilled, Picture, Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import type { UploadRequestOptions } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import { requestUploadCredentials, type UploadCredentialItem } from '../../../api/storage/upload'
@@ -10,11 +11,12 @@ const props = withDefaults(defineProps<{
   modelValue: string | string[]
   ruleCode: string
   multiple?: boolean
+  variant?: 'default' | 'avatar'
   accept?: string
   disabled?: boolean
   clearable?: boolean
   width?: string
-}>(), { multiple: false, accept: 'image/*', disabled: false, clearable: true, width: '112px' })
+}>(), { multiple: false, variant: 'default', accept: 'image/*', disabled: false, clearable: true, width: '112px' })
 
 const emit = defineEmits<{ 'update:modelValue': [value: string | string[]] }>()
 const { t } = useI18n()
@@ -24,6 +26,7 @@ const previewUrls = ref<Record<string, string>>({})
 
 const values = computed(() => Array.isArray(props.modelValue) ? props.modelValue : props.modelValue ? [props.modelValue] : [])
 const displayItems = computed(() => values.value.map((objectKey) => ({ objectKey, previewUrl: previewUrls.value[objectKey] ?? '' })))
+const avatarItem = computed(() => displayItems.value[0])
 
 function openPicker(): void {
   if (!props.disabled && !loading.value) inputRef.value?.click()
@@ -35,6 +38,14 @@ async function onFileChange(event: Event): Promise<void> {
   target.value = ''
   if (files.length === 0) return
   const selected = props.multiple ? files : files.slice(0, 1)
+  await uploadSelected(selected)
+}
+
+async function onAvatarUpload(options: UploadRequestOptions): Promise<void> {
+  await uploadSelected([options.file])
+}
+
+async function uploadSelected(selected: File[]): Promise<boolean> {
   loading.value = true
   try {
     const credentials = await requestUploadCredentials(props.ruleCode, selected.map((file) => ({ fileName: file.name, contentType: file.type, fileSizeBytes: file.size })))
@@ -57,8 +68,10 @@ async function onFileChange(event: Event): Promise<void> {
     for (const item of uploaded) nextPreviews[item.objectKey] = item.publicUrl ?? ''
     previewUrls.value = nextPreviews
     emit('update:modelValue', next)
+    return true
   } catch (error: unknown) {
     if (error instanceof DirectUploadError) ElMessage.error(error.message)
+    return false
   } finally {
     loading.value = false
   }
@@ -79,7 +92,14 @@ class DirectUploadError extends Error {}
 </script>
 
 <template>
-  <div v-loading="loading" class="up-media" :class="{ 'is-disabled': disabled, 'is-loading': loading }">
+  <div v-if="variant === 'avatar'" v-loading="loading" class="up-media up-media--avatar" :class="{ 'is-disabled': disabled, 'is-loading': loading }" :style="{ '--up-media-avatar-size': width }" data-testid="up-media-avatar">
+    <el-upload class="avatar-uploader" :show-file-list="false" :accept="accept" :disabled="disabled || loading" :http-request="onAvatarUpload">
+      <img v-if="avatarItem?.previewUrl" :src="avatarItem.previewUrl" class="avatar" alt="">
+      <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
+    </el-upload>
+    <button v-if="clearable && avatarItem && !disabled" type="button" class="up-media__avatar-clear" :aria-label="t('components.upMedia.clear')" @click="clearAt(0)"><CircleCloseFilled /></button>
+  </div>
+  <div v-else v-loading="loading" class="up-media" :class="{ 'is-disabled': disabled, 'is-loading': loading }">
     <input ref="inputRef" data-testid="up-media-input" class="up-media__input" type="file" :accept="accept" :multiple="multiple" :disabled="disabled || loading" @change="onFileChange">
     <div v-for="(item, index) in displayItems" :key="item.objectKey" class="up-media__item" :style="{ width, height: width }" :title="item.objectKey">
       <button type="button" class="up-media__preview" :disabled="disabled || loading || multiple" @click="openPicker">
@@ -103,4 +123,11 @@ class DirectUploadError extends Error {}
 .up-media__placeholder { width: 28px; color: var(--el-text-color-placeholder); }
 .up-media__clear { position: absolute; top: -8px; right: -8px; z-index: 1; display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; padding: 0; color: var(--el-color-danger); background: var(--el-bg-color); border: 0; border-radius: 50%; cursor: pointer; }
 .is-disabled { opacity: .55; }
+
+.up-media--avatar { position: relative; display: inline-flex; width: var(--up-media-avatar-size); }
+.avatar-uploader .avatar { display: block; width: var(--up-media-avatar-size); height: var(--up-media-avatar-size); object-fit: cover; }
+:deep(.avatar-uploader .el-upload) { position: relative; overflow: hidden; border: 1px dashed var(--el-border-color); border-radius: 6px; cursor: pointer; transition: var(--el-transition-duration-fast); }
+:deep(.avatar-uploader .el-upload:hover) { border-color: var(--el-color-primary); }
+.avatar-uploader-icon { width: var(--up-media-avatar-size); height: var(--up-media-avatar-size); color: #8c939d; font-size: 28px; text-align: center; }
+.up-media__avatar-clear { position: absolute; top: -8px; right: -8px; z-index: 2; display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; padding: 0; color: var(--el-color-danger); background: var(--el-bg-color); border: 0; border-radius: 50%; cursor: pointer; }
 </style>

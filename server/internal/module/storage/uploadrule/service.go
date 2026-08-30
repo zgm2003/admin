@@ -66,11 +66,11 @@ func (s *Service) Get(ctx context.Context, id int64) (RuleValue, error) {
 	if e != nil {
 		return RuleValue{}, dependency(e)
 	}
-	return RuleValue{ID: m.ID, PlatformID: m.PlatformID, Code: m.Code, Name: m.Name, CosConfigID: m.CosConfigID, MaxFileSizeBytes: m.MaxFileSizeBytes, AllowedExtensions: []string(m.AllowedExtensions), AllowedMimeTypes: []string(m.AllowedMimeTypes), AccessMode: m.AccessMode, IsEnabled: m.IsEnabled, Remark: m.Remark, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
+	return RuleValue{ID: m.ID, PlatformID: m.PlatformID, Codes: append([]string(nil), m.Codes...), Name: m.Name, CosConfigID: m.CosConfigID, MaxFileSizeBytes: m.MaxFileSizeBytes, AllowedExtensions: []string(m.AllowedExtensions), AllowedMimeTypes: []string(m.AllowedMimeTypes), AccessMode: m.AccessMode, IsEnabled: m.IsEnabled, Remark: m.Remark, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
 }
 func (s *Service) Create(ctx context.Context, in CreateInput) (int64, error) {
 	in = normalizeCreateInput(in)
-	if e := validateFields(in.PlatformID, in.Code, in.Name, in.CosConfigID, in.MaxFileSizeBytes, in.AllowedExtensions, in.AllowedMimeTypes, in.AccessMode, in.Remark, true); e != nil {
+	if e := validateFields(in.PlatformID, in.Codes, in.Name, in.CosConfigID, in.MaxFileSizeBytes, in.AllowedExtensions, in.AllowedMimeTypes, in.AccessMode, in.Remark, true); e != nil {
 		return 0, invalid(e)
 	}
 	platformOK, err := s.repository.PlatformEnabled(ctx, in.PlatformID)
@@ -87,11 +87,18 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (int64, error) {
 	if in.AccessMode == "public" && (config.BucketDomain == nil || strings.TrimSpace(*config.BucketDomain) == "") {
 		return 0, conflict(fmt.Errorf("public rule requires bucket domain"))
 	}
-	return s.repositoryCreate(ctx, in)
+	var id int64
+	err = s.repository.Transaction(ctx, func(r *Repository) error {
+		var e error
+		id, e = repositoryCreate(r, ctx, in)
+		return e
+	})
+	return id, err
 }
-func (s *Service) repositoryCreate(ctx context.Context, in CreateInput) (int64, error) {
-	m := &Model{PlatformID: in.PlatformID, Code: in.Code, Name: in.Name, CosConfigID: in.CosConfigID, MaxFileSizeBytes: in.MaxFileSizeBytes, AllowedExtensions: StringArray(in.AllowedExtensions), AllowedMimeTypes: StringArray(in.AllowedMimeTypes), AccessMode: in.AccessMode, IsEnabled: in.IsEnabled, Remark: in.Remark, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	if e := s.repository.Create(ctx, m); e != nil {
+func repositoryCreate(r *Repository, ctx context.Context, in CreateInput) (int64, error) {
+	now := time.Now().UTC()
+	m := &Model{PlatformID: in.PlatformID, Name: in.Name, CosConfigID: in.CosConfigID, MaxFileSizeBytes: in.MaxFileSizeBytes, AllowedExtensions: StringArray(in.AllowedExtensions), AllowedMimeTypes: StringArray(in.AllowedMimeTypes), AccessMode: in.AccessMode, IsEnabled: in.IsEnabled, Remark: in.Remark, CreatedAt: now, UpdatedAt: now}
+	if e := r.Create(ctx, m, in.Codes); e != nil {
 		if errors.Is(e, ErrConflict) {
 			return 0, conflict(e)
 		}
@@ -104,7 +111,7 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) error {
 		return invalid(fmt.Errorf("id invalid"))
 	}
 	in = normalizeUpdateInput(in)
-	if e := validateFields(1, "x", in.Name, in.CosConfigID, in.MaxFileSizeBytes, in.AllowedExtensions, in.AllowedMimeTypes, in.AccessMode, in.Remark, false); e != nil {
+	if e := validateFields(1, []string{"x"}, in.Name, in.CosConfigID, in.MaxFileSizeBytes, in.AllowedExtensions, in.AllowedMimeTypes, in.AccessMode, in.Remark, false); e != nil {
 		return invalid(e)
 	}
 	return s.repository.Transaction(ctx, func(r *Repository) error {
@@ -174,7 +181,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, v yesno.Value) err
 }
 
 func normalizeCreateInput(in CreateInput) CreateInput {
-	in.Code = strings.TrimSpace(in.Code)
+	in.Codes = normalize(in.Codes, false)
 	in.Name = strings.TrimSpace(in.Name)
 	in.Remark = strings.TrimSpace(in.Remark)
 	in.AllowedExtensions = normalize(in.AllowedExtensions, true)
@@ -203,10 +210,14 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		if m.IsEnabled == yesno.Yes {
 			return conflict(fmt.Errorf("rule must be disabled"))
 		}
-		if e = r.MarkDeleted(ctx, id, time.Now().UTC()); e != nil {
+		now := time.Now().UTC()
+		if e = r.MarkDeleted(ctx, id, now); e != nil {
 			if errors.Is(e, gorm.ErrRecordNotFound) {
 				return notFound(e)
 			}
+			return dependency(e)
+		}
+		if e = r.MarkCodesDeleted(ctx, id, now); e != nil {
 			return dependency(e)
 		}
 		return nil

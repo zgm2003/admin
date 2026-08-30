@@ -40,7 +40,6 @@ func (a *StringArray) Scan(value any) error {
 type Model struct {
 	ID                int64          `gorm:"column:id;primaryKey;autoIncrement"`
 	PlatformID        int64          `gorm:"column:platform_id;not null"`
-	Code              string         `gorm:"column:code;type:varchar(64);not null"`
 	Name              string         `gorm:"column:name;type:varchar(128);not null"`
 	CosConfigID       int64          `gorm:"column:cos_config_id;not null"`
 	MaxFileSizeBytes  int64          `gorm:"column:max_file_size_bytes;not null"`
@@ -52,6 +51,7 @@ type Model struct {
 	CreatedAt         time.Time      `gorm:"column:created_at;not null"`
 	UpdatedAt         time.Time      `gorm:"column:updated_at;not null"`
 	DeletedAt         gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz"`
+	Codes             []string       `gorm:"-"`
 }
 
 func (Model) TableName() string { return "storage_upload_rule" }
@@ -61,7 +61,7 @@ type RuleValue struct {
 	PlatformID        int64       `json:"platformId"`
 	PlatformCode      string      `json:"platformCode"`
 	PlatformName      string      `json:"platformName"`
-	Code              string      `json:"code"`
+	Codes             []string    `json:"codes"`
 	Name              string      `json:"name"`
 	CosConfigID       int64       `json:"cosConfigId"`
 	CosConfigName     string      `json:"cosConfigName"`
@@ -74,3 +74,14 @@ type RuleValue struct {
 	CreatedAt         time.Time   `json:"createdAt"`
 	UpdatedAt         time.Time   `json:"updatedAt"`
 }
+
+type RuleCode struct {
+	ID         int64          `gorm:"column:id;primaryKey;autoIncrement"`
+	RuleID     int64          `gorm:"column:rule_id;not null"`
+	PlatformID int64          `gorm:"column:platform_id;not null"`
+	Code       string         `gorm:"column:code;type:varchar(64);not null"`
+	CreatedAt  time.Time      `gorm:"column:created_at;not null"`
+	DeletedAt  gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz"`
+}
+
+func (RuleCode) TableName() string { return "storage_upload_rule_code" }

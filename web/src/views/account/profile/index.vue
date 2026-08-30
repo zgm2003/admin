@@ -104,7 +104,7 @@ void loadProfile()
               </el-col>
               <el-col :xs="24" :sm="12">
                 <el-form-item :label="t('account.profile.avatar')">
-                  <UpMedia v-model="profileForm.avatar" rule-code="avatar" :disabled="!canUpdateProfile" />
+                  <UpMedia v-model="profileForm.avatar" rule-code="avatar" variant="avatar" width="178px" :disabled="!canUpdateProfile" />
                 </el-form-item>
               </el-col>
               <el-col :xs="24" :sm="12">

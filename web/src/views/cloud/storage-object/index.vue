@@ -80,7 +80,7 @@ interface ConfigForm {
 }
 interface RuleForm {
   platformId: number;
-  code: string;
+  codes: string[];
   name: string;
   cosConfigId: number;
   maxFileSizeBytes: number;
@@ -108,6 +108,7 @@ const cosRegionOptions = [
 
 const commonExtensionOptions = ["jpg", "jpeg", "png", "gif", "webp", "pdf", "doc", "docx", "xls", "xlsx", "zip"];
 const commonMimeTypeOptions = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "application/zip"];
+const bytesPerMegabyte = 1024 * 1024;
 
 function httpsURLError(value: string | null, message: string): string {
   const normalized = value?.trim() ?? "";
@@ -136,7 +137,7 @@ const configRules = computed<FormRules<ConfigForm>>(() => ({
 const ruleRules = computed<FormRules<RuleForm>>(() => ({
   platformId: [{ required: true, type: "number", min: 1, message: t("storage.rulePlatformRequired"), trigger: "change" }],
   cosConfigId: [{ required: true, type: "number", min: 1, message: t("storage.ruleConfigRequired"), trigger: "change" }],
-  code: [{ required: editingRule.value === null, whitespace: true, message: t("storage.ruleCodeRequired"), trigger: "blur" }],
+  codes: [{ required: editingRule.value === null, validator: (_rule, value, callback) => Array.isArray(value) && value.length > 0 ? callback() : callback(new Error(t("storage.ruleCodeRequired"))), trigger: "change" }],
   name: [{ required: true, whitespace: true, message: t("storage.ruleNameRequired"), trigger: "blur" }],
   maxFileSizeBytes: [{ required: true, type: "number", min: 1, message: t("storage.maxFileSizeRequired"), trigger: "change" }],
   allowedExtensions: [{ required: true, validator: (_rule, value, callback) => Array.isArray(value) && value.length > 0 ? callback() : callback(new Error(t("storage.extensionsRequired"))), trigger: "change" }],
@@ -157,7 +158,7 @@ const blankConfig = (): ConfigForm => ({
 });
 const blankRule = (): RuleForm => ({
   platformId: 0,
-  code: "",
+  codes: [],
   name: "",
   cosConfigId: 0,
   maxFileSizeBytes: 1_048_576,
@@ -169,6 +170,28 @@ const blankRule = (): RuleForm => ({
 });
 const configForm = ref<ConfigForm>(blankConfig());
 const ruleForm = ref<RuleForm>(blankRule());
+const ruleMaxFileSizeMB = computed<number>({
+  get: () => ruleForm.value.maxFileSizeBytes / bytesPerMegabyte,
+  set: (value) => { ruleForm.value.maxFileSizeBytes = Math.round(value * bytesPerMegabyte); },
+});
+const allExtensionsSelected = computed(() => commonExtensionOptions.every((item) => ruleForm.value.allowedExtensions.includes(item)));
+const someExtensionsSelected = computed(() => !allExtensionsSelected.value && commonExtensionOptions.some((item) => ruleForm.value.allowedExtensions.includes(item)));
+const allMimeTypesSelected = computed(() => commonMimeTypeOptions.every((item) => ruleForm.value.allowedMimeTypes.includes(item)));
+const someMimeTypesSelected = computed(() => !allMimeTypesSelected.value && commonMimeTypeOptions.some((item) => ruleForm.value.allowedMimeTypes.includes(item)));
+
+function toggleCommonOptions(current: string[], options: string[], checked: boolean): string[] {
+  if (checked) return [...new Set([...current, ...options])];
+  return current.filter((item) => !options.includes(item));
+}
+
+function toggleAllExtensions(checked: boolean | string | number): void {
+  ruleForm.value.allowedExtensions = toggleCommonOptions(ruleForm.value.allowedExtensions, commonExtensionOptions, checked === true);
+  ruleExtensionsError.value = "";
+}
+
+function toggleAllMimeTypes(checked: boolean | string | number): void {
+  ruleForm.value.allowedMimeTypes = toggleCommonOptions(ruleForm.value.allowedMimeTypes, commonMimeTypeOptions, checked === true);
+}
 
 const can = (code: string): boolean => access.hasPermission(code);
 const canCreateConfig = computed(() => can("storage:cos-config:create"));
@@ -214,7 +237,7 @@ const ruleColumns = computed<TableColumn<UploadRule>[]>(() => [
   { prop: "name", label: t("storage.name"), minWidth: 150 },
   { prop: "platformName", label: t("storage.platform"), width: 150 },
   { prop: "cosConfigName", label: t("storage.config"), width: 170 },
-  { prop: "code", label: t("storage.code"), minWidth: 180 },
+  { key: "codes", prop: "codes", label: t("storage.code"), minWidth: 220 },
   { key: "status", prop: "id", label: t("storage.status"), width: 110 },
   { key: "actions", prop: "id", label: t("storage.actions"), width: 250 },
 ]);
@@ -287,7 +310,7 @@ async function saveRule(): Promise<void> {
   const normalized = { name: ruleForm.value.name.trim(), cosConfigId: ruleForm.value.cosConfigId, maxFileSizeBytes: ruleForm.value.maxFileSizeBytes, allowedExtensions, allowedMimeTypes, accessMode: ruleForm.value.accessMode, remark: ruleForm.value.remark.trim() };
   try {
     if (editingRule.value) await updateUploadRule(editingRule.value, normalized);
-    else await createUploadRule({ ...normalized, platformId: ruleForm.value.platformId, code: ruleForm.value.code.trim(), isEnabled: ruleForm.value.isEnabled });
+    else await createUploadRule({ ...normalized, platformId: ruleForm.value.platformId, codes: ruleForm.value.codes.map((code) => code.trim().toLowerCase()).filter(Boolean), isEnabled: ruleForm.value.isEnabled });
     ruleDialog.value = false; ElNotification.success({ title: t("storage.saveSuccess") }); await loadRules();
   }
   catch (error: unknown) { mutationError.value = errorMessage(error); }
@@ -320,6 +343,7 @@ onMounted(() => { void loadConfigs(); });
         <el-alert v-if="canCreateRule && (platforms.length === 0 || configOptions.length === 0)" :title="t('storage.rulePrerequisite')" type="warning" show-icon />
         <AppTable :columns="ruleColumns" :data="rules" :loading="loading" :pagination="rulePagination" result-state="success" :aria-label="t('storage.rulesTab')" :refresh-label="t('storage.refresh')" @refresh="loadRules" @update:pagination="updateRulePagination">
           <template #toolbar-left><el-button v-if="canCreateRule" type="primary" :icon="CirclePlus" data-testid="storage-add-rule" :disabled="!canAddRule" @click="openRule()">{{ t('storage.addRule') }}</el-button></template>
+          <template #cell-codes="{ row }"><el-space wrap :size="4"><el-tag v-for="code in row.codes" :key="code" size="small">{{ code }}</el-tag></el-space></template>
           <template #cell-status="{ row }"><el-tag size="small" :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">{{ row.isEnabled === YesNo.Yes ? t('storage.enabled') : t('storage.disabled') }}</el-tag></template>
           <template #cell-actions="{ row }"><el-space wrap :size="4"><el-button v-if="canUpdateRule" text type="primary" @click="openRule(row)">{{ t('storage.edit') }}</el-button><el-button v-if="can('storage:upload-rule:status')" text type="warning" @click="toggleRule(row)">{{ row.isEnabled === YesNo.Yes ? t('storage.disabled') : t('storage.enabled') }}</el-button><el-button v-if="can('storage:upload-rule:delete')" text type="danger" @click="removeRule(row)">{{ t('storage.delete') }}</el-button></el-space></template>
         </AppTable>
@@ -360,8 +384,8 @@ onMounted(() => { void loadConfigs(); });
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12">
-            <el-form-item :label="t('storage.code')" prop="code">
-              <el-input v-model="ruleForm.code" data-testid="storage-rule-code" :disabled="editingRule !== null" :placeholder="t('storage.ruleCodePlaceholder')" />
+            <el-form-item :label="t('storage.code')" prop="codes">
+              <el-input-tag v-model="ruleForm.codes" data-testid="storage-rule-codes" :disabled="editingRule !== null" :placeholder="t('storage.ruleCodePlaceholder')" />
               <div class="form-help">{{ t('storage.ruleCodeHelp') }}</div>
             </el-form-item>
           </el-col>
@@ -372,7 +396,7 @@ onMounted(() => { void loadConfigs(); });
           </el-col>
           <el-col :xs="24" :sm="12">
             <el-form-item :label="t('storage.maxFileSizeBytes')" prop="maxFileSizeBytes">
-              <el-input-number v-model="ruleForm.maxFileSizeBytes" :min="1" :max="1073741824" controls-position="right" />
+              <el-input-number v-model="ruleMaxFileSizeMB" data-testid="storage-rule-max-file-size-mb" :min="0.01" :max="1024" :step="1" :precision="2" controls-position="right" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12">
@@ -389,6 +413,7 @@ onMounted(() => { void loadConfigs(); });
           <el-col :xs="24" :sm="12">
             <el-form-item :label="t('storage.extensions')" prop="allowedExtensions">
               <el-select v-model="ruleForm.allowedExtensions" data-testid="storage-rule-extensions" multiple filterable allow-create default-first-option :reserve-keyword="false" :placeholder="t('storage.extensionsPlaceholder')" @change="ruleExtensionsError = ''">
+                <template #header><el-checkbox data-testid="storage-rule-extensions-select-all" :model-value="allExtensionsSelected" :indeterminate="someExtensionsSelected" @change="toggleAllExtensions">{{ t('storage.selectAll') }}</el-checkbox></template>
                 <el-option v-for="item in commonExtensionOptions" :key="item" :label="item" :value="item" />
               </el-select>
               <div v-if="ruleExtensionsError" class="el-form-item__error">{{ ruleExtensionsError }}</div>
@@ -398,6 +423,7 @@ onMounted(() => { void loadConfigs(); });
           <el-col :xs="24" :sm="12">
             <el-form-item :label="t('storage.mimeTypes')">
               <el-select v-model="ruleForm.allowedMimeTypes" data-testid="storage-rule-mime-types" multiple filterable allow-create default-first-option :reserve-keyword="false" :placeholder="t('storage.mimeTypesPlaceholder')">
+                <template #header><el-checkbox data-testid="storage-rule-mime-types-select-all" :model-value="allMimeTypesSelected" :indeterminate="someMimeTypesSelected" @change="toggleAllMimeTypes">{{ t('storage.selectAll') }}</el-checkbox></template>
                 <el-option v-for="item in commonMimeTypeOptions" :key="item" :label="item" :value="item" />
               </el-select>
               <div class="form-help">{{ t('storage.mimeTypesHelp') }}</div>

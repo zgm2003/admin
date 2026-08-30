@@ -2,9 +2,10 @@
 
 状态：设计已确认，进入实施计划
 
-补充确认（2026-08-30）：`storage_upload_rule.code` 同时作为业务上传权限编码和 COS 对象 key
-前缀，移除独立的 `path_prefix` 字段；移除 `max_file_count`，批量/单文件选择由业务代码和
-上传组件控制；允许同一平台存在多条启用规则。
+补充确认（2026-08-30）：一条上传规则包含一个或多个稳定上传编码。每个编码同时作为业务上传
+权限标识和本次 COS 对象 key 前缀；编码通过 `storage_upload_rule_code` 子表保存，并在同一
+认证平台内唯一。移除独立的 `path_prefix` 字段和 `max_file_count`；批量/单文件选择由业务代码
+和上传组件控制；允许同一平台存在多条启用规则。规则编码集合创建后不可修改。
 
 日期：2026-08-29
 
@@ -242,12 +243,9 @@ deleted_at             TIMESTAMPTZ NULL
 ```text
 id                    BIGINT PRIMARY KEY
 platform_id           BIGINT NOT NULL
-code                  VARCHAR(64) NOT NULL
 name                  VARCHAR(128) NOT NULL
 cos_config_id         BIGINT NOT NULL
-path_prefix           VARCHAR(255) NOT NULL
 max_file_size_bytes   BIGINT NOT NULL CHECK (max_file_size_bytes > 0)
-max_file_count        INTEGER NOT NULL DEFAULT 1 CHECK (max_file_count > 0)
 allowed_extensions    TEXT[] NOT NULL
 allowed_mime_types    TEXT[] NOT NULL
 access_mode           VARCHAR(16) NOT NULL DEFAULT 'private'
@@ -267,24 +265,28 @@ storage_upload_rule.cos_config_id
 
 storage_upload_rule.platform_id
   -> auth_platform.id ON DELETE RESTRICT
+
+storage_upload_rule_code.rule_id
+  -> storage_upload_rule.id ON DELETE CASCADE
+
+storage_upload_rule_code.platform_id
+  -> auth_platform.id ON DELETE RESTRICT
 ```
 
 规则约束：
 
 - `platform_id` 是规则适用的认证平台。凭证申请只查当前认证平台下的规则；不同平台可拥有
   同名 code，不能跨平台使用对方规则。
-- `code` 是业务端稳定引用值，例如 `avatar`、`article-attachment`；不允许使用显示名称作为
-  引用。有效未删除规则在同一 `platform_id` 下唯一。
+- `storage_upload_rule_code.code` 是业务端稳定引用值，例如 `avatar`、`article-attachment`；一条规则
+  可拥有多个编码，编码创建后不可修改；有效未删除编码在同一 `platform_id` 下唯一。
 - 扩展名统一转小写并去掉前导点后保存，例如 `jpg`、`png`；MIME 类型统一小写。申请上传
   时扩展名和 MIME 都必须满足规则中非空的限制集合；至少配置一个允许扩展名，默认拒绝未知
   扩展名，避免空规则意外开放全部文件。
-- `path_prefix` 必填且只能是相对对象 key 前缀，不允许以 `/` 开头、包含 `..` 或覆盖 Bucket
-  根路径。客户端不能直接提交最终对象 key。
 - `private` 是默认访问模式；`public` 必须由管理员明确选择，并在页面给出风险提示。私有
   对象的读取 URL 不在本期 Admin 页面中自动生成。
-- `max_file_count` 表示一次凭证申请允许的最大文件数，不表达业务表单的总附件数；后者由
-  未来业务模块定义。数值字段由 Service 做上限、范围和整数校验，数据库负责非零和枚举级别
-  的底线约束。单文件大小上限不得超过 COS 单个 PUT 对象的 5 GiB 上限。
+- 单次凭证申请的文件数量以及单选/多选行为由业务代码控制；规则只限制单文件大小。数值字段由
+  Service 做上限、范围和整数校验，数据库负责非零和枚举级别的底线约束。单文件大小上限不得超过
+  COS 单个 PUT 对象的 5 GiB 上限。
 - 创建、更新或启用规则时，目标 `platform_id` 必须是未删除且启用的认证平台；`access_mode`
   为 `public` 时，其 COS 配置必须具有有效 `bucket_domain`。
 - 创建时若请求 `is_enabled = 1`，必须执行与“启用规则”相同的事务锁顺序，并在插入新规则前将
@@ -293,7 +295,7 @@ storage_upload_rule.platform_id
 
 数据库约束名称固定为 `fk_storage_upload_rule_platform`、`fk_storage_upload_rule_cos_config`、
 `ck_storage_cos_config_is_enabled`、`ck_storage_upload_rule_is_enabled`、
-`ck_storage_upload_rule_max_file_size`、`ck_storage_upload_rule_max_file_count` 和
+`ck_storage_upload_rule_max_file_size` 和
 `ck_storage_upload_rule_access_mode`，便于 migration 对已有结构做精确校验而不掩盖漂移。
 
 ### 5.3 索引
@@ -307,8 +309,11 @@ ux_storage_cos_config_name_active
 ix_storage_cos_config_enabled_created_at
   (is_enabled, created_at DESC, id DESC) WHERE deleted_at IS NULL
 
-ux_storage_upload_rule_platform_code_active
+ux_storage_upload_rule_code_platform_code
   UNIQUE (platform_id, code) WHERE deleted_at IS NULL
+
+ix_storage_upload_rule_code_rule
+  (rule_id, id) WHERE deleted_at IS NULL
 
 ux_storage_upload_rule_platform_enabled
   UNIQUE (platform_id)

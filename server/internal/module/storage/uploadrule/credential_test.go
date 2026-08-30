@@ -45,13 +45,13 @@ func TestIssueCredentialsValidatesAndSignsPlatformRule(t *testing.T) {
 	}
 	signer := &recordingSigner{}
 	service := NewService(NewRepository(db), keys, signer)
-	rule := validCreate(platformID, configID, "avatar", yesno.Yes)
+	rule := validCreate(platformID, configID, []string{"avatar", "article-cover"}, yesno.Yes)
 	rule.AccessMode = "public"
 	if _, err := service.Create(ctx, rule); err != nil {
 		t.Fatal(err)
 	}
 	before := time.Now().UTC()
-	result, err := service.IssueCredentials(ctx, auth.Identity{PlatformID: platformID}, CredentialInput{RuleCode: "avatar", Files: []FileInput{{FileName: "photo.PNG", ContentType: "image/png", FileSizeBytes: 100}, {FileName: "cover.PNG", ContentType: "image/png", FileSizeBytes: 100}}})
+	result, err := service.IssueCredentials(ctx, auth.Identity{PlatformID: platformID}, CredentialInput{RuleCode: "article-cover", Files: []FileInput{{FileName: "photo.PNG", ContentType: "image/png", FileSizeBytes: 100}, {FileName: "cover.PNG", ContentType: "image/png", FileSizeBytes: 100}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestIssueCredentialsValidatesAndSignsPlatformRule(t *testing.T) {
 		t.Fatalf("result=%+v requests=%+v", result, signer.requests)
 	}
 	item := result.Items[0]
-	if item.Method != "PUT" || !strings.HasPrefix(item.ObjectKey, "avatar/") || strings.Contains(item.ObjectKey, "photo") || !strings.HasSuffix(item.ObjectKey, ".png") || item.PublicURL == nil || !strings.HasPrefix(*item.PublicURL, "https://cdn.example.com/avatar/") {
+	if item.Method != "PUT" || !strings.HasPrefix(item.ObjectKey, "article-cover/") || strings.Contains(item.ObjectKey, "photo") || !strings.HasSuffix(item.ObjectKey, ".png") || item.PublicURL == nil || !strings.HasPrefix(*item.PublicURL, "https://cdn.example.com/article-cover/") {
 		t.Fatalf("item=%+v", item)
 	}
 	if item.ExpiresAt.Before(before.Add(9*time.Minute+50*time.Second)) || item.ExpiresAt.After(time.Now().UTC().Add(10*time.Minute+time.Second)) {
@@ -83,7 +83,7 @@ func TestIssueCredentialsRejectsRuleViolations(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := NewService(NewRepository(db), keys, &recordingSigner{})
-	rule := validCreate(platformID, configID, "avatar", yesno.Yes)
+	rule := validCreate(platformID, configID, []string{"avatar"}, yesno.Yes)
 	rule.MaxFileSizeBytes = 100
 	if _, err := service.Create(ctx, rule); err != nil {
 		t.Fatal(err)
