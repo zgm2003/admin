@@ -8,6 +8,7 @@ import { changePassword, getAccountProfile, updateAccountProfile } from '../../.
 import type { AccountProfile, ChangePasswordInput, UpdateAccountProfileInput } from '../../../api/user/profile'
 import { useAccessStore } from '../../../store/access'
 import { useAuthStore } from '../../../store/auth'
+import { UpMedia } from '../../../components/UpMedia'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -19,12 +20,13 @@ const loading = ref(false)
 const savingProfile = ref(false)
 const changingPassword = ref(false)
 const loadError = ref('')
-const profileForm = reactive<UpdateAccountProfileInput>({ username: '', phone: null, birthday: null, gender: 0 })
+const profileForm = reactive<UpdateAccountProfileInput>({ username: '', phone: null, avatar: '', birthday: null, gender: 0 })
 const passwordForm = reactive<ChangePasswordInput>({ currentPassword: '', newPassword: '', confirmPassword: '' })
 
 function applyProfile(profile: AccountProfile): void {
   profileForm.username = profile.username
   profileForm.phone = profile.phone
+  profileForm.avatar = profile.avatar
   profileForm.birthday = profile.birthday
   profileForm.gender = profile.gender
 }
@@ -98,6 +100,11 @@ void loadProfile()
               <el-col :xs="24" :sm="12">
                 <el-form-item :label="t('account.profile.phone')">
                   <el-input v-model="profileForm.phone" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item :label="t('account.profile.avatar')">
+                  <UpMedia v-model="profileForm.avatar" rule-code="avatar" :disabled="!canUpdateProfile" />
                 </el-form-item>
               </el-col>
               <el-col :xs="24" :sm="12">

@@ -5,6 +5,7 @@ export interface AccountProfile {
   username: string
   email: string
   phone: string | null
+  avatar: string
   birthday: string | null
   gender: 0 | 1 | 2
 }
@@ -12,6 +13,7 @@ export interface AccountProfile {
 export interface UpdateAccountProfileInput {
   username: string
   phone: string | null
+  avatar: string
   birthday: string | null
   gender: 0 | 1 | 2
 }
@@ -39,21 +41,21 @@ export async function changePassword(input: ChangePasswordInput): Promise<void> 
 }
 
 function parseAccountProfile(value: unknown): AccountProfile {
-  if (!isRecord(value) || !hasExactKeys(value, ['userId', 'username', 'email', 'phone', 'birthday', 'gender']) ||
+  if (!isRecord(value) || !hasExactKeys(value, ['userId', 'username', 'email', 'phone', 'avatar', 'birthday', 'gender']) ||
     !isPositiveInteger(value.userId) || typeof value.username !== 'string' || typeof value.email !== 'string' ||
-    !isNullableString(value.phone) || !isNullableDate(value.birthday) || !isGender(value.gender)) {
+    !isNullableString(value.phone) || typeof value.avatar !== 'string' || !isNullableDate(value.birthday) || !isGender(value.gender)) {
     throw new ProtocolError('account profile response is invalid')
   }
-  return { userId: value.userId, username: value.username, email: value.email, phone: value.phone, birthday: value.birthday, gender: value.gender }
+  return { userId: value.userId, username: value.username, email: value.email, phone: value.phone, avatar: value.avatar, birthday: value.birthday, gender: value.gender }
 }
 
 function parseUpdatedAccountProfile(value: unknown): UpdateAccountProfileResult {
-  if (!isRecord(value) || !hasExactKeys(value, ['userId', 'username', 'email', 'phone', 'birthday', 'gender', 'updatedAt']) ||
+  if (!isRecord(value) || !hasExactKeys(value, ['userId', 'username', 'email', 'phone', 'avatar', 'birthday', 'gender', 'updatedAt']) ||
     !isPositiveInteger(value.userId) || typeof value.username !== 'string' || typeof value.email !== 'string' ||
-    !isNullableString(value.phone) || !isNullableDate(value.birthday) || !isGender(value.gender) || typeof value.updatedAt !== 'string') {
+    !isNullableString(value.phone) || typeof value.avatar !== 'string' || !isNullableDate(value.birthday) || !isGender(value.gender) || typeof value.updatedAt !== 'string') {
     throw new ProtocolError('updated account profile response is invalid')
   }
-  return { userId: value.userId, username: value.username, email: value.email, phone: value.phone, birthday: value.birthday, gender: value.gender, updatedAt: value.updatedAt }
+  return { userId: value.userId, username: value.username, email: value.email, phone: value.phone, avatar: value.avatar, birthday: value.birthday, gender: value.gender, updatedAt: value.updatedAt }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

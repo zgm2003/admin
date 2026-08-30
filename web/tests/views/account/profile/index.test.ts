@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { appI18n, setLocale } from '@src/i18n'
 import * as profileAPI from '@src/api/user/profile'
 import ProfilePage from '@src/views/account/profile/index.vue'
+import UpMedia from '@src/components/UpMedia/src/index.vue'
 import { useAccessStore } from '@src/store/access'
 import { useAuthStore } from '@src/store/auth'
 
@@ -24,7 +25,7 @@ describe('account profile permissions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setLocale('zh-CN')
-    getAccountProfile.mockResolvedValue({ userId: 7, username: 'alice', email: 'alice@example.com', phone: null, birthday: null, gender: 0 })
+    getAccountProfile.mockResolvedValue({ userId: 7, username: 'alice', email: 'alice@example.com', phone: null, avatar: '', birthday: null, gender: 0 })
   })
 
   it.each([
@@ -49,6 +50,21 @@ describe('account profile permissions', () => {
     await flushPromises()
 
     expect(errorSpy).not.toHaveBeenCalled()
+  })
+
+  it('loads the avatar object key and submits it with profile changes', async () => {
+    getAccountProfile.mockResolvedValue({ userId: 7, username: 'alice', email: 'alice@example.com', phone: null, avatar: 'avatar/old.png', birthday: null, gender: 0 })
+    updateAccountProfile.mockResolvedValue({ userId: 7, username: 'alice', email: 'alice@example.com', phone: null, avatar: 'avatar/new.png', birthday: null, gender: 0, updatedAt: '2026-08-30T00:00:00Z' })
+    const wrapper = mountPage(['account:profile:update'])
+    await flushPromises()
+
+    const media = wrapper.findComponent(UpMedia)
+    expect(media.props('modelValue')).toBe('avatar/old.png')
+    media.vm.$emit('update:modelValue', 'avatar/new.png')
+    await wrapper.get('[data-testid="account-profile-save"]').trigger('click')
+    await flushPromises()
+
+    expect(updateAccountProfile).toHaveBeenCalledWith(expect.objectContaining({ avatar: 'avatar/new.png' }))
   })
 
   it('does not emit a second error toast when changing password fails', async () => {

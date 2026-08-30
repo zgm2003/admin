@@ -2,7 +2,9 @@ package profile
 
 import (
 	"fmt"
+	"strings"
 	"time"
+	"unicode"
 
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/shared/apperror"
@@ -13,6 +15,7 @@ type updateRequest struct {
 	Phone    *string `json:"phone"`
 	Birthday *string `json:"birthday"`
 	Gender   int16   `json:"gender"`
+	Avatar   string  `json:"avatar"`
 }
 
 func (r updateRequest) input() (Input, error) {
@@ -27,7 +30,11 @@ func (r updateRequest) input() (Input, error) {
 		}
 		birthday = &parsed
 	}
-	return Input{Username: r.Username, Phone: r.Phone, Birthday: birthday, Gender: r.Gender}, nil
+	avatar := strings.TrimSpace(r.Avatar)
+	if avatar != "" && (len(avatar) > 512 || !strings.HasPrefix(avatar, "avatar/") || strings.Contains(avatar, "..") || strings.ContainsAny(avatar, "\\\r\n\t") || strings.IndexFunc(avatar, unicode.IsControl) >= 0) {
+		return Input{}, apperror.InvalidRequest(fmt.Errorf("avatar is invalid"))
+	}
+	return Input{Username: r.Username, Phone: r.Phone, Birthday: birthday, Gender: r.Gender, Avatar: avatar}, nil
 }
 
 type passwordRequest struct {

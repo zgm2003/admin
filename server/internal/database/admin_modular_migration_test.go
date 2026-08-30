@@ -39,6 +39,25 @@ func TestAdminModularMigrationPreservesIDsAndIsIdempotent(t *testing.T) {
 	assertIDExists(t, db, ctx, "user_session", 41)
 }
 
+func TestUserProfileAvatarMigrationAddsObjectKeyColumn(t *testing.T) {
+	db, ctx := testschema.Open(t, mustPostgresDSN(t), "test_user_profile_avatar_migration")
+	createLegacyAdminFixture(t, db, ctx)
+	if err := db.WithContext(ctx).Exec(readAdminModularMigration(t)).Error; err != nil {
+		t.Fatal(err)
+	}
+	script := readUserProfileAvatarMigration(t)
+	if err := db.WithContext(ctx).Exec(script).Error; err != nil {
+		t.Fatal(err)
+	}
+	assertColumnExists(t, db, ctx, "user_profile", "avatar")
+	if err := db.WithContext(ctx).Exec(`INSERT INTO user_profile (user_id, avatar) VALUES (11, 'avatar/profile.png')`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.WithContext(ctx).Exec(script).Error; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAdminModularMigrationRollsBackUnknownSessionPlatform(t *testing.T) {
 	db, ctx := testschema.Open(t, mustPostgresDSN(t), "test_admin_modular_rollback")
 	createLegacyAdminFixture(t, db, ctx)
@@ -88,6 +107,15 @@ func readAdminModularMigration(t *testing.T) string {
 	data, err := os.ReadFile(filepath.Join(repoRoot(t), "docs", "database", "2026-08-29-admin-modular-architecture.sql"))
 	if err != nil {
 		t.Fatalf("read migration: %v", err)
+	}
+	return string(data)
+}
+
+func readUserProfileAvatarMigration(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(repoRoot(t), "docs", "database", "2026-08-30-user-profile-avatar.sql"))
+	if err != nil {
+		t.Fatalf("read avatar migration: %v", err)
 	}
 	return string(data)
 }

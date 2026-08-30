@@ -854,18 +854,18 @@ func TestPersonalProfileRepositoryPersistsAndReadsBirthdayAndGender(t *testing.T
 	birthday := time.Date(2000, 1, 2, 0, 0, 0, 0, time.UTC)
 	updatedAt := time.Date(2026, 8, 28, 1, 2, 3, 0, time.UTC)
 	profileRepository := profile.NewRepository(db)
-	updated, err := profileRepository.Update(ctx, created.ID, "profile-user", nil, &birthday, 2, updatedAt)
+	updated, err := profileRepository.Update(ctx, created.ID, "profile-user", nil, &birthday, 2, "avatar/profile.png", updatedAt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Username != "profile-user" || updated.Gender != 2 || updated.Birthday == nil || !updated.Birthday.Equal(birthday) {
+	if updated.Username != "profile-user" || updated.Gender != 2 || updated.Avatar != "avatar/profile.png" || updated.Birthday == nil || !updated.Birthday.Equal(birthday) {
 		t.Fatalf("updated profile=%+v", updated)
 	}
 	read, err := profileRepository.Find(ctx, created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if read.Email != created.Email || read.Gender != 2 || read.Birthday == nil || read.Birthday.Format("2006-01-02") != "2000-01-02" {
+	if read.Email != created.Email || read.Gender != 2 || read.Avatar != "avatar/profile.png" || read.Birthday == nil || read.Birthday.Format("2006-01-02") != "2000-01-02" {
 		t.Fatalf("read profile=%+v", read)
 	}
 }

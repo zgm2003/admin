@@ -43,8 +43,8 @@ func (s *passwordServiceStub) ChangePassword(_ context.Context, identity auth.Id
 func TestProfileRoutesReadAndUpdateCurrentAdmin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	profile := &profileServiceStub{
-		current: Value{UserID: 7, Username: "alice", Email: "alice@example.com", Phone: nil},
-		updated: Value{UserID: 7, Username: "alice-new", Email: "alice@example.com", Phone: nil, UpdatedAt: time.Date(2026, 8, 28, 0, 0, 0, 0, time.UTC)},
+		current: Value{UserID: 7, Username: "alice", Email: "alice@example.com", Phone: nil, Avatar: "avatar/old.png"},
+		updated: Value{UserID: 7, Username: "alice-new", Email: "alice@example.com", Phone: nil, Avatar: "avatar/new.png", UpdatedAt: time.Date(2026, 8, 28, 0, 0, 0, 0, time.UTC)},
 	}
 	password := &passwordServiceStub{}
 	router := gin.New()
@@ -63,18 +63,18 @@ func TestProfileRoutesReadAndUpdateCurrentAdmin(t *testing.T) {
 	if err := json.Unmarshal(envelope["data"], &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["userId"] != float64(7) || got["email"] != "alice@example.com" {
+	if got["userId"] != float64(7) || got["email"] != "alice@example.com" || got["avatar"] != "avatar/old.png" {
 		t.Fatalf("profile=%v", got)
 	}
 
 	put := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/account/profile", strings.NewReader(`{"username":"alice-new","phone":"+86 138-0000-0000","birthday":"2026-08-28","gender":1}`))
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/account/profile", strings.NewReader(`{"username":"alice-new","phone":"+86 138-0000-0000","birthday":"2026-08-28","gender":1,"avatar":"avatar/new.png"}`))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(put, request)
 	if put.Code != http.StatusOK {
 		t.Fatalf("PUT status=%d body=%s", put.Code, put.Body)
 	}
-	if profile.actor != 7 || profile.target != 7 || profile.input.Username != "alice-new" || profile.input.Phone == nil || profile.input.Birthday == nil || profile.input.Birthday.Format("2006-01-02") != "2026-08-28" || profile.input.Gender != 1 {
+	if profile.actor != 7 || profile.target != 7 || profile.input.Username != "alice-new" || profile.input.Phone == nil || profile.input.Birthday == nil || profile.input.Birthday.Format("2006-01-02") != "2026-08-28" || profile.input.Gender != 1 || profile.input.Avatar != "avatar/new.png" {
 		t.Fatalf("update actor=%d target=%d input=%+v", profile.actor, profile.target, profile.input)
 	}
 }

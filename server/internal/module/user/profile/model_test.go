@@ -6,6 +6,16 @@ import (
 	"time"
 )
 
+func TestUpdateRequestAcceptsObjectKeyAndRejectsURL(t *testing.T) {
+	valid, err := (updateRequest{Username: "alice", Avatar: "avatar/2026/08/30/a.png"}).input()
+	if err != nil || valid.Avatar != "avatar/2026/08/30/a.png" {
+		t.Fatalf("valid avatar = %+v, err=%v", valid, err)
+	}
+	if _, err := (updateRequest{Username: "alice", Avatar: "https://cdn.example/avatar/a.png"}).input(); err == nil {
+		t.Fatal("avatar URL was accepted")
+	}
+}
+
 func TestProfileTableAndTimestamps(t *testing.T) {
 	if got := (Profile{}).TableName(); got != "user_profile" {
 		t.Fatalf("table name = %q", got)
