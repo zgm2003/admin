@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import ElementPlus from "element-plus";
+import { ElNotification } from "element-plus";
 import { createPinia, setActivePinia } from "pinia";
 
 import { appI18n } from "@src/i18n";
@@ -12,6 +13,7 @@ import ObjectStorage from "@src/modules/storage/object/index.vue";
 import {
   createCosConfig,
   listCosConfigs,
+  testCosConfig,
   updateCosConfig,
 } from "@src/api/storage/cosconfig";
 import {
@@ -142,6 +144,93 @@ describe("ObjectStorage", () => {
     expect(form?.textContent).toContain("COS 配置");
     expect(document.querySelector('[data-testid="storage-rule-platform"]')).not.toBeNull();
     expect(document.querySelector('[data-testid="storage-rule-config"]')).not.toBeNull();
+  });
+
+  it("uses required business fields and creatable multi-selects in the upload-rule form", async () => {
+    vi.mocked(getUploadRulePageInit).mockResolvedValue({
+      platforms: [{ id: 1, code: "admin", name: "Admin", isEnabled: 1 }],
+      configs: [{ id: 8, name: "默认 COS", bucket: "admin-assets", region: "ap-guangzhou", isEnabled: 1 }],
+    });
+    const wrapper = mountPage([
+      "storage:object:list",
+      "storage:upload-rule:create",
+    ]);
+    await flushPromises();
+    await wrapper.findAll(".el-tabs__item")[1]?.trigger("click");
+    await flushPromises();
+    await wrapper.find('[data-testid="storage-add-rule"]').trigger("click");
+    await flushPromises();
+
+    const form = wrapper.find('[data-testid="storage-rule-form"]');
+    expect(form.findAll(".el-form-item.is-required")).toHaveLength(9);
+    expect(form.find('[data-testid="storage-rule-code"]').attributes("placeholder")).toContain("业务申请上传凭证时使用");
+    expect(form.find('[data-testid="storage-rule-path-prefix"]').attributes("placeholder")).toContain("avatars");
+    expect(form.find('[data-testid="storage-rule-extensions"]').classes()).toContain("el-select");
+    expect(form.find('[data-testid="storage-rule-mime-types"]').classes()).toContain("el-select");
+    expect(form.text()).toContain("可选择常用值，也可以直接输入自定义值");
+  });
+
+  it("rejects an upload rule without allowed extensions before creating", async () => {
+    vi.mocked(getUploadRulePageInit).mockResolvedValue({
+      platforms: [{ id: 1, code: "admin", name: "Admin", isEnabled: 1 }],
+      configs: [{ id: 8, name: "默认 COS", bucket: "admin-assets", region: "ap-guangzhou", isEnabled: 1 }],
+    });
+    const wrapper = mountPage([
+      "storage:object:list",
+      "storage:upload-rule:create",
+    ]);
+    await flushPromises();
+    await wrapper.findAll(".el-tabs__item")[1]?.trigger("click");
+    await flushPromises();
+    await wrapper.find('[data-testid="storage-add-rule"]').trigger("click");
+    await flushPromises();
+
+    const form = wrapper.find('[data-testid="storage-rule-form"]');
+    await form.find('[data-testid="storage-rule-code"]').setValue("avatar");
+    await form.find('[data-testid="storage-rule-name"]').setValue("头像上传");
+    await form.find('[data-testid="storage-rule-path-prefix"]').setValue("avatars");
+    await wrapper.findAllComponents(AppDialog)[1]?.find('.el-dialog__footer .el-button--primary').trigger("click");
+    await flushPromises();
+
+    expect(createUploadRule).not.toHaveBeenCalled();
+    const extensionItem = wrapper.findAllComponents({ name: "ElFormItem" }).find((item) => item.props("label") === "允许扩展名");
+    expect(extensionItem?.text()).toContain("请至少选择或输入一个允许扩展名");
+  });
+
+  it("shows the public-access warning when public mode is selected", async () => {
+    vi.mocked(getUploadRulePageInit).mockResolvedValue({
+      platforms: [{ id: 1, code: "admin", name: "Admin", isEnabled: 1 }],
+      configs: [{ id: 8, name: "默认 COS", bucket: "admin-assets", region: "ap-guangzhou", isEnabled: 1 }],
+    });
+    const wrapper = mountPage(["storage:object:list", "storage:upload-rule:create"]);
+    await flushPromises();
+    await wrapper.findAll(".el-tabs__item")[1]?.trigger("click");
+    await flushPromises();
+    await wrapper.find('[data-testid="storage-add-rule"]').trigger("click");
+    await flushPromises();
+
+    const publicRadio = wrapper.findAllComponents({ name: "ElRadio" }).find((item) => item.props("value") === "public");
+    await publicRadio?.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="storage-public-warning"]').text()).toContain("任何获得链接的人都可以访问");
+  });
+
+  it("does not emit a second error notification when connection testing fails", async () => {
+    vi.mocked(listCosConfigs).mockResolvedValue({
+      list: [{ id: 7, name: "主配置", appId: "1250000000", bucket: "admin-assets", region: "ap-guangzhou", endpoint: null, bucketDomain: null, isEnabled: 1, hasCredentials: true, remark: "", createdAt: "2026-08-30T00:00:00Z", updatedAt: "2026-08-30T00:00:00Z" }],
+      total: 1, page: 1, pageSize: 20,
+    });
+    vi.mocked(testCosConfig).mockRejectedValue(new Error("连接失败"));
+    const errorSpy = vi.spyOn(ElNotification, "error");
+    const wrapper = mountPage(["storage:object:list", "storage:cos-config:test"]);
+    await flushPromises();
+
+    const testButton = wrapper.findAll(".el-table__body .el-button").find((button) => button.text() === "测试连接");
+    await testButton?.trigger("click");
+    await flushPromises();
+
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it("keeps the COS config dialog global without a platform field", async () => {

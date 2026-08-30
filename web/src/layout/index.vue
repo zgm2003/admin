@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { ElMessage } from "element-plus";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -8,7 +7,6 @@ import { logout } from "../api/auth/login";
 import { useAccessStore } from "../store/access";
 import { useAuthStore } from "../store/auth";
 import { useUIPreferencesStore } from "../store/ui-preferences";
-import { ProtocolError } from "../types/http";
 import { resolveBreadcrumbs } from "./breadcrumbs";
 import AppAside from "./components/AppAside.vue";
 import AppFooter from "./components/AppFooter.vue";
@@ -89,14 +87,8 @@ async function handleLogout(): Promise<void> {
     access.reset();
     auth.setAnonymous();
     await router.replace({ name: "login" });
-  } catch (error: unknown) {
-    const message =
-      error instanceof ProtocolError
-        ? t("request.protocolError")
-        : error instanceof Error && error.message !== ""
-          ? error.message
-          : t("auth.logoutFailed");
-    ElMessage.error(message);
+  } catch {
+    // request.ts emits the single API error notification
   } finally {
     logoutPending.value = false;
   }

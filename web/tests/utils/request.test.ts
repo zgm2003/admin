@@ -63,13 +63,18 @@ describe('createRequestClient', () => {
     expect(() => createRequestClient('  ')).toThrow(ProtocolError)
   })
 
-  it('returns network errors unchanged', async () => {
+  it('notifies network errors once and returns them unchanged', async () => {
     const networkError = new AxiosError('connection refused', AxiosError.ERR_NETWORK)
     const adapter: AxiosAdapter = async () => Promise.reject(networkError)
     const client = createRequestClient('http://localhost:16301')
 
     await expect(client.get('/health', { adapter })).rejects.toBe(networkError)
-    expect(notifyErrorMock).not.toHaveBeenCalled()
+    expect(notifyErrorMock).toHaveBeenCalledTimes(1)
+    expect(notifyErrorMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: '请求失败',
+      message: 'connection refused',
+      type: 'error',
+    }))
   })
 
   it.each([

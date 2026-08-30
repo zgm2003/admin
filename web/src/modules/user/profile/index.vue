@@ -49,8 +49,8 @@ async function saveProfile(): Promise<void> {
     applyProfile(updated)
     auth.updateProfile(updated.userId, updated.username, updated.phone)
     ElMessage.success(t('account.profile.saved'))
-  } catch (error: unknown) {
-    ElMessage.error(error instanceof Error && error.message !== '' ? error.message : t('account.profile.saveFailed'))
+  } catch {
+    // request.ts emits the single API error notification
   } finally {
     savingProfile.value = false
   }
@@ -65,8 +65,8 @@ async function submitPassword(): Promise<void> {
     access.reset()
     auth.setAnonymous()
     await router.replace({ name: 'login' })
-  } catch (error: unknown) {
-    if (error instanceof Error && error.message !== '') ElMessage.error(error.message)
+  } catch {
+    // request.ts emits the single API error notification
   } finally {
     changingPassword.value = false
   }

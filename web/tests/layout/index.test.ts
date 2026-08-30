@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessage } from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -255,6 +255,19 @@ describe('admin layout', () => {
     expect(useAccessStore(pinia).permissionCodes).toEqual([])
     expect(useAuthStore(pinia).status).toBe('anonymous')
     expect(router.currentRoute.value.path).toBe('/login')
+  })
+
+  it('does not emit a second error toast when logout fails', async () => {
+    logoutMock.mockRejectedValue(new Error('退出失败'))
+    const errorSpy = vi.spyOn(ElMessage, 'error')
+    const { wrapper } = await mountLayout()
+
+    await wrapper.get('[data-testid="aside-account-menu"]').trigger('click')
+    await flushPromises()
+    getPopupItem('aside-account-logout').click()
+    await flushPromises()
+
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 })
 

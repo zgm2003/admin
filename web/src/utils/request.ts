@@ -181,7 +181,7 @@ function applyClientHeaders(config: InternalAxiosRequestConfig): InternalAxiosRe
 }
 
 function notifyRequestError(error: unknown): void {
-  if (!(error instanceof ApiError) && !(error instanceof ProtocolError)) {
+  if (!(error instanceof Error)) {
     return
   }
   ElNotification.error({

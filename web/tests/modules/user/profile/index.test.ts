@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessage } from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -17,6 +17,8 @@ vi.mock('@src/api/user/profile', () => ({
 }))
 
 const getAccountProfile = vi.mocked(profileAPI.getAccountProfile)
+const updateAccountProfile = vi.mocked(profileAPI.updateAccountProfile)
+const changePassword = vi.mocked(profileAPI.changePassword)
 
 describe('account profile permissions', () => {
   beforeEach(() => {
@@ -35,6 +37,30 @@ describe('account profile permissions', () => {
 
     expect(wrapper.find('[data-testid="account-profile-save"]').exists()).toBe(save)
     expect(wrapper.find('[data-testid="account-password-submit"]').exists()).toBe(password)
+  })
+
+  it('does not emit a second error toast when saving the profile fails', async () => {
+    updateAccountProfile.mockRejectedValue(new Error('保存失败'))
+    const errorSpy = vi.spyOn(ElMessage, 'error')
+    const wrapper = mountPage(['account:profile:update'])
+    await flushPromises()
+
+    await wrapper.get('[data-testid="account-profile-save"]').trigger('click')
+    await flushPromises()
+
+    expect(errorSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not emit a second error toast when changing password fails', async () => {
+    changePassword.mockRejectedValue(new Error('密码错误'))
+    const errorSpy = vi.spyOn(ElMessage, 'error')
+    const wrapper = mountPage(['account:password:update'])
+    await flushPromises()
+
+    await wrapper.get('[data-testid="account-password-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 })
 
