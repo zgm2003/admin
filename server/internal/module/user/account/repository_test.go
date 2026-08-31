@@ -215,11 +215,14 @@ func TestFindCurrentUserRequiresAnEnabledRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := tx.WithContext(ctx).Create(&profile.Profile{UserID: created.ID, Avatar: "avatar/current.png"}).Error; err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
 	current, err := repository.FindCurrent(ctx, created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if current.ID != created.ID || current.Username != input.Username || current.Email != input.Email {
+	if current.ID != created.ID || current.Username != input.Username || current.Email != input.Email || current.Avatar != "avatar/current.png" {
 		t.Fatalf("current user = %+v", current)
 	}
 	if err := tx.WithContext(ctx).Model(&role.Role{}).Where("id = ?", defaultRole.ID).Update("is_enabled", yesno.No).Error; err != nil {

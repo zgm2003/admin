@@ -107,13 +107,13 @@ func TestMeReturnsClosedCurrentUserShape(t *testing.T) {
 		phone    *string
 		wantJSON string
 	}{
-		{name: "null phone", wantJSON: `{"userId":1,"username":"admin","email":"admin@example.com","phone":null}`},
-		{name: "stored phone", phone: &phone, wantJSON: `{"userId":1,"username":"admin","email":"admin@example.com","phone":"+86 138-0000-0000"}`},
+		{name: "null phone", wantJSON: `{"userId":1,"username":"admin","email":"admin@example.com","phone":null,"avatar":"avatar/profile.png"}`},
+		{name: "stored phone", phone: &phone, wantJSON: `{"userId":1,"username":"admin","email":"admin@example.com","phone":"+86 138-0000-0000","avatar":"avatar/profile.png"}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			service := &stubAuthenticationService{
 				authenticateIdentity: Identity{UserID: 1, SessionID: 2, Platform: "admin", Version: 1},
-				current:              user.Current{ID: 1, Username: "admin", Email: "admin@example.com", Phone: test.phone},
+				current:              user.Current{ID: 1, Username: "admin", Email: "admin@example.com", Phone: test.phone, Avatar: "avatar/profile.png"},
 			}
 			headers := map[string]string{"Authorization": "Bearer token"}
 			responseRecorder := serveAuthRouteWithHeaders(t, service, http.MethodGet, "/api/v1/auth/me", "", nil, false, time.Now(), headers)

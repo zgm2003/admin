@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ArrowUp, Monitor, SwitchButton, User } from '@element-plus/icons-vue'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
+import { requestObjectURL } from '../../api/storage/upload'
 import { useAccessStore } from '../../store/access'
 import AccessMenuNode from './AccessMenuNode.vue'
 
@@ -12,10 +13,12 @@ const props = withDefaults(defineProps<{
   uniqueOpened: boolean
   username?: string
   email?: string
+  avatar?: string
   logoutPending?: boolean
 }>(), {
   username: '',
   email: '',
+  avatar: '',
   logoutPending: false,
 })
 
@@ -28,7 +31,28 @@ const route = useRoute()
 const router = useRouter()
 const access = useAccessStore()
 const avatarText = computed(() => props.username.slice(0, 1).toUpperCase() || 'A')
+const avatarURL = ref('')
 const canOpenProfile = computed(() => access.hasPermission('account:profile:list'))
+let avatarRequestID = 0
+
+async function hydrateAvatar(objectKey: string): Promise<void> {
+  const requestID = ++avatarRequestID
+  avatarURL.value = ''
+  if (!objectKey) return
+  try {
+    const result = await requestObjectURL('avatar', objectKey)
+    if (requestID === avatarRequestID) avatarURL.value = result.url
+  } catch {
+    if (requestID === avatarRequestID) avatarURL.value = ''
+  }
+}
+
+function handleAvatarError(): void {
+  avatarRequestID += 1
+  avatarURL.value = ''
+}
+
+watch(() => props.avatar, (objectKey) => { void hydrateAvatar(objectKey) }, { immediate: true })
 
 function handleAccountCommand(command: string | number | object): void {
   if (command === 'logout') {
@@ -83,7 +107,7 @@ function handleAccountCommand(command: string | number | object): void {
           :title="t('layout.account.title')"
           :aria-label="t('layout.account.title')"
         >
-          <el-avatar class="app-aside__avatar" :size="34">{{ avatarText }}</el-avatar>
+          <el-avatar class="app-aside__avatar" :size="34" :src="avatarURL" @error="handleAvatarError">{{ avatarText }}</el-avatar>
           <span v-show="!collapsed" class="app-aside__account-copy">
             <strong data-testid="aside-account-name">{{ username }}</strong>
             <small>{{ email }}</small>

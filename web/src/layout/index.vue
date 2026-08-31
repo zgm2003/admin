@@ -30,6 +30,7 @@ const contentFullscreen = ref(false);
 const asideWidth = computed(() => (collapsed.value ? "80px" : "248px"));
 const username = computed(() => (auth.user === null ? "" : auth.user.username));
 const email = computed(() => (auth.user === null ? "" : auth.user.email));
+const avatar = computed(() => (auth.user === null ? "" : auth.user.avatar));
 const breadcrumbs = computed(
   () => resolveBreadcrumbs(route.path, access.menuTree) ?? [],
 );
@@ -124,6 +125,7 @@ onBeforeUnmount(() => {
         :unique-opened="uiPreferences.preferences.uniqueOpened"
         :username="username"
         :email="email"
+        :avatar="avatar"
         :logout-pending="logoutPending"
         @logout="handleLogout"
       />
@@ -222,6 +224,7 @@ onBeforeUnmount(() => {
         :unique-opened="uiPreferences.preferences.uniqueOpened"
         :username="username"
         :email="email"
+        :avatar="avatar"
         :logout-pending="logoutPending"
         @logout="handleLogout"
       />

@@ -3,16 +3,18 @@ import ElementPlus from 'element-plus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { appI18n } from '@src/i18n'
-import { requestUploadCredentials } from '@src/api/storage/upload'
+import { requestObjectURL, requestUploadCredentials } from '@src/api/storage/upload'
 import UpMedia from '@src/components/UpMedia/src/index.vue'
 
-vi.mock('@src/api/storage/upload', () => ({ requestUploadCredentials: vi.fn() }))
+vi.mock('@src/api/storage/upload', () => ({ requestUploadCredentials: vi.fn(), requestObjectURL: vi.fn() }))
 const credentialsMock = vi.mocked(requestUploadCredentials)
+const objectURLMock = vi.mocked(requestObjectURL)
 
 describe('UpMedia', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
+    objectURLMock.mockResolvedValue({ url: 'https://cdn.example/existing.png' })
   })
 
   it('uploads one file and emits its object key instead of the upload URL', async () => {
@@ -47,6 +49,15 @@ describe('UpMedia', () => {
     expect(filled.find('.avatar-uploader').exists()).toBe(true)
     expect(filled.find('.up-media__avatar-clear').exists()).toBe(true)
     expect(filled.find('.up-media__trigger').exists()).toBe(false)
+  })
+
+  it('restores the preview URL for an existing object key after reload', async () => {
+    objectURLMock.mockResolvedValue({ url: 'https://cdn.example/avatar/alice.png' })
+    const wrapper = mountComponent({ modelValue: 'avatar/alice.png', ruleCode: 'avatar', variant: 'avatar' })
+    await flushPromises()
+
+    expect(requestObjectURL).toHaveBeenCalledWith('avatar', 'avatar/alice.png')
+    expect(wrapper.get('.avatar').attributes('src')).toBe('https://cdn.example/avatar/alice.png')
   })
 })
 

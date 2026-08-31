@@ -150,6 +150,7 @@ func (h *Handler) Me(context *gin.Context) {
 		Username: current.Username,
 		Email:    current.Email,
 		Phone:    current.Phone,
+		Avatar:   current.Avatar,
 	})
 }
 

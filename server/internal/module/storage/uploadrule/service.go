@@ -276,6 +276,26 @@ func (s *Service) IssueCredentials(ctx context.Context, identity auth.Identity, 
 	}
 	return CredentialResponse{Items: items}, nil
 }
+
+func (s *Service) PublicObjectURL(ctx context.Context, identity auth.Identity, ruleCode, objectKey string) (string, error) {
+	if identity.PlatformID < 1 || strings.TrimSpace(ruleCode) == "" || strings.TrimSpace(objectKey) == "" {
+		return "", invalid(fmt.Errorf("object URL request invalid"))
+	}
+	target, err := s.repository.FindUploadTarget(ctx, identity.PlatformID, strings.TrimSpace(ruleCode))
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", notFound(err)
+	}
+	if err != nil {
+		return "", dependency(err)
+	}
+	if !strings.HasPrefix(objectKey, strings.Trim(ruleCode, "/")+"/") || strings.Contains(objectKey, "..") || strings.ContainsAny(objectKey, "\\\r\n\t") {
+		return "", invalid(fmt.Errorf("object key invalid"))
+	}
+	if target.AccessMode != "public" || target.BucketDomain == nil || strings.TrimSpace(*target.BucketDomain) == "" {
+		return "", nil
+	}
+	return strings.TrimRight(*target.BucketDomain, "/") + "/" + strings.ReplaceAll(url.PathEscape(objectKey), "%2F", "/"), nil
+}
 func validateCredentialFile(file FileInput, target UploadTarget) (string, error) {
 	name := strings.TrimSpace(file.FileName)
 	if name == "" || strings.ContainsAny(name, "/\\\r\n\t") || strings.Contains(name, "..") {

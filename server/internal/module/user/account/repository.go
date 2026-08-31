@@ -43,6 +43,7 @@ type Current struct {
 	Username string
 	Email    string
 	Phone    *string
+	Avatar   string
 }
 
 type RevokedSessionRef struct {
@@ -427,8 +428,10 @@ func (r *Repository) ChangePasswordAndRevokeSessions(ctx context.Context, userID
 func (r *Repository) FindCurrent(ctx context.Context, userID int64) (Current, error) {
 	var current Current
 	result := r.db.WithContext(ctx).Raw(`
-		SELECT app_user.id, app_user.username, app_user.email, app_user.phone
+		SELECT app_user.id, app_user.username, app_user.email, app_user.phone,
+		       COALESCE(profile.avatar, '') AS avatar
 		FROM user_account AS app_user
+		LEFT JOIN user_profile AS profile ON profile.user_id = app_user.id
 		WHERE app_user.id = ?
 		  AND app_user.deleted_at IS NULL
 		  AND app_user.is_enabled = ?

@@ -74,7 +74,7 @@ describe('router', () => {
     })
     getCurrentUserMock.mockImplementation(async () => {
       order.push('me')
-      return { userId: 1, username: 'admin', email: 'admin@example.com', phone: null }
+      return { userId: 1, username: 'admin', email: 'admin@example.com', phone: null, avatar: '' }
     })
     getAccessMock.mockImplementation(async () => {
       order.push('access')
@@ -242,7 +242,7 @@ describe('router', () => {
 function setAuthenticated(): void {
   const store = useAuthStore(pinia)
   store.setCredential({ accessToken: 'jwt', expiresIn: 900 })
-  store.setAuthenticated({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null })
+  store.setAuthenticated({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null, avatar: '' })
 }
 
 function emptyAccessSnapshot(): AccessSnapshot {

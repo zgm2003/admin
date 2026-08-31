@@ -15,6 +15,7 @@ export interface CurrentUser {
   username: string
   email: string
   phone: string | null
+  avatar: string
 }
 
 export async function login(input: LoginInput): Promise<AccessCredential> {
@@ -34,12 +35,12 @@ export async function getCurrentUser(): Promise<CurrentUser> {
 }
 
 function parseCurrentUser(value: unknown): CurrentUser {
-  if (!isExactRecord(value, ['userId', 'username', 'email', 'phone']) ||
+  if (!isExactRecord(value, ['userId', 'username', 'email', 'phone', 'avatar']) ||
     !isPositiveInteger(value.userId) || typeof value.username !== 'string' ||
-    typeof value.email !== 'string' || !isNullableString(value.phone)) {
+    typeof value.email !== 'string' || !isNullableString(value.phone) || typeof value.avatar !== 'string') {
     throw new ProtocolError('current user response is invalid')
   }
-  return { userId: value.userId, username: value.username, email: value.email, phone: value.phone }
+  return { userId: value.userId, username: value.username, email: value.email, phone: value.phone, avatar: value.avatar }
 }
 
 function isExactRecord(value: unknown, keys: readonly string[]): value is Record<string, unknown> {

@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { CircleCloseFilled, Picture, Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
-import { requestUploadCredentials, type UploadCredentialItem } from '../../../api/storage/upload'
+import { requestObjectURL, requestUploadCredentials, type UploadCredentialItem } from '../../../api/storage/upload'
 
 const props = withDefaults(defineProps<{
   modelValue: string | string[]
@@ -27,6 +27,23 @@ const previewUrls = ref<Record<string, string>>({})
 const values = computed(() => Array.isArray(props.modelValue) ? props.modelValue : props.modelValue ? [props.modelValue] : [])
 const displayItems = computed(() => values.value.map((objectKey) => ({ objectKey, previewUrl: previewUrls.value[objectKey] ?? '' })))
 const avatarItem = computed(() => displayItems.value[0])
+
+async function hydratePreviews(nextValues: string[]): Promise<void> {
+  const missing = nextValues.filter((objectKey) => previewUrls.value[objectKey] === undefined)
+  if (missing.length === 0) return
+  const resolved = { ...previewUrls.value }
+  await Promise.all(missing.map(async (objectKey) => {
+    try {
+      const result = await requestObjectURL(props.ruleCode, objectKey)
+      resolved[objectKey] = result.url
+    } catch {
+      resolved[objectKey] = ''
+    }
+  }))
+  previewUrls.value = resolved
+}
+
+watch(values, (next) => { void hydratePreviews(next) }, { immediate: true })
 
 function openPicker(): void {
   if (!props.disabled && !loading.value) inputRef.value?.click()

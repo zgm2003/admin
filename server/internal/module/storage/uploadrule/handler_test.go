@@ -22,6 +22,9 @@ type ruleHTTPService struct {
 func (*ruleHTTPService) IssueCredentials(context.Context, auth.Identity, CredentialInput) (CredentialResponse, error) {
 	return CredentialResponse{}, nil
 }
+func (*ruleHTTPService) PublicObjectURL(context.Context, auth.Identity, string, string) (string, error) {
+	return "", nil
+}
 
 func (s *ruleHTTPService) List(_ context.Context, q ListQuery) (pagination.Result[RuleValue], error) {
 	s.query = q
@@ -46,7 +49,7 @@ func TestRoutesUseExactUploadRulePermissions(t *testing.T) {
 	pass := func(c *gin.Context) { c.Next() }
 	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(&ruleHTTPService{}), pass, func(code string) gin.HandlerFunc { permissions = append(permissions, code); return pass })
 	RegisterCredentialRoute(router.Group("/api/v1"), NewHandler(&ruleHTTPService{}), pass, func(code string) gin.HandlerFunc { permissions = append(permissions, code); return pass })
-	want := []string{PermissionList, PermissionList, PermissionCreate, PermissionList, PermissionUpdate, PermissionStatus, PermissionDelete, "storage:object:upload"}
+	want := []string{PermissionList, PermissionList, PermissionCreate, PermissionList, PermissionUpdate, PermissionStatus, PermissionDelete, "storage:object:upload", "storage:object:upload"}
 	if !reflect.DeepEqual(permissions, want) {
 		t.Fatalf("permissions=%v want=%v", permissions, want)
 	}

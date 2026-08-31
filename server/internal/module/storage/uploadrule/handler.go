@@ -22,6 +22,7 @@ type handlerService interface {
 	UpdateStatus(context.Context, int64, yesno.Value) error
 	Delete(context.Context, int64) error
 	IssueCredentials(context.Context, auth.Identity, CredentialInput) (CredentialResponse, error)
+	PublicObjectURL(context.Context, auth.Identity, string, string) (string, error)
 }
 type Handler struct{ s handlerService }
 
@@ -169,4 +170,23 @@ func (h *Handler) Credentials(c *gin.Context) {
 		return
 	}
 	response.OK(c, http.StatusOK, result)
+}
+
+func (h *Handler) ObjectURL(c *gin.Context) {
+	identity, ok := auth.IdentityFromContext(c)
+	if !ok {
+		response.Fail(c, apperror.Unauthorized(fmt.Errorf("identity unavailable")))
+		return
+	}
+	var request objectURLRequest
+	if err := validate.BindJSON(c, &request); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	url, err := h.s.PublicObjectURL(c, identity, request.RuleCode, request.ObjectKey)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, objectURLResponse{URL: url})
 }

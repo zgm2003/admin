@@ -19,7 +19,7 @@ describe('auth store', () => {
 
   it('becomes authenticated only after applying the current user', () => {
     const store = useAuthStore()
-    const user = { userId: 1, username: 'admin', email: 'admin@example.com', phone: null }
+    const user = { userId: 1, username: 'admin', email: 'admin@example.com', phone: null, avatar: '' }
     store.setCredential({ accessToken: 'jwt', expiresIn: 900 }, 1_000)
     store.setAuthenticated(user)
     expect(store.status).toBe('authenticated')
@@ -29,7 +29,7 @@ describe('auth store', () => {
   it('clears every auth value when anonymous or failed', () => {
     const store = useAuthStore()
     store.setCredential({ accessToken: 'jwt', expiresIn: 900 }, 1_000)
-    store.setAuthenticated({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null })
+    store.setAuthenticated({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null, avatar: '' })
     store.setAnonymous()
     expect(store.status).toBe('anonymous')
     expect(store.accessToken).toBe('')
@@ -49,9 +49,9 @@ describe('auth store', () => {
 		const store = useAuthStore()
 		expect(store.updateProfile(7, 'ignored', '+86 138-0000-0000')).toBe(false)
 		store.setCredential({ accessToken: 'jwt', expiresIn: 900 }, 1_000)
-		store.setAuthenticated({ userId: 7, username: 'old', email: 'user@example.com', phone: null })
+		store.setAuthenticated({ userId: 7, username: 'old', email: 'user@example.com', phone: null, avatar: 'avatar/old.png' })
 		expect(store.updateProfile(7, 'new', '+86 138-0000-0000')).toBe(true)
-		expect(store.user).toEqual({ userId: 7, username: 'new', email: 'user@example.com', phone: '+86 138-0000-0000' })
+		expect(store.user).toEqual({ userId: 7, username: 'new', email: 'user@example.com', phone: '+86 138-0000-0000', avatar: 'avatar/old.png' })
 		expect(store.updateProfile(8, 'ignored', null)).toBe(false)
 		expect(store.user?.username).toBe('new')
 		expect(store.accessToken).toBe('jwt')

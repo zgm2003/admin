@@ -65,6 +65,7 @@ describe('account profile permissions', () => {
     await flushPromises()
 
     expect(updateAccountProfile).toHaveBeenCalledWith(expect.objectContaining({ avatar: 'avatar/new.png' }))
+    expect(useAuthStore().user?.avatar).toBe('avatar/new.png')
   })
 
   it('does not emit a second error toast when changing password fails', async () => {
@@ -84,7 +85,7 @@ function mountPage(permissionCodes: string[]) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAccessStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes })
-  useAuthStore(pinia).setAuthenticated({ userId: 7, username: 'alice', email: 'alice@example.com', phone: null })
+  useAuthStore(pinia).setAuthenticated({ userId: 7, username: 'alice', email: 'alice@example.com', phone: null, avatar: '' })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/login', name: 'login', component: { template: '<div />' } }] })
   return mount(ProfilePage, { global: { plugins: [pinia, appI18n, ElementPlus, router] } })
 }

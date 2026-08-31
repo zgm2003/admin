@@ -332,6 +332,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"PUT /api/admin/v1/storage/upload-rules/:id":          1,
 		"PATCH /api/admin/v1/storage/upload-rules/:id/status": 1,
 		"DELETE /api/admin/v1/storage/upload-rules/:id":       1,
+		"POST /api/v1/storage/object-url":                     1,
 	}
 	remaining, unexpected := routeSetDiff(router.Routes(), want)
 	if len(unexpected) != 0 {

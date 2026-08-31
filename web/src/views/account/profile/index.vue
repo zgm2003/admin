@@ -49,7 +49,7 @@ async function saveProfile(): Promise<void> {
   try {
     const updated = await updateAccountProfile({ ...profileForm })
     applyProfile(updated)
-    auth.updateProfile(updated.userId, updated.username, updated.phone)
+    auth.updateProfile(updated.userId, updated.username, updated.phone, updated.avatar)
     ElMessage.success(t('account.profile.saved'))
   } catch {
     // request.ts emits the single API error notification

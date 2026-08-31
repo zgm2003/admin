@@ -179,7 +179,7 @@ describe('user management', () => {
 function mountPage(permissions: string[], currentUserID = 7): VueWrapper {
   const pinia = createPinia(); setActivePinia(pinia)
   useAccessStore(pinia).applySnapshot({ roleCodes:[], menuTree:[], permissionCodes:permissions })
-  useAuthStore(pinia).setAuthenticated({ userId:currentUserID, username:'alice', email:'alice@example.com', phone:'+86 138-0000-0000' })
+  useAuthStore(pinia).setAuthenticated({ userId:currentUserID, username:'alice', email:'alice@example.com', phone:'+86 138-0000-0000', avatar: '' })
   return mount(UserManagement, { attachTo:document.body, global:{ plugins:[pinia, appI18n, ElementPlus] } })
 }
 function row() { return { id:7, username:'alice', email:'alice@example.com', phone:'+86 138-0000-0000', isEnabled:YesNo.Yes, roles:roles(), createdAt:'2026-08-20T00:00:00Z', updatedAt:'2026-08-20T01:00:00Z' } }

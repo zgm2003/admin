@@ -26,7 +26,7 @@ func (c *Client) sdkClient(credentials Credentials) (*tencos.Client, error) {
 	if strings.TrimSpace(credentials.Bucket) == "" || strings.TrimSpace(credentials.AppID) == "" || strings.TrimSpace(credentials.Region) == "" || strings.TrimSpace(credentials.SecretID) == "" || strings.TrimSpace(credentials.SecretKey) == "" {
 		return nil, fmt.Errorf("COS credentials are incomplete")
 	}
-	bucket := strings.TrimSpace(credentials.Bucket) + "-" + strings.TrimSpace(credentials.AppID)
+	bucket := normalizedBucketName(credentials.Bucket, credentials.AppID)
 	var base *tencos.BaseURL
 	if strings.TrimSpace(credentials.Endpoint) != "" {
 		endpoint, err := url.Parse(strings.TrimRight(strings.TrimSpace(credentials.Endpoint), "/"))
@@ -50,6 +50,15 @@ func (c *Client) sdkClient(credentials Credentials) (*tencos.Client, error) {
 	client := tencos.NewClient(base, &httpClient)
 	client.BaseURL.BucketURL.Path = ""
 	return client, nil
+}
+
+func normalizedBucketName(bucket, appID string) string {
+	bucket = strings.TrimSpace(bucket)
+	appID = strings.TrimSpace(appID)
+	if strings.HasSuffix(bucket, "-"+appID) {
+		return bucket
+	}
+	return bucket + "-" + appID
 }
 func (c *Client) TestConnection(ctx context.Context, credentials Credentials) error {
 	client, err := c.sdkClient(credentials)

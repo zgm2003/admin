@@ -2,14 +2,33 @@ import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { appI18n, setLocale } from '@src/i18n'
 import AppAside from '@src/layout/components/AppAside.vue'
 import { useAccessStore } from '@src/store/access'
+import { requestObjectURL } from '@src/api/storage/upload'
+
+vi.mock('@src/api/storage/upload', () => ({ requestObjectURL: vi.fn() }))
+
+const requestObjectURLMock = vi.mocked(requestObjectURL)
 
 describe('AppAside profile access', () => {
-  beforeEach(() => setLocale('zh-CN'))
+  beforeEach(() => {
+    setLocale('zh-CN')
+    requestObjectURLMock.mockReset()
+  })
+
+  it('renders the resolved avatar image when the current user has an avatar key', async () => {
+    requestObjectURLMock.mockResolvedValue({ url: 'https://cdn.example.com/avatar.png' })
+    const { wrapper } = mountAside([], { avatar: 'avatar/profile.png' })
+
+    await flushPromises()
+
+    expect(requestObjectURLMock).toHaveBeenCalledWith('avatar', 'avatar/profile.png')
+    expect(wrapper.findComponent({ name: 'ElAvatar' }).exists()).toBe(true)
+    expect(wrapper.get('.app-aside__avatar img').attributes('src')).toBe('https://cdn.example.com/avatar.png')
+  })
 
   it('shows the profile entry only with profile-list permission and always keeps logout', async () => {
     const { access, wrapper } = mountAside([])
@@ -30,7 +49,7 @@ describe('AppAside profile access', () => {
   })
 })
 
-function mountAside(permissionCodes: string[]) {
+function mountAside(permissionCodes: string[], props: { avatar?: string } = {}) {
   const pinia = createPinia()
   setActivePinia(pinia)
   const access = useAccessStore(pinia)
@@ -43,7 +62,7 @@ function mountAside(permissionCodes: string[]) {
     ],
   })
   const wrapper = mount(AppAside, {
-    props: { collapsed: false, uniqueOpened: true },
+    props: { collapsed: false, uniqueOpened: true, ...props },
     global: { plugins: [ElementPlus, pinia, router, appI18n] },
   })
   return { access, router, wrapper }

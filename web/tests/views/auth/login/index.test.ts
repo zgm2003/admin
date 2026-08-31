@@ -78,7 +78,7 @@ describe('Login page', () => {
     })
     getCurrentUserMock.mockImplementation(async () => {
       order.push('me')
-      return { userId: 1, username: 'admin', email: 'admin@example.com', phone: null }
+      return { userId: 1, username: 'admin', email: 'admin@example.com', phone: null, avatar: '' }
     })
     const { wrapper, router } = await mountLogin('/login?redirect=/secure')
     await wrapper.get('[data-testid="login-email"]').setValue(' Admin@Example.COM ')

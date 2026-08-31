@@ -32,8 +32,8 @@ describe('auth API', () => {
   })
 
   it('loads and validates the current user', async () => {
-    requestMock.mockResolvedValue({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null })
-    await expect(getCurrentUser()).resolves.toEqual({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null })
+    requestMock.mockResolvedValue({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null, avatar: 'avatar/profile.png' })
+    await expect(getCurrentUser()).resolves.toEqual({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null, avatar: 'avatar/profile.png' })
     expect(requestMock).toHaveBeenCalledWith({ method: 'GET', url: '/api/v1/auth/me' })
   })
 

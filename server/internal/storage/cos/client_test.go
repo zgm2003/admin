@@ -57,6 +57,21 @@ func TestTestConnectionUsesBucketGet(t *testing.T) {
 		t.Fatal("bucket request was not sent")
 	}
 }
+
+func TestBucketNameDoesNotDuplicateAppID(t *testing.T) {
+	var host string
+	client := NewClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		host = r.URL.Host
+		return &http.Response{StatusCode: 200, Body: http.NoBody, Header: make(http.Header)}, nil
+	})})
+	if err := client.TestConnection(context.Background(), Credentials{AppID: "1314542588", SecretID: "sid", SecretKey: "skey", Bucket: "zgm-1314542588", Region: "ap-nanjing"}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.HasPrefix(host, "zgm-1314542588-1314542588.") {
+		t.Fatalf("app id was duplicated in bucket host %q", host)
+	}
+}
+
 func TestPresignPutRejectsUnsafeRequest(t *testing.T) {
 	client := NewClient(nil)
 	for _, key := range []string{"", "/root", "../escape", "a\\b"} {
