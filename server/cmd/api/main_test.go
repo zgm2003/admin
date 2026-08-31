@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"admin/server/internal/module/audit/operationlog"
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/auth/platform"
@@ -21,10 +20,12 @@ import (
 	"admin/server/internal/module/rbac/role"
 	"admin/server/internal/module/storage/cosconfig"
 	"admin/server/internal/module/storage/uploadrule"
+	"admin/server/internal/module/system/operationlog"
 	"admin/server/internal/module/user/account"
 	usersession "admin/server/internal/module/user/session"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
+
 	"github.com/gin-gonic/gin"
 )
 

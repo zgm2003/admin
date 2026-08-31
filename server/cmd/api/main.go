@@ -14,7 +14,6 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	projectmiddleware "admin/server/internal/middleware"
-	"admin/server/internal/module/audit/operationlog"
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/auth/platform"
@@ -26,6 +25,7 @@ import (
 	"admin/server/internal/module/rbac/state"
 	"admin/server/internal/module/storage/cosconfig"
 	"admin/server/internal/module/storage/uploadrule"
+	"admin/server/internal/module/system/operationlog"
 	account "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/loginlog"
 	profile "admin/server/internal/module/user/profile"
@@ -35,6 +35,7 @@ import (
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/i18n"
 	storagecos "admin/server/internal/storage/cos"
+
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )

@@ -4,13 +4,13 @@ import ElementPlus from 'element-plus'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 
-import * as operationLogAPI from '@src/api/audit/operationlog'
-import type { OperationLogItem } from '@src/api/audit/operationlog'
+import * as operationLogAPI from '@src/api/system/operationlog'
+import type { OperationLogItem } from '@src/api/system/operationlog'
 import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
 import OperationLogs from '@src/views/system/operation-logs/index.vue'
 
-vi.mock('@src/api/audit/operationlog', () => ({ getOperationLogs: vi.fn() }))
+vi.mock('@src/api/system/operationlog', () => ({ getOperationLogs: vi.fn() }))
 const getOperationLogs = vi.mocked(operationLogAPI.getOperationLogs)
 
 describe('operation logs', () => {

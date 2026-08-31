@@ -62,6 +62,9 @@ func TestListReturnsTypedEnvelope(t *testing.T) {
 }
 
 func TestRegisterRoutesRequiresOperationLogListPermission(t *testing.T) {
+	if PermissionList != "system:operation-log:list" {
+		t.Fatalf("permission code = %q", PermissionList)
+	}
 	router := gin.New()
 	var permission string
 	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(&fakeOperationLogService{}), func(context *gin.Context) { context.Next() }, func(value string) gin.HandlerFunc {

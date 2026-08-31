@@ -197,7 +197,7 @@ function navigationRoots(): AccessMenuNodeDTO[] {
 		}),
 		directoryWithPage('system', 'navigation.system', {
 			...pageNode(),
-			code: 'audit:operation-log:list',
+			code: 'system:operation-log:list',
 			path: '/system/operation-logs',
 			componentPath: 'system/operation-logs',
 			i18nKey: 'navigation.systemOperationLogs',

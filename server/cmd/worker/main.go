@@ -10,9 +10,10 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
-	"admin/server/internal/module/audit/operationlog"
+	"admin/server/internal/module/system/operationlog"
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
+
 	"github.com/hibiken/asynq"
 	"github.com/joho/godotenv"
 )

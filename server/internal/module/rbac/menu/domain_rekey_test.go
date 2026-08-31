@@ -52,7 +52,7 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 		10: "rbac:role:default", 11: "rbac:role:delete", 12: "rbac:role:authorize",
 		13: "account:user:list", 14: "account:user:update", 15: "account:user:status", 16: "account:user:delete", 17: "account:user:roles",
 		18: "auth:session:list", 19: "auth:session:revoke", 20: "auth:platform:list", 21: "auth:platform:create",
-		22: "auth:platform:update", 23: "auth:platform:status", 24: "auth:platform:delete", 25: "audit:operation-log:list",
+		22: "auth:platform:update", 23: "auth:platform:status", 24: "auth:platform:delete", 25: "system:operation-log:list",
 	} {
 		row, exists := byCode[code]
 		if !exists || row.ID != id {
@@ -75,7 +75,7 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 	assertRekeyedPage(t, byCode["rbac:menu:list"], access.ID, "/access/menus", "access/menus", "navigation.accessMenus", "lucide:panel-left", 10)
 	assertRekeyedPage(t, byCode["rbac:role:list"], access.ID, "/access/roles", "access/roles", "navigation.accessRoles", "lucide:user-cog", 20)
 	assertRekeyedPage(t, byCode["auth:platform:list"], access.ID, "/access/auth-platforms", "access/auth-platforms", "navigation.accessAuthPlatforms", "lucide:key-round", 30)
-	assertRekeyedPage(t, byCode["audit:operation-log:list"], system.ID, "/system/operation-logs", "system/operation-logs", "navigation.systemOperationLogs", "lucide:scroll-text", 10)
+	assertRekeyedPage(t, byCode["system:operation-log:list"], system.ID, "/system/operation-logs", "system/operation-logs", "navigation.systemOperationLogs", "lucide:scroll-text", 10)
 
 	for _, code := range []string{"rbac:menu:list", "rbac:menu:create", "rbac:menu:update", "rbac:menu:delete"} {
 		if byCode[code].DeletedAt != nil {
@@ -90,6 +90,21 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 		t.Fatal("fixture deletion times must differ")
 	}
 	assertAccessVersions(t, db, map[int64]int64{7001: 5, 7002: 8})
+
+	if err := db.Exec(`UPDATE rbac_menu SET code = 'audit:operation-log:list' WHERE code = 'system:operation-log:list'`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := menu.PrepareSchema(ctx, db); err != nil {
+		t.Fatalf("rekey migrated operation log menu: %v", err)
+	}
+	var operationLogCode string
+	if err := db.Raw(`SELECT code FROM rbac_menu WHERE id = 25`).Scan(&operationLogCode).Error; err != nil {
+		t.Fatal(err)
+	}
+	if operationLogCode != "system:operation-log:list" {
+		t.Fatalf("operation log menu code = %q", operationLogCode)
+	}
+	assertAccessVersions(t, db, map[int64]int64{7001: 6, 7002: 9})
 
 	customName := "自定义权限中心"
 	if err := db.Exec(`UPDATE rbac_menu SET name = ?, sort_order = 260 WHERE code = 'access'`, customName).Error; err != nil {
@@ -108,7 +123,7 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 	if repeated.Name != customName || repeated.SortOrder != 260 {
 		t.Fatalf("second migration overwrote access root: %+v", repeated)
 	}
-	assertAccessVersions(t, db, map[int64]int64{7001: 5, 7002: 8})
+	assertAccessVersions(t, db, map[int64]int64{7001: 6, 7002: 9})
 }
 
 func TestPrepareSchemaRejectsUnknownLegacyIconAndRollsBack(t *testing.T) {

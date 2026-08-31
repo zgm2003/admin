@@ -260,10 +260,10 @@ function businessAccessSnapshot(): AccessSnapshot {
 				accessPage('rbac:role:list', '/access/roles', 'access/roles', 'navigation.accessRoles'),
 			]),
 			accessDirectory('system', 'navigation.system', [
-				accessPage('audit:operation-log:list', '/system/operation-logs', 'system/operation-logs', 'navigation.systemOperationLogs'),
+				accessPage('system:operation-log:list', '/system/operation-logs', 'system/operation-logs', 'navigation.systemOperationLogs'),
 			]),
 		],
-		permissionCodes: ['account:user:list', 'audit:operation-log:list', 'rbac:role:list'],
+		permissionCodes: ['account:user:list', 'system:operation-log:list', 'rbac:role:list'],
   }
 }
 

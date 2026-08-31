@@ -222,7 +222,7 @@ function accessTree(): AccessMenuNode[] {
 			'rbac:role:list', '/access/roles', 'access/roles', 'navigation.accessRoles',
 		)),
 		directory('system', 'navigation.system', page(
-			'audit:operation-log:list', '/system/operation-logs', 'system/operation-logs', 'navigation.systemOperationLogs',
+			'system:operation-log:list', '/system/operation-logs', 'system/operation-logs', 'navigation.systemOperationLogs',
 		)),
 	]
 }

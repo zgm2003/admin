@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 
-import { getOperationLogs } from '@src/api/audit/operationlog'
+import { getOperationLogs } from '@src/api/system/operationlog'
 import { request } from '@src/utils/request'
 
 vi.mock('@src/utils/request', () => ({ request: vi.fn() }))

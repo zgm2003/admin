@@ -53,7 +53,7 @@ describe('access route registration', () => {
 				page('auth:platform:list', '/access/auth-platforms', 'access/auth-platforms'),
 			]),
 			directory('system', [
-				page('audit:operation-log:list', '/system/operation-logs', 'system/operation-logs'),
+				page('system:operation-log:list', '/system/operation-logs', 'system/operation-logs'),
 			]),
 		], testViews)
 
@@ -63,7 +63,7 @@ describe('access route registration', () => {
 		expect(router.hasRoute('access:auth:session:list')).toBe(true)
 		expect(router.hasRoute('access:rbac:role:list')).toBe(true)
 		expect(router.hasRoute('access:auth:platform:list')).toBe(true)
-		expect(router.hasRoute('access:audit:operation-log:list')).toBe(true)
+		expect(router.hasRoute('access:system:operation-log:list')).toBe(true)
 
 		cleanup()
 		expect(router.hasRoute('access-menus')).toBe(true)
@@ -243,7 +243,7 @@ function pageI18nKey(code: string): string {
 	const keys: Readonly<Record<string, string>> = {
 		'account:profile:list': 'layout.account.profile',
 		'account:user:list': 'navigation.accountUsers',
-		'audit:operation-log:list': 'navigation.systemOperationLogs',
+		'system:operation-log:list': 'navigation.systemOperationLogs',
 		'auth:platform:list': 'navigation.accessAuthPlatforms',
 		'auth:session:list': 'navigation.accountSessions',
 		'account:user:loginlog:list': 'navigation.accountLoginLogs',

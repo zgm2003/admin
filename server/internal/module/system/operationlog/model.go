@@ -88,5 +88,5 @@ type OperationLog struct {
 }
 
 func (OperationLog) TableName() string {
-	return "audit_operation_log"
+	return "system_operation_log"
 }

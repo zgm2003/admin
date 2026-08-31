@@ -58,6 +58,9 @@ func TestTaskHandlerMarksMalformedPayloadSkipRetry(t *testing.T) {
 }
 
 func TestEnqueueUsesEventIDAsTaskID(t *testing.T) {
+	if TaskType != "system:operation-log:v2" {
+		t.Fatalf("task type = %q", TaskType)
+	}
 	payload := validTaskPayload()
 	queue := &recordingQueueClient{}
 	enqueuer := &QueueEnqueuer{client: queue}

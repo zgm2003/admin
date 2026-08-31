@@ -24,12 +24,14 @@ func TestAdminModularMigrationPreservesIDsAndIsIdempotent(t *testing.T) {
 	assertTableExists(t, db, ctx, "user_session")
 	assertTableExists(t, db, ctx, "user_login_log")
 	assertTableMissing(t, db, ctx, "auth_session")
-	assertColumnMissing(t, db, ctx, "audit_operation_log", "platform")
-	assertColumnExists(t, db, ctx, "audit_operation_log", "platform_id")
+	assertTableExists(t, db, ctx, "system_operation_log")
+	assertTableMissing(t, db, ctx, "audit_operation_log")
+	assertColumnMissing(t, db, ctx, "system_operation_log", "platform")
+	assertColumnExists(t, db, ctx, "system_operation_log", "platform_id")
 	assertCount(t, db, ctx, "user_account", 2)
 	assertCount(t, db, ctx, "user_session", 1)
 	assertIDExists(t, db, ctx, "user_session", 41)
-	assertIDExists(t, db, ctx, "audit_operation_log", 51)
+	assertIDExists(t, db, ctx, "system_operation_log", 51)
 	assertForeignKey(t, db, ctx, "fk_user_session_platform")
 
 	if err := db.WithContext(ctx).Exec(script).Error; err != nil {

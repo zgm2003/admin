@@ -1,5 +1,31 @@
 BEGIN;
 
+-- Move the legacy audit table into the system namespace without losing rows.
+DO $$
+BEGIN
+  IF to_regclass(current_schema() || '.audit_operation_log') IS NOT NULL
+     AND to_regclass(current_schema() || '.system_operation_log') IS NOT NULL THEN
+    RAISE EXCEPTION 'both audit_operation_log and system_operation_log exist';
+  END IF;
+  IF to_regclass(current_schema() || '.audit_operation_log') IS NOT NULL THEN
+    ALTER TABLE audit_operation_log RENAME TO system_operation_log;
+    IF to_regclass(current_schema() || '.audit_operation_log_id_seq') IS NOT NULL THEN
+      ALTER SEQUENCE audit_operation_log_id_seq RENAME TO system_operation_log_id_seq;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_audit_operation_log_platform' AND conrelid = 'system_operation_log'::regclass) THEN
+      ALTER TABLE system_operation_log RENAME CONSTRAINT fk_audit_operation_log_platform TO fk_system_operation_log_platform;
+    END IF;
+    ALTER INDEX IF EXISTS ux_audit_operation_log_event_id RENAME TO ux_system_operation_log_event_id;
+    ALTER INDEX IF EXISTS ix_audit_operation_log_request_id RENAME TO ix_system_operation_log_request_id;
+    ALTER INDEX IF EXISTS ix_audit_operation_log_created_at RENAME TO ix_system_operation_log_created_at;
+    ALTER INDEX IF EXISTS ix_audit_operation_log_user_created_at RENAME TO ix_system_operation_log_user_created_at;
+    ALTER INDEX IF EXISTS ix_audit_operation_log_action_created_at RENAME TO ix_system_operation_log_action_created_at;
+    DROP INDEX IF EXISTS ux_audit_operation_log_request_id;
+    DROP INDEX IF EXISTS ix_audit_operation_log_user_created;
+    DROP INDEX IF EXISTS ix_audit_operation_log_action_created;
+  END IF;
+END $$;
+
 -- Validate every known conflict before changing a relation.
 DO $$
 DECLARE n BIGINT;
@@ -21,10 +47,10 @@ BEGIN
     SELECT count(*) INTO n FROM auth_session s LEFT JOIN auth_platform p ON p.code = s.platform AND p.deleted_at IS NULL WHERE s.platform IS NULL OR btrim(s.platform) = '' OR p.id IS NULL;
     IF n > 0 THEN RAISE EXCEPTION 'unknown or empty auth_session platform'; END IF;
   END IF;
-  IF to_regclass(current_schema() || '.auth_platform') IS NOT NULL AND to_regclass(current_schema() || '.audit_operation_log') IS NOT NULL
-     AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='audit_operation_log' AND column_name='platform') THEN
-    SELECT count(*) INTO n FROM audit_operation_log l LEFT JOIN auth_platform p ON p.code = l.platform AND p.deleted_at IS NULL WHERE l.platform IS NOT NULL AND btrim(l.platform) <> '' AND p.id IS NULL;
-    IF n > 0 THEN RAISE EXCEPTION 'unknown audit_operation_log platform'; END IF;
+  IF to_regclass(current_schema() || '.auth_platform') IS NOT NULL AND to_regclass(current_schema() || '.system_operation_log') IS NOT NULL
+     AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='system_operation_log' AND column_name='platform') THEN
+    SELECT count(*) INTO n FROM system_operation_log l LEFT JOIN auth_platform p ON p.code = l.platform AND p.deleted_at IS NULL WHERE l.platform IS NOT NULL AND btrim(l.platform) <> '' AND p.id IS NULL;
+    IF n > 0 THEN RAISE EXCEPTION 'unknown system_operation_log platform'; END IF;
   END IF;
   IF to_regclass(current_schema() || '.rbac_role') IS NOT NULL THEN
     SELECT count(*) INTO n FROM (SELECT 1 FROM rbac_role WHERE is_default = 1 AND deleted_at IS NULL GROUP BY 1 HAVING count(*) > 1) d;
@@ -160,21 +186,21 @@ BEGIN
   END IF;
 END $$;
 
-ALTER TABLE audit_operation_log ADD COLUMN IF NOT EXISTS platform_id BIGINT;
-DROP INDEX IF EXISTS ux_audit_operation_log_request_id;
-DROP INDEX IF EXISTS ix_audit_operation_log_user_created;
-DROP INDEX IF EXISTS ix_audit_operation_log_action_created;
+ALTER TABLE system_operation_log ADD COLUMN IF NOT EXISTS platform_id BIGINT;
+DROP INDEX IF EXISTS ux_system_operation_log_request_id;
+DROP INDEX IF EXISTS ix_system_operation_log_user_created;
+DROP INDEX IF EXISTS ix_system_operation_log_action_created;
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='audit_operation_log' AND column_name='platform') THEN
-    UPDATE audit_operation_log l SET platform_id = p.id FROM auth_platform p WHERE l.platform = p.code AND p.deleted_at IS NULL;
-    ALTER TABLE audit_operation_log DROP COLUMN platform;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='system_operation_log' AND column_name='platform') THEN
+    UPDATE system_operation_log l SET platform_id = p.id FROM auth_platform p WHERE l.platform = p.code AND p.deleted_at IS NULL;
+    ALTER TABLE system_operation_log DROP COLUMN platform;
   END IF;
 END $$;
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_audit_operation_log_platform' AND conrelid=to_regclass(current_schema() || '.audit_operation_log')) THEN
-    ALTER TABLE audit_operation_log ADD CONSTRAINT fk_audit_operation_log_platform FOREIGN KEY (platform_id) REFERENCES auth_platform(id) ON DELETE RESTRICT;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_system_operation_log_platform' AND conrelid=to_regclass(current_schema() || '.system_operation_log')) THEN
+    ALTER TABLE system_operation_log ADD CONSTRAINT fk_system_operation_log_platform FOREIGN KEY (platform_id) REFERENCES auth_platform(id) ON DELETE RESTRICT;
   END IF;
 END $$;
 
@@ -212,10 +238,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_menu_platform_code_active ON rbac_menu
 CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_menu_platform_path_active ON rbac_menu (platform_id, path) WHERE path IS NOT NULL AND deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS ix_rbac_menu_platform_parent_sort ON rbac_menu (platform_id, parent_id, sort_order, id);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_role_menu_active ON rbac_role_menu (role_id, menu_id) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS ux_audit_operation_log_event_id ON audit_operation_log (event_id);
-CREATE INDEX IF NOT EXISTS ix_audit_operation_log_request_id ON audit_operation_log (request_id);
-CREATE INDEX IF NOT EXISTS ix_audit_operation_log_created_at ON audit_operation_log (created_at DESC);
-CREATE INDEX IF NOT EXISTS ix_audit_operation_log_user_created_at ON audit_operation_log (user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS ix_audit_operation_log_action_created_at ON audit_operation_log (action, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_system_operation_log_event_id ON system_operation_log (event_id);
+CREATE INDEX IF NOT EXISTS ix_system_operation_log_request_id ON system_operation_log (request_id);
+CREATE INDEX IF NOT EXISTS ix_system_operation_log_created_at ON system_operation_log (created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_system_operation_log_user_created_at ON system_operation_log (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_system_operation_log_action_created_at ON system_operation_log (action, created_at DESC);
 
 COMMIT;

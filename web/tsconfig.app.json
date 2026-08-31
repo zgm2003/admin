@@ -10,7 +10,7 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "paths": { "@src/*": ["./src/*"] }
+    "paths": { "@/*": ["./src/*"], "@src/*": ["./src/*"] }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "tests/**/*.ts", "tests/**/*.tsx", "tests/**/*.js", "tests/**/*.jsx"]
 }

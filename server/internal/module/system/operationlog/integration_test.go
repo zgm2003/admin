@@ -10,7 +10,8 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
-	"admin/server/internal/module/audit/operationlog"
+	"admin/server/internal/module/system/operationlog"
+
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -26,7 +27,7 @@ func TestOperationLogWorkerPersistsIdempotently(t *testing.T) {
 		`INSERT INTO auth_platform (id, code) VALUES (17, 'admin')`,
 		`CREATE TABLE user_account (id BIGINT PRIMARY KEY, username VARCHAR(64) NOT NULL, deleted_at TIMESTAMPTZ NULL)`,
 		`INSERT INTO user_account (id, username) VALUES (42, 'integration-user')`,
-		`CREATE TABLE audit_operation_log (
+		`CREATE TABLE system_operation_log (
 			id BIGSERIAL PRIMARY KEY,
 			event_id VARCHAR(64) NOT NULL UNIQUE,
 			request_id VARCHAR(128) NOT NULL,

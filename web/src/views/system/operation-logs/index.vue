@@ -2,8 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { getOperationLogs } from '../../../api/audit/operationlog'
-import type { OperationLogItem, OperationLogListQuery } from '../../../api/audit/operationlog'
+import { getOperationLogs } from '../../../api/system/operationlog'
+import type { OperationLogItem, OperationLogListQuery } from '../../../api/system/operationlog'
 import { YesNo } from '../../../enums/yes-no'
 import { AppTable } from '../../../components/AppTable'
 import type { TableColumn, TablePaginationState } from '../../../components/AppTable'

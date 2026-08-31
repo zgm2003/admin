@@ -62,7 +62,10 @@ func (h *TaskHandler) ProcessTask(ctx context.Context, task *asynq.Task) error {
 }
 
 func Register(mux *asynq.ServeMux, processor Processor) {
-	mux.Handle(TaskType, NewTaskHandler(processor))
+	handler := NewTaskHandler(processor)
+	mux.Handle(TaskType, handler)
+	// Consume tasks queued before the system module rename.
+	mux.Handle(LegacyTaskType, handler)
 }
 
 func decodePayload(data []byte) (TaskPayload, error) {

@@ -35,7 +35,7 @@ func (r *Repository) Insert(ctx context.Context, payload TaskPayload) error {
 }
 
 func (r *Repository) List(ctx context.Context, query ListQuery) ([]Item, int64, error) {
-	db := applyFilters(r.db.WithContext(ctx).Table("audit_operation_log"), query)
+	db := applyFilters(r.db.WithContext(ctx).Table("system_operation_log"), query)
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("count operation logs: %w", err)
@@ -46,10 +46,10 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Item, int64, 
 		UserName     string `gorm:"column:user_name"`
 	}
 	rows := make([]row, 0, query.PageSize)
-	if err := db.Select("audit_operation_log.*, COALESCE(auth_platform.code, '') AS platform, COALESCE(user_account.username, '') AS user_name").
-		Joins("LEFT JOIN auth_platform ON auth_platform.id = audit_operation_log.platform_id").
-		Joins("LEFT JOIN user_account ON user_account.id = audit_operation_log.user_id AND user_account.deleted_at IS NULL").
-		Order("audit_operation_log.created_at DESC, audit_operation_log.id DESC").
+	if err := db.Select("system_operation_log.*, COALESCE(auth_platform.code, '') AS platform, COALESCE(user_account.username, '') AS user_name").
+		Joins("LEFT JOIN auth_platform ON auth_platform.id = system_operation_log.platform_id").
+		Joins("LEFT JOIN user_account ON user_account.id = system_operation_log.user_id AND user_account.deleted_at IS NULL").
+		Order("system_operation_log.created_at DESC, system_operation_log.id DESC").
 		Offset((query.Page - 1) * query.PageSize).Limit(query.PageSize).Scan(&rows).Error; err != nil {
 		return nil, 0, fmt.Errorf("list operation logs: %w", err)
 	}
@@ -69,22 +69,22 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Item, int64, 
 
 func applyFilters(db *gorm.DB, query ListQuery) *gorm.DB {
 	if query.UserID != nil {
-		db = db.Where("audit_operation_log.user_id = ?", *query.UserID)
+		db = db.Where("system_operation_log.user_id = ?", *query.UserID)
 	}
 	if query.Action != "" {
-		db = db.Where("audit_operation_log.action LIKE ? ESCAPE '\\'", prefixPattern(query.Action))
+		db = db.Where("system_operation_log.action LIKE ? ESCAPE '\\'", prefixPattern(query.Action))
 	}
 	if query.Route != "" {
-		db = db.Where("audit_operation_log.route LIKE ? ESCAPE '\\'", prefixPattern(query.Route))
+		db = db.Where("system_operation_log.route LIKE ? ESCAPE '\\'", prefixPattern(query.Route))
 	}
 	if query.IsSuccess != nil {
-		db = db.Where("audit_operation_log.is_success = ?", *query.IsSuccess)
+		db = db.Where("system_operation_log.is_success = ?", *query.IsSuccess)
 	}
 	if query.From != nil {
-		db = db.Where("audit_operation_log.created_at >= ?", *query.From)
+		db = db.Where("system_operation_log.created_at >= ?", *query.From)
 	}
 	if query.To != nil {
-		db = db.Where("audit_operation_log.created_at <= ?", *query.To)
+		db = db.Where("system_operation_log.created_at <= ?", *query.To)
 	}
 	return db
 }

@@ -48,7 +48,7 @@ var legacyPermissionCodes = map[string]string{
 	"system:auth-platform:list": "auth:platform:list", "system:auth-platform:create": "auth:platform:create",
 	"system:auth-platform:update": "auth:platform:update", "system:auth-platform:status": "auth:platform:status",
 	"system:auth-platform:delete": "auth:platform:delete",
-	"system:operation-log:list":   "audit:operation-log:list",
+	"system:operation-log:list":   "system:operation-log:list",
 }
 
 var legacyMenuNames = map[string]string{
@@ -75,12 +75,12 @@ var legacyMenuIcons = map[string]legacyIconTarget{
 }
 
 var migratedPages = map[string]migratedPageTarget{
-	"account:user:list":        {ParentCode: "account", Path: "/account/users", ComponentPath: "account/users", I18nKey: "navigation.accountUsers", Icon: "lucide:user-round-cog", SortOrder: 10},
-	"auth:session:list":        {ParentCode: "account", Path: "/account/sessions", ComponentPath: "account/sessions", I18nKey: "navigation.accountSessions", Icon: "lucide:monitor-smartphone", SortOrder: 20},
-	"rbac:menu:list":           {ParentCode: "access", Path: "/access/menus", ComponentPath: "access/menus", I18nKey: "navigation.accessMenus", Icon: "lucide:panel-left", SortOrder: 10},
-	"rbac:role:list":           {ParentCode: "access", Path: "/access/roles", ComponentPath: "access/roles", I18nKey: "navigation.accessRoles", Icon: "lucide:user-cog", SortOrder: 20},
-	"auth:platform:list":       {ParentCode: "access", Path: "/access/auth-platforms", ComponentPath: "access/auth-platforms", I18nKey: "navigation.accessAuthPlatforms", Icon: "lucide:key-round", SortOrder: 30},
-	"audit:operation-log:list": {ParentCode: "system", Path: "/system/operation-logs", ComponentPath: "system/operation-logs", I18nKey: "navigation.systemOperationLogs", Icon: "lucide:scroll-text", SortOrder: 10},
+	"account:user:list":         {ParentCode: "account", Path: "/account/users", ComponentPath: "account/users", I18nKey: "navigation.accountUsers", Icon: "lucide:user-round-cog", SortOrder: 10},
+	"auth:session:list":         {ParentCode: "account", Path: "/account/sessions", ComponentPath: "account/sessions", I18nKey: "navigation.accountSessions", Icon: "lucide:monitor-smartphone", SortOrder: 20},
+	"rbac:menu:list":            {ParentCode: "access", Path: "/access/menus", ComponentPath: "access/menus", I18nKey: "navigation.accessMenus", Icon: "lucide:panel-left", SortOrder: 10},
+	"rbac:role:list":            {ParentCode: "access", Path: "/access/roles", ComponentPath: "access/roles", I18nKey: "navigation.accessRoles", Icon: "lucide:user-cog", SortOrder: 20},
+	"auth:platform:list":        {ParentCode: "access", Path: "/access/auth-platforms", ComponentPath: "access/auth-platforms", I18nKey: "navigation.accessAuthPlatforms", Icon: "lucide:key-round", SortOrder: 30},
+	"system:operation-log:list": {ParentCode: "system", Path: "/system/operation-logs", ComponentPath: "system/operation-logs", I18nKey: "navigation.systemOperationLogs", Icon: "lucide:scroll-text", SortOrder: 10},
 }
 
 func PrepareSchema(ctx context.Context, db *gorm.DB) error {
@@ -177,8 +177,11 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 		return fmt.Errorf("inspect current access menu root: %w", err)
 	}
 	if accessExists {
+		if err := rekeyMigratedOperationLogMenu(db); err != nil {
+			return err
+		}
 		var oldCodes []string
-		if err := db.Raw(`SELECT code FROM rbac_menu WHERE code LIKE 'system:%' ORDER BY code`).Scan(&oldCodes).Error; err != nil {
+		if err := db.Raw(`SELECT code FROM rbac_menu WHERE code LIKE 'system:%' AND code <> 'system:operation-log:list' ORDER BY code`).Scan(&oldCodes).Error; err != nil {
 			return fmt.Errorf("inspect legacy menu codes: %w", err)
 		}
 		if len(oldCodes) != 0 {
@@ -209,7 +212,7 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 	legacyRowsQuery := `
 		SELECT id, menu_type, code, ` + viewExpression + ` AS view_key, icon, sort_order
 		FROM rbac_menu
-		WHERE code = 'system' OR code LIKE 'system:%'
+		WHERE code = 'system' OR code LIKE 'system:%' OR code = 'audit:operation-log:list'
 		ORDER BY id`
 	if err := db.Raw(legacyRowsQuery).Scan(&rows).Error; err != nil {
 		return fmt.Errorf("read legacy menu catalog: %w", err)
@@ -220,11 +223,15 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 
 	rowByCode := make(map[string]legacyMigrationRow, len(rows))
 	unknown := make([]string, 0)
-	for _, row := range rows {
+	for index := range rows {
+		row := &rows[index]
+		if row.Code == "audit:operation-log:list" {
+			row.Code = "system:operation-log:list"
+		}
 		if _, duplicate := rowByCode[row.Code]; duplicate {
 			return fmt.Errorf("legacy menu code %s is duplicated", row.Code)
 		}
-		rowByCode[row.Code] = row
+		rowByCode[row.Code] = *row
 		if _, known := legacyMenuNames[row.Code]; !known {
 			unknown = append(unknown, row.Code)
 		}
@@ -258,6 +265,9 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 	}
 
 	for _, targetCode := range append([]string{"account", "access"}, currentPermissionCodes()...) {
+		if _, exists := rowByCode[targetCode]; exists {
+			continue
+		}
 		var occupied bool
 		if err := db.Raw(`SELECT EXISTS (SELECT 1 FROM rbac_menu WHERE code = ?)`, targetCode).Scan(&occupied).Error; err != nil {
 			return fmt.Errorf("inspect target menu code %s: %w", targetCode, err)
@@ -376,6 +386,37 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 	}
 	if err := db.Exec(`UPDATE rbac_access_version SET version = version + 1, updated_at = CURRENT_TIMESTAMP`).Error; err != nil {
 		return fmt.Errorf("advance access versions after menu rekey: %w", err)
+	}
+	return nil
+}
+
+func rekeyMigratedOperationLogMenu(db *gorm.DB) error {
+	var legacyCount int64
+	if err := db.Raw(`SELECT count(*) FROM rbac_menu WHERE code = 'audit:operation-log:list'`).Scan(&legacyCount).Error; err != nil {
+		return fmt.Errorf("inspect legacy operation log menu: %w", err)
+	}
+	if legacyCount == 0 {
+		return nil
+	}
+	var currentCount int64
+	if err := db.Raw(`SELECT count(*) FROM rbac_menu WHERE code = 'system:operation-log:list'`).Scan(&currentCount).Error; err != nil {
+		return fmt.Errorf("inspect current operation log menu: %w", err)
+	}
+	if currentCount != 0 {
+		return fmt.Errorf("operation log menu contains both legacy and current codes")
+	}
+	result := db.Exec(`
+		UPDATE rbac_menu
+		SET code = 'system:operation-log:list', updated_at = CURRENT_TIMESTAMP
+		WHERE code = 'audit:operation-log:list'`)
+	if result.Error != nil {
+		return fmt.Errorf("rekey migrated operation log menu: %w", result.Error)
+	}
+	if result.RowsAffected != legacyCount {
+		return fmt.Errorf("rekey migrated operation log menu affected %d rows, want %d", result.RowsAffected, legacyCount)
+	}
+	if err := db.Exec(`UPDATE rbac_access_version SET version = version + 1, updated_at = CURRENT_TIMESTAMP`).Error; err != nil {
+		return fmt.Errorf("advance access versions after operation log rekey: %w", err)
 	}
 	return nil
 }

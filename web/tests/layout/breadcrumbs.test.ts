@@ -100,7 +100,7 @@ function accessDirectory(): AccessMenuNode {
 
 function systemDirectory(): AccessMenuNode {
 	return directoryNode('system', 'navigation.system', pageNode(
-		'audit:operation-log:list',
+		'system:operation-log:list',
 		'/system/operation-logs',
 		'system/operation-logs',
 		'navigation.systemOperationLogs',

@@ -7,7 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/audit/operationlog"
+	"admin/server/internal/module/system/operationlog"
+
 	"github.com/hibiken/asynq"
 )
 

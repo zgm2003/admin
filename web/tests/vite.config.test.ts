@@ -11,4 +11,8 @@ describe('Vite development server', () => {
       open: true,
     })
   })
+
+  it('maps @ to the src root', () => {
+    expect(config.resolve?.alias).toMatchObject({ '@': expect.any(String) })
+  })
 })
