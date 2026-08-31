@@ -461,6 +461,12 @@ function isSystem(role: RoleListItem): boolean {
   return role.code === "super_admin" || role.code === "registered_user";
 }
 
+function formatTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium" }).format(date);
+}
+
 function editTooltip(role: RoleListItem): string {
   return isSystem(role)
     ? t("role.protection.systemName")
@@ -582,6 +588,8 @@ onMounted(() => {
           }}
         </el-tag>
       </template>
+      <template #cell-createdAt="{ row }: { row: RoleListItem }">{{ formatTime(row.createdAt) }}</template>
+      <template #cell-updatedAt="{ row }: { row: RoleListItem }">{{ formatTime(row.updatedAt) }}</template>
       <template #cell-actions="{ row }: { row: RoleListItem }">
         <template v-if="row.id > 0">
           <el-space wrap :size="6">

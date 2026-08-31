@@ -15,6 +15,7 @@ const props = withDefaults(defineProps<AppDIconProps>(), {
 const iconStyle = computed(() => ({
   width: typeof props.size === 'number' ? `${props.size}px` : props.size,
   height: typeof props.size === 'number' ? `${props.size}px` : props.size,
+  fontSize: typeof props.size === 'number' ? `${props.size}px` : props.size,
   color: props.color,
 }))
 

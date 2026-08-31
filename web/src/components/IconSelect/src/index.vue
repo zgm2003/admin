@@ -41,7 +41,7 @@ function selectIcon(name: MenuIconName): void {
     <el-input v-model="search" clearable placeholder="搜索图标" />
     <div v-if="filteredIcons.length > 0" class="icon-select-grid">
       <button v-for="icon in filteredIcons" :key="icon.name" type="button" class="icon-select-item" :class="{ 'is-selected': selected === icon.name }" :aria-label="icon.label" @click="selectIcon(icon.name)">
-        <AppDIcon :icon="icon.name" :size="24" />
+        <AppDIcon :icon="icon.name" :size="24" :title="icon.label" />
         <span>{{ icon.label }}</span>
       </button>
     </div>
@@ -50,7 +50,8 @@ function selectIcon(name: MenuIconName): void {
 </template>
 
 <style scoped>
-.icon-select-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; max-height: 420px; margin-top: 12px; overflow-y: auto; }
-.icon-select-item { display: flex; min-height: 76px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--el-border-color); border-radius: 4px; color: var(--el-text-color-primary); background: var(--el-bg-color); cursor: pointer; }
+.icon-select-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 10px; max-height: 420px; margin-top: 12px; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.icon-select-grid::-webkit-scrollbar { display: none; }
+.icon-select-item { display: flex; min-height: 84px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--el-border-color); border-radius: 4px; color: var(--el-text-color-primary); background: var(--el-bg-color); cursor: pointer; }
 .icon-select-item:hover, .icon-select-item.is-selected { border-color: var(--el-color-primary); color: var(--el-color-primary); }
 </style>

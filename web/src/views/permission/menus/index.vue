@@ -709,8 +709,7 @@ onMounted(() => loadMenus());
         >
           <template #default="{ row }: { row: ManagedMenuNode }">
             <span v-if="row.icon !== null" class="menu-icon-cell">
-              <AppDIcon :icon="row.icon" />
-              <span>{{ row.icon }}</span>
+              <AppDIcon :icon="row.icon" :size="24" :title="row.icon" />
             </span>
             <span v-else class="menu-cell-empty">-</span>
           </template>
@@ -770,7 +769,7 @@ onMounted(() => loadMenus());
 
         <el-table-column
           :label="t('menu.column.actions')"
-          :width="280"
+          :width="200"
           fixed="right"
           align="center"
           header-align="center"
@@ -1004,8 +1003,8 @@ onMounted(() => loadMenus());
                 :disabled="editingProtected"
                 @click="openIconSelect"
               >
-                <AppDIcon v-if="form.icon !== null" :icon="form.icon" />
-                {{ form.icon ?? t("menu.form.noIcon") }}
+                <AppDIcon v-if="form.icon !== null" :icon="form.icon" :size="24" />
+                <span v-else>{{ t("menu.form.selectIcon") }}</span>
               </el-button>
               <el-button
                 v-if="form.icon !== null"
@@ -1013,7 +1012,7 @@ onMounted(() => loadMenus());
                 type="danger"
                 :disabled="editingProtected"
                 @click="clearMenuIcon"
-                >{{ t("menu.form.noIcon") }}</el-button
+                >{{ t("menu.form.clearIcon") }}</el-button
               >
             </div>
           </el-form-item>
@@ -1082,7 +1081,7 @@ onMounted(() => loadMenus());
     <IconSelect
       v-model="iconSelectVisible"
       :title="t('menu.form.icon')"
-      :empty-text="t('menu.form.noIcon')"
+      :empty-text="t('menu.form.noMatchingIcon')"
       @select-icon="selectMenuIcon"
     />
   </section>
@@ -1165,7 +1164,9 @@ onMounted(() => loadMenus());
 
 .menu-icon-cell {
   min-width: 0;
+  width: 100%;
   gap: 6px;
+  justify-content: center;
 }
 
 .menu-management__empty {
@@ -1201,6 +1202,7 @@ onMounted(() => loadMenus());
 
 .menu-icon-picker .el-button:first-child {
   flex: 1;
+  justify-content: center;
 }
 
 .menu-form__hint {
