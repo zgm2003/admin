@@ -5,14 +5,14 @@ import { useI18n } from 'vue-i18n'
 
 import { getSessions, getSessionStats, revokeSession, revokeSessions } from '../../../api/user/session'
 import type { SessionItem, SessionListQuery, SessionStats, SessionStatus } from '../../../api/user/session'
-import { useAccessStore } from '../../../store/access'
+import { usePermissionStore } from '../../../store/permission.ts'
 import { AppTable } from '../../../components/AppTable'
 import type { TableColumn, TablePaginationState } from '../../../components/AppTable'
 import { AppSearch } from '../../../components/AppSearch'
 import type { SearchField, SearchFormModel } from '../../../components/AppSearch'
 
 const { t } = useI18n()
-const access = useAccessStore()
+const access = usePermissionStore()
 
 const rows = ref<SessionItem[]>([])
 const total = ref(0)

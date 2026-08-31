@@ -65,7 +65,7 @@ icon:           lucide:cloud-upload
 ```
 
 `云服务` 目录使用 `navigation.cloud` 和 `lucide:cloud`。目录、页面和动作仍遵守当前
-`rbac_menu` 的同平台父子关系，菜单的 `platform_id` 只指向 Admin 平台；不为 Canvas 预置
+`permission_menu` 的同平台父子关系，菜单的 `platform_id` 只指向 Admin 平台；不为 Canvas 预置
 同名菜单。
 
 该约定也适用于已有的 Canvas 测试页面。当前历史设计中的 `canvas:test` 页面码属于旧命名，
@@ -171,7 +171,7 @@ Redis 状态为 `invalidating`、读取失败、损坏或版本无法确认时�
 
 #### 3.4.4 默认角色并发基线
 
-默认角色已有的部分唯一索引 `ux_rbac_role_default_active`、事务内按 ID 升序锁定有效角色、
+默认角色已有的部分唯一索引 `ux_permission_role_default_active`、事务内按 ID 升序锁定有效角色、
 先清旧默认再设新默认和业务完整性校验继续保留。本批次增加并发切换回归测试，证明两个并发
 `SetDefault` 请求提交后最多一个有效默认角色，且不会把默认角色置于不可恢复的中间状态；不
 引入乐观锁或第二套状态字段。

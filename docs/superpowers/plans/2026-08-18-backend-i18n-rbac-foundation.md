@@ -79,9 +79,9 @@ web/src/access/protocol.test.ts
 web/src/access/route-views.ts
 web/src/api/access.contract.ts
 web/src/api/access.contract.test.ts
-web/src/api/access.ts
+web/src/api/permission.ts
 web/src/api/access.test.ts
-web/src/store/access.ts
+web/src/store/permission.ts
 web/src/store/access.test.ts
 web/src/router/access-routes.ts
 web/src/router/access-routes.test.ts
@@ -756,7 +756,7 @@ Expected: `/access` is authenticated, permission middleware fails closed, Dashbo
 - Create: `web/src/api/access.contract.test.ts`
 - Create: `web/src/api/access.ts`
 - Create: `web/src/api/access.test.ts`
-- Create: `web/src/store/access.ts`
+- Create: `../../../web/src/store/permission.ts`
 - Create: `web/src/store/access.test.ts`
 - Modify: `web/src/i18n/index.ts`
 - Modify: `web/src/i18n/index.test.ts`

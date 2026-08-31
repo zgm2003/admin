@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { AccessMenuNode } from '@src/api/rbac/access'
+import type { PermissionMenuNode } from '@src/api/permission/permission'
 import { YesNo } from '@src/enums/yes-no'
 import { resolveBreadcrumbs } from '@src/layout/breadcrumbs'
 
@@ -67,7 +67,7 @@ describe('resolveBreadcrumbs', () => {
   })
 })
 
-function accountDirectory(): AccessMenuNode {
+function accountDirectory(): PermissionMenuNode {
   return {
 		code: 'account',
     menuType: 'directory',
@@ -89,16 +89,16 @@ function accountDirectory(): AccessMenuNode {
   }
 }
 
-function accessDirectory(): AccessMenuNode {
+function accessDirectory(): PermissionMenuNode {
 	return directoryNode('access', 'navigation.access', pageNode(
-		'rbac:menu:list',
+		'permission:menu:list',
 		'/access/menus',
 		'access/menus',
 		'navigation.accessMenus',
 	))
 }
 
-function systemDirectory(): AccessMenuNode {
+function systemDirectory(): PermissionMenuNode {
 	return directoryNode('system', 'navigation.system', pageNode(
 		'system:operation-log:list',
 		'/system/operation-logs',
@@ -107,7 +107,7 @@ function systemDirectory(): AccessMenuNode {
 	))
 }
 
-function directoryNode(code: string, i18nKey: string, child: AccessMenuNode): AccessMenuNode {
+function directoryNode(code: string, i18nKey: string, child: PermissionMenuNode): PermissionMenuNode {
 	return {
 		code,
 		menuType: 'directory',
@@ -120,7 +120,7 @@ function directoryNode(code: string, i18nKey: string, child: AccessMenuNode): Ac
 	}
 }
 
-function pageNode(code: string, path: string, componentPath: string, i18nKey: string): AccessMenuNode {
+function pageNode(code: string, path: string, componentPath: string, i18nKey: string): PermissionMenuNode {
 	return {
 		code,
 		menuType: 'page',
@@ -133,7 +133,7 @@ function pageNode(code: string, path: string, componentPath: string, i18nKey: st
 	}
 }
 
-function nestedDirectory(): AccessMenuNode {
+function nestedDirectory(): PermissionMenuNode {
   return {
     code: 'system',
     menuType: 'directory',

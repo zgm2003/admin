@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { appI18n, setLocale } from '@src/i18n'
 import AppAside from '@src/layout/components/AppAside.vue'
-import { useAccessStore } from '@src/store/access'
+import { usePermissionStore } from '@/store/permission.ts'
 import { requestObjectURL } from '@src/api/storage/upload'
 
 vi.mock('@src/api/storage/upload', () => ({ requestObjectURL: vi.fn() }))
@@ -52,7 +52,7 @@ describe('AppAside profile access', () => {
 function mountAside(permissionCodes: string[], props: { avatar?: string } = {}) {
   const pinia = createPinia()
   setActivePinia(pinia)
-  const access = useAccessStore(pinia)
+  const access = usePermissionStore(pinia)
   access.applySnapshot({ roleCodes: [], menuTree: [], permissionCodes })
   const router = createRouter({
     history: createMemoryHistory(),

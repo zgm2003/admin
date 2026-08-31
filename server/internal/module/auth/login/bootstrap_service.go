@@ -3,7 +3,7 @@ package auth
 import (
 	"context"
 
-	"admin/server/internal/module/rbac/role"
+	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"

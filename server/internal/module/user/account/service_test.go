@@ -15,8 +15,8 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/auth/state"
-	"admin/server/internal/module/rbac/role"
-	"admin/server/internal/module/rbac/state"
+	"admin/server/internal/module/permission/role"
+	"admin/server/internal/module/permission/state"
 	"admin/server/internal/module/user/account"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
@@ -422,7 +422,7 @@ func TestServiceConcurrentSuperAdminRemovalsCannotBothCommit(t *testing.T) {
 	second := createListedUser(t, db, ctx, fmt.Sprintf("concurrentsuperb%d", time.Now().UnixNano()), fmt.Sprintf("concurrentsuperb%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), superRole.ID, defaultRole.ID)
 	t.Cleanup(func() {
 		_ = db.Unscoped().Where("user_id IN ?", []int64{first.ID, second.ID}).Delete(&role.UserRole{}).Error
-		_ = db.Unscoped().Where("user_id IN ?", []int64{first.ID, second.ID}).Delete("rbac_access_version").Error
+		_ = db.Unscoped().Where("user_id IN ?", []int64{first.ID, second.ID}).Delete("permission_access_version").Error
 		_ = db.Unscoped().Where("id IN ?", []int64{first.ID, second.ID}).Delete(&account.User{}).Error
 	})
 	service := newUserTestService(t, account.NewRepository(db))
@@ -648,17 +648,17 @@ func newUserTestService(t *testing.T, repository *account.Repository) *account.S
 func newUserMutationTestService(
 	t *testing.T,
 	repository *account.Repository,
-) (*account.Service, *authstate.Store, *accessstate.Store, *projectredis.Client) {
+) (*account.Service, *authstate.Store, *permissionstate.Store, *projectredis.Client) {
 	t.Helper()
 	redisClient := openUserTestRedis(t)
 	authStates := authstate.NewStore(redisClient)
-	accessStates := accessstate.NewStore(redisClient)
+	accessStates := permissionstate.NewStore(redisClient)
 	return account.NewService(
 		repository,
 		authStates,
 		authstate.NewInvalidator(authStates),
 		accessStates,
-		accessstate.NewInvalidator(accessStates),
+		permissionstate.NewInvalidator(accessStates),
 	), authStates, accessStates, redisClient
 }
 
@@ -684,7 +684,7 @@ func openUserTestRedis(t *testing.T) *projectredis.Client {
 	if err != nil {
 		t.Fatalf("open test Redis database 14: %v", err)
 	}
-	for _, pattern := range []string{"auth:user-state:*", "auth:sessions-state:*", "authz:access-state:*"} {
+	for _, pattern := range []string{"auth:user-state:*", "auth:sessions-state:*", "authz:permission-state:*"} {
 		if err := client.ScanDelete(context.Background(), pattern); err != nil {
 			_ = client.Close()
 			t.Fatalf("clean test Redis database 14: %v", err)
@@ -697,7 +697,7 @@ func openUserTestRedis(t *testing.T) *projectredis.Client {
 func readUserAccessVersion(t *testing.T, tx *gorm.DB, ctx context.Context, userID int64) int64 {
 	t.Helper()
 	var version int64
-	result := tx.WithContext(ctx).Raw("SELECT version FROM rbac_access_version WHERE user_id = ?", userID).Scan(&version)
+	result := tx.WithContext(ctx).Raw("SELECT version FROM permission_access_version WHERE user_id = ?", userID).Scan(&version)
 	if result.Error != nil || result.RowsAffected != 1 {
 		t.Fatalf("read access version: rows=%d error=%v", result.RowsAffected, result.Error)
 	}
@@ -740,10 +740,10 @@ func assertReadySessionsState(t *testing.T, store *authstate.Store, platform str
 	}
 }
 
-func assertReadyAccessState(t *testing.T, store *accessstate.Store, userID, version int64) {
+func assertReadyAccessState(t *testing.T, store *permissionstate.Store, userID, version int64) {
 	t.Helper()
 	state, found, err := store.Read(context.Background(), userID)
-	if err != nil || !found || state.State != accessstate.StateReady || state.Version != version {
+	if err != nil || !found || state.State != permissionstate.StateReady || state.Version != version {
 		t.Fatalf("access state = %+v found=%v error=%v", state, found, err)
 	}
 }

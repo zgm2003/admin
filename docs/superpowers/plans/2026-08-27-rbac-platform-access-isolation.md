@@ -68,9 +68,9 @@
 ### Frontend
 
 - `web/src/api/menu.ts`、`role.ts`：闭合平台 DTO。
-- `web/src/views/access/menus/index.vue`：顶部平台 Tabs、当前平台创建、编辑只读和根级页面。
-- `web/src/views/access/roles/role-permission-matrix.ts`：平台分组和根级页面矩阵。
-- `web/src/views/access/roles/index.vue`、components：平台分段授权 UI。
+- `../../../web/src/views/permission/menus/index.vue`：顶部平台 Tabs、当前平台创建、编辑只读和根级页面。
+- `../../../web/src/views/permission/roles/role-permission-matrix.ts`：平台分组和根级页面矩阵。
+- `../../../web/src/views/permission/roles/index.vue`、components：平台分段授权 UI。
 - `web/src/i18n/messages/zh-CN.ts`、`en-US.ts`：平台与约束文案。
 
 ### Composition and documentation
@@ -585,8 +585,8 @@ git commit -m "feat: 按平台组织角色菜单授权"
 **Files:**
 - Modify: `web/src/api/menu.ts`
 - Modify: `web/src/api/menu.test.ts`
-- Modify: `web/src/views/access/menus/index.vue`
-- Modify: `web/src/views/access/menus/index.test.ts`
+- Modify: `../../../web/src/views/permission/menus/index.vue`
+- Modify: `../../../web/src/views/permission/menus/index.test.ts`
 - Modify: `web/src/i18n/messages/zh-CN.ts`
 - Modify: `web/src/i18n/messages/en-US.ts`
 
@@ -656,12 +656,12 @@ git commit -m "feat: 增加菜单平台筛选与创建"
 **Files:**
 - Modify: `web/src/api/role.ts`
 - Modify: `web/src/api/role.test.ts`
-- Modify: `web/src/views/access/roles/role-permission-matrix.ts`
-- Modify: `web/src/views/access/roles/role-permission-matrix.test.ts`
-- Modify: `web/src/views/access/roles/components/RolePermissionMatrix.vue`
-- Modify: `web/src/views/access/roles/components/RolePermissionMatrix.test.ts`
-- Modify: `web/src/views/access/roles/index.vue`
-- Modify: `web/src/views/access/roles/index.test.ts`
+- Modify: `../../../web/src/views/permission/roles/role-permission-matrix.ts`
+- Modify: `../../../web/src/views/permission/roles/role-permission-matrix.test.ts`
+- Modify: `../../../web/src/views/permission/roles/components/RolePermissionMatrix.vue`
+- Modify: `../../../web/src/views/permission/roles/components/RolePermissionMatrix.test.ts`
+- Modify: `../../../web/src/views/permission/roles/index.vue`
+- Modify: `../../../web/src/views/permission/roles/index.test.ts`
 - Modify: `web/src/i18n/messages/zh-CN.ts`
 - Modify: `web/src/i18n/messages/en-US.ts`
 

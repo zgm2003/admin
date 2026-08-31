@@ -62,14 +62,14 @@
 - Create: `server/internal/module/user/profile/route_test.go`
 - Modify: `server/cmd/api/main_test.go`
 - Modify: `web/src/router/index.ts`
-- Modify: `web/src/router/access-routes.ts`
+- Modify: `web/src/router/permission-routes.ts`
 - Modify: `web/src/permission.ts`
 - Modify: `web/src/layout/components/AppAside.vue`
 - Modify: `web/src/layout/breadcrumbs.ts`
 - Modify: `web/src/layout/components/RouteTabs.vue`
 - Modify: `web/src/views/account/profile/index.vue`
 - Modify: `web/tests/router/index.test.ts`
-- Modify: `web/tests/router/access-routes.test.ts`
+- Modify: `web/tests/router/permission-routes.test.ts`
 - Modify: `web/tests/layout/breadcrumbs.test.ts`
 - Modify: `web/tests/layout/index.test.ts`
 - Create: `web/tests/layout/components/AppAside.test.ts`
@@ -79,7 +79,7 @@
 - Produces the route registration signature `RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc)`.
 - Produces permission constants `PermissionList = "account:profile:list"`, `PermissionUpdate = "account:profile:update"`, and `PermissionPasswordUpdate = "account:password:update"` in the `profile` package.
 - Produces dynamic route name `access:account:profile:list`; no static route named `account-profile` remains.
-- Consumes the existing `AccessSnapshot.menuTree` and `permissionCodes` without changing the HTTP DTOs for profile data.
+- Consumes the existing `PermissionSnapshot.menuTree` and `permissionCodes` without changing the HTTP DTOs for profile data.
 
 - [ ] **Step 1: Write the failing backend route contract test.**
 
@@ -150,7 +150,7 @@
   cd D:\admin\server
   go test ./internal/module/user/profile ./cmd/api -run 'Profile|Route|Operation' -count=1
   cd D:\admin\web
-  pnpm vitest run tests/router/index.test.ts tests/router/access-routes.test.ts tests/layout/breadcrumbs.test.ts tests/layout/index.test.ts tests/layout/components/AppAside.test.ts --pool=threads --maxWorkers=1
+  pnpm vitest run tests/router/index.test.ts tests/router/permission-routes.test.ts tests/layout/breadcrumbs.test.ts tests/layout/index.test.ts tests/layout/components/AppAside.test.ts --pool=threads --maxWorkers=1
   ```
 
   Expected result: all tests PASS; a user without `account:profile:list` is redirected to Dashboard before any profile component or API call is used.
@@ -159,18 +159,18 @@
 
   ```powershell
   cd D:\admin
-  git add server/internal/module/user/profile/route.go server/internal/module/user/profile/permissions.go server/internal/module/user/profile/route_test.go server/cmd/api/main.go server/cmd/api/main_test.go server/internal/module/audit/operationlog/rules.go web/src/router/index.ts web/src/router/access-routes.ts web/src/permission.ts web/src/layout/components/AppAside.vue web/src/layout/breadcrumbs.ts web/src/layout/components/RouteTabs.vue web/tests/router/index.test.ts web/tests/router/access-routes.test.ts web/tests/layout/breadcrumbs.test.ts web/tests/layout/index.test.ts web/tests/layout/components/AppAside.test.ts
+  git add server/internal/module/user/profile/route.go server/internal/module/user/profile/permissions.go server/internal/module/user/profile/route_test.go server/cmd/api/main.go server/cmd/api/main_test.go server/internal/module/audit/operationlog/rules.go web/src/router/index.ts web/src/router/permission-routes.ts web/src/permission.ts web/src/layout/components/AppAside.vue web/src/layout/breadcrumbs.ts web/src/layout/components/RouteTabs.vue web/tests/router/index.test.ts web/tests/router/permission-routes.test.ts web/tests/layout/breadcrumbs.test.ts web/tests/layout/index.test.ts web/tests/layout/components/AppAside.test.ts
   git commit -m "fix: 收紧个人资料页面与按钮权限"
   ```
 
 ### Task 2: Implement Redis-gated bounded in-process Access cache
 
 **Files:**
-- Create: `server/internal/module/rbac/access/local_cache.go`
-- Create: `server/internal/module/rbac/access/local_cache_test.go`
-- Modify: `server/internal/module/rbac/access/service.go`
-- Modify: `server/internal/module/rbac/access/service_test.go`
-- Modify: `server/internal/module/rbac/access/redis_test.go`
+- Create: `server/internal/module/permission/access/local_cache.go`
+- Create: `server/internal/module/permission/access/local_cache_test.go`
+- Modify: `server/internal/module/permission/access/service.go`
+- Modify: `server/internal/module/permission/access/service_test.go`
+- Modify: `server/internal/module/permission/access/redis_test.go`
 - Modify: `server/cmd/api/main.go`
 
 **Interfaces:**
@@ -208,7 +208,7 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/module/rbac/access -run TestLocalSnapshotCache -count=1
+  go test ./internal/module/permission/access -run TestLocalSnapshotCache -count=1
   ```
 
 - [ ] **Step 3: Implement the bounded immutable cache.**
@@ -239,7 +239,7 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/module/rbac/access -count=1
+  go test ./internal/module/permission/access -count=1
   ```
 
   Expected result: existing Redis read-through tests still pass, new L1 tests pass, and the PostgreSQL failure case returns `dependencyUnavailable` rather than stale permissions.
@@ -248,25 +248,25 @@
 
   ```powershell
   cd D:\admin
-  git add server/internal/module/rbac/access/local_cache.go server/internal/module/rbac/access/local_cache_test.go server/internal/module/rbac/access/service.go server/internal/module/rbac/access/service_test.go server/internal/module/rbac/access/redis_test.go server/cmd/api/main.go
+  git add server/internal/module/permission/access/local_cache.go server/internal/module/permission/access/local_cache_test.go server/internal/module/permission/access/service.go server/internal/module/permission/access/service_test.go server/internal/module/permission/access/redis_test.go server/cmd/api/main.go
   git commit -m "perf: 增加 Redis 门控的进程级权限缓存"
   ```
 
 ### Task 3: Fix menu row keys, Canvas permission codes, and default-role concurrency coverage
 
 **Files:**
-- Modify: `web/src/views/access/menus/index.vue`
-- Modify: `web/tests/views/access/menus/index.test.ts`
-- Modify: `web/tests/views/access/roles/index.test.ts`
-- Modify: `web/tests/views/access/roles/role-permission-matrix.test.ts`
-- Modify: `server/internal/module/rbac/access/service_test.go`
-- Modify: `server/internal/module/rbac/access/repository_test.go`
-- Modify: `server/internal/module/rbac/menu/foundation_test.go`
-- Modify: `server/internal/module/rbac/menu/service_test.go`
-- Modify: `server/internal/module/rbac/menu/repository_test.go`
-- Create: `server/internal/module/rbac/role/default_concurrency_test.go`
-- Modify: `web/tests/api/rbac/menu.test.ts`
-- Modify: `web/tests/api/rbac/role.test.ts`
+- Modify: `../../../web/src/views/permission/menus/index.vue`
+- Modify: `web/tests/views/permission/menus/index.test.ts`
+- Modify: `web/tests/views/permission/roles/index.test.ts`
+- Modify: `web/tests/views/permission/roles/role-permission-matrix.test.ts`
+- Modify: `server/internal/module/permission/access/service_test.go`
+- Modify: `server/internal/module/permission/access/repository_test.go`
+- Modify: `server/internal/module/permission/menu/foundation_test.go`
+- Modify: `server/internal/module/permission/menu/service_test.go`
+- Modify: `server/internal/module/permission/menu/repository_test.go`
+- Create: `server/internal/module/permission/role/default_concurrency_test.go`
+- Modify: `web/tests/api/permission/menu.test.ts`
+- Modify: `web/tests/api/permission/role.test.ts`
 
 **Interfaces:**
 - The menu view state becomes `Set<string>` for both `expandedIDs` and `expansionBeforeSearch`; `expandedRowKeys` is `string[]`.
@@ -306,11 +306,11 @@
   rg --pcre2 -n "canvas:test(?!:list)" server web -g "*.go" -g "*.ts" -g "*.vue"
   ```
 
-  Update only these non-persistent fixtures and assertions: `server/internal/module/rbac/access/repository_test.go`,
-  `server/internal/module/rbac/access/service_test.go`, `server/internal/module/rbac/menu/foundation_test.go`,
-  `server/internal/module/rbac/menu/service_test.go`, `web/tests/api/rbac/menu.test.ts`,
-  `web/tests/api/rbac/role.test.ts`, `web/tests/views/access/menus/index.test.ts`,
-  `web/tests/views/access/roles/index.test.ts`, and `web/tests/views/access/roles/role-permission-matrix.test.ts`.
+  Update only these non-persistent fixtures and assertions: `server/internal/module/permission/access/repository_test.go`,
+  `server/internal/module/permission/access/service_test.go`, `server/internal/module/permission/menu/foundation_test.go`,
+  `server/internal/module/permission/menu/service_test.go`, `web/tests/api/permission/menu.test.ts`,
+  `web/tests/api/permission/role.test.ts`, `web/tests/views/permission/menus/index.test.ts`,
+  `web/tests/views/permission/roles/index.test.ts`, and `web/tests/views/permission/roles/role-permission-matrix.test.ts`.
   Replace page fixtures and expected permission arrays with `canvas:test:list`, retain `canvas:test:button`,
   and leave migration/spec documents that mention the old code as historical preflight cases. Do not add a
   runtime fallback that accepts both codes; the persistent row is changed only by the manual migration in Task 4.
@@ -323,7 +323,7 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/module/rbac/access ./internal/module/rbac/menu ./internal/module/rbac/role -count=1
+  go test ./internal/module/permission/access ./internal/module/permission/menu ./internal/module/permission/role -count=1
   cd D:\admin\web
   pnpm vitest run tests/modules/rbac/menu/index.test.ts tests/modules/rbac/role/index.test.ts tests/modules/rbac/role/role-permission-matrix.test.ts --pool=threads --maxWorkers=1
   ```
@@ -332,7 +332,7 @@
 
   ```powershell
   cd D:\admin
-  git add web/src/views/access/menus/index.vue web/tests/api/rbac/menu.test.ts web/tests/api/rbac/role.test.ts web/tests/views/access/menus/index.test.ts web/tests/views/access/roles/index.test.ts web/tests/views/access/roles/role-permission-matrix.test.ts server/internal/module/rbac/access/repository_test.go server/internal/module/rbac/access/service_test.go server/internal/module/rbac/menu/foundation_test.go server/internal/module/rbac/menu/service_test.go server/internal/module/rbac/menu/repository_test.go server/internal/module/rbac/role/default_concurrency_test.go
+  git add web/src/views/permission/menus/index.vue web/tests/api/permission/menu.test.ts web/tests/api/permission/role.test.ts web/tests/views/permission/menus/index.test.ts web/tests/views/permission/roles/index.test.ts web/tests/views/permission/roles/role-permission-matrix.test.ts server/internal/module/permission/access/repository_test.go server/internal/module/permission/access/service_test.go server/internal/module/permission/menu/foundation_test.go server/internal/module/permission/menu/service_test.go server/internal/module/permission/menu/repository_test.go server/internal/module/permission/role/default_concurrency_test.go
   git commit -m "fix: 统一菜单行键并保障默认角色并发唯一"
   ```
 
@@ -341,11 +341,11 @@
 **Files:**
 - Create: `docs/database/2026-08-29-admin-rbac-baseline.sql`
 - Create: `docs/database/2026-08-29-admin-rbac-baseline.md`
-- Create: `server/internal/database/admin_rbac_baseline_migration_test.go`
+- Create: `server/internal/database/admin_permission_baseline_migration_test.go`
 
 **Interfaces:**
 - Produces a maintenance-only forward SQL file; no Go runtime code imports or executes it.
-- Preserves existing menu IDs, parent relationships, and `rbac_role_menu` rows.
+- Preserves existing menu IDs, parent relationships, and `permission_role_menu` rows.
 - Creates the hidden profile page/actions and migrates the known Canvas page code without creating Canvas business code.
 
 - [ ] **Step 1: Write migration tests against an isolated PostgreSQL schema.**
@@ -371,7 +371,7 @@
 
 - [ ] **Step 3: Write the transactional migration with explicit preflight checks.**
 
-  The SQL must begin with `BEGIN;` and use `ON_ERROR_STOP` in the documented command. Before any write, verify exactly one active Admin platform, an existing Admin `account` directory, and no conflicting duplicate codes. For Canvas, update only when exactly one old row exists and the target row is absent; if the target already exists without the old row, verify its shape and treat it as already migrated. Insert profile nodes with the fixed fields above, `layout.account.profile` as the page `i18n_key`, null render fields on actions, and `CURRENT_TIMESTAMP` for both timestamps. Use `ON DELETE RESTRICT` already present on `rbac_menu`; preserve role grants and, because menu codes change the effective permission snapshot, advance every active user's `rbac_access_version` in the same transaction. The migration document must also require a maintenance-window, key-scoped deletion of this project's `authz:access-state:*` and `authz:access:*` Redis entries after the SQL succeeds; never use `FLUSHDB`. End with `COMMIT;`.
+  The SQL must begin with `BEGIN;` and use `ON_ERROR_STOP` in the documented command. Before any write, verify exactly one active Admin platform, an existing Admin `account` directory, and no conflicting duplicate codes. For Canvas, update only when exactly one old row exists and the target row is absent; if the target already exists without the old row, verify its shape and treat it as already migrated. Insert profile nodes with the fixed fields above, `layout.account.profile` as the page `i18n_key`, null render fields on actions, and `CURRENT_TIMESTAMP` for both timestamps. Use `ON DELETE RESTRICT` already present on `permission_menu`; preserve role grants and, because menu codes change the effective permission snapshot, advance every active user's `permission_access_version` in the same transaction. The migration document must also require a maintenance-window, key-scoped deletion of this project's `authz:permission-state:*` and `authz:permission:*` Redis entries after the SQL succeeds; never use `FLUSHDB`. End with `COMMIT;`.
 
 - [ ] **Step 4: Document execution, rollback, and verification.**
 
@@ -396,7 +396,7 @@
 
   ```powershell
   cd D:\admin
-  git add docs/database/2026-08-29-admin-rbac-baseline.sql docs/database/2026-08-29-admin-rbac-baseline.md server/internal/database/admin_rbac_baseline_migration_test.go
+  git add docs/database/2026-08-29-admin-rbac-baseline.sql docs/database/2026-08-29-admin-rbac-baseline.md server/internal/database/admin_permission_baseline_migration_test.go
   git commit -m "docs: 增加 Admin RBAC 菜单基线迁移"
   ```
 
@@ -413,7 +413,7 @@
 
 - [ ] **Step 1: Write failing PostgreSQL schema tests.**
 
-  In an isolated schema, create the prerequisite `auth_platform` and `rbac_menu` tables with the current test model helpers, execute the future migration, and assert the exact columns and types from the COS spec. Assert the following constraints and indexes exist:
+  In an isolated schema, create the prerequisite `auth_platform` and `permission_menu` tables with the current test model helpers, execute the future migration, and assert the exact columns and types from the COS spec. Assert the following constraints and indexes exist:
 
   ```text
   fk_storage_upload_rule_platform
@@ -902,7 +902,7 @@
 **Interfaces:**
 - `cosconfig.ts` exposes typed functions for the seven Admin endpoints and parses `unknown` responses with exact-key checks. Its DTOs never contain `secretId`, `secretKey`, ciphertext, SDK config, or signature data in response types.
 - `uploadrule.ts` exposes typed functions for list, page-init, create, update, status, and delete; its `CredentialResponse` parser is kept separate from Admin list DTOs if a future business client needs it.
-- `index.vue` consumes only the two API files, `useAccessStore().hasPermission`, existing `AppTable`/`AppDialog`/Element Plus components, and the `storage:object:list` menu metadata.
+- `index.vue` consumes only the two API files, `usePermissionStore().hasPermission`, existing `AppTable`/`AppDialog`/Element Plus components, and the `storage:object:list` menu metadata.
 
 - [ ] **Step 1: Write failing API parser tests.**
 
@@ -969,7 +969,7 @@
 
   ```powershell
   cd D:\admin\server
-  gofmt -w internal/module/storage internal/storage/cos internal/module/user/profile internal/module/rbac/access
+  gofmt -w internal/module/storage internal/storage/cos internal/module/user/profile internal/module/permission/access
   go fmt ./...
   go vet ./...
   go test ./... -count=1

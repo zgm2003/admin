@@ -13,7 +13,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import type { AccessMenuNode } from '../../api/rbac/access'
+import type { PermissionMenuNode } from '../../api/permission/permission'
 
 interface RouteTab {
   path: string
@@ -30,7 +30,7 @@ type TabCommand = 'refresh' | 'fullscreen' | 'closeOthers' | 'closeAll'
 
 const props = withDefaults(defineProps<{
 	fullscreen?: boolean
-	menuTree: readonly AccessMenuNode[]
+	menuTree: readonly PermissionMenuNode[]
 }>(), { fullscreen: false })
 const root = ref<HTMLElement>()
 const tagsInnerRef = ref<HTMLElement | null>(null)
@@ -76,7 +76,7 @@ function getCurrentTab(): RouteTab | null {
 	return { path: route.path, i18nKey, affix: matched.meta.affix === true }
 }
 
-function findMenuPage(path: string, roots: readonly AccessMenuNode[]): AccessMenuNode | null {
+function findMenuPage(path: string, roots: readonly PermissionMenuNode[]): PermissionMenuNode | null {
 	const stack = [...roots].reverse()
 	while (stack.length > 0) {
 		const node = stack.pop()

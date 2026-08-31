@@ -50,12 +50,12 @@
 - `web/src/router/index.ts`、`access-routes.ts`：静态 `/access/menus` 精确绑定，其余页面动态注册。
 - `web/src/layout/*`：只从 access tree 渲染侧栏、面包屑和 RouteTabs。
 - Move `web/src/views/system/{users,sessions}` -> `web/src/views/account/*`。
-- Move `web/src/views/system/{menus,roles,auth-platforms}` -> `web/src/views/access/*`。
+- Move `web/src/views/system/{menus,roles,auth-platforms}` -> `../../../web/src/views/permission/*`。
 - Keep `web/src/views/system/operation-logs`，只更新权限码和导航键。
 - Move 对应 `web/tests/views/*` 到相同业务域目录。
 - Rename `web/src/styles/system-pages.scss` -> `management-pages.scss`，class 改为 `management-page*`。
 - Create `web/src/icons/menu-icons.ts`：本地 Lucide 菜单图标唯一目录和解析器。
-- Create `web/src/views/access/menus/filter-menu-tree.ts`：菜单搜索和祖先/后代保留算法。
+- Create `../../../web/src/views/permission/menus/filter-menu-tree.ts`：菜单搜索和祖先/后代保留算法。
 
 ---
 
@@ -997,9 +997,9 @@ go test ./internal/module/menu ./internal/module/role ./internal/module/user ./i
 **Files:**
 - Move: `web/src/views/system/users` -> `web/src/views/account/users`
 - Move: `web/src/views/system/sessions` -> `web/src/views/account/sessions`
-- Move: `web/src/views/system/menus` -> `web/src/views/access/menus`
-- Move: `web/src/views/system/roles` -> `web/src/views/access/roles`
-- Move: `web/src/views/system/auth-platforms` -> `web/src/views/access/auth-platforms`
+- Move: `web/src/views/system/menus` -> `../../../web/src/views/permission/menus`
+- Move: `web/src/views/system/roles` -> `../../../web/src/views/permission/roles`
+- Move: `web/src/views/system/auth-platforms` -> `../../../web/src/views/permission/auth-platforms`
 - Move matching tests under `web/tests/views/system/*` to `web/tests/views/account/*` or `web/tests/views/access/*`
 - Move: `web/src/styles/system-pages.scss` -> `web/src/styles/management-pages.scss`
 - Modify: `web/src/styles/index.scss`
@@ -1407,14 +1407,14 @@ pnpm build
 ### Task 6: 完成菜单搜索、稳定展开、Dialog 和角色名称界面
 
 **Files:**
-- Create: `web/src/views/access/menus/filter-menu-tree.ts`
+- Create: `../../../web/src/views/permission/menus/filter-menu-tree.ts`
 - Create: `web/tests/views/access/menus/filter-menu-tree.test.ts`
-- Modify: `web/src/views/access/menus/index.vue`
+- Modify: `../../../web/src/views/permission/menus/index.vue`
 - Modify: `web/tests/views/access/menus/index.test.ts`
-- Modify: `web/src/views/access/roles/role-permission-matrix.ts`
-- Modify: `web/src/views/access/roles/components/RolePermissionMatrix.vue`
-- Modify: `web/src/views/access/roles/components/RolePermissionDiffDialog.vue`
-- Modify: `web/src/views/access/roles/index.vue`
+- Modify: `../../../web/src/views/permission/roles/role-permission-matrix.ts`
+- Modify: `../../../web/src/views/permission/roles/components/RolePermissionMatrix.vue`
+- Modify: `../../../web/src/views/permission/roles/components/RolePermissionDiffDialog.vue`
+- Modify: `../../../web/src/views/permission/roles/index.vue`
 - Modify: matching role tests under `web/tests/views/access/roles`
 - Modify: `web/src/i18n/messages/zh-CN.ts`
 - Modify: `web/src/i18n/messages/en-US.ts`

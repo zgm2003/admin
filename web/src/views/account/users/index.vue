@@ -19,7 +19,7 @@ import type {
   UserRoleSummary,
 } from "../../../api/user/account";
 import { YesNo } from "../../../enums/yes-no";
-import { useAccessStore } from "../../../store/access";
+import { usePermissionStore } from "../../../store/permission.ts";
 import { useAuthStore } from "../../../store/auth";
 import { AppDialog } from "../../../components/AppDialog";
 import { AppTable } from "../../../components/AppTable";
@@ -31,7 +31,7 @@ import { AppSearch } from "../../../components/AppSearch";
 import type { SearchField, SearchFormModel } from "../../../components/AppSearch";
 
 const { t } = useI18n();
-const access = useAccessStore();
+const access = usePermissionStore();
 const auth = useAuthStore();
 
 const rows = ref<UserListItem[]>([]);

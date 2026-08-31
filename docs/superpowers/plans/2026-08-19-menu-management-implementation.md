@@ -18,7 +18,7 @@
 - `server/internal/module/access/middleware.go` exposes `access.RequirePermission`; its Repository already reads enabled menus and direct role grants.
 - `server/cmd/api/main.go` owns database setup, system initialization, service construction, and route registration.
 - `web/src/api/access.contract.ts` is the reference for closed-record runtime validation.
-- `web/src/access/menu-icons.ts`, `route-views.ts`, `web/src/i18n`, and `web/src/store/access.ts` are the existing frontend protocol and permission surfaces.
+- `web/src/access/menu-icons.ts`, `route-views.ts`, `web/src/i18n`, and `../../../web/src/store/permission.ts` are the existing frontend protocol and permission surfaces.
 
 The repository owner controls Git history. Every task ends with a focused test and diff review; this plan never commits, pushes, fetches, pulls, starts, or stops services.
 

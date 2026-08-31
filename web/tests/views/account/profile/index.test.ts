@@ -8,7 +8,7 @@ import { appI18n, setLocale } from '@src/i18n'
 import * as profileAPI from '@src/api/user/profile'
 import ProfilePage from '@src/views/account/profile/index.vue'
 import UpMedia from '@src/components/UpMedia/src/index.vue'
-import { useAccessStore } from '@src/store/access'
+import { usePermissionStore } from '@/store/permission.ts'
 import { useAuthStore } from '@src/store/auth'
 
 vi.mock('@src/api/user/profile', () => ({
@@ -84,7 +84,7 @@ describe('account profile permissions', () => {
 function mountPage(permissionCodes: string[]) {
   const pinia = createPinia()
   setActivePinia(pinia)
-  useAccessStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes })
+  usePermissionStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes })
   useAuthStore(pinia).setAuthenticated({ userId: 7, username: 'alice', email: 'alice@example.com', phone: null, avatar: '' })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/login', name: 'login', component: { template: '<div />' } }] })
   return mount(ProfilePage, { global: { plugins: [pinia, appI18n, ElementPlus, router] } })

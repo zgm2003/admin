@@ -11,7 +11,7 @@ import (
 
 	"admin/server/internal/database"
 	"admin/server/internal/module/auth/login"
-	"admin/server/internal/module/rbac/role"
+	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/user/account"
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"

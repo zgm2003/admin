@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import { logout } from "../api/auth/login";
-import { useAccessStore } from "../store/access";
+import { usePermissionStore } from "../store/permission.ts";
 import { useAuthStore } from "../store/auth";
 import { useUIPreferencesStore } from "../store/ui-preferences";
 import { resolveBreadcrumbs } from "./breadcrumbs";
@@ -17,7 +17,7 @@ const mobileBreakpoint = 840;
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
-const access = useAccessStore();
+const access = usePermissionStore();
 const auth = useAuthStore();
 const uiPreferences = useUIPreferencesStore();
 const collapsed = ref(false);

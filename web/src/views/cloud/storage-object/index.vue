@@ -35,10 +35,10 @@ import {
   type UploadRule,
   type UploadRuleQuery,
 } from "../../../api/storage/uploadrule";
-import { useAccessStore } from "../../../store/access";
+import { usePermissionStore } from "../../../store/permission.ts";
 
 const { t } = useI18n();
-const access = useAccessStore();
+const access = usePermissionStore();
 const activeTab = ref<"config" | "rules">("config");
 const configs = ref<CosConfig[]>([]);
 const rules = ref<UploadRule[]>([]);

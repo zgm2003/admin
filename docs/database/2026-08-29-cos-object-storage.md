@@ -15,7 +15,7 @@ SELECT column_name, data_type FROM information_schema.columns
 WHERE table_name IN ('storage_cos_config', 'storage_upload_rule') ORDER BY table_name, ordinal_position;
 SELECT conname FROM pg_constraint WHERE conname LIKE '%storage_%' ORDER BY conname;
 SELECT indexname, indexdef FROM pg_indexes WHERE indexname LIKE '%storage_%' ORDER BY indexname;
-SELECT id, parent_id, platform_id, code, menu_type, path, component_path FROM rbac_menu
+SELECT id, parent_id, platform_id, code, menu_type, path, component_path FROM permission_menu
 WHERE code IN ('cloud', 'storage:object:list') OR code LIKE 'storage:%' ORDER BY id;
 ```
 

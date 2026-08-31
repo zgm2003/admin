@@ -124,10 +124,10 @@ CRUD 调用和错误透传测试。
 - Modify: `web/src/api/session.ts`
 - Modify: `web/src/api/auth-platform.ts`
 - Modify: `web/src/api/operation-log.ts`
-- Modify: `web/src/views/access/roles/index.vue`
-- Modify: `web/src/views/access/roles/role-permission-matrix.ts`
+- Modify: `../../../web/src/views/permission/roles/index.vue`
+- Modify: `../../../web/src/views/permission/roles/role-permission-matrix.ts`
 - Modify: `web/src/views/account/sessions/index.vue`
-- Modify: `web/src/views/access/auth-platforms/index.vue`
+- Modify: `../../../web/src/views/permission/auth-platforms/index.vue`
 - Modify: `web/src/views/system/operation-logs/index.vue`
 - Modify: matching files under `web/tests/api` and `web/tests/views`
 - Delete: `web/src/api/role.contract.ts`, `web/src/api/session.contract.ts`, `web/src/api/auth-platform.contract.ts`, `web/src/api/operation-log.contract.ts`
@@ -161,9 +161,9 @@ CRUD 调用和错误透传测试。
 - Modify: `web/src/layout/components/AccessMenuNode.vue`
 - Modify: `web/src/layout/components/RouteTabs.vue`
 - Modify: `web/src/layout/breadcrumbs.ts`
-- Modify: `web/src/store/access.ts`
-- Modify: `web/src/views/access/menus/index.vue`
-- Modify: `web/src/views/access/menus/filter-menu-tree.ts`
+- Modify: `../../../web/src/store/permission.ts`
+- Modify: `../../../web/src/views/permission/menus/index.vue`
+- Modify: `../../../web/src/views/permission/menus/filter-menu-tree.ts`
 - Modify: matching menu/access tests
 - Delete: `web/src/api/menu.contract.ts`, `web/src/api/access.contract.ts`
 - Delete: parser-only menu/access contract tests

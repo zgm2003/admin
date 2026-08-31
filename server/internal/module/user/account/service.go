@@ -10,8 +10,8 @@ import (
 	"unicode/utf8"
 
 	"admin/server/internal/module/auth/state"
-	"admin/server/internal/module/rbac/role"
-	"admin/server/internal/module/rbac/state"
+	"admin/server/internal/module/permission/role"
+	"admin/server/internal/module/permission/state"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
@@ -22,8 +22,8 @@ type Service struct {
 	repository        *Repository
 	authStates        *authstate.Store
 	authInvalidator   *authstate.Invalidator
-	accessStates      *accessstate.Store
-	accessInvalidator *accessstate.Invalidator
+	accessStates      *permissionstate.Store
+	accessInvalidator *permissionstate.Invalidator
 }
 
 type ListQuery struct {
@@ -82,8 +82,8 @@ func NewService(
 	repository *Repository,
 	authStates *authstate.Store,
 	authInvalidator *authstate.Invalidator,
-	accessStates *accessstate.Store,
-	accessInvalidator *accessstate.Invalidator,
+	accessStates *permissionstate.Store,
+	accessInvalidator *permissionstate.Invalidator,
 ) *Service {
 	return &Service{
 		repository: repository, authStates: authStates, authInvalidator: authInvalidator,
@@ -264,7 +264,7 @@ func (s *Service) UpdateRoles(ctx context.Context, actorUserID, targetUserID int
 	if err := s.ensureAccessReady(ctx, candidate); err != nil {
 		return 0, apperror.DependencyUnavailable(err)
 	}
-	lease, err := s.accessInvalidator.Acquire(ctx, []accessstate.Version{candidate})
+	lease, err := s.accessInvalidator.Acquire(ctx, []permissionstate.Version{candidate})
 	if err != nil {
 		return 0, apperror.DependencyUnavailable(err)
 	}
@@ -392,7 +392,7 @@ func (s *Service) UpdateRoles(ctx context.Context, actorUserID, targetUserID int
 			return err
 		}
 		if lockedVersion != candidate.Version {
-			return accessstate.ErrVersionChanged
+			return permissionstate.ErrVersionChanged
 		}
 		newVersion, err = repository.IncrementAccessVersion(ctx, target.ID, operationTime)
 		if err != nil {
@@ -494,7 +494,7 @@ func (s *Service) UpdateStatus(ctx context.Context, actorUserID, targetUserID in
 			changed = true
 			lockedVersion, err := repository.LockAccessVersion(ctx, target.ID)
 			if err != nil || lockedVersion != candidate.access.Version {
-				return errors.Join(err, accessstate.ErrVersionChanged)
+				return errors.Join(err, permissionstate.ErrVersionChanged)
 			}
 			newVersion, err = repository.IncrementAccessVersion(ctx, target.ID, operationTime)
 			return err
@@ -522,7 +522,7 @@ func (s *Service) UpdateStatus(ctx context.Context, actorUserID, targetUserID in
 		}
 		lockedVersion, err := repository.LockAccessVersion(ctx, target.ID)
 		if err != nil || lockedVersion != candidate.access.Version {
-			return errors.Join(err, accessstate.ErrVersionChanged)
+			return errors.Join(err, permissionstate.ErrVersionChanged)
 		}
 		newVersion, err = repository.IncrementAccessVersion(ctx, target.ID, operationTime)
 		changed = true
@@ -630,7 +630,7 @@ func (s *Service) Delete(ctx context.Context, actorUserID, targetUserID int64) e
 		}
 		lockedVersion, err := repository.LockAccessVersion(ctx, target.ID)
 		if err != nil || lockedVersion != candidate.access.Version {
-			return errors.Join(err, accessstate.ErrVersionChanged)
+			return errors.Join(err, permissionstate.ErrVersionChanged)
 		}
 		newVersion, err = repository.IncrementAccessVersion(ctx, target.ID, operationTime)
 		changed = true
@@ -651,7 +651,7 @@ func (s *Service) Delete(ctx context.Context, actorUserID, targetUserID int64) e
 
 type fullMutationCandidate struct {
 	user      User
-	access    accessstate.Version
+	access    permissionstate.Version
 	platforms []string
 }
 
@@ -659,7 +659,7 @@ func (s *Service) prepareFullMutation(ctx context.Context, userID int64) (
 	fullMutationCandidate,
 	authstate.MutationFacts,
 	*authstate.MutationLease,
-	*accessstate.MutationLease,
+	*permissionstate.MutationLease,
 	error,
 ) {
 	target, err := s.repository.FindUserUnscoped(ctx, userID)
@@ -696,7 +696,7 @@ func (s *Service) prepareFullMutation(ctx context.Context, userID int64) (
 	if err != nil {
 		return fullMutationCandidate{}, authstate.MutationFacts{}, nil, nil, apperror.DependencyUnavailable(err)
 	}
-	accessLease, err := s.accessInvalidator.Acquire(ctx, []accessstate.Version{version})
+	accessLease, err := s.accessInvalidator.Acquire(ctx, []permissionstate.Version{version})
 	if err != nil {
 		return fullMutationCandidate{}, authstate.MutationFacts{}, nil, nil, apperror.DependencyUnavailable(errors.Join(err, authLease.Rollback(ctx)))
 	}
@@ -708,7 +708,7 @@ func (s *Service) finishFullMutation(
 	candidate fullMutationCandidate,
 	prior authstate.MutationFacts,
 	authLease *authstate.MutationLease,
-	accessLease *accessstate.MutationLease,
+	accessLease *permissionstate.MutationLease,
 	changed bool,
 	enabled bool,
 	deleted bool,
@@ -790,16 +790,16 @@ func (s *Service) ensureSessionsReady(ctx context.Context, platform string, user
 	return actual.Fact(), nil
 }
 
-func (s *Service) ensureAccessReady(ctx context.Context, version accessstate.Version) error {
+func (s *Service) ensureAccessReady(ctx context.Context, version permissionstate.Version) error {
 	state, _, err := s.accessStates.InstallReadyIfMissing(ctx, version)
 	if err != nil {
 		return err
 	}
-	if state.State != accessstate.StateReady {
-		return accessstate.ErrUpdating
+	if state.State != permissionstate.StateReady {
+		return permissionstate.ErrUpdating
 	}
 	if state.Version != version.Version {
-		return accessstate.ErrVersionChanged
+		return permissionstate.ErrVersionChanged
 	}
 	return nil
 }

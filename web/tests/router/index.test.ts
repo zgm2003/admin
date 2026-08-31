@@ -1,31 +1,31 @@
 import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getAccess } from '@src/api/rbac/access'
-import type { AccessSnapshot } from '@src/api/rbac/access'
+import { getPermission } from '@src/api/permission/permission'
+import type { PermissionSnapshot } from '@src/api/permission/permission'
 import { getCurrentUser, refresh } from '@src/api/auth/login'
 import { installPermissionGuard } from '@src/permission'
 import { pinia } from '@src/store'
-import { useAccessStore } from '@src/store/access'
+import { usePermissionStore } from '@/store/permission.ts'
 import { useAuthStore } from '@src/store/auth'
 import { ApiError } from '@src/types/http'
 import { createAppRouter } from '@src/router/index'
 import { YesNo } from '@src/enums/yes-no'
 
 vi.mock('@src/api/auth/login', () => ({ refresh: vi.fn(), getCurrentUser: vi.fn() }))
-vi.mock('@src/api/rbac/access', () => ({ getAccess: vi.fn() }))
+vi.mock('@src/api/permission/permission', () => ({ getPermission: vi.fn() }))
 const refreshMock = vi.mocked(refresh)
 const getCurrentUserMock = vi.mocked(getCurrentUser)
-const getAccessMock = vi.mocked(getAccess)
+const getPermissionMock = vi.mocked(getPermission)
 
 describe('router', () => {
   beforeEach(() => {
     useAuthStore(pinia).$reset()
-    useAccessStore(pinia).reset()
+    usePermissionStore(pinia).reset()
     refreshMock.mockReset()
     getCurrentUserMock.mockReset()
-    getAccessMock.mockReset()
-    getAccessMock.mockResolvedValue(emptyAccessSnapshot())
+    getPermissionMock.mockReset()
+    getPermissionMock.mockResolvedValue(emptyPermissionSnapshot())
   })
 
 	it('declares public auth routes and static protected Dashboard and menu management routes', () => {
@@ -35,7 +35,7 @@ describe('router', () => {
 	  expect(router.resolve('/register').matched).toHaveLength(0)
 		expect(router.resolve('/dashboard').meta.requiresAuth).toBe(true)
 		expect(router.resolve('/access/menus').meta.requiresAuth).toBe(true)
-		expect(router.resolve('/access/menus').meta.requiredPermission).toBe('rbac:menu:list')
+		expect(router.resolve('/access/menus').meta.requiredPermission).toBe('permission:menu:list')
 		expect(router.resolve('/access/menus').name).toBe('access-menus')
     expect(router.hasRoute('account-profile')).toBe(false)
     expect(router.resolve('/account/profile').matched).toHaveLength(0)
@@ -60,8 +60,8 @@ describe('router', () => {
 		await router.push('/access/menus')
 		expect(router.currentRoute.value.path).toBe('/dashboard')
 
-		useAccessStore(pinia).reset()
-		getAccessMock.mockResolvedValue({ ...emptyAccessSnapshot(), permissionCodes: ['rbac:menu:list'] })
+		usePermissionStore(pinia).reset()
+		getPermissionMock.mockResolvedValue({ ...emptyPermissionSnapshot(), permissionCodes: ['permission:menu:list'] })
 		await router.push('/access/menus')
 		expect(router.currentRoute.value.path).toBe('/access/menus')
 	})
@@ -76,9 +76,9 @@ describe('router', () => {
       order.push('me')
       return { userId: 1, username: 'admin', email: 'admin@example.com', phone: null, avatar: '' }
     })
-    getAccessMock.mockImplementation(async () => {
+    getPermissionMock.mockImplementation(async () => {
       order.push('access')
-      return businessAccessSnapshot()
+      return businessPermissionSnapshot()
     })
     const router = createAppRouter(createMemoryHistory())
     installPermissionGuard(router)
@@ -89,7 +89,7 @@ describe('router', () => {
     expect(router.hasRoute('access:account:user:list')).toBe(true)
     expect(router.currentRoute.value.fullPath).toBe('/account/users')
     expect(useAuthStore(pinia).status).toBe('authenticated')
-    expect(useAccessStore(pinia).status).toBe('ready')
+    expect(usePermissionStore(pinia).status).toBe('ready')
   })
 
   it('loads access once for an already authenticated Dashboard', async () => {
@@ -101,13 +101,13 @@ describe('router', () => {
     await router.push('/login')
 
     expect(router.currentRoute.value.path).toBe('/dashboard')
-    expect(getAccessMock).toHaveBeenCalledOnce()
+    expect(getPermissionMock).toHaveBeenCalledOnce()
     expect(refreshMock).not.toHaveBeenCalled()
   })
 
   it('does not reload access while clicking between installed pages', async () => {
     setAuthenticated()
-    getAccessMock.mockResolvedValue(businessAccessSnapshot())
+    getPermissionMock.mockResolvedValue(businessPermissionSnapshot())
     const router = createAppRouter(createMemoryHistory())
     installPermissionGuard(router)
 
@@ -116,56 +116,56 @@ describe('router', () => {
     await router.push('/account/users')
 
     expect(router.currentRoute.value.path).toBe('/account/users')
-    expect(getAccessMock).toHaveBeenCalledOnce()
+    expect(getPermissionMock).toHaveBeenCalledOnce()
   })
 
   it('shares one access request across concurrent protected navigations', async () => {
     setAuthenticated()
-    const request = deferred<AccessSnapshot>()
-    getAccessMock.mockReturnValue(request.promise)
+    const request = deferred<PermissionSnapshot>()
+    getPermissionMock.mockReturnValue(request.promise)
     const router = createAppRouter(createMemoryHistory())
     installPermissionGuard(router)
 
     const dashboardNavigation = router.push('/dashboard')
     const pageNavigation = router.push('/account/users')
-    await vi.waitFor(() => expect(getAccessMock).toHaveBeenCalledOnce())
-    request.resolve(businessAccessSnapshot())
+    await vi.waitFor(() => expect(getPermissionMock).toHaveBeenCalledOnce())
+    request.resolve(businessPermissionSnapshot())
     await Promise.all([dashboardNavigation, pageNavigation])
 
-    expect(getAccessMock).toHaveBeenCalledOnce()
+    expect(getPermissionMock).toHaveBeenCalledOnce()
     expect(router.hasRoute('access:account:user:list')).toBe(true)
   })
 
   it('keeps Dashboard mounted when access loading fails', async () => {
     setAuthenticated()
-    getAccessMock.mockRejectedValue(new Error('access unavailable'))
+    getPermissionMock.mockRejectedValue(new Error('access unavailable'))
     const router = createAppRouter(createMemoryHistory())
     installPermissionGuard(router)
 
     await router.push('/dashboard')
 
     expect(router.currentRoute.value.path).toBe('/dashboard')
-    expect(useAccessStore(pinia).status).toBe('error')
-    expect(useAccessStore(pinia).errorMessage).not.toBe('')
-    expect(getAccessMock).toHaveBeenCalledOnce()
+    expect(usePermissionStore(pinia).status).toBe('error')
+    expect(usePermissionStore(pinia).errorMessage).not.toBe('')
+    expect(getPermissionMock).toHaveBeenCalledOnce()
   })
 
   it('redirects a cold dynamic URL to Dashboard when access loading fails', async () => {
     setAuthenticated()
-    getAccessMock.mockRejectedValue(new Error('access unavailable'))
+    getPermissionMock.mockRejectedValue(new Error('access unavailable'))
     const router = createAppRouter(createMemoryHistory())
     installPermissionGuard(router)
 
     await router.push('/account/users')
 
     expect(router.currentRoute.value.path).toBe('/dashboard')
-    expect(useAccessStore(pinia).status).toBe('error')
-    expect(getAccessMock).toHaveBeenCalledOnce()
+    expect(usePermissionStore(pinia).status).toBe('error')
+    expect(getPermissionMock).toHaveBeenCalledOnce()
   })
 
   it('removes dynamic routes and access state after authentication becomes anonymous', async () => {
     setAuthenticated()
-    getAccessMock.mockResolvedValue(businessAccessSnapshot())
+    getPermissionMock.mockResolvedValue(businessPermissionSnapshot())
     const router = createAppRouter(createMemoryHistory())
     installPermissionGuard(router)
     await router.push('/account/users')
@@ -176,8 +176,8 @@ describe('router', () => {
 
     expect(router.currentRoute.value.path).toBe('/login')
     expect(router.hasRoute('access:account:user:list')).toBe(false)
-    expect(useAccessStore(pinia).status).toBe('idle')
-    expect(useAccessStore(pinia).menuTree).toEqual([])
+    expect(usePermissionStore(pinia).status).toBe('idle')
+    expect(usePermissionStore(pinia).menuTree).toEqual([])
   })
 
   it('does not bootstrap access for public Login', async () => {
@@ -187,7 +187,7 @@ describe('router', () => {
 
     expect(router.currentRoute.value.path).toBe('/login')
     expect(refreshMock).not.toHaveBeenCalled()
-    expect(getAccessMock).not.toHaveBeenCalled()
+    expect(getPermissionMock).not.toHaveBeenCalled()
   })
 
   it('redirects a refresh 401 to Login as anonymous', async () => {
@@ -200,7 +200,7 @@ describe('router', () => {
     expect(router.currentRoute.value.fullPath).toBe('/login?redirect=/dashboard')
     expect(useAuthStore(pinia).status).toBe('anonymous')
     expect(getCurrentUserMock).not.toHaveBeenCalled()
-    expect(getAccessMock).not.toHaveBeenCalled()
+    expect(getPermissionMock).not.toHaveBeenCalled()
   })
 
   it('keeps authentication dependency failures distinct from anonymous', async () => {
@@ -213,7 +213,7 @@ describe('router', () => {
     expect(store.status).toBe('error')
     expect(store.errorMessage).toBe('服务暂未就绪')
     expect(router.currentRoute.value.path).toBe('/login')
-    expect(getAccessMock).not.toHaveBeenCalled()
+    expect(getPermissionMock).not.toHaveBeenCalled()
   })
 
   it('rejects a matched route record without an explicit requiresAuth declaration', async () => {
@@ -245,11 +245,11 @@ function setAuthenticated(): void {
   store.setAuthenticated({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null, avatar: '' })
 }
 
-function emptyAccessSnapshot(): AccessSnapshot {
+function emptyPermissionSnapshot(): PermissionSnapshot {
   return { roleCodes: [], menuTree: [], permissionCodes: [] }
 }
 
-function businessAccessSnapshot(): AccessSnapshot {
+function businessPermissionSnapshot(): PermissionSnapshot {
   return {
     roleCodes: ['registered_user'],
 		menuTree: [
@@ -257,21 +257,21 @@ function businessAccessSnapshot(): AccessSnapshot {
 				accessPage('account:user:list', '/account/users', 'account/users', 'navigation.accountUsers'),
 			]),
 			accessDirectory('access', 'navigation.access', [
-				accessPage('rbac:role:list', '/access/roles', 'access/roles', 'navigation.accessRoles'),
+				accessPage('permission:role:list', '/access/roles', 'access/roles', 'navigation.accessRoles'),
 			]),
 			accessDirectory('system', 'navigation.system', [
 				accessPage('system:operation-log:list', '/system/operation-logs', 'system/operation-logs', 'navigation.systemOperationLogs'),
 			]),
 		],
-		permissionCodes: ['account:user:list', 'system:operation-log:list', 'rbac:role:list'],
+		permissionCodes: ['account:user:list', 'system:operation-log:list', 'permission:role:list'],
   }
 }
 
 function accessDirectory(
 	code: string,
 	i18nKey: string,
-	children: AccessSnapshot['menuTree'],
-): AccessSnapshot['menuTree'][number] {
+	children: PermissionSnapshot['menuTree'],
+): PermissionSnapshot['menuTree'][number] {
 	return {
 		code,
 		menuType: 'directory',
@@ -289,7 +289,7 @@ function accessPage(
 	path: string,
 	componentPath: string,
 	i18nKey: string,
-): AccessSnapshot['menuTree'][number] {
+): PermissionSnapshot['menuTree'][number] {
 	return {
 		code,
 		menuType: 'page',

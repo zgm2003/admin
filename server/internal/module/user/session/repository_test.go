@@ -14,8 +14,8 @@ import (
 	"admin/server/internal/database/testschema"
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/platform"
-	"admin/server/internal/module/rbac/access"
-	"admin/server/internal/module/rbac/role"
+	"admin/server/internal/module/permission/access"
+	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/session"
 	"admin/server/internal/shared/yesno"
@@ -311,7 +311,7 @@ func openAuthenticationSchema(t *testing.T) (*gorm.DB, context.Context) {
 		t.Fatalf("load worker config: %v", err)
 	}
 	db, ctx := testschema.Open(t, settings.PostgresDSN, "test_user_session")
-	if err := database.AutoMigrate(ctx, db, &user.User{}, &role.Role{}, &role.UserRole{}, &authplatform.Platform{}, &session.Session{}, &access.Version{}); err != nil {
+	if err := database.AutoMigrate(ctx, db, &user.User{}, &role.Role{}, &role.UserRole{}, &authplatform.Platform{}, &session.Session{}, &permission.Version{}); err != nil {
 		t.Fatalf("create session test schema: %v", err)
 	}
 	if err := role.EnsureSchema(ctx, db); err != nil {

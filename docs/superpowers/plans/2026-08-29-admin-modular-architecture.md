@@ -654,7 +654,7 @@ buildRouter 固定注册：
 - Move: web/src/api/session.ts -> web/src/api/user/session.ts
 - Move: web/src/api/menu.ts -> web/src/api/rbac/menu.ts
 - Move: web/src/api/role.ts -> web/src/api/rbac/role.ts
-- Move: web/src/api/access.ts -> web/src/api/rbac/access.ts
+- Move: web/src/api/permission.ts -> web/src/api/rbac/permission.ts
 - Move: web/src/api/auth.ts -> web/src/api/auth/login.ts
 - Move: web/src/api/auth-platform.ts -> web/src/api/auth/platform.ts
 - Move: web/src/api/operation-log.ts -> web/src/api/audit/operationlog.ts
@@ -680,7 +680,7 @@ buildRouter 固定注册：
 - Modify: web/src/layout/components/AccessMenuNode.vue
 - Modify: web/src/layout/breadcrumbs.ts
 - Modify: web/src/permission.ts
-- Modify: web/src/store/access.ts
+- Modify: web/src/store/permission.ts
 - Modify: web/src/store/auth.ts
 - Modify: web/src/i18n/messages/zh-CN.ts
 - Modify: web/src/i18n/messages/en-US.ts
@@ -691,7 +691,7 @@ buildRouter 固定注册：
 - Modify: web/tests/router/access-routes.test.ts
 - Modify: web/tests/layout/components/AccessMenuNode.test.ts
 - Modify: web/tests/layout/breadcrumbs.test.ts
-- Delete after import scan is clean: old files under web/src/api/{user.ts,account.ts,session.ts,menu.ts,role.ts,access.ts,auth.ts,auth-platform.ts,operation-log.ts}, web/src/views/{account,access,auth,system,dashboard} and their old mirrored tests
+- Delete after import scan is clean: old files under web/src/api/{user.ts,account.ts,session.ts,menu.ts,role.ts,permission.ts,auth.ts,auth-platform.ts,operation-log.ts}, web/src/views/{account,access,auth,system,dashboard} and their old mirrored tests
 
 **Interfaces:**
 - Consumes: Task 3/4/5 的稳定 HTTP DTO、/api/admin/v1 管理 URL、/api/v1/auth 和 /api/v1/access 共享 URL。

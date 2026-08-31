@@ -12,7 +12,7 @@ import { authPlatform } from '../auth/platform'
 import { readDeviceID } from '../auth/device-id'
 import { appI18n, readLocale } from '../i18n'
 import { pinia } from '../store'
-import { useAccessStore } from '../store/access'
+import { usePermissionStore } from '../store/permission.ts'
 import { useAuthStore } from '../store/auth'
 import { ApiError, ProtocolError, type ApiResponse } from '../types/http'
 
@@ -230,7 +230,7 @@ function errorMessage(error: unknown): string {
 }
 
 function handleUnauthorized(): void {
-  useAccessStore(pinia).reset()
+  usePermissionStore(pinia).reset()
   const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`
   window.location.assign(`/login?redirect=${encodeURIComponent(redirect)}`)
 }

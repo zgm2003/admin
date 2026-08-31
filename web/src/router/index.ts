@@ -43,11 +43,11 @@ const routes: RouteRecordRaw[] = [
             {
                 path: "access/menus",
                 name: "access-menus",
-                component: () => import("../views/access/menus/index.vue"),
+                component: () => import("@/views/permission/menus/index.vue"),
                 meta: {
                     requiresAuth: true,
                     i18nKey: "navigation.accessMenus",
-                    requiredPermission: "rbac:menu:list",
+                    requiredPermission: "permission:menu:list",
                 },
             },
         ],

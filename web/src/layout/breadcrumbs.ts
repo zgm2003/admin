@@ -1,4 +1,4 @@
-import type { AccessMenuNode } from '../api/rbac/access'
+import type { PermissionMenuNode } from '../api/permission/permission'
 
 export interface HeaderBreadcrumb {
   path: string | null
@@ -6,13 +6,13 @@ export interface HeaderBreadcrumb {
 }
 
 interface SearchEntry {
-  node: AccessMenuNode
+  node: PermissionMenuNode
   ancestors: readonly HeaderBreadcrumb[]
 }
 
 export function resolveBreadcrumbs(
   routePath: string,
-  menuTree: readonly AccessMenuNode[],
+  menuTree: readonly PermissionMenuNode[],
 ): HeaderBreadcrumb[] | null {
   if (routePath === '/dashboard') {
     return [{ path: '/dashboard', i18nKey: 'navigation.dashboard' }]

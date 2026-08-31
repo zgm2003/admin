@@ -6,14 +6,14 @@ import { useI18n } from 'vue-i18n'
 
 import { changePassword, getAccountProfile, updateAccountProfile } from '../../../api/user/profile'
 import type { AccountProfile, ChangePasswordInput, UpdateAccountProfileInput } from '../../../api/user/profile'
-import { useAccessStore } from '../../../store/access'
+import { usePermissionStore } from '../../../store/permission.ts'
 import { useAuthStore } from '../../../store/auth'
 import { UpMedia } from '../../../components/UpMedia'
 
 const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
-const access = useAccessStore()
+const access = usePermissionStore()
 const canUpdateProfile = computed(() => access.hasPermission('account:profile:update'))
 const canUpdatePassword = computed(() => access.hasPermission('account:password:update'))
 const loading = ref(false)

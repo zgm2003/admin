@@ -12,7 +12,7 @@ import (
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/auth/state"
-	"admin/server/internal/module/rbac/role"
+	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/loginlog"
 	projectredis "admin/server/internal/redis"

@@ -472,7 +472,7 @@ Expected: FAIL because all seven production API modules still request `/api/v1` 
 
 - [ ] **Step 4: Change only the management API URL literals**
 
-In the seven production API files, replace the management prefix with `/api/admin/v1`. Preserve methods, DTOs, params, payloads and return values exactly. Do not edit `auth.ts`, `access.ts` or `utils/request.ts`.
+In the seven production API files, replace the management prefix with `/api/admin/v1`. Preserve methods, DTOs, params, payloads and return values exactly. Do not edit `auth.ts`, `permission.ts` or `utils/request.ts`.
 
 Update the current operation-log page fixture route to `/api/admin/v1/users/:id`; this fixture represents a new current event, not the backend legacy-history test.
 

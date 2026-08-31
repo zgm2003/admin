@@ -19,10 +19,10 @@ import (
 	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/auth/state"
 	"admin/server/internal/module/health"
-	"admin/server/internal/module/rbac/access"
-	"admin/server/internal/module/rbac/menu"
-	"admin/server/internal/module/rbac/role"
-	"admin/server/internal/module/rbac/state"
+	"admin/server/internal/module/permission/access"
+	"admin/server/internal/module/permission/menu"
+	"admin/server/internal/module/permission/role"
+	"admin/server/internal/module/permission/state"
 	"admin/server/internal/module/storage/cosconfig"
 	"admin/server/internal/module/storage/uploadrule"
 	"admin/server/internal/module/system/operationlog"
@@ -47,7 +47,7 @@ type routerDependencies struct {
 	Health            *health.Handler
 	Auth              *auth.Handler
 	AuthPlatform      *authplatform.Handler
-	Access            *access.Handler
+	Permission        *permission.Handler
 	Menu              *menu.Handler
 	Role              *role.Handler
 	User              *account.Handler
@@ -102,8 +102,8 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer queueClient.Close()
-	accessStateStore := accessstate.NewStore(redisClient)
-	accessInvalidator := accessstate.NewInvalidator(accessStateStore)
+	accessStateStore := permissionstate.NewStore(redisClient)
+	accessInvalidator := permissionstate.NewInvalidator(accessStateStore)
 	menuRepository := menu.NewRepository(postgres.GORM)
 	menuService := menu.NewService(menuRepository, accessInvalidator)
 
@@ -148,8 +148,8 @@ func run(logger *slog.Logger) error {
 	uploadRuleService := uploadrule.NewService(uploadrule.NewRepository(postgres.GORM), keys, cosClient)
 	loginLogService := loginlog.NewService(loginlog.NewRepository(postgres.GORM))
 	authService.SetLoginLogRecorder(loginLogService)
-	accessRepository := access.NewRepository(postgres.GORM)
-	accessService := access.NewService(accessRepository, accessStateStore, access.NewSnapshotCache(redisClient), access.NewLocalSnapshotCache(1024), logger)
+	permissionRepository := permission.NewRepository(postgres.GORM)
+	permissionService := permission.NewService(permissionRepository, accessStateStore, permission.NewSnapshotCache(redisClient), permission.NewLocalSnapshotCache(1024), logger)
 	operationLogRepository := operationlog.NewRepository(postgres.GORM)
 	operationLogService := operationlog.NewService(operationLogRepository)
 	operationLogEnqueuer := operationlog.NewQueueEnqueuer(queueClient)
@@ -161,7 +161,7 @@ func run(logger *slog.Logger) error {
 		Health:         health.NewHandler(healthService),
 		Auth:           auth.NewHandler(authService, settings.Auth.CookieSecure),
 		AuthPlatform:   authplatform.NewHandler(authPlatformService),
-		Access:         access.NewHandler(accessService),
+		Permission:     permission.NewHandler(permissionService),
 		Menu:           menu.NewHandler(menuService),
 		Role:           role.NewHandler(roleService),
 		User: account.NewHandler(userService, func(context *gin.Context) (int64, bool) {
@@ -184,7 +184,7 @@ func run(logger *slog.Logger) error {
 		AuthOrigin:   auth.RequireOrigin(settings.CORSOrigin),
 		Authenticate: authenticate,
 		RequirePermission: func(code string) gin.HandlerFunc {
-			return access.RequirePermission(accessService, code)
+			return permission.RequirePermission(permissionService, code)
 		},
 	})
 
@@ -232,7 +232,7 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	sharedRoutes.Use(authclient.Require())
 	auth.RegisterRoutes(sharedRoutes, dependencies.Auth, dependencies.AuthOrigin, dependencies.Authenticate)
 	authplatform.RegisterPublicRoutes(sharedRoutes, dependencies.AuthPlatform)
-	access.RegisterRoutes(sharedRoutes, dependencies.Access, dependencies.Authenticate)
+	permission.RegisterRoutes(sharedRoutes, dependencies.Permission, dependencies.Authenticate)
 
 	adminRoutes := router.Group("/api/admin/v1")
 	adminRoutes.Use(authclient.Require(), authclient.RequireAdminPlatform())

@@ -95,9 +95,9 @@ DTO、隐式兜底和历史兼容包袱。
 | --- | --- | --- | --- | --- | --- |
 | 用户与账号 | 用户管理 | `account:user:list` | `/account/users` | `account/users` | `web/src/views/account/users` |
 | 用户与账号 | 会话管理 | `auth:session:list` | `/account/sessions` | `account/sessions` | `web/src/views/account/sessions` |
-| 权限与认证 | 菜单管理 | `rbac:menu:list` | `/access/menus` | `access/menus` | `web/src/views/access/menus` |
-| 权限与认证 | 角色管理 | `rbac:role:list` | `/access/roles` | `access/roles` | `web/src/views/access/roles` |
-| 权限与认证 | 认证平台 | `auth:platform:list` | `/access/auth-platforms` | `access/auth-platforms` | `web/src/views/access/auth-platforms` |
+| 权限与认证 | 菜单管理 | `rbac:menu:list` | `/access/menus` | `access/menus` | `../../../web/src/views/permission/menus` |
+| 权限与认证 | 角色管理 | `rbac:role:list` | `/access/roles` | `access/roles` | `../../../web/src/views/permission/roles` |
+| 权限与认证 | 认证平台 | `auth:platform:list` | `/access/auth-platforms` | `access/auth-platforms` | `../../../web/src/views/permission/auth-platforms` |
 | 系统管理 | 操作日志 | `audit:operation-log:list` | `/system/operation-logs` | `system/operation-logs` | `web/src/views/system/operation-logs` |
 
 API URL 继续按资源本身命名，而不是按侧栏目录命名：

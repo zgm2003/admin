@@ -69,7 +69,7 @@
 - `web/src/views/auth/login/index.vue`：邮箱密码表单。
 - `web/src/views/auth/register/index.vue`：删除。
 - `web/src/views/account/users/index.vue`：展示、编辑手机号。
-- `web/src/views/access/auth-platforms/index.vue`：锁定内置 Admin 的注册开关。
+- `../../../web/src/views/permission/auth-platforms/index.vue`：锁定内置 Admin 的注册开关。
 - `web/src/i18n/messages/zh-CN.ts`、`en-US.ts`：认证、手机号和内置限制文案。
 
 ---
@@ -950,7 +950,7 @@ If committed, include a body stating that the Admin Web no longer exposes regist
 ### Task 7: 锁定认证平台页面的 Admin 注册开关
 
 **Files:**
-- Modify: `web/src/views/access/auth-platforms/index.vue`
+- Modify: `../../../web/src/views/permission/auth-platforms/index.vue`
 - Modify: `web/tests/views/access/auth-platforms/index.test.ts`
 - Modify: `web/src/i18n/messages/zh-CN.ts`
 - Modify: `web/src/i18n/messages/en-US.ts`

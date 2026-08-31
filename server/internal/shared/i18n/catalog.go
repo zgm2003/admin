@@ -28,9 +28,9 @@ const (
 	KeyUsernameConflict             MessageKey = "auth.usernameConflict"
 	KeyEmailConflict                MessageKey = "auth.emailConflict"
 	KeySuperAdminExists             MessageKey = "auth.superAdminExists"
-	KeyPermissionDenied             MessageKey = "access.permissionDenied"
-	KeyAccessSnapshotInvalid        MessageKey = "access.snapshotInvalid"
-	KeyAccessUpdating               MessageKey = "access.updating"
+	KeyPermissionDenied             MessageKey = "permission.permissionDenied"
+	KeyPermissionSnapshotInvalid    MessageKey = "permission.snapshotInvalid"
+	KeyAccessUpdating               MessageKey = "permission.updating"
 	KeyMenuTreeInvalid              MessageKey = "menu.treeInvalid"
 	KeyMenuNotFound                 MessageKey = "menu.notFound"
 	KeyMenuCodeConflict             MessageKey = "menu.codeConflict"
@@ -90,7 +90,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyEmailConflict:                "邮箱已存在",
 		KeySuperAdminExists:             "超级管理员已存在",
 		KeyPermissionDenied:             "无权执行 {{permission}}",
-		KeyAccessSnapshotInvalid:        "访问权限数据无效",
+		KeyPermissionSnapshotInvalid:    "访问权限数据无效",
 		KeyAccessUpdating:               "访问权限正在更新",
 		KeyMenuTreeInvalid:              "菜单树数据无效",
 		KeyMenuNotFound:                 "菜单不存在",
@@ -149,7 +149,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyEmailConflict:                "Email already exists",
 		KeySuperAdminExists:             "A super administrator already exists",
 		KeyPermissionDenied:             "Permission denied: {{permission}}",
-		KeyAccessSnapshotInvalid:        "Access permission data is invalid",
+		KeyPermissionSnapshotInvalid:    "Access permission data is invalid",
 		KeyAccessUpdating:               "Access permissions are updating",
 		KeyMenuTreeInvalid:              "Menu tree data is invalid",
 		KeyMenuNotFound:                 "Menu not found",

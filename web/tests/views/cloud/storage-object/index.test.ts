@@ -8,7 +8,7 @@ import { appI18n } from "@src/i18n";
 import { AppDialog } from "@src/components/AppDialog";
 import { AppTable } from "@src/components/AppTable";
 import { AppSearch } from "@src/components/AppSearch";
-import { useAccessStore } from "@src/store/access";
+import { usePermissionStore } from "@/store/permission.ts";
 import ObjectStorage from "@src/views/cloud/storage-object/index.vue";
 import {
   createCosConfig,
@@ -46,7 +46,7 @@ vi.mock("@src/api/storage/uploadrule", () => ({
 function mountPage(permissions: string[] = ["storage:object:list"]): VueWrapper {
   const pinia = createPinia();
   setActivePinia(pinia);
-  useAccessStore().permissionCodes = permissions;
+  usePermissionStore().permissionCodes = permissions;
   const wrapper = mount(ObjectStorage, {
     attachTo: document.body,
     global: { plugins: [ElementPlus, appI18n, pinia] },

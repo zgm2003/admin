@@ -52,8 +52,8 @@ BEGIN
     SELECT count(*) INTO n FROM system_operation_log l LEFT JOIN auth_platform p ON p.code = l.platform AND p.deleted_at IS NULL WHERE l.platform IS NOT NULL AND btrim(l.platform) <> '' AND p.id IS NULL;
     IF n > 0 THEN RAISE EXCEPTION 'unknown system_operation_log platform'; END IF;
   END IF;
-  IF to_regclass(current_schema() || '.rbac_role') IS NOT NULL THEN
-    SELECT count(*) INTO n FROM (SELECT 1 FROM rbac_role WHERE is_default = 1 AND deleted_at IS NULL GROUP BY 1 HAVING count(*) > 1) d;
+  IF to_regclass(current_schema() || '.permission_role') IS NOT NULL THEN
+    SELECT count(*) INTO n FROM (SELECT 1 FROM permission_role WHERE is_default = 1 AND deleted_at IS NULL GROUP BY 1 HAVING count(*) > 1) d;
     IF n > 0 THEN RAISE EXCEPTION 'duplicate active default role'; END IF;
   END IF;
   IF to_regclass(current_schema() || '.foundation_task') IS NOT NULL THEN
@@ -204,16 +204,16 @@ BEGIN
   END IF;
 END $$;
 
-INSERT INTO rbac_access_version (user_id, version, created_at, updated_at)
+INSERT INTO permission_access_version (user_id, version, created_at, updated_at)
 SELECT id, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM user_account u
-WHERE NOT EXISTS (SELECT 1 FROM rbac_access_version v WHERE v.user_id = u.id);
+WHERE NOT EXISTS (SELECT 1 FROM permission_access_version v WHERE v.user_id = u.id);
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_rbac_access_version_user' AND conrelid=to_regclass(current_schema() || '.rbac_access_version')) THEN
-    ALTER TABLE rbac_access_version ADD CONSTRAINT fk_rbac_access_version_user FOREIGN KEY (user_id) REFERENCES user_account(id) ON DELETE RESTRICT;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_permission_access_version_user' AND conrelid=to_regclass(current_schema() || '.permission_access_version')) THEN
+    ALTER TABLE permission_access_version ADD CONSTRAINT fk_permission_access_version_user FOREIGN KEY (user_id) REFERENCES user_account(id) ON DELETE RESTRICT;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='ck_rbac_access_version_version' AND conrelid=to_regclass(current_schema() || '.rbac_access_version')) THEN
-    ALTER TABLE rbac_access_version ADD CONSTRAINT ck_rbac_access_version_version CHECK (version >= 1);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='ck_permission_access_version_version' AND conrelid=to_regclass(current_schema() || '.permission_access_version')) THEN
+    ALTER TABLE permission_access_version ADD CONSTRAINT ck_permission_access_version_version CHECK (version >= 1);
   END IF;
 END $$;
 
@@ -230,14 +230,14 @@ CREATE INDEX IF NOT EXISTS ix_user_login_log_user_created_at ON user_login_log (
 CREATE INDEX IF NOT EXISTS ix_user_login_log_platform_created_at ON user_login_log (platform_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_user_login_log_account_created_at ON user_login_log (login_account, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_auth_platform_code_active ON auth_platform (code) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_role_code_active ON rbac_role (code) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_role_name_active ON rbac_role (name) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_role_default_active ON rbac_role (is_default) WHERE is_default = 1 AND deleted_at IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_user_role_active ON rbac_user_role (user_id, role_id) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_menu_platform_code_active ON rbac_menu (platform_id, code) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_menu_platform_path_active ON rbac_menu (platform_id, path) WHERE path IS NOT NULL AND deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS ix_rbac_menu_platform_parent_sort ON rbac_menu (platform_id, parent_id, sort_order, id);
-CREATE UNIQUE INDEX IF NOT EXISTS ux_rbac_role_menu_active ON rbac_role_menu (role_id, menu_id) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_permission_role_code_active ON permission_role (code) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_permission_role_name_active ON permission_role (name) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_permission_role_default_active ON permission_role (is_default) WHERE is_default = 1 AND deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_permission_user_role_active ON permission_user_role (user_id, role_id) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_permission_menu_platform_code_active ON permission_menu (platform_id, code) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_permission_menu_platform_path_active ON permission_menu (platform_id, path) WHERE path IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS ix_permission_menu_platform_parent_sort ON permission_menu (platform_id, parent_id, sort_order, id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_permission_role_menu_active ON permission_role_menu (role_id, menu_id) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_system_operation_log_event_id ON system_operation_log (event_id);
 CREATE INDEX IF NOT EXISTS ix_system_operation_log_request_id ON system_operation_log (request_id);
 CREATE INDEX IF NOT EXISTS ix_system_operation_log_created_at ON system_operation_log (created_at DESC);

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
-import { useAccessStore } from '@src/store/access'
+import { usePermissionStore } from '@/store/permission.ts'
 import { useAuthStore } from '@src/store/auth'
 import * as userAPI from '@src/api/user/account'
 import UserManagement from '@src/views/account/users/index.vue'
@@ -73,7 +73,7 @@ describe('user management', () => {
   it('edits the current username and phone, then synchronizes auth without loading access', async () => {
     const wrapper = mountPage(['account:user:update'])
     await flushPromises()
-    const access = useAccessStore()
+    const access = usePermissionStore()
     const loadAccess = vi.spyOn(access, 'load')
     await findAriaButton(wrapper, '编辑').trigger('click'); await flushPromises()
     const usernameInput = document.body.querySelector<HTMLInputElement>('.user-edit-dialog input:not([disabled])')
@@ -135,7 +135,7 @@ describe('user management', () => {
     await bodyButton('全选').trigger('click')
     await bodyButton('保存').trigger('click'); await flushPromises()
     expect(updateRoles).toHaveBeenCalledWith(7, { roleIds:[2,3] })
-    expect(vi.spyOn(useAccessStore(), 'load')).not.toHaveBeenCalled()
+    expect(vi.spyOn(usePermissionStore(), 'load')).not.toHaveBeenCalled()
   })
 
   it('does not change the super administrator selection when an ordinary actor selects all roles', async () => {
@@ -178,7 +178,7 @@ describe('user management', () => {
 
 function mountPage(permissions: string[], currentUserID = 7): VueWrapper {
   const pinia = createPinia(); setActivePinia(pinia)
-  useAccessStore(pinia).applySnapshot({ roleCodes:[], menuTree:[], permissionCodes:permissions })
+  usePermissionStore(pinia).applySnapshot({ roleCodes:[], menuTree:[], permissionCodes:permissions })
   useAuthStore(pinia).setAuthenticated({ userId:currentUserID, username:'alice', email:'alice@example.com', phone:'+86 138-0000-0000', avatar: '' })
   return mount(UserManagement, { attachTo:document.body, global:{ plugins:[pinia, appI18n, ElementPlus] } })
 }

@@ -12,9 +12,9 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/database/testschema"
 	authplatform "admin/server/internal/module/auth/platform"
-	"admin/server/internal/module/rbac/access"
-	"admin/server/internal/module/rbac/menu"
-	"admin/server/internal/module/rbac/role"
+	"admin/server/internal/module/permission/access"
+	"admin/server/internal/module/permission/menu"
+	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/user/account"
 	"admin/server/internal/shared/yesno"
 	"github.com/joho/godotenv"
@@ -69,8 +69,8 @@ func openRBACMigrationSchema(t *testing.T) (*gorm.DB, context.Context) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, ctx := testschema.Open(t, settings.PostgresDSN, "test_admin_rbac_baseline")
-	if err := database.AutoMigrate(ctx, db, &account.User{}, &authplatform.Platform{}, &role.Role{}, &role.UserRole{}, &menu.Menu{}, &menu.RoleMenu{}, &access.Version{}); err != nil {
+	db, ctx := testschema.Open(t, settings.PostgresDSN, "test_admin_permission_baseline")
+	if err := database.AutoMigrate(ctx, db, &account.User{}, &authplatform.Platform{}, &role.Role{}, &role.UserRole{}, &menu.Menu{}, &menu.RoleMenu{}, &permission.Version{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := authplatform.EnsureSchema(ctx, db); err != nil {
@@ -82,7 +82,7 @@ func openRBACMigrationSchema(t *testing.T) (*gorm.DB, context.Context) {
 	if err := menu.EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	if err := access.EnsureSchema(ctx, db); err != nil {
+	if err := permission.EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	return db, ctx
@@ -125,7 +125,7 @@ func createRBACMigrationFixture(t *testing.T, db *gorm.DB, ctx context.Context) 
 	if err := db.WithContext(ctx).Create(&menu.RoleMenu{RoleID: storedRole.ID, MenuID: canvasAction.ID}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(ctx).Create(&access.Version{UserID: user.ID, Version: 1}).Error; err != nil {
+	if err := db.WithContext(ctx).Create(&permission.Version{UserID: user.ID, Version: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
 	return rbacMigrationFixture{adminID: admin.ID, canvasID: canvas.ID, rootID: root.ID, pageID: canvasPage.ID, roleID: storedRole.ID, userID: user.ID}
@@ -166,7 +166,7 @@ func assertRBACMigrationState(t *testing.T, db *gorm.DB, ctx context.Context, fi
 		t.Fatalf("Canvas grant count = %d, error=%v", grantCount, err)
 	}
 	var version int64
-	if err := db.WithContext(ctx).Table("rbac_access_version").Where("user_id = ?", fixture.userID).Pluck("version", &version).Error; err != nil {
+	if err := db.WithContext(ctx).Table("permission_access_version").Where("user_id = ?", fixture.userID).Pluck("version", &version).Error; err != nil {
 		t.Fatal(err)
 	}
 	if version != 2 {

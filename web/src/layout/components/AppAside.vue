@@ -5,8 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { requestObjectURL } from '../../api/storage/upload'
-import { useAccessStore } from '../../store/access'
-import AccessMenuNode from './AccessMenuNode.vue'
+import { usePermissionStore } from '../../store/permission.ts'
+import PermissionMenuNode from './PermissionMenuNode.vue'
 
 const props = withDefaults(defineProps<{
   collapsed: boolean
@@ -29,7 +29,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const access = useAccessStore()
+const access = usePermissionStore()
 const avatarText = computed(() => props.username.slice(0, 1).toUpperCase() || 'A')
 const avatarURL = ref('')
 const canOpenProfile = computed(() => access.hasPermission('account:profile:list'))
@@ -91,7 +91,7 @@ function handleAccountCommand(command: string | number | object): void {
         <el-icon><Monitor /></el-icon>
         <template #title>{{ t('navigation.dashboard') }}</template>
       </el-menu-item>
-      <AccessMenuNode v-for="node in access.menuTree" :key="node.code" :node="node" />
+      <PermissionMenuNode v-for="node in access.menuTree" :key="node.code" :node="node" />
     </el-menu>
 
     <div class="app-aside__account">

@@ -60,24 +60,24 @@ BEGIN
   SELECT id INTO admin_id FROM auth_platform WHERE code = 'admin' AND deleted_at IS NULL AND is_enabled = 1;
   IF admin_id IS NULL THEN RAISE EXCEPTION 'active Admin platform is required'; END IF;
 
-  SELECT id INTO cloud_id FROM rbac_menu WHERE platform_id = admin_id AND code = 'cloud' AND deleted_at IS NULL;
+  SELECT id INTO cloud_id FROM permission_menu WHERE platform_id = admin_id AND code = 'cloud' AND deleted_at IS NULL;
   IF cloud_id IS NULL THEN
-    INSERT INTO rbac_menu (platform_id, menu_type, name, code, i18n_key, icon, sort_order, is_enabled, is_hidden, created_at, updated_at)
+    INSERT INTO permission_menu (platform_id, menu_type, name, code, i18n_key, icon, sort_order, is_enabled, is_hidden, created_at, updated_at)
     VALUES (admin_id, 'directory', '云服务', 'cloud', 'navigation.cloud', 'lucide:cloud', 80, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     RETURNING id INTO cloud_id;
   ELSE
-    IF EXISTS (SELECT 1 FROM rbac_menu WHERE id = cloud_id AND (menu_type <> 'directory' OR i18n_key <> 'navigation.cloud' OR icon <> 'lucide:cloud' OR is_hidden <> 0)) THEN
+    IF EXISTS (SELECT 1 FROM permission_menu WHERE id = cloud_id AND (menu_type <> 'directory' OR i18n_key <> 'navigation.cloud' OR icon <> 'lucide:cloud' OR is_hidden <> 0)) THEN
       RAISE EXCEPTION 'cloud menu shape mismatch';
     END IF;
   END IF;
 
-  SELECT id INTO object_id FROM rbac_menu WHERE platform_id = admin_id AND code = 'storage:object:list' AND deleted_at IS NULL;
+  SELECT id INTO object_id FROM permission_menu WHERE platform_id = admin_id AND code = 'storage:object:list' AND deleted_at IS NULL;
   IF object_id IS NULL THEN
-    INSERT INTO rbac_menu (platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden, created_at, updated_at)
+    INSERT INTO permission_menu (platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden, created_at, updated_at)
     VALUES (admin_id, cloud_id, 'page', '对象存储', 'storage:object:list', 'navigation.storageObject', '/cloud/object-storage', 'storage/object', 'lucide:cloud-upload', 10, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     RETURNING id INTO object_id;
   ELSE
-    IF EXISTS (SELECT 1 FROM rbac_menu WHERE id = object_id AND (parent_id IS DISTINCT FROM cloud_id OR menu_type <> 'page' OR i18n_key <> 'navigation.storageObject' OR path <> '/cloud/object-storage' OR component_path <> 'storage/object' OR icon <> 'lucide:cloud-upload' OR is_hidden <> 0)) THEN
+    IF EXISTS (SELECT 1 FROM permission_menu WHERE id = object_id AND (parent_id IS DISTINCT FROM cloud_id OR menu_type <> 'page' OR i18n_key <> 'navigation.storageObject' OR path <> '/cloud/object-storage' OR component_path <> 'storage/object' OR icon <> 'lucide:cloud-upload' OR is_hidden <> 0)) THEN
       RAISE EXCEPTION 'storage object menu shape mismatch';
     END IF;
   END IF;
@@ -99,11 +99,11 @@ BEGIN
       WHEN 'storage:object:upload' THEN '上传对象'
       ELSE action_code
     END;
-    IF NOT EXISTS (SELECT 1 FROM rbac_menu WHERE platform_id = admin_id AND code = action_code AND deleted_at IS NULL) THEN
-      INSERT INTO rbac_menu (platform_id, parent_id, menu_type, name, code, sort_order, is_enabled, is_hidden, created_at, updated_at)
+    IF NOT EXISTS (SELECT 1 FROM permission_menu WHERE platform_id = admin_id AND code = action_code AND deleted_at IS NULL) THEN
+      INSERT INTO permission_menu (platform_id, parent_id, menu_type, name, code, sort_order, is_enabled, is_hidden, created_at, updated_at)
       VALUES (admin_id, object_id, 'action', action_name, action_code, 100, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
     ELSE
-      UPDATE rbac_menu
+      UPDATE permission_menu
       SET name = action_name, parent_id = object_id, menu_type = 'action', is_enabled = 1, is_hidden = 1, updated_at = CURRENT_TIMESTAMP
       WHERE platform_id = admin_id AND code = action_code AND deleted_at IS NULL;
     END IF;

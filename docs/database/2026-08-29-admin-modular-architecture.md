@@ -9,7 +9,7 @@ psql "$POSTGRES_DSN" -v ON_ERROR_STOP=1 -f docs/database/2026-08-29-admin-modula
 ```
 
 脚本使用单一事务；任何前置冲突或映射失败都会抛出异常并自动回滚。API/Worker 不会执行 migration。
-SQL 成功后，在维护窗口内仅删除本项目的 Redis 键 `authz:access-state:*` 和 `authz:access:*`，使 RBAC 三层缓存重新从数据库构建；不得使用 `FLUSHDB`。然后再启动 API/Worker。
+SQL 成功后，在维护窗口内仅删除本项目的 Redis 键 `authz:permission-state:*` 和 `authz:permission:*`，使 RBAC 三层缓存重新从数据库构建；不得使用 `FLUSHDB`。然后再启动 API/Worker。
 
 ## 回滚
 

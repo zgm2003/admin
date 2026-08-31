@@ -3,7 +3,7 @@ import ElementPlus from 'element-plus'
 import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { AccessMenuNode } from '@src/api/rbac/access'
+import type { PermissionMenuNode } from '@src/api/permission/permission'
 import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
 import RouteTabs from '@src/layout/components/RouteTabs.vue'
@@ -201,7 +201,7 @@ describe('RouteTabs', () => {
   })
 })
 
-async function mountTabs(initialPath: string, menuTree: AccessMenuNode[] = accessTree()) {
+async function mountTabs(initialPath: string, menuTree: PermissionMenuNode[] = accessTree()) {
   const router = createRouter({ history: createMemoryHistory(), routes })
   await router.push(initialPath)
   await router.isReady()
@@ -213,13 +213,13 @@ async function mountTabs(initialPath: string, menuTree: AccessMenuNode[] = acces
   return { wrapper, router }
 }
 
-function accessTree(): AccessMenuNode[] {
+function accessTree(): PermissionMenuNode[] {
 	return [
 		directory('account', 'navigation.account', page(
 			'account:user:list', '/account/users', 'account/users', 'navigation.accountUsers',
 		)),
 		directory('access', 'navigation.access', page(
-			'rbac:role:list', '/access/roles', 'access/roles', 'navigation.accessRoles',
+			'permission:role:list', '/access/roles', 'access/roles', 'navigation.accessRoles',
 		)),
 		directory('system', 'navigation.system', page(
 			'system:operation-log:list', '/system/operation-logs', 'system/operation-logs', 'navigation.systemOperationLogs',
@@ -227,7 +227,7 @@ function accessTree(): AccessMenuNode[] {
 	]
 }
 
-function directory(code: string, i18nKey: string, child: AccessMenuNode): AccessMenuNode {
+function directory(code: string, i18nKey: string, child: PermissionMenuNode): PermissionMenuNode {
 	return {
 		code,
 		menuType: 'directory',
@@ -245,7 +245,7 @@ function page(
 	path: string,
 	componentPath: string,
 	i18nKey: string,
-): AccessMenuNode {
+): PermissionMenuNode {
 	return {
 		code,
 		menuType: 'page',

@@ -7,7 +7,7 @@ import { nextTick } from 'vue'
 import * as sessionAPI from '@src/api/user/session'
 import type { SessionItem } from '@src/api/user/session'
 import { appI18n, setLocale } from '@src/i18n'
-import { useAccessStore } from '@src/store/access'
+import { usePermissionStore } from '@/store/permission.ts'
 import SessionManagement from '@src/views/account/sessions/index.vue'
 
 vi.mock('@src/api/user/session', () => ({
@@ -122,7 +122,7 @@ describe('session management', () => {
 function mountPage(permissions: string[]): VueWrapper {
 	const pinia = createPinia()
 	setActivePinia(pinia)
-	useAccessStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: permissions })
+	usePermissionStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: permissions })
 	return mount(SessionManagement, { attachTo: document.body, global: { plugins: [pinia, appI18n, ElementPlus] } })
 }
 

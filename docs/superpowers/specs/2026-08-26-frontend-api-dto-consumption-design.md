@@ -168,7 +168,7 @@ user
 1. 调整 `request.ts` 的泛型返回说明和定向测试，确认成功响应返回 `data`；
 2. 迁移 `user.ts`，作为完整 CRUD 样板；
 3. 迁移 `role.ts`、`session.ts`、`auth-platform.ts` 和 `operation-log.ts`；
-4. 迁移 `menu.ts`、`access.ts` 和 `auth.ts`；
+4. 迁移 `menu.ts`、`permission.ts` 和 `auth.ts`；
 5. 更新页面、Store、路由和测试中的类型 import；
 6. 删除无引用的业务 contract 文件和 parser 测试；
 7. 执行旧 parser、`request<unknown>` 和旧 envelope 字段扫描。

@@ -14,8 +14,8 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/module/auth/login"
 	authplatform "admin/server/internal/module/auth/platform"
-	"admin/server/internal/module/rbac/access"
-	"admin/server/internal/module/rbac/role"
+	"admin/server/internal/module/permission/access"
+	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/profile"
 	"admin/server/internal/shared/yesno"
@@ -46,7 +46,7 @@ func TestCreateWithRolePersistsUserAndRoleAtomically(t *testing.T) {
 	if err := tx.WithContext(ctx).Where("user_id = ? AND role_id = ?", created.ID, defaultRole.ID).Take(&relation).Error; err != nil {
 		t.Fatalf("find user role: %v", err)
 	}
-	var version access.Version
+	var version permission.Version
 	if err := tx.WithContext(ctx).Take(&version, "user_id = ?", created.ID).Error; err != nil {
 		t.Fatalf("find access version: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestCreateWithRoleRollsBackAfterRelationshipFailure(t *testing.T) {
 		END;
 		$$ LANGUAGE plpgsql;
 		CREATE TRIGGER test_reject_user_role_insert
-		BEFORE INSERT ON rbac_user_role
+		BEFORE INSERT ON permission_user_role
 		FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_user_role_insert();`).Error; err != nil {
 		t.Fatalf("create rejection trigger: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestCreateWithRoleRollsBackAfterRelationshipFailure(t *testing.T) {
 	var orphanVersions int64
 	if err := tx.WithContext(ctx).Raw(`
 		SELECT count(*)
-		FROM rbac_access_version AS access_version
+		FROM permission_access_version AS access_version
 		LEFT JOIN user_account AS app_user ON app_user.id = access_version.user_id
 		WHERE app_user.id IS NULL`).Scan(&orphanVersions).Error; err != nil {
 		t.Fatal(err)
@@ -724,7 +724,7 @@ func createListedUser(t *testing.T, tx *gorm.DB, ctx context.Context, username, 
 		}
 		created.IsEnabled = yesno.No
 	}
-	if err := tx.WithContext(ctx).Create(&access.Version{
+	if err := tx.WithContext(ctx).Create(&permission.Version{
 		UserID: created.ID, Version: 1, CreatedAt: created.CreatedAt, UpdatedAt: created.UpdatedAt,
 	}).Error; err != nil {
 		t.Fatal(err)
@@ -790,7 +790,7 @@ func openUserDatabase(t *testing.T) (*gorm.DB, context.Context, *role.Repository
 		_ = root.GORM.WithContext(cleanupCtx).Exec("DROP SCHEMA IF EXISTS " + schema + " CASCADE").Error
 		_ = root.Close()
 	})
-	if err := database.AutoMigrate(ctx, db, &account.User{}, &profile.Profile{}, &role.Role{}, &role.UserRole{}, &authplatform.Platform{}, &auth.Session{}, &access.Version{}); err != nil {
+	if err := database.AutoMigrate(ctx, db, &account.User{}, &profile.Profile{}, &role.Role{}, &role.UserRole{}, &authplatform.Platform{}, &auth.Session{}, &permission.Version{}); err != nil {
 		t.Fatalf("AutoMigrate: %v", err)
 	}
 	if err := authplatform.EnsureSchema(ctx, db); err != nil {
@@ -814,7 +814,7 @@ func openUserDatabase(t *testing.T) (*gorm.DB, context.Context, *role.Repository
 	if err := role.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("Ensure role schema: %v", err)
 	}
-	if err := access.EnsureSchema(ctx, db); err != nil {
+	if err := permission.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("Ensure access schema: %v", err)
 	}
 	roleRepository := role.NewRepository(db)

@@ -7,7 +7,7 @@ import { logout } from '@src/api/auth/login'
 import { YesNo } from '@src/enums/yes-no'
 import { appI18n, setLocale } from '@src/i18n'
 import { pinia } from '@src/store'
-import { useAccessStore } from '@src/store/access'
+import { usePermissionStore } from '@/store/permission.ts'
 import { useAuthStore } from '@src/store/auth'
 import { useUIPreferencesStore } from '@src/store/ui-preferences'
 import Layout from '@src/layout/index.vue'
@@ -25,7 +25,7 @@ describe('admin layout', () => {
     document.documentElement.classList.remove('dark')
     document.documentElement.style.removeProperty('color-scheme')
     setLocale('zh-CN')
-    useAccessStore(pinia).reset()
+    usePermissionStore(pinia).reset()
     useAuthStore(pinia).$reset()
     useUIPreferencesStore(pinia).initializeSafely()
     useAuthStore(pinia).setCredential({ accessToken: 'jwt', expiresIn: 900 })
@@ -120,7 +120,7 @@ describe('admin layout', () => {
   })
 
   it('renders directory and leaf breadcrumbs from the RBAC menu tree', async () => {
-    useAccessStore(pinia).applySnapshot({
+    usePermissionStore(pinia).applySnapshot({
       roleCodes: [],
       menuTree: [{
 				code: 'account',
@@ -192,7 +192,7 @@ describe('admin layout', () => {
     localStorage.setItem('admin:ui-preferences', '{broken')
     uiPreferences.initializeSafely()
     const { wrapper } = await mountLayout('/system/missing')
-    useAccessStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: [] })
+    usePermissionStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: [] })
     await wrapper.vm.$nextTick()
 
     expect(wrapper.find('[data-testid="preference-error"]').exists()).toBe(true)
@@ -200,7 +200,7 @@ describe('admin layout', () => {
   })
 
   it('opens a Drawer instead of collapsing on mobile', async () => {
-    useAccessStore(pinia).applySnapshot({
+    usePermissionStore(pinia).applySnapshot({
       roleCodes: [],
       menuTree: [{
         code: 'account:user:list',
@@ -224,12 +224,12 @@ describe('admin layout', () => {
     expect(drawer.props('modelValue')).toBe(true)
     const asides = wrapper.findAllComponents({ name: 'AppAside' })
     expect(asides).toHaveLength(2)
-    expect(asides.every((aside) => aside.findAllComponents({ name: 'AccessMenuNode' }).length === 1)).toBe(true)
+    expect(asides.every((aside) => aside.findAllComponents({ name: 'PermissionMenuNode' }).length === 1)).toBe(true)
     expect(asides.every((aside) => aside.attributes('data-collapsed') === 'false')).toBe(true)
   })
 
   it('keeps RouterView mounted and shows one non-closable access error', async () => {
-    useAccessStore(pinia).fail(new Error('权限快照加载失败'))
+    usePermissionStore(pinia).fail(new Error('权限快照加载失败'))
     const { wrapper } = await mountLayout()
 
     expect(wrapper.get('[data-testid="layout-content"]').text()).toContain('dashboard content')
@@ -239,7 +239,7 @@ describe('admin layout', () => {
   })
 
   it('logs out, clears access and memory auth, and routes to Login', async () => {
-    useAccessStore(pinia).applySnapshot({
+    usePermissionStore(pinia).applySnapshot({
       roleCodes: ['admin'],
       menuTree: [],
       permissionCodes: ['account:user:list'],
@@ -250,9 +250,9 @@ describe('admin layout', () => {
     getPopupItem('aside-account-logout').click()
     await flushPromises()
     expect(logoutMock).toHaveBeenCalledOnce()
-    expect(useAccessStore(pinia).status).toBe('idle')
-    expect(useAccessStore(pinia).roleCodes).toEqual([])
-    expect(useAccessStore(pinia).permissionCodes).toEqual([])
+    expect(usePermissionStore(pinia).status).toBe('idle')
+    expect(usePermissionStore(pinia).roleCodes).toEqual([])
+    expect(usePermissionStore(pinia).permissionCodes).toEqual([])
     expect(useAuthStore(pinia).status).toBe('anonymous')
     expect(router.currentRoute.value.path).toBe('/login')
   })

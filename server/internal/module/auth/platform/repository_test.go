@@ -12,7 +12,7 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/auth/platform"
-	"admin/server/internal/module/rbac/menu"
+	"admin/server/internal/module/permission/menu"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"

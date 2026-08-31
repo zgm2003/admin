@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"admin/server/internal/module/rbac/role"
-	"admin/server/internal/module/rbac/state"
+	"admin/server/internal/module/permission/role"
+	"admin/server/internal/module/permission/state"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
@@ -76,17 +76,17 @@ func (r *Repository) LockUserWriteTable(ctx context.Context) error {
 	return nil
 }
 
-func (r *Repository) FindAccessVersion(ctx context.Context, userID int64) (accessstate.Version, error) {
-	var version accessstate.Version
+func (r *Repository) FindAccessVersion(ctx context.Context, userID int64) (permissionstate.Version, error) {
+	var version permissionstate.Version
 	result := r.db.WithContext(ctx).Raw(`
 		SELECT user_id, version
-		FROM rbac_access_version
+		FROM permission_access_version
 		WHERE user_id = ?`, userID).Scan(&version)
 	if result.Error != nil {
-		return accessstate.Version{}, fmt.Errorf("find user access version: %w", result.Error)
+		return permissionstate.Version{}, fmt.Errorf("find user access version: %w", result.Error)
 	}
 	if result.RowsAffected != 1 || version.UserID != userID || version.Version < 1 {
-		return accessstate.Version{}, fmt.Errorf("find user access version: %w", gorm.ErrRecordNotFound)
+		return permissionstate.Version{}, fmt.Errorf("find user access version: %w", gorm.ErrRecordNotFound)
 	}
 	return version, nil
 }
@@ -95,7 +95,7 @@ func (r *Repository) LockAccessVersion(ctx context.Context, userID int64) (int64
 	var version int64
 	result := r.db.WithContext(ctx).Raw(`
 		SELECT version
-		FROM rbac_access_version
+		FROM permission_access_version
 		WHERE user_id = ?
 		FOR UPDATE`, userID).Scan(&version)
 	if result.Error != nil {
@@ -110,7 +110,7 @@ func (r *Repository) LockAccessVersion(ctx context.Context, userID int64) (int64
 func (r *Repository) IncrementAccessVersion(ctx context.Context, userID int64, now time.Time) (int64, error) {
 	var version int64
 	result := r.db.WithContext(ctx).Raw(`
-		UPDATE rbac_access_version
+		UPDATE permission_access_version
 		SET version = version + 1, updated_at = ?
 		WHERE user_id = ?
 		RETURNING version`, now.UTC(), userID).Scan(&version)
@@ -168,10 +168,10 @@ func (r *Repository) IsEffectiveSuperAdmin(ctx context.Context, userID, superAdm
 		SELECT EXISTS (
 			SELECT 1
 			FROM user_account AS app_user
-			JOIN rbac_user_role AS user_role
+			JOIN permission_user_role AS user_role
 			  ON user_role.user_id = app_user.id
 			 AND user_role.deleted_at IS NULL
-			JOIN rbac_role AS app_role
+			JOIN permission_role AS app_role
 			  ON app_role.id = user_role.role_id
 			 AND app_role.deleted_at IS NULL
 			 AND app_role.is_enabled = ?
@@ -189,7 +189,7 @@ func (r *Repository) HasActiveRole(ctx context.Context, userID, roleID int64) (b
 	var exists bool
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT EXISTS (
-			SELECT 1 FROM rbac_user_role
+			SELECT 1 FROM permission_user_role
 			WHERE user_id = ? AND role_id = ? AND deleted_at IS NULL
 		)`, userID, roleID).Scan(&exists).Error; err != nil {
 		return false, fmt.Errorf("check active user role: %w", err)
@@ -241,8 +241,8 @@ func (r *Repository) LockUserRoles(ctx context.Context, userID int64) ([]role.Us
 func (r *Repository) CountEffectiveSuperAdmins(ctx context.Context, superAdminRoleID int64) (int64, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Table("user_account AS app_user").
-		Joins("JOIN rbac_user_role AS user_role ON user_role.user_id = app_user.id AND user_role.deleted_at IS NULL").
-		Joins("JOIN rbac_role AS app_role ON app_role.id = user_role.role_id AND app_role.deleted_at IS NULL AND app_role.is_enabled = ?", yesno.Yes).
+		Joins("JOIN permission_user_role AS user_role ON user_role.user_id = app_user.id AND user_role.deleted_at IS NULL").
+		Joins("JOIN permission_role AS app_role ON app_role.id = user_role.role_id AND app_role.deleted_at IS NULL AND app_role.is_enabled = ?", yesno.Yes).
 		Where("app_user.deleted_at IS NULL AND app_user.is_enabled = ? AND app_role.id = ?", yesno.Yes, superAdminRoleID).
 		Distinct("app_user.id").Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("count effective super administrators: %w", err)
@@ -291,7 +291,7 @@ func (r *Repository) SoftDeleteUserRoleIDs(ctx context.Context, ids []int64, del
 	if len(ids) == 0 {
 		return nil
 	}
-	if err := r.db.WithContext(ctx).Table("rbac_user_role").Where("id IN ? AND deleted_at IS NULL", ids).Updates(map[string]any{
+	if err := r.db.WithContext(ctx).Table("permission_user_role").Where("id IN ? AND deleted_at IS NULL", ids).Updates(map[string]any{
 		"updated_at": deletedAt.UTC(), "deleted_at": deletedAt.UTC(),
 	}).Error; err != nil {
 		return fmt.Errorf("soft delete user roles: %w", err)
@@ -362,7 +362,7 @@ func (r *Repository) CreateWithRole(ctx context.Context, input CreateInput) (Use
 			return fmt.Errorf("create user role relationship: %w", err)
 		}
 		if err := tx.Exec(`
-			INSERT INTO rbac_access_version (user_id, version, created_at, updated_at)
+			INSERT INTO permission_access_version (user_id, version, created_at, updated_at)
 			VALUES (?, 1, ?, ?)`, created.ID, now, now).Error; err != nil {
 			return fmt.Errorf("create user access version: %w", err)
 		}
@@ -437,8 +437,8 @@ func (r *Repository) FindCurrent(ctx context.Context, userID int64) (Current, er
 		  AND app_user.is_enabled = ?
 		  AND EXISTS (
 			SELECT 1
-			FROM rbac_user_role AS user_role
-			JOIN rbac_role AS app_role
+			FROM permission_user_role AS user_role
+			JOIN permission_role AS app_role
 			  ON app_role.id = user_role.role_id
 			 AND app_role.deleted_at IS NULL
 			 AND app_role.is_enabled = ?
@@ -507,11 +507,11 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 		RoleDeletedAt  sql.NullTime
 	}
 	rows := make([]relationshipRow, 0)
-	if err := r.db.WithContext(ctx).Table("rbac_user_role AS user_role").
+	if err := r.db.WithContext(ctx).Table("permission_user_role AS user_role").
 		Select(`user_role.user_id, user_role.id AS relationship_id,
 			app_role.id AS role_id, app_role.code, app_role.name,
 			app_role.is_enabled, app_role.deleted_at AS role_deleted_at`).
-		Joins("LEFT JOIN rbac_role AS app_role ON app_role.id = user_role.role_id").
+		Joins("LEFT JOIN permission_role AS app_role ON app_role.id = user_role.role_id").
 		Where("user_role.user_id IN ? AND user_role.deleted_at IS NULL", userIDs).
 		Order("user_role.user_id ASC, app_role.code ASC, app_role.id ASC, user_role.id ASC").
 		Scan(&rows).Error; err != nil {
@@ -546,7 +546,7 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 
 func (r *Repository) FindRoleOptions(ctx context.Context) ([]RoleSummary, error) {
 	options := make([]RoleSummary, 0)
-	if err := r.db.WithContext(ctx).Table("rbac_role AS app_role").
+	if err := r.db.WithContext(ctx).Table("permission_role AS app_role").
 		Select("app_role.id, app_role.code, app_role.name, app_role.is_enabled").
 		Where("app_role.deleted_at IS NULL").
 		Order("app_role.code ASC, app_role.id ASC").
@@ -576,7 +576,7 @@ func applyUserListFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 	}
 	if query.RoleID != nil {
 		db = db.Where(`EXISTS (
-			SELECT 1 FROM rbac_user_role AS user_role
+			SELECT 1 FROM permission_user_role AS user_role
 			WHERE user_role.user_id = app_user.id
 			  AND user_role.role_id = ?
 			  AND user_role.deleted_at IS NULL

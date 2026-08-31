@@ -15,9 +15,9 @@ import (
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/health"
-	"admin/server/internal/module/rbac/access"
-	"admin/server/internal/module/rbac/menu"
-	"admin/server/internal/module/rbac/role"
+	"admin/server/internal/module/permission/access"
+	"admin/server/internal/module/permission/menu"
+	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/storage/cosconfig"
 	"admin/server/internal/module/storage/uploadrule"
 	"admin/server/internal/module/system/operationlog"
@@ -46,8 +46,8 @@ func (e *recordingOperationEnqueuer) Enqueue(_ context.Context, payload operatio
 
 type apiAccessService struct{}
 
-func (apiAccessService) Current(context.Context, auth.Identity) (access.Snapshot, error) {
-	return access.Snapshot{RoleCodes: []string{}, MenuTree: []access.MenuNode{}, PermissionCodes: []string{}}, nil
+func (apiAccessService) Current(context.Context, auth.Identity) (permission.Snapshot, error) {
+	return permission.Snapshot{RoleCodes: []string{}, MenuTree: []permission.MenuNode{}, PermissionCodes: []string{}}, nil
 }
 
 type apiMenuService struct{}
@@ -90,7 +90,7 @@ func TestBuildRouterDoesNotRegisterExampleTask(t *testing.T) {
 		Health:            health.NewHandler(readyService{}),
 		Auth:              auth.NewHandler(apiAuthService{}, false),
 		AuthPlatform:      authplatform.NewHandler(apiAuthPlatformService{}),
-		Access:            access.NewHandler(apiAccessService{}),
+		Permission:        permission.NewHandler(apiAccessService{}),
 		Menu:              menu.NewHandler(apiMenuService{}),
 		Role:              role.NewHandler(apiRoleService{}),
 		User:              account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
@@ -259,7 +259,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		Health:       health.NewHandler(readyService{}),
 		Auth:         auth.NewHandler(apiAuthService{}, false),
 		AuthPlatform: authplatform.NewHandler(apiAuthPlatformService{}),
-		Access:       access.NewHandler(apiAccessService{}),
+		Permission:   permission.NewHandler(apiAccessService{}),
 		Menu:         menu.NewHandler(apiMenuService{}),
 		Role:         role.NewHandler(apiRoleService{}),
 		User:         account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
@@ -428,7 +428,7 @@ func TestRunDoesNotMutatePersistentStateDuringStartup(t *testing.T) {
 		"role.EnsureSchema(",
 		"auth.EnsureSchema(",
 		"menu.EnsureSchema(",
-		"access.EnsureSchema(",
+		"permission.EnsureSchema(",
 		"operationlog.EnsureSchema(",
 		"authplatform.ClearBuiltinPolicies(",
 		"auth.CleanupLegacySessionPointers(",

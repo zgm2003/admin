@@ -1010,7 +1010,7 @@ views/access/menus/index.vue
 
 ### 当前需要特别注意的差距
 
-最近调整后，`menu.ts`、`access.ts`、`auth.ts` 等多个业务 API 直接调用 `request<DTO>()`。这提供 TypeScript 编译期类型，但大多数返回值没有在业务 API 层从 `unknown` 做运行时字段校验。
+最近调整后，`menu.ts`、`permission.ts`、`auth.ts` 等多个业务 API 直接调用 `request<DTO>()`。这提供 TypeScript 编译期类型，但大多数返回值没有在业务 API 层从 `unknown` 做运行时字段校验。
 
 也就是说，下面的泛型不会验证服务器真的返回了 `{ id: number }`：
 

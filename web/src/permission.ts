@@ -2,9 +2,9 @@ import type { Router } from 'vue-router'
 
 import { getCurrentUser, refresh } from './api/auth/login'
 import { appI18n } from './i18n'
-import { registerAccessRoutes } from './router/access-routes'
+import { registerPermissionRoutes } from './router/permission-routes'
 import { pinia } from './store'
-import { useAccessStore } from './store/access'
+import { usePermissionStore } from './store/permission.ts'
 import { useAuthStore } from './store/auth'
 import { ApiError, ProtocolError } from './types/http'
 
@@ -16,7 +16,7 @@ export function installPermissionGuard(router: Router): void {
       removeAccessRoutes()
       removeAccessRoutes = null
     }
-    useAccessStore(pinia).reset()
+    usePermissionStore(pinia).reset()
   }
 
   router.beforeEach(async (to) => {
@@ -24,7 +24,7 @@ export function installPermissionGuard(router: Router): void {
       throw new Error(`Route ${to.fullPath} must declare requiresAuth`)
     }
     const auth = useAuthStore(pinia)
-    const access = useAccessStore(pinia)
+    const access = usePermissionStore(pinia)
     const isPublic = to.matched.length > 0 && to.matched.every((route) => route.meta.requiresAuth === false)
     if (isPublic) {
       if (auth.status === 'anonymous') {
@@ -68,7 +68,7 @@ export function installPermissionGuard(router: Router): void {
 
     if (!accessFailed && access.status === 'ready' && removeAccessRoutes === null) {
       try {
-        removeAccessRoutes = registerAccessRoutes(router, access.menuTree)
+        removeAccessRoutes = registerPermissionRoutes(router, access.menuTree)
       } catch (error: unknown) {
         access.fail(error)
         accessFailed = true

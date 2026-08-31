@@ -119,7 +119,7 @@ func (r *Repository) FindActiveSessionUsers(ctx context.Context, platform string
 
 func (r *Repository) HasActiveMenus(ctx context.Context, platformID int64) (bool, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).Table("rbac_menu").
+	if err := r.db.WithContext(ctx).Table("permission_menu").
 		Where("platform_id = ? AND deleted_at IS NULL", platformID).
 		Count(&count).Error; err != nil {
 		return false, fmt.Errorf("inspect authentication platform active menus: %w", err)
