@@ -140,6 +140,13 @@ func assertRBACMigrationState(t *testing.T, db *gorm.DB, ctx context.Context, fi
 	if profilePage.PlatformID != fixture.adminID || profilePage.ParentID == nil || *profilePage.ParentID != fixture.rootID || profilePage.Path == nil || *profilePage.Path != "/account/profile" || profilePage.IsHidden != yesno.Yes {
 		t.Fatalf("profile page = %+v", profilePage)
 	}
+	var loginLogPage menu.Menu
+	if err := db.WithContext(ctx).Where("code = ?", "account:user:loginlog:list").Take(&loginLogPage).Error; err != nil {
+		t.Fatal(err)
+	}
+	if loginLogPage.PlatformID != fixture.adminID || loginLogPage.ParentID == nil || *loginLogPage.ParentID != fixture.rootID || loginLogPage.MenuType != menu.TypePage || loginLogPage.Path == nil || *loginLogPage.Path != "/account/login-logs" || loginLogPage.ComponentPath == nil || *loginLogPage.ComponentPath != "user/login-logs" || loginLogPage.IsHidden != yesno.No {
+		t.Fatalf("login log page = %+v", loginLogPage)
+	}
 	var actions []menu.Menu
 	if err := db.WithContext(ctx).Where("parent_id = ? AND code IN ?", profilePage.ID, []string{"account:profile:update", "account:password:update"}).Order("code").Find(&actions).Error; err != nil {
 		t.Fatal(err)

@@ -31,7 +31,7 @@ const componentPathMap: Readonly<Record<string, string>> = {
 	'account/users': 'account/users',
 	'account/profile': 'account/profile',
 	'account/sessions': 'account/sessions',
-	'user/login-logs': 'system/login-logs',
+	'user/login-logs': 'account/login-logs',
 	'access/menus': 'access/menus',
 	'access/roles': 'access/roles',
 	'access/auth-platforms': 'access/auth-platforms',

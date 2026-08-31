@@ -10,7 +10,7 @@ import type { TableColumn, TablePaginationState } from '../../../components/AppT
 import { AppSearch } from '../../../components/AppSearch'
 import type { SearchField, SearchFormModel } from '../../../components/AppSearch'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 
 const rows = ref<OperationLogItem[]>([])
 const total = ref(0)
@@ -46,7 +46,7 @@ const tableColumns = computed<TableColumn<OperationLogItem>[]>(() => [
   { key: 'method', prop: 'id', label: t('operationLog.column.method'), width: 90 },
   { prop: 'action', label: t('operationLog.column.action'), minWidth: 160, overflowTooltip: true },
   { prop: 'route', label: t('operationLog.column.route'), minWidth: 220, overflowTooltip: true },
-  { key: 'user', prop: 'id', label: t('operationLog.column.user'), width: 100 },
+  { key: 'user', prop: 'id', label: t('operationLog.column.user'), minWidth: 150, overflowTooltip: true },
   { prop: 'clientIp', label: t('operationLog.column.ip'), minWidth: 130 },
   { key: 'status', prop: 'id', label: t('operationLog.column.status'), width: 100 },
   { key: 'latency', prop: 'id', label: t('operationLog.column.latency'), width: 100 },
@@ -138,6 +138,11 @@ function formatJSON(value: unknown): string {
 	return JSON.stringify(value, null, 2) ?? '-'
 }
 
+function actionLabel(actionCode: string): string {
+	const key = `operationLog.actions.${actionCode}`
+	return te(key) ? t(key) : actionCode
+}
+
 function methodTagType(method: string): 'primary' | 'success' | 'warning' | 'danger' | 'info' {
 	if (method === 'POST') return 'success'
 	if (method === 'PUT' || method === 'PATCH') return 'warning'
@@ -194,7 +199,8 @@ onMounted(() => { void loadLogs() })
 					</div>
 				</template>
 				<template #cell-method="{ row }: { row: OperationLogItem }"><el-tag :type="methodTagType(row.method)" effect="plain">{{ row.method }}</el-tag></template>
-				<template #cell-user="{ row }: { row: OperationLogItem }">{{ row.userId === null ? '-' : `#${row.userId}` }}</template>
+				<template #cell-action="{ row }: { row: OperationLogItem }">{{ actionLabel(row.action) }}</template>
+				<template #cell-user="{ row }: { row: OperationLogItem }">{{ row.userId === null ? '-' : row.userName ? `${row.userName} (#${row.userId})` : `#${row.userId}` }}</template>
 				<template #cell-status="{ row }: { row: OperationLogItem }"><el-tag :type="row.isSuccess === YesNo.Yes ? 'success' : 'danger'" effect="light">{{ row.statusCode }}</el-tag></template>
 				<template #cell-latency="{ row }: { row: OperationLogItem }">{{ row.latencyMs }} ms</template>
 				<template #cell-createdAt="{ row }: { row: OperationLogItem }">{{ formatTime(row.createdAt) }}</template>

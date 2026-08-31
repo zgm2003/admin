@@ -5,6 +5,7 @@ DECLARE
   admin_platform_id BIGINT;
   account_id BIGINT;
   profile_id BIGINT;
+  login_log_id BIGINT;
   old_canvas_count BIGINT;
   new_canvas_count BIGINT;
   changed BOOLEAN := FALSE;
@@ -70,6 +71,21 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM rbac_menu WHERE parent_id = profile_id AND code = 'account:password:update' AND deleted_at IS NULL) THEN
     INSERT INTO rbac_menu (platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden, created_at, updated_at)
     VALUES (admin_platform_id, profile_id, 'action', '修改密码', 'account:password:update', NULL, NULL, NULL, NULL, 20, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+    changed := TRUE;
+  END IF;
+
+  SELECT id INTO login_log_id FROM rbac_menu
+  WHERE platform_id = admin_platform_id AND code = 'account:user:loginlog:list' AND deleted_at IS NULL;
+  IF (SELECT count(*) FROM rbac_menu WHERE platform_id = admin_platform_id AND code = 'account:user:loginlog:list' AND deleted_at IS NULL) > 1 THEN
+    RAISE EXCEPTION 'login log page code conflict';
+  END IF;
+  IF login_log_id IS NOT NULL THEN
+    IF EXISTS (SELECT 1 FROM rbac_menu WHERE id = login_log_id AND (parent_id IS DISTINCT FROM account_id OR menu_type <> 'page' OR path IS DISTINCT FROM '/account/login-logs' OR component_path IS DISTINCT FROM 'user/login-logs' OR i18n_key IS DISTINCT FROM 'navigation.accountLoginLogs' OR icon IS DISTINCT FROM 'lucide:lock-keyhole' OR sort_order <> 30 OR is_enabled <> 1 OR is_hidden <> 0)) THEN
+      RAISE EXCEPTION 'login log page shape mismatch';
+    END IF;
+  ELSE
+    INSERT INTO rbac_menu (platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden, created_at, updated_at)
+    VALUES (admin_platform_id, account_id, 'page', '登录日志', 'account:user:loginlog:list', 'navigation.accountLoginLogs', '/account/login-logs', 'user/login-logs', 'lucide:lock-keyhole', 30, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
     changed := TRUE;
   END IF;
 

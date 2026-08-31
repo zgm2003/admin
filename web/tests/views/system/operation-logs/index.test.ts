@@ -67,6 +67,18 @@ describe('operation logs', () => {
 		await flushPromises()
 		expect(failed.text()).toContain('查询失败')
 	})
+
+	it('renders a localized action name and falls back to the action code', async () => {
+		const wrapper = mountPage()
+		await flushPromises()
+		expect(wrapper.text()).toContain('编辑用户')
+		expect(wrapper.text()).toContain('admin')
+
+		getOperationLogs.mockResolvedValue({ list: [{ ...row(), action: 'future.action' }], total: 1, page: 1, pageSize: 20 })
+		const fallback = mountPage()
+		await flushPromises()
+		expect(fallback.text()).toContain('future.action')
+	})
 })
 
 function mountPage(): VueWrapper {
@@ -76,5 +88,5 @@ function mountPage(): VueWrapper {
 }
 
 function row(): OperationLogItem {
-	return { id: 1, requestId: 'request-id-1', userId: 7, sessionId: 9, platform: 'admin', method: 'PUT', route: '/api/admin/v1/users/:id', module: 'user', action: 'user.update', clientIp: '127.0.0.1', userAgent: 'Chrome', statusCode: 200, isSuccess: YesNo.Yes, latencyMs: 12, requestData: { password: '***' }, responseData: { code: 0 }, createdAt: '2026-08-21T00:00:00Z', updatedAt: '2026-08-21T00:00:00Z' }
+	return { id: 1, requestId: 'request-id-1', userId: 7, userName: 'admin', sessionId: 9, platform: 'admin', method: 'PUT', route: '/api/admin/v1/users/:id', module: 'user', action: 'user.update', clientIp: '127.0.0.1', userAgent: 'Chrome', statusCode: 200, isSuccess: YesNo.Yes, latencyMs: 12, requestData: { password: '***' }, responseData: { code: 0 }, createdAt: '2026-08-21T00:00:00Z', updatedAt: '2026-08-21T00:00:00Z' }
 }

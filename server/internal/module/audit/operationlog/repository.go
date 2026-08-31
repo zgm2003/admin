@@ -43,10 +43,12 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Item, int64, 
 	type row struct {
 		OperationLog `gorm:"embedded"`
 		Platform     string `gorm:"column:platform"`
+		UserName     string `gorm:"column:user_name"`
 	}
 	rows := make([]row, 0, query.PageSize)
-	if err := db.Select("audit_operation_log.*, COALESCE(auth_platform.code, '') AS platform").
+	if err := db.Select("audit_operation_log.*, COALESCE(auth_platform.code, '') AS platform, COALESCE(user_account.username, '') AS user_name").
 		Joins("LEFT JOIN auth_platform ON auth_platform.id = audit_operation_log.platform_id").
+		Joins("LEFT JOIN user_account ON user_account.id = audit_operation_log.user_id AND user_account.deleted_at IS NULL").
 		Order("audit_operation_log.created_at DESC, audit_operation_log.id DESC").
 		Offset((query.Page - 1) * query.PageSize).Limit(query.PageSize).Scan(&rows).Error; err != nil {
 		return nil, 0, fmt.Errorf("list operation logs: %w", err)
@@ -55,6 +57,7 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Item, int64, 
 	for _, row := range rows {
 		items = append(items, Item{
 			ID: row.ID, RequestID: row.RequestID, UserID: row.UserID, SessionID: row.SessionID,
+			UserName: row.UserName,
 			Platform: row.Platform, Method: row.Method, Route: row.Route, Module: row.Module,
 			Action: row.Action, ClientIP: row.ClientIP, UserAgent: row.UserAgent, StatusCode: row.StatusCode,
 			IsSuccess: int16(row.IsSuccess), LatencyMs: row.LatencyMs, RequestData: row.RequestData,

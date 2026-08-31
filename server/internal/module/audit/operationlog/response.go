@@ -6,6 +6,7 @@ type Item struct {
 	ID           int64     `json:"id"`
 	RequestID    string    `json:"requestId"`
 	UserID       *int64    `json:"userId"`
+	UserName     string    `json:"userName"`
 	SessionID    *int64    `json:"sessionId"`
 	Platform     string    `json:"platform"`
 	Method       string    `json:"method"`

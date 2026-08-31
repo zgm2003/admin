@@ -12,7 +12,7 @@ const testViews: PageModuleMap = {
 	'../views/account/users/index.vue': async () => ({ default: TestView }),
 	'../views/account/profile/index.vue': async () => ({ default: TestView }),
 	'../views/account/sessions/index.vue': async () => ({ default: TestView }),
-	'../views/system/login-logs/index.vue': async () => ({ default: TestView }),
+	'../views/account/login-logs/index.vue': async () => ({ default: TestView }),
 	'../views/access/auth-platforms/index.vue': async () => ({ default: TestView }),
 	'../views/access/menus/index.vue': async () => ({ default: TestView }),
 	'../views/access/roles/index.vue': async () => ({ default: TestView }),
@@ -68,6 +68,16 @@ describe('access route registration', () => {
 		cleanup()
 		expect(router.hasRoute('access-menus')).toBe(true)
 		expect(accessRoutes(router)).toHaveLength(0)
+	})
+
+	it('loads login logs from the account view module', () => {
+		const router = testRouter()
+		const cleanup = registerAccessRoutes(router, [directory('account', [
+			page('account:user:loginlog:list', '/account/login-logs', 'user/login-logs'),
+		])], testViews)
+
+		expect(router.resolve('/account/login-logs').name).toBe('access:account:user:loginlog:list')
+		cleanup()
 	})
 
 	it('allows two URLs to reuse one component and ignores hidden state', () => {
@@ -236,6 +246,7 @@ function pageI18nKey(code: string): string {
 		'audit:operation-log:list': 'navigation.systemOperationLogs',
 		'auth:platform:list': 'navigation.accessAuthPlatforms',
 		'auth:session:list': 'navigation.accountSessions',
+		'account:user:loginlog:list': 'navigation.accountLoginLogs',
 		'rbac:menu:list': 'navigation.accessMenus',
 		'rbac:role:list': 'navigation.accessRoles',
 	}
