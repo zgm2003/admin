@@ -2,6 +2,7 @@ package accessstate
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
@@ -32,6 +33,40 @@ func TestStoreInstallsAndStrictlyReadsReadyState(t *testing.T) {
 	}
 	if _, found, err := store.Read(ctx, 91001); err == nil || !found {
 		t.Fatal("unknown access state field was accepted")
+	}
+}
+
+func TestStoreRebuildReadyStateReplacesStaleVersion(t *testing.T) {
+	client := openAccessStateRedis(t)
+	store := NewStore(client)
+	ctx := context.Background()
+	key := StateKey(91002)
+	t.Cleanup(func() { _ = client.Delete(context.Background(), key) })
+	_ = client.Delete(ctx, key)
+	if err := client.SetString(ctx, key, `{"schemaVersion":2,"state":"ready","version":3}`, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RebuildReadyState(ctx, []Version{{UserID: 91002, Version: 6}}); err != nil {
+		t.Fatalf("RebuildReadyState() error = %v", err)
+	}
+	state, found, err := store.Read(ctx, 91002)
+	if err != nil || !found || state.Version != 6 || state.State != StateReady {
+		t.Fatalf("rebuilt state = %+v found=%v err=%v", state, found, err)
+	}
+}
+
+func TestStoreRebuildReadyStateRejectsActiveMutation(t *testing.T) {
+	client := openAccessStateRedis(t)
+	store := NewStore(client)
+	ctx := context.Background()
+	key := StateKey(91003)
+	t.Cleanup(func() { _ = client.Delete(context.Background(), key) })
+	_ = client.Delete(ctx, key)
+	if err := client.SetString(ctx, key, `{"schemaVersion":2,"state":"invalidating","version":0,"mutationToken":"token","baseVersion":3}`, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RebuildReadyState(ctx, []Version{{UserID: 91003, Version: 6}}); !errors.Is(err, ErrUpdating) {
+		t.Fatalf("RebuildReadyState() error = %v, want ErrUpdating", err)
 	}
 }
 

@@ -13,4 +13,5 @@ func RegisterRoutes(
 	routes.PUT("/menus/:id", authenticate, requirePermission(PermissionUpdate), handler.Update)
 	routes.PATCH("/menus/:id/status", authenticate, requirePermission(PermissionUpdate), handler.UpdateStatus)
 	routes.DELETE("/menus/:id", authenticate, requirePermission(PermissionDelete), handler.Delete)
+	routes.POST("/menus/access-cache/rebuild", authenticate, requirePermission(PermissionRebuildAccessCache), handler.RebuildAccessCache)
 }

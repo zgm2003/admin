@@ -40,6 +40,13 @@ func NewInvalidator(store *Store) *Invalidator {
 	return &Invalidator{store: store, leaseTTL: defaultLeaseTTL, renewEvery: defaultRenewEvery}
 }
 
+func (i *Invalidator) RebuildReadyState(ctx context.Context, versions []Version) error {
+	if i == nil || i.store == nil {
+		return fmt.Errorf("rebuild access state requires a store")
+	}
+	return i.store.RebuildReadyState(ctx, versions)
+}
+
 func (i *Invalidator) Acquire(ctx context.Context, candidates []Version) (*MutationLease, error) {
 	normalized, err := normalizeVersions(candidates)
 	if err != nil {

@@ -11,6 +11,7 @@ import {
   getMenus,
   updateMenu,
   updateMenuStatus,
+  rebuildAccessCache,
 } from '@src/api/rbac/menu'
 import type { CreateMenuInput, ManagedMenuNode, MenuCatalogResponse, UpdateMenuInput } from '@src/api/rbac/menu'
 import { YesNo } from '@src/enums/yes-no'
@@ -29,6 +30,7 @@ vi.mock('@src/api/rbac/menu', async (importOriginal) => {
     updateMenu: vi.fn(),
     updateMenuStatus: vi.fn(),
     deleteMenu: vi.fn(),
+    rebuildAccessCache: vi.fn(),
   }
 })
 
@@ -37,6 +39,7 @@ const createMenuMock = vi.mocked(createMenu)
 const updateMenuMock = vi.mocked(updateMenu)
 const updateMenuStatusMock = vi.mocked(updateMenuStatus)
 const deleteMenuMock = vi.mocked(deleteMenu)
+const rebuildAccessCacheMock = vi.mocked(rebuildAccessCache)
 
 describe('MenuManagement', () => {
   let pinia: Pinia
@@ -49,6 +52,25 @@ describe('MenuManagement', () => {
     setLocale('zh-CN')
     vi.clearAllMocks()
     getMenusMock.mockResolvedValue(menuCatalog())
+    rebuildAccessCacheMock.mockResolvedValue({ rebuiltUsers: 2 })
+  })
+
+  it('shows and executes access cache rebuild only with its permission', async () => {
+    const hidden = mountPage(pinia, ['rbac:menu:list'])
+    await flushPromises()
+    expect(hidden.find('[data-testid="rebuild-access-cache"]').exists()).toBe(false)
+    hidden.unmount()
+
+    pinia = createPinia()
+    const wrapper = mountPage(pinia, ['rbac:menu:list', 'rbac:access-cache:rebuild'])
+    await flushPromises()
+    await wrapper.get('[data-testid="rebuild-access-cache"]').trigger('click')
+    await flushPromises()
+    const confirm = document.body.querySelector('.el-message-box__btns .el-button--primary') as HTMLElement | null
+    confirm?.click()
+    await flushPromises()
+    expect(rebuildAccessCacheMock).toHaveBeenCalledOnce()
+    expect(getMenusMock).toHaveBeenCalledTimes(3)
   })
 
   it('loads once and renders the complete database-named tree table', async () => {

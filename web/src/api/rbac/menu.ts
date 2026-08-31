@@ -24,6 +24,7 @@ export interface CreateMenuInput { platformId:number; parentId:number|null; menu
 export interface UpdateMenuInput { parentId:number|null; menuType:ManagedMenuType; name:string; i18nKey:string|null; path:string|null; componentPath:string|null; icon:MenuIconName|null; sortOrder:number; isHidden:YesNo }
 export interface MenuIDResult { id:number }
 export interface MenuStatusResult { id:number; isEnabled:YesNo }
+export interface RebuildAccessCacheResult { rebuiltUsers: number }
 
 export async function getMenus(query?: MenuListQuery): Promise<MenuCatalogResponse> {
   if (query !== undefined && !isPositiveInteger(query.platformId)) {
@@ -38,6 +39,9 @@ export function createMenu(input: CreateMenuInput): Promise<MenuIDResult> { retu
 export function updateMenu(id: number, input: UpdateMenuInput): Promise<MenuIDResult> { return request<MenuIDResult>({ method: 'PUT', url: `/api/admin/v1/menus/${id}`, data: input }) }
 export function updateMenuStatus(id: number, isEnabled: YesNo): Promise<MenuStatusResult> { return request<MenuStatusResult>({ method: 'PATCH', url: `/api/admin/v1/menus/${id}/status`, data: { isEnabled } }) }
 export function deleteMenu(id: number): Promise<MenuIDResult> { return request<MenuIDResult>({ method: 'DELETE', url: `/api/admin/v1/menus/${id}` }) }
+export function rebuildAccessCache(): Promise<RebuildAccessCacheResult> {
+  return request<RebuildAccessCacheResult>({ method: 'POST', url: '/api/admin/v1/menus/access-cache/rebuild' })
+}
 
 const platformKeys = ['id', 'code', 'name', 'isEnabled'] as const
 const menuNodeKeys = [

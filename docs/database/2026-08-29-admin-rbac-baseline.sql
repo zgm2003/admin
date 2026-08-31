@@ -6,6 +6,7 @@ DECLARE
   account_id BIGINT;
   profile_id BIGINT;
   login_log_id BIGINT;
+  menu_page_id BIGINT;
   old_canvas_count BIGINT;
   new_canvas_count BIGINT;
   changed BOOLEAN := FALSE;
@@ -86,6 +87,20 @@ BEGIN
   ELSE
     INSERT INTO rbac_menu (platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden, created_at, updated_at)
     VALUES (admin_platform_id, account_id, 'page', '登录日志', 'account:user:loginlog:list', 'navigation.accountLoginLogs', '/account/login-logs', 'user/login-logs', 'lucide:lock-keyhole', 30, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+    changed := TRUE;
+  END IF;
+
+  SELECT id INTO menu_page_id FROM rbac_menu
+  WHERE platform_id = admin_platform_id AND code = 'rbac:menu:list' AND deleted_at IS NULL;
+  IF menu_page_id IS NULL THEN
+    RAISE EXCEPTION 'menu management page is missing';
+  END IF;
+  IF (SELECT count(*) FROM rbac_menu WHERE platform_id = admin_platform_id AND code = 'rbac:access-cache:rebuild' AND deleted_at IS NULL) > 1 THEN
+    RAISE EXCEPTION 'access cache rebuild action code conflict';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM rbac_menu WHERE platform_id = admin_platform_id AND parent_id = menu_page_id AND code = 'rbac:access-cache:rebuild' AND deleted_at IS NULL) THEN
+    INSERT INTO rbac_menu (platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden, created_at, updated_at)
+    VALUES (admin_platform_id, menu_page_id, 'action', '重建访问缓存', 'rbac:access-cache:rebuild', NULL, NULL, NULL, NULL, 40, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
     changed := TRUE;
   END IF;
 

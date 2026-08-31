@@ -15,6 +15,7 @@ import {
   menuCodePattern,
   updateMenu,
   updateMenuStatus,
+  rebuildAccessCache,
 } from "../../../api/rbac/menu";
 import type {
   CreateMenuInput,
@@ -41,6 +42,7 @@ const keyword = ref("");
 const expandedIDs = ref<Set<string>>(new Set());
 const expansionBeforeSearch = ref<Set<string> | null>(null);
 const loading = ref(false);
+const rebuildingAccessCache = ref(false);
 const loadError = ref("");
 const mutationError = ref("");
 const dialogVisible = ref(false);
@@ -68,6 +70,7 @@ const form = ref<MenuFormState>(newForm());
 const canCreate = computed(() => access.hasPermission("rbac:menu:create"));
 const canUpdate = computed(() => access.hasPermission("rbac:menu:update"));
 const canDelete = computed(() => access.hasPermission("rbac:menu:delete"));
+const canRebuildAccessCache = computed(() => access.hasPermission("rbac:access-cache:rebuild"));
 const activePlatform = computed(() => {
   if (activePlatformID.value === null) return null;
   return (
@@ -451,6 +454,25 @@ async function removeNode(node: ManagedMenuNode): Promise<void> {
   }
 }
 
+async function rebuildAccessCacheNow(): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      t("menu.confirm.rebuildAccessCacheMessage"),
+      t("menu.confirm.rebuildAccessCacheTitle"),
+      { confirmButtonText: t("menu.confirm.confirm"), cancelButtonText: t("menu.confirm.cancel"), type: "warning" },
+    );
+    rebuildingAccessCache.value = true;
+    const result = await rebuildAccessCache();
+    await reloadMenus();
+    ElNotification.success({ title: t("menu.success.accessCacheRebuilt"), message: t("menu.success.accessCacheRebuiltCount", { count: result.rebuiltUsers }) });
+  } catch (error: unknown) {
+    if (error === "cancel" || error === "close") return;
+    mutationError.value = publicErrorMessage(error);
+  } finally {
+    rebuildingAccessCache.value = false;
+  }
+}
+
 async function loadMenus(platformID?: number): Promise<void> {
   loading.value = true;
   loadError.value = "";
@@ -565,6 +587,15 @@ onMounted(() => loadMenus());
         @click="reloadMenus"
       >
         {{ t("menu.refresh") }}
+      </el-button>
+      <el-button
+        v-if="canRebuildAccessCache"
+        data-testid="rebuild-access-cache"
+        :icon="Refresh"
+        :loading="rebuildingAccessCache"
+        @click="rebuildAccessCacheNow"
+      >
+        {{ t("menu.rebuildAccessCache") }}
       </el-button>
     </div>
     <div class="menu-management__content">

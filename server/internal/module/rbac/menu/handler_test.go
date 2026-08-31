@@ -173,6 +173,24 @@ func TestMenuHandlerUpdateStatusAndDeleteUseExactContracts(t *testing.T) {
 	}
 }
 
+func TestMenuHandlerRebuildsAccessCache(t *testing.T) {
+	service := &menuHTTPService{rebuildCount: 3}
+	recorder := serveMenuRequest(t, service, http.MethodPost, "/api/admin/v1/menus/access-cache/rebuild", nil)
+	assertMenuEnvelope(t, recorder, http.StatusOK, 0)
+	if service.rebuildCalls != 1 {
+		t.Fatalf("rebuild calls = %d", service.rebuildCalls)
+	}
+	var envelope struct {
+		Data map[string]int `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data["rebuiltUsers"] != 3 {
+		t.Fatalf("data = %+v", envelope.Data)
+	}
+}
+
 func menuTestStringPointer(value string) *string {
 	return &value
 }
@@ -215,7 +233,7 @@ func TestMenuRoutesBindExactPermissionsInMiddlewareOrder(t *testing.T) {
 	}
 	menu.RegisterRoutes(router.Group("/api/admin/v1"), menu.NewHandler(service), authenticate, requirePermission)
 	wantPermissions := []string{menu.PermissionList, menu.PermissionCreate, menu.PermissionUpdate, menu.PermissionDelete}
-	if !reflect.DeepEqual(registeredPermissions, []string{menu.PermissionList, menu.PermissionCreate, menu.PermissionUpdate, menu.PermissionUpdate, menu.PermissionDelete}) {
+	if !reflect.DeepEqual(registeredPermissions, []string{menu.PermissionList, menu.PermissionCreate, menu.PermissionUpdate, menu.PermissionUpdate, menu.PermissionDelete, menu.PermissionRebuildAccessCache}) {
 		t.Fatalf("registered permissions = %v", registeredPermissions)
 	}
 	_ = wantPermissions
@@ -229,7 +247,8 @@ func TestMenuRoutesBindExactPermissionsInMiddlewareOrder(t *testing.T) {
 	wantRoutes := map[string]bool{
 		"GET /api/admin/v1/menus": false, "POST /api/admin/v1/menus": false,
 		"PUT /api/admin/v1/menus/:id": false, "PATCH /api/admin/v1/menus/:id/status": false,
-		"DELETE /api/admin/v1/menus/:id": false,
+		"DELETE /api/admin/v1/menus/:id":                false,
+		"POST /api/admin/v1/menus/access-cache/rebuild": false,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path
@@ -302,7 +321,9 @@ type menuHTTPService struct {
 	statusID    int64
 	statusValue yesno.Value
 
-	deleteID int64
+	deleteID     int64
+	rebuildCount int
+	rebuildCalls int
 }
 
 func (s *menuHTTPService) List(ctx context.Context, query menu.ListQuery) (menu.Catalog, error) {
@@ -333,6 +354,11 @@ func (s *menuHTTPService) UpdateStatus(_ context.Context, id int64, value yesno.
 func (s *menuHTTPService) Delete(_ context.Context, id int64) error {
 	s.deleteID = id
 	return nil
+}
+
+func (s *menuHTTPService) RebuildAccessCache(_ context.Context) (int, error) {
+	s.rebuildCalls++
+	return s.rebuildCount, nil
 }
 
 func serveMenuRequest(t *testing.T, service *menuHTTPService, method, path string, body []byte) *httptest.ResponseRecorder {

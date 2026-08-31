@@ -16,6 +16,16 @@ type menuService interface {
 	Update(context.Context, int64, UpdateInput) error
 	UpdateStatus(context.Context, int64, yesno.Value) error
 	Delete(context.Context, int64) error
+	RebuildAccessCache(context.Context) (int, error)
+}
+
+func (h *Handler) RebuildAccessCache(context *gin.Context) {
+	count, err := h.service.RebuildAccessCache(context.Request.Context())
+	if err != nil {
+		response.Fail(context, err)
+		return
+	}
+	response.OK(context, http.StatusOK, map[string]int{"rebuiltUsers": count})
 }
 
 type Handler struct {

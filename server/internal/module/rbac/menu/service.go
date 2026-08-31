@@ -119,6 +119,20 @@ func (s *Service) List(ctx context.Context, query ListQuery) (Catalog, error) {
 	return Catalog{Platforms: platforms, MenuTree: tree}, nil
 }
 
+func (s *Service) RebuildAccessCache(ctx context.Context) (int, error) {
+	if s == nil || s.repository == nil || s.accessInvalidator == nil {
+		return 0, apperror.DependencyUnavailable(fmt.Errorf("rebuild access cache requires a repository"))
+	}
+	versions, err := s.repository.FindActiveAccessVersions(ctx)
+	if err != nil {
+		return 0, apperror.DependencyUnavailable(err)
+	}
+	if err := s.accessInvalidator.RebuildReadyState(ctx, versions); err != nil {
+		return 0, apperror.DependencyUnavailable(err)
+	}
+	return len(versions), nil
+}
+
 func applyManagedMenuPlatform(items []ManagedMenu, platform PlatformOption) {
 	for index := range items {
 		items[index].PlatformID = platform.ID

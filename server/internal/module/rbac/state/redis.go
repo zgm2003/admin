@@ -70,6 +70,39 @@ func (s *Store) InstallReadyIfMissing(ctx context.Context, version Version) (Sta
 	return State{}, false, fmt.Errorf("repair access state returned %q", result)
 }
 
+// RebuildReadyState synchronizes ready access states with database versions.
+// A state currently held by a mutation lease is left untouched and reported as updating.
+func (s *Store) RebuildReadyState(ctx context.Context, versions []Version) error {
+	normalized, err := normalizeVersions(versions)
+	if err != nil {
+		return err
+	}
+	keys := make([]string, len(normalized))
+	args := make([]any, 0, len(normalized))
+	for index, version := range normalized {
+		payload, err := encodeState(State{SchemaVersion: SchemaVersion, State: StateReady, Version: version.Version})
+		if err != nil {
+			return err
+		}
+		keys[index] = StateKey(version.UserID)
+		args = append(args, payload)
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	result, err := s.redis.EvalString(ctx, rebuildReadyStateScript, keys, args...)
+	if err != nil {
+		return err
+	}
+	if result == "updating" {
+		return ErrUpdating
+	}
+	if result != "rebuilt" {
+		return fmt.Errorf("rebuild access state returned %q", result)
+	}
+	return nil
+}
+
 func encodeState(state State) (string, error) {
 	payload, err := json.Marshal(state)
 	if err != nil {
@@ -131,4 +164,16 @@ if not current then return 'missing' end
 if current ~= ARGV[1] then return 'changed' end
 redis.call('SET', KEYS[1], ARGV[2])
 return 'repaired'
+`
+
+const rebuildReadyStateScript = `
+for _, key in ipairs(KEYS) do
+  local current = redis.call('GET', key)
+  if current then
+    local ok, decoded = pcall(cjson.decode, current)
+    if ok and decoded.state == 'invalidating' then return 'updating' end
+  end
+end
+for index, key in ipairs(KEYS) do redis.call('SET', key, ARGV[index]) end
+return 'rebuilt'
 `

@@ -204,6 +204,7 @@ func testFoundationDefinitions() []FoundationDefinition {
 		{ParentCode: PermissionList, MenuType: TypeAction, Name: "新增菜单", Code: PermissionCreate, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
 		{ParentCode: PermissionList, MenuType: TypeAction, Name: "修改菜单", Code: PermissionUpdate, SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
 		{ParentCode: PermissionList, MenuType: TypeAction, Name: "删除菜单", Code: PermissionDelete, SortOrder: 30, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
+		{ParentCode: PermissionList, MenuType: TypeAction, Name: "重建访问缓存", Code: PermissionRebuildAccessCache, SortOrder: 40, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
 		{MenuType: TypeDirectory, Name: "用户与账号", Code: "account", I18nKey: stringPointer("navigation.account"), Icon: stringPointer("lucide:users-round"), SortOrder: 100, IsEnabled: yesno.Yes, IsHidden: yesno.No},
 		{ParentCode: "account", MenuType: TypePage, Name: "用户管理", Code: "account:user:list", I18nKey: stringPointer("navigation.accountUsers"), Path: stringPointer("/account/users"), ComponentPath: stringPointer("account/users"), Icon: stringPointer("lucide:user-round-cog"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
 	}

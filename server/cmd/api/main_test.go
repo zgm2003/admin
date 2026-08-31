@@ -52,6 +52,8 @@ func (apiAccessService) Current(context.Context, auth.Identity) (access.Snapshot
 
 type apiMenuService struct{}
 
+func (apiMenuService) RebuildAccessCache(context.Context) (int, error) { return 0, nil }
+
 type apiRoleService struct{}
 type apiUserService struct{}
 type apiAuthPlatformService struct{}
@@ -297,6 +299,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"PUT /api/admin/v1/menus/:id":                         1,
 		"PATCH /api/admin/v1/menus/:id/status":                1,
 		"DELETE /api/admin/v1/menus/:id":                      1,
+		"POST /api/admin/v1/menus/access-cache/rebuild":       1,
 		"GET /api/admin/v1/roles":                             1,
 		"POST /api/admin/v1/roles":                            1,
 		"PUT /api/admin/v1/roles/:id":                         1,

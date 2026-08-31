@@ -27,7 +27,7 @@ type FoundationDefinition struct {
 
 func IsProtectedCode(code string) bool {
 	return code == "access" || code == PermissionList || code == PermissionCreate ||
-		code == PermissionUpdate || code == PermissionDelete
+		code == PermissionUpdate || code == PermissionDelete || code == PermissionRebuildAccessCache
 }
 
 func (s *Service) EnsureFoundation(ctx context.Context, definitions []FoundationDefinition) error {
