@@ -12,10 +12,6 @@ type RouteRule struct {
 }
 
 var routeRules = []RouteRule{
-	{http.MethodPost, "/api/v1/auth/register", "auth", "auth.register", true, false},
-	{http.MethodPost, "/api/v1/auth/login", "auth", "auth.login", true, false},
-	{http.MethodPost, "/api/v1/auth/refresh", "auth", "auth.refresh", false, false},
-	{http.MethodPost, "/api/v1/auth/logout", "auth", "auth.logout", false, false},
 	{http.MethodPost, "/api/admin/v1/auth-platforms", "authPlatform", "authPlatform.create", true, true},
 	{http.MethodPut, "/api/admin/v1/auth-platforms/:id", "authPlatform", "authPlatform.update", true, true},
 	{http.MethodPatch, "/api/admin/v1/auth-platforms/:id/status", "authPlatform", "authPlatform.status", true, true},

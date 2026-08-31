@@ -32,8 +32,15 @@ func TestRulesMatchOnlyExplicitMutations(t *testing.T) {
 	if _, ok := FindRule(http.MethodPut, "/api/v1/users/:id"); ok {
 		t.Fatal("legacy user update rule remains registered")
 	}
-	if _, ok := FindRule(http.MethodPost, "/api/v1/auth/login"); !ok {
-		t.Fatal("shared login audit rule is missing")
+	for _, route := range []string{
+		"/api/v1/auth/register",
+		"/api/v1/auth/login",
+		"/api/v1/auth/refresh",
+		"/api/v1/auth/logout",
+	} {
+		if _, ok := FindRule(http.MethodPost, route); ok {
+			t.Fatalf("authentication route %s must not be operation logged", route)
+		}
 	}
 	if rule, ok := FindRule(http.MethodDelete, "/api/admin/v1/sessions/:id"); !ok || rule.Action != "session.revoke" {
 		t.Fatalf("session revoke rule = %+v,%v", rule, ok)

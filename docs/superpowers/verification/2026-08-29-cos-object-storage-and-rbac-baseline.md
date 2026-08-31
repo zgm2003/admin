@@ -2,7 +2,7 @@
 
 ## Environment
 
-- Date: 2026-08-30 (Asia/Shanghai)
+- Date: 2026-08-31 (Asia/Shanghai)
 - OS: Windows
 - Go: `go1.26.5 windows/amd64`
 - Node.js: `v24.12.0`
@@ -34,8 +34,8 @@ local environment; no package reported an integration skip.
 
 ```text
 pnpm vitest run --pool=threads --maxWorkers=1
-PASS: Test Files 56 passed (56), Tests 371 passed (371)
-Duration: 330.84s
+PASS: Test Files 58 passed (58), Tests 396 passed (396)
+Duration: 371.43s
 
 pnpm exec vue-tsc --noEmit
 PASS
@@ -45,6 +45,11 @@ PASS (Vite emitted only the existing chunk-size warning)
 ```
 
 The focused storage tests were also run before the full suite and passed.
+
+During final verification, authentication routes (`/api/v1/auth/register`,
+`/api/v1/auth/login`, `/api/v1/auth/refresh`, and `/api/v1/auth/logout`) were removed from
+operation-log route rules. Login and logout remain recorded by `user_login_log`; the operation-log
+page can still show historical authentication rows written before this correction.
 
 ### Static checks
 
@@ -75,9 +80,9 @@ Post-migration read-only checks:
 
 ## Skipped tests
 
-No automated backend or frontend test was skipped in the commands above. Manual browser/API
-acceptance was not run because it requires an authenticated running application session; the user
-will restart the backend after this migration step.
+No automated backend or frontend test was skipped in the commands above. COS configuration,
+upload-rule behavior, direct upload, and profile avatar display were manually accepted by the user
+against the running application.
 
 ## Acceptance
 
@@ -85,7 +90,9 @@ will restart the backend after this migration step.
 - COS configuration and upload-rule API contracts, encryption boundary, platform isolation, atomic
   per-platform enablement, presigned PUT generation, and Admin two-tab rendering are covered by the
   passing focused and full test suites.
-- Manual checks requiring an authenticated browser session remain pending: hidden profile access,
-  locale persistence, cross-platform
-  access snapshots, menu expansion behavior, concurrent default-role switching, COS secret redaction
-  in the UI, direct COS upload, and restart-without-schema-change behavior.
+- Browser verification confirmed the object-storage page exposes exactly two tabs, the Admin rule
+  contains the `avatar` code, and the profile avatar resolves to a loaded COS image. COS-related
+  manual acceptance is complete.
+- Remaining manual checks are limited to hidden profile access without permission, locale persistence,
+  cross-platform access snapshots, menu expansion behavior, concurrent default-role switching, and
+  restart-without-schema-change behavior.
