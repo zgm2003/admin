@@ -14,7 +14,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const PermissionList = "account:user:loginlog:list"
+const (
+	PermissionView = "account:user:loginlog:view"
+	PermissionList = "account:user:loginlog:list"
+)
 
 type Handler struct{ service *Service }
 

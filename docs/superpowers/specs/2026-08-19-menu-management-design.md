@@ -1,7 +1,7 @@
 # Menu Management Phase One Design
 
-> 历史设计说明（2026-08-29）：页面入口权限统一使用资源级 `:list`，包括详情和单例页面；
-> 页面按钮/API 使用独立 action code。本文早期的 Redis/进程缓存范围仅适用于当时切片，当前
+> 历史设计说明（2026-09-01）：页面入口权限统一使用资源级 `:view`；列表、详情和写 API
+> 使用独立 action code，页面权限不得自动扩权。本文早期的 Redis/进程缓存范围仅适用于当时切片，当前
 > Access 三层缓存和个人资料 RBAC 规则以最新 Agent/模块化架构 spec 为准。
 
 ## 1. 目标
@@ -84,18 +84,19 @@ API 创建根节点时必须显式提交 `"parentId": null`。缺少 `parentId` 
 
 ### 4.2 权限语义
 
-page 自身就是页面基础权限。列表页的 page code 使用 `xxx:list`，例如：
+page 自身只表示页面入口权限，统一使用 `xxx:view`，例如：
 
 ```text
-system:menu:list
+permission:menu:view
 ```
 
-不在它下面再创建一个重复的 `list` action。需要更细权限时，增加 action：
+列表 API 必须在 page 下创建独立的 `list` action；其他 API 同样使用独立 action：
 
 ```text
-system:menu:create
-system:menu:update
-system:menu:delete
+permission:menu:list
+permission:menu:create
+permission:menu:update
+permission:menu:delete
 ```
 
 权限规则保持现有 RBAC 设计：

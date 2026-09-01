@@ -24,19 +24,19 @@ describe('access route registration', () => {
   it('maps a route URL to its independent component path and i18n metadata', () => {
     const router = testRouter()
     const cleanup = registerPermissionRoutes(router, [directory('account', [
-      page('account:user:list', '/account/users', 'account/users'),
+      page('account:user:view', '/account/users', 'account/users'),
     ])], testViews)
 
     expect(router.hasRoute('access:system')).toBe(false)
-    expect(router.hasRoute('access:account:user:list')).toBe(true)
+    expect(router.hasRoute('access:account:user:view')).toBe(true)
     const resolved = router.resolve('/account/users')
-    expect(resolved.name).toBe('access:account:user:list')
+    expect(resolved.name).toBe('access:account:user:view')
     expect(resolved.meta.requiresAuth).toBe(true)
     expect(resolved.meta.i18nKey).toBe('navigation.accountUsers')
     expect(resolved.matched.map((record) => record.name)).toContain('admin-layout')
 
     cleanup()
-    expect(router.hasRoute('access:account:user:list')).toBe(false)
+    expect(router.hasRoute('access:account:user:view')).toBe(false)
     expect(router.resolve('/account/users').matched).toHaveLength(0)
   })
 
@@ -44,26 +44,26 @@ describe('access route registration', () => {
 		const router = testRouter(true)
 		const cleanup = registerPermissionRoutes(router, [
 			directory('account', [
-				page('account:user:list', '/account/users', 'account/users'),
-				page('auth:session:list', '/account/sessions', 'account/sessions'),
+				page('account:user:view', '/account/users', 'account/users'),
+				page('auth:session:view', '/account/sessions', 'account/sessions'),
 			]),
 			directory('access', [
-				page('permission:menu:list', '/access/menus', 'access/menus'),
-				page('permission:role:list', '/access/roles', 'access/roles'),
-				page('auth:platform:list', '/access/auth-platforms', 'access/auth-platforms'),
+    page('permission:menu:view', '/access/menus', 'access/menus'),
+				page('permission:role:view', '/access/roles', 'access/roles'),
+				page('auth:platform:view', '/access/auth-platforms', 'access/auth-platforms'),
 			]),
 			directory('system', [
-				page('system:operation-log:list', '/system/operation-logs', 'system/operation-logs'),
+				page('system:operation-log:view', '/system/operation-logs', 'system/operation-logs'),
 			]),
 		], testViews)
 
 		expect(router.resolve('/access/menus').name).toBe('access-menus')
-		expect(router.hasRoute('access:permission:menu:list')).toBe(false)
-		expect(router.hasRoute('access:account:user:list')).toBe(true)
-		expect(router.hasRoute('access:auth:session:list')).toBe(true)
-		expect(router.hasRoute('access:permission:role:list')).toBe(true)
-		expect(router.hasRoute('access:auth:platform:list')).toBe(true)
-		expect(router.hasRoute('access:system:operation-log:list')).toBe(true)
+    expect(router.hasRoute('access:permission:menu:view')).toBe(false)
+    expect(router.hasRoute('access:account:user:view')).toBe(true)
+    expect(router.hasRoute('access:auth:session:view')).toBe(true)
+    expect(router.hasRoute('access:permission:role:view')).toBe(true)
+    expect(router.hasRoute('access:auth:platform:view')).toBe(true)
+    expect(router.hasRoute('access:system:operation-log:view')).toBe(true)
 
 		cleanup()
 		expect(router.hasRoute('access-menus')).toBe(true)
@@ -82,21 +82,21 @@ describe('access route registration', () => {
 
 	it('allows two URLs to reuse one component and ignores hidden state', () => {
     const router = testRouter()
-    const hidden = page('system:account:list', '/system/accounts', 'account/users')
+    const hidden = page('system:account:view', '/system/accounts', 'account/users')
     hidden.isHidden = YesNo.Yes
     const cleanup = registerPermissionRoutes(router, [directory('system', [
       hidden,
-      page('account:user:list', '/account/users', 'account/users'),
+      page('account:user:view', '/account/users', 'account/users'),
     ])], testViews)
 
-    expect(router.hasRoute('access:system:account:list')).toBe(true)
-    expect(router.hasRoute('access:account:user:list')).toBe(true)
+    expect(router.hasRoute('access:system:account:view')).toBe(true)
+    expect(router.hasRoute('access:account:user:view')).toBe(true)
     cleanup()
   })
 
   it('rejects an unknown component path before registering anything', () => {
     const router = testRouter()
-    const nodes = [page('account:user:list', '/account/users', 'system/missing')]
+    const nodes = [page('account:user:view', '/account/users', 'system/missing')]
 
     expect(() => registerPermissionRoutes(router, nodes, testViews)).toThrow(ProtocolError)
     expect(accessRoutes(router)).toHaveLength(0)
@@ -106,28 +106,28 @@ describe('access route registration', () => {
     {
       name: 'duplicate path',
       nodes: [
-        page('account:user:list', '/account/users', 'account/users'),
-        page('system:other:list', '/account/users', 'access/roles'),
+        page('account:user:view', '/account/users', 'account/users'),
+        page('system:other:view', '/account/users', 'access/roles'),
       ],
     },
     {
       name: 'duplicate route name',
       nodes: [
-        page('account:user:list', '/account/users', 'account/users'),
-        page('account:user:list', '/system/accounts', 'account/users'),
+        page('account:user:view', '/account/users', 'account/users'),
+        page('account:user:view', '/system/accounts', 'account/users'),
       ],
     },
 		{
 			name: 'static code mismatch',
-			nodes: [page('permission:other:list', '/access/menus', 'access/menus')],
+			nodes: [page('permission:other:view', '/access/menus', 'access/menus')],
 		},
 		{
 			name: 'static path mismatch',
-			nodes: [page('permission:menu:list', '/access/menu-settings', 'access/menus')],
+			nodes: [page('permission:menu:view', '/access/menu-settings', 'access/menus')],
 		},
 		{
 			name: 'static component mismatch',
-			nodes: [page('permission:menu:list', '/access/menus', 'account/users')],
+			nodes: [page('permission:menu:view', '/access/menus', 'account/users')],
 		},
   ])('rejects $name before registering anything', ({ nodes }) => {
     const router = testRouter(true)
@@ -138,21 +138,21 @@ describe('access route registration', () => {
 	it('rejects an incorrectly named static menu route', () => {
 		const router = testRouter(true, 'system-menus')
 		expect(() => registerPermissionRoutes(router, [
-			directory('access', [page('permission:menu:list', '/access/menus', 'access/menus')]),
+			directory('access', [page('permission:menu:view', '/access/menus', 'access/menus')]),
 		], testViews)).toThrow(ProtocolError)
 		expect(accessRoutes(router)).toHaveLength(0)
 	})
 
 	it('registers the hidden profile page dynamically with its access route name', () => {
 		const router = testRouter()
-		const profile = page('account:profile:list', '/account/profile', 'account/profile')
+		const profile = page('account:profile:view', '/account/profile', 'account/profile')
 		profile.i18nKey = 'layout.account.profile'
 		profile.isHidden = YesNo.Yes
 		const cleanup = registerPermissionRoutes(router, [directory('account', [profile])], testViews)
 
 		expect(router.hasRoute('account-profile')).toBe(false)
-		expect(router.hasRoute('access:account:profile:list')).toBe(true)
-		expect(router.resolve('/account/profile').name).toBe('access:account:profile:list')
+		expect(router.hasRoute('access:account:profile:view')).toBe(true)
+		expect(router.resolve('/account/profile').name).toBe('access:account:profile:view')
 		cleanup()
 		expect(router.resolve('/account/profile').matched).toHaveLength(0)
 	})
@@ -168,8 +168,8 @@ describe('access route registration', () => {
     })
 
     expect(() => registerPermissionRoutes(router, [directory('system', [
-      page('permission:role:list', '/access/roles', 'access/roles'),
-      page('account:user:list', '/account/users', 'account/users'),
+      page('permission:role:view', '/access/roles', 'access/roles'),
+      page('account:user:view', '/account/users', 'account/users'),
     ])], testViews)).toThrow('add route failed')
     expect(accessRoutes(router)).toHaveLength(0)
   })
@@ -177,8 +177,8 @@ describe('access route registration', () => {
   it('returns an idempotent cleanup for multiple pages', () => {
     const router = testRouter()
     const cleanup = registerPermissionRoutes(router, [directory('system', [
-      page('permission:role:list', '/access/roles', 'access/roles'),
-      page('account:user:list', '/account/users', 'account/users'),
+      page('permission:role:view', '/access/roles', 'access/roles'),
+      page('account:user:view', '/account/users', 'account/users'),
     ])], testViews)
 
     cleanup()
@@ -202,7 +202,7 @@ function testRouter(includeStaticMenu = false, staticMenuRouteName = 'access-men
 				meta: {
 					requiresAuth: true,
 					i18nKey: 'navigation.accessMenus',
-					requiredPermission: 'permission:menu:list',
+					requiredPermission: 'permission:menu:view',
 				},
       }] : [],
     }],
@@ -241,14 +241,15 @@ function page(code: string, path: string, componentPath: string): PermissionMenu
 
 function pageI18nKey(code: string): string {
 	const keys: Readonly<Record<string, string>> = {
-		'account:profile:list': 'layout.account.profile',
-		'account:user:list': 'navigation.accountUsers',
-		'system:operation-log:list': 'navigation.systemOperationLogs',
-		'auth:platform:list': 'navigation.accessAuthPlatforms',
-		'auth:session:list': 'navigation.accountSessions',
+		'account:profile:view': 'layout.account.profile',
+		'account:user:view': 'navigation.accountUsers',
+		'system:operation-log:view': 'navigation.systemOperationLogs',
+		'auth:platform:view': 'navigation.accessAuthPlatforms',
+		'auth:session:view': 'navigation.accountSessions',
 		'account:user:loginlog:list': 'navigation.accountLoginLogs',
-		'permission:menu:list': 'navigation.accessMenus',
-		'permission:role:list': 'navigation.accessRoles',
+		'account:user:loginlog:view': 'navigation.accountLoginLogs',
+		'permission:menu:view': 'navigation.accessMenus',
+		'permission:role:view': 'navigation.accessRoles',
 	}
 	return keys[code] ?? 'navigation.accountUsers'
 }

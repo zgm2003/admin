@@ -10,8 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-27-rbac-platform-access-isolation-design.md`
 
-> 页面入口权限统一遵守项目 Agent 规则：所有 `menuType=page` 使用 `:list`，包括 Canvas 根页；
-> 本历史计划中的 Canvas code 已统一为 `canvas:test:list`。API/Worker 不负责 foundation 或
+> 页面入口权限统一遵守项目 Agent 规则：所有 `menuType=page` 使用 `:view`，包括 Canvas 根页；
+> 本历史计划中的 Canvas code 已统一为 `canvas:test:view`。API/Worker 不负责 foundation 或
 > seed，数据由维护者 migration/测试 fixture 准备。
 
 ## Global Constraints
@@ -23,7 +23,7 @@
 - 父子菜单必须同平台，并由 `(parent_id, platform_id)` 组合外键保证。
 - 用户和角色保持全局；`rbac_role_menu`、`rbac_user_role`、`rbac_access_version` 不增加平台字段。
 - `/api/v1/access` 只返回 `identity.PlatformID` 对应平台的菜单和权限，包括超级管理员。
-- Canvas 只保留 `canvas:test:list` 根 page 和 `canvas:test:button` action 的隔离测试数据；不在
+- Canvas 只保留 `canvas:test:view` 根 page 和 `canvas:test:button` action 的隔离测试数据；不在
   API/Worker 启动时创建认证平台、菜单 foundation 或 seed。
 - Access Version 继续按用户维护，菜单或角色授权变更使用现有全局失效流程。
 - JWT 继续携带平台 code，不增加 `platformId` claim；Platform ID 只存在于认证后的运行时 Identity。
@@ -303,7 +303,7 @@ git commit -m "feat: 建立菜单平台外键与迁移"
 
 - [ ] **Step 1: Write failing tree tests for Canvas root page**
 
-Create `canvas:test:list` as a root page and `canvas:test:button` as its action. Require `buildMenuIndex`, `buildManagedTree` and enabled-ancestor validation to pass. Add negative cases for root action, cross-platform parent, and duplicate code/path inside one platform; add positive duplicate code/path across two platforms.
+Create `canvas:test:view` as a root page and `canvas:test:button` as its action. Require `buildMenuIndex`, `buildManagedTree` and enabled-ancestor validation to pass. Add negative cases for root action, cross-platform parent, and duplicate code/path inside one platform; add positive duplicate code/path across two platforms.
 
 - [ ] **Step 2: Run focused tree tests**
 
@@ -371,8 +371,8 @@ git commit -m "feat: 支持多平台菜单树与根级页面"
 Inside a rollback transaction, create Canvas platform plus:
 
 ```text
-    canvas:test:list       page   root
-    canvas:test:button     action parent=canvas:test:list
+    canvas:test:view       page   root
+    canvas:test:button     action parent=canvas:test:view
 ```
 
 Create one user with two roles, grant Admin menus through one role and Canvas test/action through the other. Test Repository twice with Admin and Canvas Platform IDs.

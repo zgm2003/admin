@@ -5,7 +5,7 @@
 日期：2026-08-29
 
 > 本次补充不是对已完成模块迁移结果的虚假验收。个人资料 RBAC 闭环、Access 进程内缓存、
-> 页面 `:list` 契约和菜单字符串 row key 已写入本设计及 Agent 硬规则，运行时代码必须在
+> 页面 `:view`、独立读取 action 契约和菜单字符串 row key 已写入本设计及 Agent 硬规则，运行时代码必须在
 > 后续独立 plan 中按 TDD 实施并验证后，才能把本补充标记为完成。
 
 ## 1. 目的
@@ -243,7 +243,7 @@ web/src/
 ```
 
 迁移可以先移动文件再调整 import，但必须保持用户可见的 route path、route name、HTTP URL
-和响应 envelope。权限码只有在本设计明确列出的规范迁移中才能改变；任何旧的页面 `:view`、
+和响应 envelope。权限码只有在本设计明确列出的规范迁移中才能改变；任何旧的页面 `:list`、
 `:read` 或无动作后缀都必须先完成显式菜单 migration 和协议/测试更新，不能为了兼容而同时
 接受两套 code。已有 Element Plus、SCSS、中文/英文持久化、主题和 RouterTabs 行为不在本
 设计中重新设计；重构只把页面、API、类型和测试按领域归位。
@@ -251,28 +251,29 @@ web/src/
 ### 6.1 RBAC 页面入口与按钮动作基线
 
 权限码是前后端共同使用的稳定协议。除登录页和 Dashboard 这个应用壳静态入口外，所有
-`menuType=page` 节点的页面入口权限统一使用资源级 `:list` 后缀；列表、详情和单例页面
-都不例外，禁止使用 `:view`、`:read` 或无动作后缀。页面内按钮和对应 API 必须是独立的
-动作节点及动作权限，页面权限不能被复用为写操作权限。
+`menuType=page` 节点的页面入口权限统一使用资源级 `:view` 后缀，只控制能否进入页面或查看资源。
+列表和单条详情 API 分别使用独立的 `:list`、`:detail` action；页面内按钮和对应 API 也必须是
+独立的动作节点及动作权限。页面权限不得被复用或通过字符串规则自动扩展为任何 API 权限。
 
 个人资料必须是一个由 RBAC 管理的隐藏页面及其按钮权限，而不是静态路由特例：
 
 | 菜单节点 | 类型 | 权限码 | 路径/API | `is_hidden` |
 | --- | --- | --- | --- | --- |
-| 个人资料 | page | `account:profile:list` | `/account/profile`、`GET /api/admin/v1/account/profile` | `1` |
+| 个人资料 | page | `account:profile:view` | `/account/profile` | `1` |
+| 读取资料 | action | `account:profile:detail` | `GET /api/admin/v1/account/profile` | `1` |
 | 保存资料 | action | `account:profile:update` | `PUT /api/admin/v1/account/profile` | `1` |
 | 修改密码 | action | `account:password:update` | `POST /api/admin/v1/account/password` | `1` |
 
 页面节点进入 `/api/v1/access` 的当前平台快照并由动态路由注册；`is_hidden=1` 只是不显示
 在侧边菜单，不能让路由或 API 变成公开入口。头像个人中心入口只有在
-`account:profile:list` 存在时显示，页面保存资料和修改密码按钮分别检查对应 action
-permission；后端 `GET` 使用页面权限，`PUT`/`POST` 使用动作权限，再叠加认证 Middleware。
+`account:profile:view` 存在时显示，页面读取、保存资料和修改密码分别检查对应 action
+permission；后端 `GET` 使用 `account:profile:detail`，`PUT`/`POST` 使用写动作权限，再叠加认证 Middleware。
 没有页面权限的已认证用户直接访问 `/account/profile` 时回到 Dashboard。面包屑、RouterTabs
 和组件映射从 Access 菜单查找，不保留个人资料的静态路由、硬编码标题或特殊分支。
 
 新增或迁移菜单必须在 spec/plan 中给出“页面权限、动作权限、隐藏状态、HTTP API、后端
 Middleware”的一一映射。现有 Canvas 测试页面的 `canvas:test` 必须通过人工事务 migration
-改为 `canvas:test:list`；只保留 `canvas:test:button` 作为 action。迁移不得批量猜测 code，
+改为 `canvas:test:view`；只保留 `canvas:test:button` 作为 action。迁移不得批量猜测 code，
 发现其他错误页面码时先列出映射、保留 ID 和授权关系，再原子更新。
 
 ### 6.2 菜单管理树展开状态
@@ -550,7 +551,7 @@ Redis 读取失败、快照损坏、版本无法确认或状态为 `invalidating
 - 健康检查：保留现有 `/health`、`/ready`。
 
 本次目录重构不改变现有 URL、HTTP 方法和响应 envelope（`code`、`data`、`message`）。已有
-正确的权限码保持不变；页面入口从 `:view`、`:read` 或无后缀迁移到 `:list` 时，必须按
+正确的权限码保持不变；页面入口从 `:list`、`:read` 或无后缀迁移到 `:view` 时，必须按
 6.1 的人工事务 migration 保留菜单 ID、父子关系和角色授权，不能同时保留旧 code。Admin
 注册入口继续不存在。
 
@@ -639,7 +640,7 @@ operation log task handler -> operationlog service -> repository -> audit_operat
 - 操作日志规则只匹配管理业务变更，认证路由不入队；
 - 多角色合并、超级管理员当前平台限定、跨平台菜单不可见、Redis 版本门控和进程缓存失效有
   集成测试；
-- 页面菜单 code 只允许 `:list` 入口；个人资料页面/按钮的页面权限、动作权限、隐藏状态和
+- 页面菜单 code 只允许 `:view` 入口；个人资料页面、读取 action、写动作权限、隐藏状态和
   API Middleware 有契约测试；
 - API/Worker 启动测试确认不执行 DDL、seed、数据回填、foundation 删除或 Redis 清理；
 - `go fmt ./...`、`go vet ./...`、`go test ./...`、`go build ./...` 全部通过。
@@ -647,8 +648,8 @@ operation log task handler -> operationlog service -> repository -> audit_operat
 ### 13.2 前端
 
 - 迁移后的模块 API、DTO、Pinia、路由和页面测试保持镜像目录；
-- 个人资料只从 Access 动态路由注册，头像入口和两个按钮分别按 `account:profile:list`、
-  `account:profile:update`、`account:password:update` 控制；
+- 个人资料只从 Access 动态路由注册，头像入口、GET 和两个按钮分别按 `account:profile:view`、
+  `account:profile:detail`、`account:profile:update`、`account:password:update` 控制；
 - 菜单树全部展开/收起、搜索恢复和平台切换的 row key 始终是字符串；
 - 运行时搜索不得残留 `taskdemo`、`example-tasks`、旧 `auth_session`、错误的 DB `platform`
   查询或旧包 import；

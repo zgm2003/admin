@@ -47,7 +47,7 @@ const routes: RouteRecordRaw[] = [
                 meta: {
                     requiresAuth: true,
                     i18nKey: "navigation.accessMenus",
-                    requiredPermission: "permission:menu:list",
+                    requiredPermission: "permission:menu:view",
                 },
             },
         ],

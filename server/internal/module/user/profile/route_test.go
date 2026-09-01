@@ -9,8 +9,8 @@ import (
 )
 
 func TestRegisterRoutesRequiresProfilePermissions(t *testing.T) {
-	if PermissionList != "account:profile:list" || PermissionUpdate != "account:profile:update" || PermissionPasswordUpdate != "account:password:update" {
-		t.Fatalf("profile permissions = %q, %q, %q", PermissionList, PermissionUpdate, PermissionPasswordUpdate)
+	if PermissionView != "account:profile:view" || PermissionDetail != "account:profile:detail" || PermissionUpdate != "account:profile:update" || PermissionPasswordUpdate != "account:password:update" {
+		t.Fatalf("profile permissions = %q, %q, %q, %q", PermissionView, PermissionDetail, PermissionUpdate, PermissionPasswordUpdate)
 	}
 
 	seen := make([]string, 0, 2)
@@ -35,7 +35,7 @@ func TestRegisterRoutesRequiresProfilePermissions(t *testing.T) {
 		path       string
 		permission string
 	}{
-		{http.MethodGet, "/api/admin/v1/account/profile", PermissionList},
+		{http.MethodGet, "/api/admin/v1/account/profile", PermissionDetail},
 		{http.MethodPut, "/api/admin/v1/account/profile", PermissionUpdate},
 		{http.MethodPost, "/api/admin/v1/account/password", PermissionPasswordUpdate},
 	}

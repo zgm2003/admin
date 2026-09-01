@@ -121,7 +121,7 @@ func TestEnsureFoundationDoesNotClaimSameCodeFromAnotherPlatform(t *testing.T) {
 	}
 	var adminProtectedCount int64
 	if err := tx.WithContext(ctx).Model(&Menu{}).
-		Where("platform_id = ? AND code IN ?", adminPlatformID, []string{"access", PermissionList, PermissionCreate, PermissionUpdate, PermissionDelete}).
+		Where("platform_id = ? AND code IN ?", adminPlatformID, []string{"access", PermissionView, PermissionCreate, PermissionUpdate, PermissionDelete}).
 		Count(&adminProtectedCount).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestEnsureFoundationRestoresOnlyProtectedNodesInNonEmptyCatalog(t *testing.
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	if err := tx.WithContext(ctx).Model(&Menu{}).
-		Where("code IN ?", []string{PermissionCreate, "account:user:list"}).
+		Where("code IN ?", []string{PermissionCreate, "account:user:view"}).
 		Updates(map[string]any{"deleted_at": now, "updated_at": now}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestEnsureFoundationRestoresOnlyProtectedNodesInNonEmptyCatalog(t *testing.
 	if err := tx.WithContext(ctx).Model(&Menu{}).Where("code = ?", PermissionCreate).Count(&protectedCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.WithContext(ctx).Model(&Menu{}).Where("code = ?", "account:user:list").Count(&ordinaryCount).Error; err != nil {
+	if err := tx.WithContext(ctx).Model(&Menu{}).Where("code = ?", "account:user:view").Count(&ordinaryCount).Error; err != nil {
 		t.Fatal(err)
 	}
 	if protectedCount != 1 || ordinaryCount != 0 {
@@ -169,7 +169,7 @@ func TestProtectedMenusAllowOnlyPresentationUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 	var page Menu
-	if err := tx.WithContext(ctx).Where("code = ?", PermissionList).Take(&page).Error; err != nil {
+	if err := tx.WithContext(ctx).Where("code = ?", PermissionView).Take(&page).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -200,12 +200,12 @@ func TestProtectedMenusAllowOnlyPresentationUpdates(t *testing.T) {
 func testFoundationDefinitions() []FoundationDefinition {
 	return []FoundationDefinition{
 		{MenuType: TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: stringPointer("navigation.access"), Icon: stringPointer("lucide:shield-check"), SortOrder: 200, IsEnabled: yesno.Yes, IsHidden: yesno.No, Protected: true},
-		{ParentCode: "access", MenuType: TypePage, Name: "菜单管理", Code: PermissionList, I18nKey: stringPointer("navigation.accessMenus"), Path: stringPointer("/access/menus"), ComponentPath: stringPointer("access/menus"), Icon: stringPointer("lucide:panel-left"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, Protected: true},
-		{ParentCode: PermissionList, MenuType: TypeAction, Name: "新增菜单", Code: PermissionCreate, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
-		{ParentCode: PermissionList, MenuType: TypeAction, Name: "修改菜单", Code: PermissionUpdate, SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
-		{ParentCode: PermissionList, MenuType: TypeAction, Name: "删除菜单", Code: PermissionDelete, SortOrder: 30, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
-		{ParentCode: PermissionList, MenuType: TypeAction, Name: "重建访问缓存", Code: PermissionRebuildAccessCache, SortOrder: 40, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
+		{ParentCode: "access", MenuType: TypePage, Name: "菜单管理", Code: PermissionView, I18nKey: stringPointer("navigation.accessMenus"), Path: stringPointer("/access/menus"), ComponentPath: stringPointer("access/menus"), Icon: stringPointer("lucide:panel-left"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, Protected: true},
+		{ParentCode: PermissionView, MenuType: TypeAction, Name: "新增菜单", Code: PermissionCreate, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
+		{ParentCode: PermissionView, MenuType: TypeAction, Name: "修改菜单", Code: PermissionUpdate, SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
+		{ParentCode: PermissionView, MenuType: TypeAction, Name: "删除菜单", Code: PermissionDelete, SortOrder: 30, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
+		{ParentCode: PermissionView, MenuType: TypeAction, Name: "重建访问缓存", Code: PermissionRebuildAccessCache, SortOrder: 40, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
 		{MenuType: TypeDirectory, Name: "用户与账号", Code: "account", I18nKey: stringPointer("navigation.account"), Icon: stringPointer("lucide:users-round"), SortOrder: 100, IsEnabled: yesno.Yes, IsHidden: yesno.No},
-		{ParentCode: "account", MenuType: TypePage, Name: "用户管理", Code: "account:user:list", I18nKey: stringPointer("navigation.accountUsers"), Path: stringPointer("/account/users"), ComponentPath: stringPointer("account/users"), Icon: stringPointer("lucide:user-round-cog"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+		{ParentCode: "account", MenuType: TypePage, Name: "用户管理", Code: "account:user:view", I18nKey: stringPointer("navigation.accountUsers"), Path: stringPointer("/account/users"), ComponentPath: stringPointer("account/users"), Icon: stringPointer("lucide:user-round-cog"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
 	}
 }

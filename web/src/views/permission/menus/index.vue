@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import { ElMessageBox, ElNotification } from "element-plus";
-import { CirclePlus, Refresh } from "@element-plus/icons-vue";
-import { useI18n } from "vue-i18n";
+import {computed, onMounted, ref} from "vue";
+import {ElMessageBox, ElNotification} from "element-plus";
+import {CirclePlus, Refresh} from "@element-plus/icons-vue";
+import {useI18n} from "vue-i18n";
 
 import {
   createMenu,
@@ -24,15 +24,15 @@ import type {
   MenuPlatformOption,
   UpdateMenuInput,
 } from "../../../api/permission/menu";
-import { AppDIcon } from "../../../components/AppDIcon";
-import { YesNo } from "../../../enums/yes-no";
-import { usePermissionStore } from "../../../store/permission.ts";
-import { AppDialog } from "../../../components/AppDialog";
-import { IconSelect } from "../../../components/IconSelect";
-import type { MenuIconName } from "../../../icons/menu-icons";
-import { filterManagedMenuTree } from "./filter-menu-tree";
+import {AppDIcon} from "../../../components/AppDIcon";
+import {YesNo} from "../../../enums/yes-no";
+import {usePermissionStore} from "../../../store/permission.ts";
+import {AppDialog} from "../../../components/AppDialog";
+import {IconSelect} from "../../../components/IconSelect";
+import type {MenuIconName} from "../../../icons/menu-icons";
+import {filterManagedMenuTree} from "./filter-menu-tree";
 
-const { t } = useI18n();
+const {t} = useI18n();
 const access = usePermissionStore();
 
 const menus = ref<ManagedMenuNode[]>([]);
@@ -74,9 +74,9 @@ const canRebuildAccessCache = computed(() => access.hasPermission("permission:ac
 const activePlatform = computed(() => {
   if (activePlatformID.value === null) return null;
   return (
-    platforms.value.find(
-      (platform) => platform.id === activePlatformID.value,
-    ) ?? null
+      platforms.value.find(
+          (platform) => platform.id === activePlatformID.value,
+      ) ?? null
   );
 });
 
@@ -85,7 +85,7 @@ function menuTypeLabel(menuType: ManagedMenuType): string {
 }
 
 function menuTypeTag(
-  menuType: ManagedMenuType,
+    menuType: ManagedMenuType,
 ): "primary" | "success" | "warning" {
   if (menuType === "directory") return "primary";
   if (menuType === "page") return "success";
@@ -94,8 +94,8 @@ function menuTypeTag(
 
 function publicErrorMessage(error: unknown): string {
   return error instanceof Error && error.message !== ""
-    ? error.message
-    : t("menu.loadFailed");
+      ? error.message
+      : t("menu.loadFailed");
 }
 
 function newForm(): MenuFormState {
@@ -142,19 +142,19 @@ function collectSubtreeIDs(node: ManagedMenuNode): Set<number> {
 const editingNode = computed(() => {
   if (editingID.value === null) return null;
   return (
-    flattenMenus(menus.value).find((node) => node.id === editingID.value) ??
-    null
+      flattenMenus(menus.value).find((node) => node.id === editingID.value) ??
+      null
   );
 });
 const editingProtected = computed(
-  () => dialogMode.value === "edit" && form.value.isProtected === YesNo.Yes,
+    () => dialogMode.value === "edit" && form.value.isProtected === YesNo.Yes,
 );
 
 const parentOptions = computed(() => {
   const excluded =
-    editingNode.value === null
-      ? new Set<number>()
-      : collectSubtreeIDs(editingNode.value);
+      editingNode.value === null
+          ? new Set<number>()
+          : collectSubtreeIDs(editingNode.value);
   return flattenMenus(menus.value).filter((node) => {
     if (excluded.has(node.id)) return false;
     if (form.value.menuType === "directory")
@@ -164,7 +164,7 @@ const parentOptions = computed(() => {
   });
 });
 const displayedMenus = computed(() =>
-  filterManagedMenuTree(menus.value, keyword.value),
+    filterManagedMenuTree(menus.value, keyword.value),
 );
 const expandedRowKeys = computed(() => [...expandedIDs.value]);
 
@@ -173,24 +173,16 @@ function menuRowKey(id: number): string {
 }
 
 function flattenWithChildren(
-  nodes: readonly ManagedMenuNode[],
+    nodes: readonly ManagedMenuNode[],
 ): ManagedMenuNode[] {
   return flattenMenus(nodes);
 }
 
-function setExpandedForRoots(): void {
-  expandedIDs.value = new Set(
-    menus.value
-      .filter((node) => node.children.length > 0)
-      .map((node) => menuRowKey(node.id)),
-  );
-}
-
 function expandAll(): void {
   expandedIDs.value = new Set(
-    flattenWithChildren(displayedMenus.value)
-      .filter((node) => node.children.length > 0)
-      .map((node) => menuRowKey(node.id)),
+      flattenWithChildren(displayedMenus.value)
+          .filter((node) => node.children.length > 0)
+          .map((node) => menuRowKey(node.id)),
   );
 }
 
@@ -211,9 +203,9 @@ function updateKeyword(value: string): void {
 
 const canSubmitForm = computed(() => {
   if (
-    form.value.name === "" ||
-    form.value.name.trim() !== form.value.name ||
-    form.value.name.length > 128
+      form.value.name === "" ||
+      form.value.name.trim() !== form.value.name ||
+      form.value.name.length > 128
   )
     return false;
   if (form.value.code.length > 128 || !menuCodePattern.test(form.value.code))
@@ -223,40 +215,40 @@ const canSubmitForm = computed(() => {
   if (form.value.icon !== null && !isMenuIcon(form.value.icon)) return false;
   if (form.value.menuType === "page") {
     return (
-      form.value.path !== null &&
-      isMenuPath(form.value.path) &&
-      form.value.componentPath !== null &&
-      isComponentPath(form.value.componentPath)
+        form.value.path !== null &&
+        isMenuPath(form.value.path) &&
+        form.value.componentPath !== null &&
+        isComponentPath(form.value.componentPath)
     );
   }
   if (form.value.menuType === "directory") {
     return form.value.path === null && form.value.componentPath === null;
   }
   return (
-    form.value.path === null &&
-    form.value.componentPath === null &&
-    form.value.icon === null &&
-    form.value.isHidden === YesNo.Yes
+      form.value.path === null &&
+      form.value.componentPath === null &&
+      form.value.icon === null &&
+      form.value.isHidden === YesNo.Yes
   );
 });
 
 const rootParentValue = "__root__" as const;
 
 const parentSelectOptions = computed<
-  Array<{ label: string; value: number | typeof rootParentValue }>
+    Array<{ label: string; value: number | typeof rootParentValue }>
 >(() => [
-  { label: t("menu.form.root"), value: rootParentValue },
+  {label: t("menu.form.root"), value: rootParentValue},
   ...parentOptions.value.map((node) => ({
     label: parentLabel(node),
     value: node.id,
   })),
 ]);
 const menuTypeOptions = computed<Array<{ label: string; value: ManagedMenuType }>>(() => [
-  { label: t("menu.type.directory"), value: "directory" },
-  { label: t("menu.type.page"), value: "page" },
-  { label: t("menu.type.action"), value: "action" },
+  {label: t("menu.type.directory"), value: "directory"},
+  {label: t("menu.type.page"), value: "page"},
+  {label: t("menu.type.action"), value: "action"},
 ]);
-const tableHeaderCellStyle = { background: "var(--el-fill-color-light)" };
+const tableHeaderCellStyle = {background: "var(--el-fill-color-light)"};
 
 const parentSelection = computed<number | typeof rootParentValue>({
   get: () => form.value.parentId ?? rootParentValue,
@@ -302,8 +294,8 @@ function handleFormTypeChange(nextType: ManagedMenuType): void {
     form.value.i18nKey = "";
   }
   if (
-    form.value.parentId !== null &&
-    !parentOptions.value.some((node) => node.id === form.value.parentId)
+      form.value.parentId !== null &&
+      !parentOptions.value.some((node) => node.id === form.value.parentId)
   ) {
     form.value.parentId = null;
   }
@@ -416,13 +408,13 @@ async function changeStatus(node: ManagedMenuNode): Promise<void> {
   try {
     if (nextValue === YesNo.No) {
       await ElMessageBox.confirm(
-        t("menu.confirm.disableMessage"),
-        t("menu.confirm.disableTitle"),
-        {
-          confirmButtonText: t("menu.confirm.confirm"),
-          cancelButtonText: t("menu.confirm.cancel"),
-          type: "warning",
-        },
+          t("menu.confirm.disableMessage"),
+          t("menu.confirm.disableTitle"),
+          {
+            confirmButtonText: t("menu.confirm.confirm"),
+            cancelButtonText: t("menu.confirm.cancel"),
+            type: "warning",
+          },
       );
     }
     await updateMenuStatus(node.id, nextValue);
@@ -437,13 +429,13 @@ async function changeStatus(node: ManagedMenuNode): Promise<void> {
 async function removeNode(node: ManagedMenuNode): Promise<void> {
   try {
     await ElMessageBox.confirm(
-      t("menu.confirm.deleteMessage"),
-      t("menu.confirm.deleteTitle"),
-      {
-        confirmButtonText: t("menu.confirm.confirm"),
-        cancelButtonText: t("menu.confirm.cancel"),
-        type: "warning",
-      },
+        t("menu.confirm.deleteMessage"),
+        t("menu.confirm.deleteTitle"),
+        {
+          confirmButtonText: t("menu.confirm.confirm"),
+          cancelButtonText: t("menu.confirm.cancel"),
+          type: "warning",
+        },
     );
     await deleteMenu(node.id);
     await reloadMenus();
@@ -457,14 +449,17 @@ async function removeNode(node: ManagedMenuNode): Promise<void> {
 async function rebuildAccessCacheNow(): Promise<void> {
   try {
     await ElMessageBox.confirm(
-      t("menu.confirm.rebuildAccessCacheMessage"),
-      t("menu.confirm.rebuildAccessCacheTitle"),
-      { confirmButtonText: t("menu.confirm.confirm"), cancelButtonText: t("menu.confirm.cancel"), type: "warning" },
+        t("menu.confirm.rebuildAccessCacheMessage"),
+        t("menu.confirm.rebuildAccessCacheTitle"),
+        {confirmButtonText: t("menu.confirm.confirm"), cancelButtonText: t("menu.confirm.cancel"), type: "warning"},
     );
     rebuildingAccessCache.value = true;
     const result = await rebuildAccessCache();
     await reloadMenus();
-    ElNotification.success({ title: t("menu.success.accessCacheRebuilt"), message: t("menu.success.accessCacheRebuiltCount", { count: result.rebuiltUsers }) });
+    ElNotification.success({
+      title: t("menu.success.accessCacheRebuilt"),
+      message: t("menu.success.accessCacheRebuiltCount", {count: result.rebuiltUsers})
+    });
   } catch (error: unknown) {
     if (error === "cancel" || error === "close") return;
     mutationError.value = publicErrorMessage(error);
@@ -478,21 +473,21 @@ async function loadMenus(platformID?: number): Promise<void> {
   loadError.value = "";
   try {
     const result =
-      platformID === undefined
-        ? await getMenus()
-        : await getMenus({ platformId: platformID });
+        platformID === undefined
+            ? await getMenus()
+            : await getMenus({platformId: platformID});
     const selectedPlatform =
-      platformID === undefined
-        ? (result.platforms.find((platform) => platform.code === "admin") ??
-          result.platforms[0])
-        : result.platforms.find((platform) => platform.id === platformID);
+        platformID === undefined
+            ? (result.platforms.find((platform) => platform.code === "admin") ??
+                result.platforms[0])
+            : result.platforms.find((platform) => platform.id === platformID);
     if (selectedPlatform === undefined) {
       throw new Error(t("menu.platform.unavailable"));
     }
     platforms.value = result.platforms;
     activePlatformID.value = selectedPlatform.id;
     menus.value = result.menuTree;
-    if (keyword.value.trim() === "") setExpandedForRoots();
+    if (keyword.value.trim() === "") collapseAll();
   } catch (error: unknown) {
     loadError.value = publicErrorMessage(error);
   } finally {
@@ -525,30 +520,30 @@ onMounted(() => loadMenus());
 
 <template>
   <section
-    class="menu-management-page management-page"
-    :aria-label="t('menu.title')"
+      class="menu-management-page management-page"
+      :aria-label="t('menu.title')"
   >
     <el-tabs
-      v-if="platforms.length > 0"
-      v-model="activePlatformID"
-      data-testid="menu-platform-tabs"
-      class="menu-platform-tabs"
-      @tab-change="switchPlatform"
+        v-if="platforms.length > 0"
+        v-model="activePlatformID"
+        data-testid="menu-platform-tabs"
+        class="menu-platform-tabs"
+        @tab-change="switchPlatform"
     >
       <el-tab-pane
-        v-for="platform in platforms"
-        :key="platform.id"
-        :name="platform.id"
+          v-for="platform in platforms"
+          :key="platform.id"
+          :name="platform.id"
       >
         <template #label>
           <span class="menu-platform-tab">
             <span>{{ platform.name }}</span>
             <code>{{ platform.code }}</code>
             <el-tag
-              v-if="platform.isEnabled === YesNo.No"
-              size="small"
-              type="info"
-              effect="plain"
+                v-if="platform.isEnabled === YesNo.No"
+                size="small"
+                type="info"
+                effect="plain"
             >
               {{ t("menu.platform.disabled") }}
             </el-tag>
@@ -558,54 +553,56 @@ onMounted(() => loadMenus());
     </el-tabs>
     <div class="menu-management__toolbar-actions management-page__actions">
       <el-input
-        data-testid="menu-search"
-        :model-value="keyword"
-        clearable
-        :placeholder="t('menu.search.placeholder')"
-        @update:model-value="updateKeyword"
+          data-testid="menu-search"
+          :model-value="keyword"
+          clearable
+          :placeholder="t('menu.search.placeholder')"
+          @update:model-value="updateKeyword"
       />
       <el-button data-testid="menu-expand-all" @click="expandAll">{{
-        t("menu.expandAll")
-      }}</el-button>
+          t("menu.expandAll")
+        }}
+      </el-button>
       <el-button data-testid="menu-collapse-all" @click="collapseAll">{{
-        t("menu.collapseAll")
-      }}</el-button>
+          t("menu.collapseAll")
+        }}
+      </el-button>
       <el-button
-        v-if="canCreate"
-        data-testid="add-root-menu"
-        type="primary"
-        :icon="CirclePlus"
-        :disabled="activePlatform === null"
-        @click="openCreate()"
+          v-if="canCreate"
+          data-testid="add-root-menu"
+          type="primary"
+          :icon="CirclePlus"
+          :disabled="activePlatform === null"
+          @click="openCreate()"
       >
         {{ t("menu.addRoot") }}
       </el-button>
       <el-button
-        data-testid="refresh-menus"
-        :icon="Refresh"
-        :loading="loading"
-        @click="reloadMenus"
+          data-testid="refresh-menus"
+          :icon="Refresh"
+          :loading="loading"
+          @click="reloadMenus"
       >
         {{ t("menu.refresh") }}
       </el-button>
       <el-button
-        v-if="canRebuildAccessCache"
-        data-testid="rebuild-access-cache"
-        :icon="Refresh"
-        :loading="rebuildingAccessCache"
-        @click="rebuildAccessCacheNow"
+          v-if="canRebuildAccessCache"
+          data-testid="rebuild-access-cache"
+          :icon="Refresh"
+          :loading="rebuildingAccessCache"
+          @click="rebuildAccessCacheNow"
       >
         {{ t("menu.rebuildAccessCache") }}
       </el-button>
     </div>
     <div class="menu-management__content">
       <el-alert
-        v-if="loadError !== ''"
-        data-testid="menu-load-error"
-        type="error"
-        :title="loadError"
-        :closable="false"
-        show-icon
+          v-if="loadError !== ''"
+          data-testid="menu-load-error"
+          type="error"
+          :title="loadError"
+          :closable="false"
+          show-icon
       >
         <template #default>
           <el-button size="small" :icon="Refresh" @click="reloadMenus">
@@ -615,32 +612,32 @@ onMounted(() => loadMenus());
       </el-alert>
 
       <el-alert
-        v-if="mutationError !== ''"
-        data-testid="menu-mutation-error"
-        type="error"
-        :title="mutationError"
-        :closable="false"
-        show-icon
+          v-if="mutationError !== ''"
+          data-testid="menu-mutation-error"
+          type="error"
+          :title="mutationError"
+          :closable="false"
+          show-icon
       />
 
       <el-table
-        v-if="loadError === ''"
-        v-loading="loading"
-        border
-        data-testid="menu-table"
-        class="menu-management__table"
-        :data="displayedMenus"
-        :expand-row-keys="expandedRowKeys"
-        :header-cell-style="tableHeaderCellStyle"
-        row-key="id"
-        :tree-props="{ children: 'children' }"
-        table-layout="fixed"
+          v-if="loadError === ''"
+          v-loading="loading"
+          border
+          data-testid="menu-table"
+          class="menu-management__table"
+          :data="displayedMenus"
+          :expand-row-keys="expandedRowKeys"
+          :header-cell-style="tableHeaderCellStyle"
+          row-key="id"
+          :tree-props="{ children: 'children' }"
+          table-layout="fixed"
       >
         <el-table-column
-          :label="t('menu.column.title')"
-          min-width="190"
-          align="center"
-          header-align="center"
+            :label="t('menu.column.title')"
+            min-width="190"
+            align="center"
+            header-align="center"
         >
           <template #default="{ row }: { row: ManagedMenuNode }">
             <span class="menu-title-cell">{{ row.name }}</span>
@@ -648,16 +645,16 @@ onMounted(() => loadMenus());
         </el-table-column>
 
         <el-table-column
-          :label="t('menu.column.type')"
-          width="116"
-          align="center"
-          header-align="center"
+            :label="t('menu.column.type')"
+            width="116"
+            align="center"
+            header-align="center"
         >
           <template #default="{ row }: { row: ManagedMenuNode }">
             <el-tag
-              size="small"
-              effect="plain"
-              :type="menuTypeTag(row.menuType)"
+                size="small"
+                effect="plain"
+                :type="menuTypeTag(row.menuType)"
             >
               {{ menuTypeLabel(row.menuType) }}
             </el-tag>
@@ -665,102 +662,102 @@ onMounted(() => loadMenus());
         </el-table-column>
 
         <el-table-column
-          prop="code"
-          :label="t('menu.column.code')"
-          min-width="190"
-          align="center"
-          header-align="center"
-          show-overflow-tooltip
+            prop="code"
+            :label="t('menu.column.code')"
+            min-width="190"
+            align="center"
+            header-align="center"
+            show-overflow-tooltip
         />
 
         <el-table-column
-          :label="t('menu.column.route')"
-          min-width="180"
-          align="center"
-          header-align="center"
+            :label="t('menu.column.route')"
+            min-width="180"
+            align="center"
+            header-align="center"
         >
           <template #default="{ row }: { row: ManagedMenuNode }">
             <code v-if="row.path !== null" class="menu-route-cell">{{
-              row.path
-            }}</code>
+                row.path
+              }}</code>
             <span v-else class="menu-cell-empty">-</span>
           </template>
         </el-table-column>
 
         <el-table-column
-          :label="t('menu.column.componentPath')"
-          min-width="190"
-          align="center"
-          header-align="center"
+            :label="t('menu.column.componentPath')"
+            min-width="190"
+            align="center"
+            header-align="center"
         >
           <template #default="{ row }: { row: ManagedMenuNode }">
             <code v-if="row.componentPath !== null" class="menu-route-cell">{{
-              row.componentPath
-            }}</code>
+                row.componentPath
+              }}</code>
             <span v-else class="menu-cell-empty">-</span>
           </template>
         </el-table-column>
 
         <el-table-column
-          :label="t('menu.column.icon')"
-          width="112"
-          align="center"
-          header-align="center"
+            :label="t('menu.column.icon')"
+            width="112"
+            align="center"
+            header-align="center"
         >
           <template #default="{ row }: { row: ManagedMenuNode }">
             <span v-if="row.icon !== null" class="menu-icon-cell">
-              <AppDIcon :icon="row.icon" :size="24" :title="row.icon" />
+              <AppDIcon :icon="row.icon" :size="24" :title="row.icon"/>
             </span>
             <span v-else class="menu-cell-empty">-</span>
           </template>
         </el-table-column>
 
         <el-table-column
-          prop="sortOrder"
-          :label="t('menu.column.sortOrder')"
-          width="88"
-          align="center"
-          header-align="center"
+            prop="sortOrder"
+            :label="t('menu.column.sortOrder')"
+            width="88"
+            align="center"
+            header-align="center"
         />
 
         <el-table-column
-          :label="t('menu.column.visibility')"
-          width="104"
-          align="center"
-          header-align="center"
+            :label="t('menu.column.visibility')"
+            width="104"
+            align="center"
+            header-align="center"
         >
           <template #default="{ row }: { row: ManagedMenuNode }">
             <el-tag
-              :type="row.isHidden === YesNo.No ? 'success' : 'info'"
-              size="small"
-              effect="plain"
+                :type="row.isHidden === YesNo.No ? 'success' : 'info'"
+                size="small"
+                effect="plain"
             >
               {{
                 row.isHidden === YesNo.No
-                  ? t("menu.visibility.visible")
-                  : t("menu.visibility.hidden")
+                    ? t("menu.visibility.visible")
+                    : t("menu.visibility.hidden")
               }}
             </el-tag>
           </template>
         </el-table-column>
 
         <el-table-column
-          :label="t('menu.column.status')"
-          width="104"
-          align="center"
-          header-align="center"
+            :label="t('menu.column.status')"
+            width="104"
+            align="center"
+            header-align="center"
         >
           <template #default="{ row }: { row: ManagedMenuNode }">
             <span :data-menu-enabled="row.isEnabled">
               <el-tag
-                :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'"
-                size="small"
-                effect="plain"
+                  :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'"
+                  size="small"
+                  effect="plain"
               >
                 {{
                   row.isEnabled === YesNo.Yes
-                    ? t("menu.status.enabled")
-                    : t("menu.status.disabled")
+                      ? t("menu.status.enabled")
+                      : t("menu.status.disabled")
                 }}
               </el-tag>
             </span>
@@ -768,60 +765,64 @@ onMounted(() => loadMenus());
         </el-table-column>
 
         <el-table-column
-          :label="t('menu.column.actions')"
-          :width="200"
-          fixed="right"
-          align="center"
-          header-align="center"
+            :label="t('menu.column.actions')"
+            :width="280"
+            fixed="right"
+            align="center"
+            header-align="center"
         >
           <template #default="{ row }: { row: ManagedMenuNode }">
             <el-button
-              v-if="canCreate && row.menuType !== 'action'"
-              :data-testid="`add-child-${row.id}`"
-              text
-              type="primary"
-              @click="openCreate(row)"
-              >{{ t("menu.addChild") }}</el-button
+                v-if="canCreate && row.menuType !== 'action'"
+                :data-testid="`add-child-${row.id}`"
+                text
+                type="primary"
+                @click="openCreate(row)"
+            >{{ t("menu.addChild") }}
+            </el-button
             >
             <el-button
-              v-if="canUpdate"
-              :data-testid="`edit-${row.id}`"
-              text
-              type="primary"
-              @click="openEdit(row)"
-              >{{ t("menu.edit") }}</el-button
+                v-if="canUpdate"
+                :data-testid="`edit-${row.id}`"
+                text
+                type="primary"
+                @click="openEdit(row)"
+            >{{ t("menu.edit") }}
+            </el-button
             >
             <el-button
-              v-if="canUpdate"
-              :data-testid="`status-${row.id}`"
-              text
-              type="warning"
-              :disabled="row.isProtected === YesNo.Yes"
-              :title="
+                v-if="canUpdate"
+                :data-testid="`status-${row.id}`"
+                text
+                type="warning"
+                :disabled="row.isProtected === YesNo.Yes"
+                :title="
                 row.isProtected === YesNo.Yes
                   ? t('menu.form.protectedHint')
                   : undefined
               "
-              @click="changeStatus(row)"
-              >{{
+                @click="changeStatus(row)"
+            >{{
                 row.isEnabled === YesNo.Yes
-                  ? t("menu.disable")
-                  : t("menu.enable")
-              }}</el-button
+                    ? t("menu.disable")
+                    : t("menu.enable")
+              }}
+            </el-button
             >
             <el-button
-              v-if="canDelete"
-              :data-testid="`delete-${row.id}`"
-              text
-              type="danger"
-              :disabled="row.isProtected === YesNo.Yes"
-              :title="
+                v-if="canDelete"
+                :data-testid="`delete-${row.id}`"
+                text
+                type="danger"
+                :disabled="row.isProtected === YesNo.Yes"
+                :title="
                 row.isProtected === YesNo.Yes
                   ? t('menu.form.protectedHint')
                   : undefined
               "
-              @click="removeNode(row)"
-              >{{ t("menu.delete") }}</el-button
+                @click="removeNode(row)"
+            >{{ t("menu.delete") }}
+            </el-button
             >
           </template>
         </el-table-column>
@@ -835,242 +836,244 @@ onMounted(() => loadMenus());
     </div>
 
     <AppDialog
-      v-model="dialogVisible"
-      :title="
+        v-model="dialogVisible"
+        :title="
         dialogMode === 'create'
           ? t('menu.form.createTitle')
           : t('menu.form.editTitle')
       "
-      width="900px"
-      data-testid="menu-dialog"
+        width="900px"
+        data-testid="menu-dialog"
     >
       <el-alert
-        v-if="mutationError !== ''"
-        data-testid="menu-form-error"
-        type="error"
-        :title="mutationError"
-        :closable="false"
-        show-icon
+          v-if="mutationError !== ''"
+          data-testid="menu-form-error"
+          type="error"
+          :title="mutationError"
+          :closable="false"
+          show-icon
       />
       <el-alert
-        v-if="editingProtected"
-        data-testid="menu-form-protected-hint"
-        type="info"
-        :title="t('menu.form.protectedHint')"
-        :closable="false"
-        show-icon
+          v-if="editingProtected"
+          data-testid="menu-form-protected-hint"
+          type="info"
+          :title="t('menu.form.protectedHint')"
+          :closable="false"
+          show-icon
       />
       <el-form
-        class="menu-form"
-        label-position="right"
-        label-width="96px"
-        @submit.prevent="submitForm"
+          class="menu-form"
+          label-position="right"
+          label-width="96px"
+          @submit.prevent="submitForm"
       >
         <el-row :gutter="24" class="menu-form__grid">
           <el-col v-if="dialogMode === 'edit'" :span="24">
-          <el-form-item
-            :label="t('menu.form.platform')"
-          >
-            <div data-testid="menu-form-platform" class="menu-form__readonly">
-              <span>{{ activePlatform?.name }}</span>
-              <code>{{ activePlatform?.code }}</code>
-            </div>
-          </el-form-item>
+            <el-form-item
+                :label="t('menu.form.platform')"
+            >
+              <div data-testid="menu-form-platform" class="menu-form__readonly">
+                <span>{{ activePlatform?.name }}</span>
+                <code>{{ activePlatform?.code }}</code>
+              </div>
+            </el-form-item>
           </el-col>
 
           <el-col :xs="24" :sm="12">
-          <el-form-item :label="t('menu.form.parent')">
-            <el-select-v2
-              v-model="parentSelection"
-              data-testid="menu-form-parent"
-              clearable
-              :disabled="editingProtected"
-              :title="
+            <el-form-item :label="t('menu.form.parent')">
+              <el-select-v2
+                  v-model="parentSelection"
+                  data-testid="menu-form-parent"
+                  clearable
+                  :disabled="editingProtected"
+                  :title="
                 editingProtected ? t('menu.form.protectedHint') : undefined
               "
-              :options="parentSelectOptions"
-            />
-          </el-form-item>
+                  :options="parentSelectOptions"
+              />
+            </el-form-item>
           </el-col>
 
           <el-col :xs="24" :sm="12">
-          <el-form-item :label="t('menu.form.menuType')">
-            <el-select-v2
-              :model-value="form.menuType"
-              data-testid="menu-form-type"
-              :disabled="editingProtected"
-              :title="
+            <el-form-item :label="t('menu.form.menuType')">
+              <el-select-v2
+                  :model-value="form.menuType"
+                  data-testid="menu-form-type"
+                  :disabled="editingProtected"
+                  :title="
                 editingProtected ? t('menu.form.protectedHint') : undefined
               "
-              :options="menuTypeOptions"
-              @update:model-value="handleFormTypeChange"
-            />
-          </el-form-item>
+                  :options="menuTypeOptions"
+                  @update:model-value="handleFormTypeChange"
+              />
+            </el-form-item>
           </el-col>
 
           <el-col :span="24">
-          <el-form-item :label="t('menu.form.code')">
-            <div class="menu-form__control">
-              <el-input
-                v-model="form.code"
-                data-testid="menu-form-code"
-                :readonly="dialogMode === 'edit'"
-                :disabled="editingProtected"
-                :title="
+            <el-form-item :label="t('menu.form.code')">
+              <div class="menu-form__control">
+                <el-input
+                    v-model="form.code"
+                    data-testid="menu-form-code"
+                    :readonly="dialogMode === 'edit'"
+                    :disabled="editingProtected"
+                    :title="
                   editingProtected ? t('menu.form.protectedHint') : undefined
                 "
-                :placeholder="t('menu.form.codePlaceholder')"
-              />
-              <p class="menu-form__hint">{{ t("menu.form.codeHint") }}</p>
-            </div>
-          </el-form-item>
+                    :placeholder="t('menu.form.codePlaceholder')"
+                />
+                <p class="menu-form__hint">{{ t("menu.form.codeHint") }}</p>
+              </div>
+            </el-form-item>
           </el-col>
 
           <el-col :span="24">
-          <el-form-item :label="t('menu.form.name')">
-            <el-input
-              v-model="form.name"
-              data-testid="menu-form-name"
-              maxlength="128"
-            />
-          </el-form-item>
+            <el-form-item :label="t('menu.form.name')">
+              <el-input
+                  v-model="form.name"
+                  data-testid="menu-form-name"
+                  maxlength="128"
+              />
+            </el-form-item>
           </el-col>
 
           <el-col v-if="form.menuType !== 'action'" :span="24">
-          <el-form-item
-            :label="t('menu.form.i18nKey')"
-          >
-            <div class="menu-form__control">
-              <el-input
-                v-model="form.i18nKey"
-                data-testid="menu-form-i18n-key"
-              />
-              <p class="menu-form__hint">{{ t("menu.form.i18nKeyHint") }}</p>
-            </div>
-          </el-form-item>
+            <el-form-item
+                :label="t('menu.form.i18nKey')"
+            >
+              <div class="menu-form__control">
+                <el-input
+                    v-model="form.i18nKey"
+                    data-testid="menu-form-i18n-key"
+                />
+                <p class="menu-form__hint">{{ t("menu.form.i18nKeyHint") }}</p>
+              </div>
+            </el-form-item>
           </el-col>
 
           <el-col v-if="form.menuType === 'page'" :span="24">
-          <el-form-item
-            v-if="form.menuType === 'page'"
-            :label="t('menu.form.path')"
-          >
-            <div class="menu-form__control">
-              <el-input
-                v-model="form.path"
-                data-testid="menu-form-path"
-                :disabled="editingProtected"
-                :title="
+            <el-form-item
+                v-if="form.menuType === 'page'"
+                :label="t('menu.form.path')"
+            >
+              <div class="menu-form__control">
+                <el-input
+                    v-model="form.path"
+                    data-testid="menu-form-path"
+                    :disabled="editingProtected"
+                    :title="
                   editingProtected ? t('menu.form.protectedHint') : undefined
                 "
-                :placeholder="t('menu.form.pathPlaceholder')"
-              />
-              <p class="menu-form__hint">{{ t("menu.form.pathHint") }}</p>
-            </div>
-          </el-form-item>
+                    :placeholder="t('menu.form.pathPlaceholder')"
+                />
+                <p class="menu-form__hint">{{ t("menu.form.pathHint") }}</p>
+              </div>
+            </el-form-item>
           </el-col>
 
           <el-col v-if="form.menuType === 'page'" :span="24">
-          <el-form-item
-            v-if="form.menuType === 'page'"
-            :label="t('menu.form.componentPath')"
-          >
-            <div class="menu-form__control">
-              <el-input
-                v-model="form.componentPath"
-                data-testid="menu-form-component-path"
-                :disabled="editingProtected"
-                :title="
+            <el-form-item
+                v-if="form.menuType === 'page'"
+                :label="t('menu.form.componentPath')"
+            >
+              <div class="menu-form__control">
+                <el-input
+                    v-model="form.componentPath"
+                    data-testid="menu-form-component-path"
+                    :disabled="editingProtected"
+                    :title="
                   editingProtected ? t('menu.form.protectedHint') : undefined
                 "
-                :placeholder="t('menu.form.componentPathPlaceholder')"
+                    :placeholder="t('menu.form.componentPathPlaceholder')"
+                />
+                <p class="menu-form__hint">
+                  {{ t("menu.form.componentPathHint") }}
+                </p>
+              </div>
+            </el-form-item>
+          </el-col>
+
+          <el-col :xs="24" :sm="12">
+            <el-form-item
+                v-if="form.menuType !== 'action'"
+                :label="t('menu.form.icon')"
+            >
+              <div class="menu-icon-picker">
+                <el-button
+                    data-testid="menu-form-icon"
+                    :disabled="editingProtected"
+                    @click="openIconSelect"
+                >
+                  <AppDIcon v-if="form.icon !== null" :icon="form.icon" :size="24"/>
+                  <span v-else>{{ t("menu.form.selectIcon") }}</span>
+                </el-button>
+                <el-button
+                    v-if="form.icon !== null"
+                    text
+                    type="danger"
+                    :disabled="editingProtected"
+                    @click="clearMenuIcon"
+                >{{ t("menu.form.clearIcon") }}
+                </el-button
+                >
+              </div>
+            </el-form-item>
+          </el-col>
+
+          <el-col :xs="24" :sm="12">
+            <el-form-item :label="t('menu.form.sortOrder')">
+              <el-input-number
+                  v-model="form.sortOrder"
+                  data-testid="menu-form-sort-order"
+                  :min="0"
+                  :step="10"
               />
-              <p class="menu-form__hint">
-                {{ t("menu.form.componentPathHint") }}
-              </p>
-            </div>
-          </el-form-item>
-          </el-col>
-
-          <el-col :xs="24" :sm="12">
-          <el-form-item
-            v-if="form.menuType !== 'action'"
-            :label="t('menu.form.icon')"
-          >
-            <div class="menu-icon-picker">
-              <el-button
-                data-testid="menu-form-icon"
-                :disabled="editingProtected"
-                @click="openIconSelect"
-              >
-                <AppDIcon v-if="form.icon !== null" :icon="form.icon" :size="24" />
-                <span v-else>{{ t("menu.form.selectIcon") }}</span>
-              </el-button>
-              <el-button
-                v-if="form.icon !== null"
-                text
-                type="danger"
-                :disabled="editingProtected"
-                @click="clearMenuIcon"
-                >{{ t("menu.form.clearIcon") }}</el-button
-              >
-            </div>
-          </el-form-item>
-          </el-col>
-
-          <el-col :xs="24" :sm="12">
-          <el-form-item :label="t('menu.form.sortOrder')">
-            <el-input-number
-              v-model="form.sortOrder"
-              data-testid="menu-form-sort-order"
-              :min="0"
-              :step="10"
-            />
-          </el-form-item>
+            </el-form-item>
           </el-col>
 
           <el-col v-if="dialogMode === 'create'" :xs="24" :sm="12">
-          <el-form-item
-            v-if="dialogMode === 'create'"
-            :label="t('menu.form.isEnabled')"
-          >
-            <el-switch
-              v-model="form.isEnabled"
-              :active-value="YesNo.Yes"
-              :inactive-value="YesNo.No"
-              data-testid="menu-form-enabled"
-            />
-          </el-form-item>
+            <el-form-item
+                v-if="dialogMode === 'create'"
+                :label="t('menu.form.isEnabled')"
+            >
+              <el-switch
+                  v-model="form.isEnabled"
+                  :active-value="YesNo.Yes"
+                  :inactive-value="YesNo.No"
+                  data-testid="menu-form-enabled"
+              />
+            </el-form-item>
           </el-col>
 
           <el-col v-if="form.menuType !== 'action'" :xs="24" :sm="12">
-          <el-form-item
-            :label="t('menu.form.isHidden')"
-          >
-            <el-switch
-              v-model="form.isHidden"
-              :active-value="YesNo.No"
-              :inactive-value="YesNo.Yes"
-              :disabled="editingProtected"
-              :title="
+            <el-form-item
+                :label="t('menu.form.isHidden')"
+            >
+              <el-switch
+                  v-model="form.isHidden"
+                  :active-value="YesNo.No"
+                  :inactive-value="YesNo.Yes"
+                  :disabled="editingProtected"
+                  :title="
                 editingProtected ? t('menu.form.protectedHint') : undefined
               "
-              data-testid="menu-form-hidden"
-            />
-          </el-form-item>
+                  data-testid="menu-form-hidden"
+              />
+            </el-form-item>
           </el-col>
         </el-row>
       </el-form>
       <template #footer>
         <div class="menu-form-actions">
           <el-button data-testid="menu-form-cancel" @click="closeDialog">{{
-            t("menu.form.cancel")
-          }}</el-button>
+              t("menu.form.cancel")
+            }}
+          </el-button>
           <el-button
-            data-testid="menu-form-submit"
-            type="primary"
-            :disabled="!canSubmitForm"
-            @click="submitForm"
+              data-testid="menu-form-submit"
+              type="primary"
+              :disabled="!canSubmitForm"
+              @click="submitForm"
           >
             {{ t("menu.form.submit") }}
           </el-button>
@@ -1079,10 +1082,10 @@ onMounted(() => loadMenus());
     </AppDialog>
 
     <IconSelect
-      v-model="iconSelectVisible"
-      :title="t('menu.form.icon')"
-      :empty-text="t('menu.form.noMatchingIcon')"
-      @select-icon="selectMenuIcon"
+        v-model="iconSelectVisible"
+        :title="t('menu.form.icon')"
+        :empty-text="t('menu.form.noMatchingIcon')"
+        @select-icon="selectMenuIcon"
     />
   </section>
 </template>

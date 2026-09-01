@@ -26,7 +26,7 @@ type FoundationDefinition struct {
 }
 
 func IsProtectedCode(code string) bool {
-	return code == "access" || code == PermissionList || code == PermissionCreate ||
+	return code == "access" || code == PermissionView || code == PermissionCreate ||
 		code == PermissionUpdate || code == PermissionDelete || code == PermissionRebuildAccessCache
 }
 

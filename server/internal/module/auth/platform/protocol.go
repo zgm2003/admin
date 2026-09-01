@@ -8,6 +8,7 @@ import (
 )
 
 const (
+	PermissionView   = "auth:platform:view"
 	PermissionList   = "auth:platform:list"
 	PermissionCreate = "auth:platform:create"
 	PermissionUpdate = "auth:platform:update"

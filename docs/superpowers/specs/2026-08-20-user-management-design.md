@@ -1,8 +1,9 @@
 # Admin 用户管理与用户角色分配设计说明
 
-> 历史设计说明（2026-08-29）：页面入口权限统一使用资源级 `:list`，按钮和接口必须使用
-> 独立 action code。本文历史缓存范围不替代最新三层 Access 基线；用户资料页面遵守
-> `account:profile:list` + `account:profile:update`/`account:password:update` 的 RBAC 映射。
+> 历史设计说明（2026-09-01）：页面入口权限统一使用资源级 `:view`；列表、详情和写接口必须
+> 使用独立 action code，页面权限不得自动派生 API 权限。本文中的 `system:user:*` 是迁移前
+> 实现记录；用户资料页面采用 `account:profile:view` + `account:profile:detail`/
+> `account:profile:update`/`account:password:update` 的 RBAC 映射。
 
 ## 1. 背景与目标
 

@@ -102,7 +102,7 @@ describe('MenuManagement', () => {
 		expect(table.text()).not.toContain('内置')
     const elementTable = wrapper.findComponent({ name: 'ElTable' })
     expect(elementTable.props('defaultExpandAll')).toBe(false)
-    expect(elementTable.props('expandRowKeys')).toEqual(['1'])
+    expect(elementTable.props('expandRowKeys')).toEqual([])
     expect(elementTable.props('border')).toBe(true)
     expect(elementTable.props('headerCellStyle')).toEqual({ background: 'var(--el-fill-color-light)' })
 		const centeredLabels = ['类型', '图标', '显示状态', '状态', '操作']
@@ -382,7 +382,7 @@ describe('MenuManagement', () => {
 		expect(i18nKeyInput.element.tagName).toBe('INPUT')
 		expect(i18nKeyInput.element.closest('.el-select-v2')).toBeNull()
 		expect(document.body.textContent).toContain('i18nKey：至少两段点号路径，例如 navigation.accountUsers')
-		expect(document.body.textContent).toContain('权限码：小写冒号分段，例如 account:user:list')
+    expect(document.body.textContent).toContain('权限码：小写冒号分段，例如 account:user:view')
 
     await bodyGet('[data-testid="menu-form-type"]').trigger('click')
     const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find((item) => item.textContent?.trim() === '页面')

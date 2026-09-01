@@ -1,7 +1,7 @@
 # Backend i18n and RBAC Foundation Design
 
-> 历史规则说明（2026-08-29）：本文早期示例中的页面权限 `:view` 已被项目级 Agent 规则替代。
-> 任何 `menuType=page` 必须使用资源级 `:list`；页面内按钮和接口动作另用独立 action code。
+> 历史规则说明（2026-09-01）：任何 `menuType=page` 必须使用资源级 `:view`；列表、详情、
+> 页面内按钮和接口动作另用独立 action code，页面权限不得自动派生 API 权限。
 > 下文保留为历史实现记录，新增或迁移代码以最新 spec、plan 和 `AGENTS.md` 为准。
 
 ## 1. 目标
@@ -169,8 +169,8 @@ system:user:delete
 
 权限常量定义在实际拥有该业务接口的模块中，不能集中到一个万能权限文件。
 
-- page code 表示页面入口以及基础查看/列表访问；
-- action code 表示新增、修改、删除或其他具体操作；
+- page code 只表示页面入口或查看资源；
+- action code 表示列表、详情、新增、修改、删除或其他具体 API 操作；
 - 直接授予 action 时，自动获得其 page 和目录祖先的有效访问；
 - 直接授予 page 不会获得该 page 下的任何 action；
 - directory 只负责导航组织，不作为按钮权限返回；

@@ -35,7 +35,7 @@ describe('router', () => {
 	  expect(router.resolve('/register').matched).toHaveLength(0)
 		expect(router.resolve('/dashboard').meta.requiresAuth).toBe(true)
 		expect(router.resolve('/access/menus').meta.requiresAuth).toBe(true)
-		expect(router.resolve('/access/menus').meta.requiredPermission).toBe('permission:menu:list')
+  expect(router.resolve('/access/menus').meta.requiredPermission).toBe('permission:menu:view')
 		expect(router.resolve('/access/menus').name).toBe('access-menus')
     expect(router.hasRoute('account-profile')).toBe(false)
     expect(router.resolve('/account/profile').matched).toHaveLength(0)
@@ -61,7 +61,7 @@ describe('router', () => {
 		expect(router.currentRoute.value.path).toBe('/dashboard')
 
 		usePermissionStore(pinia).reset()
-		getPermissionMock.mockResolvedValue({ ...emptyPermissionSnapshot(), permissionCodes: ['permission:menu:list'] })
+  getPermissionMock.mockResolvedValue({ ...emptyPermissionSnapshot(), permissionCodes: ['permission:menu:view'] })
 		await router.push('/access/menus')
 		expect(router.currentRoute.value.path).toBe('/access/menus')
 	})

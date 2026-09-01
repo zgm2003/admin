@@ -32,7 +32,7 @@ const router = useRouter()
 const access = usePermissionStore()
 const avatarText = computed(() => props.username.slice(0, 1).toUpperCase() || 'A')
 const avatarURL = ref('')
-const canOpenProfile = computed(() => access.hasPermission('account:profile:list'))
+const canOpenProfile = computed(() => access.hasPermission('account:profile:view'))
 let avatarRequestID = 0
 
 async function hydrateAvatar(objectKey: string): Promise<void> {

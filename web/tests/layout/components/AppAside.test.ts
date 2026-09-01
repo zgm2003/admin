@@ -30,19 +30,19 @@ describe('AppAside profile access', () => {
     expect(wrapper.get('.app-aside__avatar img').attributes('src')).toBe('https://cdn.example.com/avatar.png')
   })
 
-  it('shows the profile entry only with profile-list permission and always keeps logout', async () => {
+  it('shows the profile entry only with profile-view permission and always keeps logout', async () => {
     const { access, wrapper } = mountAside([])
     expect(document.body.querySelector('[data-testid="aside-account-profile"]')).toBeNull()
     expect(document.body.querySelector('[data-testid="aside-account-logout"]')).not.toBeNull()
 
-    access.applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: ['account:profile:list'] })
+    access.applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: ['account:profile:view'] })
     await wrapper.vm.$nextTick()
     expect(document.body.querySelector('[data-testid="aside-account-profile"]')).not.toBeNull()
     expect(document.body.querySelector('[data-testid="aside-account-logout"]')).not.toBeNull()
   })
 
   it('opens the dynamic profile URL without depending on its generated route name', async () => {
-    const { router, wrapper } = mountAside(['account:profile:list'])
+    const { router, wrapper } = mountAside(['account:profile:view'])
     wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'profile')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/account/profile')

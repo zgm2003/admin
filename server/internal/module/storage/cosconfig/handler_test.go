@@ -60,7 +60,7 @@ func TestRoutesUseExactCOSConfigPermissions(t *testing.T) {
 		permissions = append(permissions, code)
 		return pass
 	})
-	want := []string{PermissionList, PermissionCreate, PermissionList, PermissionUpdate, PermissionStatus, PermissionTest, PermissionDelete}
+	want := []string{PermissionList, PermissionCreate, PermissionDetail, PermissionUpdate, PermissionStatus, PermissionTest, PermissionDelete}
 	if !reflect.DeepEqual(permissions, want) {
 		t.Fatalf("permissions = %v, want %v", permissions, want)
 	}

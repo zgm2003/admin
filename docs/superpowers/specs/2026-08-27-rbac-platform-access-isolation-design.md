@@ -3,8 +3,8 @@
 状态：已实施并完成验证
 
 > 2026-08-29 规范修订：本文早期示例中的 Canvas 页面码 `canvas:test` 和“启动时 foundation
-> 预设”已被后续架构基线替代。当前页面入口权限统一使用 `:list`，因此正式 code 为
-> `canvas:test:list`；平台和菜单数据只由维护者显式 migration 准备，API/Worker 启动不得写入
+> 预设”已被后续架构基线替代。当前页面入口权限统一使用 `:view`，因此正式 code 为
+> `canvas:test:view`；平台和菜单数据只由维护者显式 migration 准备，API/Worker 启动不得写入
 > 或修复数据。本文保留为多平台隔离的历史设计记录，实施时以最新模块化架构和 Agent 规则为准。
 
 ## 1. 背景
@@ -60,8 +60,8 @@
 Canvas 本地预设的结构固定为：
 
 ```text
-canvas:test:list       page   parent = null   path = /test
-canvas:test:button     action parent = canvas:test:list
+canvas:test:view       page   parent = null   path = /test
+canvas:test:button     action parent = canvas:test:view
 ```
 
 `canvas` 平台和上述菜单由维护者显式 migration 或测试 fixture 准备；API 启动只读取已有状态，
@@ -154,7 +154,7 @@ Admin 菜单 API 继续使用 `/api/admin/v1/menus`。菜单列表和创建 DTO 
 - 认证成功后 `Identity.PlatformID` 精确来自当前 Policy，Access 重建不额外查询平台 ID；
 - 同一用户多角色在当前平台合并菜单并去重；
 - 超级管理员只能获得当前平台页面和操作权限；
-- Canvas 的根级 `test` 页面 `canvas:test:list` 和 `canvas:test:button` 能形成有效快照；
+- Canvas 的根级 `test` 页面 `canvas:test:view` 和 `canvas:test:button` 能形成有效快照；
 - 跨平台角色授权不会进入当前平台的 `grantedMenuIDs`；
 - Redis 快照命中、重建和平台 key 隔离保持有效。
 

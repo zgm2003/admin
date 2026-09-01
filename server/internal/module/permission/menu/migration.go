@@ -35,20 +35,20 @@ type legacyMigrationRow struct {
 }
 
 var legacyPermissionCodes = map[string]string{
-	"system:menu:list": "permission:menu:list", "system:menu:create": "permission:menu:create",
+	"system:menu:list": "permission:menu:view", "system:menu:create": "permission:menu:create",
 	"system:menu:update": "permission:menu:update", "system:menu:delete": "permission:menu:delete",
-	"system:role:list": "permission:role:list", "system:role:create": "permission:role:create",
+	"system:role:list": "permission:role:view", "system:role:create": "permission:role:create",
 	"system:role:update": "permission:role:update", "system:role:status": "permission:role:status",
 	"system:role:default": "permission:role:default", "system:role:delete": "permission:role:delete",
 	"system:role:authorize": "permission:role:authorize",
-	"system:user:list":      "account:user:list", "system:user:update": "account:user:update",
+	"system:user:list":      "account:user:view", "system:user:update": "account:user:update",
 	"system:user:status": "account:user:status", "system:user:delete": "account:user:delete",
 	"system:user:roles":   "account:user:roles",
-	"system:session:list": "auth:session:list", "system:session:revoke": "auth:session:revoke",
-	"system:auth-platform:list": "auth:platform:list", "system:auth-platform:create": "auth:platform:create",
+	"system:session:list": "auth:session:view", "system:session:revoke": "auth:session:revoke",
+	"system:auth-platform:list": "auth:platform:view", "system:auth-platform:create": "auth:platform:create",
 	"system:auth-platform:update": "auth:platform:update", "system:auth-platform:status": "auth:platform:status",
 	"system:auth-platform:delete": "auth:platform:delete",
-	"system:operation-log:list":   "system:operation-log:list",
+	"system:operation-log:list":   "system:operation-log:view",
 }
 
 var legacyMenuNames = map[string]string{
@@ -75,12 +75,12 @@ var legacyMenuIcons = map[string]legacyIconTarget{
 }
 
 var migratedPages = map[string]migratedPageTarget{
-	"account:user:list":         {ParentCode: "account", Path: "/account/users", ComponentPath: "account/users", I18nKey: "navigation.accountUsers", Icon: "lucide:user-round-cog", SortOrder: 10},
-	"auth:session:list":         {ParentCode: "account", Path: "/account/sessions", ComponentPath: "account/sessions", I18nKey: "navigation.accountSessions", Icon: "lucide:monitor-smartphone", SortOrder: 20},
-	"permission:menu:list":      {ParentCode: "access", Path: "/access/menus", ComponentPath: "access/menus", I18nKey: "navigation.accessMenus", Icon: "lucide:panel-left", SortOrder: 10},
-	"permission:role:list":      {ParentCode: "access", Path: "/access/roles", ComponentPath: "access/roles", I18nKey: "navigation.accessRoles", Icon: "lucide:user-cog", SortOrder: 20},
-	"auth:platform:list":        {ParentCode: "access", Path: "/access/auth-platforms", ComponentPath: "access/auth-platforms", I18nKey: "navigation.accessAuthPlatforms", Icon: "lucide:key-round", SortOrder: 30},
-	"system:operation-log:list": {ParentCode: "system", Path: "/system/operation-logs", ComponentPath: "system/operation-logs", I18nKey: "navigation.systemOperationLogs", Icon: "lucide:scroll-text", SortOrder: 10},
+	"account:user:view":         {ParentCode: "account", Path: "/account/users", ComponentPath: "account/users", I18nKey: "navigation.accountUsers", Icon: "lucide:user-round-cog", SortOrder: 10},
+	"auth:session:view":         {ParentCode: "account", Path: "/account/sessions", ComponentPath: "account/sessions", I18nKey: "navigation.accountSessions", Icon: "lucide:monitor-smartphone", SortOrder: 20},
+	"permission:menu:view":      {ParentCode: "access", Path: "/access/menus", ComponentPath: "access/menus", I18nKey: "navigation.accessMenus", Icon: "lucide:panel-left", SortOrder: 10},
+	"permission:role:view":      {ParentCode: "access", Path: "/access/roles", ComponentPath: "access/roles", I18nKey: "navigation.accessRoles", Icon: "lucide:user-cog", SortOrder: 20},
+	"auth:platform:view":        {ParentCode: "access", Path: "/access/auth-platforms", ComponentPath: "access/auth-platforms", I18nKey: "navigation.accessAuthPlatforms", Icon: "lucide:key-round", SortOrder: 30},
+	"system:operation-log:view": {ParentCode: "system", Path: "/system/operation-logs", ComponentPath: "system/operation-logs", I18nKey: "navigation.systemOperationLogs", Icon: "lucide:scroll-text", SortOrder: 10},
 }
 
 func PrepareSchema(ctx context.Context, db *gorm.DB) error {
@@ -107,6 +107,9 @@ func PrepareSchema(ctx context.Context, db *gorm.DB) error {
 		if err := prepareLegacyMenuCatalog(tx); err != nil {
 			return err
 		}
+		if err := rekeyPageViewCodes(tx); err != nil {
+			return err
+		}
 		var invalidNames int64
 		if err := tx.Raw(`SELECT count(*) FROM permission_menu WHERE name IS NULL OR btrim(name) = ''`).Scan(&invalidNames).Error; err != nil {
 			return fmt.Errorf("inspect menu names: %w", err)
@@ -120,6 +123,37 @@ func PrepareSchema(ctx context.Context, db *gorm.DB) error {
 		return nil
 	}); err != nil {
 		return fmt.Errorf("prepare menu schema: %w", err)
+	}
+	return nil
+}
+
+func rekeyPageViewCodes(db *gorm.DB) error {
+	var rows []struct {
+		ID   int64
+		Code string
+	}
+	if err := db.Raw(`SELECT id, code FROM permission_menu WHERE menu_type = 'page' AND code LIKE '%:list'`).Scan(&rows).Error; err != nil {
+		return fmt.Errorf("inspect page permission codes: %w", err)
+	}
+	changed := false
+	for _, row := range rows {
+		newCode := strings.TrimSuffix(row.Code, ":list") + ":view"
+		var occupied bool
+		if err := db.Raw(`SELECT EXISTS (SELECT 1 FROM permission_menu WHERE code = ? AND id <> ?)`, newCode, row.ID).Scan(&occupied).Error; err != nil {
+			return fmt.Errorf("inspect page permission target %s: %w", newCode, err)
+		}
+		if occupied {
+			return fmt.Errorf("page permission target %s is already occupied", newCode)
+		}
+		if err := db.Exec(`UPDATE permission_menu SET code = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, newCode, row.ID).Error; err != nil {
+			return fmt.Errorf("rekey page permission %s: %w", row.Code, err)
+		}
+		changed = true
+	}
+	if changed {
+		if err := db.Exec(`UPDATE permission_access_version SET version = version + 1, updated_at = CURRENT_TIMESTAMP`).Error; err != nil {
+			return fmt.Errorf("advance access versions after page permission rekey: %w", err)
+		}
 	}
 	return nil
 }
@@ -181,7 +215,7 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 			return err
 		}
 		var oldCodes []string
-		if err := db.Raw(`SELECT code FROM permission_menu WHERE code LIKE 'system:%' AND code <> 'system:operation-log:list' ORDER BY code`).Scan(&oldCodes).Error; err != nil {
+		if err := db.Raw(`SELECT code FROM permission_menu WHERE code LIKE 'system:%' AND code NOT IN ('system:operation-log:list', 'system:operation-log:view') ORDER BY code`).Scan(&oldCodes).Error; err != nil {
 			return fmt.Errorf("inspect legacy menu codes: %w", err)
 		}
 		if len(oldCodes) != 0 {
@@ -399,7 +433,7 @@ func rekeyMigratedOperationLogMenu(db *gorm.DB) error {
 		return nil
 	}
 	var currentCount int64
-	if err := db.Raw(`SELECT count(*) FROM permission_menu WHERE code = 'system:operation-log:list'`).Scan(&currentCount).Error; err != nil {
+	if err := db.Raw(`SELECT count(*) FROM permission_menu WHERE code = 'system:operation-log:view'`).Scan(&currentCount).Error; err != nil {
 		return fmt.Errorf("inspect current operation log menu: %w", err)
 	}
 	if currentCount != 0 {
@@ -407,7 +441,7 @@ func rekeyMigratedOperationLogMenu(db *gorm.DB) error {
 	}
 	result := db.Exec(`
 		UPDATE permission_menu
-		SET code = 'system:operation-log:list', updated_at = CURRENT_TIMESTAMP
+		SET code = 'system:operation-log:view', updated_at = CURRENT_TIMESTAMP
 		WHERE code = 'audit:operation-log:list'`)
 	if result.Error != nil {
 		return fmt.Errorf("rekey migrated operation log menu: %w", result.Error)

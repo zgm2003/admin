@@ -46,6 +46,28 @@ func TestCurrentAndAllowedShareWarmSnapshotWithoutPostgreSQL(t *testing.T) {
 	}
 }
 
+func TestBuildSnapshotKeepsPageAndReadPermissionsIndependent(t *testing.T) {
+	rootID := int64(1)
+	pageID := int64(2)
+	path := "/account/users"
+	componentPath := "account/users"
+	snapshot, err := buildSnapshot(Source{
+		Version: 1,
+		Menus: []SourceMenu{
+			{ID: rootID, MenuType: MenuDirectory, Code: "account", I18nKey: accessStringPointer("navigation.account"), IsEnabled: yesno.Yes, IsHidden: yesno.No},
+			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "account:user:view", I18nKey: accessStringPointer("navigation.accountUsers"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+		},
+		GrantedMenuIDs: []int64{pageID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"account:user:view"}
+	if !reflect.DeepEqual(snapshot.PermissionCodes, want) {
+		t.Fatalf("permission codes = %v, want %v", snapshot.PermissionCodes, want)
+	}
+}
+
 func TestLoadSnapshotUsesRedisStateGateBeforeLocalCache(t *testing.T) {
 	serviceRedis := openAccessRedis(t)
 	cleanupRedis := openAccessRedis(t)

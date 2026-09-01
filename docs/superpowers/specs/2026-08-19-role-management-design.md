@@ -1,7 +1,8 @@
 # Role Management Phase One Design
 
-> 历史设计说明（2026-08-29）：所有 page 菜单入口必须使用 `:list`；按钮和接口使用独立
-> action permission。本文早期“不实现进程级缓存”的范围由最新三层 Access 缓存基线替代。
+> 历史设计说明（2026-09-01）：所有 page 菜单入口必须使用 `:view`；列表、详情和写接口使用
+> 独立 action permission，页面权限不得自动派生 API 权限。本文中的 `system:role:*` 是迁移前
+> 实现记录；早期“不实现进程级缓存”的范围由最新三层 Access 缓存基线替代。
 
 ## 1. 目标
 

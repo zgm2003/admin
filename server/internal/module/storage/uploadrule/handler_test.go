@@ -49,7 +49,7 @@ func TestRoutesUseExactUploadRulePermissions(t *testing.T) {
 	pass := func(c *gin.Context) { c.Next() }
 	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(&ruleHTTPService{}), pass, func(code string) gin.HandlerFunc { permissions = append(permissions, code); return pass })
 	RegisterCredentialRoute(router.Group("/api/v1"), NewHandler(&ruleHTTPService{}), pass, func(code string) gin.HandlerFunc { permissions = append(permissions, code); return pass })
-	want := []string{PermissionList, PermissionList, PermissionCreate, PermissionList, PermissionUpdate, PermissionStatus, PermissionDelete, "storage:object:upload", "storage:object:upload"}
+	want := []string{PermissionList, PermissionList, PermissionCreate, PermissionDetail, PermissionUpdate, PermissionStatus, PermissionDelete, "storage:object:upload", "storage:object:upload"}
 	if !reflect.DeepEqual(permissions, want) {
 		t.Fatalf("permissions=%v want=%v", permissions, want)
 	}

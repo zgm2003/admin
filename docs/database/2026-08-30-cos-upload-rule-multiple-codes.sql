@@ -12,11 +12,19 @@ CREATE TABLE IF NOT EXISTS storage_upload_rule_code (
   CONSTRAINT ck_storage_upload_rule_code_value CHECK (length(btrim(code)) > 0)
 );
 
-INSERT INTO storage_upload_rule_code (rule_id, platform_id, code, deleted_at)
-SELECT id, platform_id, code, deleted_at
-FROM storage_upload_rule
-WHERE code IS NOT NULL
-ON CONFLICT DO NOTHING;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = current_schema() AND table_name = 'storage_upload_rule' AND column_name = 'code'
+  ) THEN
+    INSERT INTO storage_upload_rule_code (rule_id, platform_id, code, deleted_at)
+    SELECT id, platform_id, code, deleted_at
+    FROM storage_upload_rule
+    WHERE code IS NOT NULL
+    ON CONFLICT DO NOTHING;
+  END IF;
+END $$;
 
 DROP INDEX IF EXISTS ux_storage_upload_rule_platform_code_active;
 

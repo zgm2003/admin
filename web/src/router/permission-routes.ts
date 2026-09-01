@@ -19,7 +19,7 @@ interface PageRoute {
 }
 
 const staticPageBinding = {
-	code: 'permission:menu:list',
+	code: 'permission:menu:view',
 	path: '/access/menus',
 	componentPath: 'access/menus',
 	routeName: 'access-menus',

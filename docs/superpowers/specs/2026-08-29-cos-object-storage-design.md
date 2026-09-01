@@ -49,7 +49,7 @@ Admin 平台菜单在模块真实可用后通过人工菜单 migration 增加，
 
 ```text
 云服务                         directory: cloud
-└─ 对象存储                     page: storage:object:list
+└─ 对象存储                     page: storage:object:view
    ├─ COS 配置                  页面内 Tab
    └─ 上传规则                  页面内 Tab
 ```
@@ -59,7 +59,7 @@ Admin 平台菜单在模块真实可用后通过人工菜单 migration 增加，
 ```text
 path:           /cloud/object-storage
 componentPath:  storage/object
-routeName:      access:storage:object:list  # 由现有动态路由按菜单 code 生成
+routeName:      access:storage:object:view  # 由现有动态路由按菜单 code 生成
 i18nKey:        navigation.storageObject
 icon:           lucide:cloud-upload
 ```
@@ -69,14 +69,15 @@ icon:           lucide:cloud-upload
 同名菜单。
 
 该约定也适用于已有的 Canvas 测试页面。当前历史设计中的 `canvas:test` 页面码属于旧命名，
-正式数据必须通过人工、事务化 migration 改为 `canvas:test:list`；保留原菜单 ID、父子关系和
+正式数据必须通过人工、事务化 migration 改为 `canvas:test:view`；保留原菜单 ID、父子关系和
 角色授权，只更新 code 及其所有协议/测试引用。`canvas:test:button` 作为页面下的 action 可以
 保留。测试夹具若不是持久化数据则直接使用新 code，不为旧 code 增加运行时兼容分支。
 
 ### 3.2 动作权限
 
 页面权限负责进入对象存储页面；动作权限只控制真实操作，不为两个 Tab 额外制造页面节点。
-所有页面节点的入口权限统一使用资源级 `:list` 后缀，不能使用 `:view` 或 `:read`：
+页面节点的入口权限统一使用资源级 `:view` 后缀；列表和单条详情 API 必须使用独立的 `:list`、`:detail`
+动作权限，不能把页面入口权限自动扩展为 API 权限：
 
 | 权限码 | 用途 |
 | --- | --- |
@@ -91,7 +92,8 @@ icon:           lucide:cloud-upload
 | `storage:upload-rule:delete` | 软删除上传规则 |
 | `storage:object:upload` | 申请预签名上传 URL |
 
-`storage:object:list` 是页面节点，权限读取时会按照当前平台过滤。未来业务平台若需要上传，
+`storage:object:view` 是页面节点，`storage:object:list` 和 `storage:object:detail` 是独立读取 action，
+权限读取时会按照当前平台过滤。未来业务平台若需要上传，
 必须在该平台自己的菜单和角色中显式授予 `storage:object:upload`；Admin 不会把 Admin 平台
 权限返回给 Canvas 或其他平台。上传规则本身携带目标 `platform_id`，因此同名规则也不会在
 不同认证平台之间串用。
@@ -122,14 +124,15 @@ COS 页面和接口进入实现前，先在同一份 plan 中完成以下既有�
 菜单 migration：
 
 ```text
-account:profile:list       page   path=/account/profile   is_hidden=1
-account:profile:update     action parent=account:profile:list
-account:password:update    action parent=account:profile:list
+account:profile:view       page   path=/account/profile   is_hidden=1
+account:profile:detail     action parent=account:profile:view
+account:profile:update     action parent=account:profile:view
+account:password:update    action parent=account:profile:view
 ```
 
-页面权限命名遵守全局 `:list` 约定，即使个人资料不是列表页也不能改成 `:view`。页面节点
+页面入口使用 `:view`，个人资料 GET 使用独立 `account:profile:detail` action。页面节点
 仍进入 Access 快照和动态路由注册，但 `is_hidden=1` 时不显示在侧边菜单。头像个人中心入口
-只有在 `account:profile:list` 存在时才显示；没有该权限的已登录用户直接访问旧 URL 或强制
+只有在 `account:profile:view` 存在时才显示；没有该权限的已登录用户直接访问旧 URL 或强制
 跳转时回到 Dashboard，不产生“路由存在但接口报错”的假页面。
 
 页面内保存资料按钮只在 `account:profile:update` 存在时显示/可用，修改密码区域只在
@@ -533,7 +536,7 @@ foundation、数据回填或 Redis 清理。COS 只在连接测试和凭证申�
 
 ### 11.1 后端
 
-- 个人资料路由不在静态路由表中；`account:profile:list` 缺失时，已认证用户访问
+- 个人资料路由不在静态路由表中；`account:profile:view` 缺失时，已认证用户访问
   `/account/profile` 被导向 Dashboard，且 GET/PUT/密码接口分别执行页面或动作权限校验。
 - Access 三层缓存覆盖 Redis version 门控、本地命中、过期/淘汰、`invalidating`、Redis 故障回源
   PostgreSQL、版本切换和不可变快照复制；验证 PostgreSQL 故障时不返回旧本地权限。
@@ -551,10 +554,10 @@ foundation、数据回填或 Redis 清理。COS 只在连接测试和凭证申�
 
 ### 11.2 前端
 
-- 动态路由只从 Access 菜单注册；隐藏的 `account:profile:list` 不出现在侧边栏，但有权限时
+- 动态路由只从 Access 菜单注册；隐藏的 `account:profile:view` 不出现在侧边栏，但有权限时
   头像菜单可以进入，缺权限时强制 URL 回 Dashboard。
 - 个人资料保存和修改密码按钮分别按 `account:profile:update`、`account:password:update`
-  控制，页面级权限统一断言为 `account:profile:list`，不接受 `:view` 变体。
+  控制，页面级权限统一断言为 `account:profile:view`，GET 断言 `account:profile:detail`。
 - 菜单管理验证全部展开、全部收起、搜索恢复和平台切换均使用字符串 row key。
 - API DTO 运行时解析拒绝缺字段、额外字段和错误类型；配置响应只能消费 `hasCredentials`
   和非敏感配置元数据。
@@ -572,7 +575,7 @@ foundation、数据回填或 Redis 清理。COS 只在连接测试和凭证申�
 5. 凭证申请只返回短时 URL 和 object key，浏览器直接 PUT 到 COS；日志中没有 URL 签名、Secret
    或 Authorization。
 6. Admin 平台以外的 `/api/v1/access` 响应不包含 Admin 的 COS 菜单或权限。
-7. 个人资料页面只有在 `account:profile:list` 授权时才可动态进入；保存资料和修改密码分别
+7. 个人资料页面只有在 `account:profile:view` 授权时才可动态进入；GET、保存资料和修改密码分别
    受对应动作权限保护，未授权强制 URL 回 Dashboard。
 8. RBAC 进程内缓存每次使用前经过 Redis access version 门控，权限变更后不会返回旧版本；
    Redis 故障时只回源 PostgreSQL。

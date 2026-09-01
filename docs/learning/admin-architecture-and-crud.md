@@ -698,7 +698,7 @@ Handler 里的 `articleService` 小接口主要服务于 Handler 单元测试。
 `server/internal/module/article/route.go`：
 
 下面的 `content:article:read` 仅是接口动作权限示例，不是 `menuType=page` 的页面入口；任何
-页面菜单节点仍必须使用资源级 `:list`（详情页也不能命名为 `:view`/`:read`）。
+页面菜单节点必须使用资源级 `:view`，列表和详情接口分别使用独立的 `:list`、`:detail` action。
 
 ```go
 package article
@@ -903,7 +903,7 @@ permission.ts 路由守卫
 
 菜单中的 page 节点生成页面路由，action 节点不生成页面，但它的 code 会进入 `permissionCodes`，供按钮权限和后端权限中间件使用。
 
-当前 `rbac:menu:list` 页面是一个静态绑定特例：前端要求它的 code、path、componentPath 精确匹配静态路由，其他页面可以按 access snapshot 动态注册。
+当前页面路由统一由 access snapshot 中的 `:view` page 动态注册；`:list`、`:detail` 和写操作 action 只进入权限集合，不生成页面路由。
 
 ## 10. PostgreSQL 与 Redis 谁说了算
 

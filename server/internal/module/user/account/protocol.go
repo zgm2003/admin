@@ -8,6 +8,7 @@ import (
 )
 
 const (
+	PermissionView   = "account:user:view"
 	PermissionList   = "account:user:list"
 	PermissionUpdate = "account:user:update"
 	PermissionStatus = "account:user:status"

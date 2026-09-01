@@ -1,7 +1,8 @@
 package profile
 
 const (
-	PermissionList           = "account:profile:list"
+	PermissionView           = "account:profile:view"
+	PermissionDetail         = "account:profile:detail"
 	PermissionUpdate         = "account:profile:update"
 	PermissionPasswordUpdate = "account:password:update"
 )

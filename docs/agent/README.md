@@ -101,12 +101,12 @@ task handler -> service -> repository -> model -> PostgreSQL
 ### 2.1 RBAC 页面、按钮与路由契约
 
 权限码是前后端共同使用的稳定协议，不是页面显示文案。所有 `menuType=page` 的菜单节点都
-必须使用资源级 `:list` 作为页面入口权限；即使页面只展示一条个人资料，也必须使用
-`account:profile:list`，不能发明 `account:profile:view` 或 `account:profile:read`。页面内按钮和
-对应接口使用独立的动作权限码，例如：
+使用资源级 `:view` 作为页面入口权限；列表和单条读取分别使用独立的 `:list`、`:detail` action，
+写操作继续使用独立动作权限。三类权限必须显式存储、显式授权，禁止从页面 code 自动派生，例如：
 
 ```text
-account:profile:list       页面进入权限
+account:profile:view       页面进入权限
+account:profile:detail     GET 单条资料权限
 account:profile:update     保存资料按钮和 PUT 接口
 account:password:update    修改密码按钮和 POST 接口
 ```
@@ -115,13 +115,13 @@ account:password:update    修改密码按钮和 POST 接口
 
 | 页面节点 | 页面权限 | 隐藏 | 页面 API | 按钮/动作权限与 API |
 | --- | --- | --- | --- | --- |
-| 个人资料 | `account:profile:list` | `1` | `GET /api/admin/v1/account/profile` | `account:profile:update` -> `PUT /api/admin/v1/account/profile`；`account:password:update` -> `POST /api/admin/v1/account/password` |
+| 个人资料 | `account:profile:view` | `1` | `account:profile:detail` -> `GET /api/admin/v1/account/profile` | `account:profile:update` -> `PUT /api/admin/v1/account/profile`；`account:password:update` -> `POST /api/admin/v1/account/password` |
 
 页面权限只负责进入页面；action 权限只负责对应按钮和写操作。页面权限、动作权限、
 `is_hidden`、动态路由、前端按钮和后端 Middleware 任一项缺失，都不能开始实现。
 
-页面权限、动作权限和后端 Middleware 必须保持一一映射。以个人资料为例，GET 使用
-`account:profile:list`，PUT 使用 `account:profile:update`，POST 密码接口使用
+页面权限、读取权限、动作权限和后端 Middleware 必须保持一一映射。以个人资料为例，GET 使用
+`account:profile:detail`，PUT 使用 `account:profile:update`，POST 密码接口使用
 `account:password:update`；页面节点进入 `menuTree`，action 节点只进入 `permissionCodes`。
 Dashboard 和登录页是应用壳的静态入口，不得以此为由给其他业务页面绕过 RBAC。
 
@@ -133,9 +133,9 @@ Element Plus 树/表格行 key 在状态层统一规范化为 `String(id)`；全
 - 页面路由由当前 Access 快照动态注册，不能在静态路由表中绕过 RBAC；
 - `is_hidden=1` 只隐藏侧边菜单，不删除动态路由和权限矩阵中的页面节点；
 - 前端隐藏按钮只是界面行为，后端 Middleware 必须使用同一动作权限码拒绝越权请求；
-- 设计和迁移时检查 `:view`、`:read` 等错误页面后缀，发现冲突先更新规范和协议，不静默兼容。
-- 代码审查前运行页面权限扫描：每个 `menuType=page` 都必须能在映射表中找到 `:list` code、
-  path、component、`is_hidden` 和 API；旧 code 必须有保留 ID/授权关系的人工 migration。
+- 设计和迁移时检查页面 `:view` 与 API `:list/:detail` 是否独立，发现共用或自动派生先更新协议。
+- 代码审查前运行页面权限扫描：每个 `menuType=page` 都必须能在映射表中找到 `:view` code、
+  path、component、`is_hidden`，每个 API 必须找到独立 action；旧 code 必须有保留 ID/授权关系的人工 migration。
 
 ### 2.2 RBAC 三层访问缓存
 
@@ -294,7 +294,7 @@ HTTP Handler 使用 `context.Request.Context()`，Asynq Handler 使用任务 Con
 哪些历史设计被明确替换；不得为了体现“新实现”而制造无产品价值的差异。
 
 涉及菜单、路由或权限时，设计阶段必须先列出页面节点和动作节点的完整映射，并逐项检查：
-页面权限是否以 `:list` 结尾、隐藏页面是否仍动态注册、每个按钮和后端接口是否有独立动作权限、
+页面权限是否以 `:view` 结尾、隐藏页面是否仍动态注册、每个读取/写入接口是否有独立 action 权限、
 以及 `/api/v1/access` 与后端 Middleware 是否使用同一权限码。未完成这张映射表不得开始实现。
 
 ### 8.4 行为变化和 bug

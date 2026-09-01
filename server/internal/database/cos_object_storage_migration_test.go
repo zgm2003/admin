@@ -12,6 +12,7 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/database/testschema"
 	authplatform "admin/server/internal/module/auth/platform"
+	permission "admin/server/internal/module/permission/access"
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/shared/yesno"
@@ -119,7 +120,7 @@ func openCOSMigrationSchema(t *testing.T) (*gorm.DB, context.Context) {
 		t.Fatal(err)
 	}
 	db, ctx := testschema.Open(t, settings.PostgresDSN, "test_cos_storage_migration")
-	if err := database.AutoMigrate(ctx, db, &authplatform.Platform{}, &role.Role{}, &role.UserRole{}, &menu.Menu{}, &menu.RoleMenu{}); err != nil {
+	if err := database.AutoMigrate(ctx, db, &authplatform.Platform{}, &role.Role{}, &role.UserRole{}, &menu.Menu{}, &menu.RoleMenu{}, &permission.Version{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := authplatform.EnsureSchema(ctx, db); err != nil {

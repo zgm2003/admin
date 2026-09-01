@@ -47,12 +47,12 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 	}
 
 	for id, code := range map[int64]string{
-		1: "access", 2: "permission:menu:list", 3: "permission:menu:create", 4: "permission:menu:update", 5: "permission:menu:delete",
-		6: "permission:role:list", 7: "permission:role:create", 8: "permission:role:update", 9: "permission:role:status",
+		1: "access", 2: "permission:menu:view", 3: "permission:menu:create", 4: "permission:menu:update", 5: "permission:menu:delete",
+		6: "permission:role:view", 7: "permission:role:create", 8: "permission:role:update", 9: "permission:role:status",
 		10: "permission:role:default", 11: "permission:role:delete", 12: "permission:role:authorize",
-		13: "account:user:list", 14: "account:user:update", 15: "account:user:status", 16: "account:user:delete", 17: "account:user:roles",
-		18: "auth:session:list", 19: "auth:session:revoke", 20: "auth:platform:list", 21: "auth:platform:create",
-		22: "auth:platform:update", 23: "auth:platform:status", 24: "auth:platform:delete", 25: "system:operation-log:list",
+		13: "account:user:view", 14: "account:user:update", 15: "account:user:status", 16: "account:user:delete", 17: "account:user:roles",
+		18: "auth:session:view", 19: "auth:session:revoke", 20: "auth:platform:view", 21: "auth:platform:create",
+		22: "auth:platform:update", 23: "auth:platform:status", 24: "auth:platform:delete", 25: "system:operation-log:view",
 	} {
 		row, exists := byCode[code]
 		if !exists || row.ID != id {
@@ -70,14 +70,14 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 		access.Icon == nil || *access.Icon != "lucide:shield-check" {
 		t.Fatalf("access root render fields = %+v", access)
 	}
-	assertRekeyedPage(t, byCode["account:user:list"], account.ID, "/account/users", "account/users", "navigation.accountUsers", "lucide:user-round-cog", 10)
-	assertRekeyedPage(t, byCode["auth:session:list"], account.ID, "/account/sessions", "account/sessions", "navigation.accountSessions", "lucide:monitor-smartphone", 20)
-	assertRekeyedPage(t, byCode["permission:menu:list"], access.ID, "/access/menus", "access/menus", "navigation.accessMenus", "lucide:panel-left", 10)
-	assertRekeyedPage(t, byCode["permission:role:list"], access.ID, "/access/roles", "access/roles", "navigation.accessRoles", "lucide:user-cog", 20)
-	assertRekeyedPage(t, byCode["auth:platform:list"], access.ID, "/access/auth-platforms", "access/auth-platforms", "navigation.accessAuthPlatforms", "lucide:key-round", 30)
-	assertRekeyedPage(t, byCode["system:operation-log:list"], system.ID, "/system/operation-logs", "system/operation-logs", "navigation.systemOperationLogs", "lucide:scroll-text", 10)
+	assertRekeyedPage(t, byCode["account:user:view"], account.ID, "/account/users", "account/users", "navigation.accountUsers", "lucide:user-round-cog", 10)
+	assertRekeyedPage(t, byCode["auth:session:view"], account.ID, "/account/sessions", "account/sessions", "navigation.accountSessions", "lucide:monitor-smartphone", 20)
+	assertRekeyedPage(t, byCode["permission:menu:view"], access.ID, "/access/menus", "access/menus", "navigation.accessMenus", "lucide:panel-left", 10)
+	assertRekeyedPage(t, byCode["permission:role:view"], access.ID, "/access/roles", "access/roles", "navigation.accessRoles", "lucide:user-cog", 20)
+	assertRekeyedPage(t, byCode["auth:platform:view"], access.ID, "/access/auth-platforms", "access/auth-platforms", "navigation.accessAuthPlatforms", "lucide:key-round", 30)
+	assertRekeyedPage(t, byCode["system:operation-log:view"], system.ID, "/system/operation-logs", "system/operation-logs", "navigation.systemOperationLogs", "lucide:scroll-text", 10)
 
-	for _, code := range []string{"permission:menu:list", "permission:menu:create", "permission:menu:update", "permission:menu:delete"} {
+	for _, code := range []string{"permission:menu:view", "permission:menu:create", "permission:menu:update", "permission:menu:delete"} {
 		if byCode[code].DeletedAt != nil {
 			t.Errorf("protected menu %s remains deleted at %v", code, byCode[code].DeletedAt)
 		}
@@ -91,7 +91,7 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 	}
 	assertAccessVersions(t, db, map[int64]int64{7001: 5, 7002: 8})
 
-	if err := db.Exec(`UPDATE permission_menu SET code = 'audit:operation-log:list' WHERE code = 'system:operation-log:list'`).Error; err != nil {
+	if err := db.Exec(`UPDATE permission_menu SET code = 'audit:operation-log:list' WHERE code = 'system:operation-log:view'`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := menu.PrepareSchema(ctx, db); err != nil {
@@ -101,7 +101,7 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 	if err := db.Raw(`SELECT code FROM permission_menu WHERE id = 25`).Scan(&operationLogCode).Error; err != nil {
 		t.Fatal(err)
 	}
-	if operationLogCode != "system:operation-log:list" {
+	if operationLogCode != "system:operation-log:view" {
 		t.Fatalf("operation log menu code = %q", operationLogCode)
 	}
 	assertAccessVersions(t, db, map[int64]int64{7001: 6, 7002: 9})

@@ -6,7 +6,7 @@
 psql "$POSTGRES_DSN" -v ON_ERROR_STOP=1 -f docs/database/2026-08-29-cos-object-storage.sql
 ```
 
-本迁移创建初始 `storage_cos_config`、`storage_upload_rule`、命名检查约束和索引，并在 Admin 平台创建 `cloud -> storage:object:list` 菜单及十个隐藏动作。历史初始结构包含单启用规则与数量字段；请继续执行下方后续修订迁移完成当前设计。API 和 Worker 启动不会执行本迁移。
+本迁移创建初始 `storage_cos_config`、`storage_upload_rule`、命名检查约束和索引，并在 Admin 平台创建 `cloud -> storage:object:view` 页面及独立的 `storage:object:list`、`storage:object:detail` 读取 action 和其他隐藏动作。历史初始结构包含单启用规则与数量字段；请继续执行下方后续修订迁移完成当前设计。API 和 Worker 启动不会执行本迁移。
 
 验证：
 
@@ -16,7 +16,7 @@ WHERE table_name IN ('storage_cos_config', 'storage_upload_rule') ORDER BY table
 SELECT conname FROM pg_constraint WHERE conname LIKE '%storage_%' ORDER BY conname;
 SELECT indexname, indexdef FROM pg_indexes WHERE indexname LIKE '%storage_%' ORDER BY indexname;
 SELECT id, parent_id, platform_id, code, menu_type, path, component_path FROM permission_menu
-WHERE code IN ('cloud', 'storage:object:list') OR code LIKE 'storage:%' ORDER BY id;
+WHERE code IN ('cloud', 'storage:object:view') OR code LIKE 'storage:%' ORDER BY id;
 ```
 
 Execute twice in the maintenance test or staging rehearsal and confirm counts, IDs, menu parents, and role grants do not change.

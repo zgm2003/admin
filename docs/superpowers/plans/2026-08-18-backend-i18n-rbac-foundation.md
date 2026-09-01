@@ -1,8 +1,8 @@
 # Backend i18n and RBAC Foundation Implementation Plan
 
-> 历史计划说明（2026-08-29）：所有页面入口权限统一使用 `:list`，禁止 `:view`、`:read` 或无
-> 后缀页面码；页面按钮和接口必须使用独立 action permission。本文旧示例已按该规则更新，
-> 后续实现以最新 Agent 规则和功能 spec 为准。
+> 历史计划说明（2026-09-01）：所有页面入口权限统一使用 `:view`；列表、详情和写接口使用
+> 独立 action permission，页面权限不得自动派生 API 权限。本文旧 `system:*` 示例保留为
+> 当时实施记录，不是当前权限码契约；后续实现以最新 Agent 规则和功能 spec 为准。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

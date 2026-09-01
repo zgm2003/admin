@@ -52,12 +52,13 @@ func TestAdminRBACBaselineMigrationRejectsCanvasConflict(t *testing.T) {
 }
 
 type rbacMigrationFixture struct {
-	adminID  int64
-	canvasID int64
-	rootID   int64
-	pageID   int64
-	roleID   int64
-	userID   int64
+	adminID    int64
+	canvasID   int64
+	rootID     int64
+	pageID     int64
+	menuPageID int64
+	roleID     int64
+	userID     int64
 }
 
 func openRBACMigrationSchema(t *testing.T) (*gorm.DB, context.Context) {
@@ -102,6 +103,15 @@ func createRBACMigrationFixture(t *testing.T, db *gorm.DB, ctx context.Context) 
 	if err := db.WithContext(ctx).Create(&root).Error; err != nil {
 		t.Fatal(err)
 	}
+	accessRoot := menu.Menu{PlatformID: admin.ID, MenuType: menu.TypeDirectory, Name: "Permission", Code: "access", I18nKey: rbacStringPointer("navigation.access"), IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	if err := db.WithContext(ctx).Create(&accessRoot).Error; err != nil {
+		t.Fatal(err)
+	}
+	menuPath, menuComponent := "/access/menus", "access/menus"
+	menuPage := menu.Menu{PlatformID: admin.ID, ParentID: &accessRoot.ID, MenuType: menu.TypePage, Name: "Menu Management", Code: "permission:menu:list", I18nKey: rbacStringPointer("navigation.accessMenus"), Path: &menuPath, ComponentPath: &menuComponent, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	if err := db.WithContext(ctx).Create(&menuPage).Error; err != nil {
+		t.Fatal(err)
+	}
 	path, component := "/test", "test"
 	canvasPage := menu.Menu{PlatformID: canvas.ID, MenuType: menu.TypePage, Name: "Canvas Test", Code: "canvas:test", I18nKey: rbacStringPointer("navigation.test"), Path: &path, ComponentPath: &component, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := db.WithContext(ctx).Create(&canvasPage).Error; err != nil {
@@ -125,41 +135,56 @@ func createRBACMigrationFixture(t *testing.T, db *gorm.DB, ctx context.Context) 
 	if err := db.WithContext(ctx).Create(&menu.RoleMenu{RoleID: storedRole.ID, MenuID: canvasAction.ID}).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.WithContext(ctx).Create(&menu.RoleMenu{RoleID: storedRole.ID, MenuID: menuPage.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := db.WithContext(ctx).Create(&permission.Version{UserID: user.ID, Version: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	return rbacMigrationFixture{adminID: admin.ID, canvasID: canvas.ID, rootID: root.ID, pageID: canvasPage.ID, roleID: storedRole.ID, userID: user.ID}
+	return rbacMigrationFixture{adminID: admin.ID, canvasID: canvas.ID, rootID: root.ID, pageID: canvasPage.ID, menuPageID: menuPage.ID, roleID: storedRole.ID, userID: user.ID}
 }
 
 func assertRBACMigrationState(t *testing.T, db *gorm.DB, ctx context.Context, fixture rbacMigrationFixture) {
 	t.Helper()
 	var profilePage menu.Menu
-	if err := db.WithContext(ctx).Where("code = ?", "account:profile:list").Take(&profilePage).Error; err != nil {
+	if err := db.WithContext(ctx).Where("code = ?", "account:profile:view").Take(&profilePage).Error; err != nil {
 		t.Fatal(err)
 	}
 	if profilePage.PlatformID != fixture.adminID || profilePage.ParentID == nil || *profilePage.ParentID != fixture.rootID || profilePage.Path == nil || *profilePage.Path != "/account/profile" || profilePage.IsHidden != yesno.Yes {
 		t.Fatalf("profile page = %+v", profilePage)
 	}
 	var loginLogPage menu.Menu
-	if err := db.WithContext(ctx).Where("code = ?", "account:user:loginlog:list").Take(&loginLogPage).Error; err != nil {
+	if err := db.WithContext(ctx).Where("code = ?", "account:user:loginlog:view").Take(&loginLogPage).Error; err != nil {
 		t.Fatal(err)
 	}
 	if loginLogPage.PlatformID != fixture.adminID || loginLogPage.ParentID == nil || *loginLogPage.ParentID != fixture.rootID || loginLogPage.MenuType != menu.TypePage || loginLogPage.Path == nil || *loginLogPage.Path != "/account/login-logs" || loginLogPage.ComponentPath == nil || *loginLogPage.ComponentPath != "user/login-logs" || loginLogPage.IsHidden != yesno.No {
 		t.Fatalf("login log page = %+v", loginLogPage)
 	}
 	var actions []menu.Menu
-	if err := db.WithContext(ctx).Where("parent_id = ? AND code IN ?", profilePage.ID, []string{"account:profile:update", "account:password:update"}).Order("code").Find(&actions).Error; err != nil {
+	if err := db.WithContext(ctx).Where("parent_id = ? AND code IN ?", profilePage.ID, []string{"account:profile:detail", "account:profile:update", "account:password:update"}).Order("code").Find(&actions).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(actions) != 2 || actions[0].Code != "account:password:update" || actions[1].Code != "account:profile:update" {
+	if len(actions) != 3 || actions[0].Code != "account:password:update" || actions[1].Code != "account:profile:detail" || actions[2].Code != "account:profile:update" {
 		t.Fatalf("profile actions = %+v", actions)
 	}
 	var canvasRows []menu.Menu
 	if err := db.WithContext(ctx).Where("platform_id = ?", fixture.canvasID).Order("id").Find(&canvasRows).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(canvasRows) != 2 || canvasRows[0].ID != fixture.pageID || canvasRows[0].Code != "canvas:test:list" || canvasRows[1].ParentID == nil || *canvasRows[1].ParentID != fixture.pageID {
+	if len(canvasRows) != 2 || canvasRows[0].ID != fixture.pageID || canvasRows[0].Code != "canvas:test:view" || canvasRows[1].ParentID == nil || *canvasRows[1].ParentID != fixture.pageID {
 		t.Fatalf("Canvas rows = %+v", canvasRows)
+	}
+	var menuPage menu.Menu
+	if err := db.WithContext(ctx).Where("id = ? AND code = ?", fixture.menuPageID, "permission:menu:view").Take(&menuPage).Error; err != nil {
+		t.Fatalf("menu management page was not rekeyed in place: %v", err)
+	}
+	var menuListAction menu.Menu
+	if err := db.WithContext(ctx).Where("parent_id = ? AND code = ?", menuPage.ID, "permission:menu:list").Take(&menuListAction).Error; err != nil {
+		t.Fatalf("menu list action is missing: %v", err)
+	}
+	var menuListGrantCount int64
+	if err := db.WithContext(ctx).Model(&menu.RoleMenu{}).Where("role_id = ? AND menu_id = ? AND deleted_at IS NULL", fixture.roleID, menuListAction.ID).Count(&menuListGrantCount).Error; err != nil || menuListGrantCount != 1 {
+		t.Fatalf("menu list grant count = %d, error=%v", menuListGrantCount, err)
 	}
 	var grantCount int64
 	if err := db.WithContext(ctx).Model(&menu.RoleMenu{}).Where("role_id = ? AND menu_id = ? AND deleted_at IS NULL", fixture.roleID, canvasRows[1].ID).Count(&grantCount).Error; err != nil || grantCount != 1 {

@@ -29,7 +29,9 @@ type Handler struct{ s handlerService }
 func NewHandler(s handlerService) *Handler { return &Handler{s} }
 
 const (
+	PermissionView   = "storage:object:view"
 	PermissionList   = "storage:object:list"
+	PermissionDetail = "storage:object:detail"
 	PermissionCreate = "storage:upload-rule:create"
 	PermissionUpdate = "storage:upload-rule:update"
 	PermissionStatus = "storage:upload-rule:status"

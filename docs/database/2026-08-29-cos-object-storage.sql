@@ -45,8 +45,6 @@ CREATE TABLE IF NOT EXISTS storage_upload_rule (
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_storage_cos_config_name_active ON storage_cos_config (lower(name)) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS ix_storage_cos_config_enabled_created_at ON storage_cos_config (is_enabled, created_at DESC) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS ux_storage_upload_rule_platform_code_active ON storage_upload_rule (platform_id, code) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS ux_storage_upload_rule_platform_enabled ON storage_upload_rule (platform_id) WHERE is_enabled = 1 AND deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS ix_storage_upload_rule_config_enabled_created_at ON storage_upload_rule (cos_config_id, is_enabled, created_at DESC) WHERE deleted_at IS NULL;
 
 DO $$
@@ -56,6 +54,9 @@ DECLARE
   object_id BIGINT;
   action_code TEXT;
   action_name TEXT;
+  action_id BIGINT;
+  changed_rows BIGINT;
+  changed BOOLEAN := FALSE;
 BEGIN
   SELECT id INTO admin_id FROM auth_platform WHERE code = 'admin' AND deleted_at IS NULL AND is_enabled = 1;
   IF admin_id IS NULL THEN RAISE EXCEPTION 'active Admin platform is required'; END IF;
@@ -71,11 +72,12 @@ BEGIN
     END IF;
   END IF;
 
-  SELECT id INTO object_id FROM permission_menu WHERE platform_id = admin_id AND code = 'storage:object:list' AND deleted_at IS NULL;
+  SELECT id INTO object_id FROM permission_menu WHERE platform_id = admin_id AND code = 'storage:object:view' AND deleted_at IS NULL;
   IF object_id IS NULL THEN
     INSERT INTO permission_menu (platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden, created_at, updated_at)
-    VALUES (admin_id, cloud_id, 'page', '对象存储', 'storage:object:list', 'navigation.storageObject', '/cloud/object-storage', 'storage/object', 'lucide:cloud-upload', 10, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    VALUES (admin_id, cloud_id, 'page', '对象存储', 'storage:object:view', 'navigation.storageObject', '/cloud/object-storage', 'storage/object', 'lucide:cloud-upload', 10, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     RETURNING id INTO object_id;
+    changed := TRUE;
   ELSE
     IF EXISTS (SELECT 1 FROM permission_menu WHERE id = object_id AND (parent_id IS DISTINCT FROM cloud_id OR menu_type <> 'page' OR i18n_key <> 'navigation.storageObject' OR path <> '/cloud/object-storage' OR component_path <> 'storage/object' OR icon <> 'lucide:cloud-upload' OR is_hidden <> 0)) THEN
       RAISE EXCEPTION 'storage object menu shape mismatch';
@@ -83,10 +85,13 @@ BEGIN
   END IF;
 
   FOREACH action_code IN ARRAY ARRAY[
+    'storage:object:list','storage:object:detail',
     'storage:cos-config:create','storage:cos-config:update','storage:cos-config:status','storage:cos-config:test','storage:cos-config:delete',
     'storage:upload-rule:create','storage:upload-rule:update','storage:upload-rule:status','storage:upload-rule:delete','storage:object:upload'
   ] LOOP
     action_name := CASE action_code
+      WHEN 'storage:object:list' THEN '读取对象列表'
+      WHEN 'storage:object:detail' THEN '读取对象详情'
       WHEN 'storage:cos-config:create' THEN '新增 COS 配置'
       WHEN 'storage:cos-config:update' THEN '编辑 COS 配置'
       WHEN 'storage:cos-config:status' THEN '变更 COS 配置状态'
@@ -101,13 +106,33 @@ BEGIN
     END;
     IF NOT EXISTS (SELECT 1 FROM permission_menu WHERE platform_id = admin_id AND code = action_code AND deleted_at IS NULL) THEN
       INSERT INTO permission_menu (platform_id, parent_id, menu_type, name, code, sort_order, is_enabled, is_hidden, created_at, updated_at)
-      VALUES (admin_id, object_id, 'action', action_name, action_code, 100, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+      VALUES (admin_id, object_id, 'action', action_name, action_code, 100, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING id INTO action_id;
+      changed := TRUE;
     ELSE
       UPDATE permission_menu
       SET name = action_name, parent_id = object_id, menu_type = 'action', is_enabled = 1, is_hidden = 1, updated_at = CURRENT_TIMESTAMP
-      WHERE platform_id = admin_id AND code = action_code AND deleted_at IS NULL;
+      WHERE platform_id = admin_id AND code = action_code AND deleted_at IS NULL
+        AND (name IS DISTINCT FROM action_name OR parent_id IS DISTINCT FROM object_id OR menu_type <> 'action' OR is_enabled <> 1 OR is_hidden <> 1);
+      GET DIAGNOSTICS changed_rows = ROW_COUNT;
+      changed := changed OR changed_rows > 0;
+      SELECT id INTO action_id FROM permission_menu WHERE platform_id = admin_id AND code = action_code AND deleted_at IS NULL;
+    END IF;
+    IF action_code IN ('storage:object:list', 'storage:object:detail') THEN
+      INSERT INTO permission_role_menu (role_id, menu_id, created_at, updated_at)
+      SELECT DISTINCT grants.role_id, action_id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      FROM permission_role_menu grants
+      JOIN permission_menu granted ON granted.id = grants.menu_id AND grants.deleted_at IS NULL
+      WHERE (granted.id = object_id OR granted.parent_id = object_id)
+        AND granted.id <> action_id
+        AND NOT EXISTS (SELECT 1 FROM permission_role_menu existing WHERE existing.role_id = grants.role_id AND existing.menu_id = action_id AND existing.deleted_at IS NULL);
+      GET DIAGNOSTICS changed_rows = ROW_COUNT;
+      changed := changed OR changed_rows > 0;
     END IF;
   END LOOP;
+  IF changed THEN
+    UPDATE permission_access_version SET version = version + 1, updated_at = CURRENT_TIMESTAMP;
+  END IF;
 END $$;
 
 COMMIT;

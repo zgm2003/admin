@@ -6,6 +6,7 @@ const (
 	CodeSuperAdmin     = "super_admin"
 	CodeRegisteredUser = "registered_user"
 
+	PermissionView      = "permission:role:view"
 	PermissionList      = "permission:role:list"
 	PermissionCreate    = "permission:role:create"
 	PermissionUpdate    = "permission:role:update"

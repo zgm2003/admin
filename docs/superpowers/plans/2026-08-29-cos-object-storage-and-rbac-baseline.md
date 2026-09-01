@@ -22,7 +22,7 @@
 - 普通请求固定为 `router -> middleware -> handler -> service -> repository -> model -> PostgreSQL`；Handler 不访问 GORM、Redis、Queue、Storage 或第三方 SDK。
 - 前端 HTTP 数据流固定为 `view -> api/<module>.ts -> utils/request.ts -> Go API`；响应 envelope 只能是 `code`、`data`、`message`。
 - 只实现腾讯云 COS；不得添加 OSS、S3、Provider、Driver、通用 Adapter、StorageManager、Factory、Manager、BaseService、BaseRepository、DI 容器或运行时注册器。
-- 所有页面菜单节点的入口权限以资源级 `:list` 结尾；个人资料固定使用 `account:profile:list`，按钮和写接口分别使用 `account:profile:update`、`account:password:update`。
+- 所有页面菜单节点的入口权限使用资源级 `:view`；列表和单条读取分别使用独立 `:list`、`:detail` action；个人资料固定使用 `account:profile:view` 和 `account:profile:detail`，按钮和写接口分别使用 `account:profile:update`、`account:password:update`。
 - `is_hidden=1` 只隐藏侧边栏，不删除 Access 快照、动态路由或权限矩阵中的页面节点；前端隐藏不是后端安全边界。
 - RBAC 查找顺序固定为 Redis access version 门控、进程内 L1、Redis 快照、PostgreSQL 重建；Redis 状态无法确认、损坏或为 `invalidating` 时禁止使用旧 L1。
 - PostgreSQL 只通过人工执行的 forward SQL migration 改变结构和菜单数据；API/Worker 启动禁止 AutoMigrate、EnsureSchema、PrepareSchema、seed、回填、菜单插入、foundation 修复和 Redis 清理。
@@ -77,8 +77,8 @@
 
 **Interfaces:**
 - Produces the route registration signature `RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc)`.
-- Produces permission constants `PermissionList = "account:profile:list"`, `PermissionUpdate = "account:profile:update"`, and `PermissionPasswordUpdate = "account:password:update"` in the `profile` package.
-- Produces dynamic route name `access:account:profile:list`; no static route named `account-profile` remains.
+- Produces permission constants `PermissionView = "account:profile:view"`, `PermissionDetail = "account:profile:detail"`, `PermissionUpdate = "account:profile:update"`, and `PermissionPasswordUpdate = "account:password:update"` in the `profile` package.
+- Produces dynamic route name `access:account:profile:view`; no static route named `account-profile` remains.
 - Consumes the existing `PermissionSnapshot.menuTree` and `permissionCodes` without changing the HTTP DTOs for profile data.
 
 - [ ] **Step 1: Write the failing backend route contract test.**
@@ -91,7 +91,7 @@
       path       string
       permission string
   }{
-      {http.MethodGet, "/api/admin/v1/account/profile", PermissionList},
+      {http.MethodGet, "/api/admin/v1/account/profile", PermissionDetail},
       {http.MethodPut, "/api/admin/v1/account/profile", PermissionUpdate},
       {http.MethodPost, "/api/admin/v1/account/password", PermissionPasswordUpdate},
   }
@@ -114,7 +114,7 @@
   Add `permissions.go` with the three exact constants, change `RegisterRoutes` to the signature above, and bind routes as follows:
 
   ```go
-  accountRoutes.GET("/profile", authenticate, requirePermission(PermissionList), handler.CurrentProfile)
+  accountRoutes.GET("/profile", authenticate, requirePermission(PermissionDetail), handler.CurrentProfile)
   accountRoutes.PUT("/profile", authenticate, requirePermission(PermissionUpdate), handler.UpdateProfile)
   accountRoutes.POST("/password", authenticate, requirePermission(PermissionPasswordUpdate), handler.ChangePassword)
   ```
@@ -131,16 +131,16 @@
 
   ```ts
   const cleanup = registerAccessRoutes(router, [profilePageNode], testViews)
-  expect(router.resolve('/account/profile').name).toBe('access:account:profile:list')
+  expect(router.resolve('/account/profile').name).toBe('access:account:profile:view')
   cleanup()
   expect(router.resolve('/account/profile').matched).toHaveLength(0)
   ```
 
-  Add AppAside tests that set `permissionCodes` to include or exclude `account:profile:list`; the profile dropdown item must exist only in the former case, while logout remains visible in both cases.
+  Add AppAside tests that set `permissionCodes` to include or exclude `account:profile:view`; the profile dropdown item must exist only in the former case, while logout remains visible in both cases.
 
 - [ ] **Step 6: Remove static and hard-coded profile behavior.**
 
-  Remove the `/account/profile` child from `web/src/router/index.ts`. Keep `account/profile` in `componentPathMap` so the Access page can resolve `web/src/views/account/profile/index.vue`. Remove the profile special cases from `resolveBreadcrumbs` and `RouteTabs.vue`; both must find profile metadata from `menuTree` like every other hidden page. In `AppAside.vue`, compute `canOpenProfile = access.hasPermission('account:profile:list')`, render the profile dropdown item conditionally, and navigate with `router.push('/account/profile')` so the dynamic route name is not hard-coded. Keep `web/src/permission.ts` redirect behavior: an authenticated URL absent from the Access tree resolves to Dashboard.
+  Remove the `/account/profile` child from `web/src/router/index.ts`. Keep `account/profile` in `componentPathMap` so the Access page can resolve `web/src/views/account/profile/index.vue`. Remove the profile special cases from `resolveBreadcrumbs` and `RouteTabs.vue`; both must find profile metadata from `menuTree` like every other hidden page. In `AppAside.vue`, compute `canOpenProfile = access.hasPermission('account:profile:view')`, render the profile dropdown item conditionally, and navigate with `router.push('/account/profile')` so the dynamic route name is not hard-coded. Keep `web/src/permission.ts` redirect behavior: an authenticated URL absent from the Access tree resolves to Dashboard.
 
 - [ ] **Step 7: Run the frontend and backend focused tests.**
 
@@ -153,7 +153,7 @@
   pnpm vitest run tests/router/index.test.ts tests/router/permission-routes.test.ts tests/layout/breadcrumbs.test.ts tests/layout/index.test.ts tests/layout/components/AppAside.test.ts --pool=threads --maxWorkers=1
   ```
 
-  Expected result: all tests PASS; a user without `account:profile:list` is redirected to Dashboard before any profile component or API call is used.
+  Expected result: all tests PASS; a user without `account:profile:view` is redirected to Dashboard before any profile component or API call is used.
 
 - [ ] **Step 8: Commit the isolated profile permission change.**
 
@@ -270,7 +270,7 @@
 
 **Interfaces:**
 - The menu view state becomes `Set<string>` for both `expandedIDs` and `expansionBeforeSearch`; `expandedRowKeys` is `string[]`.
-- Persistent Canvas page code is `canvas:test:list`; its action remains `canvas:test:button`.
+- Persistent Canvas page code is `canvas:test:view`; its action remains `canvas:test:button`; no read action is invented without a real API.
 - `rbac/role.Service.SetDefault` retains its current transaction API; this task adds real PostgreSQL concurrency evidence and only changes implementation if the test proves a race.
 
 - [ ] **Step 1: Write the failing row-key regression assertions.**
@@ -303,7 +303,7 @@
   Run from `D:\admin` before editing:
 
   ```powershell
-  rg --pcre2 -n "canvas:test(?!:list)" server web -g "*.go" -g "*.ts" -g "*.vue"
+  rg --pcre2 -n "canvas:test(?!:view)" server web -g "*.go" -g "*.ts" -g "*.vue"
   ```
 
   Update only these non-persistent fixtures and assertions: `server/internal/module/permission/access/repository_test.go`,
@@ -311,7 +311,7 @@
   `server/internal/module/permission/menu/service_test.go`, `web/tests/api/permission/menu.test.ts`,
   `web/tests/api/permission/role.test.ts`, `web/tests/views/permission/menus/index.test.ts`,
   `web/tests/views/permission/roles/index.test.ts`, and `web/tests/views/permission/roles/role-permission-matrix.test.ts`.
-  Replace page fixtures and expected permission arrays with `canvas:test:list`, retain `canvas:test:button`,
+  Replace page fixtures and expected permission arrays with `canvas:test:view`, retain `canvas:test:button`,
   and leave migration/spec documents that mention the old code as historical preflight cases. Do not add a
   runtime fallback that accepts both codes; the persistent row is changed only by the manual migration in Task 4.
 
@@ -353,10 +353,11 @@
   Build a fixture containing the Admin and Canvas platforms, the Admin `account` directory, a `canvas:test` page with `canvas:test:button`, and an existing role grant. After executing the SQL, assert:
 
   ```text
-  account:profile:list       page, parent=account, path=/account/profile, is_hidden=1
-  account:profile:update     action, parent=account:profile:list, is_hidden=1
-  account:password:update    action, parent=account:profile:list, is_hidden=1
-  canvas:test:list            same ID, same parent, same role grants
+  account:profile:view       page, parent=account, path=/account/profile, is_hidden=1
+  account:profile:detail     action, parent=account:profile:view, is_hidden=1
+  account:profile:update     action, parent=account:profile:view, is_hidden=1
+  account:password:update    action, parent=account:profile:view, is_hidden=1
+  canvas:test:view            same ID, same parent, same role grants
   canvas:test                 absent
   ```
 
@@ -408,7 +409,7 @@
 - Create: `server/internal/database/cos_object_storage_migration_test.go`
 
 **Interfaces:**
-- Produces tables `storage_cos_config` and `storage_upload_rule`, their constraints, indexes, and the Admin `cloud`/`storage:object:list` menu tree with action nodes.
+- Produces tables `storage_cos_config` and `storage_upload_rule`, their constraints, indexes, and the Admin `cloud`/`storage:object:view` menu tree with explicit `storage:object:list`/`:detail` action nodes.
 - The migration is the only source of initial COS schema/menu data; API and Worker do not call it.
 
 - [ ] **Step 1: Write failing PostgreSQL schema tests.**
@@ -494,11 +495,11 @@
 
 - [ ] **Step 4: Add the Admin menu nodes in the same maintenance boundary.**
 
-  Verify the Admin `cloud` directory and `storage:object:list` page do not conflict. Insert or verify:
+  Verify the Admin `cloud` directory and `storage:object:view` page do not conflict. Insert or verify:
 
   ```text
   cloud                         directory, i18n=navigation.cloud, icon=lucide:cloud
-  storage:object:list           page, parent=cloud, path=/cloud/object-storage,
+  storage:object:view           page, parent=cloud, path=/cloud/object-storage,
                                 component_path=storage/object,
                                 i18n=navigation.storageObject,
                                 icon=lucide:cloud-upload
@@ -902,7 +903,7 @@
 **Interfaces:**
 - `cosconfig.ts` exposes typed functions for the seven Admin endpoints and parses `unknown` responses with exact-key checks. Its DTOs never contain `secretId`, `secretKey`, ciphertext, SDK config, or signature data in response types.
 - `uploadrule.ts` exposes typed functions for list, page-init, create, update, status, and delete; its `CredentialResponse` parser is kept separate from Admin list DTOs if a future business client needs it.
-- `index.vue` consumes only the two API files, `usePermissionStore().hasPermission`, existing `AppTable`/`AppDialog`/Element Plus components, and the `storage:object:list` menu metadata.
+- `index.vue` consumes only the two API files, `usePermissionStore().hasPermission`, existing `AppTable`/`AppDialog`/Element Plus components, and the `storage:object:view` menu metadata.
 
 - [ ] **Step 1: Write failing API parser tests.**
 
@@ -994,7 +995,7 @@
 
   Verify:
 
-  1. A user with `account:profile:list` can open the hidden profile from the sidebar avatar; users without it are redirected from a forced URL to Dashboard, and profile GET/PUT/password POST return the correct permission errors.
+  1. A user with `account:profile:view` can open the hidden profile from the sidebar avatar; users without it are redirected from a forced URL to Dashboard, and profile GET/PUT/password POST return the correct permission errors.
   2. Changing locale persists across reloads and Element Plus follows the current locale; profile and COS labels have both translations.
   3. Access requests for Admin and Canvas never contain the other platform’s menus or permission codes; super admin receives all valid menus only for the current platform.
   4. Access L1 hits only after a Redis `ready` version check; Redis outage or `invalidating` never serves an old local snapshot.
@@ -1017,8 +1018,8 @@
 ## Self-Review Checklist
 
 - [ ] Every COS spec section has an implementation task: scope/menu, encrypted config, rule lifecycle, one-enabled invariant, upload credential flow, API envelope, audit/error handling, migration boundary, backend tests, frontend tests, and manual acceptance.
-- [ ] Every baseline requirement has a task: profile page/action `:list` contract, dynamic route, hidden avatar entry, backend Middleware, Redis version gate, bounded immutable L1, string row keys, Canvas code migration, and real PostgreSQL default-role concurrency.
+- [ ] Every baseline requirement has a task: profile page `:view` plus explicit `:detail`/action contract, dynamic route, hidden avatar entry, backend Middleware, Redis version gate, bounded immutable L1, string row keys, Canvas code migration, and real PostgreSQL default-role concurrency.
 - [ ] The confirmed per-platform rule invariant is enforced in both Service transaction order and `ux_storage_upload_rule_platform_enabled`; all-stop remains valid.
 - [ ] No task introduces a runtime migration, startup seed, old permission compatibility branch, OSS path, file metadata table, STS, or business-platform menu.
-- [ ] All cross-task names are consistent: `storage_cos_config`, `storage_upload_rule`, `storage/cosconfig`, `storage/uploadrule`, `storage/cos`, `storage:object:list`, `storage:object:upload`, `account:profile:list`, `account:profile:update`, and `account:password:update`.
+- [ ] All cross-task names are consistent: `storage_cos_config`, `storage_upload_rule`, `storage/cosconfig`, `storage/uploadrule`, `storage/cos`, `storage:object:view`, `storage:object:list`, `storage:object:detail`, `storage:object:upload`, `account:profile:view`, `account:profile:detail`, `account:profile:update`, and `account:password:update`.
 - [ ] All test commands are scoped to the changed risk and the final full suite; no completion claim is made without command output.
