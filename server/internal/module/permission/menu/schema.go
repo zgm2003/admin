@@ -91,6 +91,9 @@ func EnsureSchema(ctx context.Context, db *gorm.DB) error {
 		return fmt.Errorf("ensure menu schema requires a database")
 	}
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`ALTER TABLE permission_menu ADD COLUMN IF NOT EXISTS remark VARCHAR(512)`).Error; err != nil {
+			return fmt.Errorf("ensure menu remark column: %w", err)
+		}
 		if err := replaceMenuConstraints(tx); err != nil {
 			return err
 		}

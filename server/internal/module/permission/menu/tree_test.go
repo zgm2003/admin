@@ -85,6 +85,8 @@ func TestBuildMenuIndexRejectsInvalidStoredTrees(t *testing.T) {
 	pagePath := "/reports"
 	componentPath := "reports"
 	validPage := Menu{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypePage, Name: "报表列表", Code: "reports:view", I18nKey: stringPointer("reports.list"), Path: &pagePath, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	invalidPageCode := validPage
+	invalidPageCode.Code = "reports:list"
 	tests := []struct {
 		name  string
 		menus []Menu
@@ -98,6 +100,7 @@ func TestBuildMenuIndexRejectsInvalidStoredTrees(t *testing.T) {
 		{name: "cycle", menus: []Menu{{ID: 1, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}, {ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypeDirectory, Name: "设置", Code: "settings", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
 		{name: "malformed title", menus: []Menu{{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation_unknown"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
 		{name: "invalid action icon", menus: []Menu{validRoot, validPage, {ID: 3, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "新增报表", Code: "reports:create", Icon: stringPointer("lucide:key-round"), IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "page permission suffix", menus: []Menu{validRoot, invalidPageCode}},
 	}
 
 	for _, test := range tests {
@@ -114,8 +117,8 @@ func TestBuildMenuIndexSupportsRootPagesAndPlatformScopedUniqueness(t *testing.T
 	path := "/test"
 	componentPath := "test"
 	menus := []Menu{
-		{ID: 1, PlatformID: 1, MenuType: TypePage, Name: "Admin test", Code: "test", I18nKey: stringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{ID: 2, PlatformID: 2, MenuType: TypePage, Name: "Canvas test", Code: "test", I18nKey: stringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 1, PlatformID: 1, MenuType: TypePage, Name: "Admin test", Code: "test:view", I18nKey: stringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 2, PlatformID: 2, MenuType: TypePage, Name: "Canvas test", Code: "test:view", I18nKey: stringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 		{ID: 3, PlatformID: 2, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "Canvas button", Code: "test:button", IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 	}
 

@@ -15,4 +15,12 @@ describe('Vite development server', () => {
   it('maps @ to the src root', () => {
     expect(config.resolve?.alias).toMatchObject({ '@': expect.any(String) })
   })
+
+  it('runs jsdom suites in one worker to avoid resource-driven timeouts', () => {
+    expect(config.test).toMatchObject({
+      pool: 'threads',
+      maxWorkers: 1,
+      fileParallelism: false,
+    })
+  })
 })

@@ -53,6 +53,7 @@ describe('menu API', () => {
       path: null,
 		componentPath: null,
       icon: 'lucide:folder',
+      remark: null,
       sortOrder: 10,
       isEnabled: YesNo.Yes,
 		isHidden: YesNo.No,
@@ -71,6 +72,7 @@ describe('menu API', () => {
 		path: '/account/users',
 		componentPath: 'account/users',
       icon: 'lucide:panel-left',
+      remark: null,
       sortOrder: 10,
 		isHidden: YesNo.No,
     }
@@ -112,6 +114,7 @@ function menuCatalog() {
       path: '/test',
       componentPath: 'test',
       icon: null,
+      remark: null,
       sortOrder: 10,
       isEnabled: YesNo.Yes,
       isHidden: YesNo.No,

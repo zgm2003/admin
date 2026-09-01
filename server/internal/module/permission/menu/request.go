@@ -59,6 +59,7 @@ type createRequest struct {
 	Path          nullableString `json:"path"`
 	ComponentPath nullableString `json:"componentPath"`
 	Icon          nullableString `json:"icon"`
+	Remark        nullableString `json:"remark"`
 	SortOrder     *int           `json:"sortOrder"`
 	IsEnabled     *yesno.Value   `json:"isEnabled"`
 	IsHidden      *yesno.Value   `json:"isHidden"`
@@ -79,7 +80,7 @@ func (request createRequest) input() (CreateInput, error) {
 	return CreateInput{
 		PlatformID: *request.PlatformID, ParentID: request.ParentID.Value, MenuType: *request.MenuType, Name: *request.Name, Code: *request.Code,
 		I18nKey: request.I18nKey.Value, Path: request.Path.Value, ComponentPath: request.ComponentPath.Value,
-		Icon: request.Icon.Value, SortOrder: *request.SortOrder, IsEnabled: *request.IsEnabled, IsHidden: *request.IsHidden,
+		Icon: request.Icon.Value, Remark: request.Remark.Value, SortOrder: *request.SortOrder, IsEnabled: *request.IsEnabled, IsHidden: *request.IsHidden,
 	}, nil
 }
 
@@ -108,6 +109,7 @@ type updateRequest struct {
 	Path          nullableString `json:"path"`
 	ComponentPath nullableString `json:"componentPath"`
 	Icon          nullableString `json:"icon"`
+	Remark        nullableString `json:"remark"`
 	SortOrder     *int           `json:"sortOrder"`
 	IsHidden      *yesno.Value   `json:"isHidden"`
 }
@@ -126,7 +128,7 @@ func (request updateRequest) input() (UpdateInput, error) {
 	return UpdateInput{
 		ParentID: request.ParentID.Value, MenuType: *request.MenuType, Name: *request.Name, I18nKey: request.I18nKey.Value,
 		Path: request.Path.Value, ComponentPath: request.ComponentPath.Value, Icon: request.Icon.Value,
-		SortOrder: *request.SortOrder, IsHidden: *request.IsHidden,
+		Remark: request.Remark.Value, SortOrder: *request.SortOrder, IsHidden: *request.IsHidden,
 	}, nil
 }
 

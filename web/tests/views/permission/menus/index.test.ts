@@ -252,6 +252,7 @@ describe('MenuManagement', () => {
       path: null,
 		componentPath: null,
       icon: null,
+      remark: null,
       sortOrder: 100,
       isEnabled: YesNo.Yes,
 		isHidden: YesNo.No,
@@ -354,6 +355,7 @@ describe('MenuManagement', () => {
 			path: null,
 			componentPath: null,
 			icon: null,
+			remark: null,
 			sortOrder: 100,
 			isEnabled: YesNo.Yes,
 			isHidden: YesNo.Yes,
@@ -417,6 +419,8 @@ describe('MenuManagement', () => {
     await flushPromises()
     const codeInput = bodyGet('[data-testid="menu-form-code"]')
     expect(codeInput.attributes('readonly')).toBeDefined()
+    expect(bodyGet('[data-testid="menu-form-type"]').classes()).toContain('is-disabled')
+    expect(bodyFind('[data-testid="menu-form-remark"]').exists()).toBe(true)
     expect(bodyGet('[data-testid="menu-form-platform"]').text()).toContain('Admin')
     await bodyGet('[data-testid="menu-form-sort-order"] input').setValue('12')
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
@@ -430,6 +434,7 @@ describe('MenuManagement', () => {
 		path: '/account/users',
 		componentPath: 'account/users',
       icon: 'lucide:panel-left',
+      remark: null,
       sortOrder: 12,
 		isHidden: YesNo.No,
     }

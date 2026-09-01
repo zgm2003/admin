@@ -27,6 +27,7 @@ type Menu struct {
 	Path          *string        `gorm:"column:path;type:varchar(255)"`
 	ComponentPath *string        `gorm:"column:component_path;type:varchar(255)"`
 	Icon          *string        `gorm:"column:icon;type:varchar(128)"`
+	Remark        *string        `gorm:"column:remark;type:varchar(512)"`
 	SortOrder     int            `gorm:"column:sort_order;type:integer;not null;default:0"`
 	IsEnabled     yesno.Value    `gorm:"column:is_enabled;type:smallint;not null;default:1"`
 	IsHidden      yesno.Value    `gorm:"column:is_hidden;type:smallint;not null;default:0"`

@@ -19,6 +19,7 @@ type managedMenuResponse struct {
 	Path          *string               `json:"path"`
 	ComponentPath *string               `json:"componentPath"`
 	Icon          *string               `json:"icon"`
+	Remark        *string               `json:"remark"`
 	SortOrder     int                   `json:"sortOrder"`
 	IsEnabled     int16                 `json:"isEnabled"`
 	IsHidden      int16                 `json:"isHidden"`
@@ -65,7 +66,7 @@ func newManagedMenuResponse(item ManagedMenu) managedMenuResponse {
 	return managedMenuResponse{
 		ID: item.ID, PlatformID: item.PlatformID, PlatformCode: item.PlatformCode, PlatformName: item.PlatformName,
 		ParentID: item.ParentID, MenuType: item.MenuType, Name: item.Name, Code: item.Code,
-		I18nKey: item.I18nKey, Path: item.Path, ComponentPath: item.ComponentPath, Icon: item.Icon,
+		I18nKey: item.I18nKey, Path: item.Path, ComponentPath: item.ComponentPath, Icon: item.Icon, Remark: item.Remark,
 		SortOrder: item.SortOrder, IsEnabled: int16(item.IsEnabled), IsHidden: int16(item.IsHidden),
 		CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: item.UpdatedAt.UTC().Format(time.RFC3339Nano), IsProtected: protectedValue(item.IsProtected), Children: children,

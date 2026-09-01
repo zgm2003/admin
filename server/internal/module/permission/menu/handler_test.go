@@ -52,7 +52,7 @@ func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 	if err := json.Unmarshal(data["menuTree"], &rows); err != nil || len(rows) != 1 {
 		t.Fatalf("menuTree = %s error=%v", data["menuTree"], err)
 	}
-	wantKeys := []string{"id", "platformId", "platformCode", "platformName", "parentId", "menuType", "name", "code", "i18nKey", "path", "componentPath", "icon", "sortOrder", "isEnabled", "isHidden", "createdAt", "updatedAt", "isProtected", "children"}
+	wantKeys := []string{"id", "platformId", "platformCode", "platformName", "parentId", "menuType", "name", "code", "i18nKey", "path", "componentPath", "icon", "remark", "sortOrder", "isEnabled", "isHidden", "createdAt", "updatedAt", "isProtected", "children"}
 	if len(rows[0]) != len(wantKeys) {
 		t.Fatalf("menu response keys = %v", rows[0])
 	}

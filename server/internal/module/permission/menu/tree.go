@@ -220,7 +220,7 @@ func (index menuIndex) buildManagedTree() ([]ManagedMenu, error) {
 		}
 		return ManagedMenu{
 			ID: item.ID, PlatformID: item.PlatformID, ParentID: item.ParentID, MenuType: item.MenuType, Name: item.Name, Code: item.Code,
-			I18nKey: item.I18nKey, Path: item.Path, ComponentPath: item.ComponentPath, Icon: item.Icon,
+			I18nKey: item.I18nKey, Path: item.Path, ComponentPath: item.ComponentPath, Icon: item.Icon, Remark: item.Remark,
 			SortOrder: item.SortOrder, IsEnabled: item.IsEnabled, IsHidden: item.IsHidden,
 			CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt, IsProtected: IsProtectedCode(item.Code), Children: children,
 		}, nil
@@ -238,6 +238,9 @@ func (index menuIndex) buildManagedTree() ([]ManagedMenu, error) {
 func validateStoredMenu(item Menu) error {
 	if item.ID < 1 || item.PlatformID < 1 || !yesno.IsValid(item.IsEnabled) || !yesno.IsValid(item.IsHidden) || !validMenuName(item.Name) || !validMenuCode(item.Code) {
 		return fmt.Errorf("%w: code or stored scalar is invalid", errMenuFields)
+	}
+	if err := validateMenuTypeCode(item.MenuType, item.Code); err != nil {
+		return err
 	}
 	if item.Icon != nil && !validMenuIcon(*item.Icon) {
 		return fmt.Errorf("%w: icon is invalid", errMenuFields)
@@ -313,6 +316,20 @@ func validMenuIcon(value string) bool {
 	return ok
 }
 
+func normalizeRemark(value *string) (*string, error) {
+	if value == nil {
+		return nil, nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if utf8.RuneCountInString(trimmed) > 512 {
+		return nil, fmt.Errorf("%w: remark is too long", errMenuFields)
+	}
+	return &trimmed, nil
+}
+
 func normalizeCreateInput(input CreateInput) (CreateInput, error) {
 	if input.PlatformID < 1 || !validMenuName(input.Name) || !validMenuCode(input.Code) || !yesno.IsValid(input.IsEnabled) ||
 		!yesno.IsValid(input.IsHidden) || input.SortOrder < 0 {
@@ -324,6 +341,11 @@ func normalizeCreateInput(input CreateInput) (CreateInput, error) {
 	if err := validateInputShape(input.MenuType, input.I18nKey, input.Path, input.ComponentPath, input.Icon, input.IsHidden); err != nil {
 		return CreateInput{}, err
 	}
+	remark, err := normalizeRemark(input.Remark)
+	if err != nil {
+		return CreateInput{}, err
+	}
+	input.Remark = remark
 	return input, nil
 }
 
@@ -348,6 +370,11 @@ func normalizeUpdateInput(input UpdateInput) (UpdateInput, error) {
 	if err := validateInputShape(input.MenuType, input.I18nKey, input.Path, input.ComponentPath, input.Icon, input.IsHidden); err != nil {
 		return UpdateInput{}, err
 	}
+	remark, err := normalizeRemark(input.Remark)
+	if err != nil {
+		return UpdateInput{}, err
+	}
+	input.Remark = remark
 	return input, nil
 }
 

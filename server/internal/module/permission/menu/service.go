@@ -11,6 +11,7 @@ import (
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
+
 	"gorm.io/gorm"
 )
 
@@ -24,6 +25,7 @@ type CreateInput struct {
 	Path          *string
 	ComponentPath *string
 	Icon          *string
+	Remark        *string
 	SortOrder     int
 	IsEnabled     yesno.Value
 	IsHidden      yesno.Value
@@ -37,6 +39,7 @@ type UpdateInput struct {
 	Path          *string
 	ComponentPath *string
 	Icon          *string
+	Remark        *string
 	SortOrder     int
 	IsHidden      yesno.Value
 }
@@ -54,6 +57,7 @@ type ManagedMenu struct {
 	Path          *string
 	ComponentPath *string
 	Icon          *string
+	Remark        *string
 	SortOrder     int
 	IsEnabled     yesno.Value
 	IsHidden      yesno.Value
@@ -177,7 +181,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		created := Menu{
 			PlatformID: normalized.PlatformID, ParentID: normalized.ParentID, MenuType: normalized.MenuType, Name: normalized.Name, Code: normalized.Code,
 			I18nKey: normalized.I18nKey, Path: normalized.Path, ComponentPath: normalized.ComponentPath,
-			Icon: normalized.Icon, SortOrder: normalized.SortOrder, IsEnabled: normalized.IsEnabled, IsHidden: normalized.IsHidden,
+			Icon: normalized.Icon, Remark: normalized.Remark, SortOrder: normalized.SortOrder, IsEnabled: normalized.IsEnabled, IsHidden: normalized.IsHidden,
 		}
 		if err := repository.Create(mutationCtx, &created); err != nil {
 			return false, mapServiceRepositoryError(err, normalized.Code, stringValue(normalized.Path))
@@ -210,6 +214,9 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		normalized, err := normalizeUpdateInput(input)
 		if err != nil {
 			return false, menuInvalidFields(err)
+		}
+		if normalized.MenuType != target.MenuType {
+			return false, menuInvalidFields(fmt.Errorf("menu type cannot be changed"))
 		}
 		if err := validateMenuTypeCode(normalized.MenuType, target.Code); err != nil {
 			return false, menuInvalidFields(err)
@@ -246,6 +253,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		candidate.Path = normalized.Path
 		candidate.ComponentPath = normalized.ComponentPath
 		candidate.Icon = normalized.Icon
+		candidate.Remark = normalized.Remark
 		candidate.SortOrder = normalized.SortOrder
 		candidate.IsHidden = normalized.IsHidden
 		candidateIndex, err := replaceMenuInIndex(index, candidate)
@@ -262,7 +270,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		if err := repository.UpdateMenu(mutationCtx, id, UpdateValues{
 			ParentID: normalized.ParentID, MenuType: normalized.MenuType, Name: normalized.Name, I18nKey: normalized.I18nKey,
 			Path: normalized.Path, ComponentPath: normalized.ComponentPath, Icon: normalized.Icon,
-			SortOrder: normalized.SortOrder, IsHidden: normalized.IsHidden,
+			Remark: normalized.Remark, SortOrder: normalized.SortOrder, IsHidden: normalized.IsHidden,
 		}, operationTime); err != nil {
 			return false, mapServiceRepositoryError(err, target.Code, stringValue(normalized.Path))
 		}
@@ -453,7 +461,7 @@ func sameMenuUpdate(stored Menu, input UpdateInput) bool {
 	return sameInt64Pointer(stored.ParentID, input.ParentID) &&
 		stored.MenuType == input.MenuType && stored.Name == input.Name && sameStringPointer(stored.I18nKey, input.I18nKey) &&
 		sameStringPointer(stored.Path, input.Path) && sameStringPointer(stored.ComponentPath, input.ComponentPath) &&
-		sameStringPointer(stored.Icon, input.Icon) && stored.SortOrder == input.SortOrder && stored.IsHidden == input.IsHidden
+		sameStringPointer(stored.Icon, input.Icon) && sameStringPointer(stored.Remark, input.Remark) && stored.SortOrder == input.SortOrder && stored.IsHidden == input.IsHidden
 }
 
 func allowedProtectedUpdate(stored Menu, input UpdateInput) bool {

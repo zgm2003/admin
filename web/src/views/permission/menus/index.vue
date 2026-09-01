@@ -59,6 +59,7 @@ interface MenuFormState {
   path: string | null;
   componentPath: string | null;
   icon: MenuIconName | null;
+  remark: string;
   sortOrder: number;
   isEnabled: YesNo;
   isHidden: YesNo;
@@ -116,6 +117,7 @@ function newForm(): MenuFormState {
     path: null,
     componentPath: null,
     icon: null,
+    remark: "",
     sortOrder: 100,
     isEnabled: YesNo.Yes,
     isHidden: YesNo.No,
@@ -341,6 +343,7 @@ function openEdit(node: ManagedMenuNode): void {
     path: node.path,
     componentPath: node.componentPath,
     icon: node.icon,
+    remark: node.remark ?? "",
     sortOrder: node.sortOrder,
     isEnabled: node.isEnabled,
     isHidden: node.isHidden,
@@ -378,6 +381,7 @@ async function submitForm(): Promise<void> {
         path: form.value.path,
         componentPath: form.value.componentPath,
         icon: form.value.icon,
+        remark: form.value.remark.trim() === "" ? null : form.value.remark.trim(),
         sortOrder: form.value.sortOrder,
         isEnabled: form.value.isEnabled,
         isHidden: form.value.isHidden,
@@ -397,6 +401,7 @@ async function submitForm(): Promise<void> {
       path: form.value.path,
       componentPath: form.value.componentPath,
       icon: form.value.icon,
+      remark: form.value.remark.trim() === "" ? null : form.value.remark.trim(),
       sortOrder: form.value.sortOrder,
       isHidden: form.value.isHidden,
     };
@@ -684,6 +689,19 @@ onMounted(() => loadMenus());
         />
 
         <el-table-column
+            :label="t('menu.column.remark')"
+            min-width="220"
+            align="center"
+            header-align="center"
+            show-overflow-tooltip
+        >
+          <template #default="{ row }: { row: ManagedMenuNode }">
+            <span v-if="row.remark !== null">{{ row.remark }}</span>
+            <span v-else class="menu-cell-empty">-</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column
             :label="t('menu.column.route')"
             min-width="180"
             align="center"
@@ -898,7 +916,7 @@ onMounted(() => loadMenus());
                   v-model="parentSelection"
                   data-testid="menu-form-parent"
                   clearable
-                  :disabled="editingProtected"
+                  :disabled="dialogMode === 'edit' || editingProtected"
                   :title="
                 editingProtected ? t('menu.form.protectedHint') : undefined
               "
@@ -912,7 +930,8 @@ onMounted(() => loadMenus());
               <el-select-v2
                   :model-value="form.menuType"
                   data-testid="menu-form-type"
-                  :disabled="editingProtected"
+                  :disabled="dialogMode === 'edit' || editingProtected"
+                  :class="{ 'is-disabled': dialogMode === 'edit' || editingProtected }"
                   :title="
                 editingProtected ? t('menu.form.protectedHint') : undefined
               "
@@ -946,6 +965,20 @@ onMounted(() => loadMenus());
                   v-model="form.name"
                   data-testid="menu-form-name"
                   maxlength="128"
+              />
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="24">
+            <el-form-item :label="t('menu.form.remark')">
+              <el-input
+                  v-model="form.remark"
+                  data-testid="menu-form-remark"
+                  type="textarea"
+                  :rows="3"
+                  maxlength="512"
+                  show-word-limit
+                  :placeholder="t('menu.form.remarkPlaceholder')"
               />
             </el-form-item>
           </el-col>

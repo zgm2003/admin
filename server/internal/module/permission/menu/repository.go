@@ -27,6 +27,7 @@ type UpdateValues struct {
 	Path          *string
 	ComponentPath *string
 	Icon          *string
+	Remark        *string
 	SortOrder     int
 	IsHidden      yesno.Value
 }
@@ -66,11 +67,11 @@ func (r *Repository) Create(ctx context.Context, value *Menu) error {
 	}
 	result := r.db.WithContext(ctx).Raw(`
 		INSERT INTO permission_menu (
-			platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, remark, sort_order, is_enabled, is_hidden
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING id, created_at, updated_at`,
 		value.PlatformID, value.ParentID, value.MenuType, value.Name, value.Code, value.I18nKey, value.Path,
-		value.ComponentPath, value.Icon, value.SortOrder, value.IsEnabled, value.IsHidden,
+		value.ComponentPath, value.Icon, value.Remark, value.SortOrder, value.IsEnabled, value.IsHidden,
 	).Scan(&created)
 	if result.Error != nil {
 		return mapMenuWriteError("create menu", result.Error)
@@ -168,7 +169,7 @@ func (r *Repository) UpdateFoundationStructure(ctx context.Context, id int64, va
 	result := r.db.WithContext(ctx).Model(&Menu{}).Where("id = ?", id).Updates(map[string]any{
 		"parent_id": value.ParentID, "menu_type": value.MenuType, "path": value.Path,
 		"component_path": value.ComponentPath, "is_enabled": value.IsEnabled,
-		"is_hidden": value.IsHidden, "updated_at": updatedAt.UTC(),
+		"is_hidden": value.IsHidden, "remark": value.Remark, "updated_at": updatedAt.UTC(),
 	})
 	if result.Error != nil {
 		return fmt.Errorf("update foundation menu structure: %w", result.Error)
@@ -183,7 +184,7 @@ func (r *Repository) RestoreFoundationMenu(ctx context.Context, id int64, value 
 	result := r.db.WithContext(ctx).Unscoped().Model(&Menu{}).Where("id = ?", id).Updates(map[string]any{
 		"parent_id": value.ParentID, "menu_type": value.MenuType, "name": value.Name, "code": value.Code,
 		"i18n_key": value.I18nKey, "path": value.Path, "component_path": value.ComponentPath,
-		"icon": value.Icon, "sort_order": value.SortOrder, "is_enabled": value.IsEnabled,
+		"icon": value.Icon, "remark": value.Remark, "sort_order": value.SortOrder, "is_enabled": value.IsEnabled,
 		"is_hidden": value.IsHidden, "updated_at": updatedAt.UTC(), "deleted_at": nil,
 	})
 	if result.Error != nil {
@@ -318,6 +319,7 @@ func (r *Repository) UpdateMenu(ctx context.Context, id int64, values UpdateValu
 		"path":           values.Path,
 		"component_path": values.ComponentPath,
 		"icon":           values.Icon,
+		"remark":         values.Remark,
 		"sort_order":     values.SortOrder,
 		"is_hidden":      values.IsHidden,
 		"updated_at":     updatedAt.UTC(),

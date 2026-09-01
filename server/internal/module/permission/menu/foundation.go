@@ -19,6 +19,7 @@ type FoundationDefinition struct {
 	Path          *string
 	ComponentPath *string
 	Icon          *string
+	Remark        *string
 	SortOrder     int
 	IsEnabled     yesno.Value
 	IsHidden      yesno.Value
@@ -120,6 +121,9 @@ func (s *Service) ensurePlatformFoundation(ctx context.Context, platformCode str
 			default:
 				candidate.ID = row.ID
 				candidate.Name, candidate.I18nKey, candidate.Icon, candidate.SortOrder = row.Name, row.I18nKey, row.Icon, row.SortOrder
+				if row.Remark != nil {
+					candidate.Remark = row.Remark
+				}
 				if !sameFoundationStructure(row, candidate) {
 					if err := repository.UpdateFoundationStructure(mutationCtx, row.ID, candidate, operationTime); err != nil {
 						return false, err
@@ -164,7 +168,7 @@ func validateFoundationDefinitions(definitions []FoundationDefinition) ([]Founda
 		input := CreateInput{
 			PlatformID: 1, MenuType: definition.MenuType, Name: definition.Name, Code: definition.Code, I18nKey: definition.I18nKey,
 			Path: definition.Path, ComponentPath: definition.ComponentPath, Icon: definition.Icon,
-			SortOrder: definition.SortOrder, IsEnabled: definition.IsEnabled, IsHidden: definition.IsHidden,
+			Remark: definition.Remark, SortOrder: definition.SortOrder, IsEnabled: definition.IsEnabled, IsHidden: definition.IsHidden,
 		}
 		if _, err := normalizeCreateInput(input); err != nil {
 			return nil, fmt.Errorf("foundation menu %s: %w", definition.Code, err)
@@ -213,12 +217,12 @@ func foundationMenu(platformID int64, definition FoundationDefinition, activeByC
 	return Menu{
 		PlatformID: platformID, ParentID: parentID, MenuType: definition.MenuType, Name: definition.Name, Code: definition.Code,
 		I18nKey: definition.I18nKey, Path: definition.Path, ComponentPath: definition.ComponentPath,
-		Icon: definition.Icon, SortOrder: definition.SortOrder, IsEnabled: definition.IsEnabled, IsHidden: definition.IsHidden,
+		Icon: definition.Icon, Remark: definition.Remark, SortOrder: definition.SortOrder, IsEnabled: definition.IsEnabled, IsHidden: definition.IsHidden,
 	}, nil
 }
 
 func sameFoundationStructure(left, right Menu) bool {
 	return left.PlatformID == right.PlatformID && sameInt64Pointer(left.ParentID, right.ParentID) && left.MenuType == right.MenuType &&
-		sameStringPointer(left.Path, right.Path) && sameStringPointer(left.ComponentPath, right.ComponentPath) &&
+		sameStringPointer(left.Path, right.Path) && sameStringPointer(left.ComponentPath, right.ComponentPath) && sameStringPointer(left.Remark, right.Remark) &&
 		left.IsEnabled == right.IsEnabled && left.IsHidden == right.IsHidden
 }

@@ -198,6 +198,25 @@ func TestServiceUpdateMovesCandidateTreeAndKeepsCodeStable(t *testing.T) {
 	}
 }
 
+func TestServiceUpdateRejectsMenuTypeChange(t *testing.T) {
+	_, ctx, service := openCleanMenuService(t)
+	rootID, err := createAdminMenu(t, service, ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, componentPath := "/reports", "reports"
+	pageID, err := createAdminMenu(t, service, ctx, CreateInput{ParentID: &rootID, MenuType: TypePage, Name: "Reports", Code: "reports:view", I18nKey: stringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Update(ctx, pageID, UpdateInput{ParentID: &rootID, MenuType: TypeAction, Name: "Reports", IsHidden: yesno.Yes}); menuServiceErrorCode(err) != CodeMenuInvalidFields {
+		t.Fatalf("menu type change error = %v", err)
+	}
+	if err := service.Update(ctx, pageID, UpdateInput{ParentID: &rootID, MenuType: TypeDirectory, Name: "Reports", I18nKey: stringPointer("navigation.system"), IsHidden: yesno.No}); menuServiceErrorCode(err) != CodeMenuInvalidFields {
+		t.Fatalf("page to directory type change error = %v", err)
+	}
+}
+
 func TestServiceUpdateRejectsCyclesStructureGrantsAndDisabledAncestors(t *testing.T) {
 	t.Run("cycle through descendant", func(t *testing.T) {
 		_, ctx, service := openCleanMenuService(t)

@@ -14,11 +14,11 @@ func TestMenuProtocolV2UsesNameNullableI18nAndRenderState(t *testing.T) {
 		value    reflect.Type
 		required []string
 	}{
-		{name: "model", value: reflect.TypeOf(Menu{}), required: []string{"Name", "I18nKey", "ComponentPath", "IsHidden"}},
-		{name: "create input", value: reflect.TypeOf(CreateInput{}), required: []string{"Name", "I18nKey", "ComponentPath", "IsHidden"}},
-		{name: "update input", value: reflect.TypeOf(UpdateInput{}), required: []string{"Name", "I18nKey", "ComponentPath", "IsHidden"}},
-		{name: "managed menu", value: reflect.TypeOf(ManagedMenu{}), required: []string{"Name", "I18nKey", "ComponentPath", "IsHidden"}},
-		{name: "repository update", value: reflect.TypeOf(UpdateValues{}), required: []string{"Name", "I18nKey", "ComponentPath", "IsHidden"}},
+		{name: "model", value: reflect.TypeOf(Menu{}), required: []string{"Name", "I18nKey", "ComponentPath", "IsHidden", "Remark"}},
+		{name: "create input", value: reflect.TypeOf(CreateInput{}), required: []string{"Name", "I18nKey", "ComponentPath", "IsHidden", "Remark"}},
+		{name: "update input", value: reflect.TypeOf(UpdateInput{}), required: []string{"Name", "I18nKey", "ComponentPath", "IsHidden", "Remark"}},
+		{name: "managed menu", value: reflect.TypeOf(ManagedMenu{}), required: []string{"Name", "I18nKey", "ComponentPath", "IsHidden", "Remark"}},
+		{name: "repository update", value: reflect.TypeOf(UpdateValues{}), required: []string{"Name", "I18nKey", "ComponentPath", "IsHidden", "Remark"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

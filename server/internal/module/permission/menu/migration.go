@@ -98,6 +98,7 @@ func PrepareSchema(ctx context.Context, db *gorm.DB) error {
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		for _, statement := range []string{
 			`ALTER TABLE permission_menu ADD COLUMN IF NOT EXISTS name VARCHAR(128)`,
+			`ALTER TABLE permission_menu ADD COLUMN IF NOT EXISTS remark VARCHAR(512)`,
 			`ALTER TABLE permission_menu ALTER COLUMN i18n_key DROP NOT NULL`,
 		} {
 			if err := tx.Exec(statement).Error; err != nil {
@@ -120,9 +121,27 @@ func PrepareSchema(ctx context.Context, db *gorm.DB) error {
 		if err := tx.Exec(`ALTER TABLE permission_menu ALTER COLUMN name SET NOT NULL`).Error; err != nil {
 			return fmt.Errorf("require menu name: %w", err)
 		}
+		if err := backfillMenuRemarks(tx); err != nil {
+			return err
+		}
 		return nil
 	}); err != nil {
 		return fmt.Errorf("prepare menu schema: %w", err)
+	}
+	return nil
+}
+
+func backfillMenuRemarks(db *gorm.DB) error {
+	if err := db.Exec(`
+		UPDATE permission_menu
+		SET remark = CASE menu_type
+			WHEN 'page' THEN '允许进入“' || name || '”页面；不代表拥有页面内列表、详情或写操作权限。'
+			WHEN 'action' THEN '控制“' || name || '”对应的具体操作。'
+			ELSE '用于组织“' || name || '”菜单，不作为独立操作权限。'
+		END,
+		updated_at = CURRENT_TIMESTAMP
+		WHERE deleted_at IS NULL AND (remark IS NULL OR btrim(remark) = '')`).Error; err != nil {
+		return fmt.Errorf("backfill menu remarks: %w", err)
 	}
 	return nil
 }
