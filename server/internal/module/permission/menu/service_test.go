@@ -243,7 +243,7 @@ func TestServiceUpdateRejectsCyclesStructureGrantsAndDisabledAncestors(t *testin
 		}
 	})
 
-	t.Run("direct grant blocks directory conversion", func(t *testing.T) {
+	t.Run("menu type change is rejected before grant checks", func(t *testing.T) {
 		tx, ctx, service := openCleanMenuService(t)
 		rootID, _ := createAdminMenu(t, service, ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
 		path := "/reports"
@@ -257,8 +257,8 @@ func TestServiceUpdateRejectsCyclesStructureGrantsAndDisabledAncestors(t *testin
 			t.Fatal(err)
 		}
 		err := service.Update(ctx, pageID, UpdateInput{MenuType: TypeDirectory, Name: "Reports", I18nKey: stringPointer("navigation.system"), SortOrder: 1, IsHidden: yesno.No})
-		if menuServiceErrorCode(err) != CodeMenuStructureConflict {
-			t.Fatalf("grant conflict error = %v", err)
+		if menuServiceErrorCode(err) != CodeMenuInvalidFields {
+			t.Fatalf("menu type change error = %v", err)
 		}
 	})
 
