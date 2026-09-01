@@ -2,7 +2,7 @@
 
 ## 1. 状态与范围
 
-状态：设计草案，等待评审。
+状态：设计草案，菜单权限契约已确认；模板固定性与平台隔离按本版执行。
 
 本模块为 Admin 提供腾讯云 SES 邮件配置、固定业务模板、发送事实查询、测试发送和收件人黑白名单。邮件是管理员邀请、邮箱验证码和后续邮箱安全流程的发送基础设施。
 
@@ -55,6 +55,8 @@
 system:mail:view
 ```
 
+`system:mail:view` 只表示页面入口权限。所有读取和操作权限都是该页面下的隐藏 action 菜单，页面权限不会自动扩展为任何读取或写入权限；page 权限必须以 `:view` 结尾，action 权限不得以 `:view` 结尾。
+
 页面内部使用四个 Tab，不创建四个子页面或四个左侧菜单：
 
 1. 邮件配置
@@ -71,10 +73,8 @@ system:mail:view
 | `system:mail:config:update` | 保存或修改 SES 配置 |
 | `system:mail:config:delete` | 删除 SES 配置 |
 | `system:mail:test` | 发送 Admin 测试邮件 |
-| `system:mail:template:create` | 创建模板元数据 |
 | `system:mail:template:update` | 修改模板元数据 |
 | `system:mail:template:status` | 启停模板 |
-| `system:mail:template:delete` | 删除模板 |
 | `system:mail:log:delete` | 删除发送日志 |
 | `system:mail:rule:create` | 创建黑白名单规则 |
 | `system:mail:rule:update` | 修改黑白名单规则 |
@@ -108,7 +108,7 @@ SecretId 和 SecretKey 在数据库中使用项目现有凭据加密机制保存
 
 展示四个固定场景的模板元数据、启用状态、腾讯云模板 ID、变量和示例变量。
 
-场景是稳定业务协议，固定场景只能编辑名称、展示主题、模板 ID、变量和状态；不允许把一个场景改成另一个场景，也不允许删除系统仍依赖的唯一模板。模板必须启用后才能发送业务邮件。
+场景是稳定业务协议，系统只维护四条固定模板元数据。固定场景只能编辑名称、展示主题、模板 ID、变量和状态；不允许新增自定义场景、不允许把一个场景改成另一个场景，也不允许删除系统仍依赖的唯一模板。模板必须启用后才能发送业务邮件。四条初始记录和腾讯云模板 ID 通过人工 SQL 写入，不由 API 启动初始化。
 
 ### 4.3 发送日志
 
@@ -203,27 +203,27 @@ Admin 测试发送额度可以比公开业务更宽，但不能无限制，也�
 
 ## 7. 数据模型
 
-使用 PostgreSQL、`TIMESTAMPTZ`、软删除和项目统一 `Yes/No` 语义。
+使用 PostgreSQL、`TIMESTAMPTZ`、软删除和项目统一 `Yes/No` 语义。所有邮件表都必须带 `platform_id` 外键并按平台隔离；Admin 管理 API 固定操作 Admin 平台，不接受客户端传入平台 ID。业务发送由调用方传入已认证的平台上下文，不能跨平台读取配置、模板、日志或规则。
 
 ### 7.1 `system_mail_config`
 
-单个 Admin 平台一条有效配置，字段包括：加密 SecretId、加密 SecretKey、提示值、地域、Endpoint、发件邮箱、发件名称、Reply-To、验证码 TTL、启用状态、最近测试时间、最近测试错误、审计时间和软删除时间。
+每个平台最多一条有效配置；第一期只为 Admin 平台提供管理入口。字段包括：`platform_id`、加密 SecretId、加密 SecretKey、提示值、地域、Endpoint、发件邮箱、发件名称、Reply-To、验证码 TTL、启用状态、最近测试时间、最近测试错误、审计时间和软删除时间。有效配置唯一约束为 `(platform_id)`。
 
 ### 7.2 `system_mail_template`
 
-固定场景唯一；字段包括：scene、name、subject、Tencent template ID、变量 JSON、示例变量 JSON、启用状态、审计时间和软删除时间。scene 使用数据库 CHECK 和唯一有效索引约束四个场景。
+固定场景唯一；字段包括：`platform_id`、scene、name、subject、Tencent template ID、变量 JSON、示例变量 JSON、启用状态、审计时间和软删除时间。scene 使用数据库 CHECK 和唯一有效索引约束四个场景，唯一键为 `(platform_id, scene)`；第一期 Admin 平台必须恰好维护 `login`、`forget`、`bind_email`、`change_password` 四条记录。
 
 ### 7.3 `system_mail_log`
 
-字段包括：scene、template_id、to_email、subject、状态、腾讯云 Request ID、Message ID、错误码、错误摘要、耗时、发送时间、创建时间和软删除时间。日志不保存正文和未加密验证码。
+字段包括：`platform_id`、scene、template_id、to_email、subject、状态、腾讯云 Request ID、Message ID、错误码、错误摘要、耗时、发送时间、创建时间和软删除时间。日志不保存正文和未加密验证码；查询和删除必须带平台条件。
 
 ### 7.4 `system_mail_log_verification`
 
-一条日志最多一份验证码诊断快照：mail_log_id、密钥版本、验证码密文、过期时间、创建时间。该表只能由 Mail service 访问，Repository 不把密文直接映射到公开 DTO。
+一条日志最多一份验证码诊断快照：`platform_id`、mail_log_id、密钥版本、验证码密文、过期时间、创建时间。该表只能由 Mail service 访问，Repository 不把密文直接映射到公开 DTO；关联日志的平台必须一致。
 
 ### 7.5 `system_mail_recipient_rule`
 
-字段见黑白名单章节。pattern 入库前统一小写、去除首尾空白并验证邮箱/域名格式；规则查询按 scope/pattern 建索引，所有有效规则按平台隔离。
+字段包括：`platform_id` 及黑白名单章节中的其他字段。pattern 入库前统一小写、去除首尾空白并验证邮箱/域名格式；规则查询按平台、scope、pattern 建索引，所有有效规则按平台隔离，唯一约束为 `(platform_id, scope, pattern, action)`。
 
 ## 8. API 边界
 
@@ -236,10 +236,8 @@ PUT    /mail/config
 DELETE /mail/config
 POST   /mail/test
 GET    /mail/templates
-POST   /mail/templates
 PUT    /mail/templates/:id
 PATCH  /mail/templates/:id/status
-DELETE /mail/templates/:id
 GET    /mail/logs
 GET    /mail/logs/:id
 DELETE /mail/logs/:id
