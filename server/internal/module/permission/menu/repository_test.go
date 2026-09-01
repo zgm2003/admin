@@ -119,7 +119,7 @@ func TestRepositoryCreateWritesNullableFieldsAndTimestamps(t *testing.T) {
 	componentPath := "reports"
 	icon := "Menu"
 	page := Menu{
-		PlatformID: platformID, ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:create:%d:list", unique),
+		PlatformID: platformID, ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:create:%d:view", unique),
 		Name: "List", I18nKey: stringPointer("reports.list"), Path: &path, ComponentPath: &componentPath, Icon: &icon,
 		SortOrder: 2, IsEnabled: yesno.No, IsHidden: yesno.No,
 	}
@@ -147,7 +147,7 @@ func TestRepositoryUpdateMenuWritesExplicitSQLNulls(t *testing.T) {
 	componentPath := "reports"
 	icon := "Menu"
 	page := Menu{
-		PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:update:%d:list", unique),
+		PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:update:%d:view", unique),
 		Name: "List", I18nKey: stringPointer("reports.list"), Path: &path, ComponentPath: &componentPath, Icon: &icon,
 		SortOrder: 2, IsEnabled: yesno.Yes, IsHidden: yesno.No,
 	}

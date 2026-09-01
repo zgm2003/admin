@@ -14,7 +14,7 @@ func TestBuildMenuIndexBuildsStableTreeWithNonNilLeafChildren(t *testing.T) {
 	menus := []Menu{
 		{ID: 4, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "修改角色", Code: "permission:role:update", SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 		{ID: 3, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "删除角色", Code: "permission:role:delete", SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypePage, Name: "角色管理", Code: "permission:role:list", I18nKey: stringPointer("navigation.accessRoles"), Path: &pagePath, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: stringPointer("navigation.accessRoles"), Path: &pagePath, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 		{ID: 5, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), SortOrder: 200, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 		{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "系统管理", Code: "system", I18nKey: stringPointer("navigation.system"), SortOrder: 100, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 	}
@@ -56,12 +56,35 @@ func TestBuildMenuIndexBuildsStableTreeWithNonNilLeafChildren(t *testing.T) {
 	}
 }
 
+func TestNormalizeMenuInputEnforcesPageAndActionPermissionSuffixes(t *testing.T) {
+	pagePath := "/reports"
+	componentPath := "reports"
+	page := CreateInput{PlatformID: 1, MenuType: TypePage, Name: "报表", Code: "reports:list", I18nKey: stringPointer("navigation.system"), Path: &pagePath, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	if _, err := normalizeCreateInput(page); err == nil {
+		t.Fatal("page permission without :view suffix was accepted")
+	}
+	action := CreateInput{PlatformID: 1, MenuType: TypeAction, Name: "查看", Code: "reports:view", IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
+	if _, err := normalizeCreateInput(action); err == nil {
+		t.Fatal("action permission with :view suffix was accepted")
+	}
+	validPage := page
+	validPage.Code = "reports:view"
+	if _, err := normalizeCreateInput(validPage); err != nil {
+		t.Fatalf("page permission with :view suffix rejected: %v", err)
+	}
+	validAction := action
+	validAction.Code = "reports:export"
+	if _, err := normalizeCreateInput(validAction); err != nil {
+		t.Fatalf("action permission with non-view suffix rejected: %v", err)
+	}
+}
+
 func TestBuildMenuIndexRejectsInvalidStoredTrees(t *testing.T) {
 	now := time.Now().UTC()
 	validRoot := Menu{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	pagePath := "/reports"
 	componentPath := "reports"
-	validPage := Menu{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypePage, Name: "报表列表", Code: "reports:list", I18nKey: stringPointer("reports.list"), Path: &pagePath, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	validPage := Menu{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypePage, Name: "报表列表", Code: "reports:view", I18nKey: stringPointer("reports.list"), Path: &pagePath, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	tests := []struct {
 		name  string
 		menus []Menu

@@ -589,6 +589,8 @@ export const enUS = {
     'menu.form.componentPathPlaceholder': 'For example account/users',
     'menu.form.i18nKeyHint': 'i18nKey: use at least two dot-separated segments, for example navigation.accountUsers',
     'menu.form.codeHint': 'Permission code: lowercase colon-separated segments, for example account:user:view',
+    'menu.form.pageCodeSuffixError': 'Page permission codes must end with :view',
+    'menu.form.actionCodeSuffixError': 'Action permission codes cannot end with :view',
     'menu.form.pathHint': 'Route: start with /, for example /account/users',
     'menu.form.componentPathHint': 'Component path: omit the leading /. The file is web/src/views/<component path>/index.vue',
     'menu.form.protectedHint': 'This is a protected foundation menu. Only the name, i18nKey, icon, and sort order can change; structure, status, and deletion are locked.',

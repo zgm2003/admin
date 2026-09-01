@@ -98,6 +98,14 @@ function publicErrorMessage(error: unknown): string {
       : t("menu.loadFailed");
 }
 
+function permissionCodeError(): string {
+  if (form.value.menuType === "page" && !form.value.code.endsWith(":view"))
+    return t("menu.form.pageCodeSuffixError");
+  if (form.value.menuType === "action" && form.value.code.endsWith(":view"))
+    return t("menu.form.actionCodeSuffixError");
+  return "";
+}
+
 function newForm(): MenuFormState {
   return {
     parentId: null,
@@ -347,6 +355,11 @@ function closeDialog(): void {
 }
 
 async function submitForm(): Promise<void> {
+  const codeError = permissionCodeError();
+  if (codeError !== "") {
+    mutationError.value = codeError;
+    return;
+  }
   if (!canSubmitForm.value) return;
   mutationError.value = "";
   try {

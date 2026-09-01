@@ -318,10 +318,27 @@ func normalizeCreateInput(input CreateInput) (CreateInput, error) {
 		!yesno.IsValid(input.IsHidden) || input.SortOrder < 0 {
 		return CreateInput{}, fmt.Errorf("%w: create scalar is invalid", errMenuFields)
 	}
+	if err := validateMenuTypeCode(input.MenuType, input.Code); err != nil {
+		return CreateInput{}, err
+	}
 	if err := validateInputShape(input.MenuType, input.I18nKey, input.Path, input.ComponentPath, input.Icon, input.IsHidden); err != nil {
 		return CreateInput{}, err
 	}
 	return input, nil
+}
+
+func validateMenuTypeCode(menuType Type, code string) error {
+	switch menuType {
+	case TypePage:
+		if !strings.HasSuffix(code, ":view") {
+			return fmt.Errorf("%w: page permission code must end with :view", errMenuFields)
+		}
+	case TypeAction:
+		if strings.HasSuffix(code, ":view") {
+			return fmt.Errorf("%w: action permission code cannot end with :view", errMenuFields)
+		}
+	}
+	return nil
 }
 
 func normalizeUpdateInput(input UpdateInput) (UpdateInput, error) {

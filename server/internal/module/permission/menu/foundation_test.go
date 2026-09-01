@@ -67,18 +67,18 @@ func TestEnsurePlatformFoundationSeedsCanvasRootPageAndAction(t *testing.T) {
 		t.Fatal(err)
 	}
 	definitions := []FoundationDefinition{
-		{MenuType: TypePage, Name: "Test", Code: "canvas:test:list", I18nKey: stringPointer("navigation.test"), Path: stringPointer("/test"), ComponentPath: stringPointer("test"), IsEnabled: yesno.Yes, IsHidden: yesno.No},
-		{ParentCode: "canvas:test:list", MenuType: TypeAction, Name: "Test Button", Code: "canvas:test:button", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+		{MenuType: TypePage, Name: "Test", Code: "canvas:test:view", I18nKey: stringPointer("navigation.test"), Path: stringPointer("/test"), ComponentPath: stringPointer("test"), IsEnabled: yesno.Yes, IsHidden: yesno.No},
+		{ParentCode: "canvas:test:view", MenuType: TypeAction, Name: "Test Button", Code: "canvas:test:button", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
 	}
 
 	if err := service.EnsurePlatformFoundation(ctx, "canvas", definitions); err != nil {
 		t.Fatalf("EnsurePlatformFoundation() error = %v", err)
 	}
 	var rows []Menu
-	if err := tx.WithContext(ctx).Where("platform_id = ? AND code IN ?", canvas.ID, []string{"canvas:test:list", "canvas:test:button"}).Order("id").Find(&rows).Error; err != nil {
+	if err := tx.WithContext(ctx).Where("platform_id = ? AND code IN ?", canvas.ID, []string{"canvas:test:view", "canvas:test:button"}).Order("id").Find(&rows).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 2 || rows[0].ParentID != nil || rows[0].MenuType != TypePage || rows[0].Code != "canvas:test:list" ||
+	if len(rows) != 2 || rows[0].ParentID != nil || rows[0].MenuType != TypePage || rows[0].Code != "canvas:test:view" ||
 		rows[1].ParentID == nil || *rows[1].ParentID != rows[0].ID || rows[1].MenuType != TypeAction || rows[1].Code != "canvas:test:button" {
 		t.Fatalf("Canvas foundation = %+v", rows)
 	}
@@ -88,7 +88,7 @@ func TestEnsurePlatformFoundationSeedsCanvasRootPageAndAction(t *testing.T) {
 		t.Fatalf("repeat EnsurePlatformFoundation() error = %v", err)
 	}
 	rows = nil
-	if err := tx.WithContext(ctx).Where("platform_id = ? AND code IN ?", canvas.ID, []string{"canvas:test:list", "canvas:test:button"}).Order("id").Find(&rows).Error; err != nil {
+	if err := tx.WithContext(ctx).Where("platform_id = ? AND code IN ?", canvas.ID, []string{"canvas:test:view", "canvas:test:button"}).Order("id").Find(&rows).Error; err != nil {
 		t.Fatal(err)
 	}
 	if len(rows) != 2 || !rows[0].UpdatedAt.Equal(firstPageUpdatedAt) || !rows[1].UpdatedAt.Equal(firstActionUpdatedAt) {

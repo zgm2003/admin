@@ -587,6 +587,8 @@ export const zhCN = {
     'menu.form.componentPathPlaceholder': '例如 account/users',
     'menu.form.i18nKeyHint': 'i18nKey：至少两段点号路径，例如 navigation.accountUsers',
     'menu.form.codeHint': '权限码：小写冒号分段，例如 account:user:view',
+    'menu.form.pageCodeSuffixError': '页面权限码必须以 :view 结尾',
+    'menu.form.actionCodeSuffixError': '按钮权限码不能以 :view 结尾',
     'menu.form.pathHint': '路由：必须以 / 开头，例如 /account/users',
     'menu.form.componentPathHint': '页面路径：不能以 / 开头，页面文件为 web/src/views/<页面路径>/index.vue',
     'menu.form.protectedHint': '这是受保护的基础菜单，只能修改名称、i18nKey、图标和排序；结构、状态与删除操作已锁定。',

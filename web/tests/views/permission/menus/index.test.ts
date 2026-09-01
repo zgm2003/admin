@@ -90,7 +90,7 @@ describe('MenuManagement', () => {
     expect(table.text()).toContain('目录')
     expect(table.text()).toContain('页面')
     expect(table.text()).toContain('按钮权限')
-		expect(table.text()).toContain('account:user:list')
+		expect(table.text()).toContain('account:user:view')
 		expect(table.text()).toContain('/account/users')
 		expect(table.text()).toContain('account/users')
 		expect(table.find('[data-testid="d-icon"]').exists()).toBe(true)
@@ -282,7 +282,7 @@ describe('MenuManagement', () => {
     expect(pageOption).toBeDefined()
     if (pageOption !== undefined) await new DOMWrapper(pageOption).trigger('click')
     await bodyGet('[data-testid="menu-form-name"]').setValue('Test')
-    await bodyGet('[data-testid="menu-form-code"]').setValue('canvas:test:list')
+    await bodyGet('[data-testid="menu-form-code"]').setValue('canvas:test:view')
     await bodyGet('[data-testid="menu-form-path"]').setValue('/test')
     await bodyGet('[data-testid="menu-form-component-path"]').setValue('test')
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
@@ -292,7 +292,7 @@ describe('MenuManagement', () => {
       platformId: 2,
       parentId: null,
       menuType: 'page',
-      code: 'canvas:test:list',
+      code: 'canvas:test:view',
     }))
     expect(getMenusMock).toHaveBeenLastCalledWith({ platformId: 2 })
   })
@@ -438,6 +438,39 @@ describe('MenuManagement', () => {
 		expect(JSON.stringify(updateMenuMock.mock.calls[0]?.[1])).not.toContain('platformId')
   })
 
+  it('blocks page codes without view suffix before creating a menu', async () => {
+    const wrapper = mountPage(pinia, ['permission:menu:list', 'permission:menu:create'])
+    await flushPromises()
+    await bodyGet('[data-testid="add-root-menu"]').trigger('click')
+    await flushPromises()
+    await bodyGet('[data-testid="menu-form-type"]').trigger('click')
+    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find((item) => item.textContent?.trim() === '页面')
+    if (pageOption !== undefined) await new DOMWrapper(pageOption).trigger('click')
+    await bodyGet('[data-testid="menu-form-code"]').setValue('reports:list')
+    await bodyGet('[data-testid="menu-form-name"]').setValue('报表')
+    await bodyGet('[data-testid="menu-form-i18n-key"]').setValue('navigation.system')
+    await bodyGet('[data-testid="menu-form-path"]').setValue('/reports')
+    await bodyGet('[data-testid="menu-form-component-path"]').setValue('reports')
+    await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
+    expect(createMenuMock).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('页面权限码必须以 :view 结尾')
+  })
+
+  it('blocks action codes ending with view before creating a menu', async () => {
+    const wrapper = mountPage(pinia, ['permission:menu:list', 'permission:menu:create'])
+    await flushPromises()
+    await bodyGet('[data-testid="add-root-menu"]').trigger('click')
+    await flushPromises()
+    await bodyGet('[data-testid="menu-form-type"]').trigger('click')
+    const actionOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find((item) => item.textContent?.trim() === '按钮权限')
+    if (actionOption !== undefined) await new DOMWrapper(actionOption).trigger('click')
+    await bodyGet('[data-testid="menu-form-code"]').setValue('reports:view')
+    await bodyGet('[data-testid="menu-form-name"]').setValue('查看报表')
+    await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
+    expect(createMenuMock).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('按钮权限码不能以 :view 结尾')
+  })
+
   it('filters parent options to valid nodes and excludes the edited subtree', async () => {
     getMenusMock.mockResolvedValue(menuCatalog([rootWithEditableSubtree()]))
     const wrapper = mountPage(pinia, ['permission:menu:create', 'permission:menu:update'])
@@ -544,7 +577,7 @@ function menuTree(): ManagedMenuNode[] {
       parentId: 1,
       menuType: 'page',
 			name: '用户管理',
-		code: 'account:user:list',
+		code: 'account:user:view',
 		i18nKey: 'navigation.accountUsers',
 		path: '/account/users',
 		componentPath: 'account/users',
@@ -600,7 +633,7 @@ function canvasMenuTree(): ManagedMenuNode[] {
     parentId: null,
     menuType: 'page',
     name: 'Test',
-    code: 'canvas:test:list',
+    code: 'canvas:test:view',
     i18nKey: 'navigation.test',
     path: '/test',
     componentPath: 'test',
@@ -654,7 +687,7 @@ function rootWithEditableSubtree(): ManagedMenuNode {
       parentId: 10,
       menuType: 'page',
 			name: '可编辑页面',
-      code: 'reports:list',
+      code: 'reports:view',
       i18nKey: 'navigation.accessMenus',
       path: '/reports',
 		componentPath: 'account/users',

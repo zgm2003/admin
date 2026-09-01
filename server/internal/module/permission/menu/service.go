@@ -211,6 +211,9 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		if err != nil {
 			return false, menuInvalidFields(err)
 		}
+		if err := validateMenuTypeCode(normalized.MenuType, target.Code); err != nil {
+			return false, menuInvalidFields(err)
+		}
 		if IsProtectedCode(target.Code) && !allowedProtectedUpdate(target, normalized) {
 			return false, menuProtected(target.Code, fmt.Errorf("protected menu structure cannot change"))
 		}
