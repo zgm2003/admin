@@ -69,11 +69,7 @@ const transitionNames: readonly PageTransitionName[] = ['fade', 'slide-left', 'z
 export class UIPreferencesError extends Error {
   public readonly operation: UIPreferencesOperation
 
-  constructor(
-    operation: UIPreferencesOperation,
-    message: string,
-    options?: ErrorOptions,
-  ) {
+  constructor(operation: UIPreferencesOperation, message: string, options?: ErrorOptions) {
     super(message, options)
     this.operation = operation
     this.name = 'UIPreferencesError'
@@ -165,7 +161,10 @@ function toPersistedUIPreferences(preferences: UIPreferences): PersistedUIPrefer
   }
 }
 
-function parseRuntimeUIPreferences(value: unknown, operation: UIPreferencesOperation): UIPreferences {
+function parseRuntimeUIPreferences(
+  value: unknown,
+  operation: UIPreferencesOperation,
+): UIPreferences {
   const preferences = closedRecord(value, runtimePreferenceKeys, 'UI preferences', operation)
   const theme = preferences.theme
   if (theme !== 'light' && theme !== 'dark') {
@@ -190,7 +189,10 @@ function parsePersistedPreferenceFields(
   }
 
   const transitionName = preferences.transitionName
-  if (typeof transitionName !== 'string' || !transitionNames.includes(transitionName as PageTransitionName)) {
+  if (
+    typeof transitionName !== 'string' ||
+    !transitionNames.includes(transitionName as PageTransitionName)
+  ) {
     throw new UIPreferencesError(operation, 'UI preferences transitionName is invalid')
   }
 
@@ -217,7 +219,10 @@ function closedRecord(
   }
   const actualKeys = Object.keys(value).sort()
   const sortedExpectedKeys = [...expectedKeys].sort()
-  if (actualKeys.length !== sortedExpectedKeys.length || actualKeys.some((key, index) => key !== sortedExpectedKeys[index])) {
+  if (
+    actualKeys.length !== sortedExpectedKeys.length ||
+    actualKeys.some((key, index) => key !== sortedExpectedKeys[index])
+  ) {
     throw new UIPreferencesError(operation, `${label} contains unexpected or missing fields`)
   }
   return value

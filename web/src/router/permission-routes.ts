@@ -1,8 +1,8 @@
 import type { Component } from 'vue'
 import type { Router } from 'vue-router'
 
-import type { PermissionMenuNode } from '../api/permission/permission'
-import { ProtocolError } from '../types/http'
+import type { PermissionMenuNode } from '@/api/permission/permission'
+import { ProtocolError } from '@/types/http'
 
 export interface PageModule {
   default: Component
@@ -18,26 +18,22 @@ interface PageRoute {
   i18nKey: string
 }
 
-const staticPageBinding = {
-	code: 'permission:menu:view',
-	path: '/access/menus',
-	componentPath: 'access/menus',
-	routeName: 'access-menus',
-} as const
-
-const pageModules: PageModuleMap = import.meta.glob<PageModule>('../views/**/index.vue')
+const pageModules: PageModuleMap = {
+  ...import.meta.glob<PageModule>('../views/*/index.vue'),
+  ...import.meta.glob<PageModule>('../views/*/*/index.vue'),
+}
 
 const componentPathMap: Readonly<Record<string, string>> = {
-	'account/users': 'account/users',
-	'account/profile': 'account/profile',
-	'account/sessions': 'account/sessions',
-	'user/login-logs': 'account/login-logs',
-	'access/menus': 'permission/menus',
-	'access/roles': 'permission/roles',
-	'access/auth-platforms': 'permission/auth-platforms',
-	'system/operation-logs': 'system/operation-logs',
-	'storage/object': 'cloud/storage-object',
-	'message/mail': 'message/mail',
+  'account/users': 'account/users',
+  'account/profile': 'account/profile',
+  'account/sessions': 'account/sessions',
+  'user/login-logs': 'account/login-logs',
+  'access/menus': 'permission/menus',
+  'access/roles': 'permission/roles',
+  'access/auth-platforms': 'permission/auth-platforms',
+  'system/operation-logs': 'system/operation-logs',
+  'storage/object': 'cloud/storage-object',
+  'message/mail': 'message/mail',
 }
 
 export function registerPermissionRoutes(
@@ -54,9 +50,11 @@ export function registerPermissionRoutes(
   const names = new Set<string>()
   const existingRoutes = router.getRoutes()
   const existingPaths = new Set(existingRoutes.map((route) => route.path))
-  const existingNames = new Set(existingRoutes.flatMap((route) => route.name === undefined ? [] : [String(route.name)]))
+  const existingNames = new Set(
+    existingRoutes.flatMap((route) => (route.name === undefined ? [] : [String(route.name)])),
+  )
 
-	collectPages(menuTree, router, views, pages, paths, names, existingPaths, existingNames)
+  collectPages(menuTree, router, views, pages, paths, names, existingPaths, existingNames)
 
   const removers: Array<() => void> = []
   try {
@@ -65,7 +63,11 @@ export function registerPermissionRoutes(
         path: page.path,
         name: page.name,
         component: page.component,
-        meta: { requiresAuth: true, i18nKey: page.i18nKey },
+        meta: {
+          requiresAuth: true,
+          i18nKey: page.i18nKey,
+          requiredPermission: page.name.slice('access:'.length),
+        },
       })
       removers.push(remove)
     }
@@ -84,7 +86,7 @@ export function registerPermissionRoutes(
 
 function collectPages(
   nodes: readonly PermissionMenuNode[],
-	router: Router,
+  router: Router,
   views: PageModuleMap,
   pages: PageRoute[],
   paths: Set<string>,
@@ -94,16 +96,12 @@ function collectPages(
 ): void {
   for (const node of nodes) {
     if (node.menuType === 'directory') {
-			collectPages(node.children, router, views, pages, paths, names, existingPaths, existingNames)
+      collectPages(node.children, router, views, pages, paths, names, existingPaths, existingNames)
       continue
     }
     if (node.path === null || node.componentPath === null) {
       throw new ProtocolError(`access page ${node.code} is incomplete`)
     }
-		if (isStaticBindingCandidate(node)) {
-			validateStaticBinding(router, node, paths, names)
-			continue
-		}
     const key = moduleKey(node.componentPath)
     if (!Object.prototype.hasOwnProperty.call(views, key)) {
       throw new ProtocolError(`access page ${node.code} has an unknown componentPath`)
@@ -119,36 +117,6 @@ function collectPages(
     names.add(name)
     pages.push({ path: node.path, name, component: views[key], i18nKey: node.i18nKey })
   }
-}
-
-function isStaticBindingCandidate(node: PermissionMenuNode): boolean {
-	return node.code === staticPageBinding.code
-		|| node.path === staticPageBinding.path
-		|| node.componentPath === staticPageBinding.componentPath
-}
-
-function validateStaticBinding(
-	router: Router,
-	node: PermissionMenuNode,
-	paths: Set<string>,
-	names: Set<string>,
-): void {
-	if (
-		node.code !== staticPageBinding.code
-		|| node.path !== staticPageBinding.path
-		|| node.componentPath !== staticPageBinding.componentPath
-	) {
-		throw new ProtocolError('static menu page binding does not match the access protocol')
-	}
-	const route = router.getRoutes().find((record) => record.path === staticPageBinding.path)
-	if (route === undefined || route.name !== staticPageBinding.routeName) {
-		throw new ProtocolError('static menu page route is missing or incorrectly named')
-	}
-	if (paths.has(staticPageBinding.path) || names.has(staticPageBinding.routeName)) {
-		throw new ProtocolError('static menu page binding is duplicated')
-	}
-	paths.add(staticPageBinding.path)
-	names.add(staticPageBinding.routeName)
 }
 
 function moduleKey(componentPath: string): string {

@@ -4,12 +4,12 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { appI18n, setLocale } from '@src/i18n'
-import AppAside from '@src/layout/components/AppAside.vue'
+import { appI18n, setLocale } from '@/i18n'
+import AppAside from '@/layout/components/AppAside/index.vue'
 import { usePermissionStore } from '@/store/permission.ts'
-import { requestObjectURL } from '@src/api/storage/upload'
+import { requestObjectURL } from '@/api/storage/upload'
 
-vi.mock('@src/api/storage/upload', () => ({ requestObjectURL: vi.fn() }))
+vi.mock('@/api/storage/upload', () => ({ requestObjectURL: vi.fn() }))
 
 const requestObjectURLMock = vi.mocked(requestObjectURL)
 
@@ -27,7 +27,9 @@ describe('AppAside profile access', () => {
 
     expect(requestObjectURLMock).toHaveBeenCalledWith('avatar', 'avatar/profile.png')
     expect(wrapper.findComponent({ name: 'ElAvatar' }).exists()).toBe(true)
-    expect(wrapper.get('.app-aside__avatar img').attributes('src')).toBe('https://cdn.example.com/avatar.png')
+    expect(wrapper.get('.app-aside__avatar img').attributes('src')).toBe(
+      'https://cdn.example.com/avatar.png',
+    )
   })
 
   it('shows the profile entry only with profile-view permission and always keeps logout', async () => {

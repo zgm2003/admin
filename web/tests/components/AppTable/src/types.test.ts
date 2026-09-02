@@ -6,7 +6,7 @@ import {
   tableColumnValue,
   type TableColumn,
   type TablePaginationState,
-} from '@src/components/AppTable/src/types'
+} from '@/components/AppTable/types'
 
 interface UserRow {
   id: number
@@ -19,7 +19,11 @@ describe('AppTable column helpers', () => {
 
   it('resolves property and derived columns with typed values', () => {
     const property: TableColumn<UserRow> = { prop: 'username', label: 'Username' }
-    const derived: TableColumn<UserRow> = { key: 'status', label: 'Status', value: (item) => item.enabled ? 'yes' : 'no' }
+    const derived: TableColumn<UserRow> = {
+      key: 'status',
+      label: 'Status',
+      value: (item) => (item.enabled ? 'yes' : 'no'),
+    }
     expect(tableColumnKey(property)).toBe('username')
     expect(tableColumnKey(derived)).toBe('status')
     expect(tableColumnValue(row, property)).toBe('alice')

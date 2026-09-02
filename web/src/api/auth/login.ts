@@ -1,4 +1,11 @@
-import { ProtocolError, refreshAccessCredential, request } from '../../utils/request'
+import { refreshAccessCredential, request } from '@/utils/request'
+import {
+  expectExactKeys,
+  expectEmptyObject,
+  expectInteger,
+  expectNullableString,
+  expectString,
+} from '@/api/protocol'
 
 export interface LoginInput {
   email: string
@@ -19,7 +26,9 @@ export interface CurrentUser {
 }
 
 export async function login(input: LoginInput): Promise<AccessCredential> {
-  return request<AccessCredential>({ method: 'POST', url: '/api/v1/auth/login', data: input })
+  return parseAccessCredential(
+    await request<unknown>({ method: 'POST', url: '/api/v1/auth/login', data: input }),
+  )
 }
 
 export async function refresh(): Promise<AccessCredential> {
@@ -27,7 +36,10 @@ export async function refresh(): Promise<AccessCredential> {
 }
 
 export async function logout(): Promise<void> {
-  await request<Record<string, never>>({ method: 'POST', url: '/api/v1/auth/logout' })
+  expectEmptyObject(
+    await request<unknown>({ method: 'POST', url: '/api/v1/auth/logout' }),
+    'logout result',
+  )
 }
 
 export async function getCurrentUser(): Promise<CurrentUser> {
@@ -35,25 +47,24 @@ export async function getCurrentUser(): Promise<CurrentUser> {
 }
 
 function parseCurrentUser(value: unknown): CurrentUser {
-  if (!isExactRecord(value, ['userId', 'username', 'email', 'phone', 'avatar']) ||
-    !isPositiveInteger(value.userId) || typeof value.username !== 'string' ||
-    typeof value.email !== 'string' || !isNullableString(value.phone) || typeof value.avatar !== 'string') {
-    throw new ProtocolError('current user response is invalid')
+  const record = expectExactKeys(
+    value,
+    ['userId', 'username', 'email', 'phone', 'avatar'],
+    'current user response',
+  )
+  return {
+    userId: expectInteger(record.userId, 'current user.userId'),
+    username: expectString(record.username, 'current user.username'),
+    email: expectString(record.email, 'current user.email'),
+    phone: expectNullableString(record.phone, 'current user.phone'),
+    avatar: expectString(record.avatar, 'current user.avatar'),
   }
-  return { userId: value.userId, username: value.username, email: value.email, phone: value.phone, avatar: value.avatar }
 }
 
-function isExactRecord(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-  const actual = Object.keys(value).sort()
-  const expected = [...keys].sort()
-  return actual.length === expected.length && actual.every((key, index) => key === expected[index])
-}
-
-function isPositiveInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0
-}
-
-function isNullableString(value: unknown): value is string | null {
-  return value === null || typeof value === 'string'
+function parseAccessCredential(value: unknown): AccessCredential {
+  const record = expectExactKeys(value, ['accessToken', 'expiresIn'], 'access credential response')
+  return {
+    accessToken: expectString(record.accessToken, 'access credential.accessToken'),
+    expiresIn: expectInteger(record.expiresIn, 'access credential.expiresIn'),
+  }
 }

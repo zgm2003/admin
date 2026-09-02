@@ -3,16 +3,16 @@ import ElementPlus, { ElMessage } from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { logout } from '@src/api/auth/login'
-import { YesNo } from '@src/enums/yes-no'
-import { appI18n, setLocale } from '@src/i18n'
-import { pinia } from '@src/store'
+import { logout } from '@/api/auth/login'
+import { YesNo } from '@/enums/yes-no'
+import { appI18n, setLocale } from '@/i18n'
+import { pinia } from '@/store'
 import { usePermissionStore } from '@/store/permission.ts'
-import { useAuthStore } from '@src/store/auth'
-import { useUIPreferencesStore } from '@src/store/ui-preferences'
-import Layout from '@src/layout/index.vue'
+import { useAuthStore } from '@/store/auth'
+import { useUIPreferencesStore } from '@/store/ui-preferences'
+import Layout from '@/layout/index.vue'
 
-vi.mock('@src/api/auth/login', () => ({ logout: vi.fn() }))
+vi.mock('@/api/auth/login', () => ({ logout: vi.fn() }))
 
 const logoutMock = vi.mocked(logout)
 let layoutRenderCount = 0
@@ -29,7 +29,13 @@ describe('admin layout', () => {
     useAuthStore(pinia).$reset()
     useUIPreferencesStore(pinia).initializeSafely()
     useAuthStore(pinia).setCredential({ accessToken: 'jwt', expiresIn: 900 })
-    useAuthStore(pinia).setAuthenticated({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null, avatar: '' })
+    useAuthStore(pinia).setAuthenticated({
+      userId: 1,
+      username: 'admin',
+      email: 'admin@example.com',
+      phone: null,
+      avatar: '',
+    })
     Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1200 })
   })
 
@@ -81,9 +87,9 @@ describe('admin layout', () => {
 
   it('renders RouteTabs between Header and Main', async () => {
     const { wrapper } = await mountLayout()
-    const order = wrapper.findAll('.admin-layout__workspace > *').map((node) => (
-      node.classes().find((name) => name.startsWith('admin-layout__'))
-    ))
+    const order = wrapper
+      .findAll('.admin-layout__workspace > *')
+      .map((node) => node.classes().find((name) => name.startsWith('admin-layout__')))
     expect(order).toEqual([
       'admin-layout__header',
       'admin-layout__tabs',
@@ -116,36 +122,42 @@ describe('admin layout', () => {
   it('exposes Main as the scroll owner and RouteTabs as horizontal scroll', async () => {
     const { wrapper } = await mountLayout()
     expect(wrapper.get('.admin-layout__main').classes()).toContain('admin-layout__scroll-owner')
-    expect(wrapper.get('.admin-layout__tabs').classes()).toContain('admin-layout__horizontal-scroll')
+    expect(wrapper.get('.admin-layout__tabs').classes()).toContain(
+      'admin-layout__horizontal-scroll',
+    )
   })
 
   it('renders directory and leaf breadcrumbs from the RBAC menu tree', async () => {
     usePermissionStore(pinia).applySnapshot({
       roleCodes: [],
-      menuTree: [{
-				code: 'account',
-        menuType: 'directory',
-        path: null,
-		componentPath: null,
-		i18nKey: 'navigation.account',
-        icon: 'lucide:folder',
-		isHidden: YesNo.No,
-        children: [{
-          code: 'account:user:list',
-          menuType: 'page',
-          path: '/account/users',
-			componentPath: 'account/users',
-			i18nKey: 'navigation.accountUsers',
-          icon: 'User',
-			isHidden: YesNo.Yes,
-          children: [],
-        }],
-      }],
+      menuTree: [
+        {
+          code: 'account',
+          menuType: 'directory',
+          path: null,
+          componentPath: null,
+          i18nKey: 'navigation.account',
+          icon: 'lucide:folder',
+          isHidden: YesNo.No,
+          children: [
+            {
+              code: 'account:user:list',
+              menuType: 'page',
+              path: '/account/users',
+              componentPath: 'account/users',
+              i18nKey: 'navigation.accountUsers',
+              icon: 'User',
+              isHidden: YesNo.Yes,
+              children: [],
+            },
+          ],
+        },
+      ],
       permissionCodes: [],
     })
     const { wrapper } = await mountLayout('/account/users')
 
-		expect(wrapper.get('.app-header__breadcrumb').text()).toContain('用户与账号')
+    expect(wrapper.get('.app-header__breadcrumb').text()).toContain('用户与账号')
     expect(wrapper.get('.app-header__breadcrumb').text()).toContain('用户管理')
   })
 
@@ -154,7 +166,12 @@ describe('admin layout', () => {
     const uiPreferences = useUIPreferencesStore(pinia)
 
     await wrapper.get('[data-testid="toggle-menu"]').trigger('click')
-    uiPreferences.update({ showRouteTabs: false, showFooter: false, showBreadcrumb: false, showMenuToggle: false })
+    uiPreferences.update({
+      showRouteTabs: false,
+      showFooter: false,
+      showBreadcrumb: false,
+      showMenuToggle: false,
+    })
     await wrapper.vm.$nextTick()
 
     expect(wrapper.find('.admin-layout__tabs').exists()).toBe(false)
@@ -202,16 +219,18 @@ describe('admin layout', () => {
   it('opens a Drawer instead of collapsing on mobile', async () => {
     usePermissionStore(pinia).applySnapshot({
       roleCodes: [],
-      menuTree: [{
-        code: 'account:user:list',
-        menuType: 'page',
-        path: '/account/users',
-		componentPath: 'account/users',
-		i18nKey: 'navigation.accessMenus',
-        icon: 'User',
-		isHidden: YesNo.No,
-        children: [],
-      }],
+      menuTree: [
+        {
+          code: 'account:user:list',
+          menuType: 'page',
+          path: '/account/users',
+          componentPath: 'account/users',
+          i18nKey: 'navigation.accessMenus',
+          icon: 'User',
+          isHidden: YesNo.No,
+          children: [],
+        },
+      ],
       permissionCodes: [],
     })
     const { wrapper } = await mountLayout()
@@ -219,12 +238,16 @@ describe('admin layout', () => {
     window.dispatchEvent(new Event('resize'))
     await wrapper.vm.$nextTick()
     await wrapper.get('[data-testid="toggle-menu"]').trigger('click')
-    const drawer = wrapper.findAllComponents({ name: 'ElDrawer' }).find((component) => component.props('size') === '264px')
+    const drawer = wrapper
+      .findAllComponents({ name: 'ElDrawer' })
+      .find((component) => component.props('size') === '264px')
     if (drawer === undefined) throw new Error('Missing mobile menu drawer')
     expect(drawer.props('modelValue')).toBe(true)
     const asides = wrapper.findAllComponents({ name: 'AppAside' })
     expect(asides).toHaveLength(2)
-    expect(asides.every((aside) => aside.findAllComponents({ name: 'PermissionMenuNode' }).length === 1)).toBe(true)
+    expect(
+      asides.every((aside) => aside.findAllComponents({ name: 'PermissionMenuNode' }).length === 1),
+    ).toBe(true)
     expect(asides.every((aside) => aside.attributes('data-collapsed') === 'false')).toBe(true)
   })
 
@@ -286,19 +309,19 @@ async function mountLayout(path = '/dashboard') {
         path: '/dashboard',
         name: 'dashboard',
         component: layoutContent,
-		meta: { requiresAuth: true, i18nKey: 'navigation.dashboard', affix: true },
+        meta: { requiresAuth: true, i18nKey: 'navigation.dashboard', affix: true },
       },
       {
         path: '/account/users',
-				name: 'account-users',
+        name: 'account-users',
         component: layoutContent,
-		meta: { requiresAuth: true, i18nKey: 'navigation.accountUsers' },
+        meta: { requiresAuth: true, i18nKey: 'navigation.accountUsers' },
       },
       {
         path: '/system/missing',
         name: 'system-missing',
         component: layoutContent,
-		meta: { requiresAuth: true, i18nKey: 'navigation.accountUsers' },
+        meta: { requiresAuth: true, i18nKey: 'navigation.accountUsers' },
       },
       { path: '/login', name: 'login', component: { template: '<div>login</div>' } },
     ],

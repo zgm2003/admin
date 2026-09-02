@@ -1,10 +1,5 @@
-export { default as AppTable } from './src/index.vue'
-export {
-  formatTableColumnValue,
-  tableColumnKey,
-  tableColumnProp,
-  tableColumnValue,
-} from './src/types'
+export { default as AppTable } from './index.vue'
+export { formatTableColumnValue, tableColumnKey, tableColumnProp, tableColumnValue } from './types'
 export type {
   DerivedTableColumn,
   TableColumn,
@@ -12,4 +7,4 @@ export type {
   TableColumnKey,
   TablePaginationState,
   TableRow,
-} from './src/types'
+} from './types'

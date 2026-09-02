@@ -1,17 +1,17 @@
-import type { RolePermissionPlatform, RolePermissionTreeNode } from '../../../api/permission/role'
-import type { YesNo } from '../../../enums/yes-no'
+import type { RolePermissionPlatform, RolePermissionTreeNode } from '@/api/permission/role'
+import type { YesNo } from '@/enums/yes-no'
 
 export interface RoleMatrixAction {
   id: number
   code: string
-	name: string
+  name: string
   isEnabled: YesNo
 }
 
 export interface RoleMatrixRow {
   pageId: number
   pageCode: string
-	pageName: string
+  pageName: string
   pageIsEnabled: YesNo
   actions: RoleMatrixAction[]
 }
@@ -19,7 +19,7 @@ export interface RoleMatrixRow {
 export interface RoleMatrixGroup {
   groupKey: string
   groupCode: string
-	groupName: string
+  groupName: string
   groupIsEnabled: YesNo
   rows: RoleMatrixRow[]
 }
@@ -73,7 +73,7 @@ function buildPlatformGroups(platform: RolePermissionPlatform): RoleMatrixGroup[
       groups.push({
         groupKey: `menu:${node.id}`,
         groupCode: node.code,
-				groupName: node.name,
+        groupName: node.name,
         groupIsEnabled: node.isEnabled,
         rows,
       })
@@ -91,10 +91,7 @@ function buildPlatformGroups(platform: RolePermissionPlatform): RoleMatrixGroup[
   return groups
 }
 
-function collectRows(
-  nodes: readonly RolePermissionTreeNode[],
-  rows: RoleMatrixRow[],
-): void {
+function collectRows(nodes: readonly RolePermissionTreeNode[], rows: RoleMatrixRow[]): void {
   for (const node of nodes) {
     if (node.menuType === 'directory') {
       collectRows(node.children, rows)
@@ -115,7 +112,7 @@ function buildRow(node: RolePermissionTreeNode): RoleMatrixRow {
   return {
     pageId: node.id,
     pageCode: node.code,
-		pageName: node.name,
+    pageName: node.name,
     pageIsEnabled: node.isEnabled,
     actions: node.children.map((action) => {
       if (action.menuType !== 'action' || action.children.length !== 0) {
@@ -124,7 +121,7 @@ function buildRow(node: RolePermissionTreeNode): RoleMatrixRow {
       return {
         id: action.id,
         code: action.code,
-				name: action.name,
+        name: action.name,
         isEnabled: action.isEnabled,
       }
     }),

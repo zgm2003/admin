@@ -7,7 +7,13 @@
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "vue-tsc -b",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check:architecture": "node scripts/check-frontend-architecture.mjs",
+    "verify:frontend": "pnpm format:check && pnpm lint && pnpm check:architecture && pnpm typecheck && pnpm vitest run --pool=threads --maxWorkers=1 && pnpm build"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -21,15 +27,24 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^24.13.3",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/test-utils": "^2.4.11",
     "@vue/tsconfig": "^0.9.1",
+    "eslint": "^10.9.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-promise": "^7.3.0",
+    "eslint-plugin-vue": "^10.10.0",
+    "globals": "^17.11.0",
     "jsdom": "^30.0.1",
+    "prettier": "^3.9.6",
     "sass": "^1.102.0",
     "typescript": "~6.0.2",
+    "typescript-eslint": "^8.69.0",
     "vite": "^8.2.0",
     "vitest": "^4.1.10",
+    "vue-eslint-parser": "^10.4.1",
     "vue-tsc": "^3.3.8"
   }
 }

@@ -2,13 +2,18 @@
 import { Languages } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
-import { setLocale } from '../../../i18n'
+import { setLocale } from '@/i18n'
 
-withDefaults(defineProps<{
-  testId?: string
-}>(), {
-  testId: 'locale-switch',
-})
+defineOptions({ name: 'LocaleSwitch' })
+
+withDefaults(
+  defineProps<{
+    testId?: string
+  }>(),
+  {
+    testId: 'locale-switch',
+  },
+)
 
 const { locale, t } = useI18n()
 
@@ -19,7 +24,7 @@ function handleCommand(command: string | number | object): void {
   setLocale(command)
 }
 </script>
- 了
+了
 <template>
   <el-dropdown @command="handleCommand">
     <el-button

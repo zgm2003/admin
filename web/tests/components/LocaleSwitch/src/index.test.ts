@@ -2,8 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { appI18n, setLocale } from '@src/i18n'
-import LocaleSwitch from '@src/components/LocaleSwitch/src/index.vue'
+import { appI18n, setLocale } from '@/i18n'
+import LocaleSwitch from '@/components/LocaleSwitch/index.vue'
 
 describe('LocaleSwitch', () => {
   beforeEach(() => {

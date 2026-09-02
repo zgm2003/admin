@@ -17,8 +17,8 @@ export function resolveAppDialogWidth(params: {
   mobileWidth?: AppDialogSize
 }): string {
   return params.isMobile
-    ? toCssLength(params.mobileWidth) ?? DEFAULT_APP_DIALOG_MOBILE_WIDTH
-    : toCssLength(params.width) ?? DEFAULT_APP_DIALOG_WIDTH
+    ? (toCssLength(params.mobileWidth) ?? DEFAULT_APP_DIALOG_MOBILE_WIDTH)
+    : (toCssLength(params.width) ?? DEFAULT_APP_DIALOG_WIDTH)
 }
 
 export function resolveAppDialogContentHeight(height?: AppDialogSize): string | undefined {
@@ -29,8 +29,10 @@ export function resolveAppDialogBodyPadding(params: {
   isMobile: boolean
   bodyPadding?: AppDialogSize
 }): string {
-  return toCssLength(params.bodyPadding)
-    ?? (params.isMobile ? DEFAULT_APP_DIALOG_MOBILE_BODY_PADDING : DEFAULT_APP_DIALOG_BODY_PADDING)
+  return (
+    toCssLength(params.bodyPadding) ??
+    (params.isMobile ? DEFAULT_APP_DIALOG_MOBILE_BODY_PADDING : DEFAULT_APP_DIALOG_BODY_PADDING)
+  )
 }
 
 export function resolveAppDialogPadding(padding?: AppDialogSize): string | undefined {
@@ -48,7 +50,7 @@ export function resolveAppDialogDraggable(params: {
   isMobile: boolean
   draggable?: boolean
 }): boolean {
-  return params.isMobile ? false : params.draggable ?? true
+  return params.isMobile ? false : (params.draggable ?? true)
 }
 
 export function filterAppDialogAttrs(attrs: Record<string, unknown>): Record<string, unknown> {

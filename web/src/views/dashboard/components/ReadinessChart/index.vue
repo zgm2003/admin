@@ -6,6 +6,8 @@ import * as echarts from 'echarts/core'
 import type { ECharts } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 
+defineOptions({ name: 'ReadinessChart' })
+
 type StatusState = 'checking' | 'up' | 'error'
 
 const props = defineProps<{
@@ -49,7 +51,9 @@ function renderChart(): void {
         label: {
           color: themeColor('--el-text-color-regular', '#606266'),
           fontSize: 12,
-          formatter: compact ? ({ name }: { name: string }) => (name === 'PostgreSQL' ? 'PG' : name) : undefined,
+          formatter: compact
+            ? ({ name }: { name: string }) => (name === 'PostgreSQL' ? 'PG' : name)
+            : undefined,
         },
         labelLine: compact ? { length: 8, length2: 4 } : undefined,
         data: [

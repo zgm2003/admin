@@ -9,4 +9,3 @@ export interface PageResult<T> {
   page: number
   pageSize: number
 }
-

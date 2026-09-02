@@ -1,10 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { describe, expect, it } from 'vitest'
-import IconSelect from '@src/components/IconSelect/src/index.vue'
+import IconSelect from '@/components/IconSelect/index.vue'
 
 describe('IconSelect', () => {
-  const icons = [{ name: 'lucide:folder', label: '目录' }, { name: 'lucide:house', label: '首页' }] as const
+  const icons = [
+    { name: 'lucide:folder', label: '目录' },
+    { name: 'lucide:house', label: '首页' },
+  ] as const
 
   it('filters icons and emits the selected name', async () => {
     const wrapper = mount(IconSelect, {

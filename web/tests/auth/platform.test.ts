@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { authPlatform } from '@src/auth/platform'
+import { authPlatform } from '@/auth/platform'
 
 describe('auth platform', () => {
   it('uses the fixed admin platform code', () => {

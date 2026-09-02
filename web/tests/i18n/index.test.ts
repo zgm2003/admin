@@ -1,8 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { appI18n, initializeLocale, isAppMessageKey, localeStorageKey, readLocale, setLocale } from '@src/i18n/index'
-import { enUS } from '@src/i18n/messages/en-US'
-import { zhCN } from '@src/i18n/messages/zh-CN'
+import {
+  appI18n,
+  initializeLocale,
+  isAppMessageKey,
+  localeStorageKey,
+  readLocale,
+  setLocale,
+} from '@/i18n/index'
+import { enUS } from '@/i18n/messages/en-US'
+import { zhCN } from '@/i18n/messages/zh-CN'
 
 describe('frontend i18n', () => {
   beforeEach(() => {
@@ -37,54 +44,71 @@ describe('frontend i18n', () => {
     expect(isAppMessageKey('navigation.unknown')).toBe(false)
   })
 
-	it('contains only the current business-domain navigation keys', () => {
-		const currentKeys = [
-			'navigation.account',
-			'navigation.accountUsers',
-			'navigation.accountSessions',
-			'navigation.access',
-			'navigation.accessMenus',
-			'navigation.accessRoles',
-			'navigation.accessAuthPlatforms',
-			'navigation.system',
-			'navigation.systemOperationLogs',
-		]
-		const removedKeys = [
-			'navigation.systemUsers',
-			'navigation.systemSessions',
-			'navigation.systemMenus',
-			'navigation.systemRoles',
-			'navigation.systemAuthPlatforms',
-		]
-		for (const key of currentKeys) expect(isAppMessageKey(key), key).toBe(true)
-		for (const key of removedKeys) expect(isAppMessageKey(key), key).toBe(false)
-	})
+  it('contains only the current business-domain navigation keys', () => {
+    const currentKeys = [
+      'navigation.account',
+      'navigation.accountUsers',
+      'navigation.accountSessions',
+      'navigation.access',
+      'navigation.accessMenus',
+      'navigation.accessRoles',
+      'navigation.accessAuthPlatforms',
+      'navigation.system',
+      'navigation.systemOperationLogs',
+    ]
+    const removedKeys = [
+      'navigation.systemUsers',
+      'navigation.systemSessions',
+      'navigation.systemMenus',
+      'navigation.systemRoles',
+      'navigation.systemAuthPlatforms',
+    ]
+    for (const key of currentKeys) expect(isAppMessageKey(key), key).toBe(true)
+    for (const key of removedKeys) expect(isAppMessageKey(key), key).toBe(false)
+  })
 
-	it('contains the complete bilingual user-management copy', () => {
-		const keys = [
-			'navigation.accountUsers', 'permission.userUpdate', 'permission.userStatus',
-			'permission.userDelete', 'permission.userRoles', 'user.title', 'user.keyword',
-			'user.status', 'user.role', 'user.search', 'user.reset', 'user.refresh',
-			'user.enableConfirm', 'user.disableConfirm', 'user.deleteConfirm',
-		]
-		for (const key of keys) {
-			expect(isAppMessageKey(key)).toBe(true)
-			expect(appI18n.global.t(key), key).toBeTruthy()
-		}
-		expect(appI18n.global.t('user.disableConfirm')).toContain('重新登录')
-		expect(appI18n.global.t('user.deleteConfirm')).toContain('新账号')
-		setLocale('en-US')
-		expect(appI18n.global.t('user.disableConfirm')).toContain('sign in')
-		expect(appI18n.global.t('user.deleteConfirm')).toContain('new account')
-	})
+  it('contains the complete bilingual user-management copy', () => {
+    const keys = [
+      'navigation.accountUsers',
+      'permission.userUpdate',
+      'permission.userStatus',
+      'permission.userDelete',
+      'permission.userRoles',
+      'user.title',
+      'user.keyword',
+      'user.status',
+      'user.role',
+      'user.search',
+      'user.reset',
+      'user.refresh',
+      'user.enableConfirm',
+      'user.disableConfirm',
+      'user.deleteConfirm',
+    ]
+    for (const key of keys) {
+      expect(isAppMessageKey(key)).toBe(true)
+      expect(appI18n.global.t(key), key).toBeTruthy()
+    }
+    expect(appI18n.global.t('user.disableConfirm')).toContain('重新登录')
+    expect(appI18n.global.t('user.deleteConfirm')).toContain('新账号')
+    setLocale('en-US')
+    expect(appI18n.global.t('user.disableConfirm')).toContain('sign in')
+    expect(appI18n.global.t('user.deleteConfirm')).toContain('new account')
+  })
 
   it('contains the complete bilingual authentication-platform copy', () => {
     const keys = [
-      'navigation.accessAuthPlatforms', 'permission.authPlatformCreate',
-      'permission.authPlatformUpdate', 'permission.authPlatformStatus',
-      'permission.authPlatformDelete', 'authPlatform.title', 'authPlatform.search',
-      'authPlatform.form.basicSection', 'authPlatform.form.tokenSection',
-      'authPlatform.form.policySection', 'authPlatform.confirm.disable',
+      'navigation.accessAuthPlatforms',
+      'permission.authPlatformCreate',
+      'permission.authPlatformUpdate',
+      'permission.authPlatformStatus',
+      'permission.authPlatformDelete',
+      'authPlatform.title',
+      'authPlatform.search',
+      'authPlatform.form.basicSection',
+      'authPlatform.form.tokenSection',
+      'authPlatform.form.policySection',
+      'authPlatform.confirm.disable',
     ]
     for (const key of keys) {
       expect(isAppMessageKey(key), key).toBe(true)
@@ -94,19 +118,27 @@ describe('frontend i18n', () => {
     expect(appI18n.global.t('authPlatform.title')).toBe('Authentication platforms')
   })
 
-	it('contains the complete bilingual session and operation-log copy', () => {
-		const keys = [
-			'navigation.accountSessions', 'permission.sessionRevoke', 'session.title',
-			'session.loading', 'session.batchRevoke', 'session.revokeFailed',
-			'navigation.systemOperationLogs', 'operationLog.title', 'operationLog.userId',
-			'operationLog.timeRange', 'operationLog.detailTitle', 'operationLog.loading',
-		]
-		for (const key of keys) {
-			expect(isAppMessageKey(key), key).toBe(true)
-			expect(appI18n.global.t(key), key).toBeTruthy()
-		}
-		setLocale('en-US')
-		expect(appI18n.global.t('session.title')).toBe('Session management')
-		expect(appI18n.global.t('operationLog.title')).toBe('Operation logs')
-	})
+  it('contains the complete bilingual session and operation-log copy', () => {
+    const keys = [
+      'navigation.accountSessions',
+      'permission.sessionRevoke',
+      'session.title',
+      'session.loading',
+      'session.batchRevoke',
+      'session.revokeFailed',
+      'navigation.systemOperationLogs',
+      'operationLog.title',
+      'operationLog.userId',
+      'operationLog.timeRange',
+      'operationLog.detailTitle',
+      'operationLog.loading',
+    ]
+    for (const key of keys) {
+      expect(isAppMessageKey(key), key).toBe(true)
+      expect(appI18n.global.t(key), key).toBeTruthy()
+    }
+    setLocale('en-US')
+    expect(appI18n.global.t('session.title')).toBe('Session management')
+    expect(appI18n.global.t('operationLog.title')).toBe('Operation logs')
+  })
 })

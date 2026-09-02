@@ -1,10 +1,5 @@
 import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
-import ElementPlus, {
-  ElCheckbox,
-  ElPagination,
-  ElSelectV2,
-  ElTooltip,
-} from 'element-plus'
+import ElementPlus, { ElCheckbox, ElPagination, ElSelectV2, ElTooltip } from 'element-plus'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -17,15 +12,15 @@ import {
   updateRole,
   updateRolePermissions,
   updateRoleStatus,
-} from '@src/api/permission/role'
-import type { RoleListItem } from '@src/api/permission/role'
-import { YesNo } from '@src/enums/yes-no'
-import { appI18n, setLocale } from '@src/i18n'
+} from '@/api/permission/role'
+import type { RoleListItem } from '@/api/permission/role'
+import { YesNo } from '@/enums/yes-no'
+import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission.ts'
-import RolePermissionMatrix from '@/views/permission/roles/components/RolePermissionMatrix.vue'
+import RolePermissionMatrix from '@/views/permission/roles/components/RolePermissionMatrix/index.vue'
 import RoleManagement from '@/views/permission/roles/index.vue'
 
-vi.mock('@src/api/permission/role', () => ({
+vi.mock('@/api/permission/role', () => ({
   getRoles: vi.fn(),
   createRole: vi.fn(),
   updateRole: vi.fn(),
@@ -52,17 +47,19 @@ describe('RoleManagement', () => {
     setLocale('zh-CN')
     vi.clearAllMocks()
     getRolesMock.mockResolvedValue({
-      list: [{
-        id: 3,
-        code: 'tester',
-        name: '测试员',
-        isDefault: YesNo.No,
-        isEnabled: YesNo.Yes,
-        userCount: 2,
-        permissionCount: 1,
-        createdAt: '2026-08-19T00:00:00Z',
-        updatedAt: '2026-08-19T00:00:00Z',
-      }],
+      list: [
+        {
+          id: 3,
+          code: 'tester',
+          name: '测试员',
+          isDefault: YesNo.No,
+          isEnabled: YesNo.Yes,
+          userCount: 2,
+          permissionCount: 1,
+          createdAt: '2026-08-19T00:00:00Z',
+          updatedAt: '2026-08-19T00:00:00Z',
+        },
+      ],
       total: 1,
       page: 1,
       pageSize: 20,
@@ -83,7 +80,7 @@ describe('RoleManagement', () => {
     expect(getRolesMock).toHaveBeenCalledOnce()
     expect(getRolesMock).toHaveBeenCalledWith({ page: 1, pageSize: 20 })
     expect(wrapper.find('h1').exists()).toBe(false)
-		expect(wrapper.get('.role-page').classes()).toContain('management-page')
+    expect(wrapper.get('.role-page').classes()).toContain('management-page')
     expect(wrapper.find('[aria-label="角色管理"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('测试员')
     expect(wrapper.text()).toContain('tester')
@@ -246,7 +243,9 @@ describe('RoleManagement', () => {
     await flushPromises()
     expect(setDefaultRoleMock).toHaveBeenCalledWith(3)
 
-    expect(tooltipButton(wrapper, '该角色仍绑定 2 个用户，不能删除。').attributes('disabled')).toBeDefined()
+    expect(
+      tooltipButton(wrapper, '该角色仍绑定 2 个用户，不能删除。').attributes('disabled'),
+    ).toBeDefined()
   })
 
   it('soft deletes after confirmation and moves back only when the current page becomes invalid', async () => {
@@ -282,8 +281,12 @@ describe('RoleManagement', () => {
     expect(getRolePermissionsMock).toHaveBeenCalledWith(3)
     expect(document.body.textContent).toContain('测试员 (tester)')
     expect(document.body.textContent).toContain('已禁用')
-    expect(document.body.querySelector('[data-testid="role-permission-platform-tabs"]')?.textContent).toContain('Admin')
-    expect(document.body.querySelector('[data-testid="role-permission-platform-tabs"]')?.textContent).toContain('Canvas')
+    expect(
+      document.body.querySelector('[data-testid="role-permission-platform-tabs"]')?.textContent,
+    ).toContain('Admin')
+    expect(
+      document.body.querySelector('[data-testid="role-permission-platform-tabs"]')?.textContent,
+    ).toContain('Canvas')
 
     const matrix = wrapper.getComponent(RolePermissionMatrix)
     expect(matrix.props('modelValue')).toEqual([2, 3, 7, 8])
@@ -300,8 +303,9 @@ describe('RoleManagement', () => {
     await tooltipButton(wrapper, '授权').trigger('click')
     await flushPromises()
 
-    const canvasTab = Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]'))
-      .find((tab) => tab.textContent?.includes('Canvas'))
+    const canvasTab = Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]')).find(
+      (tab) => tab.textContent?.includes('Canvas'),
+    )
     expect(canvasTab).toBeDefined()
     if (canvasTab === undefined) throw new Error('Canvas permission tab is missing')
     await new DOMWrapper(canvasTab).trigger('click')
@@ -552,54 +556,64 @@ function permissionResponse(overrides: { menuIds?: number[] } = {}) {
         code: 'admin',
         name: 'Admin',
         isEnabled: YesNo.Yes,
-        menuTree: [{
-          id: 1,
-          parentId: null,
-          menuType: 'directory' as const,
-          code: 'system',
-					name: '系统管理',
-          isEnabled: YesNo.Yes,
-          children: [{
-            id: 2,
-            parentId: 1,
-            menuType: 'page' as const,
-            code: 'permission:role:list',
-						name: '角色管理',
+        menuTree: [
+          {
+            id: 1,
+            parentId: null,
+            menuType: 'directory' as const,
+            code: 'system',
+            name: '系统管理',
             isEnabled: YesNo.Yes,
-            children: [{
-              id: 3,
-              parentId: 2,
-              menuType: 'action' as const,
-              code: 'permission:role:create',
-							name: '新增角色',
-              isEnabled: YesNo.No,
-              children: [],
-            }],
-          }],
-        }],
+            children: [
+              {
+                id: 2,
+                parentId: 1,
+                menuType: 'page' as const,
+                code: 'permission:role:list',
+                name: '角色管理',
+                isEnabled: YesNo.Yes,
+                children: [
+                  {
+                    id: 3,
+                    parentId: 2,
+                    menuType: 'action' as const,
+                    code: 'permission:role:create',
+                    name: '新增角色',
+                    isEnabled: YesNo.No,
+                    children: [],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
       },
       {
         id: 2,
         code: 'canvas',
         name: 'Canvas',
         isEnabled: YesNo.No,
-        menuTree: [{
-          id: 7,
-          parentId: null,
-          menuType: 'page' as const,
-          code: 'canvas:test:list',
-          name: 'Test',
-          isEnabled: YesNo.Yes,
-          children: [{
-            id: 8,
-            parentId: 7,
-            menuType: 'action' as const,
-            code: 'canvas:test:button',
-            name: 'Test Button',
+        menuTree: [
+          {
+            id: 7,
+            parentId: null,
+            menuType: 'page' as const,
+            code: 'canvas:test:list',
+            name: 'Test',
             isEnabled: YesNo.Yes,
-            children: [],
-          }],
-        }],
+            children: [
+              {
+                id: 8,
+                parentId: 7,
+                menuType: 'action' as const,
+                code: 'canvas:test:button',
+                name: 'Test Button',
+                isEnabled: YesNo.Yes,
+                children: [],
+              },
+            ],
+          },
+        ],
       },
     ],
     menuIds: overrides.menuIds ?? [2],

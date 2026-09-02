@@ -5,18 +5,17 @@ import axios, {
   type AxiosRequestConfig,
   type InternalAxiosRequestConfig,
 } from 'axios'
-import { ElNotification } from 'element-plus'
 
-import type { AccessCredential } from '../api/auth/login'
-import { authPlatform } from '../auth/platform'
-import { readDeviceID } from '../auth/device-id'
-import { appI18n, readLocale } from '../i18n'
-import { pinia } from '../store'
-import { usePermissionStore } from '../store/permission.ts'
-import { useAuthStore } from '../store/auth'
-import { ApiError, ProtocolError, type ApiResponse } from '../types/http'
+import type { AccessCredential } from '@/api/auth/login'
+import { authPlatform } from '@/auth/platform'
+import { readDeviceID } from '@/auth/device-id'
+import { appI18n, readLocale } from '@/i18n'
+import { pinia } from '@/store'
+import { usePermissionStore } from '@/store/permission'
+import { useAuthStore } from '@/store/auth'
+import { ApiError, ProtocolError, type ApiResponse } from '@/types/http'
 
-export { ApiError, ProtocolError } from '../types/http'
+export { ApiError, ProtocolError } from '@/types/http'
 
 const envelopeKeys = ['code', 'data', 'message']
 const noBearerPaths = new Set(['/api/v1/auth/login', '/api/v1/auth/refresh'])
@@ -49,10 +48,17 @@ function parseEnvelope(value: unknown): ApiResponse<unknown> {
   }
 
   const keys = Object.keys(value).sort()
-  if (keys.length !== envelopeKeys.length || keys.some((key, index) => key !== envelopeKeys[index])) {
+  if (
+    keys.length !== envelopeKeys.length ||
+    keys.some((key, index) => key !== envelopeKeys[index])
+  ) {
     throw new ProtocolError('API response must contain exactly code, data, and message')
   }
-  if (typeof value.code !== 'number' || !Number.isInteger(value.code) || typeof value.message !== 'string') {
+  if (
+    typeof value.code !== 'number' ||
+    !Number.isInteger(value.code) ||
+    typeof value.message !== 'string'
+  ) {
     throw new ProtocolError('API response code or message has an invalid type')
   }
 
@@ -88,9 +94,11 @@ function buildRequestClient(
   const coordinatedRefresh = (): Promise<AccessCredential> => {
     if (refreshPromise === null) {
       refreshPromise = performRefresh(rawClient, authStore, onUnauthorized)
-      refreshPromise.finally(() => {
-        refreshPromise = null
-      }).catch(() => undefined)
+      refreshPromise
+        .finally(() => {
+          refreshPromise = null
+        })
+        .catch(() => undefined)
     }
     return refreshPromise
   }
@@ -113,21 +121,22 @@ function buildRequestClient(
         response.data = unwrapSuccessEnvelope(response.data)
         return response
       } catch (error: unknown) {
-        notifyRequestError(error)
         return Promise.reject(error)
       }
     },
     async (error: unknown) => {
       const normalizedError = normalizeResponseError(error)
-      if (!axios.isAxiosError(error) || error.response?.status !== 401 || error.config === undefined) {
-        notifyRequestError(normalizedError)
+      if (
+        !axios.isAxiosError(error) ||
+        error.response?.status !== 401 ||
+        error.config === undefined
+      ) {
         return Promise.reject(normalizedError)
       }
 
       const originalConfig = error.config as AuthRequestConfig
       const path = requestPath(originalConfig.url, baseURL)
       if (originalConfig.authRetried === true || noRefreshPaths.has(path)) {
-        notifyRequestError(normalizedError)
         return Promise.reject(normalizedError)
       }
 
@@ -152,7 +161,9 @@ async function performRefresh(
   onUnauthorized: () => void,
 ): Promise<AccessCredential> {
   try {
-    const response = await rawClient.post<unknown>('/api/v1/auth/refresh', undefined, { withCredentials: true })
+    const response = await rawClient.post<unknown>('/api/v1/auth/refresh', undefined, {
+      withCredentials: true,
+    })
     const credential = unwrapSuccessEnvelope<unknown>(response.data)
     if (!isAccessCredential(credential)) {
       throw new ProtocolError('access credential response is invalid')
@@ -161,7 +172,6 @@ async function performRefresh(
     return credential
   } catch (error: unknown) {
     const normalizedError = normalizeResponseError(error)
-    notifyRequestError(normalizedError)
     if (normalizedError instanceof ApiError && normalizedError.httpStatus === 401) {
       authStore.setAnonymous()
       onUnauthorized()
@@ -178,19 +188,6 @@ function applyClientHeaders(config: InternalAxiosRequestConfig): InternalAxiosRe
   config.headers.set('X-Auth-Platform', authPlatform)
   config.headers.set('X-Device-ID', readDeviceID())
   return config
-}
-
-function notifyRequestError(error: unknown): void {
-  if (!(error instanceof Error)) {
-    return
-  }
-  ElNotification.error({
-    title: appI18n.global.t('request.failed'),
-    message: error instanceof ProtocolError
-      ? appI18n.global.t('request.protocolError')
-      : error.message,
-    type: 'error',
-  })
 }
 
 function normalizeResponseError(error: unknown): unknown {
@@ -235,7 +232,11 @@ function handleUnauthorized(): void {
   window.location.assign(`/login?redirect=${encodeURIComponent(redirect)}`)
 }
 
-const defaultBundle = buildRequestClient(import.meta.env.VITE_API_BASE_URL, undefined, handleUnauthorized)
+const defaultBundle = buildRequestClient(
+  import.meta.env.VITE_API_BASE_URL,
+  undefined,
+  handleUnauthorized,
+)
 const client = defaultBundle.client
 
 export async function refreshAccessCredential(): Promise<AccessCredential> {
@@ -253,6 +254,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isAccessCredential(value: unknown): value is AccessCredential {
   if (!isRecord(value)) return false
-  return typeof value.accessToken === 'string' && value.accessToken !== '' &&
-    typeof value.expiresIn === 'number' && Number.isInteger(value.expiresIn) && value.expiresIn > 0
+  return (
+    typeof value.accessToken === 'string' &&
+    value.accessToken !== '' &&
+    typeof value.expiresIn === 'number' &&
+    Number.isInteger(value.expiresIn) &&
+    value.expiresIn > 0
+  )
 }

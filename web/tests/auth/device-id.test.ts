@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ProtocolError } from '@src/types/http'
-import { deviceIDStorageKey, readDeviceID } from '@src/auth/device-id'
+import { ProtocolError } from '@/types/http'
+import { deviceIDStorageKey, readDeviceID } from '@/auth/device-id'
 
 const validUUID = '550e8400-e29b-41d4-a716-446655440000'
 
@@ -44,7 +44,9 @@ describe('device id', () => {
   it('propagates storage write failures', () => {
     const storage = {
       getItem: () => null,
-      setItem: () => { throw new Error('storage is unavailable') },
+      setItem: () => {
+        throw new Error('storage is unavailable')
+      },
     } as unknown as Storage
 
     expect(() => readDeviceID(storage)).toThrow('storage is unavailable')

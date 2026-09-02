@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { request } from '@src/utils/request'
-import { getPermission } from '@src/api/permission/permission'
+import { request } from '@/utils/request'
+import { getPermission } from '@/api/permission/permission'
 
-vi.mock('@src/utils/request', () => ({ request: vi.fn() }))
+vi.mock('@/utils/request', () => ({ request: vi.fn() }))
 
 const requestMock = vi.mocked(request)
 
@@ -20,9 +20,9 @@ describe('access API', () => {
     expect(requestMock).toHaveBeenCalledWith({ method: 'GET', url: '/api/v1/access' })
   })
 
-  it('returns the backend snapshot without rebuilding it', async () => {
+  it('rejects malformed backend snapshots', async () => {
     const snapshot = { roleCodes: null, menuTree: [], permissionCodes: [] }
     requestMock.mockResolvedValue(snapshot)
-    await expect(getPermission()).resolves.toBe(snapshot)
+    await expect(getPermission()).rejects.toThrow('permission roleCodes must be an array')
   })
 })

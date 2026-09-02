@@ -1,4 +1,6 @@
-import { ProtocolError, request } from '../../utils/request'
+import { request } from '@/utils/request'
+import { ProtocolError } from '@/types/http'
+import { expectEmptyObject } from '@/api/protocol'
 
 export interface AccountProfile {
   userId: number
@@ -29,33 +31,97 @@ export interface ChangePasswordInput {
 }
 
 export async function getAccountProfile(): Promise<AccountProfile> {
-  return parseAccountProfile(await request<unknown>({ method: 'GET', url: '/api/admin/v1/account/profile' }))
+  return parseAccountProfile(
+    await request<unknown>({ method: 'GET', url: '/api/admin/v1/account/profile' }),
+  )
 }
 
-export async function updateAccountProfile(input: UpdateAccountProfileInput): Promise<UpdateAccountProfileResult> {
-  return parseUpdatedAccountProfile(await request<unknown>({ method: 'PUT', url: '/api/admin/v1/account/profile', data: input }))
+export async function updateAccountProfile(
+  input: UpdateAccountProfileInput,
+): Promise<UpdateAccountProfileResult> {
+  return parseUpdatedAccountProfile(
+    await request<unknown>({ method: 'PUT', url: '/api/admin/v1/account/profile', data: input }),
+  )
 }
 
 export async function changePassword(input: ChangePasswordInput): Promise<void> {
-  await request<Record<string, never>>({ method: 'POST', url: '/api/admin/v1/account/password', data: input })
+  expectEmptyObject(
+    await request<unknown>({
+      method: 'POST',
+      url: '/api/admin/v1/account/password',
+      data: input,
+    }),
+    'change password result',
+  )
 }
 
 function parseAccountProfile(value: unknown): AccountProfile {
-  if (!isRecord(value) || !hasExactKeys(value, ['userId', 'username', 'email', 'phone', 'avatar', 'birthday', 'gender']) ||
-    !isPositiveInteger(value.userId) || typeof value.username !== 'string' || typeof value.email !== 'string' ||
-    !isNullableString(value.phone) || typeof value.avatar !== 'string' || !isNullableDate(value.birthday) || !isGender(value.gender)) {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      'userId',
+      'username',
+      'email',
+      'phone',
+      'avatar',
+      'birthday',
+      'gender',
+    ]) ||
+    !isPositiveInteger(value.userId) ||
+    typeof value.username !== 'string' ||
+    typeof value.email !== 'string' ||
+    !isNullableString(value.phone) ||
+    typeof value.avatar !== 'string' ||
+    !isNullableDate(value.birthday) ||
+    !isGender(value.gender)
+  ) {
     throw new ProtocolError('account profile response is invalid')
   }
-  return { userId: value.userId, username: value.username, email: value.email, phone: value.phone, avatar: value.avatar, birthday: value.birthday, gender: value.gender }
+  return {
+    userId: value.userId,
+    username: value.username,
+    email: value.email,
+    phone: value.phone,
+    avatar: value.avatar,
+    birthday: value.birthday,
+    gender: value.gender,
+  }
 }
 
 function parseUpdatedAccountProfile(value: unknown): UpdateAccountProfileResult {
-  if (!isRecord(value) || !hasExactKeys(value, ['userId', 'username', 'email', 'phone', 'avatar', 'birthday', 'gender', 'updatedAt']) ||
-    !isPositiveInteger(value.userId) || typeof value.username !== 'string' || typeof value.email !== 'string' ||
-    !isNullableString(value.phone) || typeof value.avatar !== 'string' || !isNullableDate(value.birthday) || !isGender(value.gender) || typeof value.updatedAt !== 'string') {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      'userId',
+      'username',
+      'email',
+      'phone',
+      'avatar',
+      'birthday',
+      'gender',
+      'updatedAt',
+    ]) ||
+    !isPositiveInteger(value.userId) ||
+    typeof value.username !== 'string' ||
+    typeof value.email !== 'string' ||
+    !isNullableString(value.phone) ||
+    typeof value.avatar !== 'string' ||
+    !isNullableDate(value.birthday) ||
+    !isGender(value.gender) ||
+    typeof value.updatedAt !== 'string'
+  ) {
     throw new ProtocolError('updated account profile response is invalid')
   }
-  return { userId: value.userId, username: value.username, email: value.email, phone: value.phone, avatar: value.avatar, birthday: value.birthday, gender: value.gender, updatedAt: value.updatedAt }
+  return {
+    userId: value.userId,
+    username: value.username,
+    email: value.email,
+    phone: value.phone,
+    avatar: value.avatar,
+    birthday: value.birthday,
+    gender: value.gender,
+    updatedAt: value.updatedAt,
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

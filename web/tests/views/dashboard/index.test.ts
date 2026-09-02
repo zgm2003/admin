@@ -2,11 +2,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getHealth, getReadiness } from '@src/api/health'
-import { appI18n, setLocale } from '@src/i18n'
-import Dashboard from '@src/views/dashboard/index.vue'
+import { getHealth, getReadiness } from '@/api/health'
+import { appI18n, setLocale } from '@/i18n'
+import Dashboard from '@/views/dashboard/index.vue'
 
-vi.mock('@src/api/health', () => ({
+vi.mock('@/api/health', () => ({
   getHealth: vi.fn(),
   getReadiness: vi.fn(),
 }))

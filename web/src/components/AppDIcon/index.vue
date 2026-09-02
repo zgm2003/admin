@@ -1,11 +1,11 @@
 <script setup lang="ts">
+defineOptions({ name: 'AppDIcon', inheritAttrs: false })
+
 import type { Component } from 'vue'
 import { computed, markRaw, toRaw } from 'vue'
 import { ElIcon } from 'element-plus'
-import { isMenuIconName, menuIcons, type MenuIconName } from '../../../icons/menu-icons'
+import { isMenuIconName, menuIcons, type MenuIconName } from '@/icons/menu-icons'
 import type { AppDIconProps } from './types'
-
-defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(defineProps<AppDIconProps>(), {
   size: 18,
@@ -26,7 +26,8 @@ const resolvedComponent = computed<Component | null>(() => {
 })
 
 const invalidMessage = computed(() => {
-  if (props.component === undefined && props.icon === undefined) return 'an icon name or component is required'
+  if (props.component === undefined && props.icon === undefined)
+    return 'an icon name or component is required'
   return resolvedComponent.value === null ? `Lucide icon not found: ${String(props.icon)}` : ''
 })
 </script>
@@ -41,6 +42,14 @@ const invalidMessage = computed(() => {
 </template>
 
 <style scoped>
-.d-icon { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; }
-.d-icon-empty { font-size: 0.75em; line-height: 1; }
+.d-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+.d-icon-empty {
+  font-size: 0.75em;
+  line-height: 1;
+}
 </style>

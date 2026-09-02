@@ -27,13 +27,13 @@
 }
 
 @media (max-width: 768px) {
-	.management-page {
+  .management-page {
     min-height: 100%;
     padding: 12px;
   }
 
-	.management-page__filters,
-	.management-page__actions {
+  .management-page__filters,
+  .management-page__actions {
     align-items: stretch;
   }
 }

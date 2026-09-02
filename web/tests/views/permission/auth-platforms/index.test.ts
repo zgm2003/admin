@@ -9,14 +9,14 @@ import {
   getAuthPlatforms,
   updateAuthPlatform,
   updateAuthPlatformStatus,
-} from '@src/api/auth/platform'
-import { YesNo } from '@src/enums/yes-no'
-import { appI18n } from '@src/i18n'
-import { pinia } from '@src/store'
+} from '@/api/auth/platform'
+import { YesNo } from '@/enums/yes-no'
+import { appI18n } from '@/i18n'
+import { pinia } from '@/store'
 import { usePermissionStore } from '@/store/permission.ts'
 import AuthPlatformsPage from '@/views/permission/auth-platforms/index.vue'
 
-vi.mock('@src/api/auth/platform', () => ({
+vi.mock('@/api/auth/platform', () => ({
   createAuthPlatform: vi.fn(),
   deleteAuthPlatform: vi.fn(),
   getAuthPlatforms: vi.fn(),
@@ -31,11 +31,22 @@ const updateAuthPlatformStatusMock = vi.mocked(updateAuthPlatformStatus)
 const deleteAuthPlatformMock = vi.mocked(deleteAuthPlatform)
 
 const adminRow = {
-  id: 2, code: 'admin', name: 'Admin', policyVersion: 1,
-  accessTTLSeconds: 900, refreshTTLSeconds: 86_400, sessionCacheTTLSeconds: 7_200,
-  accessCacheTTLSeconds: 600, bindDevice: YesNo.Yes, bindIP: YesNo.No, maxSessions: 0,
-  allowRegister: YesNo.No, isEnabled: YesNo.Yes, isBuiltin: YesNo.Yes,
-  createdAt: '2026-08-20T10:00:00Z', updatedAt: '2026-08-20T10:00:00Z',
+  id: 2,
+  code: 'admin',
+  name: 'Admin',
+  policyVersion: 1,
+  accessTTLSeconds: 900,
+  refreshTTLSeconds: 86_400,
+  sessionCacheTTLSeconds: 7_200,
+  accessCacheTTLSeconds: 600,
+  bindDevice: YesNo.Yes,
+  bindIP: YesNo.No,
+  maxSessions: 0,
+  allowRegister: YesNo.No,
+  isEnabled: YesNo.Yes,
+  isBuiltin: YesNo.Yes,
+  createdAt: '2026-08-20T10:00:00Z',
+  updatedAt: '2026-08-20T10:00:00Z',
 }
 
 describe('authentication platform page', () => {
@@ -57,15 +68,18 @@ describe('authentication platform page', () => {
     expect(getAuthPlatformsMock).toHaveBeenCalledWith({ page: 1, pageSize: 20 })
     expect(getAuthPlatformsMock).toHaveBeenCalledOnce()
     expect(wrapper.find('h1').exists()).toBe(false)
-		expect(wrapper.get('.auth-platform-page').classes()).toContain('management-page')
+    expect(wrapper.get('.auth-platform-page').classes()).toContain('management-page')
     expect(wrapper.text()).toContain('Admin')
     expect(wrapper.text()).toContain('不限')
   })
 
   it('gates each mutation command independently and protects builtin deletion', async () => {
     setPermissions([
-      'auth:platform:list', 'auth:platform:create',
-      'auth:platform:update', 'auth:platform:status', 'auth:platform:delete',
+      'auth:platform:list',
+      'auth:platform:create',
+      'auth:platform:update',
+      'auth:platform:status',
+      'auth:platform:delete',
     ])
     const { wrapper } = await mountPage()
 
@@ -77,12 +91,16 @@ describe('authentication platform page', () => {
 
   it('uses the old-project table density with explicit policy states and actions', async () => {
     setPermissions([
-      'auth:platform:list', 'auth:platform:create',
-      'auth:platform:update', 'auth:platform:status',
+      'auth:platform:list',
+      'auth:platform:create',
+      'auth:platform:update',
+      'auth:platform:status',
     ])
     const { wrapper } = await mountPage()
 
-    expect(wrapper.find('.app-table__toolbar-left [data-testid="auth-platform-create"]').exists()).toBe(true)
+    expect(
+      wrapper.find('.app-table__toolbar-left [data-testid="auth-platform-create"]').exists(),
+    ).toBe(true)
     expect(wrapper.get('[data-testid="auth-platform-security"]').text()).toContain('绑定设备')
     expect(wrapper.get('[data-testid="auth-platform-security"]').text()).toContain('未绑定 IP')
     expect(wrapper.get('[data-testid="auth-platform-registration"]').text()).toContain('禁止注册')
@@ -94,10 +112,14 @@ describe('authentication platform page', () => {
     setPermissions(['auth:platform:list', 'auth:platform:update'])
     const { wrapper } = await mountPage()
 
-    expect(wrapper.get('.auth-platform-identity').classes()).toContain('auth-platform-identity--centered')
+    expect(wrapper.get('.auth-platform-identity').classes()).toContain(
+      'auth-platform-identity--centered',
+    )
     await wrapper.get('[data-testid="auth-platform-update"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('.auth-platform-field-label').classes()).toContain('auth-platform-field-label--nowrap')
+    expect(wrapper.get('.auth-platform-field-label').classes()).toContain(
+      'auth-platform-field-label--nowrap',
+    )
   })
 
   it('keeps mobile policy switches in one row and distributes pagination ends', async () => {
@@ -107,7 +129,9 @@ describe('authentication platform page', () => {
     await wrapper.get('[data-testid="auth-platform-update"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('.auth-platform-policy-grid').classes()).toContain('auth-platform-policy-grid--three-up')
+    expect(wrapper.get('.auth-platform-policy-grid').classes()).toContain(
+      'auth-platform-policy-grid--three-up',
+    )
     expect(wrapper.find('.app-table__pagination--distributed').exists()).toBe(true)
   })
 
@@ -128,8 +152,11 @@ describe('authentication platform page', () => {
     await wrapper.get('[data-testid="auth-platform-keyword"]').setValue('portal')
     await wrapper.get('[data-testid="auth-platform-search"]').trigger('click')
     await flushPromises()
-    expect(getAuthPlatformsMock).toHaveBeenLastCalledWith({ page: 1, pageSize: 20, keyword: 'portal' })
-
+    expect(getAuthPlatformsMock).toHaveBeenLastCalledWith({
+      page: 1,
+      pageSize: 20,
+      keyword: 'portal',
+    })
   })
 
   it('keeps edit code read-only and uses an independently scrolling dialog body', async () => {
@@ -139,7 +166,9 @@ describe('authentication platform page', () => {
     await flushPromises()
 
     expect(wrapper.find('.app-dialog__body--scroll').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="auth-platform-form"]').classes()).toContain('auth-platform-form-scroll')
+    expect(wrapper.get('[data-testid="auth-platform-form"]').classes()).toContain(
+      'auth-platform-form-scroll',
+    )
     expect(wrapper.find('[data-testid="auth-platform-form"] .el-row').exists()).toBe(true)
     expect(wrapper.findAllComponents({ name: 'ElCol' }).length).toBeGreaterThanOrEqual(8)
     expect(wrapper.get('[data-testid="auth-platform-code"]').attributes('disabled')).toBeDefined()
@@ -154,7 +183,12 @@ describe('authentication platform page', () => {
       sessionCacheTTLSeconds: 1_800,
       accessCacheTTLSeconds: 1_800,
     }
-    getAuthPlatformsMock.mockResolvedValue({ list: [customizedRow], total: 1, page: 1, pageSize: 20 })
+    getAuthPlatformsMock.mockResolvedValue({
+      list: [customizedRow],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
     const { wrapper } = await mountPage()
 
     await wrapper.get('[data-testid="auth-platform-update"]').trigger('click')
@@ -174,7 +208,12 @@ describe('authentication platform page', () => {
     setPermissions(['auth:platform:list', 'auth:platform:update'])
     updateAuthPlatformMock.mockResolvedValue({})
     const staleAdminRow = { ...adminRow, allowRegister: YesNo.Yes }
-    getAuthPlatformsMock.mockResolvedValue({ list: [staleAdminRow], total: 1, page: 1, pageSize: 20 })
+    getAuthPlatformsMock.mockResolvedValue({
+      list: [staleAdminRow],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
     const { wrapper } = await mountPage()
 
     await wrapper.get('[data-testid="auth-platform-update"]').trigger('click')
@@ -187,10 +226,19 @@ describe('authentication platform page', () => {
     await adminSwitchComponent.vm.$emit('update:modelValue', YesNo.Yes)
     await wrapper.get('.el-dialog__footer .el-button--primary').trigger('click')
     await flushPromises()
-    expect(updateAuthPlatformMock).toHaveBeenCalledWith(2, expect.objectContaining({ allowRegister: YesNo.No }))
+    expect(updateAuthPlatformMock).toHaveBeenCalledWith(
+      2,
+      expect.objectContaining({ allowRegister: YesNo.No }),
+    )
 
     wrapper.unmount()
-    const appRow = { ...adminRow, id: 3, code: 'app', isBuiltin: YesNo.No, allowRegister: YesNo.Yes }
+    const appRow = {
+      ...adminRow,
+      id: 3,
+      code: 'app',
+      isBuiltin: YesNo.No,
+      allowRegister: YesNo.Yes,
+    }
     getAuthPlatformsMock.mockResolvedValue({ list: [appRow], total: 1, page: 1, pageSize: 20 })
     const { wrapper: appWrapper } = await mountPage()
 
@@ -203,7 +251,10 @@ describe('authentication platform page', () => {
     await appSwitchComponent.vm.$emit('update:modelValue', YesNo.No)
     await appWrapper.get('.el-dialog__footer .el-button--primary').trigger('click')
     await flushPromises()
-    expect(updateAuthPlatformMock).toHaveBeenLastCalledWith(3, expect.objectContaining({ allowRegister: YesNo.No }))
+    expect(updateAuthPlatformMock).toHaveBeenLastCalledWith(
+      3,
+      expect.objectContaining({ allowRegister: YesNo.No }),
+    )
   })
 
   it('keeps registration editable and submits the selected value for a new platform', async () => {
@@ -222,9 +273,13 @@ describe('authentication platform page', () => {
     await wrapper.get('.el-dialog__footer .el-button--primary').trigger('click')
     await flushPromises()
 
-    expect(createAuthPlatformMock).toHaveBeenCalledWith(expect.objectContaining({
-      code: 'portal', name: 'Portal', allowRegister: YesNo.Yes,
-    }))
+    expect(createAuthPlatformMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'portal',
+        name: 'Portal',
+        allowRegister: YesNo.Yes,
+      }),
+    )
   })
 })
 
@@ -239,7 +294,9 @@ async function mountPage() {
   })
   await router.push('/access/auth-platforms')
   await router.isReady()
-  const wrapper = mount(AuthPlatformsPage, { global: { plugins: [ElementPlus, pinia, appI18n, router] } })
+  const wrapper = mount(AuthPlatformsPage, {
+    global: { plugins: [ElementPlus, pinia, appI18n, router] },
+  })
   await flushPromises()
   return { wrapper, router }
 }
@@ -247,7 +304,9 @@ async function mountPage() {
 function findAllowRegisterSwitch(wrapper: Awaited<ReturnType<typeof mountPage>>['wrapper']) {
   const allowRegisterSwitch = wrapper
     .findAllComponents({ name: 'ElSwitch' })
-    .find((switchWrapper) => switchWrapper.attributes('data-testid') === 'auth-platform-allow-register')
+    .find(
+      (switchWrapper) => switchWrapper.attributes('data-testid') === 'auth-platform-allow-register',
+    )
   if (allowRegisterSwitch === undefined) throw new Error('allow registration switch is missing')
   return allowRegisterSwitch
 }
@@ -256,8 +315,7 @@ function ttlInputValue(
   wrapper: Awaited<ReturnType<typeof mountPage>>['wrapper'],
   name: 'access' | 'refresh' | 'session-cache' | 'access-cache',
 ): number {
-  const input = wrapper
-    .get(`[data-testid="auth-platform-${name}-ttl"]`)
-    .get('input').element as HTMLInputElement
+  const input = wrapper.get(`[data-testid="auth-platform-${name}-ttl"]`).get('input')
+    .element as HTMLInputElement
   return Number(input.value)
 }

@@ -3,9 +3,11 @@ import { Close, Moon, RefreshRight, Setting, Sunny } from '@element-plus/icons-v
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useUIPreferencesStore } from '../../store/ui-preferences'
-import type { PageTransitionName, UIPreferences } from '../../utils/ui-preferences'
-import type { ThemeMode } from '../../utils/theme'
+import { useUIPreferencesStore } from '@/store/ui-preferences'
+import type { PageTransitionName, UIPreferences } from '@/utils/ui-preferences'
+import type { ThemeMode } from '@/utils/theme'
+
+defineOptions({ name: 'SettingDrawer' })
 
 defineProps<{
   modelValue: boolean
@@ -18,14 +20,28 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const uiPreferences = useUIPreferencesStore()
-const themeColors = ['#409EFF', '#3B82F6', '#475569', '#059669', '#0891B2', '#7C3AED', '#EA580C'] as const
+const themeColors = [
+  '#409EFF',
+  '#3B82F6',
+  '#475569',
+  '#059669',
+  '#0891B2',
+  '#7C3AED',
+  '#EA580C',
+] as const
 const transitionNames: readonly PageTransitionName[] = ['fade', 'slide-left', 'zoom']
 const transitionOptions = computed(() => [
   { value: 'fade', label: t('layout.settings.transitionFade') },
   { value: 'slide-left', label: t('layout.settings.transitionSlideLeft') },
   { value: 'zoom', label: t('layout.settings.transitionZoom') },
 ])
-type BooleanPreferenceKey = 'showBreadcrumb' | 'showMenuToggle' | 'showRouteTabs' | 'uniqueOpened' | 'showFooter' | 'pageTransition'
+type BooleanPreferenceKey =
+  | 'showBreadcrumb'
+  | 'showMenuToggle'
+  | 'showRouteTabs'
+  | 'uniqueOpened'
+  | 'showFooter'
+  | 'pageTransition'
 
 const persistenceErrorMessage = computed(() => {
   if (uiPreferences.persistenceError === 'invalid') return t('layout.settings.invalidStorage')
@@ -105,7 +121,14 @@ function resetPreferences(): void {
 
       <section class="setting-drawer__section" data-testid="settings-theme-section">
         <h3>{{ t('layout.settings.theme') }}</h3>
-        <el-space class="setting-drawer__segmented" wrap fill :size="8" role="group" :aria-label="t('layout.settings.theme')">
+        <el-space
+          class="setting-drawer__segmented"
+          wrap
+          fill
+          :size="8"
+          role="group"
+          :aria-label="t('layout.settings.theme')"
+        >
           <el-button
             data-testid="theme-light"
             :type="uiPreferences.preferences.theme === 'light' ? 'primary' : 'default'"
@@ -140,7 +163,9 @@ function resetPreferences(): void {
             :aria-pressed="uiPreferences.preferences.primaryColor === color"
             @click="updatePrimaryColor(color)"
           >
-            <span v-if="uiPreferences.preferences.primaryColor === color" aria-hidden="true">✓</span>
+            <span v-if="uiPreferences.preferences.primaryColor === color" aria-hidden="true"
+              >✓</span
+            >
           </button>
           <el-color-picker
             data-testid="primary-color-picker"
@@ -154,13 +179,34 @@ function resetPreferences(): void {
       <section class="setting-drawer__section" data-testid="settings-display-section">
         <h3>{{ t('layout.settings.display') }}</h3>
         <el-row :gutter="8" class="setting-drawer__display-grid">
-          <el-col v-for="item in [
-            { key: 'showBreadcrumb', testId: 'show-breadcrumb', label: t('layout.settings.breadcrumb') },
-            { key: 'showMenuToggle', testId: 'show-menu-toggle', label: t('layout.settings.menuToggle') },
-            { key: 'showRouteTabs', testId: 'show-route-tabs', label: t('layout.settings.routeTabs') },
-            { key: 'uniqueOpened', testId: 'unique-opened', label: t('layout.settings.uniqueOpened') },
-            { key: 'showFooter', testId: 'show-footer', label: t('layout.settings.footer') },
-          ]" :key="item.key" :xs="24" :sm="12">
+          <el-col
+            v-for="item in [
+              {
+                key: 'showBreadcrumb',
+                testId: 'show-breadcrumb',
+                label: t('layout.settings.breadcrumb'),
+              },
+              {
+                key: 'showMenuToggle',
+                testId: 'show-menu-toggle',
+                label: t('layout.settings.menuToggle'),
+              },
+              {
+                key: 'showRouteTabs',
+                testId: 'show-route-tabs',
+                label: t('layout.settings.routeTabs'),
+              },
+              {
+                key: 'uniqueOpened',
+                testId: 'unique-opened',
+                label: t('layout.settings.uniqueOpened'),
+              },
+              { key: 'showFooter', testId: 'show-footer', label: t('layout.settings.footer') },
+            ]"
+            :key="item.key"
+            :xs="24"
+            :sm="12"
+          >
             <label class="setting-drawer__row">
               <span>{{ item.label }}</span>
               <el-switch
@@ -176,18 +222,14 @@ function resetPreferences(): void {
 
       <section class="setting-drawer__section" data-testid="settings-transition-section">
         <h3>{{ t('layout.settings.transition') }}</h3>
-        <el-row :gutter="8">
-          <el-col :span="24">
-            <label class="setting-drawer__row">
-              <span>{{ t('layout.settings.transitionEnabled') }}</span>
-              <el-switch
-                data-testid="page-transition"
-                :model-value="uiPreferences.preferences.pageTransition"
-                @change="updateBoolean('pageTransition', $event)"
-              />
-            </label>
-          </el-col>
-        </el-row>
+        <label class="setting-drawer__row">
+          <span>{{ t('layout.settings.transitionEnabled') }}</span>
+          <el-switch
+            data-testid="page-transition"
+            :model-value="uiPreferences.preferences.pageTransition"
+            @change="updateBoolean('pageTransition', $event)"
+          />
+        </label>
         <el-select-v2
           data-testid="transition-name"
           :model-value="uiPreferences.preferences.transitionName"
@@ -200,7 +242,11 @@ function resetPreferences(): void {
       </section>
 
       <div class="setting-drawer__footer">
-        <el-button data-testid="reset-ui-preferences" :icon="RefreshRight" @click="resetPreferences">
+        <el-button
+          data-testid="reset-ui-preferences"
+          :icon="RefreshRight"
+          @click="resetPreferences"
+        >
           {{ t('layout.settings.reset') }}
         </el-button>
       </div>
@@ -208,7 +254,7 @@ function resetPreferences(): void {
   </el-drawer>
 </template>
 
-<style scoped lang="scss">
+<style scoped>
 .setting-drawer__content {
   display: flex;
   flex-direction: column;
@@ -252,7 +298,9 @@ function resetPreferences(): void {
   font-weight: 700;
 }
 
-.setting-drawer__segmented { width: 100%; }
+.setting-drawer__segmented {
+  width: 100%;
+}
 
 .setting-drawer__segmented .el-button {
   margin: 0;

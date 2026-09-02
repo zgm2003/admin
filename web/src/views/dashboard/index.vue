@@ -3,9 +3,9 @@ import { onMounted, ref } from 'vue'
 import { Check, Monitor, Refresh, Warning } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
-import { getHealth, getReadiness } from '../../api/health'
-import { ProtocolError } from '../../types/http'
-import ReadinessChart from './components/ReadinessChart.vue'
+import { getHealth, getReadiness } from '@/api/health'
+import { ProtocolError } from '@/types/http'
+import ReadinessChart from './components/ReadinessChart/index.vue'
 
 type StatusState = 'checking' | 'up' | 'error'
 
@@ -68,7 +68,9 @@ onMounted(refreshHealth)
   <div class="dashboard-page">
     <section class="dashboard-toolbar" aria-labelledby="dashboard-title">
       <div class="dashboard-toolbar__title">
-        <span class="dashboard-toolbar__icon"><el-icon><Monitor /></el-icon></span>
+        <span class="dashboard-toolbar__icon"
+          ><el-icon><Monitor /></el-icon
+        ></span>
         <div>
           <span class="dashboard-toolbar__eyebrow">{{ t('dashboard.eyebrow') }}</span>
           <h1 id="dashboard-title">{{ t('dashboard.title') }}</h1>
@@ -143,13 +145,8 @@ onMounted(refreshHealth)
               </div>
               <el-tag size="small" effect="plain" type="success">{{ t('dashboard.live') }}</el-tag>
             </header>
-            <ReadinessChart
-              :api="apiStatus"
-              :postgresql="postgresqlStatus"
-              :redis="redisStatus"
-            />
+            <ReadinessChart :api="apiStatus" :postgresql="postgresqlStatus" :redis="redisStatus" />
           </section>
-
         </div>
       </div>
     </div>

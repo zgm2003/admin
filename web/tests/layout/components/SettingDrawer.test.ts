@@ -3,10 +3,10 @@ import ElementPlus from 'element-plus'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { appI18n, setLocale } from '@src/i18n'
-import { useUIPreferencesStore } from '@src/store/ui-preferences'
-import { defaultUIPreferences, uiPreferencesStorageKey } from '@src/utils/ui-preferences'
-import SettingDrawer from '@src/layout/components/SettingDrawer.vue'
+import { appI18n, setLocale } from '@/i18n'
+import { useUIPreferencesStore } from '@/store/ui-preferences'
+import { defaultUIPreferences, uiPreferencesStorageKey } from '@/utils/ui-preferences'
+import SettingDrawer from '@/layout/components/SettingDrawer/index.vue'
 
 describe('SettingDrawer', () => {
   beforeEach(() => {

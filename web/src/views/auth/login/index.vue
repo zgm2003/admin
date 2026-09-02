@@ -5,9 +5,9 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import { getCurrentUser, login } from '../../../api/auth/login'
-import { useAuthStore } from '../../../store/auth'
-import { ApiError, ProtocolError } from '../../../types/http'
+import { getCurrentUser, login } from '@/api/auth/login'
+import { useAuthStore } from '@/store/auth'
+import { ApiError, ProtocolError } from '@/types/http'
 
 interface LoginForm {
   email: string
@@ -22,7 +22,7 @@ const formReference = ref<FormInstance>()
 const form = reactive<LoginForm>({ email: '', password: '' })
 const pending = ref(false)
 const submitError = ref('')
-const bootstrapError = computed(() => auth.status === 'error' ? auth.errorMessage : '')
+const bootstrapError = computed(() => (auth.status === 'error' ? auth.errorMessage : ''))
 const rules = computed<FormRules<LoginForm>>(() => ({
   email: [
     { required: true, message: t('auth.login.emailRequired'), trigger: 'blur' },
@@ -46,11 +46,14 @@ async function submit(): Promise<void> {
     await router.replace(safeRedirect(route.query.redirect))
   } catch (error: unknown) {
     auth.setAnonymous()
-    submitError.value = error instanceof ProtocolError
-      ? t('request.protocolError')
-      : error instanceof ApiError && error.code === 10002
-      ? t('auth.login.invalidCredentials')
-      : error instanceof Error && error.message !== '' ? error.message : t('auth.login.failed')
+    submitError.value =
+      error instanceof ProtocolError
+        ? t('request.protocolError')
+        : error instanceof ApiError && error.code === 10002
+          ? t('auth.login.invalidCredentials')
+          : error instanceof Error && error.message !== ''
+            ? error.message
+            : t('auth.login.failed')
   } finally {
     pending.value = false
   }
@@ -67,99 +70,105 @@ function safeRedirect(value: unknown): string {
   <main class="auth-page">
     <el-row class="auth-shell">
       <el-col :xs="24" :sm="24" :md="12" class="auth-brand-col">
-      <section class="auth-brand" data-testid="login-brand" :aria-label="t('navigation.admin')">
-        <div class="auth-brand__identity">
-          <span class="auth-brand__mark" aria-hidden="true">A</span>
-          <span class="auth-brand__name">Admin</span>
-        </div>
+        <section class="auth-brand" data-testid="login-brand" :aria-label="t('navigation.admin')">
+          <div class="auth-brand__identity">
+            <span class="auth-brand__mark" aria-hidden="true">A</span>
+            <span class="auth-brand__name">Admin</span>
+          </div>
 
-        <div class="auth-brand__message">
-          <p class="auth-brand__eyebrow">{{ t('auth.login.eyebrow') }}</p>
-          <h1>{{ t('auth.login.heading') }}</h1>
-          <p>{{ t('auth.login.description') }}</p>
-        </div>
+          <div class="auth-brand__message">
+            <p class="auth-brand__eyebrow">{{ t('auth.login.eyebrow') }}</p>
+            <h1>{{ t('auth.login.heading') }}</h1>
+            <p>{{ t('auth.login.description') }}</p>
+          </div>
 
-        <div class="auth-brand__trace" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-      </section>
+          <div class="auth-brand__trace" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </section>
       </el-col>
 
       <el-col :xs="24" :sm="24" :md="12" class="auth-form-col">
-      <div class="auth-form-area">
-        <section class="auth-panel" data-testid="login-panel" aria-labelledby="login-title">
-          <header class="auth-panel__header">
-            <el-icon class="auth-icon"><User /></el-icon>
-            <div>
-              <p class="auth-panel__eyebrow">{{ t('auth.login.eyebrow') }}</p>
-              <h2 id="login-title">{{ t('auth.login.title') }}</h2>
-            </div>
-          </header>
-          <p class="auth-caption">{{ t('auth.login.caption') }}</p>
+        <div class="auth-form-area">
+          <section class="auth-panel" data-testid="login-panel" aria-labelledby="login-title">
+            <header class="auth-panel__header">
+              <el-icon class="auth-icon"><User /></el-icon>
+              <div>
+                <p class="auth-panel__eyebrow">{{ t('auth.login.eyebrow') }}</p>
+                <h2 id="login-title">{{ t('auth.login.title') }}</h2>
+              </div>
+            </header>
+            <p class="auth-caption">{{ t('auth.login.caption') }}</p>
 
-          <p v-if="bootstrapError" class="auth-error" data-testid="bootstrap-error">{{ bootstrapError }}</p>
-          <p v-if="submitError" class="auth-error" data-testid="login-error">{{ submitError }}</p>
+            <p v-if="bootstrapError" class="auth-error" data-testid="bootstrap-error">
+              {{ bootstrapError }}
+            </p>
+            <p v-if="submitError" class="auth-error" data-testid="login-error">{{ submitError }}</p>
 
-          <el-form
-            ref="formReference"
-            class="auth-form"
-            :model="form"
-            :rules="rules"
-            label-position="top"
-            @submit.prevent="submit"
-          >
-            <el-form-item :label="t('auth.login.email')" prop="email">
-              <el-input
-                v-model="form.email"
-                data-testid="login-email"
-                type="email"
-                inputmode="email"
-                autocomplete="username"
-                :placeholder="t('auth.login.emailPlaceholder')"
-                size="large"
-              >
-                <template #prefix><el-icon><User /></el-icon></template>
-              </el-input>
-            </el-form-item>
-            <el-form-item :label="t('auth.login.password')" prop="password">
-              <el-input
-                v-model="form.password"
-                data-testid="login-password"
-                type="password"
-                autocomplete="current-password"
-                :placeholder="t('auth.login.passwordPlaceholder')"
-                size="large"
-                show-password
-              >
-                <template #prefix><el-icon><Lock /></el-icon></template>
-              </el-input>
-            </el-form-item>
-            <el-button
-              data-testid="login-submit"
-              class="auth-submit"
-              type="primary"
-              native-type="submit"
-              size="large"
-              :loading="pending"
-              :disabled="pending"
+            <el-form
+              ref="formReference"
+              class="auth-form"
+              :model="form"
+              :rules="rules"
+              label-position="top"
+              @submit.prevent="submit"
             >
-              {{ t('auth.login.submit') }}
-            </el-button>
-          </el-form>
+              <el-form-item :label="t('auth.login.email')" prop="email">
+                <el-input
+                  v-model="form.email"
+                  data-testid="login-email"
+                  type="email"
+                  inputmode="email"
+                  autocomplete="username"
+                  :placeholder="t('auth.login.emailPlaceholder')"
+                  size="large"
+                >
+                  <template #prefix
+                    ><el-icon><User /></el-icon
+                  ></template>
+                </el-input>
+              </el-form-item>
+              <el-form-item :label="t('auth.login.password')" prop="password">
+                <el-input
+                  v-model="form.password"
+                  data-testid="login-password"
+                  type="password"
+                  autocomplete="current-password"
+                  :placeholder="t('auth.login.passwordPlaceholder')"
+                  size="large"
+                  show-password
+                >
+                  <template #prefix
+                    ><el-icon><Lock /></el-icon
+                  ></template>
+                </el-input>
+              </el-form-item>
+              <el-button
+                data-testid="login-submit"
+                class="auth-submit"
+                type="primary"
+                native-type="submit"
+                size="large"
+                :loading="pending"
+                :disabled="pending"
+              >
+                {{ t('auth.login.submit') }}
+              </el-button>
+            </el-form>
 
-          <p class="auth-access-note">
-            <el-icon><Lock /></el-icon>{{ t('auth.login.authorizedOnly') }}
-          </p>
-        </section>
-      </div>
+            <p class="auth-access-note">
+              <el-icon><Lock /></el-icon>{{ t('auth.login.authorizedOnly') }}
+            </p>
+          </section>
+        </div>
       </el-col>
     </el-row>
   </main>
 </template>
 
-<style scoped lang="scss">
+<style scoped>
 .auth-page {
   display: flex;
   align-items: center;
@@ -388,9 +397,13 @@ function safeRedirect(value: unknown): string {
     padding: 16px;
   }
 
-  .auth-shell { min-height: 0; }
+  .auth-shell {
+    min-height: 0;
+  }
 
-  .auth-brand-col { border-right: 0; }
+  .auth-brand-col {
+    border-right: 0;
+  }
 
   .auth-brand {
     min-height: 84px;

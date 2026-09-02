@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { House } from '@element-plus/icons-vue'
 import { describe, expect, it, vi } from 'vitest'
-import AppDIcon from '@src/components/AppDIcon/src/index.vue'
+import AppDIcon from '@/components/AppDIcon/index.vue'
 
 describe('AppDIcon', () => {
   it('renders an explicit Element Plus component', () => {
@@ -25,5 +25,4 @@ describe('AppDIcon', () => {
     const wrapper = mount(AppDIcon, { props: { icon: 'lucide:not-in-registry' as never } })
     expect(wrapper.find('[data-testid="d-icon-empty"]').exists()).toBe(true)
   })
-
 })

@@ -4,14 +4,14 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { appI18n, setLocale } from '@src/i18n'
-import * as profileAPI from '@src/api/user/profile'
-import ProfilePage from '@src/views/account/profile/index.vue'
-import UpMedia from '@src/components/UpMedia/src/index.vue'
+import { appI18n, setLocale } from '@/i18n'
+import * as profileAPI from '@/api/user/profile'
+import ProfilePage from '@/views/account/profile/index.vue'
+import UpMedia from '@/components/UpMedia/index.vue'
 import { usePermissionStore } from '@/store/permission.ts'
-import { useAuthStore } from '@src/store/auth'
+import { useAuthStore } from '@/store/auth'
 
-vi.mock('@src/api/user/profile', () => ({
+vi.mock('@/api/user/profile', () => ({
   getAccountProfile: vi.fn(),
   updateAccountProfile: vi.fn(),
   changePassword: vi.fn(),
@@ -25,7 +25,15 @@ describe('account profile permissions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setLocale('zh-CN')
-    getAccountProfile.mockResolvedValue({ userId: 7, username: 'alice', email: 'alice@example.com', phone: null, avatar: '', birthday: null, gender: 0 })
+    getAccountProfile.mockResolvedValue({
+      userId: 7,
+      username: 'alice',
+      email: 'alice@example.com',
+      phone: null,
+      avatar: '',
+      birthday: null,
+      gender: 0,
+    })
   })
 
   it.each([
@@ -53,8 +61,25 @@ describe('account profile permissions', () => {
   })
 
   it('loads the avatar object key and submits it with profile changes', async () => {
-    getAccountProfile.mockResolvedValue({ userId: 7, username: 'alice', email: 'alice@example.com', phone: null, avatar: 'avatar/old.png', birthday: null, gender: 0 })
-    updateAccountProfile.mockResolvedValue({ userId: 7, username: 'alice', email: 'alice@example.com', phone: null, avatar: 'avatar/new.png', birthday: null, gender: 0, updatedAt: '2026-08-30T00:00:00Z' })
+    getAccountProfile.mockResolvedValue({
+      userId: 7,
+      username: 'alice',
+      email: 'alice@example.com',
+      phone: null,
+      avatar: 'avatar/old.png',
+      birthday: null,
+      gender: 0,
+    })
+    updateAccountProfile.mockResolvedValue({
+      userId: 7,
+      username: 'alice',
+      email: 'alice@example.com',
+      phone: null,
+      avatar: 'avatar/new.png',
+      birthday: null,
+      gender: 0,
+      updatedAt: '2026-08-30T00:00:00Z',
+    })
     const wrapper = mountPage(['account:profile:update'])
     await flushPromises()
 
@@ -64,7 +89,9 @@ describe('account profile permissions', () => {
     await wrapper.get('[data-testid="account-profile-save"]').trigger('click')
     await flushPromises()
 
-    expect(updateAccountProfile).toHaveBeenCalledWith(expect.objectContaining({ avatar: 'avatar/new.png' }))
+    expect(updateAccountProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ avatar: 'avatar/new.png' }),
+    )
     expect(useAuthStore().user?.avatar).toBe('avatar/new.png')
   })
 
@@ -85,7 +112,16 @@ function mountPage(permissionCodes: string[]) {
   const pinia = createPinia()
   setActivePinia(pinia)
   usePermissionStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes })
-  useAuthStore(pinia).setAuthenticated({ userId: 7, username: 'alice', email: 'alice@example.com', phone: null, avatar: '' })
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/login', name: 'login', component: { template: '<div />' } }] })
+  useAuthStore(pinia).setAuthenticated({
+    userId: 7,
+    username: 'alice',
+    email: 'alice@example.com',
+    phone: null,
+    avatar: '',
+  })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/login', name: 'login', component: { template: '<div />' } }],
+  })
   return mount(ProfilePage, { global: { plugins: [pinia, appI18n, ElementPlus, router] } })
 }

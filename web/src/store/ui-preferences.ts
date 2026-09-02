@@ -1,14 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import { applyPrimaryColor, applyTheme } from '../utils/theme'
+import { applyPrimaryColor, applyTheme } from '@/utils/theme'
 import {
   defaultUIPreferences,
   readUIPreferences,
   UIPreferencesError,
   writeUIPreferences,
   type UIPreferences,
-} from '../utils/ui-preferences'
+} from '@/utils/ui-preferences'
 
 export type UIPersistenceError = 'invalid' | 'write' | null
 
@@ -28,7 +28,8 @@ export const useUIPreferencesStore = defineStore('uiPreferences', () => {
       initialize()
     } catch (error: unknown) {
       replace(defaultUIPreferences)
-      persistenceError.value = error instanceof UIPreferencesError && error.operation === 'write' ? 'write' : 'invalid'
+      persistenceError.value =
+        error instanceof UIPreferencesError && error.operation === 'write' ? 'write' : 'invalid'
       initialized.value = true
     }
   }

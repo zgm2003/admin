@@ -3,9 +3,11 @@ import { Menu, Setting } from '@element-plus/icons-vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { HeaderBreadcrumb } from '../breadcrumbs'
-import { LocaleSwitch } from '../../components/LocaleSwitch'
-import SettingDrawer from './SettingDrawer.vue'
+import type { HeaderBreadcrumb } from '@/layout/breadcrumbs'
+import { LocaleSwitch } from '@/components/LocaleSwitch'
+import SettingDrawer from '@/layout/components/SettingDrawer/index.vue'
+
+defineOptions({ name: 'AppHeader' })
 
 defineProps<{
   breadcrumbs: HeaderBreadcrumb[]
@@ -20,7 +22,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const settingsOpen = ref(false)
-
 </script>
 
 <template>
@@ -37,8 +38,12 @@ const settingsOpen = ref(false)
       />
 
       <el-breadcrumb v-if="showBreadcrumb" class="app-header__breadcrumb" separator="/">
-		<el-breadcrumb-item v-for="breadcrumb in breadcrumbs" :key="`${breadcrumb.path ?? 'directory'}:${breadcrumb.i18nKey}`" :to="breadcrumb.path ?? undefined">
-			{{ t(breadcrumb.i18nKey) }}
+        <el-breadcrumb-item
+          v-for="breadcrumb in breadcrumbs"
+          :key="`${breadcrumb.path ?? 'directory'}:${breadcrumb.i18nKey}`"
+          :to="breadcrumb.path ?? undefined"
+        >
+          {{ t(breadcrumb.i18nKey) }}
         </el-breadcrumb-item>
       </el-breadcrumb>
     </div>
@@ -61,7 +66,7 @@ const settingsOpen = ref(false)
   </div>
 </template>
 
-<style scoped lang="scss">
+<style scoped>
 .app-header {
   display: flex;
   align-items: center;

@@ -1,1 +1,1 @@
-export { default as LocaleSwitch } from './src/index.vue'
+export { default as LocaleSwitch } from './index.vue'

@@ -1,4 +1,4 @@
-import { ProtocolError } from '../types/http'
+import { ProtocolError } from '@/types/http'
 
 export const deviceIDStorageKey = 'admin:device-id'
 

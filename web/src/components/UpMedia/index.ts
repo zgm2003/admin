@@ -1,1 +1,1 @@
-export { default as UpMedia } from './src/index.vue'
+export { default as UpMedia } from './index.vue'

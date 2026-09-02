@@ -1,23 +1,25 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import { useI18n } from "vue-i18n";
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-const visible = defineModel<boolean>({ required: true });
+defineOptions({ name: 'RolePermissionDiffDialog' })
+
+const visible = defineModel<boolean>({ required: true })
 
 const props = defineProps<{
-  addedLabels: string[];
-  removedLabels: string[];
-  saving: boolean;
-  error: string;
-}>();
+  addedLabels: string[]
+  removedLabels: string[]
+  saving: boolean
+  error: string
+}>()
 
 const emit = defineEmits<{
-  confirm: [];
-}>();
+  confirm: []
+}>()
 
-const { t } = useI18n();
-const hasAdded = computed(() => props.addedLabels.length > 0);
-const hasRemoved = computed(() => props.removedLabels.length > 0);
+const { t } = useI18n()
+const hasAdded = computed(() => props.addedLabels.length > 0)
+const hasRemoved = computed(() => props.removedLabels.length > 0)
 </script>
 
 <template>
@@ -28,20 +30,16 @@ const hasRemoved = computed(() => props.removedLabels.length > 0);
     append-to-body
   >
     <template #header>
-      <strong>{{ t("role.permission.confirmTitle") }}</strong>
+      <strong>{{ t('role.permission.confirmTitle') }}</strong>
     </template>
 
     <el-alert v-if="error" :title="error" type="error" show-icon />
     <div class="role-permission-diff">
       <section class="role-permission-diff__section">
         <div class="role-permission-diff__title">
-          {{ t("role.permission.added") }}
+          {{ t('role.permission.added') }}
         </div>
-        <el-empty
-          v-if="!hasAdded"
-          :description="t('role.permission.noChanges')"
-          :image-size="60"
-        />
+        <el-empty v-if="!hasAdded" :description="t('role.permission.noChanges')" :image-size="60" />
         <template v-else>
           <el-tag
             v-for="label in addedLabels"
@@ -56,7 +54,7 @@ const hasRemoved = computed(() => props.removedLabels.length > 0);
 
       <section class="role-permission-diff__section">
         <div class="role-permission-diff__title">
-          {{ t("role.permission.removed") }}
+          {{ t('role.permission.removed') }}
         </div>
         <el-empty
           v-if="!hasRemoved"
@@ -78,10 +76,10 @@ const hasRemoved = computed(() => props.removedLabels.length > 0);
 
     <template #footer>
       <el-button :disabled="saving" @click="visible = false">
-        {{ t("role.confirm.cancel") }}
+        {{ t('role.confirm.cancel') }}
       </el-button>
       <el-button type="primary" :loading="saving" @click="emit('confirm')">
-        {{ t("role.confirm.confirm") }}
+        {{ t('role.confirm.confirm') }}
       </el-button>
     </template>
   </el-dialog>

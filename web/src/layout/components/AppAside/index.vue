@@ -4,23 +4,28 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import { requestObjectURL } from '../../api/storage/upload'
-import { usePermissionStore } from '../../store/permission.ts'
-import PermissionMenuNode from './PermissionMenuNode.vue'
+import { requestObjectURL } from '@/api/storage/upload'
+import { usePermissionStore } from '@/store/permission'
+import PermissionMenuNode from '@/layout/components/PermissionMenuNode/index.vue'
 
-const props = withDefaults(defineProps<{
-  collapsed: boolean
-  uniqueOpened: boolean
-  username?: string
-  email?: string
-  avatar?: string
-  logoutPending?: boolean
-}>(), {
-  username: '',
-  email: '',
-  avatar: '',
-  logoutPending: false,
-})
+defineOptions({ name: 'AppAside' })
+
+const props = withDefaults(
+  defineProps<{
+    collapsed: boolean
+    uniqueOpened: boolean
+    username?: string
+    email?: string
+    avatar?: string
+    logoutPending?: boolean
+  }>(),
+  {
+    username: '',
+    email: '',
+    avatar: '',
+    logoutPending: false,
+  },
+)
 
 const emit = defineEmits<{
   logout: []
@@ -52,7 +57,13 @@ function handleAvatarError(): void {
   avatarURL.value = ''
 }
 
-watch(() => props.avatar, (objectKey) => { void hydrateAvatar(objectKey) }, { immediate: true })
+watch(
+  () => props.avatar,
+  (objectKey) => {
+    void hydrateAvatar(objectKey)
+  },
+  { immediate: true },
+)
 
 function handleAccountCommand(command: string | number | object): void {
   if (command === 'logout') {
@@ -95,11 +106,7 @@ function handleAccountCommand(command: string | number | object): void {
     </el-menu>
 
     <div class="app-aside__account">
-      <el-dropdown
-        trigger="click"
-        placement="top-start"
-        @command="handleAccountCommand"
-      >
+      <el-dropdown trigger="click" placement="top-start" @command="handleAccountCommand">
         <button
           type="button"
           class="app-aside__account-trigger"
@@ -107,16 +114,29 @@ function handleAccountCommand(command: string | number | object): void {
           :title="t('layout.account.title')"
           :aria-label="t('layout.account.title')"
         >
-          <el-avatar class="app-aside__avatar" :size="34" :src="avatarURL" @error="handleAvatarError">{{ avatarText }}</el-avatar>
+          <el-avatar
+            class="app-aside__avatar"
+            :size="34"
+            :src="avatarURL"
+            @error="handleAvatarError"
+            >{{ avatarText }}</el-avatar
+          >
           <span v-show="!collapsed" class="app-aside__account-copy">
             <strong data-testid="aside-account-name">{{ username }}</strong>
             <small>{{ email }}</small>
           </span>
-          <el-icon v-show="!collapsed" class="app-aside__account-arrow" aria-hidden="true"><ArrowUp /></el-icon>
+          <el-icon v-show="!collapsed" class="app-aside__account-arrow" aria-hidden="true"
+            ><ArrowUp
+          /></el-icon>
         </button>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item v-if="canOpenProfile" data-testid="aside-account-profile" :icon="User" command="profile">
+            <el-dropdown-item
+              v-if="canOpenProfile"
+              data-testid="aside-account-profile"
+              :icon="User"
+              command="profile"
+            >
               {{ t('layout.account.profile') }}
             </el-dropdown-item>
             <el-dropdown-item
@@ -135,7 +155,7 @@ function handleAccountCommand(command: string | number | object): void {
   </aside>
 </template>
 
-<style scoped lang="scss">
+<style scoped>
 .app-aside {
   display: flex;
   flex-direction: column;
@@ -290,5 +310,4 @@ function handleAccountCommand(command: string | number | object): void {
   color: var(--admin-text-soft);
   font-size: 13px;
 }
-
 </style>

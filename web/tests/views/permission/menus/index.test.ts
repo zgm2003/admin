@@ -12,17 +12,22 @@ import {
   updateMenu,
   updateMenuStatus,
   rebuildAccessCache,
-} from '@src/api/permission/menu'
-import type { CreateMenuInput, ManagedMenuNode, MenuCatalogResponse, UpdateMenuInput } from '@src/api/permission/menu'
-import { YesNo } from '@src/enums/yes-no'
-import { appI18n, setLocale } from '@src/i18n'
-import { AppDIcon } from '@src/components/AppDIcon'
-import { IconSelect } from '@src/components/IconSelect'
+} from '@/api/permission/menu'
+import type {
+  CreateMenuInput,
+  ManagedMenuNode,
+  MenuCatalogResponse,
+  UpdateMenuInput,
+} from '@/api/permission/menu'
+import { YesNo } from '@/enums/yes-no'
+import { appI18n, setLocale } from '@/i18n'
+import { AppDIcon } from '@/components/AppDIcon'
+import { IconSelect } from '@/components/IconSelect'
 import { usePermissionStore } from '@/store/permission.ts'
 import MenuManagement from '@/views/permission/menus/index.vue'
 
-vi.mock('@src/api/permission/menu', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@src/api/permission/menu')>()
+vi.mock('@/api/permission/menu', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/permission/menu')>()
   return {
     ...actual,
     getMenus: vi.fn(),
@@ -66,7 +71,9 @@ describe('MenuManagement', () => {
     await flushPromises()
     await wrapper.get('[data-testid="rebuild-access-cache"]').trigger('click')
     await flushPromises()
-    const confirm = document.body.querySelector('.el-message-box__btns .el-button--primary') as HTMLElement | null
+    const confirm = document.body.querySelector(
+      '.el-message-box__btns .el-button--primary',
+    ) as HTMLElement | null
     confirm?.click()
     await flushPromises()
     expect(rebuildAccessCacheMock).toHaveBeenCalledOnce()
@@ -82,31 +89,34 @@ describe('MenuManagement', () => {
     expect(wrapper.get('[data-testid="menu-platform-tabs"]').text()).toContain('Admin')
     expect(wrapper.get('[data-testid="menu-platform-tabs"]').text()).toContain('Canvas')
     expect(wrapper.find('h1').exists()).toBe(false)
-		expect(wrapper.get('.menu-management-page').classes()).toContain('management-page')
+    expect(wrapper.get('.menu-management-page').classes()).toContain('management-page')
     const table = wrapper.get('[data-testid="menu-table"]')
     expect(table.text()).toContain('系统管理')
-		expect(table.text()).toContain('用户管理')
-		expect(table.text()).toContain('修改用户')
+    expect(table.text()).toContain('用户管理')
+    expect(table.text()).toContain('修改用户')
     expect(table.text()).toContain('目录')
     expect(table.text()).toContain('页面')
     expect(table.text()).toContain('按钮权限')
-		expect(table.text()).toContain('account:user:view')
-		expect(table.text()).toContain('/account/users')
-		expect(table.text()).toContain('account/users')
-		expect(table.find('[data-testid="d-icon"]').exists()).toBe(true)
-		expect(table.text()).not.toContain('lucide:settings-2')
+    expect(table.text()).toContain('account:user:view')
+    expect(table.text()).toContain('/account/users')
+    expect(table.text()).toContain('account/users')
+    expect(table.find('[data-testid="d-icon"]').exists()).toBe(true)
+    expect(table.text()).not.toContain('lucide:settings-2')
     expect(table.text()).toContain('已启用')
     expect(table.text()).toContain('已禁用')
-		expect(table.text()).toContain('显示')
-		expect(table.text()).toContain('隐藏')
-		expect(table.text()).not.toContain('内置')
+    expect(table.text()).toContain('显示')
+    expect(table.text()).toContain('隐藏')
+    expect(table.text()).not.toContain('内置')
     const elementTable = wrapper.findComponent({ name: 'ElTable' })
     expect(elementTable.props('defaultExpandAll')).toBe(false)
     expect(elementTable.props('expandRowKeys')).toEqual([])
     expect(elementTable.props('border')).toBe(true)
-    expect(elementTable.props('headerCellStyle')).toEqual({ background: 'var(--el-fill-color-light)' })
-		const centeredLabels = ['类型', '图标', '显示状态', '状态', '操作']
-    const centeredColumns = wrapper.findAllComponents({ name: 'ElTableColumn' })
+    expect(elementTable.props('headerCellStyle')).toEqual({
+      background: 'var(--el-fill-color-light)',
+    })
+    const centeredLabels = ['类型', '图标', '显示状态', '状态', '操作']
+    const centeredColumns = wrapper
+      .findAllComponents({ name: 'ElTableColumn' })
       .filter((column) => centeredLabels.includes(String(column.props('label'))))
     expect(centeredColumns).toHaveLength(centeredLabels.length)
     for (const column of centeredColumns) {
@@ -120,10 +130,17 @@ describe('MenuManagement', () => {
   })
 
   it('defines menu type labels as a computed locale-dependent value', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/views/permission/menus/index.vue'), 'utf8')
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/views/permission/menus/index.vue'),
+      'utf8',
+    )
 
-    expect(source).toContain('const menuTypeOptions = computed<Array<{ label: string; value: ManagedMenuType }>>')
-    expect(source).not.toContain('const menuTypeOptions: Array<{ label: string; value: ManagedMenuType }>')
+    expect(source).toContain(
+      'const menuTypeOptions = computed<Array<{ label: string; value: ManagedMenuType }>>',
+    )
+    expect(source).not.toContain(
+      'const menuTypeOptions: Array<{ label: string; value: ManagedMenuType }>',
+    )
   })
 
   it('switches the top platform tab and reloads only that platform tree', async () => {
@@ -212,20 +229,24 @@ describe('MenuManagement', () => {
     expect(deleteWrapper.find('[data-testid^="delete-"]').exists()).toBe(true)
   })
 
-	it('allows every ordinary menu record to be edited, disabled, and deleted', async () => {
+  it('allows every ordinary menu record to be edited, disabled, and deleted', async () => {
     const wrapper = mountPage(pinia, ['permission:menu:update', 'permission:menu:delete'])
     await flushPromises()
 
-		expect(wrapper.get('[data-testid="edit-1"]').attributes('disabled')).toBeUndefined()
-		expect(wrapper.get('[data-testid="status-1"]').attributes('disabled')).toBeUndefined()
-		expect(wrapper.get('[data-testid="delete-1"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[data-testid="edit-1"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[data-testid="status-1"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[data-testid="delete-1"]').attributes('disabled')).toBeUndefined()
   })
 
   it('does not create a page or body-level scroll owner', async () => {
     const wrapper = mountPage(pinia, ['permission:menu:list'])
     await flushPromises()
-    expect(wrapper.get('.menu-management-page').classes()).not.toContain('admin-layout__scroll-owner')
-    expect(wrapper.get('.menu-management-page').attributes('style') ?? '').not.toContain('overflow: auto')
+    expect(wrapper.get('.menu-management-page').classes()).not.toContain(
+      'admin-layout__scroll-owner',
+    )
+    expect(wrapper.get('.menu-management-page').attributes('style') ?? '').not.toContain(
+      'overflow: auto',
+    )
   })
 
   it('creates a root with explicit nulls and reloads only the management tree', async () => {
@@ -238,7 +259,7 @@ describe('MenuManagement', () => {
     expect(document.body.querySelector('[data-testid="menu-dialog"]')).not.toBeNull()
     expect(document.body.querySelector('[data-testid="menu-drawer"]')).toBeNull()
     await bodyGet('[data-testid="menu-form-code"]').setValue('reports')
-		await bodyGet('[data-testid="menu-form-name"]').setValue('报表')
+    await bodyGet('[data-testid="menu-form-name"]').setValue('报表')
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
     await flushPromises()
 
@@ -246,21 +267,21 @@ describe('MenuManagement', () => {
       platformId: 1,
       parentId: null,
       menuType: 'directory',
-			name: '报表',
+      name: '报表',
       code: 'reports',
       i18nKey: 'navigation.system',
       path: null,
-		componentPath: null,
+      componentPath: null,
       icon: null,
       remark: null,
       sortOrder: 100,
       isEnabled: YesNo.Yes,
-		isHidden: YesNo.No,
+      isHidden: YesNo.No,
     }
-		expect(createMenuMock).toHaveBeenCalledWith(expected)
+    expect(createMenuMock).toHaveBeenCalledWith(expected)
     expect(getMenusMock).toHaveBeenCalledTimes(2)
     expect(document.body.textContent ?? '').toContain('刷新页面后侧边栏和路由生效')
-	})
+  })
 
   it('creates a root page in the active platform without a platform selector', async () => {
     getMenusMock
@@ -278,8 +299,9 @@ describe('MenuManagement', () => {
 
     expect(bodyFind('[data-testid="menu-form-platform-select"]').exists()).toBe(false)
     await bodyGet('[data-testid="menu-form-type"]').trigger('click')
-    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')]
-      .find((item) => item.textContent?.trim() === '页面')
+    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find(
+      (item) => item.textContent?.trim() === '页面',
+    )
     expect(pageOption).toBeDefined()
     if (pageOption !== undefined) await new DOMWrapper(pageOption).trigger('click')
     await bodyGet('[data-testid="menu-form-name"]').setValue('Test')
@@ -289,78 +311,84 @@ describe('MenuManagement', () => {
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
     await flushPromises()
 
-    expect(createMenuMock).toHaveBeenCalledWith(expect.objectContaining({
-      platformId: 2,
-      parentId: null,
-      menuType: 'page',
-      code: 'canvas:test:view',
-    }))
+    expect(createMenuMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platformId: 2,
+        parentId: null,
+        menuType: 'page',
+        code: 'canvas:test:view',
+      }),
+    )
     expect(getMenusMock).toHaveBeenLastCalledWith({ platformId: 2 })
   })
 
-	it('locks protected structure, status, and deletion while keeping presentation fields editable', async () => {
-		getMenusMock.mockResolvedValue(menuCatalog(protectedMenuTree()))
-		const wrapper = mountPage(pinia, ['permission:menu:update', 'permission:menu:delete'])
-		await flushPromises()
+  it('locks protected structure, status, and deletion while keeping presentation fields editable', async () => {
+    getMenusMock.mockResolvedValue(menuCatalog(protectedMenuTree()))
+    const wrapper = mountPage(pinia, ['permission:menu:update', 'permission:menu:delete'])
+    await flushPromises()
 
-		expect(wrapper.get('[data-testid="status-2"]').attributes('disabled')).toBeDefined()
-		expect(wrapper.get('[data-testid="delete-2"]').attributes('disabled')).toBeDefined()
-		await wrapper.get('[data-testid="edit-2"]').trigger('click')
-		await flushPromises()
-		expect(document.body.querySelector('[data-testid="menu-form-protected-hint"]')).not.toBeNull()
-		expect(bodyGet('[data-testid="menu-form-code"]').attributes('disabled')).toBeDefined()
-		expect(bodyGet('[data-testid="menu-form-path"]').attributes('disabled')).toBeDefined()
-		expect(bodyGet('[data-testid="menu-form-component-path"]').attributes('disabled')).toBeDefined()
-		expect(bodyGet('[data-testid="menu-form-hidden"]').classes()).toContain('is-disabled')
-		expect(bodyGet('[data-testid="menu-form-sort-order"]').attributes('disabled')).toBeUndefined()
-	})
+    expect(wrapper.get('[data-testid="status-2"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="delete-2"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="edit-2"]').trigger('click')
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid="menu-form-protected-hint"]')).not.toBeNull()
+    expect(bodyGet('[data-testid="menu-form-code"]').attributes('disabled')).toBeDefined()
+    expect(bodyGet('[data-testid="menu-form-path"]').attributes('disabled')).toBeDefined()
+    expect(bodyGet('[data-testid="menu-form-component-path"]').attributes('disabled')).toBeDefined()
+    expect(bodyGet('[data-testid="menu-form-hidden"]').classes()).toContain('is-disabled')
+    expect(bodyGet('[data-testid="menu-form-sort-order"]').attributes('disabled')).toBeUndefined()
+  })
 
-	it('stores an IconSelect value as a string and previews it with AppDIcon', async () => {
-		createMenuMock.mockResolvedValue({ id: 9 })
-		const wrapper = mountPage(pinia, ['permission:menu:create'])
-		await flushPromises()
-		await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
-		await flushPromises()
-		wrapper.findComponent(IconSelect).vm.$emit('select-icon', 'lucide:shield-check')
-		await flushPromises()
+  it('stores an IconSelect value as a string and previews it with AppDIcon', async () => {
+    createMenuMock.mockResolvedValue({ id: 9 })
+    const wrapper = mountPage(pinia, ['permission:menu:create'])
+    await flushPromises()
+    await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
+    await flushPromises()
+    wrapper.findComponent(IconSelect).vm.$emit('select-icon', 'lucide:shield-check')
+    await flushPromises()
 
-		expect(wrapper.findAllComponents(AppDIcon).some((icon) => icon.props('icon') === 'lucide:shield-check')).toBe(true)
-		await bodyGet('[data-testid="menu-form-name"]').setValue('报表')
-		await bodyGet('[data-testid="menu-form-code"]').setValue('reports')
-		await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
-		await flushPromises()
-		expect(createMenuMock.mock.calls[0]?.[0].icon).toBe('lucide:shield-check')
-	})
+    expect(
+      wrapper
+        .findAllComponents(AppDIcon)
+        .some((icon) => icon.props('icon') === 'lucide:shield-check'),
+    ).toBe(true)
+    await bodyGet('[data-testid="menu-form-name"]').setValue('报表')
+    await bodyGet('[data-testid="menu-form-code"]').setValue('reports')
+    await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
+    await flushPromises()
+    expect(createMenuMock.mock.calls[0]?.[0].icon).toBe('lucide:shield-check')
+  })
 
-	it('forces action menus hidden without displaying a visibility control', async () => {
-		createMenuMock.mockResolvedValue({ id: 9 })
-		const wrapper = mountPage(pinia, ['permission:menu:create'])
-		await flushPromises()
-		await wrapper.get('[data-testid="add-child-2"]').trigger('click')
-		await flushPromises()
+  it('forces action menus hidden without displaying a visibility control', async () => {
+    createMenuMock.mockResolvedValue({ id: 9 })
+    const wrapper = mountPage(pinia, ['permission:menu:create'])
+    await flushPromises()
+    await wrapper.get('[data-testid="add-child-2"]').trigger('click')
+    await flushPromises()
 
-		expect(bodyFind('[data-testid="menu-form-hidden"]').exists()).toBe(false)
-		expect(bodyFind('[data-testid="menu-form-i18n-key"]').exists()).toBe(false)
-		await bodyGet('[data-testid="menu-form-name"]').setValue('新增用户')
-		await bodyGet('[data-testid="menu-form-code"]').setValue('account:user:create')
-		await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
-		await flushPromises()
-		expect(createMenuMock).toHaveBeenCalledWith({
-			platformId: 1,
-			parentId: 2,
-			menuType: 'action',
-			name: '新增用户',
-			code: 'account:user:create',
-			i18nKey: null,
-			path: null,
-			componentPath: null,
-			icon: null,
-			remark: null,
-			sortOrder: 100,
-			isEnabled: YesNo.Yes,
-			isHidden: YesNo.Yes,
-		})
-	})
+    expect(bodyFind('[data-testid="menu-form-hidden"]').exists()).toBe(false)
+    expect(bodyFind('[data-testid="menu-form-i18n-key"]').exists()).toBe(false)
+    await bodyGet('[data-testid="menu-form-name"]').setValue('新增用户')
+    await bodyGet('[data-testid="menu-form-code"]').setValue('account:user:create')
+    await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
+    await flushPromises()
+    expect(createMenuMock).toHaveBeenCalledWith({
+      platformId: 1,
+      parentId: 2,
+      menuType: 'action',
+      name: '新增用户',
+      code: 'account:user:create',
+      i18nKey: null,
+      path: null,
+      componentPath: null,
+      icon: null,
+      remark: null,
+      sortOrder: 100,
+      isEnabled: YesNo.Yes,
+      isHidden: YesNo.Yes,
+    })
+  })
 
   it('lets the menu dialog size itself to the form content', async () => {
     const wrapper = mountPage(pinia, ['permission:menu:create'])
@@ -373,41 +401,49 @@ describe('MenuManagement', () => {
     expect(wrapper.findAllComponents({ name: 'ElCol' }).length).toBeGreaterThan(0)
   })
 
-	it('uses text protocol fields with exact hints and clears incompatible values without deriving paths', async () => {
+  it('uses text protocol fields with exact hints and clears incompatible values without deriving paths', async () => {
     const wrapper = mountPage(pinia, ['permission:menu:create'])
     await flushPromises()
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
-		expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(false)
-		expect(bodyFind('[data-testid="menu-form-component-path"]').exists()).toBe(false)
-		const i18nKeyInput = bodyGet('[data-testid="menu-form-i18n-key"]')
-		expect(i18nKeyInput.element.tagName).toBe('INPUT')
-		expect(i18nKeyInput.element.closest('.el-select-v2')).toBeNull()
-		expect(document.body.textContent).toContain('i18nKey：至少两段点号路径，例如 navigation.accountUsers')
+    expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(false)
+    expect(bodyFind('[data-testid="menu-form-component-path"]').exists()).toBe(false)
+    const i18nKeyInput = bodyGet('[data-testid="menu-form-i18n-key"]')
+    expect(i18nKeyInput.element.tagName).toBe('INPUT')
+    expect(i18nKeyInput.element.closest('.el-select-v2')).toBeNull()
+    expect(document.body.textContent).toContain(
+      'i18nKey：至少两段点号路径，例如 navigation.accountUsers',
+    )
     expect(document.body.textContent).toContain('权限码：小写冒号分段，例如 account:user:view')
 
     await bodyGet('[data-testid="menu-form-type"]').trigger('click')
-    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find((item) => item.textContent?.trim() === '页面')
+    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find(
+      (item) => item.textContent?.trim() === '页面',
+    )
     expect(pageOption).not.toBeNull()
     if (pageOption !== null) await new DOMWrapper(pageOption).trigger('click')
     await flushPromises()
-		expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(true)
-		expect(bodyFind('[data-testid="menu-form-component-path"]').exists()).toBe(true)
-		expect(bodyFind('[data-testid="menu-form-hidden"]').exists()).toBe(true)
-		expect(document.body.textContent).toContain('路由：必须以 / 开头，例如 /account/users')
-		expect(document.body.textContent).toContain('页面路径：不能以 / 开头，页面文件为 web/src/views/<页面路径>/index.vue')
-		expect(bodyGet('[data-testid="menu-form-component-path"]').text()).not.toContain('/reports')
+    expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(true)
+    expect(bodyFind('[data-testid="menu-form-component-path"]').exists()).toBe(true)
+    expect(bodyFind('[data-testid="menu-form-hidden"]').exists()).toBe(true)
+    expect(document.body.textContent).toContain('路由：必须以 / 开头，例如 /account/users')
+    expect(document.body.textContent).toContain(
+      '页面路径：不能以 / 开头，页面文件为 web/src/views/<页面路径>/index.vue',
+    )
+    expect(bodyGet('[data-testid="menu-form-component-path"]').text()).not.toContain('/reports')
 
-		await bodyGet('[data-testid="menu-form-path"]').setValue('/reports')
-		await bodyGet('[data-testid="menu-form-component-path"]').setValue('reports/orders')
+    await bodyGet('[data-testid="menu-form-path"]').setValue('/reports')
+    await bodyGet('[data-testid="menu-form-component-path"]').setValue('reports/orders')
     await bodyGet('[data-testid="menu-form-type"]').trigger('click')
-    const actionOption = Array.from(document.body.querySelectorAll('.el-select-dropdown__item')).find((item) => item.textContent?.includes('按钮权限'))
+    const actionOption = Array.from(
+      document.body.querySelectorAll('.el-select-dropdown__item'),
+    ).find((item) => item.textContent?.includes('按钮权限'))
     expect(actionOption).not.toBeUndefined()
     if (actionOption !== undefined) await new DOMWrapper(actionOption).trigger('click')
     await flushPromises()
-		expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(false)
-		expect(bodyFind('[data-testid="menu-form-component-path"]').exists()).toBe(false)
-		expect(bodyFind('[data-testid="menu-form-hidden"]').exists()).toBe(false)
+    expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(false)
+    expect(bodyFind('[data-testid="menu-form-component-path"]').exists()).toBe(false)
+    expect(bodyFind('[data-testid="menu-form-hidden"]').exists()).toBe(false)
   })
 
   it('keeps code readonly on edit and excludes it from the update payload', async () => {
@@ -429,18 +465,18 @@ describe('MenuManagement', () => {
     const expected: UpdateMenuInput = {
       parentId: 1,
       menuType: 'page',
-			name: '用户管理',
-		i18nKey: 'navigation.accountUsers',
-		path: '/account/users',
-		componentPath: 'account/users',
+      name: '用户管理',
+      i18nKey: 'navigation.accountUsers',
+      path: '/account/users',
+      componentPath: 'account/users',
       icon: 'lucide:panel-left',
       remark: null,
       sortOrder: 12,
-		isHidden: YesNo.No,
+      isHidden: YesNo.No,
     }
-		expect(updateMenuMock).toHaveBeenCalledWith(2, expected)
-		expect(JSON.stringify(updateMenuMock.mock.calls[0]?.[1])).not.toContain('code')
-		expect(JSON.stringify(updateMenuMock.mock.calls[0]?.[1])).not.toContain('platformId')
+    expect(updateMenuMock).toHaveBeenCalledWith(2, expected)
+    expect(JSON.stringify(updateMenuMock.mock.calls[0]?.[1])).not.toContain('code')
+    expect(JSON.stringify(updateMenuMock.mock.calls[0]?.[1])).not.toContain('platformId')
   })
 
   it('blocks page codes without view suffix before creating a menu', async () => {
@@ -449,7 +485,9 @@ describe('MenuManagement', () => {
     await bodyGet('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
     await bodyGet('[data-testid="menu-form-type"]').trigger('click')
-    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find((item) => item.textContent?.trim() === '页面')
+    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find(
+      (item) => item.textContent?.trim() === '页面',
+    )
     if (pageOption !== undefined) await new DOMWrapper(pageOption).trigger('click')
     await bodyGet('[data-testid="menu-form-code"]').setValue('reports:list')
     await bodyGet('[data-testid="menu-form-name"]').setValue('报表')
@@ -467,7 +505,9 @@ describe('MenuManagement', () => {
     await bodyGet('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
     await bodyGet('[data-testid="menu-form-type"]').trigger('click')
-    const actionOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find((item) => item.textContent?.trim() === '按钮权限')
+    const actionOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find(
+      (item) => item.textContent?.trim() === '按钮权限',
+    )
     if (actionOption !== undefined) await new DOMWrapper(actionOption).trigger('click')
     await bodyGet('[data-testid="menu-form-code"]').setValue('reports:view')
     await bodyGet('[data-testid="menu-form-name"]').setValue('查看报表')
@@ -483,7 +523,9 @@ describe('MenuManagement', () => {
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
     await bodyGet('[data-testid="menu-form-type"]').trigger('click')
-    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find((item) => item.textContent?.trim() === '页面')
+    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find(
+      (item) => item.textContent?.trim() === '页面',
+    )
     if (pageOption !== null) await new DOMWrapper(pageOption).trigger('click')
     await flushPromises()
     await bodyGet('[data-testid="menu-form-parent"]').trigger('click')
@@ -502,7 +544,7 @@ describe('MenuManagement', () => {
   })
 
   it('uses exact status/delete APIs, reloads once, and preserves the table on failure', async () => {
-		const mutableCatalog = menuCatalog(menuTree())
+    const mutableCatalog = menuCatalog(menuTree())
     getMenusMock.mockResolvedValueOnce(mutableCatalog).mockResolvedValue(mutableCatalog)
     updateMenuStatusMock.mockResolvedValue({ id: 3, isEnabled: YesNo.Yes })
     deleteMenuMock.mockResolvedValue({ id: 3 })
@@ -529,13 +571,17 @@ describe('MenuManagement', () => {
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
     await flushPromises()
     expect(getMenusMock).not.toHaveBeenCalled()
-		expect(wrapper.get('[data-testid="menu-table"]').text()).toContain('用户管理')
+    expect(wrapper.get('[data-testid="menu-table"]').text()).toContain('用户管理')
     expect(wrapper.get('[data-testid="menu-mutation-error"]').text()).toContain('update failed')
   })
 })
 
 function mountPage(pinia: Pinia, permissions: string[]): VueWrapper {
-  usePermissionStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: permissions })
+  usePermissionStore(pinia).applySnapshot({
+    roleCodes: [],
+    menuTree: [],
+    permissionCodes: permissions,
+  })
   return mount(MenuManagement, {
     attachTo: document.body,
     global: { plugins: [ElementPlus, appI18n, pinia] },
@@ -555,67 +601,73 @@ function bodyGet(selector: string) {
 
 function menuTree(): ManagedMenuNode[] {
   const timestamp = '2026-08-19T02:00:00Z'
-  return [{
-    id: 1,
-    platformId: 1,
-    platformCode: 'admin',
-    platformName: 'Admin',
-    parentId: null,
-    menuType: 'directory',
-		name: '系统管理',
-    code: 'system',
-    i18nKey: 'navigation.system',
-    path: null,
-		componentPath: null,
-    icon: 'lucide:settings-2',
-    sortOrder: 100,
-    isEnabled: YesNo.Yes,
-		isHidden: YesNo.No,
-		isProtected: YesNo.No,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    children: [{
-      id: 2,
+  return [
+    {
+      id: 1,
       platformId: 1,
       platformCode: 'admin',
       platformName: 'Admin',
-      parentId: 1,
-      menuType: 'page',
-			name: '用户管理',
-		code: 'account:user:view',
-		i18nKey: 'navigation.accountUsers',
-		path: '/account/users',
-		componentPath: 'account/users',
-    icon: 'lucide:panel-left',
-      sortOrder: 10,
+      parentId: null,
+      menuType: 'directory',
+      name: '系统管理',
+      code: 'system',
+      i18nKey: 'navigation.system',
+      path: null,
+      componentPath: null,
+      icon: 'lucide:settings-2',
+      sortOrder: 100,
       isEnabled: YesNo.Yes,
-		isHidden: YesNo.No,
-		isProtected: YesNo.No,
+      isHidden: YesNo.No,
+      isProtected: YesNo.No,
       createdAt: timestamp,
       updatedAt: timestamp,
-      children: [{
-        id: 3,
-        platformId: 1,
-        platformCode: 'admin',
-        platformName: 'Admin',
-        parentId: 2,
-        menuType: 'action',
-				name: '修改用户',
-		code: 'account:user:update',
-		i18nKey: null,
-        path: null,
-		componentPath: null,
-        icon: null,
-        sortOrder: 10,
-        isEnabled: YesNo.No,
-		isHidden: YesNo.Yes,
-		isProtected: YesNo.No,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        children: [],
-      }],
-    }],
-  }]
+      children: [
+        {
+          id: 2,
+          platformId: 1,
+          platformCode: 'admin',
+          platformName: 'Admin',
+          parentId: 1,
+          menuType: 'page',
+          name: '用户管理',
+          code: 'account:user:view',
+          i18nKey: 'navigation.accountUsers',
+          path: '/account/users',
+          componentPath: 'account/users',
+          icon: 'lucide:panel-left',
+          sortOrder: 10,
+          isEnabled: YesNo.Yes,
+          isHidden: YesNo.No,
+          isProtected: YesNo.No,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          children: [
+            {
+              id: 3,
+              platformId: 1,
+              platformCode: 'admin',
+              platformName: 'Admin',
+              parentId: 2,
+              menuType: 'action',
+              name: '修改用户',
+              code: 'account:user:update',
+              i18nKey: null,
+              path: null,
+              componentPath: null,
+              icon: null,
+              sortOrder: 10,
+              isEnabled: YesNo.No,
+              isHidden: YesNo.Yes,
+              isProtected: YesNo.No,
+              createdAt: timestamp,
+              updatedAt: timestamp,
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
+  ]
 }
 
 function menuCatalog(menuTreeValue: ManagedMenuNode[] = menuTree()): MenuCatalogResponse {
@@ -630,37 +682,42 @@ function menuCatalog(menuTreeValue: ManagedMenuNode[] = menuTree()): MenuCatalog
 
 function canvasMenuTree(): ManagedMenuNode[] {
   const timestamp = '2026-08-19T02:00:00Z'
-  return [{
-    id: 20,
-    platformId: 2,
-    platformCode: 'canvas',
-    platformName: 'Canvas',
-    parentId: null,
-    menuType: 'page',
-    name: 'Test',
-    code: 'canvas:test:view',
-    i18nKey: 'navigation.test',
-    path: '/test',
-    componentPath: 'test',
-    icon: null,
-    sortOrder: 10,
-    isEnabled: YesNo.Yes,
-    isHidden: YesNo.No,
-    isProtected: YesNo.No,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    children: [],
-  }]
+  return [
+    {
+      id: 20,
+      platformId: 2,
+      platformCode: 'canvas',
+      platformName: 'Canvas',
+      parentId: null,
+      menuType: 'page',
+      name: 'Test',
+      code: 'canvas:test:view',
+      i18nKey: 'navigation.test',
+      path: '/test',
+      componentPath: 'test',
+      icon: null,
+      sortOrder: 10,
+      isEnabled: YesNo.Yes,
+      isHidden: YesNo.No,
+      isProtected: YesNo.No,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      children: [],
+    },
+  ]
 }
 
 function protectedMenuTree(): ManagedMenuNode[] {
-	const tree = menuTree()
-	const root = tree[0]
-	if (root === undefined || root.children[0] === undefined) throw new Error('test menu tree is incomplete')
-	return [{
-		...root,
-		children: [{ ...root.children[0], isProtected: YesNo.Yes }],
-	}]
+  const tree = menuTree()
+  const root = tree[0]
+  if (root === undefined || root.children[0] === undefined)
+    throw new Error('test menu tree is incomplete')
+  return [
+    {
+      ...root,
+      children: [{ ...root.children[0], isProtected: YesNo.Yes }],
+    },
+  ]
 }
 
 function rootWithEditableSubtree(): ManagedMenuNode {
@@ -672,39 +729,41 @@ function rootWithEditableSubtree(): ManagedMenuNode {
     platformName: 'Admin',
     parentId: null,
     menuType: 'directory',
-		name: '可编辑目录',
+    name: '可编辑目录',
     code: 'reports',
     i18nKey: 'navigation.system',
     path: null,
-		componentPath: null,
+    componentPath: null,
     icon: 'lucide:folder',
     sortOrder: 200,
     isEnabled: YesNo.Yes,
-		isHidden: YesNo.No,
-		isProtected: YesNo.No,
+    isHidden: YesNo.No,
+    isProtected: YesNo.No,
     createdAt: root.createdAt,
     updatedAt: root.updatedAt,
-    children: [{
-      id: 11,
-      platformId: 1,
-      platformCode: 'admin',
-      platformName: 'Admin',
-      parentId: 10,
-      menuType: 'page',
-			name: '可编辑页面',
-      code: 'reports:view',
-      i18nKey: 'navigation.accessMenus',
-      path: '/reports',
-		componentPath: 'account/users',
-    icon: 'lucide:panel-left',
-      sortOrder: 10,
-      isEnabled: YesNo.Yes,
-		isHidden: YesNo.No,
-		isProtected: YesNo.No,
-      createdAt: root.createdAt,
-      updatedAt: root.updatedAt,
-      children: [],
-    }],
+    children: [
+      {
+        id: 11,
+        platformId: 1,
+        platformCode: 'admin',
+        platformName: 'Admin',
+        parentId: 10,
+        menuType: 'page',
+        name: '可编辑页面',
+        code: 'reports:view',
+        i18nKey: 'navigation.accessMenus',
+        path: '/reports',
+        componentPath: 'account/users',
+        icon: 'lucide:panel-left',
+        sortOrder: 10,
+        isEnabled: YesNo.Yes,
+        isHidden: YesNo.No,
+        isProtected: YesNo.No,
+        createdAt: root.createdAt,
+        updatedAt: root.updatedAt,
+        children: [],
+      },
+    ],
   }
   return { ...root, children: [...root.children, directory] }
 }

@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import { getPermission } from '../api/permission/permission'
-import type { PermissionMenuNode, PermissionSnapshot } from '../api/permission/permission'
-import { appI18n } from '../i18n'
-import { ApiError, ProtocolError } from '../types/http'
+import { getPermission } from '@/api/permission/permission'
+import type { PermissionMenuNode, PermissionSnapshot } from '@/api/permission/permission'
+import { appI18n } from '@/i18n'
+import { ApiError, ProtocolError } from '@/types/http'
 
 export type PermissionStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -34,11 +34,12 @@ export const usePermissionStore = defineStore('permission', () => {
     menuTree.value = []
     permissionCodes.value = []
     status.value = 'error'
-    errorMessage.value = error instanceof ProtocolError
-      ? appI18n.global.t('access.invalidProtocol')
-      : error instanceof ApiError && error.message !== ''
-        ? error.message
-        : appI18n.global.t('access.loadFailed')
+    errorMessage.value =
+      error instanceof ProtocolError
+        ? appI18n.global.t('access.invalidProtocol')
+        : error instanceof ApiError && error.message !== ''
+          ? error.message
+          : appI18n.global.t('access.loadFailed')
   }
 
   function reset(): void {
@@ -66,9 +67,11 @@ export const usePermissionStore = defineStore('permission', () => {
         throw error
       })
     loadPromise = pending
-    pending.finally(() => {
-      if (loadPromise === pending) loadPromise = null
-    }).catch(() => undefined)
+    pending
+      .finally(() => {
+        if (loadPromise === pending) loadPromise = null
+      })
+      .catch(() => undefined)
     return pending
   }
 

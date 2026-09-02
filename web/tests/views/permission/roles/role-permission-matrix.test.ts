@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { RolePermissionPlatform, RolePermissionTreeNode } from '@src/api/permission/role'
-import { YesNo } from '@src/enums/yes-no'
+import type { RolePermissionPlatform, RolePermissionTreeNode } from '@/api/permission/role'
+import { YesNo } from '@/enums/yes-no'
 import {
   buildRolePermissionMatrix,
   diffMenuIDs,
@@ -115,23 +115,27 @@ function permissionPlatforms(): RolePermissionPlatform[] {
       code: 'canvas',
       name: 'Canvas',
       isEnabled: YesNo.No,
-      menuTree: [{
-        id: 7,
-        parentId: null,
-        menuType: 'page',
-        code: 'canvas:test:list',
-        name: 'Test',
-        isEnabled: YesNo.Yes,
-        children: [{
-          id: 8,
-          parentId: 7,
-          menuType: 'action',
-          code: 'canvas:test:button',
-          name: 'Test Button',
+      menuTree: [
+        {
+          id: 7,
+          parentId: null,
+          menuType: 'page',
+          code: 'canvas:test:list',
+          name: 'Test',
           isEnabled: YesNo.Yes,
-          children: [],
-        }],
-      }],
+          children: [
+            {
+              id: 8,
+              parentId: 7,
+              menuType: 'action',
+              code: 'canvas:test:button',
+              name: 'Test Button',
+              isEnabled: YesNo.Yes,
+              children: [],
+            },
+          ],
+        },
+      ],
     },
   ]
 }
@@ -143,7 +147,7 @@ function menuTree(): RolePermissionTreeNode[] {
       parentId: null,
       menuType: 'directory',
       code: 'system',
-			name: '系统管理',
+      name: '系统管理',
       isEnabled: YesNo.Yes,
       children: [
         {
@@ -151,7 +155,7 @@ function menuTree(): RolePermissionTreeNode[] {
           parentId: 1,
           menuType: 'page',
           code: 'permission:role:list',
-					name: '角色管理',
+          name: '角色管理',
           isEnabled: YesNo.Yes,
           children: [
             {
@@ -159,7 +163,7 @@ function menuTree(): RolePermissionTreeNode[] {
               parentId: 2,
               menuType: 'action',
               code: 'permission:role:create',
-							name: '新增角色',
+              name: '新增角色',
               isEnabled: YesNo.Yes,
               children: [],
             },
@@ -170,7 +174,7 @@ function menuTree(): RolePermissionTreeNode[] {
           parentId: 1,
           menuType: 'directory',
           code: 'system:settings',
-					name: '系统设置',
+          name: '系统设置',
           isEnabled: YesNo.Yes,
           children: [
             {
@@ -178,7 +182,7 @@ function menuTree(): RolePermissionTreeNode[] {
               parentId: 4,
               menuType: 'page',
               code: 'permission:menu:list',
-							name: '菜单管理',
+              name: '菜单管理',
               isEnabled: YesNo.Yes,
               children: [
                 {
@@ -186,7 +190,7 @@ function menuTree(): RolePermissionTreeNode[] {
                   parentId: 5,
                   menuType: 'action',
                   code: 'permission:menu:delete',
-									name: '删除菜单',
+                  name: '删除菜单',
                   isEnabled: YesNo.No,
                   children: [],
                 },

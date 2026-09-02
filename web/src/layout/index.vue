@@ -1,125 +1,113 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useI18n } from "vue-i18n";
-import { useRoute, useRouter } from "vue-router";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 
-import { logout } from "../api/auth/login";
-import { usePermissionStore } from "../store/permission.ts";
-import { useAuthStore } from "../store/auth";
-import { useUIPreferencesStore } from "../store/ui-preferences";
-import { resolveBreadcrumbs } from "./breadcrumbs";
-import AppAside from "./components/AppAside.vue";
-import AppFooter from "./components/AppFooter.vue";
-import AppHeader from "./components/AppHeader.vue";
-import RouteTabs from "./components/RouteTabs.vue";
+import { logout } from '@/api/auth/login'
+import { usePermissionStore } from '@/store/permission'
+import { useAuthStore } from '@/store/auth'
+import { useUIPreferencesStore } from '@/store/ui-preferences'
+import { resolveBreadcrumbs } from './breadcrumbs'
+import AppAside from './components/AppAside/index.vue'
+import AppFooter from './components/AppFooter/index.vue'
+import AppHeader from './components/AppHeader/index.vue'
+import RouteTabs from './components/RouteTabs/index.vue'
 
-const mobileBreakpoint = 840;
-const route = useRoute();
-const router = useRouter();
-const { t } = useI18n();
-const access = usePermissionStore();
-const auth = useAuthStore();
-const uiPreferences = useUIPreferencesStore();
-const collapsed = ref(false);
-const mobileMenuOpen = ref(false);
-const isMobile = ref(window.innerWidth <= mobileBreakpoint);
-const logoutPending = ref(false);
-const refreshKey = ref(0);
-const contentFullscreen = ref(false);
+const mobileBreakpoint = 840
+const route = useRoute()
+const router = useRouter()
+const { t } = useI18n()
+const access = usePermissionStore()
+const auth = useAuthStore()
+const uiPreferences = useUIPreferencesStore()
+const collapsed = ref(false)
+const mobileMenuOpen = ref(false)
+const isMobile = ref(window.innerWidth <= mobileBreakpoint)
+const logoutPending = ref(false)
+const refreshKey = ref(0)
+const contentFullscreen = ref(false)
 
-const asideWidth = computed(() => (collapsed.value ? "80px" : "248px"));
-const username = computed(() => (auth.user === null ? "" : auth.user.username));
-const email = computed(() => (auth.user === null ? "" : auth.user.email));
-const avatar = computed(() => (auth.user === null ? "" : auth.user.avatar));
-const breadcrumbs = computed(
-  () => resolveBreadcrumbs(route.path, access.menuTree) ?? [],
-);
+const asideWidth = computed(() => (collapsed.value ? '80px' : '248px'))
+const username = computed(() => (auth.user === null ? '' : auth.user.username))
+const email = computed(() => (auth.user === null ? '' : auth.user.email))
+const avatar = computed(() => (auth.user === null ? '' : auth.user.avatar))
+const breadcrumbs = computed(() => resolveBreadcrumbs(route.path, access.menuTree) ?? [])
 const breadcrumbMissing = computed(
   () =>
     route.meta.requiresAuth === true &&
-    route.path !== "/dashboard" &&
-    access.status === "ready" &&
+    route.path !== '/dashboard' &&
+    access.status === 'ready' &&
     breadcrumbs.value.length === 0,
-);
+)
 const preferenceErrorMessage = computed(() => {
-  if (uiPreferences.persistenceError === "invalid")
-    return t("layout.settings.invalidStorage");
-  if (uiPreferences.persistenceError === "write")
-    return t("layout.settings.writeFailed");
-  return "";
-});
+  if (uiPreferences.persistenceError === 'invalid') return t('layout.settings.invalidStorage')
+  if (uiPreferences.persistenceError === 'write') return t('layout.settings.writeFailed')
+  return ''
+})
 
 function updateViewport(): void {
-  isMobile.value = window.innerWidth <= mobileBreakpoint;
-  if (!isMobile.value) mobileMenuOpen.value = false;
+  isMobile.value = window.innerWidth <= mobileBreakpoint
+  if (!isMobile.value) mobileMenuOpen.value = false
 }
 
 function toggleMenu(): void {
   if (isMobile.value) {
-    mobileMenuOpen.value = true;
-    return;
+    mobileMenuOpen.value = true
+    return
   }
-  collapsed.value = !collapsed.value;
+  collapsed.value = !collapsed.value
 }
 
 function handleRefresh(): void {
-  refreshKey.value += 1;
+  refreshKey.value += 1
 }
 
 function handleToggleFullscreen(): void {
-  contentFullscreen.value = !contentFullscreen.value;
+  contentFullscreen.value = !contentFullscreen.value
 }
 
 function handleDocumentKeydown(event: KeyboardEvent): void {
-  if (
-    event.key === "Escape" &&
-    contentFullscreen.value &&
-    !event.defaultPrevented
-  ) {
-    contentFullscreen.value = false;
+  if (event.key === 'Escape' && contentFullscreen.value && !event.defaultPrevented) {
+    contentFullscreen.value = false
   }
 }
 
 async function handleLogout(): Promise<void> {
-  if (logoutPending.value) return;
-  logoutPending.value = true;
+  if (logoutPending.value) return
+  logoutPending.value = true
   try {
-    await logout();
-    access.reset();
-    auth.setAnonymous();
-    await router.replace({ name: "login" });
+    await logout()
+    access.reset()
+    auth.setAnonymous()
+    await router.replace({ name: 'login' })
   } catch {
     // request.ts emits the single API error notification
   } finally {
-    logoutPending.value = false;
+    logoutPending.value = false
   }
 }
 
 watch(
   () => uiPreferences.preferences.showMenuToggle,
   (visible) => {
-    if (!visible) collapsed.value = false;
+    if (!visible) collapsed.value = false
   },
   { immediate: true },
-);
+)
 
 onMounted(() => {
-  window.addEventListener("resize", updateViewport);
-  document.addEventListener("keydown", handleDocumentKeydown);
-});
+  window.addEventListener('resize', updateViewport)
+  document.addEventListener('keydown', handleDocumentKeydown)
+})
 onBeforeUnmount(() => {
-  window.removeEventListener("resize", updateViewport);
-  document.removeEventListener("keydown", handleDocumentKeydown);
-});
+  window.removeEventListener('resize', updateViewport)
+  document.removeEventListener('keydown', handleDocumentKeydown)
+})
 </script>
 
 <template>
   <el-container class="admin-layout">
-    <el-aside
-      v-if="!contentFullscreen"
-      class="admin-layout__aside"
-      :width="asideWidth"
-    >
+    <el-aside v-if="!contentFullscreen" class="admin-layout__aside" :width="asideWidth">
       <AppAside
         :collapsed="collapsed"
         :unique-opened="uiPreferences.preferences.uniqueOpened"
@@ -132,11 +120,7 @@ onBeforeUnmount(() => {
     </el-aside>
 
     <el-container class="admin-layout__workspace" direction="vertical">
-      <el-header
-        v-if="!contentFullscreen"
-        class="admin-layout__header"
-        height="52px"
-      >
+      <el-header v-if="!contentFullscreen" class="admin-layout__header" height="52px">
         <AppHeader
           :breadcrumbs="breadcrumbs"
           :show-breadcrumb="uiPreferences.preferences.showBreadcrumb"
@@ -189,16 +173,9 @@ onBeforeUnmount(() => {
             :name="uiPreferences.preferences.transitionName"
             mode="out-in"
           >
-            <component
-              :is="Component"
-              :key="`${route.fullPath}::${refreshKey}`"
-            />
+            <component :is="Component" :key="`${route.fullPath}::${refreshKey}`" />
           </Transition>
-          <component
-            v-else
-            :is="Component"
-            :key="`${route.fullPath}::${refreshKey}`"
-          />
+          <component v-else :is="Component" :key="`${route.fullPath}::${refreshKey}`" />
         </RouterView>
       </el-main>
 
@@ -229,6 +206,5 @@ onBeforeUnmount(() => {
         @logout="handleLogout"
       />
     </el-drawer>
-
   </el-container>
 </template>

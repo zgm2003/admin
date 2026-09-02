@@ -2,9 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import * as mailApi from '../../../api/system/mail'
-import { YesNo } from '../../../enums/yes-no'
-import { usePermissionStore } from '../../../store/permission'
+import * as mailApi from '@/api/system/mail'
+import { YesNo } from '@/enums/yes-no'
+import { usePermissionStore } from '@/store/permission'
 import MailConfigTab from './components/config/index.vue'
 import MailLogTab from './components/log/index.vue'
 import MailRuleTab from './components/rule/index.vue'
@@ -40,7 +40,9 @@ const canList = computed(() => can('system:mail:list'))
 const visibleTabs = computed(() => [
   ...(canList.value ? [{ name: 'config' as const, label: t('mail.configTab') }] : []),
   ...(canList.value ? [{ name: 'templates' as const, label: t('mail.templatesTab') }] : []),
-  ...(canList.value && can('system:mail:detail') ? [{ name: 'logs' as const, label: t('mail.logsTab') }] : []),
+  ...(canList.value && can('system:mail:detail')
+    ? [{ name: 'logs' as const, label: t('mail.logsTab') }]
+    : []),
   ...(canList.value ? [{ name: 'rules' as const, label: t('mail.rulesTab') }] : []),
 ])
 
@@ -91,16 +93,33 @@ function changeLogPage(next: { currentPage: number; pageSize: number }): void {
   void loadLogs()
 }
 
-watch(activeTab, () => {
-  void loadActive()
-}, { immediate: true })
+watch(
+  activeTab,
+  () => {
+    void loadActive()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <section class="mail-page">
     <el-tabs v-model="activeTab" class="mail-tabs">
-      <el-tab-pane v-for="tab in visibleTabs" :key="tab.name" :name="tab.name" :label="tab.label" lazy>
-        <el-alert v-if="loadError" class="mail-error" :title="loadError" type="error" show-icon :closable="false" />
+      <el-tab-pane
+        v-for="tab in visibleTabs"
+        :key="tab.name"
+        :name="tab.name"
+        :label="tab.label"
+        lazy
+      >
+        <el-alert
+          v-if="loadError"
+          class="mail-error"
+          :title="loadError"
+          type="error"
+          show-icon
+          :closable="false"
+        />
         <el-card shadow="never" class="mail-panel">
           <MailConfigTab
             v-if="tab.name === 'config'"
@@ -146,7 +165,7 @@ watch(activeTab, () => {
   </section>
 </template>
 
-<style scoped lang="scss">
+<style scoped>
 .mail-page {
   min-width: 0;
   padding: 0 8px 20px;

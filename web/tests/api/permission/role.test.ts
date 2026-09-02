@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { YesNo } from '@src/enums/yes-no'
-import { request } from '@src/utils/request'
+import { YesNo } from '@/enums/yes-no'
+import { request } from '@/utils/request'
 import {
   createRole,
   deleteRole,
@@ -11,9 +11,9 @@ import {
   updateRole,
   updateRolePermissions,
   updateRoleStatus,
-} from '@src/api/permission/role'
+} from '@/api/permission/role'
 
-vi.mock('@src/utils/request', () => ({ request: vi.fn() }))
+vi.mock('@/utils/request', () => ({ request: vi.fn() }))
 
 const requestMock = vi.mocked(request)
 
@@ -103,7 +103,11 @@ describe('role API', () => {
 
   it.each([
     { role: permissionResponse().role, menuTree: [], menuIds: [] },
-    { role: permissionResponse().role, platforms: [{ id: 1, code: 'admin', name: 'Admin', menuTree: [] }], menuIds: [] },
+    {
+      role: permissionResponse().role,
+      platforms: [{ id: 1, code: 'admin', name: 'Admin', menuTree: [] }],
+      menuIds: [],
+    },
     { role: permissionResponse().role, platforms: [], menuIds: [], extra: true },
   ])('rejects invalid permission responses: %j', async (value) => {
     requestMock.mockResolvedValue(value)
@@ -124,10 +128,12 @@ describe('role API', () => {
     })
   })
 
-  it('returns the backend result without rebuilding it', async () => {
+  it('rejects legacy result field names', async () => {
     const result = { id: 7, permission_count: 1 }
     requestMock.mockResolvedValue(result)
-    await expect(updateRolePermissions(7, { menuIds: [] })).resolves.toBe(result)
+    await expect(updateRolePermissions(7, { menuIds: [] })).rejects.toThrow(
+      'role permission count must be an integer',
+    )
   })
 })
 
@@ -141,8 +147,40 @@ function permissionResponse() {
       isEnabled: YesNo.Yes,
     },
     platforms: [
-      { id: 1, code: 'admin', name: 'Admin', isEnabled: YesNo.Yes, menuTree: [{ id: 3, parentId: null, menuType: 'page', code: 'admin:test', name: 'Admin Test', isEnabled: YesNo.Yes, children: [] }] },
-      { id: 2, code: 'canvas', name: 'Canvas', isEnabled: YesNo.No, menuTree: [{ id: 20, parentId: null, menuType: 'page', code: 'canvas:test:list', name: 'Canvas Test', isEnabled: YesNo.Yes, children: [] }] },
+      {
+        id: 1,
+        code: 'admin',
+        name: 'Admin',
+        isEnabled: YesNo.Yes,
+        menuTree: [
+          {
+            id: 3,
+            parentId: null,
+            menuType: 'page',
+            code: 'admin:test',
+            name: 'Admin Test',
+            isEnabled: YesNo.Yes,
+            children: [],
+          },
+        ],
+      },
+      {
+        id: 2,
+        code: 'canvas',
+        name: 'Canvas',
+        isEnabled: YesNo.No,
+        menuTree: [
+          {
+            id: 20,
+            parentId: null,
+            menuType: 'page',
+            code: 'canvas:test:list',
+            name: 'Canvas Test',
+            isEnabled: YesNo.Yes,
+            children: [],
+          },
+        ],
+      },
     ],
     menuIds: [3, 20],
   }

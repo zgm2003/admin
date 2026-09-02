@@ -2,16 +2,20 @@ import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { describe, expect, it } from 'vitest'
 
-import AppTable from '@src/components/AppTable/src/index.vue'
-import type { TableColumn, TablePaginationState } from '@src/components/AppTable/src/types'
-import { appI18n, setLocale } from '@src/i18n'
+import AppTable from '@/components/AppTable/index.vue'
+import type { TableColumn, TablePaginationState } from '@/components/AppTable/types'
+import { appI18n, setLocale } from '@/i18n'
 
-interface UserRow { id: number; username: string; enabled: boolean }
+interface UserRow {
+  id: number
+  username: string
+  enabled: boolean
+}
 
 describe('AppTable', () => {
   const columns: TableColumn<UserRow>[] = [
     { prop: 'username', label: 'User' },
-    { key: 'status', label: 'Status', value: (row) => row.enabled ? 'Enabled' : 'Disabled' },
+    { key: 'status', label: 'Status', value: (row) => (row.enabled ? 'Enabled' : 'Disabled') },
     { prop: 'enabled', label: 'Hidden', hidden: true },
   ]
 
@@ -33,7 +37,14 @@ describe('AppTable', () => {
   it('exposes loading, empty/error states and typed pagination events', async () => {
     const pagination: TablePaginationState = { currentPage: 1, pageSize: 20, total: 40 }
     const wrapper = mount(AppTable<UserRow>, {
-      props: { columns, data: [], loading: true, resultState: 'loading', pagination, statusMessage: 'No users' },
+      props: {
+        columns,
+        data: [],
+        loading: true,
+        resultState: 'loading',
+        pagination,
+        statusMessage: 'No users',
+      },
       global: { plugins: [ElementPlus, appI18n] },
     })
     expect(wrapper.find('[aria-busy="true"]').exists()).toBe(true)
@@ -41,7 +52,11 @@ describe('AppTable', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('No users')
     wrapper.findComponent({ name: 'ElPagination' }).vm.$emit('current-change', 2)
-    expect(wrapper.emitted('update:pagination')?.[0]?.[0]).toEqual({ currentPage: 2, pageSize: 20, total: 40 })
+    expect(wrapper.emitted('update:pagination')?.[0]?.[0]).toEqual({
+      currentPage: 2,
+      pageSize: 20,
+      total: 40,
+    })
     await wrapper.setProps({ resultState: 'error' })
     expect(wrapper.text()).toContain('No users')
   })
@@ -56,7 +71,9 @@ describe('AppTable', () => {
       global: { plugins: [ElementPlus, appI18n] },
     })
 
-    expect(wrapper.get('.app-table__pagination').classes()).toContain('app-table__pagination--distributed')
+    expect(wrapper.get('.app-table__pagination').classes()).toContain(
+      'app-table__pagination--distributed',
+    )
   })
 
   it('forwards selection and row events without making requests', async () => {

@@ -1,9 +1,9 @@
 import { expect, it, vi } from 'vitest'
 
-import { getOperationLogs } from '@src/api/system/operationlog'
-import { request } from '@src/utils/request'
+import { getOperationLogs } from '@/api/system/operationlog'
+import { request } from '@/utils/request'
 
-vi.mock('@src/utils/request', () => ({ request: vi.fn() }))
+vi.mock('@/utils/request', () => ({ request: vi.fn() }))
 
 it('uses the Admin operation log namespace', async () => {
   vi.mocked(request).mockResolvedValue({ list: [], total: 0, page: 1, pageSize: 20 })

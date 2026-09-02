@@ -3,12 +3,28 @@ import type { TableColumnCtx } from 'element-plus'
 export type TableRow = object
 export type TableColumnKey = string
 
-export type TableColumnElementProps<Row extends TableRow = TableRow> = Partial<Pick<
-  TableColumnCtx<Row>,
-  'align' | 'headerAlign' | 'sortable' | 'sortMethod' | 'sortBy' | 'resizable' | 'columnKey' |
-  'className' | 'labelClassName' | 'filters' | 'filterMethod' | 'filterPlacement' |
-  'filterMultiple' | 'filteredValue' | 'reserveSelection' | 'sortOrders' | 'tooltipFormatter'
->>
+export type TableColumnElementProps<Row extends TableRow = TableRow> = Partial<
+  Pick<
+    TableColumnCtx<Row>,
+    | 'align'
+    | 'headerAlign'
+    | 'sortable'
+    | 'sortMethod'
+    | 'sortBy'
+    | 'resizable'
+    | 'columnKey'
+    | 'className'
+    | 'labelClassName'
+    | 'filters'
+    | 'filterMethod'
+    | 'filterPlacement'
+    | 'filterMultiple'
+    | 'filteredValue'
+    | 'reserveSelection'
+    | 'sortOrders'
+    | 'tooltipFormatter'
+  >
+>
 
 interface TableColumnBase<Row extends TableRow> {
   label: string
@@ -37,8 +53,7 @@ export interface DerivedTableColumn<Row extends TableRow> extends TableColumnBas
 }
 
 export type TableColumn<Row extends TableRow = TableRow> =
-  | PropertyTableColumn<Row>
-  | DerivedTableColumn<Row>
+  PropertyTableColumn<Row> | DerivedTableColumn<Row>
 
 export interface TablePaginationState {
   currentPage: number
@@ -52,7 +67,9 @@ interface TableColumnIdentity<Row extends TableRow> {
   readonly label?: string
 }
 
-export function tableColumnKey<Row extends TableRow>(column: TableColumnIdentity<Row>): TableColumnKey {
+export function tableColumnKey<Row extends TableRow>(
+  column: TableColumnIdentity<Row>,
+): TableColumnKey {
   const key = column.key ?? column.prop
   if (typeof key !== 'string' || key.trim() === '') {
     throw new Error('AppTable column key or prop is required')
@@ -60,11 +77,17 @@ export function tableColumnKey<Row extends TableRow>(column: TableColumnIdentity
   return key
 }
 
-export function tableColumnProp<Row extends TableRow>(column: TableColumnIdentity<Row>): string | undefined {
+export function tableColumnProp<Row extends TableRow>(
+  column: TableColumnIdentity<Row>,
+): string | undefined {
   return column.prop
 }
 
-export function tableColumnValue<Row extends TableRow>(row: Row, column: TableColumn<Row>, index = 0): unknown {
+export function tableColumnValue<Row extends TableRow>(
+  row: Row,
+  column: TableColumn<Row>,
+  index = 0,
+): unknown {
   if (column.prop !== undefined) return row[column.prop]
   return 'value' in column ? column.value?.(row, index) : undefined
 }

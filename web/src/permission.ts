@@ -4,7 +4,7 @@ import { getCurrentUser, refresh } from './api/auth/login'
 import { appI18n } from './i18n'
 import { registerPermissionRoutes } from './router/permission-routes'
 import { pinia } from './store'
-import { usePermissionStore } from './store/permission.ts'
+import { usePermissionStore } from './store/permission'
 import { useAuthStore } from './store/auth'
 import { ApiError, ProtocolError } from './types/http'
 
@@ -25,7 +25,8 @@ export function installPermissionGuard(router: Router): void {
     }
     const auth = useAuthStore(pinia)
     const access = usePermissionStore(pinia)
-    const isPublic = to.matched.length > 0 && to.matched.every((route) => route.meta.requiresAuth === false)
+    const isPublic =
+      to.matched.length > 0 && to.matched.every((route) => route.meta.requiresAuth === false)
     if (isPublic) {
       if (auth.status === 'anonymous') {
         clearAccess()
@@ -79,13 +80,13 @@ export function installPermissionGuard(router: Router): void {
       return to.name === 'dashboard' ? true : { name: 'dashboard' }
     }
 
-		const protectedRecord = [...to.matched]
-			.reverse()
-			.find((record) => record.meta.requiredPermission !== undefined)
-		const requiredPermission = protectedRecord?.meta.requiredPermission
-		if (requiredPermission !== undefined && !access.hasPermission(requiredPermission)) {
-			return { name: 'dashboard' }
-		}
+    const protectedRecord = [...to.matched]
+      .reverse()
+      .find((record) => record.meta.requiredPermission !== undefined)
+    const requiredPermission = protectedRecord?.meta.requiredPermission
+    if (requiredPermission !== undefined && !access.hasPermission(requiredPermission)) {
+      return { name: 'dashboard' }
+    }
 
     if (to.matched.length === 0) {
       const resolved = router.resolve(to.fullPath)

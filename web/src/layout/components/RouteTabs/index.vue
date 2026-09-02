@@ -13,11 +13,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import type { PermissionMenuNode } from '../../api/permission/permission'
+import type { PermissionMenuNode } from '@/api/permission/permission'
+
+defineOptions({ name: 'RouteTabs' })
 
 interface RouteTab {
   path: string
-	i18nKey: string
+  i18nKey: string
   affix: boolean
 }
 
@@ -28,10 +30,13 @@ interface ScrollbarHandle {
 
 type TabCommand = 'refresh' | 'fullscreen' | 'closeOthers' | 'closeAll'
 
-const props = withDefaults(defineProps<{
-	fullscreen?: boolean
-	menuTree: readonly PermissionMenuNode[]
-}>(), { fullscreen: false })
+const props = withDefaults(
+  defineProps<{
+    fullscreen?: boolean
+    menuTree: readonly PermissionMenuNode[]
+  }>(),
+  { fullscreen: false },
+)
 const root = ref<HTMLElement>()
 const tagsInnerRef = ref<HTMLElement | null>(null)
 const scrollPaneRef = ref<ScrollbarHandle>()
@@ -49,10 +54,14 @@ const emit = defineEmits<{
 }>()
 
 const activeIndex = computed(() => tabs.value.findIndex((tab) => tab.path === route.path))
-const previousTab = computed(() => activeIndex.value > 0 ? tabs.value[activeIndex.value - 1] : undefined)
-const nextTab = computed(() => activeIndex.value >= 0 && activeIndex.value < tabs.value.length - 1
-  ? tabs.value[activeIndex.value + 1]
-  : undefined)
+const previousTab = computed(() =>
+  activeIndex.value > 0 ? tabs.value[activeIndex.value - 1] : undefined,
+)
+const nextTab = computed(() =>
+  activeIndex.value >= 0 && activeIndex.value < tabs.value.length - 1
+    ? tabs.value[activeIndex.value + 1]
+    : undefined,
+)
 const contextTab = computed(() => tabs.value.find((tab) => tab.path === contextPath.value))
 const tagSignature = computed(() => tabs.value.map((tab) => tab.path).join('|'))
 
@@ -61,35 +70,41 @@ function slug(path: string): string {
 }
 
 function getCurrentTab(): RouteTab | null {
-	const menuPage = findMenuPage(route.path, props.menuTree)
-	if (menuPage !== null) {
-		return { path: route.path, i18nKey: menuPage.i18nKey, affix: false }
-	}
-	if (route.path !== '/dashboard') return null
-	const matched = [...route.matched].reverse().find((record) => record.name === 'dashboard')
+  const menuPage = findMenuPage(route.path, props.menuTree)
+  if (menuPage !== null) {
+    return { path: route.path, i18nKey: menuPage.i18nKey, affix: false }
+  }
+  if (route.path !== '/dashboard') return null
+  const matched = [...route.matched].reverse().find((record) => record.name === 'dashboard')
   if (matched === undefined) {
-		if (route.meta.requiresAuth === true) throw new Error(`Route ${route.fullPath} must declare i18nKey`)
+    if (route.meta.requiresAuth === true)
+      throw new Error(`Route ${route.fullPath} must declare i18nKey`)
     return null
   }
-	const i18nKey = matched.meta.i18nKey
-	if (i18nKey === undefined) throw new Error(`Route ${route.fullPath} must declare i18nKey`)
-	return { path: route.path, i18nKey, affix: matched.meta.affix === true }
+  const i18nKey = matched.meta.i18nKey
+  if (i18nKey === undefined) throw new Error(`Route ${route.fullPath} must declare i18nKey`)
+  return { path: route.path, i18nKey, affix: matched.meta.affix === true }
 }
 
-function findMenuPage(path: string, roots: readonly PermissionMenuNode[]): PermissionMenuNode | null {
-	const stack = [...roots].reverse()
-	while (stack.length > 0) {
-		const node = stack.pop()
-		if (node === undefined) continue
-		if (node.menuType === 'page' && node.path === path) return node
-		if (node.menuType === 'directory') stack.push(...[...node.children].reverse())
-	}
-	return null
+function findMenuPage(
+  path: string,
+  roots: readonly PermissionMenuNode[],
+): PermissionMenuNode | null {
+  const stack = [...roots].reverse()
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (node === undefined) continue
+    if (node.menuType === 'page' && node.path === path) return node
+    if (node.menuType === 'directory') stack.push(...[...node.children].reverse())
+  }
+  return null
 }
 
 function prefersReducedMotion(): boolean {
-  return typeof window.matchMedia === 'function'
-    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  return (
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
 }
 
 function scrollActiveTab(): void {
@@ -111,7 +126,7 @@ function syncCurrentTab(): void {
   const existing = tabs.value.find((tab) => tab.path === currentTab.path)
   if (existing === undefined) tabs.value.push(currentTab)
   else {
-		existing.i18nKey = currentTab.i18nKey
+    existing.i18nKey = currentTab.i18nKey
     existing.affix = currentTab.affix
   }
   scrollActiveTab()
@@ -130,7 +145,8 @@ async function closeTab(path: string): Promise<void> {
   tabs.value.splice(index, 1)
   dismissContextMenu()
   if (!isActive) return
-  const destination = tabs.value[index - 1] ?? tabs.value[index] ?? tabs.value.find((item) => item.affix)
+  const destination =
+    tabs.value[index - 1] ?? tabs.value[index] ?? tabs.value.find((item) => item.affix)
   await router.push(destination?.path ?? '/dashboard')
 }
 
@@ -182,14 +198,24 @@ function dismissContextMenu(): void {
 }
 
 function handleCommand(command: string | number | object): void {
-  if (typeof command !== 'string') throw new Error(`Unsupported route tab command: ${String(command)}`)
+  if (typeof command !== 'string')
+    throw new Error(`Unsupported route tab command: ${String(command)}`)
   const value = command as TabCommand
   switch (value) {
-    case 'refresh': refreshCurrent(); break
-    case 'fullscreen': toggleFullscreen(); break
-    case 'closeOthers': void closeOthers(route.path); break
-    case 'closeAll': void closeAll(); break
-    default: throw new Error(`Unsupported route tab command: ${command}`)
+    case 'refresh':
+      refreshCurrent()
+      break
+    case 'fullscreen':
+      toggleFullscreen()
+      break
+    case 'closeOthers':
+      void closeOthers(route.path)
+      break
+    case 'closeAll':
+      void closeAll()
+      break
+    default:
+      throw new Error(`Unsupported route tab command: ${command}`)
   }
 }
 
@@ -203,7 +229,12 @@ async function handleContextRefresh(): Promise<void> {
 
 function handleDocumentPointerDown(event: PointerEvent): void {
   const target = event.target
-  if (contextMenuOpen.value && root.value !== undefined && target instanceof Node && !root.value.contains(target)) {
+  if (
+    contextMenuOpen.value &&
+    root.value !== undefined &&
+    target instanceof Node &&
+    !root.value.contains(target)
+  ) {
     dismissContextMenu()
   }
 }
@@ -216,7 +247,9 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
 }
 
 watch([() => route.fullPath, () => props.menuTree], syncCurrentTab, { immediate: true })
-watch(tagSignature, () => { scrollActiveTab() })
+watch(tagSignature, () => {
+  scrollActiveTab()
+})
 
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
@@ -230,7 +263,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="root" class="route-tabs" data-testid="route-tabs" tabindex="-1" @keydown.esc="dismissContextMenu">
+  <div
+    ref="root"
+    class="route-tabs"
+    data-testid="route-tabs"
+    tabindex="-1"
+    @keydown.esc="dismissContextMenu"
+  >
     <div class="route-tabs__previous">
       <el-tooltip :content="t('layout.routeTabs.previous')">
         <el-button
@@ -266,7 +305,7 @@ onBeforeUnmount(() => {
               @contextmenu="openContextMenu($event, tab.path)"
             >
               <span v-if="tab.path === route.path" class="route-tabs__dot" />
-				<span class="route-tabs__label">{{ t(tab.i18nKey) }}</span>
+              <span class="route-tabs__label">{{ t(tab.i18nKey) }}</span>
               <span
                 v-if="!tab.affix"
                 class="route-tabs__close"
@@ -322,13 +361,29 @@ onBeforeUnmount(() => {
           <el-dropdown-item data-testid="route-tabs-refresh" command="refresh" :icon="Refresh">
             {{ t('layout.routeTabs.refresh') }}
           </el-dropdown-item>
-          <el-dropdown-item data-testid="route-tabs-fullscreen" command="fullscreen" :icon="FullScreen">
-            {{ props.fullscreen ? t('layout.routeTabs.exitFullscreen') : t('layout.routeTabs.fullscreen') }}
+          <el-dropdown-item
+            data-testid="route-tabs-fullscreen"
+            command="fullscreen"
+            :icon="FullScreen"
+          >
+            {{
+              props.fullscreen
+                ? t('layout.routeTabs.exitFullscreen')
+                : t('layout.routeTabs.fullscreen')
+            }}
           </el-dropdown-item>
-          <el-dropdown-item data-testid="route-tabs-close-others" command="closeOthers" :icon="CircleClose">
+          <el-dropdown-item
+            data-testid="route-tabs-close-others"
+            command="closeOthers"
+            :icon="CircleClose"
+          >
             {{ t('layout.routeTabs.closeOthers') }}
           </el-dropdown-item>
-          <el-dropdown-item data-testid="route-tabs-close-all" command="closeAll" :icon="FolderDelete">
+          <el-dropdown-item
+            data-testid="route-tabs-close-all"
+            command="closeAll"
+            :icon="FolderDelete"
+          >
             {{ t('layout.routeTabs.closeAll') }}
           </el-dropdown-item>
         </el-dropdown-menu>
@@ -354,7 +409,11 @@ onBeforeUnmount(() => {
       >
         <el-icon><Close /></el-icon>{{ t('layout.routeTabs.close') }}
       </li>
-      <li data-testid="route-tabs-close-others-context" role="menuitem" @click="closeOthers(contextPath)">
+      <li
+        data-testid="route-tabs-close-others-context"
+        role="menuitem"
+        @click="closeOthers(contextPath)"
+      >
         <el-icon><CircleClose /></el-icon>{{ t('layout.routeTabs.closeOthers') }}
       </li>
       <li data-testid="route-tabs-close-all-context" role="menuitem" @click="closeAll">
@@ -410,10 +469,24 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.route-tabs__scrollbar { height: 100%; }
-.route-tabs__scrollbar :deep(.el-scrollbar__view) { height: 100%; }
-.route-tabs__inner { display: flex; align-items: center; height: 100%; }
-.route-tabs__list { display: flex; align-items: center; min-width: max-content; gap: 4px; padding: 0 2px; }
+.route-tabs__scrollbar {
+  height: 100%;
+}
+.route-tabs__scrollbar :deep(.el-scrollbar__view) {
+  height: 100%;
+}
+.route-tabs__inner {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+.route-tabs__list {
+  display: flex;
+  align-items: center;
+  min-width: max-content;
+  gap: 4px;
+  padding: 0 2px;
+}
 
 .route-tabs__item {
   position: relative;
@@ -433,14 +506,55 @@ onBeforeUnmount(() => {
   transition: all 160ms ease;
 }
 
-.route-tabs__item:hover { color: var(--el-text-color-primary); background: var(--el-fill-color-light); border-color: var(--el-border-color-light); }
-.route-tabs__item.active { color: var(--el-text-color-primary); background: var(--el-bg-color); border-color: var(--el-border-color-light); }
-.route-tabs__item:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 1px; }
-.route-tabs__dot { width: 5px; height: 5px; flex: 0 0 5px; border-radius: 50%; background: var(--el-color-primary); }
-.route-tabs__label { max-width: 144px; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 500; }
-.route-tabs__close { display: grid; width: 16px; height: 16px; flex: 0 0 16px; place-items: center; margin-right: -4px; border-radius: 6px; color: currentColor; opacity: 0; transform: scale(0.88); transition: all 160ms ease; }
-.route-tabs__item:hover .route-tabs__close, .route-tabs__item.active .route-tabs__close { opacity: 1; transform: scale(1); }
-.route-tabs__close:hover { background: var(--el-fill-color); }
+.route-tabs__item:hover {
+  color: var(--el-text-color-primary);
+  background: var(--el-fill-color-light);
+  border-color: var(--el-border-color-light);
+}
+.route-tabs__item.active {
+  color: var(--el-text-color-primary);
+  background: var(--el-bg-color);
+  border-color: var(--el-border-color-light);
+}
+.route-tabs__item:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 1px;
+}
+.route-tabs__dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 50%;
+  background: var(--el-color-primary);
+}
+.route-tabs__label {
+  max-width: 144px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 500;
+}
+.route-tabs__close {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+  margin-right: -4px;
+  border-radius: 6px;
+  color: currentColor;
+  opacity: 0;
+  transform: scale(0.88);
+  transition: all 160ms ease;
+}
+.route-tabs__item:hover .route-tabs__close,
+.route-tabs__item.active .route-tabs__close {
+  opacity: 1;
+  transform: scale(1);
+}
+.route-tabs__close:hover {
+  background: var(--el-fill-color);
+}
 
 .route-tabs__action {
   position: relative;
@@ -455,24 +569,93 @@ onBeforeUnmount(() => {
   background: var(--el-bg-color);
   cursor: pointer;
 }
-.route-tabs__actions { position: relative; margin-left: 6px; }
-.route-tabs__actions::before { position: absolute; width: 1px; height: 18px; margin-left: -8px; background: var(--el-border-color-light); content: ''; }
+.route-tabs__actions {
+  position: relative;
+  margin-left: 6px;
+}
+.route-tabs__actions::before {
+  position: absolute;
+  width: 1px;
+  height: 18px;
+  margin-left: -8px;
+  background: var(--el-border-color-light);
+  content: '';
+}
 
-.route-tabs__context-menu { position: fixed; z-index: 3000; min-width: 132px; margin: 0; padding: 8px 0; list-style: none; background: var(--el-bg-color-overlay); border: 1px solid var(--el-border-color-light); border-radius: 12px; box-shadow: var(--el-box-shadow-light); }
-.route-tabs__context-menu li { display: flex; align-items: center; gap: 8px; padding: 9px 16px; color: var(--el-text-color-primary); font-size: 13px; cursor: pointer; }
-.route-tabs__context-menu li:hover { background: var(--el-fill-color-light); }
-.route-tabs__context-menu .el-icon { color: var(--el-text-color-regular); }
+.route-tabs__context-menu {
+  position: fixed;
+  z-index: 3000;
+  min-width: 132px;
+  margin: 0;
+  padding: 8px 0;
+  list-style: none;
+  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+  box-shadow: var(--el-box-shadow-light);
+}
+.route-tabs__context-menu li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+.route-tabs__context-menu li:hover {
+  background: var(--el-fill-color-light);
+}
+.route-tabs__context-menu .el-icon {
+  color: var(--el-text-color-regular);
+}
 
-.route-tab-enter-active, .route-tab-leave-active, .route-tab-move { transition: transform 160ms ease, opacity 120ms ease; }
-.route-tab-enter-from, .route-tab-leave-to { opacity: 0; transform: translateY(6px) scale(0.96); }
-.route-tab-leave-active { position: absolute; pointer-events: none; }
+.route-tab-enter-active,
+.route-tab-leave-active,
+.route-tab-move {
+  transition:
+    transform 160ms ease,
+    opacity 120ms ease;
+}
+.route-tab-enter-from,
+.route-tab-leave-to {
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+}
+.route-tab-leave-active {
+  position: absolute;
+  pointer-events: none;
+}
 
 @media (max-width: 768px) {
-  .route-tabs { height: 34px; padding-inline: 6px; }
-  .route-tabs__previous .el-button, .route-tabs__next .el-button, .route-tabs__exit-fullscreen, .route-tabs__action { width: 26px; height: 26px; border-radius: 7px; }
-  .route-tabs__list { gap: 3px; }
-  .route-tabs__item { height: 26px; padding: 0 10px; border-radius: 7px; }
-  .route-tabs__label { max-width: 88px; font-size: 12px; }
-  .route-tabs__dot { width: 4px; height: 4px; flex-basis: 4px; }
+  .route-tabs {
+    height: 34px;
+    padding-inline: 6px;
+  }
+  .route-tabs__previous .el-button,
+  .route-tabs__next .el-button,
+  .route-tabs__exit-fullscreen,
+  .route-tabs__action {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+  }
+  .route-tabs__list {
+    gap: 3px;
+  }
+  .route-tabs__item {
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 7px;
+  }
+  .route-tabs__label {
+    max-width: 88px;
+    font-size: 12px;
+  }
+  .route-tabs__dot {
+    width: 4px;
+    height: 4px;
+    flex-basis: 4px;
+  }
 }
 </style>

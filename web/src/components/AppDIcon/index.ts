@@ -1,2 +1,2 @@
-export { default as AppDIcon } from './src/index.vue'
-export type { AppDIconProps } from './src/types'
+export { default as AppDIcon } from './index.vue'
+export type { AppDIconProps } from './types'

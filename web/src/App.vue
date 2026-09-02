@@ -7,7 +7,9 @@ import { useUIPreferencesStore } from './store/ui-preferences'
 
 const { locale } = useI18n()
 const uiPreferences = useUIPreferencesStore()
-const elementLocale = computed(() => elementPlusLocaleFor(locale.value === 'en-US' ? 'en-US' : 'zh-CN'))
+const elementLocale = computed(() =>
+  elementPlusLocaleFor(locale.value === 'en-US' ? 'en-US' : 'zh-CN'),
+)
 
 if (!uiPreferences.initialized) uiPreferences.initializeSafely()
 </script>

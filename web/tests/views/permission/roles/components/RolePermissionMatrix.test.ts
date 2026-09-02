@@ -2,10 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus, { ElCheckbox } from 'element-plus'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { YesNo } from '@src/enums/yes-no'
-import { appI18n, setLocale } from '@src/i18n'
+import { YesNo } from '@/enums/yes-no'
+import { appI18n, setLocale } from '@/i18n'
 import type { RoleMatrixGroup } from '@/views/permission/roles/role-permission-matrix'
-import RolePermissionMatrix from '@/views/permission/roles/components/RolePermissionMatrix.vue'
+import RolePermissionMatrix from '@/views/permission/roles/components/RolePermissionMatrix/index.vue'
 
 describe('RolePermissionMatrix', () => {
   beforeEach(() => {
@@ -69,10 +69,7 @@ function mountMatrix(modelValue: number[]) {
   })
 }
 
-function checkboxContaining(
-  wrapper: ReturnType<typeof mountMatrix>,
-  text: string,
-) {
+function checkboxContaining(wrapper: ReturnType<typeof mountMatrix>, text: string) {
   const checkbox = wrapper
     .findAllComponents(ElCheckbox)
     .find((candidate) => candidate.text().includes(text))
@@ -83,22 +80,28 @@ function checkboxContaining(
 }
 
 function matrixGroups(): RoleMatrixGroup[] {
-  return [{
-    groupKey: 'menu:1',
-    groupCode: 'system',
-		groupName: '系统管理',
-    groupIsEnabled: YesNo.Yes,
-    rows: [{
-      pageId: 2,
-      pageCode: 'permission:role:list',
-			pageName: '角色管理',
-      pageIsEnabled: YesNo.Yes,
-      actions: [{
-        id: 3,
-        code: 'permission:role:create',
-				name: '新增角色',
-        isEnabled: YesNo.No,
-      }],
-    }],
-  }]
+  return [
+    {
+      groupKey: 'menu:1',
+      groupCode: 'system',
+      groupName: '系统管理',
+      groupIsEnabled: YesNo.Yes,
+      rows: [
+        {
+          pageId: 2,
+          pageCode: 'permission:role:list',
+          pageName: '角色管理',
+          pageIsEnabled: YesNo.Yes,
+          actions: [
+            {
+              id: 3,
+              code: 'permission:role:create',
+              name: '新增角色',
+              isEnabled: YesNo.No,
+            },
+          ],
+        },
+      ],
+    },
+  ]
 }

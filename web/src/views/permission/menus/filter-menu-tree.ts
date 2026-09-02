@@ -1,4 +1,4 @@
-import type { ManagedMenuNode } from '../../../api/permission/menu'
+import type { ManagedMenuNode } from '@/api/permission/menu'
 
 function cloneNode(node: ManagedMenuNode): ManagedMenuNode {
   return { ...node, children: node.children.map(cloneNode) }
@@ -11,8 +11,9 @@ export function filterManagedMenuTree(
   const keyword = rawKeyword.trim().toLocaleLowerCase()
   if (keyword === '') return nodes.map(cloneNode)
   return nodes.flatMap((node) => {
-    const ownMatch = [node.name, node.code, node.path ?? '']
-      .some((value) => value.toLocaleLowerCase().includes(keyword))
+    const ownMatch = [node.name, node.code, node.path ?? ''].some((value) =>
+      value.toLocaleLowerCase().includes(keyword),
+    )
     if (ownMatch) return [cloneNode(node)]
     const children = filterManagedMenuTree(node.children, keyword)
     return children.length === 0 ? [] : [{ ...node, children }]

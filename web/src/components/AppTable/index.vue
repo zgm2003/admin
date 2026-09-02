@@ -15,33 +15,38 @@ import {
   type TableRow,
 } from './types'
 
+defineOptions({ name: 'AppTable' })
+
 type TableResultState = 'idle' | 'loading' | 'refreshing' | 'success' | 'empty' | 'error'
 
-const props = withDefaults(defineProps<{
-  columns: TableColumn<Row>[]
-  data: Row[]
-  loading?: boolean
-  rowKey?: string
-  selectable?: boolean
-  selectionSelectable?: (row: Row, index: number) => boolean
-  pagination?: TablePaginationState | null
-  resultState?: TableResultState
-  statusMessage?: string
-  ariaLabel?: string
-  fixedFooter?: boolean
-  refreshLabel?: string
-}>(), {
-  loading: false,
-  rowKey: 'id',
-  selectable: false,
-  selectionSelectable: undefined,
-  pagination: null,
-  resultState: 'idle',
-  statusMessage: '',
-  ariaLabel: undefined,
-  fixedFooter: false,
-  refreshLabel: undefined,
-})
+const props = withDefaults(
+  defineProps<{
+    columns: TableColumn<Row>[]
+    data: Row[]
+    loading?: boolean
+    rowKey?: string
+    selectable?: boolean
+    selectionSelectable?: (row: Row, index: number) => boolean
+    pagination?: TablePaginationState | null
+    resultState?: TableResultState
+    statusMessage?: string
+    ariaLabel?: string
+    fixedFooter?: boolean
+    refreshLabel?: string
+  }>(),
+  {
+    loading: false,
+    rowKey: 'id',
+    selectable: false,
+    selectionSelectable: undefined,
+    pagination: null,
+    resultState: 'idle',
+    statusMessage: '',
+    ariaLabel: undefined,
+    fixedFooter: false,
+    refreshLabel: undefined,
+  },
+)
 
 const emit = defineEmits<{
   refresh: []
@@ -53,7 +58,9 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const paginationState = ref<TablePaginationState | null>(props.pagination ? { ...props.pagination } : null)
+const paginationState = ref<TablePaginationState | null>(
+  props.pagination ? { ...props.pagination } : null,
+)
 const isMobile = ref(false)
 
 function updateMobile(): void {
@@ -65,18 +72,26 @@ onMounted(() => {
 })
 onBeforeUnmount(() => window.removeEventListener('resize', updateMobile))
 
-watch(() => props.pagination, (value) => {
-  paginationState.value = value === null ? null : { ...value }
-}, { deep: true, immediate: true })
+watch(
+  () => props.pagination,
+  (value) => {
+    paginationState.value = value === null ? null : { ...value }
+  },
+  { deep: true, immediate: true },
+)
 
 const visibleColumns = computed(() => props.columns.filter((column) => !column.hidden))
 const dataColumns = computed(() => visibleColumns.value.filter((column) => !column.expand))
 const expandColumns = computed(() => visibleColumns.value.filter((column) => column.expand))
-const busy = computed(() => props.loading || props.resultState === 'loading' || props.resultState === 'refreshing')
+const busy = computed(
+  () => props.loading || props.resultState === 'loading' || props.resultState === 'refreshing',
+)
 const failed = computed(() => props.resultState === 'error')
 const tableClasses = computed(() => ({ 'app-table__table--fixed': props.fixedFooter }))
-const paginationLayout = computed(() => isMobile.value ? 'total, prev, pager, next' : 'total, sizes, prev, pager, next')
-const pageSizes = computed(() => isMobile.value ? [20, 50] : [20, 50, 100])
+const paginationLayout = computed(() =>
+  isMobile.value ? 'total, prev, pager, next' : 'total, sizes, prev, pager, next',
+)
+const pageSizes = computed(() => (isMobile.value ? [20, 50] : [20, 50, 100]))
 const tableHeaderCellStyle = { background: 'var(--el-fill-color-light)' }
 const resolvedAriaLabel = computed(() => props.ariaLabel ?? t('appTable.ariaLabel'))
 const resolvedRefreshLabel = computed(() => props.refreshLabel ?? t('appTable.refresh'))
@@ -135,7 +150,9 @@ function onSelectionChange(selection: Row[]): void {
     :aria-busy="busy"
   >
     <div class="app-table__toolbar">
-      <el-space class="app-table__toolbar-left" wrap size="small"><slot name="toolbar-left" /></el-space>
+      <el-space class="app-table__toolbar-left" wrap size="small"
+        ><slot name="toolbar-left"
+      /></el-space>
       <el-space class="app-table__toolbar-right" wrap size="small">
         <slot name="toolbar-right" />
         <el-button
@@ -199,7 +216,10 @@ function onSelectionChange(selection: Row[]): void {
         <slot v-else name="empty"><el-empty :description="resolvedEmptyMessage" /></slot>
       </template>
     </el-table>
-    <div v-if="paginationState !== null" class="app-table__pagination app-table__pagination--distributed">
+    <div
+      v-if="paginationState !== null"
+      class="app-table__pagination app-table__pagination--distributed"
+    >
       <el-pagination
         background
         :layout="paginationLayout"
@@ -215,19 +235,63 @@ function onSelectionChange(selection: Row[]): void {
   </div>
 </template>
 
-<style scoped lang="scss">
-.app-table { display: flex; min-width: 0; flex-direction: column; }
-.app-table--fixed-footer { height: 100%; min-height: 0; overflow: hidden; }
-.app-table__toolbar { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-.app-table__toolbar-left, .app-table__toolbar-right { display: flex; min-width: 0; align-items: center; gap: 8px; }
-.app-table__table--fixed { flex: 1 1 auto; min-height: 0; }
-.app-table__pagination { display: flex; flex-shrink: 0; justify-content: flex-end; margin-top: 8px; }
-.app-table__error { padding: 12px; color: var(--el-color-danger); }
+<style scoped>
+.app-table {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.app-table--fixed-footer {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.app-table__toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.app-table__toolbar-left,
+.app-table__toolbar-right {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.app-table__table--fixed {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.app-table__pagination {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.app-table__error {
+  padding: 12px;
+  color: var(--el-color-danger);
+}
 @media (max-width: 768px) {
-  .app-table__toolbar { align-items: stretch; flex-direction: column; }
-  .app-table__toolbar-left, .app-table__toolbar-right { flex-wrap: wrap; }
-  .app-table__pagination { justify-content: space-between; overflow-x: auto; }
-  .app-table__pagination--distributed :deep(.el-pagination) { width: 100%; justify-content: flex-start; }
-  .app-table__pagination--distributed :deep(.el-pagination__total) { margin-right: auto; }
+  .app-table__toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .app-table__toolbar-left,
+  .app-table__toolbar-right {
+    flex-wrap: wrap;
+  }
+  .app-table__pagination {
+    justify-content: space-between;
+    overflow-x: auto;
+  }
+  .app-table__pagination--distributed :deep(.el-pagination) {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .app-table__pagination--distributed :deep(.el-pagination__total) {
+    margin-right: auto;
+  }
 }
 </style>

@@ -5,8 +5,8 @@ import {
   defaultUIPreferences,
   uiPreferencesStorageKey,
   writeUIPreferences,
-} from '@src/utils/ui-preferences'
-import { useUIPreferencesStore } from '@src/store/ui-preferences'
+} from '@/utils/ui-preferences'
+import { useUIPreferencesStore } from '@/store/ui-preferences'
 
 describe('ui preferences store', () => {
   beforeEach(() => {
@@ -17,10 +17,13 @@ describe('ui preferences store', () => {
   })
 
   it('applies valid persisted preferences during initialization', () => {
-    localStorage.setItem(uiPreferencesStorageKey, JSON.stringify({
-      version: 2,
-      preferences: { ...persistedDefaults(), primaryColor: '#059669' },
-    }))
+    localStorage.setItem(
+      uiPreferencesStorageKey,
+      JSON.stringify({
+        version: 2,
+        preferences: { ...persistedDefaults(), primaryColor: '#059669' },
+      }),
+    )
     const store = useUIPreferencesStore()
 
     store.initialize()

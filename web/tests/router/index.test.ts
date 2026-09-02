@@ -1,19 +1,19 @@
 import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getPermission } from '@src/api/permission/permission'
-import type { PermissionSnapshot } from '@src/api/permission/permission'
-import { getCurrentUser, refresh } from '@src/api/auth/login'
-import { installPermissionGuard } from '@src/permission'
-import { pinia } from '@src/store'
+import { getPermission } from '@/api/permission/permission'
+import type { PermissionSnapshot } from '@/api/permission/permission'
+import { getCurrentUser, refresh } from '@/api/auth/login'
+import { installPermissionGuard } from '@/permission'
+import { pinia } from '@/store'
 import { usePermissionStore } from '@/store/permission.ts'
-import { useAuthStore } from '@src/store/auth'
-import { ApiError } from '@src/types/http'
-import { createAppRouter } from '@src/router/index'
-import { YesNo } from '@src/enums/yes-no'
+import { useAuthStore } from '@/store/auth'
+import { ApiError } from '@/types/http'
+import { createAppRouter } from '@/router/index'
+import { YesNo } from '@/enums/yes-no'
 
-vi.mock('@src/api/auth/login', () => ({ refresh: vi.fn(), getCurrentUser: vi.fn() }))
-vi.mock('@src/api/permission/permission', () => ({ getPermission: vi.fn() }))
+vi.mock('@/api/auth/login', () => ({ refresh: vi.fn(), getCurrentUser: vi.fn() }))
+vi.mock('@/api/permission/permission', () => ({ getPermission: vi.fn() }))
 const refreshMock = vi.mocked(refresh)
 const getCurrentUserMock = vi.mocked(getCurrentUser)
 const getPermissionMock = vi.mocked(getPermission)
@@ -28,43 +28,68 @@ describe('router', () => {
     getPermissionMock.mockResolvedValue(emptyPermissionSnapshot())
   })
 
-	it('declares public auth routes and static protected Dashboard and menu management routes', () => {
+  it('declares public auth routes and static protected Dashboard route', () => {
     const router = createAppRouter(createMemoryHistory())
     expect(router.resolve('/login').meta.requiresAuth).toBe(false)
-	  expect(router.hasRoute('register')).toBe(false)
-	  expect(router.resolve('/register').matched).toHaveLength(0)
-		expect(router.resolve('/dashboard').meta.requiresAuth).toBe(true)
-		expect(router.resolve('/access/menus').meta.requiresAuth).toBe(true)
-  expect(router.resolve('/access/menus').meta.requiredPermission).toBe('permission:menu:view')
-		expect(router.resolve('/access/menus').name).toBe('access-menus')
+    expect(router.hasRoute('register')).toBe(false)
+    expect(router.resolve('/register').matched).toHaveLength(0)
+    expect(router.resolve('/dashboard').meta.requiresAuth).toBe(true)
+    expect(router.resolve('/access/menus').matched).toHaveLength(0)
     expect(router.hasRoute('account-profile')).toBe(false)
     expect(router.resolve('/account/profile').matched).toHaveLength(0)
     expect(router.hasRoute('admin-layout')).toBe(true)
   })
 
-	it('declares translated i18n keys for fixed pages', () => {
+  it('declares translated i18n keys for fixed pages', () => {
     const router = createAppRouter(createMemoryHistory())
     const dashboard = router.resolve('/dashboard')
     expect(dashboard.meta.requiresAuth).toBe(true)
-		expect(dashboard.meta.i18nKey).toBe('navigation.dashboard')
+    expect(dashboard.meta.i18nKey).toBe('navigation.dashboard')
     expect(dashboard.meta.affix).toBe(true)
-		expect(router.resolve('/login').meta.i18nKey).toBeUndefined()
-		expect(router.resolve('/access/menus').meta.i18nKey).toBe('navigation.accessMenus')
-	})
+    expect(router.resolve('/login').meta.i18nKey).toBeUndefined()
+    expect(router.resolve('/access/menus').meta.i18nKey).toBeUndefined()
+  })
 
-	it('guards the static menu page with its exact permission after loading access', async () => {
-		setAuthenticated()
-		const router = createAppRouter(createMemoryHistory())
-		installPermissionGuard(router)
+  it('registers and guards a dynamic menu page with its exact permission after loading access', async () => {
+    setAuthenticated()
+    const router = createAppRouter(createMemoryHistory())
+    installPermissionGuard(router)
 
-		await router.push('/access/menus')
-		expect(router.currentRoute.value.path).toBe('/dashboard')
+    getPermissionMock.mockResolvedValue({
+      ...emptyPermissionSnapshot(),
+      menuTree: [
+        accessDirectory('access', 'navigation.access', [
+          accessPage(
+            'permission:menu:view',
+            '/access/menus',
+            'permission/menus',
+            'navigation.accessMenus',
+          ),
+        ]),
+      ],
+      permissionCodes: [],
+    })
+    await router.push('/access/menus')
+    expect(router.currentRoute.value.path).toBe('/dashboard')
 
-		usePermissionStore(pinia).reset()
-  getPermissionMock.mockResolvedValue({ ...emptyPermissionSnapshot(), permissionCodes: ['permission:menu:view'] })
-		await router.push('/access/menus')
-		expect(router.currentRoute.value.path).toBe('/access/menus')
-	})
+    usePermissionStore(pinia).reset()
+    getPermissionMock.mockResolvedValue({
+      ...emptyPermissionSnapshot(),
+      menuTree: [
+        accessDirectory('access', 'navigation.access', [
+          accessPage(
+            'permission:menu:view',
+            '/access/menus',
+            'permission/menus',
+            'navigation.accessMenus',
+          ),
+        ]),
+      ],
+      permissionCodes: ['permission:menu:view'],
+    })
+    await router.push('/access/menus')
+    expect(router.currentRoute.value.path).toBe('/access/menus')
+  })
 
   it('restores a cold dynamic URL through auth, access, route registration, and the original URL', async () => {
     const order: string[] = []
@@ -169,7 +194,7 @@ describe('router', () => {
     const router = createAppRouter(createMemoryHistory())
     installPermissionGuard(router)
     await router.push('/account/users')
-		expect(router.hasRoute('access:account:user:list')).toBe(true)
+    expect(router.hasRoute('access:account:user:list')).toBe(true)
 
     useAuthStore(pinia).setAnonymous()
     await router.push('/login')
@@ -235,14 +260,22 @@ describe('router', () => {
     installPermissionGuard(router)
     router.onError(() => undefined)
 
-    await expect(router.push('/missing-meta')).rejects.toThrow('Route /missing-meta must declare requiresAuth')
+    await expect(router.push('/missing-meta')).rejects.toThrow(
+      'Route /missing-meta must declare requiresAuth',
+    )
   })
 })
 
 function setAuthenticated(): void {
   const store = useAuthStore(pinia)
   store.setCredential({ accessToken: 'jwt', expiresIn: 900 })
-  store.setAuthenticated({ userId: 1, username: 'admin', email: 'admin@example.com', phone: null, avatar: '' })
+  store.setAuthenticated({
+    userId: 1,
+    username: 'admin',
+    email: 'admin@example.com',
+    phone: null,
+    avatar: '',
+  })
 }
 
 function emptyPermissionSnapshot(): PermissionSnapshot {
@@ -252,54 +285,69 @@ function emptyPermissionSnapshot(): PermissionSnapshot {
 function businessPermissionSnapshot(): PermissionSnapshot {
   return {
     roleCodes: ['registered_user'],
-		menuTree: [
-			accessDirectory('account', 'navigation.account', [
-				accessPage('account:user:list', '/account/users', 'account/users', 'navigation.accountUsers'),
-			]),
-			accessDirectory('access', 'navigation.access', [
-				accessPage('permission:role:list', '/access/roles', 'access/roles', 'navigation.accessRoles'),
-			]),
-			accessDirectory('system', 'navigation.system', [
-				accessPage('system:operation-log:list', '/system/operation-logs', 'system/operation-logs', 'navigation.systemOperationLogs'),
-			]),
-		],
-		permissionCodes: ['account:user:list', 'system:operation-log:list', 'permission:role:list'],
+    menuTree: [
+      accessDirectory('account', 'navigation.account', [
+        accessPage(
+          'account:user:list',
+          '/account/users',
+          'account/users',
+          'navigation.accountUsers',
+        ),
+      ]),
+      accessDirectory('access', 'navigation.access', [
+        accessPage(
+          'permission:role:list',
+          '/access/roles',
+          'access/roles',
+          'navigation.accessRoles',
+        ),
+      ]),
+      accessDirectory('system', 'navigation.system', [
+        accessPage(
+          'system:operation-log:list',
+          '/system/operation-logs',
+          'system/operation-logs',
+          'navigation.systemOperationLogs',
+        ),
+      ]),
+    ],
+    permissionCodes: ['account:user:list', 'system:operation-log:list', 'permission:role:list'],
   }
 }
 
 function accessDirectory(
-	code: string,
-	i18nKey: string,
-	children: PermissionSnapshot['menuTree'],
+  code: string,
+  i18nKey: string,
+  children: PermissionSnapshot['menuTree'],
 ): PermissionSnapshot['menuTree'][number] {
-	return {
-		code,
-		menuType: 'directory',
-		path: null,
-		componentPath: null,
-		i18nKey,
-		icon: null,
-		isHidden: YesNo.No,
-		children,
-	}
+  return {
+    code,
+    menuType: 'directory',
+    path: null,
+    componentPath: null,
+    i18nKey,
+    icon: null,
+    isHidden: YesNo.No,
+    children,
+  }
 }
 
 function accessPage(
-	code: string,
-	path: string,
-	componentPath: string,
-	i18nKey: string,
+  code: string,
+  path: string,
+  componentPath: string,
+  i18nKey: string,
 ): PermissionSnapshot['menuTree'][number] {
-	return {
-		code,
-		menuType: 'page',
-		path,
-		componentPath,
-		i18nKey,
-		icon: null,
-		isHidden: YesNo.No,
-		children: [],
-	}
+  return {
+    code,
+    menuType: 'page',
+    path,
+    componentPath,
+    i18nKey,
+    icon: null,
+    isHidden: YesNo.No,
+    children: [],
+  }
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {

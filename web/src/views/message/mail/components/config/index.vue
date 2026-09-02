@@ -4,8 +4,8 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import { Send, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
-import * as mailApi from '../../../../../api/system/mail'
-import { YesNo } from '../../../../../enums/yes-no'
+import * as mailApi from '@/api/system/mail'
+import { YesNo } from '@/enums/yes-no'
 
 const props = defineProps<{
   config: mailApi.MailConfig
@@ -34,25 +34,33 @@ const statusType = computed(() => {
 
 const rules = computed<FormRules<mailApi.MailConfigInput>>(() => ({
   region: [{ required: true, whitespace: true, message: t('mail.region'), trigger: 'blur' }],
-  fromEmail: [{ required: true, type: 'email', message: t('auth.login.emailInvalid'), trigger: 'blur' }],
+  fromEmail: [
+    { required: true, type: 'email', message: t('auth.login.emailInvalid'), trigger: 'blur' },
+  ],
   fromName: [{ required: true, whitespace: true, message: t('mail.fromName'), trigger: 'blur' }],
-  ttlMinutes: [{ required: true, type: 'number', min: 1, max: 60, message: t('mail.ttl'), trigger: 'change' }],
+  ttlMinutes: [
+    { required: true, type: 'number', min: 1, max: 60, message: t('mail.ttl'), trigger: 'change' },
+  ],
 }))
 
-watch(() => props.config, (value) => {
-  form.value = {
-    secretId: '',
-    secretKey: '',
-    region: value.region,
-    endpoint: value.endpoint,
-    fromEmail: value.fromEmail,
-    fromName: value.fromName,
-    replyTo: value.replyTo,
-    ttlMinutes: value.ttlMinutes,
-    isEnabled: value.isEnabled,
-  }
-  testEmail.value = value.fromEmail
-}, { immediate: true })
+watch(
+  () => props.config,
+  (value) => {
+    form.value = {
+      secretId: '',
+      secretKey: '',
+      region: value.region,
+      endpoint: value.endpoint,
+      fromEmail: value.fromEmail,
+      fromName: value.fromName,
+      replyTo: value.replyTo,
+      ttlMinutes: value.ttlMinutes,
+      isEnabled: value.isEnabled,
+    }
+    testEmail.value = value.fromEmail
+  },
+  { immediate: true },
+)
 
 function blankForm(): mailApi.MailConfigInput {
   return {
@@ -69,7 +77,7 @@ function blankForm(): mailApi.MailConfigInput {
 }
 
 async function save(): Promise<void> {
-  if (!await formRef.value?.validate().catch(() => false)) return
+  if (!(await formRef.value?.validate().catch(() => false))) return
 
   saving.value = true
   try {
@@ -181,7 +189,12 @@ async function remove(): Promise<void> {
         </el-col>
         <el-col :xs="24" :md="12">
           <el-form-item :label="t('mail.ttl')" prop="ttlMinutes">
-            <el-input-number v-model="form.ttlMinutes" :min="1" :max="60" controls-position="right" />
+            <el-input-number
+              v-model="form.ttlMinutes"
+              :min="1"
+              :max="60"
+              controls-position="right"
+            />
             <span class="input-unit">min</span>
           </el-form-item>
         </el-col>
@@ -191,7 +204,11 @@ async function remove(): Promise<void> {
       <el-row :gutter="20">
         <el-col :xs="24" :md="12">
           <el-form-item :label="t('mail.enabled')">
-            <el-switch v-model="form.isEnabled" :active-value="YesNo.Yes" :inactive-value="YesNo.No" />
+            <el-switch
+              v-model="form.isEnabled"
+              :active-value="YesNo.Yes"
+              :inactive-value="YesNo.No"
+            />
           </el-form-item>
         </el-col>
         <el-col v-if="canTest" :xs="24" :md="12">
@@ -207,7 +224,13 @@ async function remove(): Promise<void> {
         </el-col>
       </el-row>
 
-      <el-alert v-if="config.lastTestError" :title="config.lastTestError" type="warning" show-icon :closable="false" />
+      <el-alert
+        v-if="config.lastTestError"
+        :title="config.lastTestError"
+        type="warning"
+        show-icon
+        :closable="false"
+      />
 
       <div class="form-actions">
         <el-button v-if="canDelete && config.configured" text type="danger" @click="remove">
@@ -215,7 +238,13 @@ async function remove(): Promise<void> {
           {{ t('mail.delete') }}
         </el-button>
         <span />
-        <el-button v-if="canUpdate" data-testid="mail-config-save" type="primary" :loading="saving" @click="save">
+        <el-button
+          v-if="canUpdate"
+          data-testid="mail-config-save"
+          type="primary"
+          :loading="saving"
+          @click="save"
+        >
           {{ t('mail.save') }}
         </el-button>
       </div>
@@ -223,7 +252,7 @@ async function remove(): Promise<void> {
   </div>
 </template>
 
-<style scoped lang="scss">
+<style scoped>
 .config-status {
   display: flex;
   align-items: center;

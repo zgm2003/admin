@@ -326,7 +326,9 @@ h2 {
 
 .slide-left-enter-active,
 .slide-left-leave-active {
-  transition: opacity 160ms ease, transform 160ms ease;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
 }
 
 .slide-left-enter-from {
@@ -341,7 +343,9 @@ h2 {
 
 .zoom-enter-active,
 .zoom-leave-active {
-  transition: opacity 160ms ease, transform 160ms ease;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
 }
 
 .zoom-enter-from,
@@ -424,7 +428,6 @@ h2 {
   .status-track__label-short {
     display: inline;
   }
-
 }
 
 @media (prefers-reduced-motion: reduce) {

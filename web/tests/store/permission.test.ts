@@ -1,14 +1,14 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getPermission } from '@src/api/permission/permission'
-import type { PermissionSnapshot } from '@src/api/permission/permission'
-import { setLocale } from '@src/i18n'
-import { ApiError, ProtocolError } from '@src/types/http'
+import { getPermission } from '@/api/permission/permission'
+import type { PermissionSnapshot } from '@/api/permission/permission'
+import { setLocale } from '@/i18n'
+import { ApiError, ProtocolError } from '@/types/http'
 import { usePermissionStore } from '@/store/permission.ts'
-import { YesNo } from '@src/enums/yes-no'
+import { YesNo } from '@/enums/yes-no'
 
-vi.mock('@src/api/permission/permission', () => ({ getPermission: vi.fn() }))
+vi.mock('@/api/permission/permission', () => ({ getPermission: vi.fn() }))
 
 const getPermissionMock = vi.mocked(getPermission)
 
@@ -76,10 +76,10 @@ describe('access store', () => {
       code: 'old',
       menuType: 'directory',
       path: null,
-		componentPath: null,
-		i18nKey: 'navigation.system',
+      componentPath: null,
+      i18nKey: 'navigation.system',
       icon: null,
-		isHidden: YesNo.No,
+      isHidden: YesNo.No,
       children: [],
     })
     store.permissionCodes.push('old:permission')

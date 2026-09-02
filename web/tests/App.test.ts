@@ -3,9 +3,9 @@ import { mount } from '@vue/test-utils'
 import ElementPlus, { ElConfigProvider } from 'element-plus'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import App from '@src/App.vue'
-import { appI18n, elementPlusLocaleFor, setLocale } from '@src/i18n'
-import { pinia } from '@src/store'
+import App from '@/App.vue'
+import { appI18n, elementPlusLocaleFor, setLocale } from '@/i18n'
+import { pinia } from '@/store'
 
 describe('application locale provider', () => {
   beforeEach(() => {

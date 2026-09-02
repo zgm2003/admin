@@ -3,14 +3,14 @@ import ElementPlus from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getCurrentUser, login } from '@src/api/auth/login'
-import { appI18n, setLocale } from '@src/i18n'
-import { pinia } from '@src/store'
-import { useAuthStore } from '@src/store/auth'
-import { ApiError } from '@src/types/http'
-import LoginPage from '@src/views/auth/login/index.vue'
+import { getCurrentUser, login } from '@/api/auth/login'
+import { appI18n, setLocale } from '@/i18n'
+import { pinia } from '@/store'
+import { useAuthStore } from '@/store/auth'
+import { ApiError } from '@/types/http'
+import LoginPage from '@/views/auth/login/index.vue'
 
-vi.mock('@src/api/auth/login', () => ({ login: vi.fn(), getCurrentUser: vi.fn() }))
+vi.mock('@/api/auth/login', () => ({ login: vi.fn(), getCurrentUser: vi.fn() }))
 
 const loginMock = vi.mocked(login)
 const getCurrentUserMock = vi.mocked(getCurrentUser)
@@ -45,7 +45,9 @@ describe('Login page', () => {
   it('renders the selected locale messages', async () => {
     setLocale('en-US')
     const { wrapper } = await mountLogin()
-    expect(wrapper.get('[data-testid="login-email"]').attributes('placeholder')).toBe('Enter email address')
+    expect(wrapper.get('[data-testid="login-email"]').attributes('placeholder')).toBe(
+      'Enter email address',
+    )
     expect(wrapper.get('[data-testid="login-submit"]').text()).toBe('Sign in to console')
   })
 
@@ -67,7 +69,9 @@ describe('Login page', () => {
     const { wrapper } = await mountLogin()
 
     expect(wrapper.text()).toContain('Welcome back')
-    expect(wrapper.get('[data-testid="login-email"]').attributes('placeholder')).toBe('Enter email address')
+    expect(wrapper.get('[data-testid="login-email"]').attributes('placeholder')).toBe(
+      'Enter email address',
+    )
   })
 
   it('submits trimmed email and original password, loads me, and follows a safe redirect', async () => {
@@ -95,7 +99,12 @@ describe('Login page', () => {
 
   it('locks submit while pending and shows one credential error', async () => {
     let rejectLogin: (error: Error) => void = () => undefined
-    loginMock.mockImplementation(() => new Promise((_, reject) => { rejectLogin = reject }))
+    loginMock.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          rejectLogin = reject
+        }),
+    )
     const { wrapper } = await mountLogin()
     await wrapper.get('[data-testid="login-email"]').setValue('admin@example.com')
     await wrapper.get('[data-testid="login-password"]').setValue('wrong')
@@ -126,7 +135,10 @@ async function mountLogin(initialPath = '/login') {
   })
   await router.push(initialPath)
   await router.isReady()
-  const wrapper = mount(LoginPage, { attachTo: document.body, global: { plugins: [ElementPlus, pinia, router, appI18n] } })
+  const wrapper = mount(LoginPage, {
+    attachTo: document.body,
+    global: { plugins: [ElementPlus, pinia, router, appI18n] },
+  })
   await flushPromises()
   return { wrapper, router }
 }

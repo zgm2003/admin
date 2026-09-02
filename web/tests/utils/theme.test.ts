@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { applyPrimaryColor, applyTheme, isSixDigitHexColor, mixHexColor } from '@src/utils/theme'
+import { applyPrimaryColor, applyTheme, isSixDigitHexColor, mixHexColor } from '@/utils/theme'
 
 describe('theme', () => {
   beforeEach(() => {

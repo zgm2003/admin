@@ -1,24 +1,10 @@
 import { AxiosError, AxiosHeaders, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios'
-import { ElNotification } from 'element-plus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { pinia } from '@src/store'
-import { setLocale } from '@src/i18n'
-import { useAuthStore } from '@src/store/auth'
-import {
-  ApiError,
-  ProtocolError,
-  createRequestClient,
-  unwrapEnvelope,
-} from '@src/utils/request'
-
-vi.mock('element-plus', () => ({
-  ElNotification: {
-    error: vi.fn(),
-  },
-}))
-
-const notifyErrorMock = vi.mocked(ElNotification.error)
+import { pinia } from '@/store'
+import { setLocale } from '@/i18n'
+import { useAuthStore } from '@/store/auth'
+import { ApiError, ProtocolError, createRequestClient, unwrapEnvelope } from '@/utils/request'
 
 describe('unwrapEnvelope', () => {
   it('returns data from the only accepted success shape', () => {
@@ -56,25 +42,18 @@ describe('createRequestClient', () => {
     localStorage.clear()
     setLocale('zh-CN')
     useAuthStore(pinia).$reset()
-    notifyErrorMock.mockReset()
   })
 
   it('requires an explicit API base URL', () => {
     expect(() => createRequestClient('  ')).toThrow(ProtocolError)
   })
 
-  it('notifies network errors once and returns them unchanged', async () => {
+  it('returns network errors unchanged without UI side effects', async () => {
     const networkError = new AxiosError('connection refused', AxiosError.ERR_NETWORK)
     const adapter: AxiosAdapter = async () => Promise.reject(networkError)
     const client = createRequestClient('http://localhost:16301')
 
     await expect(client.get('/health', { adapter })).rejects.toBe(networkError)
-    expect(notifyErrorMock).toHaveBeenCalledTimes(1)
-    expect(notifyErrorMock).toHaveBeenCalledWith(expect.objectContaining({
-      title: '请求失败',
-      message: 'connection refused',
-      type: 'error',
-    }))
   })
 
   it.each([
@@ -90,20 +69,23 @@ describe('createRequestClient', () => {
       code: 10006,
       message: '服务暂未就绪',
     },
-  ])('converts HTTP $status business failures to ApiError', async ({ status, data, code, message }) => {
-    const client = createRequestClient('http://localhost:16301')
-    const adapter = failureAdapter(status, data)
+  ])(
+    'converts HTTP $status business failures to ApiError',
+    async ({ status, data, code, message }) => {
+      const client = createRequestClient('http://localhost:16301')
+      const adapter = failureAdapter(status, data)
 
-    try {
-      await client.get('/ready', { adapter })
-      throw new Error('request unexpectedly succeeded')
-    } catch (error) {
-      expect(error).toBeInstanceOf(ApiError)
-      expect((error as ApiError).code).toBe(code)
-      expect((error as ApiError).message).toBe(message)
-      expect((error as ApiError).httpStatus).toBe(status)
-    }
-  })
+      try {
+        await client.get('/ready', { adapter })
+        throw new Error('request unexpectedly succeeded')
+      } catch (error) {
+        expect(error).toBeInstanceOf(ApiError)
+        expect((error as ApiError).code).toBe(code)
+        expect((error as ApiError).message).toBe(message)
+        expect((error as ApiError).httpStatus).toBe(status)
+      }
+    },
+  )
 
   it.each([
     { status: 400, data: { code: 0, data: null, message: 'ok' } },
@@ -112,39 +94,36 @@ describe('createRequestClient', () => {
   ])('rejects invalid HTTP $status error envelopes', async ({ status, data }) => {
     const client = createRequestClient('http://localhost:16301')
 
-    await expect(client.get('/ready', { adapter: failureAdapter(status, data) })).rejects.toBeInstanceOf(ProtocolError)
+    await expect(
+      client.get('/ready', { adapter: failureAdapter(status, data) }),
+    ).rejects.toBeInstanceOf(ProtocolError)
   })
 
-  it('notifies when a successful HTTP response has a non-zero business code', async () => {
+  it('returns business errors without UI side effects', async () => {
     const client = createRequestClient('http://localhost:16301')
-    const adapter: AxiosAdapter = async (config) => successResponse(config, {
-      code: 10005,
-      data: null,
-      message: '用户名已存在',
-    })
+    const adapter: AxiosAdapter = async (config) =>
+      successResponse(config, {
+        code: 10005,
+        data: null,
+        message: '用户名已存在',
+      })
 
-    await expect(client.post('/api/v1/protected', undefined, { adapter })).rejects.toMatchObject({ code: 10005 })
-    expect(notifyErrorMock).toHaveBeenCalledWith(expect.objectContaining({
-      title: '请求失败',
-      message: '用户名已存在',
-      type: 'error',
-    }))
+    await expect(client.post('/api/v1/protected', undefined, { adapter })).rejects.toMatchObject({
+      code: 10005,
+    })
   })
 
   it.each([
     { status: 401, code: 10002, message: '未登录或登录已失效' },
     { status: 403, code: 10003, message: '没有访问权限' },
-  ])('notifies HTTP $status failures', async ({ status, code, message }) => {
+  ])('returns HTTP $status failures without UI side effects', async ({ status, code, message }) => {
     const client = createRequestClient('http://localhost:16301')
 
-    await expect(client.post('/api/v1/auth/login', undefined, {
-      adapter: failureAdapter(status, { code, data: null, message }),
-    })).rejects.toMatchObject({ code, httpStatus: status })
-    expect(notifyErrorMock).toHaveBeenCalledWith(expect.objectContaining({
-      title: '请求失败',
-      message,
-      type: 'error',
-    }))
+    await expect(
+      client.post('/api/v1/auth/login', undefined, {
+        adapter: failureAdapter(status, { code, data: null, message }),
+      }),
+    ).rejects.toMatchObject({ code, httpStatus: status })
   })
 
   it('does not notify an intermediate 401 that is recovered by Refresh', async () => {
@@ -152,7 +131,11 @@ describe('createRequestClient', () => {
     const adapter: AxiosAdapter = async (config) => {
       if (config.url === '/api/v1/auth/refresh') {
         refreshed = true
-        return successResponse(config, { code: 0, data: { accessToken: 'new-token', expiresIn: 900 }, message: 'ok' })
+        return successResponse(config, {
+          code: 0,
+          data: { accessToken: 'new-token', expiresIn: 900 },
+          message: 'ok',
+        })
       }
       if (!refreshed) throw apiFailure(config, 401, 10002, '未登录或登录已失效')
       return successResponse(config, { code: 0, data: { ok: true }, message: 'ok' })
@@ -160,7 +143,6 @@ describe('createRequestClient', () => {
     const client = createRequestClient('http://localhost:16301', adapter)
 
     await client.get('/api/v1/protected')
-    expect(notifyErrorMock).not.toHaveBeenCalled()
   })
 
   it('adds the in-memory bearer token to protected requests', async () => {
@@ -216,7 +198,11 @@ describe('createRequestClient', () => {
       if (config.url === '/api/v1/auth/refresh') {
         refreshLanguage = AxiosHeaders.from(config.headers).get('Accept-Language')?.toString() ?? ''
         refreshed = true
-        return successResponse(config, { code: 0, data: { accessToken: 'new-token', expiresIn: 900 }, message: 'ok' })
+        return successResponse(config, {
+          code: 0,
+          data: { accessToken: 'new-token', expiresIn: 900 },
+          message: 'ok',
+        })
       }
       if (!refreshed) throw apiFailure(config, 401, 10002, '未登录或登录已失效')
       return successResponse(config, { code: 0, data: { ok: true }, message: 'ok' })
@@ -236,7 +222,11 @@ describe('createRequestClient', () => {
       if (config.url === '/api/v1/auth/refresh') {
         refreshCalls += 1
         refreshed = true
-        return successResponse(config, { code: 0, data: { accessToken: 'new-token', expiresIn: 900 }, message: 'ok' })
+        return successResponse(config, {
+          code: 0,
+          data: { accessToken: 'new-token', expiresIn: 900 },
+          message: 'ok',
+        })
       }
       protectedCalls += 1
       if (!refreshed) {
@@ -273,11 +263,10 @@ describe('createRequestClient', () => {
 
     expect(results.every((result) => result.status === 'rejected')).toBe(true)
     expect(refreshCalls).toBe(1)
-    expect(notifyErrorMock).toHaveBeenCalledTimes(1)
     expect(onUnauthorized).toHaveBeenCalledOnce()
   })
 
-  it('notifies a 403 without refreshing or invoking the unauthorized callback', async () => {
+  it('returns a 403 without refreshing or invoking the unauthorized callback', async () => {
     let refreshCalls = 0
     const onUnauthorized = vi.fn()
     const adapter: AxiosAdapter = async (config) => {
@@ -286,9 +275,11 @@ describe('createRequestClient', () => {
     }
     const client = createRequestClient('http://localhost:16301', adapter, onUnauthorized)
 
-    await expect(client.get('/api/v1/protected')).rejects.toMatchObject({ code: 10003, httpStatus: 403 })
+    await expect(client.get('/api/v1/protected')).rejects.toMatchObject({
+      code: 10003,
+      httpStatus: 403,
+    })
     expect(refreshCalls).toBe(0)
-    expect(notifyErrorMock).toHaveBeenCalledTimes(1)
     expect(onUnauthorized).not.toHaveBeenCalled()
   })
 
@@ -296,7 +287,11 @@ describe('createRequestClient', () => {
     let protectedCalls = 0
     const adapter: AxiosAdapter = async (config) => {
       if (config.url === '/api/v1/auth/refresh') {
-        return successResponse(config, { code: 0, data: { accessToken: 'new-token', expiresIn: 900 }, message: 'ok' })
+        return successResponse(config, {
+          code: 0,
+          data: { accessToken: 'new-token', expiresIn: 900 },
+          message: 'ok',
+        })
       }
       protectedCalls += 1
       throw apiFailure(config, 401, 10002, '未登录或登录已失效')
@@ -331,17 +326,18 @@ describe('createRequestClient', () => {
     await expect(client.get('/api/v1/protected')).rejects.toMatchObject({ code: 10002 })
     expect(store.status).toBe('anonymous')
     expect(store.accessToken).toBe('')
-    expect(notifyErrorMock).toHaveBeenCalledTimes(1)
   })
 
   it.each([
     {
       name: '503',
-      refreshResult: (config: InternalAxiosRequestConfig) => Promise.reject(apiFailure(config, 503, 10006, '服务暂未就绪')),
+      refreshResult: (config: InternalAxiosRequestConfig) =>
+        Promise.reject(apiFailure(config, 503, 10006, '服务暂未就绪')),
     },
     {
       name: 'protocol violation',
-      refreshResult: async (config: InternalAxiosRequestConfig) => successResponse(config, { code: 0, data: { expiresIn: 900 }, message: 'ok' }),
+      refreshResult: async (config: InternalAxiosRequestConfig) =>
+        successResponse(config, { code: 0, data: { expiresIn: 900 }, message: 'ok' }),
     },
   ])('sets error after a refresh $name', async ({ refreshResult }) => {
     const store = useAuthStore(pinia)
@@ -355,7 +351,6 @@ describe('createRequestClient', () => {
     await expect(client.get('/api/v1/protected')).rejects.toBeDefined()
     expect(store.status).toBe('error')
     expect(store.errorMessage).not.toBe('')
-    expect(notifyErrorMock).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -381,7 +376,12 @@ function successResponse(config: InternalAxiosRequestConfig, data: unknown) {
   }
 }
 
-function apiFailure(config: InternalAxiosRequestConfig, status: number, code: number, message: string): AxiosError {
+function apiFailure(
+  config: InternalAxiosRequestConfig,
+  status: number,
+  code: number,
+  message: string,
+): AxiosError {
   return new AxiosError(`HTTP ${status}`, AxiosError.ERR_BAD_REQUEST, config, undefined, {
     data: { code, data: null, message },
     status,

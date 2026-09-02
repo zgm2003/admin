@@ -1,2 +1,2 @@
-export { default as AppDialog } from './src/index.vue'
-export * from './src/dialog'
+export { default as AppDialog } from './index.vue'
+export * from './dialog'

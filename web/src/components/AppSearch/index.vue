@@ -5,25 +5,30 @@ import { ElSpace } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import type { SearchDateRange, SearchField, SearchFormModel, SearchFormValue } from './types'
 
-const props = withDefaults(defineProps<{
-  modelValue: SearchFormModel
-  fields: SearchField[]
-  collapseCount?: number
-  queryLabel?: string
-  resetLabel?: string
-  expandLabel?: string
-  collapseLabel?: string
-  queryTestId?: string
-  resetTestId?: string
-}>(), {
-  collapseCount: 2,
-  queryLabel: undefined,
-  resetLabel: undefined,
-  expandLabel: undefined,
-  collapseLabel: undefined,
-  queryTestId: undefined,
-  resetTestId: undefined,
-})
+defineOptions({ name: 'AppSearch' })
+
+const props = withDefaults(
+  defineProps<{
+    modelValue: SearchFormModel
+    fields: SearchField[]
+    collapseCount?: number
+    queryLabel?: string
+    resetLabel?: string
+    expandLabel?: string
+    collapseLabel?: string
+    queryTestId?: string
+    resetTestId?: string
+  }>(),
+  {
+    collapseCount: 2,
+    queryLabel: undefined,
+    resetLabel: undefined,
+    expandLabel: undefined,
+    collapseLabel: undefined,
+    queryTestId: undefined,
+    resetTestId: undefined,
+  },
+)
 
 const emit = defineEmits<{
   'update:modelValue': [value: SearchFormModel]
@@ -40,18 +45,24 @@ const resolvedCollapseLabel = computed(() => props.collapseLabel ?? t('search.co
 const form = reactive<SearchFormModel>({ ...props.modelValue })
 const collapsed = ref(false)
 
-watch(() => props.modelValue, (value) => {
-  for (const key of Object.keys(form)) {
-    if (!Object.prototype.hasOwnProperty.call(value, key)) delete form[key]
-  }
-  Object.assign(form, value)
-}, { deep: true })
+watch(
+  () => props.modelValue,
+  (value) => {
+    for (const key of Object.keys(form)) {
+      if (!Object.prototype.hasOwnProperty.call(value, key)) delete form[key]
+    }
+    Object.assign(form, value)
+  },
+  { deep: true },
+)
 
 const visibleFields = computed(() => {
   const count = Math.max(1, Math.floor(props.collapseCount))
   return collapsed.value ? props.fields.slice(0, count) : props.fields
 })
-const showToggle = computed(() => props.fields.length > Math.max(1, Math.floor(props.collapseCount)))
+const showToggle = computed(
+  () => props.fields.length > Math.max(1, Math.floor(props.collapseCount)),
+)
 
 function resolveWidth(width: string | number | undefined): string {
   return typeof width === 'string' ? width : `${width ?? 180}px`
@@ -59,21 +70,41 @@ function resolveWidth(width: string | number | undefined): string {
 
 function inputValue(key: string): string | number | null | undefined {
   const value = form[key]
-  if (typeof value === 'string' || typeof value === 'number' || value === null || value === undefined) return value
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    value === null ||
+    value === undefined
+  )
+    return value
   throw new Error(`Search input field ${key} must be string or number`)
 }
 
 function dateRangeValue(key: string): SearchDateRange {
   const value = form[key]
-  if (Array.isArray(value) && (value.length === 0 || (value.length === 2 && value.every((item) => typeof item === 'string')))) {
+  if (
+    Array.isArray(value) &&
+    (value.length === 0 || (value.length === 2 && value.every((item) => typeof item === 'string')))
+  ) {
     return value as SearchDateRange
   }
   throw new Error(`Search date range field ${key} must be an empty or two-item string array`)
 }
 
 function normalizeValue(value: unknown, key: string): SearchFormValue {
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null || value === undefined) return value
-  if (Array.isArray(value) && (value.length === 0 || (value.length === 2 && value.every((item) => typeof item === 'string')))) return value as SearchDateRange
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    value === null ||
+    value === undefined
+  )
+    return value
+  if (
+    Array.isArray(value) &&
+    (value.length === 0 || (value.length === 2 && value.every((item) => typeof item === 'string')))
+  )
+    return value as SearchDateRange
   throw new Error(`Search field ${key} received an unsupported value`)
 }
 
@@ -138,7 +169,9 @@ function reset(): void {
     </template>
     <el-form-item>
       <el-space wrap size="small">
-        <el-button type="primary" :data-testid="queryTestId" @click="emitForm('query')">{{ resolvedQueryLabel }}</el-button>
+        <el-button type="primary" :data-testid="queryTestId" @click="emitForm('query')">{{
+          resolvedQueryLabel
+        }}</el-button>
         <el-button :data-testid="resetTestId" @click="reset">{{ resolvedResetLabel }}</el-button>
         <el-button
           v-if="showToggle"
@@ -156,7 +189,7 @@ function reset(): void {
   </el-form>
 </template>
 
-<style scoped lang="scss">
+<style scoped>
 .search-form {
   display: flex;
   flex-wrap: wrap;

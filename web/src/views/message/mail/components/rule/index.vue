@@ -4,9 +4,16 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Pencil, Plus, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
-import { createMailRule, deleteMailRule, updateMailRule, updateMailRuleStatus, type MailRule, type MailRuleInput } from '../../../../../api/system/mail'
-import { AppTable, type TableColumn } from '../../../../../components/AppTable'
-import { YesNo } from '../../../../../enums/yes-no'
+import {
+  createMailRule,
+  deleteMailRule,
+  updateMailRule,
+  updateMailRuleStatus,
+  type MailRule,
+  type MailRuleInput,
+} from '@/api/system/mail'
+import { AppTable, type TableColumn } from '@/components/AppTable'
+import { YesNo } from '@/enums/yes-no'
 
 const props = defineProps<{
   rules: MailRule[]
@@ -22,7 +29,10 @@ const dialog = ref(false)
 const editing = ref<MailRule | null>(null)
 const saving = ref(false)
 const form = ref<MailRuleInput>(blankRule())
-const allowCount = computed(() => props.rules.filter((item) => item.action === 'allow' && item.isEnabled === YesNo.Yes).length)
+const allowCount = computed(
+  () =>
+    props.rules.filter((item) => item.action === 'allow' && item.isEnabled === YesNo.Yes).length,
+)
 const columns = computed<TableColumn<MailRule>[]>(() => [
   { key: 'pattern', prop: 'pattern', label: t('mail.rule'), minWidth: 220 },
   { prop: 'action', label: t('mail.action'), width: 120 },
@@ -34,7 +44,14 @@ const columns = computed<TableColumn<MailRule>[]>(() => [
 
 watch(editing, (value) => {
   form.value = value
-    ? { scope: value.scope, pattern: value.pattern, action: value.action, name: value.name, remark: value.remark, isEnabled: value.isEnabled }
+    ? {
+        scope: value.scope,
+        pattern: value.pattern,
+        action: value.action,
+        name: value.name,
+        remark: value.remark,
+        isEnabled: value.isEnabled,
+      }
     : blankRule()
 })
 
@@ -111,7 +128,13 @@ async function saveRule(): Promise<void> {
         </el-tag>
       </template>
       <template #cell-enabled="{ row }: { row: MailRule }">
-        <el-switch :model-value="row.isEnabled" :active-value="YesNo.Yes" :inactive-value="YesNo.No" :disabled="!canStatus" @change="toggle(row)" />
+        <el-switch
+          :model-value="row.isEnabled"
+          :active-value="YesNo.Yes"
+          :inactive-value="YesNo.No"
+          :disabled="!canStatus"
+          @change="toggle(row)"
+        />
       </template>
       <template #cell-actions="{ row }: { row: MailRule }">
         <el-button v-if="canUpdate" text type="primary" @click="edit(row)">
@@ -151,21 +174,31 @@ async function saveRule(): Promise<void> {
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :xs="24"><el-form-item :label="t('mail.rule')"><el-input v-model="form.pattern" /></el-form-item></el-col>
-          <el-col :xs="24"><el-form-item :label="t('mail.name')"><el-input v-model="form.name" /></el-form-item></el-col>
-          <el-col :xs="24"><el-form-item :label="t('mail.remark')"><el-input v-model="form.remark" type="textarea" :rows="3" /></el-form-item></el-col>
-          <el-col :xs="24"><el-form-item :label="t('mail.enabled')"><el-switch v-model="form.isEnabled" :active-value="YesNo.Yes" :inactive-value="YesNo.No" /></el-form-item></el-col>
         </el-row>
+        <el-form-item :label="t('mail.rule')"><el-input v-model="form.pattern" /></el-form-item>
+        <el-form-item :label="t('mail.name')"><el-input v-model="form.name" /></el-form-item>
+        <el-form-item :label="t('mail.remark')">
+          <el-input v-model="form.remark" type="textarea" :rows="3" />
+        </el-form-item>
+        <el-form-item :label="t('mail.enabled')">
+          <el-switch
+            v-model="form.isEnabled"
+            :active-value="YesNo.Yes"
+            :inactive-value="YesNo.No"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialog = false">{{ t('mail.cancel') }}</el-button>
-        <el-button type="primary" :loading="saving" @click="saveRule">{{ t('mail.save') }}</el-button>
+        <el-button type="primary" :loading="saving" @click="saveRule">{{
+          t('mail.save')
+        }}</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
-<style scoped lang="scss">
+<style scoped>
 .table-tab {
   min-width: 0;
 }

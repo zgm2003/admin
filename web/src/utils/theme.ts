@@ -17,11 +17,14 @@ export function mixHexColor(base: string, target: string, weight: number): strin
   if (!Number.isFinite(weight) || weight < 0 || weight > 1) {
     throw new Error('color mix weight must be between 0 and 1')
   }
-  return `#${baseChannels.map((channel, index) => (
-    Math.round(channel + (targetChannels[index] - channel) * weight)
-      .toString(16)
-      .padStart(2, '0')
-  )).join('').toUpperCase()}`
+  return `#${baseChannels
+    .map((channel, index) =>
+      Math.round(channel + (targetChannels[index] - channel) * weight)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')
+    .toUpperCase()}`
 }
 
 export function applyPrimaryColor(color: string): void {
@@ -33,8 +36,17 @@ export function applyPrimaryColor(color: string): void {
   const style = document.documentElement.style
   style.setProperty('--el-color-primary', normalized)
   style.setProperty('--el-color-primary-rgb', channels.join(', '))
-  for (const [suffix, weight] of [['3', 0.3], ['5', 0.5], ['7', 0.7], ['8', 0.8], ['9', 0.9]] as const) {
-    style.setProperty(`--el-color-primary-light-${suffix}`, mixHexColor(normalized, '#FFFFFF', weight))
+  for (const [suffix, weight] of [
+    ['3', 0.3],
+    ['5', 0.5],
+    ['7', 0.7],
+    ['8', 0.8],
+    ['9', 0.9],
+  ] as const) {
+    style.setProperty(
+      `--el-color-primary-light-${suffix}`,
+      mixHexColor(normalized, '#FFFFFF', weight),
+    )
   }
   style.setProperty('--el-color-primary-dark-2', mixHexColor(normalized, '#000000', 0.2))
 }

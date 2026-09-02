@@ -6,7 +6,7 @@ import {
   resolveAppDialogContentHeight,
   resolveAppDialogDraggable,
   resolveAppDialogWidth,
-} from '@src/components/AppDialog/src/dialog'
+} from '@/components/AppDialog/dialog'
 
 describe('AppDialog helpers', () => {
   it('resolves desktop and mobile sizing', () => {

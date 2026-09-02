@@ -1,4 +1,4 @@
-import type { PermissionMenuNode } from '../api/permission/permission'
+import type { PermissionMenuNode } from '@/api/permission/permission'
 
 export interface HeaderBreadcrumb {
   path: string | null
