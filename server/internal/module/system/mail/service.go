@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/mail"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,7 +55,7 @@ func (s *Service) GetConfig(ctx context.Context, platformID int64) (SafeConfig, 
 		return SafeConfig{Configured: false, TTLMinutes: 10, IsEnabled: yesno.No}, nil
 	}
 	if e != nil {
-		return SafeConfig{}, dependency(e)
+		return SafeConfig{}, wrapRepo(e)
 	}
 	return safeConfig(c), nil
 }
@@ -63,9 +63,11 @@ func (s *Service) SaveConfig(ctx context.Context, platformID int64, in ConfigInp
 	if platformID < 1 || in.TTLMinutes < 1 || in.TTLMinutes > 60 || !yesno.IsValid(in.IsEnabled) {
 		return SafeConfig{}, invalid(fmt.Errorf("invalid mail config"))
 	}
-	if _, e := mail.ParseAddress(strings.TrimSpace(in.FromEmail)); e != nil {
+	fromEmail, e := normalizeMailConfigEmail(in.FromEmail)
+	if e != nil {
 		return SafeConfig{}, invalid(e)
 	}
+	in.FromEmail = fromEmail
 	if strings.TrimSpace(in.Region) == "" || strings.TrimSpace(in.FromName) == "" {
 		return SafeConfig{}, invalid(fmt.Errorf("region and fromName are required"))
 	}
@@ -88,9 +90,11 @@ func (s *Service) SaveConfig(ctx context.Context, platformID int64, in ConfigInp
 		return SafeConfig{}, invalid(fmt.Errorf("credentials are required"))
 	}
 	if strings.TrimSpace(in.ReplyTo) != "" {
-		if _, e := mail.ParseAddress(strings.TrimSpace(in.ReplyTo)); e != nil {
+		replyTo, e := normalizeMailConfigEmail(in.ReplyTo)
+		if e != nil {
 			return SafeConfig{}, invalid(e)
 		}
+		in.ReplyTo = replyTo
 	}
 	sid, _, e := EncryptSecret(s.keys.MailEncryptionKey(), in.SecretID)
 	if e != nil {
@@ -103,7 +107,7 @@ func (s *Service) SaveConfig(ctx context.Context, platformID int64, in ConfigInp
 	v := map[string]any{"secret_id_ciphertext": sid, "secret_key_ciphertext": skey, "secret_id_hint": hint(in.SecretID), "secret_key_hint": hint(in.SecretKey), "region": strings.TrimSpace(in.Region), "from_email": strings.TrimSpace(in.FromEmail), "from_name": strings.TrimSpace(in.FromName), "endpoint": nullableText(in.Endpoint), "reply_to": nullableText(in.ReplyTo), "ttl_minutes": in.TTLMinutes, "is_enabled": in.IsEnabled, "updated_at": time.Now().UTC()}
 	c, e := s.repository.SaveConfig(ctx, platformID, v)
 	if e != nil {
-		return SafeConfig{}, dependency(e)
+		return SafeConfig{}, wrapRepo(e)
 	}
 	return safeConfig(c), nil
 }
@@ -125,7 +129,7 @@ func (s *Service) DeleteConfig(ctx context.Context, p int64) error {
 		return notFound(e)
 	}
 	if e != nil {
-		return dependency(e)
+		return wrapRepo(e)
 	}
 	return nil
 }
@@ -133,7 +137,7 @@ func (s *Service) DeleteConfig(ctx context.Context, p int64) error {
 func (s *Service) ListTemplates(ctx context.Context, p int64) ([]Template, error) {
 	v, e := s.repository.ListTemplates(ctx, p)
 	if e != nil {
-		return nil, dependency(e)
+		return nil, wrapRepo(e)
 	}
 	return v, nil
 }
@@ -144,6 +148,15 @@ func (s *Service) UpdateTemplate(ctx context.Context, p, id int64, in TemplateUp
 	}
 	if in.TencentTemplateID != fixed.TencentTemplateID {
 		return invalid(fmt.Errorf("template id does not match scene"))
+	}
+	if strings.TrimSpace(in.Name) == "" || strings.TrimSpace(in.Subject) == "" {
+		return invalid(fmt.Errorf("template name and subject are required"))
+	}
+	if e := validateMailVariables(in.Variables, true); e != nil {
+		return invalid(e)
+	}
+	if e := validateMailVariables(in.ExampleVariables, true); e != nil {
+		return invalid(e)
 	}
 	current, e := s.repository.FindTemplate(ctx, p, id)
 	if e != nil {
@@ -204,6 +217,9 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 	if !ok {
 		return SendResult{}, invalid(fmt.Errorf("scene invalid"))
 	}
+	if e := validateMailVariables(in.Variables, true); e != nil {
+		return SendResult{}, invalid(e)
+	}
 	if s.rules != nil {
 		d, e := s.rules.Evaluate(ctx, in.PlatformID, email, mode)
 		if e != nil {
@@ -222,8 +238,10 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 		}
 	}
 	if in.ChallengeID != "" {
-		if old, e := s.repository.FindSentChallenge(ctx, in.PlatformID, in.ChallengeID); e == nil {
-			return SendResult{LogID: old.ID, Status: old.Status, RequestID: old.RequestID, MessageID: old.MessageID}, nil
+		if old, e := s.repository.FindActiveChallenge(ctx, in.PlatformID, in.ChallengeID); e == nil {
+			return sendResultFromLog(old), nil
+		} else if !errors.Is(e, gorm.ErrRecordNotFound) {
+			return SendResult{}, wrapRepo(e)
 		}
 	}
 	c, e := s.repository.FindConfig(ctx, in.PlatformID)
@@ -231,11 +249,11 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 		return SendResult{}, wrapRepo(e)
 	}
 	if c.IsEnabled != yesno.Yes {
-		return SendResult{}, fmt.Errorf("mail config disabled")
+		return SendResult{}, dependency(fmt.Errorf("mail config disabled"))
 	}
 	templates, e := s.repository.ListTemplates(ctx, in.PlatformID)
 	if e != nil {
-		return SendResult{}, dependency(e)
+		return SendResult{}, wrapRepo(e)
 	}
 	var tpl Template
 	for _, t := range templates {
@@ -244,8 +262,13 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 		}
 	}
 	if tpl.ID == 0 || tpl.IsEnabled != yesno.Yes {
-		return SendResult{}, fmt.Errorf("mail template disabled")
+		return SendResult{}, dependency(fmt.Errorf("mail template disabled"))
 	}
+	variables := make(map[string]string, len(in.Variables))
+	for key, value := range in.Variables {
+		variables[key] = value
+	}
+	variables["ttl_minutes"] = strconv.Itoa(int(c.TTLMinutes))
 	now := time.Now().UTC()
 	var challengePtr *string
 	if in.ChallengeID != "" {
@@ -253,28 +276,53 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 	}
 	row, e := s.repository.CreatePendingLog(ctx, &Log{PlatformID: in.PlatformID, ChallengeID: challengePtr, UserID: in.UserID, Scene: in.Scene, TemplateID: fixed.TencentTemplateID, ToEmail: email, Subject: tpl.Subject, Status: StatusPending, CreatedAt: now, UpdatedAt: now})
 	if e != nil {
-		return SendResult{}, dependency(e)
+		if in.ChallengeID != "" && isUniqueViolation(e) {
+			if old, findErr := s.repository.FindActiveChallenge(ctx, in.PlatformID, in.ChallengeID); findErr == nil {
+				return sendResultFromLog(old), nil
+			} else if !errors.Is(findErr, gorm.ErrRecordNotFound) {
+				return SendResult{}, wrapRepo(findErr)
+			}
+		}
+		return SendResult{}, wrapRepo(e)
 	}
-	if s.keys != nil && in.Variables["code"] != "" {
-		ct, ver, ce := EncryptSecret(s.keys.MailEncryptionKey(), in.Variables["code"])
-		if ce == nil {
-			_ = s.repository.AddVerification(ctx, &Verification{PlatformID: in.PlatformID, MailLogID: row.ID, KeyVersion: ver, CodeCiphertext: ct, ExpiresAt: now.Add(time.Duration(c.TTLMinutes) * time.Minute), CreatedAt: now})
+	sendStarted := time.Now()
+	if s.keys != nil {
+		ct, ver, ce := EncryptSecret(s.keys.MailEncryptionKey(), variables["code"])
+		if ce != nil {
+			return s.failPending(ctx, in.PlatformID, row.ID, ce, sendStarted)
+		}
+		if ve := s.repository.AddVerification(ctx, &Verification{PlatformID: in.PlatformID, MailLogID: row.ID, KeyVersion: ver, CodeCiphertext: ct, ExpiresAt: now.Add(time.Duration(c.TTLMinutes) * time.Minute), CreatedAt: now}); ve != nil {
+			return s.failPending(ctx, in.PlatformID, row.ID, ve, sendStarted)
 		}
 	}
 	if s.sender == nil {
 		sendErr := fmt.Errorf("sender unavailable")
-		_ = s.repository.MarkFailed(ctx, in.PlatformID, row.ID, providerError(sendErr))
-		return SendResult{LogID: row.ID, Status: StatusFailed}, providerFailure(sendErr)
+		return s.failPending(ctx, in.PlatformID, row.ID, sendErr, sendStarted)
 	}
 	sendContext, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	result, se := s.sender.Send(sendContext, SendInput{Region: c.Region, Endpoint: stringValue(c.Endpoint), SecretID: mustDecrypt(s.keys, c.SecretIDCiphertext), SecretKey: mustDecrypt(s.keys, c.SecretKeyCiphertext), FromEmail: c.FromEmail, FromName: c.FromName, ReplyTo: stringValue(c.ReplyTo), ToEmail: email, Subject: tpl.Subject, TemplateID: fixed.TencentTemplateID, TemplateData: in.Variables})
+	result, se := s.sender.Send(sendContext, SendInput{Region: c.Region, Endpoint: stringValue(c.Endpoint), SecretID: mustDecrypt(s.keys, c.SecretIDCiphertext), SecretKey: mustDecrypt(s.keys, c.SecretKeyCiphertext), FromEmail: c.FromEmail, FromName: c.FromName, ReplyTo: stringValue(c.ReplyTo), ToEmail: email, Subject: tpl.Subject, TemplateID: fixed.TencentTemplateID, TemplateData: variables})
 	if se != nil {
-		_ = s.repository.MarkFailed(ctx, in.PlatformID, row.ID, providerError(se))
-		return SendResult{LogID: row.ID, Status: StatusFailed}, providerFailure(se)
+		return s.failPending(ctx, in.PlatformID, row.ID, se, sendStarted)
 	}
-	_ = s.repository.MarkSent(ctx, in.PlatformID, row.ID, result)
+	if me := s.repository.MarkSent(ctx, in.PlatformID, row.ID, result, time.Since(sendStarted).Milliseconds()); me != nil {
+		return SendResult{LogID: row.ID, Status: StatusPending, RequestID: result.RequestID, MessageID: result.MessageID}, dependency(fmt.Errorf("persist sent mail status: %w", me))
+	}
 	return SendResult{LogID: row.ID, Status: StatusSent, RequestID: result.RequestID, MessageID: result.MessageID}, nil
+}
+
+func sendResultFromLog(log Log) SendResult {
+	return SendResult{LogID: log.ID, Status: log.Status, RequestID: log.RequestID, MessageID: log.MessageID}
+}
+
+func (s *Service) failPending(ctx context.Context, platformID, logID int64, cause error, started time.Time) (SendResult, error) {
+	if me := s.repository.MarkFailed(ctx, platformID, logID, providerError(cause), time.Since(started).Milliseconds()); me != nil {
+		return SendResult{LogID: logID, Status: StatusPending}, dependency(fmt.Errorf("persist failed mail status: %w", me))
+	}
+	if _, ok := cause.(*ProviderError); ok {
+		return SendResult{LogID: logID, Status: StatusFailed}, providerFailure(cause)
+	}
+	return SendResult{LogID: logID, Status: StatusFailed}, dependency(cause)
 }
 func (s *Service) Test(ctx context.Context, in AdminTestInput) (AdminTestResult, error) {
 	return s.TestForPlatform(ctx, 1, in)
@@ -288,7 +336,25 @@ func (s *Service) TestForPlatform(ctx context.Context, platformID int64, in Admi
 		return AdminTestResult{}, rateLimited(ErrRateLimited)
 	}
 	r, e := s.send(ctx, BusinessSendInput{PlatformID: platformID, UserID: &in.AdminUserID, ClientIP: in.ClientIP, Scene: in.Scene, ToEmail: in.ToEmail, Variables: in.Variables}, SendModeAdminTest)
+	if recordErr := s.repository.RecordTestResult(ctx, platformID, time.Now().UTC(), errorSummary(e)); recordErr != nil && e == nil {
+		e = dependency(fmt.Errorf("persist mail test result: %w", recordErr))
+	}
 	return AdminTestResult{LogID: r.LogID, Status: r.Status, RequestID: r.RequestID, MessageID: r.MessageID}, e
+}
+
+func errorSummary(err error) string {
+	if err == nil {
+		return ""
+	}
+	var providerErr *ProviderError
+	value := err.Error()
+	if errors.As(err, &providerErr) {
+		value = providerErr.Summary
+	}
+	if len(value) > 512 {
+		return value[:512]
+	}
+	return value
 }
 func fixedTemplate(scene string) (FixedTemplate, bool) {
 	for _, v := range FixedTemplates() {
@@ -313,7 +379,11 @@ func (s *Service) allow(ctx context.Context, key string, limit int, window time.
 	return e == nil && ok
 }
 func (s *Service) ListLogs(ctx context.Context, p int64, page, size int) ([]Log, int64, error) {
-	return s.repository.ListLogs(ctx, p, page, size)
+	rows, total, err := s.repository.ListLogs(ctx, p, page, size)
+	if err != nil {
+		return nil, 0, wrapRepo(err)
+	}
+	return rows, total, nil
 }
 
 type LogDetail struct {
@@ -325,7 +395,7 @@ type LogDetail struct {
 func (s *Service) GetLogDetail(ctx context.Context, p, id int64) (LogDetail, error) {
 	log, verification, err := s.repository.GetLogDetail(ctx, p, id)
 	if err != nil {
-		return LogDetail{}, err
+		return LogDetail{}, wrapRepo(err)
 	}
 	result := LogDetail{Log: log}
 	if verification.ID == 0 {
@@ -342,13 +412,17 @@ func (s *Service) GetLogDetail(ctx context.Context, p, id int64) (LogDetail, err
 	return result, nil
 }
 func (s *Service) DeleteLog(ctx context.Context, p, id int64) error {
-	return s.repository.DeleteLog(ctx, p, id)
+	return wrapRepo(s.repository.DeleteLog(ctx, p, id))
 }
 func (s *Service) DeleteLogs(ctx context.Context, p int64, ids []int64) error {
-	return s.repository.DeleteLogs(ctx, p, ids)
+	return wrapRepo(s.repository.DeleteLogs(ctx, p, ids))
 }
 func (s *Service) ListRules(ctx context.Context, p int64) ([]RecipientRule, error) {
-	return s.repository.ListRules(ctx, p)
+	rows, err := s.repository.ListRules(ctx, p)
+	if err != nil {
+		return nil, wrapRepo(err)
+	}
+	return rows, nil
 }
 func (s *Service) CreateRule(ctx context.Context, p int64, in RuleInput) (int64, error) {
 	if in.Action != RuleActionAllow && in.Action != RuleActionDeny || !yesno.IsValid(in.IsEnabled) || strings.TrimSpace(in.Name) == "" {
@@ -360,7 +434,7 @@ func (s *Service) CreateRule(ctx context.Context, p int64, in RuleInput) (int64,
 	}
 	r := &RecipientRule{PlatformID: p, Scope: in.Scope, Pattern: pattern, Action: in.Action, Name: in.Name, Remark: in.Remark, IsEnabled: in.IsEnabled, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	if e = s.repository.CreateRule(ctx, r); e != nil {
-		return 0, dependency(e)
+		return 0, wrapRepo(e)
 	}
 	return r.ID, nil
 }
@@ -372,7 +446,28 @@ func (s *Service) UpdateRule(ctx context.Context, p, id int64, in RuleInput) err
 	if e != nil {
 		return invalid(e)
 	}
-	return wrapRepo(s.repository.UpdateRule(ctx, p, id, map[string]any{"scope": in.Scope, "pattern": pattern, "action": in.Action, "name": in.Name, "remark": in.Remark, "updated_at": time.Now().UTC()}))
+	return wrapRepo(s.repository.UpdateRule(ctx, p, id, map[string]any{"scope": in.Scope, "pattern": pattern, "action": in.Action, "name": in.Name, "remark": in.Remark, "is_enabled": in.IsEnabled, "updated_at": time.Now().UTC()}))
+}
+
+func validateMailVariables(values map[string]string, requireValues bool) error {
+	if len(values) != 2 {
+		return fmt.Errorf("mail variables must contain code and ttl_minutes")
+	}
+	for _, key := range []string{"code", "ttl_minutes"} {
+		value, ok := values[key]
+		if !ok || (requireValues && strings.TrimSpace(value) == "") {
+			return fmt.Errorf("mail variable %s is required", key)
+		}
+	}
+	ttl, err := strconv.Atoi(strings.TrimSpace(values["ttl_minutes"]))
+	if err != nil || ttl < 1 || ttl > 60 {
+		return fmt.Errorf("mail variable ttl_minutes is invalid")
+	}
+	return nil
+}
+
+func normalizeMailConfigEmail(value string) (string, error) {
+	return NormalizeRecipient(value)
 }
 func (s *Service) SetRuleStatus(ctx context.Context, p, id int64, v yesno.Value) error {
 	if !yesno.IsValid(v) {

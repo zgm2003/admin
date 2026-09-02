@@ -49,3 +49,31 @@ func TestTemplateUpdateValuesPersistVariableMaps(t *testing.T) {
 		t.Fatalf("variable values were not serialized: %#v", values)
 	}
 }
+
+func TestMailVariableValidationRequiresFixedKeys(t *testing.T) {
+	valid := map[string]string{"code": "123456", "ttl_minutes": "10"}
+	if err := validateMailVariables(valid, true); err != nil {
+		t.Fatalf("valid variables rejected: %v", err)
+	}
+	for name, value := range map[string]map[string]string{
+		"missing code": {"ttl_minutes": "10"},
+		"missing ttl":  {"code": "123456"},
+		"unknown key":  {"code": "123456", "ttl_minutes": "10", "extra": "x"},
+		"empty code":   {"code": "", "ttl_minutes": "10"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateMailVariables(value, true); err == nil {
+				t.Fatal("invalid variables accepted")
+			}
+		})
+	}
+}
+
+func TestMailConfigEmailRejectsDisplayName(t *testing.T) {
+	if _, err := normalizeMailConfigEmail("Admin <admin@example.com>"); err == nil {
+		t.Fatal("display-name sender accepted")
+	}
+	if got, err := normalizeMailConfigEmail(" Admin@Example.COM "); err != nil || got != "admin@example.com" {
+		t.Fatalf("plain sender normalization = %q,%v", got, err)
+	}
+}

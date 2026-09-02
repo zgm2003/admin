@@ -117,14 +117,14 @@ func (r *Repository) CreatePendingLog(ctx context.Context, v *Log) (Log, error) 
 	e := r.db.WithContext(ctx).Create(v).Error
 	return *v, e
 }
-func (r *Repository) FindSentChallenge(ctx context.Context, platformID int64, challenge string) (Log, error) {
+func (r *Repository) FindActiveChallenge(ctx context.Context, platformID int64, challenge string) (Log, error) {
 	var v Log
-	e := r.db.WithContext(ctx).Where("platform_id = ? AND challenge_id = ? AND status = ? AND deleted_at IS NULL", platformID, challenge, StatusSent).Take(&v).Error
+	e := r.db.WithContext(ctx).Where("platform_id = ? AND challenge_id = ? AND deleted_at IS NULL", platformID, challenge).Take(&v).Error
 	return v, e
 }
-func (r *Repository) MarkSent(ctx context.Context, platformID, id int64, result ProviderSendResult) error {
+func (r *Repository) MarkSent(ctx context.Context, platformID, id int64, result ProviderSendResult, latencyMs int64) error {
 	now := time.Now().UTC()
-	q := r.db.WithContext(ctx).Model(&Log{}).Where("id = ? AND platform_id = ? AND status = ? AND deleted_at IS NULL", id, platformID, StatusPending).Updates(map[string]any{"status": StatusSent, "request_id": result.RequestID, "message_id": result.MessageID, "sent_at": now, "updated_at": now})
+	q := r.db.WithContext(ctx).Model(&Log{}).Where("id = ? AND platform_id = ? AND status = ? AND deleted_at IS NULL", id, platformID, StatusPending).Updates(map[string]any{"status": StatusSent, "request_id": result.RequestID, "message_id": result.MessageID, "latency_ms": latencyMs, "sent_at": now, "updated_at": now})
 	if q.Error != nil {
 		return q.Error
 	}
@@ -133,8 +133,18 @@ func (r *Repository) MarkSent(ctx context.Context, platformID, id int64, result 
 	}
 	return nil
 }
-func (r *Repository) MarkFailed(ctx context.Context, platformID, id int64, pe *ProviderError) error {
-	q := r.db.WithContext(ctx).Model(&Log{}).Where("id = ? AND platform_id = ? AND status = ? AND deleted_at IS NULL", id, platformID, StatusPending).Updates(map[string]any{"status": StatusFailed, "error_code": pe.Code, "error_summary": pe.Summary, "updated_at": time.Now().UTC()})
+func (r *Repository) MarkFailed(ctx context.Context, platformID, id int64, pe *ProviderError, latencyMs int64) error {
+	q := r.db.WithContext(ctx).Model(&Log{}).Where("id = ? AND platform_id = ? AND status = ? AND deleted_at IS NULL", id, platformID, StatusPending).Updates(map[string]any{"status": StatusFailed, "error_code": pe.Code, "error_summary": pe.Summary, "latency_ms": latencyMs, "updated_at": time.Now().UTC()})
+	if q.Error != nil {
+		return q.Error
+	}
+	if q.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+func (r *Repository) RecordTestResult(ctx context.Context, platformID int64, at time.Time, summary string) error {
+	q := r.db.WithContext(ctx).Model(&Config{}).Where("platform_id = ? AND deleted_at IS NULL", platformID).Updates(map[string]any{"last_test_at": at, "last_test_error": summary, "updated_at": at})
 	if q.Error != nil {
 		return q.Error
 	}
@@ -222,9 +232,13 @@ func wrapRepo(err error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return notFound(err)
 	}
-	var postgresError *pgconn.PgError
-	if errors.As(err, &postgresError) && postgresError.Code == "23505" {
+	if isUniqueViolation(err) {
 		return conflict(err)
 	}
 	return dependency(fmt.Errorf("mail repository: %w", err))
+}
+
+func isUniqueViolation(err error) bool {
+	var postgresError *pgconn.PgError
+	return errors.As(err, &postgresError) && postgresError.Code == "23505"
 }

@@ -40,6 +40,13 @@ describe('mail service page', () => {
     expect(passwords.every((input) => (input.element as HTMLInputElement).value === '')).toBe(true)
   })
 
+  it('hides all mail data tabs without list permission', async () => {
+    const wrapper = mountPage(['system:mail:view'])
+    await flushPromises()
+    expect(wrapper.findAll('[role="tab"]')).toHaveLength(0)
+    expect(mailApi.getMailConfig).not.toHaveBeenCalled()
+  })
+
   it('renders controls only for granted action permissions', async () => {
     const wrapper = mountPage(['system:mail:list', 'system:mail:detail', 'system:mail:template:update', 'system:mail:log:delete', 'system:mail:rule:create'])
     await flushPromises()

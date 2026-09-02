@@ -39,6 +39,9 @@ func (c *Client) Send(ctx context.Context, input systemmail.SendInput) (systemma
 	if err != nil {
 		return systemmail.ProviderSendResult{}, systemmail.NewProviderError("client_init", err.Error())
 	}
+	if c.httpClient != nil && c.httpClient.Transport != nil {
+		client.WithHttpTransport(c.httpClient.Transport)
+	}
 	req := ses.NewSendEmailRequest()
 	req.Template = &ses.Template{TemplateID: common.Uint64Ptr(uint64(input.TemplateID)), TemplateData: common.StringPtr(string(data))}
 	req.Destination = []*string{common.StringPtr(input.ToEmail)}

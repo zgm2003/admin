@@ -36,11 +36,12 @@ const logPage = ref(1)
 const logPageSize = ref(20)
 const logTotal = ref(0)
 const can = (code: string) => access.hasPermission(code)
+const canList = computed(() => can('system:mail:list'))
 const visibleTabs = computed(() => [
-  { name: 'config' as const, label: t('mail.configTab') },
-  { name: 'templates' as const, label: t('mail.templatesTab') },
-  ...(can('system:mail:detail') ? [{ name: 'logs' as const, label: t('mail.logsTab') }] : []),
-  { name: 'rules' as const, label: t('mail.rulesTab') },
+  ...(canList.value ? [{ name: 'config' as const, label: t('mail.configTab') }] : []),
+  ...(canList.value ? [{ name: 'templates' as const, label: t('mail.templatesTab') }] : []),
+  ...(canList.value && can('system:mail:detail') ? [{ name: 'logs' as const, label: t('mail.logsTab') }] : []),
+  ...(canList.value ? [{ name: 'rules' as const, label: t('mail.rulesTab') }] : []),
 ])
 
 function errorMessage(error: unknown): string {
@@ -69,6 +70,7 @@ async function loadLogs(): Promise<void> {
 }
 
 async function loadActive(): Promise<void> {
+  if (!canList.value) return
   loading.value = true
   loadError.value = ''
   try {
@@ -83,8 +85,9 @@ async function loadActive(): Promise<void> {
   }
 }
 
-function changeLogPage(page: number): void {
-  logPage.value = page
+function changeLogPage(next: { currentPage: number; pageSize: number }): void {
+  logPage.value = next.currentPage
+  logPageSize.value = next.pageSize
   void loadLogs()
 }
 

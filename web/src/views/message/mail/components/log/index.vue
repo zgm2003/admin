@@ -16,7 +16,7 @@ const props = defineProps<{
   canDelete: boolean
 }>()
 
-const emit = defineEmits<{ refresh: []; pageChange: [value: number] }>()
+const emit = defineEmits<{ refresh: []; pageChange: [value: TablePaginationState] }>()
 const { t } = useI18n()
 const selected = ref<MailLog[]>([])
 const detail = ref<MailLogDetail | null>(null)
@@ -71,7 +71,7 @@ async function removeSelected(): Promise<void> {
       :refresh-label="t('mail.refresh')"
       @refresh="emit('refresh')"
       @selection-change="select"
-      @update:pagination="(next: TablePaginationState) => emit('pageChange', next.currentPage)"
+      @update:pagination="(next: TablePaginationState) => emit('pageChange', next)"
     >
       <template #toolbar-left>
         <div class="table-summary">
