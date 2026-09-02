@@ -829,16 +829,77 @@ onMounted(() => loadMenus())
         label-width="96px"
         @submit.prevent="submitForm"
       >
-        <el-row :gutter="24" class="menu-form__grid">
-          <el-col v-if="dialogMode === 'edit'" :span="24">
-            <el-form-item :label="t('menu.form.platform')">
-              <div data-testid="menu-form-platform" class="menu-form__readonly">
-                <span>{{ activePlatform?.name }}</span>
-                <code>{{ activePlatform?.code }}</code>
-              </div>
-            </el-form-item>
-          </el-col>
+        <el-form-item v-if="dialogMode === 'edit'" :label="t('menu.form.platform')">
+          <div data-testid="menu-form-platform" class="menu-form__readonly">
+            <span>{{ activePlatform?.name }}</span>
+            <code>{{ activePlatform?.code }}</code>
+          </div>
+        </el-form-item>
 
+        <el-form-item :label="t('menu.form.code')">
+          <div class="menu-form__control">
+            <el-input
+              v-model="form.code"
+              data-testid="menu-form-code"
+              :readonly="dialogMode === 'edit'"
+              :disabled="editingProtected"
+              :title="editingProtected ? t('menu.form.protectedHint') : undefined"
+              :placeholder="t('menu.form.codePlaceholder')"
+            />
+            <p class="menu-form__hint">{{ t('menu.form.codeHint') }}</p>
+          </div>
+        </el-form-item>
+
+        <el-form-item :label="t('menu.form.name')">
+          <el-input v-model="form.name" data-testid="menu-form-name" maxlength="128" />
+        </el-form-item>
+
+        <el-form-item :label="t('menu.form.remark')">
+          <el-input
+            v-model="form.remark"
+            data-testid="menu-form-remark"
+            type="textarea"
+            :rows="3"
+            maxlength="512"
+            show-word-limit
+            :placeholder="t('menu.form.remarkPlaceholder')"
+          />
+        </el-form-item>
+
+        <el-form-item v-if="form.menuType !== 'action'" :label="t('menu.form.i18nKey')">
+          <div class="menu-form__control">
+            <el-input v-model="form.i18nKey" data-testid="menu-form-i18n-key" />
+            <p class="menu-form__hint">{{ t('menu.form.i18nKeyHint') }}</p>
+          </div>
+        </el-form-item>
+
+        <el-form-item v-if="form.menuType === 'page'" :label="t('menu.form.path')">
+          <div class="menu-form__control">
+            <el-input
+              v-model="form.path"
+              data-testid="menu-form-path"
+              :disabled="editingProtected"
+              :title="editingProtected ? t('menu.form.protectedHint') : undefined"
+              :placeholder="t('menu.form.pathPlaceholder')"
+            />
+            <p class="menu-form__hint">{{ t('menu.form.pathHint') }}</p>
+          </div>
+        </el-form-item>
+
+        <el-form-item v-if="form.menuType === 'page'" :label="t('menu.form.componentPath')">
+          <div class="menu-form__control">
+            <el-input
+              v-model="form.componentPath"
+              data-testid="menu-form-component-path"
+              :disabled="editingProtected"
+              :title="editingProtected ? t('menu.form.protectedHint') : undefined"
+              :placeholder="t('menu.form.componentPathPlaceholder')"
+            />
+            <p class="menu-form__hint">{{ t('menu.form.componentPathHint') }}</p>
+          </div>
+        </el-form-item>
+
+        <el-row :gutter="24" class="menu-form__grid">
           <el-col :xs="24" :sm="12">
             <el-form-item :label="t('menu.form.parent')">
               <el-select-v2
@@ -863,83 +924,6 @@ onMounted(() => loadMenus())
                 :options="menuTypeOptions"
                 @update:model-value="handleFormTypeChange"
               />
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="24">
-            <el-form-item :label="t('menu.form.code')">
-              <div class="menu-form__control">
-                <el-input
-                  v-model="form.code"
-                  data-testid="menu-form-code"
-                  :readonly="dialogMode === 'edit'"
-                  :disabled="editingProtected"
-                  :title="editingProtected ? t('menu.form.protectedHint') : undefined"
-                  :placeholder="t('menu.form.codePlaceholder')"
-                />
-                <p class="menu-form__hint">{{ t('menu.form.codeHint') }}</p>
-              </div>
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="24">
-            <el-form-item :label="t('menu.form.name')">
-              <el-input v-model="form.name" data-testid="menu-form-name" maxlength="128" />
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="24">
-            <el-form-item :label="t('menu.form.remark')">
-              <el-input
-                v-model="form.remark"
-                data-testid="menu-form-remark"
-                type="textarea"
-                :rows="3"
-                maxlength="512"
-                show-word-limit
-                :placeholder="t('menu.form.remarkPlaceholder')"
-              />
-            </el-form-item>
-          </el-col>
-
-          <el-col v-if="form.menuType !== 'action'" :span="24">
-            <el-form-item :label="t('menu.form.i18nKey')">
-              <div class="menu-form__control">
-                <el-input v-model="form.i18nKey" data-testid="menu-form-i18n-key" />
-                <p class="menu-form__hint">{{ t('menu.form.i18nKeyHint') }}</p>
-              </div>
-            </el-form-item>
-          </el-col>
-
-          <el-col v-if="form.menuType === 'page'" :span="24">
-            <el-form-item v-if="form.menuType === 'page'" :label="t('menu.form.path')">
-              <div class="menu-form__control">
-                <el-input
-                  v-model="form.path"
-                  data-testid="menu-form-path"
-                  :disabled="editingProtected"
-                  :title="editingProtected ? t('menu.form.protectedHint') : undefined"
-                  :placeholder="t('menu.form.pathPlaceholder')"
-                />
-                <p class="menu-form__hint">{{ t('menu.form.pathHint') }}</p>
-              </div>
-            </el-form-item>
-          </el-col>
-
-          <el-col v-if="form.menuType === 'page'" :span="24">
-            <el-form-item v-if="form.menuType === 'page'" :label="t('menu.form.componentPath')">
-              <div class="menu-form__control">
-                <el-input
-                  v-model="form.componentPath"
-                  data-testid="menu-form-component-path"
-                  :disabled="editingProtected"
-                  :title="editingProtected ? t('menu.form.protectedHint') : undefined"
-                  :placeholder="t('menu.form.componentPathPlaceholder')"
-                />
-                <p class="menu-form__hint">
-                  {{ t('menu.form.componentPathHint') }}
-                </p>
-              </div>
             </el-form-item>
           </el-col>
 
