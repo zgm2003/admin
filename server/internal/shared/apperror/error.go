@@ -14,6 +14,7 @@ const (
 	CodeNotFound              = 10004
 	CodeConflict              = 10005
 	CodeDependencyUnavailable = 10006
+	CodeRateLimited           = 10007
 )
 
 type Error struct {
@@ -22,6 +23,10 @@ type Error struct {
 	MessageKey i18n.MessageKey
 	Params     map[string]string
 	Cause      error
+}
+
+func RateLimited(cause error) *Error {
+	return newError(http.StatusTooManyRequests, CodeRateLimited, i18n.KeyRateLimited, nil, cause)
 }
 
 func (e *Error) Error() string {

@@ -13,12 +13,14 @@ const (
 	jwtSigningPurpose        = "admin:auth:jwt-signing:v1"
 	refreshHMACPurpose       = "admin:auth:refresh-token-hmac:v1"
 	storageEncryptionPurpose = "admin:storage:cos-encryption:v1"
+	mailEncryptionPurpose    = "admin:system:mail-encryption:v1"
 )
 
 type KeyRing struct {
 	jwtSigningKey        []byte
 	refreshTokenHMACKey  []byte
 	storageEncryptionKey []byte
+	mailEncryptionKey    []byte
 }
 
 func New(rootSecret string) (*KeyRing, error) {
@@ -38,13 +40,20 @@ func New(rootSecret string) (*KeyRing, error) {
 	if err != nil {
 		return nil, fmt.Errorf("derive storage encryption key: %w", err)
 	}
+	mailEncryptionKey, err := hkdf.Key(sha256.New, []byte(rootSecret), nil, mailEncryptionPurpose, keyLength)
+	if err != nil {
+		return nil, fmt.Errorf("derive mail encryption key: %w", err)
+	}
 
 	return &KeyRing{
 		jwtSigningKey:        jwtSigningKey,
 		refreshTokenHMACKey:  refreshTokenHMACKey,
 		storageEncryptionKey: storageEncryptionKey,
+		mailEncryptionKey:    mailEncryptionKey,
 	}, nil
 }
+
+func (k *KeyRing) MailEncryptionKey() []byte { return append([]byte(nil), k.mailEncryptionKey...) }
 
 func (k *KeyRing) StorageEncryptionKey() []byte {
 	return append([]byte(nil), k.storageEncryptionKey...)

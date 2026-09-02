@@ -18,6 +18,7 @@ const testViews: PageModuleMap = {
 	'../views/permission/roles/index.vue': async () => ({ default: TestView }),
 	'../views/system/operation-logs/index.vue': async () => ({ default: TestView }),
 	'../views/cloud/storage-object/index.vue': async () => ({ default: TestView }),
+	'../views/message/mail/index.vue': async () => ({ default: TestView }),
 }
 
 describe('access route registration', () => {
@@ -77,6 +78,16 @@ describe('access route registration', () => {
 		])], testViews)
 
 		expect(router.resolve('/account/login-logs').name).toBe('access:account:user:loginlog:list')
+		cleanup()
+	})
+
+	it('loads mail service from the message view module', () => {
+		const router = testRouter()
+		const cleanup = registerPermissionRoutes(router, [directory('message', [
+			page('system:mail:view', '/message/mail', 'message/mail'),
+		])], testViews)
+
+		expect(router.resolve('/message/mail').name).toBe('access:system:mail:view')
 		cleanup()
 	})
 

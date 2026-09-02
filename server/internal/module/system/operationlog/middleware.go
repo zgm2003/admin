@@ -228,7 +228,7 @@ func sanitizeValue(field string, value interface{}) interface{} {
 
 func isSensitiveField(field string) bool {
 	normalized := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(field, "-", ""), "_", ""))
-	for _, sensitive := range []string{"password", "confirmpassword", "accesstoken", "refreshtoken", "authorization", "cookie", "secret", "key"} {
+	for _, sensitive := range []string{"password", "confirmpassword", "accesstoken", "refreshtoken", "authorization", "cookie", "secret", "key", "code", "templatevariables", "toemail", "verificationcode", "ciphertext"} {
 		if normalized == sensitive || strings.Contains(normalized, sensitive) {
 			return true
 		}

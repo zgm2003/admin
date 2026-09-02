@@ -113,3 +113,5 @@ func (c *Client) ScanDelete(ctx context.Context, pattern string) error {
 func (c *Client) Close() error {
 	return c.client.Close()
 }
+
+func (c *Client) UniversalClient() goredis.UniversalClient { return c.client }

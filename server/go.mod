@@ -6,11 +6,14 @@ require (
 	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/validator/v10 v10.30.3
+	github.com/go-redis/redis_rate/v10 v10.0.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/hibiken/asynq v0.26.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.22.0
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.563
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/ses v1.0.563
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.75
 	golang.org/x/crypto v0.52.0
 	gorm.io/driver/postgres v1.6.2

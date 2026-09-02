@@ -25,6 +25,7 @@ const (
 	KeyNotFound                     MessageKey = "error.notFound"
 	KeyConflict                     MessageKey = "error.conflict"
 	KeyDependencyUnavailable        MessageKey = "error.dependencyUnavailable"
+	KeyRateLimited                  MessageKey = "error.rateLimited"
 	KeyUsernameConflict             MessageKey = "auth.usernameConflict"
 	KeyEmailConflict                MessageKey = "auth.emailConflict"
 	KeySuperAdminExists             MessageKey = "auth.superAdminExists"
@@ -86,6 +87,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyNotFound:                     "请求的资源不存在",
 		KeyConflict:                     "数据冲突",
 		KeyDependencyUnavailable:        "服务暂未就绪",
+		KeyRateLimited:                  "请求过于频繁",
 		KeyUsernameConflict:             "用户名已存在",
 		KeyEmailConflict:                "邮箱已存在",
 		KeySuperAdminExists:             "超级管理员已存在",
@@ -145,6 +147,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyNotFound:                     "Resource not found",
 		KeyConflict:                     "Data conflict",
 		KeyDependencyUnavailable:        "Service is temporarily unavailable",
+		KeyRateLimited:                  "Too many requests",
 		KeyUsernameConflict:             "Username already exists",
 		KeyEmailConflict:                "Email already exists",
 		KeySuperAdminExists:             "A super administrator already exists",

@@ -25,6 +25,7 @@ import (
 	"admin/server/internal/module/permission/state"
 	"admin/server/internal/module/storage/cosconfig"
 	"admin/server/internal/module/storage/uploadrule"
+	systemmail "admin/server/internal/module/system/mail"
 	"admin/server/internal/module/system/operationlog"
 	account "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/loginlog"
@@ -35,6 +36,7 @@ import (
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/i18n"
 	storagecos "admin/server/internal/storage/cos"
+	storagemail "admin/server/internal/storage/mail"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -56,6 +58,7 @@ type routerDependencies struct {
 	UploadRule        *uploadrule.Handler
 	OperationLog      *operationlog.Handler
 	LoginLog          *loginlog.Handler
+	Mail              *systemmail.Handler
 	OperationEnqueuer operationlog.Enqueuer
 	SessionAdmin      *usersession.SessionAdminHandler
 	AuthOrigin        gin.HandlerFunc
@@ -147,6 +150,9 @@ func run(logger *slog.Logger) error {
 	cosConfigService := cosconfig.NewService(cosconfig.NewRepository(postgres.GORM), keys, cosClient)
 	uploadRuleService := uploadrule.NewService(uploadrule.NewRepository(postgres.GORM), keys, cosClient)
 	loginLogService := loginlog.NewService(loginlog.NewRepository(postgres.GORM))
+	mailRepository := systemmail.NewRepository(postgres.GORM)
+	mailLimiter := systemmail.NewRedisLimiter(redisClient.UniversalClient())
+	mailService := systemmail.NewService(mailRepository, keys, storagemail.NewTencentSESClient(nil), systemmail.NewRuleService(mailRepository), mailLimiter)
 	authService.SetLoginLogRecorder(loginLogService)
 	permissionRepository := permission.NewRepository(postgres.GORM)
 	permissionService := permission.NewService(permissionRepository, accessStateStore, permission.NewSnapshotCache(redisClient), permission.NewLocalSnapshotCache(1024), logger)
@@ -176,6 +182,7 @@ func run(logger *slog.Logger) error {
 		UploadRule:        uploadrule.NewHandler(uploadRuleService),
 		OperationLog:      operationlog.NewHandler(operationLogService),
 		LoginLog:          loginlog.NewHandler(loginLogService),
+		Mail:              systemmail.NewHandler(mailService),
 		OperationEnqueuer: operationLogEnqueuer,
 		SessionAdmin: usersession.NewSessionAdminHandler(sessionService, func(context *gin.Context) (usersession.Actor, bool) {
 			identity, ok := auth.IdentityFromContext(context)
@@ -245,6 +252,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	uploadrule.RegisterRoutes(adminRoutes, dependencies.UploadRule, dependencies.Authenticate, dependencies.RequirePermission)
 	uploadrule.RegisterCredentialRoute(sharedRoutes, dependencies.UploadRule, dependencies.Authenticate, dependencies.RequirePermission)
 	loginlog.RegisterRoutes(adminRoutes, dependencies.LoginLog, dependencies.Authenticate, dependencies.RequirePermission)
+	if dependencies.Mail != nil {
+		systemmail.RegisterRoutes(adminRoutes, dependencies.Mail, dependencies.Authenticate, dependencies.RequirePermission)
+	}
 	operationlog.RegisterRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
 	usersession.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
 	return router

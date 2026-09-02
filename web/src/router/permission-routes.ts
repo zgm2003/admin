@@ -37,6 +37,7 @@ const componentPathMap: Readonly<Record<string, string>> = {
 	'access/auth-platforms': 'permission/auth-platforms',
 	'system/operation-logs': 'system/operation-logs',
 	'storage/object': 'cloud/storage-object',
+	'message/mail': 'message/mail',
 }
 
 export function registerPermissionRoutes(

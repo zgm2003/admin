@@ -82,3 +82,18 @@ func TestStorageEncryptionKeyIsStableSeparateAndCopied(t *testing.T) {
 		t.Fatal("StorageEncryptionKey returned internal storage")
 	}
 }
+
+func TestMailEncryptionKeyIsSeparateAndCopied(t *testing.T) {
+	keys, err := New(strings.Repeat("s", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, second := keys.MailEncryptionKey(), keys.MailEncryptionKey()
+	if len(first) != 32 || !bytes.Equal(first, second) || bytes.Equal(first, keys.StorageEncryptionKey()) {
+		t.Fatal("mail key derivation invalid")
+	}
+	first[0] ^= 0xff
+	if bytes.Equal(first, keys.MailEncryptionKey()) {
+		t.Fatal("MailEncryptionKey returned internal storage")
+	}
+}

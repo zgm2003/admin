@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"admin/server/internal/authcontext"
 	projectmiddleware "admin/server/internal/middleware"
 	"admin/server/internal/module/auth/client"
 	user "admin/server/internal/module/user/account"
@@ -57,6 +58,7 @@ func Authenticate(service authenticationService) gin.HandlerFunc {
 			return
 		}
 		context.Set(identityContextKey, identity)
+		authcontext.Set(context, authcontext.Identity{UserID: identity.UserID, SessionID: identity.SessionID, PlatformID: identity.PlatformID, Platform: identity.Platform})
 		projectmiddleware.SetAuthenticationLog(context, identity.PlatformID, identity.Platform, identity.UserID, identity.SessionID)
 		projectmiddleware.SetCacheLog(context, "session", identity.CacheResult, 0)
 		context.Next()

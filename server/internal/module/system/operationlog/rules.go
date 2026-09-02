@@ -43,6 +43,18 @@ var routeRules = []RouteRule{
 	{http.MethodPut, "/api/admin/v1/storage/upload-rules/:id", "storage", "storage.upload-rule.update", true, true},
 	{http.MethodPatch, "/api/admin/v1/storage/upload-rules/:id/status", "storage", "storage.upload-rule.status", true, true},
 	{http.MethodDelete, "/api/admin/v1/storage/upload-rules/:id", "storage", "storage.upload-rule.delete", false, true},
+	{http.MethodPut, "/api/admin/v1/mail/config", "mail", "mail.config.update", true, false},
+	{http.MethodDelete, "/api/admin/v1/mail/config", "mail", "mail.config.delete", false, false},
+	{http.MethodPost, "/api/admin/v1/mail/test", "mail", "mail.test", false, false},
+	{http.MethodPut, "/api/admin/v1/mail/templates/:id", "mail", "mail.template.update", true, false},
+	{http.MethodPatch, "/api/admin/v1/mail/templates/:id/status", "mail", "mail.template.status", true, false},
+	{http.MethodDelete, "/api/admin/v1/mail/logs/:id", "mail", "mail.log.delete", false, false},
+	{http.MethodDelete, "/api/admin/v1/mail/logs", "mail", "mail.log.delete.bulk", false, false},
+	{http.MethodGet, "/api/admin/v1/mail/logs/:id", "mail", "mail.log.detail", false, false},
+	{http.MethodPost, "/api/admin/v1/mail/recipient-rules", "mail", "mail.rule.create", true, false},
+	{http.MethodPut, "/api/admin/v1/mail/recipient-rules/:id", "mail", "mail.rule.update", true, false},
+	{http.MethodPatch, "/api/admin/v1/mail/recipient-rules/:id/status", "mail", "mail.rule.status", true, false},
+	{http.MethodDelete, "/api/admin/v1/mail/recipient-rules/:id", "mail", "mail.rule.delete", false, false},
 }
 
 func FindRule(method, route string) (RouteRule, bool) {
