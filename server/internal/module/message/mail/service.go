@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"admin/server/internal/secretkey"
+	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -347,10 +348,17 @@ func errorSummary(err error) string {
 		return ""
 	}
 	var providerErr *ProviderError
-	value := err.Error()
 	if errors.As(err, &providerErr) {
-		value = providerErr.Summary
+		return truncateErrorSummary(providerErr.Summary)
 	}
+	var appErr *apperror.Error
+	if errors.As(err, &appErr) && appErr.Cause != nil {
+		return truncateErrorSummary(appErr.Cause.Error())
+	}
+	return truncateErrorSummary(err.Error())
+}
+
+func truncateErrorSummary(value string) string {
 	if len(value) > 512 {
 		return value[:512]
 	}

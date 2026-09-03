@@ -101,6 +101,29 @@ describe('mail service page', () => {
     expect(wrapper.text()).toContain('发件人别名')
   })
 
+  it('disables test sending while the mail service is inactive', async () => {
+    vi.mocked(mailApi.getMailConfig).mockResolvedValueOnce({
+      configured: true,
+      region: 'ap-guangzhou',
+      endpoint: '',
+      fromEmail: 'sender@example.com',
+      fromName: 'Admin',
+      replyTo: '',
+      ttlMinutes: 10,
+      isEnabled: YesNo.No,
+      lastTestAt: null,
+      lastTestError: '',
+    })
+    const wrapper = mountPage(['message:mail:list', 'message:mail:test'])
+    await flushPromises()
+
+    const testButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('发送测试'))
+    expect(testButton).toBeDefined()
+    expect(testButton?.attributes('disabled')).toBeDefined()
+  })
+
   it('renders controls only for granted action permissions', async () => {
     const wrapper = mountPage([
       'message:mail:list',

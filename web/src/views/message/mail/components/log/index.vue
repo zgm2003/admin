@@ -34,7 +34,7 @@ const columns = computed<TableColumn<MailLog>[]>(() => [
   { key: 'status', prop: 'status', label: t('mail.status'), width: 110 },
   { key: 'latency', prop: 'latencyMs', label: t('mail.latency'), width: 120 },
   { prop: 'createdAt', label: t('mail.createdAt'), minWidth: 190 },
-  { key: 'actions', prop: 'id', label: t('mail.actions'), width: 150, fixed: 'right' },
+  { key: 'actions', prop: 'id', label: t('mail.actions'), width: 200, fixed: 'right' },
 ])
 const pagination = computed<TablePaginationState>(() => ({
   currentPage: props.page,

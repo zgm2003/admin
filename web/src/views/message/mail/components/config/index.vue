@@ -225,7 +225,11 @@ async function remove(): Promise<void> {
           <el-form-item :label="t('mail.testRecipient')">
             <div class="test-input">
               <el-input v-model="testEmail" />
-              <el-button :loading="testing" @click="sendTest">
+              <el-button
+                :loading="testing"
+                :disabled="!config.configured || config.isEnabled !== YesNo.Yes"
+                @click="sendTest"
+              >
                 <Send :size="16" />
                 {{ t('mail.test') }}
               </el-button>
