@@ -16,7 +16,7 @@ import {
 import type { RoleListItem } from '@/api/permission/role'
 import { YesNo } from '@/enums/yes-no'
 import { appI18n, setLocale } from '@/i18n'
-import { usePermissionStore } from '@/store/permission.ts'
+import { usePermissionStore } from '@/store/permission'
 import RolePermissionMatrix from '@/views/permission/roles/components/RolePermissionMatrix/index.vue'
 import RoleManagement from '@/views/permission/roles/index.vue'
 

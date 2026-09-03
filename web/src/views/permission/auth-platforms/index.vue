@@ -11,20 +11,32 @@ import {
   updateAuthPlatform,
   updateAuthPlatformStatus,
 } from '@/api/auth/platform'
-import type {
-  AuthPlatformListItem,
-  AuthPlatformListQuery,
-  CreateAuthPlatformInput,
-  UpdateAuthPlatformInput,
-} from '@/api/auth/platform'
+import type { AuthPlatformListItem, AuthPlatformListQuery } from '@/api/auth/platform'
 import { YesNo } from '@/enums/yes-no'
 import { usePermissionStore } from '@/store/permission'
 import { AppTable } from '@/components/AppTable'
-import type { TableColumn, TablePaginationState } from '@/components/AppTable'
+import type { TablePaginationState } from '@/components/AppTable'
 import { AppSearch } from '@/components/AppSearch'
-import type { SearchField, SearchFormModel } from '@/components/AppSearch'
+import type { SearchFormModel } from '@/components/AppSearch'
 import AuthPlatformDialog from './components/AuthPlatformDialog/index.vue'
 import type { AuthPlatformForm } from './components/AuthPlatformDialog/types'
+import {
+  authPlatformDefaultTTL,
+  authPlatformSecurityChanged,
+  createAuthPlatformForm,
+  createAuthPlatformInput,
+  editAuthPlatformForm,
+  isAuthPlatformFormValid,
+  updateAuthPlatformInput,
+} from './auth-platform-form'
+import {
+  authPlatformSearchFields,
+  authPlatformSessionLabel,
+  authPlatformTableColumns,
+  authPlatformTTLLabel,
+  formatAuthPlatformDate,
+  formatAuthPlatformTime,
+} from './auth-platform-view'
 
 const { t, locale } = useI18n()
 const access = usePermissionStore()
@@ -44,29 +56,7 @@ const searchModel = computed<SearchFormModel>({
     statusFilter.value = value.status === YesNo.Yes || value.status === YesNo.No ? value.status : ''
   },
 })
-const searchFields = computed<SearchField[]>(() => [
-  {
-    key: 'keyword',
-    type: 'input',
-    label: t('authPlatform.keyword'),
-    placeholder: t('authPlatform.keyword'),
-    width: 260,
-    testId: 'auth-platform-keyword',
-  },
-  {
-    key: 'status',
-    type: 'select-v2',
-    label: t('authPlatform.status.all'),
-    placeholder: t('authPlatform.status.all'),
-    options: [
-      { label: t('authPlatform.status.all'), value: '' },
-      { label: t('authPlatform.status.enabled'), value: YesNo.Yes },
-      { label: t('authPlatform.status.disabled'), value: YesNo.No },
-    ],
-    width: 160,
-    testId: 'auth-platform-status-filter',
-  },
-])
+const searchFields = computed(() => authPlatformSearchFields(t))
 
 const dialogVisible = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
@@ -78,67 +68,8 @@ const tablePagination = computed<TablePaginationState>(() => ({
   pageSize: query.value.pageSize,
   total: total.value,
 }))
-const tableColumns = computed<TableColumn<AuthPlatformListItem>[]>(() => [
-  {
-    key: 'platform',
-    prop: 'id',
-    label: t('authPlatform.column.platform'),
-    minWidth: 160,
-  },
-  {
-    key: 'tokenTTL',
-    prop: 'id',
-    label: t('authPlatform.column.tokenTTL'),
-    minWidth: 175,
-  },
-  {
-    key: 'cacheTTL',
-    prop: 'id',
-    label: t('authPlatform.column.cacheTTL'),
-    minWidth: 175,
-  },
-  {
-    key: 'security',
-    prop: 'id',
-    label: t('authPlatform.column.security'),
-    minWidth: 165,
-  },
-  {
-    key: 'sessions',
-    prop: 'id',
-    label: t('authPlatform.column.sessions'),
-    width: 110,
-  },
-  {
-    key: 'registration',
-    prop: 'id',
-    label: t('authPlatform.column.registration'),
-    width: 105,
-  },
-  {
-    key: 'status',
-    prop: 'id',
-    label: t('authPlatform.column.status'),
-    width: 90,
-  },
-  { prop: 'updatedAt', label: t('authPlatform.column.updatedAt'), width: 140 },
-  {
-    key: 'actions',
-    prop: 'id',
-    label: t('authPlatform.column.actions'),
-    width: 190,
-    fixed: 'right',
-  },
-])
-
-const defaultTTL = Object.freeze({
-  accessTTLSeconds: 900,
-  refreshTTLSeconds: 86_400,
-  sessionCacheTTLSeconds: 7_200,
-  accessCacheTTLSeconds: 600,
-})
-
-const form = reactive<AuthPlatformForm>(defaultForm())
+const tableColumns = computed(() => authPlatformTableColumns(t))
+const form = reactive<AuthPlatformForm>(createAuthPlatformForm())
 
 const canList = computed(() => access.hasPermission('auth:platform:list'))
 const canCreate = computed(() => access.hasPermission('auth:platform:create'))
@@ -152,19 +83,7 @@ const isBuiltinAdminEdit = computed(() => {
     dialogMode.value === 'edit' && platform?.code === 'admin' && platform.isBuiltin === YesNo.Yes
   )
 })
-const formValid = computed(() => {
-  const codeValid = dialogMode.value === 'edit' || /^[a-z][a-z0-9_]{1,48}$/.test(form.code.trim())
-  return (
-    codeValid &&
-    form.name.trim() !== '' &&
-    form.name.trim().length <= 64 &&
-    inRange(form.accessTTLSeconds, 60, 2_592_000) &&
-    inRange(form.refreshTTLSeconds, 60, 31_536_000) &&
-    inRange(form.sessionCacheTTLSeconds, 60, 86_400) &&
-    inRange(form.accessCacheTTLSeconds, 60, 86_400) &&
-    inRange(form.maxSessions, 0, 100)
-  )
-})
+const formValid = computed(() => isAuthPlatformFormValid(form, isEditing.value))
 
 async function loadPage(): Promise<void> {
   if (!canList.value) return
@@ -224,7 +143,7 @@ function updateTablePagination(next: TablePaginationState): void {
 function openCreate(): void {
   dialogMode.value = 'create'
   editingPlatform.value = null
-  Object.assign(form, defaultForm())
+  Object.assign(form, createAuthPlatformForm())
   mutationError.value = ''
   dialogVisible.value = true
 }
@@ -232,22 +151,7 @@ function openCreate(): void {
 function openEdit(platform: AuthPlatformListItem): void {
   dialogMode.value = 'edit'
   editingPlatform.value = platform
-  Object.assign(form, {
-    code: platform.code,
-    name: platform.name,
-    accessTTLSeconds: platform.accessTTLSeconds,
-    refreshTTLSeconds: platform.refreshTTLSeconds,
-    sessionCacheTTLSeconds: platform.sessionCacheTTLSeconds,
-    accessCacheTTLSeconds: platform.accessCacheTTLSeconds,
-    bindDevice: platform.bindDevice,
-    bindIP: platform.bindIP,
-    maxSessions: platform.maxSessions,
-    allowRegister:
-      platform.code === 'admin' && platform.isBuiltin === YesNo.Yes
-        ? YesNo.No
-        : platform.allowRegister,
-    isEnabled: platform.isEnabled,
-  })
+  Object.assign(form, editAuthPlatformForm(platform))
   mutationError.value = ''
   dialogVisible.value = true
 }
@@ -262,7 +166,7 @@ async function submit(): Promise<void> {
     )
       return
     if (
-      securityChanged(editingPlatform.value) &&
+      authPlatformSecurityChanged(form, editingPlatform.value) &&
       !(await confirmAction('authPlatform.confirm.security'))
     )
       return
@@ -271,10 +175,13 @@ async function submit(): Promise<void> {
   mutationError.value = ''
   try {
     if (dialogMode.value === 'create') {
-      await createAuthPlatform(createInput())
+      await createAuthPlatform(createAuthPlatformInput(form))
       query.value = { ...query.value, page: 1 }
     } else if (editingPlatform.value !== null) {
-      await updateAuthPlatform(editingPlatform.value.id, updateInput())
+      await updateAuthPlatform(
+        editingPlatform.value.id,
+        updateAuthPlatformInput(form, isBuiltinAdminEdit.value),
+      )
     }
     await loadPage()
     dialogVisible.value = false
@@ -336,98 +243,24 @@ async function confirmAction(
   }
 }
 
-function securityChanged(platform: AuthPlatformListItem): boolean {
-  return (
-    form.bindDevice !== platform.bindDevice ||
-    form.bindIP !== platform.bindIP ||
-    form.accessTTLSeconds !== platform.accessTTLSeconds ||
-    form.refreshTTLSeconds !== platform.refreshTTLSeconds
-  )
-}
-
-function createInput(): CreateAuthPlatformInput {
-  return {
-    code: form.code.trim(),
-    name: form.name.trim(),
-    accessTTLSeconds: form.accessTTLSeconds,
-    refreshTTLSeconds: form.refreshTTLSeconds,
-    sessionCacheTTLSeconds: form.sessionCacheTTLSeconds,
-    accessCacheTTLSeconds: form.accessCacheTTLSeconds,
-    bindDevice: form.bindDevice,
-    bindIP: form.bindIP,
-    maxSessions: form.maxSessions,
-    allowRegister: form.allowRegister,
-    isEnabled: form.isEnabled,
-  }
-}
-
-function updateInput(): UpdateAuthPlatformInput {
-  return {
-    name: form.name.trim(),
-    accessTTLSeconds: form.accessTTLSeconds,
-    refreshTTLSeconds: form.refreshTTLSeconds,
-    sessionCacheTTLSeconds: form.sessionCacheTTLSeconds,
-    accessCacheTTLSeconds: form.accessCacheTTLSeconds,
-    bindDevice: form.bindDevice,
-    bindIP: form.bindIP,
-    maxSessions: form.maxSessions,
-    allowRegister: isBuiltinAdminEdit.value ? YesNo.No : form.allowRegister,
-  }
-}
-
 function sessionLabel(value: number): string {
-  if (value === 0) return t('authPlatform.unlimited')
-  if (value === 1) return t('authPlatform.singleSession')
-  return t('authPlatform.maxSessions', { count: value })
+  return authPlatformSessionLabel(value, t)
 }
 
 function ttlLabel(value: number): string {
-  if (value % 86_400 === 0) return t('authPlatform.readableDays', { count: value / 86_400 })
-  if (value % 3_600 === 0) return t('authPlatform.readableHours', { count: value / 3_600 })
-  if (value % 60 === 0) return t('authPlatform.readableMinutes', { count: value / 60 })
-  return t('authPlatform.seconds', { count: value })
+  return authPlatformTTLLabel(value, t)
 }
 
 function formatUpdatedDate(value: string): string {
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return value
-  return new Intl.DateTimeFormat(locale.value, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(parsed)
+  return formatAuthPlatformDate(value, locale.value)
 }
 
 function formatUpdatedTime(value: string): string {
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return ''
-  return new Intl.DateTimeFormat(locale.value, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).format(parsed)
-}
-
-function defaultForm(): AuthPlatformForm {
-  return {
-    code: '',
-    name: '',
-    ...defaultTTL,
-    bindDevice: YesNo.Yes,
-    bindIP: YesNo.No,
-    maxSessions: 1,
-    allowRegister: YesNo.No,
-    isEnabled: YesNo.Yes,
-  }
+  return formatAuthPlatformTime(value, locale.value)
 }
 
 function restoreDefaultTTL(): void {
-  Object.assign(form, defaultTTL)
-}
-
-function inRange(value: number, minimum: number, maximum: number): boolean {
-  return Number.isInteger(value) && value >= minimum && value <= maximum
+  Object.assign(form, authPlatformDefaultTTL)
 }
 
 function errorMessage(
@@ -631,157 +464,4 @@ onMounted(() => {
   </section>
 </template>
 
-<style scoped>
-.auth-platform-page {
-  min-width: 0;
-}
-.auth-platform-form-help {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  line-height: 1.4;
-}
-.auth-platform-filters {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.auth-platform-filters .el-input {
-  width: 260px;
-}
-.auth-platform-filters .el-select-v2 {
-  width: 150px;
-}
-.auth-platform-identity,
-.auth-platform-policy-stack,
-.auth-platform-updated {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-.auth-platform-identity {
-  align-items: center;
-  gap: 5px;
-  text-align: center;
-}
-.auth-platform-identity--centered {
-  width: 100%;
-}
-.auth-platform-identity__meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.auth-platform-identity code {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-.auth-platform-policy-stack {
-  width: max-content;
-  max-width: 100%;
-  gap: 6px;
-  margin: 0 auto;
-  text-align: left;
-}
-.auth-platform-policy-stack > div {
-  display: grid;
-  grid-template-columns: 68px minmax(0, 1fr);
-  align-items: baseline;
-  gap: 8px;
-}
-.auth-platform-policy-stack span,
-.auth-platform-updated small {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-.auth-platform-policy-stack strong {
-  overflow: hidden;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.auth-platform-tag-list {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.auth-platform-updated {
-  align-items: center;
-  gap: 3px;
-  text-align: center;
-  line-height: 1.25;
-}
-.auth-platform-form {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-.auth-platform-form-scroll {
-  max-height: min(68vh, 620px);
-  overflow-y: auto;
-  padding-right: 8px;
-}
-.auth-platform-form-section {
-  min-width: 0;
-}
-.auth-platform-form-section h3 {
-  margin: 0;
-  color: var(--el-text-color-primary);
-  font-size: 14px;
-  font-weight: 600;
-}
-.auth-platform-form-section__heading {
-  display: flex;
-  min-height: 32px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-.auth-platform-form-section > h3 {
-  margin-bottom: 14px;
-}
-.auth-platform-field-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.auth-platform-field-label--nowrap {
-  white-space: nowrap;
-}
-.auth-platform-field-label svg {
-  width: 15px;
-  height: 15px;
-  color: var(--el-text-color-secondary);
-  cursor: help;
-}
-.auth-platform-form-grid {
-  width: 100%;
-}
-.auth-platform-form-grid--session {
-  margin-top: 12px;
-}
-.auth-platform-form :deep(.el-form-item) {
-  min-width: 0;
-  margin-bottom: 0;
-}
-.auth-platform-form :deep(.el-input-number),
-.auth-platform-number {
-  width: 100%;
-}
-@media (max-width: 760px) {
-  .auth-platform-filters {
-    align-items: stretch;
-    flex-direction: column;
-  }
-  .auth-platform-filters .el-input,
-  .auth-platform-filters .el-select {
-    width: 100%;
-  }
-}
-@media (max-width: 480px) {
-  .auth-platform-policy-grid {
-    --el-row-gutter: 8px;
-  }
-}
-</style>
+<style scoped src="./AuthPlatformPage.css"></style>

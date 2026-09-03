@@ -9,7 +9,7 @@ import { AppDIcon } from '@/components/AppDIcon'
 import { YesNo } from '@/enums/yes-no'
 import { appI18n, setLocale } from '@/i18n'
 import { pinia } from '@/store'
-import { usePermissionStore } from '@/store/permission.ts'
+import { usePermissionStore } from '@/store/permission'
 import PermissionMenuNode from '@/layout/components/PermissionMenuNode/index.vue'
 import AppAside from '@/layout/components/AppAside/index.vue'
 

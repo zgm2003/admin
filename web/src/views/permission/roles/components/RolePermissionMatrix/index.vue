@@ -148,6 +148,7 @@ function toggleGroupCollapse(group: RoleMatrixGroup): void {
       </div>
 
       <div v-if="!isGroupCollapsed(group)" class="role-permission-matrix__table-scroll">
+        <!-- AppTable exception: grouped rows and nested action checkboxes require a specialized permission matrix. -->
         <el-table :data="group.rows" border row-key="pageId" class="role-permission-matrix__table">
           <el-table-column :label="t('role.permission.page')" min-width="300">
             <template #default="{ row }">

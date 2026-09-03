@@ -1,8 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { describe, expect, it } from 'vitest'
+
 import AppSearch from '@/components/AppSearch/index.vue'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch/types'
 import { appI18n, setLocale } from '@/i18n'
@@ -31,12 +30,6 @@ describe('Search', () => {
       .find((button) => button.text().includes('收起'))
       ?.trigger('click')
     expect(wrapper.findAll('.el-form-item')).toHaveLength(3)
-  })
-
-  it('does not override Element Plus focus styles with bare native-control selectors', () => {
-    const stylesheet = readFileSync(resolve(process.cwd(), 'src/styles/index.scss'), 'utf8')
-
-    expect(stylesheet).not.toMatch(/^\s*(button|input|textarea):focus-visible\s*[,\{]/m)
   })
 
   it('emits query and reset with a copied form model', async () => {

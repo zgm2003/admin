@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { appI18n, setLocale } from '@/i18n'
 import AppAside from '@/layout/components/AppAside/index.vue'
-import { usePermissionStore } from '@/store/permission.ts'
+import { usePermissionStore } from '@/store/permission'
 import { requestObjectURL } from '@/api/storage/upload'
 
 vi.mock('@/api/storage/upload', () => ({ requestObjectURL: vi.fn() }))

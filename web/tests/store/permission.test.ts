@@ -5,7 +5,7 @@ import { getPermission } from '@/api/permission/permission'
 import type { PermissionSnapshot } from '@/api/permission/permission'
 import { setLocale } from '@/i18n'
 import { ApiError, ProtocolError } from '@/types/http'
-import { usePermissionStore } from '@/store/permission.ts'
+import { usePermissionStore } from '@/store/permission'
 import { YesNo } from '@/enums/yes-no'
 
 vi.mock('@/api/permission/permission', () => ({ getPermission: vi.fn() }))

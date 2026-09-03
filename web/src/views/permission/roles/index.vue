@@ -7,31 +7,22 @@ import { useI18n } from 'vue-i18n'
 import {
   createRole,
   deleteRole,
-  getRolePermissions,
   getRoles,
   setDefaultRole,
   updateRole,
-  updateRolePermissions,
   updateRoleStatus,
 } from '@/api/permission/role'
-import type { RoleListItem, RoleListQuery, RolePermissionsResponse } from '@/api/permission/role'
+import type { RoleListItem, RoleListQuery } from '@/api/permission/role'
 import { YesNo } from '@/enums/yes-no'
 import { usePermissionStore } from '@/store/permission'
-import { AppDialog } from '@/components/AppDialog'
 import { AppTable } from '@/components/AppTable'
-import type { TableColumn, TablePaginationState } from '@/components/AppTable'
+import type { TablePaginationState } from '@/components/AppTable'
 import { AppSearch } from '@/components/AppSearch'
-import type { SearchField, SearchFormModel } from '@/components/AppSearch'
-import RolePermissionDiffDialog from './components/RolePermissionDiffDialog/index.vue'
-import RolePermissionMatrix from './components/RolePermissionMatrix/index.vue'
-import {
-  buildRolePermissionMatrix,
-  diffMenuIDs,
-  expandDirectMenuIDs,
-  getRoleMatrixMenuIDs,
-  normalizeDirectMenuIDs,
-} from './role-permission-matrix'
-import type { RolePermissionDiff, RoleMatrixPlatform } from './role-permission-matrix'
+import type { SearchFormModel } from '@/components/AppSearch'
+import RoleFormDialog from './components/RoleFormDialog/index.vue'
+import RolePermissionDialog from './components/RolePermissionDialog/index.vue'
+import type { RoleFormState } from './components/types'
+import { formatRoleTime, roleSearchFields, roleTableColumns } from './role-view'
 
 const { t } = useI18n()
 const access = usePermissionStore()
@@ -52,96 +43,24 @@ const searchModel = computed<SearchFormModel>({
     statusFilter.value = value.status === YesNo.Yes || value.status === YesNo.No ? value.status : ''
   },
 })
-const searchFields = computed<SearchField[]>(() => [
-  {
-    key: 'keyword',
-    type: 'input',
-    label: t('role.keyword'),
-    placeholder: t('role.keyword'),
-    width: 260,
-    testId: 'role-keyword',
-  },
-  {
-    key: 'status',
-    type: 'select-v2',
-    label: t('role.status.all'),
-    options: [
-      { label: t('role.status.all'), value: '' },
-      { label: t('role.status.enabled'), value: YesNo.Yes },
-      { label: t('role.status.disabled'), value: YesNo.No },
-    ],
-    width: 160,
-  },
-])
+const searchFields = computed(() => roleSearchFields(t))
 
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
 const editingRole = ref<RoleListItem | null>(null)
 
-interface RoleFormState {
-  code: string
-  name: string
-}
-
 const form = ref<RoleFormState>({ code: '', name: '' })
 
 const permissionDialogVisible = ref(false)
-const permissionLoading = ref(false)
-const permissionSaving = ref(false)
-const permissionError = ref('')
-const permissionData = ref<RolePermissionsResponse | null>(null)
-const permissionTargetID = ref<number | null>(null)
-const originalEffectiveMenuIDs = ref<number[]>([])
-const selectedEffectiveMenuIDs = ref<number[]>([])
-const activePermissionPlatformID = ref<number | null>(null)
-const permissionDiffVisible = ref(false)
-const permissionDiff = ref<RolePermissionDiff>({ added: [], removed: [] })
+const permissionTarget = ref<RoleListItem | null>(null)
 
 const tablePagination = computed<TablePaginationState>(() => ({
   currentPage: query.value.page,
   pageSize: query.value.pageSize,
   total: total.value,
 }))
-const tableColumns = computed<TableColumn<RoleListItem>[]>(() => [
-  { prop: 'name', label: t('role.column.name'), minWidth: 150 },
-  { prop: 'code', label: t('role.column.code'), minWidth: 170 },
-  { key: 'default', prop: 'id', label: t('role.column.default'), width: 100 },
-  { key: 'status', prop: 'id', label: t('role.column.status'), width: 100 },
-  { prop: 'userCount', label: t('role.column.users'), width: 100 },
-  { prop: 'permissionCount', label: t('role.column.permissions'), width: 130 },
-  { prop: 'createdAt', label: t('role.column.createdAt'), minWidth: 190 },
-  { prop: 'updatedAt', label: t('role.column.updatedAt'), minWidth: 190 },
-  { key: 'actions', prop: 'id', label: t('role.column.actions'), width: 360 },
-])
-
-const permissionGroups = computed(() => {
-  return (
-    permissionPlatforms.value.find(
-      (platform) => platform.platformId === activePermissionPlatformID.value,
-    )?.groups ?? []
-  )
-})
-const permissionPlatforms = computed<RoleMatrixPlatform[]>(() => {
-  if (permissionData.value === null) return []
-  return buildRolePermissionMatrix(permissionData.value.platforms)
-})
-const permissionLabelMap = computed(() => {
-  const labels = new Map<number, string>()
-  for (const platform of permissionPlatforms.value) {
-    for (const group of platform.groups) {
-      for (const row of group.rows) {
-        labels.set(row.pageId, `${platform.platformName} · ${row.pageName} · ${row.pageCode}`)
-        for (const action of row.actions) {
-          labels.set(action.id, `${platform.platformName} · ${action.name} · ${action.code}`)
-        }
-      }
-    }
-  }
-  return labels
-})
-const addedPermissionLabels = computed(() => permissionLabels(permissionDiff.value.added))
-const removedPermissionLabels = computed(() => permissionLabels(permissionDiff.value.removed))
+const tableColumns = computed(() => roleTableColumns(t))
 
 const canCreate = computed(() => access.hasPermission('permission:role:create'))
 const canUpdate = computed(() => access.hasPermission('permission:role:update'))
@@ -329,101 +248,13 @@ async function removeRole(role: RoleListItem): Promise<void> {
   }
 }
 
-async function openPermissions(role: { id: number }): Promise<void> {
-  permissionTargetID.value = role.id
+function openPermissions(role: RoleListItem): void {
+  permissionTarget.value = role
   permissionDialogVisible.value = true
-  permissionDiffVisible.value = false
-  permissionLoading.value = true
-  permissionError.value = ''
-  permissionData.value = null
-  permissionDiff.value = { added: [], removed: [] }
-  originalEffectiveMenuIDs.value = []
-  selectedEffectiveMenuIDs.value = []
-
-  try {
-    const data = await getRolePermissions(role.id)
-    const matrixPlatforms = buildRolePermissionMatrix(data.platforms)
-    const allGroups = matrixPlatforms.flatMap((platform) => platform.groups)
-    const effectiveMenuIDs = expandDirectMenuIDs(allGroups, data.menuIds)
-    permissionData.value = data
-    activePermissionPlatformID.value = matrixPlatforms[0]?.platformId ?? null
-    originalEffectiveMenuIDs.value = effectiveMenuIDs
-    selectedEffectiveMenuIDs.value = [...effectiveMenuIDs]
-  } catch (error: unknown) {
-    permissionError.value = errorMessage(error)
-  } finally {
-    permissionLoading.value = false
-  }
 }
 
-function retryPermissions(): void {
-  if (permissionTargetID.value !== null) {
-    void openPermissions({ id: permissionTargetID.value })
-  }
-}
-
-function selectAllPermissions(): void {
-  const currentIDs = new Set(selectedEffectiveMenuIDs.value)
-  for (const menuID of getRoleMatrixMenuIDs(permissionGroups.value)) currentIDs.add(menuID)
-  selectedEffectiveMenuIDs.value = [...currentIDs].sort((left, right) => left - right)
-}
-
-function clearPermissions(): void {
-  const currentIDs = new Set(getRoleMatrixMenuIDs(permissionGroups.value))
-  selectedEffectiveMenuIDs.value = selectedEffectiveMenuIDs.value.filter(
-    (menuID) => !currentIDs.has(menuID),
-  )
-}
-
-function permissionLabels(menuIDs: readonly number[]): string[] {
-  return menuIDs.map((menuID) => {
-    const label = permissionLabelMap.value.get(menuID)
-    if (label === undefined) {
-      throw new Error(`permission menu ${menuID} has no display label`)
-    }
-    return label
-  })
-}
-
-function preparePermissionSave(): void {
-  if (permissionData.value === null || permissionSaving.value) {
-    return
-  }
-
-  permissionError.value = ''
-  const nextDiff = diffMenuIDs(originalEffectiveMenuIDs.value, selectedEffectiveMenuIDs.value)
-  if (nextDiff.added.length === 0 && nextDiff.removed.length === 0) {
-    permissionDialogVisible.value = false
-    return
-  }
-
-  permissionDiff.value = nextDiff
-  permissionDiffVisible.value = true
-}
-
-async function savePermissions(): Promise<void> {
-  if (permissionData.value === null || permissionSaving.value) {
-    return
-  }
-
-  permissionSaving.value = true
-  permissionError.value = ''
-
-  try {
-    const allGroups = permissionPlatforms.value.flatMap((platform) => platform.groups)
-    await updateRolePermissions(permissionData.value.role.id, {
-      menuIds: normalizeDirectMenuIDs(allGroups, selectedEffectiveMenuIDs.value),
-    })
-    if (await loadRoles()) {
-      permissionDiffVisible.value = false
-      permissionDialogVisible.value = false
-      ElNotification.success({ title: t('role.success.authorized') })
-    }
-  } catch (error: unknown) {
-    permissionError.value = errorMessage(error)
-  } finally {
-    permissionSaving.value = false
-  }
+async function handlePermissionsSaved(): Promise<void> {
+  if (await loadRoles()) ElNotification.success({ title: t('role.success.authorized') })
 }
 
 function isSystem(role: RoleListItem): boolean {
@@ -431,11 +262,7 @@ function isSystem(role: RoleListItem): boolean {
 }
 
 function formatTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '-'
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(
-    date,
-  )
+  return formatRoleTime(value)
 }
 
 function editTooltip(role: RoleListItem): string {
@@ -601,205 +428,21 @@ onMounted(() => {
       >
     </AppTable>
 
-    <AppDialog
+    <RoleFormDialog
       v-model="dialogVisible"
-      :title="t(dialogMode === 'create' ? 'role.form.createTitle' : 'role.form.editTitle')"
-      width="520px"
-      append-to-body
-    >
-      <el-alert v-if="mutationError" :title="mutationError" type="error" />
-      <el-form label-position="top">
-        <el-form-item :label="t('role.form.code')">
-          <el-input v-model="form.code" :disabled="dialogMode === 'edit'" />
-        </el-form-item>
-        <el-form-item :label="t('role.form.name')">
-          <el-input v-model="form.name" maxlength="64" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">
-          {{ t('role.form.cancel') }}
-        </el-button>
-        <el-button type="primary" :loading="submitting" :disabled="!formValid" @click="submitForm">
-          {{ t('role.form.submit') }}
-        </el-button>
-      </template>
-    </AppDialog>
-
-    <AppDialog
+      v-model:form="form"
+      :editing="dialogMode === 'edit'"
+      :mutation-error="mutationError"
+      :submitting="submitting"
+      :form-valid="formValid"
+      @save="submitForm"
+    />
+    <RolePermissionDialog
       v-model="permissionDialogVisible"
-      class="role-permission-dialog"
-      width="min(1040px, 94vw)"
-      height="min(62vh, 620px)"
-      append-to-body
-    >
-      <template #header>
-        <strong>
-          {{ t('role.permission.title') }}
-          <template v-if="permissionData">
-            · {{ permissionData.role.name }} ({{ permissionData.role.code }})
-          </template>
-        </strong>
-      </template>
-
-      <div class="permission-scroll">
-        <div v-if="permissionLoading">
-          {{ t('role.permission.loading') }}
-        </div>
-        <template v-else-if="permissionData">
-          <el-alert
-            v-if="permissionError"
-            :title="permissionError"
-            type="error"
-            show-icon
-            closable
-            @close="permissionError = ''"
-          />
-          <el-tabs
-            v-model="activePermissionPlatformID"
-            data-testid="role-permission-platform-tabs"
-            class="role-permission-platform-tabs"
-          >
-            <el-tab-pane
-              v-for="platform in permissionPlatforms"
-              :key="platform.platformId"
-              :name="platform.platformId"
-            >
-              <template #label>
-                <span class="role-permission-platform-tab">
-                  <span>{{ platform.platformName }}</span>
-                  <code>{{ platform.platformCode }}</code>
-                  <el-tag
-                    v-if="platform.platformIsEnabled === YesNo.No"
-                    size="small"
-                    type="info"
-                    effect="plain"
-                  >
-                    {{ t('role.permission.disabled') }}
-                  </el-tag>
-                </span>
-              </template>
-            </el-tab-pane>
-          </el-tabs>
-          <el-space class="permission-toolbar" wrap :size="8">
-            <el-button @click="selectAllPermissions">
-              {{ t('role.permission.selectAll') }}
-            </el-button>
-            <el-button @click="clearPermissions">
-              {{ t('role.permission.clear') }}
-            </el-button>
-          </el-space>
-          <RolePermissionMatrix v-model="selectedEffectiveMenuIDs" :groups="permissionGroups" />
-        </template>
-        <el-alert v-else-if="permissionError" :title="permissionError" type="error" show-icon>
-          <el-button text @click="retryPermissions">
-            {{ t('role.retry') }}
-          </el-button>
-        </el-alert>
-        <div v-else>
-          {{ t('role.permission.empty') }}
-        </div>
-      </div>
-
-      <template #footer>
-        <el-button @click="permissionDialogVisible = false">
-          {{ t('role.form.cancel') }}
-        </el-button>
-        <el-button
-          type="primary"
-          :disabled="permissionData === null || permissionSaving"
-          @click="preparePermissionSave"
-        >
-          {{ t('role.permission.save') }}
-        </el-button>
-      </template>
-    </AppDialog>
-
-    <RolePermissionDiffDialog
-      v-model="permissionDiffVisible"
-      :added-labels="addedPermissionLabels"
-      :removed-labels="removedPermissionLabels"
-      :saving="permissionSaving"
-      :error="permissionError"
-      @confirm="savePermissions"
+      :role="permissionTarget"
+      @saved="handlePermissionsSaved"
     />
   </section>
 </template>
 
-<style scoped>
-.role-page {
-  min-height: 0;
-}
-
-.role-filters {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.role-filters {
-  justify-content: flex-start;
-  flex-wrap: wrap;
-}
-
-.role-filters .el-input {
-  width: 280px;
-}
-
-.role-filters .el-select {
-  width: 160px;
-}
-
-.role-table {
-  width: 100%;
-}
-
-.role-empty {
-  padding: 28px;
-  color: var(--el-text-color-secondary);
-  text-align: center;
-}
-
-.el-pagination {
-  justify-content: flex-end;
-}
-
-.permission-scroll {
-  max-height: min(62vh, 620px);
-  padding-right: 8px;
-  overflow-y: auto;
-}
-
-.permission-toolbar {
-  justify-content: flex-end;
-  margin-bottom: 12px;
-}
-
-.role-permission-platform-tabs {
-  margin-bottom: 8px;
-}
-
-.role-permission-platform-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.role-permission-platform-tab code {
-  color: var(--admin-text-soft);
-  font-family: Consolas, 'SFMono-Regular', monospace;
-  font-size: 12px;
-}
-
-@media (max-width: 720px) {
-  .role-filters .el-input,
-  .role-filters .el-select {
-    width: 100%;
-  }
-
-  .el-pagination {
-    justify-content: flex-start;
-    overflow-x: auto;
-  }
-}
-</style>
+<style scoped src="./RolePage.css"></style>

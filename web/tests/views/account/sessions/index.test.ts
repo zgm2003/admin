@@ -7,7 +7,7 @@ import { nextTick } from 'vue'
 import * as sessionAPI from '@/api/user/session'
 import type { SessionItem } from '@/api/user/session'
 import { appI18n, setLocale } from '@/i18n'
-import { usePermissionStore } from '@/store/permission.ts'
+import { usePermissionStore } from '@/store/permission'
 import SessionManagement from '@/views/account/sessions/index.vue'
 
 vi.mock('@/api/user/session', () => ({

@@ -13,7 +13,7 @@ import {
 import { YesNo } from '@/enums/yes-no'
 import { appI18n } from '@/i18n'
 import { pinia } from '@/store'
-import { usePermissionStore } from '@/store/permission.ts'
+import { usePermissionStore } from '@/store/permission'
 import AuthPlatformsPage from '@/views/permission/auth-platforms/index.vue'
 
 vi.mock('@/api/auth/platform', () => ({

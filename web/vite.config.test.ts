@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import config from '../vite.config'
+import config from './vite.config.ts'
 
 describe('Vite development server', () => {
   it('uses the fixed local port and opens the browser', () => {

@@ -1,0 +1,32 @@
+.role-page {
+  min-height: 0;
+}
+
+.role-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.role-table {
+  width: 100%;
+}
+
+.role-empty {
+  padding: 28px;
+  color: var(--el-text-color-secondary);
+  text-align: center;
+}
+
+.el-pagination {
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .el-pagination {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+}

@@ -8,7 +8,7 @@ import { appI18n } from '@/i18n'
 import { AppDialog } from '@/components/AppDialog'
 import { AppTable } from '@/components/AppTable'
 import { AppSearch } from '@/components/AppSearch'
-import { usePermissionStore } from '@/store/permission.ts'
+import { usePermissionStore } from '@/store/permission'
 import ObjectStorage from '@/views/cloud/storage-object/index.vue'
 import {
   createCosConfig,

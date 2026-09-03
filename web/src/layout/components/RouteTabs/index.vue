@@ -14,19 +14,10 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import type { PermissionMenuNode } from '@/api/permission/permission'
+import { closeAllRouteTabs, closeOtherRouteTabs, closeRouteTab, findMenuPage } from './route-tabs'
+import type { RouteTab, ScrollbarHandle } from './route-tabs'
 
 defineOptions({ name: 'RouteTabs' })
-
-interface RouteTab {
-  path: string
-  i18nKey: string
-  affix: boolean
-}
-
-interface ScrollbarHandle {
-  wrapRef?: HTMLElement
-  setScrollLeft: (value: number) => void
-}
 
 type TabCommand = 'refresh' | 'fullscreen' | 'closeOthers' | 'closeAll'
 
@@ -86,20 +77,6 @@ function getCurrentTab(): RouteTab | null {
   return { path: route.path, i18nKey, affix: matched.meta.affix === true }
 }
 
-function findMenuPage(
-  path: string,
-  roots: readonly PermissionMenuNode[],
-): PermissionMenuNode | null {
-  const stack = [...roots].reverse()
-  while (stack.length > 0) {
-    const node = stack.pop()
-    if (node === undefined) continue
-    if (node.menuType === 'page' && node.path === path) return node
-    if (node.menuType === 'directory') stack.push(...[...node.children].reverse())
-  }
-  return null
-}
-
 function prefersReducedMotion(): boolean {
   return (
     typeof window.matchMedia === 'function' &&
@@ -138,29 +115,25 @@ async function navigateTo(path: string): Promise<void> {
 }
 
 async function closeTab(path: string): Promise<void> {
-  const index = tabs.value.findIndex((tab) => tab.path === path)
-  const tab = tabs.value[index]
-  if (index < 0 || tab === undefined || tab.affix) return
-  const isActive = route.path === path
-  tabs.value.splice(index, 1)
+  const result = closeRouteTab(tabs.value, path, route.path)
+  if (result.tabs.length === tabs.value.length) return
+  tabs.value = result.tabs
   dismissContextMenu()
-  if (!isActive) return
-  const destination =
-    tabs.value[index - 1] ?? tabs.value[index] ?? tabs.value.find((item) => item.affix)
-  await router.push(destination?.path ?? '/dashboard')
+  if (result.nextPath !== undefined) await router.push(result.nextPath)
 }
 
 async function closeOthers(path: string): Promise<void> {
-  const selected = tabs.value.find((tab) => tab.path === path)
-  tabs.value = tabs.value.filter((tab) => tab.affix || tab.path === path)
+  const result = closeOtherRouteTabs(tabs.value, path, route.path)
+  tabs.value = result.tabs
   dismissContextMenu()
-  if (selected !== undefined && route.path !== selected.path) await router.push(selected.path)
+  if (result.nextPath !== undefined) await router.push(result.nextPath)
 }
 
 async function closeAll(): Promise<void> {
-  tabs.value = tabs.value.filter((tab) => tab.affix)
+  const result = closeAllRouteTabs(tabs.value)
+  tabs.value = result.tabs
   dismissContextMenu()
-  await router.push('/dashboard')
+  if (result.nextPath !== undefined) await router.push(result.nextPath)
 }
 
 async function navigateRelative(target: RouteTab | undefined): Promise<void> {
@@ -423,239 +396,4 @@ onBeforeUnmount(() => {
   </div>
 </template>
 
-<style scoped>
-.route-tabs {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  height: 40px;
-  padding: 0 10px 0 8px;
-  gap: 4px;
-  color: var(--el-text-color-regular);
-  background: transparent;
-}
-
-.route-tabs__previous,
-.route-tabs__next,
-.route-tabs__exit-fullscreen,
-.route-tabs__actions {
-  flex: 0 0 auto;
-}
-
-.route-tabs__previous .el-button,
-.route-tabs__next .el-button,
-.route-tabs__exit-fullscreen {
-  width: 30px;
-  height: 30px;
-  margin: 0;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 9px;
-  color: var(--el-text-color-secondary);
-}
-
-.route-tabs__previous .el-button:hover:not(:disabled),
-.route-tabs__next .el-button:hover:not(:disabled),
-.route-tabs__exit-fullscreen:hover,
-.route-tabs__action:hover {
-  color: var(--el-text-color-primary);
-  background: var(--el-fill-color-light);
-  border-color: var(--el-border-color);
-}
-
-.route-tabs__scroll {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 100%;
-  overflow: hidden;
-}
-
-.route-tabs__scrollbar {
-  height: 100%;
-}
-.route-tabs__scrollbar :deep(.el-scrollbar__view) {
-  height: 100%;
-}
-.route-tabs__inner {
-  display: flex;
-  align-items: center;
-  height: 100%;
-}
-.route-tabs__list {
-  display: flex;
-  align-items: center;
-  min-width: max-content;
-  gap: 4px;
-  padding: 0 2px;
-}
-
-.route-tabs__item {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  height: 30px;
-  max-width: 220px;
-  padding: 0 12px;
-  gap: 7px;
-  border: 1px solid transparent;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--el-text-color-secondary);
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
-  transition: all 160ms ease;
-}
-
-.route-tabs__item:hover {
-  color: var(--el-text-color-primary);
-  background: var(--el-fill-color-light);
-  border-color: var(--el-border-color-light);
-}
-.route-tabs__item.active {
-  color: var(--el-text-color-primary);
-  background: var(--el-bg-color);
-  border-color: var(--el-border-color-light);
-}
-.route-tabs__item:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 1px;
-}
-.route-tabs__dot {
-  width: 5px;
-  height: 5px;
-  flex: 0 0 5px;
-  border-radius: 50%;
-  background: var(--el-color-primary);
-}
-.route-tabs__label {
-  max-width: 144px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 13px;
-  font-weight: 500;
-}
-.route-tabs__close {
-  display: grid;
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
-  place-items: center;
-  margin-right: -4px;
-  border-radius: 6px;
-  color: currentColor;
-  opacity: 0;
-  transform: scale(0.88);
-  transition: all 160ms ease;
-}
-.route-tabs__item:hover .route-tabs__close,
-.route-tabs__item.active .route-tabs__close {
-  opacity: 1;
-  transform: scale(1);
-}
-.route-tabs__close:hover {
-  background: var(--el-fill-color);
-}
-
-.route-tabs__action {
-  position: relative;
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 9px;
-  color: var(--el-text-color-secondary);
-  background: var(--el-bg-color);
-  cursor: pointer;
-}
-.route-tabs__actions {
-  position: relative;
-  margin-left: 6px;
-}
-.route-tabs__actions::before {
-  position: absolute;
-  width: 1px;
-  height: 18px;
-  margin-left: -8px;
-  background: var(--el-border-color-light);
-  content: '';
-}
-
-.route-tabs__context-menu {
-  position: fixed;
-  z-index: 3000;
-  min-width: 132px;
-  margin: 0;
-  padding: 8px 0;
-  list-style: none;
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 12px;
-  box-shadow: var(--el-box-shadow-light);
-}
-.route-tabs__context-menu li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 16px;
-  color: var(--el-text-color-primary);
-  font-size: 13px;
-  cursor: pointer;
-}
-.route-tabs__context-menu li:hover {
-  background: var(--el-fill-color-light);
-}
-.route-tabs__context-menu .el-icon {
-  color: var(--el-text-color-regular);
-}
-
-.route-tab-enter-active,
-.route-tab-leave-active,
-.route-tab-move {
-  transition:
-    transform 160ms ease,
-    opacity 120ms ease;
-}
-.route-tab-enter-from,
-.route-tab-leave-to {
-  opacity: 0;
-  transform: translateY(6px) scale(0.96);
-}
-.route-tab-leave-active {
-  position: absolute;
-  pointer-events: none;
-}
-
-@media (max-width: 768px) {
-  .route-tabs {
-    height: 34px;
-    padding-inline: 6px;
-  }
-  .route-tabs__previous .el-button,
-  .route-tabs__next .el-button,
-  .route-tabs__exit-fullscreen,
-  .route-tabs__action {
-    width: 26px;
-    height: 26px;
-    border-radius: 7px;
-  }
-  .route-tabs__list {
-    gap: 3px;
-  }
-  .route-tabs__item {
-    height: 26px;
-    padding: 0 10px;
-    border-radius: 7px;
-  }
-  .route-tabs__label {
-    max-width: 88px;
-    font-size: 12px;
-  }
-  .route-tabs__dot {
-    width: 4px;
-    height: 4px;
-    flex-basis: 4px;
-  }
-}
-</style>
+<style scoped src="./styles.css"></style>

@@ -12,7 +12,7 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   ...eslintPluginVue.configs['flat/essential'],
   {
-    files: ['src/**/*.{ts,vue}', 'tests/**/*.ts', 'scripts/**/*.mjs'],
+    files: ['src/**/*.{ts,vue}', 'tests/**/*.ts', '*.test.ts', 'scripts/**/*.mjs'],
     languageOptions: {
       globals: {
         ...globals.browser,
@@ -44,7 +44,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['tests/**/*.ts', 'scripts/**/*.mjs'],
+    files: ['tests/**/*.ts', '*.test.ts', 'scripts/**/*.mjs'],
     rules: {
       'no-warning-comments': 'off',
     },

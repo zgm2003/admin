@@ -21,11 +21,25 @@ import type {
 import { YesNo } from '@/enums/yes-no'
 import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
-import { AppDialog } from '@/components/AppDialog'
 import { AppTable } from '@/components/AppTable'
-import type { TableColumn, TablePaginationState } from '@/components/AppTable'
+import type { TablePaginationState } from '@/components/AppTable'
 import { AppSearch } from '@/components/AppSearch'
-import type { SearchField, SearchFormModel } from '@/components/AppSearch'
+import type { SearchFormModel } from '@/components/AppSearch'
+import UserEditDialog from './components/UserEditDialog/index.vue'
+import UserRoleDialog from './components/UserRoleDialog/index.vue'
+import type { UserFormState } from './components/types'
+import {
+  hasSuperAdminRole,
+  isPhoneValid,
+  isProtectedTarget,
+  isRoleToggleDisabled,
+  isUsernameValid,
+  normalizedPhone,
+  normalizedUsername,
+  protectedRoleIDs,
+  userSearchFields,
+  userTableColumns,
+} from './user-rules'
 
 const { t } = useI18n()
 const access = usePermissionStore()
@@ -45,10 +59,6 @@ const roleOptionsError = ref('')
 const mutationError = ref('')
 const mutating = ref(false)
 
-interface UserFormState {
-  username: string
-  phone: string
-}
 const editVisible = ref(false)
 const editingUser = ref<UserListItem | null>(null)
 const userForm = ref<UserFormState>({ username: '', phone: '' })
@@ -68,39 +78,19 @@ const tablePagination = computed<TablePaginationState>(() => ({
   pageSize: query.value.pageSize,
   total: total.value,
 }))
-const tableColumns = computed<TableColumn<UserListItem>[]>(() => [
-  { prop: 'id', label: t('user.id'), width: 80 },
-  { prop: 'username', label: t('user.username'), minWidth: 140 },
-  { prop: 'email', label: t('user.email'), minWidth: 210 },
-  { prop: 'phone', label: t('user.phone'), minWidth: 170 },
-  { key: 'roles', prop: 'id', label: t('user.roles'), minWidth: 240 },
-  { key: 'status', prop: 'id', label: t('user.status'), width: 100 },
-  { prop: 'createdAt', label: t('user.createdAt'), minWidth: 190 },
-  { prop: 'updatedAt', label: t('user.updatedAt'), minWidth: 190 },
-  { key: 'actions', prop: 'id', label: t('user.actions'), width: 330 },
-])
+const tableColumns = computed(() => userTableColumns(t))
 
 const canUpdate = computed(() => access.hasPermission('account:user:update'))
 const canStatus = computed(() => access.hasPermission('account:user:status'))
 const canDelete = computed(() => access.hasPermission('account:user:delete'))
 const canRoles = computed(() => access.hasPermission('account:user:roles'))
 const isSuperAdminActor = computed(() => access.roleCodes.includes('super_admin'))
-const normalizedUsername = computed(() => userForm.value.username.trim())
-const normalizedPhone = computed(() => userForm.value.phone.trim())
-const usernameValid = computed(() => {
-  const characters = [...normalizedUsername.value]
-  return (
-    characters.length >= 3 &&
-    characters.length <= 64 &&
-    characters.every((character) => /[\p{L}\p{N}_-]/u.test(character))
-  )
-})
-const phoneValid = computed(() => {
-  const value = normalizedPhone.value
-  return value === '' || ([...value].length <= 32 && !/\p{Cc}/u.test(value))
-})
+const normalizedUsernameValue = computed(() => normalizedUsername(userForm.value.username))
+const normalizedPhoneValue = computed(() => normalizedPhone(userForm.value.phone))
+const usernameValid = computed(() => isUsernameValid(userForm.value.username))
+const phoneValid = computed(() => isPhoneValid(userForm.value.phone))
 const submittedPhone = computed<string | null>(() =>
-  normalizedPhone.value === '' ? null : normalizedPhone.value,
+  normalizedPhoneValue.value === '' ? null : normalizedPhoneValue.value,
 )
 const hasEnabledSelection = computed(() => {
   if (roleData.value === null) return false
@@ -120,40 +110,7 @@ const searchModel = computed<SearchFormModel>({
     roleFilter.value = typeof value.role === 'number' ? value.role : ''
   },
 })
-const searchFields = computed<SearchField[]>(() => [
-  {
-    key: 'keyword',
-    type: 'input',
-    label: t('user.keyword'),
-    placeholder: t('user.keyword'),
-    width: 280,
-    testId: 'user-keyword',
-  },
-  {
-    key: 'status',
-    type: 'select-v2',
-    label: t('user.status'),
-    options: [
-      { label: t('user.status'), value: '' },
-      { label: t('user.enabled'), value: YesNo.Yes },
-      { label: t('user.disabled'), value: YesNo.No },
-    ],
-    width: 190,
-  },
-  {
-    key: 'role',
-    type: 'select-v2',
-    label: t('user.role'),
-    options: [
-      { label: t('user.role'), value: '' },
-      ...roleOptions.value.map((role) => ({
-        label: `${role.name} (${role.code})${role.isEnabled === YesNo.No ? ` · ${t('user.roleDisabled')}` : ''}`,
-        value: role.id,
-      })),
-    ],
-    width: 220,
-  },
-])
+const searchFields = computed(() => userSearchFields(t, roleOptions.value))
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message !== '' ? error.message : t(fallback)
@@ -223,10 +180,10 @@ function isSelf(row: UserListItem): boolean {
   return auth.user?.userId === row.id
 }
 function hasSuperAdmin(row: UserListItem): boolean {
-  return row.roles.some((role) => role.code === 'super_admin')
+  return hasSuperAdminRole(row)
 }
 function targetProtected(row: UserListItem): boolean {
-  return hasSuperAdmin(row) && !isSuperAdminActor.value
+  return isProtectedTarget(row, isSuperAdminActor.value)
 }
 function editDisabled(row: UserListItem): boolean {
   return targetProtected(row)
@@ -265,7 +222,7 @@ async function saveEdit(): Promise<void> {
   editError.value = ''
   try {
     const result = await updateUser(target.id, {
-      username: normalizedUsername.value,
+      username: normalizedUsernameValue.value,
       phone: submittedPhone.value,
     })
     auth.updateProfile(result.id, result.username, result.phone)
@@ -298,28 +255,24 @@ async function openRoles(row: UserListItem): Promise<void> {
     roleLoading.value = false
   }
 }
-function protectedSuperRoleID(): number | null {
-  if (isSuperAdminActor.value || roleData.value === null) return null
-  const role = roleData.value.roles.find((item) => item.code === 'super_admin')
-  return role === undefined ? null : role.id
-}
 function protectedSelectedRoleIDs(): number[] {
-  const protectedID = protectedSuperRoleID()
-  return protectedID !== null && roleData.value?.roleIds.includes(protectedID) ? [protectedID] : []
+  return protectedRoleIDs(roleData.value, isSuperAdminActor.value)
 }
 function selectAllRoles(): void {
   if (roleData.value === null) return
-  const protectedID = protectedSuperRoleID()
+  const protectedIDs = new Set(protectedSelectedRoleIDs())
   selectedRoleIDs.value = [
-    ...roleData.value.roles.filter((role) => role.id !== protectedID).map((role) => role.id),
-    ...protectedSelectedRoleIDs(),
+    ...roleData.value.roles
+      .filter((role) => isSuperAdminActor.value || role.code !== 'super_admin')
+      .map((role) => role.id),
+    ...protectedIDs,
   ].sort((a, b) => a - b)
 }
 function clearRoles(): void {
   selectedRoleIDs.value = protectedSelectedRoleIDs()
 }
 function roleToggleDisabled(role: UserRoleSummary): boolean {
-  return role.code === 'super_admin' && !isSuperAdminActor.value
+  return isRoleToggleDisabled(role, isSuperAdminActor.value)
 }
 async function saveRoles(): Promise<void> {
   const target = roleTarget.value
@@ -494,143 +447,30 @@ onMounted(() => {
       <template #empty><el-empty :description="t('user.noRoles')" /></template>
     </AppTable>
 
-    <AppDialog
+    <UserEditDialog
       v-model="editVisible"
-      class="user-edit-dialog"
-      :title="t('user.editTitle')"
-      width="min(520px, 94vw)"
-      append-to-body
-    >
-      <el-alert v-if="editError" :title="editError" type="error" /><el-form label-position="top"
-        ><el-form-item :label="t('user.email')"
-          ><el-input :model-value="editingUser?.email ?? ''" disabled /></el-form-item
-        ><el-form-item
-          :label="t('user.username')"
-          :error="userForm.username !== '' && !usernameValid ? t('user.invalidUsername') : ''"
-          ><el-input v-model="userForm.username" maxlength="64" /></el-form-item
-        ><el-form-item
-          :label="t('user.phone')"
-          :error="userForm.phone !== '' && !phoneValid ? t('user.invalidPhone') : ''"
-          ><el-input v-model="userForm.phone" data-testid="user-phone" /></el-form-item
-      ></el-form>
-      <template #footer
-        ><el-button @click="editVisible = false">{{ t('user.cancel') }}</el-button
-        ><el-button
-          type="primary"
-          :loading="editSaving"
-          :disabled="!usernameValid || !phoneValid"
-          @click="saveEdit"
-          >{{ t('user.save') }}</el-button
-        ></template
-      >
-    </AppDialog>
-    <AppDialog
+      v-model:form="userForm"
+      :editing-user="editingUser"
+      :edit-error="editError"
+      :edit-saving="editSaving"
+      :username-valid="usernameValid"
+      :phone-valid="phoneValid"
+      @save="saveEdit"
+    />
+    <UserRoleDialog
       v-model="roleDialogVisible"
-      class="user-role-dialog"
-      :title="t('user.assignRolesTitle')"
-      width="min(680px, 94vw)"
-      height="min(62vh, 620px)"
-      append-to-body
-    >
-      <div class="role-dialog-scroll">
-        <div v-if="roleLoading">{{ t('user.roleLoadFailed') }}</div>
-        <el-alert v-if="roleError" :title="roleError" type="error" show-icon /><template
-          v-if="roleData"
-        >
-          <el-space class="role-dialog-toolbar" wrap :size="8">
-            <el-button @click="selectAllRoles">{{ t('user.selectAll') }}</el-button
-            ><el-button @click="clearRoles">{{ t('user.clear') }}</el-button>
-          </el-space>
-          <el-checkbox-group v-model="selectedRoleIDs" class="role-checks"
-            ><el-checkbox
-              v-for="role in roleData.roles"
-              :key="role.id"
-              :value="role.id"
-              :disabled="roleToggleDisabled(role)"
-              ><span>{{ role.name }} ({{ role.code }})</span
-              ><el-tag v-if="role.isEnabled === YesNo.No" type="info" size="small">{{
-                t('user.roleDisabled')
-              }}</el-tag></el-checkbox
-            ></el-checkbox-group
-          ><el-alert
-            v-if="!hasEnabledSelection"
-            :title="t('user.enabledRoleRequired')"
-            type="warning"
-          />
-        </template>
-      </div>
-      <template #footer
-        ><el-button @click="roleDialogVisible = false">{{ t('user.cancel') }}</el-button
-        ><el-button
-          type="primary"
-          :loading="roleSaving"
-          :disabled="roleData === null || !hasEnabledSelection"
-          @click="saveRoles"
-          >{{ t('user.save') }}</el-button
-        ></template
-      >
-    </AppDialog>
+      v-model:selected-role-i-ds="selectedRoleIDs"
+      :role-data="roleData"
+      :role-loading="roleLoading"
+      :role-error="roleError"
+      :role-saving="roleSaving"
+      :has-enabled-selection="hasEnabledSelection"
+      :role-toggle-disabled="roleToggleDisabled"
+      @select-all="selectAllRoles"
+      @clear="clearRoles"
+      @save="saveRoles"
+    />
   </section>
 </template>
 
-<style scoped>
-.user-management {
-  min-height: 0;
-  min-width: 0;
-}
-
-.user-filters {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.user-table {
-  width: 100%;
-}
-
-.role-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.el-pagination {
-  justify-content: flex-end;
-}
-
-.role-dialog-scroll {
-  max-height: min(62vh, 620px);
-  padding-right: 8px;
-  overflow-y: auto;
-}
-
-.role-dialog-toolbar {
-  justify-content: flex-end;
-  margin-bottom: 12px;
-}
-
-.role-checks {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.role-checks .el-checkbox {
-  height: auto;
-  margin-right: 0;
-}
-
-.role-checks span {
-  margin-right: 8px;
-}
-
-@media (max-width: 720px) {
-  .el-pagination {
-    justify-content: flex-start;
-    overflow-x: auto;
-  }
-}
-</style>
+<style scoped src="./UserManagement.css"></style>

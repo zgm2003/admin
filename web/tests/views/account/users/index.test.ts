@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { YesNo } from '@/enums/yes-no'
 import { appI18n, setLocale } from '@/i18n'
-import { usePermissionStore } from '@/store/permission.ts'
+import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
 import * as userAPI from '@/api/user/account'
 import UserManagement from '@/views/account/users/index.vue'

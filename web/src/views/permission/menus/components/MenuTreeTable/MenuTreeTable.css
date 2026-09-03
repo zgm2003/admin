@@ -1,0 +1,65 @@
+.menu-tree-table,
+.menu-tree-table__table {
+  width: 100%;
+  min-width: 0;
+}
+
+.menu-tree-table__toolbar,
+.menu-icon-cell {
+  display: flex;
+  align-items: center;
+}
+
+.menu-tree-table__toolbar {
+  gap: 8px;
+}
+
+.menu-tree-table__table {
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+}
+
+.menu-title-cell {
+  color: var(--admin-text);
+  font-weight: 650;
+}
+
+.menu-route-cell {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--admin-text);
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-cell-empty,
+.menu-tree-table__empty {
+  color: var(--admin-text-soft);
+}
+
+.menu-cell-empty {
+  font-size: 12px;
+}
+
+.menu-icon-cell {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .menu-tree-table__toolbar {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .menu-tree-table__toolbar {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

@@ -8,7 +8,7 @@ import { appI18n, setLocale } from '@/i18n'
 import * as profileAPI from '@/api/user/profile'
 import ProfilePage from '@/views/account/profile/index.vue'
 import UpMedia from '@/components/UpMedia/index.vue'
-import { usePermissionStore } from '@/store/permission.ts'
+import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
 
 vi.mock('@/api/user/profile', () => ({
