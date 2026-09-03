@@ -10,7 +10,7 @@ import {
   getMailLogDetail,
   type MailLog,
   type MailLogDetail,
-} from '@/api/system/mail'
+} from '@/api/message/mail'
 import { AppTable, type TableColumn, type TablePaginationState } from '@/components/AppTable'
 
 const props = defineProps<{

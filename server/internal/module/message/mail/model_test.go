@@ -18,10 +18,71 @@ func TestFixedTemplatesHaveStableTencentIDs(t *testing.T) {
 	}
 }
 func TestMailTableNames(t *testing.T) {
-	got := map[string]string{ConfigTable: (Config{}).TableName(), TemplateTable: (Template{}).TableName(), LogTable: (Log{}).TableName(), VerificationTable: (Verification{}).TableName(), RecipientRuleTable: (RecipientRule{}).TableName()}
-	for key, value := range got {
-		if key != value {
-			t.Fatalf("table constant %q maps to %q", key, value)
+	got := map[string]string{
+		"config constant":         ConfigTable,
+		"config model":            (Config{}).TableName(),
+		"template constant":       TemplateTable,
+		"template model":          (Template{}).TableName(),
+		"log constant":            LogTable,
+		"log model":               (Log{}).TableName(),
+		"verification constant":   VerificationTable,
+		"verification model":      (Verification{}).TableName(),
+		"recipient rule constant": RecipientRuleTable,
+		"recipient rule model":    (RecipientRule{}).TableName(),
+	}
+	want := map[string]string{
+		"config constant":         "message_mail_config",
+		"config model":            "message_mail_config",
+		"template constant":       "message_mail_template",
+		"template model":          "message_mail_template",
+		"log constant":            "message_mail_log",
+		"log model":               "message_mail_log",
+		"verification constant":   "message_mail_log_verification",
+		"verification model":      "message_mail_log_verification",
+		"recipient rule constant": "message_mail_recipient_rule",
+		"recipient rule model":    "message_mail_recipient_rule",
+	}
+	for name, value := range got {
+		if value != want[name] {
+			t.Fatalf("%s = %q, want %q", name, value, want[name])
+		}
+	}
+}
+
+func TestMailPermissionCodesUseMessageDomain(t *testing.T) {
+	got := []string{
+		PermissionView,
+		PermissionList,
+		PermissionDetail,
+		PermissionConfigUpdate,
+		PermissionConfigDelete,
+		PermissionTest,
+		PermissionTemplateUpdate,
+		PermissionTemplateStatus,
+		PermissionLogDelete,
+		PermissionRuleCreate,
+		PermissionRuleUpdate,
+		PermissionRuleStatus,
+		PermissionRuleDelete,
+	}
+	want := []string{
+		"message:mail:view",
+		"message:mail:list",
+		"message:mail:detail",
+		"message:mail:config:update",
+		"message:mail:config:delete",
+		"message:mail:test",
+		"message:mail:template:update",
+		"message:mail:template:status",
+		"message:mail:log:delete",
+		"message:mail:rule:create",
+		"message:mail:rule:update",
+		"message:mail:rule:status",
+		"message:mail:rule:delete",
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("permission[%d] = %q, want %q", index, got[index], want[index])
 		}
 	}
 }

@@ -12,19 +12,19 @@ import (
 )
 
 const (
-	PermissionView           = "system:mail:view"
-	PermissionList           = "system:mail:list"
-	PermissionDetail         = "system:mail:detail"
-	PermissionConfigUpdate   = "system:mail:config:update"
-	PermissionConfigDelete   = "system:mail:config:delete"
-	PermissionTest           = "system:mail:test"
-	PermissionTemplateUpdate = "system:mail:template:update"
-	PermissionTemplateStatus = "system:mail:template:status"
-	PermissionLogDelete      = "system:mail:log:delete"
-	PermissionRuleCreate     = "system:mail:rule:create"
-	PermissionRuleUpdate     = "system:mail:rule:update"
-	PermissionRuleStatus     = "system:mail:rule:status"
-	PermissionRuleDelete     = "system:mail:rule:delete"
+	PermissionView           = "message:mail:view"
+	PermissionList           = "message:mail:list"
+	PermissionDetail         = "message:mail:detail"
+	PermissionConfigUpdate   = "message:mail:config:update"
+	PermissionConfigDelete   = "message:mail:config:delete"
+	PermissionTest           = "message:mail:test"
+	PermissionTemplateUpdate = "message:mail:template:update"
+	PermissionTemplateStatus = "message:mail:template:status"
+	PermissionLogDelete      = "message:mail:log:delete"
+	PermissionRuleCreate     = "message:mail:rule:create"
+	PermissionRuleUpdate     = "message:mail:rule:update"
+	PermissionRuleStatus     = "message:mail:rule:status"
+	PermissionRuleDelete     = "message:mail:rule:delete"
 )
 
 type Handler struct{ s *Service }

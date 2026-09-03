@@ -11,7 +11,7 @@ import {
   updateMailRuleStatus,
   type MailRule,
   type MailRuleInput,
-} from '@/api/system/mail'
+} from '@/api/message/mail'
 import { AppTable, type TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yes-no'
 

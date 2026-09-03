@@ -78,7 +78,7 @@ type Config struct {
 	DeletedAt           gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz" json:"-"`
 }
 
-func (Config) TableName() string { return "system_mail_config" }
+func (Config) TableName() string { return "message_mail_config" }
 
 type Template struct {
 	ID                int64           `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
@@ -95,7 +95,7 @@ type Template struct {
 	DeletedAt         gorm.DeletedAt  `gorm:"column:deleted_at;type:timestamptz" json:"-"`
 }
 
-func (Template) TableName() string { return "system_mail_template" }
+func (Template) TableName() string { return "message_mail_template" }
 
 type Log struct {
 	ID           int64          `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
@@ -118,7 +118,7 @@ type Log struct {
 	DeletedAt    gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz" json:"-"`
 }
 
-func (Log) TableName() string { return "system_mail_log" }
+func (Log) TableName() string { return "message_mail_log" }
 
 type Verification struct {
 	ID             int64          `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
@@ -131,7 +131,7 @@ type Verification struct {
 	DeletedAt      gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz" json:"-"`
 }
 
-func (Verification) TableName() string { return "system_mail_log_verification" }
+func (Verification) TableName() string { return "message_mail_log_verification" }
 
 type RecipientRule struct {
 	ID         int64          `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
@@ -147,4 +147,4 @@ type RecipientRule struct {
 	DeletedAt  gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz" json:"-"`
 }
 
-func (RecipientRule) TableName() string { return "system_mail_recipient_rule" }
+func (RecipientRule) TableName() string { return "message_mail_recipient_rule" }

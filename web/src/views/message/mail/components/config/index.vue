@@ -4,7 +4,7 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import { Send, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
-import * as mailApi from '@/api/system/mail'
+import * as mailApi from '@/api/message/mail'
 import { YesNo } from '@/enums/yes-no'
 
 const props = defineProps<{
@@ -22,6 +22,11 @@ const testing = ref(false)
 const testEmail = ref('')
 const form = ref<mailApi.MailConfigInput>(blankForm())
 
+const regionOptions = computed(() => [
+  { value: 'ap-guangzhou', label: t('mail.regionGuangzhou') },
+  { value: 'ap-hongkong', label: t('mail.regionHongKong') },
+])
+
 const statusText = computed(() => {
   if (!props.config.configured) return t('mail.statusUnconfigured')
   return props.config.isEnabled === YesNo.Yes ? t('mail.statusActive') : t('mail.statusInactive')
@@ -33,7 +38,7 @@ const statusType = computed(() => {
 })
 
 const rules = computed<FormRules<mailApi.MailConfigInput>>(() => ({
-  region: [{ required: true, whitespace: true, message: t('mail.region'), trigger: 'blur' }],
+  region: [{ required: true, message: t('mail.regionRequired'), trigger: 'change' }],
   fromEmail: [
     { required: true, type: 'email', message: t('auth.login.emailInvalid'), trigger: 'blur' },
   ],
@@ -130,7 +135,7 @@ async function remove(): Promise<void> {
       ref="formRef"
       :model="form"
       :rules="rules"
-      label-width="100px"
+      label-width="120px"
       class="mail-form"
       @submit.prevent="save"
     >
@@ -160,7 +165,12 @@ async function remove(): Promise<void> {
         </el-col>
         <el-col :xs="24" :md="12">
           <el-form-item :label="t('mail.region')" prop="region">
-            <el-input v-model="form.region" placeholder="ap-guangzhou" />
+            <el-select-v2
+              v-model="form.region"
+              :options="regionOptions"
+              :placeholder="t('mail.regionPlaceholder')"
+              style="width: 100%"
+            />
           </el-form-item>
         </el-col>
         <el-col :xs="24" :md="12">

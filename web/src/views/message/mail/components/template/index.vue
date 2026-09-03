@@ -9,7 +9,7 @@ import {
   updateMailTemplateStatus,
   type MailTemplate,
   type MailTemplateInput,
-} from '@/api/system/mail'
+} from '@/api/message/mail'
 import { AppTable, type TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yes-no'
 

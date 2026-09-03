@@ -3,13 +3,13 @@ import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import * as mailApi from '@/api/system/mail'
+import * as mailApi from '@/api/message/mail'
 import { YesNo } from '@/enums/yes-no'
 import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
 import MailPage from '@/views/message/mail/index.vue'
 
-vi.mock('@/api/system/mail', () => ({
+vi.mock('@/api/message/mail', () => ({
   getMailConfig: vi.fn(),
   saveMailConfig: vi.fn(),
   deleteMailConfig: vi.fn(),
@@ -67,7 +67,7 @@ describe('mail service page', () => {
   })
 
   it('hides the log tab without detail permission and never restores secrets from config', async () => {
-    const wrapper = mountPage(['system:mail:list'])
+    const wrapper = mountPage(['message:mail:list'])
     await flushPromises()
     expect(wrapper.text()).not.toContain('发送日志')
     const passwords = wrapper.findAll('input[type="password"]')
@@ -76,19 +76,38 @@ describe('mail service page', () => {
   })
 
   it('hides all mail data tabs without list permission', async () => {
-    const wrapper = mountPage(['system:mail:view'])
+    const wrapper = mountPage(['message:mail:view'])
     await flushPromises()
     expect(wrapper.findAll('[role="tab"]')).toHaveLength(0)
     expect(mailApi.getMailConfig).not.toHaveBeenCalled()
   })
 
+  it('uses Tencent SES region choices and field names in the configuration form', async () => {
+    const wrapper = mountPage(['message:mail:list'])
+    await flushPromises()
+
+    const regionSelect = wrapper.findComponent({ name: 'ElSelectV2' })
+    expect(regionSelect.exists()).toBe(true)
+    expect(regionSelect.props('modelValue')).toBe('ap-guangzhou')
+    expect(regionSelect.props('options')).toEqual([
+      { value: 'ap-guangzhou', label: '广州（ap-guangzhou）' },
+      { value: 'ap-hongkong', label: '中国香港（ap-hongkong）' },
+    ])
+
+    const configForm = wrapper.findComponent({ name: 'ElForm' })
+    expect(configForm.props('labelWidth')).toBe('120px')
+    expect(wrapper.text()).toContain('地域')
+    expect(wrapper.text()).toContain('发信地址')
+    expect(wrapper.text()).toContain('发件人别名')
+  })
+
   it('renders controls only for granted action permissions', async () => {
     const wrapper = mountPage([
-      'system:mail:list',
-      'system:mail:detail',
-      'system:mail:template:update',
-      'system:mail:log:delete',
-      'system:mail:rule:create',
+      'message:mail:list',
+      'message:mail:detail',
+      'message:mail:template:update',
+      'message:mail:log:delete',
+      'message:mail:rule:create',
     ])
     await flushPromises()
     expect(wrapper.find('[data-testid="mail-config-save"]').exists()).toBe(false)

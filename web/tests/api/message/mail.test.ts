@@ -6,7 +6,7 @@ import {
   parseMailRule,
   parseMailTemplate,
   parseMailLogPage,
-} from '@/api/system/mail'
+} from '@/api/message/mail'
 
 describe('mail config protocol', () => {
   const valid = {

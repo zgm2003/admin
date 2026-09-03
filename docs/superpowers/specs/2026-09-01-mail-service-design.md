@@ -2,9 +2,11 @@
 
 ## 1. 状态与范围
 
-状态：设计草案，菜单权限契约已确认；模板固定性与平台隔离按本版执行。
+状态：设计已确认；业务域、菜单权限契约、模板固定性与平台隔离按本版执行。
 
 本模块为 Admin 提供腾讯云 SES 邮件配置、固定业务模板、发送事实查询、测试发送和收件人黑白名单。邮件是管理员邀请、邮箱验证码和后续邮箱安全流程的发送基础设施。
+
+邮件服务统一归属 `message` 业务域：Go 模块使用 `internal/module/message/mail`，前端 API 使用 `api/message/mail.ts`，权限码使用 `message:mail:*`，PostgreSQL 表使用 `message_mail_*`。页面继续位于 `消息服务 -> 邮件服务`，路由保持 `/message/mail`；HTTP 资源 URL 保持 `/api/admin/v1/mail/*`，不复制菜单目录层级。
 
 本模块包含：
 
@@ -52,10 +54,10 @@
 页面权限使用新协议：
 
 ```text
-system:mail:view
+message:mail:view
 ```
 
-`system:mail:view` 只表示页面入口权限。所有读取和操作权限都是该页面下的隐藏 action 菜单，页面权限不会自动扩展为任何读取或写入权限；page 权限必须以 `:view` 结尾，action 权限不得以 `:view` 结尾。
+`message:mail:view` 只表示页面入口权限。所有读取和操作权限都是该页面下的隐藏 action 菜单，页面权限不会自动扩展为任何读取或写入权限；page 权限必须以 `:view` 结尾，action 权限不得以 `:view` 结尾。
 
 页面内部使用四个 Tab，不创建四个子页面或四个左侧菜单：
 
@@ -64,24 +66,24 @@ system:mail:view
 3. 发送日志
 4. 黑白名单
 
-读取和操作权限独立授权，不由 `system:mail:view` 自动扩权：
+读取和操作权限独立授权，不由 `message:mail:view` 自动扩权：
 
 | 权限码 | 用途 |
 | --- | --- |
-| `system:mail:list` | 读取配置、模板、黑白名单列表和页面初始化字典 |
-| `system:mail:detail` | 读取单条发送日志详情 |
-| `system:mail:config:update` | 保存或修改 SES 配置 |
-| `system:mail:config:delete` | 删除 SES 配置 |
-| `system:mail:test` | 发送 Admin 测试邮件 |
-| `system:mail:template:update` | 修改模板元数据 |
-| `system:mail:template:status` | 启停模板 |
-| `system:mail:log:delete` | 删除发送日志 |
-| `system:mail:rule:create` | 创建黑白名单规则 |
-| `system:mail:rule:update` | 修改黑白名单规则 |
-| `system:mail:rule:status` | 启停黑白名单规则 |
-| `system:mail:rule:delete` | 删除黑白名单规则 |
+| `message:mail:list` | 读取配置、模板、黑白名单列表和页面初始化字典 |
+| `message:mail:detail` | 读取单条发送日志详情 |
+| `message:mail:config:update` | 保存或修改 SES 配置 |
+| `message:mail:config:delete` | 删除 SES 配置 |
+| `message:mail:test` | 发送 Admin 测试邮件 |
+| `message:mail:template:update` | 修改模板元数据 |
+| `message:mail:template:status` | 启停模板 |
+| `message:mail:log:delete` | 删除发送日志 |
+| `message:mail:rule:create` | 创建黑白名单规则 |
+| `message:mail:rule:update` | 修改黑白名单规则 |
+| `message:mail:rule:status` | 启停黑白名单规则 |
+| `message:mail:rule:delete` | 删除黑白名单规则 |
 
-Tab 显示规则：页面入口只由 `system:mail:view` 控制；每个 Tab 的数据请求和按钮再由对应的 `list/detail/action` 权限控制。没有日志权限时，发送日志 Tab 不显示；没有写权限时只显示只读状态，不伪造按钮。
+Tab 显示规则：页面入口只由 `message:mail:view` 控制；每个 Tab 的数据请求和按钮再由对应的 `list/detail/action` 权限控制。没有日志权限时，发送日志 Tab 不显示；没有写权限时只显示只读状态，不伪造按钮。
 
 ## 4. 页面结构
 
@@ -121,7 +123,7 @@ Admin 端按用户要求提供完整诊断字段，包括：
 - 验证码状态和过期时间；
 - 腾讯云错误码和错误消息。
 
-这些字段只允许具备 `system:mail:detail` 或日志读取权限的 Admin API 返回。它们不得出现在公开业务响应、普通应用日志、操作日志请求体或响应体中。数据库中验证码仍以独立密文快照保存，日志查询时在受保护的 Admin service 层解密。
+这些字段只允许具备 `message:mail:detail` 或日志读取权限的 Admin API 返回。它们不得出现在公开业务响应、普通应用日志、操作日志请求体或响应体中。数据库中验证码仍以独立密文快照保存，日志查询时在受保护的 Admin service 层解密。
 
 日志状态固定为：
 
@@ -205,23 +207,23 @@ Admin 测试发送额度可以比公开业务更宽，但不能无限制，也�
 
 使用 PostgreSQL、`TIMESTAMPTZ`、软删除和项目统一 `Yes/No` 语义。所有邮件表都必须带 `platform_id` 外键并按平台隔离；Admin 管理 API 固定操作 Admin 平台，不接受客户端传入平台 ID。业务发送由调用方传入已认证的平台上下文，不能跨平台读取配置、模板、日志或规则。
 
-### 7.1 `system_mail_config`
+### 7.1 `message_mail_config`
 
 每个平台最多一条有效配置；第一期只为 Admin 平台提供管理入口。字段包括：`platform_id`、加密 SecretId、加密 SecretKey、提示值、地域、Endpoint、发件邮箱、发件名称、Reply-To、验证码 TTL、启用状态、最近测试时间、最近测试错误、审计时间和软删除时间。有效配置唯一约束为 `(platform_id)`。
 
-### 7.2 `system_mail_template`
+### 7.2 `message_mail_template`
 
 固定场景唯一；字段包括：`platform_id`、scene、name、subject、Tencent template ID、变量 JSON、示例变量 JSON、启用状态、审计时间和软删除时间。scene 使用数据库 CHECK 和唯一有效索引约束四个场景，唯一键为 `(platform_id, scene)`；第一期 Admin 平台必须恰好维护 `login`、`forget`、`bind_email`、`change_password` 四条记录。
 
-### 7.3 `system_mail_log`
+### 7.3 `message_mail_log`
 
 字段包括：`platform_id`、scene、template_id、to_email、subject、状态、腾讯云 Request ID、Message ID、错误码、错误摘要、耗时、发送时间、创建时间和软删除时间。日志不保存正文和未加密验证码；查询和删除必须带平台条件。
 
-### 7.4 `system_mail_log_verification`
+### 7.4 `message_mail_log_verification`
 
 一条日志最多一份验证码诊断快照：`platform_id`、mail_log_id、密钥版本、验证码密文、过期时间、创建时间。该表只能由 Mail service 访问，Repository 不把密文直接映射到公开 DTO；关联日志的平台必须一致。
 
-### 7.5 `system_mail_recipient_rule`
+### 7.5 `message_mail_recipient_rule`
 
 字段包括：`platform_id` 及黑白名单章节中的其他字段。pattern 入库前统一小写、去除首尾空白并验证邮箱/域名格式；规则查询按平台、scope、pattern 建索引，所有有效规则按平台隔离，唯一约束为 `(platform_id, scope, pattern, action)`。
 

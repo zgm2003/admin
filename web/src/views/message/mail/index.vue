@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import * as mailApi from '@/api/system/mail'
+import * as mailApi from '@/api/message/mail'
 import { YesNo } from '@/enums/yes-no'
 import { usePermissionStore } from '@/store/permission'
 import MailConfigTab from './components/config/index.vue'
@@ -36,11 +36,11 @@ const logPage = ref(1)
 const logPageSize = ref(20)
 const logTotal = ref(0)
 const can = (code: string) => access.hasPermission(code)
-const canList = computed(() => can('system:mail:list'))
+const canList = computed(() => can('message:mail:list'))
 const visibleTabs = computed(() => [
   ...(canList.value ? [{ name: 'config' as const, label: t('mail.configTab') }] : []),
   ...(canList.value ? [{ name: 'templates' as const, label: t('mail.templatesTab') }] : []),
-  ...(canList.value && can('system:mail:detail')
+  ...(canList.value && can('message:mail:detail')
     ? [{ name: 'logs' as const, label: t('mail.logsTab') }]
     : []),
   ...(canList.value ? [{ name: 'rules' as const, label: t('mail.rulesTab') }] : []),
@@ -124,9 +124,9 @@ watch(
           <MailConfigTab
             v-if="tab.name === 'config'"
             :config="config"
-            :can-update="can('system:mail:config:update')"
-            :can-test="can('system:mail:test')"
-            :can-delete="can('system:mail:config:delete')"
+            :can-update="can('message:mail:config:update')"
+            :can-test="can('message:mail:test')"
+            :can-delete="can('message:mail:config:delete')"
             @saved="loadConfig"
             @deleted="loadConfig"
           />
@@ -134,8 +134,8 @@ watch(
             v-else-if="tab.name === 'templates'"
             :templates="templates"
             :loading="loading"
-            :can-update="can('system:mail:template:update')"
-            :can-status="can('system:mail:template:status')"
+            :can-update="can('message:mail:template:update')"
+            :can-status="can('message:mail:template:status')"
             @refresh="loadTemplates"
           />
           <MailLogTab
@@ -145,7 +145,7 @@ watch(
             :page="logPage"
             :page-size="logPageSize"
             :loading="loading"
-            :can-delete="can('system:mail:log:delete')"
+            :can-delete="can('message:mail:log:delete')"
             @refresh="loadLogs"
             @page-change="changeLogPage"
           />
@@ -153,10 +153,10 @@ watch(
             v-else
             :rules="rules"
             :loading="loading"
-            :can-create="can('system:mail:rule:create')"
-            :can-update="can('system:mail:rule:update')"
-            :can-status="can('system:mail:rule:status')"
-            :can-delete="can('system:mail:rule:delete')"
+            :can-create="can('message:mail:rule:create')"
+            :can-update="can('message:mail:rule:update')"
+            :can-status="can('message:mail:rule:status')"
+            :can-delete="can('message:mail:rule:delete')"
             @refresh="loadRules"
           />
         </el-card>

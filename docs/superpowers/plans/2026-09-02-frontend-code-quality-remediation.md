@@ -768,9 +768,9 @@ git commit -m "refactor: 严格解析用户与会话响应"
 ### Task 8: 严格解析系统邮件与操作日志 API
 
 **Files:**
-- Modify: `web/src/api/system/mail.ts`
+- Modify: `web/src/api/message/mail.ts`
 - Modify: `web/src/api/system/operationlog.ts`
-- Modify: `web/tests/api/system/mail.test.ts`
+- Modify: `web/tests/api/message/mail.test.ts`
 - Modify: `web/tests/api/system/operationlog.test.ts`
 - Modify: `web/scripts/frontend-architecture-baseline.mjs`
 
@@ -1026,7 +1026,7 @@ git commit -m "refactor: 统一前端请求错误展示所有权"
 
 ```ts
 it('keeps the parent as tab coordinator and reloads after a child save', async () => {
-  const wrapper = mountMailPage(['system:mail:list', 'system:mail:config:update'])
+  const wrapper = mountMailPage(['message:mail:list', 'message:mail:config:update'])
   await flushPromises()
   wrapper.getComponent({ name: 'ConfigPanel' }).vm.$emit('saved')
   await flushPromises()
@@ -1068,7 +1068,7 @@ Run:
 
 ```powershell
 cd D:\admin\web
-pnpm vitest run tests/views/message/mail tests/api/system/mail.test.ts --pool=threads --maxWorkers=1
+pnpm vitest run tests/views/message/mail tests/api/message/mail.test.ts --pool=threads --maxWorkers=1
 pnpm check:architecture
 pnpm typecheck
 pnpm build

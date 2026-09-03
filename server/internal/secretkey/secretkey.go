@@ -13,7 +13,7 @@ const (
 	jwtSigningPurpose        = "admin:auth:jwt-signing:v1"
 	refreshHMACPurpose       = "admin:auth:refresh-token-hmac:v1"
 	storageEncryptionPurpose = "admin:storage:cos-encryption:v1"
-	mailEncryptionPurpose    = "admin:system:mail-encryption:v1"
+	mailEncryptionPurpose    = "admin:message:mail-encryption:v1"
 )
 
 type KeyRing struct {

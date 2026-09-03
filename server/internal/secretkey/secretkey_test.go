@@ -2,6 +2,8 @@ package secretkey
 
 import (
 	"bytes"
+	"crypto/hkdf"
+	"crypto/sha256"
 	"strings"
 	"testing"
 )
@@ -84,13 +86,21 @@ func TestStorageEncryptionKeyIsStableSeparateAndCopied(t *testing.T) {
 }
 
 func TestMailEncryptionKeyIsSeparateAndCopied(t *testing.T) {
-	keys, err := New(strings.Repeat("s", 64))
+	rootSecret := strings.Repeat("s", 64)
+	keys, err := New(rootSecret)
 	if err != nil {
 		t.Fatal(err)
 	}
 	first, second := keys.MailEncryptionKey(), keys.MailEncryptionKey()
 	if len(first) != 32 || !bytes.Equal(first, second) || bytes.Equal(first, keys.StorageEncryptionKey()) {
 		t.Fatal("mail key derivation invalid")
+	}
+	want, err := hkdf.Key(sha256.New, []byte(rootSecret), nil, "admin:message:mail-encryption:v1", keyLength)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(first, want) {
+		t.Fatal("mail key does not use the message domain purpose")
 	}
 	first[0] ^= 0xff
 	if bytes.Equal(first, keys.MailEncryptionKey()) {

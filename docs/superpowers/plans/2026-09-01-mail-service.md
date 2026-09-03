@@ -12,8 +12,9 @@
 
 ## Global Constraints
 
-- 邮件管理页面挂在 `消息服务 -> 邮件服务`，页面权限固定为 `system:mail:view`，四个 Tab 不创建左侧子菜单。
-- `:view` 只控制页面入口；读取使用 `system:mail:list`/`system:mail:detail`，写操作使用各自 action，页面权限不自动扩展读取或操作权限。
+- 邮件管理页面挂在 `消息服务 -> 邮件服务`，页面权限固定为 `message:mail:view`，四个 Tab 不创建左侧子菜单。
+- `:view` 只控制页面入口；读取使用 `message:mail:list`/`message:mail:detail`，写操作使用各自 action，页面权限不自动扩展读取或操作权限。
+- 邮件业务域统一为 `message`：Go 模块、前端 API、权限码、PostgreSQL 表分别使用 `module/message/mail`、`api/message/mail`、`message:mail:*`、`message_mail_*`；HTTP 资源 URL 保持 `/api/admin/v1/mail/*`。
 - 固定模板只有 `login=47941`、`forget=47942`、`bind_email=47943`、`change_password=47944`；不提供模板新增、删除或场景改名接口。
 - 所有邮件表必须有 `platform_id` 外键和平台范围条件；Admin API 固定使用 `auth_platform.code='admin'`，拒绝客户端传入平台 ID。
 - API/Worker 启动禁止 AutoMigrate、EnsureSchema、默认模板初始化、菜单写入、回填和 Redis 清理；数据库结构和初始四模板由一次性人工 SQL 完成。
@@ -27,18 +28,18 @@
 
 | 责任 | 文件 |
 | --- | --- |
-| 邮件模型、常量、表名和结构契约 | `server/internal/module/system/mail/model.go`、`schema.go` |
+| 邮件模型、常量、表名和结构契约 | `server/internal/module/message/mail/model.go`、`schema.go` |
 | 一次性数据库结构和四条初始模板 | `docs/database/2026-09-01-mail-service.sql` |
 | 邮件专用密钥派生 | `server/internal/secretkey/secretkey.go` |
 | 腾讯云 SES 请求封装 | `server/internal/storage/mail/tencent_ses.go` |
-| 配置、模板、日志、验证码快照的持久化 | `server/internal/module/system/mail/repository.go` |
-| 发送编排和公开业务接口 | `server/internal/module/system/mail/service.go`、`protocol.go` |
-| 收件人规则匹配 | `server/internal/module/system/mail/rules.go` |
-| Redis 业务限流和 HTTP 快速拒绝 | `server/internal/module/system/mail/limiter.go`、`server/internal/middleware/ratelimit.go` |
-| Admin DTO、处理器和路由 | `server/internal/module/system/mail/request.go`、`response.go`、`handler.go`、`route.go` |
+| 配置、模板、日志、验证码快照的持久化 | `server/internal/module/message/mail/repository.go` |
+| 发送编排和公开业务接口 | `server/internal/module/message/mail/service.go`、`protocol.go` |
+| 收件人规则匹配 | `server/internal/module/message/mail/rules.go` |
+| Redis 业务限流和 HTTP 快速拒绝 | `server/internal/module/message/mail/limiter.go`、`server/internal/middleware/ratelimit.go` |
+| Admin DTO、处理器和路由 | `server/internal/module/message/mail/request.go`、`response.go`、`handler.go`、`route.go` |
 | API 依赖注入和路由注册 | `server/cmd/api/main.go`、`server/cmd/api/main_test.go` |
 | 操作日志动作和敏感字段策略 | `server/internal/module/system/operationlog/rules.go` |
-| 前端 API、动态路由和四 Tab 页面 | `web/src/api/system/mail.ts`、`web/src/views/message/mail/index.vue`、`web/src/router/permission-routes.ts` |
+| 前端 API、动态路由和四 Tab 页面 | `web/src/api/message/mail.ts`、`web/src/views/message/mail/index.vue`、`web/src/router/permission-routes.ts` |
 | 邮件菜单和隐藏 action 菜单 | `docs/database/2026-09-01-mail-menu.sql` |
 
 ## 依赖顺序
@@ -58,15 +59,15 @@
 ### Task 1: 建立邮件数据模型、约束和一次性 SQL
 
 **Files:**
-- Create: `server/internal/module/system/mail/model.go`
-- Create: `server/internal/module/system/mail/schema.go`
-- Create: `server/internal/module/system/mail/model_test.go`
-- Create: `server/internal/module/system/mail/schema_test.go`
+- Create: `server/internal/module/message/mail/model.go`
+- Create: `server/internal/module/message/mail/schema.go`
+- Create: `server/internal/module/message/mail/model_test.go`
+- Create: `server/internal/module/message/mail/schema_test.go`
 - Create: `server/internal/database/mail_service_migration_test.go`
 - Create: `docs/database/2026-09-01-mail-service.sql`
 
 **Interfaces:**
-- Produces `mail.Config`, `mail.Template`, `mail.Log`, `mail.Verification`, `mail.RecipientRule` GORM models and `TableName()` methods for `system_mail_config`, `system_mail_template`, `system_mail_log`, `system_mail_log_verification`, `system_mail_recipient_rule`.
+- Produces `mail.Config`, `mail.Template`, `mail.Log`, `mail.Verification`, `mail.RecipientRule` GORM models and `TableName()` methods for `message_mail_config`, `message_mail_template`, `message_mail_log`, `message_mail_log_verification`, `message_mail_recipient_rule`.
 - Produces constants `SceneLogin`, `SceneForget`, `SceneBindEmail`, `SceneChangePassword`, `StatusPending`, `StatusSent`, `StatusFailed`, `RuleScopeEmail`, `RuleScopeDomain`, `RuleActionAllow`, `RuleActionDeny` and `FixedTemplates()` returning the four immutable scene/ID definitions.
 - Produces `ValidateScene(scene string) error` and `ValidateStatus(status string) error`; these are pure validation helpers and do not connect to PostgreSQL.
 
@@ -94,7 +95,7 @@
   Run from `D:\admin\server`:
 
   ```powershell
-  go test ./internal/module/system/mail -run 'TestFixedTemplatesHaveStableTencentIDs|TestMailTableNames' -count=1
+  go test ./internal/module/message/mail -run 'TestFixedTemplatesHaveStableTencentIDs|TestMailTableNames' -count=1
   ```
 
   Expected result: FAIL with missing package/types or missing fixed-template definitions.
@@ -123,7 +124,7 @@
   `docs/database/2026-09-01-mail-service.sql` must execute in one transaction and create all five tables, foreign keys to `auth_platform(id)`, `SMALLINT` Yes/No checks, status/scene checks, timestamp columns, soft-delete columns, and these partial unique indexes:
 
   ```sql
-  CREATE TABLE system_mail_config (
+  CREATE TABLE message_mail_config (
       id BIGSERIAL PRIMARY KEY,
       platform_id BIGINT NOT NULL REFERENCES auth_platform(id),
       secret_id_ciphertext TEXT NOT NULL,
@@ -143,7 +144,7 @@
       updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
       deleted_at TIMESTAMPTZ
   );
-  CREATE TABLE system_mail_template (
+  CREATE TABLE message_mail_template (
       id BIGSERIAL PRIMARY KEY,
       platform_id BIGINT NOT NULL REFERENCES auth_platform(id),
       scene VARCHAR(32) NOT NULL CHECK (scene IN ('login', 'forget', 'bind_email', 'change_password')),
@@ -157,7 +158,7 @@
       updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
       deleted_at TIMESTAMPTZ
   );
-  CREATE TABLE system_mail_log (
+  CREATE TABLE message_mail_log (
       id BIGSERIAL PRIMARY KEY,
       platform_id BIGINT NOT NULL REFERENCES auth_platform(id),
       challenge_id VARCHAR(128),
@@ -178,7 +179,7 @@
       deleted_at TIMESTAMPTZ,
       UNIQUE (id, platform_id)
   );
-  CREATE TABLE system_mail_log_verification (
+  CREATE TABLE message_mail_log_verification (
       id BIGSERIAL PRIMARY KEY,
       platform_id BIGINT NOT NULL REFERENCES auth_platform(id),
       mail_log_id BIGINT NOT NULL,
@@ -187,9 +188,9 @@
       expires_at TIMESTAMPTZ NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
       deleted_at TIMESTAMPTZ,
-      FOREIGN KEY (mail_log_id, platform_id) REFERENCES system_mail_log(id, platform_id)
+      FOREIGN KEY (mail_log_id, platform_id) REFERENCES message_mail_log(id, platform_id)
   );
-  CREATE TABLE system_mail_recipient_rule (
+  CREATE TABLE message_mail_recipient_rule (
       id BIGSERIAL PRIMARY KEY,
       platform_id BIGINT NOT NULL REFERENCES auth_platform(id),
       scope VARCHAR(16) NOT NULL CHECK (scope IN ('email', 'domain')),
@@ -205,22 +206,22 @@
   ```
 
   ```sql
-  CREATE UNIQUE INDEX ux_system_mail_config_platform_active
-      ON system_mail_config (platform_id) WHERE deleted_at IS NULL;
-  CREATE UNIQUE INDEX ux_system_mail_template_platform_scene_active
-      ON system_mail_template (platform_id, scene) WHERE deleted_at IS NULL;
-  CREATE UNIQUE INDEX ux_system_mail_rule_platform_scope_pattern_action_active
-      ON system_mail_recipient_rule (platform_id, scope, pattern, action) WHERE deleted_at IS NULL;
-  CREATE UNIQUE INDEX ux_system_mail_log_platform_challenge_active
-      ON system_mail_log (platform_id, challenge_id) WHERE deleted_at IS NULL AND challenge_id IS NOT NULL;
-  CREATE UNIQUE INDEX ux_system_mail_verification_log_active
-      ON system_mail_log_verification (mail_log_id) WHERE deleted_at IS NULL;
+  CREATE UNIQUE INDEX ux_message_mail_config_platform_active
+      ON message_mail_config (platform_id) WHERE deleted_at IS NULL;
+  CREATE UNIQUE INDEX ux_message_mail_template_platform_scene_active
+      ON message_mail_template (platform_id, scene) WHERE deleted_at IS NULL;
+  CREATE UNIQUE INDEX ux_message_mail_rule_platform_scope_pattern_action_active
+      ON message_mail_recipient_rule (platform_id, scope, pattern, action) WHERE deleted_at IS NULL;
+  CREATE UNIQUE INDEX ux_message_mail_log_platform_challenge_active
+      ON message_mail_log (platform_id, challenge_id) WHERE deleted_at IS NULL AND challenge_id IS NOT NULL;
+  CREATE UNIQUE INDEX ux_message_mail_verification_log_active
+      ON message_mail_log_verification (mail_log_id) WHERE deleted_at IS NULL;
   ```
 
   The seed portion is also manual SQL and must be limited to the Admin platform:
 
   ```sql
-  INSERT INTO system_mail_template
+  INSERT INTO message_mail_template
       (platform_id, scene, name, subject, tencent_template_id, variables, example_variables, is_enabled)
   SELECT p.id, v.scene, v.name, v.subject, v.tencent_template_id, v.variables::jsonb, v.example_variables::jsonb, 1
   FROM auth_platform p
@@ -232,7 +233,7 @@
   ) AS v(scene, name, subject, tencent_template_id, variables, example_variables)
   WHERE p.code = 'admin' AND p.deleted_at IS NULL
     AND NOT EXISTS (
-        SELECT 1 FROM system_mail_template t
+        SELECT 1 FROM message_mail_template t
         WHERE t.platform_id = p.id AND t.scene = v.scene AND t.deleted_at IS NULL
     );
   ```
@@ -252,9 +253,9 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/module/system/mail ./internal/database -run 'Mail|mail' -count=1 -timeout 180s
+  go test ./internal/module/message/mail ./internal/database -run 'Mail|mail' -count=1 -timeout 180s
   cd D:\admin
-  git add server/internal/module/system/mail server/internal/database/mail_service_migration_test.go docs/database/2026-09-01-mail-service.sql
+  git add server/internal/module/message/mail server/internal/database/mail_service_migration_test.go docs/database/2026-09-01-mail-service.sql
   git commit -m "feat: 建立邮件服务数据模型和人工迁移脚本"
   ```
 
@@ -263,11 +264,11 @@
 **Files:**
 - Modify: `server/internal/secretkey/secretkey.go`
 - Modify: `server/internal/secretkey/secretkey_test.go`
-- Modify: `server/internal/module/system/mail/crypto.go`
-- Create: `server/internal/module/system/mail/crypto_test.go`
+- Modify: `server/internal/module/message/mail/crypto.go`
+- Create: `server/internal/module/message/mail/crypto_test.go`
 
 **Interfaces:**
-- Produces `(*secretkey.KeyRing).MailEncryptionKey() []byte` using HKDF purpose `admin:system:mail-encryption:v1`.
+- Produces `(*secretkey.KeyRing).MailEncryptionKey() []byte` using HKDF purpose `admin:message:mail-encryption:v1`.
 - Produces `mail.EncryptSecret(key []byte, plaintext string) (ciphertext string, keyVersion string, err error)` and `mail.DecryptSecret(key []byte, ciphertext string) (string, error)` using AES-256-GCM, random nonce and an explicit key version prefix.
 - Consumes the existing `StorageEncryptionKey` implementation only as a pattern; the mail key must be a different derived value.
 
@@ -279,7 +280,7 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/secretkey ./internal/module/system/mail -run 'MailEncryption|EncryptSecret' -count=1
+  go test ./internal/secretkey ./internal/module/message/mail -run 'MailEncryption|EncryptSecret' -count=1
   ```
 
   Expected result: FAIL because `MailEncryptionKey`, `EncryptSecret`, and `DecryptSecret` are not defined.
@@ -311,8 +312,8 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/secretkey ./internal/module/system/mail -run 'MailEncryption|EncryptSecret' -count=1
-  rg -n "MailEncryptionKey|CodeCiphertext|SecretIDCiphertext|SecretKeyCiphertext" internal/module/system/mail internal/secretkey
+  go test ./internal/secretkey ./internal/module/message/mail -run 'MailEncryption|EncryptSecret' -count=1
+  rg -n "MailEncryptionKey|CodeCiphertext|SecretIDCiphertext|SecretKeyCiphertext" internal/module/message/mail internal/secretkey
   ```
 
   Expected result: PASS, with no response DTO or log statement referencing the plaintext value.
@@ -321,7 +322,7 @@
 
   ```powershell
   cd D:\admin
-  git add server/internal/secretkey/secretkey.go server/internal/secretkey/secretkey_test.go server/internal/module/system/mail/crypto.go server/internal/module/system/mail/crypto_test.go
+  git add server/internal/secretkey/secretkey.go server/internal/secretkey/secretkey_test.go server/internal/module/message/mail/crypto.go server/internal/module/message/mail/crypto_test.go
   git commit -m "feat: 增加邮件凭据独立加密密钥"
   ```
 
@@ -330,8 +331,8 @@
 **Files:**
 - Create: `server/internal/storage/mail/tencent_ses.go`
 - Create: `server/internal/storage/mail/tencent_ses_test.go`
-- Create: `server/internal/module/system/mail/provider.go`
-- Create: `server/internal/module/system/mail/provider_test.go`
+- Create: `server/internal/module/message/mail/provider.go`
+- Create: `server/internal/module/message/mail/provider_test.go`
 - Modify: `server/go.mod`
 - Modify: `server/go.sum`
 
@@ -349,7 +350,7 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/storage/mail ./internal/module/system/mail -run 'SES|Provider' -count=1
+  go test ./internal/storage/mail ./internal/module/message/mail -run 'SES|Provider' -count=1
   ```
 
   Expected result: FAIL because the client, interface and SES dependency are not present.
@@ -375,28 +376,28 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/storage/mail ./internal/module/system/mail -run 'SES|Provider|FixedTemplate' -count=1
+  go test ./internal/storage/mail ./internal/module/message/mail -run 'SES|Provider|FixedTemplate' -count=1
   ```
 
 - [ ] **Step 5: Commit the provider-only change.**
 
   ```powershell
   cd D:\admin
-  git add server/internal/storage/mail server/internal/module/system/mail/provider.go server/internal/module/system/mail/provider_test.go server/go.mod server/go.sum
+  git add server/internal/storage/mail server/internal/module/message/mail/provider.go server/internal/module/message/mail/provider_test.go server/go.mod server/go.sum
   git commit -m "feat: 接入腾讯云 SES 固定模板发送"
   ```
 
 ### Task 4: 实现邮件配置、模板、日志和同步发送 Service
 
 **Files:**
-- Create: `server/internal/module/system/mail/protocol.go`
-- Create: `server/internal/module/system/mail/errors.go`
-- Create: `server/internal/module/system/mail/repository.go`
-- Create: `server/internal/module/system/mail/request.go`
-- Create: `server/internal/module/system/mail/response.go`
-- Create: `server/internal/module/system/mail/service.go`
-- Create: `server/internal/module/system/mail/repository_test.go`
-- Create: `server/internal/module/system/mail/service_test.go`
+- Create: `server/internal/module/message/mail/protocol.go`
+- Create: `server/internal/module/message/mail/errors.go`
+- Create: `server/internal/module/message/mail/repository.go`
+- Create: `server/internal/module/message/mail/request.go`
+- Create: `server/internal/module/message/mail/response.go`
+- Create: `server/internal/module/message/mail/service.go`
+- Create: `server/internal/module/message/mail/repository_test.go`
+- Create: `server/internal/module/message/mail/service_test.go`
 
 **Interfaces:**
 - Produces `NewRepository(db *gorm.DB) *Repository` with platform-scoped methods for config, template, log and verification rows; every query signature includes `platformID int64`. The log methods are `CreatePendingLog`, `FindSentChallenge`, `MarkSent`, `MarkFailed`, `GetLogDetail`, `ListLogs`, `DeleteLog` and `DeleteLogs`.
@@ -436,7 +437,7 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/module/system/mail -run 'TestSend|TestConfig|TestTemplate|TestLog' -count=1
+  go test ./internal/module/message/mail -run 'TestSend|TestConfig|TestTemplate|TestLog' -count=1
   ```
 
   Expected result: FAIL because repository, Service and protocol methods do not exist.
@@ -507,25 +508,25 @@
 
 - [ ] **Step 6: Add Admin-only diagnostic projection and sensitive-field assertions.**
 
-  `GetLogDetail` may decrypt the verification snapshot only after the caller has `system:mail:detail`; `ListLogs` returns bounded failure summaries and no code. Keep the complete code, email and Tencent error in the protected detail DTO only. Add tests that marshal public results, ordinary `slog` attributes and operation-log payloads and assert they contain none of `secretId`, `secretKey`, `ciphertext`, `code`, `templateVariables` values or Authorization headers.
+  `GetLogDetail` may decrypt the verification snapshot only after the caller has `message:mail:detail`; `ListLogs` returns bounded failure summaries and no code. Keep the complete code, email and Tencent error in the protected detail DTO only. Add tests that marshal public results, ordinary `slog` attributes and operation-log payloads and assert they contain none of `secretId`, `secretKey`, `ciphertext`, `code`, `templateVariables` values or Authorization headers.
 
 - [ ] **Step 7: Run all Service tests and commit the core module.**
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/module/system/mail -count=1 -timeout 180s
+  go test ./internal/module/message/mail -count=1 -timeout 180s
   cd D:\admin
-  git add server/internal/module/system/mail
+  git add server/internal/module/message/mail
   git commit -m "feat: 实现邮件配置模板和同步发送服务"
   ```
 
 ### Task 5: 实现收件人黑白名单规则服务
 
 **Files:**
-- Create: `server/internal/module/system/mail/rules.go`
-- Create: `server/internal/module/system/mail/rules_test.go`
-- Modify: `server/internal/module/system/mail/protocol.go`
-- Modify: `server/internal/module/system/mail/repository.go`
+- Create: `server/internal/module/message/mail/rules.go`
+- Create: `server/internal/module/message/mail/rules_test.go`
+- Modify: `server/internal/module/message/mail/protocol.go`
+- Modify: `server/internal/module/message/mail/repository.go`
 
 **Interfaces:**
 - Produces `RuleEvaluator`:
@@ -548,7 +549,7 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/module/system/mail -run 'Rule|Normalize|Domain' -count=1
+  go test ./internal/module/message/mail -run 'Rule|Normalize|Domain' -count=1
   ```
 
   Expected result: FAIL because `NormalizeRecipient`, `RuleEvaluator` and rule repository methods are not implemented.
@@ -592,17 +593,17 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/module/system/mail -run 'Rule|Normalize|Domain|TestSend' -count=1
+  go test ./internal/module/message/mail -run 'Rule|Normalize|Domain|TestSend' -count=1
   cd D:\admin
-  git add server/internal/module/system/mail/protocol.go server/internal/module/system/mail/repository.go server/internal/module/system/mail/rules.go server/internal/module/system/mail/rules_test.go
+  git add server/internal/module/message/mail/protocol.go server/internal/module/message/mail/repository.go server/internal/module/message/mail/rules.go server/internal/module/message/mail/rules_test.go
   git commit -m "feat: 增加邮件收件人黑白名单规则"
   ```
 
 ### Task 6: 增加 Redis 双层限流和 HTTP 快速拒绝
 
 **Files:**
-- Create: `server/internal/module/system/mail/limiter.go`
-- Create: `server/internal/module/system/mail/limiter_test.go`
+- Create: `server/internal/module/message/mail/limiter.go`
+- Create: `server/internal/module/message/mail/limiter_test.go`
 - Create: `server/internal/middleware/ratelimit.go`
 - Create: `server/internal/middleware/ratelimit_test.go`
 - Modify: `server/internal/shared/apperror/error.go`
@@ -631,7 +632,7 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/module/system/mail ./internal/middleware -run 'Limit|Rate' -count=1
+  go test ./internal/module/message/mail ./internal/middleware -run 'Limit|Rate' -count=1
   ```
 
   Expected result: FAIL because `Limiter`, `RedisLimiter`, and `RateLimit` do not exist.
@@ -686,21 +687,21 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/module/system/mail ./internal/middleware -count=1
+  go test ./internal/module/message/mail ./internal/middleware -count=1
   cd D:\admin
-  git add server/internal/module/system/mail/limiter.go server/internal/module/system/mail/limiter_test.go server/internal/middleware/ratelimit.go server/internal/middleware/ratelimit_test.go server/go.mod server/go.sum
+  git add server/internal/module/message/mail/limiter.go server/internal/module/message/mail/limiter_test.go server/internal/middleware/ratelimit.go server/internal/middleware/ratelimit_test.go server/go.mod server/go.sum
   git commit -m "feat: 增加邮件发送双层限流"
   ```
 
 ### Task 7: 接入 Admin Handler、严格 DTO、路由和操作日志
 
 **Files:**
-- Create: `server/internal/module/system/mail/handler.go`
-- Create: `server/internal/module/system/mail/route.go`
-- Modify: `server/internal/module/system/mail/request.go`
-- Modify: `server/internal/module/system/mail/response.go`
-- Create: `server/internal/module/system/mail/handler_test.go`
-- Create: `server/internal/module/system/mail/route_test.go`
+- Create: `server/internal/module/message/mail/handler.go`
+- Create: `server/internal/module/message/mail/route.go`
+- Modify: `server/internal/module/message/mail/request.go`
+- Modify: `server/internal/module/message/mail/response.go`
+- Create: `server/internal/module/message/mail/handler_test.go`
+- Create: `server/internal/module/message/mail/route_test.go`
 - Modify: `server/cmd/api/main.go`
 - Modify: `server/cmd/api/main_test.go`
 - Modify: `server/internal/module/system/operationlog/rules.go`
@@ -713,19 +714,19 @@
 
   ```go
   const (
-      PermissionView = "system:mail:view"
-      PermissionList = "system:mail:list"
-      PermissionDetail = "system:mail:detail"
-      PermissionConfigUpdate = "system:mail:config:update"
-      PermissionConfigDelete = "system:mail:config:delete"
-      PermissionTest = "system:mail:test"
-      PermissionTemplateUpdate = "system:mail:template:update"
-      PermissionTemplateStatus = "system:mail:template:status"
-      PermissionLogDelete = "system:mail:log:delete"
-      PermissionRuleCreate = "system:mail:rule:create"
-      PermissionRuleUpdate = "system:mail:rule:update"
-      PermissionRuleStatus = "system:mail:rule:status"
-      PermissionRuleDelete = "system:mail:rule:delete"
+      PermissionView = "message:mail:view"
+      PermissionList = "message:mail:list"
+      PermissionDetail = "message:mail:detail"
+      PermissionConfigUpdate = "message:mail:config:update"
+      PermissionConfigDelete = "message:mail:config:delete"
+      PermissionTest = "message:mail:test"
+      PermissionTemplateUpdate = "message:mail:template:update"
+      PermissionTemplateStatus = "message:mail:template:status"
+      PermissionLogDelete = "message:mail:log:delete"
+      PermissionRuleCreate = "message:mail:rule:create"
+      PermissionRuleUpdate = "message:mail:rule:update"
+      PermissionRuleStatus = "message:mail:rule:status"
+      PermissionRuleDelete = "message:mail:rule:delete"
   )
   ```
 
@@ -751,7 +752,7 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/module/system/mail ./cmd/api -run 'Mail|mail' -count=1
+  go test ./internal/module/message/mail ./cmd/api -run 'Mail|mail' -count=1
   ```
 
   Expected result: FAIL because the mail Handler, route registration and dependency fields are absent.
@@ -779,10 +780,10 @@
   The registration must remain inside the shared Admin group:
 
   ```go
-  mailService := systemmail.NewService(mail.NewRepository(postgres.GORM), keys, sesClient, ruleEvaluator, redisLimiter)
-  Mail: systemmail.NewHandler(mailService),
+  mailService := messagemail.NewService(mail.NewRepository(postgres.GORM), keys, sesClient, ruleEvaluator, redisLimiter)
+  Mail: messagemail.NewHandler(mailService),
   // buildRouter
-  systemmail.RegisterRoutes(adminRoutes, dependencies.Mail, dependencies.Authenticate, dependencies.RequirePermission)
+  messagemail.RegisterRoutes(adminRoutes, dependencies.Mail, dependencies.Authenticate, dependencies.RequirePermission)
   ```
 
 - [ ] **Step 5: Add operation-log rules with request/response capture disabled for sensitive mail endpoints.**
@@ -804,7 +805,7 @@
 
   ```powershell
   cd D:\admin\server
-  go test ./internal/module/system/mail ./internal/module/system/operationlog ./cmd/api -run 'Mail|mail|Operation|Route' -count=1 -timeout 180s
+  go test ./internal/module/message/mail ./internal/module/system/operationlog ./cmd/api -run 'Mail|mail|Operation|Route' -count=1 -timeout 180s
   ```
 
   Expected result: PASS; `main` still has no migration, default-template seed or menu initialization call.
@@ -813,16 +814,16 @@
 
   ```powershell
   cd D:\admin
-  git add server/internal/module/system/mail server/cmd/api/main.go server/cmd/api/main_test.go server/internal/module/system/operationlog/rules.go server/internal/module/system/operationlog/rules_test.go
+  git add server/internal/module/message/mail server/cmd/api/main.go server/cmd/api/main_test.go server/internal/module/system/operationlog/rules.go server/internal/module/system/operationlog/rules_test.go
   git commit -m "feat: 增加邮件管理 Admin API 和审计规则"
   ```
 
 ### Task 8: 实现前端 API、动态路由和四 Tab 页面
 
 **Files:**
-- Create: `web/src/api/system/mail.ts`
+- Create: `web/src/api/message/mail.ts`
 - Create: `web/src/views/message/mail/index.vue`
-- Create: `web/tests/api/system/mail.test.ts`
+- Create: `web/tests/api/message/mail.test.ts`
 - Create: `web/tests/views/message/mail/index.test.ts`
 - Modify: `web/src/router/permission-routes.ts`
 - Modify: `web/src/locales/zh-CN.ts`
@@ -830,18 +831,18 @@
 
 **Interfaces:**
 - Produces strict TypeScript DTO parsers for every Admin mail endpoint; parsers reject missing or unknown fields and never model secret ciphertext.
-- Adds `componentPathMap['message/mail'] = 'message/mail'` and resolves the page as a dynamic route named from `system:mail:view`.
+- Adds `componentPathMap['message/mail'] = 'message/mail'` and resolves the page as a dynamic route named from `message:mail:view`.
 - Produces one `el-tabs` page with lazy tabs `config`, `templates`, `logs`, `rules`; each tab fetches only after activation and gates its requests/buttons with the exact permission codes from Task 7.
 
 - [ ] **Step 1: Write failing API parser and permission-visibility tests.**
 
-  Assert `parseConfig` rejects `secretId`, `secretKey`, unknown keys and missing `configured`; assert the page renders four tabs only when `system:mail:view` exists, hides logs when `system:mail:list`/`system:mail:detail` is absent, and hides each mutation button without its action permission. Assert the edit form initializes secret inputs as empty strings.
+  Assert `parseConfig` rejects `secretId`, `secretKey`, unknown keys and missing `configured`; assert the page renders four tabs only when `message:mail:view` exists, hides logs when `message:mail:list`/`message:mail:detail` is absent, and hides each mutation button without its action permission. Assert the edit form initializes secret inputs as empty strings.
 
 - [ ] **Step 2: Run focused Vitest tests and verify missing API/page modules fail.**
 
   ```powershell
   cd D:\admin\web
-  pnpm vitest run tests/api/system/mail.test.ts tests/views/message/mail/index.test.ts --pool=threads --maxWorkers=1
+  pnpm vitest run tests/api/message/mail.test.ts tests/views/message/mail/index.test.ts --pool=threads --maxWorkers=1
   ```
 
   Expected result: FAIL because the API module, component path binding and page do not exist.
@@ -873,10 +874,10 @@
   ```ts
   const activeTab = ref<'config' | 'templates' | 'logs' | 'rules'>('config')
   const visibleTabs = computed(() => [
-    { name: 'config', visible: access.hasPermission('system:mail:list') },
-    { name: 'templates', visible: access.hasPermission('system:mail:list') },
-    { name: 'logs', visible: access.hasPermission('system:mail:list') && access.hasPermission('system:mail:detail') },
-    { name: 'rules', visible: access.hasPermission('system:mail:list') },
+    { name: 'config', visible: access.hasPermission('message:mail:list') },
+    { name: 'templates', visible: access.hasPermission('message:mail:list') },
+    { name: 'logs', visible: access.hasPermission('message:mail:list') && access.hasPermission('message:mail:detail') },
+    { name: 'rules', visible: access.hasPermission('message:mail:list') },
   ].filter(tab => tab.visible))
   watch(activeTab, tab => { if (tab === 'logs') void loadLogs(); if (tab === 'rules') void loadRules() }, { immediate: true })
   ```
@@ -889,10 +890,10 @@
 
   ```powershell
   cd D:\admin\web
-  pnpm vitest run tests/api/system/mail.test.ts tests/views/message/mail/index.test.ts tests/router/permission-routes.test.ts --pool=threads --maxWorkers=1
+  pnpm vitest run tests/api/message/mail.test.ts tests/views/message/mail/index.test.ts tests/router/permission-routes.test.ts --pool=threads --maxWorkers=1
   pnpm build
   cd D:\admin
-  git add web/src/api/system/mail.ts web/src/views/message/mail/index.vue web/tests/api/system/mail.test.ts web/tests/views/message/mail/index.test.ts web/src/router/permission-routes.ts web/src/locales/zh-CN.ts web/src/locales/en-US.ts
+  git add web/src/api/message/mail.ts web/src/views/message/mail/index.vue web/tests/api/message/mail.test.ts web/tests/views/message/mail/index.test.ts web/src/router/permission-routes.ts web/src/locales/zh-CN.ts web/src/locales/en-US.ts
   git commit -m "feat: 增加邮件服务四 Tab 管理页面"
   ```
 
@@ -903,12 +904,12 @@
 - Create: `server/internal/database/mail_menu_migration_test.go`
 
 **Interfaces:**
-- Produces a one-time SQL script that inserts the Admin-platform `消息服务` directory and `邮件服务` page with `component_path='message/mail'`, page code `system:mail:view`, and hidden action rows for every `list/detail/action` code in the spec.
+- Produces a one-time SQL script that inserts the Admin-platform `消息服务` directory and `邮件服务` page with `component_path='message/mail'`, page code `message:mail:view`, and hidden action rows for every `list/detail/action` code in the spec.
 - Does not modify `menu.remark`, does not insert Canvas rows, and does not add any runtime migration or default-data function.
 
 - [ ] **Step 1: Write the failing menu contract test.**
 
-  Assert the SQL contains parent directory code `message`, page code `system:mail:view`, component path `message/mail`, four Tab page semantics represented only in frontend, and all twelve action permissions with `is_hidden=1`. Assert no template create/delete permission and no `platformId` request field.
+  Assert the SQL contains parent directory code `message`, page code `message:mail:view`, component path `message/mail`, four Tab page semantics represented only in frontend, and all twelve action permissions with `is_hidden=1`. Assert no template create/delete permission and no `platformId` request field.
 
 - [ ] **Step 2: Run the migration test and verify the script is absent.**
 
@@ -921,7 +922,7 @@
 
 - [ ] **Step 3: Add transactional Admin-only menu SQL.**
 
-  Select the live Admin platform by `auth_platform.code = 'admin'`, lock/find an existing `message` directory if present, insert the page beneath it, and insert hidden actions with unique `(platform_id, code)` guards. Page rows must have `menu_type='page'`, `code='system:mail:view'`, `path='/message/mail'`, `component_path='message/mail'`; action rows must have no path/component path and must not end in `:view`.
+  Select the live Admin platform by `auth_platform.code = 'admin'`, lock/find an existing `message` directory if present, insert the page beneath it, and insert hidden actions with unique `(platform_id, code)` guards. Page rows must have `menu_type='page'`, `code='message:mail:view'`, `path='/message/mail'`, `component_path='message/mail'`; action rows must have no path/component path and must not end in `:view`.
 
   The one-time script must use the same platform-scoped conflict pattern as existing menu SQL:
 
@@ -938,20 +939,20 @@
       SELECT 1 FROM permission_menu m WHERE m.platform_id = admin_platform.id AND m.code = 'message' AND m.deleted_at IS NULL
   );
   INSERT INTO permission_menu (platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, sort_order, is_enabled, is_hidden)
-  SELECT p.id, d.id, 'page', '邮件服务', 'system:mail:view', 'navigation.mail', '/message/mail', 'message/mail', 10, 1, 0
+  SELECT p.id, d.id, 'page', '邮件服务', 'message:mail:view', 'navigation.mail', '/message/mail', 'message/mail', 10, 1, 0
   FROM auth_platform p JOIN permission_menu d ON d.platform_id = p.id AND d.code = 'message' AND d.deleted_at IS NULL
   WHERE p.code = 'admin' AND p.deleted_at IS NULL
-    AND NOT EXISTS (SELECT 1 FROM permission_menu m WHERE m.platform_id = p.id AND m.code = 'system:mail:view' AND m.deleted_at IS NULL);
+    AND NOT EXISTS (SELECT 1 FROM permission_menu m WHERE m.platform_id = p.id AND m.code = 'message:mail:view' AND m.deleted_at IS NULL);
   WITH actions(code, name, sort_order) AS (VALUES
-      ('system:mail:list', '读取邮件服务', 5), ('system:mail:detail', '读取邮件详情', 10),
-      ('system:mail:config:update', '修改邮件配置', 20), ('system:mail:config:delete', '删除邮件配置', 30),
-      ('system:mail:test', '发送测试邮件', 40), ('system:mail:template:update', '修改邮件模板', 50),
-      ('system:mail:template:status', '启停邮件模板', 60), ('system:mail:log:delete', '删除邮件日志', 70),
-      ('system:mail:rule:create', '新增收件人规则', 80), ('system:mail:rule:update', '修改收件人规则', 90),
-      ('system:mail:rule:status', '启停收件人规则', 100), ('system:mail:rule:delete', '删除收件人规则', 110)
+      ('message:mail:list', '读取邮件服务', 5), ('message:mail:detail', '读取邮件详情', 10),
+      ('message:mail:config:update', '修改邮件配置', 20), ('message:mail:config:delete', '删除邮件配置', 30),
+      ('message:mail:test', '发送测试邮件', 40), ('message:mail:template:update', '修改邮件模板', 50),
+      ('message:mail:template:status', '启停邮件模板', 60), ('message:mail:log:delete', '删除邮件日志', 70),
+      ('message:mail:rule:create', '新增收件人规则', 80), ('message:mail:rule:update', '修改收件人规则', 90),
+      ('message:mail:rule:status', '启停收件人规则', 100), ('message:mail:rule:delete', '删除收件人规则', 110)
   ), page AS (
       SELECT p.id AS platform_id, m.id AS parent_id
-      FROM auth_platform p JOIN permission_menu m ON m.platform_id = p.id AND m.code = 'system:mail:view' AND m.deleted_at IS NULL
+      FROM auth_platform p JOIN permission_menu m ON m.platform_id = p.id AND m.code = 'message:mail:view' AND m.deleted_at IS NULL
       WHERE p.code = 'admin' AND p.deleted_at IS NULL
   )
   INSERT INTO permission_menu (platform_id, parent_id, menu_type, name, code, sort_order, is_enabled, is_hidden)
@@ -986,7 +987,7 @@
 
 **Files:**
 - Create: `docs/superpowers/verification/2026-09-01-mail-service-acceptance.md`
-- Create: `server/internal/module/system/mail/integration_test.go` for the cross-layer send/diagnostic contract.
+- Create: `server/internal/module/message/mail/integration_test.go` for the cross-layer send/diagnostic contract.
 - Create: `web/tests/views/message/mail/acceptance.test.ts` for deterministic permission and tab regression coverage.
 
 **Interfaces:**
@@ -1019,8 +1020,8 @@
 
   ```powershell
   cd D:\admin
-  rg -n "SecretID|SecretKey|CodeCiphertext|verificationCode|templateVariables|Authorization|ciphertext" server/internal/module/system/mail server/internal/storage/mail server/internal/module/system/operationlog
-  rg -n "AutoMigrate|EnsureSchema|Seed|初始化|INSERT INTO.*system_mail|INSERT INTO.*permission_menu" server/cmd/api server/cmd/worker
+  rg -n "SecretID|SecretKey|CodeCiphertext|verificationCode|templateVariables|Authorization|ciphertext" server/internal/module/message/mail server/internal/storage/mail server/internal/module/system/operationlog
+  rg -n "AutoMigrate|EnsureSchema|Seed|初始化|INSERT INTO.*message_mail|INSERT INTO.*permission_menu" server/cmd/api server/cmd/worker
   ```
 
   Confirm the first search only finds encryption/storage/test assertions and the second finds no startup migration, seed or menu write path.
@@ -1034,7 +1035,7 @@
   ```powershell
   cd D:\admin
   git status --short
-  git add docs/superpowers/verification/2026-09-01-mail-service-acceptance.md server/internal/module/system/mail/integration_test.go web/tests/views/message/mail/acceptance.test.ts
+  git add docs/superpowers/verification/2026-09-01-mail-service-acceptance.md server/internal/module/message/mail/integration_test.go web/tests/views/message/mail/acceptance.test.ts
   git diff --cached
   git commit -m "test: 完成邮件服务全量验证和验收记录"
   ```

@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"admin/server/internal/module/system/mail"
+	"admin/server/internal/module/message/mail"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
 	"fmt"

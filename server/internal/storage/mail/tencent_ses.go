@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	systemmail "admin/server/internal/module/system/mail"
+	messagemail "admin/server/internal/module/message/mail"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	ses "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/ses/v20201002"
@@ -21,13 +21,13 @@ func NewTencentSESClient(httpClient *http.Client) *Client {
 	return &Client{httpClient: httpClient}
 }
 
-func (c *Client) Send(ctx context.Context, input systemmail.SendInput) (systemmail.ProviderSendResult, error) {
+func (c *Client) Send(ctx context.Context, input messagemail.SendInput) (messagemail.ProviderSendResult, error) {
 	if input.TemplateID <= 0 {
-		return systemmail.ProviderSendResult{}, systemmail.NewProviderError("invalid_template", "template id is invalid")
+		return messagemail.ProviderSendResult{}, messagemail.NewProviderError("invalid_template", "template id is invalid")
 	}
 	data, err := json.Marshal(input.TemplateData)
 	if err != nil {
-		return systemmail.ProviderSendResult{}, systemmail.NewProviderError("invalid_template_data", err.Error())
+		return messagemail.ProviderSendResult{}, messagemail.NewProviderError("invalid_template_data", err.Error())
 	}
 	cred := common.NewCredential(input.SecretID, input.SecretKey)
 	cp := profile.NewClientProfile()
@@ -37,7 +37,7 @@ func (c *Client) Send(ctx context.Context, input systemmail.SendInput) (systemma
 	}
 	client, err := ses.NewClient(cred, input.Region, cp)
 	if err != nil {
-		return systemmail.ProviderSendResult{}, systemmail.NewProviderError("client_init", err.Error())
+		return messagemail.ProviderSendResult{}, messagemail.NewProviderError("client_init", err.Error())
 	}
 	if c.httpClient != nil && c.httpClient.Transport != nil {
 		client.WithHttpTransport(c.httpClient.Transport)
@@ -57,14 +57,14 @@ func (c *Client) Send(ctx context.Context, input systemmail.SendInput) (systemma
 	result, err := client.SendEmailWithContext(ctx, req)
 	if err != nil {
 		if ctx.Err() != nil {
-			return systemmail.ProviderSendResult{}, systemmail.NewProviderError("timeout", "email provider request timed out")
+			return messagemail.ProviderSendResult{}, messagemail.NewProviderError("timeout", "email provider request timed out")
 		}
-		return systemmail.ProviderSendResult{}, systemmail.NewProviderError("ses_error", fmt.Sprintf("%v", err))
+		return messagemail.ProviderSendResult{}, messagemail.NewProviderError("ses_error", fmt.Sprintf("%v", err))
 	}
 	if result == nil || result.Response == nil {
-		return systemmail.ProviderSendResult{}, systemmail.NewProviderError("empty_response", "email provider returned an empty response")
+		return messagemail.ProviderSendResult{}, messagemail.NewProviderError("empty_response", "email provider returned an empty response")
 	}
-	return systemmail.ProviderSendResult{RequestID: value(result.Response.RequestId), MessageID: value(result.Response.MessageId)}, nil
+	return messagemail.ProviderSendResult{RequestID: value(result.Response.RequestId), MessageID: value(result.Response.MessageId)}, nil
 }
 func value(v *string) string {
 	if v == nil {

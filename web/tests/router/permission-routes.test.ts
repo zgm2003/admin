@@ -97,11 +97,11 @@ describe('access route registration', () => {
     const router = testRouter()
     const cleanup = registerPermissionRoutes(
       router,
-      [directory('message', [page('system:mail:view', '/message/mail', 'message/mail')])],
+      [directory('message', [page('message:mail:view', '/message/mail', 'message/mail')])],
       testViews,
     )
 
-    expect(router.resolve('/message/mail').name).toBe('access:system:mail:view')
+    expect(router.resolve('/message/mail').name).toBe('access:message:mail:view')
     cleanup()
   })
 
