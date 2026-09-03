@@ -8,7 +8,7 @@ export interface SearchOption {
   value: SearchOptionValue
 }
 
-export type SearchFieldType = 'input' | 'select-v2'
+export type SearchFieldType = 'input' | 'select-v2' | 'date-range'
 
 interface SearchFieldBase {
   key: string

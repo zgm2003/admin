@@ -270,8 +270,8 @@ async function saveConfig(): Promise<void> {
     configDialog.value = false
     ElNotification.success({ title: t('storage.saveSuccess') })
     await loadConfigs()
-  } catch (error: unknown) {
-    mutationError.value = errorMessage(error)
+  } catch {
+    /* request.ts provides the single error notification */
   }
 }
 async function saveRule(): Promise<void> {
@@ -327,8 +327,8 @@ async function testConfigConnection(row: CosConfig): Promise<void> {
   try {
     await testCosConfig(row.id)
     ElNotification.success({ title: t('storage.testSuccess') })
-  } catch {
-    /* request.ts provides the single error notification */
+  } catch (error: unknown) {
+    mutationError.value = errorMessage(error)
   }
 }
 async function removeConfig(row: CosConfig): Promise<void> {

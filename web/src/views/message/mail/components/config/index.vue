@@ -104,10 +104,14 @@ async function sendTest(): Promise<void> {
 }
 
 async function remove(): Promise<void> {
-  await ElMessageBox.confirm(t('mail.deleteConfirm'))
-  await mailApi.deleteMailConfig()
-  ElMessage.success(t('mail.deleted'))
-  emit('deleted')
+  try {
+    await ElMessageBox.confirm(t('mail.deleteConfirm'))
+    await mailApi.deleteMailConfig()
+    ElMessage.success(t('mail.deleted'))
+    emit('deleted')
+  } catch {
+    // ElMessageBox cancellation and request errors are handled by their respective layers.
+  }
 }
 </script>
 

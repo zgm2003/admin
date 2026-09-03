@@ -91,6 +91,19 @@ function dateRangeValue(key: string): SearchDateRange {
   throw new Error(`Search date range field ${key} must be an empty or two-item string array`)
 }
 
+function selectValue(key: string): string | number | null | undefined {
+  const value = form[key]
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    value === null ||
+    value === undefined
+  ) {
+    return value
+  }
+  throw new Error(`Search select field ${key} must be string or number`)
+}
+
 function normalizeValue(value: unknown, key: string): SearchFormValue {
   if (
     typeof value === 'string' ||
@@ -155,7 +168,7 @@ function reset(): void {
         />
         <el-select-v2
           v-else
-          :model-value="form[field.key]"
+          :model-value="selectValue(field.key)"
           :options="field.options"
           :placeholder="field.placeholder"
           :disabled="field.disabled"

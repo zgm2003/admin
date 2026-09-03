@@ -76,8 +76,12 @@ function edit(row: MailTemplate): void {
 }
 
 async function toggle(row: MailTemplate): Promise<void> {
-  await updateMailTemplateStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
-  emit('refresh')
+  try {
+    await updateMailTemplateStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
+    emit('refresh')
+  } catch {
+    // request.ts owns API error notifications.
+  }
 }
 
 function parseMap(value: string): Record<string, string> {
@@ -125,7 +129,6 @@ async function saveTemplate(): Promise<void> {
       :columns="columns"
       :data="templates"
       :loading="loading"
-      result-state="success"
       :aria-label="t('mail.templatesTab')"
       :refresh-label="t('mail.refresh')"
       @refresh="emit('refresh')"

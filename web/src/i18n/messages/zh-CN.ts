@@ -570,6 +570,7 @@ export const zhCN = {
   'auth.login.failed': '登录失败',
   'auth.login.bootstrapFailed': '认证服务响应异常',
   'request.protocolError': '服务响应格式无效',
+  'request.failed': '请求失败',
   'access.loadFailed': '加载访问权限失败',
   'access.invalidProtocol': '访问权限响应格式无效',
   'menu.title': '菜单管理',

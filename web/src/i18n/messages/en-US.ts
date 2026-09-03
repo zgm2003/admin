@@ -593,6 +593,7 @@ export const enUS = {
   'auth.login.failed': 'Sign-in failed',
   'auth.login.bootstrapFailed': 'Authentication service returned an unexpected response',
   'request.protocolError': 'The service returned an invalid response',
+  'request.failed': 'Request failed',
   'access.loadFailed': 'Failed to load access permissions',
   'access.invalidProtocol': 'The access permission response is invalid',
   'menu.title': 'Menu management',

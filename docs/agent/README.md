@@ -177,6 +177,10 @@ view -> api/<module>.ts -> utils/request.ts -> Go API
 
 Axios 必须先严格校验 envelope，再把 `data` 交给业务 API。页面不能猜字段、兼容 `msg`，也不能用可选链、类型断言或默认值掩盖必填字段缺失。
 
+请求错误所有权固定为请求层：`utils/request.ts` 对业务 `code != 0`、HTTP、网络和协议错误统一调用
+`ElNotification` 提示一次；HTTP 401/403 不弹通用通知，由认证刷新/跳转或权限页面处理。页面和组件
+不得对同一接口错误重复提示，也不得以“请求层已提示”为由改变成功、取消或业务状态流程。
+
 裸 `any` 定向检查：
 
 ```powershell

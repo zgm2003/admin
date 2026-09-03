@@ -1,4 +1,5 @@
 import { AxiosError, AxiosHeaders, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios'
+import { ElNotification } from 'element-plus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { pinia } from '@/store'
@@ -42,18 +43,21 @@ describe('createRequestClient', () => {
     localStorage.clear()
     setLocale('zh-CN')
     useAuthStore(pinia).$reset()
+    vi.restoreAllMocks()
+    vi.spyOn(ElNotification, 'error').mockImplementation(() => ({ close: () => undefined }))
   })
 
   it('requires an explicit API base URL', () => {
     expect(() => createRequestClient('  ')).toThrow(ProtocolError)
   })
 
-  it('returns network errors unchanged without UI side effects', async () => {
+  it('returns network errors unchanged and shows one notification', async () => {
     const networkError = new AxiosError('connection refused', AxiosError.ERR_NETWORK)
     const adapter: AxiosAdapter = async () => Promise.reject(networkError)
     const client = createRequestClient('http://localhost:16301')
 
     await expect(client.get('/health', { adapter })).rejects.toBe(networkError)
+    expect(ElNotification.error).toHaveBeenCalledOnce()
   })
 
   it.each([
@@ -99,7 +103,7 @@ describe('createRequestClient', () => {
     ).rejects.toBeInstanceOf(ProtocolError)
   })
 
-  it('returns business errors without UI side effects', async () => {
+  it('returns business errors and shows one notification', async () => {
     const client = createRequestClient('http://localhost:16301')
     const adapter: AxiosAdapter = async (config) =>
       successResponse(config, {
@@ -111,20 +115,25 @@ describe('createRequestClient', () => {
     await expect(client.post('/api/v1/protected', undefined, { adapter })).rejects.toMatchObject({
       code: 10005,
     })
+    expect(ElNotification.error).toHaveBeenCalledOnce()
   })
 
   it.each([
     { status: 401, code: 10002, message: '未登录或登录已失效' },
     { status: 403, code: 10003, message: '没有访问权限' },
-  ])('returns HTTP $status failures without UI side effects', async ({ status, code, message }) => {
-    const client = createRequestClient('http://localhost:16301')
+  ])(
+    'returns HTTP $status failures without a generic notification',
+    async ({ status, code, message }) => {
+      const client = createRequestClient('http://localhost:16301')
 
-    await expect(
-      client.post('/api/v1/auth/login', undefined, {
-        adapter: failureAdapter(status, { code, data: null, message }),
-      }),
-    ).rejects.toMatchObject({ code, httpStatus: status })
-  })
+      await expect(
+        client.post('/api/v1/auth/login', undefined, {
+          adapter: failureAdapter(status, { code, data: null, message }),
+        }),
+      ).rejects.toMatchObject({ code, httpStatus: status })
+      expect(ElNotification.error).not.toHaveBeenCalled()
+    },
+  )
 
   it('does not notify an intermediate 401 that is recovered by Refresh', async () => {
     let refreshed = false

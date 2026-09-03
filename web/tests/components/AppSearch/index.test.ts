@@ -3,10 +3,11 @@ import ElementPlus from 'element-plus'
 import { describe, expect, it } from 'vitest'
 
 import AppSearch from '@/components/AppSearch/index.vue'
-import type { SearchField, SearchFormModel } from '@/components/AppSearch/types'
+import type { SearchField, SearchFieldType, SearchFormModel } from '@/components/AppSearch/types'
 import { appI18n, setLocale } from '@/i18n'
 
 describe('Search', () => {
+  const dateRangeType: SearchFieldType = 'date-range'
   const fields: SearchField[] = [
     { key: 'keyword', type: 'input', label: 'Keyword' },
     {
@@ -71,5 +72,9 @@ describe('Search', () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.text()).toContain('Search')
     expect(wrapper.text()).toContain('Reset')
+  })
+
+  it('supports date-range as a public field type', () => {
+    expect(dateRangeType).toBe('date-range')
   })
 })

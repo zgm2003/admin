@@ -168,7 +168,6 @@ onMounted(() => {
       :data="rows"
       :loading="loading"
       :pagination="pagination"
-      result-state="success"
       :aria-label="t('loginLog.title')"
       :refresh-label="t('loginLog.refresh')"
       @refresh="load"

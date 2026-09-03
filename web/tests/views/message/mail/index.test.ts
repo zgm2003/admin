@@ -154,6 +154,14 @@ describe('mail service page', () => {
     await selectTab(wrapper, '黑白名单')
     expect(wrapper.find('[data-testid="mail-rule-create"]').exists()).toBe(true)
   })
+
+  it('does not pass a static success result state to mail tables', async () => {
+    const wrapper = mountPage(['message:mail:list'])
+    await flushPromises()
+    await selectTab(wrapper, '邮件模板')
+
+    expect(wrapper.findComponent({ name: 'AppTable' }).props('resultState')).toBe('idle')
+  })
 })
 
 function mountPage(permissionCodes: string[]): VueWrapper {

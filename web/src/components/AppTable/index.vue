@@ -53,7 +53,6 @@ const emit = defineEmits<{
   'row-click': [row: Row]
   'selection-change': [selection: Row[]]
   'update:pagination': [pagination: TablePaginationState]
-  'column-change': [keys: TableColumnKey[]]
 }>()
 
 const { t } = useI18n()
@@ -167,7 +166,6 @@ function onSelectionChange(selection: Row[]): void {
       </el-space>
     </div>
     <el-table
-      ref="tableRef"
       v-loading="busy"
       border
       :data="data"

@@ -5,6 +5,7 @@ import axios, {
   type AxiosRequestConfig,
   type InternalAxiosRequestConfig,
 } from 'axios'
+import { ElNotification } from 'element-plus'
 
 import type { AccessCredential } from '@/api/auth/login'
 import { authPlatform } from '@/auth/platform'
@@ -121,6 +122,7 @@ function buildRequestClient(
         response.data = unwrapSuccessEnvelope(response.data)
         return response
       } catch (error: unknown) {
+        notifyRequestError(error)
         return Promise.reject(error)
       }
     },
@@ -131,12 +133,14 @@ function buildRequestClient(
         error.response?.status !== 401 ||
         error.config === undefined
       ) {
+        notifyRequestError(normalizedError)
         return Promise.reject(normalizedError)
       }
 
       const originalConfig = error.config as AuthRequestConfig
       const path = requestPath(originalConfig.url, baseURL)
       if (originalConfig.authRetried === true || noRefreshPaths.has(path)) {
+        notifyRequestError(normalizedError)
         return Promise.reject(normalizedError)
       }
 
@@ -172,6 +176,7 @@ async function performRefresh(
     return credential
   } catch (error: unknown) {
     const normalizedError = normalizeResponseError(error)
+    notifyRequestError(normalizedError)
     if (normalizedError instanceof ApiError && normalizedError.httpStatus === 401) {
       authStore.setAnonymous()
       onUnauthorized()
@@ -180,6 +185,17 @@ async function performRefresh(
     }
     throw normalizedError
   }
+}
+
+function notifyRequestError(error: unknown): void {
+  if (!(error instanceof Error)) return
+  if (error instanceof ApiError && (error.httpStatus === 401 || error.httpStatus === 403)) return
+  ElNotification.error({
+    title: appI18n.global.t('request.failed'),
+    message:
+      error instanceof ProtocolError ? appI18n.global.t('request.protocolError') : error.message,
+    type: 'error',
+  })
 }
 
 function applyClientHeaders(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {

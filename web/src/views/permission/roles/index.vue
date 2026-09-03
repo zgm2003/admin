@@ -344,7 +344,6 @@ onMounted(() => {
       :data="rows"
       :loading="loading"
       :pagination="tablePagination"
-      result-state="success"
       :aria-label="t('role.title')"
       :refresh-label="t('role.refresh')"
       @refresh="loadRoles"

@@ -37,7 +37,7 @@ const invalidMessage = computed(() => {
     <ElIcon v-if="resolvedComponent">
       <component :is="resolvedComponent" />
     </ElIcon>
-    <span v-else data-testid="d-icon-empty" :title="invalidMessage">?</span>
+    <span v-else class="d-icon-empty" data-testid="d-icon-empty" :title="invalidMessage">?</span>
   </i>
 </template>
 

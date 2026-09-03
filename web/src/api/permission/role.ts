@@ -2,7 +2,14 @@ import { isYesNo, type YesNo } from '@/enums/yes-no'
 import { request } from '@/utils/request'
 import type { PageRequest, PageResult } from '@/types/pagination'
 import { ProtocolError } from '@/types/http'
-import { expectId, expectInteger, expectPage, expectRecord, expectString } from '@/api/protocol'
+import {
+  expectEmptyObject,
+  expectId,
+  expectInteger,
+  expectPage,
+  expectRecord,
+  expectString,
+} from '@/api/protocol'
 
 export interface RoleListQuery extends PageRequest {
   keyword?: string
@@ -89,12 +96,14 @@ export async function updateRole(
   id: number,
   input: UpdateRoleInput,
 ): Promise<Record<string, never>> {
-  await request<unknown>({
-    method: 'PUT',
-    url: `/api/admin/v1/roles/${id}`,
-    data: { name: input.name },
-  })
-  return {}
+  return expectEmptyObject(
+    await request<unknown>({
+      method: 'PUT',
+      url: `/api/admin/v1/roles/${id}`,
+      data: { name: input.name },
+    }),
+    'role update result',
+  )
 }
 export async function updateRoleStatus(id: number, isEnabled: YesNo): Promise<RoleStatusResult> {
   return parseRoleStatus(
@@ -111,8 +120,10 @@ export async function setDefaultRole(id: number): Promise<RoleDefaultResult> {
   )
 }
 export async function deleteRole(id: number): Promise<Record<string, never>> {
-  await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/roles/${id}` })
-  return {}
+  return expectEmptyObject(
+    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/roles/${id}` }),
+    'role delete result',
+  )
 }
 export async function getRolePermissions(id: number): Promise<RolePermissionsResponse> {
   const raw = await request<unknown>({

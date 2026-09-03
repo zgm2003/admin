@@ -354,6 +354,7 @@ describe('ObjectStorage', () => {
     await flushPromises()
 
     expect(errorSpy).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('连接失败')
   })
 
   it('keeps the COS config dialog global without a platform field', async () => {

@@ -87,14 +87,13 @@ for (const file of [...walk(src), ...walk(tests)]) {
   if (projectPath.startsWith('src/router/') && /staticPageBinding/.test(content)) {
     add('static-business-route', file, '业务页面不得保留静态路由绑定特例')
   }
-}
-
-const requestFile = join(src, 'utils', 'request.ts')
-if (
-  existsSync(requestFile) &&
-  /element-plus|ElNotification|ElMessage|Notification/.test(readFileSync(requestFile, 'utf8'))
-) {
-  add('request-ui-side-effect', requestFile, '请求层不得直接拥有 Element Plus 通知副作用')
+  if (
+    projectPath === 'src/utils/request.ts' &&
+    (!/import\s*\{[^}]*\bElNotification\b[^}]*\}\s*from\s*['"]element-plus['"]/.test(content) ||
+      !/\bElNotification\.error\s*\(/.test(content))
+  ) {
+    add('request-error-notification-owner', file, 'request.ts 必须统一展示非 401/403 接口错误')
+  }
 }
 
 const baselinePath = join(root, 'scripts', 'frontend-architecture-baseline.mjs')

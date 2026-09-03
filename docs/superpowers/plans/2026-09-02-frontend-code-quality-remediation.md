@@ -4,7 +4,7 @@
 
 **Goal:** 在不改变现有业务功能、接口 URL、权限语义和成熟交互的前提下，统一 Vue 组件目录、Element Plus 布局、公共表格/搜索使用、严格 DTO 解析、错误展示所有权和前端质量门禁。
 
-**Architecture:** 先建立可重复执行的格式、Lint、类型和架构门禁，再迁移组件目录并收紧动态路由；随后将所有 API 固定为 `request<unknown>() -> 严格 parser -> DTO`，移除请求层 UI 副作用，最后以邮件页为样板逐页拆分和清理。页面入口只保留权限、顶层查询和组件协调，独立表单、专用表格与纯算法进入页面私有组件或明确逻辑文件，不新增万能 CRUD、Schema Renderer 或 Base 组件。
+**Architecture:** 先建立可重复执行的格式、Lint、类型和架构门禁，再迁移组件目录并收紧动态路由；随后将所有 API 固定为 `request<unknown>() -> 严格 parser -> DTO`，固化请求层统一错误通知，最后以邮件页为样板逐页拆分和清理。页面入口只保留权限、顶层查询和组件协调，独立表单、专用表格与纯算法进入页面私有组件或明确逻辑文件，不新增万能 CRUD、Schema Renderer 或 Base 组件。
 
 **Tech Stack:** Vue 3、TypeScript 6、Pinia、Vue Router、Element Plus、Vue I18n、Vitest、Vite、pnpm、ESLint、Prettier、vue-tsc
 
@@ -18,7 +18,7 @@
 - 无必要样式不写 `<style>`；少量局部样式使用普通 scoped CSS，只有实际使用 Sass 能力时才保留 SCSS。
 - 普通列表默认使用 `AppTable`，列表筛选默认使用 `AppSearch`；菜单树表和权限矩阵保留原生 `el-table` 时必须在组件内写明稳定例外原因。
 - HTTP 响应固定为 `request<unknown>() -> API 模块严格 parser -> DTO`；必填字段缺失、类型错误或未知字段必须抛出 `ProtocolError`，不得使用断言或 `?? []` 修复。
-- `request.ts` 只处理 Envelope、HTTP、Refresh 和错误归一化，不调用 Element Plus 通知；同一失败只由发起动作的页面或组件展示一次。
+- `request.ts` 处理 Envelope、HTTP、Refresh、错误归一化并统一调用 `ElNotification`；非 401/403 接口失败只提示一次，页面不得重复提示。
 - 登录页、Dashboard 和应用壳保持静态；其余业务页从 Access 快照动态注册，菜单页不得保留静态绑定特例。
 - 不修改 Go API、数据库、API URL、权限码、路由 path、分页规则、确认语义、国际化、暗色主题、移动端和可访问性行为。
 - 不创建 `BasePage`、`BaseForm`、`BaseCRUD`、Manager、Factory、通用 Schema Renderer 或万能 `useCRUD`。
@@ -233,7 +233,6 @@ const rules = [
   'meaningless-grid-wrapper',
   'api-unparsed-response',
   'required-array-fallback',
-  'request-ui-side-effect',
   'source-shape-test',
 ]
 ```
@@ -255,7 +254,7 @@ cd D:\admin\web
 node scripts/check-frontend-architecture.mjs
 ```
 
-Expected: FAIL，至少报告 `components/*/src/index.vue`、9 个独立命名 `.vue`、`../views/**/index.vue`、菜单静态路由、跨模块相对 import、显式 `.ts` import、超大页面、所有尚未严格解析的 API（含 permission menu/role）、`?? []`、`request.ts` 的 Element Plus 依赖、2 个源码形态测试、无 Sass 理由的 SCSS 和无意义 row/col；不得报告生成目录或不存在的全局 focus 规则。
+Expected: FAIL，至少报告 `components/*/src/index.vue`、9 个独立命名 `.vue`、`../views/**/index.vue`、菜单静态路由、跨模块相对 import、显式 `.ts` import、超大页面、所有尚未严格解析的 API（含 permission menu/role）、`?? []`、2 个源码形态测试、无 Sass 理由的 SCSS 和无意义 row/col；不得报告生成目录或不存在的全局 focus 规则，也不得把 request.ts 的合法统一通知当作违规。
 
 - [ ] **Step 3: 增加工具链并登记精确遗留**
 
@@ -277,7 +276,6 @@ export const architectureBaseline = Object.freeze([
   { rule: 'oversized-sfc', file: 'src/views/permission/menus/index.vue', detail: '菜单页待职责拆分' },
   { rule: 'api-unparsed-response', file: 'src/api/storage/uploadrule.ts', detail: '存储 DTO 待严格解析' },
   { rule: 'required-array-fallback', file: 'src/api/storage/uploadrule.ts', detail: 'page-init 必填数组待拒绝 null' },
-  { rule: 'request-ui-side-effect', file: 'src/utils/request.ts', detail: '错误所有权迁移前保留' },
   { rule: 'source-shape-test', file: 'tests/views/permission/menus/index.test.ts', detail: '改为可观察行为测试' },
   { rule: 'source-shape-test', file: 'tests/components/AppSearch/src/index.test.ts', detail: '迁移到架构样式检查' },
 ])
@@ -908,7 +906,7 @@ git commit -m "refactor: 严格解析对象存储响应"
 
 ---
 
-### Task 10: 移除请求层 UI 副作用并补齐错误展示所有权
+### Task 10: 固化请求层统一通知并补齐错误展示所有权
 
 **Files:**
 - Modify: `web/src/utils/request.ts`
@@ -931,26 +929,27 @@ git commit -m "refactor: 严格解析对象存储响应"
 - Modify: `web/scripts/frontend-architecture-baseline.mjs`
 
 **Interfaces:**
-- Consumes: 严格 `ApiError/ProtocolError` 和各页面现有 inline error / success toast。
-- Produces: `request(config: AxiosRequestConfig): Promise<unknown>` 和 `unwrapEnvelope(value: unknown): unknown` 只 reject 归一化错误；列表失败进入 inline/AppTable error，表单和 mutation 失败进入所属组件 error；认证最终 401 仍执行清理与跳转但不弹全局通知。
+- Consumes: 严格 `ApiError/ProtocolError` 和各页面现有 success toast。
+- Produces: API 模块固定通过 `request<unknown>()` 接收数据并显式解析；request.ts 统一 reject 归一化错误，并对非 401/403 失败通知一次；页面只维护加载/业务状态，认证最终 401 仍执行清理与跳转且不弹通用通知。
 
-- [ ] **Step 1: 先把 request 测试改成无通知副作用契约**
+- [ ] **Step 1: 先把 request 测试改成统一通知契约**
 
-删除 `ElNotification` mock，增加：
+保留 `ElNotification` mock，增加非 401/403 通知断言和 401/403 排除断言：
 
 ```ts
-it('rejects a normalized network error without owning UI feedback', async () => {
+it('rejects a normalized network error after one request-layer notification', async () => {
   const networkError = new AxiosError('connection refused', AxiosError.ERR_NETWORK)
   const adapter: AxiosAdapter = async () => Promise.reject(networkError)
   const client = createRequestClient('http://localhost:16301')
 
   await expect(client.get('/health', { adapter })).rejects.toBe(networkError)
+  expect(ElNotification.error).toHaveBeenCalledOnce()
 })
 ```
 
 最终 401 只断言一次 refresh、一次 `onUnauthorized` 和所有请求 rejected。Profile、Layout、Storage Connection Test、Mail mutation 增加“失败文本可见且不产生第二次 toast”的行为断言。
 
-- [ ] **Step 2: 确认新契约与当前通知依赖冲突**
+- [ ] **Step 2: 确认旧实现不满足统一通知契约**
 
 Run:
 
@@ -959,11 +958,11 @@ cd D:\admin\web
 pnpm vitest run tests/utils/request.test.ts tests/layout/index.test.ts tests/views/account/profile/index.test.ts tests/views/cloud/storage-object/index.test.ts tests/views/message/mail/index.test.ts --pool=threads --maxWorkers=1
 ```
 
-Expected: FAIL，原因包括 request 仍调用 `ElNotification`，以及调用方存在依赖“request.ts 已提示”的吞错路径。
+Expected: FAIL，原因应是旧实现缺少非 401/403 的统一通知或调用方重复弹出接口错误；不得把 request.ts 已存在的合法 `ElNotification` 本身判为失败。
 
-- [ ] **Step 3: 删除传输层通知并逐调用方接管错误**
+- [ ] **Step 3: 保留传输层通知并清理调用方重复提示**
 
-从 `request.ts` 删除 `ElNotification`、`notifyRequestError` 及相关调用。将公开 `request` 和 `unwrapEnvelope` 的业务数据返回类型收窄为 `unknown`，使 API 模块必须显式解析；保留 `normalizeResponseError`、Refresh 并发协调、auth store 状态和 unauthorized callback。
+保留 `request.ts` 中的 `ElNotification`、`notifyRequestError` 及相关调用。统一规定非 401/403 的业务码、HTTP、网络和协议失败由 request.ts 通知一次并继续抛出；401/403 不弹通用通知。业务 API 必须继续使用 `request<unknown>()` 并在模块边界显式解析；保留 `normalizeResponseError`、Refresh 并发协调、auth store 状态和 unauthorized callback。
 
 将以下吞错路径改为明确状态：
 
@@ -978,7 +977,7 @@ async function testConfigConnection(row: CosConfig): Promise<void> {
 }
 ```
 
-Layout logout、Profile 保存/改密、Mail 四个私有区和 UpMedia 同样由所属组件保存可见错误；取消确认仍不作为错误。成功通知继续由页面拥有。删除 baseline 的 `request-ui-side-effect` 条目。
+Layout logout、Profile 保存/改密、Mail 四个私有区和 UpMedia 保留 catch 仅用于结束 pending、保留表单或刷新状态，不重复弹出接口错误；取消确认仍不作为错误。成功通知继续由页面拥有。删除 baseline 中过时的 `request-ui-side-effect` 条目。
 
 - [ ] **Step 4: 全量验证所有失败路径没有重复或静默**
 
@@ -992,7 +991,7 @@ pnpm typecheck
 pnpm build
 ```
 
-Expected: 全部通过；`rg -n 'ElNotification|request\.ts.*notification|request\.ts.*提示' src/utils/request.ts src -g '*.ts' -g '*.vue'` 不在 `request.ts` 找到通知调用或依赖注释。
+Expected: 全部通过；`request.ts` 保留并覆盖统一通知，401/403 不产生通用通知，页面不重复提示同一接口错误。
 
 - [ ] **Step 5: 建议提交边界（仅用户授权后执行）**
 
@@ -1643,7 +1642,7 @@ Expected: 七条命令全部通过。再运行 `git status --short`，确认没�
 所有 Vue（除 App.vue）均为目录/index.vue
 所有业务页面动态注册且菜单无静态特例
 所有 API 响应为 unknown -> exact parser -> DTO
-request.ts 无 Element Plus UI 副作用
+request.ts 统一处理非 401/403 接口错误通知，401/403 不弹通用通知
 普通列表/筛选使用 AppTable/AppSearch
 原生 el-table 仅菜单树和权限矩阵且有原因注释
 简单表单无无意义 row/col，真实网格无重复 CSS

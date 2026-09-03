@@ -65,15 +65,23 @@ function edit(row: MailRule): void {
 }
 
 async function toggle(row: MailRule): Promise<void> {
-  await updateMailRuleStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
-  emit('refresh')
+  try {
+    await updateMailRuleStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
+    emit('refresh')
+  } catch {
+    // request.ts owns API error notifications.
+  }
 }
 
 async function remove(row: MailRule): Promise<void> {
-  await ElMessageBox.confirm(t('mail.deleteRuleConfirm'))
-  await deleteMailRule(row.id)
-  ElMessage.success(t('mail.deleted'))
-  emit('refresh')
+  try {
+    await ElMessageBox.confirm(t('mail.deleteRuleConfirm'))
+    await deleteMailRule(row.id)
+    ElMessage.success(t('mail.deleted'))
+    emit('refresh')
+  } catch {
+    // ElMessageBox cancellation and request errors are handled by their respective layers.
+  }
 }
 
 async function saveRule(): Promise<void> {
@@ -96,7 +104,6 @@ async function saveRule(): Promise<void> {
       :columns="columns"
       :data="rules"
       :loading="loading"
-      result-state="success"
       :aria-label="t('mail.rulesTab')"
       :refresh-label="t('mail.refresh')"
       @refresh="emit('refresh')"

@@ -3,6 +3,7 @@ import { isYesNo, type YesNo } from '@/enums/yes-no'
 import type { PageRequest, PageResult } from '@/types/pagination'
 import {
   expectArray,
+  expectEmptyObject,
   expectId,
   expectInteger,
   expectPage,
@@ -100,8 +101,14 @@ export async function updateUploadRule(
   id: number,
   data: UploadRuleInput,
 ): Promise<Record<string, never>> {
-  await request<unknown>({ method: 'PUT', url: `/api/admin/v1/storage/upload-rules/${id}`, data })
-  return {}
+  return expectEmptyObject(
+    await request<unknown>({
+      method: 'PUT',
+      url: `/api/admin/v1/storage/upload-rules/${id}`,
+      data,
+    }),
+    'upload rule update result',
+  )
 }
 export async function updateUploadRuleStatus(
   id: number,
@@ -119,8 +126,10 @@ export async function updateUploadRuleStatus(
   return { id: expectInteger(result.id, 'upload rule status id'), isEnabled: result.isEnabled }
 }
 export async function deleteUploadRule(id: number): Promise<Record<string, never>> {
-  await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/storage/upload-rules/${id}` })
-  return {}
+  return expectEmptyObject(
+    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/storage/upload-rules/${id}` }),
+    'upload rule delete result',
+  )
 }
 
 function parseUploadRule(value: unknown, index: number): UploadRule {

@@ -56,7 +56,6 @@ const { t } = useI18n()
     :data="props.data"
     :loading="props.loading"
     :pagination="props.pagination"
-    result-state="success"
     :aria-label="t('storage.rulesTab')"
     :refresh-label="t('storage.refresh')"
     @refresh="emit('refresh')"

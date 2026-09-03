@@ -4,6 +4,7 @@ import type { PageRequest, PageResult } from '@/types/pagination'
 import { ProtocolError } from '@/types/http'
 import {
   expectBoolean,
+  expectEmptyObject,
   expectExactKeys,
   expectId,
   expectInteger,
@@ -109,12 +110,14 @@ export async function updateCosConfig(
   id: number,
   data: UpdateCosConfigInput,
 ): Promise<Record<string, never>> {
-  await request<unknown>({
-    method: 'PUT',
-    url: `/api/admin/v1/storage/cos-configs/${id}`,
-    data,
-  })
-  return {}
+  return expectEmptyObject(
+    await request<unknown>({
+      method: 'PUT',
+      url: `/api/admin/v1/storage/cos-configs/${id}`,
+      data,
+    }),
+    'cos config update result',
+  )
 }
 export async function updateCosConfigStatus(
   id: number,
@@ -132,10 +135,14 @@ export async function updateCosConfigStatus(
   return { id: expectInteger(result.id, 'cos config status id'), isEnabled: result.isEnabled }
 }
 export async function testCosConfig(id: number): Promise<Record<string, never>> {
-  await request<unknown>({ method: 'POST', url: `/api/admin/v1/storage/cos-configs/${id}/test` })
-  return {}
+  return expectEmptyObject(
+    await request<unknown>({ method: 'POST', url: `/api/admin/v1/storage/cos-configs/${id}/test` }),
+    'cos config test result',
+  )
 }
 export async function deleteCosConfig(id: number): Promise<Record<string, never>> {
-  await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/storage/cos-configs/${id}` })
-  return {}
+  return expectEmptyObject(
+    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/storage/cos-configs/${id}` }),
+    'cos config delete result',
+  )
 }

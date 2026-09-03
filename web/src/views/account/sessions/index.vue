@@ -298,7 +298,6 @@ onMounted(() => {
       :selectable="canRevoke"
       :selection-selectable="selectable"
       :pagination="tablePagination"
-      result-state="success"
       :aria-label="t('session.title')"
       :refresh-label="t('session.refresh')"
       @refresh="reloadAuthoritativeData"

@@ -249,7 +249,6 @@ onMounted(() => {
       :columns="tableColumns"
       :data="rows"
       :pagination="tablePagination"
-      result-state="success"
       :aria-label="t('operationLog.title')"
       :refresh-label="t('operationLog.refresh')"
       @refresh="loadLogs"

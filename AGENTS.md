@@ -64,6 +64,9 @@ view -> api/<module>.ts -> utils/request.ts -> Go API
 ```
 
 - HTTP envelope 精确为 `code`、`data`、`message`；不接受或输出 `msg` 等兼容字段。
+- `utils/request.ts` 统一处理接口失败：业务 `code != 0`、HTTP、网络和协议错误由请求层调用
+  `ElNotification` 提示一次；HTTP 401/403 不弹通用通知，分别交由认证刷新/跳转和权限页面处理。
+  页面与组件不得为同一接口错误重复弹出通知。
 - Axios 先严格校验 envelope，业务 API 再把 `unknown` 解析并缩小为明确 DTO。页面不得猜字段、
   静默补默认值或用类型断言掩盖必填字段缺失。
 - 前端业务 TypeScript 禁止显式 `any`、`any[]`、`as any`、`Record<string, any>`、`@ts-ignore`、

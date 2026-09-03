@@ -46,24 +46,36 @@ function select(rows: MailLog[]): void {
 }
 
 async function inspect(row: MailLog): Promise<void> {
-  detail.value = await getMailLogDetail(row.id)
-  detailVisible.value = true
+  try {
+    detail.value = await getMailLogDetail(row.id)
+    detailVisible.value = true
+  } catch {
+    // request.ts owns API error notifications.
+  }
 }
 
 async function remove(row: MailLog): Promise<void> {
-  await ElMessageBox.confirm(t('mail.deleteLogConfirm'))
-  await deleteMailLog(row.id)
-  ElMessage.success(t('mail.deleted'))
-  emit('refresh')
+  try {
+    await ElMessageBox.confirm(t('mail.deleteLogConfirm'))
+    await deleteMailLog(row.id)
+    ElMessage.success(t('mail.deleted'))
+    emit('refresh')
+  } catch {
+    // ElMessageBox cancellation and request errors are handled by their respective layers.
+  }
 }
 
 async function removeSelected(): Promise<void> {
   if (!selected.value.length) return
-  await ElMessageBox.confirm(t('mail.deleteLogsConfirm'))
-  await deleteMailLogs(selected.value.map((item) => item.id))
-  selected.value = []
-  ElMessage.success(t('mail.deleted'))
-  emit('refresh')
+  try {
+    await ElMessageBox.confirm(t('mail.deleteLogsConfirm'))
+    await deleteMailLogs(selected.value.map((item) => item.id))
+    selected.value = []
+    ElMessage.success(t('mail.deleted'))
+    emit('refresh')
+  } catch {
+    // ElMessageBox cancellation and request errors are handled by their respective layers.
+  }
 }
 </script>
 
@@ -75,7 +87,6 @@ async function removeSelected(): Promise<void> {
       :loading="loading"
       :selectable="canDelete"
       :pagination="pagination"
-      result-state="success"
       :aria-label="t('mail.logsTab')"
       :refresh-label="t('mail.refresh')"
       @refresh="emit('refresh')"

@@ -305,7 +305,6 @@ onMounted(() => {
       :data="rows"
       :loading="loading"
       :pagination="tablePagination"
-      result-state="success"
       :aria-label="t('authPlatform.title')"
       :refresh-label="t('authPlatform.refresh')"
       @refresh="refresh"
