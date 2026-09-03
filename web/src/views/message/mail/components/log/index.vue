@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Eye, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -84,19 +83,13 @@ async function removeSelected(): Promise<void> {
       @update:pagination="(next: TablePaginationState) => emit('pageChange', next)"
     >
       <template #toolbar-left>
-        <div class="table-summary">
-          <strong>{{ t('mail.logSummary', { count: total }) }}</strong>
-          <span>{{ t('mail.logPrivacy') }}</span>
-        </div>
         <el-button
           v-if="canDelete"
           data-testid="mail-log-batch-delete"
-          text
           type="danger"
           :disabled="selectedCount === 0"
           @click="removeSelected"
         >
-          <Trash2 :size="16" />
           {{ t('mail.batchDelete') }}
         </el-button>
       </template>
@@ -110,11 +103,10 @@ async function removeSelected(): Promise<void> {
       <template #cell-latency="{ row }: { row: MailLog }">{{ row.latencyMs }} ms</template>
       <template #cell-actions="{ row }: { row: MailLog }">
         <el-button text type="primary" @click="inspect(row)">
-          <Eye :size="15" />
           {{ t('mail.detail') }}
         </el-button>
         <el-button v-if="canDelete" text type="danger" @click="remove(row)">
-          <Trash2 :size="15" />
+          {{ t('mail.delete') }}
         </el-button>
       </template>
       <template #empty>
@@ -153,20 +145,5 @@ async function removeSelected(): Promise<void> {
 <style scoped>
 .table-tab {
   min-width: 0;
-}
-
-.table-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.table-summary strong {
-  font-size: 14px;
-}
-
-.table-summary span {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
 }
 </style>

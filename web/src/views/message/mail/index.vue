@@ -103,7 +103,7 @@ watch(
 </script>
 
 <template>
-  <section class="mail-page">
+  <section class="mail-page management-page">
     <el-tabs v-model="activeTab" class="mail-tabs">
       <el-tab-pane
         v-for="tab in visibleTabs"
@@ -120,46 +120,44 @@ watch(
           show-icon
           :closable="false"
         />
-        <el-card shadow="never" class="mail-panel">
-          <MailConfigTab
-            v-if="tab.name === 'config'"
-            :config="config"
-            :can-update="can('message:mail:config:update')"
-            :can-test="can('message:mail:test')"
-            :can-delete="can('message:mail:config:delete')"
-            @saved="loadConfig"
-            @deleted="loadConfig"
-          />
-          <MailTemplateTab
-            v-else-if="tab.name === 'templates'"
-            :templates="templates"
-            :loading="loading"
-            :can-update="can('message:mail:template:update')"
-            :can-status="can('message:mail:template:status')"
-            @refresh="loadTemplates"
-          />
-          <MailLogTab
-            v-else-if="tab.name === 'logs'"
-            :logs="logs"
-            :total="logTotal"
-            :page="logPage"
-            :page-size="logPageSize"
-            :loading="loading"
-            :can-delete="can('message:mail:log:delete')"
-            @refresh="loadLogs"
-            @page-change="changeLogPage"
-          />
-          <MailRuleTab
-            v-else
-            :rules="rules"
-            :loading="loading"
-            :can-create="can('message:mail:rule:create')"
-            :can-update="can('message:mail:rule:update')"
-            :can-status="can('message:mail:rule:status')"
-            :can-delete="can('message:mail:rule:delete')"
-            @refresh="loadRules"
-          />
-        </el-card>
+        <MailConfigTab
+          v-if="tab.name === 'config'"
+          :config="config"
+          :can-update="can('message:mail:config:update')"
+          :can-test="can('message:mail:test')"
+          :can-delete="can('message:mail:config:delete')"
+          @saved="loadConfig"
+          @deleted="loadConfig"
+        />
+        <MailTemplateTab
+          v-else-if="tab.name === 'templates'"
+          :templates="templates"
+          :loading="loading"
+          :can-update="can('message:mail:template:update')"
+          :can-status="can('message:mail:template:status')"
+          @refresh="loadTemplates"
+        />
+        <MailLogTab
+          v-else-if="tab.name === 'logs'"
+          :logs="logs"
+          :total="logTotal"
+          :page="logPage"
+          :page-size="logPageSize"
+          :loading="loading"
+          :can-delete="can('message:mail:log:delete')"
+          @refresh="loadLogs"
+          @page-change="changeLogPage"
+        />
+        <MailRuleTab
+          v-else
+          :rules="rules"
+          :loading="loading"
+          :can-create="can('message:mail:rule:create')"
+          :can-update="can('message:mail:rule:update')"
+          :can-status="can('message:mail:rule:status')"
+          :can-delete="can('message:mail:rule:delete')"
+          @refresh="loadRules"
+        />
       </el-tab-pane>
     </el-tabs>
   </section>
@@ -168,7 +166,6 @@ watch(
 <style scoped>
 .mail-page {
   min-width: 0;
-  padding: 0 8px 20px;
 }
 
 .mail-tabs :deep(.el-tabs__header) {
@@ -181,22 +178,14 @@ watch(
 }
 
 .mail-tabs :deep(.el-tabs__item) {
-  height: 46px;
-  padding: 0 24px;
+  height: 40px;
+  padding: 0 20px;
   font-weight: 500;
 }
 
 .mail-tabs :deep(.el-tabs__content) {
   overflow: visible;
-  padding-top: 16px;
-}
-
-.mail-panel {
-  border-color: var(--el-border-color-light);
-}
-
-.mail-panel :deep(.el-card__body) {
-  padding: 18px 20px;
+  padding-top: 12px;
 }
 
 .mail-error {
@@ -204,16 +193,8 @@ watch(
 }
 
 @media (max-width: 640px) {
-  .mail-page {
-    padding-inline: 0;
-  }
-
   .mail-tabs :deep(.el-tabs__item) {
     padding: 0 14px;
-  }
-
-  .mail-panel :deep(.el-card__body) {
-    padding: 14px;
   }
 }
 </style>

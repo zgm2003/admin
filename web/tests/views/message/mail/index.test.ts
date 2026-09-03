@@ -75,6 +75,17 @@ describe('mail service page', () => {
     expect(passwords.every((input) => (input.element as HTMLInputElement).value === '')).toBe(true)
   })
 
+  it('uses one compact management surface without a nested card around mail content', async () => {
+    const wrapper = mountPage(['message:mail:list'])
+    await flushPromises()
+
+    const page = wrapper.find('.mail-page')
+    expect(page.classes()).toContain('management-page')
+    expect(page.findAll('.el-card')).toHaveLength(0)
+    expect(page.findAll('.mail-panel')).toHaveLength(0)
+    expect(page.find('.mail-tabs').exists()).toBe(true)
+  })
+
   it('hides all mail data tabs without list permission', async () => {
     const wrapper = mountPage(['message:mail:view'])
     await flushPromises()

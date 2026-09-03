@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Pencil, Plus, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -15,7 +14,7 @@ import {
 import { AppTable, type TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yes-no'
 
-const props = defineProps<{
+defineProps<{
   rules: MailRule[]
   loading: boolean
   canCreate: boolean
@@ -29,17 +28,13 @@ const dialog = ref(false)
 const editing = ref<MailRule | null>(null)
 const saving = ref(false)
 const form = ref<MailRuleInput>(blankRule())
-const allowCount = computed(
-  () =>
-    props.rules.filter((item) => item.action === 'allow' && item.isEnabled === YesNo.Yes).length,
-)
 const columns = computed<TableColumn<MailRule>[]>(() => [
   { key: 'pattern', prop: 'pattern', label: t('mail.rule'), minWidth: 220 },
   { prop: 'action', label: t('mail.action'), width: 120 },
   { prop: 'name', label: t('mail.name'), minWidth: 160 },
   { prop: 'remark', label: t('mail.remark'), minWidth: 200, overflowTooltip: true },
   { key: 'enabled', prop: 'isEnabled', label: t('mail.enabled'), width: 100 },
-  { key: 'actions', prop: 'id', label: t('mail.actions'), width: 150, fixed: 'right' },
+  { key: 'actions', prop: 'id', label: t('mail.actions'), width: 200, fixed: 'right' },
 ])
 
 watch(editing, (value) => {
@@ -107,12 +102,7 @@ async function saveRule(): Promise<void> {
       @refresh="emit('refresh')"
     >
       <template #toolbar-left>
-        <div class="table-summary">
-          <strong>{{ t('mail.ruleSummary', { count: rules.length }) }}</strong>
-          <span>{{ t('mail.ruleAllowCount', { count: allowCount }) }}</span>
-        </div>
         <el-button v-if="canCreate" data-testid="mail-rule-create" type="primary" @click="create">
-          <Plus :size="16" />
           {{ t('mail.createRule') }}
         </el-button>
       </template>
@@ -138,11 +128,10 @@ async function saveRule(): Promise<void> {
       </template>
       <template #cell-actions="{ row }: { row: MailRule }">
         <el-button v-if="canUpdate" text type="primary" @click="edit(row)">
-          <Pencil :size="15" />
           {{ t('mail.edit') }}
         </el-button>
         <el-button v-if="canDelete" text type="danger" @click="remove(row)">
-          <Trash2 :size="15" />
+          {{ t('mail.delete') }}
         </el-button>
       </template>
       <template #empty>
@@ -203,20 +192,17 @@ async function saveRule(): Promise<void> {
   min-width: 0;
 }
 
-.table-summary,
 .primary-cell {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
-.table-summary strong,
 .primary-cell strong {
   font-size: 14px;
   font-weight: 600;
 }
 
-.table-summary span,
 .primary-cell span {
   color: var(--el-text-color-secondary);
   font-size: 12px;

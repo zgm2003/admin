@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Pencil } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -98,10 +97,19 @@ async function saveTemplate(): Promise<void> {
   if (!selected.value) return
   saving.value = true
   try {
+    let parsedVariables: Record<string, string>
+    let parsedExamples: Record<string, string>
+    try {
+      parsedVariables = parseMap(variables.value)
+      parsedExamples = parseMap(examples.value)
+    } catch (error: unknown) {
+      ElMessage.error(error instanceof Error ? error.message : t('mail.variablesInvalid'))
+      return
+    }
     await updateMailTemplate(selected.value.id, {
       ...form.value,
-      variables: parseMap(variables.value),
-      exampleVariables: parseMap(examples.value),
+      variables: parsedVariables,
+      exampleVariables: parsedExamples,
     })
     ElMessage.success(t('mail.updated'))
     dialog.value = false
@@ -155,7 +163,6 @@ async function saveTemplate(): Promise<void> {
       </template>
       <template #cell-actions="{ row }: { row: MailTemplate }">
         <el-button data-testid="mail-template-edit" text type="primary" @click="edit(row)">
-          <Pencil :size="15" />
           {{ t('mail.edit') }}
         </el-button>
       </template>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Send, Trash2 } from 'lucide-vue-next'
+import { Send } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
 import * as mailApi from '@/api/message/mail'
@@ -26,16 +26,6 @@ const regionOptions = computed(() => [
   { value: 'ap-guangzhou', label: t('mail.regionGuangzhou') },
   { value: 'ap-hongkong', label: t('mail.regionHongKong') },
 ])
-
-const statusText = computed(() => {
-  if (!props.config.configured) return t('mail.statusUnconfigured')
-  return props.config.isEnabled === YesNo.Yes ? t('mail.statusActive') : t('mail.statusInactive')
-})
-
-const statusType = computed(() => {
-  if (!props.config.configured) return 'info'
-  return props.config.isEnabled === YesNo.Yes ? 'success' : 'warning'
-})
 
 const rules = computed<FormRules<mailApi.MailConfigInput>>(() => ({
   region: [{ required: true, message: t('mail.regionRequired'), trigger: 'change' }],
@@ -123,14 +113,6 @@ async function remove(): Promise<void> {
 
 <template>
   <div class="config-tab">
-    <div class="config-status">
-      <div>
-        <strong>{{ t('mail.configTab') }}</strong>
-        <span>{{ config.fromEmail || t('mail.statusDescription') }}</span>
-      </div>
-      <el-tag :type="statusType" effect="plain">{{ statusText }}</el-tag>
-    </div>
-
     <el-form
       ref="formRef"
       :model="form"
@@ -139,7 +121,6 @@ async function remove(): Promise<void> {
       class="mail-form"
       @submit.prevent="save"
     >
-      <el-divider content-position="left">{{ t('mail.credentialsTitle') }}</el-divider>
       <el-row :gutter="20">
         <el-col :xs="24" :md="12">
           <el-form-item :label="t('mail.secretId')">
@@ -180,7 +161,6 @@ async function remove(): Promise<void> {
         </el-col>
       </el-row>
 
-      <el-divider content-position="left">{{ t('mail.senderTitle') }}</el-divider>
       <el-row :gutter="20">
         <el-col :xs="24" :md="12">
           <el-form-item :label="t('mail.fromEmail')" prop="fromEmail">
@@ -210,7 +190,6 @@ async function remove(): Promise<void> {
         </el-col>
       </el-row>
 
-      <el-divider content-position="left">{{ t('mail.deliveryTitle') }}</el-divider>
       <el-row :gutter="20">
         <el-col :xs="24" :md="12">
           <el-form-item :label="t('mail.enabled')">
@@ -247,8 +226,7 @@ async function remove(): Promise<void> {
       />
 
       <div class="form-actions">
-        <el-button v-if="canDelete && config.configured" text type="danger" @click="remove">
-          <Trash2 :size="16" />
+        <el-button v-if="canDelete && config.configured" type="danger" @click="remove">
           {{ t('mail.delete') }}
         </el-button>
         <span />
@@ -267,42 +245,8 @@ async function remove(): Promise<void> {
 </template>
 
 <style scoped>
-.config-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-
-.config-status > div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.config-status strong {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.config-status span {
-  overflow: hidden;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .mail-form {
-  padding-top: 2px;
-}
-
-.mail-form :deep(.el-divider__text) {
-  font-size: 13px;
-  font-weight: 600;
+  max-width: none;
 }
 
 .mail-form :deep(.el-input-number) {
@@ -326,8 +270,8 @@ async function remove(): Promise<void> {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 8px;
-  padding-top: 16px;
+  margin-top: 2px;
+  padding-top: 12px;
   border-top: 1px solid var(--el-border-color-lighter);
 }
 
