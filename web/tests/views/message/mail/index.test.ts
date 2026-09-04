@@ -172,10 +172,7 @@ describe('mail service page', () => {
       },
     ])
     vi.mocked(mailApi.updateMailRuleStatus).mockResolvedValueOnce({ id: 7, isEnabled: YesNo.No })
-    const wrapper = mountPage([
-      'message:mail:list',
-      'message:mail:rule:status',
-    ])
+    const wrapper = mountPage(['message:mail:list', 'message:mail:rule:status'])
     await flushPromises()
     await selectTab(wrapper, '收件规则')
 
@@ -194,7 +191,7 @@ describe('mail service page', () => {
 
     expect(wrapper.findComponent({ name: 'AppTable' }).props('resultState')).toBe('idle')
   })
-  it('formats mail log timestamps instead of rendering raw API strings', async () => {
+  it('renders the provider send time and verification expiration in the active locale', async () => {
     vi.mocked(mailApi.listMailLogs).mockResolvedValue({
       list: [
         {
@@ -212,8 +209,73 @@ describe('mail service page', () => {
           errorSummary: '',
           latencyMs: 433,
           sentAt: '2026-09-03T14:33:44.2485Z',
-          createdAt: '2026-09-03T14:33:44.2485Z',
+          createdAt: '2026-09-02T14:33:44.2485Z',
           updatedAt: '2026-09-03T14:33:44.2485Z',
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    vi.mocked(mailApi.getMailLogDetail).mockResolvedValue({
+      log: {
+        id: 9,
+        platformId: 1,
+        userId: null,
+        scene: 'login',
+        templateId: 1,
+        toEmail: '2093146753@qq.com',
+        subject: '登录验证码',
+        status: 'sent',
+        requestId: '',
+        messageId: '',
+        errorCode: '',
+        errorSummary: '',
+        latencyMs: 433,
+        sentAt: '2026-09-03T14:33:44.2485Z',
+        createdAt: '2026-09-02T14:33:44.2485Z',
+        updatedAt: '2026-09-03T14:33:44.2485Z',
+      },
+      verificationCode: '123456',
+      verificationExpiresAt: '2026-09-04T14:33:44.2485Z',
+    })
+    const wrapper = mountPage(['message:mail:list', 'message:mail:detail'])
+    await flushPromises()
+    await selectTab(wrapper, '发送日志')
+
+    expect(wrapper.text()).toContain('发送时间')
+    expect(wrapper.text()).toContain('2026年9月3日')
+    expect(wrapper.text()).not.toContain('2026年9月2日')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '详情')!
+      .trigger('click')
+    await flushPromises()
+
+    expect(document.body.textContent).toContain('2026年9月4日')
+    expect(document.body.textContent).not.toContain('2026-09-04T14:33:44')
+  })
+
+  it('renders a placeholder when a delivery has no provider send time', async () => {
+    vi.mocked(mailApi.listMailLogs).mockResolvedValue({
+      list: [
+        {
+          id: 10,
+          platformId: 1,
+          userId: null,
+          scene: 'login',
+          templateId: 1,
+          toEmail: 'pending@example.com',
+          subject: '登录验证码',
+          status: 'pending',
+          requestId: '',
+          messageId: '',
+          errorCode: '',
+          errorSummary: '',
+          latencyMs: 0,
+          sentAt: null,
+          createdAt: '2026-09-02T14:33:44.2485Z',
+          updatedAt: '2026-09-02T14:33:44.2485Z',
         },
       ],
       total: 1,
@@ -224,8 +286,8 @@ describe('mail service page', () => {
     await flushPromises()
     await selectTab(wrapper, '发送日志')
 
-    expect(wrapper.text()).toContain('2026年9月3日')
-    expect(wrapper.text()).not.toContain('2026-09-03T14:33:44')
+    expect(wrapper.text()).toContain('发送时间操作')
+    expect(wrapper.text()).toContain('-')
   })
 })
 

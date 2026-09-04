@@ -33,7 +33,7 @@ const columns = computed<TableColumn<MailLog>[]>(() => [
   { prop: 'scene', label: t('mail.scene'), width: 150 },
   { key: 'status', prop: 'status', label: t('mail.status'), width: 110 },
   { key: 'latency', prop: 'latencyMs', label: t('mail.latency'), width: 120 },
-  { key: 'createdAt', prop: 'createdAt', label: t('mail.createdAt'), minWidth: 190 },
+  { key: 'sentAt', prop: 'sentAt', label: t('mail.sentAt'), minWidth: 190 },
   { key: 'actions', prop: 'id', label: t('mail.actions'), width: 200, fixed: 'right' },
 ])
 const pagination = computed<TablePaginationState>(() => ({
@@ -113,8 +113,8 @@ async function removeSelected(): Promise<void> {
         >
       </template>
       <template #cell-latency="{ row }: { row: MailLog }">{{ row.latencyMs }} ms</template>
-      <template #cell-createdAt="{ row }: { row: MailLog }">{{
-        formatTime(row.createdAt)
+      <template #cell-sentAt="{ row }: { row: MailLog }">{{
+        row.sentAt === null ? '-' : formatTime(row.sentAt)
       }}</template>
       <template #cell-actions="{ row }: { row: MailLog }">
         <el-button text type="primary" @click="inspect(row)">

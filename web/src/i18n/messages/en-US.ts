@@ -65,7 +65,7 @@ export const enUS = {
   'mail.detail': 'Details',
   'mail.batchDelete': 'Delete selected',
   'mail.recipient': 'Recipient',
-  'mail.createdAt': 'Created at',
+  'mail.sentAt': 'Sent at',
   'mail.ruleType': 'Type',
   'mail.rule': 'Rule',
   'mail.action': 'Action',
@@ -93,7 +93,8 @@ export const enUS = {
   'mail.noTemplates': 'No mail templates',
   'mail.noLogs': 'No delivery logs',
   'mail.noRules': 'No recipient rules',
-  'mail.ruleHint': 'Default allow. Exact email matches take precedence over domains; deny takes precedence over allow.',
+  'mail.ruleHint':
+    'Default allow. Exact email matches take precedence over domains; deny takes precedence over allow.',
   'mail.latency': 'Latency',
   'mail.loadFailed': 'Failed to load mail service data',
   'navigation.storageObject': 'Object storage',

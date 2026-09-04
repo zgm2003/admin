@@ -63,7 +63,7 @@ export const zhCN = {
   'mail.detail': '详情',
   'mail.batchDelete': '批量删除',
   'mail.recipient': '收件邮箱',
-  'mail.createdAt': '创建时间',
+  'mail.sentAt': '发送时间',
   'mail.ruleType': '类型',
   'mail.rule': '规则',
   'mail.action': '动作',
