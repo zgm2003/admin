@@ -25,6 +25,12 @@ func TestIsUniqueViolationRecognizesPostgresConstraint(t *testing.T) {
 	}
 }
 
+func TestWrapRepoReturnsNilWithoutError(t *testing.T) {
+	if err := wrapRepo(nil); err != nil {
+		t.Fatalf("wrapRepo(nil) = %v, want nil", err)
+	}
+}
+
 func TestFindActiveChallengeReturnsPendingAndSentLogs(t *testing.T) {
 	db, ctx := openMailRepositoryDatabase(t)
 	repository := NewRepository(db)

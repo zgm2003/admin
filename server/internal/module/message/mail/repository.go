@@ -229,6 +229,9 @@ func (r *Repository) Lock(ctx context.Context, platformID, id int64) (RecipientR
 	return v, e
 }
 func wrapRepo(err error) error {
+	if err == nil {
+		return nil
+	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return notFound(err)
 	}
