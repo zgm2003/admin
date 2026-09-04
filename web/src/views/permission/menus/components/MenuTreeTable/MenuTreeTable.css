@@ -12,6 +12,12 @@
 
 .menu-tree-table__toolbar {
   gap: 8px;
+  margin-top: 8px;
+  margin-bottom: 12px;
+}
+
+.menu-tree-table__toolbar > :first-child {
+  margin-right: 4px;
 }
 
 .menu-tree-table__table {
