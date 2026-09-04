@@ -9,6 +9,7 @@ export const enUS = {
   'search.reset': 'Reset',
   'search.expand': 'Expand',
   'search.collapse': 'Collapse',
+  'search.invalidModel': 'Search criteria are invalid. Refresh and try again.',
   'navigation.dashboard': 'Dashboard',
   'navigation.main': 'Main navigation',
   'navigation.admin': 'Admin',

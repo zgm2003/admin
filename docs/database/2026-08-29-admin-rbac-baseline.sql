@@ -159,12 +159,12 @@ WHERE platform_id = admin_platform_id
 END IF;
   IF
 login_log_id IS NOT NULL THEN
-    IF EXISTS (SELECT 1 FROM permission_menu WHERE id = login_log_id AND (parent_id IS DISTINCT FROM account_id OR menu_type <> 'page' OR path IS DISTINCT FROM '/account/login-logs' OR component_path IS DISTINCT FROM 'user/login-logs' OR i18n_key IS DISTINCT FROM 'navigation.accountLoginLogs' OR icon IS DISTINCT FROM 'lucide:lock-keyhole' OR sort_order <> 30 OR is_enabled <> 1 OR is_hidden <> 0)) THEN
+    IF EXISTS (SELECT 1 FROM permission_menu WHERE id = login_log_id AND (parent_id IS DISTINCT FROM account_id OR menu_type <> 'page' OR path IS DISTINCT FROM '/account/login-logs' OR component_path IS DISTINCT FROM 'account/login-logs' OR i18n_key IS DISTINCT FROM 'navigation.accountLoginLogs' OR icon IS DISTINCT FROM 'lucide:lock-keyhole' OR sort_order <> 30 OR is_enabled <> 1 OR is_hidden <> 0)) THEN
       RAISE EXCEPTION 'login log page shape mismatch';
 END IF;
 ELSE
     INSERT INTO permission_menu (platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden, created_at, updated_at)
-    VALUES (admin_platform_id, account_id, 'page', '登录日志', 'account:user:loginlog:view', 'navigation.accountLoginLogs', '/account/login-logs', 'user/login-logs', 'lucide:lock-keyhole', 30, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+    VALUES (admin_platform_id, account_id, 'page', '登录日志', 'account:user:loginlog:view', 'navigation.accountLoginLogs', '/account/login-logs', 'account/login-logs', 'lucide:lock-keyhole', 30, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
     changed
 := TRUE;
 END IF;

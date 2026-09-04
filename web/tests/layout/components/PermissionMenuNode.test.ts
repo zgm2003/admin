@@ -93,7 +93,7 @@ describe('AppAside access menu', () => {
     expect(items.map((item) => item.props('index'))).toEqual([
       '/dashboard',
       '/account/users',
-      '/access/roles',
+      '/permission/roles',
       '/system/operation-logs',
     ])
     expect(
@@ -195,8 +195,8 @@ function navigationRoots(): PermissionMenuNodeDTO[] {
     directoryWithPage('access', 'navigation.access', {
       ...pageNode(),
       code: 'permission:role:list',
-      path: '/access/roles',
-      componentPath: 'access/roles',
+      path: '/permission/roles',
+      componentPath: 'permission/roles',
       i18nKey: 'navigation.accessRoles',
     }),
     directoryWithPage('system', 'navigation.system', {

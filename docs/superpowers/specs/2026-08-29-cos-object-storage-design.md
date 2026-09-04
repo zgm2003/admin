@@ -57,8 +57,8 @@ Admin 平台菜单在模块真实可用后通过人工菜单 migration 增加，
 页面固定使用：
 
 ```text
-path:           /cloud/object-storage
-componentPath:  storage/object
+path:           /cloud/storage-object
+componentPath:  cloud/storage-object
 routeName:      access:storage:object:view  # 由现有动态路由按菜单 code 生成
 i18nKey:        navigation.storageObject
 icon:           lucide:cloud-upload

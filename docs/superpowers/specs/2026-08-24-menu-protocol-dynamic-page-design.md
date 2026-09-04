@@ -95,9 +95,9 @@ DTO、隐式兜底和历史兼容包袱。
 | --- | --- | --- | --- | --- | --- |
 | 用户与账号 | 用户管理 | `account:user:list` | `/account/users` | `account/users` | `web/src/views/account/users` |
 | 用户与账号 | 会话管理 | `auth:session:list` | `/account/sessions` | `account/sessions` | `web/src/views/account/sessions` |
-| 权限与认证 | 菜单管理 | `rbac:menu:list` | `/access/menus` | `access/menus` | `../../../web/src/views/permission/menus` |
-| 权限与认证 | 角色管理 | `rbac:role:list` | `/access/roles` | `access/roles` | `../../../web/src/views/permission/roles` |
-| 权限与认证 | 认证平台 | `auth:platform:list` | `/access/auth-platforms` | `access/auth-platforms` | `../../../web/src/views/permission/auth-platforms` |
+| 权限与认证 | 菜单管理 | `rbac:menu:list` | `/permission/menus` | `access/menus` | `../../../web/src/views/permission/menus` |
+| 权限与认证 | 角色管理 | `rbac:role:list` | `/permission/roles` | `access/roles` | `../../../web/src/views/permission/roles` |
+| 权限与认证 | 认证平台 | `auth:platform:list` | `/permission/auth-platforms` | `access/auth-platforms` | `../../../web/src/views/permission/auth-platforms` |
 | 系统管理 | 操作日志 | `audit:operation-log:list` | `/system/operation-logs` | `system/operation-logs` | `web/src/views/system/operation-logs` |
 
 API URL 继续按资源本身命名，而不是按侧栏目录命名：
@@ -150,8 +150,8 @@ API URL 继续按资源本身命名，而不是按侧栏目录命名：
 | JSON 字段 | lower camel case | `componentPath`、`isProtected` |
 | TypeScript 类型与组件 | PascalCase | `ManagedMenuNode`、`RolePermissionMatrix` |
 | TypeScript 变量与字段 | lower camel case | `permissionCodes`、`parentId` |
-| Vue 页面目录 | lowercase plural path | `views/access/auth-platforms` |
-| 浏览器 URL | lowercase plural kebab-case | `/access/auth-platforms` |
+| Vue 页面目录 | lowercase plural path | `views/permission/auth-platforms` |
+| 浏览器 URL | lowercase plural kebab-case | `/permission/auth-platforms` |
 | componentPath | 与页面目录相同，不带前后斜杠 | `access/auth-platforms` |
 | i18n key | 点号分组 + lower camel case | `navigation.accessAuthPlatforms` |
 | 权限码 | 冒号分组 | `auth:platform:update` |
@@ -320,9 +320,9 @@ navigation.accessMenus
 page 的 `path` 和 `componentPath` 必须同时显式填写：
 
 ```text
-path:          /access/menus
+path:          /permission/menus
 componentPath: access/menus
-页面文件:      web/src/views/access/menus/index.vue
+页面文件:      web/src/views/permission/menus/index.vue
 ```
 
 - `path` 以 `/` 开头，`componentPath` 不以 `/` 开头；
@@ -517,10 +517,10 @@ Vue Router 静态注册：
 /login
 /register
 /dashboard
-/access/menus
+/permission/menus
 ```
 
-`/access/menus` 只为菜单管理组件提供冷启动挂载点，meta 使用：
+`/permission/menus` 只为菜单管理组件提供冷启动挂载点，meta 使用：
 
 ```text
 i18nKey: navigation.accessMenus
@@ -528,7 +528,7 @@ requiredPermission: rbac:menu:list
 ```
 
 动态安装遇到数据库节点
-`rbac:menu:list + /access/menus + access/menus` 时，必须逐字段验证后复用静态 record，不执行
+`rbac:menu:list + /permission/menus + access/menus` 时，必须逐字段验证后复用静态 record，不执行
 重复 `addRoute`。其他节点占用该 path、componentPath 或 route name 时返回 `ProtocolError`。
 
 静态 route 不负责插入侧栏、权限、面包屑或 Tab。`AppAside` 删除手工菜单管理项，只递归
@@ -710,7 +710,7 @@ lucide:<kebab-case-icon-name>
 1. 页面文件、import、componentPath 和测试目录使用 account/access/system 新路径；
 2. 多根菜单树在侧栏、角色授权、面包屑和 RouteTabs 中正确处理；
 3. `AppAside` 不再手工插入菜单管理；
-4. `/access/menus` 精确复用静态 route record，不一致时失败；
+4. `/permission/menus` 精确复用静态 route record，不一致时失败；
 5. 旧 `/system/*` 页面路径没有 route 或 redirect；
 6. 权限按钮只判断新权限码；
 7. 菜单管理和角色授权显示数据库 name，导航显示 i18n 翻译；

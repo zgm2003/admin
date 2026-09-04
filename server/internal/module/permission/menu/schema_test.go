@@ -70,7 +70,7 @@ func TestMenuSchema(t *testing.T) {
 
 	checks := map[string][]string{
 		"ck_permission_menu_type":       {"CHECK", "menu_type", "directory", "page", "action"},
-		"ck_permission_menu_shape":      {"CHECK", "name", "i18n_key", "component_path", "is_hidden", "action", "icon"},
+		"ck_permission_menu_shape":      {"CHECK", "name", "i18n_key", "path", "component_path", "||", "is_hidden", "action", "icon"},
 		"ck_permission_menu_sort_order": {"CHECK", "sort_order", "0"},
 		"ck_permission_menu_is_enabled": {"CHECK", "is_enabled", "0", "1"},
 		"ck_permission_menu_is_hidden":  {"CHECK", "is_hidden", "0", "1"},

@@ -7,6 +7,7 @@ export const zhCN = {
   'search.reset': '重置',
   'search.expand': '展开',
   'search.collapse': '收起',
+  'search.invalidModel': '搜索条件格式无效，请刷新页面后重试',
   'navigation.dashboard': '工作台',
   'navigation.main': '主导航',
   'navigation.admin': 'Admin',

@@ -96,6 +96,24 @@ func TestServiceCreateEnforcesPlatformAndSupportsRootPage(t *testing.T) {
 	}
 }
 
+func TestServiceCreateAndUpdateRejectMismatchedPagePathComponentPath(t *testing.T) {
+	_, ctx, service := openCleanMenuService(t)
+	platformID := testAdminPlatformID(t, service.repository.db, ctx)
+	path, componentPath := "/permission/roles", "access/roles"
+	_, err := service.Create(ctx, CreateInput{PlatformID: platformID, MenuType: TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: stringPointer("navigation.roles"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
+	if err == nil {
+		t.Fatal("Create accepted mismatched page path/componentPath")
+	}
+	validPath, validComponent := "/permission/roles", "permission/roles"
+	id, err := service.Create(ctx, CreateInput{PlatformID: platformID, MenuType: TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: stringPointer("navigation.roles"), Path: &validPath, ComponentPath: &validComponent, IsEnabled: yesno.Yes, IsHidden: yesno.No})
+	if err != nil {
+		t.Fatalf("Create valid page: %v", err)
+	}
+	if err := service.Update(ctx, id, UpdateInput{MenuType: TypePage, Name: "角色管理", I18nKey: stringPointer("navigation.roles"), Path: &path, ComponentPath: &componentPath, IsHidden: yesno.No}); err == nil {
+		t.Fatal("Update accepted mismatched page path/componentPath")
+	}
+}
+
 func TestServiceCreateSupportsExplicitNullRootAndDisabledChild(t *testing.T) {
 	_, ctx, service := openCleanMenuService(t)
 	rootID, err := createAdminMenu(t, service, ctx, CreateInput{

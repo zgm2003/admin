@@ -79,6 +79,21 @@ func TestNormalizeMenuInputEnforcesPageAndActionPermissionSuffixes(t *testing.T)
 	}
 }
 
+func TestNormalizeMenuInputRejectsMismatchedPagePathAndComponentPath(t *testing.T) {
+	path := "/permission/roles"
+	componentPath := "access/roles"
+	input := CreateInput{PlatformID: 1, MenuType: TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: stringPointer("navigation.roles"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	if _, err := normalizeCreateInput(input); err == nil {
+		t.Fatal("mismatched page path/componentPath was accepted")
+	}
+	validPath := "/permission/roles"
+	validComponent := "permission/roles"
+	update := UpdateInput{MenuType: TypePage, Name: "角色管理", I18nKey: stringPointer("navigation.roles"), Path: &validPath, ComponentPath: &validComponent, IsHidden: yesno.No}
+	if _, err := normalizeUpdateInput(update); err != nil {
+		t.Fatalf("matching page path/componentPath rejected: %v", err)
+	}
+}
+
 func TestBuildMenuIndexRejectsInvalidStoredTrees(t *testing.T) {
 	now := time.Now().UTC()
 	validRoot := Menu{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
@@ -87,6 +102,9 @@ func TestBuildMenuIndexRejectsInvalidStoredTrees(t *testing.T) {
 	validPage := Menu{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypePage, Name: "报表列表", Code: "reports:view", I18nKey: stringPointer("reports.list"), Path: &pagePath, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	invalidPageCode := validPage
 	invalidPageCode.Code = "reports:list"
+	invalidPagePath := validPage
+	invalidPath := "/access/roles"
+	invalidPagePath.Path = &invalidPath
 	tests := []struct {
 		name  string
 		menus []Menu
@@ -101,6 +119,7 @@ func TestBuildMenuIndexRejectsInvalidStoredTrees(t *testing.T) {
 		{name: "malformed title", menus: []Menu{{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation_unknown"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
 		{name: "invalid action icon", menus: []Menu{validRoot, validPage, {ID: 3, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "新增报表", Code: "reports:create", Icon: stringPointer("lucide:key-round"), IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
 		{name: "page permission suffix", menus: []Menu{validRoot, invalidPageCode}},
+		{name: "page path component mismatch", menus: []Menu{validRoot, invalidPagePath}},
 	}
 
 	for _, test := range tests {

@@ -200,7 +200,7 @@ func TestProtectedMenusAllowOnlyPresentationUpdates(t *testing.T) {
 func testFoundationDefinitions() []FoundationDefinition {
 	return []FoundationDefinition{
 		{MenuType: TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: stringPointer("navigation.access"), Icon: stringPointer("lucide:shield-check"), SortOrder: 200, IsEnabled: yesno.Yes, IsHidden: yesno.No, Protected: true},
-		{ParentCode: "access", MenuType: TypePage, Name: "菜单管理", Code: PermissionView, I18nKey: stringPointer("navigation.accessMenus"), Path: stringPointer("/access/menus"), ComponentPath: stringPointer("access/menus"), Icon: stringPointer("lucide:panel-left"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, Protected: true},
+		{ParentCode: "access", MenuType: TypePage, Name: "菜单管理", Code: PermissionView, I18nKey: stringPointer("navigation.accessMenus"), Path: stringPointer("/permission/menus"), ComponentPath: stringPointer("permission/menus"), Icon: stringPointer("lucide:panel-left"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, Protected: true},
 		{ParentCode: PermissionView, MenuType: TypeAction, Name: "新增菜单", Code: PermissionCreate, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
 		{ParentCode: PermissionView, MenuType: TypeAction, Name: "修改菜单", Code: PermissionUpdate, SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
 		{ParentCode: PermissionView, MenuType: TypeAction, Name: "删除菜单", Code: PermissionDelete, SortOrder: 30, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},

@@ -186,6 +186,20 @@ func TestMenuSchemaRejectsCrossPlatformParent(t *testing.T) {
 	}
 }
 
+func TestMenuSchemaRejectsMismatchedPagePathComponentPath(t *testing.T) {
+	connection, ctx := openMenuSchema(t)
+	db := connection.GORM.WithContext(ctx)
+	platformID := menuAdminPlatformID(t, db)
+	i18nKey := "navigation.roles"
+	path, componentPath := "/permission/roles", "access/roles"
+	row := menu.Menu{PlatformID: platformID, MenuType: menu.TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: &i18nKey, Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	err := db.Create(&row).Error
+	var postgresError *pgconn.PgError
+	if !errors.As(err, &postgresError) || postgresError.ConstraintName != "ck_permission_menu_shape" {
+		t.Fatalf("mismatched page path error = %v", err)
+	}
+}
+
 func menuAdminPlatformID(t *testing.T, db *gorm.DB) int64 {
 	t.Helper()
 	var id int64

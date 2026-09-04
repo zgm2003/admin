@@ -27,7 +27,7 @@ describe('menu field protocol', () => {
     (value) => expect(menuCodePattern.test(value)).toBe(true),
   )
 
-  it.each(['/account/users', '/access/menus', '/register', '/reports/order-items'])(
+  it.each(['/account/users', '/permission/menus', '/register', '/reports/order-items'])(
     'accepts route path %s',
     (value) => expect(isMenuPath(value)).toBe(true),
   )

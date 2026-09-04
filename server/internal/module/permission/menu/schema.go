@@ -30,7 +30,7 @@ var menuConstraints = []constraintDefinition{
 		ddl: `ALTER TABLE permission_menu ADD CONSTRAINT ck_permission_menu_shape CHECK (
 			btrim(name) <> '' AND (
 				(menu_type = 'directory' AND i18n_key IS NOT NULL AND path IS NULL AND component_path IS NULL)
-				OR (menu_type = 'page' AND i18n_key IS NOT NULL AND path IS NOT NULL AND btrim(path) <> '' AND component_path IS NOT NULL AND btrim(component_path) <> '')
+				OR (menu_type = 'page' AND i18n_key IS NOT NULL AND path IS NOT NULL AND btrim(path) <> '' AND component_path IS NOT NULL AND btrim(component_path) <> '' AND path = '/' || component_path)
 				OR (menu_type = 'action' AND i18n_key IS NULL AND path IS NULL AND component_path IS NULL AND icon IS NULL AND is_hidden = 1)
 			)
 		)`,

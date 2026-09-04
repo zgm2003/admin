@@ -23,6 +23,14 @@ const walk = (dir) => {
 for (const file of [...walk(src), ...walk(tests)]) {
   const projectPath = toProjectPath(file)
   const content = readFileSync(file, 'utf8')
+  if (
+    (projectPath.startsWith('src/router/') || projectPath.startsWith('src/views/')) &&
+    /componentPathMap|user\/login-logs|storage\/object|\/access\/(?:menus|roles|auth-platforms)|\/cloud\/object-storage/.test(
+      content,
+    )
+  ) {
+    add('page-path-contract', file, '页面 path 必须与 componentPath 保持 /<componentPath> 一致')
+  }
   if (projectPath.startsWith('src/') && file.endsWith('.vue')) {
     const lineCount = content.split(/\r?\n/).length
     const isPage =

@@ -75,11 +75,11 @@ BEGIN
   SELECT id INTO object_id FROM permission_menu WHERE platform_id = admin_id AND code = 'storage:object:view' AND deleted_at IS NULL;
   IF object_id IS NULL THEN
     INSERT INTO permission_menu (platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden, created_at, updated_at)
-    VALUES (admin_id, cloud_id, 'page', '对象存储', 'storage:object:view', 'navigation.storageObject', '/cloud/object-storage', 'storage/object', 'lucide:cloud-upload', 10, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    VALUES (admin_id, cloud_id, 'page', '对象存储', 'storage:object:view', 'navigation.storageObject', '/cloud/storage-object', 'cloud/storage-object', 'lucide:cloud-upload', 10, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     RETURNING id INTO object_id;
     changed := TRUE;
   ELSE
-    IF EXISTS (SELECT 1 FROM permission_menu WHERE id = object_id AND (parent_id IS DISTINCT FROM cloud_id OR menu_type <> 'page' OR i18n_key <> 'navigation.storageObject' OR path <> '/cloud/object-storage' OR component_path <> 'storage/object' OR icon <> 'lucide:cloud-upload' OR is_hidden <> 0)) THEN
+    IF EXISTS (SELECT 1 FROM permission_menu WHERE id = object_id AND (parent_id IS DISTINCT FROM cloud_id OR menu_type <> 'page' OR i18n_key <> 'navigation.storageObject' OR path <> '/cloud/storage-object' OR component_path <> 'cloud/storage-object' OR icon <> 'lucide:cloud-upload' OR is_hidden <> 0)) THEN
       RAISE EXCEPTION 'storage object menu shape mismatch';
     END IF;
   END IF;

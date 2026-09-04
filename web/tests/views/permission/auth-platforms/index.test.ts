@@ -290,9 +290,9 @@ function setPermissions(codes: string[]): void {
 async function mountPage() {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/access/auth-platforms', component: AuthPlatformsPage }],
+    routes: [{ path: '/permission/auth-platforms', component: AuthPlatformsPage }],
   })
-  await router.push('/access/auth-platforms')
+  await router.push('/permission/auth-platforms')
   await router.isReady()
   const wrapper = mount(AuthPlatformsPage, {
     global: { plugins: [ElementPlus, pinia, appI18n, router] },

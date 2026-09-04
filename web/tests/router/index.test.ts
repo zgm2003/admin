@@ -34,7 +34,7 @@ describe('router', () => {
     expect(router.hasRoute('register')).toBe(false)
     expect(router.resolve('/register').matched).toHaveLength(0)
     expect(router.resolve('/dashboard').meta.requiresAuth).toBe(true)
-    expect(router.resolve('/access/menus').matched).toHaveLength(0)
+    expect(router.resolve('/permission/menus').matched).toHaveLength(0)
     expect(router.hasRoute('account-profile')).toBe(false)
     expect(router.resolve('/account/profile').matched).toHaveLength(0)
     expect(router.hasRoute('admin-layout')).toBe(true)
@@ -47,7 +47,7 @@ describe('router', () => {
     expect(dashboard.meta.i18nKey).toBe('navigation.dashboard')
     expect(dashboard.meta.affix).toBe(true)
     expect(router.resolve('/login').meta.i18nKey).toBeUndefined()
-    expect(router.resolve('/access/menus').meta.i18nKey).toBeUndefined()
+    expect(router.resolve('/permission/menus').meta.i18nKey).toBeUndefined()
   })
 
   it('registers and guards a dynamic menu page with its exact permission after loading access', async () => {
@@ -61,7 +61,7 @@ describe('router', () => {
         accessDirectory('access', 'navigation.access', [
           accessPage(
             'permission:menu:view',
-            '/access/menus',
+            '/permission/menus',
             'permission/menus',
             'navigation.accessMenus',
           ),
@@ -69,7 +69,7 @@ describe('router', () => {
       ],
       permissionCodes: [],
     })
-    await router.push('/access/menus')
+    await router.push('/permission/menus')
     expect(router.currentRoute.value.path).toBe('/dashboard')
 
     usePermissionStore(pinia).reset()
@@ -79,7 +79,7 @@ describe('router', () => {
         accessDirectory('access', 'navigation.access', [
           accessPage(
             'permission:menu:view',
-            '/access/menus',
+            '/permission/menus',
             'permission/menus',
             'navigation.accessMenus',
           ),
@@ -87,8 +87,8 @@ describe('router', () => {
       ],
       permissionCodes: ['permission:menu:view'],
     })
-    await router.push('/access/menus')
-    expect(router.currentRoute.value.path).toBe('/access/menus')
+    await router.push('/permission/menus')
+    expect(router.currentRoute.value.path).toBe('/permission/menus')
   })
 
   it('restores a cold dynamic URL through auth, access, route registration, and the original URL', async () => {
@@ -137,7 +137,7 @@ describe('router', () => {
     installPermissionGuard(router)
 
     await router.push('/account/users')
-    await router.push('/access/roles')
+    await router.push('/permission/roles')
     await router.push('/account/users')
 
     expect(router.currentRoute.value.path).toBe('/account/users')
@@ -297,8 +297,8 @@ function businessPermissionSnapshot(): PermissionSnapshot {
       accessDirectory('access', 'navigation.access', [
         accessPage(
           'permission:role:list',
-          '/access/roles',
-          'access/roles',
+          '/permission/roles',
+          'permission/roles',
           'navigation.accessRoles',
         ),
       ]),

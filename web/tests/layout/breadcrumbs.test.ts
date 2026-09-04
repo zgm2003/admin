@@ -32,10 +32,10 @@ describe('resolveBreadcrumbs', () => {
 
   it('resolves every business root and does not invent a static menu breadcrumb', () => {
     const tree = [accountDirectory(), accessDirectory(), systemDirectory()]
-    expect(resolveBreadcrumbs('/access/menus', [])).toBeNull()
-    expect(resolveBreadcrumbs('/access/menus', tree)).toEqual([
+    expect(resolveBreadcrumbs('/permission/menus', [])).toBeNull()
+    expect(resolveBreadcrumbs('/permission/menus', tree)).toEqual([
       { path: null, i18nKey: 'navigation.access' },
-      { path: '/access/menus', i18nKey: 'navigation.accessMenus' },
+      { path: '/permission/menus', i18nKey: 'navigation.accessMenus' },
     ])
     expect(resolveBreadcrumbs('/system/operation-logs', tree)).toEqual([
       { path: null, i18nKey: 'navigation.system' },
@@ -102,7 +102,12 @@ function accessDirectory(): PermissionMenuNode {
   return directoryNode(
     'access',
     'navigation.access',
-    pageNode('permission:menu:list', '/access/menus', 'access/menus', 'navigation.accessMenus'),
+    pageNode(
+      'permission:menu:list',
+      '/permission/menus',
+      'permission/menus',
+      'navigation.accessMenus',
+    ),
   )
 }
 

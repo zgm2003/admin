@@ -1,17 +1,18 @@
 export type SearchOptionValue = string | number
 export type SearchDateRange = [] | [string, string]
-export type SearchFormValue = string | number | boolean | SearchDateRange | null | undefined
-export type SearchFormModel = Record<string, SearchFormValue>
-
-export interface SearchOption {
-  label: string
-  value: SearchOptionValue
-}
+export type SearchScalar = string | number | null | undefined
+export type SearchFormValue = SearchScalar | SearchDateRange
 
 export type SearchFieldType = 'input' | 'select-v2' | 'date-range'
 
+type KeysMatching<T extends object, V> = string extends keyof T
+  ? string
+  : {
+      [K in keyof T]-?: Exclude<T[K], undefined> extends V ? K : never
+    }[keyof T] &
+      string
+
 interface SearchFieldBase {
-  key: string
   label: string
   placeholder?: string
   width?: string | number
@@ -20,19 +21,36 @@ interface SearchFieldBase {
   testId?: string
 }
 
-export interface InputSearchField extends SearchFieldBase {
+export interface InputSearchField<
+  T extends object = Record<string, SearchFormValue>,
+> extends SearchFieldBase {
+  key: KeysMatching<T, SearchScalar>
   type: 'input'
 }
 
-export interface SelectSearchField extends SearchFieldBase {
+export interface SelectSearchField<
+  T extends object = Record<string, SearchFormValue>,
+> extends SearchFieldBase {
+  key: KeysMatching<T, SearchScalar>
   type: 'select-v2'
   options: SearchOption[]
 }
 
-export interface DateRangeSearchField extends SearchFieldBase {
+export interface DateRangeSearchField<
+  T extends object = Record<string, SearchFormValue>,
+> extends SearchFieldBase {
+  key: KeysMatching<T, SearchDateRange>
   type: 'date-range'
   valueFormat?: string
   rangeSeparator?: string
 }
 
-export type SearchField = InputSearchField | SelectSearchField | DateRangeSearchField
+export type SearchField<T extends object = Record<string, SearchFormValue>> =
+  InputSearchField<T> | SelectSearchField<T> | DateRangeSearchField<T>
+
+export type SearchFormModel<T extends object = Record<string, SearchFormValue>> = T
+
+export interface SearchOption {
+  label: string
+  value: SearchOptionValue
+}

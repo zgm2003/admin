@@ -7,6 +7,12 @@ import type { SearchField, SearchFieldType, SearchFormModel } from '@/components
 import { appI18n, setLocale } from '@/i18n'
 
 describe('Search', () => {
+  interface OperationLogSearchModel {
+    keyword: string
+    method: string
+    dateRange: [] | [string, string]
+  }
+
   const dateRangeType: SearchFieldType = 'date-range'
   const fields: SearchField[] = [
     { key: 'keyword', type: 'input', label: 'Keyword' },
@@ -76,5 +82,29 @@ describe('Search', () => {
 
   it('supports date-range as a public field type', () => {
     expect(dateRangeType).toBe('date-range')
+  })
+
+  it('rejects a model value that does not match the field type without throwing during render', async () => {
+    const wrapper = mount(AppSearch, {
+      props: {
+        modelValue: { keyword: ['bad'] } as never,
+        fields: [{ key: 'keyword', type: 'input', label: 'Keyword' }],
+      },
+      global: { plugins: [ElementPlus, appI18n] },
+    })
+
+    await wrapper.find('form').trigger('submit')
+    expect(wrapper.emitted('query')).toBeUndefined()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+  })
+
+  it('models all supported field kinds with keys from the search model', () => {
+    const typedFields: SearchField<OperationLogSearchModel>[] = [
+      { key: 'keyword', type: 'input', label: 'Keyword' },
+      { key: 'method', type: 'select-v2', label: 'Method', options: [] },
+      { key: 'dateRange', type: 'date-range', label: 'Date range' },
+    ]
+
+    expect(typedFields.map((field) => field.key)).toEqual(['keyword', 'method', 'dateRange'])
   })
 })

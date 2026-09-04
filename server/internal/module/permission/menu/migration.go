@@ -77,9 +77,9 @@ var legacyMenuIcons = map[string]legacyIconTarget{
 var migratedPages = map[string]migratedPageTarget{
 	"account:user:view":         {ParentCode: "account", Path: "/account/users", ComponentPath: "account/users", I18nKey: "navigation.accountUsers", Icon: "lucide:user-round-cog", SortOrder: 10},
 	"auth:session:view":         {ParentCode: "account", Path: "/account/sessions", ComponentPath: "account/sessions", I18nKey: "navigation.accountSessions", Icon: "lucide:monitor-smartphone", SortOrder: 20},
-	"permission:menu:view":      {ParentCode: "access", Path: "/access/menus", ComponentPath: "access/menus", I18nKey: "navigation.accessMenus", Icon: "lucide:panel-left", SortOrder: 10},
-	"permission:role:view":      {ParentCode: "access", Path: "/access/roles", ComponentPath: "access/roles", I18nKey: "navigation.accessRoles", Icon: "lucide:user-cog", SortOrder: 20},
-	"auth:platform:view":        {ParentCode: "access", Path: "/access/auth-platforms", ComponentPath: "access/auth-platforms", I18nKey: "navigation.accessAuthPlatforms", Icon: "lucide:key-round", SortOrder: 30},
+	"permission:menu:view":      {ParentCode: "access", Path: "/permission/menus", ComponentPath: "permission/menus", I18nKey: "navigation.accessMenus", Icon: "lucide:panel-left", SortOrder: 10},
+	"permission:role:view":      {ParentCode: "access", Path: "/permission/roles", ComponentPath: "permission/roles", I18nKey: "navigation.accessRoles", Icon: "lucide:user-cog", SortOrder: 20},
+	"auth:platform:view":        {ParentCode: "access", Path: "/permission/auth-platforms", ComponentPath: "permission/auth-platforms", I18nKey: "navigation.accessAuthPlatforms", Icon: "lucide:key-round", SortOrder: 30},
 	"system:operation-log:view": {ParentCode: "system", Path: "/system/operation-logs", ComponentPath: "system/operation-logs", I18nKey: "navigation.systemOperationLogs", Icon: "lucide:scroll-text", SortOrder: 10},
 }
 

@@ -157,7 +157,7 @@ func assertRBACMigrationState(t *testing.T, db *gorm.DB, ctx context.Context, fi
 	if err := db.WithContext(ctx).Where("code = ?", "account:user:loginlog:view").Take(&loginLogPage).Error; err != nil {
 		t.Fatal(err)
 	}
-	if loginLogPage.PlatformID != fixture.adminID || loginLogPage.ParentID == nil || *loginLogPage.ParentID != fixture.rootID || loginLogPage.MenuType != menu.TypePage || loginLogPage.Path == nil || *loginLogPage.Path != "/account/login-logs" || loginLogPage.ComponentPath == nil || *loginLogPage.ComponentPath != "user/login-logs" || loginLogPage.IsHidden != yesno.No {
+	if loginLogPage.PlatformID != fixture.adminID || loginLogPage.ParentID == nil || *loginLogPage.ParentID != fixture.rootID || loginLogPage.MenuType != menu.TypePage || loginLogPage.Path == nil || *loginLogPage.Path != "/account/login-logs" || loginLogPage.ComponentPath == nil || *loginLogPage.ComponentPath != "account/login-logs" || loginLogPage.IsHidden != yesno.No {
 		t.Fatalf("login log page = %+v", loginLogPage)
 	}
 	var actions []menu.Menu

@@ -23,19 +23,6 @@ const pageModules: PageModuleMap = {
   ...import.meta.glob<PageModule>('../views/*/*/index.vue'),
 }
 
-const componentPathMap: Readonly<Record<string, string>> = {
-  'account/users': 'account/users',
-  'account/profile': 'account/profile',
-  'account/sessions': 'account/sessions',
-  'user/login-logs': 'account/login-logs',
-  'access/menus': 'permission/menus',
-  'access/roles': 'permission/roles',
-  'access/auth-platforms': 'permission/auth-platforms',
-  'system/operation-logs': 'system/operation-logs',
-  'storage/object': 'cloud/storage-object',
-  'message/mail': 'message/mail',
-}
-
 export function registerPermissionRoutes(
   router: Router,
   menuTree: readonly PermissionMenuNode[],
@@ -120,8 +107,7 @@ function collectPages(
 }
 
 function moduleKey(componentPath: string): string {
-  const mappedPath = componentPathMap[componentPath] ?? componentPath
-  return `../views/${mappedPath}/index.vue`
+  return `../views/${componentPath}/index.vue`
 }
 
 function removeRoutes(removers: Array<() => void>): void {

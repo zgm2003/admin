@@ -441,16 +441,16 @@ git commit -m "refactor: 统一公共组件目录结构"
 it('registers the menu page from the access snapshot', () => {
   const router = testRouter()
   const cleanup = registerPermissionRoutes(router, [
-    directory('access', [page('permission:menu:view', '/access/menus', 'access/menus')]),
+    directory('access', [page('permission:menu:view', '/permission/menus', 'access/menus')]),
   ], testViews)
 
-  expect(router.resolve('/access/menus').name).toBe('access:permission:menu:view')
+  expect(router.resolve('/permission/menus').name).toBe('access:permission:menu:view')
   cleanup()
-  expect(router.resolve('/access/menus').matched).toHaveLength(0)
+  expect(router.resolve('/permission/menus').matched).toHaveLength(0)
 })
 ```
 
-同时删除原先针对 `staticPageBinding` 的 code/path/component mismatch 和错误静态 route name 测试；把 `testRouter(true)` helper 改为只创建 `admin-layout` 与 Dashboard，避免测试继续要求已删除的业务特例。在 `router/index.test.ts` 断言静态 children 只有 Dashboard，不含 `/access/menus`。
+同时删除原先针对 `staticPageBinding` 的 code/path/component mismatch 和错误静态 route name 测试；把 `testRouter(true)` helper 改为只创建 `admin-layout` 与 Dashboard，避免测试继续要求已删除的业务特例。在 `router/index.test.ts` 断言静态 children 只有 Dashboard，不含 `/permission/menus`。
 
 - [ ] **Step 2: 确认新路由契约失败**
 
@@ -1518,10 +1518,10 @@ git commit -m "refactor: 拆分菜单树与表单职责"
 
 ```ts
 it('closes the active tab and chooses the nearest remaining tab', () => {
-  const tabs = [dashboardTab(), routeTab('/account/users'), routeTab('/access/roles')]
+  const tabs = [dashboardTab(), routeTab('/account/users'), routeTab('/permission/roles')]
   expect(closeRouteTab(tabs, '/account/users', '/account/users')).toEqual({
-    tabs: [dashboardTab(), routeTab('/access/roles')],
-    nextPath: '/access/roles',
+    tabs: [dashboardTab(), routeTab('/permission/roles')],
+    nextPath: '/permission/roles',
   })
 })
 ```

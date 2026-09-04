@@ -36,7 +36,7 @@ var menuIconNames = map[string]struct{}{
 	"lucide:database": {}, "lucide:file-stack": {}, "lucide:folder": {}, "lucide:gauge": {},
 	"lucide:hard-drive": {}, "lucide:house": {}, "lucide:images": {}, "lucide:key-round": {},
 	"lucide:layout-dashboard": {}, "lucide:list-tree": {}, "lucide:lock-keyhole": {},
-	"lucide:message-square-more": {}, "lucide:monitor-smartphone": {}, "lucide:panel-left": {},
+	"lucide:mail": {}, "lucide:message-square-more": {}, "lucide:monitor-smartphone": {}, "lucide:panel-left": {},
 	"lucide:scroll-text": {}, "lucide:server": {}, "lucide:settings-2": {}, "lucide:shield-check": {},
 	"lucide:sparkles": {}, "lucide:user-cog": {}, "lucide:user-round": {}, "lucide:user-round-cog": {},
 	"lucide:user-circle": {}, "lucide:users": {}, "lucide:users-round": {}, "lucide:wallet-cards": {},
@@ -251,7 +251,7 @@ func validateStoredMenu(item Menu) error {
 			return fmt.Errorf("%w: directory render fields are invalid", errMenuFields)
 		}
 	case TypePage:
-		if item.I18nKey == nil || !validMenuI18nKey(*item.I18nKey) || item.Path == nil || item.ComponentPath == nil || !validMenuPath(*item.Path) || !validMenuComponentPath(*item.ComponentPath) {
+		if item.I18nKey == nil || !validMenuI18nKey(*item.I18nKey) || item.Path == nil || item.ComponentPath == nil || !validMenuPath(*item.Path) || !validMenuComponentPath(*item.ComponentPath) || !samePagePath(*item.Path, *item.ComponentPath) {
 			return fmt.Errorf("%w: page render fields are invalid", errMenuFields)
 		}
 	case TypeAction:
@@ -385,7 +385,7 @@ func validateInputShape(menuType Type, i18nKey, path, componentPath, icon *strin
 			return fmt.Errorf("%w: directory fields are invalid", errMenuFields)
 		}
 	case TypePage:
-		if i18nKey == nil || !validMenuI18nKey(*i18nKey) || path == nil || componentPath == nil || !validMenuPath(*path) || !validMenuComponentPath(*componentPath) ||
+		if i18nKey == nil || !validMenuI18nKey(*i18nKey) || path == nil || componentPath == nil || !validMenuPath(*path) || !validMenuComponentPath(*componentPath) || !samePagePath(*path, *componentPath) ||
 			(icon != nil && !validMenuIcon(*icon)) || !yesno.IsValid(isHidden) {
 			return fmt.Errorf("%w: page fields are invalid", errMenuFields)
 		}
@@ -397,4 +397,8 @@ func validateInputShape(menuType Type, i18nKey, path, componentPath, icon *strin
 		return fmt.Errorf("%w: menu type is invalid", errMenuFields)
 	}
 	return nil
+}
+
+func samePagePath(path, componentPath string) bool {
+	return path == "/"+componentPath
 }

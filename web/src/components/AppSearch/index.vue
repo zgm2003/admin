@@ -1,16 +1,20 @@
-<script setup lang="ts">
+<script
+  setup
+  lang="ts"
+  generic="TModel extends Record<string, SearchFormValue> = Record<string, SearchFormValue>"
+>
 import { computed, reactive, ref, watch } from 'vue'
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { ElSpace } from 'element-plus'
 import { useI18n } from 'vue-i18n'
-import type { SearchDateRange, SearchField, SearchFormModel, SearchFormValue } from './types'
+import type { SearchDateRange, SearchField, SearchFormValue } from './types'
 
 defineOptions({ name: 'AppSearch' })
 
 const props = withDefaults(
   defineProps<{
-    modelValue: SearchFormModel
-    fields: SearchField[]
+    modelValue: TModel
+    fields: SearchField<TModel>[]
     collapseCount?: number
     queryLabel?: string
     resetLabel?: string
@@ -31,9 +35,9 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  'update:modelValue': [value: SearchFormModel]
-  query: [value: SearchFormModel]
-  reset: [value: SearchFormModel]
+  'update:modelValue': [value: TModel]
+  query: [value: TModel]
+  reset: [value: TModel]
 }>()
 
 const { t } = useI18n()
@@ -42,8 +46,38 @@ const resolvedResetLabel = computed(() => props.resetLabel ?? t('search.reset'))
 const resolvedExpandLabel = computed(() => props.expandLabel ?? t('search.expand'))
 const resolvedCollapseLabel = computed(() => props.collapseLabel ?? t('search.collapse'))
 
-const form = reactive<SearchFormModel>({ ...props.modelValue })
+const form = reactive<Record<string, SearchFormValue>>({ ...props.modelValue } as Record<
+  string,
+  SearchFormValue
+>)
 const collapsed = ref(false)
+const validationError = ref<string | null>(null)
+
+function isScalar(value: unknown): value is string | number | null | undefined {
+  return (
+    typeof value === 'string' || typeof value === 'number' || value === null || value === undefined
+  )
+}
+
+function isDateRange(value: unknown): value is SearchDateRange {
+  return (
+    Array.isArray(value) &&
+    (value.length === 0 || (value.length === 2 && value.every((item) => typeof item === 'string')))
+  )
+}
+
+function validateModel(fields: readonly SearchField<TModel>[], model: TModel): string | null {
+  for (const field of fields) {
+    if (!Object.prototype.hasOwnProperty.call(model, field.key))
+      return `missing:${String(field.key)}`
+    const value = (model as Record<string, unknown>)[field.key]
+    if (field.type === 'date-range' ? !isDateRange(value) : !isScalar(value))
+      return `invalid:${String(field.key)}`
+  }
+  return null
+}
+
+validationError.value = validateModel(props.fields, props.modelValue)
 
 watch(
   () => props.modelValue,
@@ -52,6 +86,7 @@ watch(
       if (!Object.prototype.hasOwnProperty.call(value, key)) delete form[key]
     }
     Object.assign(form, value)
+    validationError.value = validateModel(props.fields, value)
   },
   { deep: true },
 )
@@ -70,77 +105,52 @@ function resolveWidth(width: string | number | undefined): string {
 
 function inputValue(key: string): string | number | null | undefined {
   const value = form[key]
-  if (
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    value === null ||
-    value === undefined
-  )
-    return value
-  throw new Error(`Search input field ${key} must be string or number`)
+  return isScalar(value) ? value : undefined
 }
 
 function dateRangeValue(key: string): SearchDateRange {
   const value = form[key]
-  if (
-    Array.isArray(value) &&
-    (value.length === 0 || (value.length === 2 && value.every((item) => typeof item === 'string')))
-  ) {
-    return value as SearchDateRange
-  }
-  throw new Error(`Search date range field ${key} must be an empty or two-item string array`)
+  return isDateRange(value) ? value : []
 }
 
 function selectValue(key: string): string | number | null | undefined {
   const value = form[key]
-  if (
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    value === null ||
-    value === undefined
-  ) {
-    return value
-  }
-  throw new Error(`Search select field ${key} must be string or number`)
+  return isScalar(value) ? value : undefined
 }
 
-function normalizeValue(value: unknown, key: string): SearchFormValue {
-  if (
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean' ||
-    value === null ||
-    value === undefined
-  )
-    return value
-  if (
-    Array.isArray(value) &&
-    (value.length === 0 || (value.length === 2 && value.every((item) => typeof item === 'string')))
-  )
-    return value as SearchDateRange
-  throw new Error(`Search field ${key} received an unsupported value`)
+function normalizeValue(value: unknown): SearchFormValue | null {
+  if (isScalar(value)) return value
+  if (isDateRange(value)) return value
+  return null
 }
 
 function setSearchValue(key: string, value: unknown): void {
-  form[key] = normalizeValue(value, key)
-  emit('update:modelValue', { ...form })
+  const normalized = normalizeValue(value)
+  if (normalized === null) return
+  form[key] = normalized
+  emit('update:modelValue', { ...form } as TModel)
 }
 
 function emitForm(event: 'query' | 'reset'): void {
+  validationError.value = validateModel(props.fields, { ...form } as TModel)
+  if (validationError.value) return
   const value = { ...form }
-  emit('update:modelValue', value)
-  if (event === 'query') emit('query', value)
-  else emit('reset', value)
+  emit('update:modelValue', value as TModel)
+  if (event === 'query') emit('query', value as TModel)
+  else emit('reset', value as TModel)
 }
 
 function reset(): void {
-  for (const key of Object.keys(form)) form[key] = undefined
+  for (const field of props.fields) form[field.key] = field.type === 'date-range' ? [] : undefined
   emitForm('reset')
 }
 </script>
 
 <template>
   <el-form class="search-form" :inline="true" :model="form" @submit.prevent="emitForm('query')">
+    <div v-if="validationError" role="alert" class="search-form__error">
+      {{ t('search.invalidModel') }}
+    </div>
     <template v-for="field in visibleFields" :key="field.key">
       <el-form-item :label="field.label" :prop="field.key">
         <el-input

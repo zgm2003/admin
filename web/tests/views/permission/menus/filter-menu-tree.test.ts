@@ -55,8 +55,8 @@ const tree = (): ManagedMenuNode[] => [
         name: '菜单管理',
         code: 'permission:menu:list',
         i18nKey: 'navigation.accessMenus',
-        path: '/access/menus',
-        componentPath: 'access/menus',
+        path: '/permission/menus',
+        componentPath: 'permission/menus',
         icon: 'lucide:panel-left',
         sortOrder: 10,
         isEnabled: 1,
@@ -87,7 +87,7 @@ describe('filterManagedMenuTree', () => {
 
   it('matches name and path case-insensitively, clones full tree for empty keyword, and returns no result', () => {
     expect(filterManagedMenuTree(tree(), '权限与认证')).toHaveLength(1)
-    expect(filterManagedMenuTree(tree(), '/ACCESS/MENUS')[0]?.children).toHaveLength(1)
+    expect(filterManagedMenuTree(tree(), '/PERMISSION/MENUS')[0]?.children).toHaveLength(1)
     expect(filterManagedMenuTree(tree(), 'missing')).toEqual([])
     const cloned = filterManagedMenuTree(tree(), '  ')
     expect(cloned).not.toBe(tree())

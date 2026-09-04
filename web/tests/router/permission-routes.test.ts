@@ -53,9 +53,9 @@ describe('access route registration', () => {
           page('auth:session:view', '/account/sessions', 'account/sessions'),
         ]),
         directory('access', [
-          page('permission:menu:view', '/access/menus', 'access/menus'),
-          page('permission:role:view', '/access/roles', 'access/roles'),
-          page('auth:platform:view', '/access/auth-platforms', 'access/auth-platforms'),
+          page('permission:menu:view', '/permission/menus', 'permission/menus'),
+          page('permission:role:view', '/permission/roles', 'permission/roles'),
+          page('auth:platform:view', '/permission/auth-platforms', 'permission/auth-platforms'),
         ]),
         directory('system', [
           page('system:operation-log:view', '/system/operation-logs', 'system/operation-logs'),
@@ -64,7 +64,7 @@ describe('access route registration', () => {
       testViews,
     )
 
-    expect(router.resolve('/access/menus').name).toBe('access:permission:menu:view')
+    expect(router.resolve('/permission/menus').name).toBe('access:permission:menu:view')
     expect(router.hasRoute('access:permission:menu:view')).toBe(true)
     expect(router.hasRoute('access:account:user:view')).toBe(true)
     expect(router.hasRoute('access:auth:session:view')).toBe(true)
@@ -83,7 +83,7 @@ describe('access route registration', () => {
       router,
       [
         directory('account', [
-          page('account:user:loginlog:list', '/account/login-logs', 'user/login-logs'),
+          page('account:user:loginlog:list', '/account/login-logs', 'account/login-logs'),
         ]),
       ],
       testViews,
@@ -133,7 +133,7 @@ describe('access route registration', () => {
       name: 'duplicate path',
       nodes: [
         page('account:user:view', '/account/users', 'account/users'),
-        page('system:other:view', '/account/users', 'access/roles'),
+        page('system:other:view', '/account/users', 'permission/roles'),
       ],
     },
     {
@@ -178,7 +178,7 @@ describe('access route registration', () => {
         router,
         [
           directory('system', [
-            page('permission:role:view', '/access/roles', 'access/roles'),
+            page('permission:role:view', '/permission/roles', 'permission/roles'),
             page('account:user:view', '/account/users', 'account/users'),
           ]),
         ],
@@ -194,7 +194,7 @@ describe('access route registration', () => {
       router,
       [
         directory('system', [
-          page('permission:role:view', '/access/roles', 'access/roles'),
+          page('permission:role:view', '/permission/roles', 'permission/roles'),
           page('account:user:view', '/account/users', 'account/users'),
         ]),
       ],

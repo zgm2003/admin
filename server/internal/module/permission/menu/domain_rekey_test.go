@@ -72,9 +72,9 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 	}
 	assertRekeyedPage(t, byCode["account:user:view"], account.ID, "/account/users", "account/users", "navigation.accountUsers", "lucide:user-round-cog", 10)
 	assertRekeyedPage(t, byCode["auth:session:view"], account.ID, "/account/sessions", "account/sessions", "navigation.accountSessions", "lucide:monitor-smartphone", 20)
-	assertRekeyedPage(t, byCode["permission:menu:view"], access.ID, "/access/menus", "access/menus", "navigation.accessMenus", "lucide:panel-left", 10)
-	assertRekeyedPage(t, byCode["permission:role:view"], access.ID, "/access/roles", "access/roles", "navigation.accessRoles", "lucide:user-cog", 20)
-	assertRekeyedPage(t, byCode["auth:platform:view"], access.ID, "/access/auth-platforms", "access/auth-platforms", "navigation.accessAuthPlatforms", "lucide:key-round", 30)
+	assertRekeyedPage(t, byCode["permission:menu:view"], access.ID, "/permission/menus", "permission/menus", "navigation.accessMenus", "lucide:panel-left", 10)
+	assertRekeyedPage(t, byCode["permission:role:view"], access.ID, "/permission/roles", "permission/roles", "navigation.accessRoles", "lucide:user-cog", 20)
+	assertRekeyedPage(t, byCode["auth:platform:view"], access.ID, "/permission/auth-platforms", "permission/auth-platforms", "navigation.accessAuthPlatforms", "lucide:key-round", 30)
 	assertRekeyedPage(t, byCode["system:operation-log:view"], system.ID, "/system/operation-logs", "system/operation-logs", "navigation.systemOperationLogs", "lucide:scroll-text", 10)
 
 	for _, code := range []string{"permission:menu:view", "permission:menu:create", "permission:menu:update", "permission:menu:delete"} {

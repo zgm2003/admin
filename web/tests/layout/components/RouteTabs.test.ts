@@ -27,7 +27,7 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, i18nKey: 'navigation.main' },
   },
   {
-    path: '/access/roles',
+    path: '/permission/roles',
     name: 'access-roles',
     component: views,
     meta: { requiresAuth: true, i18nKey: 'reports.orders.list' },
@@ -120,19 +120,19 @@ describe('RouteTabs', () => {
       throw new Error('missing access fixture')
     accessRoot.children[0].i18nKey = 'reports.orders.list'
     const { wrapper, router } = await mountTabs('/dashboard', tree)
-    await router.push('/access/roles')
+    await router.push('/permission/roles')
     await flushPromises()
-    expect(wrapper.get('[data-testid="route-tab"][data-path="/access/roles"]').text()).toContain(
-      'reports.orders.list',
-    )
+    expect(
+      wrapper.get('[data-testid="route-tab"][data-path="/permission/roles"]').text(),
+    ).toContain('reports.orders.list')
   })
 
   it('closes the active tab and selects the nearest remaining tab', async () => {
     const { wrapper, router } = await mountTabs('/dashboard')
     await router.push('/account/users')
-    await router.push('/access/roles')
+    await router.push('/permission/roles')
     await flushPromises()
-    await wrapper.get('[data-testid="route-tab-access-roles-close"]').trigger('click')
+    await wrapper.get('[data-testid="route-tab-permission-roles-close"]').trigger('click')
     await flushPromises()
 
     expect(router.currentRoute.value.path).toBe('/account/users')
@@ -141,13 +141,17 @@ describe('RouteTabs', () => {
   it('close others and close all retain Dashboard', async () => {
     const { wrapper, router } = await mountTabs('/dashboard')
     await router.push('/account/users')
-    await router.push('/access/roles')
+    await router.push('/permission/roles')
     await flushPromises()
-    await wrapper.get('[data-testid="route-tab"][data-path="/access/roles"]').trigger('contextmenu')
+    await wrapper
+      .get('[data-testid="route-tab"][data-path="/permission/roles"]')
+      .trigger('contextmenu')
     await wrapper.get('[data-testid="route-tabs-close-others-context"]').trigger('click')
     expect(wrapper.findAll('[data-testid="route-tab"]')).toHaveLength(2)
 
-    await wrapper.get('[data-testid="route-tab"][data-path="/access/roles"]').trigger('contextmenu')
+    await wrapper
+      .get('[data-testid="route-tab"][data-path="/permission/roles"]')
+      .trigger('contextmenu')
     await wrapper.get('[data-testid="route-tabs-close-all-context"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/dashboard')
@@ -157,7 +161,7 @@ describe('RouteTabs', () => {
   it('navigates with previous and next controls and exposes disabled ends', async () => {
     const { wrapper, router } = await mountTabs('/dashboard')
     await router.push('/account/users')
-    await router.push('/access/roles')
+    await router.push('/permission/roles')
     await flushPromises()
 
     expect(wrapper.get('[data-testid="route-tabs-next"]').attributes('disabled')).toBeDefined()
@@ -166,7 +170,7 @@ describe('RouteTabs', () => {
     expect(router.currentRoute.value.path).toBe('/account/users')
     await wrapper.get('[data-testid="route-tabs-next"]').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.path).toBe('/access/roles')
+    expect(router.currentRoute.value.path).toBe('/permission/roles')
   })
 
   it('emits refresh and fullscreen commands', async () => {
@@ -238,7 +242,12 @@ function accessTree(): PermissionMenuNode[] {
     directory(
       'access',
       'navigation.access',
-      page('permission:role:list', '/access/roles', 'access/roles', 'navigation.accessRoles'),
+      page(
+        'permission:role:list',
+        '/permission/roles',
+        'permission/roles',
+        'navigation.accessRoles',
+      ),
     ),
     directory(
       'system',

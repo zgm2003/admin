@@ -18,7 +18,7 @@ const usersTab: RouteTab = {
   affix: false,
 }
 const rolesTab: RouteTab = {
-  path: '/access/roles',
+  path: '/permission/roles',
   i18nKey: 'reports.orders.list',
   affix: false,
 }
