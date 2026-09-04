@@ -33,6 +33,7 @@
 | 渐进路由 | `docs/agent/README.md` 提供启动顺序、任务矩阵和历史档案策略 |
 | 当前设计 | `docs/agent/design.md` 提供产品、UI、协议和权限基线 |
 | 当前架构 | `docs/agent/architecture.md` 提供组件、数据流和数据库事实边界 |
+| 容量基线 | 共享请求路径按百万级用户、多实例高并发设计；spec/plan 必须记录热点查询、缓存一致性、故障行为和并发验证 |
 | 固定流程 | 三个全局 Skill 通过 quick validator |
 | 邮件规则与限流 | 修复 `AppTable` 动态插槽导致收件规则状态请求携带 `undefined`；收件规则明确为默认允许、邮箱优先、拒绝优先；Redis 限流异常返回 `503/10006`，真实额度超限返回 `429/10007` |
 | 邮件日期展示 | 邮件日志接口将 `sentAt`、`createdAt`、`updatedAt`、`verificationExpiresAt` 显式输出为 UTC RFC3339Nano，空值为 `null`；页面使用供应商实际发送时间 `sentAt` 和验证码过期时间，并按应用语言和本地时区格式化，空值或非法值显示 `-` |

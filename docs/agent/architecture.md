@@ -24,6 +24,12 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 当前模块目录包括：`auth`、`health`、`permission`、`user`、`message`、`storage`、`system`。目录存在不代表
 所有业务都已完成，状态以 `STATUS.md` 和测试为准。
 
+## 容量基线
+
+项目默认按百万级用户、多实例和高并发访问设计。共享请求热路径不得把 PostgreSQL 当作每请求配置中心，
+不得依赖单进程唯一状态或无界缓存；缓存、限流、队列和失效协议必须明确跨实例一致性、故障闭合和回源上限。
+跨模块 spec/plan 必须记录容量假设、热点查询预算、缓存更新策略和并发验证方式。
+
 ## 同步请求
 
 ```text
@@ -86,4 +92,3 @@ PostgreSQL (权限事实) -> Redis (access version/快照) -> 进程内有界快
 | 前端路由和 Access | `web/src/router`、`web/src/store`、`web/src/api/permission` |
 | 公共请求和错误 | `web/src/utils/request.ts` |
 | 页面行为 | 对应 `web/src/views/<domain>` 及镜像测试 `web/tests` |
-
