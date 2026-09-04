@@ -117,6 +117,17 @@ describe('Login page', () => {
     expect(wrapper.get('[data-testid="login-error"]').text()).toContain('邮箱或密码错误')
   })
 
+  it('leaves non-credential failures to the request notification', async () => {
+    loginMock.mockRejectedValue(new ApiError(10006, '服务暂未就绪', 503))
+    const { wrapper } = await mountLogin()
+    await wrapper.get('[data-testid="login-email"]').setValue('admin@example.com')
+    await wrapper.get('[data-testid="login-password"]').setValue('password')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="login-error"]').exists()).toBe(false)
+  })
+
   it('shows the explicit cold-start service error', async () => {
     useAuthStore(pinia).setError('服务暂未就绪')
     const { wrapper } = await mountLogin()

@@ -122,7 +122,8 @@ function buildRequestClient(
         response.data = unwrapSuccessEnvelope(response.data)
         return response
       } catch (error: unknown) {
-        notifyRequestError(error)
+        const path = requestPath(response.config.url, baseURL)
+        if (!isLoginCredentialFailure(path, error)) notifyRequestError(error)
         return Promise.reject(error)
       }
     },
@@ -140,7 +141,7 @@ function buildRequestClient(
       const originalConfig = error.config as AuthRequestConfig
       const path = requestPath(originalConfig.url, baseURL)
       if (originalConfig.authRetried === true || noRefreshPaths.has(path)) {
-        notifyRequestError(normalizedError)
+        if (!isLoginCredentialFailure(path, normalizedError)) notifyRequestError(normalizedError)
         return Promise.reject(normalizedError)
       }
 
@@ -197,6 +198,10 @@ function notifyRequestError(error: unknown): void {
       error instanceof ProtocolError ? appI18n.global.t('request.protocolError') : error.message,
     type: 'error',
   })
+}
+
+function isLoginCredentialFailure(path: string, error: unknown): boolean {
+  return path === '/api/v1/auth/login' && error instanceof ApiError && error.code === 10002
 }
 
 function applyClientHeaders(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {

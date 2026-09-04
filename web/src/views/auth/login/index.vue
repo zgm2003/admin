@@ -7,7 +7,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { getCurrentUser, login } from '@/api/auth/login'
 import { useAuthStore } from '@/store/auth'
-import { ApiError, ProtocolError } from '@/types/http'
+import { ApiError } from '@/types/http'
 
 interface LoginForm {
   email: string
@@ -47,13 +47,7 @@ async function submit(): Promise<void> {
   } catch (error: unknown) {
     auth.setAnonymous()
     submitError.value =
-      error instanceof ProtocolError
-        ? t('request.protocolError')
-        : error instanceof ApiError && error.code === 10002
-          ? t('auth.login.invalidCredentials')
-          : error instanceof Error && error.message !== ''
-            ? error.message
-            : t('auth.login.failed')
+      error instanceof ApiError && error.code === 10002 ? t('auth.login.invalidCredentials') : ''
   } finally {
     pending.value = false
   }

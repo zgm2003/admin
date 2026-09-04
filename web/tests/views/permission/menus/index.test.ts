@@ -14,6 +14,7 @@ import {
 import type {
   CreateMenuInput,
   ManagedMenuNode,
+  ManagedMenuType,
   MenuCatalogResponse,
   UpdateMenuInput,
 } from '@/api/permission/menu'
@@ -53,7 +54,9 @@ describe('MenuManagement', () => {
     setActivePinia(pinia)
     localStorage.clear()
     setLocale('zh-CN')
-    vi.clearAllMocks()
+    // resetAllMocks (not clearAllMocks): clearAllMocks keeps queued
+    // mockResolvedValueOnce implementations, which leaks fixtures across tests.
+    vi.resetAllMocks()
     getMenusMock.mockResolvedValue(menuCatalog())
     rebuildAccessCacheMock.mockResolvedValue({ rebuiltUsers: 2 })
   })
@@ -217,9 +220,9 @@ describe('MenuManagement', () => {
     const wrapper = mountPage(pinia, ['permission:menu:update', 'permission:menu:delete'])
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="edit-1"]').attributes('disabled')).toBeUndefined()
-    expect(wrapper.get('[data-testid="status-1"]').attributes('disabled')).toBeUndefined()
-    expect(wrapper.get('[data-testid="delete-1"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get(`[data-testid="edit-${rootDirectoryID}"]`).attributes('disabled')).toBeUndefined()
+    expect(wrapper.get(`[data-testid="status-${rootDirectoryID}"]`).attributes('disabled')).toBeUndefined()
+    expect(wrapper.get(`[data-testid="delete-${rootDirectoryID}"]`).attributes('disabled')).toBeUndefined()
   })
 
   it('does not create a page or body-level scroll owner', async () => {
@@ -238,6 +241,11 @@ describe('MenuManagement', () => {
     createMenuMock.mockResolvedValue({ id: 9 })
     const wrapper = mountPage(pinia, ['permission:menu:create'])
     await flushPromises()
+    // The enabled Admin platform must be the default active tab even though a
+    // disabled Canvas platform exists alongside it.
+    const activeTab = wrapper.get('.el-tabs__item.is-active')
+    expect(activeTab.text()).toContain('Admin')
+    expect(activeTab.text()).not.toContain('Canvas')
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
     expect(document.body.querySelector('[data-testid="menu-dialog"]')).not.toBeNull()
@@ -282,12 +290,7 @@ describe('MenuManagement', () => {
     await flushPromises()
 
     expect(bodyFind('[data-testid="menu-form-platform-select"]').exists()).toBe(false)
-    await bodyGet('[data-testid="menu-form-type"]').trigger('click')
-    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find(
-      (item) => item.textContent?.trim() === '页面',
-    )
-    expect(pageOption).toBeDefined()
-    if (pageOption !== undefined) await new DOMWrapper(pageOption).trigger('click')
+    await selectMenuFormType(wrapper, 'page')
     await bodyGet('[data-testid="menu-form-name"]').setValue('Test')
     await bodyGet('[data-testid="menu-form-code"]').setValue('canvas:test:view')
     await bodyGet('[data-testid="menu-form-path"]').setValue('/test')
@@ -307,13 +310,18 @@ describe('MenuManagement', () => {
   })
 
   it('locks protected structure, status, and deletion while keeping presentation fields editable', async () => {
+    updateMenuMock.mockResolvedValue({ id: userPageID })
     getMenusMock.mockResolvedValue(menuCatalog(protectedMenuTree()))
     const wrapper = mountPage(pinia, ['permission:menu:update', 'permission:menu:delete'])
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="status-2"]').attributes('disabled')).toBeDefined()
-    expect(wrapper.get('[data-testid="delete-2"]').attributes('disabled')).toBeDefined()
-    await wrapper.get('[data-testid="edit-2"]').trigger('click')
+    expect(
+      wrapper.get(`[data-testid="status-${userPageID}"]`).attributes('disabled'),
+    ).toBeDefined()
+    expect(
+      wrapper.get(`[data-testid="delete-${userPageID}"]`).attributes('disabled'),
+    ).toBeDefined()
+    await wrapper.get(`[data-testid="edit-${userPageID}"]`).trigger('click')
     await flushPromises()
     expect(document.body.querySelector('[data-testid="menu-form-protected-hint"]')).not.toBeNull()
     expect(bodyGet('[data-testid="menu-form-code"]').attributes('disabled')).toBeDefined()
@@ -321,6 +329,14 @@ describe('MenuManagement', () => {
     expect(bodyGet('[data-testid="menu-form-component-path"]').attributes('disabled')).toBeDefined()
     expect(bodyGet('[data-testid="menu-form-hidden"]').classes()).toContain('is-disabled')
     expect(bodyGet('[data-testid="menu-form-sort-order"]').attributes('disabled')).toBeUndefined()
+
+    await bodyGet('[data-testid="menu-form-sort-order"] input').setValue('33')
+    await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
+    await flushPromises()
+    expect(updateMenuMock).toHaveBeenCalledWith(
+      userPageID,
+      expect.objectContaining({ menuType: 'page', sortOrder: 33, isHidden: YesNo.No }),
+    )
   })
 
   it('stores an IconSelect value as a string and previews it with AppDIcon', async () => {
@@ -385,6 +401,36 @@ describe('MenuManagement', () => {
     expect(wrapper.findAllComponents({ name: 'ElCol' }).length).toBeGreaterThan(0)
   })
 
+  it('clears mutually exclusive field values when switching menu types', async () => {
+    createMenuMock.mockResolvedValue({ id: 9 })
+    const wrapper = mountPage(pinia, ['permission:menu:create'])
+    await flushPromises()
+    await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
+    await flushPromises()
+
+    await selectMenuFormType(wrapper, 'page')
+    await bodyGet('[data-testid="menu-form-name"]').setValue('报表')
+    await bodyGet('[data-testid="menu-form-code"]').setValue('reports:create')
+    await bodyGet('[data-testid="menu-form-i18n-key"]').setValue('navigation.system')
+    await bodyGet('[data-testid="menu-form-path"]').setValue('/reports')
+    await bodyGet('[data-testid="menu-form-component-path"]').setValue('reports/orders')
+
+    await selectMenuFormType(wrapper, 'action')
+    await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(createMenuMock).toHaveBeenCalledTimes(1)
+    expect(createMenuMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        menuType: 'action',
+        path: null,
+        componentPath: null,
+        icon: null,
+        isHidden: YesNo.Yes,
+      }),
+    )
+  })
+
   it('uses text protocol fields with exact hints and clears incompatible values without deriving paths', async () => {
     const wrapper = mountPage(pinia, ['permission:menu:create'])
     await flushPromises()
@@ -400,13 +446,7 @@ describe('MenuManagement', () => {
     )
     expect(document.body.textContent).toContain('权限码：小写冒号分段，例如 account:user:view')
 
-    await bodyGet('[data-testid="menu-form-type"]').trigger('click')
-    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find(
-      (item) => item.textContent?.trim() === '页面',
-    )
-    expect(pageOption).not.toBeNull()
-    if (pageOption !== null) await new DOMWrapper(pageOption).trigger('click')
-    await flushPromises()
+    await selectMenuFormType(wrapper, 'page')
     expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(true)
     expect(bodyFind('[data-testid="menu-form-component-path"]').exists()).toBe(true)
     expect(bodyFind('[data-testid="menu-form-hidden"]').exists()).toBe(true)
@@ -418,13 +458,7 @@ describe('MenuManagement', () => {
 
     await bodyGet('[data-testid="menu-form-path"]').setValue('/reports')
     await bodyGet('[data-testid="menu-form-component-path"]').setValue('reports/orders')
-    await bodyGet('[data-testid="menu-form-type"]').trigger('click')
-    const actionOption = Array.from(
-      document.body.querySelectorAll('.el-select-dropdown__item'),
-    ).find((item) => item.textContent?.includes('按钮权限'))
-    expect(actionOption).not.toBeUndefined()
-    if (actionOption !== undefined) await new DOMWrapper(actionOption).trigger('click')
-    await flushPromises()
+    await selectMenuFormType(wrapper, 'action')
     expect(bodyFind('[data-testid="menu-form-path"]').exists()).toBe(false)
     expect(bodyFind('[data-testid="menu-form-component-path"]').exists()).toBe(false)
     expect(bodyFind('[data-testid="menu-form-hidden"]').exists()).toBe(false)
@@ -435,7 +469,7 @@ describe('MenuManagement', () => {
     getMenusMock.mockResolvedValueOnce(menuCatalog()).mockResolvedValueOnce(menuCatalog())
     const wrapper = mountPage(pinia, ['permission:menu:update'])
     await flushPromises()
-    await wrapper.get('[data-testid="edit-2"]').trigger('click')
+    await wrapper.get(`[data-testid="edit-${userPageID}"]`).trigger('click')
     await flushPromises()
     const codeInput = bodyGet('[data-testid="menu-form-code"]')
     expect(codeInput.attributes('readonly')).toBeDefined()
@@ -468,17 +502,14 @@ describe('MenuManagement', () => {
     await flushPromises()
     await bodyGet('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
-    await bodyGet('[data-testid="menu-form-type"]').trigger('click')
-    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find(
-      (item) => item.textContent?.trim() === '页面',
-    )
-    if (pageOption !== undefined) await new DOMWrapper(pageOption).trigger('click')
+    await selectMenuFormType(wrapper, 'page')
     await bodyGet('[data-testid="menu-form-code"]').setValue('reports:list')
     await bodyGet('[data-testid="menu-form-name"]').setValue('报表')
     await bodyGet('[data-testid="menu-form-i18n-key"]').setValue('navigation.system')
     await bodyGet('[data-testid="menu-form-path"]').setValue('/reports')
     await bodyGet('[data-testid="menu-form-component-path"]').setValue('reports')
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
+    await flushPromises()
     expect(createMenuMock).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('页面权限码必须以 :view 结尾')
   })
@@ -488,41 +519,41 @@ describe('MenuManagement', () => {
     await flushPromises()
     await bodyGet('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
-    await bodyGet('[data-testid="menu-form-type"]').trigger('click')
-    const actionOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find(
-      (item) => item.textContent?.trim() === '按钮权限',
-    )
-    if (actionOption !== undefined) await new DOMWrapper(actionOption).trigger('click')
+    await selectMenuFormType(wrapper, 'action')
     await bodyGet('[data-testid="menu-form-code"]').setValue('reports:view')
     await bodyGet('[data-testid="menu-form-name"]').setValue('查看报表')
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
+    await flushPromises()
     expect(createMenuMock).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('按钮权限码不能以 :view 结尾')
   })
 
-  it('filters parent options to valid nodes and excludes the edited subtree', async () => {
+  it('filters parent options to valid directories and locks parent editing on edit', async () => {
     getMenusMock.mockResolvedValue(menuCatalog([rootWithEditableSubtree()]))
     const wrapper = mountPage(pinia, ['permission:menu:create', 'permission:menu:update'])
     await flushPromises()
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
-    await bodyGet('[data-testid="menu-form-type"]').trigger('click')
-    const pageOption = [...document.body.querySelectorAll('.el-select-dropdown__item')].find(
-      (item) => item.textContent?.trim() === '页面',
-    )
-    if (pageOption !== null) await new DOMWrapper(pageOption).trigger('click')
-    await flushPromises()
+    await selectMenuFormType(wrapper, 'page')
     await bodyGet('[data-testid="menu-form-parent"]').trigger('click')
-    const optionsText = document.body.querySelector('.el-select-dropdown')?.textContent ?? ''
+    await flushPromises()
+    const optionsText = bodyDropdownText()
+    if (optionsText === null) throw new Error('parent select dropdown did not render')
     expect(optionsText).toContain('系统管理')
     expect(optionsText).toContain('reports')
     expect(optionsText).not.toContain('菜单管理')
 
     await bodyGet('[data-testid="menu-form-cancel"]').trigger('click')
-    await wrapper.get('[data-testid="edit-10"]').trigger('click')
+    await wrapper.get(`[data-testid="edit-${editableDirectoryID}"]`).trigger('click')
     await flushPromises()
+    expect(bodyGet('[data-testid="menu-form-parent"] .el-select__wrapper').classes()).toContain(
+      'is-disabled',
+    )
     await bodyGet('[data-testid="menu-form-parent"]').trigger('click')
-    const editOptionsText = document.body.querySelector('.el-select-dropdown')?.textContent ?? ''
+    await flushPromises()
+    const editOptionsText = bodyDropdownText()
+    if (editOptionsText === null) throw new Error('parent select dropdown did not render')
+    expect(editOptionsText).toContain('系统管理')
     expect(editOptionsText).not.toContain('可编辑目录')
     expect(editOptionsText).not.toContain('可编辑页面')
   })
@@ -534,23 +565,23 @@ describe('MenuManagement', () => {
     deleteMenuMock.mockResolvedValue({ id: 3 })
     const wrapper = mountPage(pinia, ['permission:menu:update', 'permission:menu:delete'])
     await flushPromises()
-    await wrapper.get('[data-testid="status-3"]').trigger('click')
+    await wrapper.get(`[data-testid="status-${userActionID}"]`).trigger('click')
     await flushPromises()
-    expect(updateMenuStatusMock).toHaveBeenCalledWith(3, YesNo.Yes)
+    expect(updateMenuStatusMock).toHaveBeenCalledWith(userActionID, YesNo.Yes)
     expect(getMenusMock).toHaveBeenCalledTimes(2)
 
     getMenusMock.mockClear()
-    await wrapper.get('[data-testid="delete-3"]').trigger('click')
+    await wrapper.get(`[data-testid="delete-${userActionID}"]`).trigger('click')
     const confirmButton = document.body.querySelector('.el-message-box__btns .el-button--primary')
     expect(confirmButton).not.toBeNull()
     await confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flushPromises()
-    expect(deleteMenuMock).toHaveBeenCalledWith(3)
+    expect(deleteMenuMock).toHaveBeenCalledWith(userActionID)
     expect(getMenusMock).toHaveBeenCalledOnce()
 
     updateMenuMock.mockRejectedValue(new Error('update failed'))
     getMenusMock.mockClear()
-    await wrapper.get('[data-testid="edit-2"]').trigger('click')
+    await wrapper.get(`[data-testid="edit-${userPageID}"]`).trigger('click')
     await flushPromises()
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
     await flushPromises()
@@ -572,6 +603,14 @@ function mountPage(pinia: Pinia, permissions: string[]): VueWrapper {
   })
 }
 
+// Stable fixture IDs shared by every menu tree helper below.
+const rootDirectoryID = 1
+const userPageID = 2
+const userActionID = 3
+const canvasPageID = 20
+const editableDirectoryID = 10
+const editablePageID = 11
+
 function bodyFind(selector: string) {
   const element = document.body.querySelector(selector)
   return element === null ? { exists: () => false } : new DOMWrapper(element)
@@ -581,6 +620,32 @@ function bodyGet(selector: string) {
   const element = document.body.querySelector(selector)
   if (element === null) throw new Error(`Unable to find ${selector} in document.body`)
   return new DOMWrapper(element)
+}
+
+// The menu type control is an el-segmented radiogroup, not a select: its radio
+// inputs render no value attribute, so resolve the option index from the
+// component's stable options prop and fail loudly when either side is missing.
+async function selectMenuFormType(wrapper: VueWrapper, type: ManagedMenuType): Promise<void> {
+  const segmented = wrapper.findComponent({ name: 'ElSegmented' })
+  if (!segmented.exists()) throw new Error('menu form type segmented control did not render')
+  const options = segmented.props('options') as Array<{ label: string; value: ManagedMenuType }>
+  const index = options.findIndex((option) => option.value === type)
+  if (index < 0) throw new Error(`menu form does not offer menu type ${type}`)
+  const inputs = document.body.querySelectorAll(
+    '[data-testid="menu-form-type"] .el-segmented__item input',
+  )
+  const input = inputs[index]
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error(`segmented input for menu type ${type} did not render`)
+  }
+  await new DOMWrapper(input).setValue(true)
+  await flushPromises()
+}
+
+function bodyDropdownText(): string | null {
+  const dropdowns = [...document.body.querySelectorAll('.el-select-dropdown')]
+  const visible = dropdowns.find((dropdown) => (dropdown as HTMLElement).style.display !== 'none')
+  return visible?.textContent ?? null
 }
 
 function menuTree(): ManagedMenuNode[] {
@@ -668,7 +733,7 @@ function canvasMenuTree(): ManagedMenuNode[] {
   const timestamp = '2026-08-19T02:00:00Z'
   return [
     {
-      id: 20,
+      id: canvasPageID,
       platformId: 2,
       platformCode: 'canvas',
       platformName: 'Canvas',
@@ -707,7 +772,7 @@ function protectedMenuTree(): ManagedMenuNode[] {
 function rootWithEditableSubtree(): ManagedMenuNode {
   const root = menuTree()[0]
   const directory: ManagedMenuNode = {
-    id: 10,
+    id: editableDirectoryID,
     platformId: 1,
     platformCode: 'admin',
     platformName: 'Admin',
@@ -727,11 +792,11 @@ function rootWithEditableSubtree(): ManagedMenuNode {
     updatedAt: root.updatedAt,
     children: [
       {
-        id: 11,
+        id: editablePageID,
         platformId: 1,
         platformCode: 'admin',
         platformName: 'Admin',
-        parentId: 10,
+        parentId: editableDirectoryID,
         menuType: 'page',
         name: '可编辑页面',
         code: 'reports:view',

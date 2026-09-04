@@ -118,22 +118,65 @@ describe('createRequestClient', () => {
     expect(ElNotification.error).toHaveBeenCalledOnce()
   })
 
-  it.each([
-    { status: 401, code: 10002, message: '未登录或登录已失效' },
-    { status: 403, code: 10003, message: '没有访问权限' },
-  ])(
-    'notifies terminal HTTP $status failures exactly once',
-    async ({ status, code, message }) => {
-      const client = createRequestClient('http://localhost:16301')
+  it('notifies terminal 401 failures outside login exactly once', async () => {
+    const client = createRequestClient('http://localhost:16301')
 
-      await expect(
-        client.post('/api/v1/auth/login', undefined, {
-          adapter: failureAdapter(status, { code, data: null, message }),
+    await expect(
+      client.post('/api/v1/auth/refresh', undefined, {
+        adapter: failureAdapter(401, {
+          code: 10002,
+          data: null,
+          message: '未登录或登录已失效',
         }),
-      ).rejects.toMatchObject({ code, httpStatus: status })
-      expect(ElNotification.error).toHaveBeenCalledOnce()
-    },
-  )
+      }),
+    ).rejects.toMatchObject({ code: 10002, httpStatus: 401 })
+    expect(ElNotification.error).toHaveBeenCalledOnce()
+  })
+
+  it('leaves login credential failures to the login page inline feedback', async () => {
+    const client = createRequestClient('http://localhost:16301')
+
+    await expect(
+      client.post('/api/v1/auth/login', undefined, {
+        adapter: failureAdapter(401, {
+          code: 10002,
+          data: null,
+          message: '未登录或登录已失效',
+        }),
+      }),
+    ).rejects.toMatchObject({ code: 10002, httpStatus: 401 })
+    expect(ElNotification.error).not.toHaveBeenCalled()
+  })
+
+  it('does not silence a forbidden login response', async () => {
+    const client = createRequestClient('http://localhost:16301')
+
+    await expect(
+      client.post('/api/v1/auth/login', undefined, {
+        adapter: failureAdapter(403, {
+          code: 10002,
+          data: null,
+          message: '未登录或登录已失效',
+        }),
+      }),
+    ).rejects.toMatchObject({ code: 10002, httpStatus: 403 })
+    expect(ElNotification.error).toHaveBeenCalledOnce()
+  })
+
+  it('leaves a login credential business failure to the login page inline feedback', async () => {
+    const adapter: AxiosAdapter = async (config) =>
+      successResponse(config, {
+        code: 10002,
+        data: null,
+        message: '未登录或登录已失效',
+      })
+    const client = createRequestClient('http://localhost:16301')
+
+    await expect(client.post('/api/v1/auth/login', undefined, { adapter })).rejects.toMatchObject({
+      code: 10002,
+    })
+    expect(ElNotification.error).not.toHaveBeenCalled()
+  })
 
   it('notifies RBAC forbidden failures', async () => {
     const client = createRequestClient('http://localhost:16301')

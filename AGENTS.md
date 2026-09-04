@@ -49,7 +49,8 @@ view -> api/<module>.ts -> utils/request.ts -> Go API
 ```
 
 - HTTP envelope 只有 `code`、`data`、`message`。`utils/request.ts` 统一处理业务、HTTP、网络和协议错误；
-  401/403 分别交给认证刷新/跳转和权限页面，不重复弹通知。
+  自动刷新期间的中间 401 不弹通知，终态 401/403 由请求层通知一次。登录接口的凭据错误由登录页内联展示，
+  请求层不得对同一错误重复通知；页面与组件不得重复弹同一接口错误。
 - API 模块从 `unknown` 严格解析 DTO；View、Props、Emits、Pinia 和组合式函数使用明确类型。业务代码禁止
   `any`、`as any`、`@ts-ignore`、宽泛 ambient declaration 和关闭 strict。
 - 优先复用现有 `AppDialog`、`AppTable`、`Search`、`DIcon`、`IconSelect`；公共组件只抽取多个真实页面已
