@@ -1,350 +1,65 @@
-# Admin Agent 施工指南
+# Agent 任务路由
 
-本指南解释根 `AGENTS.md` 的项目硬规则。用户当前明确指令优先，其次是 `AGENTS.md`，再其次是本指南、当前 spec 和当前 plan。规则冲突时停止实现并报告，不自行猜测。
+这是项目的 AI/开发者入口，不是运行时模块，也不是历史方案库。目标是让每次会话只加载完成当前任务所需的
+最小上下文。
 
-本指南只约束 AI 和开发者如何理解、修改和验证项目，不是运行时 Agent 框架，不改变应用架构。
-根 `AGENTS.md` 只保存每次任务都必须立即遵守的硬规则；本指南负责解释如何按任务施工，
-不应把这里的完整说明重新复制回根文件。具体业务字段和行为继续放在当前功能 spec 中。
+## 会话启动
 
-## 1. 渐进式任务路由
+每次任务按以下顺序读取：
 
-先判断任务规模，再读取最小充分上下文。小型局部任务不全量读取历史 spec、plan 或其他模块。
+1. 根 `AGENTS.md`：不可违反的硬规则。
+2. 本文件：判断任务范围和额外入口。
+3. `STATUS.md`：当前目标、已完成、进行中、延期和后续事项。
+4. `design.md`：当前产品和交互约定。
+5. `architecture.md`：当前运行时边界和数据流。
+6. 目标模块的代码、测试，以及任务触发的 Skill。
 
-| 任务类型 | 读取范围 |
-| --- | --- |
-| 解释代码、状态或单点问题 | `AGENTS.md`、目标文件、直接调用方 |
-| 单文件配置、文案、样式、窄测试 | 对应 Agent 规则、目标文件、相关测试 |
-| 单模块 bug | 模块调用链、相关 spec 章节、相关测试 |
-| 新功能、跨模块契约、数据库、认证权限 | 对应完整 spec、完整 plan、相关代码 |
-| 执行已批准 plan | 当前 plan、对应 spec、涉及的规则和代码 |
+不读取整棵仓库来“了解项目”。不相关的页面、模块、旧项目、SQL、spec 和 plan 都留在上下文之外。
 
-禁止以“可能有用”为理由读取全部历史 spec、plan 或仓库文档。每个额外文档必须与当前决策有直接关系。
+## 任务路由
 
-只读问题不需要创建 spec 或 plan。简单局部修改只需说明修改点和验证方式。新功能、跨模块或协议变化必须先确认设计；多步骤实现才编写 plan。
+| 任务信号 | 最小额外读取 | 常见验证 |
+| --- | --- | --- |
+| 解释、定位单点问题 | 目标文件和直接调用方 | 定向搜索或单测 |
+| 文案、样式、单文件配置 | 目标文件和相关测试 | `git diff --check`、定向测试 |
+| 单模块 bug | 模块完整调用链和相关测试 | 相关 Go/Vitest 测试 |
+| 标准列表/详情/创建/编辑/状态/删除 | `$admin-crud`、目标模块、必要的旧项目对应实现 | CRUD 测试和架构检查 |
+| 菜单、角色、权限码、动态路由、Access、Redis 失效 | `$admin-rbac`、permission 模块、相关前端 router/store | 无权限、隐藏页、版本失效、跨平台测试 |
+| 表、字段、约束、索引、迁移 | `$admin-database`、当前 PostgreSQL、Model/Repository | 真实 PostgreSQL 结构和回滚检查 |
+| UI 专项整改 | 当前页面、公共组件和前端设计 Skill | 页面测试、类型检查、构建 |
+| 跨模块新功能 | 先写契约和 `STATUS.md` 当前工作项，再按上表加载组合 Skill | 按影响范围扩大验证 |
 
-### 1.1 革新式重构与老项目参考路由
+三个项目 Skill 是固定施工流程，不是每次对话重新解释的提示词：
 
-当前项目不是重新发明一套 Admin，而是对以下成熟项目进行革新式重构：
+- `$admin-crud`：标准 CRUD 垂直切片，从 DTO、分层、权限到测试。
+- `$admin-rbac`：菜单、权限码、动态路由、Access 快照、Redis 版本和后端 Middleware 的闭环。
+- `$admin-database`：以当前 PostgreSQL 为事实来源的结构检查、forward migration、验证和可选快照。
 
-```text
-旧前端：D:\github-project\admin_front_ts
-旧后端：D:\github-project\admin_back_go
-```
+Skill 位于 `C:\Users\IGT\.codex\skills\admin-crud`、`admin-rbac`、`admin-database`。它们引用本项目路径，
+不复制历史 spec/plan；Skill 内容只有在对应任务触发时读取。
 
-老项目提供已经验证的功能、业务行为、权限语义、页面信息结构和 UI 参考；当前项目的
-spec、协议、目录和代码负责决定最终实现。读取范围仍然服从渐进原则：
+## 计划与状态
 
-- 纯前端页面、组件或样式任务只读取老前端对应页面及其直接依赖；
-- 纯后端接口、业务或数据库任务只读取老后端对应模块及其直接调用链；
-- 涉及前后端契约、权限闭环或完整业务切片时，才同时读取老前端和老后端；
-- 老项目没有对应功能，或当前 spec 已明确改变行为时，不扩大搜索去拼凑无关实现。
+不再要求每个改动创建或维护 `docs/superpowers/specs` 和 `docs/superpowers/plans`。短任务使用当前对话中的
+工作清单；需要跨模块协作时，在 `STATUS.md` 的“当前工作”写目标、范围、验收条件和下一步。完成后只更新
+“已完成”；未能交付的内容写“延期/阻塞”和原因。不要回头修改历史 plan 来追求同步。
 
-迁移已有功能前，按当前任务真实范围核对：
+`STATUS.md` 是唯一的项目进度入口，不是详细设计替代品：稳定产品规则写 `design.md`，稳定技术边界写
+`architecture.md`，一次性执行记录写在状态条目中。
 
-- 功能入口、列表字段、详情字段、筛选、分页和批量操作；
-- 创建、编辑、删除、状态切换、确认和失败恢复流程；
-- 权限码、角色行为、字段校验、默认值和状态约束；
-- loading、空态、错误、重试、成功反馈和危险操作提示；
-- 页面布局、工作密度、Dialog/Drawer、表格操作列、移动端和主题行为。
+## 历史档案
 
-然后把结论分成三类：
+`docs/superpowers/**` 保存早期 spec、plan 和验证记录，保留用于审计和必要的历史追溯，但默认不读、不改、
+不把其中的勾选状态当作当前进度。`docs/database/2026-*.sql` 同样是一次性历史 migration；数据库事实以当前
+PostgreSQL 为准。只有用户明确要求比较历史、恢复决策或审计迁移时，才按文件名精确读取对应档案。
 
-1. **直接继承**：成熟业务行为、页面信息结构、操作习惯和可适配的 UI；
-2. **适配迁移**：接入当前 DTO、API、Router、Store、权限、i18n、主题和公共组件；
-3. **明确替换**：老项目中的重型分层、兼容字段、重复状态、隐式兜底和无真实用途抽象。
+## 交接与完成
 
-“直接继承”不要求把兼容包袱一起复制；“明确替换”也不允许顺便删减成熟功能。任何功能
-范围变化必须来自用户指令或当前已确认 spec，而不能来自 AI 对老项目的个人简化。
+开始修改前记录：任务范围、相关模块、数据流、权限映射（如有）和工作区现状。完成时报告：
 
-## 2. 线性数据流
+- 实际修改文件；
+- 实际运行的命令及结果；
+- 未运行项、环境阻塞和剩余风险；
+- `STATUS.md` 是否更新。
 
-普通数据库请求固定为：
-
-```text
-router -> middleware -> handler -> service -> repository -> model -> PostgreSQL
-```
-
-各层职责：
-
-- Router：声明 URL、中间件和 Handler 绑定；
-- Middleware：处理请求级认证、权限、request ID、CORS、日志和 Recovery；
-- Handler：绑定和校验请求，调用 Service，输出统一响应；
-- Service：业务规则、状态变化、调用顺序和事务意图；
-- Repository：只处理 PostgreSQL 查询、写入、锁和事务；
-- Model：只描述 GORM 与 PostgreSQL 表映射。
-
-边界固定：
-
-- Handler 不直接访问 GORM、Redis、Queue、Storage 或第三方 SDK；
-- Service 不依赖 Gin，不接收 `*gin.Context`；
-- Repository 不处理 HTTP，不调用 Queue；
-- Queue 只封装 Asynq，不导入业务模块；
-- Redis 目录只处理 Redis 连接和基础操作；
-- Storage 只处理当前对象存储 SDK；
-- Integration client 只处理一个具体第三方协议。
-
-异步消费固定为：
-
-```text
-task handler -> service -> repository -> model -> PostgreSQL
-```
-
-任务载荷按业务语义确定，不使用一条规则覆盖所有 Asynq 任务：
-
-- 实体状态类任务只携带最小稳定标识；Task Handler/Service 从 PostgreSQL 读取当前业务事实；
-- 操作日志等不可变事件类任务可以携带完成落库所需的闭合、脱敏、版本化 DTO；
-- 两类载荷都必须在入队和消费边界严格校验，不接受未知字段、不携带秘密、不从缺失字段猜默认值；
-- Task Handler 只解码和校验载荷，再调用 Service，不直接访问 Repository 或 GORM。
-
-禁止引入 `Platform Adapter`、通用 Adapter、`infra`、Manager、Factory、BaseService、BaseRepository、DI 容器、运行时注册器或为了未来替换而存在的接口。只有当前存在多个真实实现，或者测试确有替换边界时，才定义覆盖当前需求的最小接口。
-
-### 2.1 RBAC 页面、按钮与路由契约
-
-权限码是前后端共同使用的稳定协议，不是页面显示文案。所有 `menuType=page` 的菜单节点都
-使用资源级 `:view` 作为页面入口权限；列表和单条读取分别使用独立的 `:list`、`:detail` action，
-写操作继续使用独立动作权限。三类权限必须显式存储、显式授权，禁止从页面 code 自动派生，例如：
-
-```text
-account:profile:view       页面进入权限
-account:profile:detail     GET 单条资料权限
-account:profile:update     保存资料按钮和 PUT 接口
-account:password:update    修改密码按钮和 POST 接口
-```
-
-实现前先完成以下映射表（新页面按同样格式追加，不能只写一个“查看”权限）：
-
-| 页面节点 | 页面权限 | 隐藏 | 页面 API | 按钮/动作权限与 API |
-| --- | --- | --- | --- | --- |
-| 个人资料 | `account:profile:view` | `1` | `account:profile:detail` -> `GET /api/admin/v1/account/profile` | `account:profile:update` -> `PUT /api/admin/v1/account/profile`；`account:password:update` -> `POST /api/admin/v1/account/password` |
-
-页面权限只负责进入页面；action 权限只负责对应按钮和写操作。页面权限、动作权限、
-`is_hidden`、动态路由、前端按钮和后端 Middleware 任一项缺失，都不能开始实现。
-
-页面权限、读取权限、动作权限和后端 Middleware 必须保持一一映射。以个人资料为例，GET 使用
-`account:profile:detail`，PUT 使用 `account:profile:update`，POST 密码接口使用
-`account:password:update`；页面节点进入 `menuTree`，action 节点只进入 `permissionCodes`。
-Dashboard 和登录页是应用壳的静态入口，不得以此为由给其他业务页面绕过 RBAC。
-
-Element Plus 树/表格行 key 在状态层统一规范化为 `String(id)`；全部展开、全部收起、搜索恢复
-和平台切换必须复用同一字符串 key 集合，不能把数字 ID 直接传给 `expand-row-keys`。
-
-页面权限和动作权限必须同时落实：
-
-- 页面路由由当前 Access 快照动态注册，不能在静态路由表中绕过 RBAC；
-- `is_hidden=1` 只隐藏侧边菜单，不删除动态路由和权限矩阵中的页面节点；
-- 前端隐藏按钮只是界面行为，后端 Middleware 必须使用同一动作权限码拒绝越权请求；
-- 设计和迁移时检查页面 `:view` 与 API `:list/:detail` 是否独立，发现共用或自动派生先更新协议。
-- 代码审查前运行页面权限扫描：每个 `menuType=page` 都必须能在映射表中找到 `:view` code、
-  path、component、`is_hidden`，每个 API 必须找到独立 action；旧 code 必须有保留 ID/授权关系的人工 migration。
-
-### 2.2 RBAC 三层访问缓存
-
-PostgreSQL 保存权限事实，Redis 保存跨进程的 access version 和快照，进程内缓存保存有界的
-不可变快照副本。请求先从 Redis 读取并确认当前用户的 access version，再尝试进程内快照，
-随后才读取 Redis 快照，最后从 PostgreSQL 重建。进程缓存 key 至少包含 `platformID`、平台
-code、`policyVersion`、`userID` 和 `accessVersion`；读写必须复制切片和菜单树，设置容量与 TTL。
-Redis 不可用、状态为 `invalidating` 或版本无法确认时，不能返回旧进程缓存、空权限或假成功，
-只允许按明确策略回源 PostgreSQL，并记录可观察的缓存结果。
-
-## 3. TypeScript 类型安全
-
-前端使用 TypeScript，业务代码不得退化为 AnyScript。禁止：
-
-```ts
-let value: any
-const rows: any[] = []
-const payload = input as any
-type Values = Record<string, any>
-```
-
-同样禁止用 `@ts-ignore`、宽泛 ambient declaration 或关闭严格编译选项绕过错误。
-
-正确方式：
-
-- 外部未知数据使用 `unknown`；
-- 运行时校验结构后再缩小类型；
-- API 请求和响应声明明确 DTO；
-- Vue Props、Emits、Pinia 状态和组合式函数返回值使用明确类型；
-- 有限稳定值使用 `as const` 对象或联合类型；
-- 动态键和值定义真实类型，不使用 `Record<string, any>`；
-- 第三方库缺失类型时，在独立声明文件中补当前调用所需的最小类型，不让 `any` 扩散到业务代码。
-
-HTTP 数据流固定为：
-
-```text
-view -> api/<module>.ts -> utils/request.ts -> Go API
-```
-
-Axios 必须先严格校验 envelope，再把 `data` 交给业务 API。页面不能猜字段、兼容 `msg`，也不能用可选链、类型断言或默认值掩盖必填字段缺失。
-
-请求错误所有权固定为请求层：`utils/request.ts` 对业务 `code != 0`、HTTP、网络和协议错误统一调用
-`ElNotification` 提示一次；HTTP 401/403 不弹通用通知，由认证刷新/跳转或权限页面处理。页面和组件
-不得对同一接口错误重复提示，也不得以“请求层已提示”为由改变成功、取消或业务状态流程。
-
-裸 `any` 定向检查：
-
-```powershell
-rg -n "\bas any\b|\bany\[\]|Record<[^>]*,\s*any>" web\src -g "*.ts" -g "*.vue"
-```
-
-命令有输出时逐处处理。测试夹具也不能用 `any` 逃避类型检查。
-
-## 4. 数据库规范
-
-每个 PostgreSQL Model 及其项目维护表都直接声明：
-
-```sql
-created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-```
-
-Go 模型显式写出 `CreatedAt` 和 `UpdatedAt`，不嵌入 `gorm.Model`，不创建 BaseModel。手写 SQL 更新记录时显式维护 `updated_at`，不使用隐藏触发器。
-
-有真实删除行为的表只使用：
-
-```sql
-deleted_at TIMESTAMPTZ NULL
-```
-
-- `deleted_at IS NULL` 表示有效；
-- 非空表示已软删除，并记录删除时间；
-- Go 使用 `gorm.DeletedAt`；
-- 禁止增加 `is_del`、`is_deleted` 或另一套删除状态；
-- 没有删除行为的日志、事件或任务记录不虚构该字段；
-- 业务唯一值只要求有效数据唯一时，使用 `WHERE deleted_at IS NULL` 的部分唯一索引。
-
-Yes/No 固定为：
-
-```text
-0 = No / 否
-1 = Yes / 是
-```
-
-数据库字段使用 `SMALLINT` 和 `CHECK (column IN (0, 1))`。后端只使用 `shared/yesno`，前端只使用 `enums/yes-no`。这组代码不可由字典管理页面修改。
-
-只为真实查询创建索引。AutoMigrate 不负责删除字段、修改类型或数据回填；生产 migration 需求单独设计。
-
-## 5. 错误与禁止兜底
-
-HTTP envelope 精确为：
-
-```json
-{
-  "code": 0,
-  "data": {},
-  "message": "ok"
-}
-```
-
-错误必须沿调用链返回。服务端记录内部 cause，客户端只接收公开 code/message。禁止把 SQL、堆栈、Token、Cookie、密码或 DSN 写入响应或普通请求日志。
-
-禁止以下兜底：
-
-- 缺配置时猜默认值；
-- PostgreSQL、Redis 或 Queue 不可用时切换内存实现；
-- 失败时返回空数组、假成功或旧缓存；
-- 捕获错误后只记录日志不返回；
-- 同时接受 `msg` 和 `message`；
-- 必填字段缺失时使用 `??`、可选链或类型断言继续运行；
-- Worker 依赖不可用时假装启动成功。
-
-当前 spec 明确允许的降级不属于静默兜底，但必须可观察、可测试并保持权威事实来源。例如某个
-Redis 缓存被明确设计为加速层时，可以在记录缓存错误后从 PostgreSQL 重建；不得临时改成内存
-缓存、旧缓存或假成功。没有对应设计和测试时，依赖错误继续显式返回。
-
-只有产品明确声明为可选的字段，才允许使用对应的空态展示。
-
-## 6. 命名规范
-
-- Go 导出名称使用 PascalCase，initialism 使用 `ID`、`HTTP`、`API`；
-- JSON 和 TypeScript 使用 lower camel case；
-- PostgreSQL 表、列、索引和约束使用 lower snake case；
-- URL 使用小写复数资源名；
-- 权限码使用冒号分段，例如 `system:user:list`；
-- 第三方服务使用具体名称，例如 `redis`、`queue`、`storage`、`wechat`，不用 `platform` 统称；
-  `authplatform` 等明确业务资源，以及认证、会话、权限和审计协议中含义明确的 `platform` 字段不受此限制；
-- 文件和包名表达真实职责，不使用万能 `common`、`utils2` 或无业务含义的缩写。
-
-## 7. Context 与 I/O
-
-HTTP Handler 使用 `context.Request.Context()`，Asynq Handler 使用任务 Context。该 `context.Context` 必须继续传给 Service、Repository、GORM、Redis、Queue、Storage 和第三方 I/O。
-
-禁止：
-
-- 将 `*gin.Context` 传入 Service 或 Repository；
-- 在调用链中途换成 `context.Background()`；
-- 忽略取消、超时或 I/O 错误；
-- 为了少写参数把 Context 放进全局对象。
-
-## 8. 施工流程
-
-### 8.1 只读问题
-
-读取最小相关代码和文档，给出证据支持的回答。不修改文件，不创建 spec 或 plan。
-
-### 8.2 简单局部修改
-
-说明要改的文件、行为和验证方式，然后直接做定向修改。不要求为文案、单个配置值或窄测试创建完整 spec/plan。
-
-### 8.3 新功能和契约变化
-
-涉及新功能、跨模块、数据库结构、认证权限、公共协议或多个步骤时：
-
-```text
-理解需求 -> 按任务范围核对老项目 -> 提出方案 -> 用户确认 -> spec -> plan -> 实现
-```
-
-不在设计获批前修改运行时代码。方案必须说明哪些行为直接继承、哪些只做当前架构适配、
-哪些历史设计被明确替换；不得为了体现“新实现”而制造无产品价值的差异。
-
-涉及菜单、路由或权限时，设计阶段必须先列出页面节点和动作节点的完整映射，并逐项检查：
-页面权限是否以 `:view` 结尾、隐藏页面是否仍动态注册、每个读取/写入接口是否有独立 action 权限、
-以及 `/api/v1/access` 与后端 Middleware 是否使用同一权限码。未完成这张映射表不得开始实现。
-
-### 8.4 行为变化和 bug
-
-```text
-写失败测试 -> 确认按预期失败 -> 最小实现 -> 确认通过 -> 再重构
-```
-
-失败测试必须因目标行为缺失而失败，不能因拼写、导入或环境错误失败。修复后运行相关测试，再根据影响范围决定是否扩大验证。
-
-### 8.5 文档任务
-
-文档任务运行链接、章节、关键词和 `git diff --check` 等定向检查。不修改运行时代码时，不机械运行 Go、Vitest 或生产构建。
-
-## 9. 验证与完成
-
-验证规模与风险匹配：
-
-- Go 变更：相关测试；共享或跨模块变更再运行 `go fmt ./...`、`go vet ./...`、`go test ./...`、`go build ./...`；
-- 前端行为变更：相关 Vitest；公共请求、路由或构建契约变更再运行 `pnpm vitest run` 和 `pnpm build`；
-- 数据库变更：模型测试和真实 PostgreSQL 集成检查，不用内存数据库代替；
-- 文档变更：定向内容检查和 `git diff --check`。
-
-完成报告必须区分：已验证、未运行、环境阻塞和剩余风险。禁止用“应该可以”代替命令输出。
-
-## 10. Git 与服务边界
-
-- 不回滚用户已有改动；
-- Git 初始化、remote、分支、commit、fetch、pull 和 push 只按用户明确授权执行；
-- 除非维护者明确要求，不使用 amend、rebase 或其他方式重写既有提交历史；
-- 发现其他进程产生的提交或改动时先只读核查并保留；
-- 不停止用户启动的服务；
-- 需要启动开发服务时先确认授权，结束时说明哪些进程仍在运行；
-- 不使用 Docker 或 Docker Compose。
-
-## 11. 交接清单
-
-接手编码任务时，只回答与当前范围相关的项目：
-
-- 当前任务对应哪个 spec、plan 或具体用户指令？
-- 当前范围是否有老项目对应实现，哪些内容直接继承、适配迁移或明确替换？
-- 工作区和 Git 是否存在其他改动？
-- 数据流从哪里开始，经过哪些具体文件？
-- 请求、响应、错误和依赖失败行为是什么？
-- 是否涉及 `TIMESTAMPTZ`、`deleted_at` 或 Yes/No？
-- 前端 DTO、Props、Emits、Store 和返回值类型在哪里？
-- 哪些验证已运行，哪些未运行，原因是什么？
-
-只回答局部问题时不要求回答全部项目。需要修改代码时，如果与本次范围相关的问题无法回答，应补读对应内容或向用户提问，不扩大到无关文档。
+不自动提交、推送、重写历史或清理其他开发者的改动。

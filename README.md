@@ -12,7 +12,11 @@ router -> middleware -> handler -> service -> repository -> model -> PostgreSQL
 
 ## AI 施工规范
 
-AI 和开发者共同遵守根 [`AGENTS.md`](AGENTS.md) 的硬规则。完整任务路由、线性架构、TypeScript 类型、数据库、错误和交接规范见 [`docs/agent/README.md`](docs/agent/README.md)。小型局部任务按需读取相关内容，不要求全量阅读历史 spec 和 plan。
+AI 和开发者共同遵守根 [`AGENTS.md`](AGENTS.md) 的硬规则。任务路由见
+[`docs/agent/README.md`](docs/agent/README.md)，当前进度见 [`docs/agent/STATUS.md`](docs/agent/STATUS.md)，
+产品与架构基线分别见 [`docs/agent/design.md`](docs/agent/design.md) 和
+[`docs/agent/architecture.md`](docs/agent/architecture.md)。按任务触发 `$admin-crud`、`$admin-rbac` 或
+`$admin-database`，不要求全量阅读历史文档。
 
 ## 本机前提
 
@@ -69,7 +73,9 @@ pnpm dev
 
 本地页面为 `http://localhost:16300`，API 为 `http://localhost:16301`。Vite 使用固定端口并开启 `strictPort`，端口被占用时会明确退出，不会自动切换。
 
-API 和 Worker 启动时都不会执行数据库迁移、数据预设或回填。首次启动或数据库结构变化前，必须由维护者先执行 `docs/database` 中对应的人工 migration，再启动 API 和 Worker。
+API 和 Worker 启动时都不会执行数据库迁移、数据预设或回填。首次启动或数据库结构变化前，必须由维护者先
+执行已确认的 forward migration，再启动 API 和 Worker；带日期的 `docs/database/2026-*.sql` 只保留为历史
+执行记录，不作为当前 schema 的默认来源。
 
 ## 健康检查
 
@@ -109,4 +115,6 @@ cd D:\admin\web
 pnpm vitest run --pool=threads --maxWorkers=1
 ```
 
-完整设计见 `docs/superpowers/specs/2026-08-17-admin-foundation-design.md` 和 `docs/superpowers/specs/2026-08-17-admin-foundation-hardening-design.md`。当前仓库远程由项目所有者确认，根 `.gitignore` 持续生效；项目不会自动创建提交或推送历史。
+早期设计、实施计划和一次性迁移记录保留在 `docs/superpowers/**` 与 `docs/database/2026-*.sql`，仅用于明确的
+历史追溯，不是当前 Agent 的默认上下文。当前仓库远程由项目所有者确认，根 `.gitignore` 持续生效；项目不会
+自动创建提交或推送历史。
