@@ -101,7 +101,7 @@ function updateKeyword(value: string): void {
         :disabled="!activePlatformAvailable"
         @click="emit('create-root')"
       >
-        {{ t('menu.addRoot') }}
+        {{ t('menu.add') }}
       </el-button>
       <el-button
         data-testid="refresh-menus"
@@ -285,7 +285,7 @@ function updateKeyword(value: string): void {
             type="primary"
             @click="emit('create-child', row)"
           >
-            {{ t('menu.addChild') }}
+            {{ t('menu.add') }}
           </el-button>
           <el-button
             v-if="canUpdate"

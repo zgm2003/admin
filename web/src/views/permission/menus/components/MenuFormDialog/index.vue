@@ -36,7 +36,7 @@ function selectMenuIcon(value: MenuIconName): void {
   <AppDialog
     v-model="visible"
     :title="props.dialogMode === 'create' ? t('menu.form.createTitle') : t('menu.form.editTitle')"
-    width="900px"
+    width="min(900px, 94vw)"
     data-testid="menu-dialog"
   >
     <el-alert
@@ -67,6 +67,31 @@ function selectMenuIcon(value: MenuIconName): void {
           <code>{{ props.activePlatform?.code }}</code>
         </div>
       </el-form-item>
+
+      <el-row :gutter="24" class="menu-form__grid menu-form__grid--top">
+        <el-col :xs="24" :sm="12">
+          <el-form-item :label="t('menu.form.parent')">
+            <el-select-v2
+              v-model="parentSelection"
+              data-testid="menu-form-parent"
+              :disabled="props.dialogMode === 'edit' || props.editingProtected"
+              :options="props.parentSelectOptions"
+            />
+          </el-form-item>
+        </el-col>
+        <el-col :xs="24" :sm="12">
+          <el-form-item :label="t('menu.form.menuType')">
+            <el-segmented
+              :model-value="form.menuType"
+              data-testid="menu-form-type"
+              :disabled="props.dialogMode === 'edit' || props.editingProtected"
+              :class="{ 'is-disabled': props.dialogMode === 'edit' || props.editingProtected }"
+              :options="props.menuTypeOptions"
+              @update:model-value="props.handleFormTypeChange"
+            />
+          </el-form-item>
+        </el-col>
+      </el-row>
 
       <el-form-item :label="t('menu.form.code')">
         <div class="menu-form__control">
@@ -131,54 +156,26 @@ function selectMenuIcon(value: MenuIconName): void {
         </div>
       </el-form-item>
 
-      <el-row :gutter="24" class="menu-form__grid">
+      <el-row v-if="form.menuType !== 'action'" :gutter="24" class="menu-form__grid">
         <el-col :xs="24" :sm="12">
-          <el-form-item :label="t('menu.form.parent')">
-            <el-select-v2
-              v-model="parentSelection"
-              data-testid="menu-form-parent"
-              clearable
-              :disabled="props.dialogMode === 'edit' || props.editingProtected"
-              :title="props.editingProtected ? t('menu.form.protectedHint') : undefined"
-              :options="props.parentSelectOptions"
-            />
-          </el-form-item>
-        </el-col>
-
-        <el-col :xs="24" :sm="12">
-          <el-form-item :label="t('menu.form.menuType')">
-            <el-select-v2
-              :model-value="form.menuType"
-              data-testid="menu-form-type"
-              :disabled="props.dialogMode === 'edit' || props.editingProtected"
-              :class="{ 'is-disabled': props.dialogMode === 'edit' || props.editingProtected }"
-              :title="props.editingProtected ? t('menu.form.protectedHint') : undefined"
-              :options="props.menuTypeOptions"
-              @update:model-value="props.handleFormTypeChange"
-            />
-          </el-form-item>
-        </el-col>
-
-        <el-col :xs="24" :sm="12">
-          <el-form-item v-if="form.menuType !== 'action'" :label="t('menu.form.icon')">
-            <div class="menu-icon-picker">
+          <el-form-item :label="t('menu.form.icon')">
+            <el-button-group>
               <el-button
                 data-testid="menu-form-icon"
                 :disabled="props.editingProtected"
                 @click="iconSelectVisible = true"
               >
-                <AppDIcon v-if="form.icon !== null" :icon="form.icon" :size="24" />
+                <AppDIcon v-if="form.icon !== null" :icon="form.icon" :size="20" />
                 <span v-else>{{ t('menu.form.selectIcon') }}</span>
               </el-button>
               <el-button
                 v-if="form.icon !== null"
-                text
-                type="danger"
+                data-testid="menu-form-clear-icon"
                 :disabled="props.editingProtected"
                 @click="form.icon = null"
-                >{{ t('menu.form.clearIcon') }}
-              </el-button>
-            </div>
+                >{{ t('menu.form.clearIcon') }}</el-button
+              >
+            </el-button-group>
           </el-form-item>
         </el-col>
 
@@ -193,7 +190,7 @@ function selectMenuIcon(value: MenuIconName): void {
           </el-form-item>
         </el-col>
 
-        <el-col v-if="props.dialogMode === 'create'" :xs="24" :sm="12">
+        <el-col :xs="24" :sm="12">
           <el-form-item v-if="props.dialogMode === 'create'" :label="t('menu.form.isEnabled')">
             <el-switch
               v-model="form.isEnabled"
@@ -204,7 +201,7 @@ function selectMenuIcon(value: MenuIconName): void {
           </el-form-item>
         </el-col>
 
-        <el-col v-if="form.menuType !== 'action'" :xs="24" :sm="12">
+        <el-col :xs="24" :sm="12">
           <el-form-item :label="t('menu.form.isHidden')">
             <el-switch
               v-model="form.isHidden"
@@ -213,6 +210,29 @@ function selectMenuIcon(value: MenuIconName): void {
               :disabled="props.editingProtected"
               :title="props.editingProtected ? t('menu.form.protectedHint') : undefined"
               data-testid="menu-form-hidden"
+            />
+          </el-form-item>
+        </el-col>
+      </el-row>
+
+      <el-row v-else :gutter="24" class="menu-form__grid">
+        <el-col :xs="24" :sm="12">
+          <el-form-item :label="t('menu.form.sortOrder')">
+            <el-input-number
+              v-model="form.sortOrder"
+              data-testid="menu-form-sort-order"
+              :min="0"
+              :step="10"
+            />
+          </el-form-item>
+        </el-col>
+        <el-col v-if="props.dialogMode === 'create'" :xs="24" :sm="12">
+          <el-form-item :label="t('menu.form.isEnabled')">
+            <el-switch
+              v-model="form.isEnabled"
+              :active-value="YesNo.Yes"
+              :inactive-value="YesNo.No"
+              data-testid="menu-form-enabled"
             />
           </el-form-item>
         </el-col>
@@ -263,23 +283,16 @@ function selectMenuIcon(value: MenuIconName): void {
   gap: 8px;
 }
 .menu-form__grid,
-.menu-form__control,
-.menu-icon-picker {
+.menu-form__control {
+  width: 100%;
+}
+.menu-form :deep(.el-segmented) {
   width: 100%;
 }
 .menu-form__grid :deep(.el-input),
 .menu-form__grid :deep(.el-select),
 .menu-form__grid :deep(.el-input-number) {
   width: 100%;
-}
-.menu-icon-picker {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.menu-icon-picker .el-button:first-child {
-  flex: 1;
-  justify-content: center;
 }
 .menu-form__hint {
   margin: 6px 0 0;

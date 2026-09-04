@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { AppDialog } from '@/components/AppDialog'
 import { AppDIcon } from '@/components/AppDIcon'
 import { menuIcons, type MenuIconName } from '@/icons/menu-icons'
@@ -32,6 +32,12 @@ const emit = defineEmits<{
 
 const search = ref('')
 const selected = ref<MenuIconName | null>(null)
+watch(
+  () => props.modelValue,
+  (visible) => {
+    if (visible) search.value = ''
+  },
+)
 const filteredIcons = computed(() => {
   const keyword = search.value.trim().toLocaleLowerCase()
   if (keyword === '') return props.icons
@@ -45,6 +51,13 @@ function selectIcon(name: MenuIconName): void {
   emit('select-icon', name)
   emit('update:modelValue', false)
 }
+
+function handleItemKeydown(event: KeyboardEvent, name: MenuIconName): void {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    selectIcon(name)
+  }
+}
 </script>
 
 <template>
@@ -54,55 +67,87 @@ function selectIcon(name: MenuIconName): void {
     width="min(760px, 94vw)"
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <el-input v-model="search" clearable placeholder="搜索图标" />
-    <div v-if="filteredIcons.length > 0" class="icon-select-grid">
-      <button
-        v-for="icon in filteredIcons"
-        :key="icon.name"
-        type="button"
-        class="icon-select-item"
-        :class="{ 'is-selected': selected === icon.name }"
-        :aria-label="icon.label"
-        @click="selectIcon(icon.name)"
-      >
-        <AppDIcon :icon="icon.name" :size="24" :title="icon.label" />
-        <span>{{ icon.label }}</span>
-      </button>
+    <div class="icon-select-toolbar">
+      <el-input v-model="search" clearable placeholder="搜索图标" />
+      <el-text type="info" size="small">{{ filteredIcons.length }} 个图标</el-text>
     </div>
-    <el-empty v-else :description="emptyText" />
+    <el-scrollbar v-if="filteredIcons.length > 0" height="500px" class="icon-select-scroll">
+      <div class="icon-select-grid">
+        <div
+          v-for="icon in filteredIcons"
+          :key="icon.name"
+          class="icon-select-item"
+          :class="{ 'is-selected': selected === icon.name }"
+          role="button"
+          tabindex="0"
+          :aria-label="icon.label"
+          @click="selectIcon(icon.name)"
+          @keydown="handleItemKeydown($event, icon.name)"
+        >
+          <AppDIcon :icon="icon.name" :size="28" :title="icon.label" />
+          <span>{{ icon.label }}</span>
+        </div>
+      </div>
+    </el-scrollbar>
+    <el-empty v-else :description="emptyText" :image-size="100" />
   </AppDialog>
 </template>
 
 <style scoped>
+.icon-select-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.icon-select-toolbar .el-input {
+  flex: 1;
+}
+.icon-select-scroll {
+  padding: 2px;
+}
 .icon-select-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
   gap: 10px;
-  max-height: 420px;
-  margin-top: 12px;
-  overflow-y: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.icon-select-grid::-webkit-scrollbar {
-  display: none;
 }
 .icon-select-item {
   display: flex;
+  width: 100%;
   min-height: 84px;
+  padding: 10px 6px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
   border: 1px solid var(--el-border-color);
-  border-radius: 4px;
+  border-radius: 6px;
   color: var(--el-text-color-primary);
   background: var(--el-bg-color);
   cursor: pointer;
+  user-select: none;
+  transition:
+    border-color 0.2s,
+    color 0.2s,
+    background-color 0.2s;
+}
+.icon-select-item span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.icon-select-item:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 .icon-select-item:hover,
 .icon-select-item.is-selected {
   border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
   color: var(--el-color-primary);
+}
+.icon-select-item.is-selected {
+  box-shadow: 0 0 0 2px var(--el-color-primary-light-8);
 }
 </style>
