@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/i18n"
 )
 
 type limiterStub struct {
@@ -16,6 +17,31 @@ type limiterStub struct {
 
 func (s limiterStub) Allow(context.Context, LimitRequest) (bool, error) {
 	return s.allowed, s.err
+}
+
+type ruleEvaluatorStub struct {
+	decision RuleDecision
+	err      error
+}
+
+func (s ruleEvaluatorStub) Evaluate(context.Context, int64, string, SendMode) (RuleDecision, error) {
+	return s.decision, s.err
+}
+
+func TestSendReturnsRecipientDeniedAsMailBusinessError(t *testing.T) {
+	service := NewService(nil, nil, nil, ruleEvaluatorStub{decision: RuleDecision{Allowed: false}}, nil)
+
+	_, err := service.Send(context.Background(), validBusinessSendInput())
+
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) {
+		t.Fatalf("error = %v, want application error", err)
+	}
+	if appErr.HTTPStatus != http.StatusForbidden ||
+		appErr.Code != CodeRecipientDenied ||
+		appErr.MessageKey != i18n.KeyMailRecipientDenied {
+		t.Fatalf("application error = status %d, code %d, key %q", appErr.HTTPStatus, appErr.Code, appErr.MessageKey)
+	}
 }
 
 func TestSendReturnsRateLimitedWhenLimiterRejects(t *testing.T) {

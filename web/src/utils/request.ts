@@ -189,7 +189,8 @@ async function performRefresh(
 
 function notifyRequestError(error: unknown): void {
   if (!(error instanceof Error)) return
-  if (error instanceof ApiError && (error.httpStatus === 401 || error.httpStatus === 403)) return
+  // Only the intermediate 401 inside a token refresh stays silent; every
+  // terminal failure (including RBAC 403 and mail business 403) notifies once.
   ElNotification.error({
     title: appI18n.global.t('request.failed'),
     message:

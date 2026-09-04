@@ -69,6 +69,15 @@ func TestCatalogsTranslateRoleErrorsWithExactParameters(t *testing.T) {
 	}
 }
 
+func TestCatalogsTranslateMailErrors(t *testing.T) {
+	for _, locale := range []i18n.Locale{i18n.ZhCN, i18n.EnUS} {
+		message, err := i18n.Translate(locale, i18n.KeyMailRecipientDenied, nil)
+		if err != nil || message == "" {
+			t.Errorf("Translate(%q, %q) = %q,%v", locale, i18n.KeyMailRecipientDenied, message, err)
+		}
+	}
+}
+
 func TestCatalogsTranslateUserErrorsWithExactParameters(t *testing.T) {
 	keys := []i18n.MessageKey{
 		i18n.KeyUserNotFound,

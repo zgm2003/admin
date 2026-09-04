@@ -76,6 +76,7 @@ const (
 	KeySessionQueryFailed           MessageKey = "session.queryFailed"
 	KeySessionRevokeFailed          MessageKey = "session.revokeFailed"
 	KeyOperationLogQueryFailed      MessageKey = "operationLog.queryFailed"
+	KeyMailRecipientDenied          MessageKey = "mail.recipientDenied"
 )
 
 var catalogs = map[Locale]map[MessageKey]string{
@@ -138,6 +139,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySessionQueryFailed:           "会话查询失败",
 		KeySessionRevokeFailed:          "会话撤销失败",
 		KeyOperationLogQueryFailed:      "操作日志查询失败",
+		KeyMailRecipientDenied:          "收件邮箱被收件规则拒绝",
 	},
 	EnUS: {
 		KeyInternal:                     "Internal server error",
@@ -198,6 +200,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySessionQueryFailed:           "Failed to query sessions",
 		KeySessionRevokeFailed:          "Failed to revoke session",
 		KeyOperationLogQueryFailed:      "Failed to query operation logs",
+		KeyMailRecipientDenied:          "Recipient rejected by mail rule",
 	},
 }
 

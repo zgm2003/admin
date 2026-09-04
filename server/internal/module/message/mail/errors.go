@@ -5,7 +5,13 @@ import (
 	"admin/server/internal/shared/i18n"
 	"errors"
 	"fmt"
+	"net/http"
 )
+
+// CodeRecipientDenied marks a mail-specific business rejection where the
+// recipient matches a deny rule. It intentionally does not reuse the generic
+// RBAC forbidden code so clients can tell the two 403 semantics apart.
+const CodeRecipientDenied = 18000
 
 var (
 	ErrRecipientDenied = errors.New("mail recipient denied")
@@ -16,8 +22,16 @@ func invalid(err error) error     { return apperror.InvalidRequest(err) }
 func dependency(err error) error  { return apperror.DependencyUnavailable(err) }
 func notFound(err error) error    { return apperror.NotFound(err) }
 func conflict(err error) error    { return apperror.Conflict(i18n.KeyConflict, nil, err) }
-func denied(err error) error      { return apperror.Forbidden(err) }
 func rateLimited(err error) error { return apperror.RateLimited(err) }
+
+func denied(err error) error {
+	return &apperror.Error{
+		HTTPStatus: http.StatusForbidden,
+		Code:       CodeRecipientDenied,
+		MessageKey: i18n.KeyMailRecipientDenied,
+		Cause:      err,
+	}
+}
 func providerFailure(err error) error {
 	return apperror.DependencyUnavailable(fmt.Errorf("mail provider: %w", err))
 }

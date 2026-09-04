@@ -122,7 +122,7 @@ describe('createRequestClient', () => {
     { status: 401, code: 10002, message: '未登录或登录已失效' },
     { status: 403, code: 10003, message: '没有访问权限' },
   ])(
-    'returns HTTP $status failures without a generic notification',
+    'notifies terminal HTTP $status failures exactly once',
     async ({ status, code, message }) => {
       const client = createRequestClient('http://localhost:16301')
 
@@ -131,9 +131,39 @@ describe('createRequestClient', () => {
           adapter: failureAdapter(status, { code, data: null, message }),
         }),
       ).rejects.toMatchObject({ code, httpStatus: status })
-      expect(ElNotification.error).not.toHaveBeenCalled()
+      expect(ElNotification.error).toHaveBeenCalledOnce()
     },
   )
+
+  it('notifies RBAC forbidden failures', async () => {
+    const client = createRequestClient('http://localhost:16301')
+
+    await expect(
+      client.get('/api/admin/v1/protected', {
+        adapter: failureAdapter(403, {
+          code: 10003,
+          data: null,
+          message: '没有访问权限',
+        }),
+      }),
+    ).rejects.toMatchObject({ code: 10003, httpStatus: 403 })
+    expect(ElNotification.error).toHaveBeenCalledOnce()
+  })
+
+  it('notifies mail business forbidden failures', async () => {
+    const client = createRequestClient('http://localhost:16301')
+
+    await expect(
+      client.post('/api/admin/v1/mail/test', undefined, {
+        adapter: failureAdapter(403, {
+          code: 18000,
+          data: null,
+          message: '收件邮箱被收件规则拒绝',
+        }),
+      }),
+    ).rejects.toMatchObject({ code: 18000, httpStatus: 403 })
+    expect(ElNotification.error).toHaveBeenCalledOnce()
+  })
 
   it('does not notify an intermediate 401 that is recovered by Refresh', async () => {
     let refreshed = false
@@ -272,6 +302,7 @@ describe('createRequestClient', () => {
 
     expect(results.every((result) => result.status === 'rejected')).toBe(true)
     expect(refreshCalls).toBe(1)
+    expect(ElNotification.error).toHaveBeenCalledOnce()
     expect(onUnauthorized).toHaveBeenCalledOnce()
   })
 
