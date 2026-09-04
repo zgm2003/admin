@@ -1,6 +1,9 @@
 package mail
 
-import "time"
+import (
+	"admin/server/internal/shared/pagination"
+	"time"
+)
 
 type logResponse struct {
 	ID           int64   `json:"id"`
@@ -55,6 +58,12 @@ func logResponsesFromModels(values []Log) []logResponse {
 		result = append(result, logResponseFromModel(value))
 	}
 	return result
+}
+
+func logListResponseFromModels(values []Log, total int64, page, pageSize int) pagination.Result[logResponse] {
+	return pagination.Result[logResponse]{
+		List: logResponsesFromModels(values), Total: total, Page: page, PageSize: pageSize,
+	}
 }
 
 func logDetailResponseFromModel(value LogDetail) logDetailResponse {

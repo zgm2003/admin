@@ -285,8 +285,8 @@ func TestRepositoryListUsesStableFiltersAndExactCounts(t *testing.T) {
 	if err := tx.WithContext(ctx).Create(&relation).Error; err != nil {
 		t.Fatal(err)
 	}
-	path := "/" + unique
-	componentPath := "access/menus"
+	componentPath := "access/menus/" + unique
+	path := "/" + componentPath
 	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "List", Code: unique + ":list", I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.No, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)

@@ -200,8 +200,8 @@ func TestServiceUpdateStatusProtectsRolesAndPreservesRelations(t *testing.T) {
 	if err := tx.WithContext(ctx).Create(&userRole).Error; err != nil {
 		t.Fatal(err)
 	}
-	path := fmt.Sprintf("/status-%d", time.Now().UnixNano())
-	componentPath := "access/menus"
+	componentPath := fmt.Sprintf("access/menus/status-%d", time.Now().UnixNano())
+	path := "/" + componentPath
 	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "Status", Code: fmt.Sprintf("status:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
@@ -502,8 +502,8 @@ func TestServiceDeleteSoftDeletesRoleAndGrantsWithOneTimestamp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := fmt.Sprintf("/delete-%d", time.Now().UnixNano())
-	componentPath := "access/menus"
+	componentPath := fmt.Sprintf("access/menus/delete-%d", time.Now().UnixNano())
+	path := "/" + componentPath
 	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "Delete", Code: fmt.Sprintf("delete:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
@@ -537,8 +537,8 @@ func TestServiceDeleteRollsBackWhenRoleWriteFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := fmt.Sprintf("/delete-rollback-%d", time.Now().UnixNano())
-	componentPath := "access/menus"
+	componentPath := fmt.Sprintf("access/menus/delete-rollback-%d", time.Now().UnixNano())
+	path := "/" + componentPath
 	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "Delete rollback", Code: fmt.Sprintf("delete:rollback:%d", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)

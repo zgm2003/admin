@@ -35,7 +35,8 @@
 | 当前架构 | `docs/agent/architecture.md` 提供组件、数据流和数据库事实边界 |
 | 固定流程 | 三个全局 Skill 通过 quick validator |
 | 邮件规则与限流 | 修复 `AppTable` 动态插槽导致收件规则状态请求携带 `undefined`；收件规则明确为默认允许、邮箱优先、拒绝优先；Redis 限流异常返回 `503/10006`，真实额度超限返回 `429/10007` |
-| 邮件日期展示 | 邮件日志使用供应商实际发送时间 `sentAt`；验证码过期时间使用 `verificationExpiresAt`；前端统一按应用语言和本地时区格式化，空值或非法值显示 `-` |
+| 邮件日期展示 | 邮件日志接口将 `sentAt`、`createdAt`、`updatedAt`、`verificationExpiresAt` 显式输出为 UTC RFC3339Nano，空值为 `null`；页面使用供应商实际发送时间 `sentAt` 和验证码过期时间，并按应用语言和本地时区格式化，空值或非法值显示 `-` |
+| 后端契约与全量验证 | 邮件日志列表复用 `shared/pagination.Result`；权限菜单测试夹具统一遵循 `path = "/" + componentPath`，完整后端测试、静态检查和构建通过 |
 
 ## 后续事项
 

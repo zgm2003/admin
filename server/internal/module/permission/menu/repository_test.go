@@ -115,8 +115,8 @@ func TestRepositoryCreateWritesNullableFieldsAndTimestamps(t *testing.T) {
 	if err := repository.Create(ctx, &root); err != nil {
 		t.Fatal(err)
 	}
-	path := fmt.Sprintf("/repository-create-%d", unique)
-	componentPath := "reports"
+	componentPath := fmt.Sprintf("reports/repository-create-%d", unique)
+	path := "/" + componentPath
 	icon := "Menu"
 	page := Menu{
 		PlatformID: platformID, ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:create:%d:view", unique),
@@ -143,8 +143,8 @@ func TestRepositoryUpdateMenuWritesExplicitSQLNulls(t *testing.T) {
 	repository := NewRepository(tx)
 	unique := time.Now().UnixNano()
 	root := createRepositoryDirectory(t, repository, ctx, fmt.Sprintf("repository:update:%d", unique), 1)
-	path := fmt.Sprintf("/repository-update-%d", unique)
-	componentPath := "reports"
+	componentPath := fmt.Sprintf("reports/repository-update-%d", unique)
+	path := "/" + componentPath
 	icon := "Menu"
 	page := Menu{
 		PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:update:%d:view", unique),
@@ -372,8 +372,8 @@ func TestRepositoryConvertsActiveUniqueViolations(t *testing.T) {
 		repository := NewRepository(tx)
 		unique := time.Now().UnixNano()
 		root := createRepositoryDirectory(t, repository, ctx, fmt.Sprintf("repository:path:%d", unique), 1)
-		path := fmt.Sprintf("/repository-path-%d", unique)
-		componentPath := "reports"
+		componentPath := fmt.Sprintf("reports/repository-path-%d", unique)
+		path := "/" + componentPath
 		first := Menu{PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Name: "First", Code: fmt.Sprintf("repository:path:%d:a", unique), I18nKey: stringPointer("reports.list"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes}
 		second := first
 		second.Code = fmt.Sprintf("repository:path:%d:b", unique)
@@ -390,11 +390,12 @@ func TestRepositoryConvertsActiveUniqueViolations(t *testing.T) {
 		repository := NewRepository(tx)
 		unique := time.Now().UnixNano()
 		root := createRepositoryDirectory(t, repository, ctx, fmt.Sprintf("repository:update-path:%d", unique), 1)
-		firstPath := fmt.Sprintf("/repository-update-path-%d-a", unique)
-		secondPath := fmt.Sprintf("/repository-update-path-%d-b", unique)
-		componentPath := "reports"
-		first := Menu{PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Name: "First", Code: fmt.Sprintf("repository:update-path:%d:a", unique), I18nKey: stringPointer("reports.list"), Path: &firstPath, ComponentPath: &componentPath, IsEnabled: yesno.Yes}
-		second := Menu{PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Name: "Second", Code: fmt.Sprintf("repository:update-path:%d:b", unique), I18nKey: stringPointer("reports.list"), Path: &secondPath, ComponentPath: &componentPath, IsEnabled: yesno.Yes}
+		firstComponentPath := fmt.Sprintf("reports/repository-update-path-%d-a", unique)
+		secondComponentPath := fmt.Sprintf("reports/repository-update-path-%d-b", unique)
+		firstPath := "/" + firstComponentPath
+		secondPath := "/" + secondComponentPath
+		first := Menu{PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Name: "First", Code: fmt.Sprintf("repository:update-path:%d:a", unique), I18nKey: stringPointer("reports.list"), Path: &firstPath, ComponentPath: &firstComponentPath, IsEnabled: yesno.Yes}
+		second := Menu{PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Name: "Second", Code: fmt.Sprintf("repository:update-path:%d:b", unique), I18nKey: stringPointer("reports.list"), Path: &secondPath, ComponentPath: &secondComponentPath, IsEnabled: yesno.Yes}
 		if err := repository.Create(ctx, &first); err != nil {
 			t.Fatal(err)
 		}
@@ -403,7 +404,7 @@ func TestRepositoryConvertsActiveUniqueViolations(t *testing.T) {
 		}
 		err := repository.UpdateMenu(ctx, second.ID, UpdateValues{
 			ParentID: &root.ID, MenuType: TypePage, Name: second.Name, I18nKey: second.I18nKey,
-			Path: &firstPath, ComponentPath: &componentPath, SortOrder: second.SortOrder, IsHidden: yesno.No,
+			Path: &firstPath, ComponentPath: &firstComponentPath, SortOrder: second.SortOrder, IsHidden: yesno.No,
 		}, time.Now().UTC().Truncate(time.Microsecond))
 		if !errors.Is(err, ErrMenuPathConflict) {
 			t.Fatalf("duplicate update path error = %v", err)

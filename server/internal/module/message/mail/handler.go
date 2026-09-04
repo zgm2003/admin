@@ -143,7 +143,7 @@ func (h *Handler) Logs(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	response.OK(c, http.StatusOK, map[string]any{"list": logResponsesFromModels(rows), "total": total, "page": page, "pageSize": size})
+	response.OK(c, http.StatusOK, logListResponseFromModels(rows, total, page, size))
 }
 func (h *Handler) LogDetail(c *gin.Context) {
 	id, e := mailID(c)

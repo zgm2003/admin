@@ -182,10 +182,11 @@ func TestProtectedMenusAllowOnlyPresentationUpdates(t *testing.T) {
 		t.Fatalf("presentation update error = %v", err)
 	}
 
-	otherPath := "/access/other-menus"
+	otherComponentPath := "access/other-menus"
+	otherPath := "/" + otherComponentPath
 	if err := service.Update(ctx, page.ID, UpdateInput{
 		ParentID: page.ParentID, MenuType: page.MenuType, Name: "自定义菜单中心", I18nKey: &changedI18nKey,
-		Path: &otherPath, ComponentPath: page.ComponentPath, Icon: &changedIcon, SortOrder: 99, IsHidden: page.IsHidden,
+		Path: &otherPath, ComponentPath: &otherComponentPath, Icon: &changedIcon, SortOrder: 99, IsHidden: page.IsHidden,
 	}); menuServiceErrorCode(err) != CodeMenuProtected {
 		t.Fatalf("protected structure update error = %v", err)
 	}
