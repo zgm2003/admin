@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { h } from 'vue'
 import ElementPlus from 'element-plus'
 import { describe, expect, it } from 'vitest'
 
@@ -32,6 +33,23 @@ describe('AppTable', () => {
     expect(table.text()).toContain('alice')
     expect(table.text()).toContain('Enabled')
     expect(wrapper.findAll('.hidden').length).toBe(0)
+  })
+
+  it('passes the full row to a named cell slot when its key differs from its property', async () => {
+    const wrapper = mount(AppTable<UserRow>, {
+      props: {
+        columns: [{ key: 'status', prop: 'enabled', label: 'Status' }],
+        data: [{ id: 7, username: 'alice', enabled: true }],
+      },
+      slots: {
+        'cell-status': ({ row }: { row: UserRow }) =>
+          h('span', { 'data-testid': 'status-cell' }, `${row.id}:${row.enabled}`),
+      },
+      global: { plugins: [ElementPlus, appI18n] },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="status-cell"]').text()).toBe('7:true')
   })
 
   it('exposes loading, empty/error states and typed pagination events', async () => {

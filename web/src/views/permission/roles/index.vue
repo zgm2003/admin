@@ -22,7 +22,8 @@ import type { SearchFormModel } from '@/components/AppSearch'
 import RoleFormDialog from './components/RoleFormDialog/index.vue'
 import RolePermissionDialog from './components/RolePermissionDialog/index.vue'
 import type { RoleFormState } from './components/types'
-import { formatRoleTime, roleSearchFields, roleTableColumns } from './role-view'
+import { roleSearchFields, roleTableColumns } from './role-view'
+import { formatTime } from '@/utils/datetime'
 
 const { t } = useI18n()
 const access = usePermissionStore()
@@ -259,10 +260,6 @@ async function handlePermissionsSaved(): Promise<void> {
 
 function isSystem(role: RoleListItem): boolean {
   return role.code === 'super_admin' || role.code === 'registered_user'
-}
-
-function formatTime(value: string): string {
-  return formatRoleTime(value)
 }
 
 function editTooltip(role: RoleListItem): string {

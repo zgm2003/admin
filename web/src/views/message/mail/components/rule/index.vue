@@ -100,6 +100,13 @@ async function saveRule(): Promise<void> {
 
 <template>
   <div class="table-tab">
+    <el-alert
+      class="rule-hint"
+      :title="t('mail.ruleHint')"
+      type="info"
+      show-icon
+      :closable="false"
+    />
     <AppTable
       :columns="columns"
       :data="rules"
@@ -217,5 +224,9 @@ async function saveRule(): Promise<void> {
 
 .mail-table {
   border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.rule-hint {
+  margin-bottom: 12px;
 }
 </style>

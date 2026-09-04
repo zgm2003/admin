@@ -97,6 +97,15 @@ describe('user management', () => {
     })
   })
 
+  it('formats user timestamps instead of rendering raw API strings', async () => {
+    const wrapper = mountPage(['account:user:list'])
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('2026年8月20日')
+    expect(wrapper.text()).not.toContain('2026-08-20T00:00:00')
+    expect(wrapper.text()).not.toContain('2026-08-20T01:00:00')
+  })
+
   it('renders only granted commands and protects self and super targets', async () => {
     const wrapper = mountPage([
       'account:user:update',

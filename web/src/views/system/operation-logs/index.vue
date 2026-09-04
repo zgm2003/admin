@@ -9,6 +9,7 @@ import { AppTable } from '@/components/AppTable'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { AppSearch } from '@/components/AppSearch'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
+import { formatTime } from '@/utils/datetime'
 
 const { t, te } = useI18n()
 
@@ -194,12 +195,6 @@ function updateTablePagination(next: TablePaginationState): void {
     return
   }
   changePage(next.currentPage)
-}
-
-function formatTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(
-    new Date(value),
-  )
 }
 
 function formatJSON(value: unknown): string {

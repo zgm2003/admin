@@ -25,6 +25,7 @@ import { AppTable } from '@/components/AppTable'
 import type { TablePaginationState } from '@/components/AppTable'
 import { AppSearch } from '@/components/AppSearch'
 import type { SearchFormModel } from '@/components/AppSearch'
+import { formatTime } from '@/utils/datetime'
 import UserEditDialog from './components/UserEditDialog/index.vue'
 import UserRoleDialog from './components/UserRoleDialog/index.vue'
 import type { UserFormState } from './components/types'
@@ -397,6 +398,12 @@ onMounted(() => {
       <template #cell-phone="{ row }: { row: UserListItem }">
         {{ row.phone ?? '-' }}
       </template>
+      <template #cell-createdAt="{ row }: { row: UserListItem }">{{
+        row.id > 0 ? formatTime(row.createdAt) : ''
+      }}</template>
+      <template #cell-updatedAt="{ row }: { row: UserListItem }">{{
+        row.id > 0 ? formatTime(row.updatedAt) : ''
+      }}</template>
       <template #cell-actions="{ row }: { row: UserListItem }"
         ><template v-if="row.id > 0">
           <el-space wrap :size="6">

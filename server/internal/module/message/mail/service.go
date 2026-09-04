@@ -231,11 +231,20 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 		}
 	}
 	if mode == SendModeBusiness {
-		if !s.allow(ctx, fmt.Sprintf("mail:send:email:%d:%s:%s", in.PlatformID, in.Scene, email), 1, time.Minute) {
-			return SendResult{}, rateLimited(ErrRateLimited)
+		limits := []LimitRequest{
+			{Key: fmt.Sprintf("mail:send:email:%d:%s:%s", in.PlatformID, in.Scene, email), Limit: 1, Window: time.Minute},
+			{Key: fmt.Sprintf("mail:send:email10:%d:%s:%s", in.PlatformID, in.Scene, email), Limit: 5, Window: 10 * time.Minute},
+			{Key: fmt.Sprintf("mail:send:ip:%d:%s", in.PlatformID, in.ClientIP), Limit: 10, Window: time.Minute},
+			{Key: fmt.Sprintf("mail:send:scene:%d:%s", in.PlatformID, in.Scene), Limit: 30, Window: time.Minute},
 		}
-		if !s.allow(ctx, fmt.Sprintf("mail:send:email10:%d:%s:%s", in.PlatformID, in.Scene, email), 5, 10*time.Minute) || !s.allow(ctx, fmt.Sprintf("mail:send:ip:%d:%s", in.PlatformID, in.ClientIP), 10, time.Minute) || !s.allow(ctx, fmt.Sprintf("mail:send:scene:%d:%s", in.PlatformID, in.Scene), 30, time.Minute) {
-			return SendResult{}, rateLimited(ErrRateLimited)
+		for _, limit := range limits {
+			allowed, err := s.allow(ctx, limit.Key, limit.Limit, limit.Window)
+			if err != nil {
+				return SendResult{}, dependency(err)
+			}
+			if !allowed {
+				return SendResult{}, rateLimited(ErrRateLimited)
+			}
 		}
 	}
 	if in.ChallengeID != "" {
@@ -333,8 +342,19 @@ func (s *Service) TestForPlatform(ctx context.Context, platformID int64, in Admi
 	if err != nil {
 		return AdminTestResult{}, invalid(err)
 	}
-	if !s.allow(ctx, fmt.Sprintf("mail:test:user:%d", in.AdminUserID), 5, 10*time.Minute) || !s.allow(ctx, fmt.Sprintf("mail:test:ip:%s", in.ClientIP), 10, time.Minute) || !s.allow(ctx, fmt.Sprintf("mail:test:email:%s", email), 3, 10*time.Minute) {
-		return AdminTestResult{}, rateLimited(ErrRateLimited)
+	limits := []LimitRequest{
+		{Key: fmt.Sprintf("mail:test:user:%d", in.AdminUserID), Limit: 5, Window: 10 * time.Minute},
+		{Key: fmt.Sprintf("mail:test:ip:%s", in.ClientIP), Limit: 10, Window: time.Minute},
+		{Key: fmt.Sprintf("mail:test:email:%s", email), Limit: 3, Window: 10 * time.Minute},
+	}
+	for _, limit := range limits {
+		allowed, err := s.allow(ctx, limit.Key, limit.Limit, limit.Window)
+		if err != nil {
+			return AdminTestResult{}, dependency(err)
+		}
+		if !allowed {
+			return AdminTestResult{}, rateLimited(ErrRateLimited)
+		}
 	}
 	r, e := s.send(ctx, BusinessSendInput{PlatformID: platformID, UserID: &in.AdminUserID, ClientIP: in.ClientIP, Scene: in.Scene, ToEmail: in.ToEmail, Variables: in.Variables}, SendModeAdminTest)
 	if recordErr := s.repository.RecordTestResult(ctx, platformID, time.Now().UTC(), errorSummary(e)); recordErr != nil && e == nil {
@@ -379,12 +399,11 @@ func mustDecrypt(k *secretkey.KeyRing, ct string) string {
 	v, _ := DecryptSecret(k.MailEncryptionKey(), ct)
 	return v
 }
-func (s *Service) allow(ctx context.Context, key string, limit int, window time.Duration) bool {
+func (s *Service) allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
 	if s.limiter == nil {
-		return false
+		return false, fmt.Errorf("mail rate limiter unavailable")
 	}
-	ok, e := s.limiter.Allow(ctx, LimitRequest{Key: key, Limit: limit, Window: window})
-	return e == nil && ok
+	return s.limiter.Allow(ctx, LimitRequest{Key: key, Limit: limit, Window: window})
 }
 func (s *Service) ListLogs(ctx context.Context, p int64, page, size int) ([]Log, int64, error) {
 	rows, total, err := s.repository.ListLogs(ctx, p, page, size)

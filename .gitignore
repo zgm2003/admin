@@ -4,6 +4,7 @@
 *.exe
 *.out
 .env
+.codebuddy
 server/bin/
 server/tmp/
 web/node_modules/

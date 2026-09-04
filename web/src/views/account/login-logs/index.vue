@@ -8,6 +8,7 @@ import { AppTable } from '@/components/AppTable'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { AppSearch } from '@/components/AppSearch'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
+import { formatTime } from '@/utils/datetime'
 
 const { t } = useI18n()
 const rows = ref<LoginLogItem[]>([])
@@ -137,11 +138,6 @@ function updatePagination(next: TablePaginationState): void {
 }
 function eventLabel(value: string): string {
   return value === 'login' ? t('loginLog.login') : value === 'logout' ? t('loginLog.logout') : value
-}
-function formatTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(
-    new Date(value),
-  )
 }
 
 onMounted(() => {

@@ -151,8 +151,40 @@ describe('mail service page', () => {
     expect(wrapper.find('[data-testid="mail-template-edit"]').exists()).toBe(true)
     await selectTab(wrapper, '发送日志')
     expect(wrapper.find('[data-testid="mail-log-batch-delete"]').exists()).toBe(true)
-    await selectTab(wrapper, '黑白名单')
+    await selectTab(wrapper, '收件规则')
     expect(wrapper.find('[data-testid="mail-rule-create"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('默认允许；精确邮箱优先于域名；拒绝优先于允许。')
+  })
+
+  it('passes the recipient rule id when toggling its status', async () => {
+    vi.mocked(mailApi.listMailRules).mockResolvedValue([
+      {
+        id: 7,
+        platformId: 1,
+        scope: 'domain',
+        pattern: 'example.com',
+        action: 'deny',
+        name: 'Blocked domain',
+        remark: '',
+        isEnabled: YesNo.Yes,
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+      },
+    ])
+    vi.mocked(mailApi.updateMailRuleStatus).mockResolvedValueOnce({ id: 7, isEnabled: YesNo.No })
+    const wrapper = mountPage([
+      'message:mail:list',
+      'message:mail:rule:status',
+    ])
+    await flushPromises()
+    await selectTab(wrapper, '收件规则')
+
+    const toggle = wrapper.findAll('.el-switch')[1]
+    expect(toggle.exists()).toBe(true)
+    await toggle.trigger('click')
+    await flushPromises()
+
+    expect(mailApi.updateMailRuleStatus).toHaveBeenCalledWith(7, YesNo.No)
   })
 
   it('does not pass a static success result state to mail tables', async () => {
@@ -161,6 +193,39 @@ describe('mail service page', () => {
     await selectTab(wrapper, '邮件模板')
 
     expect(wrapper.findComponent({ name: 'AppTable' }).props('resultState')).toBe('idle')
+  })
+  it('formats mail log timestamps instead of rendering raw API strings', async () => {
+    vi.mocked(mailApi.listMailLogs).mockResolvedValue({
+      list: [
+        {
+          id: 9,
+          platformId: 1,
+          userId: null,
+          scene: 'login',
+          templateId: 1,
+          toEmail: '2093146753@qq.com',
+          subject: '登录验证码',
+          status: 'sent',
+          requestId: '',
+          messageId: '',
+          errorCode: '',
+          errorSummary: '',
+          latencyMs: 433,
+          sentAt: '2026-09-03T14:33:44.2485Z',
+          createdAt: '2026-09-03T14:33:44.2485Z',
+          updatedAt: '2026-09-03T14:33:44.2485Z',
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage(['message:mail:list', 'message:mail:detail'])
+    await flushPromises()
+    await selectTab(wrapper, '发送日志')
+
+    expect(wrapper.text()).toContain('2026年9月3日')
+    expect(wrapper.text()).not.toContain('2026-09-03T14:33:44')
   })
 })
 

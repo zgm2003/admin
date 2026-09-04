@@ -189,15 +189,17 @@ function onSelectionChange(selection: Row[]): void {
         v-bind="columnBindings(column)"
       >
         <template #default="{ row, $index }: { row: Row; $index: number }">
-          <slot
-            :name="`cell-${columnKey(column)}`"
-            :row="row"
-            :col="column"
-            :value="cellValue(row, column, $index)"
-            :index="$index"
-          >
-            {{ cellText(row, column, $index) }}
-          </slot>
+          <div class="app-table__cell-slot">
+            <slot
+              :name="`cell-${columnKey(column)}`"
+              :row="row"
+              :col="column"
+              :value="cellValue(row, column, $index)"
+              :index="$index"
+            >
+              {{ cellText(row, column, $index) }}
+            </slot>
+          </div>
         </template>
       </el-table-column>
       <el-table-column
