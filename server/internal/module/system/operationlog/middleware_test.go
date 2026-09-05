@@ -249,7 +249,7 @@ func TestReadRequestSummaryMarksLargeBodyAndPreservesRequest(t *testing.T) {
 	context, _ := gin.CreateTestContext(httptest.NewRecorder())
 	context.Request = request
 
-	summary := readRequestSummary(context)
+	summary := readRequestSummary(context, nil)
 	if string(summary) != `{"truncated":true}` || len(summary) > maxSummaryBytes {
 		t.Fatalf("summary = %s", summary)
 	}

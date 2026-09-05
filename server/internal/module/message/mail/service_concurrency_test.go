@@ -68,7 +68,7 @@ func TestSendConcurrentChallengeUsesDatabaseUniqueness(t *testing.T) {
 	}
 
 	sender := &countingSender{}
-	service := NewService(NewRepository(db), nil, sender, nil, nil)
+	service := NewService(NewRepository(db), nil, sender, nil, nil, nil)
 	in := BusinessSendInput{PlatformID: 1, ChallengeID: "challenge-1", Scene: SceneLogin, ToEmail: "user@example.com", Variables: map[string]string{"code": "123456", "ttl_minutes": "10"}}
 	start := make(chan struct{})
 	results := make(chan struct {

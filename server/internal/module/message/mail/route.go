@@ -21,4 +21,6 @@ func RegisterRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, req fu
 	g.PUT("/recipient-rules/:id", auth, req(PermissionRuleUpdate), h.UpdateRule)
 	g.PATCH("/recipient-rules/:id/status", auth, req(PermissionRuleStatus), h.RuleStatus)
 	g.DELETE("/recipient-rules/:id", auth, req(PermissionRuleDelete), h.DeleteRule)
+	g.GET("/rate-limit-policies", auth, req(PermissionList), h.RateLimitPolicies)
+	g.PUT("/rate-limit-policies/:key", auth, req(PermissionRateLimitUpdate), h.UpdateRateLimitPolicy)
 }

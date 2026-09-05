@@ -35,3 +35,30 @@ func denied(err error) error {
 func providerFailure(err error) error {
 	return apperror.DependencyUnavailable(fmt.Errorf("mail provider: %w", err))
 }
+
+func rateLimitInvalid(err error) error {
+	return &apperror.Error{
+		HTTPStatus: http.StatusBadRequest,
+		Code:       apperror.CodeInvalidRequest,
+		MessageKey: i18n.KeyMailRateLimitInvalid,
+		Cause:      err,
+	}
+}
+
+func rateLimitNotFound(err error) error {
+	return &apperror.Error{
+		HTTPStatus: http.StatusNotFound,
+		Code:       apperror.CodeNotFound,
+		MessageKey: i18n.KeyMailRateLimitNotFound,
+		Cause:      err,
+	}
+}
+
+func rateLimitUnavailable(err error) error {
+	return &apperror.Error{
+		HTTPStatus: http.StatusServiceUnavailable,
+		Code:       apperror.CodeDependencyUnavailable,
+		MessageKey: i18n.KeyMailRateLimitUnavailable,
+		Cause:      err,
+	}
+}

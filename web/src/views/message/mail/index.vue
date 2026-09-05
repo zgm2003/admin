@@ -7,10 +7,11 @@ import { YesNo } from '@/enums/yes-no'
 import { usePermissionStore } from '@/store/permission'
 import MailConfigTab from './components/config/index.vue'
 import MailLogTab from './components/log/index.vue'
+import MailRateLimitTab from './components/rate-limit/index.vue'
 import MailRuleTab from './components/rule/index.vue'
 import MailTemplateTab from './components/template/index.vue'
 
-type TabName = 'config' | 'templates' | 'logs' | 'rules'
+type TabName = 'config' | 'templates' | 'logs' | 'rules' | 'rateLimits'
 
 const access = usePermissionStore()
 const { t } = useI18n()
@@ -32,6 +33,7 @@ const config = ref<mailApi.MailConfig>({
 const templates = ref<mailApi.MailTemplate[]>([])
 const logs = ref<mailApi.MailLog[]>([])
 const rules = ref<mailApi.MailRule[]>([])
+const rateLimitPolicies = ref<mailApi.MailRateLimitPolicy[]>([])
 const logPage = ref(1)
 const logPageSize = ref(20)
 const logTotal = ref(0)
@@ -44,6 +46,7 @@ const visibleTabs = computed(() => [
     ? [{ name: 'logs' as const, label: t('mail.logsTab') }]
     : []),
   ...(canList.value ? [{ name: 'rules' as const, label: t('mail.rulesTab') }] : []),
+  ...(canList.value ? [{ name: 'rateLimits' as const, label: t('mail.rateLimitsTab') }] : []),
 ])
 
 function errorMessage(error: unknown): string {
@@ -60,6 +63,11 @@ async function loadTemplates(): Promise<void> {
 
 async function loadRules(): Promise<void> {
   rules.value = await mailApi.listMailRules()
+}
+
+async function loadRateLimitPolicies(): Promise<void> {
+  const result = await mailApi.listMailRateLimitPolicies()
+  rateLimitPolicies.value = result.policies
 }
 
 async function loadLogs(): Promise<void> {
@@ -79,7 +87,8 @@ async function loadActive(): Promise<void> {
     if (activeTab.value === 'config') await loadConfig()
     else if (activeTab.value === 'templates') await loadTemplates()
     else if (activeTab.value === 'logs') await loadLogs()
-    else await loadRules()
+    else if (activeTab.value === 'rules') await loadRules()
+    else await loadRateLimitPolicies()
   } catch (error: unknown) {
     loadError.value = errorMessage(error)
   } finally {
@@ -149,7 +158,7 @@ watch(
           @page-change="changeLogPage"
         />
         <MailRuleTab
-          v-else
+          v-else-if="tab.name === 'rules'"
           :rules="rules"
           :loading="loading"
           :can-create="can('message:mail:rule:create')"
@@ -157,6 +166,13 @@ watch(
           :can-status="can('message:mail:rule:status')"
           :can-delete="can('message:mail:rule:delete')"
           @refresh="loadRules"
+        />
+        <MailRateLimitTab
+          v-else
+          :policies="rateLimitPolicies"
+          :loading="loading"
+          :can-update="can('message:mail:rate-limit:update')"
+          @refresh="loadRateLimitPolicies"
         />
       </el-tab-pane>
     </el-tabs>

@@ -26,6 +26,8 @@ vi.mock('@/api/message/mail', () => ({
   updateMailRule: vi.fn(),
   updateMailRuleStatus: vi.fn(),
   deleteMailRule: vi.fn(),
+  listMailRateLimitPolicies: vi.fn(),
+  updateMailRateLimitPolicy: vi.fn(),
 }))
 
 describe('mail service page', () => {
@@ -61,6 +63,7 @@ describe('mail service page', () => {
     ])
     vi.mocked(mailApi.listMailLogs).mockResolvedValue({ list: [], total: 0, page: 1, pageSize: 20 })
     vi.mocked(mailApi.listMailRules).mockResolvedValue([])
+    vi.mocked(mailApi.listMailRateLimitPolicies).mockResolvedValue({ version: 1, policies: [] })
   })
   afterEach(() => {
     document.body.innerHTML = ''
@@ -288,6 +291,22 @@ describe('mail service page', () => {
 
     expect(wrapper.text()).toContain('发送时间操作')
     expect(wrapper.text()).toContain('-')
+  })
+
+  it('shows the rate limit tab only with list permission and does not fetch it eagerly', async () => {
+    const wrapper = mountPage(['message:mail:list'])
+    await flushPromises()
+    expect(mailApi.listMailRateLimitPolicies).not.toHaveBeenCalled()
+
+    await selectTab(wrapper, '限流策略')
+    await flushPromises()
+    expect(mailApi.listMailRateLimitPolicies).toHaveBeenCalledOnce()
+  })
+
+  it('never fetches rate limit policies without list permission', async () => {
+    mountPage(['message:mail:view'])
+    await flushPromises()
+    expect(mailApi.listMailRateLimitPolicies).not.toHaveBeenCalled()
   })
 })
 

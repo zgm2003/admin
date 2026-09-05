@@ -16,15 +16,16 @@ import (
 )
 
 type Service struct {
-	repository *Repository
-	keys       *secretkey.KeyRing
-	sender     Sender
-	rules      RuleEvaluator
-	limiter    Limiter
+	repository  *Repository
+	keys        *secretkey.KeyRing
+	sender      Sender
+	rules       RuleEvaluator
+	limiter     Limiter
+	policyStore RateLimitPolicyStore
 }
 
-func NewService(r *Repository, keys *secretkey.KeyRing, sender Sender, rules RuleEvaluator, limiter Limiter) *Service {
-	return &Service{repository: r, keys: keys, sender: sender, rules: rules, limiter: limiter}
+func NewService(r *Repository, keys *secretkey.KeyRing, sender Sender, rules RuleEvaluator, limiter Limiter, policyStore RateLimitPolicyStore) *Service {
+	return &Service{repository: r, keys: keys, sender: sender, rules: rules, limiter: limiter, policyStore: policyStore}
 }
 
 type SafeConfig struct {
@@ -231,13 +232,11 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 		}
 	}
 	if mode == SendModeBusiness {
-		limits := []LimitRequest{
-			{Key: fmt.Sprintf("mail:send:email:%d:%s:%s", in.PlatformID, in.Scene, email), Limit: 1, Window: time.Minute},
-			{Key: fmt.Sprintf("mail:send:email10:%d:%s:%s", in.PlatformID, in.Scene, email), Limit: 5, Window: 10 * time.Minute},
-			{Key: fmt.Sprintf("mail:send:ip:%d:%s", in.PlatformID, in.ClientIP), Limit: 10, Window: time.Minute},
-			{Key: fmt.Sprintf("mail:send:scene:%d:%s", in.PlatformID, in.Scene), Limit: 30, Window: time.Minute},
+		catalog, err := s.loadRateLimitCatalog(ctx)
+		if err != nil {
+			return SendResult{}, dependency(err)
 		}
-		for _, limit := range limits {
+		for _, limit := range businessLimitRequests(catalog, in.PlatformID, in.Scene, email, in.ClientIP) {
 			allowed, err := s.allow(ctx, limit.Key, limit.Limit, limit.Window)
 			if err != nil {
 				return SendResult{}, dependency(err)
@@ -342,12 +341,11 @@ func (s *Service) TestForPlatform(ctx context.Context, platformID int64, in Admi
 	if err != nil {
 		return AdminTestResult{}, invalid(err)
 	}
-	limits := []LimitRequest{
-		{Key: fmt.Sprintf("mail:test:user:%d", in.AdminUserID), Limit: 5, Window: 10 * time.Minute},
-		{Key: fmt.Sprintf("mail:test:ip:%s", in.ClientIP), Limit: 10, Window: time.Minute},
-		{Key: fmt.Sprintf("mail:test:email:%s", email), Limit: 3, Window: 10 * time.Minute},
+	catalog, err := s.loadRateLimitCatalog(ctx)
+	if err != nil {
+		return AdminTestResult{}, dependency(err)
 	}
-	for _, limit := range limits {
+	for _, limit := range adminTestLimitRequests(catalog, in.AdminUserID, in.ClientIP, email) {
 		allowed, err := s.allow(ctx, limit.Key, limit.Limit, limit.Window)
 		if err != nil {
 			return AdminTestResult{}, dependency(err)
@@ -404,6 +402,44 @@ func (s *Service) allow(ctx context.Context, key string, limit int, window time.
 		return false, fmt.Errorf("mail rate limiter unavailable")
 	}
 	return s.limiter.Allow(ctx, LimitRequest{Key: key, Limit: limit, Window: window})
+}
+
+func (s *Service) loadRateLimitCatalog(ctx context.Context) (RateLimitCatalog, error) {
+	if s.policyStore == nil {
+		return RateLimitCatalog{}, fmt.Errorf("mail rate limit policy store unavailable")
+	}
+	return s.policyStore.Load(ctx)
+}
+
+func businessLimitRequests(catalog RateLimitCatalog, platformID int64, scene, email, clientIP string) []LimitRequest {
+	limits := policyLimitMap(catalog)
+	return []LimitRequest{
+		{Key: fmt.Sprintf("mail:send:email:%d:%s:%s", platformID, scene, email), Limit: limits["business_email_minute"].Limit, Window: policyWindow(limits["business_email_minute"])},
+		{Key: fmt.Sprintf("mail:send:email10:%d:%s:%s", platformID, scene, email), Limit: limits["business_email_10m"].Limit, Window: policyWindow(limits["business_email_10m"])},
+		{Key: fmt.Sprintf("mail:send:ip:%d:%s", platformID, clientIP), Limit: limits["business_ip_minute"].Limit, Window: policyWindow(limits["business_ip_minute"])},
+		{Key: fmt.Sprintf("mail:send:scene:%d:%s", platformID, scene), Limit: limits["business_scene_minute"].Limit, Window: policyWindow(limits["business_scene_minute"])},
+	}
+}
+
+func adminTestLimitRequests(catalog RateLimitCatalog, adminUserID int64, clientIP, email string) []LimitRequest {
+	limits := policyLimitMap(catalog)
+	return []LimitRequest{
+		{Key: fmt.Sprintf("mail:test:user:%d", adminUserID), Limit: limits["admin_test_user_10m"].Limit, Window: policyWindow(limits["admin_test_user_10m"])},
+		{Key: fmt.Sprintf("mail:test:ip:%s", clientIP), Limit: limits["admin_test_ip_minute"].Limit, Window: policyWindow(limits["admin_test_ip_minute"])},
+		{Key: fmt.Sprintf("mail:test:email:%s", email), Limit: limits["admin_test_email_10m"].Limit, Window: policyWindow(limits["admin_test_email_10m"])},
+	}
+}
+
+func policyLimitMap(catalog RateLimitCatalog) map[string]RateLimitPolicy {
+	limits := make(map[string]RateLimitPolicy, len(catalog.Policies))
+	for _, policy := range catalog.Policies {
+		limits[policy.Key] = policy
+	}
+	return limits
+}
+
+func policyWindow(policy RateLimitPolicy) time.Duration {
+	return time.Duration(policy.WindowSeconds) * time.Second
 }
 func (s *Service) ListLogs(ctx context.Context, p int64, page, size int) ([]Log, int64, error) {
 	rows, total, err := s.repository.ListLogs(ctx, p, page, size)
@@ -501,6 +537,44 @@ func (s *Service) SetRuleStatus(ctx context.Context, p, id int64, v yesno.Value)
 		return invalid(fmt.Errorf("status invalid"))
 	}
 	return wrapRepo(s.repository.UpdateRule(ctx, p, id, map[string]any{"is_enabled": v, "updated_at": time.Now().UTC()}))
+}
+
+func (s *Service) ListRateLimitPolicies(ctx context.Context) (RateLimitCatalog, error) {
+	catalog, err := s.repository.ListRateLimitPolicies(ctx)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return RateLimitCatalog{}, rateLimitNotFound(err)
+		}
+		return RateLimitCatalog{}, rateLimitUnavailable(err)
+	}
+	return catalog, nil
+}
+
+func (s *Service) UpdateRateLimitPolicy(ctx context.Context, input RateLimitPolicyInput) (RateLimitCatalog, error) {
+	if err := ValidateRateLimitPolicyInput(input); err != nil {
+		return RateLimitCatalog{}, rateLimitInvalid(err)
+	}
+	if s.policyStore == nil {
+		return RateLimitCatalog{}, rateLimitUnavailable(fmt.Errorf("rate limit policy store is unavailable"))
+	}
+	catalog, err := s.policyStore.Update(ctx, input)
+	if err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Code == apperror.CodeNotFound {
+			return RateLimitCatalog{}, rateLimitNotFound(err)
+		}
+		return RateLimitCatalog{}, rateLimitUnavailable(err)
+	}
+	return catalog, nil
+}
+
+func rateLimitPolicyByKey(catalog RateLimitCatalog, key string) (RateLimitPolicy, bool) {
+	for _, policy := range catalog.Policies {
+		if policy.Key == key {
+			return policy, true
+		}
+	}
+	return RateLimitPolicy{}, false
 }
 func (s *Service) DeleteRule(ctx context.Context, p, id int64) error {
 	return wrapRepo(s.repository.DeleteRule(ctx, p, id))

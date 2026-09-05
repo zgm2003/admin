@@ -228,6 +228,93 @@ func (r *Repository) Lock(ctx context.Context, platformID, id int64) (RecipientR
 	e := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("platform_id = ? AND id = ? AND deleted_at IS NULL", platformID, id).Take(&v).Error
 	return v, e
 }
+func (r *Repository) ListRateLimitPolicies(ctx context.Context) (RateLimitCatalog, error) {
+	var rows []RateLimitPolicy
+	if e := r.db.WithContext(ctx).Find(&rows).Error; e != nil {
+		return RateLimitCatalog{}, e
+	}
+	return buildRateLimitCatalog(rows)
+}
+
+func (r *Repository) UpdateRateLimitPolicy(ctx context.Context, input RateLimitPolicyInput) (RateLimitCatalog, error) {
+	var catalog RateLimitCatalog
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var rows []RateLimitPolicy
+		if e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Order("policy_key ASC").Find(&rows).Error; e != nil {
+			return e
+		}
+		current, e := buildRateLimitCatalog(rows)
+		if e != nil {
+			return e
+		}
+		nextRevision := current.Version + 1
+		q := tx.Model(&RateLimitPolicy{}).Where("policy_key = ?", input.Key).Updates(map[string]any{
+			"limit_count":    input.Limit,
+			"window_seconds": input.WindowSeconds,
+			"revision":       nextRevision,
+			"updated_at":     time.Now().UTC(),
+		})
+		if q.Error != nil {
+			return q.Error
+		}
+		if q.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		var after []RateLimitPolicy
+		if e := tx.Find(&after).Error; e != nil {
+			return e
+		}
+		catalog, e = buildRateLimitCatalog(after)
+		return e
+	})
+	if err != nil {
+		return RateLimitCatalog{}, err
+	}
+	return catalog, nil
+}
+
+func buildRateLimitCatalog(rows []RateLimitPolicy) (RateLimitCatalog, error) {
+	if len(rows) != len(fixedRateLimitPolicyKeys) {
+		return RateLimitCatalog{}, fmt.Errorf("rate limit policy table must contain exactly %d rows, got %d", len(fixedRateLimitPolicyKeys), len(rows))
+	}
+	byKey := make(map[string]RateLimitPolicy, len(rows))
+	var version int64
+	for _, row := range rows {
+		if _, exists := byKey[row.Key]; exists {
+			return RateLimitCatalog{}, fmt.Errorf("rate limit policy %q is duplicated", row.Key)
+		}
+		spec, ok := fixedRateLimitSpecByKey(row.Key)
+		if !ok {
+			return RateLimitCatalog{}, fmt.Errorf("rate limit policy %q is unknown", row.Key)
+		}
+		if row.Mode != spec.Mode || row.Dimension != spec.Dimension {
+			return RateLimitCatalog{}, fmt.Errorf("rate limit policy %q has invalid mode or dimension", row.Key)
+		}
+		if row.Limit < 1 || row.Limit > 100000 || row.WindowSeconds < 1 || row.WindowSeconds > 86400 {
+			return RateLimitCatalog{}, fmt.Errorf("rate limit policy %q values are out of range", row.Key)
+		}
+		if row.Revision < 1 || row.UpdatedAt.IsZero() {
+			return RateLimitCatalog{}, fmt.Errorf("rate limit policy %q has invalid revision or timestamp", row.Key)
+		}
+		byKey[row.Key] = row
+		if row.Revision > version {
+			version = row.Revision
+		}
+	}
+	ordered := make([]RateLimitPolicy, 0, len(fixedRateLimitPolicyKeys))
+	for _, key := range fixedRateLimitPolicyKeys {
+		row, ok := byKey[key]
+		if !ok {
+			return RateLimitCatalog{}, fmt.Errorf("rate limit policy %q is missing", key)
+		}
+		ordered = append(ordered, row)
+	}
+	if version < 1 {
+		return RateLimitCatalog{}, fmt.Errorf("rate limit policy catalog version is invalid")
+	}
+	return RateLimitCatalog{Version: version, Policies: ordered}, nil
+}
+
 func wrapRepo(err error) error {
 	if err == nil {
 		return nil

@@ -84,3 +84,48 @@ type RuleInput struct {
 	Remark    string      `json:"remark"`
 	IsEnabled yesno.Value `json:"isEnabled"`
 }
+
+type RateLimitPolicyInput struct {
+	Key           string
+	Limit         int
+	WindowSeconds int
+}
+
+type RateLimitCatalog struct {
+	Version  int64
+	Policies []RateLimitPolicy
+}
+
+type RateLimitPolicyStore interface {
+	Load(context.Context) (RateLimitCatalog, error)
+	Update(context.Context, RateLimitPolicyInput) (RateLimitCatalog, error)
+}
+
+type RateLimitSnapshot struct {
+	SchemaVersion int                             `json:"schemaVersion"`
+	State         string                          `json:"state"`
+	Version       int64                           `json:"version"`
+	Policies      map[string]rateLimitPolicyValue `json:"policies,omitempty"`
+	MutationToken *string                         `json:"mutationToken"`
+}
+
+type rateLimitPolicyValue struct {
+	Limit         int       `json:"limit"`
+	WindowSeconds int       `json:"windowSeconds"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
+type RateLimitPolicyUpdateRequest struct {
+	Limit         int `json:"limit"`
+	WindowSeconds int `json:"windowSeconds"`
+}
+
+type RateLimitPolicyListResponse struct {
+	Version  int64             `json:"version"`
+	Policies []RateLimitPolicy `json:"policies"`
+}
+
+type RateLimitPolicyResponse struct {
+	Version int64           `json:"version"`
+	Policy  RateLimitPolicy `json:"policy"`
+}

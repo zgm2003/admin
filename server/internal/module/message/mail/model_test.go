@@ -2,6 +2,8 @@ package mail
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -45,6 +47,19 @@ func TestMailTableNames(t *testing.T) {
 	for name, value := range got {
 		if value != want[name] {
 			t.Fatalf("%s = %q, want %q", name, value, want[name])
+		}
+	}
+}
+
+func TestRateLimitPolicyTimestampFieldsUseTimestamptzTags(t *testing.T) {
+	typeOfPolicy := reflect.TypeOf(RateLimitPolicy{})
+	for _, fieldName := range []string{"CreatedAt", "UpdatedAt"} {
+		field, ok := typeOfPolicy.FieldByName(fieldName)
+		if !ok {
+			t.Fatalf("RateLimitPolicy.%s is missing", fieldName)
+		}
+		if !strings.Contains(field.Tag.Get("gorm"), "type:timestamptz") {
+			t.Fatalf("RateLimitPolicy.%s gorm tag = %q, want type:timestamptz", fieldName, field.Tag.Get("gorm"))
 		}
 	}
 }

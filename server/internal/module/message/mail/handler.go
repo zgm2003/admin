@@ -12,19 +12,20 @@ import (
 )
 
 const (
-	PermissionView           = "message:mail:view"
-	PermissionList           = "message:mail:list"
-	PermissionDetail         = "message:mail:detail"
-	PermissionConfigUpdate   = "message:mail:config:update"
-	PermissionConfigDelete   = "message:mail:config:delete"
-	PermissionTest           = "message:mail:test"
-	PermissionTemplateUpdate = "message:mail:template:update"
-	PermissionTemplateStatus = "message:mail:template:status"
-	PermissionLogDelete      = "message:mail:log:delete"
-	PermissionRuleCreate     = "message:mail:rule:create"
-	PermissionRuleUpdate     = "message:mail:rule:update"
-	PermissionRuleStatus     = "message:mail:rule:status"
-	PermissionRuleDelete     = "message:mail:rule:delete"
+	PermissionView            = "message:mail:view"
+	PermissionList            = "message:mail:list"
+	PermissionDetail          = "message:mail:detail"
+	PermissionConfigUpdate    = "message:mail:config:update"
+	PermissionConfigDelete    = "message:mail:config:delete"
+	PermissionTest            = "message:mail:test"
+	PermissionTemplateUpdate  = "message:mail:template:update"
+	PermissionTemplateStatus  = "message:mail:template:status"
+	PermissionLogDelete       = "message:mail:log:delete"
+	PermissionRuleCreate      = "message:mail:rule:create"
+	PermissionRuleUpdate      = "message:mail:rule:update"
+	PermissionRuleStatus      = "message:mail:rule:status"
+	PermissionRuleDelete      = "message:mail:rule:delete"
+	PermissionRateLimitUpdate = "message:mail:rate-limit:update"
 )
 
 type Handler struct{ s *Service }
@@ -255,6 +256,39 @@ func (h *Handler) DeleteRule(c *gin.Context) {
 	}
 	response.OK(c, http.StatusOK, map[string]any{})
 }
+func (h *Handler) RateLimitPolicies(c *gin.Context) {
+	catalog, e := h.s.ListRateLimitPolicies(c)
+	if e != nil {
+		response.Fail(c, e)
+		return
+	}
+	response.OK(c, http.StatusOK, RateLimitPolicyListResponse{Version: catalog.Version, Policies: catalog.Policies})
+}
+
+func (h *Handler) UpdateRateLimitPolicy(c *gin.Context) {
+	key := c.Param("key")
+	var request RateLimitPolicyUpdateRequest
+	if e := validate.BindJSON(c, &request); e != nil {
+		response.Fail(c, e)
+		return
+	}
+	catalog, e := h.s.UpdateRateLimitPolicy(c, RateLimitPolicyInput{
+		Key:           key,
+		Limit:         request.Limit,
+		WindowSeconds: request.WindowSeconds,
+	})
+	if e != nil {
+		response.Fail(c, e)
+		return
+	}
+	policy, ok := rateLimitPolicyByKey(catalog, key)
+	if !ok {
+		response.Fail(c, rateLimitNotFound(fmt.Errorf("rate limit policy %q is missing", key)))
+		return
+	}
+	response.OK(c, http.StatusOK, RateLimitPolicyResponse{Version: catalog.Version, Policy: policy})
+}
+
 func adminPlatformID(c *gin.Context) int64 {
 	if id, ok := authcontext.Get(c); ok && id.PlatformID > 0 {
 		return id.PlatformID

@@ -16,6 +16,7 @@ require (
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/ses v1.0.563
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.75
 	golang.org/x/crypto v0.52.0
+	golang.org/x/sync v0.20.0
 	gorm.io/driver/postgres v1.6.2
 	gorm.io/gorm v1.31.2
 )
@@ -59,7 +60,6 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/arch v0.23.0 // indirect
 	golang.org/x/net v0.54.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.14.0 // indirect

@@ -3,6 +3,7 @@ import { isYesNo, type YesNo } from '@/enums/yes-no'
 import type { PageResult } from '@/types/pagination'
 import { ProtocolError } from '@/types/http'
 import {
+  expectArray,
   expectBoolean,
   expectEmptyObject,
   expectExactKeys,
@@ -486,4 +487,136 @@ export function deleteMailRule(id: number): Promise<Record<string, never>> {
     method: 'DELETE',
     url: `/api/admin/v1/mail/recipient-rules/${id}`,
   }).then((value) => expectEmptyObject(value, 'mail rule delete result'))
+}
+
+export interface MailRateLimitPolicy {
+  key: string
+  mode: 'business' | 'admin_test'
+  dimension: string
+  limit: number
+  windowSeconds: number
+  updatedAt: string
+}
+export interface MailRateLimitSnapshot {
+  version: number
+  policies: MailRateLimitPolicy[]
+}
+export interface MailRateLimitUpdateResult {
+  version: number
+  policy: MailRateLimitPolicy
+}
+export interface MailRateLimitPolicyInput {
+  limit: number
+  windowSeconds: number
+}
+
+const rateLimitPolicyKeys = [
+  'business_email_minute',
+  'business_email_10m',
+  'business_ip_minute',
+  'business_scene_minute',
+  'admin_test_user_10m',
+  'admin_test_ip_minute',
+  'admin_test_email_10m',
+] as const
+const rateLimitPolicyKeySet = new Set<string>(rateLimitPolicyKeys)
+const rateLimitPolicyMetadata: Record<
+  (typeof rateLimitPolicyKeys)[number],
+  { mode: MailRateLimitPolicy['mode']; dimension: string }
+> = {
+  business_email_minute: { mode: 'business', dimension: 'platform_scene_email' },
+  business_email_10m: { mode: 'business', dimension: 'platform_scene_email' },
+  business_ip_minute: { mode: 'business', dimension: 'platform_ip' },
+  business_scene_minute: { mode: 'business', dimension: 'platform_scene' },
+  admin_test_user_10m: { mode: 'admin_test', dimension: 'admin_user' },
+  admin_test_ip_minute: { mode: 'admin_test', dimension: 'ip' },
+  admin_test_email_10m: { mode: 'admin_test', dimension: 'email' },
+}
+
+export function parseMailRateLimitPolicy(value: unknown): MailRateLimitPolicy {
+  const data = expectExactKeys(
+    value,
+    ['key', 'mode', 'dimension', 'limit', 'windowSeconds', 'updatedAt'],
+    'mail rate limit policy',
+  )
+  const key = expectString(data.key, 'mail rate limit policy.key')
+  if (!rateLimitPolicyKeySet.has(key)) {
+    throw new ProtocolError('mail rate limit policy.key is unknown')
+  }
+  const mode = expectString(data.mode, 'mail rate limit policy.mode')
+  if (mode !== 'business' && mode !== 'admin_test') {
+    throw new ProtocolError('mail rate limit policy.mode is invalid')
+  }
+  const dimension = expectString(data.dimension, 'mail rate limit policy.dimension')
+  if (dimension === '') throw new ProtocolError('mail rate limit policy.dimension is empty')
+  const metadata = rateLimitPolicyMetadata[key as (typeof rateLimitPolicyKeys)[number]]
+  if (mode !== metadata.mode || dimension !== metadata.dimension) {
+    throw new ProtocolError('mail rate limit policy metadata is invalid')
+  }
+  const limit = expectInteger(data.limit, 'mail rate limit policy.limit')
+  const windowSeconds = expectInteger(data.windowSeconds, 'mail rate limit policy.windowSeconds')
+  if (limit < 1 || limit > 100000 || windowSeconds < 1 || windowSeconds > 86400) {
+    throw new ProtocolError('mail rate limit policy value is out of range')
+  }
+  return {
+    key,
+    mode,
+    dimension,
+    limit,
+    windowSeconds,
+    updatedAt: parseRateLimitPolicyTimestamp(data.updatedAt),
+  }
+}
+
+function parseRateLimitPolicyTimestamp(value: unknown): string {
+  const timestamp = expectString(value, 'mail rate limit policy.updatedAt')
+  if (timestamp.trim() === '' || Number.isNaN(Date.parse(timestamp))) {
+    throw new ProtocolError('mail rate limit policy.updatedAt must be a valid date')
+  }
+  return timestamp
+}
+
+export function parseMailRateLimitSnapshot(value: unknown): MailRateLimitSnapshot {
+  const data = expectExactKeys(value, ['version', 'policies'], 'mail rate limit snapshot')
+  const version = expectInteger(data.version, 'mail rate limit snapshot.version')
+  if (version < 1) throw new ProtocolError('mail rate limit snapshot.version is invalid')
+  const policies = expectArray(data.policies, 'mail rate limit snapshot.policies').map(
+    parseMailRateLimitPolicy,
+  )
+  const keys = new Set(policies.map((policy) => policy.key))
+  if (policies.length !== rateLimitPolicyKeys.length || keys.size !== rateLimitPolicyKeys.length) {
+    throw new ProtocolError('mail rate limit snapshot policies are incomplete')
+  }
+  return { version, policies }
+}
+
+export function parseMailRateLimitUpdateResult(
+  value: unknown,
+  expectedKey?: string,
+): MailRateLimitUpdateResult {
+  const data = expectExactKeys(value, ['version', 'policy'], 'mail rate limit update result')
+  const version = expectInteger(data.version, 'mail rate limit update result.version')
+  if (version < 1) throw new ProtocolError('mail rate limit update result.version is invalid')
+  const policy = parseMailRateLimitPolicy(data.policy)
+  if (expectedKey !== undefined && policy.key !== expectedKey) {
+    throw new ProtocolError('mail rate limit update result.policy.key does not match the request')
+  }
+  return { version, policy }
+}
+
+export function listMailRateLimitPolicies(): Promise<MailRateLimitSnapshot> {
+  return request<unknown>({ method: 'GET', url: '/api/admin/v1/mail/rate-limit-policies' }).then(
+    parseMailRateLimitSnapshot,
+  )
+}
+
+export function updateMailRateLimitPolicy(
+  key: string,
+  data: MailRateLimitPolicyInput,
+): Promise<MailRateLimitUpdateResult> {
+  return request<unknown>({
+    method: 'PUT',
+    url: `/api/admin/v1/mail/rate-limit-policies/${encodeURIComponent(key)}`,
+    data,
+  }).then((value) => parseMailRateLimitUpdateResult(value, key))
 }

@@ -77,6 +77,9 @@ const (
 	KeySessionRevokeFailed          MessageKey = "session.revokeFailed"
 	KeyOperationLogQueryFailed      MessageKey = "operationLog.queryFailed"
 	KeyMailRecipientDenied          MessageKey = "mail.recipientDenied"
+	KeyMailRateLimitInvalid         MessageKey = "mail.rateLimitInvalid"
+	KeyMailRateLimitNotFound        MessageKey = "mail.rateLimitNotFound"
+	KeyMailRateLimitUnavailable     MessageKey = "mail.rateLimitUnavailable"
 )
 
 var catalogs = map[Locale]map[MessageKey]string{
@@ -140,6 +143,9 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySessionRevokeFailed:          "会话撤销失败",
 		KeyOperationLogQueryFailed:      "操作日志查询失败",
 		KeyMailRecipientDenied:          "收件邮箱被收件规则拒绝",
+		KeyMailRateLimitInvalid:         "邮件限流策略参数无效",
+		KeyMailRateLimitNotFound:        "邮件限流策略不存在",
+		KeyMailRateLimitUnavailable:     "邮件限流策略暂不可用",
 	},
 	EnUS: {
 		KeyInternal:                     "Internal server error",
@@ -201,6 +207,9 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySessionRevokeFailed:          "Failed to revoke session",
 		KeyOperationLogQueryFailed:      "Failed to query operation logs",
 		KeyMailRecipientDenied:          "Recipient rejected by mail rule",
+		KeyMailRateLimitInvalid:         "Mail rate limit policy parameters are invalid",
+		KeyMailRateLimitNotFound:        "Mail rate limit policy not found",
+		KeyMailRateLimitUnavailable:     "Mail rate limit policy is unavailable",
 	},
 }
 

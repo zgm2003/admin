@@ -19,6 +19,13 @@ import (
 
 const maxSummaryBytes = 32 * 1024
 
+// routeParamSummaryAliases projects URL path parameters into non-sensitive
+// request-summary fields for routes whose business key would otherwise be
+// masked by the global sanitizer (for example the literal "key" field name).
+var routeParamSummaryAliases = map[string]map[string]string{
+	http.MethodPut + " /api/admin/v1/mail/rate-limit-policies/:key": {"key": "policyRef"},
+}
+
 type TaskPayload struct {
 	SchemaVersion int       `json:"schemaVersion"`
 	EventID       string    `json:"eventId"`
@@ -53,9 +60,10 @@ func Middleware(logger *slog.Logger, enqueuer Enqueuer) gin.HandlerFunc {
 			return
 		}
 
+		aliases := routeParamSummaryAliases[ginContext.Request.Method+" "+route]
 		var requestData JSON
 		if rule.CaptureRequest {
-			requestData = readRequestSummary(ginContext)
+			requestData = readRequestSummary(ginContext, aliases)
 		}
 		captureWriter := &summaryWriter{ResponseWriter: ginContext.Writer}
 		ginContext.Writer = captureWriter
@@ -170,9 +178,12 @@ func (w *summaryWriter) summary() JSON {
 	return summary
 }
 
-func readRequestSummary(context *gin.Context) JSON {
+func readRequestSummary(context *gin.Context, aliases map[string]string) JSON {
 	if context.Request.Body == nil {
-		return nil
+		if len(aliases) == 0 {
+			return nil
+		}
+		return projectedSummary(context, nil, aliases)
 	}
 	body, err := io.ReadAll(io.LimitReader(context.Request.Body, maxSummaryBytes+1))
 	if err != nil {
@@ -182,11 +193,42 @@ func readRequestSummary(context *gin.Context) JSON {
 	if len(body) > maxSummaryBytes {
 		return truncatedSummary()
 	}
+	if len(aliases) > 0 {
+		var value any
+		if decodeErr := json.Unmarshal(body, &value); decodeErr == nil {
+			if object, ok := value.(map[string]any); ok {
+				projected := projectAliases(context, object, aliases)
+				if reencoded, marshalErr := json.Marshal(projected); marshalErr == nil {
+					if sanitized, sanitizeErr := SanitizeJSON(reencoded); sanitizeErr == nil {
+						return sanitized
+					}
+				}
+			}
+		}
+	}
 	sanitized, err := SanitizeJSON(body)
 	if err != nil {
 		return nil
 	}
 	return sanitized
+}
+
+func projectedSummary(context *gin.Context, _ map[string]any, aliases map[string]string) JSON {
+	object := make(map[string]any, len(aliases))
+	projected := projectAliases(context, object, aliases)
+	if reencoded, err := json.Marshal(projected); err == nil {
+		if sanitized, sanitizeErr := SanitizeJSON(reencoded); sanitizeErr == nil {
+			return sanitized
+		}
+	}
+	return nil
+}
+
+func projectAliases(context *gin.Context, object map[string]any, aliases map[string]string) map[string]any {
+	for param, summaryField := range aliases {
+		object[summaryField] = context.Param(param)
+	}
+	return object
 }
 
 func SanitizeJSON(raw []byte) (JSON, error) {
