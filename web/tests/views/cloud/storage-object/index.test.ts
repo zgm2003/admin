@@ -417,7 +417,7 @@ describe('ObjectStorage', () => {
     const wrapper = mountPage()
     await flushPromises()
 
-    const search = wrapper.findComponent(AppSearch)
+    const search = wrapper.findComponent({ name: 'AppSearch' })
     search.vm.$emit('update:modelValue', { keyword: '  主配置  ', status: 1 })
     await search.vm.$emit('query')
     await flushPromises()
