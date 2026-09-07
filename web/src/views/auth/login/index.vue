@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Lock, Message, User } from '@element-plus/icons-vue'
+import { Lock, Message, RefreshRight, User } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -29,6 +29,7 @@ const form = ref<LoginForm>({ account: '', password: '', code: '' })
 const options = ref<LoginConfigOption[]>([])
 const activeType = ref<LoginType>()
 const loading = ref(false)
+const configFailed = ref(false)
 const pending = ref(false)
 const submitError = ref('')
 const sending = ref(false)
@@ -44,19 +45,26 @@ watch(activeType, () => {
   submitError.value = ''
 })
 
-onMounted(async () => {
+onMounted(() => {
+  void loadLoginConfig()
+})
+
+async function loadLoginConfig(): Promise<void> {
+  if (loading.value) return
   loading.value = true
   try {
     const config = await getLoginConfig()
     options.value = config.loginTypes
     activeType.value = config.loginTypes[0]?.value
+    configFailed.value = false
   } catch {
     options.value = []
     activeType.value = undefined
+    configFailed.value = true
   } finally {
     loading.value = false
   }
-})
+}
 
 onUnmounted(() => {
   if (countdownTimer !== undefined) clearInterval(countdownTimer)
@@ -194,6 +202,26 @@ function generateChallengeID(): string {
               {{ bootstrapError }}
             </p>
             <p v-if="submitError" class="auth-error" data-testid="login-error">{{ submitError }}</p>
+
+            <div
+              v-if="configFailed"
+              class="auth-config-error"
+              data-testid="login-config-error"
+              role="status"
+            >
+              <p>{{ t('auth.login.configUnavailable') }}</p>
+              <el-button
+                data-testid="login-config-retry"
+                type="primary"
+                plain
+                :loading="loading"
+                :disabled="loading"
+                @click="loadLoginConfig"
+              >
+                <el-icon><RefreshRight /></el-icon>
+                {{ t('auth.login.configRetry') }}
+              </el-button>
+            </div>
 
             <el-form
               v-if="!loading && options.length > 0"

@@ -40,6 +40,23 @@ func TestRateLimitPoliciesHandlerReturnsSevenPolicies(t *testing.T) {
 	_ = ctx
 }
 
+func TestConfigHandlerPropagatesRequestCancellation(t *testing.T) {
+	db, _ := openMailServiceDatabase(t)
+	handler := NewHandler(NewService(NewRepository(db), nil, nil, nil, nil, nil))
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ginContext, _ := gin.CreateTestContext(recorder)
+	requestContext, cancel := context.WithCancel(context.Background())
+	cancel()
+	ginContext.Request = httptest.NewRequest(http.MethodGet, "/config", nil).WithContext(requestContext)
+
+	handler.Config(ginContext)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d for canceled request", recorder.Code, http.StatusServiceUnavailable)
+	}
+}
+
 func TestUpdateRateLimitPolicyHandlerReturnsUpdatedPolicy(t *testing.T) {
 	db, ctx := openMailRepositoryDatabase(t)
 	service := NewService(NewRepository(db), nil, nil, nil, nil, stubRateLimitPolicyStore{

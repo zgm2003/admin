@@ -48,11 +48,27 @@ describe('Login page', () => {
     expect(wrapper.find('[data-testid="login-password"]').exists()).toBe(true)
   })
 
-  it('does not expose a fallback login form when config loading fails', async () => {
-    getLoginConfigMock.mockRejectedValue(new ApiError(10006, '服务暂未就绪', 503))
+  it('does not expose a fallback form and retries config loading after failure', async () => {
+    getLoginConfigMock
+      .mockRejectedValueOnce(new ApiError(10006, '服务暂未就绪', 503))
+      .mockResolvedValueOnce({
+        loginTypes: [{ value: 'email', label: '邮箱验证码' }],
+        allowRegister: true,
+      })
     const { wrapper } = await mountLogin()
     expect(wrapper.find('form').exists()).toBe(false)
     expect(wrapper.find('[data-testid="login-account"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="login-config-error"]').text()).toContain(
+      '暂时无法加载登录方式',
+    )
+
+    await wrapper.get('[data-testid="login-config-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(getLoginConfigMock).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="login-config-error"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="login-account"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-code"]').exists()).toBe(true)
   })
 
   it('submits a password login, loads me, and follows a safe redirect', async () => {

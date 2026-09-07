@@ -613,6 +613,8 @@ export const zhCN = {
   'auth.login.invalidCredentials': '账号或凭据错误',
   'auth.login.failed': '登录失败',
   'auth.login.bootstrapFailed': '认证服务响应异常',
+  'auth.login.configUnavailable': '暂时无法加载登录方式',
+  'auth.login.configRetry': '重试',
   'request.protocolError': '服务响应格式无效',
   'request.failed': '请求失败',
   'access.loadFailed': '加载访问权限失败',

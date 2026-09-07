@@ -137,7 +137,10 @@ func TestVerificationCodePutDoesNotOverwriteUnexpiredCodeOwnedByAnotherDelivery(
 func TestVerificationCodeCheckAttemptLimitsAccountAndIPWithoutDeletingCode(t *testing.T) {
 	store := newVerificationStoreForTest(t)
 	ctx := context.Background()
-	key := fmt.Sprintf("auth:verify-code:v1:admin:login:email:attempt-%d", time.Now().UnixNano())
+	runID := uint64(time.Now().UnixNano())
+	accountIP := fmt.Sprintf("2001:db8:%x:%x::1", uint16(runID>>48), uint16(runID>>32))
+	sharedIP := fmt.Sprintf("2001:db8:%x:%x::2", uint16(runID>>16), uint16(runID))
+	key := fmt.Sprintf("auth:verify-code:v1:admin:login:email:attempt-%d", runID)
 	if acquired, err := store.AcquireDelivery(ctx, key, "lease-a", 10*time.Second); err != nil || !acquired {
 		t.Fatalf("AcquireDelivery = %v, %v", acquired, err)
 	}
@@ -146,12 +149,12 @@ func TestVerificationCodeCheckAttemptLimitsAccountAndIPWithoutDeletingCode(t *te
 	}
 
 	for attempt := 0; attempt < 10; attempt++ {
-		valid, limited, err := store.CheckAttempt(ctx, key, "digest-wrong", "192.0.2.10")
+		valid, limited, err := store.CheckAttempt(ctx, key, "digest-wrong", accountIP)
 		if err != nil || valid || limited {
 			t.Fatalf("account attempt %d = valid:%v limited:%v err:%v", attempt+1, valid, limited, err)
 		}
 	}
-	if valid, limited, err := store.CheckAttempt(ctx, key, "digest-correct", "192.0.2.10"); err != nil || valid || !limited {
+	if valid, limited, err := store.CheckAttempt(ctx, key, "digest-correct", accountIP); err != nil || valid || !limited {
 		t.Fatalf("limited correct attempt = valid:%v limited:%v err:%v", valid, limited, err)
 	}
 	if valid, err := store.Check(ctx, key, "digest-correct"); err != nil || !valid {
@@ -160,13 +163,13 @@ func TestVerificationCodeCheckAttemptLimitsAccountAndIPWithoutDeletingCode(t *te
 
 	for attempt := 0; attempt < 30; attempt++ {
 		otherKey := fmt.Sprintf("auth:verify-code:v1:admin:login:email:ip-%d-%d", time.Now().UnixNano(), attempt)
-		valid, limited, err := store.CheckAttempt(ctx, otherKey, "digest-wrong", "192.0.2.20")
+		valid, limited, err := store.CheckAttempt(ctx, otherKey, "digest-wrong", sharedIP)
 		if err != nil || valid || limited {
 			t.Fatalf("IP attempt %d = valid:%v limited:%v err:%v", attempt+1, valid, limited, err)
 		}
 	}
 	otherKey := fmt.Sprintf("auth:verify-code:v1:admin:login:email:ip-limited-%d", time.Now().UnixNano())
-	if valid, limited, err := store.CheckAttempt(ctx, otherKey, "digest-wrong", "192.0.2.20"); err != nil || valid || !limited {
+	if valid, limited, err := store.CheckAttempt(ctx, otherKey, "digest-wrong", sharedIP); err != nil || valid || !limited {
 		t.Fatalf("limited IP attempt = valid:%v limited:%v err:%v", valid, limited, err)
 	}
 }

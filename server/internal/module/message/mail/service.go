@@ -16,16 +16,21 @@ import (
 )
 
 type Service struct {
-	repository  *Repository
-	keys        *secretkey.KeyRing
-	sender      Sender
-	rules       RuleEvaluator
-	limiter     Limiter
-	policyStore RateLimitPolicyStore
+	repository     *Repository
+	keys           *secretkey.KeyRing
+	sender         Sender
+	rules          RuleEvaluator
+	limiter        Limiter
+	policyStore    RateLimitPolicyStore
+	readinessStore VerifyCodeReadinessStore
 }
 
 func NewService(r *Repository, keys *secretkey.KeyRing, sender Sender, rules RuleEvaluator, limiter Limiter, policyStore RateLimitPolicyStore) *Service {
 	return &Service{repository: r, keys: keys, sender: sender, rules: rules, limiter: limiter, policyStore: policyStore}
+}
+
+func (s *Service) SetVerifyCodeReadinessStore(store VerifyCodeReadinessStore) {
+	s.readinessStore = store
 }
 
 type SafeConfig struct {
@@ -107,9 +112,19 @@ func (s *Service) SaveConfig(ctx context.Context, platformID int64, in ConfigInp
 		return SafeConfig{}, dependency(e)
 	}
 	v := map[string]any{"secret_id_ciphertext": sid, "secret_key_ciphertext": skey, "secret_id_hint": hint(in.SecretID), "secret_key_hint": hint(in.SecretKey), "region": strings.TrimSpace(in.Region), "from_email": strings.TrimSpace(in.FromEmail), "from_name": strings.TrimSpace(in.FromName), "endpoint": nullableText(in.Endpoint), "reply_to": nullableText(in.ReplyTo), "ttl_minutes": in.TTLMinutes, "is_enabled": in.IsEnabled, "updated_at": time.Now().UTC()}
+	mutation, e := s.beginVerifyCodeReadinessMutation(ctx, platformID)
+	if e != nil {
+		return SafeConfig{}, e
+	}
 	c, e := s.repository.SaveConfig(ctx, platformID, v)
 	if e != nil {
+		if rollbackErr := s.rollbackVerifyCodeReadinessMutation(ctx, mutation); rollbackErr != nil {
+			return SafeConfig{}, dependency(errors.Join(e, rollbackErr))
+		}
 		return SafeConfig{}, wrapRepo(e)
+	}
+	if e := s.publishVerifyCodeReadinessMutation(ctx, mutation); e != nil {
+		return SafeConfig{}, e
 	}
 	return safeConfig(c), nil
 }
@@ -126,14 +141,24 @@ func hint(v string) string {
 	return v[:2] + "***" + v[len(v)-2:]
 }
 func (s *Service) DeleteConfig(ctx context.Context, p int64) error {
-	e := s.repository.DeleteConfig(ctx, p)
+	mutation, e := s.beginVerifyCodeReadinessMutation(ctx, p)
+	if e != nil {
+		return e
+	}
+	e = s.repository.DeleteConfig(ctx, p)
 	if errors.Is(e, gorm.ErrRecordNotFound) {
+		if rollbackErr := s.rollbackVerifyCodeReadinessMutation(ctx, mutation); rollbackErr != nil {
+			return dependency(errors.Join(e, rollbackErr))
+		}
 		return notFound(e)
 	}
 	if e != nil {
+		if rollbackErr := s.rollbackVerifyCodeReadinessMutation(ctx, mutation); rollbackErr != nil {
+			return dependency(errors.Join(e, rollbackErr))
+		}
 		return wrapRepo(e)
 	}
-	return nil
+	return s.publishVerifyCodeReadinessMutation(ctx, mutation)
 }
 
 func (s *Service) ListTemplates(ctx context.Context, p int64) ([]Template, error) {
@@ -197,10 +222,17 @@ func (s *Service) SetTemplateStatus(ctx context.Context, p, id int64, v yesno.Va
 	if !yesno.IsValid(v) {
 		return invalid(fmt.Errorf("status invalid"))
 	}
-	if e := s.repository.UpdateTemplate(ctx, p, id, map[string]any{"is_enabled": v, "updated_at": time.Now().UTC()}); e != nil {
+	mutation, e := s.beginVerifyCodeReadinessMutation(ctx, p)
+	if e != nil {
+		return e
+	}
+	if e = s.repository.UpdateTemplate(ctx, p, id, map[string]any{"is_enabled": v, "updated_at": time.Now().UTC()}); e != nil {
+		if rollbackErr := s.rollbackVerifyCodeReadinessMutation(ctx, mutation); rollbackErr != nil {
+			return dependency(errors.Join(e, rollbackErr))
+		}
 		return wrapRepo(e)
 	}
-	return nil
+	return s.publishVerifyCodeReadinessMutation(ctx, mutation)
 }
 
 func (s *Service) Send(ctx context.Context, in BusinessSendInput) (SendResult, error) {
@@ -208,8 +240,8 @@ func (s *Service) Send(ctx context.Context, in BusinessSendInput) (SendResult, e
 }
 
 // VerifyCodeReady reports whether the platform can send a verification email
-// for the given scene. A disabled or missing config/template returns false
-// with no error; repository failures return an error.
+// for the given scene. Redis ready hits do not query PostgreSQL; only a missing
+// snapshot enters the bounded cross-instance rebuild path.
 func (s *Service) VerifyCodeReady(ctx context.Context, platformID int64, scene string) (bool, error) {
 	if scene != SceneLogin {
 		return false, nil
@@ -217,26 +249,14 @@ func (s *Service) VerifyCodeReady(ctx context.Context, platformID int64, scene s
 	if _, err := s.loadRateLimitCatalog(ctx); err != nil {
 		return false, dependency(err)
 	}
-	config, err := s.repository.FindConfig(ctx, platformID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return false, nil
-		}
-		return false, dependency(err)
+	if s.readinessStore == nil {
+		return false, dependency(fmt.Errorf("mail verification readiness store unavailable"))
 	}
-	if config.IsEnabled != yesno.Yes {
-		return false, nil
-	}
-	templates, err := s.repository.ListTemplates(ctx, platformID)
+	ready, err := s.readinessStore.Current(ctx, platformID, scene)
 	if err != nil {
 		return false, dependency(err)
 	}
-	for _, template := range templates {
-		if template.Scene == SceneLogin && template.IsEnabled == yesno.Yes {
-			return true, nil
-		}
-	}
-	return false, nil
+	return ready, nil
 }
 
 // SendEmailVerifyCode sends a six-digit login verification email through the
@@ -285,6 +305,32 @@ func isSixDigitCode(value string) bool {
 		}
 	}
 	return true
+}
+
+func (s *Service) beginVerifyCodeReadinessMutation(ctx context.Context, platformID int64) (VerifyCodeReadinessMutation, error) {
+	if s.readinessStore == nil {
+		return VerifyCodeReadinessMutation{}, dependency(fmt.Errorf("mail verification readiness store unavailable"))
+	}
+	mutation, err := s.readinessStore.BeginMutation(ctx, platformID, SceneLogin)
+	if err != nil {
+		return VerifyCodeReadinessMutation{}, dependency(err)
+	}
+	return mutation, nil
+}
+
+func (s *Service) publishVerifyCodeReadinessMutation(ctx context.Context, mutation VerifyCodeReadinessMutation) error {
+	publishContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), verifyCodeReadinessLoadTimeout)
+	defer cancel()
+	if err := s.readinessStore.PublishMutation(publishContext, mutation); err != nil {
+		return dependency(err)
+	}
+	return nil
+}
+
+func (s *Service) rollbackVerifyCodeReadinessMutation(ctx context.Context, mutation VerifyCodeReadinessMutation) error {
+	rollbackContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+	defer cancel()
+	return s.readinessStore.RollbackMutation(rollbackContext, mutation)
 }
 
 func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode) (SendResult, error) {

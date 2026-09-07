@@ -247,7 +247,10 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Registered
 	return Registered{UserID: created.ID, Username: created.Username, Email: created.Email}, nil
 }
 
-const verificationCodeTTL = 10 * time.Minute
+const (
+	verificationCodeTTL            = 10 * time.Minute
+	verificationCodeCleanupTimeout = time.Second
+)
 
 // LoginConfig returns the effective, channel-filtered login methods for the
 // platform. Phone is filtered until a real SMS sender is wired.
@@ -335,7 +338,9 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 		challengeID = leaseToken
 	}
 	if err := s.verificationCodes.Put(ctx, key, digest, leaseToken, verificationCodeTTL); err != nil {
-		releaseErr := s.verificationCodes.ReleaseDelivery(ctx, key, leaseToken)
+		cleanupCtx, cancelCleanup := verificationCodeCleanupContext(ctx)
+		releaseErr := s.verificationCodes.ReleaseDelivery(cleanupCtx, key, leaseToken)
+		cancelCleanup()
 		return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(err, releaseErr))
 	}
 	expiresAt := s.now().UTC().Add(verificationCodeTTL)
@@ -344,10 +349,12 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 		Scene: messagemail.SceneLogin, ToEmail: email, Code: code, TTLMinutes: int(verificationCodeTTL / time.Minute),
 	})
 	if sendErr != nil {
+		cleanupCtx, cancelCleanup := verificationCodeCleanupContext(ctx)
 		cleanupErr := errors.Join(
-			s.verificationCodes.DeleteIfOwned(ctx, key, leaseToken),
-			s.verificationCodes.ReleaseDelivery(ctx, key, leaseToken),
+			s.verificationCodes.DeleteIfOwned(cleanupCtx, key, leaseToken),
+			s.verificationCodes.ReleaseDelivery(cleanupCtx, key, leaseToken),
 		)
+		cancelCleanup()
 		if cleanupErr != nil {
 			if s.logger != nil {
 				s.logger.ErrorContext(ctx, "verification code cleanup failed", "error", cleanupErr)
@@ -356,13 +363,20 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 		}
 		return SendCodeResult{}, sendErr
 	}
-	if err := s.verificationCodes.ReleaseDelivery(ctx, key, leaseToken); err != nil {
+	cleanupCtx, cancelCleanup := verificationCodeCleanupContext(ctx)
+	releaseErr := s.verificationCodes.ReleaseDelivery(cleanupCtx, key, leaseToken)
+	cancelCleanup()
+	if releaseErr != nil {
 		if s.logger != nil {
-			s.logger.ErrorContext(ctx, "verification code delivery lease release failed", "error", err)
+			s.logger.ErrorContext(ctx, "verification code delivery lease release failed", "error", releaseErr)
 		}
-		return SendCodeResult{}, apperror.DependencyUnavailable(err)
+		return SendCodeResult{}, apperror.DependencyUnavailable(releaseErr)
 	}
 	return SendCodeResult{ChallengeID: challengeID, ExpiresAt: expiresAt}, nil
+}
+
+func verificationCodeCleanupContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), verificationCodeCleanupTimeout)
 }
 
 func newSixDigitCode() (string, error) {

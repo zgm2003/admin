@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Admin Full Tests" type="CompoundRunConfigurationType">
-    <toRun name="Admin Server Tests" type="GoTestRunConfiguration" />
+    <toRun name="Admin Server Tests" type="ShConfigurationType" />
     <toRun name="Admin Web Tests" type="js.build_tools.npm" />
     <method v="2" />
   </configuration>

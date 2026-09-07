@@ -36,7 +36,7 @@ func (h *Handler) PageInit(c *gin.Context) {
 }
 func (h *Handler) Config(c *gin.Context) {
 	id := adminPlatformID(c)
-	v, e := h.s.GetConfig(c, id)
+	v, e := h.s.GetConfig(c.Request.Context(), id)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -49,7 +49,7 @@ func (h *Handler) SaveConfig(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	v, e := h.s.SaveConfig(c, adminPlatformID(c), r)
+	v, e := h.s.SaveConfig(c.Request.Context(), adminPlatformID(c), r)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -61,14 +61,14 @@ func (h *Handler) DeleteConfig(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	if e := h.s.DeleteConfig(c, adminPlatformID(c)); e != nil {
+	if e := h.s.DeleteConfig(c.Request.Context(), adminPlatformID(c)); e != nil {
 		response.Fail(c, e)
 		return
 	}
 	response.OK(c, http.StatusOK, map[string]any{})
 }
 func (h *Handler) Templates(c *gin.Context) {
-	v, e := h.s.ListTemplates(c, adminPlatformID(c))
+	v, e := h.s.ListTemplates(c.Request.Context(), adminPlatformID(c))
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -86,7 +86,7 @@ func (h *Handler) UpdateTemplate(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	if e = h.s.UpdateTemplate(c, adminPlatformID(c), id, r); e != nil {
+	if e = h.s.UpdateTemplate(c.Request.Context(), adminPlatformID(c), id, r); e != nil {
 		response.Fail(c, e)
 		return
 	}
@@ -109,7 +109,7 @@ func (h *Handler) TemplateStatus(c *gin.Context) {
 		response.Fail(c, invalid(fmt.Errorf("isEnabled is required")))
 		return
 	}
-	if e = h.s.SetTemplateStatus(c, adminPlatformID(c), id, *r.IsEnabled); e != nil {
+	if e = h.s.SetTemplateStatus(c.Request.Context(), adminPlatformID(c), id, *r.IsEnabled); e != nil {
 		response.Fail(c, e)
 		return
 	}
@@ -125,7 +125,7 @@ func (h *Handler) Test(c *gin.Context) {
 	if id, ok := authcontext.Get(c); ok {
 		r.AdminUserID = id.UserID
 	}
-	v, e := h.s.TestForPlatform(c, adminPlatformID(c), r)
+	v, e := h.s.TestForPlatform(c.Request.Context(), adminPlatformID(c), r)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -139,7 +139,7 @@ func (h *Handler) Logs(c *gin.Context) {
 		response.Fail(c, invalid(fmt.Errorf("invalid pagination")))
 		return
 	}
-	rows, total, e := h.s.ListLogs(c, adminPlatformID(c), page, size)
+	rows, total, e := h.s.ListLogs(c.Request.Context(), adminPlatformID(c), page, size)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -152,7 +152,7 @@ func (h *Handler) LogDetail(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	detail, e := h.s.GetLogDetail(c, adminPlatformID(c), id)
+	detail, e := h.s.GetLogDetail(c.Request.Context(), adminPlatformID(c), id)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -165,7 +165,7 @@ func (h *Handler) DeleteLog(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	if e := h.s.DeleteLog(c, adminPlatformID(c), id); e != nil {
+	if e := h.s.DeleteLog(c.Request.Context(), adminPlatformID(c), id); e != nil {
 		response.Fail(c, e)
 		return
 	}
@@ -177,14 +177,14 @@ func (h *Handler) DeleteLogs(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	if e := h.s.DeleteLogs(c, adminPlatformID(c), ids); e != nil {
+	if e := h.s.DeleteLogs(c.Request.Context(), adminPlatformID(c), ids); e != nil {
 		response.Fail(c, e)
 		return
 	}
 	response.OK(c, http.StatusOK, map[string]any{})
 }
 func (h *Handler) Rules(c *gin.Context) {
-	v, e := h.s.ListRules(c, adminPlatformID(c))
+	v, e := h.s.ListRules(c.Request.Context(), adminPlatformID(c))
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -197,7 +197,7 @@ func (h *Handler) CreateRule(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	id, e := h.s.CreateRule(c, adminPlatformID(c), r)
+	id, e := h.s.CreateRule(c.Request.Context(), adminPlatformID(c), r)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -215,7 +215,7 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	if e := h.s.UpdateRule(c, adminPlatformID(c), id, r); e != nil {
+	if e := h.s.UpdateRule(c.Request.Context(), adminPlatformID(c), id, r); e != nil {
 		response.Fail(c, e)
 		return
 	}
@@ -238,7 +238,7 @@ func (h *Handler) RuleStatus(c *gin.Context) {
 		response.Fail(c, invalid(fmt.Errorf("isEnabled is required")))
 		return
 	}
-	if e := h.s.SetRuleStatus(c, adminPlatformID(c), id, *r.IsEnabled); e != nil {
+	if e := h.s.SetRuleStatus(c.Request.Context(), adminPlatformID(c), id, *r.IsEnabled); e != nil {
 		response.Fail(c, e)
 		return
 	}
@@ -250,14 +250,14 @@ func (h *Handler) DeleteRule(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	if e := h.s.DeleteRule(c, adminPlatformID(c), id); e != nil {
+	if e := h.s.DeleteRule(c.Request.Context(), adminPlatformID(c), id); e != nil {
 		response.Fail(c, e)
 		return
 	}
 	response.OK(c, http.StatusOK, map[string]any{})
 }
 func (h *Handler) RateLimitPolicies(c *gin.Context) {
-	catalog, e := h.s.ListRateLimitPolicies(c)
+	catalog, e := h.s.ListRateLimitPolicies(c.Request.Context())
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -272,7 +272,7 @@ func (h *Handler) UpdateRateLimitPolicy(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	catalog, e := h.s.UpdateRateLimitPolicy(c, RateLimitPolicyInput{
+	catalog, e := h.s.UpdateRateLimitPolicy(c.Request.Context(), RateLimitPolicyInput{
 		Key:           key,
 		Limit:         request.Limit,
 		WindowSeconds: request.WindowSeconds,

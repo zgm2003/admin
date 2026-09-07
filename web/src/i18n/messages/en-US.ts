@@ -637,6 +637,8 @@ export const enUS = {
   'auth.login.invalidCredentials': 'Incorrect account or credentials',
   'auth.login.failed': 'Sign-in failed',
   'auth.login.bootstrapFailed': 'Authentication service returned an unexpected response',
+  'auth.login.configUnavailable': 'Sign-in methods are temporarily unavailable',
+  'auth.login.configRetry': 'Retry',
   'request.protocolError': 'The service returned an invalid response',
   'request.failed': 'Request failed',
   'access.loadFailed': 'Failed to load access permissions',

@@ -364,6 +364,29 @@ func TestSendCodeFailsClosedWhenCleanupFails(t *testing.T) {
 	}
 }
 
+func TestSendCodeCleansUpWithBoundedContextAfterRequestCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	store := &fakeVerificationCodeStore{acquired: true}
+	sender := &fakeVerifyCodeSender{
+		ready: true,
+		sendFn: func(context.Context, messagemail.EmailVerifyCodeInput) (messagemail.EmailVerifyCodeResult, error) {
+			cancel()
+			return messagemail.EmailVerifyCodeResult{}, errors.New("mail provider failed after request cancellation")
+		},
+	}
+	service := NewService(nil, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.SetVerificationCodeStore(store)
+	service.SetVerifyCodeSender(sender)
+
+	_, err := service.SendCode(ctx, SendCodeInput{Account: "user@example.com", LoginType: authplatform.LoginTypeEmail, Scene: messagemail.SceneLogin, Client: testAuthClient()})
+	if err == nil || store.deleteCalls != 1 || store.releaseCalls != 1 {
+		t.Fatalf("send error=%v deleteCalls=%d releaseCalls=%d", err, store.deleteCalls, store.releaseCalls)
+	}
+	if store.deleteContextErr != nil || store.releaseContextErr != nil {
+		t.Fatalf("cleanup reused canceled request context: delete=%v release=%v", store.deleteContextErr, store.releaseContextErr)
+	}
+}
+
 func TestSendCodeReleasesDeliveryLeaseAfterSuccess(t *testing.T) {
 	expiresAt := time.Now().Add(10 * time.Minute)
 	store := &fakeVerificationCodeStore{acquired: true}
@@ -794,6 +817,7 @@ type fakeVerifyCodeSender struct {
 	readyErr  error
 	result    messagemail.EmailVerifyCodeResult
 	sendErr   error
+	sendFn    func(context.Context, messagemail.EmailVerifyCodeInput) (messagemail.EmailVerifyCodeResult, error)
 	sendCalls int
 }
 
@@ -801,27 +825,32 @@ func (f *fakeVerifyCodeSender) VerifyCodeReady(context.Context, int64, string) (
 	return f.ready, f.readyErr
 }
 
-func (f *fakeVerifyCodeSender) SendEmailVerifyCode(context.Context, messagemail.EmailVerifyCodeInput) (messagemail.EmailVerifyCodeResult, error) {
+func (f *fakeVerifyCodeSender) SendEmailVerifyCode(ctx context.Context, input messagemail.EmailVerifyCodeInput) (messagemail.EmailVerifyCodeResult, error) {
 	f.sendCalls++
+	if f.sendFn != nil {
+		return f.sendFn(ctx, input)
+	}
 	return f.result, f.sendErr
 }
 
 type fakeVerificationCodeStore struct {
-	acquired     bool
-	acquireErr   error
-	putErr       error
-	checkValid   bool
-	checkLimited bool
-	checkErr     error
-	consumeValid bool
-	consumeErr   error
-	deleteErr    error
-	releaseErr   error
-	acquireCalls int
-	checkCalls   int
-	consumeCalls int
-	deleteCalls  int
-	releaseCalls int
+	acquired          bool
+	acquireErr        error
+	putErr            error
+	checkValid        bool
+	checkLimited      bool
+	checkErr          error
+	consumeValid      bool
+	consumeErr        error
+	deleteErr         error
+	releaseErr        error
+	acquireCalls      int
+	checkCalls        int
+	consumeCalls      int
+	deleteCalls       int
+	releaseCalls      int
+	deleteContextErr  error
+	releaseContextErr error
 }
 
 func (*fakeVerificationCodeStore) VerificationKey(string, string, string, string) string {
@@ -847,12 +876,14 @@ func (f *fakeVerificationCodeStore) Consume(context.Context, string, string) (bo
 	f.consumeCalls++
 	return f.consumeValid, f.consumeErr
 }
-func (f *fakeVerificationCodeStore) DeleteIfOwned(context.Context, string, string) error {
+func (f *fakeVerificationCodeStore) DeleteIfOwned(ctx context.Context, _ string, _ string) error {
 	f.deleteCalls++
+	f.deleteContextErr = ctx.Err()
 	return f.deleteErr
 }
-func (f *fakeVerificationCodeStore) ReleaseDelivery(context.Context, string, string) error {
+func (f *fakeVerificationCodeStore) ReleaseDelivery(ctx context.Context, _ string, _ string) error {
 	f.releaseCalls++
+	f.releaseContextErr = ctx.Err()
 	return f.releaseErr
 }
 

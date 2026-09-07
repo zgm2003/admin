@@ -47,6 +47,44 @@ type stubRateLimitPolicyStore struct {
 	err     error
 }
 
+type stubVerifyCodeReadinessStore struct {
+	ready              bool
+	currentErr         error
+	beginErr           error
+	publishErr         error
+	rollbackErr        error
+	cancelAfterBegin   context.CancelFunc
+	beginCalls         int
+	publishCalls       int
+	rollbackCalls      int
+	publishContextErr  error
+	rollbackContextErr error
+}
+
+func (s *stubVerifyCodeReadinessStore) Current(context.Context, int64, string) (bool, error) {
+	return s.ready, s.currentErr
+}
+
+func (s *stubVerifyCodeReadinessStore) BeginMutation(context.Context, int64, string) (VerifyCodeReadinessMutation, error) {
+	s.beginCalls++
+	if s.cancelAfterBegin != nil {
+		s.cancelAfterBegin()
+	}
+	return VerifyCodeReadinessMutation{platformID: 1, scene: SceneLogin, priorPayload: "prior", invalidatingPayload: "invalidating"}, s.beginErr
+}
+
+func (s *stubVerifyCodeReadinessStore) PublishMutation(ctx context.Context, _ VerifyCodeReadinessMutation) error {
+	s.publishCalls++
+	s.publishContextErr = ctx.Err()
+	return s.publishErr
+}
+
+func (s *stubVerifyCodeReadinessStore) RollbackMutation(ctx context.Context, _ VerifyCodeReadinessMutation) error {
+	s.rollbackCalls++
+	s.rollbackContextErr = ctx.Err()
+	return s.rollbackErr
+}
+
 func (s stubRateLimitPolicyStore) Load(context.Context) (RateLimitCatalog, error) {
 	return s.catalog, s.err
 }
@@ -251,7 +289,7 @@ func openMailServiceDatabase(t *testing.T) (*gorm.DB, context.Context) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_config (platform_id, region, from_email, from_name, ttl_minutes, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 1, "ap-guangzhou", "sender@example.com", "Sender", 10, yesno.Yes, now, now).Error; err != nil {
+	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_config (platform_id, secret_id_ciphertext, secret_key_ciphertext, region, from_email, from_name, ttl_minutes, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 1, "configured", "configured", "ap-guangzhou", "sender@example.com", "Sender", 10, yesno.Yes, now, now).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_template (platform_id, scene, name, subject, tencent_template_id, variables, example_variables, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?)`, 1, SceneLogin, "Login", "Login code", 47941, `{"code":"123456","ttl_minutes":"10"}`, `{"code":"123456","ttl_minutes":"10"}`, yesno.Yes, now, now).Error; err != nil {
@@ -298,7 +336,16 @@ func TestErrorSummaryUnwrapsApplicationError(t *testing.T) {
 
 func TestVerifyCodeReadyReflectsConfigState(t *testing.T) {
 	db, ctx := openMailServiceDatabase(t)
-	service := NewService(NewRepository(db), nil, nil, nil, nil, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	redisClient := openMailReadinessRedis(t)
+	repository := NewRepository(db)
+	readinessStore := NewVerifyCodeReadinessStore(repository, redisClient)
+	keys := []string{verifyCodeReadinessKey(1, SceneLogin), verifyCodeReadinessLoadLockKey(1, SceneLogin)}
+	if err := redisClient.DeleteMany(ctx, keys); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = redisClient.DeleteMany(context.Background(), keys) })
+	service := NewService(repository, nil, nil, nil, nil, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	service.SetVerifyCodeReadinessStore(readinessStore)
 
 	ready, err := service.VerifyCodeReady(ctx, 1, SceneLogin)
 	if err != nil || !ready {
@@ -308,12 +355,48 @@ func TestVerifyCodeReadyReflectsConfigState(t *testing.T) {
 		t.Fatalf("unsupported scene ready = %v, %v", ready, err)
 	}
 
-	if err := db.WithContext(ctx).Exec(`UPDATE message_mail_config SET is_enabled = 0 WHERE platform_id = 1`).Error; err != nil {
+	template, err := repository.FindTemplateByScene(ctx, 1, SceneLogin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.SetTemplateStatus(ctx, 1, template.ID, yesno.No); err != nil {
 		t.Fatal(err)
 	}
 	ready, err = service.VerifyCodeReady(ctx, 1, SceneLogin)
 	if err != nil || ready {
 		t.Fatalf("disabled config ready = %v, %v", ready, err)
+	}
+}
+
+func TestReadinessMutationRollbackOutlivesCanceledRequest(t *testing.T) {
+	db, _ := openMailServiceDatabase(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	readiness := &stubVerifyCodeReadinessStore{ready: true, cancelAfterBegin: cancel}
+	service := NewService(NewRepository(db), nil, nil, nil, nil, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	service.SetVerifyCodeReadinessStore(readiness)
+
+	err := service.SetTemplateStatus(ctx, 1, 1, yesno.No)
+	if err == nil || readiness.beginCalls != 1 || readiness.rollbackCalls != 1 || readiness.publishCalls != 0 {
+		t.Fatalf("status error=%v begin=%d rollback=%d publish=%d", err, readiness.beginCalls, readiness.rollbackCalls, readiness.publishCalls)
+	}
+	if readiness.rollbackContextErr != nil {
+		t.Fatalf("readiness rollback reused canceled request context: %v", readiness.rollbackContextErr)
+	}
+}
+
+func TestReadinessPublicationOutlivesCanceledRequest(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	readiness := &stubVerifyCodeReadinessStore{}
+	service := NewService(nil, nil, nil, nil, nil, nil)
+	service.SetVerifyCodeReadinessStore(readiness)
+	mutation := VerifyCodeReadinessMutation{platformID: 1, scene: SceneLogin, priorPayload: "prior", invalidatingPayload: "invalidating"}
+
+	if err := service.publishVerifyCodeReadinessMutation(ctx, mutation); err != nil {
+		t.Fatal(err)
+	}
+	if readiness.publishCalls != 1 || readiness.publishContextErr != nil {
+		t.Fatalf("publication calls=%d context error=%v", readiness.publishCalls, readiness.publishContextErr)
 	}
 }
 

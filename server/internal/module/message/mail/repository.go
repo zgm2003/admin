@@ -103,6 +103,11 @@ func (r *Repository) FindTemplate(ctx context.Context, platformID, id int64) (Te
 	e := r.db.WithContext(ctx).Where("platform_id = ? AND id = ? AND deleted_at IS NULL", platformID, id).Take(&v).Error
 	return v, e
 }
+func (r *Repository) FindTemplateByScene(ctx context.Context, platformID int64, scene string) (Template, error) {
+	var v Template
+	e := r.db.WithContext(ctx).Where("platform_id = ? AND scene = ? AND deleted_at IS NULL", platformID, scene).Take(&v).Error
+	return v, e
+}
 func (r *Repository) UpdateTemplate(ctx context.Context, platformID, id int64, values map[string]any) error {
 	q := r.db.WithContext(ctx).Model(&Template{}).Where("platform_id = ? AND id = ? AND deleted_at IS NULL", platformID, id).Updates(values)
 	if q.Error != nil {

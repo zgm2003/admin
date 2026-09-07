@@ -154,6 +154,7 @@ func run(logger *slog.Logger) error {
 	mailLimiter := messagemail.NewRedisLimiter(redisClient.UniversalClient())
 	mailRateLimitStore := messagemail.NewRateLimitPolicyStore(mailRepository, redisClient)
 	mailService := messagemail.NewService(mailRepository, keys, storagemail.NewTencentSESClient(nil), messagemail.NewRuleService(mailRepository), mailLimiter, mailRateLimitStore)
+	mailService.SetVerifyCodeReadinessStore(messagemail.NewVerifyCodeReadinessStore(mailRepository, redisClient))
 	verificationStore := auth.NewVerificationCodeStore(redisClient, keys.VerificationCodeHMACKey())
 	authService.SetVerifyCodeSender(mailService)
 	authService.SetVerificationCodeStore(verificationStore)
