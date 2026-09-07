@@ -109,9 +109,9 @@ func TestVerificationCodeDeleteIfOwnedRequiresToken(t *testing.T) {
 	}
 }
 
-func TestVerificationCodePutDoesNotOverwriteUnexpiredCodeOwnedByAnotherDelivery(t *testing.T) {
+func TestVerificationCodePutReplacesPriorCodeUnderCurrentLease(t *testing.T) {
 	store := newVerificationStoreForTest(t)
-	key := fmt.Sprintf("auth:verify-code:v1:admin:login:email:occupied-%d", time.Now().UnixNano())
+	key := fmt.Sprintf("auth:verify-code:v2:admin:login:email:replace-%d", time.Now().UnixNano())
 	ctx := context.Background()
 
 	if acquired, err := store.AcquireDelivery(ctx, key, "lease-a", 10*time.Second); err != nil || !acquired {
@@ -126,11 +126,57 @@ func TestVerificationCodePutDoesNotOverwriteUnexpiredCodeOwnedByAnotherDelivery(
 	if acquired, err := store.AcquireDelivery(ctx, key, "lease-b", 10*time.Second); err != nil || !acquired {
 		t.Fatalf("second AcquireDelivery = %v, %v", acquired, err)
 	}
-	if err := store.Put(ctx, key, "digest-b", "lease-b", time.Minute); err == nil {
-		t.Fatal("second delivery overwrote an unexpired verification code")
+	if err := store.Put(ctx, key, "digest-b", "lease-b", time.Minute); err != nil {
+		t.Fatalf("second delivery did not replace the prior code: %v", err)
 	}
-	if valid, err := store.Check(ctx, key, "digest-a"); err != nil || !valid {
-		t.Fatalf("original code after overwrite attempt = %v, %v", valid, err)
+	if valid, err := store.Check(ctx, key, "digest-b"); err != nil || !valid {
+		t.Fatalf("new code after replace = %v, %v", valid, err)
+	}
+	if valid, err := store.Check(ctx, key, "digest-a"); err != nil || valid {
+		t.Fatalf("old code still valid after replace = %v, %v", valid, err)
+	}
+}
+
+func TestVerificationCodePutRejectsMissingOrMismatchedLease(t *testing.T) {
+	store := newVerificationStoreForTest(t)
+	key := fmt.Sprintf("auth:verify-code:v2:admin:login:email:lease-%d", time.Now().UnixNano())
+	ctx := context.Background()
+	if err := store.Put(ctx, key, "digest-a", "lease-a", time.Minute); err == nil {
+		t.Fatal("Put accepted a missing lease")
+	}
+	if acquired, err := store.AcquireDelivery(ctx, key, "lease-a", 10*time.Second); err != nil || !acquired {
+		t.Fatalf("AcquireDelivery = %v, %v", acquired, err)
+	}
+	if err := store.Put(ctx, key, "digest-a", "lease-wrong", time.Minute); err == nil {
+		t.Fatal("Put accepted a mismatched lease token")
+	}
+}
+
+func TestVerificationCodePutRejectsOutOfRangeTTL(t *testing.T) {
+	store := newVerificationStoreForTest(t)
+	ctx := context.Background()
+	for _, test := range []struct {
+		name string
+		ttl  time.Duration
+		ok   bool
+	}{
+		{"below minimum", 30 * time.Second, false},
+		{"one minute", time.Minute, true},
+		{"five minutes", 5 * time.Minute, true},
+		{"sixty minutes", 60 * time.Minute, true},
+		{"over maximum", 61 * time.Minute, false},
+	} {
+		key := fmt.Sprintf("auth:verify-code:v2:admin:login:email:ttl-%d", time.Now().UnixNano())
+		if _, err := store.AcquireDelivery(ctx, key, "lease", 10*time.Second); err != nil {
+			t.Fatal(err)
+		}
+		err := store.Put(ctx, key, "digest", "lease", test.ttl)
+		if test.ok && err != nil {
+			t.Fatalf("%s: Put(%v) = %v", test.name, test.ttl, err)
+		}
+		if !test.ok && err == nil {
+			t.Fatalf("%s: Put accepted TTL %v", test.name, test.ttl)
+		}
 	}
 }
 

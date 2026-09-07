@@ -240,28 +240,81 @@ func (s *Service) Send(ctx context.Context, in BusinessSendInput) (SendResult, e
 }
 
 // VerifyCodeReady reports whether the platform can send a verification email
-// for the given scene. Redis ready hits do not query PostgreSQL; only a missing
-// snapshot enters the bounded cross-instance rebuild path.
-func (s *Service) VerifyCodeReady(ctx context.Context, platformID int64, scene string) (bool, error) {
+// for the given scene, together with the channel's single TTL authority.
+// Redis ready hits do not query PostgreSQL; only a missing snapshot enters the
+// bounded cross-instance rebuild path.
+func (s *Service) VerifyCodeReady(ctx context.Context, platformID int64, scene string) (VerifyCodeReadiness, error) {
 	if scene != SceneLogin {
-		return false, nil
+		return VerifyCodeReadiness{}, nil
 	}
 	if _, err := s.loadRateLimitCatalog(ctx); err != nil {
-		return false, dependency(err)
+		return VerifyCodeReadiness{}, dependency(err)
 	}
 	if s.readinessStore == nil {
-		return false, dependency(fmt.Errorf("mail verification readiness store unavailable"))
+		return VerifyCodeReadiness{}, dependency(fmt.Errorf("mail verification readiness store unavailable"))
 	}
-	ready, err := s.readinessStore.Current(ctx, platformID, scene)
+	readiness, err := s.readinessStore.Current(ctx, platformID, scene)
 	if err != nil {
-		return false, dependency(err)
+		return VerifyCodeReadiness{}, dependency(err)
 	}
-	return ready, nil
+	return readiness, nil
 }
 
-// SendEmailVerifyCode sends a six-digit login verification email through the
-// existing business Send path, preserving challenge idempotency.
-func (s *Service) SendEmailVerifyCode(ctx context.Context, in EmailVerifyCodeInput) (EmailVerifyCodeResult, error) {
+// PrepareEmailVerifyCode runs readiness, recipient-rule and business
+// rate-limit checks for one login verification email without sending anything.
+// A successful call consumes the current business rate-limit allowance exactly
+// once; the returned preparation must be reused by SendPreparedEmailVerifyCode.
+func (s *Service) PrepareEmailVerifyCode(ctx context.Context, in EmailVerifyCodePrepareInput) (EmailVerifyCodePreparation, error) {
+	email, err := NormalizeRecipient(in.ToEmail)
+	if err != nil {
+		return EmailVerifyCodePreparation{}, invalid(err)
+	}
+	if in.Scene != SceneLogin {
+		return EmailVerifyCodePreparation{}, invalid(fmt.Errorf("verification code scene is invalid"))
+	}
+	if s.readinessStore == nil {
+		return EmailVerifyCodePreparation{}, dependency(fmt.Errorf("mail verification readiness store unavailable"))
+	}
+	readiness, err := s.readinessStore.Current(ctx, in.PlatformID, in.Scene)
+	if err != nil {
+		return EmailVerifyCodePreparation{}, dependency(err)
+	}
+	if !readiness.Ready {
+		return EmailVerifyCodePreparation{}, dependency(fmt.Errorf("mail verification is unavailable"))
+	}
+	if s.rules != nil {
+		decision, evaluateErr := s.rules.Evaluate(ctx, in.PlatformID, email, SendModeBusiness)
+		if evaluateErr != nil {
+			return EmailVerifyCodePreparation{}, dependency(evaluateErr)
+		}
+		if !decision.Allowed {
+			return EmailVerifyCodePreparation{}, denied(ErrRecipientDenied)
+		}
+	}
+	catalog, err := s.loadRateLimitCatalog(ctx)
+	if err != nil {
+		return EmailVerifyCodePreparation{}, dependency(err)
+	}
+	for _, limit := range businessLimitRequests(catalog, in.PlatformID, in.Scene, email, in.ClientIP) {
+		allowed, allowErr := s.allow(ctx, limit.Key, limit.Limit, limit.Window)
+		if allowErr != nil {
+			return EmailVerifyCodePreparation{}, dependency(allowErr)
+		}
+		if !allowed {
+			return EmailVerifyCodePreparation{}, rateLimited(ErrRateLimited)
+		}
+	}
+	resendAfterSeconds := 60
+	if policy, ok := rateLimitPolicyByKey(catalog, "business_email_minute"); ok && policy.WindowSeconds > 0 {
+		resendAfterSeconds = policy.WindowSeconds
+	}
+	return EmailVerifyCodePreparation{TTLMinutes: readiness.TTLMinutes, ResendAfterSeconds: resendAfterSeconds}, nil
+}
+
+// SendPreparedEmailVerifyCode sends a six-digit login verification email using
+// a previously produced preparation. It must not rate-limit a second time and
+// persists the exact caller-supplied expiry.
+func (s *Service) SendPreparedEmailVerifyCode(ctx context.Context, in EmailVerifyCodeInput) (EmailVerifyCodeResult, error) {
 	email, err := NormalizeRecipient(in.ToEmail)
 	if err != nil {
 		return EmailVerifyCodeResult{}, invalid(err)
@@ -272,26 +325,33 @@ func (s *Service) SendEmailVerifyCode(ctx context.Context, in EmailVerifyCodeInp
 	if !isSixDigitCode(in.Code) {
 		return EmailVerifyCodeResult{}, invalid(fmt.Errorf("verification code must be six digits"))
 	}
-	if in.TTLMinutes < 1 {
-		return EmailVerifyCodeResult{}, invalid(fmt.Errorf("verification code TTL must be positive"))
+	if in.Preparation.TTLMinutes < 1 || in.Preparation.TTLMinutes > verifyCodeReadinessTTLMaximum {
+		return EmailVerifyCodeResult{}, invalid(fmt.Errorf("verification code preparation TTL is invalid"))
 	}
-	result, err := s.Send(ctx, BusinessSendInput{
+	now := time.Now().UTC()
+	if in.ExpiresAt.IsZero() || !in.ExpiresAt.After(now) {
+		return EmailVerifyCodeResult{}, invalid(fmt.Errorf("verification code expiry is invalid"))
+	}
+	if in.ExpiresAt.After(now.Add(time.Duration(in.Preparation.TTLMinutes) * time.Minute)) {
+		return EmailVerifyCodeResult{}, invalid(fmt.Errorf("verification code expiry exceeds preparation TTL"))
+	}
+	result, err := s.sendInternal(ctx, BusinessSendInput{
 		PlatformID:            in.PlatformID,
 		UserID:                in.UserID,
 		ClientIP:              in.ClientIP,
 		ChallengeID:           in.ChallengeID,
 		Scene:                 in.Scene,
 		ToEmail:               email,
-		Variables:             map[string]string{"code": in.Code, "ttl_minutes": strconv.Itoa(in.TTLMinutes)},
+		Variables:             map[string]string{"code": in.Code, "ttl_minutes": strconv.Itoa(in.Preparation.TTLMinutes)},
 		RejectActiveChallenge: true,
-	})
+	}, SendModeBusiness, sendInternalOptions{skipPreflight: true, expiresAt: in.ExpiresAt})
 	if err != nil {
 		return EmailVerifyCodeResult{}, err
 	}
 	return EmailVerifyCodeResult{
 		LogID:       result.LogID,
 		ChallengeID: in.ChallengeID,
-		ExpiresAt:   time.Now().UTC().Add(time.Duration(in.TTLMinutes) * time.Minute),
+		ExpiresAt:   in.ExpiresAt,
 	}, nil
 }
 
@@ -333,7 +393,16 @@ func (s *Service) rollbackVerifyCodeReadinessMutation(ctx context.Context, mutat
 	return s.readinessStore.RollbackMutation(rollbackContext, mutation)
 }
 
+type sendInternalOptions struct {
+	skipPreflight bool
+	expiresAt     time.Time
+}
+
 func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode) (SendResult, error) {
+	return s.sendInternal(ctx, in, mode, sendInternalOptions{})
+}
+
+func (s *Service) sendInternal(ctx context.Context, in BusinessSendInput, mode SendMode, opts sendInternalOptions) (SendResult, error) {
 	if in.PlatformID < 1 {
 		return SendResult{}, invalid(fmt.Errorf("platform invalid"))
 	}
@@ -348,27 +417,29 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 	if e := validateMailVariables(in.Variables, true); e != nil {
 		return SendResult{}, invalid(e)
 	}
-	if s.rules != nil {
-		d, e := s.rules.Evaluate(ctx, in.PlatformID, email, mode)
-		if e != nil {
-			return SendResult{}, dependency(e)
+	if !opts.skipPreflight {
+		if s.rules != nil {
+			d, e := s.rules.Evaluate(ctx, in.PlatformID, email, mode)
+			if e != nil {
+				return SendResult{}, dependency(e)
+			}
+			if !d.Allowed {
+				return SendResult{}, denied(ErrRecipientDenied)
+			}
 		}
-		if !d.Allowed {
-			return SendResult{}, denied(ErrRecipientDenied)
-		}
-	}
-	if mode == SendModeBusiness {
-		catalog, err := s.loadRateLimitCatalog(ctx)
-		if err != nil {
-			return SendResult{}, dependency(err)
-		}
-		for _, limit := range businessLimitRequests(catalog, in.PlatformID, in.Scene, email, in.ClientIP) {
-			allowed, err := s.allow(ctx, limit.Key, limit.Limit, limit.Window)
+		if mode == SendModeBusiness {
+			catalog, err := s.loadRateLimitCatalog(ctx)
 			if err != nil {
 				return SendResult{}, dependency(err)
 			}
-			if !allowed {
-				return SendResult{}, rateLimited(ErrRateLimited)
+			for _, limit := range businessLimitRequests(catalog, in.PlatformID, in.Scene, email, in.ClientIP) {
+				allowed, err := s.allow(ctx, limit.Key, limit.Limit, limit.Window)
+				if err != nil {
+					return SendResult{}, dependency(err)
+				}
+				if !allowed {
+					return SendResult{}, rateLimited(ErrRateLimited)
+				}
 			}
 		}
 	}
@@ -408,6 +479,10 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 	}
 	effectiveTTLMinutes, _ := strconv.Atoi(strings.TrimSpace(variables["ttl_minutes"]))
 	now := time.Now().UTC()
+	expiresAt := now.Add(time.Duration(effectiveTTLMinutes) * time.Minute)
+	if !opts.expiresAt.IsZero() {
+		expiresAt = opts.expiresAt
+	}
 	var challengePtr *string
 	if in.ChallengeID != "" {
 		challengePtr = &in.ChallengeID
@@ -432,7 +507,7 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 		if ce != nil {
 			return s.failPending(ctx, in.PlatformID, row.ID, ce, sendStarted)
 		}
-		if ve := s.repository.AddVerification(ctx, &Verification{PlatformID: in.PlatformID, MailLogID: row.ID, KeyVersion: ver, CodeCiphertext: ct, ExpiresAt: now.Add(time.Duration(effectiveTTLMinutes) * time.Minute), CreatedAt: now}); ve != nil {
+		if ve := s.repository.AddVerification(ctx, &Verification{PlatformID: in.PlatformID, MailLogID: row.ID, KeyVersion: ver, CodeCiphertext: ct, ExpiresAt: expiresAt, CreatedAt: now}); ve != nil {
 			return s.failPending(ctx, in.PlatformID, row.ID, ve, sendStarted)
 		}
 	}

@@ -62,7 +62,7 @@ func readyMailRepository(delay time.Duration) *countingReadinessRepository {
 	return &countingReadinessRepository{
 		delay: delay,
 		config: Config{
-			ID: 1, SecretIDCiphertext: "configured", SecretKeyCiphertext: "configured", IsEnabled: yesno.Yes,
+			ID: 1, SecretIDCiphertext: "configured", SecretKeyCiphertext: "configured", TTLMinutes: 5, IsEnabled: yesno.Yes,
 		},
 		template: Template{ID: 1, Scene: SceneLogin, IsEnabled: yesno.Yes},
 	}
@@ -129,8 +129,8 @@ func TestVerifyCodeReadinessTwoInstancesRecoverMissingSnapshotOnce(t *testing.T)
 				errorsFound <- err
 				return
 			}
-			if !ready {
-				errorsFound <- errors.New("readiness snapshot is false")
+			if !ready.Ready || ready.TTLMinutes != 5 {
+				errorsFound <- errors.New("readiness snapshot is false or missing TTL")
 			}
 		}(index)
 	}
@@ -146,7 +146,7 @@ func TestVerifyCodeReadinessTwoInstancesRecoverMissingSnapshotOnce(t *testing.T)
 
 	for index := 0; index < 100; index++ {
 		ready, err := stores[index%len(stores)].Current(context.Background(), platformID, SceneLogin)
-		if err != nil || !ready {
+		if err != nil || !ready.Ready || ready.TTLMinutes != 5 {
 			t.Fatalf("ready hit %d = %v, %v", index, ready, err)
 		}
 	}
@@ -181,15 +181,34 @@ func TestVerifyCodeReadinessRejectsMissingDependencies(t *testing.T) {
 func TestVerifyCodeReadinessSnapshotRejectsMalformedPayloads(t *testing.T) {
 	for _, raw := range []string{
 		`{}`,
-		`{"schemaVersion":1,"state":"ready"}`,
-		`{"schemaVersion":1,"state":"ready","ready":true,"extra":true}`,
-		`{"schemaVersion":1,"state":"invalidating","ready":false,"mutationToken":"token"}`,
-		`{"schemaVersion":1,"state":"invalidating","mutationToken":""}`,
-		`{"schemaVersion":1,"state":"ready","ready":true}{"schemaVersion":1,"state":"ready","ready":false}`,
+		`{"schemaVersion":2,"state":"ready"}`,
+		`{"schemaVersion":2,"state":"ready","ready":true}`,
+		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":0}`,
+		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":61}`,
+		`{"schemaVersion":2,"state":"ready","ready":false,"ttlMinutes":5}`,
+		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":5,"extra":true}`,
+		`{"schemaVersion":1,"state":"ready","ready":true,"ttlMinutes":5}`,
+		`{"schemaVersion":2,"state":"invalidating","ready":false,"ttlMinutes":5,"mutationToken":"token"}`,
+		`{"schemaVersion":2,"state":"invalidating","mutationToken":""}`,
+		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":5}{"schemaVersion":2,"state":"ready","ready":false,"ttlMinutes":0}`,
 	} {
 		if _, err := decodeVerifyCodeReadinessSnapshot(raw); err == nil {
 			t.Fatalf("accepted malformed readiness snapshot: %s", raw)
 		}
+	}
+}
+
+func TestVerifyCodeReadinessSnapshotDecodesReadyWithTTL(t *testing.T) {
+	snapshot, err := decodeVerifyCodeReadinessSnapshot(`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":5}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Ready == nil || !*snapshot.Ready || snapshot.TTLMinutes == nil || *snapshot.TTLMinutes != 5 {
+		t.Fatalf("decoded readiness = %+v", snapshot)
+	}
+	readiness := readinessFromSnapshot(snapshot)
+	if !readiness.Ready || readiness.TTLMinutes != 5 {
+		t.Fatalf("readiness = %+v", readiness)
 	}
 }
 
@@ -235,7 +254,7 @@ func TestVerifyCodeReadinessMutationBlocksOldSnapshotAcrossInstances(t *testing.
 	}
 	t.Cleanup(func() { _ = firstClient.DeleteMany(context.Background(), keys) })
 
-	if ready, err := firstStore.Current(context.Background(), platformID, SceneLogin); err != nil || !ready {
+	if ready, err := firstStore.Current(context.Background(), platformID, SceneLogin); err != nil || !ready.Ready {
 		t.Fatalf("initial readiness = %v, %v", ready, err)
 	}
 	mutation, err := firstStore.BeginMutation(context.Background(), platformID, SceneLogin)
@@ -250,7 +269,7 @@ func TestVerifyCodeReadinessMutationBlocksOldSnapshotAcrossInstances(t *testing.
 	if err := firstStore.PublishMutation(context.Background(), mutation); err != nil {
 		t.Fatal(err)
 	}
-	if ready, err := secondStore.Current(context.Background(), platformID, SceneLogin); err != nil || ready {
+	if ready, err := secondStore.Current(context.Background(), platformID, SceneLogin); err != nil || ready.Ready {
 		t.Fatalf("published disabled readiness = %v, %v", ready, err)
 	}
 }

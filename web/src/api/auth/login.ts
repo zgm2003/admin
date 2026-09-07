@@ -35,6 +35,7 @@ export interface LoginConfig {
 export interface SendCodeResult {
   challengeId: string
   expiresAt: string
+  resendAfterSeconds: number
 }
 
 export interface CurrentUser {
@@ -153,13 +154,25 @@ function parseLoginConfig(value: unknown): LoginConfig {
 }
 
 function parseSendCodeResult(value: unknown): SendCodeResult {
-  const record = expectExactKeys(value, ['challengeId', 'expiresAt'], 'send code response')
+  const record = expectExactKeys(
+    value,
+    ['challengeId', 'expiresAt', 'resendAfterSeconds'],
+    'send code response',
+  )
   const expiresAt = expectString(record.expiresAt, 'send code.expiresAt')
   if (expiresAt.trim() === '' || Number.isNaN(Date.parse(expiresAt))) {
     throw new ProtocolError('send code.expiresAt must be a timestamp')
   }
+  const resendAfterSeconds = expectInteger(
+    record.resendAfterSeconds,
+    'send code.resendAfterSeconds',
+  )
+  if (resendAfterSeconds < 1 || resendAfterSeconds > 86400) {
+    throw new ProtocolError('send code.resendAfterSeconds must be between 1 and 86400')
+  }
   return {
     challengeId: expectString(record.challengeId, 'send code.challengeId'),
     expiresAt,
+    resendAfterSeconds,
   }
 }

@@ -248,7 +248,6 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Registered
 }
 
 const (
-	verificationCodeTTL            = 10 * time.Minute
 	verificationCodeCleanupTimeout = time.Second
 )
 
@@ -266,11 +265,11 @@ func (s *Service) LoginConfig(ctx context.Context, client authclient.Client) (au
 			if s.verifyCodeSender == nil {
 				continue
 			}
-			ready, readyErr := s.verifyCodeSender.VerifyCodeReady(ctx, policy.ID, messagemail.SceneLogin)
+			readiness, readyErr := s.verifyCodeSender.VerifyCodeReady(ctx, policy.ID, messagemail.SceneLogin)
 			if readyErr != nil {
 				return authplatform.LoginConfig{}, apperror.DependencyUnavailable(readyErr)
 			}
-			if ready {
+			if readiness.Ready {
 				options = append(options, authplatform.LoginTypeOption{Value: loginType})
 			}
 		case authplatform.LoginTypePhone:
@@ -287,6 +286,11 @@ func (s *Service) LoginConfig(ctx context.Context, client authclient.Client) (au
 
 // SendCode issues a six-digit email verification code. Only the digest is
 // stored; the code is returned to the caller only via the email channel.
+//
+// Order is fixed by the Mail verification contract: acquire the delivery lease
+// first, then prepare (readiness + recipient rule + rate limit), generate the
+// code, replace any prior code only while the lease is owned, send without a
+// second rate-limit count, and release the lease.
 func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeResult, error) {
 	if input.Scene != messagemail.SceneLogin {
 		return SendCodeResult{}, apperror.InvalidRequest(fmt.Errorf("verification code scene is invalid"))
@@ -308,20 +312,8 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 	if !policyAllowsLoginType(policy, input.LoginType) {
 		return SendCodeResult{}, apperror.Forbidden(fmt.Errorf("login type %q is disabled for authentication platform %q", input.LoginType, policy.Code))
 	}
-	ready, err := s.verifyCodeSender.VerifyCodeReady(ctx, policy.ID, messagemail.SceneLogin)
-	if err != nil {
-		return SendCodeResult{}, apperror.DependencyUnavailable(err)
-	}
-	if !ready {
-		return SendCodeResult{}, apperror.DependencyUnavailable(fmt.Errorf("mail verification is unavailable"))
-	}
 
-	code, err := newSixDigitCode()
-	if err != nil {
-		return SendCodeResult{}, apperror.Internal(err)
-	}
 	key := s.verificationCodes.VerificationKey(policy.Code, messagemail.SceneLogin, string(authplatform.LoginTypeEmail), email)
-	digest := s.verificationCodes.Digest(code)
 	leaseToken, err := newRefreshToken()
 	if err != nil {
 		return SendCodeResult{}, apperror.Internal(err)
@@ -333,20 +325,53 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 	if !acquired {
 		return SendCodeResult{}, apperror.DependencyUnavailable(fmt.Errorf("verification code delivery is in progress"))
 	}
+	releaseLease := func() error {
+		cleanupCtx, cancelCleanup := verificationCodeCleanupContext(ctx)
+		defer cancelCleanup()
+		return s.verificationCodes.ReleaseDelivery(cleanupCtx, key, leaseToken)
+	}
+
+	preparation, err := s.verifyCodeSender.PrepareEmailVerifyCode(ctx, messagemail.EmailVerifyCodePrepareInput{
+		PlatformID: policy.ID,
+		ClientIP:   input.Client.ClientIP,
+		Scene:      messagemail.SceneLogin,
+		ToEmail:    email,
+	})
+	if err != nil {
+		if releaseErr := releaseLease(); releaseErr != nil {
+			return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(err, releaseErr))
+		}
+		return SendCodeResult{}, err
+	}
+
+	code, err := newSixDigitCode()
+	if err != nil {
+		_ = releaseLease()
+		return SendCodeResult{}, apperror.Internal(err)
+	}
+	digest := s.verificationCodes.Digest(code)
+	now := s.now().UTC()
+	expiresAt := now.Add(time.Duration(preparation.TTLMinutes) * time.Minute)
+	if err := s.verificationCodes.Put(ctx, key, digest, leaseToken, time.Duration(preparation.TTLMinutes)*time.Minute); err != nil {
+		releaseErr := releaseLease()
+		return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(err, releaseErr))
+	}
 	challengeID := input.ChallengeID
 	if challengeID == "" {
 		challengeID = leaseToken
 	}
-	if err := s.verificationCodes.Put(ctx, key, digest, leaseToken, verificationCodeTTL); err != nil {
-		cleanupCtx, cancelCleanup := verificationCodeCleanupContext(ctx)
-		releaseErr := s.verificationCodes.ReleaseDelivery(cleanupCtx, key, leaseToken)
-		cancelCleanup()
-		return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(err, releaseErr))
-	}
-	expiresAt := s.now().UTC().Add(verificationCodeTTL)
-	_, sendErr := s.verifyCodeSender.SendEmailVerifyCode(ctx, messagemail.EmailVerifyCodeInput{
-		PlatformID: policy.ID, ClientIP: input.Client.ClientIP, ChallengeID: challengeID,
-		Scene: messagemail.SceneLogin, ToEmail: email, Code: code, TTLMinutes: int(verificationCodeTTL / time.Minute),
+	_, sendErr := s.verifyCodeSender.SendPreparedEmailVerifyCode(ctx, messagemail.EmailVerifyCodeInput{
+		PlatformID:  policy.ID,
+		ClientIP:    input.Client.ClientIP,
+		ChallengeID: challengeID,
+		Scene:       messagemail.SceneLogin,
+		ToEmail:     email,
+		Code:        code,
+		ExpiresAt:   expiresAt,
+		Preparation: messagemail.EmailVerifyCodePreparation{
+			TTLMinutes:         preparation.TTLMinutes,
+			ResendAfterSeconds: preparation.ResendAfterSeconds,
+		},
 	})
 	if sendErr != nil {
 		cleanupCtx, cancelCleanup := verificationCodeCleanupContext(ctx)
@@ -363,16 +388,13 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 		}
 		return SendCodeResult{}, sendErr
 	}
-	cleanupCtx, cancelCleanup := verificationCodeCleanupContext(ctx)
-	releaseErr := s.verificationCodes.ReleaseDelivery(cleanupCtx, key, leaseToken)
-	cancelCleanup()
-	if releaseErr != nil {
+	if releaseErr := releaseLease(); releaseErr != nil {
 		if s.logger != nil {
 			s.logger.ErrorContext(ctx, "verification code delivery lease release failed", "error", releaseErr)
 		}
 		return SendCodeResult{}, apperror.DependencyUnavailable(releaseErr)
 	}
-	return SendCodeResult{ChallengeID: challengeID, ExpiresAt: expiresAt}, nil
+	return SendCodeResult{ChallengeID: challengeID, ExpiresAt: expiresAt, ResendAfterSeconds: preparation.ResendAfterSeconds}, nil
 }
 
 func verificationCodeCleanupContext(ctx context.Context) (context.Context, context.CancelFunc) {

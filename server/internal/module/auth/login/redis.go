@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	verificationCodeKeyPrefix   = "auth:verify-code:v1:"
+	verificationCodeKeyPrefix   = "auth:verify-code:v2:"
 	verificationCodeLeaseSuffix = ":delivery"
 	verificationCodeMinimumTTL  = time.Minute
-	verificationCodeMaximumTTL  = 15 * time.Minute
+	verificationCodeMaximumTTL  = 60 * time.Minute
 	verificationAttemptWindow   = 10 * time.Minute
 	verificationAccountAttempts = 10
 	verificationIPAttempts      = 30
@@ -83,7 +83,7 @@ func (s *verificationCodeStore) ReleaseDelivery(ctx context.Context, key, leaseT
 
 func (s *verificationCodeStore) Put(ctx context.Context, key, digest, leaseToken string, ttl time.Duration) error {
 	if ttl < verificationCodeMinimumTTL || ttl > verificationCodeMaximumTTL {
-		return fmt.Errorf("verification code TTL must be between 1 and 15 minutes")
+		return fmt.Errorf("verification code TTL must be between 1 and 60 minutes")
 	}
 	payload, err := json.Marshal(verificationCodeValue{Digest: digest, LeaseToken: leaseToken})
 	if err != nil {
@@ -194,11 +194,6 @@ return 'mismatch'
 const putVerificationCodeScript = `
 local lease = redis.call('GET', KEYS[2])
 if not lease or lease ~= ARGV[2] then return 'lease-mismatch' end
-local current = redis.call('GET', KEYS[1])
-if current then
-  local decoded = cjson.decode(current)
-  if decoded.leaseToken ~= ARGV[2] then return 'code-exists' end
-end
 redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[3])
 return 'stored'
 `

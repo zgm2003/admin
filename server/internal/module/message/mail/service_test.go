@@ -48,7 +48,7 @@ type stubRateLimitPolicyStore struct {
 }
 
 type stubVerifyCodeReadinessStore struct {
-	ready              bool
+	readiness          VerifyCodeReadiness
 	currentErr         error
 	beginErr           error
 	publishErr         error
@@ -61,8 +61,8 @@ type stubVerifyCodeReadinessStore struct {
 	rollbackContextErr error
 }
 
-func (s *stubVerifyCodeReadinessStore) Current(context.Context, int64, string) (bool, error) {
-	return s.ready, s.currentErr
+func (s *stubVerifyCodeReadinessStore) Current(context.Context, int64, string) (VerifyCodeReadiness, error) {
+	return s.readiness, s.currentErr
 }
 
 func (s *stubVerifyCodeReadinessStore) BeginMutation(context.Context, int64, string) (VerifyCodeReadinessMutation, error) {
@@ -289,7 +289,7 @@ func openMailServiceDatabase(t *testing.T) (*gorm.DB, context.Context) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_config (platform_id, secret_id_ciphertext, secret_key_ciphertext, region, from_email, from_name, ttl_minutes, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 1, "configured", "configured", "ap-guangzhou", "sender@example.com", "Sender", 10, yesno.Yes, now, now).Error; err != nil {
+	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_config (platform_id, secret_id_ciphertext, secret_key_ciphertext, region, from_email, from_name, ttl_minutes, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 1, "configured", "configured", "ap-guangzhou", "sender@example.com", "Sender", 5, yesno.Yes, now, now).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_template (platform_id, scene, name, subject, tencent_template_id, variables, example_variables, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?)`, 1, SceneLogin, "Login", "Login code", 47941, `{"code":"123456","ttl_minutes":"10"}`, `{"code":"123456","ttl_minutes":"10"}`, yesno.Yes, now, now).Error; err != nil {
@@ -348,10 +348,10 @@ func TestVerifyCodeReadyReflectsConfigState(t *testing.T) {
 	service.SetVerifyCodeReadinessStore(readinessStore)
 
 	ready, err := service.VerifyCodeReady(ctx, 1, SceneLogin)
-	if err != nil || !ready {
+	if err != nil || !ready.Ready || ready.TTLMinutes < 1 {
 		t.Fatalf("ready = %v, %v", ready, err)
 	}
-	if ready, err := service.VerifyCodeReady(ctx, 1, "forget"); err != nil || ready {
+	if ready, err := service.VerifyCodeReady(ctx, 1, "forget"); err != nil || ready.Ready {
 		t.Fatalf("unsupported scene ready = %v, %v", ready, err)
 	}
 
@@ -363,7 +363,7 @@ func TestVerifyCodeReadyReflectsConfigState(t *testing.T) {
 		t.Fatal(err)
 	}
 	ready, err = service.VerifyCodeReady(ctx, 1, SceneLogin)
-	if err != nil || ready {
+	if err != nil || ready.Ready {
 		t.Fatalf("disabled config ready = %v, %v", ready, err)
 	}
 }
@@ -371,7 +371,7 @@ func TestVerifyCodeReadyReflectsConfigState(t *testing.T) {
 func TestReadinessMutationRollbackOutlivesCanceledRequest(t *testing.T) {
 	db, _ := openMailServiceDatabase(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	readiness := &stubVerifyCodeReadinessStore{ready: true, cancelAfterBegin: cancel}
+	readiness := &stubVerifyCodeReadinessStore{readiness: VerifyCodeReadiness{Ready: true}, cancelAfterBegin: cancel}
 	service := NewService(NewRepository(db), nil, nil, nil, nil, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
 	service.SetVerifyCodeReadinessStore(readiness)
 
@@ -405,26 +405,78 @@ func TestVerifyCodeReadyFailsWhenRateLimitPolicyIsUnavailable(t *testing.T) {
 	service := NewService(NewRepository(db), nil, nil, nil, nil, stubRateLimitPolicyStore{err: errors.New("redis unavailable")})
 
 	ready, err := service.VerifyCodeReady(ctx, 1, SceneLogin)
-	if ready {
+	if ready.Ready {
 		t.Fatal("mail reported ready while its rate-limit policy was unavailable")
 	}
 	assertApplicationError(t, err, http.StatusServiceUnavailable, apperror.CodeDependencyUnavailable)
 }
 
-func TestSendEmailVerifyCodeSendsLoginEmail(t *testing.T) {
+func openMailServiceWithReadiness(t *testing.T, limiter Limiter, policyStore RateLimitPolicyStore) (*Service, context.Context) {
+	t.Helper()
 	db, ctx := openMailServiceDatabase(t)
+	repository := NewRepository(db)
+	redisClient := openMailReadinessRedis(t)
+	readinessStore := NewVerifyCodeReadinessStore(repository, redisClient)
+	keys := []string{verifyCodeReadinessKey(1, SceneLogin), verifyCodeReadinessLoadLockKey(1, SceneLogin)}
+	if err := redisClient.DeleteMany(ctx, keys); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = redisClient.DeleteMany(context.Background(), keys) })
+	service := NewService(repository, nil, nil, nil, limiter, policyStore)
+	service.SetVerifyCodeReadinessStore(readinessStore)
+	return service, ctx
+}
+
+func TestPrepareEmailVerifyCodeReturnsConfigTTLAndResendWindow(t *testing.T) {
+	limiter := &recordingLimiter{allowed: true}
+	service, ctx := openMailServiceWithReadiness(t, limiter, stubRateLimitPolicyStore{catalog: policyCatalogWith(map[string][2]int{
+		"business_email_minute": {1, 60},
+		"business_email_10m":    {5, 600},
+		"business_ip_minute":    {10, 60},
+		"business_scene_minute": {20, 60},
+	})})
+	preparation, err := service.PrepareEmailVerifyCode(ctx, EmailVerifyCodePrepareInput{PlatformID: 1, ClientIP: "127.0.0.1", Scene: SceneLogin, ToEmail: "user@example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preparation.TTLMinutes != 5 || preparation.ResendAfterSeconds != 60 {
+		t.Fatalf("preparation = %+v", preparation)
+	}
+	if len(limiter.requests) != 4 {
+		t.Fatalf("limiter requests = %d, want 4", len(limiter.requests))
+	}
+}
+
+func TestPrepareEmailVerifyCodeRateLimitsBeforeSend(t *testing.T) {
 	sender := &countingSender{}
 	limiter := &recordingLimiter{allowed: true}
-	service := NewService(NewRepository(db), nil, sender, nil, limiter, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	service, ctx := openMailServiceWithReadiness(t, limiter, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	service.sender = sender
+	if _, err := service.PrepareEmailVerifyCode(ctx, EmailVerifyCodePrepareInput{PlatformID: 1, ClientIP: "127.0.0.1", Scene: SceneLogin, ToEmail: "user@example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	limiter.allowed = false
+	_, err := service.PrepareEmailVerifyCode(ctx, EmailVerifyCodePrepareInput{PlatformID: 1, ClientIP: "127.0.0.1", Scene: SceneLogin, ToEmail: "user@example.com"})
+	assertApplicationError(t, err, http.StatusTooManyRequests, apperror.CodeRateLimited)
+	if sender.calls.Load() != 0 {
+		t.Fatalf("prepare reached the sender %d times", sender.calls.Load())
+	}
+}
 
-	result, err := service.SendEmailVerifyCode(ctx, EmailVerifyCodeInput{
+func TestSendPreparedEmailVerifyCodeSendsLoginEmail(t *testing.T) {
+	db, ctx := openMailServiceDatabase(t)
+	sender := &countingSender{}
+	service := NewService(NewRepository(db), nil, sender, nil, &recordingLimiter{allowed: true}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	expiresAt := time.Now().UTC().Add(5 * time.Minute)
+	result, err := service.SendPreparedEmailVerifyCode(ctx, EmailVerifyCodeInput{
 		PlatformID: 1, ClientIP: "127.0.0.1", ChallengeID: "challenge-1",
-		Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", TTLMinutes: 10,
+		Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456",
+		ExpiresAt: expiresAt, Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.LogID < 1 || result.ChallengeID != "challenge-1" {
+	if result.LogID < 1 || result.ChallengeID != "challenge-1" || !result.ExpiresAt.Equal(expiresAt) {
 		t.Fatalf("result = %+v", result)
 	}
 	if sender.calls.Load() != 1 {
@@ -432,16 +484,31 @@ func TestSendEmailVerifyCodeSendsLoginEmail(t *testing.T) {
 	}
 }
 
-func TestSendEmailVerifyCodeRejectsReusedChallenge(t *testing.T) {
+func TestSendPreparedEmailVerifyCodeDoesNotRateLimitAgain(t *testing.T) {
+	db, ctx := openMailServiceDatabase(t)
+	sender := &countingSender{}
+	limiter := &recordingLimiter{allowed: true}
+	service := NewService(NewRepository(db), nil, sender, nil, limiter, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	expiresAt := time.Now().UTC().Add(5 * time.Minute)
+	preparation := EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}
+	if _, err := service.SendPreparedEmailVerifyCode(ctx, EmailVerifyCodeInput{PlatformID: 1, ClientIP: "127.0.0.1", ChallengeID: "prepared-1", Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: expiresAt, Preparation: preparation}); err != nil {
+		t.Fatal(err)
+	}
+	if len(limiter.requests) != 0 {
+		t.Fatalf("prepared send hit the limiter %d times, want 0", len(limiter.requests))
+	}
+}
+
+func TestSendPreparedEmailVerifyCodeRejectsReusedChallenge(t *testing.T) {
 	db, ctx := openMailServiceDatabase(t)
 	sender := &countingSender{}
 	service := NewService(NewRepository(db), nil, sender, nil, &recordingLimiter{allowed: true}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
-	input := EmailVerifyCodeInput{PlatformID: 1, ClientIP: "127.0.0.1", ChallengeID: "reused-challenge", Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", TTLMinutes: 10}
-	if _, err := service.SendEmailVerifyCode(ctx, input); err != nil {
+	input := EmailVerifyCodeInput{PlatformID: 1, ClientIP: "127.0.0.1", ChallengeID: "reused-challenge", Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: time.Now().UTC().Add(5 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}}
+	if _, err := service.SendPreparedEmailVerifyCode(ctx, input); err != nil {
 		t.Fatal(err)
 	}
 	input.Code = "654321"
-	if _, err := service.SendEmailVerifyCode(ctx, input); err == nil {
+	if _, err := service.SendPreparedEmailVerifyCode(ctx, input); err == nil {
 		t.Fatal("reused challenge reported a new verification code as sent")
 	}
 	if sender.calls.Load() != 1 {
@@ -456,30 +523,30 @@ func (s *inputRecordingSender) Send(_ context.Context, input SendInput) (Provide
 	return ProviderSendResult{RequestID: "request", MessageID: "message"}, nil
 }
 
-func TestSendEmailVerifyCodeUsesAuthOwnedTTL(t *testing.T) {
+func TestSendPreparedEmailVerifyCodePersistsPreparationTTL(t *testing.T) {
 	db, ctx := openMailServiceDatabase(t)
-	if err := db.WithContext(ctx).Exec(`UPDATE message_mail_config SET ttl_minutes = 3 WHERE platform_id = 1`).Error; err != nil {
-		t.Fatal(err)
-	}
 	sender := &inputRecordingSender{}
 	service := NewService(NewRepository(db), nil, sender, nil, &recordingLimiter{allowed: true}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
-	if _, err := service.SendEmailVerifyCode(ctx, EmailVerifyCodeInput{PlatformID: 1, ClientIP: "127.0.0.1", ChallengeID: "ttl-challenge", Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", TTLMinutes: 10}); err != nil {
+	if _, err := service.SendPreparedEmailVerifyCode(ctx, EmailVerifyCodeInput{PlatformID: 1, ClientIP: "127.0.0.1", ChallengeID: "ttl-challenge", Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: time.Now().UTC().Add(5 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}}); err != nil {
 		t.Fatal(err)
 	}
-	if sender.input.TemplateData["ttl_minutes"] != "10" {
-		t.Fatalf("mail template TTL = %q, want auth-owned TTL 10", sender.input.TemplateData["ttl_minutes"])
+	if sender.input.TemplateData["ttl_minutes"] != "5" {
+		t.Fatalf("mail template TTL = %q, want preparation TTL 5", sender.input.TemplateData["ttl_minutes"])
 	}
 }
 
-func TestSendEmailVerifyCodeRejectsInvalidInput(t *testing.T) {
+func TestSendPreparedEmailVerifyCodeRejectsInvalidInput(t *testing.T) {
 	db, ctx := openMailServiceDatabase(t)
 	service := NewService(NewRepository(db), nil, nil, nil, nil, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	now := time.Now().UTC()
 	for _, in := range []EmailVerifyCodeInput{
-		{PlatformID: 1, Scene: "forget", ToEmail: "user@example.com", Code: "123456", TTLMinutes: 10},
-		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "12345", TTLMinutes: 10},
-		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", TTLMinutes: 0},
+		{PlatformID: 1, Scene: "forget", ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(5 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}},
+		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "12345", ExpiresAt: now.Add(5 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}},
+		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(5 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 0, ResendAfterSeconds: 60}},
+		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(-time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}},
+		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(10 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}},
 	} {
-		if _, err := service.SendEmailVerifyCode(ctx, in); err == nil {
+		if _, err := service.SendPreparedEmailVerifyCode(ctx, in); err == nil {
 			t.Fatalf("accepted invalid input %+v", in)
 		}
 	}

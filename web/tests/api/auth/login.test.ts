@@ -73,12 +73,14 @@ describe('auth API', () => {
     requestMock.mockResolvedValue({
       challengeId: 'challenge-1',
       expiresAt: '2026-09-07T10:00:00Z',
+      resendAfterSeconds: 60,
     })
     await expect(
       sendLoginCode('admin@example.com', 'email', 'login', 'challenge-1'),
     ).resolves.toEqual({
       challengeId: 'challenge-1',
       expiresAt: '2026-09-07T10:00:00Z',
+      resendAfterSeconds: 60,
     })
     expect(requestMock).toHaveBeenCalledWith({
       method: 'POST',
@@ -154,10 +156,51 @@ describe('auth API', () => {
   })
 
   it('rejects a malformed verification-code expiry', async () => {
-    requestMock.mockResolvedValue({ challengeId: 'challenge-1', expiresAt: 'not-a-timestamp' })
+    requestMock.mockResolvedValue({
+      challengeId: 'challenge-1',
+      expiresAt: 'not-a-timestamp',
+      resendAfterSeconds: 60,
+    })
     await expect(
       sendLoginCode('admin@example.com', 'email', 'login', 'challenge-1'),
     ).rejects.toThrow('send code.expiresAt must be a timestamp')
+  })
+
+  it('rejects a missing or invalid resend window', async () => {
+    requestMock.mockResolvedValue({
+      challengeId: 'challenge-1',
+      expiresAt: '2026-09-07T10:00:00Z',
+    })
+    await expect(
+      sendLoginCode('admin@example.com', 'email', 'login', 'challenge-1'),
+    ).rejects.toThrow('send code response has invalid fields')
+
+    requestMock.mockResolvedValue({
+      challengeId: 'challenge-1',
+      expiresAt: '2026-09-07T10:00:00Z',
+      resendAfterSeconds: 0,
+    })
+    await expect(
+      sendLoginCode('admin@example.com', 'email', 'login', 'challenge-1'),
+    ).rejects.toThrow('send code.resendAfterSeconds must be between 1 and 86400')
+
+    requestMock.mockResolvedValue({
+      challengeId: 'challenge-1',
+      expiresAt: '2026-09-07T10:00:00Z',
+      resendAfterSeconds: 90000,
+    })
+    await expect(
+      sendLoginCode('admin@example.com', 'email', 'login', 'challenge-1'),
+    ).rejects.toThrow('send code.resendAfterSeconds must be between 1 and 86400')
+
+    requestMock.mockResolvedValue({
+      challengeId: 'challenge-1',
+      expiresAt: '2026-09-07T10:00:00Z',
+      resendAfterSeconds: 1.5,
+    })
+    await expect(
+      sendLoginCode('admin@example.com', 'email', 'login', 'challenge-1'),
+    ).rejects.toThrow('send code.resendAfterSeconds must be an integer')
   })
 
   it('loads and validates the current user', async () => {

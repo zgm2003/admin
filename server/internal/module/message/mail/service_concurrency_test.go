@@ -60,7 +60,7 @@ func TestSendConcurrentChallengeUsesDatabaseUniqueness(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_config (platform_id, region, from_email, from_name, ttl_minutes, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 1, "ap-guangzhou", "sender@example.com", "Sender", 10, yesno.Yes, now, now).Error; err != nil {
+	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_config (platform_id, region, from_email, from_name, ttl_minutes, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 1, "ap-guangzhou", "sender@example.com", "Sender", 5, yesno.Yes, now, now).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_template (platform_id, scene, name, subject, tencent_template_id, variables, example_variables, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?)`, 1, SceneLogin, "Login", "Login code", 47941, `{"code":"123456","ttl_minutes":"10"}`, `{"code":"123456","ttl_minutes":"10"}`, yesno.Yes, now, now).Error; err != nil {

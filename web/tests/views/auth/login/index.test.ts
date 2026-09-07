@@ -101,6 +101,7 @@ describe('Login page', () => {
     sendLoginCodeMock.mockResolvedValue({
       challengeId: 'challenge-1',
       expiresAt: '2026-09-07T10:10:00Z',
+      resendAfterSeconds: 60,
     })
     const { wrapper } = await mountLogin()
     await wrapper.find('[data-testid="login-account"]').setValue('admin@example.com')
@@ -120,13 +121,46 @@ describe('Login page', () => {
     )
   })
 
+  it('counts down from resendAfterSeconds, not the code expiry', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-07T10:00:00Z'))
+    try {
+      sendLoginCodeMock.mockResolvedValue({
+        challengeId: 'challenge-1',
+        expiresAt: '2026-09-07T10:05:00Z',
+        resendAfterSeconds: 60,
+      })
+      const { wrapper } = await mountLogin()
+      await wrapper.get('[data-testid="login-account"]').setValue('admin@example.com')
+      await wrapper.findComponent({ name: 'ElSegmented' }).vm.$emit('update:modelValue', 'email')
+      await flushPromises()
+
+      await wrapper.get('[data-testid="login-send-code"]').trigger('click')
+      await flushPromises()
+
+      const buttonText = wrapper.get('[data-testid="login-send-code"]').text()
+      expect(buttonText).toContain('60')
+      expect(buttonText).not.toContain('300')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('rotates the challenge after a successful delivery', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-07T10:00:00Z'))
     try {
       sendLoginCodeMock
-        .mockResolvedValueOnce({ challengeId: 'challenge-1', expiresAt: '2026-09-07T10:00:01Z' })
-        .mockResolvedValueOnce({ challengeId: 'challenge-2', expiresAt: '2026-09-07T10:00:02Z' })
+        .mockResolvedValueOnce({
+          challengeId: 'challenge-1',
+          expiresAt: '2026-09-07T10:05:00Z',
+          resendAfterSeconds: 1,
+        })
+        .mockResolvedValueOnce({
+          challengeId: 'challenge-2',
+          expiresAt: '2026-09-07T10:10:00Z',
+          resendAfterSeconds: 1,
+        })
       const { wrapper } = await mountLogin()
       await wrapper.get('[data-testid="login-account"]').setValue('admin@example.com')
       await wrapper.findComponent({ name: 'ElSegmented' }).vm.$emit('update:modelValue', 'email')
@@ -155,6 +189,7 @@ describe('Login page', () => {
       .mockResolvedValueOnce({
         challengeId: 'challenge-2',
         expiresAt: new Date(Date.now() + 600_000).toISOString(),
+        resendAfterSeconds: 60,
       })
     const { wrapper } = await mountLogin()
     await wrapper.get('[data-testid="login-account"]').setValue('admin@example.com')

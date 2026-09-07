@@ -25,6 +25,84 @@ import (
 	"gorm.io/gorm"
 )
 
+// gatedVerifyCodeSender blocks the provider call until released, so the winner
+// holds the delivery lease for the whole concurrent window.
+type gatedVerifyCodeSender struct {
+	readiness   mail.VerifyCodeReadiness
+	preparation mail.EmailVerifyCodePreparation
+	sendCalls   atomic.Int32
+	release     chan struct{}
+}
+
+func (s *gatedVerifyCodeSender) VerifyCodeReady(context.Context, int64, string) (mail.VerifyCodeReadiness, error) {
+	return s.readiness, nil
+}
+func (s *gatedVerifyCodeSender) PrepareEmailVerifyCode(context.Context, mail.EmailVerifyCodePrepareInput) (mail.EmailVerifyCodePreparation, error) {
+	return s.preparation, nil
+}
+func (s *gatedVerifyCodeSender) SendPreparedEmailVerifyCode(context.Context, mail.EmailVerifyCodeInput) (mail.EmailVerifyCodeResult, error) {
+	s.sendCalls.Add(1)
+	<-s.release
+	return mail.EmailVerifyCodeResult{LogID: 1, ChallengeID: "challenge", ExpiresAt: time.Now().Add(time.Minute)}, nil
+}
+
+func TestSendCodeTwoServicesSingleProviderWinner(t *testing.T) {
+	firstClient := openAuthRedis(t)
+	secondClient := openAuthRedis(t)
+	keyMaterial := []byte(strings.Repeat("v", 32))
+	policy := testPolicy()
+	email := fmt.Sprintf("concurrent-send-%d@example.com", time.Now().UnixNano())
+
+	sender := &gatedVerifyCodeSender{
+		readiness:   mail.VerifyCodeReadiness{Ready: true},
+		preparation: mail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60},
+		release:     make(chan struct{}),
+	}
+
+	firstStore := NewVerificationCodeStore(firstClient, keyMaterial)
+	secondStore := NewVerificationCodeStore(secondClient, keyMaterial)
+	firstService := newRedisTestService(t, firstClient, &fakeUserStore{}, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: policy})
+	firstService.SetVerificationCodeStore(firstStore)
+	firstService.SetVerifyCodeSender(sender)
+	secondService := newRedisTestService(t, secondClient, &fakeUserStore{}, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: policy})
+	secondService.SetVerificationCodeStore(secondStore)
+	secondService.SetVerifyCodeSender(sender)
+
+	key := firstStore.VerificationKey(policy.Code, mail.SceneLogin, string(authplatform.LoginTypeEmail), email)
+	t.Cleanup(func() {
+		_ = firstClient.DeleteMany(context.Background(), []string{key, key + verificationCodeLeaseSuffix})
+	})
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	var wait sync.WaitGroup
+	services := []*Service{firstService, secondService}
+	for index := 0; index < 2; index++ {
+		wait.Add(1)
+		go func(worker int) {
+			defer wait.Done()
+			<-start
+			_, err := services[worker].SendCode(context.Background(), SendCodeInput{Account: email, LoginType: authplatform.LoginTypeEmail, Scene: mail.SceneLogin, Client: testAuthClient()})
+			results <- err
+		}(index)
+	}
+	close(start)
+
+	// The non-winner returns first (the winner is blocked in the provider and
+	// still holds the delivery lease).
+	loserErr := <-results
+	close(sender.release)
+	winnerErr := <-results
+	wait.Wait()
+
+	if loserErr == nil || winnerErr != nil {
+		t.Fatalf("loser error=%v winner error=%v, want exactly one winner", loserErr, winnerErr)
+	}
+	if sender.sendCalls.Load() != 1 {
+		t.Fatalf("provider calls = %d, want 1", sender.sendCalls.Load())
+	}
+}
+
 func TestVerificationCodeTwoClientConsumeHasSingleWinner(t *testing.T) {
 	firstClient := openAuthRedis(t)
 	secondClient := openAuthRedis(t)

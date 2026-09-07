@@ -85,11 +85,7 @@ async function sendCode(): Promise<void> {
       'login',
       challengeId.value,
     )
-    const seconds = Math.max(
-      1,
-      Math.floor((new Date(result.expiresAt).getTime() - Date.now()) / 1000),
-    )
-    resendSeconds.value = Math.min(seconds, 900)
+    resendSeconds.value = result.resendAfterSeconds
     startCountdown()
   } catch {
     // request.ts owns API error notifications.

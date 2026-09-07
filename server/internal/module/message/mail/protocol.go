@@ -131,6 +131,30 @@ type RateLimitPolicyResponse struct {
 	Policy  RateLimitPolicy `json:"policy"`
 }
 
+// VerifyCodeReadiness reports whether a platform can send a verification code
+// for a scene and, when ready, the single TTL authority for that channel.
+type VerifyCodeReadiness struct {
+	Ready      bool
+	TTLMinutes int
+}
+
+// EmailVerifyCodePrepareInput is the preflight input for a login verification
+// email. Prepare performs readiness, recipient-rule and business rate-limit
+// checks and returns the per-request decision without sending anything.
+type EmailVerifyCodePrepareInput struct {
+	PlatformID int64
+	ClientIP   string
+	Scene      string
+	ToEmail    string
+}
+
+// EmailVerifyCodePreparation is the per-request decision produced by Prepare:
+// the channel TTL and the resend wait, both authoritative for this request.
+type EmailVerifyCodePreparation struct {
+	TTLMinutes         int
+	ResendAfterSeconds int
+}
+
 // EmailVerifyCodeInput is the narrow authentication-channel input exposed by
 // the Mail module. It carries only the fields needed to send a login
 // verification email; it never exposes the repository, GORM or Redis.
@@ -142,7 +166,8 @@ type EmailVerifyCodeInput struct {
 	Scene       string
 	ToEmail     string
 	Code        string
-	TTLMinutes  int
+	ExpiresAt   time.Time
+	Preparation EmailVerifyCodePreparation
 }
 
 type EmailVerifyCodeResult struct {
@@ -154,6 +179,7 @@ type EmailVerifyCodeResult struct {
 // VerifyCodeSender is the narrow interface Auth depends on for email
 // verification codes. It exposes no repository, GORM, Redis client or model.
 type VerifyCodeSender interface {
-	VerifyCodeReady(context.Context, int64, string) (bool, error)
-	SendEmailVerifyCode(context.Context, EmailVerifyCodeInput) (EmailVerifyCodeResult, error)
+	VerifyCodeReady(context.Context, int64, string) (VerifyCodeReadiness, error)
+	PrepareEmailVerifyCode(context.Context, EmailVerifyCodePrepareInput) (EmailVerifyCodePreparation, error)
+	SendPreparedEmailVerifyCode(context.Context, EmailVerifyCodeInput) (EmailVerifyCodeResult, error)
 }

@@ -33,8 +33,9 @@ type CredentialResponse struct {
 }
 
 type SendCodeResponse struct {
-	ChallengeID string    `json:"challengeId"`
-	ExpiresAt   time.Time `json:"expiresAt"`
+	ChallengeID        string    `json:"challengeId"`
+	ExpiresAt          time.Time `json:"expiresAt"`
+	ResendAfterSeconds int       `json:"resendAfterSeconds"`
 }
 
 type LoginConfigResponse struct {

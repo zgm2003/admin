@@ -65,6 +65,13 @@ func TestSendCodeRejectsMissingRequiredFields(t *testing.T) {
 	}
 }
 
+func TestSendCodeReturnsChallengeExpiryAndResendWindow(t *testing.T) {
+	service := &stubAuthenticationService{sendCodeResult: SendCodeResult{ChallengeID: "challenge-1", ExpiresAt: time.Date(2026, time.September, 7, 10, 5, 0, 0, time.UTC), ResendAfterSeconds: 60}}
+	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/send-code", `{"account":"admin@example.com","loginType":"email","scene":"login"}`, nil, false)
+	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusOK, 0, []string{"challengeId", "expiresAt", "resendAfterSeconds"})
+	assertEnvelopeDataJSON(t, responseRecorder, `{"challengeId":"challenge-1","expiresAt":"2026-09-07T10:05:00Z","resendAfterSeconds":60}`)
+}
+
 func TestSendCodeRejectsOversizedChallengeID(t *testing.T) {
 	service := &stubAuthenticationService{}
 	body := `{"account":"admin@example.com","loginType":"email","scene":"login","challengeId":"` + strings.Repeat("a", 129) + `"}`
@@ -249,6 +256,7 @@ type stubAuthenticationService struct {
 	loginInput           LoginInput
 	loginConfig          authplatform.LoginConfig
 	sendCodeCalls        int
+	sendCodeResult       SendCodeResult
 	authenticateIdentity Identity
 	authenticateErr      error
 	authenticateCalls    int
@@ -275,7 +283,7 @@ func (s *stubAuthenticationService) LoginConfig(_ context.Context, _ authclient.
 
 func (s *stubAuthenticationService) SendCode(_ context.Context, _ SendCodeInput) (SendCodeResult, error) {
 	s.sendCodeCalls++
-	return SendCodeResult{}, nil
+	return s.sendCodeResult, nil
 }
 
 func (s *stubAuthenticationService) Refresh(_ context.Context, input RefreshInput) (Credential, error) {

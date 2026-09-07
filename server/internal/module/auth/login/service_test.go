@@ -286,7 +286,7 @@ func TestSendCodeRequiresConfiguredLoginType(t *testing.T) {
 	policy := testPolicy()
 	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePassword}
 	store := &fakeVerificationCodeStore{acquired: true}
-	sender := &fakeVerifyCodeSender{ready: true, result: messagemail.EmailVerifyCodeResult{ExpiresAt: time.Now().Add(10 * time.Minute)}}
+	sender := &fakeVerifyCodeSender{readiness: messagemail.VerifyCodeReadiness{Ready: true}, result: messagemail.EmailVerifyCodeResult{ExpiresAt: time.Now().Add(10 * time.Minute)}}
 	service := NewService(nil, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.SetVerificationCodeStore(store)
 	service.SetVerifyCodeSender(sender)
@@ -353,7 +353,7 @@ func TestLoginCodeDoesNotConsumeForDisabledUser(t *testing.T) {
 
 func TestSendCodeFailsClosedWhenCleanupFails(t *testing.T) {
 	store := &fakeVerificationCodeStore{acquired: true, deleteErr: errors.New("redis delete failed")}
-	sender := &fakeVerifyCodeSender{ready: true, sendErr: apperror.Conflict(i18n.KeyConflict, nil, errors.New("challenge conflict"))}
+	sender := &fakeVerifyCodeSender{readiness: messagemail.VerifyCodeReadiness{Ready: true}, preparation: messagemail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}, sendErr: apperror.Conflict(i18n.KeyConflict, nil, errors.New("challenge conflict"))}
 	service := NewService(nil, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.SetVerificationCodeStore(store)
 	service.SetVerifyCodeSender(sender)
@@ -368,7 +368,8 @@ func TestSendCodeCleansUpWithBoundedContextAfterRequestCancellation(t *testing.T
 	ctx, cancel := context.WithCancel(context.Background())
 	store := &fakeVerificationCodeStore{acquired: true}
 	sender := &fakeVerifyCodeSender{
-		ready: true,
+		readiness:   messagemail.VerifyCodeReadiness{Ready: true},
+		preparation: messagemail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60},
 		sendFn: func(context.Context, messagemail.EmailVerifyCodeInput) (messagemail.EmailVerifyCodeResult, error) {
 			cancel()
 			return messagemail.EmailVerifyCodeResult{}, errors.New("mail provider failed after request cancellation")
@@ -388,9 +389,8 @@ func TestSendCodeCleansUpWithBoundedContextAfterRequestCancellation(t *testing.T
 }
 
 func TestSendCodeReleasesDeliveryLeaseAfterSuccess(t *testing.T) {
-	expiresAt := time.Now().Add(10 * time.Minute)
 	store := &fakeVerificationCodeStore{acquired: true}
-	sender := &fakeVerifyCodeSender{ready: true, result: messagemail.EmailVerifyCodeResult{ExpiresAt: expiresAt}}
+	sender := &fakeVerifyCodeSender{readiness: messagemail.VerifyCodeReadiness{Ready: true}, preparation: messagemail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}}
 	service := NewService(nil, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.SetVerificationCodeStore(store)
 	service.SetVerifyCodeSender(sender)
@@ -403,10 +403,10 @@ func TestSendCodeReleasesDeliveryLeaseAfterSuccess(t *testing.T) {
 	}
 }
 
-func TestSendCodeReturnsAuthOwnedExpiry(t *testing.T) {
+func TestSendCodeUsesPreparationTTLAndResendWindow(t *testing.T) {
 	fixedNow := time.Date(2026, time.September, 7, 10, 0, 0, 0, time.UTC)
 	store := &fakeVerificationCodeStore{acquired: true}
-	sender := &fakeVerifyCodeSender{ready: true, result: messagemail.EmailVerifyCodeResult{ExpiresAt: fixedNow.Add(time.Hour)}}
+	sender := &fakeVerifyCodeSender{readiness: messagemail.VerifyCodeReadiness{Ready: true}, preparation: messagemail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}}
 	service := NewService(nil, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.SetVerificationCodeStore(store)
 	service.SetVerifyCodeSender(sender)
@@ -416,8 +416,33 @@ func TestSendCodeReturnsAuthOwnedExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.ExpiresAt.Equal(fixedNow.Add(verificationCodeTTL)) {
-		t.Fatalf("SendCode expiry = %v, want %v", result.ExpiresAt, fixedNow.Add(verificationCodeTTL))
+	if !result.ExpiresAt.Equal(fixedNow.Add(5 * time.Minute)) {
+		t.Fatalf("SendCode expiry = %v, want %v", result.ExpiresAt, fixedNow.Add(5*time.Minute))
+	}
+	if result.ResendAfterSeconds != 60 {
+		t.Fatalf("SendCode resendAfterSeconds = %d, want 60", result.ResendAfterSeconds)
+	}
+	if sender.prepareCalls != 1 || sender.sendCalls != 1 {
+		t.Fatalf("prepareCalls=%d sendCalls=%d, want 1 each", sender.prepareCalls, sender.sendCalls)
+	}
+}
+
+func TestSendCodeReturnsRateLimitedWhenPrepareIsRateLimited(t *testing.T) {
+	store := &fakeVerificationCodeStore{acquired: true}
+	sender := &fakeVerifyCodeSender{
+		readiness:  messagemail.VerifyCodeReadiness{Ready: true},
+		prepareErr: apperror.RateLimited(errors.New("too many requests")),
+	}
+	service := NewService(nil, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.SetVerificationCodeStore(store)
+	service.SetVerifyCodeSender(sender)
+
+	_, err := service.SendCode(context.Background(), SendCodeInput{Account: "user@example.com", LoginType: authplatform.LoginTypeEmail, Scene: messagemail.SceneLogin, Client: testAuthClient()})
+	if appErrorCode(err) != apperror.CodeRateLimited {
+		t.Fatalf("prepare rate-limit error = %v", err)
+	}
+	if store.releaseCalls != 1 || store.deleteCalls != 0 {
+		t.Fatalf("prepare failure releaseCalls=%d deleteCalls=%d", store.releaseCalls, store.deleteCalls)
 	}
 }
 
@@ -813,19 +838,27 @@ func (f *fakeUserStore) FindCurrent(context.Context, int64) (user.Current, error
 }
 
 type fakeVerifyCodeSender struct {
-	ready     bool
-	readyErr  error
-	result    messagemail.EmailVerifyCodeResult
-	sendErr   error
-	sendFn    func(context.Context, messagemail.EmailVerifyCodeInput) (messagemail.EmailVerifyCodeResult, error)
-	sendCalls int
+	readiness    messagemail.VerifyCodeReadiness
+	readyErr     error
+	preparation  messagemail.EmailVerifyCodePreparation
+	prepareErr   error
+	result       messagemail.EmailVerifyCodeResult
+	sendErr      error
+	sendFn       func(context.Context, messagemail.EmailVerifyCodeInput) (messagemail.EmailVerifyCodeResult, error)
+	sendCalls    int
+	prepareCalls int
 }
 
-func (f *fakeVerifyCodeSender) VerifyCodeReady(context.Context, int64, string) (bool, error) {
-	return f.ready, f.readyErr
+func (f *fakeVerifyCodeSender) VerifyCodeReady(context.Context, int64, string) (messagemail.VerifyCodeReadiness, error) {
+	return f.readiness, f.readyErr
 }
 
-func (f *fakeVerifyCodeSender) SendEmailVerifyCode(ctx context.Context, input messagemail.EmailVerifyCodeInput) (messagemail.EmailVerifyCodeResult, error) {
+func (f *fakeVerifyCodeSender) PrepareEmailVerifyCode(context.Context, messagemail.EmailVerifyCodePrepareInput) (messagemail.EmailVerifyCodePreparation, error) {
+	f.prepareCalls++
+	return f.preparation, f.prepareErr
+}
+
+func (f *fakeVerifyCodeSender) SendPreparedEmailVerifyCode(ctx context.Context, input messagemail.EmailVerifyCodeInput) (messagemail.EmailVerifyCodeResult, error) {
 	f.sendCalls++
 	if f.sendFn != nil {
 		return f.sendFn(ctx, input)

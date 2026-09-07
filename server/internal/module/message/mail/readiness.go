@@ -19,14 +19,17 @@ import (
 )
 
 const (
-	verifyCodeReadinessSchemaVersion = 1
+	verifyCodeReadinessSchemaVersion = 2
 	verifyCodeReadinessStateReady    = "ready"
 	verifyCodeReadinessInvalidating  = "invalidating"
-	verifyCodeReadinessKeyPrefix     = "mail:verify-code-readiness:v1:"
-	verifyCodeReadinessLockPrefix    = "mail:verify-code-readiness:load-lock:v1:"
+	verifyCodeReadinessKeyPrefix     = "mail:verify-code-readiness:v2:"
+	verifyCodeReadinessLockPrefix    = "mail:verify-code-readiness:load-lock:v2:"
 	verifyCodeReadinessLoadTimeout   = 5 * time.Second
 	verifyCodeReadinessRetryInterval = 25 * time.Millisecond
 	verifyCodeReadinessMutationTTL   = 30 * time.Second
+	// verifyCodeReadinessTTLMaximum mirrors the message_mail_config.ttl_minutes
+	// CHECK constraint (1..60).
+	verifyCodeReadinessTTLMaximum = 60
 )
 
 type verifyCodeReadinessRepository interface {
@@ -38,6 +41,7 @@ type verifyCodeReadinessSnapshot struct {
 	SchemaVersion int     `json:"schemaVersion"`
 	State         string  `json:"state"`
 	Ready         *bool   `json:"ready,omitempty"`
+	TTLMinutes    *int    `json:"ttlMinutes,omitempty"`
 	MutationToken *string `json:"mutationToken,omitempty"`
 }
 
@@ -54,7 +58,7 @@ type VerifyCodeReadinessMutation struct {
 // VerifyCodeReadinessStore keeps the public login-config path on Redis while
 // PostgreSQL remains the authoritative source rebuilt on a missing key only.
 type VerifyCodeReadinessStore interface {
-	Current(context.Context, int64, string) (bool, error)
+	Current(context.Context, int64, string) (VerifyCodeReadiness, error)
 	BeginMutation(context.Context, int64, string) (VerifyCodeReadinessMutation, error)
 	PublishMutation(context.Context, VerifyCodeReadinessMutation) error
 	RollbackMutation(context.Context, VerifyCodeReadinessMutation) error
@@ -78,19 +82,19 @@ func verifyCodeReadinessLoadLockKey(platformID int64, scene string) string {
 	return verifyCodeReadinessLockPrefix + strconv.FormatInt(platformID, 10) + ":" + scene
 }
 
-func (s *verifyCodeReadinessStore) Current(ctx context.Context, platformID int64, scene string) (bool, error) {
+func (s *verifyCodeReadinessStore) Current(ctx context.Context, platformID int64, scene string) (VerifyCodeReadiness, error) {
 	if err := validateVerifyCodeReadinessCoordinates(platformID, scene); err != nil {
-		return false, err
+		return VerifyCodeReadiness{}, err
 	}
 	if s == nil || s.redis == nil || s.repository == nil {
-		return false, fmt.Errorf("mail verification readiness store dependencies unavailable")
+		return VerifyCodeReadiness{}, fmt.Errorf("mail verification readiness store dependencies unavailable")
 	}
 	snapshot, _, found, err := s.readSnapshot(ctx, platformID, scene)
 	if err != nil {
-		return false, err
+		return VerifyCodeReadiness{}, err
 	}
 	if found {
-		return *snapshot.Ready, nil
+		return readinessFromSnapshot(snapshot), nil
 	}
 
 	key := verifyCodeReadinessKey(platformID, scene)
@@ -101,16 +105,16 @@ func (s *verifyCodeReadinessStore) Current(ctx context.Context, platformID int64
 	})
 	select {
 	case <-ctx.Done():
-		return false, ctx.Err()
+		return VerifyCodeReadiness{}, ctx.Err()
 	case sharedResult := <-result:
 		if sharedResult.Err != nil {
-			return false, sharedResult.Err
+			return VerifyCodeReadiness{}, sharedResult.Err
 		}
-		ready, ok := sharedResult.Val.(bool)
+		readiness, ok := sharedResult.Val.(VerifyCodeReadiness)
 		if !ok {
-			return false, fmt.Errorf("mail verification readiness rebuild returned an invalid value")
+			return VerifyCodeReadiness{}, fmt.Errorf("mail verification readiness rebuild returned an invalid value")
 		}
-		return ready, nil
+		return readiness, nil
 	}
 }
 
@@ -135,18 +139,18 @@ func (s *verifyCodeReadinessStore) readSnapshot(ctx context.Context, platformID 
 	return snapshot, raw, true, nil
 }
 
-func (s *verifyCodeReadinessStore) rebuild(ctx context.Context, platformID int64, scene string) (bool, error) {
+func (s *verifyCodeReadinessStore) rebuild(ctx context.Context, platformID int64, scene string) (VerifyCodeReadiness, error) {
 	if s == nil || s.redis == nil || s.repository == nil {
-		return false, fmt.Errorf("mail verification readiness rebuild dependencies unavailable")
+		return VerifyCodeReadiness{}, fmt.Errorf("mail verification readiness rebuild dependencies unavailable")
 	}
 	token, err := randomVerifyCodeReadinessToken()
 	if err != nil {
-		return false, err
+		return VerifyCodeReadiness{}, err
 	}
 	lockKey := verifyCodeReadinessLoadLockKey(platformID, scene)
 	acquired, err := s.redis.SetStringIfMissing(ctx, lockKey, token, verifyCodeReadinessLoadTimeout)
 	if err != nil {
-		return false, err
+		return VerifyCodeReadiness{}, err
 	}
 	if acquired {
 		defer func() {
@@ -154,74 +158,84 @@ func (s *verifyCodeReadinessStore) rebuild(ctx context.Context, platformID int64
 			defer cancel()
 			_, _ = s.redis.EvalString(releaseContext, releaseVerifyCodeReadinessLoadLockScript, []string{lockKey}, token)
 		}()
-		ready, loadErr := s.loadFromRepository(ctx, platformID, scene)
-		if loadErr != nil {
-			return false, loadErr
+		// A prior lock owner may have installed the snapshot after our initial
+		// miss; re-check before performing a redundant PostgreSQL load.
+		if current, _, found, readErr := s.readSnapshot(ctx, platformID, scene); readErr != nil {
+			return VerifyCodeReadiness{}, readErr
+		} else if found {
+			return readinessFromSnapshot(current), nil
 		}
-		payload, encodeErr := encodeVerifyCodeReadinessSnapshot(newReadyVerifyCodeReadinessSnapshot(ready))
+		readiness, loadErr := s.loadFromRepository(ctx, platformID, scene)
+		if loadErr != nil {
+			return VerifyCodeReadiness{}, loadErr
+		}
+		payload, encodeErr := encodeVerifyCodeReadinessSnapshot(newReadyVerifyCodeReadinessSnapshot(readiness))
 		if encodeErr != nil {
-			return false, encodeErr
+			return VerifyCodeReadiness{}, encodeErr
 		}
 		result, publishErr := s.redis.EvalString(ctx, installVerifyCodeReadinessSnapshotScript,
 			[]string{verifyCodeReadinessKey(platformID, scene)}, payload)
 		if publishErr != nil {
-			return false, publishErr
+			return VerifyCodeReadiness{}, publishErr
 		}
 		switch result {
 		case "published":
-			return ready, nil
+			return readiness, nil
 		case "exists":
 			current, _, found, readErr := s.readSnapshot(ctx, platformID, scene)
 			if readErr != nil {
-				return false, readErr
+				return VerifyCodeReadiness{}, readErr
 			}
 			if !found {
-				return false, fmt.Errorf("mail verification readiness disappeared during rebuild")
+				return VerifyCodeReadiness{}, fmt.Errorf("mail verification readiness disappeared during rebuild")
 			}
-			return *current.Ready, nil
+			return readinessFromSnapshot(current), nil
 		default:
-			return false, fmt.Errorf("mail verification readiness rebuild returned %q", result)
+			return VerifyCodeReadiness{}, fmt.Errorf("mail verification readiness rebuild returned %q", result)
 		}
 	}
 
 	deadline := time.Now().Add(verifyCodeReadinessLoadTimeout)
 	for time.Now().Before(deadline) {
 		if err := waitVerifyCodeReadinessRetry(ctx, verifyCodeReadinessRetryInterval); err != nil {
-			return false, err
+			return VerifyCodeReadiness{}, err
 		}
 		snapshot, _, found, readErr := s.readSnapshot(ctx, platformID, scene)
 		if readErr != nil {
-			return false, readErr
+			return VerifyCodeReadiness{}, readErr
 		}
 		if found {
-			return *snapshot.Ready, nil
+			return readinessFromSnapshot(snapshot), nil
 		}
 	}
-	return false, fmt.Errorf("mail verification readiness rebuild timed out")
+	return VerifyCodeReadiness{}, fmt.Errorf("mail verification readiness rebuild timed out")
 }
 
-func (s *verifyCodeReadinessStore) loadFromRepository(ctx context.Context, platformID int64, scene string) (bool, error) {
+func (s *verifyCodeReadinessStore) loadFromRepository(ctx context.Context, platformID int64, scene string) (VerifyCodeReadiness, error) {
 	if s == nil || s.repository == nil {
-		return false, fmt.Errorf("mail verification readiness repository unavailable")
+		return VerifyCodeReadiness{}, fmt.Errorf("mail verification readiness repository unavailable")
 	}
 	config, err := s.repository.FindConfig(ctx, platformID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, nil
+		return VerifyCodeReadiness{}, nil
 	}
 	if err != nil {
-		return false, err
+		return VerifyCodeReadiness{}, err
 	}
 	if config.IsEnabled != yesno.Yes || config.SecretIDCiphertext == "" || config.SecretKeyCiphertext == "" {
-		return false, nil
+		return VerifyCodeReadiness{}, nil
 	}
 	template, err := s.repository.FindTemplateByScene(ctx, platformID, scene)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, nil
+		return VerifyCodeReadiness{}, nil
 	}
 	if err != nil {
-		return false, err
+		return VerifyCodeReadiness{}, err
 	}
-	return template.IsEnabled == yesno.Yes, nil
+	if template.IsEnabled != yesno.Yes {
+		return VerifyCodeReadiness{}, nil
+	}
+	return VerifyCodeReadiness{Ready: true, TTLMinutes: int(config.TTLMinutes)}, nil
 }
 
 func (s *verifyCodeReadinessStore) BeginMutation(ctx context.Context, platformID int64, scene string) (VerifyCodeReadinessMutation, error) {
@@ -270,11 +284,11 @@ func (s *verifyCodeReadinessStore) PublishMutation(ctx context.Context, mutation
 	if err := validateVerifyCodeReadinessMutation(mutation); err != nil {
 		return err
 	}
-	ready, err := s.loadFromRepository(ctx, mutation.platformID, mutation.scene)
+	readiness, err := s.loadFromRepository(ctx, mutation.platformID, mutation.scene)
 	if err != nil {
 		return err
 	}
-	payload, err := encodeVerifyCodeReadinessSnapshot(newReadyVerifyCodeReadinessSnapshot(ready))
+	payload, err := encodeVerifyCodeReadinessSnapshot(newReadyVerifyCodeReadinessSnapshot(readiness))
 	if err != nil {
 		return err
 	}
@@ -320,8 +334,24 @@ func validateVerifyCodeReadinessMutation(mutation VerifyCodeReadinessMutation) e
 	return nil
 }
 
-func newReadyVerifyCodeReadinessSnapshot(ready bool) verifyCodeReadinessSnapshot {
-	return verifyCodeReadinessSnapshot{SchemaVersion: verifyCodeReadinessSchemaVersion, State: verifyCodeReadinessStateReady, Ready: &ready}
+func readinessFromSnapshot(snapshot verifyCodeReadinessSnapshot) VerifyCodeReadiness {
+	readiness := VerifyCodeReadiness{}
+	if snapshot.Ready != nil {
+		readiness.Ready = *snapshot.Ready
+	}
+	if snapshot.TTLMinutes != nil {
+		readiness.TTLMinutes = *snapshot.TTLMinutes
+	}
+	return readiness
+}
+
+func newReadyVerifyCodeReadinessSnapshot(readiness VerifyCodeReadiness) verifyCodeReadinessSnapshot {
+	ready := readiness.Ready
+	ttl := readiness.TTLMinutes
+	if !ready {
+		ttl = 0
+	}
+	return verifyCodeReadinessSnapshot{SchemaVersion: verifyCodeReadinessSchemaVersion, State: verifyCodeReadinessStateReady, Ready: &ready, TTLMinutes: &ttl}
 }
 
 func encodeVerifyCodeReadinessSnapshot(snapshot verifyCodeReadinessSnapshot) (string, error) {
@@ -368,11 +398,18 @@ func validateVerifyCodeReadinessSnapshot(snapshot verifyCodeReadinessSnapshot) e
 	}
 	switch snapshot.State {
 	case verifyCodeReadinessStateReady:
-		if snapshot.Ready == nil || snapshot.MutationToken != nil {
+		if snapshot.Ready == nil || snapshot.TTLMinutes == nil || snapshot.MutationToken != nil {
 			return fmt.Errorf("ready mail verification snapshot is invalid")
 		}
+		if *snapshot.Ready {
+			if *snapshot.TTLMinutes < 1 || *snapshot.TTLMinutes > verifyCodeReadinessTTLMaximum {
+				return fmt.Errorf("ready mail verification snapshot TTL is invalid")
+			}
+		} else if *snapshot.TTLMinutes != 0 {
+			return fmt.Errorf("unready mail verification snapshot carries a TTL")
+		}
 	case verifyCodeReadinessInvalidating:
-		if snapshot.Ready != nil || snapshot.MutationToken == nil || *snapshot.MutationToken == "" {
+		if snapshot.Ready != nil || snapshot.TTLMinutes != nil || snapshot.MutationToken == nil || *snapshot.MutationToken == "" {
 			return fmt.Errorf("invalidating mail verification snapshot is invalid")
 		}
 	default:

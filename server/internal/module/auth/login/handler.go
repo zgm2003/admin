@@ -146,7 +146,7 @@ func (h *Handler) SendCode(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	response.OK(context, http.StatusOK, SendCodeResponse{ChallengeID: result.ChallengeID, ExpiresAt: result.ExpiresAt})
+	response.OK(context, http.StatusOK, SendCodeResponse{ChallengeID: result.ChallengeID, ExpiresAt: result.ExpiresAt, ResendAfterSeconds: result.ResendAfterSeconds})
 }
 
 func loginTypeLabel(context *gin.Context, loginType authplatform.LoginType) string {

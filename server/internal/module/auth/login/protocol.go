@@ -22,10 +22,12 @@ type SendCodeInput struct {
 	Client      authclient.Client
 }
 
-// SendCodeResult returns only challenge metadata and expiry, never the code.
+// SendCodeResult returns only challenge metadata, expiry and the resend wait,
+// never the code.
 type SendCodeResult struct {
-	ChallengeID string
-	ExpiresAt   time.Time
+	ChallengeID        string
+	ExpiresAt          time.Time
+	ResendAfterSeconds int
 }
 
 // VerificationCodeStore is the Auth-owned Redis store for verification codes.

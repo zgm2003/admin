@@ -43,6 +43,46 @@
 | 后端契约与全量验证 | 邮件日志列表复用 `shared/pagination.Result`；权限菜单测试夹具统一遵循 `path = "/" + componentPath`，完整后端测试、静态检查和构建通过 |
 | 邮件限流策略管理 | 核心实现和前端页签已落地；已补迁移跨平台 action 隔离、RBAC Access 授权/版本失效/隐藏 action 集成 fixture、Redis 回源版本保护、失败草稿恢复和严格策略 DTO 校验。2026-09-05 已在本地 `admin` PostgreSQL 执行限流策略迁移并校验 7 条策略与隐藏 action；真实 Redis 双实例并发/故障探针仍未完成 |
 
+## 邮箱验证码 TTL 与重发契约收口（2026-09-07）
+
+> 来源计划：`docs/agent/plans/2026-09-07-mail-verification-contract-closeout.md`。已按失败测试 → 最小实现落地并全量验证，未提交。
+
+**实际接口与 Redis namespace**
+
+- Mail 窄接口改为三段式：`VerifyCodeReady(...) (VerifyCodeReadiness{Ready, TTLMinutes}, error)`、`PrepareEmailVerifyCode(...)`（readiness + 收件规则 + 业务限流各一次）、`SendPreparedEmailVerifyCode(...)`（不重复计数）。
+- readiness 快照 schema/key/load-lock 升 v2：`mail:verify-code-readiness:v2:<platform>:<scene>`，ready payload 携带 `ttlMinutes`；v1 不解析、不回退。
+- Auth 验证码 key 升 v2：`auth:verify-code:v2:`；Put Lua 只以当前 delivery lease 为写权限，允许原子覆盖旧码；TTL 允许 1–60 分钟。
+- 限流 key 未换 namespace，发布期间额度连续。
+
+**5 分钟 TTL 与 60 秒重发验证证据**
+
+- `message_mail_config.ttl_minutes=5` 是唯一 TTL 来源：`loadFromRepository` 读取 `config.TTLMinutes`，`TestPrepareEmailVerifyCodeReturnsConfigTTLAndResendWindow` 断言 TTL=5 且 `business_email_minute.window_seconds=60`。
+- Auth 已删除 `verificationCodeTTL = 10 * time.Minute` 常量；`SendCode` 用一次捕获的 `now + preparation.TTLMinutes` 计算 `expiresAt`，同一值写入 Redis/模板/verification log/响应。
+- 前端 `SendCodeResult` 增加严格整数 `resendAfterSeconds`（1–86400），登录页倒计时直接取该值，不再由 `expiresAt - Date.now()` 推算。
+
+**双实例查询预算与 winner 数**
+
+- 64 路 v2 missing 只回源一组 PG（config:1/template:1）；100 次 ready 热读零 PG 查询（`TestVerifyCodeReadinessTwoInstancesRecoverMissingSnapshotOnce`）。
+- 修复双实例协调竞态：拿到 load-lock 后、回源前复查快照，闭合落后实例的冗余回源。
+- 双 Auth Service 同邮箱并发 SendCode 仅一个进入 provider（`TestSendCodeTwoServicesSingleProviderWinner`）。
+
+**各故障点公开错误码**
+
+- 额度超限 `429/10007`；Redis 读取故障 `503/10006`；readiness/依赖不可用 `503/10006`。
+- Prepare 失败只释放 lease、不删除旧码；code Put 后发送失败删除本次 code 并释放 lease；任一 owned cleanup 失败提升为 `503/10006`，不返回假成功。
+
+**实际执行命令（全部通过）**
+
+- 后端：`go fmt ./...`、`go vet ./...`、`go test ./...`（36 包全过）、`go build ./...`。
+- 前端：`pnpm vitest run --pool=threads --maxWorkers=1`（63 文件 451 用例全过）、`pnpm lint`、`pnpm check:architecture`、`pnpm typecheck`、`pnpm build`。
+- `git diff --check` 通过。
+
+**未运行项与剩余风险**
+
+- `-race` 未运行（本机无 C 编译器）。
+- 旧 v1 readiness/验证码 key 不迁移，按原 TTL 自然过期。
+- `SettingDrawer` 因拆出 `SettingDrawer.css` 新增一个文件，属此前 UI 工作，非本计划范围，保留为可 review diff。
+
 ## 后续事项
 
 - 新业务模块按任务路由加载 `$admin-crud`、`$admin-rbac` 或 `$admin-database`，交付后只更新本文件对应条目。
