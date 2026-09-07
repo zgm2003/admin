@@ -347,6 +347,18 @@
       cursor: pointer;
     }
     .hidden-by-search { display: none !important; }
+    .schema-intro { color: var(--muted); font-size: 13px; }
+    .schema-body .table-wrap { margin-bottom: 4px; }
+    .schema-body table { min-width: 820px; }
+    .schema-body td:first-child { width: 190px; white-space: nowrap; }
+    .schema-note { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+    .priority-list { display: grid; gap: 10px; margin: 16px 0; }
+    .priority-row { display: grid; grid-template-columns: 72px 190px minmax(0, 1fr); gap: 14px; align-items: start; padding: 13px 15px; background: #fff; border: 1px solid var(--line); }
+    .priority-row strong { font-size: 14px; }
+    .priority-row p { margin: 0; color: var(--muted); font-size: 13px; }
+    .source-list { columns: 2; column-gap: 30px; }
+    .source-list li { break-inside: avoid; }
+    .inline-kpi { display: inline-block; margin: 0 4px 4px 0; padding: 3px 8px; color: #234e75; background: var(--target-bg); border: 1px solid #adc5dd; border-radius: 4px; font: 700 12px Consolas, monospace; }
 
     @media (max-width: 1050px) {
       .hero-grid, .topology { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -385,6 +397,8 @@
       .top-actions .print-label { display: none; }
       .search-panel { align-items: stretch; flex-direction: column; }
       .summary-note { display: none; }
+      .priority-row { grid-template-columns: 1fr; gap: 4px; }
+      .source-list { columns: 1; }
     }
     @media print {
       .topbar, .sidebar, .search-panel, .back-top { display: none !important; }
@@ -822,3 +836,380 @@ Result
             <div><h2>当前 PostgreSQL：20 张表字段级事实</h2><p class="section-intro">以下来自 2026-09-07 对本地 public schema 的只读查询。字段顺序为逻辑顺序；候选表不在本节。</p></div>
           </div>
           <div class="callout"><strong>统一规则：</strong>维护表使用 <code>TIMESTAMPTZ created_at/updated_at</code>；有真实删除才使用 <code>deleted_at</code>；Yes/No 为 <code>SMALLINT 0/1</code>；业务唯一值常用 active partial unique index。</div>
+
+          <p class="schema-intro">字段表中的“事实”来自当前 Model、Repository、迁移和本地数据库结构；“目标”表示进入 C 端前需要新增或调整的契约。敏感值只保存密文或 hint，文档不记录真实凭据。</p>
+          <details class="schema-table" open>
+            <summary><code>auth_platform</code><span class="summary-note">认证平台策略 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>id</td><td>BIGINT PK</td><td>平台主键。</td><td>所有平台关联外键。</td></tr>
+              <tr><td>code</td><td>VARCHAR(49) NOT NULL</td><td>平台稳定代码，如 <code>admin</code>、<code>canvas</code>；唯一且不可随意复用。</td><td>请求 header、JWT、缓存 key。</td></tr>
+              <tr><td>name</td><td>VARCHAR(64) NOT NULL</td><td>展示名称。</td><td>管理端列表。</td></tr>
+              <tr><td>login_types</td><td>JSONB NOT NULL</td><td>规范化、去重后的 <code>email/phone/password</code> 数组；受 CHECK 约束。</td><td>login-config、登录分发。</td></tr>
+              <tr><td>policy_version</td><td>BIGINT NOT NULL DEFAULT 1</td><td>任何有效安全策略变化递增；旧 publisher 不能覆盖新版本。</td><td>Redis policy snapshot。</td></tr>
+              <tr><td>access_ttl_seconds</td><td>INTEGER NOT NULL</td><td>Access JWT 有效期。</td><td>登录、刷新。</td></tr>
+              <tr><td>refresh_ttl_seconds</td><td>INTEGER NOT NULL</td><td>Refresh Token 有效期。</td><td>Session 创建。</td></tr>
+              <tr><td>session_cache_ttl_seconds</td><td>INTEGER NOT NULL</td><td>Session authority 缓存 TTL。</td><td>每请求认证。</td></tr>
+              <tr><td>access_cache_ttl_seconds</td><td>INTEGER NOT NULL</td><td>Access 快照 TTL；必须为正数。</td><td>权限快照。</td></tr>
+              <tr><td>bind_device / bind_ip</td><td>SMALLINT NOT NULL</td><td>0/1；是否将 Session 绑定设备/IP。</td><td>认证校验。</td></tr>
+              <tr><td>max_sessions</td><td>SMALLINT NOT NULL</td><td>单用户单平台最大活跃 Session。</td><td>登录事务。</td></tr>
+              <tr><td>allow_register</td><td>SMALLINT NOT NULL</td><td>首次验证登录是否允许创建用户；不是独立注册接口开关。</td><td>验证码登录决策。</td></tr>
+              <tr><td>is_enabled / is_builtin</td><td>SMALLINT NOT NULL</td><td>平台启用状态、内建标记，均为 0/1。</td><td>策略读取、管理写入。</td></tr>
+              <tr><td>created_at / updated_at</td><td>TIMESTAMPTZ NOT NULL</td><td>维护时间。</td><td>审计、排序。</td></tr>
+              <tr><td>deleted_at</td><td>TIMESTAMPTZ NULL</td><td>软删除；业务唯一索引忽略已删除行。</td><td>平台过滤。</td></tr>
+            </tbody></table></div><p class="schema-note">当前运行值：admin/canvas 均为 <code>email,password</code>；Mail 验证码 TTL 不在此表。</p></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>user_account</code><span class="summary-note">全局用户身份 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>id</td><td>BIGINT PK</td><td>全局用户主键。</td><td>所有身份外键、JWT uid。</td></tr>
+              <tr><td>username</td><td>VARCHAR(64) NOT NULL</td><td>系统用户名；首次验证码注册时生成并需唯一策略。</td><td>管理检索。</td></tr>
+              <tr><td>email</td><td>VARCHAR(254) NOT NULL</td><td>邮箱身份；phone-only 用户保存空字符串，不能使用 NULL 破坏唯一语义。</td><td>邮箱登录、唯一键竞争。</td></tr>
+              <tr><td>phone</td><td>VARCHAR(32) NULL</td><td>手机号身份；启用 SMS 前不得作为可验证登录方式。</td><td>手机号登录、绑定。</td></tr>
+              <tr><td>password_hash</td><td>VARCHAR(255) NOT NULL</td><td>bcrypt 等摘要；验证码新用户可为空字符串，密码登录必须先拒绝空 hash。</td><td>密码登录。</td></tr>
+              <tr><td>is_enabled</td><td>SMALLINT NOT NULL</td><td>用户可用状态，0/1。</td><td>认证热路径。</td></tr>
+              <tr><td>created_at / updated_at</td><td>TIMESTAMPTZ NOT NULL</td><td>维护时间。</td><td>审计与管理列表。</td></tr>
+              <tr><td>deleted_at</td><td>TIMESTAMPTZ NULL</td><td>软删除；email/phone 活跃唯一索引必须加 <code>deleted_at IS NULL</code>。</td><td>身份查询。</td></tr>
+            </tbody></table></div><p class="schema-note">C 端开放前需统一首次设置密码、找回密码、绑定/换绑身份流程。</p></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>user_profile</code><span class="summary-note">用户资料 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>user_id</td><td>BIGINT PK/FK</td><td>与 user_account 1:1；创建用户事务必须同事务插入。</td><td>个人资料读取。</td></tr>
+              <tr><td>avatar</td><td>VARCHAR(512) NOT NULL DEFAULT ''</td><td>对象存储 URL/key，不在此表保存二进制。</td><td>资料页。</td></tr>
+              <tr><td>birthday</td><td>DATE NULL</td><td>可选生日。</td><td>低频资料读取。</td></tr>
+              <tr><td>gender</td><td>SMALLINT NOT NULL DEFAULT 0</td><td>产品枚举；0 表示未知。</td><td>资料读写。</td></tr>
+              <tr><td>created_at / updated_at</td><td>TIMESTAMPTZ NOT NULL</td><td>维护时间。</td><td>审计。</td></tr>
+            </tbody></table></div></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>user_session</code><span class="summary-note">平台 Session · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>id</td><td>BIGINT PK</td><td>Session 主键，JWT sid。</td><td>认证、撤销。</td></tr>
+              <tr><td>user_id / platform_id</td><td>BIGINT NOT NULL</td><td>用户与 AuthPlatform 组合隔离。</td><td>sessions-state key。</td></tr>
+              <tr><td>device_id</td><td>VARCHAR(36) NOT NULL</td><td>设备标识；按策略绑定。</td><td>刷新和风控。</td></tr>
+              <tr><td>refresh_token_hash</td><td>CHAR(64) NOT NULL</td><td>只存 HMAC-SHA256，不存明文 token。</td><td>刷新 winner。</td></tr>
+              <tr><td>version</td><td>BIGINT NOT NULL >= 1</td><td>Refresh 原子轮换版本；旧 JWT/Refresh 失效。</td><td>Session cache。</td></tr>
+              <tr><td>client_ip / user_agent</td><td>VARCHAR(64/512) NOT NULL</td><td>设备/IP 绑定与审计。</td><td>认证校验、管理列表。</td></tr>
+              <tr><td>refresh_expires_at</td><td>TIMESTAMPTZ NOT NULL</td><td>Refresh 过期时间。</td><td>刷新。</td></tr>
+              <tr><td>revoked_at</td><td>TIMESTAMPTZ NULL</td><td>单 Session 撤销时间。</td><td>撤销校验。</td></tr>
+              <tr><td>created_at / updated_at</td><td>TIMESTAMPTZ NOT NULL</td><td>维护时间。</td><td>会话管理。</td></tr>
+            </tbody></table></div><p class="schema-note">建议索引：<code>(platform_id,user_id,revoked_at)</code>、<code>(refresh_token_hash)</code>、<code>(refresh_expires_at)</code>。</p></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>user_login_log</code><span class="summary-note">登录审计 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>id</td><td>BIGINT PK</td><td>事件主键。</td><td>管理查询。</td></tr>
+              <tr><td>user_id / session_id</td><td>BIGINT NULL</td><td>失败登录可能没有用户/Session。</td><td>审计关联。</td></tr>
+              <tr><td>platform_id</td><td>BIGINT NOT NULL</td><td>平台隔离。</td><td>按平台过滤。</td></tr>
+              <tr><td>login_account</td><td>VARCHAR(254) NOT NULL</td><td>脱敏或受控保存的登录标识。</td><td>风控与审计。</td></tr>
+              <tr><td>event_type / login_type</td><td>VARCHAR(16) / VARCHAR(32)</td><td>login/logout；login 时必须记录 password/email/phone。</td><td>报表。</td></tr>
+              <tr><td>is_success / reason_code</td><td>SMALLINT / VARCHAR(64) NOT NULL</td><td>0/1 与稳定错误码；写失败不改变登录响应。</td><td>安全分析。</td></tr>
+              <tr><td>client_ip / user_agent</td><td>VARCHAR(64/512) NOT NULL</td><td>审计和风控。</td><td>失败限流分析。</td></tr>
+              <tr><td>created_at / updated_at</td><td>TIMESTAMPTZ NOT NULL</td><td>维护时间。</td><td>时间范围查询。</td></tr>
+            </tbody></table></div></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>permission_access_version</code><span class="summary-note">用户权限版本 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>user_id</td><td>BIGINT PK/FK</td><td>每个用户一行。</td><td>Access snapshot identity。</td></tr>
+              <tr><td>version</td><td>BIGINT NOT NULL DEFAULT 1</td><td>用户角色关系/账号可用性变化递增。</td><td>Redis state 确认。</td></tr>
+              <tr><td>created_at / updated_at</td><td>TIMESTAMPTZ NOT NULL</td><td>维护时间。</td><td>回源。</td></tr>
+            </tbody></table></div><p class="schema-note">目标：新增每平台一行的 <code>permission_platform_version</code>，公共菜单/角色变化只递增平台版本，不扫描百万用户。</p></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>permission_menu</code><span class="summary-note">菜单/页面/动作 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>id / platform_id</td><td>BIGINT PK / NOT NULL</td><td>菜单主键和平台隔离。</td><td>Access 构建。</td></tr>
+              <tr><td>parent_id</td><td>BIGINT NULL</td><td>父子树；根节点为空。</td><td>菜单树。</td></tr>
+              <tr><td>menu_type</td><td>VARCHAR(16) NOT NULL</td><td>directory/page/action；action 必须挂在 page 下。</td><td>树校验。</td></tr>
+              <tr><td>name / code</td><td>VARCHAR(128) NOT NULL</td><td>展示名和唯一权限码。</td><td>授权与输出。</td></tr>
+              <tr><td>i18n_key / path / component_path / icon</td><td>可选 VARCHAR</td><td>页面渲染元数据；action 不得填 path/component/icon。</td><td>动态路由。</td></tr>
+              <tr><td>remark</td><td>VARCHAR(512) NULL</td><td>管理说明。</td><td>后台低频。</td></tr>
+              <tr><td>sort_order</td><td>INTEGER NOT NULL</td><td>同级排序。</td><td>菜单输出。</td></tr>
+              <tr><td>is_enabled / is_hidden</td><td>SMALLINT NOT NULL</td><td>启用与侧栏隐藏；hidden 不删除动态路由。</td><td>Access 构建。</td></tr>
+              <tr><td>created_at / updated_at / deleted_at</td><td>TIMESTAMPTZ</td><td>维护和软删除。</td><td>有效菜单过滤。</td></tr>
+            </tbody></table></div></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>permission_role</code><span class="summary-note">全局角色 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>id / code / name</td><td>BIGINT / VARCHAR(64) / VARCHAR(64)</td><td>角色主键、稳定 code、名称；code 唯一。</td><td>Access 构建、管理。</td></tr>
+              <tr><td>is_default</td><td>SMALLINT NOT NULL</td><td>新用户默认角色候选；创建事务只锁启用 default role。</td><td>首次注册。</td></tr>
+              <tr><td>is_enabled</td><td>SMALLINT NOT NULL</td><td>角色可用状态。</td><td>授权过滤。</td></tr>
+              <tr><td>created_at / updated_at / deleted_at</td><td>TIMESTAMPTZ</td><td>维护和软删除。</td><td>角色列表。</td></tr>
+            </tbody></table></div></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>permission_role_menu</code><span class="summary-note">角色授权 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>id</td><td>BIGINT PK</td><td>授权关系主键。</td><td>管理变更。</td></tr>
+              <tr><td>role_id / menu_id</td><td>BIGINT NOT NULL</td><td>角色与菜单/action 关系；重复有效关系禁止。</td><td>Access join。</td></tr>
+              <tr><td>created_at / updated_at / deleted_at</td><td>TIMESTAMPTZ</td><td>关系维护、软删除。</td><td>授权查询。</td></tr>
+            </tbody></table></div></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>permission_user_role</code><span class="summary-note">用户角色关系 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>id</td><td>BIGINT PK</td><td>关系主键。</td><td>管理写入。</td></tr>
+              <tr><td>user_id / role_id</td><td>BIGINT NOT NULL</td><td>用户与全局角色关系；有效组合唯一。</td><td>Access 构建。</td></tr>
+              <tr><td>created_at / updated_at / deleted_at</td><td>TIMESTAMPTZ</td><td>关系维护、软删除。</td><td>用户权限变化。</td></tr>
+            </tbody></table></div></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>message_mail_config</code><span class="summary-note">邮箱通道配置 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>id / platform_id</td><td>BIGINT / NOT NULL</td><td>平台邮箱配置；有效配置按平台唯一。</td><td>readiness。</td></tr>
+              <tr><td>secret_id_ciphertext / secret_key_ciphertext</td><td>TEXT NOT NULL</td><td>加密凭据，绝不通过 API 返回。</td><td>provider 初始化。</td></tr>
+              <tr><td>secret_id_hint / secret_key_hint</td><td>VARCHAR(32) NOT NULL</td><td>管理端识别 hint。</td><td>配置列表。</td></tr>
+              <tr><td>region / endpoint</td><td>VARCHAR(64) / VARCHAR(255) NULL</td><td>供应商地域和可选 endpoint。</td><td>发送。</td></tr>
+              <tr><td>from_email / from_name / reply_to</td><td>VARCHAR(254/128) / NULL</td><td>发信人和回复地址。</td><td>模板发送。</td></tr>
+              <tr><td>ttl_minutes</td><td>SMALLINT NOT NULL</td><td><strong>邮箱验证码唯一 TTL 来源，当前 5 分钟。</strong>不在 AuthPlatform 重复配置。</td><td>readiness 返回、Auth 写 code。</td></tr>
+              <tr><td>is_enabled</td><td>SMALLINT NOT NULL</td><td>通道是否可用。</td><td>readiness。</td></tr>
+              <tr><td>last_test_at / last_test_error</td><td>TIMESTAMPTZ NULL / VARCHAR(512) NOT NULL</td><td>供应商测试结果。</td><td>管理端。</td></tr>
+              <tr><td>created_at / updated_at / deleted_at</td><td>TIMESTAMPTZ</td><td>维护和软删除。</td><td>配置读取。</td></tr>
+            </tbody></table></div></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>message_mail_template</code><span class="summary-note">邮件模板 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>id / platform_id / scene</td><td>BIGINT / BIGINT / VARCHAR(32)</td><td>平台和场景（login、forget、bind_email、change_password）；场景有效唯一。</td><td>readiness、发送。</td></tr>
+              <tr><td>name / subject</td><td>VARCHAR(128/255) NOT NULL</td><td>管理名和邮件主题。</td><td>发送。</td></tr>
+              <tr><td>tencent_template_id</td><td>INTEGER NOT NULL</td><td>供应商模板 ID。</td><td>provider 调用。</td></tr>
+              <tr><td>variables / example_variables</td><td>JSONB NOT NULL</td><td>变量定义和示例；需 schema 校验。</td><td>模板渲染。</td></tr>
+              <tr><td>is_enabled</td><td>SMALLINT NOT NULL</td><td>模板可用状态。</td><td>readiness。</td></tr>
+              <tr><td>created_at / updated_at / deleted_at</td><td>TIMESTAMPTZ</td><td>维护和软删除。</td><td>管理查询。</td></tr>
+            </tbody></table></div></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>message_mail_log</code> + <code>message_mail_log_verification</code><span class="summary-note">发送与验证码审计 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>表/字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>mail_log.id / platform_id / challenge_id</td><td>BIGINT / BIGINT / VARCHAR(128) NULL</td><td>发送日志主键、平台、无 PII challenge 关联。</td><td>发送链路、追踪。</td></tr>
+              <tr><td>user_id / scene / template_id</td><td>BIGINT NULL / VARCHAR(32) / INTEGER</td><td>可选用户、业务场景、模板快照关联。</td><td>审计。</td></tr>
+              <tr><td>to_email / subject</td><td>VARCHAR(254/255) NOT NULL</td><td>收件人和主题；管理端需脱敏展示。</td><td>日志查询。</td></tr>
+              <tr><td>status / request_id / message_id</td><td>VARCHAR(16/128) NOT NULL</td><td>pending/sent/failed 与供应商追踪 ID。</td><td>故障诊断。</td></tr>
+              <tr><td>error_code / error_summary / latency_ms / sent_at</td><td>VARCHAR/ BIGINT / TIMESTAMPTZ NULL</td><td>失败可观测性和发送时延。</td><td>报表。</td></tr>
+              <tr><td>verification.id / platform_id / mail_log_id</td><td>BIGINT / BIGINT / BIGINT</td><td>验证码审计关联；正确性仍由 Auth Redis 负责。</td><td>合规查询。</td></tr>
+              <tr><td>key_version / code_ciphertext</td><td>VARCHAR(16) / TEXT</td><td>加密存档，不能用于登录判定。</td><td>审计恢复。</td></tr>
+              <tr><td>expires_at / created_at / deleted_at</td><td>TIMESTAMPTZ</td><td>与邮件 TTL 对齐的审计过期时间。</td><td>清理任务。</td></tr>
+            </tbody></table></div></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>message_mail_rate_limit_policy</code> + <code>message_mail_recipient_rule</code><span class="summary-note">限流与收件规则 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>表/字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>policy_key</td><td>VARCHAR PK</td><td>固定策略键，如 <code>business_email_minute</code>。</td><td>Redis limiter catalog。</td></tr>
+              <tr><td>mode / dimension</td><td>VARCHAR NOT NULL</td><td>计数模式和 user/email/IP 等维度。</td><td>限流 key。</td></tr>
+              <tr><td>limit_count / window_seconds</td><td>INTEGER NOT NULL</td><td>额度和窗口；当前邮箱重发 1/60s。</td><td>发送前检查。</td></tr>
+              <tr><td>revision / created_at / updated_at</td><td>BIGINT / TIMESTAMPTZ</td><td>目录版本和维护时间。</td><td>缓存发布。</td></tr>
+              <tr><td>recipient_rule.id / platform_id</td><td>BIGINT / BIGINT</td><td>平台收件规则。</td><td>发信前评估。</td></tr>
+              <tr><td>scope / pattern / action</td><td>VARCHAR(16/254)</td><td>email/domain + allow/deny；拒绝优先、邮箱优先。</td><td>规则匹配。</td></tr>
+              <tr><td>name / remark / is_enabled</td><td>VARCHAR / SMALLINT</td><td>管理说明和启用状态。</td><td>管理端。</td></tr>
+              <tr><td>created_at / updated_at / deleted_at</td><td>TIMESTAMPTZ</td><td>维护和软删除。</td><td>有效规则。</td></tr>
+            </tbody></table></div></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>storage_cos_config</code><span class="summary-note">对象存储配置 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>id / name</td><td>BIGINT / VARCHAR(128) NOT NULL</td><td>配置主键和名称。</td><td>上传规则关联。</td></tr>
+              <tr><td>app_id / secret_id_ciphertext / secret_key_ciphertext</td><td>VARCHAR/TEXT NOT NULL</td><td>供应商身份；密钥只存密文。</td><td>签名 URL。</td></tr>
+              <tr><td>bucket / region / endpoint / bucket_domain</td><td>VARCHAR / NULL</td><td>存储位置和访问域名。</td><td>上传/下载。</td></tr>
+              <tr><td>is_enabled / remark</td><td>SMALLINT / VARCHAR</td><td>启用状态和说明。</td><td>配置管理。</td></tr>
+              <tr><td>created_at / updated_at / deleted_at</td><td>TIMESTAMPTZ</td><td>维护和软删除。</td><td>有效配置。</td></tr>
+            </tbody></table></div></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>storage_upload_rule</code> + <code>storage_upload_rule_code</code><span class="summary-note">上传约束 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>表/字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>rule.id / platform_id / name</td><td>BIGINT / BIGINT / VARCHAR(128)</td><td>平台上传规则。</td><td>上传初始化。</td></tr>
+              <tr><td>cos_config_id</td><td>BIGINT NOT NULL</td><td>关联可用 COS 配置。</td><td>签名生成。</td></tr>
+              <tr><td>max_file_size_bytes</td><td>BIGINT NOT NULL</td><td>大小上限。</td><td>上传校验。</td></tr>
+              <tr><td>allowed_extensions / allowed_mime_types</td><td>TEXT[] NOT NULL</td><td>扩展名和 MIME 白名单。</td><td>上传校验。</td></tr>
+              <tr><td>access_mode / is_enabled / remark</td><td>VARCHAR / SMALLINT / TEXT</td><td>公开/私有访问、启用状态、说明。</td><td>签名策略。</td></tr>
+              <tr><td>rule_code.id / rule_id / platform_id / code</td><td>BIGINT / BIGINT / BIGINT / VARCHAR(64)</td><td>对外稳定规则 code；平台和规则必须一致。</td><td>前端上传请求。</td></tr>
+              <tr><td>created_at / updated_at / deleted_at</td><td>TIMESTAMPTZ</td><td>维护与软删除（rule_code 无 updated_at）。</td><td>有效规则过滤。</td></tr>
+            </tbody></table></div></div>
+          </details>
+
+          <details class="schema-table">
+            <summary><code>system_operation_log</code><span class="summary-note">系统操作审计 · 当前事实</span></summary>
+            <div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>用途与约束</th><th>热点访问</th></tr></thead><tbody>
+              <tr><td>id / event_id / request_id</td><td>BIGINT / VARCHAR(64/128) NOT NULL</td><td>审计主键、事件幂等标识、请求关联。</td><td>日志检索。</td></tr>
+              <tr><td>user_id / session_id / platform_id</td><td>BIGINT NULL</td><td>操作者上下文；未登录事件允许为空。</td><td>按用户/平台审计。</td></tr>
+              <tr><td>method / route / module / action</td><td>VARCHAR(10/255/64/128)</td><td>HTTP 和显式权限动作，不从 URL 猜权限。</td><td>审计报表。</td></tr>
+              <tr><td>client_ip / user_agent</td><td>VARCHAR(64/512) NOT NULL</td><td>来源信息。</td><td>安全分析。</td></tr>
+              <tr><td>status_code / is_success / latency_ms</td><td>INTEGER / SMALLINT / BIGINT</td><td>响应结果和时延。</td><td>运营指标。</td></tr>
+              <tr><td>request_data / response_data</td><td>JSONB NULL</td><td>脱敏后的结构化数据；禁止 token、密码、密钥、DSN。</td><td>详情查看。</td></tr>
+              <tr><td>created_at / updated_at</td><td>TIMESTAMPTZ NOT NULL</td><td>维护时间。</td><td>时间范围查询。</td></tr>
+            </tbody></table></div><p class="schema-note">当前 Worker 已消费操作日志；未来通知、导出、清理任务应通过 Asynq 幂等消费，不在请求中同步完成。</p></div>
+          </details>
+        </section>
+
+        <section id="future-tables" class="section searchable">
+          <div class="section-head"><div class="section-no">10 / TARGET DB</div><div><h2>进入 C 端前的候选底座表</h2><p class="section-intro">以下是目标结构，不代表当前数据库已经存在。每张表都应通过独立 forward migration、回填和结构校验落地。</p></div></div>
+          <div class="callout warning"><strong>系统设置的边界：</strong>只存低风险产品行为配置，例如分页上限、功能开关、默认语言；不存密钥，不重复 Mail/SMS TTL，不重复 AuthPlatform 的认证安全策略。值必须经过 catalog schema 校验，不能退化为任意字符串 key-value。</div>
+          <details class="schema-table" open><summary><code>system_setting</code><span class="summary-note">目标：版本化设置目录</span></summary><div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>设计约束</th><th>缓存/写入</th></tr></thead><tbody>
+            <tr><td>id</td><td>BIGINT PK</td><td>设置记录主键。</td><td>管理端低频。</td></tr>
+            <tr><td>scope / platform_id</td><td>VARCHAR(16) / BIGINT NULL</td><td>global/platform；平台级设置明确归属，不能用 auth_platform 冒充 tenant。</td><td>snapshot key 维度。</td></tr>
+            <tr><td>setting_key</td><td>VARCHAR(128) NOT NULL</td><td>来自代码 catalog 的稳定键，禁止运行时任意创建。</td><td>设置读取。</td></tr>
+            <tr><td>value_json</td><td>JSONB NOT NULL</td><td>按 catalog 类型和范围校验；不放 secret。</td><td>版本化快照。</td></tr>
+            <tr><td>value_type</td><td>VARCHAR(16) NOT NULL</td><td>bool/int/string/enum/json，帮助校验和迁移。</td><td>解析。</td></tr>
+            <tr><td>is_public / is_enabled</td><td>SMALLINT NOT NULL</td><td>是否可公开读取、是否启用；均为 0/1。</td><td>公开 config。</td></tr>
+            <tr><td>revision</td><td>BIGINT NOT NULL DEFAULT 1</td><td>CAS 更新版本。</td><td>Redis 发布。</td></tr>
+            <tr><td>created_at / updated_at</td><td>TIMESTAMPTZ NOT NULL</td><td>维护时间。</td><td>审计。</td></tr>
+          </tbody></table></div><p class="schema-note">目标 Redis：<code>system:settings:v2:&lt;scope&gt;:&lt;platform&gt;:revision</code>；ready/missing/invalidating 与 AuthPlatform 同样 fail-closed，不采用旧项目“缓存错就静默回源”。</p></div></details>
+          <details class="schema-table"><summary><code>permission_platform_version</code><span class="summary-note">目标：平台公共权限版本</span></summary><div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>设计约束</th><th>缓存/写入</th></tr></thead><tbody>
+            <tr><td>platform_id</td><td>BIGINT PK/FK</td><td>一平台一行。</td><td>Access snapshot identity。</td></tr><tr><td>version</td><td>BIGINT NOT NULL DEFAULT 1</td><td>菜单结构、角色授权、角色状态影响平台时递增。</td><td>Redis state。</td></tr><tr><td>schema_version</td><td>INTEGER NOT NULL DEFAULT 1</td><td>快照结构升级时递增或换 namespace。</td><td>快照解析。</td></tr><tr><td>created_at / updated_at</td><td>TIMESTAMPTZ NOT NULL</td><td>维护时间。</td><td>管理写入。</td></tr>
+          </tbody></table></div></div></details>
+          <details class="schema-table"><summary><code>message_sms_config</code><span class="summary-note">目标：短信通道配置</span></summary><div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>设计约束</th><th>缓存/写入</th></tr></thead><tbody>
+            <tr><td>id / platform_id</td><td>BIGINT / BIGINT NOT NULL</td><td>平台短信配置，有效配置唯一。</td><td>readiness。</td></tr><tr><td>provider / secret_id_ciphertext / secret_key_ciphertext</td><td>VARCHAR / TEXT NOT NULL</td><td>供应商类型和加密凭据；API 只返回 hint。</td><td>provider 初始化。</td></tr><tr><td>secret_id_hint / secret_key_hint</td><td>VARCHAR(32) NOT NULL</td><td>管理识别，不是凭据。</td><td>配置列表。</td></tr><tr><td>region / endpoint / sign_name</td><td>VARCHAR / NULL</td><td>供应商地域、endpoint、短信签名。</td><td>发送。</td></tr><tr><td>ttl_minutes</td><td>SMALLINT NOT NULL</td><td>短信验证码自己的 TTL；不复用 Mail 值，也不由 AuthPlatform 设置。</td><td>SMS readiness 返回。</td></tr><tr><td>is_enabled / last_test_at / last_test_error</td><td>SMALLINT / TIMESTAMPTZ NULL / VARCHAR</td><td>通道状态与测试结果。</td><td>readiness。</td></tr><tr><td>created_at / updated_at / deleted_at</td><td>TIMESTAMPTZ</td><td>维护与软删除。</td><td>配置读取。</td></tr>
+          </tbody></table></div></div></details>
+          <details class="schema-table"><summary><code>message_sms_template</code><span class="summary-note">目标：短信模板</span></summary><div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>设计约束</th><th>缓存/写入</th></tr></thead><tbody>
+            <tr><td>id / platform_id / scene</td><td>BIGINT / BIGINT / VARCHAR(32)</td><td>平台、场景（login/forget/bind_phone/change_password），有效唯一。</td><td>readiness。</td></tr><tr><td>name / provider_template_id</td><td>VARCHAR(128) / VARCHAR(128)</td><td>管理名和供应商模板标识。</td><td>provider 调用。</td></tr><tr><td>variables / example_variables</td><td>JSONB NOT NULL</td><td>变量定义，至少包含 code、ttl_minutes。</td><td>渲染。</td></tr><tr><td>is_enabled</td><td>SMALLINT NOT NULL</td><td>模板启用状态。</td><td>readiness。</td></tr><tr><td>created_at / updated_at / deleted_at</td><td>TIMESTAMPTZ</td><td>维护与软删除。</td><td>管理。</td></tr>
+          </tbody></table></div></div></details>
+          <details class="schema-table"><summary><code>message_sms_log</code><span class="summary-note">目标：短信发送审计</span></summary><div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>设计约束</th><th>缓存/写入</th></tr></thead><tbody>
+            <tr><td>id / platform_id / challenge_id / user_id</td><td>BIGINT / BIGINT / VARCHAR(128) / BIGINT NULL</td><td>无 PII challenge 关联；用户可为空。</td><td>发送和审计。</td></tr><tr><td>scene / template_id / to_phone</td><td>VARCHAR / BIGINT / VARCHAR(32)</td><td>场景、模板、受控脱敏手机号。</td><td>日志查询。</td></tr><tr><td>status / request_id / message_id</td><td>VARCHAR NOT NULL</td><td>pending/sent/failed 与供应商 ID。</td><td>故障追踪。</td></tr><tr><td>error_code / error_summary / latency_ms / sent_at</td><td>VARCHAR / BIGINT / TIMESTAMPTZ NULL</td><td>失败和时延可观测。</td><td>指标。</td></tr><tr><td>created_at / updated_at / deleted_at</td><td>TIMESTAMPTZ</td><td>维护与保留期清理。</td><td>归档。</td></tr>
+          </tbody></table></div></div></details>
+          <details class="schema-table"><summary><code>message_sms_rate_limit_policy</code><span class="summary-note">目标：短信限流目录（可选）</span></summary><div class="schema-body"><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型/空值</th><th>设计约束</th><th>缓存/写入</th></tr></thead><tbody>
+            <tr><td>policy_key</td><td>VARCHAR PK</td><td>如 business_sms_minute、account_sms_day。</td><td>Redis limiter catalog。</td></tr><tr><td>mode / dimension</td><td>VARCHAR NOT NULL</td><td>固定计数模式与 phone/account/IP 维度。</td><td>限流 key。</td></tr><tr><td>limit_count / window_seconds</td><td>INTEGER NOT NULL</td><td>额度窗口；仍是简单 rate limit，不做 cooldown 状态机。</td><td>发送前检查。</td></tr><tr><td>revision / created_at / updated_at</td><td>BIGINT / TIMESTAMPTZ</td><td>版本和维护时间。</td><td>快照发布。</td></tr>
+          </tbody></table></div></div></details>
+          <div class="callout success"><strong>SMS 接入原则：</strong>只有 SMS readiness ready 后，AuthPlatform 的 <code>phone</code> 才能出现在公开 login-config；在此之前即使客户端伪造 <code>phone</code> 请求，Auth 也必须返回不可用错误，不得因为 user_account 有 phone 就绕过通道。</div>
+        </section>
+
+        <section id="legacy" class="section searchable">
+          <div class="section-head"><div class="section-no">11 / LEGACY</div><div><h2>与老项目的对照</h2><p class="section-intro">老项目用于确认成熟业务行为和信息结构；当前项目保留正确能力，但不复制旧的缓存错误语义、单体耦合和兼容负担。</p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>老项目能力</th><th>老项目做法</th><th>当前状态</th><th>迁移判断</th></tr></thead><tbody>
+            <tr><td>systemsetting</td><td>自由 key-value 字符串，Redis 5 分钟，缓存错误静默回源。</td><td class="status-cell"><span class="tag gap">未实现</span></td><td>改为 catalog + JSONB + revision + fail-closed snapshot；不存密钥。</td></tr>
+            <tr><td>sms</td><td>短信配置、模板、发送和验证码相关流程。</td><td><span class="tag gap">未实现</span></td><td>沿 Mail 窄接口建模，SMS 自有 TTL 和 readiness，接入后才开放 phone。</td></tr>
+            <tr><td>邮箱/手机绑定换绑</td><td>账户资料与验证码流程相对完整。</td><td><span class="tag gap">缺口</span></td><td>进入 C 端前补 verified identity 状态和审计，资料接口不允许裸改 phone。</td></tr>
+            <tr><td>首次设置密码/找回密码</td><td>独立页面和验证码场景。</td><td><span class="tag gap">缺口</span></td><td>解决验证码注册用户空 password_hash 无法改密的问题。</td></tr>
+            <tr><td>滑块 CAPTCHA</td><td>登录/敏感操作前的人机校验。</td><td><span class="tag gap">缺口</span></td><td>按风险和 provider 依赖评估，不能阻塞基础 C 端业务模型。</td></tr>
+            <tr><td>通知/通知任务</td><td>通知表、任务和异步发送。</td><td><span class="tag gap">缺口</span></td><td>Worker + Asynq 幂等任务，和 Mail/SMS 通道解耦。</td></tr>
+            <tr><td>Cron、导出、队列监控</td><td>后台任务和运维页面较丰富。</td><td><span class="tag gap">缺口</span></td><td>P1 建立任务状态、重试、死信和可观测指标。</td></tr>
+            <tr><td>支付、钱包、兑换码、AI</td><td>业务域已有实现。</td><td><span class="tag target">C 端业务</span></td><td>先确定 owner/tenant 模型，再按 CRUD/RBAC 规范逐域迁移。</td></tr>
+            <tr><td>前端组件</td><td>旧页面和组件信息结构成熟。</td><td><span class="tag current">持续复用</span></td><td>适配当前 DTO、动态路由、i18n；下拉统一 <code>el-select-v2</code>。</td></tr>
+          </tbody></table></div>
+          <div class="callout"><strong>不要照搬的部分：</strong>旧项目把配置缓存错误当作普通 miss，容易在 Redis 故障时形成数据库风暴；当前架构要求 Redis error/corrupt/invalidating 显式失败，只有可证明的 missing 才做一次跨实例回源。</div>
+        </section>
+
+        <section id="gaps" class="section searchable">
+          <div class="section-head"><div class="section-no">12 / GAPS</div><div><h2>底层还缺什么</h2><p class="section-intro">按进入 C 端的阻塞程度排序。每一项都要有契约、失败测试、迁移和运行指标，不能只做页面。</p></div></div>
+          <div class="priority-list">
+            <div class="priority-row"><span class="tag risk">P0</span><strong>统一身份生命周期</strong><p>移除/封闭独立密码注册；增加首次设置密码、找回密码、邮箱/手机号绑定换绑和 verified 状态；phone 未经 SMS 验证不得成为登录凭据。</p></div>
+            <div class="priority-row"><span class="tag risk">P0</span><strong>邮箱 TTL 收口</strong><p>Mail <code>ttl_minutes=5</code> 是唯一来源，Auth 不再写死 10 分钟；response expiresAt、Redis code TTL、模板变量和审计 expires_at 必须同值。</p></div>
+            <div class="priority-row"><span class="tag risk">P0</span><strong>权限公共版本</strong><p>新增平台 Access version，菜单/角色变更不再按百万用户扫描；snapshot key 带 platform/policy/platformVersion/user/principalVersion/schema。</p></div>
+            <div class="priority-row"><span class="tag risk">P0</span><strong>多前端部署边界</strong><p>从单一 <code>CORS_ORIGIN</code> 升级为 Origin→Platform 映射；header 不能由浏览器任意伪造，Admin/C Web 的域名、Cookie、CSRF 策略要分别验证。</p></div>
+            <div class="priority-row"><span class="tag gap">P1</span><strong>SMS 通道</strong><p>配置、模板、日志、rate limit、provider timeout 和 readiness 完整后，才打开 AuthPlatform phone；补手机号格式、脱敏和风控。</p></div>
+            <div class="priority-row"><span class="tag gap">P1</span><strong>安全与密钥轮换</strong><p>拆分 APP_SECRET 派生用途，建立 JWT/Refresh/OTP/Mail/COS 独立 key version、轮换和旧版本验证窗口。</p></div>
+            <div class="priority-row"><span class="tag gap">P1</span><strong>可观测性与健康检查</strong><p>健康检查覆盖 provider、Asynq 和关键 readiness；补结构化指标、trace/request ID、限流命中、队列积压和依赖错误告警。</p></div>
+            <div class="priority-row"><span class="tag gap">P1</span><strong>异步底座</strong><p>Worker 从操作日志扩展到通知、导出、清理；所有任务必须幂等、有限重试、可取消、可观测。</p></div>
+            <div class="priority-row"><span class="tag target">P2</span><strong>C 端业务域</strong><p>支付、钱包、兑换码、AI 等按业务 owner/tenant 设计，资源授权必须同时检查 RBAC action 和行级归属。</p></div>
+            <div class="priority-row"><span class="tag target">P2</span><strong>运维控制面</strong><p>队列监控、系统日志查看、实时事件、导出任务等作为 Admin 能力建设，不混入业务 Service。</p></div>
+          </div>
+          <div class="callout warning"><strong>关键闸门：</strong>在“个人业务”还是“组织/租户业务”未定之前，不要为 C 端业务表过早加 tenant_id。先确认计费、数据共享、成员邀请、组织管理员和跨组织资源边界，再一次性设计 membership、role scope 和 owner policy。</div>
+        </section>
+
+        <section id="c-side" class="section searchable">
+          <div class="section-head"><div class="section-no">13 / C-SIDE</div><div><h2>C 端目标架构</h2><p class="section-intro">C 端复用身份和基础设施，但业务授权必须多一层资源归属判断；AuthPlatform 仍只是客户端安全策略边界。</p></div></div>
+          <div class="codeblock">request
+  → Origin → platform resolver (admin / canvas / future)
+  → authenticate (Access JWT + Session authority + user state)
+  → RBAC action (can this principal perform this capability?)
+  → domain policy (does this principal own / belong to this resource?)
+  → service transaction
+  → PostgreSQL row constraint + outbox/task when needed
+
+read path: Redis snapshot first, PostgreSQL authoritative on safe miss
+write path: transaction + idempotency key + outbox/task for external side effects</div>
+          <div class="split"><article class="fact-card compare-new"><span class="tag target">个人业务</span><h3>简化起步</h3><p>资源表带 <code>owner_user_id</code>，服务层固定校验当前 user；RBAC 控制功能开关和管理动作。适合先快速落地 C 端验证。</p></article><article class="fact-card compare-old"><span class="tag target">组织业务</span><h3>需要额外模型</h3><p>新增 <code>organization</code>、<code>organization_member</code>、组织角色/范围、邀请和资源归属；不能把 platform_id 当组织 ID。</p></article></div>
+          <h3>业务表通用字段建议</h3>
+          <div class="table-wrap"><table><thead><tr><th>字段组</th><th>建议</th><th>原因</th></tr></thead><tbody><tr><td>主键</td><td><code>BIGINT id</code> 或明确业务 UUID</td><td>内部关联稳定；对外 ID 可另做 opaque ID。</td></tr><tr><td>归属</td><td><code>owner_user_id</code> 或已决策的 <code>tenant_id</code></td><td>服务层行级授权必须可执行、可索引。</td></tr><tr><td>幂等</td><td><code>request_id/idempotency_key</code> + 唯一索引</td><td>重试和多实例写入不产生重复订单/任务。</td></tr><tr><td>状态</td><td>受限枚举 + 明确状态迁移</td><td>避免任意字符串导致非法状态。</td></tr><tr><td>时间</td><td><code>created_at/updated_at</code>，需要删除才加 <code>deleted_at</code></td><td>遵循当前数据库硬规则。</td></tr><tr><td>外部副作用</td><td>outbox/event_id + Worker</td><td>数据库提交与发信、支付、通知解耦。</td></tr></tbody></table></div>
+        </section>
+
+        <section id="roadmap" class="section searchable">
+          <div class="section-head"><div class="section-no">14 / ROADMAP</div><div><h2>实施顺序：从 Admin 收口到 C 端</h2><p class="section-intro">每阶段都有可独立验收的结果；不要同时改身份、权限和业务表导致无法定位回归。</p></div></div>
+          <div class="roadmap">
+            <div class="phase"><span class="tag risk">P0 · 现在</span><h3>认证与权限收口</h3><p>统一 Mail 5 分钟 TTL；封闭独立注册；补首次设置密码/找回密码契约；落地平台公共 Access version；补 Origin→Platform 配置。</p><p><strong>验收：</strong>双实例 policy/OTP/refresh/注册并发探针、Redis/PG 故障闭合、Access 热读零 PG 查询。</p></div>
+            <div class="phase"><span class="tag gap">P1 · C 端前</span><h3>系统底座补齐</h3><p>system_setting catalog、SMS 配置/模板/日志、密钥轮换、健康检查、指标和 Worker 任务框架。</p><p><strong>验收：</strong>forward migration、strict DTO、RBAC action、ready/invalidating、provider 故障和重试可观测。</p></div>
+            <div class="phase"><span class="tag target">P2 · C 端 MVP</span><h3>先做一个真实业务垂直切片</h3><p>先完成 owner/tenant 决策，再按 router→middleware→handler→service→repository→model 交付列表、详情、写操作和异步副作用。</p><p><strong>验收：</strong>行级授权、幂等、分页索引、缓存策略、前端严格 DTO、移动端和桌面端回归。</p></div>
+            <div class="phase"><span class="tag target">P3 · 规模化</span><h3>业务域扩展和运营控制面</h3><p>支付、钱包、兑换码、AI、通知、导出、队列监控、实时事件按域拆分；补容量压测、分区/归档和灾备演练。</p><p><strong>验收：</strong>热点预算、SLO、告警、回滚和数据保留策略可执行。</p></div>
+          </div>
+          <div class="callout success"><strong>今天的结论：</strong>Admin 核心骨架已经足够支撑下一阶段；真正不能带入 C 端的债务是身份生命周期未闭环、Mail TTL 双重所有权、权限版本写放大和单 Origin 部署假设。</div>
+        </section>
+
+        <section id="evidence" class="section searchable">
+          <div class="section-head"><div class="section-no">15 / EVIDENCE</div><div><h2>证据、验证与边界</h2><p class="section-intro">本书是架构基线，不替代 migration、测试和代码 review；任何目标项落地都必须回写状态和验证结果。</p></div></div>
+          <div class="split"><article class="fact-card"><span class="tag current">事实来源</span><h3>本地代码与数据库</h3><ul class="source-list"><li><code>AGENTS.md</code>、<code>docs/agent/design.md</code>、<code>docs/agent/architecture.md</code></li><li><code>docs/agent/STATUS.md</code> 与当前 auth-platform plan</li><li><code>server/internal/module/**/model.go</code>、Service、Repository、Handler、测试</li><li>本地 PostgreSQL <code>public</code> schema 只读查询</li><li>旧项目 <code>D:\github-project\admin_back_go</code></li><li>旧项目 <code>D:\github-project\admin_front_ts</code></li></ul></article><article class="fact-card"><span class="tag target">验证基线</span><h3>已运行/需维护者复跑</h3><ul><li>后端定向 <code>go test</code>、<code>go vet</code>、<code>go build</code> 已通过。</li><li>前端受影响 Vitest、<code>pnpm lint</code>、<code>pnpm typecheck</code>、<code>pnpm build</code> 已通过。</li><li>`.run/Admin Full Tests` 已配置为后端真实 <code>go test ./...</code> 与前端测试入口。</li><li>全量最终复跑由维护者执行；<code>-race</code> 受本机无 C compiler 阻塞。</li><li>本 HTML 交付前会做结构检查、<code>git diff --check</code> 和桌面/移动端浏览器检查。</li></ul></article></div>
+          <div class="callout warning"><strong>已知限制：</strong>当前文档没有执行新的 migration，也没有修改业务代码；候选表的字段、索引和保留期在正式施工前仍需写契约、失败测试和 forward migration。<code>registered_user</code> 默认角色授权由维护者上线前核对。</div>
+        </section>
+
+        <div class="footer">Admin Core Architecture · 事实基线 2026-09-07 · 文档只读说明，不包含任何凭据或 DSN</div>
+      </div>
+    </main>
+  </div>
+
+  <button class="back-top" id="backTop" type="button" aria-label="返回顶部" title="返回顶部">↑</button>
+  <script>
+    (() => {
+      const sidebar = document.getElementById('sidebar');
+      const menuButton = document.getElementById('menuButton');
+      const search = document.getElementById('docSearch');
+      const searchCount = document.getElementById('searchCount');
+      const expandButton = document.getElementById('expandButton');
+      const backTop = document.getElementById('backTop');
+      const sections = [...document.querySelectorAll('.searchable')];
+      const links = [...document.querySelectorAll('.sidebar a')];
+      const tables = [...document.querySelectorAll('details.schema-table')];
+
+      const closeMenu = () => sidebar.classList.remove('open');
+      menuButton?.addEventListener('click', () => sidebar.classList.toggle('open'));
+      links.forEach((link) => link.addEventListener('click', closeMenu));
+
+      const applySearch = () => {
+        const query = search.value.trim().toLocaleLowerCase();
+        let visible = 0;
+        sections.forEach((section) => {
+          const match = !query || section.textContent.toLocaleLowerCase().includes(query);
+          section.classList.toggle('hidden-by-search', !match);
+          if (match) visible += 1;
+        });
+        searchCount.textContent = query ? `匹配 ${visible} 个章节` : '显示全部内容';
+      };
+      search?.addEventListener('input', applySearch);
+
+      let expanded = true;
+      expandButton?.addEventListener('click', () => {
+        expanded = !expanded;
+        tables.forEach((table) => { table.open = expanded; });
+        expandButton.textContent = expanded ? '收起字段' : '展开字段';
+        expandButton.title = expanded ? '收起全部数据表' : '展开全部数据表';
+      });
+
+      const observer = new IntersectionObserver((entries) => {
+        const current = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!current) return;
+        links.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${current.target.id}`));
+      }, { rootMargin: '-78px 0px -62% 0px', threshold: [0.05, 0.25, 0.6] });
+      sections.forEach((section) => observer.observe(section));
+
+      const updateBackTop = () => { backTop.hidden = window.scrollY < 500; };
+      backTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      window.addEventListener('scroll', updateBackTop, { passive: true });
+      updateBackTop();
+    })();
+  </script>
+</body>
+</html>

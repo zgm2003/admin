@@ -62,7 +62,7 @@
 | 目标 | `auth-platform-login-types`：把认证平台可配置的邮箱/手机号/密码登录方式连接到 Mail 验证码、Auth、User、Session、RBAC 和前端登录链路 |
 | 范围 | `docs/agent/plans/2026-09-05-auth-platform-login-types.md`；AuthPlatform JSONB 策略与 Redis 故障闭合、Mail 认证窄接口、Auth 验证码 Redis 原子消费和 delivery lease、自动注册事务、Session/JWT、登录日志、严格前端 DTO、并发/故障探针 |
 | 验收 | Redis ready 命中零 PostgreSQL 配置查询；Redis/数据库/Mail 部分失败显式 `503/10006`；验证码只能消费一次且错误码不删除正确码；并发注册由 PostgreSQL 唯一键收敛并补齐角色/Profile/Access version；登录方式变更递增 policy version 且不撤销既有 Session；全量 Go/Vitest/build 与 review checklist 通过 |
-| 下一步/阻塞 | 2026-09-07 已完成实现、Task 12 双实例/故障探针和 Task 13 终审兜底；Task 14 最终全量由维护者从 `.run/Admin Full Tests` 执行。Auth 固定拥有 10 分钟验证码 TTL，Mail 使用调用方 TTL；SMS 接入前 `phone` 可保存但不进入公开有效方式，直接请求亦被拒绝。终审 finding 均已修复；`-race` 仍受 `CGO_ENABLED=0` 且无 C compiler 阻塞 |
+| 下一步/阻塞 | 原实现与终审已完成；维护者随后定案邮箱验证码 TTL 必须唯一来自 Mail 配置（当前 5 分钟），重发只复用现有 Redis rate limit。下一工作单元按 `docs/agent/plans/2026-09-07-mail-verification-contract-closeout.md` 收口 Auth/Mail/前端时间语义和 60 秒后重发；SMS 接入前 `phone` 仍不可用。`-race` 仍受 `CGO_ENABLED=0` 且无 C compiler 阻塞。 |
 
 ### `auth-platform-login-types` review 与兜底（2026-09-07）
 
@@ -96,6 +96,16 @@
 - 前端实现基线曾完成 63 文件/446 项 Vitest 与 `pnpm build`；终审兜底后登录/认证平台/API 4 个文件共 36 项 Vitest、受影响文件 Prettier、`pnpm lint`、`pnpm check:architecture`、`pnpm typecheck` 均通过，最终全量复跑交维护者从 `.run` 执行。全仓 `pnpm format:check` 仍因 3 个未被本任务修改的历史文件失败：`role-view.ts`、`mail.test.ts`、`menus/index.test.ts`。
 - `go test -race` 未执行：当前 `CGO_ENABLED=0` 且机器没有 `gcc/clang`；Vite build 仍有既有的 >500 kB chunk 提示。本轮终审兜底未 commit，历史计划文件无本轮修改。
 - `.run` 提供 `Admin Server Tests`、`Admin Web Tests` 和一键并行的 `Admin Full Tests`；后端使用 Shell Script 在 `server` 工作目录执行真实 `go test ./...`，避免 GoLand `PACKAGE` 模式拒绝 wildcard。3 个 XML 均可解析，`go list ./...` 识别 39 个包；未代维护者执行最后一轮测试。
+
+### 邮箱验证码契约收口（待执行）
+
+| 项目 | 内容 |
+| --- | --- |
+| 计划 | `docs/agent/plans/2026-09-07-mail-verification-contract-closeout.md` |
+| 固定契约 | Mail `message_mail_config.ttl_minutes` 是邮箱验证码唯一 TTL 来源，当前 5 分钟；重发只使用现有 `business_email_minute=1/60s` Redis rate limit；不新增 cooldown 状态。 |
+| 实施范围 | Mail readiness v2 携带 TTL、限流前置预检、Auth lease-owner 原子替换、`resendAfterSeconds` HTTP/前端契约、真实 Redis 双实例故障探针。 |
+| 不在范围 | 数据库迁移、SMS/phone 开放、系统设置、身份生命周期、AuthPlatform 字段、`registered_user` 授权、并发协议时间配置化。 |
+| 验收 | 5 分钟 TTL 全链路同源；60 秒内 429 且旧码可用，60 秒后新码替换旧码；Redis/PG/provider 故障无假成功；readiness 热读零 PostgreSQL，missing 双实例单回源；Go/Vitest 全量通过。 |
 
 ## 项目规则维护（2026-09-07）
 
