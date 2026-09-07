@@ -292,13 +292,20 @@ describe('authentication platform page', () => {
     await wrapper.get('[data-testid="auth-platform-code"]').setValue('portal')
     await wrapper.get('[data-testid="auth-platform-name"]').setValue('Portal')
     const loginTypes = wrapper
-      .findAllComponents({ name: 'ElSelect' })
+      .findAllComponents({ name: 'ElSelectV2' })
       .find((select) => select.attributes('data-testid') === 'auth-platform-login-types')
     if (loginTypes === undefined) throw new Error('login types select is missing')
+    expect(loginTypes.props('options')).toEqual([
+      { value: 'email', label: '邮箱验证码' },
+      { value: 'phone', label: '手机验证码' },
+      { value: 'password', label: '账号密码' },
+    ])
     await loginTypes.vm.$emit('update:modelValue', [])
     await flushPromises()
 
-    expect(wrapper.get('.el-dialog__footer .el-button--primary').attributes('disabled')).toBeDefined()
+    expect(
+      wrapper.get('.el-dialog__footer .el-button--primary').attributes('disabled'),
+    ).toBeDefined()
     expect(createAuthPlatformMock).not.toHaveBeenCalled()
   })
 })

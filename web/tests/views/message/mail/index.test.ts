@@ -159,6 +159,26 @@ describe('mail service page', () => {
     expect(wrapper.text()).toContain('默认允许；精确邮箱优先于域名；拒绝优先于允许。')
   })
 
+  it('uses virtualized selects for recipient rule choices', async () => {
+    const wrapper = mountPage(['message:mail:list', 'message:mail:rule:create'])
+    await flushPromises()
+    await selectTab(wrapper, '收件规则')
+    await wrapper.get('[data-testid="mail-rule-create"]').trigger('click')
+    await flushPromises()
+
+    const selects = wrapper.findAllComponents({ name: 'ElSelectV2' })
+    const scope = selects.find((select) => select.attributes('data-testid') === 'mail-rule-scope')
+    const action = selects.find((select) => select.attributes('data-testid') === 'mail-rule-action')
+    expect(scope?.props('options')).toEqual([
+      { value: 'email', label: '邮箱' },
+      { value: 'domain', label: '域名' },
+    ])
+    expect(action?.props('options')).toEqual([
+      { value: 'allow', label: '允许' },
+      { value: 'deny', label: '拒绝' },
+    ])
+  })
+
   it('passes the recipient rule id when toggling its status', async () => {
     vi.mocked(mailApi.listMailRules).mockResolvedValue([
       {

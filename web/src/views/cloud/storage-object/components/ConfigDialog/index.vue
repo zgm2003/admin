@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FormInstance, FormRules } from 'element-plus'
 
@@ -18,6 +18,7 @@ const form = defineModel<ConfigForm>('form', { required: true })
 const emit = defineEmits<{ save: [] }>()
 const { t } = useI18n()
 const formRef = ref<FormInstance>()
+const regionOptions = computed(() => props.regions.map((item) => ({ ...item })))
 defineExpose({ validate: () => formRef.value?.validate() })
 </script>
 
@@ -95,18 +96,13 @@ defineExpose({ validate: () => formRef.value?.validate() })
         </el-col>
         <el-col :xs="24" :sm="12">
           <el-form-item :label="t('storage.region')" prop="region">
-            <el-select
+            <el-select-v2
               v-model="form.region"
+              :options="regionOptions"
               data-testid="storage-config-region"
+              class="storage-config-select"
               :placeholder="t('storage.regionPlaceholder')"
-            >
-              <el-option
-                v-for="item in props.regions"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
-              />
-            </el-select>
+            />
           </el-form-item>
         </el-col>
         <el-col :xs="24" :sm="12"
@@ -141,3 +137,9 @@ defineExpose({ validate: () => formRef.value?.validate() })
     </template>
   </AppDialog>
 </template>
+
+<style scoped>
+.storage-config-select {
+  width: 100%;
+}
+</style>

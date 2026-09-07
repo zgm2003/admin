@@ -27,6 +27,8 @@ Admin 是面向管理员的平台控制台。当前可见业务域：
   `web/src/api/<module>.ts`，经过 `web/src/utils/request.ts`。
 - 优先使用已有 `AppDialog`、`AppTable`、`Search`、`DIcon`、`IconSelect`。只有多个真实页面已经复用且交互
   稳定时才新增公共组件。
+- 所有下拉选择使用 `el-select-v2` 的 `options` 数据契约，不使用 `el-select`/`el-option` 子节点；选项文案走
+  i18n，值保持业务 DTO 的精确类型，多选、可创建和禁用状态不得在迁移中降级。
 - 所有可见文案走 i18n；JSON 和 TypeScript 字段使用 lower camel case。表格、树和分页保持可扫描的管理后台
   密度，并在窄屏下不产生遮挡或横向溢出。
 - API 失败由请求层统一通知一次。自动刷新期间的中间 401 不通知；登录接口的凭据错误由登录页以内联状态展示，

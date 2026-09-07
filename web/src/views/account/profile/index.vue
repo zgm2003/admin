@@ -24,6 +24,11 @@ const loading = ref(false)
 const savingProfile = ref(false)
 const changingPassword = ref(false)
 const loadError = ref('')
+const genderOptions = computed(() => [
+  { label: t('account.profile.genderUnknown'), value: 0 },
+  { label: t('account.profile.genderMale'), value: 1 },
+  { label: t('account.profile.genderFemale'), value: 2 },
+])
 const profileForm = reactive<UpdateAccountProfileInput>({
   username: '',
   phone: null,
@@ -150,11 +155,12 @@ void loadProfile()
               </el-col>
               <el-col :xs="24" :sm="12">
                 <el-form-item :label="t('account.profile.gender')">
-                  <el-select v-model="profileForm.gender" class="account-profile__full">
-                    <el-option :label="t('account.profile.genderUnknown')" :value="0" />
-                    <el-option :label="t('account.profile.genderMale')" :value="1" />
-                    <el-option :label="t('account.profile.genderFemale')" :value="2" />
-                  </el-select>
+                  <el-select-v2
+                    v-model="profileForm.gender"
+                    :options="genderOptions"
+                    data-testid="account-profile-gender"
+                    class="account-profile__full"
+                  />
                 </el-form-item>
               </el-col>
             </el-row>

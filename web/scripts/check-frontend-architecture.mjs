@@ -31,6 +31,14 @@ for (const file of [...walk(src), ...walk(tests)]) {
   ) {
     add('page-path-contract', file, '页面 path 必须与 componentPath 保持 /<componentPath> 一致')
   }
+  if (
+    projectPath.startsWith('src/') &&
+    (/<el-select(?:\s|>)/.test(content) ||
+      /<el-option(?:\s|>)/.test(content) ||
+      /\bElSelect\b/.test(content))
+  ) {
+    add('raw-el-select', file, '下拉选择必须使用 el-select-v2 和显式 options')
+  }
   if (projectPath.startsWith('src/') && file.endsWith('.vue')) {
     const lineCount = content.split(/\r?\n/).length
     const isPage =

@@ -35,6 +35,8 @@
 | 当前架构 | `docs/agent/architecture.md` 提供组件、数据流和数据库事实边界 |
 | 容量基线 | 共享请求路径按百万级用户、多实例高并发设计；spec/plan 必须记录热点查询、缓存一致性、故障行为和并发验证 |
 | 固定流程 | 三个全局 Skill 通过 quick validator |
+| RBAC Skill 架构 | `$admin-rbac` 按当前 PostgreSQL 权限事实、Redis `ready/invalidating` 状态、版本化快照、本地缓存确认、token lease 失效和动态路由链路重写；新增无界 PostgreSQL 故障回源、旧 publisher/token、跨平台和双实例容量检查 |
+| 前端下拉组件 | 全部生产 `el-select`/`el-option` 迁移为 `el-select-v2 + options`；`AGENTS.md`、设计基线及 `check:architecture` 固化禁用规则，保留数值/字符串、多选、可创建与 header 插槽行为 |
 | 邮件规则与限流 | 修复 `AppTable` 动态插槽导致收件规则状态请求携带 `undefined`；收件规则明确为默认允许、邮箱优先、拒绝优先；Redis 限流异常返回 `503/10006`，真实额度超限返回 `429/10007` |
 | 邮件日期展示 | 邮件日志接口将 `sentAt`、`createdAt`、`updatedAt`、`verificationExpiresAt` 显式输出为 UTC RFC3339Nano，空值为 `null`；页面使用供应商实际发送时间 `sentAt` 和验证码过期时间，并按应用语言和本地时区格式化，空值或非法值显示 `-` |
 | 邮件错误反馈 | 收件规则拒绝使用 `403/18000`；终态 `401/403` 由请求层通知一次，登录凭据 `10002` 由登录页内联展示且不重复通知 |
@@ -94,6 +96,17 @@
 - 前端实现基线曾完成 63 文件/446 项 Vitest 与 `pnpm build`；终审兜底后登录/认证平台/API 4 个文件共 36 项 Vitest、受影响文件 Prettier、`pnpm lint`、`pnpm check:architecture`、`pnpm typecheck` 均通过，最终全量复跑交维护者从 `.run` 执行。全仓 `pnpm format:check` 仍因 3 个未被本任务修改的历史文件失败：`role-view.ts`、`mail.test.ts`、`menus/index.test.ts`。
 - `go test -race` 未执行：当前 `CGO_ENABLED=0` 且机器没有 `gcc/clang`；Vite build 仍有既有的 >500 kB chunk 提示。本轮终审兜底未 commit，历史计划文件无本轮修改。
 - `.run` 提供 `Admin Server Tests`、`Admin Web Tests` 和一键并行的 `Admin Full Tests`；后端使用 Shell Script 在 `server` 工作目录执行真实 `go test ./...`，避免 GoLand `PACKAGE` 模式拒绝 wildcard。3 个 XML 均可解析，`go list ./...` 识别 39 个包；未代维护者执行最后一轮测试。
+
+## 项目规则维护（2026-09-07）
+
+- `$admin-rbac` 已通过 `skill-creator/scripts/quick_validate.py`；其读写路径与当前 permission 模块核对，明确
+  Redis state 确认、本地/Redis snapshot、PostgreSQL fresh source、事务内 access version、tokenized
+  invalidation lease 和提交后 CAS 发布顺序。现有 Redis 故障 PostgreSQL 回源若后续调整，必须补跨实例有界
+  恢复或改为显式依赖失败，禁止无界每请求回源。
+- 前端 5 个生产 SFC（个人资料、认证平台、对象存储配置/规则、邮件收件规则）共 10 个旧下拉已迁移为
+  `el-select-v2`；架构脚本会拒绝新的原生 `el-select`。定向 4 文件 47 项 Vitest、typecheck、lint、
+  `check:architecture` 和生产 build 通过；完整前端 63 文件 449 项 Vitest 全绿，build 仍有既有的 >500 kB
+  chunk 提示。
 
 ## 状态条目模板
 

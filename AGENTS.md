@@ -59,6 +59,8 @@ view -> api/<module>.ts -> utils/request.ts -> Go API
   请求层不得对同一错误重复通知；页面与组件不得重复弹同一接口错误。
 - API 模块从 `unknown` 严格解析 DTO；View、Props、Emits、Pinia 和组合式函数使用明确类型。业务代码禁止
   `any`、`as any`、`@ts-ignore`、宽泛 ambient declaration 和关闭 strict。
+- 下拉选择统一使用 `el-select-v2` 和显式、强类型 `options`；禁止新增 `el-select`/`el-option`。动态文案使用
+  `computed` 生成选项，迁移时必须保留原值类型、多选、筛选、可创建、禁用项和自定义下拉插槽行为。
 - 优先复用现有 `AppDialog`、`AppTable`、`Search`、`DIcon`、`IconSelect`；公共组件只抽取多个真实页面已
   复用的稳定交互。
 - JSON/TypeScript 使用 lower camel case；Go 导出名使用 PascalCase，initialism 使用 `ID`/`HTTP`/`API`；

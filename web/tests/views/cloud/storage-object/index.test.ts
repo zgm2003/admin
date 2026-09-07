@@ -159,8 +159,23 @@ describe('ObjectStorage', () => {
     expect(form.find('[data-testid="storage-rule-codes"]').attributes('placeholder')).toContain(
       '输入后按回车添加',
     )
-    expect(form.find('[data-testid="storage-rule-extensions"]').classes()).toContain('el-select')
-    expect(form.find('[data-testid="storage-rule-mime-types"]').classes()).toContain('el-select')
+    const selects = form.findAllComponents({ name: 'ElSelectV2' })
+    const extensions = selects.find(
+      (item: VueWrapper) => item.attributes('data-testid') === 'storage-rule-extensions',
+    )
+    const mimeTypes = selects.find(
+      (item: VueWrapper) => item.attributes('data-testid') === 'storage-rule-mime-types',
+    )
+    expect(extensions?.props()).toMatchObject({
+      allowCreate: true,
+      filterable: true,
+      multiple: true,
+    })
+    expect(mimeTypes?.props()).toMatchObject({
+      allowCreate: true,
+      filterable: true,
+      multiple: true,
+    })
     expect(form.text()).toContain('可选择常用值，也可以直接输入自定义值')
   })
 
@@ -191,7 +206,7 @@ describe('ObjectStorage', () => {
     form.findComponent({ name: 'ElInputTag' }).vm.$emit('update:modelValue', ['avatar'])
     await form.find('[data-testid="storage-rule-name"]').setValue('头像上传')
     const extensionSelect = form
-      .findAllComponents({ name: 'ElSelect' })
+      .findAllComponents({ name: 'ElSelectV2' })
       .find((item: VueWrapper) => item.attributes('data-testid') === 'storage-rule-extensions')
     extensionSelect?.vm.$emit('update:modelValue', ['png'])
     await wrapper
@@ -221,10 +236,10 @@ describe('ObjectStorage', () => {
 
     const form = wrapper.find('[data-testid="storage-rule-form"]')
     const extensionSelect = form
-      .findAllComponents({ name: 'ElSelect' })
+      .findAllComponents({ name: 'ElSelectV2' })
       .find((item: VueWrapper) => item.attributes('data-testid') === 'storage-rule-extensions')
     const mimeSelect = form
-      .findAllComponents({ name: 'ElSelect' })
+      .findAllComponents({ name: 'ElSelectV2' })
       .find((item: VueWrapper) => item.attributes('data-testid') === 'storage-rule-mime-types')
     await extensionSelect?.find('.el-select__wrapper').trigger('click')
     await flushPromises()
@@ -377,8 +392,12 @@ describe('ObjectStorage', () => {
 
     const form = wrapper.find('[data-testid="storage-config-form"]')
     expect(form.findAll('.el-form-item.is-required')).toHaveLength(6)
-    expect(form.find('[data-testid="storage-config-region"]').exists()).toBe(true)
-    expect(form.find('[data-testid="storage-config-region"]').text()).toContain('广州')
+    const regionSelect = form.getComponent({ name: 'ElSelectV2' })
+    expect(regionSelect.attributes('data-testid')).toBe('storage-config-region')
+    expect(regionSelect.props('modelValue')).toBe('ap-guangzhou')
+    expect(regionSelect.props('options')).toEqual(
+      expect.arrayContaining([{ value: 'ap-guangzhou', label: '广州（ap-guangzhou）' }]),
+    )
     expect(form.find('[data-testid="storage-config-endpoint"]').attributes('placeholder')).toBe(
       '例如：https://cos.ap-guangzhou.myqcloud.com',
     )

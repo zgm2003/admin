@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FormInstance, FormRules } from 'element-plus'
 
@@ -31,6 +31,18 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const formRef = ref<FormInstance>()
+const platformOptions = computed(() =>
+  props.platforms.map((item) => ({ label: item.name, value: item.id })),
+)
+const configOptions = computed(() =>
+  props.configs.map((item) => ({ label: item.name, value: item.id })),
+)
+const extensionOptions = computed(() =>
+  props.extensions.map((item) => ({ label: item, value: item })),
+)
+const mimeTypeOptions = computed(() =>
+  props.mimeTypes.map((item) => ({ label: item, value: item })),
+)
 defineExpose({ validate: () => formRef.value?.validate() })
 </script>
 
@@ -52,28 +64,22 @@ defineExpose({ validate: () => formRef.value?.validate() })
       <el-row :gutter="16">
         <el-col :xs="24" :sm="12"
           ><el-form-item :label="t('storage.platform')" prop="platformId"
-            ><el-select
+            ><el-select-v2
               v-model="form.platformId"
+              :options="platformOptions"
               data-testid="storage-rule-platform"
+              class="storage-rule-select"
               :disabled="props.editing"
-              :placeholder="t('storage.rulePlatformPlaceholder')"
-              ><el-option
-                v-for="item in props.platforms"
-                :key="item.id"
-                :label="item.name"
-                :value="item.id" /></el-select></el-form-item
+              :placeholder="t('storage.rulePlatformPlaceholder')" /></el-form-item
         ></el-col>
         <el-col :xs="24" :sm="12"
           ><el-form-item :label="t('storage.config')" prop="cosConfigId"
-            ><el-select
+            ><el-select-v2
               v-model="form.cosConfigId"
+              :options="configOptions"
               data-testid="storage-rule-config"
-              :placeholder="t('storage.ruleConfigPlaceholder')"
-              ><el-option
-                v-for="item in props.configs"
-                :key="item.id"
-                :label="item.name"
-                :value="item.id" /></el-select></el-form-item
+              class="storage-rule-select"
+              :placeholder="t('storage.ruleConfigPlaceholder')" /></el-form-item
         ></el-col>
         <el-col :xs="24" :sm="12"
           ><el-form-item :label="t('storage.code')" prop="codes"
@@ -123,9 +129,11 @@ defineExpose({ validate: () => formRef.value?.validate() })
         /></el-col>
         <el-col :xs="24" :sm="12"
           ><el-form-item :label="t('storage.extensions')" prop="allowedExtensions"
-            ><el-select
+            ><el-select-v2
               v-model="form.allowedExtensions"
+              :options="extensionOptions"
               data-testid="storage-rule-extensions"
+              class="storage-rule-select"
               multiple
               filterable
               allow-create
@@ -140,8 +148,8 @@ defineExpose({ validate: () => formRef.value?.validate() })
                   @change="props.toggleAllExtensions"
                   >{{ t('storage.selectAll') }}</el-checkbox
                 ></template
-              ><el-option v-for="item in props.extensions" :key="item" :label="item" :value="item"
-            /></el-select>
+              >
+            </el-select-v2>
             <div v-if="props.extensionsError" class="el-form-item__error">
               {{ props.extensionsError }}
             </div>
@@ -150,9 +158,11 @@ defineExpose({ validate: () => formRef.value?.validate() })
         >
         <el-col :xs="24" :sm="12"
           ><el-form-item :label="t('storage.mimeTypes')"
-            ><el-select
+            ><el-select-v2
               v-model="form.allowedMimeTypes"
+              :options="mimeTypeOptions"
               data-testid="storage-rule-mime-types"
+              class="storage-rule-select"
               multiple
               filterable
               allow-create
@@ -167,8 +177,8 @@ defineExpose({ validate: () => formRef.value?.validate() })
                   @change="props.toggleAllMimeTypes"
                   >{{ t('storage.selectAll') }}</el-checkbox
                 ></template
-              ><el-option v-for="item in props.mimeTypes" :key="item" :label="item" :value="item"
-            /></el-select>
+              >
+            </el-select-v2>
             <div class="form-help">{{ t('storage.mimeTypesHelp') }}</div></el-form-item
           ></el-col
         >
@@ -195,5 +205,9 @@ defineExpose({ validate: () => formRef.value?.validate() })
   color: var(--el-text-color-secondary);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.storage-rule-select {
+  width: 100%;
 }
 </style>

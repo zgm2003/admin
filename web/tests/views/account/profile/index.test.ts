@@ -48,6 +48,19 @@ describe('account profile permissions', () => {
     expect(wrapper.find('[data-testid="account-password-submit"]').exists()).toBe(password)
   })
 
+  it('uses the virtualized select with explicit gender options', async () => {
+    const wrapper = mountPage([])
+    await flushPromises()
+
+    const genderSelect = wrapper.getComponent({ name: 'ElSelectV2' })
+    expect(genderSelect.attributes('data-testid')).toBe('account-profile-gender')
+    expect(genderSelect.props('options')).toEqual([
+      { label: '未知', value: 0 },
+      { label: '男', value: 1 },
+      { label: '女', value: 2 },
+    ])
+  })
+
   it('does not emit a second error toast when saving the profile fails', async () => {
     updateAccountProfile.mockRejectedValue(new Error('保存失败'))
     const errorSpy = vi.spyOn(ElMessage, 'error')

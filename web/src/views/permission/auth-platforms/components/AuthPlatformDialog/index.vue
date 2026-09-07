@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { toRefs } from 'vue'
+import { computed, toRefs } from 'vue'
 import { CircleHelp, RotateCcw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
@@ -19,6 +19,13 @@ const visible = defineModel<boolean>({ required: true })
 const form = defineModel<AuthPlatformForm>('form', { required: true })
 const emit = defineEmits<{ save: []; 'restore-defaults': [] }>()
 const { t } = useI18n()
+const loginTypeOptions = computed<
+  Array<{ value: AuthPlatformForm['loginTypes'][number]; label: string }>
+>(() => [
+  { value: 'email', label: t('loginType.email') },
+  { value: 'phone', label: t('loginType.phone') },
+  { value: 'password', label: t('loginType.password') },
+])
 </script>
 
 <template>
@@ -52,16 +59,13 @@ const { t } = useI18n()
           </el-col>
           <el-col :xs="24">
             <el-form-item :label="t('authPlatform.loginTypes')">
-              <el-select
+              <el-select-v2
                 v-model="form.loginTypes"
+                :options="loginTypeOptions"
                 multiple
                 data-testid="auth-platform-login-types"
                 class="auth-platform-login-types"
-              >
-                <el-option value="email" :label="t('loginType.email')" />
-                <el-option value="phone" :label="t('loginType.phone')" />
-                <el-option value="password" :label="t('loginType.password')" />
-              </el-select>
+              />
             </el-form-item>
           </el-col>
         </el-row>

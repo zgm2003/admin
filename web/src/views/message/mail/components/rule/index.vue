@@ -28,6 +28,14 @@ const dialog = ref(false)
 const editing = ref<MailRule | null>(null)
 const saving = ref(false)
 const form = ref<MailRuleInput>(blankRule())
+const scopeOptions = computed<Array<{ value: MailRuleInput['scope']; label: string }>>(() => [
+  { value: 'email', label: t('mail.email') },
+  { value: 'domain', label: t('mail.domain') },
+])
+const actionOptions = computed<Array<{ value: MailRuleInput['action']; label: string }>>(() => [
+  { value: 'allow', label: t('mail.allow') },
+  { value: 'deny', label: t('mail.deny') },
+])
 const columns = computed<TableColumn<MailRule>[]>(() => [
   { key: 'pattern', prop: 'pattern', label: t('mail.rule'), minWidth: 220 },
   { prop: 'action', label: t('mail.action'), width: 120 },
@@ -163,18 +171,22 @@ async function saveRule(): Promise<void> {
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12">
             <el-form-item :label="t('mail.ruleType')">
-              <el-select v-model="form.scope">
-                <el-option value="email" :label="t('mail.email')" />
-                <el-option value="domain" :label="t('mail.domain')" />
-              </el-select>
+              <el-select-v2
+                v-model="form.scope"
+                :options="scopeOptions"
+                data-testid="mail-rule-scope"
+                class="mail-rule-select"
+              />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12">
             <el-form-item :label="t('mail.action')">
-              <el-select v-model="form.action">
-                <el-option value="allow" :label="t('mail.allow')" />
-                <el-option value="deny" :label="t('mail.deny')" />
-              </el-select>
+              <el-select-v2
+                v-model="form.action"
+                :options="actionOptions"
+                data-testid="mail-rule-action"
+                class="mail-rule-select"
+              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -228,5 +240,9 @@ async function saveRule(): Promise<void> {
 
 .rule-hint {
   margin-bottom: 12px;
+}
+
+.mail-rule-select {
+  width: 100%;
 }
 </style>
