@@ -29,8 +29,8 @@ describe('SettingDrawer', () => {
 
     getControl('show-footer').click()
     expect(store.preferences.showFooter).toBe(false)
-    expect(wrapper.findComponent({ name: 'ElSpace' }).exists()).toBe(true)
-    expect(wrapper.findComponent({ name: 'ElRow' }).exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'ElSegmented' }).exists()).toBe(true)
+    expect(document.body.querySelectorAll('.setting-drawer__row').length).toBeGreaterThan(0)
   })
 
   it('shows persistent storage errors and resets only UI preferences', async () => {
