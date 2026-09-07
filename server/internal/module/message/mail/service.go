@@ -242,13 +242,11 @@ func (s *Service) Send(ctx context.Context, in BusinessSendInput) (SendResult, e
 // VerifyCodeReady reports whether the platform can send a verification email
 // for the given scene, together with the channel's single TTL authority.
 // Redis ready hits do not query PostgreSQL; only a missing snapshot enters the
-// bounded cross-instance rebuild path.
+// bounded cross-instance rebuild path. The rate-limit catalog is deliberately
+// not loaded here: it belongs to Prepare and is irrelevant to readiness.
 func (s *Service) VerifyCodeReady(ctx context.Context, platformID int64, scene string) (VerifyCodeReadiness, error) {
 	if scene != SceneLogin {
 		return VerifyCodeReadiness{}, nil
-	}
-	if _, err := s.loadRateLimitCatalog(ctx); err != nil {
-		return VerifyCodeReadiness{}, dependency(err)
 	}
 	if s.readinessStore == nil {
 		return VerifyCodeReadiness{}, dependency(fmt.Errorf("mail verification readiness store unavailable"))
@@ -282,18 +280,26 @@ func (s *Service) PrepareEmailVerifyCode(ctx context.Context, in EmailVerifyCode
 	if !readiness.Ready {
 		return EmailVerifyCodePreparation{}, dependency(fmt.Errorf("mail verification is unavailable"))
 	}
-	if s.rules != nil {
-		decision, evaluateErr := s.rules.Evaluate(ctx, in.PlatformID, email, SendModeBusiness)
-		if evaluateErr != nil {
-			return EmailVerifyCodePreparation{}, dependency(evaluateErr)
-		}
-		if !decision.Allowed {
-			return EmailVerifyCodePreparation{}, denied(ErrRecipientDenied)
-		}
+	if readiness.TTLMinutes < 1 || readiness.TTLMinutes > verifyCodeReadinessTTLMaximum {
+		return EmailVerifyCodePreparation{}, dependency(fmt.Errorf("mail verification readiness TTL is invalid"))
+	}
+	if s.rules == nil {
+		return EmailVerifyCodePreparation{}, dependency(fmt.Errorf("mail recipient rule evaluator unavailable"))
+	}
+	decision, evaluateErr := s.rules.Evaluate(ctx, in.PlatformID, email, SendModeBusiness)
+	if evaluateErr != nil {
+		return EmailVerifyCodePreparation{}, dependency(evaluateErr)
+	}
+	if !decision.Allowed {
+		return EmailVerifyCodePreparation{}, denied(ErrRecipientDenied)
 	}
 	catalog, err := s.loadRateLimitCatalog(ctx)
 	if err != nil {
 		return EmailVerifyCodePreparation{}, dependency(err)
+	}
+	resendPolicy, ok := rateLimitPolicyByKey(catalog, "business_email_minute")
+	if !ok || resendPolicy.WindowSeconds < 1 || resendPolicy.WindowSeconds > 86400 {
+		return EmailVerifyCodePreparation{}, dependency(fmt.Errorf("mail resend rate-limit policy is invalid"))
 	}
 	for _, limit := range businessLimitRequests(catalog, in.PlatformID, in.Scene, email, in.ClientIP) {
 		allowed, allowErr := s.allow(ctx, limit.Key, limit.Limit, limit.Window)
@@ -304,11 +310,7 @@ func (s *Service) PrepareEmailVerifyCode(ctx context.Context, in EmailVerifyCode
 			return EmailVerifyCodePreparation{}, rateLimited(ErrRateLimited)
 		}
 	}
-	resendAfterSeconds := 60
-	if policy, ok := rateLimitPolicyByKey(catalog, "business_email_minute"); ok && policy.WindowSeconds > 0 {
-		resendAfterSeconds = policy.WindowSeconds
-	}
-	return EmailVerifyCodePreparation{TTLMinutes: readiness.TTLMinutes, ResendAfterSeconds: resendAfterSeconds}, nil
+	return EmailVerifyCodePreparation{TTLMinutes: readiness.TTLMinutes, ResendAfterSeconds: resendPolicy.WindowSeconds}, nil
 }
 
 // SendPreparedEmailVerifyCode sends a six-digit login verification email using
@@ -327,6 +329,9 @@ func (s *Service) SendPreparedEmailVerifyCode(ctx context.Context, in EmailVerif
 	}
 	if in.Preparation.TTLMinutes < 1 || in.Preparation.TTLMinutes > verifyCodeReadinessTTLMaximum {
 		return EmailVerifyCodeResult{}, invalid(fmt.Errorf("verification code preparation TTL is invalid"))
+	}
+	if in.Preparation.ResendAfterSeconds < 1 || in.Preparation.ResendAfterSeconds > 86400 {
+		return EmailVerifyCodeResult{}, invalid(fmt.Errorf("verification code resend wait is invalid"))
 	}
 	now := time.Now().UTC()
 	if in.ExpiresAt.IsZero() || !in.ExpiresAt.After(now) {

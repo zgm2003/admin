@@ -88,6 +88,7 @@ type Service struct {
 	verificationCodes   VerificationCodeStore
 	logger              *slog.Logger
 	now                 func() time.Time
+	generateCode        func() (string, error)
 	loginLogs           loginLogRecorder
 }
 
@@ -111,7 +112,7 @@ func NewService(
 	return &Service{
 		users: users, roles: roles, sessions: sessions, policies: policies, states: states,
 		invalidator: invalidator, sessionCache: sessionCache, redis: redis, jwt: jwt,
-		refreshTokenHMACKey: append([]byte(nil), refreshTokenHMACKey...), comparePassword: VerifyPassword, logger: logger, now: time.Now,
+		refreshTokenHMACKey: append([]byte(nil), refreshTokenHMACKey...), comparePassword: VerifyPassword, logger: logger, now: time.Now, generateCode: newSixDigitCode,
 	}
 }
 
@@ -301,16 +302,16 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 	if s.verifyCodeSender == nil || s.verificationCodes == nil {
 		return SendCodeResult{}, apperror.DependencyUnavailable(fmt.Errorf("verification code dependencies are unavailable"))
 	}
-	email, err := normalizeEmail(input.Account)
-	if err != nil {
-		return SendCodeResult{}, apperror.InvalidRequest(err)
-	}
 	policy, err := s.policies.CurrentPolicy(ctx, input.Client.Platform)
 	if err != nil {
 		return SendCodeResult{}, err
 	}
 	if !policyAllowsLoginType(policy, input.LoginType) {
 		return SendCodeResult{}, apperror.Forbidden(fmt.Errorf("login type %q is disabled for authentication platform %q", input.LoginType, policy.Code))
+	}
+	email, err := normalizeEmail(input.Account)
+	if err != nil {
+		return SendCodeResult{}, apperror.InvalidRequest(err)
 	}
 
 	key := s.verificationCodes.VerificationKey(policy.Code, messagemail.SceneLogin, string(authplatform.LoginTypeEmail), email)
@@ -343,10 +344,22 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 		}
 		return SendCodeResult{}, err
 	}
+	if err := validateEmailVerifyCodePreparation(preparation); err != nil {
+		if releaseErr := releaseLease(); releaseErr != nil {
+			return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(err, releaseErr))
+		}
+		return SendCodeResult{}, apperror.DependencyUnavailable(err)
+	}
 
-	code, err := newSixDigitCode()
+	generateCode := s.generateCode
+	if generateCode == nil {
+		generateCode = newSixDigitCode
+	}
+	code, err := generateCode()
 	if err != nil {
-		_ = releaseLease()
+		if releaseErr := releaseLease(); releaseErr != nil {
+			return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(err, releaseErr))
+		}
 		return SendCodeResult{}, apperror.Internal(err)
 	}
 	digest := s.verificationCodes.Digest(code)
@@ -395,6 +408,16 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 		return SendCodeResult{}, apperror.DependencyUnavailable(releaseErr)
 	}
 	return SendCodeResult{ChallengeID: challengeID, ExpiresAt: expiresAt, ResendAfterSeconds: preparation.ResendAfterSeconds}, nil
+}
+
+func validateEmailVerifyCodePreparation(preparation messagemail.EmailVerifyCodePreparation) error {
+	if preparation.TTLMinutes < 1 || preparation.TTLMinutes > 60 {
+		return fmt.Errorf("mail verification preparation TTL is invalid")
+	}
+	if preparation.ResendAfterSeconds < 1 || preparation.ResendAfterSeconds > 86400 {
+		return fmt.Errorf("mail verification preparation resend wait is invalid")
+	}
+	return nil
 }
 
 func verificationCodeCleanupContext(ctx context.Context) (context.Context, context.CancelFunc) {

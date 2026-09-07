@@ -366,6 +366,9 @@ func encodeVerifyCodeReadinessSnapshot(snapshot verifyCodeReadinessSnapshot) (st
 }
 
 func decodeVerifyCodeReadinessSnapshot(raw string) (verifyCodeReadinessSnapshot, error) {
+	if err := rejectDuplicateJSONKeys([]byte(raw)); err != nil {
+		return verifyCodeReadinessSnapshot{}, fmt.Errorf("decode mail verification readiness: %w", err)
+	}
 	decoder := json.NewDecoder(bytes.NewBufferString(raw))
 	decoder.DisallowUnknownFields()
 	var snapshot verifyCodeReadinessSnapshot

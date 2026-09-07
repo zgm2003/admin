@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"strings"
 	"time"
 
 	projectredis "admin/server/internal/redis"
@@ -107,11 +109,69 @@ func (s *verificationCodeStore) Check(ctx context.Context, key, digest string) (
 	if !found {
 		return false, nil
 	}
-	var value verificationCodeValue
-	if err := json.Unmarshal([]byte(raw), &value); err != nil {
+	value, err := decodeVerificationCodeValue(raw)
+	if err != nil {
 		return false, fmt.Errorf("decode verification code value: %w", err)
 	}
 	return value.Digest == digest, nil
+}
+
+// decodeVerificationCodeValue strictly decodes a stored verification code
+// payload. It rejects duplicate JSON keys, unknown fields (including any
+// smuggled PII), trailing data, and missing or empty digest/leaseToken so a
+// corrupt or hostile value can never be treated as a usable code.
+func decodeVerificationCodeValue(raw string) (verificationCodeValue, error) {
+	if err := scanVerificationCodeKeys(raw); err != nil {
+		return verificationCodeValue{}, err
+	}
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var value verificationCodeValue
+	if err := decoder.Decode(&value); err != nil {
+		return verificationCodeValue{}, fmt.Errorf("verification code value is invalid: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return verificationCodeValue{}, fmt.Errorf("verification code value contains trailing data")
+	}
+	if value.Digest == "" || value.LeaseToken == "" {
+		return verificationCodeValue{}, fmt.Errorf("verification code value is missing digest or lease token")
+	}
+	return value, nil
+}
+
+// scanVerificationCodeKeys performs a token-level duplicate-key scan over the
+// top-level object before structural decoding, so a hostile payload cannot
+// smuggle a second key past the decoder.
+func scanVerificationCodeKeys(raw string) error {
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	if delim, ok := token.(json.Delim); !ok || delim != '{' {
+		return fmt.Errorf("verification code value must be a JSON object")
+	}
+	seen := map[string]struct{}{}
+	for decoder.More() {
+		keyToken, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		key, ok := keyToken.(string)
+		if !ok {
+			return fmt.Errorf("verification code value key is invalid")
+		}
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("verification code value contains duplicate key %q", key)
+		}
+		seen[key] = struct{}{}
+		var discard any
+		if err := decoder.Decode(&discard); err != nil {
+			return err
+		}
+	}
+	_, err = decoder.Token()
+	return err
 }
 
 func (s *verificationCodeStore) CheckAttempt(ctx context.Context, key, digest, clientIP string) (bool, bool, error) {
@@ -165,7 +225,13 @@ func (s *verificationCodeStore) DeleteIfOwned(ctx context.Context, key, leaseTok
 const consumeVerificationCodeScript = `
 local raw = redis.call('GET', KEYS[1])
 if not raw then return 'missing' end
-local decoded = cjson.decode(raw)
+local ok, decoded = pcall(cjson.decode, raw)
+if not ok or type(decoded) ~= 'table' then return 'corrupt' end
+local count = 0
+for _ in pairs(decoded) do count = count + 1 end
+if count ~= 2 then return 'corrupt' end
+if type(decoded.digest) ~= 'string' or #decoded.digest == 0 then return 'corrupt' end
+if type(decoded.leaseToken) ~= 'string' or #decoded.leaseToken == 0 then return 'corrupt' end
 if decoded.digest == ARGV[1] then
   redis.call('DEL', KEYS[1])
   return 'consumed'
@@ -181,7 +247,13 @@ if account_attempts >= tonumber(ARGV[2]) or ip_attempts >= tonumber(ARGV[3]) the
 end
 local raw = redis.call('GET', KEYS[1])
 if raw then
-  local decoded = cjson.decode(raw)
+  local ok, decoded = pcall(cjson.decode, raw)
+  if not ok or type(decoded) ~= 'table' then return 'corrupt' end
+  local count = 0
+  for _ in pairs(decoded) do count = count + 1 end
+  if count ~= 2 then return 'corrupt' end
+  if type(decoded.digest) ~= 'string' or #decoded.digest == 0 then return 'corrupt' end
+  if type(decoded.leaseToken) ~= 'string' or #decoded.leaseToken == 0 then return 'corrupt' end
   if decoded.digest == ARGV[1] then return 'valid' end
 end
 account_attempts = redis.call('INCR', KEYS[2])
@@ -201,7 +273,13 @@ return 'stored'
 const deleteIfOwnedScript = `
 local raw = redis.call('GET', KEYS[1])
 if not raw then return 'missing' end
-local decoded = cjson.decode(raw)
+local ok, decoded = pcall(cjson.decode, raw)
+if not ok or type(decoded) ~= 'table' then return 'corrupt' end
+local count = 0
+for _ in pairs(decoded) do count = count + 1 end
+if count ~= 2 then return 'corrupt' end
+if type(decoded.digest) ~= 'string' or #decoded.digest == 0 then return 'corrupt' end
+if type(decoded.leaseToken) ~= 'string' or #decoded.leaseToken == 0 then return 'corrupt' end
 if decoded.leaseToken ~= ARGV[1] then return 'token-mismatch' end
 redis.call('DEL', KEYS[1])
 return 'deleted'

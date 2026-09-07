@@ -2,11 +2,15 @@ package mail
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	projectredis "admin/server/internal/redis"
+	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -114,5 +118,53 @@ func TestSendConcurrentChallengeUsesDatabaseUniqueness(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("active challenge logs = %d, want 1", count)
+	}
+}
+
+func TestPrepareEmailVerifyCodeTwoServicesShareRedisRateWindow(t *testing.T) {
+	firstClient := openMailReadinessRedis(t)
+	secondClient := openMailReadinessRedis(t)
+	platformID := time.Now().UnixNano()
+	email := fmt.Sprintf("resend-%d@example.com", platformID)
+	clientIP := fmt.Sprintf("2001:db8:%x::1", uint64(platformID))
+	catalog := policyCatalogWith(map[string][2]int{
+		"business_email_minute": {1, 1},
+		"business_email_10m":    {100, 600},
+		"business_ip_minute":    {100, 60},
+		"business_scene_minute": {100, 60},
+	})
+
+	newService := func(client *projectredis.Client) *Service {
+		service := NewService(nil, nil, nil, ruleEvaluatorStub{decision: RuleDecision{Allowed: true}}, NewRedisLimiter(client.UniversalClient()), stubRateLimitPolicyStore{catalog: catalog})
+		service.SetVerifyCodeReadinessStore(&stubVerifyCodeReadinessStore{readiness: VerifyCodeReadiness{Ready: true, TTLMinutes: 5}})
+		return service
+	}
+	firstService := newService(firstClient)
+	secondService := newService(secondClient)
+	input := EmailVerifyCodePrepareInput{PlatformID: platformID, ClientIP: clientIP, Scene: SceneLogin, ToEmail: email}
+	requests := businessLimitRequests(catalog, platformID, SceneLogin, email, clientIP)
+	keys := make([]string, 0, len(requests))
+	for _, request := range requests {
+		keys = append(keys, request.Key)
+	}
+	if err := firstClient.DeleteMany(context.Background(), keys); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = firstClient.DeleteMany(context.Background(), keys) })
+
+	first, err := firstService.PrepareEmailVerifyCode(context.Background(), input)
+	if err != nil || first.TTLMinutes != 5 || first.ResendAfterSeconds != 1 {
+		t.Fatalf("first preparation = %+v, %v", first, err)
+	}
+	if _, err := secondService.PrepareEmailVerifyCode(context.Background(), input); err == nil {
+		t.Fatal("second Mail service bypassed the shared Redis rate window")
+	} else {
+		assertApplicationError(t, err, http.StatusTooManyRequests, apperror.CodeRateLimited)
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+	second, err := secondService.PrepareEmailVerifyCode(context.Background(), input)
+	if err != nil || second.ResendAfterSeconds != 1 {
+		t.Fatalf("preparation after rate window = %+v, %v", second, err)
 	}
 }

@@ -187,6 +187,8 @@ func TestVerifyCodeReadinessSnapshotRejectsMalformedPayloads(t *testing.T) {
 		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":61}`,
 		`{"schemaVersion":2,"state":"ready","ready":false,"ttlMinutes":5}`,
 		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":5,"extra":true}`,
+		`{"schemaVersion":2,"state":"ready","ready":true,"ready":false,"ttlMinutes":5}`,
+		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":5,"ttlMinutes":6}`,
 		`{"schemaVersion":1,"state":"ready","ready":true,"ttlMinutes":5}`,
 		`{"schemaVersion":2,"state":"invalidating","ready":false,"ttlMinutes":5,"mutationToken":"token"}`,
 		`{"schemaVersion":2,"state":"invalidating","mutationToken":""}`,

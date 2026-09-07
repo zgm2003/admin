@@ -297,6 +297,25 @@ func TestSendCodeRequiresConfiguredLoginType(t *testing.T) {
 	}
 }
 
+func TestSendCodeLoadsPolicyBeforeNormalizingEmail(t *testing.T) {
+	policies := &fakePolicyStore{policy: testPolicy()}
+	store := &fakeVerificationCodeStore{acquired: true}
+	sender := &fakeVerifyCodeSender{preparation: messagemail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}}
+	service := NewService(nil, nil, nil, policies, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.SetVerificationCodeStore(store)
+	service.SetVerifyCodeSender(sender)
+
+	_, err := service.SendCode(context.Background(), SendCodeInput{
+		Account: "not-an-email", LoginType: authplatform.LoginTypeEmail, Scene: messagemail.SceneLogin, Client: testAuthClient(),
+	})
+	if appErrorCode(err) != apperror.CodeInvalidRequest || policies.calls != 1 {
+		t.Fatalf("invalid email error=%v policy calls=%d, want invalid request after one policy read", err, policies.calls)
+	}
+	if store.acquireCalls != 0 || sender.prepareCalls != 0 {
+		t.Fatalf("invalid email reached delivery: acquire=%d prepare=%d", store.acquireCalls, sender.prepareCalls)
+	}
+}
+
 func TestLoginCodeChecksBeforeUserLookupAndConsume(t *testing.T) {
 	policy := testPolicy()
 	store := &fakeVerificationCodeStore{checkValid: false, consumeValid: true}
@@ -424,6 +443,75 @@ func TestSendCodeUsesPreparationTTLAndResendWindow(t *testing.T) {
 	}
 	if sender.prepareCalls != 1 || sender.sendCalls != 1 {
 		t.Fatalf("prepareCalls=%d sendCalls=%d, want 1 each", sender.prepareCalls, sender.sendCalls)
+	}
+	if store.putCalls != 1 || store.putTTL != 5*time.Minute {
+		t.Fatalf("Put calls=%d TTL=%v, want one Put with 5m", store.putCalls, store.putTTL)
+	}
+	if !sender.sendInput.ExpiresAt.Equal(result.ExpiresAt) || sender.sendInput.Preparation != sender.preparation {
+		t.Fatalf("prepared send input=%+v result=%+v preparation=%+v", sender.sendInput, result, sender.preparation)
+	}
+}
+
+func TestSendCodeRejectsInvalidMailPreparationBeforePut(t *testing.T) {
+	for _, preparation := range []messagemail.EmailVerifyCodePreparation{
+		{TTLMinutes: 0, ResendAfterSeconds: 60},
+		{TTLMinutes: 61, ResendAfterSeconds: 60},
+		{TTLMinutes: 5, ResendAfterSeconds: 0},
+		{TTLMinutes: 5, ResendAfterSeconds: 86401},
+	} {
+		store := &fakeVerificationCodeStore{acquired: true}
+		sender := &fakeVerifyCodeSender{preparation: preparation}
+		service := NewService(nil, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		service.SetVerificationCodeStore(store)
+		service.SetVerifyCodeSender(sender)
+
+		_, err := service.SendCode(context.Background(), SendCodeInput{Account: "user@example.com", LoginType: authplatform.LoginTypeEmail, Scene: messagemail.SceneLogin, Client: testAuthClient()})
+		if appErrorCode(err) != apperror.CodeDependencyUnavailable {
+			t.Fatalf("preparation %+v error=%v, want dependency unavailable", preparation, err)
+		}
+		if store.putCalls != 0 || store.releaseCalls != 1 || sender.sendCalls != 0 {
+			t.Fatalf("preparation %+v put=%d release=%d send=%d", preparation, store.putCalls, store.releaseCalls, sender.sendCalls)
+		}
+	}
+}
+
+func TestSendCodePutFailureReleasesLeaseWithoutSending(t *testing.T) {
+	store := &fakeVerificationCodeStore{acquired: true, putErr: errors.New("Redis Eval failed")}
+	sender := &fakeVerifyCodeSender{preparation: messagemail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}}
+	service := NewService(nil, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.SetVerificationCodeStore(store)
+	service.SetVerifyCodeSender(sender)
+
+	_, err := service.SendCode(context.Background(), SendCodeInput{Account: "user@example.com", LoginType: authplatform.LoginTypeEmail, Scene: messagemail.SceneLogin, Client: testAuthClient()})
+	if appErrorCode(err) != apperror.CodeDependencyUnavailable || store.releaseCalls != 1 || store.deleteCalls != 0 || sender.sendCalls != 0 {
+		t.Fatalf("Put failure error=%v release=%d delete=%d send=%d", err, store.releaseCalls, store.deleteCalls, sender.sendCalls)
+	}
+}
+
+func TestSendCodeSuccessfulSendFailsClosedWhenLeaseReleaseFails(t *testing.T) {
+	store := &fakeVerificationCodeStore{acquired: true, releaseErr: errors.New("Redis release failed")}
+	sender := &fakeVerifyCodeSender{preparation: messagemail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}}
+	service := NewService(nil, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.SetVerificationCodeStore(store)
+	service.SetVerifyCodeSender(sender)
+
+	_, err := service.SendCode(context.Background(), SendCodeInput{Account: "user@example.com", LoginType: authplatform.LoginTypeEmail, Scene: messagemail.SceneLogin, Client: testAuthClient()})
+	if appErrorCode(err) != apperror.CodeDependencyUnavailable || sender.sendCalls != 1 || store.releaseCalls != 1 {
+		t.Fatalf("release failure error=%v send=%d release=%d", err, sender.sendCalls, store.releaseCalls)
+	}
+}
+
+func TestSendCodeGenerationFailureReportsLeaseCleanupFailure(t *testing.T) {
+	store := &fakeVerificationCodeStore{acquired: true, releaseErr: errors.New("Redis release failed")}
+	sender := &fakeVerifyCodeSender{preparation: messagemail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}}
+	service := NewService(nil, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.SetVerificationCodeStore(store)
+	service.SetVerifyCodeSender(sender)
+	service.generateCode = func() (string, error) { return "", errors.New("random source unavailable") }
+
+	_, err := service.SendCode(context.Background(), SendCodeInput{Account: "user@example.com", LoginType: authplatform.LoginTypeEmail, Scene: messagemail.SceneLogin, Client: testAuthClient()})
+	if appErrorCode(err) != apperror.CodeDependencyUnavailable || store.releaseCalls != 1 || sender.sendCalls != 0 {
+		t.Fatalf("generation failure error=%v release=%d send=%d", err, store.releaseCalls, sender.sendCalls)
 	}
 }
 
@@ -847,19 +935,23 @@ type fakeVerifyCodeSender struct {
 	sendFn       func(context.Context, messagemail.EmailVerifyCodeInput) (messagemail.EmailVerifyCodeResult, error)
 	sendCalls    int
 	prepareCalls int
+	prepareInput messagemail.EmailVerifyCodePrepareInput
+	sendInput    messagemail.EmailVerifyCodeInput
 }
 
 func (f *fakeVerifyCodeSender) VerifyCodeReady(context.Context, int64, string) (messagemail.VerifyCodeReadiness, error) {
 	return f.readiness, f.readyErr
 }
 
-func (f *fakeVerifyCodeSender) PrepareEmailVerifyCode(context.Context, messagemail.EmailVerifyCodePrepareInput) (messagemail.EmailVerifyCodePreparation, error) {
+func (f *fakeVerifyCodeSender) PrepareEmailVerifyCode(_ context.Context, input messagemail.EmailVerifyCodePrepareInput) (messagemail.EmailVerifyCodePreparation, error) {
 	f.prepareCalls++
+	f.prepareInput = input
 	return f.preparation, f.prepareErr
 }
 
 func (f *fakeVerifyCodeSender) SendPreparedEmailVerifyCode(ctx context.Context, input messagemail.EmailVerifyCodeInput) (messagemail.EmailVerifyCodeResult, error) {
 	f.sendCalls++
+	f.sendInput = input
 	if f.sendFn != nil {
 		return f.sendFn(ctx, input)
 	}
@@ -882,6 +974,8 @@ type fakeVerificationCodeStore struct {
 	consumeCalls      int
 	deleteCalls       int
 	releaseCalls      int
+	putCalls          int
+	putTTL            time.Duration
 	deleteContextErr  error
 	releaseContextErr error
 }
@@ -894,7 +988,9 @@ func (f *fakeVerificationCodeStore) AcquireDelivery(context.Context, string, str
 	f.acquireCalls++
 	return f.acquired, f.acquireErr
 }
-func (f *fakeVerificationCodeStore) Put(context.Context, string, string, string, time.Duration) error {
+func (f *fakeVerificationCodeStore) Put(_ context.Context, _, _, _ string, ttl time.Duration) error {
+	f.putCalls++
+	f.putTTL = ttl
 	return f.putErr
 }
 func (f *fakeVerificationCodeStore) Check(context.Context, string, string) (bool, error) {

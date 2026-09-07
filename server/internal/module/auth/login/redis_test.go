@@ -180,6 +180,30 @@ func TestVerificationCodePutRejectsOutOfRangeTTL(t *testing.T) {
 	}
 }
 
+func TestVerificationCodeRejectsCorruptValueFields(t *testing.T) {
+	store := newVerificationStoreForTest(t)
+	client := openAuthRedis(t)
+	ctx := context.Background()
+	key := fmt.Sprintf("auth:verify-code:v2:admin:login:email:corrupt-%d", time.Now().UnixNano())
+	t.Cleanup(func() { _ = client.Delete(ctx, key) })
+
+	for _, raw := range []string{
+		`{"digest":"digest-a"}`,
+		`{"digest":"digest-a","leaseToken":"lease-a","email":"pii@example.com"}`,
+		`{"digest":"digest-a","leaseToken":"lease-a"} trailing`,
+	} {
+		if err := client.SetString(ctx, key, raw, time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		if valid, err := store.Check(ctx, key, "digest-a"); err == nil || valid {
+			t.Fatalf("Check accepted corrupt value %q: valid=%v err=%v", raw, valid, err)
+		}
+		if consumed, err := store.Consume(ctx, key, "digest-a"); err == nil || consumed {
+			t.Fatalf("Consume accepted corrupt value %q: consumed=%v err=%v", raw, consumed, err)
+		}
+	}
+}
+
 func TestVerificationCodeCheckAttemptLimitsAccountAndIPWithoutDeletingCode(t *testing.T) {
 	store := newVerificationStoreForTest(t)
 	ctx := context.Background()

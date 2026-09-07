@@ -71,11 +71,34 @@
 - 额度超限 `429/10007`；Redis 读取故障 `503/10006`；readiness/依赖不可用 `503/10006`。
 - Prepare 失败只释放 lease、不删除旧码；code Put 后发送失败删除本次 code 并释放 lease；任一 owned cleanup 失败提升为 `503/10006`，不返回假成功。
 
-**实际执行命令（全部通过）**
+**执行者基线曾运行的命令（终审轮未复跑，最终以维护者执行为准）**
 
 - 后端：`go fmt ./...`、`go vet ./...`、`go test ./...`（36 包全过）、`go build ./...`。
 - 前端：`pnpm vitest run --pool=threads --maxWorkers=1`（63 文件 451 用例全过）、`pnpm lint`、`pnpm check:architecture`、`pnpm typecheck`、`pnpm build`。
+- 2026-09-07 终审轮：以上全量命令均未运行，由维护者执行最后一轮全量验证。
+
+**终审兜底（2026-09-07，独立审查者）**
+
+| 严重度 | Finding | 修复 | RED/GREEN |
+| --- | --- | --- | --- |
+| Critical | Auth 验证码 Redis value 解析不严格：`Check` 用普通 `json.Unmarshal` 只比较 digest，接受缺 `leaseToken`、未知字段（含 PII 走私）与 trailing data；`Consume`/`CheckAttempt`/`DeleteIfOwned` Lua 只比较 `decoded.digest`，corrupt payload 可能被当作有效码消费或删除 | `auth/login/redis.go`：新增 `decodeVerificationCodeValue`（token 级重复 key 扫描 + `DisallowUnknownFields` + EOF trailing 检查 + digest/leaseToken 非空校验）用于 `Check`；三个 Lua 脚本统一 `pcall(cjson.decode)` + 字段数恰为 2 + digest/leaseToken 非空字符串校验，异常返回 `corrupt` 并在 Go 侧 fail-closed | `TestVerificationCodeRejectsCorruptValueFields` 先 RED（`Check accepted corrupt value "{"digest":"digest-a"}"`），修复后 GREEN |
+| Important | `VerifyCodeReady` 在读取 readiness 前先 `loadRateLimitCatalog`，登录配置热路径因无关限流目录回源 Redis/PostgreSQL，且 catalog 故障会误杀 ready 结果（旧契约残留） | `message/mail/service.go` 删除该调用，ready 热读只读 readiness v2 快照；限流目录归属 Prepare | 新增 `TestVerifyCodeReadyHotReadDoesNotLoadRateLimitCatalog` 先 RED（catalog 错误导致 `ready={false 0}` 依赖错误），修复后 GREEN；`TestVerifyCodeReadyFailsWhenRateLimitPolicyIsUnavailable` 更名为 `...ReadinessStoreIsUnavailable` 修正语义 |
+
+**终审轮实际运行的定向命令（全部通过）**
+
+- `go test ./internal/module/auth/login -run 'TestVerificationCode|TestSendCode|TestHandlerSendCode' -count=1`（25 项）
+- `go test ./internal/module/message/mail -run 'Test.*VerifyCodeReadiness|TestVerifyCodeReady|TestPrepareEmailVerifyCode|TestSendPreparedEmailVerifyCode|Test.*TwoInstances|Test.*Concurrent|Test.*Fault' -count=1`（22 项）
+- `go test ./internal/module/auth/login ./internal/module/message/mail -run 'Test.*TwoInstances|Test.*Integration|Test.*Concurrent|Test.*Fault' -count=1`
+- `gofmt -l` 对 auth/login 与 message/mail 输出为空（redis.go 终审改动已格式化）。
+- `pnpm vitest run tests/api/auth/login.test.ts tests/views/auth/login/index.test.ts --pool=threads --maxWorkers=1`（2 文件 24 项）、`pnpm typecheck`、`pnpm check:architecture`（0 基线项）。
 - `git diff --check` 通过。
+
+**终审独立验证的关键行为**
+
+- 双实例：`TestSendCodeTwoServicesSingleProviderWinner`（双 Auth Service/双 Redis client 单 provider winner）、`TestVerificationCodeTwoClientConsumeHasSingleWinner`、`TestPrepareEmailVerifyCodeTwoServicesShareRedisRateWindow`（双 Mail Service/双 Redis client 共享真实限流窗口，429 后窗口恢复重发成功）、`TestVerifyCodeReadinessTwoInstancesRecoverMissingSnapshotOnce`（双实例单回源 + 热读零 PostgreSQL）。
+- TTL 同源：`TestSendCodeUsesPreparationTTLAndResendWindow`、`TestPrepareEmailVerifyCodeReturnsConfigTTLAndResendWindow`（TTL=5、resend=60 来自 `business_email_minute.window_seconds`）、`TestSendPreparedEmailVerifyCodePersistsPreparationTTL`。
+- 429/503：`TestSendCodeReturnsRateLimitedWhenPrepareIsRateLimited`（429 时 `releaseCalls=1`、`deleteCalls=0`，旧码不被烧毁）、`TestVerificationCodePutReplacesPriorCodeUnderCurrentLease`（窗口后新码替换旧码）、`TestSendCodeFailsClosedWhenCleanupFails`、`TestSendCodeGenerationFailureReportsLeaseCleanupFailure`、`TestSendCodeSuccessfulSendFailsClosedWhenLeaseReleaseFails`。
+- 静态自查：`rg` 确认无 `verificationCodeTTL` 残留、无 cooldown key、生产链路无 `context.Background()`；phone 登录在 `service.go` 显式 `Forbidden`；前端 `SendCodeResult` 严格三字段 DTO（1–86400 整数校验）、倒计时仅用 `resendAfterSeconds`、无 `el-select`/`any`/`@ts-ignore`。
 
 **未运行项与剩余风险**
 
