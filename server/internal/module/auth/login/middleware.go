@@ -8,6 +8,7 @@ import (
 	"admin/server/internal/authcontext"
 	projectmiddleware "admin/server/internal/middleware"
 	"admin/server/internal/module/auth/client"
+	authplatform "admin/server/internal/module/auth/platform"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
@@ -19,6 +20,8 @@ const identityContextKey = "auth.identity"
 type authenticationService interface {
 	Register(context.Context, RegisterInput) (Registered, error)
 	Login(context.Context, LoginInput) (Credential, error)
+	LoginConfig(context.Context, authclient.Client) (authplatform.LoginConfig, error)
+	SendCode(context.Context, SendCodeInput) (SendCodeResult, error)
 	Refresh(context.Context, RefreshInput) (Credential, error)
 	Authenticate(context.Context, string, authclient.Client) (Identity, error)
 	Logout(context.Context, Identity, authclient.Client) error

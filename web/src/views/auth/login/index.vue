@@ -1,45 +1,132 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { Lock, User } from '@element-plus/icons-vue'
-import type { FormInstance, FormRules } from 'element-plus'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { Lock, Message, User } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import { getCurrentUser, login } from '@/api/auth/login'
+import {
+  getCurrentUser,
+  getLoginConfig,
+  login,
+  sendLoginCode,
+  type LoginConfigOption,
+  type LoginType,
+} from '@/api/auth/login'
 import { useAuthStore } from '@/store/auth'
 import { ApiError } from '@/types/http'
 
 interface LoginForm {
-  email: string
+  account: string
   password: string
+  code: string
 }
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const auth = useAuthStore()
-const formReference = ref<FormInstance>()
-const form = reactive<LoginForm>({ email: '', password: '' })
+const form = ref<LoginForm>({ account: '', password: '', code: '' })
+const options = ref<LoginConfigOption[]>([])
+const activeType = ref<LoginType>()
+const loading = ref(false)
 const pending = ref(false)
 const submitError = ref('')
+const sending = ref(false)
+const resendSeconds = ref(0)
+const challengeId = ref(generateChallengeID())
+let countdownTimer: ReturnType<typeof setInterval> | undefined
 const bootstrapError = computed(() => (auth.status === 'error' ? auth.errorMessage : ''))
-const rules = computed<FormRules<LoginForm>>(() => ({
-  email: [
-    { required: true, message: t('auth.login.emailRequired'), trigger: 'blur' },
-    { type: 'email', message: t('auth.login.emailInvalid'), trigger: 'blur' },
-  ],
-  password: [{ required: true, message: t('auth.login.passwordRequired'), trigger: 'blur' }],
-}))
+
+const passwordMode = computed(() => activeType.value === 'password')
+const codeMode = computed(() => activeType.value === 'email')
+
+watch(activeType, () => {
+  submitError.value = ''
+})
+
+onMounted(async () => {
+  loading.value = true
+  try {
+    const config = await getLoginConfig()
+    options.value = config.loginTypes
+    activeType.value = config.loginTypes[0]?.value
+  } catch {
+    options.value = []
+    activeType.value = undefined
+  } finally {
+    loading.value = false
+  }
+})
+
+onUnmounted(() => {
+  if (countdownTimer !== undefined) clearInterval(countdownTimer)
+})
+
+async function sendCode(): Promise<void> {
+  if (sending.value || resendSeconds.value > 0) return
+  if (form.value.account.trim() === '') {
+    submitError.value = t('auth.login.accountRequired')
+    return
+  }
+  sending.value = true
+  submitError.value = ''
+  try {
+    const result = await sendLoginCode(
+      form.value.account.trim(),
+      'email',
+      'login',
+      challengeId.value,
+    )
+    const seconds = Math.max(
+      1,
+      Math.floor((new Date(result.expiresAt).getTime() - Date.now()) / 1000),
+    )
+    resendSeconds.value = Math.min(seconds, 900)
+    startCountdown()
+  } catch {
+    // request.ts owns API error notifications.
+  } finally {
+    challengeId.value = generateChallengeID()
+    sending.value = false
+  }
+}
+
+function startCountdown(): void {
+  if (countdownTimer !== undefined) clearInterval(countdownTimer)
+  countdownTimer = setInterval(() => {
+    if (resendSeconds.value <= 1) {
+      resendSeconds.value = 0
+      if (countdownTimer !== undefined) clearInterval(countdownTimer)
+      return
+    }
+    resendSeconds.value -= 1
+  }, 1000)
+}
 
 async function submit(): Promise<void> {
-  if (pending.value || formReference.value === undefined) return
-  if (form.email.trim() === '' || form.password === '') return
-  const valid = await formReference.value.validate().catch(() => false)
-  if (!valid) return
+  if (pending.value) return
+  const loginType = activeType.value
+  if (loginType === undefined) return
+  if (form.value.account.trim() === '') {
+    submitError.value = t('auth.login.accountRequired')
+    return
+  }
+  if (passwordMode.value && form.value.password === '') {
+    submitError.value = t('auth.login.passwordRequired')
+    return
+  }
+  if (codeMode.value && form.value.code.trim() === '') {
+    submitError.value = t('auth.login.codeRequired')
+    return
+  }
   pending.value = true
   submitError.value = ''
   try {
-    const credential = await login({ email: form.email.trim(), password: form.password })
+    const loginAccount = form.value.account.trim()
+    const credential =
+      loginType === 'password'
+        ? await login({ loginType, loginAccount, password: form.value.password })
+        : await login({ loginType, loginAccount, code: form.value.code.trim() })
     auth.setCredential(credential)
     const currentUser = await getCurrentUser()
     auth.setAuthenticated(currentUser)
@@ -57,6 +144,13 @@ function safeRedirect(value: unknown): string {
   return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')
     ? value
     : '/dashboard'
+}
+
+function generateChallengeID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `c-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 </script>
 
@@ -102,21 +196,28 @@ function safeRedirect(value: unknown): string {
             <p v-if="submitError" class="auth-error" data-testid="login-error">{{ submitError }}</p>
 
             <el-form
-              ref="formReference"
+              v-if="!loading && options.length > 0"
               class="auth-form"
               :model="form"
-              :rules="rules"
               label-position="top"
               @submit.prevent="submit"
             >
-              <el-form-item :label="t('auth.login.email')" prop="email">
+              <el-segmented
+                v-if="options.length > 0"
+                v-model="activeType"
+                class="auth-login-type"
+                :options="options"
+                block
+              />
+
+              <el-form-item :label="t('auth.login.account')">
                 <el-input
-                  v-model="form.email"
-                  data-testid="login-email"
+                  v-model="form.account"
+                  data-testid="login-account"
                   type="email"
                   inputmode="email"
                   autocomplete="username"
-                  :placeholder="t('auth.login.emailPlaceholder')"
+                  :placeholder="t('auth.login.accountPlaceholder')"
                   size="large"
                 >
                   <template #prefix
@@ -124,7 +225,8 @@ function safeRedirect(value: unknown): string {
                   ></template>
                 </el-input>
               </el-form-item>
-              <el-form-item :label="t('auth.login.password')" prop="password">
+
+              <el-form-item v-if="passwordMode" :label="t('auth.login.password')">
                 <el-input
                   v-model="form.password"
                   data-testid="login-password"
@@ -139,6 +241,37 @@ function safeRedirect(value: unknown): string {
                   ></template>
                 </el-input>
               </el-form-item>
+
+              <el-form-item v-else-if="codeMode" :label="t('auth.login.code')">
+                <div class="auth-code-row">
+                  <el-input
+                    v-model="form.code"
+                    data-testid="login-code"
+                    inputmode="numeric"
+                    maxlength="6"
+                    :placeholder="t('auth.login.codePlaceholder')"
+                    size="large"
+                  >
+                    <template #prefix
+                      ><el-icon><Message /></el-icon
+                    ></template>
+                  </el-input>
+                  <el-button
+                    data-testid="login-send-code"
+                    :disabled="sending || resendSeconds > 0 || form.account.trim() === ''"
+                    :loading="sending"
+                    size="large"
+                    @click="sendCode"
+                  >
+                    {{
+                      resendSeconds > 0
+                        ? t('auth.login.resendIn', { seconds: resendSeconds })
+                        : t('auth.login.sendCode')
+                    }}
+                  </el-button>
+                </div>
+              </el-form-item>
+
               <el-button
                 data-testid="login-submit"
                 class="auth-submit"
@@ -162,283 +295,4 @@ function safeRedirect(value: unknown): string {
   </main>
 </template>
 
-<style scoped>
-.auth-page {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  min-height: 0;
-  padding: 32px;
-  overflow: auto;
-  color: var(--el-text-color-primary);
-  background: var(--el-bg-color-page);
-}
-
-.auth-shell {
-  display: flex;
-  width: min(1080px, 100%);
-  min-height: 620px;
-  overflow: hidden;
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 8px;
-  box-shadow: var(--el-box-shadow-lighter);
-}
-
-.auth-brand-col,
-.auth-form-col {
-  display: flex;
-  min-width: 0;
-}
-
-.auth-brand-col {
-  border-right: 1px solid var(--el-border-color-light);
-}
-
-.auth-brand {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: 48px;
-  overflow: hidden;
-  background: var(--el-fill-color-light);
-}
-
-.auth-brand::after {
-  position: absolute;
-  right: 48px;
-  bottom: 48px;
-  width: 132px;
-  height: 132px;
-  content: '';
-  border: 1px solid var(--el-border-color);
-  border-right-color: transparent;
-  border-bottom-color: transparent;
-}
-
-.auth-brand__identity {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.auth-brand__mark {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  color: var(--el-color-white);
-  background: var(--el-color-primary);
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: 800;
-}
-
-.auth-brand__name {
-  font-size: 16px;
-  font-weight: 750;
-}
-
-.auth-brand__message {
-  margin: auto 0;
-  padding-bottom: 72px;
-}
-
-.auth-brand__eyebrow,
-.auth-panel__eyebrow {
-  margin: 0 0 12px;
-  color: var(--el-color-primary);
-  font-size: 11px;
-  font-weight: 750;
-}
-
-.auth-brand h1 {
-  margin: 0;
-  color: var(--el-text-color-primary);
-  font-size: 42px;
-  font-weight: 760;
-  line-height: 1.24;
-}
-
-.auth-brand__message > p:last-child {
-  max-width: 360px;
-  margin: 22px 0 0;
-  color: var(--el-text-color-secondary);
-  font-size: 14px;
-  line-height: 1.8;
-}
-
-.auth-brand__trace {
-  position: absolute;
-  right: 32px;
-  bottom: 32px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.auth-brand__trace::before {
-  position: absolute;
-  right: 10px;
-  left: 10px;
-  height: 1px;
-  content: '';
-  background: var(--el-border-color);
-}
-
-.auth-brand__trace span {
-  position: relative;
-  width: 8px;
-  height: 8px;
-  background: var(--el-color-primary);
-  border: 2px solid var(--el-bg-color);
-  border-radius: 50%;
-}
-
-.auth-form-area {
-  display: flex;
-  align-items: center;
-  padding: 48px;
-  width: 100%;
-}
-
-.auth-panel {
-  width: min(380px, 100%);
-  margin: 0 auto;
-}
-
-.auth-panel__header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.auth-panel__header > .auth-icon {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-  place-items: center;
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  border-radius: 6px;
-  font-size: 20px;
-}
-
-.auth-panel__eyebrow {
-  margin-bottom: 4px;
-}
-
-.auth-panel h2 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 750;
-}
-
-.auth-caption {
-  margin: 16px 0 30px;
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.auth-form :deep(.el-form-item) {
-  margin-bottom: 22px;
-}
-
-.auth-form :deep(.el-form-item__label) {
-  color: var(--el-text-color-regular);
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.auth-form :deep(.el-input__wrapper) {
-  border-radius: 6px;
-}
-
-.auth-submit {
-  width: 100%;
-  margin-top: 6px;
-  border-radius: 6px;
-  font-weight: 650;
-}
-
-.auth-access-note {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 24px 0 0;
-  gap: 6px;
-  color: var(--el-text-color-placeholder);
-  font-size: 12px;
-}
-
-.auth-error {
-  margin: 0 0 16px;
-  padding: 10px 12px;
-  color: var(--el-color-danger);
-  background: var(--el-color-danger-light-9);
-  border-left: 3px solid var(--el-color-danger);
-  border-radius: 4px;
-  font-size: 13px;
-}
-
-@media (max-width: 760px) {
-  .auth-page {
-    align-items: stretch;
-    padding: 16px;
-  }
-
-  .auth-shell {
-    min-height: 0;
-  }
-
-  .auth-brand-col {
-    border-right: 0;
-  }
-
-  .auth-brand {
-    min-height: 84px;
-    padding: 22px 24px;
-    border-bottom: 1px solid var(--el-border-color-light);
-  }
-
-  .auth-brand__message,
-  .auth-brand__trace,
-  .auth-brand::after {
-    display: none;
-  }
-
-  .auth-form-area {
-    padding: 42px 24px;
-  }
-}
-
-@media (max-width: 420px) {
-  .auth-page {
-    padding: 0;
-  }
-
-  .auth-shell {
-    min-height: 100dvh;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  .auth-form-area {
-    padding: 34px 20px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .auth-page *,
-  .auth-page *::before,
-  .auth-page *::after {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-  }
-}
-</style>
+<style scoped src="./LoginPage.css"></style>

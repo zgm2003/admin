@@ -47,7 +47,7 @@ func TestCurrentPolicyUsesRedisHitAndPostgreSQLFallbacks(t *testing.T) {
 	}
 }
 
-func TestCurrentPolicyFallsBackForCorruptionAndRedisReadError(t *testing.T) {
+func TestCurrentPolicyFailsClosedForCorruptionAndRedisError(t *testing.T) {
 	connection, ctx := openAuthenticationPlatformDatabase(t)
 	if err := database.AutoMigrate(ctx, connection.GORM, &authplatform.Platform{}); err != nil {
 		t.Fatal(err)
@@ -63,9 +63,8 @@ func TestCurrentPolicyFallsBackForCorruptionAndRedisReadError(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := authplatform.NewService(authplatform.NewRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient, nil, nil, nil, logger, authplatform.Deployment{})
-	if policy, err := service.CurrentPolicy(ctx, "admin"); err != nil || policy.Code != "admin" {
-		t.Fatalf("corrupt fallback = %+v,%v", policy, err)
-	}
+	_, err := service.CurrentPolicy(ctx, "admin")
+	assertDependencyUnavailable(t, err)
 
 	closedRedis := openPlatformRedis(t)
 	closedStore := authplatform.NewPolicyStore(closedRedis)
@@ -73,9 +72,8 @@ func TestCurrentPolicyFallsBackForCorruptionAndRedisReadError(t *testing.T) {
 		t.Fatal(err)
 	}
 	service = authplatform.NewService(authplatform.NewRepository(connection.GORM), closedStore, closedRedis, nil, nil, nil, logger, authplatform.Deployment{})
-	if policy, err := service.CurrentPolicy(ctx, "admin"); err != nil || policy.Code != "admin" {
-		t.Fatalf("Redis error fallback = %+v,%v", policy, err)
-	}
+	_, err = service.CurrentPolicy(ctx, "admin")
+	assertDependencyUnavailable(t, err)
 }
 
 func TestCurrentPolicyRejectsInvalidatingState(t *testing.T) {
@@ -94,9 +92,14 @@ func TestCurrentPolicyRejectsInvalidatingState(t *testing.T) {
 	}
 	service := authplatform.NewService(authplatform.NewRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient, nil, nil, nil, slog.Default(), authplatform.Deployment{})
 	_, err := service.CurrentPolicy(ctx, "admin")
+	assertDependencyUnavailable(t, err)
+}
+
+func assertDependencyUnavailable(t *testing.T, err error) {
+	t.Helper()
 	var appErr *apperror.Error
-	if !errors.As(err, &appErr) || appErr.Code != authplatform.CodeSessionUpdating {
-		t.Fatalf("invalidating error = %v", err)
+	if !errors.As(err, &appErr) || appErr.Code != apperror.CodeDependencyUnavailable {
+		t.Fatalf("error = %v, want dependency unavailable", err)
 	}
 }
 

@@ -3,6 +3,7 @@ package authplatform_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -38,7 +39,7 @@ func (s *platformHTTPService) List(_ context.Context, query authplatform.ListQue
 	s.listCalls++
 	s.listQuery = query
 	return pagination.Result[authplatform.ListItem]{List: []authplatform.ListItem{{Platform: authplatform.Platform{
-		ID: 1, Code: "admin", Name: "Admin", PolicyVersion: 1,
+		ID: 1, Code: "admin", Name: "Admin", LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1,
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
@@ -138,7 +139,7 @@ func TestManagementListRequiresStrictQueryAndReturnsClosedPage(t *testing.T) {
 
 func TestManagementJSONContractsRejectMissingAndUnknownFields(t *testing.T) {
 	service, router := managementRouter(t)
-	validCreate := `{"code":"app","name":"App","accessTTLSeconds":900,"refreshTTLSeconds":1209600,"sessionCacheTTLSeconds":1800,"accessCacheTTLSeconds":1800,"bindDevice":0,"bindIP":0,"maxSessions":1,"allowRegister":1,"isEnabled":1}`
+	validCreate := `{"code":"app","name":"App","loginTypes":["email","password"],"accessTTLSeconds":900,"refreshTTLSeconds":1209600,"sessionCacheTTLSeconds":1800,"accessCacheTTLSeconds":1800,"bindDevice":0,"bindIP":0,"maxSessions":1,"allowRegister":1,"isEnabled":1}`
 	recorder := performJSON(router, http.MethodPost, "/api/admin/v1/auth-platforms", validCreate)
 	if recorder.Code != http.StatusCreated || service.createCalls != 1 || recorder.Body.String() != `{"code":0,"data":{"id":2},"message":"ok"}` {
 		t.Fatalf("create status=%d calls=%d body=%s", recorder.Code, service.createCalls, recorder.Body)
@@ -155,7 +156,7 @@ func TestManagementJSONContractsRejectMissingAndUnknownFields(t *testing.T) {
 		}
 	}
 
-	validUpdate := `{"name":"App 2","accessTTLSeconds":900,"refreshTTLSeconds":1209600,"sessionCacheTTLSeconds":1800,"accessCacheTTLSeconds":1800,"bindDevice":1,"bindIP":0,"maxSessions":2,"allowRegister":0}`
+	validUpdate := `{"name":"App 2","loginTypes":["email","password"],"accessTTLSeconds":900,"refreshTTLSeconds":1209600,"sessionCacheTTLSeconds":1800,"accessCacheTTLSeconds":1800,"bindDevice":1,"bindIP":0,"maxSessions":2,"allowRegister":0}`
 	recorder = performJSON(router, http.MethodPut, "/api/admin/v1/auth-platforms/2", validUpdate)
 	if recorder.Code != http.StatusOK || service.updateCalls != 1 {
 		t.Fatalf("update status=%d calls=%d body=%s", recorder.Code, service.updateCalls, recorder.Body)

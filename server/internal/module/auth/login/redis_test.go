@@ -2,8 +2,10 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"admin/server/internal/config"
 	projectredis "admin/server/internal/redis"
@@ -28,4 +30,143 @@ func openAuthRedis(t *testing.T) *projectredis.Client {
 	}
 	t.Cleanup(func() { _ = client.Close() })
 	return client
+}
+
+func newVerificationStoreForTest(t *testing.T) VerificationCodeStore {
+	t.Helper()
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i)
+	}
+	return NewVerificationCodeStore(openAuthRedis(t), key)
+}
+
+func TestVerificationCodeConsumeIsSingleUse(t *testing.T) {
+	store := newVerificationStoreForTest(t)
+	key := fmt.Sprintf("auth:verify-code:v1:admin:login:email:test-%d", time.Now().UnixNano())
+	ctx := context.Background()
+
+	if acquired, err := store.AcquireDelivery(ctx, key, "lease-a", 10*time.Second); err != nil || !acquired {
+		t.Fatalf("AcquireDelivery = %v, %v", acquired, err)
+	}
+	if err := store.Put(ctx, key, "digest-a", "lease-a", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	first, err := store.Consume(ctx, key, "digest-a")
+	if err != nil || !first {
+		t.Fatalf("first consume = %v, %v", first, err)
+	}
+	second, err := store.Consume(ctx, key, "digest-a")
+	if err != nil || second {
+		t.Fatalf("replay consume = %v, %v", second, err)
+	}
+}
+
+func TestVerificationCodeWrongCodeDoesNotDeleteCorrectCode(t *testing.T) {
+	store := newVerificationStoreForTest(t)
+	key := fmt.Sprintf("auth:verify-code:v1:admin:login:email:wrong-%d", time.Now().UnixNano())
+	ctx := context.Background()
+
+	if _, err := store.AcquireDelivery(ctx, key, "lease-a", 10*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(ctx, key, "digest-correct", "lease-a", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if consumed, err := store.Consume(ctx, key, "digest-wrong"); err != nil || consumed {
+		t.Fatalf("wrong consume = %v, %v", consumed, err)
+	}
+	if ok, err := store.Check(ctx, key, "digest-correct"); err != nil || !ok {
+		t.Fatalf("correct code after wrong consume = %v, %v", ok, err)
+	}
+	if consumed, err := store.Consume(ctx, key, "digest-correct"); err != nil || !consumed {
+		t.Fatalf("correct consume = %v, %v", consumed, err)
+	}
+}
+
+func TestVerificationCodeDeleteIfOwnedRequiresToken(t *testing.T) {
+	store := newVerificationStoreForTest(t)
+	key := fmt.Sprintf("auth:verify-code:v1:admin:login:email:owned-%d", time.Now().UnixNano())
+	ctx := context.Background()
+
+	if _, err := store.AcquireDelivery(ctx, key, "lease-a", 10*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(ctx, key, "digest-a", "lease-a", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteIfOwned(ctx, key, "wrong-token"); err == nil {
+		t.Fatal("DeleteIfOwned accepted a wrong lease token")
+	}
+	if ok, err := store.Check(ctx, key, "digest-a"); err != nil || !ok {
+		t.Fatalf("code deleted by wrong token: ok=%v err=%v", ok, err)
+	}
+	if err := store.DeleteIfOwned(ctx, key, "lease-a"); err != nil {
+		t.Fatalf("DeleteIfOwned with correct token: %v", err)
+	}
+	if ok, err := store.Check(ctx, key, "digest-a"); err != nil || ok {
+		t.Fatalf("code still present after owned delete: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestVerificationCodePutDoesNotOverwriteUnexpiredCodeOwnedByAnotherDelivery(t *testing.T) {
+	store := newVerificationStoreForTest(t)
+	key := fmt.Sprintf("auth:verify-code:v1:admin:login:email:occupied-%d", time.Now().UnixNano())
+	ctx := context.Background()
+
+	if acquired, err := store.AcquireDelivery(ctx, key, "lease-a", 10*time.Second); err != nil || !acquired {
+		t.Fatalf("first AcquireDelivery = %v, %v", acquired, err)
+	}
+	if err := store.Put(ctx, key, "digest-a", "lease-a", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ReleaseDelivery(ctx, key, "lease-a"); err != nil {
+		t.Fatal(err)
+	}
+	if acquired, err := store.AcquireDelivery(ctx, key, "lease-b", 10*time.Second); err != nil || !acquired {
+		t.Fatalf("second AcquireDelivery = %v, %v", acquired, err)
+	}
+	if err := store.Put(ctx, key, "digest-b", "lease-b", time.Minute); err == nil {
+		t.Fatal("second delivery overwrote an unexpired verification code")
+	}
+	if valid, err := store.Check(ctx, key, "digest-a"); err != nil || !valid {
+		t.Fatalf("original code after overwrite attempt = %v, %v", valid, err)
+	}
+}
+
+func TestVerificationCodeCheckAttemptLimitsAccountAndIPWithoutDeletingCode(t *testing.T) {
+	store := newVerificationStoreForTest(t)
+	ctx := context.Background()
+	key := fmt.Sprintf("auth:verify-code:v1:admin:login:email:attempt-%d", time.Now().UnixNano())
+	if acquired, err := store.AcquireDelivery(ctx, key, "lease-a", 10*time.Second); err != nil || !acquired {
+		t.Fatalf("AcquireDelivery = %v, %v", acquired, err)
+	}
+	if err := store.Put(ctx, key, "digest-correct", "lease-a", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+
+	for attempt := 0; attempt < 10; attempt++ {
+		valid, limited, err := store.CheckAttempt(ctx, key, "digest-wrong", "192.0.2.10")
+		if err != nil || valid || limited {
+			t.Fatalf("account attempt %d = valid:%v limited:%v err:%v", attempt+1, valid, limited, err)
+		}
+	}
+	if valid, limited, err := store.CheckAttempt(ctx, key, "digest-correct", "192.0.2.10"); err != nil || valid || !limited {
+		t.Fatalf("limited correct attempt = valid:%v limited:%v err:%v", valid, limited, err)
+	}
+	if valid, err := store.Check(ctx, key, "digest-correct"); err != nil || !valid {
+		t.Fatalf("correct code was deleted after limited attempts = %v, %v", valid, err)
+	}
+
+	for attempt := 0; attempt < 30; attempt++ {
+		otherKey := fmt.Sprintf("auth:verify-code:v1:admin:login:email:ip-%d-%d", time.Now().UnixNano(), attempt)
+		valid, limited, err := store.CheckAttempt(ctx, otherKey, "digest-wrong", "192.0.2.20")
+		if err != nil || valid || limited {
+			t.Fatalf("IP attempt %d = valid:%v limited:%v err:%v", attempt+1, valid, limited, err)
+		}
+	}
+	otherKey := fmt.Sprintf("auth:verify-code:v1:admin:login:email:ip-limited-%d", time.Now().UnixNano())
+	if valid, limited, err := store.CheckAttempt(ctx, otherKey, "digest-wrong", "192.0.2.20"); err != nil || valid || !limited {
+		t.Fatalf("limited IP attempt = valid:%v limited:%v err:%v", valid, limited, err)
+	}
 }

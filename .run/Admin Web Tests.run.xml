@@ -1,0 +1,14 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Admin Web Tests" type="js.build_tools.npm">
+    <package-json value="$PROJECT_DIR$/web/package.json" />
+    <command value="run" />
+    <scripts>
+      <script value="test" />
+    </scripts>
+    <arguments value="--pool=threads --maxWorkers=1" />
+    <node-interpreter value="project" />
+    <package-manager value="pnpm" />
+    <envs />
+    <method v="2" />
+  </configuration>
+</component>

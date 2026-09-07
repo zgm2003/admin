@@ -2,6 +2,7 @@ package authplatform_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -332,7 +333,7 @@ func TestEnsureSchemaRollsBackBuiltinAdminMigrationFailure(t *testing.T) {
 
 func validHistoricalAdmin(now time.Time) authplatform.Platform {
 	return authplatform.Platform{
-		Code: authplatform.BuiltinAdminCode, Name: "Admin", PolicyVersion: 1,
+		Code: authplatform.BuiltinAdminCode, Name: "Admin", LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1,
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
 		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,

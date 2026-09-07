@@ -50,6 +50,20 @@ const { t } = useI18n()
               <el-input v-model="form.name" data-testid="auth-platform-name" />
             </el-form-item>
           </el-col>
+          <el-col :xs="24">
+            <el-form-item :label="t('authPlatform.loginTypes')">
+              <el-select
+                v-model="form.loginTypes"
+                multiple
+                data-testid="auth-platform-login-types"
+                class="auth-platform-login-types"
+              >
+                <el-option value="email" :label="t('loginType.email')" />
+                <el-option value="phone" :label="t('loginType.phone')" />
+                <el-option value="password" :label="t('loginType.password')" />
+              </el-select>
+            </el-form-item>
+          </el-col>
         </el-row>
       </div>
       <div class="auth-platform-form-section">

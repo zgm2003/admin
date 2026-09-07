@@ -207,6 +207,86 @@ func (s *Service) Send(ctx context.Context, in BusinessSendInput) (SendResult, e
 	return s.send(ctx, in, SendModeBusiness)
 }
 
+// VerifyCodeReady reports whether the platform can send a verification email
+// for the given scene. A disabled or missing config/template returns false
+// with no error; repository failures return an error.
+func (s *Service) VerifyCodeReady(ctx context.Context, platformID int64, scene string) (bool, error) {
+	if scene != SceneLogin {
+		return false, nil
+	}
+	if _, err := s.loadRateLimitCatalog(ctx); err != nil {
+		return false, dependency(err)
+	}
+	config, err := s.repository.FindConfig(ctx, platformID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		return false, dependency(err)
+	}
+	if config.IsEnabled != yesno.Yes {
+		return false, nil
+	}
+	templates, err := s.repository.ListTemplates(ctx, platformID)
+	if err != nil {
+		return false, dependency(err)
+	}
+	for _, template := range templates {
+		if template.Scene == SceneLogin && template.IsEnabled == yesno.Yes {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// SendEmailVerifyCode sends a six-digit login verification email through the
+// existing business Send path, preserving challenge idempotency.
+func (s *Service) SendEmailVerifyCode(ctx context.Context, in EmailVerifyCodeInput) (EmailVerifyCodeResult, error) {
+	email, err := NormalizeRecipient(in.ToEmail)
+	if err != nil {
+		return EmailVerifyCodeResult{}, invalid(err)
+	}
+	if in.Scene != SceneLogin {
+		return EmailVerifyCodeResult{}, invalid(fmt.Errorf("verification code scene is invalid"))
+	}
+	if !isSixDigitCode(in.Code) {
+		return EmailVerifyCodeResult{}, invalid(fmt.Errorf("verification code must be six digits"))
+	}
+	if in.TTLMinutes < 1 {
+		return EmailVerifyCodeResult{}, invalid(fmt.Errorf("verification code TTL must be positive"))
+	}
+	result, err := s.Send(ctx, BusinessSendInput{
+		PlatformID:            in.PlatformID,
+		UserID:                in.UserID,
+		ClientIP:              in.ClientIP,
+		ChallengeID:           in.ChallengeID,
+		Scene:                 in.Scene,
+		ToEmail:               email,
+		Variables:             map[string]string{"code": in.Code, "ttl_minutes": strconv.Itoa(in.TTLMinutes)},
+		RejectActiveChallenge: true,
+	})
+	if err != nil {
+		return EmailVerifyCodeResult{}, err
+	}
+	return EmailVerifyCodeResult{
+		LogID:       result.LogID,
+		ChallengeID: in.ChallengeID,
+		ExpiresAt:   time.Now().UTC().Add(time.Duration(in.TTLMinutes) * time.Minute),
+	}, nil
+}
+
+func isSixDigitCode(value string) bool {
+	if len(value) != 6 {
+		return false
+	}
+	for _, character := range value {
+		if character < '0' || character > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode) (SendResult, error) {
 	if in.PlatformID < 1 {
 		return SendResult{}, invalid(fmt.Errorf("platform invalid"))
@@ -248,6 +328,9 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 	}
 	if in.ChallengeID != "" {
 		if old, e := s.repository.FindActiveChallenge(ctx, in.PlatformID, in.ChallengeID); e == nil {
+			if in.RejectActiveChallenge {
+				return SendResult{}, conflict(fmt.Errorf("mail challenge is already active"))
+			}
 			return sendResultFromLog(old), nil
 		} else if !errors.Is(e, gorm.ErrRecordNotFound) {
 			return SendResult{}, wrapRepo(e)
@@ -277,7 +360,7 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 	for key, value := range in.Variables {
 		variables[key] = value
 	}
-	variables["ttl_minutes"] = strconv.Itoa(int(c.TTLMinutes))
+	effectiveTTLMinutes, _ := strconv.Atoi(strings.TrimSpace(variables["ttl_minutes"]))
 	now := time.Now().UTC()
 	var challengePtr *string
 	if in.ChallengeID != "" {
@@ -287,6 +370,9 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 	if e != nil {
 		if in.ChallengeID != "" && isUniqueViolation(e) {
 			if old, findErr := s.repository.FindActiveChallenge(ctx, in.PlatformID, in.ChallengeID); findErr == nil {
+				if in.RejectActiveChallenge {
+					return SendResult{}, conflict(fmt.Errorf("mail challenge is already active"))
+				}
 				return sendResultFromLog(old), nil
 			} else if !errors.Is(findErr, gorm.ErrRecordNotFound) {
 				return SendResult{}, wrapRepo(findErr)
@@ -300,7 +386,7 @@ func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode)
 		if ce != nil {
 			return s.failPending(ctx, in.PlatformID, row.ID, ce, sendStarted)
 		}
-		if ve := s.repository.AddVerification(ctx, &Verification{PlatformID: in.PlatformID, MailLogID: row.ID, KeyVersion: ver, CodeCiphertext: ct, ExpiresAt: now.Add(time.Duration(c.TTLMinutes) * time.Minute), CreatedAt: now}); ve != nil {
+		if ve := s.repository.AddVerification(ctx, &Verification{PlatformID: in.PlatformID, MailLogID: row.ID, KeyVersion: ver, CodeCiphertext: ct, ExpiresAt: now.Add(time.Duration(effectiveTTLMinutes) * time.Minute), CreatedAt: now}); ve != nil {
 			return s.failPending(ctx, in.PlatformID, row.ID, ve, sendStarted)
 		}
 	}

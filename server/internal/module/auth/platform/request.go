@@ -14,6 +14,7 @@ import (
 type createRequest struct {
 	Code                   *string      `json:"code"`
 	Name                   *string      `json:"name"`
+	LoginTypes             *[]LoginType `json:"loginTypes"`
 	AccessTTLSeconds       *int         `json:"accessTTLSeconds"`
 	RefreshTTLSeconds      *int         `json:"refreshTTLSeconds"`
 	SessionCacheTTLSeconds *int         `json:"sessionCacheTTLSeconds"`
@@ -26,7 +27,7 @@ type createRequest struct {
 }
 
 func (r createRequest) input() (CreateInput, error) {
-	if r.Code == nil || r.Name == nil || r.AccessTTLSeconds == nil || r.RefreshTTLSeconds == nil ||
+	if r.Code == nil || r.Name == nil || r.LoginTypes == nil || r.AccessTTLSeconds == nil || r.RefreshTTLSeconds == nil ||
 		r.SessionCacheTTLSeconds == nil || r.AccessCacheTTLSeconds == nil || r.BindDevice == nil ||
 		r.BindIP == nil || r.MaxSessions == nil || r.AllowRegister == nil || r.IsEnabled == nil {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("every authentication platform field is required"))
@@ -35,7 +36,7 @@ func (r createRequest) input() (CreateInput, error) {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("authentication platform Yes/No value is invalid"))
 	}
 	return CreateInput{
-		Code: *r.Code, Name: *r.Name,
+		Code: *r.Code, Name: *r.Name, LoginTypes: *r.LoginTypes,
 		AccessTTLSeconds: *r.AccessTTLSeconds, RefreshTTLSeconds: *r.RefreshTTLSeconds,
 		SessionCacheTTLSeconds: *r.SessionCacheTTLSeconds, AccessCacheTTLSeconds: *r.AccessCacheTTLSeconds,
 		BindDevice: *r.BindDevice, BindIP: *r.BindIP, MaxSessions: *r.MaxSessions,
@@ -45,6 +46,7 @@ func (r createRequest) input() (CreateInput, error) {
 
 type updateRequest struct {
 	Name                   *string      `json:"name"`
+	LoginTypes             *[]LoginType `json:"loginTypes"`
 	AccessTTLSeconds       *int         `json:"accessTTLSeconds"`
 	RefreshTTLSeconds      *int         `json:"refreshTTLSeconds"`
 	SessionCacheTTLSeconds *int         `json:"sessionCacheTTLSeconds"`
@@ -56,7 +58,7 @@ type updateRequest struct {
 }
 
 func (r updateRequest) input() (UpdateInput, error) {
-	if r.Name == nil || r.AccessTTLSeconds == nil || r.RefreshTTLSeconds == nil || r.SessionCacheTTLSeconds == nil ||
+	if r.Name == nil || r.LoginTypes == nil || r.AccessTTLSeconds == nil || r.RefreshTTLSeconds == nil || r.SessionCacheTTLSeconds == nil ||
 		r.AccessCacheTTLSeconds == nil || r.BindDevice == nil || r.BindIP == nil || r.MaxSessions == nil || r.AllowRegister == nil {
 		return UpdateInput{}, apperror.InvalidRequest(fmt.Errorf("every authentication platform policy field is required"))
 	}
@@ -64,7 +66,7 @@ func (r updateRequest) input() (UpdateInput, error) {
 		return UpdateInput{}, apperror.InvalidRequest(fmt.Errorf("authentication platform Yes/No value is invalid"))
 	}
 	return UpdateInput{
-		Name: *r.Name, AccessTTLSeconds: *r.AccessTTLSeconds, RefreshTTLSeconds: *r.RefreshTTLSeconds,
+		Name: *r.Name, LoginTypes: *r.LoginTypes, AccessTTLSeconds: *r.AccessTTLSeconds, RefreshTTLSeconds: *r.RefreshTTLSeconds,
 		SessionCacheTTLSeconds: *r.SessionCacheTTLSeconds, AccessCacheTTLSeconds: *r.AccessCacheTTLSeconds,
 		BindDevice: *r.BindDevice, BindIP: *r.BindIP, MaxSessions: *r.MaxSessions, AllowRegister: *r.AllowRegister,
 	}, nil

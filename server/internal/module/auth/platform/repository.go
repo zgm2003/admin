@@ -2,6 +2,7 @@ package authplatform
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -16,6 +17,7 @@ import (
 
 type UpdateValues struct {
 	Name                   string
+	LoginTypes             json.RawMessage
 	AccessTTLSeconds       int
 	RefreshTTLSeconds      int
 	SessionCacheTTLSeconds int
@@ -241,12 +243,12 @@ func (r *Repository) UpdatePolicy(ctx context.Context, id int64, values UpdateVa
 	var version int64
 	result := r.db.WithContext(ctx).Raw(`
 		UPDATE auth_platform
-		SET name = ?, access_ttl_seconds = ?, refresh_ttl_seconds = ?,
+		SET name = ?, login_types = ?, access_ttl_seconds = ?, refresh_ttl_seconds = ?,
 			session_cache_ttl_seconds = ?, access_cache_ttl_seconds = ?,
 			bind_device = ?, bind_ip = ?, max_sessions = ?, allow_register = ?,
 			policy_version = policy_version + 1, updated_at = ?
 		WHERE id = ? AND deleted_at IS NULL
-		RETURNING policy_version`, values.Name, values.AccessTTLSeconds, values.RefreshTTLSeconds,
+		RETURNING policy_version`, values.Name, values.LoginTypes, values.AccessTTLSeconds, values.RefreshTTLSeconds,
 		values.SessionCacheTTLSeconds, values.AccessCacheTTLSeconds, values.BindDevice, values.BindIP,
 		values.MaxSessions, values.AllowRegister, updatedAt.UTC(), id).Scan(&version)
 	if result.Error != nil {

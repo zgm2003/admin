@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { CirclePlus } from '@element-plus/icons-vue'
 import { ElMessageBox, ElNotification } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -69,7 +69,7 @@ const tablePagination = computed<TablePaginationState>(() => ({
   total: total.value,
 }))
 const tableColumns = computed(() => authPlatformTableColumns(t))
-const form = reactive<AuthPlatformForm>(createAuthPlatformForm())
+const form = ref<AuthPlatformForm>(createAuthPlatformForm())
 
 const canList = computed(() => access.hasPermission('auth:platform:list'))
 const canCreate = computed(() => access.hasPermission('auth:platform:create'))
@@ -83,7 +83,7 @@ const isBuiltinAdminEdit = computed(() => {
     dialogMode.value === 'edit' && platform?.code === 'admin' && platform.isBuiltin === YesNo.Yes
   )
 })
-const formValid = computed(() => isAuthPlatformFormValid(form, isEditing.value))
+const formValid = computed(() => isAuthPlatformFormValid(form.value, isEditing.value))
 
 async function loadPage(): Promise<void> {
   if (!canList.value) return
@@ -143,7 +143,7 @@ function updateTablePagination(next: TablePaginationState): void {
 function openCreate(): void {
   dialogMode.value = 'create'
   editingPlatform.value = null
-  Object.assign(form, createAuthPlatformForm())
+  Object.assign(form.value, createAuthPlatformForm())
   mutationError.value = ''
   dialogVisible.value = true
 }
@@ -151,7 +151,7 @@ function openCreate(): void {
 function openEdit(platform: AuthPlatformListItem): void {
   dialogMode.value = 'edit'
   editingPlatform.value = platform
-  Object.assign(form, editAuthPlatformForm(platform))
+  Object.assign(form.value, editAuthPlatformForm(platform))
   mutationError.value = ''
   dialogVisible.value = true
 }
@@ -160,13 +160,13 @@ async function submit(): Promise<void> {
   if (!formValid.value || submitting.value) return
   if (dialogMode.value === 'edit' && editingPlatform.value !== null) {
     if (
-      form.maxSessions < editingPlatform.value.maxSessions &&
-      form.maxSessions > 0 &&
+      form.value.maxSessions < editingPlatform.value.maxSessions &&
+      form.value.maxSessions > 0 &&
       !(await confirmAction('authPlatform.confirm.limit'))
     )
       return
     if (
-      authPlatformSecurityChanged(form, editingPlatform.value) &&
+      authPlatformSecurityChanged(form.value, editingPlatform.value) &&
       !(await confirmAction('authPlatform.confirm.security'))
     )
       return
@@ -175,12 +175,12 @@ async function submit(): Promise<void> {
   mutationError.value = ''
   try {
     if (dialogMode.value === 'create') {
-      await createAuthPlatform(createAuthPlatformInput(form))
+      await createAuthPlatform(createAuthPlatformInput(form.value))
       query.value = { ...query.value, page: 1 }
     } else if (editingPlatform.value !== null) {
       await updateAuthPlatform(
         editingPlatform.value.id,
-        updateAuthPlatformInput(form, isBuiltinAdminEdit.value),
+        updateAuthPlatformInput(form.value, isBuiltinAdminEdit.value),
       )
     }
     await loadPage()
@@ -260,7 +260,7 @@ function formatUpdatedTime(value: string): string {
 }
 
 function restoreDefaultTTL(): void {
-  Object.assign(form, authPlatformDefaultTTL)
+  Object.assign(form.value, authPlatformDefaultTTL)
 }
 
 function errorMessage(

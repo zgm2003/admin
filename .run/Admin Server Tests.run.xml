@@ -1,0 +1,14 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Admin Server Tests" type="GoTestRunConfiguration" factoryName="Go Test">
+    <module name="admin" />
+    <working_directory value="$PROJECT_DIR$/server" />
+    <go_parameters value="" />
+    <parameters value="" />
+    <kind value="PACKAGE" />
+    <package value="admin/server/..." />
+    <directory value="$PROJECT_DIR$/server" />
+    <filePath value="$PROJECT_DIR$/server" />
+    <framework value="gotest" />
+    <method v="2" />
+  </configuration>
+</component>

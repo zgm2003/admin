@@ -11,7 +11,7 @@ describe('auth store', () => {
   it('starts unknown and stores an in-memory credential', () => {
     const store = useAuthStore()
     expect(store.status).toBe('unknown')
-    store.setCredential({ accessToken: 'jwt', expiresIn: 900 }, 1_000)
+    store.setCredential({ accessToken: 'jwt', expiresIn: 900, isNewUser: false }, 1_000)
     expect(store.accessToken).toBe('jwt')
     expect(store.accessExpiresAt).toBe(901_000)
     expect(store.status).toBe('unknown')
@@ -26,7 +26,7 @@ describe('auth store', () => {
       phone: null,
       avatar: '',
     }
-    store.setCredential({ accessToken: 'jwt', expiresIn: 900 }, 1_000)
+    store.setCredential({ accessToken: 'jwt', expiresIn: 900, isNewUser: false }, 1_000)
     store.setAuthenticated(user)
     expect(store.status).toBe('authenticated')
     expect(store.user).toEqual(user)
@@ -34,7 +34,7 @@ describe('auth store', () => {
 
   it('clears every auth value when anonymous or failed', () => {
     const store = useAuthStore()
-    store.setCredential({ accessToken: 'jwt', expiresIn: 900 }, 1_000)
+    store.setCredential({ accessToken: 'jwt', expiresIn: 900, isNewUser: false }, 1_000)
     store.setAuthenticated({
       userId: 1,
       username: 'admin',
@@ -48,7 +48,7 @@ describe('auth store', () => {
     expect(store.accessExpiresAt).toBe(0)
     expect(store.user).toBeNull()
 
-    store.setCredential({ accessToken: 'jwt-2', expiresIn: 900 }, 2_000)
+    store.setCredential({ accessToken: 'jwt-2', expiresIn: 900, isNewUser: false }, 2_000)
     store.setError('服务暂未就绪')
     expect(store.status).toBe('error')
     expect(store.errorMessage).toBe('服务暂未就绪')
@@ -60,7 +60,7 @@ describe('auth store', () => {
   it('updates the authenticated current user profile atomically', () => {
     const store = useAuthStore()
     expect(store.updateProfile(7, 'ignored', '+86 138-0000-0000')).toBe(false)
-    store.setCredential({ accessToken: 'jwt', expiresIn: 900 }, 1_000)
+    store.setCredential({ accessToken: 'jwt', expiresIn: 900, isNewUser: false }, 1_000)
     store.setAuthenticated({
       userId: 7,
       username: 'old',

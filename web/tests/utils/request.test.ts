@@ -215,7 +215,7 @@ describe('createRequestClient', () => {
         refreshed = true
         return successResponse(config, {
           code: 0,
-          data: { accessToken: 'new-token', expiresIn: 900 },
+          data: { accessToken: 'new-token', expiresIn: 900, isNewUser: false },
           message: 'ok',
         })
       }
@@ -228,7 +228,11 @@ describe('createRequestClient', () => {
   })
 
   it('adds the in-memory bearer token to protected requests', async () => {
-    useAuthStore(pinia).setCredential({ accessToken: 'memory-token', expiresIn: 900 })
+    useAuthStore(pinia).setCredential({
+      accessToken: 'memory-token',
+      expiresIn: 900,
+      isNewUser: false,
+    })
     let authorization = ''
     const adapter: AxiosAdapter = async (config) => {
       authorization = AxiosHeaders.from(config.headers).get('Authorization')?.toString() ?? ''
@@ -255,7 +259,11 @@ describe('createRequestClient', () => {
   })
 
   it('attaches platform and device headers to protected requests with a bearer token', async () => {
-    useAuthStore(pinia).setCredential({ accessToken: 'stale-token', expiresIn: 900 })
+    useAuthStore(pinia).setCredential({
+      accessToken: 'stale-token',
+      expiresIn: 900,
+      isNewUser: false,
+    })
     localStorage.setItem('admin:device-id', '550e8400-e29b-41d4-a716-446655440000')
     let headers = new AxiosHeaders()
     const adapter: AxiosAdapter = async (config) => {
@@ -282,7 +290,7 @@ describe('createRequestClient', () => {
         refreshed = true
         return successResponse(config, {
           code: 0,
-          data: { accessToken: 'new-token', expiresIn: 900 },
+          data: { accessToken: 'new-token', expiresIn: 900, isNewUser: false },
           message: 'ok',
         })
       }
@@ -306,7 +314,7 @@ describe('createRequestClient', () => {
         refreshed = true
         return successResponse(config, {
           code: 0,
-          data: { accessToken: 'new-token', expiresIn: 900 },
+          data: { accessToken: 'new-token', expiresIn: 900, isNewUser: false },
           message: 'ok',
         })
       }
@@ -372,7 +380,7 @@ describe('createRequestClient', () => {
       if (config.url === '/api/v1/auth/refresh') {
         return successResponse(config, {
           code: 0,
-          data: { accessToken: 'new-token', expiresIn: 900 },
+          data: { accessToken: 'new-token', expiresIn: 900, isNewUser: false },
           message: 'ok',
         })
       }
@@ -401,7 +409,7 @@ describe('createRequestClient', () => {
 
   it('sets anonymous after a refresh 401', async () => {
     const store = useAuthStore(pinia)
-    store.setCredential({ accessToken: 'expired', expiresIn: 900 })
+    store.setCredential({ accessToken: 'expired', expiresIn: 900, isNewUser: false })
     const adapter: AxiosAdapter = async (config) => {
       throw apiFailure(config, 401, 10002, '未登录或登录已失效')
     }

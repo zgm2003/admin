@@ -28,7 +28,7 @@ describe('admin layout', () => {
     usePermissionStore(pinia).reset()
     useAuthStore(pinia).$reset()
     useUIPreferencesStore(pinia).initializeSafely()
-    useAuthStore(pinia).setCredential({ accessToken: 'jwt', expiresIn: 900 })
+    useAuthStore(pinia).setCredential({ accessToken: 'jwt', expiresIn: 900, isNewUser: false })
     useAuthStore(pinia).setAuthenticated({
       userId: 1,
       username: 'admin',

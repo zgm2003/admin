@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/auth/state"
+	messagemail "admin/server/internal/module/message/mail"
 	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/loginlog"
@@ -31,6 +33,8 @@ import (
 type userStore interface {
 	CreateWithRole(context.Context, user.CreateInput) (user.User, error)
 	FindCredentialByEmail(context.Context, string) (user.Credential, error)
+	FindCredentialByIdentity(context.Context, string, string) (user.Credential, error)
+	CreateVerifiedIdentity(context.Context, user.VerifiedIdentityInput) (user.User, error)
 	FindCurrent(context.Context, int64) (user.Current, error)
 }
 
@@ -80,6 +84,8 @@ type Service struct {
 	jwt                 *JWT
 	refreshTokenHMACKey []byte
 	comparePassword     func(string, string) error
+	verifyCodeSender    messagemail.VerifyCodeSender
+	verificationCodes   VerificationCodeStore
 	logger              *slog.Logger
 	now                 func() time.Time
 	loginLogs           loginLogRecorder
@@ -111,12 +117,22 @@ func NewService(
 
 func (s *Service) SetLoginLogRecorder(recorder loginLogRecorder) { s.loginLogs = recorder }
 
+func (s *Service) SetVerifyCodeSender(sender messagemail.VerifyCodeSender) {
+	s.verifyCodeSender = sender
+}
+
+func (s *Service) SetVerificationCodeStore(store VerificationCodeStore) { s.verificationCodes = store }
+
 func (s *Service) recordLoginEvent(ctx context.Context, event loginlog.Event) error {
 	if s.loginLogs == nil {
 		return nil
 	}
 	if err := s.loginLogs.Record(ctx, event); err != nil {
-		return apperror.DependencyUnavailable(err)
+		// Login-log persistence is best-effort: an outage must never change the
+		// completed login response.
+		if s.logger != nil {
+			s.logger.WarnContext(ctx, "login event recording failed", "error", err)
+		}
 	}
 	return nil
 }
@@ -231,12 +247,168 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Registered
 	return Registered{UserID: created.ID, Username: created.Username, Email: created.Email}, nil
 }
 
+const verificationCodeTTL = 10 * time.Minute
+
+// LoginConfig returns the effective, channel-filtered login methods for the
+// platform. Phone is filtered until a real SMS sender is wired.
+func (s *Service) LoginConfig(ctx context.Context, client authclient.Client) (authplatform.LoginConfig, error) {
+	policy, err := s.policies.CurrentPolicy(ctx, client.Platform)
+	if err != nil {
+		return authplatform.LoginConfig{}, err
+	}
+	options := make([]authplatform.LoginTypeOption, 0, len(policy.LoginTypes))
+	for _, loginType := range policy.LoginTypes {
+		switch loginType {
+		case authplatform.LoginTypeEmail:
+			if s.verifyCodeSender == nil {
+				continue
+			}
+			ready, readyErr := s.verifyCodeSender.VerifyCodeReady(ctx, policy.ID, messagemail.SceneLogin)
+			if readyErr != nil {
+				return authplatform.LoginConfig{}, apperror.DependencyUnavailable(readyErr)
+			}
+			if ready {
+				options = append(options, authplatform.LoginTypeOption{Value: loginType})
+			}
+		case authplatform.LoginTypePhone:
+			// No SMS channel is wired yet; phone is never offered.
+		case authplatform.LoginTypePassword:
+			options = append(options, authplatform.LoginTypeOption{Value: loginType})
+		}
+	}
+	if len(options) == 0 {
+		return authplatform.LoginConfig{}, apperror.DependencyUnavailable(fmt.Errorf("no login methods are available for authentication platform %q", policy.Code))
+	}
+	return authplatform.LoginConfig{LoginTypes: options, AllowRegister: policy.AllowRegister}, nil
+}
+
+// SendCode issues a six-digit email verification code. Only the digest is
+// stored; the code is returned to the caller only via the email channel.
+func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeResult, error) {
+	if input.Scene != messagemail.SceneLogin {
+		return SendCodeResult{}, apperror.InvalidRequest(fmt.Errorf("verification code scene is invalid"))
+	}
+	if input.LoginType != authplatform.LoginTypeEmail {
+		return SendCodeResult{}, apperror.InvalidRequest(fmt.Errorf("login type is not available"))
+	}
+	if s.verifyCodeSender == nil || s.verificationCodes == nil {
+		return SendCodeResult{}, apperror.DependencyUnavailable(fmt.Errorf("verification code dependencies are unavailable"))
+	}
+	email, err := normalizeEmail(input.Account)
+	if err != nil {
+		return SendCodeResult{}, apperror.InvalidRequest(err)
+	}
+	policy, err := s.policies.CurrentPolicy(ctx, input.Client.Platform)
+	if err != nil {
+		return SendCodeResult{}, err
+	}
+	if !policyAllowsLoginType(policy, input.LoginType) {
+		return SendCodeResult{}, apperror.Forbidden(fmt.Errorf("login type %q is disabled for authentication platform %q", input.LoginType, policy.Code))
+	}
+	ready, err := s.verifyCodeSender.VerifyCodeReady(ctx, policy.ID, messagemail.SceneLogin)
+	if err != nil {
+		return SendCodeResult{}, apperror.DependencyUnavailable(err)
+	}
+	if !ready {
+		return SendCodeResult{}, apperror.DependencyUnavailable(fmt.Errorf("mail verification is unavailable"))
+	}
+
+	code, err := newSixDigitCode()
+	if err != nil {
+		return SendCodeResult{}, apperror.Internal(err)
+	}
+	key := s.verificationCodes.VerificationKey(policy.Code, messagemail.SceneLogin, string(authplatform.LoginTypeEmail), email)
+	digest := s.verificationCodes.Digest(code)
+	leaseToken, err := newRefreshToken()
+	if err != nil {
+		return SendCodeResult{}, apperror.Internal(err)
+	}
+	acquired, err := s.verificationCodes.AcquireDelivery(ctx, key, leaseToken, 10*time.Second)
+	if err != nil {
+		return SendCodeResult{}, apperror.DependencyUnavailable(err)
+	}
+	if !acquired {
+		return SendCodeResult{}, apperror.DependencyUnavailable(fmt.Errorf("verification code delivery is in progress"))
+	}
+	challengeID := input.ChallengeID
+	if challengeID == "" {
+		challengeID = leaseToken
+	}
+	if err := s.verificationCodes.Put(ctx, key, digest, leaseToken, verificationCodeTTL); err != nil {
+		releaseErr := s.verificationCodes.ReleaseDelivery(ctx, key, leaseToken)
+		return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(err, releaseErr))
+	}
+	expiresAt := s.now().UTC().Add(verificationCodeTTL)
+	_, sendErr := s.verifyCodeSender.SendEmailVerifyCode(ctx, messagemail.EmailVerifyCodeInput{
+		PlatformID: policy.ID, ClientIP: input.Client.ClientIP, ChallengeID: challengeID,
+		Scene: messagemail.SceneLogin, ToEmail: email, Code: code, TTLMinutes: int(verificationCodeTTL / time.Minute),
+	})
+	if sendErr != nil {
+		cleanupErr := errors.Join(
+			s.verificationCodes.DeleteIfOwned(ctx, key, leaseToken),
+			s.verificationCodes.ReleaseDelivery(ctx, key, leaseToken),
+		)
+		if cleanupErr != nil {
+			if s.logger != nil {
+				s.logger.ErrorContext(ctx, "verification code cleanup failed", "error", cleanupErr)
+			}
+			return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(sendErr, cleanupErr))
+		}
+		return SendCodeResult{}, sendErr
+	}
+	if err := s.verificationCodes.ReleaseDelivery(ctx, key, leaseToken); err != nil {
+		if s.logger != nil {
+			s.logger.ErrorContext(ctx, "verification code delivery lease release failed", "error", err)
+		}
+		return SendCodeResult{}, apperror.DependencyUnavailable(err)
+	}
+	return SendCodeResult{ChallengeID: challengeID, ExpiresAt: expiresAt}, nil
+}
+
+func newSixDigitCode() (string, error) {
+	value := make([]byte, 4)
+	if _, err := rand.Read(value); err != nil {
+		return "", fmt.Errorf("generate verification code: %w", err)
+	}
+	return fmt.Sprintf("%06d", binary.BigEndian.Uint32(value)%1_000_000), nil
+}
+
 func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, error) {
+	switch input.LoginType {
+	case authplatform.LoginTypePassword, authplatform.LoginTypeEmail, authplatform.LoginTypePhone:
+	default:
+		return Credential{}, apperror.InvalidRequest(fmt.Errorf("login type is invalid"))
+	}
 	policy, err := s.policies.CurrentPolicy(ctx, input.Client.Platform)
 	if err != nil {
 		return Credential{}, err
 	}
-	email, err := normalizeEmail(input.Email)
+	if !policyAllowsLoginType(policy, input.LoginType) {
+		return Credential{}, apperror.Forbidden(fmt.Errorf("login type %q is disabled for authentication platform %q", input.LoginType, policy.Code))
+	}
+	if input.LoginType == authplatform.LoginTypePhone {
+		return Credential{}, apperror.Forbidden(fmt.Errorf("phone login is unavailable until an SMS channel is configured"))
+	}
+	switch input.LoginType {
+	case authplatform.LoginTypePassword:
+		return s.loginWithPassword(ctx, policy, input)
+	case authplatform.LoginTypeEmail:
+		return s.loginWithCode(ctx, policy, input)
+	}
+	return Credential{}, apperror.InvalidRequest(fmt.Errorf("login type is invalid"))
+}
+
+func policyAllowsLoginType(policy authplatform.Policy, loginType authplatform.LoginType) bool {
+	for _, configured := range policy.LoginTypes {
+		if configured == loginType {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) loginWithPassword(ctx context.Context, policy authplatform.Policy, input LoginInput) (Credential, error) {
+	email, err := normalizeEmail(input.LoginAccount)
 	if err != nil {
 		return Credential{}, apperror.InvalidRequest(err)
 	}
@@ -260,6 +432,10 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 		}
 		return Credential{}, apperror.Forbidden(fmt.Errorf("user is disabled"))
 	}
+	if credential.PasswordHash == "" {
+		_ = s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, PlatformID: policy.ID, LoginAccount: email, EventType: loginlog.EventLogin, LoginType: stringPointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "invalid_credentials", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent})
+		return Credential{}, invalidCredentialError(fmt.Errorf("password credential is unavailable"))
+	}
 	if err := s.comparePassword(credential.PasswordHash, input.Password); err != nil {
 		if logErr := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, PlatformID: policy.ID, LoginAccount: email, EventType: loginlog.EventLogin, LoginType: stringPointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "invalid_credentials", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent}); logErr != nil {
 			return Credential{}, logErr
@@ -267,11 +443,97 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 		return Credential{}, invalidCredentialError(err)
 	}
 
+	return s.issueCredential(ctx, input.Client, policy, credential, email, loginlog.LoginPassword, false)
+}
+
+func (s *Service) loginWithCode(ctx context.Context, policy authplatform.Policy, input LoginInput) (Credential, error) {
+	if s.verificationCodes == nil {
+		return Credential{}, apperror.DependencyUnavailable(fmt.Errorf("verification code store is unavailable"))
+	}
+	account, err := normalizeLoginAccount(input.LoginType, input.LoginAccount)
+	if err != nil {
+		return Credential{}, apperror.InvalidRequest(err)
+	}
+	key := s.verificationCodes.VerificationKey(policy.Code, messagemail.SceneLogin, string(input.LoginType), account)
+	digest := s.verificationCodes.Digest(input.Code)
+	identityKind := loginIdentityKind(input.LoginType)
+	valid, limited, checkErr := s.verificationCodes.CheckAttempt(ctx, key, digest, input.Client.ClientIP)
+	if checkErr != nil {
+		return Credential{}, apperror.DependencyUnavailable(checkErr)
+	}
+	if limited {
+		return Credential{}, apperror.RateLimited(fmt.Errorf("verification code attempts exceeded"))
+	}
+	if !valid {
+		s.recordCodeLoginFailure(ctx, input, policy, account, nil, "invalid_credentials")
+		return Credential{}, invalidCredentialError(fmt.Errorf("verification code is invalid or expired"))
+	}
+
+	credential, findErr := s.users.FindCredentialByIdentity(ctx, identityKind, account)
+	if findErr != nil && !errors.Is(findErr, gorm.ErrRecordNotFound) {
+		return Credential{}, apperror.DependencyUnavailable(findErr)
+	}
+	isNewUser := errors.Is(findErr, gorm.ErrRecordNotFound)
+	if isNewUser && !policy.AllowRegister {
+		s.recordCodeLoginFailure(ctx, input, policy, account, nil, "invalid_credentials")
+		return Credential{}, invalidCredentialError(fmt.Errorf("verification code is invalid or expired"))
+	}
+	if !isNewUser && credential.IsEnabled != yesno.Yes {
+		s.recordCodeLoginFailure(ctx, input, policy, account, &credential.ID, "account_disabled")
+		return Credential{}, apperror.Forbidden(fmt.Errorf("user is disabled"))
+	}
+
+	consumed, consumeErr := s.verificationCodes.Consume(ctx, key, digest)
+	if consumeErr != nil {
+		return Credential{}, apperror.DependencyUnavailable(consumeErr)
+	}
+	if !consumed {
+		s.recordCodeLoginFailure(ctx, input, policy, account, nil, "invalid_credentials")
+		return Credential{}, invalidCredentialError(fmt.Errorf("verification code is invalid or expired"))
+	}
+
+	if isNewUser {
+		created, createErr := s.users.CreateVerifiedIdentity(ctx, user.VerifiedIdentityInput{
+			IdentityKind: identityKind, Account: account,
+			Username: deterministicUsername(account), PasswordHash: "",
+		})
+		if createErr != nil {
+			if errors.Is(createErr, user.ErrEmailConflict) || errors.Is(createErr, user.ErrPhoneConflict) || errors.Is(createErr, user.ErrUsernameConflict) {
+				winner, requeryErr := s.users.FindCredentialByIdentity(ctx, identityKind, account)
+				if requeryErr != nil {
+					return Credential{}, apperror.DependencyUnavailable(requeryErr)
+				}
+				credential = winner
+				isNewUser = false
+			} else {
+				return Credential{}, apperror.DependencyUnavailable(createErr)
+			}
+		} else {
+			credential = user.Credential{ID: created.ID, Username: created.Username, Email: created.Email, PasswordHash: created.PasswordHash, IsEnabled: created.IsEnabled}
+		}
+	}
+	if credential.IsEnabled != yesno.Yes {
+		return Credential{}, apperror.Forbidden(fmt.Errorf("user is disabled"))
+	}
+	return s.issueCredential(ctx, input.Client, policy, credential, account, loginTypeFor(input.LoginType), isNewUser)
+}
+
+func (s *Service) recordCodeLoginFailure(ctx context.Context, input LoginInput, policy authplatform.Policy, account string, userID *int64, reason string) {
+	_ = s.recordLoginEvent(ctx, loginlog.Event{
+		UserID: userID, PlatformID: policy.ID, LoginAccount: account, EventType: loginlog.EventLogin,
+		LoginType: stringPointer(loginTypeFor(input.LoginType)), IsSuccess: yesno.No, ReasonCode: reason,
+		ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent,
+	})
+}
+
+// issueCredential is the shared success tail: auth-state readiness, session
+// creation/limit, snapshot publish, JWT issue and best-effort login log.
+func (s *Service) issueCredential(ctx context.Context, client authclient.Client, policy authplatform.Policy, credential user.Credential, loginAccount, loginType string, isNewUser bool) (Credential, error) {
 	userFact, err := s.ensureUserReady(ctx, credential.ID, true, false)
 	if err != nil {
 		return Credential{}, mapStateMutationError(err)
 	}
-	sessionsFact, err := s.ensureSessionsReady(ctx, input.Client.Platform, credential.ID)
+	sessionsFact, err := s.ensureSessionsReady(ctx, client.Platform, credential.ID)
 	if err != nil {
 		return Credential{}, mapStateMutationError(err)
 	}
@@ -289,9 +551,9 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 	refreshExpiresAt := now.Add(policy.RefreshTTL)
 	mutationCtx, stopRenewal := lease.StartRenewal(ctx)
 	created, revoked, createErr := s.sessions.CreateWithinLimit(mutationCtx, usersession.CreateInput{
-		UserID: credential.ID, Platform: input.Client.Platform, DeviceID: input.Client.DeviceID,
-		RefreshTokenHash: s.hashRefreshToken(refreshToken), ClientIP: input.Client.ClientIP,
-		UserAgent: input.Client.UserAgent, RefreshExpiresAt: refreshExpiresAt,
+		UserID: credential.ID, Platform: client.Platform, DeviceID: client.DeviceID,
+		RefreshTokenHash: s.hashRefreshToken(refreshToken), ClientIP: client.ClientIP,
+		UserAgent: client.UserAgent, RefreshExpiresAt: refreshExpiresAt,
 	}, policy, now)
 	renewalCause := context.Cause(mutationCtx)
 	stopRenewal()
@@ -306,7 +568,7 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 	if err != nil {
 		return Credential{}, apperror.Internal(err)
 	}
-	nextSessionsFact := authstate.SessionsFact{Platform: input.Client.Platform, UserID: credential.ID, Generation: nextGeneration}
+	nextSessionsFact := authstate.SessionsFact{Platform: client.Platform, UserID: credential.ID, Generation: nextGeneration}
 	if err := lease.Commit(ctx, authstate.MutationFacts{Sessions: []authstate.SessionsFact{nextSessionsFact}}); err != nil {
 		return Credential{}, apperror.DependencyUnavailable(err)
 	}
@@ -319,15 +581,15 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 	}
 	created.RefreshExpiresAt = refreshExpiresAt
 	if created.Platform == "" {
-		created.Platform = input.Client.Platform
+		created.Platform = client.Platform
 	}
 	if created.DeviceID == "" {
-		created.DeviceID = input.Client.DeviceID
+		created.DeviceID = client.DeviceID
 	}
 	if created.ClientIP == "" {
-		created.ClientIP = input.Client.ClientIP
+		created.ClientIP = client.ClientIP
 	}
-	if err := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, SessionID: &created.ID, PlatformID: policy.ID, LoginAccount: email, EventType: loginlog.EventLogin, LoginType: stringPointer(loginlog.LoginPassword), IsSuccess: yesno.Yes, ReasonCode: "success", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent}); err != nil {
+	if err := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, SessionID: &created.ID, PlatformID: policy.ID, LoginAccount: loginAccount, EventType: loginlog.EventLogin, LoginType: stringPointer(loginType), IsSuccess: yesno.Yes, ReasonCode: "success", ClientIP: client.ClientIP, UserAgent: client.UserAgent}); err != nil {
 		return Credential{}, err
 	}
 	authority := usersession.Authority{Session: created, UserID: credential.ID, UserIsEnabled: credential.IsEnabled}
@@ -335,15 +597,53 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 		return Credential{}, err
 	}
 	accessToken, accessExpiresAt, err := s.jwt.Issue(TokenIdentity{
-		UserID: credential.ID, SessionID: created.ID, Platform: input.Client.Platform, Version: created.Version,
+		UserID: credential.ID, SessionID: created.ID, Platform: client.Platform, Version: created.Version,
 	}, policy.AccessTTL)
 	if err != nil {
 		return Credential{}, apperror.Internal(err)
 	}
 	return Credential{
 		AccessToken: accessToken, ExpiresIn: int(accessExpiresAt.Sub(now).Seconds()), RefreshToken: refreshToken,
-		RefreshExpiresAt: refreshExpiresAt,
+		RefreshExpiresAt: refreshExpiresAt, IsNewUser: isNewUser,
 	}, nil
+}
+
+func normalizeLoginAccount(loginType authplatform.LoginType, account string) (string, error) {
+	switch loginType {
+	case authplatform.LoginTypeEmail:
+		return normalizeEmail(account)
+	case authplatform.LoginTypePhone:
+		normalized := strings.TrimSpace(account)
+		if normalized == "" {
+			return "", fmt.Errorf("phone number is invalid")
+		}
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("login type is invalid")
+	}
+}
+
+func loginIdentityKind(loginType authplatform.LoginType) string {
+	if loginType == authplatform.LoginTypePhone {
+		return "phone"
+	}
+	return "email"
+}
+
+func loginTypeFor(loginType authplatform.LoginType) string {
+	switch loginType {
+	case authplatform.LoginTypeEmail:
+		return loginlog.LoginEmail
+	case authplatform.LoginTypePhone:
+		return loginlog.LoginPhone
+	default:
+		return loginlog.LoginPassword
+	}
+}
+
+func deterministicUsername(account string) string {
+	digest := sha256.Sum256([]byte(account))
+	return "user_" + hex.EncodeToString(digest[:6])
 }
 
 func (s *Service) Authenticate(ctx context.Context, accessToken string, client authclient.Client) (Identity, error) {

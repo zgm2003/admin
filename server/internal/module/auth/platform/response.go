@@ -28,22 +28,23 @@ func newPublicPolicyResponse(policy Policy) publicPolicyResponse {
 }
 
 type listItemResponse struct {
-	ID                     int64  `json:"id"`
-	Code                   string `json:"code"`
-	Name                   string `json:"name"`
-	PolicyVersion          int64  `json:"policyVersion"`
-	AccessTTLSeconds       int    `json:"accessTTLSeconds"`
-	RefreshTTLSeconds      int    `json:"refreshTTLSeconds"`
-	SessionCacheTTLSeconds int    `json:"sessionCacheTTLSeconds"`
-	AccessCacheTTLSeconds  int    `json:"accessCacheTTLSeconds"`
-	BindDevice             int16  `json:"bindDevice"`
-	BindIP                 int16  `json:"bindIP"`
-	MaxSessions            int16  `json:"maxSessions"`
-	AllowRegister          int16  `json:"allowRegister"`
-	IsEnabled              int16  `json:"isEnabled"`
-	IsBuiltin              int16  `json:"isBuiltin"`
-	CreatedAt              string `json:"createdAt"`
-	UpdatedAt              string `json:"updatedAt"`
+	ID                     int64       `json:"id"`
+	Code                   string      `json:"code"`
+	Name                   string      `json:"name"`
+	LoginTypes             []LoginType `json:"loginTypes"`
+	PolicyVersion          int64       `json:"policyVersion"`
+	AccessTTLSeconds       int         `json:"accessTTLSeconds"`
+	RefreshTTLSeconds      int         `json:"refreshTTLSeconds"`
+	SessionCacheTTLSeconds int         `json:"sessionCacheTTLSeconds"`
+	AccessCacheTTLSeconds  int         `json:"accessCacheTTLSeconds"`
+	BindDevice             int16       `json:"bindDevice"`
+	BindIP                 int16       `json:"bindIP"`
+	MaxSessions            int16       `json:"maxSessions"`
+	AllowRegister          int16       `json:"allowRegister"`
+	IsEnabled              int16       `json:"isEnabled"`
+	IsBuiltin              int16       `json:"isBuiltin"`
+	CreatedAt              string      `json:"createdAt"`
+	UpdatedAt              string      `json:"updatedAt"`
 }
 
 type listResponse struct {
@@ -53,12 +54,16 @@ type listResponse struct {
 	PageSize int                `json:"pageSize"`
 }
 
-func newListResponse(items []ListItem, total int64, page, pageSize int) listResponse {
+func newListResponse(items []ListItem, total int64, page, pageSize int) (listResponse, error) {
 	list := make([]listItemResponse, 0, len(items))
 	for _, item := range items {
 		value := item.Platform
+		loginTypes, err := parseLoginTypes(value.LoginTypes)
+		if err != nil {
+			return listResponse{}, err
+		}
 		list = append(list, listItemResponse{
-			ID: value.ID, Code: value.Code, Name: value.Name, PolicyVersion: value.PolicyVersion,
+			ID: value.ID, Code: value.Code, Name: value.Name, LoginTypes: loginTypes, PolicyVersion: value.PolicyVersion,
 			AccessTTLSeconds: value.AccessTTLSeconds, RefreshTTLSeconds: value.RefreshTTLSeconds,
 			SessionCacheTTLSeconds: value.SessionCacheTTLSeconds, AccessCacheTTLSeconds: value.AccessCacheTTLSeconds,
 			BindDevice: int16(value.BindDevice), BindIP: int16(value.BindIP), MaxSessions: value.MaxSessions,
@@ -66,7 +71,7 @@ func newListResponse(items []ListItem, total int64, page, pageSize int) listResp
 			CreatedAt: value.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: value.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		})
 	}
-	return listResponse{List: list, Total: total, Page: page, PageSize: pageSize}
+	return listResponse{List: list, Total: total, Page: page, PageSize: pageSize}, nil
 }
 
 type deploymentResponse struct {

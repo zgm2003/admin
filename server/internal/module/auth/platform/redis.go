@@ -15,7 +15,10 @@ import (
 	projectredis "admin/server/internal/redis"
 )
 
-const policySchemaVersion = 1
+const (
+	policySchemaVersion = 2
+	policyLoadLockTTL   = 5 * time.Second
+)
 
 type policyState struct {
 	SchemaVersion int     `json:"schemaVersion"`
@@ -33,8 +36,47 @@ func NewPolicyStore(redis *projectredis.Client) *PolicyStore {
 }
 
 func PolicyKey(code string) string {
-	return "auth:policy:" + code
+	return "auth:policy:v2:" + code
 }
+
+func (s *PolicyStore) loadLockKey(code string) string {
+	return "auth:policy:load-lock:v2:" + code
+}
+
+// policyLoadLock is a tokenized, 5-second distributed lock used to ensure only
+// one instance queries PostgreSQL when the policy snapshot is missing.
+type policyLoadLock struct {
+	store *PolicyStore
+	code  string
+	token string
+}
+
+func (s *PolicyStore) acquireLoadLock(ctx context.Context, code string) (*policyLoadLock, error) {
+	token, err := randomToken()
+	if err != nil {
+		return nil, err
+	}
+	acquired, err := s.redis.SetStringIfMissing(ctx, s.loadLockKey(code), token, policyLoadLockTTL)
+	if err != nil {
+		return nil, err
+	}
+	if !acquired {
+		return nil, ErrUpdating
+	}
+	return &policyLoadLock{store: s, code: code, token: token}, nil
+}
+
+func (l *policyLoadLock) release(ctx context.Context) {
+	_, _ = l.store.redis.EvalString(ctx, deleteIfTokenScript, []string{l.store.loadLockKey(l.code)}, l.token)
+}
+
+const deleteIfTokenScript = `
+local current = redis.call('GET', KEYS[1])
+if not current then return 'missing' end
+if current ~= ARGV[1] then return 'token-mismatch' end
+redis.call('DEL', KEYS[1])
+return 'deleted'
+`
 
 func ClearBuiltinPolicies(ctx context.Context, redis *projectredis.Client) error {
 	if redis == nil {
@@ -92,6 +134,9 @@ func validatePolicyState(code string, state policyState) error {
 func validateRuntimePolicy(policy Policy) error {
 	if policy.ID < 1 || policy.PolicyVersion < 1 || policy.Code == "" || policy.Name == "" {
 		return fmt.Errorf("authentication policy identity is invalid")
+	}
+	if _, err := normalizeLoginTypes(policy.LoginTypes); err != nil {
+		return fmt.Errorf("authentication policy login types are invalid: %w", err)
 	}
 	if policy.AccessTTL < time.Minute || policy.AccessTTL > 30*24*time.Hour ||
 		policy.RefreshTTL < time.Minute || policy.RefreshTTL > 365*24*time.Hour ||

@@ -2,6 +2,7 @@ package role_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -490,7 +491,7 @@ func roleTestAdminPlatformID(t *testing.T, db *gorm.DB, ctx context.Context) int
 func createRoleTestPlatform(t *testing.T, db *gorm.DB, ctx context.Context, code, name string, isEnabled yesno.Value) authplatform.Platform {
 	t.Helper()
 	platform := authplatform.Platform{
-		Code: code, Name: name, PolicyVersion: 1,
+		Code: code, Name: name, LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1,
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
 		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,

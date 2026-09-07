@@ -12,6 +12,7 @@ import (
 
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
+	authplatform "admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/permission/access"
 	"admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
@@ -120,6 +121,14 @@ func (accessAuthService) Register(context.Context, auth.RegisterInput) (auth.Reg
 
 func (accessAuthService) Login(context.Context, auth.LoginInput) (auth.Credential, error) {
 	return auth.Credential{}, nil
+}
+
+func (accessAuthService) LoginConfig(context.Context, authclient.Client) (authplatform.LoginConfig, error) {
+	return authplatform.LoginConfig{}, nil
+}
+
+func (accessAuthService) SendCode(context.Context, auth.SendCodeInput) (auth.SendCodeResult, error) {
+	return auth.SendCodeResult{}, nil
 }
 
 func (accessAuthService) Refresh(context.Context, auth.RefreshInput) (auth.Credential, error) {

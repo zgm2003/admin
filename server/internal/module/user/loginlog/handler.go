@@ -24,7 +24,7 @@ type Handler struct{ service *Service }
 func NewHandler(service *Service) *Handler { return &Handler{service: service} }
 
 func (h *Handler) PageInit(context *gin.Context) {
-	response.OK(context, http.StatusOK, map[string]any{"eventTypes": []string{EventLogin, EventLogout}, "loginTypes": []string{LoginPassword}})
+	response.OK(context, http.StatusOK, map[string]any{"eventTypes": []string{EventLogin, EventLogout}, "loginTypes": []string{LoginPassword, LoginEmail, LoginPhone}})
 }
 
 func (h *Handler) List(context *gin.Context) {

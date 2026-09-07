@@ -3,6 +3,7 @@ package authplatform_test
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -99,7 +100,7 @@ func TestRepositoryMapsActiveCodeConflictAndAdvancesPolicyVersion(t *testing.T) 
 		t.Fatalf("duplicate error = %v", err)
 	}
 	version, err := repository.UpdatePolicy(ctx, value.ID, authplatform.UpdateValues{
-		Name: "Changed", AccessTTLSeconds: 901, RefreshTTLSeconds: value.RefreshTTLSeconds,
+		Name: "Changed", LoginTypes: json.RawMessage(`["email","password"]`), AccessTTLSeconds: 901, RefreshTTLSeconds: value.RefreshTTLSeconds,
 		SessionCacheTTLSeconds: value.SessionCacheTTLSeconds, AccessCacheTTLSeconds: value.AccessCacheTTLSeconds,
 		BindDevice: value.BindDevice, BindIP: value.BindIP, MaxSessions: value.MaxSessions, AllowRegister: value.AllowRegister,
 	}, now.Add(time.Minute))
@@ -165,7 +166,7 @@ func TestRepositoryRevokesOnlyTargetPlatformSessions(t *testing.T) {
 
 func testPlatform(code, name string, now time.Time) authplatform.Platform {
 	return authplatform.Platform{
-		Code: code, Name: name, PolicyVersion: 1,
+		Code: code, Name: name, LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1,
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,

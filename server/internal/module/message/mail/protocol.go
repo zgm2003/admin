@@ -34,6 +34,7 @@ type BusinessSendInput struct {
 	UserID                                *int64
 	ClientIP, ChallengeID, Scene, ToEmail string
 	Variables                             map[string]string
+	RejectActiveChallenge                 bool
 }
 type AdminTestInput struct {
 	AdminUserID              int64
@@ -128,4 +129,31 @@ type RateLimitPolicyListResponse struct {
 type RateLimitPolicyResponse struct {
 	Version int64           `json:"version"`
 	Policy  RateLimitPolicy `json:"policy"`
+}
+
+// EmailVerifyCodeInput is the narrow authentication-channel input exposed by
+// the Mail module. It carries only the fields needed to send a login
+// verification email; it never exposes the repository, GORM or Redis.
+type EmailVerifyCodeInput struct {
+	PlatformID  int64
+	UserID      *int64
+	ClientIP    string
+	ChallengeID string
+	Scene       string
+	ToEmail     string
+	Code        string
+	TTLMinutes  int
+}
+
+type EmailVerifyCodeResult struct {
+	LogID       int64
+	ChallengeID string
+	ExpiresAt   time.Time
+}
+
+// VerifyCodeSender is the narrow interface Auth depends on for email
+// verification codes. It exposes no repository, GORM, Redis client or model.
+type VerifyCodeSender interface {
+	VerifyCodeReady(context.Context, int64, string) (bool, error)
+	SendEmailVerifyCode(context.Context, EmailVerifyCodeInput) (EmailVerifyCodeResult, error)
 }

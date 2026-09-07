@@ -295,3 +295,109 @@ func TestErrorSummaryUnwrapsApplicationError(t *testing.T) {
 		t.Fatalf("errorSummary() = %q, want %q", got, "mail config disabled")
 	}
 }
+
+func TestVerifyCodeReadyReflectsConfigState(t *testing.T) {
+	db, ctx := openMailServiceDatabase(t)
+	service := NewService(NewRepository(db), nil, nil, nil, nil, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+
+	ready, err := service.VerifyCodeReady(ctx, 1, SceneLogin)
+	if err != nil || !ready {
+		t.Fatalf("ready = %v, %v", ready, err)
+	}
+	if ready, err := service.VerifyCodeReady(ctx, 1, "forget"); err != nil || ready {
+		t.Fatalf("unsupported scene ready = %v, %v", ready, err)
+	}
+
+	if err := db.WithContext(ctx).Exec(`UPDATE message_mail_config SET is_enabled = 0 WHERE platform_id = 1`).Error; err != nil {
+		t.Fatal(err)
+	}
+	ready, err = service.VerifyCodeReady(ctx, 1, SceneLogin)
+	if err != nil || ready {
+		t.Fatalf("disabled config ready = %v, %v", ready, err)
+	}
+}
+
+func TestVerifyCodeReadyFailsWhenRateLimitPolicyIsUnavailable(t *testing.T) {
+	db, ctx := openMailServiceDatabase(t)
+	service := NewService(NewRepository(db), nil, nil, nil, nil, stubRateLimitPolicyStore{err: errors.New("redis unavailable")})
+
+	ready, err := service.VerifyCodeReady(ctx, 1, SceneLogin)
+	if ready {
+		t.Fatal("mail reported ready while its rate-limit policy was unavailable")
+	}
+	assertApplicationError(t, err, http.StatusServiceUnavailable, apperror.CodeDependencyUnavailable)
+}
+
+func TestSendEmailVerifyCodeSendsLoginEmail(t *testing.T) {
+	db, ctx := openMailServiceDatabase(t)
+	sender := &countingSender{}
+	limiter := &recordingLimiter{allowed: true}
+	service := NewService(NewRepository(db), nil, sender, nil, limiter, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+
+	result, err := service.SendEmailVerifyCode(ctx, EmailVerifyCodeInput{
+		PlatformID: 1, ClientIP: "127.0.0.1", ChallengeID: "challenge-1",
+		Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", TTLMinutes: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.LogID < 1 || result.ChallengeID != "challenge-1" {
+		t.Fatalf("result = %+v", result)
+	}
+	if sender.calls.Load() != 1 {
+		t.Fatalf("sender calls = %d, want 1", sender.calls.Load())
+	}
+}
+
+func TestSendEmailVerifyCodeRejectsReusedChallenge(t *testing.T) {
+	db, ctx := openMailServiceDatabase(t)
+	sender := &countingSender{}
+	service := NewService(NewRepository(db), nil, sender, nil, &recordingLimiter{allowed: true}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	input := EmailVerifyCodeInput{PlatformID: 1, ClientIP: "127.0.0.1", ChallengeID: "reused-challenge", Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", TTLMinutes: 10}
+	if _, err := service.SendEmailVerifyCode(ctx, input); err != nil {
+		t.Fatal(err)
+	}
+	input.Code = "654321"
+	if _, err := service.SendEmailVerifyCode(ctx, input); err == nil {
+		t.Fatal("reused challenge reported a new verification code as sent")
+	}
+	if sender.calls.Load() != 1 {
+		t.Fatalf("sender calls = %d, want 1", sender.calls.Load())
+	}
+}
+
+type inputRecordingSender struct{ input SendInput }
+
+func (s *inputRecordingSender) Send(_ context.Context, input SendInput) (ProviderSendResult, error) {
+	s.input = input
+	return ProviderSendResult{RequestID: "request", MessageID: "message"}, nil
+}
+
+func TestSendEmailVerifyCodeUsesAuthOwnedTTL(t *testing.T) {
+	db, ctx := openMailServiceDatabase(t)
+	if err := db.WithContext(ctx).Exec(`UPDATE message_mail_config SET ttl_minutes = 3 WHERE platform_id = 1`).Error; err != nil {
+		t.Fatal(err)
+	}
+	sender := &inputRecordingSender{}
+	service := NewService(NewRepository(db), nil, sender, nil, &recordingLimiter{allowed: true}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	if _, err := service.SendEmailVerifyCode(ctx, EmailVerifyCodeInput{PlatformID: 1, ClientIP: "127.0.0.1", ChallengeID: "ttl-challenge", Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", TTLMinutes: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if sender.input.TemplateData["ttl_minutes"] != "10" {
+		t.Fatalf("mail template TTL = %q, want auth-owned TTL 10", sender.input.TemplateData["ttl_minutes"])
+	}
+}
+
+func TestSendEmailVerifyCodeRejectsInvalidInput(t *testing.T) {
+	db, ctx := openMailServiceDatabase(t)
+	service := NewService(NewRepository(db), nil, nil, nil, nil, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	for _, in := range []EmailVerifyCodeInput{
+		{PlatformID: 1, Scene: "forget", ToEmail: "user@example.com", Code: "123456", TTLMinutes: 10},
+		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "12345", TTLMinutes: 10},
+		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", TTLMinutes: 0},
+	} {
+		if _, err := service.SendEmailVerifyCode(ctx, in); err == nil {
+			t.Fatalf("accepted invalid input %+v", in)
+		}
+	}
+}

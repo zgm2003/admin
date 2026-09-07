@@ -9,6 +9,7 @@ import {
   getAuthPlatforms,
   updateAuthPlatform,
   updateAuthPlatformStatus,
+  type LoginType,
 } from '@/api/auth/platform'
 import { YesNo } from '@/enums/yes-no'
 import { appI18n } from '@/i18n'
@@ -34,6 +35,7 @@ const adminRow = {
   id: 2,
   code: 'admin',
   name: 'Admin',
+  loginTypes: ['email', 'password'] as LoginType[],
   policyVersion: 1,
   accessTTLSeconds: 900,
   refreshTTLSeconds: 86_400,
@@ -280,6 +282,24 @@ describe('authentication platform page', () => {
         allowRegister: YesNo.Yes,
       }),
     )
+  })
+
+  it('disables save when every login type is removed', async () => {
+    setPermissions(['auth:platform:list', 'auth:platform:create'])
+    const { wrapper } = await mountPage()
+
+    await wrapper.get('[data-testid="auth-platform-create"]').trigger('click')
+    await wrapper.get('[data-testid="auth-platform-code"]').setValue('portal')
+    await wrapper.get('[data-testid="auth-platform-name"]').setValue('Portal')
+    const loginTypes = wrapper
+      .findAllComponents({ name: 'ElSelect' })
+      .find((select) => select.attributes('data-testid') === 'auth-platform-login-types')
+    if (loginTypes === undefined) throw new Error('login types select is missing')
+    await loginTypes.vm.$emit('update:modelValue', [])
+    await flushPromises()
+
+    expect(wrapper.get('.el-dialog__footer .el-button--primary').attributes('disabled')).toBeDefined()
+    expect(createAuthPlatformMock).not.toHaveBeenCalled()
   })
 })
 

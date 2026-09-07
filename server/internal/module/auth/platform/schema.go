@@ -2,6 +2,7 @@ package authplatform
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -157,7 +158,7 @@ func ensureConstraint(db *gorm.DB, definition constraintDefinition) error {
 
 func builtinAdmin(now time.Time) Platform {
 	return Platform{
-		Code: BuiltinAdminCode, Name: "Admin", PolicyVersion: 1,
+		Code: BuiltinAdminCode, Name: "Admin", LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1,
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
 		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
@@ -168,7 +169,7 @@ func builtinAdmin(now time.Time) Platform {
 
 func builtinCanvas(now time.Time) Platform {
 	return Platform{
-		Code: BuiltinCanvasCode, Name: "Canvas", PolicyVersion: 1,
+		Code: BuiltinCanvasCode, Name: "Canvas", LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1,
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
 		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,

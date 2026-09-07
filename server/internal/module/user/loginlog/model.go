@@ -10,6 +10,8 @@ const (
 	EventLogin    = "login"
 	EventLogout   = "logout"
 	LoginPassword = "password"
+	LoginEmail    = "email"
+	LoginPhone    = "phone"
 )
 
 type LoginLog struct {

@@ -8,6 +8,7 @@ interface AuthState {
   status: AuthStatus
   accessToken: string
   accessExpiresAt: number
+  isNewUser: boolean
   user: CurrentUser | null
   errorMessage: string
 }
@@ -17,6 +18,7 @@ export const useAuthStore = defineStore('auth', {
     status: 'unknown',
     accessToken: '',
     accessExpiresAt: 0,
+    isNewUser: false,
     user: null,
     errorMessage: '',
   }),
@@ -24,6 +26,7 @@ export const useAuthStore = defineStore('auth', {
     setCredential(credential: AccessCredential, nowMilliseconds = Date.now()) {
       this.accessToken = credential.accessToken
       this.accessExpiresAt = nowMilliseconds + credential.expiresIn * 1_000
+      this.isNewUser = credential.isNewUser ?? false
       this.errorMessage = ''
     },
     setAuthenticated(user: CurrentUser) {
@@ -59,6 +62,7 @@ export const useAuthStore = defineStore('auth', {
     clearAuthValues() {
       this.accessToken = ''
       this.accessExpiresAt = 0
+      this.isNewUser = false
       this.user = null
       this.errorMessage = ''
     },

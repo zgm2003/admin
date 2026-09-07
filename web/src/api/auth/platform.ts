@@ -2,6 +2,7 @@ import { isYesNo, type YesNo } from '@/enums/yes-no'
 import { request } from '@/utils/request'
 import type { PageResult, PageRequest } from '@/types/pagination'
 import {
+  expectArray,
   expectEmptyObject,
   expectId,
   expectInteger,
@@ -11,6 +12,8 @@ import {
 } from '@/api/protocol'
 import { ProtocolError } from '@/types/http'
 
+export type LoginType = 'email' | 'phone' | 'password'
+
 export interface AuthPlatformListQuery extends PageRequest {
   keyword?: string
   isEnabled?: YesNo
@@ -19,6 +22,7 @@ export interface AuthPlatformListItem {
   id: number
   code: string
   name: string
+  loginTypes: LoginType[]
   policyVersion: number
   accessTTLSeconds: number
   refreshTTLSeconds: number
@@ -36,6 +40,7 @@ export interface AuthPlatformListItem {
 export interface CreateAuthPlatformInput {
   code: string
   name: string
+  loginTypes: LoginType[]
   accessTTLSeconds: number
   refreshTTLSeconds: number
   sessionCacheTTLSeconds: number
@@ -48,6 +53,7 @@ export interface CreateAuthPlatformInput {
 }
 export interface UpdateAuthPlatformInput {
   name: string
+  loginTypes: LoginType[]
   accessTTLSeconds: number
   refreshTTLSeconds: number
   sessionCacheTTLSeconds: number
@@ -84,6 +90,7 @@ export async function createAuthPlatform(input: CreateAuthPlatformInput): Promis
       data: {
         code: input.code,
         name: input.name,
+        loginTypes: input.loginTypes,
         accessTTLSeconds: input.accessTTLSeconds,
         refreshTTLSeconds: input.refreshTTLSeconds,
         sessionCacheTTLSeconds: input.sessionCacheTTLSeconds,
@@ -109,6 +116,7 @@ export async function updateAuthPlatform(
       url: `/api/admin/v1/auth-platforms/${id}`,
       data: {
         name: input.name,
+        loginTypes: input.loginTypes,
         accessTTLSeconds: input.accessTTLSeconds,
         refreshTTLSeconds: input.refreshTTLSeconds,
         sessionCacheTTLSeconds: input.sessionCacheTTLSeconds,
@@ -151,6 +159,25 @@ export async function deleteAuthPlatform(id: number): Promise<Record<string, nev
   return {}
 }
 
+const loginTypes = ['email', 'phone', 'password'] as const
+const loginTypeSet = new Set<string>(loginTypes)
+
+export function parseLoginTypes(value: unknown, context: string): LoginType[] {
+  const values = expectArray(value, context)
+  if (values.length < 1 || values.length > 3) {
+    throw new ProtocolError(`${context} must contain 1 to 3 values`)
+  }
+  const seen = new Set<string>()
+  return values.map((item) => {
+    const loginType = expectString(item, `${context}[]`)
+    if (!loginTypeSet.has(loginType) || seen.has(loginType)) {
+      throw new ProtocolError(`${context} contains an invalid or duplicate login type`)
+    }
+    seen.add(loginType)
+    return loginType as LoginType
+  })
+}
+
 function parseAuthPlatform(value: unknown, index: number): AuthPlatformListItem {
   const item = expectRecord(value, `auth platforms.list[${index}]`)
   const bindDevice = item.bindDevice
@@ -171,6 +198,7 @@ function parseAuthPlatform(value: unknown, index: number): AuthPlatformListItem 
     id: expectInteger(item.id, 'auth platform.id'),
     code: expectString(item.code, 'auth platform.code'),
     name: expectString(item.name, 'auth platform.name'),
+    loginTypes: parseLoginTypes(item.loginTypes, 'auth platform.loginTypes'),
     policyVersion: expectInteger(item.policyVersion, 'auth platform.policyVersion'),
     accessTTLSeconds: expectInteger(item.accessTTLSeconds, 'auth platform.accessTTLSeconds'),
     refreshTTLSeconds: expectInteger(item.refreshTTLSeconds, 'auth platform.refreshTTLSeconds'),

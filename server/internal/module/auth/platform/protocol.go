@@ -36,6 +36,9 @@ func ValidatePlatform(value Platform) error {
 	if err := ValidateCode(value.Code); err != nil {
 		return err
 	}
+	if _, err := parseLoginTypes(value.LoginTypes); err != nil {
+		return fmt.Errorf("platform login types are invalid: %w", err)
+	}
 	if value.Name == "" || len(value.Name) > 64 {
 		return fmt.Errorf("platform name must contain 1 to 64 bytes")
 	}

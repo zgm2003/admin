@@ -1,6 +1,9 @@
 package auth
 
-import "admin/server/internal/module/auth/client"
+import (
+	"admin/server/internal/module/auth/client"
+	authplatform "admin/server/internal/module/auth/platform"
+)
 
 type RegisterInput struct {
 	Username        string
@@ -11,9 +14,11 @@ type RegisterInput struct {
 }
 
 type LoginInput struct {
-	Email    string
-	Password string
-	Client   authclient.Client
+	LoginType    authplatform.LoginType
+	LoginAccount string
+	Password     string
+	Code         string
+	Client       authclient.Client
 }
 
 type RefreshInput struct {
@@ -29,6 +34,15 @@ type RegisterRequest struct {
 }
 
 type LoginRequest struct {
-	Email    string `json:"email" binding:"required,max=254"`
-	Password string `json:"password" binding:"required"`
+	LoginType    *string `json:"loginType" binding:"required"`
+	LoginAccount *string `json:"loginAccount" binding:"required"`
+	Password     *string `json:"password"`
+	Code         *string `json:"code"`
+}
+
+type SendCodeRequest struct {
+	Account     *string `json:"account" binding:"required"`
+	LoginType   *string `json:"loginType" binding:"required"`
+	Scene       *string `json:"scene" binding:"required"`
+	ChallengeID *string `json:"challengeId" binding:"omitempty,max=128"`
 }

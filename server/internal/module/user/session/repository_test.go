@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -375,7 +376,7 @@ func createTestPolicy(t *testing.T, db *gorm.DB, ctx context.Context, code strin
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	value := authplatform.Platform{
-		Code: code, Name: code, PolicyVersion: 1, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
+		Code: code, Name: code, LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800, MaxSessions: maxSessions,
 		BindDevice: yesno.No, BindIP: yesno.No, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.No,
 		CreatedAt: now, UpdatedAt: now,

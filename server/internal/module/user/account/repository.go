@@ -30,6 +30,16 @@ type CreateInput struct {
 	RoleID       int64
 }
 
+// VerifiedIdentityInput carries a controlled identity for code-login auto
+// registration. IdentityKind is restricted to "email" or "phone"; Account is
+// the normalized identity; PasswordHash may be empty for passwordless users.
+type VerifiedIdentityInput struct {
+	IdentityKind string
+	Account      string
+	Username     string
+	PasswordHash string
+}
+
 type Credential struct {
 	ID           int64
 	Username     string
@@ -379,11 +389,95 @@ func (r *Repository) FindCredentialByEmail(ctx context.Context, email string) (C
 	if err := r.db.WithContext(ctx).
 		Model(&User{}).
 		Select("id", "username", "email", "password_hash", "is_enabled").
-		Where("email = ?", email).
+		Where("email = ? AND email <> ''", email).
 		Take(&credential).Error; err != nil {
 		return Credential{}, fmt.Errorf("find user credential: %w", err)
 	}
 	return credential, nil
+}
+
+func (r *Repository) FindCredentialByPhone(ctx context.Context, phone string) (Credential, error) {
+	var credential Credential
+	if err := r.db.WithContext(ctx).
+		Model(&User{}).
+		Select("id", "username", "email", "password_hash", "is_enabled").
+		Where("phone = ?", phone).
+		Take(&credential).Error; err != nil {
+		return Credential{}, fmt.Errorf("find user credential by phone: %w", err)
+	}
+	return credential, nil
+}
+
+func (r *Repository) FindCredentialByIdentity(ctx context.Context, identityKind, account string) (Credential, error) {
+	switch identityKind {
+	case "email":
+		return r.FindCredentialByEmail(ctx, account)
+	case "phone":
+		return r.FindCredentialByPhone(ctx, account)
+	default:
+		return Credential{}, fmt.Errorf("identity kind %q is invalid: %w", identityKind, ErrUserDataInvalid)
+	}
+}
+
+// CreateVerifiedIdentity creates a passwordless or email/phone verified user
+// in one transaction: the account, the enabled default role relationship, an
+// access version of 1 and an empty profile. It does not lock the whole
+// user_account table; concurrent races are settled by the unique indexes.
+func (r *Repository) CreateVerifiedIdentity(ctx context.Context, input VerifiedIdentityInput) (User, error) {
+	email := ""
+	var phone *string
+	switch input.IdentityKind {
+	case "email":
+		email = input.Account
+	case "phone":
+		value := input.Account
+		phone = &value
+	default:
+		return User{}, fmt.Errorf("identity kind %q is invalid: %w", input.IdentityKind, ErrUserDataInvalid)
+	}
+
+	var created User
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		roles := make([]role.Role, 0, 2)
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("is_default = ? AND is_enabled = ?", yesno.Yes, yesno.Yes).
+			Limit(2).Find(&roles).Error; err != nil {
+			return fmt.Errorf("lock default role: %w", err)
+		}
+		if len(roles) != 1 {
+			return fmt.Errorf("expected one enabled default role, found %d: %w", len(roles), ErrUserDataInvalid)
+		}
+		defaultRole := roles[0]
+
+		now := time.Now().UTC().Truncate(time.Microsecond)
+		created = User{
+			Username: input.Username, Email: email, Phone: phone,
+			PasswordHash: input.PasswordHash, IsEnabled: yesno.Yes,
+			CreatedAt: now, UpdatedAt: now,
+		}
+		if err := tx.Create(&created).Error; err != nil {
+			return mapCreateError(err)
+		}
+		userRole := role.UserRole{UserID: created.ID, RoleID: defaultRole.ID, CreatedAt: now, UpdatedAt: now}
+		if err := tx.Create(&userRole).Error; err != nil {
+			return fmt.Errorf("create user role relationship: %w", err)
+		}
+		if err := tx.Exec(`
+			INSERT INTO permission_access_version (user_id, version, created_at, updated_at)
+			VALUES (?, 1, ?, ?)`, created.ID, now, now).Error; err != nil {
+			return fmt.Errorf("create user access version: %w", err)
+		}
+		if err := tx.Exec(`
+			INSERT INTO user_profile (user_id, created_at, updated_at)
+			VALUES (?, ?, ?)`, created.ID, now, now).Error; err != nil {
+			return fmt.Errorf("create user profile: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return User{}, err
+	}
+	return created, nil
 }
 
 func (r *Repository) FindCredentialByID(ctx context.Context, userID int64) (Credential, error) {

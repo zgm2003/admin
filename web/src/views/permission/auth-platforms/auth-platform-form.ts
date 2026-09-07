@@ -17,6 +17,7 @@ export function createAuthPlatformForm(): AuthPlatformForm {
   return {
     code: '',
     name: '',
+    loginTypes: ['email', 'password'],
     ...authPlatformDefaultTTL,
     bindDevice: YesNo.Yes,
     bindIP: YesNo.No,
@@ -31,6 +32,7 @@ export function editAuthPlatformForm(platform: AuthPlatformListItem): AuthPlatfo
   return {
     code: platform.code,
     name: platform.name,
+    loginTypes: [...platform.loginTypes],
     accessTTLSeconds: platform.accessTTLSeconds,
     refreshTTLSeconds: platform.refreshTTLSeconds,
     sessionCacheTTLSeconds: platform.sessionCacheTTLSeconds,
@@ -49,10 +51,17 @@ function inRange(value: number, minimum: number, maximum: number): boolean {
 
 export function isAuthPlatformFormValid(form: AuthPlatformForm, isEditing: boolean): boolean {
   const codeValid = isEditing || /^[a-z][a-z0-9_]{1,48}$/.test(form.code.trim())
+  const loginTypeSet = new Set(form.loginTypes)
+  const loginTypesValid =
+    form.loginTypes.length >= 1 &&
+    form.loginTypes.length <= 3 &&
+    loginTypeSet.size === form.loginTypes.length &&
+    form.loginTypes.every((value) => value === 'email' || value === 'phone' || value === 'password')
   return (
     codeValid &&
     form.name.trim() !== '' &&
     form.name.trim().length <= 64 &&
+    loginTypesValid &&
     inRange(form.accessTTLSeconds, 60, 2_592_000) &&
     inRange(form.refreshTTLSeconds, 60, 31_536_000) &&
     inRange(form.sessionCacheTTLSeconds, 60, 86_400) &&
@@ -77,6 +86,7 @@ export function createAuthPlatformInput(form: AuthPlatformForm): CreateAuthPlatf
   return {
     code: form.code.trim(),
     name: form.name.trim(),
+    loginTypes: form.loginTypes,
     accessTTLSeconds: form.accessTTLSeconds,
     refreshTTLSeconds: form.refreshTTLSeconds,
     sessionCacheTTLSeconds: form.sessionCacheTTLSeconds,
@@ -95,6 +105,7 @@ export function updateAuthPlatformInput(
 ): UpdateAuthPlatformInput {
   return {
     name: form.name.trim(),
+    loginTypes: form.loginTypes,
     accessTTLSeconds: form.accessTTLSeconds,
     refreshTTLSeconds: form.refreshTTLSeconds,
     sessionCacheTTLSeconds: form.sessionCacheTTLSeconds,

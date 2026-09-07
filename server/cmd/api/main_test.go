@@ -200,6 +200,14 @@ func (apiAuthService) Login(context.Context, auth.LoginInput) (auth.Credential, 
 	return auth.Credential{}, nil
 }
 
+func (apiAuthService) LoginConfig(context.Context, authclient.Client) (authplatform.LoginConfig, error) {
+	return authplatform.LoginConfig{}, nil
+}
+
+func (apiAuthService) SendCode(context.Context, auth.SendCodeInput) (auth.SendCodeResult, error) {
+	return auth.SendCodeResult{}, nil
+}
+
 func (apiAuthService) Refresh(context.Context, auth.RefreshInput) (auth.Credential, error) {
 	return auth.Credential{}, nil
 }
@@ -278,6 +286,8 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"GET /health":                                         1,
 		"GET /ready":                                          1,
 		"GET /api/v1/auth/policy":                             1,
+		"GET /api/v1/auth/login-config":                       1,
+		"POST /api/v1/auth/send-code":                         1,
 		"POST /api/v1/auth/register":                          1,
 		"POST /api/v1/auth/login":                             1,
 		"POST /api/v1/auth/refresh":                           1,

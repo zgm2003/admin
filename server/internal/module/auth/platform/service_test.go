@@ -32,7 +32,7 @@ func TestServiceDeleteRejectsPlatformWithActiveMenus(t *testing.T) {
 	)
 	code := fmt.Sprintf("menu_guard_%d", time.Now().UnixNano())
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
-		Code: code, Name: "Menu Guard", AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
+		Code: code, Name: "Menu Guard", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800, BindDevice: yesno.No, BindIP: yesno.No,
 		MaxSessions: 1, AllowRegister: yesno.No, IsEnabled: yesno.Yes,
 	})
@@ -73,7 +73,7 @@ func TestServiceUpdateBuildsMissingReadyStateBeforeMutation(t *testing.T) {
 	}
 	service := authplatform.NewService(authplatform.NewRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient, authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete, slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{})
 	input := authplatform.UpdateInput{
-		Name: "Admin Updated", AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
+		Name: "Admin Updated", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.No,
 	}
@@ -100,7 +100,7 @@ func TestServiceUpdateDoesNotMutatePostgreSQLWhenRedisIsUnavailable(t *testing.T
 	}
 	service := authplatform.NewService(authplatform.NewRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{})
 	input := authplatform.UpdateInput{
-		Name: "Must Not Persist", AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
+		Name: "Must Not Persist", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.No,
 	}
@@ -135,7 +135,7 @@ func TestServiceUpdateRejectsBuiltinAdminRegistrationBeforeRedisMutation(t *test
 	}
 	service := authplatform.NewService(repository, authplatform.NewPolicyStore(redisClient), redisClient, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{})
 	input := authplatform.UpdateInput{
-		Name: stored.Name, AccessTTLSeconds: stored.AccessTTLSeconds, RefreshTTLSeconds: stored.RefreshTTLSeconds,
+		Name: stored.Name, LoginTypes: []authplatform.LoginType{authplatform.LoginTypePassword, authplatform.LoginTypeEmail}, AccessTTLSeconds: stored.AccessTTLSeconds, RefreshTTLSeconds: stored.RefreshTTLSeconds,
 		SessionCacheTTLSeconds: stored.SessionCacheTTLSeconds, AccessCacheTTLSeconds: stored.AccessCacheTTLSeconds,
 		BindDevice: stored.BindDevice, BindIP: stored.BindIP, MaxSessions: stored.MaxSessions, AllowRegister: yesno.Yes,
 	}
@@ -165,7 +165,7 @@ func TestServiceUpdateAllowsNonBuiltinRegistration(t *testing.T) {
 	)
 	code := fmt.Sprintf("registration_%d", time.Now().UnixNano())
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
-		Code: code, Name: "Registration", AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
+		Code: code, Name: "Registration", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.No, IsEnabled: yesno.Yes,
 	})
@@ -173,7 +173,7 @@ func TestServiceUpdateAllowsNonBuiltinRegistration(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := service.Update(ctx, platformID, authplatform.UpdateInput{
-		Name: "Registration", AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
+		Name: "Registration", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes,
 	}); err != nil {
@@ -201,7 +201,7 @@ func TestServicePlatformMutationsApplyExactSessionEffects(t *testing.T) {
 	)
 	code := fmt.Sprintf("sessions_%d", time.Now().UnixNano())
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
-		Code: code, Name: "Sessions", AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
+		Code: code, Name: "Sessions", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 3, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
 	})
@@ -218,7 +218,7 @@ func TestServicePlatformMutationsApplyExactSessionEffects(t *testing.T) {
 	}
 
 	input := authplatform.UpdateInput{
-		Name: "Sessions renamed", AccessTTLSeconds: 901, RefreshTTLSeconds: 1209601,
+		Name: "Sessions renamed", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 901, RefreshTTLSeconds: 1209601,
 		SessionCacheTTLSeconds: 1801, AccessCacheTTLSeconds: 1801,
 		BindDevice: yesno.Yes, BindIP: yesno.Yes, MaxSessions: 3, AllowRegister: yesno.No,
 	}
@@ -282,7 +282,7 @@ func TestServicePlatformNoOpDoesNotAdvancePolicyVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	input := authplatform.UpdateInput{
-		Name: stored.Name, AccessTTLSeconds: stored.AccessTTLSeconds, RefreshTTLSeconds: stored.RefreshTTLSeconds,
+		Name: stored.Name, LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: stored.AccessTTLSeconds, RefreshTTLSeconds: stored.RefreshTTLSeconds,
 		SessionCacheTTLSeconds: stored.SessionCacheTTLSeconds, AccessCacheTTLSeconds: stored.AccessCacheTTLSeconds,
 		BindDevice: stored.BindDevice, BindIP: stored.BindIP, MaxSessions: stored.MaxSessions, AllowRegister: stored.AllowRegister,
 	}
@@ -310,7 +310,7 @@ func TestServicePlatformRollbackRestoresPolicyAndSessionState(t *testing.T) {
 	)
 	code := fmt.Sprintf("rollback_%d", time.Now().UnixNano())
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
-		Code: code, Name: "Rollback", AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
+		Code: code, Name: "Rollback", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800, BindDevice: yesno.No, BindIP: yesno.No,
 		MaxSessions: 1, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
 	})
@@ -355,7 +355,7 @@ func TestServicePlatformPublishFailureLeavesCommittedSessionStateWithoutOldPolic
 	)
 	code := fmt.Sprintf("publish_%d", time.Now().UnixNano())
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
-		Code: code, Name: "Publish", AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
+		Code: code, Name: "Publish", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800, BindDevice: yesno.No, BindIP: yesno.No,
 		MaxSessions: 1, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
 	})

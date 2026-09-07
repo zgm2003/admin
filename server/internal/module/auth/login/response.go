@@ -1,6 +1,10 @@
 package auth
 
-import "time"
+import (
+	"time"
+
+	authplatform "admin/server/internal/module/auth/platform"
+)
 
 type Registered struct {
 	UserID   int64
@@ -13,6 +17,7 @@ type Credential struct {
 	ExpiresIn        int
 	RefreshToken     string
 	RefreshExpiresAt time.Time
+	IsNewUser        bool
 }
 
 type RegisteredResponse struct {
@@ -24,6 +29,17 @@ type RegisteredResponse struct {
 type CredentialResponse struct {
 	AccessToken string `json:"accessToken"`
 	ExpiresIn   int    `json:"expiresIn"`
+	IsNewUser   bool   `json:"isNewUser"`
+}
+
+type SendCodeResponse struct {
+	ChallengeID string    `json:"challengeId"`
+	ExpiresAt   time.Time `json:"expiresAt"`
+}
+
+type LoginConfigResponse struct {
+	LoginTypes    []authplatform.LoginTypeOption `json:"loginTypes"`
+	AllowRegister bool                           `json:"allowRegister"`
 }
 
 type CurrentUserResponse struct {

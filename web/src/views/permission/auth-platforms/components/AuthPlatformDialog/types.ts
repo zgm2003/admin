@@ -1,6 +1,7 @@
 export interface AuthPlatformForm {
   code: string
   name: string
+  loginTypes: import('@/api/auth/platform').LoginType[]
   accessTTLSeconds: number
   refreshTTLSeconds: number
   sessionCacheTTLSeconds: number

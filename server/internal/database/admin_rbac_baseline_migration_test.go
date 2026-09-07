@@ -2,6 +2,7 @@ package database_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -92,7 +93,7 @@ func openRBACMigrationSchema(t *testing.T) (*gorm.DB, context.Context) {
 func createRBACMigrationFixture(t *testing.T, db *gorm.DB, ctx context.Context) rbacMigrationFixture {
 	t.Helper()
 	var admin authplatform.Platform
-	canvas := authplatform.Platform{Code: "canvas", Name: "Canvas", PolicyVersion: 1, AccessTTLSeconds: 900, RefreshTTLSeconds: 900, SessionCacheTTLSeconds: 900, AccessCacheTTLSeconds: 900, BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 10, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.No}
+	canvas := authplatform.Platform{Code: "canvas", Name: "Canvas", LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1, AccessTTLSeconds: 900, RefreshTTLSeconds: 900, SessionCacheTTLSeconds: 900, AccessCacheTTLSeconds: 900, BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 10, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.No}
 	if err := db.WithContext(ctx).Where("code = ?", "admin").Take(&admin).Error; err != nil {
 		t.Fatal(err)
 	}

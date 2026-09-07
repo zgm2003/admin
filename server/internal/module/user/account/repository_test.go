@@ -2,11 +2,13 @@ package account_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -737,6 +739,121 @@ func createListedUser(t *testing.T, tx *gorm.DB, ctx context.Context, username, 
 	return created
 }
 
+func TestCreateVerifiedIdentityPersistsPhoneUserAtomically(t *testing.T) {
+	db, ctx, _ := openUserDatabase(t)
+	repository := account.NewRepository(db)
+
+	created, err := repository.CreateVerifiedIdentity(ctx, account.VerifiedIdentityInput{
+		IdentityKind: "phone",
+		Account:      "+8615671628271",
+		Username:     "phone_user",
+		PasswordHash: "",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Email != "" || created.Phone == nil || *created.Phone != "+8615671628271" || created.PasswordHash != "" {
+		t.Fatalf("created phone user = %+v", created)
+	}
+
+	var version int64
+	if err := db.WithContext(ctx).Raw(`SELECT version FROM permission_access_version WHERE user_id = ?`, created.ID).Scan(&version).Error; err != nil || version != 1 {
+		t.Fatalf("access version = %d, %v", version, err)
+	}
+	var profileCount int64
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM user_profile WHERE user_id = ?`, created.ID).Scan(&profileCount).Error; err != nil || profileCount != 1 {
+		t.Fatalf("profile count = %d, %v", profileCount, err)
+	}
+	var roleCount int64
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM permission_user_role WHERE user_id = ? AND deleted_at IS NULL`, created.ID).Scan(&roleCount).Error; err != nil || roleCount != 1 {
+		t.Fatalf("role count = %d, %v", roleCount, err)
+	}
+
+	credential, err := repository.FindCredentialByPhone(ctx, "+8615671628271")
+	if err != nil || credential.ID != created.ID || credential.Email != "" {
+		t.Fatalf("FindCredentialByPhone = %+v, %v", credential, err)
+	}
+	byIdentity, err := repository.FindCredentialByIdentity(ctx, "phone", "+8615671628271")
+	if err != nil || byIdentity.ID != created.ID {
+		t.Fatalf("FindCredentialByIdentity = %+v, %v", byIdentity, err)
+	}
+}
+
+func TestCreateVerifiedIdentityAllowsMultiplePhoneUsersWithEmptyEmail(t *testing.T) {
+	db, ctx, _ := openUserDatabase(t)
+	repository := account.NewRepository(db)
+
+	if _, err := repository.CreateVerifiedIdentity(ctx, account.VerifiedIdentityInput{IdentityKind: "phone", Account: "+8610000001", Username: "p1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.CreateVerifiedIdentity(ctx, account.VerifiedIdentityInput{IdentityKind: "phone", Account: "+8610000002", Username: "p2"}); err != nil {
+		t.Fatalf("second phone user with empty email: %v", err)
+	}
+}
+
+func TestCreateVerifiedIdentityRejectsInvalidIdentityKind(t *testing.T) {
+	db, ctx, _ := openUserDatabase(t)
+	repository := account.NewRepository(db)
+	if _, err := repository.CreateVerifiedIdentity(ctx, account.VerifiedIdentityInput{IdentityKind: "wechat", Account: "x", Username: "u"}); err == nil {
+		t.Fatal("invalid identity kind accepted")
+	}
+}
+
+func TestCreateVerifiedIdentityConcurrentSameIdentitySingleWinner(t *testing.T) {
+	db, ctx, _ := openUserDatabase(t)
+	repository := account.NewRepository(db)
+
+	const workers = 32
+	results := make(chan error, workers)
+	var wait sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			_, err := repository.CreateVerifiedIdentity(ctx, account.VerifiedIdentityInput{
+				IdentityKind: "phone",
+				Account:      "+8615671628271",
+				Username:     "concurrent_user",
+			})
+			results <- err
+		}()
+	}
+	wait.Wait()
+	close(results)
+
+	successes, conflicts := 0, 0
+	for err := range results {
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, account.ErrPhoneConflict) || errors.Is(err, account.ErrUsernameConflict) || errors.Is(err, account.ErrEmailConflict):
+			conflicts++
+		default:
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("successes = %d, want 1", successes)
+	}
+	if conflicts != workers-1 {
+		t.Fatalf("conflicts = %d, want %d", conflicts, workers-1)
+	}
+
+	var userCount, roleCount, profileCount, versionCount int64
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM user_account WHERE phone = '+8615671628271' AND deleted_at IS NULL`).Scan(&userCount).Error; err != nil || userCount != 1 {
+		t.Fatalf("active user count = %d, %v", userCount, err)
+	}
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM user_profile WHERE user_id IN (SELECT id FROM user_account WHERE phone = '+8615671628271')`).Scan(&profileCount).Error; err != nil || profileCount != 1 {
+		t.Fatalf("profile count = %d, %v", profileCount, err)
+	}
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM permission_access_version WHERE user_id IN (SELECT id FROM user_account WHERE phone = '+8615671628271')`).Scan(&versionCount).Error; err != nil || versionCount != 1 {
+		t.Fatalf("access version count = %d, %v", versionCount, err)
+	}
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM permission_user_role WHERE user_id IN (SELECT id FROM user_account WHERE phone = '+8615671628271') AND deleted_at IS NULL`).Scan(&roleCount).Error; err != nil || roleCount != 1 {
+		t.Fatalf("role count = %d, %v", roleCount, err)
+	}
+}
+
 func openUserTransaction(t *testing.T) (*gorm.DB, context.Context, *role.Repository) {
 	t.Helper()
 	db, ctx, _ := openUserDatabase(t)
@@ -798,7 +915,7 @@ func openUserDatabase(t *testing.T) (*gorm.DB, context.Context, *role.Repository
 	}
 	for _, statement := range []string{
 		`CREATE UNIQUE INDEX ux_user_account_username_active ON user_account (lower(username)) WHERE deleted_at IS NULL`,
-		`CREATE UNIQUE INDEX ux_user_account_email_active ON user_account (lower(email)) WHERE deleted_at IS NULL`,
+		`CREATE UNIQUE INDEX ux_user_account_email_active ON user_account (lower(email)) WHERE email <> '' AND deleted_at IS NULL`,
 		`CREATE UNIQUE INDEX ux_user_account_phone_active ON user_account (phone) WHERE phone IS NOT NULL AND deleted_at IS NULL`,
 	} {
 		if err := db.WithContext(ctx).Exec(statement).Error; err != nil {
@@ -806,7 +923,7 @@ func openUserDatabase(t *testing.T) (*gorm.DB, context.Context, *role.Repository
 		}
 	}
 	for _, code := range []string{"app", "canvas", "legacy"} {
-		value := authplatform.Platform{Code: code, Name: code, PolicyVersion: 1, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600, SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800, BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 0, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.No}
+		value := authplatform.Platform{Code: code, Name: code, LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600, SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800, BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 0, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.No}
 		if err := db.WithContext(ctx).Create(&value).Error; err != nil {
 			t.Fatalf("create test platform %s: %v", code, err)
 		}

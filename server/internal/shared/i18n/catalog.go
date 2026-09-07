@@ -80,6 +80,9 @@ const (
 	KeyMailRateLimitInvalid         MessageKey = "mail.rateLimitInvalid"
 	KeyMailRateLimitNotFound        MessageKey = "mail.rateLimitNotFound"
 	KeyMailRateLimitUnavailable     MessageKey = "mail.rateLimitUnavailable"
+	KeyLoginTypeEmail               MessageKey = "loginType.email"
+	KeyLoginTypePhone               MessageKey = "loginType.phone"
+	KeyLoginTypePassword            MessageKey = "loginType.password"
 )
 
 var catalogs = map[Locale]map[MessageKey]string{
@@ -146,6 +149,9 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyMailRateLimitInvalid:         "邮件限流策略参数无效",
 		KeyMailRateLimitNotFound:        "邮件限流策略不存在",
 		KeyMailRateLimitUnavailable:     "邮件限流策略暂不可用",
+		KeyLoginTypeEmail:               "邮箱验证码",
+		KeyLoginTypePhone:               "手机验证码",
+		KeyLoginTypePassword:            "账号密码",
 	},
 	EnUS: {
 		KeyInternal:                     "Internal server error",
@@ -210,6 +216,9 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyMailRateLimitInvalid:         "Mail rate limit policy parameters are invalid",
 		KeyMailRateLimitNotFound:        "Mail rate limit policy not found",
 		KeyMailRateLimitUnavailable:     "Mail rate limit policy is unavailable",
+		KeyLoginTypeEmail:               "Email verification code",
+		KeyLoginTypePhone:               "SMS verification code",
+		KeyLoginTypePassword:            "Password",
 	},
 }
 

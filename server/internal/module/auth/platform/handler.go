@@ -29,7 +29,12 @@ func (h *Handler) List(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	response.OK(context, http.StatusOK, newListResponse(result.List, result.Total, result.Page, result.PageSize))
+	body, err := newListResponse(result.List, result.Total, result.Page, result.PageSize)
+	if err != nil {
+		response.Fail(context, dependencyUnavailable(err))
+		return
+	}
+	response.OK(context, http.StatusOK, body)
 }
 
 func (h *Handler) Deployment(context *gin.Context) {

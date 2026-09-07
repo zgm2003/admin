@@ -14,13 +14,15 @@ const (
 	refreshHMACPurpose       = "admin:auth:refresh-token-hmac:v1"
 	storageEncryptionPurpose = "admin:storage:cos-encryption:v1"
 	mailEncryptionPurpose    = "admin:message:mail-encryption:v1"
+	verificationCodePurpose  = "admin:auth:verification-code-hmac:v1"
 )
 
 type KeyRing struct {
-	jwtSigningKey        []byte
-	refreshTokenHMACKey  []byte
-	storageEncryptionKey []byte
-	mailEncryptionKey    []byte
+	jwtSigningKey           []byte
+	refreshTokenHMACKey     []byte
+	storageEncryptionKey    []byte
+	mailEncryptionKey       []byte
+	verificationCodeHMACKey []byte
 }
 
 func New(rootSecret string) (*KeyRing, error) {
@@ -44,12 +46,17 @@ func New(rootSecret string) (*KeyRing, error) {
 	if err != nil {
 		return nil, fmt.Errorf("derive mail encryption key: %w", err)
 	}
+	verificationCodeHMACKey, err := hkdf.Key(sha256.New, []byte(rootSecret), nil, verificationCodePurpose, keyLength)
+	if err != nil {
+		return nil, fmt.Errorf("derive verification code HMAC key: %w", err)
+	}
 
 	return &KeyRing{
-		jwtSigningKey:        jwtSigningKey,
-		refreshTokenHMACKey:  refreshTokenHMACKey,
-		storageEncryptionKey: storageEncryptionKey,
-		mailEncryptionKey:    mailEncryptionKey,
+		jwtSigningKey:           jwtSigningKey,
+		refreshTokenHMACKey:     refreshTokenHMACKey,
+		storageEncryptionKey:    storageEncryptionKey,
+		mailEncryptionKey:       mailEncryptionKey,
+		verificationCodeHMACKey: verificationCodeHMACKey,
 	}, nil
 }
 
@@ -65,6 +72,10 @@ func (k *KeyRing) JWTSigningKey() []byte {
 
 func (k *KeyRing) RefreshTokenHMACKey() []byte {
 	return append([]byte(nil), k.refreshTokenHMACKey...)
+}
+
+func (k *KeyRing) VerificationCodeHMACKey() []byte {
+	return append([]byte(nil), k.verificationCodeHMACKey...)
 }
 
 func validateRootSecret(rootSecret string) error {

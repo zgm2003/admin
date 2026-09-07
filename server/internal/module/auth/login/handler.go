@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"admin/server/internal/module/auth/client"
+	authplatform "admin/server/internal/module/auth/platform"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/response"
 	"admin/server/internal/shared/validate"
 	"github.com/gin-gonic/gin"
@@ -64,10 +66,26 @@ func (h *Handler) Login(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
+	if request.LoginType == nil || request.LoginAccount == nil ||
+		(*request.LoginType == string(authplatform.LoginTypePassword) && (request.Password == nil || request.Code != nil)) ||
+		((*request.LoginType == string(authplatform.LoginTypeEmail) || *request.LoginType == string(authplatform.LoginTypePhone)) && (request.Code == nil || request.Password != nil)) {
+		response.Fail(context, apperror.InvalidRequest(fmt.Errorf("login credential fields do not match login type")))
+		return
+	}
+	password := ""
+	if request.Password != nil {
+		password = *request.Password
+	}
+	code := ""
+	if request.Code != nil {
+		code = *request.Code
+	}
 	credential, err := h.service.Login(context.Request.Context(), LoginInput{
-		Email:    request.Email,
-		Password: request.Password,
-		Client:   client,
+		LoginType:    authplatform.LoginType(*request.LoginType),
+		LoginAccount: *request.LoginAccount,
+		Password:     password,
+		Code:         code,
+		Client:       client,
 	})
 	if err != nil {
 		response.Fail(context, err)
@@ -78,6 +96,73 @@ func (h *Handler) Login(context *gin.Context) {
 		return
 	}
 	writeCredential(context, credential)
+}
+
+func (h *Handler) LoginConfig(context *gin.Context) {
+	client, ok := authclient.FromContext(context)
+	if !ok {
+		response.Fail(context, apperror.InvalidRequest(fmt.Errorf("authentication client metadata is missing")))
+		return
+	}
+	config, err := h.service.LoginConfig(context.Request.Context(), client)
+	if err != nil {
+		response.Fail(context, err)
+		return
+	}
+	options := make([]authplatform.LoginTypeOption, 0, len(config.LoginTypes))
+	for _, option := range config.LoginTypes {
+		options = append(options, authplatform.LoginTypeOption{Value: option.Value, Label: loginTypeLabel(context, option.Value)})
+	}
+	response.OK(context, http.StatusOK, LoginConfigResponse{LoginTypes: options, AllowRegister: config.AllowRegister})
+}
+
+func (h *Handler) SendCode(context *gin.Context) {
+	client, ok := authclient.FromContext(context)
+	if !ok {
+		response.Fail(context, apperror.InvalidRequest(fmt.Errorf("authentication client metadata is missing")))
+		return
+	}
+	var request SendCodeRequest
+	if err := validate.BindJSON(context, &request); err != nil {
+		response.Fail(context, err)
+		return
+	}
+	if request.Account == nil || request.LoginType == nil || request.Scene == nil {
+		response.Fail(context, apperror.InvalidRequest(fmt.Errorf("send-code fields are required")))
+		return
+	}
+	challengeID := ""
+	if request.ChallengeID != nil {
+		challengeID = *request.ChallengeID
+	}
+	result, err := h.service.SendCode(context.Request.Context(), SendCodeInput{
+		Account:     *request.Account,
+		LoginType:   authplatform.LoginType(*request.LoginType),
+		Scene:       *request.Scene,
+		ChallengeID: challengeID,
+		Client:      client,
+	})
+	if err != nil {
+		response.Fail(context, err)
+		return
+	}
+	response.OK(context, http.StatusOK, SendCodeResponse{ChallengeID: result.ChallengeID, ExpiresAt: result.ExpiresAt})
+}
+
+func loginTypeLabel(context *gin.Context, loginType authplatform.LoginType) string {
+	locale := i18n.LocaleFromContext(context.Request.Context())
+	key := i18n.KeyLoginTypePassword
+	switch loginType {
+	case authplatform.LoginTypeEmail:
+		key = i18n.KeyLoginTypeEmail
+	case authplatform.LoginTypePhone:
+		key = i18n.KeyLoginTypePhone
+	}
+	message, err := i18n.Translate(locale, key, nil)
+	if err != nil {
+		return string(loginType)
+	}
+	return message
 }
 
 func (h *Handler) Refresh(context *gin.Context) {
@@ -189,5 +274,5 @@ func refreshCookieName(platform string) string {
 }
 
 func writeCredential(context *gin.Context, credential Credential) {
-	response.OK(context, http.StatusOK, CredentialResponse{AccessToken: credential.AccessToken, ExpiresIn: credential.ExpiresIn})
+	response.OK(context, http.StatusOK, CredentialResponse{AccessToken: credential.AccessToken, ExpiresIn: credential.ExpiresIn, IsNewUser: credential.IsNewUser})
 }

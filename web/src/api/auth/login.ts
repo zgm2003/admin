@@ -1,20 +1,40 @@
 import { refreshAccessCredential, request } from '@/utils/request'
 import {
+  expectArray,
+  expectBoolean,
   expectExactKeys,
   expectEmptyObject,
   expectInteger,
   expectNullableString,
   expectString,
 } from '@/api/protocol'
+import { ProtocolError } from '@/types/http'
 
-export interface LoginInput {
-  email: string
-  password: string
-}
+export type LoginType = 'email' | 'phone' | 'password'
+
+export type LoginInput =
+  | { loginType: 'password'; loginAccount: string; password: string; code?: never }
+  | { loginType: 'email' | 'phone'; loginAccount: string; code: string; password?: never }
 
 export interface AccessCredential {
   accessToken: string
   expiresIn: number
+  isNewUser: boolean
+}
+
+export interface LoginConfigOption {
+  value: LoginType
+  label: string
+}
+
+export interface LoginConfig {
+  loginTypes: LoginConfigOption[]
+  allowRegister: boolean
+}
+
+export interface SendCodeResult {
+  challengeId: string
+  expiresAt: string
 }
 
 export interface CurrentUser {
@@ -28,6 +48,27 @@ export interface CurrentUser {
 export async function login(input: LoginInput): Promise<AccessCredential> {
   return parseAccessCredential(
     await request<unknown>({ method: 'POST', url: '/api/v1/auth/login', data: input }),
+  )
+}
+
+export async function getLoginConfig(): Promise<LoginConfig> {
+  return parseLoginConfig(
+    await request<unknown>({ method: 'GET', url: '/api/v1/auth/login-config' }),
+  )
+}
+
+export async function sendLoginCode(
+  account: string,
+  loginType: 'email',
+  scene: string,
+  challengeId: string,
+): Promise<SendCodeResult> {
+  return parseSendCodeResult(
+    await request<unknown>({
+      method: 'POST',
+      url: '/api/v1/auth/send-code',
+      data: { account, loginType, scene, challengeId },
+    }),
   )
 }
 
@@ -62,9 +103,63 @@ function parseCurrentUser(value: unknown): CurrentUser {
 }
 
 function parseAccessCredential(value: unknown): AccessCredential {
-  const record = expectExactKeys(value, ['accessToken', 'expiresIn'], 'access credential response')
+  const record = expectExactKeys(
+    value,
+    ['accessToken', 'expiresIn', 'isNewUser'],
+    'access credential response',
+  )
   return {
     accessToken: expectString(record.accessToken, 'access credential.accessToken'),
     expiresIn: expectInteger(record.expiresIn, 'access credential.expiresIn'),
+    isNewUser: expectBoolean(record.isNewUser, 'access credential.isNewUser'),
+  }
+}
+
+const loginTypeSet = new Set<string>(['email', 'phone', 'password'])
+const effectiveLoginTypeSet = new Set<string>(['email', 'password'])
+
+function parseLoginConfigOption(value: unknown, index: number): LoginConfigOption {
+  const record = expectExactKeys(value, ['value', 'label'], `login config.options[${index}]`)
+  const loginType = expectString(record.value, `login config.options[${index}].value`)
+  if (!loginTypeSet.has(loginType)) throw new ProtocolError('login config option value is invalid')
+  if (!effectiveLoginTypeSet.has(loginType)) {
+    throw new ProtocolError('login config option value is unavailable')
+  }
+  return {
+    value: loginType as LoginType,
+    label: expectString(record.label, `login config.options[${index}].label`),
+  }
+}
+
+function parseLoginConfig(value: unknown): LoginConfig {
+  const record = expectExactKeys(value, ['loginTypes', 'allowRegister'], 'login config response')
+  const rawLoginTypes = expectArray(record.loginTypes, 'login config.loginTypes')
+  if (rawLoginTypes.length === 0) {
+    throw new ProtocolError('login config.loginTypes must not be empty')
+  }
+  const seen = new Set<LoginType>()
+  const loginTypes = rawLoginTypes.map((item, index) => {
+    const option = parseLoginConfigOption(item, index)
+    if (seen.has(option.value)) {
+      throw new ProtocolError('login config.loginTypes contains duplicates')
+    }
+    seen.add(option.value)
+    return option
+  })
+  return {
+    loginTypes,
+    allowRegister: expectBoolean(record.allowRegister, 'login config.allowRegister'),
+  }
+}
+
+function parseSendCodeResult(value: unknown): SendCodeResult {
+  const record = expectExactKeys(value, ['challengeId', 'expiresAt'], 'send code response')
+  const expiresAt = expectString(record.expiresAt, 'send code.expiresAt')
+  if (expiresAt.trim() === '' || Number.isNaN(Date.parse(expiresAt))) {
+    throw new ProtocolError('send code.expiresAt must be a timestamp')
+  }
+  return {
+    challengeId: expectString(record.challengeId, 'send code.challengeId'),
+    expiresAt,
   }
 }

@@ -39,6 +39,7 @@ describe('authentication platform API', () => {
     await createAuthPlatform({
       code: 'portal',
       name: 'Portal',
+      loginTypes: ['email', 'password'],
       accessTTLSeconds: 900,
       refreshTTLSeconds: 86_400,
       sessionCacheTTLSeconds: 7_200,
@@ -51,6 +52,7 @@ describe('authentication platform API', () => {
     })
     await updateAuthPlatform(3, {
       name: 'Portal 2',
+      loginTypes: ['email', 'password'],
       accessTTLSeconds: 1_800,
       refreshTTLSeconds: 86_400,
       sessionCacheTTLSeconds: 7_200,

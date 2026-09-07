@@ -13,13 +13,21 @@ import (
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
+	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 )
+
+// policyReader is the narrow PostgreSQL source used only by the policy read
+// path, so cache hits can be verified without touching the full repository.
+type policyReader interface {
+	FindPolicy(context.Context, string) (Platform, error)
+}
 
 type Policy struct {
 	ID              int64         `json:"id"`
 	Code            string        `json:"code"`
 	Name            string        `json:"name"`
+	LoginTypes      []LoginType   `json:"loginTypes"`
 	PolicyVersion   int64         `json:"policyVersion"`
 	AccessTTL       time.Duration `json:"accessTTL"`
 	RefreshTTL      time.Duration `json:"refreshTTL"`
@@ -56,6 +64,7 @@ type Deployment struct {
 type CreateInput struct {
 	Code                   string
 	Name                   string
+	LoginTypes             []LoginType
 	AccessTTLSeconds       int
 	RefreshTTLSeconds      int
 	SessionCacheTTLSeconds int
@@ -69,6 +78,7 @@ type CreateInput struct {
 
 type UpdateInput struct {
 	Name                   string
+	LoginTypes             []LoginType
 	AccessTTLSeconds       int
 	RefreshTTLSeconds      int
 	SessionCacheTTLSeconds int
@@ -91,6 +101,8 @@ type platformService interface {
 
 type Service struct {
 	repository            *Repository
+	policyReader          policyReader
+	policyLoadGroup       singleflight.Group
 	policies              *PolicyStore
 	redis                 *projectredis.Client
 	authStates            *authstate.Store
@@ -103,26 +115,79 @@ type Service struct {
 type SessionSnapshotDeleter func(context.Context, string, int64) error
 
 func NewService(repository *Repository, policies *PolicyStore, redis *projectredis.Client, authStates *authstate.Store, authInvalidator *authstate.Invalidator, deleteSessionSnapshot SessionSnapshotDeleter, logger *slog.Logger, deployment Deployment) *Service {
-	return &Service{repository: repository, policies: policies, redis: redis, authStates: authStates, authInvalidator: authInvalidator, deleteSessionSnapshot: deleteSessionSnapshot, logger: logger, deployment: deployment}
+	return &Service{repository: repository, policyReader: repository, policies: policies, redis: redis, authStates: authStates, authInvalidator: authInvalidator, deleteSessionSnapshot: deleteSessionSnapshot, logger: logger, deployment: deployment}
 }
 
 func (s *Service) CurrentPolicy(ctx context.Context, code string) (Policy, error) {
 	if err := ValidateCode(code); err != nil {
 		return Policy{}, apperror.InvalidRequest(err)
 	}
-	state, found, cacheErr := s.policies.read(ctx, code)
-	if cacheErr == nil && found {
-		if state.State == "invalidating" {
-			return Policy{}, sessionUpdating(ErrUpdating)
-		}
-		return requireAvailablePolicy(*state.Policy)
-	}
-	if cacheErr != nil {
-		s.logger.ErrorContext(ctx, "authentication policy cache read failed", "cacheKind", "policy", "cacheResult", "error", "error", cacheErr)
-	}
-	row, err := s.repository.FindPolicy(ctx, code)
+	state, found, err := s.policies.read(ctx, code)
 	if err != nil {
-		if errors.Is(err, gormErrRecordNotFound()) {
+		return Policy{}, dependencyUnavailable(err)
+	}
+	if found {
+		return s.availablePolicy(state)
+	}
+	policy, err := s.loadMissingPolicy(ctx, code)
+	if err != nil {
+		return Policy{}, err
+	}
+	return requireAvailablePolicy(policy)
+}
+
+func (s *Service) availablePolicy(state policyState) (Policy, error) {
+	if state.State == "invalidating" {
+		return Policy{}, dependencyUnavailable(fmt.Errorf("authentication policy is updating"))
+	}
+	if state.Policy == nil {
+		return Policy{}, dependencyUnavailable(fmt.Errorf("authentication policy ready state is missing its policy"))
+	}
+	return requireAvailablePolicy(*state.Policy)
+}
+
+func (s *Service) loadMissingPolicy(ctx context.Context, code string) (Policy, error) {
+	result := s.policyLoadGroup.DoChan(code, func() (any, error) {
+		sharedContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), policyLoadLockTTL)
+		defer cancel()
+		return s.rebuildMissingPolicy(sharedContext, code)
+	})
+	var sharedResult singleflight.Result
+	select {
+	case <-ctx.Done():
+		return Policy{}, ctx.Err()
+	case sharedResult = <-result:
+	}
+	if sharedResult.Err != nil {
+		return Policy{}, sharedResult.Err
+	}
+	policy, ok := sharedResult.Val.(Policy)
+	if !ok {
+		return Policy{}, dependencyUnavailable(fmt.Errorf("authentication policy rebuild returned an invalid value"))
+	}
+	return policy, nil
+}
+
+func (s *Service) rebuildMissingPolicy(ctx context.Context, code string) (Policy, error) {
+	lock, err := s.policies.acquireLoadLock(ctx, code)
+	if err != nil {
+		return s.waitForPolicyReady(ctx, code)
+	}
+	defer func() {
+		releaseContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		lock.release(releaseContext)
+	}()
+	state, found, err := s.policies.read(ctx, code)
+	if err != nil {
+		return Policy{}, dependencyUnavailable(err)
+	}
+	if found {
+		return s.availablePolicy(state)
+	}
+	row, err := s.policyReader.FindPolicy(ctx, code)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return Policy{}, notFound(err)
 		}
 		return Policy{}, dependencyUnavailable(err)
@@ -131,15 +196,41 @@ func (s *Service) CurrentPolicy(ctx context.Context, code string) (Policy, error
 	if err != nil {
 		return Policy{}, dependencyUnavailable(err)
 	}
-	current, _, publishErr := s.policies.installReadyIfMissing(ctx, policy)
-	if publishErr != nil {
-		s.logger.ErrorContext(ctx, "authentication policy cache rebuild failed", "cacheKind", "policy", "cacheResult", "error", "error", publishErr)
-		return requireAvailablePolicy(policy)
+	state, _, err = s.policies.installReadyIfMissing(ctx, policy)
+	if err != nil {
+		return Policy{}, dependencyUnavailable(err)
 	}
-	if current.State == "invalidating" {
-		return Policy{}, sessionUpdating(ErrUpdating)
+	return s.availablePolicy(state)
+}
+
+func (s *Service) waitForPolicyReady(ctx context.Context, code string) (Policy, error) {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	timeout := time.NewTimer(policyLoadLockTTL)
+	defer timeout.Stop()
+	for {
+		state, found, err := s.policies.read(ctx, code)
+		if err != nil {
+			return Policy{}, dependencyUnavailable(err)
+		}
+		if found {
+			return s.availablePolicy(state)
+		}
+		select {
+		case <-ctx.Done():
+			return Policy{}, dependencyUnavailable(ctx.Err())
+		case <-ticker.C:
+		case <-timeout.C:
+			state, found, err = s.policies.read(ctx, code)
+			if err != nil {
+				return Policy{}, dependencyUnavailable(err)
+			}
+			if found {
+				return s.availablePolicy(state)
+			}
+			return Policy{}, dependencyUnavailable(fmt.Errorf("authentication policy rebuild did not complete"))
+		}
 	}
-	return requireAvailablePolicy(*current.Policy)
 }
 
 func requireAvailablePolicy(policy Policy) (Policy, error) {
@@ -156,8 +247,12 @@ func policyFromModel(value Platform) (Policy, error) {
 	if err := ValidatePlatform(value); err != nil {
 		return Policy{}, err
 	}
+	loginTypes, err := parseLoginTypes(value.LoginTypes)
+	if err != nil {
+		return Policy{}, err
+	}
 	return Policy{
-		ID: value.ID, Code: value.Code, Name: value.Name, PolicyVersion: value.PolicyVersion,
+		ID: value.ID, Code: value.Code, Name: value.Name, LoginTypes: loginTypes, PolicyVersion: value.PolicyVersion,
 		AccessTTL:       time.Duration(value.AccessTTLSeconds) * time.Second,
 		RefreshTTL:      time.Duration(value.RefreshTTLSeconds) * time.Second,
 		SessionCacheTTL: time.Duration(value.SessionCacheTTLSeconds) * time.Second,
@@ -200,8 +295,12 @@ func (s *Service) Deployment(ctx context.Context) (Deployment, error) {
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) {
 	now := time.Now().UTC().Truncate(time.Microsecond)
+	loginTypes, err := marshalLoginTypes(input.LoginTypes)
+	if err != nil {
+		return 0, invalidPolicy(err)
+	}
 	value := Platform{
-		Code: strings.TrimSpace(input.Code), Name: strings.TrimSpace(input.Name), PolicyVersion: 1,
+		Code: strings.TrimSpace(input.Code), Name: strings.TrimSpace(input.Name), LoginTypes: loginTypes, PolicyVersion: 1,
 		AccessTTLSeconds: input.AccessTTLSeconds, RefreshTTLSeconds: input.RefreshTTLSeconds,
 		SessionCacheTTLSeconds: input.SessionCacheTTLSeconds, AccessCacheTTLSeconds: input.AccessCacheTTLSeconds,
 		BindDevice: input.BindDevice, BindIP: input.BindIP, MaxSessions: input.MaxSessions,
@@ -248,6 +347,11 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		}
 		candidate := current
 		candidate.Name = strings.TrimSpace(input.Name)
+		normalizedLoginTypes, err := normalizeLoginTypes(input.LoginTypes)
+		if err != nil {
+			return mutationPlan{}, invalidPolicy(err)
+		}
+		candidate.LoginTypes = normalizedLoginTypes
 		candidate.AccessTTL = time.Duration(input.AccessTTLSeconds) * time.Second
 		candidate.RefreshTTL = time.Duration(input.RefreshTTLSeconds) * time.Second
 		candidate.SessionCacheTTL = time.Duration(input.SessionCacheTTLSeconds) * time.Second
@@ -433,8 +537,12 @@ func (s *Service) mutate(ctx context.Context, id int64, planner func(Platform, P
 		} else if plan.status != nil {
 			_, lockErr = scoped.UpdateStatus(mutationCtx, id, *plan.status, now)
 		} else {
+			loginTypesRaw, marshalErr := marshalLoginTypes(plan.candidate.LoginTypes)
+			if marshalErr != nil {
+				return marshalErr
+			}
 			_, lockErr = scoped.UpdatePolicy(mutationCtx, id, UpdateValues{
-				Name: plan.candidate.Name, AccessTTLSeconds: int(plan.candidate.AccessTTL / time.Second), RefreshTTLSeconds: int(plan.candidate.RefreshTTL / time.Second),
+				Name: plan.candidate.Name, LoginTypes: loginTypesRaw, AccessTTLSeconds: int(plan.candidate.AccessTTL / time.Second), RefreshTTLSeconds: int(plan.candidate.RefreshTTL / time.Second),
 				SessionCacheTTLSeconds: int(plan.candidate.SessionCacheTTL / time.Second), AccessCacheTTLSeconds: int(plan.candidate.AccessCacheTTL / time.Second),
 				BindDevice: boolToYesNo(plan.candidate.BindDevice), BindIP: boolToYesNo(plan.candidate.BindIP), MaxSessions: plan.candidate.MaxSessions, AllowRegister: boolToYesNo(plan.candidate.AllowRegister),
 			}, now)
@@ -495,14 +603,28 @@ func (s *Service) mutate(ctx context.Context, id int64, planner func(Platform, P
 }
 
 func samePlatformRuntimeValues(left, right Policy) bool {
-	return left.Name == right.Name && left.AccessTTL == right.AccessTTL && left.RefreshTTL == right.RefreshTTL &&
+	return left.Name == right.Name && sameLoginTypes(left.LoginTypes, right.LoginTypes) &&
+		left.AccessTTL == right.AccessTTL && left.RefreshTTL == right.RefreshTTL &&
 		left.SessionCacheTTL == right.SessionCacheTTL && left.AccessCacheTTL == right.AccessCacheTTL &&
 		left.BindDevice == right.BindDevice && left.BindIP == right.BindIP && left.MaxSessions == right.MaxSessions && left.AllowRegister == right.AllowRegister && left.IsEnabled == right.IsEnabled
 }
 
+func sameLoginTypes(left, right []LoginType) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
 func platformModelFromPolicy(policy Policy) Platform {
+	raw, _ := marshalLoginTypes(policy.LoginTypes)
 	return Platform{
-		ID: policy.ID, Code: policy.Code, Name: policy.Name, PolicyVersion: policy.PolicyVersion,
+		ID: policy.ID, Code: policy.Code, Name: policy.Name, LoginTypes: raw, PolicyVersion: policy.PolicyVersion,
 		AccessTTLSeconds: int(policy.AccessTTL / time.Second), RefreshTTLSeconds: int(policy.RefreshTTL / time.Second),
 		SessionCacheTTLSeconds: int(policy.SessionCacheTTL / time.Second), AccessCacheTTLSeconds: int(policy.AccessCacheTTL / time.Second),
 		BindDevice: boolToYesNo(policy.BindDevice), BindIP: boolToYesNo(policy.BindIP), MaxSessions: policy.MaxSessions,
