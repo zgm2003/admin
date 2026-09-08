@@ -139,6 +139,41 @@ func TestSendReturnsRecipientDeniedAsMailBusinessError(t *testing.T) {
 	}
 }
 
+func TestForPlatformRecordsPreflightFailureAsLatestTestResult(t *testing.T) {
+	db, ctx := openMailServiceDatabase(t)
+	service := NewService(
+		NewRepository(db), nil, &countingSender{},
+		ruleEvaluatorStub{decision: RuleDecision{Allowed: false}}, limiterStub{allowed: true},
+		stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()},
+	)
+	startedAt := time.Now().UTC().Add(-time.Second)
+
+	_, err := service.TestForPlatform(ctx, 1, validAdminTestInput())
+
+	assertApplicationError(t, err, http.StatusForbidden, CodeRecipientDenied)
+	var config Config
+	if queryErr := db.WithContext(ctx).Where("platform_id = ?", 1).Take(&config).Error; queryErr != nil {
+		t.Fatal(queryErr)
+	}
+	if config.LastTestAt == nil || config.LastTestAt.Before(startedAt) {
+		t.Fatalf("last test time = %v, want a current failure timestamp", config.LastTestAt)
+	}
+	if config.LastTestError != ErrRecipientDenied.Error() {
+		t.Fatalf("last test error = %q, want %q", config.LastTestError, ErrRecipientDenied.Error())
+	}
+
+	service.rules = ruleEvaluatorStub{decision: RuleDecision{Allowed: true}}
+	if _, successErr := service.TestForPlatform(ctx, 1, validAdminTestInput()); successErr != nil {
+		t.Fatal(successErr)
+	}
+	if queryErr := db.WithContext(ctx).Where("platform_id = ?", 1).Take(&config).Error; queryErr != nil {
+		t.Fatal(queryErr)
+	}
+	if config.LastTestError != "" {
+		t.Fatalf("last test error after success = %q, want empty", config.LastTestError)
+	}
+}
+
 func TestSendReturnsRateLimitedWhenLimiterRejects(t *testing.T) {
 	service := NewService(nil, nil, nil, nil, limiterStub{allowed: false}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
 

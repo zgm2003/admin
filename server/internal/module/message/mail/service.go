@@ -565,7 +565,10 @@ func (s *Service) TestForPlatform(ctx context.Context, platformID int64, in Admi
 		Scene: in.Scene, ToEmail: in.ToEmail, Variables: in.Variables,
 	}, SendModeAdminTest)
 	result := AdminTestResult{LogID: r.LogID, Status: r.Status, RequestID: r.RequestID, MessageID: r.MessageID}
-	if err != nil && r.LogID == 0 {
+	if s.repository == nil {
+		if err == nil {
+			err = dependency(fmt.Errorf("mail repository unavailable"))
+		}
 		return result, err
 	}
 	if recordErr := s.repository.RecordTestResult(ctx, platformID, time.Now().UTC(), errorSummary(err)); recordErr != nil && err == nil {

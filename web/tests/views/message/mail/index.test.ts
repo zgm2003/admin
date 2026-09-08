@@ -138,6 +138,43 @@ describe('mail service page', () => {
     expect(testButton?.attributes('disabled')).toBeDefined()
   })
 
+  it('reloads the latest test error after a rejected management test', async () => {
+    vi.mocked(mailApi.getMailConfig)
+      .mockResolvedValueOnce({
+        configured: true,
+        region: 'ap-guangzhou',
+        endpoint: '',
+        fromEmail: 'sender@example.com',
+        fromName: 'Admin',
+        replyTo: '',
+        ttlMinutes: 10,
+        isEnabled: YesNo.Yes,
+        lastTestAt: null,
+        lastTestError: '',
+      })
+      .mockResolvedValueOnce({
+        configured: true,
+        region: 'ap-guangzhou',
+        endpoint: '',
+        fromEmail: 'sender@example.com',
+        fromName: 'Admin',
+        replyTo: '',
+        ttlMinutes: 10,
+        isEnabled: YesNo.Yes,
+        lastTestAt: '2026-09-08T10:00:00Z',
+        lastTestError: 'mail recipient denied',
+      })
+    vi.mocked(mailApi.sendMailTest).mockRejectedValueOnce(new Error('mail recipient denied'))
+    const wrapper = mountPage(['message:mail:list', 'message:mail:test'])
+    await flushPromises()
+
+    await wrapper.get('[data-testid="mail-config-test"]').trigger('click')
+    await flushPromises()
+
+    expect(mailApi.getMailConfig).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('mail recipient denied')
+  })
+
   it('renders controls only for granted action permissions', async () => {
     const wrapper = mountPage([
       'message:mail:list',

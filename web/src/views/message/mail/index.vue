@@ -137,6 +137,7 @@ watch(
           :can-delete="can('message:mail:config:delete')"
           @saved="loadConfig"
           @deleted="loadConfig"
+          @tested="loadConfig"
         />
         <MailTemplateTab
           v-else-if="tab.name === 'templates'"

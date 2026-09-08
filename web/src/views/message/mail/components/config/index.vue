@@ -14,7 +14,7 @@ const props = defineProps<{
   canDelete: boolean
 }>()
 
-const emit = defineEmits<{ saved: []; deleted: [] }>()
+const emit = defineEmits<{ saved: []; deleted: []; tested: [] }>()
 const { t } = useI18n()
 const formRef = ref<FormInstance>()
 const saving = ref(false)
@@ -98,8 +98,11 @@ async function sendTest(): Promise<void> {
       },
     })
     ElMessage.success(t('mail.testSent'))
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     testing.value = false
+    emit('tested')
   }
 }
 
@@ -209,6 +212,7 @@ async function remove(): Promise<void> {
             <div class="test-input">
               <el-input v-model="testEmail" />
               <el-button
+                data-testid="mail-config-test"
                 :loading="testing"
                 :disabled="!config.configured || config.isEnabled !== YesNo.Yes"
                 @click="sendTest"
