@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 40kHLIBwRUi3Jkxkfv7i1qug4gR990nBqh6pVNpcYP4OGfLmgabZIuDHBB3VRws
+\restrict q0eTjEazpeEPMIc5Hg83bR5dNOfH54bMjEWNQm5iQrM4trjGY6UbErKeYfkZToC
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -390,6 +390,7 @@ CREATE TABLE public.permission_auth_platform (
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
     login_types jsonb DEFAULT '["email", "password"]'::jsonb NOT NULL,
+    menu_version bigint DEFAULT 1 NOT NULL,
     CONSTRAINT ck_permission_auth_platform_access_cache_ttl_seconds CHECK (((access_cache_ttl_seconds >= 60) AND (access_cache_ttl_seconds <= 86400))),
     CONSTRAINT ck_permission_auth_platform_access_ttl_seconds CHECK (((access_ttl_seconds >= 60) AND (access_ttl_seconds <= 2592000))),
     CONSTRAINT ck_permission_auth_platform_allow_register CHECK ((allow_register = ANY (ARRAY[0, 1]))),
@@ -412,6 +413,7 @@ CASE
     ELSE 0
 END)))),
     CONSTRAINT ck_permission_auth_platform_max_sessions CHECK (((max_sessions >= 0) AND (max_sessions <= 100))),
+    CONSTRAINT ck_permission_auth_platform_menu_version CHECK ((menu_version >= 1)),
     CONSTRAINT ck_permission_auth_platform_policy_version CHECK ((policy_version >= 1)),
     CONSTRAINT ck_permission_auth_platform_refresh_ttl_seconds CHECK (((refresh_ttl_seconds >= 60) AND (refresh_ttl_seconds <= 31536000))),
     CONSTRAINT ck_permission_auth_platform_session_cache_ttl_seconds CHECK (((session_cache_ttl_seconds >= 60) AND (session_cache_ttl_seconds <= 86400)))
@@ -1539,4 +1541,4 @@ ALTER TABLE ONLY public.message_mail_template
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 40kHLIBwRUi3Jkxkfv7i1qug4gR990nBqh6pVNpcYP4OGfLmgabZIuDHBB3VRws
+\unrestrict q0eTjEazpeEPMIc5Hg83bR5dNOfH54bMjEWNQm5iQrM4trjGY6UbErKeYfkZToC

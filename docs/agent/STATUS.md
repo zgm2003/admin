@@ -16,16 +16,26 @@
 - 已验证：8 个相关 Go 包的关键定向测试带 `-race -p 1` 通过（并发、权限失效、Redis 故障、密码、迁移回滚）；
   最后时限传递修正后，Access/Menu 关键用例复跑通过。`go test ./cmd/api -run '^$' -count=1` 编译通过。
   `pnpm typecheck` 通过；Auth API、登录页、菜单页三个 Vitest 文件 50/50 通过。此次未跑全量测试或打包构建。
-- **新增迁移待执行**：`docs/database/2026-09-08-menu-catalog-version.sql`。已查询业务库确认 `menu_version`
-  不存在；旧的 module-naming-mail-policy 迁移已经执行，不要混为同一项。新迁移验证了幂等、保留策略版本与
-  既有计数、失败回滚及非正数约束。停旧 API/Worker，备份后执行，再同步启动新后端和前端。
-  `docs/database/current.sql` 仍对应此前真实数据库，不提前伪造新字段快照；新迁移后再导出。
+- **新增迁移已执行**：维护者明确授权后，`2026-09-08-menu-catalog-version.sql` 于
+  **2026-09-08 14:33:43 +08:00** 在本机 `admin.public` 提交。Admin/Canvas 的 `menu_version` 均为 1，
+  `policy_version` 仍为 2/1；事务提交前逐项核对平台原有字段、71 个菜单、11 条授权及用户授权版本均未改动。
+  新字段为 `BIGINT NOT NULL DEFAULT 1`，正数 CHECK 已验证；`docs/database/current.sql` 已从真实 schema-only 刷新。
+- 此次先备份并完成归档读取验证，文件、执行 SQL、校验输出和运行日志在仓库外
+  `%LOCALAPPDATA%\Admin\backups\20260908-142940-menu-version`；目录 ACL 限当前用户/SYSTEM。
+  `public-before.dump` SHA256：`DE217ABA77367E2D9863D9CA1A1E1BE998E180EAA9ED0A55EE3727D62AFC34D6`。
+- 仅失效并重建两个平台的菜单版本元数据键，随后核对缓存值与 PostgreSQL 一致；未清空 Redis、未撤销会话、
+  未操作邮件额度键。临时维护程序已移出工作区并归档。
+- 为避免恢复旧二进制，仅定向编译 API/Worker 两个启动入口并从命令行后台恢复，未运行全量构建或测试。
+  当前启动记录：API PID 32924、Worker PID 34024，2026-09-08 14:36 +08:00；日志在同一备份目录。
+  切换回 IDE 启动前，应先检查并停止这两个后台进程，避免重复实例/端口冲突，不要盲用过期 PID。
+- 迁移后 `/health`、`/ready`、`/api/v1/auth/policy` 均 200；管理接口带平台头但无登录凭据返回 401。
+  执行前观察到一轮已有全量 Go 测试，没有终止或重复启动它；其结果以维护者终端为准。
 - 浏览器 E2E 原型及失败记录已归档到仓库外 `%LOCALAPPDATA%\Admin\paused-e2e\20260908-135023`，工作区已移除。
   未将其计为通过，也未修改真实账号密码或发送真实邮件。密码页面交互、登录态浏览器验收交给维护者。
 - 最后进程检查无 Go/Vitest/浏览器 E2E 测试进程运行；现有 API/Worker 不是本轮新代码上线验收证据。
   未调整暂存区或提交；存在 AD（已暂存但工作区已删除）旧路径/原型文件，提交前必须核对 `git diff --cached`。
 
-### 维护者执行顺序
+### 维护者执行顺序（新增迁移已完成，迁移命令仅留档）
 
 先停止旧 API/Worker，保持 PostgreSQL/Redis 可用。每一步退出码应为 0；失败先停止，不继续发布；不要同时启动另一轮全量测试。
 
@@ -42,7 +52,7 @@ pnpm vitest run --pool=threads --maxWorkers=1
 pnpm build
 ```
 
-全量验证通过后，保持 API/Worker 停止，先备份，再执行新迁移。下面读取本地配置，不打印连接串：
+以下备份/迁移命令留作审计和复核，本次已经执行，不需要再执行一次。读取本地配置时不打印连接串：
 
 ```powershell
 cd D:\admin
