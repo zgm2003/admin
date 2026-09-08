@@ -457,7 +457,7 @@ func TestSendCodeRejectsInvalidMailPreparationBeforePut(t *testing.T) {
 	for _, preparation := range []messagemail.EmailVerifyCodePreparation{
 		{TTLMinutes: 0, ResendAfterSeconds: 60},
 		{TTLMinutes: 61, ResendAfterSeconds: 60},
-		{TTLMinutes: 5, ResendAfterSeconds: 0},
+		{TTLMinutes: 5, ResendAfterSeconds: -1},
 		{TTLMinutes: 5, ResendAfterSeconds: 86401},
 	} {
 		store := &fakeVerificationCodeStore{acquired: true}

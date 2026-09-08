@@ -14,6 +14,7 @@ type Platform struct {
 	Name                   string          `gorm:"column:name;type:varchar(64);not null"`
 	LoginTypes             json.RawMessage `gorm:"column:login_types;type:jsonb;not null"`
 	PolicyVersion          int64           `gorm:"column:policy_version;not null;default:1"`
+	MenuVersion            int64           `gorm:"column:menu_version;not null;default:1"`
 	AccessTTLSeconds       int             `gorm:"column:access_ttl_seconds;type:integer;not null"`
 	RefreshTTLSeconds      int             `gorm:"column:refresh_ttl_seconds;type:integer;not null"`
 	SessionCacheTTLSeconds int             `gorm:"column:session_cache_ttl_seconds;type:integer;not null"`

@@ -78,14 +78,14 @@ func TestLoadSnapshotUsesRedisStateGateBeforeLocalCache(t *testing.T) {
 		permissionstate.NewStore(serviceRedis),
 		NewSnapshotCache(serviceRedis),
 		NewLocalSnapshotCache(8),
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		slog.New(slog.NewTextHandler(io.Discard, nil)), permissionstate.NewMenuStore(serviceRedis),
 	)
 	identity := accessIdentity(93006)
 
 	if _, err := service.Current(context.Background(), identity); err != nil {
 		t.Fatal(err)
 	}
-	if err := cleanupRedis.Delete(context.Background(), SnapshotKey("admin", 4, 93006, 3)); err != nil {
+	if err := cleanupRedis.Delete(context.Background(), SnapshotKey("admin", 4, 93006, 3, 1)); err != nil {
 		t.Fatal(err)
 	}
 	warm, err := service.Current(context.Background(), identity)
@@ -112,7 +112,7 @@ func TestLoadSnapshotFallsBackForMissErrorAndCorruption(t *testing.T) {
 	if _, err := service.Current(context.Background(), identity); err != nil {
 		t.Fatal(err)
 	}
-	key := SnapshotKey("admin", 4, 93002, 3)
+	key := SnapshotKey("admin", 4, 93002, 3, 1)
 	if err := redisClient.SetString(context.Background(), key, `{"schemaVersion":1,"unknown":true}`, time.Minute); err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestLoadSnapshotBypassesLocalCacheForMissingOrCorruptState(t *testing.T) {
 			if _, err := service.Current(context.Background(), identity); err != nil {
 				t.Fatal(err)
 			}
-			if err := redisClient.Delete(context.Background(), SnapshotKey("admin", 4, test.userID, 3)); err != nil {
+			if err := redisClient.Delete(context.Background(), SnapshotKey("admin", 4, test.userID, 3, 1)); err != nil {
 				t.Fatal(err)
 			}
 			test.mutateState(t, redisClient, test.userID)
@@ -188,7 +188,7 @@ func TestLoadSnapshotBypassesLocalCacheForMissingOrCorruptState(t *testing.T) {
 func TestLoadSnapshotBypassesLocalCacheAfterAccessVersionChanges(t *testing.T) {
 	redisClient := openAccessRedis(t)
 	cleanupAccessKeys(t, redisClient, 93009, "admin", 4, 3)
-	t.Cleanup(func() { _ = redisClient.Delete(context.Background(), SnapshotKey("admin", 4, 93009, 4)) })
+	t.Cleanup(func() { _ = redisClient.Delete(context.Background(), SnapshotKey("admin", 4, 93009, 4, 1)) })
 	repository := &countingSourceStore{sources: []Source{baseSource(3), baseSource(4)}}
 	service := newAccessTestService(redisClient, repository)
 	identity := accessIdentity(93009)
@@ -297,7 +297,7 @@ func TestReadThroughRechecksVersionBeforePublishing(t *testing.T) {
 	if err != nil || snapshot.Version != 4 || repository.calls != 2 {
 		t.Fatalf("version recheck = %+v,%v calls=%d", snapshot, err, repository.calls)
 	}
-	if _, found, err := service.cache.Read(context.Background(), 1, "admin", 4, 93005, 3); err != nil || found {
+	if _, found, err := service.cache.Read(context.Background(), 1, "admin", 4, 93005, 3, 1); err != nil || found {
 		t.Fatalf("stale version snapshot published = %v,%v", found, err)
 	}
 }
@@ -465,7 +465,7 @@ func accessIdentity(userID int64) auth.Identity {
 
 func newAccessTestService(redisClient *projectredis.Client, repository sourceStore) *Service {
 	stateStore := permissionstate.NewStore(redisClient)
-	return NewService(repository, stateStore, NewSnapshotCache(redisClient), NewLocalSnapshotCache(8), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return NewService(repository, stateStore, NewSnapshotCache(redisClient), NewLocalSnapshotCache(8), slog.New(slog.NewTextHandler(io.Discard, nil)), permissionstate.NewMenuStore(redisClient))
 }
 
 type countingSourceStore struct {
@@ -503,3 +503,5 @@ func appErrorCode(err error) int {
 	}
 	return 0
 }
+
+func (s *countingSourceStore) FindMenuVersion(context.Context, int64) (int64, error) { return 1, nil }

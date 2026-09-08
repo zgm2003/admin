@@ -11,6 +11,27 @@ import (
 	"github.com/go-redis/redis_rate/v10"
 )
 
+func TestMailReservationReturnsSharedNextAllowance(t *testing.T) {
+	client := openMailReadinessRedis(t).UniversalClient()
+	ctx := context.Background()
+	prefix := fmt.Sprintf("test:mail:next:%d:", time.Now().UnixNano())
+	requests := []LimitRequest{{Key: prefix + "short", Limit: 2, Window: time.Minute}, {Key: prefix + "long", Limit: 2, Window: 10 * time.Minute}}
+	t.Cleanup(func() { _ = client.Del(ctx, "rate:"+requests[0].Key, "rate:"+requests[1].Key).Err() })
+	limiter := NewRedisLimiter(client)
+	first, err := limiter.Reserve(ctx, requests...)
+	if err != nil || !first.Allowed || first.RetryAfterSeconds != 0 {
+		t.Fatalf("first=%+v err=%v", first, err)
+	}
+	second, err := limiter.Reserve(ctx, requests...)
+	if err != nil || !second.Allowed || second.RetryAfterSeconds < 299 || second.RetryAfterSeconds > 300 {
+		t.Fatalf("long window must govern next resend: %+v err=%v", second, err)
+	}
+	third, err := limiter.Reserve(ctx, requests...)
+	if err != nil || third.Allowed || third.RetryAfterSeconds < 299 {
+		t.Fatalf("third=%+v err=%v", third, err)
+	}
+}
+
 func TestMailLimiterTwoInstancesShareBothWindows(t *testing.T) {
 	first := openMailReadinessRedis(t).UniversalClient()
 	second := openMailReadinessRedis(t).UniversalClient()

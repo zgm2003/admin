@@ -25,6 +25,7 @@ import (
 	usersession "admin/server/internal/module/user/session"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/cachefill"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
@@ -430,7 +431,7 @@ func validateEmailVerifyCodePreparation(preparation messagemail.EmailVerifyCodeP
 	if preparation.TTLMinutes < 1 || preparation.TTLMinutes > 60 {
 		return fmt.Errorf("mail verification preparation TTL is invalid")
 	}
-	if preparation.ResendAfterSeconds < 1 || preparation.ResendAfterSeconds > 86400 {
+	if preparation.ResendAfterSeconds < 0 || preparation.ResendAfterSeconds > 86400 {
 		return fmt.Errorf("mail verification preparation resend wait is invalid")
 	}
 	return nil
@@ -734,14 +735,44 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string, client a
 		return Identity{}, err
 	}
 	now := s.now().UTC()
-	cached, hit, cacheResult, err := s.cachedIdentity(ctx, token, client, policy, now)
-	if err != nil {
-		return Identity{}, err
+	var fill *cachefill.Lease
+	defer func() {
+		if err := fill.Release(ctx); err != nil {
+			s.logCacheError(ctx, "fillRelease", err)
+		}
+	}()
+	cacheResult := "miss"
+	for attempt := 0; attempt < 25; attempt++ {
+		cached, hit, result, cacheErr := s.cachedIdentity(ctx, token, client, policy, s.now().UTC())
+		if cacheErr != nil {
+			return Identity{}, cacheErr
+		}
+		if hit {
+			cached.CacheResult = "hit"
+			return cached, nil
+		}
+		cacheResult = result
+		if fill != nil {
+			break
+		}
+		if attempt == 24 {
+			break
+		}
+		fill, err = s.sessionCache.AcquireFill(ctx, fmt.Sprintf("%s:%d:%d:%d:%d", token.Platform, token.UserID, token.SessionID, token.Version, policy.PolicyVersion))
+		if err != nil {
+			return Identity{}, apperror.DependencyUnavailable(err)
+		}
+		if fill == nil {
+			if err := cachefill.Wait(ctx); err != nil {
+				return Identity{}, apperror.DependencyUnavailable(err)
+			}
+		}
 	}
-	if hit {
-		cached.CacheResult = "hit"
-		return cached, nil
+	if fill == nil {
+		return Identity{}, apperror.DependencyUnavailable(fmt.Errorf("session cache rebuild busy"))
 	}
+	ctx, cancel := fill.WorkContext(ctx)
+	defer cancel()
 
 	authority, err := s.sessions.FindAuthoritative(ctx, token.UserID, token.SessionID, token.Platform, token.Version, now)
 	if err != nil {

@@ -1,1281 +1,1542 @@
-/*
- Navicat Premium Dump SQL
+--
+-- PostgreSQL database dump
+--
 
- Source Server         : localhost
- Source Server Type    : PostgreSQL
- Source Server Version : 180006 (180006)
- Source Host           : localhost:5432
- Source Catalog        : admin
- Source Schema         : public
+\restrict 40kHLIBwRUi3Jkxkfv7i1qug4gR990nBqh6pVNpcYP4OGfLmgabZIuDHBB3VRws
 
- Target Server Type    : PostgreSQL
- Target Server Version : 180006 (180006)
- File Encoding         : 65001
+-- Dumped from database version 18.6
+-- Dumped by pg_dump version 18.6
 
- Date: 07/09/2026 18:49:15
-*/
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: public; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA public;
 
 
--- ----------------------------
--- Sequence structure for audit_operation_log_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."audit_operation_log_id_seq";
-CREATE SEQUENCE "public"."audit_operation_log_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
+--
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
+--
 
--- ----------------------------
--- Sequence structure for auth_platform_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."auth_platform_id_seq";
-CREATE SEQUENCE "public"."auth_platform_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
+COMMENT ON SCHEMA public IS 'standard public schema';
 
--- ----------------------------
--- Sequence structure for auth_session_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."auth_session_id_seq";
-CREATE SEQUENCE "public"."auth_session_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
 
--- ----------------------------
--- Sequence structure for message_mail_config_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."message_mail_config_id_seq";
-CREATE SEQUENCE "public"."message_mail_config_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
+SET default_tablespace = '';
 
--- ----------------------------
--- Sequence structure for message_mail_log_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."message_mail_log_id_seq";
-CREATE SEQUENCE "public"."message_mail_log_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
+SET default_table_access_method = heap;
 
--- ----------------------------
--- Sequence structure for message_mail_log_verification_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."message_mail_log_verification_id_seq";
-CREATE SEQUENCE "public"."message_mail_log_verification_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
+--
+-- Name: system_operation_log; Type: TABLE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Sequence structure for message_mail_recipient_rule_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."message_mail_recipient_rule_id_seq";
-CREATE SEQUENCE "public"."message_mail_recipient_rule_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
+CREATE TABLE public.system_operation_log (
+    id bigint CONSTRAINT audit_operation_log_id_not_null NOT NULL,
+    request_id character varying(128) CONSTRAINT audit_operation_log_request_id_not_null NOT NULL,
+    user_id bigint,
+    session_id bigint,
+    method character varying(10) CONSTRAINT audit_operation_log_method_not_null NOT NULL,
+    route character varying(255) CONSTRAINT audit_operation_log_route_not_null NOT NULL,
+    module character varying(64) CONSTRAINT audit_operation_log_module_not_null NOT NULL,
+    action character varying(128) CONSTRAINT audit_operation_log_action_not_null NOT NULL,
+    client_ip character varying(64) CONSTRAINT audit_operation_log_client_ip_not_null NOT NULL,
+    user_agent character varying(512) CONSTRAINT audit_operation_log_user_agent_not_null NOT NULL,
+    status_code integer CONSTRAINT audit_operation_log_status_code_not_null NOT NULL,
+    is_success smallint CONSTRAINT audit_operation_log_is_success_not_null NOT NULL,
+    latency_ms bigint CONSTRAINT audit_operation_log_latency_ms_not_null NOT NULL,
+    request_data jsonb,
+    response_data jsonb,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT audit_operation_log_created_at_not_null NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT audit_operation_log_updated_at_not_null NOT NULL,
+    event_id character varying(64) CONSTRAINT audit_operation_log_event_id_not_null NOT NULL,
+    platform_id bigint,
+    CONSTRAINT ck_audit_operation_log_is_success CHECK ((is_success = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_audit_operation_log_latency_ms CHECK ((latency_ms >= 0))
+);
 
--- ----------------------------
--- Sequence structure for message_mail_template_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."message_mail_template_id_seq";
-CREATE SEQUENCE "public"."message_mail_template_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
 
--- ----------------------------
--- Sequence structure for rbac_access_version_user_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."rbac_access_version_user_id_seq";
-CREATE SEQUENCE "public"."rbac_access_version_user_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
+--
+-- Name: audit_operation_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Sequence structure for rbac_menu_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."rbac_menu_id_seq";
-CREATE SEQUENCE "public"."rbac_menu_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
+CREATE SEQUENCE public.audit_operation_log_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
 
--- ----------------------------
--- Sequence structure for rbac_role_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."rbac_role_id_seq";
-CREATE SEQUENCE "public"."rbac_role_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
 
--- ----------------------------
--- Sequence structure for rbac_role_menu_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."rbac_role_menu_id_seq";
-CREATE SEQUENCE "public"."rbac_role_menu_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
+--
+-- Name: audit_operation_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Sequence structure for rbac_user_role_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."rbac_user_role_id_seq";
-CREATE SEQUENCE "public"."rbac_user_role_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
+ALTER SEQUENCE public.audit_operation_log_id_seq OWNED BY public.system_operation_log.id;
 
--- ----------------------------
--- Sequence structure for storage_cos_config_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."storage_cos_config_id_seq";
-CREATE SEQUENCE "public"."storage_cos_config_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
 
--- ----------------------------
--- Sequence structure for storage_upload_rule_code_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."storage_upload_rule_code_id_seq";
-CREATE SEQUENCE "public"."storage_upload_rule_code_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
+--
+-- Name: user_session; Type: TABLE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Sequence structure for storage_upload_rule_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."storage_upload_rule_id_seq";
-CREATE SEQUENCE "public"."storage_upload_rule_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
+CREATE TABLE public.user_session (
+    id bigint CONSTRAINT auth_session_id_not_null NOT NULL,
+    user_id bigint CONSTRAINT auth_session_user_id_not_null NOT NULL,
+    refresh_token_hash character(64) CONSTRAINT auth_session_refresh_token_hash_not_null NOT NULL,
+    version bigint DEFAULT 1 CONSTRAINT auth_session_version_not_null NOT NULL,
+    client_ip character varying(64) CONSTRAINT auth_session_client_ip_not_null NOT NULL,
+    user_agent character varying(512) CONSTRAINT auth_session_user_agent_not_null NOT NULL,
+    refresh_expires_at timestamp with time zone CONSTRAINT auth_session_refresh_expires_at_not_null NOT NULL,
+    revoked_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT auth_session_created_at_not_null NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT auth_session_updated_at_not_null NOT NULL,
+    device_id character varying(36) CONSTRAINT auth_session_device_id_not_null NOT NULL,
+    platform_id bigint NOT NULL,
+    CONSTRAINT ck_auth_session_version CHECK ((version >= 1))
+);
 
--- ----------------------------
--- Sequence structure for user_account_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."user_account_id_seq";
-CREATE SEQUENCE "public"."user_account_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
 
--- ----------------------------
--- Sequence structure for user_login_log_id_seq
--- ----------------------------
-DROP SEQUENCE IF EXISTS "public"."user_login_log_id_seq";
-CREATE SEQUENCE "public"."user_login_log_id_seq" 
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
+--
+-- Name: auth_session_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Table structure for auth_platform
--- ----------------------------
-DROP TABLE IF EXISTS "public"."auth_platform";
-CREATE TABLE "public"."auth_platform" (
-  "id" int8 NOT NULL DEFAULT nextval('auth_platform_id_seq'::regclass),
-  "code" varchar(49) COLLATE "pg_catalog"."default" NOT NULL,
-  "name" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "policy_version" int8 NOT NULL DEFAULT 1,
-  "access_ttl_seconds" int4 NOT NULL,
-  "refresh_ttl_seconds" int4 NOT NULL,
-  "session_cache_ttl_seconds" int4 NOT NULL,
-  "access_cache_ttl_seconds" int4 NOT NULL,
-  "bind_device" int2 NOT NULL,
-  "bind_ip" int2 NOT NULL,
-  "max_sessions" int2 NOT NULL,
-  "allow_register" int2 NOT NULL,
-  "is_enabled" int2 NOT NULL,
-  "is_builtin" int2 NOT NULL,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6),
-  "login_types" jsonb NOT NULL DEFAULT '["email", "password"]'::jsonb
-)
-;
+CREATE SEQUENCE public.auth_session_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
 
--- ----------------------------
--- Table structure for message_mail_config
--- ----------------------------
-DROP TABLE IF EXISTS "public"."message_mail_config";
-CREATE TABLE "public"."message_mail_config" (
-  "id" int8 NOT NULL DEFAULT nextval('message_mail_config_id_seq'::regclass),
-  "platform_id" int8 NOT NULL,
-  "secret_id_ciphertext" text COLLATE "pg_catalog"."default" NOT NULL,
-  "secret_key_ciphertext" text COLLATE "pg_catalog"."default" NOT NULL,
-  "secret_id_hint" varchar(32) COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying,
-  "secret_key_hint" varchar(32) COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying,
-  "region" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "endpoint" varchar(255) COLLATE "pg_catalog"."default",
-  "from_email" varchar(254) COLLATE "pg_catalog"."default" NOT NULL,
-  "from_name" varchar(128) COLLATE "pg_catalog"."default" NOT NULL,
-  "reply_to" varchar(254) COLLATE "pg_catalog"."default",
-  "ttl_minutes" int2 NOT NULL,
-  "is_enabled" int2 NOT NULL DEFAULT 0,
-  "last_test_at" timestamptz(6),
-  "last_test_error" varchar(512) COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6)
-)
-;
 
--- ----------------------------
--- Table structure for message_mail_log
--- ----------------------------
-DROP TABLE IF EXISTS "public"."message_mail_log";
-CREATE TABLE "public"."message_mail_log" (
-  "id" int8 NOT NULL DEFAULT nextval('message_mail_log_id_seq'::regclass),
-  "platform_id" int8 NOT NULL,
-  "challenge_id" varchar(128) COLLATE "pg_catalog"."default",
-  "user_id" int8,
-  "scene" varchar(32) COLLATE "pg_catalog"."default" NOT NULL,
-  "template_id" int4 NOT NULL,
-  "to_email" varchar(254) COLLATE "pg_catalog"."default" NOT NULL,
-  "subject" varchar(255) COLLATE "pg_catalog"."default" NOT NULL,
-  "status" varchar(16) COLLATE "pg_catalog"."default" NOT NULL,
-  "request_id" varchar(128) COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying,
-  "message_id" varchar(128) COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying,
-  "error_code" varchar(128) COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying,
-  "error_summary" varchar(512) COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying,
-  "latency_ms" int8 NOT NULL DEFAULT 0,
-  "sent_at" timestamptz(6),
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6)
-)
-;
+--
+-- Name: auth_session_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Table structure for message_mail_log_verification
--- ----------------------------
-DROP TABLE IF EXISTS "public"."message_mail_log_verification";
-CREATE TABLE "public"."message_mail_log_verification" (
-  "id" int8 NOT NULL DEFAULT nextval('message_mail_log_verification_id_seq'::regclass),
-  "platform_id" int8 NOT NULL,
-  "mail_log_id" int8 NOT NULL,
-  "key_version" varchar(16) COLLATE "pg_catalog"."default" NOT NULL,
-  "code_ciphertext" text COLLATE "pg_catalog"."default" NOT NULL,
-  "expires_at" timestamptz(6) NOT NULL,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6)
-)
-;
+ALTER SEQUENCE public.auth_session_id_seq OWNED BY public.user_session.id;
 
--- ----------------------------
--- Table structure for message_mail_rate_limit_policy
--- ----------------------------
-DROP TABLE IF EXISTS "public"."message_mail_rate_limit_policy";
-CREATE TABLE "public"."message_mail_rate_limit_policy" (
-  "policy_key" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "mode" varchar(16) COLLATE "pg_catalog"."default" NOT NULL,
-  "dimension" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "limit_count" int4 NOT NULL,
-  "window_seconds" int4 NOT NULL,
-  "revision" int8 NOT NULL DEFAULT 1,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
-)
-;
 
--- ----------------------------
--- Table structure for message_mail_recipient_rule
--- ----------------------------
-DROP TABLE IF EXISTS "public"."message_mail_recipient_rule";
-CREATE TABLE "public"."message_mail_recipient_rule" (
-  "id" int8 NOT NULL DEFAULT nextval('message_mail_recipient_rule_id_seq'::regclass),
-  "platform_id" int8 NOT NULL,
-  "scope" varchar(16) COLLATE "pg_catalog"."default" NOT NULL,
-  "pattern" varchar(254) COLLATE "pg_catalog"."default" NOT NULL,
-  "action" varchar(16) COLLATE "pg_catalog"."default" NOT NULL,
-  "name" varchar(128) COLLATE "pg_catalog"."default" NOT NULL,
-  "remark" varchar(512) COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying,
-  "is_enabled" int2 NOT NULL DEFAULT 1,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6)
-)
-;
+--
+-- Name: message_mail_config; Type: TABLE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Table structure for message_mail_template
--- ----------------------------
-DROP TABLE IF EXISTS "public"."message_mail_template";
-CREATE TABLE "public"."message_mail_template" (
-  "id" int8 NOT NULL DEFAULT nextval('message_mail_template_id_seq'::regclass),
-  "platform_id" int8 NOT NULL,
-  "scene" varchar(32) COLLATE "pg_catalog"."default" NOT NULL,
-  "name" varchar(128) COLLATE "pg_catalog"."default" NOT NULL,
-  "subject" varchar(255) COLLATE "pg_catalog"."default" NOT NULL,
-  "tencent_template_id" int4 NOT NULL,
-  "variables" jsonb NOT NULL,
-  "example_variables" jsonb NOT NULL,
-  "is_enabled" int2 NOT NULL DEFAULT 1,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6)
-)
-;
+CREATE TABLE public.message_mail_config (
+    id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    secret_id_ciphertext text NOT NULL,
+    secret_key_ciphertext text NOT NULL,
+    secret_id_hint character varying(32) DEFAULT ''::character varying NOT NULL,
+    secret_key_hint character varying(32) DEFAULT ''::character varying NOT NULL,
+    region character varying(64) NOT NULL,
+    endpoint character varying(255),
+    from_email character varying(254) NOT NULL,
+    from_name character varying(128) NOT NULL,
+    reply_to character varying(254),
+    ttl_minutes smallint NOT NULL,
+    is_enabled smallint DEFAULT 0 NOT NULL,
+    last_test_at timestamp with time zone,
+    last_test_error character varying(512) DEFAULT ''::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT message_mail_config_is_enabled_check CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT message_mail_config_ttl_minutes_check CHECK (((ttl_minutes >= 1) AND (ttl_minutes <= 60)))
+);
 
--- ----------------------------
--- Table structure for permission_access_version
--- ----------------------------
-DROP TABLE IF EXISTS "public"."permission_access_version";
-CREATE TABLE "public"."permission_access_version" (
-  "user_id" int8 NOT NULL DEFAULT nextval('rbac_access_version_user_id_seq'::regclass),
-  "version" int8 NOT NULL DEFAULT 1,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
-)
-;
 
--- ----------------------------
--- Table structure for permission_menu
--- ----------------------------
-DROP TABLE IF EXISTS "public"."permission_menu";
-CREATE TABLE "public"."permission_menu" (
-  "id" int8 NOT NULL DEFAULT nextval('rbac_menu_id_seq'::regclass),
-  "parent_id" int8,
-  "menu_type" varchar(16) COLLATE "pg_catalog"."default" NOT NULL,
-  "code" varchar(128) COLLATE "pg_catalog"."default" NOT NULL,
-  "i18n_key" varchar(128) COLLATE "pg_catalog"."default",
-  "path" varchar(255) COLLATE "pg_catalog"."default",
-  "icon" varchar(128) COLLATE "pg_catalog"."default",
-  "sort_order" int4 NOT NULL DEFAULT 0,
-  "is_enabled" int2 NOT NULL DEFAULT 1,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6),
-  "component_path" varchar(255) COLLATE "pg_catalog"."default",
-  "is_hidden" int2 NOT NULL DEFAULT 0,
-  "name" varchar(128) COLLATE "pg_catalog"."default" NOT NULL,
-  "platform_id" int8 NOT NULL,
-  "remark" varchar(512) COLLATE "pg_catalog"."default"
-)
-;
+--
+-- Name: message_mail_config_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Table structure for permission_role
--- ----------------------------
-DROP TABLE IF EXISTS "public"."permission_role";
-CREATE TABLE "public"."permission_role" (
-  "id" int8 NOT NULL DEFAULT nextval('rbac_role_id_seq'::regclass),
-  "code" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "name" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "is_default" int2 NOT NULL DEFAULT 0,
-  "is_enabled" int2 NOT NULL DEFAULT 1,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6)
-)
-;
+CREATE SEQUENCE public.message_mail_config_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
 
--- ----------------------------
--- Table structure for permission_role_menu
--- ----------------------------
-DROP TABLE IF EXISTS "public"."permission_role_menu";
-CREATE TABLE "public"."permission_role_menu" (
-  "id" int8 NOT NULL DEFAULT nextval('rbac_role_menu_id_seq'::regclass),
-  "role_id" int8 NOT NULL,
-  "menu_id" int8 NOT NULL,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6)
-)
-;
 
--- ----------------------------
--- Table structure for permission_user_role
--- ----------------------------
-DROP TABLE IF EXISTS "public"."permission_user_role";
-CREATE TABLE "public"."permission_user_role" (
-  "id" int8 NOT NULL DEFAULT nextval('rbac_user_role_id_seq'::regclass),
-  "user_id" int8 NOT NULL,
-  "role_id" int8 NOT NULL,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6)
-)
-;
+--
+-- Name: message_mail_config_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Table structure for storage_cos_config
--- ----------------------------
-DROP TABLE IF EXISTS "public"."storage_cos_config";
-CREATE TABLE "public"."storage_cos_config" (
-  "id" int8 NOT NULL GENERATED BY DEFAULT AS IDENTITY (
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1
-),
-  "name" varchar(128) COLLATE "pg_catalog"."default" NOT NULL,
-  "app_id" varchar(32) COLLATE "pg_catalog"."default" NOT NULL,
-  "secret_id_ciphertext" text COLLATE "pg_catalog"."default" NOT NULL,
-  "secret_key_ciphertext" text COLLATE "pg_catalog"."default" NOT NULL,
-  "bucket" varchar(128) COLLATE "pg_catalog"."default" NOT NULL,
-  "region" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "endpoint" varchar(255) COLLATE "pg_catalog"."default",
-  "bucket_domain" varchar(255) COLLATE "pg_catalog"."default",
-  "is_enabled" int2 NOT NULL DEFAULT 1,
-  "remark" varchar(512) COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6)
-)
-;
+ALTER SEQUENCE public.message_mail_config_id_seq OWNED BY public.message_mail_config.id;
 
--- ----------------------------
--- Table structure for storage_upload_rule
--- ----------------------------
-DROP TABLE IF EXISTS "public"."storage_upload_rule";
-CREATE TABLE "public"."storage_upload_rule" (
-  "id" int8 NOT NULL GENERATED BY DEFAULT AS IDENTITY (
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1
-),
-  "platform_id" int8 NOT NULL,
-  "name" varchar(128) COLLATE "pg_catalog"."default" NOT NULL,
-  "cos_config_id" int8 NOT NULL,
-  "max_file_size_bytes" int8 NOT NULL,
-  "allowed_extensions" text[] COLLATE "pg_catalog"."default" NOT NULL,
-  "allowed_mime_types" text[] COLLATE "pg_catalog"."default" NOT NULL,
-  "access_mode" varchar(16) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'private'::character varying,
-  "is_enabled" int2 NOT NULL DEFAULT 1,
-  "remark" varchar(512) COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6)
-)
-;
 
--- ----------------------------
--- Table structure for storage_upload_rule_code
--- ----------------------------
-DROP TABLE IF EXISTS "public"."storage_upload_rule_code";
-CREATE TABLE "public"."storage_upload_rule_code" (
-  "id" int8 NOT NULL GENERATED BY DEFAULT AS IDENTITY (
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1
-),
-  "rule_id" int8 NOT NULL,
-  "platform_id" int8 NOT NULL,
-  "code" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6)
-)
-;
+--
+-- Name: message_mail_log; Type: TABLE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Table structure for system_operation_log
--- ----------------------------
-DROP TABLE IF EXISTS "public"."system_operation_log";
-CREATE TABLE "public"."system_operation_log" (
-  "id" int8 NOT NULL DEFAULT nextval('audit_operation_log_id_seq'::regclass),
-  "request_id" varchar(128) COLLATE "pg_catalog"."default" NOT NULL,
-  "user_id" int8,
-  "session_id" int8,
-  "method" varchar(10) COLLATE "pg_catalog"."default" NOT NULL,
-  "route" varchar(255) COLLATE "pg_catalog"."default" NOT NULL,
-  "module" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "action" varchar(128) COLLATE "pg_catalog"."default" NOT NULL,
-  "client_ip" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "user_agent" varchar(512) COLLATE "pg_catalog"."default" NOT NULL,
-  "status_code" int4 NOT NULL,
-  "is_success" int2 NOT NULL,
-  "latency_ms" int8 NOT NULL,
-  "request_data" jsonb,
-  "response_data" jsonb,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "event_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "platform_id" int8
-)
-;
+CREATE TABLE public.message_mail_log (
+    id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    challenge_id character varying(128),
+    user_id bigint,
+    scene character varying(32) NOT NULL,
+    template_id integer NOT NULL,
+    to_email character varying(254) NOT NULL,
+    subject character varying(255) NOT NULL,
+    status character varying(16) NOT NULL,
+    request_id character varying(128) DEFAULT ''::character varying NOT NULL,
+    message_id character varying(128) DEFAULT ''::character varying NOT NULL,
+    error_code character varying(128) DEFAULT ''::character varying NOT NULL,
+    error_summary character varying(512) DEFAULT ''::character varying NOT NULL,
+    latency_ms bigint DEFAULT 0 NOT NULL,
+    sent_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT message_mail_log_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'sent'::character varying, 'failed'::character varying])::text[])))
+);
 
--- ----------------------------
--- Table structure for user_account
--- ----------------------------
-DROP TABLE IF EXISTS "public"."user_account";
-CREATE TABLE "public"."user_account" (
-  "id" int8 NOT NULL DEFAULT nextval('user_account_id_seq'::regclass),
-  "username" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "email" varchar(254) COLLATE "pg_catalog"."default" NOT NULL,
-  "password_hash" varchar(255) COLLATE "pg_catalog"."default" NOT NULL,
-  "is_enabled" int2 NOT NULL DEFAULT 1,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "deleted_at" timestamptz(6),
-  "phone" varchar(32) COLLATE "pg_catalog"."default"
-)
-;
 
--- ----------------------------
--- Table structure for user_login_log
--- ----------------------------
-DROP TABLE IF EXISTS "public"."user_login_log";
-CREATE TABLE "public"."user_login_log" (
-  "id" int8 NOT NULL GENERATED BY DEFAULT AS IDENTITY (
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1
-),
-  "user_id" int8,
-  "session_id" int8,
-  "platform_id" int8 NOT NULL,
-  "login_account" varchar(254) COLLATE "pg_catalog"."default" NOT NULL,
-  "event_type" varchar(16) COLLATE "pg_catalog"."default" NOT NULL,
-  "login_type" varchar(32) COLLATE "pg_catalog"."default",
-  "is_success" int2 NOT NULL,
-  "reason_code" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "client_ip" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "user_agent" varchar(512) COLLATE "pg_catalog"."default" NOT NULL,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
-)
-;
+--
+-- Name: message_mail_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Table structure for user_profile
--- ----------------------------
-DROP TABLE IF EXISTS "public"."user_profile";
-CREATE TABLE "public"."user_profile" (
-  "user_id" int8 NOT NULL,
-  "birthday" date,
-  "gender" int2 NOT NULL DEFAULT 0,
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "avatar" varchar(512) COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying
-)
-;
+CREATE SEQUENCE public.message_mail_log_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
 
--- ----------------------------
--- Table structure for user_session
--- ----------------------------
-DROP TABLE IF EXISTS "public"."user_session";
-CREATE TABLE "public"."user_session" (
-  "id" int8 NOT NULL DEFAULT nextval('auth_session_id_seq'::regclass),
-  "user_id" int8 NOT NULL,
-  "refresh_token_hash" char(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "version" int8 NOT NULL DEFAULT 1,
-  "client_ip" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "user_agent" varchar(512) COLLATE "pg_catalog"."default" NOT NULL,
-  "refresh_expires_at" timestamptz(6) NOT NULL,
-  "revoked_at" timestamptz(6),
-  "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "device_id" varchar(36) COLLATE "pg_catalog"."default" NOT NULL,
-  "platform_id" int8 NOT NULL
-)
-;
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."audit_operation_log_id_seq"
-OWNED BY "public"."system_operation_log"."id";
-SELECT setval('"public"."audit_operation_log_id_seq"', 208, true);
+--
+-- Name: message_mail_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."auth_platform_id_seq"
-OWNED BY "public"."auth_platform"."id";
-SELECT setval('"public"."auth_platform_id_seq"', 2, true);
+ALTER SEQUENCE public.message_mail_log_id_seq OWNED BY public.message_mail_log.id;
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."auth_session_id_seq"
-OWNED BY "public"."user_session"."id";
-SELECT setval('"public"."auth_session_id_seq"', 181, true);
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."message_mail_config_id_seq"
-OWNED BY "public"."message_mail_config"."id";
-SELECT setval('"public"."message_mail_config_id_seq"', 1, true);
+--
+-- Name: message_mail_log_verification; Type: TABLE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."message_mail_log_id_seq"
-OWNED BY "public"."message_mail_log"."id";
-SELECT setval('"public"."message_mail_log_id_seq"', 4, true);
+CREATE TABLE public.message_mail_log_verification (
+    id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    mail_log_id bigint NOT NULL,
+    key_version character varying(16) NOT NULL,
+    code_ciphertext text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone
+);
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."message_mail_log_verification_id_seq"
-OWNED BY "public"."message_mail_log_verification"."id";
-SELECT setval('"public"."message_mail_log_verification_id_seq"', 4, true);
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."message_mail_recipient_rule_id_seq"
-OWNED BY "public"."message_mail_recipient_rule"."id";
-SELECT setval('"public"."message_mail_recipient_rule_id_seq"', 1, true);
+--
+-- Name: message_mail_log_verification_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."message_mail_template_id_seq"
-OWNED BY "public"."message_mail_template"."id";
-SELECT setval('"public"."message_mail_template_id_seq"', 4, true);
+CREATE SEQUENCE public.message_mail_log_verification_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."rbac_access_version_user_id_seq"
-OWNED BY "public"."permission_access_version"."user_id";
-SELECT setval('"public"."rbac_access_version_user_id_seq"', 1, false);
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."rbac_menu_id_seq"
-OWNED BY "public"."permission_menu"."id";
-SELECT setval('"public"."rbac_menu_id_seq"', 4224, true);
+--
+-- Name: message_mail_log_verification_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."rbac_role_id_seq"
-OWNED BY "public"."permission_role"."id";
-SELECT setval('"public"."rbac_role_id_seq"', 926, true);
+ALTER SEQUENCE public.message_mail_log_verification_id_seq OWNED BY public.message_mail_log_verification.id;
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."rbac_role_menu_id_seq"
-OWNED BY "public"."permission_role_menu"."id";
-SELECT setval('"public"."rbac_role_menu_id_seq"', 584, true);
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."rbac_user_role_id_seq"
-OWNED BY "public"."permission_user_role"."id";
-SELECT setval('"public"."rbac_user_role_id_seq"', 804, true);
+--
+-- Name: message_mail_rate_limit_policy; Type: TABLE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."storage_cos_config_id_seq"
-OWNED BY "public"."storage_cos_config"."id";
-SELECT setval('"public"."storage_cos_config_id_seq"', 2, true);
+CREATE TABLE public.message_mail_rate_limit_policy (
+    policy_key character varying(64) NOT NULL,
+    mode character varying(16) NOT NULL,
+    dimension character varying(64) NOT NULL,
+    limit_count integer NOT NULL,
+    window_seconds integer NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT ck_message_mail_rate_limit_policy_revision CHECK ((revision >= 1)),
+    CONSTRAINT ck_message_mail_rate_limit_policy_shape CHECK ((((policy_key)::text = ANY ((ARRAY['business_email_minute'::character varying, 'business_email_10m'::character varying])::text[])) AND ((mode)::text = 'business'::text) AND ((dimension)::text = 'platform_email'::text))),
+    CONSTRAINT ck_message_mail_rate_limit_policy_values CHECK ((((limit_count >= 1) AND (limit_count <= 100000)) AND ((window_seconds >= 1) AND (window_seconds <= 86400))))
+);
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."storage_upload_rule_code_id_seq"
-OWNED BY "public"."storage_upload_rule_code"."id";
-SELECT setval('"public"."storage_upload_rule_code_id_seq"', 1, true);
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."storage_upload_rule_id_seq"
-OWNED BY "public"."storage_upload_rule"."id";
-SELECT setval('"public"."storage_upload_rule_id_seq"', 1, true);
+--
+-- Name: message_mail_recipient_rule; Type: TABLE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."user_account_id_seq"
-OWNED BY "public"."user_account"."id";
-SELECT setval('"public"."user_account_id_seq"', 717, true);
+CREATE TABLE public.message_mail_recipient_rule (
+    id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    scope character varying(16) NOT NULL,
+    pattern character varying(254) NOT NULL,
+    action character varying(16) NOT NULL,
+    name character varying(128) NOT NULL,
+    remark character varying(512) DEFAULT ''::character varying NOT NULL,
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT message_mail_recipient_rule_action_check CHECK (((action)::text = ANY ((ARRAY['allow'::character varying, 'deny'::character varying])::text[]))),
+    CONSTRAINT message_mail_recipient_rule_is_enabled_check CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT message_mail_recipient_rule_scope_check CHECK (((scope)::text = ANY ((ARRAY['email'::character varying, 'domain'::character varying])::text[])))
+);
 
--- ----------------------------
--- Alter sequences owned by
--- ----------------------------
-ALTER SEQUENCE "public"."user_login_log_id_seq"
-OWNED BY "public"."user_login_log"."id";
-SELECT setval('"public"."user_login_log_id_seq"', 30, true);
 
--- ----------------------------
--- Indexes structure for table auth_platform
--- ----------------------------
-CREATE UNIQUE INDEX "ux_auth_platform_code_active" ON "public"."auth_platform" USING btree (
-  "code" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
+--
+-- Name: message_mail_recipient_rule_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Checks structure for table auth_platform
--- ----------------------------
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "ck_auth_platform_access_cache_ttl_seconds" CHECK (access_cache_ttl_seconds >= 60 AND access_cache_ttl_seconds <= 86400);
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "ck_auth_platform_access_ttl_seconds" CHECK (access_ttl_seconds >= 60 AND access_ttl_seconds <= 2592000);
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "ck_auth_platform_allow_register" CHECK (allow_register = ANY (ARRAY[0, 1]));
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "ck_auth_platform_bind_device" CHECK (bind_device = ANY (ARRAY[0, 1]));
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "ck_auth_platform_bind_ip" CHECK (bind_ip = ANY (ARRAY[0, 1]));
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "ck_auth_platform_code" CHECK (code::text ~ '^[a-z][a-z0-9_]{1,48}$'::text);
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "ck_auth_platform_is_builtin" CHECK (is_builtin = ANY (ARRAY[0, 1]));
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "ck_auth_platform_is_enabled" CHECK (is_enabled = ANY (ARRAY[0, 1]));
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "ck_auth_platform_login_types" CHECK (jsonb_typeof(login_types) = 'array'::text AND jsonb_array_length(login_types) >= 1 AND jsonb_array_length(login_types) <= 3 AND login_types <@ '["email", "phone", "password"]'::jsonb AND jsonb_array_length(login_types) = (
+CREATE SEQUENCE public.message_mail_recipient_rule_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: message_mail_recipient_rule_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.message_mail_recipient_rule_id_seq OWNED BY public.message_mail_recipient_rule.id;
+
+
+--
+-- Name: message_mail_template; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.message_mail_template (
+    id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    scene character varying(32) NOT NULL,
+    name character varying(128) NOT NULL,
+    subject character varying(255) NOT NULL,
+    tencent_template_id integer NOT NULL,
+    variables jsonb NOT NULL,
+    example_variables jsonb NOT NULL,
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT message_mail_template_is_enabled_check CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT message_mail_template_scene_check CHECK (((scene)::text = ANY ((ARRAY['login'::character varying, 'forget'::character varying, 'bind_email'::character varying, 'change_password'::character varying])::text[])))
+);
+
+
+--
+-- Name: message_mail_template_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.message_mail_template_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: message_mail_template_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.message_mail_template_id_seq OWNED BY public.message_mail_template.id;
+
+
+--
+-- Name: permission_access_version; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.permission_access_version (
+    user_id bigint CONSTRAINT rbac_access_version_user_id_not_null NOT NULL,
+    version bigint DEFAULT 1 CONSTRAINT rbac_access_version_version_not_null NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_access_version_created_at_not_null NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_access_version_updated_at_not_null NOT NULL,
+    CONSTRAINT ck_rbac_access_version_version CHECK ((version >= 1))
+);
+
+
+--
+-- Name: permission_auth_platform; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.permission_auth_platform (
+    id bigint NOT NULL,
+    code character varying(49) NOT NULL,
+    name character varying(64) NOT NULL,
+    policy_version bigint DEFAULT 1 NOT NULL,
+    access_ttl_seconds integer NOT NULL,
+    refresh_ttl_seconds integer NOT NULL,
+    session_cache_ttl_seconds integer NOT NULL,
+    access_cache_ttl_seconds integer NOT NULL,
+    bind_device smallint NOT NULL,
+    bind_ip smallint NOT NULL,
+    max_sessions smallint NOT NULL,
+    allow_register smallint NOT NULL,
+    is_enabled smallint NOT NULL,
+    is_builtin smallint NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    login_types jsonb DEFAULT '["email", "password"]'::jsonb NOT NULL,
+    CONSTRAINT ck_permission_auth_platform_access_cache_ttl_seconds CHECK (((access_cache_ttl_seconds >= 60) AND (access_cache_ttl_seconds <= 86400))),
+    CONSTRAINT ck_permission_auth_platform_access_ttl_seconds CHECK (((access_ttl_seconds >= 60) AND (access_ttl_seconds <= 2592000))),
+    CONSTRAINT ck_permission_auth_platform_allow_register CHECK ((allow_register = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_permission_auth_platform_bind_device CHECK ((bind_device = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_permission_auth_platform_bind_ip CHECK ((bind_ip = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_permission_auth_platform_code CHECK (((code)::text ~ '^[a-z][a-z0-9_]{1,48}$'::text)),
+    CONSTRAINT ck_permission_auth_platform_is_builtin CHECK ((is_builtin = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_permission_auth_platform_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_permission_auth_platform_login_types CHECK (((jsonb_typeof(login_types) = 'array'::text) AND ((jsonb_array_length(login_types) >= 1) AND (jsonb_array_length(login_types) <= 3)) AND (login_types <@ '["email", "phone", "password"]'::jsonb) AND (jsonb_array_length(login_types) = ((
 CASE
-    WHEN login_types @> '["email"]'::jsonb THEN 1
+    WHEN (login_types @> '["email"]'::jsonb) THEN 1
     ELSE 0
 END +
 CASE
-    WHEN login_types @> '["phone"]'::jsonb THEN 1
+    WHEN (login_types @> '["phone"]'::jsonb) THEN 1
     ELSE 0
-END +
+END) +
 CASE
-    WHEN login_types @> '["password"]'::jsonb THEN 1
+    WHEN (login_types @> '["password"]'::jsonb) THEN 1
     ELSE 0
-END));
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "ck_auth_platform_max_sessions" CHECK (max_sessions >= 0 AND max_sessions <= 100);
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "ck_auth_platform_policy_version" CHECK (policy_version >= 1);
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "ck_auth_platform_refresh_ttl_seconds" CHECK (refresh_ttl_seconds >= 60 AND refresh_ttl_seconds <= 31536000);
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "ck_auth_platform_session_cache_ttl_seconds" CHECK (session_cache_ttl_seconds >= 60 AND session_cache_ttl_seconds <= 86400);
-
--- ----------------------------
--- Primary Key structure for table auth_platform
--- ----------------------------
-ALTER TABLE "public"."auth_platform" ADD CONSTRAINT "auth_platform_pkey" PRIMARY KEY ("id");
-
--- ----------------------------
--- Indexes structure for table message_mail_config
--- ----------------------------
-CREATE UNIQUE INDEX "ux_message_mail_config_platform_active" ON "public"."message_mail_config" USING btree (
-  "platform_id" "pg_catalog"."int8_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-
--- ----------------------------
--- Checks structure for table message_mail_config
--- ----------------------------
-ALTER TABLE "public"."message_mail_config" ADD CONSTRAINT "message_mail_config_is_enabled_check" CHECK (is_enabled = ANY (ARRAY[0, 1]));
-ALTER TABLE "public"."message_mail_config" ADD CONSTRAINT "message_mail_config_ttl_minutes_check" CHECK (ttl_minutes >= 1 AND ttl_minutes <= 60);
-
--- ----------------------------
--- Primary Key structure for table message_mail_config
--- ----------------------------
-ALTER TABLE "public"."message_mail_config" ADD CONSTRAINT "message_mail_config_pkey" PRIMARY KEY ("id");
-
--- ----------------------------
--- Indexes structure for table message_mail_log
--- ----------------------------
-CREATE UNIQUE INDEX "ux_message_mail_log_platform_challenge_active" ON "public"."message_mail_log" USING btree (
-  "platform_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "challenge_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL AND challenge_id IS NOT NULL;
-
--- ----------------------------
--- Uniques structure for table message_mail_log
--- ----------------------------
-ALTER TABLE "public"."message_mail_log" ADD CONSTRAINT "message_mail_log_id_platform_id_key" UNIQUE ("id", "platform_id");
-
--- ----------------------------
--- Checks structure for table message_mail_log
--- ----------------------------
-ALTER TABLE "public"."message_mail_log" ADD CONSTRAINT "message_mail_log_status_check" CHECK (status::text = ANY (ARRAY['pending'::character varying, 'sent'::character varying, 'failed'::character varying]::text[]));
-
--- ----------------------------
--- Primary Key structure for table message_mail_log
--- ----------------------------
-ALTER TABLE "public"."message_mail_log" ADD CONSTRAINT "message_mail_log_pkey" PRIMARY KEY ("id");
-
--- ----------------------------
--- Indexes structure for table message_mail_log_verification
--- ----------------------------
-CREATE UNIQUE INDEX "ux_message_mail_verification_log_active" ON "public"."message_mail_log_verification" USING btree (
-  "mail_log_id" "pg_catalog"."int8_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-
--- ----------------------------
--- Primary Key structure for table message_mail_log_verification
--- ----------------------------
-ALTER TABLE "public"."message_mail_log_verification" ADD CONSTRAINT "message_mail_log_verification_pkey" PRIMARY KEY ("id");
-
--- ----------------------------
--- Checks structure for table message_mail_rate_limit_policy
--- ----------------------------
-ALTER TABLE "public"."message_mail_rate_limit_policy" ADD CONSTRAINT "ck_message_mail_rate_limit_policy_shape" CHECK (policy_key::text = 'business_email_minute'::text AND mode::text = 'business'::text AND dimension::text = 'platform_scene_email'::text OR policy_key::text = 'business_email_10m'::text AND mode::text = 'business'::text AND dimension::text = 'platform_scene_email'::text OR policy_key::text = 'business_ip_minute'::text AND mode::text = 'business'::text AND dimension::text = 'platform_ip'::text OR policy_key::text = 'business_scene_minute'::text AND mode::text = 'business'::text AND dimension::text = 'platform_scene'::text OR policy_key::text = 'admin_test_user_10m'::text AND mode::text = 'admin_test'::text AND dimension::text = 'admin_user'::text OR policy_key::text = 'admin_test_ip_minute'::text AND mode::text = 'admin_test'::text AND dimension::text = 'ip'::text OR policy_key::text = 'admin_test_email_10m'::text AND mode::text = 'admin_test'::text AND dimension::text = 'email'::text);
-ALTER TABLE "public"."message_mail_rate_limit_policy" ADD CONSTRAINT "ck_message_mail_rate_limit_policy_values" CHECK (limit_count >= 1 AND limit_count <= 100000 AND window_seconds >= 1 AND window_seconds <= 86400);
-ALTER TABLE "public"."message_mail_rate_limit_policy" ADD CONSTRAINT "ck_message_mail_rate_limit_policy_revision" CHECK (revision >= 1);
-
--- ----------------------------
--- Primary Key structure for table message_mail_rate_limit_policy
--- ----------------------------
-ALTER TABLE "public"."message_mail_rate_limit_policy" ADD CONSTRAINT "message_mail_rate_limit_policy_pkey" PRIMARY KEY ("policy_key");
-
--- ----------------------------
--- Indexes structure for table message_mail_recipient_rule
--- ----------------------------
-CREATE UNIQUE INDEX "ux_message_mail_rule_platform_scope_pattern_action_active" ON "public"."message_mail_recipient_rule" USING btree (
-  "platform_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "scope" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
-  "pattern" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
-  "action" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-
--- ----------------------------
--- Checks structure for table message_mail_recipient_rule
--- ----------------------------
-ALTER TABLE "public"."message_mail_recipient_rule" ADD CONSTRAINT "message_mail_recipient_rule_is_enabled_check" CHECK (is_enabled = ANY (ARRAY[0, 1]));
-ALTER TABLE "public"."message_mail_recipient_rule" ADD CONSTRAINT "message_mail_recipient_rule_scope_check" CHECK (scope::text = ANY (ARRAY['email'::character varying, 'domain'::character varying]::text[]));
-ALTER TABLE "public"."message_mail_recipient_rule" ADD CONSTRAINT "message_mail_recipient_rule_action_check" CHECK (action::text = ANY (ARRAY['allow'::character varying, 'deny'::character varying]::text[]));
-
--- ----------------------------
--- Primary Key structure for table message_mail_recipient_rule
--- ----------------------------
-ALTER TABLE "public"."message_mail_recipient_rule" ADD CONSTRAINT "message_mail_recipient_rule_pkey" PRIMARY KEY ("id");
-
--- ----------------------------
--- Indexes structure for table message_mail_template
--- ----------------------------
-CREATE UNIQUE INDEX "ux_message_mail_template_platform_scene_active" ON "public"."message_mail_template" USING btree (
-  "platform_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "scene" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-
--- ----------------------------
--- Checks structure for table message_mail_template
--- ----------------------------
-ALTER TABLE "public"."message_mail_template" ADD CONSTRAINT "message_mail_template_is_enabled_check" CHECK (is_enabled = ANY (ARRAY[0, 1]));
-ALTER TABLE "public"."message_mail_template" ADD CONSTRAINT "message_mail_template_scene_check" CHECK (scene::text = ANY (ARRAY['login'::character varying, 'forget'::character varying, 'bind_email'::character varying, 'change_password'::character varying]::text[]));
-
--- ----------------------------
--- Primary Key structure for table message_mail_template
--- ----------------------------
-ALTER TABLE "public"."message_mail_template" ADD CONSTRAINT "message_mail_template_pkey" PRIMARY KEY ("id");
-
--- ----------------------------
--- Checks structure for table permission_access_version
--- ----------------------------
-ALTER TABLE "public"."permission_access_version" ADD CONSTRAINT "ck_rbac_access_version_version" CHECK (version >= 1);
-
--- ----------------------------
--- Primary Key structure for table permission_access_version
--- ----------------------------
-ALTER TABLE "public"."permission_access_version" ADD CONSTRAINT "rbac_access_version_pkey" PRIMARY KEY ("user_id");
-
--- ----------------------------
--- Indexes structure for table permission_menu
--- ----------------------------
-CREATE INDEX "ix_rbac_menu_parent_active" ON "public"."permission_menu" USING btree (
-  "platform_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "parent_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "sort_order" "pg_catalog"."int4_ops" ASC NULLS LAST,
-  "id" "pg_catalog"."int8_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-CREATE INDEX "ix_rbac_menu_platform_parent_sort" ON "public"."permission_menu" USING btree (
-  "platform_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "parent_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "sort_order" "pg_catalog"."int4_ops" ASC NULLS LAST,
-  "id" "pg_catalog"."int8_ops" ASC NULLS LAST
-);
-CREATE UNIQUE INDEX "ux_rbac_menu_code_active" ON "public"."permission_menu" USING btree (
-  "platform_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "code" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX "ux_rbac_menu_page_path_active" ON "public"."permission_menu" USING btree (
-  "platform_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "path" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL AND menu_type::text = 'page'::text;
-CREATE UNIQUE INDEX "ux_rbac_menu_platform_code_active" ON "public"."permission_menu" USING btree (
-  "platform_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "code" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX "ux_rbac_menu_platform_path_active" ON "public"."permission_menu" USING btree (
-  "platform_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "path" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE path IS NOT NULL AND deleted_at IS NULL;
-
--- ----------------------------
--- Uniques structure for table permission_menu
--- ----------------------------
-ALTER TABLE "public"."permission_menu" ADD CONSTRAINT "uq_rbac_menu_id_platform" UNIQUE ("id", "platform_id");
-
--- ----------------------------
--- Checks structure for table permission_menu
--- ----------------------------
-ALTER TABLE "public"."permission_menu" ADD CONSTRAINT "ck_rbac_menu_shape" CHECK (btrim(name::text) <> ''::text AND (menu_type::text = 'directory'::text AND i18n_key IS NOT NULL AND path IS NULL AND component_path IS NULL OR menu_type::text = 'page'::text AND i18n_key IS NOT NULL AND path IS NOT NULL AND btrim(path::text) <> ''::text AND component_path IS NOT NULL AND btrim(component_path::text) <> ''::text OR menu_type::text = 'action'::text AND i18n_key IS NULL AND path IS NULL AND component_path IS NULL AND icon IS NULL AND is_hidden = 1));
-ALTER TABLE "public"."permission_menu" ADD CONSTRAINT "ck_rbac_menu_sort_order" CHECK (sort_order >= 0);
-ALTER TABLE "public"."permission_menu" ADD CONSTRAINT "ck_rbac_menu_type" CHECK (menu_type::text = ANY (ARRAY['directory'::character varying, 'page'::character varying, 'action'::character varying]::text[]));
-ALTER TABLE "public"."permission_menu" ADD CONSTRAINT "ck_rbac_menu_is_enabled" CHECK (is_enabled = ANY (ARRAY[0, 1]));
-ALTER TABLE "public"."permission_menu" ADD CONSTRAINT "ck_rbac_menu_is_hidden" CHECK (is_hidden = ANY (ARRAY[0, 1]));
-
--- ----------------------------
--- Primary Key structure for table permission_menu
--- ----------------------------
-ALTER TABLE "public"."permission_menu" ADD CONSTRAINT "rbac_menu_pkey" PRIMARY KEY ("id");
-
--- ----------------------------
--- Indexes structure for table permission_role
--- ----------------------------
-CREATE UNIQUE INDEX "ux_rbac_role_code_active" ON "public"."permission_role" USING btree (
-  "code" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX "ux_rbac_role_default_active" ON "public"."permission_role" USING btree (
-  "is_default" "pg_catalog"."int2_ops" ASC NULLS LAST
-) WHERE is_default = 1 AND deleted_at IS NULL;
-CREATE UNIQUE INDEX "ux_rbac_role_name_active" ON "public"."permission_role" USING btree (
-  "name" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-
--- ----------------------------
--- Checks structure for table permission_role
--- ----------------------------
-ALTER TABLE "public"."permission_role" ADD CONSTRAINT "ck_rbac_role_is_enabled" CHECK (is_enabled = ANY (ARRAY[0, 1]));
-ALTER TABLE "public"."permission_role" ADD CONSTRAINT "ck_rbac_role_is_default" CHECK (is_default = ANY (ARRAY[0, 1]));
-
--- ----------------------------
--- Primary Key structure for table permission_role
--- ----------------------------
-ALTER TABLE "public"."permission_role" ADD CONSTRAINT "rbac_role_pkey" PRIMARY KEY ("id");
-
--- ----------------------------
--- Indexes structure for table permission_role_menu
--- ----------------------------
-CREATE UNIQUE INDEX "ux_rbac_role_menu_active" ON "public"."permission_role_menu" USING btree (
-  "role_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "menu_id" "pg_catalog"."int8_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-
--- ----------------------------
--- Primary Key structure for table permission_role_menu
--- ----------------------------
-ALTER TABLE "public"."permission_role_menu" ADD CONSTRAINT "rbac_role_menu_pkey" PRIMARY KEY ("id");
-
--- ----------------------------
--- Indexes structure for table permission_user_role
--- ----------------------------
-CREATE UNIQUE INDEX "ux_rbac_user_role_active" ON "public"."permission_user_role" USING btree (
-  "user_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "role_id" "pg_catalog"."int8_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-
--- ----------------------------
--- Primary Key structure for table permission_user_role
--- ----------------------------
-ALTER TABLE "public"."permission_user_role" ADD CONSTRAINT "rbac_user_role_pkey" PRIMARY KEY ("id");
-
--- ----------------------------
--- Indexes structure for table storage_cos_config
--- ----------------------------
-CREATE INDEX "ix_storage_cos_config_enabled_created_at" ON "public"."storage_cos_config" USING btree (
-  "is_enabled" "pg_catalog"."int2_ops" ASC NULLS LAST,
-  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
-) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX "ux_storage_cos_config_name_active" ON "public"."storage_cos_config" USING btree (
-  lower(name::text) COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-
--- ----------------------------
--- Checks structure for table storage_cos_config
--- ----------------------------
-ALTER TABLE "public"."storage_cos_config" ADD CONSTRAINT "ck_storage_cos_config_is_enabled" CHECK (is_enabled = ANY (ARRAY[0, 1]));
-
--- ----------------------------
--- Primary Key structure for table storage_cos_config
--- ----------------------------
-ALTER TABLE "public"."storage_cos_config" ADD CONSTRAINT "storage_cos_config_pkey" PRIMARY KEY ("id");
-
--- ----------------------------
--- Indexes structure for table storage_upload_rule
--- ----------------------------
-CREATE INDEX "ix_storage_upload_rule_config_enabled_created_at" ON "public"."storage_upload_rule" USING btree (
-  "cos_config_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "is_enabled" "pg_catalog"."int2_ops" ASC NULLS LAST,
-  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
-) WHERE deleted_at IS NULL;
-
--- ----------------------------
--- Checks structure for table storage_upload_rule
--- ----------------------------
-ALTER TABLE "public"."storage_upload_rule" ADD CONSTRAINT "ck_storage_upload_rule_is_enabled" CHECK (is_enabled = ANY (ARRAY[0, 1]));
-ALTER TABLE "public"."storage_upload_rule" ADD CONSTRAINT "ck_storage_upload_rule_max_file_size" CHECK (max_file_size_bytes > 0);
-ALTER TABLE "public"."storage_upload_rule" ADD CONSTRAINT "ck_storage_upload_rule_access_mode" CHECK (access_mode::text = ANY (ARRAY['private'::character varying, 'public'::character varying]::text[]));
-
--- ----------------------------
--- Primary Key structure for table storage_upload_rule
--- ----------------------------
-ALTER TABLE "public"."storage_upload_rule" ADD CONSTRAINT "storage_upload_rule_pkey" PRIMARY KEY ("id");
-
--- ----------------------------
--- Indexes structure for table storage_upload_rule_code
--- ----------------------------
-CREATE INDEX "ix_storage_upload_rule_code_rule" ON "public"."storage_upload_rule_code" USING btree (
-  "rule_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "id" "pg_catalog"."int8_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX "ux_storage_upload_rule_code_platform_code" ON "public"."storage_upload_rule_code" USING btree (
-  "platform_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "code" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
-
--- ----------------------------
--- Checks structure for table storage_upload_rule_code
--- ----------------------------
-ALTER TABLE "public"."storage_upload_rule_code" ADD CONSTRAINT "ck_storage_upload_rule_code_value" CHECK (length(btrim(code::text)) > 0);
-
--- ----------------------------
--- Primary Key structure for table storage_upload_rule_code
--- ----------------------------
-ALTER TABLE "public"."storage_upload_rule_code" ADD CONSTRAINT "storage_upload_rule_code_pkey" PRIMARY KEY ("id");
-
--- ----------------------------
--- Indexes structure for table system_operation_log
--- ----------------------------
-CREATE INDEX "ix_audit_operation_log_action_created_at" ON "public"."system_operation_log" USING btree (
-  "action" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
-  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
-);
-CREATE INDEX "ix_audit_operation_log_created_at" ON "public"."system_operation_log" USING btree (
-  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
-);
-CREATE INDEX "ix_audit_operation_log_request_id" ON "public"."system_operation_log" USING btree (
-  "request_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-);
-CREATE INDEX "ix_audit_operation_log_user_created_at" ON "public"."system_operation_log" USING btree (
-  "user_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
-);
-CREATE UNIQUE INDEX "ux_audit_operation_log_event_id" ON "public"."system_operation_log" USING btree (
-  "event_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+END)))),
+    CONSTRAINT ck_permission_auth_platform_max_sessions CHECK (((max_sessions >= 0) AND (max_sessions <= 100))),
+    CONSTRAINT ck_permission_auth_platform_policy_version CHECK ((policy_version >= 1)),
+    CONSTRAINT ck_permission_auth_platform_refresh_ttl_seconds CHECK (((refresh_ttl_seconds >= 60) AND (refresh_ttl_seconds <= 31536000))),
+    CONSTRAINT ck_permission_auth_platform_session_cache_ttl_seconds CHECK (((session_cache_ttl_seconds >= 60) AND (session_cache_ttl_seconds <= 86400)))
 );
 
--- ----------------------------
--- Checks structure for table system_operation_log
--- ----------------------------
-ALTER TABLE "public"."system_operation_log" ADD CONSTRAINT "ck_audit_operation_log_is_success" CHECK (is_success = ANY (ARRAY[0, 1]));
-ALTER TABLE "public"."system_operation_log" ADD CONSTRAINT "ck_audit_operation_log_latency_ms" CHECK (latency_ms >= 0);
 
--- ----------------------------
--- Primary Key structure for table system_operation_log
--- ----------------------------
-ALTER TABLE "public"."system_operation_log" ADD CONSTRAINT "audit_operation_log_pkey" PRIMARY KEY ("id");
+--
+-- Name: permission_auth_platform_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Indexes structure for table user_account
--- ----------------------------
-CREATE UNIQUE INDEX "ux_user_account_email_active" ON "public"."user_account" USING btree (
-  lower(email::text) COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE email::text <> ''::text AND deleted_at IS NULL;
-CREATE UNIQUE INDEX "ux_user_account_phone_active" ON "public"."user_account" USING btree (
-  "phone" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE phone IS NOT NULL AND deleted_at IS NULL;
-CREATE UNIQUE INDEX "ux_user_account_username_active" ON "public"."user_account" USING btree (
-  lower(username::text) COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
-) WHERE deleted_at IS NULL;
+CREATE SEQUENCE public.permission_auth_platform_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
 
--- ----------------------------
--- Checks structure for table user_account
--- ----------------------------
-ALTER TABLE "public"."user_account" ADD CONSTRAINT "ck_user_account_is_enabled" CHECK (is_enabled = ANY (ARRAY[0, 1]));
 
--- ----------------------------
--- Primary Key structure for table user_account
--- ----------------------------
-ALTER TABLE "public"."user_account" ADD CONSTRAINT "user_account_pkey" PRIMARY KEY ("id");
+--
+-- Name: permission_auth_platform_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Indexes structure for table user_login_log
--- ----------------------------
-CREATE INDEX "ix_user_login_log_account_created_at" ON "public"."user_login_log" USING btree (
-  "login_account" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
-  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
-);
-CREATE INDEX "ix_user_login_log_created_at" ON "public"."user_login_log" USING btree (
-  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
-);
-CREATE INDEX "ix_user_login_log_platform_created_at" ON "public"."user_login_log" USING btree (
-  "platform_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
-);
-CREATE INDEX "ix_user_login_log_user_created_at" ON "public"."user_login_log" USING btree (
-  "user_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
+ALTER SEQUENCE public.permission_auth_platform_id_seq OWNED BY public.permission_auth_platform.id;
+
+
+--
+-- Name: permission_menu; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.permission_menu (
+    id bigint CONSTRAINT rbac_menu_id_not_null NOT NULL,
+    parent_id bigint,
+    menu_type character varying(16) CONSTRAINT rbac_menu_menu_type_not_null NOT NULL,
+    code character varying(128) CONSTRAINT rbac_menu_code_not_null NOT NULL,
+    i18n_key character varying(128),
+    path character varying(255),
+    icon character varying(128),
+    sort_order integer DEFAULT 0 CONSTRAINT rbac_menu_sort_order_not_null NOT NULL,
+    is_enabled smallint DEFAULT 1 CONSTRAINT rbac_menu_is_enabled_not_null NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_menu_created_at_not_null NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_menu_updated_at_not_null NOT NULL,
+    deleted_at timestamp with time zone,
+    component_path character varying(255),
+    is_hidden smallint DEFAULT 0 CONSTRAINT rbac_menu_is_hidden_not_null NOT NULL,
+    name character varying(128) CONSTRAINT rbac_menu_name_not_null NOT NULL,
+    platform_id bigint CONSTRAINT rbac_menu_platform_id_not_null NOT NULL,
+    remark character varying(512),
+    CONSTRAINT ck_rbac_menu_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_rbac_menu_is_hidden CHECK ((is_hidden = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_rbac_menu_shape CHECK (((btrim((name)::text) <> ''::text) AND ((((menu_type)::text = 'directory'::text) AND (i18n_key IS NOT NULL) AND (path IS NULL) AND (component_path IS NULL)) OR (((menu_type)::text = 'page'::text) AND (i18n_key IS NOT NULL) AND (path IS NOT NULL) AND (btrim((path)::text) <> ''::text) AND (component_path IS NOT NULL) AND (btrim((component_path)::text) <> ''::text)) OR (((menu_type)::text = 'action'::text) AND (i18n_key IS NULL) AND (path IS NULL) AND (component_path IS NULL) AND (icon IS NULL) AND (is_hidden = 1))))),
+    CONSTRAINT ck_rbac_menu_sort_order CHECK ((sort_order >= 0)),
+    CONSTRAINT ck_rbac_menu_type CHECK (((menu_type)::text = ANY ((ARRAY['directory'::character varying, 'page'::character varying, 'action'::character varying])::text[])))
 );
 
--- ----------------------------
--- Checks structure for table user_login_log
--- ----------------------------
-ALTER TABLE "public"."user_login_log" ADD CONSTRAINT "ck_user_login_log_is_success" CHECK (is_success = ANY (ARRAY[0, 1]));
-ALTER TABLE "public"."user_login_log" ADD CONSTRAINT "ck_user_login_log_login_type" CHECK (event_type::text = 'login'::text AND login_type IS NOT NULL OR event_type::text = 'logout'::text AND login_type IS NULL);
-ALTER TABLE "public"."user_login_log" ADD CONSTRAINT "ck_user_login_log_event_type" CHECK (event_type::text = ANY (ARRAY['login'::character varying, 'logout'::character varying]::text[]));
 
--- ----------------------------
--- Primary Key structure for table user_login_log
--- ----------------------------
-ALTER TABLE "public"."user_login_log" ADD CONSTRAINT "user_login_log_pkey" PRIMARY KEY ("id");
+--
+-- Name: permission_role; Type: TABLE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Checks structure for table user_profile
--- ----------------------------
-ALTER TABLE "public"."user_profile" ADD CONSTRAINT "ck_user_profile_gender" CHECK (gender = ANY (ARRAY[0, 1, 2]));
-
--- ----------------------------
--- Primary Key structure for table user_profile
--- ----------------------------
-ALTER TABLE "public"."user_profile" ADD CONSTRAINT "user_profile_pkey" PRIMARY KEY ("user_id");
-
--- ----------------------------
--- Indexes structure for table user_session
--- ----------------------------
-CREATE INDEX "ix_user_session_user_created_at" ON "public"."user_session" USING btree (
-  "user_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
-);
-CREATE INDEX "ix_user_session_user_platform_created_at" ON "public"."user_session" USING btree (
-  "user_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "platform_id" "pg_catalog"."int8_ops" ASC NULLS LAST,
-  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST,
-  "id" "pg_catalog"."int8_ops" DESC NULLS FIRST
-) WHERE revoked_at IS NULL;
-CREATE UNIQUE INDEX "ux_user_session_refresh_token_hash" ON "public"."user_session" USING btree (
-  "refresh_token_hash" COLLATE "pg_catalog"."default" "pg_catalog"."bpchar_ops" ASC NULLS LAST
+CREATE TABLE public.permission_role (
+    id bigint CONSTRAINT rbac_role_id_not_null NOT NULL,
+    code character varying(64) CONSTRAINT rbac_role_code_not_null NOT NULL,
+    name character varying(64) CONSTRAINT rbac_role_name_not_null NOT NULL,
+    is_default smallint DEFAULT 0 CONSTRAINT rbac_role_is_default_not_null NOT NULL,
+    is_enabled smallint DEFAULT 1 CONSTRAINT rbac_role_is_enabled_not_null NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_role_created_at_not_null NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_role_updated_at_not_null NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_rbac_role_is_default CHECK ((is_default = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_rbac_role_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1])))
 );
 
--- ----------------------------
--- Checks structure for table user_session
--- ----------------------------
-ALTER TABLE "public"."user_session" ADD CONSTRAINT "ck_auth_session_version" CHECK (version >= 1);
 
--- ----------------------------
--- Primary Key structure for table user_session
--- ----------------------------
-ALTER TABLE "public"."user_session" ADD CONSTRAINT "auth_session_pkey" PRIMARY KEY ("id");
+--
+-- Name: permission_role_menu; Type: TABLE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Foreign Keys structure for table message_mail_config
--- ----------------------------
-ALTER TABLE "public"."message_mail_config" ADD CONSTRAINT "message_mail_config_platform_id_fkey" FOREIGN KEY ("platform_id") REFERENCES "public"."auth_platform" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+CREATE TABLE public.permission_role_menu (
+    id bigint CONSTRAINT rbac_role_menu_id_not_null NOT NULL,
+    role_id bigint CONSTRAINT rbac_role_menu_role_id_not_null NOT NULL,
+    menu_id bigint CONSTRAINT rbac_role_menu_menu_id_not_null NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_role_menu_created_at_not_null NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_role_menu_updated_at_not_null NOT NULL,
+    deleted_at timestamp with time zone
+);
 
--- ----------------------------
--- Foreign Keys structure for table message_mail_log
--- ----------------------------
-ALTER TABLE "public"."message_mail_log" ADD CONSTRAINT "message_mail_log_platform_id_fkey" FOREIGN KEY ("platform_id") REFERENCES "public"."auth_platform" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
 
--- ----------------------------
--- Foreign Keys structure for table message_mail_log_verification
--- ----------------------------
-ALTER TABLE "public"."message_mail_log_verification" ADD CONSTRAINT "message_mail_log_verification_mail_log_id_platform_id_fkey" FOREIGN KEY ("mail_log_id", "platform_id") REFERENCES "public"."message_mail_log" ("id", "platform_id") ON DELETE NO ACTION ON UPDATE NO ACTION;
-ALTER TABLE "public"."message_mail_log_verification" ADD CONSTRAINT "message_mail_log_verification_platform_id_fkey" FOREIGN KEY ("platform_id") REFERENCES "public"."auth_platform" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+--
+-- Name: permission_user_role; Type: TABLE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Foreign Keys structure for table message_mail_recipient_rule
--- ----------------------------
-ALTER TABLE "public"."message_mail_recipient_rule" ADD CONSTRAINT "message_mail_recipient_rule_platform_id_fkey" FOREIGN KEY ("platform_id") REFERENCES "public"."auth_platform" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+CREATE TABLE public.permission_user_role (
+    id bigint CONSTRAINT rbac_user_role_id_not_null NOT NULL,
+    user_id bigint CONSTRAINT rbac_user_role_user_id_not_null NOT NULL,
+    role_id bigint CONSTRAINT rbac_user_role_role_id_not_null NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_user_role_created_at_not_null NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_user_role_updated_at_not_null NOT NULL,
+    deleted_at timestamp with time zone
+);
 
--- ----------------------------
--- Foreign Keys structure for table message_mail_template
--- ----------------------------
-ALTER TABLE "public"."message_mail_template" ADD CONSTRAINT "message_mail_template_platform_id_fkey" FOREIGN KEY ("platform_id") REFERENCES "public"."auth_platform" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
 
--- ----------------------------
--- Foreign Keys structure for table permission_access_version
--- ----------------------------
-ALTER TABLE "public"."permission_access_version" ADD CONSTRAINT "fk_rbac_access_version_user" FOREIGN KEY ("user_id") REFERENCES "public"."user_account" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
+--
+-- Name: rbac_access_version_user_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Foreign Keys structure for table permission_menu
--- ----------------------------
-ALTER TABLE "public"."permission_menu" ADD CONSTRAINT "fk_rbac_menu_parent_platform" FOREIGN KEY ("parent_id", "platform_id") REFERENCES "public"."permission_menu" ("id", "platform_id") ON DELETE RESTRICT ON UPDATE NO ACTION;
-ALTER TABLE "public"."permission_menu" ADD CONSTRAINT "fk_rbac_menu_platform" FOREIGN KEY ("platform_id") REFERENCES "public"."auth_platform" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
+CREATE SEQUENCE public.rbac_access_version_user_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
 
--- ----------------------------
--- Foreign Keys structure for table permission_role_menu
--- ----------------------------
-ALTER TABLE "public"."permission_role_menu" ADD CONSTRAINT "fk_rbac_role_menu_menu" FOREIGN KEY ("menu_id") REFERENCES "public"."permission_menu" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
-ALTER TABLE "public"."permission_role_menu" ADD CONSTRAINT "fk_rbac_role_menu_role" FOREIGN KEY ("role_id") REFERENCES "public"."permission_role" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
 
--- ----------------------------
--- Foreign Keys structure for table permission_user_role
--- ----------------------------
-ALTER TABLE "public"."permission_user_role" ADD CONSTRAINT "fk_rbac_user_role_role" FOREIGN KEY ("role_id") REFERENCES "public"."permission_role" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
-ALTER TABLE "public"."permission_user_role" ADD CONSTRAINT "fk_rbac_user_role_user" FOREIGN KEY ("user_id") REFERENCES "public"."user_account" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
+--
+-- Name: rbac_access_version_user_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Foreign Keys structure for table storage_upload_rule
--- ----------------------------
-ALTER TABLE "public"."storage_upload_rule" ADD CONSTRAINT "fk_storage_upload_rule_cos_config" FOREIGN KEY ("cos_config_id") REFERENCES "public"."storage_cos_config" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
-ALTER TABLE "public"."storage_upload_rule" ADD CONSTRAINT "fk_storage_upload_rule_platform" FOREIGN KEY ("platform_id") REFERENCES "public"."auth_platform" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
+ALTER SEQUENCE public.rbac_access_version_user_id_seq OWNED BY public.permission_access_version.user_id;
 
--- ----------------------------
--- Foreign Keys structure for table storage_upload_rule_code
--- ----------------------------
-ALTER TABLE "public"."storage_upload_rule_code" ADD CONSTRAINT "fk_storage_upload_rule_code_platform" FOREIGN KEY ("platform_id") REFERENCES "public"."auth_platform" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
-ALTER TABLE "public"."storage_upload_rule_code" ADD CONSTRAINT "fk_storage_upload_rule_code_rule" FOREIGN KEY ("rule_id") REFERENCES "public"."storage_upload_rule" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
--- ----------------------------
--- Foreign Keys structure for table system_operation_log
--- ----------------------------
-ALTER TABLE "public"."system_operation_log" ADD CONSTRAINT "fk_audit_operation_log_platform" FOREIGN KEY ("platform_id") REFERENCES "public"."auth_platform" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
+--
+-- Name: rbac_menu_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
 
--- ----------------------------
--- Foreign Keys structure for table user_login_log
--- ----------------------------
-ALTER TABLE "public"."user_login_log" ADD CONSTRAINT "fk_user_login_log_platform" FOREIGN KEY ("platform_id") REFERENCES "public"."auth_platform" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
-ALTER TABLE "public"."user_login_log" ADD CONSTRAINT "fk_user_login_log_session" FOREIGN KEY ("session_id") REFERENCES "public"."user_session" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
-ALTER TABLE "public"."user_login_log" ADD CONSTRAINT "fk_user_login_log_user" FOREIGN KEY ("user_id") REFERENCES "public"."user_account" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
+CREATE SEQUENCE public.rbac_menu_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
 
--- ----------------------------
--- Foreign Keys structure for table user_profile
--- ----------------------------
-ALTER TABLE "public"."user_profile" ADD CONSTRAINT "fk_user_profile_account" FOREIGN KEY ("user_id") REFERENCES "public"."user_account" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
 
--- ----------------------------
--- Foreign Keys structure for table user_session
--- ----------------------------
-ALTER TABLE "public"."user_session" ADD CONSTRAINT "fk_auth_session_user" FOREIGN KEY ("user_id") REFERENCES "public"."user_account" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
-ALTER TABLE "public"."user_session" ADD CONSTRAINT "fk_user_session_platform" FOREIGN KEY ("platform_id") REFERENCES "public"."auth_platform" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
-ALTER TABLE "public"."user_session" ADD CONSTRAINT "fk_user_session_user" FOREIGN KEY ("user_id") REFERENCES "public"."user_account" ("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
+--
+-- Name: rbac_menu_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.rbac_menu_id_seq OWNED BY public.permission_menu.id;
+
+
+--
+-- Name: rbac_role_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.rbac_role_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: rbac_role_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.rbac_role_id_seq OWNED BY public.permission_role.id;
+
+
+--
+-- Name: rbac_role_menu_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.rbac_role_menu_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: rbac_role_menu_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.rbac_role_menu_id_seq OWNED BY public.permission_role_menu.id;
+
+
+--
+-- Name: rbac_user_role_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.rbac_user_role_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: rbac_user_role_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.rbac_user_role_id_seq OWNED BY public.permission_user_role.id;
+
+
+--
+-- Name: storage_cos_config; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.storage_cos_config (
+    id bigint NOT NULL,
+    name character varying(128) NOT NULL,
+    app_id character varying(32) NOT NULL,
+    secret_id_ciphertext text NOT NULL,
+    secret_key_ciphertext text NOT NULL,
+    bucket character varying(128) NOT NULL,
+    region character varying(64) NOT NULL,
+    endpoint character varying(255),
+    bucket_domain character varying(255),
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    remark character varying(512) DEFAULT ''::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_storage_cos_config_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1])))
+);
+
+
+--
+-- Name: storage_cos_config_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.storage_cos_config ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.storage_cos_config_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: storage_upload_rule; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.storage_upload_rule (
+    id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    name character varying(128) NOT NULL,
+    cos_config_id bigint NOT NULL,
+    max_file_size_bytes bigint NOT NULL,
+    allowed_extensions text[] NOT NULL,
+    allowed_mime_types text[] NOT NULL,
+    access_mode character varying(16) DEFAULT 'private'::character varying NOT NULL,
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    remark character varying(512) DEFAULT ''::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_storage_upload_rule_access_mode CHECK (((access_mode)::text = ANY ((ARRAY['private'::character varying, 'public'::character varying])::text[]))),
+    CONSTRAINT ck_storage_upload_rule_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_storage_upload_rule_max_file_size CHECK ((max_file_size_bytes > 0))
+);
+
+
+--
+-- Name: storage_upload_rule_code; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.storage_upload_rule_code (
+    id bigint NOT NULL,
+    rule_id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    code character varying(64) NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_storage_upload_rule_code_value CHECK ((length(btrim((code)::text)) > 0))
+);
+
+
+--
+-- Name: storage_upload_rule_code_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.storage_upload_rule_code ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.storage_upload_rule_code_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: storage_upload_rule_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.storage_upload_rule ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.storage_upload_rule_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: user_account; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_account (
+    id bigint NOT NULL,
+    username character varying(64) NOT NULL,
+    email character varying(254) NOT NULL,
+    password_hash character varying(255) NOT NULL,
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    phone character varying(32),
+    CONSTRAINT ck_user_account_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1])))
+);
+
+
+--
+-- Name: user_account_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.user_account_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: user_account_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.user_account_id_seq OWNED BY public.user_account.id;
+
+
+--
+-- Name: user_login_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_login_log (
+    id bigint NOT NULL,
+    user_id bigint,
+    session_id bigint,
+    platform_id bigint NOT NULL,
+    login_account character varying(254) NOT NULL,
+    event_type character varying(16) NOT NULL,
+    login_type character varying(32),
+    is_success smallint NOT NULL,
+    reason_code character varying(64) NOT NULL,
+    client_ip character varying(64) NOT NULL,
+    user_agent character varying(512) NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT ck_user_login_log_event_type CHECK (((event_type)::text = ANY ((ARRAY['login'::character varying, 'logout'::character varying])::text[]))),
+    CONSTRAINT ck_user_login_log_is_success CHECK ((is_success = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_user_login_log_login_type CHECK (((((event_type)::text = 'login'::text) AND (login_type IS NOT NULL)) OR (((event_type)::text = 'logout'::text) AND (login_type IS NULL))))
+);
+
+
+--
+-- Name: user_login_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_login_log ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.user_login_log_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: user_profile; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_profile (
+    user_id bigint NOT NULL,
+    birthday date,
+    gender smallint DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    avatar character varying(512) DEFAULT ''::character varying NOT NULL,
+    CONSTRAINT ck_user_profile_gender CHECK ((gender = ANY (ARRAY[0, 1, 2])))
+);
+
+
+--
+-- Name: message_mail_config id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_config ALTER COLUMN id SET DEFAULT nextval('public.message_mail_config_id_seq'::regclass);
+
+
+--
+-- Name: message_mail_log id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_log ALTER COLUMN id SET DEFAULT nextval('public.message_mail_log_id_seq'::regclass);
+
+
+--
+-- Name: message_mail_log_verification id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_log_verification ALTER COLUMN id SET DEFAULT nextval('public.message_mail_log_verification_id_seq'::regclass);
+
+
+--
+-- Name: message_mail_recipient_rule id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_recipient_rule ALTER COLUMN id SET DEFAULT nextval('public.message_mail_recipient_rule_id_seq'::regclass);
+
+
+--
+-- Name: message_mail_template id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_template ALTER COLUMN id SET DEFAULT nextval('public.message_mail_template_id_seq'::regclass);
+
+
+--
+-- Name: permission_access_version user_id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_access_version ALTER COLUMN user_id SET DEFAULT nextval('public.rbac_access_version_user_id_seq'::regclass);
+
+
+--
+-- Name: permission_auth_platform id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_auth_platform ALTER COLUMN id SET DEFAULT nextval('public.permission_auth_platform_id_seq'::regclass);
+
+
+--
+-- Name: permission_menu id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_menu ALTER COLUMN id SET DEFAULT nextval('public.rbac_menu_id_seq'::regclass);
+
+
+--
+-- Name: permission_role id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_role ALTER COLUMN id SET DEFAULT nextval('public.rbac_role_id_seq'::regclass);
+
+
+--
+-- Name: permission_role_menu id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_role_menu ALTER COLUMN id SET DEFAULT nextval('public.rbac_role_menu_id_seq'::regclass);
+
+
+--
+-- Name: permission_user_role id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_user_role ALTER COLUMN id SET DEFAULT nextval('public.rbac_user_role_id_seq'::regclass);
+
+
+--
+-- Name: system_operation_log id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.system_operation_log ALTER COLUMN id SET DEFAULT nextval('public.audit_operation_log_id_seq'::regclass);
+
+
+--
+-- Name: user_account id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_account ALTER COLUMN id SET DEFAULT nextval('public.user_account_id_seq'::regclass);
+
+
+--
+-- Name: user_session id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_session ALTER COLUMN id SET DEFAULT nextval('public.auth_session_id_seq'::regclass);
+
+
+--
+-- Name: system_operation_log audit_operation_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.system_operation_log
+    ADD CONSTRAINT audit_operation_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_session auth_session_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_session
+    ADD CONSTRAINT auth_session_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: message_mail_config message_mail_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_config
+    ADD CONSTRAINT message_mail_config_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: message_mail_log message_mail_log_id_platform_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_log
+    ADD CONSTRAINT message_mail_log_id_platform_id_key UNIQUE (id, platform_id);
+
+
+--
+-- Name: message_mail_log message_mail_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_log
+    ADD CONSTRAINT message_mail_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: message_mail_log_verification message_mail_log_verification_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_log_verification
+    ADD CONSTRAINT message_mail_log_verification_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: message_mail_rate_limit_policy message_mail_rate_limit_policy_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_rate_limit_policy
+    ADD CONSTRAINT message_mail_rate_limit_policy_pkey PRIMARY KEY (policy_key);
+
+
+--
+-- Name: message_mail_recipient_rule message_mail_recipient_rule_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_recipient_rule
+    ADD CONSTRAINT message_mail_recipient_rule_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: message_mail_template message_mail_template_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_template
+    ADD CONSTRAINT message_mail_template_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_auth_platform permission_auth_platform_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_auth_platform
+    ADD CONSTRAINT permission_auth_platform_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_access_version rbac_access_version_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_access_version
+    ADD CONSTRAINT rbac_access_version_pkey PRIMARY KEY (user_id);
+
+
+--
+-- Name: permission_menu rbac_menu_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_menu
+    ADD CONSTRAINT rbac_menu_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_role_menu rbac_role_menu_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_role_menu
+    ADD CONSTRAINT rbac_role_menu_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_role rbac_role_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_role
+    ADD CONSTRAINT rbac_role_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_user_role rbac_user_role_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_user_role
+    ADD CONSTRAINT rbac_user_role_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: storage_cos_config storage_cos_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.storage_cos_config
+    ADD CONSTRAINT storage_cos_config_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: storage_upload_rule_code storage_upload_rule_code_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.storage_upload_rule_code
+    ADD CONSTRAINT storage_upload_rule_code_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: storage_upload_rule storage_upload_rule_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.storage_upload_rule
+    ADD CONSTRAINT storage_upload_rule_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_menu uq_rbac_menu_id_platform; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_menu
+    ADD CONSTRAINT uq_rbac_menu_id_platform UNIQUE (id, platform_id);
+
+
+--
+-- Name: user_account user_account_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_account
+    ADD CONSTRAINT user_account_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_login_log user_login_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_login_log
+    ADD CONSTRAINT user_login_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_profile user_profile_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_profile
+    ADD CONSTRAINT user_profile_pkey PRIMARY KEY (user_id);
+
+
+--
+-- Name: ix_audit_operation_log_action_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_audit_operation_log_action_created_at ON public.system_operation_log USING btree (action, created_at DESC);
+
+
+--
+-- Name: ix_audit_operation_log_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_audit_operation_log_created_at ON public.system_operation_log USING btree (created_at DESC);
+
+
+--
+-- Name: ix_audit_operation_log_request_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_audit_operation_log_request_id ON public.system_operation_log USING btree (request_id);
+
+
+--
+-- Name: ix_audit_operation_log_user_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_audit_operation_log_user_created_at ON public.system_operation_log USING btree (user_id, created_at DESC);
+
+
+--
+-- Name: ix_rbac_menu_parent_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_rbac_menu_parent_active ON public.permission_menu USING btree (platform_id, parent_id, sort_order, id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ix_rbac_menu_platform_parent_sort; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_rbac_menu_platform_parent_sort ON public.permission_menu USING btree (platform_id, parent_id, sort_order, id);
+
+
+--
+-- Name: ix_storage_cos_config_enabled_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_storage_cos_config_enabled_created_at ON public.storage_cos_config USING btree (is_enabled, created_at DESC) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ix_storage_upload_rule_code_rule; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_storage_upload_rule_code_rule ON public.storage_upload_rule_code USING btree (rule_id, id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ix_storage_upload_rule_config_enabled_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_storage_upload_rule_config_enabled_created_at ON public.storage_upload_rule USING btree (cos_config_id, is_enabled, created_at DESC) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ix_user_login_log_account_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_user_login_log_account_created_at ON public.user_login_log USING btree (login_account, created_at DESC);
+
+
+--
+-- Name: ix_user_login_log_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_user_login_log_created_at ON public.user_login_log USING btree (created_at DESC);
+
+
+--
+-- Name: ix_user_login_log_platform_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_user_login_log_platform_created_at ON public.user_login_log USING btree (platform_id, created_at DESC);
+
+
+--
+-- Name: ix_user_login_log_user_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_user_login_log_user_created_at ON public.user_login_log USING btree (user_id, created_at DESC);
+
+
+--
+-- Name: ix_user_session_user_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_user_session_user_created_at ON public.user_session USING btree (user_id, created_at DESC);
+
+
+--
+-- Name: ix_user_session_user_platform_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_user_session_user_platform_created_at ON public.user_session USING btree (user_id, platform_id, created_at DESC, id DESC) WHERE (revoked_at IS NULL);
+
+
+--
+-- Name: ux_audit_operation_log_event_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_audit_operation_log_event_id ON public.system_operation_log USING btree (event_id);
+
+
+--
+-- Name: ux_message_mail_config_platform_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_message_mail_config_platform_active ON public.message_mail_config USING btree (platform_id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_message_mail_log_platform_challenge_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_message_mail_log_platform_challenge_active ON public.message_mail_log USING btree (platform_id, challenge_id) WHERE ((deleted_at IS NULL) AND (challenge_id IS NOT NULL));
+
+
+--
+-- Name: ux_message_mail_rule_platform_scope_pattern_action_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_message_mail_rule_platform_scope_pattern_action_active ON public.message_mail_recipient_rule USING btree (platform_id, scope, pattern, action) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_message_mail_template_platform_scene_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_message_mail_template_platform_scene_active ON public.message_mail_template USING btree (platform_id, scene) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_message_mail_verification_log_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_message_mail_verification_log_active ON public.message_mail_log_verification USING btree (mail_log_id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_permission_auth_platform_code_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_permission_auth_platform_code_active ON public.permission_auth_platform USING btree (code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_rbac_menu_code_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_rbac_menu_code_active ON public.permission_menu USING btree (platform_id, code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_rbac_menu_page_path_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_rbac_menu_page_path_active ON public.permission_menu USING btree (platform_id, path) WHERE ((deleted_at IS NULL) AND ((menu_type)::text = 'page'::text));
+
+
+--
+-- Name: ux_rbac_menu_platform_code_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_rbac_menu_platform_code_active ON public.permission_menu USING btree (platform_id, code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_rbac_menu_platform_path_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_rbac_menu_platform_path_active ON public.permission_menu USING btree (platform_id, path) WHERE ((path IS NOT NULL) AND (deleted_at IS NULL));
+
+
+--
+-- Name: ux_rbac_role_code_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_rbac_role_code_active ON public.permission_role USING btree (code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_rbac_role_default_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_rbac_role_default_active ON public.permission_role USING btree (is_default) WHERE ((is_default = 1) AND (deleted_at IS NULL));
+
+
+--
+-- Name: ux_rbac_role_menu_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_rbac_role_menu_active ON public.permission_role_menu USING btree (role_id, menu_id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_rbac_role_name_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_rbac_role_name_active ON public.permission_role USING btree (name) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_rbac_user_role_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_rbac_user_role_active ON public.permission_user_role USING btree (user_id, role_id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_storage_cos_config_name_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_storage_cos_config_name_active ON public.storage_cos_config USING btree (lower((name)::text)) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_storage_upload_rule_code_platform_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_storage_upload_rule_code_platform_code ON public.storage_upload_rule_code USING btree (platform_id, code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_user_account_email_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_user_account_email_active ON public.user_account USING btree (lower((email)::text)) WHERE (((email)::text <> ''::text) AND (deleted_at IS NULL));
+
+
+--
+-- Name: ux_user_account_phone_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_user_account_phone_active ON public.user_account USING btree (phone) WHERE ((phone IS NOT NULL) AND (deleted_at IS NULL));
+
+
+--
+-- Name: ux_user_account_username_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_user_account_username_active ON public.user_account USING btree (lower((username)::text)) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_user_session_refresh_token_hash; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_user_session_refresh_token_hash ON public.user_session USING btree (refresh_token_hash);
+
+
+--
+-- Name: system_operation_log fk_audit_operation_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.system_operation_log
+    ADD CONSTRAINT fk_audit_operation_log_platform FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: user_session fk_auth_session_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_session
+    ADD CONSTRAINT fk_auth_session_user FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_access_version fk_rbac_access_version_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_access_version
+    ADD CONSTRAINT fk_rbac_access_version_user FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_menu fk_rbac_menu_parent_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_menu
+    ADD CONSTRAINT fk_rbac_menu_parent_platform FOREIGN KEY (parent_id, platform_id) REFERENCES public.permission_menu(id, platform_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_menu fk_rbac_menu_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_menu
+    ADD CONSTRAINT fk_rbac_menu_platform FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_role_menu fk_rbac_role_menu_menu; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_role_menu
+    ADD CONSTRAINT fk_rbac_role_menu_menu FOREIGN KEY (menu_id) REFERENCES public.permission_menu(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_role_menu fk_rbac_role_menu_role; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_role_menu
+    ADD CONSTRAINT fk_rbac_role_menu_role FOREIGN KEY (role_id) REFERENCES public.permission_role(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_user_role fk_rbac_user_role_role; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_user_role
+    ADD CONSTRAINT fk_rbac_user_role_role FOREIGN KEY (role_id) REFERENCES public.permission_role(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_user_role fk_rbac_user_role_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.permission_user_role
+    ADD CONSTRAINT fk_rbac_user_role_user FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: storage_upload_rule_code fk_storage_upload_rule_code_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.storage_upload_rule_code
+    ADD CONSTRAINT fk_storage_upload_rule_code_platform FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: storage_upload_rule_code fk_storage_upload_rule_code_rule; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.storage_upload_rule_code
+    ADD CONSTRAINT fk_storage_upload_rule_code_rule FOREIGN KEY (rule_id) REFERENCES public.storage_upload_rule(id) ON DELETE CASCADE;
+
+
+--
+-- Name: storage_upload_rule fk_storage_upload_rule_cos_config; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.storage_upload_rule
+    ADD CONSTRAINT fk_storage_upload_rule_cos_config FOREIGN KEY (cos_config_id) REFERENCES public.storage_cos_config(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: storage_upload_rule fk_storage_upload_rule_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.storage_upload_rule
+    ADD CONSTRAINT fk_storage_upload_rule_platform FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: user_login_log fk_user_login_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_login_log
+    ADD CONSTRAINT fk_user_login_log_platform FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: user_login_log fk_user_login_log_session; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_login_log
+    ADD CONSTRAINT fk_user_login_log_session FOREIGN KEY (session_id) REFERENCES public.user_session(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: user_login_log fk_user_login_log_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_login_log
+    ADD CONSTRAINT fk_user_login_log_user FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: user_profile fk_user_profile_account; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_profile
+    ADD CONSTRAINT fk_user_profile_account FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: user_session fk_user_session_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_session
+    ADD CONSTRAINT fk_user_session_platform FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: user_session fk_user_session_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_session
+    ADD CONSTRAINT fk_user_session_user FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: message_mail_config message_mail_config_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_config
+    ADD CONSTRAINT message_mail_config_platform_id_fkey FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id);
+
+
+--
+-- Name: message_mail_log message_mail_log_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_log
+    ADD CONSTRAINT message_mail_log_platform_id_fkey FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id);
+
+
+--
+-- Name: message_mail_log_verification message_mail_log_verification_mail_log_id_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_log_verification
+    ADD CONSTRAINT message_mail_log_verification_mail_log_id_platform_id_fkey FOREIGN KEY (mail_log_id, platform_id) REFERENCES public.message_mail_log(id, platform_id);
+
+
+--
+-- Name: message_mail_log_verification message_mail_log_verification_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_log_verification
+    ADD CONSTRAINT message_mail_log_verification_platform_id_fkey FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id);
+
+
+--
+-- Name: message_mail_recipient_rule message_mail_recipient_rule_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_recipient_rule
+    ADD CONSTRAINT message_mail_recipient_rule_platform_id_fkey FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id);
+
+
+--
+-- Name: message_mail_template message_mail_template_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_template
+    ADD CONSTRAINT message_mail_template_platform_id_fkey FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict 40kHLIBwRUi3Jkxkfv7i1qug4gR990nBqh6pVNpcYP4OGfLmgabZIuDHBB3VRws

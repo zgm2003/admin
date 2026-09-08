@@ -16,6 +16,7 @@ type constraintDefinition struct {
 }
 
 var platformConstraints = []constraintDefinition{
+	{name: "ck_permission_auth_platform_menu_version", ddl: `ALTER TABLE permission_auth_platform ADD CONSTRAINT ck_permission_auth_platform_menu_version CHECK (menu_version >= 1)`},
 	{name: "ck_permission_auth_platform_code", ddl: `ALTER TABLE permission_auth_platform ADD CONSTRAINT ck_permission_auth_platform_code CHECK (code ~ '^[a-z][a-z0-9_]{1,48}$')`},
 	{name: "ck_permission_auth_platform_policy_version", ddl: `ALTER TABLE permission_auth_platform ADD CONSTRAINT ck_permission_auth_platform_policy_version CHECK (policy_version >= 1)`},
 	{name: "ck_permission_auth_platform_access_ttl_seconds", ddl: `ALTER TABLE permission_auth_platform ADD CONSTRAINT ck_permission_auth_platform_access_ttl_seconds CHECK (access_ttl_seconds BETWEEN 60 AND 2592000)`},

@@ -1,6 +1,8 @@
 package menu
 
 import (
+	"context"
+	"gorm.io/gorm"
 	"testing"
 	"time"
 
@@ -34,7 +36,7 @@ func TestEnsureFoundationSeedsFullCatalogAndIsIdempotent(t *testing.T) {
 			t.Fatalf("foundation menu %s platform = %d, want Admin %d", row.Code, row.PlatformID, adminPlatformID)
 		}
 	}
-	if got := readMenuAccessVersion(t, tx, ctx, activeUser.ID); got != 2 {
+	if got := readFoundationMenuVersion(t, tx, ctx, activeUser.ID); got != 2 {
 		t.Fatalf("seed access version = %d, want 2", got)
 	}
 	updatedAt := make(map[string]time.Time, len(rows))
@@ -45,7 +47,7 @@ func TestEnsureFoundationSeedsFullCatalogAndIsIdempotent(t *testing.T) {
 	if err := service.EnsureFoundation(ctx, definitions); err != nil {
 		t.Fatalf("repeat EnsureFoundation() error = %v", err)
 	}
-	if got := readMenuAccessVersion(t, tx, ctx, activeUser.ID); got != 2 {
+	if got := readFoundationMenuVersion(t, tx, ctx, activeUser.ID); got != 2 {
 		t.Fatalf("idempotent access version = %d, want 2", got)
 	}
 	rows = nil
@@ -164,7 +166,7 @@ func TestEnsureFoundationRestoresOnlyProtectedNodesInNonEmptyCatalog(t *testing.
 	if protectedCount != 1 || ordinaryCount != 0 {
 		t.Fatalf("active restored counts: protected=%d ordinary=%d", protectedCount, ordinaryCount)
 	}
-	if got := readMenuAccessVersion(t, tx, ctx, activeUser.ID); got != 3 {
+	if got := readFoundationMenuVersion(t, tx, ctx, activeUser.ID); got != 3 {
 		t.Fatalf("restore access version = %d, want 3", got)
 	}
 }
@@ -215,4 +217,16 @@ func testFoundationDefinitions() []FoundationDefinition {
 		{MenuType: TypeDirectory, Name: "用户与账号", Code: "account", I18nKey: stringPointer("navigation.user"), Icon: stringPointer("lucide:users-round"), SortOrder: 100, IsEnabled: yesno.Yes, IsHidden: yesno.No},
 		{ParentCode: "account", MenuType: TypePage, Name: "用户管理", Code: "user:account:view", I18nKey: stringPointer("navigation.userAccount"), Path: stringPointer("/user/account"), ComponentPath: stringPointer("user/account"), Icon: stringPointer("lucide:user-round-cog"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
 	}
+}
+
+func readFoundationMenuVersion(t *testing.T, db *gorm.DB, ctx context.Context, userID int64) int64 {
+	t.Helper()
+	if v := readMenuAccessVersion(t, db, ctx, userID); v != 1 {
+		t.Fatalf("foundation changed user grant version: %d", v)
+	}
+	v, err := NewRepository(db).FindMenuVersion(ctx, testAdminPlatformID(t, db, ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
 }

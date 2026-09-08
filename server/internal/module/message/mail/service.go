@@ -297,14 +297,14 @@ func (s *Service) PrepareEmailVerifyCode(ctx context.Context, in EmailVerifyCode
 	if err != nil {
 		return EmailVerifyCodePreparation{}, dependency(err)
 	}
-	resendPolicy, ok := rateLimitPolicyByKey(catalog, "business_email_minute")
-	if !ok || resendPolicy.WindowSeconds < 1 || resendPolicy.WindowSeconds > 86400 {
+	if _, ok := rateLimitPolicyByKey(catalog, "business_email_minute"); !ok {
 		return EmailVerifyCodePreparation{}, dependency(fmt.Errorf("mail resend rate-limit policy is invalid"))
 	}
-	if err := s.allowEmail(ctx, catalog, in.PlatformID, email); err != nil {
+	reservation, err := s.reserveEmail(ctx, catalog, in.PlatformID, email)
+	if err != nil {
 		return EmailVerifyCodePreparation{}, err
 	}
-	return EmailVerifyCodePreparation{TTLMinutes: readiness.TTLMinutes, ResendAfterSeconds: resendPolicy.WindowSeconds}, nil
+	return EmailVerifyCodePreparation{TTLMinutes: readiness.TTLMinutes, ResendAfterSeconds: reservation.RetryAfterSeconds}, nil
 }
 
 // SendPreparedEmailVerifyCode sends a six-digit login verification email using
@@ -324,7 +324,7 @@ func (s *Service) SendPreparedEmailVerifyCode(ctx context.Context, in EmailVerif
 	if in.Preparation.TTLMinutes < 1 || in.Preparation.TTLMinutes > verifyCodeReadinessTTLMaximum {
 		return EmailVerifyCodeResult{}, invalid(fmt.Errorf("verification code preparation TTL is invalid"))
 	}
-	if in.Preparation.ResendAfterSeconds < 1 || in.Preparation.ResendAfterSeconds > 86400 {
+	if in.Preparation.ResendAfterSeconds < 0 || in.Preparation.ResendAfterSeconds > 86400 {
 		return EmailVerifyCodeResult{}, invalid(fmt.Errorf("verification code resend wait is invalid"))
 	}
 	now := time.Now().UTC()
@@ -611,17 +611,22 @@ func mustDecrypt(k *secretkey.KeyRing, ct string) string {
 	return v
 }
 func (s *Service) allowEmail(ctx context.Context, catalog RateLimitCatalog, platformID int64, email string) error {
+	_, err := s.reserveEmail(ctx, catalog, platformID, email)
+	return err
+}
+
+func (s *Service) reserveEmail(ctx context.Context, catalog RateLimitCatalog, platformID int64, email string) (LimitResult, error) {
 	if s.limiter == nil {
-		return dependency(fmt.Errorf("mail rate limiter unavailable"))
+		return LimitResult{}, dependency(fmt.Errorf("mail rate limiter unavailable"))
 	}
-	allowed, err := s.limiter.Allow(ctx, businessLimitRequests(catalog, platformID, "", email, "")...)
+	result, err := s.limiter.Reserve(ctx, businessLimitRequests(catalog, platformID, "", email, "")...)
 	if err != nil {
-		return dependency(err)
+		return LimitResult{}, dependency(err)
 	}
-	if !allowed {
-		return rateLimited(ErrRateLimited)
+	if !result.Allowed {
+		return LimitResult{}, rateLimited(ErrRateLimited)
 	}
-	return nil
+	return result, nil
 }
 
 func (s *Service) loadRateLimitCatalog(ctx context.Context) (RateLimitCatalog, error) {

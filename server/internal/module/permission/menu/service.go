@@ -9,7 +9,7 @@ import (
 	"admin/server/internal/module/permission/authplatform"
 	"admin/server/internal/module/permission/state"
 	"admin/server/internal/shared/apperror"
-	"admin/server/internal/shared/i18n"
+
 	"admin/server/internal/shared/yesno"
 
 	"gorm.io/gorm"
@@ -77,12 +77,12 @@ type Catalog struct {
 }
 
 type Service struct {
-	repository        *Repository
-	accessInvalidator *permissionstate.Invalidator
+	repository   *Repository
+	menuVersions *permissionstate.MenuStore
 }
 
-func NewService(repository *Repository, accessInvalidator *permissionstate.Invalidator) *Service {
-	return &Service{repository: repository, accessInvalidator: accessInvalidator}
+func NewService(repository *Repository, menuVersions *permissionstate.MenuStore) *Service {
+	return &Service{repository: repository, menuVersions: menuVersions}
 }
 
 func (s *Service) List(ctx context.Context, query ListQuery) (Catalog, error) {
@@ -124,19 +124,20 @@ func (s *Service) List(ctx context.Context, query ListQuery) (Catalog, error) {
 }
 
 func (s *Service) RebuildAccessCache(ctx context.Context) (int, error) {
-	if s == nil || s.repository == nil || s.accessInvalidator == nil {
-		return 0, apperror.DependencyUnavailable(fmt.Errorf("rebuild access cache requires a repository"))
+	if s == nil || s.repository == nil || s.menuVersions == nil {
+		return 0, apperror.DependencyUnavailable(fmt.Errorf("menu version store unavailable"))
 	}
-	versions, err := s.repository.FindActiveAccessVersions(ctx)
+	platforms, err := s.repository.FindPlatformOptions(ctx)
 	if err != nil {
 		return 0, apperror.DependencyUnavailable(err)
 	}
-	if err := s.accessInvalidator.RebuildReadyState(ctx, versions); err != nil {
-		return 0, apperror.DependencyUnavailable(err)
+	for i, p := range platforms {
+		if err := s.mutateMenuPlatform(ctx, p.ID, 0, func(context.Context, *Repository, []Menu, time.Time) (bool, error) { return true, nil }); err != nil {
+			return i, err
+		}
 	}
-	return len(versions), nil
+	return len(platforms), nil
 }
-
 func applyManagedMenuPlatform(items []ManagedMenu, platform PlatformOption) {
 	for index := range items {
 		items[index].PlatformID = platform.ID
@@ -147,7 +148,7 @@ func applyManagedMenuPlatform(items []ManagedMenu, platform PlatformOption) {
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) {
-	if s == nil || s.repository == nil || s.accessInvalidator == nil {
+	if s == nil || s.repository == nil || s.menuVersions == nil {
 		return 0, apperror.DependencyUnavailable(fmt.Errorf("create menu requires a repository"))
 	}
 	normalized, err := normalizeCreateInput(input)
@@ -155,7 +156,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		return 0, menuInvalidFields(err)
 	}
 	var createdID int64
-	err = s.mutateAllAccessUsers(ctx, func(mutationCtx context.Context, repository *Repository, menus []Menu, _ time.Time) (bool, error) {
+	err = s.mutateMenuPlatform(ctx, normalized.PlatformID, 0, func(mutationCtx context.Context, repository *Repository, menus []Menu, _ time.Time) (bool, error) {
 		if _, err := repository.LockPlatform(mutationCtx, normalized.PlatformID); err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return false, menuPlatformUnavailable(err)
@@ -196,13 +197,13 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 }
 
 func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error {
-	if s == nil || s.repository == nil || s.accessInvalidator == nil {
+	if s == nil || s.repository == nil || s.menuVersions == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("update menu requires a repository"))
 	}
 	if id < 1 {
 		return menuNotFound(fmt.Errorf("menu id %d is invalid", id))
 	}
-	err := s.mutateAllAccessUsers(ctx, func(mutationCtx context.Context, repository *Repository, menus []Menu, operationTime time.Time) (bool, error) {
+	err := s.mutateMenuPlatform(ctx, 0, id, func(mutationCtx context.Context, repository *Repository, menus []Menu, operationTime time.Time) (bool, error) {
 		index, err := buildMenuIndex(menus)
 		if err != nil {
 			return false, menuTreeInvalid(err)
@@ -280,7 +281,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 }
 
 func (s *Service) UpdateStatus(ctx context.Context, id int64, value yesno.Value) error {
-	if s == nil || s.repository == nil || s.accessInvalidator == nil {
+	if s == nil || s.repository == nil || s.menuVersions == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("update menu status requires a repository"))
 	}
 	if id < 1 || !yesno.IsValid(value) {
@@ -289,7 +290,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, value yesno.Value)
 		}
 		return menuInvalidFields(fmt.Errorf("is_enabled value %d is invalid", value))
 	}
-	err := s.mutateAllAccessUsers(ctx, func(mutationCtx context.Context, repository *Repository, menus []Menu, operationTime time.Time) (bool, error) {
+	err := s.mutateMenuPlatform(ctx, 0, id, func(mutationCtx context.Context, repository *Repository, menus []Menu, operationTime time.Time) (bool, error) {
 		index, err := buildMenuIndex(menus)
 		if err != nil {
 			return false, menuTreeInvalid(err)
@@ -333,13 +334,13 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, value yesno.Value)
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {
-	if s == nil || s.repository == nil || s.accessInvalidator == nil {
+	if s == nil || s.repository == nil || s.menuVersions == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("delete menu requires a repository"))
 	}
 	if id < 1 {
 		return menuNotFound(fmt.Errorf("menu id %d is invalid", id))
 	}
-	err := s.mutateAllAccessUsers(ctx, func(mutationCtx context.Context, repository *Repository, menus []Menu, operationTime time.Time) (bool, error) {
+	err := s.mutateMenuPlatform(ctx, 0, id, func(mutationCtx context.Context, repository *Repository, menus []Menu, operationTime time.Time) (bool, error) {
 		index, err := buildMenuIndex(menus)
 		if err != nil {
 			return false, menuTreeInvalid(err)
@@ -367,96 +368,72 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return mapTransactionError(err)
 }
 
-var errMenuAffectedUsersChanged = errors.New("menu affected users changed")
-
-const menuMutationAttempts = 3
-
 type menuAccessMutation func(context.Context, *Repository, []Menu, time.Time) (bool, error)
 
-func (s *Service) mutateAllAccessUsers(ctx context.Context, mutate menuAccessMutation) error {
-	for attempt := 0; attempt < menuMutationAttempts; attempt++ {
-		candidates, err := s.repository.FindActiveAccessVersions(ctx)
+func (s *Service) mutateMenuPlatform(ctx context.Context, platformID, menuID int64, mutate menuAccessMutation) error {
+	if s.menuVersions == nil {
+		return apperror.DependencyUnavailable(fmt.Errorf("menu version store unavailable"))
+	}
+	if platformID == 0 {
+		id, err := s.repository.FindMenuPlatform(ctx, menuID)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return menuNotFound(err)
+		}
 		if err != nil {
 			return apperror.DependencyUnavailable(err)
 		}
-		lease, err := s.accessInvalidator.Acquire(ctx, candidates)
+		platformID = id
+	}
+	version, err := s.repository.FindMenuVersion(ctx, platformID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return menuPlatformUnavailable(err)
+	}
+	if err != nil {
+		return apperror.DependencyUnavailable(err)
+	}
+	lease, err := s.menuVersions.Acquire(ctx, platformID, version)
+	if err != nil {
+		return apperror.DependencyUnavailable(err)
+	}
+	mutationCtx, stopRenewal := lease.StartRenewal(ctx)
+	changed := false
+	err = s.repository.Transaction(mutationCtx, func(repository *Repository) error {
+		if err := repository.LockMenuVersion(mutationCtx, platformID, version); err != nil {
+			return err
+		}
+		menus, err := repository.LockPlatformMenus(mutationCtx, platformID)
 		if err != nil {
-			return apperror.DependencyUnavailable(err)
+			return err
 		}
-		mutationCtx, stopRenewal := lease.StartRenewal(ctx)
-		changed := false
-		advanced := map[int64]int64{}
-		err = s.repository.Transaction(mutationCtx, func(repository *Repository) error {
-			menus, lockErr := repository.LockActiveMenus(mutationCtx)
-			if lockErr != nil {
-				return lockErr
-			}
-			if lockErr := repository.LockUserMutationTables(mutationCtx); lockErr != nil {
-				return lockErr
-			}
-			actual, lockErr := repository.LockActiveAccessVersions(mutationCtx)
-			if lockErr != nil {
-				return lockErr
-			}
-			if !equalMenuAccessVersions(candidates, actual) {
-				return errMenuAffectedUsersChanged
-			}
-			operationTime := time.Now().UTC().Truncate(time.Microsecond)
-			changed, lockErr = mutate(mutationCtx, repository, menus, operationTime)
-			if lockErr != nil || !changed {
-				return lockErr
-			}
-			advanced, lockErr = repository.IncrementAccessVersions(mutationCtx, menuAccessUserIDs(actual), operationTime)
-			return lockErr
-		})
-		renewalCause := context.Cause(mutationCtx)
-		stopRenewal()
-		if errors.Is(err, errMenuAffectedUsersChanged) {
-			if rollbackErr := lease.Rollback(ctx); rollbackErr != nil {
-				return apperror.DependencyUnavailable(errors.Join(err, renewalCause, rollbackErr))
-			}
-			continue
+		now := time.Now().UTC().Truncate(time.Microsecond)
+		changed, err = mutate(mutationCtx, repository, menus, now)
+		if err != nil || !changed {
+			return err
 		}
-		if err != nil {
-			return errors.Join(err, renewalCause, lease.Rollback(ctx))
+		return repository.IncrementMenuVersion(mutationCtx, platformID, version, now)
+	})
+	stopRenewal()
+	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
+	if err != nil {
+		// A lost commit acknowledgement must never restore a stale ready state.
+		actual, readErr := s.repository.FindMenuVersion(finishCtx, platformID)
+		if readErr != nil {
+			return errors.Join(err, readErr)
 		}
-		if renewalCause != nil {
-			return apperror.DependencyUnavailable(errors.Join(renewalCause, lease.Rollback(ctx)))
+		if actual == version {
+			return errors.Join(err, lease.Rollback(finishCtx))
 		}
-		if !changed {
-			if err := lease.Rollback(ctx); err != nil {
-				return apperror.DependencyUnavailable(err)
-			}
-			return nil
-		}
-		if err := lease.Commit(ctx, advanced); err != nil {
-			return apperror.DependencyUnavailable(err)
-		}
-		return nil
+		return errors.Join(err, lease.Commit(finishCtx, actual))
 	}
-	return apperror.Conflict(i18n.KeyConflict, nil, errMenuAffectedUsersChanged)
+	if !changed {
+		return lease.Rollback(finishCtx)
+	}
+	if err := lease.Commit(finishCtx, version+1); err != nil {
+		return apperror.DependencyUnavailable(err)
+	}
+	return nil
 }
-
-func equalMenuAccessVersions(left, right []permissionstate.Version) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for index := range left {
-		if left[index] != right[index] {
-			return false
-		}
-	}
-	return true
-}
-
-func menuAccessUserIDs(versions []permissionstate.Version) []int64 {
-	userIDs := make([]int64, len(versions))
-	for index, version := range versions {
-		userIDs[index] = version.UserID
-	}
-	return userIDs
-}
-
 func sameMenuUpdate(stored Menu, input UpdateInput) bool {
 	return sameInt64Pointer(stored.ParentID, input.ParentID) &&
 		stored.MenuType == input.MenuType && stored.Name == input.Name && sameStringPointer(stored.I18nKey, input.I18nKey) &&

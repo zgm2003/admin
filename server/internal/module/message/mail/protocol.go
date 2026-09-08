@@ -27,8 +27,12 @@ type LimitRequest struct {
 	Window     time.Duration
 	LegacyKeys []string
 }
+type LimitResult struct {
+	Allowed           bool
+	RetryAfterSeconds int
+}
 type Limiter interface {
-	Allow(context.Context, ...LimitRequest) (bool, error)
+	Reserve(context.Context, ...LimitRequest) (LimitResult, error)
 }
 type BusinessSendInput struct {
 	PlatformID                            int64

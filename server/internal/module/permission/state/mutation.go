@@ -74,7 +74,7 @@ func (i *Invalidator) Acquire(ctx context.Context, candidates []Version) (*Mutat
 		if encodeErr != nil {
 			return nil, errors.Join(encodeErr, restoreEntries(ctx, i.store, entries))
 		}
-		result, beginErr := i.store.redis.EvalString(ctx, beginInvalidationScript, []string{StateKey(candidate.UserID)}, candidate.Version, invalidating, i.leaseTTL.Milliseconds())
+		result, beginErr := i.store.redis.EvalString(ctx, beginInvalidationScript, []string{i.store.key(candidate.UserID)}, candidate.Version, invalidating, i.leaseTTL.Milliseconds())
 		if beginErr != nil {
 			return nil, errors.Join(beginErr, restoreEntries(ctx, i.store, entries))
 		}
@@ -182,7 +182,7 @@ func (l *MutationLease) renew(ctx context.Context) error {
 	args := make([]any, 0, len(l.entries)+1)
 	args = append(args, l.leaseTTL.Milliseconds())
 	for index, entry := range l.entries {
-		keys[index] = StateKey(entry.userID)
+		keys[index] = l.store.key(entry.userID)
 		args = append(args, entry.token)
 	}
 	result, err := l.store.redis.EvalString(ctx, renewStatesScript, keys, args...)
@@ -214,7 +214,7 @@ func publishEntries(ctx context.Context, store *Store, entries []accessMutationE
 	keys := make([]string, len(entries))
 	args := make([]any, 0, len(entries)*2)
 	for index, entry := range entries {
-		keys[index] = StateKey(entry.userID)
+		keys[index] = store.key(entry.userID)
 		args = append(args, entry.token, payloads[entry.userID])
 	}
 	result, err := store.redis.EvalString(ctx, publishStatesScript, keys, args...)

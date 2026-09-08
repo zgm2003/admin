@@ -58,7 +58,7 @@ describe('MenuManagement', () => {
     // mockResolvedValueOnce implementations, which leaks fixtures across tests.
     vi.resetAllMocks()
     getMenusMock.mockResolvedValue(menuCatalog())
-    rebuildAccessCacheMock.mockResolvedValue({ rebuiltUsers: 2 })
+    rebuildAccessCacheMock.mockResolvedValue({ rebuiltPlatforms: 2 })
   })
 
   it('shows and executes access cache rebuild only with its permission', async () => {

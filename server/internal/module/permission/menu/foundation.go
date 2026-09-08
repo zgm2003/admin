@@ -40,7 +40,7 @@ func (s *Service) EnsurePlatformFoundation(ctx context.Context, platformCode str
 }
 
 func (s *Service) ensurePlatformFoundation(ctx context.Context, platformCode string, definitions []FoundationDefinition, ensureAll bool) error {
-	if s == nil || s.repository == nil || s.accessInvalidator == nil {
+	if s == nil || s.repository == nil || s.menuVersions == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("ensure menu foundation requires a repository"))
 	}
 	if err := authplatform.ValidateCode(platformCode); err != nil {
@@ -67,7 +67,7 @@ func (s *Service) ensurePlatformFoundation(ctx context.Context, platformCode str
 	if platformID < 1 {
 		return apperror.DependencyUnavailable(fmt.Errorf("authentication platform %s is unavailable", platformCode))
 	}
-	err = s.mutateAllAccessUsers(ctx, func(mutationCtx context.Context, repository *Repository, activeMenus []Menu, operationTime time.Time) (bool, error) {
+	err = s.mutateMenuPlatform(ctx, platformID, 0, func(mutationCtx context.Context, repository *Repository, activeMenus []Menu, operationTime time.Time) (bool, error) {
 		allCount, err := repository.CountAllMenusForPlatform(mutationCtx, platformID)
 		if err != nil {
 			return false, err
@@ -136,7 +136,7 @@ func (s *Service) ensurePlatformFoundation(ctx context.Context, platformCode str
 		if !changed {
 			return false, nil
 		}
-		finalMenus, err := repository.LockActiveMenus(mutationCtx)
+		finalMenus, err := repository.LockPlatformMenus(mutationCtx, platformID)
 		if err != nil {
 			return false, err
 		}

@@ -37,47 +37,57 @@ for arg = 1, #ARGV, 3 do
   end
   local increment = period / rate
   if debt + increment > period + 0.000001 then allowed = false end
-  windows[#windows + 1] = {index, count, debt, increment}
+  windows[#windows + 1] = {index, count, debt, increment, period}
   index = index + count + 1
 end
+local retry = 0
 for _, window in ipairs(windows) do
-  local index, count, debt, increment = unpack(window)
+  local index, count, debt, increment, period = unpack(window)
   if allowed then debt = debt + increment end
+  retry = math.max(retry, debt + increment - period)
   if debt > 0 then
     redis.call('SET', KEYS[index], string.format('%.6f', now + debt), 'PX', math.ceil(debt * 1000))
   end
   for key = index + 1, index + count do redis.call('DEL', KEYS[key]) end
 end
-if allowed then return 1 end
-return 0
+if allowed then return {1, math.ceil(retry)} end
+return {0, math.ceil(retry)}
 `)
 
 func (l *RedisLimiter) Allow(ctx context.Context, requests ...LimitRequest) (bool, error) {
+	result, err := l.Reserve(ctx, requests...)
+	return result.Allowed, err
+}
+
+func (l *RedisLimiter) Reserve(ctx context.Context, requests ...LimitRequest) (LimitResult, error) {
 	if l == nil || l.client == nil {
-		return false, fmt.Errorf("mail rate limiter unavailable")
+		return LimitResult{}, fmt.Errorf("mail rate limiter unavailable")
 	}
 	if len(requests) == 0 || len(requests) > 2 {
-		return false, fmt.Errorf("invalid mail rate limit windows")
+		return LimitResult{}, fmt.Errorf("invalid mail rate limit windows")
 	}
 	keys := make([]string, 0, 10)
 	args := make([]any, 0, 6)
 	seen := make(map[string]bool)
 	for _, request := range requests {
 		if request.Key == "" || request.Limit < 1 || request.Limit > 100000 || request.Window <= 0 || request.Window.Seconds() > 86400 || len(request.LegacyKeys) > 4 {
-			return false, fmt.Errorf("invalid mail rate limit request")
+			return LimitResult{}, fmt.Errorf("invalid mail rate limit request")
 		}
 		for _, key := range append([]string{request.Key}, request.LegacyKeys...) {
 			if key == "" || seen[key] {
-				return false, fmt.Errorf("duplicate or empty mail rate limit key")
+				return LimitResult{}, fmt.Errorf("duplicate or empty mail rate limit key")
 			}
 			seen[key] = true
 			keys = append(keys, "rate:"+key)
 		}
 		args = append(args, request.Limit, request.Window.Seconds(), len(request.LegacyKeys))
 	}
-	result, err := allowMailWindows.Run(ctx, l.client, keys, args...).Int()
+	result, err := allowMailWindows.Run(ctx, l.client, keys, args...).Int64Slice()
 	if err != nil {
-		return false, fmt.Errorf("redis mail rate limit: %w", err)
+		return LimitResult{}, fmt.Errorf("redis mail rate limit: %w", err)
 	}
-	return result == 1, nil
+	if len(result) != 2 || (result[0] != 0 && result[0] != 1) || result[1] < 0 {
+		return LimitResult{}, fmt.Errorf("invalid mail reservation result")
+	}
+	return LimitResult{Allowed: result[0] == 1, RetryAfterSeconds: int(result[1])}, nil
 }

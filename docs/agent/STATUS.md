@@ -3,13 +3,82 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## 当前交接：快速收尾（2026-09-08）
+
+本节优先于下方阶段记录。按维护者最新要求冻结重构范围，停止浏览器 E2E，全量测试与构建交由维护者执行。
+
+- 已完成代码：Mail 原子预占返回两窗口共同决定的下一次等待，`resendAfterSeconds=0` 合法；Auth 不另设 cooldown。
+  首次无密码登录只给非阻断提示。菜单变更改为平台 `menu_version`，不再扫描/锁定用户表或逐用户递增版本。
+  Access 本地/Redis 缓存同时受用户授权版本和平台菜单版本约束，Redis 快照 namespace 为 v6。
+- 冷缓存：Auth Session / Access / Menu Version 使用跨实例单目标租约，每个 scope 最多 32 个重建并发、
+  每滑动秒最多 128 次启动；源 I/O 的 4 秒期限从租约申请时起算，早于 6 秒 Redis 租约。忙时有界等待后
+  返回依赖错误；已知 Redis 故障/损坏不转为业务源回源。此为代码预算，不等于已完成百万用户压测。
+- 已验证：8 个相关 Go 包的关键定向测试带 `-race -p 1` 通过（并发、权限失效、Redis 故障、密码、迁移回滚）；
+  最后时限传递修正后，Access/Menu 关键用例复跑通过。`go test ./cmd/api -run '^$' -count=1` 编译通过。
+  `pnpm typecheck` 通过；Auth API、登录页、菜单页三个 Vitest 文件 50/50 通过。此次未跑全量测试或打包构建。
+- **新增迁移待执行**：`docs/database/2026-09-08-menu-catalog-version.sql`。已查询业务库确认 `menu_version`
+  不存在；旧的 module-naming-mail-policy 迁移已经执行，不要混为同一项。新迁移验证了幂等、保留策略版本与
+  既有计数、失败回滚及非正数约束。停旧 API/Worker，备份后执行，再同步启动新后端和前端。
+  `docs/database/current.sql` 仍对应此前真实数据库，不提前伪造新字段快照；新迁移后再导出。
+- 浏览器 E2E 原型及失败记录已归档到仓库外 `%LOCALAPPDATA%\Admin\paused-e2e\20260908-135023`，工作区已移除。
+  未将其计为通过，也未修改真实账号密码或发送真实邮件。密码页面交互、登录态浏览器验收交给维护者。
+- 最后进程检查无 Go/Vitest/浏览器 E2E 测试进程运行；现有 API/Worker 不是本轮新代码上线验收证据。
+  未调整暂存区或提交；存在 AD（已暂存但工作区已删除）旧路径/原型文件，提交前必须核对 `git diff --cached`。
+
+### 维护者执行顺序
+
+先停止旧 API/Worker，保持 PostgreSQL/Redis 可用。每一步退出码应为 0；失败先停止，不继续发布；不要同时启动另一轮全量测试。
+
+```powershell
+cd D:\admin\server
+go vet ./...
+go test -p 1 ./... -count=1
+go build ./...
+cd ..\web
+pnpm lint
+pnpm check:architecture
+pnpm typecheck
+pnpm vitest run --pool=threads --maxWorkers=1
+pnpm build
+```
+
+全量验证通过后，保持 API/Worker 停止，先备份，再执行新迁移。下面读取本地配置，不打印连接串：
+
+```powershell
+cd D:\admin
+$line = Get-Content server/.env | Where-Object { $_ -match '^POSTGRES_DSN=' } | Select-Object -First 1
+if (-not $line) { throw 'POSTGRES_DSN missing' }
+$dsn = (($line -split '=', 2)[1].Trim().Trim('"').Trim("'")) -replace '\s+TimeZone=\S+', ''
+$backup = Join-Path $env:LOCALAPPDATA ('Admin\backups\menu-version-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+New-Item -ItemType Directory -Path $backup | Out-Null
+pg_dump -d $dsn --format=custom --schema=public --file (Join-Path $backup 'public-before.dump')
+if ($LASTEXITCODE -ne 0) { throw 'Backup failed' }
+psql -X -d $dsn -v ON_ERROR_STOP=1 -f docs/database/2026-09-08-menu-catalog-version.sql
+if ($LASTEXITCODE -ne 0) { throw 'Migration failed; do not start the new API' }
+psql -X -d $dsn -v ON_ERROR_STOP=1 -c 'SELECT id, code, policy_version, menu_version FROM public.permission_auth_platform ORDER BY id;'
+```
+
+预期每个平台有正整数 `menu_version`（初次执行为 1），`policy_version` 不变。然后启动 IDE 的 Admin API/Worker
+及前端；`/ready` 应为 200 且 PostgreSQL/Redis 均 up。最后重新导出 public schema-only 到 `docs/database/current.sql`。
+
+### 人工验收清单（尚未验收）
+
+1. 无密码测试账号邮箱登录：仅温和提示，不强制跳转；首次设置无需旧密码，成功后当前会话保留。
+2. 找回密码：验证码过期时间和邮件展示遵守 Mail TTL；成功回登录页不自动登录，旧浏览器会话及刷新凭据失效；
+   旧密码失败，新密码成功。不要使用真实重要账号做破坏性验证。
+3. 同平台同邮箱的登录/找回密码/管理测试共享两条额度；有余额可立即重发，耗尽后按服务端返回值等待；
+   不同场景的验证码不能互相使用。测试完恢复自行调整的邮件策略。
+4. 普通菜单变更后，另一浏览器刷新菜单/权限得到新结果；无权限 API 仍拒绝。菜单修改不强制注销用户；
+   “重建缓存”反馈的平台数量正确。跨平台目录不串用。
+5. 全量测试、构建及上述浏览器验收通过后再结案；尚未执行真实百万用户压力测试，不把预算测试当容量承诺。
+
 ## 本轮交付状态（2026-09-08，优先于下方历史记录）
 
 - 最新归属修正已落实到代码：前后端管理模块 `permission/authplatform`，Model 映射
   `permission_auth_platform`，管理 URL `/api/admin/v1/permission/authplatform`、权限码
   `permission:authplatform:*`、导航键 `navigation.permissionAuthplatform`、页面文案 `permission.authplatform.*`。
   `auth/login`、公共 `/api/v1/auth/policy` 与现有平台策略 Redis key 不变；不把前端客户端平台常量
-  `src/auth/platform.ts` 误当成管理模块。业务表尚未改名，现状仍为 `auth_platform`。
+  `src/auth/platform.ts` 误当成管理模块。业务表已迁移为 `permission_auth_platform`。
 - 当前 forward migration 已同步原位改表、约束/索引/序列改名、页面路径和权限码转换；隔离 PostgreSQL
   验证跨平台 ID、外键、序列绑定与原有授权不变、重复执行和后续冲突整体回滚。必须排空旧 API、Worker
   及维护脚本后，由维护者执行迁移，再启用新版本。此脚本包含前一轮邮件两策略转换，不单独跳过其中步骤。
@@ -28,13 +97,26 @@
   后端分层归位及 AST 门禁；Views/API/权限/i18n 按 user 等业务域和单数资源统一；三个 Skill 同步。
 - 邮件实现仅两条平台+规范化邮箱共享策略，覆盖业务场景与管理测试；TTL/次数/窗口来自 Mail。
   旧场景额度按 GCRA 剩余债务原子归并，任一窗口拒绝不扣本次请求，损坏状态不产生部分写入。
-- 业务数据库迁移尚未执行：见 `docs/database/2026-09-08-module-naming-mail-policy.sql`。
-  已在隔离 PostgreSQL schema 验证幂等、跨平台 ID/授权保留、次数保留和编码冲突整体回滚。
-  必须排空旧 API 后迁移并统一部署，不能新旧版本混跑；不清库、不重置旧 Redis 邮箱额度。
-- 未闭环的架构容量项：Access/Auth 正常 missing 的跨实例回源上限；菜单修改时全用户收集、锁与失效开销。
+- 业务数据库迁移已获维护者授权并于 **2026-09-08 12:36:07 +08:00** 提交，目标为本机 `admin.public`。
+  执行 `docs/database/2026-09-08-module-naming-mail-policy.sql` 的原始事务体，并在同一事务提交前增加
+  前后校验：2 个平台全字段与表 OID、11 个引用外键、序列 OID/当前值、71 个菜单非命名字段、
+  11 条角色授权全部不变；两名用户 Access version 各递增一次。原 7 条邮件策略收敛为 2 条，保留
+  `business_email_minute=1/60s`、`business_email_10m=5/600s`，未调整邮件 TTL 或发送测试邮件。
+- 迁移前停止了项目 API/Worker，并确认没有项目数据库连接或活动事务；业务 schema 使用
+  `pg_dump --format=custom --schema=public` 备份，`pg_restore --list` 与完整归档读取通过。
+  备份及带校验的执行 SQL/结果在仓库外 `%LOCALAPPDATA%\Admin\backups\20260908-123409-module-naming`，
+  目录 ACL 限当前用户与 SYSTEM；归档 SHA256 为 `DC05D64AB938E04DA21DF475DCF36DB6B76E13B0FEAB868E98E1253F6B573C9A`。
+- 上线衔接已完成：使用现有 `RebuildReadyState` 将 2 个 Access 缓存状态同步到数据库新版本，
+  仅失效并重建 `mail:rate-limit:policies:v2` 配置缓存，校验 catalog version=2 且仅含两条平台邮箱策略；
+  未操作 `rate:mail:send:*` 额度键、未清空 Redis、未重置会话。临时维护程序已归档到备份目录并移出仓库。
+- IDE `Admin API` / `Admin Worker` 已用新代码启动；HTTP `/health`、`/ready`、`/api/v1/auth/policy` 均 200，
+  新管理路由带平台头但无登录凭据返回 401，旧 `/api/admin/v1/auth/platform` 返回 404。
+  Admin 平台 10 个真实 page 的路径、Views 与中英文 i18n 全部核对通过；Canvas 的独立测试页保持原状，
+  不拿它与 Admin 前端文件匹配。`docs/database/current.sql` 已从真实 public schema-only 导出，无业务数据。
+- 上阶段记录的冷缓存回源和菜单全用户失效问题已在快速收尾阶段修改；最新验证范围见顶部。
   Redis error/corrupt 路径现已显式失败且零故障回源，但这不等于冷启动或百万用户写路径已验收。
-- 交互待核验：发码成功后的前端倒计时仍使用 Mail 短窗口长度，多次额度配置下可能比服务端可重发时间保守；
-  没有新增 Auth 时间配置，但尚未完成按剩余额度返回精确可重发时间的契约。
+- 重发等待已改为由 Mail 原子预占结果决定，0 表示仍有额度；页面流程待维护者验收。
+  没有新增 Auth 时间配置，契约与定向测试结果见顶部。
 - 上轮实际验证（认证平台归属调整前）：`go fmt ./...`、`go vet ./...`、`go build ./...`、第二轮
   `go test -p 1 ./... -count=1` 全部通过；随后新增的迁移冲突回滚测试独立通过。
   `pnpm vitest run --pool=threads --maxWorkers=1 --reporter=verbose` 65 文件/471 项全部通过；
@@ -42,8 +124,8 @@
   首次前端全量运行约九分钟无单文件结果后已停止，以上是重新运行的最终结果。
 - `git diff --check` 通过；暂存区 `git diff --cached --check` 仍报 role-view.ts 末尾空行，工作区版本已修正，
   未修改其他会话的暂存状态。保留既有 i18n flatten 警告及构建大包提示；未执行浏览器业务端到端验收。
-  现有开发服务 `http://localhost:16300` HTTP 200，但业务库未迁移，不能据此宣称新版菜单已联通。
-  上述验证对应当前代码，不覆盖刚修正的认证平台业务归属；未 commit 或执行业务库迁移。
+  上轮开发服务的 HTTP 200 只代表前端可达；本轮迁移后接口和数据库验收见上文。
+  未做登录态浏览器端到端验收，也未 commit；不能把本次迁移完成等同于所有架构容量事项已结案。
 - 当前环境已具备 GCC 且 `CGO_ENABLED=1`。本轮 `go test -race -p 1` 对 auth/login、user/account、
   message/mail、permission/access 使用 `Test.*(Concurrent|TwoInstances|TwoServices|FirstPassword|SetPassword|Fault|RedisFailure|Corrupt)`
   筛选的定向测试四包通过；未跑全仓 race。下方旧记录中的无编译器阻塞已过时。

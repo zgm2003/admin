@@ -48,6 +48,18 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
+func (r *Repository) FindMenuVersion(ctx context.Context, platformID int64) (int64, error) {
+	var version int64
+	result := r.db.WithContext(ctx).Raw("SELECT menu_version FROM permission_auth_platform WHERE id=? AND deleted_at IS NULL", platformID).Scan(&version)
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	if version < 1 {
+		return 0, fmt.Errorf("platform menu version missing")
+	}
+	return version, nil
+}
+
 func (r *Repository) FindSourceWithVersion(ctx context.Context, userID, platformID int64) (Source, error) {
 	if platformID < 1 {
 		return Source{}, fmt.Errorf("find access source requires a positive platform id")

@@ -2,6 +2,7 @@ package permission
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -13,7 +14,7 @@ import (
 )
 
 func TestSnapshotKey(t *testing.T) {
-	if got := SnapshotKey("admin", 4, 7, 9); got != "authz:permission:v5:admin:4:7:9" {
+	if got := SnapshotKey("admin", 4, 7, 9, 1); got != "authz:permission:v6:admin:4:7:9:1" {
 		t.Fatalf("SnapshotKey() = %q", got)
 	}
 }
@@ -36,11 +37,11 @@ func TestSnapshotCachePublishesOnlyForMatchingReadyVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	cached := cachedSnapshot(94001, 1, "admin", 4, snapshot)
-	published, err := cache.PublishIfCurrent(ctx, cached, time.Minute)
+	published, err := cache.PublishIfCurrent(ctx, cached, time.Minute, 1)
 	if err != nil || !published {
 		t.Fatalf("PublishIfCurrent() = %v,%v", published, err)
 	}
-	read, found, err := cache.Read(ctx, 1, "admin", 4, 94001, 3)
+	read, found, err := cache.Read(ctx, 1, "admin", 4, 94001, 3, 1)
 	if err != nil || !found || read.PlatformID != 1 || read.Version != 3 {
 		t.Fatalf("Read() = %+v,%v,%v", read, found, err)
 	}
@@ -52,7 +53,7 @@ func TestSnapshotCachePublishesOnlyForMatchingReadyVersion(t *testing.T) {
 	if err := lease.Commit(ctx, map[int64]int64{94001: 4}); err != nil {
 		t.Fatal(err)
 	}
-	published, err = cache.PublishIfCurrent(ctx, cached, time.Minute)
+	published, err = cache.PublishIfCurrent(ctx, cached, time.Minute, 1)
 	if err != nil || published {
 		t.Fatalf("stale PublishIfCurrent() = %v,%v", published, err)
 	}
@@ -62,7 +63,7 @@ func TestSnapshotCacheRejectsUnknownFieldsAndMismatchedIdentity(t *testing.T) {
 	client := openAccessRedis(t)
 	cache := NewSnapshotCache(client)
 	ctx := context.Background()
-	key := SnapshotKey("admin", 4, 94002, 3)
+	key := SnapshotKey("admin", 4, 94002, 3, 1)
 	t.Cleanup(func() { _ = client.Delete(context.Background(), key) })
 	for _, payload := range []string{
 		`{"schemaVersion":4,"userId":94002,"platformId":1,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[],"unknown":true}`,
@@ -74,7 +75,7 @@ func TestSnapshotCacheRejectsUnknownFieldsAndMismatchedIdentity(t *testing.T) {
 		if err := client.SetString(ctx, key, payload, time.Minute); err != nil {
 			t.Fatal(err)
 		}
-		if _, found, err := cache.Read(ctx, 1, "admin", 4, 94002, 3); err == nil || !found {
+		if _, found, err := cache.Read(ctx, 1, "admin", 4, 94002, 3, 1); err == nil || !found {
 			t.Fatalf("invalid cached snapshot accepted: %s", payload)
 		}
 	}
@@ -92,7 +93,13 @@ func openAccessRedis(t *testing.T) *projectredis.Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := projectredis.Open(context.Background(), settings.RedisURL)
+	redisURL, err := url.Parse(settings.RedisURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redisURL.Path = "/13"
+	redisURL.RawPath = ""
+	client, err := projectredis.Open(context.Background(), redisURL.String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,8 +109,11 @@ func openAccessRedis(t *testing.T) *projectredis.Client {
 
 func cleanupAccessKeys(t *testing.T, client *projectredis.Client, userID int64, platform string, policyVersion, version int64) {
 	t.Helper()
-	keys := []string{permissionstate.StateKey(userID), SnapshotKey(platform, policyVersion, userID, version)}
+	keys := []string{permissionstate.StateKey(userID), SnapshotKey(platform, policyVersion, userID, version, 1), permissionstate.MenuStateKey(1)}
 	if err := client.DeleteMany(context.Background(), keys); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.SetString(context.Background(), permissionstate.MenuStateKey(1), `{"schemaVersion":2,"state":"ready","version":1}`, 0); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), keys) })

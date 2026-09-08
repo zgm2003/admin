@@ -205,8 +205,8 @@ function parseSendCodeResult(value: unknown): SendCodeResult {
     record.resendAfterSeconds,
     'send code.resendAfterSeconds',
   )
-  if (resendAfterSeconds < 1 || resendAfterSeconds > 86400) {
-    throw new ProtocolError('send code.resendAfterSeconds must be between 1 and 86400')
+  if (resendAfterSeconds < 0 || resendAfterSeconds > 86400) {
+    throw new ProtocolError('send code.resendAfterSeconds must be between 0 and 86400')
   }
   return {
     challengeId: expectString(record.challengeId, 'send code.challengeId'),

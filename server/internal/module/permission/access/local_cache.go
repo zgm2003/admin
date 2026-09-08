@@ -8,6 +8,7 @@ import (
 const defaultLocalSnapshotCacheEntries = 1024
 
 type SnapshotCacheKey struct {
+	MenuVersion   int64
 	UserID        int64
 	PlatformID    int64
 	Platform      string

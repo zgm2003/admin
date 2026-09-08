@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
 	"reflect"
 	"testing"
@@ -65,8 +66,8 @@ func TestMailRateLimitActionRequiresExplicitGrantAndRespectsPlatformScope(t *tes
 	redisClient := openMailRateLimitAccessRedis(t)
 	keys := []string{
 		permissionstate.StateKey(fixture.user.ID),
-		permissionaccess.SnapshotKey("admin", 4, fixture.user.ID, 3), permissionaccess.SnapshotKey("admin", 4, fixture.user.ID, 4), permissionaccess.SnapshotKey("admin", 4, fixture.user.ID, 5),
-		permissionaccess.SnapshotKey("canvas", 4, fixture.user.ID, 3), permissionaccess.SnapshotKey("canvas", 4, fixture.user.ID, 4), permissionaccess.SnapshotKey("canvas", 4, fixture.user.ID, 5),
+		permissionaccess.SnapshotKey("admin", 4, fixture.user.ID, 3, 1), permissionaccess.SnapshotKey("admin", 4, fixture.user.ID, 4, 1), permissionaccess.SnapshotKey("admin", 4, fixture.user.ID, 5, 1),
+		permissionaccess.SnapshotKey("canvas", 4, fixture.user.ID, 3, 1), permissionaccess.SnapshotKey("canvas", 4, fixture.user.ID, 4, 1), permissionaccess.SnapshotKey("canvas", 4, fixture.user.ID, 5, 1),
 	}
 	if err := redisClient.DeleteMany(context.Background(), keys); err != nil {
 		t.Fatal(err)
@@ -77,7 +78,7 @@ func TestMailRateLimitActionRequiresExplicitGrantAndRespectsPlatformScope(t *tes
 	roleService := role.NewService(role.NewRepository(fixture.db), permissionstate.NewInvalidator(stateStore))
 	accessService := permissionaccess.NewService(
 		fixture.repository, stateStore, permissionaccess.NewSnapshotCache(redisClient),
-		permissionaccess.NewLocalSnapshotCache(8), slog.New(slog.NewTextHandler(io.Discard, nil)),
+		permissionaccess.NewLocalSnapshotCache(8), slog.New(slog.NewTextHandler(io.Discard, nil)), permissionstate.NewMenuStore(redisClient),
 	)
 	adminIdentity := accessIdentityForMailRateLimit(fixture.user.ID)
 	canvasIdentity := adminIdentity
@@ -168,7 +169,13 @@ func openMailRateLimitAccessRedis(t *testing.T) *projectredis.Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := projectredis.Open(context.Background(), settings.RedisURL)
+	u, err := url.Parse(settings.RedisURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.Path = "/13"
+	u.RawPath = ""
+	client, err := projectredis.Open(context.Background(), u.String())
 	if err != nil {
 		t.Fatal(err)
 	}

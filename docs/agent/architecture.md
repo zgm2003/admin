@@ -81,6 +81,21 @@ Mail 管理的限流策略与 `message_mail_config.ttl_minutes` 是所有邮件�
 不得依赖单进程唯一状态或无界缓存；缓存、限流、队列和失效协议必须明确跨实例一致性、故障闭合和回源上限。
 跨模块 spec/plan 必须记录容量假设、热点查询预算、缓存更新策略和并发验证方式。
 
+### 本轮收口的具体约束
+
+- 冷缓存重建使用 `shared/cachefill`：按 Auth Session、Access、Menu Version 三个 scope 独立限制，
+  每目标仅一个跨实例持有者、每 scope 32 并发/128 次启动每秒；数据库工作期限从申请租约起算 4 秒，
+  Redis 租约 6 秒。缓存命中不走源加载；失败闭合，有界等待，不提供内存或 PostgreSQL 故障兜底。
+  “启动次数”不等于 SQL 数量，一次权限重建可能执行多条查询；尚无百万用户实测结论。
+- 平台菜单版本存在 `permission_auth_platform.menu_version`，Redis 使用 `authz:menu-state:v1:<platformID>`。
+  菜单写入只锁定平台版本行和该平台菜单，在同一数据库事务递增菜单版本，沿 token lease 发布/回滚；
+  不扫描用户表，不逐用户递增授权版本，不更改认证 `policy_version` 或撤销会话。用户/角色授权仍用用户版本。
+- Access 每次使用本地缓存前确认用户授权状态和平台菜单状态；Redis v6 快照键同时包含两种版本，
+  发布 Lua 同时校验两者，旧发布者不能把旧菜单写成当前快照。重建接口返回 `rebuiltPlatforms`。
+- Mail 的 `resendAfterSeconds` 来自两窗口原子预占后的额度，0 为合法值；不再把短窗口长度当独立冷却时间。
+  返回值是额度快照，其他并发发送仍可能改变可用性，最终以服务端共同额度判断为准。
+- 上述菜单版本机制依赖 `2026-09-08-menu-catalog-version.sql`，业务库执行状态以 STATUS 为准；不得启动时迁移。
+
 ## 同步请求
 
 ```text

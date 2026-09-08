@@ -1,6 +1,7 @@
 package authstate
 
 import (
+	"admin/server/internal/shared/cachefill"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -12,6 +13,13 @@ import (
 	authclient "admin/server/internal/module/auth/client"
 	projectredis "admin/server/internal/redis"
 )
+
+func (c *SessionCache) AcquireFill(ctx context.Context, target string) (*cachefill.Lease, error) {
+	if c == nil || c.redis == nil {
+		return nil, fmt.Errorf("session cache unavailable")
+	}
+	return cachefill.Try(ctx, c.redis.UniversalClient(), "auth-session", target)
+}
 
 const SessionSnapshotSchemaVersion = 1
 

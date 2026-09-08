@@ -25,7 +25,7 @@ func (h *Handler) RebuildAccessCache(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	response.OK(context, http.StatusOK, map[string]int{"rebuiltUsers": count})
+	response.OK(context, http.StatusOK, map[string]int{"rebuiltPlatforms": count})
 }
 
 type Handler struct {

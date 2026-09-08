@@ -15,6 +15,7 @@ import (
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/permission/state"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/cachefill"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 )
@@ -23,6 +24,7 @@ const CodePermissionSnapshotInvalid = 14000
 
 type sourceStore interface {
 	FindSourceWithVersion(context.Context, int64, int64) (Source, error)
+	FindMenuVersion(context.Context, int64) (int64, error)
 }
 
 type MenuNode struct {
@@ -59,10 +61,11 @@ type Service struct {
 	cache  *SnapshotCache
 	local  *LocalSnapshotCache
 	logger *slog.Logger
+	menus  *permissionstate.MenuStore
 }
 
-func NewService(store sourceStore, states *permissionstate.Store, cache *SnapshotCache, local *LocalSnapshotCache, logger *slog.Logger) *Service {
-	return &Service{store: store, states: states, cache: cache, local: local, logger: logger}
+func NewService(store sourceStore, states *permissionstate.Store, cache *SnapshotCache, local *LocalSnapshotCache, logger *slog.Logger, menus *permissionstate.MenuStore) *Service {
+	return &Service{store: store, states: states, cache: cache, local: local, logger: logger, menus: menus}
 }
 
 func (s *Service) Current(ctx context.Context, identity auth.Identity) (Snapshot, error) {
@@ -92,29 +95,62 @@ func (s *Service) Allowed(ctx context.Context, identity auth.Identity, permissio
 }
 
 func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Snapshot, error) {
+	menuVersion, err := s.menus.Current(ctx, identity.PlatformID, s.store.FindMenuVersion)
+	if err != nil {
+		return Snapshot{}, apperror.DependencyUnavailable(err)
+	}
 	cacheResult := "miss"
-	state, found, stateErr := s.states.Read(ctx, identity.UserID)
-	if stateErr != nil {
-		s.logCacheError(ctx, "accessState", "error", stateErr)
-		return Snapshot{}, apperror.DependencyUnavailable(stateErr)
-	} else if found {
-		if state.State == permissionstate.StateInvalidating {
-			return Snapshot{}, accessUpdating(permissionstate.ErrUpdating)
+	var fill *cachefill.Lease
+	defer func() {
+		if err := fill.Release(ctx); err != nil {
+			s.logCacheError(ctx, "fillRelease", "error", err)
 		}
-		key := snapshotCacheKey(identity, state.Version)
-		if cached, localFound := s.local.Read(key, time.Now()); localFound {
-			return snapshotFromCache(cached, "hit"), nil
+	}()
+	for admission := 0; admission < 25; admission++ {
+		state, found, stateErr := s.states.Read(ctx, identity.UserID)
+		if stateErr != nil {
+			s.logCacheError(ctx, "accessState", "error", stateErr)
+			return Snapshot{}, apperror.DependencyUnavailable(stateErr)
+		} else if found {
+			if state.State == permissionstate.StateInvalidating {
+				return Snapshot{}, accessUpdating(permissionstate.ErrUpdating)
+			}
+			key := snapshotCacheKey(identity, state.Version, menuVersion)
+			if cached, localFound := s.local.Read(key, time.Now()); localFound {
+				return snapshotFromCache(cached, "hit"), nil
+			}
+			cached, cacheFound, cacheErr := s.cache.Read(ctx, identity.PlatformID, identity.Platform, identity.PolicyVersion, identity.UserID, state.Version, menuVersion)
+			if cacheErr != nil {
+				s.logCacheError(ctx, "accessSnapshot", "error", cacheErr)
+				return Snapshot{}, apperror.DependencyUnavailable(cacheErr)
+			} else if cacheFound {
+				s.local.Put(key, cached, time.Now().Add(identity.AccessCacheTTL))
+				return snapshotFromCache(cached, "hit"), nil
+			}
 		}
-		cached, cacheFound, cacheErr := s.cache.Read(ctx, identity.PlatformID, identity.Platform, identity.PolicyVersion, identity.UserID, state.Version)
-		if cacheErr != nil {
-			s.logCacheError(ctx, "accessSnapshot", "error", cacheErr)
-			return Snapshot{}, apperror.DependencyUnavailable(cacheErr)
-		} else if cacheFound {
-			s.local.Put(key, cached, time.Now().Add(identity.AccessCacheTTL))
-			return snapshotFromCache(cached, "hit"), nil
+
+		if fill != nil {
+			break
+		}
+		if admission == 24 {
+			break
+		}
+		var err error
+		fill, err = s.cache.acquireFill(ctx, fmt.Sprintf("%s:%d:%d", identity.Platform, identity.PolicyVersion, identity.UserID))
+		if err != nil {
+			return Snapshot{}, apperror.DependencyUnavailable(err)
+		}
+		if fill == nil {
+			if err := cachefill.Wait(ctx); err != nil {
+				return Snapshot{}, apperror.DependencyUnavailable(err)
+			}
 		}
 	}
-
+	if fill == nil {
+		return Snapshot{}, apperror.DependencyUnavailable(fmt.Errorf("access cache rebuild busy"))
+	}
+	ctx, cancel := fill.WorkContext(ctx)
+	defer cancel()
 	for attempt := 0; attempt < 3; attempt++ {
 		source, err := s.store.FindSourceWithVersion(ctx, identity.UserID, identity.PlatformID)
 		if err != nil {
@@ -148,7 +184,7 @@ func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Sna
 		}
 
 		cached := newCachedSnapshot(identity.UserID, identity.PlatformID, identity.Platform, identity.PolicyVersion, snapshot)
-		published, publishErr := s.cache.PublishIfCurrent(ctx, cached, identity.AccessCacheTTL)
+		published, publishErr := s.cache.PublishIfCurrent(ctx, cached, identity.AccessCacheTTL, menuVersion)
 		if publishErr != nil {
 			s.logCacheError(ctx, "accessSnapshot", "error", publishErr)
 			return Snapshot{}, apperror.DependencyUnavailable(publishErr)
@@ -157,14 +193,15 @@ func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Sna
 			cacheResult = "miss"
 			continue
 		}
-		s.local.Put(snapshotCacheKey(identity, source.Version), cached, time.Now().Add(identity.AccessCacheTTL))
+		s.local.Put(snapshotCacheKey(identity, source.Version, menuVersion), cached, time.Now().Add(identity.AccessCacheTTL))
 		return snapshot, nil
 	}
 	return Snapshot{}, accessUpdating(fmt.Errorf("access version kept changing during snapshot rebuild"))
 }
 
-func snapshotCacheKey(identity auth.Identity, accessVersion int64) SnapshotCacheKey {
+func snapshotCacheKey(identity auth.Identity, accessVersion, menuVersion int64) SnapshotCacheKey {
 	return SnapshotCacheKey{
+		MenuVersion:   menuVersion,
 		UserID:        identity.UserID,
 		PlatformID:    identity.PlatformID,
 		Platform:      identity.Platform,

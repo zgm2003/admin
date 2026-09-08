@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
+
 	"testing"
 	"time"
 
 	"admin/server/internal/module/permission/authplatform"
-	"admin/server/internal/module/permission/state"
+
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -90,7 +90,7 @@ func TestRepositoryLockActiveMenusRunsInsideTransaction(t *testing.T) {
 	called := false
 	if err := repository.Transaction(ctx, func(locked *Repository) error {
 		called = true
-		rows, err := locked.LockActiveMenus(ctx)
+		rows, err := locked.LockPlatformMenus(ctx, created.PlatformID)
 		if err != nil {
 			return err
 		}
@@ -273,82 +273,6 @@ func TestRepositoryRoleMenuSoftDeleteTouchesOnlyActiveTargetLinks(t *testing.T) 
 	hasGrant, err = repository.HasActiveDirectGrant(ctx, first.ID)
 	if err != nil || hasGrant {
 		t.Fatalf("grant after deletion = %v,%v", hasGrant, err)
-	}
-}
-
-func TestRepositoryGlobalAccessVersionsAreSortedLockedAndAdvanced(t *testing.T) {
-	tx, ctx := openMenuTransaction(t)
-	repository := NewRepository(tx)
-	first := createMenuAccessUser(t, tx, ctx, yesno.Yes, false)
-	second := createMenuAccessUser(t, tx, ctx, yesno.Yes, false)
-	_ = createMenuAccessUser(t, tx, ctx, yesno.No, false)
-	_ = createMenuAccessUser(t, tx, ctx, yesno.Yes, true)
-	want := []permissionstate.Version{{UserID: first.ID, Version: 1}, {UserID: second.ID, Version: 1}}
-	candidates, err := repository.FindActiveAccessVersions(ctx)
-	if err != nil || !reflect.DeepEqual(candidates, want) {
-		t.Fatalf("FindActiveAccessVersions() = %+v,%v", candidates, err)
-	}
-	if err := repository.LockUserMutationTables(ctx); err != nil {
-		t.Fatal(err)
-	}
-	locked, err := repository.LockActiveAccessVersions(ctx)
-	if err != nil || !reflect.DeepEqual(locked, want) {
-		t.Fatalf("LockActiveAccessVersions() = %+v,%v", locked, err)
-	}
-	advanced, err := repository.IncrementAccessVersions(ctx, []int64{second.ID, first.ID, first.ID}, time.Now().UTC().Truncate(time.Microsecond))
-	if err != nil || !reflect.DeepEqual(advanced, map[int64]int64{first.ID: 2, second.ID: 2}) {
-		t.Fatalf("IncrementAccessVersions() = %+v,%v", advanced, err)
-	}
-}
-
-func TestSortMenuAccessVersionsOrdersReturningRowsByUserID(t *testing.T) {
-	versions := []permissionstate.Version{
-		{UserID: 169, Version: 3},
-		{UserID: 67, Version: 4},
-	}
-
-	sortMenuAccessVersions(versions)
-
-	want := []permissionstate.Version{
-		{UserID: 67, Version: 4},
-		{UserID: 169, Version: 3},
-	}
-	if !reflect.DeepEqual(versions, want) {
-		t.Fatalf("sorted access versions = %+v, want %+v", versions, want)
-	}
-}
-
-func TestRepositoryGlobalAccessVersionsRejectMissingVersion(t *testing.T) {
-	tx, ctx := openMenuTransaction(t)
-	unique := time.Now().UnixNano()
-	created := testUser{Username: fmt.Sprintf("missing_%d", unique), Email: fmt.Sprintf("missing_%d@example.com", unique), IsEnabled: yesno.Yes}
-	if err := tx.WithContext(ctx).Create(&created).Error; err != nil {
-		t.Fatal(err)
-	}
-	if _, err := NewRepository(tx).FindActiveAccessVersions(ctx); err == nil {
-		t.Fatal("active user without access version was accepted")
-	}
-}
-
-func TestRepositoryGlobalMenuLockBlocksUserWrites(t *testing.T) {
-	db, ctx := openMenuDatabase(t)
-	menuTx := db.WithContext(ctx).Begin()
-	if menuTx.Error != nil {
-		t.Fatal(menuTx.Error)
-	}
-	t.Cleanup(func() { _ = menuTx.Rollback().Error })
-	if err := NewRepository(menuTx).LockUserMutationTables(ctx); err != nil {
-		t.Fatal(err)
-	}
-	userTx := db.WithContext(ctx).Begin()
-	if userTx.Error != nil {
-		t.Fatal(userTx.Error)
-	}
-	t.Cleanup(func() { _ = userTx.Rollback().Error })
-	waitCtx, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
-	defer cancel()
-	if err := userTx.WithContext(waitCtx).Exec("LOCK TABLE user_account IN ROW EXCLUSIVE MODE").Error; err == nil {
-		t.Fatal("user write table lock bypassed global menu mutation lock")
 	}
 }
 

@@ -579,6 +579,7 @@ export const enUS = {
   'user.password.successMessage':
     'Password changed. All Admin sessions are invalid and you must sign in again.',
   'user.password.setTitle': 'Set password',
+  'user.password.setupReminder': 'You can set a password in your profile now or do it later.',
   'user.password.setSubmit': 'Set password',
   'user.password.setSuccessMessage':
     'Password set successfully, your current session stays signed in.',
@@ -689,7 +690,7 @@ export const enUS = {
   'menu.retry': 'Retry',
   'menu.loadFailed': 'Failed to load menu data',
   'menu.success.accessCacheRebuilt': 'Access cache rebuilt',
-  'menu.success.accessCacheRebuiltCount': 'Processed {count} users',
+  'menu.success.accessCacheRebuiltCount': 'Refreshed menu caches for {count} platforms',
   'menu.confirm.rebuildAccessCacheTitle': 'Rebuild access cache',
   'menu.confirm.rebuildAccessCacheMessage':
     'Rebuild access cache from active database user versions. Login sessions are not affected. Continue?',

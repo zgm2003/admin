@@ -216,7 +216,7 @@ async function rebuildAccessCacheNow(): Promise<void> {
     await reloadMenus()
     ElNotification.success({
       title: t('menu.success.accessCacheRebuilt'),
-      message: t('menu.success.accessCacheRebuiltCount', { count: result.rebuiltUsers }),
+      message: t('menu.success.accessCacheRebuiltCount', { count: result.rebuiltPlatforms }),
     })
   } catch (error: unknown) {
     if (error === 'cancel' || error === 'close') return

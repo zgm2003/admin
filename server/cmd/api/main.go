@@ -108,7 +108,8 @@ func run(logger *slog.Logger) error {
 	accessStateStore := permissionstate.NewStore(redisClient)
 	accessInvalidator := permissionstate.NewInvalidator(accessStateStore)
 	menuRepository := menu.NewRepository(postgres.GORM)
-	menuService := menu.NewService(menuRepository, accessInvalidator)
+	menuStateStore := permissionstate.NewMenuStore(redisClient)
+	menuService := menu.NewService(menuRepository, menuStateStore)
 
 	roleRepository := role.NewRepository(postgres.GORM)
 	roleService := role.NewService(roleRepository, accessInvalidator)
@@ -160,7 +161,7 @@ func run(logger *slog.Logger) error {
 	authService.SetVerificationCodeStore(verificationStore)
 	authService.SetLoginLogRecorder(loginLogService)
 	permissionRepository := permission.NewRepository(postgres.GORM)
-	permissionService := permission.NewService(permissionRepository, accessStateStore, permission.NewSnapshotCache(redisClient), permission.NewLocalSnapshotCache(1024), logger)
+	permissionService := permission.NewService(permissionRepository, accessStateStore, permission.NewSnapshotCache(redisClient), permission.NewLocalSnapshotCache(1024), logger, menuStateStore)
 	operationLogRepository := operationlog.NewRepository(postgres.GORM)
 	operationLogService := operationlog.NewService(operationLogRepository)
 	operationLogEnqueuer := operationlog.NewQueueEnqueuer(queueClient)

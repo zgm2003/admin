@@ -186,7 +186,7 @@ func TestMenuHandlerRebuildsAccessCache(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil {
 		t.Fatal(err)
 	}
-	if envelope.Data["rebuiltUsers"] != 3 {
+	if envelope.Data["rebuiltPlatforms"] != 3 {
 		t.Fatalf("data = %+v", envelope.Data)
 	}
 }

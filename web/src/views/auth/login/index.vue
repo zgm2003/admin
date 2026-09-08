@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Lock, Message, RefreshRight, User } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 
 import {
   getCurrentUser,
@@ -139,6 +140,7 @@ async function submit(): Promise<void> {
     const currentUser = await getCurrentUser()
     auth.setAuthenticated(currentUser)
     await router.replace(safeRedirect(route.query.redirect))
+    if (currentUser.passwordSetRequired) ElMessage.info(t('user.password.setupReminder'))
   } catch (error: unknown) {
     auth.setAnonymous()
     submitError.value =

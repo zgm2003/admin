@@ -557,6 +557,7 @@ export const zhCN = {
   'user.password.successTitle': '密码已修改',
   'user.password.successMessage': '密码修改成功，所有 Admin 会话已失效，请重新登录。',
   'user.password.setTitle': '设置密码',
+  'user.password.setupReminder': '建议前往个人资料设置密码，也可以稍后再设置。',
   'user.password.setSubmit': '设置密码',
   'user.password.setSuccessMessage': '密码设置成功，当前登录状态保持不变。',
   'layout.footer': 'Admin 管理控制台 · 2026',
@@ -662,7 +663,7 @@ export const zhCN = {
   'menu.retry': '重试',
   'menu.loadFailed': '菜单数据加载失败',
   'menu.success.accessCacheRebuilt': '访问缓存已重建',
-  'menu.success.accessCacheRebuiltCount': '已处理 {count} 个用户',
+  'menu.success.accessCacheRebuiltCount': '已刷新 {count} 个平台的菜单缓存',
   'menu.confirm.rebuildAccessCacheTitle': '重建访问缓存',
   'menu.confirm.rebuildAccessCacheMessage':
     '将按数据库中的活跃用户版本重建访问缓存，不会影响登录会话。是否继续？',

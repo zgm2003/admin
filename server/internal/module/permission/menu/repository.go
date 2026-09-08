@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+
 	"time"
 
 	"admin/server/internal/module/permission/state"
@@ -45,6 +45,55 @@ type Repository struct {
 
 func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
+}
+
+func (r *Repository) FindMenuPlatform(ctx context.Context, id int64) (int64, error) {
+	var platformID int64
+	result := r.db.WithContext(ctx).Raw("SELECT platform_id FROM permission_menu WHERE id=? AND deleted_at IS NULL", id).Scan(&platformID)
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	if platformID < 1 {
+		return 0, gorm.ErrRecordNotFound
+	}
+	return platformID, nil
+}
+func (r *Repository) FindMenuVersion(ctx context.Context, id int64) (int64, error) {
+	var version int64
+	result := r.db.WithContext(ctx).Raw("SELECT menu_version FROM permission_auth_platform WHERE id=? AND deleted_at IS NULL", id).Scan(&version)
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	if version < 1 {
+		return 0, gorm.ErrRecordNotFound
+	}
+	return version, nil
+}
+func (r *Repository) LockMenuVersion(ctx context.Context, id, expected int64) error {
+	var version int64
+	if err := r.db.WithContext(ctx).Raw("SELECT menu_version FROM permission_auth_platform WHERE id=? AND deleted_at IS NULL FOR UPDATE", id).Scan(&version).Error; err != nil {
+		return err
+	}
+	if version != expected {
+		return permissionstate.ErrVersionChanged
+	}
+	return nil
+}
+func (r *Repository) IncrementMenuVersion(ctx context.Context, id, expected int64, now time.Time) error {
+	result := r.db.WithContext(ctx).Exec("UPDATE permission_auth_platform SET menu_version=menu_version+1,updated_at=? WHERE id=? AND menu_version=?", now, id, expected)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return permissionstate.ErrVersionChanged
+	}
+	return nil
+}
+
+func (r *Repository) LockPlatformMenus(ctx context.Context, platformID int64) ([]Menu, error) {
+	var rows []Menu
+	err := r.db.WithContext(ctx).Where("platform_id=?", platformID).Clauses(clause.Locking{Strength: "UPDATE"}).Order("sort_order,code,id").Find(&rows).Error
+	return rows, err
 }
 
 func (r *Repository) Transaction(ctx context.Context, fn func(*Repository) error) error {
@@ -132,17 +181,6 @@ func (r *Repository) FindActiveMenus(ctx context.Context, platformID *int64) ([]
 	return rows, nil
 }
 
-func (r *Repository) LockActiveMenus(ctx context.Context) ([]Menu, error) {
-	var rows []Menu
-	if err := r.db.WithContext(ctx).
-		Clauses(clause.Locking{Strength: "UPDATE"}).
-		Order("sort_order, code, id").
-		Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("lock active menus: %w", err)
-	}
-	return rows, nil
-}
-
 func (r *Repository) CountAllMenusForPlatform(ctx context.Context, platformID int64) (int64, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Unscoped().Model(&Menu{}).Where("platform_id = ?", platformID).Count(&count).Error; err != nil {
@@ -194,120 +232,6 @@ func (r *Repository) RestoreFoundationMenu(ctx context.Context, id int64, value 
 		return fmt.Errorf("restore foundation menu %d: %w", id, gorm.ErrRecordNotFound)
 	}
 	return nil
-}
-
-func (r *Repository) FindActiveAccessVersions(ctx context.Context) ([]permissionstate.Version, error) {
-	versions := make([]permissionstate.Version, 0)
-	if err := r.db.WithContext(ctx).Raw(`
-		SELECT app_user.id AS user_id, COALESCE(access_version.version, 0) AS version
-		FROM user_account AS app_user
-		LEFT JOIN permission_access_version AS access_version
-		  ON access_version.user_id = app_user.id
-		WHERE app_user.deleted_at IS NULL
-		  AND app_user.is_enabled = ?
-		ORDER BY app_user.id ASC`, yesno.Yes).Scan(&versions).Error; err != nil {
-		return nil, fmt.Errorf("find active menu access versions: %w", err)
-	}
-	if err := validateMenuAccessVersions(versions); err != nil {
-		return nil, fmt.Errorf("find active menu access versions: %w", err)
-	}
-	return versions, nil
-}
-
-func (r *Repository) LockUserMutationTables(ctx context.Context) error {
-	if err := r.db.WithContext(ctx).Exec("LOCK TABLE user_account IN SHARE ROW EXCLUSIVE MODE").Error; err != nil {
-		return fmt.Errorf("lock user table for menu mutation: %w", err)
-	}
-	return nil
-}
-
-func (r *Repository) LockActiveAccessVersions(ctx context.Context) ([]permissionstate.Version, error) {
-	versions := make([]permissionstate.Version, 0)
-	if err := r.db.WithContext(ctx).Raw(`
-		SELECT app_user.id AS user_id, access_version.version
-		FROM user_account AS app_user
-		JOIN permission_access_version AS access_version
-		  ON access_version.user_id = app_user.id
-		WHERE app_user.deleted_at IS NULL
-		  AND app_user.is_enabled = ?
-		ORDER BY app_user.id ASC
-		FOR UPDATE OF app_user, access_version`, yesno.Yes).Scan(&versions).Error; err != nil {
-		return nil, fmt.Errorf("lock active menu access versions: %w", err)
-	}
-	if err := validateMenuAccessVersions(versions); err != nil {
-		return nil, fmt.Errorf("lock active menu access versions: %w", err)
-	}
-	return versions, nil
-}
-
-func (r *Repository) IncrementAccessVersions(ctx context.Context, userIDs []int64, now time.Time) (map[int64]int64, error) {
-	userIDs, err := normalizeMenuAccessUserIDs(userIDs)
-	if err != nil {
-		return nil, err
-	}
-	if len(userIDs) == 0 {
-		return map[int64]int64{}, nil
-	}
-	advanced := make([]permissionstate.Version, 0, len(userIDs))
-	if err := r.db.WithContext(ctx).Raw(`
-		UPDATE permission_access_version
-		SET version = version + 1, updated_at = ?
-		WHERE user_id IN ?
-		RETURNING user_id, version`, now.UTC(), userIDs).Scan(&advanced).Error; err != nil {
-		return nil, fmt.Errorf("increment menu access versions: %w", err)
-	}
-	sortMenuAccessVersions(advanced)
-	if err := validateMenuAccessVersions(advanced); err != nil {
-		return nil, fmt.Errorf("increment menu access versions: %w", err)
-	}
-	result := make(map[int64]int64, len(advanced))
-	for _, version := range advanced {
-		result[version.UserID] = version.Version
-	}
-	if len(result) != len(userIDs) {
-		return nil, fmt.Errorf("increment menu access versions returned %d users, want %d", len(result), len(userIDs))
-	}
-	for _, userID := range userIDs {
-		if result[userID] < 2 {
-			return nil, fmt.Errorf("increment menu access version for user %d is missing", userID)
-		}
-	}
-	return result, nil
-}
-
-func sortMenuAccessVersions(versions []permissionstate.Version) {
-	sort.Slice(versions, func(left, right int) bool {
-		return versions[left].UserID < versions[right].UserID
-	})
-}
-
-func validateMenuAccessVersions(versions []permissionstate.Version) error {
-	previousUserID := int64(0)
-	for index, version := range versions {
-		if version.UserID < 1 || version.Version < 1 {
-			return fmt.Errorf("menu access version at index %d is invalid", index)
-		}
-		if index > 0 && version.UserID <= previousUserID {
-			return fmt.Errorf("menu access versions are not unique and sorted")
-		}
-		previousUserID = version.UserID
-	}
-	return nil
-}
-
-func normalizeMenuAccessUserIDs(userIDs []int64) ([]int64, error) {
-	normalized := append([]int64(nil), userIDs...)
-	sort.Slice(normalized, func(left, right int) bool { return normalized[left] < normalized[right] })
-	result := normalized[:0]
-	for _, userID := range normalized {
-		if userID < 1 {
-			return nil, fmt.Errorf("menu access user id is invalid")
-		}
-		if len(result) == 0 || result[len(result)-1] != userID {
-			result = append(result, userID)
-		}
-	}
-	return result, nil
 }
 
 func (r *Repository) UpdateMenu(ctx context.Context, id int64, values UpdateValues, updatedAt time.Time) error {

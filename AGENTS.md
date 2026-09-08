@@ -81,7 +81,7 @@ view -> api/<module>.ts -> utils/request.ts -> Go API
   action code 再校验。
 - `is_hidden = 1` 只隐藏侧边菜单，隐藏页面仍由 Access 快照动态注册；`menuTree` 只包含 directory/page，
   action 只进入 `permissionCodes`。
-- 权限事实层级固定为 PostgreSQL -> Redis -> 进程内缓存。进程内缓存必须先经 Redis 确认 access version；
+- 权限事实层级固定为 PostgreSQL -> Redis -> 进程内缓存。进程内缓存必须先经 Redis 确认用户授权版本与平台菜单版本；
   Redis 故障或版本无法确认时不得返回旧缓存、空权限或假成功。
 - 个人资料固定使用隐藏 page `user:profile:view`，读取 `user:profile:detail`，保存
   `user:profile:update`，改密 `user:password:update`。

@@ -536,7 +536,7 @@ func TestServiceDeleteRollsBackRoleMenusWhenMenuWriteFails(t *testing.T) {
 	}
 }
 
-func TestServiceMenuMutationsAdvanceAllActiveAccessVersions(t *testing.T) {
+func TestServiceMenuMutationsAdvanceCatalogWithoutTouchingUserVersions(t *testing.T) {
 	tx, ctx := openMenuTransaction(t)
 	if err := tx.WithContext(ctx).Unscoped().Exec("DELETE FROM permission_role_menu").Error; err != nil {
 		t.Fatal(err)
@@ -555,7 +555,7 @@ func TestServiceMenuMutationsAdvanceAllActiveAccessVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertMenuAccessVersions(t, tx, ctx, accessStates, []testUser{first, second}, 2)
+	assertMenuCatalogVersion(t, tx, ctx, accessStates, []testUser{first, second}, 2)
 	if got := readMenuAccessVersion(t, tx, ctx, disabled.ID); got != 1 {
 		t.Fatalf("disabled user access version = %d", got)
 	}
@@ -564,7 +564,7 @@ func TestServiceMenuMutationsAdvanceAllActiveAccessVersions(t *testing.T) {
 	if err := service.Update(ctx, id, update); err != nil {
 		t.Fatal(err)
 	}
-	assertMenuAccessVersions(t, tx, ctx, accessStates, []testUser{first, second}, 3)
+	assertMenuCatalogVersion(t, tx, ctx, accessStates, []testUser{first, second}, 3)
 	var afterUpdate Menu
 	if err := tx.WithContext(ctx).Take(&afterUpdate, id).Error; err != nil {
 		t.Fatal(err)
@@ -572,7 +572,7 @@ func TestServiceMenuMutationsAdvanceAllActiveAccessVersions(t *testing.T) {
 	if err := service.Update(ctx, id, update); err != nil {
 		t.Fatal(err)
 	}
-	if got := readMenuAccessVersion(t, tx, ctx, first.ID); got != 3 {
+	if got := readMenuAccessVersion(t, tx, ctx, first.ID); got != 1 {
 		t.Fatalf("no-op update access version = %d", got)
 	}
 	var afterNoOp Menu
@@ -583,18 +583,18 @@ func TestServiceMenuMutationsAdvanceAllActiveAccessVersions(t *testing.T) {
 	if err := service.UpdateStatus(ctx, id, yesno.No); err != nil {
 		t.Fatal(err)
 	}
-	assertMenuAccessVersions(t, tx, ctx, accessStates, []testUser{first, second}, 4)
+	assertMenuCatalogVersion(t, tx, ctx, accessStates, []testUser{first, second}, 4)
 	if err := service.UpdateStatus(ctx, id, yesno.No); err != nil {
 		t.Fatal(err)
 	}
-	if got := readMenuAccessVersion(t, tx, ctx, first.ID); got != 4 {
+	if got := readMenuAccessVersion(t, tx, ctx, first.ID); got != 1 {
 		t.Fatalf("no-op status access version = %d", got)
 	}
 
 	if err := service.Delete(ctx, id); err != nil {
 		t.Fatal(err)
 	}
-	assertMenuAccessVersions(t, tx, ctx, accessStates, []testUser{first, second}, 5)
+	assertMenuCatalogVersion(t, tx, ctx, accessStates, []testUser{first, second}, 5)
 }
 
 func TestServiceMenuRedisFailurePreventsPostgreSQLMutation(t *testing.T) {
@@ -616,7 +616,7 @@ func TestServiceMenuRedisFailurePreventsPostgreSQLMutation(t *testing.T) {
 	}
 }
 
-func TestConcurrentMenuMutationRechecksChangedActiveUsers(t *testing.T) {
+func TestConcurrentMenuMutationDoesNotLockUserStatus(t *testing.T) {
 	db, ctx := openMenuDatabase(t)
 	repository := NewRepository(db)
 	base := Menu{PlatformID: testAdminPlatformID(t, db, ctx), MenuType: TypeDirectory, Name: "Base", Code: "base", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes}
@@ -629,7 +629,7 @@ func TestConcurrentMenuMutationRechecksChangedActiveUsers(t *testing.T) {
 		t.Fatal(blocker.Error)
 	}
 	t.Cleanup(func() { _ = blocker.Rollback().Error })
-	if _, err := NewRepository(blocker).LockActiveMenus(ctx); err != nil {
+	if _, err := NewRepository(blocker).LockPlatformMenus(ctx, testAdminPlatformID(t, db, ctx)); err != nil {
 		t.Fatal(err)
 	}
 	service, states, _ := newMenuMutationTestService(t, NewRepository(db))
@@ -638,7 +638,7 @@ func TestConcurrentMenuMutationRechecksChangedActiveUsers(t *testing.T) {
 		_, err := createAdminMenu(t, service, ctx, CreateInput{MenuType: TypeDirectory, Name: "Reports", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
 		done <- err
 	}()
-	waitForMenuAccessState(t, states, active.ID, permissionstate.StateInvalidating)
+	waitForMenuAccessState(t, states, testAdminPlatformID(t, db, ctx), permissionstate.StateInvalidating)
 	if err := db.WithContext(ctx).Model(&testUser{}).Where("id = ?", active.ID).Update("is_enabled", yesno.No).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -656,8 +656,8 @@ func TestConcurrentMenuMutationRechecksChangedActiveUsers(t *testing.T) {
 	if got := readMenuAccessVersion(t, db, ctx, active.ID); got != 1 {
 		t.Fatalf("disabled candidate access version = %d", got)
 	}
-	state, found, err := states.Read(ctx, active.ID)
-	if err != nil || !found || state.State != permissionstate.StateReady || state.Version != 1 {
+	state, found, err := states.Read(ctx, testAdminPlatformID(t, db, ctx))
+	if err != nil || !found || state.State != permissionstate.StateReady || state.Version != 2 {
 		t.Fatalf("restored access state = %+v found=%v error=%v", state, found, err)
 	}
 }
@@ -675,7 +675,7 @@ func TestServiceMenuTransactionFailureRestoresAccessStateAndVersion(t *testing.T
 	if got := readMenuAccessVersion(t, tx, ctx, active.ID); got != 1 {
 		t.Fatalf("rolled-back access version = %d", got)
 	}
-	state, found, err := states.Read(ctx, active.ID)
+	state, found, err := states.Read(ctx, testAdminPlatformID(t, tx, ctx))
 	if err != nil || !found || state.State != permissionstate.StateReady || state.Version != 1 {
 		t.Fatalf("restored access state = %+v found=%v error=%v", state, found, err)
 	}
@@ -702,8 +702,8 @@ func TestServiceMenuPublishFailureLeavesCommittedVersionUnreachable(t *testing.T
 		_, err := createAdminMenu(t, service, ctx, CreateInput{MenuType: TypeDirectory, Name: "Publish", Code: "publish:failure", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
 		done <- err
 	}()
-	waitForMenuAccessState(t, states, active.ID, permissionstate.StateInvalidating)
-	if err := redisClient.Delete(ctx, permissionstate.StateKey(active.ID)); err != nil {
+	waitForMenuAccessState(t, states, testAdminPlatformID(t, db, ctx), permissionstate.StateInvalidating)
+	if err := redisClient.Delete(ctx, permissionstate.MenuStateKey(testAdminPlatformID(t, db, ctx))); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -718,10 +718,10 @@ func TestServiceMenuPublishFailureLeavesCommittedVersionUnreachable(t *testing.T
 	if err := db.WithContext(ctx).Model(&Menu{}).Where("code = ?", "publish:failure").Count(&count).Error; err != nil {
 		t.Fatal(err)
 	}
-	if count != 1 || readMenuAccessVersion(t, db, ctx, active.ID) != 2 {
+	if count != 1 || readMenuAccessVersion(t, db, ctx, active.ID) != 1 {
 		t.Fatalf("committed PostgreSQL state: menuCount=%d", count)
 	}
-	if _, found, err := states.Read(ctx, active.ID); err != nil || found {
+	if _, found, err := states.Read(ctx, testAdminPlatformID(t, db, ctx)); err != nil || found {
 		t.Fatalf("old access state remained reachable: found=%v error=%v", found, err)
 	}
 }
@@ -750,11 +750,12 @@ func newMenuTestService(t *testing.T, repository *Repository) *Service {
 	return service
 }
 
-func newMenuMutationTestService(t *testing.T, repository *Repository) (*Service, *permissionstate.Store, *projectredis.Client) {
+func newMenuMutationTestService(t *testing.T, repository *Repository) (*Service, *permissionstate.MenuStore, *projectredis.Client) {
 	t.Helper()
 	redisClient := openMenuTestRedis(t)
-	accessStates := permissionstate.NewStore(redisClient)
-	return NewService(repository, permissionstate.NewInvalidator(accessStates)), accessStates, redisClient
+
+	menuStates := permissionstate.NewMenuStore(redisClient)
+	return NewService(repository, menuStates), menuStates, redisClient
 }
 
 func openMenuTestRedis(t *testing.T) *projectredis.Client {
@@ -779,7 +780,7 @@ func openMenuTestRedis(t *testing.T) *projectredis.Client {
 	if err != nil {
 		t.Fatalf("open test Redis database 12: %v", err)
 	}
-	if err := client.ScanDelete(context.Background(), "authz:permission-state:v3:*"); err != nil {
+	if err := client.ScanDelete(context.Background(), "authz:*"); err != nil {
 		_ = client.Close()
 		t.Fatalf("clean test Redis database 12: %v", err)
 	}
@@ -797,20 +798,24 @@ func readMenuAccessVersion(t *testing.T, tx *gorm.DB, ctx context.Context, userI
 	return version
 }
 
-func assertMenuAccessVersions(t *testing.T, tx *gorm.DB, ctx context.Context, states *permissionstate.Store, users []testUser, version int64) {
+func assertMenuCatalogVersion(t *testing.T, tx *gorm.DB, ctx context.Context, states *permissionstate.MenuStore, users []testUser, version int64) {
 	t.Helper()
-	for _, target := range users {
-		if got := readMenuAccessVersion(t, tx, ctx, target.ID); got != version {
-			t.Fatalf("user %d access version = %d, want %d", target.ID, got, version)
-		}
-		state, found, err := states.Read(context.Background(), target.ID)
-		if err != nil || !found || state.State != permissionstate.StateReady || state.Version != version {
-			t.Fatalf("user %d access state = %+v found=%v error=%v", target.ID, state, found, err)
+	for _, user := range users {
+		if got := readMenuAccessVersion(t, tx, ctx, user.ID); got != 1 {
+			t.Fatalf("menu mutation changed user version: %d", got)
 		}
 	}
+	platformID := testAdminPlatformID(t, tx, ctx)
+	actual, err := NewRepository(tx).FindMenuVersion(ctx, platformID)
+	if err != nil || actual != version {
+		t.Fatalf("catalog revision=%d want=%d err=%v", actual, version, err)
+	}
+	state, found, err := states.Read(ctx, platformID)
+	if err != nil || !found || state.State != permissionstate.StateReady || state.Version != version {
+		t.Fatalf("catalog state=%+v found=%v err=%v", state, found, err)
+	}
 }
-
-func waitForMenuAccessState(t *testing.T, states *permissionstate.Store, userID int64, wanted string) {
+func waitForMenuAccessState(t *testing.T, states *permissionstate.MenuStore, userID int64, wanted string) {
 	t.Helper()
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {

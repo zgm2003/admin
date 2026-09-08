@@ -191,6 +191,16 @@ describe('auth API', () => {
     ).rejects.toThrow('send code.expiresAt must be a timestamp')
   })
 
+  it('accepts zero resend wait when shared mail quota remains', async () => {
+    requestMock.mockResolvedValue({
+      challengeId: 'challenge-1',
+      expiresAt: '2026-09-08T10:00:00Z',
+      resendAfterSeconds: 0,
+    })
+    const result = await sendLoginCode('admin@example.com', 'email', 'login', 'challenge-1')
+    expect(result.resendAfterSeconds).toBe(0)
+  })
+
   it('rejects a missing or invalid resend window', async () => {
     requestMock.mockResolvedValue({
       challengeId: 'challenge-1',
@@ -203,11 +213,11 @@ describe('auth API', () => {
     requestMock.mockResolvedValue({
       challengeId: 'challenge-1',
       expiresAt: '2026-09-07T10:00:00Z',
-      resendAfterSeconds: 0,
+      resendAfterSeconds: -1,
     })
     await expect(
       sendLoginCode('admin@example.com', 'email', 'login', 'challenge-1'),
-    ).rejects.toThrow('send code.resendAfterSeconds must be between 1 and 86400')
+    ).rejects.toThrow('send code.resendAfterSeconds must be between 0 and 86400')
 
     requestMock.mockResolvedValue({
       challengeId: 'challenge-1',
@@ -216,7 +226,7 @@ describe('auth API', () => {
     })
     await expect(
       sendLoginCode('admin@example.com', 'email', 'login', 'challenge-1'),
-    ).rejects.toThrow('send code.resendAfterSeconds must be between 1 and 86400')
+    ).rejects.toThrow('send code.resendAfterSeconds must be between 0 and 86400')
 
     requestMock.mockResolvedValue({
       challengeId: 'challenge-1',

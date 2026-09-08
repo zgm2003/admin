@@ -11,7 +11,15 @@ import (
 )
 
 type Store struct {
-	redis *projectredis.Client
+	redis     *projectredis.Client
+	keyPrefix string
+}
+
+func (s *Store) key(id int64) string {
+	if s.keyPrefix != "" {
+		return fmt.Sprintf("%s%d", s.keyPrefix, id)
+	}
+	return StateKey(id)
 }
 
 func NewStore(redis *projectredis.Client) *Store {
@@ -19,7 +27,7 @@ func NewStore(redis *projectredis.Client) *Store {
 }
 
 func (s *Store) Read(ctx context.Context, userID int64) (State, bool, error) {
-	raw, found, err := s.redis.GetString(ctx, StateKey(userID))
+	raw, found, err := s.redis.GetString(ctx, s.key(userID))
 	if err != nil || !found {
 		return State{}, found, err
 	}
@@ -39,14 +47,14 @@ func (s *Store) InstallReadyIfMissing(ctx context.Context, version Version) (Sta
 	if err != nil {
 		return State{}, false, err
 	}
-	installed, err := s.redis.SetStringIfMissing(ctx, StateKey(version.UserID), payload, 0)
+	installed, err := s.redis.SetStringIfMissing(ctx, s.key(version.UserID), payload, 0)
 	if err != nil {
 		return State{}, false, err
 	}
 	if installed {
 		return desired, true, nil
 	}
-	raw, found, err := s.redis.GetString(ctx, StateKey(version.UserID))
+	raw, found, err := s.redis.GetString(ctx, s.key(version.UserID))
 	if err != nil {
 		return State{}, false, err
 	}
@@ -57,7 +65,7 @@ func (s *Store) InstallReadyIfMissing(ctx context.Context, version Version) (Sta
 	if decodeErr == nil {
 		return current, false, nil
 	}
-	result, err := s.redis.EvalString(ctx, repairStateScript, []string{StateKey(version.UserID)}, raw, payload)
+	result, err := s.redis.EvalString(ctx, repairStateScript, []string{s.key(version.UserID)}, raw, payload)
 	if err != nil {
 		return State{}, false, err
 	}
@@ -84,7 +92,7 @@ func (s *Store) RebuildReadyState(ctx context.Context, versions []Version) error
 		if err != nil {
 			return err
 		}
-		keys[index] = StateKey(version.UserID)
+		keys[index] = s.key(version.UserID)
 		args = append(args, payload)
 	}
 	if len(keys) == 0 {

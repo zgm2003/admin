@@ -14,6 +14,7 @@ import (
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/permission/state"
 	projectredis "admin/server/internal/redis"
+	"admin/server/internal/shared/cachefill"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -39,13 +40,20 @@ func NewSnapshotCache(redis *projectredis.Client) *SnapshotCache {
 	return &SnapshotCache{redis: redis}
 }
 
-func SnapshotKey(platform string, policyVersion, userID, version int64) string {
-	return "authz:permission:v5:" + platform + ":" + strconv.FormatInt(policyVersion, 10) + ":" +
-		strconv.FormatInt(userID, 10) + ":" + strconv.FormatInt(version, 10)
+func (c *SnapshotCache) acquireFill(ctx context.Context, target string) (*cachefill.Lease, error) {
+	if c == nil || c.redis == nil {
+		return nil, fmt.Errorf("access cache unavailable")
+	}
+	return cachefill.Try(ctx, c.redis.UniversalClient(), "permission-access", target)
 }
 
-func (c *SnapshotCache) Read(ctx context.Context, platformID int64, platform string, policyVersion, userID, version int64) (CachedSnapshot, bool, error) {
-	key := SnapshotKey(platform, policyVersion, userID, version)
+func SnapshotKey(platform string, policyVersion, userID, version, menuVersion int64) string {
+	return "authz:permission:v6:" + platform + ":" + strconv.FormatInt(policyVersion, 10) + ":" +
+		strconv.FormatInt(userID, 10) + ":" + strconv.FormatInt(version, 10) + ":" + strconv.FormatInt(menuVersion, 10)
+}
+
+func (c *SnapshotCache) Read(ctx context.Context, platformID int64, platform string, policyVersion, userID, version, menuVersion int64) (CachedSnapshot, bool, error) {
+	key := SnapshotKey(platform, policyVersion, userID, version, menuVersion)
 	raw, found, err := c.redis.GetString(ctx, key)
 	if err != nil || !found {
 		return CachedSnapshot{}, found, err
@@ -60,7 +68,7 @@ func (c *SnapshotCache) Read(ctx context.Context, platformID int64, platform str
 	return snapshot, true, nil
 }
 
-func (c *SnapshotCache) PublishIfCurrent(ctx context.Context, snapshot CachedSnapshot, ttl time.Duration) (bool, error) {
+func (c *SnapshotCache) PublishIfCurrent(ctx context.Context, snapshot CachedSnapshot, ttl time.Duration, menuVersion int64) (bool, error) {
 	if err := validateCachedSnapshot(snapshot); err != nil {
 		return false, err
 	}
@@ -72,9 +80,10 @@ func (c *SnapshotCache) PublishIfCurrent(ctx context.Context, snapshot CachedSna
 		return false, fmt.Errorf("encode access snapshot: %w", err)
 	}
 	result, err := c.redis.EvalString(ctx, publishPermissionSnapshotScript, []string{
-		SnapshotKey(snapshot.Platform, snapshot.PolicyVersion, snapshot.UserID, snapshot.Version),
+		SnapshotKey(snapshot.Platform, snapshot.PolicyVersion, snapshot.UserID, snapshot.Version, menuVersion),
 		permissionstate.StateKey(snapshot.UserID),
-	}, string(payload), snapshot.Version, ttl.Milliseconds())
+		permissionstate.MenuStateKey(snapshot.PlatformID),
+	}, string(payload), snapshot.Version, ttl.Milliseconds(), menuVersion)
 	if err != nil {
 		return false, err
 	}
@@ -232,6 +241,10 @@ func sortUniqueStrings(values []string) ([]string, error) {
 }
 
 const publishPermissionSnapshotScript = `
+local menu = redis.call('GET',KEYS[3])
+if not menu then return 'missing' end
+local catalog = cjson.decode(menu)
+if catalog.state ~= 'ready' or catalog.version ~= tonumber(ARGV[4]) then return 'changed' end
 local state = redis.call('GET', KEYS[2])
 if not state then return 'missing' end
 local decoded = cjson.decode(state)

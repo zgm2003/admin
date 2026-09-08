@@ -109,7 +109,7 @@ export interface MenuStatusResult {
 }
 
 export interface RebuildAccessCacheResult {
-  rebuiltUsers: number
+  rebuiltPlatforms: number
 }
 
 export async function getMenus(query?: MenuListQuery): Promise<MenuCatalogResponse> {
@@ -172,11 +172,14 @@ export async function rebuildAccessCache(): Promise<RebuildAccessCacheResult> {
       method: 'POST',
       url: '/api/admin/v1/permission/menu/access-cache/rebuild',
     }),
-    ['rebuiltUsers'],
+    ['rebuiltPlatforms'],
     'rebuild access cache result',
   )
   return {
-    rebuiltUsers: expectInteger(value.rebuiltUsers, 'rebuild access cache result.rebuiltUsers'),
+    rebuiltPlatforms: expectInteger(
+      value.rebuiltPlatforms,
+      'rebuild access cache result.rebuiltPlatforms',
+    ),
   }
 }
 

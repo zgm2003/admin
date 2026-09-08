@@ -20,8 +20,8 @@ type limiterStub struct {
 	err     error
 }
 
-func (s limiterStub) Allow(context.Context, ...LimitRequest) (bool, error) {
-	return s.allowed, s.err
+func (s limiterStub) Reserve(context.Context, ...LimitRequest) (LimitResult, error) {
+	return LimitResult{Allowed: s.allowed, RetryAfterSeconds: 60}, s.err
 }
 
 type recordingLimiter struct {
@@ -30,9 +30,9 @@ type recordingLimiter struct {
 	err      error
 }
 
-func (l *recordingLimiter) Allow(_ context.Context, requests ...LimitRequest) (bool, error) {
+func (l *recordingLimiter) Reserve(_ context.Context, requests ...LimitRequest) (LimitResult, error) {
 	l.requests = append(l.requests, requests...)
-	return l.allowed, l.err
+	return LimitResult{Allowed: l.allowed, RetryAfterSeconds: 60}, l.err
 }
 
 type ruleEvaluatorStub struct {
@@ -654,7 +654,7 @@ func TestSendPreparedEmailVerifyCodeRejectsInvalidInput(t *testing.T) {
 		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(5 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 0, ResendAfterSeconds: 60}},
 		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(-time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}},
 		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(10 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}},
-		{PlatformID: 1, ChallengeID: "resend-zero", Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(5 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 0}},
+		{PlatformID: 1, ChallengeID: "resend-negative", Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(5 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: -1}},
 		{PlatformID: 1, ChallengeID: "resend-too-large", Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(5 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 86401}},
 	} {
 		_, err := service.SendPreparedEmailVerifyCode(ctx, in)
