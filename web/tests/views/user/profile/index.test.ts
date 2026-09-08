@@ -8,6 +8,7 @@ import { appI18n, setLocale } from '@/i18n'
 import * as profileAPI from '@/api/user/profile'
 import ProfilePage from '@/views/user/profile/index.vue'
 import UpMedia from '@/components/UpMedia/index.vue'
+import ProfileHero from '@/views/user/profile/components/ProfileHero/index.vue'
 import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
 
@@ -100,6 +101,11 @@ describe('account profile permissions', () => {
 
     const media = wrapper.findComponent(UpMedia)
     expect(media.props('modelValue')).toBe('avatar/old.png')
+    media.vm.$emit('preview-change', 'https://cdn.example/avatar/old.png')
+    await flushPromises()
+    expect(wrapper.getComponent(ProfileHero).props('avatarUrl')).toBe(
+      'https://cdn.example/avatar/old.png',
+    )
     media.vm.$emit('update:modelValue', 'avatar/new.png')
     await wrapper.get('[data-testid="account-profile-save"]').trigger('click')
     await flushPromises()

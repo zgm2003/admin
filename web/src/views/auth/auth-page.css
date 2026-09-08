@@ -1,0 +1,479 @@
+/* Shared login and password-recovery surface. */
+
+.auth-page {
+  position: relative;
+  display: flex;
+  min-height: 100%;
+  overflow: hidden auto;
+  color: var(--el-text-color-primary);
+  background: var(--el-bg-color-page);
+}
+
+/* —— 入场动效 —— */
+.auth-anim {
+  opacity: 0;
+  animation: auth-rise 0.6s cubic-bezier(0.22, 0.8, 0.32, 1) forwards;
+  animation-delay: var(--d, 0ms);
+}
+
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* —— 舞台：品牌区 + 表单区 —— */
+.auth-stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  width: min(1120px, 100%);
+  min-height: 100dvh;
+  margin: auto;
+  padding: 72px 48px;
+  gap: 56px;
+}
+
+.auth-brand {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.auth-brand__identity {
+  display: flex;
+  align-items: center;
+  margin-bottom: 44px;
+  gap: 14px;
+}
+
+.auth-brand__logo {
+  width: auto;
+  height: 48px;
+  object-fit: contain;
+  transition: transform 0.45s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+.auth-brand__identity:hover .auth-brand__logo {
+  transform: rotate(10deg) scale(1.06);
+}
+
+.auth-brand__name {
+  display: block;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.auth-brand__tag {
+  display: block;
+  margin-top: 2px;
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.auth-brand__message h1 {
+  max-width: 460px;
+  margin: 0;
+  font-size: 46px;
+  font-weight: 800;
+  line-height: 1.16;
+  letter-spacing: 0;
+  text-wrap: balance;
+  color: var(--el-text-color-primary);
+}
+
+.auth-brand__message > p {
+  max-width: 420px;
+  margin: 20px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.auth-brand__points {
+  display: grid;
+  max-width: 430px;
+  margin: 44px 0 0;
+  padding: 0;
+  gap: 14px;
+  list-style: none;
+}
+
+.auth-brand__points li {
+  display: flex;
+  align-items: center;
+  padding: 13px 16px;
+  gap: 12px;
+  color: var(--el-text-color-regular);
+  font-size: 13.5px;
+  line-height: 1.5;
+  background: color-mix(in srgb, var(--el-bg-color) 72%, transparent);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 8px;
+  box-shadow: var(--admin-shadow-sm);
+  backdrop-filter: blur(8px);
+  transition:
+    transform 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.auth-brand__points li:hover {
+  border-color: var(--el-color-primary-light-7);
+  box-shadow: var(--admin-shadow-md);
+  transform: translateX(8px);
+}
+
+.auth-brand__point-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+/* —— 表单面板：玻璃拟态卡片 —— */
+.auth-panel-wrap {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.auth-panel {
+  width: min(420px, 100%);
+  padding: 38px 36px 28px;
+  background: color-mix(in srgb, var(--el-bg-color) 84%, transparent);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 8px;
+  box-shadow: var(--admin-shadow-lg);
+  backdrop-filter: blur(20px);
+}
+
+.auth-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.auth-panel__logo {
+  width: auto;
+  height: 42px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.auth-panel__eyebrow {
+  margin: 0 0 4px;
+  color: var(--el-color-primary);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+.auth-panel h2 {
+  margin: 0;
+  color: var(--admin-text);
+  font-size: 24px;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.auth-caption {
+  margin: 16px 0 26px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.auth-form :deep(.el-form-item) {
+  margin-bottom: 20px;
+}
+
+.auth-form :deep(.el-form-item__label) {
+  width: 100%;
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.auth-form :deep(.el-input__wrapper),
+.auth-form :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--el-border-color) inset;
+  transition:
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.auth-form :deep(.el-input__wrapper.is-focus),
+.auth-form :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px var(--el-color-primary) inset,
+    0 0 0 3px var(--el-color-primary-light-9);
+}
+
+.auth-form :deep(.el-input__prefix .el-icon) {
+  color: var(--el-text-color-placeholder);
+}
+
+/* —— 登录方式：滑动墨水条 Tabs —— */
+.auth-login-type {
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.auth-login-type :deep(.el-tabs__header) {
+  margin-bottom: 0;
+}
+
+.auth-login-type :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background: var(--el-border-color-lighter);
+}
+
+.auth-login-type :deep(.el-tabs__item) {
+  height: 42px;
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+  font-weight: 650;
+  transition: color 0.2s ease;
+}
+
+.auth-login-type :deep(.el-tabs__item:hover) {
+  color: var(--el-text-color-primary);
+}
+
+.auth-login-type :deep(.el-tabs__item.is-active) {
+  color: var(--el-color-primary);
+}
+
+.auth-login-type :deep(.el-tabs__active-bar) {
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--el-color-primary);
+}
+
+/* —— 验证码：label 行内发送链接 + 独占整行的 OTP 单元格 —— */
+.auth-code-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.auth-code-label :deep(.el-button) {
+  height: auto;
+  padding: 0;
+  font-size: 13px;
+}
+
+.auth-otp {
+  --el-input-otp-gap: 8px;
+  --el-input-otp-size: 48px;
+  width: 100%;
+}
+
+.auth-otp :deep(.el-input-otp__input-field) {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  border-radius: 8px;
+  font-size: 17px;
+  font-weight: 700;
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.auth-otp :deep(.el-input-otp__input-field:focus-within) {
+  box-shadow:
+    0 0 0 1px var(--el-color-primary) inset,
+    0 0 0 3px var(--el-color-primary-light-9);
+  transform: translateY(-1px);
+}
+
+/* —— 邮箱 + 发送按钮行（忘记密码第一步） —— */
+.auth-code-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+}
+
+.auth-code-row > .el-button {
+  flex: 0 0 auto;
+  min-width: 118px;
+  border-radius: 8px;
+}
+
+.auth-hint {
+  margin: -8px 0 16px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.auth-submit {
+  width: 100%;
+  height: 46px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  background: var(--el-color-primary);
+  box-shadow: 0 8px 18px var(--el-color-primary-light-7);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    filter 0.18s ease;
+}
+
+.auth-submit:hover {
+  filter: brightness(1.04);
+  box-shadow: 0 10px 22px var(--el-color-primary-light-7);
+  transform: translateY(-1px);
+}
+
+.auth-submit:active {
+  transform: translateY(0);
+}
+
+.auth-forgot {
+  margin-top: 14px;
+  text-align: center;
+}
+
+.auth-forgot a {
+  color: var(--el-color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.auth-forgot a:hover,
+.auth-forgot a:focus-visible {
+  opacity: 0.8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-access-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 24px 0 0;
+  gap: 6px;
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
+}
+
+.auth-error {
+  margin: 0 0 16px;
+  padding: 11px 13px;
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+  border: 1px solid var(--el-color-danger-light-8);
+  border-radius: var(--admin-radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.auth-config-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 50px;
+  margin: 0 0 16px;
+  padding: 11px 13px;
+  gap: 12px;
+  color: var(--el-text-color-regular);
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-color-warning-light-7);
+  border-radius: var(--admin-radius-sm);
+  font-size: 13px;
+}
+
+.auth-config-error p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.auth-config-error .el-button {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 900px) {
+  .auth-stage {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: auto;
+    padding: 84px 22px 40px;
+    gap: 26px;
+  }
+
+  .auth-brand__message,
+  .auth-brand__points {
+    display: none;
+  }
+
+  .auth-brand__identity {
+    justify-content: center;
+    margin-bottom: 0;
+  }
+
+  .auth-panel {
+    padding: 32px 26px 24px;
+  }
+}
+
+@media (max-width: 420px) {
+  .auth-stage {
+    padding: 78px 14px 28px;
+  }
+
+  .auth-panel {
+    border-radius: 8px;
+  }
+
+  .auth-code-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .auth-code-row > .el-button {
+    width: 100%;
+  }
+
+  .auth-config-error {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-page *,
+  .auth-page *::before,
+  .auth-page *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

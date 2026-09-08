@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { HeaderBreadcrumb } from '@/layout/breadcrumbs'
+import logoUrl from '@/assets/logo.png'
 import { LocaleSwitch } from '@/components/LocaleSwitch'
 import SettingDrawer from '@/layout/components/SettingDrawer/index.vue'
 
@@ -14,6 +15,7 @@ defineProps<{
   showBreadcrumb: boolean
   showMenuToggle: boolean
   contentFullscreen: boolean
+  showBrand?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -27,6 +29,10 @@ const settingsOpen = ref(false)
 <template>
   <div class="app-header">
     <div class="app-header__leading">
+      <div v-if="showBrand" class="app-header__brand" :aria-label="t('navigation.admin')">
+        <img class="app-header__brand-logo" :src="logoUrl" :alt="t('navigation.admin')" />
+        <span class="app-header__brand-name">{{ t('navigation.admin') }}</span>
+      </div>
       <el-button
         v-if="showMenuToggle"
         data-testid="toggle-menu"
@@ -86,6 +92,25 @@ const settingsOpen = ref(false)
 .app-header__leading {
   min-width: 0;
   gap: 12px;
+}
+
+.app-header__brand {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 9px;
+}
+
+.app-header__brand-logo {
+  width: auto;
+  height: 30px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.app-header__brand-name {
+  font-size: 14px;
+  font-weight: 750;
 }
 
 .app-header__breadcrumb {

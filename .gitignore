@@ -11,3 +11,5 @@ web/node_modules/
 web/dist/
 web/coverage/
 docs/database/backups/
+docs/local-work/*
+!docs/local-work/README.md

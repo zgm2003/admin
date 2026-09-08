@@ -91,6 +91,18 @@ describe('admin layout', () => {
     expect(wrapper.get('.app-header__breadcrumb').text()).toContain('Dashboard')
   })
 
+  it('renders the full-width topbar and hides the workspace header in top layout', async () => {
+    useUIPreferencesStore(pinia).update({ layout: 'top' })
+    const { wrapper } = await mountLayout()
+
+    expect(wrapper.find('.admin-layout__topbar').exists()).toBe(true)
+    expect(wrapper.find('.admin-layout__header').exists()).toBe(false)
+    expect(wrapper.find('.app-header__brand').exists()).toBe(true)
+    expect(wrapper.find('.admin-layout__aside').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="layout-content"]').text()).toContain('dashboard content')
+    expect(wrapper.get('[data-testid="aside-account-name"]').text()).toBe('admin')
+  })
+
   it('renders RouteTabs between Header and Main', async () => {
     const { wrapper } = await mountLayout()
     const order = wrapper

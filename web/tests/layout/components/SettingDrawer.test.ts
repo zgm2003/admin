@@ -46,6 +46,18 @@ describe('SettingDrawer', () => {
     expect(store.persistenceError).toBeNull()
   })
 
+  it('switches the layout mode between side and top', async () => {
+    const store = useUIPreferencesStore()
+    mountDrawer()
+    await flushPromises()
+
+    expect(store.preferences.layout).toBe('side')
+    getControl('layout-mode-top').click()
+    expect(store.preferences.layout).toBe('top')
+    getControl('layout-mode-side').click()
+    expect(store.preferences.layout).toBe('side')
+  })
+
   it('keeps RouteTabs visible as the fullscreen exit path', async () => {
     mountDrawer({ contentFullscreen: true })
     await flushPromises()

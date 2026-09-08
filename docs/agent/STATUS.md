@@ -28,8 +28,7 @@
   前端 `pnpm typecheck` 通过；Role Matrix、Role 页面、AuthPlatform 页面、登录页 5 个 Vitest 文件
   59/59 通过。未跑全量测试/构建，浏览器注册、上传与密码流程由维护者人工验收。
 - Agent 在迁移后保持服务关闭；维护者随后于 15:44 从 IDEA 手动启动 API/Worker。当前观察到 API PID 35736、
-  Worker PID 34520，未由 Agent 启动或停止。临时执行清单在
-  `docs/agent/TEMP-2026-09-08-admin-registration-rbac-plan.md`，明确不提交，验收后删除。
+  Worker PID 34520，未由 Agent 启动或停止。Admin/RBAC 临时执行清单已删除，不作为未来上下文。
 
 ## 当前交接：快速收尾（2026-09-08）
 
@@ -415,6 +414,32 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
   `el-select-v2`；架构脚本会拒绝新的原生 `el-select`。定向 4 文件 47 项 Vitest、typecheck、lint、
   `check:architecture` 和生产 build 通过；完整前端 63 文件 449 项 Vitest 全绿，build 仍有既有的 >500 kB
   chunk 提示。
+
+## 前端 UI 整改（2026-09-08）
+
+- 设计基调升级为「现代精致」：`styles/variables.scss` 与 `index.scss` 新增圆角/阴影/渐变令牌
+  （`--admin-radius-*`、`--admin-shadow-*`、`--admin-gradient-*`），暗色有独立阴影覆盖；全局面板圆角
+  8px → 12px。
+- 产品定名「智澜」：`navigation.admin`（zh 智澜 / en Zhilan）、页脚、`index.html` 标题、登录/忘记密码
+  与 Aside/Header 品牌位统一；品牌图标使用 `web/src/assets/logo.png`（黄橙四宫格）。
+- 登录/忘记密码彻底重构：共享 `views/auth/auth-page.scss`（漂移光斑 + 主色点阵 + 玻璃拟态面板 + 入场
+  动效，`prefers-reduced-motion` 降级）；验证码改用 `el-input-otp`（6 位数字 validator）；登录方式保持
+  ElSegmented（测试锚点约束）并重做胶囊滑块样式；新组件 `views/auth/components/AuthDock` 提供页内
+  语言/明暗主题/主色快捷调整。
+- 个人资料重构为身份横幅 + Tab 分区（基本资料/安全设置），首次设密码用户默认落在安全设置 Tab；
+  权限锚点、`UpMedia` 头像、`el-select-v2` 性别契约保持不变。
+- UI 偏好升级 v3：新增 `layout`（side 侧边 / top 顶部通栏），v1/v2 存储自动迁移；设置抽屉改为
+  el-tabs 分组（主题/布局/界面）并新增布局线框预览选择；布局壳统一为 topbar + body 结构，Aside 品牌可
+  用 `show-brand` 隐藏，响应式、移动端抽屉菜单与内容全屏行为不变。
+- canvas 登录页同步改版（React/Tailwind）：真实 logo、漂移光斑 + 点阵背景、入场动效、渐变主按钮，
+  移除无对应概念的「访问密钥」入口；`globals.css` 新增 `canvas-login-orb` 关键帧。
+
+**验证证据**
+
+- 定向 Vitest：认证页、资料页、布局、SettingDrawer、i18n、theme/ui-preferences 等 12 文件 80 项 +
+  品牌替换后 8 文件 52 项，全部通过（含忘记密码页 OTP 用例与 v1→v3 偏好迁移用例）。
+- `pnpm build`（web，含 vue-tsc）通过，仅存既有 >500 kB chunk 提示；`pnpm build`（canvas，含 tsc）通过。
+- 全量 `pnpm verify:frontend` 由维护者执行。
 
 ## 状态条目模板
 

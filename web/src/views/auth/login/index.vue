@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Lock, Message, RefreshRight, User } from '@element-plus/icons-vue'
+import { CircleCheckFilled, Lock, RefreshRight, User } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -13,8 +13,10 @@ import {
   type LoginConfigOption,
   type LoginType,
 } from '@/api/auth/login'
+import logoUrl from '@/assets/logo.png'
 import { useAuthStore } from '@/store/auth'
 import { ApiError } from '@/types/http'
+import AuthDock from '@/views/auth/components/AuthDock/index.vue'
 
 interface LoginForm {
   account: string
@@ -39,6 +41,11 @@ const resendSeconds = ref(0)
 const challengeId = ref(generateChallengeID())
 let countdownTimer: ReturnType<typeof setInterval> | undefined
 const bootstrapError = computed(() => (auth.status === 'error' ? auth.errorMessage : ''))
+const brandPoints = computed(() => [
+  t('auth.brand.pointOne'),
+  t('auth.brand.pointTwo'),
+  t('auth.brand.pointThree'),
+])
 
 const passwordMode = computed(() => activeType.value === 'password')
 const codeMode = computed(() => activeType.value === 'email')
@@ -77,6 +84,10 @@ async function loadLoginConfig(): Promise<void> {
 onUnmounted(() => {
   if (countdownTimer !== undefined) clearInterval(countdownTimer)
 })
+
+function isDigitChar(char: string): boolean {
+  return /^\d$/.test(char)
+}
 
 async function sendCode(): Promise<void> {
   if (sending.value || resendSeconds.value > 0) return
@@ -143,7 +154,12 @@ async function submit(): Promise<void> {
     const currentUser = await getCurrentUser()
     auth.setAuthenticated(currentUser)
     await router.replace(safeRedirect(route.query.redirect))
-    if (currentUser.passwordSetRequired) ElMessage.info(t('user.password.setupReminder'))
+    ElMessage.success(
+      t(credential.isNewUser ? 'auth.login.registeredSuccess' : 'auth.login.success'),
+    )
+    if (currentUser.passwordSetRequired && !credential.isNewUser) {
+      ElMessage.info(t('user.password.setupReminder'))
+    }
   } catch (error: unknown) {
     auth.setAnonymous()
     submitError.value =
@@ -169,131 +185,137 @@ function generateChallengeID(): string {
 
 <template>
   <main class="auth-page">
-    <el-row class="auth-shell">
-      <el-col :xs="24" :sm="24" :md="12" class="auth-brand-col">
-        <section class="auth-brand" data-testid="login-brand" :aria-label="t('navigation.admin')">
-          <div class="auth-brand__identity">
-            <span class="auth-brand__mark" aria-hidden="true">A</span>
-            <span class="auth-brand__name">Admin</span>
+    <AuthDock />
+
+    <div class="auth-stage">
+      <section class="auth-brand" data-testid="login-brand" :aria-label="t('navigation.admin')">
+        <header class="auth-brand__identity auth-anim" style="--d: 0ms">
+          <img class="auth-brand__logo" :src="logoUrl" :alt="t('navigation.admin')" />
+          <div>
+            <span class="auth-brand__name">{{ t('navigation.admin') }}</span>
+            <span class="auth-brand__tag">{{ t('auth.login.eyebrow') }}</span>
           </div>
+        </header>
 
-          <div class="auth-brand__message">
-            <p class="auth-brand__eyebrow">{{ t('auth.login.eyebrow') }}</p>
-            <h1>{{ t('auth.login.heading') }}</h1>
-            <p>{{ t('auth.login.description') }}</p>
-          </div>
+        <div class="auth-brand__message">
+          <h1 class="auth-anim" style="--d: 90ms">{{ t('auth.login.heading') }}</h1>
+          <p class="auth-anim" style="--d: 180ms">{{ t('auth.login.description') }}</p>
+        </div>
 
-          <div class="auth-brand__trace" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-        </section>
-      </el-col>
+        <ul class="auth-brand__points">
+          <li
+            v-for="(point, index) in brandPoints"
+            :key="point"
+            class="auth-anim"
+            :style="{ '--d': `${270 + index * 90}ms` }"
+          >
+            <span class="auth-brand__point-icon" aria-hidden="true">
+              <el-icon><CircleCheckFilled /></el-icon>
+            </span>
+            <span>{{ point }}</span>
+          </li>
+        </ul>
+      </section>
 
-      <el-col :xs="24" :sm="24" :md="12" class="auth-form-col">
-        <div class="auth-form-area">
-          <section class="auth-panel" data-testid="login-panel" aria-labelledby="login-title">
-            <header class="auth-panel__header">
-              <el-icon class="auth-icon"><User /></el-icon>
-              <div>
-                <p class="auth-panel__eyebrow">{{ t('auth.login.eyebrow') }}</p>
-                <h2 id="login-title">{{ t('auth.login.title') }}</h2>
-              </div>
-            </header>
-            <p class="auth-caption">{{ t('auth.login.caption') }}</p>
-
-            <p v-if="bootstrapError" class="auth-error" data-testid="bootstrap-error">
-              {{ bootstrapError }}
-            </p>
-            <p v-if="submitError" class="auth-error" data-testid="login-error">{{ submitError }}</p>
-
-            <div
-              v-if="configFailed"
-              class="auth-config-error"
-              data-testid="login-config-error"
-              role="status"
-            >
-              <p>{{ t('auth.login.configUnavailable') }}</p>
-              <el-button
-                data-testid="login-config-retry"
-                type="primary"
-                plain
-                :loading="loading"
-                :disabled="loading"
-                @click="loadLoginConfig"
-              >
-                <el-icon><RefreshRight /></el-icon>
-                {{ t('auth.login.configRetry') }}
-              </el-button>
+      <section class="auth-panel-wrap">
+        <div
+          class="auth-panel auth-anim"
+          style="--d: 140ms"
+          data-testid="login-panel"
+          aria-labelledby="login-title"
+        >
+          <header class="auth-panel__header">
+            <img class="auth-panel__logo" :src="logoUrl" :alt="t('navigation.admin')" />
+            <div>
+              <p class="auth-panel__eyebrow">{{ t('auth.login.eyebrow') }}</p>
+              <h2 id="login-title">{{ t('auth.login.title') }}</h2>
             </div>
+          </header>
+          <p class="auth-caption">{{ t('auth.login.caption') }}</p>
 
-            <el-form
-              v-if="!loading && options.length > 0"
-              class="auth-form"
-              :model="form"
-              label-position="top"
-              @submit.prevent="submit"
+          <p v-if="bootstrapError" class="auth-error" data-testid="bootstrap-error">
+            {{ bootstrapError }}
+          </p>
+          <p v-if="submitError" class="auth-error" data-testid="login-error">{{ submitError }}</p>
+
+          <div
+            v-if="configFailed"
+            class="auth-config-error"
+            data-testid="login-config-error"
+            role="status"
+          >
+            <p>{{ t('auth.login.configUnavailable') }}</p>
+            <el-button
+              data-testid="login-config-retry"
+              type="primary"
+              plain
+              :loading="loading"
+              :disabled="loading"
+              @click="loadLoginConfig"
             >
-              <el-segmented
-                v-if="options.length > 0"
-                v-model="activeType"
-                class="auth-login-type"
-                :options="options"
-                block
+              <el-icon><RefreshRight /></el-icon>
+              {{ t('auth.login.configRetry') }}
+            </el-button>
+          </div>
+
+          <el-form
+            v-if="!loading && options.length > 0"
+            class="auth-form"
+            :model="form"
+            label-position="top"
+            @submit.prevent="submit"
+          >
+            <el-tabs v-if="options.length > 0" v-model="activeType" class="auth-login-type" stretch>
+              <el-tab-pane
+                v-for="option in options"
+                :key="option.value"
+                :label="option.label"
+                :name="option.value"
               />
+            </el-tabs>
 
-              <el-form-item :label="t('auth.login.account')">
-                <el-input
-                  v-model="form.account"
-                  data-testid="login-account"
-                  type="email"
-                  inputmode="email"
-                  autocomplete="username"
-                  :placeholder="t('auth.login.accountPlaceholder')"
-                  size="large"
-                >
-                  <template #prefix
-                    ><el-icon><User /></el-icon
-                  ></template>
-                </el-input>
-              </el-form-item>
+            <el-form-item :label="t('auth.login.account')">
+              <el-input
+                v-model="form.account"
+                data-testid="login-account"
+                type="email"
+                inputmode="email"
+                autocomplete="username"
+                :placeholder="t('auth.login.accountPlaceholder')"
+                size="large"
+              >
+                <template #prefix
+                  ><el-icon><User /></el-icon
+                ></template>
+              </el-input>
+            </el-form-item>
 
-              <el-form-item v-if="passwordMode" :label="t('auth.login.password')">
-                <el-input
-                  v-model="form.password"
-                  data-testid="login-password"
-                  type="password"
-                  autocomplete="current-password"
-                  :placeholder="t('auth.login.passwordPlaceholder')"
-                  size="large"
-                  show-password
-                >
-                  <template #prefix
-                    ><el-icon><Lock /></el-icon
-                  ></template>
-                </el-input>
-              </el-form-item>
+            <el-form-item v-if="passwordMode" :label="t('auth.login.password')">
+              <el-input
+                v-model="form.password"
+                data-testid="login-password"
+                type="password"
+                autocomplete="current-password"
+                :placeholder="t('auth.login.passwordPlaceholder')"
+                size="large"
+                show-password
+              >
+                <template #prefix
+                  ><el-icon><Lock /></el-icon
+                ></template>
+              </el-input>
+            </el-form-item>
 
-              <el-form-item v-else-if="codeMode" :label="t('auth.login.code')">
-                <div class="auth-code-row">
-                  <el-input
-                    v-model="form.code"
-                    data-testid="login-code"
-                    inputmode="numeric"
-                    maxlength="6"
-                    :placeholder="t('auth.login.codePlaceholder')"
-                    size="large"
-                  >
-                    <template #prefix
-                      ><el-icon><Message /></el-icon
-                    ></template>
-                  </el-input>
+            <el-form-item v-else-if="codeMode">
+              <template #label>
+                <div class="auth-code-label">
+                  <span>{{ t('auth.login.code') }}</span>
                   <el-button
                     data-testid="login-send-code"
+                    text
+                    type="primary"
                     :disabled="sending || resendSeconds > 0 || form.account.trim() === ''"
                     :loading="sending"
-                    size="large"
                     @click="sendCode"
                   >
                     {{
@@ -303,42 +325,45 @@ function generateChallengeID(): string {
                     }}
                   </el-button>
                 </div>
-              </el-form-item>
-              <p
-                v-if="codeMode && allowRegister"
-                class="auth-caption"
-                data-testid="login-register-hint"
-              >
-                {{ t('auth.login.emailAutoRegister') }}
-              </p>
-
-              <el-button
-                data-testid="login-submit"
-                class="auth-submit"
-                type="primary"
-                native-type="submit"
-                size="large"
-                :loading="pending"
-                :disabled="pending"
-              >
-                {{ t('auth.login.submit') }}
-              </el-button>
-
-              <div class="auth-forgot">
-                <router-link data-testid="login-forgot-link" :to="{ path: '/forgot-password' }">
-                  {{ t('auth.login.forgotPassword') }}
-                </router-link>
-              </div>
-            </el-form>
-
-            <p class="auth-access-note">
-              <el-icon><Lock /></el-icon>{{ t('auth.login.authorizedOnly') }}
+              </template>
+              <el-input-otp
+                v-model="form.code"
+                data-testid="login-code"
+                class="auth-otp"
+                :length="6"
+                :validator="isDigitChar"
+              />
+            </el-form-item>
+            <p v-if="codeMode && allowRegister" class="auth-hint" data-testid="login-register-hint">
+              {{ t('auth.login.emailAutoRegister') }}
             </p>
-          </section>
+
+            <el-button
+              data-testid="login-submit"
+              class="auth-submit"
+              type="primary"
+              native-type="submit"
+              size="large"
+              :loading="pending"
+              :disabled="pending"
+            >
+              {{ t('auth.login.submit') }}
+            </el-button>
+
+            <div class="auth-forgot">
+              <router-link data-testid="login-forgot-link" :to="{ path: '/forgot-password' }">
+                {{ t('auth.login.forgotPassword') }}
+              </router-link>
+            </div>
+          </el-form>
+
+          <p class="auth-access-note">
+            <el-icon><Lock /></el-icon>{{ t('auth.login.authorizedOnly') }}
+          </p>
         </div>
-      </el-col>
-    </el-row>
+      </section>
+    </div>
   </main>
 </template>
 
-<style scoped src="./LoginPage.css"></style>
+<style scoped src="../auth-page.css"></style>

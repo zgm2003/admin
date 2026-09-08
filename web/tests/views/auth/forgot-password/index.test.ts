@@ -71,7 +71,8 @@ describe('Forgot password page', () => {
     await wrapper.get('[data-testid="forgot-send-code"]').trigger('click')
     await flushPromises()
 
-    await wrapper.get('[data-testid="forgot-code"]').setValue('123456')
+    wrapper.findComponent({ name: 'ElInputOtp' }).vm.$emit('update:modelValue', '123456')
+    await wrapper.vm.$nextTick()
     await wrapper.get('[data-testid="forgot-new-password"]').setValue('NewPassw0rd!')
     await wrapper.get('[data-testid="forgot-confirm-password"]').setValue('DifferentPass1!')
     await wrapper.get('form').trigger('submit')
@@ -89,7 +90,8 @@ describe('Forgot password page', () => {
     await wrapper.get('[data-testid="forgot-send-code"]').trigger('click')
     await flushPromises()
 
-    await wrapper.get('[data-testid="forgot-code"]').setValue('123456')
+    wrapper.findComponent({ name: 'ElInputOtp' }).vm.$emit('update:modelValue', '123456')
+    await wrapper.vm.$nextTick()
     await wrapper.get('[data-testid="forgot-new-password"]').setValue('NewPassw0rd!')
     await wrapper.get('[data-testid="forgot-confirm-password"]').setValue('NewPassw0rd!')
     await wrapper.get('form').trigger('submit')

@@ -34,7 +34,10 @@ const props = withDefaults(
   },
 )
 
-const emit = defineEmits<{ 'update:modelValue': [value: string | string[]] }>()
+const emit = defineEmits<{
+  'update:modelValue': [value: string | string[]]
+  'preview-change': [value: string]
+}>()
 const { t } = useI18n()
 const inputRef = ref<HTMLInputElement>()
 const loading = ref(false)
@@ -47,6 +50,12 @@ const displayItems = computed(() =>
   values.value.map((objectKey) => ({ objectKey, previewUrl: previewUrls.value[objectKey] ?? '' })),
 )
 const avatarItem = computed(() => displayItems.value[0])
+
+watch(
+  () => avatarItem.value?.previewUrl ?? '',
+  (previewUrl) => emit('preview-change', previewUrl),
+  { immediate: true },
+)
 
 async function hydratePreviews(nextValues: string[]): Promise<void> {
   const missing = nextValues.filter((objectKey) => previewUrls.value[objectKey] === undefined)

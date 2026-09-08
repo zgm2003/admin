@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { requestObjectURL } from '@/api/storage/upload'
+import logoUrl from '@/assets/logo.png'
 import { usePermissionStore } from '@/store/permission'
 import PermissionMenuNode from '@/layout/components/PermissionMenuNode/index.vue'
 
@@ -14,12 +15,14 @@ const props = withDefaults(
   defineProps<{
     collapsed: boolean
     uniqueOpened: boolean
+    showBrand?: boolean
     username?: string
     email?: string
     avatar?: string
     logoutPending?: boolean
   }>(),
   {
+    showBrand: true,
     username: '',
     email: '',
     avatar: '',
@@ -85,9 +88,9 @@ function handleAccountCommand(command: string | number | object): void {
     :data-collapsed="String(collapsed)"
     :aria-label="t('navigation.main')"
   >
-    <div class="app-aside__brand" aria-label="Admin">
-      <span class="app-aside__mark">A</span>
-      <span v-show="!collapsed" class="app-aside__name">Admin</span>
+    <div v-if="showBrand" class="app-aside__brand" :aria-label="t('navigation.admin')">
+      <img class="app-aside__logo" :src="logoUrl" :alt="t('navigation.admin')" />
+      <span v-show="!collapsed" class="app-aside__name">{{ t('navigation.admin') }}</span>
     </div>
 
     <el-menu
@@ -175,17 +178,11 @@ function handleAccountCommand(command: string | number | object): void {
   gap: 10px;
 }
 
-.app-aside__mark {
-  display: grid;
-  width: 30px;
+.app-aside__logo {
+  width: auto;
   height: 30px;
-  flex: 0 0 30px;
-  place-items: center;
-  color: var(--el-color-white);
-  background: var(--el-color-primary);
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 800;
+  flex: 0 0 auto;
+  object-fit: contain;
 }
 
 .app-aside__name {

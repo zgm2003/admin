@@ -459,8 +459,35 @@
     mix-blend-mode: normal;
 }
 
+@layer utilities {
+    .canvas-login-orb {
+        animation: canvas-login-orb 18s ease-in-out infinite alternate;
+    }
+
+    .canvas-login-orb--slow {
+        animation-direction: alternate-reverse;
+        animation-duration: 24s;
+    }
+
+    @keyframes canvas-login-orb {
+        from {
+            transform: translate3d(0, 0, 0) scale(1);
+        }
+
+        to {
+            transform: translate3d(40px, 30px, 0) scale(1.08);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .canvas-login-orb {
+            animation: none;
+        }
+    }
+}
+
 .agent-streamdown {
-    overflow-wrap: anywhere;
+  overflow-wrap: anywhere;
 }
 
 .agent-streamdown > :first-child {

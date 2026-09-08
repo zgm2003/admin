@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessage } from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -42,7 +42,7 @@ describe('Login page', () => {
 
   it('renders the product identity and a login form', async () => {
     const { wrapper } = await mountLogin()
-    expect(wrapper.get('[data-testid="login-brand"]').text()).toContain('Admin')
+    expect(wrapper.get('[data-testid="login-brand"]').text()).toContain('智澜')
     expect(wrapper.find('[data-testid="login-panel"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="login-account"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="login-password"]').exists()).toBe(true)
@@ -76,6 +76,7 @@ describe('Login page', () => {
   })
 
   it('submits a password login, loads me, and follows a safe redirect', async () => {
+    const successSpy = vi.spyOn(ElMessage, 'success')
     const order: string[] = []
     loginMock.mockImplementation(async () => {
       order.push('login')
@@ -106,6 +107,8 @@ describe('Login page', () => {
     expect(order).toEqual(['login', 'me'])
     expect(useAuthStore(pinia).status).toBe('authenticated')
     expect(router.currentRoute.value.path).toBe('/secure')
+    expect(successSpy).toHaveBeenCalledWith('登录成功')
+    successSpy.mockRestore()
   })
 
   it('switches to email code mode and sends a code', async () => {
@@ -117,7 +120,7 @@ describe('Login page', () => {
     const { wrapper } = await mountLogin()
     await wrapper.find('[data-testid="login-account"]').setValue('admin@example.com')
     // Switch to email code mode via the segmented control.
-    const segmented = wrapper.findComponent({ name: 'ElSegmented' })
+    const segmented = wrapper.findComponent({ name: 'ElTabs' })
     await segmented.vm.$emit('update:modelValue', 'email')
     await flushPromises()
 
@@ -143,7 +146,7 @@ describe('Login page', () => {
       })
       const { wrapper } = await mountLogin()
       await wrapper.get('[data-testid="login-account"]').setValue('admin@example.com')
-      await wrapper.findComponent({ name: 'ElSegmented' }).vm.$emit('update:modelValue', 'email')
+      await wrapper.findComponent({ name: 'ElTabs' }).vm.$emit('update:modelValue', 'email')
       await flushPromises()
 
       await wrapper.get('[data-testid="login-send-code"]').trigger('click')
@@ -174,7 +177,7 @@ describe('Login page', () => {
         })
       const { wrapper } = await mountLogin()
       await wrapper.get('[data-testid="login-account"]').setValue('admin@example.com')
-      await wrapper.findComponent({ name: 'ElSegmented' }).vm.$emit('update:modelValue', 'email')
+      await wrapper.findComponent({ name: 'ElTabs' }).vm.$emit('update:modelValue', 'email')
       await flushPromises()
 
       await wrapper.get('[data-testid="login-send-code"]').trigger('click')
@@ -204,7 +207,7 @@ describe('Login page', () => {
       })
     const { wrapper } = await mountLogin()
     await wrapper.get('[data-testid="login-account"]').setValue('admin@example.com')
-    await wrapper.findComponent({ name: 'ElSegmented' }).vm.$emit('update:modelValue', 'email')
+    await wrapper.findComponent({ name: 'ElTabs' }).vm.$emit('update:modelValue', 'email')
     await flushPromises()
 
     await wrapper.get('[data-testid="login-send-code"]').trigger('click')

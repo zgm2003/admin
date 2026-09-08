@@ -20,7 +20,7 @@ describe('ui preferences store', () => {
     localStorage.setItem(
       uiPreferencesStorageKey,
       JSON.stringify({
-        version: 2,
+        version: 3,
         preferences: { ...persistedDefaults(), primaryColor: '#059669' },
       }),
     )
@@ -82,7 +82,7 @@ describe('ui preferences store', () => {
     expect(store.preferences.theme).toBe('dark')
     expect(store.preferences.showFooter).toBe(false)
     expect(JSON.parse(localStorage.getItem(uiPreferencesStorageKey) ?? '')).toEqual({
-      version: 2,
+      version: 3,
       preferences: { ...persistedDefaults(), showFooter: false },
     })
 

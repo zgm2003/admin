@@ -44,6 +44,7 @@ const preferenceErrorMessage = computed(() => {
   if (uiPreferences.persistenceError === 'write') return t('layout.settings.writeFailed')
   return ''
 })
+const isTopLayout = computed(() => uiPreferences.preferences.layout === 'top')
 
 function updateViewport(): void {
   isMobile.value = window.innerWidth <= mobileBreakpoint
@@ -106,87 +107,105 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <el-container class="admin-layout">
-    <el-aside v-if="!contentFullscreen" class="admin-layout__aside" :width="asideWidth">
-      <AppAside
-        :collapsed="collapsed"
-        :unique-opened="uiPreferences.preferences.uniqueOpened"
-        :username="username"
-        :email="email"
-        :avatar="avatar"
-        :logout-pending="logoutPending"
-        @logout="handleLogout"
+  <el-container class="admin-layout" :direction="isTopLayout ? 'vertical' : 'horizontal'">
+    <el-header v-if="isTopLayout && !contentFullscreen" class="admin-layout__topbar" height="52px">
+      <AppHeader
+        :breadcrumbs="breadcrumbs"
+        :show-brand="true"
+        :show-breadcrumb="uiPreferences.preferences.showBreadcrumb"
+        :show-menu-toggle="uiPreferences.preferences.showMenuToggle"
+        :content-fullscreen="contentFullscreen"
+        @toggle-menu="toggleMenu"
       />
-    </el-aside>
+    </el-header>
 
-    <el-container class="admin-layout__workspace" direction="vertical">
-      <el-header v-if="!contentFullscreen" class="admin-layout__header" height="52px">
-        <AppHeader
-          :breadcrumbs="breadcrumbs"
-          :show-breadcrumb="uiPreferences.preferences.showBreadcrumb"
-          :show-menu-toggle="uiPreferences.preferences.showMenuToggle"
-          :content-fullscreen="contentFullscreen"
-          @toggle-menu="toggleMenu"
+    <div class="admin-layout__body">
+      <el-aside v-if="!contentFullscreen" class="admin-layout__aside" :width="asideWidth">
+        <AppAside
+          :collapsed="collapsed"
+          :unique-opened="uiPreferences.preferences.uniqueOpened"
+          :show-brand="!isTopLayout"
+          :username="username"
+          :email="email"
+          :avatar="avatar"
+          :logout-pending="logoutPending"
+          @logout="handleLogout"
         />
-      </el-header>
+      </el-aside>
 
-      <div
-        v-if="uiPreferences.preferences.showRouteTabs || contentFullscreen"
-        class="admin-layout__tabs admin-layout__horizontal-scroll"
-      >
-        <RouteTabs
-          :fullscreen="contentFullscreen"
-          :menu-tree="access.menuTree"
-          @refresh="handleRefresh"
-          @toggle-fullscreen="handleToggleFullscreen"
-        />
-      </div>
+      <el-container class="admin-layout__workspace" direction="vertical">
+        <el-header
+          v-if="!isTopLayout && !contentFullscreen"
+          class="admin-layout__header"
+          height="52px"
+        >
+          <AppHeader
+            :breadcrumbs="breadcrumbs"
+            :show-breadcrumb="uiPreferences.preferences.showBreadcrumb"
+            :show-menu-toggle="uiPreferences.preferences.showMenuToggle"
+            :content-fullscreen="contentFullscreen"
+            @toggle-menu="toggleMenu"
+          />
+        </el-header>
 
-      <el-main class="admin-layout__main admin-layout__scroll-owner">
-        <el-alert
-          v-if="access.status === 'error'"
-          data-testid="access-error"
-          type="error"
-          :title="access.errorMessage"
-          :closable="false"
-          show-icon
-        />
-        <el-alert
-          v-if="uiPreferences.persistenceError !== null"
-          data-testid="preference-error"
-          type="error"
-          :title="preferenceErrorMessage"
-          :closable="false"
-          show-icon
-        />
-        <el-alert
-          v-if="breadcrumbMissing"
-          data-testid="breadcrumb-missing"
-          type="error"
-          :title="t('layout.breadcrumb.missing')"
-          :closable="false"
-          show-icon
-        />
-        <RouterView v-slot="{ Component }">
-          <Transition
-            v-if="uiPreferences.preferences.pageTransition"
-            :name="uiPreferences.preferences.transitionName"
-            mode="out-in"
-          >
-            <component :is="Component" :key="`${route.fullPath}::${refreshKey}`" />
-          </Transition>
-          <component v-else :is="Component" :key="`${route.fullPath}::${refreshKey}`" />
-        </RouterView>
-      </el-main>
+        <div
+          v-if="uiPreferences.preferences.showRouteTabs || contentFullscreen"
+          class="admin-layout__tabs admin-layout__horizontal-scroll"
+        >
+          <RouteTabs
+            :fullscreen="contentFullscreen"
+            :menu-tree="access.menuTree"
+            @refresh="handleRefresh"
+            @toggle-fullscreen="handleToggleFullscreen"
+          />
+        </div>
 
-      <el-footer
-        v-if="uiPreferences.preferences.showFooter && !contentFullscreen"
-        class="admin-layout__footer"
-        height="40px"
-      >
-        <AppFooter />
-      </el-footer>
-    </el-container>
+        <el-main class="admin-layout__main admin-layout__scroll-owner">
+          <el-alert
+            v-if="access.status === 'error'"
+            data-testid="access-error"
+            type="error"
+            :title="access.errorMessage"
+            :closable="false"
+            show-icon
+          />
+          <el-alert
+            v-if="uiPreferences.persistenceError !== null"
+            data-testid="preference-error"
+            type="error"
+            :title="preferenceErrorMessage"
+            :closable="false"
+            show-icon
+          />
+          <el-alert
+            v-if="breadcrumbMissing"
+            data-testid="breadcrumb-missing"
+            type="error"
+            :title="t('layout.breadcrumb.missing')"
+            :closable="false"
+            show-icon
+          />
+          <RouterView v-slot="{ Component }">
+            <Transition
+              v-if="uiPreferences.preferences.pageTransition"
+              :name="uiPreferences.preferences.transitionName"
+              mode="out-in"
+            >
+              <component :is="Component" :key="`${route.fullPath}::${refreshKey}`" />
+            </Transition>
+            <component v-else :is="Component" :key="`${route.fullPath}::${refreshKey}`" />
+          </RouterView>
+        </el-main>
+
+        <el-footer
+          v-if="uiPreferences.preferences.showFooter && !contentFullscreen"
+          class="admin-layout__footer"
+          height="40px"
+        >
+          <AppFooter />
+        </el-footer>
+      </el-container>
+    </div>
 
     <el-drawer
       v-if="!contentFullscreen"

@@ -1,5 +1,19 @@
 export type ThemeMode = 'light' | 'dark'
 
+export const themeColorPresets = [
+  '#409EFF',
+  '#3B82F6',
+  '#4F46E5',
+  '#7C3AED',
+  '#DB2777',
+  '#DC2626',
+  '#EA580C',
+  '#CA8A04',
+  '#059669',
+  '#0891B2',
+  '#475569',
+] as const
+
 const sixDigitHex = /^#[0-9a-fA-F]{6}$/
 
 export function isSixDigitHexColor(value: unknown): value is string {

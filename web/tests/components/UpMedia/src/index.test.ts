@@ -106,6 +106,9 @@ describe('UpMedia', () => {
 
     expect(requestObjectURL).toHaveBeenCalledWith('avatar', 'avatar/alice.png')
     expect(wrapper.get('.avatar').attributes('src')).toBe('https://cdn.example/avatar/alice.png')
+    expect(wrapper.emitted('preview-change')?.at(-1)).toEqual([
+      'https://cdn.example/avatar/alice.png',
+    ])
   })
 })
 

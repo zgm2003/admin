@@ -9,6 +9,18 @@
   --admin-text: var(--el-text-color-primary);
   --admin-text-soft: var(--el-text-color-secondary);
   --admin-shadow: var(--el-box-shadow-lighter);
+
+  // Shared elevation tokens for framed tools and panels.
+  --admin-radius-sm: 8px;
+  --admin-shadow-sm: 0 1px 2px rgb(15 23 42 / 4%), 0 4px 12px rgb(15 23 42 / 5%);
+  --admin-shadow-md: 0 2px 6px rgb(15 23 42 / 6%), 0 16px 32px rgb(15 23 42 / 10%);
+  --admin-shadow-lg: 0 8px 16px rgb(15 23 42 / 8%), 0 28px 60px rgb(15 23 42 / 14%);
+}
+
+html.dark {
+  --admin-shadow-sm: 0 1px 2px rgb(0 0 0 / 28%), 0 4px 12px rgb(0 0 0 / 34%);
+  --admin-shadow-md: 0 2px 6px rgb(0 0 0 / 32%), 0 16px 32px rgb(0 0 0 / 42%);
+  --admin-shadow-lg: 0 8px 16px rgb(0 0 0 / 38%), 0 28px 60px rgb(0 0 0 / 50%);
 }
 
 * {
@@ -51,10 +63,26 @@ a:focus-visible {
   overflow: hidden;
 }
 
-.admin-layout__aside {
+.admin-layout__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.admin-layout__topbar {
   position: sticky;
   top: 0;
-  height: 100vh;
+  z-index: 20;
+  padding: 0;
+  background: $color-surface;
+  border-bottom: 1px solid $color-border;
+  flex: 0 0 52px;
+}
+
+.admin-layout__aside {
+  height: 100%;
   overflow: hidden;
   background: var(--admin-surface);
   border-right: 1px solid var(--admin-border);

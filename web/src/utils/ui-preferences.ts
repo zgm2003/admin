@@ -1,11 +1,13 @@
 import { isSixDigitHexColor, type ThemeMode } from './theme'
 
+export type LayoutMode = 'side' | 'top'
 export type PageTransitionName = 'fade' | 'slide-left' | 'zoom'
 export type UIPreferencesOperation = 'read' | 'write'
 
 export interface UIPreferences {
   theme: ThemeMode
   primaryColor: string
+  layout: LayoutMode
   showBreadcrumb: boolean
   showMenuToggle: boolean
   showRouteTabs: boolean
@@ -15,8 +17,9 @@ export interface UIPreferences {
   transitionName: PageTransitionName
 }
 
-interface PersistedUIPreferencesV2 {
+interface PersistedUIPreferencesV3 {
   primaryColor: string
+  layout: LayoutMode
   showBreadcrumb: boolean
   showMenuToggle: boolean
   showRouteTabs: boolean
@@ -26,15 +29,16 @@ interface PersistedUIPreferencesV2 {
   transitionName: PageTransitionName
 }
 
-interface StoredUIPreferencesV2 {
-  version: 2
-  preferences: PersistedUIPreferencesV2
+interface StoredUIPreferencesV3 {
+  version: 3
+  preferences: PersistedUIPreferencesV3
 }
 
 export const uiPreferencesStorageKey = 'admin:ui-preferences'
 export const defaultUIPreferences: Readonly<UIPreferences> = Object.freeze({
   theme: 'light',
   primaryColor: '#409EFF',
+  layout: 'side',
   showBreadcrumb: true,
   showMenuToggle: true,
   showRouteTabs: true,
@@ -45,6 +49,7 @@ export const defaultUIPreferences: Readonly<UIPreferences> = Object.freeze({
 })
 
 const runtimePreferenceKeys = [
+  'layout',
   'pageTransition',
   'primaryColor',
   'showBreadcrumb',
@@ -56,6 +61,8 @@ const runtimePreferenceKeys = [
   'uniqueOpened',
 ] as const
 const persistedPreferenceKeys = runtimePreferenceKeys.filter((key) => key !== 'theme')
+const persistedPreferenceKeysV2 = persistedPreferenceKeys.filter((key) => key !== 'layout')
+const runtimePreferenceKeysV1 = runtimePreferenceKeys.filter((key) => key !== 'layout')
 const booleanPreferenceKeys = [
   'showBreadcrumb',
   'showMenuToggle',
@@ -65,6 +72,7 @@ const booleanPreferenceKeys = [
   'pageTransition',
 ] as const
 const transitionNames: readonly PageTransitionName[] = ['fade', 'slide-left', 'zoom']
+const layoutModes: readonly LayoutMode[] = ['side', 'top']
 
 export class UIPreferencesError extends Error {
   public readonly operation: UIPreferencesOperation
@@ -78,8 +86,8 @@ export class UIPreferencesError extends Error {
 
 export function parseStoredUIPreferences(value: unknown): UIPreferences {
   const stored = closedRecord(value, ['preferences', 'version'], 'stored UI preferences', 'read')
-  if (stored.version !== 2) {
-    throw new UIPreferencesError('read', 'stored UI preferences version must be 2')
+  if (stored.version !== 3) {
+    throw new UIPreferencesError('read', 'stored UI preferences version must be 3')
   }
 
   const preferences = closedRecord(
@@ -113,12 +121,17 @@ export function readUIPreferences(): UIPreferences {
     writeUIPreferences(migrated)
     return migrated
   }
+  if (stored.version === 2) {
+    const migrated = parseStoredUIPreferencesV2(parsed)
+    writeUIPreferences(migrated)
+    return migrated
+  }
   return parseStoredUIPreferences(parsed)
 }
 
 export function writeUIPreferences(preferences: UIPreferences): void {
-  const value: StoredUIPreferencesV2 = {
-    version: 2,
+  const value: StoredUIPreferencesV3 = {
+    version: 3,
     preferences: toPersistedUIPreferences(preferences),
   }
   try {
@@ -136,7 +149,7 @@ function parseStoredUIPreferencesV1(value: unknown): UIPreferences {
 
   const preferences = closedRecord(
     stored.preferences,
-    runtimePreferenceKeys,
+    runtimePreferenceKeysV1,
     'stored UI preferences preferences',
     'read',
   )
@@ -144,13 +157,35 @@ function parseStoredUIPreferencesV1(value: unknown): UIPreferences {
   if (theme !== 'light' && theme !== 'dark') {
     throw new UIPreferencesError('read', 'stored UI preferences theme is invalid')
   }
-  return { theme: 'light', ...parsePersistedPreferenceFields(preferences, 'read') }
+  return {
+    theme: 'light',
+    ...parsePersistedPreferenceFields({ ...preferences, layout: 'side' }, 'read'),
+  }
 }
 
-function toPersistedUIPreferences(preferences: UIPreferences): PersistedUIPreferencesV2 {
+function parseStoredUIPreferencesV2(value: unknown): UIPreferences {
+  const stored = closedRecord(value, ['preferences', 'version'], 'stored UI preferences', 'read')
+  if (stored.version !== 2) {
+    throw new UIPreferencesError('read', 'stored UI preferences version must be 2')
+  }
+
+  const preferences = closedRecord(
+    stored.preferences,
+    persistedPreferenceKeysV2,
+    'stored UI preferences preferences',
+    'read',
+  )
+  return {
+    theme: 'light',
+    ...parsePersistedPreferenceFields({ ...preferences, layout: 'side' }, 'read'),
+  }
+}
+
+function toPersistedUIPreferences(preferences: UIPreferences): PersistedUIPreferencesV3 {
   const validated = parseRuntimeUIPreferences(preferences, 'write')
   return {
     primaryColor: validated.primaryColor,
+    layout: validated.layout,
     showBreadcrumb: validated.showBreadcrumb,
     showMenuToggle: validated.showMenuToggle,
     showRouteTabs: validated.showRouteTabs,
@@ -176,7 +211,7 @@ function parseRuntimeUIPreferences(
 function parsePersistedPreferenceFields(
   preferences: Record<string, unknown>,
   operation: UIPreferencesOperation,
-): PersistedUIPreferencesV2 {
+): PersistedUIPreferencesV3 {
   const primaryColor = preferences.primaryColor
   if (!isSixDigitHexColor(primaryColor)) {
     throw new UIPreferencesError(operation, 'UI preferences primaryColor is invalid')
@@ -196,8 +231,14 @@ function parsePersistedPreferenceFields(
     throw new UIPreferencesError(operation, 'UI preferences transitionName is invalid')
   }
 
+  const layout = preferences.layout
+  if (typeof layout !== 'string' || !layoutModes.includes(layout as LayoutMode)) {
+    throw new UIPreferencesError(operation, 'UI preferences layout is invalid')
+  }
+
   return {
     primaryColor: primaryColor.toUpperCase(),
+    layout: layout as LayoutMode,
     showBreadcrumb: preferences.showBreadcrumb as boolean,
     showMenuToggle: preferences.showMenuToggle as boolean,
     showRouteTabs: preferences.showRouteTabs as boolean,

@@ -144,3 +144,134 @@
 .setting-drawer__section :deep(.el-select) {
   width: 100%;
 }
+
+.setting-drawer__tabs {
+  width: 100%;
+}
+
+.setting-drawer__tabs :deep(.el-tabs__header) {
+  margin-bottom: 14px;
+}
+
+.setting-drawer__tabs :deep(.el-tabs__item) {
+  font-weight: 650;
+}
+
+.setting-drawer__tab-body {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 4px;
+  gap: 14px;
+}
+
+.setting-drawer__layouts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.setting-drawer__layout {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  padding: 10px 8px 8px;
+  gap: 8px;
+  color: var(--el-text-color-regular);
+  font: inherit;
+  background: var(--el-fill-color-blank);
+  border: 1px solid var(--el-border-color);
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.setting-drawer__layout:hover {
+  border-color: var(--el-text-color-placeholder);
+}
+
+.setting-drawer__layout.is-active {
+  border-color: var(--el-color-primary);
+  outline: 2px solid var(--el-color-primary-light-5);
+  outline-offset: 1px;
+}
+
+.setting-drawer__layout:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
+.setting-drawer__layout-preview {
+  position: relative;
+  width: 100%;
+  height: 58px;
+  overflow: hidden;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+}
+
+.setting-drawer__layout-bar {
+  position: absolute;
+  border-radius: 2px;
+}
+
+.setting-drawer__layout-bar--top {
+  background: var(--el-color-primary-light-5);
+}
+
+.setting-drawer__layout-bar--aside {
+  background: var(--el-color-primary-light-7);
+}
+
+.setting-drawer__layout-bar--main {
+  background: var(--el-fill-color-darker);
+}
+
+.setting-drawer__layout-preview--side .setting-drawer__layout-bar--top {
+  top: 5px;
+  right: 5px;
+  left: 24px;
+  height: 9px;
+}
+
+.setting-drawer__layout-preview--side .setting-drawer__layout-bar--aside {
+  top: 5px;
+  bottom: 5px;
+  left: 5px;
+  width: 15px;
+}
+
+.setting-drawer__layout-preview--side .setting-drawer__layout-bar--main {
+  top: 18px;
+  right: 5px;
+  bottom: 5px;
+  left: 24px;
+}
+
+.setting-drawer__layout-preview--top .setting-drawer__layout-bar--top {
+  top: 5px;
+  right: 5px;
+  left: 5px;
+  height: 9px;
+}
+
+.setting-drawer__layout-preview--top .setting-drawer__layout-bar--aside {
+  top: 18px;
+  bottom: 5px;
+  left: 5px;
+  width: 15px;
+}
+
+.setting-drawer__layout-preview--top .setting-drawer__layout-bar--main {
+  top: 18px;
+  right: 5px;
+  bottom: 5px;
+  left: 24px;
+}
+
+.setting-drawer__layout-name {
+  font-size: 12px;
+  font-weight: 650;
+}
