@@ -160,6 +160,30 @@ func TestRotateByRefreshHashUsesExactPlatformAndClientMetadata(t *testing.T) {
 	}
 }
 
+func TestRefreshAuthorityTracksFirstPasswordWithoutRevokingSession(t *testing.T) {
+	tx, ctx := openAuthTransaction(t)
+	createdUser := createAuthUserWithoutRole(t, tx, ctx, "refresh-password")
+	policy := updateTestPolicy(t, tx, ctx, "admin", 1)
+	repository := session.NewRepository(tx)
+	now := time.Now().UTC()
+	created, _, err := repository.CreateWithinLimit(ctx, sessionInput(createdUser.ID, "7", now.Add(time.Hour)), policy, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, hash := range []string{"", "first-password-hash"} {
+		if err := tx.WithContext(ctx).Model(&user.User{}).Where("id = ?", createdUser.ID).Update("password_hash", hash).Error; err != nil {
+			t.Fatal(err)
+		}
+		authority, err := repository.FindByRefreshHash(ctx, "admin", created.RefreshTokenHash, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if authority.PasswordSetRequired != (hash == "") || authority.Session.RevokedAt != nil {
+			t.Fatalf("refresh flag=%v revoked=%v", authority.PasswordSetRequired, authority.Session.RevokedAt)
+		}
+	}
+}
+
 func TestRevokeIsIdempotentForTheSameSession(t *testing.T) {
 	tx, ctx := openAuthTransaction(t)
 	createdUser := createAuthUserWithoutRole(t, tx, ctx, "revoke")
