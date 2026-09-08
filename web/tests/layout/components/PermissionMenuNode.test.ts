@@ -122,13 +122,13 @@ describe('AppAside access menu', () => {
     expect(wrapper.findComponent({ name: 'ElMenu' }).props('uniqueOpened')).toBe(false)
   })
 
-  it('keeps the collapse transition enabled for the sidebar', () => {
+  it('disables the EP collapse content transition so width animates without clipped labels', () => {
     const wrapper = mount(AppAside, {
       props: { collapsed: true, uniqueOpened: true },
       global: { plugins: [ElementPlus, pinia, createTestRouter(), appI18n] },
     })
 
-    expect(wrapper.findComponent({ name: 'ElMenu' }).props('collapseTransition')).toBe(true)
+    expect(wrapper.findComponent({ name: 'ElMenu' }).props('collapseTransition')).toBe(false)
   })
 
   it('renders the signed-in account in the sidebar footer and emits logout', () => {

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import { CircleCheckFilled, Lock, RefreshRight, User } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElLink, ElMessage, ElNotification } from 'element-plus'
 
 import {
   getCurrentUser,
@@ -154,9 +154,7 @@ async function submit(): Promise<void> {
     const currentUser = await getCurrentUser()
     auth.setAuthenticated(currentUser)
     await router.replace(safeRedirect(route.query.redirect))
-    ElMessage.success(
-      t(credential.isNewUser ? 'auth.login.registeredSuccess' : 'auth.login.success'),
-    )
+    showLoginSuccess(credential.isNewUser)
     if (currentUser.passwordSetRequired && !credential.isNewUser) {
       ElMessage.info(t('user.password.setupReminder'))
     }
@@ -167,6 +165,34 @@ async function submit(): Promise<void> {
   } finally {
     pending.value = false
   }
+}
+
+function showLoginSuccess(isNewUser: boolean): void {
+  if (!isNewUser) {
+    ElNotification.success({ title: t('auth.login.success') })
+    return
+  }
+
+  const profileLocation = router.resolve('/user/profile')
+  ElNotification.success({
+    title: t('auth.login.registeredSuccess'),
+    message: h('span', [
+      `${t('auth.login.registeredDescription')} `,
+      h(
+        ElLink,
+        {
+          type: 'primary',
+          href: profileLocation.href,
+          onClick: (event: MouseEvent) => {
+            event.preventDefault()
+            void router.push('/user/profile')
+          },
+        },
+        () => t('auth.login.openProfile'),
+      ),
+    ]),
+    duration: 8000,
+  })
 }
 
 function safeRedirect(value: unknown): string {

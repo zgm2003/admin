@@ -90,14 +90,14 @@ function handleAccountCommand(command: string | number | object): void {
   >
     <div v-if="showBrand" class="app-aside__brand" :aria-label="t('navigation.admin')">
       <img class="app-aside__logo" :src="logoUrl" :alt="t('navigation.admin')" />
-      <span v-show="!collapsed" class="app-aside__name">{{ t('navigation.admin') }}</span>
+      <span class="app-aside__name">{{ t('navigation.admin') }}</span>
     </div>
 
     <el-menu
       class="app-aside__menu"
       router
       :collapse="collapsed"
-      :collapse-transition="true"
+      :collapse-transition="false"
       :default-active="route.path"
       :unique-opened="uniqueOpened"
     >
@@ -124,13 +124,11 @@ function handleAccountCommand(command: string | number | object): void {
             @error="handleAvatarError"
             >{{ avatarText }}</el-avatar
           >
-          <span v-show="!collapsed" class="app-aside__account-copy">
+          <span class="app-aside__account-copy">
             <strong data-testid="aside-account-name">{{ username }}</strong>
             <small>{{ email }}</small>
           </span>
-          <el-icon v-show="!collapsed" class="app-aside__account-arrow" aria-hidden="true"
-            ><ArrowUp
-          /></el-icon>
+          <el-icon class="app-aside__account-arrow" aria-hidden="true"><ArrowUp /></el-icon>
         </button>
         <template #dropdown>
           <el-dropdown-menu>
@@ -165,30 +163,51 @@ function handleAccountCommand(command: string | number | object): void {
   width: 100%;
   height: 100%;
   padding: 14px 12px 12px;
-  gap: 10px;
+  gap: 8px;
   color: var(--admin-text);
 }
 
 .app-aside__brand {
   display: flex;
   align-items: center;
-  flex: 0 0 58px;
-  min-height: 58px;
-  padding: 0 12px;
-  gap: 10px;
+  flex: 0 0 50px;
+  min-height: 50px;
+  padding: 0 10px 9px;
+  gap: 9px;
+  border-bottom: 1px solid var(--admin-border);
+  transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .app-aside__logo {
   width: auto;
-  height: 30px;
+  height: 32px;
   flex: 0 0 auto;
   object-fit: contain;
 }
 
 .app-aside__name {
+  max-width: 140px;
+  overflow: hidden;
+  opacity: 1;
   white-space: nowrap;
-  font-size: 14px;
-  font-weight: 750;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0;
+  transition:
+    max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s ease;
+}
+
+.app-aside[data-collapsed='true'] .app-aside__brand {
+  justify-content: center;
+  padding-right: 0;
+  padding-left: 0;
+  gap: 0;
+}
+
+.app-aside[data-collapsed='true'] .app-aside__name {
+  max-width: 0;
+  opacity: 0;
 }
 
 .app-aside__menu {
@@ -206,29 +225,79 @@ function handleAccountCommand(command: string | number | object): void {
 
 .app-aside__menu :deep(.el-menu-item),
 .app-aside__menu :deep(.el-sub-menu__title) {
-  height: 44px;
-  margin: 3px 0;
-  border-radius: 12px;
+  position: relative;
+  height: 40px;
+  margin: 2px 0;
+  border-radius: 10px;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.app-aside__menu :deep(.el-menu-item:hover),
+.app-aside__menu :deep(.el-sub-menu__title:hover) {
+  color: var(--el-text-color-primary);
+  background: var(--el-fill-color-light);
+}
+
+.app-aside__menu :deep(.el-menu-item .el-icon),
+.app-aside__menu :deep(.el-sub-menu__title .el-icon) {
+  transition: transform 0.18s ease;
+}
+
+.app-aside__menu :deep(.el-menu-item:hover .el-icon),
+.app-aside__menu :deep(.el-sub-menu__title:hover .el-icon) {
+  transform: scale(1.06);
 }
 
 .app-aside__menu :deep(.el-menu-item.is-active) {
   color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
+  font-weight: 650;
+}
+
+.app-aside__menu :deep(.el-menu-item.is-active)::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 3px;
+  height: 18px;
+  content: '';
+  background: var(--el-color-primary);
+  border-radius: 0 3px 3px 0;
+  transform: translateY(-50%);
+}
+
+.app-aside__menu :deep(.el-sub-menu.is-active > .el-sub-menu__title) {
+  color: var(--el-color-primary);
 }
 
 .app-aside__menu :deep(.el-sub-menu .el-menu-item) {
   min-width: 0;
-  padding-left: 46px;
+  padding-left: 44px;
 }
 
-.app-aside__menu :deep(.el-menu--collapse .el-menu-item),
-.app-aside__menu :deep(.el-menu--collapse .el-sub-menu__title) {
+.app-aside[data-collapsed='true'] .app-aside__menu :deep(.el-menu-item),
+.app-aside[data-collapsed='true'] .app-aside__menu :deep(.el-sub-menu__title) {
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 1px auto;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.app-aside[data-collapsed='true'] .app-aside__menu :deep(.el-menu-item .el-menu-tooltip__trigger) {
   justify-content: center;
   padding: 0;
 }
 
-.app-aside__menu :deep(.el-menu--collapse .el-menu-item .el-icon),
-.app-aside__menu :deep(.el-menu--collapse .el-sub-menu__title .el-icon) {
+.app-aside[data-collapsed='true'] .app-aside__menu :deep(.el-menu-item.is-active)::before {
+  display: none;
+}
+
+.app-aside[data-collapsed='true'] .app-aside__menu :deep(.el-menu-item .el-icon),
+.app-aside[data-collapsed='true'] .app-aside__menu :deep(.el-sub-menu__title .el-icon) {
   margin: 0;
 }
 
@@ -257,6 +326,9 @@ function handleAccountCommand(command: string | number | object): void {
   border-radius: 8px;
   background: var(--admin-surface-soft);
   cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .app-aside__account-trigger:hover {
@@ -280,8 +352,14 @@ function handleAccountCommand(command: string | number | object): void {
 .app-aside__account-copy {
   display: grid;
   min-width: 0;
+  max-width: 160px;
   flex: 1;
+  overflow: hidden;
+  opacity: 1;
   gap: 2px;
+  transition:
+    max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s ease;
 }
 
 .app-aside__account-copy strong,
@@ -303,8 +381,25 @@ function handleAccountCommand(command: string | number | object): void {
 }
 
 .app-aside__account-arrow {
+  max-width: 20px;
   flex: 0 0 auto;
+  overflow: hidden;
   color: var(--admin-text-soft);
   font-size: 13px;
+  opacity: 1;
+  transition:
+    max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s ease;
+}
+
+.app-aside[data-collapsed='true'] .app-aside__account-trigger {
+  justify-content: center;
+  padding: 9px 0;
+  gap: 0;
+}
+
+.app-aside[data-collapsed='true'] .app-aside__account-copy,
+.app-aside[data-collapsed='true'] .app-aside__account-arrow {
+  display: none;
 }
 </style>

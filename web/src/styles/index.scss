@@ -86,7 +86,7 @@ a:focus-visible {
   overflow: hidden;
   background: var(--admin-surface);
   border-right: 1px solid var(--admin-border);
-  transition: width 160ms ease;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .admin-layout__workspace {

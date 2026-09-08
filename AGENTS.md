@@ -88,7 +88,7 @@ view -> api/<module>.ts -> utils/request.ts -> Go API
   action 只进入 `permissionCodes`。
 - 权限事实层级固定为 PostgreSQL -> Redis -> 进程内缓存。进程内缓存必须先经 Redis 确认用户授权版本与平台菜单版本；
   Redis 故障或版本无法确认时不得返回旧缓存、空权限或假成功。
-- 个人资料固定使用隐藏 page `user:profile:view`，读取 `user:profile:detail`，保存
+- 个人中心固定使用隐藏 page `user:profile:view`，读取 `user:profile:detail`，保存
   `user:profile:update`，改密 `user:password:update`；该 page 是无父节点的隐藏根页面，不挂在用户管理目录下。
 
 ## 数据库与错误

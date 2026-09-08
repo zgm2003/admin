@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import ElementPlus, { ElMessage } from 'element-plus'
+import ElementPlus, { ElNotification } from 'element-plus'
+import { isVNode } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -76,7 +77,7 @@ describe('Login page', () => {
   })
 
   it('submits a password login, loads me, and follows a safe redirect', async () => {
-    const successSpy = vi.spyOn(ElMessage, 'success')
+    const successSpy = vi.spyOn(ElNotification, 'success')
     const order: string[] = []
     loginMock.mockImplementation(async () => {
       order.push('login')
@@ -107,7 +108,60 @@ describe('Login page', () => {
     expect(order).toEqual(['login', 'me'])
     expect(useAuthStore(pinia).status).toBe('authenticated')
     expect(router.currentRoute.value.path).toBe('/secure')
-    expect(successSpy).toHaveBeenCalledWith('登录成功')
+    expect(successSpy).toHaveBeenCalledWith({ title: '登录成功' })
+    successSpy.mockRestore()
+  })
+
+  it('links a newly registered user to Personal center from the success notification', async () => {
+    const successSpy = vi
+      .spyOn(ElNotification, 'success')
+      .mockImplementation(() => ({ close: () => undefined }))
+    getLoginConfigMock.mockResolvedValue({
+      loginTypes: [{ value: 'email', label: '邮箱验证码' }],
+      allowRegister: true,
+    })
+    loginMock.mockResolvedValue({
+      accessToken: 'jwt',
+      expiresIn: 900,
+      isNewUser: true,
+      passwordSetRequired: true,
+    })
+    getCurrentUserMock.mockResolvedValue({
+      userId: 2,
+      username: 'new-user',
+      email: 'new@example.com',
+      phone: null,
+      avatar: '',
+      passwordSetRequired: true,
+    })
+
+    const { wrapper, router } = await mountLogin()
+    await wrapper.get('[data-testid="login-account"]').setValue('new@example.com')
+    await wrapper.findComponent({ name: 'ElInputOtp' }).vm.$emit('update:modelValue', '123456')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    const options = successSpy.mock.calls[0]?.[0]
+    expect(options).toEqual(expect.objectContaining({ title: '注册并登录成功', duration: 8000 }))
+    if (
+      options === undefined ||
+      typeof options === 'string' ||
+      isVNode(options) ||
+      !('message' in options) ||
+      !isVNode(options.message)
+    ) {
+      throw new Error('Expected registration notification content to be a VNode')
+    }
+    const message = options.message
+    const content = mount({ render: () => message }, { global: { plugins: [ElementPlus] } })
+    expect(content.text()).toContain('已创建普通用户账号。')
+    expect(content.get('a').text()).toBe('前往个人中心')
+    expect(content.get('a').attributes('href')).toBe('/user/profile')
+
+    await content.get('a').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/user/profile')
+    content.unmount()
     successSpy.mockRestore()
   })
 
@@ -273,6 +327,7 @@ async function mountLogin(initialPath = '/login') {
       { path: '/forgot-password', component: { template: '<div />' } },
       { path: '/dashboard', component: { template: '<div />' } },
       { path: '/secure', component: { template: '<div />' } },
+      { path: '/user/profile', component: { template: '<div />' } },
     ],
   })
   await router.push(initialPath)

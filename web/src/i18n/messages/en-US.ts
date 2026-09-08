@@ -579,7 +579,7 @@ export const enUS = {
   'user.password.successMessage':
     'Password changed. All Admin sessions are invalid and you must sign in again.',
   'user.password.setTitle': 'Set password',
-  'user.password.setupReminder': 'You can set a password in your profile now or do it later.',
+  'user.password.setupReminder': 'You can set a password in Personal center now or do it later.',
   'user.password.setSubmit': 'Set password',
   'user.password.setSuccessMessage':
     'Password set successfully, your current session stays signed in.',
@@ -656,8 +656,9 @@ export const enUS = {
   'auth.login.configUnavailable': 'Sign-in methods are temporarily unavailable',
   'auth.login.configRetry': 'Retry',
   'auth.login.success': 'Signed in successfully',
-  'auth.login.registeredSuccess':
-    'Registration and sign-in succeeded. Your standard user account is ready.',
+  'auth.login.registeredSuccess': 'Registration and sign-in succeeded',
+  'auth.login.registeredDescription': 'Your standard user account is ready.',
+  'auth.login.openProfile': 'Go to Personal center',
   'auth.dock.theme': 'Toggle theme',
   'auth.forgot.eyebrow': 'ACCOUNT RECOVERY',
   'auth.forgot.title': 'Reset password',
