@@ -124,7 +124,7 @@ func TestAuthenticationPlatformSchemaAndBuiltinAdmin(t *testing.T) {
 	}
 
 	admin := readAdmin(t, connection.GORM)
-	if admin.Name != "Admin" || admin.PolicyVersion != 1 || admin.AccessTTLSeconds != 900 || admin.RefreshTTLSeconds != 1209600 || admin.SessionCacheTTLSeconds != 1800 || admin.AccessCacheTTLSeconds != 1800 || admin.BindDevice != yesno.No || admin.BindIP != yesno.No || admin.MaxSessions != 1 || admin.AllowRegister != yesno.No || admin.IsEnabled != yesno.Yes || admin.IsBuiltin != yesno.Yes || admin.DeletedAt.Valid {
+	if admin.Name != "Admin" || admin.PolicyVersion != 1 || admin.AccessTTLSeconds != 900 || admin.RefreshTTLSeconds != 1209600 || admin.SessionCacheTTLSeconds != 1800 || admin.AccessCacheTTLSeconds != 1800 || admin.BindDevice != yesno.No || admin.BindIP != yesno.No || admin.MaxSessions != 1 || admin.AllowRegister != yesno.Yes || admin.IsEnabled != yesno.Yes || admin.IsBuiltin != yesno.Yes || admin.DeletedAt.Valid {
 		t.Fatalf("builtin admin = %+v", admin)
 	}
 }
@@ -211,7 +211,7 @@ func TestEnsureCanvasPresetPromotesExistingPlatformWithoutResettingPolicy(t *tes
 	}
 }
 
-func TestEnsureSchemaMigratesBuiltinAdminRegistrationOnce(t *testing.T) {
+func TestEnsureSchemaPreservesBuiltinAdminRegistrationPolicy(t *testing.T) {
 	connection, ctx := openAuthenticationPlatformDatabase(t)
 	if err := database.AutoMigrate(ctx, connection.GORM, &authplatform.Platform{}); err != nil {
 		t.Fatal(err)
@@ -236,8 +236,8 @@ func TestEnsureSchemaMigratesBuiltinAdminRegistrationOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	first := readAdmin(t, db)
-	if first.AllowRegister != yesno.No || first.PolicyVersion != 8 {
-		t.Fatalf("first migration = %+v", first)
+	if first.AllowRegister != historical.AllowRegister || first.PolicyVersion != historical.PolicyVersion {
+		t.Fatalf("registration policy was rewritten = %+v", first)
 	}
 	if first.Name != historical.Name || first.AccessTTLSeconds != historical.AccessTTLSeconds || first.RefreshTTLSeconds != historical.RefreshTTLSeconds || first.SessionCacheTTLSeconds != historical.SessionCacheTTLSeconds || first.AccessCacheTTLSeconds != historical.AccessCacheTTLSeconds || first.BindDevice != historical.BindDevice || first.BindIP != historical.BindIP || first.MaxSessions != historical.MaxSessions || first.IsEnabled != historical.IsEnabled || !first.CreatedAt.Equal(historical.CreatedAt) {
 		t.Fatalf("editable policy values were reset: historical=%+v migrated=%+v", historical, first)
@@ -308,7 +308,7 @@ func TestEnsureSchemaRejectsDamagedBuiltinHistory(t *testing.T) {
 	}
 }
 
-func TestEnsureSchemaRollsBackBuiltinAdminMigrationFailure(t *testing.T) {
+func TestEnsureSchemaPreservesExplicitlyDisabledAdminRegistration(t *testing.T) {
 	connection, ctx := openAuthenticationPlatformDatabase(t)
 	if err := database.AutoMigrate(ctx, connection.GORM, &authplatform.Platform{}); err != nil {
 		t.Fatal(err)
@@ -316,18 +316,16 @@ func TestEnsureSchemaRollsBackBuiltinAdminMigrationFailure(t *testing.T) {
 	db := connection.GORM.WithContext(ctx)
 	historical := validHistoricalAdmin(time.Now().UTC().Truncate(time.Microsecond))
 	historical.PolicyVersion = 4
+	historical.AllowRegister = yesno.No
 	if err := db.Create(&historical).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec(`ALTER TABLE permission_auth_platform ADD CONSTRAINT ck_test_admin_registration_migration CHECK (allow_register = 1)`).Error; err != nil {
+	if err := authplatform.EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	if err := authplatform.EnsureSchema(ctx, db); err == nil {
-		t.Fatal("migration unexpectedly succeeded")
-	}
 	admin := readAdmin(t, db)
-	if admin.AllowRegister != yesno.Yes || admin.PolicyVersion != historical.PolicyVersion || !admin.UpdatedAt.Equal(historical.UpdatedAt) {
-		t.Fatalf("failed migration was not rolled back: historical=%+v current=%+v", historical, admin)
+	if admin.AllowRegister != yesno.No || admin.PolicyVersion != historical.PolicyVersion || !admin.UpdatedAt.Equal(historical.UpdatedAt) {
+		t.Fatalf("registration policy was rewritten: historical=%+v current=%+v", historical, admin)
 	}
 }
 

@@ -67,18 +67,6 @@ func EnsureSchema(ctx context.Context, db *gorm.DB) error {
 		if err := validateBuiltinAdmin(current); err != nil {
 			return err
 		}
-		if current.AllowRegister == yesno.No {
-			return nil
-		}
-		now := time.Now().UTC().Truncate(time.Microsecond)
-		if err := tx.Exec(`
-			UPDATE permission_auth_platform
-			SET allow_register = 0,
-			    policy_version = policy_version + 1,
-			    updated_at = ?
-			WHERE id = ? AND deleted_at IS NULL`, now, current.ID).Error; err != nil {
-			return fmt.Errorf("disable builtin admin registration: %w", err)
-		}
 		return nil
 	}); err != nil {
 		return fmt.Errorf("ensure builtin authentication platform: %w", err)
@@ -163,7 +151,7 @@ func builtinAdmin(now time.Time) Platform {
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
 		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
-		AllowRegister: yesno.No, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+		AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
 		CreatedAt: now, UpdatedAt: now,
 	}
 }

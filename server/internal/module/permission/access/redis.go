@@ -48,7 +48,7 @@ func (c *SnapshotCache) acquireFill(ctx context.Context, target string) (*cachef
 }
 
 func SnapshotKey(platform string, policyVersion, userID, version, menuVersion int64) string {
-	return "authz:permission:v6:" + platform + ":" + strconv.FormatInt(policyVersion, 10) + ":" +
+	return "authz:permission:v7:" + platform + ":" + strconv.FormatInt(policyVersion, 10) + ":" +
 		strconv.FormatInt(userID, 10) + ":" + strconv.FormatInt(version, 10) + ":" + strconv.FormatInt(menuVersion, 10)
 }
 

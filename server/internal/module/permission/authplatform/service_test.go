@@ -116,7 +116,7 @@ func TestServiceUpdateDoesNotMutatePostgreSQLWhenRedisIsUnavailable(t *testing.T
 	}
 }
 
-func TestServiceUpdateRejectsBuiltinAdminRegistrationBeforeRedisMutation(t *testing.T) {
+func TestServiceUpdateAllowsBuiltinAdminRegistrationSetting(t *testing.T) {
 	connection, ctx := openAuthenticationPlatformDatabase(t)
 	if err := database.AutoMigrate(ctx, connection.GORM, &authplatform.Platform{}); err != nil {
 		t.Fatal(err)
@@ -130,26 +130,22 @@ func TestServiceUpdateRejectsBuiltinAdminRegistrationBeforeRedisMutation(t *test
 		t.Fatal(err)
 	}
 	redisClient := openPlatformRedis(t)
-	if err := redisClient.Close(); err != nil {
-		t.Fatal(err)
-	}
-	service := authplatform.NewService(repository, authplatform.NewPolicyStore(redisClient), redisClient, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{})
+	authStates := authstate.NewStore(redisClient)
+	service := authplatform.NewService(repository, authplatform.NewPolicyStore(redisClient), redisClient, authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete, slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{})
 	input := authplatform.UpdateInput{
 		Name: stored.Name, LoginTypes: []authplatform.LoginType{authplatform.LoginTypePassword, authplatform.LoginTypeEmail}, AccessTTLSeconds: stored.AccessTTLSeconds, RefreshTTLSeconds: stored.RefreshTTLSeconds,
 		SessionCacheTTLSeconds: stored.SessionCacheTTLSeconds, AccessCacheTTLSeconds: stored.AccessCacheTTLSeconds,
-		BindDevice: stored.BindDevice, BindIP: stored.BindIP, MaxSessions: stored.MaxSessions, AllowRegister: yesno.Yes,
+		BindDevice: stored.BindDevice, BindIP: stored.BindIP, MaxSessions: stored.MaxSessions, AllowRegister: yesno.No,
 	}
-	err = service.Update(ctx, stored.ID, input)
-	var appErr *apperror.Error
-	if !errors.As(err, &appErr) || appErr.Code != authplatform.CodeInvalidPolicy {
-		t.Fatalf("Update() error = %v, want code %d", err, authplatform.CodeInvalidPolicy)
+	if err := service.Update(ctx, stored.ID, input); err != nil {
+		t.Fatal(err)
 	}
 	after, err := repository.FindPolicy(ctx, authplatform.BuiltinAdminCode)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.PolicyVersion != stored.PolicyVersion || !after.UpdatedAt.Equal(stored.UpdatedAt) || after.AllowRegister != stored.AllowRegister {
-		t.Fatalf("builtin admin was mutated: before=%+v after=%+v", stored, after)
+	if after.PolicyVersion != stored.PolicyVersion+1 || after.AllowRegister != yesno.No {
+		t.Fatalf("builtin admin registration policy = %+v", after)
 	}
 }
 

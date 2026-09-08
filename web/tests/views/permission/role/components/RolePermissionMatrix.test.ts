@@ -36,24 +36,24 @@ describe('RolePermissionMatrix', () => {
     expect(wrapper.text()).toContain('操作 0/1')
   })
 
-  it('selects an action together with its page', async () => {
+  it('selects an action without changing its page', async () => {
     const wrapper = mountMatrix([])
     await flushPromises()
 
     checkboxContaining(wrapper, '新增角色').vm.$emit('update:modelValue', true)
     await flushPromises()
 
-    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([[2, 3]])
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([[3]])
   })
 
-  it('clears a page and all of its actions', async () => {
+  it('clears a page without changing its actions', async () => {
     const wrapper = mountMatrix([2, 3])
     await flushPromises()
 
     checkboxContaining(wrapper, '角色管理').vm.$emit('update:modelValue', false)
     await flushPromises()
 
-    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([[]])
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([[3]])
   })
 })
 

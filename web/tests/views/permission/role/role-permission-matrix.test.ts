@@ -35,10 +35,10 @@ describe('role permission matrix', () => {
     })
   })
 
-  it('expands action grants with their page and preserves direct page grants', () => {
+  it('preserves independent direct page and action grants', () => {
     const groups = matrixGroups()
 
-    expect(expandDirectMenuIDs(groups, [3, 5, 8])).toEqual([2, 3, 5, 7, 8])
+    expect(expandDirectMenuIDs(groups, [3, 5, 8])).toEqual([3, 5, 8])
   })
 
   it('keeps page and action selection semantically valid', () => {
@@ -48,9 +48,9 @@ describe('role permission matrix', () => {
       return
     }
 
-    expect(toggleMatrixAction([], row, 3, true)).toEqual([2, 3])
+    expect(toggleMatrixAction([], row, 3, true)).toEqual([3])
     expect(toggleMatrixAction([2, 3], row, 3, false)).toEqual([2])
-    expect(toggleMatrixPage([2, 3], row, false)).toEqual([])
+    expect(toggleMatrixPage([2, 3], row, false)).toEqual([3])
     expect(toggleMatrixPage([], row, true)).toEqual([2])
   })
 
@@ -90,12 +90,12 @@ describe('role permission matrix', () => {
     })
   })
 
-  it('normalizes effective permissions to minimal direct grants', () => {
+  it('serializes page and action grants independently', () => {
     const groups = matrixGroups()
 
-    expect(normalizeDirectMenuIDs(groups, [2, 3])).toEqual([3])
+    expect(normalizeDirectMenuIDs(groups, [2, 3])).toEqual([2, 3])
     expect(normalizeDirectMenuIDs(groups, [2])).toEqual([2])
-    expect(normalizeDirectMenuIDs(groups, [2, 3, 5, 6])).toEqual([3, 6])
+    expect(normalizeDirectMenuIDs(groups, [2, 3, 5, 6])).toEqual([2, 3, 5, 6])
   })
 
   it('calculates stable added and removed permission ids', () => {

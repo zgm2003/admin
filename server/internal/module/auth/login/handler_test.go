@@ -18,12 +18,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestRegisterReturns201AndNoCookie(t *testing.T) {
+func TestPasswordRegistrationRouteIsNotExposed(t *testing.T) {
 	service := &stubAuthenticationService{registered: Registered{UserID: 1, Username: "admin", Email: "admin@example.com"}}
 	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/register", `{"username":"admin","email":"admin@example.com","password":"password","confirmPassword":"password"}`, nil, false)
-	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusCreated, 0, []string{"userId", "username", "email"})
-	if len(responseRecorder.Result().Cookies()) != 0 {
-		t.Fatal("registration set a cookie")
+	if responseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("password registration status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 }
 
@@ -189,12 +188,9 @@ func TestMeReturnsClosedCurrentUserShape(t *testing.T) {
 }
 
 func TestAuthHandlersRejectUnknownJSONFields(t *testing.T) {
-	for _, route := range []string{"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/password/forgot"} {
+	for _, route := range []string{"/api/v1/auth/login", "/api/v1/auth/password/forgot"} {
 		service := &stubAuthenticationService{}
 		body := `{"email":"admin@example.com","password":"password","unknown":true}`
-		if strings.HasSuffix(route, "register") {
-			body = `{"username":"admin","email":"admin@example.com","password":"password","confirmPassword":"password","unknown":true}`
-		}
 		responseRecorder := serveAuthRoute(t, service, http.MethodPost, route, body, nil, false)
 		if responseRecorder.Code != http.StatusBadRequest {
 			t.Errorf("route %s status=%d", route, responseRecorder.Code)
@@ -204,14 +200,12 @@ func TestAuthHandlersRejectUnknownJSONFields(t *testing.T) {
 
 func TestAuthHandlersPassExactClientMetadata(t *testing.T) {
 	service := &stubAuthenticationService{registered: Registered{UserID: 1}, credential: Credential{AccessToken: "access", ExpiresIn: 900, RefreshToken: "refresh", RefreshExpiresAt: time.Now().Add(time.Hour)}}
-	serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/register", `{"username":"admin","email":"admin@example.com","password":"password","confirmPassword":"password"}`, nil, false)
 	serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/login", `{"loginType":"password","loginAccount":"admin@example.com","password":"password"}`, nil, false)
 	serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/refresh", "", &http.Cookie{Name: refreshCookieName("admin"), Value: "refresh"}, false)
 	want := authclient.Client{Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440000", ClientIP: "192.0.2.1", UserAgent: ""}
 	for name, got := range map[string]authclient.Client{
-		"register": service.registerInput.Client,
-		"login":    service.loginInput.Client,
-		"refresh":  service.refreshInput.Client,
+		"login":   service.loginInput.Client,
+		"refresh": service.refreshInput.Client,
 	} {
 		if got != want {
 			t.Errorf("%s client = %+v, want %+v", name, got, want)

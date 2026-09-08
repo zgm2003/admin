@@ -3,13 +3,41 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## Admin 注册与权限语义修复（2026-09-08，最新）
+
+- 修复 action 自动赋予 page/view 的错误语义：普通角色的直接 action 只进入 `permissionCodes`，不产生 page、
+  动态路由或目录；只有直接 page 才进入 `menuTree` 并补目录祖先。Role Service 与前端授权矩阵均保存
+  page/action 的显式独立组合。`super_admin` 的全量有效权限语义不变。
+- `user:profile:view` 已从 `user` 目录移动为 `parent_id=NULL` 的隐藏根 page。个人中心可动态访问但不显示菜单，
+  也不会再让仅有个人能力的用户看到“用户与账号”目录。
+- Admin 允许邮箱验证码自注册；新邮箱验证成功后原子创建无密码账号、Profile、Access version，并绑定唯一
+  默认 `registered_user`。公开密码直注册路由已移除，避免绕过邮箱验证。登录页显示普通用户自动注册说明，
+  AuthPlatform 管理页允许编辑内置 Admin 的注册开关。
+- `registered_user` 当前直接授权固定为 5 项：`user:profile:view/detail/update`、`user:password:update`、
+  `storage:object:upload`。上传 action 不赋予 `storage:object:view`；额外管理能力必须分配其他角色。
+- Access Redis snapshot namespace 升至 v7，旧 v6 action 扩展快照不回读。Admin policy/menu version 与
+  当前 `registered_user` 用户的 Access state 已精确同步；未清 Redis、未重置会话或邮件额度。
+- 数据库迁移 `2026-09-08-admin-email-registration.sql` 已于 **2026-09-08 15:40:59 +08:00** 提交。
+  结果：Admin `allow_register=1`、`policy_version=3`、`menu_version=2`、默认角色 5 条直授权；
+  平台/角色/菜单/用户关系 ID 保持，非目标记录未变。真实 schema-only 快照已刷新。
+- 迁移前备份与带校验执行记录位于仓库外
+  `%LOCALAPPDATA%\Admin\backups\20260908-153855-admin-registration-rbac`；备份 SHA256：
+  `6B2837601B70C055C9EB9BECC83D76EDC9A1136DBF98151C23E82F84DB3C13A1`。
+- 后端定向测试通过：Access、Role、AuthPlatform、Auth Handler、迁移及 Router，包含 action-only 不泄露页面、
+  profile 隐藏根页面、v6 快照不回读、page/action 独立往返、注册开关、密码直注册 404 和迁移回滚。
+  前端 `pnpm typecheck` 通过；Role Matrix、Role 页面、AuthPlatform 页面、登录页 5 个 Vitest 文件
+  59/59 通过。未跑全量测试/构建，浏览器注册、上传与密码流程由维护者人工验收。
+- Agent 在迁移后保持服务关闭；维护者随后于 15:44 从 IDEA 手动启动 API/Worker。当前观察到 API PID 35736、
+  Worker PID 34520，未由 Agent 启动或停止。临时执行清单在
+  `docs/agent/TEMP-2026-09-08-admin-registration-rbac-plan.md`，明确不提交，验收后删除。
+
 ## 当前交接：快速收尾（2026-09-08）
 
 本节优先于下方阶段记录。按维护者最新要求冻结重构范围，停止浏览器 E2E，全量测试与构建交由维护者执行。
 
 - 已完成代码：Mail 原子预占返回两窗口共同决定的下一次等待，`resendAfterSeconds=0` 合法；Auth 不另设 cooldown。
   首次无密码登录只给非阻断提示。菜单变更改为平台 `menu_version`，不再扫描/锁定用户表或逐用户递增版本。
-  Access 本地/Redis 缓存同时受用户授权版本和平台菜单版本约束，Redis 快照 namespace 为 v6。
+  Access 本地/Redis 缓存同时受用户授权版本和平台菜单版本约束，Redis 快照 namespace 为 v7。
 - 冷缓存：Auth Session / Access / Menu Version 使用跨实例单目标租约，每个 scope 最多 32 个重建并发、
   每滑动秒最多 128 次启动；源 I/O 的 4 秒期限从租约申请时起算，早于 6 秒 Redis 租约。忙时有界等待后
   返回依赖错误；已知 Redis 故障/损坏不转为业务源回源。此为代码预算，不等于已完成百万用户压测。

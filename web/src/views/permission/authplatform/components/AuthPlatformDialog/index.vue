@@ -10,11 +10,10 @@ import type { AuthPlatformForm } from './types'
 const props = defineProps<{
   dialogMode: 'create' | 'edit'
   isEditing: boolean
-  isBuiltinAdminEdit: boolean
   submitting: boolean
   formValid: boolean
 }>()
-const { dialogMode, isEditing, isBuiltinAdminEdit, submitting, formValid } = toRefs(props)
+const { dialogMode, isEditing, submitting, formValid } = toRefs(props)
 const visible = defineModel<boolean>({ required: true })
 const form = defineModel<AuthPlatformForm>('form', { required: true })
 const emit = defineEmits<{ save: []; 'restore-defaults': [] }>()
@@ -179,12 +178,8 @@ const loginTypeOptions = computed<
                 v-model="form.allowRegister"
                 :active-value="YesNo.Yes"
                 :inactive-value="YesNo.No"
-                :disabled="isBuiltinAdminEdit"
                 data-testid="auth-platform-allow-register"
               />
-              <span v-if="isBuiltinAdminEdit" class="auth-platform-form-help">{{
-                t('permission.authplatform.adminRegistrationLocked')
-              }}</span>
             </el-form-item>
           </el-col>
           <el-col v-if="dialogMode === 'create'" :xs="8" :sm="8" :lg="8">

@@ -14,7 +14,7 @@ import (
 )
 
 func TestSnapshotKey(t *testing.T) {
-	if got := SnapshotKey("admin", 4, 7, 9, 1); got != "authz:permission:v6:admin:4:7:9:1" {
+	if got := SnapshotKey("admin", 4, 7, 9, 1); got != "authz:permission:v7:admin:4:7:9:1" {
 		t.Fatalf("SnapshotKey() = %q", got)
 	}
 }
@@ -78,6 +78,21 @@ func TestSnapshotCacheRejectsUnknownFieldsAndMismatchedIdentity(t *testing.T) {
 		if _, found, err := cache.Read(ctx, 1, "admin", 4, 94002, 3, 1); err == nil || !found {
 			t.Fatalf("invalid cached snapshot accepted: %s", payload)
 		}
+	}
+}
+
+func TestSnapshotCacheDoesNotReadLegacyActionExpansionNamespace(t *testing.T) {
+	client := openAccessRedis(t)
+	cache := NewSnapshotCache(client)
+	ctx := context.Background()
+	legacyKey := "authz:permission:v6:admin:4:94003:3:1"
+	t.Cleanup(func() { _ = client.Delete(ctx, legacyKey) })
+	payload := `{"schemaVersion":4,"userId":94003,"platformId":1,"platform":"admin","policyVersion":4,"version":3,"roleCodes":["registered_user"],"menuTree":[],"permissionCodes":["storage:object:view","storage:object:upload"]}`
+	if err := client.SetString(ctx, legacyKey, payload, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := cache.Read(ctx, 1, "admin", 4, 94003, 3, 1); err != nil || found {
+		t.Fatalf("legacy v6 snapshot was read: found=%v err=%v", found, err)
 	}
 }
 

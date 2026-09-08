@@ -206,10 +206,10 @@ describe('authentication platform page', () => {
     expect(updateAuthPlatformMock).not.toHaveBeenCalled()
   })
 
-  it('locks builtin admin registration off while preserving non-builtin registration choices', async () => {
+  it('keeps registration editable for builtin and non-builtin platforms', async () => {
     setPermissions(['permission:authplatform:list', 'permission:authplatform:update'])
     updateAuthPlatformMock.mockResolvedValue({})
-    const staleAdminRow = { ...adminRow, allowRegister: YesNo.Yes }
+    const staleAdminRow = { ...adminRow, allowRegister: YesNo.No }
     getAuthPlatformsMock.mockResolvedValue({
       list: [staleAdminRow],
       total: 1,
@@ -221,7 +221,7 @@ describe('authentication platform page', () => {
     await wrapper.get('[data-testid="auth-platform-update"]').trigger('click')
     await flushPromises()
     const adminSwitch = wrapper.get('[data-testid="auth-platform-allow-register"]')
-    expect(adminSwitch.get('input').attributes('disabled')).toBeDefined()
+    expect(adminSwitch.get('input').attributes('disabled')).toBeUndefined()
     expect(adminSwitch.get('input').attributes('aria-checked')).toBe('false')
 
     const adminSwitchComponent = findAllowRegisterSwitch(wrapper)
@@ -230,7 +230,7 @@ describe('authentication platform page', () => {
     await flushPromises()
     expect(updateAuthPlatformMock).toHaveBeenCalledWith(
       2,
-      expect.objectContaining({ allowRegister: YesNo.No }),
+      expect.objectContaining({ allowRegister: YesNo.Yes }),
     )
 
     wrapper.unmount()

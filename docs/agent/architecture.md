@@ -90,11 +90,15 @@ Mail 管理的限流策略与 `message_mail_config.ttl_minutes` 是所有邮件�
 - 平台菜单版本存在 `permission_auth_platform.menu_version`，Redis 使用 `authz:menu-state:v1:<platformID>`。
   菜单写入只锁定平台版本行和该平台菜单，在同一数据库事务递增菜单版本，沿 token lease 发布/回滚；
   不扫描用户表，不逐用户递增授权版本，不更改认证 `policy_version` 或撤销会话。用户/角色授权仍用用户版本。
-- Access 每次使用本地缓存前确认用户授权状态和平台菜单状态；Redis v6 快照键同时包含两种版本，
+- Access 每次使用本地缓存前确认用户授权状态和平台菜单状态；Redis v7 快照键同时包含两种版本，
   发布 Lua 同时校验两者，旧发布者不能把旧菜单写成当前快照。重建接口返回 `rebuiltPlatforms`。
 - Mail 的 `resendAfterSeconds` 来自两窗口原子预占后的额度，0 为合法值；不再把短窗口长度当独立冷却时间。
   返回值是额度快照，其他并发发送仍可能改变可用性，最终以服务端共同额度判断为准。
 - 上述菜单版本机制依赖 `2026-09-08-menu-catalog-version.sql`，业务库执行状态以 STATUS 为准；不得启动时迁移。
+- Access 的 page/action 授权不互相派生：直接 action 只进入 `permissionCodes`；直接 page 才进入 `menuTree`，
+  且只为页面渲染补 directory 祖先。当前快照 namespace v7 隔离旧的 action 自动补 page 语义。
+- `user:profile:view` 是 `parent_id=NULL` 的隐藏根 page。Admin 邮箱验证码登录在注册开启时创建
+  `registered_user`；该角色直接授权 profile page、三个 profile/password action 与 upload action。
 
 ## 同步请求
 

@@ -79,12 +79,14 @@ view -> api/<module>.ts -> utils/request.ts -> Go API
   `:list`、`:detail`、`:create`、`:update`、`:status`、`:delete` 或 `:authorize`。
 - 页面和 API 不共用权限码，不从 `:view` 字符串自动派生动作权限；每个 API 的后端 Middleware 使用同一
   action code 再校验。
+- Page 与 action 双向独立：action 授权不得隐式产生 page `:view`、动态路由或目录；只有直接授权 page 才进入
+  `menuTree` 并补齐目录祖先。角色授权必须保留 page/action 的显式组合。
 - `is_hidden = 1` 只隐藏侧边菜单，隐藏页面仍由 Access 快照动态注册；`menuTree` 只包含 directory/page，
   action 只进入 `permissionCodes`。
 - 权限事实层级固定为 PostgreSQL -> Redis -> 进程内缓存。进程内缓存必须先经 Redis 确认用户授权版本与平台菜单版本；
   Redis 故障或版本无法确认时不得返回旧缓存、空权限或假成功。
 - 个人资料固定使用隐藏 page `user:profile:view`，读取 `user:profile:detail`，保存
-  `user:profile:update`，改密 `user:password:update`。
+  `user:profile:update`，改密 `user:password:update`；该 page 是无父节点的隐藏根页面，不挂在用户管理目录下。
 
 ## 数据库与错误
 

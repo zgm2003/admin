@@ -171,9 +171,6 @@ export function expandDirectMenuIDs(
       throw new Error(`direct permission menu ${menuID} is absent from the matrix`)
     }
     expanded.add(menuID)
-    if (menuID !== row.pageId) {
-      expanded.add(row.pageId)
-    }
   }
 
   return sortedUnique(expanded)
@@ -188,9 +185,7 @@ export function toggleMatrixPage(
   if (checked) {
     next.add(row.pageId)
   } else {
-    for (const menuID of getRoleMatrixRowMenuIDs(row)) {
-      next.delete(menuID)
-    }
+    next.delete(row.pageId)
   }
   return sortedUnique(next)
 }
@@ -207,7 +202,6 @@ export function toggleMatrixAction(
 
   const next = new Set(selected)
   if (checked) {
-    next.add(row.pageId)
     next.add(actionID)
   } else {
     next.delete(actionID)
@@ -240,14 +234,12 @@ export function normalizeDirectMenuIDs(
 
   for (const group of groups) {
     for (const row of group.rows) {
-      const selectedActionIDs = row.actions
-        .filter((action) => selected.has(action.id))
-        .map((action) => action.id)
-      if (selectedActionIDs.length > 0) {
-        selectedActionIDs.forEach((actionID) => direct.add(actionID))
-      } else if (selected.has(row.pageId)) {
+      if (selected.has(row.pageId)) {
         direct.add(row.pageId)
       }
+      row.actions
+        .filter((action) => selected.has(action.id))
+        .forEach((action) => direct.add(action.id))
     }
   }
 

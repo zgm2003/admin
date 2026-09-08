@@ -28,7 +28,6 @@ export function createAuthPlatformForm(): AuthPlatformForm {
 }
 
 export function editAuthPlatformForm(platform: AuthPlatformListItem): AuthPlatformForm {
-  const isBuiltinAdmin = platform.code === 'admin' && platform.isBuiltin === YesNo.Yes
   return {
     code: platform.code,
     name: platform.name,
@@ -40,7 +39,7 @@ export function editAuthPlatformForm(platform: AuthPlatformListItem): AuthPlatfo
     bindDevice: platform.bindDevice,
     bindIP: platform.bindIP,
     maxSessions: platform.maxSessions,
-    allowRegister: isBuiltinAdmin ? YesNo.No : platform.allowRegister,
+    allowRegister: platform.allowRegister,
     isEnabled: platform.isEnabled,
   }
 }
@@ -99,10 +98,7 @@ export function createAuthPlatformInput(form: AuthPlatformForm): CreateAuthPlatf
   }
 }
 
-export function updateAuthPlatformInput(
-  form: AuthPlatformForm,
-  isBuiltinAdmin: boolean,
-): UpdateAuthPlatformInput {
+export function updateAuthPlatformInput(form: AuthPlatformForm): UpdateAuthPlatformInput {
   return {
     name: form.name.trim(),
     loginTypes: form.loginTypes,
@@ -113,6 +109,6 @@ export function updateAuthPlatformInput(
     bindDevice: form.bindDevice,
     bindIP: form.bindIP,
     maxSessions: form.maxSessions,
-    allowRegister: isBuiltinAdmin ? YesNo.No : form.allowRegister,
+    allowRegister: form.allowRegister,
   }
 }

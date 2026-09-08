@@ -46,6 +46,7 @@ describe('Login page', () => {
     expect(wrapper.find('[data-testid="login-panel"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="login-account"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="login-password"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-register-hint"]').exists()).toBe(false)
   })
 
   it('does not expose a fallback form and retries config loading after failure', async () => {
@@ -69,6 +70,9 @@ describe('Login page', () => {
     expect(wrapper.find('[data-testid="login-config-error"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="login-account"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="login-code"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="login-register-hint"]').text()).toContain(
+      '自动注册为普通用户',
+    )
   })
 
   it('submits a password login, loads me, and follows a safe redirect', async () => {

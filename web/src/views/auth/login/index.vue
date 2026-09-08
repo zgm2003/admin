@@ -28,6 +28,7 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const form = ref<LoginForm>({ account: '', password: '', code: '' })
 const options = ref<LoginConfigOption[]>([])
+const allowRegister = ref(false)
 const activeType = ref<LoginType>()
 const loading = ref(false)
 const configFailed = ref(false)
@@ -60,10 +61,12 @@ async function loadLoginConfig(): Promise<void> {
   try {
     const config = await getLoginConfig()
     options.value = config.loginTypes
+    allowRegister.value = config.allowRegister
     activeType.value = config.loginTypes[0]?.value
     configFailed.value = false
   } catch {
     options.value = []
+    allowRegister.value = false
     activeType.value = undefined
     configFailed.value = true
   } finally {
@@ -301,6 +304,13 @@ function generateChallengeID(): string {
                   </el-button>
                 </div>
               </el-form-item>
+              <p
+                v-if="codeMode && allowRegister"
+                class="auth-caption"
+                data-testid="login-register-hint"
+              >
+                {{ t('auth.login.emailAutoRegister') }}
+              </p>
 
               <el-button
                 data-testid="login-submit"

@@ -42,10 +42,9 @@ type Permissions struct {
 }
 
 type permissionIndex struct {
-	byID         map[int64]menu.Menu
-	children     map[int64][]int64
-	roots        []int64
-	pageByAction map[int64]int64
+	byID     map[int64]menu.Menu
+	children map[int64][]int64
+	roots    []int64
 }
 
 type platformCodeKey struct {
@@ -56,7 +55,7 @@ type platformCodeKey struct {
 func buildPermissionIndex(rows []menu.Menu) (permissionIndex, error) {
 	index := permissionIndex{
 		byID: make(map[int64]menu.Menu, len(rows)), children: make(map[int64][]int64),
-		roots: make([]int64, 0), pageByAction: make(map[int64]int64),
+		roots: make([]int64, 0),
 	}
 	codes := make(map[platformCodeKey]struct{}, len(rows))
 	for _, row := range rows {
@@ -92,9 +91,6 @@ func buildPermissionIndex(rows []menu.Menu) (permissionIndex, error) {
 			(parent.MenuType == menu.TypePage && row.MenuType == menu.TypeAction)
 		if !validChild {
 			return permissionIndex{}, fmt.Errorf("menu %d has an illegal parent type", row.ID)
-		}
-		if row.MenuType == menu.TypeAction {
-			index.pageByAction[row.ID] = parent.ID
 		}
 		index.children[parent.ID] = append(index.children[parent.ID], row.ID)
 	}
@@ -175,11 +171,6 @@ func (index permissionIndex) normalizeRequested(ids []int64) ([]int64, error) {
 			return nil, fmt.Errorf("menu id %d is not a grantable menu", id)
 		}
 		selected[id] = struct{}{}
-	}
-	for actionID, pageID := range index.pageByAction {
-		if _, actionSelected := selected[actionID]; actionSelected {
-			delete(selected, pageID)
-		}
 	}
 	result := make([]int64, 0, len(selected))
 	for id := range selected {

@@ -310,10 +310,10 @@ func TestBuildSnapshotPreservesLeafGrantSemanticsAndStableArrays(t *testing.T) {
 	if !reflect.DeepEqual(snapshot.RoleCodes, []string{"ai_tester", "registered_user"}) {
 		t.Fatalf("role codes = %v", snapshot.RoleCodes)
 	}
-	if !reflect.DeepEqual(snapshot.PermissionCodes, []string{"user:account:create", "user:account:list"}) {
+	if !reflect.DeepEqual(snapshot.PermissionCodes, []string{"user:account:create"}) {
 		t.Fatalf("permission codes = %v", snapshot.PermissionCodes)
 	}
-	if len(snapshot.MenuTree) != 1 || len(snapshot.MenuTree[0].Children) != 1 {
+	if len(snapshot.MenuTree) != 0 {
 		t.Fatalf("menu tree = %+v", snapshot.MenuTree)
 	}
 
@@ -363,8 +363,8 @@ func TestBuildSnapshotSupportsCanvasRootPageAndAction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(snapshot.MenuTree) != 1 || snapshot.MenuTree[0].Code != "canvas:test:list" || snapshot.MenuTree[0].MenuType != MenuPage ||
-		!reflect.DeepEqual(snapshot.PermissionCodes, []string{"canvas:test:button", "canvas:test:list"}) {
+	if len(snapshot.MenuTree) != 0 ||
+		!reflect.DeepEqual(snapshot.PermissionCodes, []string{"canvas:test:button"}) {
 		t.Fatalf("Canvas snapshot = %+v", snapshot)
 	}
 }
@@ -377,13 +377,41 @@ func TestBuildSnapshotKeepsHiddenMenusAndExcludesActionsFromTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(snapshot.MenuTree) != 1 || snapshot.MenuTree[0].IsHidden != int16(yesno.Yes) ||
-		len(snapshot.MenuTree[0].Children) != 1 || snapshot.MenuTree[0].Children[0].IsHidden != int16(yesno.Yes) {
+	if len(snapshot.MenuTree) != 0 {
 		t.Fatalf("hidden menu tree = %+v", snapshot.MenuTree)
 	}
-	if len(snapshot.MenuTree[0].Children[0].Children) != 0 ||
-		!reflect.DeepEqual(snapshot.PermissionCodes, []string{"user:account:create", "user:account:list"}) {
+	if !reflect.DeepEqual(snapshot.PermissionCodes, []string{"user:account:create"}) {
 		t.Fatalf("action tree/permissions = %+v / %v", snapshot.MenuTree, snapshot.PermissionCodes)
+	}
+}
+
+func TestRegisteredUserUploadActionDoesNotExposeStorageAndProfileIsRoot(t *testing.T) {
+	userDirectoryID, profileID, storageDirectoryID, storagePageID := int64(1), int64(2), int64(6), int64(7)
+	profilePath, profileComponent := "/user/profile", "user/profile"
+	storagePath, storageComponent := "/storage/object", "storage/object"
+	snapshot, err := buildSnapshot(Source{
+		Version: 1, RoleCodes: []string{"registered_user"},
+		Menus: []SourceMenu{
+			{ID: userDirectoryID, MenuType: MenuDirectory, Code: "user", I18nKey: accessStringPointer("navigation.user"), IsEnabled: yesno.Yes},
+			{ID: profileID, MenuType: MenuPage, Code: "user:profile:view", I18nKey: accessStringPointer("layout.user.profile"), Path: &profilePath, ComponentPath: &profileComponent, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: 3, ParentID: &profileID, MenuType: MenuAction, Code: "user:profile:detail", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: 4, ParentID: &profileID, MenuType: MenuAction, Code: "user:profile:update", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: 5, ParentID: &profileID, MenuType: MenuAction, Code: "user:password:update", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: storageDirectoryID, MenuType: MenuDirectory, Code: "storage", I18nKey: accessStringPointer("navigation.storage"), IsEnabled: yesno.Yes},
+			{ID: storagePageID, ParentID: &storageDirectoryID, MenuType: MenuPage, Code: "storage:object:view", I18nKey: accessStringPointer("navigation.storageObject"), Path: &storagePath, ComponentPath: &storageComponent, IsEnabled: yesno.Yes},
+			{ID: 8, ParentID: &storagePageID, MenuType: MenuAction, Code: "storage:object:upload", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+		},
+		GrantedMenuIDs: []int64{profileID, 3, 4, 5, 8},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCodes := []string{"storage:object:upload", "user:password:update", "user:profile:detail", "user:profile:update", "user:profile:view"}
+	if !reflect.DeepEqual(snapshot.PermissionCodes, wantCodes) {
+		t.Fatalf("permission codes=%v", snapshot.PermissionCodes)
+	}
+	if len(snapshot.MenuTree) != 1 || snapshot.MenuTree[0].Code != "user:profile:view" || snapshot.MenuTree[0].IsHidden != int16(yesno.Yes) {
+		t.Fatalf("menu tree=%+v", snapshot.MenuTree)
 	}
 }
 

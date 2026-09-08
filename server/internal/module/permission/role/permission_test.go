@@ -34,8 +34,8 @@ func TestPermissionIndexBuildsStableTreeAndNormalizesDirectGrants(t *testing.T) 
 		{input: []int64{}, want: []int64{}},
 		{input: []int64{2}, want: []int64{2}},
 		{input: []int64{3}, want: []int64{3}},
-		{input: []int64{2, 3}, want: []int64{3}},
-		{input: []int64{2, 3, 4}, want: []int64{3, 4}},
+		{input: []int64{2, 3}, want: []int64{2, 3}},
+		{input: []int64{2, 3, 4}, want: []int64{2, 3, 4}},
 	} {
 		got, err := index.normalizeRequested(test.input)
 		if err != nil || !reflect.DeepEqual(got, test.want) {

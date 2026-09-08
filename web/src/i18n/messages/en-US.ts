@@ -393,8 +393,6 @@ export const enUS = {
   'permission.authplatform.bindIP': 'Bind IP',
   'permission.authplatform.maxSessionsField': 'Maximum sessions',
   'permission.authplatform.allowRegister': 'Allow registration',
-  'permission.authplatform.adminRegistrationLocked':
-    'Built-in Admin does not support public registration',
   'permission.authplatform.isEnabled': 'Enable platform',
   'permission.authplatform.cancel': 'Cancel',
   'permission.authplatform.save': 'Save',
@@ -624,6 +622,8 @@ export const enUS = {
   'auth.login.description': 'Manage service status, tasks, and future permissions in one place.',
   'auth.login.caption': 'Use an authorized email address and password to enter the console.',
   'auth.login.email': 'Email',
+  'auth.login.emailAutoRegister':
+    'A verified new email creates a standard user account. An administrator assigns additional access.',
   'auth.login.emailPlaceholder': 'Enter email address',
   'auth.login.password': 'Password',
   'auth.login.passwordPlaceholder': 'Enter password',

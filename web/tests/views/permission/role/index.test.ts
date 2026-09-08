@@ -271,7 +271,7 @@ describe('RoleManagement', () => {
     expect(getRolesMock).toHaveBeenLastCalledWith({ page: 1, pageSize: 20 })
   })
 
-  it('expands minimal action grants into a fully selected effective matrix', async () => {
+  it('keeps action grants independent from their pages', async () => {
     getRolePermissionsMock.mockResolvedValue(permissionResponse({ menuIds: [3, 8] }))
     const wrapper = mountPage(['permission:role:authorize'])
     await flushPromises()
@@ -289,12 +289,12 @@ describe('RoleManagement', () => {
     ).toContain('Canvas')
 
     const matrix = wrapper.getComponent(RolePermissionMatrix)
-    expect(matrix.props('modelValue')).toEqual([2, 3, 7, 8])
+    expect(matrix.props('modelValue')).toEqual([3, 8])
     const groupCheckbox = matrix
       .findAllComponents(ElCheckbox)
       .find((checkbox) => checkbox.text().includes('系统管理'))
-    expect(groupCheckbox?.props('modelValue')).toBe(true)
-    expect(groupCheckbox?.props('indeterminate')).toBe(false)
+    expect(groupCheckbox?.props('modelValue')).toBe(false)
+    expect(groupCheckbox?.props('indeterminate')).toBe(true)
   })
 
   it('switches platform tabs and renders the Canvas root page matrix', async () => {
@@ -318,7 +318,7 @@ describe('RoleManagement', () => {
     expect(matrix.text()).not.toContain('系统管理')
   })
 
-  it('shows the effective permission diff before submitting minimal direct grants', async () => {
+  it('shows the permission diff before submitting independent direct grants', async () => {
     const wrapper = mountPage(['permission:role:authorize'])
     await flushPromises()
     await tooltipButton(wrapper, '授权').trigger('click')
@@ -340,7 +340,7 @@ describe('RoleManagement', () => {
 
     await bodyButton('确认').trigger('click')
     await flushPromises()
-    expect(updateRolePermissionsMock).toHaveBeenCalledWith(3, { menuIds: [3] })
+    expect(updateRolePermissionsMock).toHaveBeenCalledWith(3, { menuIds: [2, 3] })
     expect(accessStore.permissionCodes).toEqual(['permission:role:authorize'])
     expect(loadAccess).not.toHaveBeenCalled()
     expect(resetAccess).not.toHaveBeenCalled()
@@ -356,11 +356,11 @@ describe('RoleManagement', () => {
     const matrix = wrapper.getComponent(RolePermissionMatrix)
     await bodyButton('全选').trigger('click')
     await flushPromises()
-    expect(matrix.props('modelValue')).toEqual([2, 3, 7, 8])
+    expect(matrix.props('modelValue')).toEqual([2, 3, 8])
 
     await bodyButton('清空').trigger('click')
     await flushPromises()
-    expect(matrix.props('modelValue')).toEqual([7, 8])
+    expect(matrix.props('modelValue')).toEqual([8])
   })
 
   it('keeps the matrix selection when permission diff confirmation is cancelled', async () => {
@@ -432,7 +432,7 @@ describe('RoleManagement', () => {
     await bodyButton('确认').trigger('click')
     await flushPromises()
 
-    expect(updateRolePermissionsMock).toHaveBeenCalledWith(3, { menuIds: [3] })
+    expect(updateRolePermissionsMock).toHaveBeenCalledWith(3, { menuIds: [2, 3] })
     expect(document.body.textContent).toContain('save failed')
     expect(document.body.textContent).toContain('确认权限变更')
     expect(document.body.textContent).toContain('测试员 (tester)')

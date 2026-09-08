@@ -77,12 +77,6 @@ const canUpdate = computed(() => access.hasPermission('permission:authplatform:u
 const canStatus = computed(() => access.hasPermission('permission:authplatform:status'))
 const canDelete = computed(() => access.hasPermission('permission:authplatform:delete'))
 const isEditing = computed(() => dialogMode.value === 'edit')
-const isBuiltinAdminEdit = computed(() => {
-  const platform = editingPlatform.value
-  return (
-    dialogMode.value === 'edit' && platform?.code === 'admin' && platform.isBuiltin === YesNo.Yes
-  )
-})
 const formValid = computed(() => isAuthPlatformFormValid(form.value, isEditing.value))
 
 async function loadPage(): Promise<void> {
@@ -178,10 +172,7 @@ async function submit(): Promise<void> {
       await createAuthPlatform(createAuthPlatformInput(form.value))
       query.value = { ...query.value, page: 1 }
     } else if (editingPlatform.value !== null) {
-      await updateAuthPlatform(
-        editingPlatform.value.id,
-        updateAuthPlatformInput(form.value, isBuiltinAdminEdit.value),
-      )
+      await updateAuthPlatform(editingPlatform.value.id, updateAuthPlatformInput(form.value))
     }
     await loadPage()
     dialogVisible.value = false
@@ -470,7 +461,6 @@ onMounted(() => {
       v-model:form="form"
       :dialog-mode="dialogMode"
       :is-editing="isEditing"
-      :is-builtin-admin-edit="isBuiltinAdminEdit"
       :submitting="submitting"
       :form-valid="formValid"
       @restore-defaults="restoreDefaultTTL"

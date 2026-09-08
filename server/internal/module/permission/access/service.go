@@ -253,7 +253,11 @@ func buildSnapshot(source Source) (Snapshot, error) {
 		startIDs = append(startIDs, source.GrantedMenuIDs...)
 	}
 
-	selected := make(map[int64]SourceMenu)
+	if err := validateSelectedMenus(menusByID); err != nil {
+		return Snapshot{}, err
+	}
+	direct := make(map[int64]SourceMenu, len(startIDs))
+	treeSelected := make(map[int64]SourceMenu)
 	for _, startID := range startIDs {
 		start, exists := menusByID[startID]
 		if !exists {
@@ -263,6 +267,10 @@ func buildSnapshot(source Source) (Snapshot, error) {
 			return Snapshot{}, fmt.Errorf("directory menu %d was directly granted", startID)
 		}
 
+		direct[startID] = start
+		if start.MenuType == MenuAction {
+			continue
+		}
 		visited := make(map[int64]struct{})
 		currentID := startID
 		for {
@@ -274,7 +282,7 @@ func buildSnapshot(source Source) (Snapshot, error) {
 			if !exists {
 				return Snapshot{}, fmt.Errorf("menu parent %d is missing", currentID)
 			}
-			selected[currentID] = current
+			treeSelected[currentID] = current
 			if current.ParentID == nil {
 				break
 			}
@@ -282,7 +290,7 @@ func buildSnapshot(source Source) (Snapshot, error) {
 		}
 	}
 
-	if err := validateSelectedMenus(selected); err != nil {
+	if err := validateSelectedMenus(treeSelected); err != nil {
 		return Snapshot{}, err
 	}
 	roleCodes, err := sortUniqueStrings(source.RoleCodes)
@@ -290,7 +298,7 @@ func buildSnapshot(source Source) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	permissionCodes := make([]string, 0)
-	for _, item := range selected {
+	for _, item := range direct {
 		if item.MenuType == MenuPage || item.MenuType == MenuAction {
 			permissionCodes = append(permissionCodes, item.Code)
 		}
@@ -301,7 +309,7 @@ func buildSnapshot(source Source) (Snapshot, error) {
 	}
 
 	return Snapshot{
-		RoleCodes: roleCodes, MenuTree: buildMenuTree(selected), PermissionCodes: permissionCodes, Version: source.Version,
+		RoleCodes: roleCodes, MenuTree: buildMenuTree(treeSelected), PermissionCodes: permissionCodes, Version: source.Version,
 	}, nil
 }
 

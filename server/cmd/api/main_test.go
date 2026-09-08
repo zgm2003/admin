@@ -296,7 +296,6 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"GET /api/v1/auth/policy":                                 1,
 		"GET /api/v1/auth/login-config":                           1,
 		"POST /api/v1/auth/send-code":                             1,
-		"POST /api/v1/auth/register":                              1,
 		"POST /api/v1/auth/login":                                 1,
 		"POST /api/v1/auth/refresh":                               1,
 		"POST /api/v1/auth/logout":                                1,

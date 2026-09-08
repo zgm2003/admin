@@ -565,7 +565,7 @@ func TestServiceDeleteRollsBackWhenRoleWriteFails(t *testing.T) {
 	}
 }
 
-func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
+func TestServicePermissionsPreservesIndependentDirectGrants(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
 	service, accessStates, _ := newRoleMutationTestService(t, role.NewRepository(tx))
 	adminPlatformID := roleTestAdminPlatformID(t, tx, ctx)
@@ -603,12 +603,12 @@ func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
 	}
 	boundUser := createRoleAccessUser(t, tx, ctx, roleID, yesno.Yes, false)
 	count, err := service.UpdatePermissions(ctx, roleID, []int64{page.ID, action.ID, canvasPage.ID, canvasAction.ID})
-	if err != nil || count != 2 {
+	if err != nil || count != 4 {
 		t.Fatalf("UpdatePermissions() = %d,%v", count, err)
 	}
 	assertRoleAccessState(t, accessStates, boundUser.ID, 2)
 	permissions, err := service.Permissions(ctx, roleID)
-	if err != nil || len(permissions.Platforms) != 2 || !reflect.DeepEqual(permissions.MenuIDs, []int64{action.ID, canvasAction.ID}) {
+	if err != nil || len(permissions.Platforms) != 2 || !reflect.DeepEqual(permissions.MenuIDs, []int64{page.ID, action.ID, canvasPage.ID, canvasAction.ID}) {
 		t.Fatalf("Permissions() = %+v,%v", permissions, err)
 	}
 	adminPermissions, canvasPermissions := permissions.Platforms[0], permissions.Platforms[1]
@@ -622,7 +622,7 @@ func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
 	if err := tx.WithContext(ctx).Where("role_id = ?", roleID).Take(&before).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.UpdatePermissions(ctx, roleID, []int64{action.ID, canvasAction.ID}); err != nil {
+	if _, err := service.UpdatePermissions(ctx, roleID, []int64{page.ID, action.ID, canvasPage.ID, canvasAction.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if got := readRoleAccessVersion(t, tx, ctx, boundUser.ID); got != 2 {
