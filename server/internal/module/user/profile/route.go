@@ -7,4 +7,5 @@ func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.
 	accountRoutes.GET("/profile", authenticate, requirePermission(PermissionDetail), handler.CurrentProfile)
 	accountRoutes.PUT("/profile", authenticate, requirePermission(PermissionUpdate), handler.UpdateProfile)
 	accountRoutes.POST("/password", authenticate, requirePermission(PermissionPasswordUpdate), handler.ChangePassword)
+	accountRoutes.POST("/password/set", authenticate, requirePermission(PermissionPasswordUpdate), handler.SetPassword)
 }

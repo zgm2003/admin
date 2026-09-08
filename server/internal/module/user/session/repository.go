@@ -91,9 +91,10 @@ func (r *Repository) CreateWithinLimit(ctx context.Context, input CreateInput, p
 
 type authorityRow struct {
 	Session
-	Platform      string
-	UserIsEnabled yesno.Value
-	UserDeleted   bool
+	Platform            string
+	UserIsEnabled       yesno.Value
+	UserDeleted         bool
+	PasswordSetRequired bool
 }
 
 func (r *Repository) FindAuthoritative(ctx context.Context, userID, sessionID int64, platform string, version int64, now time.Time) (Authority, error) {
@@ -121,6 +122,7 @@ func (r *Repository) FindByRefreshHash(ctx context.Context, platform, hash strin
 	var row authorityRow
 	result := r.db.WithContext(ctx).Unscoped().Raw(`
 		SELECT session.*, platform.code AS platform,
+			(app_user.password_hash = '') AS password_set_required,
 			app_user.is_enabled AS user_is_enabled,
 			(app_user.deleted_at IS NOT NULL) AS user_deleted
 		FROM user_session AS session
@@ -142,7 +144,7 @@ func authorityFromRow(row authorityRow) Authority {
 	return Authority{
 		Session: row.Session,
 		UserID:  row.UserID, UserIsEnabled: row.UserIsEnabled,
-		UserDeleted: row.UserDeleted,
+		UserDeleted: row.UserDeleted, PasswordSetRequired: row.PasswordSetRequired,
 	}
 }
 

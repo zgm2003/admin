@@ -46,3 +46,16 @@ type SendCodeRequest struct {
 	Scene       *string `json:"scene" binding:"required"`
 	ChallengeID *string `json:"challengeId" binding:"omitempty,max=128"`
 }
+
+// ForgotPasswordRequest is the request body of POST /auth/password/forgot.
+type ForgotPasswordRequest struct {
+	Email *string `json:"email" binding:"required,email"`
+}
+
+// ResetPasswordRequest is the request body of POST /auth/password/reset.
+type ResetPasswordRequest struct {
+	Email           *string `json:"email" binding:"required,email"`
+	Code            *string `json:"code" binding:"required,len=6,numeric"`
+	NewPassword     *string `json:"newPassword" binding:"required"`
+	ConfirmPassword *string `json:"confirmPassword" binding:"required"`
+}

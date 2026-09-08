@@ -49,3 +49,15 @@ func (r passwordRequest) input() (auth.ChangePasswordInput, error) {
 	}
 	return auth.ChangePasswordInput{CurrentPassword: r.CurrentPassword, NewPassword: r.NewPassword, ConfirmPassword: r.ConfirmPassword}, nil
 }
+
+type setPasswordRequest struct {
+	NewPassword     string `json:"newPassword"`
+	ConfirmPassword string `json:"confirmPassword"`
+}
+
+func (r setPasswordRequest) input() (auth.SetPasswordInput, error) {
+	if r.NewPassword == "" || r.ConfirmPassword == "" {
+		return auth.SetPasswordInput{}, apperror.InvalidRequest(fmt.Errorf("password fields are required"))
+	}
+	return auth.SetPasswordInput{NewPassword: r.NewPassword, ConfirmPassword: r.ConfirmPassword}, nil
+}

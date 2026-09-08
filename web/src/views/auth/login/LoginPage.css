@@ -200,6 +200,22 @@
   font-weight: 650;
 }
 
+.auth-forgot {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.auth-forgot a {
+  color: var(--el-color-primary);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.auth-forgot a:hover,
+.auth-forgot a:focus-visible {
+  text-decoration: underline;
+}
+
 .auth-login-type {
   width: 100%;
   margin-bottom: 22px;

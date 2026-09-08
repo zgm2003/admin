@@ -131,6 +131,14 @@ func (accessAuthService) SendCode(context.Context, auth.SendCodeInput) (auth.Sen
 	return auth.SendCodeResult{}, nil
 }
 
+func (accessAuthService) ForgotPassword(context.Context, auth.ForgotPasswordInput) (auth.SendCodeResult, error) {
+	return auth.SendCodeResult{}, nil
+}
+
+func (accessAuthService) ResetPassword(context.Context, auth.ResetPasswordInput) error {
+	return nil
+}
+
 func (accessAuthService) Refresh(context.Context, auth.RefreshInput) (auth.Credential, error) {
 	return auth.Credential{}, nil
 }

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
-import { changePassword, getAccountProfile, updateAccountProfile } from '@/api/user/profile'
+import { changePassword, getAccountProfile, setPassword, updateAccountProfile } from '@/api/user/profile'
 import type {
   AccountProfile,
   ChangePasswordInput,
@@ -20,6 +20,7 @@ const auth = useAuthStore()
 const access = usePermissionStore()
 const canUpdateProfile = computed(() => access.hasPermission('account:profile:update'))
 const canUpdatePassword = computed(() => access.hasPermission('account:password:update'))
+const setPasswordMode = computed(() => auth.passwordSetRequired)
 const loading = ref(false)
 const savingProfile = ref(false)
 const changingPassword = ref(false)
@@ -84,6 +85,18 @@ async function submitPassword(): Promise<void> {
   if (changingPassword.value) return
   changingPassword.value = true
   try {
+    if (setPasswordMode.value) {
+      await setPassword({
+        newPassword: passwordForm.newPassword,
+        confirmPassword: passwordForm.confirmPassword,
+      })
+      auth.markPasswordSet()
+      passwordForm.currentPassword = ''
+      passwordForm.newPassword = ''
+      passwordForm.confirmPassword = ''
+      ElMessage.success(t('account.password.setSuccessMessage'))
+      return
+    }
     await changePassword({ ...passwordForm })
     await ElMessageBox.alert(
       t('account.password.successMessage'),
@@ -181,13 +194,14 @@ void loadProfile()
         <el-card shadow="never">
           <template #header
             ><div class="account-profile__card-title">
-              {{ t('account.password.title') }}
+              {{ t(setPasswordMode ? 'account.password.setTitle' : 'account.password.title') }}
             </div></template
           >
           <el-form label-position="top" @submit.prevent="submitPassword">
-            <el-form-item :label="t('account.password.current')"
+            <el-form-item v-if="!setPasswordMode" :label="t('account.password.current')"
               ><el-input
                 v-model="passwordForm.currentPassword"
+                data-testid="account-password-current"
                 type="password"
                 show-password
                 autocomplete="current-password"
@@ -195,6 +209,7 @@ void loadProfile()
             <el-form-item :label="t('account.password.new')"
               ><el-input
                 v-model="passwordForm.newPassword"
+                data-testid="account-password-new"
                 type="password"
                 show-password
                 autocomplete="new-password"
@@ -202,6 +217,7 @@ void loadProfile()
             <el-form-item :label="t('account.password.confirm')"
               ><el-input
                 v-model="passwordForm.confirmPassword"
+                data-testid="account-password-confirm"
                 type="password"
                 show-password
                 autocomplete="new-password"
@@ -212,7 +228,7 @@ void loadProfile()
                 type="primary"
                 :loading="changingPassword"
                 @click="submitPassword"
-                >{{ t('account.password.submit') }}</el-button
+                >{{ t(setPasswordMode ? 'account.password.setSubmit' : 'account.password.submit') }}</el-button
               >
             </div>
           </el-form>

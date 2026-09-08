@@ -208,6 +208,14 @@ func (apiAuthService) SendCode(context.Context, auth.SendCodeInput) (auth.SendCo
 	return auth.SendCodeResult{}, nil
 }
 
+func (apiAuthService) ForgotPassword(context.Context, auth.ForgotPasswordInput) (auth.SendCodeResult, error) {
+	return auth.SendCodeResult{}, nil
+}
+
+func (apiAuthService) ResetPassword(context.Context, auth.ResetPasswordInput) error {
+	return nil
+}
+
 func (apiAuthService) Refresh(context.Context, auth.RefreshInput) (auth.Credential, error) {
 	return auth.Credential{}, nil
 }
@@ -292,6 +300,8 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"POST /api/v1/auth/login":                             1,
 		"POST /api/v1/auth/refresh":                           1,
 		"POST /api/v1/auth/logout":                            1,
+		"POST /api/v1/auth/password/forgot":                   1,
+		"POST /api/v1/auth/password/reset":                    1,
 		"GET /api/v1/auth/me":                                 1,
 		"GET /api/v1/access":                                  1,
 		"POST /api/v1/storage/upload-credentials":             1,
@@ -300,6 +310,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"GET /api/admin/v1/account/profile":                   1,
 		"POST /api/admin/v1/auth-platforms":                   1,
 		"POST /api/admin/v1/account/password":                 1,
+		"POST /api/admin/v1/account/password/set":             1,
 		"PUT /api/admin/v1/auth-platforms/:id":                1,
 		"PUT /api/admin/v1/account/profile":                   1,
 		"PATCH /api/admin/v1/auth-platforms/:id/status":       1,

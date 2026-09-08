@@ -120,6 +120,32 @@
 
 ## 当前工作
 
+### 当前优先工作：密码契约兜底（2026-09-08）
+
+以下条目是当前执行入口；后文 `auth-platform-login-types` 与 TTL 收口条目保留前置工作的记录，不代表本轮仍需重新实施。
+
+| 项目 | 内容 |
+| --- | --- |
+| 目标 | `password-recovery-first-set`：按现有独立契约兜底找回密码和首次设置密码，先完成架构与行为收口 |
+| 计划 | `docs/agent/plans/2026-09-07-password-recovery-first-set-contract.md`；该契约标明属于 P0 认证与权限收口，前置为邮箱验证码 TTL/重发收口 |
+| 状态 | 已有未提交实现，尚未完成交付验收；技术方案讨论与定向审查中，不视为已完成 |
+| 优先级 | 后端 Handler -> Service -> Repository -> Model 与前端 View -> API -> Request 边界优先；UI 视觉统一整改延期，必要的协议及交互正确性仍需验证 |
+| 兜底范围 | 认证接口与测试替身一致性、首次设密原子条件写入、forget readiness 失效、passwordSetRequired 生命周期、验证码消费与会话撤销的并发/部分失败验证 |
+| 已定契约 | 所有发邮件场景（包括管理测试）服从 Mail 管理配置；邮箱额度按平台+规范化邮箱共享，验证码内容按 scene 隔离。60 秒/5 分钟不是硬规则，不新增 Auth TTL/cooldown。存量 Redis 窗口必须衔接，不能直接换 key 重置额度 |
+| 验收 | 保留重置后不自动登录、首次设密不强制拦截及保留会话的既定行为；定向行为测试、共享接口测试编译与构建通过；真实依赖验证和未运行项单独记录 |
+| 下一步 | 按失败测试 -> 最小修复 -> 验证推进密码兜底与后端架构维护；保留跨层业务命名映射。UI 改版不在本轮范围，未经验证不宣称整体收尾 |
+
+后端维护验收清单（本轮进行中）：跨层命名约束与三个 Skill；DTO/Handler/Service/Repository/Model/shared
+责任归位与自动检查；首次设密原子写入；邮件全场景共享策略与旧 Redis 衔接；readiness 全场景失效；
+refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另需评估 Access/Auth Redis 故障无界回源、
+菜单全用户失效的容量风险，不能用文件移动代替这些问题的结论。
+
+本轮维护原则：根规则只放硬边界，任务路由负责按需加载，三个项目 Skill 分别维护 CRUD、数据库和 RBAC 施工流程；只将可复用的已确认约束沉淀到 Skill，不把本次密码业务细节扩成通用框架。
+
+本轮已执行验证：`go build ./...` 通过；公共 shared/config/secretkey 定向测试通过；auth/login、message/mail、auth/platform、user/profile 的 `-short` 测试通过（真实依赖测试跳过）。`go test ./... -run '^$'` 因 API/Access 测试替身缺少新增认证接口方法而失败。前端 `pnpm check:architecture` 通过；全量 Vitest 已报告一个存储页面用例失败，随后长时间未完成，本轮启动的进程已停止，无完整通过结论。工作区同时存在其他会话改动，以上仅代表执行当时的结果。
+
+### 前置工作记录：认证平台登录方式
+
 | 项目 | 内容 |
 | --- | --- |
 | 目标 | `auth-platform-login-types`：把认证平台可配置的邮箱/手机号/密码登录方式连接到 Mail 验证码、Auth、User、Session、RBAC 和前端登录链路 |
@@ -169,6 +195,39 @@
 | 实施范围 | Mail readiness v2 携带 TTL、限流前置预检、Auth lease-owner 原子替换、`resendAfterSeconds` HTTP/前端契约、真实 Redis 双实例故障探针。 |
 | 不在范围 | 数据库迁移、SMS/phone 开放、系统设置、身份生命周期、AuthPlatform 字段、`registered_user` 授权、并发协议时间配置化。 |
 | 验收 | 5 分钟 TTL 全链路同源；60 秒内 429 且旧码可用，60 秒后新码替换旧码；Redis/PG/provider 故障无假成功；readiness 热读零 PostgreSQL，missing 双实例单回源；Go/Vitest 全量通过。 |
+
+## 找回密码与首次设置密码（2026-09-08）
+
+> 用户授权牵头实现找回密码/首次设置密码契约；探索与交互方案已与用户对齐后端到端落地，未提交。
+
+**后端契约**
+
+- 公开路由 `POST /api/v1/auth/password/forgot`（发码，scene=forget，返回 SendCodeResult）与
+  `POST /api/v1/auth/password/reset`（email+code+newPassword+confirmPassword，成功 data 为空对象）。
+- 登录、refresh、Me 响应新增 `passwordSetRequired` 布尔字段：凭据 `PasswordHash == ""` 时为 true。
+- 认证路由 `POST /api/admin/v1/account/password/set`：仅允许无密码账号首次设置（已有密码返回
+  `10005` Conflict），使用 `account:password:update` 权限码，成功后不吊销当前会话；改密仍走
+  `ChangePasswordAndRevokeSessions` 吊销全部会话。
+- Repository 新增 `SetPasswordHash`；`authenticationService` 接口新增 `ForgotPassword`/`ResetPassword`，
+  相关测试桩已同步。
+
+**前端契约与页面**
+
+- `AccessCredential`/`CurrentUser` 严格 DTO 纳入 `passwordSetRequired`（`expectExactKeys` + 布尔校验），
+  `utils/request.ts` 的 `isAccessCredential` 探测同步。
+- 新增 `/forgot-password` 页面（复用 LoginPage.css 布局）：邮箱 → 发码（60s 倒计时、challenge 轮换）→
+  设置新密码 → 成功回登录页并经 `?account=` 预填；登录页新增忘记密码入口链接。
+- profile 密码卡片双形态：`passwordSetRequired` 为 true 时隐藏当前密码框、改调 `setPassword`、成功文案
+  提示会话保持；store 在 set 成功后清除标记。
+- zh-CN/en-US 文案齐备；所有引用 `AccessCredential`/`CurrentUser` 的测试 stub 已同步新字段。
+
+**验证证据**
+
+- 后端：`go fmt`、`go vet`、`go build`、`go test ./...`（36 包）全部通过。
+- 前端：全量 Vitest 64 文件 461 项中 460 项通过，唯一失败（store updateProfile 期望形状）修复后定向重跑
+  通过；`pnpm build`（含 vue-tsc）通过，仅存既有 >500 kB chunk 提示。
+- 首轮全量中 storage-object/roles 4 项 5s 超时为机器负载抖动，隔离重跑全部通过。
+- `go test -race` 仍未执行（机器无 gcc/clang，与既有记录一致）。
 
 ## 项目规则维护（2026-09-07）
 

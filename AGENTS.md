@@ -17,6 +17,10 @@ Skill。`docs/superpowers/**` 与带日期的旧 SQL 是历史档案，除非用
 
 ## 架构边界
 
+- 业务身份必须贯穿 `web/src/views`、`web/src/api`、`server/internal/module`、Model 表名、菜单
+  `path/componentPath/code/i18nKey` 和中英文 i18n。沿用现有域映射，不为目录整齐机械改名；跨层改名必须
+  同时核对路由、权限、数据库迁移和翻译，并补契约测试。具体映射见 `docs/agent/architecture.md`。
+
 默认容量基线为百万级用户、多实例和高并发访问：
 
 - 共享请求热路径不得把 PostgreSQL 当作每请求配置中心，不得依赖单进程状态或无界缓存；

@@ -282,6 +282,7 @@ function isAccessCredential(value: unknown): value is AccessCredential {
     typeof value.expiresIn === 'number' &&
     Number.isInteger(value.expiresIn) &&
     value.expiresIn > 0 &&
-    typeof value.isNewUser === 'boolean'
+    typeof value.isNewUser === 'boolean' &&
+    typeof value.passwordSetRequired === 'boolean'
   )
 }

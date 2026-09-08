@@ -55,6 +55,22 @@ export async function changePassword(input: ChangePasswordInput): Promise<void> 
   )
 }
 
+export interface SetPasswordInput {
+  newPassword: string
+  confirmPassword: string
+}
+
+export async function setPassword(input: SetPasswordInput): Promise<void> {
+  expectEmptyObject(
+    await request<unknown>({
+      method: 'POST',
+      url: '/api/admin/v1/account/password/set',
+      data: input,
+    }),
+    'set password result',
+  )
+}
+
 function parseAccountProfile(value: unknown): AccountProfile {
   if (
     !isRecord(value) ||

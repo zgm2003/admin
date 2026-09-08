@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  forgotPassword,
   getCurrentUser,
   getLoginConfig,
   login,
   logout,
   refresh,
+  resetPassword,
   sendLoginCode,
 } from '@/api/auth/login'
 import { refreshAccessCredential, request } from '@/utils/request'
@@ -26,7 +28,12 @@ describe('auth API', () => {
   })
 
   it('logs in with password and parses isNewUser', async () => {
-    requestMock.mockResolvedValue({ accessToken: 'jwt', expiresIn: 900, isNewUser: false })
+    requestMock.mockResolvedValue({
+      accessToken: 'jwt',
+      expiresIn: 900,
+      isNewUser: false,
+      passwordSetRequired: false,
+    })
     const input = {
       loginType: 'password' as const,
       loginAccount: 'admin@example.com',
@@ -36,6 +43,7 @@ describe('auth API', () => {
       accessToken: 'jwt',
       expiresIn: 900,
       isNewUser: false,
+      passwordSetRequired: false,
     })
     expect(requestMock).toHaveBeenCalledWith({
       method: 'POST',
@@ -45,10 +53,20 @@ describe('auth API', () => {
   })
 
   it('logs in with an email verification code', async () => {
-    requestMock.mockResolvedValue({ accessToken: 'jwt', expiresIn: 900, isNewUser: true })
+    requestMock.mockResolvedValue({
+      accessToken: 'jwt',
+      expiresIn: 900,
+      isNewUser: true,
+      passwordSetRequired: true,
+    })
     await expect(
       login({ loginType: 'email', loginAccount: 'admin@example.com', code: '123456' }),
-    ).resolves.toEqual({ accessToken: 'jwt', expiresIn: 900, isNewUser: true })
+    ).resolves.toEqual({
+      accessToken: 'jwt',
+      expiresIn: 900,
+      isNewUser: true,
+      passwordSetRequired: true,
+    })
   })
 
   it('loads the effective login config', async () => {
@@ -103,7 +121,12 @@ describe('auth API', () => {
   })
 
   it('rejects non-boolean credential and config flags', async () => {
-    requestMock.mockResolvedValueOnce({ accessToken: 'jwt', expiresIn: 900, isNewUser: 1 })
+    requestMock.mockResolvedValueOnce({
+      accessToken: 'jwt',
+      expiresIn: 900,
+      isNewUser: 1,
+      passwordSetRequired: false,
+    })
     await expect(
       login({ loginType: 'password', loginAccount: 'admin@example.com', password: 'password' }),
     ).rejects.toThrow('access credential.isNewUser must be a boolean')
@@ -128,12 +151,14 @@ describe('auth API', () => {
       accessToken: 'jwt',
       expiresIn: 900,
       isNewUser: false,
+      passwordSetRequired: false,
     })
     requestMock.mockResolvedValueOnce({})
     await expect(refresh()).resolves.toEqual({
       accessToken: 'jwt',
       expiresIn: 900,
       isNewUser: false,
+      passwordSetRequired: false,
     })
     await expect(logout()).resolves.toBeUndefined()
     expect(refreshAccessCredentialMock).toHaveBeenCalledOnce()
@@ -210,6 +235,7 @@ describe('auth API', () => {
       email: 'admin@example.com',
       phone: null,
       avatar: 'avatar/profile.png',
+      passwordSetRequired: false,
     })
     await expect(getCurrentUser()).resolves.toEqual({
       userId: 1,
@@ -217,8 +243,46 @@ describe('auth API', () => {
       email: 'admin@example.com',
       phone: null,
       avatar: 'avatar/profile.png',
+      passwordSetRequired: false,
     })
     expect(requestMock).toHaveBeenCalledWith({ method: 'GET', url: '/api/v1/auth/me' })
+  })
+
+  it('requests a forgot-password code and parses the resend window', async () => {
+    requestMock.mockResolvedValue({
+      challengeId: 'challenge-9',
+      expiresAt: '2026-09-07T10:00:00Z',
+      resendAfterSeconds: 60,
+    })
+    await expect(forgotPassword('admin@example.com')).resolves.toEqual({
+      challengeId: 'challenge-9',
+      expiresAt: '2026-09-07T10:00:00Z',
+      resendAfterSeconds: 60,
+    })
+    expect(requestMock).toHaveBeenCalledWith({
+      method: 'POST',
+      url: '/api/v1/auth/password/forgot',
+      data: { email: 'admin@example.com' },
+    })
+  })
+
+  it('resets the password and requires an empty object result', async () => {
+    const input = {
+      email: 'admin@example.com',
+      code: '123456',
+      newPassword: 'NewPassw0rd!',
+      confirmPassword: 'NewPassw0rd!',
+    }
+    requestMock.mockResolvedValueOnce({})
+    await expect(resetPassword(input)).resolves.toBeUndefined()
+    expect(requestMock).toHaveBeenCalledWith({
+      method: 'POST',
+      url: '/api/v1/auth/password/reset',
+      data: input,
+    })
+
+    requestMock.mockResolvedValueOnce({ unexpected: true })
+    await expect(resetPassword(input)).rejects.toThrow('reset password result')
   })
 
   it('rejects a current user response without the required phone field', async () => {

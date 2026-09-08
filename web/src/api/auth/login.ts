@@ -20,6 +20,7 @@ export interface AccessCredential {
   accessToken: string
   expiresIn: number
   isNewUser: boolean
+  passwordSetRequired: boolean
 }
 
 export interface LoginConfigOption {
@@ -44,6 +45,7 @@ export interface CurrentUser {
   email: string
   phone: string | null
   avatar: string
+  passwordSetRequired: boolean
 }
 
 export async function login(input: LoginInput): Promise<AccessCredential> {
@@ -73,6 +75,34 @@ export async function sendLoginCode(
   )
 }
 
+export interface ResetPasswordInput {
+  email: string
+  code: string
+  newPassword: string
+  confirmPassword: string
+}
+
+export async function forgotPassword(email: string): Promise<SendCodeResult> {
+  return parseSendCodeResult(
+    await request<unknown>({
+      method: 'POST',
+      url: '/api/v1/auth/password/forgot',
+      data: { email },
+    }),
+  )
+}
+
+export async function resetPassword(input: ResetPasswordInput): Promise<void> {
+  expectEmptyObject(
+    await request<unknown>({
+      method: 'POST',
+      url: '/api/v1/auth/password/reset',
+      data: input,
+    }),
+    'reset password result',
+  )
+}
+
 export async function refresh(): Promise<AccessCredential> {
   return refreshAccessCredential()
 }
@@ -91,7 +121,7 @@ export async function getCurrentUser(): Promise<CurrentUser> {
 function parseCurrentUser(value: unknown): CurrentUser {
   const record = expectExactKeys(
     value,
-    ['userId', 'username', 'email', 'phone', 'avatar'],
+    ['userId', 'username', 'email', 'phone', 'avatar', 'passwordSetRequired'],
     'current user response',
   )
   return {
@@ -100,19 +130,27 @@ function parseCurrentUser(value: unknown): CurrentUser {
     email: expectString(record.email, 'current user.email'),
     phone: expectNullableString(record.phone, 'current user.phone'),
     avatar: expectString(record.avatar, 'current user.avatar'),
+    passwordSetRequired: expectBoolean(
+      record.passwordSetRequired,
+      'current user.passwordSetRequired',
+    ),
   }
 }
 
 function parseAccessCredential(value: unknown): AccessCredential {
   const record = expectExactKeys(
     value,
-    ['accessToken', 'expiresIn', 'isNewUser'],
+    ['accessToken', 'expiresIn', 'isNewUser', 'passwordSetRequired'],
     'access credential response',
   )
   return {
     accessToken: expectString(record.accessToken, 'access credential.accessToken'),
     expiresIn: expectInteger(record.expiresIn, 'access credential.expiresIn'),
     isNewUser: expectBoolean(record.isNewUser, 'access credential.isNewUser'),
+    passwordSetRequired: expectBoolean(
+      record.passwordSetRequired,
+      'access credential.passwordSetRequired',
+    ),
   }
 }
 

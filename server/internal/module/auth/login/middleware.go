@@ -8,8 +8,6 @@ import (
 	"admin/server/internal/authcontext"
 	projectmiddleware "admin/server/internal/middleware"
 	"admin/server/internal/module/auth/client"
-	authplatform "admin/server/internal/module/auth/platform"
-	user "admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
 	"github.com/gin-gonic/gin"
@@ -17,15 +15,8 @@ import (
 
 const identityContextKey = "auth.identity"
 
-type authenticationService interface {
-	Register(context.Context, RegisterInput) (Registered, error)
-	Login(context.Context, LoginInput) (Credential, error)
-	LoginConfig(context.Context, authclient.Client) (authplatform.LoginConfig, error)
-	SendCode(context.Context, SendCodeInput) (SendCodeResult, error)
-	Refresh(context.Context, RefreshInput) (Credential, error)
+type authenticator interface {
 	Authenticate(context.Context, string, authclient.Client) (Identity, error)
-	Logout(context.Context, Identity, authclient.Client) error
-	CurrentUser(context.Context, Identity) (user.Current, error)
 }
 
 func RequireOrigin(allowedOrigin string) gin.HandlerFunc {
@@ -38,7 +29,7 @@ func RequireOrigin(allowedOrigin string) gin.HandlerFunc {
 	}
 }
 
-func Authenticate(service authenticationService) gin.HandlerFunc {
+func Authenticate(service authenticator) gin.HandlerFunc {
 	return func(context *gin.Context) {
 		client, ok := authclient.FromContext(context)
 		if !ok {

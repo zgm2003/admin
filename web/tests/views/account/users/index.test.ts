@@ -286,6 +286,7 @@ function mountPage(permissions: string[], currentUserID = 7): VueWrapper {
     email: 'alice@example.com',
     phone: '+86 138-0000-0000',
     avatar: '',
+    passwordSetRequired: false,
   })
   return mount(UserManagement, {
     attachTo: document.body,

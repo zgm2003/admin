@@ -33,10 +33,16 @@ func (s *profileServiceStub) Update(_ context.Context, actor, target int64, inpu
 type passwordServiceStub struct {
 	identity auth.Identity
 	input    auth.ChangePasswordInput
+	setInput auth.SetPasswordInput
 }
 
 func (s *passwordServiceStub) ChangePassword(_ context.Context, identity auth.Identity, input auth.ChangePasswordInput) error {
 	s.identity, s.input = identity, input
+	return nil
+}
+
+func (s *passwordServiceStub) SetPassword(_ context.Context, identity auth.Identity, input auth.SetPasswordInput) error {
+	s.identity, s.setInput = identity, input
 	return nil
 }
 
@@ -94,6 +100,40 @@ func TestPasswordRoutePassesCurrentIdentityAndCredentials(t *testing.T) {
 	}
 	if password.identity.UserID != 7 || password.identity.SessionID != 8 || password.identity.Platform != "admin" || password.input.CurrentPassword != "old-pass" || password.input.NewPassword != "new-pass" {
 		t.Fatalf("identity=%+v input=%+v", password.identity, password.input)
+	}
+}
+
+func TestPasswordSetRoutePassesCurrentIdentityAndCredentials(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	password := &passwordServiceStub{}
+	router := gin.New()
+	registerTestRoutes(router, &profileServiceStub{}, password, true)
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/account/password/set", strings.NewReader(`{"newPassword":"new-pass","confirmPassword":"new-pass"}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body)
+	}
+	if password.identity.UserID != 7 || password.identity.SessionID != 8 || password.identity.Platform != "admin" || password.setInput.NewPassword != "new-pass" || password.setInput.ConfirmPassword != "new-pass" {
+		t.Fatalf("identity=%+v setInput=%+v", password.identity, password.setInput)
+	}
+}
+
+func TestPasswordSetRouteRejectsMissingRequiredFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	password := &passwordServiceStub{}
+	router := gin.New()
+	registerTestRoutes(router, &profileServiceStub{}, password, true)
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/account/password/set", strings.NewReader(`{}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body)
+	}
+	if password.setInput.NewPassword != "" {
+		t.Fatalf("service reached with invalid body, setInput=%+v", password.setInput)
 	}
 }
 

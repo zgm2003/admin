@@ -46,6 +46,10 @@ watch(activeType, () => {
 })
 
 onMounted(() => {
+  const presetAccount = route.query.account
+  if (typeof presetAccount === 'string' && presetAccount !== '') {
+    form.value.account = presetAccount
+  }
   void loadLoginConfig()
 })
 
@@ -307,6 +311,12 @@ function generateChallengeID(): string {
               >
                 {{ t('auth.login.submit') }}
               </el-button>
+
+              <div class="auth-forgot">
+                <router-link data-testid="login-forgot-link" :to="{ path: '/forgot-password' }">
+                  {{ t('auth.login.forgotPassword') }}
+                </router-link>
+              </div>
             </el-form>
 
             <p class="auth-access-note">

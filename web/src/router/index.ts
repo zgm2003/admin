@@ -19,6 +19,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false },
   },
   {
+    path: '/forgot-password',
+    name: 'forgot-password',
+    component: () => import('@/views/auth/forgot-password/index.vue'),
+    meta: { requiresAuth: false },
+  },
+  {
     path: '/',
     name: 'admin-layout',
     component: () => import('@/layout/index.vue'),

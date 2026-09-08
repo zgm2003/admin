@@ -75,11 +75,18 @@ describe('Login page', () => {
     const order: string[] = []
     loginMock.mockImplementation(async () => {
       order.push('login')
-      return { accessToken: 'jwt', expiresIn: 900, isNewUser: false }
+      return { accessToken: 'jwt', expiresIn: 900, isNewUser: false, passwordSetRequired: false }
     })
     getCurrentUserMock.mockImplementation(async () => {
       order.push('me')
-      return { userId: 1, username: 'admin', email: 'admin@example.com', phone: null, avatar: '' }
+      return {
+        userId: 1,
+        username: 'admin',
+        email: 'admin@example.com',
+        phone: null,
+        avatar: '',
+        passwordSetRequired: false,
+      }
     })
     const { wrapper, router } = await mountLogin('/login?redirect=/secure')
     await wrapper.get('[data-testid="login-account"]').setValue(' Admin@Example.COM ')
@@ -240,6 +247,15 @@ describe('Login page', () => {
     const { wrapper } = await mountLogin()
     expect(wrapper.get('[data-testid="bootstrap-error"]').text()).toContain('服务暂未就绪')
   })
+
+  it('links to forgot-password and prefills the account from the query', async () => {
+    const { wrapper } = await mountLogin('/login?account=Admin%40Example.COM')
+    expect(wrapper.get('[data-testid="login-forgot-link"]').attributes('href')).toBe(
+      '/forgot-password',
+    )
+    const accountInput = wrapper.get('[data-testid="login-account"]')
+    expect((accountInput.element as HTMLInputElement).value).toBe('Admin@Example.COM')
+  })
 })
 
 async function mountLogin(initialPath = '/login') {
@@ -247,6 +263,7 @@ async function mountLogin(initialPath = '/login') {
     history: createMemoryHistory(),
     routes: [
       { path: '/login', component: LoginPage },
+      { path: '/forgot-password', component: { template: '<div />' } },
       { path: '/dashboard', component: { template: '<div />' } },
       { path: '/secure', component: { template: '<div />' } },
     ],

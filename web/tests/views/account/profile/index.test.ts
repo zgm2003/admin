@@ -15,11 +15,13 @@ vi.mock('@/api/user/profile', () => ({
   getAccountProfile: vi.fn(),
   updateAccountProfile: vi.fn(),
   changePassword: vi.fn(),
+  setPassword: vi.fn(),
 }))
 
 const getAccountProfile = vi.mocked(profileAPI.getAccountProfile)
 const updateAccountProfile = vi.mocked(profileAPI.updateAccountProfile)
 const changePassword = vi.mocked(profileAPI.changePassword)
+const setPassword = vi.mocked(profileAPI.setPassword)
 
 describe('account profile permissions', () => {
   beforeEach(() => {
@@ -119,9 +121,30 @@ describe('account profile permissions', () => {
 
     expect(errorSpy).not.toHaveBeenCalled()
   })
+
+  it('sets the first password without asking for the current one', async () => {
+    setPassword.mockResolvedValue(undefined)
+    const wrapper = mountPage(['account:password:update'], true)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('设置密码')
+    expect(wrapper.find('[data-testid="account-password-current"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="account-password-new"]').setValue('NewPassw0rd!')
+    await wrapper.get('[data-testid="account-password-confirm"]').setValue('NewPassw0rd!')
+    await wrapper.get('[data-testid="account-password-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(setPassword).toHaveBeenCalledWith({
+      newPassword: 'NewPassw0rd!',
+      confirmPassword: 'NewPassw0rd!',
+    })
+    expect(changePassword).not.toHaveBeenCalled()
+    expect(useAuthStore().passwordSetRequired).toBe(false)
+  })
 })
 
-function mountPage(permissionCodes: string[]) {
+function mountPage(permissionCodes: string[], passwordSetRequired = false) {
   const pinia = createPinia()
   setActivePinia(pinia)
   usePermissionStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes })
@@ -131,6 +154,7 @@ function mountPage(permissionCodes: string[]) {
     email: 'alice@example.com',
     phone: null,
     avatar: '',
+    passwordSetRequired,
   })
   const router = createRouter({
     history: createMemoryHistory(),

@@ -8,6 +8,8 @@ func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, origin gin.Handle
 	authRoutes.POST("/send-code", origin, handler.SendCode)
 	authRoutes.POST("/register", origin, handler.Register)
 	authRoutes.POST("/login", origin, handler.Login)
+	authRoutes.POST("/password/forgot", origin, handler.ForgotPassword)
+	authRoutes.POST("/password/reset", origin, handler.ResetPassword)
 	authRoutes.POST("/refresh", origin, handler.Refresh)
 	authRoutes.POST("/logout", origin, authenticate, handler.Logout)
 	authRoutes.GET("/me", authenticate, handler.Me)

@@ -42,6 +42,7 @@ type passwordStore interface {
 	FindCredentialByID(context.Context, int64) (user.Credential, error)
 	FindActiveSessionPlatforms(context.Context, int64) ([]string, error)
 	ChangePasswordAndRevokeSessions(context.Context, int64, string, time.Time) ([]user.RevokedSessionRef, error)
+	SetPasswordHash(context.Context, int64, string, time.Time) error
 }
 
 type roleStore interface {
@@ -174,13 +175,21 @@ func (s *Service) ChangePassword(ctx context.Context, identity Identity, input C
 	if err != nil {
 		return apperror.Internal(err)
 	}
-	platforms, err := s.passwords.FindActiveSessionPlatforms(ctx, identity.UserID)
+	return s.revokeAllSessionsAndAdvanceState(ctx, identity.UserID, passwordHash)
+}
+
+// revokeAllSessionsAndAdvanceState atomically replaces the password hash and
+// revokes every active session, then advances the user-state generations so
+// every instance drops its cached session snapshots. It is shared by
+// ChangePassword and ResetPassword.
+func (s *Service) revokeAllSessionsAndAdvanceState(ctx context.Context, userID int64, passwordHash string) error {
+	platforms, err := s.passwords.FindActiveSessionPlatforms(ctx, userID)
 	if err != nil {
 		return apperror.DependencyUnavailable(err)
 	}
 	facts := make([]authstate.SessionsFact, 0, len(platforms))
 	for _, platform := range platforms {
-		fact, factErr := s.ensureSessionsReady(ctx, platform, identity.UserID)
+		fact, factErr := s.ensureSessionsReady(ctx, platform, userID)
 		if factErr != nil {
 			return mapStateMutationError(factErr)
 		}
@@ -191,7 +200,7 @@ func (s *Service) ChangePassword(ctx context.Context, identity Identity, input C
 		return mapStateMutationError(err)
 	}
 	mutationCtx, stopRenewal := lease.StartRenewal(ctx)
-	revoked, updateErr := s.passwords.ChangePasswordAndRevokeSessions(mutationCtx, identity.UserID, passwordHash, s.now().UTC())
+	revoked, updateErr := s.passwords.ChangePasswordAndRevokeSessions(mutationCtx, userID, passwordHash, s.now().UTC())
 	renewalCause := context.Cause(mutationCtx)
 	stopRenewal()
 	if updateErr != nil || renewalCause != nil {
@@ -313,8 +322,16 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 	if err != nil {
 		return SendCodeResult{}, apperror.InvalidRequest(err)
 	}
+	return s.deliverEmailVerificationCode(ctx, policy, messagemail.SceneLogin, email, input.Client, input.ChallengeID)
+}
 
-	key := s.verificationCodes.VerificationKey(policy.Code, messagemail.SceneLogin, string(authplatform.LoginTypeEmail), email)
+// deliverEmailVerificationCode owns the fixed delivery sequence shared by every
+// verification-code scene: acquire the delivery lease, prepare (readiness +
+// recipient rule + rate limit, counted once), generate the code, replace any
+// prior code only while the lease is owned, send without a second rate-limit
+// count, and release the lease.
+func (s *Service) deliverEmailVerificationCode(ctx context.Context, policy authplatform.Policy, scene string, email string, client authclient.Client, challengeID string) (SendCodeResult, error) {
+	key := s.verificationCodes.VerificationKey(policy.Code, scene, string(authplatform.LoginTypeEmail), email)
 	leaseToken, err := newRefreshToken()
 	if err != nil {
 		return SendCodeResult{}, apperror.Internal(err)
@@ -334,8 +351,8 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 
 	preparation, err := s.verifyCodeSender.PrepareEmailVerifyCode(ctx, messagemail.EmailVerifyCodePrepareInput{
 		PlatformID: policy.ID,
-		ClientIP:   input.Client.ClientIP,
-		Scene:      messagemail.SceneLogin,
+		ClientIP:   client.ClientIP,
+		Scene:      scene,
 		ToEmail:    email,
 	})
 	if err != nil {
@@ -369,15 +386,14 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 		releaseErr := releaseLease()
 		return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(err, releaseErr))
 	}
-	challengeID := input.ChallengeID
 	if challengeID == "" {
 		challengeID = leaseToken
 	}
 	_, sendErr := s.verifyCodeSender.SendPreparedEmailVerifyCode(ctx, messagemail.EmailVerifyCodeInput{
 		PlatformID:  policy.ID,
-		ClientIP:    input.Client.ClientIP,
+		ClientIP:    client.ClientIP,
 		ChallengeID: challengeID,
-		Scene:       messagemail.SceneLogin,
+		Scene:       scene,
 		ToEmail:     email,
 		Code:        code,
 		ExpiresAt:   expiresAt,
@@ -663,7 +679,7 @@ func (s *Service) issueCredential(ctx context.Context, client authclient.Client,
 	}
 	return Credential{
 		AccessToken: accessToken, ExpiresIn: int(accessExpiresAt.Sub(now).Seconds()), RefreshToken: refreshToken,
-		RefreshExpiresAt: refreshExpiresAt, IsNewUser: isNewUser,
+		RefreshExpiresAt: refreshExpiresAt, IsNewUser: isNewUser, PasswordSetRequired: credential.PasswordHash == "",
 	}, nil
 }
 
@@ -849,7 +865,7 @@ func (s *Service) Refresh(ctx context.Context, input RefreshInput) (Credential, 
 	}
 	return Credential{
 		AccessToken: accessToken, ExpiresIn: int(accessExpiresAt.Sub(now).Seconds()), RefreshToken: newToken,
-		RefreshExpiresAt: rotated.RefreshExpiresAt,
+		RefreshExpiresAt: rotated.RefreshExpiresAt, PasswordSetRequired: authority.PasswordSetRequired,
 	}, nil
 }
 

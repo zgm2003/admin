@@ -318,7 +318,7 @@ func (s *verifyCodeReadinessStore) replaceMutation(ctx context.Context, mutation
 }
 
 func validateVerifyCodeReadinessCoordinates(platformID int64, scene string) error {
-	if platformID < 1 || scene != SceneLogin {
+	if platformID < 1 || !isVerifyCodeScene(scene) {
 		return fmt.Errorf("mail verification readiness coordinates are invalid")
 	}
 	return nil

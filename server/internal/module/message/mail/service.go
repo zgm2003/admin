@@ -267,7 +267,7 @@ func (s *Service) PrepareEmailVerifyCode(ctx context.Context, in EmailVerifyCode
 	if err != nil {
 		return EmailVerifyCodePreparation{}, invalid(err)
 	}
-	if in.Scene != SceneLogin {
+	if !isVerifyCodeScene(in.Scene) {
 		return EmailVerifyCodePreparation{}, invalid(fmt.Errorf("verification code scene is invalid"))
 	}
 	if s.readinessStore == nil {
@@ -321,7 +321,7 @@ func (s *Service) SendPreparedEmailVerifyCode(ctx context.Context, in EmailVerif
 	if err != nil {
 		return EmailVerifyCodeResult{}, invalid(err)
 	}
-	if in.Scene != SceneLogin {
+	if !isVerifyCodeScene(in.Scene) {
 		return EmailVerifyCodeResult{}, invalid(fmt.Errorf("verification code scene is invalid"))
 	}
 	if !isSixDigitCode(in.Code) {
@@ -372,30 +372,45 @@ func isSixDigitCode(value string) bool {
 	return true
 }
 
-func (s *Service) beginVerifyCodeReadinessMutation(ctx context.Context, platformID int64) (VerifyCodeReadinessMutation, error) {
+func (s *Service) beginVerifyCodeReadinessMutation(ctx context.Context, platformID int64) ([]VerifyCodeReadinessMutation, error) {
 	if s.readinessStore == nil {
-		return VerifyCodeReadinessMutation{}, dependency(fmt.Errorf("mail verification readiness store unavailable"))
+		return nil, dependency(fmt.Errorf("mail verification readiness store unavailable"))
 	}
-	mutation, err := s.readinessStore.BeginMutation(ctx, platformID, SceneLogin)
-	if err != nil {
-		return VerifyCodeReadinessMutation{}, dependency(err)
+	mutations := make([]VerifyCodeReadinessMutation, 0, 2)
+	for _, scene := range []string{SceneLogin, SceneForget} {
+		if err := ctx.Err(); err != nil {
+			return nil, dependency(errors.Join(err, s.rollbackVerifyCodeReadinessMutation(ctx, mutations)))
+		}
+		mutation, err := s.readinessStore.BeginMutation(ctx, platformID, scene)
+		if err != nil {
+			return nil, dependency(errors.Join(err, s.rollbackVerifyCodeReadinessMutation(ctx, mutations)))
+		}
+		mutations = append(mutations, mutation)
 	}
-	return mutation, nil
+	return mutations, nil
 }
 
-func (s *Service) publishVerifyCodeReadinessMutation(ctx context.Context, mutation VerifyCodeReadinessMutation) error {
+func (s *Service) publishVerifyCodeReadinessMutation(ctx context.Context, mutations []VerifyCodeReadinessMutation) error {
 	publishContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), verifyCodeReadinessLoadTimeout)
 	defer cancel()
-	if err := s.readinessStore.PublishMutation(publishContext, mutation); err != nil {
-		return dependency(err)
+	var result error
+	for _, mutation := range mutations {
+		result = errors.Join(result, s.readinessStore.PublishMutation(publishContext, mutation))
+	}
+	if result != nil {
+		return dependency(result)
 	}
 	return nil
 }
 
-func (s *Service) rollbackVerifyCodeReadinessMutation(ctx context.Context, mutation VerifyCodeReadinessMutation) error {
+func (s *Service) rollbackVerifyCodeReadinessMutation(ctx context.Context, mutations []VerifyCodeReadinessMutation) error {
 	rollbackContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 	defer cancel()
-	return s.readinessStore.RollbackMutation(rollbackContext, mutation)
+	var result error
+	for i := len(mutations) - 1; i >= 0; i-- {
+		result = errors.Join(result, s.readinessStore.RollbackMutation(rollbackContext, mutations[i]))
+	}
+	return result
 }
 
 type sendInternalOptions struct {

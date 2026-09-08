@@ -24,7 +24,49 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 当前模块目录包括：`auth`、`health`、`permission`、`user`、`message`、`storage`、`system`。目录存在不代表
 所有业务都已完成，状态以 `STATUS.md` 和测试为准。
 
-## 容量基线
+## 业务身份与跨层定位
+
+业务命名是跨层导航契约，不是每层字符串强制相等。沿用以下既有映射，不将 UI 分组误当成后端业务域：
+
+| Views（省略 index.vue） | API / 后端 module | PostgreSQL 主表 |
+| --- | --- | --- |
+| `account/users` | `user/account` | `user_account` |
+| `account/profile` | `user/profile`（账户写入协作 `user/account`） | `user_profile`、`user_account` |
+| `account/sessions` | `user/session` | `user_session` |
+| `account/login-logs` | `user/loginlog` | `user_login_log` |
+| `permission/auth-platforms` | `auth/platform` | `auth_platform` |
+| `permission/menus` | `permission/menu` | `permission_menu` |
+| `permission/roles` | `permission/role` | `permission_role` |
+| `message/mail` | `message/mail` | `message_mail_*` |
+| `cloud/storage-object` | `storage/cosconfig`、`storage/uploadrule`、`storage/upload` | `storage_cos_config`、`storage_upload_rule*` |
+| `system/operation-logs` | `system/operationlog` | `system_operation_log` |
+
+菜单 page 的 `componentPath` 精确对应 Views 页面，`path = "/" + componentPath`；菜单 `code` 与页面和动作
+权限各自对应，`i18nKey` 必须在中英文翻译中可解析。公共登录/找回密码页按静态认证路由处理，不强行创建
+菜单或独立数据库表。关联表、聚合页和无表模块允许一对多/多对一映射，不制造占位模块满足表面一致。
+
+修改业务名称时沿 Views -> API -> Module -> TableName -> 菜单/权限 -> i18n 核对全部引用；数据库中的菜单
+和表名以当前 PostgreSQL 为准，文件/测试夹具不能证明实际数据库已同步。未经明确需求不改变既有标识。
+
+## 层内责任
+
+- `request.go` / `response.go` 定义 HTTP DTO 与序列化边界；Service 输入输出表达用例，不接收 Gin Context。
+- Handler 的消费接口只包含入口需要的能力；认证 Middleware 只依赖 Authenticate，不能因新增找回密码
+  用例而迫使所有 Middleware 测试替身实现完整认证业务接口。
+- Repository 方法和查询行结构归属 repository 文件；事务由 Service 表达意图、Repository 执行 SQL/锁。
+- Model 保存持久化映射，业务校验、模板目录和事件输入放回模块的业务/协议文件，不混成表模型。
+- Redis、Storage、邮件 Provider 等 I/O 留在对应技术实现或业务模块，由 Service 编排，不塞进 PG Repository。
+- `shared` 只容纳跨域稳定、无业务模块依赖的协议/工具；不下沉某个模块的业务规则来消除循环依赖。
+
+## 邮件规则所有权
+
+Mail 管理的限流策略与 `message_mail_config.ttl_minutes` 是所有邮件发送场景的共同规则来源，Auth 不新增
+固定重发间隔、验证码 TTL 或独立 cooldown。邮箱额度按同一平台、同一规范化邮箱共享，验证码内容仍按场景
+隔离；管理测试发送不能绕开共同额度，可以叠加管理端防滥用限制。60 秒和 5 分钟只是配置示例，不是硬规则。
+切换旧的按场景 Redis 限流状态时必须保留已消耗额度，并明确旧进程退出顺序、原子迁移和故障行为；不能只
+换 key 后声称窗口连续。该契约的实现与验证进度见 STATUS。
+
+## 容量与一致性
 
 项目默认按百万级用户、多实例和高并发访问设计。共享请求热路径不得把 PostgreSQL 当作每请求配置中心，
 不得依赖单进程唯一状态或无界缓存；缓存、限流、队列和失效协议必须明确跨实例一致性、故障闭合和回源上限。

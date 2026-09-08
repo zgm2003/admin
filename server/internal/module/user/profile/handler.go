@@ -20,6 +20,7 @@ type profileService interface {
 
 type passwordService interface {
 	ChangePassword(context.Context, auth.Identity, auth.ChangePasswordInput) error
+	SetPassword(context.Context, auth.Identity, auth.SetPasswordInput) error
 }
 
 type Handler struct {
@@ -89,6 +90,32 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	}
 	projectmiddleware.SetAccessLogOperation(c, "account.password.update", identity.UserID, identity.UserID)
 	if err := h.password.ChangePassword(c.Request.Context(), identity, input); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, emptyResponse{})
+}
+
+// SetPassword handles POST /account/password/set, the first-time password
+// flow for passwordless accounts.
+func (h *Handler) SetPassword(c *gin.Context) {
+	identity, ok := auth.IdentityFromContext(c)
+	if !ok {
+		response.Fail(c, apperror.Unauthorized(fmt.Errorf("authentication identity is missing")))
+		return
+	}
+	var request setPasswordRequest
+	if err := validate.BindJSON(c, &request); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	input, err := request.input()
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	projectmiddleware.SetAccessLogOperation(c, "account.password.set", identity.UserID, identity.UserID)
+	if err := h.password.SetPassword(c.Request.Context(), identity, input); err != nil {
 		response.Fail(c, err)
 		return
 	}

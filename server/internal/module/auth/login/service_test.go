@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -735,6 +736,7 @@ func TestRefreshRotatesWithinSessionInvalidationAndKeepsAbsoluteExpiry(t *testin
 	authority := SessionAuthority{
 		Session: Session{ID: 86802, UserID: 86801, Platform: "admin", DeviceID: testAuthClient().DeviceID, RefreshTokenHash: strings.Repeat("a", 64), Version: 3, ClientIP: "127.0.0.1", RefreshExpiresAt: expiresAt},
 		UserID:  86801, UserIsEnabled: yesno.Yes,
+		PasswordSetRequired: true,
 	}
 	rotated := authority.Session
 	rotated.Version++
@@ -756,6 +758,9 @@ func TestRefreshRotatesWithinSessionInvalidationAndKeepsAbsoluteExpiry(t *testin
 	}
 	if sessions.rotateCalls != 1 || credential.ExpiresIn != int(policy.AccessTTL.Seconds()) || !credential.RefreshExpiresAt.Equal(expiresAt) {
 		t.Fatalf("Refresh() = %+v rotateCalls=%d", credential, sessions.rotateCalls)
+	}
+	if !credential.PasswordSetRequired {
+		t.Fatal("refresh lost first-password guidance")
 	}
 	identity, err := service.jwt.Parse(credential.AccessToken)
 	if err != nil || identity.Version != rotated.Version || identity.SessionID != rotated.ID {
@@ -1073,3 +1078,297 @@ func testAuthClient() authclient.Client {
 
 var _ = gorm.ErrRecordNotFound
 var _ = i18n.KeyUnauthorized
+
+func TestForgotPasswordSendsCodeWithForgetScene(t *testing.T) {
+	fixedNow := time.Date(2026, time.September, 7, 10, 0, 0, 0, time.UTC)
+	store := &fakeVerificationCodeStore{acquired: true}
+	sender := &fakeVerifyCodeSender{
+		readiness:   messagemail.VerifyCodeReadiness{Ready: true, TTLMinutes: 5},
+		preparation: messagemail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60},
+	}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "hash", IsEnabled: yesno.Yes}}
+	service := NewService(users, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetVerificationCodeStore(store)
+	service.SetVerifyCodeSender(sender)
+	service.now = func() time.Time { return fixedNow }
+
+	result, err := service.ForgotPassword(context.Background(), ForgotPasswordInput{Email: "USER@Example.com", Client: testAuthClient()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sender.prepareCalls != 1 || sender.prepareInput.Scene != messagemail.SceneForget || sender.prepareInput.ToEmail != "user@example.com" {
+		t.Fatalf("prepare calls=%d input=%+v", sender.prepareCalls, sender.prepareInput)
+	}
+	if store.putCalls != 1 || store.putTTL != 5*time.Minute {
+		t.Fatalf("put calls=%d ttl=%v", store.putCalls, store.putTTL)
+	}
+	if sender.sendCalls != 1 || sender.sendInput.Scene != messagemail.SceneForget || sender.sendInput.Preparation.TTLMinutes != 5 {
+		t.Fatalf("send calls=%d input=%+v", sender.sendCalls, sender.sendInput)
+	}
+	if store.releaseCalls != 1 {
+		t.Fatalf("release calls=%d", store.releaseCalls)
+	}
+	if !result.ExpiresAt.Equal(fixedNow.Add(5*time.Minute)) || result.ResendAfterSeconds != 60 {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
+func TestForgotPasswordRejectsUnknownEmail(t *testing.T) {
+	store := &fakeVerificationCodeStore{acquired: true}
+	sender := &fakeVerifyCodeSender{
+		readiness:   messagemail.VerifyCodeReadiness{Ready: true, TTLMinutes: 5},
+		preparation: messagemail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60},
+	}
+	users := &fakeUserStore{credentialErr: fmt.Errorf("find user credential: %w", gorm.ErrRecordNotFound)}
+	service := NewService(users, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetVerificationCodeStore(store)
+	service.SetVerifyCodeSender(sender)
+
+	_, err := service.ForgotPassword(context.Background(), ForgotPasswordInput{Email: "ghost@example.com", Client: testAuthClient()})
+	if code := appErrorCode(err); code != apperror.CodeNotFound {
+		t.Fatalf("err = %v, code = %d, want %d", err, code, apperror.CodeNotFound)
+	}
+	if store.acquireCalls != 0 || sender.prepareCalls != 0 {
+		t.Fatalf("lease acquired=%d prepare calls=%d; unknown email must fail before lease", store.acquireCalls, sender.prepareCalls)
+	}
+}
+
+func TestForgotPasswordRequiresPasswordLoginType(t *testing.T) {
+	emailOnly := testPolicy()
+	emailOnly.LoginTypes = []authplatform.LoginType{authplatform.LoginTypeEmail}
+	store := &fakeVerificationCodeStore{acquired: true}
+	sender := &fakeVerifyCodeSender{
+		readiness:   messagemail.VerifyCodeReadiness{Ready: true, TTLMinutes: 5},
+		preparation: messagemail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60},
+	}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "hash", IsEnabled: yesno.Yes}}
+	service := NewService(users, nil, nil, &fakePolicyStore{policy: emailOnly}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetVerificationCodeStore(store)
+	service.SetVerifyCodeSender(sender)
+
+	_, err := service.ForgotPassword(context.Background(), ForgotPasswordInput{Email: "user@example.com", Client: testAuthClient()})
+	if code := appErrorCode(err); code != apperror.CodeForbidden {
+		t.Fatalf("code = %d, want %d", code, apperror.CodeForbidden)
+	}
+	if store.acquireCalls != 0 || sender.prepareCalls != 0 {
+		t.Fatalf("lease acquired=%d prepare calls=%d", store.acquireCalls, sender.prepareCalls)
+	}
+}
+
+type fakePasswordStore struct {
+	credentialByID    user.Credential
+	credentialByIDErr error
+	platforms         []string
+	platformsErr      error
+	revokeCalls       int
+	revokedUserID     int64
+	revokedHash       string
+	revokeResult      []user.RevokedSessionRef
+	revokeErr         error
+	setCalls          int
+	setUserID         int64
+	setHash           string
+	setErr            error
+}
+
+func (f *fakePasswordStore) FindCredentialByID(context.Context, int64) (user.Credential, error) {
+	return f.credentialByID, f.credentialByIDErr
+}
+func (f *fakePasswordStore) FindActiveSessionPlatforms(context.Context, int64) ([]string, error) {
+	return f.platforms, f.platformsErr
+}
+func (f *fakePasswordStore) ChangePasswordAndRevokeSessions(_ context.Context, userID int64, passwordHash string, _ time.Time) ([]user.RevokedSessionRef, error) {
+	f.revokeCalls++
+	f.revokedUserID = userID
+	f.revokedHash = passwordHash
+	return f.revokeResult, f.revokeErr
+}
+
+func (f *fakePasswordStore) SetPasswordHash(_ context.Context, userID int64, passwordHash string, _ time.Time) error {
+	f.setCalls++
+	f.setUserID = userID
+	f.setHash = passwordHash
+	return f.setErr
+}
+
+func newResetPasswordService(t *testing.T, users *fakeUserStore, passwords *fakePasswordStore, codes *fakeVerificationCodeStore, policy authplatform.Policy) *Service {
+	t.Helper()
+	redisClient := openAuthRedis(t)
+	stateStore := authstate.NewStore(redisClient)
+	service := NewService(users, nil, nil, &fakePolicyStore{policy: policy}, stateStore, authstate.NewInvalidator(stateStore), authstate.NewSessionCache(redisClient), nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetPasswordStore(passwords)
+	service.SetVerificationCodeStore(codes)
+	return service
+}
+
+func TestResetPasswordReplacesHashAndRevokesSessions(t *testing.T) {
+	passwords := &fakePasswordStore{platforms: []string{"admin"}, revokeResult: []user.RevokedSessionRef{{Platform: "admin", ID: 42}}}
+	codes := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "old", IsEnabled: yesno.Yes}}
+	service := newResetPasswordService(t, users, passwords, codes, testPolicy())
+
+	err := service.ResetPassword(context.Background(), ResetPasswordInput{
+		Email: "USER@Example.com", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if codes.checkCalls != 1 || codes.consumeCalls != 1 {
+		t.Fatalf("check=%d consume=%d", codes.checkCalls, codes.consumeCalls)
+	}
+	if passwords.revokeCalls != 1 || passwords.revokedUserID != 7 || passwords.revokedHash == "" || passwords.revokedHash == "old" {
+		t.Fatalf("revoke calls=%d user=%d hash=%q", passwords.revokeCalls, passwords.revokedUserID, passwords.revokedHash)
+	}
+}
+
+func TestResetPasswordWrongCodeDoesNotConsumeOrRevoke(t *testing.T) {
+	passwords := &fakePasswordStore{platforms: []string{"admin"}}
+	codes := &fakeVerificationCodeStore{checkValid: false}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "old", IsEnabled: yesno.Yes}}
+	service := newResetPasswordService(t, users, passwords, codes, testPolicy())
+
+	err := service.ResetPassword(context.Background(), ResetPasswordInput{
+		Email: "user@example.com", Code: "000000", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+	})
+	if code := appErrorCode(err); code != apperror.CodeUnauthorized {
+		t.Fatalf("err = %v code = %d, want unauthorized", err, code)
+	}
+	if codes.consumeCalls != 0 || passwords.revokeCalls != 0 {
+		t.Fatalf("consume=%d revoke=%d; wrong code must not burn the code or touch sessions", codes.consumeCalls, passwords.revokeCalls)
+	}
+}
+
+func TestResetPasswordRateLimitedBeforeConsume(t *testing.T) {
+	passwords := &fakePasswordStore{platforms: []string{"admin"}}
+	codes := &fakeVerificationCodeStore{checkValid: false, checkLimited: true}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "old", IsEnabled: yesno.Yes}}
+	service := newResetPasswordService(t, users, passwords, codes, testPolicy())
+
+	err := service.ResetPassword(context.Background(), ResetPasswordInput{
+		Email: "user@example.com", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+	})
+	if code := appErrorCode(err); code != apperror.CodeRateLimited {
+		t.Fatalf("err = %v code = %d, want rate limited", err, code)
+	}
+	if codes.consumeCalls != 0 || passwords.revokeCalls != 0 {
+		t.Fatalf("consume=%d revoke=%d", codes.consumeCalls, passwords.revokeCalls)
+	}
+}
+
+func TestResetPasswordRejectsUnknownAndDisabledEmail(t *testing.T) {
+	passwords := &fakePasswordStore{}
+	codes := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
+	unknown := &fakeUserStore{credentialErr: fmt.Errorf("find user credential: %w", gorm.ErrRecordNotFound)}
+	service := newResetPasswordService(t, unknown, passwords, codes, testPolicy())
+	err := service.ResetPassword(context.Background(), ResetPasswordInput{
+		Email: "ghost@example.com", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+	})
+	if code := appErrorCode(err); code != apperror.CodeNotFound {
+		t.Fatalf("unknown email err = %v code = %d, want not found", err, code)
+	}
+	if codes.checkCalls != 0 {
+		t.Fatalf("check=%d; unknown email must fail before code verification", codes.checkCalls)
+	}
+
+	disabled := &fakeUserStore{credential: user.Credential{ID: 8, Email: "disabled@example.com", PasswordHash: "old", IsEnabled: yesno.No}}
+	service = newResetPasswordService(t, disabled, passwords, codes, testPolicy())
+	err = service.ResetPassword(context.Background(), ResetPasswordInput{
+		Email: "disabled@example.com", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+	})
+	if code := appErrorCode(err); code != apperror.CodeNotFound {
+		t.Fatalf("disabled email err = %v code = %d, want not found", err, code)
+	}
+}
+
+func TestResetPasswordRequiresPasswordLoginTypeAndConfirmation(t *testing.T) {
+	emailOnly := testPolicy()
+	emailOnly.LoginTypes = []authplatform.LoginType{authplatform.LoginTypeEmail}
+	passwords := &fakePasswordStore{}
+	codes := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "old", IsEnabled: yesno.Yes}}
+	service := newResetPasswordService(t, users, passwords, codes, emailOnly)
+	err := service.ResetPassword(context.Background(), ResetPasswordInput{
+		Email: "user@example.com", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+	})
+	if code := appErrorCode(err); code != apperror.CodeForbidden {
+		t.Fatalf("err = %v code = %d, want forbidden", err, code)
+	}
+
+	service = newResetPasswordService(t, users, passwords, codes, testPolicy())
+	err = service.ResetPassword(context.Background(), ResetPasswordInput{
+		Email: "user@example.com", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "DifferentPass1!", Client: testAuthClient(),
+	})
+	if code := appErrorCode(err); code != apperror.CodeInvalidRequest {
+		t.Fatalf("err = %v code = %d, want invalid request", err, code)
+	}
+	if codes.checkCalls != 0 {
+		t.Fatalf("check=%d; mismatched confirmation must fail before code verification", codes.checkCalls)
+	}
+}
+
+func TestSetPasswordStoresHashWithoutRevokingSessions(t *testing.T) {
+	passwords := &fakePasswordStore{credentialByID: user.Credential{ID: 7, PasswordHash: "", IsEnabled: yesno.Yes}}
+	service := NewService(&fakeUserStore{}, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetPasswordStore(passwords)
+
+	if err := service.SetPassword(context.Background(), Identity{UserID: 7}, SetPasswordInput{NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!"}); err != nil {
+		t.Fatal(err)
+	}
+	if passwords.setCalls != 1 || passwords.setUserID != 7 || passwords.setHash == "" {
+		t.Fatalf("set calls=%d user=%d hash=%q", passwords.setCalls, passwords.setUserID, passwords.setHash)
+	}
+	if passwords.revokeCalls != 0 {
+		t.Fatalf("revoke calls=%d; setting the first password must not revoke sessions", passwords.revokeCalls)
+	}
+}
+
+func TestSetPasswordRejectsAccountWithExistingPassword(t *testing.T) {
+	passwords := &fakePasswordStore{credentialByID: user.Credential{ID: 7, PasswordHash: "existing", IsEnabled: yesno.Yes}}
+	service := NewService(&fakeUserStore{}, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetPasswordStore(passwords)
+
+	err := service.SetPassword(context.Background(), Identity{UserID: 7}, SetPasswordInput{NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!"})
+	if code := appErrorCode(err); code != apperror.CodeConflict {
+		t.Fatalf("err = %v code = %d, want conflict", err, code)
+	}
+	if passwords.setCalls != 0 {
+		t.Fatalf("set calls=%d; accounts with a password must use change password", passwords.setCalls)
+	}
+}
+
+func TestSetPasswordMapsConcurrentWinnerToConflict(t *testing.T) {
+	passwords := &fakePasswordStore{credentialByID: user.Credential{ID: 7, IsEnabled: yesno.Yes}, setErr: user.ErrPasswordAlreadySet}
+	service := NewService(&fakeUserStore{}, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetPasswordStore(passwords)
+	err := service.SetPassword(context.Background(), Identity{UserID: 7}, SetPasswordInput{NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!"})
+	if appErrorCode(err) != apperror.CodeConflict {
+		t.Fatalf("concurrent first set: %v", err)
+	}
+	if passwords.revokeCalls != 0 {
+		t.Fatal("first set revoked sessions")
+	}
+}
+
+func TestSetPasswordRejectsInvalidInputAndMissingIdentity(t *testing.T) {
+	passwords := &fakePasswordStore{credentialByID: user.Credential{ID: 7, IsEnabled: yesno.Yes}}
+	service := NewService(&fakeUserStore{}, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetPasswordStore(passwords)
+
+	err := service.SetPassword(context.Background(), Identity{UserID: 7}, SetPasswordInput{NewPassword: "NewPassw0rd!", ConfirmPassword: "DifferentPass1!"})
+	if code := appErrorCode(err); code != apperror.CodeInvalidRequest {
+		t.Fatalf("mismatch err = %v code = %d, want invalid request", err, code)
+	}
+
+	err = service.SetPassword(context.Background(), Identity{UserID: 7}, SetPasswordInput{NewPassword: "short", ConfirmPassword: "short"})
+	if code := appErrorCode(err); code != apperror.CodeInvalidRequest {
+		t.Fatalf("weak password err = %v code = %d, want invalid request", err, code)
+	}
+
+	err = service.SetPassword(context.Background(), Identity{}, SetPasswordInput{NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!"})
+	if code := appErrorCode(err); code != apperror.CodeUnauthorized {
+		t.Fatalf("missing identity err = %v code = %d, want unauthorized", err, code)
+	}
+	if passwords.setCalls != 0 {
+		t.Fatalf("set calls=%d", passwords.setCalls)
+	}
+}

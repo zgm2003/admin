@@ -27,10 +27,11 @@ type Session struct {
 type Record = Session
 
 type Authority struct {
-	Session       Record
-	UserID        int64
-	UserIsEnabled yesno.Value
-	UserDeleted   bool
+	Session             Record
+	UserID              int64
+	UserIsEnabled       yesno.Value
+	UserDeleted         bool
+	PasswordSetRequired bool
 }
 
 type CreateInput struct {

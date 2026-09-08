@@ -32,8 +32,8 @@ func TestLoginReturnsCredentialAndSecureRefreshCookie(t *testing.T) {
 	refreshTTL := 14 * 24 * time.Hour
 	service := &stubAuthenticationService{credential: Credential{AccessToken: "access", ExpiresIn: 900, RefreshToken: "refresh", RefreshExpiresAt: fixedNow.Add(refreshTTL), IsNewUser: true}}
 	responseRecorder := serveAuthRouteAt(t, service, http.MethodPost, "/api/v1/auth/login", `{"loginType":"password","loginAccount":"admin@example.com","password":"password"}`, nil, true, fixedNow)
-	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusOK, 0, []string{"accessToken", "expiresIn", "isNewUser"})
-	assertEnvelopeDataJSON(t, responseRecorder, `{"accessToken":"access","expiresIn":900,"isNewUser":true}`)
+	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusOK, 0, []string{"accessToken", "expiresIn", "isNewUser", "passwordSetRequired"})
+	assertEnvelopeDataJSON(t, responseRecorder, `{"accessToken":"access","expiresIn":900,"isNewUser":true,"passwordSetRequired":false}`)
 	assertRefreshCookie(t, responseRecorder, "refresh", true, int(refreshTTL.Seconds()), fixedNow.Add(refreshTTL))
 }
 
@@ -106,7 +106,7 @@ func TestLoginAcceptsOnlyLoginTypeAndAccount(t *testing.T) {
 		AccessToken: "access", ExpiresIn: 900, RefreshToken: "refresh", RefreshExpiresAt: time.Now().Add(time.Hour),
 	}}
 	success := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/login", `{"loginType":"password","loginAccount":" Admin@Example.COM ","password":"password"}`, nil, false)
-	assertEnvelopeKeysAndCode(t, success, http.StatusOK, 0, []string{"accessToken", "expiresIn", "isNewUser"})
+	assertEnvelopeKeysAndCode(t, success, http.StatusOK, 0, []string{"accessToken", "expiresIn", "isNewUser", "passwordSetRequired"})
 	if service.loginInput.LoginAccount != " Admin@Example.COM " || service.loginInput.LoginType != authplatform.LoginTypePassword {
 		t.Fatalf("handler changed login input before service: %+v", service.loginInput)
 	}
@@ -129,7 +129,7 @@ func TestRefreshRotatesCookieWithRemainingLifetime(t *testing.T) {
 	fixedNow := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
 	service := &stubAuthenticationService{credential: Credential{AccessToken: "new-access", ExpiresIn: 900, RefreshToken: "new-refresh", RefreshExpiresAt: fixedNow.Add(30 * time.Minute)}}
 	responseRecorder := serveAuthRouteAt(t, service, http.MethodPost, "/api/v1/auth/refresh", "", &http.Cookie{Name: refreshCookieName("admin"), Value: "old-refresh"}, false, fixedNow)
-	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusOK, 0, []string{"accessToken", "expiresIn", "isNewUser"})
+	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusOK, 0, []string{"accessToken", "expiresIn", "isNewUser", "passwordSetRequired"})
 	assertRefreshCookie(t, responseRecorder, "new-refresh", false, 1800, fixedNow.Add(30*time.Minute))
 	if service.refreshInput.RefreshToken != "old-refresh" {
 		t.Fatalf("Refresh input = %+v", service.refreshInput)
@@ -173,8 +173,8 @@ func TestMeReturnsClosedCurrentUserShape(t *testing.T) {
 		phone    *string
 		wantJSON string
 	}{
-		{name: "null phone", wantJSON: `{"userId":1,"username":"admin","email":"admin@example.com","phone":null,"avatar":"avatar/profile.png"}`},
-		{name: "stored phone", phone: &phone, wantJSON: `{"userId":1,"username":"admin","email":"admin@example.com","phone":"+86 138-0000-0000","avatar":"avatar/profile.png"}`},
+		{name: "null phone", wantJSON: `{"userId":1,"username":"admin","email":"admin@example.com","phone":null,"avatar":"avatar/profile.png","passwordSetRequired":false}`},
+		{name: "stored phone", phone: &phone, wantJSON: `{"userId":1,"username":"admin","email":"admin@example.com","phone":"+86 138-0000-0000","avatar":"avatar/profile.png","passwordSetRequired":false}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			service := &stubAuthenticationService{
@@ -189,7 +189,7 @@ func TestMeReturnsClosedCurrentUserShape(t *testing.T) {
 }
 
 func TestAuthHandlersRejectUnknownJSONFields(t *testing.T) {
-	for _, route := range []string{"/api/v1/auth/register", "/api/v1/auth/login"} {
+	for _, route := range []string{"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/password/forgot"} {
 		service := &stubAuthenticationService{}
 		body := `{"email":"admin@example.com","password":"password","unknown":true}`
 		if strings.HasSuffix(route, "register") {
@@ -216,6 +216,30 @@ func TestAuthHandlersPassExactClientMetadata(t *testing.T) {
 		if got != want {
 			t.Errorf("%s client = %+v, want %+v", name, got, want)
 		}
+	}
+}
+
+func TestForgotPasswordRejectsMissingRequiredFields(t *testing.T) {
+	service := &stubAuthenticationService{}
+	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/password/forgot", `{}`, nil, false)
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	if service.sendCodeCalls != 0 {
+		t.Fatalf("service reached with invalid body, calls=%d", service.sendCodeCalls)
+	}
+}
+
+func TestForgotPasswordReturnsChallengeExpiryAndResendWindow(t *testing.T) {
+	fixedNow := time.Date(2026, time.September, 8, 9, 0, 0, 0, time.UTC)
+	service := &stubAuthenticationService{sendCodeResult: SendCodeResult{ChallengeID: "challenge-1", ExpiresAt: fixedNow.Add(5 * time.Minute), ResendAfterSeconds: 60}}
+	responseRecorder := serveAuthRouteAt(t, service, http.MethodPost, "/api/v1/auth/password/forgot", `{"email":"user@example.com"}`, nil, false, fixedNow)
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	if !strings.Contains(responseRecorder.Body.String(), `"challengeId":"challenge-1"`) ||
+		!strings.Contains(responseRecorder.Body.String(), `"resendAfterSeconds":60`) {
+		t.Fatalf("body=%s", responseRecorder.Body.String())
 	}
 }
 
@@ -284,6 +308,16 @@ func (s *stubAuthenticationService) LoginConfig(_ context.Context, _ authclient.
 func (s *stubAuthenticationService) SendCode(_ context.Context, _ SendCodeInput) (SendCodeResult, error) {
 	s.sendCodeCalls++
 	return s.sendCodeResult, nil
+}
+
+func (s *stubAuthenticationService) ForgotPassword(_ context.Context, _ ForgotPasswordInput) (SendCodeResult, error) {
+	s.sendCodeCalls++
+	return s.sendCodeResult, nil
+}
+
+func (s *stubAuthenticationService) ResetPassword(_ context.Context, _ ResetPasswordInput) error {
+	s.sendCodeCalls++
+	return nil
 }
 
 func (s *stubAuthenticationService) Refresh(_ context.Context, input RefreshInput) (Credential, error) {

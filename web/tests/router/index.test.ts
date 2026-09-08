@@ -95,11 +95,18 @@ describe('router', () => {
     const order: string[] = []
     refreshMock.mockImplementation(async () => {
       order.push('refresh')
-      return { accessToken: 'jwt', expiresIn: 900, isNewUser: false }
+      return { accessToken: 'jwt', expiresIn: 900, isNewUser: false, passwordSetRequired: false }
     })
     getCurrentUserMock.mockImplementation(async () => {
       order.push('me')
-      return { userId: 1, username: 'admin', email: 'admin@example.com', phone: null, avatar: '' }
+      return {
+        userId: 1,
+        username: 'admin',
+        email: 'admin@example.com',
+        phone: null,
+        avatar: '',
+        passwordSetRequired: false,
+      }
     })
     getPermissionMock.mockImplementation(async () => {
       order.push('access')
@@ -268,13 +275,14 @@ describe('router', () => {
 
 function setAuthenticated(): void {
   const store = useAuthStore(pinia)
-  store.setCredential({ accessToken: 'jwt', expiresIn: 900, isNewUser: false })
+  store.setCredential({ accessToken: 'jwt', expiresIn: 900, isNewUser: false, passwordSetRequired: false })
   store.setAuthenticated({
     userId: 1,
     username: 'admin',
     email: 'admin@example.com',
     phone: null,
     avatar: '',
+    passwordSetRequired: false,
   })
 }
 

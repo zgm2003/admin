@@ -17,10 +17,11 @@ import (
 )
 
 var (
-	ErrUsernameConflict = errors.New("active username already exists")
-	ErrEmailConflict    = errors.New("active email already exists")
-	ErrPhoneConflict    = errors.New("active phone already exists")
-	ErrUserDataInvalid  = errors.New("user or user-role data is invalid")
+	ErrUsernameConflict   = errors.New("active username already exists")
+	ErrEmailConflict      = errors.New("active email already exists")
+	ErrPhoneConflict      = errors.New("active phone already exists")
+	ErrUserDataInvalid    = errors.New("user or user-role data is invalid")
+	ErrPasswordAlreadySet = errors.New("user password is already set")
 )
 
 type CreateInput struct {
@@ -54,6 +55,9 @@ type Current struct {
 	Email    string
 	Phone    *string
 	Avatar   string
+	// PasswordSetRequired reports that the account still has no password
+	// (passwordless email-code signup).
+	PasswordSetRequired bool
 }
 
 type RevokedSessionRef struct {
@@ -419,6 +423,28 @@ func (r *Repository) FindCredentialByIdentity(ctx context.Context, identityKind,
 	}
 }
 
+// SetPasswordHash conditionally writes the first password; concurrent losers
+// cannot overwrite an existing credential.
+func (r *Repository) SetPasswordHash(ctx context.Context, userID int64, passwordHash string, now time.Time) error {
+	if strings.TrimSpace(passwordHash) == "" {
+		return fmt.Errorf("empty password hash: %w", ErrUserDataInvalid)
+	}
+	result := r.db.WithContext(ctx).
+		Model(&User{}).
+		Where("id = ? AND deleted_at IS NULL AND password_hash = ''", userID).
+		Updates(map[string]any{"password_hash": passwordHash, "updated_at": now})
+	if result.Error != nil {
+		return fmt.Errorf("set user password: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		if _, err := r.FindCredentialByID(ctx, userID); err != nil {
+			return fmt.Errorf("set user password: %w", err)
+		}
+		return ErrPasswordAlreadySet
+	}
+	return nil
+}
+
 // CreateVerifiedIdentity creates a passwordless or email/phone verified user
 // in one transaction: the account, the enabled default role relationship, an
 // access version of 1 and an empty profile. It does not lock the whole
@@ -523,7 +549,8 @@ func (r *Repository) FindCurrent(ctx context.Context, userID int64) (Current, er
 	var current Current
 	result := r.db.WithContext(ctx).Raw(`
 		SELECT app_user.id, app_user.username, app_user.email, app_user.phone,
-		       COALESCE(profile.avatar, '') AS avatar
+		       COALESCE(profile.avatar, '') AS avatar,
+		       (app_user.password_hash = '') AS password_set_required
 		FROM user_account AS app_user
 		LEFT JOIN user_profile AS profile ON profile.user_id = app_user.id
 		WHERE app_user.id = ?

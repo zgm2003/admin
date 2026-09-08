@@ -1,12 +1,14 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
 
 	"admin/server/internal/module/auth/client"
 	authplatform "admin/server/internal/module/auth/platform"
+	user "admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/response"
@@ -15,6 +17,18 @@ import (
 )
 
 const refreshCookiePath = "/api/v1/auth"
+
+type authenticationService interface {
+	Register(context.Context, RegisterInput) (Registered, error)
+	Login(context.Context, LoginInput) (Credential, error)
+	LoginConfig(context.Context, authclient.Client) (authplatform.LoginConfig, error)
+	SendCode(context.Context, SendCodeInput) (SendCodeResult, error)
+	ForgotPassword(context.Context, ForgotPasswordInput) (SendCodeResult, error)
+	ResetPassword(context.Context, ResetPasswordInput) error
+	Refresh(context.Context, RefreshInput) (Credential, error)
+	Logout(context.Context, Identity, authclient.Client) error
+	CurrentUser(context.Context, Identity) (user.Current, error)
+}
 
 type Handler struct {
 	service      authenticationService
@@ -231,11 +245,12 @@ func (h *Handler) Me(context *gin.Context) {
 		return
 	}
 	response.OK(context, http.StatusOK, CurrentUserResponse{
-		UserID:   current.ID,
-		Username: current.Username,
-		Email:    current.Email,
-		Phone:    current.Phone,
-		Avatar:   current.Avatar,
+		UserID:              current.ID,
+		Username:            current.Username,
+		Email:               current.Email,
+		Phone:               current.Phone,
+		Avatar:              current.Avatar,
+		PasswordSetRequired: current.PasswordSetRequired,
 	})
 }
 
@@ -274,5 +289,5 @@ func refreshCookieName(platform string) string {
 }
 
 func writeCredential(context *gin.Context, credential Credential) {
-	response.OK(context, http.StatusOK, CredentialResponse{AccessToken: credential.AccessToken, ExpiresIn: credential.ExpiresIn, IsNewUser: credential.IsNewUser})
+	response.OK(context, http.StatusOK, CredentialResponse{AccessToken: credential.AccessToken, ExpiresIn: credential.ExpiresIn, IsNewUser: credential.IsNewUser, PasswordSetRequired: credential.PasswordSetRequired})
 }

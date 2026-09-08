@@ -28,13 +28,14 @@ describe('admin layout', () => {
     usePermissionStore(pinia).reset()
     useAuthStore(pinia).$reset()
     useUIPreferencesStore(pinia).initializeSafely()
-    useAuthStore(pinia).setCredential({ accessToken: 'jwt', expiresIn: 900, isNewUser: false })
+    useAuthStore(pinia).setCredential({ accessToken: 'jwt', expiresIn: 900, isNewUser: false, passwordSetRequired: false })
     useAuthStore(pinia).setAuthenticated({
       userId: 1,
       username: 'admin',
       email: 'admin@example.com',
       phone: null,
       avatar: '',
+      passwordSetRequired: false,
     })
     Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1200 })
   })
