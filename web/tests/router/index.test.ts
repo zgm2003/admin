@@ -34,9 +34,9 @@ describe('router', () => {
     expect(router.hasRoute('register')).toBe(false)
     expect(router.resolve('/register').matched).toHaveLength(0)
     expect(router.resolve('/dashboard').meta.requiresAuth).toBe(true)
-    expect(router.resolve('/permission/menus').matched).toHaveLength(0)
+    expect(router.resolve('/permission/menu').matched).toHaveLength(0)
     expect(router.hasRoute('account-profile')).toBe(false)
-    expect(router.resolve('/account/profile').matched).toHaveLength(0)
+    expect(router.resolve('/user/profile').matched).toHaveLength(0)
     expect(router.hasRoute('admin-layout')).toBe(true)
   })
 
@@ -47,7 +47,7 @@ describe('router', () => {
     expect(dashboard.meta.i18nKey).toBe('navigation.dashboard')
     expect(dashboard.meta.affix).toBe(true)
     expect(router.resolve('/login').meta.i18nKey).toBeUndefined()
-    expect(router.resolve('/permission/menus').meta.i18nKey).toBeUndefined()
+    expect(router.resolve('/permission/menu').meta.i18nKey).toBeUndefined()
   })
 
   it('registers and guards a dynamic menu page with its exact permission after loading access', async () => {
@@ -58,37 +58,37 @@ describe('router', () => {
     getPermissionMock.mockResolvedValue({
       ...emptyPermissionSnapshot(),
       menuTree: [
-        accessDirectory('access', 'navigation.access', [
+        accessDirectory('access', 'navigation.permission', [
           accessPage(
             'permission:menu:view',
-            '/permission/menus',
-            'permission/menus',
-            'navigation.accessMenus',
+            '/permission/menu',
+            'permission/menu',
+            'navigation.permissionMenu',
           ),
         ]),
       ],
       permissionCodes: [],
     })
-    await router.push('/permission/menus')
+    await router.push('/permission/menu')
     expect(router.currentRoute.value.path).toBe('/dashboard')
 
     usePermissionStore(pinia).reset()
     getPermissionMock.mockResolvedValue({
       ...emptyPermissionSnapshot(),
       menuTree: [
-        accessDirectory('access', 'navigation.access', [
+        accessDirectory('access', 'navigation.permission', [
           accessPage(
             'permission:menu:view',
-            '/permission/menus',
-            'permission/menus',
-            'navigation.accessMenus',
+            '/permission/menu',
+            'permission/menu',
+            'navigation.permissionMenu',
           ),
         ]),
       ],
       permissionCodes: ['permission:menu:view'],
     })
-    await router.push('/permission/menus')
-    expect(router.currentRoute.value.path).toBe('/permission/menus')
+    await router.push('/permission/menu')
+    expect(router.currentRoute.value.path).toBe('/permission/menu')
   })
 
   it('restores a cold dynamic URL through auth, access, route registration, and the original URL', async () => {
@@ -115,11 +115,11 @@ describe('router', () => {
     const router = createAppRouter(createMemoryHistory())
     installPermissionGuard(router)
 
-    await router.push('/account/users')
+    await router.push('/user/account')
 
     expect(order).toEqual(['refresh', 'me', 'access'])
-    expect(router.hasRoute('access:account:user:list')).toBe(true)
-    expect(router.currentRoute.value.fullPath).toBe('/account/users')
+    expect(router.hasRoute('access:user:account:list')).toBe(true)
+    expect(router.currentRoute.value.fullPath).toBe('/user/account')
     expect(useAuthStore(pinia).status).toBe('authenticated')
     expect(usePermissionStore(pinia).status).toBe('ready')
   })
@@ -143,11 +143,11 @@ describe('router', () => {
     const router = createAppRouter(createMemoryHistory())
     installPermissionGuard(router)
 
-    await router.push('/account/users')
-    await router.push('/permission/roles')
-    await router.push('/account/users')
+    await router.push('/user/account')
+    await router.push('/permission/role')
+    await router.push('/user/account')
 
-    expect(router.currentRoute.value.path).toBe('/account/users')
+    expect(router.currentRoute.value.path).toBe('/user/account')
     expect(getPermissionMock).toHaveBeenCalledOnce()
   })
 
@@ -159,13 +159,13 @@ describe('router', () => {
     installPermissionGuard(router)
 
     const dashboardNavigation = router.push('/dashboard')
-    const pageNavigation = router.push('/account/users')
+    const pageNavigation = router.push('/user/account')
     await vi.waitFor(() => expect(getPermissionMock).toHaveBeenCalledOnce())
     request.resolve(businessPermissionSnapshot())
     await Promise.all([dashboardNavigation, pageNavigation])
 
     expect(getPermissionMock).toHaveBeenCalledOnce()
-    expect(router.hasRoute('access:account:user:list')).toBe(true)
+    expect(router.hasRoute('access:user:account:list')).toBe(true)
   })
 
   it('keeps Dashboard mounted when access loading fails', async () => {
@@ -188,7 +188,7 @@ describe('router', () => {
     const router = createAppRouter(createMemoryHistory())
     installPermissionGuard(router)
 
-    await router.push('/account/users')
+    await router.push('/user/account')
 
     expect(router.currentRoute.value.path).toBe('/dashboard')
     expect(usePermissionStore(pinia).status).toBe('error')
@@ -200,14 +200,14 @@ describe('router', () => {
     getPermissionMock.mockResolvedValue(businessPermissionSnapshot())
     const router = createAppRouter(createMemoryHistory())
     installPermissionGuard(router)
-    await router.push('/account/users')
-    expect(router.hasRoute('access:account:user:list')).toBe(true)
+    await router.push('/user/account')
+    expect(router.hasRoute('access:user:account:list')).toBe(true)
 
     useAuthStore(pinia).setAnonymous()
     await router.push('/login')
 
     expect(router.currentRoute.value.path).toBe('/login')
-    expect(router.hasRoute('access:account:user:list')).toBe(false)
+    expect(router.hasRoute('access:user:account:list')).toBe(false)
     expect(usePermissionStore(pinia).status).toBe('idle')
     expect(usePermissionStore(pinia).menuTree).toEqual([])
   })
@@ -275,7 +275,12 @@ describe('router', () => {
 
 function setAuthenticated(): void {
   const store = useAuthStore(pinia)
-  store.setCredential({ accessToken: 'jwt', expiresIn: 900, isNewUser: false, passwordSetRequired: false })
+  store.setCredential({
+    accessToken: 'jwt',
+    expiresIn: 900,
+    isNewUser: false,
+    passwordSetRequired: false,
+  })
   store.setAuthenticated({
     userId: 1,
     username: 'admin',
@@ -294,32 +299,27 @@ function businessPermissionSnapshot(): PermissionSnapshot {
   return {
     roleCodes: ['registered_user'],
     menuTree: [
-      accessDirectory('account', 'navigation.account', [
-        accessPage(
-          'account:user:list',
-          '/account/users',
-          'account/users',
-          'navigation.accountUsers',
-        ),
+      accessDirectory('account', 'navigation.user', [
+        accessPage('user:account:list', '/user/account', 'user/account', 'navigation.userAccount'),
       ]),
-      accessDirectory('access', 'navigation.access', [
+      accessDirectory('access', 'navigation.permission', [
         accessPage(
           'permission:role:list',
-          '/permission/roles',
-          'permission/roles',
-          'navigation.accessRoles',
+          '/permission/role',
+          'permission/role',
+          'navigation.permissionRole',
         ),
       ]),
       accessDirectory('system', 'navigation.system', [
         accessPage(
-          'system:operation-log:list',
-          '/system/operation-logs',
-          'system/operation-logs',
-          'navigation.systemOperationLogs',
+          'system:operationlog:list',
+          '/system/operationlog',
+          'system/operationlog',
+          'navigation.systemOperationlog',
         ),
       ]),
     ],
-    permissionCodes: ['account:user:list', 'system:operation-log:list', 'permission:role:list'],
+    permissionCodes: ['user:account:list', 'system:operationlog:list', 'permission:role:list'],
   }
 }
 

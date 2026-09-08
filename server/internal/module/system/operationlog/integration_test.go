@@ -23,8 +23,8 @@ import (
 func TestOperationLogWorkerPersistsIdempotently(t *testing.T) {
 	connection, ctx := openOperationLogDatabase(t)
 	for _, statement := range []string{
-		`CREATE TABLE auth_platform (id BIGINT PRIMARY KEY, code VARCHAR(49) NOT NULL)`,
-		`INSERT INTO auth_platform (id, code) VALUES (17, 'admin')`,
+		`CREATE TABLE permission_auth_platform (id BIGINT PRIMARY KEY, code VARCHAR(49) NOT NULL)`,
+		`INSERT INTO permission_auth_platform (id, code) VALUES (17, 'admin')`,
 		`CREATE TABLE user_account (id BIGINT PRIMARY KEY, username VARCHAR(64) NOT NULL, deleted_at TIMESTAMPTZ NULL)`,
 		`INSERT INTO user_account (id, username) VALUES (42, 'integration-user')`,
 		`CREATE TABLE system_operation_log (
@@ -33,7 +33,7 @@ func TestOperationLogWorkerPersistsIdempotently(t *testing.T) {
 			request_id VARCHAR(128) NOT NULL,
 			user_id BIGINT,
 			session_id BIGINT,
-			platform_id BIGINT REFERENCES auth_platform(id) ON DELETE RESTRICT,
+			platform_id BIGINT REFERENCES permission_auth_platform(id) ON DELETE RESTRICT,
 			method VARCHAR(10) NOT NULL,
 			route VARCHAR(255) NOT NULL,
 			module VARCHAR(64) NOT NULL,
@@ -58,7 +58,7 @@ func TestOperationLogWorkerPersistsIdempotently(t *testing.T) {
 	userID := int64(42)
 	payload := operationlog.TaskPayload{
 		SchemaVersion: 2, EventID: "operation-event-1", RequestID: "operation-integration-1", UserID: &userID, PlatformID: &platformID,
-		Method: "PUT", Route: "/api/admin/v1/users/:id", Module: "user", Action: "user.update",
+		Method: "PUT", Route: "/api/admin/v1/user/account/:id", Module: "user", Action: "user.update",
 		ClientIP: "127.0.0.1", UserAgent: "integration", StatusCode: 200, IsSuccess: 1, LatencyMs: 4,
 		RequestData: operationlog.JSON(`{"password":"***"}`), ResponseData: operationlog.JSON(`{"code":0}`),
 		CreatedAt: time.Now().UTC().Truncate(time.Microsecond),

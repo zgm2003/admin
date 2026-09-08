@@ -118,10 +118,10 @@ export async function getMenus(query?: MenuListQuery): Promise<MenuCatalogRespon
   }
   const raw =
     query === undefined
-      ? await request<unknown>({ method: 'GET', url: '/api/admin/v1/menus' })
+      ? await request<unknown>({ method: 'GET', url: '/api/admin/v1/permission/menu' })
       : await request<unknown>({
           method: 'GET',
-          url: '/api/admin/v1/menus',
+          url: '/api/admin/v1/permission/menu',
           params: { platformId: query.platformId },
         })
   return parseMenuCatalog(raw, query?.platformId)
@@ -129,14 +129,18 @@ export async function getMenus(query?: MenuListQuery): Promise<MenuCatalogRespon
 
 export async function createMenu(input: CreateMenuInput): Promise<MenuIDResult> {
   return expectId(
-    await request<unknown>({ method: 'POST', url: '/api/admin/v1/menus', data: input }),
+    await request<unknown>({ method: 'POST', url: '/api/admin/v1/permission/menu', data: input }),
     'menu create result',
   )
 }
 
 export async function updateMenu(id: number, input: UpdateMenuInput): Promise<MenuIDResult> {
   return expectId(
-    await request<unknown>({ method: 'PUT', url: `/api/admin/v1/menus/${id}`, data: input }),
+    await request<unknown>({
+      method: 'PUT',
+      url: `/api/admin/v1/permission/menu/${id}`,
+      data: input,
+    }),
     'menu update result',
   )
 }
@@ -145,7 +149,7 @@ export async function updateMenuStatus(id: number, isEnabled: YesNo): Promise<Me
   const value = expectExactKeys(
     await request<unknown>({
       method: 'PATCH',
-      url: `/api/admin/v1/menus/${id}/status`,
+      url: `/api/admin/v1/permission/menu/${id}/status`,
       data: { isEnabled },
     }),
     ['id', 'isEnabled'],
@@ -157,7 +161,7 @@ export async function updateMenuStatus(id: number, isEnabled: YesNo): Promise<Me
 
 export async function deleteMenu(id: number): Promise<MenuIDResult> {
   return expectId(
-    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/menus/${id}` }),
+    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/permission/menu/${id}` }),
     'menu delete result',
   )
 }
@@ -166,7 +170,7 @@ export async function rebuildAccessCache(): Promise<RebuildAccessCacheResult> {
   const value = expectExactKeys(
     await request<unknown>({
       method: 'POST',
-      url: '/api/admin/v1/menus/access-cache/rebuild',
+      url: '/api/admin/v1/permission/menu/access-cache/rebuild',
     }),
     ['rebuiltUsers'],
     'rebuild access cache result',

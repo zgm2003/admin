@@ -1,7 +1,7 @@
 package session
 
 const (
-	PermissionView   = "auth:session:view"
-	PermissionList   = "auth:session:list"
-	PermissionRevoke = "auth:session:revoke"
+	PermissionView   = "user:session:view"
+	PermissionList   = "user:session:list"
+	PermissionRevoke = "user:session:revoke"
 )

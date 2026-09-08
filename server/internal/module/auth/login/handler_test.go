@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"admin/server/internal/module/auth/client"
-	authplatform "admin/server/internal/module/auth/platform"
+	authplatform "admin/server/internal/module/permission/authplatform"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"github.com/gin-gonic/gin"

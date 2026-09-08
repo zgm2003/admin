@@ -46,15 +46,15 @@ describe('frontend i18n', () => {
 
   it('contains only the current business-domain navigation keys', () => {
     const currentKeys = [
-      'navigation.account',
-      'navigation.accountUsers',
-      'navigation.accountSessions',
-      'navigation.access',
-      'navigation.accessMenus',
-      'navigation.accessRoles',
-      'navigation.accessAuthPlatforms',
+      'navigation.user',
+      'navigation.userAccount',
+      'navigation.userSession',
+      'navigation.permission',
+      'navigation.permissionMenu',
+      'navigation.permissionRole',
+      'navigation.permissionAuthplatform',
       'navigation.system',
-      'navigation.systemOperationLogs',
+      'navigation.systemOperationlog',
     ]
     const removedKeys = [
       'navigation.systemUsers',
@@ -69,7 +69,7 @@ describe('frontend i18n', () => {
 
   it('contains the complete bilingual user-management copy', () => {
     const keys = [
-      'navigation.accountUsers',
+      'navigation.userAccount',
       'permission.userUpdate',
       'permission.userStatus',
       'permission.userDelete',
@@ -98,35 +98,35 @@ describe('frontend i18n', () => {
 
   it('contains the complete bilingual authentication-platform copy', () => {
     const keys = [
-      'navigation.accessAuthPlatforms',
+      'navigation.permissionAuthplatform',
       'permission.authPlatformCreate',
       'permission.authPlatformUpdate',
       'permission.authPlatformStatus',
       'permission.authPlatformDelete',
-      'authPlatform.title',
-      'authPlatform.search',
-      'authPlatform.form.basicSection',
-      'authPlatform.form.tokenSection',
-      'authPlatform.form.policySection',
-      'authPlatform.confirm.disable',
+      'permission.authplatform.title',
+      'permission.authplatform.search',
+      'permission.authplatform.form.basicSection',
+      'permission.authplatform.form.tokenSection',
+      'permission.authplatform.form.policySection',
+      'permission.authplatform.confirm.disable',
     ]
     for (const key of keys) {
       expect(isAppMessageKey(key), key).toBe(true)
       expect(appI18n.global.t(key), key).toBeTruthy()
     }
     setLocale('en-US')
-    expect(appI18n.global.t('authPlatform.title')).toBe('Authentication platforms')
+    expect(appI18n.global.t('permission.authplatform.title')).toBe('Authentication platforms')
   })
 
   it('contains the complete bilingual session and operation-log copy', () => {
     const keys = [
-      'navigation.accountSessions',
+      'navigation.userSession',
       'permission.sessionRevoke',
       'session.title',
       'session.loading',
       'session.batchRevoke',
       'session.revokeFailed',
-      'navigation.systemOperationLogs',
+      'navigation.systemOperationlog',
       'operationLog.title',
       'operationLog.userId',
       'operationLog.timeRange',

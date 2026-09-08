@@ -31,7 +31,7 @@ describe('storage upload API', () => {
     ).resolves.toEqual(result)
     expect(requestMock).toHaveBeenCalledWith({
       method: 'POST',
-      url: '/api/v1/storage/upload-credentials',
+      url: '/api/v1/storage/upload-credential',
       data: {
         ruleCode: 'avatar',
         files: [{ fileName: 'a.png', contentType: 'image/png', fileSizeBytes: 10 }],

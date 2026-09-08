@@ -11,7 +11,7 @@ it('uses the Admin operation log namespace', async () => {
   await getOperationLogs(query)
   expect(request).toHaveBeenCalledWith({
     method: 'GET',
-    url: '/api/admin/v1/operation-logs',
+    url: '/api/admin/v1/system/operationlog',
     params: query,
   })
 })

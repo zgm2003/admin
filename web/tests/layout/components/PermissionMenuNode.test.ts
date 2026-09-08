@@ -29,7 +29,7 @@ describe('PermissionMenuNode', () => {
 
     expect(wrapper.findComponent({ name: 'ElSubMenu' }).props('index')).toBe('account')
     expect(wrapper.findAllComponents({ name: 'ElSubMenu' })).toHaveLength(1)
-    expect(wrapper.findComponent({ name: 'ElMenuItem' }).props('index')).toBe('/account/users')
+    expect(wrapper.findComponent({ name: 'ElMenuItem' }).props('index')).toBe('/user/account')
   })
 
   it.each(['lucide:settings-2', 'lucide:shield-check'])(
@@ -92,9 +92,9 @@ describe('AppAside access menu', () => {
 
     expect(items.map((item) => item.props('index'))).toEqual([
       '/dashboard',
-      '/account/users',
-      '/permission/roles',
-      '/system/operation-logs',
+      '/user/account',
+      '/permission/role',
+      '/system/operationlog',
     ])
     expect(
       wrapper.findAllComponents({ name: 'ElSubMenu' }).map((item) => item.props('index')),
@@ -169,7 +169,7 @@ function directoryNode(): PermissionMenuNodeDTO {
     menuType: 'directory',
     path: null,
     componentPath: null,
-    i18nKey: 'navigation.account',
+    i18nKey: 'navigation.user',
     icon: 'lucide:folder',
     isHidden: YesNo.No,
     children: [pageNode()],
@@ -178,11 +178,11 @@ function directoryNode(): PermissionMenuNodeDTO {
 
 function pageNode(): PermissionMenuNodeDTO {
   return {
-    code: 'account:user:list',
+    code: 'user:account:list',
     menuType: 'page',
-    path: '/account/users',
-    componentPath: 'account/users',
-    i18nKey: 'navigation.accountUsers',
+    path: '/user/account',
+    componentPath: 'user/account',
+    i18nKey: 'navigation.userAccount',
     icon: 'lucide:settings-2',
     isHidden: YesNo.No,
     children: [],
@@ -191,20 +191,20 @@ function pageNode(): PermissionMenuNodeDTO {
 
 function navigationRoots(): PermissionMenuNodeDTO[] {
   return [
-    directoryWithPage('account', 'navigation.account', pageNode()),
-    directoryWithPage('access', 'navigation.access', {
+    directoryWithPage('account', 'navigation.user', pageNode()),
+    directoryWithPage('access', 'navigation.permission', {
       ...pageNode(),
       code: 'permission:role:list',
-      path: '/permission/roles',
-      componentPath: 'permission/roles',
-      i18nKey: 'navigation.accessRoles',
+      path: '/permission/role',
+      componentPath: 'permission/role',
+      i18nKey: 'navigation.permissionRole',
     }),
     directoryWithPage('system', 'navigation.system', {
       ...pageNode(),
-      code: 'system:operation-log:list',
-      path: '/system/operation-logs',
-      componentPath: 'system/operation-logs',
-      i18nKey: 'navigation.systemOperationLogs',
+      code: 'system:operationlog:list',
+      path: '/system/operationlog',
+      componentPath: 'system/operationlog',
+      i18nKey: 'navigation.systemOperationlog',
     }),
   ]
 }

@@ -12,7 +12,7 @@ var menuConstraints = []constraintDefinition{
 	{
 		name:  "fk_permission_menu_platform",
 		table: "permission_menu",
-		ddl:   `ALTER TABLE permission_menu ADD CONSTRAINT fk_permission_menu_platform FOREIGN KEY (platform_id) REFERENCES auth_platform(id) ON DELETE RESTRICT`,
+		ddl:   `ALTER TABLE permission_menu ADD CONSTRAINT fk_permission_menu_platform FOREIGN KEY (platform_id) REFERENCES permission_auth_platform(id) ON DELETE RESTRICT`,
 	},
 	{
 		name:  "uq_permission_menu_id_platform",
@@ -107,7 +107,7 @@ var legacyComponentPaths = map[string]string{
 	"system-users":          "system/users",
 	"system-auth-platforms": "system/auth-platforms",
 	"system-sessions":       "system/sessions",
-	"system-operation-logs": "system/operation-logs",
+	"system-operation-logs": "system/operationlog",
 }
 
 func replaceMenuConstraints(db *gorm.DB) error {

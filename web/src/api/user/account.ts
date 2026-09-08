@@ -59,19 +59,19 @@ export interface UserRoleResult {
 
 export async function getUsers(query: UserListQuery): Promise<UserPage> {
   return parseUserPage(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/users', params: query }),
+    await request<unknown>({ method: 'GET', url: '/api/admin/v1/user/account', params: query }),
   )
 }
 
 export async function getUserRoleOptions(): Promise<UserRoleOptions> {
   return parseUserRoleOptions(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/users/role-options' }),
+    await request<unknown>({ method: 'GET', url: '/api/admin/v1/user/account/role-options' }),
   )
 }
 
 export async function updateUser(id: number, input: UpdateUserInput): Promise<UpdatedProfile> {
   return parseUpdatedProfile(
-    await request<unknown>({ method: 'PUT', url: `/api/admin/v1/users/${id}`, data: input }),
+    await request<unknown>({ method: 'PUT', url: `/api/admin/v1/user/account/${id}`, data: input }),
   )
 }
 
@@ -79,7 +79,7 @@ export async function updateUserStatus(id: number, isEnabled: YesNo): Promise<Us
   return parseUserStatus(
     await request<unknown>({
       method: 'PATCH',
-      url: `/api/admin/v1/users/${id}/status`,
+      url: `/api/admin/v1/user/account/${id}/status`,
       data: { isEnabled },
     }),
   )
@@ -87,14 +87,14 @@ export async function updateUserStatus(id: number, isEnabled: YesNo): Promise<Us
 
 export async function deleteUser(id: number): Promise<Record<string, never>> {
   return expectEmptyObject(
-    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/users/${id}` }),
+    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/user/account/${id}` }),
     'user delete result',
   )
 }
 
 export async function getUserRoles(id: number): Promise<UserRolesResponse> {
   return parseUserRoles(
-    await request<unknown>({ method: 'GET', url: `/api/admin/v1/users/${id}/roles` }),
+    await request<unknown>({ method: 'GET', url: `/api/admin/v1/user/account/${id}/role` }),
   )
 }
 
@@ -105,7 +105,7 @@ export async function updateUserRoles(
   return parseUserRoleResult(
     await request<unknown>({
       method: 'PUT',
-      url: `/api/admin/v1/users/${id}/roles`,
+      url: `/api/admin/v1/user/account/${id}/role`,
       data: { roleIds: input.roleIds },
     }),
   )

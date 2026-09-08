@@ -32,10 +32,10 @@ const (
 	PermissionView   = "storage:object:view"
 	PermissionList   = "storage:object:list"
 	PermissionDetail = "storage:object:detail"
-	PermissionCreate = "storage:upload-rule:create"
-	PermissionUpdate = "storage:upload-rule:update"
-	PermissionStatus = "storage:upload-rule:status"
-	PermissionDelete = "storage:upload-rule:delete"
+	PermissionCreate = "storage:uploadrule:create"
+	PermissionUpdate = "storage:uploadrule:update"
+	PermissionStatus = "storage:uploadrule:status"
+	PermissionDelete = "storage:uploadrule:delete"
 )
 
 func (h *Handler) List(c *gin.Context) {

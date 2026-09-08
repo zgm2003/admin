@@ -7,6 +7,12 @@ import (
 	"admin/server/internal/shared/yesno"
 )
 
+func TestCanonicalPermissionDirectoryIsProtected(t *testing.T) {
+	if !IsProtectedCode("permission") {
+		t.Fatal("canonical permission directory is not protected")
+	}
+}
+
 func TestEnsureFoundationSeedsFullCatalogAndIsIdempotent(t *testing.T) {
 	tx, ctx, service := openCleanMenuService(t)
 	activeUser := createMenuAccessUser(t, tx, ctx, yesno.Yes, false)
@@ -102,7 +108,7 @@ func TestEnsureFoundationDoesNotClaimSameCodeFromAnotherPlatform(t *testing.T) {
 	canvas := createRepositoryPlatform(t, tx, ctx, "canvas", "Canvas", yesno.Yes, false)
 	canvasAccess := Menu{
 		PlatformID: canvas.ID, MenuType: TypeDirectory, Name: "Canvas Access", Code: "access",
-		I18nKey: stringPointer("navigation.access"), IsEnabled: yesno.Yes, IsHidden: yesno.No,
+		I18nKey: stringPointer("navigation.permission"), IsEnabled: yesno.Yes, IsHidden: yesno.No,
 	}
 	if err := NewRepository(tx).Create(ctx, &canvasAccess); err != nil {
 		t.Fatal(err)
@@ -140,7 +146,7 @@ func TestEnsureFoundationRestoresOnlyProtectedNodesInNonEmptyCatalog(t *testing.
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	if err := tx.WithContext(ctx).Model(&Menu{}).
-		Where("code IN ?", []string{PermissionCreate, "account:user:view"}).
+		Where("code IN ?", []string{PermissionCreate, "user:account:view"}).
 		Updates(map[string]any{"deleted_at": now, "updated_at": now}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +158,7 @@ func TestEnsureFoundationRestoresOnlyProtectedNodesInNonEmptyCatalog(t *testing.
 	if err := tx.WithContext(ctx).Model(&Menu{}).Where("code = ?", PermissionCreate).Count(&protectedCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.WithContext(ctx).Model(&Menu{}).Where("code = ?", "account:user:view").Count(&ordinaryCount).Error; err != nil {
+	if err := tx.WithContext(ctx).Model(&Menu{}).Where("code = ?", "user:account:view").Count(&ordinaryCount).Error; err != nil {
 		t.Fatal(err)
 	}
 	if protectedCount != 1 || ordinaryCount != 0 {
@@ -200,13 +206,13 @@ func TestProtectedMenusAllowOnlyPresentationUpdates(t *testing.T) {
 
 func testFoundationDefinitions() []FoundationDefinition {
 	return []FoundationDefinition{
-		{MenuType: TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: stringPointer("navigation.access"), Icon: stringPointer("lucide:shield-check"), SortOrder: 200, IsEnabled: yesno.Yes, IsHidden: yesno.No, Protected: true},
-		{ParentCode: "access", MenuType: TypePage, Name: "菜单管理", Code: PermissionView, I18nKey: stringPointer("navigation.accessMenus"), Path: stringPointer("/permission/menus"), ComponentPath: stringPointer("permission/menus"), Icon: stringPointer("lucide:panel-left"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, Protected: true},
+		{MenuType: TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: stringPointer("navigation.permission"), Icon: stringPointer("lucide:shield-check"), SortOrder: 200, IsEnabled: yesno.Yes, IsHidden: yesno.No, Protected: true},
+		{ParentCode: "access", MenuType: TypePage, Name: "菜单管理", Code: PermissionView, I18nKey: stringPointer("navigation.permissionMenu"), Path: stringPointer("/permission/menu"), ComponentPath: stringPointer("permission/menu"), Icon: stringPointer("lucide:panel-left"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, Protected: true},
 		{ParentCode: PermissionView, MenuType: TypeAction, Name: "新增菜单", Code: PermissionCreate, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
 		{ParentCode: PermissionView, MenuType: TypeAction, Name: "修改菜单", Code: PermissionUpdate, SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
 		{ParentCode: PermissionView, MenuType: TypeAction, Name: "删除菜单", Code: PermissionDelete, SortOrder: 30, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
 		{ParentCode: PermissionView, MenuType: TypeAction, Name: "重建访问缓存", Code: PermissionRebuildAccessCache, SortOrder: 40, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, Protected: true},
-		{MenuType: TypeDirectory, Name: "用户与账号", Code: "account", I18nKey: stringPointer("navigation.account"), Icon: stringPointer("lucide:users-round"), SortOrder: 100, IsEnabled: yesno.Yes, IsHidden: yesno.No},
-		{ParentCode: "account", MenuType: TypePage, Name: "用户管理", Code: "account:user:view", I18nKey: stringPointer("navigation.accountUsers"), Path: stringPointer("/account/users"), ComponentPath: stringPointer("account/users"), Icon: stringPointer("lucide:user-round-cog"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+		{MenuType: TypeDirectory, Name: "用户与账号", Code: "account", I18nKey: stringPointer("navigation.user"), Icon: stringPointer("lucide:users-round"), SortOrder: 100, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+		{ParentCode: "account", MenuType: TypePage, Name: "用户管理", Code: "user:account:view", I18nKey: stringPointer("navigation.userAccount"), Path: stringPointer("/user/account"), ComponentPath: stringPointer("user/account"), Icon: stringPointer("lucide:user-round-cog"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
 	}
 }

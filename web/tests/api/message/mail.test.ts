@@ -98,13 +98,8 @@ describe('mail admin protocol', () => {
 
 describe('mail rate limit protocol', () => {
   const policyMetadata = {
-    business_email_minute: ['business', 'platform_scene_email'],
-    business_email_10m: ['business', 'platform_scene_email'],
-    business_ip_minute: ['business', 'platform_ip'],
-    business_scene_minute: ['business', 'platform_scene'],
-    admin_test_user_10m: ['admin_test', 'admin_user'],
-    admin_test_ip_minute: ['admin_test', 'ip'],
-    admin_test_email_10m: ['admin_test', 'email'],
+    business_email_minute: ['business', 'platform_email'],
+    business_email_10m: ['business', 'platform_email'],
   } as const
   const policy = policyFor('business_email_minute')
 
@@ -126,7 +121,9 @@ describe('mail rate limit protocol', () => {
       version: 3,
       policy,
     })
-    expect(() => parseMailRateLimitUpdateResult({ version: 3, policy }, 'business_ip_minute')).toThrow()
+    expect(() =>
+      parseMailRateLimitUpdateResult({ version: 3, policy }, 'business_ip_minute'),
+    ).toThrow()
   })
 
   it('rejects unknown fields, invalid keys and out-of-range values', () => {

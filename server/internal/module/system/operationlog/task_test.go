@@ -16,7 +16,7 @@ func validTaskPayload() TaskPayload {
 		EventID:       "event-1",
 		RequestID:     "request-1",
 		Method:        "PUT",
-		Route:         "/api/admin/v1/users/:id",
+		Route:         "/api/admin/v1/user/account/:id",
 		Module:        "user",
 		Action:        "user.update",
 		ClientIP:      "127.0.0.1",
@@ -58,7 +58,7 @@ func TestTaskHandlerMarksMalformedPayloadSkipRetry(t *testing.T) {
 }
 
 func TestEnqueueUsesEventIDAsTaskID(t *testing.T) {
-	if TaskType != "system:operation-log:v2" {
+	if TaskType != "system:operationlog:v2" {
 		t.Fatalf("task type = %q", TaskType)
 	}
 	payload := validTaskPayload()

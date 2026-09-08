@@ -132,12 +132,12 @@ func TestTranslateUsesTheRequestedLocale(t *testing.T) {
 
 func TestTranslateInterpolatesExactParameters(t *testing.T) {
 	got, err := i18n.Translate(i18n.EnUS, i18n.KeyPermissionDenied, map[string]string{
-		"permission": "account:user:create",
+		"permission": "user:account:create",
 	})
 	if err != nil {
 		t.Fatalf("Translate() error = %v", err)
 	}
-	if got != "Permission denied: account:user:create" {
+	if got != "Permission denied: user:account:create" {
 		t.Fatalf("Translate() = %q", got)
 	}
 }

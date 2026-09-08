@@ -62,11 +62,15 @@ Admin 是面向管理员的平台控制台。当前可见业务域：
 - 页面 `:view` 只控制能否进入；不得自动推导读取或写入权限。
 - `is_hidden=1` 只是不出现在侧边菜单，仍需动态路由、页面权限和后端 Middleware。
 - Access 的 `menuTree` 只放 directory/page，action 只放入 `permissionCodes`。
-- 个人资料是隐藏页面：`account:profile:view`、`account:profile:detail`、
-  `account:profile:update`、`account:password:update` 分别对应进入、读取、保存和改密。
+- 个人资料是隐藏页面：`user:profile:view`、`user:profile:detail`、
+  `user:profile:update`、`user:password:update` 分别对应进入、读取、保存和改密。
 - 前端按钮隐藏不是安全边界；后端 API 必须使用同一个 action code 再校验。
 
 ## 数据和状态
+
+- 邮件只保留每分钟、每 10 分钟两条发送上限；同平台、同邮箱跨所有场景和管理测试共享，任一达到上限
+  即拒绝，不再叠加场景/IP/管理员专属策略。配置的次数、窗口与验证码 TTL 都由邮件管理拥有。
+- 找回密码成功不自动登录，并撤销全部既有会话；首次设置密码只允许无密码账号，保持会话且不强制拦路。
 
 - PostgreSQL 保存用户、权限、菜单、配置、日志等业务事实；Redis 只做会话、Access 版本/快照和队列存储等
   明确用途，不成为第二个权限来源。

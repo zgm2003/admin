@@ -20,7 +20,7 @@ type limiterStub struct {
 	err     error
 }
 
-func (s limiterStub) Allow(context.Context, LimitRequest) (bool, error) {
+func (s limiterStub) Allow(context.Context, ...LimitRequest) (bool, error) {
 	return s.allowed, s.err
 }
 
@@ -30,8 +30,8 @@ type recordingLimiter struct {
 	err      error
 }
 
-func (l *recordingLimiter) Allow(_ context.Context, request LimitRequest) (bool, error) {
-	l.requests = append(l.requests, request)
+func (l *recordingLimiter) Allow(_ context.Context, requests ...LimitRequest) (bool, error) {
+	l.requests = append(l.requests, requests...)
 	return l.allowed, l.err
 }
 
@@ -224,13 +224,13 @@ func TestSendUsesCurrentBusinessPolicySnapshot(t *testing.T) {
 	if _, err := service.Send(ctx, validBusinessSendInput()); err != nil {
 		t.Fatal(err)
 	}
-	if len(limiter.requests) != 4 {
-		t.Fatalf("limiter requests = %d, want 4", len(limiter.requests))
+	if len(limiter.requests) != 2 {
+		t.Fatalf("limiter requests = %d, want 2", len(limiter.requests))
 	}
 	if got := limiter.requests[0]; got.Limit != 2 || got.Window != 120*time.Second {
 		t.Fatalf("first request = %+v", got)
 	}
-	if got := limiter.requests[3]; got.Limit != 31 || got.Window != 120*time.Second {
+	if got := limiter.requests[1]; got.Limit != 7 || got.Window != 900*time.Second {
 		t.Fatalf("last request = %+v", got)
 	}
 }
@@ -242,22 +242,21 @@ func TestAdminTestUsesCurrentPolicySnapshot(t *testing.T) {
 	service := NewService(
 		NewRepository(db), nil, sender, nil, limiter,
 		stubRateLimitPolicyStore{catalog: policyCatalogWith(map[string][2]int{
-			"admin_test_user_10m":  {6, 600},
-			"admin_test_ip_minute": {11, 60},
-			"admin_test_email_10m": {4, 600},
+			"business_email_minute": {6, 60},
+			"business_email_10m":    {4, 600},
 		})},
 	)
 
 	if _, err := service.TestForPlatform(ctx, 1, validAdminTestInput()); err != nil {
 		t.Fatal(err)
 	}
-	if len(limiter.requests) != 3 {
-		t.Fatalf("limiter requests = %d, want 3", len(limiter.requests))
+	if len(limiter.requests) != 2 {
+		t.Fatalf("limiter requests = %d, want 2", len(limiter.requests))
 	}
-	if got := limiter.requests[0]; got.Limit != 6 || got.Window != 600*time.Second {
+	if got := limiter.requests[0]; got.Limit != 6 || got.Window != 60*time.Second {
 		t.Fatalf("admin user request = %+v", got)
 	}
-	if got := limiter.requests[2]; got.Limit != 4 || got.Window != 600*time.Second {
+	if got := limiter.requests[1]; got.Limit != 4 || got.Window != 600*time.Second {
 		t.Fatalf("admin email request = %+v", got)
 	}
 }
@@ -511,8 +510,8 @@ func TestPrepareEmailVerifyCodeReturnsConfigTTLAndResendWindow(t *testing.T) {
 	if preparation.TTLMinutes != 5 || preparation.ResendAfterSeconds != 60 {
 		t.Fatalf("preparation = %+v", preparation)
 	}
-	if len(limiter.requests) != 4 {
-		t.Fatalf("limiter requests = %d, want 4", len(limiter.requests))
+	if len(limiter.requests) != 2 {
+		t.Fatalf("limiter requests = %d, want 2", len(limiter.requests))
 	}
 }
 

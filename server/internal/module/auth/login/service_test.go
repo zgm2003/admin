@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"admin/server/internal/module/auth/client"
-	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/auth/state"
 	messagemail "admin/server/internal/module/message/mail"
+	"admin/server/internal/module/permission/authplatform"
 	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/loginlog"
@@ -602,7 +602,7 @@ func TestAuthenticateFallsBackToPostgreSQLAndRebuildsRedis(t *testing.T) {
 	}
 }
 
-func TestAuthenticateRepairsCorruptStateAfterPostgreSQLFallback(t *testing.T) {
+func TestAuthenticateRejectsCorruptStateWithoutPostgreSQL(t *testing.T) {
 	redisClient := openAuthRedis(t)
 	cleanupAuthRedisKeys(t, redisClient, 84501, "admin", 84502)
 	fixedNow := time.Date(2026, time.August, 20, 10, 0, 0, 0, time.UTC)
@@ -621,16 +621,16 @@ func TestAuthenticateRepairsCorruptStateAfterPostgreSQLFallback(t *testing.T) {
 	rawToken, _, _ := service.jwt.Issue(TokenIdentity{UserID: 84501, SessionID: 84502, Platform: "admin", Version: 2}, policy.AccessTTL)
 
 	first, err := service.Authenticate(context.Background(), rawToken, testAuthClient())
-	if err != nil || sessions.authorityCalls != 1 {
+	if appErrorCode(err) != apperror.CodeDependencyUnavailable || sessions.authorityCalls != 0 {
 		t.Fatalf("corrupt fallback = %+v,%v calls=%d", first, err, sessions.authorityCalls)
 	}
 	second, err := service.Authenticate(context.Background(), rawToken, testAuthClient())
-	if err != nil || second.CacheResult != "hit" || sessions.authorityCalls != 1 {
+	if appErrorCode(err) != apperror.CodeDependencyUnavailable || sessions.authorityCalls != 0 {
 		t.Fatalf("repaired cache = %+v,%v calls=%d", second, err, sessions.authorityCalls)
 	}
 }
 
-func TestAuthenticateUsesPostgreSQLAuthorityWhenRedisFails(t *testing.T) {
+func TestAuthenticateDoesNotQueryPostgreSQLWhenRedisFails(t *testing.T) {
 	redisClient := openAuthRedis(t)
 	fixedNow := time.Date(2026, time.August, 20, 10, 0, 0, 0, time.UTC)
 	policy := testPolicy()
@@ -648,7 +648,7 @@ func TestAuthenticateUsesPostgreSQLAuthorityWhenRedisFails(t *testing.T) {
 	}
 
 	identity, err := service.Authenticate(context.Background(), rawToken, testAuthClient())
-	if err != nil || identity.UserID != 85001 || identity.CacheResult != "error" || sessions.authorityCalls != 1 {
+	if appErrorCode(err) != apperror.CodeDependencyUnavailable || sessions.authorityCalls != 0 {
 		t.Fatalf("Redis error fallback = %+v,%v calls=%d", identity, err, sessions.authorityCalls)
 	}
 	sessions.authorityErr = errors.New("postgres down")

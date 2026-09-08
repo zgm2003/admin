@@ -23,7 +23,7 @@ type Session struct {
 }
 
 // Record combines the persisted session with its platform code resolved from
-// auth_platform. Platform is not a user_session column.
+// permission_auth_platform. Platform is not a user_session column.
 type Record = Session
 
 type Authority struct {

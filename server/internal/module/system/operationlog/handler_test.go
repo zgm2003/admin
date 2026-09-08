@@ -27,10 +27,10 @@ func (f *fakeOperationLogService) Process(context.Context, TaskPayload) error {
 
 func TestListRejectsInvalidPaginationAndSuccessCode(t *testing.T) {
 	for _, target := range []string{
-		"/api/admin/v1/operation-logs?page=0&pageSize=20",
-		"/api/admin/v1/operation-logs?page=1&pageSize=101",
-		"/api/admin/v1/operation-logs?page=1&pageSize=20&isSuccess=2",
-		"/api/admin/v1/operation-logs?page=1&pageSize=20&from=2026-08-22T00:00:00Z&to=2026-08-21T00:00:00Z",
+		"/api/admin/v1/system/operationlog?page=0&pageSize=20",
+		"/api/admin/v1/system/operationlog?page=1&pageSize=101",
+		"/api/admin/v1/system/operationlog?page=1&pageSize=20&isSuccess=2",
+		"/api/admin/v1/system/operationlog?page=1&pageSize=20&from=2026-08-22T00:00:00Z&to=2026-08-21T00:00:00Z",
 	} {
 		service := &fakeOperationLogService{}
 		router := gin.New()
@@ -48,7 +48,7 @@ func TestListReturnsTypedEnvelope(t *testing.T) {
 	router := gin.New()
 	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(service), func(context *gin.Context) { context.Next() }, func(string) gin.HandlerFunc { return func(context *gin.Context) { context.Next() } })
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/operation-logs?page=1&pageSize=20", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/system/operationlog?page=1&pageSize=20", nil))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
@@ -62,7 +62,7 @@ func TestListReturnsTypedEnvelope(t *testing.T) {
 }
 
 func TestRegisterRoutesRequiresOperationLogListPermission(t *testing.T) {
-	if PermissionList != "system:operation-log:list" {
+	if PermissionList != "system:operationlog:list" {
 		t.Fatalf("permission code = %q", PermissionList)
 	}
 	router := gin.New()
@@ -72,7 +72,7 @@ func TestRegisterRoutesRequiresOperationLogListPermission(t *testing.T) {
 		return func(context *gin.Context) { context.Next() }
 	})
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/operation-logs?page=1&pageSize=20", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/system/operationlog?page=1&pageSize=20", nil))
 	if permission != PermissionList {
 		t.Fatalf("permission = %q", permission)
 	}

@@ -12,8 +12,8 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	"admin/server/internal/database/testschema"
-	authplatform "admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/permission/access"
+	authplatform "admin/server/internal/module/permission/authplatform"
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/user/account"
@@ -87,6 +87,10 @@ func openRBACMigrationSchema(t *testing.T) (*gorm.DB, context.Context) {
 	if err := permission.EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
+	// Historical migration fixtures retain the table name used by that SQL.
+	if err := db.WithContext(ctx).Exec(`ALTER TABLE permission_auth_platform RENAME TO auth_platform`).Error; err != nil {
+		t.Fatal(err)
+	}
 	return db, ctx
 }
 
@@ -94,10 +98,10 @@ func createRBACMigrationFixture(t *testing.T, db *gorm.DB, ctx context.Context) 
 	t.Helper()
 	var admin authplatform.Platform
 	canvas := authplatform.Platform{Code: "canvas", Name: "Canvas", LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1, AccessTTLSeconds: 900, RefreshTTLSeconds: 900, SessionCacheTTLSeconds: 900, AccessCacheTTLSeconds: 900, BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 10, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.No}
-	if err := db.WithContext(ctx).Where("code = ?", "admin").Take(&admin).Error; err != nil {
+	if err := db.WithContext(ctx).Table("auth_platform").Where("code = ?", "admin").Take(&admin).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(ctx).Create(&canvas).Error; err != nil {
+	if err := db.WithContext(ctx).Table("auth_platform").Create(&canvas).Error; err != nil {
 		t.Fatal(err)
 	}
 	root := menu.Menu{PlatformID: admin.ID, MenuType: menu.TypeDirectory, Name: "Account", Code: "account", I18nKey: rbacStringPointer("navigation.account"), IsEnabled: yesno.Yes, IsHidden: yesno.No}

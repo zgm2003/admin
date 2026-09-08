@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"admin/server/internal/module/auth/client"
-	authplatform "admin/server/internal/module/auth/platform"
+	authplatform "admin/server/internal/module/permission/authplatform"
 )
 
 const (
-	PermissionSessionList   = "auth:session:list"
-	PermissionSessionRevoke = "auth:session:revoke"
+	PermissionSessionList   = "user:session:list"
+	PermissionSessionRevoke = "user:session:revoke"
 )
 
 // SendCodeInput carries the strict send-code request after binding.

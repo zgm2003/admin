@@ -1,0 +1,264 @@
+<script setup lang="ts">
+import { computed, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useI18n } from 'vue-i18n'
+
+import {
+  changePassword,
+  getAccountProfile,
+  setPassword,
+  updateAccountProfile,
+} from '@/api/user/profile'
+import type {
+  AccountProfile,
+  ChangePasswordInput,
+  UpdateAccountProfileInput,
+} from '@/api/user/profile'
+import { usePermissionStore } from '@/store/permission'
+import { useAuthStore } from '@/store/auth'
+import { UpMedia } from '@/components/UpMedia'
+
+const { t } = useI18n()
+const router = useRouter()
+const auth = useAuthStore()
+const access = usePermissionStore()
+const canUpdateProfile = computed(() => access.hasPermission('user:profile:update'))
+const canUpdatePassword = computed(() => access.hasPermission('user:password:update'))
+const setPasswordMode = computed(() => auth.passwordSetRequired)
+const loading = ref(false)
+const savingProfile = ref(false)
+const changingPassword = ref(false)
+const loadError = ref('')
+const genderOptions = computed(() => [
+  { label: t('user.profile.genderUnknown'), value: 0 },
+  { label: t('user.profile.genderMale'), value: 1 },
+  { label: t('user.profile.genderFemale'), value: 2 },
+])
+const profileForm = reactive<UpdateAccountProfileInput>({
+  username: '',
+  phone: null,
+  avatar: '',
+  birthday: null,
+  gender: 0,
+})
+const passwordForm = reactive<ChangePasswordInput>({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+})
+
+function applyProfile(profile: AccountProfile): void {
+  profileForm.username = profile.username
+  profileForm.phone = profile.phone
+  profileForm.avatar = profile.avatar
+  profileForm.birthday = profile.birthday
+  profileForm.gender = profile.gender
+}
+
+async function loadProfile(): Promise<void> {
+  loading.value = true
+  loadError.value = ''
+  try {
+    applyProfile(await getAccountProfile())
+  } catch (error: unknown) {
+    loadError.value =
+      error instanceof Error && error.message !== '' ? error.message : t('user.profile.loadFailed')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function saveProfile(): Promise<void> {
+  if (savingProfile.value) return
+  savingProfile.value = true
+  try {
+    const updated = await updateAccountProfile({ ...profileForm })
+    applyProfile(updated)
+    auth.updateProfile(updated.userId, updated.username, updated.phone, updated.avatar)
+    ElMessage.success(t('user.profile.saved'))
+  } catch {
+    // request.ts emits the single API error notification
+  } finally {
+    savingProfile.value = false
+  }
+}
+
+async function submitPassword(): Promise<void> {
+  if (changingPassword.value) return
+  changingPassword.value = true
+  try {
+    if (setPasswordMode.value) {
+      await setPassword({
+        newPassword: passwordForm.newPassword,
+        confirmPassword: passwordForm.confirmPassword,
+      })
+      auth.markPasswordSet()
+      passwordForm.currentPassword = ''
+      passwordForm.newPassword = ''
+      passwordForm.confirmPassword = ''
+      ElMessage.success(t('user.password.setSuccessMessage'))
+      return
+    }
+    await changePassword({ ...passwordForm })
+    await ElMessageBox.alert(t('user.password.successMessage'), t('user.password.successTitle'), {
+      type: 'success',
+    })
+    access.reset()
+    auth.setAnonymous()
+    await router.replace({ name: 'login' })
+  } catch {
+    // request.ts emits the single API error notification
+  } finally {
+    changingPassword.value = false
+  }
+}
+
+void loadProfile()
+</script>
+
+<template>
+  <section class="account-profile" data-testid="account-profile-page">
+    <el-alert v-if="loadError" type="error" :title="loadError" :closable="false" show-icon />
+
+    <el-row :gutter="16" class="account-profile__grid">
+      <el-col :xs="24" :lg="14">
+        <el-card shadow="never" v-loading="loading">
+          <template #header
+            ><div class="account-profile__card-title">
+              {{ t('user.profile.basicTitle') }}
+            </div></template
+          >
+          <el-form label-position="top" @submit.prevent="saveProfile">
+            <el-row :gutter="16">
+              <el-col :xs="24" :sm="12">
+                <el-form-item :label="t('user.profile.username')">
+                  <el-input v-model="profileForm.username" autocomplete="username" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item :label="t('user.profile.email')">
+                  <el-input :model-value="auth.user?.email ?? ''" disabled />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item :label="t('user.profile.phone')">
+                  <el-input v-model="profileForm.phone" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item :label="t('user.profile.avatar')">
+                  <UpMedia
+                    v-model="profileForm.avatar"
+                    rule-code="avatar"
+                    variant="avatar"
+                    width="178px"
+                    :disabled="!canUpdateProfile"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item :label="t('user.profile.birthday')">
+                  <el-date-picker
+                    v-model="profileForm.birthday"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    class="account-profile__full"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item :label="t('user.profile.gender')">
+                  <el-select-v2
+                    v-model="profileForm.gender"
+                    :options="genderOptions"
+                    data-testid="account-profile-gender"
+                    class="account-profile__full"
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <div v-if="canUpdateProfile" class="account-profile__actions">
+              <el-button
+                data-testid="account-profile-save"
+                type="primary"
+                :loading="savingProfile"
+                @click="saveProfile"
+                >{{ t('user.profile.save') }}</el-button
+              >
+            </div>
+          </el-form>
+        </el-card>
+      </el-col>
+
+      <el-col :xs="24" :lg="10">
+        <el-card shadow="never">
+          <template #header
+            ><div class="account-profile__card-title">
+              {{ t(setPasswordMode ? 'user.password.setTitle' : 'user.password.title') }}
+            </div></template
+          >
+          <el-form label-position="top" @submit.prevent="submitPassword">
+            <el-form-item v-if="!setPasswordMode" :label="t('user.password.current')"
+              ><el-input
+                v-model="passwordForm.currentPassword"
+                data-testid="account-password-current"
+                type="password"
+                show-password
+                autocomplete="current-password"
+            /></el-form-item>
+            <el-form-item :label="t('user.password.new')"
+              ><el-input
+                v-model="passwordForm.newPassword"
+                data-testid="account-password-new"
+                type="password"
+                show-password
+                autocomplete="new-password"
+            /></el-form-item>
+            <el-form-item :label="t('user.password.confirm')"
+              ><el-input
+                v-model="passwordForm.confirmPassword"
+                data-testid="account-password-confirm"
+                type="password"
+                show-password
+                autocomplete="new-password"
+            /></el-form-item>
+            <div v-if="canUpdatePassword" class="account-profile__actions">
+              <el-button
+                data-testid="account-password-submit"
+                type="primary"
+                :loading="changingPassword"
+                @click="submitPassword"
+                >{{
+                  t(setPasswordMode ? 'user.password.setSubmit' : 'user.password.submit')
+                }}</el-button
+              >
+            </div>
+          </el-form>
+        </el-card>
+      </el-col>
+    </el-row>
+  </section>
+</template>
+
+<style scoped>
+.account-profile {
+  display: grid;
+  gap: 16px;
+}
+.account-profile__grid {
+  align-items: start;
+}
+.account-profile__card-title {
+  color: var(--el-text-color-primary);
+  font-weight: 650;
+}
+.account-profile__full {
+  width: 100%;
+}
+.account-profile__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+</style>

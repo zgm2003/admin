@@ -12,9 +12,9 @@ describe('resolveBreadcrumbs', () => {
   })
 
   it('returns directory to leaf order without inventing a directory path', () => {
-    expect(resolveBreadcrumbs('/account/users', [accountDirectory()])).toEqual([
-      { path: null, i18nKey: 'navigation.account' },
-      { path: '/account/users', i18nKey: 'navigation.accountUsers' },
+    expect(resolveBreadcrumbs('/user/account', [accountDirectory()])).toEqual([
+      { path: null, i18nKey: 'navigation.user' },
+      { path: '/user/account', i18nKey: 'navigation.userAccount' },
     ])
   })
 
@@ -24,48 +24,43 @@ describe('resolveBreadcrumbs', () => {
 
     expect(resolveBreadcrumbs('/system/security/sessions', tree)).toEqual([
       { path: null, i18nKey: 'navigation.system' },
-      { path: null, i18nKey: 'navigation.accessAuthPlatforms' },
-      { path: '/system/security/sessions', i18nKey: 'navigation.accountSessions' },
+      { path: null, i18nKey: 'navigation.permissionAuthplatform' },
+      { path: '/system/security/sessions', i18nKey: 'navigation.userSession' },
     ])
     expect(JSON.stringify(tree)).toBe(before)
   })
 
   it('resolves every business root and does not invent a static menu breadcrumb', () => {
     const tree = [accountDirectory(), accessDirectory(), systemDirectory()]
-    expect(resolveBreadcrumbs('/permission/menus', [])).toBeNull()
-    expect(resolveBreadcrumbs('/permission/menus', tree)).toEqual([
-      { path: null, i18nKey: 'navigation.access' },
-      { path: '/permission/menus', i18nKey: 'navigation.accessMenus' },
+    expect(resolveBreadcrumbs('/permission/menu', [])).toBeNull()
+    expect(resolveBreadcrumbs('/permission/menu', tree)).toEqual([
+      { path: null, i18nKey: 'navigation.permission' },
+      { path: '/permission/menu', i18nKey: 'navigation.permissionMenu' },
     ])
-    expect(resolveBreadcrumbs('/system/operation-logs', tree)).toEqual([
+    expect(resolveBreadcrumbs('/system/operationlog', tree)).toEqual([
       { path: null, i18nKey: 'navigation.system' },
-      { path: '/system/operation-logs', i18nKey: 'navigation.systemOperationLogs' },
+      { path: '/system/operationlog', i18nKey: 'navigation.systemOperationlog' },
     ])
   })
 
   it('keeps hidden pages in the breadcrumb source tree', () => {
     const root = accountDirectory()
     root.children[0].isHidden = YesNo.Yes
-    expect(resolveBreadcrumbs('/account/users', [root])).toEqual([
-      { path: null, i18nKey: 'navigation.account' },
-      { path: '/account/users', i18nKey: 'navigation.accountUsers' },
+    expect(resolveBreadcrumbs('/user/account', [root])).toEqual([
+      { path: null, i18nKey: 'navigation.user' },
+      { path: '/user/account', i18nKey: 'navigation.userAccount' },
     ])
   })
 
   it('resolves the hidden profile breadcrumb from the access tree', () => {
     const root = accountDirectory()
     root.children = [
-      pageNode(
-        'account:profile:list',
-        '/account/profile',
-        'account/profile',
-        'layout.account.profile',
-      ),
+      pageNode('user:profile:list', '/user/profile', 'user/profile', 'layout.user.profile'),
     ]
     root.children[0].isHidden = YesNo.Yes
-    expect(resolveBreadcrumbs('/account/profile', [root])).toEqual([
-      { path: null, i18nKey: 'navigation.account' },
-      { path: '/account/profile', i18nKey: 'layout.account.profile' },
+    expect(resolveBreadcrumbs('/user/profile', [root])).toEqual([
+      { path: null, i18nKey: 'navigation.user' },
+      { path: '/user/profile', i18nKey: 'layout.user.profile' },
     ])
   })
 
@@ -80,16 +75,16 @@ function accountDirectory(): PermissionMenuNode {
     menuType: 'directory',
     path: null,
     componentPath: null,
-    i18nKey: 'navigation.account',
+    i18nKey: 'navigation.user',
     icon: 'lucide:folder',
     isHidden: YesNo.No,
     children: [
       {
-        code: 'account:user:list',
+        code: 'user:account:list',
         menuType: 'page',
-        path: '/account/users',
-        componentPath: 'account/users',
-        i18nKey: 'navigation.accountUsers',
+        path: '/user/account',
+        componentPath: 'user/account',
+        i18nKey: 'navigation.userAccount',
         icon: 'User',
         isHidden: YesNo.No,
         children: [],
@@ -101,12 +96,12 @@ function accountDirectory(): PermissionMenuNode {
 function accessDirectory(): PermissionMenuNode {
   return directoryNode(
     'access',
-    'navigation.access',
+    'navigation.permission',
     pageNode(
       'permission:menu:list',
-      '/permission/menus',
-      'permission/menus',
-      'navigation.accessMenus',
+      '/permission/menu',
+      'permission/menu',
+      'navigation.permissionMenu',
     ),
   )
 }
@@ -116,10 +111,10 @@ function systemDirectory(): PermissionMenuNode {
     'system',
     'navigation.system',
     pageNode(
-      'system:operation-log:list',
-      '/system/operation-logs',
-      'system/operation-logs',
-      'navigation.systemOperationLogs',
+      'system:operationlog:list',
+      '/system/operationlog',
+      'system/operationlog',
+      'navigation.systemOperationlog',
     ),
   )
 }
@@ -174,7 +169,7 @@ function nestedDirectory(): PermissionMenuNode {
         menuType: 'directory',
         path: null,
         componentPath: null,
-        i18nKey: 'navigation.accessAuthPlatforms',
+        i18nKey: 'navigation.permissionAuthplatform',
         icon: 'lucide:key-round',
         isHidden: YesNo.No,
         children: [
@@ -182,8 +177,8 @@ function nestedDirectory(): PermissionMenuNode {
             code: 'system:security:sessions',
             menuType: 'page',
             path: '/system/security/sessions',
-            componentPath: 'account/sessions',
-            i18nKey: 'navigation.accountSessions',
+            componentPath: 'user/session',
+            i18nKey: 'navigation.userSession',
             icon: 'lucide:list-tree',
             isHidden: YesNo.No,
             children: [],

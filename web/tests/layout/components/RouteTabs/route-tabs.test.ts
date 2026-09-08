@@ -13,12 +13,12 @@ const dashboardTab: RouteTab = {
   affix: true,
 }
 const usersTab: RouteTab = {
-  path: '/account/users',
+  path: '/user/account',
   i18nKey: 'navigation.main',
   affix: false,
 }
 const rolesTab: RouteTab = {
-  path: '/permission/roles',
+  path: '/permission/role',
   i18nKey: 'reports.orders.list',
   affix: false,
 }

@@ -37,17 +37,17 @@ describe('AppAside profile access', () => {
     expect(document.body.querySelector('[data-testid="aside-account-profile"]')).toBeNull()
     expect(document.body.querySelector('[data-testid="aside-account-logout"]')).not.toBeNull()
 
-    access.applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: ['account:profile:view'] })
+    access.applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: ['user:profile:view'] })
     await wrapper.vm.$nextTick()
     expect(document.body.querySelector('[data-testid="aside-account-profile"]')).not.toBeNull()
     expect(document.body.querySelector('[data-testid="aside-account-logout"]')).not.toBeNull()
   })
 
   it('opens the dynamic profile URL without depending on its generated route name', async () => {
-    const { router, wrapper } = mountAside(['account:profile:view'])
+    const { router, wrapper } = mountAside(['user:profile:view'])
     wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'profile')
     await flushPromises()
-    expect(router.currentRoute.value.path).toBe('/account/profile')
+    expect(router.currentRoute.value.path).toBe('/user/profile')
   })
 })
 
@@ -60,7 +60,7 @@ function mountAside(permissionCodes: string[], props: { avatar?: string } = {}) 
     history: createMemoryHistory(),
     routes: [
       { path: '/dashboard', component: { template: '<div />' } },
-      { path: '/account/profile', component: { template: '<div />' } },
+      { path: '/user/profile', component: { template: '<div />' } },
     ],
   })
   const wrapper = mount(AppAside, {

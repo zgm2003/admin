@@ -46,8 +46,8 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Item, int64, 
 		UserName     string `gorm:"column:user_name"`
 	}
 	rows := make([]row, 0, query.PageSize)
-	if err := db.Select("system_operation_log.*, COALESCE(auth_platform.code, '') AS platform, COALESCE(user_account.username, '') AS user_name").
-		Joins("LEFT JOIN auth_platform ON auth_platform.id = system_operation_log.platform_id").
+	if err := db.Select("system_operation_log.*, COALESCE(permission_auth_platform.code, '') AS platform, COALESCE(user_account.username, '') AS user_name").
+		Joins("LEFT JOIN permission_auth_platform ON permission_auth_platform.id = system_operation_log.platform_id").
 		Joins("LEFT JOIN user_account ON user_account.id = system_operation_log.user_id AND user_account.deleted_at IS NULL").
 		Order("system_operation_log.created_at DESC, system_operation_log.id DESC").
 		Offset((query.Page - 1) * query.PageSize).Limit(query.PageSize).Scan(&rows).Error; err != nil {

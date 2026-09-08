@@ -37,7 +37,7 @@ describe('COS config API', () => {
     })
     expect(requestMock).toHaveBeenCalledWith({
       method: 'GET',
-      url: '/api/admin/v1/storage/cos-configs',
+      url: '/api/admin/v1/storage/cosconfig',
       params: { page: 1, pageSize: 20, keyword: 'main' },
     })
   })

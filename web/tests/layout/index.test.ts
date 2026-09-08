@@ -28,7 +28,12 @@ describe('admin layout', () => {
     usePermissionStore(pinia).reset()
     useAuthStore(pinia).$reset()
     useUIPreferencesStore(pinia).initializeSafely()
-    useAuthStore(pinia).setCredential({ accessToken: 'jwt', expiresIn: 900, isNewUser: false, passwordSetRequired: false })
+    useAuthStore(pinia).setCredential({
+      accessToken: 'jwt',
+      expiresIn: 900,
+      isNewUser: false,
+      passwordSetRequired: false,
+    })
     useAuthStore(pinia).setAuthenticated({
       userId: 1,
       username: 'admin',
@@ -137,16 +142,16 @@ describe('admin layout', () => {
           menuType: 'directory',
           path: null,
           componentPath: null,
-          i18nKey: 'navigation.account',
+          i18nKey: 'navigation.user',
           icon: 'lucide:folder',
           isHidden: YesNo.No,
           children: [
             {
-              code: 'account:user:list',
+              code: 'user:account:list',
               menuType: 'page',
-              path: '/account/users',
-              componentPath: 'account/users',
-              i18nKey: 'navigation.accountUsers',
+              path: '/user/account',
+              componentPath: 'user/account',
+              i18nKey: 'navigation.userAccount',
               icon: 'User',
               isHidden: YesNo.Yes,
               children: [],
@@ -156,7 +161,7 @@ describe('admin layout', () => {
       ],
       permissionCodes: [],
     })
-    const { wrapper } = await mountLayout('/account/users')
+    const { wrapper } = await mountLayout('/user/account')
 
     expect(wrapper.get('.app-header__breadcrumb').text()).toContain('用户与账号')
     expect(wrapper.get('.app-header__breadcrumb').text()).toContain('用户管理')
@@ -222,11 +227,11 @@ describe('admin layout', () => {
       roleCodes: [],
       menuTree: [
         {
-          code: 'account:user:list',
+          code: 'user:account:list',
           menuType: 'page',
-          path: '/account/users',
-          componentPath: 'account/users',
-          i18nKey: 'navigation.accessMenus',
+          path: '/user/account',
+          componentPath: 'user/account',
+          i18nKey: 'navigation.permissionMenu',
           icon: 'User',
           isHidden: YesNo.No,
           children: [],
@@ -266,7 +271,7 @@ describe('admin layout', () => {
     usePermissionStore(pinia).applySnapshot({
       roleCodes: ['admin'],
       menuTree: [],
-      permissionCodes: ['account:user:list'],
+      permissionCodes: ['user:account:list'],
     })
     const { wrapper, router } = await mountLayout()
     await wrapper.get('[data-testid="aside-account-menu"]').trigger('click')
@@ -313,16 +318,16 @@ async function mountLayout(path = '/dashboard') {
         meta: { requiresAuth: true, i18nKey: 'navigation.dashboard', affix: true },
       },
       {
-        path: '/account/users',
+        path: '/user/account',
         name: 'account-users',
         component: layoutContent,
-        meta: { requiresAuth: true, i18nKey: 'navigation.accountUsers' },
+        meta: { requiresAuth: true, i18nKey: 'navigation.userAccount' },
       },
       {
         path: '/system/missing',
         name: 'system-missing',
         component: layoutContent,
-        meta: { requiresAuth: true, i18nKey: 'navigation.accountUsers' },
+        meta: { requiresAuth: true, i18nKey: 'navigation.userAccount' },
       },
       { path: '/login', name: 'login', component: { template: '<div>login</div>' } },
     ],

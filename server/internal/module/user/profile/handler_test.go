@@ -57,7 +57,7 @@ func TestProfileRoutesReadAndUpdateCurrentAdmin(t *testing.T) {
 	registerTestRoutes(router, profile, password, true)
 
 	get := httptest.NewRecorder()
-	router.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/api/admin/v1/account/profile", nil))
+	router.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/api/admin/v1/user/profile", nil))
 	if get.Code != http.StatusOK {
 		t.Fatalf("GET status=%d body=%s", get.Code, get.Body)
 	}
@@ -74,7 +74,7 @@ func TestProfileRoutesReadAndUpdateCurrentAdmin(t *testing.T) {
 	}
 
 	put := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/account/profile", strings.NewReader(`{"username":"alice-new","phone":"+86 138-0000-0000","birthday":"2026-08-28","gender":1,"avatar":"avatar/new.png"}`))
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/user/profile", strings.NewReader(`{"username":"alice-new","phone":"+86 138-0000-0000","birthday":"2026-08-28","gender":1,"avatar":"avatar/new.png"}`))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(put, request)
 	if put.Code != http.StatusOK {
@@ -91,7 +91,7 @@ func TestPasswordRoutePassesCurrentIdentityAndCredentials(t *testing.T) {
 	password := &passwordServiceStub{}
 	router := gin.New()
 	registerTestRoutes(router, profile, password, true)
-	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/account/password", strings.NewReader(`{"currentPassword":"old-pass","newPassword":"new-pass","confirmPassword":"new-pass"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/user/password", strings.NewReader(`{"currentPassword":"old-pass","newPassword":"new-pass","confirmPassword":"new-pass"}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
@@ -108,7 +108,7 @@ func TestPasswordSetRoutePassesCurrentIdentityAndCredentials(t *testing.T) {
 	password := &passwordServiceStub{}
 	router := gin.New()
 	registerTestRoutes(router, &profileServiceStub{}, password, true)
-	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/account/password/set", strings.NewReader(`{"newPassword":"new-pass","confirmPassword":"new-pass"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/user/password/set", strings.NewReader(`{"newPassword":"new-pass","confirmPassword":"new-pass"}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
@@ -125,7 +125,7 @@ func TestPasswordSetRouteRejectsMissingRequiredFields(t *testing.T) {
 	password := &passwordServiceStub{}
 	router := gin.New()
 	registerTestRoutes(router, &profileServiceStub{}, password, true)
-	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/account/password/set", strings.NewReader(`{}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/user/password/set", strings.NewReader(`{}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)

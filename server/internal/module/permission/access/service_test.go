@@ -33,11 +33,11 @@ func TestCurrentAndAllowedShareWarmSnapshotWithoutPostgreSQL(t *testing.T) {
 	if !reflect.DeepEqual(repository.platformIDs, []int64{identity.PlatformID}) {
 		t.Fatalf("permission source platform IDs = %v", repository.platformIDs)
 	}
-	allowed, err := service.Allowed(context.Background(), identity, "account:user:create")
+	allowed, err := service.Allowed(context.Background(), identity, "user:account:create")
 	if err != nil || !allowed {
 		t.Fatalf("Allowed(create) = %v,%v", allowed, err)
 	}
-	denied, err := service.Allowed(context.Background(), identity, "account:user:delete")
+	denied, err := service.Allowed(context.Background(), identity, "user:account:delete")
 	if err != nil || denied {
 		t.Fatalf("Allowed(delete) = %v,%v", denied, err)
 	}
@@ -49,20 +49,20 @@ func TestCurrentAndAllowedShareWarmSnapshotWithoutPostgreSQL(t *testing.T) {
 func TestBuildSnapshotKeepsPageAndReadPermissionsIndependent(t *testing.T) {
 	rootID := int64(1)
 	pageID := int64(2)
-	path := "/account/users"
-	componentPath := "account/users"
+	path := "/user/account"
+	componentPath := "user/account"
 	snapshot, err := buildSnapshot(Source{
 		Version: 1,
 		Menus: []SourceMenu{
-			{ID: rootID, MenuType: MenuDirectory, Code: "account", I18nKey: accessStringPointer("navigation.account"), IsEnabled: yesno.Yes, IsHidden: yesno.No},
-			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "account:user:view", I18nKey: accessStringPointer("navigation.accountUsers"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+			{ID: rootID, MenuType: MenuDirectory, Code: "account", I18nKey: accessStringPointer("navigation.user"), IsEnabled: yesno.Yes, IsHidden: yesno.No},
+			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "user:account:view", I18nKey: accessStringPointer("navigation.userAccount"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No},
 		},
 		GrantedMenuIDs: []int64{pageID},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"account:user:view"}
+	want := []string{"user:account:view"}
 	if !reflect.DeepEqual(snapshot.PermissionCodes, want) {
 		t.Fatalf("permission codes = %v, want %v", snapshot.PermissionCodes, want)
 	}
@@ -97,7 +97,7 @@ func TestLoadSnapshotUsesRedisStateGateBeforeLocalCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	fresh, err := service.Current(context.Background(), identity)
-	if err != nil || fresh.CacheResult != "error" || repository.calls != 2 {
+	if appErrorCode(err) != apperror.CodeDependencyUnavailable || repository.calls != 1 {
 		t.Fatalf("Redis gate failure = %+v,%v calls=%d", fresh, err, repository.calls)
 	}
 }
@@ -118,11 +118,11 @@ func TestLoadSnapshotFallsBackForMissErrorAndCorruption(t *testing.T) {
 	}
 	service.local = NewLocalSnapshotCache(8)
 	snapshot, err := service.Current(context.Background(), identity)
-	if err != nil || snapshot.CacheResult != "error" || repository.calls != 2 {
+	if appErrorCode(err) != apperror.CodeDependencyUnavailable || repository.calls != 1 {
 		t.Fatalf("corrupt fallback = %+v,%v calls=%d", snapshot, err, repository.calls)
 	}
 	warm, err := service.Current(context.Background(), identity)
-	if err != nil || warm.CacheResult != "hit" || repository.calls != 2 {
+	if appErrorCode(err) != apperror.CodeDependencyUnavailable || repository.calls != 1 {
 		t.Fatalf("rebuilt snapshot = %+v,%v calls=%d", warm, err, repository.calls)
 	}
 }
@@ -172,6 +172,12 @@ func TestLoadSnapshotBypassesLocalCacheForMissingOrCorruptState(t *testing.T) {
 			test.mutateState(t, redisClient, test.userID)
 
 			snapshot, err := service.Current(context.Background(), identity)
+			if test.name == "corrupt" {
+				if appErrorCode(err) != apperror.CodeDependencyUnavailable || repository.calls != 1 {
+					t.Fatalf("corrupt state: %v calls=%d", err, repository.calls)
+				}
+				return
+			}
 			if err != nil || snapshot.CacheResult != test.cacheResult || repository.calls != 2 {
 				t.Fatalf("state %s fallback = %+v,%v calls=%d", test.name, snapshot, err, repository.calls)
 			}
@@ -230,7 +236,7 @@ func TestLoadSnapshotDoesNotUseLocalCacheWhileInvalidating(t *testing.T) {
 	}
 }
 
-func TestLoadSnapshotReturnsPostgreSQLAuthorityWhenRedisFails(t *testing.T) {
+func TestLoadSnapshotDoesNotQueryPostgreSQLWhenRedisFails(t *testing.T) {
 	redisClient := openAccessRedis(t)
 	repository := &countingSourceStore{sources: []Source{baseSource(3)}}
 	service := newAccessTestService(redisClient, repository)
@@ -238,7 +244,7 @@ func TestLoadSnapshotReturnsPostgreSQLAuthorityWhenRedisFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot, err := service.Current(context.Background(), accessIdentity(93003))
-	if err != nil || snapshot.CacheResult != "error" || repository.calls != 1 {
+	if appErrorCode(err) != apperror.CodeDependencyUnavailable || repository.calls != 0 {
 		t.Fatalf("Redis failure fallback = %+v,%v calls=%d", snapshot, err, repository.calls)
 	}
 }
@@ -304,7 +310,7 @@ func TestBuildSnapshotPreservesLeafGrantSemanticsAndStableArrays(t *testing.T) {
 	if !reflect.DeepEqual(snapshot.RoleCodes, []string{"ai_tester", "registered_user"}) {
 		t.Fatalf("role codes = %v", snapshot.RoleCodes)
 	}
-	if !reflect.DeepEqual(snapshot.PermissionCodes, []string{"account:user:create", "account:user:list"}) {
+	if !reflect.DeepEqual(snapshot.PermissionCodes, []string{"user:account:create", "user:account:list"}) {
 		t.Fatalf("permission codes = %v", snapshot.PermissionCodes)
 	}
 	if len(snapshot.MenuTree) != 1 || len(snapshot.MenuTree[0].Children) != 1 {
@@ -314,7 +320,7 @@ func TestBuildSnapshotPreservesLeafGrantSemanticsAndStableArrays(t *testing.T) {
 	pageOnly := baseSource(3)
 	pageOnly.GrantedMenuIDs = []int64{2}
 	snapshot, err = buildSnapshot(pageOnly)
-	if err != nil || !reflect.DeepEqual(snapshot.PermissionCodes, []string{"account:user:list"}) {
+	if err != nil || !reflect.DeepEqual(snapshot.PermissionCodes, []string{"user:account:list"}) {
 		t.Fatalf("page-only snapshot = %+v,%v", snapshot, err)
 	}
 
@@ -323,7 +329,7 @@ func TestBuildSnapshotPreservesLeafGrantSemanticsAndStableArrays(t *testing.T) {
 	superAdmin.GrantedMenuIDs = nil
 	snapshot, err = buildSnapshot(superAdmin)
 	if err != nil || !reflect.DeepEqual(snapshot.PermissionCodes, []string{
-		"account:user:create", "account:user:delete", "account:user:list",
+		"user:account:create", "user:account:delete", "user:account:list",
 	}) {
 		t.Fatalf("super-admin snapshot = %+v,%v", snapshot, err)
 	}
@@ -376,7 +382,7 @@ func TestBuildSnapshotKeepsHiddenMenusAndExcludesActionsFromTree(t *testing.T) {
 		t.Fatalf("hidden menu tree = %+v", snapshot.MenuTree)
 	}
 	if len(snapshot.MenuTree[0].Children[0].Children) != 0 ||
-		!reflect.DeepEqual(snapshot.PermissionCodes, []string{"account:user:create", "account:user:list"}) {
+		!reflect.DeepEqual(snapshot.PermissionCodes, []string{"user:account:create", "user:account:list"}) {
 		t.Fatalf("action tree/permissions = %+v / %v", snapshot.MenuTree, snapshot.PermissionCodes)
 	}
 }
@@ -384,10 +390,10 @@ func TestBuildSnapshotKeepsHiddenMenusAndExcludesActionsFromTree(t *testing.T) {
 func TestBuildSnapshotAllowsSharedComponentPathButRejectsSharedRoutePath(t *testing.T) {
 	source := baseSource(1)
 	secondPath := "/account/accounts"
-	sharedComponentPath := "account/users"
+	sharedComponentPath := "user/account"
 	source.Menus = append(source.Menus, SourceMenu{
 		ID: 5, ParentID: int64Pointer(1), MenuType: MenuPage, Code: "account:account:list",
-		I18nKey: accessStringPointer("navigation.accountAccounts"), Path: &secondPath, ComponentPath: &sharedComponentPath,
+		I18nKey: accessStringPointer("navigation.userAccounts"), Path: &secondPath, ComponentPath: &sharedComponentPath,
 		SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.No,
 	})
 	source.GrantedMenuIDs = []int64{2, 5}
@@ -431,15 +437,15 @@ func TestServiceValidatesIdentityAndPermissionCode(t *testing.T) {
 func baseSource(version int64) Source {
 	rootID := int64(1)
 	pageID := int64(2)
-	path := "/account/users"
-	componentPath := "account/users"
+	path := "/user/account"
+	componentPath := "user/account"
 	return Source{
 		Version: version, RoleCodes: []string{"registered_user", "ai_tester", "registered_user"},
 		Menus: []SourceMenu{
-			{ID: rootID, MenuType: MenuDirectory, Code: "account", I18nKey: accessStringPointer("navigation.account"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
-			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "account:user:list", I18nKey: accessStringPointer("navigation.accountUsers"), Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
-			{ID: 3, ParentID: &pageID, MenuType: MenuAction, Code: "account:user:create", I18nKey: nil, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-			{ID: 4, ParentID: &pageID, MenuType: MenuAction, Code: "account:user:delete", I18nKey: nil, SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: rootID, MenuType: MenuDirectory, Code: "account", I18nKey: accessStringPointer("navigation.user"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "user:account:list", I18nKey: accessStringPointer("navigation.userAccount"), Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+			{ID: 3, ParentID: &pageID, MenuType: MenuAction, Code: "user:account:create", I18nKey: nil, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: 4, ParentID: &pageID, MenuType: MenuAction, Code: "user:account:delete", I18nKey: nil, SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
 		},
 		GrantedMenuIDs: []int64{3, 3},
 	}

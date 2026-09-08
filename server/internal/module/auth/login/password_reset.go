@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	authclient "admin/server/internal/module/auth/client"
-	"admin/server/internal/module/auth/platform"
 	messagemail "admin/server/internal/module/message/mail"
+	"admin/server/internal/module/permission/authplatform"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"

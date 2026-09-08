@@ -10,8 +10,8 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
-	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/permission/access"
+	"admin/server/internal/module/permission/authplatform"
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/user/account"
@@ -207,18 +207,18 @@ func openAccessRepositoryFixture(t *testing.T) *accessRepositoryFixture {
 	if err := connection.GORM.WithContext(ctx).Create(&userRole).Error; err != nil {
 		t.Fatal(err)
 	}
-	accountI18nKey := "navigation.account"
+	accountI18nKey := "navigation.user"
 	root := menu.Menu{PlatformID: adminPlatform.ID, MenuType: menu.TypeDirectory, Name: "用户与账号", Code: "account", I18nKey: &accountI18nKey, SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&root).Error; err != nil {
 		t.Fatal(err)
 	}
-	path, componentPath := "/account/users", "account/users"
-	pageI18nKey := "navigation.accountUsers"
-	page := menu.Menu{PlatformID: adminPlatform.ID, ParentID: &root.ID, MenuType: menu.TypePage, Name: "用户管理", Code: "account:user:list", I18nKey: &pageI18nKey, Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now}
+	path, componentPath := "/user/account", "user/account"
+	pageI18nKey := "navigation.userAccount"
+	page := menu.Menu{PlatformID: adminPlatform.ID, ParentID: &root.ID, MenuType: menu.TypePage, Name: "用户管理", Code: "user:account:list", I18nKey: &pageI18nKey, Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
-	action := menu.Menu{PlatformID: adminPlatform.ID, ParentID: &page.ID, MenuType: menu.TypeAction, Name: "新增用户", Code: "account:user:create", SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	action := menu.Menu{PlatformID: adminPlatform.ID, ParentID: &page.ID, MenuType: menu.TypeAction, Name: "新增用户", Code: "user:account:create", SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&action).Error; err != nil {
 		t.Fatal(err)
 	}

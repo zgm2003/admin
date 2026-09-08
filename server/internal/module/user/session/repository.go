@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"admin/server/internal/module/auth/client"
-	"admin/server/internal/module/auth/platform"
+	"admin/server/internal/module/permission/authplatform"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -104,7 +104,7 @@ func (r *Repository) FindAuthoritative(ctx context.Context, userID, sessionID in
 			app_user.is_enabled AS user_is_enabled,
 			(app_user.deleted_at IS NOT NULL) AS user_deleted
 		FROM user_session AS session
-		JOIN auth_platform AS platform ON platform.id = session.platform_id
+		JOIN permission_auth_platform AS platform ON platform.id = session.platform_id
 		JOIN user_account AS app_user ON app_user.id = session.user_id
 		WHERE session.id = ? AND session.user_id = ? AND platform.code = ? AND session.version = ?
 		  AND session.revoked_at IS NULL AND session.refresh_expires_at > ?`,
@@ -126,7 +126,7 @@ func (r *Repository) FindByRefreshHash(ctx context.Context, platform, hash strin
 			app_user.is_enabled AS user_is_enabled,
 			(app_user.deleted_at IS NOT NULL) AS user_deleted
 		FROM user_session AS session
-		JOIN auth_platform AS platform ON platform.id = session.platform_id
+		JOIN permission_auth_platform AS platform ON platform.id = session.platform_id
 		JOIN user_account AS app_user ON app_user.id = session.user_id
 		WHERE platform.code = ? AND session.refresh_token_hash = ?
 		  AND session.revoked_at IS NULL AND session.refresh_expires_at > ?`, platform, hash, now.UTC()).Scan(&row)
@@ -154,7 +154,7 @@ func (r *Repository) RotateByRefreshHash(ctx context.Context, sessionID int64, p
 		UPDATE user_session AS session
 		SET refresh_token_hash = ?, version = session.version + 1,
 			client_ip = ?, user_agent = ?, updated_at = ?
-		FROM auth_platform AS platform
+		FROM permission_auth_platform AS platform
 		WHERE session.id = ? AND session.platform_id = platform.id AND platform.code = ?
 		  AND session.refresh_token_hash = ? AND session.revoked_at IS NULL
 		  AND session.refresh_expires_at > ?

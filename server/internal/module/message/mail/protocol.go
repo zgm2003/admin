@@ -22,12 +22,13 @@ type RuleEvaluator interface {
 	Evaluate(context.Context, int64, string, SendMode) (RuleDecision, error)
 }
 type LimitRequest struct {
-	Key    string
-	Limit  int
-	Window time.Duration
+	Key        string
+	Limit      int
+	Window     time.Duration
+	LegacyKeys []string
 }
 type Limiter interface {
-	Allow(context.Context, LimitRequest) (bool, error)
+	Allow(context.Context, ...LimitRequest) (bool, error)
 }
 type BusinessSendInput struct {
 	PlatformID                            int64

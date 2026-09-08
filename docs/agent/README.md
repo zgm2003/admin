@@ -49,8 +49,8 @@ Skill 位于 `C:\Users\IGT\.codex\skills\admin-crud`、`admin-rbac`、`admin-dat
 
 ## 历史档案
 
-`docs/superpowers/**` 保存早期 spec、plan 和验证记录，保留用于审计和必要的历史追溯，但默认不读、不改、
-不把其中的勾选状态当作当前进度。`docs/database/2026-*.sql` 同样是一次性历史 migration；数据库事实以当前
+旧 spec/plan 已由维护者清理，不恢复，不以记忆中的旧方案指导当前行为。残留历史档案默认不读、不改、
+不把其中的勾选状态当作当前进度。`docs/database/2026-*.sql` 是一次性 migration；数据库事实以当前
 PostgreSQL 为准。只有用户明确要求比较历史、恢复决策或审计迁移时，才按文件名精确读取对应档案。
 
 ## 交接与完成

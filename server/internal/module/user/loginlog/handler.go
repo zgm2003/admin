@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	PermissionView = "account:user:loginlog:view"
-	PermissionList = "account:user:loginlog:list"
+	PermissionView = "user:loginlog:view"
+	PermissionList = "user:loginlog:list"
 )
 
 type Handler struct{ service *Service }

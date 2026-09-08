@@ -15,7 +15,7 @@ const policies = [
   {
     key: 'business_email_minute',
     mode: 'business' as const,
-    dimension: 'platform_scene_email',
+    dimension: 'platform_email',
     limit: 1,
     windowSeconds: 60,
     updatedAt: '2026-09-04T12:00:00Z',
@@ -23,48 +23,8 @@ const policies = [
   {
     key: 'business_email_10m',
     mode: 'business' as const,
-    dimension: 'platform_scene_email',
+    dimension: 'platform_email',
     limit: 5,
-    windowSeconds: 600,
-    updatedAt: '2026-09-04T12:00:00Z',
-  },
-  {
-    key: 'business_ip_minute',
-    mode: 'business' as const,
-    dimension: 'platform_ip',
-    limit: 10,
-    windowSeconds: 60,
-    updatedAt: '2026-09-04T12:00:00Z',
-  },
-  {
-    key: 'business_scene_minute',
-    mode: 'business' as const,
-    dimension: 'platform_scene',
-    limit: 30,
-    windowSeconds: 60,
-    updatedAt: '2026-09-04T12:00:00Z',
-  },
-  {
-    key: 'admin_test_user_10m',
-    mode: 'admin_test' as const,
-    dimension: 'admin_user',
-    limit: 5,
-    windowSeconds: 600,
-    updatedAt: '2026-09-04T12:00:00Z',
-  },
-  {
-    key: 'admin_test_ip_minute',
-    mode: 'admin_test' as const,
-    dimension: 'ip',
-    limit: 10,
-    windowSeconds: 60,
-    updatedAt: '2026-09-04T12:00:00Z',
-  },
-  {
-    key: 'admin_test_email_10m',
-    mode: 'admin_test' as const,
-    dimension: 'email',
-    limit: 3,
     windowSeconds: 600,
     updatedAt: '2026-09-04T12:00:00Z',
   },
@@ -83,14 +43,14 @@ describe('mail rate limit tab', () => {
     vi.clearAllMocks()
   })
 
-  it('renders seven fixed policies with localized placeholders', async () => {
+  it('renders two fixed policies with localized placeholders', async () => {
     const wrapper = mountTab(false)
     await flushPromises()
 
-    expect(wrapper.findAll('[data-testid="rate-limit-input"]')).toHaveLength(7)
+    expect(wrapper.findAll('[data-testid="rate-limit-input"]')).toHaveLength(2)
     expect(wrapper.findAll('input[type="number"]').length).toBeGreaterThan(0)
-    expect(wrapper.text()).toContain('单邮箱每分钟')
-    expect(wrapper.text()).toContain('平台·场景·邮箱')
+    expect(wrapper.text()).toContain('每分钟发送上限')
+    expect(wrapper.text()).toContain('平台·邮箱')
   })
 
   it('uses policy key as the stable table row key', () => {

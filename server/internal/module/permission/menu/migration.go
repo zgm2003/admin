@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"admin/server/internal/module/auth/platform"
+	"admin/server/internal/module/permission/authplatform"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -41,14 +41,14 @@ var legacyPermissionCodes = map[string]string{
 	"system:role:update": "permission:role:update", "system:role:status": "permission:role:status",
 	"system:role:default": "permission:role:default", "system:role:delete": "permission:role:delete",
 	"system:role:authorize": "permission:role:authorize",
-	"system:user:list":      "account:user:view", "system:user:update": "account:user:update",
-	"system:user:status": "account:user:status", "system:user:delete": "account:user:delete",
-	"system:user:roles":   "account:user:roles",
-	"system:session:list": "auth:session:view", "system:session:revoke": "auth:session:revoke",
-	"system:auth-platform:list": "auth:platform:view", "system:auth-platform:create": "auth:platform:create",
-	"system:auth-platform:update": "auth:platform:update", "system:auth-platform:status": "auth:platform:status",
-	"system:auth-platform:delete": "auth:platform:delete",
-	"system:operation-log:list":   "system:operation-log:view",
+	"system:user:list":      "user:account:view", "system:user:update": "user:account:update",
+	"system:user:status": "user:account:status", "system:user:delete": "user:account:delete",
+	"system:user:roles":   "user:account:authorize",
+	"system:session:list": "user:session:view", "system:session:revoke": "user:session:revoke",
+	"system:auth-platform:list": "permission:authplatform:view", "system:auth-platform:create": "permission:authplatform:create",
+	"system:auth-platform:update": "permission:authplatform:update", "system:auth-platform:status": "permission:authplatform:status",
+	"system:auth-platform:delete": "permission:authplatform:delete",
+	"system:operation-log:list":   "system:operationlog:view",
 }
 
 var legacyMenuNames = map[string]string{
@@ -75,12 +75,12 @@ var legacyMenuIcons = map[string]legacyIconTarget{
 }
 
 var migratedPages = map[string]migratedPageTarget{
-	"account:user:view":         {ParentCode: "account", Path: "/account/users", ComponentPath: "account/users", I18nKey: "navigation.accountUsers", Icon: "lucide:user-round-cog", SortOrder: 10},
-	"auth:session:view":         {ParentCode: "account", Path: "/account/sessions", ComponentPath: "account/sessions", I18nKey: "navigation.accountSessions", Icon: "lucide:monitor-smartphone", SortOrder: 20},
-	"permission:menu:view":      {ParentCode: "access", Path: "/permission/menus", ComponentPath: "permission/menus", I18nKey: "navigation.accessMenus", Icon: "lucide:panel-left", SortOrder: 10},
-	"permission:role:view":      {ParentCode: "access", Path: "/permission/roles", ComponentPath: "permission/roles", I18nKey: "navigation.accessRoles", Icon: "lucide:user-cog", SortOrder: 20},
-	"auth:platform:view":        {ParentCode: "access", Path: "/permission/auth-platforms", ComponentPath: "permission/auth-platforms", I18nKey: "navigation.accessAuthPlatforms", Icon: "lucide:key-round", SortOrder: 30},
-	"system:operation-log:view": {ParentCode: "system", Path: "/system/operation-logs", ComponentPath: "system/operation-logs", I18nKey: "navigation.systemOperationLogs", Icon: "lucide:scroll-text", SortOrder: 10},
+	"user:account:view":            {ParentCode: "account", Path: "/user/account", ComponentPath: "user/account", I18nKey: "navigation.userAccount", Icon: "lucide:user-round-cog", SortOrder: 10},
+	"user:session:view":            {ParentCode: "account", Path: "/user/session", ComponentPath: "user/session", I18nKey: "navigation.userSession", Icon: "lucide:monitor-smartphone", SortOrder: 20},
+	"permission:menu:view":         {ParentCode: "access", Path: "/permission/menu", ComponentPath: "permission/menu", I18nKey: "navigation.permissionMenu", Icon: "lucide:panel-left", SortOrder: 10},
+	"permission:role:view":         {ParentCode: "access", Path: "/permission/role", ComponentPath: "permission/role", I18nKey: "navigation.permissionRole", Icon: "lucide:user-cog", SortOrder: 20},
+	"permission:authplatform:view": {ParentCode: "access", Path: "/permission/authplatform", ComponentPath: "permission/authplatform", I18nKey: "navigation.permissionAuthplatform", Icon: "lucide:key-round", SortOrder: 30},
+	"system:operationlog:view":     {ParentCode: "system", Path: "/system/operationlog", ComponentPath: "system/operationlog", I18nKey: "navigation.systemOperationlog", Icon: "lucide:scroll-text", SortOrder: 10},
 }
 
 func PrepareSchema(ctx context.Context, db *gorm.DB) error {
@@ -190,7 +190,7 @@ func PreparePlatformSchema(ctx context.Context, db *gorm.DB) error {
 		return nil
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`LOCK TABLE auth_platform IN SHARE ROW EXCLUSIVE MODE`).Error; err != nil {
+		if err := tx.Exec(`LOCK TABLE permission_auth_platform IN SHARE ROW EXCLUSIVE MODE`).Error; err != nil {
 			return fmt.Errorf("lock authentication platforms for menu migration: %w", err)
 		}
 		if err := tx.Exec(`LOCK TABLE permission_menu IN SHARE ROW EXCLUSIVE MODE`).Error; err != nil {
@@ -199,7 +199,7 @@ func PreparePlatformSchema(ctx context.Context, db *gorm.DB) error {
 		adminIDs := make([]int64, 0, 2)
 		if err := tx.Raw(`
 			SELECT id
-			FROM auth_platform
+			FROM permission_auth_platform
 			WHERE code = ? AND is_builtin = 1 AND deleted_at IS NULL
 			ORDER BY id
 			LIMIT 2`, authplatform.BuiltinAdminCode).Scan(&adminIDs).Error; err != nil {
@@ -234,7 +234,7 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 			return err
 		}
 		var oldCodes []string
-		if err := db.Raw(`SELECT code FROM permission_menu WHERE code LIKE 'system:%' AND code NOT IN ('system:operation-log:list', 'system:operation-log:view') ORDER BY code`).Scan(&oldCodes).Error; err != nil {
+		if err := db.Raw(`SELECT code FROM permission_menu WHERE code LIKE 'system:%' AND code NOT IN ('system:operationlog:list', 'system:operationlog:view') ORDER BY code`).Scan(&oldCodes).Error; err != nil {
 			return fmt.Errorf("inspect legacy menu codes: %w", err)
 		}
 		if len(oldCodes) != 0 {
@@ -242,7 +242,7 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 		}
 		result := db.Exec(`
 			UPDATE permission_menu
-			SET i18n_key = 'navigation.access', updated_at = CURRENT_TIMESTAMP
+			SET i18n_key = 'navigation.permission', updated_at = CURRENT_TIMESTAMP
 			WHERE code = 'access'
 			  AND menu_type = 'directory'
 			  AND i18n_key = 'lucide:shield-check'
@@ -356,7 +356,7 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 		Icon      string
 		SortOrder int
 	}{
-		{Name: "用户与账号", Code: "account", I18nKey: "navigation.account", Icon: "lucide:users-round", SortOrder: 100},
+		{Name: "用户与账号", Code: "account", I18nKey: "navigation.user", Icon: "lucide:users-round", SortOrder: 100},
 		{Name: "系统管理", Code: "system", I18nKey: "navigation.system", Icon: "lucide:settings-2", SortOrder: 300},
 	} {
 		result := db.Exec(`
@@ -396,7 +396,7 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 		sortOrder := row.SortOrder
 		isHidden := yesno.Yes
 		if row.Code == "system" {
-			i18nValue := "navigation.access"
+			i18nValue := "navigation.permission"
 			iconValue := legacyMenuIcons[row.Code].New
 			i18nKey = &i18nValue
 			icon = &iconValue
@@ -452,7 +452,7 @@ func rekeyMigratedOperationLogMenu(db *gorm.DB) error {
 		return nil
 	}
 	var currentCount int64
-	if err := db.Raw(`SELECT count(*) FROM permission_menu WHERE code = 'system:operation-log:view'`).Scan(&currentCount).Error; err != nil {
+	if err := db.Raw(`SELECT count(*) FROM permission_menu WHERE code = 'system:operationlog:view'`).Scan(&currentCount).Error; err != nil {
 		return fmt.Errorf("inspect current operation log menu: %w", err)
 	}
 	if currentCount != 0 {
@@ -460,7 +460,7 @@ func rekeyMigratedOperationLogMenu(db *gorm.DB) error {
 	}
 	result := db.Exec(`
 		UPDATE permission_menu
-		SET code = 'system:operation-log:view', updated_at = CURRENT_TIMESTAMP
+		SET code = 'system:operationlog:view', updated_at = CURRENT_TIMESTAMP
 		WHERE code = 'audit:operation-log:list'`)
 	if result.Error != nil {
 		return fmt.Errorf("rekey migrated operation log menu: %w", result.Error)

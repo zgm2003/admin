@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	rateLimitPolicySchemaVersion = 1
-	rateLimitPolicySnapshotKey   = "mail:rate-limit:policies:v1"
-	rateLimitPolicyLoadLockKey   = "mail:rate-limit:policies:load-lock:v1"
+	rateLimitPolicySchemaVersion = 2
+	rateLimitPolicySnapshotKey   = "mail:rate-limit:policies:v2"
+	rateLimitPolicyLoadLockKey   = "mail:rate-limit:policies:load-lock:v2"
 	rateLimitPolicyLoadLockTTL   = 5 * time.Second
 	rateLimitPolicyRetryInterval = 50 * time.Millisecond
 )
@@ -30,11 +30,6 @@ const (
 var fixedRateLimitPolicyKeys = []string{
 	"business_email_minute",
 	"business_email_10m",
-	"business_ip_minute",
-	"business_scene_minute",
-	"admin_test_user_10m",
-	"admin_test_ip_minute",
-	"admin_test_email_10m",
 }
 
 type fixedRateLimitSpec struct {
@@ -46,13 +41,8 @@ type fixedRateLimitSpec struct {
 }
 
 var fixedRateLimitSpecs = []fixedRateLimitSpec{
-	{Key: "business_email_minute", Mode: "business", Dimension: "platform_scene_email", Limit: 1, WindowSeconds: 60},
-	{Key: "business_email_10m", Mode: "business", Dimension: "platform_scene_email", Limit: 5, WindowSeconds: 600},
-	{Key: "business_ip_minute", Mode: "business", Dimension: "platform_ip", Limit: 10, WindowSeconds: 60},
-	{Key: "business_scene_minute", Mode: "business", Dimension: "platform_scene", Limit: 30, WindowSeconds: 60},
-	{Key: "admin_test_user_10m", Mode: "admin_test", Dimension: "admin_user", Limit: 5, WindowSeconds: 600},
-	{Key: "admin_test_ip_minute", Mode: "admin_test", Dimension: "ip", Limit: 10, WindowSeconds: 60},
-	{Key: "admin_test_email_10m", Mode: "admin_test", Dimension: "email", Limit: 3, WindowSeconds: 600},
+	{Key: "business_email_minute", Mode: "business", Dimension: "platform_email", Limit: 1, WindowSeconds: 60},
+	{Key: "business_email_10m", Mode: "business", Dimension: "platform_email", Limit: 5, WindowSeconds: 600},
 }
 
 func fixedRateLimitSpecByKey(key string) (fixedRateLimitSpec, bool) {

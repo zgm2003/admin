@@ -38,7 +38,7 @@ func (r *Repository) ListAdmin(ctx context.Context, query AdminSessionQuery, now
 			"CASE WHEN session.revoked_at IS NOT NULL THEN 'revoked' "+
 			"WHEN session.refresh_expires_at <= ? THEN 'expired' ELSE 'active' END AS status", now.UTC()).
 		Joins("JOIN user_account AS app_user ON app_user.id = session.user_id").
-		Joins("JOIN auth_platform AS platform ON platform.id = session.platform_id").
+		Joins("JOIN permission_auth_platform AS platform ON platform.id = session.platform_id").
 		Where("app_user.deleted_at IS NULL")
 	if query.Username != "" {
 		db = db.Where("app_user.username LIKE ? ESCAPE '\\'", adminPrefixPattern(query.Username))
@@ -96,7 +96,7 @@ func (r *Repository) StatsAdmin(ctx context.Context, now time.Time) (AdminSessio
 	if err := r.db.WithContext(ctx).Table("user_session AS session").
 		Select("platform.code AS platform, COUNT(*) AS count").
 		Joins("JOIN user_account AS app_user ON app_user.id = session.user_id").
-		Joins("JOIN auth_platform AS platform ON platform.id = session.platform_id").
+		Joins("JOIN permission_auth_platform AS platform ON platform.id = session.platform_id").
 		Where("app_user.deleted_at IS NULL AND session.revoked_at IS NULL AND session.refresh_expires_at > ?", now.UTC()).
 		Group("platform.code").Scan(&rows).Error; err != nil {
 		return AdminSessionStats{}, fmt.Errorf("count active sessions by platform: %w", err)
@@ -113,7 +113,7 @@ func (r *Repository) RevokeAdmin(ctx context.Context, ids []int64, currentSessio
 		rows := make([]sessionPlatformRow, 0, len(ids))
 		if err := tx.Unscoped().Table("user_session AS session").
 			Select("session.*, platform.code AS platform").
-			Joins("JOIN auth_platform AS platform ON platform.id = session.platform_id").
+			Joins("JOIN permission_auth_platform AS platform ON platform.id = session.platform_id").
 			Clauses(clause.Locking{Strength: "UPDATE", Table: clause.Table{Name: "session"}}).
 			Where("session.id IN ?", ids).Scan(&rows).Error; err != nil {
 			return fmt.Errorf("lock sessions for revoke: %w", err)
@@ -158,7 +158,7 @@ func (r *Repository) FindAdminRevokeTargets(ctx context.Context, ids []int64) ([
 	rows := make([]sessionPlatformRow, 0, len(ids))
 	if err := r.db.WithContext(ctx).Unscoped().Table("user_session AS session").
 		Select("session.*, platform.code AS platform").
-		Joins("JOIN auth_platform AS platform ON platform.id = session.platform_id").
+		Joins("JOIN permission_auth_platform AS platform ON platform.id = session.platform_id").
 		Where("session.id IN ?", ids).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("find sessions for admin revoke: %w", err)
 	}

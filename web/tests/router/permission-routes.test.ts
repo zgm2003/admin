@@ -9,15 +9,15 @@ import { ProtocolError } from '@/types/http'
 const TestLayout = { template: '<router-view />' }
 const TestView = { template: '<div>test view</div>' }
 const testViews: PageModuleMap = {
-  '../views/account/users/index.vue': async () => ({ default: TestView }),
-  '../views/account/profile/index.vue': async () => ({ default: TestView }),
-  '../views/account/sessions/index.vue': async () => ({ default: TestView }),
-  '../views/account/login-logs/index.vue': async () => ({ default: TestView }),
-  '../views/permission/auth-platforms/index.vue': async () => ({ default: TestView }),
-  '../views/permission/menus/index.vue': async () => ({ default: TestView }),
-  '../views/permission/roles/index.vue': async () => ({ default: TestView }),
-  '../views/system/operation-logs/index.vue': async () => ({ default: TestView }),
-  '../views/cloud/storage-object/index.vue': async () => ({ default: TestView }),
+  '../views/user/account/index.vue': async () => ({ default: TestView }),
+  '../views/user/profile/index.vue': async () => ({ default: TestView }),
+  '../views/user/session/index.vue': async () => ({ default: TestView }),
+  '../views/user/loginlog/index.vue': async () => ({ default: TestView }),
+  '../views/permission/authplatform/index.vue': async () => ({ default: TestView }),
+  '../views/permission/menu/index.vue': async () => ({ default: TestView }),
+  '../views/permission/role/index.vue': async () => ({ default: TestView }),
+  '../views/system/operationlog/index.vue': async () => ({ default: TestView }),
+  '../views/storage/object/index.vue': async () => ({ default: TestView }),
   '../views/message/mail/index.vue': async () => ({ default: TestView }),
 }
 
@@ -26,21 +26,21 @@ describe('access route registration', () => {
     const router = testRouter()
     const cleanup = registerPermissionRoutes(
       router,
-      [directory('account', [page('account:user:view', '/account/users', 'account/users')])],
+      [directory('account', [page('user:account:view', '/user/account', 'user/account')])],
       testViews,
     )
 
     expect(router.hasRoute('access:system')).toBe(false)
-    expect(router.hasRoute('access:account:user:view')).toBe(true)
-    const resolved = router.resolve('/account/users')
-    expect(resolved.name).toBe('access:account:user:view')
+    expect(router.hasRoute('access:user:account:view')).toBe(true)
+    const resolved = router.resolve('/user/account')
+    expect(resolved.name).toBe('access:user:account:view')
     expect(resolved.meta.requiresAuth).toBe(true)
-    expect(resolved.meta.i18nKey).toBe('navigation.accountUsers')
+    expect(resolved.meta.i18nKey).toBe('navigation.userAccount')
     expect(resolved.matched.map((record) => record.name)).toContain('admin-layout')
 
     cleanup()
-    expect(router.hasRoute('access:account:user:view')).toBe(false)
-    expect(router.resolve('/account/users').matched).toHaveLength(0)
+    expect(router.hasRoute('access:user:account:view')).toBe(false)
+    expect(router.resolve('/user/account').matched).toHaveLength(0)
   })
 
   it('registers menu pages from every root dynamically', () => {
@@ -49,28 +49,32 @@ describe('access route registration', () => {
       router,
       [
         directory('account', [
-          page('account:user:view', '/account/users', 'account/users'),
-          page('auth:session:view', '/account/sessions', 'account/sessions'),
+          page('user:account:view', '/user/account', 'user/account'),
+          page('user:session:view', '/user/session', 'user/session'),
         ]),
         directory('access', [
-          page('permission:menu:view', '/permission/menus', 'permission/menus'),
-          page('permission:role:view', '/permission/roles', 'permission/roles'),
-          page('auth:platform:view', '/permission/auth-platforms', 'permission/auth-platforms'),
+          page('permission:menu:view', '/permission/menu', 'permission/menu'),
+          page('permission:role:view', '/permission/role', 'permission/role'),
+          page(
+            'permission:authplatform:view',
+            '/permission/authplatform',
+            'permission/authplatform',
+          ),
         ]),
         directory('system', [
-          page('system:operation-log:view', '/system/operation-logs', 'system/operation-logs'),
+          page('system:operationlog:view', '/system/operationlog', 'system/operationlog'),
         ]),
       ],
       testViews,
     )
 
-    expect(router.resolve('/permission/menus').name).toBe('access:permission:menu:view')
+    expect(router.resolve('/permission/menu').name).toBe('access:permission:menu:view')
     expect(router.hasRoute('access:permission:menu:view')).toBe(true)
-    expect(router.hasRoute('access:account:user:view')).toBe(true)
-    expect(router.hasRoute('access:auth:session:view')).toBe(true)
+    expect(router.hasRoute('access:user:account:view')).toBe(true)
+    expect(router.hasRoute('access:user:session:view')).toBe(true)
     expect(router.hasRoute('access:permission:role:view')).toBe(true)
-    expect(router.hasRoute('access:auth:platform:view')).toBe(true)
-    expect(router.hasRoute('access:system:operation-log:view')).toBe(true)
+    expect(router.hasRoute('access:permission:authplatform:view')).toBe(true)
+    expect(router.hasRoute('access:system:operationlog:view')).toBe(true)
 
     cleanup()
     expect(router.hasRoute('access:permission:menu:view')).toBe(false)
@@ -81,15 +85,11 @@ describe('access route registration', () => {
     const router = testRouter()
     const cleanup = registerPermissionRoutes(
       router,
-      [
-        directory('account', [
-          page('account:user:loginlog:list', '/account/login-logs', 'account/login-logs'),
-        ]),
-      ],
+      [directory('account', [page('user:loginlog:list', '/user/loginlog', 'user/loginlog')])],
       testViews,
     )
 
-    expect(router.resolve('/account/login-logs').name).toBe('access:account:user:loginlog:list')
+    expect(router.resolve('/user/loginlog').name).toBe('access:user:loginlog:list')
     cleanup()
   })
 
@@ -107,22 +107,22 @@ describe('access route registration', () => {
 
   it('allows two URLs to reuse one component and ignores hidden state', () => {
     const router = testRouter()
-    const hidden = page('system:account:view', '/system/accounts', 'account/users')
+    const hidden = page('system:account:view', '/system/accounts', 'user/account')
     hidden.isHidden = YesNo.Yes
     const cleanup = registerPermissionRoutes(
       router,
-      [directory('system', [hidden, page('account:user:view', '/account/users', 'account/users')])],
+      [directory('system', [hidden, page('user:account:view', '/user/account', 'user/account')])],
       testViews,
     )
 
     expect(router.hasRoute('access:system:account:view')).toBe(true)
-    expect(router.hasRoute('access:account:user:view')).toBe(true)
+    expect(router.hasRoute('access:user:account:view')).toBe(true)
     cleanup()
   })
 
   it('rejects an unknown component path before registering anything', () => {
     const router = testRouter()
-    const nodes = [page('account:user:view', '/account/users', 'system/missing')]
+    const nodes = [page('user:account:view', '/user/account', 'system/missing')]
 
     expect(() => registerPermissionRoutes(router, nodes, testViews)).toThrow(ProtocolError)
     expect(accessRoutes(router)).toHaveLength(0)
@@ -132,15 +132,15 @@ describe('access route registration', () => {
     {
       name: 'duplicate path',
       nodes: [
-        page('account:user:view', '/account/users', 'account/users'),
-        page('system:other:view', '/account/users', 'permission/roles'),
+        page('user:account:view', '/user/account', 'user/account'),
+        page('system:other:view', '/user/account', 'permission/role'),
       ],
     },
     {
       name: 'duplicate route name',
       nodes: [
-        page('account:user:view', '/account/users', 'account/users'),
-        page('account:user:view', '/system/accounts', 'account/users'),
+        page('user:account:view', '/user/account', 'user/account'),
+        page('user:account:view', '/system/accounts', 'user/account'),
       ],
     },
   ])('rejects $name before registering anything', ({ nodes }) => {
@@ -151,16 +151,16 @@ describe('access route registration', () => {
 
   it('registers the hidden profile page dynamically with its access route name', () => {
     const router = testRouter()
-    const profile = page('account:profile:view', '/account/profile', 'account/profile')
-    profile.i18nKey = 'layout.account.profile'
+    const profile = page('user:profile:view', '/user/profile', 'user/profile')
+    profile.i18nKey = 'layout.user.profile'
     profile.isHidden = YesNo.Yes
     const cleanup = registerPermissionRoutes(router, [directory('account', [profile])], testViews)
 
     expect(router.hasRoute('account-profile')).toBe(false)
-    expect(router.hasRoute('access:account:profile:view')).toBe(true)
-    expect(router.resolve('/account/profile').name).toBe('access:account:profile:view')
+    expect(router.hasRoute('access:user:profile:view')).toBe(true)
+    expect(router.resolve('/user/profile').name).toBe('access:user:profile:view')
     cleanup()
-    expect(router.resolve('/account/profile').matched).toHaveLength(0)
+    expect(router.resolve('/user/profile').matched).toHaveLength(0)
   })
 
   it('removes routes in reverse when addRoute fails partway through', () => {
@@ -178,8 +178,8 @@ describe('access route registration', () => {
         router,
         [
           directory('system', [
-            page('permission:role:view', '/permission/roles', 'permission/roles'),
-            page('account:user:view', '/account/users', 'account/users'),
+            page('permission:role:view', '/permission/role', 'permission/role'),
+            page('user:account:view', '/user/account', 'user/account'),
           ]),
         ],
         testViews,
@@ -194,8 +194,8 @@ describe('access route registration', () => {
       router,
       [
         directory('system', [
-          page('permission:role:view', '/permission/roles', 'permission/roles'),
-          page('account:user:view', '/account/users', 'account/users'),
+          page('permission:role:view', '/permission/role', 'permission/role'),
+          page('user:account:view', '/user/account', 'user/account'),
         ]),
       ],
       testViews,
@@ -254,15 +254,15 @@ function page(code: string, path: string, componentPath: string): PermissionMenu
 
 function pageI18nKey(code: string): string {
   const keys: Readonly<Record<string, string>> = {
-    'account:profile:view': 'layout.account.profile',
-    'account:user:view': 'navigation.accountUsers',
-    'system:operation-log:view': 'navigation.systemOperationLogs',
-    'auth:platform:view': 'navigation.accessAuthPlatforms',
-    'auth:session:view': 'navigation.accountSessions',
-    'account:user:loginlog:list': 'navigation.accountLoginLogs',
-    'account:user:loginlog:view': 'navigation.accountLoginLogs',
-    'permission:menu:view': 'navigation.accessMenus',
-    'permission:role:view': 'navigation.accessRoles',
+    'user:profile:view': 'layout.user.profile',
+    'user:account:view': 'navigation.userAccount',
+    'system:operationlog:view': 'navigation.systemOperationlog',
+    'permission:authplatform:view': 'navigation.permissionAuthplatform',
+    'user:session:view': 'navigation.userSession',
+    'user:loginlog:list': 'navigation.userLoginlog',
+    'user:loginlog:view': 'navigation.userLoginlog',
+    'permission:menu:view': 'navigation.permissionMenu',
+    'permission:role:view': 'navigation.permissionRole',
   }
-  return keys[code] ?? 'navigation.accountUsers'
+  return keys[code] ?? 'navigation.userAccount'
 }

@@ -14,7 +14,7 @@ func TestBuildMenuIndexBuildsStableTreeWithNonNilLeafChildren(t *testing.T) {
 	menus := []Menu{
 		{ID: 4, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "修改角色", Code: "permission:role:update", SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 		{ID: 3, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "删除角色", Code: "permission:role:delete", SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: stringPointer("navigation.accessRoles"), Path: &pagePath, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: stringPointer("navigation.permissionRole"), Path: &pagePath, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 		{ID: 5, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), SortOrder: 200, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 		{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "系统管理", Code: "system", I18nKey: stringPointer("navigation.system"), SortOrder: 100, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 	}
@@ -80,14 +80,14 @@ func TestNormalizeMenuInputEnforcesPageAndActionPermissionSuffixes(t *testing.T)
 }
 
 func TestNormalizeMenuInputRejectsMismatchedPagePathAndComponentPath(t *testing.T) {
-	path := "/permission/roles"
+	path := "/permission/role"
 	componentPath := "access/roles"
 	input := CreateInput{PlatformID: 1, MenuType: TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: stringPointer("navigation.roles"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if _, err := normalizeCreateInput(input); err == nil {
 		t.Fatal("mismatched page path/componentPath was accepted")
 	}
-	validPath := "/permission/roles"
-	validComponent := "permission/roles"
+	validPath := "/permission/role"
+	validComponent := "permission/role"
 	update := UpdateInput{MenuType: TypePage, Name: "角色管理", I18nKey: stringPointer("navigation.roles"), Path: &validPath, ComponentPath: &validComponent, IsHidden: yesno.No}
 	if _, err := normalizeUpdateInput(update); err != nil {
 		t.Fatalf("matching page path/componentPath rejected: %v", err)
@@ -199,7 +199,7 @@ func TestBuildMenuIndexAcceptsProfileMenuIcon(t *testing.T) {
 	icon := "lucide:user-circle"
 	menu := Menu{
 		ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "个人中心", Code: "account:profile",
-		I18nKey: stringPointer("navigation.account"), Icon: &icon, IsEnabled: yesno.Yes,
+		I18nKey: stringPointer("navigation.user"), Icon: &icon, IsEnabled: yesno.Yes,
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if _, err := buildMenuIndex([]Menu{menu}); err != nil {

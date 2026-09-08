@@ -26,7 +26,7 @@ export async function requestUploadCredentials(
   return parseCredentials(
     await request<unknown>({
       method: 'POST',
-      url: '/api/v1/storage/upload-credentials',
+      url: '/api/v1/storage/upload-credential',
       data: { ruleCode, files },
     }),
   )

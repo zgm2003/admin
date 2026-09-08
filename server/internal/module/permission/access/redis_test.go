@@ -13,7 +13,7 @@ import (
 )
 
 func TestSnapshotKey(t *testing.T) {
-	if got := SnapshotKey("admin", 4, 7, 9); got != "authz:permission:admin:4:7:9" {
+	if got := SnapshotKey("admin", 4, 7, 9); got != "authz:permission:v5:admin:4:7:9" {
 		t.Fatalf("SnapshotKey() = %q", got)
 	}
 }
@@ -69,7 +69,7 @@ func TestSnapshotCacheRejectsUnknownFieldsAndMismatchedIdentity(t *testing.T) {
 		`{"schemaVersion":4,"userId":999,"platformId":1,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[]}`,
 		`{"schemaVersion":4,"userId":94002,"platformId":2,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[]}`,
 		`{"schemaVersion":3,"userId":94002,"platformId":1,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[],"permissionCodes":[]}`,
-		`{"schemaVersion":4,"userId":94002,"platformId":1,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[{"code":"account:user:list","menuType":"page","path":"/account/users","componentPath":"account/users","i18nKey":"navigation.accountUsers","icon":null,"isHidden":0,"children":[],"unexpected":true}],"permissionCodes":[]}`,
+		`{"schemaVersion":4,"userId":94002,"platformId":1,"platform":"admin","policyVersion":4,"version":3,"roleCodes":[],"menuTree":[{"code":"user:account:list","menuType":"page","path":"/user/account","componentPath":"user/account","i18nKey":"navigation.userAccount","icon":null,"isHidden":0,"children":[],"unexpected":true}],"permissionCodes":[]}`,
 	} {
 		if err := client.SetString(ctx, key, payload, time.Minute); err != nil {
 			t.Fatal(err)

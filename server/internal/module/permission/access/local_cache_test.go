@@ -24,7 +24,7 @@ func TestLocalSnapshotCacheReturnsDeepCopies(t *testing.T) {
 	if !found {
 		t.Fatal("second cache read missed")
 	}
-	if second.RoleCodes[0] != "role" || second.PermissionCodes[0] != "account:user:list" || second.MenuTree[0].Children[0].Code != "account:user:list" {
+	if second.RoleCodes[0] != "role" || second.PermissionCodes[0] != "user:account:list" || second.MenuTree[0].Children[0].Code != "user:account:list" {
 		t.Fatalf("stored snapshot was mutated: %+v", second)
 	}
 }
@@ -108,8 +108,8 @@ func localCacheKey(version int64) SnapshotCacheKey {
 }
 
 func localCachedSnapshot(version int64) CachedSnapshot {
-	path := "/account/users"
-	componentPath := "account/users"
+	path := "/user/account"
+	componentPath := "user/account"
 	return CachedSnapshot{
 		SchemaVersion: accessSnapshotSchemaVersion,
 		UserID:        7,
@@ -119,11 +119,11 @@ func localCachedSnapshot(version int64) CachedSnapshot {
 		Version:       version,
 		RoleCodes:     []string{"role"},
 		MenuTree: []MenuNode{{
-			Code: "account", MenuType: MenuDirectory, I18nKey: "navigation.account", Children: []MenuNode{{
-				Code: "account:user:list", MenuType: MenuPage, Path: &path, ComponentPath: &componentPath,
-				I18nKey: "navigation.accountUsers", Children: []MenuNode{},
+			Code: "account", MenuType: MenuDirectory, I18nKey: "navigation.user", Children: []MenuNode{{
+				Code: "user:account:list", MenuType: MenuPage, Path: &path, ComponentPath: &componentPath,
+				I18nKey: "navigation.userAccount", Children: []MenuNode{},
 			}},
 		}},
-		PermissionCodes: []string{"account:user:list"},
+		PermissionCodes: []string{"user:account:list"},
 	}
 }

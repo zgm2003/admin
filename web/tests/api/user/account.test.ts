@@ -24,14 +24,14 @@ describe('user API', () => {
     await getUsers({ page: 2, pageSize: 50, keyword: 'alice', isEnabled: YesNo.No, roleId: 7 })
     expect(requestMock).toHaveBeenLastCalledWith({
       method: 'GET',
-      url: '/api/admin/v1/users',
+      url: '/api/admin/v1/user/account',
       params: { page: 2, pageSize: 50, keyword: 'alice', isEnabled: YesNo.No, roleId: 7 },
     })
     requestMock.mockResolvedValueOnce({ roles: [] })
     await getUserRoleOptions()
     expect(requestMock).toHaveBeenLastCalledWith({
       method: 'GET',
-      url: '/api/admin/v1/users/role-options',
+      url: '/api/admin/v1/user/account/role-options',
     })
     requestMock.mockResolvedValueOnce({
       id: 7,
@@ -42,19 +42,22 @@ describe('user API', () => {
     await updateUser(7, { username: 'alice_new', phone: '+86 138-0000-0000' })
     expect(requestMock).toHaveBeenLastCalledWith({
       method: 'PUT',
-      url: '/api/admin/v1/users/7',
+      url: '/api/admin/v1/user/account/7',
       data: { username: 'alice_new', phone: '+86 138-0000-0000' },
     })
     requestMock.mockResolvedValueOnce({ id: 7, isEnabled: YesNo.No })
     await updateUserStatus(7, YesNo.No)
     expect(requestMock).toHaveBeenLastCalledWith({
       method: 'PATCH',
-      url: '/api/admin/v1/users/7/status',
+      url: '/api/admin/v1/user/account/7/status',
       data: { isEnabled: YesNo.No },
     })
     requestMock.mockResolvedValueOnce({})
     await deleteUser(7)
-    expect(requestMock).toHaveBeenLastCalledWith({ method: 'DELETE', url: '/api/admin/v1/users/7' })
+    expect(requestMock).toHaveBeenLastCalledWith({
+      method: 'DELETE',
+      url: '/api/admin/v1/user/account/7',
+    })
     requestMock.mockResolvedValueOnce({
       user: { id: 7, username: 'alice', email: 'a@b.com', phone: null, isEnabled: YesNo.Yes },
       roles: [{ id: 2, code: 'member', name: 'Member', isEnabled: YesNo.Yes }],
@@ -63,13 +66,13 @@ describe('user API', () => {
     await getUserRoles(7)
     expect(requestMock).toHaveBeenLastCalledWith({
       method: 'GET',
-      url: '/api/admin/v1/users/7/roles',
+      url: '/api/admin/v1/user/account/7/role',
     })
     requestMock.mockResolvedValueOnce({ id: 7, roleCount: 2 })
     await updateUserRoles(7, { roleIds: [2, 5] })
     expect(requestMock).toHaveBeenLastCalledWith({
       method: 'PUT',
-      url: '/api/admin/v1/users/7/roles',
+      url: '/api/admin/v1/user/account/7/role',
       data: { roleIds: [2, 5] },
     })
   })

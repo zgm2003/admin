@@ -43,14 +43,14 @@ func TestRateLimitPolicyStoreRejectsMissingDependencies(t *testing.T) {
 
 func TestRateLimitPolicyCatalogIsFixed(t *testing.T) {
 	got := FixedRateLimitPolicies()
-	if len(got) != 7 {
-		t.Fatalf("policy count = %d, want 7", len(got))
+	if len(got) != 2 {
+		t.Fatalf("policy count = %d, want 2", len(got))
 	}
 	if got[0].Key != "business_email_minute" || got[0].Limit != 1 || got[0].WindowSeconds != 60 {
 		t.Fatalf("business email policy = %+v", got[0])
 	}
-	if got[6].Key != "admin_test_email_10m" || got[6].Limit != 3 || got[6].WindowSeconds != 600 {
-		t.Fatalf("admin email policy = %+v", got[6])
+	if got[1].Key != "business_email_10m" || got[1].Limit != 5 || got[1].WindowSeconds != 600 {
+		t.Fatalf("email policy = %+v", got[1])
 	}
 }
 
@@ -88,7 +88,7 @@ func TestRateLimitSnapshotReadyRoundTrip(t *testing.T) {
 		t.Fatalf("decoded snapshot = %+v", decoded)
 	}
 	roundTrip := catalogFromSnapshot(decoded)
-	if roundTrip.Version != 4 || len(roundTrip.Policies) != 7 {
+	if roundTrip.Version != 4 || len(roundTrip.Policies) != 2 {
 		t.Fatalf("round trip catalog = %+v", roundTrip)
 	}
 	for _, policy := range roundTrip.Policies {

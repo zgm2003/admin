@@ -140,7 +140,7 @@ func (r *Repository) IncrementAccessVersion(ctx context.Context, userID int64, n
 func (r *Repository) FindActiveSessionPlatforms(ctx context.Context, userID int64) ([]string, error) {
 	platforms := make([]string, 0)
 	if err := r.db.WithContext(ctx).Table("user_session AS session").Distinct("platform_ref.code").
-		Joins("JOIN auth_platform AS platform_ref ON platform_ref.id = session.platform_id").
+		Joins("JOIN permission_auth_platform AS platform_ref ON platform_ref.id = session.platform_id").
 		Where("session.user_id = ? AND session.revoked_at IS NULL", userID).Order("platform_ref.code").Pluck("platform_ref.code", &platforms).Error; err != nil {
 		return nil, fmt.Errorf("find active user session platforms: %w", err)
 	}
@@ -529,7 +529,7 @@ func (r *Repository) ChangePasswordAndRevokeSessions(ctx context.Context, userID
 			return fmt.Errorf("update password %d: %w", userID, gorm.ErrRecordNotFound)
 		}
 		if err := tx.Table("user_session AS session").Select("session.id, session.user_id, platform_ref.code AS platform").
-			Joins("JOIN auth_platform AS platform_ref ON platform_ref.id = session.platform_id").
+			Joins("JOIN permission_auth_platform AS platform_ref ON platform_ref.id = session.platform_id").
 			Where("session.user_id = ? AND session.revoked_at IS NULL", userID).Find(&revoked).Error; err != nil {
 			return fmt.Errorf("find active sessions for password change: %w", err)
 		}

@@ -75,7 +75,7 @@ export async function getRoles(query: RoleListQuery): Promise<PageResult<RoleLis
   return expectPage(
     await request<unknown>({
       method: 'GET',
-      url: '/api/admin/v1/roles',
+      url: '/api/admin/v1/permission/role',
       params: query,
     }),
     parseRole,
@@ -86,7 +86,7 @@ export async function createRole(input: CreateRoleInput): Promise<{ id: number }
   return expectId(
     await request<unknown>({
       method: 'POST',
-      url: '/api/admin/v1/roles',
+      url: '/api/admin/v1/permission/role',
       data: { code: input.code, name: input.name },
     }),
     'role create result',
@@ -99,7 +99,7 @@ export async function updateRole(
   return expectEmptyObject(
     await request<unknown>({
       method: 'PUT',
-      url: `/api/admin/v1/roles/${id}`,
+      url: `/api/admin/v1/permission/role/${id}`,
       data: { name: input.name },
     }),
     'role update result',
@@ -109,26 +109,26 @@ export async function updateRoleStatus(id: number, isEnabled: YesNo): Promise<Ro
   return parseRoleStatus(
     await request<unknown>({
       method: 'PATCH',
-      url: `/api/admin/v1/roles/${id}/status`,
+      url: `/api/admin/v1/permission/role/${id}/status`,
       data: { isEnabled },
     }),
   )
 }
 export async function setDefaultRole(id: number): Promise<RoleDefaultResult> {
   return parseRoleDefault(
-    await request<unknown>({ method: 'PATCH', url: `/api/admin/v1/roles/${id}/default` }),
+    await request<unknown>({ method: 'PATCH', url: `/api/admin/v1/permission/role/${id}/default` }),
   )
 }
 export async function deleteRole(id: number): Promise<Record<string, never>> {
   return expectEmptyObject(
-    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/roles/${id}` }),
+    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/permission/role/${id}` }),
     'role delete result',
   )
 }
 export async function getRolePermissions(id: number): Promise<RolePermissionsResponse> {
   const raw = await request<unknown>({
     method: 'GET',
-    url: `/api/admin/v1/roles/${id}/permissions`,
+    url: `/api/admin/v1/permission/role/${id}/permission`,
   })
   return parseRolePermissions(raw)
 }
@@ -139,7 +139,7 @@ export async function updateRolePermissions(
   return parseRolePermissionResult(
     await request<unknown>({
       method: 'PUT',
-      url: `/api/admin/v1/roles/${id}/permissions`,
+      url: `/api/admin/v1/permission/role/${id}/permission`,
       data: { menuIds: input.menuIds },
     }),
   )

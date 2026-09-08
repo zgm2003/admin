@@ -95,8 +95,8 @@ func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Sna
 	cacheResult := "miss"
 	state, found, stateErr := s.states.Read(ctx, identity.UserID)
 	if stateErr != nil {
-		cacheResult = "error"
 		s.logCacheError(ctx, "accessState", "error", stateErr)
+		return Snapshot{}, apperror.DependencyUnavailable(stateErr)
 	} else if found {
 		if state.State == permissionstate.StateInvalidating {
 			return Snapshot{}, accessUpdating(permissionstate.ErrUpdating)
@@ -107,8 +107,8 @@ func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Sna
 		}
 		cached, cacheFound, cacheErr := s.cache.Read(ctx, identity.PlatformID, identity.Platform, identity.PolicyVersion, identity.UserID, state.Version)
 		if cacheErr != nil {
-			cacheResult = "error"
 			s.logCacheError(ctx, "accessSnapshot", "error", cacheErr)
+			return Snapshot{}, apperror.DependencyUnavailable(cacheErr)
 		} else if cacheFound {
 			s.local.Put(key, cached, time.Now().Add(identity.AccessCacheTTL))
 			return snapshotFromCache(cached, "hit"), nil
@@ -128,12 +128,14 @@ func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Sna
 		snapshot.CacheResult = cacheResult
 
 		current, currentFound, currentErr := s.states.Read(ctx, identity.UserID)
-		if currentErr != nil || !currentFound {
+		if currentErr != nil {
+			return Snapshot{}, apperror.DependencyUnavailable(currentErr)
+		}
+		if !currentFound {
 			installed, _, installErr := s.states.InstallReadyIfMissing(ctx, permissionstate.Version{UserID: identity.UserID, Version: source.Version})
 			if installErr != nil {
 				s.logCacheError(ctx, "accessState", "error", errors.Join(currentErr, installErr))
-				snapshot.CacheResult = "error"
-				return snapshot, nil
+				return Snapshot{}, apperror.DependencyUnavailable(installErr)
 			}
 			current = installed
 		}
@@ -149,8 +151,7 @@ func (s *Service) loadSnapshot(ctx context.Context, identity auth.Identity) (Sna
 		published, publishErr := s.cache.PublishIfCurrent(ctx, cached, identity.AccessCacheTTL)
 		if publishErr != nil {
 			s.logCacheError(ctx, "accessSnapshot", "error", publishErr)
-			snapshot.CacheResult = "error"
-			return snapshot, nil
+			return Snapshot{}, apperror.DependencyUnavailable(publishErr)
 		}
 		if !published {
 			cacheResult = "miss"

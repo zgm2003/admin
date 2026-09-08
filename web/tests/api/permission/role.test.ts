@@ -30,7 +30,7 @@ describe('role API', () => {
     ).resolves.toEqual({ list: [], total: 0, page: 2, pageSize: 50 })
     expect(requestMock).toHaveBeenCalledWith({
       method: 'GET',
-      url: '/api/admin/v1/roles',
+      url: '/api/admin/v1/permission/role',
       params: { page: 2, pageSize: 50, keyword: 'tester', isEnabled: YesNo.No },
     })
   })
@@ -41,7 +41,7 @@ describe('role API', () => {
     await expect(createRole({ code: 'tester', name: 'Tester' })).resolves.toEqual({ id: 7 })
     expect(requestMock).toHaveBeenCalledWith({
       method: 'POST',
-      url: '/api/admin/v1/roles',
+      url: '/api/admin/v1/permission/role',
       data: { code: 'tester', name: 'Tester' },
     })
   })
@@ -52,7 +52,7 @@ describe('role API', () => {
     await expect(updateRole(7, { name: 'Updated' })).resolves.toEqual({})
     expect(requestMock).toHaveBeenCalledWith({
       method: 'PUT',
-      url: '/api/admin/v1/roles/7',
+      url: '/api/admin/v1/permission/role/7',
       data: { name: 'Updated' },
     })
   })
@@ -66,7 +66,7 @@ describe('role API', () => {
     })
     expect(requestMock).toHaveBeenCalledWith({
       method: 'PATCH',
-      url: '/api/admin/v1/roles/7/status',
+      url: '/api/admin/v1/permission/role/7/status',
       data: { isEnabled: YesNo.No },
     })
   })
@@ -77,7 +77,7 @@ describe('role API', () => {
     await expect(setDefaultRole(7)).resolves.toEqual({ id: 7, isDefault: YesNo.Yes })
     expect(requestMock).toHaveBeenCalledWith({
       method: 'PATCH',
-      url: '/api/admin/v1/roles/7/default',
+      url: '/api/admin/v1/permission/role/7/default',
     })
   })
 
@@ -87,7 +87,7 @@ describe('role API', () => {
     await expect(deleteRole(7)).resolves.toEqual({})
     expect(requestMock).toHaveBeenCalledWith({
       method: 'DELETE',
-      url: '/api/admin/v1/roles/7',
+      url: '/api/admin/v1/permission/role/7',
     })
   })
 
@@ -97,7 +97,7 @@ describe('role API', () => {
     await expect(getRolePermissions(7)).resolves.toEqual(permissionResponse())
     expect(requestMock).toHaveBeenCalledWith({
       method: 'GET',
-      url: '/api/admin/v1/roles/7/permissions',
+      url: '/api/admin/v1/permission/role/7/permission',
     })
   })
 
@@ -123,7 +123,7 @@ describe('role API', () => {
     })
     expect(requestMock).toHaveBeenCalledWith({
       method: 'PUT',
-      url: '/api/admin/v1/roles/7/permissions',
+      url: '/api/admin/v1/permission/role/7/permission',
       data: { menuIds: [3] },
     })
   })

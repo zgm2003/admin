@@ -12,9 +12,9 @@ func TestPermissionIndexBuildsStableTreeAndNormalizesDirectGrants(t *testing.T) 
 	rootID, pageID := int64(1), int64(2)
 	rows := []menu.Menu{
 		{ID: 4, PlatformID: 1, ParentID: &pageID, MenuType: menu.TypeAction, Name: "修改角色", Code: "permission:role:update", SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-		{ID: rootID, PlatformID: 1, MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: roleStringPointer("navigation.access"), SortOrder: 100, IsEnabled: yesno.Yes},
+		{ID: rootID, PlatformID: 1, MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: roleStringPointer("navigation.permission"), SortOrder: 100, IsEnabled: yesno.Yes},
 		{ID: 3, PlatformID: 1, ParentID: &pageID, MenuType: menu.TypeAction, Name: "新增角色", Code: "permission:role:create", SortOrder: 10, IsEnabled: yesno.No, IsHidden: yesno.Yes},
-		{ID: pageID, PlatformID: 1, ParentID: &rootID, MenuType: menu.TypePage, Name: "角色管理", Code: "permission:role:list", I18nKey: roleStringPointer("navigation.accessRoles"), SortOrder: 20, IsEnabled: yesno.Yes},
+		{ID: pageID, PlatformID: 1, ParentID: &rootID, MenuType: menu.TypePage, Name: "角色管理", Code: "permission:role:list", I18nKey: roleStringPointer("navigation.permissionRole"), SortOrder: 20, IsEnabled: yesno.Yes},
 	}
 	index, err := buildPermissionIndex(rows)
 	if err != nil {
@@ -52,9 +52,9 @@ func TestPermissionIndexBuildsStableTreeAndNormalizesDirectGrants(t *testing.T) 
 func TestPermissionIndexSeparatesPlatformsAndSupportsRootPages(t *testing.T) {
 	adminRootID, adminPageID, canvasPageID := int64(1), int64(2), int64(3)
 	rows := []menu.Menu{
-		{ID: adminRootID, PlatformID: 1, MenuType: menu.TypeDirectory, Name: "Admin", Code: "test", I18nKey: roleStringPointer("navigation.access"), IsEnabled: yesno.Yes},
-		{ID: adminPageID, PlatformID: 1, ParentID: &adminRootID, MenuType: menu.TypePage, Name: "Admin Test", Code: "test:list", I18nKey: roleStringPointer("navigation.accessRoles"), IsEnabled: yesno.Yes},
-		{ID: canvasPageID, PlatformID: 2, MenuType: menu.TypePage, Name: "Canvas Test", Code: "test", I18nKey: roleStringPointer("navigation.access"), IsEnabled: yesno.Yes},
+		{ID: adminRootID, PlatformID: 1, MenuType: menu.TypeDirectory, Name: "Admin", Code: "test", I18nKey: roleStringPointer("navigation.permission"), IsEnabled: yesno.Yes},
+		{ID: adminPageID, PlatformID: 1, ParentID: &adminRootID, MenuType: menu.TypePage, Name: "Admin Test", Code: "test:list", I18nKey: roleStringPointer("navigation.permissionRole"), IsEnabled: yesno.Yes},
+		{ID: canvasPageID, PlatformID: 2, MenuType: menu.TypePage, Name: "Canvas Test", Code: "test", I18nKey: roleStringPointer("navigation.permission"), IsEnabled: yesno.Yes},
 		{ID: 4, PlatformID: 2, ParentID: &canvasPageID, MenuType: menu.TypeAction, Name: "Canvas Button", Code: "test:button", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
 	}
 	index, err := buildPermissionIndex(rows)
@@ -76,12 +76,12 @@ func TestPermissionIndexSeparatesPlatformsAndSupportsRootPages(t *testing.T) {
 
 func TestPermissionIndexRejectsInvalidTreesAndStoredGrants(t *testing.T) {
 	rootID := int64(1)
-	valid := menu.Menu{ID: rootID, PlatformID: 1, MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: roleStringPointer("navigation.access"), IsEnabled: yesno.Yes}
+	valid := menu.Menu{ID: rootID, PlatformID: 1, MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: roleStringPointer("navigation.permission"), IsEnabled: yesno.Yes}
 	for _, rows := range [][]menu.Menu{
 		{valid, valid},
 		{{ID: 1, PlatformID: 1, MenuType: menu.TypeAction, Name: "授权", Code: "permission:role:authorize", IsEnabled: yesno.Yes, IsHidden: yesno.Yes}},
-		{valid, {ID: 2, PlatformID: 1, ParentID: func() *int64 { value := int64(99); return &value }(), MenuType: menu.TypePage, Name: "角色管理", Code: "permission:role:list", I18nKey: roleStringPointer("navigation.accessRoles"), IsEnabled: yesno.Yes}},
-		{valid, {ID: 2, PlatformID: 2, ParentID: &rootID, MenuType: menu.TypePage, Name: "角色管理", Code: "permission:role:list", I18nKey: roleStringPointer("navigation.accessRoles"), IsEnabled: yesno.Yes}},
+		{valid, {ID: 2, PlatformID: 1, ParentID: func() *int64 { value := int64(99); return &value }(), MenuType: menu.TypePage, Name: "角色管理", Code: "permission:role:list", I18nKey: roleStringPointer("navigation.permissionRole"), IsEnabled: yesno.Yes}},
+		{valid, {ID: 2, PlatformID: 2, ParentID: &rootID, MenuType: menu.TypePage, Name: "角色管理", Code: "permission:role:list", I18nKey: roleStringPointer("navigation.permissionRole"), IsEnabled: yesno.Yes}},
 	} {
 		if _, err := buildPermissionIndex(rows); err == nil {
 			t.Errorf("invalid tree accepted: %+v", rows)

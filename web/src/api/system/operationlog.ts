@@ -45,7 +45,7 @@ export async function getOperationLogs(query: OperationLogListQuery): Promise<Op
   return expectPage(
     await request<unknown>({
       method: 'GET',
-      url: '/api/admin/v1/operation-logs',
+      url: '/api/admin/v1/system/operationlog',
       params: query,
     }),
     (value, index) => {

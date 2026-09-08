@@ -9,7 +9,7 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	"admin/server/internal/database/testschema"
-	"admin/server/internal/module/auth/platform"
+	"admin/server/internal/module/permission/authplatform"
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/module/permission/role"
 	"github.com/joho/godotenv"
@@ -85,7 +85,7 @@ func TestMenuSchema(t *testing.T) {
 	}
 
 	constraints := map[string][]string{
-		"fk_permission_menu_platform":        {"FOREIGN KEY (platform_id)", "auth_platform(id)", "ON DELETE RESTRICT"},
+		"fk_permission_menu_platform":        {"FOREIGN KEY (platform_id)", "permission_auth_platform(id)", "ON DELETE RESTRICT"},
 		"uq_permission_menu_id_platform":     {"UNIQUE (id, platform_id)"},
 		"fk_permission_menu_parent_platform": {"FOREIGN KEY (parent_id, platform_id)", "permission_menu(id, platform_id)", "ON DELETE RESTRICT"},
 		"fk_permission_role_menu_role":       {"FOREIGN KEY", "ON DELETE RESTRICT"},

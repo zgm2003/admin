@@ -63,7 +63,7 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	projectmiddleware.SetAccessLogOperation(c, "account.profile.update", actor, actor)
+	projectmiddleware.SetAccessLogOperation(c, "user.profile.update", actor, actor)
 	updated, err := h.profile.Update(c.Request.Context(), actor, actor, input)
 	if err != nil {
 		response.Fail(c, err)
@@ -88,7 +88,7 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	projectmiddleware.SetAccessLogOperation(c, "account.password.update", identity.UserID, identity.UserID)
+	projectmiddleware.SetAccessLogOperation(c, "user.password.update", identity.UserID, identity.UserID)
 	if err := h.password.ChangePassword(c.Request.Context(), identity, input); err != nil {
 		response.Fail(c, err)
 		return
@@ -114,7 +114,7 @@ func (h *Handler) SetPassword(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	projectmiddleware.SetAccessLogOperation(c, "account.password.set", identity.UserID, identity.UserID)
+	projectmiddleware.SetAccessLogOperation(c, "user.password.set", identity.UserID, identity.UserID)
 	if err := h.password.SetPassword(c.Request.Context(), identity, input); err != nil {
 		response.Fail(c, err)
 		return

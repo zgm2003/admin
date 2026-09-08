@@ -25,7 +25,7 @@ for (const file of [...walk(src), ...walk(tests)]) {
   const content = readFileSync(file, 'utf8')
   if (
     (projectPath.startsWith('src/router/') || projectPath.startsWith('src/views/')) &&
-    /componentPathMap|user\/login-logs|storage\/object|\/access\/(?:menus|roles|auth-platforms)|\/cloud\/object-storage/.test(
+    /componentPathMap|user\/login-logs|account\/(?:users|profile|sessions|login-logs)|permission\/(?:menus|roles|auth-platforms)|system\/operation-logs|cloud\/(?:storage-object|object-storage)|\/access\/(?:menus|roles|auth-platforms)/.test(
       content,
     )
   ) {

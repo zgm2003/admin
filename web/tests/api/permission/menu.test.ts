@@ -26,7 +26,7 @@ describe('menu API', () => {
     await expect(getMenus({ platformId: 2 })).resolves.toEqual(catalog)
     expect(requestMock).toHaveBeenCalledWith({
       method: 'GET',
-      url: '/api/admin/v1/menus',
+      url: '/api/admin/v1/permission/menu',
       params: { platformId: 2 },
     })
   })
@@ -62,7 +62,7 @@ describe('menu API', () => {
     await expect(createMenu(input)).resolves.toEqual({ id: 7 })
     expect(requestMock).toHaveBeenCalledWith({
       method: 'POST',
-      url: '/api/admin/v1/menus',
+      url: '/api/admin/v1/permission/menu',
       data: input,
     })
   })
@@ -72,9 +72,9 @@ describe('menu API', () => {
       parentId: 1,
       menuType: 'page',
       name: '用户管理',
-      i18nKey: 'navigation.accessMenus',
-      path: '/account/users',
-      componentPath: 'account/users',
+      i18nKey: 'navigation.permissionMenu',
+      path: '/user/account',
+      componentPath: 'user/account',
       icon: 'lucide:panel-left',
       remark: null,
       sortOrder: 10,
@@ -84,7 +84,7 @@ describe('menu API', () => {
     await expect(updateMenu(7, input)).resolves.toEqual({ id: 7 })
     expect(requestMock).toHaveBeenCalledWith({
       method: 'PUT',
-      url: '/api/admin/v1/menus/7',
+      url: '/api/admin/v1/permission/menu/7',
       data: input,
     })
   })
@@ -94,7 +94,7 @@ describe('menu API', () => {
     await expect(updateMenuStatus(7, YesNo.No)).resolves.toEqual({ id: 7, isEnabled: 0 })
     expect(requestMock).toHaveBeenCalledWith({
       method: 'PATCH',
-      url: '/api/admin/v1/menus/7/status',
+      url: '/api/admin/v1/permission/menu/7/status',
       data: { isEnabled: YesNo.No },
     })
   })
@@ -102,7 +102,10 @@ describe('menu API', () => {
   it('deletes without a request body and validates the backend result', async () => {
     requestMock.mockResolvedValue({ id: 7 })
     await expect(deleteMenu(7)).resolves.toEqual({ id: 7 })
-    expect(requestMock).toHaveBeenCalledWith({ method: 'DELETE', url: '/api/admin/v1/menus/7' })
+    expect(requestMock).toHaveBeenCalledWith({
+      method: 'DELETE',
+      url: '/api/admin/v1/permission/menu/7',
+    })
 
     requestMock.mockResolvedValue({ id: 7, extra: true })
     await expect(deleteMenu(7)).rejects.toThrow('menu delete result')

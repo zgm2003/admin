@@ -11,12 +11,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestRateLimitPoliciesHandlerReturnsSevenPolicies(t *testing.T) {
+func TestRateLimitPoliciesHandlerReturnsTwoPolicies(t *testing.T) {
 	db, ctx := openMailRepositoryDatabase(t)
 	service := NewService(NewRepository(db), nil, nil, nil, nil, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
 	handler := NewHandler(service)
 
-	recorder := serveRateLimitHandler(t, handler, http.MethodGet, "/rate-limit-policies", "", nil)
+	recorder := serveRateLimitHandler(t, handler, http.MethodGet, "/rate-limit-policy", "", nil)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
@@ -31,7 +31,7 @@ func TestRateLimitPoliciesHandlerReturnsSevenPolicies(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil {
 		t.Fatal(err)
 	}
-	if envelope.Code != 0 || len(envelope.Data.Policies) != 7 {
+	if envelope.Code != 0 || len(envelope.Data.Policies) != 2 {
 		t.Fatalf("envelope = %+v", envelope)
 	}
 	if envelope.Data.Version < 1 {
@@ -64,7 +64,7 @@ func TestUpdateRateLimitPolicyHandlerReturnsUpdatedPolicy(t *testing.T) {
 	})
 	handler := NewHandler(service)
 
-	recorder := serveRateLimitHandler(t, handler, http.MethodPut, "/rate-limit-policies/business_email_minute", `{"limit":2,"windowSeconds":120}`, gin.Params{{Key: "key", Value: "business_email_minute"}})
+	recorder := serveRateLimitHandler(t, handler, http.MethodPut, "/rate-limit-policy/business_email_minute", `{"limit":2,"windowSeconds":120}`, gin.Params{{Key: "key", Value: "business_email_minute"}})
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
@@ -99,13 +99,13 @@ func TestUpdateRateLimitPolicyHandlerRejectsInvalidInput(t *testing.T) {
 		`{"limit":1,"windowSeconds":60,"extra":true}`,
 		`not-json`,
 	} {
-		recorder := serveRateLimitHandler(t, handler, http.MethodPut, "/rate-limit-policies/business_email_minute", body, gin.Params{{Key: "key", Value: "business_email_minute"}})
+		recorder := serveRateLimitHandler(t, handler, http.MethodPut, "/rate-limit-policy/business_email_minute", body, gin.Params{{Key: "key", Value: "business_email_minute"}})
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("body %q status = %d, want 400", body, recorder.Code)
 		}
 	}
 
-	recorder := serveRateLimitHandler(t, handler, http.MethodPut, "/rate-limit-policies/unknown", `{"limit":1,"windowSeconds":60}`, gin.Params{{Key: "key", Value: "unknown"}})
+	recorder := serveRateLimitHandler(t, handler, http.MethodPut, "/rate-limit-policy/unknown", `{"limit":1,"windowSeconds":60}`, gin.Params{{Key: "key", Value: "unknown"}})
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("unknown key status = %d, want 400", recorder.Code)
 	}
@@ -117,7 +117,7 @@ func TestUpdateRateLimitPolicyHandlerMapsStoreFailureToUnavailable(t *testing.T)
 	service := NewService(NewRepository(db), nil, nil, nil, nil, stubRateLimitPolicyStore{err: context.Canceled})
 	handler := NewHandler(service)
 
-	recorder := serveRateLimitHandler(t, handler, http.MethodPut, "/rate-limit-policies/business_email_minute", `{"limit":2,"windowSeconds":120}`, gin.Params{{Key: "key", Value: "business_email_minute"}})
+	recorder := serveRateLimitHandler(t, handler, http.MethodPut, "/rate-limit-policy/business_email_minute", `{"limit":2,"windowSeconds":120}`, gin.Params{{Key: "key", Value: "business_email_minute"}})
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", recorder.Code)
 	}

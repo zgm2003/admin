@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"admin/server/internal/module/auth/client"
-	"admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/auth/state"
 	messagemail "admin/server/internal/module/message/mail"
+	"admin/server/internal/module/permission/authplatform"
 	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/loginlog"
@@ -763,8 +763,7 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string, client a
 			return Identity{}, authplatform.SessionUpdating(userErr)
 		}
 		s.logCacheError(ctx, "userState", userErr)
-		identity.CacheResult = "error"
-		return identity, nil
+		return Identity{}, apperror.DependencyUnavailable(userErr)
 	}
 	sessionsFact, sessionsErr := s.ensureSessionsReady(ctx, authority.Session.Platform, authority.UserID)
 	if sessionsErr != nil {
@@ -772,8 +771,7 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string, client a
 			return Identity{}, authplatform.SessionUpdating(sessionsErr)
 		}
 		s.logCacheError(ctx, "sessionState", sessionsErr)
-		identity.CacheResult = "error"
-		return identity, nil
+		return Identity{}, apperror.DependencyUnavailable(sessionsErr)
 	}
 	currentPolicy, policyErr := s.policies.CurrentPolicy(ctx, client.Platform)
 	if policyErr != nil {
@@ -788,7 +786,7 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string, client a
 			return Identity{}, err
 		}
 		s.logCacheError(ctx, "sessionSnapshot", err)
-		identity.CacheResult = "error"
+		return Identity{}, err
 	}
 	return identity, nil
 }
@@ -909,7 +907,7 @@ func (s *Service) cachedIdentity(ctx context.Context, token TokenIdentity, clien
 	userState, userFound, userErr := s.states.ReadUser(ctx, token.UserID)
 	if userErr != nil {
 		s.logCacheError(ctx, "userState", userErr)
-		return Identity{}, false, "error", nil
+		return Identity{}, false, "error", apperror.DependencyUnavailable(userErr)
 	}
 	if userFound && userState.State == authstate.StateInvalidating {
 		return Identity{}, false, "", authplatform.SessionUpdating(authstate.ErrUpdating)
@@ -923,7 +921,7 @@ func (s *Service) cachedIdentity(ctx context.Context, token TokenIdentity, clien
 	sessionsState, sessionsFound, sessionsErr := s.states.ReadSessions(ctx, token.Platform, token.UserID)
 	if sessionsErr != nil {
 		s.logCacheError(ctx, "sessionState", sessionsErr)
-		return Identity{}, false, "error", nil
+		return Identity{}, false, "error", apperror.DependencyUnavailable(sessionsErr)
 	}
 	if sessionsFound && sessionsState.State == authstate.StateInvalidating {
 		return Identity{}, false, "", authplatform.SessionUpdating(authstate.ErrUpdating)
@@ -934,7 +932,7 @@ func (s *Service) cachedIdentity(ctx context.Context, token TokenIdentity, clien
 	snapshot, snapshotFound, snapshotErr := s.sessionCache.Read(ctx, token.Platform, token.SessionID)
 	if snapshotErr != nil {
 		s.logCacheError(ctx, "sessionSnapshot", snapshotErr)
-		return Identity{}, false, "error", nil
+		return Identity{}, false, "error", apperror.DependencyUnavailable(snapshotErr)
 	}
 	if !snapshotFound {
 		return Identity{}, false, "miss", nil

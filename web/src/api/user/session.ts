@@ -49,14 +49,14 @@ export interface SessionRevokeResult {
 
 export async function getSessions(query: SessionListQuery): Promise<SessionPage> {
   return expectPage(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/sessions', params: query }),
+    await request<unknown>({ method: 'GET', url: '/api/admin/v1/user/session', params: query }),
     parseSessionItem,
     'sessions',
   )
 }
 export async function getSessionStats(): Promise<SessionStats> {
   const value = expectRecord(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/sessions/stats' }),
+    await request<unknown>({ method: 'GET', url: '/api/admin/v1/user/session/stats' }),
     'session stats',
   )
   const platforms = expectRecord(value.platforms, 'session stats.platforms')
@@ -70,14 +70,14 @@ export async function getSessionStats(): Promise<SessionStats> {
 }
 export async function revokeSession(id: number): Promise<SessionRevokeResult> {
   return parseRevokeResult(
-    await request<unknown>({ method: 'DELETE', url: '/api/admin/v1/sessions/' + id }),
+    await request<unknown>({ method: 'DELETE', url: '/api/admin/v1/user/session/' + id }),
   )
 }
 export async function revokeSessions(ids: number[]): Promise<SessionRevokeResult> {
   return parseRevokeResult(
     await request<unknown>({
       method: 'DELETE',
-      url: '/api/admin/v1/sessions',
+      url: '/api/admin/v1/user/session',
       data: { ids },
     }),
   )

@@ -21,25 +21,25 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, i18nKey: 'navigation.dashboard', affix: true },
   },
   {
-    path: '/account/users',
+    path: '/user/account',
     name: 'account-users',
     component: views,
     meta: { requiresAuth: true, i18nKey: 'navigation.main' },
   },
   {
-    path: '/permission/roles',
+    path: '/permission/role',
     name: 'access-roles',
     component: views,
     meta: { requiresAuth: true, i18nKey: 'reports.orders.list' },
   },
   {
-    path: '/system/operation-logs',
+    path: '/system/operationlog',
     name: 'system-operation-logs',
     component: views,
     meta: { requiresAuth: true, i18nKey: 'navigation.main' },
   },
   {
-    path: '/account/profile',
+    path: '/user/profile',
     name: 'account-profile',
     component: views,
     meta: { requiresAuth: true, i18nKey: 'navigation.main' },
@@ -69,9 +69,9 @@ describe('RouteTabs', () => {
 
   it('adds each visited leaf once and keeps Dashboard fixed', async () => {
     const { wrapper, router } = await mountTabs('/dashboard')
-    await router.push('/account/users')
+    await router.push('/user/account')
     await flushPromises()
-    await router.push('/account/users')
+    await router.push('/user/account')
     await flushPromises()
 
     expect(wrapper.findAll('[data-testid="route-tab"]')).toHaveLength(2)
@@ -83,17 +83,17 @@ describe('RouteTabs', () => {
 
   it('uses the complete access tree instead of dynamic route meta for titles', async () => {
     const { wrapper, router } = await mountTabs('/dashboard')
-    await router.push('/account/users')
+    await router.push('/user/account')
     await flushPromises()
-    expect(wrapper.get('[data-testid="route-tab"][data-path="/account/users"]').text()).toContain(
+    expect(wrapper.get('[data-testid="route-tab"][data-path="/user/account"]').text()).toContain(
       '用户管理',
     )
     expect(wrapper.text()).not.toContain('主导航')
 
-    await router.push('/system/operation-logs')
+    await router.push('/system/operationlog')
     await flushPromises()
     expect(
-      wrapper.get('[data-testid="route-tab"][data-path="/system/operation-logs"]').text(),
+      wrapper.get('[data-testid="route-tab"][data-path="/system/operationlog"]').text(),
     ).toContain('操作日志')
   })
 
@@ -102,13 +102,13 @@ describe('RouteTabs', () => {
     const account = tree[0]
     if (account === undefined) throw new Error('missing account fixture')
     account.children.push(
-      page('account:profile:list', '/account/profile', 'account/profile', 'layout.account.profile'),
+      page('user:profile:list', '/user/profile', 'user/profile', 'layout.user.profile'),
     )
     account.children[1].isHidden = YesNo.Yes
     const { wrapper, router } = await mountTabs('/dashboard', tree)
-    await router.push('/account/profile')
+    await router.push('/user/profile')
     await flushPromises()
-    expect(wrapper.get('[data-testid="route-tab"][data-path="/account/profile"]').text()).toContain(
+    expect(wrapper.get('[data-testid="route-tab"][data-path="/user/profile"]').text()).toContain(
       '个人中心',
     )
   })
@@ -120,37 +120,37 @@ describe('RouteTabs', () => {
       throw new Error('missing access fixture')
     accessRoot.children[0].i18nKey = 'reports.orders.list'
     const { wrapper, router } = await mountTabs('/dashboard', tree)
-    await router.push('/permission/roles')
+    await router.push('/permission/role')
     await flushPromises()
-    expect(
-      wrapper.get('[data-testid="route-tab"][data-path="/permission/roles"]').text(),
-    ).toContain('reports.orders.list')
+    expect(wrapper.get('[data-testid="route-tab"][data-path="/permission/role"]').text()).toContain(
+      'reports.orders.list',
+    )
   })
 
   it('closes the active tab and selects the nearest remaining tab', async () => {
     const { wrapper, router } = await mountTabs('/dashboard')
-    await router.push('/account/users')
-    await router.push('/permission/roles')
+    await router.push('/user/account')
+    await router.push('/permission/role')
     await flushPromises()
-    await wrapper.get('[data-testid="route-tab-permission-roles-close"]').trigger('click')
+    await wrapper.get('[data-testid="route-tab-permission-role-close"]').trigger('click')
     await flushPromises()
 
-    expect(router.currentRoute.value.path).toBe('/account/users')
+    expect(router.currentRoute.value.path).toBe('/user/account')
   })
 
   it('close others and close all retain Dashboard', async () => {
     const { wrapper, router } = await mountTabs('/dashboard')
-    await router.push('/account/users')
-    await router.push('/permission/roles')
+    await router.push('/user/account')
+    await router.push('/permission/role')
     await flushPromises()
     await wrapper
-      .get('[data-testid="route-tab"][data-path="/permission/roles"]')
+      .get('[data-testid="route-tab"][data-path="/permission/role"]')
       .trigger('contextmenu')
     await wrapper.get('[data-testid="route-tabs-close-others-context"]').trigger('click')
     expect(wrapper.findAll('[data-testid="route-tab"]')).toHaveLength(2)
 
     await wrapper
-      .get('[data-testid="route-tab"][data-path="/permission/roles"]')
+      .get('[data-testid="route-tab"][data-path="/permission/role"]')
       .trigger('contextmenu')
     await wrapper.get('[data-testid="route-tabs-close-all-context"]').trigger('click')
     await flushPromises()
@@ -160,17 +160,17 @@ describe('RouteTabs', () => {
 
   it('navigates with previous and next controls and exposes disabled ends', async () => {
     const { wrapper, router } = await mountTabs('/dashboard')
-    await router.push('/account/users')
-    await router.push('/permission/roles')
+    await router.push('/user/account')
+    await router.push('/permission/role')
     await flushPromises()
 
     expect(wrapper.get('[data-testid="route-tabs-next"]').attributes('disabled')).toBeDefined()
     await wrapper.get('[data-testid="route-tabs-previous"]').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.path).toBe('/account/users')
+    expect(router.currentRoute.value.path).toBe('/user/account')
     await wrapper.get('[data-testid="route-tabs-next"]').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.path).toBe('/permission/roles')
+    expect(router.currentRoute.value.path).toBe('/permission/role')
   })
 
   it('emits refresh and fullscreen commands', async () => {
@@ -206,12 +206,10 @@ describe('RouteTabs', () => {
     await wrapper.get('[data-testid="route-tab"][data-path="/dashboard"]').trigger('click')
     expect(wrapper.find('[role="menu"]').exists()).toBe(false)
 
-    await router.push('/account/users')
+    await router.push('/user/account')
     await flushPromises()
     expect(scrollIntoViewMock).toHaveBeenCalled()
-    await wrapper
-      .get('[data-testid="route-tab"][data-path="/account/users"]')
-      .trigger('contextmenu')
+    await wrapper.get('[data-testid="route-tab"][data-path="/user/account"]').trigger('contextmenu')
     await wrapper.get('[data-testid="route-tabs-close"]').trigger('click')
     expect(wrapper.find('[role="menu"]').exists()).toBe(false)
     await wrapper.get('[data-testid="route-tab"][data-path="/dashboard"]').trigger('contextmenu')
@@ -236,27 +234,27 @@ function accessTree(): PermissionMenuNode[] {
   return [
     directory(
       'account',
-      'navigation.account',
-      page('account:user:list', '/account/users', 'account/users', 'navigation.accountUsers'),
+      'navigation.user',
+      page('user:account:list', '/user/account', 'user/account', 'navigation.userAccount'),
     ),
     directory(
       'access',
-      'navigation.access',
+      'navigation.permission',
       page(
         'permission:role:list',
-        '/permission/roles',
-        'permission/roles',
-        'navigation.accessRoles',
+        '/permission/role',
+        'permission/role',
+        'navigation.permissionRole',
       ),
     ),
     directory(
       'system',
       'navigation.system',
       page(
-        'system:operation-log:list',
-        '/system/operation-logs',
-        'system/operation-logs',
-        'navigation.systemOperationLogs',
+        'system:operationlog:list',
+        '/system/operationlog',
+        'system/operationlog',
+        'navigation.systemOperationlog',
       ),
     ),
   ]

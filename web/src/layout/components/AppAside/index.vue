@@ -37,7 +37,7 @@ const router = useRouter()
 const access = usePermissionStore()
 const avatarText = computed(() => props.username.slice(0, 1).toUpperCase() || 'A')
 const avatarURL = ref('')
-const canOpenProfile = computed(() => access.hasPermission('account:profile:view'))
+const canOpenProfile = computed(() => access.hasPermission('user:profile:view'))
 let avatarRequestID = 0
 
 async function hydrateAvatar(objectKey: string): Promise<void> {
@@ -71,7 +71,7 @@ function handleAccountCommand(command: string | number | object): void {
     return
   }
   if (command === 'profile') {
-    void router.push('/account/profile')
+    void router.push('/user/profile')
     return
   }
   throw new Error(`Unsupported account command: ${String(command)}`)
@@ -111,8 +111,8 @@ function handleAccountCommand(command: string | number | object): void {
           type="button"
           class="app-aside__account-trigger"
           data-testid="aside-account-menu"
-          :title="t('layout.account.title')"
-          :aria-label="t('layout.account.title')"
+          :title="t('layout.user.title')"
+          :aria-label="t('layout.user.title')"
         >
           <el-avatar
             class="app-aside__avatar"
@@ -137,7 +137,7 @@ function handleAccountCommand(command: string | number | object): void {
               :icon="User"
               command="profile"
             >
-              {{ t('layout.account.profile') }}
+              {{ t('layout.user.profile') }}
             </el-dropdown-item>
             <el-dropdown-item
               data-testid="aside-account-logout"

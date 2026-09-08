@@ -46,14 +46,14 @@ export interface LoginLogPageInit {
 export function getLoginLogPageInit(): Promise<LoginLogPageInit> {
   return request<unknown>({
     method: 'GET',
-    url: '/api/admin/v1/users/login-logs/page-init',
+    url: '/api/admin/v1/user/loginlog/page-init',
   }).then(parseLoginLogPageInit)
 }
 
 export function getLoginLogs(query: LoginLogListQuery): Promise<LoginLogPage> {
   return request<unknown>({
     method: 'GET',
-    url: '/api/admin/v1/users/login-logs',
+    url: '/api/admin/v1/user/loginlog',
     params: query,
   }).then((value) => expectPage(value, parseLoginLogItem, 'login logs'))
 }

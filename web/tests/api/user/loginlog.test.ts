@@ -19,11 +19,11 @@ describe('login log API', () => {
 
     expect(requestMock).toHaveBeenNthCalledWith(1, {
       method: 'GET',
-      url: '/api/admin/v1/users/login-logs/page-init',
+      url: '/api/admin/v1/user/loginlog/page-init',
     })
     expect(requestMock).toHaveBeenNthCalledWith(2, {
       method: 'GET',
-      url: '/api/admin/v1/users/login-logs',
+      url: '/api/admin/v1/user/loginlog',
       params: { page: 1, pageSize: 20, eventType: 'login', isSuccess: 1 },
     })
   })

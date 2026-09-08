@@ -87,7 +87,7 @@ func (r *Repository) Create(ctx context.Context, value *Menu) error {
 
 func (r *Repository) FindPlatformOptions(ctx context.Context) ([]PlatformOption, error) {
 	rows := make([]PlatformOption, 0)
-	if err := r.db.WithContext(ctx).Table("auth_platform").
+	if err := r.db.WithContext(ctx).Table("permission_auth_platform").
 		Select("id, code, name, is_enabled").
 		Where("deleted_at IS NULL").
 		Order("is_builtin DESC, code ASC, id ASC").
@@ -99,7 +99,7 @@ func (r *Repository) FindPlatformOptions(ctx context.Context) ([]PlatformOption,
 
 func (r *Repository) FindPlatform(ctx context.Context, id int64) (PlatformOption, error) {
 	var found PlatformOption
-	if err := r.db.WithContext(ctx).Table("auth_platform").
+	if err := r.db.WithContext(ctx).Table("permission_auth_platform").
 		Select("id, code, name, is_enabled").
 		Where("id = ? AND deleted_at IS NULL", id).
 		Take(&found).Error; err != nil {
@@ -110,7 +110,7 @@ func (r *Repository) FindPlatform(ctx context.Context, id int64) (PlatformOption
 
 func (r *Repository) LockPlatform(ctx context.Context, id int64) (PlatformOption, error) {
 	var found PlatformOption
-	if err := r.db.WithContext(ctx).Table("auth_platform").
+	if err := r.db.WithContext(ctx).Table("permission_auth_platform").
 		Select("id, code, name, is_enabled").
 		Clauses(clause.Locking{Strength: "SHARE"}).
 		Where("id = ? AND deleted_at IS NULL", id).

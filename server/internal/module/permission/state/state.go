@@ -33,7 +33,7 @@ type State struct {
 }
 
 func StateKey(userID int64) string {
-	return "authz:permission-state:" + strconv.FormatInt(userID, 10)
+	return "authz:permission-state:v3:" + strconv.FormatInt(userID, 10)
 }
 
 func normalizeVersions(values []Version) ([]Version, error) {

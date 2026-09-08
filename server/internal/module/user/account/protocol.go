@@ -8,12 +8,12 @@ import (
 )
 
 const (
-	PermissionView   = "account:user:view"
-	PermissionList   = "account:user:list"
-	PermissionUpdate = "account:user:update"
-	PermissionStatus = "account:user:status"
-	PermissionDelete = "account:user:delete"
-	PermissionRoles  = "account:user:roles"
+	PermissionView   = "user:account:view"
+	PermissionList   = "user:account:list"
+	PermissionUpdate = "user:account:update"
+	PermissionStatus = "user:account:status"
+	PermissionDelete = "user:account:delete"
+	PermissionRoles  = "user:account:authorize"
 )
 
 func NormalizeUsername(value string) (string, error) {

@@ -6,7 +6,7 @@ import (
 )
 
 func TestStateKey(t *testing.T) {
-	if got := StateKey(7); got != "authz:permission-state:7" {
+	if got := StateKey(7); got != "authz:permission-state:v3:7" {
 		t.Fatalf("StateKey(7) = %q", got)
 	}
 }

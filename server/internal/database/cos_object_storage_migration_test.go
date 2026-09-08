@@ -11,8 +11,8 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	"admin/server/internal/database/testschema"
-	authplatform "admin/server/internal/module/auth/platform"
 	permission "admin/server/internal/module/permission/access"
+	authplatform "admin/server/internal/module/permission/authplatform"
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/shared/yesno"
@@ -129,13 +129,17 @@ func openCOSMigrationSchema(t *testing.T) (*gorm.DB, context.Context) {
 	if err := menu.EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
+	// Historical SQL is tested against its original schema, not rewritten.
+	if err := db.WithContext(ctx).Exec(`ALTER TABLE permission_auth_platform RENAME TO auth_platform`).Error; err != nil {
+		t.Fatal(err)
+	}
 	return db, ctx
 }
 
 func ensureCOSAdmin(t *testing.T, db *gorm.DB, ctx context.Context) authplatform.Platform {
 	t.Helper()
 	var admin authplatform.Platform
-	if err := db.WithContext(ctx).Where("code = ?", authplatform.BuiltinAdminCode).Take(&admin).Error; err != nil {
+	if err := db.WithContext(ctx).Table("auth_platform").Where("code = ?", authplatform.BuiltinAdminCode).Take(&admin).Error; err != nil {
 		t.Fatal(err)
 	}
 	return admin

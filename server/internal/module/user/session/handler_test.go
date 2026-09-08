@@ -49,15 +49,15 @@ func TestSessionRoutesUseExactPermissions(t *testing.T) {
 		method string
 		path   string
 	}{
-		{http.MethodGet, "/api/admin/v1/sessions?page=1&pageSize=20"},
-		{http.MethodGet, "/api/admin/v1/sessions/stats"},
-		{http.MethodDelete, "/api/admin/v1/sessions/7"},
-		{http.MethodDelete, "/api/admin/v1/sessions"},
+		{http.MethodGet, "/api/admin/v1/user/session?page=1&pageSize=20"},
+		{http.MethodGet, "/api/admin/v1/user/session/stats"},
+		{http.MethodDelete, "/api/admin/v1/user/session/7"},
+		{http.MethodDelete, "/api/admin/v1/user/session"},
 	}
 	for _, path := range paths {
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(path.method, path.path, strings.NewReader(`{"ids":[7]}`))
-		if path.method == http.MethodDelete && path.path != "/api/admin/v1/sessions" {
+		if path.method == http.MethodDelete && path.path != "/api/admin/v1/user/session" {
 			request = httptest.NewRequest(path.method, path.path, nil)
 		}
 		router.ServeHTTP(recorder, request)
@@ -76,9 +76,9 @@ func TestSessionRoutesUseExactPermissions(t *testing.T) {
 func TestBulkRevokeRequiresExactIDsBody(t *testing.T) {
 	for _, body := range []string{`{}`, `{"ids":[]}`, `{"ids":[1],"unknown":true}`} {
 		router := gin.New()
-		router.DELETE("/api/admin/v1/sessions", NewSessionAdminHandler(&fakeSessionAdminService{}, testActor).RevokeMany)
+		router.DELETE("/api/admin/v1/user/session", NewSessionAdminHandler(&fakeSessionAdminService{}, testActor).RevokeMany)
 		recorder := httptest.NewRecorder()
-		request := httptest.NewRequest(http.MethodDelete, "/api/admin/v1/sessions", strings.NewReader(body))
+		request := httptest.NewRequest(http.MethodDelete, "/api/admin/v1/user/session", strings.NewReader(body))
 		request.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(recorder, request)
 		if recorder.Code != http.StatusBadRequest {
@@ -90,9 +90,9 @@ func TestBulkRevokeRequiresExactIDsBody(t *testing.T) {
 		ids[index] = "1"
 	}
 	router := gin.New()
-	router.DELETE("/api/admin/v1/sessions", NewSessionAdminHandler(&fakeSessionAdminService{}, testActor).RevokeMany)
+	router.DELETE("/api/admin/v1/user/session", NewSessionAdminHandler(&fakeSessionAdminService{}, testActor).RevokeMany)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodDelete, "/api/admin/v1/sessions", strings.NewReader(`{"ids":[`+strings.Join(ids, ",")+`]}`))
+	request := httptest.NewRequest(http.MethodDelete, "/api/admin/v1/user/session", strings.NewReader(`{"ids":[`+strings.Join(ids, ",")+`]}`))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusBadRequest {
@@ -104,10 +104,10 @@ func TestSessionHandlerUsesRequestContext(t *testing.T) {
 	service := &fakeSessionAdminService{}
 	handler := NewSessionAdminHandler(service, testActor)
 	router := gin.New()
-	router.GET("/api/admin/v1/sessions", func(context *gin.Context) {
+	router.GET("/api/admin/v1/user/session", func(context *gin.Context) {
 		context.Next()
 	}, handler.List)
-	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/sessions?page=1&pageSize=20", nil).WithContext(context.WithValue(context.Background(), struct{}{}, "request"))
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/user/session?page=1&pageSize=20", nil).WithContext(context.WithValue(context.Background(), struct{}{}, "request"))
 	router.ServeHTTP(httptest.NewRecorder(), request)
 	if service.listContext == nil || service.listContext.Value(struct{}{}) != "request" {
 		t.Fatal("request context was not passed to service")
@@ -121,11 +121,11 @@ func TestSessionListMarksCurrentSession(t *testing.T) {
 	}}
 	handler := NewSessionAdminHandler(service, testActor)
 	router := gin.New()
-	router.GET("/api/admin/v1/sessions", func(context *gin.Context) {
+	router.GET("/api/admin/v1/user/session", func(context *gin.Context) {
 		context.Next()
 	}, handler.List)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/sessions?page=1&pageSize=20", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/user/session?page=1&pageSize=20", nil)
 	router.ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {

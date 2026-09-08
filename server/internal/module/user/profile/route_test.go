@@ -9,7 +9,7 @@ import (
 )
 
 func TestRegisterRoutesRequiresProfilePermissions(t *testing.T) {
-	if PermissionView != "account:profile:view" || PermissionDetail != "account:profile:detail" || PermissionUpdate != "account:profile:update" || PermissionPasswordUpdate != "account:password:update" {
+	if PermissionView != "user:profile:view" || PermissionDetail != "user:profile:detail" || PermissionUpdate != "user:profile:update" || PermissionPasswordUpdate != "user:password:update" {
 		t.Fatalf("profile permissions = %q, %q, %q, %q", PermissionView, PermissionDetail, PermissionUpdate, PermissionPasswordUpdate)
 	}
 
@@ -35,9 +35,9 @@ func TestRegisterRoutesRequiresProfilePermissions(t *testing.T) {
 		path       string
 		permission string
 	}{
-		{http.MethodGet, "/api/admin/v1/account/profile", PermissionDetail},
-		{http.MethodPut, "/api/admin/v1/account/profile", PermissionUpdate},
-		{http.MethodPost, "/api/admin/v1/account/password", PermissionPasswordUpdate},
+		{http.MethodGet, "/api/admin/v1/user/profile", PermissionDetail},
+		{http.MethodPut, "/api/admin/v1/user/profile", PermissionUpdate},
+		{http.MethodPost, "/api/admin/v1/user/password", PermissionPasswordUpdate},
 	}
 	for _, request := range want {
 		seen = seen[:0]

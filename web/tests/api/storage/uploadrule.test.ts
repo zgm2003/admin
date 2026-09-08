@@ -9,14 +9,14 @@ describe('upload rule API', () => {
     await listUploadRules({ page: 1, pageSize: 20, platformId: 2 })
     expect(requestMock).toHaveBeenCalledWith({
       method: 'GET',
-      url: '/api/admin/v1/storage/upload-rules',
+      url: '/api/admin/v1/storage/uploadrule',
       params: { page: 1, pageSize: 20, platformId: 2 },
     })
     requestMock.mockResolvedValueOnce({ platforms: [], configs: [] })
     await getUploadRulePageInit()
     expect(requestMock).toHaveBeenCalledWith({
       method: 'GET',
-      url: '/api/admin/v1/storage/upload-rules/page-init',
+      url: '/api/admin/v1/storage/uploadrule/page-init',
     })
   })
 

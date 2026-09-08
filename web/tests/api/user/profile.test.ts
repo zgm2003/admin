@@ -25,7 +25,7 @@ describe('account API', () => {
     await expect(getAccountProfile()).resolves.toEqual(profile)
     expect(requestMock).toHaveBeenLastCalledWith({
       method: 'GET',
-      url: '/api/admin/v1/account/profile',
+      url: '/api/admin/v1/user/profile',
     })
 
     requestMock.mockResolvedValueOnce({ ...profile, updatedAt: '2026-08-28T00:00:00Z' })
@@ -38,7 +38,7 @@ describe('account API', () => {
     })
     expect(requestMock).toHaveBeenLastCalledWith({
       method: 'PUT',
-      url: '/api/admin/v1/account/profile',
+      url: '/api/admin/v1/user/profile',
       data: {
         username: 'alice',
         phone: null,
@@ -56,7 +56,7 @@ describe('account API', () => {
     })
     expect(requestMock).toHaveBeenLastCalledWith({
       method: 'POST',
-      url: '/api/admin/v1/account/password',
+      url: '/api/admin/v1/user/password',
       data: { currentPassword: 'old-pass', newPassword: 'new-pass', confirmPassword: 'new-pass' },
     })
   })

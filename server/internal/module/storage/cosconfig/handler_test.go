@@ -69,7 +69,7 @@ func TestRoutesUseExactCOSConfigPermissions(t *testing.T) {
 func TestHandlersUseStrictDTOsAndNeverReturnCredentials(t *testing.T) {
 	service, router := configRouter(t)
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/storage/cos-configs?page=1&pageSize=20&keyword=main&isEnabled=1", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/storage/cosconfig?page=1&pageSize=20&keyword=main&isEnabled=1", nil))
 	if recorder.Code != http.StatusOK || service.listQuery.Page != 1 || service.listQuery.PageSize != 20 || service.listQuery.IsEnabled == nil || *service.listQuery.IsEnabled != yesno.Yes {
 		t.Fatalf("list status=%d query=%+v body=%s", recorder.Code, service.listQuery, recorder.Body)
 	}
@@ -80,7 +80,7 @@ func TestHandlersUseStrictDTOsAndNeverReturnCredentials(t *testing.T) {
 	}
 
 	validCreate := `{"name":" Main ","appId":"1250000000","secretId":"sid","secretKey":"skey","bucket":"assets","region":"ap-guangzhou","endpoint":"https://cos.example.com","bucketDomain":"https://cdn.example.com","isEnabled":1,"remark":"primary"}`
-	recorder = performConfigJSON(router, http.MethodPost, "/api/admin/v1/storage/cos-configs", validCreate)
+	recorder = performConfigJSON(router, http.MethodPost, "/api/admin/v1/storage/cosconfig", validCreate)
 	if recorder.Code != http.StatusCreated || service.createCalls != 1 || recorder.Body.String() != `{"code":0,"data":{"id":9},"message":"ok"}` {
 		t.Fatalf("create status=%d calls=%d body=%s", recorder.Code, service.createCalls, recorder.Body)
 	}
@@ -92,25 +92,25 @@ func TestHandlersUseStrictDTOsAndNeverReturnCredentials(t *testing.T) {
 		strings.Replace(validCreate, `"endpoint":"https://cos.example.com"`, `"endpoint":"ftp://cos.example.com"`, 1),
 		strings.Replace(validCreate, `"secretKey":"skey"`, `"secretKey":""`, 1),
 	} {
-		recorder = performConfigJSON(router, http.MethodPost, "/api/admin/v1/storage/cos-configs", body)
+		recorder = performConfigJSON(router, http.MethodPost, "/api/admin/v1/storage/cosconfig", body)
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("invalid create status=%d body=%s input=%s", recorder.Code, recorder.Body, body)
 		}
 	}
 
 	validUpdate := `{"name":"Main","appId":"1250000000","bucket":"assets","region":"ap-guangzhou","endpoint":null,"bucketDomain":null,"remark":"updated"}`
-	recorder = performConfigJSON(router, http.MethodPut, "/api/admin/v1/storage/cos-configs/1", validUpdate)
+	recorder = performConfigJSON(router, http.MethodPut, "/api/admin/v1/storage/cosconfig/1", validUpdate)
 	if recorder.Code != http.StatusOK || service.updateCalls != 1 || service.updateInput.SecretID.Present || service.updateInput.SecretKey.Present {
 		t.Fatalf("update status=%d calls=%d input=%+v body=%s", recorder.Code, service.updateCalls, service.updateInput, recorder.Body)
 	}
 	for _, replacement := range []string{`"secretId":null,`, `"secretId":"",`, `"secretKey":null,`, `"secretKey":"",`} {
-		recorder = performConfigJSON(router, http.MethodPut, "/api/admin/v1/storage/cos-configs/1", strings.Replace(validUpdate, "{", "{"+replacement, 1))
+		recorder = performConfigJSON(router, http.MethodPut, "/api/admin/v1/storage/cosconfig/1", strings.Replace(validUpdate, "{", "{"+replacement, 1))
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("invalid secret replacement status=%d body=%s", recorder.Code, recorder.Body)
 		}
 	}
 
-	for _, test := range []struct{ method, path, body string }{{http.MethodPost, "/api/admin/v1/storage/cos-configs/0/test", ""}, {http.MethodDelete, "/api/admin/v1/storage/cos-configs/-1", ""}, {http.MethodPost, "/api/admin/v1/storage/cos-configs/1/test", `{}`}, {http.MethodDelete, "/api/admin/v1/storage/cos-configs/1", `{}`}} {
+	for _, test := range []struct{ method, path, body string }{{http.MethodPost, "/api/admin/v1/storage/cosconfig/0/test", ""}, {http.MethodDelete, "/api/admin/v1/storage/cosconfig/-1", ""}, {http.MethodPost, "/api/admin/v1/storage/cosconfig/1/test", `{}`}, {http.MethodDelete, "/api/admin/v1/storage/cosconfig/1", `{}`}} {
 		recorder = performConfigJSON(router, test.method, test.path, test.body)
 		if recorder.Code != http.StatusBadRequest {
 			t.Fatalf("%s %s status=%d body=%s", test.method, test.path, recorder.Code, recorder.Body)

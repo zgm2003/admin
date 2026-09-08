@@ -40,7 +40,7 @@ func NewSnapshotCache(redis *projectredis.Client) *SnapshotCache {
 }
 
 func SnapshotKey(platform string, policyVersion, userID, version int64) string {
-	return "authz:permission:" + platform + ":" + strconv.FormatInt(policyVersion, 10) + ":" +
+	return "authz:permission:v5:" + platform + ":" + strconv.FormatInt(policyVersion, 10) + ":" +
 		strconv.FormatInt(userID, 10) + ":" + strconv.FormatInt(version, 10)
 }
 

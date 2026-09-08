@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/auth/platform"
+	"admin/server/internal/module/permission/authplatform"
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/shared/yesno"
@@ -22,7 +22,7 @@ func TestMenuEnsureSchemaPreservesActiveCatalogAndGrants(t *testing.T) {
 	if err := db.Create(&createdRole).Error; err != nil {
 		t.Fatalf("create role: %v", err)
 	}
-	accessI18nKey := "navigation.access"
+	accessI18nKey := "navigation.permission"
 	root := menu.Menu{
 		PlatformID: adminPlatformID, MenuType: menu.TypeDirectory, Name: "自定义权限中心", Code: "access",
 		I18nKey: &accessI18nKey, SortOrder: 210, IsEnabled: yesno.Yes, IsHidden: yesno.No,
@@ -30,7 +30,7 @@ func TestMenuEnsureSchemaPreservesActiveCatalogAndGrants(t *testing.T) {
 	if err := db.Create(&root).Error; err != nil {
 		t.Fatalf("create access root: %v", err)
 	}
-	pageI18nKey := "navigation.accessMenus"
+	pageI18nKey := "navigation.permissionMenu"
 	path, componentPath := "/access/menus", "access/menus"
 	page := menu.Menu{
 		PlatformID: adminPlatformID, ParentID: &root.ID, MenuType: menu.TypePage, Name: "自定义菜单管理", Code: menu.PermissionList,
@@ -191,7 +191,7 @@ func TestMenuSchemaRejectsMismatchedPagePathComponentPath(t *testing.T) {
 	db := connection.GORM.WithContext(ctx)
 	platformID := menuAdminPlatformID(t, db)
 	i18nKey := "navigation.roles"
-	path, componentPath := "/permission/roles", "access/roles"
+	path, componentPath := "/permission/role", "access/roles"
 	row := menu.Menu{PlatformID: platformID, MenuType: menu.TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: &i18nKey, Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	err := db.Create(&row).Error
 	var postgresError *pgconn.PgError
@@ -203,7 +203,7 @@ func TestMenuSchemaRejectsMismatchedPagePathComponentPath(t *testing.T) {
 func menuAdminPlatformID(t *testing.T, db *gorm.DB) int64 {
 	t.Helper()
 	var id int64
-	if err := db.Raw(`SELECT id FROM auth_platform WHERE code = 'admin' AND deleted_at IS NULL`).Scan(&id).Error; err != nil || id < 1 {
+	if err := db.Raw(`SELECT id FROM permission_auth_platform WHERE code = 'admin' AND deleted_at IS NULL`).Scan(&id).Error; err != nil || id < 1 {
 		t.Fatalf("find Admin platform id: id=%d err=%v", id, err)
 	}
 	return id

@@ -18,8 +18,11 @@ Skill。`docs/superpowers/**` 与带日期的旧 SQL 是历史档案，除非用
 ## 架构边界
 
 - 业务身份必须贯穿 `web/src/views`、`web/src/api`、`server/internal/module`、Model 表名、菜单
-  `path/componentPath/code/i18nKey` 和中英文 i18n。沿用现有域映射，不为目录整齐机械改名；跨层改名必须
+  `path/componentPath/code/i18nKey` 和中英文 i18n。先按维护者确认的业务归属校正后端模块，再统一各层，
+  不把现有目录当作不可更改的业务依据。统一单数资源名；用户域固定为
+  `user`，前端不得另起 `account` 域。跨层改名必须
   同时核对路由、权限、数据库迁移和翻译，并补契约测试。具体映射见 `docs/agent/architecture.md`。
+  认证平台管理固定为 `permission/authplatform`、表 `permission_auth_platform`；登录流程保留 `auth/login`。
 
 默认容量基线为百万级用户、多实例和高并发访问：
 
@@ -68,7 +71,7 @@ view -> api/<module>.ts -> utils/request.ts -> Go API
 - 优先复用现有 `AppDialog`、`AppTable`、`Search`、`DIcon`、`IconSelect`；公共组件只抽取多个真实页面已
   复用的稳定交互。
 - JSON/TypeScript 使用 lower camel case；Go 导出名使用 PascalCase，initialism 使用 `ID`/`HTTP`/`API`；
-  URL 使用小写复数资源名。
+  URL 使用小写单数资源名；集合字段、数组变量和普通英文句子不为此强行去掉复数。
 
 ## RBAC 契约
 
@@ -80,8 +83,8 @@ view -> api/<module>.ts -> utils/request.ts -> Go API
   action 只进入 `permissionCodes`。
 - 权限事实层级固定为 PostgreSQL -> Redis -> 进程内缓存。进程内缓存必须先经 Redis 确认 access version；
   Redis 故障或版本无法确认时不得返回旧缓存、空权限或假成功。
-- 个人资料固定使用隐藏 page `account:profile:view`，读取 `account:profile:detail`，保存
-  `account:profile:update`，改密 `account:password:update`。
+- 个人资料固定使用隐藏 page `user:profile:view`，读取 `user:profile:detail`，保存
+  `user:profile:update`，改密 `user:password:update`。
 
 ## 数据库与错误
 

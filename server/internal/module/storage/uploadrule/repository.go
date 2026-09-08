@@ -1,7 +1,7 @@
 package uploadrule
 
 import (
-	"admin/server/internal/module/auth/platform"
+	"admin/server/internal/module/permission/authplatform"
 	"admin/server/internal/module/storage/cosconfig"
 	"admin/server/internal/shared/yesno"
 	"context"
@@ -28,7 +28,7 @@ type UploadTarget struct {
 
 func (r *Repository) PlatformEnabled(ctx context.Context, id int64) (bool, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Table("auth_platform").Where("id = ? AND is_enabled = 1 AND deleted_at IS NULL", id).Count(&count).Error
+	err := r.db.WithContext(ctx).Table("permission_auth_platform").Where("id = ? AND is_enabled = 1 AND deleted_at IS NULL", id).Count(&count).Error
 	return count == 1, err
 }
 
@@ -83,7 +83,7 @@ func (r *Repository) List(ctx context.Context, q ListQuery) ([]RuleValue, error)
 		UpdatedAt         time.Time
 	}
 	var rows []row
-	err := filter(r.db.WithContext(ctx).Table("storage_upload_rule").Select("storage_upload_rule.*, p.code as platform_code,p.name as platform_name,c.name as cos_config_name, COALESCE(array_agg(k.code ORDER BY k.id) FILTER (WHERE k.deleted_at IS NULL), '{}') as codes").Joins("JOIN auth_platform p ON p.id=storage_upload_rule.platform_id").Joins("JOIN storage_cos_config c ON c.id=storage_upload_rule.cos_config_id").Joins("LEFT JOIN storage_upload_rule_code k ON k.rule_id=storage_upload_rule.id"), q).Where("storage_upload_rule.deleted_at IS NULL").Group("storage_upload_rule.id,p.code,p.name,c.name").Order("storage_upload_rule.created_at DESC,storage_upload_rule.id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Scan(&rows).Error
+	err := filter(r.db.WithContext(ctx).Table("storage_upload_rule").Select("storage_upload_rule.*, p.code as platform_code,p.name as platform_name,c.name as cos_config_name, COALESCE(array_agg(k.code ORDER BY k.id) FILTER (WHERE k.deleted_at IS NULL), '{}') as codes").Joins("JOIN permission_auth_platform p ON p.id=storage_upload_rule.platform_id").Joins("JOIN storage_cos_config c ON c.id=storage_upload_rule.cos_config_id").Joins("LEFT JOIN storage_upload_rule_code k ON k.rule_id=storage_upload_rule.id"), q).Where("storage_upload_rule.deleted_at IS NULL").Group("storage_upload_rule.id,p.code,p.name,c.name").Order("storage_upload_rule.created_at DESC,storage_upload_rule.id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}

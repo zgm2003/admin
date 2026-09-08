@@ -24,20 +24,20 @@ describe('session API', () => {
 
     expect(requestMock).toHaveBeenNthCalledWith(1, {
       method: 'GET',
-      url: '/api/admin/v1/sessions',
+      url: '/api/admin/v1/user/session',
       params: query,
     })
     expect(requestMock).toHaveBeenNthCalledWith(2, {
       method: 'GET',
-      url: '/api/admin/v1/sessions/stats',
+      url: '/api/admin/v1/user/session/stats',
     })
     expect(requestMock).toHaveBeenNthCalledWith(3, {
       method: 'DELETE',
-      url: '/api/admin/v1/sessions/7',
+      url: '/api/admin/v1/user/session/7',
     })
     expect(requestMock).toHaveBeenNthCalledWith(4, {
       method: 'DELETE',
-      url: '/api/admin/v1/sessions',
+      url: '/api/admin/v1/user/session',
       data: { ids: [7, 8] },
     })
   })

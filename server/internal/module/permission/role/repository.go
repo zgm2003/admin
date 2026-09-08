@@ -104,7 +104,7 @@ func (r *Repository) FindPermissionPlatforms(ctx context.Context) ([]PermissionP
 		IsEnabled yesno.Value
 	}
 	rows := make([]permissionPlatformRow, 0)
-	if err := r.db.WithContext(ctx).Table("auth_platform").
+	if err := r.db.WithContext(ctx).Table("permission_auth_platform").
 		Select("id, code, name, is_enabled").
 		Where("deleted_at IS NULL").
 		Order("is_builtin DESC, code ASC, id ASC").

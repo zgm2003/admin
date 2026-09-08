@@ -301,14 +301,8 @@ func (s *Service) PrepareEmailVerifyCode(ctx context.Context, in EmailVerifyCode
 	if !ok || resendPolicy.WindowSeconds < 1 || resendPolicy.WindowSeconds > 86400 {
 		return EmailVerifyCodePreparation{}, dependency(fmt.Errorf("mail resend rate-limit policy is invalid"))
 	}
-	for _, limit := range businessLimitRequests(catalog, in.PlatformID, in.Scene, email, in.ClientIP) {
-		allowed, allowErr := s.allow(ctx, limit.Key, limit.Limit, limit.Window)
-		if allowErr != nil {
-			return EmailVerifyCodePreparation{}, dependency(allowErr)
-		}
-		if !allowed {
-			return EmailVerifyCodePreparation{}, rateLimited(ErrRateLimited)
-		}
+	if err := s.allowEmail(ctx, catalog, in.PlatformID, email); err != nil {
+		return EmailVerifyCodePreparation{}, err
 	}
 	return EmailVerifyCodePreparation{TTLMinutes: readiness.TTLMinutes, ResendAfterSeconds: resendPolicy.WindowSeconds}, nil
 }
@@ -349,7 +343,7 @@ func (s *Service) SendPreparedEmailVerifyCode(ctx context.Context, in EmailVerif
 		ToEmail:               email,
 		Variables:             map[string]string{"code": in.Code, "ttl_minutes": strconv.Itoa(in.Preparation.TTLMinutes)},
 		RejectActiveChallenge: true,
-	}, SendModeBusiness, sendInternalOptions{skipPreflight: true, expiresAt: in.ExpiresAt})
+	}, SendModeBusiness, sendInternalOptions{skipPreflight: true, expiresAt: in.ExpiresAt, ttlMinutes: in.Preparation.TTLMinutes})
 	if err != nil {
 		return EmailVerifyCodeResult{}, err
 	}
@@ -416,6 +410,7 @@ func (s *Service) rollbackVerifyCodeReadinessMutation(ctx context.Context, mutat
 type sendInternalOptions struct {
 	skipPreflight bool
 	expiresAt     time.Time
+	ttlMinutes    int
 }
 
 func (s *Service) send(ctx context.Context, in BusinessSendInput, mode SendMode) (SendResult, error) {
@@ -447,19 +442,13 @@ func (s *Service) sendInternal(ctx context.Context, in BusinessSendInput, mode S
 				return SendResult{}, denied(ErrRecipientDenied)
 			}
 		}
-		if mode == SendModeBusiness {
+		{
 			catalog, err := s.loadRateLimitCatalog(ctx)
 			if err != nil {
 				return SendResult{}, dependency(err)
 			}
-			for _, limit := range businessLimitRequests(catalog, in.PlatformID, in.Scene, email, in.ClientIP) {
-				allowed, err := s.allow(ctx, limit.Key, limit.Limit, limit.Window)
-				if err != nil {
-					return SendResult{}, dependency(err)
-				}
-				if !allowed {
-					return SendResult{}, rateLimited(ErrRateLimited)
-				}
+			if err := s.allowEmail(ctx, catalog, in.PlatformID, email); err != nil {
+				return SendResult{}, err
 			}
 		}
 	}
@@ -497,7 +486,14 @@ func (s *Service) sendInternal(ctx context.Context, in BusinessSendInput, mode S
 	for key, value := range in.Variables {
 		variables[key] = value
 	}
-	effectiveTTLMinutes, _ := strconv.Atoi(strings.TrimSpace(variables["ttl_minutes"]))
+	effectiveTTLMinutes := int(c.TTLMinutes)
+	if opts.ttlMinutes != 0 {
+		effectiveTTLMinutes = opts.ttlMinutes
+	}
+	if effectiveTTLMinutes < 1 || effectiveTTLMinutes > verifyCodeReadinessTTLMaximum {
+		return SendResult{}, dependency(fmt.Errorf("mail config TTL is invalid"))
+	}
+	variables["ttl_minutes"] = strconv.Itoa(effectiveTTLMinutes)
 	now := time.Now().UTC()
 	expiresAt := now.Add(time.Duration(effectiveTTLMinutes) * time.Minute)
 	if !opts.expiresAt.IsZero() {
@@ -564,28 +560,18 @@ func (s *Service) Test(ctx context.Context, in AdminTestInput) (AdminTestResult,
 	return s.TestForPlatform(ctx, 1, in)
 }
 func (s *Service) TestForPlatform(ctx context.Context, platformID int64, in AdminTestInput) (AdminTestResult, error) {
-	email, err := NormalizeRecipient(in.ToEmail)
-	if err != nil {
-		return AdminTestResult{}, invalid(err)
+	r, err := s.send(ctx, BusinessSendInput{
+		PlatformID: platformID, UserID: &in.AdminUserID, ClientIP: in.ClientIP,
+		Scene: in.Scene, ToEmail: in.ToEmail, Variables: in.Variables,
+	}, SendModeAdminTest)
+	result := AdminTestResult{LogID: r.LogID, Status: r.Status, RequestID: r.RequestID, MessageID: r.MessageID}
+	if err != nil && r.LogID == 0 {
+		return result, err
 	}
-	catalog, err := s.loadRateLimitCatalog(ctx)
-	if err != nil {
-		return AdminTestResult{}, dependency(err)
+	if recordErr := s.repository.RecordTestResult(ctx, platformID, time.Now().UTC(), errorSummary(err)); recordErr != nil && err == nil {
+		err = dependency(fmt.Errorf("persist mail test result: %w", recordErr))
 	}
-	for _, limit := range adminTestLimitRequests(catalog, in.AdminUserID, in.ClientIP, email) {
-		allowed, err := s.allow(ctx, limit.Key, limit.Limit, limit.Window)
-		if err != nil {
-			return AdminTestResult{}, dependency(err)
-		}
-		if !allowed {
-			return AdminTestResult{}, rateLimited(ErrRateLimited)
-		}
-	}
-	r, e := s.send(ctx, BusinessSendInput{PlatformID: platformID, UserID: &in.AdminUserID, ClientIP: in.ClientIP, Scene: in.Scene, ToEmail: in.ToEmail, Variables: in.Variables}, SendModeAdminTest)
-	if recordErr := s.repository.RecordTestResult(ctx, platformID, time.Now().UTC(), errorSummary(e)); recordErr != nil && e == nil {
-		e = dependency(fmt.Errorf("persist mail test result: %w", recordErr))
-	}
-	return AdminTestResult{LogID: r.LogID, Status: r.Status, RequestID: r.RequestID, MessageID: r.MessageID}, e
+	return result, err
 }
 
 func errorSummary(err error) string {
@@ -624,11 +610,18 @@ func mustDecrypt(k *secretkey.KeyRing, ct string) string {
 	v, _ := DecryptSecret(k.MailEncryptionKey(), ct)
 	return v
 }
-func (s *Service) allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
+func (s *Service) allowEmail(ctx context.Context, catalog RateLimitCatalog, platformID int64, email string) error {
 	if s.limiter == nil {
-		return false, fmt.Errorf("mail rate limiter unavailable")
+		return dependency(fmt.Errorf("mail rate limiter unavailable"))
 	}
-	return s.limiter.Allow(ctx, LimitRequest{Key: key, Limit: limit, Window: window})
+	allowed, err := s.limiter.Allow(ctx, businessLimitRequests(catalog, platformID, "", email, "")...)
+	if err != nil {
+		return dependency(err)
+	}
+	if !allowed {
+		return rateLimited(ErrRateLimited)
+	}
+	return nil
 }
 
 func (s *Service) loadRateLimitCatalog(ctx context.Context) (RateLimitCatalog, error) {
@@ -640,21 +633,16 @@ func (s *Service) loadRateLimitCatalog(ctx context.Context) (RateLimitCatalog, e
 
 func businessLimitRequests(catalog RateLimitCatalog, platformID int64, scene, email, clientIP string) []LimitRequest {
 	limits := policyLimitMap(catalog)
-	return []LimitRequest{
-		{Key: fmt.Sprintf("mail:send:email:%d:%s:%s", platformID, scene, email), Limit: limits["business_email_minute"].Limit, Window: policyWindow(limits["business_email_minute"])},
-		{Key: fmt.Sprintf("mail:send:email10:%d:%s:%s", platformID, scene, email), Limit: limits["business_email_10m"].Limit, Window: policyWindow(limits["business_email_10m"])},
-		{Key: fmt.Sprintf("mail:send:ip:%d:%s", platformID, clientIP), Limit: limits["business_ip_minute"].Limit, Window: policyWindow(limits["business_ip_minute"])},
-		{Key: fmt.Sprintf("mail:send:scene:%d:%s", platformID, scene), Limit: limits["business_scene_minute"].Limit, Window: policyWindow(limits["business_scene_minute"])},
+	requests := make([]LimitRequest, 0, 2)
+	for _, spec := range []struct{ key, prefix string }{{"business_email_minute", "email"}, {"business_email_10m", "email10"}} {
+		policy := limits[spec.key]
+		request := LimitRequest{Key: fmt.Sprintf("mail:send:%s:v2:%d:%s", spec.prefix, platformID, email), Limit: policy.Limit, Window: policyWindow(policy)}
+		for _, template := range FixedTemplates() {
+			request.LegacyKeys = append(request.LegacyKeys, fmt.Sprintf("mail:send:%s:%d:%s:%s", spec.prefix, platformID, template.Scene, email))
+		}
+		requests = append(requests, request)
 	}
-}
-
-func adminTestLimitRequests(catalog RateLimitCatalog, adminUserID int64, clientIP, email string) []LimitRequest {
-	limits := policyLimitMap(catalog)
-	return []LimitRequest{
-		{Key: fmt.Sprintf("mail:test:user:%d", adminUserID), Limit: limits["admin_test_user_10m"].Limit, Window: policyWindow(limits["admin_test_user_10m"])},
-		{Key: fmt.Sprintf("mail:test:ip:%s", clientIP), Limit: limits["admin_test_ip_minute"].Limit, Window: policyWindow(limits["admin_test_ip_minute"])},
-		{Key: fmt.Sprintf("mail:test:email:%s", email), Limit: limits["admin_test_email_10m"].Limit, Window: policyWindow(limits["admin_test_email_10m"])},
-	}
+	return requests
 }
 
 func policyLimitMap(catalog RateLimitCatalog) map[string]RateLimitPolicy {

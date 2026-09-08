@@ -99,12 +99,12 @@ func TestServiceCreateEnforcesPlatformAndSupportsRootPage(t *testing.T) {
 func TestServiceCreateAndUpdateRejectMismatchedPagePathComponentPath(t *testing.T) {
 	_, ctx, service := openCleanMenuService(t)
 	platformID := testAdminPlatformID(t, service.repository.db, ctx)
-	path, componentPath := "/permission/roles", "access/roles"
+	path, componentPath := "/permission/role", "access/roles"
 	_, err := service.Create(ctx, CreateInput{PlatformID: platformID, MenuType: TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: stringPointer("navigation.roles"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No})
 	if err == nil {
 		t.Fatal("Create accepted mismatched page path/componentPath")
 	}
-	validPath, validComponent := "/permission/roles", "permission/roles"
+	validPath, validComponent := "/permission/role", "permission/role"
 	id, err := service.Create(ctx, CreateInput{PlatformID: platformID, MenuType: TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: stringPointer("navigation.roles"), Path: &validPath, ComponentPath: &validComponent, IsEnabled: yesno.Yes, IsHidden: yesno.No})
 	if err != nil {
 		t.Fatalf("Create valid page: %v", err)
@@ -779,7 +779,7 @@ func openMenuTestRedis(t *testing.T) *projectredis.Client {
 	if err != nil {
 		t.Fatalf("open test Redis database 12: %v", err)
 	}
-	if err := client.ScanDelete(context.Background(), "authz:permission-state:*"); err != nil {
+	if err := client.ScanDelete(context.Background(), "authz:permission-state:v3:*"); err != nil {
 		_ = client.Close()
 		t.Fatalf("clean test Redis database 12: %v", err)
 	}

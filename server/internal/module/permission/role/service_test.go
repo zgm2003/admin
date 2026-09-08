@@ -570,13 +570,13 @@ func TestServicePermissionsQueriesAndSavesMinimalDirectGrants(t *testing.T) {
 	service, accessStates, _ := newRoleMutationTestService(t, role.NewRepository(tx))
 	adminPlatformID := roleTestAdminPlatformID(t, tx, ctx)
 	canvasPlatform := createRoleTestPlatform(t, tx, ctx, "canvas", "Canvas", yesno.No)
-	root := menu.Menu{PlatformID: adminPlatformID, MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: roleTestStringPointer("navigation.access"), IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	root := menu.Menu{PlatformID: adminPlatformID, MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: roleTestStringPointer("navigation.permission"), IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&root).Error; err != nil {
 		t.Fatal(err)
 	}
 	path := "/system/roles"
 	componentPath := "system/roles"
-	page := menu.Menu{PlatformID: adminPlatformID, ParentID: &root.ID, MenuType: menu.TypePage, Name: "角色管理", Code: role.PermissionList, I18nKey: roleTestStringPointer("navigation.accessRoles"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := menu.Menu{PlatformID: adminPlatformID, ParentID: &root.ID, MenuType: menu.TypePage, Name: "角色管理", Code: role.PermissionList, I18nKey: roleTestStringPointer("navigation.permissionRole"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -695,7 +695,7 @@ func openRoleTestRedis(t *testing.T) *projectredis.Client {
 	if err != nil {
 		t.Fatalf("open test Redis database 13: %v", err)
 	}
-	if err := client.ScanDelete(context.Background(), "authz:permission-state:*"); err != nil {
+	if err := client.ScanDelete(context.Background(), "authz:permission-state:v3:*"); err != nil {
 		_ = client.Close()
 		t.Fatalf("clean test Redis database 13: %v", err)
 	}

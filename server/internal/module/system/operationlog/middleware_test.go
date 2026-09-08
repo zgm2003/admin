@@ -26,7 +26,7 @@ func (e *failingEnqueuer) Enqueue(_ context.Context, payload TaskPayload) error 
 }
 
 func TestRulesMatchOnlyExplicitMutations(t *testing.T) {
-	if rule, ok := FindRule(http.MethodPut, "/api/admin/v1/users/:id"); !ok || rule.Action != "user.update" {
+	if rule, ok := FindRule(http.MethodPut, "/api/admin/v1/user/account/:id"); !ok || rule.Action != "user.update" {
 		t.Fatalf("user update rule = %+v,%v", rule, ok)
 	}
 	if _, ok := FindRule(http.MethodPut, "/api/v1/users/:id"); ok {
@@ -42,16 +42,16 @@ func TestRulesMatchOnlyExplicitMutations(t *testing.T) {
 			t.Fatalf("authentication route %s must not be operation logged", route)
 		}
 	}
-	if rule, ok := FindRule(http.MethodDelete, "/api/admin/v1/sessions/:id"); !ok || rule.Action != "session.revoke" {
+	if rule, ok := FindRule(http.MethodDelete, "/api/admin/v1/user/session/:id"); !ok || rule.Action != "session.revoke" {
 		t.Fatalf("session revoke rule = %+v,%v", rule, ok)
 	}
-	if rule, ok := FindRule(http.MethodPut, "/api/admin/v1/account/profile"); !ok || rule.Action != "account.profile.update" || !rule.CaptureRequest || !rule.CaptureResponse {
+	if rule, ok := FindRule(http.MethodPut, "/api/admin/v1/user/profile"); !ok || rule.Action != "user.profile.update" || !rule.CaptureRequest || !rule.CaptureResponse {
 		t.Fatalf("profile update rule = %+v,%v", rule, ok)
 	}
-	if rule, ok := FindRule(http.MethodPost, "/api/admin/v1/account/password"); !ok || rule.Action != "account.password.change" || !rule.CaptureRequest || !rule.CaptureResponse {
+	if rule, ok := FindRule(http.MethodPost, "/api/admin/v1/user/password"); !ok || rule.Action != "account.password.change" || !rule.CaptureRequest || !rule.CaptureResponse {
 		t.Fatalf("password update rule = %+v,%v", rule, ok)
 	}
-	for _, route := range []string{"/api/admin/v1/users", "/api/v1/access", "/api/admin/v1/users/:id/roles", "/api/admin/v1/account/profile"} {
+	for _, route := range []string{"/api/admin/v1/user/account", "/api/v1/access", "/api/admin/v1/user/account/:id/role", "/api/admin/v1/user/profile"} {
 		if _, ok := FindRule(http.MethodGet, route); ok {
 			t.Fatalf("read route %s was registered as operation", route)
 		}
@@ -81,18 +81,18 @@ func TestCOSConfigRulesAndSanitizerNeverCaptureCredentials(t *testing.T) {
 		route  string
 		action string
 	}{
-		{http.MethodPost, "/api/admin/v1/storage/cos-configs", "storage.cos-config.create"},
-		{http.MethodPut, "/api/admin/v1/storage/cos-configs/:id", "storage.cos-config.update"},
-		{http.MethodPatch, "/api/admin/v1/storage/cos-configs/:id/status", "storage.cos-config.status"},
-		{http.MethodPost, "/api/admin/v1/storage/cos-configs/:id/test", "storage.cos-config.test"},
-		{http.MethodDelete, "/api/admin/v1/storage/cos-configs/:id", "storage.cos-config.delete"},
+		{http.MethodPost, "/api/admin/v1/storage/cosconfig", "storage.cos-config.create"},
+		{http.MethodPut, "/api/admin/v1/storage/cosconfig/:id", "storage.cos-config.update"},
+		{http.MethodPatch, "/api/admin/v1/storage/cosconfig/:id/status", "storage.cos-config.status"},
+		{http.MethodPost, "/api/admin/v1/storage/cosconfig/:id/test", "storage.cos-config.test"},
+		{http.MethodDelete, "/api/admin/v1/storage/cosconfig/:id", "storage.cos-config.delete"},
 	} {
 		rule, ok := FindRule(test.method, test.route)
 		if !ok || rule.Module != "storage" || rule.Action != test.action {
 			t.Fatalf("COS config rule %s %s = %+v,%v", test.method, test.route, rule, ok)
 		}
 	}
-	for _, route := range []string{"/api/admin/v1/storage/cos-configs", "/api/admin/v1/storage/cos-configs/:id"} {
+	for _, route := range []string{"/api/admin/v1/storage/cosconfig", "/api/admin/v1/storage/cosconfig/:id"} {
 		if _, ok := FindRule(http.MethodGet, route); ok {
 			t.Fatalf("COS config read route %s was registered as operation", route)
 		}
@@ -115,17 +115,17 @@ func TestCOSConfigRulesAndSanitizerNeverCaptureCredentials(t *testing.T) {
 
 func TestUploadRuleMutationRulesExcludeCredentialIssuance(t *testing.T) {
 	for _, test := range []struct{ method, route, action string }{
-		{http.MethodPost, "/api/admin/v1/storage/upload-rules", "storage.upload-rule.create"},
-		{http.MethodPut, "/api/admin/v1/storage/upload-rules/:id", "storage.upload-rule.update"},
-		{http.MethodPatch, "/api/admin/v1/storage/upload-rules/:id/status", "storage.upload-rule.status"},
-		{http.MethodDelete, "/api/admin/v1/storage/upload-rules/:id", "storage.upload-rule.delete"},
+		{http.MethodPost, "/api/admin/v1/storage/uploadrule", "storage.upload-rule.create"},
+		{http.MethodPut, "/api/admin/v1/storage/uploadrule/:id", "storage.upload-rule.update"},
+		{http.MethodPatch, "/api/admin/v1/storage/uploadrule/:id/status", "storage.upload-rule.status"},
+		{http.MethodDelete, "/api/admin/v1/storage/uploadrule/:id", "storage.upload-rule.delete"},
 	} {
 		rule, ok := FindRule(test.method, test.route)
 		if !ok || rule.Action != test.action || rule.Module != "storage" {
 			t.Fatalf("rule=%+v ok=%v", rule, ok)
 		}
 	}
-	if _, ok := FindRule(http.MethodPost, "/api/v1/storage/upload-credentials"); ok {
+	if _, ok := FindRule(http.MethodPost, "/api/v1/storage/upload-credential"); ok {
 		t.Fatal("credential issuance must not be operation logged")
 	}
 }
@@ -137,11 +137,11 @@ func TestMiddlewareKeepsBusinessStatusWhenEnqueueFails(t *testing.T) {
 	enqueuer := &failingEnqueuer{}
 	router := gin.New()
 	router.Use(projectmiddleware.RequestID(), Middleware(logger, enqueuer))
-	router.PUT("/api/admin/v1/users/:id", func(context *gin.Context) {
+	router.PUT("/api/admin/v1/user/account/:id", func(context *gin.Context) {
 		context.JSON(http.StatusCreated, gin.H{"code": 0, "data": gin.H{"id": 7}, "message": "ok"})
 	})
 
-	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/users/7", strings.NewReader(`{"password":"should-not-leak"}`))
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/user/account/7", strings.NewReader(`{"password":"should-not-leak"}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
@@ -170,12 +170,12 @@ func TestMiddlewareGeneratesDistinctEventIDsForRepeatedRequestID(t *testing.T) {
 	enqueuer := &failingEnqueuer{}
 	router := gin.New()
 	router.Use(projectmiddleware.RequestID(), Middleware(slog.Default(), enqueuer))
-	router.PUT("/api/admin/v1/users/:id", func(context *gin.Context) {
+	router.PUT("/api/admin/v1/user/account/:id", func(context *gin.Context) {
 		context.JSON(http.StatusOK, gin.H{"code": 0, "data": nil, "message": "ok"})
 	})
 
 	for _, id := range []string{"7", "8"} {
-		request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/users/"+id, strings.NewReader(`{"username":"member"}`))
+		request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/user/account/"+id, strings.NewReader(`{"username":"member"}`))
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set(projectmiddleware.RequestIDHeader, "client-reused-request")
 		router.ServeHTTP(httptest.NewRecorder(), request)
@@ -198,12 +198,12 @@ func TestMiddlewareUsesPlatformIDFromAuthenticationContext(t *testing.T) {
 	enqueuer := &failingEnqueuer{}
 	router := gin.New()
 	router.Use(projectmiddleware.RequestID(), Middleware(slog.Default(), enqueuer))
-	router.PUT("/api/admin/v1/users/:id", func(context *gin.Context) {
+	router.PUT("/api/admin/v1/user/account/:id", func(context *gin.Context) {
 		projectmiddleware.SetAuthenticationLog(context, 17, "admin", 7, 11)
 		context.JSON(http.StatusOK, gin.H{"code": 0, "data": nil, "message": "ok"})
 	})
 
-	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/api/admin/v1/users/7", strings.NewReader(`{"username":"member"}`)))
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/api/admin/v1/user/account/7", strings.NewReader(`{"username":"member"}`)))
 
 	if len(enqueuer.payloads) != 1 {
 		t.Fatalf("payload count = %d, want 1", len(enqueuer.payloads))
@@ -245,7 +245,7 @@ func TestSummaryWriterBoundsCapturedResponse(t *testing.T) {
 func TestReadRequestSummaryMarksLargeBodyAndPreservesRequest(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	original := []byte(`{"visible":"` + strings.Repeat("x", maxSummaryBytes) + `"}`)
-	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/users/7", bytes.NewReader(original))
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/user/account/7", bytes.NewReader(original))
 	context, _ := gin.CreateTestContext(httptest.NewRecorder())
 	context.Request = request
 
@@ -267,10 +267,10 @@ func TestMiddlewareSanitizesCapturedResponse(t *testing.T) {
 	enqueuer := &failingEnqueuer{}
 	router := gin.New()
 	router.Use(projectmiddleware.RequestID(), Middleware(slog.Default(), enqueuer))
-	router.PUT("/api/admin/v1/users/:id", func(context *gin.Context) {
+	router.PUT("/api/admin/v1/user/account/:id", func(context *gin.Context) {
 		context.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"secretKey": "must-not-leak"}, "message": "ok"})
 	})
-	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/api/admin/v1/users/7", strings.NewReader(`{"username":"member"}`)))
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/api/admin/v1/user/account/7", strings.NewReader(`{"username":"member"}`)))
 
 	if len(enqueuer.payloads) != 1 {
 		t.Fatalf("payload count = %d", len(enqueuer.payloads))

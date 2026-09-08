@@ -72,7 +72,7 @@ func TestSendConcurrentChallengeUsesDatabaseUniqueness(t *testing.T) {
 	}
 
 	sender := &countingSender{}
-	service := NewService(NewRepository(db), nil, sender, nil, nil, nil)
+	service := NewService(NewRepository(db), nil, sender, nil, limiterStub{allowed: true}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
 	in := BusinessSendInput{PlatformID: 1, ChallengeID: "challenge-1", Scene: SceneLogin, ToEmail: "user@example.com", Variables: map[string]string{"code": "123456", "ttl_minutes": "10"}}
 	start := make(chan struct{})
 	results := make(chan struct {
@@ -145,7 +145,7 @@ func TestPrepareEmailVerifyCodeTwoServicesShareRedisRateWindow(t *testing.T) {
 	requests := businessLimitRequests(catalog, platformID, SceneLogin, email, clientIP)
 	keys := make([]string, 0, len(requests))
 	for _, request := range requests {
-		keys = append(keys, request.Key)
+		keys = append(keys, "rate:"+request.Key)
 	}
 	if err := firstClient.DeleteMany(context.Background(), keys); err != nil {
 		t.Fatal(err)
@@ -156,12 +156,31 @@ func TestPrepareEmailVerifyCodeTwoServicesShareRedisRateWindow(t *testing.T) {
 	if err != nil || first.TTLMinutes != 5 || first.ResendAfterSeconds != 1 {
 		t.Fatalf("first preparation = %+v, %v", first, err)
 	}
+	input.Scene = SceneForget
 	if _, err := secondService.PrepareEmailVerifyCode(context.Background(), input); err == nil {
 		t.Fatal("second Mail service bypassed the shared Redis rate window")
 	} else {
 		assertApplicationError(t, err, http.StatusTooManyRequests, apperror.CodeRateLimited)
 	}
 
+	adminInput := validAdminTestInput()
+	adminInput.ToEmail = email
+	if _, err := secondService.TestForPlatform(context.Background(), platformID, adminInput); err == nil {
+		t.Fatal("admin test bypassed shared scene quota")
+	} else {
+		assertApplicationError(t, err, http.StatusTooManyRequests, apperror.CodeRateLimited)
+	}
+	otherPlatform := input
+	otherPlatform.PlatformID++
+	otherRequests := businessLimitRequests(catalog, otherPlatform.PlatformID, SceneForget, email, clientIP)
+	t.Cleanup(func() {
+		for _, request := range otherRequests {
+			_ = firstClient.Delete(context.Background(), "rate:"+request.Key)
+		}
+	})
+	if _, err := secondService.PrepareEmailVerifyCode(context.Background(), otherPlatform); err != nil {
+		t.Fatalf("quota leaked across platforms: %v", err)
+	}
 	time.Sleep(1100 * time.Millisecond)
 	second, err := secondService.PrepareEmailVerifyCode(context.Background(), input)
 	if err != nil || second.ResendAfterSeconds != 1 {

@@ -47,7 +47,7 @@ func TestUpdateRateLimitPolicyLocksAllRowsAndIncrementsRevision(t *testing.T) {
 	}
 
 	catalogAgain, err := repository.UpdateRateLimitPolicy(ctx, RateLimitPolicyInput{
-		Key: "business_ip_minute", Limit: 11, WindowSeconds: 60,
+		Key: "business_email_10m", Limit: 11, WindowSeconds: 60,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +55,7 @@ func TestUpdateRateLimitPolicyLocksAllRowsAndIncrementsRevision(t *testing.T) {
 	if catalogAgain.Version != 3 {
 		t.Fatalf("version after second update = %d, want 3", catalogAgain.Version)
 	}
-	if updated := findPolicy(t, catalogAgain.Policies, "business_ip_minute"); updated.Limit != 11 || updated.WindowSeconds != 60 {
+	if updated := findPolicy(t, catalogAgain.Policies, "business_email_10m"); updated.Limit != 11 || updated.WindowSeconds != 60 {
 		t.Fatalf("second update row = %+v", updated)
 	}
 
@@ -199,13 +199,8 @@ func openMailRepositoryDatabase(t *testing.T) (*gorm.DB, context.Context) {
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 		INSERT INTO message_mail_rate_limit_policy (policy_key, mode, dimension, limit_count, window_seconds, revision) VALUES
-			('business_email_minute', 'business', 'platform_scene_email', 1, 60, 1),
-			('business_email_10m', 'business', 'platform_scene_email', 5, 600, 1),
-			('business_ip_minute', 'business', 'platform_ip', 10, 60, 1),
-			('business_scene_minute', 'business', 'platform_scene', 30, 60, 1),
-			('admin_test_user_10m', 'admin_test', 'admin_user', 5, 600, 1),
-			('admin_test_ip_minute', 'admin_test', 'ip', 10, 60, 1),
-			('admin_test_email_10m', 'admin_test', 'email', 3, 600, 1);
+			('business_email_minute', 'business', 'platform_email', 1, 60, 1),
+			('business_email_10m', 'business', 'platform_email', 5, 600, 1);
 	`).Error; err != nil {
 		t.Fatal(err)
 	}

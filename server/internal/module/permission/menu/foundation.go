@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"admin/server/internal/module/auth/platform"
+	"admin/server/internal/module/permission/authplatform"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/yesno"
 )
@@ -27,7 +27,7 @@ type FoundationDefinition struct {
 }
 
 func IsProtectedCode(code string) bool {
-	return code == "access" || code == PermissionView || code == PermissionCreate ||
+	return code == "permission" || code == "access" || code == PermissionView || code == PermissionCreate ||
 		code == PermissionUpdate || code == PermissionDelete || code == PermissionRebuildAccessCache
 }
 

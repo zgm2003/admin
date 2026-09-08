@@ -1,8 +1,8 @@
 package operationlog
 
 const (
-	PermissionView = "system:operation-log:view"
-	PermissionList = "system:operation-log:list"
-	TaskType       = "system:operation-log:v2"
+	PermissionView = "system:operationlog:view"
+	PermissionList = "system:operationlog:list"
+	TaskType       = "system:operationlog:v2"
 	LegacyTaskType = "audit:operation-log:v2"
 )

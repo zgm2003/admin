@@ -197,7 +197,7 @@ describe('createRequestClient', () => {
     const client = createRequestClient('http://localhost:16301')
 
     await expect(
-      client.post('/api/admin/v1/mail/test', undefined, {
+      client.post('/api/admin/v1/message/mail/test', undefined, {
         adapter: failureAdapter(403, {
           code: 18000,
           data: null,
@@ -215,7 +215,12 @@ describe('createRequestClient', () => {
         refreshed = true
         return successResponse(config, {
           code: 0,
-          data: { accessToken: 'new-token', expiresIn: 900, isNewUser: false, passwordSetRequired: false },
+          data: {
+            accessToken: 'new-token',
+            expiresIn: 900,
+            isNewUser: false,
+            passwordSetRequired: false,
+          },
           message: 'ok',
         })
       }
@@ -292,7 +297,12 @@ describe('createRequestClient', () => {
         refreshed = true
         return successResponse(config, {
           code: 0,
-          data: { accessToken: 'new-token', expiresIn: 900, isNewUser: false, passwordSetRequired: false },
+          data: {
+            accessToken: 'new-token',
+            expiresIn: 900,
+            isNewUser: false,
+            passwordSetRequired: false,
+          },
           message: 'ok',
         })
       }
@@ -316,7 +326,12 @@ describe('createRequestClient', () => {
         refreshed = true
         return successResponse(config, {
           code: 0,
-          data: { accessToken: 'new-token', expiresIn: 900, isNewUser: false, passwordSetRequired: false },
+          data: {
+            accessToken: 'new-token',
+            expiresIn: 900,
+            isNewUser: false,
+            passwordSetRequired: false,
+          },
           message: 'ok',
         })
       }
@@ -382,7 +397,12 @@ describe('createRequestClient', () => {
       if (config.url === '/api/v1/auth/refresh') {
         return successResponse(config, {
           code: 0,
-          data: { accessToken: 'new-token', expiresIn: 900, isNewUser: false, passwordSetRequired: false },
+          data: {
+            accessToken: 'new-token',
+            expiresIn: 900,
+            isNewUser: false,
+            passwordSetRequired: false,
+          },
           message: 'ok',
         })
       }
@@ -411,7 +431,12 @@ describe('createRequestClient', () => {
 
   it('sets anonymous after a refresh 401', async () => {
     const store = useAuthStore(pinia)
-    store.setCredential({ accessToken: 'expired', expiresIn: 900, isNewUser: false, passwordSetRequired: false })
+    store.setCredential({
+      accessToken: 'expired',
+      expiresIn: 900,
+      isNewUser: false,
+      passwordSetRequired: false,
+    })
     const adapter: AxiosAdapter = async (config) => {
       throw apiFailure(config, 401, 10002, '未登录或登录已失效')
     }

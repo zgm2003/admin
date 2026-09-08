@@ -23,7 +23,7 @@ const maxSummaryBytes = 32 * 1024
 // request-summary fields for routes whose business key would otherwise be
 // masked by the global sanitizer (for example the literal "key" field name).
 var routeParamSummaryAliases = map[string]map[string]string{
-	http.MethodPut + " /api/admin/v1/mail/rate-limit-policies/:key": {"key": "policyRef"},
+	http.MethodPut + " /api/admin/v1/message/mail/rate-limit-policy/:key": {"key": "policyRef"},
 }
 
 type TaskPayload struct {

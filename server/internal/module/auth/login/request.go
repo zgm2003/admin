@@ -2,7 +2,7 @@ package auth
 
 import (
 	"admin/server/internal/module/auth/client"
-	authplatform "admin/server/internal/module/auth/platform"
+	authplatform "admin/server/internal/module/permission/authplatform"
 )
 
 type RegisterInput struct {

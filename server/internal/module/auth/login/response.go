@@ -3,7 +3,7 @@ package auth
 import (
 	"time"
 
-	authplatform "admin/server/internal/module/auth/platform"
+	authplatform "admin/server/internal/module/permission/authplatform"
 )
 
 type Registered struct {

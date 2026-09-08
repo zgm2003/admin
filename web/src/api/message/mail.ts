@@ -399,64 +399,72 @@ function parseMailRuleStatus(value: unknown): { id: number; isEnabled: YesNo } {
 }
 
 export function getMailConfig() {
-  return request<unknown>({ method: 'GET', url: '/api/admin/v1/mail/config' }).then(parseMailConfig)
+  return request<unknown>({ method: 'GET', url: '/api/admin/v1/message/mail/config' }).then(
+    parseMailConfig,
+  )
 }
 export function saveMailConfig(data: MailConfigInput) {
-  return request<unknown>({ method: 'PUT', url: '/api/admin/v1/mail/config', data }).then(
+  return request<unknown>({ method: 'PUT', url: '/api/admin/v1/message/mail/config', data }).then(
     parseMailConfig,
   )
 }
 export async function deleteMailConfig(): Promise<Record<string, never>> {
   return expectEmptyObject(
-    await request<unknown>({ method: 'DELETE', url: '/api/admin/v1/mail/config' }),
+    await request<unknown>({ method: 'DELETE', url: '/api/admin/v1/message/mail/config' }),
     'mail config delete result',
   )
 }
 export function sendMailTest(data: MailTestInput): Promise<MailTestResult> {
-  return request<unknown>({ method: 'POST', url: '/api/admin/v1/mail/test', data }).then(
+  return request<unknown>({ method: 'POST', url: '/api/admin/v1/message/mail/test', data }).then(
     parseMailTestResult,
   )
 }
 export function listMailTemplates() {
-  return request<unknown>({ method: 'GET', url: '/api/admin/v1/mail/templates' }).then((value) => {
-    if (!Array.isArray(value)) throw new ProtocolError('mail templates response is invalid')
-    return value.map(parseMailTemplate)
-  })
+  return request<unknown>({ method: 'GET', url: '/api/admin/v1/message/mail/template' }).then(
+    (value) => {
+      if (!Array.isArray(value)) throw new ProtocolError('mail templates response is invalid')
+      return value.map(parseMailTemplate)
+    },
+  )
 }
 export function updateMailTemplate(id: number, data: MailTemplateInput) {
-  return request<unknown>({ method: 'PUT', url: `/api/admin/v1/mail/templates/${id}`, data }).then(
-    (value) => expectEmptyObject(value, 'mail template update result'),
-  )
+  return request<unknown>({
+    method: 'PUT',
+    url: `/api/admin/v1/message/mail/template/${id}`,
+    data,
+  }).then((value) => expectEmptyObject(value, 'mail template update result'))
 }
 export function updateMailTemplateStatus(id: number, isEnabled: YesNo) {
   return request<unknown>({
     method: 'PATCH',
-    url: `/api/admin/v1/mail/templates/${id}/status`,
+    url: `/api/admin/v1/message/mail/template/${id}/status`,
     data: { isEnabled },
   }).then(parseMailTemplateStatus)
 }
 export function listMailLogs(params: { page: number; pageSize: number }) {
-  return request<unknown>({ method: 'GET', url: '/api/admin/v1/mail/logs', params }).then(
+  return request<unknown>({ method: 'GET', url: '/api/admin/v1/message/mail/log', params }).then(
     parseMailLogPage,
   )
 }
 export function getMailLogDetail(id: number) {
-  return request<unknown>({ method: 'GET', url: `/api/admin/v1/mail/logs/${id}` }).then(
+  return request<unknown>({ method: 'GET', url: `/api/admin/v1/message/mail/log/${id}` }).then(
     parseMailLogDetail,
   )
 }
 export function deleteMailLog(id: number): Promise<Record<string, never>> {
-  return request<unknown>({ method: 'DELETE', url: `/api/admin/v1/mail/logs/${id}` }).then(
+  return request<unknown>({ method: 'DELETE', url: `/api/admin/v1/message/mail/log/${id}` }).then(
     (value) => expectEmptyObject(value, 'mail log delete result'),
   )
 }
 export function deleteMailLogs(ids: number[]): Promise<Record<string, never>> {
-  return request<unknown>({ method: 'DELETE', url: '/api/admin/v1/mail/logs', data: ids }).then(
-    (value) => expectEmptyObject(value, 'mail logs delete result'),
-  )
+  return request<unknown>({
+    method: 'DELETE',
+    url: '/api/admin/v1/message/mail/log',
+    data: ids,
+  }).then((value) => expectEmptyObject(value, 'mail logs delete result'))
 }
 export function listMailRules() {
-  return request<unknown>({ method: 'GET', url: '/api/admin/v1/mail/recipient-rules' }).then(
+  return request<unknown>({ method: 'GET', url: '/api/admin/v1/message/mail/recipient-rule' }).then(
     (value) => {
       if (!Array.isArray(value)) throw new ProtocolError('mail recipient rules response is invalid')
       return value.map(parseMailRule)
@@ -464,34 +472,36 @@ export function listMailRules() {
   )
 }
 export function createMailRule(data: MailRuleInput): Promise<{ id: number }> {
-  return request<unknown>({ method: 'POST', url: '/api/admin/v1/mail/recipient-rules', data }).then(
-    (value) => expectId(value, 'mail rule create result'),
-  )
+  return request<unknown>({
+    method: 'POST',
+    url: '/api/admin/v1/message/mail/recipient-rule',
+    data,
+  }).then((value) => expectId(value, 'mail rule create result'))
 }
 export function updateMailRule(id: number, data: MailRuleInput) {
   return request<unknown>({
     method: 'PUT',
-    url: `/api/admin/v1/mail/recipient-rules/${id}`,
+    url: `/api/admin/v1/message/mail/recipient-rule/${id}`,
     data,
   }).then((value) => expectEmptyObject(value, 'mail rule update result'))
 }
 export function updateMailRuleStatus(id: number, isEnabled: YesNo) {
   return request<unknown>({
     method: 'PATCH',
-    url: `/api/admin/v1/mail/recipient-rules/${id}/status`,
+    url: `/api/admin/v1/message/mail/recipient-rule/${id}/status`,
     data: { isEnabled },
   }).then(parseMailRuleStatus)
 }
 export function deleteMailRule(id: number): Promise<Record<string, never>> {
   return request<unknown>({
     method: 'DELETE',
-    url: `/api/admin/v1/mail/recipient-rules/${id}`,
+    url: `/api/admin/v1/message/mail/recipient-rule/${id}`,
   }).then((value) => expectEmptyObject(value, 'mail rule delete result'))
 }
 
 export interface MailRateLimitPolicy {
   key: string
-  mode: 'business' | 'admin_test'
+  mode: 'business'
   dimension: string
   limit: number
   windowSeconds: number
@@ -510,27 +520,14 @@ export interface MailRateLimitPolicyInput {
   windowSeconds: number
 }
 
-const rateLimitPolicyKeys = [
-  'business_email_minute',
-  'business_email_10m',
-  'business_ip_minute',
-  'business_scene_minute',
-  'admin_test_user_10m',
-  'admin_test_ip_minute',
-  'admin_test_email_10m',
-] as const
+const rateLimitPolicyKeys = ['business_email_minute', 'business_email_10m'] as const
 const rateLimitPolicyKeySet = new Set<string>(rateLimitPolicyKeys)
 const rateLimitPolicyMetadata: Record<
   (typeof rateLimitPolicyKeys)[number],
   { mode: MailRateLimitPolicy['mode']; dimension: string }
 > = {
-  business_email_minute: { mode: 'business', dimension: 'platform_scene_email' },
-  business_email_10m: { mode: 'business', dimension: 'platform_scene_email' },
-  business_ip_minute: { mode: 'business', dimension: 'platform_ip' },
-  business_scene_minute: { mode: 'business', dimension: 'platform_scene' },
-  admin_test_user_10m: { mode: 'admin_test', dimension: 'admin_user' },
-  admin_test_ip_minute: { mode: 'admin_test', dimension: 'ip' },
-  admin_test_email_10m: { mode: 'admin_test', dimension: 'email' },
+  business_email_minute: { mode: 'business', dimension: 'platform_email' },
+  business_email_10m: { mode: 'business', dimension: 'platform_email' },
 }
 
 export function parseMailRateLimitPolicy(value: unknown): MailRateLimitPolicy {
@@ -544,7 +541,7 @@ export function parseMailRateLimitPolicy(value: unknown): MailRateLimitPolicy {
     throw new ProtocolError('mail rate limit policy.key is unknown')
   }
   const mode = expectString(data.mode, 'mail rate limit policy.mode')
-  if (mode !== 'business' && mode !== 'admin_test') {
+  if (mode !== 'business') {
     throw new ProtocolError('mail rate limit policy.mode is invalid')
   }
   const dimension = expectString(data.dimension, 'mail rate limit policy.dimension')
@@ -605,9 +602,10 @@ export function parseMailRateLimitUpdateResult(
 }
 
 export function listMailRateLimitPolicies(): Promise<MailRateLimitSnapshot> {
-  return request<unknown>({ method: 'GET', url: '/api/admin/v1/mail/rate-limit-policies' }).then(
-    parseMailRateLimitSnapshot,
-  )
+  return request<unknown>({
+    method: 'GET',
+    url: '/api/admin/v1/message/mail/rate-limit-policy',
+  }).then(parseMailRateLimitSnapshot)
 }
 
 export function updateMailRateLimitPolicy(
@@ -616,7 +614,7 @@ export function updateMailRateLimitPolicy(
 ): Promise<MailRateLimitUpdateResult> {
   return request<unknown>({
     method: 'PUT',
-    url: `/api/admin/v1/mail/rate-limit-policies/${encodeURIComponent(key)}`,
+    url: `/api/admin/v1/message/mail/rate-limit-policy/${encodeURIComponent(key)}`,
     data,
   }).then((value) => parseMailRateLimitUpdateResult(value, key))
 }

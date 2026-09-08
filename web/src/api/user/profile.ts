@@ -32,7 +32,7 @@ export interface ChangePasswordInput {
 
 export async function getAccountProfile(): Promise<AccountProfile> {
   return parseAccountProfile(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/account/profile' }),
+    await request<unknown>({ method: 'GET', url: '/api/admin/v1/user/profile' }),
   )
 }
 
@@ -40,7 +40,7 @@ export async function updateAccountProfile(
   input: UpdateAccountProfileInput,
 ): Promise<UpdateAccountProfileResult> {
   return parseUpdatedAccountProfile(
-    await request<unknown>({ method: 'PUT', url: '/api/admin/v1/account/profile', data: input }),
+    await request<unknown>({ method: 'PUT', url: '/api/admin/v1/user/profile', data: input }),
   )
 }
 
@@ -48,7 +48,7 @@ export async function changePassword(input: ChangePasswordInput): Promise<void> 
   expectEmptyObject(
     await request<unknown>({
       method: 'POST',
-      url: '/api/admin/v1/account/password',
+      url: '/api/admin/v1/user/password',
       data: input,
     }),
     'change password result',
@@ -64,7 +64,7 @@ export async function setPassword(input: SetPasswordInput): Promise<void> {
   expectEmptyObject(
     await request<unknown>({
       method: 'POST',
-      url: '/api/admin/v1/account/password/set',
+      url: '/api/admin/v1/user/password/set',
       data: input,
     }),
     'set password result',

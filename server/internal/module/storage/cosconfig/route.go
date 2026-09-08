@@ -6,15 +6,15 @@ const (
 	PermissionView   = "storage:object:view"
 	PermissionList   = "storage:object:list"
 	PermissionDetail = "storage:object:detail"
-	PermissionCreate = "storage:cos-config:create"
-	PermissionUpdate = "storage:cos-config:update"
-	PermissionStatus = "storage:cos-config:status"
-	PermissionTest   = "storage:cos-config:test"
-	PermissionDelete = "storage:cos-config:delete"
+	PermissionCreate = "storage:cosconfig:create"
+	PermissionUpdate = "storage:cosconfig:update"
+	PermissionStatus = "storage:cosconfig:status"
+	PermissionTest   = "storage:cosconfig:test"
+	PermissionDelete = "storage:cosconfig:delete"
 )
 
 func RegisterRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, req func(string) gin.HandlerFunc) {
-	g := r.Group("/storage/cos-configs")
+	g := r.Group("/storage/cosconfig")
 	g.GET("", auth, req(PermissionList), h.List)
 	g.POST("", auth, req(PermissionCreate), h.Create)
 	g.GET("/:id", auth, req(PermissionDetail), h.Get)

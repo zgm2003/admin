@@ -3,7 +3,7 @@ package uploadrule
 import "github.com/gin-gonic/gin"
 
 func RegisterRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, req func(string) gin.HandlerFunc) {
-	g := r.Group("/storage/upload-rules")
+	g := r.Group("/storage/uploadrule")
 	g.GET("", auth, req(PermissionList), h.List)
 	g.GET("/page-init", auth, req(PermissionList), h.PageInit)
 	g.POST("", auth, req(PermissionCreate), h.Create)
@@ -14,6 +14,6 @@ func RegisterRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, req fu
 }
 
 func RegisterCredentialRoute(r *gin.RouterGroup, h *Handler, authMiddleware gin.HandlerFunc, req func(string) gin.HandlerFunc) {
-	r.POST("/storage/upload-credentials", authMiddleware, req("storage:object:upload"), h.Credentials)
+	r.POST("/storage/upload-credential", authMiddleware, req("storage:object:upload"), h.Credentials)
 	r.POST("/storage/object-url", authMiddleware, req("storage:object:upload"), h.ObjectURL)
 }

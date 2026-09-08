@@ -3,6 +3,51 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## 本轮交付状态（2026-09-08，优先于下方历史记录）
+
+- 最新归属修正已落实到代码：前后端管理模块 `permission/authplatform`，Model 映射
+  `permission_auth_platform`，管理 URL `/api/admin/v1/permission/authplatform`、权限码
+  `permission:authplatform:*`、导航键 `navigation.permissionAuthplatform`、页面文案 `permission.authplatform.*`。
+  `auth/login`、公共 `/api/v1/auth/policy` 与现有平台策略 Redis key 不变；不把前端客户端平台常量
+  `src/auth/platform.ts` 误当成管理模块。业务表尚未改名，现状仍为 `auth_platform`。
+- 当前 forward migration 已同步原位改表、约束/索引/序列改名、页面路径和权限码转换；隔离 PostgreSQL
+  验证跨平台 ID、外键、序列绑定与原有授权不变、重复执行和后续冲突整体回滚。必须排空旧 API、Worker
+  及维护脚本后，由维护者执行迁移，再启用新版本。此脚本包含前一轮邮件两策略转换，不单独跳过其中步骤。
+- Agent/三个 Skill 统一为“先确认业务归属并校正后端，再统一各层”，不再以现有后端目录自动推断归属。
+- 认证平台归属调整验证：`go fmt ./...`、`go vet ./...`、`go build ./...`、
+  `go test -p 1 ./... -count=1` 全部通过；补充的原位改表后失败回滚测试用
+  `go test ./internal/architecture -count=1` 通过。`go test -race -p 1 ./internal/module/permission/authplatform ./internal/module/auth/login -count=1`
+  两包完整通过。IDE build 无错误，三个 Skill validator 通过。
+- 此次前端 `pnpm lint`、`pnpm check:architecture`、`pnpm build` 通过；全量 Vitest 为 470/471 通过，
+  会话页第一项超过默认 5 秒（全量下 8272ms），并非断言失败。使用原超时独立复跑
+  `pnpm vitest run tests/views/user/session/index.test.ts --pool=threads --maxWorkers=1 --reporter=verbose`，
+  6/6 通过，原超时项 1230ms。未修改测试超时；未将本次全量记录标为全绿。
+- 当前依据仅为维护者本次最终决策；下方旧日期记录中的 plan 链接、7 条邮件策略、固定 60 秒和旧路径
+  均为历史执行记录，不是当前契约，不恢复已经删除的 plan/spec。
+- 已实现：首次设密条件写入与并发单胜者、重置密码撤销会话、forget readiness 失效、refresh 设密标记；
+  后端分层归位及 AST 门禁；Views/API/权限/i18n 按 user 等业务域和单数资源统一；三个 Skill 同步。
+- 邮件实现仅两条平台+规范化邮箱共享策略，覆盖业务场景与管理测试；TTL/次数/窗口来自 Mail。
+  旧场景额度按 GCRA 剩余债务原子归并，任一窗口拒绝不扣本次请求，损坏状态不产生部分写入。
+- 业务数据库迁移尚未执行：见 `docs/database/2026-09-08-module-naming-mail-policy.sql`。
+  已在隔离 PostgreSQL schema 验证幂等、跨平台 ID/授权保留、次数保留和编码冲突整体回滚。
+  必须排空旧 API 后迁移并统一部署，不能新旧版本混跑；不清库、不重置旧 Redis 邮箱额度。
+- 未闭环的架构容量项：Access/Auth 正常 missing 的跨实例回源上限；菜单修改时全用户收集、锁与失效开销。
+  Redis error/corrupt 路径现已显式失败且零故障回源，但这不等于冷启动或百万用户写路径已验收。
+- 交互待核验：发码成功后的前端倒计时仍使用 Mail 短窗口长度，多次额度配置下可能比服务端可重发时间保守；
+  没有新增 Auth 时间配置，但尚未完成按剩余额度返回精确可重发时间的契约。
+- 上轮实际验证（认证平台归属调整前）：`go fmt ./...`、`go vet ./...`、`go build ./...`、第二轮
+  `go test -p 1 ./... -count=1` 全部通过；随后新增的迁移冲突回滚测试独立通过。
+  `pnpm vitest run --pool=threads --maxWorkers=1 --reporter=verbose` 65 文件/471 项全部通过；
+  `pnpm lint`、`pnpm check:architecture`、`pnpm build`（含类型检查）通过，三个 Skill validator 通过。
+  首次前端全量运行约九分钟无单文件结果后已停止，以上是重新运行的最终结果。
+- `git diff --check` 通过；暂存区 `git diff --cached --check` 仍报 role-view.ts 末尾空行，工作区版本已修正，
+  未修改其他会话的暂存状态。保留既有 i18n flatten 警告及构建大包提示；未执行浏览器业务端到端验收。
+  现有开发服务 `http://localhost:16300` HTTP 200，但业务库未迁移，不能据此宣称新版菜单已联通。
+  上述验证对应当前代码，不覆盖刚修正的认证平台业务归属；未 commit 或执行业务库迁移。
+- 当前环境已具备 GCC 且 `CGO_ENABLED=1`。本轮 `go test -race -p 1` 对 auth/login、user/account、
+  message/mail、permission/access 使用 `Test.*(Concurrent|TwoInstances|TwoServices|FirstPassword|SetPassword|Fault|RedisFailure|Corrupt)`
+  筛选的定向测试四包通过；未跑全仓 race。下方旧记录中的无编译器阻塞已过时。
+
 ## 当前总目标
 
 | 项目 | 内容 |
@@ -120,20 +165,31 @@
 
 ## 当前工作
 
-### 当前优先工作：密码契约兜底（2026-09-08）
+### 当前优先工作：统一命名、邮件最高规则与后端维护（2026-09-08）
 
 以下条目是当前执行入口；后文 `auth-platform-login-types` 与 TTL 收口条目保留前置工作的记录，不代表本轮仍需重新实施。
 
 | 项目 | 内容 |
 | --- | --- |
 | 目标 | `password-recovery-first-set`：按现有独立契约兜底找回密码和首次设置密码，先完成架构与行为收口 |
-| 计划 | `docs/agent/plans/2026-09-07-password-recovery-first-set-contract.md`；该契约标明属于 P0 认证与权限收口，前置为邮箱验证码 TTL/重发收口 |
-| 状态 | 已有未提交实现，尚未完成交付验收；技术方案讨论与定向审查中，不视为已完成 |
+| 决策来源 | 维护者本次对话的最终方案；旧 plan/spec 已删除，不恢复、不作为当前依据 |
+| 状态 | 方案已确认，实施及全量回归中；尚未宣称整体交付完成 |
 | 优先级 | 后端 Handler -> Service -> Repository -> Model 与前端 View -> API -> Request 边界优先；UI 视觉统一整改延期，必要的协议及交互正确性仍需验证 |
 | 兜底范围 | 认证接口与测试替身一致性、首次设密原子条件写入、forget readiness 失效、passwordSetRequired 生命周期、验证码消费与会话撤销的并发/部分失败验证 |
 | 已定契约 | 所有发邮件场景（包括管理测试）服从 Mail 管理配置；邮箱额度按平台+规范化邮箱共享，验证码内容按 scene 隔离。60 秒/5 分钟不是硬规则，不新增 Auth TTL/cooldown。存量 Redis 窗口必须衔接，不能直接换 key 重置额度 |
 | 验收 | 保留重置后不自动登录、首次设密不强制拦截及保留会话的既定行为；定向行为测试、共享接口测试编译与构建通过；真实依赖验证和未运行项单独记录 |
-| 下一步 | 按失败测试 -> 最小修复 -> 验证推进密码兜底与后端架构维护；保留跨层业务命名映射。UI 改版不在本轮范围，未经验证不宣称整体收尾 |
+| 下一步 | 前端对齐后端 user 等业务域，所有资源使用单数；闭合 API/菜单/权限/i18n/测试。邮件只保留每分钟与每 10 分钟两条平台+邮箱策略，删除其他五条。UI 改版不在本轮范围 |
+
+本轮数据库迁移：`docs/database/2026-09-08-module-naming-mail-policy.sql`。已在真实 PostgreSQL 的隔离
+schema 上验证两次执行幂等、跨平台菜单改名、原菜单 ID/角色授权保留、access version 仅递增一次及邮件
+配置次数保留。尚未在业务 schema 执行，遵守维护者执行 forward migration 的规则。
+
+发布约束：停止并排空所有旧 API 实例后执行 SQL，再启动新版前后端；不能新旧版本混跑。Access snapshot
+使用 `authz:permission:v5:`，access state 使用 `authz:permission-state:v3:`，Mail policy 使用 v2，旧 key
+不回读、不全库清理。邮箱限流新 key 使用 `mail:send:email:v2:` / `email10:v2:`（Redis 实际带 `rate:`
+前缀），每次至多读取两组各四个已知旧场景 key，以 GCRA 剩余债务原子归并，拒绝请求不扣任一窗口。
+已删除的 IP/场景/管理员专属策略停止参与判断，旧专属 key 自然过期；它们不是新版邮箱策略的新额度来源。
+旧 key 无 hash tag，该跨 key 归并针对当前 standalone Redis；不支持直接迁至 Redis Cluster 后再归并。
 
 后端维护验收清单（本轮进行中）：跨层命名约束与三个 Skill；DTO/Handler/Service/Repository/Model/shared
 责任归位与自动检查；首次设密原子写入；邮件全场景共享策略与旧 Redis 衔接；readiness 全场景失效；

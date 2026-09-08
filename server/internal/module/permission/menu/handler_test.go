@@ -28,7 +28,7 @@ func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 			SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now,
 			IsProtected: true, Children: []menu.ManagedMenu{},
 		}}}}
-	recorder := serveMenuRequest(t, service, http.MethodGet, "/api/admin/v1/menus?platformId=1", nil)
+	recorder := serveMenuRequest(t, service, http.MethodGet, "/api/admin/v1/permission/menu?platformId=1", nil)
 	assertMenuEnvelope(t, recorder, http.StatusOK, 0)
 
 	var envelope map[string]json.RawMessage
@@ -79,10 +79,10 @@ func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 
 func TestMenuHandlerListRejectsInvalidPlatformQuery(t *testing.T) {
 	for _, path := range []string{
-		"/api/admin/v1/menus?platformId=0",
-		"/api/admin/v1/menus?platformId=abc",
-		"/api/admin/v1/menus?platformId=1&platformId=2",
-		"/api/admin/v1/menus?platformId=1&unknown=true",
+		"/api/admin/v1/permission/menu?platformId=0",
+		"/api/admin/v1/permission/menu?platformId=abc",
+		"/api/admin/v1/permission/menu?platformId=1&platformId=2",
+		"/api/admin/v1/permission/menu?platformId=1&unknown=true",
 	} {
 		service := &menuHTTPService{}
 		recorder := serveMenuRequest(t, service, http.MethodGet, path, nil)
@@ -96,7 +96,7 @@ func TestMenuHandlerListRejectsInvalidPlatformQuery(t *testing.T) {
 func TestMenuHandlerCreateRequiresEveryFieldAndExplicitNull(t *testing.T) {
 	valid := `{"platformId":2,"parentId":null,"menuType":"directory","name":"报表","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"lucide:folder","sortOrder":0,"isEnabled":0,"isHidden":0}`
 	service := &menuHTTPService{createID: 41}
-	recorder := serveMenuRequest(t, service, http.MethodPost, "/api/admin/v1/menus", []byte(valid))
+	recorder := serveMenuRequest(t, service, http.MethodPost, "/api/admin/v1/permission/menu", []byte(valid))
 	assertMenuEnvelope(t, recorder, http.StatusCreated, 0)
 	if service.createCalls != 1 || service.createInput.PlatformID != 2 || service.createInput.ParentID != nil || service.createInput.SortOrder != 0 || service.createInput.IsEnabled != yesno.No || service.createInput.IsHidden != yesno.No {
 		t.Fatalf("create input = %+v calls=%d", service.createInput, service.createCalls)
@@ -119,7 +119,7 @@ func TestMenuHandlerCreateRequiresEveryFieldAndExplicitNull(t *testing.T) {
 	for index, body := range invalidBodies {
 		t.Run(fmt.Sprintf("invalid-%d", index), func(t *testing.T) {
 			invalidService := &menuHTTPService{}
-			responseRecorder := serveMenuRequest(t, invalidService, http.MethodPost, "/api/admin/v1/menus", []byte(body))
+			responseRecorder := serveMenuRequest(t, invalidService, http.MethodPost, "/api/admin/v1/permission/menu", []byte(body))
 			assertMenuEnvelope(t, responseRecorder, http.StatusBadRequest, apperror.CodeInvalidRequest)
 			if invalidService.createCalls != 0 {
 				t.Fatal("invalid request reached Service")
@@ -131,21 +131,21 @@ func TestMenuHandlerCreateRequiresEveryFieldAndExplicitNull(t *testing.T) {
 func TestMenuHandlerUpdateStatusAndDeleteUseExactContracts(t *testing.T) {
 	service := &menuHTTPService{}
 	updateBody := []byte(`{"parentId":1,"menuType":"page","name":"报表列表","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0}`)
-	recorder := serveMenuRequest(t, service, http.MethodPut, "/api/admin/v1/menus/7", updateBody)
+	recorder := serveMenuRequest(t, service, http.MethodPut, "/api/admin/v1/permission/menu/7", updateBody)
 	assertMenuEnvelope(t, recorder, http.StatusOK, 0)
 	if service.updateID != 7 || service.updateInput.ParentID == nil || *service.updateInput.ParentID != 1 {
 		t.Fatalf("update = id %d input %+v", service.updateID, service.updateInput)
 	}
 	assertMutationData(t, recorder, map[string]float64{"id": 7})
 
-	recorder = serveMenuRequest(t, service, http.MethodPatch, "/api/admin/v1/menus/7/status", []byte(`{"isEnabled":0}`))
+	recorder = serveMenuRequest(t, service, http.MethodPatch, "/api/admin/v1/permission/menu/7/status", []byte(`{"isEnabled":0}`))
 	assertMenuEnvelope(t, recorder, http.StatusOK, 0)
 	if service.statusID != 7 || service.statusValue != yesno.No {
 		t.Fatalf("status = id %d value %d", service.statusID, service.statusValue)
 	}
 	assertMutationData(t, recorder, map[string]float64{"id": 7, "isEnabled": 0})
 
-	recorder = serveMenuRequest(t, service, http.MethodDelete, "/api/admin/v1/menus/7", nil)
+	recorder = serveMenuRequest(t, service, http.MethodDelete, "/api/admin/v1/permission/menu/7", nil)
 	assertMenuEnvelope(t, recorder, http.StatusOK, 0)
 	if service.deleteID != 7 {
 		t.Fatalf("delete id = %d", service.deleteID)
@@ -157,13 +157,13 @@ func TestMenuHandlerUpdateStatusAndDeleteUseExactContracts(t *testing.T) {
 		path   string
 		body   []byte
 	}{
-		{method: http.MethodPut, path: "/api/admin/v1/menus/0", body: updateBody},
-		{method: http.MethodPut, path: "/api/admin/v1/menus/7", body: []byte(`{"parentId":1,"menuType":"page","code":"forbidden","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0}`)},
-		{method: http.MethodPut, path: "/api/admin/v1/menus/7", body: []byte(`{"platformId":2,"parentId":1,"menuType":"page","name":"报表列表","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0}`)},
-		{method: http.MethodPut, path: "/api/admin/v1/menus/7", body: []byte(`{"parentId":1,"menuType":"page","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0,"isEnabled":1}`)},
-		{method: http.MethodPatch, path: "/api/admin/v1/menus/7/status", body: []byte(`{"isEnabled":2}`)},
-		{method: http.MethodPatch, path: "/api/admin/v1/menus/7/status", body: []byte(`{"isEnabled":0,"other":true}`)},
-		{method: http.MethodDelete, path: "/api/admin/v1/menus/7", body: []byte(`{}`)},
+		{method: http.MethodPut, path: "/api/admin/v1/permission/menu/0", body: updateBody},
+		{method: http.MethodPut, path: "/api/admin/v1/permission/menu/7", body: []byte(`{"parentId":1,"menuType":"page","code":"forbidden","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0}`)},
+		{method: http.MethodPut, path: "/api/admin/v1/permission/menu/7", body: []byte(`{"platformId":2,"parentId":1,"menuType":"page","name":"报表列表","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0}`)},
+		{method: http.MethodPut, path: "/api/admin/v1/permission/menu/7", body: []byte(`{"parentId":1,"menuType":"page","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0,"isEnabled":1}`)},
+		{method: http.MethodPatch, path: "/api/admin/v1/permission/menu/7/status", body: []byte(`{"isEnabled":2}`)},
+		{method: http.MethodPatch, path: "/api/admin/v1/permission/menu/7/status", body: []byte(`{"isEnabled":0,"other":true}`)},
+		{method: http.MethodDelete, path: "/api/admin/v1/permission/menu/7", body: []byte(`{}`)},
 	}
 	for index, request := range invalid {
 		t.Run(fmt.Sprintf("invalid-%d", index), func(t *testing.T) {
@@ -175,7 +175,7 @@ func TestMenuHandlerUpdateStatusAndDeleteUseExactContracts(t *testing.T) {
 
 func TestMenuHandlerRebuildsAccessCache(t *testing.T) {
 	service := &menuHTTPService{rebuildCount: 3}
-	recorder := serveMenuRequest(t, service, http.MethodPost, "/api/admin/v1/menus/access-cache/rebuild", nil)
+	recorder := serveMenuRequest(t, service, http.MethodPost, "/api/admin/v1/permission/menu/access-cache/rebuild", nil)
 	assertMenuEnvelope(t, recorder, http.StatusOK, 0)
 	if service.rebuildCalls != 1 {
 		t.Fatalf("rebuild calls = %d", service.rebuildCalls)
@@ -201,7 +201,7 @@ func TestMenuHandlerPreservesLocalizedServiceError(t *testing.T) {
 		MessageKey: "menu.parentDisabled", Params: map[string]string{"code": "reports"},
 		Cause: errors.New("internal detail"),
 	}}
-	recorder := serveMenuRequest(t, service, http.MethodGet, "/api/admin/v1/menus", nil)
+	recorder := serveMenuRequest(t, service, http.MethodGet, "/api/admin/v1/permission/menu", nil)
 	assertMenuEnvelope(t, recorder, http.StatusConflict, menu.CodeMenuParentDisabled)
 	var envelope struct {
 		Message string `json:"message"`
@@ -239,16 +239,16 @@ func TestMenuRoutesBindExactPermissionsInMiddlewareOrder(t *testing.T) {
 	_ = wantPermissions
 
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/menus", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/permission/menu", nil))
 	if recorder.Code != http.StatusOK || !reflect.DeepEqual(requestOrder, []string{"authenticate", "permission:" + menu.PermissionList}) {
 		t.Fatalf("request order = %v status=%d", requestOrder, recorder.Code)
 	}
 
 	wantRoutes := map[string]bool{
-		"GET /api/admin/v1/menus": false, "POST /api/admin/v1/menus": false,
-		"PUT /api/admin/v1/menus/:id": false, "PATCH /api/admin/v1/menus/:id/status": false,
-		"DELETE /api/admin/v1/menus/:id":                false,
-		"POST /api/admin/v1/menus/access-cache/rebuild": false,
+		"GET /api/admin/v1/permission/menu": false, "POST /api/admin/v1/permission/menu": false,
+		"PUT /api/admin/v1/permission/menu/:id": false, "PATCH /api/admin/v1/permission/menu/:id/status": false,
+		"DELETE /api/admin/v1/permission/menu/:id":                false,
+		"POST /api/admin/v1/permission/menu/access-cache/rebuild": false,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path
@@ -295,7 +295,7 @@ func TestMenuRoutesStopBeforeHandlerOnAuthenticationOrPermissionFailure(t *testi
 			router := gin.New()
 			menu.RegisterRoutes(router.Group("/api/admin/v1"), menu.NewHandler(service), test.auth, func(string) gin.HandlerFunc { return test.permission })
 			recorder := httptest.NewRecorder()
-			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/menus", nil))
+			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/permission/menu", nil))
 			assertMenuEnvelope(t, recorder, test.wantStatus, test.wantCode)
 			if service.listCalls != 0 {
 				t.Fatal("blocked request reached Handler Service")

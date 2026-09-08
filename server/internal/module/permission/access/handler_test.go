@@ -12,8 +12,8 @@ import (
 
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
-	authplatform "admin/server/internal/module/auth/platform"
 	"admin/server/internal/module/permission/access"
+	authplatform "admin/server/internal/module/permission/authplatform"
 	"admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"github.com/gin-gonic/gin"
@@ -26,11 +26,11 @@ func TestAccessHandlerReturnsClosedSnapshot(t *testing.T) {
 		RoleCodes: []string{"ai_tester", "registered_user"},
 		MenuTree: []permission.MenuNode{{
 			Code: "system", MenuType: permission.MenuDirectory, I18nKey: "navigation.system", IsHidden: 0, Children: []permission.MenuNode{{
-				Code: "account:user:view", MenuType: permission.MenuPage, Path: &pagePath, ComponentPath: &componentPath,
+				Code: "user:account:view", MenuType: permission.MenuPage, Path: &pagePath, ComponentPath: &componentPath,
 				I18nKey: "navigation.systemUsers", IsHidden: 1, Children: []permission.MenuNode{},
 			}},
 		}},
-		PermissionCodes: []string{"account:user:create", "account:user:view"},
+		PermissionCodes: []string{"user:account:create", "user:account:view"},
 	}}
 	recorder := serveAccessRoute(t, service, "Bearer token")
 
