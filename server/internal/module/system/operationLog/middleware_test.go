@@ -165,6 +165,34 @@ func TestMiddlewareKeepsBusinessStatusWhenEnqueueFails(t *testing.T) {
 	}
 }
 
+func TestMiddlewareCapturesRateLimitPlatformAndPolicyReferences(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	enqueuer := &failingEnqueuer{}
+	router := gin.New()
+	router.Use(Middleware(slog.Default(), enqueuer))
+	router.PUT("/api/admin/v1/message/mail/rate-limit-policy/:platformId/:key", func(context *gin.Context) {
+		context.JSON(http.StatusOK, gin.H{"code": 0, "data": nil, "message": "ok"})
+	})
+
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/message/mail/rate-limit-policy/17/business_email_minute", strings.NewReader(`{"limit":2,"windowSeconds":60}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(httptest.NewRecorder(), request)
+
+	if len(enqueuer.payloads) != 1 {
+		t.Fatalf("payload count=%d", len(enqueuer.payloads))
+	}
+	var summary map[string]any
+	if err := json.Unmarshal(enqueuer.payloads[0].RequestData, &summary); err != nil {
+		t.Fatal(err)
+	}
+	if summary["platformRef"] != "17" || summary["policyRef"] != "business_email_minute" || summary["limit"] != float64(2) {
+		t.Fatalf("request summary=%v", summary)
+	}
+	if _, leaked := summary["key"]; leaked {
+		t.Fatalf("sensitive key field leaked in request summary=%v", summary)
+	}
+}
+
 func TestMiddlewareGeneratesDistinctEventIDsForRepeatedRequestID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	enqueuer := &failingEnqueuer{}

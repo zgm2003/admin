@@ -2,6 +2,7 @@ package template
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
@@ -19,11 +20,22 @@ func (r *countingReadiness) Mutate(ctx context.Context, change func(context.Cont
 	return change(ctx)
 }
 
+type runtimeCoordinatorFunc func(context.Context, func(context.Context) error) error
+
+func (f runtimeCoordinatorFunc) Mutate(ctx context.Context, change func(context.Context) error) error {
+	return f(ctx, change)
+}
+
 func TestServiceUpdatesGlobalTemplateAndInvalidatesReadinessOnStatus(t *testing.T) {
 	database, ctx := openServiceDatabase(t)
 	repository := NewRepository(database)
 	readiness := &countingReadiness{}
 	service := NewService(repository, readiness)
+	runtimeInvalidations := 0
+	service.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context) error) error {
+		runtimeInvalidations++
+		return change(ctx)
+	}))
 
 	err := service.Update(ctx, 1, UpdateInput{
 		Scene: SceneLogin, Name: "Updated", Subject: "Updated subject", TencentTemplateID: 57999,
@@ -40,11 +52,14 @@ func TestServiceUpdatesGlobalTemplateAndInvalidatesReadinessOnStatus(t *testing.
 	if readiness.calls != 0 {
 		t.Fatalf("content-only update invalidated readiness %d times", readiness.calls)
 	}
+	if runtimeInvalidations != 1 {
+		t.Fatalf("content-only update invalidated runtime %d times", runtimeInvalidations)
+	}
 	if err := service.SetStatus(ctx, 1, yesno.No); err != nil {
 		t.Fatal(err)
 	}
 	updated, err = repository.Find(ctx, 1)
-	if err != nil || updated.IsEnabled != yesno.No || readiness.calls != 1 {
+	if err != nil || updated.IsEnabled != yesno.No || readiness.calls != 1 || runtimeInvalidations != 2 {
 		t.Fatalf("status=%d readiness=%d err=%v", updated.IsEnabled, readiness.calls, err)
 	}
 }
@@ -65,6 +80,27 @@ func TestVariableValidationRequiresFixedKeys(t *testing.T) {
 				t.Fatal("invalid variables accepted")
 			}
 		})
+	}
+}
+
+func TestServiceDoesNotUpdateWhenRuntimeInvalidationFails(t *testing.T) {
+	database, ctx := openServiceDatabase(t)
+	repository := NewRepository(database)
+	service := NewService(repository, &countingReadiness{})
+	service.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(context.Context, func(context.Context) error) error {
+		return errors.New("redis unavailable")
+	}))
+	err := service.Update(ctx, 1, UpdateInput{
+		Scene: SceneLogin, Name: "Must Not Persist", Subject: "Changed", TencentTemplateID: 57999,
+		Variables:        map[string]string{"code": "123456", "ttl_minutes": "5"},
+		ExampleVariables: map[string]string{"code": "654321", "ttl_minutes": "10"},
+	})
+	if err == nil {
+		t.Fatal("update succeeded while runtime invalidation failed")
+	}
+	stored, findErr := repository.Find(ctx, 1)
+	if findErr != nil || stored.Name != "Login" || stored.TencentTemplateID != 47941 {
+		t.Fatalf("stored template=%+v err=%v", stored, findErr)
 	}
 }
 

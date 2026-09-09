@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -20,6 +21,12 @@ func (passthroughReadiness) Mutate(ctx context.Context, change func(context.Cont
 	return change(ctx)
 }
 
+type runtimeCoordinatorFunc func(context.Context, func(context.Context) error) error
+
+func (f runtimeCoordinatorFunc) Mutate(ctx context.Context, change func(context.Context) error) error {
+	return f(ctx, change)
+}
+
 func TestServiceSavesOneGlobalConfigAndPreservesOmittedCredentials(t *testing.T) {
 	database, ctx := openServiceDatabase(t)
 	keys, err := secretkey.New(strings.Repeat("s", 64))
@@ -27,6 +34,7 @@ func TestServiceSavesOneGlobalConfigAndPreservesOmittedCredentials(t *testing.T)
 		t.Fatal(err)
 	}
 	service := NewService(NewRepository(database), keys, passthroughReadiness{})
+	service.SetRuntimeCoordinator(passthroughReadiness{})
 	input := Input{
 		SecretID: "secret-id", SecretKey: "secret-key", Region: "ap-guangzhou",
 		FromEmail: " Sender@Example.COM ", FromName: "Sender", TTLMinutes: 5, IsEnabled: yesno.Yes,
@@ -65,6 +73,29 @@ func TestNormalizeAddressRejectsDisplayName(t *testing.T) {
 	}
 	if value, err := normalizeAddress(" Admin@Example.COM "); err != nil || value != "admin@example.com" {
 		t.Fatalf("plain sender normalization = %q,%v", value, err)
+	}
+}
+
+func TestServiceDoesNotWriteWhenRuntimeInvalidationFails(t *testing.T) {
+	database, ctx := openServiceDatabase(t)
+	keys, err := secretkey.New(strings.Repeat("s", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(NewRepository(database), keys, passthroughReadiness{})
+	service.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(context.Context, func(context.Context) error) error {
+		return errors.New("redis unavailable")
+	}))
+	_, err = service.Save(ctx, Input{
+		SecretID: "secret-id", SecretKey: "secret-key", Region: "ap-guangzhou",
+		FromEmail: "sender@example.com", FromName: "Sender", TTLMinutes: 5, IsEnabled: yesno.Yes,
+	})
+	if err == nil {
+		t.Fatal("save succeeded while runtime invalidation failed")
+	}
+	var count int64
+	if queryErr := database.WithContext(ctx).Model(&Model{}).Count(&count).Error; queryErr != nil || count != 0 {
+		t.Fatalf("mail config rows=%d err=%v", count, queryErr)
 	}
 }
 

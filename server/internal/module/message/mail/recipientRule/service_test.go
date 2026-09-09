@@ -2,6 +2,7 @@ package recipientrule
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
@@ -12,9 +13,18 @@ import (
 	"gorm.io/gorm"
 )
 
+type runtimeCoordinatorFunc func(context.Context, func(context.Context) error) error
+
+func (f runtimeCoordinatorFunc) Mutate(ctx context.Context, change func(context.Context) error) error {
+	return f(ctx, change)
+}
+
 func TestServiceAppliesGlobalExactRuleBeforeDomainAndSupportsCRUD(t *testing.T) {
 	database, ctx := openServiceDatabase(t)
 	service := NewService(NewRepository(database))
+	service.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context) error) error {
+		return change(ctx)
+	}))
 	domainID, err := service.Create(ctx, Input{
 		Scope: ScopeDomain, Pattern: "example.com", Action: ActionDeny,
 		Name: "deny example", IsEnabled: yesno.Yes,
@@ -63,6 +73,24 @@ func TestNormalizeAndDomainBoundary(t *testing.T) {
 	}
 	if _, err = NormalizeRule(ScopeDomain, "-example.com"); err == nil {
 		t.Fatal("invalid domain accepted")
+	}
+}
+
+func TestServiceDoesNotCreateWhenRuntimeInvalidationFails(t *testing.T) {
+	database, ctx := openServiceDatabase(t)
+	service := NewService(NewRepository(database))
+	service.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(context.Context, func(context.Context) error) error {
+		return errors.New("redis unavailable")
+	}))
+	if _, err := service.Create(ctx, Input{
+		Scope: ScopeDomain, Pattern: "example.com", Action: ActionDeny,
+		Name: "deny example", IsEnabled: yesno.Yes,
+	}); err == nil {
+		t.Fatal("create succeeded while runtime invalidation failed")
+	}
+	var count int64
+	if err := database.WithContext(ctx).Model(&Model{}).Count(&count).Error; err != nil || count != 0 {
+		t.Fatalf("recipient rule rows=%d err=%v", count, err)
 	}
 }
 

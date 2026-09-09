@@ -17,13 +17,13 @@ import (
 )
 
 type Service struct {
-	repository         *Repository
-	readiness          ReadinessCoordinator
-	runtimeInvalidator func(context.Context) error
+	repository *Repository
+	readiness  ReadinessCoordinator
+	runtime    RuntimeCoordinator
 }
 
-func (s *Service) SetRuntimeInvalidator(invalidator func(context.Context) error) {
-	s.runtimeInvalidator = invalidator
+func (s *Service) SetRuntimeCoordinator(runtime RuntimeCoordinator) {
+	s.runtime = runtime
 }
 
 func NewService(repository *Repository, readiness ReadinessCoordinator) *Service {
@@ -67,14 +67,17 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 	if err != nil {
 		return apperror.InvalidRequest(err)
 	}
-	err = wrapRepository(s.repository.Update(ctx, id, map[string]any{
-		"name": input.Name, "subject": input.Subject, "tencent_template_id": input.TencentTemplateID,
-		"variables": variables, "example_variables": examples, "updated_at": time.Now().UTC(),
-	}))
-	if err != nil || s.runtimeInvalidator == nil {
-		return err
+	if s.runtime == nil {
+		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	return s.runtimeInvalidator(ctx)
+	err = s.runtime.Mutate(ctx, func(writeContext context.Context) error {
+		return s.repository.Update(writeContext, id, map[string]any{
+			"name": input.Name, "subject": input.Subject, "tencent_template_id": input.TencentTemplateID,
+			"variables": variables, "example_variables": examples, "updated_at": time.Now().UTC(),
+		})
+	})
+	err = wrapRepository(err)
+	return err
 }
 
 func (s *Service) SetStatus(ctx context.Context, id int64, enabled yesno.Value) error {
@@ -84,16 +87,18 @@ func (s *Service) SetStatus(ctx context.Context, id int64, enabled yesno.Value) 
 	if s.readiness == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("mail readiness coordinator unavailable"))
 	}
+	if s.runtime == nil {
+		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
+	}
 	err := s.readiness.Mutate(ctx, func(writeContext context.Context) error {
-		return s.repository.Update(writeContext, id, map[string]any{
-			"is_enabled": enabled, "updated_at": time.Now().UTC(),
+		return s.runtime.Mutate(writeContext, func(runtimeContext context.Context) error {
+			return s.repository.Update(runtimeContext, id, map[string]any{
+				"is_enabled": enabled, "updated_at": time.Now().UTC(),
+			})
 		})
 	})
 	if mapped := mapMutationError(err); mapped != nil {
 		return mapped
-	}
-	if s.runtimeInvalidator != nil {
-		return s.runtimeInvalidator(ctx)
 	}
 	return nil
 }

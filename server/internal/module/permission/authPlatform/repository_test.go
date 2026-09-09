@@ -12,6 +12,7 @@ import (
 
 	"admin/server/internal/database"
 	"admin/server/internal/module/auth/login"
+	ratelimitpolicy "admin/server/internal/module/message/mail/rateLimitPolicy"
 	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
 	user "admin/server/internal/module/user/account"
@@ -177,7 +178,7 @@ func testPlatform(code, name string, now time.Time) authplatform.Platform {
 
 func preparePlatformSessionSchema(t *testing.T, db *gorm.DB, ctx context.Context) {
 	t.Helper()
-	if err := database.AutoMigrate(ctx, db, &user.User{}, &auth.Session{}, &authplatform.Platform{}, &menu.Menu{}); err != nil {
+	if err := database.AutoMigrate(ctx, db, &user.User{}, &auth.Session{}, &authplatform.Platform{}, &menu.Menu{}, &ratelimitpolicy.Model{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := authplatform.EnsureSchema(ctx, db); err != nil {
@@ -193,6 +194,19 @@ func preparePlatformSessionSchema(t *testing.T, db *gorm.DB, ctx context.Context
 			t.Fatal(err)
 		}
 	}
+}
+
+func newPlatformLifecycleRepository(db *gorm.DB) *authplatform.Repository {
+	repository := authplatform.NewRepository(db)
+	repository.SetRateLimitPolicyLifecycle(
+		func(ctx context.Context, tx *gorm.DB, platformID int64) error {
+			return ratelimitpolicy.NewRepository(tx).ProvisionDefaults(ctx, platformID)
+		},
+		func(ctx context.Context, tx *gorm.DB, platformID int64) error {
+			return ratelimitpolicy.NewRepository(tx).DeleteForPlatform(ctx, platformID)
+		},
+	)
+	return repository
 }
 
 func createPlatformUser(t *testing.T, db *gorm.DB, ctx context.Context, prefix string) user.User {

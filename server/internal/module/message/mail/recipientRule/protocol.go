@@ -35,6 +35,10 @@ type Evaluator interface {
 	Evaluate(context.Context, string, SendMode) (Decision, error)
 }
 
+type RuntimeCoordinator interface {
+	Mutate(context.Context, func(context.Context) error) error
+}
+
 type Input struct {
 	Scope     string      `json:"scope"`
 	Pattern   string      `json:"pattern"`

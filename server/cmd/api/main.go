@@ -134,6 +134,15 @@ func run(logger *slog.Logger) error {
 	profileRepository := profile.NewRepository(postgres.GORM)
 	sessionRepository := usersession.NewRepository(postgres.GORM)
 	authPlatformRepository := authplatform.NewRepository(postgres.GORM)
+	mailRateLimitRepository := ratelimitpolicy.NewRepository(postgres.GORM)
+	authPlatformRepository.SetRateLimitPolicyLifecycle(
+		func(ctx context.Context, tx *gorm.DB, platformID int64) error {
+			return ratelimitpolicy.NewRepository(tx).ProvisionDefaults(ctx, platformID)
+		},
+		func(ctx context.Context, tx *gorm.DB, platformID int64) error {
+			return ratelimitpolicy.NewRepository(tx).DeleteForPlatform(ctx, platformID)
+		},
+	)
 	policyStore := authplatform.NewPolicyStore(redisClient)
 	authStateStore := authstate.NewStore(redisClient)
 	authInvalidator := authstate.NewInvalidator(authStateStore)
@@ -164,15 +173,6 @@ func run(logger *slog.Logger) error {
 	loginLogService := loginlog.NewService(loginlog.NewRepository(postgres.GORM))
 	mailStores := messagemail.NewStores(postgres.GORM)
 	mailLimiter := messagemail.NewRedisLimiter(redisClient.UniversalClient())
-	mailRateLimitRepository := ratelimitpolicy.NewRepository(postgres.GORM)
-	authPlatformRepository.SetRateLimitPolicyLifecycle(
-		func(ctx context.Context, tx *gorm.DB, platformID int64) error {
-			return ratelimitpolicy.NewRepository(tx).ProvisionDefaults(ctx, platformID)
-		},
-		func(ctx context.Context, tx *gorm.DB, platformID int64) error {
-			return ratelimitpolicy.NewRepository(tx).DeleteForPlatform(ctx, platformID)
-		},
-	)
 	mailRateLimitStore := ratelimitpolicy.NewStore(mailRateLimitRepository, redisClient)
 	mailRateLimitService := ratelimitpolicy.NewService(mailRateLimitRepository, mailRateLimitStore)
 	mailReadinessStore := messagemail.NewVerifyCodeReadinessStore(mailStores, redisClient)
@@ -184,11 +184,11 @@ func run(logger *slog.Logger) error {
 	mailService.SetVerifyCodeReadinessStore(mailReadinessStore)
 	mailService.SetRuntimeStore(mailRuntimeStore)
 	mailConfigService := mailconfig.NewService(mailStores.Config, keys, mailReadinessCoordinator)
-	mailConfigService.SetRuntimeInvalidator(mailRuntimeStore.Invalidate)
+	mailConfigService.SetRuntimeCoordinator(mailRuntimeStore)
 	mailTemplateService := mailtemplate.NewService(mailStores.Template, mailReadinessCoordinator)
-	mailTemplateService.SetRuntimeInvalidator(mailRuntimeStore.Invalidate)
+	mailTemplateService.SetRuntimeCoordinator(mailRuntimeStore)
 	mailLogService := maillog.NewService(mailStores.Log, mailStores.LogVerification, keys)
-	mailRecipientRuleService.SetRuntimeInvalidator(mailRuntimeStore.Invalidate)
+	mailRecipientRuleService.SetRuntimeCoordinator(mailRuntimeStore)
 	verificationStore := auth.NewVerificationCodeStore(redisClient, keys.VerificationCodeHMACKey())
 	authService.SetVerifyCodeSender(mailService)
 	authService.SetVerificationCodeStore(verificationStore)

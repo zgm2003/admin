@@ -11,7 +11,9 @@
   `business_email_minute=1/60s` 与 `business_email_10m=5/600s`，删除平台在同一事务中软删平台并清理策略；
   失败会整体回滚。依赖在 `cmd/api/main.go` 显式装配，Service 未接触 GORM。
 - 操作日志限流更新规则已对齐实际 `/rate-limit-policy/:platformId/:key` 路由，并脱敏映射平台参数；Runtime
-  Snapshot shared rebuild 使用 `context.WithoutCancel` + 15 秒有界超时。缺 Mail 配置时 TTL 返回 `0`，前端不再显示伪默认 10 分钟。
+  Snapshot shared rebuild 使用 `context.WithoutCancel` + 15 秒有界超时；配置、模板、收件规则写入改为
+  Redis mutation lease（先进入 invalidating、写入成功后 CAS 释放），失效失败不再提交数据库，旧快照不可达。
+  缺 Mail 配置时 TTL 返回 `0`，前端不再显示伪默认 10 分钟。
 - 历史 RBAC migration 断言已恢复验证当时生成的 `account:user:loginlog:view`；`docs/database/current.sql` 已从真实
   PostgreSQL 重新 schema-only 导出且仅包含 `public` schema，不含测试 schema。
 - 本次未执行真实 DDL/Redis 清理、未启动 API/Worker、未提交代码。剩余风险：未运行 `go test -race`（机器无 C 编译器）。

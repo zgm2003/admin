@@ -17,14 +17,14 @@ import (
 )
 
 type Service struct {
-	repository         *Repository
-	keys               *secretkey.KeyRing
-	readiness          ReadinessCoordinator
-	runtimeInvalidator func(context.Context) error
+	repository *Repository
+	keys       *secretkey.KeyRing
+	readiness  ReadinessCoordinator
+	runtime    RuntimeCoordinator
 }
 
-func (s *Service) SetRuntimeInvalidator(invalidator func(context.Context) error) {
-	s.runtimeInvalidator = invalidator
+func (s *Service) SetRuntimeCoordinator(runtime RuntimeCoordinator) {
+	s.runtime = runtime
 }
 
 func NewService(repository *Repository, keys *secretkey.KeyRing, readiness ReadinessCoordinator) *Service {
@@ -104,17 +104,17 @@ func (s *Service) Save(ctx context.Context, input Input) (Safe, error) {
 	if s.readiness == nil {
 		return Safe{}, apperror.DependencyUnavailable(fmt.Errorf("mail readiness coordinator unavailable"))
 	}
+	if s.runtime == nil {
+		return Safe{}, apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
+	}
 	if err := s.readiness.Mutate(ctx, func(writeContext context.Context) error {
-		var saveErr error
-		saved, saveErr = s.repository.Save(writeContext, values)
-		return saveErr
+		return s.runtime.Mutate(writeContext, func(runtimeContext context.Context) error {
+			var saveErr error
+			saved, saveErr = s.repository.Save(runtimeContext, values)
+			return saveErr
+		})
 	}); err != nil {
 		return Safe{}, mapMutationError(err)
-	}
-	if s.runtimeInvalidator != nil {
-		if err := s.runtimeInvalidator(ctx); err != nil {
-			return Safe{}, apperror.DependencyUnavailable(err)
-		}
 	}
 	return safe(saved), nil
 }
@@ -123,14 +123,14 @@ func (s *Service) Delete(ctx context.Context) error {
 	if s.readiness == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("mail readiness coordinator unavailable"))
 	}
-	err := s.readiness.Mutate(ctx, s.repository.Delete)
+	if s.runtime == nil {
+		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
+	}
+	err := s.readiness.Mutate(ctx, func(writeContext context.Context) error {
+		return s.runtime.Mutate(writeContext, s.repository.Delete)
+	})
 	if mapped := mapMutationError(err); mapped != nil {
 		return mapped
-	}
-	if s.runtimeInvalidator != nil {
-		if err := s.runtimeInvalidator(ctx); err != nil {
-			return apperror.DependencyUnavailable(err)
-		}
 	}
 	return nil
 }

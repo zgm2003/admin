@@ -22,6 +22,12 @@ type limiterStub struct {
 	err     error
 }
 
+type runtimeCoordinatorFunc func(context.Context, func(context.Context) error) error
+
+func (f runtimeCoordinatorFunc) Mutate(ctx context.Context, change func(context.Context) error) error {
+	return f(ctx, change)
+}
+
 func (s limiterStub) Reserve(context.Context, ...LimitRequest) (LimitResult, error) {
 	return LimitResult{Allowed: s.allowed, RetryAfterSeconds: 60}, s.err
 }
@@ -178,7 +184,7 @@ func TestForPlatformRecordsPreflightFailureAsLatestTestResult(t *testing.T) {
 }
 
 func TestSendReturnsRateLimitedWhenLimiterRejects(t *testing.T) {
-	service := NewService(nil, nil, nil, nil, limiterStub{allowed: false}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	service := NewService(nil, testMailKeyRing(t), nil, nil, limiterStub{allowed: false}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
 
 	_, err := service.Send(context.Background(), validBusinessSendInput())
 
@@ -186,7 +192,7 @@ func TestSendReturnsRateLimitedWhenLimiterRejects(t *testing.T) {
 }
 
 func TestSendReturnsDependencyUnavailableWhenLimiterFails(t *testing.T) {
-	service := NewService(nil, nil, nil, nil, limiterStub{err: errors.New("redis unavailable")}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	service := NewService(nil, testMailKeyRing(t), nil, nil, limiterStub{err: errors.New("redis unavailable")}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
 
 	_, err := service.Send(context.Background(), validBusinessSendInput())
 
@@ -194,7 +200,7 @@ func TestSendReturnsDependencyUnavailableWhenLimiterFails(t *testing.T) {
 }
 
 func TestForPlatformReturnsRateLimitedWhenLimiterRejects(t *testing.T) {
-	service := NewService(nil, nil, nil, nil, limiterStub{allowed: false}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	service := NewService(nil, testMailKeyRing(t), nil, nil, limiterStub{allowed: false}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
 
 	_, err := service.TestForPlatform(context.Background(), 1, validAdminTestInput())
 
@@ -202,11 +208,22 @@ func TestForPlatformReturnsRateLimitedWhenLimiterRejects(t *testing.T) {
 }
 
 func TestForPlatformReturnsDependencyUnavailableWhenLimiterFails(t *testing.T) {
-	service := NewService(nil, nil, nil, nil, limiterStub{err: errors.New("redis unavailable")}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	service := NewService(nil, testMailKeyRing(t), nil, nil, limiterStub{err: errors.New("redis unavailable")}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
 
 	_, err := service.TestForPlatform(context.Background(), 1, validAdminTestInput())
 
 	assertApplicationError(t, err, http.StatusServiceUnavailable, apperror.CodeDependencyUnavailable)
+}
+
+func TestReserveEmailRejectsMissingRecipientHMACKey(t *testing.T) {
+	limiter := &recordingLimiter{allowed: true}
+	service := NewService(nil, nil, nil, nil, limiter, nil)
+	if _, err := service.reserveEmail(context.Background(), defaultPolicyCatalog(), 1, "user@example.com"); err == nil {
+		t.Fatal("mail reservation accepted a missing recipient HMAC key")
+	}
+	if len(limiter.requests) != 0 {
+		t.Fatal("limiter received a plaintext recipient before the HMAC dependency failure")
+	}
 }
 
 func TestSendReturnsDependencyUnavailableWhenStoreFails(t *testing.T) {
@@ -464,6 +481,9 @@ func TestVerifyCodeReadyReflectsConfigState(t *testing.T) {
 		t.Fatal(err)
 	}
 	templateService := mailtemplate.NewService(repository.Template, NewReadinessCoordinator(readinessStore))
+	templateService.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context) error) error {
+		return change(ctx)
+	}))
 	if err := templateService.SetStatus(ctx, template.ID, yesno.No); err != nil {
 		t.Fatal(err)
 	}
@@ -479,6 +499,9 @@ func TestReadinessMutationRollbackOutlivesCanceledRequest(t *testing.T) {
 	readiness := &stubVerifyCodeReadinessStore{readiness: VerifyCodeReadiness{Ready: true}, cancelAfterBegin: cancel}
 	stores := NewStores(db)
 	templateService := mailtemplate.NewService(stores.Template, NewReadinessCoordinator(readiness))
+	templateService.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context) error) error {
+		return change(ctx)
+	}))
 
 	err := templateService.SetStatus(ctx, 1, yesno.No)
 	if err == nil || readiness.beginCalls != 1 || readiness.rollbackCalls != 1 || readiness.publishCalls != 0 {
@@ -575,10 +598,19 @@ func openMailServiceWithReadiness(t *testing.T, limiter Limiter, policyStore Rat
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = redisClient.DeleteMany(context.Background(), keys) })
-	service := NewService(repository, nil, nil, nil, limiter, policyStore)
+	service := NewService(repository, testMailKeyRing(t), nil, nil, limiter, policyStore)
 	service.rules = ruleEvaluatorStub{decision: RuleDecision{Allowed: true}}
 	service.SetVerifyCodeReadinessStore(readinessStore)
 	return service, ctx
+}
+
+func testMailKeyRing(t *testing.T) *secretkey.KeyRing {
+	t.Helper()
+	keys, err := secretkey.New(strings.Repeat("m", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return keys
 }
 
 func TestPrepareEmailVerifyCodeReturnsConfigTTLAndResendWindow(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -16,13 +17,15 @@ import (
 )
 
 const (
-	mailRuntimeSnapshotPrefix  = "mail:runtime:v1:"
-	mailRuntimeGenerationKey   = "mail:runtime:generation:v1"
-	mailRuntimeLoadLockKey     = "mail:runtime:load-lock:v1"
+	mailRuntimeSnapshotPrefix  = "mail:runtime:v2:"
+	mailRuntimeGenerationKey   = "mail:runtime:generation:v2"
+	mailRuntimeMutationKey     = "mail:runtime:mutation:v2"
+	mailRuntimeLoadLockKey     = "mail:runtime:load-lock:v2"
 	mailRuntimeSnapshotTTL     = 10 * time.Minute
 	mailRuntimeLoadLockTTL     = 5 * time.Second
 	mailRuntimeRetryInterval   = 50 * time.Millisecond
 	mailRuntimeRebuildAttempts = 3
+	mailRuntimeMutationTTL     = 30 * time.Second
 )
 
 type runtimeSnapshot struct {
@@ -76,6 +79,8 @@ type runtimeStore struct {
 	group  singleflight.Group
 }
 
+type runtimeMutation struct{ token string }
+
 func newRuntimeStore(stores *Stores, redis *projectredis.Client) *runtimeStore {
 	return &runtimeStore{stores: stores, redis: redis}
 }
@@ -96,7 +101,7 @@ func (s *runtimeStore) Load(ctx context.Context, scene string) (runtimeSnapshot,
 		return snapshot, nil
 	}
 	result := s.group.DoChan(scene, func() (any, error) {
-		sharedContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), mailRuntimeLoadLockTTL*time.Duration(mailRuntimeRebuildAttempts))
+		sharedContext, cancel := newRuntimeRebuildContext(ctx)
 		defer cancel()
 		return s.rebuild(sharedContext, scene)
 	})
@@ -113,6 +118,10 @@ func (s *runtimeStore) Load(ctx context.Context, scene string) (runtimeSnapshot,
 		}
 		return snapshot, nil
 	}
+}
+
+func newRuntimeRebuildContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), mailRuntimeLoadLockTTL*time.Duration(mailRuntimeRebuildAttempts))
 }
 
 func (s *runtimeStore) rebuild(ctx context.Context, scene string) (runtimeSnapshot, error) {
@@ -156,7 +165,7 @@ func (s *runtimeStore) rebuild(ctx context.Context, scene string) (runtimeSnapsh
 			return runtimeSnapshot{}, marshalErr
 		}
 		published, publishErr := s.redis.EvalString(ctx, publishRuntimeSnapshotScript,
-			[]string{s.key(scene), mailRuntimeGenerationKey, mailRuntimeLoadLockKey},
+			[]string{s.key(scene), mailRuntimeGenerationKey, mailRuntimeMutationKey, mailRuntimeLoadLockKey},
 			snapshot.Generation, payload, int64(mailRuntimeSnapshotTTL/time.Millisecond), token)
 		_ = s.releaseLoadLock(context.WithoutCancel(ctx), token)
 		if publishErr != nil {
@@ -228,19 +237,74 @@ func (s *runtimeStore) loadFromDatabase(ctx context.Context, scene string) (runt
 }
 
 func (s *runtimeStore) Invalidate(ctx context.Context) error {
-	if s == nil || s.redis == nil {
-		return fmt.Errorf("mail runtime snapshot Redis store unavailable")
+	return s.Mutate(ctx, func(context.Context) error { return nil })
+}
+
+func (s *runtimeStore) Mutate(ctx context.Context, change func(context.Context) error) error {
+	if s == nil || s.redis == nil || change == nil {
+		return fmt.Errorf("mail runtime mutation dependencies unavailable")
 	}
-	keys := make([]string, 0, len(mailtemplate.FixedCatalog()))
+	mutation, err := s.beginMutation(ctx)
+	if err != nil {
+		return err
+	}
+	if err := change(ctx); err != nil {
+		rollbackContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		if rollbackErr := s.finishMutation(rollbackContext, mutation); rollbackErr != nil {
+			return fmt.Errorf("mail runtime mutation rollback: %w", errors.Join(err, rollbackErr))
+		}
+		return err
+	}
+	publishContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), mailRuntimeLoadLockTTL)
+	defer cancel()
+	if err := s.finishMutation(publishContext, mutation); err != nil {
+		return fmt.Errorf("mail runtime mutation publication: %w", err)
+	}
+	return nil
+}
+
+func (s *runtimeStore) beginMutation(ctx context.Context) (runtimeMutation, error) {
+	token, err := randomRuntimeToken()
+	if err != nil {
+		return runtimeMutation{}, err
+	}
+	keys := make([]string, 0, len(mailtemplate.FixedCatalog())+2)
+	keys = append(keys, mailRuntimeGenerationKey, mailRuntimeMutationKey)
 	for _, scene := range mailtemplate.FixedCatalog() {
 		keys = append(keys, s.key(scene.Scene))
 	}
-	_, err := s.redis.EvalString(ctx, invalidateRuntimeSnapshotsScript,
-		append([]string{mailRuntimeGenerationKey}, keys...))
-	return err
+	result, err := s.redis.EvalString(ctx, beginRuntimeMutationScript, keys, token, int64(mailRuntimeMutationTTL/time.Millisecond))
+	if err != nil {
+		return runtimeMutation{}, err
+	}
+	if result != "acquired" {
+		return runtimeMutation{}, fmt.Errorf("mail runtime mutation returned %q", result)
+	}
+	return runtimeMutation{token: token}, nil
+
+}
+
+func (s *runtimeStore) finishMutation(ctx context.Context, mutation runtimeMutation) error {
+	if mutation.token == "" {
+		return fmt.Errorf("mail runtime mutation token is invalid")
+	}
+	result, err := s.redis.EvalString(ctx, finishRuntimeMutationScript, []string{mailRuntimeMutationKey}, mutation.token)
+	if err != nil {
+		return err
+	}
+	if result != "published" {
+		return fmt.Errorf("mail runtime mutation publication returned %q", result)
+	}
+	return nil
 }
 
 func (s *runtimeStore) readGeneration(ctx context.Context) (int64, error) {
+	if _, found, err := s.redis.GetString(ctx, mailRuntimeMutationKey); err != nil {
+		return 0, err
+	} else if found {
+		return 0, fmt.Errorf("mail runtime snapshot is invalidating")
+	}
 	raw, found, err := s.redis.GetString(ctx, mailRuntimeGenerationKey)
 	if err != nil {
 		return 0, err
@@ -251,6 +315,11 @@ func (s *runtimeStore) readGeneration(ctx context.Context) (int64, error) {
 	generation, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || generation < 0 {
 		return 0, fmt.Errorf("mail runtime generation is invalid")
+	}
+	if _, mutating, mutationErr := s.redis.GetString(ctx, mailRuntimeMutationKey); mutationErr != nil {
+		return 0, mutationErr
+	} else if mutating {
+		return 0, fmt.Errorf("mail runtime snapshot is invalidating")
 	}
 	return generation, nil
 }
@@ -279,9 +348,10 @@ func validateRuntimeSnapshot(snapshot runtimeSnapshot, scene string) error {
 }
 
 const publishRuntimeSnapshotScript = `
+if redis.call('EXISTS', KEYS[3]) == 1 then return 'stale' end
 local generation = redis.call('GET', KEYS[2])
 if generation and tonumber(generation) ~= tonumber(ARGV[1]) then return 'stale' end
-local lock = redis.call('GET', KEYS[3])
+local lock = redis.call('GET', KEYS[4])
 if lock ~= ARGV[4] then return 'stale' end
 redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
 return 'published'
@@ -293,10 +363,20 @@ if current == ARGV[1] then redis.call('DEL', KEYS[1]) end
 return 1
 `
 
-const invalidateRuntimeSnapshotsScript = `
-local generation = redis.call('INCR', KEYS[1])
-for index = 2, #KEYS do redis.call('DEL', KEYS[index]) end
-return tostring(generation)
+const beginRuntimeMutationScript = `
+if redis.call('EXISTS', KEYS[2]) == 1 then return 'busy' end
+redis.call('SET', KEYS[2], ARGV[1], 'PX', ARGV[2])
+redis.call('INCR', KEYS[1])
+for index = 3, #KEYS do redis.call('DEL', KEYS[index]) end
+return 'acquired'
+`
+
+const finishRuntimeMutationScript = `
+local current = redis.call('GET', KEYS[1])
+if not current then return 'missing' end
+if current ~= ARGV[1] then return 'changed' end
+redis.call('DEL', KEYS[1])
+return 'published'
 `
 
 func (s *runtimeStore) releaseLoadLock(ctx context.Context, token string) error {

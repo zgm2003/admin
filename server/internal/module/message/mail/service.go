@@ -439,13 +439,10 @@ func (s *Service) reserveEmail(ctx context.Context, catalog RateLimitCatalog, pl
 	if s.limiter == nil {
 		return LimitResult{}, dependency(fmt.Errorf("mail rate limiter unavailable"))
 	}
-	recipientKey := email
-	if _, concreteRedisLimiter := s.limiter.(*RedisLimiter); concreteRedisLimiter {
-		if s.keys == nil || len(s.keys.MailRecipientHMACKey()) == 0 {
-			return LimitResult{}, dependency(fmt.Errorf("mail recipient HMAC key unavailable"))
-		}
-		recipientKey = mailRecipientKey(s.keys, email)
+	if s.keys == nil || len(s.keys.MailRecipientHMACKey()) == 0 {
+		return LimitResult{}, dependency(fmt.Errorf("mail recipient HMAC key unavailable"))
 	}
+	recipientKey := mailRecipientKey(s.keys, email)
 	result, err := s.limiter.Reserve(ctx, businessLimitRequests(catalog, platformID, recipientKey)...)
 	if err != nil {
 		return LimitResult{}, dependency(err)

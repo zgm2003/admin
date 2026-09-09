@@ -54,6 +54,35 @@ func TestRepositoryListAllReturnsEveryPlatformCatalog(t *testing.T) {
 	}
 }
 
+func TestRepositoryProvisionDefaultsIsIdempotentAndDeletesByPlatform(t *testing.T) {
+	database, ctx := openRepositoryDatabase(t)
+	repository := NewRepository(database)
+	if err := database.WithContext(ctx).Exec("INSERT INTO permission_auth_platform(id, code, name) VALUES (3, 'mobile', 'Mobile')").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.ProvisionDefaults(ctx, 3); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.ProvisionDefaults(ctx, 3); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := repository.List(ctx, 3)
+	if err != nil || len(catalog.Policies) != 2 || catalog.Version != 1 {
+		t.Fatalf("provisioned catalog=%+v err=%v", catalog, err)
+	}
+	minute := policyByKey(t, catalog.Policies, "business_email_minute")
+	tenMinutes := policyByKey(t, catalog.Policies, "business_email_10m")
+	if minute.Limit != 1 || minute.WindowSeconds != 60 || tenMinutes.Limit != 5 || tenMinutes.WindowSeconds != 600 {
+		t.Fatalf("default policies minute=%+v tenMinutes=%+v", minute, tenMinutes)
+	}
+	if err := repository.DeleteForPlatform(ctx, 3); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.List(ctx, 3); err == nil {
+		t.Fatal("deleted platform policies still form a catalog")
+	}
+}
+
 func TestBuildCatalogRejectsInvalidRows(t *testing.T) {
 	now := time.Now().UTC()
 	rows := FixedRateLimitPolicies()

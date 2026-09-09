@@ -40,3 +40,7 @@ type Safe struct {
 type ReadinessCoordinator interface {
 	Mutate(context.Context, func(context.Context) error) error
 }
+
+type RuntimeCoordinator interface {
+	Mutate(context.Context, func(context.Context) error) error
+}

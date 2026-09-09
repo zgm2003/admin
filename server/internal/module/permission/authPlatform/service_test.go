@@ -18,6 +18,7 @@ import (
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/yesno"
+	"gorm.io/gorm"
 )
 
 func TestServiceDeleteRejectsPlatformWithActiveMenus(t *testing.T) {
@@ -26,7 +27,7 @@ func TestServiceDeleteRejectsPlatformWithActiveMenus(t *testing.T) {
 	redisClient := openPlatformRedis(t)
 	authStates := authstate.NewStore(redisClient)
 	service := authplatform.NewService(
-		authplatform.NewRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
+		newPlatformLifecycleRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
 		authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
 	)
@@ -55,6 +56,38 @@ func TestServiceDeleteRejectsPlatformWithActiveMenus(t *testing.T) {
 	}
 	if err := service.Delete(ctx, platformID); err != nil {
 		t.Fatalf("Delete(after menu cleanup) error = %v", err)
+	}
+}
+
+func TestServiceCreateRollsBackPlatformWhenPolicyProvisioningFails(t *testing.T) {
+	connection, ctx := openAuthenticationPlatformDatabase(t)
+	preparePlatformSessionSchema(t, connection.GORM, ctx)
+	redisClient := openPlatformRedis(t)
+	repository := authplatform.NewRepository(connection.GORM)
+	forced := errors.New("forced policy provisioning failure")
+	repository.SetRateLimitPolicyLifecycle(
+		func(context.Context, *gorm.DB, int64) error { return forced },
+		func(context.Context, *gorm.DB, int64) error { return nil },
+	)
+	service := authplatform.NewService(
+		repository, authplatform.NewPolicyStore(redisClient), redisClient, nil, nil, nil,
+		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
+	)
+	code := fmt.Sprintf("provision_rollback_%d", time.Now().UnixNano())
+	_, err := service.Create(ctx, authplatform.CreateInput{
+		Code: code, Name: "Provision rollback", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail},
+		AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600, SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
+	})
+	if err == nil {
+		t.Fatal("platform creation succeeded after policy provisioning failed")
+	}
+	var count int64
+	if queryErr := connection.GORM.WithContext(ctx).Unscoped().Model(&authplatform.Platform{}).Where("code = ?", code).Count(&count).Error; queryErr != nil || count != 0 {
+		t.Fatalf("rolled-back platform rows=%d err=%v", count, queryErr)
+	}
+	if _, found, readErr := redisClient.GetString(ctx, authplatform.PolicyKey(code)); readErr != nil || found {
+		t.Fatalf("rolled-back platform policy cache found=%v err=%v", found, readErr)
 	}
 }
 
@@ -155,7 +188,7 @@ func TestServiceUpdateAllowsNonBuiltinRegistration(t *testing.T) {
 	redisClient := openPlatformRedis(t)
 	authStates := authstate.NewStore(redisClient)
 	service := authplatform.NewService(
-		authplatform.NewRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
+		newPlatformLifecycleRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
 		authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
 	)
@@ -191,7 +224,7 @@ func TestServicePlatformMutationsApplyExactSessionEffects(t *testing.T) {
 	authStates := authstate.NewStore(redisClient)
 	sessionCache := auth.NewSessionCache(redisClient)
 	service := authplatform.NewService(
-		authplatform.NewRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
+		newPlatformLifecycleRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
 		authStates, authstate.NewInvalidator(authStates), sessionCache.Delete,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
 	)
@@ -203,6 +236,10 @@ func TestServicePlatformMutationsApplyExactSessionEffects(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	var policyCount int64
+	if err := connection.GORM.WithContext(ctx).Table("message_mail_rate_limit_policy").Where("platform_id = ?", platformID).Count(&policyCount).Error; err != nil || policyCount != 2 {
+		t.Fatalf("created platform policies=%d err=%v", policyCount, err)
 	}
 	createdUser := createPlatformUser(t, connection.GORM, ctx, "service_sessions")
 	base := time.Now().UTC().Add(-time.Hour).Truncate(time.Microsecond)
@@ -261,6 +298,9 @@ func TestServicePlatformMutationsApplyExactSessionEffects(t *testing.T) {
 	if !stored.DeletedAt.Valid || stored.PolicyVersion != 7 {
 		t.Fatalf("deleted platform = %+v", stored)
 	}
+	if err := connection.GORM.WithContext(ctx).Table("message_mail_rate_limit_policy").Where("platform_id = ?", platformID).Count(&policyCount).Error; err != nil || policyCount != 0 {
+		t.Fatalf("deleted platform policies=%d err=%v", policyCount, err)
+	}
 }
 
 func TestServicePlatformNoOpDoesNotAdvancePolicyVersion(t *testing.T) {
@@ -269,7 +309,7 @@ func TestServicePlatformNoOpDoesNotAdvancePolicyVersion(t *testing.T) {
 	redisClient := openPlatformRedis(t)
 	authStates := authstate.NewStore(redisClient)
 	service := authplatform.NewService(
-		authplatform.NewRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
+		newPlatformLifecycleRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
 		authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
 	)
@@ -300,7 +340,7 @@ func TestServicePlatformRollbackRestoresPolicyAndSessionState(t *testing.T) {
 	redisClient := openPlatformRedis(t)
 	authStates := authstate.NewStore(redisClient)
 	service := authplatform.NewService(
-		authplatform.NewRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
+		newPlatformLifecycleRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
 		authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
 	)
@@ -345,7 +385,7 @@ func TestServicePlatformPublishFailureLeavesCommittedSessionStateWithoutOldPolic
 	redisClient := openPlatformRedis(t)
 	authStates := authstate.NewStore(redisClient)
 	service := authplatform.NewService(
-		authplatform.NewRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
+		newPlatformLifecycleRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
 		authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
 	)

@@ -20,14 +20,14 @@ import (
 var domainLabel = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 
 type Service struct {
-	repository         *Repository
-	runtimeInvalidator func(context.Context) error
+	repository *Repository
+	runtime    RuntimeCoordinator
 }
 
 func NewService(repository *Repository) *Service { return &Service{repository: repository} }
 
-func (s *Service) SetRuntimeInvalidator(invalidator func(context.Context) error) {
-	s.runtimeInvalidator = invalidator
+func (s *Service) SetRuntimeCoordinator(runtime RuntimeCoordinator) {
+	s.runtime = runtime
 }
 
 func (s *Service) Evaluate(ctx context.Context, email string, _ SendMode) (Decision, error) {
@@ -86,13 +86,13 @@ func (s *Service) Create(ctx context.Context, input Input) (int64, error) {
 		Scope: input.Scope, Pattern: pattern, Action: input.Action, Name: input.Name,
 		Remark: input.Remark, IsEnabled: input.IsEnabled, CreatedAt: now, UpdatedAt: now,
 	}
-	if err := s.repository.Create(ctx, value); err != nil {
-		return 0, wrapRepository(err)
+	if s.runtime == nil {
+		return 0, apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	if s.runtimeInvalidator != nil {
-		if err := s.runtimeInvalidator(ctx); err != nil {
-			return 0, apperror.DependencyUnavailable(err)
-		}
+	if err := s.runtime.Mutate(ctx, func(writeContext context.Context) error {
+		return s.repository.Create(writeContext, value)
+	}); err != nil {
+		return 0, wrapRepository(err)
 	}
 	return value.ID, nil
 }
@@ -105,35 +105,40 @@ func (s *Service) Update(ctx context.Context, id int64, input Input) error {
 	if err != nil {
 		return apperror.InvalidRequest(err)
 	}
-	err = wrapRepository(s.repository.Update(ctx, id, map[string]any{
-		"scope": input.Scope, "pattern": pattern, "action": input.Action, "name": input.Name,
-		"remark": input.Remark, "is_enabled": input.IsEnabled, "updated_at": time.Now().UTC(),
-	}))
-	if err != nil || s.runtimeInvalidator == nil {
-		return err
+	if s.runtime == nil {
+		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	return s.runtimeInvalidator(ctx)
+	err = wrapRepository(s.runtime.Mutate(ctx, func(writeContext context.Context) error {
+		return s.repository.Update(writeContext, id, map[string]any{
+			"scope": input.Scope, "pattern": pattern, "action": input.Action, "name": input.Name,
+			"remark": input.Remark, "is_enabled": input.IsEnabled, "updated_at": time.Now().UTC(),
+		})
+	}))
+	return err
 }
 
 func (s *Service) SetStatus(ctx context.Context, id int64, enabled yesno.Value) error {
 	if !yesno.IsValid(enabled) {
 		return apperror.InvalidRequest(fmt.Errorf("status invalid"))
 	}
-	err := wrapRepository(s.repository.Update(ctx, id, map[string]any{
-		"is_enabled": enabled, "updated_at": time.Now().UTC(),
-	}))
-	if err != nil || s.runtimeInvalidator == nil {
-		return err
+	if s.runtime == nil {
+		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	return s.runtimeInvalidator(ctx)
+	err := wrapRepository(s.runtime.Mutate(ctx, func(writeContext context.Context) error {
+		return s.repository.Update(writeContext, id, map[string]any{
+			"is_enabled": enabled, "updated_at": time.Now().UTC(),
+		})
+	}))
+	return err
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {
-	err := wrapRepository(s.repository.Delete(ctx, id))
-	if err != nil || s.runtimeInvalidator == nil {
-		return err
+	if s.runtime == nil {
+		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	return s.runtimeInvalidator(ctx)
+	return wrapRepository(s.runtime.Mutate(ctx, func(writeContext context.Context) error {
+		return s.repository.Delete(writeContext, id)
+	}))
 }
 
 func NormalizeRecipient(value string) (string, error) {

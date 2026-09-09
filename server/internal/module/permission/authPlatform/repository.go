@@ -64,14 +64,14 @@ func (r *Repository) SetRateLimitPolicyLifecycle(
 
 func (r *Repository) provisionRateLimitPolicies(ctx context.Context, platformID int64) error {
 	if r.rateLimitPolicyProvision == nil {
-		return nil
+		return fmt.Errorf("authentication platform rate limit policy provisioner is unavailable")
 	}
 	return r.rateLimitPolicyProvision(ctx, r.db, platformID)
 }
 
 func (r *Repository) deleteRateLimitPolicies(ctx context.Context, platformID int64) error {
 	if r.rateLimitPolicyDelete == nil {
-		return nil
+		return fmt.Errorf("authentication platform rate limit policy cleaner is unavailable")
 	}
 	return r.rateLimitPolicyDelete(ctx, r.db, platformID)
 }
