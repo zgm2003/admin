@@ -30,6 +30,13 @@
   `authz:menu-state:v1:1`；Canvas、用户 Access、Session、Mail 额度及其他 Redis key 未清理。
 - `docs/database/current.sql` 已从迁移后的真实 `public` schema-only 刷新。Agent 未启动 API/Worker；维护者可在
   全量检查后手动启动新代码，不得恢复旧二进制。
+- **迁移后首次启动回归修复（2026-09-09）**：维护者启动新 API 后，`GET /api/v1/access` 返回 code `14000`
+  （访问权限数据无效），而 API/PostgreSQL/Redis 健康检查均正常。根因是 Access/Menu/前端菜单字段校验器仍
+  只接受全小写或 kebab-case，拒绝已迁移的 `permission/authPlatform`、`system/operationLog`、
+  `user/loginLog`。现已统一为“段首小写，支持 lower camel；保留既有全小写 kebab action/path；拒绝大写首段、
+  下划线和非法路径”的兼容规则，并补充后端菜单、Access 快照和前端表单测试。修复后 Permission Menu/Access
+  完整定向包通过，前端相关 Vitest 75/75、lint、architecture、typecheck 通过；`go vet` 与 API 编译检查通过。
+  当前运行中的 API 仍是修复前二进制，需维护者手动重启后再刷新页面验证。
 - 已验证：`go build ./...`；Mail 全部子包；Permission/Storage/Auth/LoginLog/OperationLog/cacheFill/Worker
   定向测试；两份新 migration 的隔离测试；前端 typecheck、lint、architecture 及此前 17 文件 154 项 Vitest。
   最后一轮文件改名后已复跑完整 Mail 子包，以及前端 lint、architecture、typecheck 和 10 文件 57 项改名

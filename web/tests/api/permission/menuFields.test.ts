@@ -22,18 +22,36 @@ describe('menu field protocol', () => {
     'navigation.userAccount ',
   ])('rejects i18n key %s', (value) => expect(isMenuI18nKey(value)).toBe(false))
 
-  it.each(['system', 'user:account:list', 'reports:order-items:list'])(
+  it.each([
+    'system',
+    'user:account:list',
+    'permission:authPlatform:view',
+    'permission:access-cache:rebuild',
+    'message:mail:rate-limit:update',
+  ])(
     'accepts menu code %s',
     (value) => expect(menuCodePattern.test(value)).toBe(true),
   )
 
-  it.each(['/user/account', '/permission/menu', '/register', '/reports/order-items'])(
+  it.each(['Permission:authPlatform:view', 'system:operation_log:list'])(
+    'rejects menu code %s',
+    (value) => expect(menuCodePattern.test(value)).toBe(false),
+  )
+
+  it.each([
+    '/user/account',
+    '/permission/menu',
+    '/reports/order-items',
+    '/permission/authPlatform',
+    '/system/operationLog',
+  ])(
     'accepts route path %s',
     (value) => expect(isMenuPath(value)).toBe(true),
   )
 
   it.each([
     '/login',
+    '/register',
     '/dashboard',
     'user/account',
     '/user/account/',
@@ -41,10 +59,12 @@ describe('menu field protocol', () => {
     '/system//users',
     '/user/account?tab=1',
     '/user/account#top',
+    '/system/operation_log',
   ])('rejects route path %s', (value) => expect(isMenuPath(value)).toBe(false))
 
-  it.each(['user/account', 'reports/order-items'])('accepts component path %s', (value) =>
-    expect(isComponentPath(value)).toBe(true),
+  it.each(['user/account', 'reports/order-items', 'permission/authPlatform', 'system/operationLog'])(
+    'accepts component path %s',
+    (value) => expect(isComponentPath(value)).toBe(true),
   )
 
   it.each([
@@ -54,6 +74,7 @@ describe('menu field protocol', () => {
     'system/:id',
     'system/../users',
     'system//users',
+    'system/operation_log',
   ])('rejects component path %s', (value) => expect(isComponentPath(value)).toBe(false))
 
   it('accepts only registered local Lucide icon names', () => {

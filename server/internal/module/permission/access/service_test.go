@@ -68,6 +68,27 @@ func TestBuildSnapshotKeepsPageAndReadPermissionsIndependent(t *testing.T) {
 	}
 }
 
+func TestBuildSnapshotAcceptsLowerCamelModuleIdentity(t *testing.T) {
+	rootID := int64(1)
+	pageID := int64(2)
+	path := "/permission/authPlatform"
+	componentPath := "permission/authPlatform"
+	snapshot, err := buildSnapshot(Source{
+		Version: 1,
+		Menus: []SourceMenu{
+			{ID: rootID, MenuType: MenuDirectory, Code: "permission", I18nKey: accessStringPointer("navigation.permission"), IsEnabled: yesno.Yes, IsHidden: yesno.No},
+			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "permission:authPlatform:view", I18nKey: accessStringPointer("navigation.permissionAuthPlatform"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+		},
+		GrantedMenuIDs: []int64{pageID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.MenuTree) != 1 || len(snapshot.MenuTree[0].Children) != 1 || snapshot.MenuTree[0].Children[0].Code != "permission:authPlatform:view" {
+		t.Fatalf("lower camel snapshot = %+v", snapshot)
+	}
+}
+
 func TestLoadSnapshotUsesRedisStateGateBeforeLocalCache(t *testing.T) {
 	serviceRedis := openAccessRedis(t)
 	cleanupRedis := openAccessRedis(t)

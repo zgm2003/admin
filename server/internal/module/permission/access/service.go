@@ -40,8 +40,8 @@ type MenuNode struct {
 
 var (
 	accessI18nKeyPattern       = regexp.MustCompile(`^[a-z][a-z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$`)
-	accessPathPattern          = regexp.MustCompile(`^/[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
-	accessComponentPathPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
+	accessPathPattern          = regexp.MustCompile(`^/[a-z][a-zA-Z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-zA-Z0-9]*(?:-[a-z0-9]+)*)*$`)
+	accessComponentPathPattern = regexp.MustCompile(`^[a-z][a-zA-Z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-zA-Z0-9]*(?:-[a-z0-9]+)*)*$`)
 	staticAccessPagePaths      = map[string]struct{}{
 		"/login": {}, "/register": {}, "/dashboard": {},
 	}

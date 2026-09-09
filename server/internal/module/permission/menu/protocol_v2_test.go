@@ -47,15 +47,28 @@ func TestMenuProtocolV2AcceptsCustomI18nKeyAndIconName(t *testing.T) {
 	}
 }
 
-func TestMenuProtocolV2RejectsStaticAndNonKebabPagePaths(t *testing.T) {
-	for _, value := range []string{"/login", "/register", "/dashboard", "/System/users", "/system/users/", "/system/:id"} {
+func TestMenuProtocolV2AcceptsLowerCamelAndRejectsInvalidPagePaths(t *testing.T) {
+	for _, value := range []string{"/login", "/register", "/dashboard", "/System/users", "/system/users/", "/system/:id", "/system/operation_log"} {
 		if validMenuPath(value) {
 			t.Errorf("validMenuPath(%q) = true", value)
 		}
 	}
-	for _, value := range []string{"/system/users", "/reports/order-items"} {
+	for _, value := range []string{"/system/users", "/reports/order-items", "/system/operationLog", "/permission/authPlatform"} {
 		if !validMenuPath(value) {
 			t.Errorf("validMenuPath(%q) = false", value)
+		}
+	}
+}
+
+func TestMenuProtocolV2AcceptsLowerCamelAndRejectsInvalidCodes(t *testing.T) {
+	for _, value := range []string{"permission:authPlatform:view", "system:operationLog:list", "storage:uploadRule:update", "permission:access-cache:rebuild", "message:mail:rate-limit:update"} {
+		if !validMenuCode(value) {
+			t.Errorf("validMenuCode(%q) = false", value)
+		}
+	}
+	for _, value := range []string{"Permission:authPlatform:view", "system:operation_log:list"} {
+		if validMenuCode(value) {
+			t.Errorf("validMenuCode(%q) = true", value)
 		}
 	}
 }

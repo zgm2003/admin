@@ -25,6 +25,17 @@ func TestSnapshotSchemaVersionIsCurrent(t *testing.T) {
 	}
 }
 
+func TestDecodeCachedSnapshotAcceptsLowerCamelModuleIdentity(t *testing.T) {
+	payload := `{"schemaVersion":4,"userId":94000,"platformId":1,"platform":"admin","policyVersion":3,"version":1,"roleCodes":["super_admin"],"menuTree":[{"code":"permission","menuType":"directory","path":null,"componentPath":null,"i18nKey":"navigation.permission","icon":null,"isHidden":0,"children":[{"code":"permission:authPlatform:view","menuType":"page","path":"/permission/authPlatform","componentPath":"permission/authPlatform","i18nKey":"navigation.permissionAuthPlatform","icon":null,"isHidden":0,"children":[]}]}],"permissionCodes":["permission:authPlatform:view"]}`
+	snapshot, err := decodeCachedSnapshot(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.MenuTree) != 1 || len(snapshot.MenuTree[0].Children) != 1 || snapshot.MenuTree[0].Children[0].ComponentPath == nil || *snapshot.MenuTree[0].Children[0].ComponentPath != "permission/authPlatform" {
+		t.Fatalf("lower camel cached snapshot = %+v", snapshot)
+	}
+}
+
 func TestSnapshotCachePublishesOnlyForMatchingReadyVersion(t *testing.T) {
 	client := openAccessRedis(t)
 	states := permissionstate.NewStore(client)

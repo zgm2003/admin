@@ -20,10 +20,10 @@ var (
 )
 
 var (
-	menuCodePattern          = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?::[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
+	menuCodePattern          = regexp.MustCompile(`^[a-z][a-zA-Z0-9]*(?:-[a-z0-9]+)*(?::[a-z][a-zA-Z0-9]*(?:-[a-z0-9]+)*)*$`)
 	menuI18nKeyPattern       = regexp.MustCompile(`^[a-z][a-z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$`)
-	menuPathPattern          = regexp.MustCompile(`^/[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
-	menuComponentPathPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$`)
+	menuPathPattern          = regexp.MustCompile(`^/[a-z][a-zA-Z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-zA-Z0-9]*(?:-[a-z0-9]+)*)*$`)
+	menuComponentPathPattern = regexp.MustCompile(`^[a-z][a-zA-Z0-9]*(?:-[a-z0-9]+)*(?:/[a-z][a-zA-Z0-9]*(?:-[a-z0-9]+)*)*$`)
 )
 
 var staticPagePaths = map[string]struct{}{
