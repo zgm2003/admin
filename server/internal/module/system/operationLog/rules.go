@@ -55,7 +55,7 @@ var routeRules = []RouteRule{
 	{http.MethodPut, "/api/admin/v1/message/mail/recipient-rule/:id", "mail", "mail.rule.update", true, false},
 	{http.MethodPatch, "/api/admin/v1/message/mail/recipient-rule/:id/status", "mail", "mail.rule.status", true, false},
 	{http.MethodDelete, "/api/admin/v1/message/mail/recipient-rule/:id", "mail", "mail.rule.delete", false, false},
-	{http.MethodPut, "/api/admin/v1/message/mail/rate-limit-policy/:key", "mail", "mail.rate-limit.update", true, true},
+	{http.MethodPut, "/api/admin/v1/message/mail/rate-limit-policy/:platformId/:key", "mail", "mail.rate-limit.update", true, true},
 }
 
 func FindRule(method, route string) (RouteRule, bool) {

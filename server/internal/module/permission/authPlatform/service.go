@@ -322,7 +322,10 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		if len(history) != 0 {
 			return ErrCodeConflict
 		}
-		return scoped.Create(ctx, &value)
+		if err := scoped.Create(ctx, &value); err != nil {
+			return err
+		}
+		return scoped.provisionRateLimitPolicies(ctx, value.ID)
 	}); err != nil {
 		_ = lease.rollback(ctx)
 		if errors.Is(err, ErrCodeConflict) {
@@ -531,6 +534,9 @@ func (s *Service) mutate(ctx context.Context, id int64, planner func(Platform, P
 		now := time.Now().UTC().Truncate(time.Microsecond)
 		if plan.deletePlatform {
 			_, lockErr = scoped.SoftDelete(mutationCtx, id, now)
+			if lockErr == nil {
+				lockErr = scoped.deleteRateLimitPolicies(mutationCtx, id)
+			}
 		} else if plan.status != nil {
 			_, lockErr = scoped.UpdateStatus(mutationCtx, id, *plan.status, now)
 		} else {

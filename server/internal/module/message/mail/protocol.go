@@ -16,10 +16,9 @@ type SendMode = recipientrule.SendMode
 type RuleDecision = recipientrule.Decision
 type RuleEvaluator = recipientrule.Evaluator
 type LimitRequest struct {
-	Key        string
-	Limit      int
-	Window     time.Duration
-	LegacyKeys []string
+	Key    string
+	Limit  int
+	Window time.Duration
 }
 type LimitResult struct {
 	Allowed           bool

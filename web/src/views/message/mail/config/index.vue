@@ -66,7 +66,7 @@ function blankForm(): mailApi.MailConfigInput {
     fromEmail: '',
     fromName: '',
     replyTo: '',
-    ttlMinutes: 10,
+    ttlMinutes: 0,
     isEnabled: YesNo.No,
   }
 }

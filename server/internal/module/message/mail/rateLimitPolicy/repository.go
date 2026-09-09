@@ -13,6 +13,41 @@ type Repository struct{ db *gorm.DB }
 
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 
+// ProvisionDefaults creates the fixed business mail policies for a newly
+// created authentication platform. It is idempotent so a retried lifecycle
+// callback cannot create duplicate rows or reset an existing catalog.
+func (r *Repository) ProvisionDefaults(ctx context.Context, platformID int64) error {
+	if platformID < 1 {
+		return fmt.Errorf("rate limit policy platform is invalid")
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	rows := make([]Model, 0, len(fixedRateLimitSpecs))
+	for _, spec := range fixedRateLimitSpecs {
+		rows = append(rows, Model{
+			PlatformID: platformID, Key: spec.Key, Mode: spec.Mode, Dimension: spec.Dimension,
+			Limit: spec.Limit, WindowSeconds: spec.WindowSeconds, Revision: 1,
+			CreatedAt: now, UpdatedAt: now,
+		})
+	}
+	if err := r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&rows).Error; err != nil {
+		return fmt.Errorf("provision mail rate limit policies: %w", err)
+	}
+	_, err := r.List(ctx, platformID)
+	return err
+}
+
+// DeleteForPlatform removes all policy rows when an authentication platform
+// is soft-deleted. Rate-limit policy rows have no independent business life.
+func (r *Repository) DeleteForPlatform(ctx context.Context, platformID int64) error {
+	if platformID < 1 {
+		return fmt.Errorf("rate limit policy platform is invalid")
+	}
+	if err := r.db.WithContext(ctx).Where("platform_id = ?", platformID).Delete(&Model{}).Error; err != nil {
+		return fmt.Errorf("delete mail rate limit policies: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) List(ctx context.Context, platformID int64) (Catalog, error) {
 	var rows []Model
 	if err := r.db.WithContext(ctx).Where("platform_id = ?", platformID).Find(&rows).Error; err != nil {

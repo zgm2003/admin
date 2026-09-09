@@ -34,7 +34,7 @@ func NewService(repository *Repository, keys *secretkey.KeyRing, readiness Readi
 func (s *Service) Get(ctx context.Context) (Safe, error) {
 	value, err := s.repository.Find(ctx)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return Safe{Configured: false, TTLMinutes: 10, IsEnabled: yesno.No}, nil
+		return Safe{Configured: false, TTLMinutes: 0, IsEnabled: yesno.No}, nil
 	}
 	if err != nil {
 		return Safe{}, wrapRepository(err)

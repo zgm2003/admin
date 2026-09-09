@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	projectredis "admin/server/internal/redis"
+	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/yesno"
 )
@@ -134,14 +136,18 @@ func TestPrepareEmailVerifyCodeTwoServicesShareRedisRateWindow(t *testing.T) {
 	})
 
 	newService := func(client *projectredis.Client) *Service {
-		service := NewService(nil, nil, nil, ruleEvaluatorStub{decision: RuleDecision{Allowed: true}}, NewRedisLimiter(client.UniversalClient()), stubRateLimitPolicyStore{catalog: catalog})
+		keys, err := secretkey.New(strings.Repeat("r", 64))
+		if err != nil {
+			t.Fatal(err)
+		}
+		service := NewService(nil, keys, nil, ruleEvaluatorStub{decision: RuleDecision{Allowed: true}}, NewRedisLimiter(client.UniversalClient()), stubRateLimitPolicyStore{catalog: catalog})
 		service.SetVerifyCodeReadinessStore(&stubVerifyCodeReadinessStore{readiness: VerifyCodeReadiness{Ready: true, TTLMinutes: 5}})
 		return service
 	}
 	firstService := newService(firstClient)
 	secondService := newService(secondClient)
 	input := EmailVerifyCodePrepareInput{PlatformID: platformID, ClientIP: clientIP, Scene: SceneLogin, ToEmail: email}
-	requests := businessLimitRequests(catalog, platformID, SceneLogin, email, clientIP)
+	requests := businessLimitRequests(catalog, platformID, email)
 	keys := make([]string, 0, len(requests))
 	for _, request := range requests {
 		keys = append(keys, "rate:"+request.Key)
@@ -171,7 +177,7 @@ func TestPrepareEmailVerifyCodeTwoServicesShareRedisRateWindow(t *testing.T) {
 	}
 	otherPlatform := input
 	otherPlatform.PlatformID++
-	otherRequests := businessLimitRequests(catalog, otherPlatform.PlatformID, SceneForget, email, clientIP)
+	otherRequests := businessLimitRequests(catalog, otherPlatform.PlatformID, email)
 	t.Cleanup(func() {
 		for _, request := range otherRequests {
 			_ = firstClient.Delete(context.Background(), "rate:"+request.Key)

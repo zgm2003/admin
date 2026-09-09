@@ -25,7 +25,7 @@ const config = ref<mailApi.MailConfig>({
   fromEmail: '',
   fromName: '',
   replyTo: '',
-  ttlMinutes: 10,
+  ttlMinutes: 0,
   isEnabled: YesNo.No,
   lastTestAt: null,
   lastTestError: '',

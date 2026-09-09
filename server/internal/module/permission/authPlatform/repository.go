@@ -29,7 +29,9 @@ type UpdateValues struct {
 }
 
 type Repository struct {
-	db *gorm.DB
+	db                       *gorm.DB
+	rateLimitPolicyProvision func(context.Context, *gorm.DB, int64) error
+	rateLimitPolicyDelete    func(context.Context, *gorm.DB, int64) error
 }
 
 type SessionRef struct {
@@ -47,6 +49,31 @@ func (platformSession) TableName() string { return "user_session" }
 
 func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
+}
+
+// SetRateLimitPolicyLifecycle injects the cross-module policy work that must
+// participate in the platform transaction. Service code only calls the
+// repository boundary and never receives a GORM handle.
+func (r *Repository) SetRateLimitPolicyLifecycle(
+	provision func(context.Context, *gorm.DB, int64) error,
+	remove func(context.Context, *gorm.DB, int64) error,
+) {
+	r.rateLimitPolicyProvision = provision
+	r.rateLimitPolicyDelete = remove
+}
+
+func (r *Repository) provisionRateLimitPolicies(ctx context.Context, platformID int64) error {
+	if r.rateLimitPolicyProvision == nil {
+		return nil
+	}
+	return r.rateLimitPolicyProvision(ctx, r.db, platformID)
+}
+
+func (r *Repository) deleteRateLimitPolicies(ctx context.Context, platformID int64) error {
+	if r.rateLimitPolicyDelete == nil {
+		return nil
+	}
+	return r.rateLimitPolicyDelete(ctx, r.db, platformID)
 }
 
 func (r *Repository) FindPolicy(ctx context.Context, code string) (Platform, error) {
@@ -87,7 +114,12 @@ func applyListFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 }
 
 func (r *Repository) Transaction(ctx context.Context, fn func(*Repository) error) error {
-	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return fn(NewRepository(tx)) }); err != nil {
+	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		scoped := NewRepository(tx)
+		scoped.rateLimitPolicyProvision = r.rateLimitPolicyProvision
+		scoped.rateLimitPolicyDelete = r.rateLimitPolicyDelete
+		return fn(scoped)
+	}); err != nil {
 		return fmt.Errorf("authentication platform transaction: %w", err)
 	}
 	return nil

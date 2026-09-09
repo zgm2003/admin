@@ -6,7 +6,7 @@ import (
 )
 
 func TestFindRuleMatchesRateLimitPolicyUpdate(t *testing.T) {
-	rule, ok := FindRule(http.MethodPut, "/api/admin/v1/message/mail/rate-limit-policy/:key")
+	rule, ok := FindRule(http.MethodPut, "/api/admin/v1/message/mail/rate-limit-policy/:platformId/:key")
 	if !ok {
 		t.Fatal("rate limit policy update rule is not registered")
 	}
@@ -19,7 +19,7 @@ func TestFindRuleMatchesRateLimitPolicyUpdate(t *testing.T) {
 }
 
 func TestFindRuleDoesNotMatchUnknownRoute(t *testing.T) {
-	if _, ok := FindRule(http.MethodPut, "/api/admin/v1/message/mail/rate-limit-policy"); ok {
+	if _, ok := FindRule(http.MethodPut, "/api/admin/v1/message/mail/rate-limit-policy/:key"); ok {
 		t.Fatal("the list route must not match the update rule")
 	}
 }

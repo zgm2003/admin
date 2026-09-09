@@ -3,6 +3,19 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## 当前收口执行记录（2026-09-09）
+
+- Mail 限流协议已移除 `LimitRequest.LegacyKeys` 及旧场景额度迁移；Redis Lua 只处理平台 + HMAC
+  规范化邮箱的每分钟/每 10 分钟两条窗口，缺少 Mail Recipient HMAC 密钥时显式返回依赖错误，禁止明文邮箱进入 Redis。
+- 认证平台生命周期已接入 Mail 策略 Repository：创建平台在同一 PostgreSQL 事务中幂等写入
+  `business_email_minute=1/60s` 与 `business_email_10m=5/600s`，删除平台在同一事务中软删平台并清理策略；
+  失败会整体回滚。依赖在 `cmd/api/main.go` 显式装配，Service 未接触 GORM。
+- 操作日志限流更新规则已对齐实际 `/rate-limit-policy/:platformId/:key` 路由，并脱敏映射平台参数；Runtime
+  Snapshot shared rebuild 使用 `context.WithoutCancel` + 15 秒有界超时。缺 Mail 配置时 TTL 返回 `0`，前端不再显示伪默认 10 分钟。
+- 历史 RBAC migration 断言已恢复验证当时生成的 `account:user:loginlog:view`；`docs/database/current.sql` 已从真实
+  PostgreSQL 重新 schema-only 导出且仅包含 `public` schema，不含测试 schema。
+- 本次未执行真实 DDL/Redis 清理、未启动 API/Worker、未提交代码。剩余风险：未运行 `go test -race`（机器无 C 编译器）。
+
 ## 当前 Mail 平台限流/运行时收尾（2026-09-09）
 
 - 修复限流策略管理响应 DTO：`platformId` 只保留在 catalog envelope，不再重复写入每个 policy。旧运行中的

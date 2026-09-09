@@ -95,7 +95,11 @@ func (s *runtimeStore) Load(ctx context.Context, scene string) (runtimeSnapshot,
 	} else if found {
 		return snapshot, nil
 	}
-	result := s.group.DoChan(scene, func() (any, error) { return s.rebuild(ctx, scene) })
+	result := s.group.DoChan(scene, func() (any, error) {
+		sharedContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), mailRuntimeLoadLockTTL*time.Duration(mailRuntimeRebuildAttempts))
+		defer cancel()
+		return s.rebuild(sharedContext, scene)
+	})
 	select {
 	case <-ctx.Done():
 		return runtimeSnapshot{}, ctx.Err()

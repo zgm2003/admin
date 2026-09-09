@@ -440,10 +440,13 @@ func (s *Service) reserveEmail(ctx context.Context, catalog RateLimitCatalog, pl
 		return LimitResult{}, dependency(fmt.Errorf("mail rate limiter unavailable"))
 	}
 	recipientKey := email
-	if s.keys != nil {
+	if _, concreteRedisLimiter := s.limiter.(*RedisLimiter); concreteRedisLimiter {
+		if s.keys == nil || len(s.keys.MailRecipientHMACKey()) == 0 {
+			return LimitResult{}, dependency(fmt.Errorf("mail recipient HMAC key unavailable"))
+		}
 		recipientKey = mailRecipientKey(s.keys, email)
 	}
-	result, err := s.limiter.Reserve(ctx, businessLimitRequests(catalog, platformID, "", recipientKey, "")...)
+	result, err := s.limiter.Reserve(ctx, businessLimitRequests(catalog, platformID, recipientKey)...)
 	if err != nil {
 		return LimitResult{}, dependency(err)
 	}
@@ -466,16 +469,12 @@ func (s *Service) loadRateLimitCatalog(ctx context.Context, platformID int64) (R
 	return s.policyStore.Load(ctx, platformID)
 }
 
-func businessLimitRequests(catalog RateLimitCatalog, platformID int64, scene, email, clientIP string) []LimitRequest {
+func businessLimitRequests(catalog RateLimitCatalog, platformID int64, email string) []LimitRequest {
 	limits := policyLimitMap(catalog)
 	requests := make([]LimitRequest, 0, 2)
 	for _, spec := range []struct{ key, prefix string }{{"business_email_minute", "email"}, {"business_email_10m", "email10"}} {
 		policy := limits[spec.key]
-		request := LimitRequest{Key: fmt.Sprintf("mail:send:%s:v2:%d:%s", spec.prefix, platformID, email), Limit: policy.Limit, Window: policyWindow(policy)}
-		for _, template := range mailtemplate.FixedCatalog() {
-			request.LegacyKeys = append(request.LegacyKeys, fmt.Sprintf("mail:send:%s:%d:%s:%s", spec.prefix, platformID, template.Scene, email))
-		}
-		requests = append(requests, request)
+		requests = append(requests, LimitRequest{Key: fmt.Sprintf("mail:send:%s:v2:%d:%s", spec.prefix, platformID, email), Limit: policy.Limit, Window: policyWindow(policy)})
 	}
 	return requests
 }

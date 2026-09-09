@@ -45,6 +45,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 )
 
 type routerDependencies struct {
@@ -164,6 +165,14 @@ func run(logger *slog.Logger) error {
 	mailStores := messagemail.NewStores(postgres.GORM)
 	mailLimiter := messagemail.NewRedisLimiter(redisClient.UniversalClient())
 	mailRateLimitRepository := ratelimitpolicy.NewRepository(postgres.GORM)
+	authPlatformRepository.SetRateLimitPolicyLifecycle(
+		func(ctx context.Context, tx *gorm.DB, platformID int64) error {
+			return ratelimitpolicy.NewRepository(tx).ProvisionDefaults(ctx, platformID)
+		},
+		func(ctx context.Context, tx *gorm.DB, platformID int64) error {
+			return ratelimitpolicy.NewRepository(tx).DeleteForPlatform(ctx, platformID)
+		},
+	)
 	mailRateLimitStore := ratelimitpolicy.NewStore(mailRateLimitRepository, redisClient)
 	mailRateLimitService := ratelimitpolicy.NewService(mailRateLimitRepository, mailRateLimitStore)
 	mailReadinessStore := messagemail.NewVerifyCodeReadinessStore(mailStores, redisClient)
