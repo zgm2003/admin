@@ -15,11 +15,11 @@ import (
 )
 
 const (
-	rateLimitPolicySchemaVersion = 2
-	rateLimitPolicySnapshotKey   = "mail:rate-limit:policies:v2"
-	rateLimitPolicyLoadLockKey   = "mail:rate-limit:policies:load-lock:v2"
-	rateLimitPolicyLoadLockTTL   = 5 * time.Second
-	rateLimitPolicyRetryInterval = 50 * time.Millisecond
+	rateLimitPolicySchemaVersion  = 2
+	rateLimitPolicySnapshotPrefix = "mail:rate-limit:policies:v3:"
+	rateLimitPolicyLoadLockPrefix = "mail:rate-limit:policies:load-lock:v3:"
+	rateLimitPolicyLoadLockTTL    = 5 * time.Second
+	rateLimitPolicyRetryInterval  = 50 * time.Millisecond
 )
 
 const (
@@ -137,7 +137,7 @@ func validateRateLimitSnapshot(snapshot RateLimitSnapshot) error {
 	if snapshot.SchemaVersion != rateLimitPolicySchemaVersion {
 		return fmt.Errorf("rate limit policy snapshot schema version is invalid")
 	}
-	if snapshot.Version < 1 {
+	if snapshot.PlatformID < 1 || snapshot.Version < 1 {
 		return fmt.Errorf("rate limit policy snapshot version is invalid")
 	}
 	switch snapshot.State {
@@ -200,6 +200,7 @@ func snapshotFromCatalog(catalog RateLimitCatalog) (RateLimitSnapshot, error) {
 	return RateLimitSnapshot{
 		SchemaVersion: rateLimitPolicySchemaVersion,
 		State:         rateLimitPolicyStateReady,
+		PlatformID:    catalog.PlatformID,
 		Version:       catalog.Version,
 		Policies:      policies,
 	}, nil
@@ -219,7 +220,7 @@ func catalogFromSnapshot(snapshot RateLimitSnapshot) RateLimitCatalog {
 			UpdatedAt:     value.UpdatedAt,
 		})
 	}
-	return RateLimitCatalog{Version: snapshot.Version, Policies: policies}
+	return RateLimitCatalog{PlatformID: snapshot.PlatformID, Version: snapshot.Version, Policies: policies}
 }
 
 // rejectDuplicateJSONKeys performs a token-level duplicate-key scan so a
@@ -292,6 +293,13 @@ type rateLimitPolicyStore struct {
 	group      singleflight.Group
 }
 
+func rateLimitPolicySnapshotKey(platformID int64) string {
+	return fmt.Sprintf("%s%d", rateLimitPolicySnapshotPrefix, platformID)
+}
+func rateLimitPolicyLoadLockKey(platformID int64) string {
+	return fmt.Sprintf("%s%d", rateLimitPolicyLoadLockPrefix, platformID)
+}
+
 func NewRateLimitPolicyStore(repository *Repository, redis *projectredis.Client) *rateLimitPolicyStore {
 	return &rateLimitPolicyStore{repository: repository, redis: redis}
 }
@@ -300,23 +308,26 @@ func NewStore(repository *Repository, redis *projectredis.Client) Store {
 	return NewRateLimitPolicyStore(repository, redis)
 }
 
-func (s *rateLimitPolicyStore) Load(ctx context.Context) (RateLimitCatalog, error) {
+func (s *rateLimitPolicyStore) Load(ctx context.Context, platformID int64) (RateLimitCatalog, error) {
+	if platformID < 1 {
+		return RateLimitCatalog{}, dependency(fmt.Errorf("mail rate limit policy platform is invalid"))
+	}
 	if s == nil || s.redis == nil {
 		return RateLimitCatalog{}, dependency(fmt.Errorf("mail rate limit policy Redis store unavailable"))
 	}
-	snapshot, found, err := s.readSnapshot(ctx)
+	snapshot, found, err := s.readSnapshot(ctx, platformID)
 	if err != nil {
 		return RateLimitCatalog{}, err
 	}
 	if found {
 		return catalogFromSnapshot(snapshot), nil
 	}
-	result := s.group.DoChan(rateLimitPolicySnapshotKey, func() (any, error) {
+	result := s.group.DoChan(rateLimitPolicySnapshotKey(platformID), func() (any, error) {
 		// A shared rebuild must outlive the caller that happens to win
 		// singleflight, but it still needs a hard upper bound.
 		sharedContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), rateLimitPolicyLoadLockTTL)
 		defer cancel()
-		return s.rebuild(sharedContext)
+		return s.rebuild(sharedContext, platformID)
 	})
 	var sharedResult singleflight.Result
 	select {
@@ -334,11 +345,14 @@ func (s *rateLimitPolicyStore) Load(ctx context.Context) (RateLimitCatalog, erro
 	return catalog, nil
 }
 
-func (s *rateLimitPolicyStore) readSnapshot(ctx context.Context) (RateLimitSnapshot, bool, error) {
+func (s *rateLimitPolicyStore) readSnapshot(ctx context.Context, platformID int64) (RateLimitSnapshot, bool, error) {
 	if s == nil || s.redis == nil {
 		return RateLimitSnapshot{}, false, dependency(fmt.Errorf("mail rate limit policy Redis store unavailable"))
 	}
-	raw, found, err := s.redis.GetString(ctx, rateLimitPolicySnapshotKey)
+	if platformID < 1 {
+		return RateLimitSnapshot{}, false, dependency(fmt.Errorf("mail rate limit policy platform is invalid"))
+	}
+	raw, found, err := s.redis.GetString(ctx, rateLimitPolicySnapshotKey(platformID))
 	if err != nil {
 		return RateLimitSnapshot{}, false, dependency(err)
 	}
@@ -352,10 +366,13 @@ func (s *rateLimitPolicyStore) readSnapshot(ctx context.Context) (RateLimitSnaps
 	if snapshot.State == rateLimitPolicyStateInvalidating {
 		return RateLimitSnapshot{}, true, dependency(fmt.Errorf("rate limit policy snapshot is invalidating"))
 	}
+	if snapshot.PlatformID != platformID {
+		return RateLimitSnapshot{}, true, dependency(fmt.Errorf("rate limit policy snapshot platform is invalid"))
+	}
 	return snapshot, true, nil
 }
 
-func (s *rateLimitPolicyStore) rebuild(ctx context.Context) (RateLimitCatalog, error) {
+func (s *rateLimitPolicyStore) rebuild(ctx context.Context, platformID int64) (RateLimitCatalog, error) {
 	if s == nil || s.redis == nil || s.repository == nil {
 		return RateLimitCatalog{}, dependency(fmt.Errorf("mail rate limit policy rebuild dependencies unavailable"))
 	}
@@ -363,7 +380,7 @@ func (s *rateLimitPolicyStore) rebuild(ctx context.Context) (RateLimitCatalog, e
 	if err != nil {
 		return RateLimitCatalog{}, dependency(err)
 	}
-	acquired, err := s.redis.SetStringIfMissing(ctx, rateLimitPolicyLoadLockKey, token, 5*time.Second)
+	acquired, err := s.redis.SetStringIfMissing(ctx, rateLimitPolicyLoadLockKey(platformID), token, 5*time.Second)
 	if err != nil {
 		return RateLimitCatalog{}, dependency(err)
 	}
@@ -371,9 +388,9 @@ func (s *rateLimitPolicyStore) rebuild(ctx context.Context) (RateLimitCatalog, e
 		defer func() {
 			releaseContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 			defer cancel()
-			_ = s.releaseLoadLock(releaseContext, token)
+			_ = s.releaseLoadLock(releaseContext, platformID, token)
 		}()
-		catalog, dbErr := s.repository.ListRateLimitPolicies(ctx)
+		catalog, dbErr := s.repository.ListRateLimitPolicies(ctx, platformID)
 		if dbErr != nil {
 			return RateLimitCatalog{}, dependency(dbErr)
 		}
@@ -386,13 +403,13 @@ func (s *rateLimitPolicyStore) rebuild(ctx context.Context) (RateLimitCatalog, e
 			return RateLimitCatalog{}, dependency(encErr)
 		}
 		published, publishErr := s.redis.EvalString(ctx, rebuildRateLimitSnapshotScript,
-			[]string{rateLimitPolicySnapshotKey}, catalog.Version, payload)
+			[]string{rateLimitPolicySnapshotKey(platformID)}, catalog.Version, payload)
 		if publishErr != nil {
-			_ = s.releaseLoadLock(ctx, token)
+			_ = s.releaseLoadLock(ctx, platformID, token)
 			return RateLimitCatalog{}, dependency(publishErr)
 		}
 		if published == "newer" {
-			current, found, readErr := s.readSnapshot(ctx)
+			current, found, readErr := s.readSnapshot(ctx, platformID)
 			if readErr != nil {
 				return RateLimitCatalog{}, readErr
 			}
@@ -421,7 +438,7 @@ func (s *rateLimitPolicyStore) rebuild(ctx context.Context) (RateLimitCatalog, e
 		if err := waitRateLimitRetry(ctx, remaining); err != nil {
 			return RateLimitCatalog{}, dependency(err)
 		}
-		snapshot, found, readErr := s.readSnapshot(ctx)
+		snapshot, found, readErr := s.readSnapshot(ctx, platformID)
 		if readErr != nil {
 			return RateLimitCatalog{}, readErr
 		}
@@ -449,27 +466,27 @@ if current == ARGV[1] then redis.call('DEL', KEYS[1]) end
 return 1
 `
 
-func (s *rateLimitPolicyStore) releaseLoadLock(ctx context.Context, token string) error {
-	_, err := s.redis.EvalString(ctx, releaseRateLimitLoadLockScript, []string{rateLimitPolicyLoadLockKey}, token)
+func (s *rateLimitPolicyStore) releaseLoadLock(ctx context.Context, platformID int64, token string) error {
+	_, err := s.redis.EvalString(ctx, releaseRateLimitLoadLockScript, []string{rateLimitPolicyLoadLockKey(platformID)}, token)
 	return err
 }
 
-func (s *rateLimitPolicyStore) Update(ctx context.Context, input RateLimitPolicyInput) (RateLimitCatalog, error) {
+func (s *rateLimitPolicyStore) Update(ctx context.Context, platformID int64, input RateLimitPolicyInput) (RateLimitCatalog, error) {
 	if err := ValidateRateLimitPolicyInput(input); err != nil {
 		return RateLimitCatalog{}, invalid(err)
 	}
 	if s == nil || s.redis == nil || s.repository == nil {
 		return RateLimitCatalog{}, dependency(fmt.Errorf("mail rate limit policy update dependencies unavailable"))
 	}
-	prior, found, err := s.readSnapshot(ctx)
+	prior, found, err := s.readSnapshot(ctx, platformID)
 	if err != nil {
 		return RateLimitCatalog{}, err
 	}
 	if !found {
-		if _, loadErr := s.Load(ctx); loadErr != nil {
+		if _, loadErr := s.Load(ctx, platformID); loadErr != nil {
 			return RateLimitCatalog{}, loadErr
 		}
-		prior, found, err = s.readSnapshot(ctx)
+		prior, found, err = s.readSnapshot(ctx, platformID)
 		if err != nil {
 			return RateLimitCatalog{}, err
 		}
@@ -485,6 +502,7 @@ func (s *rateLimitPolicyStore) Update(ctx context.Context, input RateLimitPolicy
 	invalidating, err := encodeRateLimitSnapshot(RateLimitSnapshot{
 		SchemaVersion: rateLimitPolicySchemaVersion,
 		State:         rateLimitPolicyStateInvalidating,
+		PlatformID:    platformID,
 		Version:       prior.Version,
 		MutationToken: &token,
 	})
@@ -492,7 +510,7 @@ func (s *rateLimitPolicyStore) Update(ctx context.Context, input RateLimitPolicy
 		return RateLimitCatalog{}, dependency(err)
 	}
 	acquired, err := s.redis.EvalString(ctx, beginRateLimitMutationScript,
-		[]string{rateLimitPolicySnapshotKey}, prior.Version, invalidating, int64((30*time.Second)/time.Millisecond))
+		[]string{rateLimitPolicySnapshotKey(platformID)}, prior.Version, invalidating, int64((30*time.Second)/time.Millisecond))
 	if err != nil {
 		return RateLimitCatalog{}, dependency(err)
 	}
@@ -500,9 +518,9 @@ func (s *rateLimitPolicyStore) Update(ctx context.Context, input RateLimitPolicy
 		return RateLimitCatalog{}, dependency(fmt.Errorf("rate limit policy is being updated by another request"))
 	}
 
-	catalog, dbErr := s.repository.UpdateRateLimitPolicy(ctx, input)
+	catalog, dbErr := s.repository.UpdateRateLimitPolicy(ctx, platformID, input)
 	if dbErr != nil {
-		if rollbackErr := s.rollbackReady(ctx, prior, token); rollbackErr != nil {
+		if rollbackErr := s.rollbackReady(ctx, platformID, prior, token); rollbackErr != nil {
 			return RateLimitCatalog{}, dependency(fmt.Errorf("rollback rate limit policy snapshot: %w", rollbackErr))
 		}
 		return RateLimitCatalog{}, wrapRepo(dbErr)
@@ -517,12 +535,12 @@ func (s *rateLimitPolicyStore) Update(ctx context.Context, input RateLimitPolicy
 		return RateLimitCatalog{}, dependency(encErr)
 	}
 	result, pubErr := s.redis.EvalString(ctx, publishRateLimitMutationScript,
-		[]string{rateLimitPolicySnapshotKey}, token, catalog.Version, readyPayload)
+		[]string{rateLimitPolicySnapshotKey(platformID)}, token, catalog.Version, readyPayload)
 	if pubErr != nil {
 		return RateLimitCatalog{}, dependency(pubErr)
 	}
 	if result == "newer" {
-		current, _, readErr := s.readSnapshot(ctx)
+		current, _, readErr := s.readSnapshot(ctx, platformID)
 		if readErr != nil {
 			return RateLimitCatalog{}, readErr
 		}
@@ -537,13 +555,13 @@ func (s *rateLimitPolicyStore) Update(ctx context.Context, input RateLimitPolicy
 	return catalog, nil
 }
 
-func (s *rateLimitPolicyStore) rollbackReady(ctx context.Context, prior RateLimitSnapshot, token string) error {
+func (s *rateLimitPolicyStore) rollbackReady(ctx context.Context, platformID int64, prior RateLimitSnapshot, token string) error {
 	payload, err := encodeRateLimitSnapshot(prior)
 	if err != nil {
 		return err
 	}
 	result, err := s.redis.EvalString(ctx, publishRateLimitMutationScript,
-		[]string{rateLimitPolicySnapshotKey}, token, prior.Version, payload)
+		[]string{rateLimitPolicySnapshotKey(platformID)}, token, prior.Version, payload)
 	if err != nil {
 		return err
 	}

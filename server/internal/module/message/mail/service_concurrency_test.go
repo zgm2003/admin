@@ -70,7 +70,8 @@ func TestSendConcurrentChallengeUsesDatabaseUniqueness(t *testing.T) {
 	}
 
 	sender := &countingSender{}
-	service := NewService(NewStores(db), nil, sender, nil, limiterStub{allowed: true}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	keys := configuredMailTestKeys(t, db, ctx)
+	service := NewService(NewStores(db), keys, sender, nil, limiterStub{allowed: true}, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
 	in := BusinessSendInput{PlatformID: 1, ChallengeID: "challenge-1", Scene: SceneLogin, ToEmail: "user@example.com", Variables: map[string]string{"code": "123456", "ttl_minutes": "10"}}
 	start := make(chan struct{})
 	results := make(chan struct {

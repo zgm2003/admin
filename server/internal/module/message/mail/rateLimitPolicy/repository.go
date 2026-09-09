@@ -13,26 +13,60 @@ type Repository struct{ db *gorm.DB }
 
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 
-func (r *Repository) List(ctx context.Context) (Catalog, error) {
+func (r *Repository) List(ctx context.Context, platformID int64) (Catalog, error) {
 	var rows []Model
-	if err := r.db.WithContext(ctx).Find(&rows).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("platform_id = ?", platformID).Find(&rows).Error; err != nil {
 		return Catalog{}, err
 	}
-	return buildCatalog(rows)
+	return buildCatalog(platformID, rows)
 }
 
-func (r *Repository) Update(ctx context.Context, input Input) (Catalog, error) {
+// ListAll is the management view. Rate-limit data is platform-scoped, but the
+// Admin console is the control plane and must be able to inspect every
+// platform catalog in one request. Sending still uses List(platformID).
+func (r *Repository) ListAll(ctx context.Context) ([]Catalog, error) {
+	var rows []Model
+	if err := r.db.WithContext(ctx).Order("platform_id ASC, policy_key ASC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	groups := make(map[int64][]Model)
+	for _, row := range rows {
+		groups[row.PlatformID] = append(groups[row.PlatformID], row)
+	}
+	var platforms []struct {
+		ID   int64
+		Code string
+		Name string
+	}
+	if err := r.db.WithContext(ctx).Table("permission_auth_platform").Select("id, code, name").Where("deleted_at IS NULL").Order("id ASC").Find(&platforms).Error; err != nil {
+		return nil, err
+	}
+	result := make([]Catalog, 0, len(platforms))
+	for _, platform := range platforms {
+		platformID := platform.ID
+		catalog, err := buildCatalog(platformID, groups[platformID])
+		if err != nil {
+			return nil, err
+		}
+		catalog.PlatformCode = platform.Code
+		catalog.PlatformName = platform.Name
+		result = append(result, catalog)
+	}
+	return result, nil
+}
+
+func (r *Repository) Update(ctx context.Context, platformID int64, input Input) (Catalog, error) {
 	var catalog Catalog
 	err := r.db.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		var rows []Model
-		if err := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).Order("policy_key ASC").Find(&rows).Error; err != nil {
+		if err := transaction.Where("platform_id = ?", platformID).Clauses(clause.Locking{Strength: "UPDATE"}).Order("policy_key ASC").Find(&rows).Error; err != nil {
 			return err
 		}
-		current, err := buildCatalog(rows)
+		current, err := buildCatalog(platformID, rows)
 		if err != nil {
 			return err
 		}
-		query := transaction.Model(&Model{}).Where("policy_key = ?", input.Key).Updates(map[string]any{
+		query := transaction.Model(&Model{}).Where("platform_id = ? AND policy_key = ?", platformID, input.Key).Updates(map[string]any{
 			"limit_count": input.Limit, "window_seconds": input.WindowSeconds,
 			"revision": current.Version + 1, "updated_at": time.Now().UTC(),
 		})
@@ -43,30 +77,36 @@ func (r *Repository) Update(ctx context.Context, input Input) (Catalog, error) {
 			return gorm.ErrRecordNotFound
 		}
 		var updated []Model
-		if err := transaction.Find(&updated).Error; err != nil {
+		if err := transaction.Where("platform_id = ?", platformID).Find(&updated).Error; err != nil {
 			return err
 		}
-		catalog, err = buildCatalog(updated)
+		catalog, err = buildCatalog(platformID, updated)
 		return err
 	})
 	return catalog, err
 }
 
-func (r *Repository) ListRateLimitPolicies(ctx context.Context) (Catalog, error) {
-	return r.List(ctx)
+func (r *Repository) ListRateLimitPolicies(ctx context.Context, platformID int64) (Catalog, error) {
+	return r.List(ctx, platformID)
 }
 
-func (r *Repository) UpdateRateLimitPolicy(ctx context.Context, input Input) (Catalog, error) {
-	return r.Update(ctx, input)
+func (r *Repository) UpdateRateLimitPolicy(ctx context.Context, platformID int64, input Input) (Catalog, error) {
+	return r.Update(ctx, platformID, input)
 }
 
-func buildCatalog(rows []Model) (Catalog, error) {
+func buildCatalog(platformID int64, rows []Model) (Catalog, error) {
+	if platformID < 1 {
+		return Catalog{}, fmt.Errorf("rate limit policy platform is invalid")
+	}
 	if len(rows) != len(fixedRateLimitPolicyKeys) {
 		return Catalog{}, fmt.Errorf("rate limit policy table must contain exactly %d rows, got %d", len(fixedRateLimitPolicyKeys), len(rows))
 	}
 	byKey := make(map[string]Model, len(rows))
 	var version int64
 	for _, row := range rows {
+		if row.PlatformID != platformID {
+			return Catalog{}, fmt.Errorf("rate limit policy platform is inconsistent")
+		}
 		if _, exists := byKey[row.Key]; exists {
 			return Catalog{}, fmt.Errorf("rate limit policy %q is duplicated", row.Key)
 		}
@@ -96,7 +136,9 @@ func buildCatalog(rows []Model) (Catalog, error) {
 	if version < 1 {
 		return Catalog{}, fmt.Errorf("rate limit policy catalog version is invalid")
 	}
-	return Catalog{Version: version, Policies: ordered}, nil
+	return Catalog{PlatformID: platformID, Version: version, Policies: ordered}, nil
 }
 
-func BuildCatalog(rows []Model) (Catalog, error) { return buildCatalog(rows) }
+func BuildCatalog(platformID int64, rows []Model) (Catalog, error) {
+	return buildCatalog(platformID, rows)
+}

@@ -99,7 +99,8 @@ export const enUS = {
   'mail.loadFailed': 'Failed to load mail service data',
   'mail.rateLimitsTab': 'Rate Limits',
   'mail.rateLimit.explanation':
-    'Both policies are shared by platform and email across all scenes, including admin tests.',
+    'Policies are maintained per authentication platform. The same platform and email share both policies across all scenes and admin tests.',
+  'mail.rateLimit.platform': 'Platform',
   'mail.rateLimit.policy': 'Policy',
   'mail.rateLimit.mode': 'Mode',
   'mail.rateLimit.modeBusiness': 'All mail',

@@ -62,7 +62,7 @@ describe('mail service page', () => {
     ])
     vi.mocked(mailApi.listMailLogs).mockResolvedValue({ list: [], total: 0, page: 1, pageSize: 20 })
     vi.mocked(mailApi.listMailRules).mockResolvedValue([])
-    vi.mocked(mailApi.listMailRateLimitPolicies).mockResolvedValue({ version: 1, policies: [] })
+    vi.mocked(mailApi.listMailRateLimitPolicies).mockResolvedValue({ platforms: [] })
   })
   afterEach(() => {
     document.body.innerHTML = ''

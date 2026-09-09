@@ -10,20 +10,19 @@ const (
 )
 
 type Fixed struct {
-	Scene             string   `json:"scene"`
-	Name              string   `json:"name"`
-	Subject           string   `json:"subject"`
-	TencentTemplateID int      `json:"tencentTemplateId"`
-	Variables         []string `json:"variables"`
+	Scene     string   `json:"scene"`
+	Name      string   `json:"name"`
+	Subject   string   `json:"subject"`
+	Variables []string `json:"variables"`
 }
 
 func FixedCatalog() []Fixed {
 	variables := []string{"code", "ttl_minutes"}
 	return []Fixed{
-		{Scene: SceneLogin, Name: "邮箱验证码登录", Subject: "登录验证码", TencentTemplateID: 47941, Variables: append([]string(nil), variables...)},
-		{Scene: SceneForget, Name: "找回密码", Subject: "找回密码验证码", TencentTemplateID: 47942, Variables: append([]string(nil), variables...)},
-		{Scene: SceneBindEmail, Name: "绑定/换绑邮箱", Subject: "绑定邮箱验证码", TencentTemplateID: 47943, Variables: append([]string(nil), variables...)},
-		{Scene: SceneChangePassword, Name: "验证码改密", Subject: "修改密码验证码", TencentTemplateID: 47944, Variables: append([]string(nil), variables...)},
+		{Scene: SceneLogin, Name: "邮箱验证码登录", Subject: "登录验证码", Variables: append([]string(nil), variables...)},
+		{Scene: SceneForget, Name: "找回密码", Subject: "找回密码验证码", Variables: append([]string(nil), variables...)},
+		{Scene: SceneBindEmail, Name: "绑定/换绑邮箱", Subject: "绑定邮箱验证码", Variables: append([]string(nil), variables...)},
+		{Scene: SceneChangePassword, Name: "验证码改密", Subject: "修改密码验证码", Variables: append([]string(nil), variables...)},
 	}
 }
 

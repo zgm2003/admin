@@ -40,7 +40,7 @@ func (h *Handler) List(context *gin.Context) {
 		response.Fail(context, invalid(err))
 		return
 	}
-	result, err := h.service.List(context, query)
+	result, err := h.service.List(context.Request.Context(), query)
 	if err != nil {
 		response.Fail(context, err)
 		return
@@ -54,7 +54,7 @@ func (h *Handler) Get(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	value, err := h.service.Get(context, id)
+	value, err := h.service.Get(context.Request.Context(), id)
 	if err != nil {
 		response.Fail(context, err)
 		return
@@ -73,7 +73,7 @@ func (h *Handler) Create(context *gin.Context) {
 		response.Fail(context, invalid(err))
 		return
 	}
-	id, err := h.service.Create(context, input)
+	id, err := h.service.Create(context.Request.Context(), input)
 	if err != nil {
 		response.Fail(context, err)
 		return
@@ -97,7 +97,7 @@ func (h *Handler) Update(context *gin.Context) {
 		response.Fail(context, invalid(err))
 		return
 	}
-	if err = h.service.Update(context, id, input); err != nil {
+	if err = h.service.Update(context.Request.Context(), id, input); err != nil {
 		response.Fail(context, err)
 		return
 	}
@@ -119,7 +119,7 @@ func (h *Handler) Status(context *gin.Context) {
 		response.Fail(context, invalid(fmt.Errorf("isEnabled is required")))
 		return
 	}
-	if err = h.service.UpdateStatus(context, id, *request.IsEnabled); err != nil {
+	if err = h.service.UpdateStatus(context.Request.Context(), id, *request.IsEnabled); err != nil {
 		response.Fail(context, err)
 		return
 	}
@@ -136,7 +136,7 @@ func (h *Handler) Test(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	if err = h.service.TestConnection(context, id); err != nil {
+	if err = h.service.TestConnection(context.Request.Context(), id); err != nil {
 		response.Fail(context, err)
 		return
 	}
@@ -153,7 +153,7 @@ func (h *Handler) Delete(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	if err = h.service.Delete(context, id); err != nil {
+	if err = h.service.Delete(context.Request.Context(), id); err != nil {
 		response.Fail(context, err)
 		return
 	}

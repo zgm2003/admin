@@ -31,10 +31,10 @@ func TestRateLimitRetryWaitHonorsDelay(t *testing.T) {
 
 func TestRateLimitPolicyStoreRejectsMissingDependencies(t *testing.T) {
 	store := NewRateLimitPolicyStore(nil, nil)
-	if _, err := store.Load(context.Background()); err == nil {
+	if _, err := store.Load(context.Background(), 1); err == nil {
 		t.Fatal("Load accepted a missing Redis dependency")
 	}
-	if _, err := store.Update(context.Background(), RateLimitPolicyInput{
+	if _, err := store.Update(context.Background(), 1, RateLimitPolicyInput{
 		Key: "business_email_minute", Limit: 1, WindowSeconds: 60,
 	}); err == nil {
 		t.Fatal("Update accepted missing store dependencies")
@@ -70,7 +70,7 @@ func TestRateLimitPolicyInputRejectsUnknownKeyAndOutOfRangeValues(t *testing.T) 
 
 func TestRateLimitSnapshotReadyRoundTrip(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	catalog := RateLimitCatalog{Version: 4, Policies: fixedPoliciesWithTimestamp(now)}
+	catalog := RateLimitCatalog{PlatformID: 1, Version: 4, Policies: fixedPoliciesWithTimestamp(now)}
 
 	snapshot, err := snapshotFromCatalog(catalog)
 	if err != nil {
@@ -84,7 +84,7 @@ func TestRateLimitSnapshotReadyRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if decoded.State != rateLimitPolicyStateReady || decoded.Version != 4 {
+	if decoded.State != rateLimitPolicyStateReady || decoded.PlatformID != 1 || decoded.Version != 4 {
 		t.Fatalf("decoded snapshot = %+v", decoded)
 	}
 	roundTrip := catalogFromSnapshot(decoded)
@@ -101,7 +101,7 @@ func TestRateLimitSnapshotReadyRoundTrip(t *testing.T) {
 
 func TestRateLimitSnapshotRejectsMalformedPayloads(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	catalog := RateLimitCatalog{Version: 1, Policies: fixedPoliciesWithTimestamp(now)}
+	catalog := RateLimitCatalog{PlatformID: 1, Version: 1, Policies: fixedPoliciesWithTimestamp(now)}
 	ready, err := encodeRateLimitSnapshot(mustSnapshot(t, catalog))
 	if err != nil {
 		t.Fatal(err)
@@ -110,6 +110,7 @@ func TestRateLimitSnapshotRejectsMalformedPayloads(t *testing.T) {
 	invalidating, err := encodeRateLimitSnapshot(RateLimitSnapshot{
 		SchemaVersion: rateLimitPolicySchemaVersion,
 		State:         rateLimitPolicyStateInvalidating,
+		PlatformID:    1,
 		Version:       1,
 		MutationToken: stringPointer("token"),
 	})
@@ -153,6 +154,7 @@ func TestRateLimitSnapshotInvalidatingOmitsPolicies(t *testing.T) {
 	snapshot := RateLimitSnapshot{
 		SchemaVersion: rateLimitPolicySchemaVersion,
 		State:         rateLimitPolicyStateInvalidating,
+		PlatformID:    1,
 		Version:       1,
 		MutationToken: &token,
 	}

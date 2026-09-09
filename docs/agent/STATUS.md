@@ -3,6 +3,30 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## 当前 Mail 平台限流/运行时收尾（2026-09-09）
+
+- 修复限流策略管理响应 DTO：`platformId` 只保留在 catalog envelope，不再重复写入每个 policy。旧运行中的
+  API 会返回重复字段，前端严格协议解析因此显示 `mail rate limit policy has invalid fields`；已修改
+  `rateLimitPolicy/handler.go` 使用专用 `PolicyResponse`，重新编译后需重启 API 才生效。
+- 修正管理端平台范围：Admin 控制台是全平台控制面，不能只读取当前认证平台。限流管理 GET 现在返回
+  `platforms[]`，每个平台包含平台名称、编码、版本及两条策略；PUT 使用
+  `/rate-limit-policy/:platformId/:key` 明确修改目标平台。前端展示四行（Admin 两行、Canvas 两行），并以
+  `platformId + policyKey` 作为行键。
+- 修复 Mail 集成测试夹具：测试密钥辅助函数不再递归；验证码日志表和平台化限流策略夹具均已补齐。
+  `go test -p 1 ./internal/module/message/mail/... -count=1` 与 Mail 根包 `-race` 已通过。
+- Mail Runtime Snapshot 改为专用内部 DTO，显式携带加密凭据密文；发送热路径命中 Redis 时不再因
+  `json:"-"` 丢失密文而回源/失败。新增 generation + Redis 租约，配置、模板、收件规则变更以原子
+  generation 失效，避免旧快照在并发重建中回写；Redis 故障、快照损坏和源数据不完整均显式失败。
+- **真实数据库迁移已执行**：停止状态下于 **2026-09-09 11:11:12 +08:00** 执行
+  `docs/database/2026-09-09-mail-rate-policy-platform.sql`。`admin.public` 已从旧全局两行转换为四行：
+  `admin`(platform_id=1) 两行 + `canvas`(platform_id=2) 两行，额度仍为 1/60s 与 5/600s；重复执行由
+  隔离测试验证不新增，异常整体回滚。迁移前备份位于
+  `%LOCALAPPDATA%\Admin\backups\mail-rate-policy-platform-20260909-111112\public-before.dump`，
+  SHA256 `29FCFEDF8B7F8654F159A4728935282502DDFF3AD5E72A994A940CEA78D62E0E`，`pg_restore --list` 通过。
+  `docs/database/current.sql` 已按真实 schema 刷新。
+- 当前没有 API/Worker 或测试进程由 Agent 运行；未清理 Redis 额度、Session 或 Access。维护者需手动启动
+  新 API/Worker 后再做人工验收。
+
 ## 模块 lower camel 与 Mail 分层整改（2026-09-09，最新）
 
 - 后端复合模块目录/import path 已统一 lower camel：`authPlatform`、`permissionVersion`、`roleMenu`、

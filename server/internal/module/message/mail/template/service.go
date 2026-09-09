@@ -17,8 +17,13 @@ import (
 )
 
 type Service struct {
-	repository *Repository
-	readiness  ReadinessCoordinator
+	repository         *Repository
+	readiness          ReadinessCoordinator
+	runtimeInvalidator func(context.Context) error
+}
+
+func (s *Service) SetRuntimeInvalidator(invalidator func(context.Context) error) {
+	s.runtimeInvalidator = invalidator
 }
 
 func NewService(repository *Repository, readiness ReadinessCoordinator) *Service {
@@ -34,8 +39,8 @@ func (s *Service) List(ctx context.Context) ([]Model, error) {
 }
 
 func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error {
-	fixed, found := FindFixed(input.Scene)
-	if !found || input.TencentTemplateID != fixed.TencentTemplateID {
+	_, found := FindFixed(input.Scene)
+	if !found || input.TencentTemplateID < 1 {
 		return apperror.InvalidRequest(fmt.Errorf("template scene or id is invalid"))
 	}
 	if strings.TrimSpace(input.Name) == "" || strings.TrimSpace(input.Subject) == "" {
@@ -62,10 +67,14 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 	if err != nil {
 		return apperror.InvalidRequest(err)
 	}
-	return wrapRepository(s.repository.Update(ctx, id, map[string]any{
+	err = wrapRepository(s.repository.Update(ctx, id, map[string]any{
 		"name": input.Name, "subject": input.Subject, "tencent_template_id": input.TencentTemplateID,
 		"variables": variables, "example_variables": examples, "updated_at": time.Now().UTC(),
 	}))
+	if err != nil || s.runtimeInvalidator == nil {
+		return err
+	}
+	return s.runtimeInvalidator(ctx)
 }
 
 func (s *Service) SetStatus(ctx context.Context, id int64, enabled yesno.Value) error {
@@ -80,7 +89,13 @@ func (s *Service) SetStatus(ctx context.Context, id int64, enabled yesno.Value) 
 			"is_enabled": enabled, "updated_at": time.Now().UTC(),
 		})
 	})
-	return mapMutationError(err)
+	if mapped := mapMutationError(err); mapped != nil {
+		return mapped
+	}
+	if s.runtimeInvalidator != nil {
+		return s.runtimeInvalidator(ctx)
+	}
+	return nil
 }
 
 func validateVariables(values map[string]string, requireValues bool) error {

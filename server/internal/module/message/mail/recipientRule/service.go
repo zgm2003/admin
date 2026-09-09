@@ -19,9 +19,16 @@ import (
 
 var domainLabel = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 
-type Service struct{ repository *Repository }
+type Service struct {
+	repository         *Repository
+	runtimeInvalidator func(context.Context) error
+}
 
 func NewService(repository *Repository) *Service { return &Service{repository: repository} }
+
+func (s *Service) SetRuntimeInvalidator(invalidator func(context.Context) error) {
+	s.runtimeInvalidator = invalidator
+}
 
 func (s *Service) Evaluate(ctx context.Context, email string, _ SendMode) (Decision, error) {
 	email, err := NormalizeRecipient(email)
@@ -29,6 +36,15 @@ func (s *Service) Evaluate(ctx context.Context, email string, _ SendMode) (Decis
 		return Decision{}, err
 	}
 	rows, err := s.repository.List(ctx)
+	if err != nil {
+		return Decision{}, err
+	}
+	return EvaluateRows(rows, email)
+}
+
+func EvaluateRows(rows []Model, email string) (Decision, error) {
+	var err error
+	email, err = NormalizeRecipient(email)
 	if err != nil {
 		return Decision{}, err
 	}
@@ -73,6 +89,11 @@ func (s *Service) Create(ctx context.Context, input Input) (int64, error) {
 	if err := s.repository.Create(ctx, value); err != nil {
 		return 0, wrapRepository(err)
 	}
+	if s.runtimeInvalidator != nil {
+		if err := s.runtimeInvalidator(ctx); err != nil {
+			return 0, apperror.DependencyUnavailable(err)
+		}
+	}
 	return value.ID, nil
 }
 
@@ -84,23 +105,35 @@ func (s *Service) Update(ctx context.Context, id int64, input Input) error {
 	if err != nil {
 		return apperror.InvalidRequest(err)
 	}
-	return wrapRepository(s.repository.Update(ctx, id, map[string]any{
+	err = wrapRepository(s.repository.Update(ctx, id, map[string]any{
 		"scope": input.Scope, "pattern": pattern, "action": input.Action, "name": input.Name,
 		"remark": input.Remark, "is_enabled": input.IsEnabled, "updated_at": time.Now().UTC(),
 	}))
+	if err != nil || s.runtimeInvalidator == nil {
+		return err
+	}
+	return s.runtimeInvalidator(ctx)
 }
 
 func (s *Service) SetStatus(ctx context.Context, id int64, enabled yesno.Value) error {
 	if !yesno.IsValid(enabled) {
 		return apperror.InvalidRequest(fmt.Errorf("status invalid"))
 	}
-	return wrapRepository(s.repository.Update(ctx, id, map[string]any{
+	err := wrapRepository(s.repository.Update(ctx, id, map[string]any{
 		"is_enabled": enabled, "updated_at": time.Now().UTC(),
 	}))
+	if err != nil || s.runtimeInvalidator == nil {
+		return err
+	}
+	return s.runtimeInvalidator(ctx)
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {
-	return wrapRepository(s.repository.Delete(ctx, id))
+	err := wrapRepository(s.repository.Delete(ctx, id))
+	if err != nil || s.runtimeInvalidator == nil {
+		return err
+	}
+	return s.runtimeInvalidator(ctx)
 }
 
 func NormalizeRecipient(value string) (string, error) {

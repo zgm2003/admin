@@ -492,6 +492,10 @@ export function deleteMailRule(id: number): Promise<Record<string, never>> {
 }
 
 export interface MailRateLimitPolicy {
+  platformId: number
+  platformCode?: string
+  platformName?: string
+  rowId?: string
   key: string
   mode: 'business'
   dimension: string
@@ -499,11 +503,18 @@ export interface MailRateLimitPolicy {
   windowSeconds: number
   updatedAt: string
 }
-export interface MailRateLimitSnapshot {
+export interface MailRateLimitPlatformCatalog {
+  platformId: number
+  platformCode: string
+  platformName: string
   version: number
   policies: MailRateLimitPolicy[]
 }
+export interface MailRateLimitSnapshot {
+  platforms: MailRateLimitPlatformCatalog[]
+}
 export interface MailRateLimitUpdateResult {
+  platformId: number
   version: number
   policy: MailRateLimitPolicy
 }
@@ -525,9 +536,11 @@ const rateLimitPolicyMetadata: Record<
 export function parseMailRateLimitPolicy(value: unknown): MailRateLimitPolicy {
   const data = expectExactKeys(
     value,
-    ['key', 'mode', 'dimension', 'limit', 'windowSeconds', 'updatedAt'],
+    ['platformId', 'key', 'mode', 'dimension', 'limit', 'windowSeconds', 'updatedAt'],
     'mail rate limit policy',
   )
+  const platformId = expectInteger(data.platformId, 'mail rate limit policy.platformId')
+  if (platformId < 1) throw new ProtocolError('mail rate limit policy.platformId is invalid')
   const key = expectString(data.key, 'mail rate limit policy.key')
   if (!rateLimitPolicyKeySet.has(key)) {
     throw new ProtocolError('mail rate limit policy.key is unknown')
@@ -548,6 +561,7 @@ export function parseMailRateLimitPolicy(value: unknown): MailRateLimitPolicy {
     throw new ProtocolError('mail rate limit policy value is out of range')
   }
   return {
+    platformId,
     key,
     mode,
     dimension,
@@ -566,31 +580,56 @@ function parseRateLimitPolicyTimestamp(value: unknown): string {
 }
 
 export function parseMailRateLimitSnapshot(value: unknown): MailRateLimitSnapshot {
-  const data = expectExactKeys(value, ['version', 'policies'], 'mail rate limit snapshot')
-  const version = expectInteger(data.version, 'mail rate limit snapshot.version')
-  if (version < 1) throw new ProtocolError('mail rate limit snapshot.version is invalid')
-  const policies = expectArray(data.policies, 'mail rate limit snapshot.policies').map(
-    parseMailRateLimitPolicy,
-  )
-  const keys = new Set(policies.map((policy) => policy.key))
-  if (policies.length !== rateLimitPolicyKeys.length || keys.size !== rateLimitPolicyKeys.length) {
-    throw new ProtocolError('mail rate limit snapshot policies are incomplete')
+  const data = expectExactKeys(value, ['platforms'], 'mail rate limit snapshot')
+  const platforms = expectArray(data.platforms, 'mail rate limit snapshot.platforms').map((value) => {
+    const platform = expectExactKeys(value, ['platformId', 'platformCode', 'platformName', 'version', 'policies'], 'mail rate limit platform catalog')
+    const platformId = expectInteger(platform.platformId, 'mail rate limit platform catalog.platformId')
+    if (platformId < 1) throw new ProtocolError('mail rate limit platform catalog.platformId is invalid')
+    const platformCode = expectString(platform.platformCode, 'mail rate limit platform catalog.platformCode')
+    const platformName = expectString(platform.platformName, 'mail rate limit platform catalog.platformName')
+    if (platformCode.trim() === '' || platformName.trim() === '') throw new ProtocolError('mail rate limit platform catalog identity is invalid')
+    const version = expectInteger(platform.version, 'mail rate limit platform catalog.version')
+    if (version < 1) throw new ProtocolError('mail rate limit platform catalog.version is invalid')
+    const policies = expectArray(platform.policies, 'mail rate limit platform catalog.policies').map((policy) => {
+      const policyData = expectExactKeys(
+        policy,
+        ['key', 'mode', 'dimension', 'limit', 'windowSeconds', 'updatedAt'],
+        'mail rate limit platform catalog.policy',
+      )
+      return parseMailRateLimitPolicy({ ...policyData, platformId })
+    })
+    const keys = new Set(policies.map((policy) => policy.key))
+    if (policies.length !== rateLimitPolicyKeys.length || keys.size !== rateLimitPolicyKeys.length) {
+      throw new ProtocolError('mail rate limit platform catalog policies are incomplete')
+    }
+    return { platformId, platformCode, platformName, version, policies }
+  })
+  const platformIds = new Set(platforms.map((platform) => platform.platformId))
+  if (platformIds.size !== platforms.length || platforms.length === 0) {
+    throw new ProtocolError('mail rate limit snapshot platforms are invalid')
   }
-  return { version, policies }
+  return { platforms }
 }
 
 export function parseMailRateLimitUpdateResult(
   value: unknown,
   expectedKey?: string,
 ): MailRateLimitUpdateResult {
-  const data = expectExactKeys(value, ['version', 'policy'], 'mail rate limit update result')
+  const data = expectExactKeys(value, ['platformId', 'version', 'policy'], 'mail rate limit update result')
+  const platformId = expectInteger(data.platformId, 'mail rate limit update result.platformId')
+  if (platformId < 1) throw new ProtocolError('mail rate limit update result.platformId is invalid')
   const version = expectInteger(data.version, 'mail rate limit update result.version')
   if (version < 1) throw new ProtocolError('mail rate limit update result.version is invalid')
-  const policy = parseMailRateLimitPolicy(data.policy)
+  const policyData = expectExactKeys(
+    data.policy,
+    ['key', 'mode', 'dimension', 'limit', 'windowSeconds', 'updatedAt'],
+    'mail rate limit update result.policy',
+  )
+  const policy = parseMailRateLimitPolicy({ ...policyData, platformId })
   if (expectedKey !== undefined && policy.key !== expectedKey) {
     throw new ProtocolError('mail rate limit update result.policy.key does not match the request')
   }
-  return { version, policy }
+  return { platformId, version, policy }
 }
 
 export function listMailRateLimitPolicies(): Promise<MailRateLimitSnapshot> {
@@ -601,12 +640,13 @@ export function listMailRateLimitPolicies(): Promise<MailRateLimitSnapshot> {
 }
 
 export function updateMailRateLimitPolicy(
+  platformId: number,
   key: string,
   data: MailRateLimitPolicyInput,
 ): Promise<MailRateLimitUpdateResult> {
   return request<unknown>({
     method: 'PUT',
-    url: `/api/admin/v1/message/mail/rate-limit-policy/${encodeURIComponent(key)}`,
+    url: `/api/admin/v1/message/mail/rate-limit-policy/${platformId}/${encodeURIComponent(key)}`,
     data,
   }).then((value) => parseMailRateLimitUpdateResult(value, key))
 }

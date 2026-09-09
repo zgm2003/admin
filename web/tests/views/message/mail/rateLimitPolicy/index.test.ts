@@ -13,6 +13,8 @@ vi.mock('@/api/message/mail', async (importOriginal) => {
 
 const policies = [
   {
+    platformId: 1,
+    rowId: '1:business_email_minute',
     key: 'business_email_minute',
     mode: 'business' as const,
     dimension: 'platform_email',
@@ -21,6 +23,28 @@ const policies = [
     updatedAt: '2026-09-04T12:00:00Z',
   },
   {
+    platformId: 1,
+    rowId: '1:business_email_10m',
+    key: 'business_email_10m',
+    mode: 'business' as const,
+    dimension: 'platform_email',
+    limit: 5,
+    windowSeconds: 600,
+    updatedAt: '2026-09-04T12:00:00Z',
+  },
+  {
+    platformId: 2,
+    rowId: '2:business_email_minute',
+    key: 'business_email_minute',
+    mode: 'business' as const,
+    dimension: 'platform_email',
+    limit: 1,
+    windowSeconds: 60,
+    updatedAt: '2026-09-04T12:00:00Z',
+  },
+  {
+    platformId: 2,
+    rowId: '2:business_email_10m',
     key: 'business_email_10m',
     mode: 'business' as const,
     dimension: 'platform_email',
@@ -43,19 +67,19 @@ describe('mail rate limit tab', () => {
     vi.clearAllMocks()
   })
 
-  it('renders two fixed policies with localized placeholders', async () => {
+  it('renders every platform catalog with localized placeholders', async () => {
     const wrapper = mountTab(false)
     await flushPromises()
 
-    expect(wrapper.findAll('[data-testid="rate-limit-input"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid="rate-limit-input"]')).toHaveLength(4)
     expect(wrapper.findAll('input[type="number"]').length).toBeGreaterThan(0)
     expect(wrapper.text()).toContain('每分钟发送上限')
     expect(wrapper.text()).toContain('平台·邮箱')
   })
 
-  it('uses policy key as the stable table row key', () => {
+  it('uses platform and policy key as the stable table row key', () => {
     const table = wrapperTable(mountTab(false))
-    expect(table.props('rowKey')).toBe('key')
+    expect(table.props('rowKey')).toBe('rowId')
   })
 
   it('disables inputs and hides save buttons without update permission', async () => {
@@ -67,6 +91,7 @@ describe('mail rate limit tab', () => {
 
   it('sends only the edited row and keeps a per-row saving state', async () => {
     vi.mocked(mailApi.updateMailRateLimitPolicy).mockResolvedValue({
+      platformId: 1,
       version: 2,
       policy: { ...policies[0], limit: 2, windowSeconds: 120 },
     })
@@ -77,12 +102,12 @@ describe('mail rate limit tab', () => {
     await inputs[0].setValue(2)
     await flushPromises()
 
-    const save = wrapper.find('[data-testid="rate-limit-save-business_email_minute"]')
+    const save = wrapper.find('[data-testid="rate-limit-save-1:business_email_minute"]')
     expect(save.exists()).toBe(true)
     await save.trigger('click')
     await flushPromises()
 
-    expect(mailApi.updateMailRateLimitPolicy).toHaveBeenCalledWith('business_email_minute', {
+    expect(mailApi.updateMailRateLimitPolicy).toHaveBeenCalledWith(1, 'business_email_minute', {
       limit: 2,
       windowSeconds: 60,
     })
@@ -96,7 +121,7 @@ describe('mail rate limit tab', () => {
     const input = wrapper.find('[data-testid="rate-limit-input"] input')
     await input.setValue(2)
     await flushPromises()
-    await wrapper.find('[data-testid="rate-limit-save-business_email_minute"]').trigger('click')
+    await wrapper.find('[data-testid="rate-limit-save-1:business_email_minute"]').trigger('click')
     await flushPromises()
 
     expect((input.element as HTMLInputElement).value).toBe('1')

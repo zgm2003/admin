@@ -26,7 +26,7 @@ func TestServiceUpdatesGlobalTemplateAndInvalidatesReadinessOnStatus(t *testing.
 	service := NewService(repository, readiness)
 
 	err := service.Update(ctx, 1, UpdateInput{
-		Scene: SceneLogin, Name: "Updated", Subject: "Updated subject", TencentTemplateID: 47941,
+		Scene: SceneLogin, Name: "Updated", Subject: "Updated subject", TencentTemplateID: 57999,
 		Variables:        map[string]string{"code": "123456", "ttl_minutes": "5"},
 		ExampleVariables: map[string]string{"code": "654321", "ttl_minutes": "10"},
 	})
@@ -34,7 +34,7 @@ func TestServiceUpdatesGlobalTemplateAndInvalidatesReadinessOnStatus(t *testing.
 		t.Fatal(err)
 	}
 	updated, err := repository.Find(ctx, 1)
-	if err != nil || updated.Name != "Updated" || updated.Subject != "Updated subject" {
+	if err != nil || updated.Name != "Updated" || updated.Subject != "Updated subject" || updated.TencentTemplateID != 57999 {
 		t.Fatalf("updated=%+v err=%v", updated, err)
 	}
 	if readiness.calls != 0 {

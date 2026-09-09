@@ -22,8 +22,9 @@ watch(
   () => props.policies,
   (policies) => {
     for (const policy of policies) {
-      if (drafts[policy.key] === undefined) {
-        drafts[policy.key] = { limit: policy.limit, windowSeconds: policy.windowSeconds }
+      const id = policyId(policy)
+      if (drafts[id] === undefined) {
+        drafts[id] = { limit: policy.limit, windowSeconds: policy.windowSeconds }
       }
     }
   },
@@ -31,6 +32,7 @@ watch(
 )
 
 const columns = computed<TableColumn<MailRateLimitPolicy>[]>(() => [
+  { key: 'platform', prop: 'platformName', label: t('mail.rateLimit.platform'), minWidth: 180 },
   { key: 'name', prop: 'key', label: t('mail.rateLimit.policy'), minWidth: 220 },
   { key: 'mode', prop: 'mode', label: t('mail.rateLimit.mode'), width: 130 },
   { key: 'dimension', prop: 'dimension', label: t('mail.rateLimit.dimension'), minWidth: 180 },
@@ -39,12 +41,16 @@ const columns = computed<TableColumn<MailRateLimitPolicy>[]>(() => [
   { key: 'actions', prop: 'key', label: t('mail.actions'), width: 140, fixed: 'right' },
 ])
 
-function draftOf(key: string): Draft {
-  return drafts[key] ?? { limit: null, windowSeconds: null }
+function policyId(policy: Pick<MailRateLimitPolicy, 'platformId' | 'key'>): string {
+  return `${policy.platformId}:${policy.key}`
+}
+
+function draftOf(policy: MailRateLimitPolicy): Draft {
+  return drafts[policyId(policy)] ?? { limit: null, windowSeconds: null }
 }
 
 function validDraft(policy: MailRateLimitPolicy): boolean {
-  const draft = draftOf(policy.key)
+  const draft = draftOf(policy)
   if (draft.limit === null || draft.windowSeconds === null) return false
   return (
     draft.limit >= 1 &&
@@ -55,26 +61,27 @@ function validDraft(policy: MailRateLimitPolicy): boolean {
 }
 
 function dirty(policy: MailRateLimitPolicy): boolean {
-  const draft = draftOf(policy.key)
+  const draft = draftOf(policy)
   return draft.limit !== policy.limit || draft.windowSeconds !== policy.windowSeconds
 }
 
 async function save(policy: MailRateLimitPolicy): Promise<void> {
-  const draft = draftOf(policy.key)
-  if (draft.limit === null || draft.windowSeconds === null || saving[policy.key]) return
-  saving[policy.key] = true
+  const id = policyId(policy)
+  const draft = draftOf(policy)
+  if (draft.limit === null || draft.windowSeconds === null || saving[id]) return
+  saving[id] = true
   try {
-    const result = await updateMailRateLimitPolicy(policy.key, {
+    const result = await updateMailRateLimitPolicy(policy.platformId, policy.key, {
       limit: draft.limit,
       windowSeconds: draft.windowSeconds,
     })
-    drafts[policy.key] = { limit: result.policy.limit, windowSeconds: result.policy.windowSeconds }
+    drafts[id] = { limit: result.policy.limit, windowSeconds: result.policy.windowSeconds }
     ElMessage.success(t('mail.rateLimit.saveSuccess'))
     emit('refresh')
   } catch {
-    drafts[policy.key] = { limit: policy.limit, windowSeconds: policy.windowSeconds }
+    drafts[id] = { limit: policy.limit, windowSeconds: policy.windowSeconds }
   } finally {
-    saving[policy.key] = false
+    saving[id] = false
   }
 }
 </script>
@@ -91,12 +98,15 @@ async function save(policy: MailRateLimitPolicy): Promise<void> {
     <AppTable
       :columns="columns"
       :data="policies"
-      row-key="key"
+      row-key="rowId"
       :loading="loading"
       :aria-label="t('mail.rateLimitsTab')"
       :refresh-label="t('mail.refresh')"
       @refresh="emit('refresh')"
     >
+      <template #cell-platform="{ row }: { row: MailRateLimitPolicy | undefined }">
+        <template v-if="row?.platformId">{{ row.platformName }} ({{ row.platformCode }})</template>
+      </template>
       <template #cell-name="{ row }: { row: MailRateLimitPolicy | undefined }">
         <template v-if="row?.key">
           <div class="rate-limit-name">
@@ -122,7 +132,7 @@ async function save(policy: MailRateLimitPolicy): Promise<void> {
       <template #cell-limit="{ row }: { row: MailRateLimitPolicy | undefined }">
         <template v-if="row?.key">
           <el-input-number
-            v-model="draftOf(row.key).limit"
+            v-model="draftOf(row).limit"
             :min="1"
             :max="100000"
             :disabled="!canUpdate"
@@ -135,7 +145,7 @@ async function save(policy: MailRateLimitPolicy): Promise<void> {
       <template #cell-window="{ row }: { row: MailRateLimitPolicy | undefined }">
         <template v-if="row?.key">
           <el-input-number
-            v-model="draftOf(row.key).windowSeconds"
+            v-model="draftOf(row).windowSeconds"
             :min="1"
             :max="86400"
             :disabled="!canUpdate"
@@ -151,9 +161,9 @@ async function save(policy: MailRateLimitPolicy): Promise<void> {
           v-if="canUpdate && row?.key"
           text
           type="primary"
-          :loading="saving[row.key] === true"
+          :loading="saving[policyId(row)] === true"
           :disabled="!validDraft(row) || !dirty(row)"
-          :data-testid="`rate-limit-save-${row.key}`"
+          :data-testid="`rate-limit-save-${policyId(row)}`"
           @click="save(row)"
         >
           {{ t('mail.save') }}

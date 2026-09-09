@@ -17,9 +17,14 @@ import (
 )
 
 type Service struct {
-	repository *Repository
-	keys       *secretkey.KeyRing
-	readiness  ReadinessCoordinator
+	repository         *Repository
+	keys               *secretkey.KeyRing
+	readiness          ReadinessCoordinator
+	runtimeInvalidator func(context.Context) error
+}
+
+func (s *Service) SetRuntimeInvalidator(invalidator func(context.Context) error) {
+	s.runtimeInvalidator = invalidator
 }
 
 func NewService(repository *Repository, keys *secretkey.KeyRing, readiness ReadinessCoordinator) *Service {
@@ -54,8 +59,11 @@ func (s *Service) Save(ctx context.Context, input Input) (Safe, error) {
 	}
 	if strings.TrimSpace(input.SecretID) == "" || strings.TrimSpace(input.SecretKey) == "" {
 		current, findErr := s.repository.Find(ctx)
-		if findErr != nil {
+		if errors.Is(findErr, gorm.ErrRecordNotFound) {
 			return Safe{}, apperror.InvalidRequest(fmt.Errorf("credentials are required for the first configuration"))
+		}
+		if findErr != nil {
+			return Safe{}, wrapRepository(findErr)
 		}
 		if strings.TrimSpace(input.SecretID) == "" {
 			input.SecretID, err = secretkey.DecryptMailValue(s.keys.MailEncryptionKey(), current.SecretIDCiphertext)
@@ -103,6 +111,11 @@ func (s *Service) Save(ctx context.Context, input Input) (Safe, error) {
 	}); err != nil {
 		return Safe{}, mapMutationError(err)
 	}
+	if s.runtimeInvalidator != nil {
+		if err := s.runtimeInvalidator(ctx); err != nil {
+			return Safe{}, apperror.DependencyUnavailable(err)
+		}
+	}
 	return safe(saved), nil
 }
 
@@ -111,7 +124,15 @@ func (s *Service) Delete(ctx context.Context) error {
 		return apperror.DependencyUnavailable(fmt.Errorf("mail readiness coordinator unavailable"))
 	}
 	err := s.readiness.Mutate(ctx, s.repository.Delete)
-	return mapMutationError(err)
+	if mapped := mapMutationError(err); mapped != nil {
+		return mapped
+	}
+	if s.runtimeInvalidator != nil {
+		if err := s.runtimeInvalidator(ctx); err != nil {
+			return apperror.DependencyUnavailable(err)
+		}
+	}
+	return nil
 }
 
 func safe(value Model) Safe {

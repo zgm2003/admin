@@ -67,7 +67,15 @@ async function loadRules(): Promise<void> {
 
 async function loadRateLimitPolicies(): Promise<void> {
   const result = await mailApi.listMailRateLimitPolicies()
-  rateLimitPolicies.value = result.policies
+  rateLimitPolicies.value = result.platforms.flatMap((platform) =>
+    platform.policies.map((policy) => ({
+      ...policy,
+      platformId: platform.platformId,
+      platformCode: platform.platformCode,
+      platformName: platform.platformName,
+      rowId: `${platform.platformId}:${policy.key}`,
+    })),
+  )
 }
 
 async function loadLogs(): Promise<void> {

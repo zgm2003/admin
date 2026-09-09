@@ -2,6 +2,9 @@ package mail
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -25,6 +28,7 @@ type Service struct {
 	limiter        Limiter
 	policyStore    RateLimitPolicyStore
 	readinessStore VerifyCodeReadinessStore
+	runtime        *runtimeStore
 }
 
 func NewService(stores *Stores, keys *secretkey.KeyRing, sender Sender, rules RuleEvaluator, limiter Limiter, policyStore RateLimitPolicyStore) *Service {
@@ -34,6 +38,8 @@ func NewService(stores *Stores, keys *secretkey.KeyRing, sender Sender, rules Ru
 func (s *Service) SetVerifyCodeReadinessStore(store VerifyCodeReadinessStore) {
 	s.readinessStore = store
 }
+
+func (s *Service) SetRuntimeStore(store *runtimeStore) { s.runtime = store }
 
 func (s *Service) Send(ctx context.Context, in BusinessSendInput) (SendResult, error) {
 	return s.send(ctx, in, SendModeBusiness)
@@ -83,17 +89,27 @@ func (s *Service) PrepareEmailVerifyCode(ctx context.Context, in EmailVerifyCode
 	if readiness.TTLMinutes < 1 || readiness.TTLMinutes > verifyCodeReadinessTTLMaximum {
 		return EmailVerifyCodePreparation{}, dependency(fmt.Errorf("mail verification readiness TTL is invalid"))
 	}
-	if s.rules == nil {
-		return EmailVerifyCodePreparation{}, dependency(fmt.Errorf("mail recipient rule evaluator unavailable"))
+	var decision RuleDecision
+	var evaluateErr error
+	if s.runtime != nil {
+		runtime, runtimeErr := s.runtime.Load(ctx, in.Scene)
+		if runtimeErr != nil {
+			return EmailVerifyCodePreparation{}, dependency(runtimeErr)
+		}
+		decision, evaluateErr = recipientrule.EvaluateRows(runtime.Rules, email)
+	} else {
+		if s.rules == nil {
+			return EmailVerifyCodePreparation{}, dependency(fmt.Errorf("mail recipient rule evaluator unavailable"))
+		}
+		decision, evaluateErr = s.rules.Evaluate(ctx, email, SendModeBusiness)
 	}
-	decision, evaluateErr := s.rules.Evaluate(ctx, email, SendModeBusiness)
 	if evaluateErr != nil {
 		return EmailVerifyCodePreparation{}, dependency(evaluateErr)
 	}
 	if !decision.Allowed {
 		return EmailVerifyCodePreparation{}, denied(ErrRecipientDenied)
 	}
-	catalog, err := s.loadRateLimitCatalog(ctx)
+	catalog, err := s.loadRateLimitCatalog(ctx, in.PlatformID)
 	if err != nil {
 		return EmailVerifyCodePreparation{}, dependency(err)
 	}
@@ -184,15 +200,31 @@ func (s *Service) sendInternal(ctx context.Context, in BusinessSendInput, mode S
 	if e != nil {
 		return SendResult{}, invalid(e)
 	}
-	fixed, ok := fixedTemplate(in.Scene)
+	_, ok := fixedTemplate(in.Scene)
 	if !ok {
 		return SendResult{}, invalid(fmt.Errorf("scene invalid"))
 	}
 	if e := mailtemplate.ValidateVariables(in.Variables, true); e != nil {
 		return SendResult{}, invalid(e)
 	}
+	var runtime runtimeSnapshot
+	if s.runtime != nil {
+		var runtimeErr error
+		runtime, runtimeErr = s.runtime.Load(ctx, in.Scene)
+		if runtimeErr != nil {
+			return SendResult{}, dependency(runtimeErr)
+		}
+	}
 	if !opts.skipPreflight {
-		if s.rules != nil {
+		if s.runtime != nil {
+			d, e := recipientrule.EvaluateRows(runtime.Rules, email)
+			if e != nil {
+				return SendResult{}, dependency(e)
+			}
+			if !d.Allowed {
+				return SendResult{}, denied(ErrRecipientDenied)
+			}
+		} else if s.rules != nil {
 			d, e := s.rules.Evaluate(ctx, email, mode)
 			if e != nil {
 				return SendResult{}, dependency(e)
@@ -202,7 +234,7 @@ func (s *Service) sendInternal(ctx context.Context, in BusinessSendInput, mode S
 			}
 		}
 		{
-			catalog, err := s.loadRateLimitCatalog(ctx)
+			catalog, err := s.loadRateLimitCatalog(ctx, in.PlatformID)
 			if err != nil {
 				return SendResult{}, dependency(err)
 			}
@@ -221,16 +253,26 @@ func (s *Service) sendInternal(ctx context.Context, in BusinessSendInput, mode S
 			return SendResult{}, wrapRepo(e)
 		}
 	}
-	c, e := s.stores.Config.Find(ctx)
-	if e != nil {
-		return SendResult{}, wrapRepo(e)
+	c := runtime.Config
+	if s.runtime == nil {
+		var configErr error
+		var config Config
+		config, configErr = s.stores.Config.Find(ctx)
+		if configErr != nil {
+			return SendResult{}, wrapRepo(configErr)
+		}
+		c = runtimeConfigFromModel(config)
 	}
 	if c.IsEnabled != yesno.Yes {
 		return SendResult{}, dependency(fmt.Errorf("mail config disabled"))
 	}
-	templates, e := s.stores.Template.List(ctx)
-	if e != nil {
-		return SendResult{}, wrapRepo(e)
+	templates := runtime.Templates
+	if s.runtime == nil {
+		var templateErr error
+		templates, templateErr = s.stores.Template.List(ctx)
+		if templateErr != nil {
+			return SendResult{}, wrapRepo(templateErr)
+		}
 	}
 	var tpl Template
 	for _, t := range templates {
@@ -262,7 +304,7 @@ func (s *Service) sendInternal(ctx context.Context, in BusinessSendInput, mode S
 	if in.ChallengeID != "" {
 		challengePtr = &in.ChallengeID
 	}
-	row, e := s.stores.Log.CreatePending(ctx, &Log{PlatformID: in.PlatformID, ChallengeID: challengePtr, UserID: in.UserID, Scene: in.Scene, TemplateID: fixed.TencentTemplateID, ToEmail: email, Subject: tpl.Subject, Status: StatusPending, CreatedAt: now, UpdatedAt: now})
+	row, e := s.stores.Log.CreatePending(ctx, &Log{PlatformID: in.PlatformID, ChallengeID: challengePtr, UserID: in.UserID, Scene: in.Scene, TemplateID: tpl.TencentTemplateID, ToEmail: email, Subject: tpl.Subject, Status: StatusPending, CreatedAt: now, UpdatedAt: now})
 	if e != nil {
 		if in.ChallengeID != "" && isUniqueViolation(e) {
 			if old, findErr := s.stores.Log.FindActiveChallenge(ctx, in.PlatformID, in.ChallengeID); findErr == nil {
@@ -292,11 +334,21 @@ func (s *Service) sendInternal(ctx context.Context, in BusinessSendInput, mode S
 	}
 	sendContext, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	result, se := s.sender.Send(sendContext, SendInput{Region: c.Region, Endpoint: pointerValue(c.Endpoint), SecretID: mustDecrypt(s.keys, c.SecretIDCiphertext), SecretKey: mustDecrypt(s.keys, c.SecretKeyCiphertext), FromEmail: c.FromEmail, FromName: c.FromName, ReplyTo: pointerValue(c.ReplyTo), ToEmail: email, Subject: tpl.Subject, TemplateID: fixed.TencentTemplateID, TemplateData: variables})
+	secretID, decryptErr := decryptMailSecret(s.keys, c.SecretIDCiphertext)
+	if decryptErr != nil {
+		return s.failPending(ctx, in.PlatformID, row.ID, decryptErr, sendStarted)
+	}
+	secretKey, decryptErr := decryptMailSecret(s.keys, c.SecretKeyCiphertext)
+	if decryptErr != nil {
+		return s.failPending(ctx, in.PlatformID, row.ID, decryptErr, sendStarted)
+	}
+	result, se := s.sender.Send(sendContext, SendInput{Region: c.Region, Endpoint: pointerValue(c.Endpoint), SecretID: secretID, SecretKey: secretKey, FromEmail: c.FromEmail, FromName: c.FromName, ReplyTo: pointerValue(c.ReplyTo), ToEmail: email, Subject: tpl.Subject, TemplateID: tpl.TencentTemplateID, TemplateData: variables})
 	if se != nil {
 		return s.failPending(ctx, in.PlatformID, row.ID, se, sendStarted)
 	}
-	if me := s.stores.Log.MarkSent(ctx, in.PlatformID, row.ID, maillog.ProviderResult(result), time.Since(sendStarted).Milliseconds()); me != nil {
+	statusCtx, cancelStatus := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+	defer cancelStatus()
+	if me := s.stores.Log.MarkSent(statusCtx, in.PlatformID, row.ID, maillog.ProviderResult(result), time.Since(sendStarted).Milliseconds()); me != nil {
 		return SendResult{LogID: row.ID, Status: StatusPending, RequestID: result.RequestID, MessageID: result.MessageID}, dependency(fmt.Errorf("persist sent mail status: %w", me))
 	}
 	return SendResult{LogID: row.ID, Status: StatusSent, RequestID: result.RequestID, MessageID: result.MessageID}, nil
@@ -308,7 +360,9 @@ func sendResultFromLog(log Log) SendResult {
 
 func (s *Service) failPending(ctx context.Context, platformID, logID int64, cause error, started time.Time) (SendResult, error) {
 	providerErrorValue := providerError(cause)
-	if me := s.stores.Log.MarkFailed(ctx, platformID, logID, providerErrorValue.Code, providerErrorValue.Summary, time.Since(started).Milliseconds()); me != nil {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+	defer cancel()
+	if me := s.stores.Log.MarkFailed(cleanupCtx, platformID, logID, providerErrorValue.Code, providerErrorValue.Summary, time.Since(started).Milliseconds()); me != nil {
 		return SendResult{LogID: logID, Status: StatusPending}, dependency(fmt.Errorf("persist failed mail status: %w", me))
 	}
 	if _, ok := cause.(*ProviderError); ok {
@@ -356,12 +410,18 @@ func truncateErrorSummary(value string) string {
 	return value
 }
 func fixedTemplate(scene string) (mailtemplate.Fixed, bool) { return mailtemplate.FindFixed(scene) }
-func mustDecrypt(k *secretkey.KeyRing, ct string) string {
+func decryptMailSecret(k *secretkey.KeyRing, ct string) (string, error) {
 	if k == nil {
-		return ""
+		return "", fmt.Errorf("mail encryption key unavailable")
 	}
-	v, _ := secretkey.DecryptMailValue(k.MailEncryptionKey(), ct)
-	return v
+	v, err := secretkey.DecryptMailValue(k.MailEncryptionKey(), ct)
+	if err != nil || v == "" {
+		if err == nil {
+			err = fmt.Errorf("mail secret is empty")
+		}
+		return "", err
+	}
+	return v, nil
 }
 
 func pointerValue(value *string) string {
@@ -379,7 +439,11 @@ func (s *Service) reserveEmail(ctx context.Context, catalog RateLimitCatalog, pl
 	if s.limiter == nil {
 		return LimitResult{}, dependency(fmt.Errorf("mail rate limiter unavailable"))
 	}
-	result, err := s.limiter.Reserve(ctx, businessLimitRequests(catalog, platformID, "", email, "")...)
+	recipientKey := email
+	if s.keys != nil {
+		recipientKey = mailRecipientKey(s.keys, email)
+	}
+	result, err := s.limiter.Reserve(ctx, businessLimitRequests(catalog, platformID, "", recipientKey, "")...)
 	if err != nil {
 		return LimitResult{}, dependency(err)
 	}
@@ -389,11 +453,17 @@ func (s *Service) reserveEmail(ctx context.Context, catalog RateLimitCatalog, pl
 	return result, nil
 }
 
-func (s *Service) loadRateLimitCatalog(ctx context.Context) (RateLimitCatalog, error) {
+func mailRecipientKey(keys *secretkey.KeyRing, email string) string {
+	digest := hmac.New(sha256.New, keys.MailRecipientHMACKey())
+	_, _ = digest.Write([]byte(email))
+	return hex.EncodeToString(digest.Sum(nil))
+}
+
+func (s *Service) loadRateLimitCatalog(ctx context.Context, platformID int64) (RateLimitCatalog, error) {
 	if s.policyStore == nil {
 		return RateLimitCatalog{}, fmt.Errorf("mail rate limit policy store unavailable")
 	}
-	return s.policyStore.Load(ctx)
+	return s.policyStore.Load(ctx, platformID)
 }
 
 func businessLimitRequests(catalog RateLimitCatalog, platformID int64, scene, email, clientIP string) []LimitRequest {

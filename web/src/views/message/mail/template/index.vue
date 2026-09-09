@@ -187,7 +187,7 @@ async function saveTemplate(): Promise<void> {
           ></el-col>
           <el-col :xs="24" :sm="12"
             ><el-form-item :label="t('mail.templateId')"
-              ><el-input-number v-model="form.tencentTemplateId" disabled /></el-form-item
+              ><el-input-number v-model="form.tencentTemplateId" :min="1" :step="1" /></el-form-item
           ></el-col>
           <el-col :xs="24" :sm="12"
             ><el-form-item :label="t('mail.name')"><el-input v-model="form.name" /></el-form-item

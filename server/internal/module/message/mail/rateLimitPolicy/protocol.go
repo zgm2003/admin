@@ -14,18 +14,22 @@ type Input struct {
 }
 
 type Catalog struct {
-	Version  int64
-	Policies []Model
+	PlatformID   int64
+	PlatformCode string
+	PlatformName string
+	Version      int64
+	Policies     []Model
 }
 
 type Store interface {
-	Load(context.Context) (Catalog, error)
-	Update(context.Context, Input) (Catalog, error)
+	Load(context.Context, int64) (Catalog, error)
+	Update(context.Context, int64, Input) (Catalog, error)
 }
 
 type Snapshot struct {
 	SchemaVersion int                       `json:"schemaVersion"`
 	State         string                    `json:"state"`
+	PlatformID    int64                     `json:"platformId"`
 	Version       int64                     `json:"version"`
 	Policies      map[string]snapshotPolicy `json:"policies,omitempty"`
 	MutationToken *string                   `json:"mutationToken"`
@@ -42,14 +46,41 @@ type UpdateRequest struct {
 	WindowSeconds int `json:"windowSeconds"`
 }
 
+// PolicyResponse intentionally omits PlatformID. Platform scope belongs to
+// the catalog envelope; repeating it on every policy makes the public DTO
+// inconsistent with the frontend contract and invites scope mismatches.
+type PolicyResponse struct {
+	Key           string    `json:"key"`
+	Mode          string    `json:"mode"`
+	Dimension     string    `json:"dimension"`
+	Limit         int       `json:"limit"`
+	WindowSeconds int       `json:"windowSeconds"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
+func newPolicyResponse(value Model) PolicyResponse {
+	return PolicyResponse{
+		Key: value.Key, Mode: value.Mode, Dimension: value.Dimension,
+		Limit: value.Limit, WindowSeconds: value.WindowSeconds, UpdatedAt: value.UpdatedAt,
+	}
+}
+
+type PlatformResponse struct {
+	PlatformID   int64            `json:"platformId"`
+	PlatformCode string           `json:"platformCode"`
+	PlatformName string           `json:"platformName"`
+	Version      int64            `json:"version"`
+	Policies     []PolicyResponse `json:"policies"`
+}
+
 type ListResponse struct {
-	Version  int64   `json:"version"`
-	Policies []Model `json:"policies"`
+	Platforms []PlatformResponse `json:"platforms"`
 }
 
 type UpdateResponse struct {
-	Version int64 `json:"version"`
-	Policy  Model `json:"policy"`
+	PlatformID int64          `json:"platformId"`
+	Version    int64          `json:"version"`
+	Policy     PolicyResponse `json:"policy"`
 }
 
 type RateLimitPolicy = Model

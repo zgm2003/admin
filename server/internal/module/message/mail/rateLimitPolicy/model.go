@@ -5,6 +5,7 @@ import "time"
 const Table = "message_mail_rate_limit_policy"
 
 type Model struct {
+	PlatformID    int64     `gorm:"column:platform_id;primaryKey" json:"platformId"`
 	Key           string    `gorm:"column:policy_key;primaryKey" json:"key"`
 	Mode          string    `gorm:"column:mode;not null" json:"mode"`
 	Dimension     string    `gorm:"column:dimension;not null" json:"dimension"`

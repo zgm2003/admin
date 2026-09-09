@@ -44,7 +44,7 @@ func (h *Handler) List(c *gin.Context) {
 		response.Fail(c, invalid(e))
 		return
 	}
-	r, e := h.s.List(c, q)
+	r, e := h.s.List(c.Request.Context(), q)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -52,7 +52,7 @@ func (h *Handler) List(c *gin.Context) {
 	response.OK(c, http.StatusOK, pageResponse(r))
 }
 func (h *Handler) PageInit(c *gin.Context) {
-	r, e := h.s.PageInit(c)
+	r, e := h.s.PageInit(c.Request.Context())
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -71,7 +71,7 @@ func (h *Handler) Get(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	r, e := h.s.Get(c, id)
+	r, e := h.s.Get(c.Request.Context(), id)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -89,7 +89,7 @@ func (h *Handler) Create(c *gin.Context) {
 		response.Fail(c, invalid(e))
 		return
 	}
-	id, e := h.s.Create(c, in)
+	id, e := h.s.Create(c.Request.Context(), in)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -112,7 +112,7 @@ func (h *Handler) Update(c *gin.Context) {
 		response.Fail(c, invalid(e))
 		return
 	}
-	if e = h.s.Update(c, id, in); e != nil {
+	if e = h.s.Update(c.Request.Context(), id, in); e != nil {
 		response.Fail(c, e)
 		return
 	}
@@ -132,7 +132,7 @@ func (h *Handler) Status(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	if e = h.s.UpdateStatus(c, id, *r.IsEnabled); e != nil {
+	if e = h.s.UpdateStatus(c.Request.Context(), id, *r.IsEnabled); e != nil {
 		response.Fail(c, e)
 		return
 	}
@@ -148,7 +148,7 @@ func (h *Handler) Delete(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	if e = h.s.Delete(c, id); e != nil {
+	if e = h.s.Delete(c.Request.Context(), id); e != nil {
 		response.Fail(c, e)
 		return
 	}
@@ -166,7 +166,7 @@ func (h *Handler) Credentials(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	result, err := h.s.IssueCredentials(c, identity, request)
+	result, err := h.s.IssueCredentials(c.Request.Context(), identity, request)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -185,7 +185,7 @@ func (h *Handler) ObjectURL(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	url, err := h.s.PublicObjectURL(c, identity, request.RuleCode, request.ObjectKey)
+	url, err := h.s.PublicObjectURL(c.Request.Context(), identity, request.RuleCode, request.ObjectKey)
 	if err != nil {
 		response.Fail(c, err)
 		return

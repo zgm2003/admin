@@ -108,7 +108,7 @@ view -> api/<module>.ts -> utils/request.ts -> Go API
 - 有真实删除行为的表只使用 `deleted_at`/`gorm.DeletedAt`；业务唯一值需要忽略已删除记录时使用
   `WHERE deleted_at IS NULL` 部分唯一索引。没有删除行为的表不增加该字段。
 - Yes/No 固定为 `0 = No`、`1 = Yes`，数据库使用 `SMALLINT + CHECK`，后端使用 `shared/yesno`，前端使用
-  `enums/yes-no`。
+  `enums/yesNo`。
 - DDL、数据回填和 seed 只通过维护者执行的幂等、可审计 forward migration；API/Worker 启动不得执行。历史
   `docs/database/*.sql` 不作为默认知识；迁移成功后可从真实 PostgreSQL 导出 `docs/database/current.sql`。
 - 错误必须返回并映射为明确公开语义；禁止缺配置猜默认值、内存兜底、空数组/假成功、吞错，或泄露 SQL、

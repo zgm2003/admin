@@ -67,6 +67,54 @@ func violations(path string, file *ast.File) []string {
 		if receiver == "Repository" && isService {
 			result = append(result, "Repository method in service file: "+fn.Name.Name)
 		}
+		if receiver == "Handler" && isHandler {
+			ginContextParams := make(map[string]struct{})
+			if fn.Type.Params != nil {
+				for _, field := range fn.Type.Params.List {
+					star, ok := field.Type.(*ast.StarExpr)
+					if !ok {
+						continue
+					}
+					selector, ok := star.X.(*ast.SelectorExpr)
+					if !ok || selector.Sel.Name != "Context" {
+						continue
+					}
+					packageName, ok := selector.X.(*ast.Ident)
+					if !ok || imports[packageName.Name] != "github.com/gin-gonic/gin" {
+						continue
+					}
+					for _, name := range field.Names {
+						ginContextParams[name.Name] = struct{}{}
+					}
+				}
+			}
+			ast.Inspect(fn.Body, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok || len(call.Args) == 0 {
+					return true
+				}
+				selector, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				if nested, ok := selector.X.(*ast.SelectorExpr); !ok {
+					receiver, isService := selector.X.(*ast.Ident)
+					if !isService || (receiver.Name != "s" && receiver.Name != "service") {
+						return true
+					}
+				} else if receiver, ok := nested.X.(*ast.Ident); !ok || (receiver.Name != "h" && receiver.Name != "handler") {
+					return true
+				}
+				argument, ok := call.Args[0].(*ast.Ident)
+				if !ok {
+					return true
+				}
+				if _, found := ginContextParams[argument.Name]; found {
+					result = append(result, "Handler passes Gin Context to Service: "+fn.Name.Name)
+				}
+				return true
+			})
+		}
 		if receiver == "Service" {
 			ast.Inspect(fn, func(node ast.Node) bool {
 				selector, ok := node.(*ast.SelectorExpr)
@@ -133,6 +181,7 @@ func TestBoundaryGateRejectsViolations(t *testing.T) {
 		{"/module/x/service.go", `package x; func(r *Repository) List(){}`},
 		{"/module/x/password.go", `package x; import transport "github.com/gin-gonic/gin"; func(s *Service) Run(c *transport.Context){}`},
 		{"/module/x/repository.go", `package x; import "github.com/redis/go-redis/v9"`},
+		{"/module/x/handler.go", `package x; import transport "github.com/gin-gonic/gin"; type Service struct{}; func(s *Service) List(any){}; type Handler struct{s *Service}; func(h *Handler) Run(c *transport.Context){ h.s.List(c) }`},
 		{"/cmd/api/main.go", `package main; func main(){ db.AutoMigrate() }`},
 	} {
 		file, err := parser.ParseFile(token.NewFileSet(), test.path, test.source, 0)

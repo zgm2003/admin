@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict jgeil5ZzEHiaUokikuR2DCwiYm10xgmyvdMnkFiuy1erbYzyNt4FL1krI1Sngfv
+\restrict cydo0mfmzKuo5SeHWsLnY3rjI1tVL7VYLwLfqnRxj3QdKBoAxdWTeuz2nnGXnWQ
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -20,17 +20,395 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: public; Type: SCHEMA; Schema: -; Owner: -
+-- Name: test_access_1787825924504187200; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA public;
+CREATE SCHEMA test_access_1787825924504187200;
 
 
 --
--- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
+-- Name: test_authplatform_1787825907271387600; Type: SCHEMA; Schema: -; Owner: -
 --
 
-COMMENT ON SCHEMA public IS 'standard public schema';
+CREATE SCHEMA test_authplatform_1787825907271387600;
+
+
+--
+-- Name: test_authplatform_1788311751053591400; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_authplatform_1788311751053591400;
+
+
+--
+-- Name: test_authplatform_1788311752797777800; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_authplatform_1788311752797777800;
+
+
+--
+-- Name: test_authplatform_1788311760786861300; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_authplatform_1788311760786861300;
+
+
+--
+-- Name: test_authplatform_1788349452674711900; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_authplatform_1788349452674711900;
+
+
+--
+-- Name: test_authplatform_1788411137839783200; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_authplatform_1788411137839783200;
+
+
+--
+-- Name: test_authplatform_1788437259710199000; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_authplatform_1788437259710199000;
+
+
+--
+-- Name: test_menu_1787708489894412200; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1787708489894412200;
+
+
+--
+-- Name: test_menu_1788254206452353300; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788254206452353300;
+
+
+--
+-- Name: test_menu_1788254327450341500; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788254327450341500;
+
+
+--
+-- Name: test_menu_1788254336756965800; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788254336756965800;
+
+
+--
+-- Name: test_menu_1788254342079010600; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788254342079010600;
+
+
+--
+-- Name: test_menu_1788254343498451800; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788254343498451800;
+
+
+--
+-- Name: test_menu_1788254894117835900; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788254894117835900;
+
+
+--
+-- Name: test_menu_1788311852387565700; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788311852387565700;
+
+
+--
+-- Name: test_menu_1788349432618315400; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788349432618315400;
+
+
+--
+-- Name: test_menu_1788410261887402900; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788410261887402900;
+
+
+--
+-- Name: test_menu_1788437228419182900; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788437228419182900;
+
+
+--
+-- Name: test_menu_1788437229697515700; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788437229697515700;
+
+
+--
+-- Name: test_menu_1788437231914388800; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788437231914388800;
+
+
+--
+-- Name: test_menu_1788437234335272500; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788437234335272500;
+
+
+--
+-- Name: test_menu_1788437247205480900; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788437247205480900;
+
+
+--
+-- Name: test_menu_1788437248324521600; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788437248324521600;
+
+
+--
+-- Name: test_menu_1788437250549432600; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788437250549432600;
+
+
+--
+-- Name: test_menu_1788437251787681300; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788437251787681300;
+
+
+--
+-- Name: test_menu_1788437253175426000; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788437253175426000;
+
+
+--
+-- Name: test_menu_1788437254379752200; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788437254379752200;
+
+
+--
+-- Name: test_menu_1788441857738923100; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788441857738923100;
+
+
+--
+-- Name: test_menu_1788441871114670000; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788441871114670000;
+
+
+--
+-- Name: test_menu_1788441909090336400; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788441909090336400;
+
+
+--
+-- Name: test_menu_1788442272188551500; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788442272188551500;
+
+
+--
+-- Name: test_menu_1788442277382854500; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_menu_1788442277382854500;
+
+
+--
+-- Name: test_role_1788254889619946000; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_role_1788254889619946000;
+
+
+--
+-- Name: test_role_1788408902789809500; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_role_1788408902789809500;
+
+
+--
+-- Name: test_role_1788410258012550900; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_role_1788410258012550900;
+
+
+--
+-- Name: test_role_1788437228767960600; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_role_1788437228767960600;
+
+
+--
+-- Name: test_role_1788437239894279000; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_role_1788437239894279000;
+
+
+--
+-- Name: test_role_1788437240954624000; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_role_1788437240954624000;
+
+
+--
+-- Name: test_role_1788437259429051200; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_role_1788437259429051200;
+
+
+--
+-- Name: test_role_1788437281889155700; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_role_1788437281889155700;
+
+
+--
+-- Name: test_role_1788437326766827300; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_role_1788437326766827300;
+
+
+--
+-- Name: test_user_1788254838354852700; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_1788254838354852700;
+
+
+--
+-- Name: test_user_1788254906426654300; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_1788254906426654300;
+
+
+--
+-- Name: test_user_1788311761257629300; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_1788311761257629300;
+
+
+--
+-- Name: test_user_1788311762877383200; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_1788311762877383200;
+
+
+--
+-- Name: test_user_1788311830826014900; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_1788311830826014900;
+
+
+--
+-- Name: test_user_1788311838850049400; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_1788311838850049400;
+
+
+--
+-- Name: test_user_1788408911878467100; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_1788408911878467100;
+
+
+--
+-- Name: test_user_1788408915434940200; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_1788408915434940200;
+
+
+--
+-- Name: test_user_1788408928409858800; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_1788408928409858800;
+
+
+--
+-- Name: test_user_1788410263703131500; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_1788410263703131500;
+
+
+--
+-- Name: test_user_1788437284027131600; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_1788437284027131600;
+
+
+--
+-- Name: test_user_1788437289956774700; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_1788437289956774700;
+
+
+--
+-- Name: test_user_1788441842042685200; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_1788441842042685200;
+
+
+--
+-- Name: test_user_session_1788437240066425200; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA test_user_session_1788437240066425200;
 
 
 SET default_tablespace = '';
@@ -265,6 +643,8 @@ CREATE TABLE public.message_mail_rate_limit_policy (
     revision bigint DEFAULT 1 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    platform_id bigint NOT NULL,
+    CONSTRAINT ck_message_mail_rate_limit_policy_platform CHECK ((platform_id > 0)),
     CONSTRAINT ck_message_mail_rate_limit_policy_revision CHECK ((revision >= 1)),
     CONSTRAINT ck_message_mail_rate_limit_policy_shape CHECK ((((policy_key)::text = ANY ((ARRAY['business_email_minute'::character varying, 'business_email_10m'::character varying])::text[])) AND ((mode)::text = 'business'::text) AND ((dimension)::text = 'platform_email'::text))),
     CONSTRAINT ck_message_mail_rate_limit_policy_values CHECK ((((limit_count >= 1) AND (limit_count <= 100000)) AND ((window_seconds >= 1) AND (window_seconds <= 86400))))
@@ -802,6 +1182,716 @@ CREATE TABLE public.user_profile (
 
 
 --
+-- Name: auth_platform; Type: TABLE; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE TABLE test_menu_1788437234335272500.auth_platform (
+    id bigint NOT NULL,
+    code character varying(49) NOT NULL,
+    name character varying(64) NOT NULL,
+    policy_version bigint DEFAULT 1 NOT NULL,
+    access_ttl_seconds integer NOT NULL,
+    refresh_ttl_seconds integer NOT NULL,
+    session_cache_ttl_seconds integer NOT NULL,
+    access_cache_ttl_seconds integer NOT NULL,
+    bind_device smallint NOT NULL,
+    bind_ip smallint NOT NULL,
+    max_sessions smallint NOT NULL,
+    allow_register smallint NOT NULL,
+    is_enabled smallint NOT NULL,
+    is_builtin smallint NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_auth_platform_access_cache_ttl_seconds CHECK (((access_cache_ttl_seconds >= 60) AND (access_cache_ttl_seconds <= 86400))),
+    CONSTRAINT ck_auth_platform_access_ttl_seconds CHECK (((access_ttl_seconds >= 60) AND (access_ttl_seconds <= 2592000))),
+    CONSTRAINT ck_auth_platform_allow_register CHECK ((allow_register = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_bind_device CHECK ((bind_device = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_bind_ip CHECK ((bind_ip = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_code CHECK (((code)::text ~ '^[a-z][a-z0-9_]{1,48}$'::text)),
+    CONSTRAINT ck_auth_platform_is_builtin CHECK ((is_builtin = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_max_sessions CHECK (((max_sessions >= 0) AND (max_sessions <= 100))),
+    CONSTRAINT ck_auth_platform_policy_version CHECK ((policy_version >= 1)),
+    CONSTRAINT ck_auth_platform_refresh_ttl_seconds CHECK (((refresh_ttl_seconds >= 60) AND (refresh_ttl_seconds <= 31536000))),
+    CONSTRAINT ck_auth_platform_session_cache_ttl_seconds CHECK (((session_cache_ttl_seconds >= 60) AND (session_cache_ttl_seconds <= 86400)))
+);
+
+
+--
+-- Name: auth_platform_id_seq; Type: SEQUENCE; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE SEQUENCE test_menu_1788437234335272500.auth_platform_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: auth_platform_id_seq; Type: SEQUENCE OWNED BY; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER SEQUENCE test_menu_1788437234335272500.auth_platform_id_seq OWNED BY test_menu_1788437234335272500.auth_platform.id;
+
+
+--
+-- Name: permission_access_version; Type: TABLE; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE TABLE test_menu_1788437234335272500.permission_access_version (
+    user_id bigint NOT NULL,
+    version bigint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: permission_access_version_user_id_seq; Type: SEQUENCE; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE SEQUENCE test_menu_1788437234335272500.permission_access_version_user_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: permission_access_version_user_id_seq; Type: SEQUENCE OWNED BY; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER SEQUENCE test_menu_1788437234335272500.permission_access_version_user_id_seq OWNED BY test_menu_1788437234335272500.permission_access_version.user_id;
+
+
+--
+-- Name: permission_menu; Type: TABLE; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE TABLE test_menu_1788437234335272500.permission_menu (
+    id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    parent_id bigint,
+    menu_type character varying(16) NOT NULL,
+    name character varying(128) NOT NULL,
+    code character varying(128) NOT NULL,
+    i18n_key character varying(128),
+    path character varying(255),
+    component_path character varying(255),
+    icon character varying(128),
+    remark character varying(512),
+    sort_order integer DEFAULT 0 NOT NULL,
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    is_hidden smallint DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_permission_menu_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_permission_menu_is_hidden CHECK ((is_hidden = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_permission_menu_shape CHECK (((btrim((name)::text) <> ''::text) AND ((((menu_type)::text = 'directory'::text) AND (i18n_key IS NOT NULL) AND (path IS NULL) AND (component_path IS NULL)) OR (((menu_type)::text = 'page'::text) AND (i18n_key IS NOT NULL) AND (path IS NOT NULL) AND (btrim((path)::text) <> ''::text) AND (component_path IS NOT NULL) AND (btrim((component_path)::text) <> ''::text)) OR (((menu_type)::text = 'action'::text) AND (i18n_key IS NULL) AND (path IS NULL) AND (component_path IS NULL) AND (icon IS NULL) AND (is_hidden = 1))))),
+    CONSTRAINT ck_permission_menu_sort_order CHECK ((sort_order >= 0)),
+    CONSTRAINT ck_permission_menu_type CHECK (((menu_type)::text = ANY ((ARRAY['directory'::character varying, 'page'::character varying, 'action'::character varying])::text[])))
+);
+
+
+--
+-- Name: permission_menu_id_seq; Type: SEQUENCE; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE SEQUENCE test_menu_1788437234335272500.permission_menu_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: permission_menu_id_seq; Type: SEQUENCE OWNED BY; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER SEQUENCE test_menu_1788437234335272500.permission_menu_id_seq OWNED BY test_menu_1788437234335272500.permission_menu.id;
+
+
+--
+-- Name: permission_role; Type: TABLE; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE TABLE test_menu_1788437234335272500.permission_role (
+    id bigint NOT NULL,
+    code character varying(64) NOT NULL,
+    name character varying(64) NOT NULL,
+    is_default smallint DEFAULT 0 NOT NULL,
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone
+);
+
+
+--
+-- Name: permission_role_id_seq; Type: SEQUENCE; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE SEQUENCE test_menu_1788437234335272500.permission_role_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: permission_role_id_seq; Type: SEQUENCE OWNED BY; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER SEQUENCE test_menu_1788437234335272500.permission_role_id_seq OWNED BY test_menu_1788437234335272500.permission_role.id;
+
+
+--
+-- Name: permission_role_menu; Type: TABLE; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE TABLE test_menu_1788437234335272500.permission_role_menu (
+    id bigint NOT NULL,
+    role_id bigint NOT NULL,
+    menu_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone
+);
+
+
+--
+-- Name: permission_role_menu_id_seq; Type: SEQUENCE; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE SEQUENCE test_menu_1788437234335272500.permission_role_menu_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: permission_role_menu_id_seq; Type: SEQUENCE OWNED BY; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER SEQUENCE test_menu_1788437234335272500.permission_role_menu_id_seq OWNED BY test_menu_1788437234335272500.permission_role_menu.id;
+
+
+--
+-- Name: user_account; Type: TABLE; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE TABLE test_menu_1788437234335272500.user_account (
+    id bigint NOT NULL,
+    username character varying(64) NOT NULL,
+    email character varying(254) NOT NULL,
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone
+);
+
+
+--
+-- Name: user_account_id_seq; Type: SEQUENCE; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE SEQUENCE test_menu_1788437234335272500.user_account_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: user_account_id_seq; Type: SEQUENCE OWNED BY; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER SEQUENCE test_menu_1788437234335272500.user_account_id_seq OWNED BY test_menu_1788437234335272500.user_account.id;
+
+
+--
+-- Name: auth_platform; Type: TABLE; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE TABLE test_menu_1788437254379752200.auth_platform (
+    id bigint NOT NULL,
+    code character varying(49) NOT NULL,
+    name character varying(64) NOT NULL,
+    policy_version bigint DEFAULT 1 NOT NULL,
+    access_ttl_seconds integer NOT NULL,
+    refresh_ttl_seconds integer NOT NULL,
+    session_cache_ttl_seconds integer NOT NULL,
+    access_cache_ttl_seconds integer NOT NULL,
+    bind_device smallint NOT NULL,
+    bind_ip smallint NOT NULL,
+    max_sessions smallint NOT NULL,
+    allow_register smallint NOT NULL,
+    is_enabled smallint NOT NULL,
+    is_builtin smallint NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_auth_platform_access_cache_ttl_seconds CHECK (((access_cache_ttl_seconds >= 60) AND (access_cache_ttl_seconds <= 86400))),
+    CONSTRAINT ck_auth_platform_access_ttl_seconds CHECK (((access_ttl_seconds >= 60) AND (access_ttl_seconds <= 2592000))),
+    CONSTRAINT ck_auth_platform_allow_register CHECK ((allow_register = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_bind_device CHECK ((bind_device = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_bind_ip CHECK ((bind_ip = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_code CHECK (((code)::text ~ '^[a-z][a-z0-9_]{1,48}$'::text)),
+    CONSTRAINT ck_auth_platform_is_builtin CHECK ((is_builtin = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_max_sessions CHECK (((max_sessions >= 0) AND (max_sessions <= 100))),
+    CONSTRAINT ck_auth_platform_policy_version CHECK ((policy_version >= 1)),
+    CONSTRAINT ck_auth_platform_refresh_ttl_seconds CHECK (((refresh_ttl_seconds >= 60) AND (refresh_ttl_seconds <= 31536000))),
+    CONSTRAINT ck_auth_platform_session_cache_ttl_seconds CHECK (((session_cache_ttl_seconds >= 60) AND (session_cache_ttl_seconds <= 86400)))
+);
+
+
+--
+-- Name: auth_platform_id_seq; Type: SEQUENCE; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE SEQUENCE test_menu_1788437254379752200.auth_platform_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: auth_platform_id_seq; Type: SEQUENCE OWNED BY; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER SEQUENCE test_menu_1788437254379752200.auth_platform_id_seq OWNED BY test_menu_1788437254379752200.auth_platform.id;
+
+
+--
+-- Name: permission_access_version; Type: TABLE; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE TABLE test_menu_1788437254379752200.permission_access_version (
+    user_id bigint NOT NULL,
+    version bigint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: permission_access_version_user_id_seq; Type: SEQUENCE; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE SEQUENCE test_menu_1788437254379752200.permission_access_version_user_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: permission_access_version_user_id_seq; Type: SEQUENCE OWNED BY; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER SEQUENCE test_menu_1788437254379752200.permission_access_version_user_id_seq OWNED BY test_menu_1788437254379752200.permission_access_version.user_id;
+
+
+--
+-- Name: permission_menu; Type: TABLE; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE TABLE test_menu_1788437254379752200.permission_menu (
+    id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    parent_id bigint,
+    menu_type character varying(16) NOT NULL,
+    name character varying(128) NOT NULL,
+    code character varying(128) NOT NULL,
+    i18n_key character varying(128),
+    path character varying(255),
+    component_path character varying(255),
+    icon character varying(128),
+    remark character varying(512),
+    sort_order integer DEFAULT 0 NOT NULL,
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    is_hidden smallint DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_permission_menu_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_permission_menu_is_hidden CHECK ((is_hidden = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_permission_menu_shape CHECK (((btrim((name)::text) <> ''::text) AND ((((menu_type)::text = 'directory'::text) AND (i18n_key IS NOT NULL) AND (path IS NULL) AND (component_path IS NULL)) OR (((menu_type)::text = 'page'::text) AND (i18n_key IS NOT NULL) AND (path IS NOT NULL) AND (btrim((path)::text) <> ''::text) AND (component_path IS NOT NULL) AND (btrim((component_path)::text) <> ''::text)) OR (((menu_type)::text = 'action'::text) AND (i18n_key IS NULL) AND (path IS NULL) AND (component_path IS NULL) AND (icon IS NULL) AND (is_hidden = 1))))),
+    CONSTRAINT ck_permission_menu_sort_order CHECK ((sort_order >= 0)),
+    CONSTRAINT ck_permission_menu_type CHECK (((menu_type)::text = ANY ((ARRAY['directory'::character varying, 'page'::character varying, 'action'::character varying])::text[])))
+);
+
+
+--
+-- Name: permission_menu_id_seq; Type: SEQUENCE; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE SEQUENCE test_menu_1788437254379752200.permission_menu_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: permission_menu_id_seq; Type: SEQUENCE OWNED BY; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER SEQUENCE test_menu_1788437254379752200.permission_menu_id_seq OWNED BY test_menu_1788437254379752200.permission_menu.id;
+
+
+--
+-- Name: permission_role; Type: TABLE; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE TABLE test_menu_1788437254379752200.permission_role (
+    id bigint NOT NULL,
+    code character varying(64) NOT NULL,
+    name character varying(64) NOT NULL,
+    is_default smallint DEFAULT 0 NOT NULL,
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone
+);
+
+
+--
+-- Name: permission_role_id_seq; Type: SEQUENCE; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE SEQUENCE test_menu_1788437254379752200.permission_role_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: permission_role_id_seq; Type: SEQUENCE OWNED BY; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER SEQUENCE test_menu_1788437254379752200.permission_role_id_seq OWNED BY test_menu_1788437254379752200.permission_role.id;
+
+
+--
+-- Name: permission_role_menu; Type: TABLE; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE TABLE test_menu_1788437254379752200.permission_role_menu (
+    id bigint NOT NULL,
+    role_id bigint NOT NULL,
+    menu_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone
+);
+
+
+--
+-- Name: permission_role_menu_id_seq; Type: SEQUENCE; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE SEQUENCE test_menu_1788437254379752200.permission_role_menu_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: permission_role_menu_id_seq; Type: SEQUENCE OWNED BY; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER SEQUENCE test_menu_1788437254379752200.permission_role_menu_id_seq OWNED BY test_menu_1788437254379752200.permission_role_menu.id;
+
+
+--
+-- Name: user_account; Type: TABLE; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE TABLE test_menu_1788437254379752200.user_account (
+    id bigint NOT NULL,
+    username character varying(64) NOT NULL,
+    email character varying(254) NOT NULL,
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone
+);
+
+
+--
+-- Name: user_account_id_seq; Type: SEQUENCE; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE SEQUENCE test_menu_1788437254379752200.user_account_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: user_account_id_seq; Type: SEQUENCE OWNED BY; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER SEQUENCE test_menu_1788437254379752200.user_account_id_seq OWNED BY test_menu_1788437254379752200.user_account.id;
+
+
+--
+-- Name: auth_platform; Type: TABLE; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE TABLE test_user_session_1788437240066425200.auth_platform (
+    id bigint NOT NULL,
+    code character varying(49) NOT NULL,
+    name character varying(64) NOT NULL,
+    policy_version bigint DEFAULT 1 NOT NULL,
+    access_ttl_seconds integer NOT NULL,
+    refresh_ttl_seconds integer NOT NULL,
+    session_cache_ttl_seconds integer NOT NULL,
+    access_cache_ttl_seconds integer NOT NULL,
+    bind_device smallint NOT NULL,
+    bind_ip smallint NOT NULL,
+    max_sessions smallint NOT NULL,
+    allow_register smallint NOT NULL,
+    is_enabled smallint NOT NULL,
+    is_builtin smallint NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_auth_platform_access_cache_ttl_seconds CHECK (((access_cache_ttl_seconds >= 60) AND (access_cache_ttl_seconds <= 86400))),
+    CONSTRAINT ck_auth_platform_access_ttl_seconds CHECK (((access_ttl_seconds >= 60) AND (access_ttl_seconds <= 2592000))),
+    CONSTRAINT ck_auth_platform_allow_register CHECK ((allow_register = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_bind_device CHECK ((bind_device = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_bind_ip CHECK ((bind_ip = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_code CHECK (((code)::text ~ '^[a-z][a-z0-9_]{1,48}$'::text)),
+    CONSTRAINT ck_auth_platform_is_builtin CHECK ((is_builtin = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_auth_platform_max_sessions CHECK (((max_sessions >= 0) AND (max_sessions <= 100))),
+    CONSTRAINT ck_auth_platform_policy_version CHECK ((policy_version >= 1)),
+    CONSTRAINT ck_auth_platform_refresh_ttl_seconds CHECK (((refresh_ttl_seconds >= 60) AND (refresh_ttl_seconds <= 31536000))),
+    CONSTRAINT ck_auth_platform_session_cache_ttl_seconds CHECK (((session_cache_ttl_seconds >= 60) AND (session_cache_ttl_seconds <= 86400)))
+);
+
+
+--
+-- Name: auth_platform_id_seq; Type: SEQUENCE; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE SEQUENCE test_user_session_1788437240066425200.auth_platform_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: auth_platform_id_seq; Type: SEQUENCE OWNED BY; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER SEQUENCE test_user_session_1788437240066425200.auth_platform_id_seq OWNED BY test_user_session_1788437240066425200.auth_platform.id;
+
+
+--
+-- Name: permission_access_version; Type: TABLE; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE TABLE test_user_session_1788437240066425200.permission_access_version (
+    user_id bigint NOT NULL,
+    version bigint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: permission_access_version_user_id_seq; Type: SEQUENCE; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE SEQUENCE test_user_session_1788437240066425200.permission_access_version_user_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: permission_access_version_user_id_seq; Type: SEQUENCE OWNED BY; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER SEQUENCE test_user_session_1788437240066425200.permission_access_version_user_id_seq OWNED BY test_user_session_1788437240066425200.permission_access_version.user_id;
+
+
+--
+-- Name: permission_role; Type: TABLE; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE TABLE test_user_session_1788437240066425200.permission_role (
+    id bigint NOT NULL,
+    code character varying(64) NOT NULL,
+    name character varying(64) NOT NULL,
+    is_default smallint DEFAULT 0 NOT NULL,
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_permission_role_is_default CHECK ((is_default = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_permission_role_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1])))
+);
+
+
+--
+-- Name: permission_role_id_seq; Type: SEQUENCE; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE SEQUENCE test_user_session_1788437240066425200.permission_role_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: permission_role_id_seq; Type: SEQUENCE OWNED BY; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER SEQUENCE test_user_session_1788437240066425200.permission_role_id_seq OWNED BY test_user_session_1788437240066425200.permission_role.id;
+
+
+--
+-- Name: permission_user_role; Type: TABLE; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE TABLE test_user_session_1788437240066425200.permission_user_role (
+    id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    role_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone
+);
+
+
+--
+-- Name: permission_user_role_id_seq; Type: SEQUENCE; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE SEQUENCE test_user_session_1788437240066425200.permission_user_role_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: permission_user_role_id_seq; Type: SEQUENCE OWNED BY; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER SEQUENCE test_user_session_1788437240066425200.permission_user_role_id_seq OWNED BY test_user_session_1788437240066425200.permission_user_role.id;
+
+
+--
+-- Name: user_account; Type: TABLE; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE TABLE test_user_session_1788437240066425200.user_account (
+    id bigint NOT NULL,
+    username character varying(64) NOT NULL,
+    email character varying(254) NOT NULL,
+    phone character varying(32),
+    password_hash character varying(255) NOT NULL,
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_user_account_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1])))
+);
+
+
+--
+-- Name: user_account_id_seq; Type: SEQUENCE; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE SEQUENCE test_user_session_1788437240066425200.user_account_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: user_account_id_seq; Type: SEQUENCE OWNED BY; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER SEQUENCE test_user_session_1788437240066425200.user_account_id_seq OWNED BY test_user_session_1788437240066425200.user_account.id;
+
+
+--
+-- Name: user_session; Type: TABLE; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE TABLE test_user_session_1788437240066425200.user_session (
+    id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    device_id character varying(36) NOT NULL,
+    refresh_token_hash character(64) NOT NULL,
+    version bigint DEFAULT 1 NOT NULL,
+    client_ip character varying(64) NOT NULL,
+    user_agent character varying(512) NOT NULL,
+    refresh_expires_at timestamp with time zone NOT NULL,
+    revoked_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT ck_user_session_version CHECK ((version >= 1))
+);
+
+
+--
+-- Name: user_session_id_seq; Type: SEQUENCE; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE SEQUENCE test_user_session_1788437240066425200.user_session_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: user_session_id_seq; Type: SEQUENCE OWNED BY; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER SEQUENCE test_user_session_1788437240066425200.user_session_id_seq OWNED BY test_user_session_1788437240066425200.user_session.id;
+
+
+--
 -- Name: message_mail_config id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -900,6 +1990,132 @@ ALTER TABLE ONLY public.user_session ALTER COLUMN id SET DEFAULT nextval('public
 
 
 --
+-- Name: auth_platform id; Type: DEFAULT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.auth_platform ALTER COLUMN id SET DEFAULT nextval('test_menu_1788437234335272500.auth_platform_id_seq'::regclass);
+
+
+--
+-- Name: permission_access_version user_id; Type: DEFAULT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.permission_access_version ALTER COLUMN user_id SET DEFAULT nextval('test_menu_1788437234335272500.permission_access_version_user_id_seq'::regclass);
+
+
+--
+-- Name: permission_menu id; Type: DEFAULT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.permission_menu ALTER COLUMN id SET DEFAULT nextval('test_menu_1788437234335272500.permission_menu_id_seq'::regclass);
+
+
+--
+-- Name: permission_role id; Type: DEFAULT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.permission_role ALTER COLUMN id SET DEFAULT nextval('test_menu_1788437234335272500.permission_role_id_seq'::regclass);
+
+
+--
+-- Name: permission_role_menu id; Type: DEFAULT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.permission_role_menu ALTER COLUMN id SET DEFAULT nextval('test_menu_1788437234335272500.permission_role_menu_id_seq'::regclass);
+
+
+--
+-- Name: user_account id; Type: DEFAULT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.user_account ALTER COLUMN id SET DEFAULT nextval('test_menu_1788437234335272500.user_account_id_seq'::regclass);
+
+
+--
+-- Name: auth_platform id; Type: DEFAULT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.auth_platform ALTER COLUMN id SET DEFAULT nextval('test_menu_1788437254379752200.auth_platform_id_seq'::regclass);
+
+
+--
+-- Name: permission_access_version user_id; Type: DEFAULT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.permission_access_version ALTER COLUMN user_id SET DEFAULT nextval('test_menu_1788437254379752200.permission_access_version_user_id_seq'::regclass);
+
+
+--
+-- Name: permission_menu id; Type: DEFAULT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.permission_menu ALTER COLUMN id SET DEFAULT nextval('test_menu_1788437254379752200.permission_menu_id_seq'::regclass);
+
+
+--
+-- Name: permission_role id; Type: DEFAULT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.permission_role ALTER COLUMN id SET DEFAULT nextval('test_menu_1788437254379752200.permission_role_id_seq'::regclass);
+
+
+--
+-- Name: permission_role_menu id; Type: DEFAULT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.permission_role_menu ALTER COLUMN id SET DEFAULT nextval('test_menu_1788437254379752200.permission_role_menu_id_seq'::regclass);
+
+
+--
+-- Name: user_account id; Type: DEFAULT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.user_account ALTER COLUMN id SET DEFAULT nextval('test_menu_1788437254379752200.user_account_id_seq'::regclass);
+
+
+--
+-- Name: auth_platform id; Type: DEFAULT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.auth_platform ALTER COLUMN id SET DEFAULT nextval('test_user_session_1788437240066425200.auth_platform_id_seq'::regclass);
+
+
+--
+-- Name: permission_access_version user_id; Type: DEFAULT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.permission_access_version ALTER COLUMN user_id SET DEFAULT nextval('test_user_session_1788437240066425200.permission_access_version_user_id_seq'::regclass);
+
+
+--
+-- Name: permission_role id; Type: DEFAULT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.permission_role ALTER COLUMN id SET DEFAULT nextval('test_user_session_1788437240066425200.permission_role_id_seq'::regclass);
+
+
+--
+-- Name: permission_user_role id; Type: DEFAULT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.permission_user_role ALTER COLUMN id SET DEFAULT nextval('test_user_session_1788437240066425200.permission_user_role_id_seq'::regclass);
+
+
+--
+-- Name: user_account id; Type: DEFAULT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.user_account ALTER COLUMN id SET DEFAULT nextval('test_user_session_1788437240066425200.user_account_id_seq'::regclass);
+
+
+--
+-- Name: user_session id; Type: DEFAULT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.user_session ALTER COLUMN id SET DEFAULT nextval('test_user_session_1788437240066425200.user_session_id_seq'::regclass);
+
+
+--
 -- Name: system_operation_log audit_operation_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -952,7 +2168,7 @@ ALTER TABLE ONLY public.message_mail_log_verification
 --
 
 ALTER TABLE ONLY public.message_mail_rate_limit_policy
-    ADD CONSTRAINT message_mail_rate_limit_policy_pkey PRIMARY KEY (policy_key);
+    ADD CONSTRAINT message_mail_rate_limit_policy_pkey PRIMARY KEY (platform_id, policy_key);
 
 
 --
@@ -1076,6 +2292,166 @@ ALTER TABLE ONLY public.user_profile
 
 
 --
+-- Name: auth_platform auth_platform_pkey; Type: CONSTRAINT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.auth_platform
+    ADD CONSTRAINT auth_platform_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_access_version permission_access_version_pkey; Type: CONSTRAINT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.permission_access_version
+    ADD CONSTRAINT permission_access_version_pkey PRIMARY KEY (user_id);
+
+
+--
+-- Name: permission_menu permission_menu_pkey; Type: CONSTRAINT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.permission_menu
+    ADD CONSTRAINT permission_menu_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_role_menu permission_role_menu_pkey; Type: CONSTRAINT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.permission_role_menu
+    ADD CONSTRAINT permission_role_menu_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_role permission_role_pkey; Type: CONSTRAINT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.permission_role
+    ADD CONSTRAINT permission_role_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_menu uq_permission_menu_id_platform; Type: CONSTRAINT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.permission_menu
+    ADD CONSTRAINT uq_permission_menu_id_platform UNIQUE (id, platform_id);
+
+
+--
+-- Name: user_account user_account_pkey; Type: CONSTRAINT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.user_account
+    ADD CONSTRAINT user_account_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: auth_platform auth_platform_pkey; Type: CONSTRAINT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.auth_platform
+    ADD CONSTRAINT auth_platform_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_access_version permission_access_version_pkey; Type: CONSTRAINT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.permission_access_version
+    ADD CONSTRAINT permission_access_version_pkey PRIMARY KEY (user_id);
+
+
+--
+-- Name: permission_menu permission_menu_pkey; Type: CONSTRAINT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.permission_menu
+    ADD CONSTRAINT permission_menu_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_role_menu permission_role_menu_pkey; Type: CONSTRAINT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.permission_role_menu
+    ADD CONSTRAINT permission_role_menu_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_role permission_role_pkey; Type: CONSTRAINT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.permission_role
+    ADD CONSTRAINT permission_role_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_menu uq_permission_menu_id_platform; Type: CONSTRAINT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.permission_menu
+    ADD CONSTRAINT uq_permission_menu_id_platform UNIQUE (id, platform_id);
+
+
+--
+-- Name: user_account user_account_pkey; Type: CONSTRAINT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.user_account
+    ADD CONSTRAINT user_account_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: auth_platform auth_platform_pkey; Type: CONSTRAINT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.auth_platform
+    ADD CONSTRAINT auth_platform_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_access_version permission_access_version_pkey; Type: CONSTRAINT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.permission_access_version
+    ADD CONSTRAINT permission_access_version_pkey PRIMARY KEY (user_id);
+
+
+--
+-- Name: permission_role permission_role_pkey; Type: CONSTRAINT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.permission_role
+    ADD CONSTRAINT permission_role_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: permission_user_role permission_user_role_pkey; Type: CONSTRAINT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.permission_user_role
+    ADD CONSTRAINT permission_user_role_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_account user_account_pkey; Type: CONSTRAINT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.user_account
+    ADD CONSTRAINT user_account_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_session user_session_pkey; Type: CONSTRAINT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.user_session
+    ADD CONSTRAINT user_session_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: ix_audit_operation_log_action_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1101,6 +2477,13 @@ CREATE INDEX ix_audit_operation_log_request_id ON public.system_operation_log US
 --
 
 CREATE INDEX ix_audit_operation_log_user_created_at ON public.system_operation_log USING btree (user_id, created_at DESC);
+
+
+--
+-- Name: ix_message_mail_rate_limit_policy_platform_revision; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_message_mail_rate_limit_policy_platform_revision ON public.message_mail_rate_limit_policy USING btree (platform_id, revision);
 
 
 --
@@ -1335,6 +2718,111 @@ CREATE UNIQUE INDEX ux_user_session_refresh_token_hash ON public.user_session US
 
 
 --
+-- Name: ix_permission_menu_parent_active; Type: INDEX; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE INDEX ix_permission_menu_parent_active ON test_menu_1788437234335272500.permission_menu USING btree (platform_id, parent_id, sort_order, id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_auth_platform_code_active; Type: INDEX; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_auth_platform_code_active ON test_menu_1788437234335272500.auth_platform USING btree (code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_permission_menu_code_active; Type: INDEX; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_permission_menu_code_active ON test_menu_1788437234335272500.permission_menu USING btree (platform_id, code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_permission_menu_page_path_active; Type: INDEX; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_permission_menu_page_path_active ON test_menu_1788437234335272500.permission_menu USING btree (platform_id, path) WHERE ((deleted_at IS NULL) AND ((menu_type)::text = 'page'::text));
+
+
+--
+-- Name: ux_permission_role_menu_active; Type: INDEX; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_permission_role_menu_active ON test_menu_1788437234335272500.permission_role_menu USING btree (role_id, menu_id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ix_permission_menu_parent_active; Type: INDEX; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE INDEX ix_permission_menu_parent_active ON test_menu_1788437254379752200.permission_menu USING btree (platform_id, parent_id, sort_order, id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_auth_platform_code_active; Type: INDEX; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_auth_platform_code_active ON test_menu_1788437254379752200.auth_platform USING btree (code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_permission_menu_code_active; Type: INDEX; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_permission_menu_code_active ON test_menu_1788437254379752200.permission_menu USING btree (platform_id, code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_permission_menu_page_path_active; Type: INDEX; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_permission_menu_page_path_active ON test_menu_1788437254379752200.permission_menu USING btree (platform_id, path) WHERE ((deleted_at IS NULL) AND ((menu_type)::text = 'page'::text));
+
+
+--
+-- Name: ux_permission_role_menu_active; Type: INDEX; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_permission_role_menu_active ON test_menu_1788437254379752200.permission_role_menu USING btree (role_id, menu_id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_auth_platform_code_active; Type: INDEX; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_auth_platform_code_active ON test_user_session_1788437240066425200.auth_platform USING btree (code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_permission_role_code_active; Type: INDEX; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_permission_role_code_active ON test_user_session_1788437240066425200.permission_role USING btree (code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_permission_role_default_active; Type: INDEX; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_permission_role_default_active ON test_user_session_1788437240066425200.permission_role USING btree (is_default) WHERE ((is_default = 1) AND (deleted_at IS NULL));
+
+
+--
+-- Name: ux_permission_role_name_active; Type: INDEX; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_permission_role_name_active ON test_user_session_1788437240066425200.permission_role USING btree (name) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_permission_user_role_active; Type: INDEX; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_permission_user_role_active ON test_user_session_1788437240066425200.permission_user_role USING btree (user_id, role_id) WHERE (deleted_at IS NULL);
+
+
+--
 -- Name: system_operation_log fk_audit_operation_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1511,7 +2999,95 @@ ALTER TABLE ONLY public.message_mail_log_verification
 
 
 --
+-- Name: message_mail_rate_limit_policy message_mail_rate_limit_policy_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_mail_rate_limit_policy
+    ADD CONSTRAINT message_mail_rate_limit_policy_platform_id_fkey FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id);
+
+
+--
+-- Name: permission_menu fk_permission_menu_parent_platform; Type: FK CONSTRAINT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.permission_menu
+    ADD CONSTRAINT fk_permission_menu_parent_platform FOREIGN KEY (parent_id, platform_id) REFERENCES test_menu_1788437234335272500.permission_menu(id, platform_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_menu fk_permission_menu_platform; Type: FK CONSTRAINT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.permission_menu
+    ADD CONSTRAINT fk_permission_menu_platform FOREIGN KEY (platform_id) REFERENCES test_menu_1788437234335272500.auth_platform(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_role_menu fk_permission_role_menu_menu; Type: FK CONSTRAINT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.permission_role_menu
+    ADD CONSTRAINT fk_permission_role_menu_menu FOREIGN KEY (menu_id) REFERENCES test_menu_1788437234335272500.permission_menu(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_role_menu fk_permission_role_menu_role; Type: FK CONSTRAINT; Schema: test_menu_1788437234335272500; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437234335272500.permission_role_menu
+    ADD CONSTRAINT fk_permission_role_menu_role FOREIGN KEY (role_id) REFERENCES test_menu_1788437234335272500.permission_role(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_menu fk_permission_menu_parent_platform; Type: FK CONSTRAINT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.permission_menu
+    ADD CONSTRAINT fk_permission_menu_parent_platform FOREIGN KEY (parent_id, platform_id) REFERENCES test_menu_1788437254379752200.permission_menu(id, platform_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_menu fk_permission_menu_platform; Type: FK CONSTRAINT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.permission_menu
+    ADD CONSTRAINT fk_permission_menu_platform FOREIGN KEY (platform_id) REFERENCES test_menu_1788437254379752200.auth_platform(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_role_menu fk_permission_role_menu_menu; Type: FK CONSTRAINT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.permission_role_menu
+    ADD CONSTRAINT fk_permission_role_menu_menu FOREIGN KEY (menu_id) REFERENCES test_menu_1788437254379752200.permission_menu(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_role_menu fk_permission_role_menu_role; Type: FK CONSTRAINT; Schema: test_menu_1788437254379752200; Owner: -
+--
+
+ALTER TABLE ONLY test_menu_1788437254379752200.permission_role_menu
+    ADD CONSTRAINT fk_permission_role_menu_role FOREIGN KEY (role_id) REFERENCES test_menu_1788437254379752200.permission_role(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_user_role fk_permission_user_role_role; Type: FK CONSTRAINT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.permission_user_role
+    ADD CONSTRAINT fk_permission_user_role_role FOREIGN KEY (role_id) REFERENCES test_user_session_1788437240066425200.permission_role(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: permission_user_role fk_permission_user_role_user; Type: FK CONSTRAINT; Schema: test_user_session_1788437240066425200; Owner: -
+--
+
+ALTER TABLE ONLY test_user_session_1788437240066425200.permission_user_role
+    ADD CONSTRAINT fk_permission_user_role_user FOREIGN KEY (user_id) REFERENCES test_user_session_1788437240066425200.user_account(id) ON DELETE RESTRICT;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict jgeil5ZzEHiaUokikuR2DCwiYm10xgmyvdMnkFiuy1erbYzyNt4FL1krI1Sngfv
+\unrestrict cydo0mfmzKuo5SeHWsLnY3rjI1tVL7VYLwLfqnRxj3QdKBoAxdWTeuz2nnGXnWQ
