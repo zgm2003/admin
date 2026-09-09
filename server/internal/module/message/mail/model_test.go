@@ -58,6 +58,9 @@ func TestMailConfigurationModelsAreGlobalWhileDeliveryFactsKeepPlatform(t *testi
 		if _, found := reflect.TypeOf(model).FieldByName("PlatformID"); !found {
 			t.Fatalf("%s lost its source platform audit field", name)
 		}
+		if _, found := reflect.TypeOf(model).FieldByName("DeletedAt"); found {
+			t.Fatalf("immutable %s exposes a soft-delete field", name)
+		}
 	}
 }
 
@@ -84,7 +87,6 @@ func TestMailPermissionCodesUseMessageDomain(t *testing.T) {
 		PermissionTest,
 		mailtemplate.PermissionUpdate,
 		mailtemplate.PermissionStatus,
-		maillog.PermissionDelete,
 		recipientrule.PermissionCreate,
 		recipientrule.PermissionUpdate,
 		recipientrule.PermissionStatus,
@@ -100,7 +102,6 @@ func TestMailPermissionCodesUseMessageDomain(t *testing.T) {
 		"message:mail:test",
 		"message:mail:template:update",
 		"message:mail:template:status",
-		"message:mail:log:delete",
 		"message:mail:rule:create",
 		"message:mail:rule:update",
 		"message:mail:rule:status",

@@ -37,8 +37,6 @@ func TestResourceModulesRegisterTheCompleteMailSurfaceOnce(t *testing.T) {
 		"PATCH /api/admin/v1/message/mail/template/:id/status":              1,
 		"GET /api/admin/v1/message/mail/log":                                1,
 		"GET /api/admin/v1/message/mail/log/:id":                            1,
-		"DELETE /api/admin/v1/message/mail/log/:id":                         1,
-		"DELETE /api/admin/v1/message/mail/log":                             1,
 		"GET /api/admin/v1/message/mail/rate-limit-policy":                  1,
 		"PUT /api/admin/v1/message/mail/rate-limit-policy/:platformId/:key": 1,
 		"GET /api/admin/v1/message/mail/recipient-rule":                     1,
@@ -50,6 +48,9 @@ func TestResourceModulesRegisterTheCompleteMailSurfaceOnce(t *testing.T) {
 	got := make(map[string]int, len(want))
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path
+		if route.Method == "DELETE" && (route.Path == "/api/admin/v1/message/mail/log" || route.Path == "/api/admin/v1/message/mail/log/:id") {
+			t.Fatalf("immutable mail log exposed delete route %s", key)
+		}
 		if _, tracked := want[key]; tracked {
 			got[key]++
 		}

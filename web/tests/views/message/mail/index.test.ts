@@ -19,8 +19,6 @@ vi.mock('@/api/message/mail', () => ({
   updateMailTemplateStatus: vi.fn(),
   listMailLogs: vi.fn(),
   getMailLogDetail: vi.fn(),
-  deleteMailLog: vi.fn(),
-  deleteMailLogs: vi.fn(),
   listMailRules: vi.fn(),
   createMailRule: vi.fn(),
   updateMailRule: vi.fn(),
@@ -179,7 +177,6 @@ describe('mail service page', () => {
       'message:mail:list',
       'message:mail:detail',
       'message:mail:template:update',
-      'message:mail:log:delete',
       'message:mail:rule:create',
     ])
     await flushPromises()
@@ -189,7 +186,8 @@ describe('mail service page', () => {
     await selectTab(wrapper, '邮件模板')
     expect(wrapper.find('[data-testid="mail-template-edit"]').exists()).toBe(true)
     await selectTab(wrapper, '发送日志')
-    expect(wrapper.find('[data-testid="mail-log-batch-delete"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="mail-log-batch-delete"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('批量删除')
     await selectTab(wrapper, '收件规则')
     expect(wrapper.find('[data-testid="mail-rule-create"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('默认允许；精确邮箱优先于域名；拒绝优先于允许。')
@@ -391,6 +389,74 @@ describe('mail service page', () => {
     })
   })
 
+  it('loads delivery logs even when the optional template catalog fails', async () => {
+    vi.mocked(mailApi.listMailTemplates).mockRejectedValueOnce(new Error('template unavailable'))
+    vi.mocked(mailApi.listMailLogs).mockResolvedValueOnce({
+      list: [mailLogRow(21, 'fallback@example.com', 'custom_scene')],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage(['message:mail:list', 'message:mail:detail'])
+    await flushPromises()
+
+    await selectTab(wrapper, '发送日志')
+
+    expect(mailApi.listMailLogs).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('fallback@example.com')
+    expect(wrapper.text()).toContain('custom_scene')
+    expect(wrapper.find('.mail-error').exists()).toBe(false)
+  })
+
+  it('attempts an empty template catalog only once while paging logs', async () => {
+    vi.mocked(mailApi.listMailTemplates).mockResolvedValueOnce([])
+    const wrapper = mountPage(['message:mail:list', 'message:mail:detail'])
+    await flushPromises()
+    await selectTab(wrapper, '发送日志')
+
+    wrapper.findComponent({ name: 'ElPagination' }).vm.$emit('current-change', 2)
+    await flushPromises()
+
+    expect(mailApi.listMailTemplates).toHaveBeenCalledOnce()
+    expect(mailApi.listMailLogs).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not let an older log response overwrite a newer filter result', async () => {
+    const older = deferred<Awaited<ReturnType<typeof mailApi.listMailLogs>>>()
+    vi.mocked(mailApi.listMailLogs)
+      .mockReturnValueOnce(older.promise)
+      .mockResolvedValueOnce({
+        list: [mailLogRow(23, 'new@example.com', 'login')],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+      })
+    const wrapper = mountPage(['message:mail:list', 'message:mail:detail'])
+    await flushPromises()
+    await selectTab(wrapper, '发送日志')
+
+    wrapper.findComponent({ name: 'AppSearch' }).vm.$emit('query', {
+      platform: '',
+      toEmail: 'new@example.com',
+      scene: '',
+      status: '',
+      timeRange: [],
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('new@example.com')
+
+    older.resolve({
+      list: [mailLogRow(22, 'old@example.com', 'login')],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('new@example.com')
+    expect(wrapper.text()).not.toContain('old@example.com')
+  })
+
   it('shows the rate limit tab only with list permission and does not fetch it eagerly', async () => {
     const wrapper = mountPage(['message:mail:list'])
     await flushPromises()
@@ -423,4 +489,37 @@ async function selectTab(wrapper: VueWrapper, label: string) {
   if (!tab) throw new Error(`tab not found: ${label}`)
   await tab.trigger('click')
   await flushPromises()
+}
+
+function mailLogRow(id: number, toEmail: string, scene: string): mailApi.MailLog {
+  return {
+    id,
+    platformId: 1,
+    platform: 'admin',
+    userId: null,
+    username: '',
+    scene,
+    templateId: 1,
+    toEmail,
+    subject: 'subject',
+    status: 'sent',
+    requestId: '',
+    messageId: '',
+    errorCode: '',
+    errorSummary: '',
+    latencyMs: 1,
+    sentAt: '2026-09-09T00:00:00Z',
+    createdAt: '2026-09-09T00:00:00Z',
+    updatedAt: '2026-09-09T00:00:00Z',
+  }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
 }

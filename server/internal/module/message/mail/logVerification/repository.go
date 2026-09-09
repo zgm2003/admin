@@ -17,7 +17,7 @@ func (r *Repository) Create(ctx context.Context, value *Model) error {
 func (r *Repository) FindByLog(ctx context.Context, platformID, logID int64) (Model, error) {
 	var value Model
 	err := r.db.WithContext(ctx).
-		Where("platform_id = ? AND mail_log_id = ? AND deleted_at IS NULL", platformID, logID).
+		Where("platform_id = ? AND mail_log_id = ?", platformID, logID).
 		Take(&value).Error
 	return value, err
 }

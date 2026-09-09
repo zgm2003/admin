@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict dTeVZz2Y8Tz4L2NKdfEVnLsOjsTGnlY7SGYKVkO9QnSW49bvnng3t8R8BUDjxQw
+\restrict wD1YwmbJ24dK13UJXEE5k9uOjU3XeIcBwe5ZsgCPTrV2pP0Usoa1XvrDnVcpdcM
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -193,7 +193,6 @@ CREATE TABLE public.message_mail_log (
     sent_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    deleted_at timestamp with time zone,
     CONSTRAINT message_mail_log_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'sent'::character varying, 'failed'::character varying])::text[])))
 );
 
@@ -228,8 +227,7 @@ CREATE TABLE public.message_mail_log_verification (
     key_version character varying(16) NOT NULL,
     code_ciphertext text NOT NULL,
     expires_at timestamp with time zone NOT NULL,
-    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    deleted_at timestamp with time zone
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 
@@ -1106,10 +1104,52 @@ CREATE INDEX ix_audit_operation_log_user_created_at ON public.system_operation_l
 
 
 --
+-- Name: ix_message_mail_log_created_id_desc; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_message_mail_log_created_id_desc ON public.message_mail_log USING btree (created_at DESC, id DESC);
+
+
+--
+-- Name: ix_message_mail_log_platform_id_desc; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_message_mail_log_platform_id_desc ON public.message_mail_log USING btree (platform_id, id DESC);
+
+
+--
+-- Name: ix_message_mail_log_scene_id_desc; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_message_mail_log_scene_id_desc ON public.message_mail_log USING btree (scene, id DESC);
+
+
+--
+-- Name: ix_message_mail_log_status_id_desc; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_message_mail_log_status_id_desc ON public.message_mail_log USING btree (status, id DESC);
+
+
+--
+-- Name: ix_message_mail_log_to_email_prefix; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_message_mail_log_to_email_prefix ON public.message_mail_log USING btree (to_email varchar_pattern_ops, id DESC);
+
+
+--
 -- Name: ix_message_mail_rate_limit_policy_platform_revision; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_message_mail_rate_limit_policy_platform_revision ON public.message_mail_rate_limit_policy USING btree (platform_id, revision);
+
+
+--
+-- Name: ix_permission_auth_platform_code_history_prefix; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_permission_auth_platform_code_history_prefix ON public.permission_auth_platform USING btree (code varchar_pattern_ops, id);
 
 
 --
@@ -1204,10 +1244,10 @@ CREATE UNIQUE INDEX ux_message_mail_config_active_singleton ON public.message_ma
 
 
 --
--- Name: ux_message_mail_log_platform_challenge_active; Type: INDEX; Schema: public; Owner: -
+-- Name: ux_message_mail_log_platform_challenge; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX ux_message_mail_log_platform_challenge_active ON public.message_mail_log USING btree (platform_id, challenge_id) WHERE ((deleted_at IS NULL) AND (challenge_id IS NOT NULL));
+CREATE UNIQUE INDEX ux_message_mail_log_platform_challenge ON public.message_mail_log USING btree (platform_id, challenge_id) WHERE (challenge_id IS NOT NULL);
 
 
 --
@@ -1225,10 +1265,10 @@ CREATE UNIQUE INDEX ux_message_mail_template_scene_active ON public.message_mail
 
 
 --
--- Name: ux_message_mail_verification_log_active; Type: INDEX; Schema: public; Owner: -
+-- Name: ux_message_mail_verification_log; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX ux_message_mail_verification_log_active ON public.message_mail_log_verification USING btree (mail_log_id) WHERE (deleted_at IS NULL);
+CREATE UNIQUE INDEX ux_message_mail_verification_log ON public.message_mail_log_verification USING btree (mail_log_id);
 
 
 --
@@ -1531,4 +1571,4 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 -- PostgreSQL database dump complete
 --
 
-\unrestrict dTeVZz2Y8Tz4L2NKdfEVnLsOjsTGnlY7SGYKVkO9QnSW49bvnng3t8R8BUDjxQw
+\unrestrict wD1YwmbJ24dK13UJXEE5k9uOjU3XeIcBwe5ZsgCPTrV2pP0Usoa1XvrDnVcpdcM

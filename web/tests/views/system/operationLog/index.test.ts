@@ -105,7 +105,6 @@ describe('operation logs', () => {
         { ...row(), action: 'future.action' },
         { ...row(), id: 2, action: 'mail.config.update' },
         { ...row(), id: 3, action: 'user.password.update' },
-        { ...row(), id: 4, action: 'account.password.change' },
       ],
       total: 4,
       page: 1,

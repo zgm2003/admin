@@ -114,7 +114,7 @@ func TestSendConcurrentChallengeUsesDatabaseUniqueness(t *testing.T) {
 		t.Fatalf("sender calls = %d, want 1", sender.calls.Load())
 	}
 	var count int64
-	if err := db.WithContext(ctx).Model(&Log{}).Where("platform_id = ? AND challenge_id = ? AND deleted_at IS NULL", 1, in.ChallengeID).Count(&count).Error; err != nil {
+	if err := db.WithContext(ctx).Model(&Log{}).Where("platform_id = ? AND challenge_id = ?", 1, in.ChallengeID).Count(&count).Error; err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {

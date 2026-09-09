@@ -19,6 +19,8 @@ const { t } = useI18n()
 const activeTab = ref<TabName>('config')
 const loading = ref(false)
 const loadError = ref('')
+const logLoading = ref(false)
+const logError = ref('')
 const config = ref<mailApi.MailConfig>({
   configured: false,
   region: '',
@@ -45,6 +47,8 @@ const logFilter = ref<MailLogFilter>({
   status: '',
   timeRange: [],
 })
+const templateCatalogAttempted = ref(false)
+let logRequestSequence = 0
 const can = (code: string) => access.hasPermission(code)
 const canList = computed(() => can('message:mail:list'))
 const visibleTabs = computed(() => [
@@ -66,7 +70,18 @@ async function loadConfig(): Promise<void> {
 }
 
 async function loadTemplates(): Promise<void> {
+  templateCatalogAttempted.value = true
   templates.value = await mailApi.listMailTemplates()
+}
+
+async function loadTemplateCatalogForLogs(): Promise<void> {
+  if (templateCatalogAttempted.value) return
+  templateCatalogAttempted.value = true
+  try {
+    templates.value = await mailApi.listMailTemplates()
+  } catch {
+    // Scene names are optional presentation data; request.ts owns the error notification.
+  }
 }
 
 async function loadRules(): Promise<void> {
@@ -87,32 +102,43 @@ async function loadRateLimitPolicies(): Promise<void> {
 }
 
 async function loadLogs(): Promise<void> {
-  // The scene filter mirrors the backend template catalog; load it once so the
-  // log tab does not rely on a frontend-only scene list.
-  if (templates.value.length === 0) await loadTemplates()
+  const sequence = ++logRequestSequence
+  logLoading.value = true
+  logError.value = ''
   const filter = logFilter.value
   const [from, to] = filter.timeRange
-  const result = await mailApi.listMailLogs({
-    page: logPage.value,
-    pageSize: logPageSize.value,
-    ...(filter.platform.trim() === '' ? {} : { platform: filter.platform.trim() }),
-    ...(filter.toEmail.trim() === '' ? {} : { toEmail: filter.toEmail.trim() }),
-    ...(filter.scene === '' ? {} : { scene: filter.scene }),
-    ...(filter.status === '' ? {} : { status: filter.status }),
-    ...(filter.timeRange.length === 0 ? {} : { from, to }),
-  })
-  logs.value = result.list
-  logTotal.value = result.total
+  try {
+    const result = await mailApi.listMailLogs({
+      page: logPage.value,
+      pageSize: logPageSize.value,
+      ...(filter.platform.trim() === '' ? {} : { platform: filter.platform.trim() }),
+      ...(filter.toEmail.trim() === '' ? {} : { toEmail: filter.toEmail.trim() }),
+      ...(filter.scene === '' ? {} : { scene: filter.scene }),
+      ...(filter.status === '' ? {} : { status: filter.status }),
+      ...(filter.timeRange.length === 0 ? {} : { from, to }),
+    })
+    if (sequence !== logRequestSequence) return
+    logs.value = result.list
+    logTotal.value = result.total
+  } catch (error: unknown) {
+    if (sequence === logRequestSequence) logError.value = errorMessage(error)
+  } finally {
+    if (sequence === logRequestSequence) logLoading.value = false
+  }
 }
 
 async function loadActive(): Promise<void> {
   if (!canList.value) return
+  if (activeTab.value === 'logs') {
+    void loadTemplateCatalogForLogs()
+    await loadLogs()
+    return
+  }
   loading.value = true
   loadError.value = ''
   try {
     if (activeTab.value === 'config') await loadConfig()
     else if (activeTab.value === 'templates') await loadTemplates()
-    else if (activeTab.value === 'logs') await loadLogs()
     else if (activeTab.value === 'rules') await loadRules()
     else await loadRateLimitPolicies()
   } catch (error: unknown) {
@@ -154,9 +180,9 @@ watch(
         lazy
       >
         <el-alert
-          v-if="loadError"
+          v-if="tab.name === 'logs' ? logError : loadError"
           class="mail-error"
-          :title="loadError"
+          :title="tab.name === 'logs' ? logError : loadError"
           type="error"
           show-icon
           :closable="false"
@@ -186,8 +212,7 @@ watch(
           :total="logTotal"
           :page="logPage"
           :page-size="logPageSize"
-          :loading="loading"
-          :can-delete="can('message:mail:log:delete')"
+          :loading="logLoading"
           @refresh="loadLogs"
           @page-change="changeLogPage"
           @search="searchLogs"

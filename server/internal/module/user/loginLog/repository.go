@@ -85,7 +85,7 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Item, int64, 
 	}
 	items := make([]Item, 0, query.PageSize)
 	if err := db.Select("login_log.id, login_log.user_id, login_log.session_id, COALESCE(platform.code, '') AS platform, login_log.login_account, login_log.event_type, login_log.login_type, login_log.is_success, login_log.reason_code, login_log.client_ip, login_log.user_agent, login_log.created_at").
-		Joins("JOIN permission_auth_platform AS platform ON platform.id = login_log.platform_id").
+		Joins("LEFT JOIN permission_auth_platform AS platform ON platform.id = login_log.platform_id").
 		Order("login_log.created_at DESC, login_log.id DESC").Offset((query.Page - 1) * query.PageSize).Limit(query.PageSize).Scan(&items).Error; err != nil {
 		return nil, 0, fmt.Errorf("list login logs: %w", err)
 	}

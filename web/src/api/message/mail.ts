@@ -461,18 +461,6 @@ export function getMailLogDetail(id: number) {
     parseMailLogDetail,
   )
 }
-export function deleteMailLog(id: number): Promise<Record<string, never>> {
-  return request<unknown>({ method: 'DELETE', url: `/api/admin/v1/message/mail/log/${id}` }).then(
-    (value) => expectEmptyObject(value, 'mail log delete result'),
-  )
-}
-export function deleteMailLogs(ids: number[]): Promise<Record<string, never>> {
-  return request<unknown>({
-    method: 'DELETE',
-    url: '/api/admin/v1/message/mail/log',
-    data: ids,
-  }).then((value) => expectEmptyObject(value, 'mail logs delete result'))
-}
 export function listMailRules() {
   return request<unknown>({ method: 'GET', url: '/api/admin/v1/message/mail/recipient-rule' }).then(
     (value) => {

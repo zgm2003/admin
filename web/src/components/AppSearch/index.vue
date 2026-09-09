@@ -118,23 +118,16 @@ function selectValue(key: string): string | number | null | undefined {
   return isScalar(value) ? value : undefined
 }
 
-function normalizeValue(value: unknown): SearchFormValue | null {
-  if (isScalar(value)) return value
-  if (isDateRange(value)) return value
-  return null
-}
-
 function setSearchValue(key: string, value: unknown, dateRange = false): void {
-  if (dateRange && !isDateRange(value)) {
-    // el-date-picker clearable emits null; map it to an empty range so the
-    // stale selection does not survive the next query.
-    form[key] = []
-    emit('update:modelValue', { ...form } as TModel)
+  const candidateValue = dateRange && (value === null || value === undefined) ? [] : value
+  const candidate = { ...form, [key]: candidateValue } as TModel
+  const error = validateModel(props.fields, candidate)
+  if (error !== null) {
+    validationError.value = error
     return
   }
-  const normalized = normalizeValue(value)
-  if (normalized === null) return
-  form[key] = normalized
+  form[key] = candidateValue as SearchFormValue
+  validationError.value = null
   emit('update:modelValue', { ...form } as TModel)
 }
 

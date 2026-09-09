@@ -1,11 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import {
-  deleteMailLog,
-  deleteMailLogs,
   getMailLogDetail,
   type MailLog,
   type MailLogDetail,
@@ -31,7 +28,6 @@ const props = defineProps<{
   page: number
   pageSize: number
   loading: boolean
-  canDelete: boolean
 }>()
 
 const emit = defineEmits<{
@@ -40,11 +36,9 @@ const emit = defineEmits<{
   search: [value: MailLogFilter]
 }>()
 const { t } = useI18n()
-const selected = ref<MailLog[]>([])
 const detail = ref<MailLogDetail | null>(null)
 const detailVisible = ref(false)
 const filter = ref<MailLogFilter>(blankFilter())
-const selectedCount = computed(() => selected.value.length)
 const searchModel = computed<SearchFormModel>({
   get: () => filter.value,
   set: (value) => {
@@ -114,7 +108,7 @@ const columns = computed<TableColumn<MailLog>[]>(() => [
   { key: 'status', prop: 'status', label: t('mail.status'), width: 110 },
   { key: 'latency', prop: 'latencyMs', label: t('mail.latency'), width: 110 },
   { key: 'sentAt', prop: 'sentAt', label: t('mail.sentAt'), minWidth: 180 },
-  { key: 'actions', prop: 'id', label: t('mail.actions'), width: 200, fixed: 'right' },
+  { key: 'actions', prop: 'id', label: t('mail.actions'), width: 100, fixed: 'right' },
 ])
 const pagination = computed<TablePaginationState>(() => ({
   currentPage: props.page,
@@ -134,10 +128,6 @@ function toFilter(value: SearchFormModel): MailLogFilter {
     status: typeof value.status === 'string' ? value.status : '',
     timeRange: Array.isArray(value.timeRange) ? (value.timeRange as [string, string] | []) : [],
   }
-}
-
-function select(rows: MailLog[]): void {
-  selected.value = rows
 }
 
 function platformText(value: string): string {
@@ -178,29 +168,6 @@ async function inspect(row: MailLog): Promise<void> {
   }
 }
 
-async function remove(row: MailLog): Promise<void> {
-  try {
-    await ElMessageBox.confirm(t('mail.deleteLogConfirm'))
-    await deleteMailLog(row.id)
-    ElMessage.success(t('mail.deleted'))
-    emit('refresh')
-  } catch {
-    // ElMessageBox cancellation and request errors are handled by their respective layers.
-  }
-}
-
-async function removeSelected(): Promise<void> {
-  if (!selected.value.length) return
-  try {
-    await ElMessageBox.confirm(t('mail.deleteLogsConfirm'))
-    await deleteMailLogs(selected.value.map((item) => item.id))
-    selected.value = []
-    ElMessage.success(t('mail.deleted'))
-    emit('refresh')
-  } catch {
-    // ElMessageBox cancellation and request errors are handled by their respective layers.
-  }
-}
 </script>
 
 <template>
@@ -218,25 +185,12 @@ async function removeSelected(): Promise<void> {
       :columns="columns"
       :data="logs"
       :loading="loading"
-      :selectable="canDelete"
       :pagination="pagination"
       :aria-label="t('mail.logsTab')"
       :refresh-label="t('mail.refresh')"
       @refresh="emit('refresh')"
-      @selection-change="select"
       @update:pagination="(next: TablePaginationState) => emit('pageChange', next)"
     >
-      <template #toolbar-left>
-        <el-button
-          v-if="canDelete"
-          data-testid="mail-log-batch-delete"
-          type="danger"
-          :disabled="selectedCount === 0"
-          @click="removeSelected"
-        >
-          {{ t('mail.batchDelete') }}
-        </el-button>
-      </template>
       <template #cell-platform="{ row }: { row: MailLog }">
         {{ platformText(row.platform) }}
       </template>
@@ -260,9 +214,6 @@ async function removeSelected(): Promise<void> {
       <template #cell-actions="{ row }: { row: MailLog }">
         <el-button text type="primary" @click="inspect(row)">
           {{ t('mail.detail') }}
-        </el-button>
-        <el-button v-if="canDelete" text type="danger" @click="remove(row)">
-          {{ t('mail.delete') }}
         </el-button>
       </template>
       <template #empty>

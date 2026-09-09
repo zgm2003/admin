@@ -76,6 +76,8 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 腾讯云 SES 是全系统唯一邮件通道。`message_mail_config` 是全局唯一活动配置，`message_mail_template` 按
 `scene` 全局唯一，`message_mail_recipient_rule` 是全局收件策略；三者不持有认证平台 `platform_id`。只有
 `message_mail_log` 和 `message_mail_log_verification` 保留来源平台，用于审计、验证码隔离和发送状态更新。
+这两张表是 append-only 审计事实，不含 `deleted_at`，不注册管理员删除 API、权限动作或前端删除控件；平台软删
+不得从审计 JOIN 中排除历史记录，平台 code 通过 `LEFT JOIN` 保留显示。
 Mail readiness 只按场景缓存，配置或模板变更一次性失效全局场景状态；认证平台只参与登录方式开关、发送日志
 归属和发送额度 key。缺失认证上下文不得回退到固定平台。当前只有 COS 上传配置允许按认证平台维护独立配置。
 

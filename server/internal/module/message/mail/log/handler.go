@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -15,14 +16,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const (
-	PermissionDetail = "message:mail:detail"
-	PermissionDelete = "message:mail:log:delete"
-)
+const PermissionDetail = "message:mail:detail"
 
-type Handler struct{ service *Service }
+type handlerService interface {
+	List(context.Context, ListQuery, int, int) ([]ListRow, int64, error)
+	Get(context.Context, int64) (Detail, error)
+}
 
-func NewHandler(service *Service) *Handler { return &Handler{service: service} }
+type Handler struct{ service handlerService }
+
+func NewHandler(service handlerService) *Handler { return &Handler{service: service} }
 
 func (h *Handler) List(ctx *gin.Context) {
 	page, size, err := parsePagination(ctx)
@@ -110,32 +113,6 @@ func (h *Handler) Get(ctx *gin.Context) {
 		return
 	}
 	response.OK(ctx, http.StatusOK, NewDetailResponse(value))
-}
-
-func (h *Handler) Delete(ctx *gin.Context) {
-	id, err := parseID(ctx)
-	if err != nil {
-		response.Fail(ctx, err)
-		return
-	}
-	if err := h.service.Delete(ctx.Request.Context(), id); err != nil {
-		response.Fail(ctx, err)
-		return
-	}
-	response.OK(ctx, http.StatusOK, map[string]any{})
-}
-
-func (h *Handler) DeleteMany(ctx *gin.Context) {
-	var ids []int64
-	if err := validate.BindJSON(ctx, &ids); err != nil {
-		response.Fail(ctx, err)
-		return
-	}
-	if err := h.service.DeleteMany(ctx.Request.Context(), ids); err != nil {
-		response.Fail(ctx, err)
-		return
-	}
-	response.OK(ctx, http.StatusOK, map[string]any{})
 }
 
 func parseID(ctx *gin.Context) (int64, error) {

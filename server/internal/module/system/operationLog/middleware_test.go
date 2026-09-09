@@ -56,6 +56,11 @@ func TestRulesMatchOnlyExplicitMutations(t *testing.T) {
 			t.Fatalf("read route %s was registered as operation", route)
 		}
 	}
+	for _, route := range []string{"/api/admin/v1/message/mail/log", "/api/admin/v1/message/mail/log/:id"} {
+		if _, ok := FindRule(http.MethodDelete, route); ok {
+			t.Fatalf("immutable mail log delete route %s was registered as operation", route)
+		}
+	}
 }
 
 func TestSanitizeSummaryMasksSecrets(t *testing.T) {

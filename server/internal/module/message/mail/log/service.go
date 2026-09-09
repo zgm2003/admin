@@ -61,14 +61,6 @@ func (s *Service) Get(ctx context.Context, id int64) (Detail, error) {
 	return result, nil
 }
 
-func (s *Service) Delete(ctx context.Context, id int64) error {
-	return wrapRepository(s.repository.Delete(ctx, id))
-}
-
-func (s *Service) DeleteMany(ctx context.Context, ids []int64) error {
-	return wrapRepository(s.repository.DeleteMany(ctx, ids))
-}
-
 func wrapRepository(err error) error {
 	if err == nil {
 		return nil

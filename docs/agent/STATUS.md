@@ -3,6 +3,36 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## Mail 审计日志不可删除整改（2026-09-09，当前）
+
+- 按维护者确认的审计契约，`message_mail_log` 与 `message_mail_log_verification` 现在是 append-only：
+  后端 Model/Repository/Service/Route、前端 API/按钮/选择列和中英文删除文案均已移除；日志详情仍保留
+  管理员解密验证码能力。`message:mail:log:delete` 仅作为历史菜单记录软删，不再进入有效权限。
+- 认证平台软删不影响 Mail/操作/登录日志的历史来源显示；登录日志使用 `LEFT JOIN`，Mail 日志的来源平台
+  同样不追加 `deleted_at IS NULL`。不存在的关联平台以空编码返回，已有软删平台仍保留原 code。
+- 新增 forward migration `docs/database/2026-09-09-mail-log-immutable.sql`，执行前拒绝任一日志表存在
+  `deleted_at IS NOT NULL` 的数据；移除两张日志表的 `deleted_at`，重建 challenge/verification 唯一索引，
+  增加平台、邮箱前缀、场景、状态和时间分页索引，并按受影响平台递增一次 `menu_version`。真实
+  `admin.public` 已于 2026-09-09 22:12:13 +08:00 执行成功：日志 9/验证码 9 保持，Admin 版本 3→4、
+  Canvas 仍为 1；备份在 `%LOCALAPPDATA%\\Admin\\backups\\mail-log-immutable-20260909-221155\\public-before.dump`，
+  SHA256 `42FBFC71DAA843F1F04615B667CF8F84C4EB559441DF4D458FB6ACB7394A76EB`，`pg_restore --list` 通过；
+  `docs/database/current.sql` 已从真实 public schema 刷新。随后真实库再次执行同一 migration，exit 0 且
+  `menu_version` 保持 4/1，确认幂等。
+- Mail 日志查询补充显式 `ESCAPE '\\'`，并有真实 PostgreSQL 通配符回归测试。以事务内 100,000 行临时夹具执行
+  `EXPLAIN (ANALYZE, BUFFERS)`：count 使用 `ix_message_mail_log_to_email_prefix` Bitmap Index Scan，
+  list 使用主键倒序 Index Scan + LIMIT；小表直接 Seq Scan 属 PostgreSQL 成本选择，不判为索引失效，事务已回滚。
+- 日志页与模板目录解耦：模板目录失败不阻断日志，空目录只尝试一次；日志有独立 loading/error 和请求序号，
+  旧响应不能覆盖新筛选。`AppSearch` 仅将 date-range 的 null/undefined 映射为空数组，其他畸形值进入显式
+  invalid model 错误。
+- 本轮新增 Handler 输入边界、迁移幂等/回滚、登录历史平台和页面竞态测试。完整后端
+  `go fmt ./...`、`go vet ./...`、`go test ./...`、`go build ./...` 全部通过；完整前端 65 个测试文件/496 项
+  Vitest、`pnpm typecheck`、`pnpm lint`、`pnpm check:architecture`（0 findings）和 `pnpm build` 全部通过。
+  Mail 全部子包 `go test -race ./internal/module/message/mail/...` 也通过。Build 仅报告既有的大 chunk 警告。
+  当前 API 进程未由 Agent 重启，维护者需重启到新二进制后再做人工页面/API 验收；SMS 与 HTML 仍未开始。
+- 当前有效 Mail 菜单事实为 13 条（含页面/动作；历史 `message:mail:log:delete` 记录已软删），操作日志规则为
+  11 条 Mail 变更/详情规则；`account.password.change` 旧兼容翻译键已按未上线契约移除，仅保留
+  `user.password.update`。
+
 ## 操作日志密码 action 归属修正（2026-09-09）
 
 - 维护者确认：改密操作的 operationLog action 应归属 user 域（路由 `/api/admin/v1/user/password`、

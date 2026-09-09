@@ -24,14 +24,14 @@ func (r *Repository) CreatePending(ctx context.Context, value *Model) (Model, er
 
 func (r *Repository) FindActiveChallenge(ctx context.Context, platformID int64, challenge string) (Model, error) {
 	var value Model
-	err := r.db.WithContext(ctx).Where("platform_id = ? AND challenge_id = ? AND deleted_at IS NULL", platformID, challenge).Take(&value).Error
+	err := r.db.WithContext(ctx).Where("platform_id = ? AND challenge_id = ?", platformID, challenge).Take(&value).Error
 	return value, err
 }
 
 func (r *Repository) MarkSent(ctx context.Context, platformID, id int64, result ProviderResult, latencyMs int64) error {
 	now := time.Now().UTC()
 	query := r.db.WithContext(ctx).Model(&Model{}).
-		Where("id = ? AND platform_id = ? AND status = ? AND deleted_at IS NULL", id, platformID, "pending").
+		Where("id = ? AND platform_id = ? AND status = ?", id, platformID, "pending").
 		Updates(map[string]any{
 			"status": "sent", "request_id": result.RequestID, "message_id": result.MessageID,
 			"latency_ms": latencyMs, "sent_at": now, "updated_at": now,
@@ -47,7 +47,7 @@ func (r *Repository) MarkSent(ctx context.Context, platformID, id int64, result 
 
 func (r *Repository) MarkFailed(ctx context.Context, platformID, id int64, errorCode, errorSummary string, latencyMs int64) error {
 	query := r.db.WithContext(ctx).Model(&Model{}).
-		Where("id = ? AND platform_id = ? AND status = ? AND deleted_at IS NULL", id, platformID, "pending").
+		Where("id = ? AND platform_id = ? AND status = ?", id, platformID, "pending").
 		Updates(map[string]any{
 			"status": "failed", "error_code": errorCode, "error_summary": errorSummary,
 			"latency_ms": latencyMs, "updated_at": time.Now().UTC(),
@@ -84,8 +84,7 @@ type ListQuery struct {
 func (r *Repository) List(ctx context.Context, filter ListQuery, page, size int) ([]ListRow, int64, error) {
 	count := r.db.WithContext(ctx).
 		Table(Table).
-		Joins("LEFT JOIN permission_auth_platform ON permission_auth_platform.id = message_mail_log.platform_id").
-		Where("message_mail_log.deleted_at IS NULL")
+		Joins("LEFT JOIN permission_auth_platform ON permission_auth_platform.id = message_mail_log.platform_id")
 	count = applyListFilters(count, filter)
 	var total int64
 	if err := count.Count(&total).Error; err != nil {
@@ -96,8 +95,7 @@ func (r *Repository) List(ctx context.Context, filter ListQuery, page, size int)
 		Table(Table).
 		Select("message_mail_log.*, COALESCE(permission_auth_platform.code, '') AS platform, COALESCE(user_account.username, '') AS username").
 		Joins("LEFT JOIN permission_auth_platform ON permission_auth_platform.id = message_mail_log.platform_id").
-		Joins("LEFT JOIN user_account ON user_account.id = message_mail_log.user_id AND user_account.deleted_at IS NULL").
-		Where("message_mail_log.deleted_at IS NULL")
+		Joins("LEFT JOIN user_account ON user_account.id = message_mail_log.user_id AND user_account.deleted_at IS NULL")
 	query = applyListFilters(query, filter)
 	err := query.
 		Order("message_mail_log.id DESC").
@@ -107,10 +105,10 @@ func (r *Repository) List(ctx context.Context, filter ListQuery, page, size int)
 
 func applyListFilters(db *gorm.DB, filter ListQuery) *gorm.DB {
 	if filter.Platform != "" {
-		db = db.Where("permission_auth_platform.code LIKE ?", escapeLikePrefix(filter.Platform))
+		db = db.Where("permission_auth_platform.code LIKE ? ESCAPE '\\'", escapeLikePrefix(filter.Platform))
 	}
 	if filter.ToEmail != "" {
-		db = db.Where("message_mail_log.to_email LIKE ?", escapeLikePrefix(filter.ToEmail))
+		db = db.Where("message_mail_log.to_email LIKE ? ESCAPE '\\'", escapeLikePrefix(filter.ToEmail))
 	}
 	if filter.Scene != "" {
 		db = db.Where("message_mail_log.scene = ?", filter.Scene)
@@ -139,29 +137,7 @@ func (r *Repository) Find(ctx context.Context, id int64) (ListRow, error) {
 		Select("message_mail_log.*, COALESCE(permission_auth_platform.code, '') AS platform, COALESCE(user_account.username, '') AS username").
 		Joins("LEFT JOIN permission_auth_platform ON permission_auth_platform.id = message_mail_log.platform_id").
 		Joins("LEFT JOIN user_account ON user_account.id = message_mail_log.user_id AND user_account.deleted_at IS NULL").
-		Where("message_mail_log.id = ? AND message_mail_log.deleted_at IS NULL", id).
+		Where("message_mail_log.id = ?", id).
 		Take(&value).Error
 	return value, err
-}
-
-func (r *Repository) Delete(ctx context.Context, id int64) error {
-	query := r.db.WithContext(ctx).Model(&Model{}).
-		Where("id = ? AND deleted_at IS NULL", id).
-		Update("deleted_at", time.Now().UTC())
-	if query.Error != nil {
-		return query.Error
-	}
-	if query.RowsAffected != 1 {
-		return gorm.ErrRecordNotFound
-	}
-	return nil
-}
-
-func (r *Repository) DeleteMany(ctx context.Context, ids []int64) error {
-	if len(ids) == 0 {
-		return nil
-	}
-	return r.db.WithContext(ctx).Model(&Model{}).
-		Where("id IN ? AND deleted_at IS NULL", ids).
-		Update("deleted_at", time.Now().UTC()).Error
 }

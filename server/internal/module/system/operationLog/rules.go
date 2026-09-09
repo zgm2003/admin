@@ -48,8 +48,6 @@ var routeRules = []RouteRule{
 	{http.MethodPost, "/api/admin/v1/message/mail/test", "mail", "mail.test", false, false},
 	{http.MethodPut, "/api/admin/v1/message/mail/template/:id", "mail", "mail.template.update", true, false},
 	{http.MethodPatch, "/api/admin/v1/message/mail/template/:id/status", "mail", "mail.template.status", true, false},
-	{http.MethodDelete, "/api/admin/v1/message/mail/log/:id", "mail", "mail.log.delete", false, false},
-	{http.MethodDelete, "/api/admin/v1/message/mail/log", "mail", "mail.log.delete.bulk", false, false},
 	{http.MethodGet, "/api/admin/v1/message/mail/log/:id", "mail", "mail.log.detail", false, false},
 	{http.MethodPost, "/api/admin/v1/message/mail/recipient-rule", "mail", "mail.rule.create", true, false},
 	{http.MethodPut, "/api/admin/v1/message/mail/recipient-rule/:id", "mail", "mail.rule.update", true, false},
