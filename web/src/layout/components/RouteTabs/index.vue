@@ -14,8 +14,8 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import type { PermissionMenuNode } from '@/api/permission/permission'
-import { closeAllRouteTabs, closeOtherRouteTabs, closeRouteTab, findMenuPage } from './route-tabs'
-import type { RouteTab, ScrollbarHandle } from './route-tabs'
+import { closeAllRouteTabs, closeOtherRouteTabs, closeRouteTab, findMenuPage } from './routeTabs'
+import type { RouteTab, ScrollbarHandle } from './routeTabs'
 
 defineOptions({ name: 'RouteTabs' })
 

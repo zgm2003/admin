@@ -1,5 +1,5 @@
 @use './variables' as *;
-@use './management-pages';
+@use './managementPages';
 
 :root {
   --admin-page: var(--el-bg-color-page);

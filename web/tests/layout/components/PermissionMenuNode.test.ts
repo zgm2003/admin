@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { PermissionMenuNode as PermissionMenuNodeDTO } from '@/api/permission/permission'
 import { AppDIcon } from '@/components/AppDIcon'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import { appI18n, setLocale } from '@/i18n'
 import { pinia } from '@/store'
 import { usePermissionStore } from '@/store/permission'
@@ -94,7 +94,7 @@ describe('AppAside access menu', () => {
       '/dashboard',
       '/user/account',
       '/permission/role',
-      '/system/operationlog',
+      '/system/operationLog',
     ])
     expect(
       wrapper.findAllComponents({ name: 'ElSubMenu' }).map((item) => item.props('index')),
@@ -201,10 +201,10 @@ function navigationRoots(): PermissionMenuNodeDTO[] {
     }),
     directoryWithPage('system', 'navigation.system', {
       ...pageNode(),
-      code: 'system:operationlog:list',
-      path: '/system/operationlog',
-      componentPath: 'system/operationlog',
-      i18nKey: 'navigation.systemOperationlog',
+      code: 'system:operationLog:list',
+      path: '/system/operationLog',
+      componentPath: 'system/operationLog',
+      i18nKey: 'navigation.systemOperationLog',
     }),
   ]
 }

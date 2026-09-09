@@ -1,5 +1,5 @@
 import { request } from '@/utils/request'
-import { isYesNo, type YesNo } from '@/enums/yes-no'
+import { isYesNo, type YesNo } from '@/enums/yesNo'
 import type { PageResult } from '@/types/pagination'
 import { ProtocolError } from '@/types/http'
 import {
@@ -27,7 +27,6 @@ export interface MailConfig {
 }
 export interface MailTemplate {
   id: number
-  platformId: number
   scene: string
   name: string
   subject: string
@@ -63,7 +62,6 @@ export interface MailLogDetail {
 }
 export interface MailRule {
   id: number
-  platformId: number
   scope: 'email' | 'domain'
   pattern: string
   action: 'allow' | 'deny'
@@ -188,7 +186,6 @@ export function parseMailConfig(value: unknown): MailConfig {
 
 const templateKeys = [
   'id',
-  'platformId',
   'scene',
   'name',
   'subject',
@@ -205,7 +202,6 @@ export function parseMailTemplate(value: unknown): MailTemplate {
   const isEnabled = data.isEnabled
   if (
     !integer(data.id) ||
-    !integer(data.platformId) ||
     !text(data.scene) ||
     !text(data.name) ||
     !text(data.subject) ||
@@ -219,7 +215,6 @@ export function parseMailTemplate(value: unknown): MailTemplate {
     throw new ProtocolError('mail template response is invalid')
   return {
     id: expectInteger(data.id, 'mail template.id'),
-    platformId: expectInteger(data.platformId, 'mail template.platformId'),
     scene: expectString(data.scene, 'mail template.scene'),
     name: expectString(data.name, 'mail template.name'),
     subject: expectString(data.subject, 'mail template.subject'),
@@ -294,7 +289,6 @@ export function parseMailLog(value: unknown): MailLog {
 
 const ruleKeys = [
   'id',
-  'platformId',
   'scope',
   'pattern',
   'action',
@@ -312,7 +306,6 @@ export function parseMailRule(value: unknown): MailRule {
   const isEnabled = data.isEnabled
   if (
     !integer(data.id) ||
-    !integer(data.platformId) ||
     (scope !== 'email' && scope !== 'domain') ||
     !text(data.pattern) ||
     (action !== 'allow' && action !== 'deny') ||
@@ -325,7 +318,6 @@ export function parseMailRule(value: unknown): MailRule {
     throw new ProtocolError('mail recipient rule response is invalid')
   return {
     id: expectInteger(data.id, 'mail rule.id'),
-    platformId: expectInteger(data.platformId, 'mail rule.platformId'),
     scope,
     pattern: expectString(data.pattern, 'mail rule.pattern'),
     action,

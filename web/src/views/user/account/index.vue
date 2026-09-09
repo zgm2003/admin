@@ -18,7 +18,7 @@ import type {
   UserRolesResponse,
   UserRoleSummary,
 } from '@/api/user/account'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
 import { AppTable } from '@/components/AppTable'
@@ -40,7 +40,7 @@ import {
   protectedRoleIDs,
   userSearchFields,
   userTableColumns,
-} from './user-rules'
+} from './userRules'
 
 const { t } = useI18n()
 const access = usePermissionStore()

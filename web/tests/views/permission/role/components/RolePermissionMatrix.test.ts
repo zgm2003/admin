@@ -2,9 +2,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus, { ElCheckbox } from 'element-plus'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import { appI18n, setLocale } from '@/i18n'
-import type { RoleMatrixGroup } from '@/views/permission/role/role-permission-matrix'
+import type { RoleMatrixGroup } from '@/views/permission/role/rolePermissionMatrix'
 import RolePermissionMatrix from '@/views/permission/role/components/RolePermissionMatrix/index.vue'
 
 describe('RolePermissionMatrix', () => {

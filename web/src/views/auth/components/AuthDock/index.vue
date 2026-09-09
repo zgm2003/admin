@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { LocaleSwitch } from '@/components/LocaleSwitch'
-import { useUIPreferencesStore } from '@/store/ui-preferences'
+import { useUIPreferencesStore } from '@/store/uiPreferences'
 import { themeColorPresets } from '@/utils/theme'
 
 defineOptions({ name: 'AuthDock' })

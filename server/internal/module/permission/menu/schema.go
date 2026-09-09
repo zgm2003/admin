@@ -107,7 +107,7 @@ var legacyComponentPaths = map[string]string{
 	"system-users":          "system/users",
 	"system-auth-platforms": "system/auth-platforms",
 	"system-sessions":       "system/sessions",
-	"system-operation-logs": "system/operationlog",
+	"system-operation-logs": "system/operationLog",
 }
 
 func replaceMenuConstraints(db *gorm.DB) error {

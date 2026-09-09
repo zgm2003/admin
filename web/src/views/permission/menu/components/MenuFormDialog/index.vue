@@ -6,8 +6,8 @@ import type { ManagedMenuType, MenuPlatformOption } from '@/api/permission/menu'
 import { AppDIcon } from '@/components/AppDIcon'
 import { AppDialog } from '@/components/AppDialog'
 import { IconSelect } from '@/components/IconSelect'
-import { YesNo } from '@/enums/yes-no'
-import type { MenuIconName } from '@/icons/menu-icons'
+import { YesNo } from '@/enums/yesNo'
+import type { MenuIconName } from '@/icons/menuIcons'
 import type { MenuFormState } from '@/views/permission/menu/components/types'
 
 const props = defineProps<{

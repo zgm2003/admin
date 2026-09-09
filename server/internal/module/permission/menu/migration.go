@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"admin/server/internal/module/permission/authplatform"
+	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -45,10 +45,10 @@ var legacyPermissionCodes = map[string]string{
 	"system:user:status": "user:account:status", "system:user:delete": "user:account:delete",
 	"system:user:roles":   "user:account:authorize",
 	"system:session:list": "user:session:view", "system:session:revoke": "user:session:revoke",
-	"system:auth-platform:list": "permission:authplatform:view", "system:auth-platform:create": "permission:authplatform:create",
-	"system:auth-platform:update": "permission:authplatform:update", "system:auth-platform:status": "permission:authplatform:status",
-	"system:auth-platform:delete": "permission:authplatform:delete",
-	"system:operation-log:list":   "system:operationlog:view",
+	"system:auth-platform:list": "permission:authPlatform:view", "system:auth-platform:create": "permission:authPlatform:create",
+	"system:auth-platform:update": "permission:authPlatform:update", "system:auth-platform:status": "permission:authPlatform:status",
+	"system:auth-platform:delete": "permission:authPlatform:delete",
+	"system:operation-log:list":   "system:operationLog:view",
 }
 
 var legacyMenuNames = map[string]string{
@@ -79,8 +79,8 @@ var migratedPages = map[string]migratedPageTarget{
 	"user:session:view":            {ParentCode: "account", Path: "/user/session", ComponentPath: "user/session", I18nKey: "navigation.userSession", Icon: "lucide:monitor-smartphone", SortOrder: 20},
 	"permission:menu:view":         {ParentCode: "access", Path: "/permission/menu", ComponentPath: "permission/menu", I18nKey: "navigation.permissionMenu", Icon: "lucide:panel-left", SortOrder: 10},
 	"permission:role:view":         {ParentCode: "access", Path: "/permission/role", ComponentPath: "permission/role", I18nKey: "navigation.permissionRole", Icon: "lucide:user-cog", SortOrder: 20},
-	"permission:authplatform:view": {ParentCode: "access", Path: "/permission/authplatform", ComponentPath: "permission/authplatform", I18nKey: "navigation.permissionAuthplatform", Icon: "lucide:key-round", SortOrder: 30},
-	"system:operationlog:view":     {ParentCode: "system", Path: "/system/operationlog", ComponentPath: "system/operationlog", I18nKey: "navigation.systemOperationlog", Icon: "lucide:scroll-text", SortOrder: 10},
+	"permission:authPlatform:view": {ParentCode: "access", Path: "/permission/authPlatform", ComponentPath: "permission/authPlatform", I18nKey: "navigation.permissionAuthPlatform", Icon: "lucide:key-round", SortOrder: 30},
+	"system:operationLog:view":     {ParentCode: "system", Path: "/system/operationLog", ComponentPath: "system/operationLog", I18nKey: "navigation.systemOperationLog", Icon: "lucide:scroll-text", SortOrder: 10},
 }
 
 func PrepareSchema(ctx context.Context, db *gorm.DB) error {
@@ -234,7 +234,7 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 			return err
 		}
 		var oldCodes []string
-		if err := db.Raw(`SELECT code FROM permission_menu WHERE code LIKE 'system:%' AND code NOT IN ('system:operationlog:list', 'system:operationlog:view') ORDER BY code`).Scan(&oldCodes).Error; err != nil {
+		if err := db.Raw(`SELECT code FROM permission_menu WHERE code LIKE 'system:%' AND code NOT IN ('system:operationLog:list', 'system:operationLog:view') ORDER BY code`).Scan(&oldCodes).Error; err != nil {
 			return fmt.Errorf("inspect legacy menu codes: %w", err)
 		}
 		if len(oldCodes) != 0 {
@@ -452,7 +452,7 @@ func rekeyMigratedOperationLogMenu(db *gorm.DB) error {
 		return nil
 	}
 	var currentCount int64
-	if err := db.Raw(`SELECT count(*) FROM permission_menu WHERE code = 'system:operationlog:view'`).Scan(&currentCount).Error; err != nil {
+	if err := db.Raw(`SELECT count(*) FROM permission_menu WHERE code = 'system:operationLog:view'`).Scan(&currentCount).Error; err != nil {
 		return fmt.Errorf("inspect current operation log menu: %w", err)
 	}
 	if currentCount != 0 {
@@ -460,7 +460,7 @@ func rekeyMigratedOperationLogMenu(db *gorm.DB) error {
 	}
 	result := db.Exec(`
 		UPDATE permission_menu
-		SET code = 'system:operationlog:view', updated_at = CURRENT_TIMESTAMP
+		SET code = 'system:operationLog:view', updated_at = CURRENT_TIMESTAMP
 		WHERE code = 'audit:operation-log:list'`)
 	if result.Error != nil {
 		return fmt.Errorf("rekey migrated operation log menu: %w", result.Error)

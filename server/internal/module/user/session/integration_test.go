@@ -14,7 +14,7 @@ import (
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/auth/state"
-	"admin/server/internal/module/permission/authplatform"
+	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/session"

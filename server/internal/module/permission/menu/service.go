@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"admin/server/internal/module/permission/authplatform"
+	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/state"
 	"admin/server/internal/shared/apperror"
 

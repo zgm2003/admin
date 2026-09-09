@@ -9,7 +9,7 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	"admin/server/internal/database/testschema"
-	"admin/server/internal/module/permission/authplatform"
+	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/module/permission/role"
 	"github.com/joho/godotenv"

@@ -18,14 +18,14 @@ import (
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/state"
 	messagemail "admin/server/internal/module/message/mail"
-	"admin/server/internal/module/permission/authplatform"
+	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
-	"admin/server/internal/module/user/loginlog"
+	"admin/server/internal/module/user/loginLog"
 	usersession "admin/server/internal/module/user/session"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
-	"admin/server/internal/shared/cachefill"
+	"admin/server/internal/shared/cacheFill"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
@@ -276,7 +276,7 @@ func (s *Service) LoginConfig(ctx context.Context, client authclient.Client) (au
 			if s.verifyCodeSender == nil {
 				continue
 			}
-			readiness, readyErr := s.verifyCodeSender.VerifyCodeReady(ctx, policy.ID, messagemail.SceneLogin)
+			readiness, readyErr := s.verifyCodeSender.VerifyCodeReady(ctx, messagemail.SceneLogin)
 			if readyErr != nil {
 				return authplatform.LoginConfig{}, apperror.DependencyUnavailable(readyErr)
 			}

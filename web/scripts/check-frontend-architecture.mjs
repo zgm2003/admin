@@ -23,6 +23,19 @@ const walk = (dir) => {
 for (const file of [...walk(src), ...walk(tests)]) {
   const projectPath = toProjectPath(file)
   const content = readFileSync(file, 'utf8')
+  const codeModulePath = /^(?:src|tests)\/(?:api|views)\//.test(projectPath)
+  const moduleDirectories = projectPath.split('/').slice(0, -1)
+  if (codeModulePath && moduleDirectories.some((segment) => segment.includes('-'))) {
+    add('module-lower-camel', file, '业务模块目录不得使用 kebab-case')
+  }
+  if (
+    /^(?:src|tests)\//.test(projectPath) &&
+    file.endsWith('.ts') &&
+    !/^src\/i18n\/messages\/(?:en-US|zh-CN)\.ts$/.test(projectPath) &&
+    projectPath.split('/').at(-1).split('.')[0].includes('-')
+  ) {
+    add('module-lower-camel', file, 'TypeScript 模块文件必须使用 lower camel case')
+  }
   if (
     (projectPath.startsWith('src/router/') || projectPath.startsWith('src/views/')) &&
     /componentPathMap|user\/login-logs|account\/(?:users|profile|sessions|login-logs)|permission\/(?:menus|roles|auth-platforms)|system\/operation-logs|cloud\/(?:storage-object|object-storage)|\/access\/(?:menus|roles|auth-platforms)/.test(

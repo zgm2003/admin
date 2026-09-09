@@ -52,9 +52,9 @@ describe('frontend i18n', () => {
       'navigation.permission',
       'navigation.permissionMenu',
       'navigation.permissionRole',
-      'navigation.permissionAuthplatform',
+      'navigation.permissionAuthPlatform',
       'navigation.system',
-      'navigation.systemOperationlog',
+      'navigation.systemOperationLog',
     ]
     const removedKeys = [
       'navigation.systemUsers',
@@ -98,24 +98,24 @@ describe('frontend i18n', () => {
 
   it('contains the complete bilingual authentication-platform copy', () => {
     const keys = [
-      'navigation.permissionAuthplatform',
+      'navigation.permissionAuthPlatform',
       'permission.authPlatformCreate',
       'permission.authPlatformUpdate',
       'permission.authPlatformStatus',
       'permission.authPlatformDelete',
-      'permission.authplatform.title',
-      'permission.authplatform.search',
-      'permission.authplatform.form.basicSection',
-      'permission.authplatform.form.tokenSection',
-      'permission.authplatform.form.policySection',
-      'permission.authplatform.confirm.disable',
+      'permission.authPlatform.title',
+      'permission.authPlatform.search',
+      'permission.authPlatform.form.basicSection',
+      'permission.authPlatform.form.tokenSection',
+      'permission.authPlatform.form.policySection',
+      'permission.authPlatform.confirm.disable',
     ]
     for (const key of keys) {
       expect(isAppMessageKey(key), key).toBe(true)
       expect(appI18n.global.t(key), key).toBeTruthy()
     }
     setLocale('en-US')
-    expect(appI18n.global.t('permission.authplatform.title')).toBe('Authentication platforms')
+    expect(appI18n.global.t('permission.authPlatform.title')).toBe('Authentication platforms')
   })
 
   it('contains the complete bilingual session and operation-log copy', () => {
@@ -126,7 +126,7 @@ describe('frontend i18n', () => {
       'session.loading',
       'session.batchRevoke',
       'session.revokeFailed',
-      'navigation.systemOperationlog',
+      'navigation.systemOperationLog',
       'operationLog.title',
       'operationLog.userId',
       'operationLog.timeRange',

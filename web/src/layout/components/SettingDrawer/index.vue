@@ -3,9 +3,9 @@ import { Check, Close, Moon, RefreshRight, Setting, Sunny } from '@element-plus/
 import { computed, markRaw, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useUIPreferencesStore } from '@/store/ui-preferences'
+import { useUIPreferencesStore } from '@/store/uiPreferences'
 import { themeColorPresets } from '@/utils/theme'
-import type { LayoutMode, PageTransitionName, UIPreferences } from '@/utils/ui-preferences'
+import type { LayoutMode, PageTransitionName, UIPreferences } from '@/utils/uiPreferences'
 
 defineOptions({ name: 'SettingDrawer' })
 

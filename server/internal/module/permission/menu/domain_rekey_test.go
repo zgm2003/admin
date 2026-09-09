@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/permission/authplatform"
+	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
@@ -51,8 +51,8 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 		6: "permission:role:view", 7: "permission:role:create", 8: "permission:role:update", 9: "permission:role:status",
 		10: "permission:role:default", 11: "permission:role:delete", 12: "permission:role:authorize",
 		13: "user:account:view", 14: "user:account:update", 15: "user:account:status", 16: "user:account:delete", 17: "user:account:authorize",
-		18: "user:session:view", 19: "user:session:revoke", 20: "permission:authplatform:view", 21: "permission:authplatform:create",
-		22: "permission:authplatform:update", 23: "permission:authplatform:status", 24: "permission:authplatform:delete", 25: "system:operationlog:view",
+		18: "user:session:view", 19: "user:session:revoke", 20: "permission:authPlatform:view", 21: "permission:authPlatform:create",
+		22: "permission:authPlatform:update", 23: "permission:authPlatform:status", 24: "permission:authPlatform:delete", 25: "system:operationLog:view",
 	} {
 		row, exists := byCode[code]
 		if !exists || row.ID != id {
@@ -74,8 +74,8 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 	assertRekeyedPage(t, byCode["user:session:view"], account.ID, "/user/session", "user/session", "navigation.userSession", "lucide:monitor-smartphone", 20)
 	assertRekeyedPage(t, byCode["permission:menu:view"], access.ID, "/permission/menu", "permission/menu", "navigation.permissionMenu", "lucide:panel-left", 10)
 	assertRekeyedPage(t, byCode["permission:role:view"], access.ID, "/permission/role", "permission/role", "navigation.permissionRole", "lucide:user-cog", 20)
-	assertRekeyedPage(t, byCode["permission:authplatform:view"], access.ID, "/permission/authplatform", "permission/authplatform", "navigation.permissionAuthplatform", "lucide:key-round", 30)
-	assertRekeyedPage(t, byCode["system:operationlog:view"], system.ID, "/system/operationlog", "system/operationlog", "navigation.systemOperationlog", "lucide:scroll-text", 10)
+	assertRekeyedPage(t, byCode["permission:authPlatform:view"], access.ID, "/permission/authPlatform", "permission/authPlatform", "navigation.permissionAuthPlatform", "lucide:key-round", 30)
+	assertRekeyedPage(t, byCode["system:operationLog:view"], system.ID, "/system/operationLog", "system/operationLog", "navigation.systemOperationLog", "lucide:scroll-text", 10)
 
 	for _, code := range []string{"permission:menu:view", "permission:menu:create", "permission:menu:update", "permission:menu:delete"} {
 		if byCode[code].DeletedAt != nil {
@@ -91,7 +91,7 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 	}
 	assertAccessVersions(t, db, map[int64]int64{7001: 5, 7002: 8})
 
-	if err := db.Exec(`UPDATE permission_menu SET code = 'audit:operation-log:list' WHERE code = 'system:operationlog:view'`).Error; err != nil {
+	if err := db.Exec(`UPDATE permission_menu SET code = 'audit:operation-log:list' WHERE code = 'system:operationLog:view'`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := menu.PrepareSchema(ctx, db); err != nil {
@@ -101,7 +101,7 @@ func TestPrepareSchemaRekeysLegacyMenuCatalogInPlace(t *testing.T) {
 	if err := db.Raw(`SELECT code FROM permission_menu WHERE id = 25`).Scan(&operationLogCode).Error; err != nil {
 		t.Fatal(err)
 	}
-	if operationLogCode != "system:operationlog:view" {
+	if operationLogCode != "system:operationLog:view" {
 		t.Fatalf("operation log menu code = %q", operationLogCode)
 	}
 	assertAccessVersions(t, db, map[int64]int64{7001: 6, 7002: 9})
@@ -369,7 +369,7 @@ func legacyMenuRows(retiredAt time.Time) []legacyMenuRow {
 		action(22, platformPageID, "system:auth-platform:update", "permission.authPlatformUpdate", 20),
 		action(23, platformPageID, "system:auth-platform:status", "permission.authPlatformStatus", 30),
 		action(24, platformPageID, "system:auth-platform:delete", "permission.authPlatformDelete", 40),
-		page(25, "system:operation-log:list", "navigation.systemOperationlog", "/system/operationlog", "system-operation-logs", "List", 60),
+		page(25, "system:operation-log:list", "navigation.systemOperationLog", "/system/operationLog", "system-operation-logs", "List", 60),
 	}
 }
 

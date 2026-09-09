@@ -1,4 +1,4 @@
-import type { MenuIconName } from '@/icons/menu-icons'
+import type { MenuIconName } from '@/icons/menuIcons'
 
 export interface IconSelectIcon {
   name: MenuIconName

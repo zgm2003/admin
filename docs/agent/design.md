@@ -19,6 +19,10 @@ Admin 是面向管理员的平台控制台。当前可见业务域：
 新业务不因历史文档里出现过名称就视为已实现；先看 `server/internal/module`、`web/src/views` 和
 `STATUS.md`。
 
+代码中的复合业务模块名使用 lower camel case；页面模块、API 模块、后端模块、菜单 componentPath、权限码
+和 i18n key 使用同一模块段。数据库表继续使用 snake_case，HTTP API 使用小写资源路径，Vue 组件使用
+PascalCase，CSS class 与测试定位符使用 kebab-case。
+
 ## 体验基线
 
 - 前端是 Vue 3 + TypeScript + Pinia + Vue Router + Element Plus；页面优先保持成熟旧项目的信息结构、工作密度
@@ -70,6 +74,8 @@ Admin 是面向管理员的平台控制台。当前可见业务域：
 
 ## 数据和状态
 
+- 腾讯云 SES 配置、邮件模板和收件规则全系统共享，不随 Admin/Canvas 等认证平台复制；只有发送日志、验证码
+  记录和额度 key 保留来源平台。只有 COS 上传配置可以按认证平台分别维护。
 - 邮件只保留每分钟、每 10 分钟两条发送上限；同平台、同邮箱跨所有场景和管理测试共享，任一达到上限
   即拒绝，不再叠加场景/IP/管理员专属策略。配置的次数、窗口与验证码 TTL 都由邮件管理拥有。
 - 找回密码成功不自动登录，并撤销全部既有会话；首次设置密码只允许无密码账号，保持会话且不强制拦路。

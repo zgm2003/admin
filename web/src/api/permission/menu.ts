@@ -1,6 +1,6 @@
 import { request } from '@/utils/request'
-import { isYesNo, type YesNo } from '@/enums/yes-no'
-import { isMenuIconName, type MenuIconName } from '@/icons/menu-icons'
+import { isYesNo, type YesNo } from '@/enums/yesNo'
+import { isMenuIconName, type MenuIconName } from '@/icons/menuIcons'
 import { ProtocolError } from '@/types/http'
 import { expectExactKeys, expectId, expectInteger } from '@/api/protocol'
 

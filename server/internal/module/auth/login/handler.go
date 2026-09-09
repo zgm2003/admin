@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"admin/server/internal/module/auth/client"
-	authplatform "admin/server/internal/module/permission/authplatform"
+	authplatform "admin/server/internal/module/permission/authPlatform"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"

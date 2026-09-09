@@ -3,7 +3,7 @@ package role
 import (
 	"time"
 
-	"admin/server/internal/module/permission/userrole"
+	"admin/server/internal/module/permission/userRole"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )

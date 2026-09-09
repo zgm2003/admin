@@ -4,8 +4,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { appI18n, setLocale } from '@/i18n'
-import { useUIPreferencesStore } from '@/store/ui-preferences'
-import { defaultUIPreferences, uiPreferencesStorageKey } from '@/utils/ui-preferences'
+import { useUIPreferencesStore } from '@/store/uiPreferences'
+import { defaultUIPreferences, uiPreferencesStorageKey } from '@/utils/uiPreferences'
 import SettingDrawer from '@/layout/components/SettingDrawer/index.vue'
 
 describe('SettingDrawer', () => {

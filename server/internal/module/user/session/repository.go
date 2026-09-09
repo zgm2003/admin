@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"admin/server/internal/module/auth/client"
-	"admin/server/internal/module/permission/authplatform"
+	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

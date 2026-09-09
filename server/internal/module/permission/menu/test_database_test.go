@@ -9,7 +9,7 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
-	"admin/server/internal/module/permission/authplatform"
+	"admin/server/internal/module/permission/authPlatform"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"

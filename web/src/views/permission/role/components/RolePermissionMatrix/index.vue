@@ -2,12 +2,12 @@
 import { computed, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import type {
   RoleMatrixGroup,
   RoleMatrixRow,
   RoleMatrixSelectionState,
-} from '@/views/permission/role/role-permission-matrix'
+} from '@/views/permission/role/rolePermissionMatrix'
 
 defineOptions({ name: 'RolePermissionMatrix' })
 import {
@@ -16,7 +16,7 @@ import {
   toggleMatrixAction,
   toggleMatrixGroup,
   toggleMatrixPage,
-} from '@/views/permission/role/role-permission-matrix'
+} from '@/views/permission/role/rolePermissionMatrix'
 
 const selectedMenuIDs = defineModel<number[]>({ required: true })
 

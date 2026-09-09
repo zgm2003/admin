@@ -13,7 +13,7 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/permission/access"
-	"admin/server/internal/module/permission/authplatform"
+	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/permission/state"

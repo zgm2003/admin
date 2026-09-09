@@ -1,298 +1,49 @@
 package mail
 
 import (
+	"fmt"
+	"net/http"
+
 	"admin/server/internal/authcontext"
+	mailtemplate "admin/server/internal/module/message/mail/template"
+	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
 	"admin/server/internal/shared/validate"
-	"admin/server/internal/shared/yesno"
-	"fmt"
 	"github.com/gin-gonic/gin"
-	"net/http"
-	"strconv"
 )
 
 const (
-	PermissionView            = "message:mail:view"
-	PermissionList            = "message:mail:list"
-	PermissionDetail          = "message:mail:detail"
-	PermissionConfigUpdate    = "message:mail:config:update"
-	PermissionConfigDelete    = "message:mail:config:delete"
-	PermissionTest            = "message:mail:test"
-	PermissionTemplateUpdate  = "message:mail:template:update"
-	PermissionTemplateStatus  = "message:mail:template:status"
-	PermissionLogDelete       = "message:mail:log:delete"
-	PermissionRuleCreate      = "message:mail:rule:create"
-	PermissionRuleUpdate      = "message:mail:rule:update"
-	PermissionRuleStatus      = "message:mail:rule:status"
-	PermissionRuleDelete      = "message:mail:rule:delete"
-	PermissionRateLimitUpdate = "message:mail:rate-limit:update"
+	PermissionView = "message:mail:view"
+	PermissionList = "message:mail:list"
+	PermissionTest = "message:mail:test"
 )
 
-type Handler struct{ s *Service }
+type Handler struct{ service *Service }
 
-func NewHandler(s *Service) *Handler { return &Handler{s: s} }
-func (h *Handler) PageInit(c *gin.Context) {
-	response.OK(c, http.StatusOK, map[string]any{"scenes": FixedTemplates()})
+func NewHandler(service *Service) *Handler { return &Handler{service: service} }
+
+func (h *Handler) PageInit(ctx *gin.Context) {
+	response.OK(ctx, http.StatusOK, map[string]any{"scenes": mailtemplate.FixedCatalog()})
 }
-func (h *Handler) Config(c *gin.Context) {
-	id := adminPlatformID(c)
-	v, e := h.s.GetConfig(c.Request.Context(), id)
-	if e != nil {
-		response.Fail(c, e)
+
+func (h *Handler) Test(ctx *gin.Context) {
+	identity, found := authcontext.Get(ctx)
+	if !found || identity.UserID < 1 || identity.PlatformID < 1 {
+		response.Fail(ctx, apperror.Unauthorized(fmt.Errorf("authenticated mail platform is unavailable")))
 		return
 	}
-	response.OK(c, http.StatusOK, v)
-}
-func (h *Handler) SaveConfig(c *gin.Context) {
-	var r ConfigInput
-	if e := validate.BindJSON(c, &r); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	v, e := h.s.SaveConfig(c.Request.Context(), adminPlatformID(c), r)
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, v)
-}
-func (h *Handler) DeleteConfig(c *gin.Context) {
-	if e := validate.RequireEmptyBody(c); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	if e := h.s.DeleteConfig(c.Request.Context(), adminPlatformID(c)); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, map[string]any{})
-}
-func (h *Handler) Templates(c *gin.Context) {
-	v, e := h.s.ListTemplates(c.Request.Context(), adminPlatformID(c))
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, v)
-}
-func (h *Handler) UpdateTemplate(c *gin.Context) {
-	id, e := mailID(c)
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	var r TemplateUpdateInput
-	if e = validate.BindJSON(c, &r); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	if e = h.s.UpdateTemplate(c.Request.Context(), adminPlatformID(c), id, r); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, map[string]any{})
-}
-func (h *Handler) TemplateStatus(c *gin.Context) {
-	id, e := mailID(c)
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	var r struct {
-		IsEnabled *yesno.Value `json:"isEnabled"`
-	}
-	if e = validate.BindJSON(c, &r); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	if r.IsEnabled == nil {
-		response.Fail(c, invalid(fmt.Errorf("isEnabled is required")))
-		return
-	}
-	if e = h.s.SetTemplateStatus(c.Request.Context(), adminPlatformID(c), id, *r.IsEnabled); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, map[string]any{"id": id, "isEnabled": *r.IsEnabled})
-}
-func (h *Handler) Test(c *gin.Context) {
 	var request AdminTestRequest
-	if e := validate.BindJSON(c, &request); e != nil {
-		response.Fail(c, e)
+	if err := validate.BindJSON(ctx, &request); err != nil {
+		response.Fail(ctx, err)
 		return
 	}
-	r := AdminTestInput{ClientIP: c.ClientIP(), ToEmail: request.ToEmail, Scene: request.Scene, Variables: request.Variables}
-	if id, ok := authcontext.Get(c); ok {
-		r.AdminUserID = id.UserID
-	}
-	v, e := h.s.TestForPlatform(c.Request.Context(), adminPlatformID(c), r)
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, v)
-}
-func (h *Handler) Logs(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	size, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
-	if page < 1 || size < 1 || size > 100 {
-		response.Fail(c, invalid(fmt.Errorf("invalid pagination")))
-		return
-	}
-	rows, total, e := h.s.ListLogs(c.Request.Context(), adminPlatformID(c), page, size)
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, logListResponseFromModels(rows, total, page, size))
-}
-func (h *Handler) LogDetail(c *gin.Context) {
-	id, e := mailID(c)
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	detail, e := h.s.GetLogDetail(c.Request.Context(), adminPlatformID(c), id)
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, logDetailResponseFromModel(detail))
-}
-func (h *Handler) DeleteLog(c *gin.Context) {
-	id, e := mailID(c)
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	if e := h.s.DeleteLog(c.Request.Context(), adminPlatformID(c), id); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, map[string]any{})
-}
-func (h *Handler) DeleteLogs(c *gin.Context) {
-	var ids []int64
-	if e := validate.BindJSON(c, &ids); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	if e := h.s.DeleteLogs(c.Request.Context(), adminPlatformID(c), ids); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, map[string]any{})
-}
-func (h *Handler) Rules(c *gin.Context) {
-	v, e := h.s.ListRules(c.Request.Context(), adminPlatformID(c))
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, v)
-}
-func (h *Handler) CreateRule(c *gin.Context) {
-	var r RuleInput
-	if e := validate.BindJSON(c, &r); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	id, e := h.s.CreateRule(c.Request.Context(), adminPlatformID(c), r)
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusCreated, map[string]any{"id": id})
-}
-func (h *Handler) UpdateRule(c *gin.Context) {
-	id, e := mailID(c)
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	var r RuleInput
-	if e := validate.BindJSON(c, &r); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	if e := h.s.UpdateRule(c.Request.Context(), adminPlatformID(c), id, r); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, map[string]any{})
-}
-func (h *Handler) RuleStatus(c *gin.Context) {
-	id, e := mailID(c)
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	var r struct {
-		IsEnabled *yesno.Value `json:"isEnabled"`
-	}
-	if e := validate.BindJSON(c, &r); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	if r.IsEnabled == nil {
-		response.Fail(c, invalid(fmt.Errorf("isEnabled is required")))
-		return
-	}
-	if e := h.s.SetRuleStatus(c.Request.Context(), adminPlatformID(c), id, *r.IsEnabled); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, map[string]any{"id": id, "isEnabled": *r.IsEnabled})
-}
-func (h *Handler) DeleteRule(c *gin.Context) {
-	id, e := mailID(c)
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	if e := h.s.DeleteRule(c.Request.Context(), adminPlatformID(c), id); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, map[string]any{})
-}
-func (h *Handler) RateLimitPolicies(c *gin.Context) {
-	catalog, e := h.s.ListRateLimitPolicies(c.Request.Context())
-	if e != nil {
-		response.Fail(c, e)
-		return
-	}
-	response.OK(c, http.StatusOK, RateLimitPolicyListResponse{Version: catalog.Version, Policies: catalog.Policies})
-}
-
-func (h *Handler) UpdateRateLimitPolicy(c *gin.Context) {
-	key := c.Param("key")
-	var request RateLimitPolicyUpdateRequest
-	if e := validate.BindJSON(c, &request); e != nil {
-		response.Fail(c, e)
-		return
-	}
-	catalog, e := h.s.UpdateRateLimitPolicy(c.Request.Context(), RateLimitPolicyInput{
-		Key:           key,
-		Limit:         request.Limit,
-		WindowSeconds: request.WindowSeconds,
+	result, err := h.service.TestForPlatform(ctx.Request.Context(), identity.PlatformID, AdminTestInput{
+		AdminUserID: identity.UserID, ClientIP: ctx.ClientIP(), ToEmail: request.ToEmail,
+		Scene: request.Scene, Variables: request.Variables,
 	})
-	if e != nil {
-		response.Fail(c, e)
+	if err != nil {
+		response.Fail(ctx, err)
 		return
 	}
-	policy, ok := rateLimitPolicyByKey(catalog, key)
-	if !ok {
-		response.Fail(c, rateLimitNotFound(fmt.Errorf("rate limit policy %q is missing", key)))
-		return
-	}
-	response.OK(c, http.StatusOK, RateLimitPolicyResponse{Version: catalog.Version, Policy: policy})
+	response.OK(ctx, http.StatusOK, result)
 }
-
-func adminPlatformID(c *gin.Context) int64 {
-	if id, ok := authcontext.Get(c); ok && id.PlatformID > 0 {
-		return id.PlatformID
-	}
-	return 1
-}
-func mailID(c *gin.Context) (int64, error) { return validate.ParsePositiveInt64(c.Param("id"), "id") }

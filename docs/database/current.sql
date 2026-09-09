@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict o6Woylh50nRsQrjgRiUEwUW0y2TsCg8U8fxDVKiEPfGWRgS52LuL4ScvlJTx5l4
+\restrict jgeil5ZzEHiaUokikuR2DCwiYm10xgmyvdMnkFiuy1erbYzyNt4FL1krI1Sngfv
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -131,7 +131,6 @@ ALTER SEQUENCE public.auth_session_id_seq OWNED BY public.user_session.id;
 
 CREATE TABLE public.message_mail_config (
     id bigint NOT NULL,
-    platform_id bigint NOT NULL,
     secret_id_ciphertext text NOT NULL,
     secret_key_ciphertext text NOT NULL,
     secret_id_hint character varying(32) DEFAULT ''::character varying NOT NULL,
@@ -278,7 +277,6 @@ CREATE TABLE public.message_mail_rate_limit_policy (
 
 CREATE TABLE public.message_mail_recipient_rule (
     id bigint NOT NULL,
-    platform_id bigint NOT NULL,
     scope character varying(16) NOT NULL,
     pattern character varying(254) NOT NULL,
     action character varying(16) NOT NULL,
@@ -319,7 +317,6 @@ ALTER SEQUENCE public.message_mail_recipient_rule_id_seq OWNED BY public.message
 
 CREATE TABLE public.message_mail_template (
     id bigint NOT NULL,
-    platform_id bigint NOT NULL,
     scene character varying(32) NOT NULL,
     name character varying(128) NOT NULL,
     subject character varying(255) NOT NULL,
@@ -1191,10 +1188,10 @@ CREATE UNIQUE INDEX ux_audit_operation_log_event_id ON public.system_operation_l
 
 
 --
--- Name: ux_message_mail_config_platform_active; Type: INDEX; Schema: public; Owner: -
+-- Name: ux_message_mail_config_active_singleton; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX ux_message_mail_config_platform_active ON public.message_mail_config USING btree (platform_id) WHERE (deleted_at IS NULL);
+CREATE UNIQUE INDEX ux_message_mail_config_active_singleton ON public.message_mail_config USING btree ((true)) WHERE (deleted_at IS NULL);
 
 
 --
@@ -1205,17 +1202,17 @@ CREATE UNIQUE INDEX ux_message_mail_log_platform_challenge_active ON public.mess
 
 
 --
--- Name: ux_message_mail_rule_platform_scope_pattern_action_active; Type: INDEX; Schema: public; Owner: -
+-- Name: ux_message_mail_rule_scope_pattern_action_active; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX ux_message_mail_rule_platform_scope_pattern_action_active ON public.message_mail_recipient_rule USING btree (platform_id, scope, pattern, action) WHERE (deleted_at IS NULL);
+CREATE UNIQUE INDEX ux_message_mail_rule_scope_pattern_action_active ON public.message_mail_recipient_rule USING btree (scope, pattern, action) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_message_mail_template_platform_scene_active; Type: INDEX; Schema: public; Owner: -
+-- Name: ux_message_mail_template_scene_active; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX ux_message_mail_template_platform_scene_active ON public.message_mail_template USING btree (platform_id, scene) WHERE (deleted_at IS NULL);
+CREATE UNIQUE INDEX ux_message_mail_template_scene_active ON public.message_mail_template USING btree (scene) WHERE (deleted_at IS NULL);
 
 
 --
@@ -1490,14 +1487,6 @@ ALTER TABLE ONLY public.user_session
 
 
 --
--- Name: message_mail_config message_mail_config_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.message_mail_config
-    ADD CONSTRAINT message_mail_config_platform_id_fkey FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id);
-
-
---
 -- Name: message_mail_log message_mail_log_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1522,23 +1511,7 @@ ALTER TABLE ONLY public.message_mail_log_verification
 
 
 --
--- Name: message_mail_recipient_rule message_mail_recipient_rule_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.message_mail_recipient_rule
-    ADD CONSTRAINT message_mail_recipient_rule_platform_id_fkey FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id);
-
-
---
--- Name: message_mail_template message_mail_template_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.message_mail_template
-    ADD CONSTRAINT message_mail_template_platform_id_fkey FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id);
-
-
---
 -- PostgreSQL database dump complete
 --
 
-\unrestrict o6Woylh50nRsQrjgRiUEwUW0y2TsCg8U8fxDVKiEPfGWRgS52LuL4ScvlJTx5l4
+\unrestrict jgeil5ZzEHiaUokikuR2DCwiYm10xgmyvdMnkFiuy1erbYzyNt4FL1krI1Sngfv

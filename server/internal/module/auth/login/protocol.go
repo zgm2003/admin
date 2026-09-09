@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"admin/server/internal/module/auth/client"
-	authplatform "admin/server/internal/module/permission/authplatform"
+	authplatform "admin/server/internal/module/permission/authPlatform"
 )
 
 const (

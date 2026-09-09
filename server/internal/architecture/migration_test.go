@@ -34,7 +34,7 @@ INSERT INTO permission_menu(id,platform_id,code,path,component_path,i18n_key) VA
 (1,1,'account',NULL,NULL,'navigation.account'),
 (2,1,'account:user:view','/account/users','account/users','navigation.accountUsers'),
 (3,1,'account:user:roles',NULL,NULL,NULL),
-(4,1,'account:user:loginlog:view','/account/login-logs','account/login-logs','navigation.accountLoginLogs'),
+(4,1,'account:user:loginLog:view','/account/login-logs','account/login-logs','navigation.accountLoginLogs'),
 (5,2,'account:user:view','/account/users','account/users','navigation.accountUsers'),
 (6,1,'account:profile:view','/account/profile','account/profile','layout.account.profile'),
 (7,2,'canvas:test:view','/test','test','navigation.test'),
@@ -109,7 +109,7 @@ AND (SELECT count(*) FROM message_mail_rate_limit_policy)=7`).Scan(&intact).Erro
 		}
 		if err := db.WithContext(ctx).Raw(`SELECT
 (SELECT count(*) FROM permission_auth_platform WHERE (id=1 AND code='admin') OR (id=2 AND code='canvas')) rows,
-(SELECT count(*) FROM permission_menu WHERE id=9 AND platform_id=1 AND code='permission:authplatform:view' AND component_path='permission/authplatform' AND path='/permission/authplatform' AND i18n_key='navigation.permissionAuthplatform') page,
+(SELECT count(*) FROM permission_menu WHERE id=9 AND platform_id=1 AND code='permission:authPlatform:view' AND component_path='permission/authPlatform' AND path='/permission/authPlatform' AND i18n_key='navigation.permissionAuthPlatform') page,
 (SELECT count(*) FROM pg_constraint WHERE conrelid='permission_menu'::regclass AND confrelid='permission_auth_platform'::regclass) foreign_keys,
 to_regclass(current_schema()||'.auth_platform') IS NULL old_absent,
 to_regclass(current_schema()||'.ux_permission_auth_platform_code_active') IS NOT NULL index_renamed,

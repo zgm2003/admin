@@ -15,7 +15,7 @@ import (
 	"admin/server/internal/database/testschema"
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/permission/access"
-	"admin/server/internal/module/permission/authplatform"
+	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/session"

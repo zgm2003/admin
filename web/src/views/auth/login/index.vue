@@ -377,7 +377,7 @@ function generateChallengeID(): string {
             </el-button>
 
             <div class="auth-forgot">
-              <router-link data-testid="login-forgot-link" :to="{ path: '/forgot-password' }">
+              <router-link data-testid="login-forgot-link" :to="{ path: '/forgotPassword' }">
                 {{ t('auth.login.forgotPassword') }}
               </router-link>
             </div>
@@ -392,4 +392,4 @@ function generateChallengeID(): string {
   </main>
 </template>
 
-<style scoped src="../auth-page.css"></style>
+<style scoped src="../authPage.css"></style>

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/permission/authplatform"
+	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/shared/yesno"

@@ -4,7 +4,7 @@ defineOptions({ name: 'AppDIcon', inheritAttrs: false })
 import type { Component } from 'vue'
 import { computed, markRaw, toRaw } from 'vue'
 import { ElIcon } from 'element-plus'
-import { isMenuIconName, menuIcons, type MenuIconName } from '@/icons/menu-icons'
+import { isMenuIconName, menuIcons, type MenuIconName } from '@/icons/menuIcons'
 import type { AppDIconProps } from './types'
 
 const props = withDefaults(defineProps<AppDIconProps>(), {

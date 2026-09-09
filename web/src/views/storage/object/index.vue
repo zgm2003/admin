@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { TablePaginationState } from '@/components/AppTable'
 import type { SearchFormModel } from '@/components/AppSearch'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import {
   createCosConfig,
   deleteCosConfig,
@@ -17,7 +17,7 @@ import {
   type CosConfigQuery,
   type CreateCosConfigInput,
   type UpdateCosConfigInput,
-} from '@/api/storage/cosconfig'
+} from '@/api/storage/cosConfig'
 import {
   createUploadRule,
   deleteUploadRule,
@@ -29,7 +29,7 @@ import {
   type PlatformOption,
   type UploadRule,
   type UploadRuleQuery,
-} from '@/api/storage/uploadrule'
+} from '@/api/storage/uploadRule'
 import { usePermissionStore } from '@/store/permission'
 import ConfigDialog from './components/ConfigDialog/index.vue'
 import ConfigTable from './components/ConfigTable/index.vue'
@@ -40,13 +40,13 @@ import {
   commonMimeTypeOptions,
   cosRegionOptions,
   useStorageForms,
-} from './storage-forms'
+} from './storageForms'
 import {
   createConfigColumns,
   createConfigSearchFields,
   createRuleColumns,
   createRuleSearchFields,
-} from './storage-view'
+} from './storageView'
 
 const { t } = useI18n()
 const access = usePermissionStore()
@@ -96,13 +96,13 @@ const configDialogRef = ref<InstanceType<typeof ConfigDialog>>()
 const ruleDialogRef = ref<InstanceType<typeof RuleDialog>>()
 
 const can = (code: string): boolean => access.hasPermission(code)
-const canCreateConfig = computed(() => can('storage:cosconfig:create'))
-const canCreateRule = computed(() => can('storage:uploadrule:create'))
+const canCreateConfig = computed(() => can('storage:cosConfig:create'))
+const canCreateRule = computed(() => can('storage:uploadRule:create'))
 const canAddRule = computed(
   () => canCreateRule.value && platforms.value.length > 0 && configOptions.value.length > 0,
 )
-const canUpdateConfig = computed(() => can('storage:cosconfig:update'))
-const canUpdateRule = computed(() => can('storage:uploadrule:update'))
+const canUpdateConfig = computed(() => can('storage:cosConfig:update'))
+const canUpdateRule = computed(() => can('storage:uploadRule:update'))
 
 const configPagination = computed<TablePaginationState>(() => ({
   currentPage: configQuery.value.page,

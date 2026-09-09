@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { FormInstance, FormRules } from 'element-plus'
 
 import { AppDialog } from '@/components/AppDialog'
-import type { ConfigSummary, PlatformOption } from '@/api/storage/uploadrule'
+import type { ConfigSummary, PlatformOption } from '@/api/storage/uploadRule'
 import type { RuleForm } from '@/views/storage/object/components/types'
 
 const props = defineProps<{

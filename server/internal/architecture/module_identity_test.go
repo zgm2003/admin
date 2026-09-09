@@ -4,19 +4,53 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 )
 
+func TestCompoundModuleDirectoriesUseLowerCamelCase(t *testing.T) {
+	for _, module := range []struct{ parent, expected, legacy string }{
+		{"permission", "authPlatform", "authplatform"}, {"permission", "permissionVersion", "permissionversion"},
+		{"permission", "roleMenu", "rolemenu"}, {"permission", "userRole", "userrole"},
+		{"user", "loginLog", "loginlog"}, {"system", "operationLog", "operationlog"},
+		{"storage", "cosConfig", "cosconfig"}, {"storage", "uploadRule", "uploadrule"},
+		{"message/mail", "logVerification", "logverification"},
+		{"message/mail", "rateLimitPolicy", "ratelimitpolicy"},
+		{"message/mail", "recipientRule", "recipientrule"},
+		{"../shared", "cacheFill", "cachefill"},
+	} {
+		entries, err := os.ReadDir(filepath.Join("..", "module", module.parent))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var expectedFound, legacyFound bool
+		for _, entry := range entries {
+			expectedFound = expectedFound || entry.IsDir() && entry.Name() == module.expected
+			legacyFound = legacyFound || entry.IsDir() && entry.Name() == module.legacy
+		}
+		if !expectedFound || legacyFound {
+			t.Fatalf("module directory parent=%s expected=%s legacy=%s entries=%v", module.parent, module.expected, module.legacy, entries)
+		}
+	}
+	for _, legacyRootFile := range []string{"model.go", "repository.go", "schema.go"} {
+		if _, err := os.Stat(filepath.Join("..", "module", "message", "mail", legacyRootFile)); !os.IsNotExist(err) {
+			t.Fatalf("root Mail still owns resource persistence file %s", legacyRootFile)
+		}
+	}
+}
+
 func TestBusinessModulesKeepCanonicalTableNames(t *testing.T) {
 	for module, tables := range map[string][]string{
 		"user/account": {"user_account"}, "user/profile": {"user_profile"},
-		"user/session": {"user_session"}, "user/loginlog": {"user_login_log"},
-		"permission/authplatform": {"permission_auth_platform"}, "permission/menu": {"permission_menu"},
-		"permission/role": {"permission_role"}, "system/operationlog": {"system_operation_log"},
-		"storage/cosconfig": {"storage_cos_config"}, "storage/uploadrule": {"storage_upload_rule", "storage_upload_rule_code"},
-		"message/mail": {"message_mail_config", "message_mail_template", "message_mail_log", "message_mail_log_verification", "message_mail_rate_limit_policy", "message_mail_recipient_rule"},
+		"user/session": {"user_session"}, "user/loginLog": {"user_login_log"},
+		"permission/authPlatform": {"permission_auth_platform"}, "permission/menu": {"permission_menu"},
+		"permission/role": {"permission_role"}, "system/operationLog": {"system_operation_log"},
+		"storage/cosConfig": {"storage_cos_config"}, "storage/uploadRule": {"storage_upload_rule", "storage_upload_rule_code"},
+		"message/mail/config": {"message_mail_config"}, "message/mail/template": {"message_mail_template"},
+		"message/mail/log": {"message_mail_log"}, "message/mail/logVerification": {"message_mail_log_verification"},
+		"message/mail/rateLimitPolicy": {"message_mail_rate_limit_policy"}, "message/mail/recipientRule": {"message_mail_recipient_rule"},
 	} {
 		t.Run(module, func(t *testing.T) {
 			path := filepath.Join("..", "module", module, "model.go")

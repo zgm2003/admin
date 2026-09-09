@@ -5,31 +5,26 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	mailconfig "admin/server/internal/module/message/mail/config"
+	maillog "admin/server/internal/module/message/mail/log"
+	logverification "admin/server/internal/module/message/mail/logVerification"
+	ratelimitpolicy "admin/server/internal/module/message/mail/rateLimitPolicy"
+	recipientrule "admin/server/internal/module/message/mail/recipientRule"
+	mailtemplate "admin/server/internal/module/message/mail/template"
 )
 
-func TestFixedTemplatesHaveStableTencentIDs(t *testing.T) {
-	want := map[string]int{SceneLogin: 47941, SceneForget: 47942, SceneBindEmail: 47943, SceneChangePassword: 47944}
-	got := FixedTemplates()
-	if len(got) != 4 {
-		t.Fatalf("templates=%d", len(got))
-	}
-	for _, v := range got {
-		if want[v.Scene] != v.TencentTemplateID || len(v.Variables) != 2 {
-			t.Fatalf("invalid template: %+v", v)
-		}
-	}
-}
 func TestMailTableNames(t *testing.T) {
 	got := map[string]string{
-		"config constant":         ConfigTable,
+		"config constant":         mailconfig.Table,
 		"config model":            (Config{}).TableName(),
-		"template constant":       TemplateTable,
+		"template constant":       mailtemplate.Table,
 		"template model":          (Template{}).TableName(),
-		"log constant":            LogTable,
+		"log constant":            maillog.Table,
 		"log model":               (Log{}).TableName(),
-		"verification constant":   VerificationTable,
+		"verification constant":   logverification.Table,
 		"verification model":      (Verification{}).TableName(),
-		"recipient rule constant": RecipientRuleTable,
+		"recipient rule constant": recipientrule.Table,
 		"recipient rule model":    (RecipientRule{}).TableName(),
 	}
 	want := map[string]string{
@@ -51,6 +46,21 @@ func TestMailTableNames(t *testing.T) {
 	}
 }
 
+func TestMailConfigurationModelsAreGlobalWhileDeliveryFactsKeepPlatform(t *testing.T) {
+	for name, model := range map[string]any{
+		"config": Config{}, "template": Template{}, "recipient rule": RecipientRule{},
+	} {
+		if _, found := reflect.TypeOf(model).FieldByName("PlatformID"); found {
+			t.Fatalf("%s still belongs to an authentication platform", name)
+		}
+	}
+	for name, model := range map[string]any{"log": Log{}, "verification": Verification{}} {
+		if _, found := reflect.TypeOf(model).FieldByName("PlatformID"); !found {
+			t.Fatalf("%s lost its source platform audit field", name)
+		}
+	}
+}
+
 func TestRateLimitPolicyTimestampFieldsUseTimestamptzTags(t *testing.T) {
 	typeOfPolicy := reflect.TypeOf(RateLimitPolicy{})
 	for _, fieldName := range []string{"CreatedAt", "UpdatedAt"} {
@@ -68,17 +78,18 @@ func TestMailPermissionCodesUseMessageDomain(t *testing.T) {
 	got := []string{
 		PermissionView,
 		PermissionList,
-		PermissionDetail,
-		PermissionConfigUpdate,
-		PermissionConfigDelete,
+		maillog.PermissionDetail,
+		mailconfig.PermissionUpdate,
+		mailconfig.PermissionDelete,
 		PermissionTest,
-		PermissionTemplateUpdate,
-		PermissionTemplateStatus,
-		PermissionLogDelete,
-		PermissionRuleCreate,
-		PermissionRuleUpdate,
-		PermissionRuleStatus,
-		PermissionRuleDelete,
+		mailtemplate.PermissionUpdate,
+		mailtemplate.PermissionStatus,
+		maillog.PermissionDelete,
+		recipientrule.PermissionCreate,
+		recipientrule.PermissionUpdate,
+		recipientrule.PermissionStatus,
+		recipientrule.PermissionDelete,
+		ratelimitpolicy.PermissionUpdate,
 	}
 	want := []string{
 		"message:mail:view",
@@ -94,6 +105,7 @@ func TestMailPermissionCodesUseMessageDomain(t *testing.T) {
 		"message:mail:rule:update",
 		"message:mail:rule:status",
 		"message:mail:rule:delete",
+		"message:mail:rate-limit:update",
 	}
 	for index := range want {
 		if got[index] != want[index] {
@@ -110,46 +122,5 @@ func TestAdminTestResultUsesCamelCaseJSON(t *testing.T) {
 	want := `{"logId":12,"status":"sent","requestId":"request-1","messageId":"message-1"}`
 	if string(body) != want {
 		t.Fatalf("unexpected response: %s", body)
-	}
-}
-
-func TestTemplateUpdateValuesPersistVariableMaps(t *testing.T) {
-	values, err := templateUpdateValues(TemplateUpdateInput{
-		Name: "登录验证码", Subject: "登录验证码", TencentTemplateID: 47941,
-		Variables: map[string]string{"code": "123456"}, ExampleVariables: map[string]string{"ttl_minutes": "10"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(values["variables"].([]byte)) != `{"code":"123456"}` || string(values["example_variables"].([]byte)) != `{"ttl_minutes":"10"}` {
-		t.Fatalf("variable values were not serialized: %#v", values)
-	}
-}
-
-func TestMailVariableValidationRequiresFixedKeys(t *testing.T) {
-	valid := map[string]string{"code": "123456", "ttl_minutes": "10"}
-	if err := validateMailVariables(valid, true); err != nil {
-		t.Fatalf("valid variables rejected: %v", err)
-	}
-	for name, value := range map[string]map[string]string{
-		"missing code": {"ttl_minutes": "10"},
-		"missing ttl":  {"code": "123456"},
-		"unknown key":  {"code": "123456", "ttl_minutes": "10", "extra": "x"},
-		"empty code":   {"code": "", "ttl_minutes": "10"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			if err := validateMailVariables(value, true); err == nil {
-				t.Fatal("invalid variables accepted")
-			}
-		})
-	}
-}
-
-func TestMailConfigEmailRejectsDisplayName(t *testing.T) {
-	if _, err := normalizeMailConfigEmail("Admin <admin@example.com>"); err == nil {
-		t.Fatal("display-name sender accepted")
-	}
-	if got, err := normalizeMailConfigEmail(" Admin@Example.COM "); err != nil || got != "admin@example.com" {
-		t.Fatalf("plain sender normalization = %q,%v", got, err)
 	}
 }

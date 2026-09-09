@@ -19,9 +19,9 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false },
   },
   {
-    path: '/forgot-password',
-    name: 'forgot-password',
-    component: () => import('@/views/auth/forgot-password/index.vue'),
+    path: '/forgotPassword',
+    name: 'forgotPassword',
+    component: () => import('@/views/auth/forgotPassword/index.vue'),
     meta: { requiresAuth: false },
   },
   {

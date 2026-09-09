@@ -15,15 +15,15 @@ import {
   listCosConfigs,
   testCosConfig,
   updateCosConfig,
-} from '@/api/storage/cosconfig'
+} from '@/api/storage/cosConfig'
 import {
   createUploadRule,
   getUploadRulePageInit,
   listUploadRules,
   updateUploadRule,
-} from '@/api/storage/uploadrule'
+} from '@/api/storage/uploadRule'
 
-vi.mock('@/api/storage/cosconfig', () => ({
+vi.mock('@/api/storage/cosConfig', () => ({
   listCosConfigs: vi.fn(),
   getCosConfig: vi.fn(),
   createCosConfig: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock('@/api/storage/cosconfig', () => ({
   deleteCosConfig: vi.fn(),
 }))
 
-vi.mock('@/api/storage/uploadrule', () => ({
+vi.mock('@/api/storage/uploadRule', () => ({
   listUploadRules: vi.fn(),
   getUploadRule: vi.fn(),
   getUploadRulePageInit: vi.fn(),
@@ -100,7 +100,7 @@ describe('ObjectStorage', () => {
   })
 
   it('keeps add-rule disabled when page-init has no platform or COS config', async () => {
-    const wrapper = mountPage(['storage:object:list', 'storage:uploadrule:create'])
+    const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
     await flushPromises()
     await wrapper.findAll('.el-tabs__item')[1]?.trigger('click')
     await flushPromises()
@@ -125,7 +125,7 @@ describe('ObjectStorage', () => {
         },
       ],
     })
-    const wrapper = mountPage(['storage:object:list', 'storage:uploadrule:create'])
+    const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
     await flushPromises()
     await wrapper.findAll('.el-tabs__item')[1]?.trigger('click')
     await flushPromises()
@@ -147,7 +147,7 @@ describe('ObjectStorage', () => {
         { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
       ],
     })
-    const wrapper = mountPage(['storage:object:list', 'storage:uploadrule:create'])
+    const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
     await flushPromises()
     await wrapper.findAll('.el-tabs__item')[1]?.trigger('click')
     await flushPromises()
@@ -186,7 +186,7 @@ describe('ObjectStorage', () => {
         { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
       ],
     })
-    const wrapper = mountPage(['storage:object:list', 'storage:uploadrule:create'])
+    const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
     await flushPromises()
     await wrapper.findAll('.el-tabs__item')[1]?.trigger('click')
     await flushPromises()
@@ -227,7 +227,7 @@ describe('ObjectStorage', () => {
         { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
       ],
     })
-    const wrapper = mountPage(['storage:object:list', 'storage:uploadrule:create'])
+    const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
     await flushPromises()
     await wrapper.findAll('.el-tabs__item')[1]?.trigger('click')
     await flushPromises()
@@ -287,7 +287,7 @@ describe('ObjectStorage', () => {
         { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
       ],
     })
-    const wrapper = mountPage(['storage:object:list', 'storage:uploadrule:create'])
+    const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
     await flushPromises()
     await wrapper.findAll('.el-tabs__item')[1]?.trigger('click')
     await flushPromises()
@@ -317,7 +317,7 @@ describe('ObjectStorage', () => {
         { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
       ],
     })
-    const wrapper = mountPage(['storage:object:list', 'storage:uploadrule:create'])
+    const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
     await flushPromises()
     await wrapper.findAll('.el-tabs__item')[1]?.trigger('click')
     await flushPromises()
@@ -359,7 +359,7 @@ describe('ObjectStorage', () => {
     })
     vi.mocked(testCosConfig).mockRejectedValue(new Error('连接失败'))
     const errorSpy = vi.spyOn(ElNotification, 'error')
-    const wrapper = mountPage(['storage:object:list', 'storage:cosconfig:test'])
+    const wrapper = mountPage(['storage:object:list', 'storage:cosConfig:test'])
     await flushPromises()
 
     const testButton = wrapper
@@ -373,7 +373,7 @@ describe('ObjectStorage', () => {
   })
 
   it('keeps the COS config dialog global without a platform field', async () => {
-    const wrapper = mountPage(['storage:object:list', 'storage:cosconfig:create'])
+    const wrapper = mountPage(['storage:object:list', 'storage:cosConfig:create'])
     await flushPromises()
     await wrapper.find('[data-testid="storage-add-config"]').trigger('click')
     await flushPromises()
@@ -385,7 +385,7 @@ describe('ObjectStorage', () => {
   })
 
   it('marks required COS fields and defaults the region selector to Guangzhou', async () => {
-    const wrapper = mountPage(['storage:object:list', 'storage:cosconfig:create'])
+    const wrapper = mountPage(['storage:object:list', 'storage:cosConfig:create'])
     await flushPromises()
     await wrapper.find('[data-testid="storage-add-config"]').trigger('click')
     await flushPromises()
@@ -407,7 +407,7 @@ describe('ObjectStorage', () => {
   })
 
   it('rejects a COS domain without an HTTPS scheme before creating', async () => {
-    const wrapper = mountPage(['storage:object:list', 'storage:cosconfig:create'])
+    const wrapper = mountPage(['storage:object:list', 'storage:cosConfig:create'])
     await flushPromises()
     await wrapper.find('[data-testid="storage-add-config"]').trigger('click')
     await flushPromises()
@@ -471,7 +471,7 @@ describe('ObjectStorage', () => {
       page: 1,
       pageSize: 20,
     })
-    const wrapper = mountPage(['storage:object:list', 'storage:cosconfig:update'])
+    const wrapper = mountPage(['storage:object:list', 'storage:cosConfig:update'])
     await flushPromises()
     await wrapper.find('.el-table__body .el-button').trigger('click')
     await flushPromises()
@@ -522,7 +522,7 @@ describe('ObjectStorage', () => {
       page: 1,
       pageSize: 20,
     })
-    const wrapper = mountPage(['storage:object:list', 'storage:uploadrule:update'])
+    const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:update'])
     await flushPromises()
     await wrapper.findAll('.el-tabs__item')[1]?.trigger('click')
     await flushPromises()

@@ -53,7 +53,7 @@ func TestPagePathAlignmentMigrationAlignsPagePathsAndIsIdempotent(t *testing.T) 
 		"permission:menu:view":       {"/permission/menus", "permission/menus"},
 		"permission:role:view":       {"/permission/roles", "permission/roles"},
 		"auth:platform:view":         {"/permission/auth-platforms", "permission/auth-platforms"},
-		"account:user:loginlog:view": {"/account/login-logs", "account/login-logs"},
+		"account:user:loginLog:view": {"/account/login-logs", "account/login-logs"},
 		"storage:object:view":        {"/cloud/storage-object", "cloud/storage-object"},
 	})
 	assertPagePathAlignmentGrants(t, db, ctx, fixture.grants)
@@ -66,7 +66,7 @@ func TestPagePathAlignmentMigrationAlignsPagePathsAndIsIdempotent(t *testing.T) 
 		"permission:menu:view":       {"/permission/menus", "permission/menus"},
 		"permission:role:view":       {"/permission/roles", "permission/roles"},
 		"auth:platform:view":         {"/permission/auth-platforms", "permission/auth-platforms"},
-		"account:user:loginlog:view": {"/account/login-logs", "account/login-logs"},
+		"account:user:loginLog:view": {"/account/login-logs", "account/login-logs"},
 		"storage:object:view":        {"/cloud/storage-object", "cloud/storage-object"},
 	})
 	assertPagePathAlignmentGrants(t, db, ctx, fixture.grants)
@@ -87,7 +87,7 @@ func TestPagePathAlignmentMigrationRejectsOccupiedTargetPathAndRollsBack(t *test
 		"permission:menu:view":       {"/access/menus", "access/menus"},
 		"permission:role:view":       {"/access/roles", "access/roles"},
 		"auth:platform:view":         {"/access/auth-platforms", "access/auth-platforms"},
-		"account:user:loginlog:view": {"/account/login-logs", "user/login-logs"},
+		"account:user:loginLog:view": {"/account/login-logs", "user/login-logs"},
 		"storage:object:view":        {"/cloud/object-storage", "storage/object"},
 	})
 	assertPagePathAlignmentGrants(t, db, ctx, fixture.grants)
@@ -149,14 +149,14 @@ func createPagePathAlignmentFixture(t *testing.T, db *gorm.DB, ctx context.Conte
 		"permission:menu:view":       10,
 		"permission:role:view":       11,
 		"auth:platform:view":         12,
-		"account:user:loginlog:view": 13,
+		"account:user:loginLog:view": 13,
 		"storage:object:view":        14,
 	}
 	pageParent := map[string]int64{
 		"permission:menu:view":       accessID,
 		"permission:role:view":       accessID,
 		"auth:platform:view":         accessID,
-		"account:user:loginlog:view": accountID,
+		"account:user:loginLog:view": accountID,
 		"storage:object:view":        cloudID,
 	}
 
@@ -178,7 +178,7 @@ func createPagePathAlignmentFixture(t *testing.T, db *gorm.DB, ctx context.Conte
 		{id: pageIDs["permission:menu:view"], parentID: int64Pointer(accessID), menuType: "page", name: "Menu", code: "permission:menu:view", i18nKey: stringPointer("navigation.accessMenus"), path: stringPointer("/access/menus"), component: stringPointer("access/menus"), icon: stringPointer("lucide:panel-left"), sortOrder: 10},
 		{id: pageIDs["permission:role:view"], parentID: int64Pointer(accessID), menuType: "page", name: "Role", code: "permission:role:view", i18nKey: stringPointer("navigation.accessRoles"), path: stringPointer("/access/roles"), component: stringPointer("access/roles"), icon: stringPointer("lucide:user-cog"), sortOrder: 20},
 		{id: pageIDs["auth:platform:view"], parentID: int64Pointer(accessID), menuType: "page", name: "Auth Platform", code: "auth:platform:view", i18nKey: stringPointer("navigation.accessAuthPlatforms"), path: stringPointer("/access/auth-platforms"), component: stringPointer("access/auth-platforms"), icon: stringPointer("lucide:key-round"), sortOrder: 30},
-		{id: pageIDs["account:user:loginlog:view"], parentID: int64Pointer(accountID), menuType: "page", name: "Login Log", code: "account:user:loginlog:view", i18nKey: stringPointer("navigation.accountLoginLogs"), path: stringPointer("/account/login-logs"), component: stringPointer("user/login-logs"), icon: stringPointer("lucide:lock-keyhole"), sortOrder: 40},
+		{id: pageIDs["account:user:loginLog:view"], parentID: int64Pointer(accountID), menuType: "page", name: "Login Log", code: "account:user:loginLog:view", i18nKey: stringPointer("navigation.accountLoginLogs"), path: stringPointer("/account/login-logs"), component: stringPointer("user/login-logs"), icon: stringPointer("lucide:lock-keyhole"), sortOrder: 40},
 		{id: pageIDs["storage:object:view"], parentID: int64Pointer(cloudID), menuType: "page", name: "Object Storage", code: "storage:object:view", i18nKey: stringPointer("navigation.storageObject"), path: stringPointer("/cloud/object-storage"), component: stringPointer("storage/object"), icon: stringPointer("lucide:cloud-upload"), sortOrder: 10},
 	} {
 		if err := db.WithContext(ctx).Exec(`
@@ -204,7 +204,7 @@ func createPagePathAlignmentFixture(t *testing.T, db *gorm.DB, ctx context.Conte
 		{ID: 101, RoleID: roleID, MenuID: pageIDs["permission:menu:view"]},
 		{ID: 102, RoleID: roleID, MenuID: pageIDs["permission:role:view"]},
 		{ID: 103, RoleID: roleID, MenuID: pageIDs["auth:platform:view"]},
-		{ID: 104, RoleID: roleID, MenuID: pageIDs["account:user:loginlog:view"]},
+		{ID: 104, RoleID: roleID, MenuID: pageIDs["account:user:loginLog:view"]},
 		{ID: 105, RoleID: roleID, MenuID: pageIDs["storage:object:view"]},
 	} {
 		if err := db.WithContext(ctx).Exec(`
@@ -227,7 +227,7 @@ func createPagePathAlignmentFixture(t *testing.T, db *gorm.DB, ctx context.Conte
 		userID:     userID,
 		pageIDs:    pageIDs,
 		pageParent: pageParent,
-		grants:     []pagePathAlignmentGrantRow{{ID: 101, RoleID: roleID, MenuID: pageIDs["permission:menu:view"]}, {ID: 102, RoleID: roleID, MenuID: pageIDs["permission:role:view"]}, {ID: 103, RoleID: roleID, MenuID: pageIDs["auth:platform:view"]}, {ID: 104, RoleID: roleID, MenuID: pageIDs["account:user:loginlog:view"]}, {ID: 105, RoleID: roleID, MenuID: pageIDs["storage:object:view"]}},
+		grants:     []pagePathAlignmentGrantRow{{ID: 101, RoleID: roleID, MenuID: pageIDs["permission:menu:view"]}, {ID: 102, RoleID: roleID, MenuID: pageIDs["permission:role:view"]}, {ID: 103, RoleID: roleID, MenuID: pageIDs["auth:platform:view"]}, {ID: 104, RoleID: roleID, MenuID: pageIDs["account:user:loginLog:view"]}, {ID: 105, RoleID: roleID, MenuID: pageIDs["storage:object:view"]}},
 	}
 }
 

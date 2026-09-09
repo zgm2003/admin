@@ -16,7 +16,7 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/permission/access"
-	authplatform "admin/server/internal/module/permission/authplatform"
+	authplatform "admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/profile"

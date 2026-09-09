@@ -6,7 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { logout } from '@/api/auth/login'
 import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
-import { useUIPreferencesStore } from '@/store/ui-preferences'
+import { useUIPreferencesStore } from '@/store/uiPreferences'
 import { resolveBreadcrumbs } from './breadcrumbs'
 import AppAside from './components/AppAside/index.vue'
 import AppFooter from './components/AppFooter/index.vue'
@@ -154,7 +154,7 @@ onBeforeUnmount(() => {
         >
           <RouteTabs
             :fullscreen="contentFullscreen"
-            :menu-tree="access.menuTree"
+            :menuTree="access.menuTree"
             @refresh="handleRefresh"
             @toggle-fullscreen="handleToggleFullscreen"
           />

@@ -10,7 +10,7 @@ import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
 import { ApiError } from '@/types/http'
 import { createAppRouter } from '@/router/index'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 
 vi.mock('@/api/auth/login', () => ({ refresh: vi.fn(), getCurrentUser: vi.fn() }))
 vi.mock('@/api/permission/permission', () => ({ getPermission: vi.fn() }))
@@ -312,14 +312,14 @@ function businessPermissionSnapshot(): PermissionSnapshot {
       ]),
       accessDirectory('system', 'navigation.system', [
         accessPage(
-          'system:operationlog:list',
-          '/system/operationlog',
-          'system/operationlog',
-          'navigation.systemOperationlog',
+          'system:operationLog:list',
+          '/system/operationLog',
+          'system/operationLog',
+          'navigation.systemOperationLog',
         ),
       ]),
     ],
-    permissionCodes: ['user:account:list', 'system:operationlog:list', 'permission:role:list'],
+    permissionCodes: ['user:account:list', 'system:operationLog:list', 'permission:role:list'],
   }
 }
 

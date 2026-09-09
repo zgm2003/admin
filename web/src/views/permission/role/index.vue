@@ -13,7 +13,7 @@ import {
   updateRoleStatus,
 } from '@/api/permission/role'
 import type { RoleListItem, RoleListQuery } from '@/api/permission/role'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
 import { AppTable } from '@/components/AppTable'
 import type { TablePaginationState } from '@/components/AppTable'
@@ -22,7 +22,7 @@ import type { SearchFormModel } from '@/components/AppSearch'
 import RoleFormDialog from './components/RoleFormDialog/index.vue'
 import RolePermissionDialog from './components/RolePermissionDialog/index.vue'
 import type { RoleFormState } from './components/types'
-import { roleSearchFields, roleTableColumns } from './role-view'
+import { roleSearchFields, roleTableColumns } from './roleView'
 import { formatTime } from '@/utils/datetime'
 
 const { t } = useI18n()

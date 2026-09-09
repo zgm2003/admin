@@ -14,7 +14,7 @@ import (
 )
 
 func TestSnapshotKey(t *testing.T) {
-	if got := SnapshotKey("admin", 4, 7, 9, 1); got != "authz:permission:v7:admin:4:7:9:1" {
+	if got := SnapshotKey("admin", 4, 7, 9, 1); got != "authz:permission:v8:admin:4:7:9:1" {
 		t.Fatalf("SnapshotKey() = %q", got)
 	}
 }

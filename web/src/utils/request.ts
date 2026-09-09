@@ -9,7 +9,7 @@ import { ElNotification } from 'element-plus'
 
 import type { AccessCredential } from '@/api/auth/login'
 import { authPlatform } from '@/auth/platform'
-import { readDeviceID } from '@/auth/device-id'
+import { readDeviceID } from '@/auth/deviceId'
 import { appI18n, readLocale } from '@/i18n'
 import { pinia } from '@/store'
 import { usePermissionStore } from '@/store/permission'

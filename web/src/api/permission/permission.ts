@@ -1,5 +1,5 @@
 import { request } from '@/utils/request'
-import { isYesNo, type YesNo } from '@/enums/yes-no'
+import { isYesNo, type YesNo } from '@/enums/yesNo'
 import { expectArray, expectRecord, expectString } from '@/api/protocol'
 import { ProtocolError } from '@/types/http'
 

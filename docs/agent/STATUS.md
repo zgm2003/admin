@@ -3,6 +3,65 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## 模块 lower camel 与 Mail 分层整改（2026-09-09，最新）
+
+- 后端复合模块目录/import path 已统一 lower camel：`authPlatform`、`permissionVersion`、`roleMenu`、
+  `userRole`、`loginLog`、`operationLog`、`cosConfig`、`uploadRule`、`cacheFill`。Go package 标识符继续遵循
+  全小写惯例；PostgreSQL 表/列/约束/索引继续 snake_case，HTTP API 路径继续使用小写资源段。
+- Mail 六张表已拆入 `config`、`template`、`log`、`logVerification`、`rateLimitPolicy`、`recipientRule`，
+  各自拥有 Model/Repository，公开管理资源拥有 Handler/Service/Route；`logVerification` 仅供日志详情使用。
+  根 Mail 已删除万能 Model/Repository/Schema 和管理 CRUD，只保留发送编排、Provider、Limiter、Readiness、
+  管理测试、Stores 显式组合及路由聚合。Mail 密文 envelope 下沉到 `internal/secretkey` 供配置和验证码共用。
+- 前端业务目录、API/工具 TypeScript 模块已统一 lower camel；Mail 页签模块不再放在泛化 `components` 下。
+  Vue 组件目录保持 PascalCase，CSS class/data-testid 保持 kebab-case。`AppAside` scoped 样式原样移至
+  `AppAside.css`，SFC 从 406 行降至 159 行，前端架构门禁恢复 0 findings。
+- 菜单/权限/i18n 模块段已同步为 `authPlatform`、`operationLog`、`loginLog`、`cosConfig`、`uploadRule`；
+  Access Redis snapshot namespace 升至 v8，避免读取旧标识的 v7 快照。forward migration
+  `2026-09-09-module-lower-camel.sql` 已通过隔离 PostgreSQL 幂等、冲突回滚、菜单 ID/角色授权保持及平台
+  `menu_version` 单次递增测试。
+- **真实数据库已迁移**：维护者停止旧 Worker 后，迁移于 **2026-09-09 07:56:54 +08:00** 在本机
+  `admin.public` 提交。19 条权限码与 3 组 `path/componentPath/i18nKey` 已原位转换，旧标识均为 0；菜单仍为
+  71 条，角色菜单关系仍为 17 条，菜单 ID 与授权摘要保持。Admin `menu_version` 从 2 增至 3，Canvas 仍为
+  1，两平台 `policy_version` 仍为 3/1；未修改表名、用户 access version、Session 或 Mail 发送额度。
+- 迁移前备份与执行记录位于仓库外
+  `%LOCALAPPDATA%\Admin\backups\20260909-075553-module-lower-camel`；`public-before.dump` 已通过
+  `pg_restore --list`，SHA256 为 `E5341CD7C603E47F318F6267EADAA2304653B4808CA5BDF845D4212CB7693664`。
+  Admin Redis menu state 已从 `ready/version=2` 精确重建为 `ready/version=3`，只操作
+  `authz:menu-state:v1:1`；Canvas、用户 Access、Session、Mail 额度及其他 Redis key 未清理。
+- `docs/database/current.sql` 已从迁移后的真实 `public` schema-only 刷新。Agent 未启动 API/Worker；维护者可在
+  全量检查后手动启动新代码，不得恢复旧二进制。
+- 已验证：`go build ./...`；Mail 全部子包；Permission/Storage/Auth/LoginLog/OperationLog/cacheFill/Worker
+  定向测试；两份新 migration 的隔离测试；前端 typecheck、lint、architecture 及此前 17 文件 154 项 Vitest。
+  最后一轮文件改名后已复跑完整 Mail 子包，以及前端 lint、architecture、typecheck 和 10 文件 57 项改名
+  契约 Vitest，均通过；Git 索引无旧模块路径，`git diff --cached --check` 通过。三个 Admin Skill quick
+  validator 通过。全量 Go/Vitest/build 尚未按维护者约定重复运行。
+
+## Mail 全局 SES 归属修复（2026-09-08，最新）
+
+- 维护者确认腾讯云 SES 是全系统唯一邮件通道，只有 COS 上传配置允许按认证平台分区。
+  `message_mail_config`、`message_mail_template`、`message_mail_recipient_rule` 已改为全局配置/模板/规则；
+  `message_mail_log`、`message_mail_log_verification` 与 Redis 发送额度继续保留来源平台，维持“同平台、同邮箱”隔离。
+- Mail Repository/Service/Handler 和前端 DTO 已删除配置、模板、收件规则的认证平台参数与响应字段。
+  Auth 的 Mail readiness 改为按场景全局缓存，namespace 升至 v3；旧平台级 v2 readiness 不回读。
+  管理测试和平台日志仍要求认证上下文中的正数来源平台，缺失时明确 401，不再静默回退平台 1。
+- forward migration `2026-09-08-mail-global-configuration.sql` 会锁定三张目标表，拒绝多活动配置、重复场景模板
+  或重复收件规则，删除三列及外键后建立全局部分唯一索引；隔离 PostgreSQL 已验证重复执行、三类歧义拒绝和
+  失败整体回滚。
+- **实际数据库已迁移**：首次编写的迁移测试脚本错误使用 `public.` 限定名，导致测试连接越过临时 schema，
+  于约 **2026-09-08 21:59 +08:00** 将本机 `admin.public` 提交到目标结构。发现后立即停止写操作并修正脚本为
+  `current_schema()`/search-path 隔离；未执行回滚。只读核验确认原 1 条配置、4 条模板、1 条收件规则的 ID 和
+  业务字段全部保留，9 条发送日志及其 `platform_id` 未变，未操作验证码、额度、Session 或其他表。
+- 本次操作前没有创建即时备份。迁移后受限权限归档位于
+  `%LOCALAPPDATA%\Admin\backups\20260908-220912-mail-global-postmigration`，归档 SHA256：
+  `18A685303623E83997386419B30BCE1B16961A2D5289A958BEE62B86CB9C58DD`；`pg_restore --list` 读取通过。
+  `docs/database/current.sql` 已从真实 public schema-only 刷新。
+- 当前 API/Worker 未由 Agent 重启；检查时 API 未监听常用端口，迁移前 Worker PID `34520` 仍在运行并使用带
+  `platform_id` 的旧 Mail SQL，维护者手动重启新代码前不得发送或消费邮件任务。新 readiness v3 将在新进程
+  首次访问时按全局配置重建，不需要清理旧 v2，也不得清理发送额度键。
+- 验证通过：`go build ./...`；Mail/Auth/Architecture 三包定向测试；Mail/Auth 完整 `-race -p 1`；迁移重复执行、
+  歧义拒绝和回滚；前端 `pnpm typecheck`、Mail API/页面 23 项 Vitest、相关 ESLint。`pnpm check:architecture`
+  被既有 `AppAside/index.vue` 406 行（阈值 400）拦截，该文件不属于本次 Mail 改动，未在本轮扩展 UI 重构。
+
 ## Admin 注册与权限语义修复（2026-09-08，最新）
 
 - 修复 action 自动赋予 page/view 的错误语义：普通角色的直接 action 只进入 `permissionCodes`，不产生 page、
@@ -111,9 +170,9 @@ psql -X -d $dsn -v ON_ERROR_STOP=1 -c 'SELECT id, code, policy_version, menu_ver
 
 ## 本轮交付状态（2026-09-08，优先于下方历史记录）
 
-- 最新归属修正已落实到代码：前后端管理模块 `permission/authplatform`，Model 映射
-  `permission_auth_platform`，管理 URL `/api/admin/v1/permission/authplatform`、权限码
-  `permission:authplatform:*`、导航键 `navigation.permissionAuthplatform`、页面文案 `permission.authplatform.*`。
+- 最新归属修正已落实到代码：前后端管理模块 `permission/authPlatform`，Model 映射
+  `permission_auth_platform`，管理 URL `/api/admin/v1/permission/authPlatform`、权限码
+  `permission:authPlatform:*`、导航键 `navigation.permissionAuthPlatform`、页面文案 `permission.authPlatform.*`。
   `auth/login`、公共 `/api/v1/auth/policy` 与现有平台策略 Redis key 不变；不把前端客户端平台常量
   `src/auth/platform.ts` 误当成管理模块。业务表已迁移为 `permission_auth_platform`。
 - 当前 forward migration 已同步原位改表、约束/索引/序列改名、页面路径和权限码转换；隔离 PostgreSQL
@@ -122,7 +181,7 @@ psql -X -d $dsn -v ON_ERROR_STOP=1 -c 'SELECT id, code, policy_version, menu_ver
 - Agent/三个 Skill 统一为“先确认业务归属并校正后端，再统一各层”，不再以现有后端目录自动推断归属。
 - 认证平台归属调整验证：`go fmt ./...`、`go vet ./...`、`go build ./...`、
   `go test -p 1 ./... -count=1` 全部通过；补充的原位改表后失败回滚测试用
-  `go test ./internal/architecture -count=1` 通过。`go test -race -p 1 ./internal/module/permission/authplatform ./internal/module/auth/login -count=1`
+  `go test ./internal/architecture -count=1` 通过。`go test -race -p 1 ./internal/module/permission/authPlatform ./internal/module/auth/login -count=1`
   两包完整通过。IDE build 无错误，三个 Skill validator 通过。
 - 此次前端 `pnpm lint`、`pnpm check:architecture`、`pnpm build` 通过；全量 Vitest 为 470/471 通过，
   会话页第一项超过默认 5 秒（全量下 8272ms），并非断言失败。使用原超时独立复跑
@@ -390,7 +449,7 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 
 - `AccessCredential`/`CurrentUser` 严格 DTO 纳入 `passwordSetRequired`（`expectExactKeys` + 布尔校验），
   `utils/request.ts` 的 `isAccessCredential` 探测同步。
-- 新增 `/forgot-password` 页面（复用 LoginPage.css 布局）：邮箱 → 发码（60s 倒计时、challenge 轮换）→
+- 新增 `/forgotPassword` 页面（复用 LoginPage.css 布局）：邮箱 → 发码（60s 倒计时、challenge 轮换）→
   设置新密码 → 成功回登录页并经 `?account=` 预填；登录页新增忘记密码入口链接。
 - profile 密码卡片双形态：`passwordSetRequired` 为 true 时隐藏当前密码框、改调 `setPassword`、成功文案
   提示会话保持；store 在 set 成功后清除标记。

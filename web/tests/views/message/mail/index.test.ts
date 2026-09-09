@@ -4,7 +4,7 @@ import ElementPlus from 'element-plus'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as mailApi from '@/api/message/mail'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
 import MailPage from '@/views/message/mail/index.vue'
@@ -49,7 +49,6 @@ describe('mail service page', () => {
     vi.mocked(mailApi.listMailTemplates).mockResolvedValue([
       {
         id: 1,
-        platformId: 1,
         scene: 'login',
         name: '登录验证码',
         subject: '登录验证码',
@@ -220,7 +219,6 @@ describe('mail service page', () => {
     vi.mocked(mailApi.listMailRules).mockResolvedValue([
       {
         id: 7,
-        platformId: 1,
         scope: 'domain',
         pattern: 'example.com',
         action: 'deny',

@@ -5,18 +5,18 @@ import { useI18n } from 'vue-i18n'
 import { getRolePermissions, updateRolePermissions } from '@/api/permission/role'
 import type { RoleListItem, RolePermissionsResponse } from '@/api/permission/role'
 import { AppDialog } from '@/components/AppDialog'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import {
   buildRolePermissionMatrix,
   diffMenuIDs,
   expandDirectMenuIDs,
   getRoleMatrixMenuIDs,
   normalizeDirectMenuIDs,
-} from '@/views/permission/role/role-permission-matrix'
+} from '@/views/permission/role/rolePermissionMatrix'
 import type {
   RoleMatrixPlatform,
   RolePermissionDiff,
-} from '@/views/permission/role/role-permission-matrix'
+} from '@/views/permission/role/rolePermissionMatrix'
 import RolePermissionDiffDialog from '@/views/permission/role/components/RolePermissionDiffDialog/index.vue'
 import RolePermissionMatrix from '@/views/permission/role/components/RolePermissionMatrix/index.vue'
 

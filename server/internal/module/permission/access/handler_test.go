@@ -13,7 +13,7 @@ import (
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/permission/access"
-	authplatform "admin/server/internal/module/permission/authplatform"
+	authplatform "admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"github.com/gin-gonic/gin"

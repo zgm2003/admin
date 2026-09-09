@@ -4,12 +4,12 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { logout } from '@/api/auth/login'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import { appI18n, setLocale } from '@/i18n'
 import { pinia } from '@/store'
 import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
-import { useUIPreferencesStore } from '@/store/ui-preferences'
+import { useUIPreferencesStore } from '@/store/uiPreferences'
 import Layout from '@/layout/index.vue'
 
 vi.mock('@/api/auth/login', () => ({ logout: vi.fn() }))

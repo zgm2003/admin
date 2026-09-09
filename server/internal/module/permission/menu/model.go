@@ -3,7 +3,7 @@ package menu
 import (
 	"time"
 
-	"admin/server/internal/module/permission/rolemenu"
+	"admin/server/internal/module/permission/roleMenu"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )

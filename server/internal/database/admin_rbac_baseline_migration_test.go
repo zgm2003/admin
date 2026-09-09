@@ -13,7 +13,7 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/database/testschema"
 	"admin/server/internal/module/permission/access"
-	authplatform "admin/server/internal/module/permission/authplatform"
+	authplatform "admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/user/account"
@@ -159,7 +159,7 @@ func assertRBACMigrationState(t *testing.T, db *gorm.DB, ctx context.Context, fi
 		t.Fatalf("profile page = %+v", profilePage)
 	}
 	var loginLogPage menu.Menu
-	if err := db.WithContext(ctx).Where("code = ?", "account:user:loginlog:view").Take(&loginLogPage).Error; err != nil {
+	if err := db.WithContext(ctx).Where("code = ?", "account:user:loginLog:view").Take(&loginLogPage).Error; err != nil {
 		t.Fatal(err)
 	}
 	if loginLogPage.PlatformID != fixture.adminID || loginLogPage.ParentID == nil || *loginLogPage.ParentID != fixture.rootID || loginLogPage.MenuType != menu.TypePage || loginLogPage.Path == nil || *loginLogPage.Path != "/account/login-logs" || loginLogPage.ComponentPath == nil || *loginLogPage.ComponentPath != "account/login-logs" || loginLogPage.IsHidden != yesno.No {

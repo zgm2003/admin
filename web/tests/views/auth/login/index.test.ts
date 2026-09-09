@@ -312,7 +312,7 @@ describe('Login page', () => {
   it('links to forgot-password and prefills the account from the query', async () => {
     const { wrapper } = await mountLogin('/login?account=Admin%40Example.COM')
     expect(wrapper.get('[data-testid="login-forgot-link"]').attributes('href')).toBe(
-      '/forgot-password',
+      '/forgotPassword',
     )
     const accountInput = wrapper.get('[data-testid="login-account"]')
     expect((accountInput.element as HTMLInputElement).value).toBe('Admin@Example.COM')
@@ -324,7 +324,7 @@ async function mountLogin(initialPath = '/login') {
     history: createMemoryHistory(),
     routes: [
       { path: '/login', component: LoginPage },
-      { path: '/forgot-password', component: { template: '<div />' } },
+      { path: '/forgotPassword', component: { template: '<div />' } },
       { path: '/dashboard', component: { template: '<div />' } },
       { path: '/secure', component: { template: '<div />' } },
       { path: '/user/profile', component: { template: '<div />' } },

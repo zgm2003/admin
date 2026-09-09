@@ -2,7 +2,7 @@ import type { Router } from 'vue-router'
 
 import { getCurrentUser, refresh } from './api/auth/login'
 import { appI18n } from './i18n'
-import { registerPermissionRoutes } from './router/permission-routes'
+import { registerPermissionRoutes } from './router/permissionRoutes'
 import { pinia } from './store'
 import { usePermissionStore } from './store/permission'
 import { useAuthStore } from './store/auth'

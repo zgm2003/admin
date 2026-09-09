@@ -16,10 +16,10 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/database/testschema"
 	"admin/server/internal/module/message/mail"
-	authplatform "admin/server/internal/module/permission/authplatform"
+	authplatform "admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
-	"admin/server/internal/module/user/loginlog"
+	"admin/server/internal/module/user/loginLog"
 	"admin/server/internal/shared/yesno"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
@@ -34,7 +34,7 @@ type gatedVerifyCodeSender struct {
 	release     chan struct{}
 }
 
-func (s *gatedVerifyCodeSender) VerifyCodeReady(context.Context, int64, string) (mail.VerifyCodeReadiness, error) {
+func (s *gatedVerifyCodeSender) VerifyCodeReady(context.Context, string) (mail.VerifyCodeReadiness, error) {
 	return s.readiness, nil
 }
 func (s *gatedVerifyCodeSender) PrepareEmailVerifyCode(context.Context, mail.EmailVerifyCodePrepareInput) (mail.EmailVerifyCodePreparation, error) {

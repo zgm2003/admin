@@ -5,9 +5,9 @@ import { CirclePlus, Refresh } from '@element-plus/icons-vue'
 
 import type { ManagedMenuNode, ManagedMenuType } from '@/api/permission/menu'
 import { AppDIcon } from '@/components/AppDIcon'
-import { YesNo } from '@/enums/yes-no'
-import { filterManagedMenuTree } from '@/views/permission/menu/filter-menu-tree'
-import { flattenWithChildren, menuRowKey } from '@/views/permission/menu/menu-tree'
+import { YesNo } from '@/enums/yesNo'
+import { filterManagedMenuTree } from '@/views/permission/menu/filterMenuTree'
+import { flattenWithChildren, menuRowKey } from '@/views/permission/menu/menuTree'
 
 const props = defineProps<{
   menus: readonly ManagedMenuNode[]

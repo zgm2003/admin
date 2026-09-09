@@ -25,7 +25,17 @@ Skill。`docs/superpowers/**` 与带日期的旧 SQL 是历史档案，除非用
   不把现有目录当作不可更改的业务依据。统一单数资源名；用户域固定为
   `user`，前端不得另起 `account` 域。跨层改名必须
   同时核对路由、权限、数据库迁移和翻译，并补契约测试。具体映射见 `docs/agent/architecture.md`。
-  认证平台管理固定为 `permission/authplatform`、表 `permission_auth_platform`；登录流程保留 `auth/login`。
+  认证平台管理固定为 `permission/authPlatform`、表 `permission_auth_platform`；登录流程保留 `auth/login`。
+- 前后端代码中的复合业务模块目录、文件名和 import path 使用 lower camel case，例如 `authPlatform`、
+  `operationLog`、`rateLimitPolicy`；Go `package` 标识符仍遵循 Go 语言惯例使用简短全小写名称。Vue 组件及其
+  组件目录使用 PascalCase，CSS class 与 `data-testid` 使用 kebab-case。菜单 `path/componentPath/code/i18nKey`
+  中的模块段与代码模块保持 lower camel case；HTTP API 路径继续使用小写单数资源名。
+- PostgreSQL 表、列、约束和索引使用 snake_case。表名按业务域与模块层级展开，例如代码模块
+  `permission/authPlatform` 对应表 `permission_auth_platform`，代码模块 `message/mail/rateLimitPolicy` 对应
+  表 `message_mail_rate_limit_policy`；不得为了匹配代码驼峰修改数据库下划线命名。
+- 腾讯云 SES 是全系统唯一邮件通道：`message_mail_config`、`message_mail_template` 和
+  `message_mail_recipient_rule` 不得按认证平台分区。邮件日志与验证码记录保留来源 `platform_id`，发送额度仍按
+  同一认证平台、同一规范化邮箱隔离。只有 COS 上传配置允许按认证平台维护独立配置。
 
 默认容量基线为百万级用户、多实例和高并发访问：
 

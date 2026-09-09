@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { PermissionMenuNode } from '@/api/permission/permission'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import { resolveBreadcrumbs } from '@/layout/breadcrumbs'
 
 describe('resolveBreadcrumbs', () => {
@@ -24,7 +24,7 @@ describe('resolveBreadcrumbs', () => {
 
     expect(resolveBreadcrumbs('/system/security/sessions', tree)).toEqual([
       { path: null, i18nKey: 'navigation.system' },
-      { path: null, i18nKey: 'navigation.permissionAuthplatform' },
+      { path: null, i18nKey: 'navigation.permissionAuthPlatform' },
       { path: '/system/security/sessions', i18nKey: 'navigation.userSession' },
     ])
     expect(JSON.stringify(tree)).toBe(before)
@@ -37,9 +37,9 @@ describe('resolveBreadcrumbs', () => {
       { path: null, i18nKey: 'navigation.permission' },
       { path: '/permission/menu', i18nKey: 'navigation.permissionMenu' },
     ])
-    expect(resolveBreadcrumbs('/system/operationlog', tree)).toEqual([
+    expect(resolveBreadcrumbs('/system/operationLog', tree)).toEqual([
       { path: null, i18nKey: 'navigation.system' },
-      { path: '/system/operationlog', i18nKey: 'navigation.systemOperationlog' },
+      { path: '/system/operationLog', i18nKey: 'navigation.systemOperationLog' },
     ])
   })
 
@@ -111,10 +111,10 @@ function systemDirectory(): PermissionMenuNode {
     'system',
     'navigation.system',
     pageNode(
-      'system:operationlog:list',
-      '/system/operationlog',
-      'system/operationlog',
-      'navigation.systemOperationlog',
+      'system:operationLog:list',
+      '/system/operationLog',
+      'system/operationLog',
+      'navigation.systemOperationLog',
     ),
   )
 }
@@ -169,7 +169,7 @@ function nestedDirectory(): PermissionMenuNode {
         menuType: 'directory',
         path: null,
         componentPath: null,
-        i18nKey: 'navigation.permissionAuthplatform',
+        i18nKey: 'navigation.permissionAuthPlatform',
         icon: 'lucide:key-round',
         isHidden: YesNo.No,
         children: [

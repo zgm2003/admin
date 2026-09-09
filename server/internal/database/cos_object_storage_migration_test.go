@@ -12,7 +12,7 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/database/testschema"
 	permission "admin/server/internal/module/permission/access"
-	authplatform "admin/server/internal/module/permission/authplatform"
+	authplatform "admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/shared/yesno"

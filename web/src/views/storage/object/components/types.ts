@@ -1,4 +1,4 @@
-import type { YesNo } from '@/enums/yes-no'
+import type { YesNo } from '@/enums/yesNo'
 
 export interface ConfigForm {
   name: string

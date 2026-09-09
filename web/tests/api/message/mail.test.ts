@@ -36,7 +36,6 @@ describe('mail config protocol', () => {
 describe('mail admin protocol', () => {
   const template = {
     id: 1,
-    platformId: 1,
     scene: 'login',
     name: '登录验证码',
     subject: '登录验证码',
@@ -67,7 +66,6 @@ describe('mail admin protocol', () => {
   }
   const rule = {
     id: 3,
-    platformId: 1,
     scope: 'domain',
     pattern: 'example.com',
     action: 'deny',
@@ -86,6 +84,8 @@ describe('mail admin protocol', () => {
 
   it('rejects unknown fields and malformed pages', () => {
     expect(() => parseMailTemplate({ ...template, secretId: 'secret' })).toThrow()
+    expect(() => parseMailTemplate({ ...template, platformId: 1 })).toThrow()
+    expect(() => parseMailRule({ ...rule, platformId: 1 })).toThrow()
     expect(() => parseMailLogPage({ list: [log], total: 1, page: 1 })).toThrow()
   })
 

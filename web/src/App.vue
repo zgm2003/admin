@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { elementPlusLocaleFor } from './i18n'
-import { useUIPreferencesStore } from './store/ui-preferences'
+import { useUIPreferencesStore } from './store/uiPreferences'
 
 const { locale } = useI18n()
 const uiPreferences = useUIPreferencesStore()

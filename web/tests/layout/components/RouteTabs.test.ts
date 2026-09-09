@@ -4,7 +4,7 @@ import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-rout
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { PermissionMenuNode } from '@/api/permission/permission'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import { appI18n, setLocale } from '@/i18n'
 import RouteTabs from '@/layout/components/RouteTabs/index.vue'
 
@@ -33,7 +33,7 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, i18nKey: 'reports.orders.list' },
   },
   {
-    path: '/system/operationlog',
+    path: '/system/operationLog',
     name: 'system-operation-logs',
     component: views,
     meta: { requiresAuth: true, i18nKey: 'navigation.main' },
@@ -90,10 +90,10 @@ describe('RouteTabs', () => {
     )
     expect(wrapper.text()).not.toContain('主导航')
 
-    await router.push('/system/operationlog')
+    await router.push('/system/operationLog')
     await flushPromises()
     expect(
-      wrapper.get('[data-testid="route-tab"][data-path="/system/operationlog"]').text(),
+      wrapper.get('[data-testid="route-tab"][data-path="/system/operationLog"]').text(),
     ).toContain('操作日志')
   })
 
@@ -251,10 +251,10 @@ function accessTree(): PermissionMenuNode[] {
       'system',
       'navigation.system',
       page(
-        'system:operationlog:list',
-        '/system/operationlog',
-        'system/operationlog',
-        'navigation.systemOperationlog',
+        'system:operationLog:list',
+        '/system/operationLog',
+        'system/operationLog',
+        'navigation.systemOperationLog',
       ),
     ),
   ]

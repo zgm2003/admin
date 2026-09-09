@@ -26,7 +26,7 @@ type countingReadinessRepository struct {
 	delay         time.Duration
 }
 
-func (r *countingReadinessRepository) FindConfig(ctx context.Context, _ int64) (Config, error) {
+func (r *countingReadinessRepository) FindConfig(ctx context.Context) (Config, error) {
 	r.configCalls.Add(1)
 	if err := waitForReadinessTest(ctx, r.delay); err != nil {
 		return Config{}, err
@@ -39,7 +39,7 @@ func (r *countingReadinessRepository) FindConfig(ctx context.Context, _ int64) (
 	return r.config, nil
 }
 
-func (r *countingReadinessRepository) FindTemplateByScene(ctx context.Context, _ int64, _ string) (Template, error) {
+func (r *countingReadinessRepository) FindTemplateByScene(ctx context.Context, _ string) (Template, error) {
 	r.templateCalls.Add(1)
 	if err := waitForReadinessTest(ctx, r.delay); err != nil {
 		return Template{}, err
@@ -108,8 +108,7 @@ func TestVerifyCodeReadinessTwoInstancesRecoverMissingSnapshotOnce(t *testing.T)
 	repository := readyMailRepository(100 * time.Millisecond)
 	firstStore := NewVerifyCodeReadinessStore(repository, firstClient)
 	secondStore := NewVerifyCodeReadinessStore(repository, secondClient)
-	platformID := time.Now().UnixNano()
-	keys := []string{verifyCodeReadinessKey(platformID, SceneLogin), verifyCodeReadinessLoadLockKey(platformID, SceneLogin)}
+	keys := []string{verifyCodeReadinessKey(SceneLogin), verifyCodeReadinessLoadLockKey(SceneLogin)}
 	if err := firstClient.DeleteMany(context.Background(), keys); err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +123,7 @@ func TestVerifyCodeReadinessTwoInstancesRecoverMissingSnapshotOnce(t *testing.T)
 		go func(worker int) {
 			defer wait.Done()
 			<-start
-			ready, err := stores[worker%len(stores)].Current(context.Background(), platformID, SceneLogin)
+			ready, err := stores[worker%len(stores)].Current(context.Background(), SceneLogin)
 			if err != nil {
 				errorsFound <- err
 				return
@@ -145,7 +144,7 @@ func TestVerifyCodeReadinessTwoInstancesRecoverMissingSnapshotOnce(t *testing.T)
 	}
 
 	for index := 0; index < 100; index++ {
-		ready, err := stores[index%len(stores)].Current(context.Background(), platformID, SceneLogin)
+		ready, err := stores[index%len(stores)].Current(context.Background(), SceneLogin)
 		if err != nil || !ready.Ready || ready.TTLMinutes != 5 {
 			t.Fatalf("ready hit %d = %v, %v", index, ready, err)
 		}
@@ -156,23 +155,20 @@ func TestVerifyCodeReadinessTwoInstancesRecoverMissingSnapshotOnce(t *testing.T)
 }
 
 func TestVerifyCodeReadinessRejectsMissingDependencies(t *testing.T) {
-	if _, err := NewVerifyCodeReadinessStore(nil, nil).Current(context.Background(), 1, SceneLogin); err == nil {
+	if _, err := NewVerifyCodeReadinessStore(nil, nil).Current(context.Background(), SceneLogin); err == nil {
 		t.Fatal("Current accepted missing Redis and repository dependencies")
 	}
 	client := openMailReadinessRedis(t)
 	store := NewVerifyCodeReadinessStore(nil, client)
-	platformID := time.Now().UnixNano()
-	keys := []string{verifyCodeReadinessKey(platformID, SceneLogin), verifyCodeReadinessLoadLockKey(platformID, SceneLogin)}
+	keys := []string{verifyCodeReadinessKey(SceneLogin), verifyCodeReadinessLoadLockKey(SceneLogin)}
 	if err := client.DeleteMany(context.Background(), keys); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), keys) })
-	if _, err := store.Current(context.Background(), platformID, SceneLogin); err == nil {
+	if _, err := store.Current(context.Background(), SceneLogin); err == nil {
 		t.Fatal("Current accepted a missing repository")
 	}
-	mutation := VerifyCodeReadinessMutation{
-		platformID: platformID, scene: SceneLogin, priorPayload: "prior", invalidatingPayload: "invalidating",
-	}
+	mutation := VerifyCodeReadinessMutation{scene: SceneLogin, priorPayload: "prior", invalidatingPayload: "invalidating"}
 	if err := store.PublishMutation(context.Background(), mutation); err == nil {
 		t.Fatal("PublishMutation accepted a missing repository")
 	}
@@ -181,18 +177,18 @@ func TestVerifyCodeReadinessRejectsMissingDependencies(t *testing.T) {
 func TestVerifyCodeReadinessSnapshotRejectsMalformedPayloads(t *testing.T) {
 	for _, raw := range []string{
 		`{}`,
-		`{"schemaVersion":2,"state":"ready"}`,
-		`{"schemaVersion":2,"state":"ready","ready":true}`,
-		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":0}`,
-		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":61}`,
-		`{"schemaVersion":2,"state":"ready","ready":false,"ttlMinutes":5}`,
-		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":5,"extra":true}`,
-		`{"schemaVersion":2,"state":"ready","ready":true,"ready":false,"ttlMinutes":5}`,
-		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":5,"ttlMinutes":6}`,
-		`{"schemaVersion":1,"state":"ready","ready":true,"ttlMinutes":5}`,
-		`{"schemaVersion":2,"state":"invalidating","ready":false,"ttlMinutes":5,"mutationToken":"token"}`,
-		`{"schemaVersion":2,"state":"invalidating","mutationToken":""}`,
-		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":5}{"schemaVersion":2,"state":"ready","ready":false,"ttlMinutes":0}`,
+		`{"schemaVersion":3,"state":"ready"}`,
+		`{"schemaVersion":3,"state":"ready","ready":true}`,
+		`{"schemaVersion":3,"state":"ready","ready":true,"ttlMinutes":0}`,
+		`{"schemaVersion":3,"state":"ready","ready":true,"ttlMinutes":61}`,
+		`{"schemaVersion":3,"state":"ready","ready":false,"ttlMinutes":5}`,
+		`{"schemaVersion":3,"state":"ready","ready":true,"ttlMinutes":5,"extra":true}`,
+		`{"schemaVersion":3,"state":"ready","ready":true,"ready":false,"ttlMinutes":5}`,
+		`{"schemaVersion":3,"state":"ready","ready":true,"ttlMinutes":5,"ttlMinutes":6}`,
+		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":5}`,
+		`{"schemaVersion":3,"state":"invalidating","ready":false,"ttlMinutes":5,"mutationToken":"token"}`,
+		`{"schemaVersion":3,"state":"invalidating","mutationToken":""}`,
+		`{"schemaVersion":3,"state":"ready","ready":true,"ttlMinutes":5}{"schemaVersion":3,"state":"ready","ready":false,"ttlMinutes":0}`,
 	} {
 		if _, err := decodeVerifyCodeReadinessSnapshot(raw); err == nil {
 			t.Fatalf("accepted malformed readiness snapshot: %s", raw)
@@ -201,7 +197,7 @@ func TestVerifyCodeReadinessSnapshotRejectsMalformedPayloads(t *testing.T) {
 }
 
 func TestVerifyCodeReadinessSnapshotDecodesReadyWithTTL(t *testing.T) {
-	snapshot, err := decodeVerifyCodeReadinessSnapshot(`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":5}`)
+	snapshot, err := decodeVerifyCodeReadinessSnapshot(`{"schemaVersion":3,"state":"ready","ready":true,"ttlMinutes":5}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,14 +214,13 @@ func TestVerifyCodeReadinessFailsClosedWithoutPostgresFallback(t *testing.T) {
 	client := openMailReadinessRedis(t)
 	repository := readyMailRepository(0)
 	store := NewVerifyCodeReadinessStore(repository, client)
-	platformID := time.Now().UnixNano()
-	key := verifyCodeReadinessKey(platformID, SceneLogin)
+	key := verifyCodeReadinessKey(SceneLogin)
 	t.Cleanup(func() { _ = client.Delete(context.Background(), key) })
 
 	if err := client.SetString(context.Background(), key, "not-json", 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Current(context.Background(), platformID, SceneLogin); err == nil {
+	if _, err := store.Current(context.Background(), SceneLogin); err == nil {
 		t.Fatal("corrupt readiness snapshot was accepted")
 	}
 	if repository.configCalls.Load() != 0 || repository.templateCalls.Load() != 0 {
@@ -235,7 +230,7 @@ func TestVerifyCodeReadinessFailsClosedWithoutPostgresFallback(t *testing.T) {
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Current(context.Background(), platformID, SceneLogin); err == nil {
+	if _, err := store.Current(context.Background(), SceneLogin); err == nil {
 		t.Fatal("closed Redis client was accepted")
 	}
 	if repository.configCalls.Load() != 0 || repository.templateCalls.Load() != 0 {
@@ -249,21 +244,20 @@ func TestVerifyCodeReadinessMutationBlocksOldSnapshotAcrossInstances(t *testing.
 	repository := readyMailRepository(0)
 	firstStore := NewVerifyCodeReadinessStore(repository, firstClient)
 	secondStore := NewVerifyCodeReadinessStore(repository, secondClient)
-	platformID := time.Now().UnixNano()
-	keys := []string{verifyCodeReadinessKey(platformID, SceneLogin), verifyCodeReadinessLoadLockKey(platformID, SceneLogin)}
+	keys := []string{verifyCodeReadinessKey(SceneLogin), verifyCodeReadinessLoadLockKey(SceneLogin)}
 	if err := firstClient.DeleteMany(context.Background(), keys); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = firstClient.DeleteMany(context.Background(), keys) })
 
-	if ready, err := firstStore.Current(context.Background(), platformID, SceneLogin); err != nil || !ready.Ready {
+	if ready, err := firstStore.Current(context.Background(), SceneLogin); err != nil || !ready.Ready {
 		t.Fatalf("initial readiness = %v, %v", ready, err)
 	}
-	mutation, err := firstStore.BeginMutation(context.Background(), platformID, SceneLogin)
+	mutation, err := firstStore.BeginMutation(context.Background(), SceneLogin)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := secondStore.Current(context.Background(), platformID, SceneLogin); err == nil {
+	if _, err := secondStore.Current(context.Background(), SceneLogin); err == nil {
 		t.Fatal("second instance returned an old ready snapshot during mutation")
 	}
 
@@ -271,7 +265,7 @@ func TestVerifyCodeReadinessMutationBlocksOldSnapshotAcrossInstances(t *testing.
 	if err := firstStore.PublishMutation(context.Background(), mutation); err != nil {
 		t.Fatal(err)
 	}
-	if ready, err := secondStore.Current(context.Background(), platformID, SceneLogin); err != nil || ready.Ready {
+	if ready, err := secondStore.Current(context.Background(), SceneLogin); err != nil || ready.Ready {
 		t.Fatalf("published disabled readiness = %v, %v", ready, err)
 	}
 }
@@ -279,16 +273,15 @@ func TestVerifyCodeReadinessMutationBlocksOldSnapshotAcrossInstances(t *testing.
 func TestVerifyCodeReadinessRollbackRequiresMutationOwner(t *testing.T) {
 	client := openMailReadinessRedis(t)
 	store := NewVerifyCodeReadinessStore(readyMailRepository(0), client)
-	platformID := time.Now().UnixNano()
-	keys := []string{verifyCodeReadinessKey(platformID, SceneLogin), verifyCodeReadinessLoadLockKey(platformID, SceneLogin)}
+	keys := []string{verifyCodeReadinessKey(SceneLogin), verifyCodeReadinessLoadLockKey(SceneLogin)}
 	if err := client.DeleteMany(context.Background(), keys); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), keys) })
-	if _, err := store.Current(context.Background(), platformID, SceneLogin); err != nil {
+	if _, err := store.Current(context.Background(), SceneLogin); err != nil {
 		t.Fatal(err)
 	}
-	mutation, err := store.BeginMutation(context.Background(), platformID, SceneLogin)
+	mutation, err := store.BeginMutation(context.Background(), SceneLogin)
 	if err != nil {
 		t.Fatal(err)
 	}

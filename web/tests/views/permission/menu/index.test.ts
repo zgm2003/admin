@@ -18,7 +18,7 @@ import type {
   MenuCatalogResponse,
   UpdateMenuInput,
 } from '@/api/permission/menu'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import { appI18n, setLocale } from '@/i18n'
 import { AppDIcon } from '@/components/AppDIcon'
 import { IconSelect } from '@/components/IconSelect'

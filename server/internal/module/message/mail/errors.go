@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/jackc/pgx/v5/pgconn"
+	"gorm.io/gorm"
 )
 
 // CodeRecipientDenied marks a mail-specific business rejection where the
@@ -61,4 +64,22 @@ func rateLimitUnavailable(err error) error {
 		MessageKey: i18n.KeyMailRateLimitUnavailable,
 		Cause:      err,
 	}
+}
+
+func wrapRepo(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return notFound(err)
+	}
+	if isUniqueViolation(err) {
+		return conflict(err)
+	}
+	return dependency(fmt.Errorf("mail repository: %w", err))
+}
+
+func isUniqueViolation(err error) bool {
+	var postgresError *pgconn.PgError
+	return errors.As(err, &postgresError) && postgresError.Code == "23505"
 }

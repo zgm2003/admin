@@ -10,7 +10,7 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
-	"admin/server/internal/module/system/operationlog"
+	"admin/server/internal/module/system/operationLog"
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
 

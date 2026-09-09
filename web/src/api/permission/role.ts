@@ -1,4 +1,4 @@
-import { isYesNo, type YesNo } from '@/enums/yes-no'
+import { isYesNo, type YesNo } from '@/enums/yesNo'
 import { request } from '@/utils/request'
 import type { PageRequest, PageResult } from '@/types/pagination'
 import { ProtocolError } from '@/types/http'

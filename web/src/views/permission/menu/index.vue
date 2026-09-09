@@ -13,7 +13,7 @@ import {
   rebuildAccessCache,
 } from '@/api/permission/menu'
 import type { ManagedMenuNode, ManagedMenuType, MenuPlatformOption } from '@/api/permission/menu'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
 import MenuFormDialog from './components/MenuFormDialog/index.vue'
 import MenuTreeTable from './components/MenuTreeTable/index.vue'
@@ -26,8 +26,8 @@ import {
   isMenuFormSubmittable,
   menuCodeError,
   updateMenuInput,
-} from './menu-form'
-import { menuParentOptions } from './menu-tree'
+} from './menuForm'
+import { menuParentOptions } from './menuTree'
 
 const { t } = useI18n()
 const access = usePermissionStore()

@@ -2,12 +2,12 @@
 import { CirclePlus } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
-import type { CosConfig } from '@/api/storage/cosconfig'
+import type { CosConfig } from '@/api/storage/cosConfig'
 import { AppSearch } from '@/components/AppSearch'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import { AppTable } from '@/components/AppTable'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 
 const props = defineProps<{
   columns: TableColumn<CosConfig>[]
@@ -81,7 +81,7 @@ const { t } = useI18n()
           {{ t('storage.edit') }}
         </el-button>
         <el-button
-          v-if="props.can('storage:cosconfig:test')"
+          v-if="props.can('storage:cosConfig:test')"
           text
           type="primary"
           @click="emit('test', row)"
@@ -89,7 +89,7 @@ const { t } = useI18n()
           {{ t('storage.test') }}
         </el-button>
         <el-button
-          v-if="props.can('storage:cosconfig:status')"
+          v-if="props.can('storage:cosConfig:status')"
           text
           type="warning"
           @click="emit('status', row)"
@@ -97,7 +97,7 @@ const { t } = useI18n()
           {{ row.isEnabled === YesNo.Yes ? t('storage.disable') : t('storage.enable') }}
         </el-button>
         <el-button
-          v-if="props.can('storage:cosconfig:delete')"
+          v-if="props.can('storage:cosConfig:delete')"
           text
           type="danger"
           @click="emit('delete', row)"

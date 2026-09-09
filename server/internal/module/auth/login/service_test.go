@@ -13,10 +13,10 @@ import (
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/state"
 	messagemail "admin/server/internal/module/message/mail"
-	"admin/server/internal/module/permission/authplatform"
+	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
-	"admin/server/internal/module/user/loginlog"
+	"admin/server/internal/module/user/loginLog"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
@@ -944,7 +944,7 @@ type fakeVerifyCodeSender struct {
 	sendInput    messagemail.EmailVerifyCodeInput
 }
 
-func (f *fakeVerifyCodeSender) VerifyCodeReady(context.Context, int64, string) (messagemail.VerifyCodeReadiness, error) {
+func (f *fakeVerifyCodeSender) VerifyCodeReady(context.Context, string) (messagemail.VerifyCodeReadiness, error) {
 	return f.readiness, f.readyErr
 }
 

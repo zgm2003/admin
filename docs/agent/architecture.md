@@ -28,28 +28,33 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 
 业务命名是跨层导航契约：先确认业务归属并校正后端模块，前端 Views/API 再统一使用该业务域与单数资源名，
 不再使用业务域倒置或复数资源别名；现有后端目录本身不是业务归属的最终依据。
-Go 复合模块目录保持小写紧凑形式，数据库使用 snake_case；集合字段仍按实际语义使用复数。
+前后端复合模块目录使用 lower camel case，数据库使用 snake_case；集合字段仍按实际语义使用复数。
 
 | Views（省略 index.vue） | API / 后端 module | PostgreSQL 主表 |
 | --- | --- | --- |
 | `user/account` | `user/account` | `user_account` |
 | `user/profile` | `user/profile`（账户写入协作 `user/account`） | `user_profile`、`user_account` |
 | `user/session` | `user/session` | `user_session` |
-| `user/loginlog` | `user/loginlog` | `user_login_log` |
-| `permission/authplatform` | `permission/authplatform` | `permission_auth_platform` |
+| `user/loginLog` | `user/loginLog` | `user_login_log` |
+| `permission/authPlatform` | `permission/authPlatform` | `permission_auth_platform` |
 | `permission/menu` | `permission/menu` | `permission_menu` |
 | `permission/role` | `permission/role` | `permission_role` |
 | `message/mail` | `message/mail` | `message_mail_*` |
-| `storage/object` | `storage/cosconfig`、`storage/uploadrule`、`storage/upload` | `storage_cos_config`、`storage_upload_rule*` |
-| `system/operationlog` | `system/operationlog` | `system_operation_log` |
+| `storage/object` | `storage/cosConfig`、`storage/uploadRule`、`storage/upload` | `storage_cos_config`、`storage_upload_rule*` |
+| `system/operationLog` | `system/operationLog` | `system_operation_log` |
+
+复合代码模块统一使用 lower camel case；数据库仍使用 snake_case，HTTP API 仍使用小写资源段。Mail 是聚合
+页面，后端按表资源拆为 `message/mail/config`、`template`、`log`、`logVerification`、`rateLimitPolicy`、
+`recipientRule`；根 `message/mail` 只保留发送编排、Provider、Limiter、Readiness、管理测试和路由聚合。
+`logVerification` 是 `log` 详情的下属持久化模块，不单独创建页面或公开 CRUD。
 
 菜单 page 的 `componentPath` 精确对应 Views 页面，`path = "/" + componentPath`；菜单 `code` 与页面和动作
 权限各自对应，`i18nKey` 必须在中英文翻译中可解析。公共登录/找回密码页按静态认证路由处理，不强行创建
 菜单或独立数据库表。关联表、聚合页和无表模块允许一对多/多对一映射，不制造占位模块满足表面一致。
 
 认证平台归属“权限与认证”：管理 API 为 `/api/admin/v1/permission/authplatform`，页面/动作权限为
-`permission:authplatform:view/list/create/update/status/delete`（各自独立声明，不自动推导）。导航翻译使用
-`navigation.permissionAuthplatform`，页面文案使用 `permission.authplatform.*`。`auth/login` 消费平台策略，
+`permission:authPlatform:view/list/create/update/status/delete`（各自独立声明，不自动推导）。导航翻译使用
+`navigation.permissionAuthPlatform`，页面文案使用 `permission.authPlatform.*`。`auth/login` 消费平台策略，
 公共策略端点 `/api/v1/auth/policy` 不变；前端 `src/auth/platform.ts` 只是当前客户端平台标识，不是管理模块。
 本次归属改名不改变平台 ID、策略内容、策略版本或 `auth:policy:v2:*` Redis key，不重置现有会话。
 
@@ -68,6 +73,12 @@ Go 复合模块目录保持小写紧凑形式，数据库使用 snake_case；集
 
 ## 邮件规则所有权
 
+腾讯云 SES 是全系统唯一邮件通道。`message_mail_config` 是全局唯一活动配置，`message_mail_template` 按
+`scene` 全局唯一，`message_mail_recipient_rule` 是全局收件策略；三者不持有认证平台 `platform_id`。只有
+`message_mail_log` 和 `message_mail_log_verification` 保留来源平台，用于审计、验证码隔离和发送状态更新。
+Mail readiness 只按场景缓存，配置或模板变更一次性失效全局场景状态；认证平台只参与登录方式开关、发送日志
+归属和发送额度 key。缺失认证上下文不得回退到固定平台。当前只有 COS 上传配置允许按认证平台维护独立配置。
+
 Mail 管理的限流策略与 `message_mail_config.ttl_minutes` 是所有邮件发送场景的共同规则来源，Auth 不新增
 固定重发间隔、验证码 TTL 或独立 cooldown。邮箱额度按同一平台、同一规范化邮箱共享，验证码内容仍按场景
 隔离；只保留每分钟、每 10 分钟两条邮箱策略，管理测试发送直接共用，不叠加场景、IP 或管理员专属额度。
@@ -83,20 +94,20 @@ Mail 管理的限流策略与 `message_mail_config.ttl_minutes` 是所有邮件�
 
 ### 本轮收口的具体约束
 
-- 冷缓存重建使用 `shared/cachefill`：按 Auth Session、Access、Menu Version 三个 scope 独立限制，
+- 冷缓存重建使用 `shared/cacheFill`：按 Auth Session、Access、Menu Version 三个 scope 独立限制，
   每目标仅一个跨实例持有者、每 scope 32 并发/128 次启动每秒；数据库工作期限从申请租约起算 4 秒，
   Redis 租约 6 秒。缓存命中不走源加载；失败闭合，有界等待，不提供内存或 PostgreSQL 故障兜底。
   “启动次数”不等于 SQL 数量，一次权限重建可能执行多条查询；尚无百万用户实测结论。
 - 平台菜单版本存在 `permission_auth_platform.menu_version`，Redis 使用 `authz:menu-state:v1:<platformID>`。
   菜单写入只锁定平台版本行和该平台菜单，在同一数据库事务递增菜单版本，沿 token lease 发布/回滚；
   不扫描用户表，不逐用户递增授权版本，不更改认证 `policy_version` 或撤销会话。用户/角色授权仍用用户版本。
-- Access 每次使用本地缓存前确认用户授权状态和平台菜单状态；Redis v7 快照键同时包含两种版本，
+- Access 每次使用本地缓存前确认用户授权状态和平台菜单状态；Redis v8 快照键同时包含两种版本，
   发布 Lua 同时校验两者，旧发布者不能把旧菜单写成当前快照。重建接口返回 `rebuiltPlatforms`。
 - Mail 的 `resendAfterSeconds` 来自两窗口原子预占后的额度，0 为合法值；不再把短窗口长度当独立冷却时间。
   返回值是额度快照，其他并发发送仍可能改变可用性，最终以服务端共同额度判断为准。
 - 上述菜单版本机制依赖 `2026-09-08-menu-catalog-version.sql`，业务库执行状态以 STATUS 为准；不得启动时迁移。
 - Access 的 page/action 授权不互相派生：直接 action 只进入 `permissionCodes`；直接 page 才进入 `menuTree`，
-  且只为页面渲染补 directory 祖先。当前快照 namespace v7 隔离旧的 action 自动补 page 语义。
+  且只为页面渲染补 directory 祖先。当前快照 namespace v8 隔离旧的 action 自动补 page 语义和旧模块标识。
 - `user:profile:view` 是 `parent_id=NULL` 的隐藏根 page。Admin 邮箱验证码登录在注册开启时创建
   `registered_user`；该角色直接授权 profile page、三个 profile/password action 与 upload action。
 

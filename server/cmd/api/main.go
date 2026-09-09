@@ -19,16 +19,21 @@ import (
 	"admin/server/internal/module/auth/state"
 	"admin/server/internal/module/health"
 	messagemail "admin/server/internal/module/message/mail"
+	mailconfig "admin/server/internal/module/message/mail/config"
+	maillog "admin/server/internal/module/message/mail/log"
+	ratelimitpolicy "admin/server/internal/module/message/mail/rateLimitPolicy"
+	recipientrule "admin/server/internal/module/message/mail/recipientRule"
+	mailtemplate "admin/server/internal/module/message/mail/template"
 	"admin/server/internal/module/permission/access"
-	"admin/server/internal/module/permission/authplatform"
+	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/permission/state"
-	"admin/server/internal/module/storage/cosconfig"
-	"admin/server/internal/module/storage/uploadrule"
-	"admin/server/internal/module/system/operationlog"
+	"admin/server/internal/module/storage/cosConfig"
+	"admin/server/internal/module/storage/uploadRule"
+	"admin/server/internal/module/system/operationLog"
 	account "admin/server/internal/module/user/account"
-	"admin/server/internal/module/user/loginlog"
+	"admin/server/internal/module/user/loginLog"
 	profile "admin/server/internal/module/user/profile"
 	usersession "admin/server/internal/module/user/session"
 	"admin/server/internal/queue"
@@ -59,6 +64,11 @@ type routerDependencies struct {
 	OperationLog      *operationlog.Handler
 	LoginLog          *loginlog.Handler
 	Mail              *messagemail.Handler
+	MailConfig        *mailconfig.Handler
+	MailTemplate      *mailtemplate.Handler
+	MailLog           *maillog.Handler
+	MailRateLimit     *ratelimitpolicy.Handler
+	MailRecipientRule *recipientrule.Handler
 	OperationEnqueuer operationlog.Enqueuer
 	SessionAdmin      *usersession.SessionAdminHandler
 	AuthOrigin        gin.HandlerFunc
@@ -151,11 +161,20 @@ func run(logger *slog.Logger) error {
 	cosConfigService := cosconfig.NewService(cosconfig.NewRepository(postgres.GORM), keys, cosClient)
 	uploadRuleService := uploadrule.NewService(uploadrule.NewRepository(postgres.GORM), keys, cosClient)
 	loginLogService := loginlog.NewService(loginlog.NewRepository(postgres.GORM))
-	mailRepository := messagemail.NewRepository(postgres.GORM)
+	mailStores := messagemail.NewStores(postgres.GORM)
 	mailLimiter := messagemail.NewRedisLimiter(redisClient.UniversalClient())
-	mailRateLimitStore := messagemail.NewRateLimitPolicyStore(mailRepository, redisClient)
-	mailService := messagemail.NewService(mailRepository, keys, storagemail.NewTencentSESClient(nil), messagemail.NewRuleService(mailRepository), mailLimiter, mailRateLimitStore)
-	mailService.SetVerifyCodeReadinessStore(messagemail.NewVerifyCodeReadinessStore(mailRepository, redisClient))
+	mailRateLimitRepository := ratelimitpolicy.NewRepository(postgres.GORM)
+	mailRateLimitStore := ratelimitpolicy.NewStore(mailRateLimitRepository, redisClient)
+	mailRateLimitService := ratelimitpolicy.NewService(mailRateLimitRepository, mailRateLimitStore)
+	mailReadinessStore := messagemail.NewVerifyCodeReadinessStore(mailStores, redisClient)
+	mailReadinessCoordinator := messagemail.NewReadinessCoordinator(mailReadinessStore)
+	mailRecipientRuleRepository := mailStores.RecipientRule
+	mailRecipientRuleService := recipientrule.NewService(mailRecipientRuleRepository)
+	mailService := messagemail.NewService(mailStores, keys, storagemail.NewTencentSESClient(nil), mailRecipientRuleService, mailLimiter, mailRateLimitStore)
+	mailService.SetVerifyCodeReadinessStore(mailReadinessStore)
+	mailConfigService := mailconfig.NewService(mailStores.Config, keys, mailReadinessCoordinator)
+	mailTemplateService := mailtemplate.NewService(mailStores.Template, mailReadinessCoordinator)
+	mailLogService := maillog.NewService(mailStores.Log, mailStores.LogVerification, keys)
 	verificationStore := auth.NewVerificationCodeStore(redisClient, keys.VerificationCodeHMACKey())
 	authService.SetVerifyCodeSender(mailService)
 	authService.SetVerificationCodeStore(verificationStore)
@@ -189,6 +208,11 @@ func run(logger *slog.Logger) error {
 		OperationLog:      operationlog.NewHandler(operationLogService),
 		LoginLog:          loginlog.NewHandler(loginLogService),
 		Mail:              messagemail.NewHandler(mailService),
+		MailConfig:        mailconfig.NewHandler(mailConfigService),
+		MailTemplate:      mailtemplate.NewHandler(mailTemplateService),
+		MailLog:           maillog.NewHandler(mailLogService),
+		MailRateLimit:     ratelimitpolicy.NewHandler(mailRateLimitService),
+		MailRecipientRule: recipientrule.NewHandler(mailRecipientRuleService),
 		OperationEnqueuer: operationLogEnqueuer,
 		SessionAdmin: usersession.NewSessionAdminHandler(sessionService, func(context *gin.Context) (usersession.Actor, bool) {
 			identity, ok := auth.IdentityFromContext(context)
@@ -259,7 +283,13 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	uploadrule.RegisterCredentialRoute(sharedRoutes, dependencies.UploadRule, dependencies.Authenticate, dependencies.RequirePermission)
 	loginlog.RegisterRoutes(adminRoutes, dependencies.LoginLog, dependencies.Authenticate, dependencies.RequirePermission)
 	if dependencies.Mail != nil {
-		messagemail.RegisterRoutes(adminRoutes, dependencies.Mail, dependencies.Authenticate, dependencies.RequirePermission)
+		mailRoutes := adminRoutes.Group("/message/mail")
+		messagemail.RegisterRoutes(mailRoutes, dependencies.Mail, dependencies.Authenticate, dependencies.RequirePermission)
+		mailconfig.RegisterRoutes(mailRoutes, dependencies.MailConfig, dependencies.Authenticate, dependencies.RequirePermission)
+		mailtemplate.RegisterRoutes(mailRoutes, dependencies.MailTemplate, dependencies.Authenticate, dependencies.RequirePermission)
+		maillog.RegisterRoutes(mailRoutes, dependencies.MailLog, dependencies.Authenticate, dependencies.RequirePermission)
+		ratelimitpolicy.RegisterRoutes(mailRoutes, dependencies.MailRateLimit, dependencies.Authenticate, dependencies.RequirePermission)
+		recipientrule.RegisterRoutes(mailRoutes, dependencies.MailRecipientRule, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	operationlog.RegisterRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
 	usersession.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)

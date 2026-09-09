@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import type { MenuIconName } from '@/icons/menu-icons'
+import type { MenuIconName } from '@/icons/menuIcons'
 
 interface AppDIconSharedProps {
   size?: string | number

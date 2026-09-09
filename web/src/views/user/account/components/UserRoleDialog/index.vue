@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { AppDialog } from '@/components/AppDialog'
-import { YesNo } from '@/enums/yes-no'
+import { YesNo } from '@/enums/yesNo'
 import type { UserRolesResponse, UserRoleSummary } from '@/api/user/account'
 
 const props = defineProps<{

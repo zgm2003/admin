@@ -1,6 +1,6 @@
 import type { ManagedMenuType } from '@/api/permission/menu'
-import type { YesNo } from '@/enums/yes-no'
-import type { MenuIconName } from '@/icons/menu-icons'
+import type { YesNo } from '@/enums/yesNo'
+import type { MenuIconName } from '@/icons/menuIcons'
 
 export interface MenuFormState {
   parentId: number | null
