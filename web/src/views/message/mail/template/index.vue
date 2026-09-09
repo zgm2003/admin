@@ -190,19 +190,34 @@ async function saveTemplate(): Promise<void> {
               ><el-input-number v-model="form.tencentTemplateId" :min="1" :step="1" /></el-form-item
           ></el-col>
           <el-col :xs="24" :sm="12"
-            ><el-form-item :label="t('mail.name')"><el-input v-model="form.name" /></el-form-item
+            ><el-form-item :label="t('mail.name')">
+              <el-input v-model="form.name" :placeholder="t('mail.templateNamePlaceholder')" />
+            </el-form-item
           ></el-col>
           <el-col :xs="24" :sm="12"
-            ><el-form-item :label="t('mail.subject')"
-              ><el-input v-model="form.subject" /></el-form-item
+            ><el-form-item :label="t('mail.subject')">
+              <el-input v-model="form.subject" :placeholder="t('mail.subjectPlaceholder')" />
+            </el-form-item
           ></el-col>
           <el-col :xs="24" :sm="12"
-            ><el-form-item :label="t('mail.variables')"
-              ><el-input v-model="variables" type="textarea" :rows="6" /></el-form-item
+            ><el-form-item :label="t('mail.variables')">
+              <el-input
+                v-model="variables"
+                type="textarea"
+                :rows="6"
+                :placeholder="t('mail.variablesPlaceholder')"
+              />
+            </el-form-item
           ></el-col>
           <el-col :xs="24" :sm="12"
-            ><el-form-item :label="t('mail.exampleVariables')"
-              ><el-input v-model="examples" type="textarea" :rows="6" /></el-form-item
+            ><el-form-item :label="t('mail.exampleVariables')">
+              <el-input
+                v-model="examples"
+                type="textarea"
+                :rows="6"
+                :placeholder="t('mail.examplesPlaceholder')"
+              />
+            </el-form-item
           ></el-col>
         </el-row>
       </el-form>

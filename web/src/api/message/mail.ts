@@ -40,7 +40,9 @@ export interface MailTemplate {
 export interface MailLog {
   id: number
   platformId: number
+  platform: string
   userId: number | null
+  username: string
   scene: string
   templateId: number
   toEmail: string
@@ -230,7 +232,9 @@ export function parseMailTemplate(value: unknown): MailTemplate {
 const logKeys = [
   'id',
   'platformId',
+  'platform',
   'userId',
+  'username',
   'scene',
   'templateId',
   'toEmail',
@@ -251,7 +255,9 @@ export function parseMailLog(value: unknown): MailLog {
   if (
     !integer(data.id) ||
     !integer(data.platformId) ||
+    !text(data.platform) ||
     (data.userId !== null && !integer(data.userId)) ||
+    !text(data.username) ||
     !text(data.scene) ||
     !integer(data.templateId) ||
     !text(data.toEmail) ||
@@ -270,7 +276,9 @@ export function parseMailLog(value: unknown): MailLog {
   return {
     id: expectInteger(data.id, 'mail log.id'),
     platformId: expectInteger(data.platformId, 'mail log.platformId'),
+    platform: expectString(data.platform, 'mail log.platform'),
     userId: data.userId === null ? null : expectInteger(data.userId, 'mail log.userId'),
+    username: expectString(data.username, 'mail log.username'),
     scene: expectString(data.scene, 'mail log.scene'),
     templateId: expectInteger(data.templateId, 'mail log.templateId'),
     toEmail: expectString(data.toEmail, 'mail log.toEmail'),
@@ -433,7 +441,17 @@ export function updateMailTemplateStatus(id: number, isEnabled: YesNo) {
     data: { isEnabled },
   }).then(parseMailTemplateStatus)
 }
-export function listMailLogs(params: { page: number; pageSize: number }) {
+export interface MailLogQuery {
+  page: number
+  pageSize: number
+  platform?: string
+  toEmail?: string
+  scene?: string
+  status?: string
+  from?: string
+  to?: string
+}
+export function listMailLogs(params: MailLogQuery) {
   return request<unknown>({ method: 'GET', url: '/api/admin/v1/message/mail/log', params }).then(
     parseMailLogPage,
   )

@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import * as mailApi from '@/api/message/mail'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
+import type { MailLogFilter } from './log/index.vue'
 import MailConfigTab from './config/index.vue'
 import MailLogTab from './log/index.vue'
 import MailRateLimitTab from './rateLimitPolicy/index.vue'
@@ -37,6 +38,13 @@ const rateLimitPolicies = ref<mailApi.MailRateLimitPolicy[]>([])
 const logPage = ref(1)
 const logPageSize = ref(20)
 const logTotal = ref(0)
+const logFilter = ref<MailLogFilter>({
+  platform: '',
+  toEmail: '',
+  scene: '',
+  status: '',
+  timeRange: [],
+})
 const can = (code: string) => access.hasPermission(code)
 const canList = computed(() => can('message:mail:list'))
 const visibleTabs = computed(() => [
@@ -79,9 +87,19 @@ async function loadRateLimitPolicies(): Promise<void> {
 }
 
 async function loadLogs(): Promise<void> {
+  // The scene filter mirrors the backend template catalog; load it once so the
+  // log tab does not rely on a frontend-only scene list.
+  if (templates.value.length === 0) await loadTemplates()
+  const filter = logFilter.value
+  const [from, to] = filter.timeRange
   const result = await mailApi.listMailLogs({
     page: logPage.value,
     pageSize: logPageSize.value,
+    ...(filter.platform.trim() === '' ? {} : { platform: filter.platform.trim() }),
+    ...(filter.toEmail.trim() === '' ? {} : { toEmail: filter.toEmail.trim() }),
+    ...(filter.scene === '' ? {} : { scene: filter.scene }),
+    ...(filter.status === '' ? {} : { status: filter.status }),
+    ...(filter.timeRange.length === 0 ? {} : { from, to }),
   })
   logs.value = result.list
   logTotal.value = result.total
@@ -107,6 +125,12 @@ async function loadActive(): Promise<void> {
 function changeLogPage(next: { currentPage: number; pageSize: number }): void {
   logPage.value = next.currentPage
   logPageSize.value = next.pageSize
+  void loadLogs()
+}
+
+function searchLogs(filter: MailLogFilter): void {
+  logFilter.value = filter
+  logPage.value = 1
   void loadLogs()
 }
 
@@ -158,6 +182,7 @@ watch(
         <MailLogTab
           v-else-if="tab.name === 'logs'"
           :logs="logs"
+          :scenes="templates"
           :total="logTotal"
           :page="logPage"
           :page-size="logPageSize"
@@ -165,6 +190,7 @@ watch(
           :can-delete="can('message:mail:log:delete')"
           @refresh="loadLogs"
           @page-change="changeLogPage"
+          @search="searchLogs"
         />
         <MailRuleTab
           v-else-if="tab.name === 'rules'"

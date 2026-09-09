@@ -255,7 +255,9 @@ describe('mail service page', () => {
         {
           id: 9,
           platformId: 1,
-          userId: null,
+          platform: 'admin',
+          userId: 169,
+          username: 'tester',
           scene: 'login',
           templateId: 1,
           toEmail: '2093146753@qq.com',
@@ -279,7 +281,9 @@ describe('mail service page', () => {
       log: {
         id: 9,
         platformId: 1,
-        userId: null,
+        platform: 'admin',
+        userId: 169,
+        username: 'tester',
         scene: 'login',
         templateId: 1,
         toEmail: '2093146753@qq.com',
@@ -319,8 +323,10 @@ describe('mail service page', () => {
       list: [
         {
           id: 10,
-          platformId: 1,
+          platformId: 2,
+          platform: 'canvas',
           userId: null,
+          username: '',
           scene: 'login',
           templateId: 1,
           toEmail: 'pending@example.com',
@@ -346,6 +352,43 @@ describe('mail service page', () => {
 
     expect(wrapper.text()).toContain('发送时间操作')
     expect(wrapper.text()).toContain('-')
+    expect(wrapper.text()).toContain('平台')
+    expect(wrapper.text()).toContain('canvas')
+  })
+
+  it('sends delivery log filters through the log query', async () => {
+    const wrapper = mountPage(['message:mail:list', 'message:mail:detail'])
+    await flushPromises()
+    await selectTab(wrapper, '发送日志')
+    expect(mailApi.listMailLogs).toHaveBeenLastCalledWith({ page: 1, pageSize: 20 })
+
+    await wrapper.get('[data-testid="mail-log-platform"]').setValue(' canvas')
+    await wrapper.get('[data-testid="mail-log-email"]').setValue('user@example.com')
+    wrapper.findComponent({ name: 'AppSearch' }).vm.$emit('query', {
+      platform: 'canvas',
+      toEmail: 'user@example.com',
+      scene: 'login',
+      status: '',
+      timeRange: [],
+    })
+    await flushPromises()
+    expect(mailApi.listMailLogs).toHaveBeenLastCalledWith({
+      page: 1,
+      pageSize: 20,
+      platform: 'canvas',
+      toEmail: 'user@example.com',
+      scene: 'login',
+    })
+
+    wrapper.findComponent({ name: 'ElPagination' }).vm.$emit('current-change', 2)
+    await flushPromises()
+    expect(mailApi.listMailLogs).toHaveBeenLastCalledWith({
+      page: 2,
+      pageSize: 20,
+      platform: 'canvas',
+      toEmail: 'user@example.com',
+      scene: 'login',
+    })
   })
 
   it('shows the rate limit tab only with list permission and does not fetch it eagerly', async () => {

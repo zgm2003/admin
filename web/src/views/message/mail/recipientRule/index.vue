@@ -190,10 +190,27 @@ async function saveRule(): Promise<void> {
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item :label="t('mail.rule')"><el-input v-model="form.pattern" /></el-form-item>
-        <el-form-item :label="t('mail.name')"><el-input v-model="form.name" /></el-form-item>
+        <el-form-item :label="t('mail.rule')">
+          <el-input
+            v-model="form.pattern"
+            :placeholder="
+              form.scope === 'email'
+                ? t('mail.rulePatternEmailPlaceholder')
+                : t('mail.rulePatternDomainPlaceholder')
+            "
+            data-testid="mail-rule-pattern"
+          />
+        </el-form-item>
+        <el-form-item :label="t('mail.name')">
+          <el-input v-model="form.name" :placeholder="t('mail.ruleNamePlaceholder')" />
+        </el-form-item>
         <el-form-item :label="t('mail.remark')">
-          <el-input v-model="form.remark" type="textarea" :rows="3" />
+          <el-input
+            v-model="form.remark"
+            type="textarea"
+            :rows="3"
+            :placeholder="t('mail.ruleRemarkPlaceholder')"
+          />
         </el-form-item>
         <el-form-item :label="t('mail.enabled')">
           <el-switch

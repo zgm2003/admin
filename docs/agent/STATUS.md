@@ -3,6 +3,76 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## 操作日志密码 action 归属修正（2026-09-09）
+
+- 维护者确认：改密操作的 operationLog action 应归属 user 域（路由 `/api/admin/v1/user/password`、
+  权限码 `user:password:update`）。`operationLog/rules.go` 中 profile/password 两条的 `module="account"`
+  是 09-08 统一 user 域时漏改的历史遗留。已修正：password 规则改为 `module=user, action=user.password.update`
+  （动词与权限码 `:update` 对齐），profile 规则 module 同步改为 `user`。
+- 前端 i18n 新增 `operationLog.actions.user.password.update`，**保留** `account.password.change` 旧键——
+  数据库已存审计行的 action 仍是旧值，保留键使历史日志继续显示中文；后端测试与前端测试同步断言
+  新旧两值。
+- 验证：后端 operationLog 包测试全过（含规则匹配断言）、`gofmt`/`vet`/`build` 通过；前端
+  operationLog + mail Vitest 19/19、`typecheck`、`lint` 通过。**需重启 API** 后新写入的操作日志才使用
+  新 action/module。
+
+## 操作日志翻译补齐与发送日志中文化（2026-09-09）
+
+- 操作日志 action 翻译补齐：后端 `operationLog/rules.go` 共 44 条规则，前端 i18n 缺失 mail 全部
+  12 个 action 键，且 `account.password.change`（后端）与 `user.password.change`（旧 i18n 键）不匹配
+  ——页面 `actionLabel` 机制本就支持（`te` 回退原始码），只是键不全导致英文直出。已补齐 mail 12 键、
+  修正密码键名；测试补 `编辑邮件配置`/`修改密码` 断言。
+- 发送日志筛选场景下拉改为接口数据：`loadLogs` 首次进入日志页签时加载模板目录
+  （`message/mail/template`），场景下拉与表格/详情场景列均显示模板 `name`（如“登录验证码”）而非
+  前端写死的 scene 枚举；删除 4 个前端场景死键。
+- 发送日志状态中文化：表格状态 tag 与详情状态统一显示 `已发送/发送中/发送失败`
+  （未知状态回退原始码），与筛选下拉一致。
+- 验证：mail + operationLog + AppSearch 定向 Vitest 29/29；`typecheck`、`lint`、
+  `check:architecture`（0 findings）通过。
+
+## AppSearch 时间范围清空修复与宽度调整（2026-09-09）
+
+- 修复公共组件 `AppSearch` 的 date-range 清空缺陷：`el-date-picker` clearable 点击后 emit `null`，
+  `setSearchValue` 的 `normalizeValue` 将 null 判为无效直接 return，旧时间范围永远留在表单里且
+  `model-value` 回弹——用户无法清空。现在 date-range 分支把 null/undefined 映射为空数组并 emit。
+  该缺陷影响所有使用 date-range 的页面（session/loginLog/operationLog/mail log），修复后清空立即生效。
+- 邮件发送日志时间范围筛选宽度 340 → 420（datetimerange 两个日期时间输入显示不全）。
+- 新增 `web/tests/components/AppSearch/index.test.ts`（失败测试先行：清空事件映射为 `[]`）。
+- 验证：AppSearch + mail 定向 Vitest 3 文件 25/25；AppSearch 消费方回归（session/loginLog/
+  operationLog/account）3 文件 22/22；`typecheck`、`lint`、`check:architecture` 通过。
+
+## 邮件发送日志筛选、关联用户与表单提示（2026-09-09）
+
+- 发送日志新增筛选：后端 `message/mail/log` 支持 `platform`（平台编码前缀）、`toEmail`（收件邮箱前缀）、
+  `scene`、`status` 精确筛选与 `from`/`to`（created_at，RFC3339Nano）时间范围；Handler 采用 loginLog 同款
+  白名单 query 解析（重复参数拒绝、长度上限、from<=to 校验）。LIKE 统一转义并加尾部通配。
+- 日志响应新增 `username`（LEFT JOIN `user_account`，软删用户与无关联显示 `-`）：业务邮件为收件用户，
+  管理测试为发起测试的操作员——前端表格新增"关联用户"列并在详情展示。
+- 前端日志页签接入 `AppSearch`（平台/邮箱/场景/状态/时间范围，场景与状态为 el-select-v2）；筛选值由
+  子组件规范化后 emit 给聚合页，聚合页持有筛选状态并在查询时重置页码；翻页保留筛选。
+- 模板与收件规则表单补齐 placeholder（名称/主题/变量 JSON/规则值/备注，规则值按 email/domain 动态
+  提示）；vue-i18n 消息中的 `@` 与 `{}` 需按字面量转义或避开（本次踩坑：`user@example.com` 触发
+  Invalid linked format）。
+- 验证：mail 全部子包 `go test -count=1` 通过、log 包 `-race` 通过、`gofmt`/`go vet`/`go build` 通过；
+  前端 `typecheck`、`lint`、`check:architecture`（0 findings）、mail 定向 Vitest 2 文件 24/24 通过。
+  未跑全量测试与浏览器验收；旧 API 二进制需重启后筛选与 `username` 字段才生效。
+
+## 邮件发送日志全平台化与详情对话框（2026-09-09）
+
+- 管理端邮件发送日志从“当前认证平台”视角改为全平台控制面（与限流管理定位一致）：`message/mail/log`
+  的 List/Get/Delete/DeleteMany 不再按 `identity.PlatformID` 过滤，可查看/删除所有平台日志；
+  发送热路径（CreatePending/MarkSent/MarkFailed/FindActiveChallenge）的平台作用域不变。
+- 日志响应新增 `platform`（`permission_auth_platform.code`，LEFT JOIN + COALESCE 空串，参照
+  operationLog 既有模式）；平台被软删时日志仍可见，platform 显示 `-`。无数据库结构变化。
+- 前端 `MailLog` DTO 增加 required `platform` 严格解析；日志表格新增平台列；详情从 el-drawer
+  迁移为 `AppDialog`（复用公共组件契约，宽度 520px），详情内补充平台项；i18n 新增
+  `mail.platform`（中/英）。
+- 验证：`go test ./internal/module/message/mail/... -count=1` 全部子包通过（含 log 包
+  `-race`）；`gofmt`/`go vet`/`go build` 通过；前端 `pnpm typecheck`、`pnpm lint`、
+  `check:architecture`（0 findings）、mail 定向 Vitest 2 文件 23/23 通过。未跑全量测试与
+  浏览器验收；运行中的旧 API 需重启后日志接口才返回新 `platform` 字段（旧二进制无此字段时
+  严格解析会报协议错误，属预期切换行为）。
+
 ## 当前收口执行记录（2026-09-09）
 
 - Mail 限流协议已移除 `LimitRequest.LegacyKeys` 及旧场景额度迁移；Redis Lua 只处理平台 + HMAC

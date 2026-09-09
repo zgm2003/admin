@@ -124,7 +124,14 @@ function normalizeValue(value: unknown): SearchFormValue | null {
   return null
 }
 
-function setSearchValue(key: string, value: unknown): void {
+function setSearchValue(key: string, value: unknown, dateRange = false): void {
+  if (dateRange && !isDateRange(value)) {
+    // el-date-picker clearable emits null; map it to an empty range so the
+    // stale selection does not survive the next query.
+    form[key] = []
+    emit('update:modelValue', { ...form } as TModel)
+    return
+  }
   const normalized = normalizeValue(value)
   if (normalized === null) return
   form[key] = normalized
@@ -174,7 +181,7 @@ function reset(): void {
           :clearable="field.clearable ?? true"
           :data-testid="field.testId"
           :style="{ width: resolveWidth(field.width) }"
-          @update:model-value="setSearchValue(field.key, $event)"
+          @update:model-value="setSearchValue(field.key, $event, true)"
         />
         <el-select-v2
           v-else

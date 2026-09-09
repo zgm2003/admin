@@ -13,7 +13,7 @@ import (
 )
 
 type Detail struct {
-	Log                   Model
+	Log                   ListRow
 	VerificationCode      string
 	VerificationExpiresAt *time.Time
 }
@@ -28,21 +28,21 @@ func NewService(repository *Repository, verification *logverification.Repository
 	return &Service{repository: repository, verification: verification, keys: keys}
 }
 
-func (s *Service) List(ctx context.Context, platformID int64, page, size int) ([]Model, int64, error) {
-	values, total, err := s.repository.List(ctx, platformID, page, size)
+func (s *Service) List(ctx context.Context, filter ListQuery, page, size int) ([]ListRow, int64, error) {
+	values, total, err := s.repository.List(ctx, filter, page, size)
 	if err != nil {
 		return nil, 0, wrapRepository(err)
 	}
 	return values, total, nil
 }
 
-func (s *Service) Get(ctx context.Context, platformID, id int64) (Detail, error) {
-	value, err := s.repository.Find(ctx, platformID, id)
+func (s *Service) Get(ctx context.Context, id int64) (Detail, error) {
+	value, err := s.repository.Find(ctx, id)
 	if err != nil {
 		return Detail{}, wrapRepository(err)
 	}
 	result := Detail{Log: value}
-	verification, err := s.verification.FindByLog(ctx, platformID, id)
+	verification, err := s.verification.FindByLog(ctx, value.PlatformID, value.ID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return result, nil
 	}
@@ -61,12 +61,12 @@ func (s *Service) Get(ctx context.Context, platformID, id int64) (Detail, error)
 	return result, nil
 }
 
-func (s *Service) Delete(ctx context.Context, platformID, id int64) error {
-	return wrapRepository(s.repository.Delete(ctx, platformID, id))
+func (s *Service) Delete(ctx context.Context, id int64) error {
+	return wrapRepository(s.repository.Delete(ctx, id))
 }
 
-func (s *Service) DeleteMany(ctx context.Context, platformID int64, ids []int64) error {
-	return wrapRepository(s.repository.DeleteMany(ctx, platformID, ids))
+func (s *Service) DeleteMany(ctx context.Context, ids []int64) error {
+	return wrapRepository(s.repository.DeleteMany(ctx, ids))
 }
 
 func wrapRepository(err error) error {

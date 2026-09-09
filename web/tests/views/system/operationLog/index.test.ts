@@ -101,14 +101,21 @@ describe('operation logs', () => {
     expect(wrapper.text()).toContain('admin')
 
     getOperationLogs.mockResolvedValue({
-      list: [{ ...row(), action: 'future.action' }],
-      total: 1,
+      list: [
+        { ...row(), action: 'future.action' },
+        { ...row(), id: 2, action: 'mail.config.update' },
+        { ...row(), id: 3, action: 'user.password.update' },
+        { ...row(), id: 4, action: 'account.password.change' },
+      ],
+      total: 4,
       page: 1,
       pageSize: 20,
     })
     const fallback = mountPage()
     await flushPromises()
     expect(fallback.text()).toContain('future.action')
+    expect(fallback.text()).toContain('编辑邮件配置')
+    expect(fallback.text()).toContain('修改密码')
   })
 })
 

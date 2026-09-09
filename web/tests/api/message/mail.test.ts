@@ -49,7 +49,9 @@ describe('mail admin protocol', () => {
   const log = {
     id: 2,
     platformId: 1,
+    platform: 'admin',
     userId: 169,
+    username: 'tester',
     scene: 'login',
     templateId: 47941,
     toEmail: 'admin@example.com',
@@ -86,6 +88,7 @@ describe('mail admin protocol', () => {
     expect(() => parseMailTemplate({ ...template, secretId: 'secret' })).toThrow()
     expect(() => parseMailTemplate({ ...template, platformId: 1 })).toThrow()
     expect(() => parseMailRule({ ...rule, platformId: 1 })).toThrow()
+    expect(() => parseMailLog({ ...log, platform: undefined })).toThrow()
     expect(() => parseMailLogPage({ list: [log], total: 1, page: 1 })).toThrow()
   })
 

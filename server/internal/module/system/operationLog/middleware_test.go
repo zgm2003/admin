@@ -48,7 +48,7 @@ func TestRulesMatchOnlyExplicitMutations(t *testing.T) {
 	if rule, ok := FindRule(http.MethodPut, "/api/admin/v1/user/profile"); !ok || rule.Action != "user.profile.update" || !rule.CaptureRequest || !rule.CaptureResponse {
 		t.Fatalf("profile update rule = %+v,%v", rule, ok)
 	}
-	if rule, ok := FindRule(http.MethodPost, "/api/admin/v1/user/password"); !ok || rule.Action != "account.password.change" || !rule.CaptureRequest || !rule.CaptureResponse {
+	if rule, ok := FindRule(http.MethodPost, "/api/admin/v1/user/password"); !ok || rule.Action != "user.password.update" || rule.Module != "user" || !rule.CaptureRequest || !rule.CaptureResponse {
 		t.Fatalf("password update rule = %+v,%v", rule, ok)
 	}
 	for _, route := range []string{"/api/admin/v1/user/account", "/api/v1/access", "/api/admin/v1/user/account/:id/role", "/api/admin/v1/user/profile"} {

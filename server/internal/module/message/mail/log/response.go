@@ -9,7 +9,9 @@ import (
 type Response struct {
 	ID           int64   `json:"id"`
 	PlatformID   int64   `json:"platformId"`
+	Platform     string  `json:"platform"`
 	UserID       *int64  `json:"userId"`
+	Username     string  `json:"username"`
 	Scene        string  `json:"scene"`
 	TemplateID   int     `json:"templateId"`
 	ToEmail      string  `json:"toEmail"`
@@ -31,28 +33,29 @@ type DetailResponse struct {
 	VerificationExpiresAt *string  `json:"verificationExpiresAt"`
 }
 
-func ListResponse(values []Model, total int64, page, pageSize int) pagination.Result[Response] {
+func ListResponse(values []ListRow, total int64, page, pageSize int) pagination.Result[Response] {
 	rows := make([]Response, 0, len(values))
 	for _, value := range values {
-		rows = append(rows, fromModel(value))
+		rows = append(rows, fromRow(value))
 	}
 	return pagination.Result[Response]{List: rows, Total: total, Page: page, PageSize: pageSize}
 }
 
 func NewDetailResponse(value Detail) DetailResponse {
 	return DetailResponse{
-		Log: fromModel(value.Log), VerificationCode: value.VerificationCode,
+		Log: fromRow(value.Log), VerificationCode: value.VerificationCode,
 		VerificationExpiresAt: optionalTime(value.VerificationExpiresAt),
 	}
 }
 
-func fromModel(value Model) Response {
+func fromRow(value ListRow) Response {
 	return Response{
-		ID: value.ID, PlatformID: value.PlatformID, UserID: value.UserID, Scene: value.Scene,
-		TemplateID: value.TemplateID, ToEmail: value.ToEmail, Subject: value.Subject, Status: value.Status,
-		RequestID: value.RequestID, MessageID: value.MessageID, ErrorCode: value.ErrorCode,
-		ErrorSummary: value.ErrorSummary, LatencyMs: value.LatencyMs, SentAt: optionalTime(value.SentAt),
-		CreatedAt: formatTime(value.CreatedAt), UpdatedAt: formatTime(value.UpdatedAt),
+		ID: value.ID, PlatformID: value.PlatformID, Platform: value.Platform, UserID: value.UserID,
+		Username: value.Username, Scene: value.Scene, TemplateID: value.TemplateID, ToEmail: value.ToEmail,
+		Subject: value.Subject, Status: value.Status, RequestID: value.RequestID, MessageID: value.MessageID,
+		ErrorCode: value.ErrorCode, ErrorSummary: value.ErrorSummary, LatencyMs: value.LatencyMs,
+		SentAt: optionalTime(value.SentAt), CreatedAt: formatTime(value.CreatedAt),
+		UpdatedAt: formatTime(value.UpdatedAt),
 	}
 }
 
