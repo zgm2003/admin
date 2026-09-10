@@ -31,6 +31,7 @@ import (
 	"admin/server/internal/module/permission/state"
 	"admin/server/internal/module/storage/cosConfig"
 	"admin/server/internal/module/storage/uploadRule"
+	"admin/server/internal/module/system/dictionary"
 	"admin/server/internal/module/system/operationLog"
 	account "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/loginLog"
@@ -63,6 +64,7 @@ type routerDependencies struct {
 	COSConfig         *cosconfig.Handler
 	UploadRule        *uploadrule.Handler
 	OperationLog      *operationlog.Handler
+	Dictionary        *dictionary.Handler
 	LoginLog          *loginlog.Handler
 	Mail              *messagemail.Handler
 	MailConfig        *mailconfig.Handler
@@ -197,6 +199,8 @@ func run(logger *slog.Logger) error {
 	permissionService := permission.NewService(permissionRepository, accessStateStore, permission.NewSnapshotCache(redisClient), permission.NewLocalSnapshotCache(1024), logger, menuStateStore)
 	operationLogRepository := operationlog.NewRepository(postgres.GORM)
 	operationLogService := operationlog.NewService(operationLogRepository)
+	dictionaryService := dictionary.NewService(dictionary.NewRepository(postgres.GORM))
+	dictionaryService.SetCache(dictionary.NewOptionsCache(redisClient))
 	operationLogEnqueuer := operationlog.NewQueueEnqueuer(queueClient)
 	authenticate := auth.Authenticate(authService)
 	router := buildRouter(routerDependencies{
@@ -220,6 +224,7 @@ func run(logger *slog.Logger) error {
 		COSConfig:         cosconfig.NewHandler(cosConfigService),
 		UploadRule:        uploadrule.NewHandler(uploadRuleService),
 		OperationLog:      operationlog.NewHandler(operationLogService),
+		Dictionary:        dictionary.NewHandler(dictionaryService),
 		LoginLog:          loginlog.NewHandler(loginLogService),
 		Mail:              messagemail.NewHandler(mailService),
 		MailConfig:        mailconfig.NewHandler(mailConfigService),
@@ -306,6 +311,7 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 		recipientrule.RegisterRoutes(mailRoutes, dependencies.MailRecipientRule, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	operationlog.RegisterRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
+	dictionary.RegisterRoutes(adminRoutes, dependencies.Dictionary, dependencies.Authenticate, dependencies.RequirePermission)
 	usersession.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
 	return router
 }
