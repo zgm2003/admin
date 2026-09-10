@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/cacheFill"
@@ -27,6 +28,7 @@ type repository interface {
 	Delete(context.Context, int64) error
 	CreateItem(context.Context, Item) error
 	FindItem(context.Context, int64, int64) (Item, error)
+	FindItemByValue(context.Context, int64, string) (Item, error)
 	UpdateItem(context.Context, int64, int64, UpdateItemInput, time.Time) error
 	UpdateItemStatus(context.Context, int64, int64, int16, time.Time) error
 	DeleteItem(context.Context, int64, int64) error
@@ -44,9 +46,16 @@ func (s *Service) SetCache(cache *optionsCache) { s.cache = cache }
 
 func (s *Service) mutate(ctx context.Context, change func(context.Context) error) error {
 	if s.cache == nil {
-		return change(ctx)
+		err := change(ctx)
+		if errors.Is(err, ErrConflict) {
+			return apperror.Conflict("error.conflict", nil, err)
+		}
+		return err
 	}
 	if err := s.cache.Mutate(ctx, change); err != nil {
+		if errors.Is(err, ErrConflict) {
+			return apperror.Conflict("error.conflict", nil, err)
+		}
 		return apperror.DependencyUnavailable(err)
 	}
 	return nil
@@ -82,7 +91,8 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 	input.Code = strings.TrimSpace(input.Code)
 	input.NameZH = strings.TrimSpace(input.NameZH)
 	input.NameEN = strings.TrimSpace(input.NameEN)
-	if !codePattern.MatchString(input.Code) || len(input.Code) > 128 || input.NameZH == "" || input.NameEN == "" {
+	input.Description = strings.TrimSpace(input.Description)
+	if !codePattern.MatchString(input.Code) || utf8.RuneCountInString(input.Code) > 128 || !validText(input.NameZH, 128) || !validText(input.NameEN, 128) || utf8.RuneCountInString(input.Description) > 512 {
 		return 0, apperror.InvalidRequest(fmt.Errorf("dictionary input is invalid"))
 	}
 	if _, err := s.repository.FindByCode(ctx, input.Code); err == nil {
@@ -110,7 +120,8 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 	}
 	input.NameZH = strings.TrimSpace(input.NameZH)
 	input.NameEN = strings.TrimSpace(input.NameEN)
-	if input.NameZH == "" || input.NameEN == "" {
+	input.Description = strings.TrimSpace(input.Description)
+	if !validText(input.NameZH, 128) || !validText(input.NameEN, 128) || utf8.RuneCountInString(input.Description) > 512 {
 		return apperror.InvalidRequest(fmt.Errorf("dictionary names are required"))
 	}
 	if err := s.mutate(ctx, func(writeContext context.Context) error {
@@ -258,8 +269,15 @@ func (s *Service) CreateItem(ctx context.Context, dictionaryID int64, input Crea
 		return 0, apperror.Conflict("error.conflict", nil, fmt.Errorf("dictionary is disabled"))
 	}
 	input.Value = strings.TrimSpace(input.Value)
-	if input.Value == "" || input.LabelZH == "" || input.LabelEN == "" || input.Sort < 0 {
+	input.LabelZH = strings.TrimSpace(input.LabelZH)
+	input.LabelEN = strings.TrimSpace(input.LabelEN)
+	if !validText(input.Value, 128) || !validText(input.LabelZH, 256) || !validText(input.LabelEN, 256) || input.Sort < 0 {
 		return 0, apperror.InvalidRequest(fmt.Errorf("dictionary item input is invalid"))
+	}
+	if _, findErr := s.repository.FindItemByValue(ctx, dictionaryID, input.Value); findErr == nil {
+		return 0, apperror.Conflict("error.conflict", nil, ErrConflict)
+	} else if !errors.Is(findErr, gorm.ErrRecordNotFound) {
+		return 0, apperror.DependencyUnavailable(findErr)
 	}
 	now := time.Now().UTC()
 	value := Item{DictionaryID: dictionaryID, Value: input.Value, LabelZH: input.LabelZH, LabelEN: input.LabelEN, Sort: input.Sort, IsEnabled: yesno.Yes, IsBuiltin: yesno.No, CreatedAt: now, UpdatedAt: now}
@@ -269,7 +287,9 @@ func (s *Service) CreateItem(ctx context.Context, dictionaryID int64, input Crea
 	return value.ID, nil
 }
 func (s *Service) UpdateItem(ctx context.Context, dictionaryID, itemID int64, input UpdateItemInput) error {
-	if input.LabelZH == "" || input.LabelEN == "" || input.Sort < 0 {
+	input.LabelZH = strings.TrimSpace(input.LabelZH)
+	input.LabelEN = strings.TrimSpace(input.LabelEN)
+	if !validText(input.LabelZH, 256) || !validText(input.LabelEN, 256) || input.Sort < 0 {
 		return apperror.InvalidRequest(fmt.Errorf("dictionary item input is invalid"))
 	}
 	if _, err := s.repository.FindItem(ctx, dictionaryID, itemID); errors.Is(err, gorm.ErrRecordNotFound) {
@@ -283,6 +303,10 @@ func (s *Service) UpdateItem(ctx context.Context, dictionaryID, itemID int64, in
 		return err
 	}
 	return nil
+}
+
+func validText(value string, maxRunes int) bool {
+	return value != "" && utf8.RuneCountInString(value) <= maxRunes
 }
 func (s *Service) UpdateItemStatus(ctx context.Context, dictionaryID, itemID int64, status yesno.Value) error {
 	if !yesno.IsValid(status) {

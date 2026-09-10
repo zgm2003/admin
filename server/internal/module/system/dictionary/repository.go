@@ -2,10 +2,12 @@ package dictionary
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
@@ -64,7 +66,8 @@ func (r *Repository) Items(ctx context.Context, dictionaryID int64, enabledOnly 
 }
 
 func (r *Repository) Create(ctx context.Context, value *Dictionary) error {
-	return r.db.WithContext(ctx).Create(&value).Error
+	err := r.db.WithContext(ctx).Create(&value).Error
+	return mapRepositoryError(err)
 }
 func (r *Repository) Update(ctx context.Context, id int64, input UpdateInput, now time.Time) error {
 	return r.db.WithContext(ctx).Model(&Dictionary{}).Where("id = ?", id).Updates(map[string]interface{}{"name_zh": input.NameZH, "name_en": input.NameEN, "description": input.Description, "updated_at": now}).Error
@@ -76,7 +79,13 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 	return r.db.WithContext(ctx).Delete(&Dictionary{}, id).Error
 }
 func (r *Repository) CreateItem(ctx context.Context, value Item) error {
-	return r.db.WithContext(ctx).Create(&value).Error
+	err := r.db.WithContext(ctx).Create(&value).Error
+	return mapRepositoryError(err)
+}
+func (r *Repository) FindItemByValue(ctx context.Context, dictionaryID int64, value string) (Item, error) {
+	var item Item
+	err := r.db.WithContext(ctx).Where("dictionary_id = ? AND value = ?", dictionaryID, value).First(&item).Error
+	return item, err
 }
 func (r *Repository) FindItem(ctx context.Context, dictionaryID, itemID int64) (Item, error) {
 	var value Item
@@ -84,6 +93,17 @@ func (r *Repository) FindItem(ctx context.Context, dictionaryID, itemID int64) (
 		return Item{}, err
 	}
 	return value, nil
+}
+
+func mapRepositoryError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return ErrConflict
+	}
+	return err
 }
 func (r *Repository) UpdateItem(ctx context.Context, dictionaryID, itemID int64, input UpdateItemInput, now time.Time) error {
 	return r.db.WithContext(ctx).Model(&Item{}).Where("dictionary_id = ? AND id = ?", dictionaryID, itemID).Updates(map[string]interface{}{"label_zh": input.LabelZH, "label_en": input.LabelEN, "sort": input.Sort, "updated_at": now}).Error
