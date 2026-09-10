@@ -26,7 +26,7 @@ type repository interface {
 	Update(context.Context, int64, UpdateInput, time.Time) error
 	UpdateStatus(context.Context, int64, int16, time.Time) error
 	Delete(context.Context, int64) error
-	CreateItem(context.Context, Item) error
+	CreateItem(context.Context, *Item) error
 	FindItem(context.Context, int64, int64) (Item, error)
 	FindItemByValue(context.Context, int64, string) (Item, error)
 	UpdateItem(context.Context, int64, int64, UpdateItemInput, time.Time) error
@@ -281,7 +281,7 @@ func (s *Service) CreateItem(ctx context.Context, dictionaryID int64, input Crea
 	}
 	now := time.Now().UTC()
 	value := Item{DictionaryID: dictionaryID, Value: input.Value, LabelZH: input.LabelZH, LabelEN: input.LabelEN, Sort: input.Sort, IsEnabled: yesno.Yes, IsBuiltin: yesno.No, CreatedAt: now, UpdatedAt: now}
-	if err := s.mutate(ctx, func(writeContext context.Context) error { return s.repository.CreateItem(writeContext, value) }); err != nil {
+	if err := s.mutate(ctx, func(writeContext context.Context) error { return s.repository.CreateItem(writeContext, &value) }); err != nil {
 		return 0, err
 	}
 	return value.ID, nil

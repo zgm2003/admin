@@ -167,7 +167,7 @@ export async function getDictionary(id: number): Promise<DictionaryDetail> {
 export async function getDictionaryOptions(codes: string[]): Promise<DictionaryOptions> {
   const value = await request<unknown>({
     method: 'GET',
-    url: '/api/admin/v1/system/dictionary/options',
+    url: '/api/v1/system/dictionary/options',
     params: { codes: codes.join(',') },
   })
   const r = expectRecord(value, 'dictionary options')

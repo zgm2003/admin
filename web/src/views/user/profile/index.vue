@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -17,15 +17,17 @@ import type {
 } from '@/api/user/profile'
 import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
+import { useSystemDictionaryStore } from '@/store/systemDictionary'
 import { UpMedia } from '@/components/UpMedia'
 import ProfileHero from '@/views/user/profile/components/ProfileHero/index.vue'
 
 type ProfileTab = 'profile' | 'security'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
 const access = usePermissionStore()
+const dictionaries = useSystemDictionaryStore()
 const canUpdateProfile = computed(() => access.hasPermission('user:profile:update'))
 const canUpdatePassword = computed(() => access.hasPermission('user:password:update'))
 const setPasswordMode = computed(() => auth.passwordSetRequired)
@@ -35,11 +37,10 @@ const changingPassword = ref(false)
 const loadError = ref('')
 const activeTab = ref<ProfileTab>(setPasswordMode.value ? 'security' : 'profile')
 const heroAvatarURL = ref('')
-const genderOptions = computed(() => [
-  { label: t('user.profile.genderUnknown'), value: 0 },
-  { label: t('user.profile.genderMale'), value: 1 },
-  { label: t('user.profile.genderFemale'), value: 2 },
-])
+const genderOptions = ref<Array<{ label: string; value: UpdateAccountProfileInput['gender'] }>>([])
+const genderOptionsLoading = ref(false)
+const genderOptionsError = ref('')
+let genderOptionsRequest = 0
 const profileForm = reactive<UpdateAccountProfileInput>({
   username: '',
   phone: null,
@@ -76,6 +77,38 @@ async function loadProfile(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+async function loadGenderOptions(): Promise<void> {
+  const request = ++genderOptionsRequest
+  genderOptionsLoading.value = true
+  genderOptionsError.value = ''
+  try {
+    await dictionaries.load(['user.gender'])
+    if (request !== genderOptionsRequest) return
+    const options = dictionaries.options('user.gender').value
+    if (options === undefined) throw new Error('user.gender dictionary is not ready')
+    const seen = new Set<number>()
+    genderOptions.value = options.map((option) => {
+      const value = parseGenderValue(option.value)
+      if (seen.has(value)) throw new Error('user.gender dictionary contains duplicate values')
+      seen.add(value)
+      return { label: option.label, value }
+    })
+  } catch {
+    if (request !== genderOptionsRequest) return
+    genderOptions.value = []
+    genderOptionsError.value = t('user.profile.genderOptionsLoadFailed')
+  } finally {
+    if (request === genderOptionsRequest) genderOptionsLoading.value = false
+  }
+}
+
+function parseGenderValue(value: string): UpdateAccountProfileInput['gender'] {
+  if (value === '0') return 0
+  if (value === '1') return 1
+  if (value === '2') return 2
+  throw new Error('user.gender dictionary value is invalid')
 }
 
 async function saveProfile(): Promise<void> {
@@ -124,6 +157,7 @@ async function submitPassword(): Promise<void> {
 }
 
 void loadProfile()
+watch(locale, () => void loadGenderOptions(), { immediate: true })
 </script>
 
 <template>
@@ -211,9 +245,14 @@ void loadProfile()
                 <el-select-v2
                   v-model="profileForm.gender"
                   :options="genderOptions"
+                  :loading="genderOptionsLoading"
+                  :disabled="genderOptionsLoading || genderOptionsError !== ''"
                   data-testid="account-profile-gender"
                   class="account-profile__full"
                 />
+                <div v-if="genderOptionsError" class="el-form-item__error">
+                  {{ genderOptionsError }}
+                </div>
               </el-form-item>
             </el-col>
           </el-row>

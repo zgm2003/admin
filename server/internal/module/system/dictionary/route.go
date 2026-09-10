@@ -2,9 +2,12 @@ package dictionary
 
 import "github.com/gin-gonic/gin"
 
+func RegisterOptionRoute(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc) {
+	routes.GET("/system/dictionary/options", authenticate, handler.Options)
+}
+
 func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
 	routes.GET("/system/dictionary", authenticate, requirePermission(PermissionList), handler.List)
-	routes.GET("/system/dictionary/options", authenticate, requirePermission(PermissionList), handler.Options)
 	routes.GET("/system/dictionary/:id", authenticate, requirePermission(PermissionDetail), handler.Get)
 	routes.POST("/system/dictionary", authenticate, requirePermission(PermissionCreate), handler.Create)
 	routes.PUT("/system/dictionary/:id", authenticate, requirePermission(PermissionUpdate), handler.Update)

@@ -1,11 +1,12 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus, { ElMessage } from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { appI18n, setLocale } from '@/i18n'
 import * as profileAPI from '@/api/user/profile'
+import { getDictionaryOptions } from '@/api/system/dictionary'
 import ProfilePage from '@/views/user/profile/index.vue'
 import UpMedia from '@/components/UpMedia/index.vue'
 import ProfileHero from '@/views/user/profile/components/ProfileHero/index.vue'
@@ -18,16 +19,26 @@ vi.mock('@/api/user/profile', () => ({
   changePassword: vi.fn(),
   setPassword: vi.fn(),
 }))
+vi.mock('@/api/system/dictionary', () => ({ getDictionaryOptions: vi.fn() }))
 
 const getAccountProfile = vi.mocked(profileAPI.getAccountProfile)
 const updateAccountProfile = vi.mocked(profileAPI.updateAccountProfile)
 const changePassword = vi.mocked(profileAPI.changePassword)
 const setPassword = vi.mocked(profileAPI.setPassword)
+const getDictionaryOptionsMock = vi.mocked(getDictionaryOptions)
+const mountedWrappers: VueWrapper[] = []
 
 describe('account profile permissions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setLocale('zh-CN')
+    getDictionaryOptionsMock.mockResolvedValue({
+      'user.gender': [
+        { label: '未知', value: '0' },
+        { label: '男', value: '1' },
+        { label: '女', value: '2' },
+      ],
+    })
     getAccountProfile.mockResolvedValue({
       userId: 7,
       username: 'alice',
@@ -37,6 +48,11 @@ describe('account profile permissions', () => {
       birthday: null,
       gender: 0,
     })
+  })
+
+  afterEach(() => {
+    for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
+    document.body.innerHTML = ''
   })
 
   it.each([
@@ -51,16 +67,70 @@ describe('account profile permissions', () => {
     expect(wrapper.find('[data-testid="account-password-submit"]').exists()).toBe(password)
   })
 
-  it('uses the virtualized select with explicit gender options', async () => {
+  it('loads localized gender options from the system dictionary and preserves numeric values', async () => {
     const wrapper = mountPage([])
     await flushPromises()
 
+    expect(getDictionaryOptionsMock).toHaveBeenCalledWith(['user.gender'])
     const genderSelect = wrapper.getComponent({ name: 'ElSelectV2' })
     expect(genderSelect.attributes('data-testid')).toBe('account-profile-gender')
     expect(genderSelect.props('options')).toEqual([
       { label: '未知', value: 0 },
       { label: '男', value: 1 },
       { label: '女', value: 2 },
+    ])
+  })
+
+  it('does not substitute hardcoded gender options when the dictionary fails', async () => {
+    getDictionaryOptionsMock.mockRejectedValueOnce(new Error('dictionary unavailable'))
+    const wrapper = mountPage([])
+    await flushPromises()
+
+    const genderSelect = wrapper.getComponent({ name: 'ElSelectV2' })
+    expect(genderSelect.props('options')).toEqual([])
+    expect(genderSelect.props('disabled')).toBe(true)
+    expect(wrapper.text()).toContain('性别选项加载失败')
+  })
+
+  it('rejects malformed gender dictionary values instead of coercing them', async () => {
+    getDictionaryOptionsMock.mockResolvedValueOnce({
+      'user.gender': [{ label: '其他', value: 'female' }],
+    })
+    const wrapper = mountPage([])
+    await flushPromises()
+
+    expect(wrapper.getComponent({ name: 'ElSelectV2' }).props('options')).toEqual([])
+    expect(wrapper.text()).toContain('性别选项加载失败')
+  })
+
+  it('reloads gender labels when the active language changes', async () => {
+    getDictionaryOptionsMock
+      .mockReset()
+      .mockResolvedValueOnce({
+        'user.gender': [
+          { label: '未知', value: '0' },
+          { label: '男', value: '1' },
+          { label: '女', value: '2' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        'user.gender': [
+          { label: 'Unknown', value: '0' },
+          { label: 'Male', value: '1' },
+          { label: 'Female', value: '2' },
+        ],
+      })
+    const wrapper = mountPage([])
+    await flushPromises()
+
+    setLocale('en-US')
+    await flushPromises()
+
+    expect(getDictionaryOptionsMock).toHaveBeenCalledTimes(2)
+    expect(wrapper.getComponent({ name: 'ElSelectV2' }).props('options')).toEqual([
+      { label: 'Unknown', value: 0 },
+      { label: 'Male', value: 1 },
+      { label: 'Female', value: 2 },
     ])
   })
 
@@ -166,5 +236,9 @@ function mountPage(permissionCodes: string[], passwordSetRequired = false) {
     history: createMemoryHistory(),
     routes: [{ path: '/login', name: 'login', component: { template: '<div />' } }],
   })
-  return mount(ProfilePage, { global: { plugins: [pinia, appI18n, ElementPlus, router] } })
+  const wrapper = mount(ProfilePage, {
+    global: { plugins: [pinia, appI18n, ElementPlus, router] },
+  })
+  mountedWrappers.push(wrapper)
+  return wrapper
 }

@@ -18,6 +18,7 @@ vi.mock('@/api/system/dictionary', () => ({
   deleteDictionaryItem: vi.fn(),
   getDictionaries: vi.fn(),
   getDictionary: vi.fn(),
+  getDictionaryOptions: vi.fn(),
   updateDictionary: vi.fn(),
   updateDictionaryItem: vi.fn(),
   updateDictionaryItemStatus: vi.fn(),
@@ -88,9 +89,11 @@ describe('system dictionary page', () => {
     await flushPromises()
 
     await wrapper.get('[data-testid="dictionary-keyword"]').setValue(' user.gender ')
-    wrapper
-      .getComponent('[data-testid="dictionary-status"]')
-      .vm.$emit('update:modelValue', YesNo.Yes)
+    const statusFilter = wrapper
+      .findAllComponents({ name: 'ElSelectV2' })
+      .find((component) => component.attributes('data-testid') === 'dictionary-status-filter')
+    if (statusFilter === undefined) throw new Error('dictionary status filter not found')
+    statusFilter.vm.$emit('update:modelValue', YesNo.Yes)
     await wrapper.get('[data-testid="dictionary-search"]').trigger('click')
     await flushPromises()
     expect(dictionaryAPI.getDictionaries).toHaveBeenLastCalledWith({
@@ -126,7 +129,7 @@ describe('system dictionary page', () => {
 
     expect(wrapper.find('[data-testid="dictionary-create"]').exists()).toBe(true)
     expect(wrapper.findAll('[data-testid="dictionary-update"]')).toHaveLength(2)
-    expect(wrapper.findAll('[data-testid="dictionary-status"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid="dictionary-status-toggle"]')).toHaveLength(2)
     expect(wrapper.findAll('[data-testid="dictionary-delete"]')).toHaveLength(1)
 
     wrapper.unmount()
@@ -134,7 +137,7 @@ describe('system dictionary page', () => {
     await flushPromises()
     expect(readonly.find('[data-testid="dictionary-create"]').exists()).toBe(false)
     expect(readonly.find('[data-testid="dictionary-update"]').exists()).toBe(false)
-    expect(readonly.find('[data-testid="dictionary-status"]').exists()).toBe(false)
+    expect(readonly.find('[data-testid="dictionary-status-toggle"]').exists()).toBe(false)
     expect(readonly.find('[data-testid="dictionary-delete"]').exists()).toBe(false)
   })
 
@@ -147,11 +150,11 @@ describe('system dictionary page', () => {
     await flushPromises()
 
     await wrapper.get('[data-testid="dictionary-create"]').trigger('click')
-    await wrapper.get('[data-testid="dictionary-form-code"]').setValue(' user.status ')
-    await wrapper.get('[data-testid="dictionary-form-name-zh"]').setValue(' 用户状态 ')
-    await wrapper.get('[data-testid="dictionary-form-name-en"]').setValue(' User status ')
-    await wrapper.get('[data-testid="dictionary-form-description"]').setValue(' profile status ')
-    await wrapper.get('[data-testid="dictionary-save"]').trigger('click')
+    await setBodyInput('[data-testid="dictionary-form-code"]', ' user.status ')
+    await setBodyInput('[data-testid="dictionary-form-name-zh"]', ' 用户状态 ')
+    await setBodyInput('[data-testid="dictionary-form-name-en"]', ' User status ')
+    await setBodyInput('[data-testid="dictionary-form-description"]', ' profile status ')
+    await clickBody('[data-testid="dictionary-save"]')
     await flushPromises()
     expect(dictionaryAPI.createDictionary).toHaveBeenCalledWith({
       code: ' user.status ',
@@ -161,9 +164,9 @@ describe('system dictionary page', () => {
     })
 
     await wrapper.findAll('[data-testid="dictionary-update"]')[0]!.trigger('click')
-    expect(wrapper.get('[data-testid="dictionary-form-code"]').attributes('disabled')).toBeDefined()
-    await wrapper.get('[data-testid="dictionary-form-name-zh"]').setValue('性别名称')
-    await wrapper.get('[data-testid="dictionary-save"]').trigger('click')
+    expect(bodyElement('[data-testid="dictionary-form-code"]').hasAttribute('disabled')).toBe(true)
+    await setBodyInput('[data-testid="dictionary-form-name-zh"]', '性别名称')
+    await clickBody('[data-testid="dictionary-save"]')
     await flushPromises()
     expect(dictionaryAPI.updateDictionary).toHaveBeenCalledWith(1, {
       code: 'user.gender',
@@ -187,17 +190,15 @@ describe('system dictionary page', () => {
     await flushPromises()
 
     expect(dictionaryAPI.getDictionary).toHaveBeenCalledWith(1)
-    expect(wrapper.findAll('[data-testid="dictionary-item-delete"]')).toHaveLength(1)
-    expect(wrapper.findAll('[data-testid="dictionary-item-status"]')).toHaveLength(2)
+    expect(document.body.querySelectorAll('[data-testid="dictionary-item-delete"]')).toHaveLength(1)
+    expect(document.body.querySelectorAll('[data-testid="dictionary-item-status"]')).toHaveLength(2)
 
-    await wrapper.get('[data-testid="dictionary-item-create"]').trigger('click')
-    await wrapper.get('[data-testid="dictionary-item-form-value"]').setValue(' 4 ')
-    await wrapper.get('[data-testid="dictionary-item-form-label-zh"]').setValue('其他')
-    await wrapper.get('[data-testid="dictionary-item-form-label-en"]').setValue('Other')
-    wrapper
-      .getComponent('[data-testid="dictionary-item-form-sort"]')
-      .vm.$emit('update:modelValue', 4)
-    await wrapper.get('[data-testid="dictionary-item-save"]').trigger('click')
+    await clickBody('[data-testid="dictionary-item-create"]')
+    await setBodyInput('[data-testid="dictionary-item-form-value"]', ' 4 ')
+    await setBodyInput('[data-testid="dictionary-item-form-label-zh"]', '其他')
+    await setBodyInput('[data-testid="dictionary-item-form-label-en"]', 'Other')
+    await setBodyInput('[data-testid="dictionary-item-form-sort"] input', '4')
+    await clickBody('[data-testid="dictionary-item-save"]')
     await flushPromises()
     expect(dictionaryAPI.createDictionaryItem).toHaveBeenCalledWith(1, {
       value: ' 4 ',
@@ -206,12 +207,12 @@ describe('system dictionary page', () => {
       sort: 4,
     })
 
-    await wrapper.findAll('[data-testid="dictionary-item-update"]')[1]!.trigger('click')
-    expect(
-      wrapper.get('[data-testid="dictionary-item-form-value"]').attributes('disabled'),
-    ).toBeDefined()
-    await wrapper.get('[data-testid="dictionary-item-form-label-en"]').setValue('Custom')
-    await wrapper.get('[data-testid="dictionary-item-save"]').trigger('click')
+    await clickBody('[data-testid="dictionary-item-update"]', 1)
+    expect(bodyElement('[data-testid="dictionary-item-form-value"]').hasAttribute('disabled')).toBe(
+      true,
+    )
+    await setBodyInput('[data-testid="dictionary-item-form-label-en"]', 'Custom')
+    await clickBody('[data-testid="dictionary-item-save"]')
     await flushPromises()
     expect(dictionaryAPI.updateDictionaryItem).toHaveBeenCalledWith(1, 12, {
       value: '3',
@@ -249,21 +250,19 @@ function dictionaryRow(overrides: Partial<Dictionary>): Dictionary {
 }
 
 function dictionaryItem(overrides: Partial<DictionaryItem>): DictionaryItem {
+  const custom = overrides.value === '3'
   return {
     id: 11,
     dictionaryId: 1,
     value: '0',
-    labelZh: '未知',
-    labelEn: 'Unknown',
-    sort: 0,
+    labelZh: overrides.labelZh ?? (custom ? '自定义' : '未知'),
+    labelEn: overrides.labelEn ?? (custom ? 'Custom value' : 'Unknown'),
+    sort: overrides.sort ?? (custom ? 3 : 0),
     isEnabled: YesNo.Yes,
     isBuiltin: YesNo.No,
     createdAt: '2026-09-10T00:00:00Z',
     updatedAt: '2026-09-10T00:00:00Z',
     ...overrides,
-    labelZh: overrides.value === '3' ? '自定义' : (overrides.labelZh ?? '未知'),
-    labelEn: overrides.value === '3' ? 'Custom value' : (overrides.labelEn ?? 'Unknown'),
-    sort: overrides.value === '3' ? 3 : (overrides.sort ?? 0),
   }
 }
 
@@ -279,4 +278,25 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
       resolvePromise(value)
     },
   }
+}
+
+function bodyElement(selector: string, index = 0): HTMLElement {
+  const element = document.body.querySelectorAll(selector)[index]
+  if (!(element instanceof HTMLElement)) throw new Error(`element not found: ${selector}[${index}]`)
+  return element
+}
+
+async function setBodyInput(selector: string, value: string): Promise<void> {
+  const input = bodyElement(selector)
+  if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) {
+    throw new Error(`input not found: ${selector}`)
+  }
+  input.value = value
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  await nextTick()
+}
+
+async function clickBody(selector: string, index = 0): Promise<void> {
+  bodyElement(selector, index).click()
+  await flushPromises()
 }

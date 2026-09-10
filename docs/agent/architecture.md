@@ -42,11 +42,15 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 | `message/mail` | `message/mail` | `message_mail_*` |
 | `storage/object` | `storage/cosConfig`、`storage/uploadRule`、`storage/upload` | `storage_cos_config`、`storage_upload_rule*` |
 | `system/operationLog` | `system/operationLog` | `system_operation_log` |
+| `system/dictionary` | `system/dictionary` | `system_dictionary`、`system_dictionary_item` |
 
 复合代码模块统一使用 lower camel case；数据库仍使用 snake_case，HTTP API 仍使用小写资源段。Mail 是聚合
 页面，后端按表资源拆为 `message/mail/config`、`template`、`log`、`logVerification`、`rateLimitPolicy`、
 `recipientRule`；根 `message/mail` 只保留发送编排、Provider、Limiter、Readiness、管理测试和路由聚合。
 `logVerification` 是 `log` 详情的下属持久化模块，不单独创建页面或公开 CRUD。
+字典管理 CRUD 位于 `/api/admin/v1/system/dictionary` 并使用独立 action 权限；业务消费只读端点位于
+`/api/v1/system/dictionary/options`，要求有效登录态但不要求字典管理权限，只返回已启用字典及选项的本地化
+`label/value`。options 经过 Redis generation/mutation/snapshot 和有界冷回源租约，PostgreSQL 仍是事实来源。
 
 菜单 page 的 `componentPath` 精确对应 Views 页面，`path = "/" + componentPath`；菜单 `code` 与页面和动作
 权限各自对应，`i18nKey` 必须在中英文翻译中可解析。公共登录/找回密码页按静态认证路由处理，不强行创建

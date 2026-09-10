@@ -650,8 +650,10 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 
 - 目标：新增系统设置下的全局多语言字典管理；字典 `code/value` 稳定不可修改，`isBuiltin` 仅表示系统保护，不等同于代码 enum。COS 上传策略、邮件限流策略和登录 Session 仍按认证平台隔离，字典不拆平台。
 - 范围：后端 `system/dictionary` CRUD、双语标签、options 批量读取、严格 DTO、RBAC action、PostgreSQL migration/menu；前端 API/Pinia 多语言状态、主从管理页和筛选；Redis generation/mutation/snapshot 缓存及跨实例冷回源租约。
-- 验收：`go vet ./...`、`go test ./...`、`go build ./...`、前端 typecheck/lint/architecture/build 与字典定向 Vitest 通过；未执行真实 migration，未迁移现有业务页面硬编码 options；全量 Vitest 本轮进程运行超过 2 分钟无输出后停止，需维护者单独复跑。
-- 下一步/阻塞：两份 forward migration 已于 2026-09-10 在真实 `admin` PostgreSQL 执行并重复执行验证通过；`docs/database/current.sql` 已由 `pg_dump --schema-only` 刷新。由于 `canvas` 平台没有系统设置目录，菜单迁移仅向 `admin` 平台写入页面/action，字典表仍全局共享。体验 seed `2026-09-10-system-dictionary-seed.sql` 已执行两次并验证幂等，内置 `user.gender` 及 3 个双语选项（0/1/2）已可用。接下来接入真实 Redis/PostgreSQL 做缓存租约和页面验收；后续再按业务优先级迁移现有硬编码下拉，不把程序协议 enum 迁入字典。
+- 迁移事实：两份 forward migration 已在真实 `admin` PostgreSQL 执行并重复验证幂等，`docs/database/current.sql` 已由真实库刷新。`canvas` 没有系统设置目录，因此菜单/action 仅写入 `admin` 平台；字典数据仍全局共享。体验 seed 已写入内置 `user.gender` 及 `0/1/2` 三个双语选项。
+- 本轮收口：唯一冲突统一映射 409，字典及字典项补 Trim 和长度边界，新增项改为指针写入并正确返回数据库自增 ID；管理页补齐 loading/empty/error、筛选翻页、权限按钮、主从 CRUD、不可变字段及内置删除保护测试。首个业务迁移已完成：个人中心性别通过登录态共享端点 `/api/v1/system/dictionary/options` 和 Pinia Store 加载，严格将字符串值收窄为数字 `0 | 1 | 2`，语言切换重新加载，失败或畸形值不使用硬编码兜底。
+- 验收：后端 `go vet ./...`、`go test ./...`、`go build ./...` 全部通过；前端 `pnpm typecheck`、`pnpm lint`、`pnpm check:architecture`（0 findings）、`pnpm build` 全部通过；全量 Vitest 68 文件 512 项通过。Build 仅报告既有的大 chunk 警告。
+- 下一步/阻塞：API 未由 Agent 重启，需用新二进制验证共享 options、真实 Redis generation/mutation/snapshot 和个人中心双语切换。后续继续按业务优先级迁移展示型硬编码下拉；登录方式、Session 状态、邮件发送状态、权限节点类型和 Yes/No 等程序协议 enum 保留在代码中。
 
 ## 状态条目模板
 

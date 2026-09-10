@@ -40,6 +40,11 @@ describe('system dictionary API', () => {
 
     requestMock.mockResolvedValueOnce({ 'user.gender': [], unexpected: [] })
     await expect(getDictionaryOptions(['user.gender'])).rejects.toBeInstanceOf(ProtocolError)
+    expect(requestMock.mock.calls[0]?.[0]).toEqual({
+      method: 'GET',
+      url: '/api/v1/system/dictionary/options',
+      params: { codes: 'user.gender,user.status' },
+    })
   })
 
   it('parses exact create and mutation responses', async () => {

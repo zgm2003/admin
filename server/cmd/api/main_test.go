@@ -341,7 +341,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"DELETE /api/admin/v1/user/session":                             1,
 		"GET /api/admin/v1/system/operationlog":                         1,
 		"GET /api/admin/v1/system/dictionary":                           1,
-		"GET /api/admin/v1/system/dictionary/options":                   1,
+		"GET /api/v1/system/dictionary/options":                         1,
 		"GET /api/admin/v1/system/dictionary/:id":                       1,
 		"POST /api/admin/v1/system/dictionary":                          1,
 		"POST /api/admin/v1/system/dictionary/:id/item":                 1,

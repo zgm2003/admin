@@ -43,7 +43,6 @@ func TestRegisterRoutesRequiresDictionaryActionPermissions(t *testing.T) {
 	})
 	for _, path := range []string{
 		"/api/admin/v1/system/dictionary?page=1&pageSize=20",
-		"/api/admin/v1/system/dictionary/options?codes=user.gender",
 		"/api/admin/v1/system/dictionary/1",
 		"/api/admin/v1/system/dictionary/1/item/2",
 	} {
@@ -61,5 +60,27 @@ func TestRegisterRoutesRequiresDictionaryActionPermissions(t *testing.T) {
 		if !found {
 			t.Fatalf("permission %q was not registered: %v", expected, seen)
 		}
+	}
+}
+
+func TestRegisterOptionRouteRequiresAuthenticationWithoutManagementPermission(t *testing.T) {
+	router := gin.New()
+	authenticationCalls := 0
+	RegisterOptionRoute(
+		router.Group("/api/v1"),
+		NewHandler(routeDictionaryService{}),
+		func(c *gin.Context) {
+			authenticationCalls++
+			c.Next()
+		},
+	)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(
+		recorder,
+		httptest.NewRequest(http.MethodGet, "/api/v1/system/dictionary/options?codes=user.gender", nil),
+	)
+	if recorder.Code != http.StatusOK || authenticationCalls != 1 {
+		t.Fatalf("option route status=%d authentication calls=%d", recorder.Code, authenticationCalls)
 	}
 }

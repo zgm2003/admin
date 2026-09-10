@@ -50,8 +50,9 @@ func (f *fakeRepository) Create(context.Context, *Dictionary) error             
 func (*fakeRepository) Update(context.Context, int64, UpdateInput, time.Time) error { return nil }
 func (*fakeRepository) UpdateStatus(context.Context, int64, int16, time.Time) error { return nil }
 func (*fakeRepository) Delete(context.Context, int64) error                         { return nil }
-func (f *fakeRepository) CreateItem(_ context.Context, value Item) error {
-	f.createdItem = value
+func (f *fakeRepository) CreateItem(_ context.Context, value *Item) error {
+	f.createdItem = *value
+	value.ID = 77
 	return f.createItemErr
 }
 func (*fakeRepository) FindItem(context.Context, int64, int64) (Item, error) {
@@ -136,8 +137,12 @@ func TestCreateItemRejectsExistingValueAndMapsRaceConflict(t *testing.T) {
 func TestDictionaryItemLabelsAreTrimmedAndValidated(t *testing.T) {
 	repo := &fakeRepository{dictionaries: map[string]Dictionary{"user.gender": {ID: 1, IsEnabled: yesno.Yes}}, items: map[int64][]Item{}}
 	service := NewService(repo)
-	if _, err := service.CreateItem(context.Background(), 1, CreateItemInput{Value: " male ", LabelZH: " 男 ", LabelEN: " Male ", Sort: 1}); err != nil {
+	id, err := service.CreateItem(context.Background(), 1, CreateItemInput{Value: " male ", LabelZH: " 男 ", LabelEN: " Male ", Sort: 1})
+	if err != nil {
 		t.Fatal(err)
+	}
+	if id != 77 {
+		t.Fatalf("created item id = %d, want 77", id)
 	}
 	if repo.createdItem.Value != "male" || repo.createdItem.LabelZH != "男" || repo.createdItem.LabelEN != "Male" {
 		t.Fatalf("created item was not trimmed: %+v", repo.createdItem)

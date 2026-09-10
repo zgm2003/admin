@@ -22,11 +22,13 @@ import { AppTable } from '@/components/AppTable'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
+import { useSystemDictionaryStore } from '@/store/systemDictionary'
 import { AppSearch } from '@/components/AppSearch'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 
 const { t } = useI18n()
 const access = usePermissionStore()
+const dictionaries = useSystemDictionaryStore()
 const rows = ref<Dictionary[]>([])
 const total = ref(0)
 const query = ref<{ page: number; pageSize: number; keyword?: string; isEnabled?: YesNo }>({
@@ -68,6 +70,7 @@ const searchFields = computed<SearchField[]>(() => [
     label: t('dictionary.code'),
     placeholder: t('dictionary.searchPlaceholder'),
     clearable: true,
+    testId: 'dictionary-keyword',
   },
   {
     key: 'status',
@@ -78,6 +81,7 @@ const searchFields = computed<SearchField[]>(() => [
       { label: t('dictionary.disabled'), value: YesNo.No },
     ],
     clearable: true,
+    testId: 'dictionary-status-filter',
   },
 ])
 const columns = computed<TableColumn<Dictionary>[]>(() => [
@@ -101,6 +105,11 @@ const pagination = computed<TablePaginationState>(() => ({
   pageSize: query.value.pageSize,
   total: total.value,
 }))
+const listState = computed<'loading' | 'error' | 'empty' | 'success'>(() => {
+  if (loading.value) return 'loading'
+  if (loadError.value !== '') return 'error'
+  return rows.value.length === 0 ? 'empty' : 'success'
+})
 
 async function load(): Promise<void> {
   if (!canList.value) return
@@ -158,6 +167,7 @@ async function submitDictionary(): Promise<void> {
   try {
     if (editingDictionary.value === null) await createDictionary(dictionaryForm.value)
     else await updateDictionary(editingDictionary.value.id, dictionaryForm.value)
+    dictionaries.reset()
     dictionaryVisible.value = false
     await load()
     ElNotification.success({ title: t('dictionary.saved') })
@@ -209,6 +219,7 @@ async function submitItem(): Promise<void> {
       await createDictionaryItem(selectedDictionary.value.id, itemForm.value)
     else
       await updateDictionaryItem(selectedDictionary.value.id, editingItem.value.id, itemForm.value)
+    dictionaries.reset()
     itemVisible.value = false
     await reloadDetail()
   } finally {
@@ -217,6 +228,7 @@ async function submitItem(): Promise<void> {
 }
 async function toggleDictionary(row: Dictionary): Promise<void> {
   await updateDictionaryStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
+  dictionaries.reset()
   await load()
 }
 async function toggleItem(item: DictionaryItem): Promise<void> {
@@ -226,6 +238,7 @@ async function toggleItem(item: DictionaryItem): Promise<void> {
     item.id,
     item.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes,
   )
+  dictionaries.reset()
   await reloadDetail()
 }
 async function removeDictionary(row: Dictionary): Promise<void> {
@@ -234,6 +247,7 @@ async function removeDictionary(row: Dictionary): Promise<void> {
     type: 'warning',
   })
   await deleteDictionary(row.id)
+  dictionaries.reset()
   await load()
 }
 async function removeItem(item: DictionaryItem): Promise<void> {
@@ -242,10 +256,12 @@ async function removeItem(item: DictionaryItem): Promise<void> {
     type: 'warning',
   })
   await deleteDictionaryItem(selectedDictionary.value.id, item.id)
+  dictionaries.reset()
   await reloadDetail()
 }
 function updatePagination(value: TablePaginationState): void {
   query.value = {
+    ...query.value,
     page: value.pageSize === query.value.pageSize ? value.currentPage : 1,
     pageSize: value.pageSize,
   }
@@ -262,14 +278,17 @@ onMounted(() => void load())
       :fields="searchFields"
       :query-label="t('search.query')"
       :reset-label="t('search.reset')"
+      query-test-id="dictionary-search"
+      reset-test-id="dictionary-reset"
       @query="search"
       @reset="reset"
     />
-    <div v-if="loadError" class="dictionary-error">{{ loadError }}</div>
     <AppTable
       :data="rows"
       :columns="columns"
       :loading="loading"
+      :result-state="listState"
+      :status-message="loadError"
       row-key="id"
       :pagination="pagination"
       @refresh="load"
@@ -277,9 +296,14 @@ onMounted(() => void load())
       @update:pagination="updatePagination"
     >
       <template #toolbar-left
-        ><el-button v-if="canCreate" type="primary" :icon="CirclePlus" @click="openCreate">{{
-          t('dictionary.create')
-        }}</el-button></template
+        ><el-button
+          v-if="canCreate"
+          data-testid="dictionary-create"
+          type="primary"
+          :icon="CirclePlus"
+          @click="openCreate"
+          >{{ t('dictionary.create') }}</el-button
+        ></template
       >
       <template #cell-status="{ row }"
         ><el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">{{
@@ -287,14 +311,25 @@ onMounted(() => void load())
         }}</el-tag></template
       >
       <template #cell-actions="{ row }"
-        ><el-button v-if="canUpdate" text :icon="Edit" @click.stop="openEdit(row)">{{
-          t('dictionary.edit')
-        }}</el-button
-        ><el-button v-if="canStatus" text :icon="Switch" @click.stop="toggleDictionary(row)">{{
-          row.isEnabled === YesNo.Yes ? t('dictionary.disable') : t('dictionary.enable')
-        }}</el-button
+        ><el-button
+          v-if="canUpdate"
+          data-testid="dictionary-update"
+          text
+          :icon="Edit"
+          @click.stop="openEdit(row)"
+          >{{ t('dictionary.edit') }}</el-button
+        ><el-button
+          v-if="canStatus"
+          data-testid="dictionary-status-toggle"
+          text
+          :icon="Switch"
+          @click.stop="toggleDictionary(row)"
+          >{{
+            row.isEnabled === YesNo.Yes ? t('dictionary.disable') : t('dictionary.enable')
+          }}</el-button
         ><el-button
           v-if="canDelete && row.isBuiltin === YesNo.No"
+          data-testid="dictionary-delete"
           text
           type="danger"
           :icon="Delete"
@@ -311,24 +346,36 @@ onMounted(() => void load())
         ><el-form-item :label="t('dictionary.code')"
           ><el-input
             v-model="dictionaryForm.code"
+            data-testid="dictionary-form-code"
+            :maxlength="128"
             :placeholder="t('dictionary.codePlaceholder')"
             :disabled="editingDictionary !== null" /></el-form-item
         ><el-form-item :label="t('dictionary.nameZh')"
           ><el-input
             v-model="dictionaryForm.nameZh"
+            data-testid="dictionary-form-name-zh"
+            :maxlength="128"
             :placeholder="t('dictionary.nameZhPlaceholder')" /></el-form-item
         ><el-form-item :label="t('dictionary.nameEn')"
           ><el-input
             v-model="dictionaryForm.nameEn"
+            data-testid="dictionary-form-name-en"
+            :maxlength="128"
             :placeholder="t('dictionary.nameEnPlaceholder')" /></el-form-item
         ><el-form-item :label="t('dictionary.description')"
           ><el-input
             v-model="dictionaryForm.description"
+            data-testid="dictionary-form-description"
+            :maxlength="512"
             type="textarea"
             :placeholder="t('dictionary.descriptionPlaceholder')" /></el-form-item
-        ><el-button type="primary" :loading="submitting" @click="submitDictionary">{{
-          t('dictionary.save')
-        }}</el-button></el-form
+        ><el-button
+          data-testid="dictionary-save"
+          type="primary"
+          :loading="submitting"
+          @click="submitDictionary"
+          >{{ t('dictionary.save') }}</el-button
+        ></el-form
       ></AppDialog
     >
     <AppDialog
@@ -337,22 +384,38 @@ onMounted(() => void load())
       width="900px"
       ><AppTable :data="items" :columns="itemColumns" row-key="id" @refresh="reloadDetail"
         ><template #toolbar-left
-          ><el-button v-if="canCreate" type="primary" :icon="CirclePlus" @click="openCreateItem">{{
-            t('dictionary.createItem')
-          }}</el-button></template
+          ><el-button
+            v-if="canCreate"
+            data-testid="dictionary-item-create"
+            type="primary"
+            :icon="CirclePlus"
+            @click="openCreateItem"
+            >{{ t('dictionary.createItem') }}</el-button
+          ></template
         ><template #cell-itemStatus="{ row }"
           ><el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">{{
             row.isEnabled === YesNo.Yes ? t('dictionary.enabled') : t('dictionary.disabled')
           }}</el-tag></template
         ><template #cell-itemActions="{ row }"
-          ><el-button v-if="canUpdate" text :icon="Edit" @click="openEditItem(row)">{{
-            t('dictionary.edit')
-          }}</el-button
-          ><el-button v-if="canStatus" text :icon="Switch" @click="toggleItem(row)">{{
-            row.isEnabled === YesNo.Yes ? t('dictionary.disable') : t('dictionary.enable')
-          }}</el-button
+          ><el-button
+            v-if="canUpdate"
+            data-testid="dictionary-item-update"
+            text
+            :icon="Edit"
+            @click="openEditItem(row)"
+            >{{ t('dictionary.edit') }}</el-button
+          ><el-button
+            v-if="canStatus"
+            data-testid="dictionary-item-status"
+            text
+            :icon="Switch"
+            @click="toggleItem(row)"
+            >{{
+              row.isEnabled === YesNo.Yes ? t('dictionary.disable') : t('dictionary.enable')
+            }}</el-button
           ><el-button
             v-if="canDelete && row.isBuiltin === YesNo.No"
+            data-testid="dictionary-item-delete"
             text
             type="danger"
             :icon="Delete"
@@ -370,24 +433,35 @@ onMounted(() => void load())
         ><el-form-item :label="t('dictionary.value')"
           ><el-input
             v-model="itemForm.value"
+            data-testid="dictionary-item-form-value"
+            :maxlength="128"
             :placeholder="t('dictionary.valuePlaceholder')"
             :disabled="editingItem !== null" /></el-form-item
         ><el-form-item :label="t('dictionary.labelZh')"
           ><el-input
             v-model="itemForm.labelZh"
+            data-testid="dictionary-item-form-label-zh"
+            :maxlength="256"
             :placeholder="t('dictionary.labelZhPlaceholder')" /></el-form-item
         ><el-form-item :label="t('dictionary.labelEn')"
           ><el-input
             v-model="itemForm.labelEn"
+            data-testid="dictionary-item-form-label-en"
+            :maxlength="256"
             :placeholder="t('dictionary.labelEnPlaceholder')" /></el-form-item
         ><el-form-item :label="t('dictionary.sort')"
           ><el-input-number
             v-model="itemForm.sort"
+            data-testid="dictionary-item-form-sort"
             :min="0"
             :placeholder="t('dictionary.sortPlaceholder')" /></el-form-item
-        ><el-button type="primary" :loading="submitting" @click="submitItem">{{
-          t('dictionary.save')
-        }}</el-button></el-form
+        ><el-button
+          data-testid="dictionary-item-save"
+          type="primary"
+          :loading="submitting"
+          @click="submitItem"
+          >{{ t('dictionary.save') }}</el-button
+        ></el-form
       ></AppDialog
     >
   </section>

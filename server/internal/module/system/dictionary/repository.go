@@ -78,8 +78,8 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, status int16, n
 func (r *Repository) Delete(ctx context.Context, id int64) error {
 	return r.db.WithContext(ctx).Delete(&Dictionary{}, id).Error
 }
-func (r *Repository) CreateItem(ctx context.Context, value Item) error {
-	err := r.db.WithContext(ctx).Create(&value).Error
+func (r *Repository) CreateItem(ctx context.Context, value *Item) error {
+	err := r.db.WithContext(ctx).Create(value).Error
 	return mapRepositoryError(err)
 }
 func (r *Repository) FindItemByValue(ctx context.Context, dictionaryID int64, value string) (Item, error) {
