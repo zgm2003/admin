@@ -5,6 +5,8 @@ import { ElNotification } from 'element-plus'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { appI18n } from '@/i18n'
+import { setLocale } from '@/i18n'
+import { getDictionaryOptions } from '@/api/system/dictionary'
 import { AppDialog } from '@/components/AppDialog'
 import { AppTable } from '@/components/AppTable'
 import { AppSearch } from '@/components/AppSearch'
@@ -22,6 +24,8 @@ import {
   listUploadRules,
   updateUploadRule,
 } from '@/api/storage/uploadRule'
+
+vi.mock('@/api/system/dictionary', () => ({ getDictionaryOptions: vi.fn() }))
 
 vi.mock('@/api/storage/cosConfig', () => ({
   listCosConfigs: vi.fn(),
@@ -60,6 +64,8 @@ const wrappers: VueWrapper[] = []
 describe('ObjectStorage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    setLocale('zh-CN')
+    vi.mocked(getDictionaryOptions).mockReset().mockResolvedValue(storageDictionaryOptions())
     vi.mocked(listCosConfigs).mockResolvedValue({
       list: [],
       total: 0,
@@ -97,6 +103,74 @@ describe('ObjectStorage', () => {
     expect(listCosConfigs).toHaveBeenCalledOnce()
     expect(listCosConfigs).toHaveBeenLastCalledWith({ page: 1, pageSize: 20 })
     expect(listUploadRules).not.toHaveBeenCalled()
+    expect(getDictionaryOptions).toHaveBeenCalledWith([
+      'storage.cos.region',
+      'storage.file.extension',
+      'storage.mime.type',
+    ])
+  })
+
+  it('reloads localized storage dictionary labels when the language changes', async () => {
+    vi.mocked(getDictionaryOptions)
+      .mockReset()
+      .mockResolvedValueOnce(storageDictionaryOptions())
+      .mockResolvedValueOnce({
+        ...storageDictionaryOptions(),
+        'storage.cos.region': [{ value: 'ap-guangzhou', label: 'Guangzhou (ap-guangzhou)' }],
+      })
+    const wrapper = mountPage(['storage:object:list', 'storage:cosConfig:create'])
+    await flushPromises()
+    await wrapper.get('[data-testid="storage-add-config"]').trigger('click')
+    await flushPromises()
+
+    const regionSelect = wrapper.get('[data-testid="storage-config-form"]').getComponent({
+      name: 'ElSelectV2',
+    })
+    expect(regionSelect.props('options')).toEqual([
+      { value: 'ap-guangzhou', label: '广州（ap-guangzhou）' },
+      { value: 'ap-hongkong', label: '中国香港（ap-hongkong）' },
+    ])
+
+    setLocale('en-US')
+    await flushPromises()
+
+    expect(getDictionaryOptions).toHaveBeenCalledTimes(2)
+    expect(regionSelect.props('options')).toEqual([
+      { value: 'ap-guangzhou', label: 'Guangzhou (ap-guangzhou)' },
+    ])
+  })
+
+  it('does not substitute hardcoded storage options when dictionary loading fails', async () => {
+    vi.mocked(getDictionaryOptions).mockRejectedValueOnce(new Error('dictionary unavailable'))
+    const wrapper = mountPage(['storage:object:list', 'storage:cosConfig:create'])
+    await flushPromises()
+    await wrapper.get('[data-testid="storage-add-config"]').trigger('click')
+    await flushPromises()
+
+    const regionSelect = wrapper.get('[data-testid="storage-config-form"]').getComponent({
+      name: 'ElSelectV2',
+    })
+    expect(regionSelect.props('options')).toEqual([])
+    expect(regionSelect.props('disabled')).toBe(true)
+    expect(wrapper.text()).toContain('存储选项加载失败')
+  })
+
+  it('disables dictionary-backed controls while storage options are loading', async () => {
+    const pending = deferred<ReturnType<typeof storageDictionaryOptions>>()
+    vi.mocked(getDictionaryOptions).mockReset().mockReturnValueOnce(pending.promise)
+    const wrapper = mountPage(['storage:object:list', 'storage:cosConfig:create'])
+    await flushPromises()
+    await wrapper.get('[data-testid="storage-add-config"]').trigger('click')
+    await flushPromises()
+
+    const regionSelect = wrapper.get('[data-testid="storage-config-form"]').getComponent({
+      name: 'ElSelectV2',
+    })
+    expect(regionSelect.props()).toMatchObject({ loading: true, disabled: true })
+
+    pending.resolve(storageDictionaryOptions())
+    await flushPromises()
+    expect(regionSelect.props()).toMatchObject({ loading: false, disabled: false })
   })
 
   it('keeps add-rule disabled when page-init has no platform or COS config', async () => {
@@ -543,3 +617,43 @@ describe('ObjectStorage', () => {
     })
   })
 })
+
+function storageDictionaryOptions() {
+  return {
+    'storage.cos.region': [
+      { value: 'ap-guangzhou', label: '广州（ap-guangzhou）' },
+      { value: 'ap-hongkong', label: '中国香港（ap-hongkong）' },
+    ],
+    'storage.file.extension': [
+      'jpg',
+      'jpeg',
+      'png',
+      'gif',
+      'webp',
+      'pdf',
+      'doc',
+      'docx',
+      'xls',
+      'xlsx',
+      'zip',
+    ].map((value) => ({ value, label: value })),
+    'storage.mime.type': [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'application/pdf',
+      'application/zip',
+    ].map((value) => ({ value, label: value })),
+  }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}

@@ -646,6 +646,15 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - `pnpm build`（web，含 vue-tsc）通过，仅存既有 >500 kB chunk 提示；`pnpm build`（canvas，含 tsc）通过。
 - 全量 `pnpm verify:frontend` 由维护者执行。
 
+## 展示型硬编码选项全局字典迁移（2026-09-10，完成）
+
+- 目标：按“后台可维护展示选项进入字典，后端状态机/协议 enum、Yes/No、界面偏好和关联资源不进入字典”的边界，迁移现存业务页面中的同类硬编码 `el-select-v2` 选项。
+- 本轮范围：`storage.cos.region`、`storage.file.extension`、`storage.mime.type`、`message.mail.region` 四个全局多语言字典；Storage 保留扩展名/MIME 的多选、筛选、可创建、自定义值及全选/半选行为，COS 与 SES 地域使用独立字典，避免错误绑定各自可用地域。
+- 已完成：Storage 一次批量加载三个字典，Mail 独立加载 SES 地域；语言切换重新请求，加载中/失败均禁用依赖选择器和保存动作并显示明确错误，不使用硬编码兜底。Storage 的多选、筛选、可创建、自定义值、全选/半选均保留，全选集合随当前启用字典项变化。其余下拉已复核为 Yes/No、状态机/协议 enum、界面偏好或动态关联资源，不迁移。
+- 数据库：新增 forward migration `docs/database/2026-09-10-display-option-dictionaries.sql`，包含 4 个内置字典与 31 个基线项；已有同 value 项不覆盖，保留 code 被非内置字典占用时整笔拒绝。真实 `admin.public` 已只读确认当前仅 `user.gender`、新 code 无冲突；migration 未执行到业务库。隔离 PostgreSQL 已验证重复执行幂等、既有项保持和冲突回滚。
+- 验收：后端 `go vet ./...`、`go test ./... -count=1`、`go build ./...` 通过；前端定向 Vitest 38/38、最终全量 Vitest 68 文件 517 项、`pnpm typecheck`、`pnpm lint`、`pnpm check:architecture`（0 findings）、`pnpm build` 均通过。Build 仅有既有的大 chunk 警告。
+- 迁移事实：真实 `admin.public` 已于 2026-09-10 15:59 +08:00 执行 `2026-09-10-display-option-dictionaries.sql`，并再次执行确认幂等；最终为 4 个启用内置字典、31 个启用内置项，空 value/中英文标签和重复活动值分组均为 0，原 `user.gender` 3 项未变化。迁移前 `public` 备份位于 `%LOCALAPPDATA%\Admin\backups\display-option-dictionaries-20260910-155853\public-before.dump`，大小 123773 字节，SHA256 `C85F6226715AF35ACA9A3FC4F046DC942EF1E28F55525F69F056E836BDAF324D`，`pg_restore --list` 得到 229 个归档条目。此次仅写入业务 seed，未修改 schema，因此不刷新 `current.sql`；未重启 API、未清理 Redis、Session、Access 或 Mail 额度。
+
 ## 系统字典管理（2026-09-10）
 
 - 目标：新增系统设置下的全局多语言字典管理；字典 `code/value` 稳定不可修改，`isBuiltin` 仅表示系统保护，不等同于代码 enum。COS 上传策略、邮件限流策略和登录 Session 仍按认证平台隔离，字典不拆平台。

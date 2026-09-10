@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, type ComputedRef } from 'vue'
 import type { FormRules } from 'element-plus'
 
 import type { CosConfig } from '@/api/storage/cosConfig'
@@ -8,44 +8,6 @@ import type { ConfigForm, RuleForm } from './components/types'
 
 const bytesPerMegabyte = 1024 * 1024
 
-export const cosRegionOptions = [
-  { value: 'ap-guangzhou', label: '广州（ap-guangzhou）' },
-  { value: 'ap-shanghai', label: '上海（ap-shanghai）' },
-  { value: 'ap-nanjing', label: '南京（ap-nanjing）' },
-  { value: 'ap-beijing', label: '北京（ap-beijing）' },
-  { value: 'ap-chengdu', label: '成都（ap-chengdu）' },
-  { value: 'ap-chongqing', label: '重庆（ap-chongqing）' },
-  { value: 'ap-hongkong', label: '中国香港（ap-hongkong）' },
-  { value: 'ap-singapore', label: '新加坡（ap-singapore）' },
-  { value: 'ap-tokyo', label: '东京（ap-tokyo）' },
-  { value: 'ap-seoul', label: '首尔（ap-seoul）' },
-  { value: 'eu-frankfurt', label: '法兰克福（eu-frankfurt）' },
-  { value: 'na-siliconvalley', label: '硅谷（na-siliconvalley）' },
-] as const
-
-export const commonExtensionOptions = [
-  'jpg',
-  'jpeg',
-  'png',
-  'gif',
-  'webp',
-  'pdf',
-  'doc',
-  'docx',
-  'xls',
-  'xlsx',
-  'zip',
-]
-
-export const commonMimeTypeOptions = [
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'application/pdf',
-  'application/zip',
-]
-
 function blankConfig(): ConfigForm {
   return {
     name: '',
@@ -53,7 +15,7 @@ function blankConfig(): ConfigForm {
     secretId: '',
     secretKey: '',
     bucket: '',
-    region: 'ap-guangzhou',
+    region: '',
     endpoint: null,
     bucketDomain: null,
     isEnabled: YesNo.Yes,
@@ -97,12 +59,20 @@ function httpsURLError(value: string | null, message: string): string {
   }
 }
 
-function toggleCommonOptions(current: string[], options: string[], checked: boolean): string[] {
+function toggleCommonOptions(
+  current: string[],
+  options: readonly string[],
+  checked: boolean,
+): string[] {
   if (checked) return [...new Set([...current, ...options])]
   return current.filter((item) => !options.includes(item))
 }
 
-export function useStorageForms(t: (key: string) => string) {
+export function useStorageForms(
+  t: (key: string) => string,
+  extensionValues: ComputedRef<readonly string[]>,
+  mimeTypeValues: ComputedRef<readonly string[]>,
+) {
   const configDialog = ref(false)
   const ruleDialog = ref(false)
   const editingConfig = ref<number | null>(null)
@@ -199,21 +169,25 @@ export function useStorageForms(t: (key: string) => string) {
       ruleForm.value.maxFileSizeBytes = Math.round(value * bytesPerMegabyte)
     },
   })
-  const allExtensionsSelected = computed(() =>
-    commonExtensionOptions.every((item) => ruleForm.value.allowedExtensions.includes(item)),
+  const allExtensionsSelected = computed(
+    () =>
+      extensionValues.value.length > 0 &&
+      extensionValues.value.every((item) => ruleForm.value.allowedExtensions.includes(item)),
   )
   const someExtensionsSelected = computed(
     () =>
       !allExtensionsSelected.value &&
-      commonExtensionOptions.some((item) => ruleForm.value.allowedExtensions.includes(item)),
+      extensionValues.value.some((item) => ruleForm.value.allowedExtensions.includes(item)),
   )
-  const allMimeTypesSelected = computed(() =>
-    commonMimeTypeOptions.every((item) => ruleForm.value.allowedMimeTypes.includes(item)),
+  const allMimeTypesSelected = computed(
+    () =>
+      mimeTypeValues.value.length > 0 &&
+      mimeTypeValues.value.every((item) => ruleForm.value.allowedMimeTypes.includes(item)),
   )
   const someMimeTypesSelected = computed(
     () =>
       !allMimeTypesSelected.value &&
-      commonMimeTypeOptions.some((item) => ruleForm.value.allowedMimeTypes.includes(item)),
+      mimeTypeValues.value.some((item) => ruleForm.value.allowedMimeTypes.includes(item)),
   )
 
   function validateConfigURLField(field: 'endpoint' | 'bucketDomain'): void {
@@ -230,11 +204,11 @@ export function useStorageForms(t: (key: string) => string) {
     return configUrlErrors.value.endpoint === '' && configUrlErrors.value.bucketDomain === ''
   }
 
-  function openConfig(row?: CosConfig): void {
+  function openConfig(row: CosConfig | undefined, defaultRegion: string): void {
     editingConfig.value = row?.id ?? null
     configForm.value = row
       ? { ...blankConfig(), ...row, secretId: '', secretKey: '' }
-      : blankConfig()
+      : { ...blankConfig(), region: defaultRegion }
     configUrlErrors.value = { endpoint: '', bucketDomain: '' }
     configDialog.value = true
   }
@@ -272,7 +246,7 @@ export function useStorageForms(t: (key: string) => string) {
   function toggleAllExtensions(checked: boolean | string | number): void {
     ruleForm.value.allowedExtensions = toggleCommonOptions(
       ruleForm.value.allowedExtensions,
-      commonExtensionOptions,
+      extensionValues.value,
       checked === true,
     )
     ruleExtensionsError.value = ''
@@ -281,7 +255,7 @@ export function useStorageForms(t: (key: string) => string) {
   function toggleAllMimeTypes(checked: boolean | string | number): void {
     ruleForm.value.allowedMimeTypes = toggleCommonOptions(
       ruleForm.value.allowedMimeTypes,
-      commonMimeTypeOptions,
+      mimeTypeValues.value,
       checked === true,
     )
   }

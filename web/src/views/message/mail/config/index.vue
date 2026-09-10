@@ -5,7 +5,9 @@ import { Send } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
 import * as mailApi from '@/api/message/mail'
+import type { DictionaryOptions } from '@/api/system/dictionary'
 import { YesNo } from '@/enums/yesNo'
+import { useSystemDictionaryStore } from '@/store/systemDictionary'
 
 const props = defineProps<{
   config: mailApi.MailConfig
@@ -15,17 +17,19 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ saved: []; deleted: []; tested: [] }>()
-const { t } = useI18n()
+type DictionaryOption = DictionaryOptions[string][number]
+
+const { t, locale } = useI18n()
+const dictionaries = useSystemDictionaryStore()
 const formRef = ref<FormInstance>()
 const saving = ref(false)
 const testing = ref(false)
 const testEmail = ref('')
 const form = ref<mailApi.MailConfigInput>(blankForm())
-
-const regionOptions = computed(() => [
-  { value: 'ap-guangzhou', label: t('mail.regionGuangzhou') },
-  { value: 'ap-hongkong', label: t('mail.regionHongKong') },
-])
+const regionOptions = ref<DictionaryOption[]>([])
+const regionOptionsLoading = ref(false)
+const regionOptionsError = ref('')
+let regionOptionsRequest = 0
 
 const rules = computed<FormRules<mailApi.MailConfigInput>>(() => ({
   region: [{ required: true, message: t('mail.regionRequired'), trigger: 'change' }],
@@ -71,7 +75,27 @@ function blankForm(): mailApi.MailConfigInput {
   }
 }
 
+async function loadRegionOptions(): Promise<void> {
+  const request = ++regionOptionsRequest
+  regionOptionsLoading.value = true
+  regionOptionsError.value = ''
+  try {
+    await dictionaries.load(['message.mail.region'])
+    if (request !== regionOptionsRequest) return
+    const options = dictionaries.options('message.mail.region').value
+    if (options === undefined) throw new Error('message.mail.region dictionary is not ready')
+    regionOptions.value = options.map((item) => ({ ...item }))
+  } catch {
+    if (request !== regionOptionsRequest) return
+    regionOptions.value = []
+    regionOptionsError.value = t('mail.regionOptionsLoadFailed')
+  } finally {
+    if (request === regionOptionsRequest) regionOptionsLoading.value = false
+  }
+}
+
 async function save(): Promise<void> {
+  if (regionOptionsLoading.value || regionOptionsError.value !== '') return
   if (!(await formRef.value?.validate().catch(() => false))) return
 
   saving.value = true
@@ -116,10 +140,19 @@ async function remove(): Promise<void> {
     // ElMessageBox cancellation and request errors are handled by their respective layers.
   }
 }
+
+watch(locale, () => void loadRegionOptions(), { immediate: true })
 </script>
 
 <template>
   <div class="config-tab">
+    <el-alert
+      v-if="regionOptionsError"
+      :title="regionOptionsError"
+      type="error"
+      show-icon
+      :closable="false"
+    />
     <el-form
       ref="formRef"
       :model="form"
@@ -156,6 +189,8 @@ async function remove(): Promise<void> {
             <el-select-v2
               v-model="form.region"
               :options="regionOptions"
+              :loading="regionOptionsLoading"
+              :disabled="regionOptionsLoading || regionOptionsError !== ''"
               :placeholder="t('mail.regionPlaceholder')"
               style="width: 100%"
             />
@@ -243,6 +278,7 @@ async function remove(): Promise<void> {
           data-testid="mail-config-save"
           type="primary"
           :loading="saving"
+          :disabled="regionOptionsLoading || regionOptionsError !== ''"
           @click="save"
         >
           {{ t('mail.save') }}

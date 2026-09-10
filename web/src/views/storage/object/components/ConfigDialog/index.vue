@@ -11,6 +11,8 @@ const props = defineProps<{
   rules: FormRules<ConfigForm>
   urlErrors: { endpoint: string; bucketDomain: string }
   regions: readonly { value: string; label: string }[]
+  optionsLoading: boolean
+  optionsUnavailable: boolean
   validateUrlField: (field: 'endpoint' | 'bucketDomain') => void
 }>()
 const visible = defineModel<boolean>({ required: true })
@@ -99,6 +101,8 @@ defineExpose({ validate: () => formRef.value?.validate() })
             <el-select-v2
               v-model="form.region"
               :options="regionOptions"
+              :loading="props.optionsLoading"
+              :disabled="props.optionsLoading || props.optionsUnavailable"
               data-testid="storage-config-region"
               class="storage-config-select"
               :placeholder="t('storage.regionPlaceholder')"
@@ -133,7 +137,12 @@ defineExpose({ validate: () => formRef.value?.validate() })
     </el-form>
     <template #footer>
       <el-button @click="visible = false">{{ t('storage.cancel') }}</el-button>
-      <el-button type="primary" @click="emit('save')">{{ t('storage.save') }}</el-button>
+      <el-button
+        type="primary"
+        :disabled="props.optionsLoading || props.optionsUnavailable"
+        @click="emit('save')"
+        >{{ t('storage.save') }}</el-button
+      >
     </template>
   </AppDialog>
 </template>

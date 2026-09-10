@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
@@ -35,12 +35,8 @@ import ConfigDialog from './components/ConfigDialog/index.vue'
 import ConfigTable from './components/ConfigTable/index.vue'
 import RuleDialog from './components/RuleDialog/index.vue'
 import RuleTable from './components/RuleTable/index.vue'
-import {
-  commonExtensionOptions,
-  commonMimeTypeOptions,
-  cosRegionOptions,
-  useStorageForms,
-} from './storageForms'
+import { useStorageDictionaries } from './storageDictionaries'
+import { useStorageForms } from './storageForms'
 import {
   createConfigColumns,
   createConfigSearchFields,
@@ -69,6 +65,15 @@ const loading = ref(false)
 const loadError = ref('')
 const mutationError = ref('')
 const {
+  commonExtensionOptions,
+  commonExtensionValues,
+  commonMimeTypeOptions,
+  commonMimeTypeValues,
+  cosRegionOptions,
+  storageOptionsError,
+  storageOptionsLoading,
+} = useStorageDictionaries()
+const {
   allExtensionsSelected,
   allMimeTypesSelected,
   configDialog,
@@ -91,7 +96,7 @@ const {
   toggleAllMimeTypes,
   validateConfigURLField,
   validateConfigURLs,
-} = useStorageForms(t)
+} = useStorageForms(t, commonExtensionValues, commonMimeTypeValues)
 const configDialogRef = ref<InstanceType<typeof ConfigDialog>>()
 const ruleDialogRef = ref<InstanceType<typeof RuleDialog>>()
 
@@ -222,7 +227,7 @@ function updateRulePagination(next: TablePaginationState): void {
   void loadRules()
 }
 function openConfig(row?: CosConfig): void {
-  openConfigForm(row)
+  openConfigForm(row, cosRegionOptions.value[0]?.value ?? '')
   mutationError.value = ''
 }
 function openRule(row?: UploadRule): void {
@@ -237,6 +242,7 @@ function openRule(row?: UploadRule): void {
   mutationError.value = ''
 }
 async function saveConfig(): Promise<void> {
+  if (storageOptionsLoading.value || storageOptionsError.value !== '') return
   const valid = await (configDialogRef.value?.validate() ?? Promise.resolve(false)).catch(
     () => false,
   )
@@ -275,6 +281,7 @@ async function saveConfig(): Promise<void> {
   }
 }
 async function saveRule(): Promise<void> {
+  if (storageOptionsLoading.value || storageOptionsError.value !== '') return
   const normalizedValues = normalizeRuleValues()
   if (normalizedValues === null) return
   const { allowedExtensions, allowedMimeTypes } = normalizedValues
@@ -353,11 +360,23 @@ async function removeRule(row: UploadRule): Promise<void> {
 onMounted(() => {
   void loadConfigs()
 })
+watch(cosRegionOptions, (options) => {
+  if (configDialog.value && editingConfig.value === null && configForm.value.region === '') {
+    configForm.value.region = options[0]?.value ?? ''
+  }
+})
 </script>
 
 <template>
   <section class="storage-page management-page">
     <el-alert v-if="loadError" :title="loadError" type="error" show-icon />
+    <el-alert
+      v-if="storageOptionsError"
+      :title="storageOptionsError"
+      type="error"
+      show-icon
+      :closable="false"
+    />
     <el-alert
       v-if="mutationError"
       :title="mutationError"
@@ -420,6 +439,8 @@ onMounted(() => {
       :rules="configRules"
       :url-errors="configUrlErrors"
       :regions="cosRegionOptions"
+      :options-loading="storageOptionsLoading"
+      :options-unavailable="storageOptionsError !== ''"
       :validate-url-field="validateConfigURLField"
       @save="saveConfig"
     />
@@ -434,6 +455,8 @@ onMounted(() => {
       :file-size-mb="ruleMaxFileSizeMB"
       :extensions="commonExtensionOptions"
       :mime-types="commonMimeTypeOptions"
+      :options-loading="storageOptionsLoading"
+      :options-unavailable="storageOptionsError !== ''"
       :all-extensions-selected="allExtensionsSelected"
       :some-extensions-selected="someExtensionsSelected"
       :all-mime-types-selected="allMimeTypesSelected"

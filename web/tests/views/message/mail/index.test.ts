@@ -4,10 +4,13 @@ import ElementPlus from 'element-plus'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as mailApi from '@/api/message/mail'
+import { getDictionaryOptions } from '@/api/system/dictionary'
 import { YesNo } from '@/enums/yesNo'
 import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
 import MailPage from '@/views/message/mail/index.vue'
+
+const wrappers: VueWrapper[] = []
 
 vi.mock('@/api/message/mail', () => ({
   getMailConfig: vi.fn(),
@@ -27,11 +30,18 @@ vi.mock('@/api/message/mail', () => ({
   listMailRateLimitPolicies: vi.fn(),
   updateMailRateLimitPolicy: vi.fn(),
 }))
+vi.mock('@/api/system/dictionary', () => ({ getDictionaryOptions: vi.fn() }))
 
 describe('mail service page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setLocale('zh-CN')
+    vi.mocked(getDictionaryOptions).mockReset().mockResolvedValue({
+      'message.mail.region': [
+        { value: 'ap-guangzhou', label: '广州（ap-guangzhou）' },
+        { value: 'ap-hongkong', label: '中国香港（ap-hongkong）' },
+      ],
+    })
     vi.mocked(mailApi.getMailConfig).mockResolvedValue({
       configured: true,
       region: 'ap-guangzhou',
@@ -63,6 +73,7 @@ describe('mail service page', () => {
     vi.mocked(mailApi.listMailRateLimitPolicies).mockResolvedValue({ platforms: [] })
   })
   afterEach(() => {
+    for (const wrapper of wrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
   })
 
@@ -104,12 +115,49 @@ describe('mail service page', () => {
       { value: 'ap-guangzhou', label: '广州（ap-guangzhou）' },
       { value: 'ap-hongkong', label: '中国香港（ap-hongkong）' },
     ])
+    expect(getDictionaryOptions).toHaveBeenCalledWith(['message.mail.region'])
 
     const configForm = wrapper.findComponent({ name: 'ElForm' })
     expect(configForm.props('labelWidth')).toBe('120px')
     expect(wrapper.text()).toContain('地域')
     expect(wrapper.text()).toContain('发信地址')
     expect(wrapper.text()).toContain('发件人别名')
+  })
+
+  it('does not substitute hardcoded mail regions when dictionary loading fails', async () => {
+    vi.mocked(getDictionaryOptions).mockRejectedValueOnce(new Error('dictionary unavailable'))
+    const wrapper = mountPage(['message:mail:list'])
+    await flushPromises()
+
+    const regionSelect = wrapper.findComponent({ name: 'ElSelectV2' })
+    expect(regionSelect.props('options')).toEqual([])
+    expect(regionSelect.props('disabled')).toBe(true)
+    expect(wrapper.text()).toContain('邮件地域选项加载失败')
+  })
+
+  it('reloads mail region labels when the active language changes', async () => {
+    vi.mocked(getDictionaryOptions)
+      .mockReset()
+      .mockResolvedValueOnce({
+        'message.mail.region': [{ value: 'ap-guangzhou', label: '广州（ap-guangzhou）' }],
+      })
+      .mockResolvedValueOnce({
+        'message.mail.region': [{ value: 'ap-guangzhou', label: 'Guangzhou (ap-guangzhou)' }],
+      })
+    const wrapper = mountPage(['message:mail:list'])
+    await flushPromises()
+    const regionSelect = wrapper.findComponent({ name: 'ElSelectV2' })
+    expect(regionSelect.props('options')).toEqual([
+      { value: 'ap-guangzhou', label: '广州（ap-guangzhou）' },
+    ])
+
+    setLocale('en-US')
+    await flushPromises()
+
+    expect(getDictionaryOptions).toHaveBeenCalledTimes(2)
+    expect(regionSelect.props('options')).toEqual([
+      { value: 'ap-guangzhou', label: 'Guangzhou (ap-guangzhou)' },
+    ])
   })
 
   it('disables test sending while the mail service is inactive', async () => {
@@ -478,10 +526,12 @@ function mountPage(permissionCodes: string[]): VueWrapper {
   const pinia = createPinia()
   setActivePinia(pinia)
   usePermissionStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes })
-  return mount(MailPage, {
+  const wrapper = mount(MailPage, {
     attachTo: document.body,
     global: { plugins: [pinia, appI18n, ElementPlus] },
   })
+  wrappers.push(wrapper)
+  return wrapper
 }
 
 async function selectTab(wrapper: VueWrapper, label: string) {

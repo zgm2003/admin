@@ -13,8 +13,10 @@ const props = defineProps<{
   platforms: PlatformOption[]
   configs: ConfigSummary[]
   fileSizeMb: number
-  extensions: string[]
-  mimeTypes: string[]
+  extensions: readonly { value: string; label: string }[]
+  mimeTypes: readonly { value: string; label: string }[]
+  optionsLoading: boolean
+  optionsUnavailable: boolean
   allExtensionsSelected: boolean
   someExtensionsSelected: boolean
   allMimeTypesSelected: boolean
@@ -37,12 +39,8 @@ const platformOptions = computed(() =>
 const configOptions = computed(() =>
   props.configs.map((item) => ({ label: item.name, value: item.id })),
 )
-const extensionOptions = computed(() =>
-  props.extensions.map((item) => ({ label: item, value: item })),
-)
-const mimeTypeOptions = computed(() =>
-  props.mimeTypes.map((item) => ({ label: item, value: item })),
-)
+const extensionOptions = computed(() => props.extensions.map((item) => ({ ...item })))
+const mimeTypeOptions = computed(() => props.mimeTypes.map((item) => ({ ...item })))
 defineExpose({ validate: () => formRef.value?.validate() })
 </script>
 
@@ -132,6 +130,8 @@ defineExpose({ validate: () => formRef.value?.validate() })
             ><el-select-v2
               v-model="form.allowedExtensions"
               :options="extensionOptions"
+              :loading="props.optionsLoading"
+              :disabled="props.optionsLoading || props.optionsUnavailable"
               data-testid="storage-rule-extensions"
               class="storage-rule-select"
               multiple
@@ -161,6 +161,8 @@ defineExpose({ validate: () => formRef.value?.validate() })
             ><el-select-v2
               v-model="form.allowedMimeTypes"
               :options="mimeTypeOptions"
+              :loading="props.optionsLoading"
+              :disabled="props.optionsLoading || props.optionsUnavailable"
               data-testid="storage-rule-mime-types"
               class="storage-rule-select"
               multiple
@@ -194,7 +196,12 @@ defineExpose({ validate: () => formRef.value?.validate() })
     </el-form>
     <template #footer
       ><el-button @click="visible = false">{{ t('storage.cancel') }}</el-button
-      ><el-button type="primary" @click="emit('save')">{{ t('storage.save') }}</el-button></template
+      ><el-button
+        type="primary"
+        :disabled="props.optionsLoading || props.optionsUnavailable"
+        @click="emit('save')"
+        >{{ t('storage.save') }}</el-button
+      ></template
     >
   </AppDialog>
 </template>
