@@ -15,7 +15,6 @@ import (
 
 type Input struct {
 	Username string
-	Phone    *string
 	Birthday *time.Time
 	Gender   int16
 	Avatar   string
@@ -52,14 +51,10 @@ func (s *Service) Update(ctx context.Context, actorUserID, targetUserID int64, i
 	if err != nil {
 		return Value{}, apperror.InvalidRequest(err)
 	}
-	phone, err := account.NormalizePhone(input.Phone)
-	if err != nil {
-		return Value{}, apperror.InvalidRequest(err)
-	}
 	if input.Gender < 0 || input.Gender > 2 {
 		return Value{}, apperror.InvalidRequest(fmt.Errorf("gender is invalid"))
 	}
-	updated, err := s.repository.Update(ctx, targetUserID, username, phone, input.Birthday, input.Gender, input.Avatar, s.now().UTC().Truncate(time.Microsecond))
+	updated, err := s.repository.Update(ctx, targetUserID, username, input.Birthday, input.Gender, input.Avatar, s.now().UTC().Truncate(time.Microsecond))
 	if err != nil {
 		return Value{}, mapRepositoryError(err)
 	}

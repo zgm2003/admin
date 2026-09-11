@@ -1,8 +1,6 @@
 package account
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -15,38 +13,17 @@ import (
 	"admin/server/internal/shared/yesno"
 )
 
+// updateRequest accepts the username only. The phone number is a verified
+// identity fact and can never be changed through the ordinary user edit.
 type updateRequest struct {
-	Username *string              `json:"username"`
-	Phone    nullablePhoneRequest `json:"phone"`
-}
-
-type nullablePhoneRequest struct {
-	Present bool
-	Value   *string
-}
-
-func (value *nullablePhoneRequest) UnmarshalJSON(data []byte) error {
-	value.Present = true
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		value.Value = nil
-		return nil
-	}
-	var phone string
-	if err := json.Unmarshal(data, &phone); err != nil {
-		return err
-	}
-	value.Value = &phone
-	return nil
+	Username *string `json:"username"`
 }
 
 func (r updateRequest) input() (UpdateInput, error) {
 	if r.Username == nil {
 		return UpdateInput{}, apperror.InvalidRequest(fmt.Errorf("username is required"))
 	}
-	if !r.Phone.Present {
-		return UpdateInput{}, apperror.InvalidRequest(fmt.Errorf("phone is required"))
-	}
-	return UpdateInput{Username: *r.Username, Phone: r.Phone.Value}, nil
+	return UpdateInput{Username: *r.Username}, nil
 }
 
 type statusRequest struct {

@@ -43,5 +43,5 @@ func ValidateScene(scene string) error {
 }
 
 func IsVerificationScene(scene string) bool {
-	return scene == SceneLogin || scene == SceneForget
+	return scene == SceneLogin || scene == SceneForget || scene == SceneBindEmail || scene == SceneChangePassword
 }

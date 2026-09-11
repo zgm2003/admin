@@ -34,12 +34,15 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 | --- | --- | --- |
 | `user/account` | `user/account` | `user_account` |
 | `user/profile` | `user/profile`（账户写入协作 `user/account`） | `user_profile`、`user_account` |
+| `user/email` | `user/email` | `user_account`、`user_email_change_log` |
+| `user/phone` | `user/phone` | `user_account`、`user_phone_change_log` |
 | `user/session` | `user/session` | `user_session` |
 | `user/loginLog` | `user/loginLog` | `user_login_log` |
 | `permission/authPlatform` | `permission/authPlatform` | `permission_auth_platform` |
 | `permission/menu` | `permission/menu` | `permission_menu` |
 | `permission/role` | `permission/role` | `permission_role` |
 | `message/mail` | `message/mail` | `message_mail_*` |
+| `message/sms` | `message/sms` | `message_sms_*` |
 | `storage/object` | `storage/cosConfig`、`storage/uploadRule`、`storage/upload` | `storage_cos_config`、`storage_upload_rule*` |
 | `system/operationLog` | `system/operationLog` | `system_operation_log` |
 | `system/dictionary` | `system/dictionary` | `system_dictionary`、`system_dictionary_item` |
@@ -91,6 +94,21 @@ Mail 管理的限流策略与 `message_mail_config.ttl_minutes` 是所有邮件�
 次数与窗口以 Mail 配置为准，Auth 不新增时间配置；验证码有效期同样只来自 Mail 配置。
 切换旧的按场景 Redis 限流状态时必须保留已消耗额度，并明确旧进程退出顺序、原子迁移和故障行为；不能只
 换 key 后声称窗口连续。该契约的实现与验证进度见 STATUS。
+
+## Email/Phone 身份与 SMS 边界
+
+`user/email` 与 `user/phone` 是对称的用户身份管理模块，分别使用 `shared/email` 与 `shared/phone` 的唯一
+规范化入口。两者都提供当前身份读取、发送绑定码、首次绑定和双 proof 换绑；Service 不导入 `auth/login`，Handler
+不接触 GORM/Redis，Repository 在一个 PostgreSQL 事务内锁定账户、更新 `user_account` 并追加对应 change log。
+身份 proof 通过一次 `ConsumeMany` 原子校验，任一 proof 错误时全部保留；数据库失败不会回填已消费 proof。身份变更
+成功后通过 auth state mutation 使用户 authority generation 失效。
+
+`message/mail` 与 `message/sms` 仅负责发送渠道。Mail 的场景固定为 `login`、`forget`、`bind_email`、
+`change_password`；SMS 的场景固定为 `login`、`forget`、`bind_phone`、`change_password`，不得以 `test`、
+`changePhone` 或 `setPassword` 扩展业务场景。Auth 根据显式 `loginType` 选择对应 sender、scene 和 verification
+key；verification key 通过 channel、scene、loginType 和规范化身份隔离，key/value 不含明文身份或验证码。
+SMS 管理页是五 tab 聚合页，配置/模板/收件规则全局共享，限流策略按认证平台维护，日志保留来源平台；SMS 日志、
+verification 和身份 change log 均无删除 API。
 
 ## 容量与一致性
 

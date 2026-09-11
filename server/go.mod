@@ -14,6 +14,7 @@ require (
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.563
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/ses v1.0.563
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms v1.0.563
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.75
 	golang.org/x/crypto v0.52.0
 	golang.org/x/sync v0.20.0

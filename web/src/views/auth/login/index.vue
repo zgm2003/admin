@@ -38,7 +38,8 @@ const pending = ref(false)
 const submitError = ref('')
 const sending = ref(false)
 const resendSeconds = ref(0)
-const challengeId = ref(generateChallengeID())
+const deliveryChallengeId = ref(generateChallengeID())
+const proofChallengeId = ref('')
 let countdownTimer: ReturnType<typeof setInterval> | undefined
 const bootstrapError = computed(() => (auth.status === 'error' ? auth.errorMessage : ''))
 const brandPoints = computed(() => [
@@ -48,10 +49,20 @@ const brandPoints = computed(() => [
 ])
 
 const passwordMode = computed(() => activeType.value === 'password')
-const codeMode = computed(() => activeType.value === 'email')
+const codeMode = computed(() => activeType.value === 'email' || activeType.value === 'phone')
+const accountInputType = computed(() => (activeType.value === 'phone' ? 'tel' : 'email'))
+const accountInputMode = computed(() => (activeType.value === 'phone' ? 'tel' : 'email'))
+const accountPlaceholder = computed(() =>
+  activeType.value === 'phone' ? t('auth.login.phonePlaceholder') : t('auth.login.accountPlaceholder'),
+)
 
 watch(activeType, () => {
   submitError.value = ''
+  form.value.code = ''
+  deliveryChallengeId.value = generateChallengeID()
+  proofChallengeId.value = ''
+  resendSeconds.value = 0
+  if (countdownTimer !== undefined) clearInterval(countdownTimer)
 })
 
 onMounted(() => {
@@ -91,6 +102,8 @@ function isDigitChar(char: string): boolean {
 
 async function sendCode(): Promise<void> {
   if (sending.value || resendSeconds.value > 0) return
+  const loginType = activeType.value
+  if (loginType !== 'email' && loginType !== 'phone') return
   if (form.value.account.trim() === '') {
     submitError.value = t('auth.login.accountRequired')
     return
@@ -100,16 +113,17 @@ async function sendCode(): Promise<void> {
   try {
     const result = await sendLoginCode(
       form.value.account.trim(),
-      'email',
+      loginType,
       'login',
-      challengeId.value,
+      deliveryChallengeId.value,
     )
+    proofChallengeId.value = result.challengeId
     resendSeconds.value = result.resendAfterSeconds
     startCountdown()
   } catch {
     // request.ts owns API error notifications.
   } finally {
-    challengeId.value = generateChallengeID()
+    deliveryChallengeId.value = generateChallengeID()
     sending.value = false
   }
 }
@@ -149,7 +163,12 @@ async function submit(): Promise<void> {
     const credential =
       loginType === 'password'
         ? await login({ loginType, loginAccount, password: form.value.password })
-        : await login({ loginType, loginAccount, code: form.value.code.trim() })
+        : await login({
+            loginType,
+            loginAccount,
+            challengeId: proofChallengeId.value,
+            code: form.value.code.trim(),
+          })
     auth.setCredential(credential)
     const currentUser = await getCurrentUser()
     auth.setAuthenticated(currentUser)
@@ -304,10 +323,10 @@ function generateChallengeID(): string {
               <el-input
                 v-model="form.account"
                 data-testid="login-account"
-                type="email"
-                inputmode="email"
+                :type="accountInputType"
+                :inputmode="accountInputMode"
                 autocomplete="username"
-                :placeholder="t('auth.login.accountPlaceholder')"
+                :placeholder="accountPlaceholder"
                 size="large"
               >
                 <template #prefix
@@ -361,7 +380,7 @@ function generateChallengeID(): string {
               />
             </el-form-item>
             <p v-if="codeMode && allowRegister" class="auth-hint" data-testid="login-register-hint">
-              {{ t('auth.login.emailAutoRegister') }}
+              {{ t(activeType === 'phone' ? 'auth.login.phoneAutoRegister' : 'auth.login.emailAutoRegister') }}
             </p>
 
             <el-button

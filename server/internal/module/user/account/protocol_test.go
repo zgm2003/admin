@@ -29,7 +29,7 @@ func TestNormalizeUsername(t *testing.T) {
 }
 
 func TestNormalizePhone(t *testing.T) {
-	tooLong := strings.Repeat("a", 33)
+	tooLong := strings.Repeat("1", 33)
 	for _, test := range []struct {
 		name  string
 		input *string
@@ -37,9 +37,11 @@ func TestNormalizePhone(t *testing.T) {
 		valid bool
 	}{
 		{name: "nil", valid: true},
-		{name: "trims whitespace", input: pointerTo("  +86 138-0000-0000  "), want: pointerTo("+86 138-0000-0000"), valid: true},
-		{name: "accepts phone characters", input: pointerTo("+86 138-0000-0000"), want: pointerTo("+86 138-0000-0000"), valid: true},
+		{name: "normalizes separators and country code", input: pointerTo("  +86 138-0000-0000  "), want: pointerTo("+8613800000000"), valid: true},
+		{name: "accepts national number", input: pointerTo("13800000000"), want: pointerTo("+8613800000000"), valid: true},
 		{name: "rejects empty", input: pointerTo("  ")},
+		{name: "rejects non mainland number", input: pointerTo("+1 415-555-2671")},
+		{name: "rejects second digit violation", input: pointerTo("12671628271")},
 		{name: "rejects more than 32 runes", input: &tooLong},
 		{name: "rejects control character", input: pointerTo("138\n0000")},
 	} {

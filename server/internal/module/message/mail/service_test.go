@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -388,11 +389,10 @@ func openMailServiceDatabase(t *testing.T) (*gorm.DB, context.Context) {
 	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_config (secret_id_ciphertext, secret_key_ciphertext, region, from_email, from_name, ttl_minutes, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, "configured", "configured", "ap-guangzhou", "sender@example.com", "Sender", 5, yesno.Yes, now, now).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_template (scene, name, subject, tencent_template_id, variables, example_variables, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?)`, SceneLogin, "Login", "Login code", 47941, `{"code":"123456","ttl_minutes":"10"}`, `{"code":"123456","ttl_minutes":"10"}`, yesno.Yes, now, now).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_template (scene, name, subject, tencent_template_id, variables, example_variables, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?)`, SceneForget, "Forget", "Reset code", 47942, `{"code":"123456","ttl_minutes":"10"}`, `{"code":"123456","ttl_minutes":"10"}`, yesno.Yes, now, now).Error; err != nil {
-		t.Fatal(err)
+	for index, scene := range []string{SceneLogin, SceneForget, SceneBindEmail, SceneChangePassword} {
+		if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_template (scene, name, subject, tencent_template_id, variables, example_variables, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?)`, scene, scene, scene+" code", 47941+index, `{"code":"123456","ttl_minutes":"10"}`, `{"code":"123456","ttl_minutes":"10"}`, yesno.Yes, now, now).Error; err != nil {
+			t.Fatal(err)
+		}
 	}
 	return db, ctx
 }
@@ -512,16 +512,17 @@ func TestReadinessMutationRollbackOutlivesCanceledRequest(t *testing.T) {
 	}
 }
 
-func TestReadinessMutationIncludesForgetScene(t *testing.T) {
+func TestReadinessMutationIncludesAllVerificationScenes(t *testing.T) {
 	readiness := &stubVerifyCodeReadinessStore{}
 	coordinator := NewReadinessCoordinator(readiness)
 	if err := coordinator.Mutate(context.Background(), func(context.Context) error { return errors.New("stop") }); err == nil {
 		t.Fatal("mutation change unexpectedly succeeded")
 	}
-	if readiness.rollbackCalls != 2 {
-		t.Fatalf("rollback calls = %d, want 2", readiness.rollbackCalls)
+	if readiness.rollbackCalls != 4 {
+		t.Fatalf("rollback calls = %d, want 4", readiness.rollbackCalls)
 	}
-	if len(readiness.beginScenes) != 2 || readiness.beginScenes[0] != SceneLogin || readiness.beginScenes[1] != SceneForget {
+	wantScenes := []string{SceneLogin, SceneForget, SceneBindEmail, SceneChangePassword}
+	if !reflect.DeepEqual(readiness.beginScenes, wantScenes) {
 		t.Fatalf("invalidated scenes = %v", readiness.beginScenes)
 	}
 	if readiness.publishCalls != 0 {
@@ -530,8 +531,8 @@ func TestReadinessMutationIncludesForgetScene(t *testing.T) {
 	if readiness.rollbackContextErr != nil {
 		t.Fatalf("rollback context error = %v", readiness.rollbackContextErr)
 	}
-	if readiness.beginCalls != 2 {
-		t.Fatalf("begin calls = %d, want 2", readiness.beginCalls)
+	if readiness.beginCalls != 4 {
+		t.Fatalf("begin calls = %d, want 4", readiness.beginCalls)
 	}
 }
 
@@ -545,7 +546,7 @@ func TestReadinessPublicationOutlivesCanceledRequest(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if readiness.publishCalls != 2 || readiness.publishContextErr != nil {
+	if readiness.publishCalls != 4 || readiness.publishContextErr != nil {
 		t.Fatalf("publication calls=%d context error=%v", readiness.publishCalls, readiness.publishContextErr)
 	}
 }
@@ -593,6 +594,8 @@ func openMailServiceWithReadiness(t *testing.T, limiter Limiter, policyStore Rat
 	keys := []string{
 		verifyCodeReadinessKey(SceneLogin), verifyCodeReadinessLoadLockKey(SceneLogin),
 		verifyCodeReadinessKey(SceneForget), verifyCodeReadinessLoadLockKey(SceneForget),
+		verifyCodeReadinessKey(SceneBindEmail), verifyCodeReadinessLoadLockKey(SceneBindEmail),
+		verifyCodeReadinessKey(SceneChangePassword), verifyCodeReadinessLoadLockKey(SceneChangePassword),
 	}
 	if err := redisClient.DeleteMany(ctx, keys); err != nil {
 		t.Fatal(err)
@@ -767,7 +770,7 @@ func TestSendPreparedEmailVerifyCodeRejectsInvalidInput(t *testing.T) {
 	service := NewService(NewStores(db), nil, sender, nil, nil, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
 	now := time.Now().UTC()
 	for _, in := range []EmailVerifyCodeInput{
-		{PlatformID: 1, Scene: SceneBindEmail, ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(5 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}},
+		{PlatformID: 1, Scene: "bogus", ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(5 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}},
 		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "12345", ExpiresAt: now.Add(5 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}},
 		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(5 * time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 0, ResendAfterSeconds: 60}},
 		{PlatformID: 1, Scene: SceneLogin, ToEmail: "user@example.com", Code: "123456", ExpiresAt: now.Add(-time.Minute), Preparation: EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}},
@@ -796,12 +799,20 @@ func TestPrepareEmailVerifyCodeAcceptsForgetScene(t *testing.T) {
 	}
 }
 
-func TestPrepareEmailVerifyCodeStillRejectsNonVerificationScenes(t *testing.T) {
+func TestPrepareEmailVerifyCodeAcceptsAllFourVerificationScenes(t *testing.T) {
 	limiter := &recordingLimiter{allowed: true}
 	service, ctx := openMailServiceWithReadiness(t, limiter, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
 
-	for _, scene := range []string{SceneBindEmail, SceneChangePassword, "bogus"} {
-		_, err := service.PrepareEmailVerifyCode(ctx, EmailVerifyCodePrepareInput{PlatformID: 1, ClientIP: "127.0.0.1", Scene: scene, ToEmail: "user@example.com"})
-		assertApplicationError(t, err, http.StatusBadRequest, apperror.CodeInvalidRequest)
+	for _, scene := range []string{SceneLogin, SceneForget, SceneBindEmail, SceneChangePassword} {
+		if _, err := service.PrepareEmailVerifyCode(ctx, EmailVerifyCodePrepareInput{PlatformID: 1, ClientIP: "127.0.0.1", Scene: scene, ToEmail: "user@example.com"}); err != nil {
+			t.Fatalf("scene %q rejected: %v", scene, err)
+		}
 	}
+}
+
+func TestPrepareEmailVerifyCodeStillRejectsUnknownScene(t *testing.T) {
+	limiter := &recordingLimiter{allowed: true}
+	service, ctx := openMailServiceWithReadiness(t, limiter, stubRateLimitPolicyStore{catalog: defaultPolicyCatalog()})
+	_, err := service.PrepareEmailVerifyCode(ctx, EmailVerifyCodePrepareInput{PlatformID: 1, ClientIP: "127.0.0.1", Scene: "bogus", ToEmail: "user@example.com"})
+	assertApplicationError(t, err, http.StatusBadRequest, apperror.CodeInvalidRequest)
 }

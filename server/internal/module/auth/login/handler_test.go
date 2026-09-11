@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -46,6 +47,15 @@ func TestLoginRejectsMissingAndMismatchedCredentialFields(t *testing.T) {
 		service := &stubAuthenticationService{credential: Credential{RefreshExpiresAt: time.Now().Add(time.Hour)}}
 		responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/login", body, nil, false)
 		assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusBadRequest, apperror.CodeInvalidRequest, nil)
+	}
+}
+
+func TestCodeLoginRequiresChallengeID(t *testing.T) {
+	service := &stubAuthenticationService{}
+	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/login", `{"loginType":"email","loginAccount":"admin@example.com","code":"123456"}`, nil, false)
+	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusBadRequest, apperror.CodeInvalidRequest, nil)
+	if service.loginInput.LoginAccount != "" {
+		t.Fatalf("code login without challengeId reached service: %+v", service.loginInput)
 	}
 }
 
@@ -227,13 +237,57 @@ func TestForgotPasswordRejectsMissingRequiredFields(t *testing.T) {
 func TestForgotPasswordReturnsChallengeExpiryAndResendWindow(t *testing.T) {
 	fixedNow := time.Date(2026, time.September, 8, 9, 0, 0, 0, time.UTC)
 	service := &stubAuthenticationService{sendCodeResult: SendCodeResult{ChallengeID: "challenge-1", ExpiresAt: fixedNow.Add(5 * time.Minute), ResendAfterSeconds: 60}}
-	responseRecorder := serveAuthRouteAt(t, service, http.MethodPost, "/api/v1/auth/password/forgot", `{"email":"user@example.com"}`, nil, false, fixedNow)
+	responseRecorder := serveAuthRouteAt(t, service, http.MethodPost, "/api/v1/auth/password/forgot", `{"account":"user@example.com","loginType":"email"}`, nil, false, fixedNow)
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 	if !strings.Contains(responseRecorder.Body.String(), `"challengeId":"challenge-1"`) ||
 		!strings.Contains(responseRecorder.Body.String(), `"resendAfterSeconds":60`) {
 		t.Fatalf("body=%s", responseRecorder.Body.String())
+	}
+}
+
+func TestForgotAndResetPasswordUseStrictIdentityDTOs(t *testing.T) {
+	service := &stubAuthenticationService{}
+	for _, test := range []struct {
+		path string
+		body string
+	}{
+		{path: "/api/v1/auth/password/forgot", body: `{"email":"user@example.com"}`},
+		{path: "/api/v1/auth/password/forgot", body: `{"account":"user@example.com","loginType":"password"}`},
+		{path: "/api/v1/auth/password/reset", body: `{"account":"user@example.com","loginType":"email","challengeId":"","code":"123456","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`},
+		{path: "/api/v1/auth/password/reset", body: `{"account":"user@example.com","loginType":"email","challengeId":"challenge-1","code":"12345","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`},
+		{path: "/api/v1/auth/password/reset", body: `{"account":"user@example.com","loginType":"email","challengeId":"challenge-1","code":"１２３４５６","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`},
+	} {
+		recorder := serveAuthRoute(t, service, http.MethodPost, test.path, test.body, nil, false)
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("%s body=%s status=%d response=%s", test.path, test.body, recorder.Code, recorder.Body)
+		}
+	}
+	if service.forgotInput.Account != "" || service.resetInput.Account != "" {
+		t.Fatalf("invalid requests reached service: forgot=%+v reset=%+v", service.forgotInput, service.resetInput)
+	}
+
+	for _, loginType := range []string{"email", "phone"} {
+		account := "user@example.com"
+		if loginType == "phone" {
+			account = "15671628271"
+		}
+		forgotBody := fmt.Sprintf(`{"account":%q,"loginType":%q}`, account, loginType)
+		if recorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/password/forgot", forgotBody, nil, false); recorder.Code != http.StatusOK {
+			t.Fatalf("forgot %s status=%d body=%s", loginType, recorder.Code, recorder.Body)
+		}
+		if service.forgotInput.Account != account || string(service.forgotInput.LoginType) != loginType {
+			t.Fatalf("forgot input=%+v", service.forgotInput)
+		}
+
+		resetBody := fmt.Sprintf(`{"account":%q,"loginType":%q,"challengeId":"challenge-1","code":"123456","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`, account, loginType)
+		if recorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/password/reset", resetBody, nil, false); recorder.Code != http.StatusOK {
+			t.Fatalf("reset %s status=%d body=%s", loginType, recorder.Code, recorder.Body)
+		}
+		if service.resetInput.Account != account || string(service.resetInput.LoginType) != loginType || service.resetInput.ChallengeID != "challenge-1" {
+			t.Fatalf("reset input=%+v", service.resetInput)
+		}
 	}
 }
 
@@ -275,6 +329,8 @@ type stubAuthenticationService struct {
 	loginConfig          authplatform.LoginConfig
 	sendCodeCalls        int
 	sendCodeResult       SendCodeResult
+	forgotInput          ForgotPasswordInput
+	resetInput           ResetPasswordInput
 	authenticateIdentity Identity
 	authenticateErr      error
 	authenticateCalls    int
@@ -304,13 +360,15 @@ func (s *stubAuthenticationService) SendCode(_ context.Context, _ SendCodeInput)
 	return s.sendCodeResult, nil
 }
 
-func (s *stubAuthenticationService) ForgotPassword(_ context.Context, _ ForgotPasswordInput) (SendCodeResult, error) {
+func (s *stubAuthenticationService) ForgotPassword(_ context.Context, input ForgotPasswordInput) (SendCodeResult, error) {
 	s.sendCodeCalls++
+	s.forgotInput = input
 	return s.sendCodeResult, nil
 }
 
-func (s *stubAuthenticationService) ResetPassword(_ context.Context, _ ResetPasswordInput) error {
+func (s *stubAuthenticationService) ResetPassword(_ context.Context, input ResetPasswordInput) error {
 	s.sendCodeCalls++
+	s.resetInput = input
 	return nil
 }
 

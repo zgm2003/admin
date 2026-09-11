@@ -33,8 +33,8 @@ func (c *ReadinessCoordinator) begin(ctx context.Context) ([]VerifyCodeReadiness
 	if c == nil || c.store == nil {
 		return nil, dependency(fmt.Errorf("mail verification readiness store unavailable"))
 	}
-	mutations := make([]VerifyCodeReadinessMutation, 0, 2)
-	for _, scene := range []string{SceneLogin, SceneForget} {
+	mutations := make([]VerifyCodeReadinessMutation, 0, 4)
+	for _, scene := range []string{SceneLogin, SceneForget, SceneBindEmail, SceneChangePassword} {
 		if err := ctx.Err(); err != nil {
 			return nil, dependency(errors.Join(err, c.rollback(ctx, mutations)))
 		}

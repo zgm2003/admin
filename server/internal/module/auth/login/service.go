@@ -11,13 +11,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/mail"
-	"strings"
 	"time"
 
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/state"
 	messagemail "admin/server/internal/module/message/mail"
+	messagesms "admin/server/internal/module/message/sms"
+	smstemplate "admin/server/internal/module/message/sms/template"
 	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
@@ -26,7 +26,9 @@ import (
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/cacheFill"
+	sharedemail "admin/server/internal/shared/email"
 	"admin/server/internal/shared/i18n"
+	"admin/server/internal/shared/phone"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -43,6 +45,7 @@ type passwordStore interface {
 	FindCredentialByID(context.Context, int64) (user.Credential, error)
 	FindActiveSessionPlatforms(context.Context, int64) ([]string, error)
 	ChangePasswordAndRevokeSessions(context.Context, int64, string, time.Time) ([]user.RevokedSessionRef, error)
+	ChangePasswordAndRevokeOtherSessions(context.Context, int64, int64, string, time.Time) ([]user.RevokedSessionRef, error)
 	SetPasswordHash(context.Context, int64, string, time.Time) error
 }
 
@@ -87,6 +90,7 @@ type Service struct {
 	refreshTokenHMACKey []byte
 	comparePassword     func(string, string) error
 	verifyCodeSender    messagemail.VerifyCodeSender
+	phoneCodeSender     messagesms.VerifyCodeSender
 	verificationCodes   VerificationCodeStore
 	logger              *slog.Logger
 	now                 func() time.Time
@@ -122,6 +126,12 @@ func (s *Service) SetLoginLogRecorder(recorder loginLogRecorder) { s.loginLogs =
 
 func (s *Service) SetVerifyCodeSender(sender messagemail.VerifyCodeSender) {
 	s.verifyCodeSender = sender
+}
+
+// SetPhoneVerifyCodeSender wires the SMS channel. Auth keeps the two senders as
+// separate fields instead of a shared manager or factory.
+func (s *Service) SetPhoneVerifyCodeSender(sender messagesms.VerifyCodeSender) {
+	s.phoneCodeSender = sender
 }
 
 func (s *Service) SetVerificationCodeStore(store VerificationCodeStore) { s.verificationCodes = store }
@@ -226,6 +236,49 @@ func (s *Service) revokeAllSessionsAndAdvanceState(ctx context.Context, userID i
 	return nil
 }
 
+func (s *Service) revokeOtherSessionsAndAdvanceState(ctx context.Context, userID, keepSessionID int64, passwordHash string) error {
+	platforms, err := s.passwords.FindActiveSessionPlatforms(ctx, userID)
+	if err != nil {
+		return apperror.DependencyUnavailable(err)
+	}
+	facts := make([]authstate.SessionsFact, 0, len(platforms))
+	for _, platform := range platforms {
+		fact, factErr := s.ensureSessionsReady(ctx, platform, userID)
+		if factErr != nil {
+			return mapStateMutationError(factErr)
+		}
+		facts = append(facts, fact)
+	}
+	lease, err := s.invalidator.Acquire(ctx, authstate.MutationFacts{Sessions: facts})
+	if err != nil {
+		return mapStateMutationError(err)
+	}
+	mutationCtx, stopRenewal := lease.StartRenewal(ctx)
+	revoked, updateErr := s.passwords.ChangePasswordAndRevokeOtherSessions(mutationCtx, userID, keepSessionID, passwordHash, s.now().UTC())
+	renewalCause := context.Cause(mutationCtx)
+	stopRenewal()
+	if updateErr != nil || renewalCause != nil {
+		return apperror.DependencyUnavailable(errors.Join(updateErr, renewalCause, lease.Rollback(ctx)))
+	}
+	nextFacts := make([]authstate.SessionsFact, 0, len(facts))
+	for _, fact := range facts {
+		generation, generationErr := authstate.NewGeneration()
+		if generationErr != nil {
+			return apperror.Internal(generationErr)
+		}
+		nextFacts = append(nextFacts, authstate.SessionsFact{Platform: fact.Platform, UserID: fact.UserID, Generation: generation})
+	}
+	if err := lease.Commit(ctx, authstate.MutationFacts{Sessions: nextFacts}); err != nil {
+		return apperror.DependencyUnavailable(err)
+	}
+	for _, session := range revoked {
+		if err := s.sessionCache.Delete(ctx, session.Platform, session.ID); err != nil {
+			return apperror.DependencyUnavailable(err)
+		}
+	}
+	return nil
+}
+
 func (s *Service) Register(ctx context.Context, input RegisterInput) (Registered, error) {
 	policy, err := s.policies.CurrentPolicy(ctx, input.Client.Platform)
 	if err != nil {
@@ -277,14 +330,19 @@ func (s *Service) LoginConfig(ctx context.Context, client authclient.Client) (au
 				continue
 			}
 			readiness, readyErr := s.verifyCodeSender.VerifyCodeReady(ctx, messagemail.SceneLogin)
-			if readyErr != nil {
-				return authplatform.LoginConfig{}, apperror.DependencyUnavailable(readyErr)
+			if readyErr != nil || !readiness.Ready {
+				continue
 			}
-			if readiness.Ready {
-				options = append(options, authplatform.LoginTypeOption{Value: loginType})
-			}
+			options = append(options, authplatform.LoginTypeOption{Value: loginType})
 		case authplatform.LoginTypePhone:
-			// No SMS channel is wired yet; phone is never offered.
+			if s.phoneCodeSender == nil {
+				continue
+			}
+			readiness, readyErr := s.phoneCodeSender.VerifyCodeReady(ctx, smstemplate.SceneLogin)
+			if readyErr != nil || !readiness.Ready {
+				continue
+			}
+			options = append(options, authplatform.LoginTypeOption{Value: loginType})
 		case authplatform.LoginTypePassword:
 			options = append(options, authplatform.LoginTypeOption{Value: loginType})
 		}
@@ -306,10 +364,15 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 	if input.Scene != messagemail.SceneLogin {
 		return SendCodeResult{}, apperror.InvalidRequest(fmt.Errorf("verification code scene is invalid"))
 	}
-	if input.LoginType != authplatform.LoginTypeEmail {
+	if input.LoginType != authplatform.LoginTypeEmail && input.LoginType != authplatform.LoginTypePhone {
 		return SendCodeResult{}, apperror.InvalidRequest(fmt.Errorf("login type is not available"))
 	}
-	if s.verifyCodeSender == nil || s.verificationCodes == nil {
+	if input.ChallengeID != "" {
+		if err := validateChallengeID(input.ChallengeID); err != nil {
+			return SendCodeResult{}, apperror.InvalidRequest(err)
+		}
+	}
+	if s.verificationCodes == nil {
 		return SendCodeResult{}, apperror.DependencyUnavailable(fmt.Errorf("verification code dependencies are unavailable"))
 	}
 	policy, err := s.policies.CurrentPolicy(ctx, input.Client.Platform)
@@ -319,11 +382,24 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 	if !policyAllowsLoginType(policy, input.LoginType) {
 		return SendCodeResult{}, apperror.Forbidden(fmt.Errorf("login type %q is disabled for authentication platform %q", input.LoginType, policy.Code))
 	}
-	email, err := normalizeEmail(input.Account)
+	if input.LoginType == authplatform.LoginTypeEmail {
+		if s.verifyCodeSender == nil {
+			return SendCodeResult{}, apperror.DependencyUnavailable(fmt.Errorf("verification code dependencies are unavailable"))
+		}
+		email, err := normalizeEmail(input.Account)
+		if err != nil {
+			return SendCodeResult{}, apperror.InvalidRequest(err)
+		}
+		return s.deliverEmailVerificationCode(ctx, policy, messagemail.SceneLogin, email, input.Client, input.ChallengeID)
+	}
+	if s.phoneCodeSender == nil {
+		return SendCodeResult{}, apperror.DependencyUnavailable(fmt.Errorf("verification code dependencies are unavailable"))
+	}
+	normalizedPhone, err := phone.Normalize(input.Account)
 	if err != nil {
 		return SendCodeResult{}, apperror.InvalidRequest(err)
 	}
-	return s.deliverEmailVerificationCode(ctx, policy, messagemail.SceneLogin, email, input.Client, input.ChallengeID)
+	return s.deliverPhoneVerificationCode(ctx, policy, smstemplate.SceneLogin, normalizedPhone, input.Client, input.ChallengeID, nil)
 }
 
 // deliverEmailVerificationCode owns the fixed delivery sequence shared by every
@@ -380,15 +456,15 @@ func (s *Service) deliverEmailVerificationCode(ctx context.Context, policy authp
 		}
 		return SendCodeResult{}, apperror.Internal(err)
 	}
-	digest := s.verificationCodes.Digest(code)
+	if challengeID == "" {
+		challengeID = leaseToken
+	}
+	digest := s.verificationCodes.ProofDigest(challengeID, code)
 	now := s.now().UTC()
 	expiresAt := now.Add(time.Duration(preparation.TTLMinutes) * time.Minute)
 	if err := s.verificationCodes.Put(ctx, key, digest, leaseToken, time.Duration(preparation.TTLMinutes)*time.Minute); err != nil {
 		releaseErr := releaseLease()
 		return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(err, releaseErr))
-	}
-	if challengeID == "" {
-		challengeID = leaseToken
 	}
 	_, sendErr := s.verifyCodeSender.SendPreparedEmailVerifyCode(ctx, messagemail.EmailVerifyCodeInput{
 		PlatformID:  policy.ID,
@@ -427,6 +503,107 @@ func (s *Service) deliverEmailVerificationCode(ctx context.Context, policy authp
 	return SendCodeResult{ChallengeID: challengeID, ExpiresAt: expiresAt, ResendAfterSeconds: preparation.ResendAfterSeconds}, nil
 }
 
+// deliverPhoneVerificationCode mirrors the email delivery sequence for the SMS
+// channel: acquire the delivery lease, prepare (readiness + rules + rate limit,
+// counted once), generate the code, replace it only while the lease is owned,
+// send without a second rate-limit count, then release the lease.
+func (s *Service) deliverPhoneVerificationCode(ctx context.Context, policy authplatform.Policy, scene string, toPhone string, client authclient.Client, challengeID string, userID *int64) (SendCodeResult, error) {
+	key := s.verificationCodes.VerificationKey(policy.Code, scene, string(authplatform.LoginTypePhone), toPhone)
+	leaseToken, err := newRefreshToken()
+	if err != nil {
+		return SendCodeResult{}, apperror.Internal(err)
+	}
+	acquired, err := s.verificationCodes.AcquireDelivery(ctx, key, leaseToken, 10*time.Second)
+	if err != nil {
+		return SendCodeResult{}, apperror.DependencyUnavailable(err)
+	}
+	if !acquired {
+		return SendCodeResult{}, apperror.DependencyUnavailable(fmt.Errorf("verification code delivery is in progress"))
+	}
+	releaseLease := func() error {
+		cleanupCtx, cancelCleanup := verificationCodeCleanupContext(ctx)
+		defer cancelCleanup()
+		return s.verificationCodes.ReleaseDelivery(cleanupCtx, key, leaseToken)
+	}
+
+	preparation, err := s.phoneCodeSender.PreparePhoneVerifyCode(ctx, messagesms.PhoneVerifyCodePrepareInput{
+		PlatformID: policy.ID,
+		Scene:      scene,
+		ToPhone:    toPhone,
+	})
+	if err != nil {
+		if releaseErr := releaseLease(); releaseErr != nil {
+			return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(err, releaseErr))
+		}
+		return SendCodeResult{}, err
+	}
+	if err := validatePhoneVerifyCodePreparation(preparation); err != nil {
+		if releaseErr := releaseLease(); releaseErr != nil {
+			return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(err, releaseErr))
+		}
+		return SendCodeResult{}, apperror.DependencyUnavailable(err)
+	}
+
+	generateCode := s.generateCode
+	if generateCode == nil {
+		generateCode = newSixDigitCode
+	}
+	code, err := generateCode()
+	if err != nil {
+		releaseErr := releaseLease()
+		return SendCodeResult{}, apperror.Internal(errors.Join(err, releaseErr))
+	}
+	if challengeID == "" {
+		challengeID = leaseToken
+	}
+	digest := s.verificationCodes.ProofDigest(challengeID, code)
+	now := s.now().UTC()
+	expiresAt := now.Add(time.Duration(preparation.TTLMinutes) * time.Minute)
+	if err := s.verificationCodes.Put(ctx, key, digest, leaseToken, time.Duration(preparation.TTLMinutes)*time.Minute); err != nil {
+		releaseErr := releaseLease()
+		return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(err, releaseErr))
+	}
+	_, sendErr := s.phoneCodeSender.SendPreparedPhoneVerifyCode(ctx, messagesms.PhoneVerifyCodeInput{
+		PlatformID:  policy.ID,
+		UserID:      userID,
+		ChallengeID: challengeID,
+		Scene:       scene,
+		ToPhone:     toPhone,
+		Code:        code,
+		ExpiresAt:   expiresAt,
+		Preparation: messagesms.PhoneVerifyCodePreparation{
+			TTLMinutes:         preparation.TTLMinutes,
+			ResendAfterSeconds: preparation.ResendAfterSeconds,
+		},
+	})
+	if sendErr != nil {
+		cleanupCtx, cancelCleanup := verificationCodeCleanupContext(ctx)
+		cleanupErr := errors.Join(
+			s.verificationCodes.DeleteIfOwned(cleanupCtx, key, leaseToken),
+			s.verificationCodes.ReleaseDelivery(cleanupCtx, key, leaseToken),
+		)
+		cancelCleanup()
+		if cleanupErr != nil {
+			return SendCodeResult{}, apperror.DependencyUnavailable(errors.Join(sendErr, cleanupErr))
+		}
+		return SendCodeResult{}, sendErr
+	}
+	if releaseErr := releaseLease(); releaseErr != nil {
+		return SendCodeResult{}, apperror.DependencyUnavailable(releaseErr)
+	}
+	return SendCodeResult{ChallengeID: challengeID, ExpiresAt: expiresAt, ResendAfterSeconds: preparation.ResendAfterSeconds}, nil
+}
+
+func validatePhoneVerifyCodePreparation(preparation messagesms.PhoneVerifyCodePreparation) error {
+	if preparation.TTLMinutes < 1 || preparation.TTLMinutes > 60 {
+		return fmt.Errorf("sms verification preparation TTL is invalid")
+	}
+	if preparation.ResendAfterSeconds < 0 || preparation.ResendAfterSeconds > 86400 {
+		return fmt.Errorf("sms verification preparation resend wait is invalid")
+	}
+	return nil
+}
+
 func validateEmailVerifyCodePreparation(preparation messagemail.EmailVerifyCodePreparation) error {
 	if preparation.TTLMinutes < 1 || preparation.TTLMinutes > 60 {
 		return fmt.Errorf("mail verification preparation TTL is invalid")
@@ -462,13 +639,10 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Credential, erro
 	if !policyAllowsLoginType(policy, input.LoginType) {
 		return Credential{}, apperror.Forbidden(fmt.Errorf("login type %q is disabled for authentication platform %q", input.LoginType, policy.Code))
 	}
-	if input.LoginType == authplatform.LoginTypePhone {
-		return Credential{}, apperror.Forbidden(fmt.Errorf("phone login is unavailable until an SMS channel is configured"))
-	}
 	switch input.LoginType {
 	case authplatform.LoginTypePassword:
 		return s.loginWithPassword(ctx, policy, input)
-	case authplatform.LoginTypeEmail:
+	case authplatform.LoginTypeEmail, authplatform.LoginTypePhone:
 		return s.loginWithCode(ctx, policy, input)
 	}
 	return Credential{}, apperror.InvalidRequest(fmt.Errorf("login type is invalid"))
@@ -526,12 +700,19 @@ func (s *Service) loginWithCode(ctx context.Context, policy authplatform.Policy,
 	if s.verificationCodes == nil {
 		return Credential{}, apperror.DependencyUnavailable(fmt.Errorf("verification code store is unavailable"))
 	}
+	if err := validateChallengeID(input.ChallengeID); err != nil || !isSixASCIIDigits(input.Code) {
+		return Credential{}, apperror.InvalidRequest(fmt.Errorf("verification proof is invalid"))
+	}
 	account, err := normalizeLoginAccount(input.LoginType, input.LoginAccount)
 	if err != nil {
 		return Credential{}, apperror.InvalidRequest(err)
 	}
-	key := s.verificationCodes.VerificationKey(policy.Code, messagemail.SceneLogin, string(input.LoginType), account)
-	digest := s.verificationCodes.Digest(input.Code)
+	scene := messagemail.SceneLogin
+	if input.LoginType == authplatform.LoginTypePhone {
+		scene = smstemplate.SceneLogin
+	}
+	key := s.verificationCodes.VerificationKey(policy.Code, scene, string(input.LoginType), account)
+	digest := s.verificationCodes.ProofDigest(input.ChallengeID, input.Code)
 	identityKind := loginIdentityKind(input.LoginType)
 	valid, limited, checkErr := s.verificationCodes.CheckAttempt(ctx, key, digest, input.Client.ClientIP)
 	if checkErr != nil {
@@ -689,11 +870,7 @@ func normalizeLoginAccount(loginType authplatform.LoginType, account string) (st
 	case authplatform.LoginTypeEmail:
 		return normalizeEmail(account)
 	case authplatform.LoginTypePhone:
-		normalized := strings.TrimSpace(account)
-		if normalized == "" {
-			return "", fmt.Errorf("phone number is invalid")
-		}
-		return normalized, nil
+		return phone.Normalize(account)
 	default:
 		return "", fmt.Errorf("login type is invalid")
 	}
@@ -1171,12 +1348,7 @@ func validateAccountInput(username, email, password, confirmPassword string) (no
 }
 
 func normalizeEmail(value string) (string, error) {
-	email := strings.ToLower(strings.TrimSpace(value))
-	parsed, err := mail.ParseAddress(email)
-	if err != nil || parsed.Name != "" || parsed.Address != email || len(email) > 254 {
-		return "", fmt.Errorf("email address is invalid")
-	}
-	return email, nil
+	return sharedemail.Normalize(value)
 }
 
 func mapUserCreateError(err error) error {

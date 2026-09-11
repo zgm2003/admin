@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { CircleCheckFilled, Lock, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -9,15 +9,19 @@ import { forgotPassword, resetPassword } from '@/api/auth/login'
 import logoUrl from '@/assets/logo.png'
 import AuthDock from '@/views/auth/components/AuthDock/index.vue'
 
+type RecoveryLoginType = 'email' | 'phone'
+
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 
-const email = ref('')
+const account = ref('')
+const loginType = ref<RecoveryLoginType>('email')
 const code = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 const codeSent = ref(false)
+const challengeId = ref('')
 const sending = ref(false)
 const pending = ref(false)
 const submitError = ref('')
@@ -28,16 +32,33 @@ const brandPoints = computed(() => [
   t('auth.brand.pointTwo'),
   t('auth.brand.pointThree'),
 ])
+const accountLabel = computed(() => t(loginType.value === 'email' ? 'auth.forgot.email' : 'auth.forgot.phone'))
+const accountPlaceholder = computed(() => t(loginType.value === 'email' ? 'auth.forgot.emailPlaceholder' : 'auth.forgot.phonePlaceholder'))
 
 onMounted(() => {
   const presetAccount = route.query.account
   if (typeof presetAccount === 'string' && presetAccount !== '') {
-    email.value = presetAccount
+    account.value = presetAccount
   }
 })
 
 onUnmounted(() => {
   if (countdownTimer !== undefined) clearInterval(countdownTimer)
+})
+
+watch(loginType, () => {
+  account.value = ''
+  code.value = ''
+  newPassword.value = ''
+  confirmPassword.value = ''
+  codeSent.value = false
+  challengeId.value = ''
+  submitError.value = ''
+  resendSeconds.value = 0
+  if (countdownTimer !== undefined) {
+    clearInterval(countdownTimer)
+    countdownTimer = undefined
+  }
 })
 
 function isDigitChar(char: string): boolean {
@@ -46,7 +67,7 @@ function isDigitChar(char: string): boolean {
 
 async function sendCode(): Promise<void> {
   if (sending.value || resendSeconds.value > 0) return
-  const target = email.value.trim()
+  const target = account.value.trim()
   if (target === '') {
     submitError.value = t('auth.forgot.emailRequired')
     return
@@ -54,7 +75,8 @@ async function sendCode(): Promise<void> {
   sending.value = true
   submitError.value = ''
   try {
-    const result = await forgotPassword(target)
+    const result = await forgotPassword(target, loginType.value)
+    challengeId.value = result.challengeId
     codeSent.value = true
     resendSeconds.value = result.resendAfterSeconds
     startCountdown()
@@ -79,7 +101,7 @@ function startCountdown(): void {
 
 async function submit(): Promise<void> {
   if (pending.value) return
-  const target = email.value.trim()
+  const target = account.value.trim()
   if (target === '') {
     submitError.value = t('auth.forgot.emailRequired')
     return
@@ -100,7 +122,9 @@ async function submit(): Promise<void> {
   submitError.value = ''
   try {
     await resetPassword({
-      email: target,
+      account: target,
+      loginType: loginType.value,
+      challengeId: challengeId.value,
       code: code.value.trim(),
       newPassword: newPassword.value,
       confirmPassword: confirmPassword.value,
@@ -165,20 +189,25 @@ async function submit(): Promise<void> {
           </header>
           <p class="auth-caption">{{ t('auth.forgot.caption') }}</p>
 
+          <el-radio-group v-model="loginType" class="auth-login-type" size="large">
+            <el-radio-button value="email">{{ t('loginType.email') }}</el-radio-button>
+            <el-radio-button value="phone">{{ t('loginType.phone') }}</el-radio-button>
+          </el-radio-group>
+
           <p v-if="submitError" class="auth-error" data-testid="forgot-error">
             {{ submitError }}
           </p>
 
           <el-form class="auth-form" label-position="top" @submit.prevent="submit">
-            <el-form-item :label="t('auth.forgot.email')">
+            <el-form-item :label="accountLabel">
               <div class="auth-code-row">
                 <el-input
-                  v-model="email"
+                  v-model="account"
                   data-testid="forgot-email"
-                  type="email"
-                  inputmode="email"
+                  :type="loginType === 'phone' ? 'tel' : 'email'"
+                  :inputmode="loginType === 'phone' ? 'tel' : 'email'"
                   autocomplete="username"
-                  :placeholder="t('auth.forgot.emailPlaceholder')"
+                  :placeholder="accountPlaceholder"
                   size="large"
                 >
                   <template #prefix

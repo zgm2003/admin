@@ -36,7 +36,7 @@ describe('user management', () => {
     updateUser.mockResolvedValue({
       id: 7,
       username: 'new_name',
-      phone: '+86 139-0000-0000',
+      phone: '+86 138-0000-0000',
       updatedAt: '2026-08-20T02:00:00Z',
     })
     updateStatus.mockResolvedValue({ id: 7, isEnabled: YesNo.No })
@@ -125,7 +125,7 @@ describe('user management', () => {
     expect(dangerous.every((button) => button.attributes('disabled') !== undefined)).toBe(true)
   })
 
-  it('edits the current username and phone, then synchronizes auth without loading access', async () => {
+  it('edits only username while keeping email and phone as read-only identities', async () => {
     const wrapper = mountPage(['user:account:update'])
     await flushPromises()
     const access = usePermissionStore()
@@ -139,67 +139,20 @@ describe('user management', () => {
     if (usernameInput === null) return
     usernameInput.value = ' new_name '
     usernameInput.dispatchEvent(new Event('input'))
-    const phoneInput = document.body.querySelector<HTMLInputElement>('[data-testid="user-phone"]')
-    if (phoneInput === null) throw new Error('phone input missing')
-    phoneInput.value = '  +86 139-0000-0000  '
-    phoneInput.dispatchEvent(new Event('input'))
+    const emailInput = document.body.querySelector<HTMLInputElement>('[data-testid="user-email-readonly"]')
+    const phoneInput = document.body.querySelector<HTMLInputElement>('[data-testid="user-phone-readonly"]')
+    expect(emailInput?.disabled).toBe(true)
+    expect(emailInput?.value).toBe('alice@example.com')
+    expect(phoneInput?.disabled).toBe(true)
+    expect(phoneInput?.value).toBe('+86 138-0000-0000')
     await bodyButton('保存').trigger('click')
     await flushPromises()
-    expect(updateUser).toHaveBeenCalledWith(7, { username: 'new_name', phone: '+86 139-0000-0000' })
+    expect(updateUser).toHaveBeenCalledWith(7, { username: 'new_name' })
     expect(useAuthStore().user?.username).toBe('new_name')
-    expect(useAuthStore().user?.phone).toBe('+86 139-0000-0000')
+    expect(useAuthStore().user?.email).toBe('alice@example.com')
+    expect(useAuthStore().user?.phone).toBe('+86 138-0000-0000')
     expect(loadAccess).not.toHaveBeenCalled()
   })
-
-  it('clears a user phone as null', async () => {
-    const wrapper = mountPage(['user:account:update'])
-    await flushPromises()
-    await findAriaButton(wrapper, '编辑').trigger('click')
-    await flushPromises()
-    const phoneInput = document.body.querySelector<HTMLInputElement>('[data-testid="user-phone"]')
-    if (phoneInput === null) throw new Error('phone input missing')
-    phoneInput.value = '   '
-    phoneInput.dispatchEvent(new Event('input'))
-    await bodyButton('保存').trigger('click')
-    await flushPromises()
-    expect(updateUser).toHaveBeenCalledWith(7, { username: 'alice', phone: null })
-  })
-
-  it('submits exactly 32 astral phone runes without native length truncation', async () => {
-    const wrapper = mountPage(['user:account:update'])
-    const phone = '😀'.repeat(32)
-    await flushPromises()
-    await findAriaButton(wrapper, '编辑').trigger('click')
-    await flushPromises()
-    const phoneInput = document.body.querySelector<HTMLInputElement>('[data-testid="user-phone"]')
-    if (phoneInput === null) throw new Error('phone input missing')
-    expect(phoneInput.maxLength).toBe(-1)
-    phoneInput.value = phone
-    phoneInput.dispatchEvent(new Event('input'))
-    expect(phoneInput.value).toBe(phone)
-    await bodyButton('保存').trigger('click')
-    await flushPromises()
-    expect(updateUser).toHaveBeenCalledWith(7, { username: 'alice', phone })
-  })
-
-  it.each(['+86\u0007139', '1'.repeat(33)])(
-    'does not save an invalid phone value',
-    async (phone) => {
-      const wrapper = mountPage(['user:account:update'])
-      await flushPromises()
-      await findAriaButton(wrapper, '编辑').trigger('click')
-      await flushPromises()
-      const phoneInput = document.body.querySelector<HTMLInputElement>('[data-testid="user-phone"]')
-      if (phoneInput === null) throw new Error('phone input missing')
-      phoneInput.value = phone
-      phoneInput.dispatchEvent(new Event('input'))
-      await flushPromises()
-      expect(bodyButton('保存').attributes('disabled')).toBeDefined()
-      await bodyButton('保存').trigger('click')
-      await flushPromises()
-      expect(updateUser).not.toHaveBeenCalled()
-    },
-  )
 
   it('loads and saves unique sorted user roles without refreshing access', async () => {
     const wrapper = mountPage(['user:account:authorize'], 9)

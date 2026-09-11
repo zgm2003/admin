@@ -189,6 +189,44 @@ describe('Login page', () => {
     )
   })
 
+  it('submits the challenge returned by the last successful delivery', async () => {
+    sendLoginCodeMock.mockResolvedValue({
+      challengeId: 'challenge-proof',
+      expiresAt: '2026-09-07T10:10:00Z',
+      resendAfterSeconds: 60,
+    })
+    loginMock.mockResolvedValue({
+      accessToken: 'jwt',
+      expiresIn: 900,
+      isNewUser: false,
+      passwordSetRequired: false,
+    })
+    getCurrentUserMock.mockResolvedValue({
+      userId: 1,
+      username: 'admin',
+      email: 'admin@example.com',
+      phone: null,
+      avatar: '',
+      passwordSetRequired: false,
+    })
+    const { wrapper } = await mountLogin()
+    await wrapper.get('[data-testid="login-account"]').setValue('admin@example.com')
+    await wrapper.findComponent({ name: 'ElTabs' }).vm.$emit('update:modelValue', 'email')
+    await flushPromises()
+    await wrapper.get('[data-testid="login-send-code"]').trigger('click')
+    await flushPromises()
+    await wrapper.findComponent({ name: 'ElInputOtp' }).vm.$emit('update:modelValue', '123456')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(loginMock).toHaveBeenCalledWith({
+      loginType: 'email',
+      loginAccount: 'admin@example.com',
+      challengeId: 'challenge-proof',
+      code: '123456',
+    })
+  })
+
   it('counts down from resendAfterSeconds, not the code expiry', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-07T10:00:00Z'))

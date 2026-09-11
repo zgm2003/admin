@@ -9,7 +9,6 @@ const props = defineProps<{
   editError: string
   editSaving: boolean
   usernameValid: boolean
-  phoneValid: boolean
 }>()
 const visible = defineModel<boolean>({ required: true })
 const form = defineModel<UserFormState>('form', { required: true })
@@ -28,22 +27,26 @@ const { t } = useI18n()
     <el-alert v-if="props.editError" :title="props.editError" type="error" /><el-form
       label-position="top"
       ><el-form-item :label="t('user.email')"
-        ><el-input :model-value="props.editingUser?.email ?? ''" disabled /></el-form-item
+        ><el-input
+          :model-value="props.editingUser?.email ?? ''"
+          data-testid="user-email-readonly"
+          disabled /></el-form-item
+      ><el-form-item :label="t('user.phone')"
+        ><el-input
+          :model-value="props.editingUser?.phone ?? ''"
+          data-testid="user-phone-readonly"
+          disabled /></el-form-item
       ><el-form-item
         :label="t('user.username')"
         :error="form.username !== '' && !props.usernameValid ? t('user.invalidUsername') : ''"
         ><el-input v-model="form.username" maxlength="64" /></el-form-item
-      ><el-form-item
-        :label="t('user.phone')"
-        :error="form.phone !== '' && !props.phoneValid ? t('user.invalidPhone') : ''"
-        ><el-input v-model="form.phone" data-testid="user-phone" /></el-form-item
     ></el-form>
     <template #footer
       ><el-button @click="visible = false">{{ t('user.cancel') }}</el-button
       ><el-button
         type="primary"
         :loading="props.editSaving"
-        :disabled="!props.usernameValid || !props.phoneValid"
+        :disabled="!props.usernameValid"
         @click="emit('save')"
         >{{ t('user.save') }}</el-button
       ></template

@@ -59,6 +59,16 @@ export const useAuthStore = defineStore('auth', {
       }
       return true
     },
+    updateEmail(userId: number, email: string): boolean {
+      if (this.user === null || this.user.userId !== userId) return false
+      this.user = { ...this.user, email }
+      return true
+    },
+    updatePhone(userId: number, phone: string): boolean {
+      if (this.user === null || this.user.userId !== userId) return false
+      this.user = { ...this.user, phone }
+      return true
+    },
     setAnonymous() {
       this.clearAuthValues()
       this.status = 'anonymous'

@@ -45,6 +45,7 @@ type Credential struct {
 	ID           int64
 	Username     string
 	Email        string
+	Phone        *string
 	PasswordHash string
 	IsEnabled    yesno.Value
 }
@@ -264,9 +265,9 @@ func (r *Repository) CountEffectiveSuperAdmins(ctx context.Context, superAdminRo
 	return count, nil
 }
 
-func (r *Repository) UpdateProfile(ctx context.Context, userID int64, username string, phone *string, updatedAt time.Time) error {
+func (r *Repository) UpdateProfile(ctx context.Context, userID int64, username string, updatedAt time.Time) error {
 	result := r.db.WithContext(ctx).Model(&User{}).Where("id = ?", userID).Updates(map[string]any{
-		"username": username, "phone": phone, "updated_at": updatedAt.UTC(),
+		"username": username, "updated_at": updatedAt.UTC(),
 	})
 	if result.Error != nil {
 		return mapUserWriteError("update profile", result.Error)
@@ -412,6 +413,18 @@ func (r *Repository) FindCredentialByPhone(ctx context.Context, phone string) (C
 	return credential, nil
 }
 
+// IsPhoneInUse reports whether another active account owns the normalized
+// phone number. The check is advisory; ChangePhoneTransaction remains the
+// authoritative unique-index boundary.
+func (r *Repository) IsPhoneInUse(ctx context.Context, userID int64, phone string) (bool, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&User{}).
+		Where("phone = ? AND id <> ? AND deleted_at IS NULL", phone, userID).Count(&count).Error; err != nil {
+		return false, fmt.Errorf("check phone ownership: %w", err)
+	}
+	return count > 0, nil
+}
+
 func (r *Repository) FindCredentialByIdentity(ctx context.Context, identityKind, account string) (Credential, error) {
 	switch identityKind {
 	case "email":
@@ -509,7 +522,7 @@ func (r *Repository) CreateVerifiedIdentity(ctx context.Context, input VerifiedI
 func (r *Repository) FindCredentialByID(ctx context.Context, userID int64) (Credential, error) {
 	var credential Credential
 	result := r.db.WithContext(ctx).Table("user_account").
-		Select("id, username, email, password_hash, is_enabled").
+		Select("id, username, email, phone, password_hash, is_enabled").
 		Where("id = ? AND deleted_at IS NULL", userID).Take(&credential)
 	if result.Error != nil {
 		return Credential{}, fmt.Errorf("find credential by id: %w", result.Error)
@@ -536,6 +549,43 @@ func (r *Repository) ChangePasswordAndRevokeSessions(ctx context.Context, userID
 		if err := tx.Table("user_session").Where("user_id = ? AND revoked_at IS NULL", userID).
 			Updates(map[string]any{"revoked_at": now.UTC(), "updated_at": now.UTC()}).Error; err != nil {
 			return fmt.Errorf("revoke sessions after password change: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return revoked, nil
+}
+
+// ChangePasswordAndRevokeOtherSessions updates the password while preserving
+// the authenticated session that initiated the change. Every other active
+// session is revoked in the same transaction.
+func (r *Repository) ChangePasswordAndRevokeOtherSessions(ctx context.Context, userID, keepSessionID int64, passwordHash string, now time.Time) ([]RevokedSessionRef, error) {
+	revoked := make([]RevokedSessionRef, 0)
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var currentSession struct{ ID int64 }
+		if err := tx.Table("user_session").Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("id").Where("id = ? AND user_id = ? AND revoked_at IS NULL", keepSessionID, userID).Take(&currentSession).Error; err != nil {
+			return fmt.Errorf("lock current session for password change: %w", err)
+		}
+		result := tx.Table("user_account").Where("id = ? AND deleted_at IS NULL", userID).
+			Updates(map[string]any{"password_hash": passwordHash, "updated_at": now.UTC()})
+		if result.Error != nil {
+			return fmt.Errorf("update password: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("update password %d: %w", userID, gorm.ErrRecordNotFound)
+		}
+		if err := tx.Table("user_session AS session").Select("session.id, session.user_id, platform_ref.code AS platform").
+			Joins("JOIN permission_auth_platform AS platform_ref ON platform_ref.id = session.platform_id").
+			Where("session.user_id = ? AND session.id <> ? AND session.revoked_at IS NULL", userID, keepSessionID).
+			Find(&revoked).Error; err != nil {
+			return fmt.Errorf("find other active sessions for password change: %w", err)
+		}
+		if err := tx.Table("user_session").Where("user_id = ? AND id <> ? AND revoked_at IS NULL", userID, keepSessionID).
+			Updates(map[string]any{"revoked_at": now.UTC(), "updated_at": now.UTC()}).Error; err != nil {
+			return fmt.Errorf("revoke other sessions after password change: %w", err)
 		}
 		return nil
 	})

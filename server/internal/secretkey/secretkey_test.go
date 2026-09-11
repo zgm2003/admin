@@ -85,6 +85,53 @@ func TestStorageEncryptionKeyIsStableSeparateAndCopied(t *testing.T) {
 	}
 }
 
+func TestSMSKeysAreStableSeparateFromMailAndCopied(t *testing.T) {
+	rootSecret := strings.Repeat("s", 64)
+	keys, err := New(rootSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	encryption := keys.SMSEncryptionKey()
+	recipient := keys.SMSRecipientHMACKey()
+	if len(encryption) != 32 || len(recipient) != 32 {
+		t.Fatal("sms keys must be 32 bytes")
+	}
+	if !bytes.Equal(encryption, keys.SMSEncryptionKey()) {
+		t.Fatal("sms encryption derivation is not stable")
+	}
+	if bytes.Equal(encryption, recipient) {
+		t.Fatal("sms purposes produced the same key")
+	}
+	if bytes.Equal(encryption, keys.MailEncryptionKey()) || bytes.Equal(recipient, keys.MailRecipientHMACKey()) {
+		t.Fatal("sms keys must not reuse mail keys")
+	}
+
+	wantEncryption, err := hkdf.Key(sha256.New, []byte(rootSecret), nil, "admin:message:sms-encryption:v1", keyLength)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(encryption, wantEncryption) {
+		t.Fatal("sms encryption key does not use the message domain purpose")
+	}
+	wantRecipient, err := hkdf.Key(sha256.New, []byte(rootSecret), nil, "admin:message:sms-recipient-hmac:v1", keyLength)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(recipient, wantRecipient) {
+		t.Fatal("sms recipient key does not use the message domain purpose")
+	}
+
+	encryption[0] ^= 0xff
+	recipient[0] ^= 0xff
+	if bytes.Equal(encryption, keys.SMSEncryptionKey()) {
+		t.Fatal("SMSEncryptionKey returned internal storage")
+	}
+	if bytes.Equal(recipient, keys.SMSRecipientHMACKey()) {
+		t.Fatal("SMSRecipientHMACKey returned internal storage")
+	}
+}
+
 func TestMailEncryptionKeyIsSeparateAndCopied(t *testing.T) {
 	rootSecret := strings.Repeat("s", 64)
 	keys, err := New(rootSecret)

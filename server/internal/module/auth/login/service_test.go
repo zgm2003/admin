@@ -13,6 +13,8 @@ import (
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/state"
 	messagemail "admin/server/internal/module/message/mail"
+	messagesms "admin/server/internal/module/message/sms"
+	smstemplate "admin/server/internal/module/message/sms/template"
 	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
@@ -253,19 +255,169 @@ func TestLoginRejectsPasswordWhenPlatformDoesNotEnableIt(t *testing.T) {
 	}
 }
 
-func TestLoginRejectsPhoneUntilSMSChannelExists(t *testing.T) {
+func TestLoginPhoneUsesVerifiedNormalizedIdentity(t *testing.T) {
+	redisClient := openAuthRedis(t)
 	policy := testPolicy()
-	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone}
+	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
 	store := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
-	users := &fakeUserStore{credentialErr: gorm.ErrRecordNotFound}
-	service := NewService(users, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	users := &fakeUserStore{credential: user.Credential{ID: 82601, Username: "phone-user", IsEnabled: yesno.Yes}}
+	sessions := &fakeSessionStore{createSession: Session{ID: 82602, UserID: 82601, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: "127.0.0.1"}}
+	cleanupAuthRedisKeys(t, redisClient, 82601, "admin", 82602)
+	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
 	service.SetVerificationCodeStore(store)
 
-	_, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypePhone, LoginAccount: "+8615671628271", Code: "123456", Client: testAuthClient()})
-	if appErrorCode(err) != apperror.CodeForbidden || store.checkCalls != 0 || users.identityCalls != 0 {
-		t.Fatalf("phone login error=%v checkCalls=%d identityCalls=%d", err, store.checkCalls, users.identityCalls)
+	credential, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypePhone, LoginAccount: "86 156-7162-8271", ChallengeID: "challenge-1", Code: "123456", Client: testAuthClient()})
+	if err != nil || credential.AccessToken == "" || store.checkCalls != 1 || store.consumeCalls != 1 || users.identityCalls != 1 {
+		t.Fatalf("credential=%+v error=%v check=%d consume=%d identity=%d", credential, err, store.checkCalls, store.consumeCalls, users.identityCalls)
+	}
+	if users.identityKind != "phone" || users.identityAccount != "+8615671628271" {
+		t.Fatalf("identity kind=%q account=%q", users.identityKind, users.identityAccount)
+	}
+	if store.proofChallengeID != "challenge-1" || store.proofCode != "123456" {
+		t.Fatalf("proof challenge=%q code=%q", store.proofChallengeID, store.proofCode)
 	}
 }
+
+func TestLoginConfigPublishesPhoneOnlyWhenSMSIsReady(t *testing.T) {
+	policy := testPolicy()
+	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePhone, authplatform.LoginTypePassword}
+	emailSender := &fakeVerifyCodeSender{readiness: messagemail.VerifyCodeReadiness{Ready: true, TTLMinutes: 5}}
+	phoneSender := &fakePhoneVerifyCodeSender{readiness: messagesms.VerifyCodeReadiness{Ready: true, TTLMinutes: 5}}
+	service := NewService(nil, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetVerifyCodeSender(emailSender)
+	service.SetPhoneVerifyCodeSender(phoneSender)
+
+	config, err := service.LoginConfig(context.Background(), testAuthClient())
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := make([]authplatform.LoginType, 0, len(config.LoginTypes))
+	for _, option := range config.LoginTypes {
+		values = append(values, option.Value)
+	}
+	if fmt.Sprint(values) != "[email phone password]" || phoneSender.readyCalls != 1 {
+		t.Fatalf("login types=%v phone readiness calls=%d", values, phoneSender.readyCalls)
+	}
+
+	phoneSender.readyErr = errors.New("sms readiness corrupt")
+	config, err = service.LoginConfig(context.Background(), testAuthClient())
+	if err != nil {
+		t.Fatal(err)
+	}
+	values = values[:0]
+	for _, option := range config.LoginTypes {
+		values = append(values, option.Value)
+	}
+	if fmt.Sprint(values) != "[email password]" {
+		t.Fatalf("login types after SMS failure=%v", values)
+	}
+
+	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}
+	phoneSender.readyCalls = 0
+	service.policies = &fakePolicyStore{policy: policy}
+	if _, err := service.LoginConfig(context.Background(), testAuthClient()); err != nil {
+		t.Fatal(err)
+	}
+	if phoneSender.readyCalls != 0 {
+		t.Fatalf("SMS readiness probed despite phone-disabled policy: %d", phoneSender.readyCalls)
+	}
+}
+
+func TestSendCodeRoutesPhoneToSMSLoginScene(t *testing.T) {
+	policy := testPolicy()
+	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
+	store := &fakeVerificationCodeStore{acquired: true}
+	sender := &fakePhoneVerifyCodeSender{preparation: messagesms.PhoneVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}}
+	service := NewService(nil, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetVerificationCodeStore(store)
+	service.SetPhoneVerifyCodeSender(sender)
+	service.generateCode = func() (string, error) { return "123456", nil }
+
+	result, err := service.SendCode(context.Background(), SendCodeInput{Account: "86 156-7162-8271", LoginType: authplatform.LoginTypePhone, Scene: smstemplate.SceneLogin, Client: testAuthClient()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sender.prepareCalls != 1 || sender.sendCalls != 1 || sender.prepareInput.Scene != smstemplate.SceneLogin || sender.prepareInput.ToPhone != "+8615671628271" || sender.sendInput.Code != "123456" {
+		t.Fatalf("prepare=%+v send=%+v calls=%d/%d", sender.prepareInput, sender.sendInput, sender.prepareCalls, sender.sendCalls)
+	}
+	if store.keyLoginType != "phone" || store.keyAccount != "+8615671628271" || result.ResendAfterSeconds != 60 {
+		t.Fatalf("key type=%q account=%q result=%+v", store.keyLoginType, store.keyAccount, result)
+	}
+}
+
+func TestLoginPhoneAutoRegistersVerifiedIdentity(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	policy := testPolicy()
+	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
+	store := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
+	users := &fakeUserStore{
+		credentialErr: gorm.ErrRecordNotFound,
+		verifiedUser:  user.User{ID: 82701, Username: "phone_82701", Phone: pointerString("+8615671628271"), IsEnabled: yesno.Yes},
+	}
+	sessions := &fakeSessionStore{createSession: Session{ID: 82702, UserID: 82701, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: "127.0.0.1"}}
+	cleanupAuthRedisKeys(t, redisClient, 82701, "admin", 82702)
+	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
+	service.SetVerificationCodeStore(store)
+
+	credential, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypePhone, LoginAccount: "15671628271", ChallengeID: "challenge-1", Code: "123456", Client: testAuthClient()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !credential.IsNewUser || credential.AccessToken == "" || users.verifiedInput.IdentityKind != "phone" || users.verifiedInput.Account != "+8615671628271" || users.verifiedInput.PasswordHash != "" {
+		t.Fatalf("credential=%+v verified input=%+v", credential, users.verifiedInput)
+	}
+}
+
+func TestLoginPhoneRegistrationPolicyAndConflictWinner(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	policy := testPolicy()
+	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
+	policy.AllowRegister = false
+	store := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
+	users := &fakeUserStore{credentialErr: gorm.ErrRecordNotFound}
+	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: policy})
+	service.SetVerificationCodeStore(store)
+	_, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypePhone, LoginAccount: "15671628271", ChallengeID: "challenge-1", Code: "123456", Client: testAuthClient()})
+	if appErrorCode(err) != apperror.CodeUnauthorized || store.consumeCalls != 0 || users.verifiedInput.IdentityKind != "" {
+		t.Fatalf("closed registration error=%v consume=%d verified=%+v", err, store.consumeCalls, users.verifiedInput)
+	}
+
+	policy.AllowRegister = true
+	users = &fakeUserStore{credentialErr: gorm.ErrRecordNotFound, createErr: user.ErrPhoneConflict}
+	winner := user.Credential{ID: 82801, Username: "winner", IsEnabled: yesno.Yes}
+	users.verifiedFn = func(context.Context, user.VerifiedIdentityInput) (user.User, error) {
+		users.credential = winner
+		users.credentialErr = nil
+		return user.User{}, user.ErrPhoneConflict
+	}
+	sessions := &fakeSessionStore{createSession: Session{ID: 82802, UserID: 82801, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: "127.0.0.1"}}
+	cleanupAuthRedisKeys(t, redisClient, 82801, "admin", 82802)
+	service = newRedisTestService(t, redisClient, users, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
+	service.SetVerificationCodeStore(&fakeVerificationCodeStore{checkValid: true, consumeValid: true})
+	credential, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypePhone, LoginAccount: "15671628271", ChallengeID: "challenge-1", Code: "123456", Client: testAuthClient()})
+	if err != nil || credential.AccessToken == "" || credential.IsNewUser || users.identityCalls != 2 {
+		t.Fatalf("winner credential=%+v error=%v identity calls=%d", credential, err, users.identityCalls)
+	}
+}
+
+func TestSendCodePhoneFailureReleasesOwnedVerification(t *testing.T) {
+	policy := testPolicy()
+	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
+	store := &fakeVerificationCodeStore{acquired: true}
+	sender := &fakePhoneVerifyCodeSender{
+		preparation: messagesms.PhoneVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60},
+		sendErr:     apperror.DependencyUnavailable(errors.New("sms provider unavailable")),
+	}
+	service := NewService(nil, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetVerificationCodeStore(store)
+	service.SetPhoneVerifyCodeSender(sender)
+	_, err := service.SendCode(context.Background(), SendCodeInput{Account: "15671628271", LoginType: authplatform.LoginTypePhone, Scene: smstemplate.SceneLogin, Client: testAuthClient()})
+	if appErrorCode(err) != apperror.CodeDependencyUnavailable || sender.sendCalls != 1 || store.deleteCalls != 1 || store.releaseCalls != 1 {
+		t.Fatalf("error=%v send=%d delete=%d release=%d", err, sender.sendCalls, store.deleteCalls, store.releaseCalls)
+	}
+}
+
+func pointerString(value string) *string { return &value }
 
 func TestLoginRejectsEmptyPasswordHashBeforeBcrypt(t *testing.T) {
 	policy := testPolicy()
@@ -324,7 +476,7 @@ func TestLoginCodeChecksBeforeUserLookupAndConsume(t *testing.T) {
 	service := NewService(users, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.SetVerificationCodeStore(store)
 
-	_, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypeEmail, LoginAccount: "user@example.com", Code: "000000", Client: testAuthClient()})
+	_, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypeEmail, LoginAccount: "user@example.com", ChallengeID: "challenge-1", Code: "000000", Client: testAuthClient()})
 	if appErrorCode(err) != apperror.CodeUnauthorized || store.checkCalls != 1 || store.consumeCalls != 0 || users.identityCalls != 0 {
 		t.Fatalf("wrong code error=%v check=%d consume=%d identity=%d", err, store.checkCalls, store.consumeCalls, users.identityCalls)
 	}
@@ -338,7 +490,7 @@ func TestLoginCodeRateLimitStopsBeforeUserLookupAndLoginLog(t *testing.T) {
 	service.SetVerificationCodeStore(store)
 	service.SetLoginLogRecorder(recorder)
 
-	_, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypeEmail, LoginAccount: "user@example.com", Code: "000000", Client: testAuthClient()})
+	_, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypeEmail, LoginAccount: "user@example.com", ChallengeID: "challenge-1", Code: "000000", Client: testAuthClient()})
 	if appErrorCode(err) != apperror.CodeRateLimited || users.identityCalls != 0 || len(recorder.events) != 0 {
 		t.Fatalf("limited code error=%v identityCalls=%d loginEvents=%d", err, users.identityCalls, len(recorder.events))
 	}
@@ -352,7 +504,7 @@ func TestLoginCodeDoesNotConsumeWhenRegistrationIsDisabled(t *testing.T) {
 	service := NewService(users, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.SetVerificationCodeStore(store)
 
-	_, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypeEmail, LoginAccount: "new@example.com", Code: "123456", Client: testAuthClient()})
+	_, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypeEmail, LoginAccount: "new@example.com", ChallengeID: "challenge-1", Code: "123456", Client: testAuthClient()})
 	if appErrorCode(err) != apperror.CodeUnauthorized || store.consumeCalls != 0 {
 		t.Fatalf("registration-disabled code login error=%v consumeCalls=%d", err, store.consumeCalls)
 	}
@@ -365,7 +517,7 @@ func TestLoginCodeDoesNotConsumeForDisabledUser(t *testing.T) {
 	service := NewService(users, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.SetVerificationCodeStore(store)
 
-	_, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypeEmail, LoginAccount: "user@example.com", Code: "123456", Client: testAuthClient()})
+	_, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypeEmail, LoginAccount: "user@example.com", ChallengeID: "challenge-1", Code: "123456", Client: testAuthClient()})
 	if appErrorCode(err) != apperror.CodeForbidden || store.consumeCalls != 0 {
 		t.Fatalf("disabled-user code login error=%v consumeCalls=%d", err, store.consumeCalls)
 	}
@@ -542,7 +694,7 @@ func TestLoginCodeRecordsEmailCredentialFailure(t *testing.T) {
 	service.SetVerificationCodeStore(store)
 	service.SetLoginLogRecorder(recorder)
 
-	_, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypeEmail, LoginAccount: "user@example.com", Code: "000000", Client: testAuthClient()})
+	_, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypeEmail, LoginAccount: "user@example.com", ChallengeID: "challenge-1", Code: "000000", Client: testAuthClient()})
 	if appErrorCode(err) != apperror.CodeUnauthorized {
 		t.Fatalf("invalid code error = %v", err)
 	}
@@ -902,6 +1054,11 @@ type fakeUserStore struct {
 	current         user.Current
 	currentErr      error
 	identityCalls   int
+	identityKind    string
+	identityAccount string
+	verifiedInput   user.VerifiedIdentityInput
+	verifiedUser    user.User
+	verifiedFn      func(context.Context, user.VerifiedIdentityInput) (user.User, error)
 }
 
 func (f *fakeUserStore) CreateWithRole(ctx context.Context, input user.CreateInput) (user.User, error) {
@@ -917,13 +1074,19 @@ func (f *fakeUserStore) FindCredentialByEmail(_ context.Context, email string) (
 	return f.credential, f.credentialErr
 }
 
-func (f *fakeUserStore) FindCredentialByIdentity(context.Context, string, string) (user.Credential, error) {
+func (f *fakeUserStore) FindCredentialByIdentity(_ context.Context, kind, account string) (user.Credential, error) {
 	f.identityCalls++
+	f.identityKind = kind
+	f.identityAccount = account
 	return f.credential, f.credentialErr
 }
 
-func (f *fakeUserStore) CreateVerifiedIdentity(context.Context, user.VerifiedIdentityInput) (user.User, error) {
-	return user.User{}, f.createErr
+func (f *fakeUserStore) CreateVerifiedIdentity(ctx context.Context, input user.VerifiedIdentityInput) (user.User, error) {
+	f.verifiedInput = input
+	if f.verifiedFn != nil {
+		return f.verifiedFn(ctx, input)
+	}
+	return f.verifiedUser, f.createErr
 }
 
 func (f *fakeUserStore) FindCurrent(context.Context, int64) (user.Current, error) {
@@ -963,6 +1126,40 @@ func (f *fakeVerifyCodeSender) SendPreparedEmailVerifyCode(ctx context.Context, 
 	return f.result, f.sendErr
 }
 
+type fakePhoneVerifyCodeSender struct {
+	readiness    messagesms.VerifyCodeReadiness
+	readyErr     error
+	preparation  messagesms.PhoneVerifyCodePreparation
+	prepareErr   error
+	result       messagesms.PhoneVerifyCodeResult
+	sendErr      error
+	readyCalls   int
+	prepareCalls int
+	sendCalls    int
+	prepareInput messagesms.PhoneVerifyCodePrepareInput
+	sendInput    messagesms.PhoneVerifyCodeInput
+}
+
+func (f *fakePhoneVerifyCodeSender) VerifyCodeReady(_ context.Context, scene string) (messagesms.VerifyCodeReadiness, error) {
+	f.readyCalls++
+	if scene != smstemplate.SceneLogin {
+		return messagesms.VerifyCodeReadiness{}, fmt.Errorf("unexpected SMS readiness scene %q", scene)
+	}
+	return f.readiness, f.readyErr
+}
+
+func (f *fakePhoneVerifyCodeSender) PreparePhoneVerifyCode(_ context.Context, input messagesms.PhoneVerifyCodePrepareInput) (messagesms.PhoneVerifyCodePreparation, error) {
+	f.prepareCalls++
+	f.prepareInput = input
+	return f.preparation, f.prepareErr
+}
+
+func (f *fakePhoneVerifyCodeSender) SendPreparedPhoneVerifyCode(_ context.Context, input messagesms.PhoneVerifyCodeInput) (messagesms.PhoneVerifyCodeResult, error) {
+	f.sendCalls++
+	f.sendInput = input
+	return f.result, f.sendErr
+}
+
 type fakeVerificationCodeStore struct {
 	acquired          bool
 	acquireErr        error
@@ -972,23 +1169,40 @@ type fakeVerificationCodeStore struct {
 	checkErr          error
 	consumeValid      bool
 	consumeErr        error
+	consumeManyValid  bool
+	consumeManyErr    error
 	deleteErr         error
 	releaseErr        error
 	acquireCalls      int
 	checkCalls        int
 	consumeCalls      int
+	consumeManyCalls  int
 	deleteCalls       int
 	releaseCalls      int
 	putCalls          int
 	putTTL            time.Duration
 	deleteContextErr  error
 	releaseContextErr error
+	keyPlatform       string
+	keyScene          string
+	keyLoginType      string
+	keyAccount        string
+	proofChallengeID  string
+	proofCode         string
 }
 
-func (*fakeVerificationCodeStore) VerificationKey(string, string, string, string) string {
+func (f *fakeVerificationCodeStore) VerificationKey(platform, scene, loginType, account string) string {
+	f.keyPlatform = platform
+	f.keyScene = scene
+	f.keyLoginType = loginType
+	f.keyAccount = account
 	return "verification-key"
 }
-func (*fakeVerificationCodeStore) Digest(string) string { return "digest" }
+func (f *fakeVerificationCodeStore) ProofDigest(challengeID, code string) string {
+	f.proofChallengeID = challengeID
+	f.proofCode = code
+	return "digest:" + challengeID + ":" + code
+}
 func (f *fakeVerificationCodeStore) AcquireDelivery(context.Context, string, string, time.Duration) (bool, error) {
 	f.acquireCalls++
 	return f.acquired, f.acquireErr
@@ -1009,6 +1223,19 @@ func (f *fakeVerificationCodeStore) CheckAttempt(context.Context, string, string
 func (f *fakeVerificationCodeStore) Consume(context.Context, string, string) (bool, error) {
 	f.consumeCalls++
 	return f.consumeValid, f.consumeErr
+}
+func (f *fakeVerificationCodeStore) ConsumeMany(_ context.Context, keys []string, digests []string) (bool, error) {
+	f.consumeManyCalls++
+	if len(keys) == 0 || len(keys) != len(digests) {
+		return false, errors.New("verification keys and digests must be non-empty and aligned")
+	}
+	if f.consumeManyErr != nil {
+		return false, f.consumeManyErr
+	}
+	if f.consumeManyValid {
+		return true, nil
+	}
+	return f.consumeValid, nil
 }
 func (f *fakeVerificationCodeStore) DeleteIfOwned(ctx context.Context, _ string, _ string) error {
 	f.deleteCalls++
@@ -1092,7 +1319,7 @@ func TestForgotPasswordSendsCodeWithForgetScene(t *testing.T) {
 	service.SetVerifyCodeSender(sender)
 	service.now = func() time.Time { return fixedNow }
 
-	result, err := service.ForgotPassword(context.Background(), ForgotPasswordInput{Email: "USER@Example.com", Client: testAuthClient()})
+	result, err := service.ForgotPassword(context.Background(), ForgotPasswordInput{Account: "USER@Example.com", LoginType: authplatform.LoginTypeEmail, Client: testAuthClient()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1124,7 +1351,7 @@ func TestForgotPasswordRejectsUnknownEmail(t *testing.T) {
 	service.SetVerificationCodeStore(store)
 	service.SetVerifyCodeSender(sender)
 
-	_, err := service.ForgotPassword(context.Background(), ForgotPasswordInput{Email: "ghost@example.com", Client: testAuthClient()})
+	_, err := service.ForgotPassword(context.Background(), ForgotPasswordInput{Account: "ghost@example.com", LoginType: authplatform.LoginTypeEmail, Client: testAuthClient()})
 	if code := appErrorCode(err); code != apperror.CodeNotFound {
 		t.Fatalf("err = %v, code = %d, want %d", err, code, apperror.CodeNotFound)
 	}
@@ -1146,12 +1373,51 @@ func TestForgotPasswordRequiresPasswordLoginType(t *testing.T) {
 	service.SetVerificationCodeStore(store)
 	service.SetVerifyCodeSender(sender)
 
-	_, err := service.ForgotPassword(context.Background(), ForgotPasswordInput{Email: "user@example.com", Client: testAuthClient()})
+	_, err := service.ForgotPassword(context.Background(), ForgotPasswordInput{Account: "user@example.com", LoginType: authplatform.LoginTypeEmail, Client: testAuthClient()})
 	if code := appErrorCode(err); code != apperror.CodeForbidden {
 		t.Fatalf("code = %d, want %d", code, apperror.CodeForbidden)
 	}
 	if store.acquireCalls != 0 || sender.prepareCalls != 0 {
 		t.Fatalf("lease acquired=%d prepare calls=%d", store.acquireCalls, sender.prepareCalls)
+	}
+}
+
+func TestForgotPasswordPhoneUsesSMSForgetScene(t *testing.T) {
+	policy := testPolicy()
+	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
+	store := &fakeVerificationCodeStore{acquired: true}
+	sender := &fakePhoneVerifyCodeSender{preparation: messagesms.PhoneVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Username: "phone-user", PasswordHash: "hash", IsEnabled: yesno.Yes}}
+	service := NewService(users, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetVerificationCodeStore(store)
+	service.SetPhoneVerifyCodeSender(sender)
+	service.generateCode = func() (string, error) { return "123456", nil }
+
+	result, err := service.ForgotPassword(context.Background(), ForgotPasswordInput{Account: "86 156-7162-8271", LoginType: authplatform.LoginTypePhone, Client: testAuthClient()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if users.identityKind != "phone" || users.identityAccount != "+8615671628271" || sender.prepareInput.Scene != smstemplate.SceneForget || sender.sendInput.Scene != smstemplate.SceneForget || sender.sendInput.ToPhone != "+8615671628271" {
+		t.Fatalf("identity=%q/%q prepare=%+v send=%+v", users.identityKind, users.identityAccount, sender.prepareInput, sender.sendInput)
+	}
+	if store.keyLoginType != "phone" || store.keyScene != smstemplate.SceneForget || result.ChallengeID == "" {
+		t.Fatalf("verification key=%q/%q result=%+v", store.keyLoginType, store.keyScene, result)
+	}
+}
+
+func TestForgotPasswordPhoneFailsClosedWhenSMSIsUnavailable(t *testing.T) {
+	policy := testPolicy()
+	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
+	store := &fakeVerificationCodeStore{acquired: true}
+	sender := &fakePhoneVerifyCodeSender{prepareErr: apperror.DependencyUnavailable(errors.New("sms not ready"))}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, IsEnabled: yesno.Yes}}
+	service := NewService(users, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetVerificationCodeStore(store)
+	service.SetPhoneVerifyCodeSender(sender)
+
+	_, err := service.ForgotPassword(context.Background(), ForgotPasswordInput{Account: "15671628271", LoginType: authplatform.LoginTypePhone, Client: testAuthClient()})
+	if appErrorCode(err) != apperror.CodeDependencyUnavailable || sender.sendCalls != 0 || store.releaseCalls != 1 || store.putCalls != 0 {
+		t.Fatalf("error=%v send=%d release=%d put=%d", err, sender.sendCalls, store.releaseCalls, store.putCalls)
 	}
 }
 
@@ -1169,6 +1435,10 @@ type fakePasswordStore struct {
 	setUserID         int64
 	setHash           string
 	setErr            error
+	revokeOtherCalls  int
+	keptSessionID     int64
+	revokeOtherResult []user.RevokedSessionRef
+	revokeOtherErr    error
 }
 
 func (f *fakePasswordStore) FindCredentialByID(context.Context, int64) (user.Credential, error) {
@@ -1191,6 +1461,14 @@ func (f *fakePasswordStore) SetPasswordHash(_ context.Context, userID int64, pas
 	return f.setErr
 }
 
+func (f *fakePasswordStore) ChangePasswordAndRevokeOtherSessions(_ context.Context, userID, keepSessionID int64, passwordHash string, _ time.Time) ([]user.RevokedSessionRef, error) {
+	f.revokeOtherCalls++
+	f.revokedUserID = userID
+	f.keptSessionID = keepSessionID
+	f.revokedHash = passwordHash
+	return f.revokeOtherResult, f.revokeOtherErr
+}
+
 func newResetPasswordService(t *testing.T, users *fakeUserStore, passwords *fakePasswordStore, codes *fakeVerificationCodeStore, policy authplatform.Policy) *Service {
 	t.Helper()
 	redisClient := openAuthRedis(t)
@@ -1208,7 +1486,7 @@ func TestResetPasswordReplacesHashAndRevokesSessions(t *testing.T) {
 	service := newResetPasswordService(t, users, passwords, codes, testPolicy())
 
 	err := service.ResetPassword(context.Background(), ResetPasswordInput{
-		Email: "USER@Example.com", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+		Account: "USER@Example.com", LoginType: authplatform.LoginTypeEmail, ChallengeID: "challenge-1", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1221,6 +1499,48 @@ func TestResetPasswordReplacesHashAndRevokesSessions(t *testing.T) {
 	}
 }
 
+func TestResetPasswordPhoneNormalizesIdentityAndRevokesEveryPlatform(t *testing.T) {
+	policy := testPolicy()
+	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
+	passwords := &fakePasswordStore{
+		platforms:    []string{"admin", "canvas"},
+		revokeResult: []user.RevokedSessionRef{{Platform: "admin", ID: 42}, {Platform: "canvas", ID: 43}},
+	}
+	codes := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Username: "phone-user", PasswordHash: "old", IsEnabled: yesno.Yes}}
+	service := newResetPasswordService(t, users, passwords, codes, policy)
+
+	err := service.ResetPassword(context.Background(), ResetPasswordInput{
+		Account: "86 156-7162-8271", LoginType: authplatform.LoginTypePhone, ChallengeID: "challenge-1", Code: "123456",
+		NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if users.identityKind != "phone" || users.identityAccount != "+8615671628271" || codes.keyLoginType != "phone" || codes.keyScene != smstemplate.SceneForget || codes.consumeCalls != 1 || passwords.revokeCalls != 1 {
+		t.Fatalf("identity=%q/%q key=%q/%q consume=%d revoke=%d", users.identityKind, users.identityAccount, codes.keyLoginType, codes.keyScene, codes.consumeCalls, passwords.revokeCalls)
+	}
+}
+
+func TestResetPasswordRejectsInvalidChallengeBeforeCodeLookup(t *testing.T) {
+	passwords := &fakePasswordStore{}
+	codes := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, IsEnabled: yesno.Yes}}
+	service := newResetPasswordService(t, users, passwords, codes, testPolicy())
+	for _, challengeID := range []string{"", " challenge", "challenge\n", strings.Repeat("x", 129)} {
+		err := service.ResetPassword(context.Background(), ResetPasswordInput{
+			Account: "user@example.com", LoginType: authplatform.LoginTypeEmail, ChallengeID: challengeID, Code: "123456",
+			NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+		})
+		if appErrorCode(err) != apperror.CodeInvalidRequest {
+			t.Fatalf("challenge %q error=%v", challengeID, err)
+		}
+	}
+	if codes.checkCalls != 0 || codes.consumeCalls != 0 || passwords.revokeCalls != 0 {
+		t.Fatalf("invalid challenge reached mutation: check=%d consume=%d revoke=%d", codes.checkCalls, codes.consumeCalls, passwords.revokeCalls)
+	}
+}
+
 func TestResetPasswordWrongCodeDoesNotConsumeOrRevoke(t *testing.T) {
 	passwords := &fakePasswordStore{platforms: []string{"admin"}}
 	codes := &fakeVerificationCodeStore{checkValid: false}
@@ -1228,7 +1548,7 @@ func TestResetPasswordWrongCodeDoesNotConsumeOrRevoke(t *testing.T) {
 	service := newResetPasswordService(t, users, passwords, codes, testPolicy())
 
 	err := service.ResetPassword(context.Background(), ResetPasswordInput{
-		Email: "user@example.com", Code: "000000", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+		Account: "user@example.com", LoginType: authplatform.LoginTypeEmail, ChallengeID: "challenge-1", Code: "000000", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
 	})
 	if code := appErrorCode(err); code != apperror.CodeUnauthorized {
 		t.Fatalf("err = %v code = %d, want unauthorized", err, code)
@@ -1245,7 +1565,7 @@ func TestResetPasswordRateLimitedBeforeConsume(t *testing.T) {
 	service := newResetPasswordService(t, users, passwords, codes, testPolicy())
 
 	err := service.ResetPassword(context.Background(), ResetPasswordInput{
-		Email: "user@example.com", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+		Account: "user@example.com", LoginType: authplatform.LoginTypeEmail, ChallengeID: "challenge-1", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
 	})
 	if code := appErrorCode(err); code != apperror.CodeRateLimited {
 		t.Fatalf("err = %v code = %d, want rate limited", err, code)
@@ -1261,7 +1581,7 @@ func TestResetPasswordRejectsUnknownAndDisabledEmail(t *testing.T) {
 	unknown := &fakeUserStore{credentialErr: fmt.Errorf("find user credential: %w", gorm.ErrRecordNotFound)}
 	service := newResetPasswordService(t, unknown, passwords, codes, testPolicy())
 	err := service.ResetPassword(context.Background(), ResetPasswordInput{
-		Email: "ghost@example.com", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+		Account: "ghost@example.com", LoginType: authplatform.LoginTypeEmail, ChallengeID: "challenge-1", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
 	})
 	if code := appErrorCode(err); code != apperror.CodeNotFound {
 		t.Fatalf("unknown email err = %v code = %d, want not found", err, code)
@@ -1273,7 +1593,7 @@ func TestResetPasswordRejectsUnknownAndDisabledEmail(t *testing.T) {
 	disabled := &fakeUserStore{credential: user.Credential{ID: 8, Email: "disabled@example.com", PasswordHash: "old", IsEnabled: yesno.No}}
 	service = newResetPasswordService(t, disabled, passwords, codes, testPolicy())
 	err = service.ResetPassword(context.Background(), ResetPasswordInput{
-		Email: "disabled@example.com", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+		Account: "disabled@example.com", LoginType: authplatform.LoginTypeEmail, ChallengeID: "challenge-1", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
 	})
 	if code := appErrorCode(err); code != apperror.CodeNotFound {
 		t.Fatalf("disabled email err = %v code = %d, want not found", err, code)
@@ -1288,7 +1608,7 @@ func TestResetPasswordRequiresPasswordLoginTypeAndConfirmation(t *testing.T) {
 	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "old", IsEnabled: yesno.Yes}}
 	service := newResetPasswordService(t, users, passwords, codes, emailOnly)
 	err := service.ResetPassword(context.Background(), ResetPasswordInput{
-		Email: "user@example.com", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
+		Account: "user@example.com", LoginType: authplatform.LoginTypeEmail, ChallengeID: "challenge-1", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
 	})
 	if code := appErrorCode(err); code != apperror.CodeForbidden {
 		t.Fatalf("err = %v code = %d, want forbidden", err, code)
@@ -1296,7 +1616,7 @@ func TestResetPasswordRequiresPasswordLoginTypeAndConfirmation(t *testing.T) {
 
 	service = newResetPasswordService(t, users, passwords, codes, testPolicy())
 	err = service.ResetPassword(context.Background(), ResetPasswordInput{
-		Email: "user@example.com", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "DifferentPass1!", Client: testAuthClient(),
+		Account: "user@example.com", LoginType: authplatform.LoginTypeEmail, ChallengeID: "challenge-1", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "DifferentPass1!", Client: testAuthClient(),
 	})
 	if code := appErrorCode(err); code != apperror.CodeInvalidRequest {
 		t.Fatalf("err = %v code = %d, want invalid request", err, code)
@@ -1370,5 +1690,65 @@ func TestSetPasswordRejectsInvalidInputAndMissingIdentity(t *testing.T) {
 	}
 	if passwords.setCalls != 0 {
 		t.Fatalf("set calls=%d", passwords.setCalls)
+	}
+}
+
+func TestSendPasswordCodeUsesBoundPhoneAndChangePasswordScene(t *testing.T) {
+	boundPhone := "+8615671628271"
+	policy := testPolicy()
+	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
+	codes := &fakeVerificationCodeStore{acquired: true}
+	sender := &fakePhoneVerifyCodeSender{preparation: messagesms.PhoneVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}}
+	users := &fakeUserStore{current: user.Current{ID: 7, Phone: &boundPhone}}
+	service := NewService(users, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	service.SetVerificationCodeStore(codes)
+	service.SetPhoneVerifyCodeSender(sender)
+	service.generateCode = func() (string, error) { return "123456", nil }
+
+	result, err := service.SendPasswordCodeForLoginType(context.Background(), Identity{UserID: 7, SessionID: 8, PlatformID: 1, Platform: "admin"}, testAuthClient(), authplatform.LoginTypePhone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sender.prepareInput.Scene != smstemplate.SceneChangePassword || sender.sendInput.Scene != smstemplate.SceneChangePassword || sender.sendInput.ToPhone != boundPhone || sender.sendInput.UserID == nil || *sender.sendInput.UserID != 7 {
+		t.Fatalf("prepare=%+v send=%+v", sender.prepareInput, sender.sendInput)
+	}
+	if codes.keyScene != smstemplate.SceneChangePassword || codes.keyLoginType != "phone" || result.ChallengeID == "" {
+		t.Fatalf("key=%q/%q result=%+v", codes.keyScene, codes.keyLoginType, result)
+	}
+}
+
+func TestChangePasswordByCodeKeepsCurrentSessionAndRevokesOthers(t *testing.T) {
+	boundPhone := "+8615671628271"
+	policy := testPolicy()
+	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
+	passwords := &fakePasswordStore{
+		platforms:         []string{"admin", "canvas"},
+		revokeOtherResult: []user.RevokedSessionRef{{ID: 43, UserID: 7, Platform: "canvas"}},
+	}
+	codes := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
+	users := &fakeUserStore{current: user.Current{ID: 7, Phone: &boundPhone}}
+	service := newResetPasswordService(t, users, passwords, codes, policy)
+
+	err := service.ChangePasswordByCode(context.Background(), Identity{UserID: 7, SessionID: 8, PlatformID: 1, Platform: "admin"}, testAuthClient(), ChangePasswordByCodeInput{
+		LoginType: authplatform.LoginTypePhone, ChallengeID: "challenge-1", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if codes.keyScene != smstemplate.SceneChangePassword || codes.consumeCalls != 1 || passwords.revokeOtherCalls != 1 || passwords.keptSessionID != 8 || passwords.revokedHash == "" {
+		t.Fatalf("key=%q consume=%d revokeOther=%d keep=%d hash=%q", codes.keyScene, codes.consumeCalls, passwords.revokeOtherCalls, passwords.keptSessionID, passwords.revokedHash)
+	}
+	if passwords.revokeCalls != 0 {
+		t.Fatalf("all-session revocation called %d times", passwords.revokeCalls)
+	}
+}
+
+func TestPasswordCodeFlowsRejectAccountWithoutBoundPhone(t *testing.T) {
+	policy := testPolicy()
+	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
+	service := NewService(&fakeUserStore{current: user.Current{ID: 7}}, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
+	_, err := service.SendPasswordCodeForLoginType(context.Background(), Identity{UserID: 7, SessionID: 8, PlatformID: 1, Platform: "admin"}, testAuthClient(), authplatform.LoginTypePhone)
+	if appErrorCode(err) != apperror.CodeNotFound {
+		t.Fatalf("send error=%v", err)
 	}
 }

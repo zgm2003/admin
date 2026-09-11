@@ -16,6 +16,8 @@ const (
 	mailEncryptionPurpose    = "admin:message:mail-encryption:v1"
 	verificationCodePurpose  = "admin:auth:verification-code-hmac:v1"
 	mailRecipientPurpose     = "admin:message:mail-recipient-hmac:v1"
+	smsEncryptionPurpose     = "admin:message:sms-encryption:v1"
+	smsRecipientPurpose      = "admin:message:sms-recipient-hmac:v1"
 )
 
 type KeyRing struct {
@@ -25,6 +27,8 @@ type KeyRing struct {
 	mailEncryptionKey       []byte
 	verificationCodeHMACKey []byte
 	mailRecipientHMACKey    []byte
+	smsEncryptionKey        []byte
+	smsRecipientHMACKey     []byte
 }
 
 func New(rootSecret string) (*KeyRing, error) {
@@ -56,6 +60,14 @@ func New(rootSecret string) (*KeyRing, error) {
 	if err != nil {
 		return nil, fmt.Errorf("derive mail recipient HMAC key: %w", err)
 	}
+	smsEncryptionKey, err := hkdf.Key(sha256.New, []byte(rootSecret), nil, smsEncryptionPurpose, keyLength)
+	if err != nil {
+		return nil, fmt.Errorf("derive sms encryption key: %w", err)
+	}
+	smsRecipientHMACKey, err := hkdf.Key(sha256.New, []byte(rootSecret), nil, smsRecipientPurpose, keyLength)
+	if err != nil {
+		return nil, fmt.Errorf("derive sms recipient HMAC key: %w", err)
+	}
 
 	return &KeyRing{
 		jwtSigningKey:           jwtSigningKey,
@@ -64,6 +76,8 @@ func New(rootSecret string) (*KeyRing, error) {
 		mailEncryptionKey:       mailEncryptionKey,
 		verificationCodeHMACKey: verificationCodeHMACKey,
 		mailRecipientHMACKey:    mailRecipientHMACKey,
+		smsEncryptionKey:        smsEncryptionKey,
+		smsRecipientHMACKey:     smsRecipientHMACKey,
 	}, nil
 }
 
@@ -87,6 +101,14 @@ func (k *KeyRing) VerificationCodeHMACKey() []byte {
 
 func (k *KeyRing) MailRecipientHMACKey() []byte {
 	return append([]byte(nil), k.mailRecipientHMACKey...)
+}
+
+func (k *KeyRing) SMSEncryptionKey() []byte {
+	return append([]byte(nil), k.smsEncryptionKey...)
+}
+
+func (k *KeyRing) SMSRecipientHMACKey() []byte {
+	return append([]byte(nil), k.smsRecipientHMACKey...)
 }
 
 func validateRootSecret(rootSecret string) error {

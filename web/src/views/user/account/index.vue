@@ -31,11 +31,9 @@ import UserRoleDialog from './components/UserRoleDialog/index.vue'
 import type { UserFormState } from './components/types'
 import {
   hasSuperAdminRole,
-  isPhoneValid,
   isProtectedTarget,
   isRoleToggleDisabled,
   isUsernameValid,
-  normalizedPhone,
   normalizedUsername,
   protectedRoleIDs,
   userSearchFields,
@@ -62,7 +60,7 @@ const mutating = ref(false)
 
 const editVisible = ref(false)
 const editingUser = ref<UserListItem | null>(null)
-const userForm = ref<UserFormState>({ username: '', phone: '' })
+const userForm = ref<UserFormState>({ username: '' })
 const editSaving = ref(false)
 const editError = ref('')
 
@@ -87,12 +85,7 @@ const canDelete = computed(() => access.hasPermission('user:account:delete'))
 const canRoles = computed(() => access.hasPermission('user:account:authorize'))
 const isSuperAdminActor = computed(() => access.roleCodes.includes('super_admin'))
 const normalizedUsernameValue = computed(() => normalizedUsername(userForm.value.username))
-const normalizedPhoneValue = computed(() => normalizedPhone(userForm.value.phone))
 const usernameValid = computed(() => isUsernameValid(userForm.value.username))
-const phoneValid = computed(() => isPhoneValid(userForm.value.phone))
-const submittedPhone = computed<string | null>(() =>
-  normalizedPhoneValue.value === '' ? null : normalizedPhoneValue.value,
-)
 const hasEnabledSelection = computed(() => {
   if (roleData.value === null) return false
   const selected = new Set(selectedRoleIDs.value)
@@ -212,19 +205,18 @@ function protectionText(row: UserListItem, operation: 'status' | 'roles' | 'dele
 function openEdit(row: UserListItem): void {
   if (editDisabled(row)) return
   editingUser.value = row
-  userForm.value = { username: row.username, phone: row.phone ?? '' }
+  userForm.value = { username: row.username }
   editError.value = ''
   editVisible.value = true
 }
 async function saveEdit(): Promise<void> {
   const target = editingUser.value
-  if (target === null || !usernameValid.value || !phoneValid.value || editSaving.value) return
+  if (target === null || !usernameValid.value || editSaving.value) return
   editSaving.value = true
   editError.value = ''
   try {
     const result = await updateUser(target.id, {
       username: normalizedUsernameValue.value,
-      phone: submittedPhone.value,
     })
     auth.updateProfile(result.id, result.username, result.phone)
     if (await loadUsers()) {
@@ -460,7 +452,6 @@ onMounted(() => {
       :edit-error="editError"
       :edit-saving="editSaving"
       :username-valid="usernameValid"
-      :phone-valid="phoneValid"
       @save="saveEdit"
     />
     <UserRoleDialog

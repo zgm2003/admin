@@ -34,7 +34,6 @@ export interface UserRolesResponse {
 }
 export interface UpdateUserInput {
   username: string
-  phone: string | null
 }
 export interface UpdateUserRolesInput {
   roleIds: number[]

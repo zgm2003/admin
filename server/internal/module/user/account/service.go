@@ -68,7 +68,6 @@ type Roles struct {
 
 type UpdateInput struct {
 	Username string
-	Phone    *string
 }
 
 type UpdatedProfile struct {
@@ -154,10 +153,6 @@ func (s *Service) Update(ctx context.Context, actorUserID, targetUserID int64, i
 	if err != nil {
 		return UpdatedProfile{}, apperror.InvalidRequest(err)
 	}
-	phone, err := NormalizePhone(input.Phone)
-	if err != nil {
-		return UpdatedProfile{}, apperror.InvalidRequest(err)
-	}
 	var updated UpdatedProfile
 	err = s.repository.Transaction(ctx, func(repository *Repository) error {
 		if err := repository.LockUserWriteTable(ctx); err != nil {
@@ -185,15 +180,15 @@ func (s *Service) Update(ctx context.Context, actorUserID, targetUserID int64, i
 		if targetHasSuperAdmin && !actorIsSuperAdmin {
 			return userSuperAdminProtected(fmt.Errorf("ordinary actor cannot update a super administrator target"))
 		}
-		if target.Username == username && equalOptionalString(target.Phone, phone) {
+		if target.Username == username {
 			updated = currentUpdatedProfile(target)
 			return nil
 		}
 		updatedAt := time.Now().UTC().Truncate(time.Microsecond)
-		if err := repository.UpdateProfile(ctx, target.ID, username, phone, updatedAt); err != nil {
+		if err := repository.UpdateProfile(ctx, target.ID, username, updatedAt); err != nil {
 			return err
 		}
-		updated = UpdatedProfile{ID: target.ID, Username: username, Phone: phone, UpdatedAt: updatedAt}
+		updated = UpdatedProfile{ID: target.ID, Username: username, Phone: target.Phone, UpdatedAt: updatedAt}
 		return nil
 	})
 	if err != nil {
@@ -204,13 +199,6 @@ func (s *Service) Update(ctx context.Context, actorUserID, targetUserID int64, i
 
 func currentUpdatedProfile(value User) UpdatedProfile {
 	return UpdatedProfile{ID: value.ID, Username: value.Username, Phone: value.Phone, UpdatedAt: value.UpdatedAt}
-}
-
-func equalOptionalString(left, right *string) bool {
-	if left == nil || right == nil {
-		return left == nil && right == nil
-	}
-	return *left == *right
 }
 
 func (s *Service) Roles(ctx context.Context, targetUserID int64) (Roles, error) {

@@ -16,6 +16,7 @@ type RegisterInput struct {
 type LoginInput struct {
 	LoginType    authplatform.LoginType
 	LoginAccount string
+	ChallengeID  string
 	Password     string
 	Code         string
 	Client       authclient.Client
@@ -36,6 +37,7 @@ type RegisterRequest struct {
 type LoginRequest struct {
 	LoginType    *string `json:"loginType" binding:"required"`
 	LoginAccount *string `json:"loginAccount" binding:"required"`
+	ChallengeID  *string `json:"challengeId" binding:"omitempty,max=128"`
 	Password     *string `json:"password"`
 	Code         *string `json:"code"`
 }
@@ -49,12 +51,15 @@ type SendCodeRequest struct {
 
 // ForgotPasswordRequest is the request body of POST /auth/password/forgot.
 type ForgotPasswordRequest struct {
-	Email *string `json:"email" binding:"required,email"`
+	Account   *string `json:"account" binding:"required,max=254"`
+	LoginType *string `json:"loginType" binding:"required"`
 }
 
 // ResetPasswordRequest is the request body of POST /auth/password/reset.
 type ResetPasswordRequest struct {
-	Email           *string `json:"email" binding:"required,email"`
+	Account         *string `json:"account" binding:"required,max=254"`
+	LoginType       *string `json:"loginType" binding:"required"`
+	ChallengeID     *string `json:"challengeId" binding:"required,max=128"`
 	Code            *string `json:"code" binding:"required,len=6,numeric"`
 	NewPassword     *string `json:"newPassword" binding:"required"`
 	ConfirmPassword *string `json:"confirmPassword" binding:"required"`

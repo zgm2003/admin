@@ -81,8 +81,8 @@ func (h *Handler) Login(context *gin.Context) {
 		return
 	}
 	if request.LoginType == nil || request.LoginAccount == nil ||
-		(*request.LoginType == string(authplatform.LoginTypePassword) && (request.Password == nil || request.Code != nil)) ||
-		((*request.LoginType == string(authplatform.LoginTypeEmail) || *request.LoginType == string(authplatform.LoginTypePhone)) && (request.Code == nil || request.Password != nil)) {
+		(*request.LoginType == string(authplatform.LoginTypePassword) && (request.Password == nil || request.Code != nil || request.ChallengeID != nil)) ||
+		((*request.LoginType == string(authplatform.LoginTypeEmail) || *request.LoginType == string(authplatform.LoginTypePhone)) && (request.Code == nil || request.Password != nil || request.ChallengeID == nil)) {
 		response.Fail(context, apperror.InvalidRequest(fmt.Errorf("login credential fields do not match login type")))
 		return
 	}
@@ -94,9 +94,14 @@ func (h *Handler) Login(context *gin.Context) {
 	if request.Code != nil {
 		code = *request.Code
 	}
+	challengeID := ""
+	if request.ChallengeID != nil {
+		challengeID = *request.ChallengeID
+	}
 	credential, err := h.service.Login(context.Request.Context(), LoginInput{
 		LoginType:    authplatform.LoginType(*request.LoginType),
 		LoginAccount: *request.LoginAccount,
+		ChallengeID:  challengeID,
 		Password:     password,
 		Code:         code,
 		Client:       client,

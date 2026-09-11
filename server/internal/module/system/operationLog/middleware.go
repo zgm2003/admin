@@ -24,6 +24,7 @@ const maxSummaryBytes = 32 * 1024
 // masked by the global sanitizer (for example the literal "key" field name).
 var routeParamSummaryAliases = map[string]map[string]string{
 	http.MethodPut + " /api/admin/v1/message/mail/rate-limit-policy/:platformId/:key": {"key": "policyRef", "platformId": "platformRef"},
+	http.MethodPut + " /api/admin/v1/message/sms/rate-limit-policy/:platformId/:key":  {"key": "policyRef", "platformId": "platformRef"},
 }
 
 type TaskPayload struct {
@@ -270,7 +271,7 @@ func sanitizeValue(field string, value interface{}) interface{} {
 
 func isSensitiveField(field string) bool {
 	normalized := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(field, "-", ""), "_", ""))
-	for _, sensitive := range []string{"password", "confirmpassword", "accesstoken", "refreshtoken", "authorization", "cookie", "secret", "key", "code", "templatevariables", "toemail", "verificationcode", "ciphertext"} {
+	for _, sensitive := range []string{"password", "confirmpassword", "accesstoken", "refreshtoken", "authorization", "cookie", "secret", "key", "code", "templatevariables", "toemail", "verificationcode", "ciphertext", "phone", "account", "pattern"} {
 		if normalized == sensitive || strings.Contains(normalized, sensitive) {
 			return true
 		}

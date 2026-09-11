@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { request } from '@/utils/request'
-import { changePassword, getAccountProfile, updateAccountProfile } from '@/api/user/profile'
+import {
+  changePassword,
+  changePasswordByCode,
+  getAccountProfile,
+  sendPasswordCode,
+  updateAccountProfile,
+} from '@/api/user/profile'
 
 vi.mock('@/utils/request', () => ({
   request: vi.fn(),
@@ -31,7 +37,6 @@ describe('account API', () => {
     requestMock.mockResolvedValueOnce({ ...profile, updatedAt: '2026-08-28T00:00:00Z' })
     await updateAccountProfile({
       username: 'alice',
-      phone: null,
       avatar: 'avatar/a.png',
       birthday: '2000-01-02',
       gender: 2,
@@ -41,7 +46,6 @@ describe('account API', () => {
       url: '/api/admin/v1/user/profile',
       data: {
         username: 'alice',
-        phone: null,
         avatar: 'avatar/a.png',
         birthday: '2000-01-02',
         gender: 2,
@@ -59,5 +63,58 @@ describe('account API', () => {
       url: '/api/admin/v1/user/password',
       data: { currentPassword: 'old-pass', newPassword: 'new-pass', confirmPassword: 'new-pass' },
     })
+  })
+
+  it('uses symmetric email and phone password-code endpoints', async () => {
+    requestMock.mockResolvedValueOnce({
+      challengeId: 'password-challenge',
+      expiresAt: '2026-09-11T08:00:00Z',
+      resendAfterSeconds: 60,
+    })
+    await expect(sendPasswordCode('email')).resolves.toEqual({
+      challengeId: 'password-challenge',
+      expiresAt: '2026-09-11T08:00:00Z',
+      resendAfterSeconds: 60,
+    })
+    expect(requestMock).toHaveBeenLastCalledWith({
+      method: 'POST',
+      url: '/api/admin/v1/user/password/send-code',
+      data: { loginType: 'email' },
+    })
+
+    const input = {
+      loginType: 'phone' as const,
+      challengeId: 'password-challenge',
+      code: '123456',
+      newPassword: 'NewPassw0rd!',
+      confirmPassword: 'NewPassw0rd!',
+    }
+    requestMock.mockResolvedValueOnce({})
+    await expect(changePasswordByCode(input)).resolves.toBeUndefined()
+    expect(requestMock).toHaveBeenLastCalledWith({
+      method: 'PUT',
+      url: '/api/admin/v1/user/password/by-code',
+      data: input,
+    })
+  })
+
+  it('rejects malformed password-code responses', async () => {
+    requestMock.mockResolvedValueOnce({
+      challengeId: '',
+      expiresAt: 'invalid',
+      resendAfterSeconds: -1,
+    })
+    await expect(sendPasswordCode('phone')).rejects.toThrow()
+
+    requestMock.mockResolvedValueOnce({ ignored: true })
+    await expect(
+      changePasswordByCode({
+        loginType: 'email',
+        challengeId: 'challenge',
+        code: '123456',
+        newPassword: 'NewPassw0rd!',
+        confirmPassword: 'NewPassw0rd!',
+      }),
+    ).rejects.toThrow('password code result')
   })
 })

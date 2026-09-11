@@ -5,6 +5,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"admin/server/internal/shared/phone"
 )
 
 const (
@@ -30,18 +32,8 @@ func NormalizeUsername(value string) (string, error) {
 	return value, nil
 }
 
+// NormalizePhone keeps the account-level nil semantics and delegates the
+// mainland mobile number rules to the shared phone package.
 func NormalizePhone(value *string) (*string, error) {
-	if value == nil {
-		return nil, nil
-	}
-	normalized := strings.TrimSpace(*value)
-	if normalized == "" || utf8.RuneCountInString(normalized) > 32 {
-		return nil, fmt.Errorf("phone must contain 1 to 32 Unicode characters")
-	}
-	for _, character := range normalized {
-		if unicode.IsControl(character) {
-			return nil, fmt.Errorf("phone contains a control character")
-		}
-	}
-	return &normalized, nil
+	return phone.NormalizeOptional(value)
 }

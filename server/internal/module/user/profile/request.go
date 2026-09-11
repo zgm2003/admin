@@ -12,7 +12,6 @@ import (
 
 type updateRequest struct {
 	Username string  `json:"username"`
-	Phone    *string `json:"phone"`
 	Birthday *string `json:"birthday"`
 	Gender   int16   `json:"gender"`
 	Avatar   string  `json:"avatar"`
@@ -34,7 +33,7 @@ func (r updateRequest) input() (Input, error) {
 	if avatar != "" && (len(avatar) > 512 || !strings.HasPrefix(avatar, "avatar/") || strings.Contains(avatar, "..") || strings.ContainsAny(avatar, "\\\r\n\t") || strings.IndexFunc(avatar, unicode.IsControl) >= 0) {
 		return Input{}, apperror.InvalidRequest(fmt.Errorf("avatar is invalid"))
 	}
-	return Input{Username: r.Username, Phone: r.Phone, Birthday: birthday, Gender: r.Gender, Avatar: avatar}, nil
+	return Input{Username: r.Username, Birthday: birthday, Gender: r.Gender, Avatar: avatar}, nil
 }
 
 type passwordRequest struct {

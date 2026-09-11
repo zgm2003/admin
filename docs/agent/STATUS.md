@@ -3,6 +3,37 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## 短信（SMS）垂直切片（2026-09-10，执行中）
+
+- 目标：交付 `message/sms` 垂直切片并开放手机验证码登录、找回密码、绑定/换绑手机号与验证码改密；场景固定为
+  `login`/`forget`/`bind_phone`/`change_password`，SMS 与 Mail 不共享表、场景常量、Redis namespace、Provider
+  或加密/HMAC 密钥。
+- 当前进度：Task 1–7 的 SMS 基础设施、数据库隔离迁移、Provider、配置/模板/规则/限流、runtime/readiness、日志、
+  Auth 手机登录与忘记密码均已落地并通过对应定向测试。Task 8 的 Email/Phone 对等身份改造也已落地：新增
+  `shared/email`、`user/email`，并让 `user/email` 与 `user/phone` 共享双 proof、`ConsumeMany`、事务审计、唯一冲突、
+  authority generation 失效和严格 Handler 边界；普通 account/profile PUT 保留身份只读字段且拒绝身份写入。
+  Task 9–12 的 RBAC/操作日志/架构门禁、严格前端 DTO、SMS 五 tab 管理页、登录/忘记密码/绑定/验证码改密流程已完成。
+- 最近定向证据：用户身份、Auth、Mail/SMS、RBAC、操作日志、架构和 `cmd/api` 定向 Go 测试通过；用户/认证高风险
+  `go test -race -p 1 ./internal/module/user/... ./internal/module/auth/login/... -count=1` 通过；前端 Email/Phone/Auth/
+  Profile/Account/SMS 关键流程 8 个测试文件共 91 项通过，拆分 Profile 后回归 4 个文件 46 项通过；`pnpm typecheck`、
+  `pnpm lint`、`pnpm check:architecture` 与 `pnpm build` 均通过（build 仅有既有大 chunk 警告）。
+- 当前未完成：Task 13 后端/前端全量验证与最终静态敏感信息审计仍待维护者执行或补跑；身份并发换绑的数据库级单赢家
+  探针仍应作为最终验收重点，不以普通定向测试替代。用户/认证高风险 `go test -race -p 1` 已通过。
+- 验证证据：`go test ./internal/database -run TestMessageSMSMigration -count=1` 六个用例通过（幂等重复执行、非法旧
+  phone 整体回滚、规范化碰撞整体回滚、双国家码整体回滚、软删平台日志仍可查询、七表约束/索引行为覆盖）；
+  `go test ./internal/architecture -count=1`、`go vet ./internal/database/...`、`gofmt -l internal/database` 均通过。
+- 复审修正（Task 2 第 2 轮）：迁移为活动 `registered_user` 幂等直授 `user:phone:update`（先就地新增 action 再授权，
+  授权变化与菜单变化合并为每平台一次 `menu_version` 递增）；SQL 手机号规范化改为只剥离一个可选 `+86/86`，与
+  `shared/phone` 语义一致；迁移测试补齐七表 CHECK/FK/唯一索引与查询索引覆盖，并修掉夹具中因缺少 finisher 而
+  从未真正执行的授权插入语句。
+- 根 Agent 最终复审：迁移拒绝用例现在解析 `pgconn.PgError`，逐项精确断言 SQLSTATE 与约束名；模板和限流策略
+  改用更新 seed 行以排除唯一键干扰，verification 按“跨平台复合 FK → 正常写入 → 单日志唯一索引”顺序验证。
+  强化断言后旧顺序先以 `23505/ux_message_sms_log_verification_log` 按预期失败，调整顺序后六个迁移测试全部通过。
+- 尚未执行：**真实 `admin.public` migration 未执行**；未发送真实短信；未录入腾讯云凭据；未启停 API/Worker；
+  未清理 Redis。七张表、`message.sms.region` 字典与 SMS 菜单/action 目前只存在于隔离测试 schema。
+- 下一步/阻塞：维护者执行 Task 13 全量命令并回传真实输出；在此之前不进入 Task 14。真实 `admin.public` migration、
+  真实短信/邮件发送、Redis 清理、API/Worker 重启和浏览器验收仍未执行，必须由维护者分别授权和记录。
+
 ## Mail 审计日志不可删除整改（2026-09-09，当前）
 
 - 按维护者确认的审计契约，`message_mail_log` 与 `message_mail_log_verification` 现在是 append-only：

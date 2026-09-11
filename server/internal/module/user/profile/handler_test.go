@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	authclient "admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
+	authplatform "admin/server/internal/module/permission/authPlatform"
 	"github.com/gin-gonic/gin"
 )
 
@@ -31,9 +33,12 @@ func (s *profileServiceStub) Update(_ context.Context, actor, target int64, inpu
 }
 
 type passwordServiceStub struct {
-	identity auth.Identity
-	input    auth.ChangePasswordInput
-	setInput auth.SetPasswordInput
+	identity      auth.Identity
+	input         auth.ChangePasswordInput
+	setInput      auth.SetPasswordInput
+	codeIdentity  auth.Identity
+	codeInput     auth.ChangePasswordByCodeInput
+	codeSendCalls int
 }
 
 func (s *passwordServiceStub) ChangePassword(_ context.Context, identity auth.Identity, input auth.ChangePasswordInput) error {
@@ -43,6 +48,19 @@ func (s *passwordServiceStub) ChangePassword(_ context.Context, identity auth.Id
 
 func (s *passwordServiceStub) SetPassword(_ context.Context, identity auth.Identity, input auth.SetPasswordInput) error {
 	s.identity, s.setInput = identity, input
+	return nil
+}
+
+func (s *passwordServiceStub) SendPasswordCodeForLoginType(_ context.Context, identity auth.Identity, _ authclient.Client, loginType authplatform.LoginType) (auth.SendCodeResult, error) {
+	s.codeIdentity = identity
+	s.codeInput.LoginType = loginType
+	s.codeSendCalls++
+	return auth.SendCodeResult{ChallengeID: "challenge-1", ResendAfterSeconds: 60}, nil
+}
+
+func (s *passwordServiceStub) ChangePasswordByCode(_ context.Context, identity auth.Identity, _ authclient.Client, input auth.ChangePasswordByCodeInput) error {
+	s.codeIdentity = identity
+	s.codeInput = input
 	return nil
 }
 
@@ -74,14 +92,25 @@ func TestProfileRoutesReadAndUpdateCurrentAdmin(t *testing.T) {
 	}
 
 	put := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/user/profile", strings.NewReader(`{"username":"alice-new","phone":"+86 138-0000-0000","birthday":"2026-08-28","gender":1,"avatar":"avatar/new.png"}`))
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/user/profile", strings.NewReader(`{"username":"alice-new","birthday":"2026-08-28","gender":1,"avatar":"avatar/new.png"}`))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(put, request)
 	if put.Code != http.StatusOK {
 		t.Fatalf("PUT status=%d body=%s", put.Code, put.Body)
 	}
-	if profile.actor != 7 || profile.target != 7 || profile.input.Username != "alice-new" || profile.input.Phone == nil || profile.input.Birthday == nil || profile.input.Birthday.Format("2006-01-02") != "2026-08-28" || profile.input.Gender != 1 || profile.input.Avatar != "avatar/new.png" {
+	if profile.actor != 7 || profile.target != 7 || profile.input.Username != "alice-new" || profile.input.Birthday == nil || profile.input.Birthday.Format("2006-01-02") != "2026-08-28" || profile.input.Gender != 1 || profile.input.Avatar != "avatar/new.png" {
 		t.Fatalf("update actor=%d target=%d input=%+v", profile.actor, profile.target, profile.input)
+	}
+
+	for _, field := range []string{`"phone":"+8613800000000"`, `"email":"other@example.com"`} {
+		withIdentity := httptest.NewRecorder()
+		body := `{"username":"alice-new",` + field + `,"birthday":"2026-08-28","gender":1,"avatar":"avatar/new.png"}`
+		request = httptest.NewRequest(http.MethodPut, "/api/admin/v1/user/profile", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(withIdentity, request)
+		if withIdentity.Code != http.StatusBadRequest {
+			t.Fatalf("PUT with identity field %s status=%d body=%s", field, withIdentity.Code, withIdentity.Body)
+		}
 	}
 }
 
@@ -137,11 +166,76 @@ func TestPasswordSetRouteRejectsMissingRequiredFields(t *testing.T) {
 	}
 }
 
+func TestPasswordCodeRoutesUseStrictProofAndCurrentIdentity(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	password := &passwordServiceStub{}
+	router := gin.New()
+	registerTestRoutes(router, &profileServiceStub{}, password, true)
+
+	send := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/user/password/send-code", strings.NewReader(`{"loginType":"phone"}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(send, request)
+	if send.Code != http.StatusOK || password.codeSendCalls != 1 || password.codeIdentity.SessionID != 8 {
+		t.Fatalf("send status=%d calls=%d identity=%+v body=%s", send.Code, password.codeSendCalls, password.codeIdentity, send.Body)
+	}
+
+	update := httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodPut, "/api/admin/v1/user/password/by-code", strings.NewReader(`{"loginType":"phone","challengeId":"challenge-1","code":"123456","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(update, request)
+	if update.Code != http.StatusOK || password.codeInput.ChallengeID != "challenge-1" || password.codeInput.Code != "123456" || password.codeIdentity.SessionID != 8 {
+		t.Fatalf("update status=%d input=%+v identity=%+v body=%s", update.Code, password.codeInput, password.codeIdentity, update.Body)
+	}
+
+	for _, body := range []string{`{"loginType":"phone","challengeId":"challenge-1","code":"12345","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`, `{"loginType":"phone","challengeId":"challenge-1","code":"123456","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!","unknown":true}`} {
+		bad := httptest.NewRecorder()
+		request = httptest.NewRequest(http.MethodPut, "/api/admin/v1/user/password/by-code", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(bad, request)
+		if bad.Code != http.StatusBadRequest {
+			t.Fatalf("body=%s status=%d response=%s", body, bad.Code, bad.Body)
+		}
+	}
+}
+
+func TestPasswordCodeRoutesRequireExplicitLoginType(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	password := &passwordServiceStub{}
+	router := gin.New()
+	registerTestRoutes(router, &profileServiceStub{}, password, true)
+
+	for _, test := range []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{name: "send code", method: http.MethodPost, path: "/api/admin/v1/user/password/send-code", body: `{}`},
+		{name: "send code empty body", method: http.MethodPost, path: "/api/admin/v1/user/password/send-code", body: ``},
+		{name: "change password by code", method: http.MethodPut, path: "/api/admin/v1/user/password/by-code", body: `{"challengeId":"challenge-1","code":"123456","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(test.method, test.path, strings.NewReader(test.body))
+			request.Header.Set("Content-Type", "application/json")
+			router.ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body)
+			}
+		})
+	}
+	if password.codeSendCalls != 0 || password.codeInput.ChallengeID != "" {
+		t.Fatalf("password service reached without explicit loginType: calls=%d input=%+v", password.codeSendCalls, password.codeInput)
+	}
+}
+
 func registerTestRoutes(router *gin.Engine, profile profileService, password passwordService, authenticated bool) {
 	pass := func(c *gin.Context) { c.Next() }
 	actor := func(*gin.Context) (int64, bool) { return 7, authenticated }
 	identity := func(c *gin.Context) {
 		c.Set("auth.identity", auth.Identity{UserID: 7, SessionID: 8, PlatformID: 1, Platform: "admin"})
+		c.Set("authclient.client", authclient.Client{Platform: "admin", ClientIP: "127.0.0.1"})
 		c.Next()
 	}
 	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(profile, password, actor), func(c *gin.Context) {

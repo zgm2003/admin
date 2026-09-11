@@ -60,7 +60,12 @@ describe('auth API', () => {
       passwordSetRequired: true,
     })
     await expect(
-      login({ loginType: 'email', loginAccount: 'admin@example.com', code: '123456' }),
+      login({
+        loginType: 'email',
+        loginAccount: 'admin@example.com',
+        challengeId: 'challenge-1',
+        code: '123456',
+      }),
     ).resolves.toEqual({
       accessToken: 'jwt',
       expiresIn: 900,
@@ -138,12 +143,15 @@ describe('auth API', () => {
     await expect(getLoginConfig()).rejects.toThrow('login config.allowRegister must be a boolean')
   })
 
-  it('rejects phone from the effective config until an SMS channel exists', async () => {
+  it('accepts phone in the effective config when the backend reports it ready', async () => {
     requestMock.mockResolvedValue({
       loginTypes: [{ value: 'phone', label: 'Phone code' }],
       allowRegister: false,
     })
-    await expect(getLoginConfig()).rejects.toThrow('login config option value is unavailable')
+    await expect(getLoginConfig()).resolves.toEqual({
+      loginTypes: [{ value: 'phone', label: 'Phone code' }],
+      allowRegister: false,
+    })
   })
 
   it('refreshes and logs out without a JSON body', async () => {
@@ -264,7 +272,7 @@ describe('auth API', () => {
       expiresAt: '2026-09-07T10:00:00Z',
       resendAfterSeconds: 60,
     })
-    await expect(forgotPassword('admin@example.com')).resolves.toEqual({
+    await expect(forgotPassword('admin@example.com', 'email')).resolves.toEqual({
       challengeId: 'challenge-9',
       expiresAt: '2026-09-07T10:00:00Z',
       resendAfterSeconds: 60,
@@ -272,27 +280,26 @@ describe('auth API', () => {
     expect(requestMock).toHaveBeenCalledWith({
       method: 'POST',
       url: '/api/v1/auth/password/forgot',
-      data: { email: 'admin@example.com' },
+      data: { account: 'admin@example.com', loginType: 'email' },
     })
   })
 
   it('resets the password and requires an empty object result', async () => {
     const input = {
-      email: 'admin@example.com',
       code: '123456',
       newPassword: 'NewPassw0rd!',
       confirmPassword: 'NewPassw0rd!',
     }
     requestMock.mockResolvedValueOnce({})
-    await expect(resetPassword(input)).resolves.toBeUndefined()
+    await expect(resetPassword({ account: 'admin@example.com', loginType: 'email', challengeId: 'challenge-1', ...input })).resolves.toBeUndefined()
     expect(requestMock).toHaveBeenCalledWith({
       method: 'POST',
       url: '/api/v1/auth/password/reset',
-      data: input,
+      data: { account: 'admin@example.com', loginType: 'email', challengeId: 'challenge-1', ...input },
     })
 
     requestMock.mockResolvedValueOnce({ unexpected: true })
-    await expect(resetPassword(input)).rejects.toThrow('reset password result')
+    await expect(resetPassword({ account: 'admin@example.com', loginType: 'email', challengeId: 'challenge-1', ...input })).rejects.toThrow('reset password result')
   })
 
   it('rejects a current user response without the required phone field', async () => {

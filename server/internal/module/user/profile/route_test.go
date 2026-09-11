@@ -13,7 +13,7 @@ func TestRegisterRoutesRequiresProfilePermissions(t *testing.T) {
 		t.Fatalf("profile permissions = %q, %q, %q, %q", PermissionView, PermissionDetail, PermissionUpdate, PermissionPasswordUpdate)
 	}
 
-	seen := make([]string, 0, 2)
+	seen := make([]string, 0, 4)
 	router := gin.New()
 	RegisterRoutes(
 		router.Group("/api/admin/v1"),
@@ -38,6 +38,8 @@ func TestRegisterRoutesRequiresProfilePermissions(t *testing.T) {
 		{http.MethodGet, "/api/admin/v1/user/profile", PermissionDetail},
 		{http.MethodPut, "/api/admin/v1/user/profile", PermissionUpdate},
 		{http.MethodPost, "/api/admin/v1/user/password", PermissionPasswordUpdate},
+		{http.MethodPost, "/api/admin/v1/user/password/send-code", PermissionPasswordUpdate},
+		{http.MethodPut, "/api/admin/v1/user/password/by-code", PermissionPasswordUpdate},
 	}
 	for _, request := range want {
 		seen = seen[:0]

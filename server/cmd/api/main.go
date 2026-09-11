@@ -24,6 +24,13 @@ import (
 	ratelimitpolicy "admin/server/internal/module/message/mail/rateLimitPolicy"
 	recipientrule "admin/server/internal/module/message/mail/recipientRule"
 	mailtemplate "admin/server/internal/module/message/mail/template"
+	messagesms "admin/server/internal/module/message/sms"
+	smsconfig "admin/server/internal/module/message/sms/config"
+	smslog "admin/server/internal/module/message/sms/log"
+	smslogverification "admin/server/internal/module/message/sms/logVerification"
+	smsratelimitpolicy "admin/server/internal/module/message/sms/rateLimitPolicy"
+	smsrecipientrule "admin/server/internal/module/message/sms/recipientRule"
+	smstemplate "admin/server/internal/module/message/sms/template"
 	"admin/server/internal/module/permission/access"
 	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
@@ -34,7 +41,9 @@ import (
 	"admin/server/internal/module/system/dictionary"
 	"admin/server/internal/module/system/operationLog"
 	account "admin/server/internal/module/user/account"
+	useremail "admin/server/internal/module/user/email"
 	"admin/server/internal/module/user/loginLog"
+	userphone "admin/server/internal/module/user/phone"
 	profile "admin/server/internal/module/user/profile"
 	usersession "admin/server/internal/module/user/session"
 	"admin/server/internal/queue"
@@ -43,6 +52,7 @@ import (
 	"admin/server/internal/shared/i18n"
 	storagecos "admin/server/internal/storage/cos"
 	storagemail "admin/server/internal/storage/mail"
+	storagesms "admin/server/internal/storage/sms"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -61,6 +71,8 @@ type routerDependencies struct {
 	Role              *role.Handler
 	User              *account.Handler
 	Account           *profile.Handler
+	Phone             *userphone.Handler
+	Email             *useremail.Handler
 	COSConfig         *cosconfig.Handler
 	UploadRule        *uploadrule.Handler
 	OperationLog      *operationlog.Handler
@@ -72,6 +84,12 @@ type routerDependencies struct {
 	MailLog           *maillog.Handler
 	MailRateLimit     *ratelimitpolicy.Handler
 	MailRecipientRule *recipientrule.Handler
+	SMS               *messagesms.Handler
+	SMSConfig         *smsconfig.Handler
+	SMSTemplate       *smstemplate.Handler
+	SMSLog            *smslog.Handler
+	SMSRateLimit      *smsratelimitpolicy.Handler
+	SMSRecipientRule  *smsrecipientrule.Handler
 	OperationEnqueuer operationlog.Enqueuer
 	SessionAdmin      *usersession.SessionAdminHandler
 	AuthOrigin        gin.HandlerFunc
@@ -139,10 +157,16 @@ func run(logger *slog.Logger) error {
 	mailRateLimitRepository := ratelimitpolicy.NewRepository(postgres.GORM)
 	authPlatformRepository.SetRateLimitPolicyLifecycle(
 		func(ctx context.Context, tx *gorm.DB, platformID int64) error {
-			return ratelimitpolicy.NewRepository(tx).ProvisionDefaults(ctx, platformID)
+			if err := ratelimitpolicy.NewRepository(tx).ProvisionDefaults(ctx, platformID); err != nil {
+				return err
+			}
+			return smsratelimitpolicy.NewRepository(tx).ProvisionDefaults(ctx, platformID, time.Now().UTC())
 		},
 		func(ctx context.Context, tx *gorm.DB, platformID int64) error {
-			return ratelimitpolicy.NewRepository(tx).DeleteForPlatform(ctx, platformID)
+			if err := ratelimitpolicy.NewRepository(tx).DeleteForPlatform(ctx, platformID); err != nil {
+				return err
+			}
+			return smsratelimitpolicy.NewRepository(tx).DeleteForPlatform(ctx, platformID)
 		},
 	)
 	policyStore := authplatform.NewPolicyStore(redisClient)
@@ -191,10 +215,39 @@ func run(logger *slog.Logger) error {
 	mailTemplateService.SetRuntimeCoordinator(mailRuntimeStore)
 	mailLogService := maillog.NewService(mailStores.Log, mailStores.LogVerification, keys)
 	mailRecipientRuleService.SetRuntimeCoordinator(mailRuntimeStore)
+	smsRuntimeCache := messagesms.NewRuntimeCache(redisClient)
+	smsConfigRepository := smsconfig.NewRepository(postgres.GORM)
+	smsConfigService := smsconfig.NewService(smsConfigRepository, keys, smsRuntimeCache)
+	smsTemplateRepository := smstemplate.NewRepository(postgres.GORM)
+	smsTemplateService := smstemplate.NewService(smsTemplateRepository)
+	smsTemplateService.SetRuntimeCoordinator(smsRuntimeCache)
+	smsRecipientRuleRepository := smsrecipientrule.NewRepository(postgres.GORM)
+	smsRecipientRuleService := smsrecipientrule.NewService(smsRecipientRuleRepository, keys)
+	smsRecipientRuleService.SetRuntimeCoordinator(smsRuntimeCache)
+	smsRateLimitRepository := smsratelimitpolicy.NewRepository(postgres.GORM)
+	smsRateLimitStore := smsratelimitpolicy.NewStore(redisClient)
+	smsRateLimitService := smsratelimitpolicy.NewService(smsRateLimitRepository, smsRateLimitStore)
+	smsLogRepository := smslog.NewRepository(postgres.GORM)
+	smsLogVerificationRepository := smslogverification.NewRepository(postgres.GORM)
+	smsLogService := smslog.NewService(smsLogRepository, smsLogVerificationRepository, keys)
+	smsService := messagesms.NewService(messagesms.Stores{
+		Runtime:      smsRuntimeCache,
+		Config:       smsConfigRepository,
+		Template:     smsTemplateRepository,
+		Rule:         smsRecipientRuleRepository,
+		Log:          smsLogRepository,
+		Verification: smsLogVerificationRepository,
+		Policy:       smsRateLimitService,
+		Limiter:      messagesms.NewRedisLimiter(redisClient.UniversalClient()),
+		Sender:       storagesms.NewTencentSMSClient(nil),
+	}, keys)
 	verificationStore := auth.NewVerificationCodeStore(redisClient, keys.VerificationCodeHMACKey())
 	authService.SetVerifyCodeSender(mailService)
+	authService.SetPhoneVerifyCodeSender(smsService)
 	authService.SetVerificationCodeStore(verificationStore)
 	authService.SetLoginLogRecorder(loginLogService)
+	phoneService := userphone.NewService(userphone.NewRepository(postgres.GORM), smsService, verificationStore, keys, userphone.NewAuthorityCoordinator(authStateStore, authInvalidator))
+	emailService := useremail.NewService(useremail.NewRepository(postgres.GORM), mailService, verificationStore, keys, useremail.NewAuthorityCoordinator(authStateStore, authInvalidator))
 	permissionRepository := permission.NewRepository(postgres.GORM)
 	permissionService := permission.NewService(permissionRepository, accessStateStore, permission.NewSnapshotCache(redisClient), permission.NewLocalSnapshotCache(1024), logger, menuStateStore)
 	operationLogRepository := operationlog.NewRepository(postgres.GORM)
@@ -221,6 +274,16 @@ func run(logger *slog.Logger) error {
 			identity, ok := auth.IdentityFromContext(context)
 			return identity.UserID, ok
 		}),
+		Phone: userphone.NewHandler(phoneService, func(context *gin.Context) (userphone.Actor, bool) {
+			identity, ok := auth.IdentityFromContext(context)
+			client, clientOK := authclient.FromContext(context)
+			return userphone.Actor{UserID: identity.UserID, SessionID: identity.SessionID, PlatformID: identity.PlatformID, Platform: identity.Platform, ClientIP: client.ClientIP}, ok && clientOK
+		}),
+		Email: useremail.NewHandler(emailService, func(context *gin.Context) (useremail.Actor, bool) {
+			identity, ok := auth.IdentityFromContext(context)
+			client, clientOK := authclient.FromContext(context)
+			return useremail.Actor{UserID: identity.UserID, SessionID: identity.SessionID, PlatformID: identity.PlatformID, Platform: identity.Platform, ClientIP: client.ClientIP}, ok && clientOK
+		}),
 		COSConfig:         cosconfig.NewHandler(cosConfigService),
 		UploadRule:        uploadrule.NewHandler(uploadRuleService),
 		OperationLog:      operationlog.NewHandler(operationLogService),
@@ -232,6 +295,12 @@ func run(logger *slog.Logger) error {
 		MailLog:           maillog.NewHandler(mailLogService),
 		MailRateLimit:     ratelimitpolicy.NewHandler(mailRateLimitService),
 		MailRecipientRule: recipientrule.NewHandler(mailRecipientRuleService),
+		SMS:               messagesms.NewHandler(smsService),
+		SMSConfig:         smsconfig.NewHandler(smsConfigService),
+		SMSTemplate:       smstemplate.NewHandler(smsTemplateService),
+		SMSLog:            smslog.NewHandler(smsLogService),
+		SMSRateLimit:      smsratelimitpolicy.NewHandler(smsRateLimitService),
+		SMSRecipientRule:  smsrecipientrule.NewHandler(smsRecipientRuleService),
 		OperationEnqueuer: operationLogEnqueuer,
 		SessionAdmin: usersession.NewSessionAdminHandler(sessionService, func(context *gin.Context) (usersession.Actor, bool) {
 			identity, ok := auth.IdentityFromContext(context)
@@ -298,6 +367,12 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	role.RegisterRoutes(adminRoutes, dependencies.Role, dependencies.Authenticate, dependencies.RequirePermission)
 	account.RegisterRoutes(adminRoutes, dependencies.User, dependencies.Authenticate, dependencies.RequirePermission)
 	profile.RegisterRoutes(adminRoutes, dependencies.Account, dependencies.Authenticate, dependencies.RequirePermission)
+	if dependencies.Phone != nil {
+		userphone.RegisterRoutes(adminRoutes, dependencies.Phone, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.Email != nil {
+		useremail.RegisterRoutes(adminRoutes, dependencies.Email, dependencies.Authenticate, dependencies.RequirePermission)
+	}
 	cosconfig.RegisterRoutes(adminRoutes, dependencies.COSConfig, dependencies.Authenticate, dependencies.RequirePermission)
 	uploadrule.RegisterRoutes(adminRoutes, dependencies.UploadRule, dependencies.Authenticate, dependencies.RequirePermission)
 	uploadrule.RegisterCredentialRoute(sharedRoutes, dependencies.UploadRule, dependencies.Authenticate, dependencies.RequirePermission)
@@ -310,6 +385,15 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 		maillog.RegisterRoutes(mailRoutes, dependencies.MailLog, dependencies.Authenticate, dependencies.RequirePermission)
 		ratelimitpolicy.RegisterRoutes(mailRoutes, dependencies.MailRateLimit, dependencies.Authenticate, dependencies.RequirePermission)
 		recipientrule.RegisterRoutes(mailRoutes, dependencies.MailRecipientRule, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.SMS != nil {
+		smsRoutes := adminRoutes.Group("/message/sms")
+		messagesms.RegisterRoutes(smsRoutes, dependencies.SMS, dependencies.Authenticate, dependencies.RequirePermission)
+		smsconfig.RegisterRoutes(smsRoutes, dependencies.SMSConfig, dependencies.Authenticate, dependencies.RequirePermission)
+		smstemplate.RegisterRoutes(smsRoutes, dependencies.SMSTemplate, dependencies.Authenticate, dependencies.RequirePermission)
+		smslog.RegisterRoutes(smsRoutes, dependencies.SMSLog, dependencies.Authenticate, dependencies.RequirePermission)
+		smsratelimitpolicy.RegisterRoutes(smsRoutes, dependencies.SMSRateLimit, dependencies.Authenticate, dependencies.RequirePermission)
+		smsrecipientrule.RegisterRoutes(smsRoutes, dependencies.SMSRecipientRule, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	operationlog.RegisterRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
 	dictionary.RegisterRoutes(adminRoutes, dependencies.Dictionary, dependencies.Authenticate, dependencies.RequirePermission)

@@ -52,10 +52,13 @@ func (s *verificationCodeStore) VerificationKey(platform, scene, loginType, acco
 	return verificationCodeKeyPrefix + platform + ":" + scene + ":" + loginType + ":" + hex.EncodeToString(mac.Sum(nil))
 }
 
-// Digest computes the HMAC of a plaintext code so the code itself is never
-// written to Redis.
-func (s *verificationCodeStore) Digest(code string) string {
+// ProofDigest binds a one-time code to the challenge identifier returned by
+// the send-code endpoint. The NUL separator is outside both accepted input
+// alphabets, so the encoded tuple is unambiguous without storing either value.
+func (s *verificationCodeStore) ProofDigest(challengeID, code string) string {
 	mac := hmac.New(sha256.New, s.hmacKey)
+	_, _ = mac.Write([]byte(challengeID))
+	_, _ = mac.Write([]byte{0})
 	_, _ = mac.Write([]byte(code))
 	return hex.EncodeToString(mac.Sum(nil))
 }
@@ -211,6 +214,30 @@ func (s *verificationCodeStore) Consume(ctx context.Context, key, digest string)
 	return false, fmt.Errorf("consume verification code: %s", result)
 }
 
+// ConsumeMany atomically validates every key against its digest and, only when
+// all of them match, deletes all of them. A partial match consumes nothing.
+func (s *verificationCodeStore) ConsumeMany(ctx context.Context, keys []string, digests []string) (bool, error) {
+	if len(keys) == 0 || len(keys) != len(digests) {
+		return false, fmt.Errorf("consume many verification codes: invalid argument count")
+	}
+	args := make([]any, 0, len(digests))
+	for _, digest := range digests {
+		args = append(args, digest)
+	}
+	result, err := s.redis.EvalString(ctx, consumeManyVerificationCodeScript, keys, args...)
+	if err != nil {
+		return false, fmt.Errorf("consume many verification codes: %w", err)
+	}
+	switch result {
+	case "consumed":
+		return true, nil
+	case "mismatch", "missing":
+		return false, nil
+	default:
+		return false, fmt.Errorf("consume many verification codes: %s", result)
+	}
+}
+
 func (s *verificationCodeStore) DeleteIfOwned(ctx context.Context, key, leaseToken string) error {
 	result, err := s.redis.EvalString(ctx, deleteIfOwnedScript, []string{key}, leaseToken)
 	if err != nil {
@@ -237,6 +264,24 @@ if decoded.digest == ARGV[1] then
   return 'consumed'
 end
 return 'mismatch'
+`
+
+const consumeManyVerificationCodeScript = `
+if #KEYS ~= #ARGV then return 'mismatch' end
+for i = 1, #KEYS do
+  local raw = redis.call('GET', KEYS[i])
+  if not raw then return 'mismatch' end
+  local ok, decoded = pcall(cjson.decode, raw)
+  if not ok or type(decoded) ~= 'table' then return 'corrupt' end
+  local count = 0
+  for _ in pairs(decoded) do count = count + 1 end
+  if count ~= 2 then return 'corrupt' end
+  if type(decoded.digest) ~= 'string' or #decoded.digest == 0 then return 'corrupt' end
+  if type(decoded.leaseToken) ~= 'string' or #decoded.leaseToken == 0 then return 'corrupt' end
+  if decoded.digest ~= ARGV[i] then return 'mismatch' end
+end
+for i = 1, #KEYS do redis.call('DEL', KEYS[i]) end
+return 'consumed'
 `
 
 const checkVerificationCodeAttemptScript = `

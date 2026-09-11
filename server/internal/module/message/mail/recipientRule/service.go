@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/mail"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"admin/server/internal/shared/apperror"
+	sharedemail "admin/server/internal/shared/email"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -142,16 +142,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 }
 
 func NormalizeRecipient(value string) (string, error) {
-	value = strings.ToLower(strings.TrimSpace(value))
-	parsed, err := mail.ParseAddress(value)
-	if err != nil || parsed.Address != value || !strings.Contains(value, "@") {
-		return "", fmt.Errorf("invalid recipient email")
-	}
-	parts := strings.Split(value, "@")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", fmt.Errorf("invalid recipient email")
-	}
-	return value, nil
+	return sharedemail.Normalize(value)
 }
 
 func NormalizeRule(scope, pattern string) (string, error) {

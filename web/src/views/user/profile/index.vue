@@ -1,27 +1,34 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import {
+  changePasswordByCode,
   changePassword,
   getAccountProfile,
+  sendPasswordCode,
   setPassword,
   updateAccountProfile,
 } from '@/api/user/profile'
 import type {
   AccountProfile,
   ChangePasswordInput,
+  PasswordCodeLoginType,
   UpdateAccountProfileInput,
 } from '@/api/user/profile'
 import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
 import { useSystemDictionaryStore } from '@/store/systemDictionary'
-import { UpMedia } from '@/components/UpMedia'
+import EmailBindingDialog from '@/views/user/profile/components/EmailBindingDialog/index.vue'
+import PhoneBindingDialog from '@/views/user/profile/components/PhoneBindingDialog/index.vue'
+import PasswordSecurityForm from '@/views/user/profile/components/PasswordSecurityForm/index.vue'
+import ProfileDetailsForm from '@/views/user/profile/components/ProfileDetailsForm/index.vue'
 import ProfileHero from '@/views/user/profile/components/ProfileHero/index.vue'
 
 type ProfileTab = 'profile' | 'security'
+type PasswordMode = 'password' | 'code'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -30,20 +37,32 @@ const access = usePermissionStore()
 const dictionaries = useSystemDictionaryStore()
 const canUpdateProfile = computed(() => access.hasPermission('user:profile:update'))
 const canUpdatePassword = computed(() => access.hasPermission('user:password:update'))
+const canUpdateEmail = computed(() => access.hasPermission('user:email:update'))
+const canUpdatePhone = computed(() => access.hasPermission('user:phone:update'))
 const setPasswordMode = computed(() => auth.passwordSetRequired)
 const loading = ref(false)
 const savingProfile = ref(false)
 const changingPassword = ref(false)
+const sendingPasswordCode = ref(false)
 const loadError = ref('')
 const activeTab = ref<ProfileTab>(setPasswordMode.value ? 'security' : 'profile')
 const heroAvatarURL = ref('')
+const currentEmail = ref(auth.user?.email ?? '')
+const currentPhone = ref<string | null>(auth.user?.phone ?? null)
+const emailDialogVisible = ref(false)
+const phoneDialogVisible = ref(false)
+const passwordMode = ref<PasswordMode>('password')
+const passwordLoginType = ref<PasswordCodeLoginType>('email')
+const passwordChallengeID = ref('')
+const passwordCode = ref('')
+const passwordResendSeconds = ref(0)
+let passwordResendTimer: number | undefined
 const genderOptions = ref<Array<{ label: string; value: UpdateAccountProfileInput['gender'] }>>([])
 const genderOptionsLoading = ref(false)
 const genderOptionsError = ref('')
 let genderOptionsRequest = 0
 const profileForm = reactive<UpdateAccountProfileInput>({
   username: '',
-  phone: null,
   avatar: '',
   birthday: null,
   gender: 0,
@@ -56,14 +75,31 @@ const passwordForm = reactive<ChangePasswordInput>({
 const heroName = computed(() =>
   profileForm.username !== '' ? profileForm.username : (auth.user?.username ?? ''),
 )
-const heroEmail = computed(() => auth.user?.email ?? '')
+const heroEmail = computed(() => currentEmail.value)
+const passwordModeOptions = computed(() => [
+  { label: t('user.password.byCurrentPassword'), value: 'password' as const },
+  { label: t('user.password.byCode'), value: 'code' as const },
+])
+const passwordIdentityOptions = computed<Array<{ label: string; value: PasswordCodeLoginType }>>(
+  () => {
+    const options: Array<{ label: string; value: PasswordCodeLoginType }> = []
+    if (currentEmail.value !== '') {
+      options.push({ label: t('user.profile.email'), value: 'email' })
+    }
+    if (currentPhone.value !== null) {
+      options.push({ label: t('user.profile.phone'), value: 'phone' })
+    }
+    return options
+  },
+)
 
 function applyProfile(profile: AccountProfile): void {
   profileForm.username = profile.username
-  profileForm.phone = profile.phone
   profileForm.avatar = profile.avatar
   profileForm.birthday = profile.birthday
   profileForm.gender = profile.gender
+  currentEmail.value = profile.email
+  currentPhone.value = profile.phone
 }
 
 async function loadProfile(): Promise<void> {
@@ -142,6 +178,23 @@ async function submitPassword(): Promise<void> {
       ElMessage.success(t('user.password.setSuccessMessage'))
       return
     }
+    if (passwordMode.value === 'code') {
+      await changePasswordByCode({
+        loginType: passwordLoginType.value,
+        challengeId: passwordChallengeID.value,
+        code: passwordCode.value,
+        newPassword: passwordForm.newPassword,
+        confirmPassword: passwordForm.confirmPassword,
+      })
+      passwordChallengeID.value = ''
+      passwordCode.value = ''
+      passwordForm.currentPassword = ''
+      passwordForm.newPassword = ''
+      passwordForm.confirmPassword = ''
+      stopPasswordCountdown()
+      ElMessage.success(t('user.password.codeSuccessMessage'))
+      return
+    }
     await changePassword({ ...passwordForm })
     await ElMessageBox.alert(t('user.password.successMessage'), t('user.password.successTitle'), {
       type: 'success',
@@ -156,8 +209,75 @@ async function submitPassword(): Promise<void> {
   }
 }
 
+async function sendCurrentIdentityPasswordCode(): Promise<void> {
+  if (
+    sendingPasswordCode.value ||
+    passwordResendSeconds.value > 0 ||
+    !passwordIdentityOptions.value.some((option) => option.value === passwordLoginType.value)
+  ) {
+    return
+  }
+  sendingPasswordCode.value = true
+  try {
+    const result = await sendPasswordCode(passwordLoginType.value)
+    passwordChallengeID.value = result.challengeId
+    startPasswordCountdown(result.resendAfterSeconds)
+  } catch {
+    // request.ts emits the single API error notification
+  } finally {
+    sendingPasswordCode.value = false
+  }
+}
+
+function startPasswordCountdown(seconds: number): void {
+  stopPasswordCountdown()
+  passwordResendSeconds.value = seconds
+  if (seconds <= 0) return
+  passwordResendTimer = window.setInterval(() => {
+    passwordResendSeconds.value = Math.max(0, passwordResendSeconds.value - 1)
+    if (passwordResendSeconds.value === 0) stopPasswordCountdown()
+  }, 1000)
+}
+
+function stopPasswordCountdown(): void {
+  if (passwordResendTimer !== undefined) {
+    window.clearInterval(passwordResendTimer)
+    passwordResendTimer = undefined
+  }
+  passwordResendSeconds.value = 0
+}
+
+function handleEmailUpdated(email: string): void {
+  currentEmail.value = email
+  if (auth.user !== null) auth.updateEmail(auth.user.userId, email)
+}
+
+function handlePhoneUpdated(phone: string): void {
+  currentPhone.value = phone
+  if (auth.user !== null) auth.updatePhone(auth.user.userId, phone)
+}
+
+watch(
+  passwordIdentityOptions,
+  (options) => {
+    if (!options.some((option) => option.value === passwordLoginType.value) && options[0]) {
+      passwordLoginType.value = options[0].value
+      passwordChallengeID.value = ''
+      passwordCode.value = ''
+      stopPasswordCountdown()
+    }
+  },
+  { immediate: true },
+)
+watch(passwordLoginType, () => {
+  passwordChallengeID.value = ''
+  passwordCode.value = ''
+  stopPasswordCountdown()
+})
+
 void loadProfile()
 watch(locale, () => void loadGenderOptions(), { immediate: true })
+onBeforeUnmount(stopPasswordCountdown)
 </script>
 
 <template>
@@ -197,124 +317,57 @@ watch(locale, () => void loadGenderOptions(), { immediate: true })
     </div>
 
     <div v-show="activeTab === 'profile'" class="account-profile__pane">
-      <section v-loading="loading" class="account-profile__card">
-        <header class="account-profile__card-head">
-          <h2 class="account-profile__card-title">{{ t('user.profile.basicTitle') }}</h2>
-        </header>
-        <el-form label-position="top" @submit.prevent="saveProfile">
-          <el-row :gutter="16">
-            <el-col :xs="24" :sm="12">
-              <el-form-item :label="t('user.profile.username')">
-                <el-input v-model="profileForm.username" autocomplete="username" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
-              <el-form-item :label="t('user.profile.email')">
-                <el-input :model-value="heroEmail" disabled />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
-              <el-form-item :label="t('user.profile.phone')">
-                <el-input v-model="profileForm.phone" clearable />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
-              <el-form-item :label="t('user.profile.avatar')">
-                <UpMedia
-                  v-model="profileForm.avatar"
-                  rule-code="avatar"
-                  variant="avatar"
-                  width="178px"
-                  :disabled="!canUpdateProfile"
-                  @preview-change="heroAvatarURL = $event"
-                />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
-              <el-form-item :label="t('user.profile.birthday')">
-                <el-date-picker
-                  v-model="profileForm.birthday"
-                  type="date"
-                  value-format="YYYY-MM-DD"
-                  class="account-profile__full"
-                />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
-              <el-form-item :label="t('user.profile.gender')">
-                <el-select-v2
-                  v-model="profileForm.gender"
-                  :options="genderOptions"
-                  :loading="genderOptionsLoading"
-                  :disabled="genderOptionsLoading || genderOptionsError !== ''"
-                  data-testid="account-profile-gender"
-                  class="account-profile__full"
-                />
-                <div v-if="genderOptionsError" class="el-form-item__error">
-                  {{ genderOptionsError }}
-                </div>
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <div v-if="canUpdateProfile" class="account-profile__actions">
-            <el-button
-              data-testid="account-profile-save"
-              type="primary"
-              :loading="savingProfile"
-              @click="saveProfile"
-              >{{ t('user.profile.save') }}</el-button
-            >
-          </div>
-        </el-form>
-      </section>
+      <ProfileDetailsForm
+        :profile-form="profileForm"
+        :current-email="currentEmail"
+        :current-phone="currentPhone"
+        :gender-options="genderOptions"
+        :gender-options-loading="genderOptionsLoading"
+        :gender-options-error="genderOptionsError"
+        :loading="loading"
+        :can-update-profile="canUpdateProfile"
+        :can-update-email="canUpdateEmail"
+        :can-update-phone="canUpdatePhone"
+        @update:profile-form="Object.assign(profileForm, $event)"
+        @save="saveProfile"
+        @email-action="emailDialogVisible = true"
+        @phone-action="phoneDialogVisible = true"
+        @avatar-preview-change="heroAvatarURL = $event"
+      />
     </div>
 
     <div v-show="activeTab === 'security'" class="account-profile__pane">
-      <section class="account-profile__card account-profile__card--narrow">
-        <header class="account-profile__card-head">
-          <h2 class="account-profile__card-title">
-            {{ t(setPasswordMode ? 'user.password.setTitle' : 'user.password.title') }}
-          </h2>
-        </header>
-        <el-form label-position="top" @submit.prevent="submitPassword">
-          <el-form-item v-if="!setPasswordMode" :label="t('user.password.current')"
-            ><el-input
-              v-model="passwordForm.currentPassword"
-              data-testid="account-password-current"
-              type="password"
-              show-password
-              autocomplete="current-password"
-          /></el-form-item>
-          <el-form-item :label="t('user.password.new')"
-            ><el-input
-              v-model="passwordForm.newPassword"
-              data-testid="account-password-new"
-              type="password"
-              show-password
-              autocomplete="new-password"
-          /></el-form-item>
-          <el-form-item :label="t('user.password.confirm')"
-            ><el-input
-              v-model="passwordForm.confirmPassword"
-              data-testid="account-password-confirm"
-              type="password"
-              show-password
-              autocomplete="new-password"
-          /></el-form-item>
-          <div v-if="canUpdatePassword" class="account-profile__actions">
-            <el-button
-              data-testid="account-password-submit"
-              type="primary"
-              :loading="changingPassword"
-              @click="submitPassword"
-              >{{
-                t(setPasswordMode ? 'user.password.setSubmit' : 'user.password.submit')
-              }}</el-button
-            >
-          </div>
-        </el-form>
-      </section>
+      <PasswordSecurityForm
+        :set-password-mode="setPasswordMode"
+        :password-mode="passwordMode"
+        :password-mode-options="passwordModeOptions"
+        :password-login-type="passwordLoginType"
+        :password-identity-options="passwordIdentityOptions"
+        :password-form="passwordForm"
+        :password-code="passwordCode"
+        :password-resend-seconds="passwordResendSeconds"
+        :changing-password="changingPassword"
+        :sending-password-code="sendingPasswordCode"
+        :can-update-password="canUpdatePassword"
+        @update:password-form="Object.assign(passwordForm, $event)"
+        @update:password-mode="passwordMode = $event"
+        @update:password-login-type="passwordLoginType = $event"
+        @update:password-code="passwordCode = $event"
+        @submit="submitPassword"
+        @send-code="sendCurrentIdentityPasswordCode"
+      />
     </div>
+
+    <EmailBindingDialog
+      v-model="emailDialogVisible"
+      :current-email="currentEmail"
+      @updated="handleEmailUpdated"
+    />
+    <PhoneBindingDialog
+      v-model="phoneDialogVisible"
+      :current-phone="currentPhone"
+      @updated="handlePhoneUpdated"
+    />
   </section>
 </template>
 
@@ -405,6 +458,14 @@ watch(locale, () => void loadGenderOptions(), { immediate: true })
   width: 100%;
 }
 
+.account-profile__identity-row,
+.account-profile__code-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
 .account-profile__actions {
   display: flex;
   justify-content: flex-end;
@@ -414,6 +475,11 @@ watch(locale, () => void loadGenderOptions(), { immediate: true })
 @media (max-width: 560px) {
   .account-profile__card {
     padding: 20px 18px;
+  }
+
+  .account-profile__identity-row,
+  .account-profile__code-row {
+    grid-template-columns: 1fr;
   }
 }
 </style>

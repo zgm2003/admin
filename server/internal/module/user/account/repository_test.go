@@ -235,7 +235,7 @@ func TestFindCurrentUserRequiresAnEnabledRole(t *testing.T) {
 	}
 }
 
-func TestRepositoryProfilePhoneRoundTripAndKeywordSearch(t *testing.T) {
+func TestRepositoryProfileKeepsReadOnlyPhoneVisibleAndSearchable(t *testing.T) {
 	tx, ctx, roleRepository := openUserTransaction(t)
 	defaultRole, err := roleRepository.FindDefault(ctx)
 	if err != nil {
@@ -250,9 +250,12 @@ func TestRepositoryProfilePhoneRoundTripAndKeywordSearch(t *testing.T) {
 	if created.Phone != nil {
 		t.Fatalf("new user phone = %v, want nil", created.Phone)
 	}
-	phone := "+86 138-0000-0000"
+	phone := "+8613800000000"
+	if err := tx.WithContext(ctx).Model(&account.User{}).Where("id = ?", created.ID).Update("phone", phone).Error; err != nil {
+		t.Fatal(err)
+	}
 	updatedAt := time.Date(2026, 8, 27, 1, 2, 3, 0, time.UTC)
-	if err := repository.UpdateProfile(ctx, created.ID, created.Username+"x", &phone, updatedAt); err != nil {
+	if err := repository.UpdateProfile(ctx, created.ID, created.Username+"x", updatedAt); err != nil {
 		t.Fatal(err)
 	}
 	stored, err := repository.FindUser(ctx, created.ID)
@@ -263,27 +266,9 @@ func TestRepositoryProfilePhoneRoundTripAndKeywordSearch(t *testing.T) {
 	if err != nil || current.Phone == nil || *current.Phone != phone {
 		t.Fatalf("current=%+v err=%v", current, err)
 	}
-	rows, err := repository.List(ctx, account.ListQuery{Page: 1, PageSize: 20, Keyword: "138-0000"})
+	rows, err := repository.List(ctx, account.ListQuery{Page: 1, PageSize: 20, Keyword: "1380000"})
 	if err != nil || len(rows) != 1 || rows[0].ID != created.ID || rows[0].Phone == nil || *rows[0].Phone != phone {
 		t.Fatalf("rows=%+v err=%v", rows, err)
-	}
-}
-
-func TestUpdateProfileMapsPhoneConstraint(t *testing.T) {
-	tx, ctx, roleRepository := openUserTransaction(t)
-	defaultRole, err := roleRepository.FindDefault(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	first := createListedUser(t, tx, ctx, fmt.Sprintf("phone-first%d", time.Now().UnixNano()), fmt.Sprintf("phone-first%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
-	second := createListedUser(t, tx, ctx, fmt.Sprintf("phone-second%d", time.Now().UnixNano()), fmt.Sprintf("phone-second%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
-	phone := "+86 138-0000-0000"
-	repository := account.NewRepository(tx)
-	if err := repository.UpdateProfile(ctx, first.ID, first.Username, &phone, time.Now().UTC()); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.UpdateProfile(ctx, second.ID, second.Username, &phone, time.Now().UTC()); !errors.Is(err, account.ErrPhoneConflict) {
-		t.Fatalf("UpdateProfile() error = %v", err)
 	}
 }
 
@@ -491,7 +476,7 @@ func TestRepositoryUpdateSoftDeleteCreateUserRolesAndRevoke(t *testing.T) {
 	created := createListedUser(t, tx, ctx, fmt.Sprintf("writes%d", time.Now().UnixNano()), fmt.Sprintf("writes%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
 	repository := account.NewRepository(tx)
 	operationTime := time.Date(2026, 8, 20, 6, 7, 8, 0, time.UTC)
-	if err := repository.UpdateProfile(ctx, created.ID, created.Username+"x", nil, operationTime); err != nil {
+	if err := repository.UpdateProfile(ctx, created.ID, created.Username+"x", operationTime); err != nil {
 		t.Fatal(err)
 	}
 	if err := repository.UpdateStatus(ctx, created.ID, yesno.No, operationTime); err != nil {
@@ -616,7 +601,7 @@ func TestRepositoryUpdateProfileMapsActiveUsernameConstraint(t *testing.T) {
 	}
 	first := createListedUser(t, tx, ctx, fmt.Sprintf("conflict%d", time.Now().UnixNano()), fmt.Sprintf("conflict%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
 	second := createListedUser(t, tx, ctx, fmt.Sprintf("other%d", time.Now().UnixNano()), fmt.Sprintf("other%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
-	if err := account.NewRepository(tx).UpdateProfile(ctx, second.ID, strings.ToUpper(first.Username), nil, time.Now().UTC()); !errors.Is(err, account.ErrUsernameConflict) {
+	if err := account.NewRepository(tx).UpdateProfile(ctx, second.ID, strings.ToUpper(first.Username), time.Now().UTC()); !errors.Is(err, account.ErrUsernameConflict) {
 		t.Fatalf("UpdateProfile() error = %v", err)
 	}
 }
@@ -974,7 +959,7 @@ func TestPersonalProfileRepositoryPersistsAndReadsBirthdayAndGender(t *testing.T
 	birthday := time.Date(2000, 1, 2, 0, 0, 0, 0, time.UTC)
 	updatedAt := time.Date(2026, 8, 28, 1, 2, 3, 0, time.UTC)
 	profileRepository := profile.NewRepository(db)
-	updated, err := profileRepository.Update(ctx, created.ID, "profile-user", nil, &birthday, 2, "avatar/profile.png", updatedAt)
+	updated, err := profileRepository.Update(ctx, created.ID, "profile-user", &birthday, 2, "avatar/profile.png", updatedAt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1024,6 +1009,47 @@ func TestChangePasswordAndRevokeSessionsUpdatesHashAndAllPlatforms(t *testing.T)
 	}
 	if active != 0 {
 		t.Fatalf("active sessions=%d", active)
+	}
+}
+
+func TestChangePasswordAndRevokeOtherSessionsKeepsCurrentSession(t *testing.T) {
+	db, ctx, roleRepository := openUserDatabase(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := account.NewRepository(db)
+	created, err := repository.CreateWithRole(ctx, newCreateInput("password-code", defaultRole.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 11, 2, 3, 4, 0, time.UTC)
+	sessions := make([]auth.Session, 0, 2)
+	for index, platform := range []string{"admin", "canvas"} {
+		session := auth.Session{UserID: created.ID, PlatformID: testPlatformID(t, db, ctx, platform), Platform: platform, DeviceID: fmt.Sprintf("device-%d", index), RefreshTokenHash: fmt.Sprintf("%064d", index+1), Version: 1, ClientIP: "127.0.0.1", UserAgent: "test", RefreshExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now}
+		if err := db.WithContext(ctx).Create(&session).Error; err != nil {
+			t.Fatal(err)
+		}
+		sessions = append(sessions, session)
+	}
+
+	revoked, err := repository.ChangePasswordAndRevokeOtherSessions(ctx, created.ID, sessions[0].ID, "new-hash", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revoked) != 1 || revoked[0].ID != sessions[1].ID || revoked[0].Platform != "canvas" {
+		t.Fatalf("revoked=%+v", revoked)
+	}
+	var stored []auth.Session
+	if err := db.WithContext(ctx).Order("id").Find(&stored, "user_id = ?", created.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored[0].RevokedAt != nil || stored[1].RevokedAt == nil {
+		t.Fatalf("sessions=%+v", stored)
+	}
+	credential, err := repository.FindCredentialByID(ctx, created.ID)
+	if err != nil || credential.PasswordHash != "new-hash" {
+		t.Fatalf("credential=%+v error=%v", credential, err)
 	}
 }
 

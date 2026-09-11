@@ -13,8 +13,14 @@ import { ProtocolError } from '@/types/http'
 export type LoginType = 'email' | 'phone' | 'password'
 
 export type LoginInput =
-  | { loginType: 'password'; loginAccount: string; password: string; code?: never }
-  | { loginType: 'email' | 'phone'; loginAccount: string; code: string; password?: never }
+  | { loginType: 'password'; loginAccount: string; password: string; challengeId?: never; code?: never }
+  | {
+      loginType: 'email' | 'phone'
+      loginAccount: string
+      challengeId: string
+      code: string
+      password?: never
+    }
 
 export interface AccessCredential {
   accessToken: string
@@ -62,9 +68,9 @@ export async function getLoginConfig(): Promise<LoginConfig> {
 
 export async function sendLoginCode(
   account: string,
-  loginType: 'email',
-  scene: string,
-  challengeId: string,
+  loginType: 'email' | 'phone',
+  scene: 'login' = 'login',
+  challengeId?: string,
 ): Promise<SendCodeResult> {
   return parseSendCodeResult(
     await request<unknown>({
@@ -76,18 +82,20 @@ export async function sendLoginCode(
 }
 
 export interface ResetPasswordInput {
-  email: string
+  account: string
+  loginType: 'email' | 'phone'
+  challengeId: string
   code: string
   newPassword: string
   confirmPassword: string
 }
 
-export async function forgotPassword(email: string): Promise<SendCodeResult> {
+export async function forgotPassword(account: string, loginType: 'email' | 'phone'): Promise<SendCodeResult> {
   return parseSendCodeResult(
     await request<unknown>({
       method: 'POST',
       url: '/api/v1/auth/password/forgot',
-      data: { email },
+      data: { account, loginType },
     }),
   )
 }
@@ -155,7 +163,7 @@ function parseAccessCredential(value: unknown): AccessCredential {
 }
 
 const loginTypeSet = new Set<string>(['email', 'phone', 'password'])
-const effectiveLoginTypeSet = new Set<string>(['email', 'password'])
+const effectiveLoginTypeSet = new Set<string>(['email', 'phone', 'password'])
 
 function parseLoginConfigOption(value: unknown, index: number): LoginConfigOption {
   const record = expectExactKeys(value, ['value', 'label'], `login config.options[${index}]`)

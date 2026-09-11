@@ -115,7 +115,7 @@ func TestVerificationCodeTwoClientConsumeHasSingleWinner(t *testing.T) {
 	if acquired, err := firstStore.AcquireDelivery(ctx, key, "lease", 10*time.Second); err != nil || !acquired {
 		t.Fatalf("AcquireDelivery = %v, %v", acquired, err)
 	}
-	if err := firstStore.Put(ctx, key, firstStore.Digest("123456"), "lease", time.Minute); err != nil {
+	if err := firstStore.Put(ctx, key, firstStore.ProofDigest("challenge-1", "123456"), "lease", time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -133,7 +133,7 @@ func TestVerificationCodeTwoClientConsumeHasSingleWinner(t *testing.T) {
 			if worker%2 == 1 {
 				store = secondStore
 			}
-			consumed, err := store.Consume(ctx, key, store.Digest("123456"))
+			consumed, err := store.Consume(ctx, key, store.ProofDigest("challenge-1", "123456"))
 			if err != nil {
 				errorsFound <- err
 				return
@@ -162,10 +162,10 @@ func TestVerificationCodeClosedClientFaultProbe(t *testing.T) {
 	ctx := context.Background()
 	key := store.VerificationKey("admin", mail.SceneLogin, string(authplatform.LoginTypeEmail), "fault@example.com")
 
-	if err := store.Put(ctx, key, store.Digest("123456"), "lease", time.Minute); err == nil {
+	if err := store.Put(ctx, key, store.ProofDigest("challenge-1", "123456"), "lease", time.Minute); err == nil {
 		t.Fatal("Put succeeded with a closed Redis client")
 	}
-	if consumed, err := store.Consume(ctx, key, store.Digest("123456")); err == nil || consumed {
+	if consumed, err := store.Consume(ctx, key, store.ProofDigest("challenge-1", "123456")); err == nil || consumed {
 		t.Fatalf("Consume with closed Redis = %v, %v", consumed, err)
 	}
 	if err := store.ReleaseDelivery(ctx, key, "lease"); err == nil {

@@ -41,6 +41,39 @@ func newVerificationStoreForTest(t *testing.T) VerificationCodeStore {
 	return NewVerificationCodeStore(openAuthRedis(t), key)
 }
 
+func TestVerificationProofDigestBindsChallengeID(t *testing.T) {
+	store := &verificationCodeStore{hmacKey: []byte("01234567890123456789012345678901")}
+	first := store.ProofDigest("challenge-a", "123456")
+	second := store.ProofDigest("challenge-b", "123456")
+	if first == "" || second == "" || first == second {
+		t.Fatalf("proof digests do not bind challengeId: first=%q second=%q", first, second)
+	}
+}
+
+func TestVerificationCodeWrongChallengeDoesNotConsumeCorrectProof(t *testing.T) {
+	store := newVerificationStoreForTest(t)
+	key := fmt.Sprintf("auth:verify-code:v2:admin:login:email:challenge-%d", time.Now().UnixNano())
+	ctx := context.Background()
+
+	if acquired, err := store.AcquireDelivery(ctx, key, "lease-a", 10*time.Second); err != nil || !acquired {
+		t.Fatalf("AcquireDelivery = %v, %v", acquired, err)
+	}
+	correctDigest := store.ProofDigest("challenge-a", "123456")
+	if err := store.Put(ctx, key, correctDigest, "lease-a", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	wrongDigest := store.ProofDigest("challenge-b", "123456")
+	if consumed, err := store.Consume(ctx, key, wrongDigest); err != nil || consumed {
+		t.Fatalf("wrong challenge consume = %v, %v", consumed, err)
+	}
+	if valid, err := store.Check(ctx, key, correctDigest); err != nil || !valid {
+		t.Fatalf("correct proof after wrong challenge = %v, %v", valid, err)
+	}
+	if consumed, err := store.Consume(ctx, key, correctDigest); err != nil || !consumed {
+		t.Fatalf("correct challenge consume = %v, %v", consumed, err)
+	}
+}
+
 func TestVerificationCodeConsumeIsSingleUse(t *testing.T) {
 	store := newVerificationStoreForTest(t)
 	key := fmt.Sprintf("auth:verify-code:v1:admin:login:email:test-%d", time.Now().UnixNano())
@@ -81,6 +114,43 @@ func TestVerificationCodeWrongCodeDoesNotDeleteCorrectCode(t *testing.T) {
 	}
 	if consumed, err := store.Consume(ctx, key, "digest-correct"); err != nil || !consumed {
 		t.Fatalf("correct consume = %v, %v", consumed, err)
+	}
+}
+
+func TestVerificationCodeConsumeManyIsAllOrNothingAndSingleUse(t *testing.T) {
+	client := openAuthRedis(t)
+	keyMaterial := []byte("01234567890123456789012345678901")
+	store := NewVerificationCodeStore(client, keyMaterial)
+	ctx := context.Background()
+	keys := []string{
+		store.VerificationKey("admin", "bind_email", "email", "current@example.com"),
+		store.VerificationKey("admin", "bind_email", "email", "next@example.com"),
+	}
+	leaseKeys := []string{keys[0] + verificationCodeLeaseSuffix, keys[1] + verificationCodeLeaseSuffix}
+	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), append(keys, leaseKeys...)) })
+	_ = client.DeleteMany(ctx, append(keys, leaseKeys...))
+	digests := []string{store.ProofDigest("current-challenge", "111111"), store.ProofDigest("next-challenge", "222222")}
+	for index := range keys {
+		lease := fmt.Sprintf("lease-%d", index)
+		acquired, err := store.AcquireDelivery(ctx, keys[index], lease, time.Minute)
+		if err != nil || !acquired {
+			t.Fatalf("acquire key %d = %v,%v", index, acquired, err)
+		}
+		if err := store.Put(ctx, keys[index], digests[index], lease, time.Minute); err != nil {
+			t.Fatalf("put key %d: %v", index, err)
+		}
+	}
+
+	wrong := append([]string(nil), digests...)
+	wrong[1] = store.ProofDigest("next-challenge", "999999")
+	if consumed, err := store.ConsumeMany(ctx, keys, wrong); err != nil || consumed {
+		t.Fatalf("partial mismatch consumed=%v err=%v", consumed, err)
+	}
+	if consumed, err := store.ConsumeMany(ctx, keys, digests); err != nil || !consumed {
+		t.Fatalf("correct proofs after mismatch consumed=%v err=%v", consumed, err)
+	}
+	if consumed, err := store.ConsumeMany(ctx, keys, digests); err != nil || consumed {
+		t.Fatalf("reused proofs consumed=%v err=%v", consumed, err)
 	}
 }
 

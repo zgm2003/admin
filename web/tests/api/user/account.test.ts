@@ -39,11 +39,11 @@ describe('user API', () => {
       phone: '+86 138-0000-0000',
       updatedAt: '2026-08-20T00:00:00Z',
     })
-    await updateUser(7, { username: 'alice_new', phone: '+86 138-0000-0000' })
+    await updateUser(7, { username: 'alice_new' })
     expect(requestMock).toHaveBeenLastCalledWith({
       method: 'PUT',
       url: '/api/admin/v1/user/account/7',
-      data: { username: 'alice_new', phone: '+86 138-0000-0000' },
+      data: { username: 'alice_new' },
     })
     requestMock.mockResolvedValueOnce({ id: 7, isEnabled: YesNo.No })
     await updateUserStatus(7, YesNo.No)
@@ -89,7 +89,7 @@ describe('user API', () => {
       updatedAt: '2026-08-20T00:00:00Z',
     })
 
-    await expect(updateUser(7, { username: 'alice_new', phone: null })).rejects.toThrow(
+    await expect(updateUser(7, { username: 'alice_new' })).rejects.toThrow(
       'updated user profile response is invalid',
     )
   })
@@ -165,7 +165,7 @@ describe('user API', () => {
       updatedAt: '2026-08-20T00:00:00Z',
     })
 
-    await expect(updateUser(7, { username: 'alice_new', phone: null })).rejects.toThrow(
+    await expect(updateUser(7, { username: 'alice_new' })).rejects.toThrow(
       'updated user profile response is invalid',
     )
   })

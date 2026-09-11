@@ -57,7 +57,7 @@ describe('Forgot password page', () => {
     await wrapper.get('[data-testid="forgot-send-code"]').trigger('click')
     await flushPromises()
 
-    expect(forgotPasswordMock).toHaveBeenCalledWith('admin@example.com')
+    expect(forgotPasswordMock).toHaveBeenCalledWith('admin@example.com', 'email')
     expect(wrapper.find('[data-testid="forgot-code"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="forgot-new-password"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="forgot-confirm-password"]').exists()).toBe(true)
@@ -98,7 +98,9 @@ describe('Forgot password page', () => {
     await flushPromises()
 
     expect(resetPasswordMock).toHaveBeenCalledWith({
-      email: 'admin@example.com',
+      account: 'admin@example.com',
+      loginType: 'email',
+      challengeId: 'challenge-1',
       code: '123456',
       newPassword: 'NewPassw0rd!',
       confirmPassword: 'NewPassw0rd!',
@@ -111,6 +113,22 @@ describe('Forgot password page', () => {
     const { wrapper } = await mountPage('/forgotPassword?account=admin%40example.com')
     const emailInput = wrapper.get('[data-testid="forgot-email"]')
     expect((emailInput.element as HTMLInputElement).value).toBe('admin@example.com')
+  })
+
+  it('clears the previous identity proof when switching recovery channel', async () => {
+    forgotPasswordMock.mockResolvedValue(sendCodeResult)
+    const { wrapper } = await mountPage()
+    await wrapper.get('[data-testid="forgot-email"]').setValue('admin@example.com')
+    await wrapper.get('[data-testid="forgot-send-code"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="forgot-code"]').exists()).toBe(true)
+
+    await wrapper.findComponent({ name: 'ElRadioGroup' }).vm.$emit('update:modelValue', 'phone')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="forgot-code"]').exists()).toBe(false)
+    expect((wrapper.get('[data-testid="forgot-email"]').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.get('[data-testid="forgot-email"]').attributes('placeholder')).toContain('手机号')
   })
 })
 

@@ -13,7 +13,7 @@ Admin 是面向管理员的平台控制台。当前可见业务域：
 | 权限管理 | 认证平台、菜单、角色、角色授权、Access 快照 |
 | 系统运维 | 操作日志、健康/就绪检查 |
 | 对象存储 | COS 配置、上传规则、凭证 |
-| 消息 | 邮件配置、模板、发送测试、发送日志、收件规则 |
+| 消息 | 邮件与短信配置、模板、发送测试、发送日志、收件规则、限流策略 |
 | 应用壳 | Dashboard、动态菜单、路由标签、语言切换、主题 |
 
 新业务不因历史文档里出现过名称就视为已实现；先看 `server/internal/module`、`web/src/views` 和
@@ -82,6 +82,14 @@ PascalCase，CSS class 与测试定位符使用 kebab-case。
 - Admin 允许邮箱验证码自注册。未知邮箱验证码验证成功后原子创建无密码账号并绑定唯一默认
   `registered_user`；不开放绕过邮箱验证的密码直注册入口。默认角色只有个人中心/设密与上传 action，
   额外管理权限由管理员显式分配其他角色。
+- Email 和 Phone 是同级用户身份：用户可以只有其中一个或同时拥有两个。`user/account` 与普通
+  `user/profile` 只读展示身份，绑定/换绑分别由 `user/email` 与 `user/phone` 负责；首次绑定只需新身份 proof，
+  换绑必须当前身份与新身份两份 proof，并以一次 `ConsumeMany` 原子消费。身份更新和 append-only 变更审计在同一
+  PostgreSQL 事务中完成，唯一冲突、陈旧 current 与并发失败返回冲突语义，并使 authority generation 失效。
+- Mail 与 SMS 是发送渠道，不是身份模块。Mail 使用 `login`/`forget`/`bind_email`/`change_password`，SMS 只使用
+  `login`/`forget`/`bind_phone`/`change_password` 四个固定场景；两种渠道的模板、Provider、Redis namespace 和
+  加密/HMAC key 独立。验证码改密按 `loginType=email|phone` 选择渠道，保留当前 Session 并撤销其他 Session；找回密码
+  撤销全部 Session。
 
 - PostgreSQL 保存用户、权限、菜单、配置、日志等业务事实；Redis 只做会话、Access 版本/快照和队列存储等
   明确用途，不成为第二个权限来源。
