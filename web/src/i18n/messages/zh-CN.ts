@@ -62,6 +62,7 @@ export const zhCN = {
   'navigation.storage': '云服务',
   'navigation.message': '消息服务',
   'navigation.mail': '邮件服务',
+  'navigation.sms': '短信服务',
   'mail.configTab': '邮件配置',
   'mail.templatesTab': '邮件模板',
   'mail.logsTab': '发送日志',

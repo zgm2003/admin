@@ -280,6 +280,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
             :options="sceneOptions"
             :disabled="!catalogReady"
             :placeholder="t('sms.scenePlaceholder')"
+            class="sms-config__test-scene"
           />
         </el-form-item>
         <el-button
@@ -323,5 +324,20 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
   align-items: end;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.sms-config__test-scene {
+  width: 220px;
+}
+
+@media (max-width: 640px) {
+  .sms-config__test :deep(.el-form-item) {
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .sms-config__test-scene {
+    width: 100%;
+  }
 }
 </style>

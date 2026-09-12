@@ -55,6 +55,7 @@ describe('frontend i18n', () => {
       'navigation.permissionAuthPlatform',
       'navigation.system',
       'navigation.systemOperationLog',
+      'navigation.sms',
     ]
     const removedKeys = [
       'navigation.systemUsers',

@@ -64,6 +64,7 @@ export const enUS = {
   'navigation.storage': 'Cloud services',
   'navigation.message': 'Messaging',
   'navigation.mail': 'Mail service',
+  'navigation.sms': 'SMS service',
   'mail.configTab': 'Configuration',
   'mail.templatesTab': 'Templates',
   'mail.logsTab': 'Delivery logs',

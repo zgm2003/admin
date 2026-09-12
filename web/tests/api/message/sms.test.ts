@@ -11,6 +11,7 @@ import {
   listSmsRateLimitPolicies,
   listSmsRules,
   listSmsTemplates,
+  parseSmsConfig,
   saveSmsConfig,
   sendSmsTest,
   updateSmsRateLimitPolicy,
@@ -148,6 +149,32 @@ describe('SMS admin API protocol', () => {
   ])('rejects malformed or unsafe config responses', async (response) => {
     requestMock.mockResolvedValue(response)
     await expect(getSmsConfig()).rejects.toThrow()
+  })
+
+  it('accepts an unconfigured response with zero TTL', () => {
+    expect(
+      parseSmsConfig({
+        configured: false,
+        smsSdkAppId: '',
+        signName: '',
+        region: '',
+        endpoint: '',
+        ttlMinutes: 0,
+        isEnabled: YesNo.No,
+        lastTestAt: null,
+        lastTestError: '',
+      }),
+    ).toEqual({
+      configured: false,
+      smsSdkAppId: '',
+      signName: '',
+      region: '',
+      endpoint: '',
+      ttlMinutes: 0,
+      isEnabled: YesNo.No,
+      lastTestAt: null,
+      lastTestError: '',
+    })
   })
 
   it('freezes the exact four scene catalog and strict template shape', async () => {

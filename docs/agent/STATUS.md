@@ -17,8 +17,9 @@
   `go test -race -p 1 ./internal/module/user/... ./internal/module/auth/login/... -count=1` 通过；前端 Email/Phone/Auth/
   Profile/Account/SMS 关键流程 8 个测试文件共 91 项通过，拆分 Profile 后回归 4 个文件 46 项通过；`pnpm typecheck`、
   `pnpm lint`、`pnpm check:architecture` 与 `pnpm build` 均通过（build 仅有既有大 chunk 警告）。
-- 当前未完成：Task 13 后端/前端全量验证与最终静态敏感信息审计仍待维护者执行或补跑；身份并发换绑的数据库级单赢家
-  探针仍应作为最终验收重点，不以普通定向测试替代。用户/认证高风险 `go test -race -p 1` 已通过。
+- Task 13 自动验证已由根 Agent 补跑：后端 `go test ./... -count=1`、`go vet ./...`、`go build ./...`、架构测试、
+  用户/认证高风险 `go test -race -p 1 ./internal/module/user/... ./internal/module/auth/login/... -count=1` 全部通过；
+  前端全量验证此前已由维护者确认通过。
 - 验证证据：`go test ./internal/database -run TestMessageSMSMigration -count=1` 六个用例通过（幂等重复执行、非法旧
   phone 整体回滚、规范化碰撞整体回滚、双国家码整体回滚、软删平台日志仍可查询、七表约束/索引行为覆盖）；
   `go test ./internal/architecture -count=1`、`go vet ./internal/database/...`、`gofmt -l internal/database` 均通过。
@@ -29,10 +30,18 @@
 - 根 Agent 最终复审：迁移拒绝用例现在解析 `pgconn.PgError`，逐项精确断言 SQLSTATE 与约束名；模板和限流策略
   改用更新 seed 行以排除唯一键干扰，verification 按“跨平台复合 FK → 正常写入 → 单日志唯一索引”顺序验证。
   强化断言后旧顺序先以 `23505/ux_message_sms_log_verification_log` 按预期失败，调整顺序后六个迁移测试全部通过。
-- 尚未执行：**真实 `admin.public` migration 未执行**；未发送真实短信；未录入腾讯云凭据；未启停 API/Worker；
-  未清理 Redis。七张表、`message.sms.region` 字典与 SMS 菜单/action 目前只存在于隔离测试 schema。
-- 下一步/阻塞：维护者执行 Task 13 全量命令并回传真实输出；在此之前不进入 Task 14。真实 `admin.public` migration、
-  真实短信/邮件发送、Redis 清理、API/Worker 重启和浏览器验收仍未执行，必须由维护者分别授权和记录。
+- 真实 `admin.public` migration 已于 2026-09-11 23:03:33 +08:00 执行成功，并立即重复执行确认幂等；
+  八张目标表（含 `user_email_change_log`）已创建，手机号非空 1 条、E.164 非法 0 条、规范化碰撞组 0 条；
+  四个 SMS 模板、每个活动平台两条策略、SMS page/12 actions、`user:email:update`/`user:phone:update` 与
+  `message.sms.region` 已核验。Admin `menu_version` 5→6，Canvas 保持 1；重复执行版本不再增加。
+- 迁移前 `public` 备份位于
+  `%LOCALAPPDATA%\Admin\backups\message-sms-20260911-230034\public-before.dump`，大小 124882 字节，
+  SHA256 `7CC89B78BE70C2A4ED4EAC5A4DB524DE1DFCCEE05786419E62AFFE94F6963449`，`pg_restore --list` 得到 229 个归档条目。
+  `docs/database/current.sql` 已从真实 `public` schema-only 刷新。
+- 尚未执行：真实短信发送、腾讯云凭据录入、API/Worker 重启、浏览器验收及受影响 Redis runtime/readiness/menu
+  定向重建；未清理 Redis 全库、Session、Access 或 Mail 额度。上述运行态动作需分别受控执行，不能由自动测试替代。
+- 下一步/阻塞：先按新二进制重启 API/Worker（需维护者确认窗口）并做 `/health`、`/ready`、权限和页面验收；真实短信
+  发送仅在维护者录入凭据和受控号码后进行。
 
 ## Mail 审计日志不可删除整改（2026-09-09，当前）
 

@@ -255,6 +255,7 @@ describe('SMS management page', () => {
     const sceneSelect = wrapper
       .findAllComponents({ name: 'ElSelectV2' })
       .find((item) => item.attributes('data-testid') === 'sms-test-scene')
+    expect(sceneSelect?.classes()).toContain('sms-config__test-scene')
     sceneSelect?.vm.$emit('update:modelValue', 'forget')
     await wrapper.get('[data-testid="sms-test-send"]').trigger('click')
     await flushPromises()

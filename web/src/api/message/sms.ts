@@ -276,7 +276,9 @@ export function parseSmsConfig(value: unknown): SmsConfig {
     signName: text(data.signName, 'sms config.signName'),
     region: text(data.region, 'sms config.region'),
     endpoint: text(data.endpoint, 'sms config.endpoint'),
-    ttlMinutes: boundedInteger(data.ttlMinutes, 1, 60, 'sms config.ttlMinutes'),
+    ttlMinutes: data.configured
+      ? boundedInteger(data.ttlMinutes, 1, 60, 'sms config.ttlMinutes')
+      : boundedInteger(data.ttlMinutes, 0, 0, 'sms config.ttlMinutes'),
     isEnabled: data.isEnabled,
     lastTestAt:
       data.lastTestAt === null ? null : timestamp(data.lastTestAt, 'sms config.lastTestAt'),
