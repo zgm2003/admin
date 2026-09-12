@@ -18,7 +18,6 @@ import {
   updateDictionaryStatus,
 } from '@/api/system/dictionary'
 import type { Dictionary, DictionaryItem } from '@/api/system/dictionary'
-import { AppDialog } from '@/components/AppDialog'
 import { AppTable } from '@/components/AppTable'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
@@ -26,6 +25,9 @@ import { usePermissionStore } from '@/store/permission'
 import { useSystemDictionaryStore } from '@/store/systemDictionary'
 import { AppSearch } from '@/components/AppSearch'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
+import DictionaryDetailDialog from './components/DictionaryDetailDialog/index.vue'
+import DictionaryFormDialog from './components/DictionaryFormDialog/index.vue'
+import DictionaryItemDialog from './components/DictionaryItemDialog/index.vue'
 
 const { t } = useI18n()
 const access = usePermissionStore()
@@ -92,14 +94,6 @@ const columns = computed<TableColumn<Dictionary>[]>(() => [
   { prop: 'itemCount', label: t('dictionary.itemCount'), width: 100 },
   { key: 'status', prop: 'id', label: t('dictionary.status'), width: 100 },
   { key: 'actions', prop: 'id', label: t('dictionary.actions'), width: 230 },
-])
-const itemColumns = computed<TableColumn<DictionaryItem>[]>(() => [
-  { prop: 'value', label: t('dictionary.value'), minWidth: 140 },
-  { prop: 'labelZh', label: t('dictionary.labelZh'), minWidth: 140 },
-  { prop: 'labelEn', label: t('dictionary.labelEn'), minWidth: 140 },
-  { prop: 'sort', label: t('dictionary.sort'), width: 80 },
-  { key: 'itemStatus', prop: 'id', label: t('dictionary.status'), width: 90 },
-  { key: 'itemActions', prop: 'id', label: t('dictionary.actions'), width: 230 },
 ])
 const pagination = computed<TablePaginationState>(() => ({
   currentPage: query.value.page,
@@ -339,131 +333,33 @@ onMounted(() => void load())
         ></template
       >
     </AppTable>
-    <AppDialog
+    <DictionaryFormDialog
       v-model="dictionaryVisible"
-      :title="editingDictionary === null ? t('dictionary.create') : t('dictionary.edit')"
-      width="520px"
-      ><el-form label-position="top" @submit.prevent="submitDictionary"
-        ><el-form-item :label="t('dictionary.code')"
-          ><el-input
-            v-model="dictionaryForm.code"
-            data-testid="dictionary-form-code"
-            :maxlength="128"
-            :placeholder="t('dictionary.codePlaceholder')"
-            :disabled="editingDictionary !== null" /></el-form-item
-        ><el-form-item :label="t('dictionary.nameZh')"
-          ><el-input
-            v-model="dictionaryForm.nameZh"
-            data-testid="dictionary-form-name-zh"
-            :maxlength="128"
-            :placeholder="t('dictionary.nameZhPlaceholder')" /></el-form-item
-        ><el-form-item :label="t('dictionary.nameEn')"
-          ><el-input
-            v-model="dictionaryForm.nameEn"
-            data-testid="dictionary-form-name-en"
-            :maxlength="128"
-            :placeholder="t('dictionary.nameEnPlaceholder')" /></el-form-item
-        ><el-form-item :label="t('dictionary.description')"
-          ><el-input
-            v-model="dictionaryForm.description"
-            data-testid="dictionary-form-description"
-            :maxlength="512"
-            type="textarea"
-            :placeholder="t('dictionary.descriptionPlaceholder')" /></el-form-item
-        ><el-button
-          data-testid="dictionary-save"
-          type="primary"
-          :loading="submitting"
-          @click="submitDictionary"
-          >{{ t('dictionary.save') }}</el-button
-        ></el-form
-      ></AppDialog
-    >
-    <AppDialog
+      v-model:form="dictionaryForm"
+      :editing="editingDictionary"
+      :submitting="submitting"
+      @save="submitDictionary"
+    />
+    <DictionaryDetailDialog
       v-model="detailVisible"
-      :title="selectedDictionary?.code ?? t('dictionary.items')"
-      width="900px"
-      ><AppTable :data="items" :columns="itemColumns" row-key="id" @refresh="reloadDetail"
-        ><template #toolbar-left
-          ><el-button
-            v-if="canCreate"
-            data-testid="dictionary-item-create"
-            type="primary"
-            :icon="CirclePlus"
-            @click="openCreateItem"
-            >{{ t('dictionary.createItem') }}</el-button
-          ></template
-        ><template #cell-itemStatus="{ row }"
-          ><el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">{{
-            row.isEnabled === YesNo.Yes ? t('dictionary.enabled') : t('dictionary.disabled')
-          }}</el-tag></template
-        ><template #cell-itemActions="{ row }"
-          ><el-button
-            v-if="canUpdate"
-            data-testid="dictionary-item-update"
-            text
-            :icon="Edit"
-            @click="openEditItem(row)"
-            >{{ t('dictionary.edit') }}</el-button
-          ><el-button
-            v-if="canStatus"
-            data-testid="dictionary-item-status"
-            text
-            :icon="Switch"
-            @click="toggleItem(row)"
-            >{{
-              row.isEnabled === YesNo.Yes ? t('dictionary.disable') : t('dictionary.enable')
-            }}</el-button
-          ><el-button
-            v-if="canDelete && row.isBuiltin === YesNo.No"
-            data-testid="dictionary-item-delete"
-            text
-            type="danger"
-            :icon="Delete"
-            @click="removeItem(row)"
-            >{{ t('dictionary.delete') }}</el-button
-          ></template
-        ></AppTable
-      ></AppDialog
-    >
-    <AppDialog
+      :dictionary="selectedDictionary"
+      :items="items"
+      :can-create="canCreate"
+      :can-update="canUpdate"
+      :can-status="canStatus"
+      :can-delete="canDelete"
+      @refresh="reloadDetail"
+      @create-item="openCreateItem"
+      @edit-item="openEditItem"
+      @toggle-item="toggleItem"
+      @remove-item="removeItem"
+    />
+    <DictionaryItemDialog
       v-model="itemVisible"
-      :title="editingItem === null ? t('dictionary.createItem') : t('dictionary.editItem')"
-      width="520px"
-      ><el-form label-position="top" @submit.prevent="submitItem"
-        ><el-form-item :label="t('dictionary.value')"
-          ><el-input
-            v-model="itemForm.value"
-            data-testid="dictionary-item-form-value"
-            :maxlength="128"
-            :placeholder="t('dictionary.valuePlaceholder')"
-            :disabled="editingItem !== null" /></el-form-item
-        ><el-form-item :label="t('dictionary.labelZh')"
-          ><el-input
-            v-model="itemForm.labelZh"
-            data-testid="dictionary-item-form-label-zh"
-            :maxlength="256"
-            :placeholder="t('dictionary.labelZhPlaceholder')" /></el-form-item
-        ><el-form-item :label="t('dictionary.labelEn')"
-          ><el-input
-            v-model="itemForm.labelEn"
-            data-testid="dictionary-item-form-label-en"
-            :maxlength="256"
-            :placeholder="t('dictionary.labelEnPlaceholder')" /></el-form-item
-        ><el-form-item :label="t('dictionary.sort')"
-          ><el-input-number
-            v-model="itemForm.sort"
-            data-testid="dictionary-item-form-sort"
-            :min="0"
-            :placeholder="t('dictionary.sortPlaceholder')" /></el-form-item
-        ><el-button
-          data-testid="dictionary-item-save"
-          type="primary"
-          :loading="submitting"
-          @click="submitItem"
-          >{{ t('dictionary.save') }}</el-button
-        ></el-form
-      ></AppDialog
-    >
+      v-model:form="itemForm"
+      :editing="editingItem"
+      :submitting="submitting"
+      @save="submitItem"
+    />
   </AppPage>
 </template>

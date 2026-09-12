@@ -3,6 +3,19 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## 管理页壳与局部对话框组件化（2026-09-12，已完成）
+
+- 新增全局页面壳 `web/src/components/AppPage`，统一管理页根节点为
+  `section.app-page.management-page`，并迁移用户、存储、权限、系统、消息等管理页；页面继续通过
+  `class` 传递各自模块样式，公共壳提供统一的 `min-width: 0` 等基础布局约束。
+- 系统设置页已采用 `AppPage`、`AppSearch`、`AppTable` 与局部 `SettingDialog`，修正查询事件契约、工具栏新增按钮、
+  响应式宽度和表单 placeholder/maxlength。
+- 系统字典页进一步抽离 `DictionaryFormDialog`、`DictionaryDetailDialog`、`DictionaryItemDialog`，主页面仅负责编排
+  列表查询、权限和提交回调；字典项列定义、状态/操作按钮与表单细节分别收敛到局部组件，保留原有 data-testid 与权限行为。
+- 验证：字典页定向 Vitest 6/6，AppPage 测试随管理页回归通过；前端 `pnpm typecheck`、`pnpm lint`、
+  `pnpm check:architecture`、`pnpm build` 均通过（build 仅有既有大 chunk 警告）。本轮管理页回归分两组共 12 个文件、
+  138 项通过；未执行真实 API/数据库/Redis 操作。
+
 ## 系统设置与认证滑块 Captcha（2026-09-12，已迁移）
 
 - 新增 `system/setting` 管理切片：设置键、值类型（string/number/bool/JSON）、启停、软删除、内置保护、严格

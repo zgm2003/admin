@@ -84,6 +84,20 @@ describe('system dictionary page', () => {
     expect(failed.text()).toContain('字典加载失败')
   })
 
+  it('keeps dictionary forms and item details in local components', async () => {
+    const wrapper = mountPage([
+      'system:dictionary:list',
+      'system:dictionary:detail',
+      'system:dictionary:create',
+      'system:dictionary:update',
+    ])
+    await flushPromises()
+
+    expect(wrapper.findComponent({ name: 'DictionaryFormDialog' }).exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'DictionaryDetailDialog' }).exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'DictionaryItemDialog' }).exists()).toBe(true)
+  })
+
   it('submits trimmed filters, resets them, and preserves filters while paging', async () => {
     const wrapper = mountPage(['system:dictionary:list'])
     await flushPromises()
