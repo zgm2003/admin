@@ -8,6 +8,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { forgotPassword, resetPassword } from '@/api/auth/login'
 import logoUrl from '@/assets/logo.png'
 import AuthDock from '@/views/auth/components/AuthDock/index.vue'
+import CaptchaDialog from '@/views/auth/components/CaptchaDialog/index.vue'
 
 type RecoveryLoginType = 'email' | 'phone'
 
@@ -26,6 +27,7 @@ const sending = ref(false)
 const pending = ref(false)
 const submitError = ref('')
 const resendSeconds = ref(0)
+const captchaVisible = ref(false)
 let countdownTimer: ReturnType<typeof setInterval> | undefined
 const brandPoints = computed(() => [
   t('auth.brand.pointOne'),
@@ -65,21 +67,27 @@ function isDigitChar(char: string): boolean {
   return /^\d$/.test(char)
 }
 
-async function sendCode(): Promise<void> {
+function sendCode(): void {
   if (sending.value || resendSeconds.value > 0) return
   const target = account.value.trim()
   if (target === '') {
     submitError.value = t('auth.forgot.emailRequired')
     return
   }
-  sending.value = true
   submitError.value = ''
+  captchaVisible.value = true
+}
+
+async function completeCaptcha(value: { captchaId: string; captchaAnswer: { x: number; y: number } }): Promise<void> {
+  if (sending.value) return
+  sending.value = true
   try {
-    const result = await forgotPassword(target, loginType.value)
+    const result = await forgotPassword(account.value.trim(), loginType.value, value)
     challengeId.value = result.challengeId
     codeSent.value = true
     resendSeconds.value = result.resendAfterSeconds
     startCountdown()
+    captchaVisible.value = false
   } catch {
     // request.ts owns API error notifications.
   } finally {
@@ -299,6 +307,7 @@ async function submit(): Promise<void> {
         </div>
       </section>
     </div>
+    <CaptchaDialog v-model="captchaVisible" :loading="sending" @complete="completeCaptcha" />
   </main>
 </template>
 

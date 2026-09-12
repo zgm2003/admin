@@ -1,27 +1,30 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus, { ElNotification } from 'element-plus'
 import { isVNode } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getCurrentUser, getLoginConfig, login, sendLoginCode } from '@/api/auth/login'
+import { getCaptcha, getCurrentUser, getLoginConfig, login, sendLoginCode } from '@/api/auth/login'
 import { appI18n, setLocale } from '@/i18n'
 import { pinia } from '@/store'
 import { useAuthStore } from '@/store/auth'
 import { ApiError } from '@/types/http'
 import LoginPage from '@/views/auth/login/index.vue'
+import CaptchaDialog from '@/views/auth/components/CaptchaDialog/index.vue'
 
 vi.mock('@/api/auth/login', () => ({
   login: vi.fn(),
   getCurrentUser: vi.fn(),
   getLoginConfig: vi.fn(),
   sendLoginCode: vi.fn(),
+  getCaptcha: vi.fn(),
 }))
 
 const loginMock = vi.mocked(login)
 const getCurrentUserMock = vi.mocked(getCurrentUser)
 const getLoginConfigMock = vi.mocked(getLoginConfig)
 const sendLoginCodeMock = vi.mocked(sendLoginCode)
+const getCaptchaMock = vi.mocked(getCaptcha)
 
 describe('Login page', () => {
   beforeEach(() => {
@@ -32,6 +35,12 @@ describe('Login page', () => {
     getCurrentUserMock.mockReset()
     getLoginConfigMock.mockReset()
     sendLoginCodeMock.mockReset()
+    getCaptchaMock.mockReset()
+    getCaptchaMock.mockResolvedValue({
+      captchaId: 'captcha-1', captchaType: 'slide', masterImage: 'data:image/png;base64,master',
+      tileImage: 'data:image/png;base64,tile', tileX: 80, tileY: 40, tileWidth: 48,
+      tileHeight: 48, imageWidth: 300, imageHeight: 220, expiresIn: 120,
+    })
     getLoginConfigMock.mockResolvedValue({
       loginTypes: [
         { value: 'password', label: '密码' },
@@ -181,11 +190,13 @@ describe('Login page', () => {
     expect(wrapper.find('[data-testid="login-code"]').exists()).toBe(true)
     await wrapper.get('[data-testid="login-send-code"]').trigger('click')
     await flushPromises()
+    await completeCaptcha(wrapper)
     expect(sendLoginCodeMock).toHaveBeenCalledWith(
       'admin@example.com',
       'email',
       'login',
       expect.any(String),
+      expect.objectContaining({ captchaId: 'captcha-1' }),
     )
   })
 
@@ -215,6 +226,7 @@ describe('Login page', () => {
     await flushPromises()
     await wrapper.get('[data-testid="login-send-code"]').trigger('click')
     await flushPromises()
+    await completeCaptcha(wrapper)
     await wrapper.findComponent({ name: 'ElInputOtp' }).vm.$emit('update:modelValue', '123456')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -243,6 +255,7 @@ describe('Login page', () => {
 
       await wrapper.get('[data-testid="login-send-code"]').trigger('click')
       await flushPromises()
+      await completeCaptcha(wrapper)
 
       const buttonText = wrapper.get('[data-testid="login-send-code"]').text()
       expect(buttonText).toContain('60')
@@ -274,11 +287,13 @@ describe('Login page', () => {
 
       await wrapper.get('[data-testid="login-send-code"]').trigger('click')
       await flushPromises()
+      await completeCaptcha(wrapper)
       const firstChallenge = sendLoginCodeMock.mock.calls[0]?.[3]
 
       await vi.advanceTimersByTimeAsync(1000)
       await wrapper.get('[data-testid="login-send-code"]').trigger('click')
       await flushPromises()
+      await completeCaptcha(wrapper)
       const secondChallenge = sendLoginCodeMock.mock.calls[1]?.[3]
 
       expect(firstChallenge).toBeTypeOf('string')
@@ -304,8 +319,10 @@ describe('Login page', () => {
 
     await wrapper.get('[data-testid="login-send-code"]').trigger('click')
     await flushPromises()
+    await completeCaptcha(wrapper)
     await wrapper.get('[data-testid="login-send-code"]').trigger('click')
     await flushPromises()
+    await completeCaptcha(wrapper)
 
     expect(sendLoginCodeMock.mock.calls[1]?.[3]).not.toBe(sendLoginCodeMock.mock.calls[0]?.[3])
   })
@@ -376,4 +393,9 @@ async function mountLogin(initialPath = '/login') {
   })
   await flushPromises()
   return { wrapper, router }
+}
+
+async function completeCaptcha(wrapper: VueWrapper): Promise<void> {
+  wrapper.findComponent(CaptchaDialog).vm.$emit('complete', { captchaId: 'captcha-1', captchaAnswer: { x: 80, y: 40 } })
+  await flushPromises()
 }

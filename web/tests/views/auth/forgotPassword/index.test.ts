@@ -1,21 +1,24 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { forgotPassword, resetPassword } from '@/api/auth/login'
+import { forgotPassword, getCaptcha, resetPassword } from '@/api/auth/login'
 import { appI18n, setLocale } from '@/i18n'
 import { pinia } from '@/store'
 import { useAuthStore } from '@/store/auth'
 import ForgotPasswordPage from '@/views/auth/forgotPassword/index.vue'
+import CaptchaDialog from '@/views/auth/components/CaptchaDialog/index.vue'
 
 vi.mock('@/api/auth/login', () => ({
   forgotPassword: vi.fn(),
   resetPassword: vi.fn(),
+  getCaptcha: vi.fn(),
 }))
 
 const forgotPasswordMock = vi.mocked(forgotPassword)
 const resetPasswordMock = vi.mocked(resetPassword)
+const getCaptchaMock = vi.mocked(getCaptcha)
 
 const sendCodeResult = {
   challengeId: 'challenge-1',
@@ -30,6 +33,12 @@ describe('Forgot password page', () => {
     useAuthStore(pinia).$reset()
     forgotPasswordMock.mockReset()
     resetPasswordMock.mockReset()
+    getCaptchaMock.mockReset()
+    getCaptchaMock.mockResolvedValue({
+      captchaId: 'captcha-1', captchaType: 'slide', masterImage: 'data:image/png;base64,master',
+      tileImage: 'data:image/png;base64,tile', tileX: 80, tileY: 40, tileWidth: 48,
+      tileHeight: 48, imageWidth: 300, imageHeight: 220, expiresIn: 120,
+    })
   })
 
   it('renders the email step first and hides the reset fields', async () => {
@@ -56,8 +65,9 @@ describe('Forgot password page', () => {
     await wrapper.get('[data-testid="forgot-email"]').setValue('admin@example.com')
     await wrapper.get('[data-testid="forgot-send-code"]').trigger('click')
     await flushPromises()
+    await completeCaptcha(wrapper)
 
-    expect(forgotPasswordMock).toHaveBeenCalledWith('admin@example.com', 'email')
+    expect(forgotPasswordMock).toHaveBeenCalledWith('admin@example.com', 'email', expect.objectContaining({ captchaId: 'captcha-1' }))
     expect(wrapper.find('[data-testid="forgot-code"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="forgot-new-password"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="forgot-confirm-password"]').exists()).toBe(true)
@@ -70,6 +80,7 @@ describe('Forgot password page', () => {
     await wrapper.get('[data-testid="forgot-email"]').setValue('admin@example.com')
     await wrapper.get('[data-testid="forgot-send-code"]').trigger('click')
     await flushPromises()
+    await completeCaptcha(wrapper)
 
     wrapper.findComponent({ name: 'ElInputOtp' }).vm.$emit('update:modelValue', '123456')
     await wrapper.vm.$nextTick()
@@ -89,6 +100,7 @@ describe('Forgot password page', () => {
     await wrapper.get('[data-testid="forgot-email"]').setValue('admin@example.com')
     await wrapper.get('[data-testid="forgot-send-code"]').trigger('click')
     await flushPromises()
+    await completeCaptcha(wrapper)
 
     wrapper.findComponent({ name: 'ElInputOtp' }).vm.$emit('update:modelValue', '123456')
     await wrapper.vm.$nextTick()
@@ -121,6 +133,7 @@ describe('Forgot password page', () => {
     await wrapper.get('[data-testid="forgot-email"]').setValue('admin@example.com')
     await wrapper.get('[data-testid="forgot-send-code"]').trigger('click')
     await flushPromises()
+    await completeCaptcha(wrapper)
     expect(wrapper.find('[data-testid="forgot-code"]').exists()).toBe(true)
 
     await wrapper.findComponent({ name: 'ElRadioGroup' }).vm.$emit('update:modelValue', 'phone')
@@ -148,4 +161,9 @@ async function mountPage(initialPath = '/forgotPassword') {
   })
   await flushPromises()
   return { wrapper, router }
+}
+
+async function completeCaptcha(wrapper: VueWrapper): Promise<void> {
+  wrapper.findComponent(CaptchaDialog).vm.$emit('complete', { captchaId: 'captcha-1', captchaAnswer: { x: 80, y: 40 } })
+  await flushPromises()
 }

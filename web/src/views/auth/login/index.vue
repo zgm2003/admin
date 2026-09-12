@@ -17,6 +17,7 @@ import logoUrl from '@/assets/logo.png'
 import { useAuthStore } from '@/store/auth'
 import { ApiError } from '@/types/http'
 import AuthDock from '@/views/auth/components/AuthDock/index.vue'
+import CaptchaDialog from '@/views/auth/components/CaptchaDialog/index.vue'
 
 interface LoginForm {
   account: string
@@ -40,6 +41,7 @@ const sending = ref(false)
 const resendSeconds = ref(0)
 const deliveryChallengeId = ref(generateChallengeID())
 const proofChallengeId = ref('')
+const captchaVisible = ref(false)
 let countdownTimer: ReturnType<typeof setInterval> | undefined
 const bootstrapError = computed(() => (auth.status === 'error' ? auth.errorMessage : ''))
 const brandPoints = computed(() => [
@@ -100,7 +102,7 @@ function isDigitChar(char: string): boolean {
   return /^\d$/.test(char)
 }
 
-async function sendCode(): Promise<void> {
+function sendCode(): void {
   if (sending.value || resendSeconds.value > 0) return
   const loginType = activeType.value
   if (loginType !== 'email' && loginType !== 'phone') return
@@ -108,18 +110,27 @@ async function sendCode(): Promise<void> {
     submitError.value = t('auth.login.accountRequired')
     return
   }
-  sending.value = true
   submitError.value = ''
+  captchaVisible.value = true
+}
+
+async function completeCaptcha(value: { captchaId: string; captchaAnswer: { x: number; y: number } }): Promise<void> {
+  if (sending.value) return
+  const loginType = activeType.value
+  if (loginType !== 'email' && loginType !== 'phone') return
+  sending.value = true
   try {
     const result = await sendLoginCode(
       form.value.account.trim(),
       loginType,
       'login',
       deliveryChallengeId.value,
+      value,
     )
     proofChallengeId.value = result.challengeId
     resendSeconds.value = result.resendAfterSeconds
     startCountdown()
+    captchaVisible.value = false
   } catch {
     // request.ts owns API error notifications.
   } finally {
@@ -408,6 +419,7 @@ function generateChallengeID(): string {
         </div>
       </section>
     </div>
+    <CaptchaDialog v-model="captchaVisible" :loading="sending" @complete="completeCaptcha" />
   </main>
 </template>
 

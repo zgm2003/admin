@@ -150,6 +150,7 @@ func (h *Handler) SendCode(context *gin.Context) {
 		response.Fail(context, apperror.InvalidRequest(fmt.Errorf("send-code fields are required")))
 		return
 	}
+	captchaID, captchaX, captchaY := captchaRequestValues(request.CaptchaID, request.CaptchaAnswer)
 	challengeID := ""
 	if request.ChallengeID != nil {
 		challengeID = *request.ChallengeID
@@ -160,12 +161,22 @@ func (h *Handler) SendCode(context *gin.Context) {
 		Scene:       *request.Scene,
 		ChallengeID: challengeID,
 		Client:      client,
+		CaptchaID:   captchaID,
+		CaptchaX:    captchaX,
+		CaptchaY:    captchaY,
 	})
 	if err != nil {
 		response.Fail(context, err)
 		return
 	}
 	response.OK(context, http.StatusOK, SendCodeResponse{ChallengeID: result.ChallengeID, ExpiresAt: result.ExpiresAt, ResendAfterSeconds: result.ResendAfterSeconds})
+}
+
+func captchaRequestValues(id *string, answer *captchaAnswerRequest) (string, int, int) {
+	if id == nil || answer == nil || answer.X == nil || answer.Y == nil {
+		return "", 0, 0
+	}
+	return *id, *answer.X, *answer.Y
 }
 
 func loginTypeLabel(context *gin.Context, loginType authplatform.LoginType) string {

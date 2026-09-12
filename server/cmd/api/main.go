@@ -14,6 +14,7 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	projectmiddleware "admin/server/internal/middleware"
+	authcaptcha "admin/server/internal/module/auth/captcha"
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/auth/state"
@@ -40,6 +41,7 @@ import (
 	"admin/server/internal/module/storage/uploadRule"
 	"admin/server/internal/module/system/dictionary"
 	"admin/server/internal/module/system/operationLog"
+	systemsetting "admin/server/internal/module/system/setting"
 	account "admin/server/internal/module/user/account"
 	useremail "admin/server/internal/module/user/email"
 	"admin/server/internal/module/user/loginLog"
@@ -65,6 +67,7 @@ type routerDependencies struct {
 	Logger            *slog.Logger
 	Health            *health.Handler
 	Auth              *auth.Handler
+	Captcha           *authcaptcha.Handler
 	AuthPlatform      *authplatform.Handler
 	Permission        *permission.Handler
 	Menu              *menu.Handler
@@ -77,6 +80,7 @@ type routerDependencies struct {
 	UploadRule        *uploadrule.Handler
 	OperationLog      *operationlog.Handler
 	Dictionary        *dictionary.Handler
+	Setting           *systemsetting.Handler
 	LoginLog          *loginlog.Handler
 	Mail              *messagemail.Handler
 	MailConfig        *mailconfig.Handler
@@ -151,6 +155,9 @@ func run(logger *slog.Logger) error {
 
 	healthService := health.NewService(postgres, redisClient)
 	userRepository := account.NewRepository(postgres.GORM)
+	settingRepository := systemsetting.NewRepository(postgres.GORM)
+	settingService := systemsetting.NewService(settingRepository)
+	settingService.SetCache(systemsetting.NewCache(redisClient))
 	profileRepository := profile.NewRepository(postgres.GORM)
 	sessionRepository := usersession.NewRepository(postgres.GORM)
 	authPlatformRepository := authplatform.NewRepository(postgres.GORM)
@@ -189,6 +196,12 @@ func run(logger *slog.Logger) error {
 		keys.RefreshTokenHMACKey(),
 		logger,
 	)
+	captchaEngine, err := authcaptcha.NewSlideEngine()
+	if err != nil {
+		return fmt.Errorf("build captcha engine: %w", err)
+	}
+	captchaService := authcaptcha.NewService(captchaEngine, authcaptcha.NewRedisStore(redisClient, "captcha:slide:"), settingService)
+	authService.SetCaptchaVerifier(captchaService)
 	authService.SetPasswordStore(userRepository)
 	sessionService := usersession.NewService(sessionRepository, authStateStore, authInvalidator, auth.NewSessionCache(redisClient))
 	userService := account.NewService(userRepository, authStateStore, authInvalidator, accessStateStore, accessInvalidator)
@@ -262,6 +275,7 @@ func run(logger *slog.Logger) error {
 		Logger:         logger,
 		Health:         health.NewHandler(healthService),
 		Auth:           auth.NewHandler(authService, settings.Auth.CookieSecure),
+		Captcha:        authcaptcha.NewHandler(captchaService),
 		AuthPlatform:   authplatform.NewHandler(authPlatformService),
 		Permission:     permission.NewHandler(permissionService),
 		Menu:           menu.NewHandler(menuService),
@@ -288,6 +302,7 @@ func run(logger *slog.Logger) error {
 		UploadRule:        uploadrule.NewHandler(uploadRuleService),
 		OperationLog:      operationlog.NewHandler(operationLogService),
 		Dictionary:        dictionary.NewHandler(dictionaryService),
+		Setting:           systemsetting.NewHandler(settingService),
 		LoginLog:          loginlog.NewHandler(loginLogService),
 		Mail:              messagemail.NewHandler(mailService),
 		MailConfig:        mailconfig.NewHandler(mailConfigService),
@@ -356,6 +371,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	sharedRoutes := router.Group("/api/v1")
 	sharedRoutes.Use(authclient.Require())
 	auth.RegisterRoutes(sharedRoutes, dependencies.Auth, dependencies.AuthOrigin, dependencies.Authenticate)
+	if dependencies.Captcha != nil {
+		authcaptcha.RegisterRoutes(sharedRoutes, dependencies.Captcha, dependencies.AuthOrigin)
+	}
 	authplatform.RegisterPublicRoutes(sharedRoutes, dependencies.AuthPlatform)
 	permission.RegisterRoutes(sharedRoutes, dependencies.Permission, dependencies.Authenticate)
 	dictionary.RegisterOptionRoute(sharedRoutes, dependencies.Dictionary, dependencies.Authenticate)
@@ -397,6 +415,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	}
 	operationlog.RegisterRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
 	dictionary.RegisterRoutes(adminRoutes, dependencies.Dictionary, dependencies.Authenticate, dependencies.RequirePermission)
+	if dependencies.Setting != nil {
+		systemsetting.RegisterRoutes(adminRoutes, dependencies.Setting, dependencies.Authenticate, dependencies.RequirePermission)
+	}
 	usersession.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
 	return router
 }

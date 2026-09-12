@@ -11,8 +11,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
+	authcaptcha "admin/server/internal/module/auth/captcha"
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/state"
 	messagemail "admin/server/internal/module/message/mail"
@@ -96,6 +98,7 @@ type Service struct {
 	now                 func() time.Time
 	generateCode        func() (string, error)
 	loginLogs           loginLogRecorder
+	captchaVerifier     captchaVerifier
 }
 
 type loginLogRecorder interface {
@@ -135,6 +138,24 @@ func (s *Service) SetPhoneVerifyCodeSender(sender messagesms.VerifyCodeSender) {
 }
 
 func (s *Service) SetVerificationCodeStore(store VerificationCodeStore) { s.verificationCodes = store }
+
+func (s *Service) SetCaptchaVerifier(verifier captchaVerifier) { s.captchaVerifier = verifier }
+
+func (s *Service) verifyCaptcha(ctx context.Context, id string, x, y int) error {
+	if s.captchaVerifier == nil {
+		return nil
+	}
+	if strings.TrimSpace(id) == "" {
+		return apperror.InvalidRequest(fmt.Errorf("captchaId is required"))
+	}
+	if err := s.captchaVerifier.Verify(ctx, authcaptcha.VerifyInput{ID: id, X: x, Y: y}); err != nil {
+		if errors.Is(err, authcaptcha.ErrRequired) || errors.Is(err, authcaptcha.ErrInvalidOrExpired) {
+			return apperror.InvalidRequest(err)
+		}
+		return apperror.DependencyUnavailable(err)
+	}
+	return nil
+}
 
 func (s *Service) recordLoginEvent(ctx context.Context, event loginlog.Event) error {
 	if s.loginLogs == nil {
@@ -366,6 +387,9 @@ func (s *Service) SendCode(ctx context.Context, input SendCodeInput) (SendCodeRe
 	}
 	if input.LoginType != authplatform.LoginTypeEmail && input.LoginType != authplatform.LoginTypePhone {
 		return SendCodeResult{}, apperror.InvalidRequest(fmt.Errorf("login type is not available"))
+	}
+	if err := s.verifyCaptcha(ctx, input.CaptchaID, input.CaptchaX, input.CaptchaY); err != nil {
+		return SendCodeResult{}, err
 	}
 	if input.ChallengeID != "" {
 		if err := validateChallengeID(input.ChallengeID); err != nil {

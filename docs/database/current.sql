@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict c4YN748kSJZgOjM8Ny9NLtaV6jTT6kfPu6wBg7TiF8TourB5vyuaRKxpEtAsObp
+\restrict 3Q2HGK1XzNAwZGax47CnbPiYrla6BIcO5g7gXdtJaSd76vfqXgammcWBveIZG3t
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -1116,6 +1116,51 @@ ALTER SEQUENCE public.system_dictionary_item_id_seq OWNED BY public.system_dicti
 
 
 --
+-- Name: system_setting; Type: TABLE; Schema: public; Owner: root
+--
+
+CREATE TABLE public.system_setting (
+    id bigint NOT NULL,
+    setting_key character varying(128) NOT NULL,
+    value text NOT NULL,
+    value_type smallint NOT NULL,
+    description character varying(512) DEFAULT ''::character varying NOT NULL,
+    is_enabled smallint DEFAULT 1 NOT NULL,
+    is_builtin smallint DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_system_setting_is_builtin CHECK ((is_builtin = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_system_setting_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_system_setting_key CHECK (((setting_key)::text ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'::text)),
+    CONSTRAINT ck_system_setting_value_type CHECK ((value_type = ANY (ARRAY[1, 2, 3, 4])))
+);
+
+
+ALTER TABLE public.system_setting OWNER TO root;
+
+--
+-- Name: system_setting_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+--
+
+CREATE SEQUENCE public.system_setting_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.system_setting_id_seq OWNER TO root;
+
+--
+-- Name: system_setting_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+--
+
+ALTER SEQUENCE public.system_setting_id_seq OWNED BY public.system_setting.id;
+
+
+--
 -- Name: user_account; Type: TABLE; Schema: public; Owner: root
 --
 
@@ -1432,6 +1477,13 @@ ALTER TABLE ONLY public.system_operation_log ALTER COLUMN id SET DEFAULT nextval
 
 
 --
+-- Name: system_setting id; Type: DEFAULT; Schema: public; Owner: root
+--
+
+ALTER TABLE ONLY public.system_setting ALTER COLUMN id SET DEFAULT nextval('public.system_setting_id_seq'::regclass);
+
+
+--
 -- Name: user_account id; Type: DEFAULT; Schema: public; Owner: root
 --
 
@@ -1668,6 +1720,14 @@ ALTER TABLE ONLY public.system_dictionary
 
 
 --
+-- Name: system_setting system_setting_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+--
+
+ALTER TABLE ONLY public.system_setting
+    ADD CONSTRAINT system_setting_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: message_sms_log uq_message_sms_log_id_platform; Type: CONSTRAINT; Schema: public; Owner: root
 --
 
@@ -1889,6 +1949,13 @@ CREATE INDEX ix_system_dictionary_enabled_code ON public.system_dictionary USING
 --
 
 CREATE INDEX ix_system_dictionary_item_enabled_sort ON public.system_dictionary_item USING btree (dictionary_id, is_enabled, sort, id);
+
+
+--
+-- Name: ix_system_setting_enabled_key; Type: INDEX; Schema: public; Owner: root
+--
+
+CREATE INDEX ix_system_setting_enabled_key ON public.system_setting USING btree (is_enabled, setting_key) WHERE (deleted_at IS NULL);
 
 
 --
@@ -2120,6 +2187,13 @@ CREATE UNIQUE INDEX ux_system_dictionary_code ON public.system_dictionary USING 
 --
 
 CREATE UNIQUE INDEX ux_system_dictionary_item_value_active ON public.system_dictionary_item USING btree (dictionary_id, value) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_system_setting_key_active; Type: INDEX; Schema: public; Owner: root
+--
+
+CREATE UNIQUE INDEX ux_system_setting_key_active ON public.system_setting USING btree (setting_key) WHERE (deleted_at IS NULL);
 
 
 --
@@ -2418,4 +2492,4 @@ ALTER TABLE ONLY public.system_dictionary_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict c4YN748kSJZgOjM8Ny9NLtaV6jTT6kfPu6wBg7TiF8TourB5vyuaRKxpEtAsObp
+\unrestrict 3Q2HGK1XzNAwZGax47CnbPiYrla6BIcO5g7gXdtJaSd76vfqXgammcWBveIZG3t

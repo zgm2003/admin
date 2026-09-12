@@ -43,16 +43,25 @@ type LoginRequest struct {
 }
 
 type SendCodeRequest struct {
-	Account     *string `json:"account" binding:"required"`
-	LoginType   *string `json:"loginType" binding:"required"`
-	Scene       *string `json:"scene" binding:"required"`
-	ChallengeID *string `json:"challengeId" binding:"omitempty,max=128"`
+	Account       *string               `json:"account" binding:"required"`
+	LoginType     *string               `json:"loginType" binding:"required"`
+	Scene         *string               `json:"scene" binding:"required"`
+	ChallengeID   *string               `json:"challengeId" binding:"omitempty,max=128"`
+	CaptchaID     *string               `json:"captchaId" binding:"omitempty,max=128"`
+	CaptchaAnswer *captchaAnswerRequest `json:"captchaAnswer"`
+}
+
+type captchaAnswerRequest struct {
+	X *int `json:"x"`
+	Y *int `json:"y"`
 }
 
 // ForgotPasswordRequest is the request body of POST /auth/password/forgot.
 type ForgotPasswordRequest struct {
-	Account   *string `json:"account" binding:"required,max=254"`
-	LoginType *string `json:"loginType" binding:"required"`
+	Account       *string               `json:"account" binding:"required,max=254"`
+	LoginType     *string               `json:"loginType" binding:"required"`
+	CaptchaID     *string               `json:"captchaId" binding:"omitempty,max=128"`
+	CaptchaAnswer *captchaAnswerRequest `json:"captchaAnswer"`
 }
 
 // ResetPasswordRequest is the request body of POST /auth/password/reset.

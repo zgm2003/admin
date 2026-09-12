@@ -45,6 +45,26 @@ export interface SendCodeResult {
   resendAfterSeconds: number
 }
 
+export interface CaptchaChallenge {
+  captchaId: string
+  captchaType: 'slide'
+  masterImage: string
+  tileImage: string
+  tileX: number
+  tileY: number
+  tileWidth: number
+  tileHeight: number
+  imageWidth: number
+  imageHeight: number
+  expiresIn: number
+}
+
+export interface CaptchaAnswer { x: number; y: number }
+
+export async function getCaptcha(): Promise<CaptchaChallenge> {
+  return parseCaptchaChallenge(await request<unknown>({ method: 'GET', url: '/api/v1/auth/captcha' }))
+}
+
 export interface CurrentUser {
   userId: number
   username: string
@@ -71,12 +91,13 @@ export async function sendLoginCode(
   loginType: 'email' | 'phone',
   scene: 'login' = 'login',
   challengeId?: string,
+  captcha?: { captchaId: string; captchaAnswer: CaptchaAnswer },
 ): Promise<SendCodeResult> {
   return parseSendCodeResult(
     await request<unknown>({
       method: 'POST',
       url: '/api/v1/auth/send-code',
-      data: { account, loginType, scene, challengeId },
+      data: { account, loginType, scene, challengeId, captchaId: captcha?.captchaId, captchaAnswer: captcha?.captchaAnswer },
     }),
   )
 }
@@ -90,12 +111,12 @@ export interface ResetPasswordInput {
   confirmPassword: string
 }
 
-export async function forgotPassword(account: string, loginType: 'email' | 'phone'): Promise<SendCodeResult> {
+export async function forgotPassword(account: string, loginType: 'email' | 'phone', captcha?: { captchaId: string; captchaAnswer: CaptchaAnswer }): Promise<SendCodeResult> {
   return parseSendCodeResult(
     await request<unknown>({
       method: 'POST',
       url: '/api/v1/auth/password/forgot',
-      data: { account, loginType },
+      data: { account, loginType, captchaId: captcha?.captchaId, captchaAnswer: captcha?.captchaAnswer },
     }),
   )
 }
@@ -220,5 +241,23 @@ function parseSendCodeResult(value: unknown): SendCodeResult {
     challengeId: expectString(record.challengeId, 'send code.challengeId'),
     expiresAt,
     resendAfterSeconds,
+  }
+}
+
+function parseCaptchaChallenge(value: unknown): CaptchaChallenge {
+  const record = expectExactKeys(value, ['captchaId', 'captchaType', 'masterImage', 'tileImage', 'tileX', 'tileY', 'tileWidth', 'tileHeight', 'imageWidth', 'imageHeight', 'expiresIn'], 'captcha challenge')
+  if (record.captchaType !== 'slide') throw new ProtocolError('captcha challenge type is invalid')
+  return {
+    captchaId: expectString(record.captchaId, 'captcha challenge.captchaId'),
+    captchaType: 'slide',
+    masterImage: expectString(record.masterImage, 'captcha challenge.masterImage'),
+    tileImage: expectString(record.tileImage, 'captcha challenge.tileImage'),
+    tileX: expectInteger(record.tileX, 'captcha challenge.tileX'),
+    tileY: expectInteger(record.tileY, 'captcha challenge.tileY'),
+    tileWidth: expectInteger(record.tileWidth, 'captcha challenge.tileWidth'),
+    tileHeight: expectInteger(record.tileHeight, 'captcha challenge.tileHeight'),
+    imageWidth: expectInteger(record.imageWidth, 'captcha challenge.imageWidth'),
+    imageHeight: expectInteger(record.imageHeight, 'captcha challenge.imageHeight'),
+    expiresIn: expectInteger(record.expiresIn, 'captcha challenge.expiresIn'),
   }
 }

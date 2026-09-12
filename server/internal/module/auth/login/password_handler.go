@@ -27,6 +27,7 @@ func (h *Handler) ForgotPassword(context *gin.Context) {
 		response.Fail(context, apperror.InvalidRequest(fmt.Errorf("account and loginType are required")))
 		return
 	}
+	captchaID, captchaX, captchaY := captchaRequestValues(request.CaptchaID, request.CaptchaAnswer)
 	loginType := authplatform.LoginType(*request.LoginType)
 	if loginType != authplatform.LoginTypeEmail && loginType != authplatform.LoginTypePhone {
 		response.Fail(context, apperror.InvalidRequest(fmt.Errorf("loginType must be email or phone")))
@@ -36,6 +37,9 @@ func (h *Handler) ForgotPassword(context *gin.Context) {
 		Account:   *request.Account,
 		LoginType: loginType,
 		Client:    client,
+		CaptchaID: captchaID,
+		CaptchaX:  captchaX,
+		CaptchaY:  captchaY,
 	})
 	if err != nil {
 		response.Fail(context, err)

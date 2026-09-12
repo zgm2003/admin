@@ -23,6 +23,9 @@ type ForgotPasswordInput struct {
 	Account   string
 	LoginType authplatform.LoginType
 	Client    authclient.Client
+	CaptchaID string
+	CaptchaX  int
+	CaptchaY  int
 }
 
 // ForgotPassword sends a password-reset verification code (scene=forget) to a
@@ -30,6 +33,9 @@ type ForgotPasswordInput struct {
 // verification key are isolated by login type. It fails closed before acquiring
 // any delivery lease when password login is disabled or the account is unknown.
 func (s *Service) ForgotPassword(ctx context.Context, input ForgotPasswordInput) (SendCodeResult, error) {
+	if err := s.verifyCaptcha(ctx, input.CaptchaID, input.CaptchaX, input.CaptchaY); err != nil {
+		return SendCodeResult{}, err
+	}
 	if s.verificationCodes == nil {
 		return SendCodeResult{}, apperror.DependencyUnavailable(fmt.Errorf("verification code dependencies are unavailable"))
 	}

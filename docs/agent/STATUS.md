@@ -3,6 +3,36 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## 系统设置与认证滑块 Captcha（2026-09-12，已迁移）
+
+- 新增 `system/setting` 管理切片：设置键、值类型（string/number/bool/JSON）、启停、软删除、内置保护、严格
+  请求字段和分页筛选；运行时读取通过 `shared/setting.Reader`，Redis key 为
+  `system:setting:v1:<setting-key>`，变更会主动失效缓存；缓存快照使用严格 lower-camel JSON 解码，拒绝未知字段和
+  trailing data。
+- forward migration `docs/database/2026-09-12-system-setting-captcha.sql` 已在真实 `admin.public` 执行：创建
+  `system_setting`、内置 `auth.captcha.ttl_minutes`/`auth.captcha.slide_padding`，并按已有
+  `navigation.system` 目录幂等写入系统设置 page/action 与菜单版本。执行时间为
+  **2026-09-12 13:37:24 +08:00**；仅 Admin 平台存在系统目录并写入 1 个 page + 6 个 action，Canvas 跳过。
+- 新增 `auth/captcha` 滑块服务：go-captcha 生成图片，Redis `captcha:slide:` 保存短期答案，验证使用 `GETDEL` 单次消费；
+  Captcha 配置读取失败、Redis/生成失败显式返回依赖错误，错误答案返回请求错误。公共端点为
+  `GET /api/v1/auth/captcha`。
+- 系统设置页面已按现有管理页范式收敛：使用 `management-page`、`AppSearch` 的 `query/reset` 契约、`AppTable`
+  工具栏与 `row-key`、标准空态，以及 `AppDialog` 响应式宽度和 footer 操作；表单补齐长度限制、占位提示和
+  `el-select-v2` 全宽样式。
+- 登录验证码和找回密码发码前端已接入滑块弹窗；密码登录不要求滑块。系统设置页、Captcha 弹窗及登录/找回密码回归测试已补齐，
+  中英文 i18n 已同步。
+- 本轮真实库验证：两个 seed 均为 `value_type=2`、`is_enabled=1`、`is_builtin=1`，活动内置 seed 恰好 2 行；
+  `system_setting` 的 CHECK、主键、活动唯一索引和启用查询索引均存在。Admin `menu_version` 6→7，Canvas 保持 1；
+  立即重复执行 exit 0 且版本保持 7/1，确认幂等。隔离 schema 迁移测试、后端/前端定向测试此前均已通过。
+- 迁移前备份位于
+  `%LOCALAPPDATA%\\Admin\\backups\\system-setting-captcha-20260912-133629\\public-before.dump`，大小 159172 字节，
+  SHA256 `3810AD2DCC66C961747124278BE436E35258045A26E515921F10C38A01A042C8`，`pg_restore --list` 得到 289 个归档条目。
+  `docs/database/current.sql` 已于本次迁移后从真实 `public` schema-only 刷新（85123 字节）。
+- 尚未执行：真实短信/邮件发送、腾讯云凭据录入、API/Worker 重启、浏览器验收及受影响 Redis runtime/readiness/menu
+  定向重建；未清理 Redis 全库、Session、Access 或 Mail 额度。
+- 下一步：由维护者在受控窗口重启新 API/Worker 后验收系统设置菜单、滑块图片和发码流程；定时任务、WebSocket、导出等基础能力
+  另行排期，不在本切片内混入。
+
 ## 短信（SMS）垂直切片（2026-09-10，执行中）
 
 - 目标：交付 `message/sms` 垂直切片并开放手机验证码登录、找回密码、绑定/换绑手机号与验证码改密；场景固定为

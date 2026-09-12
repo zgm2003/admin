@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	authcaptcha "admin/server/internal/module/auth/captcha"
 	"admin/server/internal/module/auth/client"
 	authplatform "admin/server/internal/module/permission/authPlatform"
 )
@@ -20,6 +21,9 @@ type SendCodeInput struct {
 	Scene       string
 	ChallengeID string
 	Client      authclient.Client
+	CaptchaID   string
+	CaptchaX    int
+	CaptchaY    int
 }
 
 // SendCodeResult returns only challenge metadata, expiry and the resend wait,
@@ -47,4 +51,8 @@ type VerificationCodeStore interface {
 	ConsumeMany(context.Context, []string, []string) (bool, error)
 	DeleteIfOwned(context.Context, string, string) error
 	ReleaseDelivery(context.Context, string, string) error
+}
+
+type captchaVerifier interface {
+	Verify(context.Context, authcaptcha.VerifyInput) error
 }
