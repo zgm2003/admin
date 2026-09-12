@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox, ElNotification } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -334,7 +335,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="user-management management-page">
+  <AppPage class="user-management">
     <AppSearch
       v-model="searchModel"
       class="user-filters management-page__filters"
@@ -467,7 +468,7 @@ onMounted(() => {
       @clear="clearRoles"
       @save="saveRoles"
     />
-  </section>
+  </AppPage>
 </template>
 
 <style scoped src="./UserManagement.css"></style>

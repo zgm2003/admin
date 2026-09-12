@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -187,7 +188,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="sms-page management-page" data-testid="sms-page">
+  <AppPage class="sms-page" data-testid="sms-page">
     <el-empty v-if="!canList" :description="t('sms.listPermissionRequired')" />
     <template v-else>
       <el-alert
@@ -261,7 +262,7 @@ onMounted(() => {
         </el-tab-pane>
       </el-tabs>
     </template>
-  </section>
+  </AppPage>
 </template>
 
 <style scoped>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox, ElNotification } from 'element-plus'
 import { CirclePlus } from '@element-plus/icons-vue'
@@ -308,7 +309,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="role-page management-page">
+  <AppPage class="role-page">
     <AppSearch
       v-model="searchModel"
       class="role-filters management-page__filters"
@@ -438,7 +439,7 @@ onMounted(() => {
       :role="permissionTarget"
       @saved="handlePermissionsSaved"
     />
-  </section>
+  </AppPage>
 </template>
 
 <style scoped src="./RolePage.css"></style>

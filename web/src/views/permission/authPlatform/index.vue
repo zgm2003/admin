@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref } from 'vue'
 import { CirclePlus } from '@element-plus/icons-vue'
 import { ElMessageBox, ElNotification } from 'element-plus'
@@ -267,7 +268,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="auth-platform-page management-page">
+  <AppPage class="auth-platform-page">
     <AppSearch
       v-model="searchModel"
       class="auth-platform-filters management-page__filters"
@@ -466,7 +467,7 @@ onMounted(() => {
       @restore-defaults="restoreDefaultTTL"
       @save="submit"
     />
-  </section>
+  </AppPage>
 </template>
 
 <style scoped src="./AuthPlatformPage.css"></style>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -368,7 +369,7 @@ watch(cosRegionOptions, (options) => {
 </script>
 
 <template>
-  <section class="storage-page management-page">
+  <AppPage class="storage-page">
     <el-alert v-if="loadError" :title="loadError" type="error" show-icon />
     <el-alert
       v-if="storageOptionsError"
@@ -467,7 +468,7 @@ watch(cosRegionOptions, (options) => {
       @update:file-size-mb="ruleMaxFileSizeMB = $event"
       @save="saveRule"
     />
-  </section>
+  </AppPage>
 </template>
 
 <style scoped>

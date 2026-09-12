@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox, ElNotification } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -271,7 +272,7 @@ onMounted(() => loadMenus())
 </script>
 
 <template>
-  <section class="menu-management-page management-page" :aria-label="t('menu.title')">
+  <AppPage class="menu-management-page" :aria-label="t('menu.title')">
     <el-tabs
       v-if="platforms.length > 0"
       v-model="activePlatformID"
@@ -351,14 +352,10 @@ onMounted(() => loadMenus())
       @close="closeDialog"
       @save="submitForm"
     />
-  </section>
+  </AppPage>
 </template>
 
 <style scoped>
-.menu-management-page {
-  min-width: 0;
-}
-
 .menu-platform-tabs {
   min-width: 0;
   margin-bottom: 8px;

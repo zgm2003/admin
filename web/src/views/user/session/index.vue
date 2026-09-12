@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox, ElNotification } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -240,7 +241,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="session-page management-page">
+  <AppPage class="session-page">
     <el-row :gutter="16" class="session-stats session-stats--compact" v-loading="statsLoading">
       <el-col :xs="24" :sm="8">
         <div class="session-stat-primary session-stat-primary--inline">
@@ -349,7 +350,7 @@ onMounted(() => {
       >
       <template #empty><el-empty :description="t('session.empty')" /></template>
     </AppTable>
-  </section>
+  </AppPage>
 </template>
 
 <style scoped>

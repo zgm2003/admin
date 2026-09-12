@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -146,7 +147,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="login-log-page management-page">
+  <AppPage class="login-log-page">
     <AppSearch
       v-model="searchModel"
       class="management-page__filters"
@@ -182,7 +183,7 @@ onMounted(() => {
       }}</template>
       <template #empty><el-empty :description="t('loginLog.empty')" /></template>
     </AppTable>
-  </section>
+  </AppPage>
 </template>
 
 <style scoped>

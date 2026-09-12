@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AppPage } from '@/components/AppPage'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -170,7 +171,7 @@ watch(
 </script>
 
 <template>
-  <section class="mail-page management-page">
+  <AppPage class="mail-page">
     <el-tabs v-model="activeTab" class="mail-tabs">
       <el-tab-pane
         v-for="tab in visibleTabs"
@@ -236,7 +237,7 @@ watch(
         />
       </el-tab-pane>
     </el-tabs>
-  </section>
+  </AppPage>
 </template>
 
 <style scoped>

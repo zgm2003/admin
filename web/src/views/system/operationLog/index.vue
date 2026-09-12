@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -221,7 +222,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="operation-log-page management-page">
+  <AppPage class="operation-log-page">
     <AppSearch
       v-model="searchModel"
       class="operation-log-filters management-page__filters"
@@ -310,7 +311,7 @@ onMounted(() => {
       }}</template>
       <template #empty><el-empty :description="t('operationLog.empty')" /></template>
     </AppTable>
-  </section>
+  </AppPage>
 </template>
 
 <style scoped>

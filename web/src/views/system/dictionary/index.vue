@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref } from 'vue'
 import { CirclePlus, Delete, Edit, Switch } from '@element-plus/icons-vue'
 import { ElMessageBox, ElNotification } from 'element-plus'
@@ -271,7 +272,7 @@ onMounted(() => void load())
 </script>
 
 <template>
-  <section class="dictionary-page management-page">
+  <AppPage class="dictionary-page">
     <AppSearch
       v-model="searchModel"
       class="management-page__filters"
@@ -464,5 +465,5 @@ onMounted(() => void load())
         ></el-form
       ></AppDialog
     >
-  </section>
+  </AppPage>
 </template>

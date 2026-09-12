@@ -13,13 +13,14 @@ import {
   type SettingValueType,
   type SystemSetting,
 } from '@/api/system/setting'
-import { AppDialog } from '@/components/AppDialog'
+import { AppPage } from '@/components/AppPage'
 import { AppSearch } from '@/components/AppSearch'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import { AppTable } from '@/components/AppTable'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
+import SettingDialog from './components/SettingDialog/index.vue'
 
 const { t } = useI18n()
 const access = usePermissionStore()
@@ -74,7 +75,7 @@ const searchFields = computed<SearchField[]>(() => [
     testId: 'setting-status-filter',
   },
 ])
-const valueTypeOptions = computed(() => [
+const valueTypeOptions = computed<Array<{ label: string; value: SettingValueType }>>(() => [
   { label: t('setting.typeString'), value: 1 },
   { label: t('setting.typeNumber'), value: 2 },
   { label: t('setting.typeBoolean'), value: 3 },
@@ -204,7 +205,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="setting-page management-page">
+  <AppPage class="setting-page">
     <AppSearch
       v-model="searchModel"
       class="management-page__filters"
@@ -281,53 +282,13 @@ onMounted(() => {
       /></template>
     </AppTable>
 
-    <AppDialog
+    <SettingDialog
       v-model="dialogVisible"
-      :title="editing === null ? t('setting.create') : t('setting.edit')"
-      width="min(560px, 94vw)"
-    >
-      <el-form label-position="top" @submit.prevent="save">
-        <el-form-item :label="t('setting.key')">
-          <el-input
-            v-model="form.key"
-            data-testid="setting-form-key"
-            :maxlength="128"
-            :disabled="editing !== null"
-            :placeholder="t('setting.keyPlaceholder')"
-          />
-        </el-form-item>
-        <el-form-item :label="t('setting.type')">
-          <el-select-v2
-            v-model="form.valueType"
-            data-testid="setting-form-type"
-            :options="valueTypeOptions"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item :label="t('setting.value')">
-          <el-input
-            v-model="form.value"
-            data-testid="setting-form-value"
-            type="textarea"
-            :rows="4"
-            :placeholder="t('setting.valuePlaceholder')"
-          />
-        </el-form-item>
-        <el-form-item :label="t('setting.descriptionField')">
-          <el-input
-            v-model="form.description"
-            data-testid="setting-form-description"
-            :maxlength="512"
-            :placeholder="t('setting.descriptionPlaceholder')"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('setting.cancel') }}</el-button>
-        <el-button data-testid="setting-save" type="primary" :loading="submitting" @click="save">
-          {{ t('setting.save') }}
-        </el-button>
-      </template>
-    </AppDialog>
-  </section>
+      v-model:form="form"
+      :editing="editing"
+      :submitting="submitting"
+      :value-type-options="valueTypeOptions"
+      @save="save"
+    />
+  </AppPage>
 </template>

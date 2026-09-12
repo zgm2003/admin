@@ -65,6 +65,8 @@ describe('system setting page', () => {
     const wrapper = mountPage(['system:setting:list', 'system:setting:create'])
     await flushPromises()
 
+    expect(wrapper.getComponent({ name: 'AppPage' }).classes()).toContain('management-page')
+    expect(wrapper.findComponent({ name: 'SettingDialog' }).exists()).toBe(true)
     expect(wrapper.get('section.setting-page').classes()).toContain('management-page')
     expect(wrapper.find('h1').exists()).toBe(false)
 
