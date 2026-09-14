@@ -140,8 +140,13 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
       @refresh="emit('refresh')"
     >
       <template #toolbar-left>
-        <el-button v-if="canCreate" data-testid="sms-rule-create" type="primary" @click="create">
-          <Plus :size="16" />
+        <el-button
+          v-if="canCreate"
+          data-testid="sms-rule-create"
+          type="primary"
+          :icon="Plus"
+          @click="create"
+        >
           {{ t('sms.create') }}
         </el-button>
       </template>

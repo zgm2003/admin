@@ -74,8 +74,13 @@ defineExpose({ done, refresh })
       <el-skeleton v-else :rows="5" animated />
       <el-slider v-model="sliderX" :min="0" :max="maxX" :disabled="loadingChallenge || verifying" aria-label="captcha slider" />
       <div class="captcha-actions">
-        <el-button text :disabled="loadingChallenge || verifying" @click="refresh">
-          <el-icon><RefreshRight /></el-icon>{{ t('auth.captcha.refresh') }}
+        <el-button
+          text
+          :icon="RefreshRight"
+          :disabled="loadingChallenge || verifying"
+          @click="refresh"
+        >
+          {{ t('auth.captcha.refresh') }}
         </el-button>
         <el-button type="primary" :loading="verifying" :disabled="!challenge || loadingChallenge" @click="complete">
           {{ t('auth.captcha.confirm') }}

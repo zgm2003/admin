@@ -252,9 +252,9 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
                 data-testid="mail-config-test"
                 :loading="testing"
                 :disabled="!config.configured || config.isEnabled !== YesNo.Yes"
+                :icon="Send"
                 @click="sendTest"
               >
-                <Send :size="16" />
                 {{ t('mail.test') }}
               </el-button>
             </div>

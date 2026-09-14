@@ -309,9 +309,9 @@ function generateChallengeID(): string {
               plain
               :loading="loading"
               :disabled="loading"
+              :icon="RefreshRight"
               @click="loadLoginConfig"
             >
-              <el-icon><RefreshRight /></el-icon>
               {{ t('auth.login.configRetry') }}
             </el-button>
           </div>

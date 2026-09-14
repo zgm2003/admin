@@ -290,9 +290,9 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
             type="primary"
             :loading="testing"
             :disabled="!catalogReady || testPhone.trim() === ''"
+            :icon="Send"
             @click="sendTest"
           >
-            <Send :size="16" />
             {{ t('sms.sendTest') }}
           </el-button>
         </el-form-item>
