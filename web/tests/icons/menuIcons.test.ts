@@ -14,4 +14,9 @@ describe('menu icons', () => {
     expect(isMenuIconName('lucide:sliders-horizontal')).toBe(true)
     expect(menuIcons['lucide:sliders-horizontal'].label).toBe('系统设置')
   })
+
+  it('resolves the task queue icon used by the queue monitor migration', () => {
+    expect(isMenuIconName('lucide:list-checks')).toBe(true)
+    expect(menuIcons['lucide:list-checks'].label).toBe('任务队列')
+  })
 })

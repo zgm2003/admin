@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import config from './vite.config.ts'
+import { createViteConfig } from './vite.config.ts'
+
+const config = createViteConfig('test')
 
 describe('Vite development server', () => {
   it('uses the fixed local port and opens the browser', () => {
@@ -9,6 +11,15 @@ describe('Vite development server', () => {
       port: 16300,
       strictPort: true,
       open: true,
+    })
+  })
+
+  it('proxies same-origin API requests to the Go server', () => {
+    expect(config.server?.proxy).toMatchObject({
+      '/api': {
+        target: 'http://localhost:16301',
+        changeOrigin: true,
+      },
     })
   })
 

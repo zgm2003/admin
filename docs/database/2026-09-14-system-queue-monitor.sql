@@ -39,7 +39,7 @@ BEGIN
     VALUES
       (admin_platform_id, system_menu_id, 'page', '任务队列', 'system:queueMonitor:view',
        'navigation.systemQueueMonitor', '/system/queueMonitor', 'system/queueMonitor',
-       'lucide:list-tree', 90, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+       'lucide:list-checks', 90, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
     changed := TRUE;
   ELSE
     SELECT id INTO queue_page_id FROM permission_menu
@@ -48,7 +48,7 @@ BEGIN
     IF EXISTS (SELECT 1 FROM permission_menu WHERE id = queue_page_id AND
       (parent_id IS DISTINCT FROM system_menu_id OR menu_type <> 'page' OR name <> '任务队列' OR
        i18n_key IS DISTINCT FROM 'navigation.systemQueueMonitor' OR path IS DISTINCT FROM '/system/queueMonitor' OR
-       component_path IS DISTINCT FROM 'system/queueMonitor' OR icon IS DISTINCT FROM 'lucide:list-tree' OR
+       component_path IS DISTINCT FROM 'system/queueMonitor' OR icon IS DISTINCT FROM 'lucide:list-checks' OR
        is_enabled <> 1 OR is_hidden <> 0)) THEN
       RAISE EXCEPTION 'system:queueMonitor:view menu shape mismatch';
     END IF;

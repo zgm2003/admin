@@ -24,9 +24,9 @@
   返回 `Compiled successfully`；Node 24 下的旧版 CRA/PostCSS `ERR_PACKAGE_PATH_NOT_EXPORTED` 不再是当前构建阻塞。
   本次只验证了源码构建，运行时继续使用已校验且已移除 source map 与 `sourceMappingURL` 的现有 v0.7.2 官方 build，未覆盖
   `ui/dist`。
-- 页面验收发现开发环境 iframe 相对地址被 Vite `16300` 的 SPA fallback 返回为管理端首页，修正为基于
-  `VITE_API_BASE_URL` 生成 API 服务地址；菜单原使用未注册的 `lucide:list-checks` 导致图标显示 `?`，已改为已注册的
-  `lucide:list-tree`。真实 Admin 菜单数据已修正，`menu_version` 由 8 递增至 9。
+- 页面验收发现开发环境 iframe 相对地址被 Vite `16300` 的 SPA fallback 返回为管理端首页；现已为 Vite 增加读取
+  `VITE_API_BASE_URL` 的 `/api` 代理，保持 iframe 同源。菜单使用的 `lucide:list-checks` 已加入前端注册表，真实 Admin
+  菜单同步恢复该图标，`menu_version` 已递增至 10。Vite 已重启，代理路径实测返回后端响应而非管理端 HTML。
 
 ## 管理页壳与局部对话框组件化（2026-09-12，已完成）
 

@@ -7,9 +7,10 @@
 .codebuddy
 server/bin/
 server/tmp/
-web/node_modules/
+**/node_modules/
 web/dist/
 web/coverage/
+server/internal/module/system/queueMonitor/ui/upstream/build/
 docs/database/backups/
 docs/local-work/*
 !docs/local-work/README.md
