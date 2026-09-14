@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { Plus } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
 import * as smsApi from '@/api/message/sms'
-import { AppDialog } from '@/components/AppDialog'
-import { AppTable, type TableColumn } from '@/components/AppTable'
+import type { TableColumn } from '@/components/AppTable'
 import { YesNo, type YesNo as YesNoValue } from '@/enums/yesNo'
 
 const props = defineProps<{

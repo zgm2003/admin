@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref } from 'vue'
-import { ElMessageBox, ElNotification } from 'element-plus'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
+import { ElNotification } from 'element-plus/es/components/notification/index'
 import { Refresh } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 

@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import { useI18n } from 'vue-i18n'
 
 import { bindEmail, sendEmailCode } from '@/api/user/email'
-import { AppDialog } from '@/components/AppDialog'
 
 const props = defineProps<{ currentEmail: string }>()
 const visible = defineModel<boolean>({ required: true })

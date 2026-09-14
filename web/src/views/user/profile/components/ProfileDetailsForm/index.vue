@@ -3,7 +3,6 @@ import { reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { UpdateAccountProfileInput } from '@/api/user/profile'
-import { UpMedia } from '@/components/UpMedia'
 
 interface Props {
   profileForm: UpdateAccountProfileInput

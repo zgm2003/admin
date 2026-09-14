@@ -1,15 +1,13 @@
 <script setup lang="ts">
-import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref } from 'vue'
-import { ElMessageBox, ElNotification } from 'element-plus'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
+import { ElNotification } from 'element-plus/es/components/notification/index'
 import { useI18n } from 'vue-i18n'
 
 import { getSessions, getSessionStats, revokeSession, revokeSessions } from '@/api/user/session'
 import type { SessionItem, SessionListQuery, SessionStats, SessionStatus } from '@/api/user/session'
 import { usePermissionStore } from '@/store/permission'
-import { AppTable } from '@/components/AppTable'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
-import { AppSearch } from '@/components/AppSearch'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import { formatTime } from '@/utils/datetime'
 

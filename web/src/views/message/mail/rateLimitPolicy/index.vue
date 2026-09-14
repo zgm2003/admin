@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import { useI18n } from 'vue-i18n'
 
 import { updateMailRateLimitPolicy, type MailRateLimitPolicy } from '@/api/message/mail'
-import { AppTable, type TableColumn } from '@/components/AppTable'
+import type { TableColumn } from '@/components/AppTable'
 
 const props = defineProps<{
   policies: MailRateLimitPolicy[]

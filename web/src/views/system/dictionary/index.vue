@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref } from 'vue'
 import { CirclePlus, Delete, Edit, Switch } from '@element-plus/icons-vue'
-import { ElMessageBox, ElNotification } from 'element-plus'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
+import { ElNotification } from 'element-plus/es/components/notification/index'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -18,12 +18,10 @@ import {
   updateDictionaryStatus,
 } from '@/api/system/dictionary'
 import type { Dictionary, DictionaryItem } from '@/api/system/dictionary'
-import { AppTable } from '@/components/AppTable'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
 import { useSystemDictionaryStore } from '@/store/systemDictionary'
-import { AppSearch } from '@/components/AppSearch'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import DictionaryDetailDialog from './components/DictionaryDetailDialog/index.vue'
 import DictionaryFormDialog from './components/DictionaryFormDialog/index.vue'

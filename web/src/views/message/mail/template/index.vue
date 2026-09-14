@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -9,7 +9,7 @@ import {
   type MailTemplate,
   type MailTemplateInput,
 } from '@/api/message/mail'
-import { AppTable, type TableColumn } from '@/components/AppTable'
+import type { TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
 
 const props = defineProps<{

@@ -3,7 +3,9 @@ import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import { CircleCheckFilled, Lock, RefreshRight, User } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { ElLink, ElMessage, ElNotification } from 'element-plus'
+import { ElLink } from 'element-plus/es/components/link/index'
+import { ElMessage } from 'element-plus/es/components/message/index'
+import { ElNotification } from 'element-plus/es/components/notification/index'
 
 import {
   getCurrentUser,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref } from 'vue'
-import { ElMessageBox, ElNotification } from 'element-plus'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
+import { ElNotification } from 'element-plus/es/components/notification/index'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -22,9 +22,7 @@ import type {
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
-import { AppTable } from '@/components/AppTable'
 import type { TablePaginationState } from '@/components/AppTable'
-import { AppSearch } from '@/components/AppSearch'
 import type { SearchFormModel } from '@/components/AppSearch'
 import { formatTime } from '@/utils/datetime'
 import UserEditDialog from './components/UserEditDialog/index.vue'

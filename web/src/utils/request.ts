@@ -5,7 +5,7 @@ import axios, {
   type AxiosRequestConfig,
   type InternalAxiosRequestConfig,
 } from 'axios'
-import { ElNotification } from 'element-plus'
+import { ElNotification } from 'element-plus/es/components/notification/index'
 
 import type { AccessCredential } from '@/api/auth/login'
 import { authPlatform } from '@/auth/platform'

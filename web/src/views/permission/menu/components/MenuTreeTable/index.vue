@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { CirclePlus, Refresh } from '@element-plus/icons-vue'
 
 import type { ManagedMenuNode, ManagedMenuType } from '@/api/permission/menu'
-import { AppDIcon } from '@/components/AppDIcon'
 import { YesNo } from '@/enums/yesNo'
 import { filterManagedMenuTree } from '@/views/permission/menu/filterMenuTree'
 import { flattenWithChildren, menuRowKey } from '@/views/permission/menu/menuTree'

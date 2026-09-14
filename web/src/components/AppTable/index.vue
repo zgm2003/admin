@@ -1,6 +1,5 @@
 <script setup lang="ts" generic="Row extends TableRow">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ElButton, ElTable, ElTableColumn, ElPagination, ElSpace } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 

@@ -2,7 +2,6 @@
 import { useI18n } from 'vue-i18n'
 
 import type { PermissionMenuNode as PermissionMenuNodeDTO } from '@/api/permission/permission'
-import { AppDIcon } from '@/components/AppDIcon'
 import { YesNo } from '@/enums/yesNo'
 
 defineOptions({ name: 'PermissionMenuNode' })

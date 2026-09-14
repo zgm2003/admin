@@ -2,7 +2,6 @@
 import { useI18n } from 'vue-i18n'
 
 import type { SystemSetting, SettingValueType } from '@/api/system/setting'
-import { AppDialog } from '@/components/AppDialog'
 
 defineOptions({ name: 'SettingDialog' })
 

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import { AppDialog } from '@/components/AppDialog'
 import type { RoleFormState } from '@/views/permission/role/components/types'
 
 const props = defineProps<{

@@ -38,7 +38,8 @@ var menuIconNames = map[string]struct{}{
 	"lucide:layout-dashboard": {}, "lucide:list-tree": {}, "lucide:lock-keyhole": {},
 	"lucide:mail": {}, "lucide:message-square-more": {}, "lucide:monitor-smartphone": {}, "lucide:panel-left": {},
 	"lucide:scroll-text": {}, "lucide:server": {}, "lucide:settings-2": {}, "lucide:shield-check": {},
-	"lucide:sparkles": {}, "lucide:user-cog": {}, "lucide:user-round": {}, "lucide:user-round-cog": {},
+	"lucide:sliders-horizontal": {},
+	"lucide:sparkles":           {}, "lucide:user-cog": {}, "lucide:user-round": {}, "lucide:user-round-cog": {},
 	"lucide:user-circle": {}, "lucide:users": {}, "lucide:users-round": {}, "lucide:wallet-cards": {},
 }
 

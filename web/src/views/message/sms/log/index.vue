@@ -3,9 +3,8 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import * as smsApi from '@/api/message/sms'
-import { AppDialog } from '@/components/AppDialog'
-import { AppSearch, type SearchField, type SearchFormModel } from '@/components/AppSearch'
-import { AppTable, type TableColumn, type TablePaginationState } from '@/components/AppTable'
+import type { SearchField, SearchFormModel } from '@/components/AppSearch'
+import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { formatTime } from '@/utils/datetime'
 
 export interface SmsLogFilter {

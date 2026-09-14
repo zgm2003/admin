@@ -2,7 +2,6 @@
 import { useI18n } from 'vue-i18n'
 
 import type { Dictionary } from '@/api/system/dictionary'
-import { AppDialog } from '@/components/AppDialog'
 
 defineOptions({ name: 'DictionaryFormDialog' })
 

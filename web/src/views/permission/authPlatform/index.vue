@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { AppPage } from '@/components/AppPage'
 import { computed, onMounted, ref } from 'vue'
 import { CirclePlus } from '@element-plus/icons-vue'
-import { ElMessageBox, ElNotification } from 'element-plus'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
+import { ElNotification } from 'element-plus/es/components/notification/index'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -15,9 +15,7 @@ import {
 import type { AuthPlatformListItem, AuthPlatformListQuery } from '@/api/permission/authPlatform'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
-import { AppTable } from '@/components/AppTable'
 import type { TablePaginationState } from '@/components/AppTable'
-import { AppSearch } from '@/components/AppSearch'
 import type { SearchFormModel } from '@/components/AppSearch'
 import AuthPlatformDialog from './components/AuthPlatformDialog/index.vue'
 import type { AuthPlatformForm } from './components/AuthPlatformDialog/types'

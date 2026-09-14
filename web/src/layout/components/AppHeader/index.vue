@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 
 import type { HeaderBreadcrumb } from '@/layout/breadcrumbs'
 import logoUrl from '@/assets/logo.png'
-import { LocaleSwitch } from '@/components/LocaleSwitch'
 import SettingDrawer from '@/layout/components/SettingDrawer/index.vue'
 
 defineOptions({ name: 'AppHeader' })

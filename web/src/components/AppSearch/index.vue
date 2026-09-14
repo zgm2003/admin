@@ -5,7 +5,6 @@
 >
 import { computed, reactive, ref, watch } from 'vue'
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
-import { ElSpace } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import type { SearchDateRange, SearchField, SearchFormValue } from './types'
 

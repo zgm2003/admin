@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { AppDialog } from '@/components/AppDialog'
 import type { UserListItem } from '@/api/user/account'
 import type { UserFormState } from '@/views/user/account/components/types'
 

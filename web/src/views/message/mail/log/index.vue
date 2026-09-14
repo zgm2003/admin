@@ -8,9 +8,8 @@ import {
   type MailLogDetail,
   type MailTemplate,
 } from '@/api/message/mail'
-import { AppDialog } from '@/components/AppDialog'
-import { AppTable, type TableColumn, type TablePaginationState } from '@/components/AppTable'
-import { AppSearch, type SearchField, type SearchFormModel } from '@/components/AppSearch'
+import type { TableColumn, TablePaginationState } from '@/components/AppTable'
+import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import { formatTime } from '@/utils/datetime'
 
 export interface MailLogFilter {

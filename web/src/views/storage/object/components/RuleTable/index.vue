@@ -3,9 +3,7 @@ import { CirclePlus } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import type { UploadRule } from '@/api/storage/uploadRule'
-import { AppSearch } from '@/components/AppSearch'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
-import { AppTable } from '@/components/AppTable'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
 

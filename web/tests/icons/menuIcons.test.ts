@@ -9,4 +9,9 @@ describe('menu icons', () => {
     expect(menuIcons['lucide:message-square-more'].label).toBe('对话')
     expect(menuIcons['lucide:mail'].label).toBe('邮件')
   })
+
+  it('resolves the system setting icon used by the settings migration', () => {
+    expect(isMenuIconName('lucide:sliders-horizontal')).toBe(true)
+    expect(menuIcons['lucide:sliders-horizontal'].label).toBe('系统设置')
+  })
 })

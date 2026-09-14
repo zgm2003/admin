@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -8,7 +8,7 @@ import {
   type SmsRateLimitPlatform,
   type SmsRateLimitPolicy,
 } from '@/api/message/sms'
-import { AppTable, type TableColumn } from '@/components/AppTable'
+import type { TableColumn } from '@/components/AppTable'
 
 const props = defineProps<{
   platforms: SmsRateLimitPlatform[]

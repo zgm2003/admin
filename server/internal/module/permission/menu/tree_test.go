@@ -207,6 +207,20 @@ func TestBuildMenuIndexAcceptsProfileMenuIcon(t *testing.T) {
 	}
 }
 
+func TestBuildMenuIndexAcceptsSystemSettingMenuIcon(t *testing.T) {
+	now := time.Now().UTC()
+	icon := "lucide:sliders-horizontal"
+	menu := Menu{
+		ID: 1, PlatformID: 1, MenuType: TypePage, Name: "系统设置", Code: "system:setting:view",
+		I18nKey: stringPointer("navigation.systemSetting"), Path: stringPointer("/system/setting"),
+		ComponentPath: stringPointer("system/setting"), Icon: &icon, IsEnabled: yesno.Yes,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if _, err := buildMenuIndex([]Menu{menu}); err != nil {
+		t.Fatalf("system setting menu icon rejected: %v", err)
+	}
+}
+
 func int64Pointer(value int64) *int64 {
 	return &value
 }

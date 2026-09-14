@@ -1,7 +1,5 @@
 import { createRouter, createWebHistory, type RouterHistory, type RouteRecordRaw } from 'vue-router'
 
-import Dashboard from '@/views/dashboard/index.vue'
-
 declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth: boolean
@@ -34,7 +32,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'dashboard',
         name: 'dashboard',
-        component: Dashboard,
+        component: () => import('@/views/dashboard/index.vue'),
         meta: {
           requiresAuth: true,
           i18nKey: 'navigation.dashboard',

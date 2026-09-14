@@ -1,4 +1,3 @@
-import ElementPlus from 'element-plus'
 import { describe, expect, it, vi } from 'vitest'
 
 const appHarness = vi.hoisted(() => {
@@ -11,8 +10,6 @@ const appHarness = vi.hoisted(() => {
     app,
     createApp: vi.fn(() => app),
     initializeLocale: vi.fn(),
-    readLocale: vi.fn(() => 'en-US'),
-    elementPlusLocaleFor: vi.fn(() => ({ name: 'english-locale' })),
     installPermissionGuard: vi.fn(),
   }
 })
@@ -25,21 +22,18 @@ vi.mock('@/App.vue', () => ({ default: {} }))
 vi.mock('@/i18n', () => ({
   appI18n: { name: 'i18n' },
   initializeLocale: appHarness.initializeLocale,
-  readLocale: appHarness.readLocale,
-  elementPlusLocaleFor: appHarness.elementPlusLocaleFor,
 }))
 vi.mock('@/router', () => ({ router: { name: 'router' } }))
 vi.mock('@/store', () => ({ pinia: { name: 'pinia' } }))
 vi.mock('@/permission', () => ({ installPermissionGuard: appHarness.installPermissionGuard }))
 
 describe('application bootstrap', () => {
-  it('installs Element Plus with the persisted startup locale', async () => {
+  it('bootstraps the app without eagerly installing the full Element Plus bundle', async () => {
     await import('@/main')
 
-    expect(appHarness.readLocale).toHaveBeenCalledOnce()
-    expect(appHarness.elementPlusLocaleFor).toHaveBeenCalledWith('en-US')
-    expect(appHarness.app.use).toHaveBeenCalledWith(ElementPlus, {
-      locale: { name: 'english-locale' },
-    })
+    expect(appHarness.initializeLocale).toHaveBeenCalledOnce()
+    expect(appHarness.app.use).toHaveBeenCalledWith({ name: 'pinia' })
+    expect(appHarness.app.use).toHaveBeenCalledWith({ name: 'router' })
+    expect(appHarness.app.use).toHaveBeenCalledWith({ name: 'i18n' })
   })
 })

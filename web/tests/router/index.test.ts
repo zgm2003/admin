@@ -30,10 +30,12 @@ describe('router', () => {
 
   it('declares public auth routes and static protected Dashboard route', () => {
     const router = createAppRouter(createMemoryHistory())
+    const dashboardRoute = router.getRoutes().find((route) => route.name === 'dashboard')
     expect(router.resolve('/login').meta.requiresAuth).toBe(false)
     expect(router.hasRoute('register')).toBe(false)
     expect(router.resolve('/register').matched).toHaveLength(0)
     expect(router.resolve('/dashboard').meta.requiresAuth).toBe(true)
+    expect(typeof dashboardRoute?.components?.default).toBe('function')
     expect(router.resolve('/permission/menu').matched).toHaveLength(0)
     expect(router.hasRoute('account-profile')).toBe(false)
     expect(router.resolve('/user/profile').matched).toHaveLength(0)

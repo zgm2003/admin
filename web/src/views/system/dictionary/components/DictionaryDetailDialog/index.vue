@@ -4,8 +4,6 @@ import { CirclePlus, Delete, Edit, Switch } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import type { Dictionary, DictionaryItem } from '@/api/system/dictionary'
-import { AppDialog } from '@/components/AppDialog'
-import { AppTable } from '@/components/AppTable'
 import type { TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
 

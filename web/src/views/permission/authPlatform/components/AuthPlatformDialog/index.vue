@@ -3,7 +3,6 @@ import { computed, toRefs } from 'vue'
 import { CircleHelp, RotateCcw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
-import { AppDialog } from '@/components/AppDialog'
 import { YesNo } from '@/enums/yesNo'
 import type { AuthPlatformForm } from './types'
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { CircleCloseFilled, Picture, Plus } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index'
 import type { UploadRequestOptions } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 

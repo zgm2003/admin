@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 
 import { getRolePermissions, updateRolePermissions } from '@/api/permission/role'
 import type { RoleListItem, RolePermissionsResponse } from '@/api/permission/role'
-import { AppDialog } from '@/components/AppDialog'
 import { YesNo } from '@/enums/yesNo'
 import {
   buildRolePermissionMatrix,
