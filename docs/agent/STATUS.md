@@ -3,6 +3,31 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## 系统任务队列监控（2026-09-14，代码已完成）
+
+- 在系统设置下新增“任务队列”页面，页面权限为 `system:queueMonitor:view`，Grant API 权限为
+  `system:queueMonitor:list`；页面通过同源 iframe 加载 Asynqmon v0.7.2，后端实际配置 `ReadOnly=true`。
+- Grant 使用 32 字节随机值和 Redis SHA-256 key `system:queue-monitor:grant:v1:<hash>`，TTL 60 秒；只通过
+  HttpOnly、SameSite=Lax、Path=`/api/admin/v1/system/queuemonitor/ui` 的 Cookie 传递，Redis 故障闭合，iframe URL
+  不携带 Token。前端每 45 秒续期，隐藏、失活和卸载时停止，恢复可见时立即重新签发。
+- 中文 UI 固定基于 Asynqmon v0.7.2 上游资源，保留 LICENSE 和源码；运行时 dist 由 Go embed 提供，不依赖 cwd，
+  不进入 Vite 主 chunk。当前中文由项目内集中词典覆盖固定界面文案，不翻译队列名、任务类型、Payload 和业务数据。
+- 新增 forward migration `docs/database/2026-09-14-system-queue-monitor.sql`：仅为活动 Admin 平台现有系统目录新增
+  page/action，真实变化时只递增一次 `menu_version`，不修改 Canvas 或普通角色授权。隔离 PostgreSQL 重复执行测试通过；
+  真实 `admin.public` migration 已于 2026-09-14 执行成功；Admin `menu_version` 已为 8，写入
+  `system:queueMonitor:view` page 与 `system:queueMonitor:list` action，随后查询确认两条菜单均启用且层级正确。
+  使用 `psql` 执行返回 `BEGIN / DO / COMMIT`，未执行真实回滚演练。
+- 定向验证：queueMonitor、queue、cmd/api Go 测试通过；迁移隔离测试通过；queue monitor API/页面 Vitest 4 项通过；
+  `pnpm typecheck`、`pnpm check:architecture`、定向 `go vet` 和 `go build ./cmd/api` 通过。前端全量 Vitest 与 build 按
+  维护者要求未执行；浏览器、真实 Redis 和队列数据验收待 API 重启后进行。
+- 上游依赖 `yarn install --frozen-lockfile` 在 Node `v16.15.1` / Yarn `1.22.19` 下成功，随后 `yarn build`
+  返回 `Compiled successfully`；Node 24 下的旧版 CRA/PostCSS `ERR_PACKAGE_PATH_NOT_EXPORTED` 不再是当前构建阻塞。
+  本次只验证了源码构建，运行时继续使用已校验且已移除 source map 与 `sourceMappingURL` 的现有 v0.7.2 官方 build，未覆盖
+  `ui/dist`。
+- 页面验收发现开发环境 iframe 相对地址被 Vite `16300` 的 SPA fallback 返回为管理端首页，修正为基于
+  `VITE_API_BASE_URL` 生成 API 服务地址；菜单原使用未注册的 `lucide:list-checks` 导致图标显示 `?`，已改为已注册的
+  `lucide:list-tree`。真实 Admin 菜单数据已修正，`menu_version` 由 8 递增至 9。
+
 ## 管理页壳与局部对话框组件化（2026-09-12，已完成）
 
 - 新增全局页面壳 `web/src/components/AppPage`，统一管理页根节点为

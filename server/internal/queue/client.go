@@ -12,11 +12,19 @@ type Client struct {
 }
 
 func NewClient(redisURL string) (*Client, error) {
-	redisOptions, err := asynq.ParseRedisURI(redisURL)
+	redisOptions, err := RedisConnOpt(redisURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse Redis URL for Asynq client: %w", err)
 	}
 	return &Client{client: asynq.NewClient(redisOptions)}, nil
+}
+
+func RedisConnOpt(redisURL string) (asynq.RedisConnOpt, error) {
+	redisOptions, err := asynq.ParseRedisURI(redisURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse Redis URL for Asynq: %w", err)
+	}
+	return redisOptions, nil
 }
 
 func (c *Client) Enqueue(ctx context.Context, task *asynq.Task, options ...asynq.Option) (*asynq.TaskInfo, error) {

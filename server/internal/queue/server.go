@@ -7,7 +7,7 @@ import (
 )
 
 func NewServer(redisURL string) (*asynq.Server, error) {
-	redisOptions, err := asynq.ParseRedisURI(redisURL)
+	redisOptions, err := RedisConnOpt(redisURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse Redis URL for Asynq server: %w", err)
 	}

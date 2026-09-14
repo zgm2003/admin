@@ -26,3 +26,13 @@ func TestNewServerRejectsNonRedisURL(t *testing.T) {
 		t.Fatalf("error = %q", err)
 	}
 }
+
+func TestRedisConnOptParsesRedisURL(t *testing.T) {
+	option, err := queue.RedisConnOpt("redis://:secret@127.0.0.1:6379/3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if option == nil {
+		t.Fatal("RedisConnOpt() returned nil")
+	}
+}

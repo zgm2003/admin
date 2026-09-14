@@ -41,6 +41,7 @@ import (
 	"admin/server/internal/module/storage/uploadRule"
 	"admin/server/internal/module/system/dictionary"
 	"admin/server/internal/module/system/operationLog"
+	"admin/server/internal/module/system/queueMonitor"
 	systemsetting "admin/server/internal/module/system/setting"
 	account "admin/server/internal/module/user/account"
 	useremail "admin/server/internal/module/user/email"
@@ -81,6 +82,8 @@ type routerDependencies struct {
 	OperationLog      *operationlog.Handler
 	Dictionary        *dictionary.Handler
 	Setting           *systemsetting.Handler
+	QueueMonitor      *queuemonitor.Handler
+	QueueMonitorUI    http.Handler
 	LoginLog          *loginlog.Handler
 	Mail              *messagemail.Handler
 	MailConfig        *mailconfig.Handler
@@ -140,6 +143,12 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer queueClient.Close()
+	queueMonitorUI, err := queuemonitor.NewMonitor(settings.RedisURL)
+	if err != nil {
+		return fmt.Errorf("build queue monitor: %w", err)
+	}
+	defer queueMonitorUI.Close()
+	queueMonitorService := queuemonitor.NewService(queuemonitor.NewRedisGrantStore(redisClient))
 	accessStateStore := permissionstate.NewStore(redisClient)
 	accessInvalidator := permissionstate.NewInvalidator(accessStateStore)
 	menuRepository := menu.NewRepository(postgres.GORM)
@@ -303,6 +312,8 @@ func run(logger *slog.Logger) error {
 		OperationLog:      operationlog.NewHandler(operationLogService),
 		Dictionary:        dictionary.NewHandler(dictionaryService),
 		Setting:           systemsetting.NewHandler(settingService),
+		QueueMonitor:      queuemonitor.NewHandler(queueMonitorService, settings.Auth.CookieSecure, queuemonitor.SubjectFromContext),
+		QueueMonitorUI:    queuemonitor.NewGateway(queueMonitorService, queueMonitorUI),
 		LoginLog:          loginlog.NewHandler(loginLogService),
 		Mail:              messagemail.NewHandler(mailService),
 		MailConfig:        mailconfig.NewHandler(mailConfigService),
@@ -368,6 +379,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 		projectmiddleware.Language(),
 	)
 	health.RegisterRoutes(router, dependencies.Health)
+	if dependencies.QueueMonitorUI != nil {
+		queuemonitor.RegisterUIRoutes(router, dependencies.QueueMonitorUI)
+	}
 	sharedRoutes := router.Group("/api/v1")
 	sharedRoutes.Use(authclient.Require())
 	auth.RegisterRoutes(sharedRoutes, dependencies.Auth, dependencies.AuthOrigin, dependencies.Authenticate)
@@ -417,6 +431,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	dictionary.RegisterRoutes(adminRoutes, dependencies.Dictionary, dependencies.Authenticate, dependencies.RequirePermission)
 	if dependencies.Setting != nil {
 		systemsetting.RegisterRoutes(adminRoutes, dependencies.Setting, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.QueueMonitor != nil {
+		queuemonitor.RegisterGrantRoute(adminRoutes, dependencies.QueueMonitor, dependencies.AuthOrigin, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	usersession.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
 	return router
