@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import { useI18n } from 'vue-i18n'
 
@@ -11,6 +11,14 @@ import {
 } from '@/api/message/mail'
 import type { TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
+import {
+  assertSafeMailHtml,
+  replaceMailVariables,
+} from './components/MailHtmlEditor/mailHtmlDocument'
+
+const MailHtmlEditor = defineAsyncComponent(
+  () => import('@/views/message/mail/template/components/MailHtmlEditor/index.vue'),
+)
 
 const props = defineProps<{
   templates: MailTemplate[]
@@ -23,9 +31,8 @@ const { t } = useI18n()
 const selected = ref<MailTemplate | null>(null)
 const dialog = ref(false)
 const saving = ref(false)
+const editorVisible = ref(false)
 const form = ref<MailTemplateInput>(blankTemplate())
-const variables = ref('{}')
-const examples = ref('{}')
 const enabledCount = computed(
   () => props.templates.filter((item) => item.isEnabled === YesNo.Yes).length,
 )
@@ -52,20 +59,31 @@ watch(selected, (value) => {
     name: value.name,
     subject: value.subject,
     tencentTemplateId: value.tencentTemplateId,
-    variables: value.variables,
+    content: value.content,
+    variableKeys: [...value.variableKeys],
     exampleVariables: value.exampleVariables,
   }
-  variables.value = JSON.stringify(value.variables, null, 2)
-  examples.value = JSON.stringify(value.exampleVariables, null, 2)
 })
+
+watch(
+  () => form.value.variableKeys,
+  (keys) => {
+    const next: Record<string, string> = {}
+    for (const key of keys) next[key] = form.value.exampleVariables[key] ?? ''
+    form.value.exampleVariables = next
+  },
+  { deep: true },
+)
 
 function blankTemplate(): MailTemplateInput {
   return {
     scene: '',
     name: '',
     subject: '',
-    tencentTemplateId: 0,
-    variables: {},
+    tencentTemplateId: null,
+    content:
+      '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>{{code}} {{ttl_minutes}}</body></html>',
+    variableKeys: ['code', 'ttl_minutes'],
     exampleVariables: {},
   }
 }
@@ -73,6 +91,20 @@ function blankTemplate(): MailTemplateInput {
 function edit(row: MailTemplate): void {
   selected.value = row
   dialog.value = true
+  editorVisible.value = true
+}
+
+const previewHtml = computed(() =>
+  replaceMailVariables(form.value.content, form.value.exampleVariables),
+)
+
+async function copyHtml(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(form.value.content)
+    ElMessage.success(t('mail.copied'))
+  } catch {
+    ElMessage.error(t('mail.copyFailed'))
+  }
 }
 
 async function toggle(row: MailTemplate): Promise<void> {
@@ -84,36 +116,15 @@ async function toggle(row: MailTemplate): Promise<void> {
   }
 }
 
-function parseMap(value: string): Record<string, string> {
-  const data: unknown = JSON.parse(value)
-  if (
-    typeof data !== 'object' ||
-    data === null ||
-    Array.isArray(data) ||
-    !Object.values(data).every((item) => typeof item === 'string')
-  ) {
-    throw new Error(t('mail.variablesInvalid'))
-  }
-  return data as Record<string, string>
-}
-
 async function saveTemplate(): Promise<void> {
   if (!selected.value) return
   saving.value = true
   try {
-    let parsedVariables: Record<string, string>
-    let parsedExamples: Record<string, string>
-    try {
-      parsedVariables = parseMap(variables.value)
-      parsedExamples = parseMap(examples.value)
-    } catch (error: unknown) {
-      ElMessage.error(error instanceof Error ? error.message : t('mail.variablesInvalid'))
-      return
-    }
+    assertSafeMailHtml(form.value.content)
     await updateMailTemplate(selected.value.id, {
       ...form.value,
-      variables: parsedVariables,
-      exampleVariables: parsedExamples,
+      variableKeys: [...form.value.variableKeys],
+      exampleVariables: { ...form.value.exampleVariables },
     })
     ElMessage.success(t('mail.updated'))
     dialog.value = false
@@ -150,7 +161,7 @@ async function saveTemplate(): Promise<void> {
       >
       <template #cell-variables="{ row }: { row: MailTemplate }">
         <el-space wrap>
-          <el-tag v-for="(_, key) in row.variables" :key="key" size="small" effect="plain">{{
+          <el-tag v-for="key in row.variableKeys" :key="key" size="small" effect="plain">{{
             key
           }}</el-tag>
         </el-space>
@@ -176,7 +187,7 @@ async function saveTemplate(): Promise<void> {
     <el-dialog
       v-model="dialog"
       :title="t('mail.editTemplate')"
-      width="min(680px, 94vw)"
+      width="min(1080px, 96vw)"
       destroy-on-close
     >
       <el-form :model="form" label-position="top">
@@ -185,43 +196,56 @@ async function saveTemplate(): Promise<void> {
             ><el-form-item :label="t('mail.scene')"
               ><el-input v-model="form.scene" disabled /></el-form-item
           ></el-col>
+          <el-col :xs="24">
+            <el-form-item :label="t('mail.content')">
+              <MailHtmlEditor v-if="editorVisible" v-model="form.content" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24">
+            <el-form-item :label="t('mail.preview')">
+              <iframe
+                class="mail-preview"
+                sandbox=""
+                referrerpolicy="no-referrer"
+                :srcdoc="previewHtml"
+              />
+            </el-form-item>
+          </el-col>
           <el-col :xs="24" :sm="12"
             ><el-form-item :label="t('mail.templateId')"
               ><el-input-number v-model="form.tencentTemplateId" :min="1" :step="1" /></el-form-item
           ></el-col>
           <el-col :xs="24" :sm="12"
             ><el-form-item :label="t('mail.name')">
-              <el-input v-model="form.name" :placeholder="t('mail.templateNamePlaceholder')" />
-            </el-form-item
+              <el-input
+                v-model="form.name"
+                :placeholder="t('mail.templateNamePlaceholder')"
+              /> </el-form-item
           ></el-col>
           <el-col :xs="24" :sm="12"
             ><el-form-item :label="t('mail.subject')">
-              <el-input v-model="form.subject" :placeholder="t('mail.subjectPlaceholder')" />
-            </el-form-item
+              <el-input
+                v-model="form.subject"
+                :placeholder="t('mail.subjectPlaceholder')"
+              /> </el-form-item
           ></el-col>
           <el-col :xs="24" :sm="12"
             ><el-form-item :label="t('mail.variables')">
-              <el-input
-                v-model="variables"
-                type="textarea"
-                :rows="6"
-                :placeholder="t('mail.variablesPlaceholder')"
-              />
-            </el-form-item
+              <el-input-tag v-model="form.variableKeys" draggable /> </el-form-item
           ></el-col>
           <el-col :xs="24" :sm="12"
             ><el-form-item :label="t('mail.exampleVariables')">
               <el-input
-                v-model="examples"
-                type="textarea"
-                :rows="6"
-                :placeholder="t('mail.examplesPlaceholder')"
-              />
-            </el-form-item
+                v-for="key in form.variableKeys"
+                :key="key"
+                v-model="form.exampleVariables[key]"
+                :placeholder="key"
+              /> </el-form-item
           ></el-col>
         </el-row>
       </el-form>
       <template #footer>
+        <el-button @click="copyHtml">{{ t('mail.copyHtml') }}</el-button>
         <el-button @click="dialog = false">{{ t('mail.cancel') }}</el-button>
         <el-button type="primary" :loading="saving" @click="saveTemplate">{{
           t('mail.save')
@@ -259,5 +283,12 @@ async function saveTemplate(): Promise<void> {
 
 .primary-cell strong {
   font-weight: 600;
+}
+
+.mail-preview {
+  width: 100%;
+  min-height: 420px;
+  border: 1px solid var(--el-border-color);
+  border-radius: var(--el-border-radius-base);
 }
 </style>

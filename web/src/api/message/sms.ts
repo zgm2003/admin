@@ -44,8 +44,9 @@ export interface SmsTemplate {
   scene: SmsScene
   name: string
   tencentTemplateId: string
-  parameterKeys: ['code', 'ttl_minutes']
-  exampleVariables: { code: string; ttl_minutes: string }
+  content: string
+  variableKeys: string[]
+  exampleVariables: Record<string, string>
   isEnabled: YesNo
   createdAt: string
   updatedAt: string
@@ -55,8 +56,9 @@ export interface SmsTemplateInput {
   scene: SmsScene
   name: string
   tencentTemplateId: string
-  parameterKeys: ['code', 'ttl_minutes']
-  exampleVariables: { code: string; ttl_minutes: string }
+  content: string
+  variableKeys: string[]
+  exampleVariables: Record<string, string>
 }
 
 export interface SmsRule {
@@ -114,7 +116,7 @@ export interface SmsTestResult {
 export interface SmsSceneOption {
   scene: SmsScene
   name: string
-  parameterKeys: ['code', 'ttl_minutes']
+  variableKeys: string[]
 }
 
 export interface SmsPageInit {
@@ -235,20 +237,23 @@ function status(value: unknown, context: string): SmsStatus {
   return result
 }
 
-function parameterKeys(value: unknown, context: string): ['code', 'ttl_minutes'] {
+function variableKeys(value: unknown, context: string): string[] {
   const values = expectArray(value, context)
-  if (values.length !== 2 || values[0] !== 'code' || values[1] !== 'ttl_minutes') {
+  if (
+    values.length < 2 ||
+    values.some((item) => typeof item !== 'string') ||
+    new Set(values as string[]).size !== values.length
+  )
     throw new ProtocolError(`${context} is invalid`)
-  }
-  return ['code', 'ttl_minutes']
+  return values as string[]
 }
 
-function exampleVariables(value: unknown, context: string): { code: string; ttl_minutes: string } {
-  const data = expectExactKeys(value, ['code', 'ttl_minutes'], context)
-  return {
-    code: text(data.code, `${context}.code`),
-    ttl_minutes: text(data.ttl_minutes, `${context}.ttl_minutes`),
-  }
+function exampleVariables(value: unknown, context: string): Record<string, string> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw new ProtocolError(`${context} is invalid`)
+  const result: Record<string, string> = {}
+  for (const [key, item] of Object.entries(value)) result[key] = text(item, `${context}.${key}`)
+  return result
 }
 
 export function parseSmsConfig(value: unknown): SmsConfig {
@@ -294,7 +299,8 @@ export function parseSmsTemplate(value: unknown): SmsTemplate {
       'scene',
       'name',
       'tencentTemplateId',
-      'parameterKeys',
+      'content',
+      'variableKeys',
       'exampleVariables',
       'isEnabled',
       'createdAt',
@@ -303,13 +309,18 @@ export function parseSmsTemplate(value: unknown): SmsTemplate {
     'sms template',
   )
   if (!isYesNo(data.isEnabled)) throw new ProtocolError('sms template is invalid')
+  const keys = variableKeys(data.variableKeys, 'sms template.variableKeys')
+  const examples = exampleVariables(data.exampleVariables, 'sms template.exampleVariables')
+  if (Object.keys(examples).length !== keys.length || keys.some((key) => !(key in examples)))
+    throw new ProtocolError('sms template example variables do not match variableKeys')
   return {
     id: positiveInteger(data.id, 'sms template.id'),
     scene: scene(data.scene, 'sms template.scene'),
     name: nonEmptyText(data.name, 'sms template.name'),
     tencentTemplateId: text(data.tencentTemplateId, 'sms template.tencentTemplateId'),
-    parameterKeys: parameterKeys(data.parameterKeys, 'sms template.parameterKeys'),
-    exampleVariables: exampleVariables(data.exampleVariables, 'sms template.exampleVariables'),
+    content: text(data.content, 'sms template.content'),
+    variableKeys: keys,
+    exampleVariables: examples,
     isEnabled: data.isEnabled,
     createdAt: timestamp(data.createdAt, 'sms template.createdAt'),
     updatedAt: timestamp(data.updatedAt, 'sms template.updatedAt'),
@@ -439,11 +450,11 @@ export function parseSmsLogDetail(value: unknown): SmsLogDetail {
 export function parseSmsPageInit(value: unknown): SmsPageInit {
   const data = expectExactKeys(value, ['scenes'], 'sms page init')
   const result = expectArray(data.scenes, 'sms page init.scenes').map((item) => {
-    const option = expectExactKeys(item, ['scene', 'name', 'parameterKeys'], 'sms scene')
+    const option = expectExactKeys(item, ['scene', 'name', 'variableKeys'], 'sms scene')
     return {
       scene: scene(option.scene, 'sms scene.scene'),
       name: nonEmptyText(option.name, 'sms scene.name'),
-      parameterKeys: parameterKeys(option.parameterKeys, 'sms scene.parameterKeys'),
+      variableKeys: variableKeys(option.variableKeys, 'sms scene.variableKeys'),
     }
   })
   if (

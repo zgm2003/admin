@@ -37,7 +37,7 @@ func (runtimeTemplateSourceTest) List(context.Context) ([]template.Model, error)
 	for index, fixed := range template.FixedCatalog() {
 		rows = append(rows, template.Model{
 			ID: int64(index + 1), Scene: fixed.Scene, Name: fixed.Name, TencentTemplateID: "123456",
-			ParameterKeys:    json.RawMessage(`["code","ttl_minutes"]`),
+			VariableKeys:     json.RawMessage(`["code","ttl_minutes"]`),
 			ExampleVariables: json.RawMessage(`{"code":"123456","ttl_minutes":"5"}`),
 			IsEnabled:        yesno.Yes, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 		})
@@ -55,7 +55,7 @@ func validRuntimeSnapshotForTest() runtimeSnapshot {
 		templates[fixed.Scene] = templateRow{
 			Name:              fixed.Name,
 			TencentTemplateID: "123456",
-			ParameterKeys:     append([]string(nil), fixed.ParameterKeys...),
+			VariableKeys:      append([]string(nil), fixed.VariableKeys...),
 			ExampleVariables:  map[string]string{"code": "123456", "ttl_minutes": "5"},
 			IsEnabled:         int16(yesno.Yes),
 		}
@@ -84,7 +84,7 @@ func TestDecodeRuntimeSnapshotRejectsInvalidSceneSet(t *testing.T) {
 	delete(snapshot.Templates, template.SceneForget)
 	snapshot.Templates["test"] = templateRow{
 		Name: "test", TencentTemplateID: "123456",
-		ParameterKeys:    []string{"code", "ttl_minutes"},
+		VariableKeys:     []string{"code", "ttl_minutes"},
 		ExampleVariables: map[string]string{"code": "123456", "ttl_minutes": "5"},
 		IsEnabled:        int16(yesno.Yes),
 	}

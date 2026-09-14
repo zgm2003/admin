@@ -757,3 +757,16 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 验收：
 下一步/阻塞：
 ```
+
+### 邮件与短信模板正文统一（2026-09-14）
+
+- 已统一两类模板字段：API 使用 `variableKeys`，数据库使用 `variable_keys`；短信新增可上传腾讯云的 `content`，邮件保存完整 HTML，邮件模板 ID 可空但启用时必须为正整数。
+- 已完成后端 Service/Repository/Model/Handler、运行时指针 ID 适配和模板校验；短信位置变量使用 `{1}` 到 `{n}`，邮件预览使用 sandbox iframe。
+- 前端已改用 `el-input-tag` 管理动态变量，邮件富文本编辑器懒加载至 `web/src/views/message/mail/template/components/MailHtmlEditor/`，并保留 HTML 源码、预览和复制入口。
+- 实际验证：后端 `go test ./internal/module/message/sms/... ./internal/module/message/mail/...` 通过；前端 `vue-tsc --noEmit --skipLibCheck`、短信/邮件 API 与 HTML 工具 Vitest（48 项）通过；`vite build` 通过并产出独立 `MailHtmlEditor` chunk。
+- 最新执行（维护者已授权）：迁移在真实 PostgreSQL 完成 ROLLBACK 演练、正式 COMMIT、再次执行幂等验证。两表各 4 行，content/variable_keys 非空，Mail provider ID 可空，旧 variables/parameter_keys 已移除。current.sql 已从 public schema 重新导出。
+- 迁移备份：`%LOCALAPPDATA%/Admin/backups/template-content-20260914-155047/templates-before.dump`，pg_restore --list 验证可读，SHA256 `2FDC59198FFA3115A121E2034BBFDC17305FBD6942593070F8F1C426F89CA691`。
+- 更正前一阶段类型验证结论：根 tsconfig 仅含 references，vue-tsc --noEmit 不代表子项目通过。本轮实际 `pnpm typecheck`（vue-tsc -b）已通过。已更新邮件页面旧 fixture、修复 SMS 实际误用普通 el-input 和 JSON tag 误大写。
+- 本轮后端 `go test ./internal/module/message/sms/... ./internal/module/message/mail/...` 通过；SMS 页面定向 Vitest（forks、单 worker）11/11 通过，仍有既有 i18n warning。threads 定向组合运行无结果后已中断，不计为通过。相关前端文件已定向 Prettier 格式化。
+- es5-ext postinstall 经检查只输出提示、不生成构建产物，显式设置 allowBuilds=false，pnpm 安装保护问题已解除。前端全量测试由维护者执行，本轮不执行全量。
+- 未重启 API/Worker、未清理 Redis、未调用真实腾讯云。新旧字段不兼容，联调必须使用新进程；既有 runtime 缓存与新增变量发送支持仍需专项核对。编辑器独立 chunk 约 670KB，仍有构建警告，不能称为完全解决 chunk 问题。

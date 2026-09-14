@@ -1,2 +1,13 @@
 allowBuilds:
   '@parcel/watcher': true
+  es5-ext: false
+minimumReleaseAgeExclude:
+  - '@wangeditor-next/basic-modules@6.4.2'
+  - '@wangeditor-next/code-highlight@6.4.2'
+  - '@wangeditor-next/core@6.4.2'
+  - '@wangeditor-next/editor-for-vue@6.4.2'
+  - '@wangeditor-next/editor@6.4.2'
+  - '@wangeditor-next/list-module@6.4.2'
+  - '@wangeditor-next/table-module@6.4.2'
+  - '@wangeditor-next/upload-image-module@6.4.2'
+  - '@wangeditor-next/video-module@6.4.2'

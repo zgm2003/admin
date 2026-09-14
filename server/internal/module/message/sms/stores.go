@@ -104,7 +104,7 @@ func (s Stores) loadTemplatesInto(ctx context.Context, facts *RuntimeFacts) (int
 	}
 	for _, row := range rows {
 		fact := TemplateFact{Name: row.Name, TencentTemplateID: row.TencentTemplateID, IsEnabled: row.IsEnabled}
-		if err := unmarshalJSON(row.ParameterKeys, &fact.ParameterKeys); err != nil {
+		if err := unmarshalJSON(row.VariableKeys, &fact.VariableKeys); err != nil {
 			return 0, err
 		}
 		if err := unmarshalJSON(row.ExampleVariables, &fact.ExampleVariables); err != nil {

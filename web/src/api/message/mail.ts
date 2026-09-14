@@ -30,8 +30,9 @@ export interface MailTemplate {
   scene: string
   name: string
   subject: string
-  tencentTemplateId: number
-  variables: Record<string, string>
+  tencentTemplateId: number | null
+  content: string
+  variableKeys: string[]
   exampleVariables: Record<string, string>
   isEnabled: YesNo
   createdAt: string
@@ -88,8 +89,9 @@ export interface MailTemplateInput {
   scene: string
   name: string
   subject: string
-  tencentTemplateId: number
-  variables: Record<string, string>
+  tencentTemplateId: number | null
+  content: string
+  variableKeys: string[]
   exampleVariables: Record<string, string>
 }
 export interface MailRuleInput {
@@ -142,6 +144,11 @@ function parseStringMap(value: unknown, context: string): Record<string, string>
   }
   return result
 }
+function parseStringArray(value: unknown, context: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string'))
+    throw new ProtocolError(`${context} is invalid`)
+  return value as string[]
+}
 
 const configKeys = [
   'configured',
@@ -192,7 +199,8 @@ const templateKeys = [
   'name',
   'subject',
   'tencentTemplateId',
-  'variables',
+  'content',
+  'variableKeys',
   'exampleVariables',
   'isEnabled',
   'createdAt',
@@ -207,22 +215,36 @@ export function parseMailTemplate(value: unknown): MailTemplate {
     !text(data.scene) ||
     !text(data.name) ||
     !text(data.subject) ||
-    !integer(data.tencentTemplateId) ||
-    !stringMap(data.variables) ||
+    (data.tencentTemplateId !== null && !integer(data.tencentTemplateId)) ||
+    !text(data.content) ||
+    !Array.isArray(data.variableKeys) ||
+    data.variableKeys.some((key) => !text(key)) ||
     !stringMap(data.exampleVariables) ||
     !isYesNo(isEnabled) ||
     !text(data.createdAt) ||
     !text(data.updatedAt)
   )
     throw new ProtocolError('mail template response is invalid')
+  const variableKeys = parseStringArray(data.variableKeys, 'mail template.variableKeys')
+  const exampleVariables = parseStringMap(data.exampleVariables, 'mail template.exampleVariables')
+  if (
+    new Set(variableKeys).size !== variableKeys.length ||
+    Object.keys(exampleVariables).length !== variableKeys.length ||
+    variableKeys.some((key) => !(key in exampleVariables))
+  )
+    throw new ProtocolError('mail template variables are invalid')
   return {
     id: expectInteger(data.id, 'mail template.id'),
     scene: expectString(data.scene, 'mail template.scene'),
     name: expectString(data.name, 'mail template.name'),
     subject: expectString(data.subject, 'mail template.subject'),
-    tencentTemplateId: expectInteger(data.tencentTemplateId, 'mail template.tencentTemplateId'),
-    variables: parseStringMap(data.variables, 'mail template.variables'),
-    exampleVariables: parseStringMap(data.exampleVariables, 'mail template.exampleVariables'),
+    tencentTemplateId:
+      data.tencentTemplateId === null
+        ? null
+        : expectInteger(data.tencentTemplateId, 'mail template.tencentTemplateId'),
+    content: expectString(data.content, 'mail template.content'),
+    variableKeys,
+    exampleVariables,
     isEnabled,
     createdAt: expectString(data.createdAt, 'mail template.createdAt'),
     updatedAt: expectString(data.updatedAt, 'mail template.updatedAt'),
@@ -587,29 +609,53 @@ function parseRateLimitPolicyTimestamp(value: unknown): string {
 
 export function parseMailRateLimitSnapshot(value: unknown): MailRateLimitSnapshot {
   const data = expectExactKeys(value, ['platforms'], 'mail rate limit snapshot')
-  const platforms = expectArray(data.platforms, 'mail rate limit snapshot.platforms').map((value) => {
-    const platform = expectExactKeys(value, ['platformId', 'platformCode', 'platformName', 'version', 'policies'], 'mail rate limit platform catalog')
-    const platformId = expectInteger(platform.platformId, 'mail rate limit platform catalog.platformId')
-    if (platformId < 1) throw new ProtocolError('mail rate limit platform catalog.platformId is invalid')
-    const platformCode = expectString(platform.platformCode, 'mail rate limit platform catalog.platformCode')
-    const platformName = expectString(platform.platformName, 'mail rate limit platform catalog.platformName')
-    if (platformCode.trim() === '' || platformName.trim() === '') throw new ProtocolError('mail rate limit platform catalog identity is invalid')
-    const version = expectInteger(platform.version, 'mail rate limit platform catalog.version')
-    if (version < 1) throw new ProtocolError('mail rate limit platform catalog.version is invalid')
-    const policies = expectArray(platform.policies, 'mail rate limit platform catalog.policies').map((policy) => {
-      const policyData = expectExactKeys(
-        policy,
-        ['key', 'mode', 'dimension', 'limit', 'windowSeconds', 'updatedAt'],
-        'mail rate limit platform catalog.policy',
+  const platforms = expectArray(data.platforms, 'mail rate limit snapshot.platforms').map(
+    (value) => {
+      const platform = expectExactKeys(
+        value,
+        ['platformId', 'platformCode', 'platformName', 'version', 'policies'],
+        'mail rate limit platform catalog',
       )
-      return parseMailRateLimitPolicy({ ...policyData, platformId })
-    })
-    const keys = new Set(policies.map((policy) => policy.key))
-    if (policies.length !== rateLimitPolicyKeys.length || keys.size !== rateLimitPolicyKeys.length) {
-      throw new ProtocolError('mail rate limit platform catalog policies are incomplete')
-    }
-    return { platformId, platformCode, platformName, version, policies }
-  })
+      const platformId = expectInteger(
+        platform.platformId,
+        'mail rate limit platform catalog.platformId',
+      )
+      if (platformId < 1)
+        throw new ProtocolError('mail rate limit platform catalog.platformId is invalid')
+      const platformCode = expectString(
+        platform.platformCode,
+        'mail rate limit platform catalog.platformCode',
+      )
+      const platformName = expectString(
+        platform.platformName,
+        'mail rate limit platform catalog.platformName',
+      )
+      if (platformCode.trim() === '' || platformName.trim() === '')
+        throw new ProtocolError('mail rate limit platform catalog identity is invalid')
+      const version = expectInteger(platform.version, 'mail rate limit platform catalog.version')
+      if (version < 1)
+        throw new ProtocolError('mail rate limit platform catalog.version is invalid')
+      const policies = expectArray(
+        platform.policies,
+        'mail rate limit platform catalog.policies',
+      ).map((policy) => {
+        const policyData = expectExactKeys(
+          policy,
+          ['key', 'mode', 'dimension', 'limit', 'windowSeconds', 'updatedAt'],
+          'mail rate limit platform catalog.policy',
+        )
+        return parseMailRateLimitPolicy({ ...policyData, platformId })
+      })
+      const keys = new Set(policies.map((policy) => policy.key))
+      if (
+        policies.length !== rateLimitPolicyKeys.length ||
+        keys.size !== rateLimitPolicyKeys.length
+      ) {
+        throw new ProtocolError('mail rate limit platform catalog policies are incomplete')
+      }
+      return { platformId, platformCode, platformName, version, policies }
+    },
+  )
   const platformIds = new Set(platforms.map((platform) => platform.platformId))
   if (platformIds.size !== platforms.length || platforms.length === 0) {
     throw new ProtocolError('mail rate limit snapshot platforms are invalid')
@@ -621,7 +667,11 @@ export function parseMailRateLimitUpdateResult(
   value: unknown,
   expectedKey?: string,
 ): MailRateLimitUpdateResult {
-  const data = expectExactKeys(value, ['platformId', 'version', 'policy'], 'mail rate limit update result')
+  const data = expectExactKeys(
+    value,
+    ['platformId', 'version', 'policy'],
+    'mail rate limit update result',
+  )
   const platformId = expectInteger(data.platformId, 'mail rate limit update result.platformId')
   if (platformId < 1) throw new ProtocolError('mail rate limit update result.platformId is invalid')
   const version = expectInteger(data.version, 'mail rate limit update result.version')

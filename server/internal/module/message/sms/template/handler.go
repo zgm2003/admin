@@ -26,7 +26,8 @@ type updateRequest struct {
 	Scene            *string            `json:"scene"`
 	Name             *string            `json:"name"`
 	TemplateID       *string            `json:"tencentTemplateId"`
-	ParameterKeys    *[]string          `json:"parameterKeys"`
+	Content          *string            `json:"content"`
+	VariableKeys     *[]string          `json:"variableKeys"`
 	ExampleVariables *map[string]string `json:"exampleVariables"`
 }
 
@@ -35,14 +36,15 @@ type statusRequest struct {
 }
 
 func (r updateRequest) input() (UpdateInput, error) {
-	if r.Scene == nil || r.Name == nil || r.TemplateID == nil || r.ParameterKeys == nil || r.ExampleVariables == nil {
+	if r.Scene == nil || r.Name == nil || r.TemplateID == nil || r.Content == nil || r.VariableKeys == nil || r.ExampleVariables == nil {
 		return UpdateInput{}, apperror.InvalidRequest(fmt.Errorf("sms template fields are required"))
 	}
 	return UpdateInput{
 		Scene:             *r.Scene,
 		Name:              *r.Name,
 		TencentTemplateID: *r.TemplateID,
-		ParameterKeys:     *r.ParameterKeys,
+		Content:           *r.Content,
+		VariableKeys:      *r.VariableKeys,
 		ExampleVariables:  *r.ExampleVariables,
 	}, nil
 }

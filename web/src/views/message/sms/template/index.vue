@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import { useI18n } from 'vue-i18n'
 
@@ -19,6 +19,16 @@ const dialogVisible = ref(false)
 const saving = ref(false)
 const selectedID = ref<number | null>(null)
 const form = ref<smsApi.SmsTemplateInput>(blankTemplate())
+
+watch(
+  () => form.value.variableKeys,
+  (keys) => {
+    const next: Record<string, string> = {}
+    for (const key of keys) next[key] = form.value.exampleVariables[key] ?? ''
+    form.value.exampleVariables = next
+  },
+  { deep: true },
+)
 
 const columns = computed<TableColumn<smsApi.SmsTemplate>[]>(() => [
   { key: 'name', prop: 'name', label: t('sms.name'), minWidth: 180 },
@@ -40,7 +50,8 @@ function blankTemplate(): smsApi.SmsTemplateInput {
     scene: 'login',
     name: '',
     tencentTemplateId: '',
-    parameterKeys: ['code', 'ttl_minutes'],
+    content: '{1} 有效期 {2} 分钟',
+    variableKeys: ['code', 'ttl_minutes'],
     exampleVariables: { code: '123456', ttl_minutes: '5' },
   }
 }
@@ -51,7 +62,8 @@ function edit(row: smsApi.SmsTemplate): void {
     scene: row.scene,
     name: row.name,
     tencentTemplateId: row.tencentTemplateId,
-    parameterKeys: [...row.parameterKeys],
+    content: row.content,
+    variableKeys: [...row.variableKeys],
     exampleVariables: { ...row.exampleVariables },
   }
   dialogVisible.value = true
@@ -65,10 +77,9 @@ async function save(): Promise<void> {
       ...form.value,
       name: form.value.name.trim(),
       tencentTemplateId: form.value.tencentTemplateId.trim(),
-      exampleVariables: {
-        code: form.value.exampleVariables.code.trim(),
-        ttl_minutes: form.value.exampleVariables.ttl_minutes.trim(),
-      },
+      exampleVariables: Object.fromEntries(
+        Object.entries(form.value.exampleVariables).map(([key, value]) => [key, value.trim()]),
+      ),
     })
     dialogVisible.value = false
     ElMessage.success(t('sms.saved'))
@@ -108,7 +119,7 @@ async function toggle(row: smsApi.SmsTemplate, value: YesNoValue): Promise<void>
       </template>
       <template #cell-parameters="{ row }: { row: smsApi.SmsTemplate }">
         <el-space wrap>
-          <el-tag v-for="key in row.parameterKeys" :key="key" size="small" effect="plain">
+          <el-tag v-for="key in row.variableKeys" :key="key" size="small" effect="plain">
             {{ key }}
           </el-tag>
         </el-space>
@@ -167,28 +178,29 @@ async function toggle(row: smsApi.SmsTemplate, value: YesNoValue): Promise<void>
           </el-col>
           <el-col :xs="24" :sm="12">
             <el-form-item :label="t('sms.parameters')">
-              <el-input
-                :model-value="form.parameterKeys.join(', ')"
+              <el-input-tag
+                v-model="form.variableKeys"
+                tag-type="primary"
+                draggable
                 :placeholder="t('sms.parametersPlaceholder')"
-                disabled
               />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="12">
-            <el-form-item :label="t('sms.exampleCode')">
+          <el-col :xs="24">
+            <el-form-item :label="t('sms.content')">
               <el-input
-                v-model="form.exampleVariables.code"
-                data-testid="sms-template-example-code"
-                :placeholder="t('sms.exampleCodePlaceholder')"
+                v-model="form.content"
+                type="textarea"
+                :rows="4"
+                data-testid="sms-template-content"
               />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="12">
-            <el-form-item :label="t('sms.exampleTTL')">
+          <el-col v-for="key in form.variableKeys" :key="key" :xs="24" :sm="12">
+            <el-form-item :label="`${t('sms.exampleVariable')}: ${key}`">
               <el-input
-                v-model="form.exampleVariables.ttl_minutes"
-                data-testid="sms-template-example-ttl"
-                :placeholder="t('sms.exampleTTLPlaceholder')"
+                v-model="form.exampleVariables[key]"
+                :data-testid="`sms-template-example-${key}`"
               />
             </el-form-item>
           </el-col>

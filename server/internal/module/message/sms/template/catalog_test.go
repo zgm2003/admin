@@ -15,7 +15,7 @@ func TestSceneValuesAreFrozenLiterals(t *testing.T) {
 	}
 }
 
-func TestFixedCatalogHasStableScenesAndParameterKeys(t *testing.T) {
+func TestFixedCatalogHasStableScenesAndVariableKeys(t *testing.T) {
 	want := []struct {
 		scene string
 		name  string
@@ -35,23 +35,23 @@ func TestFixedCatalogHasStableScenesAndParameterKeys(t *testing.T) {
 		if value.Scene != expected.scene || value.Name != expected.name {
 			t.Fatalf("catalog[%d] = %+v, want scene %q name %q", index, value, expected.scene, expected.name)
 		}
-		if !reflect.DeepEqual(value.ParameterKeys, []string{"code", "ttl_minutes"}) {
-			t.Fatalf("catalog[%d] parameter keys = %v", index, value.ParameterKeys)
+		if !reflect.DeepEqual(value.VariableKeys, []string{"code", "ttl_minutes"}) {
+			t.Fatalf("catalog[%d] parameter keys = %v", index, value.VariableKeys)
 		}
 	}
 }
 
-func TestFixedCatalogCopiesParameterKeys(t *testing.T) {
+func TestFixedCatalogCopiesVariableKeys(t *testing.T) {
 	mutated := FixedCatalog()
-	mutated[0].ParameterKeys[0] = "mutated"
-	mutated[1].ParameterKeys = append(mutated[1].ParameterKeys, "extra")
+	mutated[0].VariableKeys[0] = "mutated"
+	mutated[1].VariableKeys = append(mutated[1].VariableKeys, "extra")
 
 	fresh := FixedCatalog()
-	if !reflect.DeepEqual(fresh[0].ParameterKeys, []string{"code", "ttl_minutes"}) {
-		t.Fatalf("catalog parameter keys are shared: %v", fresh[0].ParameterKeys)
+	if !reflect.DeepEqual(fresh[0].VariableKeys, []string{"code", "ttl_minutes"}) {
+		t.Fatalf("catalog parameter keys are shared: %v", fresh[0].VariableKeys)
 	}
-	if len(fresh[1].ParameterKeys) != 2 {
-		t.Fatalf("catalog parameter keys are shared: %v", fresh[1].ParameterKeys)
+	if len(fresh[1].VariableKeys) != 2 {
+		t.Fatalf("catalog parameter keys are shared: %v", fresh[1].VariableKeys)
 	}
 }
 

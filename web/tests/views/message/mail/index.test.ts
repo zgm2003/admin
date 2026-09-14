@@ -36,12 +36,14 @@ describe('mail service page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setLocale('zh-CN')
-    vi.mocked(getDictionaryOptions).mockReset().mockResolvedValue({
-      'message.mail.region': [
-        { value: 'ap-guangzhou', label: '广州（ap-guangzhou）' },
-        { value: 'ap-hongkong', label: '中国香港（ap-hongkong）' },
-      ],
-    })
+    vi.mocked(getDictionaryOptions)
+      .mockReset()
+      .mockResolvedValue({
+        'message.mail.region': [
+          { value: 'ap-guangzhou', label: '广州（ap-guangzhou）' },
+          { value: 'ap-hongkong', label: '中国香港（ap-hongkong）' },
+        ],
+      })
     vi.mocked(mailApi.getMailConfig).mockResolvedValue({
       configured: true,
       region: 'ap-guangzhou',
@@ -61,7 +63,8 @@ describe('mail service page', () => {
         name: '登录验证码',
         subject: '登录验证码',
         tencentTemplateId: 47941,
-        variables: { code: '123456', ttl_minutes: '10' },
+        content: '<!DOCTYPE html><html><head></head><body>{{code}} {{ttl_minutes}}</body></html>',
+        variableKeys: ['code', 'ttl_minutes'],
         exampleVariables: { code: '123456', ttl_minutes: '10' },
         isEnabled: YesNo.Yes,
         createdAt: '2026-09-01T00:00:00Z',

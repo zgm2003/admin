@@ -280,9 +280,10 @@ func (s *Service) sendInternal(ctx context.Context, in BusinessSendInput, mode S
 			tpl = t
 		}
 	}
-	if tpl.ID == 0 || tpl.IsEnabled != yesno.Yes {
+	if tpl.ID == 0 || tpl.IsEnabled != yesno.Yes || tpl.TencentTemplateID == nil || *tpl.TencentTemplateID < 1 {
 		return SendResult{}, dependency(fmt.Errorf("mail template disabled"))
 	}
+	tencentTemplateID := *tpl.TencentTemplateID
 	variables := make(map[string]string, len(in.Variables))
 	for key, value := range in.Variables {
 		variables[key] = value
@@ -304,7 +305,7 @@ func (s *Service) sendInternal(ctx context.Context, in BusinessSendInput, mode S
 	if in.ChallengeID != "" {
 		challengePtr = &in.ChallengeID
 	}
-	row, e := s.stores.Log.CreatePending(ctx, &Log{PlatformID: in.PlatformID, ChallengeID: challengePtr, UserID: in.UserID, Scene: in.Scene, TemplateID: tpl.TencentTemplateID, ToEmail: email, Subject: tpl.Subject, Status: StatusPending, CreatedAt: now, UpdatedAt: now})
+	row, e := s.stores.Log.CreatePending(ctx, &Log{PlatformID: in.PlatformID, ChallengeID: challengePtr, UserID: in.UserID, Scene: in.Scene, TemplateID: tencentTemplateID, ToEmail: email, Subject: tpl.Subject, Status: StatusPending, CreatedAt: now, UpdatedAt: now})
 	if e != nil {
 		if in.ChallengeID != "" && isUniqueViolation(e) {
 			if old, findErr := s.stores.Log.FindActiveChallenge(ctx, in.PlatformID, in.ChallengeID); findErr == nil {
@@ -342,7 +343,7 @@ func (s *Service) sendInternal(ctx context.Context, in BusinessSendInput, mode S
 	if decryptErr != nil {
 		return s.failPending(ctx, in.PlatformID, row.ID, decryptErr, sendStarted)
 	}
-	result, se := s.sender.Send(sendContext, SendInput{Region: c.Region, Endpoint: pointerValue(c.Endpoint), SecretID: secretID, SecretKey: secretKey, FromEmail: c.FromEmail, FromName: c.FromName, ReplyTo: pointerValue(c.ReplyTo), ToEmail: email, Subject: tpl.Subject, TemplateID: tpl.TencentTemplateID, TemplateData: variables})
+	result, se := s.sender.Send(sendContext, SendInput{Region: c.Region, Endpoint: pointerValue(c.Endpoint), SecretID: secretID, SecretKey: secretKey, FromEmail: c.FromEmail, FromName: c.FromName, ReplyTo: pointerValue(c.ReplyTo), ToEmail: email, Subject: tpl.Subject, TemplateID: tencentTemplateID, TemplateData: variables})
 	if se != nil {
 		return s.failPending(ctx, in.PlatformID, row.ID, se, sendStarted)
 	}

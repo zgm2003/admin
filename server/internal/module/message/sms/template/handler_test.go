@@ -72,15 +72,15 @@ func TestUpdateRejectsUnknownAndIncompleteBodies(t *testing.T) {
 	for _, test := range []struct{ name, body string }{
 		{
 			name: "unknown field",
-			body: `{"scene":"login","name":"n","tencentTemplateId":"1","parameterKeys":["code","ttl_minutes"],"exampleVariables":{"code":"1","ttl_minutes":"5"},"subject":"x"}`,
+			body: `{"scene":"login","name":"n","content":"{1} {2}","tencentTemplateId":"1","variableKeys":["code","ttl_minutes"],"exampleVariables":{"code":"1","ttl_minutes":"5"},"subject":"x"}`,
 		},
 		{
 			name: "missing scene",
-			body: `{"name":"n","tencentTemplateId":"1","parameterKeys":["code","ttl_minutes"],"exampleVariables":{"code":"1","ttl_minutes":"5"}}`,
+			body: `{"name":"n","content":"{1} {2}","tencentTemplateId":"1","variableKeys":["code","ttl_minutes"],"exampleVariables":{"code":"1","ttl_minutes":"5"}}`,
 		},
 		{
 			name: "invalid identifier",
-			body: `{"scene":"login","name":"n","tencentTemplateId":"1","parameterKeys":["code","ttl_minutes"],"exampleVariables":{"code":"1","ttl_minutes":"5"}}`,
+			body: `{"scene":"login","name":"n","content":"{1} {2}","tencentTemplateId":"1","variableKeys":["code","ttl_minutes"],"exampleVariables":{"code":"1","ttl_minutes":"5"}}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -110,7 +110,7 @@ func TestUpdateForwardsTheExactSceneAndParameters(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPut, "/template/3", strings.NewReader(
-		`{"scene":"bind_phone","name":"绑定/换绑手机","tencentTemplateId":"7654321","parameterKeys":["code","ttl_minutes"],"exampleVariables":{"code":"123456","ttl_minutes":"5"}}`))
+		`{"scene":"bind_phone","name":"绑定/换绑手机","content":"{1} {2}","tencentTemplateId":"7654321","variableKeys":["code","ttl_minutes"],"exampleVariables":{"code":"123456","ttl_minutes":"5"}}`))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(recorder, request)
 
@@ -118,7 +118,7 @@ func TestUpdateForwardsTheExactSceneAndParameters(t *testing.T) {
 		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body)
 	}
 	if service.updateID != 3 || service.updateIn.Scene != SceneBindPhone ||
-		strings.Join(service.updateIn.ParameterKeys, ",") != "code,ttl_minutes" ||
+		strings.Join(service.updateIn.VariableKeys, ",") != "code,ttl_minutes" ||
 		service.updateIn.ExampleVariables["ttl_minutes"] != "5" {
 		t.Fatalf("forwarded id=%d input=%+v", service.updateID, service.updateIn)
 	}

@@ -152,7 +152,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
       :closable="false"
       show-icon
     />
-    <el-form :model="form" label-width="120px" @submit.prevent="save">
+    <el-form :model="form" label-width="200px" @submit.prevent="save">
       <el-row :gutter="16">
         <el-col :xs="24" :md="12">
           <el-form-item :label="t('sms.secretId')">

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 3Q2HGK1XzNAwZGax47CnbPiYrla6BIcO5g7gXdtJaSd76vfqXgammcWBveIZG3t
+\restrict OwOrfXVPLQr0o0hrRy0Zf5XwSJyeLv5786kaRqPdz6x51QQft6uOY94TLHzzHmF
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -348,13 +348,15 @@ CREATE TABLE public.message_mail_template (
     scene character varying(32) NOT NULL,
     name character varying(128) NOT NULL,
     subject character varying(255) NOT NULL,
-    tencent_template_id integer NOT NULL,
-    variables jsonb NOT NULL,
+    tencent_template_id integer,
     example_variables jsonb NOT NULL,
     is_enabled smallint DEFAULT 1 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
+    content text NOT NULL,
+    variable_keys jsonb NOT NULL,
+    CONSTRAINT ck_message_mail_template_variable_keys CHECK (((jsonb_typeof(variable_keys) = 'array'::text) AND (jsonb_array_length(variable_keys) >= 2))),
     CONSTRAINT message_mail_template_is_enabled_check CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
     CONSTRAINT message_mail_template_scene_check CHECK (((scene)::text = ANY ((ARRAY['login'::character varying, 'forget'::character varying, 'bind_email'::character varying, 'change_password'::character varying])::text[])))
 );
@@ -602,14 +604,15 @@ CREATE TABLE public.message_sms_template (
     scene character varying(32) NOT NULL,
     name character varying(128) NOT NULL,
     tencent_template_id character varying(64) DEFAULT ''::character varying NOT NULL,
-    parameter_keys jsonb NOT NULL,
+    variable_keys jsonb CONSTRAINT message_sms_template_parameter_keys_not_null NOT NULL,
     example_variables jsonb NOT NULL,
     is_enabled smallint DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    content text NOT NULL,
     CONSTRAINT ck_message_sms_template_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
-    CONSTRAINT ck_message_sms_template_parameter_keys CHECK ((parameter_keys = '["code", "ttl_minutes"]'::jsonb)),
-    CONSTRAINT ck_message_sms_template_scene CHECK (((scene)::text = ANY ((ARRAY['login'::character varying, 'forget'::character varying, 'bind_phone'::character varying, 'change_password'::character varying])::text[])))
+    CONSTRAINT ck_message_sms_template_scene CHECK (((scene)::text = ANY ((ARRAY['login'::character varying, 'forget'::character varying, 'bind_phone'::character varying, 'change_password'::character varying])::text[]))),
+    CONSTRAINT ck_message_sms_template_variable_keys CHECK (((jsonb_typeof(variable_keys) = 'array'::text) AND (jsonb_array_length(variable_keys) >= 2)))
 );
 
 
@@ -2492,4 +2495,4 @@ ALTER TABLE ONLY public.system_dictionary_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 3Q2HGK1XzNAwZGax47CnbPiYrla6BIcO5g7gXdtJaSd76vfqXgammcWBveIZG3t
+\unrestrict OwOrfXVPLQr0o0hrRy0Zf5XwSJyeLv5786kaRqPdz6x51QQft6uOY94TLHzzHmF

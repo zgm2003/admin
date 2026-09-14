@@ -45,7 +45,8 @@ const template = {
   scene: 'login' as const,
   name: 'Login code',
   tencentTemplateId: '100001',
-  parameterKeys: ['code', 'ttl_minutes'] as ['code', 'ttl_minutes'],
+  content: '{1} 有效期 {2} 分钟',
+  variableKeys: ['code', 'ttl_minutes'] as ['code', 'ttl_minutes'],
   exampleVariables: { code: '123456', ttl_minutes: '5' },
   isEnabled: YesNo.Yes,
   createdAt: timestamp,
@@ -179,13 +180,13 @@ describe('SMS admin API protocol', () => {
 
   it('freezes the exact four scene catalog and strict template shape', async () => {
     const scenes = [
-      { scene: 'login', name: 'Login', parameterKeys: ['code', 'ttl_minutes'] },
-      { scene: 'forget', name: 'Forget', parameterKeys: ['code', 'ttl_minutes'] },
-      { scene: 'bind_phone', name: 'Bind phone', parameterKeys: ['code', 'ttl_minutes'] },
+      { scene: 'login', name: 'Login', variableKeys: ['code', 'ttl_minutes'] },
+      { scene: 'forget', name: 'Forget', variableKeys: ['code', 'ttl_minutes'] },
+      { scene: 'bind_phone', name: 'Bind phone', variableKeys: ['code', 'ttl_minutes'] },
       {
         scene: 'change_password',
         name: 'Change password',
-        parameterKeys: ['code', 'ttl_minutes'],
+        variableKeys: ['code', 'ttl_minutes'],
       },
     ]
     requestMock.mockResolvedValueOnce({ scenes })
@@ -199,14 +200,14 @@ describe('SMS admin API protocol', () => {
       scenes: Array.from({ length: 4 }, () => ({
         scene: 'login',
         name: 'Duplicate',
-        parameterKeys: ['code', 'ttl_minutes'],
+        variableKeys: ['code', 'ttl_minutes'],
       })),
     },
     {
       scenes: [
-        { scene: 'login', name: 'Login', parameterKeys: ['code', 'ttl_minutes'] },
-        { scene: 'forget', name: 'Forget', parameterKeys: ['code', 'ttl_minutes'] },
-        { scene: 'bind_phone', name: 'Bind', parameterKeys: ['code', 'ttl_minutes'] },
+        { scene: 'login', name: 'Login', variableKeys: ['code', 'ttl_minutes'] },
+        { scene: 'forget', name: 'Forget', variableKeys: ['code', 'ttl_minutes'] },
+        { scene: 'bind_phone', name: 'Bind', variableKeys: ['code', 'ttl_minutes'] },
       ],
     },
   ])('rejects incomplete or duplicate scene catalogs', async (response) => {
@@ -216,7 +217,7 @@ describe('SMS admin API protocol', () => {
 
   it.each([
     { ...template, exampleVariables: { ...template.exampleVariables, extra: 'value' } },
-    { ...template, parameterKeys: ['ttl_minutes', 'code'] },
+    { ...template, variableKeys: ['code', 'code'] },
     { ...template, scene: 'test' },
     { ...template, id: 0 },
     { ...template, createdAt: 'not-a-date' },
@@ -230,7 +231,8 @@ describe('SMS admin API protocol', () => {
       scene: template.scene,
       name: template.name,
       tencentTemplateId: template.tencentTemplateId,
-      parameterKeys: template.parameterKeys,
+      content: template.content,
+      variableKeys: template.variableKeys,
       exampleVariables: template.exampleVariables,
     }
     requestMock.mockResolvedValueOnce(template)

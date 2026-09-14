@@ -129,7 +129,7 @@ func TestRuntimeSnapshotCarriesEncryptedMailCredentials(t *testing.T) {
 			CreatedAt:           now,
 			UpdatedAt:           now,
 		},
-		Templates: []Template{{ID: 1, Scene: SceneLogin, TencentTemplateID: 47941, IsEnabled: yesno.Yes}},
+		Templates: []Template{{ID: 1, Scene: SceneLogin, TencentTemplateID: intPointer(47941), IsEnabled: yesno.Yes}},
 	}
 	raw, err := json.Marshal(snapshot)
 	if err != nil {
@@ -154,9 +154,11 @@ func TestRuntimeSnapshotRejectsMissingCredentials(t *testing.T) {
 	snapshot := runtimeSnapshot{
 		Generation: 1,
 		Config:     runtimeConfig{ID: 1, Region: "ap-guangzhou", FromEmail: "sender@example.com", FromName: "Sender", TTLMinutes: 5, IsEnabled: yesno.Yes, UpdatedAt: time.Now().UTC()},
-		Templates:  []Template{{ID: 1, Scene: SceneLogin, TencentTemplateID: 47941, IsEnabled: yesno.Yes}},
+		Templates:  []Template{{ID: 1, Scene: SceneLogin, TencentTemplateID: intPointer(47941), IsEnabled: yesno.Yes}},
 	}
 	if err := validateRuntimeSnapshot(snapshot, SceneLogin); err == nil {
 		t.Fatal("runtime snapshot accepted missing encrypted credentials")
 	}
 }
+
+func intPointer(value int) *int { return &value }

@@ -40,7 +40,8 @@ describe('mail admin protocol', () => {
     name: '登录验证码',
     subject: '登录验证码',
     tencentTemplateId: 47941,
-    variables: { code: '123456', ttl_minutes: '10' },
+    content: '<!DOCTYPE html><html><head></head><body>{{code}} {{ttl_minutes}}</body></html>',
+    variableKeys: ['code', 'ttl_minutes'],
     exampleVariables: { code: '123456', ttl_minutes: '10' },
     isEnabled: 1,
     createdAt: '2026-09-01T00:00:00Z',
@@ -112,12 +113,29 @@ describe('mail rate limit protocol', () => {
   }
 
   it('accepts the exact policy and snapshot shapes', () => {
-    expect(parseMailRateLimitPolicy({ ...policy, platformId: 1 })).toEqual({ ...policy, platformId: 1 })
+    expect(parseMailRateLimitPolicy({ ...policy, platformId: 1 })).toEqual({
+      ...policy,
+      platformId: 1,
+    })
     const policies = Object.keys(policyMetadata).map((key) =>
       policyFor(key as keyof typeof policyMetadata),
     )
-    expect(parseMailRateLimitSnapshot({ platforms: [{ platformId: 1, platformCode: 'admin', platformName: 'Admin', version: 3, policies }] })).toEqual({
-      platforms: [{ platformId: 1, platformCode: 'admin', platformName: 'Admin', version: 3, policies: policies.map((policy) => ({ ...policy, platformId: 1 })) }],
+    expect(
+      parseMailRateLimitSnapshot({
+        platforms: [
+          { platformId: 1, platformCode: 'admin', platformName: 'Admin', version: 3, policies },
+        ],
+      }),
+    ).toEqual({
+      platforms: [
+        {
+          platformId: 1,
+          platformCode: 'admin',
+          platformName: 'Admin',
+          version: 3,
+          policies: policies.map((policy) => ({ ...policy, platformId: 1 })),
+        },
+      ],
     })
     expect(parseMailRateLimitUpdateResult({ platformId: 1, version: 3, policy })).toEqual({
       platformId: 1,
@@ -141,8 +159,26 @@ describe('mail rate limit protocol', () => {
   })
 
   it('rejects incomplete snapshots and missing version', () => {
-    expect(() => parseMailRateLimitSnapshot({ platforms: [{ platformId: 1, platformCode: 'admin', platformName: 'Admin', policies: [policy] }] })).toThrow()
-    expect(() => parseMailRateLimitSnapshot({ platforms: [{ platformId: 1, platformCode: 'admin', platformName: 'Admin', version: 0, policies: [policy] }] })).toThrow()
+    expect(() =>
+      parseMailRateLimitSnapshot({
+        platforms: [
+          { platformId: 1, platformCode: 'admin', platformName: 'Admin', policies: [policy] },
+        ],
+      }),
+    ).toThrow()
+    expect(() =>
+      parseMailRateLimitSnapshot({
+        platforms: [
+          {
+            platformId: 1,
+            platformCode: 'admin',
+            platformName: 'Admin',
+            version: 0,
+            policies: [policy],
+          },
+        ],
+      }),
+    ).toThrow()
     expect(() => parseMailRateLimitUpdateResult({ platformId: 1, policy })).toThrow()
   })
 
@@ -152,13 +188,15 @@ describe('mail rate limit protocol', () => {
     )
     expect(() =>
       parseMailRateLimitSnapshot({
-        platforms: [{
-          platformId: 1,
-          platformCode: 'admin',
-          platformName: 'Admin',
-          version: 3,
-          policies: [...policies, policyFor('business_email_minute')],
-        }],
+        platforms: [
+          {
+            platformId: 1,
+            platformCode: 'admin',
+            platformName: 'Admin',
+            version: 3,
+            policies: [...policies, policyFor('business_email_minute')],
+          },
+        ],
       }),
     ).toThrow()
   })

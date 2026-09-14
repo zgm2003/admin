@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "@wangeditor-next/editor": "6.4.2",
+    "@wangeditor-next/editor-for-vue": "6.4.2",
     "axios": "^1.19.0",
     "echarts": "^6.1.0",
     "element-plus": "^2.14.4",

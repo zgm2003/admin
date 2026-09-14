@@ -68,7 +68,8 @@ func seededRows() []Model {
 			Scene:             fixed.Scene,
 			Name:              fixed.Name,
 			TencentTemplateID: "1000" + fixed.Scene[:1],
-			ParameterKeys:     jsonOf(fixed.ParameterKeys),
+			Content:           "{1} 有效期 {2} 分钟",
+			VariableKeys:      jsonOf(fixed.VariableKeys),
 			ExampleVariables:  jsonOf(map[string]string{"code": "123456", "ttl_minutes": "5"}),
 			IsEnabled:         yesno.No,
 			CreatedAt:         time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
@@ -99,8 +100,8 @@ func TestListReturnsTheFourCatalogScenesInOrder(t *testing.T) {
 		if safes[index].Scene != scene || safes[index].Name == "" {
 			t.Fatalf("template[%d] = %+v", index, safes[index])
 		}
-		if strings.Join(safes[index].ParameterKeys, ",") != "code,ttl_minutes" {
-			t.Fatalf("parameter keys = %v", safes[index].ParameterKeys)
+		if strings.Join(safes[index].VariableKeys, ",") != "code,ttl_minutes" {
+			t.Fatalf("parameter keys = %v", safes[index].VariableKeys)
 		}
 	}
 }
@@ -124,7 +125,7 @@ func TestUpdateRejectsSceneChangesAndInvalidFields(t *testing.T) {
 		{name: "blank name", mutate: func(input *UpdateInput) { input.Name = "   " }},
 		{name: "overlong name", mutate: func(input *UpdateInput) { input.Name = strings.Repeat("名", 129) }},
 		{name: "non numeric template id", mutate: func(input *UpdateInput) { input.TencentTemplateID = "abc" }},
-		{name: "reordered parameter keys", mutate: func(input *UpdateInput) { input.ParameterKeys = []string{"ttl_minutes", "code"} }},
+		{name: "duplicate variable keys", mutate: func(input *UpdateInput) { input.VariableKeys = []string{"code", "code"} }},
 		{name: "missing example variable", mutate: func(input *UpdateInput) { input.ExampleVariables = map[string]string{"code": "123456"} }},
 		{name: "blank example variable", mutate: func(input *UpdateInput) {
 			input.ExampleVariables = map[string]string{"code": "123456", "ttl_minutes": " "}
@@ -229,7 +230,8 @@ func validUpdate() UpdateInput {
 		Scene:             SceneLogin,
 		Name:              "登录验证码",
 		TencentTemplateID: "1234567",
-		ParameterKeys:     []string{"code", "ttl_minutes"},
+		Content:           "{1} 有效期 {2} 分钟",
+		VariableKeys:      []string{"code", "ttl_minutes"},
 		ExampleVariables:  map[string]string{"code": "123456", "ttl_minutes": "5"},
 	}
 }

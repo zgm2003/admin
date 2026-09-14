@@ -19,6 +19,7 @@ const (
 	maxTemplateNameLength = 128
 	maxTemplateIDLength   = 64
 	maxVariableLength     = 64
+	maxContentLength      = 1000
 )
 
 var numericTemplatePattern = regexp.MustCompile(`^[0-9]{1,64}$`)
@@ -28,7 +29,8 @@ type Safe struct {
 	Scene             string            `json:"scene"`
 	Name              string            `json:"name"`
 	TencentTemplateID string            `json:"tencentTemplateId"`
-	ParameterKeys     []string          `json:"parameterKeys"`
+	Content           string            `json:"content"`
+	VariableKeys      []string          `json:"variableKeys"`
 	ExampleVariables  map[string]string `json:"exampleVariables"`
 	IsEnabled         yesno.Value       `json:"isEnabled"`
 	CreatedAt         string            `json:"createdAt"`
@@ -43,7 +45,8 @@ type UpdateInput struct {
 	Scene             string
 	Name              string
 	TencentTemplateID string
-	ParameterKeys     []string
+	Content           string
+	VariableKeys      []string
 	ExampleVariables  map[string]string
 }
 
@@ -73,7 +76,7 @@ func decodeJSON(raw json.RawMessage, target any) error {
 
 func safeOf(value Model) (Safe, error) {
 	var keys []string
-	if err := json.Unmarshal(value.ParameterKeys, &keys); err != nil {
+	if err := json.Unmarshal(value.VariableKeys, &keys); err != nil {
 		return Safe{}, fmt.Errorf("decode sms template parameter keys: %w", err)
 	}
 	var variables map[string]string
@@ -85,7 +88,8 @@ func safeOf(value Model) (Safe, error) {
 		Scene:             value.Scene,
 		Name:              value.Name,
 		TencentTemplateID: value.TencentTemplateID,
-		ParameterKeys:     keys,
+		Content:           value.Content,
+		VariableKeys:      keys,
 		ExampleVariables:  variables,
 		IsEnabled:         value.IsEnabled,
 		CreatedAt:         value.CreatedAt.UTC().Format(time.RFC3339Nano),

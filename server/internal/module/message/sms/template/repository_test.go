@@ -30,7 +30,8 @@ CREATE TABLE message_sms_template(
  scene VARCHAR(32) NOT NULL,
  name VARCHAR(128) NOT NULL,
  tencent_template_id VARCHAR(64) NOT NULL DEFAULT '',
- parameter_keys JSONB NOT NULL,
+ content TEXT NOT NULL DEFAULT '',
+ variable_keys JSONB NOT NULL,
  example_variables JSONB NOT NULL,
  is_enabled SMALLINT NOT NULL DEFAULT 0,
  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -47,8 +48,8 @@ func seedTemplates(t *testing.T, db *gorm.DB, ctx context.Context) {
 	t.Helper()
 	for index, fixed := range FixedCatalog() {
 		if err := db.WithContext(ctx).Exec(`
-INSERT INTO message_sms_template(scene,name,tencent_template_id,parameter_keys,example_variables,is_enabled,created_at,updated_at)
-VALUES (?,?,'',?::jsonb,?::jsonb,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+INSERT INTO message_sms_template(scene,name,tencent_template_id,content,variable_keys,example_variables,is_enabled,created_at,updated_at)
+VALUES (?,?,'','{1} 有效期 {2} 分钟',?::jsonb,?::jsonb,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
 			fixed.Scene, fixed.Name, `["code","ttl_minutes"]`, `{"code":"123456","ttl_minutes":"5"}`, yesno.No).
 			Error; err != nil {
 			t.Fatalf("seed template %d: %v", index, err)
@@ -92,7 +93,8 @@ func TestRepositoryUpdatesContentAndStatusOnly(t *testing.T) {
 		Scene:             target.Scene,
 		Name:              "  登录短信验证码  ",
 		TencentTemplateID: "1234567",
-		ParameterKeys:     []string{"code", "ttl_minutes"},
+		Content:           "{1} 有效期 {2} 分钟",
+		VariableKeys:      []string{"code", "ttl_minutes"},
 		ExampleVariables:  map[string]string{"code": "123456", "ttl_minutes": "5"},
 	})
 	if err != nil {
@@ -121,8 +123,8 @@ func TestRepositoryRejectsADuplicateScene(t *testing.T) {
 	db, ctx := openTemplateSchema(t)
 	seedTemplates(t, db, ctx)
 	err := db.WithContext(ctx).Exec(`
-INSERT INTO message_sms_template(scene,name,tencent_template_id,parameter_keys,example_variables,is_enabled)
-VALUES ('login','重复','','["code","ttl_minutes"]'::jsonb,'{}'::jsonb,0)`).Error
+INSERT INTO message_sms_template(scene,name,tencent_template_id,content,variable_keys,example_variables,is_enabled)
+VALUES ('login','重复','','{1} {2}','["code","ttl_minutes"]'::jsonb,'{}'::jsonb,0)`).Error
 	if err == nil {
 		t.Fatal("a duplicate scene was accepted")
 	}

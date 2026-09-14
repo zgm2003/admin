@@ -49,7 +49,7 @@ type ConfiguredConfig struct {
 type TemplateFact struct {
 	Name              string
 	TencentTemplateID string
-	ParameterKeys     []string
+	VariableKeys      []string
 	ExampleVariables  map[string]string
 	IsEnabled         yesno.Value
 }
@@ -90,7 +90,7 @@ type runtimeSnapshot struct {
 type templateRow struct {
 	Name              string            `json:"name"`
 	TencentTemplateID string            `json:"tencentTemplateId"`
-	ParameterKeys     []string          `json:"parameterKeys"`
+	VariableKeys      []string          `json:"variableKeys"`
 	ExampleVariables  map[string]string `json:"exampleVariables"`
 	IsEnabled         int16             `json:"isEnabled"`
 }
@@ -251,7 +251,7 @@ func (c *RuntimeCache) write(ctx context.Context, generation string, facts Runti
 	for scene, value := range facts.Templates {
 		snapshot.Templates[scene] = templateRow{
 			Name: value.Name, TencentTemplateID: value.TencentTemplateID,
-			ParameterKeys: value.ParameterKeys, ExampleVariables: value.ExampleVariables,
+			VariableKeys: value.VariableKeys, ExampleVariables: value.ExampleVariables,
 			IsEnabled: int16(value.IsEnabled),
 		}
 	}
@@ -461,7 +461,7 @@ func validateRuntimeSnapshot(snapshot runtimeSnapshot) error {
 	for _, fixed := range catalog {
 		row, found := snapshot.Templates[fixed.Scene]
 		if !found || strings.TrimSpace(row.Name) == "" || !yesno.IsValid(yesno.Value(row.IsEnabled)) ||
-			!sameStrings(row.ParameterKeys, fixed.ParameterKeys) || !validRuntimeVariables(row.ExampleVariables, fixed.ParameterKeys) {
+			!sameStrings(row.VariableKeys, fixed.VariableKeys) || !validRuntimeVariables(row.ExampleVariables, fixed.VariableKeys) {
 			return fmt.Errorf("sms runtime template %q is invalid", fixed.Scene)
 		}
 		if yesno.Value(row.IsEnabled) == yesno.Yes && !isDecimal(row.TencentTemplateID) {
@@ -589,7 +589,7 @@ func factsOf(snapshot runtimeSnapshot) RuntimeFacts {
 	for scene, row := range snapshot.Templates {
 		facts.Templates[scene] = TemplateFact{
 			Name: row.Name, TencentTemplateID: row.TencentTemplateID,
-			ParameterKeys: row.ParameterKeys, ExampleVariables: row.ExampleVariables,
+			VariableKeys: row.VariableKeys, ExampleVariables: row.ExampleVariables,
 			IsEnabled: yesno.Value(row.IsEnabled),
 		}
 	}

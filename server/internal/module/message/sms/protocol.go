@@ -17,9 +17,9 @@ type PageInitResult struct {
 }
 
 type SceneOption struct {
-	Scene         string   `json:"scene"`
-	Name          string   `json:"name"`
-	ParameterKeys []string `json:"parameterKeys"`
+	Scene        string   `json:"scene"`
+	Name         string   `json:"name"`
+	VariableKeys []string `json:"variableKeys"`
 }
 
 // VerifyCodeReadiness reports whether one scene is able to send right now.

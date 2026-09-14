@@ -48,7 +48,7 @@ func (s *Service) PageInit(context.Context) (PageInitResult, error) {
 	catalog := template.FixedCatalog()
 	scenes := make([]SceneOption, 0, len(catalog))
 	for _, fixed := range catalog {
-		scenes = append(scenes, SceneOption{Scene: fixed.Scene, Name: fixed.Name, ParameterKeys: fixed.ParameterKeys})
+		scenes = append(scenes, SceneOption{Scene: fixed.Scene, Name: fixed.Name, VariableKeys: fixed.VariableKeys})
 	}
 	return PageInitResult{Scenes: scenes}, nil
 }
@@ -246,8 +246,8 @@ func (s *Service) SendAdminTest(ctx context.Context, input AdminTestInput) (Admi
 	if err != nil {
 		return AdminTestResult{}, dependency(fmt.Errorf("sms template id is invalid"))
 	}
-	variables := make([]string, 0, len(tpl.ParameterKeys))
-	for _, key := range tpl.ParameterKeys {
+	variables := make([]string, 0, len(tpl.VariableKeys))
+	for _, key := range tpl.VariableKeys {
 		variables = append(variables, tpl.ExampleVariables[key])
 	}
 	started := s.now().UTC()

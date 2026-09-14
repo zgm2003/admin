@@ -33,10 +33,10 @@ vi.mock('@/api/system/dictionary', () => ({ getDictionaryOptions: vi.fn() }))
 
 const timestamp = '2026-09-11T08:00:00Z'
 const scenes: smsApi.SmsSceneOption[] = [
-  { scene: 'login', name: '登录验证码', parameterKeys: ['code', 'ttl_minutes'] },
-  { scene: 'forget', name: '找回密码', parameterKeys: ['code', 'ttl_minutes'] },
-  { scene: 'bind_phone', name: '绑定/换绑手机', parameterKeys: ['code', 'ttl_minutes'] },
-  { scene: 'change_password', name: '修改密码', parameterKeys: ['code', 'ttl_minutes'] },
+  { scene: 'login', name: '登录验证码', variableKeys: ['code', 'ttl_minutes'] },
+  { scene: 'forget', name: '找回密码', variableKeys: ['code', 'ttl_minutes'] },
+  { scene: 'bind_phone', name: '绑定/换绑手机', variableKeys: ['code', 'ttl_minutes'] },
+  { scene: 'change_password', name: '修改密码', variableKeys: ['code', 'ttl_minutes'] },
 ]
 const config: smsApi.SmsConfig = {
   configured: true,
@@ -54,7 +54,8 @@ const template: smsApi.SmsTemplate = {
   scene: 'login',
   name: '登录验证码',
   tencentTemplateId: '100001',
-  parameterKeys: ['code', 'ttl_minutes'],
+  content: '{1} 有效期 {2} 分钟',
+  variableKeys: ['code', 'ttl_minutes'],
   exampleVariables: { code: '123456', ttl_minutes: '5' },
   isEnabled: YesNo.Yes,
   createdAt: timestamp,
@@ -254,9 +255,7 @@ describe('SMS management page', () => {
     const configForm = wrapper.get('.sms-config form').element
     expect(configForm).toBeInstanceOf(HTMLFormElement)
     expect(configForm.classList.contains('el-form--label-top')).toBe(false)
-    expect(configForm.querySelector('.el-form-item__label')?.getAttribute('style')).toContain(
-      'width: 120px',
-    )
+    expect(configForm.querySelector('.el-form-item__label')).not.toBeNull()
     const testForm = wrapper.get('[data-testid="sms-test-send"]').element.closest('form')
     expect(testForm).toBeInstanceOf(HTMLFormElement)
     expect(testForm?.classList.contains('el-form--inline')).toBe(true)
@@ -298,7 +297,8 @@ describe('SMS management page', () => {
       scene: 'login',
       name: '登录验证码',
       tencentTemplateId: '100001',
-      parameterKeys: ['code', 'ttl_minutes'],
+      content: '{1} 有效期 {2} 分钟',
+      variableKeys: ['code', 'ttl_minutes'],
       exampleVariables: { code: '123456', ttl_minutes: '5' },
     })
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -81,26 +83,28 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (Safe
 	}
 
 	name := strings.TrimSpace(input.Name)
+	content := strings.TrimSpace(input.Content)
 	templateID := strings.TrimSpace(input.TencentTemplateID)
 	if !validText(name, maxTemplateNameLength) {
 		return Safe{}, apperror.InvalidRequest(fmt.Errorf("sms template name is invalid"))
 	}
-	if !validParameterKeys(input.ParameterKeys) {
-		return Safe{}, apperror.InvalidRequest(fmt.Errorf("sms template parameter keys must match the fixed catalog"))
+	if !validText(content, maxContentLength) {
+		return Safe{}, apperror.InvalidRequest(fmt.Errorf("sms template content is invalid"))
 	}
 	if templateID != "" && !numericTemplatePattern.MatchString(templateID) {
 		return Safe{}, apperror.InvalidRequest(fmt.Errorf("sms template id must be numeric"))
 	}
-	if err := validateExampleVariables(input.ExampleVariables); err != nil {
-		return Safe{}, err
+	if err := validateTemplate(input.VariableKeys, input.ExampleVariables, content); err != nil {
+		return Safe{}, apperror.InvalidRequest(err)
 	}
 	if current.IsEnabled == yesno.Yes && templateID == "" {
 		return Safe{}, apperror.InvalidRequest(fmt.Errorf("an enabled sms template requires a provider template id"))
 	}
 
 	current.Name = name
+	current.Content = content
 	current.TencentTemplateID = templateID
-	current.ParameterKeys = jsonOf(input.ParameterKeys)
+	current.VariableKeys = jsonOf(input.VariableKeys)
 	current.ExampleVariables = jsonOf(input.ExampleVariables)
 
 	now := time.Now().UTC()
@@ -136,7 +140,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, status yesno.Value
 		if err := decodeJSON(current.ExampleVariables, &variables); err != nil {
 			return apperror.DependencyUnavailable(err)
 		}
-		if err := validateExampleVariables(variables); err != nil {
+		if err := validateTemplateFromModel(current, variables); err != nil {
 			return apperror.InvalidRequest(fmt.Errorf("an enabled sms template requires every example variable"))
 		}
 	}
@@ -152,32 +156,58 @@ func validText(value string, maxRunes int) bool {
 	return value != "" && utf8.RuneCountInString(value) <= maxRunes
 }
 
-func validParameterKeys(keys []string) bool {
-	fixed := FixedCatalog()[0].ParameterKeys
-	if len(keys) != len(fixed) {
-		return false
-	}
-	for index, key := range fixed {
-		if keys[index] != key {
-			return false
-		}
-	}
-	return true
-}
+var variableNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{1,63}$`)
+var placeholderPattern = regexp.MustCompile(`{([0-9]+)}`)
 
-func validateExampleVariables(variables map[string]string) error {
-	fixed := FixedCatalog()[0].ParameterKeys
-	if len(variables) != len(fixed) {
-		return apperror.InvalidRequest(fmt.Errorf("sms template example variables must match the fixed catalog"))
-	}
-	for _, key := range fixed {
-		value, found := variables[key]
-		if !found {
-			return apperror.InvalidRequest(fmt.Errorf("sms template example variable %q is missing", key))
+func validateTemplate(keys []string, examples map[string]string, content string) error {
+	seen := make(map[string]bool, len(keys))
+	for _, key := range keys {
+		if !variableNamePattern.MatchString(key) || seen[key] {
+			return fmt.Errorf("sms template variable keys are invalid")
 		}
-		if !validText(strings.TrimSpace(value), maxVariableLength) {
-			return apperror.InvalidRequest(fmt.Errorf("sms template example variable %q is invalid", key))
+		seen[key] = true
+	}
+	for _, required := range []string{"code", "ttl_minutes"} {
+		if !seen[required] {
+			return fmt.Errorf("sms template variable %s is required", required)
+		}
+	}
+	if len(examples) != len(keys) {
+		return fmt.Errorf("sms template example variables must match variable keys")
+	}
+	for key := range seen {
+		value, ok := examples[key]
+		if !ok || !validText(strings.TrimSpace(value), maxVariableLength) {
+			return fmt.Errorf("sms template example variable %s is invalid", key)
+		}
+	}
+	ttl, err := strconv.Atoi(strings.TrimSpace(examples["ttl_minutes"]))
+	if err != nil || ttl < 1 || ttl > 60 {
+		return fmt.Errorf("sms variable ttl_minutes is invalid")
+	}
+	positions := make(map[int]bool)
+	for _, match := range placeholderPattern.FindAllStringSubmatch(content, -1) {
+		position, err := strconv.Atoi(match[1])
+		if err != nil || position < 1 || position > len(keys) {
+			return fmt.Errorf("sms template placeholder is invalid")
+		}
+		positions[position] = true
+	}
+	if remainder := placeholderPattern.ReplaceAllString(content, ""); strings.ContainsAny(remainder, "{}") {
+		return fmt.Errorf("sms template placeholder is invalid")
+	}
+	for position := 1; position <= len(keys); position++ {
+		if !positions[position] {
+			return fmt.Errorf("sms template placeholder {%d} is missing", position)
 		}
 	}
 	return nil
+}
+
+func validateTemplateFromModel(current Model, examples map[string]string) error {
+	var keys []string
+	if err := decodeJSON(current.VariableKeys, &keys); err != nil {
+		return err
+	}
+	return validateTemplate(keys, examples, current.Content)
 }

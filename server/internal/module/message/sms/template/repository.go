@@ -33,7 +33,8 @@ func (r *Repository) Update(ctx context.Context, value *Model, now time.Time) er
 	return r.db.WithContext(ctx).Model(&Model{}).Where("id = ?", value.ID).Updates(map[string]any{
 		"name":                value.Name,
 		"tencent_template_id": value.TencentTemplateID,
-		"parameter_keys":      value.ParameterKeys,
+		"content":             value.Content,
+		"variable_keys":       value.VariableKeys,
 		"example_variables":   value.ExampleVariables,
 		"updated_at":          now,
 	}).Error

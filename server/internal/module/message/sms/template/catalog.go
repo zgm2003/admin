@@ -11,20 +11,20 @@ const (
 
 // Fixed describes one of the four SMS templates that always exist.
 type Fixed struct {
-	Scene         string   `json:"scene"`
-	Name          string   `json:"name"`
-	ParameterKeys []string `json:"parameterKeys"`
+	Scene        string   `json:"scene"`
+	Name         string   `json:"name"`
+	VariableKeys []string `json:"variableKeys"`
 }
 
 // FixedCatalog returns the four SMS scenes in stable order. SMS never imports
 // the Mail scene constants even when a value happens to be identical.
 func FixedCatalog() []Fixed {
-	parameterKeys := []string{"code", "ttl_minutes"}
+	VariableKeys := []string{"code", "ttl_minutes"}
 	return []Fixed{
-		{Scene: SceneLogin, Name: "登录验证码", ParameterKeys: append([]string(nil), parameterKeys...)},
-		{Scene: SceneForget, Name: "找回密码", ParameterKeys: append([]string(nil), parameterKeys...)},
-		{Scene: SceneBindPhone, Name: "绑定/换绑手机", ParameterKeys: append([]string(nil), parameterKeys...)},
-		{Scene: SceneChangePassword, Name: "修改密码", ParameterKeys: append([]string(nil), parameterKeys...)},
+		{Scene: SceneLogin, Name: "登录验证码", VariableKeys: append([]string(nil), VariableKeys...)},
+		{Scene: SceneForget, Name: "找回密码", VariableKeys: append([]string(nil), VariableKeys...)},
+		{Scene: SceneBindPhone, Name: "绑定/换绑手机", VariableKeys: append([]string(nil), VariableKeys...)},
+		{Scene: SceneChangePassword, Name: "修改密码", VariableKeys: append([]string(nil), VariableKeys...)},
 	}
 }
 

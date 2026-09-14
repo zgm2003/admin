@@ -147,7 +147,7 @@ func readySendingFixture(t *testing.T) (*Service, *sendingLogStoreTest, *verific
 func readyTemplateFact(name, providerID string) TemplateFact {
 	return TemplateFact{
 		Name: name, TencentTemplateID: providerID,
-		ParameterKeys:    []string{"code", "ttl_minutes"},
+		VariableKeys:     []string{"code", "ttl_minutes"},
 		ExampleVariables: map[string]string{"code": "123456", "ttl_minutes": "5"},
 		IsEnabled:        yesno.Yes,
 	}
