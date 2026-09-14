@@ -770,3 +770,9 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 本轮后端 `go test ./internal/module/message/sms/... ./internal/module/message/mail/...` 通过；SMS 页面定向 Vitest（forks、单 worker）11/11 通过，仍有既有 i18n warning。threads 定向组合运行无结果后已中断，不计为通过。相关前端文件已定向 Prettier 格式化。
 - es5-ext postinstall 经检查只输出提示、不生成构建产物，显式设置 allowBuilds=false，pnpm 安装保护问题已解除。前端全量测试由维护者执行，本轮不执行全量。
 - 未重启 API/Worker、未清理 Redis、未调用真实腾讯云。新旧字段不兼容，联调必须使用新进程；既有 runtime 缓存与新增变量发送支持仍需专项核对。编辑器独立 chunk 约 670KB，仍有构建警告，不能称为完全解决 chunk 问题。
+
+### 邮件模板编辑体验修复（2026-09-14）
+
+- AppDialog 默认 content height 改为 500px，内部统一使用 el-scrollbar；footer 留在滚动区外并增加顶边框。邮件模板弹窗改用 AppDialog，基础字段和变量压缩在顶部，编辑器与 sandbox 预览左右并排，示例变量同行显示。
+- 完整邮件 HTML 新增 `data-mail-editor="content"` 可视化编辑边界；富文本只更新该区域，不再替换 body。编辑器忽略初始化 change，只有用户在编辑区操作后才回写，避免点击即丢失完整 HTML 和邮件卡片样式。
+- migration 已再次在真实 PostgreSQL 执行，4 个邮件模板均有编辑边界，current.sql 已刷新。AppDialog/HTML 工具定向测试 7/7、Mail 页面测试 20/20、pnpm typecheck 通过；前端全量测试由维护者执行。

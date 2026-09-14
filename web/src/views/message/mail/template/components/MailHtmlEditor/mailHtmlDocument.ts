@@ -24,13 +24,17 @@ export function readMailBody(html: string): string {
   assertSafeMailHtml(html)
   const document = new DOMParser().parseFromString(html, 'text/html')
   if (!document.doctype || !document.head || !document.body) throw new Error('邮件 HTML 结构不完整')
-  return document.body.innerHTML
+  const editable = document.querySelector<HTMLElement>('[data-mail-editor="content"]')
+  if (editable === null) throw new Error('邮件 HTML 缺少可视化编辑区域')
+  return editable.innerHTML
 }
 
 export function updateMailBody(html: string, body: string): string {
   assertSafeMailHtml(html)
   const document = new DOMParser().parseFromString(html, 'text/html')
   if (!document.doctype || !document.head || !document.body) throw new Error('邮件 HTML 结构不完整')
-  document.body.innerHTML = body
+  const editable = document.querySelector<HTMLElement>('[data-mail-editor="content"]')
+  if (editable === null) throw new Error('邮件 HTML 缺少可视化编辑区域')
+  editable.innerHTML = body
   return `<!DOCTYPE html>\n${document.documentElement.outerHTML}`
 }

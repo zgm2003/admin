@@ -41,7 +41,7 @@ const props = withDefaults(
     description: '',
     width: undefined,
     mobileWidth: DEFAULT_APP_DIALOG_MOBILE_WIDTH,
-    height: undefined,
+    height: 500,
     bodyPadding: undefined,
     headerPadding: undefined,
     footerPadding: undefined,
@@ -153,16 +153,10 @@ const bodyStyle = computed(() => ({
       </div>
       <span v-else :id="titleId" :class="[titleClass, 'app-dialog__sr-only']">{{ ariaLabel }}</span>
     </template>
-    <div
-      v-if="resolveAppDialogContentHeight(height)"
-      class="app-dialog__body app-dialog__body--scroll"
-    >
+    <div class="app-dialog__body app-dialog__body--scroll">
       <el-scrollbar :height="resolveAppDialogContentHeight(height)" class="app-dialog__scrollbar">
         <div class="app-dialog__content" :style="bodyStyle"><slot /></div>
       </el-scrollbar>
-    </div>
-    <div v-else class="app-dialog__body">
-      <div class="app-dialog__content" :style="bodyStyle"><slot /></div>
     </div>
     <template v-if="$slots.footer" #footer><slot name="footer" /></template>
   </el-dialog>
@@ -180,6 +174,9 @@ const bodyStyle = computed(() => ({
 }
 .app-dialog--custom-footer-padding :deep(.el-dialog__footer) {
   padding: var(--app-dialog-footer-padding);
+}
+.app-dialog :deep(.el-dialog__footer) {
+  border-top: 1px solid var(--el-border-color-lighter);
 }
 .app-dialog__body,
 .app-dialog__content,

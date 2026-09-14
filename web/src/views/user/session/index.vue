@@ -37,7 +37,7 @@ const tablePagination = computed<TablePaginationState | null>(() =>
 const tableColumns = computed<TableColumn<SessionItem>[]>(() => [
   { key: 'user', prop: 'id', label: t('session.column.user'), minWidth: 150 },
   { prop: 'platform', label: t('session.column.platform'), minWidth: 110 },
-  { key: 'device', prop: 'id', label: t('session.column.device'), minWidth: 180 },
+  { key: 'device', prop: 'id', label: t('session.column.device'), minWidth: 250 },
   { prop: 'clientIp', label: t('session.column.ip'), minWidth: 130 },
   { prop: 'userAgent', label: t('session.column.userAgent'), minWidth: 180, overflowTooltip: true },
   { key: 'createdAt', prop: 'id', label: t('session.column.createdAt'), minWidth: 180 },

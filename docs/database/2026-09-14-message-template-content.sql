@@ -41,6 +41,15 @@ ALTER TABLE message_sms_template ALTER COLUMN content DROP DEFAULT;
 UPDATE message_mail_template
 SET content = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>' || name || '</title></head><body style="margin:0;padding:32px;background:#f5f7fb;font-family:Arial,sans-serif;color:#1f2937"><div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden"><div style="padding:28px 32px;background:linear-gradient(135deg,#2563eb,#14b8a6);color:#fff"><h1 style="margin:0;font-size:24px">' || name || '</h1></div><div style="padding:32px"><p style="font-size:16px;line-height:1.8">您好，请使用下面的信息完成操作：</p><div style="padding:22px;text-align:center;background:#f8fafc;border:1px dashed #93c5fd;border-radius:14px"><strong style="font-size:36px;letter-spacing:8px;color:#1d4ed8">{{code}}</strong></div><p style="color:#4b5563">验证码有效期为 {{ttl_minutes}} 分钟，请勿泄露给他人。</p></div><div style="padding:18px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;color:#6b7280;font-size:13px">本邮件由系统自动发送，请勿直接回复。</div></div></body></html>'
 WHERE content = '';
+UPDATE message_mail_template
+SET content = replace(
+  replace(content,
+    '<p style="font-size:16px;line-height:1.8">',
+    '<div data-mail-editor="content" style="font-size:16px;line-height:1.8"><p style="margin:0">'),
+  '</p><div style="padding:22px;text-align:center',
+  '</p></div><div style="padding:22px;text-align:center')
+WHERE content NOT LIKE '%data-mail-editor="content"%'
+  AND content LIKE '%<p style="font-size:16px;line-height:1.8">%';
 ALTER TABLE message_mail_template ALTER COLUMN content DROP DEFAULT;
 
 ALTER TABLE message_sms_template DROP CONSTRAINT IF EXISTS ck_message_sms_template_parameter_keys;

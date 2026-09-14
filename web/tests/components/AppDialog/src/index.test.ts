@@ -28,6 +28,10 @@ describe('AppDialog', () => {
     expect(document.body.textContent).toContain('Custom header')
     expect(document.body.textContent).toContain('Content')
     expect(document.body.textContent).toContain('Save')
+    expect(document.body.querySelector<HTMLElement>('.el-scrollbar__wrap')?.style.height).toBe(
+      '500px',
+    )
+    expect(document.body.querySelector('.el-dialog__footer')).not.toBeNull()
     wrapper.findComponent({ name: 'ElDialog' }).vm.$emit('update:modelValue', false)
     expect(visible.value).toBe(false)
     wrapper.unmount()

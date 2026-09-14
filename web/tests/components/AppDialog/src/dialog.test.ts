@@ -14,7 +14,7 @@ describe('AppDialog helpers', () => {
     expect(resolveAppDialogWidth({ isMobile: true })).toBe('94vw')
     expect(resolveAppDialogWidth({ isMobile: true, mobileWidth: 320 })).toBe('320px')
     expect(resolveAppDialogContentHeight(560)).toBe('560px')
-    expect(resolveAppDialogContentHeight()).toBeUndefined()
+    expect(resolveAppDialogContentHeight()).toBe('500px')
   })
 
   it('filters fullscreen and disables desktop-only behaviors on mobile', () => {

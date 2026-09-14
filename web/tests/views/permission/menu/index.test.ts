@@ -398,7 +398,7 @@ describe('MenuManagement', () => {
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.findComponent({ name: 'AppDialog' }).props('height')).toBeUndefined()
+    expect(wrapper.findComponent({ name: 'AppDialog' }).props('height')).toBe(500)
     expect(wrapper.findComponent({ name: 'ElRow' }).exists()).toBe(true)
     expect(wrapper.findAllComponents({ name: 'ElCol' }).length).toBeGreaterThan(0)
   })
