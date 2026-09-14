@@ -16,7 +16,7 @@
     return value;
   }
   function translateNode(node) {
-    if (node.nodeType === Node.TEXT_NODE) { node.nodeValue = translate(node.nodeValue); return; }
+    if (node.nodeType === Node.TEXT_NODE) { var translated = translate(node.nodeValue); if (translated !== node.nodeValue) node.nodeValue = translated; return; }
     if (node.nodeType !== Node.ELEMENT_NODE) return;
     ['aria-label', 'title', 'alt'].forEach(function (name) {
       if (node.hasAttribute(name)) node.setAttribute(name, translate(node.getAttribute(name)));

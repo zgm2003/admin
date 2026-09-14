@@ -38,6 +38,9 @@ func TestEmbeddedUIProvidesJavaScriptAndRejectsTraversal(t *testing.T) {
 	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "待处理") {
 		t.Fatalf("localized script status=%d", recorder.Code)
 	}
+	if !strings.Contains(recorder.Body.String(), "if (translated !== node.nodeValue)") {
+		t.Fatal("localized script must not rewrite unchanged text nodes and retrigger its observer")
+	}
 
 	recorder = httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, UIPath+"/../secret", nil))
