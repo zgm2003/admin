@@ -251,6 +251,16 @@ describe('SMS management page', () => {
     const wrapper = mountPage(['message:sms:list', 'message:sms:test'])
     await flushPromises()
 
+    const configForm = wrapper.get('.sms-config form').element
+    expect(configForm).toBeInstanceOf(HTMLFormElement)
+    expect(configForm.classList.contains('el-form--label-top')).toBe(false)
+    expect(configForm.querySelector('.el-form-item__label')?.getAttribute('style')).toContain(
+      'width: 120px',
+    )
+    const testForm = wrapper.get('[data-testid="sms-test-send"]').element.closest('form')
+    expect(testForm).toBeInstanceOf(HTMLFormElement)
+    expect(testForm?.classList.contains('el-form--inline')).toBe(true)
+
     await wrapper.get('[data-testid="sms-test-phone"]').setValue('15671628271')
     const sceneSelect = wrapper
       .findAllComponents({ name: 'ElSelectV2' })

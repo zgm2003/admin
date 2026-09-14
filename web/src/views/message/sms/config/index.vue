@@ -152,7 +152,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
       :closable="false"
       show-icon
     />
-    <el-form :model="form" label-position="top" @submit.prevent="save">
+    <el-form :model="form" label-width="120px" @submit.prevent="save">
       <el-row :gutter="16">
         <el-col :xs="24" :md="12">
           <el-form-item :label="t('sms.secretId')">
@@ -264,7 +264,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
 
     <template v-if="canTest">
       <el-divider />
-      <el-form class="sms-config__test" inline @submit.prevent="sendTest">
+      <el-form class="sms-config__test" inline label-width="120px" @submit.prevent="sendTest">
         <el-form-item :label="t('sms.testPhone')">
           <el-input
             v-model="testPhone"
@@ -284,16 +284,18 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
             class="sms-config__test-scene"
           />
         </el-form-item>
-        <el-button
-          data-testid="sms-test-send"
-          type="primary"
-          :loading="testing"
-          :disabled="!catalogReady || testPhone.trim() === ''"
-          @click="sendTest"
-        >
-          <Send :size="16" />
-          {{ t('sms.sendTest') }}
-        </el-button>
+        <el-form-item>
+          <el-button
+            data-testid="sms-test-send"
+            type="primary"
+            :loading="testing"
+            :disabled="!catalogReady || testPhone.trim() === ''"
+            @click="sendTest"
+          >
+            <Send :size="16" />
+            {{ t('sms.sendTest') }}
+          </el-button>
+        </el-form-item>
       </el-form>
     </template>
   </div>
@@ -318,13 +320,6 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
 
 .sms-config__actions > span {
   flex: 1;
-}
-
-.sms-config__test {
-  display: flex;
-  align-items: end;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .sms-config__test-scene {
