@@ -4,6 +4,8 @@ import i18n from "@/i18n";
 import type { CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import type { AgentReasoningEffort } from "@/stores/use-agent-store";
 
+export type AgentConfigResponse = { ok?: boolean; protocolVersion?: number; url?: string; token?: string; hasToken?: boolean };
+
 export class AgentApiError<T = unknown> extends Error {
     constructor(readonly status: number, readonly response: T & { code?: string; error?: string; msg?: string }) {
         super(response.error || response.msg || i18n.t("agent.state.requestFailed"));
@@ -98,10 +100,10 @@ export function setCodexSkillEnabled(_endpoint: string, _token: string, _skill: 
     return Promise.reject(new AgentApiError(501, {}));
 }
 
-export async function fetchAgentJson<T>(_endpoint: string, _token: string, _path: string, _init?: RequestInit) {
+export async function fetchAgentJson<T>(_endpoint: string, _token: string, _path: string, _init?: RequestInit): Promise<T> {
     throw new AgentApiError(501, {});
 }
 
-export async function discoverAgentConfig(_endpoint: string) {
+export async function discoverAgentConfig(_endpoint: string): Promise<AgentConfigResponse | null> {
     return null;
 }
