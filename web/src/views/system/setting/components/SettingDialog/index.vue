@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { SystemSetting, SettingValueType } from '@/api/system/setting'
@@ -27,6 +28,37 @@ const visible = defineModel<boolean>({ required: true })
 const form = defineModel<SettingForm>('form', { required: true })
 const emit = defineEmits<{ save: [] }>()
 const { t } = useI18n()
+const valueError = ref('')
+
+function validateValue(): boolean {
+  valueError.value = ''
+  if (form.value.value.trim() === '') {
+    valueError.value = t('setting.valueRequired')
+    return false
+  }
+  if (form.value.valueType === 4) {
+    try {
+      JSON.parse(form.value.value)
+    } catch {
+      valueError.value = t('setting.jsonInvalid')
+      return false
+    }
+  }
+  return true
+}
+
+function formatJSON(): void {
+  valueError.value = ''
+  try {
+    form.value.value = JSON.stringify(JSON.parse(form.value.value), null, 2)
+  } catch {
+    valueError.value = t('setting.jsonInvalid')
+  }
+}
+
+function save(): void {
+  if (validateValue()) emit('save')
+}
 </script>
 
 <template>
@@ -35,7 +67,7 @@ const { t } = useI18n()
     :title="editing === null ? t('setting.create') : t('setting.edit')"
     width="min(560px, 94vw)"
   >
-    <el-form label-position="top" @submit.prevent="emit('save')">
+    <el-form label-position="top" @submit.prevent="save">
       <el-form-item :label="t('setting.key')">
         <el-input
           v-model="form.key"
@@ -54,13 +86,35 @@ const { t } = useI18n()
         />
       </el-form-item>
       <el-form-item :label="t('setting.value')">
-        <el-input
+        <el-switch
+          v-if="form.valueType === 3"
           v-model="form.value"
           data-testid="setting-form-value"
-          type="textarea"
-          :rows="4"
+          active-value="true"
+          inactive-value="false"
+          :active-text="t('setting.trueValue')"
+          :inactive-text="t('setting.falseValue')"
+        />
+        <el-input
+          v-else
+          v-model="form.value"
+          data-testid="setting-form-value"
+          :type="form.valueType === 4 ? 'textarea' : form.valueType === 2 ? 'number' : 'text'"
+          :rows="form.valueType === 4 ? 8 : undefined"
           :placeholder="t('setting.valuePlaceholder')"
         />
+        <div v-if="valueError" class="el-form-item__error setting-value-error">
+          {{ valueError }}
+        </div>
+        <el-button
+          v-if="form.valueType === 4"
+          data-testid="setting-json-format"
+          class="setting-json-format"
+          text
+          type="primary"
+          @click="formatJSON"
+          >{{ t('setting.formatJson') }}</el-button
+        >
       </el-form-item>
       <el-form-item :label="t('setting.descriptionField')">
         <el-input
@@ -73,14 +127,21 @@ const { t } = useI18n()
     </el-form>
     <template #footer>
       <el-button @click="visible = false">{{ t('setting.cancel') }}</el-button>
-      <el-button
-        data-testid="setting-save"
-        type="primary"
-        :loading="submitting"
-        @click="emit('save')"
-      >
+      <el-button data-testid="setting-save" type="primary" :loading="submitting" @click="save">
         {{ t('setting.save') }}
       </el-button>
     </template>
   </AppDialog>
 </template>
+
+<style scoped>
+.setting-json-format {
+  margin-top: 6px;
+  margin-left: auto;
+}
+
+.setting-value-error {
+  position: static;
+  width: 100%;
+}
+</style>

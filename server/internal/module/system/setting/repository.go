@@ -73,3 +73,44 @@ func (r *Repository) UpdateStatus(ctx context.Context, key string, status yesno.
 func (r *Repository) Delete(ctx context.Context, key string) error {
 	return r.db.WithContext(ctx).Where("setting_key = ?", key).Delete(&Model{}).Error
 }
+
+func (r *Repository) FindBrand(ctx context.Context) (BrandSettings, error) {
+	var rows []Model
+	keys := []string{BrandTitleZhCNKey, BrandTitleEnUSKey, BrandDefaultAvatarKey}
+	if err := r.db.WithContext(ctx).Where("setting_key IN ? AND deleted_at IS NULL", keys).Find(&rows).Error; err != nil {
+		return BrandSettings{}, err
+	}
+	values := make(map[string]string, len(rows))
+	for _, row := range rows {
+		if row.ValueType != ValueTypeString || row.IsEnabled != yesno.Yes {
+			return BrandSettings{}, fmt.Errorf("brand setting unavailable")
+		}
+		values[row.Key] = row.Value
+	}
+	if len(values) != len(keys) {
+		return BrandSettings{}, fmt.Errorf("brand setting unavailable")
+	}
+	return BrandSettings{
+		TitleZhCN: values[BrandTitleZhCNKey], TitleEnUS: values[BrandTitleEnUSKey], DefaultAvatar: values[BrandDefaultAvatarKey],
+	}, nil
+}
+
+func (r *Repository) UpdateBrand(ctx context.Context, brand BrandSettings, now time.Time) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		values := map[string]string{
+			BrandTitleZhCNKey: brand.TitleZhCN, BrandTitleEnUSKey: brand.TitleEnUS, BrandDefaultAvatarKey: brand.DefaultAvatar,
+		}
+		for key, value := range values {
+			result := tx.Model(&Model{}).Where("setting_key = ? AND deleted_at IS NULL", key).Updates(map[string]any{
+				"value": value, "value_type": ValueTypeString, "is_enabled": yesno.Yes, "is_builtin": yesno.Yes, "updated_at": now,
+			})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrNotFound
+			}
+		}
+		return nil
+	})
+}

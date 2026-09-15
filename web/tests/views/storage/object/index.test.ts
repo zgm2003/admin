@@ -564,7 +564,7 @@ describe('ObjectStorage', () => {
     })
   })
 
-  it('omits immutable create fields from the upload-rule update payload', async () => {
+  it('keeps upload codes editable and includes them in the upload-rule update payload', async () => {
     vi.mocked(getUploadRulePageInit).mockResolvedValue({
       platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
       configs: [
@@ -603,10 +603,17 @@ describe('ObjectStorage', () => {
     await wrapper.find('.el-table__body .el-button').trigger('click')
     await flushPromises()
     const dialog = wrapper.findAllComponents(AppDialog)[1]
+    const codesInput = wrapper
+      .find('[data-testid="storage-rule-form"]')
+      .findComponent({ name: 'ElInputTag' })
+    expect(codesInput.exists()).toBe(true)
+    expect(codesInput.props('disabled')).not.toBe(true)
+    codesInput?.vm.$emit('update:modelValue', ['avatar-v2', 'profile-photo'])
     await dialog?.find('.el-dialog__footer .el-button--primary').trigger('click')
     await flushPromises()
 
     expect(updateUploadRule).toHaveBeenCalledWith(9, {
+      codes: ['avatar-v2', 'profile-photo'],
       name: '头像上传',
       cosConfigId: 8,
       maxFileSizeBytes: 1048576,

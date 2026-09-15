@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { connect, ConnectedProps } from "react-redux";
 import Container from "@material-ui/core/Container";
 import { makeStyles } from "@material-ui/core/styles";
@@ -93,6 +93,25 @@ type Props = ConnectedProps<typeof connector>;
 export type DailyStatsKey = "today" | "last-7d" | "last-30d" | "last-90d";
 export const defaultDailyStatsKey = "last-7d";
 
+export function useQueueStatsRefresh(
+  queueNames: string,
+  refresh: () => void
+) {
+  const previousQueueNames = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (previousQueueNames.current === queueNames) {
+      return;
+    }
+    const shouldRefresh =
+      previousQueueNames.current !== null || queueNames !== "";
+    previousQueueNames.current = queueNames;
+    if (shouldRefresh) {
+      refresh();
+    }
+  }, [queueNames, refresh]);
+}
+
 function DashboardView(props: Props) {
   const {
     pollInterval,
@@ -111,9 +130,7 @@ function DashboardView(props: Props) {
     .sort()
     .join(",");
 
-  useEffect(() => {
-    listQueueStatsAsync();
-  }, [listQueueStatsAsync, qnames]);
+  useQueueStatsRefresh(qnames, listQueueStatsAsync);
 
   const processedStats = queues.map((q) => ({
     queue: q.queue,

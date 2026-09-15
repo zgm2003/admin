@@ -17,6 +17,7 @@ import (
 type ruleHTTPService struct {
 	query   ListQuery
 	creates int
+	update  UpdateInput
 }
 
 func (*ruleHTTPService) IssueCredentials(context.Context, auth.Identity, CredentialInput) (CredentialResponse, error) {
@@ -38,7 +39,10 @@ func (s *ruleHTTPService) Create(context.Context, CreateInput) (int64, error) {
 	s.creates++
 	return 1, nil
 }
-func (*ruleHTTPService) Update(context.Context, int64, UpdateInput) error       { return nil }
+func (s *ruleHTTPService) Update(_ context.Context, _ int64, input UpdateInput) error {
+	s.update = input
+	return nil
+}
 func (*ruleHTTPService) UpdateStatus(context.Context, int64, yesno.Value) error { return nil }
 func (*ruleHTTPService) Delete(context.Context, int64) error                    { return nil }
 
@@ -84,6 +88,18 @@ func TestPageInitSerializesEmptyCollectionsAsArrays(t *testing.T) {
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/storage/uploadrule/page-init", nil))
 	if recorder.Code != http.StatusOK || recorder.Body.String() != `{"code":0,"data":{"platforms":[],"configs":[]},"message":"ok"}` {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHandlerBindsCodesWhenUpdatingUploadRule(t *testing.T) {
+	service, router := ruleRouter()
+	body := `{"codes":[" Avatar-V2 ","profile-photo"],"name":"Avatar","cosConfigId":1,"maxFileSizeBytes":1024,"allowedExtensions":["png"],"allowedMimeTypes":["image/png"],"accessMode":"private","remark":""}`
+	recorder := ruleJSON(router, http.MethodPut, "/api/admin/v1/storage/uploadrule/7", body)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if !reflect.DeepEqual(service.update.Codes, []string{"avatar-v2", "profile-photo"}) {
+		t.Fatalf("codes=%v", service.update.Codes)
 	}
 }
 func ruleRouter() (*ruleHTTPService, *gin.Engine) {

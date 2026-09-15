@@ -28,6 +28,7 @@ type CreateInput struct {
 	Remark                              string
 }
 type UpdateInput struct {
+	Codes                               []string
 	Name                                string
 	CosConfigID                         int64
 	MaxFileSizeBytes                    int64
@@ -56,6 +57,7 @@ type createRequest struct {
 	Remark            string      `json:"remark"`
 }
 type updateRequest struct {
+	Codes             []string `json:"codes"`
 	Name              string   `json:"name"`
 	CosConfigID       int64    `json:"cosConfigId"`
 	MaxFileSizeBytes  int64    `json:"maxFileSizeBytes"`
@@ -124,14 +126,15 @@ func (r createRequest) input() (CreateInput, error) {
 	return CreateInput{r.PlatformID, r.Codes, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.IsEnabled, r.Remark}, nil
 }
 func (r updateRequest) input() (UpdateInput, error) {
+	r.Codes = normalize(r.Codes, false)
 	r.Name = strings.TrimSpace(r.Name)
 	r.Remark = strings.TrimSpace(r.Remark)
 	r.AllowedExtensions = normalize(r.AllowedExtensions, true)
 	r.AllowedMimeTypes = normalize(r.AllowedMimeTypes, false)
-	if err := validateFields(1, []string{"x"}, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark, false); err != nil {
+	if err := validateFields(1, r.Codes, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark, false); err != nil {
 		return UpdateInput{}, err
 	}
-	return UpdateInput{r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark}, nil
+	return UpdateInput{r.Codes, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark}, nil
 }
 func parseListQuery(v url.Values) (ListQuery, error) {
 	allowed := map[string]bool{"page": true, "pageSize": true, "platformId": true, "cosConfigId": true, "keyword": true, "isEnabled": true}

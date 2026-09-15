@@ -35,18 +35,21 @@ export interface UploadRuleQuery extends PageRequest {
   keyword?: string
   isEnabled?: YesNo
 }
-export interface UploadRuleInput {
-  platformId?: number
-  codes?: string[]
+interface UploadRuleMutableInput {
+  codes: string[]
   name: string
   cosConfigId: number
   maxFileSizeBytes: number
   allowedExtensions: string[]
   allowedMimeTypes: string[]
   accessMode: 'private' | 'public'
-  isEnabled?: YesNo
   remark: string
 }
+export interface CreateUploadRuleInput extends UploadRuleMutableInput {
+  platformId: number
+  isEnabled: YesNo
+}
+export type UpdateUploadRuleInput = UploadRuleMutableInput
 export interface PlatformOption {
   id: number
   code: string
@@ -91,7 +94,7 @@ export async function getUploadRulePageInit(): Promise<UploadRulePageInit> {
     configs: expectArray(result.configs, 'upload rule page init.configs').map(parseConfig),
   }
 }
-export async function createUploadRule(data: UploadRuleInput): Promise<{ id: number }> {
+export async function createUploadRule(data: CreateUploadRuleInput): Promise<{ id: number }> {
   return expectId(
     await request<unknown>({ method: 'POST', url: '/api/admin/v1/storage/uploadrule', data }),
     'upload rule create result',
@@ -99,7 +102,7 @@ export async function createUploadRule(data: UploadRuleInput): Promise<{ id: num
 }
 export async function updateUploadRule(
   id: number,
-  data: UploadRuleInput,
+  data: UpdateUploadRuleInput,
 ): Promise<Record<string, never>> {
   return expectEmptyObject(
     await request<unknown>({

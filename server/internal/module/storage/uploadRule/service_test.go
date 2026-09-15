@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -63,6 +64,59 @@ func TestServiceValidatesTargetsAndAllowsMultipleEnabledRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertEnabledRule(t, db, ctx, platformID)
+}
+
+func TestServiceUpdatesCodesAndRollsBackOnCodeConflict(t *testing.T) {
+	db, ctx := openRuleDatabase(t)
+	platformID := insertPlatform(t, db, ctx, "admin", yesno.Yes)
+	configID := insertConfig(t, db, ctx, "main", yesno.Yes, "")
+	service := NewService(NewRepository(db), nil, nil)
+	firstID, err := service.Create(ctx, validCreate(platformID, configID, []string{"avatar", "article-cover"}, yesno.Yes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Create(ctx, validCreate(platformID, configID, []string{"attachment"}, yesno.Yes)); err != nil {
+		t.Fatal(err)
+	}
+
+	update := UpdateInput{
+		Codes:             []string{" Avatar-V2 ", "profile-photo", "avatar-v2"},
+		Name:              "Updated avatar",
+		CosConfigID:       configID,
+		MaxFileSizeBytes:  2048,
+		AllowedExtensions: []string{"png"},
+		AllowedMimeTypes:  []string{"image/png"},
+		AccessMode:        "private",
+	}
+	if err = service.Update(ctx, firstID, update); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := service.Get(ctx, firstID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(updated.Codes, []string{"avatar-v2", "profile-photo"}) || updated.Name != "Updated avatar" || updated.MaxFileSizeBytes != 2048 {
+		t.Fatalf("updated=%+v", updated)
+	}
+	if _, err = NewRepository(db).FindUploadTarget(ctx, platformID, "avatar"); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("old code error=%v", err)
+	}
+	if target, targetErr := NewRepository(db).FindUploadTarget(ctx, platformID, "avatar-v2"); targetErr != nil || target.RuleID != firstID {
+		t.Fatalf("new target=%+v error=%v", target, targetErr)
+	}
+
+	update.Codes = []string{"attachment"}
+	update.Name = "Must roll back"
+	if err = service.Update(ctx, firstID, update); appCode(err) != apperror.CodeConflict {
+		t.Fatalf("conflict error=%v", err)
+	}
+	rolledBack, err := service.Get(ctx, firstID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(rolledBack.Codes, []string{"avatar-v2", "profile-photo"}) || rolledBack.Name != "Updated avatar" {
+		t.Fatalf("rolled back=%+v", rolledBack)
+	}
 }
 
 func TestConcurrentEnableAllowsMultipleRules(t *testing.T) {

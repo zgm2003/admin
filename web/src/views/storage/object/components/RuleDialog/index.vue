@@ -83,7 +83,6 @@ defineExpose({ validate: () => formRef.value?.validate() })
             ><el-input-tag
               v-model="form.codes"
               data-testid="storage-rule-codes"
-              :disabled="props.editing"
               :placeholder="t('storage.ruleCodePlaceholder')"
             />
             <div class="form-help">{{ t('storage.ruleCodeHelp') }}</div></el-form-item

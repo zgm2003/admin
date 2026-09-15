@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 
 type detailHandlerService struct {
 	record Record
+	brand  BrandSettings
 }
 
 func (f detailHandlerService) List(context.Context, ListQuery) (ListResult, error) {
@@ -30,6 +32,8 @@ func (f detailHandlerService) Create(context.Context, CreateInput) (int64, error
 func (f detailHandlerService) Update(context.Context, string, UpdateInput) error       { return nil }
 func (f detailHandlerService) UpdateStatus(context.Context, string, yesno.Value) error { return nil }
 func (f detailHandlerService) Delete(context.Context, string) error                    { return nil }
+func (f detailHandlerService) Brand(context.Context) (BrandSettings, error)            { return f.brand, nil }
+func (f detailHandlerService) UpdateBrand(context.Context, BrandSettings) error        { return nil }
 
 func TestDetailReturnsPersistenceMetadata(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -58,5 +62,34 @@ func TestDetailReturnsPersistenceMetadata(t *testing.T) {
 	got := envelope.Data.Setting
 	if got.ID != 42 || got.Key != "auth.captcha.ttl_minutes" || got.CreatedAt != createdAt || got.UpdatedAt != updatedAt {
 		t.Fatalf("detail = %+v, want persistence metadata", got)
+	}
+}
+
+func TestBrandHandlersUseStrictContract(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	service := detailHandlerService{brand: BrandSettings{TitleZhCN: "智澜", TitleEnUS: "ZHILAN", DefaultAvatar: "avatar/2026/default.png"}}
+	router := gin.New()
+	handler := NewHandler(service)
+	router.GET("/system/setting/brand", handler.Brand)
+	router.PUT("/system/setting/brand", handler.UpdateBrand)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/system/setting/brand", nil))
+	if recorder.Code != http.StatusOK || recorder.Body.String() != `{"code":0,"data":{"titleZhCN":"智澜","titleEnUS":"ZHILAN","defaultAvatar":"avatar/2026/default.png"},"message":"ok"}` {
+		t.Fatalf("GET status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	for _, body := range []string{
+		`{"titleZhCN":"智澜","titleEnUS":"ZHILAN","defaultAvatar":""} {}`,
+		`{"titleZhCN":"智澜","titleEnUS":"ZHILAN","defaultAvatar":"","unknown":true}`,
+		`{"titleZhCN":"智澜"}`,
+	} {
+		recorder = httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPut, "/system/setting/brand", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("body=%s status=%d response=%s", body, recorder.Code, recorder.Body.String())
+		}
 	}
 }

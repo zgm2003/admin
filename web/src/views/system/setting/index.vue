@@ -8,17 +8,21 @@ import { useI18n } from 'vue-i18n'
 import {
   createSetting,
   deleteSetting,
+  getBrandSettings,
   getSettings,
   updateSetting,
+  updateBrandSettings,
   updateSettingStatus,
   type SettingValueType,
   type SystemSetting,
+  type BrandSettings,
 } from '@/api/system/setting'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
 import SettingDialog from './components/SettingDialog/index.vue'
+import BrandSettingsPanel from './components/BrandSettingsPanel/index.vue'
 
 const { t } = useI18n()
 const access = usePermissionStore()
@@ -32,6 +36,10 @@ const pageSize = ref(20)
 const total = ref(0)
 const dialogVisible = ref(false)
 const submitting = ref(false)
+const brandLoading = ref(false)
+const brandSaving = ref(false)
+const brandError = ref('')
+const brandForm = ref<BrandSettings>({ titleZhCN: '', titleEnUS: '', defaultAvatar: '' })
 const editing = ref<SystemSetting | null>(null)
 const form = ref<{ key: string; value: string; valueType: SettingValueType; description: string }>({
   key: '',
@@ -45,6 +53,7 @@ const canCreate = computed(() => access.hasPermission('system:setting:create'))
 const canUpdate = computed(() => access.hasPermission('system:setting:update'))
 const canStatus = computed(() => access.hasPermission('system:setting:status'))
 const canDelete = computed(() => access.hasPermission('system:setting:delete'))
+const canUpload = computed(() => access.hasPermission('storage:object:upload'))
 const searchModel = computed<SearchFormModel>({
   get: () => ({ keyword: keyword.value, status: status.value }),
   set: (value) => {
@@ -127,6 +136,41 @@ async function load(): Promise<void> {
     loading.value = false
   }
 }
+async function loadBrand(): Promise<void> {
+  if (!canList.value) return
+  brandLoading.value = true
+  brandError.value = ''
+  try {
+    brandForm.value = await getBrandSettings()
+  } catch {
+    brandError.value = t('setting.brandLoadFailed')
+  } finally {
+    brandLoading.value = false
+  }
+}
+async function saveBrand(): Promise<void> {
+  if (!canUpdate.value || brandSaving.value) return
+  const next = {
+    titleZhCN: brandForm.value.titleZhCN.trim(),
+    titleEnUS: brandForm.value.titleEnUS.trim(),
+    defaultAvatar: brandForm.value.defaultAvatar.trim(),
+  }
+  if (next.titleZhCN === '' || next.titleEnUS === '') {
+    brandError.value = t('setting.brandTitleRequired')
+    return
+  }
+  brandSaving.value = true
+  brandError.value = ''
+  try {
+    await updateBrandSettings(next)
+    brandForm.value = next
+    ElNotification.success({ title: t('setting.saved') })
+  } catch {
+    brandError.value = t('setting.brandSaveFailed')
+  } finally {
+    brandSaving.value = false
+  }
+}
 function search(): void {
   page.value = 1
   void load()
@@ -199,11 +243,24 @@ function typeLabel(value: SettingValueType): string {
 
 onMounted(() => {
   void load()
+  void loadBrand()
 })
 </script>
 
 <template>
   <AppPage class="setting-page">
+    <BrandSettingsPanel
+      v-model:form="brandForm"
+      :loading="brandLoading"
+      :saving="brandSaving"
+      :error="brandError"
+      :can-update="canUpdate"
+      :can-upload="canUpload"
+      @save="saveBrand"
+    />
+    <div class="setting-page__advanced-header">
+      <h2>{{ t('setting.advancedTitle') }}</h2>
+    </div>
     <AppSearch
       v-model="searchModel"
       class="management-page__filters"
@@ -290,3 +347,17 @@ onMounted(() => {
     />
   </AppPage>
 </template>
+
+<style scoped>
+.setting-page__advanced-header {
+  margin: 24px 0 10px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.setting-page__advanced-header h2 {
+  margin: 0;
+  color: var(--el-text-color-primary);
+  font-size: 16px;
+  line-height: 1.5;
+}
+</style>

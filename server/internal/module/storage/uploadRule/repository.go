@@ -149,6 +149,48 @@ func (r *Repository) Update(ctx context.Context, id int64, v map[string]any) err
 	}
 	return nil
 }
+func (r *Repository) ReplaceCodes(ctx context.Context, ruleID, platformID int64, current, next []string, now time.Time) error {
+	currentSet := make(map[string]struct{}, len(current))
+	nextSet := make(map[string]struct{}, len(next))
+	for _, code := range current {
+		currentSet[code] = struct{}{}
+	}
+	for _, code := range next {
+		nextSet[code] = struct{}{}
+	}
+	removed := make([]string, 0)
+	for _, code := range current {
+		if _, keep := nextSet[code]; !keep {
+			removed = append(removed, code)
+		}
+	}
+	if len(removed) > 0 {
+		result := r.db.WithContext(ctx).Model(&RuleCode{}).Where("rule_id=? AND code IN ? AND deleted_at IS NULL", ruleID, removed).Update("deleted_at", now)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != int64(len(removed)) {
+			return gorm.ErrRecordNotFound
+		}
+	}
+	added := make([]RuleCode, 0)
+	for _, code := range next {
+		if _, exists := currentSet[code]; !exists {
+			added = append(added, RuleCode{RuleID: ruleID, PlatformID: platformID, Code: code, CreatedAt: now})
+		}
+	}
+	if len(added) == 0 {
+		return nil
+	}
+	if err := r.db.WithContext(ctx).Create(&added).Error; err != nil {
+		var postgresError *pgconn.PgError
+		if errors.As(err, &postgresError) && postgresError.Code == "23505" {
+			return ErrConflict
+		}
+		return err
+	}
+	return nil
+}
 func (r *Repository) MarkDeleted(ctx context.Context, id int64, now time.Time) error {
 	res := r.db.WithContext(ctx).Model(&Model{}).Where("id=? AND deleted_at IS NULL AND is_enabled=0", id).Updates(map[string]any{"deleted_at": now, "updated_at": now})
 	if res.Error != nil {

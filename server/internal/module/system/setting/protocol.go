@@ -24,6 +24,12 @@ const (
 	ValueTypeJSON   = sharedsetting.ValueTypeJSON
 )
 
+const (
+	BrandTitleZhCNKey     = "app.brand.title_zh_cn"
+	BrandTitleEnUSKey     = "app.brand.title_en_us"
+	BrandDefaultAvatarKey = "app.brand.default_avatar"
+)
+
 var ErrNotFound = errNotFound{}
 
 type errNotFound struct{}
@@ -57,6 +63,12 @@ type CreateInput struct {
 type UpdateInput struct {
 	Value, Description string
 	ValueType          int
+}
+
+type BrandSettings struct {
+	TitleZhCN     string `json:"titleZhCN"`
+	TitleEnUS     string `json:"titleEnUS"`
+	DefaultAvatar string `json:"defaultAvatar"`
 }
 
 type Detail struct{ Record Record }

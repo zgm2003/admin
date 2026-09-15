@@ -22,6 +22,8 @@ type service interface {
 	Update(context.Context, string, UpdateInput) error
 	UpdateStatus(context.Context, string, yesno.Value) error
 	Delete(context.Context, string) error
+	Brand(context.Context) (BrandSettings, error)
+	UpdateBrand(context.Context, BrandSettings) error
 }
 type Handler struct{ service service }
 
@@ -108,6 +110,33 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 	if err := h.service.Delete(c.Request.Context(), c.Param("key")); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, struct{}{})
+}
+
+func (h *Handler) Brand(c *gin.Context) {
+	brand, err := h.service.Brand(c.Request.Context())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, brand)
+}
+
+func (h *Handler) UpdateBrand(c *gin.Context) {
+	var request brandRequest
+	if err := validate.BindJSON(c, &request); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	brand, err := request.input()
+	if err != nil {
+		response.Fail(c, apperror.InvalidRequest(err))
+		return
+	}
+	if err := h.service.UpdateBrand(c.Request.Context(), brand); err != nil {
 		response.Fail(c, err)
 		return
 	}

@@ -17,6 +17,7 @@ type fakeRepository struct {
 	update   Record
 	findErr  error
 	writeErr error
+	brand    BrandSettings
 }
 
 func (f *fakeRepository) List(context.Context, ListQuery) ([]Record, int64, error) {
@@ -51,6 +52,21 @@ func (f *fakeRepository) UpdateStatus(_ context.Context, key string, status yesn
 	return f.writeErr
 }
 func (f *fakeRepository) Delete(_ context.Context, key string) error { return f.writeErr }
+func (f *fakeRepository) FindBrand(_ context.Context) (BrandSettings, error) {
+	if f.findErr != nil {
+		return BrandSettings{}, f.findErr
+	}
+	return BrandSettings{
+		TitleZhCN: f.rows[BrandTitleZhCNKey].Value, TitleEnUS: f.rows[BrandTitleEnUSKey].Value, DefaultAvatar: f.rows[BrandDefaultAvatarKey].Value,
+	}, nil
+}
+func (f *fakeRepository) UpdateBrand(_ context.Context, brand BrandSettings, _ time.Time) error {
+	if f.writeErr != nil {
+		return f.writeErr
+	}
+	f.brand = brand
+	return nil
+}
 
 func TestServiceCreateRejectsUnknownValueTypeAndMalformedJSON(t *testing.T) {
 	service := NewService(&fakeRepository{})
@@ -94,6 +110,44 @@ func TestServicePropagatesRepositoryFailure(t *testing.T) {
 	service := NewService(&fakeRepository{findErr: repoErr})
 	if _, err := service.FindByKey(context.Background(), "auth.captcha.ttl_minutes"); !errors.Is(err, repoErr) {
 		t.Fatalf("expected repository error, got %v", err)
+	}
+}
+
+func TestServiceReadsAndAtomicallyUpdatesBrandSettings(t *testing.T) {
+	repo := &fakeRepository{rows: map[string]Record{
+		BrandTitleZhCNKey:     {Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandTitleEnUSKey:     {Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
+	}}
+	service := NewService(repo)
+	brand, err := service.Brand(context.Background())
+	if err != nil || brand.TitleZhCN != "智澜" || brand.TitleEnUS != "ZHILAN" || brand.DefaultAvatar != "" {
+		t.Fatalf("brand=%+v error=%v", brand, err)
+	}
+
+	err = service.UpdateBrand(context.Background(), BrandSettings{
+		TitleZhCN: " 新标题 ", TitleEnUS: " New title ", DefaultAvatar: "avatar/2026/09/15/default.png",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := BrandSettings{TitleZhCN: "新标题", TitleEnUS: "New title", DefaultAvatar: "avatar/2026/09/15/default.png"}
+	if repo.brand != want {
+		t.Fatalf("updated brand=%+v want=%+v", repo.brand, want)
+	}
+}
+
+func TestServiceRejectsInvalidBrandSettings(t *testing.T) {
+	service := NewService(&fakeRepository{})
+	for _, input := range []BrandSettings{
+		{TitleZhCN: "", TitleEnUS: "ZHILAN"},
+		{TitleZhCN: "智澜", TitleEnUS: ""},
+		{TitleZhCN: "智澜", TitleEnUS: "ZHILAN", DefaultAvatar: "other/default.png"},
+		{TitleZhCN: "智澜", TitleEnUS: "ZHILAN", DefaultAvatar: "avatar/../secret.png"},
+	} {
+		if err := service.UpdateBrand(context.Background(), input); err == nil {
+			t.Fatalf("input=%+v should fail", input)
+		}
 	}
 }
 

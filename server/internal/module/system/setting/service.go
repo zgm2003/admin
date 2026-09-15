@@ -23,12 +23,15 @@ type repository interface {
 	Update(context.Context, string, Record) error
 	UpdateStatus(context.Context, string, yesno.Value, time.Time) error
 	Delete(context.Context, string) error
+	FindBrand(context.Context) (BrandSettings, error)
+	UpdateBrand(context.Context, BrandSettings, time.Time) error
 }
 
 type settingCache interface {
 	Get(context.Context, string) (Record, bool, error)
 	Set(context.Context, Record) error
 	Delete(context.Context, string) error
+	DeleteMany(context.Context, []string) error
 }
 
 type Service struct {
@@ -39,6 +42,35 @@ type Service struct {
 func NewService(repository repository) *Service { return &Service{repository: repository} }
 
 func (s *Service) SetCache(cache settingCache) { s.cache = cache }
+
+func (s *Service) Brand(ctx context.Context) (BrandSettings, error) {
+	brand, err := s.repository.FindBrand(ctx)
+	if err != nil {
+		return BrandSettings{}, apperror.DependencyUnavailable(err)
+	}
+	return brand, nil
+}
+
+func (s *Service) UpdateBrand(ctx context.Context, brand BrandSettings) error {
+	brand.TitleZhCN = strings.TrimSpace(brand.TitleZhCN)
+	brand.TitleEnUS = strings.TrimSpace(brand.TitleEnUS)
+	brand.DefaultAvatar = strings.TrimSpace(brand.DefaultAvatar)
+	if utf8.RuneCountInString(brand.TitleZhCN) == 0 || utf8.RuneCountInString(brand.TitleZhCN) > 128 || utf8.RuneCountInString(brand.TitleEnUS) == 0 || utf8.RuneCountInString(brand.TitleEnUS) > 128 {
+		return apperror.InvalidRequest(fmt.Errorf("brand title is invalid"))
+	}
+	if brand.DefaultAvatar != "" && (!strings.HasPrefix(brand.DefaultAvatar, "avatar/") || strings.Contains(brand.DefaultAvatar, "..") || strings.ContainsAny(brand.DefaultAvatar, "\\\r\n\t")) {
+		return apperror.InvalidRequest(fmt.Errorf("brand avatar is invalid"))
+	}
+	if err := s.repository.UpdateBrand(ctx, brand, time.Now().UTC()); err != nil {
+		return apperror.DependencyUnavailable(err)
+	}
+	if s.cache != nil {
+		if err := s.cache.DeleteMany(ctx, []string{BrandTitleZhCNKey, BrandTitleEnUSKey, BrandDefaultAvatarKey}); err != nil {
+			return apperror.DependencyUnavailable(err)
+		}
+	}
+	return nil
+}
 
 func (s *Service) Find(ctx context.Context, key string) (Record, error) {
 	key = strings.TrimSpace(key)

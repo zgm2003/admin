@@ -111,7 +111,7 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) error {
 		return invalid(fmt.Errorf("id invalid"))
 	}
 	in = normalizeUpdateInput(in)
-	if e := validateFields(1, []string{"x"}, in.Name, in.CosConfigID, in.MaxFileSizeBytes, in.AllowedExtensions, in.AllowedMimeTypes, in.AccessMode, in.Remark, false); e != nil {
+	if e := validateFields(1, in.Codes, in.Name, in.CosConfigID, in.MaxFileSizeBytes, in.AllowedExtensions, in.AllowedMimeTypes, in.AccessMode, in.Remark, false); e != nil {
 		return invalid(e)
 	}
 	return s.repository.Transaction(ctx, func(r *Repository) error {
@@ -133,10 +133,19 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) error {
 		if in.AccessMode == "public" && (config.BucketDomain == nil || strings.TrimSpace(*config.BucketDomain) == "") {
 			return conflict(fmt.Errorf("public rule requires bucket domain"))
 		}
-		if e = r.Update(ctx, id, map[string]any{"name": in.Name, "cos_config_id": in.CosConfigID, "max_file_size_bytes": in.MaxFileSizeBytes, "allowed_extensions": StringArray(in.AllowedExtensions), "allowed_mime_types": StringArray(in.AllowedMimeTypes), "access_mode": in.AccessMode, "remark": in.Remark, "updated_at": time.Now().UTC()}); e != nil {
+		now := time.Now().UTC()
+		if e = r.ReplaceCodes(ctx, id, m.PlatformID, m.Codes, in.Codes, now); e != nil {
+			if errors.Is(e, ErrConflict) {
+				return conflict(e)
+			}
 			return dependency(e)
 		}
-		_ = m
+		if e = r.Update(ctx, id, map[string]any{"name": in.Name, "cos_config_id": in.CosConfigID, "max_file_size_bytes": in.MaxFileSizeBytes, "allowed_extensions": StringArray(in.AllowedExtensions), "allowed_mime_types": StringArray(in.AllowedMimeTypes), "access_mode": in.AccessMode, "remark": in.Remark, "updated_at": now}); e != nil {
+			if errors.Is(e, ErrConflict) {
+				return conflict(e)
+			}
+			return dependency(e)
+		}
 		return nil
 	})
 }
@@ -189,6 +198,7 @@ func normalizeCreateInput(in CreateInput) CreateInput {
 	return in
 }
 func normalizeUpdateInput(in UpdateInput) UpdateInput {
+	in.Codes = normalize(in.Codes, false)
 	in.Name = strings.TrimSpace(in.Name)
 	in.Remark = strings.TrimSpace(in.Remark)
 	in.AllowedExtensions = normalize(in.AllowedExtensions, true)

@@ -131,7 +131,7 @@ export function useStorageForms(
     ],
     codes: [
       {
-        required: editingRule.value === null,
+        required: true,
         validator: (_rule, value, callback) =>
           Array.isArray(value) && value.length > 0
             ? callback()
@@ -224,15 +224,20 @@ export function useStorageForms(
   }
 
   function normalizeRuleValues(): {
+    codes: string[]
     allowedExtensions: string[]
     allowedMimeTypes: string[]
   } | null {
+    const codes = ruleForm.value.codes
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean)
     const allowedExtensions = ruleForm.value.allowedExtensions
       .map((item) => item.trim().toLowerCase().replace(/^\./, ''))
       .filter(Boolean)
     const allowedMimeTypes = ruleForm.value.allowedMimeTypes
       .map((item) => item.trim().toLowerCase())
       .filter(Boolean)
+    ruleForm.value.codes = codes
     ruleForm.value.allowedExtensions = allowedExtensions
     ruleForm.value.allowedMimeTypes = allowedMimeTypes
     if (allowedExtensions.length === 0) {
@@ -240,7 +245,7 @@ export function useStorageForms(
       return null
     }
     ruleExtensionsError.value = ''
-    return { allowedExtensions, allowedMimeTypes }
+    return { codes, allowedExtensions, allowedMimeTypes }
   }
 
   function toggleAllExtensions(checked: boolean | string | number): void {

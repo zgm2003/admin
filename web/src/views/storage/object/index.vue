@@ -286,10 +286,11 @@ async function saveRule(): Promise<void> {
   if (storageOptionsLoading.value || storageOptionsError.value !== '') return
   const normalizedValues = normalizeRuleValues()
   if (normalizedValues === null) return
-  const { allowedExtensions, allowedMimeTypes } = normalizedValues
+  const { codes, allowedExtensions, allowedMimeTypes } = normalizedValues
   const valid = await (ruleDialogRef.value?.validate() ?? Promise.resolve(false)).catch(() => false)
   if (!valid) return
   const normalized = {
+    codes,
     name: ruleForm.value.name.trim(),
     cosConfigId: ruleForm.value.cosConfigId,
     maxFileSizeBytes: ruleForm.value.maxFileSizeBytes,
@@ -304,7 +305,6 @@ async function saveRule(): Promise<void> {
       await createUploadRule({
         ...normalized,
         platformId: ruleForm.value.platformId,
-        codes: ruleForm.value.codes.map((code) => code.trim().toLowerCase()).filter(Boolean),
         isEnabled: ruleForm.value.isEnabled,
       })
     ruleDialog.value = false

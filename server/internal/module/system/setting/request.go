@@ -23,6 +23,11 @@ type updateRequest struct {
 type statusRequest struct {
 	IsEnabled *yesno.Value `json:"isEnabled"`
 }
+type brandRequest struct {
+	TitleZhCN     *string `json:"titleZhCN"`
+	TitleEnUS     *string `json:"titleEnUS"`
+	DefaultAvatar *string `json:"defaultAvatar"`
+}
 
 func (r createRequest) input() (CreateInput, error) {
 	if r.Key == nil || r.Value == nil || r.ValueType == nil {
@@ -43,6 +48,12 @@ func (r updateRequest) input() (UpdateInput, error) {
 		description = *r.Description
 	}
 	return UpdateInput{Value: *r.Value, ValueType: *r.ValueType, Description: description}, nil
+}
+func (r brandRequest) input() (BrandSettings, error) {
+	if r.TitleZhCN == nil || r.TitleEnUS == nil || r.DefaultAvatar == nil {
+		return BrandSettings{}, fmt.Errorf("titleZhCN, titleEnUS and defaultAvatar are required")
+	}
+	return BrandSettings{TitleZhCN: *r.TitleZhCN, TitleEnUS: *r.TitleEnUS, DefaultAvatar: *r.DefaultAvatar}, nil
 }
 func parseListQuery(values url.Values) (ListQuery, error) {
 	for key, entries := range values {

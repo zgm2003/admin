@@ -74,3 +74,14 @@ func (c *Cache) Delete(ctx context.Context, settingKey string) error {
 	}
 	return c.client.Delete(ctx, c.key(settingKey))
 }
+
+func (c *Cache) DeleteMany(ctx context.Context, settingKeys []string) error {
+	if c == nil || c.client == nil {
+		return nil
+	}
+	keys := make([]string, 0, len(settingKeys))
+	for _, settingKey := range settingKeys {
+		keys = append(keys, c.key(settingKey))
+	}
+	return c.client.DeleteMany(ctx, keys)
+}

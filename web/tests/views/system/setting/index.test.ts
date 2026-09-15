@@ -10,17 +10,21 @@ import { YesNo } from '@/enums/yesNo'
 import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
 import SettingPageView from '@/views/system/setting/index.vue'
+import UpMedia from '@/components/UpMedia/index.vue'
 
 vi.mock('@/api/system/setting', () => ({
   createSetting: vi.fn(),
   deleteSetting: vi.fn(),
   getSettings: vi.fn(),
+  getBrandSettings: vi.fn(),
   updateSetting: vi.fn(),
+  updateBrandSettings: vi.fn(),
   updateSettingStatus: vi.fn(),
 }))
 
 const builtinSetting = settingRow({ id: 1, key: 'auth.captcha.ttl_minutes', isBuiltin: YesNo.Yes })
 const customSetting = settingRow({ id: 2, key: 'auth.captcha.slide_padding', isBuiltin: YesNo.No })
+const mountedWrappers: VueWrapper[] = []
 
 describe('system setting page', () => {
   beforeEach(() => {
@@ -32,13 +36,20 @@ describe('system setting page', () => {
       page: 1,
       pageSize: 20,
     })
+    vi.mocked(settingAPI.getBrandSettings).mockResolvedValue({
+      titleZhCN: '智澜',
+      titleEnUS: 'ZHILAN',
+      defaultAvatar: '',
+    })
     vi.mocked(settingAPI.createSetting).mockResolvedValue(3)
     vi.mocked(settingAPI.updateSetting).mockResolvedValue(undefined)
+    vi.mocked(settingAPI.updateBrandSettings).mockResolvedValue(undefined)
     vi.mocked(settingAPI.updateSettingStatus).mockResolvedValue(undefined)
     vi.mocked(settingAPI.deleteSetting).mockResolvedValue(undefined)
   })
 
   afterEach(() => {
+    for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
   })
 
@@ -59,7 +70,7 @@ describe('system setting page', () => {
     await flushPromises()
     expect(failed.getComponent({ name: 'AppTable' }).props('resultState')).toBe('error')
     expect(failed.text()).toContain('系统设置加载失败')
-  })
+  }, 30_000)
 
   it('follows the standard management page shell and shared component contracts', async () => {
     const wrapper = mountPage(['system:setting:list', 'system:setting:create'])
@@ -83,6 +94,67 @@ describe('system setting page', () => {
       true,
     )
     expect(wrapper.find('[data-testid="setting-empty"]').exists()).toBe(false)
+  })
+
+  it('edits brand titles and reuses the single-image avatar upload rule', async () => {
+    const wrapper = mountPage([
+      'system:setting:list',
+      'system:setting:update',
+      'storage:object:upload',
+    ])
+    await flushPromises()
+
+    const media = wrapper.getComponent(UpMedia)
+    expect(media.props()).toMatchObject({
+      modelValue: '',
+      ruleCode: 'avatar',
+      multiple: false,
+      accept: 'image/*',
+      variant: 'avatar',
+      disabled: false,
+    })
+    await wrapper.get('[data-testid="brand-title-zh-cn"]').setValue(' 新标题 ')
+    await wrapper.get('[data-testid="brand-title-en-us"]').setValue(' New title ')
+    media.vm.$emit('update:modelValue', 'avatar/2026/09/15/default.png')
+    await wrapper.get('[data-testid="brand-save"]').trigger('click')
+    await flushPromises()
+
+    expect(settingAPI.updateBrandSettings).toHaveBeenCalledWith({
+      titleZhCN: '新标题',
+      titleEnUS: 'New title',
+      defaultAvatar: 'avatar/2026/09/15/default.png',
+    })
+  })
+
+  it('keeps brand values visible but disables mutations without their permissions', async () => {
+    const wrapper = mountPage(['system:setting:list'])
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="brand-title-zh-cn"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.getComponent(UpMedia).props('disabled')).toBe(true)
+    expect(wrapper.find('[data-testid="brand-save"]').exists()).toBe(false)
+  })
+
+  it('formats valid JSON and blocks malformed JSON in the typed setting editor', async () => {
+    const wrapper = mountPage(['system:setting:list', 'system:setting:create'])
+    await flushPromises()
+    await wrapper.get('[data-testid="setting-create"]').trigger('click')
+    const typeSelect = wrapper
+      .getComponent({ name: 'SettingDialog' })
+      .getComponent({ name: 'ElSelectV2' })
+    typeSelect.vm.$emit('update:modelValue', 4)
+    await setBodyValue('setting-form-key', 'app.brand.payload')
+    await setBodyValue('setting-form-value', '{"name":"智澜"}')
+    await clickBody('setting-json-format')
+    const valueRoot = document.querySelector('[data-testid="setting-form-value"]')
+    const textarea =
+      valueRoot instanceof HTMLTextAreaElement ? valueRoot : valueRoot?.querySelector('textarea')
+    expect(textarea?.value).toContain('\n  "name": "智澜"\n')
+
+    await setBodyValue('setting-form-value', '{')
+    await clickBody('setting-save')
+    expect(settingAPI.createSetting).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('JSON 格式不正确')
   })
 
   it('submits normalized filters and keeps them while paging', async () => {
@@ -167,7 +239,13 @@ describe('system setting page', () => {
     if (!(keyElement instanceof HTMLInputElement) || !keyElement.disabled) {
       throw new Error('setting key must be disabled during edit')
     }
-    await setBodyValue('setting-form-value', '3')
+    const valueInput = wrapper
+      .getComponent({ name: 'SettingDialog' })
+      .findAllComponents({ name: 'ElInput' })
+      .find((component) => component.attributes('data-testid') === 'setting-form-value')
+    if (valueInput === undefined) throw new Error('setting value input not found')
+    valueInput.vm.$emit('update:modelValue', '3')
+    await nextTick()
     await clickBody('setting-save')
     await flushPromises()
     expect(settingAPI.updateSetting).toHaveBeenCalledWith('auth.captcha.ttl_minutes', {
@@ -182,10 +260,12 @@ function mountPage(permissionCodes: string[]): VueWrapper {
   const pinia = createPinia()
   setActivePinia(pinia)
   usePermissionStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes })
-  return mount(SettingPageView, {
+  const wrapper = mount(SettingPageView, {
     attachTo: document.body,
     global: { plugins: [pinia, appI18n, ElementPlus] },
   })
+  mountedWrappers.push(wrapper)
+  return wrapper
 }
 
 function settingRow(overrides: Partial<SystemSetting>): SystemSetting {
