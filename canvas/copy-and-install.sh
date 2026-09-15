@@ -9,11 +9,6 @@ echo "=== copy pages / hooks ==="
 cp -r "$SRC/src/pages" "$DST/src/"
 cp -r "$SRC/src/hooks" "$DST/src/"
 
-echo "=== copy remaining services ==="
-cp "$SRC/src/services/api/canvas-agent.ts" "$DST/src/services/api/"
-cp "$SRC/src/services/app-sync.ts" "$DST/src/services/"
-cp "$SRC/src/services/webdav-sync.ts" "$DST/src/services/"
-
 echo "=== copy public assets ==="
 cp "$SRC/public/config.js" "$DST/public/"
 cp -r "$SRC/public/icons" "$DST/public/"
@@ -28,6 +23,6 @@ pnpm add @ant-design/pro-components@3.0.0-beta.3 @tanstack/react-query@^5.100.9 
 pnpm add -D @types/file-saver@^2.0.7
 
 echo "=== typecheck ==="
-pnpm exec tsc --noEmit 2>&1 | head -80
+pnpm exec tsc --noEmit 2>&1 | head -100
 
 echo "=== done ==="

@@ -1,9 +1,8 @@
+// 临时桩：本地 Canvas Agent（Codex MCP）通信层，admin 版规划中暂不接入，已按静态阶段回退。
+// 类型定义保留供 Agent 面板组件编译；接入 admin 后端或决定启用 Agent 时再整体替换。
 import i18n from "@/i18n";
 import type { CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import type { AgentReasoningEffort } from "@/stores/use-agent-store";
-
-type AgentConfigResponse = { ok?: boolean; protocolVersion?: number; url?: string; token?: string; hasToken?: boolean };
-const AGENT_MESSAGE_ASSET_PATTERN = /^agent-asset:([a-f0-9]{64})\/([a-f0-9]{64}\.(?:gif|jpe?g|png|webp))$/;
 
 export class AgentApiError<T = unknown> extends Error {
     constructor(readonly status: number, readonly response: T & { code?: string; error?: string; msg?: string }) {
@@ -41,99 +40,68 @@ export type AgentSkillsResponse = { ok?: boolean; data?: AgentSkillSummary[]; er
 export type AgentSkillResponse = { ok?: boolean; data?: AgentSkillDetail };
 export type AgentSkillDraftResponse = { ok?: boolean; data?: AgentSkillDraft };
 
-export async function postState(endpoint: string, token: string, clientId: string, snapshot: CanvasAgentSnapshot | null) {
-    try {
-        const response = await fetch(`${endpoint}/canvas/state?token=${encodeURIComponent(token)}&clientId=${encodeURIComponent(clientId)}`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(snapshot ? { ...snapshot, hasCanvas: true } : { hasCanvas: false }),
-        });
-        return response.ok;
-    } catch {
-        return false;
-    }
+export async function postState(_endpoint: string, _token: string, _clientId: string, _snapshot: CanvasAgentSnapshot | null) {
+    return false;
 }
 
-export async function activateAgentClient(endpoint: string, token: string, clientId: string) {
-    try {
-        await fetch(`${endpoint}/canvas/activate?token=${encodeURIComponent(token)}&clientId=${encodeURIComponent(clientId)}`, { method: "POST" });
-    } catch {}
+export async function activateAgentClient(_endpoint: string, _token: string, _clientId: string) {}
+
+export async function postToolResult(_endpoint: string, _token: string, _clientId: string, _body: { requestId: string; result?: unknown; error?: string }) {
+    throw new AgentApiError(501, {});
 }
 
-export async function postToolResult(endpoint: string, token: string, clientId: string, body: { requestId: string; result?: unknown; error?: string }) {
-    await fetchAgentJson(endpoint, token, `/canvas/result?clientId=${encodeURIComponent(clientId)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+export async function postCodexApproval(_endpoint: string, _token: string, _requestId: string, _decision: "accept" | "acceptForSession" | "decline") {
+    throw new AgentApiError(501, {});
 }
 
-export async function postCodexApproval(endpoint: string, token: string, requestId: string, decision: "accept" | "acceptForSession" | "decline") {
-    await fetchAgentJson(endpoint, token, "/agent/codex/approval", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ requestId, decision }) });
+export async function interruptCodexTurn(_endpoint: string, _token: string, _threadId?: string) {
+    throw new AgentApiError(501, {});
 }
 
-export async function interruptCodexTurn(endpoint: string, token: string, threadId?: string) {
-    await fetchAgentJson(endpoint, token, "/agent/codex/interrupt", jsonPost({ threadId }));
+export async function acknowledgeCodexHistory(_endpoint: string, _token: string, _threadId: string, _turnIds: string[]) {
+    throw new AgentApiError(501, {});
 }
 
-export async function acknowledgeCodexHistory(endpoint: string, token: string, threadId: string, turnIds: string[]) {
-    await fetchAgentJson(endpoint, token, "/agent/codex/history/ack", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ threadId, turnIds }) });
+export async function revealAgentLocalFile(_endpoint: string, _token: string, _path: string) {
+    throw new AgentApiError(501, {});
 }
 
-export async function revealAgentLocalFile(endpoint: string, token: string, path: string) {
-    await fetchAgentJson(endpoint, token, "/agent/local-file/reveal", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path }) });
+export function resolveAgentMessageAssetUrl(_endpoint: string, _token: string, value: string) {
+    return value.startsWith("agent-asset:") ? "" : value;
 }
 
-export function resolveAgentMessageAssetUrl(endpoint: string, token: string, value: string) {
-    const match = AGENT_MESSAGE_ASSET_PATTERN.exec(value);
-    if (!match) return value.startsWith("agent-asset:") ? "" : value;
-    const baseUrl = endpoint.trim().replace(/\/$/, "");
-    return baseUrl && token ? `${baseUrl}/agent/message-assets/${match[1]}/${match[2]}?token=${encodeURIComponent(token)}` : "";
+export function fetchCodexSkills(_endpoint: string, _token: string, _forceReload = false): Promise<AgentSkillsResponse> {
+    return Promise.reject(new AgentApiError(501, {}));
 }
 
-export function fetchCodexSkills(endpoint: string, token: string, forceReload = false) {
-    return fetchAgentJson<AgentSkillsResponse>(endpoint, token, `/agent/codex/skills${forceReload ? "?forceReload=1" : ""}`);
+export function fetchCodexSkill(_endpoint: string, _token: string, _name: string): Promise<AgentSkillResponse> {
+    return Promise.reject(new AgentApiError(501, {}));
 }
 
-export function fetchCodexSkill(endpoint: string, token: string, name: string) {
-    return fetchAgentJson<AgentSkillResponse>(endpoint, token, `/agent/codex/skills/${encodeURIComponent(name)}`);
+export function createCodexSkill(_endpoint: string, _token: string, _input: AgentSkillInput): Promise<AgentSkillResponse> {
+    return Promise.reject(new AgentApiError(501, {}));
 }
 
-export function createCodexSkill(endpoint: string, token: string, input: AgentSkillInput) {
-    return fetchAgentJson<AgentSkillResponse>(endpoint, token, "/agent/codex/skills", jsonPost(input));
+export function createCodexSkillDraft(_endpoint: string, _token: string, _input: AgentSkillDraftInput): Promise<AgentSkillDraftResponse> {
+    return Promise.reject(new AgentApiError(501, {}));
 }
 
-export function createCodexSkillDraft(endpoint: string, token: string, input: AgentSkillDraftInput) {
-    return fetchAgentJson<AgentSkillDraftResponse>(endpoint, token, "/agent/codex/skills/draft", jsonPost(input));
+export function updateCodexSkill(_endpoint: string, _token: string, _name: string, _input: AgentSkillInput): Promise<AgentSkillResponse> {
+    return Promise.reject(new AgentApiError(501, {}));
 }
 
-export function updateCodexSkill(endpoint: string, token: string, name: string, input: AgentSkillInput) {
-    return fetchAgentJson<AgentSkillResponse>(endpoint, token, `/agent/codex/skills/${encodeURIComponent(name)}`, jsonPost(input));
+export function deleteCodexSkill(_endpoint: string, _token: string, _name: string, _expectedRevision: string): Promise<{ ok?: boolean }> {
+    return Promise.reject(new AgentApiError(501, {}));
 }
 
-export function deleteCodexSkill(endpoint: string, token: string, name: string, expectedRevision: string) {
-    return fetchAgentJson<{ ok?: boolean }>(endpoint, token, `/agent/codex/skills/${encodeURIComponent(name)}/delete`, jsonPost({ expectedRevision }));
+export function setCodexSkillEnabled(_endpoint: string, _token: string, _skill: Pick<AgentSkillSummary, "name" | "path">, _enabled: boolean): Promise<{ ok?: boolean }> {
+    return Promise.reject(new AgentApiError(501, {}));
 }
 
-export function setCodexSkillEnabled(endpoint: string, token: string, skill: Pick<AgentSkillSummary, "name" | "path">, enabled: boolean) {
-    return fetchAgentJson<{ ok?: boolean }>(endpoint, token, `/agent/codex/skills/${encodeURIComponent(skill.name)}/enabled`, jsonPost({ ...skill, enabled }));
+export async function fetchAgentJson<T>(_endpoint: string, _token: string, _path: string, _init?: RequestInit) {
+    throw new AgentApiError(501, {});
 }
 
-export async function fetchAgentJson<T>(endpoint: string, token: string, path: string, init?: RequestInit) {
-    const url = `${endpoint}${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
-    const res = await fetch(url, init);
-    const data = (await res.json().catch(() => ({}))) as T & { error?: string; msg?: string };
-    if (!res.ok) throw new AgentApiError(res.status, data);
-    return data;
-}
-
-export async function discoverAgentConfig(endpoint: string) {
-    try {
-        const res = await fetch(`${endpoint}/config`);
-        if (!res.ok) return null;
-        const data = (await res.json()) as AgentConfigResponse;
-        return data.ok ? data : null;
-    } catch {
-        return null;
-    }
-}
-
-function jsonPost(body: unknown): RequestInit {
-    return { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
+export async function discoverAgentConfig(_endpoint: string) {
+    return null;
 }

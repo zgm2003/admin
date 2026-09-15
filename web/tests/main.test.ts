@@ -11,6 +11,7 @@ const appHarness = vi.hoisted(() => {
     createApp: vi.fn(() => app),
     initializeLocale: vi.fn(),
     installPermissionGuard: vi.fn(),
+    installRouteLoadRecovery: vi.fn(),
   }
 })
 
@@ -26,12 +27,16 @@ vi.mock('@/i18n', () => ({
 vi.mock('@/router', () => ({ router: { name: 'router' } }))
 vi.mock('@/store', () => ({ pinia: { name: 'pinia' } }))
 vi.mock('@/permission', () => ({ installPermissionGuard: appHarness.installPermissionGuard }))
+vi.mock('@/router/routeLoadRecovery', () => ({
+  installRouteLoadRecovery: appHarness.installRouteLoadRecovery,
+}))
 
 describe('application bootstrap', () => {
   it('bootstraps the app without eagerly installing the full Element Plus bundle', async () => {
     await import('@/main')
 
     expect(appHarness.initializeLocale).toHaveBeenCalledOnce()
+    expect(appHarness.installRouteLoadRecovery).toHaveBeenCalledWith({ name: 'router' })
     expect(appHarness.app.use).toHaveBeenCalledWith({ name: 'pinia' })
     expect(appHarness.app.use).toHaveBeenCalledWith({ name: 'router' })
     expect(appHarness.app.use).toHaveBeenCalledWith({ name: 'i18n' })
