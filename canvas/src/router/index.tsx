@@ -3,7 +3,7 @@ import { createBrowserRouter } from 'react-router-dom'
 
 import Layout from '@/layout'
 
-const HomePage = lazy(() => import('@/views/home'))
+const HomePage = lazy(() => import('@/pages/home'))
 const LoginPage = lazy(() => import('@/views/login'))
 const CanvasPage = lazy(() => import('@/pages/canvas'))
 const CanvasProjectPage = lazy(() => import('@/pages/canvas/project'))
