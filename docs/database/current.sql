@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict dFEPxZQ6nsRQnUnhjb5MfnBd29Y4cktIDCiollUwrH0EL2HzsDA2xmI9uA5XAue
+\restrict jNIyU2bb1BaKPX98eWbWqBIT4ujx6bzJb4EJN6Y9beabrviScjfCAsTJynyOlzR
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -20,16 +20,14 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: public; Type: SCHEMA; Schema: -; Owner: pg_database_owner
+-- Name: public; Type: SCHEMA; Schema: -; Owner: -
 --
 
 CREATE SCHEMA public;
 
 
-ALTER SCHEMA public OWNER TO pg_database_owner;
-
 --
--- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: pg_database_owner
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON SCHEMA public IS 'standard public schema';
@@ -40,7 +38,7 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- Name: system_operation_log; Type: TABLE; Schema: public; Owner: root
+-- Name: system_operation_log; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.system_operation_log (
@@ -68,10 +66,8 @@ CREATE TABLE public.system_operation_log (
 );
 
 
-ALTER TABLE public.system_operation_log OWNER TO root;
-
 --
--- Name: audit_operation_log_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: audit_operation_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.audit_operation_log_id_seq
@@ -82,17 +78,15 @@ CREATE SEQUENCE public.audit_operation_log_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.audit_operation_log_id_seq OWNER TO root;
-
 --
--- Name: audit_operation_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: audit_operation_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.audit_operation_log_id_seq OWNED BY public.system_operation_log.id;
 
 
 --
--- Name: user_session; Type: TABLE; Schema: public; Owner: root
+-- Name: user_session; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_session (
@@ -112,10 +106,8 @@ CREATE TABLE public.user_session (
 );
 
 
-ALTER TABLE public.user_session OWNER TO root;
-
 --
--- Name: auth_session_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: auth_session_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.auth_session_id_seq
@@ -126,17 +118,15 @@ CREATE SEQUENCE public.auth_session_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.auth_session_id_seq OWNER TO root;
-
 --
--- Name: auth_session_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: auth_session_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.auth_session_id_seq OWNED BY public.user_session.id;
 
 
 --
--- Name: message_mail_config; Type: TABLE; Schema: public; Owner: root
+-- Name: message_mail_config; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.message_mail_config (
@@ -162,10 +152,8 @@ CREATE TABLE public.message_mail_config (
 );
 
 
-ALTER TABLE public.message_mail_config OWNER TO root;
-
 --
--- Name: message_mail_config_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: message_mail_config_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.message_mail_config_id_seq
@@ -176,17 +164,15 @@ CREATE SEQUENCE public.message_mail_config_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.message_mail_config_id_seq OWNER TO root;
-
 --
--- Name: message_mail_config_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: message_mail_config_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.message_mail_config_id_seq OWNED BY public.message_mail_config.id;
 
 
 --
--- Name: message_mail_log; Type: TABLE; Schema: public; Owner: root
+-- Name: message_mail_log; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.message_mail_log (
@@ -211,10 +197,8 @@ CREATE TABLE public.message_mail_log (
 );
 
 
-ALTER TABLE public.message_mail_log OWNER TO root;
-
 --
--- Name: message_mail_log_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: message_mail_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.message_mail_log_id_seq
@@ -225,17 +209,15 @@ CREATE SEQUENCE public.message_mail_log_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.message_mail_log_id_seq OWNER TO root;
-
 --
--- Name: message_mail_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: message_mail_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.message_mail_log_id_seq OWNED BY public.message_mail_log.id;
 
 
 --
--- Name: message_mail_log_verification; Type: TABLE; Schema: public; Owner: root
+-- Name: message_mail_log_verification; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.message_mail_log_verification (
@@ -249,10 +231,8 @@ CREATE TABLE public.message_mail_log_verification (
 );
 
 
-ALTER TABLE public.message_mail_log_verification OWNER TO root;
-
 --
--- Name: message_mail_log_verification_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: message_mail_log_verification_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.message_mail_log_verification_id_seq
@@ -263,17 +243,15 @@ CREATE SEQUENCE public.message_mail_log_verification_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.message_mail_log_verification_id_seq OWNER TO root;
-
 --
--- Name: message_mail_log_verification_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: message_mail_log_verification_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.message_mail_log_verification_id_seq OWNED BY public.message_mail_log_verification.id;
 
 
 --
--- Name: message_mail_rate_limit_policy; Type: TABLE; Schema: public; Owner: root
+-- Name: message_mail_rate_limit_policy; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.message_mail_rate_limit_policy (
@@ -293,10 +271,8 @@ CREATE TABLE public.message_mail_rate_limit_policy (
 );
 
 
-ALTER TABLE public.message_mail_rate_limit_policy OWNER TO root;
-
 --
--- Name: message_mail_recipient_rule; Type: TABLE; Schema: public; Owner: root
+-- Name: message_mail_recipient_rule; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.message_mail_recipient_rule (
@@ -316,10 +292,8 @@ CREATE TABLE public.message_mail_recipient_rule (
 );
 
 
-ALTER TABLE public.message_mail_recipient_rule OWNER TO root;
-
 --
--- Name: message_mail_recipient_rule_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: message_mail_recipient_rule_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.message_mail_recipient_rule_id_seq
@@ -330,17 +304,15 @@ CREATE SEQUENCE public.message_mail_recipient_rule_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.message_mail_recipient_rule_id_seq OWNER TO root;
-
 --
--- Name: message_mail_recipient_rule_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: message_mail_recipient_rule_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.message_mail_recipient_rule_id_seq OWNED BY public.message_mail_recipient_rule.id;
 
 
 --
--- Name: message_mail_template; Type: TABLE; Schema: public; Owner: root
+-- Name: message_mail_template; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.message_mail_template (
@@ -362,10 +334,8 @@ CREATE TABLE public.message_mail_template (
 );
 
 
-ALTER TABLE public.message_mail_template OWNER TO root;
-
 --
--- Name: message_mail_template_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: message_mail_template_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.message_mail_template_id_seq
@@ -376,17 +346,15 @@ CREATE SEQUENCE public.message_mail_template_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.message_mail_template_id_seq OWNER TO root;
-
 --
--- Name: message_mail_template_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: message_mail_template_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.message_mail_template_id_seq OWNED BY public.message_mail_template.id;
 
 
 --
--- Name: message_sms_config; Type: TABLE; Schema: public; Owner: root
+-- Name: message_sms_config; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.message_sms_config (
@@ -411,10 +379,8 @@ CREATE TABLE public.message_sms_config (
 );
 
 
-ALTER TABLE public.message_sms_config OWNER TO root;
-
 --
--- Name: message_sms_config_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: message_sms_config_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.message_sms_config_id_seq
@@ -425,17 +391,15 @@ CREATE SEQUENCE public.message_sms_config_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.message_sms_config_id_seq OWNER TO root;
-
 --
--- Name: message_sms_config_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: message_sms_config_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.message_sms_config_id_seq OWNED BY public.message_sms_config.id;
 
 
 --
--- Name: message_sms_log; Type: TABLE; Schema: public; Owner: root
+-- Name: message_sms_log; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.message_sms_log (
@@ -464,10 +428,8 @@ CREATE TABLE public.message_sms_log (
 );
 
 
-ALTER TABLE public.message_sms_log OWNER TO root;
-
 --
--- Name: message_sms_log_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: message_sms_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.message_sms_log_id_seq
@@ -478,17 +440,15 @@ CREATE SEQUENCE public.message_sms_log_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.message_sms_log_id_seq OWNER TO root;
-
 --
--- Name: message_sms_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: message_sms_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.message_sms_log_id_seq OWNED BY public.message_sms_log.id;
 
 
 --
--- Name: message_sms_log_verification; Type: TABLE; Schema: public; Owner: root
+-- Name: message_sms_log_verification; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.message_sms_log_verification (
@@ -503,10 +463,8 @@ CREATE TABLE public.message_sms_log_verification (
 );
 
 
-ALTER TABLE public.message_sms_log_verification OWNER TO root;
-
 --
--- Name: message_sms_log_verification_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: message_sms_log_verification_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.message_sms_log_verification_id_seq
@@ -517,17 +475,15 @@ CREATE SEQUENCE public.message_sms_log_verification_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.message_sms_log_verification_id_seq OWNER TO root;
-
 --
--- Name: message_sms_log_verification_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: message_sms_log_verification_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.message_sms_log_verification_id_seq OWNED BY public.message_sms_log_verification.id;
 
 
 --
--- Name: message_sms_rate_limit_policy; Type: TABLE; Schema: public; Owner: root
+-- Name: message_sms_rate_limit_policy; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.message_sms_rate_limit_policy (
@@ -547,10 +503,8 @@ CREATE TABLE public.message_sms_rate_limit_policy (
 );
 
 
-ALTER TABLE public.message_sms_rate_limit_policy OWNER TO root;
-
 --
--- Name: message_sms_recipient_rule; Type: TABLE; Schema: public; Owner: root
+-- Name: message_sms_recipient_rule; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.message_sms_recipient_rule (
@@ -572,10 +526,8 @@ CREATE TABLE public.message_sms_recipient_rule (
 );
 
 
-ALTER TABLE public.message_sms_recipient_rule OWNER TO root;
-
 --
--- Name: message_sms_recipient_rule_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: message_sms_recipient_rule_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.message_sms_recipient_rule_id_seq
@@ -586,17 +538,15 @@ CREATE SEQUENCE public.message_sms_recipient_rule_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.message_sms_recipient_rule_id_seq OWNER TO root;
-
 --
--- Name: message_sms_recipient_rule_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: message_sms_recipient_rule_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.message_sms_recipient_rule_id_seq OWNED BY public.message_sms_recipient_rule.id;
 
 
 --
--- Name: message_sms_template; Type: TABLE; Schema: public; Owner: root
+-- Name: message_sms_template; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.message_sms_template (
@@ -616,10 +566,8 @@ CREATE TABLE public.message_sms_template (
 );
 
 
-ALTER TABLE public.message_sms_template OWNER TO root;
-
 --
--- Name: message_sms_template_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: message_sms_template_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.message_sms_template_id_seq
@@ -630,17 +578,15 @@ CREATE SEQUENCE public.message_sms_template_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.message_sms_template_id_seq OWNER TO root;
-
 --
--- Name: message_sms_template_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: message_sms_template_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.message_sms_template_id_seq OWNED BY public.message_sms_template.id;
 
 
 --
--- Name: permission_access_version; Type: TABLE; Schema: public; Owner: root
+-- Name: permission_access_version; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.permission_access_version (
@@ -652,10 +598,8 @@ CREATE TABLE public.permission_access_version (
 );
 
 
-ALTER TABLE public.permission_access_version OWNER TO root;
-
 --
--- Name: permission_auth_platform; Type: TABLE; Schema: public; Owner: root
+-- Name: permission_auth_platform; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.permission_auth_platform (
@@ -707,10 +651,8 @@ END)))),
 );
 
 
-ALTER TABLE public.permission_auth_platform OWNER TO root;
-
 --
--- Name: permission_auth_platform_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: permission_auth_platform_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.permission_auth_platform_id_seq
@@ -721,17 +663,15 @@ CREATE SEQUENCE public.permission_auth_platform_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.permission_auth_platform_id_seq OWNER TO root;
-
 --
--- Name: permission_auth_platform_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: permission_auth_platform_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.permission_auth_platform_id_seq OWNED BY public.permission_auth_platform.id;
 
 
 --
--- Name: permission_menu; Type: TABLE; Schema: public; Owner: root
+-- Name: permission_menu; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.permission_menu (
@@ -760,10 +700,8 @@ CREATE TABLE public.permission_menu (
 );
 
 
-ALTER TABLE public.permission_menu OWNER TO root;
-
 --
--- Name: permission_role; Type: TABLE; Schema: public; Owner: root
+-- Name: permission_role; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.permission_role (
@@ -780,10 +718,8 @@ CREATE TABLE public.permission_role (
 );
 
 
-ALTER TABLE public.permission_role OWNER TO root;
-
 --
--- Name: permission_role_menu; Type: TABLE; Schema: public; Owner: root
+-- Name: permission_role_menu; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.permission_role_menu (
@@ -796,10 +732,8 @@ CREATE TABLE public.permission_role_menu (
 );
 
 
-ALTER TABLE public.permission_role_menu OWNER TO root;
-
 --
--- Name: permission_user_role; Type: TABLE; Schema: public; Owner: root
+-- Name: permission_user_role; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.permission_user_role (
@@ -812,10 +746,8 @@ CREATE TABLE public.permission_user_role (
 );
 
 
-ALTER TABLE public.permission_user_role OWNER TO root;
-
 --
--- Name: rbac_access_version_user_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: rbac_access_version_user_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.rbac_access_version_user_id_seq
@@ -826,17 +758,15 @@ CREATE SEQUENCE public.rbac_access_version_user_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.rbac_access_version_user_id_seq OWNER TO root;
-
 --
--- Name: rbac_access_version_user_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: rbac_access_version_user_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.rbac_access_version_user_id_seq OWNED BY public.permission_access_version.user_id;
 
 
 --
--- Name: rbac_menu_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: rbac_menu_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.rbac_menu_id_seq
@@ -847,17 +777,15 @@ CREATE SEQUENCE public.rbac_menu_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.rbac_menu_id_seq OWNER TO root;
-
 --
--- Name: rbac_menu_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: rbac_menu_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.rbac_menu_id_seq OWNED BY public.permission_menu.id;
 
 
 --
--- Name: rbac_role_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: rbac_role_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.rbac_role_id_seq
@@ -868,17 +796,15 @@ CREATE SEQUENCE public.rbac_role_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.rbac_role_id_seq OWNER TO root;
-
 --
--- Name: rbac_role_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: rbac_role_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.rbac_role_id_seq OWNED BY public.permission_role.id;
 
 
 --
--- Name: rbac_role_menu_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: rbac_role_menu_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.rbac_role_menu_id_seq
@@ -889,17 +815,15 @@ CREATE SEQUENCE public.rbac_role_menu_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.rbac_role_menu_id_seq OWNER TO root;
-
 --
--- Name: rbac_role_menu_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: rbac_role_menu_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.rbac_role_menu_id_seq OWNED BY public.permission_role_menu.id;
 
 
 --
--- Name: rbac_user_role_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: rbac_user_role_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.rbac_user_role_id_seq
@@ -910,17 +834,15 @@ CREATE SEQUENCE public.rbac_user_role_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.rbac_user_role_id_seq OWNER TO root;
-
 --
--- Name: rbac_user_role_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: rbac_user_role_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.rbac_user_role_id_seq OWNED BY public.permission_user_role.id;
 
 
 --
--- Name: storage_cos_config; Type: TABLE; Schema: public; Owner: root
+-- Name: storage_cos_config; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.storage_cos_config (
@@ -942,10 +864,8 @@ CREATE TABLE public.storage_cos_config (
 );
 
 
-ALTER TABLE public.storage_cos_config OWNER TO root;
-
 --
--- Name: storage_cos_config_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: storage_cos_config_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 ALTER TABLE public.storage_cos_config ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
@@ -959,7 +879,7 @@ ALTER TABLE public.storage_cos_config ALTER COLUMN id ADD GENERATED BY DEFAULT A
 
 
 --
--- Name: storage_upload_rule; Type: TABLE; Schema: public; Owner: root
+-- Name: storage_upload_rule; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.storage_upload_rule (
@@ -982,10 +902,8 @@ CREATE TABLE public.storage_upload_rule (
 );
 
 
-ALTER TABLE public.storage_upload_rule OWNER TO root;
-
 --
--- Name: storage_upload_rule_code; Type: TABLE; Schema: public; Owner: root
+-- Name: storage_upload_rule_code; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.storage_upload_rule_code (
@@ -999,10 +917,8 @@ CREATE TABLE public.storage_upload_rule_code (
 );
 
 
-ALTER TABLE public.storage_upload_rule_code OWNER TO root;
-
 --
--- Name: storage_upload_rule_code_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: storage_upload_rule_code_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 ALTER TABLE public.storage_upload_rule_code ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
@@ -1016,7 +932,7 @@ ALTER TABLE public.storage_upload_rule_code ALTER COLUMN id ADD GENERATED BY DEF
 
 
 --
--- Name: storage_upload_rule_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: storage_upload_rule_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 ALTER TABLE public.storage_upload_rule ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
@@ -1030,7 +946,7 @@ ALTER TABLE public.storage_upload_rule ALTER COLUMN id ADD GENERATED BY DEFAULT 
 
 
 --
--- Name: system_dictionary; Type: TABLE; Schema: public; Owner: root
+-- Name: system_dictionary; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.system_dictionary (
@@ -1050,10 +966,8 @@ CREATE TABLE public.system_dictionary (
 );
 
 
-ALTER TABLE public.system_dictionary OWNER TO root;
-
 --
--- Name: system_dictionary_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: system_dictionary_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.system_dictionary_id_seq
@@ -1064,17 +978,15 @@ CREATE SEQUENCE public.system_dictionary_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.system_dictionary_id_seq OWNER TO root;
-
 --
--- Name: system_dictionary_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: system_dictionary_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.system_dictionary_id_seq OWNED BY public.system_dictionary.id;
 
 
 --
--- Name: system_dictionary_item; Type: TABLE; Schema: public; Owner: root
+-- Name: system_dictionary_item; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.system_dictionary_item (
@@ -1095,10 +1007,8 @@ CREATE TABLE public.system_dictionary_item (
 );
 
 
-ALTER TABLE public.system_dictionary_item OWNER TO root;
-
 --
--- Name: system_dictionary_item_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: system_dictionary_item_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.system_dictionary_item_id_seq
@@ -1109,17 +1019,15 @@ CREATE SEQUENCE public.system_dictionary_item_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.system_dictionary_item_id_seq OWNER TO root;
-
 --
--- Name: system_dictionary_item_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: system_dictionary_item_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.system_dictionary_item_id_seq OWNED BY public.system_dictionary_item.id;
 
 
 --
--- Name: system_setting; Type: TABLE; Schema: public; Owner: root
+-- Name: system_setting; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.system_setting (
@@ -1140,10 +1048,8 @@ CREATE TABLE public.system_setting (
 );
 
 
-ALTER TABLE public.system_setting OWNER TO root;
-
 --
--- Name: system_setting_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: system_setting_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.system_setting_id_seq
@@ -1154,17 +1060,15 @@ CREATE SEQUENCE public.system_setting_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.system_setting_id_seq OWNER TO root;
-
 --
--- Name: system_setting_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: system_setting_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.system_setting_id_seq OWNED BY public.system_setting.id;
 
 
 --
--- Name: user_account; Type: TABLE; Schema: public; Owner: root
+-- Name: user_account; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_account (
@@ -1182,10 +1086,8 @@ CREATE TABLE public.user_account (
 );
 
 
-ALTER TABLE public.user_account OWNER TO root;
-
 --
--- Name: user_account_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: user_account_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.user_account_id_seq
@@ -1196,17 +1098,15 @@ CREATE SEQUENCE public.user_account_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.user_account_id_seq OWNER TO root;
-
 --
--- Name: user_account_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: user_account_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.user_account_id_seq OWNED BY public.user_account.id;
 
 
 --
--- Name: user_email_change_log; Type: TABLE; Schema: public; Owner: root
+-- Name: user_email_change_log; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_email_change_log (
@@ -1224,10 +1124,8 @@ CREATE TABLE public.user_email_change_log (
 );
 
 
-ALTER TABLE public.user_email_change_log OWNER TO root;
-
 --
--- Name: user_email_change_log_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: user_email_change_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.user_email_change_log_id_seq
@@ -1238,17 +1136,15 @@ CREATE SEQUENCE public.user_email_change_log_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.user_email_change_log_id_seq OWNER TO root;
-
 --
--- Name: user_email_change_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: user_email_change_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.user_email_change_log_id_seq OWNED BY public.user_email_change_log.id;
 
 
 --
--- Name: user_login_log; Type: TABLE; Schema: public; Owner: root
+-- Name: user_login_log; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_login_log (
@@ -1271,10 +1167,8 @@ CREATE TABLE public.user_login_log (
 );
 
 
-ALTER TABLE public.user_login_log OWNER TO root;
-
 --
--- Name: user_login_log_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: user_login_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 ALTER TABLE public.user_login_log ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
@@ -1288,7 +1182,7 @@ ALTER TABLE public.user_login_log ALTER COLUMN id ADD GENERATED BY DEFAULT AS ID
 
 
 --
--- Name: user_phone_change_log; Type: TABLE; Schema: public; Owner: root
+-- Name: user_phone_change_log; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_phone_change_log (
@@ -1306,10 +1200,8 @@ CREATE TABLE public.user_phone_change_log (
 );
 
 
-ALTER TABLE public.user_phone_change_log OWNER TO root;
-
 --
--- Name: user_phone_change_log_id_seq; Type: SEQUENCE; Schema: public; Owner: root
+-- Name: user_phone_change_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.user_phone_change_log_id_seq
@@ -1320,17 +1212,15 @@ CREATE SEQUENCE public.user_phone_change_log_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.user_phone_change_log_id_seq OWNER TO root;
-
 --
--- Name: user_phone_change_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: root
+-- Name: user_phone_change_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.user_phone_change_log_id_seq OWNED BY public.user_phone_change_log.id;
 
 
 --
--- Name: user_profile; Type: TABLE; Schema: public; Owner: root
+-- Name: user_profile; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_profile (
@@ -1344,178 +1234,176 @@ CREATE TABLE public.user_profile (
 );
 
 
-ALTER TABLE public.user_profile OWNER TO root;
-
 --
--- Name: message_mail_config id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: message_mail_config id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_config ALTER COLUMN id SET DEFAULT nextval('public.message_mail_config_id_seq'::regclass);
 
 
 --
--- Name: message_mail_log id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: message_mail_log id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_log ALTER COLUMN id SET DEFAULT nextval('public.message_mail_log_id_seq'::regclass);
 
 
 --
--- Name: message_mail_log_verification id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: message_mail_log_verification id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_log_verification ALTER COLUMN id SET DEFAULT nextval('public.message_mail_log_verification_id_seq'::regclass);
 
 
 --
--- Name: message_mail_recipient_rule id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: message_mail_recipient_rule id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_recipient_rule ALTER COLUMN id SET DEFAULT nextval('public.message_mail_recipient_rule_id_seq'::regclass);
 
 
 --
--- Name: message_mail_template id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: message_mail_template id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_template ALTER COLUMN id SET DEFAULT nextval('public.message_mail_template_id_seq'::regclass);
 
 
 --
--- Name: message_sms_config id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: message_sms_config id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_config ALTER COLUMN id SET DEFAULT nextval('public.message_sms_config_id_seq'::regclass);
 
 
 --
--- Name: message_sms_log id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: message_sms_log id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_log ALTER COLUMN id SET DEFAULT nextval('public.message_sms_log_id_seq'::regclass);
 
 
 --
--- Name: message_sms_log_verification id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: message_sms_log_verification id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_log_verification ALTER COLUMN id SET DEFAULT nextval('public.message_sms_log_verification_id_seq'::regclass);
 
 
 --
--- Name: message_sms_recipient_rule id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: message_sms_recipient_rule id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_recipient_rule ALTER COLUMN id SET DEFAULT nextval('public.message_sms_recipient_rule_id_seq'::regclass);
 
 
 --
--- Name: message_sms_template id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: message_sms_template id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_template ALTER COLUMN id SET DEFAULT nextval('public.message_sms_template_id_seq'::regclass);
 
 
 --
--- Name: permission_access_version user_id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: permission_access_version user_id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_access_version ALTER COLUMN user_id SET DEFAULT nextval('public.rbac_access_version_user_id_seq'::regclass);
 
 
 --
--- Name: permission_auth_platform id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: permission_auth_platform id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_auth_platform ALTER COLUMN id SET DEFAULT nextval('public.permission_auth_platform_id_seq'::regclass);
 
 
 --
--- Name: permission_menu id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: permission_menu id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_menu ALTER COLUMN id SET DEFAULT nextval('public.rbac_menu_id_seq'::regclass);
 
 
 --
--- Name: permission_role id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: permission_role id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_role ALTER COLUMN id SET DEFAULT nextval('public.rbac_role_id_seq'::regclass);
 
 
 --
--- Name: permission_role_menu id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: permission_role_menu id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_role_menu ALTER COLUMN id SET DEFAULT nextval('public.rbac_role_menu_id_seq'::regclass);
 
 
 --
--- Name: permission_user_role id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: permission_user_role id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_user_role ALTER COLUMN id SET DEFAULT nextval('public.rbac_user_role_id_seq'::regclass);
 
 
 --
--- Name: system_dictionary id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: system_dictionary id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.system_dictionary ALTER COLUMN id SET DEFAULT nextval('public.system_dictionary_id_seq'::regclass);
 
 
 --
--- Name: system_dictionary_item id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: system_dictionary_item id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.system_dictionary_item ALTER COLUMN id SET DEFAULT nextval('public.system_dictionary_item_id_seq'::regclass);
 
 
 --
--- Name: system_operation_log id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: system_operation_log id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.system_operation_log ALTER COLUMN id SET DEFAULT nextval('public.audit_operation_log_id_seq'::regclass);
 
 
 --
--- Name: system_setting id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: system_setting id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.system_setting ALTER COLUMN id SET DEFAULT nextval('public.system_setting_id_seq'::regclass);
 
 
 --
--- Name: user_account id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: user_account id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_account ALTER COLUMN id SET DEFAULT nextval('public.user_account_id_seq'::regclass);
 
 
 --
--- Name: user_email_change_log id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: user_email_change_log id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_email_change_log ALTER COLUMN id SET DEFAULT nextval('public.user_email_change_log_id_seq'::regclass);
 
 
 --
--- Name: user_phone_change_log id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: user_phone_change_log id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_phone_change_log ALTER COLUMN id SET DEFAULT nextval('public.user_phone_change_log_id_seq'::regclass);
 
 
 --
--- Name: user_session id; Type: DEFAULT; Schema: public; Owner: root
+-- Name: user_session id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_session ALTER COLUMN id SET DEFAULT nextval('public.auth_session_id_seq'::regclass);
 
 
 --
--- Name: system_operation_log audit_operation_log_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: system_operation_log audit_operation_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.system_operation_log
@@ -1523,7 +1411,7 @@ ALTER TABLE ONLY public.system_operation_log
 
 
 --
--- Name: user_session auth_session_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: user_session auth_session_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_session
@@ -1531,7 +1419,7 @@ ALTER TABLE ONLY public.user_session
 
 
 --
--- Name: message_mail_config message_mail_config_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_mail_config message_mail_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_config
@@ -1539,7 +1427,7 @@ ALTER TABLE ONLY public.message_mail_config
 
 
 --
--- Name: message_mail_log message_mail_log_id_platform_id_key; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_mail_log message_mail_log_id_platform_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_log
@@ -1547,7 +1435,7 @@ ALTER TABLE ONLY public.message_mail_log
 
 
 --
--- Name: message_mail_log message_mail_log_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_mail_log message_mail_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_log
@@ -1555,7 +1443,7 @@ ALTER TABLE ONLY public.message_mail_log
 
 
 --
--- Name: message_mail_log_verification message_mail_log_verification_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_mail_log_verification message_mail_log_verification_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_log_verification
@@ -1563,7 +1451,7 @@ ALTER TABLE ONLY public.message_mail_log_verification
 
 
 --
--- Name: message_mail_rate_limit_policy message_mail_rate_limit_policy_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_mail_rate_limit_policy message_mail_rate_limit_policy_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_rate_limit_policy
@@ -1571,7 +1459,7 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 
 
 --
--- Name: message_mail_recipient_rule message_mail_recipient_rule_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_mail_recipient_rule message_mail_recipient_rule_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_recipient_rule
@@ -1579,7 +1467,7 @@ ALTER TABLE ONLY public.message_mail_recipient_rule
 
 
 --
--- Name: message_mail_template message_mail_template_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_mail_template message_mail_template_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_template
@@ -1587,7 +1475,7 @@ ALTER TABLE ONLY public.message_mail_template
 
 
 --
--- Name: message_sms_config message_sms_config_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_sms_config message_sms_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_config
@@ -1595,7 +1483,7 @@ ALTER TABLE ONLY public.message_sms_config
 
 
 --
--- Name: message_sms_log message_sms_log_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_sms_log message_sms_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_log
@@ -1603,7 +1491,7 @@ ALTER TABLE ONLY public.message_sms_log
 
 
 --
--- Name: message_sms_log_verification message_sms_log_verification_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_sms_log_verification message_sms_log_verification_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_log_verification
@@ -1611,7 +1499,7 @@ ALTER TABLE ONLY public.message_sms_log_verification
 
 
 --
--- Name: message_sms_rate_limit_policy message_sms_rate_limit_policy_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_sms_rate_limit_policy message_sms_rate_limit_policy_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_rate_limit_policy
@@ -1619,7 +1507,7 @@ ALTER TABLE ONLY public.message_sms_rate_limit_policy
 
 
 --
--- Name: message_sms_recipient_rule message_sms_recipient_rule_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_sms_recipient_rule message_sms_recipient_rule_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_recipient_rule
@@ -1627,7 +1515,7 @@ ALTER TABLE ONLY public.message_sms_recipient_rule
 
 
 --
--- Name: message_sms_template message_sms_template_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_sms_template message_sms_template_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_template
@@ -1635,7 +1523,7 @@ ALTER TABLE ONLY public.message_sms_template
 
 
 --
--- Name: permission_auth_platform permission_auth_platform_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_auth_platform permission_auth_platform_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_auth_platform
@@ -1643,7 +1531,7 @@ ALTER TABLE ONLY public.permission_auth_platform
 
 
 --
--- Name: permission_access_version rbac_access_version_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_access_version rbac_access_version_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_access_version
@@ -1651,7 +1539,7 @@ ALTER TABLE ONLY public.permission_access_version
 
 
 --
--- Name: permission_menu rbac_menu_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_menu rbac_menu_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_menu
@@ -1659,7 +1547,7 @@ ALTER TABLE ONLY public.permission_menu
 
 
 --
--- Name: permission_role_menu rbac_role_menu_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_role_menu rbac_role_menu_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_role_menu
@@ -1667,7 +1555,7 @@ ALTER TABLE ONLY public.permission_role_menu
 
 
 --
--- Name: permission_role rbac_role_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_role rbac_role_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_role
@@ -1675,7 +1563,7 @@ ALTER TABLE ONLY public.permission_role
 
 
 --
--- Name: permission_user_role rbac_user_role_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_user_role rbac_user_role_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_user_role
@@ -1683,7 +1571,7 @@ ALTER TABLE ONLY public.permission_user_role
 
 
 --
--- Name: storage_cos_config storage_cos_config_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: storage_cos_config storage_cos_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.storage_cos_config
@@ -1691,7 +1579,7 @@ ALTER TABLE ONLY public.storage_cos_config
 
 
 --
--- Name: storage_upload_rule_code storage_upload_rule_code_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: storage_upload_rule_code storage_upload_rule_code_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.storage_upload_rule_code
@@ -1699,7 +1587,7 @@ ALTER TABLE ONLY public.storage_upload_rule_code
 
 
 --
--- Name: storage_upload_rule storage_upload_rule_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: storage_upload_rule storage_upload_rule_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.storage_upload_rule
@@ -1707,7 +1595,7 @@ ALTER TABLE ONLY public.storage_upload_rule
 
 
 --
--- Name: system_dictionary_item system_dictionary_item_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: system_dictionary_item system_dictionary_item_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.system_dictionary_item
@@ -1715,7 +1603,7 @@ ALTER TABLE ONLY public.system_dictionary_item
 
 
 --
--- Name: system_dictionary system_dictionary_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: system_dictionary system_dictionary_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.system_dictionary
@@ -1723,7 +1611,7 @@ ALTER TABLE ONLY public.system_dictionary
 
 
 --
--- Name: system_setting system_setting_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: system_setting system_setting_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.system_setting
@@ -1731,7 +1619,7 @@ ALTER TABLE ONLY public.system_setting
 
 
 --
--- Name: message_sms_log uq_message_sms_log_id_platform; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: message_sms_log uq_message_sms_log_id_platform; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_log
@@ -1739,7 +1627,7 @@ ALTER TABLE ONLY public.message_sms_log
 
 
 --
--- Name: permission_menu uq_rbac_menu_id_platform; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_menu uq_rbac_menu_id_platform; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_menu
@@ -1747,7 +1635,7 @@ ALTER TABLE ONLY public.permission_menu
 
 
 --
--- Name: user_account user_account_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: user_account user_account_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_account
@@ -1755,7 +1643,7 @@ ALTER TABLE ONLY public.user_account
 
 
 --
--- Name: user_email_change_log user_email_change_log_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: user_email_change_log user_email_change_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_email_change_log
@@ -1763,7 +1651,7 @@ ALTER TABLE ONLY public.user_email_change_log
 
 
 --
--- Name: user_login_log user_login_log_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: user_login_log user_login_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_login_log
@@ -1771,7 +1659,7 @@ ALTER TABLE ONLY public.user_login_log
 
 
 --
--- Name: user_phone_change_log user_phone_change_log_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: user_phone_change_log user_phone_change_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_phone_change_log
@@ -1779,7 +1667,7 @@ ALTER TABLE ONLY public.user_phone_change_log
 
 
 --
--- Name: user_profile user_profile_pkey; Type: CONSTRAINT; Schema: public; Owner: root
+-- Name: user_profile user_profile_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_profile
@@ -1787,448 +1675,448 @@ ALTER TABLE ONLY public.user_profile
 
 
 --
--- Name: ix_audit_operation_log_action_created_at; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_audit_operation_log_action_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_audit_operation_log_action_created_at ON public.system_operation_log USING btree (action, created_at DESC);
 
 
 --
--- Name: ix_audit_operation_log_created_at; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_audit_operation_log_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_audit_operation_log_created_at ON public.system_operation_log USING btree (created_at DESC);
 
 
 --
--- Name: ix_audit_operation_log_request_id; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_audit_operation_log_request_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_audit_operation_log_request_id ON public.system_operation_log USING btree (request_id);
 
 
 --
--- Name: ix_audit_operation_log_user_created_at; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_audit_operation_log_user_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_audit_operation_log_user_created_at ON public.system_operation_log USING btree (user_id, created_at DESC);
 
 
 --
--- Name: ix_message_mail_log_created_id_desc; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_message_mail_log_created_id_desc; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_message_mail_log_created_id_desc ON public.message_mail_log USING btree (created_at DESC, id DESC);
 
 
 --
--- Name: ix_message_mail_log_platform_id_desc; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_message_mail_log_platform_id_desc; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_message_mail_log_platform_id_desc ON public.message_mail_log USING btree (platform_id, id DESC);
 
 
 --
--- Name: ix_message_mail_log_scene_id_desc; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_message_mail_log_scene_id_desc; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_message_mail_log_scene_id_desc ON public.message_mail_log USING btree (scene, id DESC);
 
 
 --
--- Name: ix_message_mail_log_status_id_desc; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_message_mail_log_status_id_desc; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_message_mail_log_status_id_desc ON public.message_mail_log USING btree (status, id DESC);
 
 
 --
--- Name: ix_message_mail_log_to_email_prefix; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_message_mail_log_to_email_prefix; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_message_mail_log_to_email_prefix ON public.message_mail_log USING btree (to_email varchar_pattern_ops, id DESC);
 
 
 --
--- Name: ix_message_mail_rate_limit_policy_platform_revision; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_message_mail_rate_limit_policy_platform_revision; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_message_mail_rate_limit_policy_platform_revision ON public.message_mail_rate_limit_policy USING btree (platform_id, revision);
 
 
 --
--- Name: ix_message_sms_log_created_id_desc; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_message_sms_log_created_id_desc; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_message_sms_log_created_id_desc ON public.message_sms_log USING btree (created_at DESC, id DESC);
 
 
 --
--- Name: ix_message_sms_log_platform_id_desc; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_message_sms_log_platform_id_desc; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_message_sms_log_platform_id_desc ON public.message_sms_log USING btree (platform_id, id DESC);
 
 
 --
--- Name: ix_message_sms_log_scene_id_desc; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_message_sms_log_scene_id_desc; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_message_sms_log_scene_id_desc ON public.message_sms_log USING btree (scene, id DESC);
 
 
 --
--- Name: ix_message_sms_log_status_id_desc; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_message_sms_log_status_id_desc; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_message_sms_log_status_id_desc ON public.message_sms_log USING btree (status, id DESC);
 
 
 --
--- Name: ix_message_sms_log_to_phone_hmac_id_desc; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_message_sms_log_to_phone_hmac_id_desc; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_message_sms_log_to_phone_hmac_id_desc ON public.message_sms_log USING btree (to_phone_hmac, id DESC);
 
 
 --
--- Name: ix_message_sms_rate_limit_policy_platform_revision; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_message_sms_rate_limit_policy_platform_revision; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_message_sms_rate_limit_policy_platform_revision ON public.message_sms_rate_limit_policy USING btree (platform_id, revision);
 
 
 --
--- Name: ix_permission_auth_platform_code_history_prefix; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_permission_auth_platform_code_history_prefix; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_permission_auth_platform_code_history_prefix ON public.permission_auth_platform USING btree (code varchar_pattern_ops, id);
 
 
 --
--- Name: ix_rbac_menu_parent_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_rbac_menu_parent_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_rbac_menu_parent_active ON public.permission_menu USING btree (platform_id, parent_id, sort_order, id) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ix_rbac_menu_platform_parent_sort; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_rbac_menu_platform_parent_sort; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_rbac_menu_platform_parent_sort ON public.permission_menu USING btree (platform_id, parent_id, sort_order, id);
 
 
 --
--- Name: ix_storage_cos_config_enabled_created_at; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_storage_cos_config_enabled_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_storage_cos_config_enabled_created_at ON public.storage_cos_config USING btree (is_enabled, created_at DESC) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ix_storage_upload_rule_code_rule; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_storage_upload_rule_code_rule; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_storage_upload_rule_code_rule ON public.storage_upload_rule_code USING btree (rule_id, id) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ix_storage_upload_rule_config_enabled_created_at; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_storage_upload_rule_config_enabled_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_storage_upload_rule_config_enabled_created_at ON public.storage_upload_rule USING btree (cos_config_id, is_enabled, created_at DESC) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ix_system_dictionary_enabled_code; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_system_dictionary_enabled_code; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_system_dictionary_enabled_code ON public.system_dictionary USING btree (is_enabled, code) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ix_system_dictionary_item_enabled_sort; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_system_dictionary_item_enabled_sort; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_system_dictionary_item_enabled_sort ON public.system_dictionary_item USING btree (dictionary_id, is_enabled, sort, id);
 
 
 --
--- Name: ix_system_setting_enabled_key; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_system_setting_enabled_key; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_system_setting_enabled_key ON public.system_setting USING btree (is_enabled, setting_key) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ix_user_email_change_log_user_id_desc; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_user_email_change_log_user_id_desc; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_user_email_change_log_user_id_desc ON public.user_email_change_log USING btree (user_id, id DESC);
 
 
 --
--- Name: ix_user_login_log_account_created_at; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_user_login_log_account_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_user_login_log_account_created_at ON public.user_login_log USING btree (login_account, created_at DESC);
 
 
 --
--- Name: ix_user_login_log_created_at; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_user_login_log_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_user_login_log_created_at ON public.user_login_log USING btree (created_at DESC);
 
 
 --
--- Name: ix_user_login_log_platform_created_at; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_user_login_log_platform_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_user_login_log_platform_created_at ON public.user_login_log USING btree (platform_id, created_at DESC);
 
 
 --
--- Name: ix_user_login_log_user_created_at; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_user_login_log_user_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_user_login_log_user_created_at ON public.user_login_log USING btree (user_id, created_at DESC);
 
 
 --
--- Name: ix_user_phone_change_log_user_id_desc; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_user_phone_change_log_user_id_desc; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_user_phone_change_log_user_id_desc ON public.user_phone_change_log USING btree (user_id, id DESC);
 
 
 --
--- Name: ix_user_session_user_created_at; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_user_session_user_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_user_session_user_created_at ON public.user_session USING btree (user_id, created_at DESC);
 
 
 --
--- Name: ix_user_session_user_platform_created_at; Type: INDEX; Schema: public; Owner: root
+-- Name: ix_user_session_user_platform_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_user_session_user_platform_created_at ON public.user_session USING btree (user_id, platform_id, created_at DESC, id DESC) WHERE (revoked_at IS NULL);
 
 
 --
--- Name: ux_audit_operation_log_event_id; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_audit_operation_log_event_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_audit_operation_log_event_id ON public.system_operation_log USING btree (event_id);
 
 
 --
--- Name: ux_message_mail_config_active_singleton; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_message_mail_config_active_singleton; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_message_mail_config_active_singleton ON public.message_mail_config USING btree ((true)) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_message_mail_log_platform_challenge; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_message_mail_log_platform_challenge; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_message_mail_log_platform_challenge ON public.message_mail_log USING btree (platform_id, challenge_id) WHERE (challenge_id IS NOT NULL);
 
 
 --
--- Name: ux_message_mail_rule_scope_pattern_action_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_message_mail_rule_scope_pattern_action_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_message_mail_rule_scope_pattern_action_active ON public.message_mail_recipient_rule USING btree (scope, pattern, action) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_message_mail_template_scene_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_message_mail_template_scene_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_message_mail_template_scene_active ON public.message_mail_template USING btree (scene) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_message_mail_verification_log; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_message_mail_verification_log; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_message_mail_verification_log ON public.message_mail_log_verification USING btree (mail_log_id);
 
 
 --
--- Name: ux_message_sms_config_active_singleton; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_message_sms_config_active_singleton; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_message_sms_config_active_singleton ON public.message_sms_config USING btree ((true)) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_message_sms_log_platform_challenge; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_message_sms_log_platform_challenge; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_message_sms_log_platform_challenge ON public.message_sms_log USING btree (platform_id, challenge_id) WHERE (challenge_id IS NOT NULL);
 
 
 --
--- Name: ux_message_sms_log_verification_log; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_message_sms_log_verification_log; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_message_sms_log_verification_log ON public.message_sms_log_verification USING btree (sms_log_id);
 
 
 --
--- Name: ux_message_sms_recipient_rule_pattern_action_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_message_sms_recipient_rule_pattern_action_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_message_sms_recipient_rule_pattern_action_active ON public.message_sms_recipient_rule USING btree (scope, pattern_hmac, action) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_message_sms_template_scene; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_message_sms_template_scene; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_message_sms_template_scene ON public.message_sms_template USING btree (scene);
 
 
 --
--- Name: ux_permission_auth_platform_code_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_permission_auth_platform_code_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_permission_auth_platform_code_active ON public.permission_auth_platform USING btree (code) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_rbac_menu_code_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_rbac_menu_code_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_rbac_menu_code_active ON public.permission_menu USING btree (platform_id, code) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_rbac_menu_page_path_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_rbac_menu_page_path_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_rbac_menu_page_path_active ON public.permission_menu USING btree (platform_id, path) WHERE ((deleted_at IS NULL) AND ((menu_type)::text = 'page'::text));
 
 
 --
--- Name: ux_rbac_menu_platform_code_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_rbac_menu_platform_code_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_rbac_menu_platform_code_active ON public.permission_menu USING btree (platform_id, code) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_rbac_menu_platform_path_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_rbac_menu_platform_path_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_rbac_menu_platform_path_active ON public.permission_menu USING btree (platform_id, path) WHERE ((path IS NOT NULL) AND (deleted_at IS NULL));
 
 
 --
--- Name: ux_rbac_role_code_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_rbac_role_code_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_rbac_role_code_active ON public.permission_role USING btree (code) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_rbac_role_default_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_rbac_role_default_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_rbac_role_default_active ON public.permission_role USING btree (is_default) WHERE ((is_default = 1) AND (deleted_at IS NULL));
 
 
 --
--- Name: ux_rbac_role_menu_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_rbac_role_menu_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_rbac_role_menu_active ON public.permission_role_menu USING btree (role_id, menu_id) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_rbac_role_name_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_rbac_role_name_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_rbac_role_name_active ON public.permission_role USING btree (name) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_rbac_user_role_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_rbac_user_role_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_rbac_user_role_active ON public.permission_user_role USING btree (user_id, role_id) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_storage_cos_config_name_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_storage_cos_config_name_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_storage_cos_config_name_active ON public.storage_cos_config USING btree (lower((name)::text)) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_storage_upload_rule_code_platform_code; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_storage_upload_rule_code_platform_code; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_storage_upload_rule_code_platform_code ON public.storage_upload_rule_code USING btree (platform_id, code) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_system_dictionary_code; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_system_dictionary_code; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_system_dictionary_code ON public.system_dictionary USING btree (code) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_system_dictionary_item_value_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_system_dictionary_item_value_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_system_dictionary_item_value_active ON public.system_dictionary_item USING btree (dictionary_id, value) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_system_setting_key_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_system_setting_key_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_system_setting_key_active ON public.system_setting USING btree (setting_key) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_user_account_email_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_user_account_email_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_user_account_email_active ON public.user_account USING btree (lower((email)::text)) WHERE (((email)::text <> ''::text) AND (deleted_at IS NULL));
 
 
 --
--- Name: ux_user_account_phone_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_user_account_phone_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_user_account_phone_active ON public.user_account USING btree (phone) WHERE ((phone IS NOT NULL) AND (deleted_at IS NULL));
 
 
 --
--- Name: ux_user_account_username_active; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_user_account_username_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_user_account_username_active ON public.user_account USING btree (lower((username)::text)) WHERE (deleted_at IS NULL);
 
 
 --
--- Name: ux_user_session_refresh_token_hash; Type: INDEX; Schema: public; Owner: root
+-- Name: ux_user_session_refresh_token_hash; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_user_session_refresh_token_hash ON public.user_session USING btree (refresh_token_hash);
 
 
 --
--- Name: system_operation_log fk_audit_operation_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: system_operation_log fk_audit_operation_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.system_operation_log
@@ -2236,7 +2124,7 @@ ALTER TABLE ONLY public.system_operation_log
 
 
 --
--- Name: user_session fk_auth_session_user; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: user_session fk_auth_session_user; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_session
@@ -2244,7 +2132,7 @@ ALTER TABLE ONLY public.user_session
 
 
 --
--- Name: message_sms_log fk_message_sms_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: message_sms_log fk_message_sms_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_log
@@ -2252,7 +2140,7 @@ ALTER TABLE ONLY public.message_sms_log
 
 
 --
--- Name: message_sms_log fk_message_sms_log_template; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: message_sms_log fk_message_sms_log_template; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_log
@@ -2260,7 +2148,7 @@ ALTER TABLE ONLY public.message_sms_log
 
 
 --
--- Name: message_sms_log_verification fk_message_sms_log_verification_log; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: message_sms_log_verification fk_message_sms_log_verification_log; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_log_verification
@@ -2268,7 +2156,7 @@ ALTER TABLE ONLY public.message_sms_log_verification
 
 
 --
--- Name: message_sms_log_verification fk_message_sms_log_verification_platform; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: message_sms_log_verification fk_message_sms_log_verification_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_log_verification
@@ -2276,7 +2164,7 @@ ALTER TABLE ONLY public.message_sms_log_verification
 
 
 --
--- Name: message_sms_rate_limit_policy fk_message_sms_rate_limit_policy_platform; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: message_sms_rate_limit_policy fk_message_sms_rate_limit_policy_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_sms_rate_limit_policy
@@ -2284,7 +2172,7 @@ ALTER TABLE ONLY public.message_sms_rate_limit_policy
 
 
 --
--- Name: permission_access_version fk_rbac_access_version_user; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_access_version fk_rbac_access_version_user; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_access_version
@@ -2292,7 +2180,7 @@ ALTER TABLE ONLY public.permission_access_version
 
 
 --
--- Name: permission_menu fk_rbac_menu_parent_platform; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_menu fk_rbac_menu_parent_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_menu
@@ -2300,7 +2188,7 @@ ALTER TABLE ONLY public.permission_menu
 
 
 --
--- Name: permission_menu fk_rbac_menu_platform; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_menu fk_rbac_menu_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_menu
@@ -2308,7 +2196,7 @@ ALTER TABLE ONLY public.permission_menu
 
 
 --
--- Name: permission_role_menu fk_rbac_role_menu_menu; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_role_menu fk_rbac_role_menu_menu; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_role_menu
@@ -2316,7 +2204,7 @@ ALTER TABLE ONLY public.permission_role_menu
 
 
 --
--- Name: permission_role_menu fk_rbac_role_menu_role; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_role_menu fk_rbac_role_menu_role; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_role_menu
@@ -2324,7 +2212,7 @@ ALTER TABLE ONLY public.permission_role_menu
 
 
 --
--- Name: permission_user_role fk_rbac_user_role_role; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_user_role fk_rbac_user_role_role; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_user_role
@@ -2332,7 +2220,7 @@ ALTER TABLE ONLY public.permission_user_role
 
 
 --
--- Name: permission_user_role fk_rbac_user_role_user; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: permission_user_role fk_rbac_user_role_user; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_user_role
@@ -2340,7 +2228,7 @@ ALTER TABLE ONLY public.permission_user_role
 
 
 --
--- Name: storage_upload_rule_code fk_storage_upload_rule_code_platform; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: storage_upload_rule_code fk_storage_upload_rule_code_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.storage_upload_rule_code
@@ -2348,7 +2236,7 @@ ALTER TABLE ONLY public.storage_upload_rule_code
 
 
 --
--- Name: storage_upload_rule_code fk_storage_upload_rule_code_rule; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: storage_upload_rule_code fk_storage_upload_rule_code_rule; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.storage_upload_rule_code
@@ -2356,7 +2244,7 @@ ALTER TABLE ONLY public.storage_upload_rule_code
 
 
 --
--- Name: storage_upload_rule fk_storage_upload_rule_cos_config; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: storage_upload_rule fk_storage_upload_rule_cos_config; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.storage_upload_rule
@@ -2364,7 +2252,7 @@ ALTER TABLE ONLY public.storage_upload_rule
 
 
 --
--- Name: storage_upload_rule fk_storage_upload_rule_platform; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: storage_upload_rule fk_storage_upload_rule_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.storage_upload_rule
@@ -2372,7 +2260,7 @@ ALTER TABLE ONLY public.storage_upload_rule
 
 
 --
--- Name: user_email_change_log fk_user_email_change_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: user_email_change_log fk_user_email_change_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_email_change_log
@@ -2380,7 +2268,7 @@ ALTER TABLE ONLY public.user_email_change_log
 
 
 --
--- Name: user_email_change_log fk_user_email_change_log_user; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: user_email_change_log fk_user_email_change_log_user; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_email_change_log
@@ -2388,7 +2276,7 @@ ALTER TABLE ONLY public.user_email_change_log
 
 
 --
--- Name: user_login_log fk_user_login_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: user_login_log fk_user_login_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_login_log
@@ -2396,7 +2284,7 @@ ALTER TABLE ONLY public.user_login_log
 
 
 --
--- Name: user_login_log fk_user_login_log_session; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: user_login_log fk_user_login_log_session; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_login_log
@@ -2404,7 +2292,7 @@ ALTER TABLE ONLY public.user_login_log
 
 
 --
--- Name: user_login_log fk_user_login_log_user; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: user_login_log fk_user_login_log_user; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_login_log
@@ -2412,7 +2300,7 @@ ALTER TABLE ONLY public.user_login_log
 
 
 --
--- Name: user_phone_change_log fk_user_phone_change_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: user_phone_change_log fk_user_phone_change_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_phone_change_log
@@ -2420,7 +2308,7 @@ ALTER TABLE ONLY public.user_phone_change_log
 
 
 --
--- Name: user_phone_change_log fk_user_phone_change_log_user; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: user_phone_change_log fk_user_phone_change_log_user; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_phone_change_log
@@ -2428,7 +2316,7 @@ ALTER TABLE ONLY public.user_phone_change_log
 
 
 --
--- Name: user_profile fk_user_profile_account; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: user_profile fk_user_profile_account; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_profile
@@ -2436,7 +2324,7 @@ ALTER TABLE ONLY public.user_profile
 
 
 --
--- Name: user_session fk_user_session_platform; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: user_session fk_user_session_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_session
@@ -2444,7 +2332,7 @@ ALTER TABLE ONLY public.user_session
 
 
 --
--- Name: user_session fk_user_session_user; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: user_session fk_user_session_user; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_session
@@ -2452,7 +2340,7 @@ ALTER TABLE ONLY public.user_session
 
 
 --
--- Name: message_mail_log message_mail_log_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: message_mail_log message_mail_log_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_log
@@ -2460,7 +2348,7 @@ ALTER TABLE ONLY public.message_mail_log
 
 
 --
--- Name: message_mail_log_verification message_mail_log_verification_mail_log_id_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: message_mail_log_verification message_mail_log_verification_mail_log_id_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_log_verification
@@ -2468,7 +2356,7 @@ ALTER TABLE ONLY public.message_mail_log_verification
 
 
 --
--- Name: message_mail_log_verification message_mail_log_verification_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: message_mail_log_verification message_mail_log_verification_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_log_verification
@@ -2476,7 +2364,7 @@ ALTER TABLE ONLY public.message_mail_log_verification
 
 
 --
--- Name: message_mail_rate_limit_policy message_mail_rate_limit_policy_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: message_mail_rate_limit_policy message_mail_rate_limit_policy_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.message_mail_rate_limit_policy
@@ -2484,7 +2372,7 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 
 
 --
--- Name: system_dictionary_item system_dictionary_item_dictionary_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: root
+-- Name: system_dictionary_item system_dictionary_item_dictionary_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.system_dictionary_item
@@ -2495,4 +2383,5 @@ ALTER TABLE ONLY public.system_dictionary_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict dFEPxZQ6nsRQnUnhjb5MfnBd29Y4cktIDCiollUwrH0EL2HzsDA2xmI9uA5XAue
+\unrestrict jNIyU2bb1BaKPX98eWbWqBIT4ujx6bzJb4EJN6Y9beabrviScjfCAsTJynyOlzR
+

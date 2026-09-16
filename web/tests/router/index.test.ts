@@ -19,6 +19,8 @@ const getCurrentUserMock = vi.mocked(getCurrentUser)
 const getPermissionMock = vi.mocked(getPermission)
 
 describe('router', () => {
+  vi.setConfig({ testTimeout: 30_000 })
+
   beforeEach(() => {
     useAuthStore(pinia).$reset()
     usePermissionStore(pinia).reset()

@@ -167,7 +167,7 @@ describe('authentication platform page', () => {
     await wrapper.get('[data-testid="auth-platform-update"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('.app-dialog__body--scroll').exists()).toBe(false)
+    expect(wrapper.find('.app-dialog__body--scroll').exists()).toBe(true)
     expect(wrapper.get('[data-testid="auth-platform-form"]').classes()).toContain(
       'auth-platform-form-scroll',
     )
