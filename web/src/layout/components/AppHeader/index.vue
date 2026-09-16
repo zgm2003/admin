@@ -15,6 +15,7 @@ defineProps<{
   showMenuToggle: boolean
   contentFullscreen: boolean
   showBrand?: boolean
+  brandName?: string
 }>()
 
 const emit = defineEmits<{
@@ -28,9 +29,17 @@ const settingsOpen = ref(false)
 <template>
   <div class="app-header">
     <div class="app-header__leading">
-      <div v-if="showBrand" class="app-header__brand" :aria-label="t('navigation.admin')">
-        <img class="app-header__brand-logo" :src="logoUrl" :alt="t('navigation.admin')" />
-        <span class="app-header__brand-name">{{ t('navigation.admin') }}</span>
+      <div
+        v-if="showBrand"
+        class="app-header__brand"
+        :aria-label="brandName || t('navigation.admin')"
+      >
+        <img
+          class="app-header__brand-logo"
+          :src="logoUrl"
+          :alt="brandName || t('navigation.admin')"
+        />
+        <span class="app-header__brand-name">{{ brandName || t('navigation.admin') }}</span>
       </div>
       <el-button
         v-if="showMenuToggle"

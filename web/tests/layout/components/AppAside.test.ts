@@ -32,6 +32,18 @@ describe('AppAside profile access', () => {
     )
   })
 
+  it('falls back to the configured default avatar when the user has no avatar', async () => {
+    requestObjectURLMock.mockResolvedValue({ url: 'https://cdn.example.com/default.png' })
+    const { wrapper } = mountAside([], { avatar: '', defaultAvatar: 'avatar/default.png' })
+
+    await flushPromises()
+
+    expect(requestObjectURLMock).toHaveBeenCalledWith('avatar', 'avatar/default.png')
+    expect(wrapper.get('.app-aside__avatar img').attributes('src')).toBe(
+      'https://cdn.example.com/default.png',
+    )
+  })
+
   it('shows the profile entry only with profile-view permission and always keeps logout', async () => {
     const { access, wrapper } = mountAside([])
     expect(document.body.querySelector('[data-testid="aside-account-profile"]')).toBeNull()
@@ -51,7 +63,10 @@ describe('AppAside profile access', () => {
   })
 })
 
-function mountAside(permissionCodes: string[], props: { avatar?: string } = {}) {
+function mountAside(
+  permissionCodes: string[],
+  props: { avatar?: string; defaultAvatar?: string } = {},
+) {
   const pinia = createPinia()
   setActivePinia(pinia)
   const access = usePermissionStore(pinia)

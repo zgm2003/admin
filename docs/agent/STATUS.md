@@ -3,6 +3,17 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## 系统设置品牌配置与收尾修复（2026-09-15，代码已完成）
+
+- COS 上传规则编辑态继续复用 `el-input-tag`，统一上传编码可编辑并随 PUT 请求提交；后端在同一事务中处理编码差集、软删、冲突和回滚，未改变上传大小、扩展名、MIME、路径或访问模式配置。
+- Queue Monitor 修复首次进入时 `queue_stats` 重复请求：空队列不请求，首次获得真实队列请求一次，队列增删才刷新；Asynqmon dist 已重新构建并清理旧 hash/source map。Dashboard 回归测试通过。
+- 系统设置新增品牌配置：`app.brand.title_zh_cn`、`app.brand.title_en_us`、`app.brand.default_avatar`；新增幂等 forward migration `docs/database/2026-09-15-system-setting-brand.sql`，默认头像只保存 COS object key 并固定复用 `avatar` 上传规则（单张、`image/*`、avatar variant，不传递新的大小限制）。迁移尚未执行真实业务库。
+- 新增已登录基础端点 `GET /api/admin/v1/system/setting/brand`（仅认证，不要求设置权限）供管理壳层读取品牌；品牌 Store 共享并发请求、支持 reset 竞态保护；标题按当前语言同步到 `document.title`、Aside/Header，用户无头像时回退默认头像。品牌保存仍使用 `system:setting:update`，管理页读取列表与编辑权限独立。
+- 设置编辑器支持 string/number/bool/JSON，JSON 可格式化且严格拒绝非法内容；品牌面板移除解释性可见提示，仅保留字段标签和错误状态。
+- 验证：Node `v24.12.0` 下前端相关 5 个测试文件 34/34 通过，`pnpm typecheck`、`pnpm lint`、`pnpm check:architecture` 通过；Go `go test ./internal/module/storage/uploadRule ./internal/module/system/queueMonitor ./internal/module/system/setting ./internal/database -count=1`、定向 `go vet`、`go build ./cmd/api` 通过；新增真实 PostgreSQL 品牌事务回滚测试通过。页面测试因 Element Plus/Teleport 挂载成本将单文件预算设为 30 秒，未产生 unhandled error。
+- 全量复核：Go 全量 `go fmt ./...`、`go vet ./...`、`go test ./... -count=1`、`go build ./...` 均通过；前端 `pnpm typecheck`、`pnpm lint`、`pnpm check:architecture`、`pnpm build` 均通过（仅有既有大 chunk 警告）。前端全量 Vitest 为 78 文件/611 项通过、4 项失败；单独复跑确认失败仍是既有 `router/index.test.ts` 动态路由用例 1 项超时，以及 `permission/authPlatform` 滚动容器断言 1 项，不涉及本轮文件；本轮相关定向测试 34/34 通过。
+- 未执行：真实品牌 migration、API/Worker 重启、Redis 清缓存和浏览器人工验收。品牌保存后 Redis 删除失败仍沿用系统设置原有“数据库已提交、缓存失效报错”的残余一致性风险。
+
 ## 系统任务队列监控（2026-09-14，代码已完成）
 
 - 在系统设置下新增“任务队列”页面，页面权限为 `system:queueMonitor:view`，Grant API 权限为

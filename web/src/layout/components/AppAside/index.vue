@@ -19,6 +19,8 @@ const props = withDefaults(
     username?: string
     email?: string
     avatar?: string
+    defaultAvatar?: string
+    brandName?: string
     logoutPending?: boolean
   }>(),
   {
@@ -26,6 +28,8 @@ const props = withDefaults(
     username: '',
     email: '',
     avatar: '',
+    defaultAvatar: '',
+    brandName: '',
     logoutPending: false,
   },
 )
@@ -39,6 +43,7 @@ const route = useRoute()
 const router = useRouter()
 const access = usePermissionStore()
 const avatarText = computed(() => props.username.slice(0, 1).toUpperCase() || 'A')
+const avatarObjectKey = computed(() => props.avatar || props.defaultAvatar)
 const avatarURL = ref('')
 const canOpenProfile = computed(() => access.hasPermission('user:profile:view'))
 let avatarRequestID = 0
@@ -61,7 +66,7 @@ function handleAvatarError(): void {
 }
 
 watch(
-  () => props.avatar,
+  avatarObjectKey,
   (objectKey) => {
     void hydrateAvatar(objectKey)
   },
@@ -88,9 +93,9 @@ function handleAccountCommand(command: string | number | object): void {
     :data-collapsed="String(collapsed)"
     :aria-label="t('navigation.main')"
   >
-    <div v-if="showBrand" class="app-aside__brand" :aria-label="t('navigation.admin')">
-      <img class="app-aside__logo" :src="logoUrl" :alt="t('navigation.admin')" />
-      <span class="app-aside__name">{{ t('navigation.admin') }}</span>
+    <div v-if="showBrand" class="app-aside__brand" :aria-label="brandName || t('navigation.admin')">
+      <img class="app-aside__logo" :src="logoUrl" :alt="brandName || t('navigation.admin')" />
+      <span class="app-aside__name">{{ brandName || t('navigation.admin') }}</span>
     </div>
 
     <el-menu

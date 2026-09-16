@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { logout } from '@/api/auth/login'
 import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
+import { useBrandStore } from '@/store/brand'
 import { useUIPreferencesStore } from '@/store/uiPreferences'
 import { resolveBreadcrumbs } from './breadcrumbs'
 import AppAside from './components/AppAside/index.vue'
@@ -16,9 +17,10 @@ import RouteTabs from './components/RouteTabs/index.vue'
 const mobileBreakpoint = 840
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n()
+const { locale, t } = useI18n()
 const access = usePermissionStore()
 const auth = useAuthStore()
+const brand = useBrandStore()
 const uiPreferences = useUIPreferencesStore()
 const collapsed = ref(false)
 const mobileMenuOpen = ref(false)
@@ -31,6 +33,10 @@ const asideWidth = computed(() => (collapsed.value ? '80px' : '248px'))
 const username = computed(() => (auth.user === null ? '' : auth.user.username))
 const email = computed(() => (auth.user === null ? '' : auth.user.email))
 const avatar = computed(() => (auth.user === null ? '' : auth.user.avatar))
+const brandName = computed(() => {
+  const configured = locale.value === 'en-US' ? brand.settings.titleEnUS : brand.settings.titleZhCN
+  return configured || t('navigation.admin')
+})
 const breadcrumbs = computed(() => resolveBreadcrumbs(route.path, access.menuTree) ?? [])
 const breadcrumbMissing = computed(
   () =>
@@ -79,6 +85,7 @@ async function handleLogout(): Promise<void> {
   try {
     await logout()
     access.reset()
+    brand.reset()
     auth.setAnonymous()
     await router.replace({ name: 'login' })
   } catch {
@@ -96,7 +103,16 @@ watch(
   { immediate: true },
 )
 
+watch(
+  brandName,
+  (value) => {
+    document.title = value
+  },
+  { immediate: true },
+)
+
 onMounted(() => {
+  void brand.load().catch(() => undefined)
   window.addEventListener('resize', updateViewport)
   document.addEventListener('keydown', handleDocumentKeydown)
 })
@@ -111,6 +127,7 @@ onBeforeUnmount(() => {
     <el-header v-if="isTopLayout && !contentFullscreen" class="admin-layout__topbar" height="52px">
       <AppHeader
         :breadcrumbs="breadcrumbs"
+        :brand-name="brandName"
         :show-brand="true"
         :show-breadcrumb="uiPreferences.preferences.showBreadcrumb"
         :show-menu-toggle="uiPreferences.preferences.showMenuToggle"
@@ -128,6 +145,8 @@ onBeforeUnmount(() => {
           :username="username"
           :email="email"
           :avatar="avatar"
+          :default-avatar="brand.settings.defaultAvatar"
+          :brand-name="brandName"
           :logout-pending="logoutPending"
           @logout="handleLogout"
         />
@@ -141,6 +160,7 @@ onBeforeUnmount(() => {
         >
           <AppHeader
             :breadcrumbs="breadcrumbs"
+            :brand-name="brandName"
             :show-breadcrumb="uiPreferences.preferences.showBreadcrumb"
             :show-menu-toggle="uiPreferences.preferences.showMenuToggle"
             :content-fullscreen="contentFullscreen"
@@ -221,6 +241,8 @@ onBeforeUnmount(() => {
         :username="username"
         :email="email"
         :avatar="avatar"
+        :default-avatar="brand.settings.defaultAvatar"
+        :brand-name="brandName"
         :logout-pending="logoutPending"
         @logout="handleLogout"
       />

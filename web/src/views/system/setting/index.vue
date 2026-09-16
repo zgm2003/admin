@@ -8,7 +8,6 @@ import { useI18n } from 'vue-i18n'
 import {
   createSetting,
   deleteSetting,
-  getBrandSettings,
   getSettings,
   updateSetting,
   updateBrandSettings,
@@ -21,11 +20,13 @@ import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
+import { useBrandStore } from '@/store/brand'
 import SettingDialog from './components/SettingDialog/index.vue'
 import BrandSettingsPanel from './components/BrandSettingsPanel/index.vue'
 
 const { t } = useI18n()
 const access = usePermissionStore()
+const brand = useBrandStore()
 const rows = ref<SystemSetting[]>([])
 const loading = ref(false)
 const loadError = ref('')
@@ -137,11 +138,11 @@ async function load(): Promise<void> {
   }
 }
 async function loadBrand(): Promise<void> {
-  if (!canList.value) return
   brandLoading.value = true
   brandError.value = ''
   try {
-    brandForm.value = await getBrandSettings()
+    await brand.load()
+    brandForm.value = { ...brand.settings }
   } catch {
     brandError.value = t('setting.brandLoadFailed')
   } finally {
@@ -163,6 +164,7 @@ async function saveBrand(): Promise<void> {
   brandError.value = ''
   try {
     await updateBrandSettings(next)
+    brand.apply(next)
     brandForm.value = next
     ElNotification.success({ title: t('setting.saved') })
   } catch {

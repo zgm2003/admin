@@ -1,32 +1,49 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus, { ElMessage } from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { logout } from '@/api/auth/login'
+import { requestObjectURL } from '@/api/storage/upload'
+import { getBrandSettings } from '@/api/system/setting'
 import { YesNo } from '@/enums/yesNo'
 import { appI18n, setLocale } from '@/i18n'
 import { pinia } from '@/store'
 import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
+import { useBrandStore } from '@/store/brand'
 import { useUIPreferencesStore } from '@/store/uiPreferences'
 import Layout from '@/layout/index.vue'
 
 vi.mock('@/api/auth/login', () => ({ logout: vi.fn() }))
+vi.mock('@/api/storage/upload', () => ({ requestObjectURL: vi.fn() }))
+vi.mock('@/api/system/setting', () => ({ getBrandSettings: vi.fn() }))
 
 const logoutMock = vi.mocked(logout)
+const requestObjectURLMock = vi.mocked(requestObjectURL)
+const getBrandSettingsMock = vi.mocked(getBrandSettings)
 let layoutRenderCount = 0
+const mountedWrappers: VueWrapper[] = []
 
 describe('admin layout', () => {
   beforeEach(() => {
     logoutMock.mockReset()
     logoutMock.mockResolvedValue()
+    requestObjectURLMock.mockReset()
+    requestObjectURLMock.mockResolvedValue({ url: 'https://cdn.example.com/default.png' })
+    getBrandSettingsMock.mockReset()
+    getBrandSettingsMock.mockResolvedValue({
+      titleZhCN: '智澜管理台',
+      titleEnUS: 'ZHILAN ADMIN',
+      defaultAvatar: 'avatar/default.png',
+    })
     localStorage.clear()
     document.documentElement.classList.remove('dark')
     document.documentElement.style.removeProperty('color-scheme')
     setLocale('zh-CN')
     usePermissionStore(pinia).reset()
     useAuthStore(pinia).$reset()
+    useBrandStore(pinia).reset()
     useUIPreferencesStore(pinia).initializeSafely()
     useAuthStore(pinia).setCredential({
       accessToken: 'jwt',
@@ -45,8 +62,15 @@ describe('admin layout', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1200 })
   })
 
+  afterEach(() => {
+    for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
+    document.body.innerHTML = ''
+    vi.restoreAllMocks()
+  })
+
   it('renders one Aside, Header, Main, Footer, RouterView, sidebar account, and Dashboard item', async () => {
     const { wrapper } = await mountLayout()
+    await flushPromises()
     expect(wrapper.findAll('.admin-layout__aside')).toHaveLength(1)
     expect(wrapper.findAll('.admin-layout__header')).toHaveLength(1)
     expect(wrapper.findAll('.admin-layout__main')).toHaveLength(1)
@@ -55,6 +79,9 @@ describe('admin layout', () => {
     expect(wrapper.find('[data-testid="current-username"]').exists()).toBe(false)
     expect(wrapper.findAll('[data-testid="dashboard-menu-item"]')).toHaveLength(1)
     expect(wrapper.get('[data-testid="layout-content"]').text()).toContain('dashboard content')
+    expect(getBrandSettingsMock).toHaveBeenCalledOnce()
+    expect(wrapper.get('.app-aside__name').text()).toBe('智澜管理台')
+    expect(document.title).toBe('智澜管理台')
   })
 
   it('collapses the desktop Aside without changing the shell tracks', async () => {
@@ -81,6 +108,7 @@ describe('admin layout', () => {
 
   it('switches the current interface language from the Header', async () => {
     const { wrapper } = await mountLayout()
+    await flushPromises()
     expect(wrapper.findComponent({ name: 'AppHeader' }).props()).not.toHaveProperty('locale')
     await wrapper.get('[data-testid="locale-switch"]').trigger('click')
     await flushPromises()
@@ -89,6 +117,8 @@ describe('admin layout', () => {
     expect(document.documentElement.lang).toBe('en-US')
     expect(localStorage.getItem('admin:locale')).toBe('en-US')
     expect(wrapper.get('.app-header__breadcrumb').text()).toContain('Dashboard')
+    expect(wrapper.get('.app-aside__name').text()).toBe('ZHILAN ADMIN')
+    expect(document.title).toBe('ZHILAN ADMIN')
   })
 
   it('renders the full-width topbar and hides the workspace header in top layout', async () => {
@@ -296,6 +326,7 @@ describe('admin layout', () => {
     expect(usePermissionStore(pinia).permissionCodes).toEqual([])
     expect(useAuthStore(pinia).status).toBe('anonymous')
     expect(router.currentRoute.value.path).toBe('/login')
+    expect(useBrandStore(pinia).status).toBe('idle')
   })
 
   it('does not emit a second error toast when logout fails', async () => {
@@ -347,6 +378,7 @@ async function mountLayout(path = '/dashboard') {
   await router.push(path)
   await router.isReady()
   const wrapper = mount(Layout, { global: { plugins: [ElementPlus, pinia, router, appI18n] } })
+  mountedWrappers.push(wrapper)
   return { wrapper, router }
 }
 

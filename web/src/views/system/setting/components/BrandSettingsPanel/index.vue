@@ -28,7 +28,6 @@ const { t } = useI18n()
           <span>{{ t('setting.brandIdentity') }}</span>
         </div>
         <h2 id="brand-settings-title">{{ t('setting.brandTitle') }}</h2>
-        <p>{{ t('setting.brandDescription') }}</p>
       </div>
       <el-button
         v-if="canUpdate"
@@ -74,7 +73,6 @@ const { t } = useI18n()
           width="104px"
           :disabled="!canUpdate || !canUpload"
         />
-        <p class="brand-settings__hint">{{ t('setting.defaultAvatarHint') }}</p>
       </el-form-item>
     </el-form>
   </section>
@@ -82,11 +80,8 @@ const { t } = useI18n()
 
 <style scoped>
 .brand-settings {
-  padding: 20px 22px 22px;
-  border: 1px solid var(--el-border-color-light);
-  border-left: 3px solid var(--el-color-primary);
-  border-radius: 6px;
-  background: var(--el-bg-color);
+  padding: 2px 0 22px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
 .brand-settings__header {
@@ -112,14 +107,6 @@ const { t } = useI18n()
   color: var(--el-text-color-primary);
   font-size: 18px;
   line-height: 1.4;
-}
-
-.brand-settings__header p,
-.brand-settings__hint {
-  margin: 5px 0 0;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  line-height: 1.6;
 }
 
 .brand-settings__form {

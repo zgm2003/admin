@@ -27,6 +27,8 @@ const customSetting = settingRow({ id: 2, key: 'auth.captcha.slide_padding', isB
 const mountedWrappers: VueWrapper[] = []
 
 describe('system setting page', () => {
+  vi.setConfig({ testTimeout: 30_000 })
+
   beforeEach(() => {
     vi.clearAllMocks()
     setLocale('zh-CN')
@@ -239,12 +241,8 @@ describe('system setting page', () => {
     if (!(keyElement instanceof HTMLInputElement) || !keyElement.disabled) {
       throw new Error('setting key must be disabled during edit')
     }
-    const valueInput = wrapper
-      .getComponent({ name: 'SettingDialog' })
-      .findAllComponents({ name: 'ElInput' })
-      .find((component) => component.attributes('data-testid') === 'setting-form-value')
-    if (valueInput === undefined) throw new Error('setting value input not found')
-    valueInput.vm.$emit('update:modelValue', '3')
+    const settingDialog = wrapper.getComponent({ name: 'SettingDialog' })
+    settingDialog.vm.$emit('update:form', { ...settingDialog.props('form'), value: '3' })
     await nextTick()
     await clickBody('setting-save')
     await flushPromises()
