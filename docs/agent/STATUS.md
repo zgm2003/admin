@@ -3,16 +3,26 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## 统一配置缓存代际协议（2026-09-16，待设计）
+
+- 背景：`system/setting` 当前写路径为 PostgreSQL 提交后删除 Redis；删除失败会出现“数据库已提交但接口返回依赖错误”，缓存未命中期间的旧请求还可能在删除后回填旧值。该问题不只存在于品牌配置，必须按整个系统设置模块处理。
+- 已确认方向：PostgreSQL 继续作为唯一事实来源；为低频写、高频读的配置型缓存提供持久化 generation，并使用 Redis `ready` / `invalidating` 状态、带 generation 的不可变快照 key、tokenized mutation lease 和 `shared/cacheFill` 有界冷回源。旧代际缓存不扫描删除，只通过不可达 key 与 TTL 回收。
+- 待评审方案：优先评估一张按 `namespace + scope_key` 分区的 generation 表，统一承载没有自然业务版本的配置型缓存。它只保存权威代际，不保存缓存内容；不能退化成全项目共用一个 generation，也不能替代业务实体版本或编辑乐观锁。
+- 现有版本必须保持业务归属：`permission_auth_platform.policy_version/menu_version`、`permission_access_version.version`、Session/authority generation 等不迁入通用表。字典、Mail/SMS runtime、COS 等现有配置缓存只能在逐项核对作用域、事务边界和故障语义后决定是否迁移。
+- 下一会话先深读 `AGENTS.md`、`docs/agent/{README,STATUS,design,architecture}.md`，再核对 `system/setting`、`system/dictionary`、`permission/{authPlatform,menu,access,state,permissionVersion}`、Mail/SMS runtime、`shared/cacheFill` 和 Redis 封装。先输出全项目缓存/版本矩阵及 2～3 个方案，不直接改代码、建表或执行 migration。
+- 设计必须明确：容量和热点预算、namespace/scope 模型、读写状态机、数据库提交后 Redis 发布失败语义、进程崩溃与 Redis 丢数据后的自愈、冷回源上限、渐进迁移顺序，以及 generation 与 optimistic revision 的边界。
+- 维护者偏好：Node 已为 `v24.12.0`，不要重复执行 `nvm use`；测试命令由维护者自行执行，Agent 未获新指令前不要代跑测试。
+
 ## 系统设置品牌配置与收尾修复（2026-09-15，代码已完成）
 
 - COS 上传规则编辑态继续复用 `el-input-tag`，统一上传编码可编辑并随 PUT 请求提交；后端在同一事务中处理编码差集、软删、冲突和回滚，未改变上传大小、扩展名、MIME、路径或访问模式配置。
 - Queue Monitor 修复首次进入时 `queue_stats` 重复请求：空队列不请求，首次获得真实队列请求一次，队列增删才刷新；Asynqmon dist 已重新构建并清理旧 hash/source map。Dashboard 回归测试通过。
-- 系统设置新增品牌配置：`app.brand.title_zh_cn`、`app.brand.title_en_us`、`app.brand.default_avatar`；新增幂等 forward migration `docs/database/2026-09-15-system-setting-brand.sql`，默认头像只保存 COS object key 并固定复用 `avatar` 上传规则（单张、`image/*`、avatar variant，不传递新的大小限制）。迁移尚未执行真实业务库。
+- 系统设置新增品牌配置：`app.brand.title_zh_cn`、`app.brand.title_en_us`、`app.brand.default_avatar`；新增幂等 forward migration `docs/database/2026-09-15-system-setting-brand.sql`，默认头像只保存 COS object key 并固定复用 `avatar` 上传规则（单张、`image/*`、avatar variant，不传递新的大小限制）。真实 `admin.public` migration 已执行并重复执行验证幂等，三条活动内置配置均为 `value_type=1`、`is_enabled=1`、`is_builtin=1`。
 - 新增已登录基础端点 `GET /api/admin/v1/system/setting/brand`（仅认证，不要求设置权限）供管理壳层读取品牌；品牌 Store 共享并发请求、支持 reset 竞态保护；标题按当前语言同步到 `document.title`、Aside/Header，用户无头像时回退默认头像。品牌保存仍使用 `system:setting:update`，管理页读取列表与编辑权限独立。
 - 设置编辑器支持 string/number/bool/JSON，JSON 可格式化且严格拒绝非法内容；品牌面板移除解释性可见提示，仅保留字段标签和错误状态。
 - 验证：Node `v24.12.0` 下前端相关 5 个测试文件 34/34 通过，`pnpm typecheck`、`pnpm lint`、`pnpm check:architecture` 通过；Go `go test ./internal/module/storage/uploadRule ./internal/module/system/queueMonitor ./internal/module/system/setting ./internal/database -count=1`、定向 `go vet`、`go build ./cmd/api` 通过；新增真实 PostgreSQL 品牌事务回滚测试通过。页面测试因 Element Plus/Teleport 挂载成本将单文件预算设为 30 秒，未产生 unhandled error。
 - 全量复核：Go 全量 `go fmt ./...`、`go vet ./...`、`go test ./... -count=1`、`go build ./...` 均通过；前端 `pnpm typecheck`、`pnpm lint`、`pnpm check:architecture`、`pnpm build` 均通过（仅有既有大 chunk 警告）。前端全量 Vitest 为 78 文件/611 项通过、4 项失败；单独复跑确认失败仍是既有 `router/index.test.ts` 动态路由用例 1 项超时，以及 `permission/authPlatform` 滚动容器断言 1 项，不涉及本轮文件；本轮相关定向测试 34/34 通过。
-- 未执行：真实品牌 migration、API/Worker 重启、Redis 清缓存和浏览器人工验收。品牌保存后 Redis 删除失败仍沿用系统设置原有“数据库已提交、缓存失效报错”的残余一致性风险。
+- 迁移前备份位于 `%LOCALAPPDATA%\Admin\backups\system-setting-brand-20260916-091253\public-before.dump`，SHA256 为 `1C9293CDF4B3D59FB83CCE617EE08996C71F04F88B9E8EFA94E24FECCD31B31B`；`docs/database/current.sql` 已从真实数据库刷新。未执行 API/Worker 重启、Redis 清缓存和浏览器人工验收。品牌保存后 Redis 删除失败仍沿用系统设置原有“数据库已提交、缓存失效报错”的残余一致性风险。
 
 ## 系统任务队列监控（2026-09-14，代码已完成）
 
