@@ -17,6 +17,7 @@ const testViews: PageModuleMap = {
   '../views/permission/menu/index.vue': async () => ({ default: TestView }),
   '../views/permission/role/index.vue': async () => ({ default: TestView }),
   '../views/system/operationLog/index.vue': async () => ({ default: TestView }),
+  '../views/system/cacheGeneration/index.vue': async () => ({ default: TestView }),
   '../views/storage/object/index.vue': async () => ({ default: TestView }),
   '../views/message/mail/index.vue': async () => ({ default: TestView }),
 }
@@ -188,6 +189,27 @@ describe('access route registration', () => {
     expect(accessRoutes(router)).toHaveLength(0)
   })
 
+  it('registers the config cache generation page from the system view module', () => {
+    const router = testRouter()
+    const cleanup = registerPermissionRoutes(
+      router,
+      [
+        directory('system', [
+          page('system:cacheGeneration:view', '/system/cacheGeneration', 'system/cacheGeneration'),
+        ]),
+      ],
+      testViews,
+    )
+
+    expect(router.hasRoute('access:system:cacheGeneration:view')).toBe(true)
+    const resolved = router.resolve('/system/cacheGeneration')
+    expect(resolved.name).toBe('access:system:cacheGeneration:view')
+    expect(resolved.meta.i18nKey).toBe('navigation.systemCacheGeneration')
+
+    cleanup()
+    expect(accessRoutes(router)).toHaveLength(0)
+  })
+
   it('returns an idempotent cleanup for multiple pages', () => {
     const router = testRouter()
     const cleanup = registerPermissionRoutes(
@@ -263,6 +285,7 @@ function pageI18nKey(code: string): string {
     'user:loginLog:view': 'navigation.userLoginLog',
     'permission:menu:view': 'navigation.permissionMenu',
     'permission:role:view': 'navigation.permissionRole',
+    'system:cacheGeneration:view': 'navigation.systemCacheGeneration',
   }
   return keys[code] ?? 'navigation.userAccount'
 }

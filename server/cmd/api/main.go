@@ -39,6 +39,7 @@ import (
 	"admin/server/internal/module/permission/state"
 	"admin/server/internal/module/storage/cosConfig"
 	"admin/server/internal/module/storage/uploadRule"
+	systemcachegeneration "admin/server/internal/module/system/cacheGeneration"
 	"admin/server/internal/module/system/dictionary"
 	"admin/server/internal/module/system/operationLog"
 	"admin/server/internal/module/system/queueMonitor"
@@ -52,6 +53,7 @@ import (
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/secretkey"
+	"admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/i18n"
 	storagecos "admin/server/internal/storage/cos"
 	storagemail "admin/server/internal/storage/mail"
@@ -82,6 +84,7 @@ type routerDependencies struct {
 	OperationLog      *operationlog.Handler
 	Dictionary        *dictionary.Handler
 	Setting           *systemsetting.Handler
+	CacheGeneration   *systemcachegeneration.Handler
 	QueueMonitor      *queuemonitor.Handler
 	QueueMonitorUI    http.Handler
 	LoginLog          *loginlog.Handler
@@ -164,9 +167,17 @@ func run(logger *slog.Logger) error {
 
 	healthService := health.NewService(postgres, redisClient)
 	userRepository := account.NewRepository(postgres.GORM)
+	settingGenerationRepository := cachegeneration.NewRepository(postgres.GORM)
+	settingGenerationStore := cachegeneration.NewStore(redisClient)
 	settingRepository := systemsetting.NewRepository(postgres.GORM)
+	settingRepository.SetGenerations(settingGenerationRepository)
 	settingService := systemsetting.NewService(settingRepository)
-	settingService.SetCache(systemsetting.NewCache(redisClient))
+	settingCache := systemsetting.NewCache(redisClient)
+	settingCache.SetStateStore(settingGenerationStore)
+	settingService.SetCache(settingCache)
+	cacheGenerationService := systemcachegeneration.NewService(systemcachegeneration.NewRepository(postgres.GORM), settingGenerationStore)
+	settingService.SetGenerations(settingGenerationRepository, settingGenerationStore)
+	settingService.SetLogger(logger)
 	profileRepository := profile.NewRepository(postgres.GORM)
 	sessionRepository := usersession.NewRepository(postgres.GORM)
 	authPlatformRepository := authplatform.NewRepository(postgres.GORM)
@@ -312,6 +323,7 @@ func run(logger *slog.Logger) error {
 		OperationLog:      operationlog.NewHandler(operationLogService),
 		Dictionary:        dictionary.NewHandler(dictionaryService),
 		Setting:           systemsetting.NewHandler(settingService),
+		CacheGeneration:   systemcachegeneration.NewHandler(cacheGenerationService),
 		QueueMonitor:      queuemonitor.NewHandler(queueMonitorService, settings.Auth.CookieSecure, queuemonitor.SubjectFromContext),
 		QueueMonitorUI:    queuemonitor.NewGateway(queueMonitorService, queueMonitorUI),
 		LoginLog:          loginlog.NewHandler(loginLogService),
@@ -431,6 +443,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	dictionary.RegisterRoutes(adminRoutes, dependencies.Dictionary, dependencies.Authenticate, dependencies.RequirePermission)
 	if dependencies.Setting != nil {
 		systemsetting.RegisterRoutes(adminRoutes, dependencies.Setting, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.CacheGeneration != nil {
+		systemcachegeneration.RegisterRoutes(adminRoutes, dependencies.CacheGeneration, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.QueueMonitor != nil {
 		queuemonitor.RegisterGrantRoute(adminRoutes, dependencies.QueueMonitor, dependencies.AuthOrigin, dependencies.Authenticate, dependencies.RequirePermission)

@@ -20,6 +20,7 @@ import (
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/storage/cosConfig"
 	"admin/server/internal/module/storage/uploadRule"
+	systemcachegeneration "admin/server/internal/module/system/cacheGeneration"
 	"admin/server/internal/module/system/operationLog"
 	"admin/server/internal/module/user/account"
 	usersession "admin/server/internal/module/user/session"
@@ -270,21 +271,22 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	router := buildRouter(routerDependencies{
-		CORSOrigin:   "http://localhost:16300",
-		Logger:       logger,
-		Health:       health.NewHandler(readyService{}),
-		Auth:         auth.NewHandler(apiAuthService{}, false),
-		AuthPlatform: authplatform.NewHandler(apiAuthPlatformService{}),
-		Permission:   permission.NewHandler(apiAccessService{}),
-		Menu:         menu.NewHandler(apiMenuService{}),
-		Role:         role.NewHandler(apiRoleService{}),
-		User:         account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
-		COSConfig:    cosconfig.NewHandler(cosconfig.NewService(nil, nil, nil)),
-		UploadRule:   uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil)),
-		OperationLog: operationlog.NewHandler(apiOperationLogService{}),
-		SessionAdmin: usersession.NewSessionAdminHandler(apiSessionAdminService{}, apiSessionActor),
-		AuthOrigin:   auth.RequireOrigin("http://localhost:16300"),
-		Authenticate: auth.Authenticate(apiAuthService{}),
+		CORSOrigin:      "http://localhost:16300",
+		Logger:          logger,
+		Health:          health.NewHandler(readyService{}),
+		Auth:            auth.NewHandler(apiAuthService{}, false),
+		AuthPlatform:    authplatform.NewHandler(apiAuthPlatformService{}),
+		Permission:      permission.NewHandler(apiAccessService{}),
+		Menu:            menu.NewHandler(apiMenuService{}),
+		Role:            role.NewHandler(apiRoleService{}),
+		User:            account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
+		COSConfig:       cosconfig.NewHandler(cosconfig.NewService(nil, nil, nil)),
+		UploadRule:      uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil)),
+		OperationLog:    operationlog.NewHandler(apiOperationLogService{}),
+		CacheGeneration: systemcachegeneration.NewHandler(apiCacheGenerationService{}),
+		SessionAdmin:    usersession.NewSessionAdminHandler(apiSessionAdminService{}, apiSessionActor),
+		AuthOrigin:      auth.RequireOrigin("http://localhost:16300"),
+		Authenticate:    auth.Authenticate(apiAuthService{}),
 		RequirePermission: func(string) gin.HandlerFunc {
 			return func(context *gin.Context) { context.Next() }
 		},
@@ -342,6 +344,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"DELETE /api/admin/v1/user/session/:id":                         1,
 		"DELETE /api/admin/v1/user/session":                             1,
 		"GET /api/admin/v1/system/operationlog":                         1,
+		"GET /api/admin/v1/system/cachegeneration":                      1,
 		"GET /api/admin/v1/system/dictionary":                           1,
 		"GET /api/v1/system/dictionary/options":                         1,
 		"GET /api/admin/v1/system/dictionary/:id":                       1,
@@ -490,5 +493,74 @@ func TestRunDoesNotMutatePersistentStateDuringStartup(t *testing.T) {
 			t.Fatalf("run source order is invalid at %s", fragment)
 		}
 		previous = position
+	}
+}
+
+type apiCacheGenerationService struct{}
+
+func (apiCacheGenerationService) List(context.Context, systemcachegeneration.ListQuery) (systemcachegeneration.ListResult, error) {
+	return systemcachegeneration.ListResult{Items: []systemcachegeneration.Item{}, Page: 1, PageSize: 20}, nil
+}
+
+func TestCacheGenerationRouteRequiresListPermission(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	checkedCode := ""
+	router := buildRouter(routerDependencies{
+		CORSOrigin:      "http://localhost:16300",
+		Logger:          logger,
+		Health:          health.NewHandler(readyService{}),
+		Auth:            auth.NewHandler(apiAuthService{}, false),
+		AuthPlatform:    authplatform.NewHandler(apiAuthPlatformService{}),
+		Permission:      permission.NewHandler(apiAccessService{}),
+		Menu:            menu.NewHandler(apiMenuService{}),
+		Role:            role.NewHandler(apiRoleService{}),
+		User:            account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
+		COSConfig:       cosconfig.NewHandler(cosconfig.NewService(nil, nil, nil)),
+		UploadRule:      uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil)),
+		OperationLog:    operationlog.NewHandler(apiOperationLogService{}),
+		CacheGeneration: systemcachegeneration.NewHandler(apiCacheGenerationService{}),
+		SessionAdmin:    usersession.NewSessionAdminHandler(apiSessionAdminService{}, apiSessionActor),
+		AuthOrigin:      auth.RequireOrigin("http://localhost:16300"),
+		Authenticate:    auth.Authenticate(apiAuthService{}),
+		RequirePermission: func(code string) gin.HandlerFunc {
+			return func(c *gin.Context) {
+				checkedCode = code
+				c.AbortWithStatus(http.StatusForbidden)
+			}
+		},
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/system/cachegeneration", nil)
+	request.Header[authclient.PlatformHeader] = []string{"admin"}
+	request.Header[authclient.DeviceIDHeader] = []string{"550e8400-e29b-41d4-a716-446655440000"}
+	request.Header["Authorization"] = []string{"Bearer test-token"}
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d body = %s want 403", recorder.Code, recorder.Body.String())
+	}
+	if checkedCode != systemcachegeneration.PermissionList {
+		t.Fatalf("permission code = %q want %q", checkedCode, systemcachegeneration.PermissionList)
+	}
+}
+
+func TestRunWiresSettingGenerationDependencies(t *testing.T) {
+	content, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(content)
+	for _, fragment := range []string{
+		"cachegeneration.NewRepository(postgres.GORM)",
+		"cachegeneration.NewStore(redisClient)",
+		"settingRepository.SetGenerations(",
+		"settingCache.SetStateStore(",
+		"settingService.SetGenerations(",
+	} {
+		if !strings.Contains(source, fragment) {
+			t.Fatalf("run source lacks setting generation wiring %s", fragment)
+		}
 	}
 }

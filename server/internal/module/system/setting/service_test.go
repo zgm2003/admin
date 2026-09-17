@@ -3,42 +3,104 @@ package setting
 import (
 	"context"
 	"errors"
-	"os"
+	"fmt"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"admin/server/internal/config"
-	"admin/server/internal/database/testschema"
+	projectredis "admin/server/internal/redis"
+	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/cacheGeneration"
 	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
-	"github.com/joho/godotenv"
-	"gorm.io/gorm"
+
+	goredis "github.com/redis/go-redis/v9"
 )
 
+const generationTestKey = "auth.captcha.ttl_minutes"
+
 type fakeRepository struct {
-	rows     map[string]Record
-	list     []Record
-	create   Record
-	update   Record
-	findErr  error
-	writeErr error
-	brand    BrandSettings
+	mutex          sync.Mutex
+	rows           map[string]Record
+	list           []Record
+	create         Record
+	update         Record
+	findErr        error
+	writeErr       error
+	brand          BrandSettings
+	mutation       MutationResult
+	hasMutation    bool
+	mutationErr    error
+	onMutation     func(context.Context) error
+	onFind         func(context.Context, string) (Record, error)
+	findDelay      time.Duration
+	findCallCount  int
+	brandCallCount int
+}
+
+func (f *fakeRepository) findCalls() int {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	return f.findCallCount
+}
+
+func (f *fakeRepository) brandCalls() int {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	return f.brandCallCount
+}
+
+func (f *fakeRepository) runMutation(ctx context.Context) (MutationResult, error) {
+	if f.onMutation != nil {
+		if err := f.onMutation(ctx); err != nil {
+			return MutationResult{}, err
+		}
+	}
+	if f.mutationErr != nil {
+		return MutationResult{}, f.mutationErr
+	}
+	if f.writeErr != nil {
+		return MutationResult{}, f.writeErr
+	}
+	if f.hasMutation {
+		return f.mutation, nil
+	}
+	return MutationResult{Generation: 2, OutboxID: 1, Changed: true}, nil
 }
 
 func (f *fakeRepository) List(context.Context, ListQuery) ([]Record, int64, error) {
 	return f.list, int64(len(f.list)), nil
 }
-func (f *fakeRepository) Find(_ context.Context, key string) (Record, error) {
-	if f.findErr != nil {
-		return Record{}, f.findErr
-	}
+func (f *fakeRepository) Find(ctx context.Context, key string) (Record, error) {
+	f.mutex.Lock()
+	f.findCallCount++
+	delay := f.findDelay
+	onFind := f.onFind
+	findErr := f.findErr
 	row, ok := f.rows[key]
+	f.mutex.Unlock()
+
+	if delay > 0 {
+		select {
+		case <-ctx.Done():
+			return Record{}, ctx.Err()
+		case <-time.After(delay):
+		}
+	}
+	if onFind != nil {
+		return onFind(ctx, key)
+	}
+	if findErr != nil {
+		return Record{}, findErr
+	}
 	if !ok {
 		return Record{}, ErrNotFound
 	}
 	return row, nil
 }
-func (f *fakeRepository) Create(_ context.Context, row *Record) error {
+func (f *fakeRepository) Create(ctx context.Context, row *Record, _ int64) (MutationResult, error) {
+	f.mutex.Lock()
 	f.create = *row
 	if row.ID == 0 {
 		row.ID = 1
@@ -47,30 +109,40 @@ func (f *fakeRepository) Create(_ context.Context, row *Record) error {
 		f.rows = map[string]Record{}
 	}
 	f.rows[row.Key] = *row
-	return f.writeErr
+	f.mutex.Unlock()
+	return f.runMutation(ctx)
 }
-func (f *fakeRepository) Update(_ context.Context, key string, row Record) error {
+func (f *fakeRepository) Update(ctx context.Context, _ string, row Record, _ int64) (MutationResult, error) {
+	f.mutex.Lock()
 	f.update = row
-	return f.writeErr
+	f.mutex.Unlock()
+	return f.runMutation(ctx)
 }
-func (f *fakeRepository) UpdateStatus(_ context.Context, key string, status yesno.Value, now time.Time) error {
-	return f.writeErr
+func (f *fakeRepository) UpdateStatus(ctx context.Context, _ string, _ yesno.Value, _ int64, _ time.Time) (MutationResult, error) {
+	return f.runMutation(ctx)
 }
-func (f *fakeRepository) Delete(_ context.Context, key string) error { return f.writeErr }
-func (f *fakeRepository) FindBrand(_ context.Context) (BrandSettings, error) {
-	if f.findErr != nil {
-		return BrandSettings{}, f.findErr
+func (f *fakeRepository) Delete(ctx context.Context, _ string, _ int64, _ time.Time) (MutationResult, error) {
+	return f.runMutation(ctx)
+}
+func (f *fakeRepository) FindBrand(context.Context) (BrandSettings, error) {
+	f.mutex.Lock()
+	f.brandCallCount++
+	findErr := f.findErr
+	rows := f.rows
+	f.mutex.Unlock()
+	if findErr != nil {
+		return BrandSettings{}, findErr
 	}
 	return BrandSettings{
-		TitleZhCN: f.rows[BrandTitleZhCNKey].Value, TitleEnUS: f.rows[BrandTitleEnUSKey].Value, DefaultAvatar: f.rows[BrandDefaultAvatarKey].Value,
+		TitleZhCN: rows[BrandTitleZhCNKey].Value, TitleEnUS: rows[BrandTitleEnUSKey].Value, DefaultAvatar: rows[BrandDefaultAvatarKey].Value,
 	}, nil
 }
-func (f *fakeRepository) UpdateBrand(_ context.Context, brand BrandSettings, _ time.Time) error {
+func (f *fakeRepository) UpdateBrand(ctx context.Context, brand BrandSettings, _ int64, _ time.Time) (MutationResult, error) {
 	if f.writeErr != nil {
-		return f.writeErr
+		return MutationResult{}, f.writeErr
 	}
 	f.brand = brand
-	return nil
+	return f.runMutation(ctx)
 }
 
 func TestServiceCreateRejectsUnknownValueTypeAndMalformedJSON(t *testing.T) {
@@ -84,16 +156,17 @@ func TestServiceCreateRejectsUnknownValueTypeAndMalformedJSON(t *testing.T) {
 }
 
 func TestServiceCreateNormalizesAndReturnsSharedRecord(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
 	repo := &fakeRepository{}
-	service := NewService(repo)
-	id, err := service.Create(context.Background(), CreateInput{Key: " auth.captcha.ttl_minutes ", Value: " 2 ", ValueType: ValueTypeNumber, Description: " ttl "})
+	service := harness.service(repo)
+	id, err := service.Create(harness.ctx, CreateInput{Key: " auth.captcha.ttl_minutes ", Value: " 2 ", ValueType: ValueTypeNumber, Description: " ttl "})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
 	if id != 1 || repo.create.Key != "auth.captcha.ttl_minutes" || repo.create.Value != "2" || repo.create.Description != "ttl" {
 		t.Fatalf("unexpected record: %#v", repo.create)
 	}
-	shared, err := service.FindByKey(context.Background(), "auth.captcha.ttl_minutes")
+	shared, err := service.FindByKey(harness.ctx, "auth.captcha.ttl_minutes")
 	if err != nil {
 		t.Fatalf("FindByKey() error = %v", err)
 	}
@@ -112,8 +185,9 @@ func TestServiceBuiltinCannotDelete(t *testing.T) {
 
 func TestServicePropagatesRepositoryFailure(t *testing.T) {
 	repoErr := errors.New("database down")
-	service := NewService(&fakeRepository{findErr: repoErr})
-	if _, err := service.FindByKey(context.Background(), "auth.captcha.ttl_minutes"); !errors.Is(err, repoErr) {
+	harness := openSettingGenerationHarness(t)
+	service := harness.service(&fakeRepository{findErr: repoErr})
+	if _, err := service.FindByKey(harness.ctx, "auth.captcha.ttl_minutes"); !errors.Is(err, repoErr) {
 		t.Fatalf("expected repository error, got %v", err)
 	}
 }
@@ -124,13 +198,14 @@ func TestServiceReadsAndAtomicallyUpdatesBrandSettings(t *testing.T) {
 		BrandTitleEnUSKey:     {Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
 		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
 	}}
-	service := NewService(repo)
-	brand, err := service.Brand(context.Background())
+	harness := openSettingGenerationHarness(t)
+	service := harness.service(repo)
+	brand, err := service.Brand(harness.ctx)
 	if err != nil || brand.TitleZhCN != "智澜" || brand.TitleEnUS != "ZHILAN" || brand.DefaultAvatar != "" {
 		t.Fatalf("brand=%+v error=%v", brand, err)
 	}
 
-	err = service.UpdateBrand(context.Background(), BrandSettings{
+	err = service.UpdateBrand(harness.ctx, BrandSettings{
 		TitleZhCN: " 新标题 ", TitleEnUS: " New title ", DefaultAvatar: "avatar/2026/09/15/default.png",
 	})
 	if err != nil {
@@ -156,6 +231,19 @@ func TestServiceRejectsInvalidBrandSettings(t *testing.T) {
 	}
 }
 
+func TestServiceBrandFailsClosedWhenCacheDependenciesAreMissing(t *testing.T) {
+	service := NewService(&fakeRepository{})
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("Brand() panicked without cache dependencies: %v", recovered)
+		}
+	}()
+
+	if _, err := service.Brand(context.Background()); err == nil {
+		t.Fatal("Brand() returned success without cache dependencies")
+	}
+}
+
 func TestRepositoryUpdateBrandRollsBackWhenOneSettingIsMissing(t *testing.T) {
 	db, ctx := openSettingDatabase(t)
 	now := time.Now().UTC()
@@ -165,10 +253,12 @@ func TestRepositoryUpdateBrandRollsBackWhenOneSettingIsMissing(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
+	repository := NewRepository(db)
+	repository.SetGenerations(cachegeneration.NewRepository(db))
 
-	err := NewRepository(db).UpdateBrand(ctx, BrandSettings{
+	_, err := repository.UpdateBrand(ctx, BrandSettings{
 		TitleZhCN: "新中文", TitleEnUS: "NEW", DefaultAvatar: "avatar/default.png",
-	}, now.Add(time.Minute))
+	}, 1, now.Add(time.Minute))
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("UpdateBrand() error=%v want=%v", err, ErrNotFound)
 	}
@@ -180,39 +270,756 @@ func TestRepositoryUpdateBrandRollsBackWhenOneSettingIsMissing(t *testing.T) {
 	if len(rows) != 2 || rows[0].Value != "OLD" || rows[1].Value != "旧中文" {
 		t.Fatalf("rows=%+v, transaction partially updated brand settings", rows)
 	}
+	assertSettingGeneration(t, db, ctx, "global", 1)
+	assertSettingOutbox(t, db, ctx, "global", 0, 0, false)
 }
 
-func openSettingDatabase(t *testing.T) (*gorm.DB, context.Context) {
-	t.Helper()
-	if testing.Short() {
-		t.Skip("PostgreSQL integration test")
+func TestServiceMutationAcquiresLeaseBeforeDatabaseMutation(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	seedSettingRow(t, harness.db, harness.ctx, numericSettingRow(generationTestKey, "2", yesno.No))
+	fake := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	observed := ""
+	fake.onMutation = func(mutationCtx context.Context) error {
+		state, found, err := cachegeneration.NewStore(harness.client).Read(mutationCtx, harness.scope)
+		if err != nil || !found {
+			return fmt.Errorf("state unavailable during mutation: found=%v err=%v", found, err)
+		}
+		observed = state.State
+		return nil
 	}
-	if err := godotenv.Load("../../../../.env"); err != nil && !os.IsNotExist(err) {
+	service := harness.service(fake)
+
+	if err := service.Update(harness.ctx, generationTestKey, UpdateInput{Value: "5", ValueType: ValueTypeNumber}); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if observed != cachegeneration.StateInvalidating {
+		t.Fatalf("mutation observed state %q want %q", observed, cachegeneration.StateInvalidating)
+	}
+	state, found, err := harness.store.Read(harness.ctx, harness.scope)
+	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 2 {
+		t.Fatalf("state after mutation = %+v found=%v err=%v", state, found, err)
+	}
+}
+
+func TestServiceMutationPublishesGenerationAndMarksOutbox(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	seedSettingRow(t, harness.db, harness.ctx, numericSettingRow(generationTestKey, "2", yesno.No))
+	repository := NewRepository(harness.db)
+	repository.scope = harness.scope
+	repository.SetGenerations(harness.generations)
+	service := harness.service(repository)
+
+	if err := service.Update(harness.ctx, generationTestKey, UpdateInput{Value: "5", ValueType: ValueTypeNumber}); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	assertSettingGeneration(t, harness.db, harness.ctx, harness.scope.ScopeKey, 2)
+	assertSettingOutbox(t, harness.db, harness.ctx, harness.scope.ScopeKey, 1, 2, true)
+	state, found, err := harness.store.Read(harness.ctx, harness.scope)
+	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 2 {
+		t.Fatalf("state after mutation = %+v found=%v err=%v", state, found, err)
+	}
+}
+
+func TestServiceMutationRollsBackLeaseWhenDatabaseFails(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{
+		rows: map[string]Record{
+			generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		},
+		mutationErr: errors.New("database down"),
+	}
+	service := harness.service(fake)
+
+	if err := service.Update(harness.ctx, generationTestKey, UpdateInput{Value: "5", ValueType: ValueTypeNumber}); err == nil {
+		t.Fatal("expected dependency failure")
+	}
+	state, found, err := harness.store.Read(harness.ctx, harness.scope)
+	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 1 {
+		t.Fatalf("state after rollback = %+v found=%v err=%v", state, found, err)
+	}
+	assertSettingGeneration(t, harness.db, harness.ctx, harness.scope.ScopeKey, 1)
+}
+
+func TestServiceMutationRollsBackLeaseOnNoOp(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{
+		rows: map[string]Record{
+			generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		},
+		hasMutation: true,
+		mutation:    MutationResult{Changed: false},
+	}
+	service := harness.service(fake)
+
+	if err := service.UpdateStatus(harness.ctx, generationTestKey, yesno.Yes); err != nil {
+		t.Fatalf("UpdateStatus() error = %v", err)
+	}
+	state, found, err := harness.store.Read(harness.ctx, harness.scope)
+	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 1 {
+		t.Fatalf("state after no-op = %+v found=%v err=%v", state, found, err)
+	}
+}
+
+func TestServiceMutationReturnsSuccessWhenPublishFails(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	fake.onMutation = func(context.Context) error {
+		return harness.client.Delete(context.Background(), cachegeneration.StateKey(harness.scope))
+	}
+	service := harness.service(fake)
+
+	if err := service.Update(harness.ctx, generationTestKey, UpdateInput{Value: "5", ValueType: ValueTypeNumber}); err != nil {
+		t.Fatalf("publish failure must not fail the committed business write: %v", err)
+	}
+	if _, found, err := harness.store.Read(harness.ctx, harness.scope); err != nil || found {
+		t.Fatalf("state should be gone after lease loss: found=%v err=%v", found, err)
+	}
+}
+
+func TestServiceMutationTreatsUncertainCommitAsCommitted(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	fake.onMutation = func(mutationCtx context.Context) error {
+		if err := harness.db.WithContext(mutationCtx).Exec(
+			`UPDATE system_config_cache_generation SET generation = 2 WHERE namespace = 'system.setting' AND scope_key = ?`,
+			harness.scope.ScopeKey).Error; err != nil {
+			return err
+		}
+		return errors.New("connection reset after commit")
+	}
+	service := harness.service(fake)
+
+	if err := service.Update(harness.ctx, generationTestKey, UpdateInput{Value: "5", ValueType: ValueTypeNumber}); err != nil {
+		t.Fatalf("committed write with uncertain acknowledgement must succeed: %v", err)
+	}
+	state, found, err := harness.store.Read(harness.ctx, harness.scope)
+	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 2 {
+		t.Fatalf("state after uncertain commit = %+v found=%v err=%v", state, found, err)
+	}
+}
+
+func TestServiceMutationCancelsTransactionWhenLeaseRenewalFails(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	cancelled := make(chan error, 1)
+	fake.onMutation = func(mutationCtx context.Context) error {
+		if err := harness.client.Delete(context.Background(), cachegeneration.StateKey(harness.scope)); err != nil {
+			return err
+		}
+		select {
+		case <-mutationCtx.Done():
+			cancelled <- mutationCtx.Err()
+			return mutationCtx.Err()
+		case <-time.After(5 * time.Second):
+			return errors.New("mutation context was not cancelled by the lease renewal")
+		}
+	}
+	service := harness.service(fake)
+
+	if err := service.Update(harness.ctx, generationTestKey, UpdateInput{Value: "5", ValueType: ValueTypeNumber}); err == nil {
+		t.Fatal("expected dependency failure")
+	}
+	select {
+	case cause := <-cancelled:
+		if cause == nil {
+			t.Fatal("mutation context was cancelled without cause")
+		}
+	default:
+		t.Fatal("mutation context was not cancelled")
+	}
+	assertSettingGeneration(t, harness.db, harness.ctx, harness.scope.ScopeKey, 1)
+}
+
+func TestServiceCacheHitSkipsPostgres(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{}
+	service := harness.service(fake)
+	now := time.Now().UTC()
+	row := Record{
+		ID: 7, Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Description: "",
+		IsEnabled: yesno.Yes, IsBuiltin: yesno.No, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := harness.cache.PutRecord(harness.ctx, 1, row); err != nil {
 		t.Fatal(err)
 	}
-	settings, err := config.LoadWorker(os.LookupEnv)
+	got, err := service.Find(harness.ctx, generationTestKey)
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if got.ID != 7 || got.Value != "2" {
+		t.Fatalf("cached record = %+v", got)
+	}
+	if calls := fake.findCalls(); calls != 0 {
+		t.Fatalf("ready hit must not read PostgreSQL: calls=%d", calls)
+	}
+}
+
+func TestServiceCacheRejectsSnapshotCoordinateMismatch(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "5", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	service := harness.service(fake)
+	snapshotKey, err := cachegeneration.SnapshotKey(harness.scope, 1, recordVariant(generationTestKey))
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, ctx := testschema.Open(t, settings.PostgresDSN, "test_system_setting_repository")
-	if err = db.WithContext(ctx).Exec(`
-		CREATE TABLE system_setting (
-			id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-			setting_key VARCHAR(128) NOT NULL,
-			value TEXT NOT NULL,
-			value_type SMALLINT NOT NULL,
-			description VARCHAR(512) NOT NULL,
-			is_enabled SMALLINT NOT NULL,
-			is_builtin SMALLINT NOT NULL,
-			created_at TIMESTAMPTZ NOT NULL,
-			updated_at TIMESTAMPTZ NOT NULL,
-			deleted_at TIMESTAMPTZ
-		);
-		CREATE UNIQUE INDEX ux_system_setting_key_active ON system_setting(setting_key) WHERE deleted_at IS NULL;
-	`).Error; err != nil {
+	payload, err := encodeRecordPayload(2, Record{Key: generationTestKey, Value: "9", ValueType: ValueTypeNumber})
+	if err != nil {
 		t.Fatal(err)
 	}
-	return db, ctx
+	if err := harness.client.SetString(harness.ctx, snapshotKey, payload, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := service.Find(harness.ctx, generationTestKey)
+	if err != nil || got.Value != "5" {
+		t.Fatalf("record = %+v err = %v", got, err)
+	}
+	if calls := fake.findCalls(); calls != 1 {
+		t.Fatalf("coordinate mismatch must trigger repair: calls=%d", calls)
+	}
+}
+
+func TestServiceCacheMissingStateRecoversFromPostgres(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	service := harness.service(fake)
+	if err := harness.client.Delete(harness.ctx, cachegeneration.StateKey(harness.scope)); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := service.Find(harness.ctx, generationTestKey)
+	if err != nil || got.Value != "2" {
+		t.Fatalf("record = %+v err = %v", got, err)
+	}
+	state, found, err := harness.store.Read(harness.ctx, harness.scope)
+	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 1 {
+		t.Fatalf("recovered state = %+v found=%v err=%v", state, found, err)
+	}
+	if calls := fake.findCalls(); calls != 1 {
+		t.Fatalf("missing state recovery reads = %d want 1", calls)
+	}
+}
+
+func TestServiceColdFillSingleLeaderAndFollowerBudget(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{
+		rows: map[string]Record{
+			generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		},
+		findDelay: 30 * time.Millisecond,
+	}
+	service := harness.service(fake)
+
+	// 本机 Redis 在高并发下单条命令可达 ~20ms，因此这里断言“有界失败闭合 +
+	// 单 leader 回源”；超预算返回依赖错误是协议定义的行为，
+	// 恢复能力由 TestServiceColdFillFollowersRecoverWithinBudget 覆盖。
+	const workers = 32
+	start := time.Now()
+	var waitGroup sync.WaitGroup
+	failures := make(chan error, workers)
+	for index := 0; index < workers; index++ {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			if _, err := service.Find(harness.ctx, generationTestKey); err != nil {
+				failures <- err
+			}
+		}()
+	}
+	waitGroup.Wait()
+	close(failures)
+	elapsed := time.Since(start)
+
+	if elapsed > 3*time.Second {
+		t.Fatalf("cold fill exceeded the bounded budget: %v", elapsed)
+	}
+	for err := range failures {
+		var appErr *apperror.Error
+		if !errors.As(err, &appErr) || appErr.Code != apperror.CodeDependencyUnavailable {
+			t.Fatalf("follower failure = %v want dependency unavailable", err)
+		}
+	}
+	if calls := fake.findCalls(); calls != 1 {
+		t.Fatalf("cold fill must have a single PostgreSQL leader: calls=%d", calls)
+	}
+	snapshotKey, err := cachegeneration.SnapshotKey(harness.scope, 1, recordVariant(generationTestKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := harness.client.GetString(harness.ctx, snapshotKey); err != nil || !found {
+		t.Fatalf("cold fill snapshot missing: found=%v err=%v", found, err)
+	}
+	followUp, err := service.Find(harness.ctx, generationTestKey)
+	if err != nil || followUp.Value != "2" {
+		t.Fatalf("follow-up read = %+v err = %v", followUp, err)
+	}
+	if calls := fake.findCalls(); calls != 1 {
+		t.Fatalf("follow-up read must hit the snapshot: calls=%d", calls)
+	}
+}
+
+// TestServiceColdFillFollowersRecoverWithinBudget 用较小并发验证 followers
+// 能在约 500ms 预算内等到 leader 发布快照。
+func TestServiceColdFillFollowersRecoverWithinBudget(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{
+		rows: map[string]Record{
+			generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		},
+		findDelay: 20 * time.Millisecond,
+	}
+	service := harness.service(fake)
+
+	const workers = 4
+	var waitGroup sync.WaitGroup
+	failures := make(chan error, workers)
+	for index := 0; index < workers; index++ {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			if _, err := service.Find(harness.ctx, generationTestKey); err != nil {
+				failures <- err
+			}
+		}()
+	}
+	waitGroup.Wait()
+	close(failures)
+	for err := range failures {
+		t.Fatalf("follower did not recover within the budget: %v", err)
+	}
+	if calls := fake.findCalls(); calls != 1 {
+		t.Fatalf("followers must reuse the leader snapshot: calls=%d", calls)
+	}
+}
+
+func TestServiceColdFillDropsStaleGenerationResult(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	var mutex sync.Mutex
+	loaded := make(chan struct{})
+	release := make(chan struct{})
+	first := true
+	current := Record{Key: generationTestKey, Value: "old", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No}
+	fake := &fakeRepository{}
+	fake.onFind = func(ctx context.Context, _ string) (Record, error) {
+		mutex.Lock()
+		isFirst := first
+		first = false
+		row := current
+		mutex.Unlock()
+		if isFirst {
+			close(loaded)
+			select {
+			case <-release:
+			case <-ctx.Done():
+				return Record{}, ctx.Err()
+			}
+		}
+		return row, nil
+	}
+	service := harness.service(fake)
+
+	results := make(chan Record, 1)
+	failures := make(chan error, 1)
+	go func() {
+		row, err := service.Find(harness.ctx, generationTestKey)
+		if err != nil {
+			failures <- err
+			return
+		}
+		results <- row
+	}()
+	<-loaded
+
+	mutex.Lock()
+	current = Record{Key: generationTestKey, Value: "new", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No}
+	mutex.Unlock()
+	if err := harness.db.WithContext(harness.ctx).Exec(
+		`UPDATE system_config_cache_generation SET generation = 2 WHERE namespace = 'system.setting' AND scope_key = ?`,
+		harness.scope.ScopeKey).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := harness.store.Reconcile(harness.ctx, harness.scope, 2); err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+
+	select {
+	case err := <-failures:
+		t.Fatalf("Find() error = %v", err)
+	case row := <-results:
+		if row.Value != "new" {
+			t.Fatalf("stale generation result was returned: %+v", row)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Find did not return after the generation changed")
+	}
+
+	staleKey, err := cachegeneration.SnapshotKey(harness.scope, 1, recordVariant(generationTestKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := harness.client.GetString(harness.ctx, staleKey); err != nil || found {
+		t.Fatalf("generation 1 snapshot must not be written: found=%v err=%v", found, err)
+	}
+	freshKey, err := cachegeneration.SnapshotKey(harness.scope, 2, recordVariant(generationTestKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, found, err := harness.client.GetString(harness.ctx, freshKey)
+	if err != nil || !found || !strings.Contains(raw, `"new"`) {
+		t.Fatalf("generation 2 snapshot = %q found=%v err=%v", raw, found, err)
+	}
+}
+
+func TestServiceCacheRedisFailureDoesNotReadPostgres(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{}
+	service := harness.service(fake)
+	if err := harness.client.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := service.Find(harness.ctx, generationTestKey); err == nil {
+		t.Fatal("expected dependency failure")
+	}
+	if calls := fake.findCalls(); calls != 0 {
+		t.Fatalf("redis failure must not fall back to PostgreSQL: calls=%d", calls)
+	}
+}
+
+func TestServiceCacheInvalidatingWaitExhaustsBudget(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	service := harness.service(fake)
+	service.readBudget = 80 * time.Millisecond
+	lease, err := harness.store.Acquire(harness.ctx, harness.scope, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lease.Rollback(context.Background()) }()
+
+	if _, err := service.Find(harness.ctx, generationTestKey); err == nil {
+		t.Fatal("expected dependency failure while invalidating")
+	}
+	if calls := fake.findCalls(); calls != 0 {
+		t.Fatalf("invalidating wait must not read PostgreSQL: calls=%d", calls)
+	}
+}
+
+func TestServiceBrandUsesSingleSnapshotVariant(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{rows: map[string]Record{
+		BrandTitleZhCNKey:     {Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandTitleEnUSKey:     {Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
+	}}
+	service := harness.service(fake)
+
+	first, err := service.Brand(harness.ctx)
+	if err != nil || first.TitleZhCN != "智澜" {
+		t.Fatalf("brand = %+v err = %v", first, err)
+	}
+	second, err := service.Brand(harness.ctx)
+	if err != nil || second != first {
+		t.Fatalf("cached brand = %+v err = %v", second, err)
+	}
+	if calls := fake.brandCalls(); calls != 1 {
+		t.Fatalf("brand must be one PostgreSQL read: calls=%d", calls)
+	}
+	snapshotKey, err := cachegeneration.SnapshotKey(harness.scope, 1, brandSnapshotVariant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := harness.client.GetString(harness.ctx, snapshotKey); err != nil || !found {
+		t.Fatalf("brand snapshot missing: found=%v err=%v", found, err)
+	}
+}
+
+func TestServiceCacheCorruptSnapshotIsRepairedByLeader(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	service := harness.service(fake)
+	snapshotKey, err := cachegeneration.SnapshotKey(harness.scope, 1, recordVariant(generationTestKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := harness.client.SetString(harness.ctx, snapshotKey, "not-json", 0); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := service.Find(harness.ctx, generationTestKey)
+	if err != nil || got.Value != "2" {
+		t.Fatalf("record = %+v err = %v", got, err)
+	}
+	if calls := fake.findCalls(); calls != 1 {
+		t.Fatalf("corrupt snapshot repair reads = %d want 1", calls)
+	}
+	raw, found, err := harness.client.GetString(harness.ctx, snapshotKey)
+	if err != nil || !found || strings.Contains(raw, "not-json") {
+		t.Fatalf("snapshot not repaired: %q found=%v err=%v", raw, found, err)
+	}
+}
+
+// commandCounter 记录单个 Redis client 实际发出的命令，用于热点预算断言。
+type commandCounter struct {
+	mutex  sync.Mutex
+	counts map[string]int
+}
+
+func newCommandCounter() *commandCounter {
+	return &commandCounter{counts: map[string]int{}}
+}
+
+func (c *commandCounter) DialHook(next goredis.DialHook) goredis.DialHook { return next }
+
+func (c *commandCounter) ProcessHook(next goredis.ProcessHook) goredis.ProcessHook {
+	return func(ctx context.Context, command goredis.Cmder) error {
+		c.record([]goredis.Cmder{command})
+		return next(ctx, command)
+	}
+}
+
+func (c *commandCounter) ProcessPipelineHook(next goredis.ProcessPipelineHook) goredis.ProcessPipelineHook {
+	return func(ctx context.Context, commands []goredis.Cmder) error {
+		c.record(commands)
+		return next(ctx, commands)
+	}
+}
+
+func (c *commandCounter) record(commands []goredis.Cmder) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	for _, command := range commands {
+		c.counts[command.Name()]++
+	}
+}
+
+func (c *commandCounter) countsOf(names ...string) int {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	total := 0
+	for _, name := range names {
+		total += c.counts[name]
+	}
+	return total
+}
+
+func (c *commandCounter) reset() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.counts = map[string]int{}
+}
+
+func TestServiceHotReadUsesOneStateAndOneSnapshotCommand(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	counter := newCommandCounter()
+	harness.client.UniversalClient().AddHook(counter)
+	service := harness.service(fake)
+
+	if _, err := service.Find(harness.ctx, generationTestKey); err != nil {
+		t.Fatalf("cold read error = %v", err)
+	}
+	counter.reset()
+	row, err := service.Find(harness.ctx, generationTestKey)
+	if err != nil || row.Value != "2" {
+		t.Fatalf("hot read = %+v err=%v", row, err)
+	}
+	if gets := counter.countsOf("get"); gets != 2 {
+		t.Fatalf("hot read redis GETs = %d want 2 (state + snapshot)", gets)
+	}
+	if calls := fake.findCalls(); calls != 1 {
+		t.Fatalf("hot read must not hit PostgreSQL again: calls=%d", calls)
+	}
+}
+
+func TestServiceMutationWritesSingleStateWithoutKeyScan(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	seedSettingRow(t, harness.db, harness.ctx, numericSettingRow(generationTestKey, "2", yesno.No))
+	repository := NewRepository(harness.db)
+	repository.scope = harness.scope
+	repository.SetGenerations(harness.generations)
+	counter := newCommandCounter()
+	harness.client.UniversalClient().AddHook(counter)
+	service := harness.service(repository)
+	// 关闭续租，确保计数只包含 acquire 与 commit 两条脚本。
+	service.renewInterval = time.Hour
+
+	if err := service.Update(harness.ctx, generationTestKey, UpdateInput{Value: "5", ValueType: ValueTypeNumber}); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if scripts := counter.countsOf("eval", "evalsha"); scripts != 2 {
+		t.Fatalf("mutation redis scripts = %d want 2 (acquire + commit)", scripts)
+	}
+	for _, forbidden := range []string{"scan", "del", "flushdb", "flushall", "set"} {
+		if count := counter.countsOf(forbidden); count != 0 {
+			t.Fatalf("mutation must not use %s: %d", forbidden, count)
+		}
+	}
+	assertSettingGeneration(t, harness.db, harness.ctx, harness.scope.ScopeKey, 2)
+	assertSettingOutbox(t, harness.db, harness.ctx, harness.scope.ScopeKey, 1, 2, true)
+}
+
+func TestServiceTwoInstancesSerializeMutationsThroughSingleLease(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	settings := loadSettingTestSettings(t)
+	secondClient, err := projectredis.Open(harness.ctx, settings.RedisURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = secondClient.Close() })
+	secondStore := cachegeneration.NewStore(secondClient)
+
+	release := make(chan struct{})
+	holding := make(chan struct{})
+	first := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	first.onMutation = func(mutationCtx context.Context) error {
+		close(holding)
+		select {
+		case <-release:
+		case <-mutationCtx.Done():
+			return mutationCtx.Err()
+		}
+		if err := harness.db.WithContext(mutationCtx).Exec(
+			`UPDATE system_config_cache_generation SET generation = 2 WHERE namespace = 'system.setting' AND scope_key = ?`,
+			harness.scope.ScopeKey).Error; err != nil {
+			return err
+		}
+		return nil
+	}
+	first.hasMutation = true
+	first.mutation = MutationResult{Generation: 2, OutboxID: 0, Changed: true}
+	firstService := harness.service(first)
+
+	second := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	second.hasMutation = true
+	second.mutation = MutationResult{Changed: false}
+	secondService := harness.service(second)
+	secondService.states = secondStore
+
+	firstDone := make(chan error, 1)
+	go func() {
+		firstDone <- firstService.Update(harness.ctx, generationTestKey, UpdateInput{Value: "5", ValueType: ValueTypeNumber})
+	}()
+	<-holding
+
+	err = secondService.Update(harness.ctx, generationTestKey, UpdateInput{Value: "6", ValueType: ValueTypeNumber})
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) || appErr.Code != apperror.CodeConflict {
+		t.Fatalf("concurrent mutation error = %v want conflict", err)
+	}
+
+	close(release)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first mutation error = %v", err)
+	}
+	state, found, err := secondStore.Read(harness.ctx, harness.scope)
+	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 2 {
+		t.Fatalf("state after first mutation = %+v found=%v err=%v", state, found, err)
+	}
+
+	if err := secondService.Update(harness.ctx, generationTestKey, UpdateInput{Value: "6", ValueType: ValueTypeNumber}); err != nil {
+		t.Fatalf("successor retry error = %v", err)
+	}
+	state, found, err = harness.store.Read(harness.ctx, harness.scope)
+	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 2 {
+		t.Fatalf("state after successor retry = %+v found=%v err=%v", state, found, err)
+	}
+}
+
+func TestServiceCacheCorruptStateIsRepairedByAuthority(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	service := harness.service(fake)
+	if err := harness.client.SetString(harness.ctx, cachegeneration.StateKey(harness.scope), "not-json", 0); err != nil {
+		t.Fatal(err)
+	}
+
+	row, err := service.Find(harness.ctx, generationTestKey)
+	if err != nil || row.Value != "2" {
+		t.Fatalf("read with corrupt state = %+v err=%v", row, err)
+	}
+	state, found, err := harness.store.Read(harness.ctx, harness.scope)
+	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 1 {
+		t.Fatalf("repaired state = %+v found=%v err=%v", state, found, err)
+	}
+	if calls := fake.findCalls(); calls != 1 {
+		t.Fatalf("authority repair reads = %d want 1", calls)
+	}
+}
+
+func TestServiceCacheScopeFlushRecoversFromAuthority(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	service := harness.service(fake)
+	if _, err := service.Find(harness.ctx, generationTestKey); err != nil {
+		t.Fatalf("warm read error = %v", err)
+	}
+	// 只清掉本测试 scope 的 state 与 snapshot，模拟隔离测试 Redis 的 FLUSHDB。
+	snapshotKey, err := cachegeneration.SnapshotKey(harness.scope, 1, recordVariant(generationTestKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := harness.client.Delete(harness.ctx, cachegeneration.StateKey(harness.scope)); err != nil {
+		t.Fatal(err)
+	}
+	if err := harness.client.Delete(harness.ctx, snapshotKey); err != nil {
+		t.Fatal(err)
+	}
+	fake.mutex.Lock()
+	fake.findCallCount = 0
+	fake.mutex.Unlock()
+
+	const workers = 4
+	var waitGroup sync.WaitGroup
+	failures := make(chan error, workers)
+	for index := 0; index < workers; index++ {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			if _, err := service.Find(harness.ctx, generationTestKey); err != nil {
+				failures <- err
+			}
+		}()
+	}
+	waitGroup.Wait()
+	close(failures)
+	for err := range failures {
+		t.Fatalf("read after scope flush failed: %v", err)
+	}
+	if calls := fake.findCalls(); calls != 1 {
+		t.Fatalf("flush recovery leaders = %d want 1", calls)
+	}
+	state, found, err := harness.store.Read(harness.ctx, harness.scope)
+	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 1 {
+		t.Fatalf("state after flush recovery = %+v found=%v err=%v", state, found, err)
+	}
 }
 
 var _ sharedsetting.Reader = (*Service)(nil)

@@ -3,13 +3,20 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
-## 统一配置缓存代际协议（2026-09-16，待设计）
+## 统一配置缓存代际协议（2026-09-16，第一阶段已实现并迁移）
 
 - 背景：`system/setting` 当前写路径为 PostgreSQL 提交后删除 Redis；删除失败会出现“数据库已提交但接口返回依赖错误”，缓存未命中期间的旧请求还可能在删除后回填旧值。该问题不只存在于品牌配置，必须按整个系统设置模块处理。
 - 已确认方向：PostgreSQL 继续作为唯一事实来源；为低频写、高频读的配置型缓存提供持久化 generation，并使用 Redis `ready` / `invalidating` 状态、带 generation 的不可变快照 key、tokenized mutation lease 和 `shared/cacheFill` 有界冷回源。旧代际缓存不扫描删除，只通过不可达 key 与 TTL 回收。
-- 待评审方案：优先评估一张按 `namespace + scope_key` 分区的 generation 表，统一承载没有自然业务版本的配置型缓存。它只保存权威代际，不保存缓存内容；不能退化成全项目共用一个 generation，也不能替代业务实体版本或编辑乐观锁。
+- 已采用方案：按 `namespace + scope_key` 管理权威 generation，并以 durable outbox 负责 PostgreSQL 提交后的 Redis 发布恢复。generation 表只保存权威代际，不保存缓存内容；不能退化成全项目共用一个 generation，也不能替代业务实体版本或编辑乐观锁。
+- 第一阶段已接入 `system_setting`，scope 固定为 `system.setting/global`；Redis state 使用 `ready/invalidating`、tokenized mutation lease，快照 key 带 generation，`shared/cacheFill` 提供有界冷回源。旧 `system:setting:v1:*` 仅由迁移 runner 定向清理，运行时不再 pattern delete。
+- 已新增只读管理资源 `system/cacheGeneration`：页面权限 `system:cacheGeneration:view`，列表 API 权限 `system:cacheGeneration:list`，后端 API 为 `GET /api/admin/v1/system/cachegeneration`；不提供手工修改 generation、删除 outbox 或清 Redis 控件。
+- 真实迁移已于 2026-09-16 执行：`docs/database/2026-09-16-system-config-cache-generation.ps1 -OldAPIStopped` exit 0；Admin `menu_version` 10→11，Canvas 保持 1；`system_config_cache_generation`/`system_config_cache_outbox`、初始 generation=1/outbox、page/action 均已核验；`system:setting:v1:*` 两次定向扫描均为 0。迁移 runner 已修复为记录迁移前 generation/outbox 快照，重复执行不再把已发布事件或后续代际误报为失败。
+- `docs/database/current.sql` 已从真实 PostgreSQL schema-only 导出刷新，包含两张新表、约束、外键和 pending 索引；没有手工伪造菜单数据。
+- 真实定向 Go 回归已通过：`internal/shared/cacheGeneration`、`internal/module/system/cacheGeneration`、`internal/module/system/setting`、`internal/database`、`cmd/system-setting-cache-migration` 均 exit 0。前端 `pnpm typecheck` 与受影响文件 Prettier 通过；Vitest 未能启动，原因是当前 shell 的 Node 为 `v20.19.5`，依赖 `jsdom/undici` 报 `webidl.util.markAsUncloneable is not a function`，未修改依赖或执行 `nvm use`，前端全量测试留给维护者在 Node `v24.12.0` 环境执行。
+- 兜底修复：`system_setting` Repository 现在标记事务回调已确定回滚的错误；Service 不再把明确的唯一冲突、未找到或代际冲突误判为“提交结果不确定”并返回成功。真正的数据库提交确认异常仍保留原有 outbox/Redis 恢复路径。
+- 兜底修复：缓存代际管理 API 现在要求 Redis `ready` state 的 generation 与 PostgreSQL 权威 generation 完全一致；旧代际、新代际或异常代际均显示 `corrupt`，避免监控页把 Redis 残留误报为 ready。
 - 现有版本必须保持业务归属：`permission_auth_platform.policy_version/menu_version`、`permission_access_version.version`、Session/authority generation 等不迁入通用表。字典、Mail/SMS runtime、COS 等现有配置缓存只能在逐项核对作用域、事务边界和故障语义后决定是否迁移。
-- 下一会话先深读 `AGENTS.md`、`docs/agent/{README,STATUS,design,architecture}.md`，再核对 `system/setting`、`system/dictionary`、`permission/{authPlatform,menu,access,state,permissionVersion}`、Mail/SMS runtime、`shared/cacheFill` 和 Redis 封装。先输出全项目缓存/版本矩阵及 2～3 个方案，不直接改代码、建表或执行 migration。
+- 后续阶段另立计划：Dictionary 先修复“读取开始捕获代际、发布时重新读代际”的竞态，再迁移；Mail/SMS runtime、COS 配置逐项评估后迁移。`menu_version`、`policy_version`、`permission_access_version.version`、Session/authority generation、验证码、限流计数和 Queue 数据不迁入中央表。
 - 设计必须明确：容量和热点预算、namespace/scope 模型、读写状态机、数据库提交后 Redis 发布失败语义、进程崩溃与 Redis 丢数据后的自愈、冷回源上限、渐进迁移顺序，以及 generation 与 optimistic revision 的边界。
 - 维护者偏好：Node 已为 `v24.12.0`，不要重复执行 `nvm use`；测试命令由维护者自行执行，Agent 未获新指令前不要代跑测试。
 

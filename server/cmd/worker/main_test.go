@@ -3,7 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
+	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,15 +16,15 @@ import (
 	"github.com/hibiken/asynq"
 )
 
-func TestCheckWorkerRedisReturnsFullStartupContext(t *testing.T) {
+func TestOpenWorkerRedisKeepsStartupContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := checkWorkerRedis(ctx, "redis://127.0.0.1:1/0")
+	_, err := openWorkerRedis(ctx, "redis://127.0.0.1:1/0")
 	if err == nil {
-		t.Fatal("expected Redis startup check to fail")
+		t.Fatal("expected Redis startup to fail")
 	}
-	for _, want := range []string{"check Worker Redis", "ping Redis"} {
+	for _, want := range []string{"open Worker Redis", "ping Redis"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error = %q, want %q context", err, want)
 		}
@@ -54,4 +58,169 @@ func TestBuildWorkerMuxRegistersOnlyOperationLogTasks(t *testing.T) {
 	if operationProcessor.processed != "request-1" {
 		t.Fatalf("processed operation=%q", operationProcessor.processed)
 	}
+}
+
+type fakeRelayRunner struct {
+	mutex       sync.Mutex
+	startCount  int
+	cancelCount int
+	runErr      error
+	started     chan struct{}
+	stopped     chan struct{}
+	startOnce   sync.Once
+	stopOnce    sync.Once
+}
+
+func newFakeRelayRunner() *fakeRelayRunner {
+	return &fakeRelayRunner{started: make(chan struct{}), stopped: make(chan struct{})}
+}
+
+func (f *fakeRelayRunner) Run(ctx context.Context) error {
+	f.mutex.Lock()
+	f.startCount++
+	f.mutex.Unlock()
+	f.startOnce.Do(func() { close(f.started) })
+	if f.runErr != nil {
+		return f.runErr
+	}
+	<-ctx.Done()
+	f.mutex.Lock()
+	f.cancelCount++
+	f.mutex.Unlock()
+	f.stopOnce.Do(func() { close(f.stopped) })
+	return nil
+}
+
+func (f *fakeRelayRunner) counts() (int, int) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	return f.startCount, f.cancelCount
+}
+
+type fakeAsynqServer struct {
+	mutex      sync.Mutex
+	startCalls int
+	shutdowns  int
+	startErr   error
+}
+
+func (f *fakeAsynqServer) Start(asynq.Handler) error {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	f.startCalls++
+	return f.startErr
+}
+
+func (f *fakeAsynqServer) Shutdown() {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	f.shutdowns++
+}
+
+func (f *fakeAsynqServer) counts() (int, int) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	return f.startCalls, f.shutdowns
+}
+
+func TestWorkerAssemblyStartsRelayThenCancelsOnShutdown(t *testing.T) {
+	processContext, cancel := context.WithCancel(context.Background())
+	relay := newFakeRelayRunner()
+	server := &fakeAsynqServer{}
+	done := make(chan error, 1)
+	go func() {
+		done <- runWorkerAssembly(workerAssembly{
+			ProcessContext: processContext,
+			Logger:         discardLogger(),
+			Mux:            asynq.NewServeMux(),
+			NewRelay:       func() (relayRunner, error) { return relay, nil },
+			NewServer:      func() (asynqServer, error) { return server, nil },
+		})
+	}()
+
+	select {
+	case <-relay.started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("relay did not start")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("assembly error = %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("assembly did not stop after cancel")
+	}
+	select {
+	case <-relay.stopped:
+	case <-time.After(time.Second):
+		t.Fatal("relay was not cancelled")
+	}
+	if starts, cancels := relay.counts(); starts != 1 || cancels != 1 {
+		t.Fatalf("relay start/cancel = %d/%d want 1/1", starts, cancels)
+	}
+	if starts, shutdowns := server.counts(); starts != 1 || shutdowns != 1 {
+		t.Fatalf("asynq start/shutdown = %d/%d want 1/1", starts, shutdowns)
+	}
+}
+
+func TestWorkerAssemblyDoesNotBuildAsynqWhenRelayFails(t *testing.T) {
+	serverBuilt := false
+	err := runWorkerAssembly(workerAssembly{
+		ProcessContext: context.Background(),
+		Logger:         discardLogger(),
+		Mux:            asynq.NewServeMux(),
+		NewRelay:       func() (relayRunner, error) { return nil, errors.New("relay unavailable") },
+		NewServer: func() (asynqServer, error) {
+			serverBuilt = true
+			return &fakeAsynqServer{}, nil
+		},
+	})
+	if err == nil {
+		t.Fatal("expected relay build failure")
+	}
+	if serverBuilt {
+		t.Fatal("Asynq must not be built when the relay fails")
+	}
+	if !strings.Contains(err.Error(), "build cache generation relay") {
+		t.Fatalf("error = %q want relay context", err)
+	}
+}
+
+func TestWorkerAssemblyCancelsRelayWhenAsynqStartFails(t *testing.T) {
+	relay := newFakeRelayRunner()
+	server := &fakeAsynqServer{startErr: errors.New("bind failed")}
+
+	err := runWorkerAssembly(workerAssembly{
+		ProcessContext: context.Background(),
+		Logger:         discardLogger(),
+		Mux:            asynq.NewServeMux(),
+		NewRelay:       func() (relayRunner, error) { return relay, nil },
+		NewServer:      func() (asynqServer, error) { return server, nil },
+	})
+	if err == nil || !strings.Contains(err.Error(), "start Asynq Worker") {
+		t.Fatalf("error = %v want Asynq start failure", err)
+	}
+	select {
+	case <-relay.stopped:
+	case <-time.After(time.Second):
+		t.Fatal("relay must be cancelled after a failed Asynq start")
+	}
+	if _, cancels := relay.counts(); cancels != 1 {
+		t.Fatalf("relay cancels = %d want 1", cancels)
+	}
+	if _, shutdowns := server.counts(); shutdowns != 0 {
+		t.Fatalf("failed Asynq start must not call Shutdown: %d", shutdowns)
+	}
+}
+
+func TestWorkerAssemblyRequiresFactories(t *testing.T) {
+	if err := runWorkerAssembly(workerAssembly{ProcessContext: context.Background()}); err == nil {
+		t.Fatal("assembly accepted missing factories")
+	}
+}
+
+func discardLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }

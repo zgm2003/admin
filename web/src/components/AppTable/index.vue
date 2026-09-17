@@ -23,7 +23,7 @@ const props = withDefaults(
     columns: TableColumn<Row>[]
     data: Row[]
     loading?: boolean
-    rowKey?: string
+    rowKey?: string | ((row: Row) => string)
     selectable?: boolean
     selectionSelectable?: (row: Row, index: number) => boolean
     pagination?: TablePaginationState | null
