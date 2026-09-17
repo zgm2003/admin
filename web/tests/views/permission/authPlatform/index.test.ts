@@ -1,7 +1,7 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createAuthPlatform,
@@ -30,6 +30,7 @@ const createAuthPlatformMock = vi.mocked(createAuthPlatform)
 const updateAuthPlatformMock = vi.mocked(updateAuthPlatform)
 const updateAuthPlatformStatusMock = vi.mocked(updateAuthPlatformStatus)
 const deleteAuthPlatformMock = vi.mocked(deleteAuthPlatform)
+const mountedWrappers: VueWrapper[] = []
 
 const adminRow = {
   id: 2,
@@ -61,6 +62,11 @@ describe('authentication platform page', () => {
     updateAuthPlatformStatusMock.mockReset()
     deleteAuthPlatformMock.mockReset()
     getAuthPlatformsMock.mockResolvedValue({ list: [adminRow], total: 1, page: 1, pageSize: 20 })
+  })
+
+  afterEach(() => {
+    for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
+    document.body.innerHTML = ''
   })
 
   it('loads the platform list with list permission', async () => {
@@ -324,6 +330,7 @@ async function mountPage() {
   const wrapper = mount(AuthPlatformsPage, {
     global: { plugins: [ElementPlus, pinia, appI18n, router] },
   })
+  mountedWrappers.push(wrapper)
   await flushPromises()
   return { wrapper, router }
 }

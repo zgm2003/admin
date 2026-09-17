@@ -1,18 +1,25 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { appI18n, setLocale } from '@/i18n'
 import { useUIPreferencesStore } from '@/store/uiPreferences'
 import { defaultUIPreferences, uiPreferencesStorageKey } from '@/utils/uiPreferences'
 import SettingDrawer from '@/layout/components/SettingDrawer/index.vue'
 
+const mountedWrappers: VueWrapper[] = []
+
 describe('SettingDrawer', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
     setLocale('zh-CN')
+    document.body.innerHTML = ''
+  })
+
+  afterEach(() => {
+    for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
   })
 
@@ -66,7 +73,7 @@ describe('SettingDrawer', () => {
 })
 
 function mountDrawer(props: { modelValue?: boolean; contentFullscreen?: boolean } = {}) {
-  return mount(SettingDrawer, {
+  const wrapper = mount(SettingDrawer, {
     props: {
       modelValue: true,
       contentFullscreen: false,
@@ -77,6 +84,8 @@ function mountDrawer(props: { modelValue?: boolean; contentFullscreen?: boolean 
       plugins: [ElementPlus, appI18n],
     },
   })
+  mountedWrappers.push(wrapper)
+  return wrapper
 }
 
 function getControl(testId: string): HTMLElement {

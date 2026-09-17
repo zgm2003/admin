@@ -21,6 +21,7 @@ const getSessions = vi.mocked(sessionAPI.getSessions)
 const getSessionStats = vi.mocked(sessionAPI.getSessionStats)
 const revokeSession = vi.mocked(sessionAPI.revokeSession)
 const revokeSessions = vi.mocked(sessionAPI.revokeSessions)
+const mountedWrappers: VueWrapper[] = []
 
 describe('session management', () => {
   beforeEach(() => {
@@ -35,6 +36,7 @@ describe('session management', () => {
     )
   })
   afterEach(() => {
+    for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
     vi.restoreAllMocks()
     document.body.innerHTML = ''
   })
@@ -152,10 +154,12 @@ function mountPage(permissions: string[]): VueWrapper {
     menuTree: [],
     permissionCodes: permissions,
   })
-  return mount(SessionManagement, {
+  const wrapper = mount(SessionManagement, {
     attachTo: document.body,
     global: { plugins: [pinia, appI18n, ElementPlus] },
   })
+  mountedWrappers.push(wrapper)
+  return wrapper
 }
 
 function rows(): SessionItem[] {

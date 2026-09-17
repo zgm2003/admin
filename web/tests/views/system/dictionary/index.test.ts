@@ -29,6 +29,7 @@ const builtinDictionary = dictionaryRow({ id: 1, code: 'user.gender', isBuiltin:
 const customDictionary = dictionaryRow({ id: 2, code: 'user.level', isBuiltin: YesNo.No })
 const builtinItem = dictionaryItem({ id: 11, dictionaryId: 1, value: '0', isBuiltin: YesNo.Yes })
 const customItem = dictionaryItem({ id: 12, dictionaryId: 1, value: '3', isBuiltin: YesNo.No })
+const mountedWrappers: VueWrapper[] = []
 
 describe('system dictionary page', () => {
   beforeEach(() => {
@@ -61,6 +62,7 @@ describe('system dictionary page', () => {
   })
 
   afterEach(() => {
+    for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
   })
 
@@ -241,10 +243,12 @@ function mountPage(permissionCodes: string[]): VueWrapper {
   const pinia = createPinia()
   setActivePinia(pinia)
   usePermissionStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes })
-  return mount(DictionaryPageView, {
+  const wrapper = mount(DictionaryPageView, {
     attachTo: document.body,
     global: { plugins: [pinia, appI18n, ElementPlus] },
   })
+  mountedWrappers.push(wrapper)
+  return wrapper
 }
 
 function dictionaryRow(overrides: Partial<Dictionary>): Dictionary {

@@ -12,6 +12,7 @@ import OperationLogs from '@/views/system/operationLog/index.vue'
 
 vi.mock('@/api/system/operationLog', () => ({ getOperationLogs: vi.fn() }))
 const getOperationLogs = vi.mocked(operationLogAPI.getOperationLogs)
+const mountedWrappers: VueWrapper[] = []
 
 describe('operation logs', () => {
   beforeEach(() => {
@@ -20,6 +21,7 @@ describe('operation logs', () => {
     getOperationLogs.mockResolvedValue({ list: [row()], total: 1, page: 1, pageSize: 20 })
   })
   afterEach(() => {
+    for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
   })
 
@@ -121,10 +123,12 @@ describe('operation logs', () => {
 function mountPage(): VueWrapper {
   const pinia = createPinia()
   setActivePinia(pinia)
-  return mount(OperationLogs, {
+  const wrapper = mount(OperationLogs, {
     attachTo: document.body,
     global: { plugins: [pinia, appI18n, ElementPlus] },
   })
+  mountedWrappers.push(wrapper)
+  return wrapper
 }
 
 function row(): OperationLogItem {

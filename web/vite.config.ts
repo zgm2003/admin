@@ -9,40 +9,41 @@ export function createViteConfig(mode: string): ViteUserConfig {
   const env = loadEnv(mode, process.cwd(), '')
 
   return {
-  plugins: [
-    vue(),
-    Components({
-      dts: false,
-      dirs: ['src/components'],
-      resolvers: [
-        ElementPlusResolver({ importStyle: process.env.NODE_ENV === 'test' ? false : 'css' }),
-      ],
-    }),
-  ],
-  resolve: {
-    alias: {
-      '@': resolve(process.cwd(), 'src'),
-    },
-  },
-  server: {
-    host: 'localhost',
-    port: 16300,
-    strictPort: true,
-    open: true,
-    proxy: {
-      '/api': {
-        target: env.VITE_API_BASE_URL,
-        changeOrigin: true,
+    plugins: [
+      vue(),
+      Components({
+        dts: false,
+        dirs: ['src/components'],
+        resolvers: [
+          ElementPlusResolver({ importStyle: process.env.NODE_ENV === 'test' ? false : 'css' }),
+        ],
+      }),
+    ],
+    resolve: {
+      alias: {
+        '@': resolve(process.cwd(), 'src'),
       },
     },
-  },
-  test: {
-    environment: 'jsdom',
-    include: ['tests/**/*.{test,spec}.{ts,tsx,js,jsx}'],
-    pool: 'threads',
-    maxWorkers: 1,
-    fileParallelism: false,
-  },
+    server: {
+      host: 'localhost',
+      port: 16300,
+      strictPort: true,
+      open: true,
+      proxy: {
+        '/api': {
+          target: env.VITE_API_BASE_URL,
+          changeOrigin: true,
+        },
+      },
+    },
+    test: {
+      environment: 'jsdom',
+      include: ['tests/**/*.{test,spec}.{ts,tsx,js,jsx}'],
+      pool: 'threads',
+      maxWorkers: 1,
+      fileParallelism: false,
+      testTimeout: 30_000,
+    },
   }
 }
 

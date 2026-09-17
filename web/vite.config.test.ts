@@ -27,11 +27,12 @@ describe('Vite development server', () => {
     expect(config.resolve?.alias).toMatchObject({ '@': expect.any(String) })
   })
 
-  it('runs jsdom suites in one worker to avoid resource-driven timeouts', () => {
+  it('bounds jsdom suites and runs them in one worker to avoid resource-driven timeouts', () => {
     expect(config.test).toMatchObject({
       pool: 'threads',
       maxWorkers: 1,
       fileParallelism: false,
+      testTimeout: 30_000,
     })
   })
 })
