@@ -15,6 +15,12 @@ const appHarness = vi.hoisted(() => {
   }
 })
 
+const elementPlusStyleHarness = vi.hoisted(() => ({
+  message: vi.fn(),
+  messageBox: vi.fn(),
+  notification: vi.fn(),
+}))
+
 vi.mock('vue', async (importOriginal) => ({
   ...(await importOriginal<typeof import('vue')>()),
   createApp: appHarness.createApp,
@@ -30,11 +36,26 @@ vi.mock('@/permission', () => ({ installPermissionGuard: appHarness.installPermi
 vi.mock('@/router/routeLoadRecovery', () => ({
   installRouteLoadRecovery: appHarness.installRouteLoadRecovery,
 }))
+vi.mock('element-plus/es/components/message/style/css', () => {
+  elementPlusStyleHarness.message()
+  return {}
+})
+vi.mock('element-plus/es/components/message-box/style/css', () => {
+  elementPlusStyleHarness.messageBox()
+  return {}
+})
+vi.mock('element-plus/es/components/notification/style/css', () => {
+  elementPlusStyleHarness.notification()
+  return {}
+})
 
 describe('application bootstrap', () => {
-  it('bootstraps the app without eagerly installing the full Element Plus bundle', async () => {
+  it('bootstraps the app with programmatic Element Plus styles but without the full bundle', async () => {
     await import('@/main')
 
+    expect(elementPlusStyleHarness.message).toHaveBeenCalledOnce()
+    expect(elementPlusStyleHarness.messageBox).toHaveBeenCalledOnce()
+    expect(elementPlusStyleHarness.notification).toHaveBeenCalledOnce()
     expect(appHarness.initializeLocale).toHaveBeenCalledOnce()
     expect(appHarness.installRouteLoadRecovery).toHaveBeenCalledWith({ name: 'router' })
     expect(appHarness.app.use).toHaveBeenCalledWith({ name: 'pinia' })

@@ -65,7 +65,6 @@ const platforms = ref<PlatformOption[]>([])
 const configOptions = ref<ConfigSummary[]>([])
 const loading = ref(false)
 const loadError = ref('')
-const mutationError = ref('')
 const {
   commonExtensionOptions,
   commonExtensionValues,
@@ -230,7 +229,6 @@ function updateRulePagination(next: TablePaginationState): void {
 }
 function openConfig(row?: CosConfig): void {
   openConfigForm(row, cosRegionOptions.value[0]?.value ?? '')
-  mutationError.value = ''
 }
 function openRule(row?: UploadRule): void {
   if (!row && !canAddRule.value) {
@@ -241,7 +239,6 @@ function openRule(row?: UploadRule): void {
     platformId: platforms.value[0]?.id ?? 0,
     cosConfigId: configOptions.value[0]?.id ?? 0,
   })
-  mutationError.value = ''
 }
 async function saveConfig(): Promise<void> {
   if (storageOptionsLoading.value || storageOptionsError.value !== '') return
@@ -310,8 +307,8 @@ async function saveRule(): Promise<void> {
     ruleDialog.value = false
     ElNotification.success({ title: t('storage.saveSuccess') })
     await loadRules()
-  } catch (error: unknown) {
-    mutationError.value = errorMessage(error)
+  } catch {
+    /* request.ts provides the single error notification */
   }
 }
 async function toggleConfig(row: CosConfig): Promise<void> {
@@ -319,8 +316,8 @@ async function toggleConfig(row: CosConfig): Promise<void> {
     await ElMessageBox.confirm(t('storage.confirmStatus'), t('storage.status'), { type: 'warning' })
     await updateCosConfigStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
     await loadConfigs()
-  } catch (error: unknown) {
-    if (error !== 'cancel' && error !== 'close') mutationError.value = errorMessage(error)
+  } catch {
+    /* MessageBox cancellation stays silent; request.ts reports request errors. */
   }
 }
 async function toggleRule(row: UploadRule): Promise<void> {
@@ -328,16 +325,16 @@ async function toggleRule(row: UploadRule): Promise<void> {
     await ElMessageBox.confirm(t('storage.confirmStatus'), t('storage.status'), { type: 'warning' })
     await updateUploadRuleStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
     await loadRules()
-  } catch (error: unknown) {
-    if (error !== 'cancel' && error !== 'close') mutationError.value = errorMessage(error)
+  } catch {
+    /* MessageBox cancellation stays silent; request.ts reports request errors. */
   }
 }
 async function testConfigConnection(row: CosConfig): Promise<void> {
   try {
     await testCosConfig(row.id)
     ElNotification.success({ title: t('storage.testSuccess') })
-  } catch (error: unknown) {
-    mutationError.value = errorMessage(error)
+  } catch {
+    /* request.ts provides the single error notification */
   }
 }
 async function removeConfig(row: CosConfig): Promise<void> {
@@ -345,8 +342,8 @@ async function removeConfig(row: CosConfig): Promise<void> {
     await ElMessageBox.confirm(t('storage.confirmDelete'), t('storage.delete'), { type: 'warning' })
     await deleteCosConfig(row.id)
     await loadConfigs()
-  } catch (error: unknown) {
-    if (error !== 'cancel' && error !== 'close') mutationError.value = errorMessage(error)
+  } catch {
+    /* MessageBox cancellation stays silent; request.ts reports request errors. */
   }
 }
 async function removeRule(row: UploadRule): Promise<void> {
@@ -354,8 +351,8 @@ async function removeRule(row: UploadRule): Promise<void> {
     await ElMessageBox.confirm(t('storage.confirmDelete'), t('storage.delete'), { type: 'warning' })
     await deleteUploadRule(row.id)
     await loadRules()
-  } catch (error: unknown) {
-    if (error !== 'cancel' && error !== 'close') mutationError.value = errorMessage(error)
+  } catch {
+    /* MessageBox cancellation stays silent; request.ts reports request errors. */
   }
 }
 
@@ -378,14 +375,6 @@ watch(cosRegionOptions, (options) => {
       type="error"
       show-icon
       :closable="false"
-    />
-    <el-alert
-      v-if="mutationError"
-      :title="mutationError"
-      type="error"
-      show-icon
-      closable
-      @close="mutationError = ''"
     />
     <el-tabs v-model="activeTab" @tab-change="switchTab">
       <el-tab-pane name="config" :label="t('storage.configTab')" data-testid="storage-config-tab">

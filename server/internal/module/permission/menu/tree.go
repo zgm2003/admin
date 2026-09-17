@@ -33,9 +33,9 @@ var staticPagePaths = map[string]struct{}{
 var menuIconNames = map[string]struct{}{
 	"lucide:activity": {}, "lucide:bell": {}, "lucide:bot": {}, "lucide:brain-circuit": {},
 	"lucide:circle-dollar-sign": {}, "lucide:cloud": {}, "lucide:cloud-upload": {}, "lucide:cpu": {},
-	"lucide:database": {}, "lucide:file-stack": {}, "lucide:folder": {}, "lucide:gauge": {},
+	"lucide:database": {}, "lucide:database-zap": {}, "lucide:file-stack": {}, "lucide:folder": {}, "lucide:gauge": {},
 	"lucide:hard-drive": {}, "lucide:house": {}, "lucide:images": {}, "lucide:key-round": {},
-	"lucide:layout-dashboard": {}, "lucide:list-tree": {}, "lucide:lock-keyhole": {},
+	"lucide:layout-dashboard": {}, "lucide:list-checks": {}, "lucide:list-tree": {}, "lucide:lock-keyhole": {},
 	"lucide:mail": {}, "lucide:message-square-more": {}, "lucide:monitor-smartphone": {}, "lucide:panel-left": {},
 	"lucide:scroll-text": {}, "lucide:server": {}, "lucide:settings-2": {}, "lucide:shield-check": {},
 	"lucide:sliders-horizontal": {},

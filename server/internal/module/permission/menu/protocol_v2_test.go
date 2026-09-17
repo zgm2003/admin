@@ -47,6 +47,18 @@ func TestMenuProtocolV2AcceptsCustomI18nKeyAndIconName(t *testing.T) {
 	}
 }
 
+func TestMenuProtocolV2AcceptsPersistedOperationalIcons(t *testing.T) {
+	for _, icon := range []string{"lucide:list-checks", "lucide:database-zap"} {
+		input := CreateInput{
+			PlatformID: 1, MenuType: TypeDirectory, Name: "系统工具", Code: "tools",
+			I18nKey: stringPointer("navigation.system"), Icon: &icon, SortOrder: 10, IsEnabled: yesno.Yes,
+		}
+		if _, err := normalizeCreateInput(input); err != nil {
+			t.Errorf("persisted icon %q was rejected: %v", icon, err)
+		}
+	}
+}
+
 func TestMenuProtocolV2AcceptsLowerCamelAndRejectsInvalidPagePaths(t *testing.T) {
 	for _, value := range []string{"/login", "/register", "/dashboard", "/System/users", "/system/users/", "/system/:id", "/system/operation_log"} {
 		if validMenuPath(value) {

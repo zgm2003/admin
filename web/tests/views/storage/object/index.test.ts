@@ -409,7 +409,7 @@ describe('ObjectStorage', () => {
     )
   })
 
-  it('does not emit a second error notification when connection testing fails', async () => {
+  it('delegates mutation failures to the request layer without an inline duplicate', async () => {
     vi.mocked(listCosConfigs).mockResolvedValue({
       list: [
         {
@@ -443,7 +443,7 @@ describe('ObjectStorage', () => {
     await flushPromises()
 
     expect(errorSpy).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('连接失败')
+    expect(wrapper.text()).not.toContain('连接失败')
   })
 
   it('keeps the COS config dialog global without a platform field', async () => {

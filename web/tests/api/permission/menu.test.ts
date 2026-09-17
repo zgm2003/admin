@@ -24,6 +24,7 @@ describe('menu API', () => {
     const catalog = menuCatalog()
     requestMock.mockResolvedValue(catalog)
     await expect(getMenus({ platformId: 2 })).resolves.toEqual(catalog)
+    expect(catalog.menuTree[0]?.icon).toBe('lucide:database-zap')
     expect(requestMock).toHaveBeenCalledWith({
       method: 'GET',
       url: '/api/admin/v1/permission/menu',
@@ -128,7 +129,7 @@ function menuCatalog() {
         i18nKey: 'navigation.test',
         path: '/test',
         componentPath: 'test',
-        icon: null,
+        icon: 'lucide:database-zap',
         remark: null,
         sortOrder: 10,
         isEnabled: YesNo.Yes,
