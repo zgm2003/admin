@@ -25,7 +25,7 @@ func (s *stubService) List(context.Context) ([]PlatformResponse, error) { return
 func (s *stubService) Update(_ context.Context, platformID int64, key string, limit, windowSeconds int) (PlatformResponse, error) {
 	s.updateCalls++
 	s.updateID, s.updateKey, s.updateLimit, s.updateWin = platformID, key, limit, windowSeconds
-	return PlatformResponse{PlatformID: platformID, PlatformCode: "admin"}, s.updateErr
+	return platformResponseOf(testCatalog(platformID, limit)), s.updateErr
 }
 
 func TestRegisterRoutesBindsExactRateLimitPermissions(t *testing.T) {
@@ -70,6 +70,9 @@ func TestUpdateForwardPlatformKeyAndValues(t *testing.T) {
 	}
 	if service.updateID != 2 || service.updateKey != KeyTenMin || service.updateLimit != 7 || service.updateWin != 900 {
 		t.Fatalf("forwarded %d/%s/%d/%d", service.updateID, service.updateKey, service.updateLimit, service.updateWin)
+	}
+	if strings.Contains(recorder.Body.String(), "revision") || strings.Contains(recorder.Body.String(), "generation") {
+		t.Fatalf("response exposed internal version fields: %s", recorder.Body)
 	}
 }
 

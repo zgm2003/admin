@@ -1,6 +1,7 @@
 package recipientrule
 
 import (
+	"admin/server/internal/shared/cacheGeneration"
 	"context"
 
 	"admin/server/internal/shared/yesno"
@@ -36,7 +37,7 @@ type Evaluator interface {
 }
 
 type RuntimeCoordinator interface {
-	Mutate(context.Context, func(context.Context) error) error
+	Mutate(context.Context, func(context.Context, int64) (cachegeneration.MutationResult, error)) error
 }
 
 type Input struct {

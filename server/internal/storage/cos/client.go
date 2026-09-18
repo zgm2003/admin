@@ -12,7 +12,10 @@ import (
 	tencos "github.com/tencentyun/cos-go-sdk-v5"
 )
 
-const PresignValidity = 10 * time.Minute
+const (
+	PresignValidity    = 10 * time.Minute
+	GetPresignValidity = 10 * time.Minute
+)
 
 type Client struct{ httpClient *http.Client }
 
@@ -69,7 +72,7 @@ func (c *Client) TestConnection(ctx context.Context, credentials Credentials) er
 	return err
 }
 func (c *Client) PresignPut(ctx context.Context, credentials Credentials, request PutRequest) (PutResult, error) {
-	if request.ContentLength < 1 || strings.TrimSpace(request.ObjectKey) == "" || strings.HasPrefix(request.ObjectKey, "/") || strings.Contains(request.ObjectKey, "..") || strings.Contains(request.ObjectKey, "\\") || strings.IndexFunc(request.ObjectKey, unicode.IsControl) >= 0 {
+	if request.ContentLength < 1 || !validObjectKey(request.ObjectKey) {
 		return PutResult{}, fmt.Errorf("PUT request is invalid")
 	}
 	client, err := c.sdkClient(credentials)
@@ -100,4 +103,26 @@ func (c *Client) PresignPut(ctx context.Context, credentials Credentials, reques
 		}
 	}
 	return PutResult{URL: signed.String(), Headers: out}, nil
+}
+
+func (c *Client) PresignGet(ctx context.Context, credentials Credentials, request GetRequest) (GetResult, error) {
+	if !validObjectKey(request.ObjectKey) {
+		return GetResult{}, fmt.Errorf("GET request is invalid")
+	}
+	client, err := c.sdkClient(credentials)
+	if err != nil {
+		return GetResult{}, err
+	}
+	now := time.Now().UTC()
+	signed, err := client.Object.GetPresignedURL(ctx, http.MethodGet, request.ObjectKey, credentials.SecretID, credentials.SecretKey, GetPresignValidity, nil, true)
+	if err != nil {
+		return GetResult{}, err
+	}
+	return GetResult{URL: signed.String(), ExpiresAt: now.Add(GetPresignValidity)}, nil
+}
+
+func validObjectKey(objectKey string) bool {
+	return strings.TrimSpace(objectKey) != "" && !strings.HasPrefix(objectKey, "/") &&
+		!strings.Contains(objectKey, "..") && !strings.Contains(objectKey, "\\") &&
+		strings.IndexFunc(objectKey, unicode.IsControl) < 0
 }

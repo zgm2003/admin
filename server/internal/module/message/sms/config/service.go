@@ -10,6 +10,7 @@ import (
 
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -103,13 +104,13 @@ func (s *Service) Update(ctx context.Context, input Input) (Safe, error) {
 	}
 
 	now := time.Now().UTC()
-	if err := s.mutate(ctx, func(writeContext context.Context) error {
+	if err := s.mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
 		if !existing {
 			model.CreatedAt = now
 			model.UpdatedAt = now
-			return s.repository.Create(writeContext, &model)
+			return s.repository.Create(writeContext, &model, expected, now)
 		}
-		return s.repository.Update(writeContext, &model, now)
+		return s.repository.Update(writeContext, &model, expected, now)
 	}); err != nil {
 		return Safe{}, err
 	}
@@ -125,8 +126,9 @@ func (s *Service) Delete(ctx context.Context) error {
 	if err != nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("sms config repository: %w", err))
 	}
-	return s.mutate(ctx, func(writeContext context.Context) error {
-		return s.repository.Delete(writeContext, current.ID)
+	now := time.Now().UTC()
+	return s.mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+		return s.repository.Delete(writeContext, current.ID, expected, now)
 	})
 }
 
@@ -173,7 +175,7 @@ func (s *Service) MarkTestResult(ctx context.Context, id int64, at time.Time, me
 	return nil
 }
 
-func (s *Service) mutate(ctx context.Context, change func(context.Context) error) error {
+func (s *Service) mutate(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
 	if s.runtime == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("sms runtime coordinator is unavailable"))
 	}

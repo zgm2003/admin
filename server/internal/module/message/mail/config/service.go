@@ -10,6 +10,7 @@ import (
 
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -19,7 +20,6 @@ import (
 type Service struct {
 	repository *Repository
 	keys       *secretkey.KeyRing
-	readiness  ReadinessCoordinator
 	runtime    RuntimeCoordinator
 }
 
@@ -27,8 +27,8 @@ func (s *Service) SetRuntimeCoordinator(runtime RuntimeCoordinator) {
 	s.runtime = runtime
 }
 
-func NewService(repository *Repository, keys *secretkey.KeyRing, readiness ReadinessCoordinator) *Service {
-	return &Service{repository: repository, keys: keys, readiness: readiness}
+func NewService(repository *Repository, keys *secretkey.KeyRing) *Service {
+	return &Service{repository: repository, keys: keys}
 }
 
 func (s *Service) Get(ctx context.Context) (Safe, error) {
@@ -57,25 +57,31 @@ func (s *Service) Save(ctx context.Context, input Input) (Safe, error) {
 	if s.keys == nil {
 		return Safe{}, apperror.DependencyUnavailable(fmt.Errorf("mail encryption key unavailable"))
 	}
+	current, findErr := s.repository.Find(ctx)
+	hasCurrent := findErr == nil
+	if findErr != nil && !errors.Is(findErr, gorm.ErrRecordNotFound) {
+		return Safe{}, wrapRepository(findErr)
+	}
+	var currentSecretID, currentSecretKey string
+	if hasCurrent {
+		currentSecretID, err = secretkey.DecryptMailValue(s.keys.MailEncryptionKey(), current.SecretIDCiphertext)
+		if err != nil {
+			return Safe{}, apperror.DependencyUnavailable(err)
+		}
+		currentSecretKey, err = secretkey.DecryptMailValue(s.keys.MailEncryptionKey(), current.SecretKeyCiphertext)
+		if err != nil {
+			return Safe{}, apperror.DependencyUnavailable(err)
+		}
+	}
 	if strings.TrimSpace(input.SecretID) == "" || strings.TrimSpace(input.SecretKey) == "" {
-		current, findErr := s.repository.Find(ctx)
-		if errors.Is(findErr, gorm.ErrRecordNotFound) {
+		if !hasCurrent {
 			return Safe{}, apperror.InvalidRequest(fmt.Errorf("credentials are required for the first configuration"))
 		}
-		if findErr != nil {
-			return Safe{}, wrapRepository(findErr)
-		}
 		if strings.TrimSpace(input.SecretID) == "" {
-			input.SecretID, err = secretkey.DecryptMailValue(s.keys.MailEncryptionKey(), current.SecretIDCiphertext)
-			if err != nil {
-				return Safe{}, apperror.DependencyUnavailable(err)
-			}
+			input.SecretID = currentSecretID
 		}
 		if strings.TrimSpace(input.SecretKey) == "" {
-			input.SecretKey, err = secretkey.DecryptMailValue(s.keys.MailEncryptionKey(), current.SecretKeyCiphertext)
-			if err != nil {
-				return Safe{}, apperror.DependencyUnavailable(err)
-			}
+			input.SecretKey = currentSecretKey
 		}
 	}
 	if strings.TrimSpace(input.ReplyTo) != "" {
@@ -84,13 +90,23 @@ func (s *Service) Save(ctx context.Context, input Input) (Safe, error) {
 			return Safe{}, apperror.InvalidRequest(err)
 		}
 	}
-	secretID, _, err := secretkey.EncryptMailValue(s.keys.MailEncryptionKey(), input.SecretID)
-	if err != nil {
-		return Safe{}, apperror.DependencyUnavailable(err)
+	secretID := ""
+	if hasCurrent && input.SecretID == currentSecretID {
+		secretID = current.SecretIDCiphertext
+	} else {
+		secretID, _, err = secretkey.EncryptMailValue(s.keys.MailEncryptionKey(), input.SecretID)
+		if err != nil {
+			return Safe{}, apperror.DependencyUnavailable(err)
+		}
 	}
-	secretKey, _, err := secretkey.EncryptMailValue(s.keys.MailEncryptionKey(), input.SecretKey)
-	if err != nil {
-		return Safe{}, apperror.DependencyUnavailable(err)
+	secretKey := ""
+	if hasCurrent && input.SecretKey == currentSecretKey {
+		secretKey = current.SecretKeyCiphertext
+	} else {
+		secretKey, _, err = secretkey.EncryptMailValue(s.keys.MailEncryptionKey(), input.SecretKey)
+		if err != nil {
+			return Safe{}, apperror.DependencyUnavailable(err)
+		}
 	}
 	values := map[string]any{
 		"secret_id_ciphertext": secretID, "secret_key_ciphertext": secretKey,
@@ -101,18 +117,14 @@ func (s *Service) Save(ctx context.Context, input Input) (Safe, error) {
 		"is_enabled": input.IsEnabled, "updated_at": time.Now().UTC(),
 	}
 	var saved Model
-	if s.readiness == nil {
-		return Safe{}, apperror.DependencyUnavailable(fmt.Errorf("mail readiness coordinator unavailable"))
-	}
 	if s.runtime == nil {
 		return Safe{}, apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	if err := s.readiness.Mutate(ctx, func(writeContext context.Context) error {
-		return s.runtime.Mutate(writeContext, func(runtimeContext context.Context) error {
-			var saveErr error
-			saved, saveErr = s.repository.Save(runtimeContext, values)
-			return saveErr
-		})
+	if err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+		var result cachegeneration.MutationResult
+		var saveErr error
+		saved, result, saveErr = s.repository.Save(writeContext, values, expected, time.Now().UTC())
+		return result, saveErr
 	}); err != nil {
 		return Safe{}, mapMutationError(err)
 	}
@@ -120,14 +132,11 @@ func (s *Service) Save(ctx context.Context, input Input) (Safe, error) {
 }
 
 func (s *Service) Delete(ctx context.Context) error {
-	if s.readiness == nil {
-		return apperror.DependencyUnavailable(fmt.Errorf("mail readiness coordinator unavailable"))
-	}
 	if s.runtime == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	err := s.readiness.Mutate(ctx, func(writeContext context.Context) error {
-		return s.runtime.Mutate(writeContext, s.repository.Delete)
+	err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+		return s.repository.Delete(writeContext, expected, time.Now().UTC())
 	})
 	if mapped := mapMutationError(err); mapped != nil {
 		return mapped

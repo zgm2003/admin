@@ -103,7 +103,6 @@ const ratePlatform: smsApi.SmsRateLimitPlatform = {
       dimension: 'platform_phone',
       limit: 1,
       windowSeconds: 60,
-      revision: 1,
       updatedAt: timestamp,
     },
     {
@@ -112,7 +111,6 @@ const ratePlatform: smsApi.SmsRateLimitPlatform = {
       dimension: 'platform_phone',
       limit: 5,
       windowSeconds: 600,
-      revision: 1,
       updatedAt: timestamp,
     },
   ],

@@ -310,3 +310,21 @@ func assertSettingOutbox(t *testing.T, db *gorm.DB, ctx context.Context, scopeKe
 		t.Fatalf("outbox published = %v want %v", row.PublishedAt != nil, wantPublished)
 	}
 }
+
+func assertSettingOutboxGenerations(t *testing.T, db *gorm.DB, ctx context.Context, scopeKey string, want []int64) {
+	t.Helper()
+	var got []int64
+	if err := db.WithContext(ctx).Raw(
+		`SELECT generation FROM system_config_cache_outbox WHERE namespace = 'system.setting' AND scope_key = ? ORDER BY generation`,
+		scopeKey).Scan(&got).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("outbox generations = %v want %v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("outbox generations = %v want %v", got, want)
+		}
+	}
+}

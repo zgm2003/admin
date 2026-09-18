@@ -69,7 +69,7 @@ func (r *Repository) Find(ctx context.Context, key string) (Record, error) {
 }
 
 // Create 插入业务行并在同一事务内推进 generation 与 outbox。
-func (r *Repository) Create(ctx context.Context, value *Record, expected int64) (MutationResult, error) {
+func (r *Repository) Create(ctx context.Context, value *Record, expected int64) (cachegeneration.MutationResult, error) {
 	return r.mutate(ctx, expected, value.CreatedAt, func(tx *gorm.DB) (bool, error) {
 		row := Model{
 			Key: value.Key, Value: value.Value, ValueType: value.ValueType, Description: value.Description,
@@ -88,7 +88,7 @@ func (r *Repository) Create(ctx context.Context, value *Record, expected int64) 
 }
 
 // Update 锁定业务行；内容完全一致时不推进 generation。
-func (r *Repository) Update(ctx context.Context, key string, value Record, expected int64) (MutationResult, error) {
+func (r *Repository) Update(ctx context.Context, key string, value Record, expected int64) (cachegeneration.MutationResult, error) {
 	return r.mutate(ctx, expected, value.UpdatedAt, func(tx *gorm.DB) (bool, error) {
 		row, err := lockSettingRow(ctx, tx, key)
 		if err != nil {
@@ -111,7 +111,7 @@ func (r *Repository) Update(ctx context.Context, key string, value Record, expec
 }
 
 // UpdateStatus 锁定业务行；状态一致时不推进 generation。
-func (r *Repository) UpdateStatus(ctx context.Context, key string, status yesno.Value, expected int64, now time.Time) (MutationResult, error) {
+func (r *Repository) UpdateStatus(ctx context.Context, key string, status yesno.Value, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
 	return r.mutate(ctx, expected, now, func(tx *gorm.DB) (bool, error) {
 		row, err := lockSettingRow(ctx, tx, key)
 		if err != nil {
@@ -134,7 +134,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, key string, status yesno.
 }
 
 // Delete 锁定业务行后软删并在同一事务内推进 generation 与 outbox。
-func (r *Repository) Delete(ctx context.Context, key string, expected int64, now time.Time) (MutationResult, error) {
+func (r *Repository) Delete(ctx context.Context, key string, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
 	return r.mutate(ctx, expected, now, func(tx *gorm.DB) (bool, error) {
 		row, err := lockSettingRow(ctx, tx, key)
 		if err != nil {
@@ -174,7 +174,7 @@ func (r *Repository) FindBrand(ctx context.Context) (BrandSettings, error) {
 
 // UpdateBrand 在同一事务内锁定并更新三行；任一行缺失整体回滚；
 // 三行内容全部一致时不推进 generation。
-func (r *Repository) UpdateBrand(ctx context.Context, brand BrandSettings, expected int64, now time.Time) (MutationResult, error) {
+func (r *Repository) UpdateBrand(ctx context.Context, brand BrandSettings, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
 	return r.mutate(ctx, expected, now, func(tx *gorm.DB) (bool, error) {
 		var rows []Model
 		if err := tx.WithContext(ctx).Raw(
@@ -218,17 +218,17 @@ func (r *Repository) UpdateBrand(ctx context.Context, brand BrandSettings, expec
 
 // mutate 是私有的业务事务 helper：只执行显式业务变更，并在真实变化时
 // 于同一事务内校验 lease base generation 并推进 generation/outbox。
-func (r *Repository) mutate(ctx context.Context, expected int64, now time.Time, apply func(tx *gorm.DB) (bool, error)) (MutationResult, error) {
+func (r *Repository) mutate(ctx context.Context, expected int64, now time.Time, apply func(tx *gorm.DB) (bool, error)) (cachegeneration.MutationResult, error) {
 	if r == nil || r.db == nil {
-		return MutationResult{}, fmt.Errorf("setting repository is not configured")
+		return cachegeneration.MutationResult{}, fmt.Errorf("setting repository is not configured")
 	}
 	if r.generations == nil {
-		return MutationResult{}, fmt.Errorf("setting repository requires cache generations")
+		return cachegeneration.MutationResult{}, fmt.Errorf("setting repository requires cache generations")
 	}
 	if expected < 1 {
-		return MutationResult{}, fmt.Errorf("setting mutation requires an expected generation")
+		return cachegeneration.MutationResult{}, fmt.Errorf("setting mutation requires an expected generation")
 	}
-	result := MutationResult{}
+	result := cachegeneration.MutationResult{}
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		changed, err := apply(tx)
 		if err != nil {
@@ -247,7 +247,7 @@ func (r *Repository) mutate(ctx context.Context, expected int64, now time.Time, 
 		return nil
 	})
 	if err != nil {
-		return MutationResult{}, err
+		return cachegeneration.MutationResult{}, err
 	}
 	return result, nil
 }

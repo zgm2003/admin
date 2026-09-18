@@ -75,7 +75,11 @@ PascalCase，CSS class 与测试定位符使用 kebab-case。
 ## 数据和状态
 
 - 腾讯云 SES 配置、邮件模板和收件规则全系统共享，不随 Admin/Canvas 等认证平台复制；只有发送日志、验证码
-  记录和额度 key 保留来源平台。只有 COS 上传配置可以按认证平台分别维护。
+  记录和额度 key 保留来源平台。COS 逻辑配置同样全局共享且允许维护多条，上传规则按认证平台隔离，并通过
+  `cosConfigId` 选择配置。
+- COS 配置的物理 version 只用于定位对象写入时所在的 Bucket/Region/Endpoint，不承担管理员编辑冲突控制；
+  配置 generation 只用于 Redis state/snapshot/lease/outbox 一致性。普通管理 CRUD 采用 last-write-wins，DTO
+  不暴露 generation、revision 或 expected version。
 - 邮件只保留每分钟、每 10 分钟两条发送上限；同平台、同邮箱跨所有场景和管理测试共享，任一达到上限
   即拒绝，不再叠加场景/IP/管理员专属策略。配置的次数、窗口与验证码 TTL 都由邮件管理拥有。
 - 找回密码成功不自动登录，并撤销全部既有会话；首次设置密码只允许无密码账号，保持会话且不强制拦路。
@@ -93,6 +97,9 @@ PascalCase，CSS class 与测试定位符使用 kebab-case。
 
 - PostgreSQL 保存用户、权限、菜单、配置、日志等业务事实；Redis 只做会话、Access 版本/快照和队列存储等
   明确用途，不成为第二个权限来源。
+- 配置缓存固定覆盖 `system.setting/global`、`system.dictionary/global`、`message.mail/global`、
+  `message.sms/global` 和 `storage.cosconfig/<configId>`。权限的 menu/policy/access version、Session/authority
+  generation、验证码、限流计数和队列数据保持各自业务语义，不迁入配置 generation。
 - 系统字典全平台共享，负责可由后台维护的展示型选项及中英文标签；`code`/`value` 是稳定业务值，
   `isBuiltin` 只表示禁止删除。登录方式、Session/邮件状态、权限节点类型、Yes/No 等参与后端分支、协议或
   数据库约束的 enum 不迁入字典。消费页不得用硬编码选项掩盖字典加载失败或畸形值。
@@ -106,3 +113,7 @@ PascalCase，CSS class 与测试定位符使用 kebab-case。
 迁移已有功能时只读取对应旧项目的直接页面/接口和调用方：成熟行为、字段语义、筛选分页、危险操作确认和
 信息结构优先继承；重型分层、兼容协议、重复状态和无真实用途抽象按当前架构替换。未得到用户或当前任务
 确认，不删减已存在的成熟功能。
+
+项目尚未上线期间，经维护者确认的破坏性重构直接切换到新表、新 DTO、新权限和新 Redis 协议；正常运行时不保留
+旧字段、旧 key、旧对象格式的双读、双写或回退分支。需要清理的旧 Redis key 只由固定 pattern 的一次性 migration
+命令处理。

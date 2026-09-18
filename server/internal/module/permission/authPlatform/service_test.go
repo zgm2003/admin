@@ -13,10 +13,13 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/auth/state"
+	ratelimitpolicy "admin/server/internal/module/message/mail/rateLimitPolicy"
+	smsratelimitpolicy "admin/server/internal/module/message/sms/rateLimitPolicy"
 	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
+	cachegeneration "admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -31,6 +34,7 @@ func TestServiceDeleteRejectsPlatformWithActiveMenus(t *testing.T) {
 		authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
 	)
+	configurePlatformRateLimitGenerations(t, ctx, service, connection.GORM, redisClient)
 	code := fmt.Sprintf("menu_guard_%d", time.Now().UnixNano())
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Menu Guard", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
@@ -66,13 +70,18 @@ func TestServiceCreateRollsBackPlatformWhenPolicyProvisioningFails(t *testing.T)
 	repository := authplatform.NewRepository(connection.GORM)
 	forced := errors.New("forced policy provisioning failure")
 	repository.SetRateLimitPolicyLifecycle(
-		func(context.Context, *gorm.DB, int64) error { return forced },
-		func(context.Context, *gorm.DB, int64) error { return nil },
+		func(context.Context, *gorm.DB, int64, authplatform.RateLimitGenerationBases, time.Time) (authplatform.RateLimitGenerationEvents, error) {
+			return authplatform.RateLimitGenerationEvents{}, forced
+		},
+		func(context.Context, *gorm.DB, int64, authplatform.RateLimitGenerationBases, time.Time) (authplatform.RateLimitGenerationEvents, error) {
+			return authplatform.RateLimitGenerationEvents{}, nil
+		},
 	)
 	service := authplatform.NewService(
 		repository, authplatform.NewPolicyStore(redisClient), redisClient, nil, nil, nil,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
 	)
+	configurePlatformRateLimitGenerations(t, ctx, service, connection.GORM, redisClient)
 	code := fmt.Sprintf("provision_rollback_%d", time.Now().UnixNano())
 	_, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Provision rollback", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail},
@@ -88,6 +97,111 @@ func TestServiceCreateRollsBackPlatformWhenPolicyProvisioningFails(t *testing.T)
 	}
 	if _, found, readErr := redisClient.GetString(ctx, authplatform.PolicyKey(code)); readErr != nil || found {
 		t.Fatalf("rolled-back platform policy cache found=%v err=%v", found, readErr)
+	}
+}
+
+func TestServicePlatformLifecycleAdvancesBothRateLimitGenerations(t *testing.T) {
+	connection, ctx := openAuthenticationPlatformDatabase(t)
+	preparePlatformSessionSchema(t, connection.GORM, ctx)
+	redisClient := openPlatformRedis(t)
+	authStates := authstate.NewStore(redisClient)
+	service := authplatform.NewService(
+		newPlatformLifecycleRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient,
+		authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete,
+		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
+	)
+	generations, _ := configurePlatformRateLimitGenerations(t, ctx, service, connection.GORM, redisClient)
+	code := fmt.Sprintf("dual_generation_%d", time.Now().UnixNano())
+	platformID, err := service.Create(ctx, authplatform.CreateInput{
+		Code: code, Name: "Dual generation", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail},
+		AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600, SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRateLimitLifecycleFacts(t, connection.GORM, ctx, generations, platformID, 2, 2)
+
+	if err := service.Delete(ctx, platformID); err != nil {
+		t.Fatal(err)
+	}
+	assertRateLimitLifecycleFacts(t, connection.GORM, ctx, generations, platformID, 3, 0)
+}
+
+func TestServicePlatformCreateRollsBackBothGenerationsWhenSecondAdvanceFails(t *testing.T) {
+	connection, ctx := openAuthenticationPlatformDatabase(t)
+	preparePlatformSessionSchema(t, connection.GORM, ctx)
+	redisClient := openPlatformRedis(t)
+	generations := cachegeneration.NewRepository(connection.GORM)
+	mailScope, smsScope := platformRateLimitScopes()
+	repository := authplatform.NewRepository(connection.GORM)
+	repository.SetRateLimitPolicyLifecycle(
+		func(ctx context.Context, tx *gorm.DB, platformID int64, expected authplatform.RateLimitGenerationBases, now time.Time) (authplatform.RateLimitGenerationEvents, error) {
+			if err := ratelimitpolicy.NewRepository(tx).ProvisionDefaults(ctx, platformID); err != nil {
+				return authplatform.RateLimitGenerationEvents{}, err
+			}
+			if err := smsratelimitpolicy.NewRepository(tx).ProvisionDefaults(ctx, platformID, now); err != nil {
+				return authplatform.RateLimitGenerationEvents{}, err
+			}
+			mailEvent, err := generations.AdvanceTx(ctx, tx, mailScope, expected.Mail, now)
+			if err != nil {
+				return authplatform.RateLimitGenerationEvents{}, err
+			}
+			_, err = generations.AdvanceTx(ctx, tx, smsScope, expected.SMS+1, now)
+			return authplatform.RateLimitGenerationEvents{Mail: mailEvent}, err
+		},
+		func(context.Context, *gorm.DB, int64, authplatform.RateLimitGenerationBases, time.Time) (authplatform.RateLimitGenerationEvents, error) {
+			return authplatform.RateLimitGenerationEvents{}, nil
+		},
+	)
+	service := authplatform.NewService(
+		repository, authplatform.NewPolicyStore(redisClient), redisClient, nil, nil, nil,
+		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
+	)
+	configurePlatformRateLimitGenerations(t, ctx, service, connection.GORM, redisClient)
+	code := fmt.Sprintf("second_advance_%d", time.Now().UnixNano())
+	_, err := service.Create(ctx, authplatform.CreateInput{
+		Code: code, Name: "Second advance", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail},
+		AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600, SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
+	})
+	if err == nil {
+		t.Fatal("platform creation succeeded after the second generation advance failed")
+	}
+	assertRateLimitLifecycleFacts(t, connection.GORM, ctx, generations, 0, 1, 0)
+	var platformCount int64
+	if queryErr := connection.GORM.WithContext(ctx).Unscoped().Model(&authplatform.Platform{}).Where("code = ?", code).Count(&platformCount).Error; queryErr != nil || platformCount != 0 {
+		t.Fatalf("rolled-back platform rows=%d err=%v", platformCount, queryErr)
+	}
+}
+
+func TestServicePlatformCreateRollsBackMailLeaseWhenSMSLeaseIsBusy(t *testing.T) {
+	connection, ctx := openAuthenticationPlatformDatabase(t)
+	preparePlatformSessionSchema(t, connection.GORM, ctx)
+	redisClient := openPlatformRedis(t)
+	service := authplatform.NewService(
+		newPlatformLifecycleRepository(connection.GORM), authplatform.NewPolicyStore(redisClient), redisClient, nil, nil, nil,
+		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
+	)
+	_, states := configurePlatformRateLimitGenerations(t, ctx, service, connection.GORM, redisClient)
+	mailScope, smsScope := platformRateLimitScopes()
+	blockingLease, err := states.Acquire(ctx, smsScope, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = blockingLease.Rollback(context.Background()) })
+
+	_, err = service.Create(ctx, authplatform.CreateInput{
+		Code: fmt.Sprintf("busy_sms_%d", time.Now().UnixNano()), Name: "Busy SMS", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail},
+		AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600, SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
+	})
+	if err == nil {
+		t.Fatal("platform creation succeeded while the SMS generation lease was busy")
+	}
+	mailState, found, readErr := states.Read(ctx, mailScope)
+	if readErr != nil || !found || mailState.State != cachegeneration.StateReady || mailState.Generation != 1 {
+		t.Fatalf("mail state after partial acquire = %+v found=%v err=%v", mailState, found, readErr)
 	}
 }
 
@@ -192,6 +306,8 @@ func TestServiceUpdateAllowsNonBuiltinRegistration(t *testing.T) {
 		authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
 	)
+	configurePlatformRateLimitGenerations(t, ctx, service, connection.GORM, redisClient)
+	configurePlatformRateLimitGenerations(t, ctx, service, connection.GORM, redisClient)
 	code := fmt.Sprintf("registration_%d", time.Now().UnixNano())
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Registration", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
@@ -228,6 +344,7 @@ func TestServicePlatformMutationsApplyExactSessionEffects(t *testing.T) {
 		authStates, authstate.NewInvalidator(authStates), sessionCache.Delete,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
 	)
+	configurePlatformRateLimitGenerations(t, ctx, service, connection.GORM, redisClient)
 	code := fmt.Sprintf("sessions_%d", time.Now().UnixNano())
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Sessions", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
@@ -313,6 +430,7 @@ func TestServicePlatformNoOpDoesNotAdvancePolicyVersion(t *testing.T) {
 		authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
 	)
+	configurePlatformRateLimitGenerations(t, ctx, service, connection.GORM, redisClient)
 	stored, err := authplatform.NewRepository(connection.GORM).FindPolicy(ctx, "admin")
 	if err != nil {
 		t.Fatal(err)
@@ -344,6 +462,7 @@ func TestServicePlatformRollbackRestoresPolicyAndSessionState(t *testing.T) {
 		authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
 	)
+	configurePlatformRateLimitGenerations(t, ctx, service, connection.GORM, redisClient)
 	code := fmt.Sprintf("rollback_%d", time.Now().UnixNano())
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Rollback", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
@@ -389,6 +508,7 @@ func TestServicePlatformPublishFailureLeavesCommittedSessionStateWithoutOldPolic
 		authStates, authstate.NewInvalidator(authStates), auth.NewSessionCache(redisClient).Delete,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), authplatform.Deployment{},
 	)
+	configurePlatformRateLimitGenerations(t, ctx, service, connection.GORM, redisClient)
 	code := fmt.Sprintf("publish_%d", time.Now().UnixNano())
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Publish", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
@@ -472,10 +592,71 @@ func waitForPolicyInvalidating(t *testing.T, redisClient *projectredis.Client, c
 	t.Fatalf("policy %s did not become invalidating", code)
 }
 
+func configurePlatformRateLimitGenerations(t *testing.T, ctx context.Context, service *authplatform.Service, db *gorm.DB, redisClient *projectredis.Client) (*cachegeneration.Repository, *cachegeneration.Store) {
+	t.Helper()
+	mailScope, smsScope := platformRateLimitScopes()
+	for _, scope := range []cachegeneration.Scope{mailScope, smsScope} {
+		if err := redisClient.Delete(ctx, cachegeneration.StateKey(scope)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	generations := cachegeneration.NewRepository(db)
+	states := cachegeneration.NewStore(redisClient)
+	for _, scope := range []cachegeneration.Scope{mailScope, smsScope} {
+		generation, err := generations.Current(ctx, scope)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := states.Reconcile(ctx, scope, generation); err != nil {
+			t.Fatal(err)
+		}
+	}
+	service.SetRateLimitCacheGenerations(generations, states, mailScope, smsScope)
+	return generations, states
+}
+
+func platformRateLimitScopes() (cachegeneration.Scope, cachegeneration.Scope) {
+	return cachegeneration.Scope{Namespace: "message.mail", ScopeKey: "global"}, cachegeneration.Scope{Namespace: "message.sms", ScopeKey: "global"}
+}
+
+func assertRateLimitLifecycleFacts(t *testing.T, db *gorm.DB, ctx context.Context, generations *cachegeneration.Repository, platformID, expectedGeneration int64, expectedPolicies int64) {
+	t.Helper()
+	mailScope, smsScope := platformRateLimitScopes()
+	for _, scope := range []cachegeneration.Scope{mailScope, smsScope} {
+		generation, err := generations.Current(ctx, scope)
+		if err != nil || generation != expectedGeneration {
+			t.Fatalf("generation %s/%s = %d,%v want %d", scope.Namespace, scope.ScopeKey, generation, err, expectedGeneration)
+		}
+		var pending int64
+		if err := db.WithContext(ctx).Table("system_config_cache_outbox").Where("namespace = ? AND scope_key = ? AND published_at IS NULL", scope.Namespace, scope.ScopeKey).Count(&pending).Error; err != nil || pending != 0 {
+			t.Fatalf("pending outbox %s/%s = %d,%v", scope.Namespace, scope.ScopeKey, pending, err)
+		}
+	}
+	if platformID == 0 {
+		var total int64
+		if err := db.WithContext(ctx).Table("system_config_cache_outbox").Count(&total).Error; err != nil || total != 0 {
+			t.Fatalf("rolled-back outbox rows=%d err=%v", total, err)
+		}
+		return
+	}
+	for _, table := range []string{"message_mail_rate_limit_policy", "message_sms_rate_limit_policy"} {
+		var count int64
+		if err := db.WithContext(ctx).Table(table).Where("platform_id = ?", platformID).Count(&count).Error; err != nil || count != expectedPolicies {
+			t.Fatalf("%s policies=%d err=%v want %d", table, count, err, expectedPolicies)
+		}
+	}
+}
+
 func platformErrorCode(err error) int {
 	var appErr *apperror.Error
 	if errors.As(err, &appErr) {
 		return appErr.Code
 	}
 	return 0
+}
+
+func TestServiceValidateRateLimitCacheDependenciesRejectsIncompleteStartupWiring(t *testing.T) {
+	if err := authplatform.NewService(nil, nil, nil, nil, nil, nil, nil, authplatform.Deployment{}).ValidateRateLimitCacheDependencies(); err == nil {
+		t.Fatal("ValidateRateLimitCacheDependencies accepted missing generation dependencies")
+	}
 }

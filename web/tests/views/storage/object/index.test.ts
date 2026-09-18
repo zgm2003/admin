@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
-import { ElNotification } from 'element-plus'
+import { ElMessageBox, ElNotification } from 'element-plus'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { appI18n } from '@/i18n'
@@ -550,12 +550,15 @@ describe('ObjectStorage', () => {
     await wrapper.find('.el-table__body .el-button').trigger('click')
     await flushPromises()
     const dialog = wrapper.findAllComponents(AppDialog)[0]
+		const appIdRoot = document.querySelector('[data-testid="storage-config-app-id"]')
+		const appIdInput =
+			appIdRoot instanceof HTMLInputElement ? appIdRoot : appIdRoot?.querySelector('input')
+		expect(appIdInput?.disabled).toBe(true)
     await dialog?.find('.el-dialog__footer .el-button--primary').trigger('click')
     await flushPromises()
 
     expect(updateCosConfig).toHaveBeenCalledWith(7, {
       name: '主配置',
-      appId: '1250000000',
       bucket: 'admin-assets',
       region: 'ap-guangzhou',
       endpoint: null,
@@ -608,6 +611,25 @@ describe('ObjectStorage', () => {
       .findComponent({ name: 'ElInputTag' })
     expect(codesInput.exists()).toBe(true)
     expect(codesInput.props('disabled')).not.toBe(true)
+		const selects = wrapper
+			.find('[data-testid="storage-rule-form"]')
+			.findAllComponents({ name: 'ElSelectV2' })
+		expect(
+			selects.find((item: VueWrapper) => item.attributes('data-testid') === 'storage-rule-platform')?.props(
+				'disabled',
+			),
+		).toBe(true)
+		expect(
+			selects.find((item: VueWrapper) => item.attributes('data-testid') === 'storage-rule-config')?.props(
+				'disabled',
+			),
+		).toBe(true)
+		expect(
+			wrapper
+				.find('[data-testid="storage-rule-form"]')
+				.findComponent({ name: 'ElRadioGroup' })
+				.props('disabled'),
+		).toBe(true)
     codesInput?.vm.$emit('update:modelValue', ['avatar-v2', 'profile-photo'])
     await dialog?.find('.el-dialog__footer .el-button--primary').trigger('click')
     await flushPromises()
@@ -615,14 +637,74 @@ describe('ObjectStorage', () => {
     expect(updateUploadRule).toHaveBeenCalledWith(9, {
       codes: ['avatar-v2', 'profile-photo'],
       name: '头像上传',
-      cosConfigId: 8,
       maxFileSizeBytes: 1048576,
       allowedExtensions: ['png'],
       allowedMimeTypes: ['image/png'],
-      accessMode: 'private',
       remark: '',
     })
   })
+
+	it('confirms replacing the enabled rule before creating another enabled rule', async () => {
+		vi.mocked(getUploadRulePageInit).mockResolvedValue({
+			platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
+			configs: [
+				{ id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
+			],
+		})
+		vi.mocked(listUploadRules).mockResolvedValue({
+			list: [
+				{
+					id: 9,
+					platformId: 1,
+					platformCode: 'admin',
+					platformName: 'Admin',
+					codes: ['avatar'],
+					name: '现有规则',
+					cosConfigId: 8,
+					cosConfigName: '默认 COS',
+					maxFileSizeBytes: 1048576,
+					allowedExtensions: ['png'],
+					allowedMimeTypes: ['image/png'],
+					accessMode: 'private',
+					isEnabled: 1,
+					remark: '',
+					createdAt: '2026-09-17T00:00:00Z',
+					updatedAt: '2026-09-17T00:00:00Z',
+				},
+			],
+			total: 1,
+			page: 1,
+			pageSize: 20,
+		})
+		const confirm = vi.spyOn(ElMessageBox, 'confirm').mockImplementation(async () =>
+			Object.assign('confirm' as const, { value: '', action: 'confirm' as const }),
+		)
+		const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
+		await flushPromises()
+		await wrapper.findAll('.el-tabs__item')[1]?.trigger('click')
+		await flushPromises()
+		await wrapper.find('[data-testid="storage-add-rule"]').trigger('click')
+		await flushPromises()
+		const form = wrapper.find('[data-testid="storage-rule-form"]')
+		form.findComponent({ name: 'ElInputTag' }).vm.$emit('update:modelValue', ['file'])
+		await form.find('[data-testid="storage-rule-name"]').setValue('新规则')
+		const extensionSelect = form
+			.findAllComponents({ name: 'ElSelectV2' })
+			.find((item: VueWrapper) => item.attributes('data-testid') === 'storage-rule-extensions')
+		extensionSelect?.vm.$emit('update:modelValue', ['png'])
+		await wrapper
+			.findAllComponents(AppDialog)[1]
+			?.find('.el-dialog__footer .el-button--primary')
+			.trigger('click')
+		await flushPromises()
+
+		expect(confirm).toHaveBeenCalledWith(
+			expect.stringContaining('自动停用'),
+			expect.any(String),
+			{ type: 'warning' },
+		)
+		expect(createUploadRule).toHaveBeenCalledOnce()
+	})
 })
 
 function storageDictionaryOptions() {

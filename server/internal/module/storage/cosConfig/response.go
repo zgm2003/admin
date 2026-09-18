@@ -9,8 +9,8 @@ type listResponse struct {
 	PageSize int         `json:"pageSize"`
 }
 
-func safeValue(m Model) SafeValue {
-	return SafeValue{ID: m.ID, Name: m.Name, AppID: m.AppID, Bucket: m.Bucket, Region: m.Region, Endpoint: copiedStringPointer(m.Endpoint), BucketDomain: copiedStringPointer(m.BucketDomain), IsEnabled: m.IsEnabled, HasCredentials: m.SecretIDCiphertext != "" && m.SecretKeyCiphertext != "", Remark: m.Remark, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}
+func safeValue(row Current) SafeValue {
+	return SafeValue{ID: row.ID, Name: row.Name, AppID: row.AppID, Bucket: row.Bucket, Region: row.Region, Endpoint: copiedStringPointer(row.Endpoint), BucketDomain: copiedStringPointer(row.BucketDomain), IsEnabled: row.IsEnabled, HasCredentials: row.SecretIDCiphertext != "" && row.SecretKeyCiphertext != "", Remark: row.Remark, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
 }
 
 func copiedStringPointer(value *string) *string {

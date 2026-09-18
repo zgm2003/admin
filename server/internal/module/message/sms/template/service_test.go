@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -41,23 +42,46 @@ func (f *fakeRepository) FindByID(_ context.Context, id int64) (Model, error) {
 	return Model{}, gorm.ErrRecordNotFound
 }
 
-func (f *fakeRepository) Update(_ context.Context, value *Model, now time.Time) error {
+func (f *fakeRepository) Update(_ context.Context, value *Model, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
 	if f.writeErr != nil {
-		return f.writeErr
+		return cachegeneration.MutationResult{}, f.writeErr
 	}
 	f.updatedID = value.ID
 	f.updated = *value
 	f.updated.UpdatedAt = now
-	return nil
+	return templateMutation(expected), nil
 }
 
-func (f *fakeRepository) UpdateStatus(_ context.Context, id int64, status int16, now time.Time) error {
+func (f *fakeRepository) UpdateStatus(_ context.Context, id int64, status int16, expected int64, _ time.Time) (cachegeneration.MutationResult, error) {
 	if f.writeErr != nil {
-		return f.writeErr
+		return cachegeneration.MutationResult{}, f.writeErr
 	}
 	f.statusID = id
 	f.status = status
-	return nil
+	return templateMutation(expected), nil
+}
+
+type passthroughRuntime struct{ generation int64 }
+
+func (r *passthroughRuntime) Mutate(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+	if r.generation == 0 {
+		r.generation = 1
+	}
+	result, err := change(ctx, r.generation)
+	if err == nil && result.Changed {
+		r.generation = result.Generation
+	}
+	return err
+}
+
+func templateMutation(expected int64) cachegeneration.MutationResult {
+	return cachegeneration.MutationResult{Changed: true, Generation: expected + 1, OutboxID: expected}
+}
+
+func newMutationService(repository repository) *Service {
+	service := NewService(repository)
+	service.SetRuntimeCoordinator(&passthroughRuntime{})
+	return service
 }
 
 func seededRows() []Model {
@@ -135,7 +159,7 @@ func TestUpdateRejectsSceneChangesAndInvalidFields(t *testing.T) {
 			repository := &fakeRepository{rows: seededRows()}
 			input := validUpdate()
 			test.mutate(&input)
-			_, err := NewService(repository).Update(context.Background(), 1, input)
+			_, err := newMutationService(repository).Update(context.Background(), 1, input)
 			if appErrorCode(err) != apperror.CodeInvalidRequest {
 				t.Fatalf("Update() error = %v, want invalid request", err)
 			}
@@ -150,7 +174,7 @@ func TestUpdatePersistsAllowedFieldsAndTrims(t *testing.T) {
 	repository := &fakeRepository{rows: seededRows()}
 	input := validUpdate()
 	input.Name = "  登录短信验证码  "
-	safe, err := NewService(repository).Update(context.Background(), 1, input)
+	safe, err := newMutationService(repository).Update(context.Background(), 1, input)
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
@@ -169,13 +193,13 @@ func TestUpdateRequiresAValidTemplateBeforeStayingEnabled(t *testing.T) {
 	repository := &fakeRepository{rows: rows}
 	input := validUpdate()
 	input.TencentTemplateID = ""
-	if _, err := NewService(repository).Update(context.Background(), 1, input); appErrorCode(err) != apperror.CodeInvalidRequest {
+	if _, err := newMutationService(repository).Update(context.Background(), 1, input); appErrorCode(err) != apperror.CodeInvalidRequest {
 		t.Fatalf("Update() error = %v, want invalid request", err)
 	}
 }
 
 func TestUpdateReportsMissingTemplateAsNotFound(t *testing.T) {
-	_, err := NewService(&fakeRepository{rows: seededRows()}).Update(context.Background(), 999, validUpdate())
+	_, err := newMutationService(&fakeRepository{rows: seededRows()}).Update(context.Background(), 999, validUpdate())
 	if appErrorCode(err) != apperror.CodeNotFound {
 		t.Fatalf("Update() error = %v, want not found", err)
 	}
@@ -194,7 +218,7 @@ func TestStatusEnableRequiresNumericIDAndCompleteExampleVariables(t *testing.T) 
 			rows := seededRows()
 			test.mutate(rows)
 			repository := &fakeRepository{rows: rows}
-			err := NewService(repository).UpdateStatus(context.Background(), 1, yesno.Yes)
+			err := newMutationService(repository).UpdateStatus(context.Background(), 1, yesno.Yes)
 			if appErrorCode(err) != apperror.CodeInvalidRequest {
 				t.Fatalf("UpdateStatus() error = %v, want invalid request", err)
 			}
@@ -209,7 +233,7 @@ func TestStatusDisableIsAlwaysAllowed(t *testing.T) {
 	rows := seededRows()
 	rows[0].TencentTemplateID = ""
 	repository := &fakeRepository{rows: rows}
-	if err := NewService(repository).UpdateStatus(context.Background(), 1, yesno.No); err != nil {
+	if err := newMutationService(repository).UpdateStatus(context.Background(), 1, yesno.No); err != nil {
 		t.Fatalf("UpdateStatus() error = %v", err)
 	}
 	if repository.statusID != 1 || repository.status != 0 {
@@ -219,7 +243,7 @@ func TestStatusDisableIsAlwaysAllowed(t *testing.T) {
 
 func TestUpdateMapsRepositoryFailureToDependencyUnavailable(t *testing.T) {
 	repository := &fakeRepository{rows: seededRows(), writeErr: errors.New("database unavailable")}
-	_, err := NewService(repository).Update(context.Background(), 1, validUpdate())
+	_, err := newMutationService(repository).Update(context.Background(), 1, validUpdate())
 	if appErrorCode(err) != apperror.CodeDependencyUnavailable {
 		t.Fatalf("Update() error = %v, want dependency unavailable", err)
 	}

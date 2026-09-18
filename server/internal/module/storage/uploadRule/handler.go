@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"strings"
 )
 
 type handlerService interface {
@@ -22,7 +23,7 @@ type handlerService interface {
 	UpdateStatus(context.Context, int64, yesno.Value) error
 	Delete(context.Context, int64) error
 	IssueCredentials(context.Context, auth.Identity, CredentialInput) (CredentialResponse, error)
-	PublicObjectURL(context.Context, auth.Identity, string, string) (string, error)
+	ObjectURL(context.Context, auth.Identity, string) (ObjectURLResult, error)
 }
 type Handler struct{ s handlerService }
 
@@ -185,10 +186,15 @@ func (h *Handler) ObjectURL(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	url, err := h.s.PublicObjectURL(c.Request.Context(), identity, request.RuleCode, request.ObjectKey)
+	request.ObjectKey = strings.TrimSpace(request.ObjectKey)
+	if request.ObjectKey == "" {
+		response.Fail(c, invalid(fmt.Errorf("objectKey is required")))
+		return
+	}
+	result, err := h.s.ObjectURL(c.Request.Context(), identity, request.ObjectKey)
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, http.StatusOK, objectURLResponse{URL: url})
+	response.OK(c, http.StatusOK, result)
 }

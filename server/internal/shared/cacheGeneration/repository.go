@@ -7,12 +7,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
 var (
-	ErrGenerationRowMissing = errors.New("cache generation row is missing")
-	ErrOutboxClaimLost      = errors.New("cache generation outbox claim was lost")
+	ErrGenerationRowMissing    = errors.New("cache generation row is missing")
+	ErrOutboxClaimLost         = errors.New("cache generation outbox claim was lost")
+	ErrGenerationAlreadyExists = errors.New("cache generation row already exists")
 )
 
 type Event struct {
@@ -102,6 +104,55 @@ func (r *Repository) AdvanceTx(ctx context.Context, tx *gorm.DB, scope Scope, ex
 		 ) VALUES (?, ?, ?, 0, ?, ?, ?) RETURNING id`,
 		scope.Namespace, scope.ScopeKey, next, now, now, now).Scan(&event.ID).Error; err != nil {
 		return Event{}, fmt.Errorf("insert cache generation outbox: %w", err)
+	}
+	return event, nil
+}
+
+// InitializeTx 使用调用方事务为一个尚无 generation 行的动态 scope 建立 generation=1 与同代 outbox。
+// 只有主键冲突（pk_system_config_cache_generation）被映射为 ErrGenerationAlreadyExists；
+// outbox 唯一约束或其它 23505 属于 schema/事务事实异常，必须原样上抛，不能伪装成"已初始化"。
+func (r *Repository) InitializeTx(ctx context.Context, tx *gorm.DB, scope Scope, now time.Time) (Event, error) {
+	if r == nil {
+		return Event{}, fmt.Errorf("cache generation repository is not configured")
+	}
+	if tx == nil {
+		return Event{}, fmt.Errorf("cache generation initialize requires an open transaction")
+	}
+	if err := scope.Validate(); err != nil {
+		return Event{}, err
+	}
+	if now.IsZero() {
+		return Event{}, fmt.Errorf("cache generation initialize time is invalid")
+	}
+
+	statement := tx.WithContext(ctx)
+	result := statement.Exec(
+		`INSERT INTO system_config_cache_generation (namespace, scope_key, generation, created_at, updated_at)
+		 VALUES (?, ?, 1, ?, ?)`,
+		scope.Namespace, scope.ScopeKey, now, now)
+	if result.Error != nil {
+		var postgresError *pgconn.PgError
+		if errors.As(result.Error, &postgresError) && postgresError.Code == "23505" &&
+			postgresError.ConstraintName == "pk_system_config_cache_generation" {
+			return Event{}, fmt.Errorf("%w: %s/%s", ErrGenerationAlreadyExists, scope.Namespace, scope.ScopeKey)
+		}
+		return Event{}, fmt.Errorf("initialize cache generation: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return Event{}, fmt.Errorf("initialize cache generation affected %d rows", result.RowsAffected)
+	}
+
+	event := Event{Scope: scope, Generation: 1}
+	if err := statement.Raw(
+		`INSERT INTO system_config_cache_outbox (
+			namespace, scope_key, generation, attempts, available_at, created_at, updated_at
+		 ) VALUES (?, ?, 1, 0, ?, ?, ?) RETURNING id`,
+		scope.Namespace, scope.ScopeKey, now, now, now).Scan(&event.ID).Error; err != nil {
+		var postgresError *pgconn.PgError
+		if errors.As(err, &postgresError) && postgresError.Code == "23505" {
+			return Event{}, fmt.Errorf("initialize cache generation outbox conflict on %s: %w", postgresError.ConstraintName, err)
+		}
+		return Event{}, fmt.Errorf("initialize cache generation outbox: %w", err)
 	}
 	return event, nil
 }

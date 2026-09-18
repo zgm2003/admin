@@ -75,13 +75,14 @@ type RuleValue struct {
 	UpdatedAt         time.Time   `json:"updatedAt"`
 }
 
+// RuleCode 是规则内的编码行：平台由 rule_id 唯一确定，不再冗余保存 platform_id。
 type RuleCode struct {
-	ID         int64          `gorm:"column:id;primaryKey;autoIncrement"`
-	RuleID     int64          `gorm:"column:rule_id;not null"`
-	PlatformID int64          `gorm:"column:platform_id;not null"`
-	Code       string         `gorm:"column:code;type:varchar(64);not null"`
-	CreatedAt  time.Time      `gorm:"column:created_at;not null"`
-	DeletedAt  gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz"`
+	ID        int64          `gorm:"column:id;primaryKey;autoIncrement"`
+	RuleID    int64          `gorm:"column:rule_id;not null"`
+	Code      string         `gorm:"column:code;type:varchar(64);not null"`
+	CreatedAt time.Time      `gorm:"column:created_at;not null"`
+	UpdatedAt time.Time      `gorm:"column:updated_at;not null"`
+	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz"`
 }
 
 func (RuleCode) TableName() string { return "storage_upload_rule_code" }

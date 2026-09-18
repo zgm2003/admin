@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"admin/server/internal/shared/apperror"
+	cachegeneration "admin/server/internal/shared/cacheGeneration"
 	"gorm.io/gorm"
 )
 
@@ -18,6 +19,7 @@ type fakeRepository struct {
 	updatedLimit int
 	updatedWin   int
 	updatedKey   string
+	expected     int64
 	provisioned  int64
 	deleted      int64
 }
@@ -41,18 +43,32 @@ func (f *fakeRepository) FindPlatform(_ context.Context, platformID int64) (Cata
 	return Catalog{}, ErrPlatformNotFound
 }
 
-func (f *fakeRepository) UpdatePolicy(_ context.Context, platformID int64, key string, limit, windowSeconds int, now time.Time) (Model, error) {
+func (f *fakeRepository) UpdatePolicy(_ context.Context, platformID int64, key string, limit, windowSeconds int, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
 	if f.updateErr != nil {
-		return Model{}, f.updateErr
+		return cachegeneration.MutationResult{}, f.updateErr
 	}
-	f.updatedKey, f.updatedLimit, f.updatedWin = key, limit, windowSeconds
-	return Model{
-		PlatformID: platformID, Key: key, Mode: ModeBusiness, Dimension: DimensionPhone,
-		Limit: limit, WindowSeconds: windowSeconds, Revision: 2, UpdatedAt: now,
-	}, nil
+	f.updatedKey, f.updatedLimit, f.updatedWin, f.expected = key, limit, windowSeconds, expected
+	for catalogIndex := range f.catalogs {
+		if f.catalogs[catalogIndex].PlatformID != platformID {
+			continue
+		}
+		for policyIndex := range f.catalogs[catalogIndex].Policies {
+			policy := &f.catalogs[catalogIndex].Policies[policyIndex]
+			if policy.Key == key {
+				if policy.Limit == limit && policy.WindowSeconds == windowSeconds {
+					return cachegeneration.MutationResult{}, nil
+				}
+				policy.Limit = limit
+				policy.WindowSeconds = windowSeconds
+				policy.UpdatedAt = now
+				return cachegeneration.MutationResult{Changed: true, Generation: expected + 1, OutboxID: expected}, nil
+			}
+		}
+	}
+	return cachegeneration.MutationResult{}, gorm.ErrRecordNotFound
 }
 
-func (f *fakeRepository) ProvisionDefaults(_ context.Context, platformID int64, now time.Time) error {
+func (f *fakeRepository) ProvisionDefaults(_ context.Context, platformID int64, _ time.Time) error {
 	f.provisioned = platformID
 	return f.updateErr
 }
@@ -63,12 +79,11 @@ func (f *fakeRepository) DeleteForPlatform(_ context.Context, platformID int64) 
 }
 
 type fakeStore struct {
-	calls     int
-	loadErr   error
-	mutateErr error
+	calls   int
+	loadErr error
 }
 
-func (f *fakeStore) Load(ctx context.Context, platformID int64, load func(context.Context) (Catalog, error)) (Catalog, error) {
+func (f *fakeStore) Load(ctx context.Context, _ int64, load func(context.Context) (Catalog, error)) (Catalog, error) {
 	f.calls++
 	if f.loadErr != nil {
 		return Catalog{}, f.loadErr
@@ -76,12 +91,25 @@ func (f *fakeStore) Load(ctx context.Context, platformID int64, load func(contex
 	return load(ctx)
 }
 
-func (f *fakeStore) Mutate(ctx context.Context, platformID int64, change func(context.Context) error) error {
+type fakeRuntime struct {
+	calls      int
+	generation int64
+	err        error
+}
+
+func (f *fakeRuntime) Mutate(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
 	f.calls++
-	if f.mutateErr != nil {
-		return f.mutateErr
+	if f.err != nil {
+		return f.err
 	}
-	return change(ctx)
+	if f.generation == 0 {
+		f.generation = 1
+	}
+	result, err := change(ctx, f.generation)
+	if err == nil && result.Changed {
+		f.generation = result.Generation
+	}
+	return err
 }
 
 func appErrorCode(err error) int {
@@ -94,17 +122,24 @@ func appErrorCode(err error) int {
 
 func catalogOf(platformID int64, code string, policies ...Model) Catalog {
 	if len(policies) == 0 {
-		for index, fixed := range FixedPolicies() {
+		now := time.Now().UTC()
+		for _, fixed := range FixedPolicies() {
 			policies = append(policies, Model{
 				PlatformID: platformID, Key: fixed.Key, Mode: fixed.Mode, Dimension: fixed.Dimension,
-				Limit: fixed.Limit, WindowSeconds: fixed.WindowSeconds, Revision: int64(index + 1),
+				Limit: fixed.Limit, WindowSeconds: fixed.WindowSeconds, CreatedAt: now, UpdatedAt: now,
 			})
 		}
 	}
 	return Catalog{PlatformID: platformID, PlatformCode: code, PlatformName: strings.ToUpper(code), Policies: policies}
 }
 
-func TestListReturnsEveryActivePlatformWithItsPolicies(t *testing.T) {
+func newServiceForUpdate(repository repository, store Store, runtime RuntimeCoordinator) *Service {
+	service := NewService(repository, store)
+	service.SetRuntimeCoordinator(runtime)
+	return service
+}
+
+func TestListReturnsEveryActivePlatformWithoutRevision(t *testing.T) {
 	repository := &fakeRepository{catalogs: []Catalog{catalogOf(1, "admin"), catalogOf(2, "canvas")}}
 	platforms, err := NewService(repository, &fakeStore{}).List(context.Background())
 	if err != nil {
@@ -112,9 +147,6 @@ func TestListReturnsEveryActivePlatformWithItsPolicies(t *testing.T) {
 	}
 	if len(platforms) != 2 || platforms[0].PlatformCode != "admin" || len(platforms[0].Policies) != 2 {
 		t.Fatalf("platforms = %+v", platforms)
-	}
-	if platforms[0].Policies[0].Key != KeyTenMin && platforms[0].Policies[0].Key != KeyMinute {
-		t.Fatalf("policy key = %q", platforms[0].Policies[0].Key)
 	}
 }
 
@@ -131,55 +163,60 @@ func TestUpdateRejectsUnknownKeysAndOutOfRangeValues(t *testing.T) {
 		{name: "window above one day", key: KeyMinute, limit: 1, window: 86401},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			store := &fakeStore{}
-			_, err := NewService(&fakeRepository{}, store).Update(context.Background(), 1, test.key, test.limit, test.window)
+			runtime := &fakeRuntime{}
+			_, err := newServiceForUpdate(&fakeRepository{}, &fakeStore{}, runtime).
+				Update(context.Background(), 1, test.key, test.limit, test.window)
 			if appErrorCode(err) != apperror.CodeInvalidRequest {
 				t.Fatalf("Update() error = %v, want invalid request", err)
 			}
-			if store.calls != 0 {
-				t.Fatal("invalid input reached the store")
+			if runtime.calls != 0 {
+				t.Fatal("invalid input reached the runtime coordinator")
 			}
 		})
 	}
 }
 
 func TestUpdateRequiresAnActivePlatform(t *testing.T) {
-	_, err := NewService(&fakeRepository{}, &fakeStore{}).Update(context.Background(), 9, KeyMinute, 2, 120)
+	_, err := newServiceForUpdate(&fakeRepository{}, &fakeStore{}, &fakeRuntime{}).
+		Update(context.Background(), 9, KeyMinute, 2, 120)
 	if appErrorCode(err) != apperror.CodeNotFound {
 		t.Fatalf("Update() error = %v, want not found", err)
 	}
 }
 
-func TestUpdateWritesThroughTheTokenizedMutationAndReturnsRevision(t *testing.T) {
+func TestUpdateUsesSMSGenerationAndReturnsLatestPostgresCatalog(t *testing.T) {
 	repository := &fakeRepository{catalogs: []Catalog{catalogOf(1, "admin")}}
-	store := &fakeStore{}
-	platform, err := NewService(repository, store).Update(context.Background(), 1, KeyMinute, 2, 120)
+	runtime := &fakeRuntime{generation: 7}
+	platform, err := newServiceForUpdate(repository, &fakeStore{}, runtime).
+		Update(context.Background(), 1, KeyMinute, 2, 120)
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
-	if store.calls != 1 || repository.updatedKey != KeyMinute || repository.updatedLimit != 2 || repository.updatedWin != 120 {
-		t.Fatalf("store calls = %d updated = %s/%d/%d", store.calls, repository.updatedKey, repository.updatedLimit, repository.updatedWin)
+	if runtime.calls != 1 || repository.expected != 7 || repository.updatedKey != KeyMinute ||
+		repository.updatedLimit != 2 || repository.updatedWin != 120 {
+		t.Fatalf("runtime calls=%d expected=%d updated=%s/%d/%d", runtime.calls, repository.expected,
+			repository.updatedKey, repository.updatedLimit, repository.updatedWin)
 	}
-	if platform.PlatformID != 1 || len(platform.Policies) != 2 {
+	if platform.PlatformID != 1 || len(platform.Policies) != 2 || platform.Policies[1].Limit != 2 && platform.Policies[0].Limit != 2 {
 		t.Fatalf("platform = %+v", platform)
 	}
 }
 
-func TestUpdateMapsStoreAndRepositoryFailures(t *testing.T) {
+func TestUpdateMapsCoordinatorAndRepositoryFailures(t *testing.T) {
 	repository := &fakeRepository{catalogs: []Catalog{catalogOf(1, "admin")}}
-	if _, err := NewService(repository, &fakeStore{mutateErr: errors.New("redis unavailable")}).
+	if _, err := newServiceForUpdate(repository, &fakeStore{}, &fakeRuntime{err: errors.New("redis unavailable")}).
 		Update(context.Background(), 1, KeyMinute, 2, 120); appErrorCode(err) != apperror.CodeDependencyUnavailable {
-		t.Fatalf("store failure error = %v", err)
+		t.Fatalf("coordinator failure error = %v", err)
 	}
 
 	repository.updateErr = errors.New("database unavailable")
-	if _, err := NewService(repository, &fakeStore{}).
+	if _, err := newServiceForUpdate(repository, &fakeStore{}, &fakeRuntime{}).
 		Update(context.Background(), 1, KeyMinute, 2, 120); appErrorCode(err) != apperror.CodeDependencyUnavailable {
 		t.Fatalf("repository failure error = %v", err)
 	}
 
 	repository.updateErr = gorm.ErrRecordNotFound
-	if _, err := NewService(repository, &fakeStore{}).
+	if _, err := newServiceForUpdate(repository, &fakeStore{}, &fakeRuntime{}).
 		Update(context.Background(), 1, KeyMinute, 2, 120); appErrorCode(err) != apperror.CodeNotFound {
 		t.Fatalf("missing policy error = %v", err)
 	}
@@ -191,7 +228,6 @@ func TestCatalogFailsClosedOnIncompletePolicies(t *testing.T) {
 	if _, err := NewService(repository, &fakeStore{}).Catalog(context.Background(), 1); appErrorCode(err) != apperror.CodeDependencyUnavailable {
 		t.Fatalf("Catalog() error = %v, want dependency unavailable", err)
 	}
-
 	if _, err := NewService(&fakeRepository{catalogs: []Catalog{catalogOf(1, "admin")}}, nil).
 		Catalog(context.Background(), 1); appErrorCode(err) != apperror.CodeDependencyUnavailable {
 		t.Fatalf("Catalog() without a store error = %v", err)

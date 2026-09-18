@@ -1,5 +1,5 @@
 import { request } from '@/utils/request'
-import { expectArray, expectRecord, expectString } from '@/api/protocol'
+import { expectArray, expectExactKeys, expectRecord, expectString } from '@/api/protocol'
 import { ProtocolError } from '@/types/http'
 
 export interface UploadFileInput {
@@ -18,6 +18,10 @@ export interface UploadCredentialItem {
 export interface UploadCredentialResponse {
   items: UploadCredentialItem[]
 }
+export interface ObjectURLResult {
+  url: string
+  expiresAt: string | null
+}
 
 export async function requestUploadCredentials(
   ruleCode: string,
@@ -32,19 +36,24 @@ export async function requestUploadCredentials(
   )
 }
 
-export async function requestObjectURL(
-  ruleCode: string,
-  objectKey: string,
-): Promise<{ url: string }> {
-  const value = expectRecord(
+export async function requestObjectURL(objectKey: string): Promise<ObjectURLResult> {
+  const value = expectExactKeys(
     await request<unknown>({
       method: 'POST',
       url: '/api/v1/storage/object-url',
-      data: { ruleCode, objectKey },
+      data: { objectKey },
     }),
+    ['url', 'expiresAt'] as const,
     'object url',
   )
-  return { url: expectString(value.url, 'object url.url') }
+  const url = expectString(value.url, 'object url.url')
+  if (url.trim() === '') throw new ProtocolError('object url.url must not be empty')
+  if (value.expiresAt === null) return { url, expiresAt: null }
+  const expiresAt = expectString(value.expiresAt, 'object url.expiresAt')
+  if (!expiresAt.endsWith('Z') || Number.isNaN(Date.parse(expiresAt))) {
+    throw new ProtocolError('object url.expiresAt must be an ISO UTC timestamp or null')
+  }
+  return { url, expiresAt }
 }
 
 function parseCredentials(value: unknown): UploadCredentialResponse {

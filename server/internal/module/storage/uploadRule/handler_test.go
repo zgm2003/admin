@@ -15,16 +15,18 @@ import (
 )
 
 type ruleHTTPService struct {
-	query   ListQuery
-	creates int
-	update  UpdateInput
+	query     ListQuery
+	creates   int
+	update    UpdateInput
+	objectKey string
 }
 
 func (*ruleHTTPService) IssueCredentials(context.Context, auth.Identity, CredentialInput) (CredentialResponse, error) {
 	return CredentialResponse{}, nil
 }
-func (*ruleHTTPService) PublicObjectURL(context.Context, auth.Identity, string, string) (string, error) {
-	return "", nil
+func (s *ruleHTTPService) ObjectURL(_ context.Context, _ auth.Identity, objectKey string) (ObjectURLResult, error) {
+	s.objectKey = objectKey
+	return ObjectURLResult{URL: "https://download.example.com/object"}, nil
 }
 
 func (s *ruleHTTPService) List(_ context.Context, q ListQuery) (pagination.Result[RuleValue], error) {
@@ -53,9 +55,60 @@ func TestRoutesUseExactUploadRulePermissions(t *testing.T) {
 	pass := func(c *gin.Context) { c.Next() }
 	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(&ruleHTTPService{}), pass, func(code string) gin.HandlerFunc { permissions = append(permissions, code); return pass })
 	RegisterCredentialRoute(router.Group("/api/v1"), NewHandler(&ruleHTTPService{}), pass, func(code string) gin.HandlerFunc { permissions = append(permissions, code); return pass })
-	want := []string{PermissionList, PermissionList, PermissionCreate, PermissionDetail, PermissionUpdate, PermissionStatus, PermissionDelete, "storage:object:upload", "storage:object:upload"}
+	want := []string{PermissionList, PermissionList, PermissionCreate, PermissionDetail, PermissionUpdate, PermissionStatus, PermissionDelete, "storage:object:upload"}
 	if !reflect.DeepEqual(permissions, want) {
 		t.Fatalf("permissions=%v want=%v", permissions, want)
+	}
+}
+
+func TestObjectURLRouteRequiresAuthenticationWithoutUploadPermission(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	service := &ruleHTTPService{}
+	router := gin.New()
+	authCalls := 0
+	authenticated := func(c *gin.Context) {
+		authCalls++
+		c.Set("auth.identity", auth.Identity{PlatformID: 7})
+		c.Next()
+	}
+	permissions := []string{}
+	RegisterCredentialRoute(router.Group("/api/v1"), NewHandler(service), authenticated, func(code string) gin.HandlerFunc {
+		permissions = append(permissions, code)
+		return func(c *gin.Context) { c.Next() }
+	})
+
+	body := `{"objectKey":"avatar/.admin-storage/v2/p7/r2/c3/v1/2026/09/17/6e7e53334a6da066b130a89cc3f69535.png"}`
+	recorder := ruleJSON(router, http.MethodPost, "/api/v1/storage/object-url", body)
+	if recorder.Code != http.StatusOK || authCalls != 1 || service.objectKey == "" {
+		t.Fatalf("status=%d authCalls=%d key=%q body=%s", recorder.Code, authCalls, service.objectKey, recorder.Body.String())
+	}
+	if !reflect.DeepEqual(permissions, []string{"storage:object:upload"}) {
+		t.Fatalf("permissions=%v", permissions)
+	}
+	if recorder.Body.String() != `{"code":0,"data":{"url":"https://download.example.com/object","expiresAt":null},"message":"ok"}` {
+		t.Fatalf("body=%s", recorder.Body.String())
+	}
+
+	for _, invalidBody := range []string{
+		`{"objectKey":""}`,
+		`{"ruleCode":"avatar","objectKey":"avatar/.admin-storage/v2/p7/r2/c3/v1/2026/09/17/6e7e53334a6da066b130a89cc3f69535.png"}`,
+		body + `{}`,
+	} {
+		response := ruleJSON(router, http.MethodPost, "/api/v1/storage/object-url", invalidBody)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid body=%s status=%d response=%s", invalidBody, response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestObjectURLHandlerRejectsMissingIdentity(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	pass := func(c *gin.Context) { c.Next() }
+	RegisterCredentialRoute(router.Group("/api/v1"), NewHandler(&ruleHTTPService{}), pass, func(string) gin.HandlerFunc { return pass })
+	recorder := ruleJSON(router, http.MethodPost, "/api/v1/storage/object-url", `{"objectKey":"avatar/.admin-storage/v2/p1/r2/c3/v1/2026/09/17/6e7e53334a6da066b130a89cc3f69535.png"}`)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -93,13 +146,20 @@ func TestPageInitSerializesEmptyCollectionsAsArrays(t *testing.T) {
 
 func TestHandlerBindsCodesWhenUpdatingUploadRule(t *testing.T) {
 	service, router := ruleRouter()
-	body := `{"codes":[" Avatar-V2 ","profile-photo"],"name":"Avatar","cosConfigId":1,"maxFileSizeBytes":1024,"allowedExtensions":["png"],"allowedMimeTypes":["image/png"],"accessMode":"private","remark":""}`
+	body := `{"codes":[" Avatar-V2 ","profile-photo"],"name":"Avatar","maxFileSizeBytes":1024,"allowedExtensions":["png"],"allowedMimeTypes":["image/png"],"remark":""}`
 	recorder := ruleJSON(router, http.MethodPut, "/api/admin/v1/storage/uploadrule/7", body)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 	if !reflect.DeepEqual(service.update.Codes, []string{"avatar-v2", "profile-photo"}) {
 		t.Fatalf("codes=%v", service.update.Codes)
+	}
+	// platform/config/access 创建后只读，且 last-write-wins 不引入任何版本字段：严格 DTO 必须拒绝。
+	for _, forbidden := range []string{`"cosConfigId":2`, `"accessMode":"public"`, `"platformId":2`, `"revision":1`, `"expectedRevision":1`} {
+		legacy := "{" + forbidden + "," + body[1:]
+		if rec := ruleJSON(router, http.MethodPut, "/api/admin/v1/storage/uploadrule/7", legacy); rec.Code != http.StatusBadRequest {
+			t.Fatalf("legacy field %s status=%d body=%s", forbidden, rec.Code, rec.Body.String())
+		}
 	}
 }
 func ruleRouter() (*ruleHTTPService, *gin.Engine) {

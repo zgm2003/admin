@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -96,7 +97,7 @@ func TestBuildRouterDoesNotRegisterExampleTask(t *testing.T) {
 		Role:              role.NewHandler(apiRoleService{}),
 		User:              account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
 		COSConfig:         cosconfig.NewHandler(cosconfig.NewService(nil, nil, nil)),
-		UploadRule:        uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil)),
+		UploadRule:        uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil, nil, nil)),
 		OperationLog:      operationlog.NewHandler(apiOperationLogService{}),
 		OperationEnqueuer: enqueuer,
 		SessionAdmin:      usersession.NewSessionAdminHandler(apiSessionAdminService{}, apiSessionActor),
@@ -281,7 +282,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		Role:            role.NewHandler(apiRoleService{}),
 		User:            account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
 		COSConfig:       cosconfig.NewHandler(cosconfig.NewService(nil, nil, nil)),
-		UploadRule:      uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil)),
+		UploadRule:      uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil, nil, nil)),
 		OperationLog:    operationlog.NewHandler(apiOperationLogService{}),
 		CacheGeneration: systemcachegeneration.NewHandler(apiCacheGenerationService{}),
 		SessionAdmin:    usersession.NewSessionAdminHandler(apiSessionAdminService{}, apiSessionActor),
@@ -517,7 +518,7 @@ func TestCacheGenerationRouteRequiresListPermission(t *testing.T) {
 		Role:            role.NewHandler(apiRoleService{}),
 		User:            account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
 		COSConfig:       cosconfig.NewHandler(cosconfig.NewService(nil, nil, nil)),
-		UploadRule:      uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil)),
+		UploadRule:      uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil, nil, nil)),
 		OperationLog:    operationlog.NewHandler(apiOperationLogService{}),
 		CacheGeneration: systemcachegeneration.NewHandler(apiCacheGenerationService{}),
 		SessionAdmin:    usersession.NewSessionAdminHandler(apiSessionAdminService{}, apiSessionActor),
@@ -546,21 +547,100 @@ func TestCacheGenerationRouteRequiresListPermission(t *testing.T) {
 	}
 }
 
-func TestRunWiresSettingGenerationDependencies(t *testing.T) {
+func TestRunWiresSharedConfigGenerationDependencies(t *testing.T) {
+	content, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(content)
+	if got := strings.Count(source, ":= cachegeneration.NewRepository(postgres.GORM)"); got != 1 {
+		t.Fatalf("shared generation repository constructor count = %d want 1", got)
+	}
+	if got := strings.Count(source, "cachegeneration.NewStore(redisClient)"); got != 1 {
+		t.Fatalf("shared generation store constructor count = %d want 1", got)
+	}
+	for _, fragment := range []string{
+		"settingRepository.SetGenerations(configGenerationRepository)",
+		"settingCache.SetStateStore(configGenerationStore)",
+		"settingService.SetGenerations(configGenerationRepository, configGenerationStore)",
+		"dictionaryRepository.SetGenerations(configGenerationRepository, dictionary.CacheGenerationScope())",
+		"dictionaryCache.SetStateStore(configGenerationStore)",
+		"dictionaryService.SetCache(dictionaryCache)",
+		"dictionaryService.SetGenerations(configGenerationRepository, configGenerationStore)",
+		"dictionaryService.SetLogger(logger)",
+		"mailRuntimeStore.SetGenerations(configGenerationRepository, configGenerationStore)",
+		"mailRateLimitStore.SetGenerations(configGenerationRepository, configGenerationStore)",
+		"smsRuntimeCache.SetGenerations(configGenerationRepository, configGenerationStore)",
+		"smsRateLimitStore.SetGenerations(configGenerationRepository, configGenerationStore)",
+		"authPlatformService.SetRateLimitCacheGenerations(configGenerationRepository, configGenerationStore, mailGenerationScope, smsGenerationScope)",
+		"cosConfigRepository.SetGenerations(configGenerationRepository)",
+		"cosConfigCache.SetStateStore(configGenerationStore)",
+		"cosConfigService.SetGenerations(configGenerationRepository, configGenerationStore)",
+	} {
+		if !strings.Contains(source, fragment) {
+			t.Fatalf("run source lacks shared generation wiring %s", fragment)
+		}
+	}
+}
+
+func TestRunWiresStorageGenerationAndRouteCaches(t *testing.T) {
 	content, err := os.ReadFile("main.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(content)
 	for _, fragment := range []string{
-		"cachegeneration.NewRepository(postgres.GORM)",
-		"cachegeneration.NewStore(redisClient)",
-		"settingRepository.SetGenerations(",
-		"settingCache.SetStateStore(",
-		"settingService.SetGenerations(",
+		"cosConfigRepository.SetGenerations(configGenerationRepository)",
+		"cosConfigCache.SetStateStore(configGenerationStore)",
+		"cosConfigService.SetCache(cosConfigCache)",
+		"cosConfigService.SetGenerations(configGenerationRepository, configGenerationStore)",
+		"cosConfigService.SetLogger(logger)",
+		"uploadRouteCache := uploadrule.NewRouteCache(redisClient)",
+		"uploadrule.NewService(uploadRuleRepository, keys, cosClient, cosConfigService, uploadRouteCache)",
 	} {
 		if !strings.Contains(source, fragment) {
-			t.Fatalf("run source lacks setting generation wiring %s", fragment)
+			t.Fatalf("run source lacks storage cache wiring %s", fragment)
+		}
+	}
+}
+
+func TestValidateRuntimeDependenciesReturnsTheExactFailedScope(t *testing.T) {
+	sentinel := errors.New("missing state store")
+	err := validateRuntimeDependencies(
+		runtimeDependency{name: "system.setting/global", validate: func() error { return nil }},
+		runtimeDependency{name: "system.dictionary/global", validate: func() error { return sentinel }},
+		runtimeDependency{name: "message.mail/global", validate: func() error { return nil }},
+	)
+	if !errors.Is(err, sentinel) || !strings.Contains(err.Error(), "system.dictionary/global") {
+		t.Fatalf("validateRuntimeDependencies() error = %v", err)
+	}
+}
+
+func TestRunValidatesEveryConfigRuntimeDependencyBeforeBuildingTheRouter(t *testing.T) {
+	content, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(content)
+	fragments := []string{
+		`runtimeDependency{name: "system.setting/global", validate: settingService.ValidateDependencies}`,
+		`runtimeDependency{name: "system.dictionary/global", validate: dictionaryService.ValidateDependencies}`,
+		`runtimeDependency{name: "message.mail/global runtime", validate: mailRuntimeStore.ValidateDependencies}`,
+		`runtimeDependency{name: "message.mail/global rate-limit", validate: mailRateLimitStore.ValidateDependencies}`,
+		`runtimeDependency{name: "message.sms/global runtime", validate: smsRuntimeCache.ValidateDependencies}`,
+		`runtimeDependency{name: "message.sms/global rate-limit", validate: smsRateLimitStore.ValidateDependencies}`,
+		`runtimeDependency{name: "permission.authPlatform mail/sms generation", validate: authPlatformService.ValidateRateLimitCacheDependencies}`,
+		`runtimeDependency{name: "storage.cosconfig/<positive config id>", validate: cosConfigService.ValidateDependencies}`,
+		`runtimeDependency{name: "storage.object-route/v2", validate: uploadRuleService.ValidateDependencies}`,
+	}
+	validationPosition := strings.Index(source, "if err := validateRuntimeDependencies(")
+	routerPosition := strings.Index(source, "router := buildRouter(")
+	if validationPosition < 0 || routerPosition < 0 || validationPosition >= routerPosition {
+		t.Fatalf("runtime dependency validation must run before router construction")
+	}
+	for _, fragment := range fragments {
+		if !strings.Contains(source, fragment) {
+			t.Errorf("run source lacks startup dependency validation %s", fragment)
 		}
 	}
 }

@@ -98,10 +98,17 @@ func TestHandlersUseStrictDTOsAndNeverReturnCredentials(t *testing.T) {
 		}
 	}
 
-	validUpdate := `{"name":"Main","appId":"1250000000","bucket":"assets","region":"ap-guangzhou","endpoint":null,"bucketDomain":null,"remark":"updated"}`
+	validUpdate := `{"name":"Main","bucket":"assets","region":"ap-guangzhou","endpoint":null,"bucketDomain":null,"remark":"updated"}`
 	recorder = performConfigJSON(router, http.MethodPut, "/api/admin/v1/storage/cosconfig/1", validUpdate)
 	if recorder.Code != http.StatusOK || service.updateCalls != 1 || service.updateInput.SecretID.Present || service.updateInput.SecretKey.Present {
 		t.Fatalf("update status=%d calls=%d input=%+v body=%s", recorder.Code, service.updateCalls, service.updateInput, recorder.Body)
+	}
+	// 管理 CRUD 为 last-write-wins：appId 与任何 expected generation/revision 都必须被严格 DTO 拒绝。
+	for _, forbidden := range []string{`"appId":"1250000000",`, `"expectedGeneration":1,`, `"expectedRevision":1,`} {
+		recorder = performConfigJSON(router, http.MethodPut, "/api/admin/v1/storage/cosconfig/1", strings.Replace(validUpdate, "{", "{"+forbidden, 1))
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("legacy update field %s status=%d body=%s", forbidden, recorder.Code, recorder.Body)
+		}
 	}
 	for _, replacement := range []string{`"secretId":null,`, `"secretId":"",`, `"secretKey":null,`, `"secretKey":"",`} {
 		recorder = performConfigJSON(router, http.MethodPut, "/api/admin/v1/storage/cosconfig/1", strings.Replace(validUpdate, "{", "{"+replacement, 1))

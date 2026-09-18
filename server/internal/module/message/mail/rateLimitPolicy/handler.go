@@ -26,7 +26,7 @@ func (h *Handler) List(ctx *gin.Context) {
 		for _, policy := range catalog.Policies {
 			policies = append(policies, newPolicyResponse(policy))
 		}
-		platforms = append(platforms, PlatformResponse{PlatformID: catalog.PlatformID, PlatformCode: catalog.PlatformCode, PlatformName: catalog.PlatformName, Version: catalog.Version, Policies: policies})
+		platforms = append(platforms, PlatformResponse{PlatformID: catalog.PlatformID, PlatformCode: catalog.PlatformCode, PlatformName: catalog.PlatformName, Policies: policies})
 	}
 	response.OK(ctx, http.StatusOK, ListResponse{Platforms: platforms})
 }
@@ -53,5 +53,5 @@ func (h *Handler) Update(ctx *gin.Context) {
 		response.Fail(ctx, notFound(fmt.Errorf("rate limit policy %q is missing", key)))
 		return
 	}
-	response.OK(ctx, http.StatusOK, UpdateResponse{PlatformID: catalog.PlatformID, Version: catalog.Version, Policy: newPolicyResponse(policy)})
+	response.OK(ctx, http.StatusOK, UpdateResponse{PlatformID: catalog.PlatformID, Policy: newPolicyResponse(policy)})
 }

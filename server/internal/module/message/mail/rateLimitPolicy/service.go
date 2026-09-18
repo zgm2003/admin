@@ -4,18 +4,30 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"admin/server/internal/shared/apperror"
+	cachegeneration "admin/server/internal/shared/cacheGeneration"
 	"gorm.io/gorm"
 )
 
-type Service struct {
-	repository *Repository
-	store      Store
+type serviceRepository interface {
+	List(context.Context, int64) (Catalog, error)
+	ListAll(context.Context) ([]Catalog, error)
+	Update(context.Context, int64, Input, int64, time.Time) (Catalog, cachegeneration.MutationResult, error)
 }
 
-func NewService(repository *Repository, store Store) *Service {
-	return &Service{repository: repository, store: store}
+type Service struct {
+	repository serviceRepository
+	runtime    RuntimeCoordinator
+}
+
+func NewService(repository serviceRepository) *Service {
+	return &Service{repository: repository}
+}
+
+func (s *Service) SetRuntimeCoordinator(runtime RuntimeCoordinator) {
+	s.runtime = runtime
 }
 
 func (s *Service) List(ctx context.Context, platformID int64) (Catalog, error) {
@@ -41,10 +53,16 @@ func (s *Service) Update(ctx context.Context, platformID int64, input Input) (Ca
 	if err := ValidateInput(input); err != nil {
 		return Catalog{}, invalid(err)
 	}
-	if s.store == nil {
-		return Catalog{}, unavailable(fmt.Errorf("rate limit policy store is unavailable"))
+	if s.runtime == nil {
+		return Catalog{}, unavailable(fmt.Errorf("mail runtime coordinator is unavailable"))
 	}
-	catalog, err := s.store.Update(ctx, platformID, input)
+	var catalog Catalog
+	err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+		var mutation cachegeneration.MutationResult
+		var updateErr error
+		catalog, mutation, updateErr = s.repository.Update(writeContext, platformID, input, expected, time.Now().UTC())
+		return mutation, updateErr
+	})
 	if err != nil {
 		var applicationError *apperror.Error
 		if errors.As(err, &applicationError) && applicationError.Code == apperror.CodeNotFound {

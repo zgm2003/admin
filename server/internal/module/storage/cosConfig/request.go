@@ -29,11 +29,12 @@ type CreateInput struct {
 	IsEnabled                                        yesno.Value
 	Remark                                           string
 }
+// UpdateInput 保持 last-write-wins：AppID 创建后不可修改，也没有任何 expected generation/revision 字段。
 type UpdateInput struct {
-	Name, AppID, Bucket, Region string
-	Endpoint, BucketDomain      *string
-	SecretID, SecretKey         SecretInput
-	Remark                      string
+	Name, Bucket, Region   string
+	Endpoint, BucketDomain *string
+	SecretID, SecretKey    SecretInput
+	Remark                 string
 }
 
 type createRequest struct {
@@ -62,7 +63,6 @@ func (r createRequest) input() (CreateInput, error) {
 
 type updateRequest struct {
 	Name         *string               `json:"name"`
-	AppID        *string               `json:"appId"`
 	SecretID     json.RawMessage       `json:"secretId"`
 	SecretKey    json.RawMessage       `json:"secretKey"`
 	Bucket       *string               `json:"bucket"`
@@ -86,7 +86,7 @@ func parseSecretInput(raw json.RawMessage) (SecretInput, error) {
 	return SecretInput{Present: true, Value: value}, nil
 }
 func (r updateRequest) input() (UpdateInput, error) {
-	if r.Name == nil || r.AppID == nil || r.Bucket == nil || r.Region == nil || r.Remark == nil {
+	if r.Name == nil || r.Bucket == nil || r.Region == nil || r.Remark == nil {
 		return UpdateInput{}, fmt.Errorf("every COS config metadata field is required")
 	}
 	sid, e := parseSecretInput(r.SecretID)
@@ -97,7 +97,7 @@ func (r updateRequest) input() (UpdateInput, error) {
 	if e != nil {
 		return UpdateInput{}, e
 	}
-	input := UpdateInput{Name: *r.Name, AppID: *r.AppID, Bucket: *r.Bucket, Region: *r.Region, Endpoint: r.Endpoint.Value, BucketDomain: r.BucketDomain.Value, SecretID: sid, SecretKey: skey, Remark: *r.Remark}
+	input := UpdateInput{Name: *r.Name, Bucket: *r.Bucket, Region: *r.Region, Endpoint: r.Endpoint.Value, BucketDomain: r.BucketDomain.Value, SecretID: sid, SecretKey: skey, Remark: *r.Remark}
 	if err := validateUpdate(input); err != nil {
 		return UpdateInput{}, err
 	}
@@ -184,9 +184,6 @@ func validateCreate(input CreateInput) error {
 }
 func validateUpdate(input UpdateInput) error {
 	if err := validateText("name", input.Name, 128); err != nil {
-		return err
-	}
-	if err := validateText("appID", input.AppID, 32); err != nil {
 		return err
 	}
 	if err := validateText("bucket", input.Bucket, 128); err != nil {

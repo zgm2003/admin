@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"unicode"
 )
 
 type ListQuery struct {
@@ -27,13 +26,14 @@ type CreateInput struct {
 	IsEnabled                           yesno.Value
 	Remark                              string
 }
+
+// UpdateInput 保持 last-write-wins：platform/config/access 创建后不可修改，也没有任何 expected 字段。
 type UpdateInput struct {
 	Codes                               []string
 	Name                                string
-	CosConfigID                         int64
 	MaxFileSizeBytes                    int64
 	AllowedExtensions, AllowedMimeTypes []string
-	AccessMode, Remark                  string
+	Remark                              string
 }
 type FileInput struct {
 	FileName      string `json:"fileName"`
@@ -59,15 +59,16 @@ type createRequest struct {
 type updateRequest struct {
 	Codes             []string `json:"codes"`
 	Name              string   `json:"name"`
-	CosConfigID       int64    `json:"cosConfigId"`
 	MaxFileSizeBytes  int64    `json:"maxFileSizeBytes"`
 	AllowedExtensions []string `json:"allowedExtensions"`
 	AllowedMimeTypes  []string `json:"allowedMimeTypes"`
-	AccessMode        string   `json:"accessMode"`
 	Remark            string   `json:"remark"`
 }
 type statusRequest struct {
 	IsEnabled *yesno.Value `json:"isEnabled"`
+}
+type objectURLRequest struct {
+	ObjectKey string `json:"objectKey"`
 }
 
 func normalize(input []string, ext bool) []string {
@@ -86,15 +87,15 @@ func normalize(input []string, ext bool) []string {
 	return out
 }
 func validateFields(platformID int64, codes []string, name string, configID int64, size int64, ext, mime []string, mode, remark string, requirePlatform bool) error {
-	if requirePlatform && platformID < 1 || configID < 1 {
+	if requirePlatform && (platformID < 1 || configID < 1) {
 		return fmt.Errorf("platformId/cosConfigId invalid")
 	}
 	if len(codes) == 0 || strings.TrimSpace(name) == "" || len(name) > 128 {
 		return fmt.Errorf("code/name invalid")
 	}
 	for _, code := range codes {
-		if code == "" || len(code) > 64 || strings.HasPrefix(code, "/") || strings.HasSuffix(code, "/") || strings.Contains(code, "..") || strings.IndexFunc(code, func(r rune) bool { return unicode.IsControl(r) }) >= 0 {
-			return fmt.Errorf("code/name invalid")
+		if !validCode(code) {
+			return fmt.Errorf("code invalid")
 		}
 	}
 	if size < 1 || size > 5*1024*1024*1024 {
@@ -103,7 +104,7 @@ func validateFields(platformID int64, codes []string, name string, configID int6
 	if len(ext) == 0 {
 		return fmt.Errorf("allowedExtensions required")
 	}
-	if mode != "private" && mode != "public" {
+	if requirePlatform && mode != "private" && mode != "public" {
 		return fmt.Errorf("accessMode invalid")
 	}
 	if len(remark) > 512 {
@@ -131,10 +132,10 @@ func (r updateRequest) input() (UpdateInput, error) {
 	r.Remark = strings.TrimSpace(r.Remark)
 	r.AllowedExtensions = normalize(r.AllowedExtensions, true)
 	r.AllowedMimeTypes = normalize(r.AllowedMimeTypes, false)
-	if err := validateFields(1, r.Codes, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark, false); err != nil {
+	if err := validateFields(1, r.Codes, r.Name, 1, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, "", r.Remark, false); err != nil {
 		return UpdateInput{}, err
 	}
-	return UpdateInput{r.Codes, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark}, nil
+	return UpdateInput{r.Codes, r.Name, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.Remark}, nil
 }
 func parseListQuery(v url.Values) (ListQuery, error) {
 	allowed := map[string]bool{"page": true, "pageSize": true, "platformId": true, "cosConfigId": true, "keyword": true, "isEnabled": true}

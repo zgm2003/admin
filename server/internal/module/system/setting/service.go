@@ -22,8 +22,10 @@ import (
 
 const (
 	// settingReadBudget 是热读失败闭合的上限：followers 最多等待约 500ms。
-	settingReadBudget = 500 * time.Millisecond
-	settingFillWait   = 20 * time.Millisecond
+	settingReadBudget  = 500 * time.Millisecond
+	settingFillWait    = 20 * time.Millisecond
+	settingWriteBudget = 500 * time.Millisecond
+	settingWriteWait   = 20 * time.Millisecond
 )
 
 // ErrGenerationAdvanced 表示回源期间 generation 已变化：必须丢弃结果并重试完整读流程。
@@ -32,12 +34,12 @@ var ErrGenerationAdvanced = errors.New("setting cache generation advanced during
 type repository interface {
 	List(context.Context, ListQuery) ([]Record, int64, error)
 	Find(context.Context, string) (Record, error)
-	Create(context.Context, *Record, int64) (MutationResult, error)
-	Update(context.Context, string, Record, int64) (MutationResult, error)
-	UpdateStatus(context.Context, string, yesno.Value, int64, time.Time) (MutationResult, error)
-	Delete(context.Context, string, int64, time.Time) (MutationResult, error)
+	Create(context.Context, *Record, int64) (cachegeneration.MutationResult, error)
+	Update(context.Context, string, Record, int64) (cachegeneration.MutationResult, error)
+	UpdateStatus(context.Context, string, yesno.Value, int64, time.Time) (cachegeneration.MutationResult, error)
+	Delete(context.Context, string, int64, time.Time) (cachegeneration.MutationResult, error)
 	FindBrand(context.Context) (BrandSettings, error)
-	UpdateBrand(context.Context, BrandSettings, int64, time.Time) (MutationResult, error)
+	UpdateBrand(context.Context, BrandSettings, int64, time.Time) (cachegeneration.MutationResult, error)
 }
 
 type settingCache interface {
@@ -59,6 +61,10 @@ type Service struct {
 	scope         cachegeneration.Scope
 	renewInterval time.Duration
 	readBudget    time.Duration
+	writeBudget   time.Duration
+	waitStep      time.Duration
+	now           func() time.Time
+	wait          func(context.Context, time.Duration) error
 }
 
 func NewService(repository repository) *Service {
@@ -68,6 +74,10 @@ func NewService(repository repository) *Service {
 		scope:         settingGenerationScope,
 		renewInterval: cachegeneration.MutationRenewInterval,
 		readBudget:    settingReadBudget,
+		writeBudget:   settingWriteBudget,
+		waitStep:      settingWriteWait,
+		now:           time.Now,
+		wait:          waitForSettingRetry,
 	}
 }
 
@@ -83,6 +93,18 @@ func (s *Service) SetLogger(logger *slog.Logger) {
 	if logger != nil {
 		s.logger = logger
 	}
+}
+
+func (s *Service) ValidateDependencies() error {
+	if s == nil || s.repository == nil || s.cache == nil || s.generations == nil || s.states == nil {
+		return fmt.Errorf("setting cache generation dependencies are not configured")
+	}
+	if cache, ok := s.cache.(interface{ ValidateDependencies() error }); ok {
+		if err := cache.ValidateDependencies(); err != nil {
+			return err
+		}
+	}
+	return s.scope.Validate()
 }
 
 // Brand 读取同一 generation 下的单 brand 快照：一次 PostgreSQL 查询装入三字段。
@@ -106,8 +128,8 @@ func (s *Service) UpdateBrand(ctx context.Context, brand BrandSettings) error {
 	if brand.DefaultAvatar != "" && (!strings.HasPrefix(brand.DefaultAvatar, "avatar/") || strings.Contains(brand.DefaultAvatar, "..") || strings.ContainsAny(brand.DefaultAvatar, "\\\r\n\t")) {
 		return apperror.InvalidRequest(fmt.Errorf("brand avatar is invalid"))
 	}
-	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (MutationResult, error) {
-		return s.repository.UpdateBrand(mutationCtx, brand, expected, time.Now().UTC())
+	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (cachegeneration.MutationResult, error) {
+		return s.repository.UpdateBrand(mutationCtx, brand, expected, s.now().UTC())
 	})
 }
 
@@ -160,9 +182,9 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 	} else if err != nil && !errors.Is(err, ErrNotFound) {
 		return 0, apperror.DependencyUnavailable(err)
 	}
-	now := time.Now().UTC()
+	now := s.now().UTC()
 	row := Record{Key: input.Key, Value: input.Value, ValueType: input.ValueType, Description: input.Description, IsEnabled: yesno.Yes, IsBuiltin: yesno.No, CreatedAt: now, UpdatedAt: now}
-	if err := s.mutate(ctx, func(mutationCtx context.Context, expected int64) (MutationResult, error) {
+	if err := s.mutate(ctx, func(mutationCtx context.Context, expected int64) (cachegeneration.MutationResult, error) {
 		return s.repository.Create(mutationCtx, &row, expected)
 	}); err != nil {
 		return 0, err
@@ -183,8 +205,8 @@ func (s *Service) Update(ctx context.Context, key string, input UpdateInput) err
 	if err := validateInput(key, input.Value, input.ValueType, input.Description); err != nil {
 		return apperror.InvalidRequest(err)
 	}
-	current.Value, current.ValueType, current.Description, current.UpdatedAt = input.Value, input.ValueType, input.Description, time.Now().UTC()
-	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (MutationResult, error) {
+	current.Value, current.ValueType, current.Description, current.UpdatedAt = input.Value, input.ValueType, input.Description, s.now().UTC()
+	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (cachegeneration.MutationResult, error) {
 		return s.repository.Update(mutationCtx, key, current, expected)
 	})
 }
@@ -199,8 +221,8 @@ func (s *Service) UpdateStatus(ctx context.Context, key string, status yesno.Val
 	} else if err != nil {
 		return apperror.DependencyUnavailable(err)
 	}
-	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (MutationResult, error) {
-		return s.repository.UpdateStatus(mutationCtx, key, status, expected, time.Now().UTC())
+	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (cachegeneration.MutationResult, error) {
+		return s.repository.UpdateStatus(mutationCtx, key, status, expected, s.now().UTC())
 	})
 }
 
@@ -216,26 +238,51 @@ func (s *Service) Delete(ctx context.Context, key string) error {
 	if row.IsBuiltin == yesno.Yes {
 		return apperror.Conflict("error.conflict", nil, fmt.Errorf("builtin setting cannot be deleted"))
 	}
-	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (MutationResult, error) {
-		return s.repository.Delete(mutationCtx, key, expected, time.Now().UTC())
+	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (cachegeneration.MutationResult, error) {
+		return s.repository.Delete(mutationCtx, key, expected, s.now().UTC())
 	})
 }
 
-// mutate 固定 mutation 顺序：读取 current generation -> Acquire lease ->
-// 启动带 cancel 的续租 -> 业务事务 -> 停续租 -> commit/rollback Redis state ->
-// 同步标记 outbox。PostgreSQL 已提交后 Redis 发布失败不再是业务失败。
-func (s *Service) mutate(ctx context.Context, apply func(context.Context, int64) (MutationResult, error)) error {
+// mutate 在 500ms 预算内重复完整 mutation 尝试；只重试内部代际竞争，
+// Redis I/O、非法 state 和业务错误直接失败闭合。
+func (s *Service) mutate(ctx context.Context, apply func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
 	if s.generations == nil || s.states == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("setting mutation requires cache generation dependencies"))
 	}
+	deadline := s.now().Add(s.writeBudget)
+	for {
+		if err := ctx.Err(); err != nil {
+			return apperror.DependencyUnavailable(err)
+		}
+		err := s.mutateOnce(ctx, apply)
+		switch {
+		case err == nil:
+			return nil
+		case errors.Is(err, cachegeneration.ErrUpdating), errors.Is(err, cachegeneration.ErrGenerationChanged):
+			if !s.now().Before(deadline) {
+				return apperror.DependencyUnavailable(fmt.Errorf("setting mutation budget exhausted: %w", err))
+			}
+			if waitErr := s.wait(ctx, s.waitStep); waitErr != nil {
+				return apperror.DependencyUnavailable(waitErr)
+			}
+		default:
+			return mapMutationError(err)
+		}
+	}
+}
+
+// mutateOnce 固定单次顺序：读取 current generation -> Acquire lease ->
+// 启动带 cancel 的续租 -> 业务事务 -> 停续租 -> commit/rollback Redis state ->
+// 同步标记 outbox。PostgreSQL 已提交后 Redis 发布失败不再是业务失败。
+func (s *Service) mutateOnce(ctx context.Context, apply func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
 	scope := s.scope
 	base, err := s.generations.Current(ctx, scope)
 	if err != nil {
-		return apperror.DependencyUnavailable(err)
+		return err
 	}
 	lease, err := s.acquireLease(ctx, scope, base)
 	if err != nil {
-		return mapGenerationError(err)
+		return err
 	}
 	mutationCtx, stopRenewal := s.startRenewal(ctx, lease)
 	result, applyErr := apply(mutationCtx, base)
@@ -247,7 +294,7 @@ func (s *Service) mutate(ctx context.Context, apply func(context.Context, int64)
 	if !result.Changed {
 		// no-op：不推进 generation，恢复原 ready。
 		if err := lease.Rollback(ctx); err != nil {
-			return apperror.DependencyUnavailable(err)
+			return err
 		}
 		return nil
 	}
@@ -255,7 +302,7 @@ func (s *Service) mutate(ctx context.Context, apply func(context.Context, int64)
 		s.logGenerationFailure("publish setting generation failed", scope, result.Generation, result.OutboxID, err)
 		return nil
 	}
-	if _, err := s.generations.MarkPublishedIfUnclaimed(ctx, result.OutboxID, time.Now().UTC()); err != nil {
+	if _, err := s.generations.MarkPublishedIfUnclaimed(ctx, result.OutboxID, s.now().UTC()); err != nil {
 		s.logGenerationFailure("mark setting outbox published failed", scope, result.Generation, result.OutboxID, err)
 	}
 	return nil
@@ -307,21 +354,21 @@ func (s *Service) startRenewal(parent context.Context, lease *cachegeneration.Le
 func (s *Service) finishFailedMutation(ctx context.Context, scope cachegeneration.Scope, lease *cachegeneration.Lease, base int64, applyErr error) error {
 	current, readErr := s.generations.Current(ctx, scope)
 	if readErr != nil {
-		return apperror.DependencyUnavailable(errors.Join(applyErr, readErr))
+		return errors.Join(applyErr, readErr)
 	}
 	if current > base {
 		if err := lease.Commit(ctx, current); err != nil {
 			s.logGenerationFailure("publish setting generation after uncertain commit failed", scope, current, 0, err)
 		}
 		if errors.Is(applyErr, errMutationRolledBack) {
-			return mapMutationError(applyErr)
+			return applyErr
 		}
 		return nil
 	}
 	if err := lease.Rollback(ctx); err != nil {
-		return apperror.DependencyUnavailable(errors.Join(applyErr, err))
+		return errors.Join(applyErr, err)
 	}
-	return mapMutationError(applyErr)
+	return applyErr
 }
 
 // readSettingCache 是共享热读协议：只从捕获到的 ready generation 读取不可变快照；
@@ -524,19 +571,21 @@ func mapMutationError(err error) error {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		return apperror.NotFound(err)
-	case errors.Is(err, ErrConflict), errors.Is(err, cachegeneration.ErrGenerationChanged):
+	case errors.Is(err, ErrConflict):
 		return apperror.Conflict("error.conflict", nil, err)
 	default:
 		return apperror.DependencyUnavailable(err)
 	}
 }
 
-func mapGenerationError(err error) error {
-	switch {
-	case errors.Is(err, cachegeneration.ErrUpdating), errors.Is(err, cachegeneration.ErrGenerationChanged):
-		return apperror.Conflict("error.conflict", nil, err)
-	default:
-		return apperror.DependencyUnavailable(err)
+func waitForSettingRetry(ctx context.Context, duration time.Duration) error {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
 

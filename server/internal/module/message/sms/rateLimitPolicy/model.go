@@ -16,7 +16,6 @@ type Model struct {
 	Dimension     string    `gorm:"column:dimension;type:varchar(64);not null"`
 	Limit         int       `gorm:"column:limit_count;not null"`
 	WindowSeconds int       `gorm:"column:window_seconds;not null"`
-	Revision      int64     `gorm:"column:revision;not null"`
 	CreatedAt     time.Time `gorm:"column:created_at;not null"`
 	UpdatedAt     time.Time `gorm:"column:updated_at;not null"`
 }

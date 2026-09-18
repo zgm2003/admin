@@ -107,6 +107,23 @@ type routerDependencies struct {
 	RequirePermission func(string) gin.HandlerFunc
 }
 
+type runtimeDependency struct {
+	name     string
+	validate func() error
+}
+
+func validateRuntimeDependencies(dependencies ...runtimeDependency) error {
+	for _, dependency := range dependencies {
+		if dependency.name == "" || dependency.validate == nil {
+			return fmt.Errorf("runtime dependency declaration is invalid")
+		}
+		if err := dependency.validate(); err != nil {
+			return fmt.Errorf("validate runtime dependency %s: %w", dependency.name, err)
+		}
+	}
+	return nil
+}
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	if err := run(logger); err != nil {
@@ -167,33 +184,57 @@ func run(logger *slog.Logger) error {
 
 	healthService := health.NewService(postgres, redisClient)
 	userRepository := account.NewRepository(postgres.GORM)
-	settingGenerationRepository := cachegeneration.NewRepository(postgres.GORM)
-	settingGenerationStore := cachegeneration.NewStore(redisClient)
+	configGenerationRepository := cachegeneration.NewRepository(postgres.GORM)
+	configGenerationStore := cachegeneration.NewStore(redisClient)
 	settingRepository := systemsetting.NewRepository(postgres.GORM)
-	settingRepository.SetGenerations(settingGenerationRepository)
+	settingRepository.SetGenerations(configGenerationRepository)
 	settingService := systemsetting.NewService(settingRepository)
 	settingCache := systemsetting.NewCache(redisClient)
-	settingCache.SetStateStore(settingGenerationStore)
+	settingCache.SetStateStore(configGenerationStore)
 	settingService.SetCache(settingCache)
-	cacheGenerationService := systemcachegeneration.NewService(systemcachegeneration.NewRepository(postgres.GORM), settingGenerationStore)
-	settingService.SetGenerations(settingGenerationRepository, settingGenerationStore)
+	cacheGenerationService := systemcachegeneration.NewService(systemcachegeneration.NewRepository(postgres.GORM), configGenerationStore)
+	settingService.SetGenerations(configGenerationRepository, configGenerationStore)
 	settingService.SetLogger(logger)
 	profileRepository := profile.NewRepository(postgres.GORM)
 	sessionRepository := usersession.NewRepository(postgres.GORM)
 	authPlatformRepository := authplatform.NewRepository(postgres.GORM)
 	mailRateLimitRepository := ratelimitpolicy.NewRepository(postgres.GORM)
+	mailGenerationScope := messagemail.CacheGenerationScope()
+	smsGenerationScope := messagesms.CacheGenerationScope()
 	authPlatformRepository.SetRateLimitPolicyLifecycle(
-		func(ctx context.Context, tx *gorm.DB, platformID int64) error {
+		func(ctx context.Context, tx *gorm.DB, platformID int64, expected authplatform.RateLimitGenerationBases, now time.Time) (authplatform.RateLimitGenerationEvents, error) {
 			if err := ratelimitpolicy.NewRepository(tx).ProvisionDefaults(ctx, platformID); err != nil {
-				return err
+				return authplatform.RateLimitGenerationEvents{}, err
 			}
-			return smsratelimitpolicy.NewRepository(tx).ProvisionDefaults(ctx, platformID, time.Now().UTC())
+			if err := smsratelimitpolicy.NewRepository(tx).ProvisionDefaults(ctx, platformID, now); err != nil {
+				return authplatform.RateLimitGenerationEvents{}, err
+			}
+			mailEvent, err := configGenerationRepository.AdvanceTx(ctx, tx, mailGenerationScope, expected.Mail, now)
+			if err != nil {
+				return authplatform.RateLimitGenerationEvents{}, err
+			}
+			smsEvent, err := configGenerationRepository.AdvanceTx(ctx, tx, smsGenerationScope, expected.SMS, now)
+			if err != nil {
+				return authplatform.RateLimitGenerationEvents{}, err
+			}
+			return authplatform.RateLimitGenerationEvents{Mail: mailEvent, SMS: smsEvent}, nil
 		},
-		func(ctx context.Context, tx *gorm.DB, platformID int64) error {
+		func(ctx context.Context, tx *gorm.DB, platformID int64, expected authplatform.RateLimitGenerationBases, now time.Time) (authplatform.RateLimitGenerationEvents, error) {
 			if err := ratelimitpolicy.NewRepository(tx).DeleteForPlatform(ctx, platformID); err != nil {
-				return err
+				return authplatform.RateLimitGenerationEvents{}, err
 			}
-			return smsratelimitpolicy.NewRepository(tx).DeleteForPlatform(ctx, platformID)
+			if err := smsratelimitpolicy.NewRepository(tx).DeleteForPlatform(ctx, platformID); err != nil {
+				return authplatform.RateLimitGenerationEvents{}, err
+			}
+			mailEvent, err := configGenerationRepository.AdvanceTx(ctx, tx, mailGenerationScope, expected.Mail, now)
+			if err != nil {
+				return authplatform.RateLimitGenerationEvents{}, err
+			}
+			smsEvent, err := configGenerationRepository.AdvanceTx(ctx, tx, smsGenerationScope, expected.SMS, now)
+			if err != nil {
+				return authplatform.RateLimitGenerationEvents{}, err
+			}
+			return authplatform.RateLimitGenerationEvents{Mail: mailEvent, SMS: smsEvent}, nil
 		},
 	)
 	policyStore := authplatform.NewPolicyStore(redisClient)
@@ -203,6 +244,7 @@ func run(logger *slog.Logger) error {
 		CookieSecure: settings.Auth.CookieSecure, CORSOrigin: settings.CORSOrigin,
 		TrustedProxyMode: settings.TrustedProxyMode, TrustedProxyCount: len(settings.TrustedProxies),
 	})
+	authPlatformService.SetRateLimitCacheGenerations(configGenerationRepository, configGenerationStore, mailGenerationScope, smsGenerationScope)
 	authService := auth.NewService(
 		userRepository,
 		roleRepository,
@@ -227,39 +269,62 @@ func run(logger *slog.Logger) error {
 	userService := account.NewService(userRepository, authStateStore, authInvalidator, accessStateStore, accessInvalidator)
 	profileService := profile.NewService(profileRepository)
 	cosClient := storagecos.NewClient(nil)
-	cosConfigService := cosconfig.NewService(cosconfig.NewRepository(postgres.GORM), keys, cosClient)
-	uploadRuleService := uploadrule.NewService(uploadrule.NewRepository(postgres.GORM), keys, cosClient)
+	cosConfigRepository := cosconfig.NewRepository(postgres.GORM)
+	cosConfigRepository.SetGenerations(configGenerationRepository)
+	cosConfigService := cosconfig.NewService(cosConfigRepository, keys, cosClient)
+	cosConfigCache := cosconfig.NewCache(redisClient)
+	cosConfigCache.SetStateStore(configGenerationStore)
+	cosConfigService.SetCache(cosConfigCache)
+	cosConfigService.SetGenerations(configGenerationRepository, configGenerationStore)
+	cosConfigService.SetLogger(logger)
+	uploadRuleRepository := uploadrule.NewRepository(postgres.GORM)
+	uploadRouteCache := uploadrule.NewRouteCache(redisClient)
+	uploadRuleService := uploadrule.NewService(uploadRuleRepository, keys, cosClient, cosConfigService, uploadRouteCache)
 	loginLogService := loginlog.NewService(loginlog.NewRepository(postgres.GORM))
 	mailStores := messagemail.NewStores(postgres.GORM)
 	mailLimiter := messagemail.NewRedisLimiter(redisClient.UniversalClient())
+	mailRateLimitRepository.SetGenerations(configGenerationRepository, messagemail.CacheGenerationScope())
 	mailRateLimitStore := ratelimitpolicy.NewStore(mailRateLimitRepository, redisClient)
-	mailRateLimitService := ratelimitpolicy.NewService(mailRateLimitRepository, mailRateLimitStore)
-	mailReadinessStore := messagemail.NewVerifyCodeReadinessStore(mailStores, redisClient)
-	mailReadinessCoordinator := messagemail.NewReadinessCoordinator(mailReadinessStore)
+	mailRateLimitStore.SetGenerations(configGenerationRepository, configGenerationStore)
+	mailRateLimitService := ratelimitpolicy.NewService(mailRateLimitRepository)
 	mailRuntimeStore := messagemail.NewRuntimeStore(mailStores, redisClient)
+	mailRuntimeStore.SetGenerations(configGenerationRepository, configGenerationStore)
+	mailRuntimeStore.SetLogger(logger)
+	mailRateLimitService.SetRuntimeCoordinator(mailRuntimeStore)
+	mailStores.Config.SetGenerations(configGenerationRepository, messagemail.CacheGenerationScope())
+	mailStores.Template.SetGenerations(configGenerationRepository, messagemail.CacheGenerationScope())
+	mailStores.RecipientRule.SetGenerations(configGenerationRepository, messagemail.CacheGenerationScope())
 	mailRecipientRuleRepository := mailStores.RecipientRule
 	mailRecipientRuleService := recipientrule.NewService(mailRecipientRuleRepository)
 	mailService := messagemail.NewService(mailStores, keys, storagemail.NewTencentSESClient(nil), mailRecipientRuleService, mailLimiter, mailRateLimitStore)
-	mailService.SetVerifyCodeReadinessStore(mailReadinessStore)
+	mailService.SetVerifyCodeReadinessStore(mailRuntimeStore)
 	mailService.SetRuntimeStore(mailRuntimeStore)
-	mailConfigService := mailconfig.NewService(mailStores.Config, keys, mailReadinessCoordinator)
+	mailConfigService := mailconfig.NewService(mailStores.Config, keys)
 	mailConfigService.SetRuntimeCoordinator(mailRuntimeStore)
-	mailTemplateService := mailtemplate.NewService(mailStores.Template, mailReadinessCoordinator)
+	mailTemplateService := mailtemplate.NewService(mailStores.Template)
 	mailTemplateService.SetRuntimeCoordinator(mailRuntimeStore)
 	mailLogService := maillog.NewService(mailStores.Log, mailStores.LogVerification, keys)
 	mailRecipientRuleService.SetRuntimeCoordinator(mailRuntimeStore)
 	smsRuntimeCache := messagesms.NewRuntimeCache(redisClient)
+	smsRuntimeCache.SetGenerations(configGenerationRepository, configGenerationStore)
+	smsRuntimeCache.SetLogger(logger)
 	smsConfigRepository := smsconfig.NewRepository(postgres.GORM)
+	smsConfigRepository.SetGenerations(configGenerationRepository, messagesms.CacheGenerationScope())
 	smsConfigService := smsconfig.NewService(smsConfigRepository, keys, smsRuntimeCache)
 	smsTemplateRepository := smstemplate.NewRepository(postgres.GORM)
+	smsTemplateRepository.SetGenerations(configGenerationRepository, messagesms.CacheGenerationScope())
 	smsTemplateService := smstemplate.NewService(smsTemplateRepository)
 	smsTemplateService.SetRuntimeCoordinator(smsRuntimeCache)
 	smsRecipientRuleRepository := smsrecipientrule.NewRepository(postgres.GORM)
+	smsRecipientRuleRepository.SetGenerations(configGenerationRepository, messagesms.CacheGenerationScope())
 	smsRecipientRuleService := smsrecipientrule.NewService(smsRecipientRuleRepository, keys)
 	smsRecipientRuleService.SetRuntimeCoordinator(smsRuntimeCache)
 	smsRateLimitRepository := smsratelimitpolicy.NewRepository(postgres.GORM)
+	smsRateLimitRepository.SetGenerations(configGenerationRepository, messagesms.CacheGenerationScope())
 	smsRateLimitStore := smsratelimitpolicy.NewStore(redisClient)
+	smsRateLimitStore.SetGenerations(configGenerationRepository, configGenerationStore)
 	smsRateLimitService := smsratelimitpolicy.NewService(smsRateLimitRepository, smsRateLimitStore)
+	smsRateLimitService.SetRuntimeCoordinator(smsRuntimeCache)
 	smsLogRepository := smslog.NewRepository(postgres.GORM)
 	smsLogVerificationRepository := smslogverification.NewRepository(postgres.GORM)
 	smsLogService := smslog.NewService(smsLogRepository, smsLogVerificationRepository, keys)
@@ -285,8 +350,27 @@ func run(logger *slog.Logger) error {
 	permissionService := permission.NewService(permissionRepository, accessStateStore, permission.NewSnapshotCache(redisClient), permission.NewLocalSnapshotCache(1024), logger, menuStateStore)
 	operationLogRepository := operationlog.NewRepository(postgres.GORM)
 	operationLogService := operationlog.NewService(operationLogRepository)
-	dictionaryService := dictionary.NewService(dictionary.NewRepository(postgres.GORM))
-	dictionaryService.SetCache(dictionary.NewOptionsCache(redisClient))
+	dictionaryRepository := dictionary.NewRepository(postgres.GORM)
+	dictionaryRepository.SetGenerations(configGenerationRepository, dictionary.CacheGenerationScope())
+	dictionaryCache := dictionary.NewOptionsCache(redisClient)
+	dictionaryCache.SetStateStore(configGenerationStore)
+	dictionaryService := dictionary.NewService(dictionaryRepository)
+	dictionaryService.SetCache(dictionaryCache)
+	dictionaryService.SetGenerations(configGenerationRepository, configGenerationStore)
+	dictionaryService.SetLogger(logger)
+	if err := validateRuntimeDependencies(
+		runtimeDependency{name: "system.setting/global", validate: settingService.ValidateDependencies},
+		runtimeDependency{name: "system.dictionary/global", validate: dictionaryService.ValidateDependencies},
+		runtimeDependency{name: "message.mail/global runtime", validate: mailRuntimeStore.ValidateDependencies},
+		runtimeDependency{name: "message.mail/global rate-limit", validate: mailRateLimitStore.ValidateDependencies},
+		runtimeDependency{name: "message.sms/global runtime", validate: smsRuntimeCache.ValidateDependencies},
+		runtimeDependency{name: "message.sms/global rate-limit", validate: smsRateLimitStore.ValidateDependencies},
+		runtimeDependency{name: "permission.authPlatform mail/sms generation", validate: authPlatformService.ValidateRateLimitCacheDependencies},
+		runtimeDependency{name: "storage.cosconfig/<positive config id>", validate: cosConfigService.ValidateDependencies},
+		runtimeDependency{name: "storage.object-route/v2", validate: uploadRuleService.ValidateDependencies},
+	); err != nil {
+		return err
+	}
 	operationLogEnqueuer := operationlog.NewQueueEnqueuer(queueClient)
 	authenticate := auth.Authenticate(authService)
 	router := buildRouter(routerDependencies{

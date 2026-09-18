@@ -30,7 +30,10 @@ describe('admin layout', () => {
     logoutMock.mockReset()
     logoutMock.mockResolvedValue()
     requestObjectURLMock.mockReset()
-    requestObjectURLMock.mockResolvedValue({ url: 'https://cdn.example.com/default.png' })
+		requestObjectURLMock.mockResolvedValue({
+			url: 'https://cdn.example.com/default.png',
+			expiresAt: null,
+		})
     getBrandSettingsMock.mockReset()
     getBrandSettingsMock.mockResolvedValue({
       titleZhCN: '智澜管理台',

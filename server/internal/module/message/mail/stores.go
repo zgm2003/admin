@@ -39,3 +39,11 @@ func (s *Stores) FindConfig(ctx context.Context) (Config, error) {
 func (s *Stores) FindTemplateByScene(ctx context.Context, scene string) (Template, error) {
 	return s.Template.FindByScene(ctx, scene)
 }
+
+func (s *Stores) ListTemplates(ctx context.Context) ([]Template, error) {
+	return s.Template.List(ctx)
+}
+
+func (s *Stores) ListRecipientRules(ctx context.Context) ([]RecipientRule, error) {
+	return s.RecipientRule.List(ctx)
+}

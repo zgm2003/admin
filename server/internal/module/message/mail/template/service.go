@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -19,7 +20,6 @@ import (
 
 type Service struct {
 	repository *Repository
-	readiness  ReadinessCoordinator
 	runtime    RuntimeCoordinator
 }
 
@@ -27,8 +27,8 @@ func (s *Service) SetRuntimeCoordinator(runtime RuntimeCoordinator) {
 	s.runtime = runtime
 }
 
-func NewService(repository *Repository, readiness ReadinessCoordinator) *Service {
-	return &Service{repository: repository, readiness: readiness}
+func NewService(repository *Repository) *Service {
+	return &Service{repository: repository}
 }
 
 func (s *Service) List(ctx context.Context) ([]Safe, error) {
@@ -82,11 +82,11 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 	if s.runtime == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	err = s.runtime.Mutate(ctx, func(writeContext context.Context) error {
-		return s.repository.Update(writeContext, id, map[string]any{
+	err = s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+		return s.repository.Update(writeContext, id, input.Scene, map[string]any{
 			"name": strings.TrimSpace(input.Name), "subject": strings.TrimSpace(input.Subject), "content": strings.TrimSpace(input.Content),
-			"tencent_template_id": input.TencentTemplateID, "variable_keys": variableKeys, "example_variables": examples, "updated_at": time.Now().UTC(),
-		})
+			"tencent_template_id": input.TencentTemplateID, "variable_keys": variableKeys, "example_variables": examples,
+		}, expected, time.Now().UTC())
 	})
 	err = wrapRepository(err)
 	return err
@@ -95,9 +95,6 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 func (s *Service) SetStatus(ctx context.Context, id int64, enabled yesno.Value) error {
 	if !yesno.IsValid(enabled) {
 		return apperror.InvalidRequest(fmt.Errorf("status invalid"))
-	}
-	if s.readiness == nil {
-		return apperror.DependencyUnavailable(fmt.Errorf("mail readiness coordinator unavailable"))
 	}
 	if s.runtime == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
@@ -114,12 +111,8 @@ func (s *Service) SetStatus(ctx context.Context, id int64, enabled yesno.Value) 
 			return apperror.InvalidRequest(err)
 		}
 	}
-	err = s.readiness.Mutate(ctx, func(writeContext context.Context) error {
-		return s.runtime.Mutate(writeContext, func(runtimeContext context.Context) error {
-			return s.repository.Update(runtimeContext, id, map[string]any{
-				"is_enabled": enabled, "updated_at": time.Now().UTC(),
-			})
-		})
+	err = s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+		return s.repository.UpdateStatus(writeContext, id, enabled, expected, time.Now().UTC())
 	})
 	if mapped := mapMutationError(err); mapped != nil {
 		return mapped

@@ -4,6 +4,7 @@ import type { PageRequest, PageResult } from '@/types/pagination'
 import {
   expectArray,
   expectEmptyObject,
+  expectExactKeys,
   expectId,
   expectInteger,
   expectPage,
@@ -35,7 +36,7 @@ export interface UploadRuleQuery extends PageRequest {
   keyword?: string
   isEnabled?: YesNo
 }
-interface UploadRuleMutableInput {
+interface UploadRuleCreateFields {
   codes: string[]
   name: string
   cosConfigId: number
@@ -45,11 +46,18 @@ interface UploadRuleMutableInput {
   accessMode: 'private' | 'public'
   remark: string
 }
-export interface CreateUploadRuleInput extends UploadRuleMutableInput {
+export interface CreateUploadRuleInput extends UploadRuleCreateFields {
   platformId: number
   isEnabled: YesNo
 }
-export type UpdateUploadRuleInput = UploadRuleMutableInput
+export interface UpdateUploadRuleInput {
+  codes: string[]
+  name: string
+  maxFileSizeBytes: number
+  allowedExtensions: string[]
+  allowedMimeTypes: string[]
+  remark: string
+}
 export interface PlatformOption {
   id: number
   code: string
@@ -136,7 +144,28 @@ export async function deleteUploadRule(id: number): Promise<Record<string, never
 }
 
 function parseUploadRule(value: unknown, index: number): UploadRule {
-  const item = expectRecord(value, `upload rules[${index}]`)
+  const item = expectExactKeys(
+    value,
+    [
+      'id',
+      'platformId',
+      'platformCode',
+      'platformName',
+      'codes',
+      'name',
+      'cosConfigId',
+      'cosConfigName',
+      'maxFileSizeBytes',
+      'allowedExtensions',
+      'allowedMimeTypes',
+      'accessMode',
+      'isEnabled',
+      'remark',
+      'createdAt',
+      'updatedAt',
+    ] as const,
+    `upload rules[${index}]`,
+  )
   const accessMode = item.accessMode
   const isEnabled = item.isEnabled
   if (accessMode !== 'private' && accessMode !== 'public')

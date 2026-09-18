@@ -3,7 +3,6 @@ package dictionary
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,83 +15,65 @@ import (
 
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/cacheFill"
+	"admin/server/internal/shared/cacheGeneration"
 )
 
-const dictionaryCacheSchema = 1
+const (
+	dictionaryCacheSchema = 1
+	dictionaryCacheTTL    = 10 * time.Minute
+)
+
+var (
+	dictionaryGenerationScope = cachegeneration.Scope{Namespace: "system.dictionary", ScopeKey: "global"}
+	ErrOptionsSnapshotCorrupt = errors.New("dictionary options snapshot is corrupt")
+)
+
+func CacheGenerationScope() cachegeneration.Scope { return dictionaryGenerationScope }
 
 type optionsCache struct {
 	redis *projectredis.Client
+	store *cachegeneration.Store
+	scope cachegeneration.Scope
 	ttl   time.Duration
 }
 
 type optionsSnapshot struct {
 	SchemaVersion int          `json:"schemaVersion"`
-	Generation    string       `json:"generation"`
+	Generation    int64        `json:"generation"`
 	Language      string       `json:"language"`
 	Codes         []string     `json:"codes"`
 	Options       OptionResult `json:"options"`
 }
 
 func NewOptionsCache(redis *projectredis.Client) *optionsCache {
-	return &optionsCache{redis: redis, ttl: 10 * time.Minute}
+	if redis == nil {
+		return nil
+	}
+	return &optionsCache{redis: redis, scope: dictionaryGenerationScope, ttl: dictionaryCacheTTL}
 }
 
-func (c *optionsCache) acquireFill(ctx context.Context, codes []string, language string) (*cachefill.Lease, error) {
+func (c *optionsCache) SetStateStore(store *cachegeneration.Store) { c.store = store }
+
+func (c *optionsCache) ReadState(ctx context.Context) (cachegeneration.State, bool, error) {
+	if c == nil || c.store == nil {
+		return cachegeneration.State{}, false, fmt.Errorf("dictionary cache state store is not configured")
+	}
+	return c.store.Read(ctx, c.scope)
+}
+
+func (c *optionsCache) Get(ctx context.Context, generation int64, codes []string, language string) (OptionResult, bool, error) {
 	if c == nil || c.redis == nil {
-		return nil, fmt.Errorf("dictionary options cache unavailable")
+		return nil, false, fmt.Errorf("dictionary options cache is not configured")
 	}
-	sorted := append([]string(nil), codes...)
-	sort.Strings(sorted)
-	return cachefill.Try(ctx, c.redis.UniversalClient(), "system-dictionary", strings.Join(append([]string{language}, sorted...), "\x00"))
-}
-
-func (c *optionsCache) generationKey() string { return "system:dictionary:generation:v1" }
-func (c *optionsCache) mutationKey() string   { return "system:dictionary:mutation:v1" }
-
-func (c *optionsCache) snapshotKey(codes []string, language, generation string) string {
-	sorted := append([]string(nil), codes...)
-	sort.Strings(sorted)
-	hash := sha256.Sum256([]byte(strings.Join(append([]string{language, generation}, sorted...), "\x00")))
-	return "system:dictionary:options:v1:" + hex.EncodeToString(hash[:])
-}
-
-func (c *optionsCache) currentGeneration(ctx context.Context) (string, error) {
-	if _, found, err := c.redis.GetString(ctx, c.mutationKey()); err != nil {
-		return "", err
-	} else if found {
-		return "", fmt.Errorf("dictionary options are invalidating")
-	}
-	value, found, err := c.redis.GetString(ctx, c.generationKey())
-	if err != nil {
-		return "", err
-	}
-	if found && value != "" {
-		return value, nil
-	}
-	if _, err := c.redis.SetStringIfMissing(ctx, c.generationKey(), "1", 0); err != nil {
-		return "", err
-	}
-	value, found, err = c.redis.GetString(ctx, c.generationKey())
-	if err != nil {
-		return "", err
-	}
-	if !found || value == "" {
-		return "", fmt.Errorf("dictionary cache generation is missing")
-	}
-	if _, mutating, err := c.redis.GetString(ctx, c.mutationKey()); err != nil {
-		return "", err
-	} else if mutating {
-		return "", fmt.Errorf("dictionary options are invalidating")
-	}
-	return value, nil
-}
-
-func (c *optionsCache) Get(ctx context.Context, codes []string, language string) (OptionResult, bool, error) {
-	generation, err := c.currentGeneration(ctx)
+	variant, err := optionsVariant(codes, language)
 	if err != nil {
 		return nil, false, err
 	}
-	raw, found, err := c.redis.GetString(ctx, c.snapshotKey(codes, language, generation))
+	key, err := cachegeneration.SnapshotKey(c.scope, generation, variant)
+	if err != nil {
+		return nil, false, err
+	}
+	raw, found, err := c.redis.GetString(ctx, key)
 	if err != nil || !found {
 		return nil, found, err
 	}
@@ -103,19 +84,77 @@ func (c *optionsCache) Get(ctx context.Context, codes []string, language string)
 	return options, true, nil
 }
 
-func (c *optionsCache) Set(ctx context.Context, codes []string, language string, options OptionResult) error {
-	generation, err := c.currentGeneration(ctx)
+func (c *optionsCache) Put(ctx context.Context, generation int64, codes []string, language string, options OptionResult) error {
+	if c == nil || c.redis == nil {
+		return fmt.Errorf("dictionary options cache is not configured")
+	}
+	canonical := canonicalCodes(codes)
+	variant, err := optionsVariant(canonical, language)
 	if err != nil {
 		return err
 	}
-	payload, err := json.Marshal(optionsSnapshot{SchemaVersion: dictionaryCacheSchema, Generation: generation, Language: language, Codes: append([]string(nil), codes...), Options: options})
+	payload, err := json.Marshal(optionsSnapshot{
+		SchemaVersion: dictionaryCacheSchema,
+		Generation:    generation,
+		Language:      language,
+		Codes:         canonical,
+		Options:       options,
+	})
 	if err != nil {
-		return fmt.Errorf("encode dictionary options cache: %w", err)
+		return fmt.Errorf("encode dictionary options snapshot: %w", err)
 	}
-	return c.redis.SetString(ctx, c.snapshotKey(codes, language, generation), string(payload), c.ttl)
+	key, err := cachegeneration.SnapshotKey(c.scope, generation, variant)
+	if err != nil {
+		return err
+	}
+	return c.redis.SetString(ctx, key, string(payload), c.ttl)
 }
 
-func decodeOptionsSnapshot(raw string, requestedCodes []string, language, generation string) (OptionResult, error) {
+func (c *optionsCache) TryFill(ctx context.Context, generation int64, variant string) (*cachefill.Lease, error) {
+	if c == nil || c.redis == nil {
+		return nil, fmt.Errorf("dictionary options cache is not configured")
+	}
+	target, err := cachegeneration.FillKey(c.scope, generation, variant)
+	if err != nil {
+		return nil, err
+	}
+	return cachefill.Try(ctx, c.redis.UniversalClient(), cachegeneration.StateKey(c.scope), target)
+}
+
+func (c *optionsCache) TryRepair(ctx context.Context, variant string) (*cachefill.Lease, error) {
+	if c == nil || c.redis == nil {
+		return nil, fmt.Errorf("dictionary options cache is not configured")
+	}
+	return cachefill.Try(ctx, c.redis.UniversalClient(), cachegeneration.StateKey(c.scope), "repair:"+variant)
+}
+
+func optionsVariant(codes []string, language string) (string, error) {
+	canonical := canonicalCodes(codes)
+	if len(canonical) == 0 || strings.TrimSpace(language) == "" {
+		return "", fmt.Errorf("dictionary options snapshot coordinates are invalid")
+	}
+	hash := sha256.Sum256([]byte(language + "\x00" + strings.Join(canonical, "\x00")))
+	return "options:" + hex.EncodeToString(hash[:]), nil
+}
+
+func canonicalCodes(codes []string) []string {
+	seen := make(map[string]struct{}, len(codes))
+	result := make([]string, 0, len(codes))
+	for _, code := range codes {
+		if _, exists := seen[code]; exists {
+			continue
+		}
+		seen[code] = struct{}{}
+		result = append(result, code)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func decodeOptionsSnapshot(raw string, requestedCodes []string, language string, generation int64) (OptionResult, error) {
+	if generation < 1 {
+		return nil, corruptOptionsSnapshot("generation is invalid")
+	}
 	if err := scanOptionsSnapshotKeys(raw); err != nil {
 		return nil, err
 	}
@@ -123,36 +162,34 @@ func decodeOptionsSnapshot(raw string, requestedCodes []string, language, genera
 	decoder.DisallowUnknownFields()
 	var snapshot optionsSnapshot
 	if err := decoder.Decode(&snapshot); err != nil {
-		return nil, fmt.Errorf("decode dictionary options cache: %w", err)
+		return nil, corruptOptionsSnapshot("decode payload: %v", err)
 	}
-	if decoder.More() {
-		return nil, fmt.Errorf("decode dictionary options cache: trailing value")
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, corruptOptionsSnapshot("payload has trailing data")
 	}
 	if snapshot.SchemaVersion != dictionaryCacheSchema || snapshot.Generation != generation || snapshot.Language != language {
-		return nil, fmt.Errorf("dictionary options cache is stale")
+		return nil, corruptOptionsSnapshot("coordinates do not match")
 	}
-	want := append([]string(nil), requestedCodes...)
-	got := append([]string(nil), snapshot.Codes...)
-	sort.Strings(want)
-	sort.Strings(got)
-	if len(want) != len(got) || len(snapshot.Options) != len(want) {
-		return nil, fmt.Errorf("dictionary options cache codes do not match")
+	want := canonicalCodes(requestedCodes)
+	got := canonicalCodes(snapshot.Codes)
+	if len(want) != len(requestedCodes) || len(got) != len(snapshot.Codes) || len(want) != len(got) || len(snapshot.Options) != len(want) {
+		return nil, corruptOptionsSnapshot("code set does not match")
 	}
 	for index, code := range want {
-		if got[index] != code {
-			return nil, fmt.Errorf("dictionary options cache codes do not match")
+		if got[index] != code || snapshot.Codes[index] != code {
+			return nil, corruptOptionsSnapshot("code set does not match")
 		}
 		options, ok := snapshot.Options[code]
 		if !ok || options == nil {
-			return nil, fmt.Errorf("dictionary options cache is missing code %q", code)
+			return nil, corruptOptionsSnapshot("code %q is missing", code)
 		}
 		seenValues := make(map[string]struct{}, len(options))
 		for _, option := range options {
 			if option.Label == "" || option.Value == "" {
-				return nil, fmt.Errorf("dictionary options cache contains an empty option")
+				return nil, corruptOptionsSnapshot("option is empty")
 			}
 			if _, exists := seenValues[option.Value]; exists {
-				return nil, fmt.Errorf("dictionary options cache contains duplicate values")
+				return nil, corruptOptionsSnapshot("option value is duplicated")
 			}
 			seenValues[option.Value] = struct{}{}
 		}
@@ -164,92 +201,40 @@ func scanOptionsSnapshotKeys(raw string) error {
 	decoder := json.NewDecoder(strings.NewReader(raw))
 	token, err := decoder.Token()
 	if err != nil {
-		return fmt.Errorf("decode dictionary options cache: %w", err)
+		return corruptOptionsSnapshot("decode payload: %v", err)
 	}
 	delim, ok := token.(json.Delim)
 	if !ok || delim != '{' {
-		return fmt.Errorf("dictionary options cache must be an object")
+		return corruptOptionsSnapshot("payload must be an object")
 	}
 	seen := map[string]struct{}{}
 	for decoder.More() {
 		keyToken, err := decoder.Token()
 		if err != nil {
-			return err
+			return corruptOptionsSnapshot("decode field: %v", err)
 		}
 		key, ok := keyToken.(string)
 		if !ok {
-			return fmt.Errorf("dictionary options cache key is invalid")
+			return corruptOptionsSnapshot("field name is invalid")
 		}
 		if _, exists := seen[key]; exists {
-			return fmt.Errorf("dictionary options cache contains duplicate field %q", key)
+			return corruptOptionsSnapshot("field %q is duplicated", key)
 		}
 		seen[key] = struct{}{}
 		var discard json.RawMessage
 		if err := decoder.Decode(&discard); err != nil {
-			return err
+			return corruptOptionsSnapshot("decode field %q: %v", key, err)
 		}
 	}
 	if _, err := decoder.Token(); err != nil {
-		return err
+		return corruptOptionsSnapshot("decode payload: %v", err)
 	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return fmt.Errorf("dictionary options cache contains trailing data")
-	}
-	return nil
-}
-
-func (c *optionsCache) Mutate(ctx context.Context, change func(context.Context) error) error {
-	if c == nil || c.redis == nil || change == nil {
-		return fmt.Errorf("dictionary mutation dependencies unavailable")
-	}
-	tokenBytes := make([]byte, 16)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		return fmt.Errorf("create dictionary mutation token: %w", err)
-	}
-	token := hex.EncodeToString(tokenBytes)
-	result, err := c.redis.EvalString(ctx, beginDictionaryMutationScript, []string{c.mutationKey(), c.generationKey()}, token, int64((15*time.Second)/time.Millisecond))
-	if err != nil {
-		return err
-	}
-	if result != "acquired" {
-		return fmt.Errorf("dictionary mutation returned %q", result)
-	}
-	if err := change(ctx); err != nil {
-		rollbackContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
-		defer cancel()
-		_, releaseErr := c.redis.EvalString(rollbackContext, releaseDictionaryMutationScript, []string{c.mutationKey()}, token)
-		if releaseErr != nil {
-			return fmt.Errorf("dictionary mutation rollback: %w", errors.Join(err, releaseErr))
-		}
-		return err
-	}
-	publishContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
-	defer cancel()
-	result, err = c.redis.EvalString(publishContext, publishDictionaryMutationScript, []string{c.mutationKey()}, token)
-	if err != nil {
-		return err
-	}
-	if result != "published" {
-		return fmt.Errorf("dictionary mutation publication returned %q", result)
+	if _, err := decoder.Token(); err != io.EOF {
+		return corruptOptionsSnapshot("payload has trailing data")
 	}
 	return nil
 }
 
-const beginDictionaryMutationScript = `
-if redis.call('EXISTS', KEYS[1]) == 1 then return 'busy' end
-redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
-redis.call('INCR', KEYS[2])
-return 'acquired'
-`
-
-const releaseDictionaryMutationScript = `
-if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 'stale' end
-redis.call('DEL', KEYS[1])
-return 'released'
-`
-
-const publishDictionaryMutationScript = `
-if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 'stale' end
-redis.call('DEL', KEYS[1])
-return 'published'
-`
+func corruptOptionsSnapshot(format string, values ...any) error {
+	return fmt.Errorf("%w: %s", ErrOptionsSnapshotCorrupt, fmt.Sprintf(format, values...))
+}

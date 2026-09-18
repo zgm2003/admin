@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -37,10 +38,6 @@ type Safe struct {
 	LastTestError string      `json:"lastTestError"`
 }
 
-type ReadinessCoordinator interface {
-	Mutate(context.Context, func(context.Context) error) error
-}
-
 type RuntimeCoordinator interface {
-	Mutate(context.Context, func(context.Context) error) error
+	Mutate(context.Context, func(context.Context, int64) (cachegeneration.MutationResult, error)) error
 }

@@ -7,20 +7,26 @@ import (
 	"time"
 
 	"admin/server/internal/shared/apperror"
+	cachegeneration "admin/server/internal/shared/cacheGeneration"
 	"gorm.io/gorm"
 )
 
 type Service struct {
 	repository repository
 	store      Store
+	runtime    RuntimeCoordinator
 }
 
 func NewService(repository repository, store Store) *Service {
 	return &Service{repository: repository, store: store}
 }
 
+func (s *Service) SetRuntimeCoordinator(runtime RuntimeCoordinator) {
+	s.runtime = runtime
+}
+
 // List is the administrative control-plane read: it always reflects PostgreSQL
-// and therefore includes the current revision of every active platform.
+// and therefore reflects the current rows for every active platform.
 func (s *Service) List(ctx context.Context) ([]PlatformResponse, error) {
 	catalogs, err := s.repository.ListPlatforms(ctx)
 	if err != nil {
@@ -37,8 +43,8 @@ func (s *Service) Update(ctx context.Context, platformID int64, key string, limi
 	if err := ValidateInput(key, limit, windowSeconds); err != nil {
 		return PlatformResponse{}, apperror.InvalidRequest(err)
 	}
-	if s.store == nil {
-		return PlatformResponse{}, apperror.DependencyUnavailable(fmt.Errorf("sms rate limit store is unavailable"))
+	if s.runtime == nil {
+		return PlatformResponse{}, apperror.DependencyUnavailable(fmt.Errorf("sms runtime coordinator is unavailable"))
 	}
 	if _, err := s.repository.FindPlatform(ctx, platformID); errors.Is(err, ErrPlatformNotFound) {
 		return PlatformResponse{}, apperror.NotFound(err)
@@ -46,15 +52,12 @@ func (s *Service) Update(ctx context.Context, platformID int64, key string, limi
 		return PlatformResponse{}, apperror.DependencyUnavailable(fmt.Errorf("sms rate limit repository: %w", err))
 	}
 
-	if err := s.store.Mutate(ctx, platformID, func(writeContext context.Context) error {
-		if _, err := s.repository.UpdatePolicy(writeContext, platformID, key, limit, windowSeconds, time.Now().UTC()); err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return apperror.NotFound(err)
-			}
-			return err
-		}
-		return nil
+	if err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+		return s.repository.UpdatePolicy(writeContext, platformID, key, limit, windowSeconds, expected, time.Now().UTC())
 	}); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return PlatformResponse{}, apperror.NotFound(err)
+		}
 		var appError *apperror.Error
 		if errors.As(err, &appError) {
 			return PlatformResponse{}, err

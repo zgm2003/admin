@@ -45,6 +45,13 @@ func (c *Cache) SetStateStore(store *cachegeneration.Store) {
 	c.store = store
 }
 
+func (c *Cache) ValidateDependencies() error {
+	if c == nil || c.client == nil || c.store == nil {
+		return fmt.Errorf("setting cache state store is not configured")
+	}
+	return c.scope.Validate()
+}
+
 func (c *Cache) ReadState(ctx context.Context) (cachegeneration.State, bool, error) {
 	if c == nil || c.store == nil {
 		return cachegeneration.State{}, false, fmt.Errorf("setting cache state store is not configured")

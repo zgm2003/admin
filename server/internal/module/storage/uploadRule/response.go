@@ -54,11 +54,7 @@ type CredentialResponse struct {
 	Items []CredentialItem `json:"items"`
 }
 
-type objectURLRequest struct {
-	RuleCode  string `json:"ruleCode"`
-	ObjectKey string `json:"objectKey"`
-}
-
-type objectURLResponse struct {
-	URL string `json:"url"`
+type ObjectURLResult struct {
+	URL       string     `json:"url"`
+	ExpiresAt *time.Time `json:"expiresAt"`
 }

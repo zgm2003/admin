@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	cachegeneration "admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
@@ -30,9 +31,21 @@ type UpdateValues struct {
 
 type Repository struct {
 	db                       *gorm.DB
-	rateLimitPolicyProvision func(context.Context, *gorm.DB, int64) error
-	rateLimitPolicyDelete    func(context.Context, *gorm.DB, int64) error
+	rateLimitPolicyProvision RateLimitPolicyLifecycle
+	rateLimitPolicyDelete    RateLimitPolicyLifecycle
 }
+
+type RateLimitGenerationBases struct {
+	Mail int64
+	SMS  int64
+}
+
+type RateLimitGenerationEvents struct {
+	Mail cachegeneration.Event
+	SMS  cachegeneration.Event
+}
+
+type RateLimitPolicyLifecycle func(context.Context, *gorm.DB, int64, RateLimitGenerationBases, time.Time) (RateLimitGenerationEvents, error)
 
 type SessionRef struct {
 	UserID    int64
@@ -55,25 +68,25 @@ func NewRepository(db *gorm.DB) *Repository {
 // participate in the platform transaction. Service code only calls the
 // repository boundary and never receives a GORM handle.
 func (r *Repository) SetRateLimitPolicyLifecycle(
-	provision func(context.Context, *gorm.DB, int64) error,
-	remove func(context.Context, *gorm.DB, int64) error,
+	provision RateLimitPolicyLifecycle,
+	remove RateLimitPolicyLifecycle,
 ) {
 	r.rateLimitPolicyProvision = provision
 	r.rateLimitPolicyDelete = remove
 }
 
-func (r *Repository) provisionRateLimitPolicies(ctx context.Context, platformID int64) error {
+func (r *Repository) provisionRateLimitPolicies(ctx context.Context, platformID int64, expected RateLimitGenerationBases, now time.Time) (RateLimitGenerationEvents, error) {
 	if r.rateLimitPolicyProvision == nil {
-		return fmt.Errorf("authentication platform rate limit policy provisioner is unavailable")
+		return RateLimitGenerationEvents{}, fmt.Errorf("authentication platform rate limit policy provisioner is unavailable")
 	}
-	return r.rateLimitPolicyProvision(ctx, r.db, platformID)
+	return r.rateLimitPolicyProvision(ctx, r.db, platformID, expected, now)
 }
 
-func (r *Repository) deleteRateLimitPolicies(ctx context.Context, platformID int64) error {
+func (r *Repository) deleteRateLimitPolicies(ctx context.Context, platformID int64, expected RateLimitGenerationBases, now time.Time) (RateLimitGenerationEvents, error) {
 	if r.rateLimitPolicyDelete == nil {
-		return fmt.Errorf("authentication platform rate limit policy cleaner is unavailable")
+		return RateLimitGenerationEvents{}, fmt.Errorf("authentication platform rate limit policy cleaner is unavailable")
 	}
-	return r.rateLimitPolicyDelete(ctx, r.db, platformID)
+	return r.rateLimitPolicyDelete(ctx, r.db, platformID, expected, now)
 }
 
 func (r *Repository) FindPolicy(ctx context.Context, code string) (Platform, error) {

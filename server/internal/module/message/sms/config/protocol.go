@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"time"
 
+	"admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -56,13 +57,13 @@ type Credentials struct {
 
 // RuntimeCoordinator invalidates the SMS runtime snapshot after a write.
 type RuntimeCoordinator interface {
-	Mutate(context.Context, func(context.Context) error) error
+	Mutate(context.Context, func(context.Context, int64) (cachegeneration.MutationResult, error)) error
 }
 
 type repository interface {
 	FindActive(context.Context) (Model, error)
-	Create(context.Context, *Model) error
-	Update(context.Context, *Model, time.Time) error
+	Create(context.Context, *Model, int64, time.Time) (cachegeneration.MutationResult, error)
+	Update(context.Context, *Model, int64, time.Time) (cachegeneration.MutationResult, error)
 	UpdateTestResult(context.Context, int64, time.Time, string) error
-	Delete(context.Context, int64) error
+	Delete(context.Context, int64, int64, time.Time) (cachegeneration.MutationResult, error)
 }

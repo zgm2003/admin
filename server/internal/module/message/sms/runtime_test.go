@@ -3,6 +3,7 @@ package sms
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -62,7 +63,7 @@ func validRuntimeSnapshotForTest() runtimeSnapshot {
 	}
 	return runtimeSnapshot{
 		SchemaVersion:       runtimeCacheSchemaVersion,
-		Generation:          "7",
+		Generation:          7,
 		Configured:          true,
 		SecretIDCiphertext:  "ciphertext-id",
 		SecretKeyCiphertext: "ciphertext-key",
@@ -92,7 +93,7 @@ func TestDecodeRuntimeSnapshotRejectsInvalidSceneSet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := decodeRuntimeSnapshot(string(raw), "7"); err == nil {
+	if _, err := decodeRuntimeSnapshot(string(raw), 7); err == nil {
 		t.Fatal("runtime snapshot accepted a missing fixed scene and an unknown test scene")
 	}
 }
@@ -111,9 +112,41 @@ func TestDecodeRuntimeSnapshotRejectsInvalidNestedFacts(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := decodeRuntimeSnapshot(string(raw), "7"); err == nil {
+		if _, err := decodeRuntimeSnapshot(string(raw), 7); err == nil {
 			t.Fatalf("runtime snapshot accepted invalid facts: %s", raw)
 		}
+	}
+}
+
+func TestRuntimeSnapshotCodecIsStrictAndPreservesCiphertext(t *testing.T) {
+	snapshot := validRuntimeSnapshotForTest()
+	facts := factsOf(snapshot)
+	raw, err := encodeRuntimeSnapshot(7, facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(raw, snapshot.SecretIDCiphertext) || !strings.Contains(raw, snapshot.SecretKeyCiphertext) ||
+		strings.Contains(raw, "plain-secret") {
+		t.Fatalf("runtime snapshot crossed the credential boundary: %s", raw)
+	}
+	decoded, err := decodeRuntimeSnapshot(raw, 7)
+	if err != nil || decoded.Generation != 7 || len(decoded.Templates) != len(template.FixedCatalog()) || len(decoded.Rules) != 1 {
+		t.Fatalf("decoded snapshot = %+v, err=%v", decoded, err)
+	}
+
+	for name, payload := range map[string]string{
+		"unknown field":       strings.Replace(raw, `{`, `{"extra":true,`, 1),
+		"duplicate field":     strings.Replace(raw, `"generation":7`, `"generation":7,"generation":8`, 1),
+		"trailing value":      raw + `{}`,
+		"wrong schema":        strings.Replace(raw, `"schemaVersion":1`, `"schemaVersion":2`, 1),
+		"wrong generation":    strings.Replace(raw, `"generation":7`, `"generation":8`, 1),
+		"missing fixed scene": strings.Replace(raw, `"forget":`, `"unknown":`, 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := decodeRuntimeSnapshot(payload, 7); !errors.Is(err, ErrRuntimeSnapshotCorrupt) {
+				t.Fatalf("decode error = %v, want ErrRuntimeSnapshotCorrupt", err)
+			}
+		})
 	}
 }
 
@@ -132,5 +165,11 @@ func TestRuntimeLoaderCarriesCiphertextInsteadOfPlainCredentials(t *testing.T) {
 	}
 	if !strings.Contains(string(payload), "sms:v1:cipher-id") || !strings.Contains(string(payload), "sms:v1:cipher-key") {
 		t.Fatalf("runtime facts omitted encrypted credentials: %s", payload)
+	}
+}
+
+func TestRuntimeCacheValidateDependenciesRejectsIncompleteStartupWiring(t *testing.T) {
+	if err := NewRuntimeCache(nil).ValidateDependencies(); err == nil {
+		t.Fatal("ValidateDependencies accepted missing SMS runtime dependencies")
 	}
 }

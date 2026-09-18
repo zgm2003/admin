@@ -37,8 +37,21 @@ var (
 	variantPattern    = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,191}$`)
 )
 
+// ErrMutationRolledBack marks a business transaction that is known to have
+// rolled back. Coordinators use it to distinguish a generation race from an
+// uncertain post-commit transport error.
+var ErrMutationRolledBack = errors.New("cache generation business mutation rolled back")
+
 // ErrStateCorrupt 表示 Redis 中的 state payload 无法按协议解析。
 var ErrStateCorrupt = errors.New("config cache state is corrupt")
+
+// MutationResult 只表达一次业务 mutation 的机械提交结果：是否真实发生变化、提交后的 generation 与 outbox 事件 ID。
+// 它不执行回调、不持有业务 Repository，也不是 Manager；各模块在同一个 PostgreSQL 事务里填充它。
+type MutationResult struct {
+	Changed    bool
+	Generation int64
+	OutboxID   int64
+}
 
 type Scope struct {
 	Namespace string

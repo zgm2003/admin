@@ -3,8 +3,8 @@ package mail
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,24 +12,33 @@ import (
 
 	"admin/server/internal/config"
 	projectredis "admin/server/internal/redis"
+	cachegeneration "admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/yesno"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 )
 
 type countingReadinessRepository struct {
-	configCalls   atomic.Int64
-	templateCalls atomic.Int64
-	mu            sync.RWMutex
-	config        Config
-	template      Template
-	delay         time.Duration
+	configCalls       atomic.Int64
+	templateCalls     atomic.Int64
+	listTemplateCalls atomic.Int64
+	listRuleCalls     atomic.Int64
+	mu                sync.RWMutex
+	config            Config
+	templates         []Template
+	rules             []RecipientRule
+	delay             time.Duration
+	onFindConfig      func(context.Context)
+	onFindConfigOnce  sync.Once
 }
 
 func (r *countingReadinessRepository) FindConfig(ctx context.Context) (Config, error) {
 	r.configCalls.Add(1)
 	if err := waitForReadinessTest(ctx, r.delay); err != nil {
 		return Config{}, err
+	}
+	if r.onFindConfig != nil {
+		r.onFindConfigOnce.Do(func() { r.onFindConfig(ctx) })
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -39,32 +48,57 @@ func (r *countingReadinessRepository) FindConfig(ctx context.Context) (Config, e
 	return r.config, nil
 }
 
-func (r *countingReadinessRepository) FindTemplateByScene(ctx context.Context, _ string) (Template, error) {
+func (r *countingReadinessRepository) FindTemplateByScene(ctx context.Context, scene string) (Template, error) {
 	r.templateCalls.Add(1)
 	if err := waitForReadinessTest(ctx, r.delay); err != nil {
 		return Template{}, err
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	if r.template.ID == 0 {
-		return Template{}, gorm.ErrRecordNotFound
+	for _, template := range r.templates {
+		if template.Scene == scene {
+			return template, nil
+		}
 	}
-	return r.template, nil
+	return Template{}, gorm.ErrRecordNotFound
 }
 
-func (r *countingReadinessRepository) setConfigEnabled(enabled yesno.Value) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.config.IsEnabled = enabled
+func (r *countingReadinessRepository) ListTemplates(ctx context.Context) ([]Template, error) {
+	r.listTemplateCalls.Add(1)
+	if err := waitForReadinessTest(ctx, r.delay); err != nil {
+		return nil, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return append([]Template(nil), r.templates...), nil
+}
+
+func (r *countingReadinessRepository) ListRecipientRules(ctx context.Context) ([]RecipientRule, error) {
+	r.listRuleCalls.Add(1)
+	if err := waitForReadinessTest(ctx, r.delay); err != nil {
+		return nil, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return append([]RecipientRule(nil), r.rules...), nil
 }
 
 func readyMailRepository(delay time.Duration) *countingReadinessRepository {
+	now := time.Now().UTC()
 	return &countingReadinessRepository{
 		delay: delay,
 		config: Config{
-			ID: 1, SecretIDCiphertext: "configured", SecretKeyCiphertext: "configured", TTLMinutes: 5, IsEnabled: yesno.Yes,
+			ID: 1, SecretIDCiphertext: "mail:v1:cipher-id", SecretKeyCiphertext: "mail:v1:cipher-key",
+			Region: "ap-guangzhou", FromEmail: "sender@example.com", FromName: "Sender",
+			TTLMinutes: 5, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now,
 		},
-		template: Template{ID: 1, Scene: SceneLogin, IsEnabled: yesno.Yes},
+		templates: []Template{{
+			ID: 1, Scene: SceneLogin, Name: "Login", Subject: "Code", Content: "{{code}}",
+			TencentTemplateID: intPointer(47941), VariableKeys: []byte(`["code"]`),
+			ExampleVariables: []byte(`{"code":"123456"}`), IsEnabled: yesno.Yes,
+			CreatedAt: now, UpdatedAt: now,
+		}},
+		rules: []RecipientRule{},
 	}
 }
 
@@ -102,28 +136,51 @@ func openMailReadinessRedis(t *testing.T) *projectredis.Client {
 	return client
 }
 
-func TestVerifyCodeReadinessTwoInstancesRecoverMissingSnapshotOnce(t *testing.T) {
+func TestMailCacheRuntimeAndReadinessUseOneGenerationWithSeparateVariants(t *testing.T) {
+	database, ctx := openMailGenerationDatabase(t)
+	client := openMailReadinessRedis(t)
+	repository := readyMailRepository(0)
+	store := newMailCacheTestStore(t, database, repository, client)
+
+	readiness, err := store.LoadReadiness(ctx, SceneLogin)
+	if err != nil || !readiness.Ready || readiness.TTLMinutes != 5 {
+		t.Fatalf("readiness = %+v, %v", readiness, err)
+	}
+	runtime, err := store.Load(ctx, SceneLogin)
+	if err != nil || runtime.Generation != 1 || runtime.Config.ID != 1 {
+		t.Fatalf("runtime = %+v, %v", runtime, err)
+	}
+	readinessKey, _ := cachegeneration.SnapshotKey(mailGenerationScope, 1, "readiness:"+SceneLogin)
+	runtimeKey, _ := cachegeneration.SnapshotKey(mailGenerationScope, 1, "runtime:"+SceneLogin)
+	readinessRaw, readinessFound, readinessErr := client.GetString(ctx, readinessKey)
+	runtimeRaw, runtimeFound, runtimeErr := client.GetString(ctx, runtimeKey)
+	if readinessErr != nil || runtimeErr != nil || !readinessFound || !runtimeFound {
+		t.Fatalf("variant snapshots readiness=%v/%v runtime=%v/%v", readinessFound, readinessErr, runtimeFound, runtimeErr)
+	}
+	if strings.Contains(readinessRaw, "cipher-id") || !strings.Contains(runtimeRaw, "cipher-id") {
+		t.Fatalf("credential boundary readiness=%s runtime=%s", readinessRaw, runtimeRaw)
+	}
+}
+
+func TestMailReadinessTwoInstancesUseOneColdFillLeaderAndHotHitsAvoidPostgres(t *testing.T) {
+	database, ctx := openMailGenerationDatabase(t)
 	firstClient := openMailReadinessRedis(t)
 	secondClient := openMailReadinessRedis(t)
-	repository := readyMailRepository(100 * time.Millisecond)
-	firstStore := NewVerifyCodeReadinessStore(repository, firstClient)
-	secondStore := NewVerifyCodeReadinessStore(repository, secondClient)
-	keys := []string{verifyCodeReadinessKey(SceneLogin), verifyCodeReadinessLoadLockKey(SceneLogin)}
-	if err := firstClient.DeleteMany(context.Background(), keys); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = firstClient.DeleteMany(context.Background(), keys) })
+	repository := readyMailRepository(20 * time.Millisecond)
+	firstStore := newMailCacheTestStore(t, database, repository, firstClient)
+	secondStore := newRuntimeStore(repository, secondClient)
+	secondStore.SetGenerations(cachegeneration.NewRepository(database), cachegeneration.NewStore(secondClient))
 
 	start := make(chan struct{})
-	errorsFound := make(chan error, 64)
+	errorsFound := make(chan error, 8)
 	var wait sync.WaitGroup
-	stores := []*verifyCodeReadinessStore{firstStore, secondStore}
-	for index := 0; index < 64; index++ {
+	stores := []*runtimeStore{firstStore, secondStore}
+	for index := 0; index < 8; index++ {
 		wait.Add(1)
 		go func(worker int) {
 			defer wait.Done()
 			<-start
-			ready, err := stores[worker%len(stores)].Current(context.Background(), SceneLogin)
+			ready, err := stores[worker%len(stores)].LoadReadiness(context.Background(), SceneLogin)
 			if err != nil {
 				errorsFound <- err
 				return
@@ -140,157 +197,177 @@ func TestVerifyCodeReadinessTwoInstancesRecoverMissingSnapshotOnce(t *testing.T)
 		t.Fatal(err)
 	}
 	if repository.configCalls.Load() != 1 || repository.templateCalls.Load() != 1 {
-		t.Fatalf("PostgreSQL readiness reads = config:%d template:%d, want 1 each", repository.configCalls.Load(), repository.templateCalls.Load())
+		t.Fatalf("cold PostgreSQL reads = config:%d template:%d, want 1 each", repository.configCalls.Load(), repository.templateCalls.Load())
 	}
 
-	for index := 0; index < 100; index++ {
-		ready, err := stores[index%len(stores)].Current(context.Background(), SceneLogin)
-		if err != nil || !ready.Ready || ready.TTLMinutes != 5 {
-			t.Fatalf("ready hit %d = %v, %v", index, ready, err)
+	for index := 0; index < 50; index++ {
+		ready, err := stores[index%len(stores)].LoadReadiness(ctx, SceneLogin)
+		if err != nil || !ready.Ready {
+			t.Fatalf("hot readiness %d = %+v, %v", index, ready, err)
 		}
 	}
 	if repository.configCalls.Load() != 1 || repository.templateCalls.Load() != 1 {
-		t.Fatalf("ready hits queried PostgreSQL: config:%d template:%d", repository.configCalls.Load(), repository.templateCalls.Load())
+		t.Fatalf("hot hits queried PostgreSQL: config:%d template:%d", repository.configCalls.Load(), repository.templateCalls.Load())
 	}
 }
 
-func TestVerifyCodeReadinessRejectsMissingDependencies(t *testing.T) {
-	if _, err := NewVerifyCodeReadinessStore(nil, nil).Current(context.Background(), SceneLogin); err == nil {
-		t.Fatal("Current accepted missing Redis and repository dependencies")
-	}
-	client := openMailReadinessRedis(t)
-	store := NewVerifyCodeReadinessStore(nil, client)
-	keys := []string{verifyCodeReadinessKey(SceneLogin), verifyCodeReadinessLoadLockKey(SceneLogin)}
-	if err := client.DeleteMany(context.Background(), keys); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), keys) })
-	if _, err := store.Current(context.Background(), SceneLogin); err == nil {
-		t.Fatal("Current accepted a missing repository")
-	}
-	mutation := VerifyCodeReadinessMutation{scene: SceneLogin, priorPayload: "prior", invalidatingPayload: "invalidating"}
-	if err := store.PublishMutation(context.Background(), mutation); err == nil {
-		t.Fatal("PublishMutation accepted a missing repository")
-	}
-}
-
-func TestVerifyCodeReadinessSnapshotRejectsMalformedPayloads(t *testing.T) {
-	for _, raw := range []string{
-		`{}`,
-		`{"schemaVersion":3,"state":"ready"}`,
-		`{"schemaVersion":3,"state":"ready","ready":true}`,
-		`{"schemaVersion":3,"state":"ready","ready":true,"ttlMinutes":0}`,
-		`{"schemaVersion":3,"state":"ready","ready":true,"ttlMinutes":61}`,
-		`{"schemaVersion":3,"state":"ready","ready":false,"ttlMinutes":5}`,
-		`{"schemaVersion":3,"state":"ready","ready":true,"ttlMinutes":5,"extra":true}`,
-		`{"schemaVersion":3,"state":"ready","ready":true,"ready":false,"ttlMinutes":5}`,
-		`{"schemaVersion":3,"state":"ready","ready":true,"ttlMinutes":5,"ttlMinutes":6}`,
-		`{"schemaVersion":2,"state":"ready","ready":true,"ttlMinutes":5}`,
-		`{"schemaVersion":3,"state":"invalidating","ready":false,"ttlMinutes":5,"mutationToken":"token"}`,
-		`{"schemaVersion":3,"state":"invalidating","mutationToken":""}`,
-		`{"schemaVersion":3,"state":"ready","ready":true,"ttlMinutes":5}{"schemaVersion":3,"state":"ready","ready":false,"ttlMinutes":0}`,
-	} {
-		if _, err := decodeVerifyCodeReadinessSnapshot(raw); err == nil {
-			t.Fatalf("accepted malformed readiness snapshot: %s", raw)
-		}
-	}
-}
-
-func TestVerifyCodeReadinessSnapshotDecodesReadyWithTTL(t *testing.T) {
-	snapshot, err := decodeVerifyCodeReadinessSnapshot(`{"schemaVersion":3,"state":"ready","ready":true,"ttlMinutes":5}`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if snapshot.Ready == nil || !*snapshot.Ready || snapshot.TTLMinutes == nil || *snapshot.TTLMinutes != 5 {
-		t.Fatalf("decoded readiness = %+v", snapshot)
-	}
-	readiness := readinessFromSnapshot(snapshot)
-	if !readiness.Ready || readiness.TTLMinutes != 5 {
-		t.Fatalf("readiness = %+v", readiness)
-	}
-}
-
-func TestVerifyCodeReadinessFailsClosedWithoutPostgresFallback(t *testing.T) {
+func TestMailReadinessCorruptSnapshotIsRebuilt(t *testing.T) {
+	database, ctx := openMailGenerationDatabase(t)
 	client := openMailReadinessRedis(t)
 	repository := readyMailRepository(0)
-	store := NewVerifyCodeReadinessStore(repository, client)
-	key := verifyCodeReadinessKey(SceneLogin)
-	t.Cleanup(func() { _ = client.Delete(context.Background(), key) })
-
-	if err := client.SetString(context.Background(), key, "not-json", 0); err != nil {
+	store := newMailCacheTestStore(t, database, repository, client)
+	key, _ := cachegeneration.SnapshotKey(mailGenerationScope, 1, "readiness:"+SceneLogin)
+	if err := client.SetString(ctx, key, `{"schemaVersion":1,"generation":1,"ready":true,"ttlMinutes":5,"extra":true}`, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Current(context.Background(), SceneLogin); err == nil {
-		t.Fatal("corrupt readiness snapshot was accepted")
-	}
-	if repository.configCalls.Load() != 0 || repository.templateCalls.Load() != 0 {
-		t.Fatal("corrupt readiness snapshot fell back to PostgreSQL")
-	}
 
+	ready, err := store.LoadReadiness(ctx, SceneLogin)
+	if err != nil || !ready.Ready || ready.TTLMinutes != 5 {
+		t.Fatalf("rebuilt readiness = %+v, %v", ready, err)
+	}
+	if repository.configCalls.Load() != 1 || repository.templateCalls.Load() != 1 {
+		t.Fatalf("rebuild reads = config:%d template:%d, want 1 each", repository.configCalls.Load(), repository.templateCalls.Load())
+	}
+	raw, found, err := client.GetString(ctx, key)
+	if err != nil || !found || strings.Contains(raw, `"extra"`) {
+		t.Fatalf("rebuilt snapshot found=%v err=%v raw=%s", found, err, raw)
+	}
+}
+
+func TestMailReadinessRedisFailureFailsClosedWithoutPostgres(t *testing.T) {
+	database, ctx := openMailGenerationDatabase(t)
+	client := openMailReadinessRedis(t)
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Current(context.Background(), SceneLogin); err == nil {
+	repository := readyMailRepository(0)
+	store := newRuntimeStore(repository, client)
+	store.SetGenerations(cachegeneration.NewRepository(database), cachegeneration.NewStore(client))
+
+	if _, err := store.LoadReadiness(ctx, SceneLogin); err == nil {
 		t.Fatal("closed Redis client was accepted")
 	}
 	if repository.configCalls.Load() != 0 || repository.templateCalls.Load() != 0 {
-		t.Fatal("Redis failure fell back to PostgreSQL")
+		t.Fatalf("Redis failure fell back to PostgreSQL: config:%d template:%d", repository.configCalls.Load(), repository.templateCalls.Load())
 	}
 }
 
-func TestVerifyCodeReadinessMutationBlocksOldSnapshotAcrossInstances(t *testing.T) {
-	firstClient := openMailReadinessRedis(t)
-	secondClient := openMailReadinessRedis(t)
+func TestMailReadinessDropsOldFillWhenGenerationAdvances(t *testing.T) {
+	database, ctx := openMailGenerationDatabase(t)
+	client := openMailReadinessRedis(t)
 	repository := readyMailRepository(0)
-	firstStore := NewVerifyCodeReadinessStore(repository, firstClient)
-	secondStore := NewVerifyCodeReadinessStore(repository, secondClient)
-	keys := []string{verifyCodeReadinessKey(SceneLogin), verifyCodeReadinessLoadLockKey(SceneLogin)}
-	if err := firstClient.DeleteMany(context.Background(), keys); err != nil {
-		t.Fatal(err)
+	store := newMailCacheTestStore(t, database, repository, client)
+	repository.onFindConfig = func(hookContext context.Context) {
+		result, err := advanceMailGeneration(hookContext, database, 1)
+		if err != nil {
+			t.Errorf("advance generation: %v", err)
+			return
+		}
+		if _, err := store.states.Reconcile(hookContext, mailGenerationScope, result.Generation); err != nil {
+			t.Errorf("publish advanced generation: %v", err)
+		}
 	}
-	t.Cleanup(func() { _ = firstClient.DeleteMany(context.Background(), keys) })
 
-	if ready, err := firstStore.Current(context.Background(), SceneLogin); err != nil || !ready.Ready {
-		t.Fatalf("initial readiness = %v, %v", ready, err)
+	ready, err := store.LoadReadiness(ctx, SceneLogin)
+	if err != nil || !ready.Ready {
+		t.Fatalf("readiness after generation advance = %+v, %v", ready, err)
 	}
-	mutation, err := firstStore.BeginMutation(context.Background(), SceneLogin)
+	oldKey, _ := cachegeneration.SnapshotKey(mailGenerationScope, 1, "readiness:"+SceneLogin)
+	if _, found, err := client.GetString(ctx, oldKey); err != nil || found {
+		t.Fatalf("old generation snapshot found=%v err=%v", found, err)
+	}
+	newKey, _ := cachegeneration.SnapshotKey(mailGenerationScope, 2, "readiness:"+SceneLogin)
+	if _, found, err := client.GetString(ctx, newKey); err != nil || !found {
+		t.Fatalf("new generation snapshot found=%v err=%v", found, err)
+	}
+}
+
+func TestVerifyCodeReadinessSnapshotCodecIsStrict(t *testing.T) {
+	raw, err := encodeVerifyCodeReadinessSnapshot(newVerifyCodeReadinessSnapshot(2, VerifyCodeReadiness{Ready: true, TTLMinutes: 5}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := secondStore.Current(context.Background(), SceneLogin); err == nil {
-		t.Fatal("second instance returned an old ready snapshot during mutation")
+	snapshot, err := decodeVerifyCodeReadinessSnapshot(raw)
+	if err != nil || snapshot.Generation != 2 || !snapshot.Ready || snapshot.TTLMinutes != 5 {
+		t.Fatalf("decoded snapshot = %+v, %v", snapshot, err)
 	}
-
-	repository.setConfigEnabled(yesno.No)
-	if err := firstStore.PublishMutation(context.Background(), mutation); err != nil {
-		t.Fatal(err)
-	}
-	if ready, err := secondStore.Current(context.Background(), SceneLogin); err != nil || ready.Ready {
-		t.Fatalf("published disabled readiness = %v, %v", ready, err)
+	for name, payload := range map[string]string{
+		"empty":            `{}`,
+		"unknown field":    strings.Replace(raw, `{`, `{"extra":true,`, 1),
+		"duplicate field":  strings.Replace(raw, `"ready":true`, `"ready":true,"ready":false`, 1),
+		"zero generation":  strings.Replace(raw, `"generation":2`, `"generation":0`, 1),
+		"invalid TTL":      strings.Replace(raw, `"ttlMinutes":5`, `"ttlMinutes":61`, 1),
+		"unready with TTL": `{"schemaVersion":1,"generation":2,"ready":false,"ttlMinutes":5}`,
+		"trailing value":   raw + `{}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := decodeVerifyCodeReadinessSnapshot(payload); !errors.Is(err, ErrReadinessSnapshotCorrupt) {
+				t.Fatalf("decode error = %v, want ErrReadinessSnapshotCorrupt", err)
+			}
+		})
 	}
 }
 
-func TestVerifyCodeReadinessRollbackRequiresMutationOwner(t *testing.T) {
-	client := openMailReadinessRedis(t)
-	store := NewVerifyCodeReadinessStore(readyMailRepository(0), client)
-	keys := []string{verifyCodeReadinessKey(SceneLogin), verifyCodeReadinessLoadLockKey(SceneLogin)}
+func TestMailReadinessRejectsMissingDependencies(t *testing.T) {
+	if _, err := newRuntimeStore(nil, nil).LoadReadiness(context.Background(), SceneLogin); err == nil {
+		t.Fatal("readiness accepted missing dependencies")
+	}
+}
+
+func openMailGenerationDatabase(t *testing.T) (*gorm.DB, context.Context) {
+	t.Helper()
+	database, ctx := openMailRepositoryDatabase(t)
+	if err := database.WithContext(ctx).Exec(`
+CREATE TABLE system_config_cache_generation(
+ namespace varchar(128) NOT NULL, scope_key varchar(128) NOT NULL, generation bigint NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(namespace,scope_key));
+CREATE TABLE system_config_cache_outbox(
+ id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+ namespace varchar(128) NOT NULL, scope_key varchar(128) NOT NULL, generation bigint NOT NULL,
+ attempts integer NOT NULL DEFAULT 0, available_at timestamptz NOT NULL DEFAULT now(),
+ locked_until timestamptz, lock_token varchar(64), last_error varchar(512) NOT NULL DEFAULT '',
+ published_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(namespace,scope_key,generation),
+ FOREIGN KEY(namespace,scope_key) REFERENCES system_config_cache_generation(namespace,scope_key));
+INSERT INTO system_config_cache_generation(namespace,scope_key,generation) VALUES ('message.mail','global',1);`).Error; err != nil {
+		t.Fatal(err)
+	}
+	return database, ctx
+}
+
+func newMailCacheTestStore(t *testing.T, database *gorm.DB, repository runtimeRepository, client *projectredis.Client) *runtimeStore {
+	t.Helper()
+	keys := mailCacheTestKeys(t)
 	if err := client.DeleteMany(context.Background(), keys); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), keys) })
-	if _, err := store.Current(context.Background(), SceneLogin); err != nil {
-		t.Fatal(err)
-	}
-	mutation, err := store.BeginMutation(context.Background(), SceneLogin)
+	store := newRuntimeStore(repository, client)
+	store.SetGenerations(cachegeneration.NewRepository(database), cachegeneration.NewStore(client))
+	generation, err := store.generations.Current(context.Background(), mailGenerationScope)
 	if err != nil {
 		t.Fatal(err)
 	}
-	stale := mutation
-	stale.invalidatingPayload = fmt.Sprintf("%s-stale", stale.invalidatingPayload)
-	if err := store.RollbackMutation(context.Background(), stale); err == nil {
-		t.Fatal("rollback accepted a stale mutation owner")
-	}
-	if err := store.RollbackMutation(context.Background(), mutation); err != nil {
+	if _, err := store.states.Reconcile(context.Background(), mailGenerationScope, generation); err != nil {
 		t.Fatal(err)
 	}
+	return store
+}
+
+func mailCacheTestKeys(t *testing.T) []string {
+	t.Helper()
+	keys := []string{cachegeneration.StateKey(mailGenerationScope)}
+	for generation := int64(1); generation <= 8; generation++ {
+		for _, scene := range []string{SceneLogin, SceneForget, SceneBindEmail, SceneChangePassword} {
+			for _, variant := range []string{"runtime:" + scene, "readiness:" + scene} {
+				snapshot, err := cachegeneration.SnapshotKey(mailGenerationScope, generation, variant)
+				if err != nil {
+					t.Fatal(err)
+				}
+				keys = append(keys, snapshot)
+			}
+		}
+	}
+	return keys
 }

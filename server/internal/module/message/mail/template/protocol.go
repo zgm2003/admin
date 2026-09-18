@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -50,10 +51,6 @@ func safeOf(value Model) (Safe, error) {
 	return Safe{ID: value.ID, Scene: value.Scene, Name: value.Name, Subject: value.Subject, TencentTemplateID: value.TencentTemplateID, Content: value.Content, VariableKeys: keys, ExampleVariables: examples, IsEnabled: value.IsEnabled, CreatedAt: value.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: value.UpdatedAt.UTC().Format(time.RFC3339Nano)}, nil
 }
 
-type ReadinessCoordinator interface {
-	Mutate(context.Context, func(context.Context) error) error
-}
-
 type RuntimeCoordinator interface {
-	Mutate(context.Context, func(context.Context) error) error
+	Mutate(context.Context, func(context.Context, int64) (cachegeneration.MutationResult, error)) error
 }

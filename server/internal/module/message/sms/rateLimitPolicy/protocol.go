@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	cachegeneration "admin/server/internal/shared/cacheGeneration"
 )
 
 const (
@@ -84,7 +86,6 @@ type PolicyResponse struct {
 	Dimension     string `json:"dimension"`
 	Limit         int    `json:"limit"`
 	WindowSeconds int    `json:"windowSeconds"`
-	Revision      int64  `json:"revision"`
 	UpdatedAt     string `json:"updatedAt"`
 }
 
@@ -102,7 +103,7 @@ type ListResponse struct {
 type repository interface {
 	ListPlatforms(context.Context) ([]Catalog, error)
 	FindPlatform(context.Context, int64) (Catalog, error)
-	UpdatePolicy(context.Context, int64, string, int, int, time.Time) (Model, error)
+	UpdatePolicy(context.Context, int64, string, int, int, int64, time.Time) (cachegeneration.MutationResult, error)
 	ProvisionDefaults(context.Context, int64, time.Time) error
 	DeleteForPlatform(context.Context, int64) error
 }
@@ -111,13 +112,16 @@ type repository interface {
 // sending path reads. The database stays the source of truth.
 type Store interface {
 	Load(context.Context, int64, func(context.Context) (Catalog, error)) (Catalog, error)
-	Mutate(context.Context, int64, func(context.Context) error) error
+}
+
+type RuntimeCoordinator interface {
+	Mutate(context.Context, func(context.Context, int64) (cachegeneration.MutationResult, error)) error
 }
 
 func policyResponseOf(value Model) PolicyResponse {
 	return PolicyResponse{
 		Key: value.Key, Mode: value.Mode, Dimension: value.Dimension,
 		Limit: value.Limit, WindowSeconds: value.WindowSeconds,
-		Revision: value.Revision, UpdatedAt: value.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt: value.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }

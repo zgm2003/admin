@@ -92,7 +92,6 @@ describe('mail rate limit tab', () => {
   it('sends only the edited row and keeps a per-row saving state', async () => {
     vi.mocked(mailApi.updateMailRateLimitPolicy).mockResolvedValue({
       platformId: 1,
-      version: 2,
       policy: { ...policies[0], limit: 2, windowSeconds: 120 },
     })
     const wrapper = mountTab(true)

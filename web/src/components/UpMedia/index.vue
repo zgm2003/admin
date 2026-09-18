@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { CircleCloseFilled, Picture, Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import type { UploadRequestOptions } from 'element-plus'
@@ -41,13 +41,24 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const inputRef = ref<HTMLInputElement>()
 const loading = ref(false)
-const previewUrls = ref<Record<string, string>>({})
+interface PreviewState {
+  url: string
+  expiresAt: string | null
+  requestId: number
+  pending: boolean
+}
+const previews = ref<Record<string, PreviewState>>({})
+let nextRequestId = 0
+let active = true
 
 const values = computed(() =>
   Array.isArray(props.modelValue) ? props.modelValue : props.modelValue ? [props.modelValue] : [],
 )
 const displayItems = computed(() =>
-  values.value.map((objectKey) => ({ objectKey, previewUrl: previewUrls.value[objectKey] ?? '' })),
+	values.value.map((objectKey) => ({
+		objectKey,
+		previewUrl: previews.value[objectKey]?.url ?? '',
+	})),
 )
 const avatarItem = computed(() => displayItems.value[0])
 
@@ -57,30 +68,67 @@ watch(
   { immediate: true },
 )
 
-async function hydratePreviews(nextValues: string[]): Promise<void> {
-  const missing = nextValues.filter((objectKey) => previewUrls.value[objectKey] === undefined)
-  if (missing.length === 0) return
-  const resolved = { ...previewUrls.value }
-  await Promise.all(
-    missing.map(async (objectKey) => {
-      try {
-        const result = await requestObjectURL(props.ruleCode, objectKey)
-        resolved[objectKey] = result.url
-      } catch {
-        resolved[objectKey] = ''
-      }
-    }),
-  )
-  previewUrls.value = resolved
+async function resolvePreview(objectKey: string, force = false): Promise<void> {
+	if (!active) return
+	const current = previews.value[objectKey]
+	if (current?.pending) return
+	if (
+		!force &&
+		current?.url &&
+		(current.expiresAt === null || Date.parse(current.expiresAt) > Date.now())
+	) {
+		return
+	}
+	const requestId = ++nextRequestId
+	previews.value = {
+		...previews.value,
+		[objectKey]: {
+			url: force ? '' : (current?.url ?? ''),
+			expiresAt: current?.expiresAt ?? null,
+			requestId,
+			pending: true,
+		},
+	}
+	try {
+		const result = await requestObjectURL(objectKey)
+		if (!active || previews.value[objectKey]?.requestId !== requestId) return
+		previews.value = {
+			...previews.value,
+			[objectKey]: { url: result.url, expiresAt: result.expiresAt, requestId, pending: false },
+		}
+	} catch {
+		if (!active || previews.value[objectKey]?.requestId !== requestId) return
+		previews.value = {
+			...previews.value,
+			[objectKey]: { url: '', expiresAt: null, requestId, pending: false },
+		}
+	}
 }
 
 watch(
   values,
   (next) => {
-    void hydratePreviews(next)
+		const retained: Record<string, PreviewState> = {}
+		for (const objectKey of next) {
+			retained[objectKey] =
+				previews.value[objectKey] ?? {
+					url: '',
+					expiresAt: null,
+					requestId: ++nextRequestId,
+					pending: false,
+				}
+		}
+		previews.value = retained
+		for (const objectKey of next) void resolvePreview(objectKey)
   },
   { immediate: true },
 )
+
+onBeforeUnmount(() => {
+	active = false
+	nextRequestId += 1
+	previews.value = {}
+})
 
 function openPicker(): void {
   if (!props.disabled && !loading.value) inputRef.value?.click()
@@ -132,10 +180,26 @@ async function uploadSelected(selected: File[]): Promise<boolean> {
     const next = props.multiple
       ? [...values.value, ...uploaded.map((item) => item.objectKey)]
       : (uploaded[0]?.objectKey ?? '')
-    const nextPreviews = props.multiple ? { ...previewUrls.value } : {}
-    for (const item of uploaded) nextPreviews[item.objectKey] = item.publicUrl ?? ''
-    previewUrls.value = nextPreviews
+		const nextPreviews: Record<string, PreviewState> = {}
+		if (props.multiple) {
+			for (const objectKey of values.value) {
+				const existing = previews.value[objectKey]
+				if (existing) nextPreviews[objectKey] = existing
+			}
+		}
+		for (const item of uploaded) {
+			nextPreviews[item.objectKey] = {
+				url: item.publicUrl ?? '',
+				expiresAt: null,
+				requestId: ++nextRequestId,
+				pending: false,
+			}
+		}
+		previews.value = nextPreviews
     emit('update:modelValue', next)
+		for (const item of uploaded) {
+			if (!item.publicUrl) void resolvePreview(item.objectKey, true)
+		}
     return true
   } catch (error: unknown) {
     if (error instanceof DirectUploadError) ElMessage.error(error.message)
@@ -149,11 +213,15 @@ function clearAt(index: number): void {
   const next = values.value.filter((_value, itemIndex) => itemIndex !== index)
   const removed = values.value[index]
   if (removed) {
-    const nextPreviews = { ...previewUrls.value }
+		const nextPreviews = { ...previews.value }
     delete nextPreviews[removed]
-    previewUrls.value = nextPreviews
+		previews.value = nextPreviews
   }
   emit('update:modelValue', props.multiple ? next : '')
+}
+
+function handlePreviewError(objectKey: string): void {
+	void resolvePreview(objectKey, true)
 }
 
 class DirectUploadError extends Error {}
@@ -175,7 +243,13 @@ class DirectUploadError extends Error {}
       :disabled="disabled || loading"
       :http-request="onAvatarUpload"
     >
-      <img v-if="avatarItem?.previewUrl" :src="avatarItem.previewUrl" class="avatar" alt="" />
+			<img
+				v-if="avatarItem?.previewUrl"
+				:src="avatarItem.previewUrl"
+				class="avatar"
+				alt=""
+				@error="handlePreviewError(avatarItem.objectKey)"
+			/>
       <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
     </el-upload>
     <button
@@ -217,7 +291,12 @@ class DirectUploadError extends Error {}
         :disabled="disabled || loading || multiple"
         @click="openPicker"
       >
-        <img v-if="item.previewUrl" :src="item.previewUrl" alt="" />
+				<img
+					v-if="item.previewUrl"
+					:src="item.previewUrl"
+					alt=""
+					@error="handlePreviewError(item.objectKey)"
+				/>
         <Picture v-else class="up-media__placeholder" />
       </button>
       <button

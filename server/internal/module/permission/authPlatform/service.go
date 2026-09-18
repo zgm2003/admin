@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"admin/server/internal/module/auth/state"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
+	cachegeneration "admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
 	"golang.org/x/sync/singleflight"
@@ -110,12 +112,49 @@ type Service struct {
 	deleteSessionSnapshot SessionSnapshotDeleter
 	logger                *slog.Logger
 	deployment            Deployment
+	rateLimitGenerations  *cachegeneration.Repository
+	rateLimitStates       *cachegeneration.Store
+	mailRateLimitScope    cachegeneration.Scope
+	smsRateLimitScope     cachegeneration.Scope
 }
 
 type SessionSnapshotDeleter func(context.Context, string, int64) error
 
+const (
+	rateLimitGenerationWriteBudget = 500 * time.Millisecond
+	rateLimitGenerationWaitStep    = 20 * time.Millisecond
+)
+
+type rateLimitGenerationMutation struct {
+	bases  RateLimitGenerationBases
+	events RateLimitGenerationEvents
+	mail   *cachegeneration.Lease
+	sms    *cachegeneration.Lease
+}
+
 func NewService(repository *Repository, policies *PolicyStore, redis *projectredis.Client, authStates *authstate.Store, authInvalidator *authstate.Invalidator, deleteSessionSnapshot SessionSnapshotDeleter, logger *slog.Logger, deployment Deployment) *Service {
 	return &Service{repository: repository, policyReader: repository, policies: policies, redis: redis, authStates: authStates, authInvalidator: authInvalidator, deleteSessionSnapshot: deleteSessionSnapshot, logger: logger, deployment: deployment}
+}
+
+func (s *Service) SetRateLimitCacheGenerations(repository *cachegeneration.Repository, store *cachegeneration.Store, mailScope, smsScope cachegeneration.Scope) {
+	s.rateLimitGenerations = repository
+	s.rateLimitStates = store
+	s.mailRateLimitScope = mailScope
+	s.smsRateLimitScope = smsScope
+}
+
+func (s *Service) ValidateRateLimitCacheDependencies() error {
+	if s == nil || s.repository == nil || s.rateLimitGenerations == nil || s.rateLimitStates == nil ||
+		s.repository.rateLimitPolicyProvision == nil || s.repository.rateLimitPolicyDelete == nil {
+		return fmt.Errorf("authentication platform rate limit generation dependencies are required")
+	}
+	if s.mailRateLimitScope.Namespace != "message.mail" || s.mailRateLimitScope.ScopeKey != "global" {
+		return fmt.Errorf("authentication platform mail rate limit generation scope is invalid")
+	}
+	if s.smsRateLimitScope.Namespace != "message.sms" || s.smsRateLimitScope.ScopeKey != "global" {
+		return fmt.Errorf("authentication platform SMS rate limit generation scope is invalid")
+	}
+	return nil
 }
 
 func (s *Service) CurrentPolicy(ctx context.Context, code string) (Policy, error) {
@@ -310,28 +349,39 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 	if err := ValidatePlatform(value); err != nil {
 		return 0, invalidPolicy(err)
 	}
-	lease, err := s.policies.acquire(ctx, value.Code, nil)
+	rateLimitMutation, err := s.beginRateLimitGenerationMutation(ctx)
 	if err != nil {
 		return 0, dependencyUnavailable(err)
 	}
-	if err := s.repository.Transaction(ctx, func(scoped *Repository) error {
-		history, findErr := scoped.LockByCodeUnscoped(ctx, value.Code)
+	lease, err := s.policies.acquire(ctx, value.Code, nil)
+	if err != nil {
+		_ = s.rollbackRateLimitGenerationMutation(ctx, rateLimitMutation)
+		return 0, dependencyUnavailable(err)
+	}
+	mutationCtx, stopGenerationRenewal := s.startRateLimitGenerationRenewal(ctx, rateLimitMutation)
+	transactionErr := s.repository.Transaction(mutationCtx, func(scoped *Repository) error {
+		history, findErr := scoped.LockByCodeUnscoped(mutationCtx, value.Code)
 		if findErr != nil {
 			return findErr
 		}
 		if len(history) != 0 {
 			return ErrCodeConflict
 		}
-		if err := scoped.Create(ctx, &value); err != nil {
+		if err := scoped.Create(mutationCtx, &value); err != nil {
 			return err
 		}
-		return scoped.provisionRateLimitPolicies(ctx, value.ID)
-	}); err != nil {
+		events, provisionErr := scoped.provisionRateLimitPolicies(mutationCtx, value.ID, rateLimitMutation.bases, now)
+		rateLimitMutation.events = events
+		return provisionErr
+	})
+	stopGenerationRenewal()
+	committed, finishErr := s.finishRateLimitGenerationMutation(ctx, rateLimitMutation, transactionErr)
+	if finishErr != nil || !committed {
 		_ = lease.rollback(ctx)
-		if errors.Is(err, ErrCodeConflict) {
-			return 0, codeConflict(err)
+		if errors.Is(finishErr, ErrCodeConflict) {
+			return 0, codeConflict(finishErr)
 		}
-		return 0, dependencyUnavailable(err)
+		return 0, dependencyUnavailable(finishErr)
 	}
 	policy, err := policyFromModel(value)
 	if err != nil {
@@ -481,10 +531,25 @@ func (s *Service) mutate(ctx context.Context, id int64, planner func(Platform, P
 			return dependencyUnavailable(err)
 		}
 	}
+	var rateLimitMutation *rateLimitGenerationMutation
+	if plan.deletePlatform {
+		rateLimitMutation, err = s.beginRateLimitGenerationMutation(ctx)
+		if err != nil {
+			if authLease != nil {
+				_ = authLease.Rollback(ctx)
+			}
+			_ = lease.rollback(ctx)
+			return dependencyUnavailable(err)
+		}
+	}
 	mutationCtx, stopPolicyRenewal := lease.StartRenewal(ctx)
 	var stopAuthRenewal func()
 	if authLease != nil {
 		mutationCtx, stopAuthRenewal = authLease.StartRenewal(mutationCtx)
+	}
+	var stopRateLimitRenewal func()
+	if rateLimitMutation != nil {
+		mutationCtx, stopRateLimitRenewal = s.startRateLimitGenerationRenewal(mutationCtx, rateLimitMutation)
 	}
 	var revoked []SessionRef
 	err = s.repository.Transaction(ctx, func(scoped *Repository) error {
@@ -535,7 +600,9 @@ func (s *Service) mutate(ctx context.Context, id int64, planner func(Platform, P
 		if plan.deletePlatform {
 			_, lockErr = scoped.SoftDelete(mutationCtx, id, now)
 			if lockErr == nil {
-				lockErr = scoped.deleteRateLimitPolicies(mutationCtx, id)
+				events, lifecycleErr := scoped.deleteRateLimitPolicies(mutationCtx, id, rateLimitMutation.bases, now)
+				rateLimitMutation.events = events
+				lockErr = lifecycleErr
 			}
 		} else if plan.status != nil {
 			_, lockErr = scoped.UpdateStatus(mutationCtx, id, *plan.status, now)
@@ -552,9 +619,20 @@ func (s *Service) mutate(ctx context.Context, id int64, planner func(Platform, P
 		}
 		return lockErr
 	})
+	if stopRateLimitRenewal != nil {
+		stopRateLimitRenewal()
+	}
 	stopPolicyRenewal()
 	if stopAuthRenewal != nil {
 		stopAuthRenewal()
+	}
+	if rateLimitMutation != nil {
+		committed, finishErr := s.finishRateLimitGenerationMutation(ctx, rateLimitMutation, err)
+		if !committed {
+			err = finishErr
+		} else {
+			err = nil
+		}
 	}
 	if err != nil {
 		if authLease != nil {
@@ -603,6 +681,195 @@ func (s *Service) mutate(ctx context.Context, id int64, planner func(Platform, P
 		return dependencyUnavailable(err)
 	}
 	return nil
+}
+
+func (s *Service) beginRateLimitGenerationMutation(ctx context.Context) (*rateLimitGenerationMutation, error) {
+	if s.rateLimitGenerations == nil || s.rateLimitStates == nil {
+		return nil, fmt.Errorf("authentication platform rate limit generation dependencies are required")
+	}
+	if err := s.mailRateLimitScope.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.smsRateLimitScope.Validate(); err != nil {
+		return nil, err
+	}
+	deadline := time.Now().Add(rateLimitGenerationWriteBudget)
+	for {
+		mailGeneration, err := s.rateLimitGenerations.Current(ctx, s.mailRateLimitScope)
+		if err != nil {
+			return nil, err
+		}
+		smsGeneration, err := s.rateLimitGenerations.Current(ctx, s.smsRateLimitScope)
+		if err != nil {
+			return nil, err
+		}
+		mailLease, err := s.acquireRateLimitGenerationLease(ctx, s.mailRateLimitScope, mailGeneration)
+		if err != nil {
+			if !isRateLimitGenerationRace(err) {
+				return nil, err
+			}
+			acquireErr := err
+			if waitErr := waitForRateLimitGenerationRetry(ctx, deadline); waitErr != nil {
+				return nil, errors.Join(fmt.Errorf("acquire mail rate limit generation: %w", acquireErr), waitErr)
+			}
+			continue
+		}
+		smsLease, err := s.acquireRateLimitGenerationLease(ctx, s.smsRateLimitScope, smsGeneration)
+		if err == nil {
+			return &rateLimitGenerationMutation{
+				bases: RateLimitGenerationBases{Mail: mailGeneration, SMS: smsGeneration},
+				mail:  mailLease, sms: smsLease,
+			}, nil
+		}
+		rollbackErr := mailLease.Rollback(ctx)
+		if rollbackErr != nil {
+			return nil, errors.Join(err, rollbackErr)
+		}
+		if !isRateLimitGenerationRace(err) {
+			return nil, err
+		}
+		if waitErr := waitForRateLimitGenerationRetry(ctx, deadline); waitErr != nil {
+			return nil, errors.Join(err, waitErr)
+		}
+	}
+}
+
+func (s *Service) acquireRateLimitGenerationLease(ctx context.Context, scope cachegeneration.Scope, expected int64) (*cachegeneration.Lease, error) {
+	lease, err := s.rateLimitStates.Acquire(ctx, scope, expected)
+	if err == nil {
+		return lease, nil
+	}
+	if !errors.Is(err, cachegeneration.ErrStateMissing) && !errors.Is(err, cachegeneration.ErrStateCorrupt) {
+		return nil, err
+	}
+	if _, reconcileErr := s.rateLimitStates.Reconcile(ctx, scope, expected); reconcileErr != nil {
+		return nil, errors.Join(err, reconcileErr)
+	}
+	return s.rateLimitStates.Acquire(ctx, scope, expected)
+}
+
+func isRateLimitGenerationRace(err error) bool {
+	return errors.Is(err, cachegeneration.ErrUpdating) || errors.Is(err, cachegeneration.ErrGenerationChanged)
+}
+
+func waitForRateLimitGenerationRetry(ctx context.Context, deadline time.Time) error {
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return fmt.Errorf("authentication platform rate limit generation mutation budget exhausted")
+	}
+	wait := rateLimitGenerationWaitStep
+	if remaining < wait {
+		wait = remaining
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func (s *Service) startRateLimitGenerationRenewal(parent context.Context, mutation *rateLimitGenerationMutation) (context.Context, func()) {
+	ctx, cancel := context.WithCancelCause(parent)
+	var waitGroup sync.WaitGroup
+	for _, lease := range []*cachegeneration.Lease{mutation.mail, mutation.sms} {
+		waitGroup.Add(1)
+		go func(active *cachegeneration.Lease) {
+			defer waitGroup.Done()
+			ticker := time.NewTicker(cachegeneration.MutationRenewInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					if err := active.Renew(ctx); err != nil {
+						cancel(err)
+						return
+					}
+				}
+			}
+		}(lease)
+	}
+	return ctx, func() {
+		cancel(nil)
+		waitGroup.Wait()
+	}
+}
+
+func (s *Service) finishRateLimitGenerationMutation(ctx context.Context, mutation *rateLimitGenerationMutation, transactionErr error) (bool, error) {
+	if transactionErr == nil {
+		s.publishRateLimitGenerationMutation(ctx, mutation, mutation.events.Mail.Generation, mutation.events.SMS.Generation)
+		return true, nil
+	}
+	mailGeneration, mailErr := s.rateLimitGenerations.Current(ctx, s.mailRateLimitScope)
+	smsGeneration, smsErr := s.rateLimitGenerations.Current(ctx, s.smsRateLimitScope)
+	if mailErr != nil || smsErr != nil {
+		return false, errors.Join(transactionErr, mailErr, smsErr)
+	}
+	mailAdvanced := mailGeneration > mutation.bases.Mail
+	smsAdvanced := smsGeneration > mutation.bases.SMS
+	switch {
+	case !mailAdvanced && !smsAdvanced:
+		return false, errors.Join(transactionErr, s.rollbackRateLimitGenerationMutation(ctx, mutation))
+	case mailAdvanced && smsAdvanced:
+		s.publishRateLimitGenerationMutation(ctx, mutation, mailGeneration, smsGeneration)
+		return true, nil
+	default:
+		if mailAdvanced {
+			s.publishRateLimitGenerationLease(ctx, mutation.mail, mutation.events.Mail, mailGeneration)
+		} else if err := mutation.mail.Rollback(ctx); err != nil {
+			s.logRateLimitGenerationFailure("rollback mail generation after inconsistent transaction", s.mailRateLimitScope, mutation.bases.Mail, 0, err)
+		}
+		if smsAdvanced {
+			s.publishRateLimitGenerationLease(ctx, mutation.sms, mutation.events.SMS, smsGeneration)
+		} else if err := mutation.sms.Rollback(ctx); err != nil {
+			s.logRateLimitGenerationFailure("rollback sms generation after inconsistent transaction", s.smsRateLimitScope, mutation.bases.SMS, 0, err)
+		}
+		return false, errors.Join(transactionErr, fmt.Errorf("authentication platform rate limit generations committed inconsistently: mail=%d sms=%d", mailGeneration, smsGeneration))
+	}
+}
+
+func (s *Service) rollbackRateLimitGenerationMutation(ctx context.Context, mutation *rateLimitGenerationMutation) error {
+	if mutation == nil {
+		return nil
+	}
+	var result error
+	if mutation.sms != nil {
+		result = errors.Join(result, mutation.sms.Rollback(ctx))
+	}
+	if mutation.mail != nil {
+		result = errors.Join(result, mutation.mail.Rollback(ctx))
+	}
+	return result
+}
+
+func (s *Service) publishRateLimitGenerationMutation(ctx context.Context, mutation *rateLimitGenerationMutation, mailGeneration, smsGeneration int64) {
+	s.publishRateLimitGenerationLease(ctx, mutation.mail, mutation.events.Mail, mailGeneration)
+	s.publishRateLimitGenerationLease(ctx, mutation.sms, mutation.events.SMS, smsGeneration)
+}
+
+func (s *Service) publishRateLimitGenerationLease(ctx context.Context, lease *cachegeneration.Lease, event cachegeneration.Event, generation int64) {
+	if err := lease.Commit(ctx, generation); err != nil {
+		s.logRateLimitGenerationFailure("publish authentication platform rate limit generation failed", event.Scope, generation, event.ID, err)
+		return
+	}
+	if event.ID < 1 {
+		s.logRateLimitGenerationFailure("authentication platform rate limit outbox event is missing", event.Scope, generation, event.ID, fmt.Errorf("outbox event is missing"))
+		return
+	}
+	if _, err := s.rateLimitGenerations.MarkPublishedIfUnclaimed(ctx, event.ID, time.Now().UTC()); err != nil {
+		s.logRateLimitGenerationFailure("mark authentication platform rate limit outbox published failed", event.Scope, generation, event.ID, err)
+	}
+}
+
+func (s *Service) logRateLimitGenerationFailure(message string, scope cachegeneration.Scope, generation, outboxID int64, err error) {
+	if s.logger == nil {
+		return
+	}
+	s.logger.Error(message, "namespace", scope.Namespace, "scopeKey", scope.ScopeKey, "generation", generation, "outboxId", outboxID, "error", err)
 }
 
 func samePlatformRuntimeValues(left, right Policy) bool {

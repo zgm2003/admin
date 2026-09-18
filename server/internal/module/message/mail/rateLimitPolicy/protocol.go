@@ -3,6 +3,8 @@ package ratelimitpolicy
 import (
 	"context"
 	"time"
+
+	cachegeneration "admin/server/internal/shared/cacheGeneration"
 )
 
 const PermissionUpdate = "message:mail:rate-limit:update"
@@ -17,22 +19,22 @@ type Catalog struct {
 	PlatformID   int64
 	PlatformCode string
 	PlatformName string
-	Version      int64
 	Policies     []Model
 }
 
 type Store interface {
 	Load(context.Context, int64) (Catalog, error)
-	Update(context.Context, int64, Input) (Catalog, error)
+}
+
+type RuntimeCoordinator interface {
+	Mutate(context.Context, func(context.Context, int64) (cachegeneration.MutationResult, error)) error
 }
 
 type Snapshot struct {
 	SchemaVersion int                       `json:"schemaVersion"`
-	State         string                    `json:"state"`
+	Generation    int64                     `json:"generation"`
 	PlatformID    int64                     `json:"platformId"`
-	Version       int64                     `json:"version"`
-	Policies      map[string]snapshotPolicy `json:"policies,omitempty"`
-	MutationToken *string                   `json:"mutationToken"`
+	Policies      map[string]snapshotPolicy `json:"policies"`
 }
 
 type snapshotPolicy struct {
@@ -69,7 +71,6 @@ type PlatformResponse struct {
 	PlatformID   int64            `json:"platformId"`
 	PlatformCode string           `json:"platformCode"`
 	PlatformName string           `json:"platformName"`
-	Version      int64            `json:"version"`
 	Policies     []PolicyResponse `json:"policies"`
 }
 
@@ -79,7 +80,6 @@ type ListResponse struct {
 
 type UpdateResponse struct {
 	PlatformID int64          `json:"platformId"`
-	Version    int64          `json:"version"`
 	Policy     PolicyResponse `json:"policy"`
 }
 

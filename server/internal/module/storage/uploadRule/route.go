@@ -15,5 +15,5 @@ func RegisterRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, req fu
 
 func RegisterCredentialRoute(r *gin.RouterGroup, h *Handler, authMiddleware gin.HandlerFunc, req func(string) gin.HandlerFunc) {
 	r.POST("/storage/upload-credential", authMiddleware, req("storage:object:upload"), h.Credentials)
-	r.POST("/storage/object-url", authMiddleware, req("storage:object:upload"), h.ObjectURL)
+	r.POST("/storage/object-url", authMiddleware, h.ObjectURL)
 }

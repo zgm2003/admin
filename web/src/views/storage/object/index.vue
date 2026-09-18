@@ -246,9 +246,8 @@ async function saveConfig(): Promise<void> {
     () => false,
   )
   if (!valid || !validateConfigURLs()) return
-  const base = {
+  const mutable = {
     name: configForm.value.name.trim(),
-    appId: configForm.value.appId.trim(),
     bucket: configForm.value.bucket.trim(),
     region: configForm.value.region.trim(),
     endpoint: configForm.value.endpoint || null,
@@ -258,14 +257,15 @@ async function saveConfig(): Promise<void> {
   try {
     if (editingConfig.value) {
       const data: UpdateCosConfigInput = {
-        ...base,
+				...mutable,
         ...(configForm.value.secretId ? { secretId: configForm.value.secretId } : {}),
         ...(configForm.value.secretKey ? { secretKey: configForm.value.secretKey } : {}),
       }
       await updateCosConfig(editingConfig.value, data)
     } else {
       const data: CreateCosConfigInput = {
-        ...base,
+				...mutable,
+				appId: configForm.value.appId.trim(),
         secretId: configForm.value.secretId,
         secretKey: configForm.value.secretKey,
         isEnabled: configForm.value.isEnabled,
@@ -286,24 +286,38 @@ async function saveRule(): Promise<void> {
   const { codes, allowedExtensions, allowedMimeTypes } = normalizedValues
   const valid = await (ruleDialogRef.value?.validate() ?? Promise.resolve(false)).catch(() => false)
   if (!valid) return
-  const normalized = {
+	const mutable = {
     codes,
     name: ruleForm.value.name.trim(),
-    cosConfigId: ruleForm.value.cosConfigId,
     maxFileSizeBytes: ruleForm.value.maxFileSizeBytes,
     allowedExtensions,
     allowedMimeTypes,
-    accessMode: ruleForm.value.accessMode,
     remark: ruleForm.value.remark.trim(),
   }
   try {
-    if (editingRule.value) await updateUploadRule(editingRule.value, normalized)
-    else
+		if (editingRule.value) await updateUploadRule(editingRule.value, mutable)
+		else {
+			if (
+				ruleForm.value.isEnabled === YesNo.Yes &&
+				rules.value.some(
+					(rule) =>
+						rule.platformId === ruleForm.value.platformId && rule.isEnabled === YesNo.Yes,
+				)
+			) {
+				await ElMessageBox.confirm(
+					t('storage.confirmEnabledRuleReplacement'),
+					t('storage.status'),
+					{ type: 'warning' },
+				)
+			}
       await createUploadRule({
-        ...normalized,
+				...mutable,
         platformId: ruleForm.value.platformId,
+				cosConfigId: ruleForm.value.cosConfigId,
+				accessMode: ruleForm.value.accessMode,
         isEnabled: ruleForm.value.isEnabled,
       })
+		}
     ruleDialog.value = false
     ElNotification.success({ title: t('storage.saveSuccess') })
     await loadRules()
@@ -322,8 +336,18 @@ async function toggleConfig(row: CosConfig): Promise<void> {
 }
 async function toggleRule(row: UploadRule): Promise<void> {
   try {
-    await ElMessageBox.confirm(t('storage.confirmStatus'), t('storage.status'), { type: 'warning' })
-    await updateUploadRuleStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
+		const next = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
+		const replacesEnabled =
+			next === YesNo.Yes &&
+			rules.value.some(
+				(rule) => rule.id !== row.id && rule.platformId === row.platformId && rule.isEnabled === YesNo.Yes,
+			)
+		await ElMessageBox.confirm(
+			t(replacesEnabled ? 'storage.confirmEnabledRuleReplacement' : 'storage.confirmStatus'),
+			t('storage.status'),
+			{ type: 'warning' },
+		)
+		await updateUploadRuleStatus(row.id, next)
     await loadRules()
   } catch {
     /* MessageBox cancellation stays silent; request.ts reports request errors. */

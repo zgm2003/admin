@@ -9,6 +9,7 @@ import (
 
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -45,42 +46,65 @@ func (f *fakeRepository) FindByID(_ context.Context, id int64) (Model, error) {
 	return Model{}, gorm.ErrRecordNotFound
 }
 
-func (f *fakeRepository) Create(_ context.Context, value *Model) error {
+func (f *fakeRepository) Create(_ context.Context, value *Model, expected int64, _ time.Time) (cachegeneration.MutationResult, error) {
 	if f.createErr != nil {
-		return f.createErr
+		return cachegeneration.MutationResult{}, f.createErr
 	}
 	if f.writeErr != nil {
-		return f.writeErr
+		return cachegeneration.MutationResult{}, f.writeErr
 	}
 	f.created = *value
 	value.ID = 11
-	return nil
+	return ruleMutation(expected), nil
 }
 
-func (f *fakeRepository) Update(_ context.Context, value *Model, now time.Time) error {
+func (f *fakeRepository) Update(_ context.Context, value *Model, expected int64, _ time.Time) (cachegeneration.MutationResult, error) {
 	if f.writeErr != nil {
-		return f.writeErr
+		return cachegeneration.MutationResult{}, f.writeErr
 	}
 	f.updatedID = value.ID
 	f.updated = *value
-	return nil
+	return ruleMutation(expected), nil
 }
 
-func (f *fakeRepository) UpdateStatus(_ context.Context, id int64, status int16, now time.Time) error {
+func (f *fakeRepository) UpdateStatus(_ context.Context, id int64, status int16, expected int64, _ time.Time) (cachegeneration.MutationResult, error) {
 	if f.writeErr != nil {
-		return f.writeErr
+		return cachegeneration.MutationResult{}, f.writeErr
 	}
 	f.statusID = id
 	f.status = status
-	return nil
+	return ruleMutation(expected), nil
 }
 
-func (f *fakeRepository) Delete(_ context.Context, id int64) error {
+func (f *fakeRepository) Delete(_ context.Context, id int64, expected int64, _ time.Time) (cachegeneration.MutationResult, error) {
 	if f.writeErr != nil {
-		return f.writeErr
+		return cachegeneration.MutationResult{}, f.writeErr
 	}
 	f.deletedID = id
-	return nil
+	return ruleMutation(expected), nil
+}
+
+type passthroughRuntime struct{ generation int64 }
+
+func (r *passthroughRuntime) Mutate(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+	if r.generation == 0 {
+		r.generation = 1
+	}
+	result, err := change(ctx, r.generation)
+	if err == nil && result.Changed {
+		r.generation = result.Generation
+	}
+	return err
+}
+
+func ruleMutation(expected int64) cachegeneration.MutationResult {
+	return cachegeneration.MutationResult{Changed: true, Generation: expected + 1, OutboxID: expected}
+}
+
+func newMutationService(repository repository, keys *secretkey.KeyRing) *Service {
+	service := NewService(repository, keys)
+	service.SetRuntimeCoordinator(&passthroughRuntime{})
+	return service
 }
 
 func testKeys(t *testing.T) *secretkey.KeyRing {
@@ -133,7 +157,7 @@ func TestListReturnsHintsOnly(t *testing.T) {
 func TestCreateNormalizesEncryptsAndHashesThePattern(t *testing.T) {
 	keys := testKeys(t)
 	repository := &fakeRepository{}
-	service := NewService(repository, keys)
+	service := newMutationService(repository, keys)
 
 	safe, err := service.Create(context.Background(), CreateInput{
 		Scope: ScopePhone, Pattern: " 156 7162 8271 ", Action: ActionDeny, Name: " 黑名单 ", IsEnabled: yesno.Yes,
@@ -185,7 +209,7 @@ func TestCreateRejectsPatternsOutsideTheirScope(t *testing.T) {
 func TestCreateMapsUniqueConflictsToConflict(t *testing.T) {
 	keys := testKeys(t)
 	repository := &fakeRepository{createErr: ErrConflict}
-	_, err := NewService(repository, keys).Create(context.Background(), CreateInput{
+	_, err := newMutationService(repository, keys).Create(context.Background(), CreateInput{
 		Scope: ScopePhone, Pattern: "+8615671628271", Action: ActionDeny, Name: "rule", IsEnabled: yesno.Yes,
 	})
 	if appErrorCode(err) != apperror.CodeConflict {
@@ -198,7 +222,7 @@ func TestUpdateKeepsThePatternWhenItIsOmitted(t *testing.T) {
 	row := ruleRow(t, keys, 3, ScopePhone, "+8615671628271", ActionDeny, yesno.Yes)
 	repository := &fakeRepository{rows: []Model{row}}
 
-	_, err := NewService(repository, keys).Update(context.Background(), 3, UpdateInput{
+	_, err := newMutationService(repository, keys).Update(context.Background(), 3, UpdateInput{
 		Scope: ScopePhone, Action: ActionAllow, Name: "改名", IsEnabled: yesno.Yes,
 	})
 	if err != nil {
@@ -224,7 +248,7 @@ func TestUpdateRequiresAPatternWhenTheScopeChanges(t *testing.T) {
 	}
 
 	pattern := "+86156"
-	if _, err := NewService(repository, keys).Update(context.Background(), 3, UpdateInput{
+	if _, err := newMutationService(repository, keys).Update(context.Background(), 3, UpdateInput{
 		Scope: ScopePrefix, Pattern: &pattern, Action: ActionDeny, Name: "改名", IsEnabled: yesno.Yes,
 	}); err != nil {
 		t.Fatalf("Update() with a new pattern error = %v", err)
@@ -252,7 +276,7 @@ func TestUpdateStatusAndDeleteForwardToTheRepository(t *testing.T) {
 	keys := testKeys(t)
 	row := ruleRow(t, keys, 5, ScopePhone, "+8615671628271", ActionDeny, yesno.Yes)
 	repository := &fakeRepository{rows: []Model{row}}
-	service := NewService(repository, keys)
+	service := newMutationService(repository, keys)
 
 	if err := service.UpdateStatus(context.Background(), 5, yesno.No); err != nil {
 		t.Fatalf("UpdateStatus() error = %v", err)

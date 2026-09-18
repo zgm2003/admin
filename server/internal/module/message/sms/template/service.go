@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -30,9 +31,9 @@ func (s *Service) SetRuntimeCoordinator(runtime RuntimeCoordinator) {
 
 // mutate runs one write and, when a runtime coordinator is wired, invalidates
 // the runtime snapshot only after the database change succeeds.
-func (s *Service) mutate(ctx context.Context, change func(context.Context) error) error {
+func (s *Service) mutate(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
 	if s.runtime == nil {
-		return change(ctx)
+		return apperror.DependencyUnavailable(fmt.Errorf("sms runtime coordinator is unavailable"))
 	}
 	if err := s.runtime.Mutate(ctx, change); err != nil {
 		return apperror.DependencyUnavailable(err)
@@ -108,8 +109,8 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (Safe
 	current.ExampleVariables = jsonOf(input.ExampleVariables)
 
 	now := time.Now().UTC()
-	if err := s.mutate(ctx, func(writeContext context.Context) error {
-		return s.repository.Update(writeContext, &current, now)
+	if err := s.mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+		return s.repository.Update(writeContext, &current, expected, now)
 	}); err != nil {
 		return Safe{}, apperror.DependencyUnavailable(fmt.Errorf("update sms template: %w", err))
 	}
@@ -144,8 +145,9 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, status yesno.Value
 			return apperror.InvalidRequest(fmt.Errorf("an enabled sms template requires every example variable"))
 		}
 	}
-	if err := s.mutate(ctx, func(writeContext context.Context) error {
-		return s.repository.UpdateStatus(writeContext, id, int16(status), time.Now().UTC())
+	now := time.Now().UTC()
+	if err := s.mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+		return s.repository.UpdateStatus(writeContext, id, int16(status), expected, now)
 	}); err != nil {
 		return apperror.DependencyUnavailable(err)
 	}

@@ -2,14 +2,27 @@ package rateLimitPolicy
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	cachegeneration "admin/server/internal/shared/cacheGeneration"
+
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
-type Repository struct{ db *gorm.DB }
+type Repository struct {
+	db          *gorm.DB
+	generations *cachegeneration.Repository
+	scope       cachegeneration.Scope
+}
 
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
+
+func (r *Repository) SetGenerations(repository *cachegeneration.Repository, scope cachegeneration.Scope) {
+	r.generations = repository
+	r.scope = scope
+}
 
 type platformRow struct {
 	ID   int64
@@ -58,26 +71,57 @@ SELECT id, code, name FROM permission_auth_platform
 	}, nil
 }
 
-func (r *Repository) UpdatePolicy(ctx context.Context, platformID int64, key string, limit, windowSeconds int, now time.Time) (Model, error) {
-	result := r.db.WithContext(ctx).Model(&Model{}).
-		Where("platform_id = ? AND policy_key = ?", platformID, key).
-		Updates(map[string]any{
-			"limit_count":    limit,
-			"window_seconds": windowSeconds,
-			"revision":       gorm.Expr("revision + 1"),
-			"updated_at":     now,
-		})
-	if result.Error != nil {
-		return Model{}, result.Error
+func (r *Repository) UpdatePolicy(ctx context.Context, platformID int64, key string, limit, windowSeconds int, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
+	if r == nil || r.db == nil || r.generations == nil {
+		return cachegeneration.MutationResult{}, fmt.Errorf("sms rate limit generation dependencies are not configured")
 	}
-	if result.RowsAffected == 0 {
-		return Model{}, gorm.ErrRecordNotFound
+	if err := r.scope.Validate(); err != nil {
+		return cachegeneration.MutationResult{}, err
 	}
-	var value Model
-	if err := r.db.WithContext(ctx).Where("platform_id = ? AND policy_key = ?", platformID, key).First(&value).Error; err != nil {
-		return Model{}, err
+	mutation := cachegeneration.MutationResult{}
+	err := r.db.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
+		var rows []Model
+		if err := transaction.WithContext(ctx).Where("platform_id = ?", platformID).
+			Clauses(clause.Locking{Strength: "UPDATE"}).Order("policy_key").Find(&rows).Error; err != nil {
+			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, err)
+		}
+		policies, err := validatePolicyRows(platformID, rows)
+		if err != nil {
+			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, err)
+		}
+		var current Model
+		for _, policy := range policies {
+			if policy.Key == key {
+				current = policy
+				break
+			}
+		}
+		if current.Key == "" {
+			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, gorm.ErrRecordNotFound)
+		}
+		if current.Limit == limit && current.WindowSeconds == windowSeconds {
+			return nil
+		}
+		result := transaction.WithContext(ctx).Model(&Model{}).
+			Where("platform_id = ? AND policy_key = ?", platformID, key).
+			Updates(map[string]any{"limit_count": limit, "window_seconds": windowSeconds, "updated_at": now})
+		if result.Error != nil {
+			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, gorm.ErrRecordNotFound)
+		}
+		event, err := r.generations.AdvanceTx(ctx, transaction, r.scope, expected, now)
+		if err != nil {
+			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, err)
+		}
+		mutation = cachegeneration.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
+		return nil
+	})
+	if err != nil {
+		return cachegeneration.MutationResult{}, err
 	}
-	return value, nil
+	return mutation, nil
 }
 
 // ProvisionDefaults inserts the two fixed policies for a platform; it is
@@ -86,8 +130,8 @@ func (r *Repository) ProvisionDefaults(ctx context.Context, platformID int64, no
 	for _, fixed := range FixedPolicies() {
 		if err := r.db.WithContext(ctx).Exec(`
 INSERT INTO message_sms_rate_limit_policy
-  (platform_id, policy_key, mode, dimension, limit_count, window_seconds, revision, created_at, updated_at)
-VALUES (?,?,?,?,?,?,1,?,?)
+  (platform_id, policy_key, mode, dimension, limit_count, window_seconds, created_at, updated_at)
+VALUES (?,?,?,?,?,?,?,?)
 ON CONFLICT (platform_id, policy_key) DO NOTHING`,
 			platformID, fixed.Key, fixed.Mode, fixed.Dimension,
 			fixed.Limit, fixed.WindowSeconds, now, now).Error; err != nil {
@@ -108,5 +152,36 @@ func (r *Repository) policiesOf(ctx context.Context, platformID int64) ([]Model,
 		Order("policy_key").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	return rows, nil
+	return validatePolicyRows(platformID, rows)
+}
+
+func validatePolicyRows(platformID int64, rows []Model) ([]Model, error) {
+	if platformID < 1 || len(rows) == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	if len(rows) != len(FixedPolicies()) {
+		return nil, fmt.Errorf("sms rate limit policy catalog is incomplete")
+	}
+	byKey := make(map[string]Model, len(rows))
+	for _, row := range rows {
+		fixed, found := FixedPolicyByKey(row.Key)
+		if !found || row.PlatformID != platformID || row.Mode != fixed.Mode || row.Dimension != fixed.Dimension ||
+			row.Limit < minLimit || row.Limit > maxLimit || row.WindowSeconds < minWindowSeconds || row.WindowSeconds > maxWindowSeconds ||
+			row.CreatedAt.IsZero() || row.UpdatedAt.IsZero() {
+			return nil, fmt.Errorf("sms rate limit policy %q is invalid", row.Key)
+		}
+		if _, exists := byKey[row.Key]; exists {
+			return nil, fmt.Errorf("sms rate limit policy %q is duplicated", row.Key)
+		}
+		byKey[row.Key] = row
+	}
+	ordered := make([]Model, 0, len(rows))
+	for _, fixed := range FixedPolicies() {
+		row, found := byKey[fixed.Key]
+		if !found {
+			return nil, fmt.Errorf("sms rate limit policy %q is missing", fixed.Key)
+		}
+		ordered = append(ordered, row)
+	}
+	return ordered, nil
 }

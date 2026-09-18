@@ -1,6 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { request, ProtocolError } from '@/utils/request'
-import { parseCosConfigResponse, listCosConfigs, type CosConfig } from '@/api/storage/cosConfig'
+import {
+  listCosConfigs,
+  parseCosConfigResponse,
+  updateCosConfig,
+  type CosConfig,
+} from '@/api/storage/cosConfig'
 
 vi.mock('@/utils/request', async () => {
   const actual = await vi.importActual<typeof import('@/utils/request')>('@/utils/request')
@@ -26,6 +31,9 @@ describe('COS config API', () => {
   it('parses safe config metadata only', () => {
     expect(parseCosConfigResponse(config)).toEqual(config)
     expect(() => parseCosConfigResponse({ ...config, secretId: 'leak' })).toThrow(ProtocolError)
+    for (const field of ['currentVersion', 'generation', 'revision']) {
+      expect(() => parseCosConfigResponse({ ...config, [field]: 1 })).toThrow(ProtocolError)
+    }
   })
   it('uses the exact list endpoint and query', async () => {
     requestMock.mockResolvedValue({ list: [config], total: 1, page: 1, pageSize: 20 })
@@ -39,6 +47,30 @@ describe('COS config API', () => {
       method: 'GET',
       url: '/api/admin/v1/storage/cosconfig',
       params: { page: 1, pageSize: 20, keyword: 'main' },
+    })
+  })
+
+  it('updates only mutable business fields without appId or versions', async () => {
+    requestMock.mockResolvedValue({})
+    await updateCosConfig(7, {
+      name: 'Main v2',
+      bucket: 'assets-v2',
+      region: 'ap-shanghai',
+      endpoint: null,
+      bucketDomain: 'https://cdn.example.com',
+      remark: '',
+    })
+    expect(requestMock).toHaveBeenCalledWith({
+      method: 'PUT',
+      url: '/api/admin/v1/storage/cosconfig/7',
+      data: {
+        name: 'Main v2',
+        bucket: 'assets-v2',
+        region: 'ap-shanghai',
+        endpoint: null,
+        bucketDomain: 'https://cdn.example.com',
+        remark: '',
+      },
     })
   })
 })

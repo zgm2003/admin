@@ -93,7 +93,6 @@ const policies = [
     dimension: 'platform_phone' as const,
     limit: 1,
     windowSeconds: 60,
-    revision: 2,
     updatedAt: timestamp,
   },
   {
@@ -102,7 +101,6 @@ const policies = [
     dimension: 'platform_phone' as const,
     limit: 5,
     windowSeconds: 600,
-    revision: 2,
     updatedAt: timestamp,
   },
 ]
@@ -386,7 +384,7 @@ describe('SMS admin API protocol', () => {
   it.each([
     { invalidPolicies: [{ ...policies[0], limit: 0 }, policies[1]] },
     { invalidPolicies: [{ ...policies[0], windowSeconds: 0 }, policies[1]] },
-    { invalidPolicies: [{ ...policies[0], revision: 0 }, policies[1]] },
+    { invalidPolicies: [{ ...policies[0], revision: 2 }, policies[1]] },
     {
       invalidPolicies: [policies[0], { ...policies[1], key: 'business_phone_minute' }],
     },

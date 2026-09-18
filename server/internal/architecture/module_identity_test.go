@@ -47,7 +47,7 @@ func TestBusinessModulesKeepCanonicalTableNames(t *testing.T) {
 		"user/session": {"user_session"}, "user/loginLog": {"user_login_log"},
 		"permission/authPlatform": {"permission_auth_platform"}, "permission/menu": {"permission_menu"},
 		"permission/role": {"permission_role"}, "system/operationLog": {"system_operation_log"},
-		"storage/cosConfig": {"storage_cos_config"}, "storage/uploadRule": {"storage_upload_rule", "storage_upload_rule_code"},
+		"storage/cosConfig": {"storage_cos_config", "storage_cos_config_version"}, "storage/uploadRule": {"storage_upload_rule", "storage_upload_rule_code"},
 		"message/mail/config": {"message_mail_config"}, "message/mail/template": {"message_mail_template"},
 		"message/mail/log": {"message_mail_log"}, "message/mail/logVerification": {"message_mail_log_verification"},
 		"message/mail/rateLimitPolicy": {"message_mail_rate_limit_policy"}, "message/mail/recipientRule": {"message_mail_recipient_rule"},

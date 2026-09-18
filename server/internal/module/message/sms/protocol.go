@@ -3,6 +3,8 @@ package sms
 import (
 	"context"
 	"time"
+
+	"admin/server/internal/shared/cacheGeneration"
 )
 
 const (
@@ -99,5 +101,5 @@ type Limiter interface {
 // RuntimeCoordinator runs one write in a tokenized mutation so the runtime
 // snapshot is invalidated only after the database change committed.
 type RuntimeCoordinator interface {
-	Mutate(context.Context, func(context.Context) error) error
+	Mutate(context.Context, func(context.Context, int64) (cachegeneration.MutationResult, error)) error
 }

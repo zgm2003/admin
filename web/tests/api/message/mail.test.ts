@@ -123,7 +123,7 @@ describe('mail rate limit protocol', () => {
     expect(
       parseMailRateLimitSnapshot({
         platforms: [
-          { platformId: 1, platformCode: 'admin', platformName: 'Admin', version: 3, policies },
+          { platformId: 1, platformCode: 'admin', platformName: 'Admin', policies },
         ],
       }),
     ).toEqual({
@@ -132,18 +132,16 @@ describe('mail rate limit protocol', () => {
           platformId: 1,
           platformCode: 'admin',
           platformName: 'Admin',
-          version: 3,
           policies: policies.map((policy) => ({ ...policy, platformId: 1 })),
         },
       ],
     })
-    expect(parseMailRateLimitUpdateResult({ platformId: 1, version: 3, policy })).toEqual({
+    expect(parseMailRateLimitUpdateResult({ platformId: 1, policy })).toEqual({
       platformId: 1,
-      version: 3,
       policy: { ...policy, platformId: 1 },
     })
     expect(() =>
-      parseMailRateLimitUpdateResult({ platformId: 1, version: 3, policy }, 'business_ip_minute'),
+      parseMailRateLimitUpdateResult({ platformId: 1, policy }, 'business_ip_minute'),
     ).toThrow()
   })
 
@@ -158,7 +156,7 @@ describe('mail rate limit protocol', () => {
     expect(() => parseMailRateLimitPolicy({ ...policy, dimension: 'email' })).toThrow()
   })
 
-  it('rejects incomplete snapshots and missing version', () => {
+  it('rejects incomplete snapshots and obsolete version fields', () => {
     expect(() =>
       parseMailRateLimitSnapshot({
         platforms: [
@@ -166,20 +164,17 @@ describe('mail rate limit protocol', () => {
         ],
       }),
     ).toThrow()
+    const policies = Object.keys(policyMetadata).map((key) =>
+      policyFor(key as keyof typeof policyMetadata),
+    )
     expect(() =>
       parseMailRateLimitSnapshot({
         platforms: [
-          {
-            platformId: 1,
-            platformCode: 'admin',
-            platformName: 'Admin',
-            version: 0,
-            policies: [policy],
-          },
+          { platformId: 1, platformCode: 'admin', platformName: 'Admin', version: 3, policies },
         ],
       }),
     ).toThrow()
-    expect(() => parseMailRateLimitUpdateResult({ platformId: 1, policy })).toThrow()
+    expect(() => parseMailRateLimitUpdateResult({ platformId: 1, version: 3, policy })).toThrow()
   })
 
   it('rejects snapshots with duplicate policy keys', () => {
@@ -193,7 +188,6 @@ describe('mail rate limit protocol', () => {
             platformId: 1,
             platformCode: 'admin',
             platformName: 'Admin',
-            version: 3,
             policies: [...policies, policyFor('business_email_minute')],
           },
         ],

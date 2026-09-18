@@ -46,7 +46,7 @@ export interface CreateCosConfigInput {
 }
 export type UpdateCosConfigInput = Omit<
   CreateCosConfigInput,
-  'secretId' | 'secretKey' | 'isEnabled'
+  'appId' | 'secretId' | 'secretKey' | 'isEnabled'
 > & { secretId?: string; secretKey?: string }
 const configKeys = [
   'id',

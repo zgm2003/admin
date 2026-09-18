@@ -86,7 +86,8 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 这两张表是 append-only 审计事实，不含 `deleted_at`，不注册管理员删除 API、权限动作或前端删除控件；平台软删
 不得从审计 JOIN 中排除历史记录，平台 code 通过 `LEFT JOIN` 保留显示。
 Mail readiness 只按场景缓存，配置或模板变更一次性失效全局场景状态；认证平台只参与登录方式开关、发送日志
-归属和发送额度 key。缺失认证上下文不得回退到固定平台。当前只有 COS 上传配置允许按认证平台维护独立配置。
+归属和发送额度 key。缺失认证上下文不得回退到固定平台。COS 逻辑配置全局共享且可维护多条；上传规则按认证
+平台隔离，并通过 `cos_config_id` 选择全局配置。
 
 Mail 管理的限流策略与 `message_mail_config.ttl_minutes` 是所有邮件发送场景的共同规则来源，Auth 不新增
 固定重发间隔、验证码 TTL 或独立 cooldown。邮箱额度按同一平台、同一规范化邮箱共享，验证码内容仍按场景
@@ -115,6 +116,39 @@ verification 和身份 change log 均无删除 API。
 项目默认按百万级用户、多实例和高并发访问设计。共享请求热路径不得把 PostgreSQL 当作每请求配置中心，
 不得依赖单进程唯一状态或无界缓存；缓存、限流、队列和失效协议必须明确跨实例一致性、故障闭合和回源上限。
 跨模块 spec/plan 必须记录容量假设、热点查询预算、缓存更新策略和并发验证方式。
+
+### 配置缓存代际
+
+配置型缓存统一使用 PostgreSQL generation + durable outbox、Redis tokenized mutation lease、
+`ready/invalidating` state、generation 不可变 snapshot 和 `shared/cacheFill` 有界冷回源。固定 scopes 为：
+
+- `system.setting/global`
+- `system.dictionary/global`
+- `message.mail/global`
+- `message.sms/global`
+- `storage.cosconfig/<configId>`
+
+API 内各模块显式复用同一个 generation Repository/Store，但保留本模块的 snapshot codec、业务 Repository 和
+Service，不引入通用 CacheManager、运行时注册器或跨模块隐式 hook。ready 命中不读取 PostgreSQL；Redis I/O
+失败或 500ms 预算耗尽时失败闭合。PostgreSQL 提交后同步发布失败不否认已提交业务，pending outbox 由 Worker
+通用 relay 恢复；旧 generation 快照只通过不可达 key 与 TTL 回收。
+
+generation 只承担缓存代际，不是管理员乐观锁。普通管理 CRUD 使用 last-write-wins；COS physical version 只定位
+历史对象所在的物理配置。`permission_auth_platform.menu_version/policy_version`、
+`permission_access_version.version`、Session/authority generation、验证码、限流计数和队列状态保持原有事实归属，
+不得迁入配置 generation 表。
+
+### COS 对象路由
+
+`storage_cos_config` 是全局逻辑配置，当前物理坐标由 `current_version` 指向不可变的
+`storage_cos_config_version`；上传规则按认证平台隔离，创建后固定 platform/config/access mode，编码关系继续由
+`storage_upload_rule_code` 规范化维护并允许跨规则重复。新 object key 自描述 platform/rule/config/physical
+version，读取时仍与 PostgreSQL rule route 事实交叉校验。公开对象返回 Bucket Domain URL；私有对象只向已认证
+用户返回短期签名 GET URL，不由 Go API 代理对象内容。
+
+项目尚未上线期间，维护者批准的破坏性变更直接切换新契约；运行时代码不保留旧 DTO、旧字段、旧 Redis 协议、
+旧权限码或旧对象格式的双读、双写和回退。一次性 Redis 清理由 migration runner 使用固定 pattern 执行，禁止
+`KEYS`、`FLUSHDB` 和 `FLUSHALL`。
 
 ### 本轮收口的具体约束
 

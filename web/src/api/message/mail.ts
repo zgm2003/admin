@@ -535,7 +535,6 @@ export interface MailRateLimitPlatformCatalog {
   platformId: number
   platformCode: string
   platformName: string
-  version: number
   policies: MailRateLimitPolicy[]
 }
 export interface MailRateLimitSnapshot {
@@ -543,7 +542,6 @@ export interface MailRateLimitSnapshot {
 }
 export interface MailRateLimitUpdateResult {
   platformId: number
-  version: number
   policy: MailRateLimitPolicy
 }
 export interface MailRateLimitPolicyInput {
@@ -613,7 +611,7 @@ export function parseMailRateLimitSnapshot(value: unknown): MailRateLimitSnapsho
     (value) => {
       const platform = expectExactKeys(
         value,
-        ['platformId', 'platformCode', 'platformName', 'version', 'policies'],
+        ['platformId', 'platformCode', 'platformName', 'policies'],
         'mail rate limit platform catalog',
       )
       const platformId = expectInteger(
@@ -632,9 +630,6 @@ export function parseMailRateLimitSnapshot(value: unknown): MailRateLimitSnapsho
       )
       if (platformCode.trim() === '' || platformName.trim() === '')
         throw new ProtocolError('mail rate limit platform catalog identity is invalid')
-      const version = expectInteger(platform.version, 'mail rate limit platform catalog.version')
-      if (version < 1)
-        throw new ProtocolError('mail rate limit platform catalog.version is invalid')
       const policies = expectArray(
         platform.policies,
         'mail rate limit platform catalog.policies',
@@ -653,7 +648,7 @@ export function parseMailRateLimitSnapshot(value: unknown): MailRateLimitSnapsho
       ) {
         throw new ProtocolError('mail rate limit platform catalog policies are incomplete')
       }
-      return { platformId, platformCode, platformName, version, policies }
+      return { platformId, platformCode, platformName, policies }
     },
   )
   const platformIds = new Set(platforms.map((platform) => platform.platformId))
@@ -669,13 +664,11 @@ export function parseMailRateLimitUpdateResult(
 ): MailRateLimitUpdateResult {
   const data = expectExactKeys(
     value,
-    ['platformId', 'version', 'policy'],
+    ['platformId', 'policy'],
     'mail rate limit update result',
   )
   const platformId = expectInteger(data.platformId, 'mail rate limit update result.platformId')
   if (platformId < 1) throw new ProtocolError('mail rate limit update result.platformId is invalid')
-  const version = expectInteger(data.version, 'mail rate limit update result.version')
-  if (version < 1) throw new ProtocolError('mail rate limit update result.version is invalid')
   const policyData = expectExactKeys(
     data.policy,
     ['key', 'mode', 'dimension', 'limit', 'windowSeconds', 'updatedAt'],
@@ -685,7 +678,7 @@ export function parseMailRateLimitUpdateResult(
   if (expectedKey !== undefined && policy.key !== expectedKey) {
     throw new ProtocolError('mail rate limit update result.policy.key does not match the request')
   }
-  return { platformId, version, policy }
+  return { platformId, policy }
 }
 
 export function listMailRateLimitPolicies(): Promise<MailRateLimitSnapshot> {

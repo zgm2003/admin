@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowUp, Monitor, SwitchButton, User } from '@element-plus/icons-vue'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -47,22 +47,22 @@ const avatarObjectKey = computed(() => props.avatar || props.defaultAvatar)
 const avatarURL = ref('')
 const canOpenProfile = computed(() => access.hasPermission('user:profile:view'))
 let avatarRequestID = 0
+let active = true
 
 async function hydrateAvatar(objectKey: string): Promise<void> {
   const requestID = ++avatarRequestID
   avatarURL.value = ''
   if (!objectKey) return
   try {
-    const result = await requestObjectURL('avatar', objectKey)
-    if (requestID === avatarRequestID) avatarURL.value = result.url
+		const result = await requestObjectURL(objectKey)
+		if (active && requestID === avatarRequestID) avatarURL.value = result.url
   } catch {
-    if (requestID === avatarRequestID) avatarURL.value = ''
+		if (active && requestID === avatarRequestID) avatarURL.value = ''
   }
 }
 
 function handleAvatarError(): void {
-  avatarRequestID += 1
-  avatarURL.value = ''
+	void hydrateAvatar(avatarObjectKey.value)
 }
 
 watch(
@@ -72,6 +72,11 @@ watch(
   },
   { immediate: true },
 )
+
+onBeforeUnmount(() => {
+	active = false
+	avatarRequestID += 1
+})
 
 function handleAccountCommand(command: string | number | object): void {
   if (command === 'logout') {

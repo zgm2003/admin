@@ -16,6 +16,7 @@ import (
 	"admin/server/internal/shared/yesno"
 
 	goredis "github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 const generationTestKey = "auth.captcha.ttl_minutes"
@@ -29,7 +30,7 @@ type fakeRepository struct {
 	findErr        error
 	writeErr       error
 	brand          BrandSettings
-	mutation       MutationResult
+	mutation       cachegeneration.MutationResult
 	hasMutation    bool
 	mutationErr    error
 	onMutation     func(context.Context) error
@@ -37,6 +38,7 @@ type fakeRepository struct {
 	findDelay      time.Duration
 	findCallCount  int
 	brandCallCount int
+	mutationCalls  int
 }
 
 func (f *fakeRepository) findCalls() int {
@@ -51,22 +53,31 @@ func (f *fakeRepository) brandCalls() int {
 	return f.brandCallCount
 }
 
-func (f *fakeRepository) runMutation(ctx context.Context) (MutationResult, error) {
+func (f *fakeRepository) mutations() int {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	return f.mutationCalls
+}
+
+func (f *fakeRepository) runMutation(ctx context.Context) (cachegeneration.MutationResult, error) {
+	f.mutex.Lock()
+	f.mutationCalls++
+	f.mutex.Unlock()
 	if f.onMutation != nil {
 		if err := f.onMutation(ctx); err != nil {
-			return MutationResult{}, err
+			return cachegeneration.MutationResult{}, err
 		}
 	}
 	if f.mutationErr != nil {
-		return MutationResult{}, f.mutationErr
+		return cachegeneration.MutationResult{}, f.mutationErr
 	}
 	if f.writeErr != nil {
-		return MutationResult{}, f.writeErr
+		return cachegeneration.MutationResult{}, f.writeErr
 	}
 	if f.hasMutation {
 		return f.mutation, nil
 	}
-	return MutationResult{Generation: 2, OutboxID: 1, Changed: true}, nil
+	return cachegeneration.MutationResult{Generation: 2, OutboxID: 1, Changed: true}, nil
 }
 
 func (f *fakeRepository) List(context.Context, ListQuery) ([]Record, int64, error) {
@@ -99,7 +110,7 @@ func (f *fakeRepository) Find(ctx context.Context, key string) (Record, error) {
 	}
 	return row, nil
 }
-func (f *fakeRepository) Create(ctx context.Context, row *Record, _ int64) (MutationResult, error) {
+func (f *fakeRepository) Create(ctx context.Context, row *Record, _ int64) (cachegeneration.MutationResult, error) {
 	f.mutex.Lock()
 	f.create = *row
 	if row.ID == 0 {
@@ -112,16 +123,16 @@ func (f *fakeRepository) Create(ctx context.Context, row *Record, _ int64) (Muta
 	f.mutex.Unlock()
 	return f.runMutation(ctx)
 }
-func (f *fakeRepository) Update(ctx context.Context, _ string, row Record, _ int64) (MutationResult, error) {
+func (f *fakeRepository) Update(ctx context.Context, _ string, row Record, _ int64) (cachegeneration.MutationResult, error) {
 	f.mutex.Lock()
 	f.update = row
 	f.mutex.Unlock()
 	return f.runMutation(ctx)
 }
-func (f *fakeRepository) UpdateStatus(ctx context.Context, _ string, _ yesno.Value, _ int64, _ time.Time) (MutationResult, error) {
+func (f *fakeRepository) UpdateStatus(ctx context.Context, _ string, _ yesno.Value, _ int64, _ time.Time) (cachegeneration.MutationResult, error) {
 	return f.runMutation(ctx)
 }
-func (f *fakeRepository) Delete(ctx context.Context, _ string, _ int64, _ time.Time) (MutationResult, error) {
+func (f *fakeRepository) Delete(ctx context.Context, _ string, _ int64, _ time.Time) (cachegeneration.MutationResult, error) {
 	return f.runMutation(ctx)
 }
 func (f *fakeRepository) FindBrand(context.Context) (BrandSettings, error) {
@@ -137,9 +148,9 @@ func (f *fakeRepository) FindBrand(context.Context) (BrandSettings, error) {
 		TitleZhCN: rows[BrandTitleZhCNKey].Value, TitleEnUS: rows[BrandTitleEnUSKey].Value, DefaultAvatar: rows[BrandDefaultAvatarKey].Value,
 	}, nil
 }
-func (f *fakeRepository) UpdateBrand(ctx context.Context, brand BrandSettings, _ int64, _ time.Time) (MutationResult, error) {
+func (f *fakeRepository) UpdateBrand(ctx context.Context, brand BrandSettings, _ int64, _ time.Time) (cachegeneration.MutationResult, error) {
 	if f.writeErr != nil {
-		return MutationResult{}, f.writeErr
+		return cachegeneration.MutationResult{}, f.writeErr
 	}
 	f.brand = brand
 	return f.runMutation(ctx)
@@ -349,7 +360,7 @@ func TestServiceMutationRollsBackLeaseOnNoOp(t *testing.T) {
 			generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
 		},
 		hasMutation: true,
-		mutation:    MutationResult{Changed: false},
+		mutation:    cachegeneration.MutationResult{Changed: false},
 	}
 	service := harness.service(fake)
 
@@ -878,8 +889,62 @@ func TestServiceMutationWritesSingleStateWithoutKeyScan(t *testing.T) {
 	assertSettingOutbox(t, harness.db, harness.ctx, harness.scope.ScopeKey, 1, 2, true)
 }
 
-func TestServiceTwoInstancesSerializeMutationsThroughSingleLease(t *testing.T) {
+type blockingUpdateRepository struct {
+	repository
+	entered chan struct{}
+	release <-chan struct{}
+	once    sync.Once
+}
+
+func (r *blockingUpdateRepository) Update(ctx context.Context, key string, row Record, expected int64) (cachegeneration.MutationResult, error) {
+	r.once.Do(func() { close(r.entered) })
+	select {
+	case <-r.release:
+	case <-ctx.Done():
+		return cachegeneration.MutationResult{}, ctx.Err()
+	}
+	return r.repository.Update(ctx, key, row, expected)
+}
+
+type generationRaceRepository struct {
+	repository
+	db              *gorm.DB
+	generations     *cachegeneration.Repository
+	scope           cachegeneration.Scope
+	mutex           sync.Mutex
+	calls           int
+	rolledBackValue string
+}
+
+func (r *generationRaceRepository) Update(ctx context.Context, key string, row Record, expected int64) (cachegeneration.MutationResult, error) {
+	r.mutex.Lock()
+	r.calls++
+	first := r.calls == 1
+	r.mutex.Unlock()
+	if first {
+		if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			_, err := r.generations.AdvanceTx(ctx, tx, r.scope, expected, time.Now().UTC())
+			return err
+		}); err != nil {
+			return cachegeneration.MutationResult{}, err
+		}
+	}
+	result, err := r.repository.Update(ctx, key, row, expected)
+	if first && err != nil {
+		current, findErr := r.repository.Find(ctx, key)
+		if findErr != nil {
+			return cachegeneration.MutationResult{}, errors.Join(err, findErr)
+		}
+		r.mutex.Lock()
+		r.rolledBackValue = current.Value
+		r.mutex.Unlock()
+	}
+	return result, err
+}
+
+func TestServiceTwoInstancesSerializeConcurrentMutationsWithinBudget(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
+	seedSettingRow(t, harness.db, harness.ctx, numericSettingRow(generationTestKey, "2", yesno.No))
 	settings := loadSettingTestSettings(t)
 	secondClient, err := projectredis.Open(harness.ctx, settings.RedisURL)
 	if err != nil {
@@ -890,34 +955,31 @@ func TestServiceTwoInstancesSerializeMutationsThroughSingleLease(t *testing.T) {
 
 	release := make(chan struct{})
 	holding := make(chan struct{})
-	first := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
-	}}
-	first.onMutation = func(mutationCtx context.Context) error {
-		close(holding)
-		select {
-		case <-release:
-		case <-mutationCtx.Done():
-			return mutationCtx.Err()
-		}
-		if err := harness.db.WithContext(mutationCtx).Exec(
-			`UPDATE system_config_cache_generation SET generation = 2 WHERE namespace = 'system.setting' AND scope_key = ?`,
-			harness.scope.ScopeKey).Error; err != nil {
-			return err
-		}
-		return nil
-	}
-	first.hasMutation = true
-	first.mutation = MutationResult{Generation: 2, OutboxID: 0, Changed: true}
-	firstService := harness.service(first)
-
-	second := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
-	}}
-	second.hasMutation = true
-	second.mutation = MutationResult{Changed: false}
-	secondService := harness.service(second)
+	firstRepository := NewRepository(harness.db)
+	firstRepository.scope = harness.scope
+	firstRepository.SetGenerations(harness.generations)
+	firstService := harness.service(&blockingUpdateRepository{
+		repository: firstRepository,
+		entered:    holding,
+		release:    release,
+	})
+	secondRepository := NewRepository(harness.db)
+	secondRepository.scope = harness.scope
+	secondRepository.SetGenerations(harness.generations)
+	secondService := harness.service(secondRepository)
 	secondService.states = secondStore
+	secondWaiting := make(chan struct{})
+	continueSecond := make(chan struct{})
+	var waitOnce sync.Once
+	secondService.wait = func(ctx context.Context, _ time.Duration) error {
+		waitOnce.Do(func() { close(secondWaiting) })
+		select {
+		case <-continueSecond:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 
 	firstDone := make(chan error, 1)
 	go func() {
@@ -925,27 +987,114 @@ func TestServiceTwoInstancesSerializeMutationsThroughSingleLease(t *testing.T) {
 	}()
 	<-holding
 
-	err = secondService.Update(harness.ctx, generationTestKey, UpdateInput{Value: "6", ValueType: ValueTypeNumber})
-	var appErr *apperror.Error
-	if !errors.As(err, &appErr) || appErr.Code != apperror.CodeConflict {
-		t.Fatalf("concurrent mutation error = %v want conflict", err)
-	}
-
+	secondDone := make(chan error, 1)
+	go func() {
+		secondDone <- secondService.Update(harness.ctx, generationTestKey, UpdateInput{Value: "6", ValueType: ValueTypeNumber})
+	}()
+	<-secondWaiting
 	close(release)
 	if err := <-firstDone; err != nil {
 		t.Fatalf("first mutation error = %v", err)
 	}
-	state, found, err := secondStore.Read(harness.ctx, harness.scope)
-	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 2 {
-		t.Fatalf("state after first mutation = %+v found=%v err=%v", state, found, err)
+	close(continueSecond)
+	if err := <-secondDone; err != nil {
+		t.Fatalf("second mutation error = %v", err)
 	}
 
-	if err := secondService.Update(harness.ctx, generationTestKey, UpdateInput{Value: "6", ValueType: ValueTypeNumber}); err != nil {
-		t.Fatalf("successor retry error = %v", err)
+	row, err := secondRepository.Find(harness.ctx, generationTestKey)
+	if err != nil || row.Value != "6" {
+		t.Fatalf("final setting = %+v err=%v want last writer value 6", row, err)
 	}
-	state, found, err = harness.store.Read(harness.ctx, harness.scope)
-	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 2 {
-		t.Fatalf("state after successor retry = %+v found=%v err=%v", state, found, err)
+	assertSettingGeneration(t, harness.db, harness.ctx, harness.scope.ScopeKey, 3)
+	assertSettingOutboxGenerations(t, harness.db, harness.ctx, harness.scope.ScopeKey, []int64{2, 3})
+	state, found, err := secondStore.Read(harness.ctx, harness.scope)
+	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 3 {
+		t.Fatalf("state after concurrent mutations = %+v found=%v err=%v", state, found, err)
+	}
+}
+
+func TestServiceMutationRetriesWholeFlowAfterGenerationChangesInsideTransaction(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	seedSettingRow(t, harness.db, harness.ctx, numericSettingRow(generationTestKey, "2", yesno.No))
+	base := NewRepository(harness.db)
+	base.scope = harness.scope
+	base.SetGenerations(harness.generations)
+	racing := &generationRaceRepository{
+		repository:  base,
+		db:          harness.db,
+		generations: harness.generations,
+		scope:       harness.scope,
+	}
+	service := harness.service(racing)
+	service.wait = func(context.Context, time.Duration) error { return nil }
+
+	if err := service.Update(harness.ctx, generationTestKey, UpdateInput{Value: "5", ValueType: ValueTypeNumber}); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	row, err := base.Find(harness.ctx, generationTestKey)
+	if err != nil || row.Value != "5" {
+		t.Fatalf("final setting = %+v err=%v", row, err)
+	}
+	if racing.calls != 2 {
+		t.Fatalf("repository attempts = %d want 2", racing.calls)
+	}
+	if racing.rolledBackValue != "2" {
+		t.Fatalf("value after generation conflict = %q want rolled-back value 2", racing.rolledBackValue)
+	}
+	assertSettingGeneration(t, harness.db, harness.ctx, harness.scope.ScopeKey, 3)
+	assertSettingOutboxGenerations(t, harness.db, harness.ctx, harness.scope.ScopeKey, []int64{2, 3})
+}
+
+func TestServiceMutationBudgetExhaustionIsDependencyFailureWithoutDatabaseMutation(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	lease, err := harness.store.Acquire(harness.ctx, harness.scope, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lease.Rollback(context.Background()) })
+	service := harness.service(fake)
+	current := time.Date(2026, time.September, 17, 0, 0, 0, 0, time.UTC)
+	waits := 0
+	service.now = func() time.Time { return current }
+	service.wait = func(context.Context, time.Duration) error {
+		waits++
+		current = current.Add(20 * time.Millisecond)
+		return nil
+	}
+
+	err = service.Update(harness.ctx, generationTestKey, UpdateInput{Value: "5", ValueType: ValueTypeNumber})
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) || appErr.Code != apperror.CodeDependencyUnavailable {
+		t.Fatalf("budget error = %v want dependency unavailable", err)
+	}
+	if waits > 25 {
+		t.Fatalf("budget waits = %d want at most 25", waits)
+	}
+	if calls := fake.mutations(); calls != 0 {
+		t.Fatalf("database mutations = %d want 0", calls)
+	}
+}
+
+func TestServiceMutationRedisFailureDoesNotEnterDatabaseMutation(t *testing.T) {
+	harness := openSettingGenerationHarness(t)
+	fake := &fakeRepository{rows: map[string]Record{
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+	}}
+	service := harness.service(fake)
+	if err := harness.client.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	err := service.Update(harness.ctx, generationTestKey, UpdateInput{Value: "5", ValueType: ValueTypeNumber})
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) || appErr.Code != apperror.CodeDependencyUnavailable {
+		t.Fatalf("redis error = %v want dependency unavailable", err)
+	}
+	if calls := fake.mutations(); calls != 0 {
+		t.Fatalf("database mutations = %d want 0", calls)
 	}
 }
 
@@ -1023,3 +1172,15 @@ func TestServiceCacheScopeFlushRecoversFromAuthority(t *testing.T) {
 }
 
 var _ sharedsetting.Reader = (*Service)(nil)
+
+func TestServiceValidateDependenciesRejectsIncompleteStartupWiring(t *testing.T) {
+	if err := NewService(nil).ValidateDependencies(); err == nil {
+		t.Fatal("ValidateDependencies accepted missing setting dependencies")
+	}
+	service := NewService(&fakeRepository{})
+	service.SetCache(NewCache(&projectredis.Client{}))
+	service.SetGenerations(&cachegeneration.Repository{}, &cachegeneration.Store{})
+	if err := service.ValidateDependencies(); err == nil {
+		t.Fatal("ValidateDependencies accepted a cache without its state store")
+	}
+}

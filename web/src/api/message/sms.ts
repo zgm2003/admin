@@ -147,7 +147,6 @@ export interface SmsRateLimitPolicy {
   dimension: 'platform_phone'
   limit: number
   windowSeconds: number
-  revision: number
   updatedAt: string
 }
 
@@ -483,7 +482,7 @@ function parseTest(value: unknown): SmsTestResult {
 function parsePolicy(value: unknown): SmsRateLimitPolicy {
   const data = expectExactKeys(
     value,
-    ['key', 'mode', 'dimension', 'limit', 'windowSeconds', 'revision', 'updatedAt'],
+    ['key', 'mode', 'dimension', 'limit', 'windowSeconds', 'updatedAt'],
     'sms rate policy',
   )
   const key = text(data.key, 'sms rate policy.key') as SmsRateLimitPolicyKey
@@ -500,7 +499,6 @@ function parsePolicy(value: unknown): SmsRateLimitPolicy {
     dimension: 'platform_phone',
     limit: boundedInteger(data.limit, 1, 100000, 'sms rate policy.limit'),
     windowSeconds: boundedInteger(data.windowSeconds, 1, 86400, 'sms rate policy.windowSeconds'),
-    revision: positiveInteger(data.revision, 'sms rate policy.revision'),
     updatedAt: timestamp(data.updatedAt, 'sms rate policy.updatedAt'),
   }
 }
