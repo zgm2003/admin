@@ -7,8 +7,8 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { forgotPassword, resetPassword } from '@/api/auth/login'
 import logoUrl from '@/assets/logo.png'
+import AppCaptcha from '@/components/AppCaptcha/index.vue'
 import AuthDock from '@/views/auth/components/AuthDock/index.vue'
-import CaptchaDialog from '@/views/auth/components/CaptchaDialog/index.vue'
 
 type RecoveryLoginType = 'email' | 'phone'
 
@@ -34,8 +34,12 @@ const brandPoints = computed(() => [
   t('auth.brand.pointTwo'),
   t('auth.brand.pointThree'),
 ])
-const accountLabel = computed(() => t(loginType.value === 'email' ? 'auth.forgot.email' : 'auth.forgot.phone'))
-const accountPlaceholder = computed(() => t(loginType.value === 'email' ? 'auth.forgot.emailPlaceholder' : 'auth.forgot.phonePlaceholder'))
+const accountLabel = computed(() =>
+  t(loginType.value === 'email' ? 'auth.forgot.email' : 'auth.forgot.phone'),
+)
+const accountPlaceholder = computed(() =>
+  t(loginType.value === 'email' ? 'auth.forgot.emailPlaceholder' : 'auth.forgot.phonePlaceholder'),
+)
 
 onMounted(() => {
   const presetAccount = route.query.account
@@ -78,7 +82,10 @@ function sendCode(): void {
   captchaVisible.value = true
 }
 
-async function completeCaptcha(value: { captchaId: string; captchaAnswer: { x: number; y: number } }): Promise<void> {
+async function completeCaptcha(value: {
+  captchaId: string
+  captchaAnswer: { x: number; y: number }
+}): Promise<void> {
   if (sending.value) return
   sending.value = true
   try {
@@ -307,7 +314,7 @@ async function submit(): Promise<void> {
         </div>
       </section>
     </div>
-    <CaptchaDialog v-model="captchaVisible" :loading="sending" @complete="completeCaptcha" />
+    <AppCaptcha v-model="captchaVisible" :loading="sending" @complete="completeCaptcha" />
   </main>
 </template>
 

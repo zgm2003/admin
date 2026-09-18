@@ -63,6 +63,8 @@ export const enUS = {
   'auth.captcha.title': 'Complete verification',
   'auth.captcha.refresh': 'Refresh',
   'auth.captcha.confirm': 'Verify',
+  'auth.captcha.instruction': 'Drag the slider to complete the puzzle',
+  'auth.captcha.loading': 'Loading verification',
   'auth.captcha.tileAlt': 'Captcha tile',
   'auth.captcha.loadFailed': 'Captcha could not be loaded. Try again.',
   'setting.title': 'System settings',

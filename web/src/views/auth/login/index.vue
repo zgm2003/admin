@@ -16,10 +16,10 @@ import {
   type LoginType,
 } from '@/api/auth/login'
 import logoUrl from '@/assets/logo.png'
+import AppCaptcha from '@/components/AppCaptcha/index.vue'
 import { useAuthStore } from '@/store/auth'
 import { ApiError } from '@/types/http'
 import AuthDock from '@/views/auth/components/AuthDock/index.vue'
-import CaptchaDialog from '@/views/auth/components/CaptchaDialog/index.vue'
 
 interface LoginForm {
   account: string
@@ -57,7 +57,9 @@ const codeMode = computed(() => activeType.value === 'email' || activeType.value
 const accountInputType = computed(() => (activeType.value === 'phone' ? 'tel' : 'email'))
 const accountInputMode = computed(() => (activeType.value === 'phone' ? 'tel' : 'email'))
 const accountPlaceholder = computed(() =>
-  activeType.value === 'phone' ? t('auth.login.phonePlaceholder') : t('auth.login.accountPlaceholder'),
+  activeType.value === 'phone'
+    ? t('auth.login.phonePlaceholder')
+    : t('auth.login.accountPlaceholder'),
 )
 
 watch(activeType, () => {
@@ -116,7 +118,10 @@ function sendCode(): void {
   captchaVisible.value = true
 }
 
-async function completeCaptcha(value: { captchaId: string; captchaAnswer: { x: number; y: number } }): Promise<void> {
+async function completeCaptcha(value: {
+  captchaId: string
+  captchaAnswer: { x: number; y: number }
+}): Promise<void> {
   if (sending.value) return
   const loginType = activeType.value
   if (loginType !== 'email' && loginType !== 'phone') return
@@ -393,7 +398,13 @@ function generateChallengeID(): string {
               />
             </el-form-item>
             <p v-if="codeMode && allowRegister" class="auth-hint" data-testid="login-register-hint">
-              {{ t(activeType === 'phone' ? 'auth.login.phoneAutoRegister' : 'auth.login.emailAutoRegister') }}
+              {{
+                t(
+                  activeType === 'phone'
+                    ? 'auth.login.phoneAutoRegister'
+                    : 'auth.login.emailAutoRegister',
+                )
+              }}
             </p>
 
             <el-button
@@ -421,7 +432,7 @@ function generateChallengeID(): string {
         </div>
       </section>
     </div>
-    <CaptchaDialog v-model="captchaVisible" :loading="sending" @complete="completeCaptcha" />
+    <AppCaptcha v-model="captchaVisible" :loading="sending" @complete="completeCaptcha" />
   </main>
 </template>
 

@@ -26,6 +26,9 @@ importers:
       element-plus:
         specifier: ^2.14.4
         version: 2.14.4(vue@3.5.41(typescript@6.0.3))
+      go-captcha-vue:
+        specifier: 2.0.7
+        version: 2.0.7(vue@3.5.41(typescript@6.0.3))
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.41(typescript@6.0.3))
@@ -1221,6 +1224,11 @@ packages:
   globals@17.11.0:
     resolution: {integrity: sha512-Z2I8hM+PbJDXQDq3Icgpzv+mPdwr68iZUU9d5WW4FuXfDUQfkZaZuvjMv42/5crNyw154+9+VWXbYrUgDXbxNw==}
     engines: {node: '>=18'}
+
+  go-captcha-vue@2.0.7:
+    resolution: {integrity: sha512-ynlb/6CJiMdsqKe+79lIVpTsNXQTgOHDJ7BH+Gx6EZQZyHSwuyLZvQwjz9vQOYhyHpREW9tapBo8ZOTyVzIQew==}
+    peerDependencies:
+      vue: '>=3'
 
   gopd@1.2.0:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
@@ -3203,6 +3211,10 @@ snapshots:
       path-scurry: 1.11.1
 
   globals@17.11.0: {}
+
+  go-captcha-vue@2.0.7(vue@3.5.41(typescript@6.0.3)):
+    dependencies:
+      vue: 3.5.41(typescript@6.0.3)
 
   gopd@1.2.0: {}
 

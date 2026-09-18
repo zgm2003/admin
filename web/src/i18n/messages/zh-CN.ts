@@ -61,6 +61,8 @@ export const zhCN = {
   'auth.captcha.title': '完成安全验证',
   'auth.captcha.refresh': '换一张',
   'auth.captcha.confirm': '确认验证',
+  'auth.captcha.instruction': '请拖动滑块完成拼图',
+  'auth.captcha.loading': '正在加载验证码',
   'auth.captcha.tileAlt': '滑块拼图',
   'auth.captcha.loadFailed': '验证码加载失败，请重试',
   'setting.title': '系统设置',

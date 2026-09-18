@@ -5,12 +5,12 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getCaptcha, getCurrentUser, getLoginConfig, login, sendLoginCode } from '@/api/auth/login'
+import AppCaptcha from '@/components/AppCaptcha/index.vue'
 import { appI18n, setLocale } from '@/i18n'
 import { pinia } from '@/store'
 import { useAuthStore } from '@/store/auth'
 import { ApiError } from '@/types/http'
 import LoginPage from '@/views/auth/login/index.vue'
-import CaptchaDialog from '@/views/auth/components/CaptchaDialog/index.vue'
 
 vi.mock('@/api/auth/login', () => ({
   login: vi.fn(),
@@ -37,9 +37,17 @@ describe('Login page', () => {
     sendLoginCodeMock.mockReset()
     getCaptchaMock.mockReset()
     getCaptchaMock.mockResolvedValue({
-      captchaId: 'captcha-1', captchaType: 'slide', masterImage: 'data:image/png;base64,master',
-      tileImage: 'data:image/png;base64,tile', tileX: 80, tileY: 40, tileWidth: 48,
-      tileHeight: 48, imageWidth: 300, imageHeight: 220, expiresIn: 120,
+      captchaId: 'captcha-1',
+      captchaType: 'slide',
+      masterImage: 'data:image/png;base64,master',
+      tileImage: 'data:image/png;base64,tile',
+      tileX: 80,
+      tileY: 40,
+      tileWidth: 48,
+      tileHeight: 48,
+      imageWidth: 300,
+      imageHeight: 220,
+      expiresIn: 120,
     })
     getLoginConfigMock.mockResolvedValue({
       loginTypes: [
@@ -396,6 +404,8 @@ async function mountLogin(initialPath = '/login') {
 }
 
 async function completeCaptcha(wrapper: VueWrapper): Promise<void> {
-  wrapper.findComponent(CaptchaDialog).vm.$emit('complete', { captchaId: 'captcha-1', captchaAnswer: { x: 80, y: 40 } })
+  wrapper
+    .findComponent(AppCaptcha)
+    .vm.$emit('complete', { captchaId: 'captcha-1', captchaAnswer: { x: 80, y: 40 } })
   await flushPromises()
 }
