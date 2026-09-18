@@ -152,7 +152,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
       :closable="false"
       show-icon
     />
-    <el-form :model="form" label-width="200px" @submit.prevent="save">
+    <el-form :model="form" label-width="120px" class="sms-config__form" @submit.prevent="save">
       <el-row :gutter="16">
         <el-col :xs="24" :md="12">
           <el-form-item :label="t('sms.secretId')">
@@ -243,6 +243,40 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
             />
           </el-form-item>
         </el-col>
+        <el-col v-if="canTest" :xs="24" :md="12">
+          <el-form-item :label="t('sms.testPhone')">
+            <el-input
+              v-model="testPhone"
+              data-testid="sms-test-phone"
+              type="tel"
+              inputmode="tel"
+              :placeholder="t('sms.testPhonePlaceholder')"
+            />
+          </el-form-item>
+        </el-col>
+        <el-col v-if="canTest" :xs="24" :md="12">
+          <el-form-item :label="t('sms.sceneLabel')">
+            <div class="sms-config__test-action">
+              <el-select-v2
+                v-model="testScene"
+                data-testid="sms-test-scene"
+                :options="sceneOptions"
+                :disabled="!catalogReady"
+                :placeholder="t('sms.scenePlaceholder')"
+                class="sms-config__test-scene"
+              />
+              <el-button
+                data-testid="sms-test-send"
+                :loading="testing"
+                :disabled="!catalogReady || testPhone.trim() === ''"
+                :icon="Send"
+                @click="sendTest"
+              >
+                {{ t('sms.sendTest') }}
+              </el-button>
+            </div>
+          </el-form-item>
+        </el-col>
       </el-row>
       <div class="sms-config__actions">
         <el-button v-if="canDelete && config.configured" type="danger" @click="remove">
@@ -261,47 +295,14 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
         </el-button>
       </div>
     </el-form>
-
-    <template v-if="canTest">
-      <el-divider />
-      <el-form class="sms-config__test" inline label-width="120px" @submit.prevent="sendTest">
-        <el-form-item :label="t('sms.testPhone')">
-          <el-input
-            v-model="testPhone"
-            data-testid="sms-test-phone"
-            type="tel"
-            inputmode="tel"
-            :placeholder="t('sms.testPhonePlaceholder')"
-          />
-        </el-form-item>
-        <el-form-item :label="t('sms.sceneLabel')">
-          <el-select-v2
-            v-model="testScene"
-            data-testid="sms-test-scene"
-            :options="sceneOptions"
-            :disabled="!catalogReady"
-            :placeholder="t('sms.scenePlaceholder')"
-            class="sms-config__test-scene"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            data-testid="sms-test-send"
-            type="primary"
-            :loading="testing"
-            :disabled="!catalogReady || testPhone.trim() === ''"
-            :icon="Send"
-            @click="sendTest"
-          >
-            {{ t('sms.sendTest') }}
-          </el-button>
-        </el-form-item>
-      </el-form>
-    </template>
   </div>
 </template>
 
 <style scoped>
+.sms-config__form {
+  max-width: none;
+}
+
 .sms-config__full {
   width: 100%;
 }
@@ -313,7 +314,8 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
 .sms-config__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  margin-top: 2px;
   padding-top: 12px;
   border-top: 1px solid var(--el-border-color-lighter);
 }
@@ -323,17 +325,20 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
 }
 
 .sms-config__test-scene {
-  width: 220px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sms-config__test-action {
+  display: flex;
+  width: 100%;
+  gap: 8px;
 }
 
 @media (max-width: 640px) {
-  .sms-config__test :deep(.el-form-item) {
-    width: 100%;
-    margin-right: 0;
-  }
-
-  .sms-config__test-scene {
-    width: 100%;
+  .sms-config__test-action {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>

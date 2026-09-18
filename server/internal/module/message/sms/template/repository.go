@@ -28,7 +28,7 @@ func (r *Repository) SetGenerations(repository *cachegeneration.Repository, scop
 // fixed catalog order used by the scene pickers.
 func (r *Repository) List(ctx context.Context) ([]Model, error) {
 	var values []Model
-	if err := r.db.WithContext(ctx).Where("deleted_at IS NULL").Order("id").Find(&values).Error; err != nil {
+	if err := r.db.WithContext(ctx).Order("id").Find(&values).Error; err != nil {
 		return nil, err
 	}
 	return values, nil
@@ -36,7 +36,7 @@ func (r *Repository) List(ctx context.Context) ([]Model, error) {
 
 func (r *Repository) FindByID(ctx context.Context, id int64) (Model, error) {
 	var value Model
-	if err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&value).Error; err != nil {
+	if err := r.db.WithContext(ctx).First(&value, id).Error; err != nil {
 		return Model{}, err
 	}
 	return value, nil
@@ -57,7 +57,7 @@ func (r *Repository) Update(ctx context.Context, value *Model, expected int64, n
 		if sameTemplate(current, *value) {
 			return false, nil
 		}
-		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ? AND deleted_at IS NULL", value.ID).Updates(map[string]any{
+		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ?", value.ID).Updates(map[string]any{
 			"name": value.Name, "tencent_template_id": value.TencentTemplateID,
 			"content": value.Content, "variable_keys": value.VariableKeys,
 			"example_variables": value.ExampleVariables, "updated_at": now,
@@ -81,7 +81,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, status int16, e
 		if int16(current.IsEnabled) == status {
 			return false, nil
 		}
-		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]any{
+		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ?", id).Updates(map[string]any{
 			"is_enabled": status, "updated_at": now,
 		})
 		if query.Error != nil {
@@ -125,7 +125,7 @@ func (r *Repository) mutate(ctx context.Context, expected int64, now time.Time, 
 
 func lockTemplate(ctx context.Context, tx *gorm.DB, id int64) (Model, error) {
 	var value Model
-	if err := tx.WithContext(ctx).Raw(`SELECT * FROM message_sms_template WHERE id = ? AND deleted_at IS NULL FOR UPDATE`, id).Scan(&value).Error; err != nil {
+	if err := tx.WithContext(ctx).Raw(`SELECT * FROM message_sms_template WHERE id = ? FOR UPDATE`, id).Scan(&value).Error; err != nil {
 		return Model{}, err
 	}
 	if value.ID == 0 {

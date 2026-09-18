@@ -176,6 +176,7 @@ describe('SMS management page', () => {
     const allowed = mountPage(['message:sms:list'])
     await flushPromises()
     expect(allowed.findAll('[role="tab"]')).toHaveLength(5)
+    expect(allowed.findAll('[role="tab"]')[0]?.text()).toBe('短信配置')
     expect(smsApi.getSmsPageInit).toHaveBeenCalledOnce()
     expect(smsApi.getSmsConfig).toHaveBeenCalledOnce()
     expect(smsApi.listSmsTemplates).not.toHaveBeenCalled()
@@ -189,7 +190,8 @@ describe('SMS management page', () => {
     await flushPromises()
 
     await selectTab(wrapper, '模板')
-    expect(wrapper.text()).toContain('template unavailable')
+    expect(wrapper.text()).toContain('短信数据加载失败')
+    expect(wrapper.text()).not.toContain('template unavailable')
     await wrapper.get('[data-testid="sms-tab-retry"]').trigger('click')
     await flushPromises()
     expect(smsApi.listSmsTemplates).toHaveBeenCalledTimes(2)
@@ -246,17 +248,35 @@ describe('SMS management page', () => {
     })
   })
 
-  it('sends an admin test through one of the fixed business scenes', async () => {
+  it('shows delete only when an SMS configuration exists', async () => {
+    const configured = mountPage(['message:sms:list', 'message:sms:config:delete'])
+    await flushPromises()
+    expect(configured.findAll('button').some((button) => button.text() === '删除')).toBe(true)
+    configured.unmount()
+
+    vi.mocked(smsApi.getSmsConfig).mockResolvedValueOnce({
+      ...config,
+      configured: false,
+      isEnabled: YesNo.No,
+    })
+    const unconfigured = mountPage(['message:sms:list', 'message:sms:config:delete'])
+    await flushPromises()
+    expect(unconfigured.findAll('button').some((button) => button.text() === '删除')).toBe(false)
+  })
+
+  it('uses the mail configuration form layout and sends through a fixed business scene', async () => {
     const wrapper = mountPage(['message:sms:list', 'message:sms:test'])
     await flushPromises()
 
+    const configForms = wrapper.get('.sms-config').findAllComponents({ name: 'ElForm' })
+    expect(configForms).toHaveLength(1)
+    expect(configForms[0]?.props('labelWidth')).toBe('120px')
     const configForm = wrapper.get('.sms-config form').element
     expect(configForm).toBeInstanceOf(HTMLFormElement)
     expect(configForm.classList.contains('el-form--label-top')).toBe(false)
     expect(configForm.querySelector('.el-form-item__label')).not.toBeNull()
     const testForm = wrapper.get('[data-testid="sms-test-send"]').element.closest('form')
-    expect(testForm).toBeInstanceOf(HTMLFormElement)
-    expect(testForm?.classList.contains('el-form--inline')).toBe(true)
+    expect(testForm).toBe(configForm)
 
     await wrapper.get('[data-testid="sms-test-phone"]').setValue('15671628271')
     const sceneSelect = wrapper

@@ -273,7 +273,7 @@ export const enUS = {
   'mail.rateLimit.dimension.admin_user': 'Admin user',
   'mail.rateLimit.dimension.ip': 'IP',
   'mail.rateLimit.dimension.email': 'Email',
-  'sms.tab.config': 'Configuration',
+  'sms.tab.config': 'SMS configuration',
   'sms.tab.templates': 'Templates',
   'sms.tab.logs': 'Send logs',
   'sms.tab.rules': 'Recipient rules',

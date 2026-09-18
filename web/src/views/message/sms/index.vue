@@ -193,7 +193,7 @@ onMounted(() => {
       <el-alert
         v-if="catalogError"
         class="sms-page__catalog-error"
-        :title="catalogError"
+        :title="t('sms.loadFailed')"
         type="warning"
         :closable="false"
         show-icon
@@ -202,7 +202,7 @@ onMounted(() => {
         <el-tab-pane v-for="tab in visibleTabs" :key="tab.name" :name="tab.name" :label="tab.label">
           <div class="sms-panel">
             <div v-if="errors[tab.name]" class="sms-panel__error" role="alert">
-              <span>{{ errors[tab.name] }}</span>
+              <span>{{ t('sms.loadFailed') }}</span>
               <el-button data-testid="sms-tab-retry" type="primary" plain @click="loadActiveTab">
                 {{ t('sms.retry') }}
               </el-button>
@@ -274,7 +274,23 @@ onMounted(() => {
 }
 
 .sms-tabs :deep(.el-tabs__content) {
-  padding-top: 16px;
+  overflow: visible;
+  padding-top: 12px;
+}
+
+.sms-tabs :deep(.el-tabs__header) {
+  margin: 0;
+}
+
+.sms-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background: var(--el-border-color-lighter);
+}
+
+.sms-tabs :deep(.el-tabs__item) {
+  height: 40px;
+  padding: 0 20px;
+  font-weight: 500;
 }
 
 .sms-panel {
@@ -290,5 +306,11 @@ onMounted(() => {
   gap: 12px;
   color: var(--el-color-danger);
   text-align: center;
+}
+
+@media (max-width: 640px) {
+  .sms-tabs :deep(.el-tabs__item) {
+    padding: 0 14px;
+  }
 }
 </style>

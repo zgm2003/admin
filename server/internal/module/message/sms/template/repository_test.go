@@ -37,7 +37,6 @@ CREATE TABLE message_sms_template(
  is_enabled SMALLINT NOT NULL DEFAULT 0,
  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	deleted_at TIMESTAMPTZ,
  CONSTRAINT ck_fixture_sms_template_scene CHECK (scene IN ('login','forget','bind_phone','change_password'))
 );
 CREATE UNIQUE INDEX ux_message_sms_template_scene ON message_sms_template(scene);`).Error; err != nil {
