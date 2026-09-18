@@ -1126,4 +1126,9 @@ export const enUS = {
   'loginLog.refresh': 'Refresh',
   'loginLog.empty': 'No login logs',
   'loginLog.loadFailed': 'Failed to load login logs',
+  'network.offline.title': 'Network connection lost',
+  'network.offline.message':
+    'Check your network settings. You can continue when the connection returns.',
+  'network.offline.since': 'Offline since {time}',
+  'network.offline.refresh': 'Refresh page',
 } satisfies Record<AppMessageKey, string>

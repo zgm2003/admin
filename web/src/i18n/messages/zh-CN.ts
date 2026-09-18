@@ -1090,6 +1090,10 @@ export const zhCN = {
   'loginLog.refresh': '刷新',
   'loginLog.empty': '暂无登录日志',
   'loginLog.loadFailed': '登录日志加载失败',
+  'network.offline.title': '网络连接已断开',
+  'network.offline.message': '请检查网络设置，连接恢复后可继续操作。',
+  'network.offline.since': '断开于 {time}',
+  'network.offline.refresh': '刷新页面',
 } as const
 
 export type AppMessageKey = keyof typeof zhCN

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import NetworkStatusNotice from './components/NetworkStatusNotice/index.vue'
 import { elementPlusLocaleFor } from './i18n'
 import { useUIPreferencesStore } from './store/uiPreferences'
 
@@ -16,6 +17,7 @@ if (!uiPreferences.initialized) uiPreferences.initializeSafely()
 
 <template>
   <el-config-provider :locale="elementLocale">
+    <NetworkStatusNotice />
     <RouterView />
   </el-config-provider>
 </template>
