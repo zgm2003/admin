@@ -4,7 +4,6 @@ import { ElMessage } from 'element-plus/es/components/message/index'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
 import { useI18n } from 'vue-i18n'
-
 import type { TablePaginationState } from '@/components/AppTable'
 import type { SearchFormModel } from '@/components/AppSearch'
 import { YesNo } from '@/enums/yesNo'
@@ -21,11 +20,9 @@ import {
   type UpdateCosConfigInput,
 } from '@/api/storage/cosConfig'
 import {
-  createUploadRule,
   deleteUploadRule,
   getUploadRulePageInit,
   listUploadRules,
-  updateUploadRule,
   updateUploadRuleStatus,
   type ConfigSummary,
   type PlatformOption,
@@ -39,13 +36,13 @@ import RuleDialog from './components/RuleDialog/index.vue'
 import RuleTable from './components/RuleTable/index.vue'
 import { useStorageDictionaries } from './storageDictionaries'
 import { useStorageForms } from './storageForms'
+import { saveExistingRule, saveNewRule } from './storageRuleSave'
 import {
   createConfigColumns,
   createConfigSearchFields,
   createRuleColumns,
   createRuleSearchFields,
 } from './storageView'
-
 const { t } = useI18n()
 const access = usePermissionStore()
 const activeTab = ref<'config' | 'rules'>('config')
@@ -100,7 +97,6 @@ const {
 } = useStorageForms(t, commonExtensionValues, commonMimeTypeValues)
 const configDialogRef = ref<InstanceType<typeof ConfigDialog>>()
 const ruleDialogRef = ref<InstanceType<typeof RuleDialog>>()
-
 const can = (code: string): boolean => access.hasPermission(code)
 const canCreateConfig = computed(() => can('storage:cosConfig:create'))
 const canCreateRule = computed(() => can('storage:uploadRule:create'))
@@ -109,7 +105,7 @@ const canAddRule = computed(
 )
 const canUpdateConfig = computed(() => can('storage:cosConfig:update'))
 const canUpdateRule = computed(() => can('storage:uploadRule:update'))
-
+const canUpdateRuleStatus = computed(() => can('storage:uploadRule:status'))
 const configPagination = computed<TablePaginationState>(() => ({
   currentPage: configQuery.value.page,
   pageSize: configQuery.value.pageSize,
@@ -295,27 +291,29 @@ async function saveRule(): Promise<void> {
     remark: ruleForm.value.remark.trim(),
   }
   try {
-    if (editingRule.value) await updateUploadRule(editingRule.value, mutable)
-    else {
-      if (
-        ruleForm.value.isEnabled === YesNo.Yes &&
-        rules.value.some(
-          (rule) => rule.platformId === ruleForm.value.platformId && rule.isEnabled === YesNo.Yes,
-        )
-      ) {
-        await ElMessageBox.confirm(
-          t('storage.confirmEnabledRuleReplacement'),
-          t('storage.status'),
-          { type: 'warning' },
-        )
-      }
-      await createUploadRule({
-        ...mutable,
-        platformId: ruleForm.value.platformId,
-        cosConfigId: ruleForm.value.cosConfigId,
-        accessMode: ruleForm.value.accessMode,
-        isEnabled: ruleForm.value.isEnabled,
-      })
+    if (editingRule.value) {
+      await saveExistingRule(
+        editingRule.value,
+        ruleForm.value,
+        rules.value.find((rule) => rule.id === editingRule.value),
+        rules.value,
+        canUpdateRuleStatus.value,
+        mutable,
+        t,
+      )
+    } else {
+      await saveNewRule(
+        ruleForm.value,
+        rules.value,
+        {
+          ...mutable,
+          platformId: ruleForm.value.platformId,
+          cosConfigId: ruleForm.value.cosConfigId,
+          accessMode: ruleForm.value.accessMode,
+          isEnabled: ruleForm.value.isEnabled,
+        },
+        t,
+      )
     }
     ruleDialog.value = false
     ElNotification.success({ title: t('storage.saveSuccess') })
@@ -464,6 +462,7 @@ watch(cosRegionOptions, (options) => {
       v-model="ruleDialog"
       v-model:form="ruleForm"
       :editing="editingRule !== null"
+      :can-update-status="canUpdateRuleStatus"
       :rules="ruleRules"
       :platforms="platforms"
       :configs="configOptions"

@@ -4,10 +4,12 @@ import { useI18n } from 'vue-i18n'
 import type { FormInstance, FormRules } from 'element-plus'
 
 import type { ConfigSummary, PlatformOption } from '@/api/storage/uploadRule'
+import { YesNo } from '@/enums/yesNo'
 import type { RuleForm } from '@/views/storage/object/components/types'
 
 const props = defineProps<{
   editing: boolean
+  canUpdateStatus: boolean
   rules: FormRules<RuleForm>
   platforms: PlatformOption[]
   configs: ConfigSummary[]
@@ -108,17 +110,30 @@ defineExpose({ validate: () => formRef.value?.validate() })
               controls-position="right"
               @update:model-value="emit('update:fileSizeMb', $event ?? 0)" /></el-form-item
         ></el-col>
-        <el-col :xs="24" :sm="12"
-          ><el-form-item :label="t('storage.accessMode')" prop="accessMode"
-            ><el-radio-group
-              v-model="form.accessMode"
-              data-testid="storage-rule-access-mode"
-              :disabled="props.editing"
-              ><el-radio value="private">{{ t('storage.private') }}</el-radio
-              ><el-radio value="public">{{ t('storage.public') }}</el-radio></el-radio-group
-            ></el-form-item
-          ></el-col
-        >
+        <el-col :xs="24" :sm="12">
+          <div class="storage-rule-mode-status" data-testid="storage-rule-mode-status">
+            <el-form-item :label="t('storage.accessMode')" prop="accessMode">
+              <el-radio-group
+                v-model="form.accessMode"
+                data-testid="storage-rule-access-mode"
+                :disabled="props.editing"
+              >
+                <el-radio value="private">{{ t('storage.private') }}</el-radio>
+                <el-radio value="public">{{ t('storage.public') }}</el-radio>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item :label="t('storage.status')">
+              <el-radio-group
+                v-model="form.isEnabled"
+                data-testid="storage-rule-status"
+                :disabled="props.editing && !props.canUpdateStatus"
+              >
+                <el-radio :value="YesNo.Yes">{{ t('storage.enable') }}</el-radio>
+                <el-radio :value="YesNo.No">{{ t('storage.disable') }}</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </div>
+        </el-col>
         <el-col v-if="form.accessMode === 'public'" :xs="24"
           ><el-alert
             data-testid="storage-public-warning"
@@ -218,5 +233,12 @@ defineExpose({ validate: () => formRef.value?.validate() })
 
 .storage-rule-select {
   width: 100%;
+}
+
+.storage-rule-mode-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
 }
 </style>

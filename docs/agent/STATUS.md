@@ -15,6 +15,7 @@
 - 各次迁移前 PostgreSQL 归档均曾通过 `pg_restore --list` 验证。维护者要求清理后，已于 **2026-09-18 12:00 +08:00** 删除 `%LOCALAPPDATA%\Admin\backups` 下全部 20 个项目备份批次并复验剩余文件为 0；当前不再保留可用于恢复旧 schema 的本地归档。
 - `docs/database/current.sql` 已从最终真实 `public` schema-only 刷新，SHA256 为 `583A90DA6628D47C0D6E7A66A301B1FA5D22C4364F134FA7A659F4DE72D9EDE4`。精确 SQL 预算探针验证：rule route 冷回源 1 条 SELECT、热命中 0；COS snapshot 两实例并发冷回源合计 1 条逻辑配置 SELECT + 1 条物理版本 SELECT、热命中 0；route 与 snapshot 均 ready 的 object-url 为 0 条 SELECT。
 - 兜底修复：上传规则页面初始化的 COS 配置摘要已改为按 `storage_cos_config.current_version` 连接 `storage_cos_config_version`，不再从逻辑配置表读取已迁出的 `bucket/region`；真实 PostgreSQL 回归覆盖当前物理版本和停用配置过滤。
+- 上传规则新增与编辑弹窗均在访问模式旁提供同款启用/停用单选组：新增默认启用并将选择值写入创建请求；编辑态有 `storage:uploadRule:status` 时通过独立 PATCH 接口保存状态，无该权限时只读展示当前值，不把状态权限并入普通更新接口。
 - 维护者要求最终迁移后，两个 forward runner 已于 **2026-09-18 11:59 +08:00** 再次完整执行并确认幂等：COS generation/outbox、编码行、`menu_version`、Mail/SMS policy 指纹及权限/Session/access 版本均保持不变。随后对旧协议和新协议固定 Redis pattern 各执行两轮清理，system.setting、Dictionary、Mail、SMS、COS state/snapshot/fill 与 v2 object route 均为 `remaining=0`；API/Worker 仍未由 Agent 启动。
 - 验证通过：`go test -p 1 ./... -count=1`、`go vet ./...`、`go build ./...`、两个 runner 的 PowerShell Parser 检查、`git diff --check`。前端全量 Vitest 由维护者执行，本轮 Agent 未运行。迁移前只读进程检查未发现业务 API/Worker；迁移后未由 Agent 启动或重启服务。
 

@@ -23,6 +23,7 @@ import {
   getUploadRulePageInit,
   listUploadRules,
   updateUploadRule,
+  updateUploadRuleStatus,
 } from '@/api/storage/uploadRule'
 
 vi.mock('@/api/system/dictionary', () => ({ getDictionaryOptions: vi.fn() }))
@@ -630,6 +631,12 @@ describe('ObjectStorage', () => {
         .findComponent({ name: 'ElRadioGroup' })
         .props('disabled'),
     ).toBe(true)
+    const statusGroup = wrapper
+      .find('[data-testid="storage-rule-mode-status"]')
+      .findAllComponents({ name: 'ElRadioGroup' })
+      .find((item: VueWrapper) => item.attributes('data-testid') === 'storage-rule-status')
+    expect(statusGroup?.exists()).toBe(true)
+    expect(statusGroup?.props('disabled')).toBe(true)
     codesInput?.vm.$emit('update:modelValue', ['avatar-v2', 'profile-photo'])
     await dialog?.find('.el-dialog__footer .el-button--primary').trigger('click')
     await flushPromises()
@@ -642,6 +649,121 @@ describe('ObjectStorage', () => {
       allowedMimeTypes: ['image/png'],
       remark: '',
     })
+  })
+
+  it('places create status beside access mode and submits a disabled rule', async () => {
+    vi.mocked(getUploadRulePageInit).mockResolvedValue({
+      platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
+      configs: [
+        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
+      ],
+    })
+    const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
+    await flushPromises()
+    await wrapper.findAll('.el-tabs__item')[1]?.trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-testid="storage-add-rule"]').trigger('click')
+    await flushPromises()
+
+    const form = wrapper.get('[data-testid="storage-rule-form"]')
+    const modeStatus = form.get('[data-testid="storage-rule-mode-status"]')
+    expect(modeStatus.findComponent({ name: 'ElRadioGroup' }).exists()).toBe(true)
+    const statusGroup = modeStatus
+      .findAllComponents({ name: 'ElRadioGroup' })
+      .find((item: VueWrapper) => item.attributes('data-testid') === 'storage-rule-status')
+    expect(statusGroup?.props('modelValue')).toBe(1)
+    statusGroup?.vm.$emit('update:modelValue', 0)
+    form.getComponent({ name: 'ElInputTag' }).vm.$emit('update:modelValue', ['file'])
+    await form.get('[data-testid="storage-rule-name"]').setValue('停用规则')
+    form
+      .findAllComponents({ name: 'ElSelectV2' })
+      .find((item: VueWrapper) => item.attributes('data-testid') === 'storage-rule-extensions')
+      ?.vm.$emit('update:modelValue', ['png'])
+    await wrapper
+      .findAllComponents(AppDialog)[1]
+      ?.find('.el-dialog__footer .el-button--primary')
+      .trigger('click')
+    await flushPromises()
+
+    expect(createUploadRule).toHaveBeenCalledWith({
+      platformId: 1,
+      codes: ['file'],
+      name: '停用规则',
+      cosConfigId: 8,
+      maxFileSizeBytes: 1048576,
+      allowedExtensions: ['png'],
+      allowedMimeTypes: [],
+      accessMode: 'private',
+      isEnabled: 0,
+      remark: '',
+    })
+  })
+
+  it('updates status from the edit form only with the status permission', async () => {
+    vi.mocked(getUploadRulePageInit).mockResolvedValue({
+      platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
+      configs: [
+        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
+      ],
+    })
+    vi.mocked(listUploadRules).mockResolvedValue({
+      list: [
+        {
+          id: 9,
+          platformId: 1,
+          platformCode: 'admin',
+          platformName: 'Admin',
+          codes: ['avatar'],
+          name: '头像上传',
+          cosConfigId: 8,
+          cosConfigName: '默认 COS',
+          maxFileSizeBytes: 1048576,
+          allowedExtensions: ['png'],
+          allowedMimeTypes: ['image/png'],
+          accessMode: 'private',
+          isEnabled: 1,
+          remark: '',
+          createdAt: '2026-08-30T00:00:00Z',
+          updatedAt: '2026-08-30T00:00:00Z',
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    vi.mocked(updateUploadRuleStatus).mockResolvedValue({ id: 9, isEnabled: 0 })
+    const wrapper = mountPage([
+      'storage:object:list',
+      'storage:uploadRule:update',
+      'storage:uploadRule:status',
+    ])
+    await flushPromises()
+    await wrapper.findAll('.el-tabs__item')[1]?.trigger('click')
+    await flushPromises()
+    await wrapper.find('.el-table__body .el-button').trigger('click')
+    await flushPromises()
+
+    const modeStatus = wrapper.find('[data-testid="storage-rule-mode-status"]')
+    const statusGroup = modeStatus
+      .findAllComponents({ name: 'ElRadioGroup' })
+      .find((item: VueWrapper) => item.attributes('data-testid') === 'storage-rule-status')
+    expect(statusGroup?.props('disabled')).toBe(false)
+    statusGroup?.vm.$emit('update:modelValue', 0)
+    await wrapper
+      .findAllComponents(AppDialog)[1]
+      ?.find('.el-dialog__footer .el-button--primary')
+      .trigger('click')
+    await flushPromises()
+
+    expect(updateUploadRule).toHaveBeenCalledWith(9, {
+      codes: ['avatar'],
+      name: '头像上传',
+      maxFileSizeBytes: 1048576,
+      allowedExtensions: ['png'],
+      allowedMimeTypes: ['image/png'],
+      remark: '',
+    })
+    expect(updateUploadRuleStatus).toHaveBeenCalledWith(9, 0)
   })
 
   it('confirms replacing the enabled rule before creating another enabled rule', async () => {
