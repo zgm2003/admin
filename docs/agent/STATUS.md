@@ -3,6 +3,21 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## COS 对象协议与统一配置缓存代际（2026-09-18，已实现并迁移）
+
+- COS 逻辑配置现为全局多配置，上传规则继续按认证平台隔离并选择 `cos_config_id`；每个平台至多一条活动规则。规则编码继续由规范化子表维护，允许跨规则和跨平台重复。普通管理 CRUD 使用 last-write-wins，不新增乐观锁。
+- `storage_cos_config_version` 保存不可变物理 Bucket/Region 坐标，逻辑配置只以 `current_version` 指向当前物理版本；v2 object key 自描述 platform/rule/config/physical version。项目未上线，迁移直接清空旧用户头像和品牌默认头像引用，不保留旧 DTO、旧对象 key、旧 Redis 协议或双读双写分支。
+- `POST /api/v1/storage/upload-credential` 继续要求 `storage:object:upload`；`POST /api/v1/storage/object-url` 只要求有效登录态，并校验 key 所属认证平台。public 对象返回普通 URL，private 对象返回短期签名 GET URL；上传权限、菜单和前端上传判断均保留。
+- 配置代际现覆盖 `system.setting/global`、`system.dictionary/global`、`message.mail/global`、`message.sms/global`、`storage.cosconfig/<configId>`。各模块共享 generation Repository/Store 与 outbox relay，但保留本模块 codec、Repository 和 Cache；没有通用 CacheManager、隐式注册器或跨模块万能 Adapter。
+- generation 只负责缓存代际，不是管理员乐观锁。Mail/SMS rate policy 的 `revision` 已删除；`permission_auth_platform.menu_version/policy_version`、`permission_access_version.version`、Session/authority generation、验证码、限流计数和队列状态保持原业务归属，未迁入配置 generation。
+- COS migration 已于 **2026-09-18 10:59 +08:00** 通过 `2026-09-17-storage-object-versioning.ps1 -OldAPIStopped` 执行，并于 **11:07 +08:00** 完整复跑验证幂等。两条逻辑配置均回填 physical version 1 和 `storage.cosconfig/<id>` generation/outbox；1 条用户头像旧引用已清空，品牌默认头像原本为空；Admin/Canvas `menu_version` 保持 `11/1`，编码行保持 2。两轮固定 Redis cleanup 的全部 pattern 均为 `remaining=0`。
+- 配置缓存完成 migration 已于 **2026-09-18 11:00 +08:00** 通过 `2026-09-17-config-cache-generation-completion.ps1 -OldAPIStopped` 执行，并于 **11:07 +08:00** 完整复跑验证幂等。Dictionary/Mail/SMS 三个 global scope 与同代 pending outbox 均为 generation 1；Mail/SMS policy 事实与时间戳指纹不变，menu/policy/session/access 版本指纹不变；两轮固定 Redis cleanup 全部为 `remaining=0`。
+- 各次迁移前 PostgreSQL 归档均曾通过 `pg_restore --list` 验证。维护者要求清理后，已于 **2026-09-18 12:00 +08:00** 删除 `%LOCALAPPDATA%\Admin\backups` 下全部 20 个项目备份批次并复验剩余文件为 0；当前不再保留可用于恢复旧 schema 的本地归档。
+- `docs/database/current.sql` 已从最终真实 `public` schema-only 刷新，SHA256 为 `583A90DA6628D47C0D6E7A66A301B1FA5D22C4364F134FA7A659F4DE72D9EDE4`。精确 SQL 预算探针验证：rule route 冷回源 1 条 SELECT、热命中 0；COS snapshot 两实例并发冷回源合计 1 条逻辑配置 SELECT + 1 条物理版本 SELECT、热命中 0；route 与 snapshot 均 ready 的 object-url 为 0 条 SELECT。
+- 兜底修复：上传规则页面初始化的 COS 配置摘要已改为按 `storage_cos_config.current_version` 连接 `storage_cos_config_version`，不再从逻辑配置表读取已迁出的 `bucket/region`；真实 PostgreSQL 回归覆盖当前物理版本和停用配置过滤。
+- 维护者要求最终迁移后，两个 forward runner 已于 **2026-09-18 11:59 +08:00** 再次完整执行并确认幂等：COS generation/outbox、编码行、`menu_version`、Mail/SMS policy 指纹及权限/Session/access 版本均保持不变。随后对旧协议和新协议固定 Redis pattern 各执行两轮清理，system.setting、Dictionary、Mail、SMS、COS state/snapshot/fill 与 v2 object route 均为 `remaining=0`；API/Worker 仍未由 Agent 启动。
+- 验证通过：`go test -p 1 ./... -count=1`、`go vet ./...`、`go build ./...`、两个 runner 的 PowerShell Parser 检查、`git diff --check`。前端全量 Vitest 由维护者执行，本轮 Agent 未运行。迁移前只读进程检查未发现业务 API/Worker；迁移后未由 Agent 启动或重启服务。
+
 ## 统一配置缓存代际协议（2026-09-16，第一阶段已实现并迁移）
 
 - 背景：`system/setting` 当前写路径为 PostgreSQL 提交后删除 Redis；删除失败会出现“数据库已提交但接口返回依赖错误”，缓存未命中期间的旧请求还可能在删除后回填旧值。该问题不只存在于品牌配置，必须按整个系统设置模块处理。

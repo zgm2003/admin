@@ -403,8 +403,9 @@ export const zhCN = {
   'storage.rulePlatformPlaceholder': '请选择认证平台',
   'storage.ruleConfigPlaceholder': '请选择 COS 配置',
   'storage.ruleCodePlaceholder': '输入后按回车添加，可添加多个编码，例如：avatar',
-	'storage.ruleCodeHelp': '统一编码同时作为上传权限标识和 COS 对象前缀；同一规则内自动去重，可跨规则重复',
-	'storage.confirmEnabledRuleReplacement': '启用后将自动停用该平台当前已启用的上传规则，是否继续？',
+  'storage.ruleCodeHelp':
+    '统一编码同时作为上传权限标识和 COS 对象前缀；同一规则内自动去重，可跨规则重复',
+  'storage.confirmEnabledRuleReplacement': '启用后将自动停用该平台当前已启用的上传规则，是否继续？',
   'storage.ruleNamePlaceholder': '请输入规则名称',
   'storage.publicWarning': '公开访问：任何获得链接的人都可以访问，请确认文件允许公开',
   'storage.namePlaceholder': '请输入配置名称',

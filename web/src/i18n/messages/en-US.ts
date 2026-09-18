@@ -412,9 +412,9 @@ export const enUS = {
   'storage.ruleConfigPlaceholder': 'Select a COS config',
   'storage.ruleCodePlaceholder': 'Press Enter to add one or more codes, for example: avatar',
   'storage.ruleCodeHelp':
-		'Each code is both an upload permission identifier and a COS object prefix. Codes are deduplicated within a rule and may be reused across rules.',
-	'storage.confirmEnabledRuleReplacement':
-		'Enabling this rule will automatically disable the currently enabled rule for the same platform. Continue?',
+    'Each code is both an upload permission identifier and a COS object prefix. Codes are deduplicated within a rule and may be reused across rules.',
+  'storage.confirmEnabledRuleReplacement':
+    'Enabling this rule will automatically disable the currently enabled rule for the same platform. Continue?',
   'storage.ruleNamePlaceholder': 'Enter a rule name',
   'storage.publicWarning':
     'Public access: anyone with the link can access the file. Confirm that the file may be public.',

@@ -20,15 +20,15 @@ describe('AppAside profile access', () => {
   })
 
   it('renders the resolved avatar image when the current user has an avatar key', async () => {
-		requestObjectURLMock.mockResolvedValue({
-			url: 'https://cdn.example.com/avatar.png',
-			expiresAt: null,
-		})
+    requestObjectURLMock.mockResolvedValue({
+      url: 'https://cdn.example.com/avatar.png',
+      expiresAt: null,
+    })
     const { wrapper } = mountAside([], { avatar: 'avatar/profile.png' })
 
     await flushPromises()
 
-		expect(requestObjectURLMock).toHaveBeenCalledWith('avatar/profile.png')
+    expect(requestObjectURLMock).toHaveBeenCalledWith('avatar/profile.png')
     expect(wrapper.findComponent({ name: 'ElAvatar' }).exists()).toBe(true)
     expect(wrapper.get('.app-aside__avatar img').attributes('src')).toBe(
       'https://cdn.example.com/avatar.png',
@@ -36,42 +36,42 @@ describe('AppAside profile access', () => {
   })
 
   it('falls back to the configured default avatar when the user has no avatar', async () => {
-		requestObjectURLMock.mockResolvedValue({
-			url: 'https://cdn.example.com/default.png',
-			expiresAt: null,
-		})
+    requestObjectURLMock.mockResolvedValue({
+      url: 'https://cdn.example.com/default.png',
+      expiresAt: null,
+    })
     const { wrapper } = mountAside([], { avatar: '', defaultAvatar: 'avatar/default.png' })
 
     await flushPromises()
 
-		expect(requestObjectURLMock).toHaveBeenCalledWith('avatar/default.png')
+    expect(requestObjectURLMock).toHaveBeenCalledWith('avatar/default.png')
     expect(wrapper.get('.app-aside__avatar img').attributes('src')).toBe(
       'https://cdn.example.com/default.png',
     )
   })
 
-	it('refreshes the current avatar on image failure without a background timer', async () => {
-		requestObjectURLMock
-			.mockResolvedValueOnce({
-				url: 'https://cos.example.com/first.png',
-				expiresAt: '2020-01-01T00:00:00Z',
-			})
-			.mockResolvedValueOnce({
-				url: 'https://cos.example.com/refreshed.png',
-				expiresAt: '2030-01-01T00:00:00Z',
-			})
-		const { wrapper } = mountAside([], { avatar: 'avatar/private.png' })
-		await flushPromises()
-		await new Promise((resolve) => setTimeout(resolve, 25))
-		expect(requestObjectURLMock).toHaveBeenCalledTimes(1)
+  it('refreshes the current avatar on image failure without a background timer', async () => {
+    requestObjectURLMock
+      .mockResolvedValueOnce({
+        url: 'https://cos.example.com/first.png',
+        expiresAt: '2020-01-01T00:00:00Z',
+      })
+      .mockResolvedValueOnce({
+        url: 'https://cos.example.com/refreshed.png',
+        expiresAt: '2030-01-01T00:00:00Z',
+      })
+    const { wrapper } = mountAside([], { avatar: 'avatar/private.png' })
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    expect(requestObjectURLMock).toHaveBeenCalledTimes(1)
 
-		await wrapper.get('.app-aside__avatar img').trigger('error')
-		await flushPromises()
-		expect(requestObjectURLMock).toHaveBeenCalledTimes(2)
-		expect(wrapper.get('.app-aside__avatar img').attributes('src')).toBe(
-			'https://cos.example.com/refreshed.png',
-		)
-	})
+    await wrapper.get('.app-aside__avatar img').trigger('error')
+    await flushPromises()
+    expect(requestObjectURLMock).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('.app-aside__avatar img').attributes('src')).toBe(
+      'https://cos.example.com/refreshed.png',
+    )
+  })
 
   it('shows the profile entry only with profile-view permission and always keeps logout', async () => {
     const { access, wrapper } = mountAside([])

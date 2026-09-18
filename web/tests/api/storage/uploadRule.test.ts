@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { request } from '@/utils/request'
 import { ProtocolError } from '@/types/http'
-import {
-  getUploadRulePageInit,
-  listUploadRules,
-  updateUploadRule,
-} from '@/api/storage/uploadRule'
+import { getUploadRulePageInit, listUploadRules, updateUploadRule } from '@/api/storage/uploadRule'
 vi.mock('@/utils/request', () => ({ request: vi.fn() }))
 const requestMock = vi.mocked(request)
 describe('upload rule API', () => {

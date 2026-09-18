@@ -122,9 +122,7 @@ describe('mail rate limit protocol', () => {
     )
     expect(
       parseMailRateLimitSnapshot({
-        platforms: [
-          { platformId: 1, platformCode: 'admin', platformName: 'Admin', policies },
-        ],
+        platforms: [{ platformId: 1, platformCode: 'admin', platformName: 'Admin', policies }],
       }),
     ).toEqual({
       platforms: [

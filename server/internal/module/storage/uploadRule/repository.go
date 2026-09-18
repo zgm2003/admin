@@ -214,7 +214,11 @@ func (r *Repository) FindPlatformOptions(ctx context.Context) ([]PlatformOption,
 }
 func (r *Repository) FindConfigSummaries(ctx context.Context) ([]ConfigSummary, error) {
 	var out []ConfigSummary
-	err := r.db.WithContext(ctx).Model(&cosconfig.Model{}).Select("id,name,bucket,region,is_enabled").Where("deleted_at IS NULL AND is_enabled=1").Order("id").Scan(&out).Error
+	err := r.db.WithContext(ctx).Table("storage_cos_config").
+		Select("storage_cos_config.id, storage_cos_config.name, current_version.bucket AS bucket, current_version.region AS region, storage_cos_config.is_enabled").
+		Joins("JOIN storage_cos_config_version AS current_version ON current_version.cos_config_id = storage_cos_config.id AND current_version.version = storage_cos_config.current_version").
+		Where("storage_cos_config.deleted_at IS NULL AND storage_cos_config.is_enabled = 1").
+		Order("storage_cos_config.id").Scan(&out).Error
 	return out, err
 }
 func (r *Repository) FindUploadTarget(ctx context.Context, pid int64, code string) (UploadTarget, error) {

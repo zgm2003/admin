@@ -52,7 +52,7 @@ defineExpose({ validate: () => formRef.value?.validate() })
             <el-input
               v-model="form.appId"
               data-testid="storage-config-app-id"
-							:disabled="props.editing"
+              :disabled="props.editing"
               :placeholder="t('storage.appIdPlaceholder')"
             />
           </el-form-item>

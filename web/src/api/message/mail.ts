@@ -662,11 +662,7 @@ export function parseMailRateLimitUpdateResult(
   value: unknown,
   expectedKey?: string,
 ): MailRateLimitUpdateResult {
-  const data = expectExactKeys(
-    value,
-    ['platformId', 'policy'],
-    'mail rate limit update result',
-  )
+  const data = expectExactKeys(value, ['platformId', 'policy'], 'mail rate limit update result')
   const platformId = expectInteger(data.platformId, 'mail rate limit update result.platformId')
   if (platformId < 1) throw new ProtocolError('mail rate limit update result.platformId is invalid')
   const policyData = expectExactKeys(

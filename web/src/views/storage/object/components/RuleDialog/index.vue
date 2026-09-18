@@ -76,7 +76,7 @@ defineExpose({ validate: () => formRef.value?.validate() })
               :options="configOptions"
               data-testid="storage-rule-config"
               class="storage-rule-select"
-							:disabled="props.editing"
+              :disabled="props.editing"
               :placeholder="t('storage.ruleConfigPlaceholder')" /></el-form-item
         ></el-col>
         <el-col :xs="24" :sm="12"
@@ -110,10 +110,10 @@ defineExpose({ validate: () => formRef.value?.validate() })
         ></el-col>
         <el-col :xs="24" :sm="12"
           ><el-form-item :label="t('storage.accessMode')" prop="accessMode"
-			><el-radio-group
-				v-model="form.accessMode"
-				data-testid="storage-rule-access-mode"
-				:disabled="props.editing"
+            ><el-radio-group
+              v-model="form.accessMode"
+              data-testid="storage-rule-access-mode"
+              :disabled="props.editing"
               ><el-radio value="private">{{ t('storage.private') }}</el-radio
               ><el-radio value="public">{{ t('storage.public') }}</el-radio></el-radio-group
             ></el-form-item

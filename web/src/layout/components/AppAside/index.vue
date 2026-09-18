@@ -54,15 +54,15 @@ async function hydrateAvatar(objectKey: string): Promise<void> {
   avatarURL.value = ''
   if (!objectKey) return
   try {
-		const result = await requestObjectURL(objectKey)
-		if (active && requestID === avatarRequestID) avatarURL.value = result.url
+    const result = await requestObjectURL(objectKey)
+    if (active && requestID === avatarRequestID) avatarURL.value = result.url
   } catch {
-		if (active && requestID === avatarRequestID) avatarURL.value = ''
+    if (active && requestID === avatarRequestID) avatarURL.value = ''
   }
 }
 
 function handleAvatarError(): void {
-	void hydrateAvatar(avatarObjectKey.value)
+  void hydrateAvatar(avatarObjectKey.value)
 }
 
 watch(
@@ -74,8 +74,8 @@ watch(
 )
 
 onBeforeUnmount(() => {
-	active = false
-	avatarRequestID += 1
+  active = false
+  avatarRequestID += 1
 })
 
 function handleAccountCommand(command: string | number | object): void {
