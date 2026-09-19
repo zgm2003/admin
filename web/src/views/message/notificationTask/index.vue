@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import * as taskApi from '@/api/message/notificationTask'
 import type { SearchFormModel } from '@/components/AppSearch'
 import type { TablePaginationState } from '@/components/AppTable/types'
 import { usePermissionStore } from '@/store/permission'
+import { ProtocolError } from '@/types/http'
 import NotificationEditor from './components/NotificationEditor/index.vue'
 import NotificationTaskSearch from './components/NotificationTaskSearch/index.vue'
 import NotificationTaskTable from './components/NotificationTaskTable/index.vue'
@@ -277,9 +278,16 @@ async function save(): Promise<void> {
     const payload: taskApi.NotificationTaskInput = { ...form, platformId: platformID }
     if (editingID.value === null) await taskApi.createNotificationTask(payload)
     else await taskApi.updateNotificationTask(editingID.value, payload)
-    ElMessage.success(t('notificationTask.saveSuccess'))
+    ElNotification.success({ title: t('notificationTask.saveSuccess') })
     updateDialogOpen(false)
     await load()
+  } catch (error) {
+    if (error instanceof ProtocolError) {
+      ElNotification.error({
+        title: t('request.failed'),
+        message: t('request.protocolError'),
+      })
+    }
   } finally {
     saving.value = false
   }
@@ -288,7 +296,7 @@ async function save(): Promise<void> {
 async function remove(row: taskApi.NotificationTaskListItem): Promise<void> {
   await ElMessageBox.confirm(t('notificationTask.deleteConfirm'), t('notificationTask.delete'))
   await taskApi.deleteNotificationTask(row.id)
-  ElMessage.success(t('notificationTask.deleteSuccess'))
+  ElNotification.success({ title: t('notificationTask.deleteSuccess') })
   await load()
 }
 
@@ -301,7 +309,7 @@ async function command(
   if (action === 'cancel')
     await ElMessageBox.confirm(t('notificationTask.cancelConfirm'), t('notificationTask.cancel'))
   const result = await taskApi.commandNotificationTask(row.id, action)
-  ElMessage.success(t(`notificationTask.${action}Success`))
+  ElNotification.success({ title: t(`notificationTask.${action}Success`) })
   await load()
   if (action === 'copy' && can('message:notificationTask:update'))
     await loadDetail(result.id, 'edit')

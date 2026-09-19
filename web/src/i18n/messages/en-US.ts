@@ -1153,6 +1153,7 @@ export const enUS = {
   'notification.noPermission': 'Notification access is not available',
   'notification.delete': 'Delete',
   'navigation.messageNotificationTask': 'Notification tasks',
+  'navigation.messageNotification': 'Notification center',
   'notificationTask.title': 'Title',
   'notificationTask.platform': 'Platform',
   'notificationTask.platformPlaceholder': 'Select a platform',

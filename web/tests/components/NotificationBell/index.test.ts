@@ -55,6 +55,51 @@ describe('NotificationBell', () => {
     })
     expect(wrapper.find('[data-value="99+"]').exists()).toBe(true)
   })
+
+  it('opens the recent notification popover when the bell is clicked', async () => {
+    usePermissionStore().permissionCodes = [
+      'message:notification:view',
+      'message:notification:list',
+      'message:notification:read',
+    ]
+    vi.mocked(notificationApi.getNotificationSummary).mockResolvedValueOnce({
+      unreadCount: 1,
+      recent: [
+        {
+          id: 9,
+          title: 'Visible notice',
+          summary: 'Visible body',
+          variant: 'info',
+          priority: 'normal',
+          linkType: 'none',
+          link: '',
+          publishedAt: '2026-09-18T12:00:00Z',
+          isRead: false,
+        },
+      ],
+    })
+    const wrapper = mount(NotificationBell, {
+      attachTo: document.body,
+      global: { plugins: [router, appI18n] },
+    })
+
+    try {
+      await vi.waitFor(() =>
+        expect(document.querySelector('[data-testid="notification-bell-item-9"]')).not.toBeNull(),
+      )
+      await wrapper.get('[data-testid="notification-bell"]').trigger('click')
+
+      await vi.waitFor(() => {
+        const popover = document
+          .querySelector('[data-testid="notification-bell-item-9"]')
+          ?.closest('.el-popover')
+        expect(popover?.getAttribute('aria-hidden')).toBe('false')
+      })
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
   it('does not expose read actions without read permission and still opens a link', async () => {
     usePermissionStore().permissionCodes = ['message:notification:list']
     vi.mocked(notificationApi.getNotificationSummary).mockResolvedValueOnce({

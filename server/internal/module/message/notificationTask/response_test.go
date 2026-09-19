@@ -29,3 +29,13 @@ func TestTaskListDTOExcludesDetailFieldsAndIncludesCompletion(t *testing.T) {
 		t.Fatalf("list response missing completedAt: %s", encoded)
 	}
 }
+
+func TestTaskDTOEncodesEmptyTargetsAsArray(t *testing.T) {
+	raw, err := json.Marshal(taskDTO(Task{TargetIDs: nil}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"targetIds":[]`) {
+		t.Fatalf("task response must encode empty targetIds as an array: %s", raw)
+	}
+}

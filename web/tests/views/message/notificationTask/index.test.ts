@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { ElNotification } from 'element-plus'
 import { createPinia, setActivePinia } from 'pinia'
 import { appI18n } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
+import { ProtocolError } from '@/types/http'
 import * as api from '@/api/message/notificationTask'
 import Page from '@/views/message/notificationTask/index.vue'
 import {
@@ -16,6 +18,8 @@ vi.mock('@/api/message/notificationTask', async (original) => ({
   getNotificationTask: vi.fn(),
   getNotificationTaskForUpdate: vi.fn(),
   listNotificationTaskOptions: vi.fn(),
+  createNotificationTask: vi.fn(),
+  updateNotificationTask: vi.fn(),
 }))
 
 const task: api.NotificationTask = {
@@ -70,7 +74,10 @@ describe('notification task management', () => {
     })
     vi.mocked(api.getNotificationTask).mockResolvedValue(task)
     vi.mocked(api.getNotificationTaskForUpdate).mockResolvedValue(task)
+    vi.mocked(api.createNotificationTask).mockResolvedValue(task)
+    vi.mocked(api.updateNotificationTask).mockResolvedValue(task)
   })
+  afterEach(() => vi.restoreAllMocks())
   it('uses only the approved editor controls and HTTPS links', () => {
     expect(notificationToolbarKeys).toEqual([
       'bold',
@@ -107,7 +114,7 @@ describe('notification task management', () => {
           AppTable: {
             props: ['data'],
             template:
-              '<div><slot name="toolbar-right" /><slot v-if="data.length" name="actions" :row="data[0]" /></div>',
+              '<div><slot name="toolbar-right" /><slot v-if="data.length" name="cell-actions" :row="data[0]" /></div>',
           },
           AppDialog: true,
           ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },
@@ -154,7 +161,10 @@ describe('notification task management', () => {
       },
     })
     await wrapper.get('[data-testid="notification-task-create"]').trigger('click')
-    const platformSelect = wrapper.getComponent({ name: 'ElSelectV2' })
+    const platformSelect = wrapper
+      .findAllComponents({ name: 'ElSelectV2' })
+      .find((select) => select.attributes('data-testid') === 'notification-task-platform')
+    if (platformSelect === undefined) throw new Error('platform select is missing')
     expect(platformSelect.props('modelValue')).toBeNull()
     await vi.waitFor(() =>
       expect(api.listNotificationTaskOptions).toHaveBeenCalledWith('create', 'platform', {
@@ -248,18 +258,24 @@ describe('notification task management', () => {
     expect(wrapper.find('[data-testid="notification-task-option-more"]').exists()).toBe(false)
     await create.trigger('click')
     await vi.waitFor(() =>
-      expect(wrapper.getComponent({ name: 'ElSelectV2' }).props('options')).toEqual([
-        { value: 3, label: 'Current' },
-      ]),
+      expect(
+        wrapper
+          .findAllComponents({ name: 'ElSelectV2' })
+          .find((select) => select.attributes('data-testid') === 'notification-task-platform')
+          ?.props('options'),
+      ).toEqual([{ value: 3, label: 'Current' }]),
     )
 
     stale.resolve({ items: [{ id: 2, label: 'Stale' }], nextAfterId: null })
     await stale.promise
     await Promise.resolve()
     await wrapper.vm.$nextTick()
-    expect(wrapper.getComponent({ name: 'ElSelectV2' }).props('options')).toEqual([
-      { value: 3, label: 'Current' },
-    ])
+    expect(
+      wrapper
+        .findAllComponents({ name: 'ElSelectV2' })
+        .find((select) => select.attributes('data-testid') === 'notification-task-platform')
+        ?.props('options'),
+    ).toEqual([{ value: 3, label: 'Current' }])
   })
 
   it('does not let a closed edit request replace a newly opened draft', async () => {
@@ -278,7 +294,7 @@ describe('notification task management', () => {
           AppTable: {
             props: ['data'],
             template:
-              '<div><slot name="toolbar-right" /><slot v-if="data.length" name="actions" :row="data[0]" /></div>',
+              '<div><slot name="toolbar-right" /><slot v-if="data.length" name="cell-actions" :row="data[0]" /></div>',
           },
           AppDialog: {
             name: 'AppDialog',
@@ -399,6 +415,122 @@ describe('notification task management', () => {
     expect(wrapper.text()).not.toContain('Stale result')
   })
 
+  it('notifies, closes the dialog, and reloads after saving a draft', async () => {
+    usePermissionStore().permissionCodes = [
+      'message:notificationTask:list',
+      'message:notificationTask:create',
+    ]
+    const success = vi.spyOn(ElNotification, 'success').mockImplementation(() => ({
+      close: () => undefined,
+    }))
+    const wrapper = mount(Page, {
+      global: {
+        plugins: [appI18n],
+        stubs: {
+          AppPage: { template: '<section><slot /></section>' },
+          AppTable: { props: ['data'], template: '<div><slot name="toolbar-right" /></div>' },
+          AppDialog: {
+            name: 'AppDialog',
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<div><slot /></div><slot name="footer" />',
+          },
+          NotificationEditor: true,
+          ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },
+          ElSelectV2: {
+            name: 'ElSelectV2',
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<div v-bind="$attrs" />',
+          },
+          ElInput: true,
+          ElForm: { template: '<form><slot /></form>' },
+          ElFormItem: { template: '<div><slot /></div>' },
+        },
+      },
+    })
+    await vi.waitFor(() => expect(api.listNotificationTasks).toHaveBeenCalledTimes(1))
+    await wrapper.get('[data-testid="notification-task-create"]').trigger('click')
+    const platform = wrapper
+      .findAllComponents({ name: 'ElSelectV2' })
+      .find((select) => select.attributes('data-testid') === 'notification-task-platform')
+    if (platform === undefined) throw new Error('platform select is missing')
+    platform.vm.$emit('update:modelValue', 2)
+    await wrapper.vm.$nextTick()
+
+    const save = wrapper.findAll('button').find((button) => button.text().includes('保存'))
+    if (save === undefined) throw new Error('save button is missing')
+    await save.trigger('click')
+    await vi.waitFor(() => expect(api.createNotificationTask).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(success).toHaveBeenCalledOnce())
+
+    expect(wrapper.getComponent({ name: 'AppDialog' }).props('modelValue')).toBe(false)
+    expect(api.listNotificationTasks).toHaveBeenCalledTimes(2)
+  })
+
+  it('notifies once and keeps the dialog open when a saved response violates the DTO', async () => {
+    usePermissionStore().permissionCodes = [
+      'message:notificationTask:list',
+      'message:notificationTask:create',
+    ]
+    vi.mocked(api.createNotificationTask).mockRejectedValue(
+      new ProtocolError('targetIds must be an array'),
+    )
+    const success = vi.spyOn(ElNotification, 'success').mockImplementation(() => ({
+      close: () => undefined,
+    }))
+    const error = vi.spyOn(ElNotification, 'error').mockImplementation(() => ({
+      close: () => undefined,
+    }))
+    const wrapper = mount(Page, {
+      global: {
+        plugins: [appI18n],
+        stubs: {
+          AppPage: { template: '<section><slot /></section>' },
+          AppTable: { props: ['data'], template: '<div><slot name="toolbar-right" /></div>' },
+          AppDialog: {
+            name: 'AppDialog',
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<div><slot /></div><slot name="footer" />',
+          },
+          NotificationEditor: true,
+          ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },
+          ElSelectV2: {
+            name: 'ElSelectV2',
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<div v-bind="$attrs" />',
+          },
+          ElInput: true,
+          ElForm: { template: '<form><slot /></form>' },
+          ElFormItem: { template: '<div><slot /></div>' },
+        },
+      },
+    })
+    await vi.waitFor(() => expect(api.listNotificationTasks).toHaveBeenCalledTimes(1))
+    await wrapper.get('[data-testid="notification-task-create"]').trigger('click')
+    const platform = wrapper
+      .findAllComponents({ name: 'ElSelectV2' })
+      .find((select) => select.attributes('data-testid') === 'notification-task-platform')
+    if (platform === undefined) throw new Error('platform select is missing')
+    platform.vm.$emit('update:modelValue', 2)
+    await wrapper.vm.$nextTick()
+
+    const save = wrapper.findAll('button').find((button) => button.text().includes('保存'))
+    if (save === undefined) throw new Error('save button is missing')
+    await save.trigger('click')
+    await vi.waitFor(() => expect(error).toHaveBeenCalledOnce())
+
+    expect(error).toHaveBeenCalledWith({
+      title: '请求失败',
+      message: '服务响应格式无效',
+    })
+    expect(success).not.toHaveBeenCalled()
+    expect(wrapper.getComponent({ name: 'AppDialog' }).props('modelValue')).toBe(true)
+    expect(api.listNotificationTasks).toHaveBeenCalledTimes(1)
+  })
+
   it('loads exact detail before editing a draft', async () => {
     usePermissionStore().permissionCodes = [
       'message:notificationTask:list',
@@ -411,7 +543,7 @@ describe('notification task management', () => {
           AppPage: { template: '<section><slot /></section>' },
           AppTable: {
             props: ['data'],
-            template: '<div><slot v-if="data.length" name="actions" :row="data[0]" /></div>',
+            template: '<div><slot v-if="data.length" name="cell-actions" :row="data[0]" /></div>',
           },
           AppDialog: { template: '<div><slot /></div><slot name="footer" />' },
           NotificationEditor: true,
@@ -456,7 +588,7 @@ describe('notification task management', () => {
           AppPage: { template: '<section><slot /></section>' },
           AppTable: {
             props: ['data'],
-            template: '<div><slot v-if="data.length" name="actions" :row="data[0]" /></div>',
+            template: '<div><slot v-if="data.length" name="cell-actions" :row="data[0]" /></div>',
           },
           AppDialog: true,
           ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },

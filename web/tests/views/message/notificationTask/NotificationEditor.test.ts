@@ -1,25 +1,13 @@
-import { mount } from '@vue/test-utils'
+import { shallowMount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { Editor } from '@wangeditor-next/editor-for-vue'
 
 import NotificationEditor from '@/views/message/notificationTask/components/NotificationEditor/index.vue'
 
 describe('NotificationEditor', () => {
   it('forwards consecutive editor updates through v-model', async () => {
-    const wrapper = mount(NotificationEditor, {
-      props: { modelValue: '' },
-      global: {
-        stubs: {
-          Editor: {
-            name: 'Editor',
-            props: ['modelValue'],
-            emits: ['update:modelValue', 'onCreated'],
-            template: '<div />',
-          },
-          Toolbar: true,
-        },
-      },
-    })
-    const editor = wrapper.getComponent({ name: 'Editor' })
+    const wrapper = shallowMount(NotificationEditor, { props: { modelValue: '' } })
+    const editor = wrapper.getComponent(Editor)
 
     editor.vm.$emit('update:modelValue', '<p>First</p>')
     await wrapper.setProps({ modelValue: '<p>First</p>' })

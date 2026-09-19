@@ -14,6 +14,8 @@
 - 本次保留两份可读备份：`realtime-notification-20260919-120719/public-before.dump`（180426 字节，SHA256 `2C8655A5386CBBF4E7B2BBF15E7D860BCAD26E25B2B94CC5E0EFE8B2617BEDED`，327 项）和 `realtime-notification-20260919-120748/public-before.dump`（224922 字节，SHA256 `FCFD85E12CF62EDB0D9B09EE077CCD30F605D3B4A5782CE16A29EF9C27CC216B`，412 项），均位于 `%LOCALAPPDATA%\Admin\backups` 且未删除。
 - 全量门禁通过：`go test -p 1 ./... -count=1`、`go vet ./...`、`go build ./...`；前端 `format:check`、`lint`、`check:architecture`、`typecheck`、96 文件 706 项 Vitest、生产 build 全部 exit 0。迁移后指定的 5 包真实 PG/Redis 探针通过；测试 fixture 已移除并发创建全局 `pgcrypto` extension 的竞态。
 - `docs/database/current.sql` 已从真实 `public` schema-only 刷新，114300 字节，SHA256 `7BDA894A3FB01EAFF786A4B83D8AAC78FB236F21696378805E38C5A785046D3A`。Agent 精确停止了本项目 API/Worker，未停止 Vite，迁移后未启动或重启 API/Worker。
+- 2026-09-19 浏览器全链路验收补齐并修复三项真实前端/协议缺陷：平台草稿 `targetIds` 固定输出空数组，保存成功不再因 DTO 解析失败而静默；通知任务表使用 `AppTable` 的 `cell-actions` 契约；铃铛 Popover 不再把 Tooltip 组件当作 reference，通知中心隐藏路由补齐中英文导航文案。真实 Element Plus 交互测试覆盖铃铛展开，通知表使用真实 `AppTable` 覆盖操作列。
+- 本次真实 E2E 已覆盖平台/指定用户/指定角色立即发送、角色提交时点冻结展开、未来定时发送、到期前取消、提交后复制与草稿编辑、dispatch/realtime outbox 发布、WebSocket 在线刷新、铃铛最近 5 条、隐藏通知中心 all/unread/已读/全部已读/删除。PostgreSQL 与 Redis 测试账号及全部 E2E 事实已精确清理，原任务未改动；最新全量门禁为后端 test/vet/build 全部 exit 0，前端 format/lint/typecheck/architecture、98 文件 716 项 Vitest、生产 build 全部 exit 0。
 - 下一个唯一真实模块是“通用定时任务管理”：实现 PostgreSQL 权威 schedule/job/run、管理页/RBAC、多实例 claim 与 missed-run recovery；使用静态任务类型分派；接管 notification batch 0/后续 batch 唤醒和 realtime/notification cleanup；回归立即/定时通知、取消、重启、Redis 丢失、提交后 enqueue 失败和跨实例单次 claim；随后删除 `message_notification_dispatch_outbox`、`notificationTask/dispatch.go`、Worker dispatch relay 和两个临时 `retentionTrigger.go`，不得保留双调度、旧表读取或过渡分支。
 
 ## COS 对象协议与统一配置缓存代际（2026-09-18，已实现并迁移）

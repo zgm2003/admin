@@ -72,16 +72,15 @@ function retry(): void {
 <template>
   <el-popover v-if="visible" placement="bottom-end" :width="360" trigger="click">
     <template #reference>
-      <el-tooltip :content="t('notification.title')">
-        <el-badge :value="badge" :hidden="notification.unreadCount === 0" :max="99">
-          <el-button
-            data-testid="notification-bell"
-            text
-            :icon="Bell"
-            :aria-label="t('notification.title')"
-          />
-        </el-badge>
-      </el-tooltip>
+      <el-badge :value="badge" :hidden="notification.unreadCount === 0" :max="99">
+        <el-button
+          data-testid="notification-bell"
+          text
+          :icon="Bell"
+          :aria-label="t('notification.title')"
+          :title="t('notification.title')"
+        />
+      </el-badge>
     </template>
     <div class="notification-bell__header">
       <strong>{{ t('notification.title') }}</strong

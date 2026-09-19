@@ -1116,6 +1116,7 @@ export const zhCN = {
   'notification.noPermission': '暂无通知查看权限',
   'notification.delete': '删除',
   'navigation.messageNotificationTask': '通知任务',
+  'navigation.messageNotification': '通知中心',
   'notificationTask.title': '标题',
   'notificationTask.platform': '平台',
   'notificationTask.platformPlaceholder': '请选择平台',

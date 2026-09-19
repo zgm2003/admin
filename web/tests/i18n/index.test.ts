@@ -35,7 +35,12 @@ describe('frontend i18n', () => {
     expect(localStorage.getItem(localeStorageKey)).toBe('en-US')
     expect(document.documentElement.lang).toBe('en-US')
     expect(appI18n.global.t('navigation.dashboard')).toBe('Dashboard')
+    expect(appI18n.global.t('navigation.messageNotification')).toBe('Notification center')
     expect(Object.keys(enUS).sort()).toEqual(Object.keys(zhCN).sort())
+  })
+
+  it('translates the hidden notification center route', () => {
+    expect(appI18n.global.t('navigation.messageNotification')).toBe('通知中心')
   })
 
   it('recognizes only exact application message keys', () => {

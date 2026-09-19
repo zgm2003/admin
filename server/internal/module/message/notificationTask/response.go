@@ -34,7 +34,7 @@ func taskDTO(v Task) taskResponse {
 	return taskResponse{
 		ID: v.ID, PlatformID: v.PlatformID, NotificationID: v.NotificationID, Title: v.Title,
 		ContentHTML: v.ContentHTML, Summary: v.Summary, Variant: string(v.Variant), Priority: string(v.Priority),
-		LinkType: string(v.LinkType), Link: v.Link, AudienceType: v.AudienceType, TargetIDs: v.TargetIDs,
+		LinkType: string(v.LinkType), Link: v.Link, AudienceType: v.AudienceType, TargetIDs: append([]int64{}, v.TargetIDs...),
 		ScheduledAt: v.ScheduledAt, AudienceMaxUserID: v.AudienceMaxUserID, SubmittedAt: v.SubmittedAt,
 		PublishedAt: v.PublishedAt, CompletedAt: v.CompletedAt, CanceledAt: v.CanceledAt, FailedAt: v.FailedAt,
 		FailureMessage: v.FailureMessage, Status: v.Status, GeneratedCount: v.GeneratedCount, CreatedBy: v.CreatedBy,

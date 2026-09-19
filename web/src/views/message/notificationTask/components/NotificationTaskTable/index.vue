@@ -57,7 +57,7 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         >{{ t('notificationTask.create') }}</el-button
       >
     </template>
-    <template #actions="{ row }">
+    <template #cell-actions="{ row }">
       <el-button
         v-if="can('message:notificationTask:detail')"
         :data-testid="`notification-task-detail-${row.id}`"
