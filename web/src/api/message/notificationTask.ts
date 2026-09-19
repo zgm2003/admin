@@ -19,6 +19,7 @@ export type NotificationTaskStatus =
 export interface NotificationTask {
   id: number
   platformId: number
+  platformName: string
   notificationId: number | null
   title: string
   contentHtml: string
@@ -46,6 +47,7 @@ export interface NotificationTask {
 export interface NotificationTaskListItem {
   id: number
   platformId: number
+  platformName: string
   title: string
   variant: NotificationVariant
   priority: NotificationPriority
@@ -128,6 +130,7 @@ export function parseNotificationTask(value: unknown): NotificationTask {
     [
       'id',
       'platformId',
+      'platformName',
       'notificationId',
       'title',
       'contentHtml',
@@ -157,6 +160,7 @@ export function parseNotificationTask(value: unknown): NotificationTask {
   return {
     id: expectInteger(r.id, 'id'),
     platformId: expectInteger(r.platformId, 'platformId'),
+    platformName: expectString(r.platformName, 'platformName'),
     notificationId: nullableInteger(r.notificationId, 'notificationId'),
     title: expectString(r.title, 'title'),
     contentHtml: expectString(r.contentHtml, 'contentHtml'),
@@ -188,6 +192,7 @@ export function parseNotificationTaskListItem(value: unknown): NotificationTaskL
     [
       'id',
       'platformId',
+      'platformName',
       'title',
       'variant',
       'priority',
@@ -204,6 +209,7 @@ export function parseNotificationTaskListItem(value: unknown): NotificationTaskL
   return {
     id: expectInteger(r.id, 'id'),
     platformId: expectInteger(r.platformId, 'platformId'),
+    platformName: expectString(r.platformName, 'platformName'),
     title: expectString(r.title, 'title'),
     variant: oneOf(r.variant, variants, 'variant'),
     priority: oneOf(r.priority, priorities, 'priority'),

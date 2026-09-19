@@ -8,6 +8,7 @@ import (
 type Task struct {
 	ID                int64                 `gorm:"column:id;primaryKey"`
 	PlatformID        int64                 `gorm:"column:platform_id"`
+	PlatformName      string                `gorm:"column:platform_name;->"`
 	Title             string                `gorm:"column:title"`
 	ContentHTML       string                `gorm:"column:content_html"`
 	Summary           string                `gorm:"column:summary"`

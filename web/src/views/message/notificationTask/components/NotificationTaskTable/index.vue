@@ -2,9 +2,13 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { NotificationTaskListItem } from '@/api/message/notificationTask'
+import type {
+  NotificationTaskListItem,
+  NotificationTaskStatus,
+} from '@/api/message/notificationTask'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable/types'
 import { usePermissionStore } from '@/store/permission'
+import { formatTime } from '@/utils/datetime'
 
 defineProps<{
   rows: NotificationTaskListItem[]
@@ -24,9 +28,21 @@ const emit = defineEmits<{
 const access = usePermissionStore()
 const { t } = useI18n()
 const can = (code: string): boolean => access.hasPermission(code)
+type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const statusTagTypes: Record<NotificationTaskStatus, TagType> = {
+  draft: 'info',
+  scheduled: 'warning',
+  queued: 'primary',
+  processing: 'primary',
+  completed: 'success',
+  failed: 'danger',
+  canceled: 'info',
+}
+const statusTagType = (status: NotificationTaskStatus): TagType => statusTagTypes[status]
+const displayTime = (value: string | null): string => (value === null ? '-' : formatTime(value))
 const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
   { prop: 'title', label: t('notificationTask.title'), minWidth: 180 },
-  { prop: 'platformId', label: t('notificationTask.platform'), width: 100 },
+  { prop: 'platformName', label: t('notificationTask.platform'), minWidth: 140 },
   { prop: 'audienceType', label: t('notificationTask.audienceLabel'), width: 110 },
   { prop: 'status', label: t('notificationTask.statusLabel'), width: 110 },
   { prop: 'generatedCount', label: t('notificationTask.generatedCount'), width: 120 },
@@ -56,6 +72,42 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         @click="emit('create')"
         >{{ t('notificationTask.create') }}</el-button
       >
+    </template>
+    <template #cell-audienceType="{ row }">
+      <span v-if="row.id !== undefined" :data-testid="`notification-task-audience-${row.id}`">
+        {{ t(`notificationTask.audience.${row.audienceType}`) }}
+      </span>
+    </template>
+    <template #cell-status="{ row }">
+      <span v-if="row.id !== undefined" :data-testid="`notification-task-status-${row.id}`">
+        <el-tag :type="statusTagType(row.status)" effect="light" size="small">
+          {{ t(`notificationTask.status.${row.status}`) }}
+        </el-tag>
+      </span>
+    </template>
+    <template #cell-generatedCount="{ row }">
+      <span v-if="row.id !== undefined" :data-testid="`notification-task-generated-${row.id}`">
+        {{
+          row.status === 'draft'
+            ? t('notificationTask.notGenerated')
+            : t('notificationTask.generatedValue', { count: row.generatedCount })
+        }}
+      </span>
+    </template>
+    <template #cell-scheduledAt="{ row }">
+      <span v-if="row.id !== undefined" :data-testid="`notification-task-scheduled-${row.id}`">
+        {{ displayTime(row.scheduledAt) }}
+      </span>
+    </template>
+    <template #cell-submittedAt="{ row }">
+      <span v-if="row.id !== undefined" :data-testid="`notification-task-submitted-${row.id}`">
+        {{ displayTime(row.submittedAt) }}
+      </span>
+    </template>
+    <template #cell-completedAt="{ row }">
+      <span v-if="row.id !== undefined" :data-testid="`notification-task-completed-${row.id}`">
+        {{ displayTime(row.completedAt) }}
+      </span>
     </template>
     <template #cell-actions="{ row }">
       <el-button

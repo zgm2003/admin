@@ -61,6 +61,9 @@ func TestRepositoryListFiltersStatusAcrossTheWholePage(t *testing.T) {
 	if total != 1 || len(rows) != 1 || rows[0].ID != draft.ID {
 		t.Fatalf("total=%d rows=%+v", total, rows)
 	}
+	if rows[0].PlatformName != "Admin" {
+		t.Fatalf("platform name=%q want Admin", rows[0].PlatformName)
+	}
 }
 
 func TestRepositoryListAppliesEveryApprovedFilter(t *testing.T) {
@@ -114,6 +117,9 @@ func TestRepositoryDraftSubmitCancelCopyTransactions(t *testing.T) {
 	}
 	if created.Status != StatusDraft || len(created.TargetIDs) != 2 {
 		t.Fatalf("created=%+v", created)
+	}
+	if created.PlatformName != "Admin" {
+		t.Fatalf("created platform name=%q want Admin", created.PlatformName)
 	}
 	submitted, err := service.Submit(ctx, created.ID, time.Now().UTC())
 	if err != nil {

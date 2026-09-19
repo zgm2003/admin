@@ -31,11 +31,14 @@ func TestTaskListDTOExcludesDetailFieldsAndIncludesCompletion(t *testing.T) {
 }
 
 func TestTaskDTOEncodesEmptyTargetsAsArray(t *testing.T) {
-	raw, err := json.Marshal(taskDTO(Task{TargetIDs: nil}))
+	raw, err := json.Marshal(taskDTO(Task{PlatformName: "Admin", TargetIDs: nil}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(raw), `"targetIds":[]`) {
 		t.Fatalf("task response must encode empty targetIds as an array: %s", raw)
+	}
+	if !strings.Contains(string(raw), `"platformName":"Admin"`) {
+		t.Fatalf("task response must include platformName: %s", raw)
 	}
 }

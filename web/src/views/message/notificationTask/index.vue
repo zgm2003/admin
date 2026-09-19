@@ -364,7 +364,7 @@ onMounted(() => void load())
       :model-value="dialogOpen"
       :title="dialogTitle"
       width="760px"
-      height="70vh"
+      :height="readonly ? 'min(460px, 64vh)' : '70vh'"
       @update:model-value="updateDialogOpen"
     >
       <div v-if="dialogLoading" class="notification-task-form__state">

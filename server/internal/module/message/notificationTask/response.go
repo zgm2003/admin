@@ -5,6 +5,7 @@ import "time"
 type taskResponse struct {
 	ID                int64        `json:"id"`
 	PlatformID        int64        `json:"platformId"`
+	PlatformName      string       `json:"platformName"`
 	NotificationID    *int64       `json:"notificationId"`
 	Title             string       `json:"title"`
 	ContentHTML       string       `json:"contentHtml"`
@@ -32,7 +33,7 @@ type taskResponse struct {
 
 func taskDTO(v Task) taskResponse {
 	return taskResponse{
-		ID: v.ID, PlatformID: v.PlatformID, NotificationID: v.NotificationID, Title: v.Title,
+		ID: v.ID, PlatformID: v.PlatformID, PlatformName: v.PlatformName, NotificationID: v.NotificationID, Title: v.Title,
 		ContentHTML: v.ContentHTML, Summary: v.Summary, Variant: string(v.Variant), Priority: string(v.Priority),
 		LinkType: string(v.LinkType), Link: v.Link, AudienceType: v.AudienceType, TargetIDs: append([]int64{}, v.TargetIDs...),
 		ScheduledAt: v.ScheduledAt, AudienceMaxUserID: v.AudienceMaxUserID, SubmittedAt: v.SubmittedAt,
@@ -45,6 +46,7 @@ func taskDTO(v Task) taskResponse {
 type taskListItemResponse struct {
 	ID             int64        `json:"id"`
 	PlatformID     int64        `json:"platformId"`
+	PlatformName   string       `json:"platformName"`
 	Title          string       `json:"title"`
 	Variant        string       `json:"variant"`
 	Priority       string       `json:"priority"`
@@ -59,7 +61,7 @@ type taskListItemResponse struct {
 
 func taskListDTO(v Task) taskListItemResponse {
 	return taskListItemResponse{
-		ID: v.ID, PlatformID: v.PlatformID, Title: v.Title, Variant: string(v.Variant), Priority: string(v.Priority),
+		ID: v.ID, PlatformID: v.PlatformID, PlatformName: v.PlatformName, Title: v.Title, Variant: string(v.Variant), Priority: string(v.Priority),
 		AudienceType: v.AudienceType, ScheduledAt: v.ScheduledAt, SubmittedAt: v.SubmittedAt,
 		CompletedAt: v.CompletedAt, Status: v.Status, GeneratedCount: v.GeneratedCount, UpdatedAt: v.UpdatedAt,
 	}

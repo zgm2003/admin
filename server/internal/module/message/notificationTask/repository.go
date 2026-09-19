@@ -28,7 +28,15 @@ func (r *Repository) Create(ctx context.Context, creator int64, input DraftInput
 		if err := tx.db.WithContext(ctx).Create(&task).Error; err != nil {
 			return err
 		}
-		return tx.replaceTargets(ctx, task.ID, input.AudienceType, input.TargetIDs, now)
+		if err := tx.replaceTargets(ctx, task.ID, input.AudienceType, input.TargetIDs, now); err != nil {
+			return err
+		}
+		created, err := tx.find(ctx, task.ID)
+		if err != nil {
+			return err
+		}
+		task = created
+		return nil
 	})
 	return task, err
 }
@@ -150,7 +158,11 @@ func (r *Repository) Copy(ctx context.Context, id, creator int64, now time.Time)
 		if err = tx.db.WithContext(ctx).Create(&copied).Error; err != nil {
 			return err
 		}
-		return tx.replaceTargets(ctx, copied.ID, input.AudienceType, input.TargetIDs, now)
+		if err = tx.replaceTargets(ctx, copied.ID, input.AudienceType, input.TargetIDs, now); err != nil {
+			return err
+		}
+		copied, err = tx.find(ctx, copied.ID)
+		return err
 	})
 	return copied, err
 }
@@ -171,7 +183,12 @@ func (r *Repository) Delete(ctx context.Context, id int64, now time.Time) error 
 }
 func (r *Repository) find(ctx context.Context, id int64) (Task, error) {
 	var row Task
-	err := r.db.WithContext(ctx).Raw(`SELECT task.*,notification.id AS notification_id FROM message_notification_task task LEFT JOIN message_notification notification ON notification.source_task_id=task.id WHERE task.id=? AND task.deleted_at IS NULL`, id).Scan(&row).Error
+	err := r.db.WithContext(ctx).Raw(`
+SELECT task.*, platform.name AS platform_name, notification.id AS notification_id
+FROM message_notification_task task
+JOIN permission_auth_platform platform ON platform.id=task.platform_id
+LEFT JOIN message_notification notification ON notification.source_task_id=task.id
+WHERE task.id=? AND task.deleted_at IS NULL`, id).Scan(&row).Error
 	if err != nil {
 		return Task{}, err
 	}
@@ -273,32 +290,35 @@ func (r *Repository) validatePlatformCapability(ctx context.Context, platformID 
 }
 func (r *Repository) Find(ctx context.Context, id int64) (Task, error) { return r.find(ctx, id) }
 func (r *Repository) List(ctx context.Context, input ListQuery) ([]Task, int64, error) {
-	query := r.db.WithContext(ctx).Model(&Task{}).Where("deleted_at IS NULL")
+	query := r.db.WithContext(ctx).
+		Table("message_notification_task task").
+		Joins("JOIN permission_auth_platform platform ON platform.id=task.platform_id").
+		Where("task.deleted_at IS NULL")
 	if input.PlatformID != nil {
-		query = query.Where("platform_id=?", *input.PlatformID)
+		query = query.Where("task.platform_id=?", *input.PlatformID)
 	}
 	if input.Status != "" {
-		query = query.Where("status=?", input.Status)
+		query = query.Where("task.status=?", input.Status)
 	}
 	if input.AudienceType != "" {
-		query = query.Where("audience_type=?", input.AudienceType)
+		query = query.Where("task.audience_type=?", input.AudienceType)
 	}
 	if input.Keyword != "" {
 		pattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(input.Keyword) + "%"
-		query = query.Where(`title ILIKE ? ESCAPE '\'`, pattern)
+		query = query.Where(`task.title ILIKE ? ESCAPE '\'`, pattern)
 	}
 	if input.From != nil {
-		query = query.Where("created_at>=?", *input.From)
+		query = query.Where("task.created_at>=?", *input.From)
 	}
 	if input.To != nil {
-		query = query.Where("created_at<=?", *input.To)
+		query = query.Where("task.created_at<=?", *input.To)
 	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var rows []Task
-	err := query.Order("id DESC").Limit(input.PageSize).Offset((input.Page - 1) * input.PageSize).Find(&rows).Error
+	err := query.Select("task.*, platform.name AS platform_name").Order("task.id DESC").Limit(input.PageSize).Offset((input.Page - 1) * input.PageSize).Scan(&rows).Error
 	return rows, total, err
 }
 

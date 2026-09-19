@@ -26,6 +26,7 @@ vi.mock('@/api/message/notificationTask', async (original) => ({
 const task: api.NotificationTask = {
   id: 1,
   platformId: 2,
+  platformName: 'Canvas',
   notificationId: null,
   title: 'Notice',
   contentHtml: '<p>Body</p>',

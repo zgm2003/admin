@@ -9,6 +9,7 @@ import {
 const task = {
   id: 1,
   platformId: 2,
+  platformName: 'Canvas',
   notificationId: null,
   title: 't',
   contentHtml: '<p>x</p>',
@@ -52,6 +53,7 @@ describe('notification task DTO', () => {
         {
           id: 1,
           platformId: 2,
+          platformName: 'Canvas',
           title: 't',
           variant: 'info',
           priority: 'normal',
@@ -69,6 +71,7 @@ describe('notification task DTO', () => {
       pageSize: 20,
     })
     expect(page.list[0]?.completedAt).toBe('2026-09-18T12:01:00Z')
+    expect(page.list[0]?.platformName).toBe('Canvas')
     expect(() =>
       parseNotificationTaskPage({
         ...page,
