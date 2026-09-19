@@ -5,6 +5,7 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 import { appI18n } from '@/i18n'
 import Page from '@/views/message/notification/index.vue'
 import { usePermissionStore } from '@/store/permission'
+import { formatTime } from '@/utils/datetime'
 import * as api from '@/api/message/notification'
 vi.mock('@/api/message/notification', async (o) => ({
   ...(await o()),
@@ -65,17 +66,41 @@ describe('notification center', () => {
           ElEmpty: true,
           ElButton: { template: '<button><slot /></button>' },
           ElSelectV2: true,
+          ElSegmented: {
+            name: 'ElSegmented',
+            props: ['modelValue', 'options'],
+            template: '<div data-testid="notification-filter-mode" />',
+          },
+          ElTag: { template: '<span><slot /></span>' },
+          ElTooltip: { template: '<span><slot /></span>' },
         },
       },
     })
     await vi.waitFor(() => expect(w.html()).toContain('<strong>Body</strong>'))
+    expect(w.getComponent({ name: 'ElSegmented' }).props('options')).toEqual([
+      { value: 'all', label: '全部通知' },
+      { value: 'unread', label: '未读通知' },
+    ])
+    expect(w.findAll('.notification-center__filter-label').map((label) => label.text())).toEqual([
+      '类型',
+      '优先级',
+    ])
+    expect(w.get('[data-testid="notification-item-1"]').classes()).toContain('is-unread')
+    expect(w.get('[data-testid="notification-variant-1"]').text()).toBe('信息')
+    expect(w.get('[data-testid="notification-priority-1"]').text()).toBe('普通')
+    expect(w.get('[data-testid="notification-published-1"]').text()).toBe(
+      formatTime('2026-09-18T12:00:00Z'),
+    )
     expect(w.find('[data-testid="notification-read-1"]').exists()).toBe(true)
     expect(w.find('[data-testid="notification-delete-1"]').exists()).toBe(true)
+    expect(w.get('[data-testid="notification-read-1"]').attributes('aria-label')).toBe('标记已读')
+    expect(w.get('[data-testid="notification-delete-1"]').attributes('aria-label')).toBe('删除')
 
     await w.get('[data-testid="notification-read-1"]').trigger('click')
     await vi.waitFor(() =>
       expect(w.find('[data-testid="notification-read-1"]').exists()).toBe(false),
     )
+    expect(w.get('[data-testid="notification-item-1"]').classes()).not.toContain('is-unread')
 
     await w.get('[data-testid="notification-delete-1"]').trigger('click')
     await vi.waitFor(() => expect(w.text()).not.toContain('Body'))

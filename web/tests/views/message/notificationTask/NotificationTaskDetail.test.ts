@@ -51,6 +51,11 @@ describe('NotificationTaskDetail', () => {
     expect(wrapper.get('[data-testid="notification-task-detail-generated"]').text()).toBe(
       '尚未生成',
     )
+    const descriptions = wrapper.getComponent({ name: 'ElDescriptions' })
+    expect(descriptions.props('column')).toBe(2)
+    expect(descriptions.props('border')).toBe(true)
+    expect(wrapper.find('dl').exists()).toBe(false)
+    expect(wrapper.findAll('.el-descriptions__label').map((item) => item.text())).toContain('平台')
     expect(wrapper.get('[data-testid="notification-task-detail-content"]').text()).toContain(
       '今晚进行系统维护。',
     )

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CheckCheck } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
@@ -11,6 +12,9 @@ import {
 } from '@/api/message/notification'
 import { useNotificationStore } from '@/store/notification'
 import { usePermissionStore } from '@/store/permission'
+
+import NotificationCenterList from './components/NotificationCenterList/index.vue'
+
 const access = usePermissionStore(),
   store = useNotificationStore(),
   router = useRouter(),
@@ -27,6 +31,20 @@ const canList = computed(() => access.hasPermission('message:notification:list')
 const filterOptions = computed(() => [
   { value: 'all', label: t('notification.filterAll') },
   { value: 'unread', label: t('notification.filterUnread') },
+])
+const variantOptions = computed(() => [
+  { value: '', label: t('notification.variantAll') },
+  ...(['info', 'success', 'warning', 'error'] as const).map((value) => ({
+    value,
+    label: t(`notification.variant.${value}`),
+  })),
+])
+const priorityOptions = computed(() => [
+  { value: '', label: t('notification.priorityAll') },
+  ...(['normal', 'urgent'] as const).map((value) => ({
+    value,
+    label: t(`notification.priority.${value}`),
+  })),
 ])
 async function load(append = false): Promise<void> {
   if (!canList.value) return
@@ -102,106 +120,159 @@ function open(item: NotificationItem): void {
 onMounted(() => void load())
 </script>
 <template>
-  <AppPage
-    ><header class="notification-center__toolbar">
+  <AppPage class="notification-center">
+    <header class="notification-center__header">
       <h1>{{ t('notification.center') }}</h1>
-      <el-select-v2 v-model="filter" :options="filterOptions" /><el-select-v2
-        v-model="variant"
-        :options="[
-          { value: '', label: t('notification.any') },
-          { value: 'info', label: 'Info' },
-          { value: 'success', label: 'Success' },
-          { value: 'warning', label: 'Warning' },
-          { value: 'error', label: 'Error' },
-        ]"
-      /><el-select-v2
-        v-model="priority"
-        :options="[
-          { value: '', label: t('notification.any') },
-          { value: 'normal', label: t('notification.normal') },
-          { value: 'urgent', label: t('notification.urgent') },
-        ]"
-      /><el-button v-if="access.hasPermission('message:notification:read')" @click="markAllRead">{{
-        t('notification.readAll')
-      }}</el-button>
+      <el-button
+        v-if="access.hasPermission('message:notification:read')"
+        :icon="CheckCheck"
+        plain
+        type="primary"
+        @click="markAllRead"
+      >
+        {{ t('notification.readAll') }}
+      </el-button>
     </header>
+    <div class="notification-center__filters">
+      <el-segmented
+        v-model="filter"
+        data-testid="notification-filter-mode"
+        :options="filterOptions"
+      />
+      <div class="notification-center__selectors">
+        <label class="notification-center__filter">
+          <span class="notification-center__filter-label">{{
+            t('notification.variantLabel')
+          }}</span>
+          <el-select-v2
+            v-model="variant"
+            data-testid="notification-variant-filter"
+            :options="variantOptions"
+            :aria-label="t('notification.variantLabel')"
+          />
+        </label>
+        <label class="notification-center__filter">
+          <span class="notification-center__filter-label">{{
+            t('notification.priorityLabel')
+          }}</span>
+          <el-select-v2
+            v-model="priority"
+            data-testid="notification-priority-filter"
+            :options="priorityOptions"
+            :aria-label="t('notification.priorityLabel')"
+          />
+        </label>
+      </div>
+    </div>
     <el-empty v-if="!canList" :description="t('notification.noPermission')" />
     <div v-else-if="error" class="notification-center__state">
       {{ error }}<el-button link @click="load()">{{ t('notification.retry') }}</el-button>
     </div>
+    <div v-else-if="loading && items.length === 0" class="notification-center__state">
+      {{ t('notification.loading') }}
+    </div>
     <el-empty v-else-if="!loading && items.length === 0" :description="t('notification.empty')" />
-    <div v-else class="notification-center__list">
-      <article v-for="item in items" :key="item.id" class="notification-center__item">
-        <div class="notification-center__heading">
-          <h2>{{ item.title }}</h2>
-          <div>
-            <el-button
-              v-if="!item.isRead && access.hasPermission('message:notification:read')"
-              :data-testid="`notification-read-${item.id}`"
-              link
-              @click="markRead(item)"
-              >{{ t('notification.markRead') }}</el-button
-            ><el-button
-              v-if="access.hasPermission('message:notification:delete')"
-              :data-testid="`notification-delete-${item.id}`"
-              link
-              type="danger"
-              @click="remove(item)"
-              >{{ t('notification.delete') }}</el-button
-            >
-          </div>
-        </div>
-        <div class="notification-center__body" v-html="item.contentHtml" />
-        <el-button v-if="item.linkType !== 'none'" link @click="open(item)">{{
-          item.link
-        }}</el-button>
-      </article>
-      <el-button v-if="nextBeforeId !== null" :loading="loading" @click="load(true)">{{
-        t('notification.loadMore')
-      }}</el-button>
-    </div></AppPage
-  >
+    <NotificationCenterList
+      v-else
+      :items="items"
+      :loading="loading"
+      :next-before-id="nextBeforeId"
+      :can-read="access.hasPermission('message:notification:read')"
+      :can-delete="access.hasPermission('message:notification:delete')"
+      @read="markRead"
+      @remove="remove"
+      @open="open"
+      @load-more="load(true)"
+    />
+  </AppPage>
 </template>
 <style scoped>
-.notification-center__toolbar {
+.notification-center {
+  gap: 0;
+}
+
+.notification-center__header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-.notification-center__toolbar h1 {
-  margin: 0 auto 0 0;
-  font-size: 20px;
-}
-.notification-center__list {
-  border-top: 1px solid var(--el-border-color);
-}
-.notification-center__item {
-  min-height: 132px;
-  padding: 16px 0;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
-.notification-center__heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.notification-center__heading h2 {
+
+.notification-center__header h1 {
   margin: 0;
-  font-size: 16px;
-  overflow-wrap: anywhere;
+  color: var(--el-text-color-primary);
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: 0;
 }
-.notification-center__body {
-  margin: 10px 0;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
+
+.notification-center__filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
+
+.notification-center__selectors,
+.notification-center__filter {
+  display: flex;
+  align-items: center;
+}
+
+.notification-center__selectors {
+  gap: 16px;
+}
+
+.notification-center__filter {
+  gap: 8px;
+}
+
+.notification-center__filter-label {
+  flex: 0 0 auto;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.notification-center__filter :deep(.el-select) {
+  width: 150px;
+}
+
 .notification-center__state {
   display: flex;
+  min-height: 180px;
   justify-content: center;
+  align-items: center;
   gap: 8px;
   padding: 40px;
+  color: var(--el-text-color-secondary);
+}
+
+@media (max-width: 768px) {
+  .notification-center__header {
+    align-items: flex-start;
+  }
+
+  .notification-center__filters,
+  .notification-center__selectors {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .notification-center__filters :deep(.el-segmented) {
+    align-self: flex-start;
+  }
+
+  .notification-center__filter {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .notification-center__filter :deep(.el-select) {
+    width: 100%;
+  }
 }
 </style>

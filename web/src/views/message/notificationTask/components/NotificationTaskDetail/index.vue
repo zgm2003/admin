@@ -60,53 +60,49 @@ function displayTime(value: string | null): string {
       </div>
     </header>
 
-    <dl class="notification-task-detail__meta">
-      <div class="notification-task-detail__meta-item">
-        <dt>{{ t('notificationTask.platform') }}</dt>
-        <dd data-testid="notification-task-detail-platform">{{ task.platformName }}</dd>
-      </div>
-      <div class="notification-task-detail__meta-item">
-        <dt>{{ t('notificationTask.audienceLabel') }}</dt>
-        <dd>{{ audienceText }}</dd>
-      </div>
-      <div class="notification-task-detail__meta-item">
-        <dt>{{ t('notificationTask.variantLabel') }}</dt>
-        <dd>{{ t(`notificationTask.variant.${task.variant}`) }}</dd>
-      </div>
-      <div class="notification-task-detail__meta-item">
-        <dt>{{ t('notificationTask.priorityLabel') }}</dt>
-        <dd>{{ t(`notification.${task.priority}`) }}</dd>
-      </div>
-      <div class="notification-task-detail__meta-item">
-        <dt>{{ t('notificationTask.scheduledAt') }}</dt>
-        <dd>
-          {{
-            task.scheduledAt === null
-              ? t('notificationTask.sendImmediately')
-              : displayTime(task.scheduledAt)
-          }}
-        </dd>
-      </div>
-      <div class="notification-task-detail__meta-item">
-        <dt>{{ t('notificationTask.createdAt') }}</dt>
-        <dd>{{ displayTime(task.createdAt) }}</dd>
-      </div>
-      <div v-if="task.submittedAt !== null" class="notification-task-detail__meta-item">
-        <dt>{{ t('notificationTask.submittedAt') }}</dt>
-        <dd>{{ displayTime(task.submittedAt) }}</dd>
-      </div>
-      <div v-if="task.completedAt !== null" class="notification-task-detail__meta-item">
-        <dt>{{ t('notificationTask.completedAt') }}</dt>
-        <dd>{{ displayTime(task.completedAt) }}</dd>
-      </div>
-      <div
-        v-if="task.linkType !== 'none'"
-        class="notification-task-detail__meta-item notification-task-detail__meta-item--wide"
+    <el-descriptions class="notification-task-detail__meta" :column="2" border>
+      <el-descriptions-item :label="t('notificationTask.platform')">
+        <span data-testid="notification-task-detail-platform">{{ task.platformName }}</span>
+      </el-descriptions-item>
+      <el-descriptions-item :label="t('notificationTask.audienceLabel')">
+        {{ audienceText }}
+      </el-descriptions-item>
+      <el-descriptions-item :label="t('notificationTask.variantLabel')">
+        {{ t(`notificationTask.variant.${task.variant}`) }}
+      </el-descriptions-item>
+      <el-descriptions-item :label="t('notificationTask.priorityLabel')">
+        {{ t(`notification.${task.priority}`) }}
+      </el-descriptions-item>
+      <el-descriptions-item :label="t('notificationTask.scheduledAt')">
+        {{
+          task.scheduledAt === null
+            ? t('notificationTask.sendImmediately')
+            : displayTime(task.scheduledAt)
+        }}
+      </el-descriptions-item>
+      <el-descriptions-item :label="t('notificationTask.createdAt')">
+        {{ displayTime(task.createdAt) }}
+      </el-descriptions-item>
+      <el-descriptions-item
+        v-if="task.submittedAt !== null"
+        :label="t('notificationTask.submittedAt')"
       >
-        <dt>{{ t('notificationTask.link') }}</dt>
-        <dd>{{ task.link }}</dd>
-      </div>
-    </dl>
+        {{ displayTime(task.submittedAt) }}
+      </el-descriptions-item>
+      <el-descriptions-item
+        v-if="task.completedAt !== null"
+        :label="t('notificationTask.completedAt')"
+      >
+        {{ displayTime(task.completedAt) }}
+      </el-descriptions-item>
+      <el-descriptions-item
+        v-if="task.linkType !== 'none'"
+        :label="t('notificationTask.link')"
+        :span="2"
+      >
+        <span class="notification-task-detail__link">{{ task.link }}</span>
+      </el-descriptions-item>
+    </el-descriptions>
 
     <el-alert
       v-if="task.failureMessage"
@@ -178,39 +174,23 @@ function displayTime(value: string | null): string {
   line-height: 1.4;
 }
 
-.notification-task-detail__metric span,
-.notification-task-detail__meta dt {
+.notification-task-detail__metric span {
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }
 
 .notification-task-detail__meta {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px 28px;
-  padding: 20px 0;
-  margin: 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  margin-top: 18px;
 }
 
-.notification-task-detail__meta-item {
-  min-width: 0;
+.notification-task-detail__meta :deep(.el-descriptions__label) {
+  width: 116px;
+  color: var(--el-text-color-secondary);
+  font-weight: 500;
 }
 
-.notification-task-detail__meta-item--wide {
-  grid-column: 1 / -1;
-}
-
-.notification-task-detail__meta dt {
-  margin-bottom: 5px;
-  line-height: 1.4;
-}
-
-.notification-task-detail__meta dd {
-  margin: 0;
-  color: var(--el-text-color-regular);
-  font-size: 14px;
-  line-height: 1.5;
+.notification-task-detail__meta :deep(.el-descriptions__content),
+.notification-task-detail__link {
   overflow-wrap: anywhere;
 }
 
@@ -263,9 +243,8 @@ function displayTime(value: string | null): string {
     border-left: 0;
   }
 
-  .notification-task-detail__meta {
-    grid-template-columns: 1fr;
-    gap: 14px;
+  .notification-task-detail__meta :deep(.el-descriptions__label) {
+    width: 92px;
   }
 }
 </style>
