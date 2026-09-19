@@ -1118,6 +1118,8 @@ export const zhCN = {
   'navigation.messageNotificationTask': '通知任务',
   'notificationTask.title': '标题',
   'notificationTask.platform': '平台',
+  'notificationTask.platformPlaceholder': '请选择平台',
+  'notificationTask.platformRequired': '请选择平台',
   'notificationTask.platformId': '平台 ID',
   'notificationTask.platformIdInvalid': '平台 ID 必须为正整数',
   'notificationTask.keyword': '标题关键词',

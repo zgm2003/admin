@@ -32,8 +32,12 @@ const detailTask = ref<taskApi.NotificationTask | null>(null)
 const saving = ref(false)
 const editingID = ref<number | null>(null)
 
-const emptyForm = (): taskApi.NotificationTaskInput => ({
-  platformId: 0,
+type NotificationTaskFormModel = Omit<taskApi.NotificationTaskInput, 'platformId'> & {
+  platformId: number | null
+}
+
+const emptyForm = (): NotificationTaskFormModel => ({
+  platformId: null,
   title: '',
   contentHtml: '',
   variant: 'info',
@@ -44,9 +48,10 @@ const emptyForm = (): taskApi.NotificationTaskInput => ({
   targetIds: [],
   scheduledAt: null,
 })
-const form = reactive<taskApi.NotificationTaskInput>(emptyForm())
+const form = reactive<NotificationTaskFormModel>(emptyForm())
 const {
   ensureSelectedTargets,
+  loadMoreOptions,
   loadOptions,
   optionStates,
   platformOptions,
@@ -225,6 +230,11 @@ function changeLinkType(value: taskApi.NotificationTaskInput['linkType']): void 
 }
 
 async function save(): Promise<void> {
+  const platformID = form.platformId
+  if (platformID === null || !Number.isInteger(platformID) || platformID < 1) {
+    ElMessage.warning(t('notificationTask.platformRequired'))
+    return
+  }
   if (form.scheduledAt !== null && Date.parse(form.scheduledAt) <= Date.now()) {
     ElMessage.warning(t('notificationTask.scheduledAtFuture'))
     return
@@ -235,8 +245,9 @@ async function save(): Promise<void> {
   }
   saving.value = true
   try {
-    if (editingID.value === null) await taskApi.createNotificationTask({ ...form })
-    else await taskApi.updateNotificationTask(editingID.value, { ...form })
+    const payload: taskApi.NotificationTaskInput = { ...form, platformId: platformID }
+    if (editingID.value === null) await taskApi.createNotificationTask(payload)
+    else await taskApi.updateNotificationTask(editingID.value, payload)
     ElMessage.success(t('notificationTask.saveSuccess'))
     dialogOpen.value = false
     await load()
@@ -327,12 +338,14 @@ onMounted(() => void load())
         >
       </div>
       <NotificationTaskDetail v-else-if="readonly && detailTask !== null" :task="detailTask" />
-      <el-form v-else label-position="top">
+      <el-form v-else class="notification-task-form" label-position="top">
         <div class="notification-task-form__grid">
           <el-form-item :label="t('notificationTask.platform')">
             <el-select-v2
               v-model="form.platformId"
+              data-testid="notification-task-platform"
               :options="platformOptions"
+              :placeholder="t('notificationTask.platformPlaceholder')"
               filterable
               remote
               :loading="optionStates.platform.loading"
@@ -342,6 +355,7 @@ onMounted(() => void load())
           <el-form-item :label="t('notificationTask.audienceLabel')">
             <el-select-v2
               v-model="form.audienceType"
+              data-testid="notification-task-audience"
               :options="audienceOptions"
               @change="changeAudience"
             />
@@ -353,6 +367,7 @@ onMounted(() => void load())
         >
           <el-select-v2
             v-model="form.targetIds"
+            data-testid="notification-task-targets"
             :options="targetState.items"
             multiple
             filterable
@@ -364,7 +379,7 @@ onMounted(() => void load())
             v-if="targetState.nextAfterId !== null"
             data-testid="notification-task-option-more"
             link
-            @click="loadOptions(targetKind, '', true)"
+            @click="loadMoreOptions(targetKind)"
             >{{ t('notificationTask.loadMoreOptions') }}</el-button
           >
           <span v-if="targetState.error" class="notification-task-form__error">{{
@@ -375,7 +390,7 @@ onMounted(() => void load())
           v-else-if="optionStates.platform.nextAfterId !== null"
           data-testid="notification-task-option-more"
           link
-          @click="loadOptions('platform', '', true)"
+          @click="loadMoreOptions('platform')"
           >{{ t('notificationTask.loadMoreOptions') }}</el-button
         >
         <el-form-item :label="t('notificationTask.title')"
@@ -416,6 +431,7 @@ onMounted(() => void load())
           <el-form-item :label="t('notificationTask.scheduledAt')"
             ><el-date-picker
               v-model="form.scheduledAt"
+              class="notification-task-form__date-picker"
               type="datetime"
               value-format="YYYY-MM-DDTHH:mm:ss.SSSZ"
               clearable
@@ -440,6 +456,10 @@ onMounted(() => void load())
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+.notification-task-form :deep(.el-select),
+.notification-task-form__date-picker {
+  width: 100%;
 }
 .notification-task-form__error {
   color: var(--el-color-danger);

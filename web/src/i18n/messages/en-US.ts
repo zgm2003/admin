@@ -1155,6 +1155,8 @@ export const enUS = {
   'navigation.messageNotificationTask': 'Notification tasks',
   'notificationTask.title': 'Title',
   'notificationTask.platform': 'Platform',
+  'notificationTask.platformPlaceholder': 'Select a platform',
+  'notificationTask.platformRequired': 'Select a platform',
   'notificationTask.platformId': 'Platform ID',
   'notificationTask.platformIdInvalid': 'Platform ID must be a positive integer',
   'notificationTask.keyword': 'Title keyword',

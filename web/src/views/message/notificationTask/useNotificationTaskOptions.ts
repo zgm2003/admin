@@ -5,18 +5,20 @@ import * as taskApi from '@/api/message/notificationTask'
 export type NotificationTaskOptionKind = 'platform' | 'user' | 'role'
 
 interface OptionState {
-  items: taskApi.NotificationTaskOption[]
+  items: Array<{ value: number; label: string }>
   nextAfterId: number | null
   error: string
   loading: boolean
+  keyword: string | null
   sequence: number
 }
 
 const newOptionState = (): OptionState => ({
   items: [],
-  nextAfterId: 0,
+  nextAfterId: null,
   error: '',
   loading: false,
+  keyword: null,
   sequence: 0,
 })
 
@@ -46,20 +48,23 @@ export function useNotificationTaskOptions(
   ): Promise<void> {
     const state = optionStates[kind]
     const current = ++state.sequence
+    const normalizedKeyword = keyword.trim()
     const afterId = append && state.nextAfterId !== null ? state.nextAfterId : 0
     state.error = ''
     state.loading = true
+    state.keyword = normalizedKeyword
     try {
       const result = await taskApi.listNotificationTaskOptions(intent(), kind, {
-        ...(keyword.trim() === '' ? {} : { keyword: keyword.trim() }),
+        ...(normalizedKeyword === '' ? {} : { keyword: normalizedKeyword }),
         afterId,
         limit: 50,
       })
       if (current !== state.sequence) return
-      const merged = append ? [...state.items, ...result.items] : result.items
-      state.items = Array.from(new Map(merged.map((option) => [option.id, option])).values()).slice(
-        -1000,
-      )
+      const options = result.items.map((option) => ({ value: option.id, label: option.label }))
+      const merged = append ? [...state.items, ...options] : options
+      state.items = Array.from(
+        new Map(merged.map((option) => [option.value, option])).values(),
+      ).slice(-1000)
       state.nextAfterId = result.nextAfterId
     } catch (error) {
       if (current === state.sequence)
@@ -70,21 +75,28 @@ export function useNotificationTaskOptions(
   }
 
   function remoteOptions(kind: NotificationTaskOptionKind, keyword: string): void {
+    const state = optionStates[kind]
+    const normalizedKeyword = keyword.trim()
+    if (state.keyword === normalizedKeyword && (state.loading || state.error === '')) return
     const timer = optionTimers[kind]
     if (timer !== null) window.clearTimeout(timer)
     optionTimers[kind] = window.setTimeout(() => {
       optionTimers[kind] = null
-      void loadOptions(kind, keyword)
+      void loadOptions(kind, normalizedKeyword)
     }, 300)
+  }
+
+  function loadMoreOptions(kind: NotificationTaskOptionKind): Promise<void> {
+    return loadOptions(kind, optionStates[kind].keyword ?? '', true)
   }
 
   function ensureSelectedTargets(kind: 'user' | 'role', ids: number[]): void {
     const state = optionStates[kind]
-    const known = new Set(state.items.map((option) => option.id))
+    const known = new Set(state.items.map((option) => option.value))
     state.items = [
       ...ids
         .filter((targetID) => !known.has(targetID))
-        .map((targetID) => ({ id: targetID, label: String(targetID) })),
+        .map((targetID) => ({ value: targetID, label: String(targetID) })),
       ...state.items,
     ].slice(0, 1000)
   }
@@ -94,7 +106,9 @@ export function useNotificationTaskOptions(
       const timer = optionTimers[kind]
       if (timer !== null) window.clearTimeout(timer)
       optionTimers[kind] = null
+      const nextSequence = optionStates[kind].sequence + 1
       Object.assign(optionStates[kind], newOptionState())
+      optionStates[kind].sequence = nextSequence
     }
   }
 
@@ -104,6 +118,7 @@ export function useNotificationTaskOptions(
 
   return {
     ensureSelectedTargets,
+    loadMoreOptions,
     loadOptions,
     optionStates,
     platformOptions,

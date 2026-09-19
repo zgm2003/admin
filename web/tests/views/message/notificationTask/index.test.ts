@@ -46,6 +46,14 @@ const task: api.NotificationTask = {
   updatedAt: '2026-09-18T12:00:00Z',
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
+}
+
 describe('notification task management', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -133,7 +141,12 @@ describe('notification task management', () => {
           ElButton: {
             template: '<button v-bind="$attrs"><slot /></button>',
           },
-          ElSelectV2: true,
+          ElSelectV2: {
+            name: 'ElSelectV2',
+            props: ['modelValue', 'options', 'remoteMethod'],
+            emits: ['update:modelValue', 'change'],
+            template: '<div v-bind="$attrs" />',
+          },
           ElInput: true,
           ElForm: { template: '<form><slot /></form>' },
           ElFormItem: { template: '<div><slot /></div>' },
@@ -141,17 +154,112 @@ describe('notification task management', () => {
       },
     })
     await wrapper.get('[data-testid="notification-task-create"]').trigger('click')
+    const platformSelect = wrapper.getComponent({ name: 'ElSelectV2' })
+    expect(platformSelect.props('modelValue')).toBeNull()
     await vi.waitFor(() =>
       expect(api.listNotificationTaskOptions).toHaveBeenCalledWith('create', 'platform', {
         afterId: 0,
         limit: 50,
       }),
     )
+    await vi.waitFor(() =>
+      expect(platformSelect.props('options')).toEqual([{ value: 2, label: 'Admin' }]),
+    )
+    platformSelect.vm.$emit('update:modelValue', 2)
+    await wrapper.vm.$nextTick()
+    expect(platformSelect.props('modelValue')).toBe(2)
+
+    vi.mocked(api.listNotificationTaskOptions).mockClear()
+    const remoteMethod = platformSelect.props('remoteMethod') as (keyword: string) => void
+    remoteMethod('')
+    await wrapper.vm.$nextTick()
+    expect(api.listNotificationTaskOptions).not.toHaveBeenCalled()
+
     await wrapper.get('[data-testid="notification-task-option-more"]').trigger('click')
     expect(api.listNotificationTaskOptions).toHaveBeenLastCalledWith('create', 'platform', {
       afterId: 3,
       limit: 50,
     })
+
+    const audienceSelect = wrapper
+      .findAllComponents({ name: 'ElSelectV2' })
+      .find((select) => select.attributes('data-testid') === 'notification-task-audience')
+    if (audienceSelect === undefined) throw new Error('audience select is missing')
+    audienceSelect.vm.$emit('update:modelValue', 'user')
+    audienceSelect.vm.$emit('change', 'user')
+    await vi.waitFor(() =>
+      expect(api.listNotificationTaskOptions).toHaveBeenCalledWith('create', 'user', {
+        afterId: 0,
+        limit: 50,
+      }),
+    )
+    const targetSelect = wrapper
+      .findAllComponents({ name: 'ElSelectV2' })
+      .find((select) => select.attributes('data-testid') === 'notification-task-targets')
+    if (targetSelect === undefined) throw new Error('target select is missing')
+    await vi.waitFor(() =>
+      expect(targetSelect.props('options')).toEqual([{ value: 2, label: 'Admin' }]),
+    )
+
+    audienceSelect.vm.$emit('update:modelValue', 'role')
+    audienceSelect.vm.$emit('change', 'role')
+    await vi.waitFor(() =>
+      expect(api.listNotificationTaskOptions).toHaveBeenCalledWith('create', 'role', {
+        afterId: 0,
+        limit: 50,
+      }),
+    )
+    await vi.waitFor(() =>
+      expect(targetSelect.props('options')).toEqual([{ value: 2, label: 'Admin' }]),
+    )
+  })
+
+  it('ignores stale platform options when the draft dialog is reopened', async () => {
+    usePermissionStore().permissionCodes = [
+      'message:notificationTask:list',
+      'message:notificationTask:create',
+    ]
+    const stale = deferred<api.NotificationTaskOptions>()
+    vi.mocked(api.listNotificationTaskOptions)
+      .mockReturnValueOnce(stale.promise)
+      .mockResolvedValueOnce({ items: [{ id: 3, label: 'Current' }], nextAfterId: null })
+    const wrapper = mount(Page, {
+      global: {
+        plugins: [appI18n],
+        stubs: {
+          AppPage: { template: '<section><slot /></section>' },
+          AppTable: { props: ['data'], template: '<div><slot name="toolbar-right" /></div>' },
+          AppDialog: { template: '<div><slot /></div><slot name="footer" />' },
+          NotificationEditor: true,
+          ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },
+          ElSelectV2: {
+            name: 'ElSelectV2',
+            props: ['options'],
+            template: '<div v-bind="$attrs" />',
+          },
+          ElInput: true,
+          ElForm: { template: '<form><slot /></form>' },
+          ElFormItem: { template: '<div><slot /></div>' },
+        },
+      },
+    })
+    const create = wrapper.get('[data-testid="notification-task-create"]')
+    await create.trigger('click')
+    expect(wrapper.find('[data-testid="notification-task-option-more"]').exists()).toBe(false)
+    await create.trigger('click')
+    await vi.waitFor(() =>
+      expect(wrapper.getComponent({ name: 'ElSelectV2' }).props('options')).toEqual([
+        { value: 3, label: 'Current' },
+      ]),
+    )
+
+    stale.resolve({ items: [{ id: 2, label: 'Stale' }], nextAfterId: null })
+    await stale.promise
+    await Promise.resolve()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.getComponent({ name: 'ElSelectV2' }).props('options')).toEqual([
+      { value: 3, label: 'Current' },
+    ])
   })
 
   it('submits platform, status, audience, keyword, and time filters together', async () => {

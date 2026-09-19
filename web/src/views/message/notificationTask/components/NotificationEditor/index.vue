@@ -87,6 +87,8 @@ function onChange(current: IDomEditor): void {
 
 <style scoped>
 .notification-editor {
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
   border: 1px solid var(--el-border-color);
   border-radius: var(--el-border-radius-base);

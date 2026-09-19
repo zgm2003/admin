@@ -67,6 +67,7 @@ func (s *realtimeSessionValidatorStub) ValidateRealtimeSession(context.Context, 
 func TestRouteIssuesTicketAndWebSocketHandlesPingAndReuse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	redisClient, _ := openRealtimeTicketRedis(t)
+	allowedOrigin := "http://localhost:16300"
 	now := time.Now().UTC()
 	identity := auth.Identity{UserID: 10, SessionID: 20, PlatformID: 1, Platform: "admin", Version: 3, AccessExpiresAt: now.Add(time.Minute)}
 	validator := &realtimeSessionValidatorStub{}
@@ -76,12 +77,12 @@ func TestRouteIssuesTicketAndWebSocketHandlesPingAndReuse(t *testing.T) {
 	router := gin.New()
 	server := httptest.NewServer(router)
 	defer server.Close()
-	handler := NewHandler(service, connections, server.URL)
+	handler := NewHandler(service, connections, allowedOrigin)
 	shared := router.Group("/api/v1", authclient.Require())
-	RegisterRoutes(shared, router, handler, auth.RequireOrigin(server.URL), auth.Authenticate(realtimeAuthStub{identity: identity}))
+	RegisterRoutes(shared, router, handler, auth.RequireOrigin(allowedOrigin), auth.Authenticate(realtimeAuthStub{identity: identity}))
 
 	request, _ := http.NewRequest(http.MethodPost, server.URL+"/api/v1/realtime/ticket", nil)
-	request.Header.Set("Origin", server.URL)
+	request.Header.Set("Origin", allowedOrigin)
 	request.Header.Set("Authorization", "Bearer token")
 	request.Header.Set(authclient.PlatformHeader, "admin")
 	request.Header.Set(authclient.DeviceIDHeader, "11111111-1111-4111-8111-111111111111")
@@ -108,7 +109,7 @@ func TestRouteIssuesTicketAndWebSocketHandlesPingAndReuse(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/v1/realtime/ws?ticket=" + envelope.Data.Ticket
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": []string{server.URL}}})
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": []string{allowedOrigin}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +136,7 @@ func TestRouteIssuesTicketAndWebSocketHandlesPingAndReuse(t *testing.T) {
 	if validator.calls != 1 {
 		t.Fatalf("validator calls=%d", validator.calls)
 	}
-	if _, response, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": []string{server.URL}}}); err == nil || response == nil || response.StatusCode != http.StatusUnauthorized {
+	if _, response, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": []string{allowedOrigin}}}); err == nil || response == nil || response.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("reuse response=%v err=%v", response, err)
 	}
 }

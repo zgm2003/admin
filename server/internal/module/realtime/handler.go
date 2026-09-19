@@ -52,7 +52,9 @@ func (h *Handler) WebSocket(c *gin.Context) {
 		c.Status(http.StatusUnauthorized)
 		return
 	}
-	conn, err := websocket.Accept(c.Writer, c.Request, nil)
+	conn, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{
+		OriginPatterns: []string{h.origin},
+	})
 	if err != nil {
 		return
 	}
