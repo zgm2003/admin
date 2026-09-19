@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     实时通道与站内通知 forward migration 的唯一入口。
 

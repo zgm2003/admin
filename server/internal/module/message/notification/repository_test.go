@@ -88,7 +88,6 @@ func openNotificationRepositoryDB(t *testing.T) (*gorm.DB, context.Context) {
 	t.Helper()
 	db, ctx := testschema.Open(t, notificationRepositoryDSN(t), "test_notification_repository")
 	statements := []string{
-		`CREATE EXTENSION IF NOT EXISTS pgcrypto`,
 		`CREATE TABLE permission_auth_platform(id BIGINT PRIMARY KEY)`,
 		`CREATE TABLE user_account(id BIGINT PRIMARY KEY)`,
 		`INSERT INTO permission_auth_platform(id) VALUES(1),(2)`,

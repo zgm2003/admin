@@ -3,13 +3,18 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
-## 全项目实时通道与站内通知（2026-09-18，进行中）
+## 全项目实时通道与站内通知（2026-09-19，已实现并迁移）
 
-- 当前按已批准 Spec/Plan 串行实施 PostgreSQL durable realtime event/outbox、Redis Pub/Sub、WebSocket 恢复协议、个人站内通知和通知任务管理；PostgreSQL 是唯一业务事实来源，Redis 只承担一次性 ticket 与低延迟分发。
-- `web/` Admin Vue 是本期唯一端到端前端消费者；后端协议保持多平台扩展能力，不修改 Canvas，也不为 Canvas 写入 Vue 页面菜单。受众固定为指定用户、提交时点冻结的指定角色和 O(1) 平台广播。
-- 容量边界固定为显式用户最多 1000、内部与 Worker 单批最多 500、resume 最多 500、连接发送队列 128，并使用 cursor、租约和有界并发；Redis、Asynq 或进程故障不得丢失 PostgreSQL 通知与 event/outbox 事实。
-- 项目未上线，本次只实现新表、新 DTO、新 Redis channel 和新 WebSocket 路径，不增加 legacy、双读、双写或运行时兼容层。
-- 本切片完成后的下一个唯一真实模块是“通用定时任务管理”，负责接管通知到期唤醒与 realtime/notification retention cleanup 触发，并在回归后删除通知专用临时调度实现。
+- 已交付 PostgreSQL durable realtime event/outbox、Redis Pub/Sub、一次性 WebSocket ticket、cursor resume、个人通知邮箱与通知任务管理。`web/` Admin Vue 是首个端到端消费者；Canvas 未写入 Vue 页面菜单。受众固定为最多 1000 个指定用户、按提交时点冻结的指定角色和 O(1) 平台广播。
+- 通知任务支持草稿、last-write-wins 编辑、立即/定时提交、取消、复制和只读详情；提交后内容、平台、受众和时间冻结，取消不撤回已生成通知。通知中心是隐藏 page；铃铛仅在 Access ready 且有 list action 时连接实时通道，展示最近 5 条并按独立 view action决定是否显示“查看全部”。
+- Review 已修复：WebSocket 帧按 connection epoch 串行处理，旧会话不能推进新会话 cursor 或触发紧急通知；连接先同步 detach，再由连接 loop 执行网络关闭，Redis Subscriber 不等待关闭握手；Pub/Sub 只向浏览器发送 envelope；多批任务复用数据库中的首次 `published_at`；API Subscriber 与 dispatch relay 不再吞退出/标记错误。
+- RBAC 保持 page/action 独立：通知任务 create/update 各自拥有受对应 action 保护的 options，update 另有 draft edit 读取端点，不依赖 detail action；个人通知 page/list/read/delete 作为基础权限迁移给现有有效角色。Admin `menu_version` 由 11 递增到 12，Canvas 菜单与版本未变化。
+- migration runner 的完整状态现在包含十表列默认值/长度、约束定义和索引定义的结构指纹；同名错误 CHECK/FK/index、错误长度/default 都会在事务内拒绝。Windows PowerShell runner 已保存为 UTF-8 BOM，`powershell.exe -File` 可直接解析。
+- 真实 migration 于 **2026-09-19 12:07 +08:00** 首次执行并于 **12:07 +08:00** 完整复跑：十张表、13 个 Admin 菜单节点、两个必需 setting、角色授权、setting generation/outbox、menu/access version 全部通过；第二次 `structure/setting/generation/menu/grants/access/adminVersion/canvas` 指纹完全不变。固定 Redis patterns `system.setting` state/snapshot/fill、permission/menu state、access v8 snapshot、realtime ticket 每次均清理两轮且 `remaining=0`。
+- 本次保留两份可读备份：`realtime-notification-20260919-120719/public-before.dump`（180426 字节，SHA256 `2C8655A5386CBBF4E7B2BBF15E7D860BCAD26E25B2B94CC5E0EFE8B2617BEDED`，327 项）和 `realtime-notification-20260919-120748/public-before.dump`（224922 字节，SHA256 `FCFD85E12CF62EDB0D9B09EE077CCD30F605D3B4A5782CE16A29EF9C27CC216B`，412 项），均位于 `%LOCALAPPDATA%\Admin\backups` 且未删除。
+- 全量门禁通过：`go test -p 1 ./... -count=1`、`go vet ./...`、`go build ./...`；前端 `format:check`、`lint`、`check:architecture`、`typecheck`、96 文件 706 项 Vitest、生产 build 全部 exit 0。迁移后指定的 5 包真实 PG/Redis 探针通过；测试 fixture 已移除并发创建全局 `pgcrypto` extension 的竞态。
+- `docs/database/current.sql` 已从真实 `public` schema-only 刷新，114300 字节，SHA256 `7BDA894A3FB01EAFF786A4B83D8AAC78FB236F21696378805E38C5A785046D3A`。Agent 精确停止了本项目 API/Worker，未停止 Vite，迁移后未启动或重启 API/Worker。
+- 下一个唯一真实模块是“通用定时任务管理”：实现 PostgreSQL 权威 schedule/job/run、管理页/RBAC、多实例 claim 与 missed-run recovery；使用静态任务类型分派；接管 notification batch 0/后续 batch 唤醒和 realtime/notification cleanup；回归立即/定时通知、取消、重启、Redis 丢失、提交后 enqueue 失败和跨实例单次 claim；随后删除 `message_notification_dispatch_outbox`、`notificationTask/dispatch.go`、Worker dispatch relay 和两个临时 `retentionTrigger.go`，不得保留双调度、旧表读取或过渡分支。
 
 ## COS 对象协议与统一配置缓存代际（2026-09-18，已实现并迁移）
 

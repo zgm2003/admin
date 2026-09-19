@@ -43,6 +43,9 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 | `permission/role` | `permission/role` | `permission_role` |
 | `message/mail` | `message/mail` | `message_mail_*` |
 | `message/sms` | `message/sms` | `message_sms_*` |
+| `message/notification` | `message/notification` | `message_notification*` |
+| `message/notificationTask` | `message/notificationTask` | `message_notification_task*` |
+| 无独立页面 | `realtime` | `realtime_event*`、`realtime_retention_state` |
 | `storage/object` | `storage/cosConfig`、`storage/uploadRule`、`storage/upload` | `storage_cos_config`、`storage_upload_rule*` |
 | `system/operationLog` | `system/operationLog` | `system_operation_log` |
 | `system/dictionary` | `system/dictionary` | `system_dictionary`、`system_dictionary_item` |
@@ -149,6 +152,34 @@ version，读取时仍与 PostgreSQL rule route 事实交叉校验。公开对�
 项目尚未上线期间，维护者批准的破坏性变更直接切换新契约；运行时代码不保留旧 DTO、旧字段、旧 Redis 协议、
 旧权限码或旧对象格式的双读、双写和回退。一次性 Redis 清理由 migration runner 使用固定 pattern 执行，禁止
 `KEYS`、`FLUSHDB` 和 `FLUSHALL`。
+
+### 实时通道与站内通知
+
+PostgreSQL 是通知和 durable realtime event 的唯一事实来源。业务事务通过 `realtime.Repository.AppendTx` 同时写
+`realtime_event` 与 `realtime_event_outbox`；relay 用 `FOR UPDATE SKIP LOCKED`、token lease 和条件 mark 发布到
+`realtime:user:v1:<platformID>:<userID>` 或 `realtime:platform:v1:<platformID>`。Redis Pub/Sub 只是低延迟运输，
+丢失后客户端使用 PostgreSQL cursor resume 恢复，不能把 Redis 消息当业务事实。
+
+客户端先从认证 HTTP 端点取得 Redis 原子单次消费 ticket，再连接 `/api/v1/realtime/ws`；连接身份固定为
+`(platformId,userId,sessionId)`，Access 到期、Session/平台/用户失效或 Subscriber 故障会关闭连接。每个浏览器账号
+使用 BroadcastChannel leader 维持一个 socket；帧按 connection epoch 串行处理，cursor 只在服务端
+`realtime.resumed.v1` 或完成 `resyncRequired` 后推进，旧连接不能修改新账号状态。每连接发送队列上限 128，慢消费者
+先从 ConnectionSet detach，再由自己的 read/write loop 关闭网络连接；Subscriber 热循环不等待 WebSocket 握手。
+
+通知邮箱按 `(platform_id,user_id)` 隔离。指定用户/角色写 `message_notification_recipient`；平台广播只写一条
+`message_notification`，以提交时 `audience_max_user_id` 限定既有账号，并在用户已读/删除时按需写
+`message_notification_broadcast_state`。全部已读水位存于 `message_notification_mailbox_state`。summary 和列表由
+PostgreSQL 权威查询，正常热路径不读取 setting 表；保留期配置通过 `system.setting/global` generation 快照读取。
+
+通知任务提交后冻结事实。用户/角色每批最多 500，按 user ID cursor 展开；平台广播固定写一条 notification 和一条
+event/outbox。当前通用 scheduler 尚未实现，`message_notification_dispatch_outbox` 与 Worker relay 只作为明确的临时
+到期/续批唤醒层；下一模块接管后必须删除该表、relay wiring 和 realtime/notification 的临时 retention trigger，
+不得保留双调度或兼容读取。
+
+容量边界为显式用户最多 1000、resume 最多 500、resume 数据库预算最多 2 次查询/2 秒且每实例最多 32 个并发、
+连接队列 128、Worker 批次 500。Redis 故障时新 ticket 失败闭合、已有连接关闭，PG 通知事实仍可在恢复后通过 HTTP/
+cursor 读取；PG 故障显式失败；Asynq 入队失败保留 dispatch outbox，重复运输由 task batch、recipient/event 唯一约束
+和 dedup key 幂等吸收。
 
 ### 本轮收口的具体约束
 

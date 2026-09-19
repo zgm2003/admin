@@ -97,7 +97,7 @@ func TestRepositoryResumeWindowRequiresResyncForWatermarkAndOverLimit(t *testing
 	repository := NewRepository(db)
 	now := time.Now().UTC()
 	if err := db.WithContext(ctx).Exec(`INSERT INTO realtime_event(event_id,dedup_key,platform_id,event_type,target_type,target_user_id,payload,occurred_at,created_at,updated_at)
-		SELECT gen_random_uuid(),'bulk-'||value,1,'notification.created.v1','user',10,'{}'::jsonb,?,?,? FROM generate_series(1,501) AS value`, now, now, now).Error; err != nil {
+		SELECT md5('bulk-'||value)::uuid,'bulk-'||value,1,'notification.created.v1','user',10,'{}'::jsonb,?,?,? FROM generate_series(1,501) AS value`, now, now, now).Error; err != nil {
 		t.Fatal(err)
 	}
 	window, err := repository.ResumeWindow(ctx, 1, 10, 0, 500)
@@ -194,7 +194,6 @@ func openRealtimeRepositoryDB(t *testing.T) (*gorm.DB, context.Context) {
 	t.Helper()
 	db, ctx := testschema.Open(t, realtimeRepositoryDSN(t), "test_realtime_repository")
 	for _, statement := range []string{
-		`CREATE EXTENSION IF NOT EXISTS pgcrypto`,
 		`CREATE TABLE permission_auth_platform(id BIGINT PRIMARY KEY)`,
 		`CREATE TABLE user_account(id BIGINT PRIMARY KEY)`,
 		`INSERT INTO permission_auth_platform(id) VALUES(1),(2)`,
