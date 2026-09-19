@@ -47,9 +47,16 @@ export function useNotificationTaskOptions(
     append = false,
   ): Promise<void> {
     const state = optionStates[kind]
+    const timer = optionTimers[kind]
+    if (timer !== null) window.clearTimeout(timer)
+    optionTimers[kind] = null
     const current = ++state.sequence
     const normalizedKeyword = keyword.trim()
     const afterId = append && state.nextAfterId !== null ? state.nextAfterId : 0
+    if (!append) {
+      state.items = []
+      state.nextAfterId = null
+    }
     state.error = ''
     state.loading = true
     state.keyword = normalizedKeyword
@@ -80,6 +87,12 @@ export function useNotificationTaskOptions(
     if (state.keyword === normalizedKeyword && (state.loading || state.error === '')) return
     const timer = optionTimers[kind]
     if (timer !== null) window.clearTimeout(timer)
+    state.sequence += 1
+    state.items = []
+    state.nextAfterId = null
+    state.error = ''
+    state.loading = true
+    state.keyword = normalizedKeyword
     optionTimers[kind] = window.setTimeout(() => {
       optionTimers[kind] = null
       void loadOptions(kind, normalizedKeyword)

@@ -85,6 +85,28 @@ describe('AppSearch', () => {
     expect(dateRangeType).toBe('date-range')
   })
 
+  it('passes distinct start and end placeholders to date ranges', () => {
+    const wrapper = mount(AppSearch, {
+      props: {
+        modelValue: { dateRange: [] },
+        fields: [
+          {
+            key: 'dateRange',
+            type: 'date-range',
+            label: 'Date range',
+            startPlaceholder: 'Start time',
+            endPlaceholder: 'End time',
+          },
+        ],
+      },
+      global: { plugins: [ElementPlus, appI18n] },
+    })
+
+    const picker = wrapper.getComponent({ name: 'ElDatePicker' })
+    expect(picker.props('startPlaceholder')).toBe('Start time')
+    expect(picker.props('endPlaceholder')).toBe('End time')
+  })
+
   it('rejects a model value that does not match the field type without throwing during render', async () => {
     const wrapper = mount(AppSearch, {
       props: {

@@ -262,6 +262,66 @@ describe('notification task management', () => {
     ])
   })
 
+  it('does not let a closed edit request replace a newly opened draft', async () => {
+    usePermissionStore().permissionCodes = [
+      'message:notificationTask:list',
+      'message:notificationTask:create',
+      'message:notificationTask:update',
+    ]
+    const stale = deferred<api.NotificationTask>()
+    vi.mocked(api.getNotificationTaskForUpdate).mockReturnValueOnce(stale.promise)
+    const wrapper = mount(Page, {
+      global: {
+        plugins: [appI18n],
+        stubs: {
+          AppPage: { template: '<section><slot /></section>' },
+          AppTable: {
+            props: ['data'],
+            template:
+              '<div><slot name="toolbar-right" /><slot v-if="data.length" name="actions" :row="data[0]" /></div>',
+          },
+          AppDialog: {
+            name: 'AppDialog',
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<div><slot /></div><slot name="footer" />',
+          },
+          NotificationEditor: true,
+          ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },
+          ElSelectV2: {
+            name: 'ElSelectV2',
+            props: ['modelValue', 'options'],
+            template: '<div v-bind="$attrs" />',
+          },
+          ElInput: true,
+          ElForm: { template: '<form><slot /></form>' },
+          ElFormItem: { template: '<div><slot /></div>' },
+        },
+      },
+    })
+    await vi.waitFor(() =>
+      expect(wrapper.find('[data-testid="notification-task-edit-1"]').exists()).toBe(true),
+    )
+    await wrapper.get('[data-testid="notification-task-edit-1"]').trigger('click')
+    await vi.waitFor(() => expect(api.getNotificationTaskForUpdate).toHaveBeenCalledWith(1))
+
+    wrapper.getComponent({ name: 'AppDialog' }).vm.$emit('update:modelValue', false)
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[data-testid="notification-task-create"]').trigger('click')
+
+    const platformSelect = wrapper
+      .findAllComponents({ name: 'ElSelectV2' })
+      .find((select) => select.attributes('data-testid') === 'notification-task-platform')
+    if (platformSelect === undefined) throw new Error('platform select is missing')
+    expect(platformSelect.props('modelValue')).toBeNull()
+
+    stale.resolve({ ...task, platformId: 99, title: 'Stale edit' })
+    await stale.promise
+    await Promise.resolve()
+    await wrapper.vm.$nextTick()
+    expect(platformSelect.props('modelValue')).toBeNull()
+  })
+
   it('submits platform, status, audience, keyword, and time filters together', async () => {
     usePermissionStore().permissionCodes = ['message:notificationTask:list']
     const wrapper = mount(Page, {
@@ -294,6 +354,51 @@ describe('notification task management', () => {
       }),
     )
   })
+
+  it('keeps the newest task list when an older request finishes later', async () => {
+    usePermissionStore().permissionCodes = ['message:notificationTask:list']
+    const stale = deferred<api.NotificationTaskPage>()
+    vi.mocked(api.listNotificationTasks)
+      .mockReturnValueOnce(stale.promise)
+      .mockResolvedValueOnce({
+        list: [{ ...task, id: 2, title: 'Current result' }],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+      })
+    const wrapper = mount(Page, {
+      global: {
+        plugins: [appI18n],
+        stubs: {
+          AppPage: { template: '<section><slot /></section>' },
+          AppSearch: {
+            emits: ['update:modelValue', 'query'],
+            template: `<button data-testid="notification-task-search" @click="$emit('update:modelValue', { keyword: 'current' }); $emit('query')">search</button>`,
+          },
+          AppTable: {
+            props: ['data'],
+            template: '<div>{{ data.map((row) => row.title).join(",") }}</div>',
+          },
+          AppDialog: true,
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="notification-task-search"]').trigger('click')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Current result'))
+    stale.resolve({
+      list: [{ ...task, title: 'Stale result' }],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    await stale.promise
+    await Promise.resolve()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('Current result')
+    expect(wrapper.text()).not.toContain('Stale result')
+  })
+
   it('loads exact detail before editing a draft', async () => {
     usePermissionStore().permissionCodes = [
       'message:notificationTask:list',

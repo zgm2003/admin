@@ -36,7 +36,7 @@ export const notificationEditorConfig = {
 </script>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, shallowRef } from 'vue'
 import type { IDomEditor } from '@wangeditor-next/editor'
 import { Editor, Toolbar } from '@wangeditor-next/editor-for-vue'
 import '@wangeditor-next/editor/dist/css/style.css'
@@ -44,43 +44,27 @@ import '@wangeditor-next/editor/dist/css/style.css'
 const props = defineProps<{ modelValue: string }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const editor = shallowRef<IDomEditor>()
-const value = ref(props.modelValue)
-const userEditing = ref(false)
+const value = computed({
+  get: () => props.modelValue,
+  set: (next: string) => {
+    if (next !== props.modelValue) emit('update:modelValue', next)
+  },
+})
 const editorConfig = { ...notificationEditorConfig, placeholder: '' }
 const toolbarConfig = { toolbarKeys: [...notificationToolbarKeys] }
 
-watch(
-  () => props.modelValue,
-  (next) => {
-    userEditing.value = false
-    value.value = next
-  },
-)
 onBeforeUnmount(() => editor.value?.destroy())
-
-function markUserEditing(): void {
-  userEditing.value = true
-}
-
-function onChange(current: IDomEditor): void {
-  if (!userEditing.value) return
-  const next = current.getHtml()
-  if (next === value.value) return
-  value.value = next
-  emit('update:modelValue', next)
-}
 </script>
 
 <template>
-  <div class="notification-editor" @pointerdown="markUserEditing" @keydown="markUserEditing">
+  <div class="notification-editor">
     <Toolbar :editor="editor" :default-config="toolbarConfig" mode="default" />
     <Editor
+      v-model="value"
       class="notification-editor__body"
-      :model-value="value"
       :default-config="editorConfig"
       mode="default"
       @on-created="editor = $event"
-      @on-change="onChange"
     />
   </div>
 </template>

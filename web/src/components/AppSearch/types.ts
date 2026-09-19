@@ -41,6 +41,8 @@ export interface DateRangeSearchField<
 > extends SearchFieldBase {
   key: KeysMatching<T, SearchDateRange>
   type: 'date-range'
+  startPlaceholder?: string
+  endPlaceholder?: string
   valueFormat?: string
   rangeSeparator?: string
 }

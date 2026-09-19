@@ -31,6 +31,8 @@ const dialogError = ref('')
 const detailTask = ref<taskApi.NotificationTask | null>(null)
 const saving = ref(false)
 const editingID = ref<number | null>(null)
+let listSequence = 0
+let dialogSequence = 0
 
 type NotificationTaskFormModel = Omit<taskApi.NotificationTaskInput, 'platformId'> & {
   platformId: number | null
@@ -132,6 +134,7 @@ const linkTypeOptions = computed(() =>
 
 async function load(): Promise<void> {
   if (!can('message:notificationTask:list')) return
+  const current = ++listSequence
   loading.value = true
   errorMessage.value = ''
   try {
@@ -145,16 +148,20 @@ async function load(): Promise<void> {
       ...(keywordFilter.value.trim() === '' ? {} : { keyword: keywordFilter.value.trim() }),
       ...(timeRange.value.length === 0 ? {} : { from: timeRange.value[0], to: timeRange.value[1] }),
     })
+    if (current !== listSequence) return
     rows.value = result.list
     pagination.total = result.total
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : t('notificationTask.loadFailed')
+    if (current === listSequence)
+      errorMessage.value = error instanceof Error ? error.message : t('notificationTask.loadFailed')
   } finally {
-    loading.value = false
+    if (current === listSequence) loading.value = false
   }
 }
 
 function resetForm(): void {
+  dialogSequence += 1
+  dialogLoading.value = false
   Object.assign(form, emptyForm())
   editingID.value = null
   detailTask.value = null
@@ -188,6 +195,7 @@ function applyDetail(row: taskApi.NotificationTask): void {
 
 async function loadDetail(id: number, mode: 'edit' | 'detail'): Promise<void> {
   resetForm()
+  const current = dialogSequence
   editingID.value = id
   dialogMode.value = mode
   dialogOpen.value = true
@@ -197,19 +205,40 @@ async function loadDetail(id: number, mode: 'edit' | 'detail'): Promise<void> {
       mode === 'edit'
         ? await taskApi.getNotificationTaskForUpdate(id)
         : await taskApi.getNotificationTask(id)
+    if (!isCurrentDialogRequest(current, id, mode)) return
     applyDetail(row)
     if (mode === 'edit') {
       await loadOptions('platform')
+      if (!isCurrentDialogRequest(current, id, mode)) return
       if (row.audienceType !== 'platform') {
         await loadOptions(row.audienceType)
+        if (!isCurrentDialogRequest(current, id, mode)) return
         ensureSelectedTargets(row.audienceType, row.targetIds)
       }
     }
   } catch (error) {
-    dialogError.value = error instanceof Error ? error.message : t('notificationTask.loadFailed')
+    if (isCurrentDialogRequest(current, id, mode))
+      dialogError.value = error instanceof Error ? error.message : t('notificationTask.loadFailed')
   } finally {
-    dialogLoading.value = false
+    if (isCurrentDialogRequest(current, id, mode)) dialogLoading.value = false
   }
+}
+
+function isCurrentDialogRequest(sequence: number, id: number, mode: 'edit' | 'detail'): boolean {
+  return (
+    sequence === dialogSequence &&
+    dialogOpen.value &&
+    editingID.value === id &&
+    dialogMode.value === mode
+  )
+}
+
+function updateDialogOpen(value: boolean): void {
+  dialogOpen.value = value
+  if (value) return
+  dialogSequence += 1
+  dialogLoading.value = false
+  resetOptions()
 }
 
 function openEdit(row: taskApi.NotificationTaskListItem): void {
@@ -249,7 +278,7 @@ async function save(): Promise<void> {
     if (editingID.value === null) await taskApi.createNotificationTask(payload)
     else await taskApi.updateNotificationTask(editingID.value, payload)
     ElMessage.success(t('notificationTask.saveSuccess'))
-    dialogOpen.value = false
+    updateDialogOpen(false)
     await load()
   } finally {
     saving.value = false
@@ -323,7 +352,13 @@ onMounted(() => void load())
       @update:pagination="updatePagination"
     />
 
-    <AppDialog v-model="dialogOpen" :title="dialogTitle" width="760px" height="70vh">
+    <AppDialog
+      :model-value="dialogOpen"
+      :title="dialogTitle"
+      width="760px"
+      height="70vh"
+      @update:model-value="updateDialogOpen"
+    >
       <div v-if="dialogLoading" class="notification-task-form__state">
         {{ t('notificationTask.loadingDetail') }}
       </div>
@@ -442,7 +477,7 @@ onMounted(() => void load())
         </div>
       </el-form>
       <template #footer>
-        <el-button @click="dialogOpen = false">{{ t('notificationTask.close') }}</el-button>
+        <el-button @click="updateDialogOpen(false)">{{ t('notificationTask.close') }}</el-button>
         <el-button v-if="!readonly" type="primary" :loading="saving" @click="save">{{
           t('notificationTask.save')
         }}</el-button>
@@ -451,33 +486,4 @@ onMounted(() => void load())
   </AppPage>
 </template>
 
-<style scoped>
-.notification-task-form__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-.notification-task-form :deep(.el-select),
-.notification-task-form__date-picker {
-  width: 100%;
-}
-.notification-task-form__error {
-  color: var(--el-color-danger);
-  font-size: 12px;
-}
-.notification-task-form__grid--three {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.notification-task-form__state {
-  display: flex;
-  min-height: 160px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-@media (max-width: 720px) {
-  .notification-task-form__grid {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
+<style scoped src="./NotificationTaskPage.css"></style>
