@@ -2,6 +2,8 @@ package notification
 
 import (
 	"context"
+	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -106,6 +108,27 @@ func TestMailboxMutationsAreAtomicAndIdempotent(t *testing.T) {
 	after := realtimeEventCount(t, db, ctx)
 	if after-before != 3 {
 		t.Fatalf("state events=%d want=3", after-before)
+	}
+	var payloads [][]byte
+	if err := db.WithContext(ctx).Raw(`SELECT payload FROM realtime_event WHERE event_type=? ORDER BY sequence`, realtime.EventNotificationStateChanged).Scan(&payloads).Error; err != nil {
+		t.Fatal(err)
+	}
+	wantPayloads := []map[string]any{
+		{"kind": "read", "notificationId": float64(first.ID), "readThroughNotificationId": nil},
+		{"kind": "readAll", "notificationId": nil, "readThroughNotificationId": float64(second.ID)},
+		{"kind": "delete", "notificationId": float64(second.ID), "readThroughNotificationId": nil},
+	}
+	if len(payloads) != len(wantPayloads) {
+		t.Fatalf("state payload count=%d want=%d", len(payloads), len(wantPayloads))
+	}
+	for index, raw := range payloads {
+		var got map[string]any
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, wantPayloads[index]) {
+			t.Fatalf("state payload[%d]=%v want=%v", index, got, wantPayloads[index])
+		}
 	}
 	page, err := service.List(ctx, MailboxQuery{PlatformID: 1, UserID: 1, Limit: 50})
 	if err != nil || len(page.Items) != 1 || page.Items[0].ID != first.ID || !page.Items[0].IsRead {

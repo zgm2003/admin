@@ -23,6 +23,7 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 )
 
 // workerRelayShutdownBudget 是取消 relay 后等待其退出的上限。
@@ -98,8 +99,13 @@ func run(logger *slog.Logger) error {
 	notificationTaskRepository := notificationtask.NewRepository(postgres.GORM)
 	notificationTaskHandler := notificationtask.NewTaskHandler(notificationtask.NewProcessor(postgres.GORM, realtimeRepository), notificationTaskRepository)
 	mux := buildWorkerMux(operationLogService, notificationTaskHandler)
-	settingService := systemsetting.NewService(systemsetting.NewRepository(postgres.GORM))
-	configRelay := cachegeneration.NewRelay(cachegeneration.NewRepository(postgres.GORM), cachegeneration.NewStore(redisClient), logger)
+	configGenerationRepository := cachegeneration.NewRepository(postgres.GORM)
+	configGenerationStore := cachegeneration.NewStore(redisClient)
+	settingService, err := buildWorkerSettingService(postgres.GORM, redisClient, configGenerationRepository, configGenerationStore, logger)
+	if err != nil {
+		return err
+	}
+	configRelay := cachegeneration.NewRelay(configGenerationRepository, configGenerationStore, logger)
 	realtimeRelay := realtime.NewRelay(realtimeRepository, redisClient, logger)
 	dispatchRelay := notificationtask.NewDispatchRelay(notificationTaskRepository, notificationtask.NewQueueEnqueuer(queueClient), logger)
 	realtimeRetention := realtime.NewRetentionTrigger(realtime.NewRetentionService(realtimeRepository, settingService), logger)
@@ -120,6 +126,24 @@ func run(logger *slog.Logger) error {
 			return queue.NewServer(settings.RedisURL)
 		},
 	})
+}
+
+func buildWorkerSettingService(db *gorm.DB, redisClient *projectredis.Client, generations *cachegeneration.Repository, states *cachegeneration.Store, logger *slog.Logger) (*systemsetting.Service, error) {
+	if db == nil || redisClient == nil || generations == nil || states == nil {
+		return nil, errors.New("worker setting cache generation dependencies are required")
+	}
+	repository := systemsetting.NewRepository(db)
+	repository.SetGenerations(generations)
+	cache := systemsetting.NewCache(redisClient)
+	cache.SetStateStore(states)
+	service := systemsetting.NewService(repository)
+	service.SetCache(cache)
+	service.SetGenerations(generations, states)
+	service.SetLogger(logger)
+	if err := service.ValidateDependencies(); err != nil {
+		return nil, fmt.Errorf("configure Worker system setting service: %w", err)
+	}
+	return service, nil
 }
 
 // runWorkerAssembly 启动 relay goroutine 后启动 Asynq；任一启动失败都会

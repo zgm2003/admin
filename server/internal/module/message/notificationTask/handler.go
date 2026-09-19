@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	auth "admin/server/internal/module/auth/login"
@@ -21,7 +20,8 @@ type taskService interface {
 	Cancel(context.Context, int64, time.Time) (Task, error)
 	Copy(context.Context, int64, int64, time.Time) (Task, error)
 	Detail(context.Context, int64) (Task, error)
-	List(context.Context, Status, int, int) ([]Task, int64, error)
+	EditableDetail(context.Context, int64) (Task, error)
+	List(context.Context, ListQuery) ([]Task, int64, error)
 	Delete(context.Context, int64, time.Time) error
 	Options(context.Context, string, string, int64, int) ([]Option, *int64, error)
 }
@@ -37,33 +37,12 @@ func NewHandler(service taskService) *Handler {
 	}}
 }
 func (h *Handler) List(c *gin.Context) {
-	values := c.Request.URL.Query()
-	for key, entries := range values {
-		if (key != "page" && key != "pageSize" && key != "status") || len(entries) != 1 {
-			response.Fail(c, apperror.InvalidRequest(fmt.Errorf("invalid query")))
-			return
-		}
-	}
-	page, size := 1, 20
-	var err error
-	if raw := c.Query("page"); raw != "" {
-		page, err = strconv.Atoi(raw)
-	}
-	if err == nil {
-		if raw := c.Query("pageSize"); raw != "" {
-			size, err = strconv.Atoi(raw)
-		}
-	}
+	query, err := parseListQuery(c.Request.URL.Query())
 	if err != nil {
-		response.Fail(c, apperror.InvalidRequest(err))
+		response.Fail(c, err)
 		return
 	}
-	status := Status(c.Query("status"))
-	if status != "" && !validStatus(status) {
-		response.Fail(c, apperror.InvalidRequest(fmt.Errorf("status is invalid")))
-		return
-	}
-	rows, total, err := h.service.List(c.Request.Context(), status, page, size)
+	rows, total, err := h.service.List(c.Request.Context(), query)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -72,7 +51,7 @@ func (h *Handler) List(c *gin.Context) {
 	for _, row := range rows {
 		list = append(list, taskListDTO(row))
 	}
-	response.OK(c, http.StatusOK, taskListResponse{list, total, page, size})
+	response.OK(c, http.StatusOK, taskListResponse{list, total, query.Page, query.PageSize})
 }
 func (h *Handler) Detail(c *gin.Context) {
 	id, ok := taskID(c)
@@ -80,6 +59,18 @@ func (h *Handler) Detail(c *gin.Context) {
 		return
 	}
 	row, err := h.service.Detail(c.Request.Context(), id)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, taskDTO(row))
+}
+func (h *Handler) Edit(c *gin.Context) {
+	id, ok := taskID(c)
+	if !ok {
+		return
+	}
+	row, err := h.service.EditableDetail(c.Request.Context(), id)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -171,10 +162,12 @@ func (h *Handler) command(c *gin.Context, fn func(context.Context, int64, int64)
 	}
 	response.OK(c, http.StatusOK, taskDTO(row))
 }
-func (h *Handler) PlatformOption(c *gin.Context) { h.options(c, "platform") }
-func (h *Handler) UserOption(c *gin.Context)     { h.options(c, "user") }
-func (h *Handler) RoleOption(c *gin.Context)     { h.options(c, "role") }
-func (h *Handler) options(c *gin.Context, kind string) {
+func (h *Handler) Option(c *gin.Context) {
+	kind := c.Param("kind")
+	if kind != "platform" && kind != "user" && kind != "role" {
+		response.Fail(c, apperror.InvalidRequest(fmt.Errorf("option kind is invalid")))
+		return
+	}
 	query, err := parseOptionQuery(c.Request.URL.Query())
 	if err != nil {
 		response.Fail(c, err)

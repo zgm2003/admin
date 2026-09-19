@@ -15,9 +15,18 @@ import { useBrandStore } from '@/store/brand'
 import { useUIPreferencesStore } from '@/store/uiPreferences'
 import Layout from '@/layout/index.vue'
 
+const realtimeStartMock = vi.hoisted(() => vi.fn())
+const realtimeStopMock = vi.hoisted(() => vi.fn())
+
 vi.mock('@/api/auth/login', () => ({ logout: vi.fn() }))
 vi.mock('@/api/storage/upload', () => ({ requestObjectURL: vi.fn() }))
 vi.mock('@/api/system/setting', () => ({ getBrandSettings: vi.fn() }))
+vi.mock('@/realtime', () => ({
+  RealtimeRuntime: class {
+    start = realtimeStartMock
+    stop = realtimeStopMock
+  },
+}))
 
 const logoutMock = vi.mocked(logout)
 const requestObjectURLMock = vi.mocked(requestObjectURL)
@@ -40,6 +49,8 @@ describe('admin layout', () => {
       titleEnUS: 'ZHILAN ADMIN',
       defaultAvatar: 'avatar/default.png',
     })
+    realtimeStartMock.mockReset()
+    realtimeStopMock.mockReset()
     localStorage.clear()
     document.documentElement.classList.remove('dark')
     document.documentElement.style.removeProperty('color-scheme')
@@ -85,6 +96,25 @@ describe('admin layout', () => {
     expect(getBrandSettingsMock).toHaveBeenCalledOnce()
     expect(wrapper.get('.app-aside__name').text()).toBe('智澜管理台')
     expect(document.title).toBe('智澜管理台')
+  })
+
+  it('runs realtime only while Access is ready with the notification list action', async () => {
+    const { wrapper } = await mountLayout()
+    await flushPromises()
+    expect(realtimeStartMock).not.toHaveBeenCalled()
+
+    usePermissionStore(pinia).applySnapshot({
+      roleCodes: [],
+      menuTree: [],
+      permissionCodes: ['message:notification:list'],
+    })
+    await wrapper.vm.$nextTick()
+    expect(realtimeStartMock).toHaveBeenCalledOnce()
+    expect(realtimeStartMock.mock.calls[0]?.[0]).toEqual({ platformCode: 'admin', userId: 1 })
+
+    usePermissionStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: [] })
+    await wrapper.vm.$nextTick()
+    expect(realtimeStopMock).toHaveBeenCalledTimes(3)
   })
 
   it('collapses the desktop Aside without changing the shell tracks', async () => {

@@ -3,6 +3,7 @@ package realtime
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestConnectionSetBoundsReplacementAndIsolation(t *testing.T) {
@@ -48,6 +49,46 @@ func TestConnectionSetBoundsReplacementAndIsolation(t *testing.T) {
 	if set.Len() != 0 || !c3.Closed() {
 		t.Fatalf("close all len=%d", set.Len())
 	}
+}
+
+func TestConnectionSetDetachesBeforeNetworkCloseCompletes(t *testing.T) {
+	set := NewConnectionSet(2, 2)
+	closeStarted := make(chan struct{})
+	releaseClose := make(chan struct{})
+	connection := NewConnection(1, 10, 100, 8, func(int, string) {
+		close(closeStarted)
+		<-releaseClose
+	})
+	if err := set.Attach(connection); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		<-connection.Done()
+		connection.finalizeClose()
+	}()
+
+	returned := make(chan struct{})
+	go func() {
+		set.CloseAll()
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("CloseAll waited for the network close callback")
+	}
+	select {
+	case <-closeStarted:
+	case <-time.After(time.Second):
+		t.Fatal("connection close was not handed to its connection loop")
+	}
+	if set.Len() != 0 {
+		t.Fatalf("connections=%d want 0", set.Len())
+	}
+	if err := set.Attach(newTestConnection(1, 11, 101)); err != nil {
+		t.Fatalf("subscriber work remained blocked after detach: %v", err)
+	}
+	close(releaseClose)
 }
 
 func TestConnectionSetSlowConsumerAndDrain(t *testing.T) {

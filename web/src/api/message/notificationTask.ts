@@ -83,6 +83,16 @@ export interface NotificationTaskPage {
   page: number
   pageSize: number
 }
+export interface NotificationTaskListQuery {
+  page: number
+  pageSize: number
+  platformId?: number
+  status?: NotificationTaskStatus
+  audienceType?: NotificationAudience
+  keyword?: string
+  from?: string
+  to?: string
+}
 
 const variants = new Set(['info', 'success', 'warning', 'error'])
 const priorities = new Set(['normal', 'urgent'])
@@ -228,20 +238,21 @@ export function parseNotificationTaskPage(value: unknown): NotificationTaskPage 
 
 const base = '/api/admin/v1/message/notificationtask'
 export async function listNotificationTasks(
-  page: number,
-  pageSize: number,
-  status: NotificationTaskStatus | '' = '',
+  params: NotificationTaskListQuery,
 ): Promise<NotificationTaskPage> {
   return parseNotificationTaskPage(
     await request<unknown>({
       method: 'GET',
       url: base,
-      params: { page, pageSize, ...(status === '' ? {} : { status }) },
+      params,
     }),
   )
 }
 export async function getNotificationTask(id: number): Promise<NotificationTask> {
   return parseNotificationTask(await request<unknown>({ method: 'GET', url: `${base}/${id}` }))
+}
+export async function getNotificationTaskForUpdate(id: number): Promise<NotificationTask> {
+  return parseNotificationTask(await request<unknown>({ method: 'GET', url: `${base}/${id}/edit` }))
 }
 export async function createNotificationTask(
   data: NotificationTaskInput,
@@ -268,10 +279,11 @@ export async function commandNotificationTask(
   )
 }
 export async function listNotificationTaskOptions(
+  intent: 'create' | 'update',
   kind: 'platform' | 'user' | 'role',
   params: { keyword?: string; afterId?: number; limit?: number },
 ): Promise<NotificationTaskOptions> {
   return parseNotificationTaskOptions(
-    await request<unknown>({ method: 'GET', url: `${base}/${kind}-option`, params }),
+    await request<unknown>({ method: 'GET', url: `${base}/${intent}/option/${kind}`, params }),
   )
 }

@@ -5,6 +5,7 @@ import NotificationBell from '@/components/NotificationBell/index.vue'
 import { usePermissionStore } from '@/store/permission'
 import { useNotificationStore } from '@/store/notification'
 import { createRouter, createMemoryHistory } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { appI18n } from '@/i18n'
 import * as notificationApi from '@/api/message/notification'
 
@@ -17,7 +18,13 @@ vi.mock('@/api/message/notification', () => ({
 
 describe('NotificationBell', () => {
   beforeEach(() => setActivePinia(createPinia()))
-  const router = createRouter({ history: createMemoryHistory(), routes: [] })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/message/notification', component: { template: '<div />' } },
+      { path: '/target', component: { template: '<div />' } },
+    ],
+  })
   it('is hidden without list permission', () => {
     expect(
       mount(NotificationBell, {
@@ -89,5 +96,65 @@ describe('NotificationBell', () => {
     expect(notificationApi.readNotification).not.toHaveBeenCalled()
     expect(open).toHaveBeenCalledWith('https://example.test/path', '_blank', 'noopener,noreferrer')
     open.mockRestore()
+  })
+
+  it('does not expose the notification center route to a list-only user', async () => {
+    usePermissionStore().permissionCodes = ['message:notification:list']
+    const wrapper = mount(NotificationBell, {
+      global: {
+        plugins: [router, appI18n],
+        stubs: {
+          ElTooltip: { template: '<div><slot /></div>' },
+          ElPopover: { template: '<div><slot name="reference" /><slot /></div>' },
+          ElBadge: { template: '<span><slot /></span>' },
+          ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },
+        },
+      },
+    })
+    await vi.waitFor(() => expect(notificationApi.getNotificationSummary).toHaveBeenCalled())
+    expect(wrapper.find('[data-testid="notification-bell-view-all"]').exists()).toBe(false)
+  })
+
+  it('reports a rejected internal navigation without leaking the rejection', async () => {
+    usePermissionStore().permissionCodes = [
+      'message:notification:view',
+      'message:notification:list',
+    ]
+    vi.mocked(notificationApi.getNotificationSummary).mockResolvedValueOnce({
+      unreadCount: 0,
+      recent: [
+        {
+          id: 8,
+          title: 'Target',
+          summary: 'Body',
+          variant: 'info',
+          priority: 'normal',
+          linkType: 'internal',
+          link: '/target',
+          publishedAt: '2026-09-18T12:00:00Z',
+          isRead: true,
+        },
+      ],
+    })
+    const push = vi.spyOn(router, 'push').mockRejectedValueOnce(new Error('navigation failed'))
+    const notify = vi.spyOn(ElMessage, 'error')
+    const wrapper = mount(NotificationBell, {
+      global: {
+        plugins: [router, appI18n],
+        stubs: {
+          ElTooltip: { template: '<div><slot /></div>' },
+          ElPopover: { template: '<div><slot name="reference" /><slot /></div>' },
+          ElBadge: { template: '<span><slot /></span>' },
+          ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },
+          ElIcon: { template: '<i><slot /></i>' },
+        },
+      },
+    })
+    await vi.waitFor(() =>
+      expect(wrapper.find('[data-testid="notification-bell-item-8"]').exists()).toBe(true),
+    )
+    await wrapper.get('[data-testid="notification-bell-item-8"]').trigger('click')
+    await vi.waitFor(() => expect(notify).toHaveBeenCalled())
+    expect(push).toHaveBeenCalledWith('/target')
   })
 })

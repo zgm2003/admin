@@ -64,7 +64,10 @@ func (h *Handler) WebSocket(c *gin.Context) {
 		return
 	}
 	defer h.connections.Detach(connection)
-	defer connection.Close(1000, "closed")
+	defer func() {
+		connection.Close(1000, "closed")
+		connection.finalizeClose()
+	}()
 	ctx, cancel := context.WithDeadline(c.Request.Context(), subject.AccessExpiresAt)
 	defer cancel()
 	connectedData, _ := json.Marshal(struct {
@@ -74,39 +77,63 @@ func (h *Handler) WebSocket(c *gin.Context) {
 	if !connection.enqueue(connected) {
 		return
 	}
-	writerDone := make(chan error, 1)
-	go h.writeLoop(ctx, conn, connection, writerDone)
-	readErr := h.readLoop(ctx, conn, connection, subject)
-	if readErr != nil {
+	readErr, _ := runConnectionLoops(
+		ctx,
+		func(loopCtx context.Context) error { return h.readLoop(loopCtx, conn, connection, subject) },
+		func(loopCtx context.Context) error { return h.writeLoop(loopCtx, conn, connection) },
+	)
+	if readErr != nil && !errors.Is(readErr, context.Canceled) && !errors.Is(readErr, context.DeadlineExceeded) {
 		connection.Close(1002, "protocol error")
 	}
-	cancel()
-	<-writerDone
 }
 
-func (h *Handler) writeLoop(ctx context.Context, conn *websocket.Conn, connection *Connection, done chan<- error) {
+func runConnectionLoops(ctx context.Context, readLoop, writeLoop func(context.Context) error) (error, error) {
+	loopCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	type result struct {
+		read bool
+		err  error
+	}
+	done := make(chan result, 2)
+	go func() { done <- result{read: true, err: readLoop(loopCtx)} }()
+	go func() { done <- result{err: writeLoop(loopCtx)} }()
+	first := <-done
+	cancel()
+	second := <-done
+	var readErr, writeErr error
+	for _, current := range []result{first, second} {
+		if current.read {
+			readErr = current.err
+		} else {
+			writeErr = current.err
+		}
+	}
+	return readErr, writeErr
+}
+
+func (h *Handler) writeLoop(ctx context.Context, conn *websocket.Conn, connection *Connection) error {
 	ping := time.NewTicker(25 * time.Second)
 	defer ping.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			done <- ctx.Err()
-			return
+			return ctx.Err()
+		case <-connection.Done():
+			connection.finalizeClose()
+			return nil
 		case payload := <-connection.Send():
 			writeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			err := conn.Write(writeCtx, websocket.MessageText, payload)
 			cancel()
 			if err != nil {
-				done <- err
-				return
+				return err
 			}
 		case <-ping.C:
 			pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			err := conn.Ping(pingCtx)
 			cancel()
 			if err != nil {
-				done <- err
-				return
+				return err
 			}
 		}
 	}

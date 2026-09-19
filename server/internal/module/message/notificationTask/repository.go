@@ -272,17 +272,33 @@ func (r *Repository) validatePlatformCapability(ctx context.Context, platformID 
 	return nil
 }
 func (r *Repository) Find(ctx context.Context, id int64) (Task, error) { return r.find(ctx, id) }
-func (r *Repository) List(ctx context.Context, status Status, page, size int) ([]Task, int64, error) {
+func (r *Repository) List(ctx context.Context, input ListQuery) ([]Task, int64, error) {
 	query := r.db.WithContext(ctx).Model(&Task{}).Where("deleted_at IS NULL")
-	if status != "" {
-		query = query.Where("status=?", status)
+	if input.PlatformID != nil {
+		query = query.Where("platform_id=?", *input.PlatformID)
+	}
+	if input.Status != "" {
+		query = query.Where("status=?", input.Status)
+	}
+	if input.AudienceType != "" {
+		query = query.Where("audience_type=?", input.AudienceType)
+	}
+	if input.Keyword != "" {
+		pattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(input.Keyword) + "%"
+		query = query.Where(`title ILIKE ? ESCAPE '\'`, pattern)
+	}
+	if input.From != nil {
+		query = query.Where("created_at>=?", *input.From)
+	}
+	if input.To != nil {
+		query = query.Where("created_at<=?", *input.To)
 	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var rows []Task
-	err := query.Order("id DESC").Limit(size).Offset((page - 1) * size).Find(&rows).Error
+	err := query.Order("id DESC").Limit(input.PageSize).Offset((input.Page - 1) * input.PageSize).Find(&rows).Error
 	return rows, total, err
 }
 
@@ -299,7 +315,7 @@ func (r *Repository) Options(ctx context.Context, kind, keyword string, after in
 	}
 	var rows []Option
 	if kind == "platform" {
-		pattern := "%" + strings.NewReplacer("%", "\\%", "_", "\\_").Replace(keyword) + "%"
+		pattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(keyword) + "%"
 		var malformed int64
 		if err := r.db.WithContext(ctx).Raw(`
 SELECT count(*)
@@ -307,7 +323,7 @@ FROM permission_auth_platform platform
 WHERE platform.id>?
   AND platform.is_enabled=1
   AND platform.deleted_at IS NULL
-  AND (?='' OR platform.name ILIKE ? ESCAPE '\\')
+  AND (?='' OR platform.name ILIKE ? ESCAPE '\')
   AND EXISTS (
     SELECT 1 FROM permission_menu node
     WHERE node.platform_id=platform.id
@@ -362,7 +378,7 @@ JOIN permission_menu action
 WHERE platform.id>?
   AND platform.is_enabled=1
   AND platform.deleted_at IS NULL
-  AND (?='' OR platform.name ILIKE ? ESCAPE '\\')
+  AND (?='' OR platform.name ILIKE ? ESCAPE '\')
 GROUP BY platform.id,platform.name
 HAVING count(DISTINCT action.code)=3
 ORDER BY platform.id
@@ -371,7 +387,8 @@ LIMIT ?`, after, keyword, pattern, limit).Scan(&rows).Error
 	}
 	query := r.db.WithContext(ctx).Table(table).Select("id,"+name+" AS label").Where("id>? AND "+condition, after)
 	if keyword != "" {
-		query = query.Where(name+" ILIKE ?", "%"+strings.NewReplacer("%", "\\%", "_", "\\_").Replace(keyword)+"%")
+		pattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(keyword) + "%"
+		query = query.Where(name+` ILIKE ? ESCAPE '\'`, pattern)
 	}
 	if err := query.Order("id").Limit(limit).Scan(&rows).Error; err != nil {
 		return nil, err

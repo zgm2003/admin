@@ -104,10 +104,24 @@ async function handleLogout(): Promise<void> {
 }
 
 watch(
-  () => [auth.status, auth.user?.userId, auth.accessToken] as const,
-  ([status, userId, token]) => {
+  () =>
+    [
+      auth.status,
+      auth.user?.userId,
+      auth.accessToken,
+      access.status,
+      access.hasPermission('message:notification:list'),
+    ] as const,
+  ([status, userId, token, accessStatus, canListNotifications]) => {
     realtimeRuntime.stop()
-    if (status !== 'authenticated' || userId === undefined || token === '') return
+    if (
+      status !== 'authenticated' ||
+      userId === undefined ||
+      token === '' ||
+      accessStatus !== 'ready' ||
+      !canListNotifications
+    )
+      return
     realtimeRuntime.start(
       { platformCode: authPlatform, userId },
       {

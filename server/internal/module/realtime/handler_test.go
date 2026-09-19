@@ -3,6 +3,7 @@ package realtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,6 +15,38 @@ import (
 	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 )
+
+func TestRunConnectionLoopsCancelsPeerWhenEitherLoopExits(t *testing.T) {
+	readStarted := make(chan struct{})
+	readStopped := make(chan struct{})
+	writeFailure := errors.New("write failed")
+
+	readErr, writeErr := runConnectionLoops(
+		context.Background(),
+		func(ctx context.Context) error {
+			close(readStarted)
+			<-ctx.Done()
+			close(readStopped)
+			return ctx.Err()
+		},
+		func(context.Context) error {
+			<-readStarted
+			return writeFailure
+		},
+	)
+
+	if !errors.Is(writeErr, writeFailure) {
+		t.Fatalf("write error=%v want %v", writeErr, writeFailure)
+	}
+	if !errors.Is(readErr, context.Canceled) {
+		t.Fatalf("read error=%v want context canceled", readErr)
+	}
+	select {
+	case <-readStopped:
+	default:
+		t.Fatal("read loop was not stopped before orchestration returned")
+	}
+}
 
 type realtimeAuthStub struct{ identity auth.Identity }
 

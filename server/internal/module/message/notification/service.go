@@ -8,8 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"admin/server/internal/shared/apperror"
 	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
+	"gorm.io/gorm"
 )
 
 var sourceTypePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$`)
@@ -137,58 +139,84 @@ type mailboxRepository interface {
 
 func (s *Service) List(ctx context.Context, query MailboxQuery) (MailboxPage, error) {
 	if query.PlatformID <= 0 || query.UserID <= 0 || query.BeforeID < 0 || query.Limit < 1 || query.Limit > 50 {
-		return MailboxPage{}, errors.New("invalid notification mailbox query")
+		return MailboxPage{}, apperror.InvalidRequest(errors.New("invalid notification mailbox query"))
 	}
 	if query.Filter == "" {
 		query.Filter = MailboxAll
 	}
 	if query.Filter != MailboxAll && query.Filter != MailboxUnread {
-		return MailboxPage{}, errors.New("invalid notification mailbox filter")
+		return MailboxPage{}, apperror.InvalidRequest(errors.New("invalid notification mailbox filter"))
 	}
 	cutoff, err := s.retentionCutoff(ctx)
 	if err != nil {
-		return MailboxPage{}, err
+		return MailboxPage{}, mailboxDependencyError(err)
 	}
-	return s.mailbox.ListMailbox(ctx, query, cutoff)
+	page, err := s.mailbox.ListMailbox(ctx, query, cutoff)
+	return page, mailboxDependencyError(err)
 }
 
 func (s *Service) Summary(ctx context.Context, platformID, userID int64) (MailboxSummary, error) {
 	if platformID <= 0 || userID <= 0 {
-		return MailboxSummary{}, errors.New("invalid notification mailbox identity")
+		return MailboxSummary{}, apperror.InvalidRequest(errors.New("invalid notification mailbox identity"))
 	}
 	cutoff, err := s.retentionCutoff(ctx)
 	if err != nil {
-		return MailboxSummary{}, err
+		return MailboxSummary{}, mailboxDependencyError(err)
 	}
-	return s.mailbox.SummaryMailbox(ctx, platformID, userID, cutoff)
+	result, err := s.mailbox.SummaryMailbox(ctx, platformID, userID, cutoff)
+	return result, mailboxDependencyError(err)
 }
 
 func (s *Service) Read(ctx context.Context, platformID, userID, notificationID int64) error {
 	if platformID <= 0 || userID <= 0 || notificationID <= 0 {
-		return errors.New("invalid notification read")
+		return apperror.InvalidRequest(errors.New("invalid notification read"))
+	}
+	if s == nil || s.mailbox == nil {
+		return apperror.DependencyUnavailable(errors.New("notification mailbox dependencies are unavailable"))
 	}
 	_, err := s.mailbox.ReadNotification(ctx, platformID, userID, notificationID, time.Now().UTC())
-	return err
+	return mailboxMutationError(err)
 }
 
 func (s *Service) ReadAll(ctx context.Context, platformID, userID int64) error {
 	if platformID <= 0 || userID <= 0 {
-		return errors.New("invalid notification read all")
+		return apperror.InvalidRequest(errors.New("invalid notification read all"))
 	}
 	cutoff, err := s.retentionCutoff(ctx)
 	if err != nil {
-		return err
+		return mailboxDependencyError(err)
 	}
 	_, err = s.mailbox.ReadAllNotifications(ctx, platformID, userID, cutoff, time.Now().UTC())
-	return err
+	return mailboxDependencyError(err)
 }
 
 func (s *Service) Delete(ctx context.Context, platformID, userID, notificationID int64) error {
 	if platformID <= 0 || userID <= 0 || notificationID <= 0 {
-		return errors.New("invalid notification delete")
+		return apperror.InvalidRequest(errors.New("invalid notification delete"))
+	}
+	if s == nil || s.mailbox == nil {
+		return apperror.DependencyUnavailable(errors.New("notification mailbox dependencies are unavailable"))
 	}
 	_, err := s.mailbox.DeleteNotification(ctx, platformID, userID, notificationID, time.Now().UTC())
-	return err
+	return mailboxMutationError(err)
+}
+
+func mailboxMutationError(err error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return apperror.NotFound(err)
+	}
+	return mailboxDependencyError(err)
+}
+
+func mailboxDependencyError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var applicationError *apperror.Error
+	if errors.As(err, &applicationError) {
+		return err
+	}
+	return apperror.DependencyUnavailable(err)
 }
 
 func (s *Service) retentionCutoff(ctx context.Context) (time.Time, error) {

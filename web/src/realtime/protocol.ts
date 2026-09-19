@@ -29,7 +29,9 @@ export type RealtimeEvent =
     }
   | {
       type: 'notification.stateChanged.v1'
-      data: { notificationId: number; operation: 'read' | 'readAll' | 'delete' }
+      data:
+        | { kind: 'read' | 'delete'; notificationId: number; readThroughNotificationId: null }
+        | { kind: 'readAll'; notificationId: null; readThroughNotificationId: number }
     }
 export type RealtimeEnvelope = RealtimeEvent & {
   eventId: string
@@ -128,17 +130,37 @@ export function parseRealtimeEnvelope(value: unknown): RealtimeEnvelope {
       },
     }
   } else if (type === 'notification.stateChanged.v1') {
-    const d = expectExactKeys(m.r.data, ['notificationId', 'operation'], 'notification state data')
-    const operation = expectString(d.operation, 'operation')
-    if (!['read', 'readAll', 'delete'].includes(operation))
-      throw new ProtocolError('operation is invalid')
-    event = {
-      type,
-      data: {
-        notificationId: positive(d.notificationId, 'notificationId'),
-        operation: operation as 'read' | 'readAll' | 'delete',
-      },
-    }
+    const d = expectExactKeys(
+      m.r.data,
+      ['kind', 'notificationId', 'readThroughNotificationId'],
+      'notification state data',
+    )
+    const kind = expectString(d.kind, 'kind')
+    if (kind === 'readAll') {
+      if (d.notificationId !== null) throw new ProtocolError('readAll notificationId must be null')
+      event = {
+        type,
+        data: {
+          kind,
+          notificationId: null,
+          readThroughNotificationId: positive(
+            d.readThroughNotificationId,
+            'readThroughNotificationId',
+          ),
+        },
+      }
+    } else if (kind === 'read' || kind === 'delete') {
+      if (d.readThroughNotificationId !== null)
+        throw new ProtocolError(`${kind} readThroughNotificationId must be null`)
+      event = {
+        type,
+        data: {
+          kind,
+          notificationId: positive(d.notificationId, 'notificationId'),
+          readThroughNotificationId: null,
+        },
+      }
+    } else throw new ProtocolError('kind is invalid')
   } else throw new ProtocolError('unsupported realtime event type')
   const common = {
     eventId: m.eventId,

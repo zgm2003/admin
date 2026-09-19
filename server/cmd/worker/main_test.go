@@ -31,6 +31,12 @@ func TestOpenWorkerRedisKeepsStartupContext(t *testing.T) {
 	}
 }
 
+func TestBuildWorkerSettingServiceRejectsIncompleteCacheGenerationDependencies(t *testing.T) {
+	if _, err := buildWorkerSettingService(nil, nil, nil, nil, discardLogger()); err == nil {
+		t.Fatal("worker setting service accepted incomplete cache generation dependencies")
+	}
+}
+
 type workerOperationLogProcessor struct {
 	processed string
 }

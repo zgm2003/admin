@@ -15,9 +15,9 @@ const (
 
 func RegisterRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, require func(string) gin.HandlerFunc) {
 	r.GET("/message/notificationtask", auth, require(PermissionList), h.List)
-	r.GET("/message/notificationtask/platform-option", auth, require(PermissionDetail), h.PlatformOption)
-	r.GET("/message/notificationtask/user-option", auth, require(PermissionDetail), h.UserOption)
-	r.GET("/message/notificationtask/role-option", auth, require(PermissionDetail), h.RoleOption)
+	r.GET("/message/notificationtask/create/option/:kind", auth, require(PermissionCreate), h.Option)
+	r.GET("/message/notificationtask/update/option/:kind", auth, require(PermissionUpdate), h.Option)
+	r.GET("/message/notificationtask/:id/edit", auth, require(PermissionUpdate), h.Edit)
 	r.GET("/message/notificationtask/:id", auth, require(PermissionDetail), h.Detail)
 	r.POST("/message/notificationtask", auth, require(PermissionCreate), h.Create)
 	r.PUT("/message/notificationtask/:id", auth, require(PermissionUpdate), h.Update)

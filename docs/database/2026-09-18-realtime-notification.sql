@@ -1,5 +1,129 @@
 BEGIN;
 
+CREATE OR REPLACE FUNCTION pg_temp.realtime_notification_schema_fingerprint()
+RETURNS TEXT
+LANGUAGE SQL
+STABLE
+AS $fingerprint$
+WITH targets(table_name) AS (VALUES
+  ('message_notification_task'),('message_notification_task_target'),('message_notification'),
+  ('message_notification_recipient'),('message_notification_broadcast_state'),
+  ('message_notification_mailbox_state'),('message_notification_dispatch_outbox'),
+  ('realtime_event'),('realtime_event_outbox'),('realtime_retention_state')
+), columns AS (
+  SELECT string_agg(format('%s.%s:%s:%s:%s:%s:%s:%s',column_row.table_name,column_row.ordinal_position,column_row.column_name,column_row.udt_name,column_row.is_nullable,column_row.is_identity,COALESCE(column_row.character_maximum_length::text,''),COALESCE(column_row.column_default,'')),E'\n' ORDER BY column_row.table_name,column_row.ordinal_position) AS value
+  FROM information_schema.columns column_row JOIN targets ON targets.table_name=column_row.table_name
+  WHERE column_row.table_schema=current_schema()
+), constraints AS (
+  SELECT string_agg(format('%s:%s:%s:%s',relation.relname,constraint_row.conname,constraint_row.contype,pg_get_constraintdef(constraint_row.oid,true)),E'\n' ORDER BY relation.relname,constraint_row.conname) AS value
+  FROM pg_constraint constraint_row
+  JOIN pg_class relation ON relation.oid=constraint_row.conrelid
+  JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
+  JOIN targets ON targets.table_name=relation.relname
+  WHERE namespace.nspname=current_schema()
+), indexes AS (
+  SELECT string_agg(format('%s:%s:%s',index_row.tablename,index_row.indexname,replace(index_row.indexdef,format('%I.',current_schema()),'')),E'\n' ORDER BY index_row.tablename,index_row.indexname) AS value
+  FROM pg_indexes index_row JOIN targets ON targets.table_name=index_row.tablename
+  WHERE index_row.schemaname=current_schema()
+)
+SELECT md5(concat_ws(E'\n--constraints--\n',COALESCE(columns.value,''),COALESCE(constraints.value,''),COALESCE(indexes.value,'')))
+FROM columns,constraints,indexes
+$fingerprint$;
+
+DO $schema_preflight$
+DECLARE
+    target_count INTEGER;
+    expected RECORD;
+    actual_signature TEXT;
+BEGIN
+    SELECT count(*) INTO target_count
+    FROM pg_class relation
+    JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
+    WHERE namespace.nspname=current_schema()
+      AND relation.relkind='r'
+      AND relation.relname IN (
+        'message_notification_task','message_notification_task_target','message_notification',
+        'message_notification_recipient','message_notification_broadcast_state',
+        'message_notification_mailbox_state','message_notification_dispatch_outbox',
+        'realtime_event','realtime_event_outbox','realtime_retention_state'
+      );
+
+    IF target_count NOT IN (0,10) THEN
+        RAISE EXCEPTION 'realtime notification target schema must be entirely absent or complete; found % of 10 tables',target_count;
+    END IF;
+
+    IF target_count=10 THEN
+		IF pg_temp.realtime_notification_schema_fingerprint() <> '2ebc4dc2c8f4746f21d676304fa120e6' THEN
+			RAISE EXCEPTION 'realtime notification target schema fingerprint is incompatible';
+		END IF;
+        FOR expected IN SELECT * FROM (VALUES
+          ('message_notification_task','id:int8:NO:YES,platform_id:int8:NO:NO,title:varchar:NO:NO,content_html:text:NO:NO,summary:varchar:NO:NO,variant:varchar:NO:NO,priority:varchar:NO:NO,link_type:varchar:NO:NO,link:varchar:NO:NO,audience_type:varchar:NO:NO,scheduled_at:timestamptz:YES:NO,audience_max_user_id:int8:YES:NO,submitted_at:timestamptz:YES:NO,status:varchar:NO:NO,next_user_id:int8:NO:NO,next_batch_no:int4:NO:NO,generated_count:int8:NO:NO,failure_message:varchar:YES:NO,published_at:timestamptz:YES:NO,completed_at:timestamptz:YES:NO,canceled_at:timestamptz:YES:NO,failed_at:timestamptz:YES:NO,created_by:int8:NO:NO,created_at:timestamptz:NO:NO,updated_at:timestamptz:NO:NO,deleted_at:timestamptz:YES:NO'),
+          ('message_notification_task_target','id:int8:NO:YES,task_id:int8:NO:NO,target_type:varchar:NO:NO,target_id:int8:NO:NO,created_at:timestamptz:NO:NO,updated_at:timestamptz:NO:NO,deleted_at:timestamptz:YES:NO'),
+          ('message_notification','id:int8:NO:YES,platform_id:int8:NO:NO,source_task_id:int8:YES:NO,source_type:varchar:NO:NO,source_key:varchar:NO:NO,audience_type:varchar:NO:NO,audience_max_user_id:int8:NO:NO,title:varchar:NO:NO,content_html:text:NO:NO,summary:varchar:NO:NO,variant:varchar:NO:NO,priority:varchar:NO:NO,link_type:varchar:NO:NO,link:varchar:NO:NO,published_at:timestamptz:NO:NO,created_at:timestamptz:NO:NO,updated_at:timestamptz:NO:NO'),
+          ('message_notification_recipient','id:int8:NO:YES,notification_id:int8:NO:NO,platform_id:int8:NO:NO,user_id:int8:NO:NO,read_at:timestamptz:YES:NO,created_at:timestamptz:NO:NO,updated_at:timestamptz:NO:NO,deleted_at:timestamptz:YES:NO'),
+          ('message_notification_broadcast_state','id:int8:NO:YES,notification_id:int8:NO:NO,platform_id:int8:NO:NO,user_id:int8:NO:NO,read_at:timestamptz:YES:NO,created_at:timestamptz:NO:NO,updated_at:timestamptz:NO:NO,deleted_at:timestamptz:YES:NO'),
+          ('message_notification_mailbox_state','platform_id:int8:NO:NO,user_id:int8:NO:NO,read_through_notification_id:int8:NO:NO,created_at:timestamptz:NO:NO,updated_at:timestamptz:NO:NO'),
+          ('realtime_event','sequence:int8:NO:YES,event_id:uuid:NO:NO,dedup_key:varchar:NO:NO,platform_id:int8:NO:NO,event_type:varchar:NO:NO,target_type:varchar:NO:NO,target_user_id:int8:YES:NO,audience_max_user_id:int8:YES:NO,payload:jsonb:NO:NO,occurred_at:timestamptz:NO:NO,created_at:timestamptz:NO:NO,updated_at:timestamptz:NO:NO'),
+          ('realtime_event_outbox','id:int8:NO:YES,event_sequence:int8:NO:NO,attempts:int4:NO:NO,available_at:timestamptz:NO:NO,locked_until:timestamptz:YES:NO,lock_token:varchar:YES:NO,published_at:timestamptz:YES:NO,last_error:varchar:YES:NO,created_at:timestamptz:NO:NO,updated_at:timestamptz:NO:NO'),
+          ('realtime_retention_state','platform_id:int8:NO:NO,deleted_through_sequence:int8:NO:NO,created_at:timestamptz:NO:NO,updated_at:timestamptz:NO:NO'),
+          ('message_notification_dispatch_outbox','id:int8:NO:YES,task_id:int8:NO:NO,batch_no:int4:NO:NO,attempts:int4:NO:NO,available_at:timestamptz:NO:NO,locked_until:timestamptz:YES:NO,lock_token:varchar:YES:NO,published_at:timestamptz:YES:NO,last_error:varchar:YES:NO,created_at:timestamptz:NO:NO,updated_at:timestamptz:NO:NO')
+        ) AS contracts(table_name,column_signature)
+        LOOP
+            SELECT string_agg(format('%s:%s:%s:%s',column_name,udt_name,is_nullable,is_identity),',' ORDER BY ordinal_position)
+            INTO actual_signature
+            FROM information_schema.columns
+            WHERE table_schema=current_schema() AND table_name=expected.table_name;
+            IF actual_signature IS DISTINCT FROM expected.column_signature THEN
+                RAISE EXCEPTION 'realtime notification target schema is incompatible for table %',expected.table_name;
+            END IF;
+        END LOOP;
+
+        IF EXISTS (
+          SELECT 1 FROM (VALUES
+            ('message_notification_task','message_notification_task_pkey'),('message_notification_task','fk_message_notification_task_platform'),('message_notification_task','fk_message_notification_task_creator'),('message_notification_task','ck_message_notification_task_title'),('message_notification_task','ck_message_notification_task_content'),('message_notification_task','ck_message_notification_task_summary'),('message_notification_task','ck_message_notification_task_variant'),('message_notification_task','ck_message_notification_task_priority'),('message_notification_task','ck_message_notification_task_link'),('message_notification_task','ck_message_notification_task_audience'),('message_notification_task','ck_message_notification_task_status'),('message_notification_task','ck_message_notification_task_counters'),('message_notification_task','ck_message_notification_task_state'),
+            ('message_notification_task_target','message_notification_task_target_pkey'),('message_notification_task_target','fk_message_notification_task_target_task'),('message_notification_task_target','ck_message_notification_task_target_type'),('message_notification_task_target','ck_message_notification_task_target_id'),
+            ('message_notification','message_notification_pkey'),('message_notification','fk_message_notification_platform'),('message_notification','fk_message_notification_source_task'),('message_notification','ck_message_notification_source'),('message_notification','ck_message_notification_audience'),('message_notification','ck_message_notification_content'),('message_notification','ck_message_notification_variant'),('message_notification','ck_message_notification_priority'),('message_notification','ck_message_notification_link'),
+            ('message_notification_recipient','message_notification_recipient_pkey'),('message_notification_recipient','fk_message_notification_recipient_notification'),('message_notification_recipient','fk_message_notification_recipient_platform'),('message_notification_recipient','fk_message_notification_recipient_user'),
+            ('message_notification_broadcast_state','message_notification_broadcast_state_pkey'),('message_notification_broadcast_state','fk_message_notification_broadcast_notification'),('message_notification_broadcast_state','fk_message_notification_broadcast_platform'),('message_notification_broadcast_state','fk_message_notification_broadcast_user'),
+            ('message_notification_mailbox_state','message_notification_mailbox_state_pkey'),('message_notification_mailbox_state','fk_message_notification_mailbox_platform'),('message_notification_mailbox_state','fk_message_notification_mailbox_user'),('message_notification_mailbox_state','ck_message_notification_mailbox_watermark'),
+            ('realtime_event','realtime_event_pkey'),('realtime_event','fk_realtime_event_platform'),('realtime_event','fk_realtime_event_user'),('realtime_event','ck_realtime_event_type'),('realtime_event','ck_realtime_event_target'),('realtime_event','ck_realtime_event_payload'),
+            ('realtime_event_outbox','realtime_event_outbox_pkey'),('realtime_event_outbox','fk_realtime_event_outbox_event'),('realtime_event_outbox','ck_realtime_event_outbox_attempts'),('realtime_event_outbox','ck_realtime_event_outbox_lock'),('realtime_event_outbox','ck_realtime_event_outbox_published'),
+            ('realtime_retention_state','realtime_retention_state_pkey'),('realtime_retention_state','fk_realtime_retention_platform'),('realtime_retention_state','ck_realtime_retention_watermark'),
+            ('message_notification_dispatch_outbox','message_notification_dispatch_outbox_pkey'),('message_notification_dispatch_outbox','fk_message_notification_dispatch_task'),('message_notification_dispatch_outbox','ck_message_notification_dispatch_counters'),('message_notification_dispatch_outbox','ck_message_notification_dispatch_lock'),('message_notification_dispatch_outbox','ck_message_notification_dispatch_published')
+          ) AS required(table_name,constraint_name)
+          WHERE NOT EXISTS (
+            SELECT 1 FROM pg_constraint constraint_row
+            JOIN pg_class relation ON relation.oid=constraint_row.conrelid
+            JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
+            WHERE namespace.nspname=current_schema() AND relation.relname=required.table_name AND constraint_row.conname=required.constraint_name
+          )
+        ) THEN
+            RAISE EXCEPTION 'realtime notification target schema has missing or incompatible constraints';
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM (VALUES
+            ('message_notification','ux_message_notification_source'),('message_notification','ux_message_notification_source_task'),
+            ('message_notification_task_target','ux_message_notification_task_target_active'),
+            ('message_notification_recipient','ux_message_notification_recipient'),('message_notification_broadcast_state','ux_message_notification_broadcast_state'),
+            ('realtime_event','ux_realtime_event_event_id'),('realtime_event','ux_realtime_event_dedup_key'),
+            ('realtime_event_outbox','ux_realtime_event_outbox_event'),('message_notification_dispatch_outbox','ux_message_notification_dispatch_batch'),
+            ('message_notification_task','ix_message_notification_task_due'),('message_notification_task','ix_message_notification_task_platform_list'),('message_notification_task','ix_message_notification_task_creator_list'),
+            ('message_notification_recipient','ix_message_notification_recipient_mailbox'),('message_notification_recipient','ix_message_notification_recipient_unread'),
+            ('message_notification','ix_message_notification_platform_mailbox'),('realtime_event','ix_realtime_event_user_resume'),('realtime_event','ix_realtime_event_platform_resume'),('realtime_event','ix_realtime_event_retention'),
+            ('realtime_event_outbox','ix_realtime_event_outbox_pending'),('message_notification_dispatch_outbox','ix_message_notification_dispatch_pending')
+          ) AS required(table_name,index_name)
+          WHERE NOT EXISTS (
+            SELECT 1 FROM pg_indexes index_row
+            WHERE index_row.schemaname=current_schema() AND index_row.tablename=required.table_name AND index_row.indexname=required.index_name
+          )
+        ) THEN
+            RAISE EXCEPTION 'realtime notification target schema has missing or incompatible indexes';
+        END IF;
+    END IF;
+END
+$schema_preflight$;
+
 CREATE TABLE IF NOT EXISTS message_notification_task (
     id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
     platform_id BIGINT NOT NULL,
@@ -356,5 +480,13 @@ BEGIN
     END IF;
 END
 $migration$;
+
+DO $schema_postflight$
+BEGIN
+    IF pg_temp.realtime_notification_schema_fingerprint() <> '2ebc4dc2c8f4746f21d676304fa120e6' THEN
+        RAISE EXCEPTION 'realtime notification target schema fingerprint is incompatible after migration';
+    END IF;
+END
+$schema_postflight$;
 
 COMMIT;

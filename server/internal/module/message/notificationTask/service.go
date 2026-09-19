@@ -20,7 +20,7 @@ type taskRepository interface {
 }
 type taskAdminRepository interface {
 	Find(context.Context, int64) (Task, error)
-	List(context.Context, Status, int, int) ([]Task, int64, error)
+	List(context.Context, ListQuery) ([]Task, int64, error)
 	Delete(context.Context, int64, time.Time) error
 	Options(context.Context, string, string, int64, int) ([]Option, error)
 }
@@ -82,12 +82,23 @@ func (s *Service) Detail(ctx context.Context, id int64) (Task, error) {
 	result, err := repository.Find(ctx, id)
 	return result, mapTaskError(err)
 }
-func (s *Service) List(ctx context.Context, status Status, page, size int) ([]Task, int64, error) {
+func (s *Service) EditableDetail(ctx context.Context, id int64) (Task, error) {
+	result, err := s.Detail(ctx, id)
+	if err != nil {
+		return Task{}, err
+	}
+	if result.Status != StatusDraft {
+		return Task{}, apperror.Conflict(i18n.KeyConflict, nil, ErrNotDraft)
+	}
+	return result, nil
+}
+func (s *Service) List(ctx context.Context, query ListQuery) ([]Task, int64, error) {
 	repository, ok := s.repository.(taskAdminRepository)
-	if (status != "" && !validStatus(status)) || page < 1 || size < 1 || size > 100 || !ok {
+	validAudience := query.AudienceType == "" || query.AudienceType == AudienceUser || query.AudienceType == AudienceRole || query.AudienceType == AudiencePlatform
+	if (query.Status != "" && !validStatus(query.Status)) || !validAudience || query.Page < 1 || query.PageSize < 1 || query.PageSize > 100 || !ok {
 		return nil, 0, apperror.InvalidRequest(errors.New("task page is invalid"))
 	}
-	rows, total, err := repository.List(ctx, status, page, size)
+	rows, total, err := repository.List(ctx, query)
 	return rows, total, mapTaskError(err)
 }
 

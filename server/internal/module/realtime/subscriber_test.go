@@ -53,7 +53,7 @@ func TestSubscriberTwoInstancesRouteUserAndPlatformPubSub(t *testing.T) {
 	if err := firstRedis.Publish(ctx, UserChannel(41, 101), userPayload); err != nil {
 		t.Fatal(err)
 	}
-	expectPayloadEventually(t, firstUser, userPayload)
+	expectPayloadEventually(t, firstUser, subscriberEnvelope(t, userPayload))
 	expectNoPayload(t, firstExcluded)
 	expectNoPayload(t, secondUser)
 
@@ -61,9 +61,9 @@ func TestSubscriberTwoInstancesRouteUserAndPlatformPubSub(t *testing.T) {
 	if err := firstRedis.Publish(ctx, PlatformChannel(41), platformPayload); err != nil {
 		t.Fatal(err)
 	}
-	expectPayloadEventually(t, firstUser, platformPayload)
+	expectPayloadEventually(t, firstUser, subscriberEnvelope(t, platformPayload))
 	expectNoPayload(t, firstExcluded)
-	expectPayloadEventually(t, secondUser, platformPayload)
+	expectPayloadEventually(t, secondUser, subscriberEnvelope(t, platformPayload))
 
 	firstSet.Detach(firstUser)
 	if err := first.Sync(ctx); err != nil {
@@ -175,7 +175,7 @@ func TestSubscriberDisconnectClosesAllAndRestoresCurrentSubscriptions(t *testing
 	}
 	payload := subscriberPayload(t, TargetUser, 61, 404, 0)
 	secondSession.message(UserChannel(61, 404), payload)
-	expectPayloadEventually(t, replacement, payload)
+	expectPayloadEventually(t, replacement, subscriberEnvelope(t, payload))
 }
 
 func startSubscriber(t *testing.T, ctx context.Context, subscriber *Subscriber) {
@@ -205,6 +205,19 @@ func subscriberPayload(t *testing.T, target TargetType, platformID, userID, audi
 		t.Fatal(err)
 	}
 	return raw
+}
+
+func subscriberEnvelope(t *testing.T, raw []byte) []byte {
+	t.Helper()
+	payload, err := DecodePubSubPayload(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope, err := EncodeEnvelope(payload.Envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return envelope
 }
 
 func expectPayloadEventually(t *testing.T, connection *Connection, want []byte) {

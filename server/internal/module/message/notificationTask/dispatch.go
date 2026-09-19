@@ -107,17 +107,22 @@ func (r *DispatchRelay) RunOnce(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	published := 0
+	var iterationErr error
 	for _, row := range rows {
 		err = r.queue.EnqueueBatch(ctx, BatchPayload{SchemaVersion: 1, TaskID: row.TaskID, BatchNo: row.BatchNo})
 		if err == nil || errors.Is(err, asynq.ErrTaskIDConflict) {
-			if markErr := r.repository.MarkDispatch(ctx, row.ID, token, now); markErr == nil {
-				published++
+			if markErr := r.repository.MarkDispatch(ctx, row.ID, token, now); markErr != nil {
+				iterationErr = errors.Join(iterationErr, fmt.Errorf("mark notification dispatch %d: %w", row.ID, markErr))
+				continue
 			}
+			published++
 			continue
 		}
-		_ = r.repository.RescheduleDispatch(ctx, row.ID, token, "dependency-unavailable", now.Add(dispatchBackoff(row.Attempts)), now)
+		if rescheduleErr := r.repository.RescheduleDispatch(ctx, row.ID, token, "dependency-unavailable", now.Add(dispatchBackoff(row.Attempts)), now); rescheduleErr != nil {
+			iterationErr = errors.Join(iterationErr, fmt.Errorf("reschedule notification dispatch %d: %w", row.ID, rescheduleErr))
+		}
 	}
-	return published, nil
+	return published, iterationErr
 }
 func dispatchBackoff(attempts int) time.Duration {
 	if attempts < 1 {

@@ -190,7 +190,7 @@ func (r *Repository) mutateNotification(ctx context.Context, platformID, userID,
 		if !changed {
 			return nil
 		}
-		return r.appendStateEvent(ctx, tx, platformID, userID, fmt.Sprintf("notification-state:%s:%d:%d:%d", operation, platformID, userID, notificationID), notificationID, operation, now)
+		return r.appendStateEvent(ctx, tx, platformID, userID, fmt.Sprintf("notification-state:%s:%d:%d:%d", operation, platformID, userID, notificationID), operation, &notificationID, nil, now)
 	})
 	return changed, err
 }
@@ -213,16 +213,17 @@ func (r *Repository) ReadAllNotifications(ctx context.Context, platformID, userI
 		if !changed {
 			return nil
 		}
-		return r.appendStateEvent(ctx, tx, platformID, userID, fmt.Sprintf("notification-state:read-all:%d:%d:%d", platformID, userID, maximum), maximum, "readAll", now)
+		return r.appendStateEvent(ctx, tx, platformID, userID, fmt.Sprintf("notification-state:read-all:%d:%d:%d", platformID, userID, maximum), "readAll", nil, &maximum, now)
 	})
 	return changed, err
 }
 
-func (r *Repository) appendStateEvent(ctx context.Context, tx *gorm.DB, platformID, userID int64, dedup string, notificationID int64, operation string, now time.Time) error {
+func (r *Repository) appendStateEvent(ctx context.Context, tx *gorm.DB, platformID, userID int64, dedup, kind string, notificationID, readThroughNotificationID *int64, now time.Time) error {
 	payload, err := json.Marshal(struct {
-		NotificationID int64  `json:"notificationId"`
-		Operation      string `json:"operation"`
-	}{notificationID, operation})
+		Kind                      string `json:"kind"`
+		NotificationID            *int64 `json:"notificationId"`
+		ReadThroughNotificationID *int64 `json:"readThroughNotificationId"`
+	}{kind, notificationID, readThroughNotificationID})
 	if err != nil {
 		return err
 	}

@@ -59,6 +59,34 @@ type fakeHTTPRuntime struct {
 	serveErr error
 }
 
+type blockingHTTPRuntime struct {
+	served   chan struct{}
+	shutdown chan struct{}
+}
+
+func (f *blockingHTTPRuntime) ListenAndServe() error {
+	close(f.served)
+	<-f.shutdown
+	return http.ErrServerClosed
+}
+
+func (f *blockingHTTPRuntime) Shutdown(context.Context) error {
+	close(f.shutdown)
+	return nil
+}
+
+type exitingRealtimeSubscriber struct {
+	ready chan struct{}
+	exit  chan struct{}
+}
+
+func (f *exitingRealtimeSubscriber) Ready() <-chan struct{} { return f.ready }
+func (f *exitingRealtimeSubscriber) Run(context.Context) error {
+	close(f.ready)
+	<-f.exit
+	return errors.New("subscriber connection lost")
+}
+
 func (f *fakeHTTPRuntime) ListenAndServe() error {
 	*f.events = append(*f.events, "http-listen")
 	close(f.served)
@@ -106,6 +134,25 @@ func TestRealtimeRuntimeDoesNotListenWhenSubscriberFails(t *testing.T) {
 	}
 	if len(events) != 0 {
 		t.Fatalf("events=%v want none", events)
+	}
+}
+
+func TestRealtimeRuntimeDoesNotWaitAgainAfterSubscriberExited(t *testing.T) {
+	subscriber := &exitingRealtimeSubscriber{ready: make(chan struct{}), exit: make(chan struct{})}
+	server := &blockingHTTPRuntime{served: make(chan struct{}), shutdown: make(chan struct{})}
+	done := make(chan error, 1)
+	go func() {
+		done <- runAPIRuntime(context.Background(), subscriber, fakeRealtimeConnections{&[]string{}}, server)
+	}()
+	<-server.served
+	close(subscriber.exit)
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "subscriber") {
+			t.Fatalf("error=%v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("runtime waited for an already-finished subscriber")
 	}
 }
 

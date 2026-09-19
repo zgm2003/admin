@@ -14,6 +14,7 @@ const permission = usePermissionStore(),
   { t } = useI18n()
 const visible = computed(() => permission.hasPermission('message:notification:list'))
 const canRead = computed(() => permission.hasPermission('message:notification:read'))
+const canView = computed(() => permission.hasPermission('message:notification:view'))
 const badge = computed(() => (notification.unreadCount > 99 ? '99+' : notification.unreadCount))
 watch(
   visible,
@@ -41,8 +42,30 @@ async function openItem(item: NotificationRecent): Promise<void> {
       ElMessage.error(t('notification.linkUnavailable'))
       return
     }
-    await router.push(item.link)
+    try {
+      await router.push(item.link)
+    } catch {
+      ElMessage.error(t('notification.linkUnavailable'))
+    }
   }
+}
+async function viewAll(): Promise<void> {
+  const path = '/message/notification'
+  if (router.resolve(path).matched.length === 0) {
+    ElMessage.error(t('notification.linkUnavailable'))
+    return
+  }
+  try {
+    await router.push(path)
+  } catch {
+    ElMessage.error(t('notification.linkUnavailable'))
+  }
+}
+function readAll(): void {
+  void notification.markAllRead().catch(() => undefined)
+}
+function retry(): void {
+  void notification.load().catch(() => undefined)
 }
 </script>
 
@@ -67,7 +90,7 @@ async function openItem(item: NotificationRecent): Promise<void> {
         data-testid="notification-bell-read-all"
         link
         type="primary"
-        @click="notification.markAllRead"
+        @click="readAll"
         >{{ t('notification.readAll') }}</el-button
       >
     </div>
@@ -76,9 +99,7 @@ async function openItem(item: NotificationRecent): Promise<void> {
     </div>
     <div v-else-if="notification.errorMessage" class="notification-bell__state">
       <span>{{ notification.errorMessage }}</span
-      ><el-button link type="primary" @click="notification.load">{{
-        t('notification.retry')
-      }}</el-button>
+      ><el-button link type="primary" @click="retry">{{ t('notification.retry') }}</el-button>
     </div>
     <div v-else-if="notification.recent.length === 0" class="notification-bell__state">
       {{ t('notification.empty') }}
@@ -99,10 +120,12 @@ async function openItem(item: NotificationRecent): Promise<void> {
       >
     </button>
     <el-button
+      v-if="canView"
       class="notification-bell__all"
+      data-testid="notification-bell-view-all"
       link
       type="primary"
-      @click="router.push('/message/notification')"
+      @click="viewAll"
       >{{ t('notification.viewAll') }}</el-button
     >
   </el-popover>

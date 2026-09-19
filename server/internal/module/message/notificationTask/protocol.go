@@ -47,6 +47,17 @@ type DraftInput struct {
 	ScheduledAt  *time.Time
 }
 
+type ListQuery struct {
+	Page         int
+	PageSize     int
+	PlatformID   *int64
+	Status       Status
+	AudienceType AudienceType
+	Keyword      string
+	From         *time.Time
+	To           *time.Time
+}
+
 func NormalizeDraft(input DraftInput) (DraftInput, error) {
 	input.Title = strings.TrimSpace(input.Title)
 	cleaned, err := notification.SanitizeContent(input.ContentHTML)

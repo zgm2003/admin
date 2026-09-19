@@ -35,20 +35,50 @@ func TestDispatchRelayReschedulesFailureAndMarksConflict(t *testing.T) {
 	}
 }
 
+func TestDispatchRelayReportsPersistenceFailures(t *testing.T) {
+	tests := []struct {
+		name       string
+		queueError error
+		markError  error
+		reschedule error
+	}{
+		{name: "mark after enqueue", markError: errors.New("mark failed")},
+		{name: "reschedule after enqueue failure", queueError: errors.New("redis down"), reschedule: errors.New("reschedule failed")},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repo := &dispatchRepositoryStub{rows: []DispatchClaim{{ID: 1, TaskID: 42, BatchNo: 0}}, markErr: test.markError, rescheduleErr: test.reschedule}
+			queue := &dispatchQueueStub{errors: []error{test.queueError}}
+			count, err := NewDispatchRelay(repo, queue, nil).RunOnce(context.Background())
+			if err == nil || count != 0 {
+				t.Fatalf("count=%d err=%v", count, err)
+			}
+		})
+	}
+}
+
 type dispatchRepositoryStub struct {
-	rows        []DispatchClaim
-	marked      []int64
-	rescheduled []int64
+	rows          []DispatchClaim
+	marked        []int64
+	rescheduled   []int64
+	markErr       error
+	rescheduleErr error
 }
 
 func (s *dispatchRepositoryStub) ClaimDispatch(context.Context, int, string, time.Time, time.Duration) ([]DispatchClaim, error) {
 	return s.rows, nil
 }
 func (s *dispatchRepositoryStub) MarkDispatch(_ context.Context, id int64, _ string, _ time.Time) error {
+	if s.markErr != nil {
+		return s.markErr
+	}
 	s.marked = append(s.marked, id)
 	return nil
 }
 func (s *dispatchRepositoryStub) RescheduleDispatch(_ context.Context, id int64, _ string, _ string, _ time.Time, _ time.Time) error {
+	if s.rescheduleErr != nil {
+		return s.rescheduleErr
+	}
 	s.rescheduled = append(s.rescheduled, id)
 	return nil
 }

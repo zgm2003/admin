@@ -517,9 +517,11 @@ func runAPIRuntime(processContext context.Context, subscriber realtimeSubscriber
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- server.ListenAndServe() }()
 	var serveErr error
+	subscriberStopped := false
 	select {
 	case <-processContext.Done():
 	case err := <-subscriberDone:
+		subscriberStopped = true
 		if err == nil {
 			err = errors.New("subscriber stopped unexpectedly")
 		}
@@ -532,9 +534,11 @@ func runAPIRuntime(processContext context.Context, subscriber realtimeSubscriber
 
 	connections.BeginDrain()
 	cancelSubscriber()
-	select {
-	case <-subscriberDone:
-	case <-time.After(5 * time.Second):
+	if !subscriberStopped {
+		select {
+		case <-subscriberDone:
+		case <-time.After(5 * time.Second):
+		}
 	}
 	connections.CloseAll()
 	shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)

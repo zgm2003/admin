@@ -54,11 +54,51 @@ func TestRepositoryListFiltersStatusAcrossTheWholePage(t *testing.T) {
 	if err = db.WithContext(ctx).Model(&Task{}).Where("id=?", completed.ID).Updates(map[string]any{"status": StatusCompleted, "completed_at": time.Now().UTC()}).Error; err != nil {
 		t.Fatal(err)
 	}
-	rows, total, err := NewRepository(db).List(ctx, StatusDraft, 1, 20)
+	rows, total, err := NewRepository(db).List(ctx, ListQuery{Status: StatusDraft, Page: 1, PageSize: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if total != 1 || len(rows) != 1 || rows[0].ID != draft.ID {
+		t.Fatalf("total=%d rows=%+v", total, rows)
+	}
+}
+
+func TestRepositoryListAppliesEveryApprovedFilter(t *testing.T) {
+	db, ctx := openTaskDB(t)
+	service := NewService(NewRepository(db))
+	matching, err := service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: "Planned Maintenance", ContentHTML: "<p>content</p>", Variant: notification.VariantWarning, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudienceRole, TargetIDs: []int64{1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: "Other", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudiencePlatform}); err != nil {
+		t.Fatal(err)
+	}
+	from := matching.CreatedAt.Add(-time.Second)
+	to := matching.CreatedAt.Add(time.Second)
+	rows, total, err := NewRepository(db).List(ctx, ListQuery{PlatformID: &matching.PlatformID, Status: StatusDraft, AudienceType: AudienceRole, Keyword: "maintenance", From: &from, To: &to, Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(rows) != 1 || rows[0].ID != matching.ID {
+		t.Fatalf("total=%d rows=%+v", total, rows)
+	}
+}
+
+func TestRepositoryListTreatsKeywordWildcardsLiterally(t *testing.T) {
+	db, ctx := openTaskDB(t)
+	service := NewService(NewRepository(db))
+	matching, err := service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: `Release 100%_ready`, ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudiencePlatform})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: `Release 100X-ready`, ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudiencePlatform}); err != nil {
+		t.Fatal(err)
+	}
+	rows, total, err := NewRepository(db).List(ctx, ListQuery{Keyword: `%_`, Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(rows) != 1 || rows[0].ID != matching.ID {
 		t.Fatalf("total=%d rows=%+v", total, rows)
 	}
 }
@@ -136,6 +176,35 @@ func TestRepositoryPlatformOptionsRejectIncompleteCapabilityFacts(t *testing.T) 
 	}
 	if _, err := NewRepository(db).Options(ctx, "platform", "", 0, 50); err == nil {
 		t.Fatal("incomplete platform notification capability was silently skipped")
+	}
+}
+
+func TestRepositoryOptionsTreatKeywordWildcardsAndBackslashesLiterally(t *testing.T) {
+	db, ctx := openTaskDB(t)
+	if err := db.WithContext(ctx).Exec(`UPDATE permission_auth_platform SET name=? WHERE id=1`, `Admin 100%_C:\west`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.WithContext(ctx).Exec(`UPDATE user_account SET username=? WHERE id=1`, `user%_C:\west`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.WithContext(ctx).Exec(`UPDATE permission_role SET name=? WHERE id=1`, `role%_C:\west`).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		kind string
+		want int64
+	}{
+		{kind: "platform", want: 1},
+		{kind: "user", want: 1},
+		{kind: "role", want: 1},
+	} {
+		rows, err := NewRepository(db).Options(ctx, test.kind, `%_C:\`, 0, 50)
+		if err != nil {
+			t.Fatalf("kind=%s: %v", test.kind, err)
+		}
+		if len(rows) != 1 || rows[0].ID != test.want {
+			t.Fatalf("kind=%s rows=%+v", test.kind, rows)
+		}
 	}
 }
 func openTaskDB(t *testing.T) (*gorm.DB, context.Context) {

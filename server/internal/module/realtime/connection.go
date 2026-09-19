@@ -20,19 +20,23 @@ type Connection struct {
 	SessionID    int64
 	send         chan []byte
 	closeOnce    sync.Once
+	finalizeOnce sync.Once
+	closeSignal  chan struct{}
 	closeFn      func(int, string)
 	mu           sync.Mutex
 	closed       bool
 	closeCode    int
+	closeReason  string
 }
 
 func NewConnection(platformID, userID, sessionID int64, capacity int, closeFn func(int, string)) *Connection {
 	if capacity < 1 {
 		capacity = 128
 	}
-	return &Connection{PlatformID: platformID, UserID: userID, SessionID: sessionID, send: make(chan []byte, capacity), closeFn: closeFn}
+	return &Connection{PlatformID: platformID, UserID: userID, SessionID: sessionID, send: make(chan []byte, capacity), closeSignal: make(chan struct{}), closeFn: closeFn}
 }
-func (c *Connection) Send() <-chan []byte { return c.send }
+func (c *Connection) Send() <-chan []byte   { return c.send }
+func (c *Connection) Done() <-chan struct{} { return c.closeSignal }
 func (c *Connection) enqueue(payload []byte) bool {
 	select {
 	case c.send <- append([]byte(nil), payload...):
@@ -46,9 +50,18 @@ func (c *Connection) Close(code int, reason string) {
 		c.mu.Lock()
 		c.closed = true
 		c.closeCode = code
+		c.closeReason = reason
 		c.mu.Unlock()
-		if c.closeFn != nil {
-			c.closeFn(code, reason)
+		close(c.closeSignal)
+	})
+}
+func (c *Connection) finalizeClose() {
+	c.finalizeOnce.Do(func() {
+		c.mu.Lock()
+		code, reason, closeFn := c.closeCode, c.closeReason, c.closeFn
+		c.mu.Unlock()
+		if closeFn != nil {
+			closeFn(code, reason)
 		}
 	})
 }

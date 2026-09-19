@@ -49,12 +49,12 @@ func (p *Processor) processTx(ctx context.Context, tx *gorm.DB, payload BatchPay
 		return fmt.Errorf("%w: metadata", ErrFrozenFacts)
 	}
 	now := time.Now().UTC()
-	notificationID, created, err := p.ensureNotification(ctx, tx, task, now)
+	notificationID, publishedAt, created, err := p.ensureNotification(ctx, tx, task, now)
 	if err != nil {
 		return err
 	}
 	if task.AudienceType == AudiencePlatform {
-		return p.processPlatform(ctx, tx, task, notificationID, created, now)
+		return p.processPlatform(ctx, tx, task, notificationID, publishedAt, created, now)
 	}
 	users, more, err := p.batchUsers(ctx, tx, task)
 	if err != nil {
@@ -65,7 +65,7 @@ func (p *Processor) processTx(ctx context.Context, tx *gorm.DB, payload BatchPay
 		return err
 	}
 	for _, userID := range inserted {
-		if err = p.appendUserEvent(ctx, tx, task, notificationID, userID, now); err != nil {
+		if err = p.appendUserEvent(ctx, tx, task, notificationID, userID, publishedAt); err != nil {
 			return err
 		}
 	}
@@ -73,7 +73,7 @@ func (p *Processor) processTx(ctx context.Context, tx *gorm.DB, payload BatchPay
 	if len(users) > 0 {
 		nextUser = users[len(users)-1]
 	}
-	updates := map[string]any{"status": StatusProcessing, "next_user_id": nextUser, "next_batch_no": task.NextBatchNo + 1, "generated_count": gorm.Expr("generated_count + ?", len(inserted)), "published_at": now, "updated_at": now}
+	updates := map[string]any{"status": StatusProcessing, "next_user_id": nextUser, "next_batch_no": task.NextBatchNo + 1, "generated_count": gorm.Expr("generated_count + ?", len(inserted)), "published_at": gorm.Expr("COALESCE(published_at, ?)", publishedAt), "updated_at": now}
 	if !more {
 		updates["status"] = StatusCompleted
 		updates["completed_at"] = now
@@ -86,29 +86,32 @@ func (p *Processor) processTx(ctx context.Context, tx *gorm.DB, payload BatchPay
 	}
 	return nil
 }
-func (p *Processor) ensureNotification(ctx context.Context, tx *gorm.DB, task Task, now time.Time) (int64, bool, error) {
+func (p *Processor) ensureNotification(ctx context.Context, tx *gorm.DB, task Task, now time.Time) (int64, time.Time, bool, error) {
 	audience := notification.AudienceTargeted
 	if task.AudienceType == AudiencePlatform {
 		audience = notification.AudiencePlatform
 	}
 	result := tx.WithContext(ctx).Exec(`INSERT INTO message_notification(platform_id,source_task_id,source_type,source_key,audience_type,audience_max_user_id,title,content_html,summary,variant,priority,link_type,link,published_at,created_at,updated_at) VALUES(?,?,'message.notificationtask',?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_task_id) WHERE source_task_id IS NOT NULL DO NOTHING`, task.PlatformID, task.ID, fmt.Sprint(task.ID), audience, *task.AudienceMaxUserID, task.Title, task.ContentHTML, task.Summary, task.Variant, task.Priority, task.LinkType, task.Link, now, now, now)
 	if result.Error != nil {
-		return 0, false, result.Error
+		return 0, time.Time{}, false, result.Error
 	}
-	var id int64
-	if err := tx.WithContext(ctx).Raw(`SELECT id FROM message_notification WHERE source_task_id=?`, task.ID).Scan(&id).Error; err != nil || id == 0 {
-		return 0, false, errors.New("notification creation returned no row")
+	var row struct {
+		ID          int64
+		PublishedAt time.Time
 	}
-	return id, result.RowsAffected == 1, nil
+	if err := tx.WithContext(ctx).Raw(`SELECT id,published_at FROM message_notification WHERE source_task_id=?`, task.ID).Scan(&row).Error; err != nil || row.ID == 0 || row.PublishedAt.IsZero() {
+		return 0, time.Time{}, false, errors.New("notification creation returned no row")
+	}
+	return row.ID, row.PublishedAt.UTC(), result.RowsAffected == 1, nil
 }
-func (p *Processor) processPlatform(ctx context.Context, tx *gorm.DB, task Task, notificationID int64, created bool, now time.Time) error {
+func (p *Processor) processPlatform(ctx context.Context, tx *gorm.DB, task Task, notificationID int64, publishedAt time.Time, created bool, now time.Time) error {
 	if created {
-		payload, _ := eventPayload(task, notificationID, now)
-		if _, err := p.realtime.AppendTx(ctx, tx, realtime.EventInput{EventID: uuid.NewString(), DedupKey: fmt.Sprintf("notification:%d:platform", notificationID), PlatformID: task.PlatformID, EventType: realtime.EventNotificationCreated, TargetType: realtime.TargetPlatform, AudienceMaxUserID: task.AudienceMaxUserID, Payload: payload, OccurredAt: now}); err != nil {
+		payload, _ := eventPayload(task, notificationID, publishedAt)
+		if _, err := p.realtime.AppendTx(ctx, tx, realtime.EventInput{EventID: uuid.NewString(), DedupKey: fmt.Sprintf("notification:%d:platform", notificationID), PlatformID: task.PlatformID, EventType: realtime.EventNotificationCreated, TargetType: realtime.TargetPlatform, AudienceMaxUserID: task.AudienceMaxUserID, Payload: payload, OccurredAt: publishedAt}); err != nil {
 			return err
 		}
 	}
-	return tx.WithContext(ctx).Model(&Task{}).Where("id=?", task.ID).Updates(map[string]any{"status": StatusCompleted, "generated_count": 1, "next_batch_no": task.NextBatchNo + 1, "published_at": now, "completed_at": now, "updated_at": now}).Error
+	return tx.WithContext(ctx).Model(&Task{}).Where("id=?", task.ID).Updates(map[string]any{"status": StatusCompleted, "generated_count": 1, "next_batch_no": task.NextBatchNo + 1, "published_at": gorm.Expr("COALESCE(published_at, ?)", publishedAt), "completed_at": now, "updated_at": now}).Error
 }
 func (p *Processor) batchUsers(ctx context.Context, tx *gorm.DB, task Task) ([]int64, bool, error) {
 	var ids []int64
@@ -143,9 +146,9 @@ func (p *Processor) insertRecipients(ctx context.Context, tx *gorm.DB, platformI
 	}
 	return inserted, nil
 }
-func (p *Processor) appendUserEvent(ctx context.Context, tx *gorm.DB, task Task, notificationID, userID int64, now time.Time) error {
-	payload, _ := eventPayload(task, notificationID, now)
-	_, err := p.realtime.AppendTx(ctx, tx, realtime.EventInput{EventID: uuid.NewString(), DedupKey: fmt.Sprintf("notification:%d:user:%d", notificationID, userID), PlatformID: task.PlatformID, EventType: realtime.EventNotificationCreated, TargetType: realtime.TargetUser, TargetUserID: &userID, Payload: payload, OccurredAt: now})
+func (p *Processor) appendUserEvent(ctx context.Context, tx *gorm.DB, task Task, notificationID, userID int64, publishedAt time.Time) error {
+	payload, _ := eventPayload(task, notificationID, publishedAt)
+	_, err := p.realtime.AppendTx(ctx, tx, realtime.EventInput{EventID: uuid.NewString(), DedupKey: fmt.Sprintf("notification:%d:user:%d", notificationID, userID), PlatformID: task.PlatformID, EventType: realtime.EventNotificationCreated, TargetType: realtime.TargetUser, TargetUserID: &userID, Payload: payload, OccurredAt: publishedAt})
 	return err
 }
 func eventPayload(task Task, notificationID int64, publishedAt time.Time) (json.RawMessage, error) {

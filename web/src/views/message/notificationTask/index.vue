@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import * as taskApi from '@/api/message/notificationTask'
-import type { TableColumn, TablePaginationState } from '@/components/AppTable/types'
+import type { SearchFormModel } from '@/components/AppSearch'
+import type { TablePaginationState } from '@/components/AppTable/types'
 import { usePermissionStore } from '@/store/permission'
 import NotificationEditor from './components/NotificationEditor/index.vue'
+import NotificationTaskSearch from './components/NotificationTaskSearch/index.vue'
+import NotificationTaskTable from './components/NotificationTaskTable/index.vue'
 import NotificationTaskDetail from './components/NotificationTaskDetail/index.vue'
 import { useNotificationTaskOptions } from './useNotificationTaskOptions'
 
@@ -15,7 +18,11 @@ const { t } = useI18n()
 const rows = ref<taskApi.NotificationTaskListItem[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
+const platformIDFilter = ref('')
 const statusFilter = ref<taskApi.NotificationTaskStatus | ''>('')
+const audienceFilter = ref<taskApi.NotificationAudience | ''>('')
+const keywordFilter = ref('')
+const timeRange = ref<[] | [string, string]>([])
 const pagination = reactive<TablePaginationState>({ currentPage: 1, pageSize: 20, total: 0 })
 const dialogOpen = ref(false)
 const dialogMode = ref<'create' | 'edit' | 'detail'>('create')
@@ -50,39 +57,57 @@ const {
   targetState,
 } = useNotificationTaskOptions(
   () => form.audienceType,
+  () => (dialogMode.value === 'create' ? 'create' : 'update'),
   () => t('notificationTask.optionFailed'),
 )
 const can = (code: string): boolean => access.hasPermission(code)
-const canUseDetail = computed(() => can('message:notificationTask:detail'))
 const readonly = computed(() => dialogMode.value === 'detail')
 const dialogTitle = computed(() =>
   dialogMode.value === 'detail'
     ? t('notificationTask.detailTitle')
     : t('notificationTask.dialogTitle'),
 )
-const columns = computed<TableColumn<taskApi.NotificationTaskListItem>[]>(() => [
-  { prop: 'title', label: t('notificationTask.title'), minWidth: 180 },
-  { prop: 'platformId', label: t('notificationTask.platform'), width: 100 },
-  { prop: 'audienceType', label: t('notificationTask.audienceLabel'), width: 110 },
-  { prop: 'status', label: t('notificationTask.statusLabel'), width: 110 },
-  { prop: 'generatedCount', label: t('notificationTask.generatedCount'), width: 120 },
-  { prop: 'scheduledAt', label: t('notificationTask.scheduledAt'), minWidth: 170 },
-  { prop: 'submittedAt', label: t('notificationTask.submittedAt'), minWidth: 170 },
-  { prop: 'completedAt', label: t('notificationTask.completedAt'), minWidth: 170 },
-  { key: 'actions', label: t('notificationTask.actions'), width: 300 },
-])
-const statusOptions = computed(() => [
-  { value: '', label: t('notificationTask.statusAll') },
-  ...(
-    ['draft', 'scheduled', 'queued', 'processing', 'completed', 'failed', 'canceled'] as const
-  ).map((value) => ({ value, label: t(`notificationTask.status.${value}`) })),
-])
 const audienceOptions = computed(() =>
   (['platform', 'user', 'role'] as const).map((value) => ({
     value,
     label: t(`notificationTask.audience.${value}`),
   })),
 )
+const searchModel = computed<SearchFormModel>({
+  get: () => ({
+    platformId: platformIDFilter.value,
+    status: statusFilter.value,
+    audienceType: audienceFilter.value,
+    keyword: keywordFilter.value,
+    timeRange: timeRange.value,
+  }),
+  set: (value) => {
+    platformIDFilter.value =
+      typeof value.platformId === 'string' || typeof value.platformId === 'number'
+        ? String(value.platformId)
+        : ''
+    statusFilter.value =
+      typeof value.status === 'string' &&
+      ['draft', 'scheduled', 'queued', 'processing', 'completed', 'failed', 'canceled'].includes(
+        value.status,
+      )
+        ? (value.status as taskApi.NotificationTaskStatus)
+        : ''
+    audienceFilter.value =
+      value.audienceType === 'user' ||
+      value.audienceType === 'role' ||
+      value.audienceType === 'platform'
+        ? value.audienceType
+        : ''
+    keywordFilter.value = typeof value.keyword === 'string' ? value.keyword : ''
+    timeRange.value =
+      Array.isArray(value.timeRange) &&
+      value.timeRange.length === 2 &&
+      value.timeRange.every((item) => typeof item === 'string')
+        ? [value.timeRange[0], value.timeRange[1]]
+        : []
+  },
+})
 const variantOptions = computed(() =>
   (['info', 'success', 'warning', 'error'] as const).map((value) => ({
     value,
@@ -105,11 +130,16 @@ async function load(): Promise<void> {
   loading.value = true
   errorMessage.value = ''
   try {
-    const result = await taskApi.listNotificationTasks(
-      pagination.currentPage,
-      pagination.pageSize,
-      statusFilter.value,
-    )
+    const platformID = platformIDFilter.value.trim()
+    const result = await taskApi.listNotificationTasks({
+      page: pagination.currentPage,
+      pageSize: pagination.pageSize,
+      ...(platformID === '' ? {} : { platformId: Number(platformID) }),
+      ...(statusFilter.value === '' ? {} : { status: statusFilter.value }),
+      ...(audienceFilter.value === '' ? {} : { audienceType: audienceFilter.value }),
+      ...(keywordFilter.value.trim() === '' ? {} : { keyword: keywordFilter.value.trim() }),
+      ...(timeRange.value.length === 0 ? {} : { from: timeRange.value[0], to: timeRange.value[1] }),
+    })
     rows.value = result.list
     pagination.total = result.total
   } catch (error) {
@@ -158,7 +188,10 @@ async function loadDetail(id: number, mode: 'edit' | 'detail'): Promise<void> {
   dialogOpen.value = true
   dialogLoading.value = true
   try {
-    const row = await taskApi.getNotificationTask(id)
+    const row =
+      mode === 'edit'
+        ? await taskApi.getNotificationTaskForUpdate(id)
+        : await taskApi.getNotificationTask(id)
     applyDetail(row)
     if (mode === 'edit') {
       await loadOptions('platform')
@@ -230,11 +263,7 @@ async function command(
   const result = await taskApi.commandNotificationTask(row.id, action)
   ElMessage.success(t(`notificationTask.${action}Success`))
   await load()
-  if (
-    action === 'copy' &&
-    can('message:notificationTask:detail') &&
-    can('message:notificationTask:update')
-  )
+  if (action === 'copy' && can('message:notificationTask:update'))
     await loadDetail(result.id, 'edit')
 }
 
@@ -243,86 +272,45 @@ function updatePagination(next: TablePaginationState): void {
   void load()
 }
 
-onMounted(() => void load())
-watch(statusFilter, () => {
+function search(): void {
+  const platformID = platformIDFilter.value.trim()
+  if (platformID !== '' && (!/^\d+$/.test(platformID) || Number(platformID) < 1)) {
+    ElMessage.warning(t('notificationTask.platformIdInvalid'))
+    return
+  }
   pagination.currentPage = 1
   void load()
-})
+}
+
+function resetSearch(): void {
+  platformIDFilter.value = ''
+  statusFilter.value = ''
+  audienceFilter.value = ''
+  keywordFilter.value = ''
+  timeRange.value = []
+  pagination.currentPage = 1
+  void load()
+}
+
+onMounted(() => void load())
 </script>
 
 <template>
   <AppPage>
-    <AppTable
-      :columns="columns"
-      :data="rows"
+    <NotificationTaskSearch v-model="searchModel" @query="search" @reset="resetSearch" />
+    <NotificationTaskTable
+      :rows="rows"
       :loading="loading"
       :pagination="pagination"
-      :result-state="errorMessage ? 'error' : rows.length === 0 ? 'empty' : 'success'"
-      :status-message="errorMessage"
+      :error-message="errorMessage"
+      @create="openCreate"
+      @detail="openDetail"
+      @edit="openEdit"
+      @remove="remove"
+      @command="command"
       @refresh="load"
       @update:pagination="updatePagination"
-    >
-      <template #toolbar-left>
-        <el-select-v2 v-model="statusFilter" :options="statusOptions" />
-      </template>
-      <template #toolbar-right>
-        <el-button
-          v-if="can('message:notificationTask:create') && canUseDetail"
-          data-testid="notification-task-create"
-          type="primary"
-          @click="openCreate"
-          >{{ t('notificationTask.create') }}</el-button
-        >
-      </template>
-      <template #actions="{ row }">
-        <el-button
-          v-if="canUseDetail"
-          :data-testid="`notification-task-detail-${row.id}`"
-          link
-          @click.stop="openDetail(row)"
-          >{{ t('notificationTask.detail') }}</el-button
-        >
-        <el-button
-          v-if="row.status === 'draft' && canUseDetail && can('message:notificationTask:update')"
-          :data-testid="`notification-task-edit-${row.id}`"
-          link
-          @click.stop="openEdit(row)"
-          >{{ t('notificationTask.edit') }}</el-button
-        >
-        <el-button
-          v-if="row.status === 'draft' && can('message:notificationTask:delete')"
-          :data-testid="`notification-task-delete-${row.id}`"
-          link
-          type="danger"
-          @click.stop="remove(row)"
-          >{{ t('notificationTask.delete') }}</el-button
-        >
-        <el-button
-          v-if="row.status === 'draft' && can('message:notificationTask:submit')"
-          :data-testid="`notification-task-submit-${row.id}`"
-          link
-          @click.stop="command(row, 'submit')"
-          >{{ t('notificationTask.submit') }}</el-button
-        >
-        <el-button
-          v-if="
-            ['scheduled', 'queued', 'processing'].includes(row.status) &&
-            can('message:notificationTask:cancel')
-          "
-          :data-testid="`notification-task-cancel-${row.id}`"
-          link
-          @click.stop="command(row, 'cancel')"
-          >{{ t('notificationTask.cancel') }}</el-button
-        >
-        <el-button
-          v-if="row.status !== 'draft' && can('message:notificationTask:copy')"
-          :data-testid="`notification-task-copy-${row.id}`"
-          link
-          @click.stop="command(row, 'copy')"
-          >{{ t('notificationTask.copy') }}</el-button
-        >
-      </template>
-    </AppTable>
+    />
 
     <AppDialog v-model="dialogOpen" :title="dialogTitle" width="760px" height="70vh">
       <div v-if="dialogLoading" class="notification-task-form__state">

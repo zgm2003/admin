@@ -51,6 +51,9 @@ func TestRealtimeNotificationMigrationIsIdempotent(t *testing.T) {
 	}
 	first := readRealtimeNotificationFacts(t, db, ctx)
 	assertRealtimeNotificationStructure(t, db, ctx)
+	if fingerprint := realtimeNotificationStructureFingerprint(t, db, ctx); fingerprint != "2ebc4dc2c8f4746f21d676304fa120e6" {
+		t.Fatalf("structure fingerprint=%s", fingerprint)
+	}
 	assertRealtimeNotificationSeed(t, db, ctx)
 	if first.TableCount != 10 || first.Generation != before.Generation+1 || first.OutboxCount != before.OutboxCount+1 {
 		t.Fatalf("unexpected first migration facts: before=%+v after=%+v", before, first)
@@ -75,6 +78,39 @@ func TestRealtimeNotificationMigrationIsIdempotent(t *testing.T) {
 	if !reflect.DeepEqual(first, second) {
 		t.Fatalf("migration is not idempotent:\nfirst=%+v\nsecond=%+v", first, second)
 	}
+}
+
+func realtimeNotificationStructureFingerprint(t *testing.T, db *gorm.DB, ctx context.Context) string {
+	t.Helper()
+	var fingerprint string
+	err := db.WithContext(ctx).Raw(`
+WITH targets(table_name) AS (VALUES
+  ('message_notification_task'),('message_notification_task_target'),('message_notification'),
+  ('message_notification_recipient'),('message_notification_broadcast_state'),
+  ('message_notification_mailbox_state'),('message_notification_dispatch_outbox'),
+  ('realtime_event'),('realtime_event_outbox'),('realtime_retention_state')
+), columns AS (
+  SELECT string_agg(format('%s.%s:%s:%s:%s:%s:%s:%s',column_row.table_name,column_row.ordinal_position,column_row.column_name,column_row.udt_name,column_row.is_nullable,column_row.is_identity,COALESCE(column_row.character_maximum_length::text,''),COALESCE(column_row.column_default,'')),E'\n' ORDER BY column_row.table_name,column_row.ordinal_position) AS value
+  FROM information_schema.columns column_row JOIN targets ON targets.table_name=column_row.table_name
+  WHERE column_row.table_schema=current_schema()
+), constraints AS (
+  SELECT string_agg(format('%s:%s:%s:%s',relation.relname,constraint_row.conname,constraint_row.contype,pg_get_constraintdef(constraint_row.oid,true)),E'\n' ORDER BY relation.relname,constraint_row.conname) AS value
+  FROM pg_constraint constraint_row
+  JOIN pg_class relation ON relation.oid=constraint_row.conrelid
+  JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
+  JOIN targets ON targets.table_name=relation.relname
+  WHERE namespace.nspname=current_schema()
+), indexes AS (
+  SELECT string_agg(format('%s:%s:%s',index_row.tablename,index_row.indexname,replace(index_row.indexdef,format('%I.',current_schema()),'')),E'\n' ORDER BY index_row.tablename,index_row.indexname) AS value
+  FROM pg_indexes index_row JOIN targets ON targets.table_name=index_row.tablename
+  WHERE index_row.schemaname=current_schema()
+)
+SELECT md5(concat_ws(E'\n--constraints--\n',COALESCE(columns.value,''),COALESCE(constraints.value,''),COALESCE(indexes.value,'')))
+FROM columns,constraints,indexes`).Scan(&fingerprint).Error
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fingerprint
 }
 
 func TestRealtimeNotificationMigrationPreservesValidRetentionValues(t *testing.T) {
@@ -154,6 +190,61 @@ func TestRealtimeNotificationMigrationRollsBackOnInvalidPrerequisites(t *testing
 			}
 			for _, table := range realtimeNotificationTables {
 				assertTableMissing(t, db, ctx, table)
+			}
+		})
+	}
+}
+
+func TestRealtimeNotificationMigrationRejectsPartialTargetSchema(t *testing.T) {
+	db, ctx := openRealtimeNotificationMigrationSchema(t)
+	seedRealtimeNotificationPrerequisites(t, db, ctx)
+	if err := db.WithContext(ctx).Exec(`CREATE TABLE message_notification_task(id BIGINT PRIMARY KEY)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	before := readRealtimeNotificationFacts(t, db, ctx)
+	err := db.WithContext(ctx).Exec(readRealtimeNotificationMigration(t)).Error
+	if err == nil || !strings.Contains(err.Error(), "target schema") {
+		t.Fatalf("error=%v want target schema rejection", err)
+	}
+	after := readRealtimeNotificationFacts(t, db, ctx)
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("partial schema migration did not roll back: before=%+v after=%+v", before, after)
+	}
+	for _, table := range realtimeNotificationTables[1:] {
+		assertTableMissing(t, db, ctx, table)
+	}
+}
+
+func TestRealtimeNotificationMigrationRejectsIncompatibleExistingTargetSchema(t *testing.T) {
+	mutations := []struct {
+		name string
+		sql  string
+	}{
+		{name: "missing constraint", sql: `ALTER TABLE message_notification_task DROP CONSTRAINT ck_message_notification_task_title`},
+		{name: "same name wrong constraint", sql: `ALTER TABLE message_notification_task DROP CONSTRAINT ck_message_notification_task_title; ALTER TABLE message_notification_task ADD CONSTRAINT ck_message_notification_task_title CHECK (btrim(title) <> '' AND char_length(title) <= 129)`},
+		{name: "same name wrong index", sql: `DROP INDEX ux_message_notification_source; CREATE UNIQUE INDEX ux_message_notification_source ON message_notification(source_type,source_key,platform_id)`},
+		{name: "wrong varchar length", sql: `ALTER TABLE message_notification_task ALTER COLUMN title TYPE VARCHAR(129)`},
+		{name: "wrong default", sql: `ALTER TABLE message_notification_task ALTER COLUMN next_batch_no SET DEFAULT 1`},
+	}
+	for _, mutation := range mutations {
+		t.Run(mutation.name, func(t *testing.T) {
+			db, ctx := openRealtimeNotificationMigrationSchema(t)
+			seedRealtimeNotificationPrerequisites(t, db, ctx)
+			script := readRealtimeNotificationMigration(t)
+			if err := db.WithContext(ctx).Exec(script).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.WithContext(ctx).Exec(mutation.sql).Error; err != nil {
+				t.Fatal(err)
+			}
+			before := readRealtimeNotificationFacts(t, db, ctx)
+			err := db.WithContext(ctx).Exec(script).Error
+			if err == nil || !strings.Contains(err.Error(), "target schema") {
+				t.Fatalf("error=%v want incompatible target schema rejection", err)
+			}
+			after := readRealtimeNotificationFacts(t, db, ctx)
+			if !reflect.DeepEqual(before, after) {
+				t.Fatalf("incompatible schema migration changed facts: before=%+v after=%+v", before, after)
 			}
 		})
 	}

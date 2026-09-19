@@ -14,6 +14,7 @@ vi.mock('@/api/message/notificationTask', async (original) => ({
   ...(await original()),
   listNotificationTasks: vi.fn(),
   getNotificationTask: vi.fn(),
+  getNotificationTaskForUpdate: vi.fn(),
   listNotificationTaskOptions: vi.fn(),
 }))
 
@@ -60,6 +61,7 @@ describe('notification task management', () => {
       nextAfterId: 3,
     })
     vi.mocked(api.getNotificationTask).mockResolvedValue(task)
+    vi.mocked(api.getNotificationTaskForUpdate).mockResolvedValue(task)
   })
   it('uses only the approved editor controls and HTTPS links', () => {
     expect(notificationToolbarKeys).toEqual([
@@ -118,7 +120,6 @@ describe('notification task management', () => {
   it('loads options with an ID cursor', async () => {
     usePermissionStore().permissionCodes = [
       'message:notificationTask:list',
-      'message:notificationTask:detail',
       'message:notificationTask:create',
     ]
     const wrapper = mount(Page, {
@@ -141,21 +142,53 @@ describe('notification task management', () => {
     })
     await wrapper.get('[data-testid="notification-task-create"]').trigger('click')
     await vi.waitFor(() =>
-      expect(api.listNotificationTaskOptions).toHaveBeenCalledWith('platform', {
+      expect(api.listNotificationTaskOptions).toHaveBeenCalledWith('create', 'platform', {
         afterId: 0,
         limit: 50,
       }),
     )
     await wrapper.get('[data-testid="notification-task-option-more"]').trigger('click')
-    expect(api.listNotificationTaskOptions).toHaveBeenLastCalledWith('platform', {
+    expect(api.listNotificationTaskOptions).toHaveBeenLastCalledWith('create', 'platform', {
       afterId: 3,
       limit: 50,
     })
   })
+
+  it('submits platform, status, audience, keyword, and time filters together', async () => {
+    usePermissionStore().permissionCodes = ['message:notificationTask:list']
+    const wrapper = mount(Page, {
+      global: {
+        plugins: [appI18n],
+        stubs: {
+          AppPage: { template: '<section><slot /></section>' },
+          AppSearch: {
+            emits: ['update:modelValue', 'query'],
+            template: `<button data-testid="notification-task-search" @click="$emit('update:modelValue', { platformId: '2', status: 'processing', audienceType: 'role', keyword: ' maintenance ', timeRange: ['2026-09-18T00:00:00Z', '2026-09-19T00:00:00Z'] }); $emit('query')">search</button>`,
+          },
+          AppTable: { props: ['data'], template: '<div />' },
+          AppDialog: true,
+        },
+      },
+    })
+    await vi.waitFor(() => expect(api.listNotificationTasks).toHaveBeenCalled())
+    vi.mocked(api.listNotificationTasks).mockClear()
+    await wrapper.get('[data-testid="notification-task-search"]').trigger('click')
+    await vi.waitFor(() =>
+      expect(api.listNotificationTasks).toHaveBeenCalledWith({
+        page: 1,
+        pageSize: 20,
+        platformId: 2,
+        status: 'processing',
+        audienceType: 'role',
+        keyword: 'maintenance',
+        from: '2026-09-18T00:00:00Z',
+        to: '2026-09-19T00:00:00Z',
+      }),
+    )
+  })
   it('loads exact detail before editing a draft', async () => {
     usePermissionStore().permissionCodes = [
       'message:notificationTask:list',
-      'message:notificationTask:detail',
       'message:notificationTask:update',
     ]
     const wrapper = mount(Page, {
@@ -183,7 +216,7 @@ describe('notification task management', () => {
       expect(wrapper.find('[data-testid="notification-task-edit-1"]').exists()).toBe(true),
     )
     await wrapper.get('[data-testid="notification-task-edit-1"]').trigger('click')
-    await vi.waitFor(() => expect(api.getNotificationTask).toHaveBeenCalledWith(1))
+    await vi.waitFor(() => expect(api.getNotificationTaskForUpdate).toHaveBeenCalledWith(1))
     expect(wrapper.find('[data-testid="notification-task-variant"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="notification-task-priority"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="notification-task-link-type"]').exists()).toBe(true)

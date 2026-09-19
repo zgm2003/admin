@@ -356,19 +356,24 @@ func (s *Subscriber) handleMessage(desired DesiredSubscriptions, message *goredi
 		s.report("invalid_pubsub_payload")
 		return
 	}
+	envelope, err := EncodeEnvelope(payload.Envelope)
+	if err != nil {
+		s.report("invalid_pubsub_envelope")
+		return
+	}
 	switch payload.TargetType {
 	case TargetUser:
 		if message.Channel != UserChannel(payload.PlatformID, *payload.TargetUserID) {
 			s.report("pubsub_channel_mismatch")
 			return
 		}
-		s.connections.PublishUser(payload.PlatformID, *payload.TargetUserID, []byte(message.Payload))
+		s.connections.PublishUser(payload.PlatformID, *payload.TargetUserID, envelope)
 	case TargetPlatform:
 		if message.Channel != PlatformChannel(payload.PlatformID) {
 			s.report("pubsub_channel_mismatch")
 			return
 		}
-		s.connections.PublishPlatform(payload.PlatformID, *payload.AudienceMaxUserID, []byte(message.Payload))
+		s.connections.PublishPlatform(payload.PlatformID, *payload.AudienceMaxUserID, envelope)
 	}
 }
 

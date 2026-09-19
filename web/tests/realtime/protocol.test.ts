@@ -29,7 +29,14 @@ describe('realtime protocol', () => {
         publishedAt: '2026-09-18T12:00:00Z',
       },
     ],
-    ['notification.stateChanged.v1', { notificationId: 4, operation: 'read' }],
+    [
+      'notification.stateChanged.v1',
+      { kind: 'read', notificationId: 4, readThroughNotificationId: null },
+    ],
+    [
+      'notification.stateChanged.v1',
+      { kind: 'readAll', notificationId: null, readThroughNotificationId: 4 },
+    ],
   ])('parses %s', (type, data) =>
     expect(parseRealtimeEnvelope({ ...base, type, data }).type).toBe(type),
   )
@@ -54,6 +61,14 @@ describe('realtime protocol', () => {
     ).toThrow()
     expect(() =>
       parseRealtimeEnvelope({ ...base, type: 'realtime.pong.v1', data: {}, extra: true }),
+    ).toThrow()
+
+    expect(() =>
+      parseRealtimeEnvelope({
+        ...base,
+        type: 'notification.stateChanged.v1',
+        data: { notificationId: 4, operation: 'read' },
+      }),
     ).toThrow()
   })
 })

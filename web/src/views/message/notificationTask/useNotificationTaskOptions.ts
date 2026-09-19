@@ -22,6 +22,7 @@ const newOptionState = (): OptionState => ({
 
 export function useNotificationTaskOptions(
   audience: () => taskApi.NotificationAudience,
+  intent: () => 'create' | 'update',
   optionFailedMessage: () => string,
 ) {
   const optionStates = reactive<Record<NotificationTaskOptionKind, OptionState>>({
@@ -49,7 +50,7 @@ export function useNotificationTaskOptions(
     state.error = ''
     state.loading = true
     try {
-      const result = await taskApi.listNotificationTaskOptions(kind, {
+      const result = await taskApi.listNotificationTaskOptions(intent(), kind, {
         ...(keyword.trim() === '' ? {} : { keyword: keyword.trim() }),
         afterId,
         limit: 50,

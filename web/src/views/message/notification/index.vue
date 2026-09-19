@@ -121,11 +121,9 @@ onMounted(() => void load())
           { value: 'normal', label: t('notification.normal') },
           { value: 'urgent', label: t('notification.urgent') },
         ]"
-      /><el-button
-        v-if="access.hasPermission('message:notification:read')"
-        @click="markAllRead"
-        >{{ t('notification.readAll') }}</el-button
-      >
+      /><el-button v-if="access.hasPermission('message:notification:read')" @click="markAllRead">{{
+        t('notification.readAll')
+      }}</el-button>
     </header>
     <el-empty v-if="!canList" :description="t('notification.noPermission')" />
     <div v-else-if="error" class="notification-center__state">

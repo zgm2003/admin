@@ -2,6 +2,7 @@ package notificationtask
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -60,6 +61,62 @@ func TestProcessorUserAudienceCreatesRecipientsAndEventsOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertProcessCounts(t, db, ctx, 1, 2, 2)
+}
+
+func TestProcessorKeepsPublishedAtStableAcrossBatches(t *testing.T) {
+	db, ctx := openTaskDB(t)
+	if err := db.WithContext(ctx).Exec(`INSERT INTO user_account(id,username,is_enabled,deleted_at) SELECT value,'user-' || value,1,NULL FROM generate_series(3,501) AS value`).Error; err != nil {
+		t.Fatal(err)
+	}
+	targets := make([]int64, 501)
+	for index := range targets {
+		targets[index] = int64(index + 1)
+	}
+	service := NewService(NewRepository(db))
+	task, err := service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: "two batches", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudienceUser, TargetIDs: targets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err = service.Submit(ctx, task.ID, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	processor := NewProcessor(db, realtime.NewRepository(db))
+	if err = processor.Process(ctx, BatchPayload{SchemaVersion: 1, TaskID: task.ID, BatchNo: 0}); err != nil {
+		t.Fatal(err)
+	}
+	if err = processor.Process(ctx, BatchPayload{SchemaVersion: 1, TaskID: task.ID, BatchNo: 1}); err != nil {
+		t.Fatal(err)
+	}
+
+	var notificationPublishedAt, taskPublishedAt time.Time
+	if err = db.WithContext(ctx).Raw(`SELECT published_at FROM message_notification WHERE source_task_id=?`, task.ID).Scan(&notificationPublishedAt).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = db.WithContext(ctx).Raw(`SELECT published_at FROM message_notification_task WHERE id=?`, task.ID).Scan(&taskPublishedAt).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !taskPublishedAt.Equal(notificationPublishedAt) {
+		t.Fatalf("task publishedAt=%s notification publishedAt=%s", taskPublishedAt, notificationPublishedAt)
+	}
+	var payloads [][]byte
+	if err = db.WithContext(ctx).Raw(`SELECT payload FROM realtime_event ORDER BY sequence`).Scan(&payloads).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(payloads) != 501 {
+		t.Fatalf("event payload count=%d want=501", len(payloads))
+	}
+	for index, payload := range payloads {
+		var event struct {
+			PublishedAt time.Time `json:"publishedAt"`
+		}
+		if err = json.Unmarshal(payload, &event); err != nil {
+			t.Fatalf("decode payload %d: %v", index, err)
+		}
+		if !event.PublishedAt.Equal(notificationPublishedAt) {
+			t.Fatalf("payload %d publishedAt=%s want=%s", index, event.PublishedAt, notificationPublishedAt)
+		}
+	}
 }
 
 func TestProcessorUserAndRoleAudienceUseOneKeysetSelectionQuery(t *testing.T) {

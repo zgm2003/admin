@@ -56,6 +56,7 @@ export class RealtimeRuntime {
   private resumeScheduled = false
   private attempt = 0
   private seen = new Map<string, true>()
+  private inboundQueue: Promise<void> = Promise.resolve()
   private elector: ReturnType<typeof createLeaderElector> | null = null
   private readonly dependencies: Dependencies
   constructor(dependencies: Dependencies = {}) {
@@ -64,7 +65,7 @@ export class RealtimeRuntime {
   start(subject: Subject, handlers: Handlers): void {
     this.stop()
     this.stopped = false
-    this.subject = subject
+    this.subject = { ...subject }
     this.handlers = handlers
     const storage = this.dependencies.storage ?? localStorage
     this.elector = createLeaderElector({
@@ -85,7 +86,14 @@ export class RealtimeRuntime {
     this.leaderRequired = true
     this.channel = channelFactory(realtimeChannelName(subject.platformCode, subject.userId))
     this.channel.onmessage = (message) => {
-      void this.receiveBroadcast(message.data)
+      const epoch = this.connectionEpoch
+      const activeSubject = this.subject
+      const activeHandlers = this.handlers
+      if (activeSubject === null || activeHandlers === null) return
+      this.enqueueInbound(
+        () => this.receiveBroadcast(message.data, epoch, activeSubject, activeHandlers),
+        () => undefined,
+      )
     }
     this.electOrFollow()
   }
@@ -105,6 +113,7 @@ export class RealtimeRuntime {
     this.subject = null
     this.handlers = null
     this.seen.clear()
+    this.inboundQueue = Promise.resolve()
   }
   private electOrFollow(): void {
     if (this.stopped || this.elector === null) return
@@ -164,7 +173,15 @@ export class RealtimeRuntime {
       }
       socket.onmessage = (message: MessageEvent<string>) => {
         if (this.socketValue !== socket) return
-        void this.receiveSocket(message.data).catch(() => this.failSocket(socket))
+        const activeSubject = this.subject
+        const activeHandlers = this.handlers
+        if (activeSubject === null || activeHandlers === null) return
+        this.enqueueInbound(
+          () => this.receiveSocket(message.data, socket, epoch, activeSubject, activeHandlers),
+          () => {
+            if (this.isActive(epoch, activeSubject, activeHandlers, socket)) this.failSocket(socket)
+          },
+        )
       }
       socket.onclose = () => {
         if (this.socketValue !== socket) return
@@ -223,45 +240,86 @@ export class RealtimeRuntime {
     this.seen.set(id, true)
     if (this.seen.size > 2048) this.seen.delete(this.seen.keys().next().value!)
   }
-  private async receiveSocket(raw: string): Promise<void> {
-    const socket = this.socketValue
-    if (socket === null) return
+  private enqueueInbound(run: () => Promise<void>, onError: () => void): void {
+    const next = this.inboundQueue.then(run)
+    this.inboundQueue = next.catch(onError)
+  }
+  private isActive(
+    epoch: number,
+    subject: Subject,
+    handlers: Handlers,
+    socket?: SocketLike,
+  ): boolean {
+    return (
+      !this.stopped &&
+      epoch === this.connectionEpoch &&
+      this.subject?.platformCode === subject.platformCode &&
+      this.subject.userId === subject.userId &&
+      this.handlers === handlers &&
+      (socket === undefined || this.socketValue === socket)
+    )
+  }
+  private async receiveSocket(
+    raw: string,
+    socket: SocketLike,
+    epoch: number,
+    subject: Subject,
+    handlers: Handlers,
+  ): Promise<void> {
+    if (!this.isActive(epoch, subject, handlers, socket)) return
     const event = parseRealtimeEnvelope(JSON.parse(raw) as unknown)
     if (this.seen.has(event.eventId)) return
-    await this.dispatch(event, true)
+    await this.dispatch(event, true, epoch, subject, handlers, socket)
+    if (!this.isActive(epoch, subject, handlers, socket)) return
     this.remember(event.eventId)
     this.channel?.postMessage({ schemaVersion: 1, kind: 'event', event })
     if (event.type === 'notification.created.v1' || event.type === 'notification.stateChanged.v1')
       this.scheduleResume(socket)
   }
-  private async receiveBroadcast(raw: unknown): Promise<void> {
+  private async receiveBroadcast(
+    raw: unknown,
+    epoch: number,
+    subject: Subject,
+    handlers: Handlers,
+  ): Promise<void> {
+    if (!this.isActive(epoch, subject, handlers)) return
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return
     const r = raw as Record<string, unknown>
     if (Object.keys(r).length !== 3 || r.schemaVersion !== 1 || r.kind !== 'event') return
     try {
       const event = parseRealtimeEnvelope(r.event)
       if (this.seen.has(event.eventId)) return
-      await this.dispatch(event, false)
+      await this.dispatch(event, false, epoch, subject, handlers)
+      if (!this.isActive(epoch, subject, handlers)) return
       this.remember(event.eventId)
     } catch {
       return
     }
   }
-  private async dispatch(event: RealtimeEnvelope, leader: boolean): Promise<void> {
-    if (this.subject === null || this.handlers === null) return
+  private async dispatch(
+    event: RealtimeEnvelope,
+    leader: boolean,
+    epoch: number,
+    subject: Subject,
+    handlers: Handlers,
+    socket?: SocketLike,
+  ): Promise<void> {
+    if (!this.isActive(epoch, subject, handlers, socket)) return
     if (event.type === 'realtime.resyncRequired.v1') {
-      await this.handlers.resync()
+      await handlers.resync()
+      if (!this.isActive(epoch, subject, handlers, socket)) return
       createCursorStore(this.dependencies.storage ?? localStorage).write(
-        this.subject.platformCode,
-        this.subject.userId,
+        subject.platformCode,
+        subject.userId,
         event.data.throughSequence,
       )
     } else {
-      await this.handlers.event(event)
+      await handlers.event(event)
+      if (!this.isActive(epoch, subject, handlers, socket)) return
       if (event.type === 'realtime.resumed.v1')
         createCursorStore(this.dependencies.storage ?? localStorage).write(
-          this.subject.platformCode,
-          this.subject.userId,
+          subject.platformCode,
+          subject.userId,
           event.data.throughSequence,
         )
     }
@@ -271,6 +329,6 @@ export class RealtimeRuntime {
       event.data.priority === 'urgent' &&
       this.elector?.isLeader() !== false
     )
-      await this.handlers.urgent(event)
+      await handlers.urgent(event)
   }
 }

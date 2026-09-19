@@ -111,6 +111,32 @@ try {
     }
 
     $tableCountQuery = "SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema() AND table_name IN ('message_notification_task','message_notification_task_target','message_notification','message_notification_recipient','message_notification_broadcast_state','message_notification_mailbox_state','message_notification_dispatch_outbox','realtime_event','realtime_event_outbox','realtime_retention_state')"
+    $expectedSchemaFingerprint = '2ebc4dc2c8f4746f21d676304fa120e6'
+    $schemaFingerprintQuery = @"
+WITH targets(table_name) AS (VALUES
+  ('message_notification_task'),('message_notification_task_target'),('message_notification'),
+  ('message_notification_recipient'),('message_notification_broadcast_state'),
+  ('message_notification_mailbox_state'),('message_notification_dispatch_outbox'),
+  ('realtime_event'),('realtime_event_outbox'),('realtime_retention_state')
+), columns AS (
+  SELECT string_agg(format('%s.%s:%s:%s:%s:%s:%s:%s',column_row.table_name,column_row.ordinal_position,column_row.column_name,column_row.udt_name,column_row.is_nullable,column_row.is_identity,COALESCE(column_row.character_maximum_length::text,''),COALESCE(column_row.column_default,'')),E'\n' ORDER BY column_row.table_name,column_row.ordinal_position) AS value
+  FROM information_schema.columns column_row JOIN targets ON targets.table_name=column_row.table_name
+  WHERE column_row.table_schema=current_schema()
+), constraints AS (
+  SELECT string_agg(format('%s:%s:%s:%s',relation.relname,constraint_row.conname,constraint_row.contype,pg_get_constraintdef(constraint_row.oid,true)),E'\n' ORDER BY relation.relname,constraint_row.conname) AS value
+  FROM pg_constraint constraint_row
+  JOIN pg_class relation ON relation.oid=constraint_row.conrelid
+  JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
+  JOIN targets ON targets.table_name=relation.relname
+  WHERE namespace.nspname=current_schema()
+), indexes AS (
+  SELECT string_agg(format('%s:%s:%s',index_row.tablename,index_row.indexname,replace(index_row.indexdef,format('%I.',current_schema()),'')),E'\n' ORDER BY index_row.tablename,index_row.indexname) AS value
+  FROM pg_indexes index_row JOIN targets ON targets.table_name=index_row.tablename
+  WHERE index_row.schemaname=current_schema()
+)
+SELECT md5(concat_ws(E'\n--constraints--\n',COALESCE(columns.value,''),COALESCE(constraints.value,''),COALESCE(indexes.value,'')))
+FROM columns,constraints,indexes
+"@
     $settingFactsQuery = "SELECT md5(COALESCE(string_agg(concat_ws('|',setting_key,value,value_type,is_enabled,is_builtin,description,created_at,updated_at),';' ORDER BY setting_key),'')) FROM system_setting WHERE deleted_at IS NULL AND setting_key IN ('message.notification.retention_days','realtime.event.retention_days')"
     $generationFactsQuery = "SELECT md5(concat(COALESCE((SELECT namespace || '|' || scope_key || '|' || generation || '|' || created_at || '|' || updated_at FROM system_config_cache_generation WHERE namespace='system.setting' AND scope_key='global'),''),'#',COALESCE((SELECT string_agg(concat_ws('|',id,generation,attempts,available_at,locked_until,lock_token,last_error,published_at,created_at,updated_at),';' ORDER BY id) FROM system_config_cache_outbox WHERE namespace='system.setting' AND scope_key='global'),'')))"
     $menuFactsQuery = "SELECT md5(COALESCE(string_agg(concat_ws('|',id,platform_id,parent_id,menu_type,name,code,i18n_key,path,component_path,icon,sort_order,is_enabled,is_hidden,created_at,updated_at),';' ORDER BY id),'')) FROM permission_menu WHERE deleted_at IS NULL AND (code LIKE 'message:notification:%' OR code LIKE 'message:notificationTask:%')"
@@ -118,10 +144,11 @@ try {
     $accessFactsQuery = "SELECT md5(COALESCE(string_agg(user_id || '|' || version || '|' || created_at || '|' || updated_at,';' ORDER BY user_id),'')) FROM permission_access_version"
     $adminVersionQuery = "SELECT menu_version FROM permission_auth_platform WHERE code='admin' AND is_enabled=1 AND deleted_at IS NULL"
     $canvasFingerprintQuery = "SELECT md5(concat(p.menu_version,'#',COALESCE(string_agg(concat_ws('|',m.id,m.parent_id,m.menu_type,m.code,m.path,m.component_path,m.is_hidden,m.is_enabled,m.created_at,m.updated_at),';' ORDER BY m.id),''))) FROM permission_auth_platform p LEFT JOIN permission_menu m ON m.platform_id=p.id AND m.deleted_at IS NULL WHERE p.code='canvas' AND p.deleted_at IS NULL GROUP BY p.id,p.menu_version"
-    $completeQuery = "SELECT CASE WHEN ($tableCountQuery)=10 AND (SELECT count(*) FROM permission_menu WHERE platform_id=(SELECT id FROM permission_auth_platform WHERE code='admin' AND deleted_at IS NULL) AND deleted_at IS NULL AND (code LIKE 'message:notification:%' OR code LIKE 'message:notificationTask:%'))=13 AND (SELECT count(*) FROM system_setting WHERE deleted_at IS NULL AND setting_key IN ('message.notification.retention_days','realtime.event.retention_days') AND value_type=2 AND is_enabled=1 AND is_builtin=1)=2 THEN 'yes' ELSE 'no' END"
+    $completeQuery = "SELECT CASE WHEN ($tableCountQuery)=10 AND ($schemaFingerprintQuery)='$expectedSchemaFingerprint' AND (SELECT count(*) FROM permission_menu WHERE platform_id=(SELECT id FROM permission_auth_platform WHERE code='admin' AND deleted_at IS NULL) AND deleted_at IS NULL AND (code LIKE 'message:notification:%' OR code LIKE 'message:notificationTask:%'))=13 AND (SELECT count(*) FROM system_setting WHERE deleted_at IS NULL AND setting_key IN ('message.notification.retention_days','realtime.event.retention_days') AND value_type=2 AND is_enabled=1 AND is_builtin=1)=2 THEN 'yes' ELSE 'no' END"
 
     $before = [ordered]@{
         complete       = Get-PsqlValue -Query $completeQuery
+        structure      = Get-PsqlValue -Query $schemaFingerprintQuery
         setting        = Get-PsqlValue -Query $settingFactsQuery
         generation     = Get-PsqlValue -Query $generationFactsQuery
         menu            = Get-PsqlValue -Query $menuFactsQuery
@@ -130,7 +157,7 @@ try {
         adminVersion    = Get-PsqlValue -Query $adminVersionQuery
         canvas          = Get-PsqlValue -Query $canvasFingerprintQuery
     }
-    Write-Host ("迁移前指纹：complete={0} setting={1} generation={2} menu={3} grants={4} access={5} adminMenuVersion={6} canvas={7}" -f $before.complete,$before.setting,$before.generation,$before.menu,$before.grants,$before.access,$before.adminVersion,$before.canvas)
+    Write-Host ("迁移前指纹：complete={0} structure={1} setting={2} generation={3} menu={4} grants={5} access={6} adminMenuVersion={7} canvas={8}" -f $before.complete,$before.structure,$before.setting,$before.generation,$before.menu,$before.grants,$before.access,$before.adminVersion,$before.canvas)
 
     $backupDir = Join-Path $env:LOCALAPPDATA ("Admin\backups\realtime-notification-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
     New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
@@ -156,6 +183,7 @@ try {
     } finally { Pop-Location }
 
     Assert-PsqlValue '十张目标表' $tableCountQuery '10'
+    Assert-PsqlValue '目标 schema 结构指纹' $schemaFingerprintQuery $expectedSchemaFingerprint
     Assert-PsqlValue '两个必需 setting 合法' "SELECT CASE WHEN (SELECT count(*) FROM system_setting WHERE deleted_at IS NULL AND setting_key='message.notification.retention_days' AND value_type=2 AND is_enabled=1 AND is_builtin=1 AND value ~ '^[0-9]+$' AND value::BIGINT BETWEEN 30 AND 3650)=1 AND (SELECT count(*) FROM system_setting WHERE deleted_at IS NULL AND setting_key='realtime.event.retention_days' AND value_type=2 AND is_enabled=1 AND is_builtin=1 AND value ~ '^[0-9]+$' AND value::BIGINT BETWEEN 1 AND 30)=1 THEN 'ok' ELSE 'fail' END" 'ok'
     Assert-PsqlValue 'Admin 通知菜单节点' "SELECT count(*) FROM permission_menu WHERE platform_id=(SELECT id FROM permission_auth_platform WHERE code='admin' AND deleted_at IS NULL) AND deleted_at IS NULL AND (code LIKE 'message:notification:%' OR code LIKE 'message:notificationTask:%')" '13'
     Assert-PsqlValue '非 Admin 未创建通知节点' "SELECT count(*) FROM permission_menu WHERE platform_id<>(SELECT id FROM permission_auth_platform WHERE code='admin' AND deleted_at IS NULL) AND deleted_at IS NULL AND (code LIKE 'message:notification:%' OR code LIKE 'message:notificationTask:%')" '0'
@@ -164,6 +192,7 @@ try {
     Assert-PsqlValue 'Canvas 菜单和版本保持' $canvasFingerprintQuery "$($before.canvas)"
 
     $after = [ordered]@{
+        structure   = Get-PsqlValue -Query $schemaFingerprintQuery
         setting     = Get-PsqlValue -Query $settingFactsQuery
         generation  = Get-PsqlValue -Query $generationFactsQuery
         menu         = Get-PsqlValue -Query $menuFactsQuery
@@ -172,10 +201,10 @@ try {
         adminVersion = Get-PsqlValue -Query $adminVersionQuery
         canvas       = Get-PsqlValue -Query $canvasFingerprintQuery
     }
-    Write-Host ("迁移后指纹：setting={0} generation={1} menu={2} grants={3} access={4} adminMenuVersion={5} canvas={6}" -f $after.setting,$after.generation,$after.menu,$after.grants,$after.access,$after.adminVersion,$after.canvas)
+    Write-Host ("迁移后指纹：structure={0} setting={1} generation={2} menu={3} grants={4} access={5} adminMenuVersion={6} canvas={7}" -f $after.structure,$after.setting,$after.generation,$after.menu,$after.grants,$after.access,$after.adminVersion,$after.canvas)
 
     if ($before.complete -eq 'yes') {
-        foreach ($name in @('setting','generation','menu','grants','access','adminVersion','canvas')) {
+        foreach ($name in @('structure','setting','generation','menu','grants','access','adminVersion','canvas')) {
             if ($before[$name] -ne $after[$name]) { throw "幂等验证失败：$name 指纹发生变化。" }
         }
         Write-Host '幂等验证通过：完整事实与版本指纹均未变化。'
