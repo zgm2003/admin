@@ -27,10 +27,11 @@ type Claims struct {
 }
 
 type TokenIdentity struct {
-	UserID    int64
-	SessionID int64
-	Platform  string
-	Version   int64
+	UserID          int64
+	SessionID       int64
+	Platform        string
+	Version         int64
+	AccessExpiresAt time.Time
 }
 
 func NewJWT(signingKey []byte) *JWT {
@@ -92,7 +93,7 @@ func (j *JWT) Parse(raw string) (TokenIdentity, error) {
 	if claims.IssuedAt == nil || claims.NotBefore == nil || claims.ExpiresAt == nil {
 		return TokenIdentity{}, fmt.Errorf("Access Token requires issued-at, not-before, and expiry claims")
 	}
-	identity := TokenIdentity{UserID: claims.UserID, SessionID: claims.SessionID, Platform: claims.Platform, Version: claims.Version}
+	identity := TokenIdentity{UserID: claims.UserID, SessionID: claims.SessionID, Platform: claims.Platform, Version: claims.Version, AccessExpiresAt: claims.ExpiresAt.Time.UTC()}
 	if err := validateIdentity(identity); err != nil {
 		return TokenIdentity{}, err
 	}
@@ -102,6 +103,9 @@ func (j *JWT) Parse(raw string) (TokenIdentity, error) {
 func validateIdentity(identity TokenIdentity) error {
 	if identity.UserID <= 0 || identity.SessionID <= 0 || identity.Version <= 0 {
 		return fmt.Errorf("identity user, session, and version must be positive")
+	}
+	if !identity.AccessExpiresAt.IsZero() && identity.AccessExpiresAt.Location() != time.UTC {
+		return fmt.Errorf("identity Access Token expiry must be UTC")
 	}
 	if err := authclient.ValidatePlatform(identity.Platform); err != nil {
 		return fmt.Errorf("identity platform is invalid: %w", err)

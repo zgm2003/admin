@@ -38,6 +38,17 @@ export function expectBoolean(value: unknown, context: string): boolean {
   return value
 }
 
+export function expectISODate(value: unknown, context: string): string {
+  const parsed = expectString(value, context)
+  if (
+    !/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/.test(parsed) ||
+    Number.isNaN(Date.parse(parsed))
+  ) {
+    throw new ProtocolError(`${context} must be an ISO timestamp`)
+  }
+  return parsed
+}
+
 export function expectArray(value: unknown, context: string): unknown[] {
   if (!Array.isArray(value)) throw new ProtocolError(`${context} must be an array`)
   return value

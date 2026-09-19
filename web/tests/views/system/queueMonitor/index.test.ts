@@ -15,7 +15,9 @@ vi.mock('@/api/system/queueMonitor', () => ({
 describe('queue monitor page', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    vi.mocked(api.grantQueueMonitor).mockReset().mockResolvedValue({ expiresAt: '2026-09-14T12:00:00Z' })
+    vi.mocked(api.grantQueueMonitor)
+      .mockReset()
+      .mockResolvedValue({ expiresAt: '2026-09-14T12:00:00Z' })
   })
 
   it('loads iframe only after grant and renews without changing src', async () => {

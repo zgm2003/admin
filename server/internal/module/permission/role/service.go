@@ -23,8 +23,9 @@ const (
 )
 
 type Service struct {
-	repository        *Repository
-	accessInvalidator *permissionstate.Invalidator
+	repository            *Repository
+	accessInvalidator     *permissionstate.Invalidator
+	notificationBaseCodes []string
 }
 
 type ListQuery struct {
@@ -55,8 +56,12 @@ type UpdateInput struct {
 	Name string
 }
 
-func NewService(repository *Repository, accessInvalidator *permissionstate.Invalidator) *Service {
-	return &Service{repository: repository, accessInvalidator: accessInvalidator}
+func NewService(repository *Repository, accessInvalidator *permissionstate.Invalidator, notificationBaseCodes ...[]string) *Service {
+	service := &Service{repository: repository, accessInvalidator: accessInvalidator}
+	if len(notificationBaseCodes) > 0 {
+		service.notificationBaseCodes = append([]string(nil), notificationBaseCodes[0]...)
+	}
+	return service
 }
 
 func (s *Service) EnsureSystemRoles(ctx context.Context) error {
@@ -143,7 +148,25 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 	created := Role{
 		Code: input.Code, Name: input.Name, IsDefault: yesno.No, IsEnabled: yesno.Yes,
 	}
-	if err := s.repository.Create(ctx, &created); err != nil {
+	err := s.repository.Transaction(ctx, func(repository *Repository) error {
+		if err := repository.Create(ctx, &created); err != nil {
+			return err
+		}
+		if len(s.notificationBaseCodes) == 0 {
+			return nil
+		}
+		menuIDs, err := repository.FindNotificationBaseMenuIDs(ctx, s.notificationBaseCodes)
+		if err != nil {
+			return err
+		}
+		rows := make([]menu.RoleMenu, 0, len(menuIDs))
+		now := time.Now().UTC()
+		for _, menuID := range menuIDs {
+			rows = append(rows, menu.RoleMenu{RoleID: created.ID, MenuID: menuID, CreatedAt: now, UpdatedAt: now})
+		}
+		return repository.CreateRoleMenus(ctx, rows)
+	})
+	if err != nil {
 		return 0, mapRoleRepositoryError(err, input.Code, input.Name)
 	}
 	return created.ID, nil

@@ -25,6 +25,8 @@ import (
 	ratelimitpolicy "admin/server/internal/module/message/mail/rateLimitPolicy"
 	recipientrule "admin/server/internal/module/message/mail/recipientRule"
 	mailtemplate "admin/server/internal/module/message/mail/template"
+	"admin/server/internal/module/message/notification"
+	notificationtask "admin/server/internal/module/message/notificationTask"
 	messagesms "admin/server/internal/module/message/sms"
 	smsconfig "admin/server/internal/module/message/sms/config"
 	smslog "admin/server/internal/module/message/sms/log"
@@ -37,6 +39,7 @@ import (
 	"admin/server/internal/module/permission/menu"
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/permission/state"
+	"admin/server/internal/module/realtime"
 	"admin/server/internal/module/storage/cosConfig"
 	"admin/server/internal/module/storage/uploadRule"
 	systemcachegeneration "admin/server/internal/module/system/cacheGeneration"
@@ -100,6 +103,9 @@ type routerDependencies struct {
 	SMSLog            *smslog.Handler
 	SMSRateLimit      *smsratelimitpolicy.Handler
 	SMSRecipientRule  *smsrecipientrule.Handler
+	Realtime          *realtime.Handler
+	Notification      *notification.Handler
+	NotificationTask  *notificationtask.Handler
 	OperationEnqueuer operationlog.Enqueuer
 	SessionAdmin      *usersession.SessionAdminHandler
 	AuthOrigin        gin.HandlerFunc
@@ -110,6 +116,21 @@ type routerDependencies struct {
 type runtimeDependency struct {
 	name     string
 	validate func() error
+}
+
+type realtimeSubscriber interface {
+	Ready() <-chan struct{}
+	Run(context.Context) error
+}
+
+type realtimeConnections interface {
+	BeginDrain()
+	CloseAll()
+}
+
+type httpRuntime interface {
+	ListenAndServe() error
+	Shutdown(context.Context) error
 }
 
 func validateRuntimeDependencies(dependencies ...runtimeDependency) error {
@@ -176,7 +197,7 @@ func run(logger *slog.Logger) error {
 	menuService := menu.NewService(menuRepository, menuStateStore)
 
 	roleRepository := role.NewRepository(postgres.GORM)
-	roleService := role.NewService(roleRepository, accessInvalidator)
+	roleService := role.NewService(roleRepository, accessInvalidator, notification.BasePermissionCodes())
 	keys, err := secretkey.New(settings.AppSecret)
 	if err != nil {
 		return fmt.Errorf("derive application keys: %w", err)
@@ -358,6 +379,18 @@ func run(logger *slog.Logger) error {
 	dictionaryService.SetCache(dictionaryCache)
 	dictionaryService.SetGenerations(configGenerationRepository, configGenerationStore)
 	dictionaryService.SetLogger(logger)
+	realtimeRepository := realtime.NewRepository(postgres.GORM)
+	realtimeTickets := realtime.NewTicketStore(redisClient)
+	realtimeConnections := realtime.NewConnectionSet(settings.Realtime.MaxConnections, settings.Realtime.MaxConnectionsPerUser)
+	realtimeSubscriber := realtime.NewSubscriber(redisClient, realtimeConnections, func(errorClass string) {
+		logger.Error("realtime subscriber error", "errorClass", errorClass)
+	})
+	realtimeService := realtime.NewService(realtimeTickets, authService, realtimeRepository, settings.Realtime.ResumeConcurrency)
+	realtimeHandler := realtime.NewHandler(realtimeService, realtimeConnections, settings.CORSOrigin)
+	notificationRepository := notification.NewRepository(postgres.GORM, realtimeRepository)
+	notificationService := notification.NewService(notificationRepository, settingService)
+	notificationTaskRepository := notificationtask.NewRepository(postgres.GORM)
+	notificationTaskService := notificationtask.NewService(notificationTaskRepository)
 	if err := validateRuntimeDependencies(
 		runtimeDependency{name: "system.setting/global", validate: settingService.ValidateDependencies},
 		runtimeDependency{name: "system.dictionary/global", validate: dictionaryService.ValidateDependencies},
@@ -368,6 +401,24 @@ func run(logger *slog.Logger) error {
 		runtimeDependency{name: "permission.authPlatform mail/sms generation", validate: authPlatformService.ValidateRateLimitCacheDependencies},
 		runtimeDependency{name: "storage.cosconfig/<positive config id>", validate: cosConfigService.ValidateDependencies},
 		runtimeDependency{name: "storage.object-route/v2", validate: uploadRuleService.ValidateDependencies},
+		runtimeDependency{name: "realtime.ticket Redis", validate: func() error {
+			if realtimeTickets == nil {
+				return errors.New("ticket store is unavailable")
+			}
+			return nil
+		}},
+		runtimeDependency{name: "realtime repository", validate: func() error {
+			if realtimeRepository == nil {
+				return errors.New("repository is unavailable")
+			}
+			return nil
+		}},
+		runtimeDependency{name: "message.notification retention settings", validate: func() error {
+			if settingService == nil {
+				return errors.New("setting reader is unavailable")
+			}
+			return nil
+		}},
 	); err != nil {
 		return err
 	}
@@ -423,6 +474,9 @@ func run(logger *slog.Logger) error {
 		SMSLog:            smslog.NewHandler(smsLogService),
 		SMSRateLimit:      smsratelimitpolicy.NewHandler(smsRateLimitService),
 		SMSRecipientRule:  smsrecipientrule.NewHandler(smsRecipientRuleService),
+		Realtime:          realtimeHandler,
+		Notification:      notification.NewHandler(notificationService),
+		NotificationTask:  notificationtask.NewHandler(notificationTaskService),
 		OperationEnqueuer: operationLogEnqueuer,
 		SessionAdmin: usersession.NewSessionAdminHandler(sessionService, func(context *gin.Context) (usersession.Actor, bool) {
 			identity, ok := auth.IdentityFromContext(context)
@@ -436,29 +490,59 @@ func run(logger *slog.Logger) error {
 	})
 
 	server := &http.Server{Addr: settings.HTTPAddr, Handler: router, ReadHeaderTimeout: 5 * time.Second}
-	serveErrors := make(chan error, 1)
-	go func() {
-		err := server.ListenAndServe()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			serveErrors <- err
-		}
-		close(serveErrors)
-	}()
+	return runAPIRuntime(processContext, realtimeSubscriber, realtimeConnections, server)
+}
 
+func runAPIRuntime(processContext context.Context, subscriber realtimeSubscriber, connections realtimeConnections, server httpRuntime) error {
+	if processContext == nil || subscriber == nil || connections == nil || server == nil {
+		return errors.New("API runtime dependencies are required")
+	}
+	subscriberContext, cancelSubscriber := context.WithCancel(processContext)
+	subscriberDone := make(chan error, 1)
+	go func() { subscriberDone <- subscriber.Run(subscriberContext) }()
+	select {
+	case <-subscriber.Ready():
+	case err := <-subscriberDone:
+		cancelSubscriber()
+		if err == nil {
+			err = errors.New("subscriber stopped before ready")
+		}
+		return fmt.Errorf("start realtime subscriber: %w", err)
+	case <-processContext.Done():
+		cancelSubscriber()
+		<-subscriberDone
+		return nil
+	}
+
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.ListenAndServe() }()
+	var serveErr error
 	select {
 	case <-processContext.Done():
-	case err := <-serveErrors:
-		if err != nil {
-			return fmt.Errorf("serve HTTP: %w", err)
+	case err := <-subscriberDone:
+		if err == nil {
+			err = errors.New("subscriber stopped unexpectedly")
+		}
+		serveErr = fmt.Errorf("realtime subscriber stopped: %w", err)
+	case err := <-serveDone:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr = fmt.Errorf("serve HTTP: %w", err)
 		}
 	}
 
-	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := server.Shutdown(shutdownContext); err != nil {
-		return fmt.Errorf("shutdown HTTP: %w", err)
+	connections.BeginDrain()
+	cancelSubscriber()
+	select {
+	case <-subscriberDone:
+	case <-time.After(5 * time.Second):
 	}
-	return nil
+	connections.CloseAll()
+	shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelShutdown()
+	if err := server.Shutdown(shutdownContext); err != nil && serveErr == nil {
+		serveErr = fmt.Errorf("shutdown HTTP: %w", err)
+	}
+	return serveErr
 }
 
 func buildRouter(dependencies routerDependencies) *gin.Engine {
@@ -486,6 +570,12 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	}
 	authplatform.RegisterPublicRoutes(sharedRoutes, dependencies.AuthPlatform)
 	permission.RegisterRoutes(sharedRoutes, dependencies.Permission, dependencies.Authenticate)
+	if dependencies.Realtime != nil {
+		realtime.RegisterRoutes(sharedRoutes, router, dependencies.Realtime, dependencies.AuthOrigin, dependencies.Authenticate)
+	}
+	if dependencies.Notification != nil {
+		notification.RegisterRoutes(sharedRoutes, dependencies.Notification, dependencies.Authenticate, dependencies.RequirePermission)
+	}
 	dictionary.RegisterOptionRoute(sharedRoutes, dependencies.Dictionary, dependencies.Authenticate)
 
 	adminRoutes := router.Group("/api/admin/v1")
@@ -535,5 +625,8 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 		queuemonitor.RegisterGrantRoute(adminRoutes, dependencies.QueueMonitor, dependencies.AuthOrigin, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	usersession.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
+	if dependencies.NotificationTask != nil {
+		notificationtask.RegisterRoutes(adminRoutes, dependencies.NotificationTask, dependencies.Authenticate, dependencies.RequirePermission)
+	}
 	return router
 }

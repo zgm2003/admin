@@ -81,11 +81,7 @@ function updateGender(value: UpdateAccountProfileInput['gender']): void {
                 @click="emit('emailAction')"
               >
                 {{
-                  t(
-                    currentEmail === ''
-                      ? 'user.identity.bindEmail'
-                      : 'user.identity.changeEmail',
-                  )
+                  t(currentEmail === '' ? 'user.identity.bindEmail' : 'user.identity.changeEmail')
                 }}
               </el-button>
             </div>
@@ -101,11 +97,7 @@ function updateGender(value: UpdateAccountProfileInput['gender']): void {
                 @click="emit('phoneAction')"
               >
                 {{
-                  t(
-                    currentPhone === null
-                      ? 'user.identity.bindPhone'
-                      : 'user.identity.changePhone',
-                  )
+                  t(currentPhone === null ? 'user.identity.bindPhone' : 'user.identity.changePhone')
                 }}
               </el-button>
             </div>
@@ -153,12 +145,9 @@ function updateGender(value: UpdateAccountProfileInput['gender']): void {
         </el-col>
       </el-row>
       <div v-if="canUpdateProfile" class="account-profile__actions">
-        <el-button
-          data-testid="account-profile-save"
-          type="primary"
-          @click="emit('save')"
-          >{{ t('user.profile.save') }}</el-button
-        >
+        <el-button data-testid="account-profile-save" type="primary" @click="emit('save')">{{
+          t('user.profile.save')
+        }}</el-button>
       </div>
     </el-form>
   </section>

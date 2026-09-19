@@ -136,6 +136,45 @@ func TestLoadAPIRejectsCORSAndCookieSecurityMismatch(t *testing.T) {
 	}
 }
 
+func TestLoadAPIUsesBoundedRealtimeDefaults(t *testing.T) {
+	settings, err := LoadAPI(lookup(validAPIValues()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.Realtime.MaxConnections != 20000 ||
+		settings.Realtime.MaxConnectionsPerUser != 32 ||
+		settings.Realtime.ResumeConcurrency != 32 {
+		t.Fatalf("realtime defaults = %+v", settings.Realtime)
+	}
+}
+
+func TestLoadAPIRejectsInvalidRealtimeLimits(t *testing.T) {
+	tests := []struct {
+		name  string
+		key   string
+		value string
+	}{
+		{name: "zero total connections", key: "REALTIME_MAX_CONNECTIONS", value: "0"},
+		{name: "negative total connections", key: "REALTIME_MAX_CONNECTIONS", value: "-1"},
+		{name: "non integer total connections", key: "REALTIME_MAX_CONNECTIONS", value: "many"},
+		{name: "excessive total connections", key: "REALTIME_MAX_CONNECTIONS", value: "200001"},
+		{name: "zero connections per user", key: "REALTIME_MAX_CONNECTIONS_PER_USER", value: "0"},
+		{name: "per user exceeds total", key: "REALTIME_MAX_CONNECTIONS_PER_USER", value: "20001"},
+		{name: "zero resume concurrency", key: "REALTIME_RESUME_CONCURRENCY", value: "0"},
+		{name: "excessive resume concurrency", key: "REALTIME_RESUME_CONCURRENCY", value: "1025"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			values := validAPIValues()
+			values[tt.key] = tt.value
+
+			_, err := LoadAPI(lookup(values))
+			assertErrorContains(t, err, tt.key)
+		})
+	}
+}
+
 func TestLoadWorker(t *testing.T) {
 	t.Run("loads only PostgreSQL and Redis", func(t *testing.T) {
 		got, err := LoadWorker(lookup(map[string]string{

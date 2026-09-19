@@ -74,22 +74,34 @@ function parseEmailResult(value: unknown): EmailResult {
 }
 
 function isCanonicalEmail(value: string): boolean {
-  if (value === '' || value.length > 254 || value !== value.trim() || value !== value.toLowerCase()) {
+  if (
+    value === '' ||
+    value.length > 254 ||
+    value !== value.trim() ||
+    value !== value.toLowerCase()
+  ) {
     return false
   }
-  if ([...value].some((character) => {
-    const code = character.charCodeAt(0)
-    return code <= 0x1f || code === 0x7f
-  })) return false
+  if (
+    [...value].some((character) => {
+      const code = character.charCodeAt(0)
+      return code <= 0x1f || code === 0x7f
+    })
+  )
+    return false
   const parts = value.split('@')
   return parts.length === 2 && parts[0] !== '' && parts[1] !== ''
 }
 
 function isChallengeID(value: string): boolean {
-  return value.length > 0 && value.length <= 128 && ![...value].some((character) => {
-    const code = character.charCodeAt(0)
-    return code <= 0x20 || code === 0x7f
-  })
+  return (
+    value.length > 0 &&
+    value.length <= 128 &&
+    ![...value].some((character) => {
+      const code = character.charCodeAt(0)
+      return code <= 0x20 || code === 0x7f
+    })
+  )
 }
 
 function isTimestamp(value: string): boolean {

@@ -15,7 +15,7 @@ func TestJWTIssueAndParseRoundTrip(t *testing.T) {
 	codec := NewJWT(key)
 	codec.now = func() time.Time { return fixedNow }
 	key[0] = 'x'
-	want := TokenIdentity{UserID: 11, SessionID: 22, Platform: "admin", Version: 3}
+	want := TokenIdentity{UserID: 11, SessionID: 22, Platform: "admin", Version: 3, AccessExpiresAt: fixedNow.Add(23 * time.Minute)}
 	ttl := 23 * time.Minute
 
 	raw, expiresAt, err := codec.Issue(want, ttl)

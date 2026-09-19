@@ -166,7 +166,6 @@ async function inspect(row: MailLog): Promise<void> {
     // request.ts owns API error notifications.
   }
 }
-
 </script>
 
 <template>

@@ -20,10 +20,17 @@ type API struct {
 	TrustedProxies   []string
 	TrustedProxyMode string
 	Auth             Auth
+	Realtime         Realtime
 }
 
 type Auth struct {
 	CookieSecure bool
+}
+
+type Realtime struct {
+	MaxConnections        int
+	MaxConnectionsPerUser int
+	ResumeConcurrency     int
 }
 
 type Worker struct {
@@ -69,6 +76,10 @@ func LoadAPI(lookupEnv LookupEnv) (API, error) {
 	if err != nil {
 		return API{}, err
 	}
+	realtime, err := loadRealtime(lookupEnv)
+	if err != nil {
+		return API{}, err
+	}
 
 	return API{
 		HTTPAddr:         httpAddr,
@@ -79,6 +90,7 @@ func LoadAPI(lookupEnv LookupEnv) (API, error) {
 		TrustedProxies:   trustedProxies,
 		TrustedProxyMode: trustedProxyMode,
 		Auth:             auth,
+		Realtime:         realtime,
 	}, nil
 }
 
@@ -185,6 +197,38 @@ func loadAuth(lookupEnv LookupEnv, corsOrigin string) (Auth, error) {
 		return Auth{}, fmt.Errorf("AUTH_COOKIE_SECURE: must be %d when CORS_ORIGIN uses %s", boolCode(wantSecure), origin.Scheme)
 	}
 	return Auth{CookieSecure: cookieSecure}, nil
+}
+
+func loadRealtime(lookupEnv LookupEnv) (Realtime, error) {
+	maxConnections, err := optionalBoundedInt(lookupEnv, "REALTIME_MAX_CONNECTIONS", 20000, 1, 200000)
+	if err != nil {
+		return Realtime{}, err
+	}
+	maxConnectionsPerUser, err := optionalBoundedInt(lookupEnv, "REALTIME_MAX_CONNECTIONS_PER_USER", 32, 1, maxConnections)
+	if err != nil {
+		return Realtime{}, err
+	}
+	resumeConcurrency, err := optionalBoundedInt(lookupEnv, "REALTIME_RESUME_CONCURRENCY", 32, 1, 1024)
+	if err != nil {
+		return Realtime{}, err
+	}
+	return Realtime{
+		MaxConnections:        maxConnections,
+		MaxConnectionsPerUser: maxConnectionsPerUser,
+		ResumeConcurrency:     resumeConcurrency,
+	}, nil
+}
+
+func optionalBoundedInt(lookupEnv LookupEnv, key string, defaultValue, minimum, maximum int) (int, error) {
+	raw, ok := lookupEnv(key)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return defaultValue, nil
+	}
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || value < minimum || value > maximum {
+		return 0, fmt.Errorf("%s: must be an integer between %d and %d", key, minimum, maximum)
+	}
+	return value, nil
 }
 
 func validateAppSecret(value string) error {

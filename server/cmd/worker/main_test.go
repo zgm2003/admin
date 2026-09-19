@@ -40,9 +40,10 @@ func (p *workerOperationLogProcessor) Process(_ context.Context, payload operati
 	return nil
 }
 
-func TestBuildWorkerMuxRegistersOnlyOperationLogTasks(t *testing.T) {
+func TestBuildWorkerMuxRegistersOperationLogAndNotificationTasks(t *testing.T) {
 	operationProcessor := &workerOperationLogProcessor{}
-	mux := buildWorkerMux(operationProcessor)
+	notificationProcessor := &fakeAsynqHandler{}
+	mux := buildWorkerMux(operationProcessor, notificationProcessor)
 
 	operationPayload, err := json.Marshal(operationlog.TaskPayload{
 		SchemaVersion: 2, EventID: "worker-operation-event", RequestID: "request-1", Method: "PUT", Route: "/api/admin/v1/user/account/:id",
@@ -58,7 +59,17 @@ func TestBuildWorkerMuxRegistersOnlyOperationLogTasks(t *testing.T) {
 	if operationProcessor.processed != "request-1" {
 		t.Fatalf("processed operation=%q", operationProcessor.processed)
 	}
+	if err := mux.ProcessTask(context.Background(), asynq.NewTask("message:notificationtask:dispatch:v1", []byte(`{}`))); err != nil {
+		t.Fatalf("process notification task: %v", err)
+	}
+	if notificationProcessor.calls != 1 {
+		t.Fatalf("notification calls=%d want 1", notificationProcessor.calls)
+	}
 }
+
+type fakeAsynqHandler struct{ calls int }
+
+func (h *fakeAsynqHandler) ProcessTask(context.Context, *asynq.Task) error { h.calls++; return nil }
 
 type fakeRelayRunner struct {
 	mutex       sync.Mutex
@@ -133,7 +144,7 @@ func TestWorkerAssemblyStartsRelayThenCancelsOnShutdown(t *testing.T) {
 			ProcessContext: processContext,
 			Logger:         discardLogger(),
 			Mux:            asynq.NewServeMux(),
-			NewRelay:       func() (relayRunner, error) { return relay, nil },
+			Runners:        []namedRunner{{Name: "config-generation", Runner: relay}},
 			NewServer:      func() (asynqServer, error) { return server, nil },
 		})
 	}()
@@ -165,26 +176,22 @@ func TestWorkerAssemblyStartsRelayThenCancelsOnShutdown(t *testing.T) {
 	}
 }
 
-func TestWorkerAssemblyDoesNotBuildAsynqWhenRelayFails(t *testing.T) {
-	serverBuilt := false
+func TestWorkerAssemblyReportsNamedRunnerFailureAndShutsDownAsynq(t *testing.T) {
+	relay := newFakeRelayRunner()
+	relay.runErr = errors.New("relay unavailable")
+	server := &fakeAsynqServer{}
 	err := runWorkerAssembly(workerAssembly{
 		ProcessContext: context.Background(),
 		Logger:         discardLogger(),
 		Mux:            asynq.NewServeMux(),
-		NewRelay:       func() (relayRunner, error) { return nil, errors.New("relay unavailable") },
-		NewServer: func() (asynqServer, error) {
-			serverBuilt = true
-			return &fakeAsynqServer{}, nil
-		},
+		Runners:        []namedRunner{{Name: "realtime-outbox", Runner: relay}},
+		NewServer:      func() (asynqServer, error) { return server, nil },
 	})
-	if err == nil {
-		t.Fatal("expected relay build failure")
+	if err == nil || !strings.Contains(err.Error(), "realtime-outbox") {
+		t.Fatalf("error = %v want named runner context", err)
 	}
-	if serverBuilt {
-		t.Fatal("Asynq must not be built when the relay fails")
-	}
-	if !strings.Contains(err.Error(), "build cache generation relay") {
-		t.Fatalf("error = %q want relay context", err)
+	if _, shutdowns := server.counts(); shutdowns != 1 {
+		t.Fatalf("shutdowns=%d want 1", shutdowns)
 	}
 }
 
@@ -196,7 +203,7 @@ func TestWorkerAssemblyCancelsRelayWhenAsynqStartFails(t *testing.T) {
 		ProcessContext: context.Background(),
 		Logger:         discardLogger(),
 		Mux:            asynq.NewServeMux(),
-		NewRelay:       func() (relayRunner, error) { return relay, nil },
+		Runners:        []namedRunner{{Name: "config-generation", Runner: relay}},
 		NewServer:      func() (asynqServer, error) { return server, nil },
 	})
 	if err == nil || !strings.Contains(err.Error(), "start Asynq Worker") {
@@ -218,6 +225,32 @@ func TestWorkerAssemblyCancelsRelayWhenAsynqStartFails(t *testing.T) {
 func TestWorkerAssemblyRequiresFactories(t *testing.T) {
 	if err := runWorkerAssembly(workerAssembly{ProcessContext: context.Background()}); err == nil {
 		t.Fatal("assembly accepted missing factories")
+	}
+}
+
+func TestWorkerAssemblyStartsAllNamedRunners(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	runners := []namedRunner{}
+	fakes := []*fakeRelayRunner{}
+	for _, name := range []string{"config-generation", "realtime-outbox", "notification-dispatch", "realtime-retention-trigger", "notification-retention-trigger"} {
+		fake := newFakeRelayRunner()
+		fakes = append(fakes, fake)
+		runners = append(runners, namedRunner{Name: name, Runner: fake})
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- runWorkerAssembly(workerAssembly{ProcessContext: ctx, Logger: discardLogger(), Mux: asynq.NewServeMux(), Runners: runners, NewServer: func() (asynqServer, error) { return &fakeAsynqServer{}, nil }})
+	}()
+	for i, fake := range fakes {
+		select {
+		case <-fake.started:
+		case <-time.After(time.Second):
+			t.Fatalf("runner %d did not start", i)
+		}
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }
 

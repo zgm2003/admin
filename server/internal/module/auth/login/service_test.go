@@ -19,6 +19,7 @@ import (
 	"admin/server/internal/module/permission/role"
 	user "admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/loginLog"
+	usersession "admin/server/internal/module/user/session"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
@@ -955,6 +956,24 @@ func TestCurrentUserReturnsClosedIdentity(t *testing.T) {
 	current, err := service.CurrentUser(context.Background(), Identity{UserID: 1, SessionID: 2, Platform: "admin", Version: 1})
 	if err != nil || current != users.current {
 		t.Fatalf("CurrentUser() = %+v,%v", current, err)
+	}
+}
+
+func TestValidateRealtimeSessionFailsClosedAfterInvalidation(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	policy := testPolicy()
+	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: policy})
+	authority := SessionAuthority{Session: usersession.Record{ID: 902, UserID: 901, PlatformID: 1, Platform: "admin", Version: 3, DeviceID: testAuthClient().DeviceID, ClientIP: "127.0.0.1", RefreshExpiresAt: time.Now().UTC().Add(time.Hour)}, UserID: 901, UserIsEnabled: yesno.Yes}
+	cleanupAuthRedisKeys(t, redisClient, authority.UserID, authority.Session.Platform, authority.Session.ID)
+	installWarmSession(t, service, authority, policy)
+	if err := service.ValidateRealtimeSession(context.Background(), "admin", 901, 902, 3); err != nil {
+		t.Fatal(err)
+	}
+	if err := redisClient.SetString(context.Background(), authstate.SessionsStateKey("admin", 901), `{"schemaVersion":1,"state":"invalidating","platform":"admin","userId":901,"generation":"next","mutationToken":"token"}`, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.ValidateRealtimeSession(context.Background(), "admin", 901, 902, 3); appErrorCode(err) != apperror.CodeUnauthorized {
+		t.Fatalf("ValidateRealtimeSession after invalidation=%v", err)
 	}
 }
 

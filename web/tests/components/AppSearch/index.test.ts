@@ -3,11 +3,7 @@ import ElementPlus from 'element-plus'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { AppSearch } from '@/components/AppSearch'
-import type {
-  SearchField,
-  SearchFieldType,
-  SearchFormModel,
-} from '@/components/AppSearch/types'
+import type { SearchField, SearchFieldType, SearchFormModel } from '@/components/AppSearch/types'
 import { appI18n, setLocale } from '@/i18n'
 
 describe('AppSearch', () => {

@@ -13,7 +13,13 @@ import { ProtocolError } from '@/types/http'
 export type LoginType = 'email' | 'phone' | 'password'
 
 export type LoginInput =
-  | { loginType: 'password'; loginAccount: string; password: string; challengeId?: never; code?: never }
+  | {
+      loginType: 'password'
+      loginAccount: string
+      password: string
+      challengeId?: never
+      code?: never
+    }
   | {
       loginType: 'email' | 'phone'
       loginAccount: string
@@ -59,10 +65,15 @@ export interface CaptchaChallenge {
   expiresIn: number
 }
 
-export interface CaptchaAnswer { x: number; y: number }
+export interface CaptchaAnswer {
+  x: number
+  y: number
+}
 
 export async function getCaptcha(): Promise<CaptchaChallenge> {
-  return parseCaptchaChallenge(await request<unknown>({ method: 'GET', url: '/api/v1/auth/captcha' }))
+  return parseCaptchaChallenge(
+    await request<unknown>({ method: 'GET', url: '/api/v1/auth/captcha' }),
+  )
 }
 
 export interface CurrentUser {
@@ -97,7 +108,14 @@ export async function sendLoginCode(
     await request<unknown>({
       method: 'POST',
       url: '/api/v1/auth/send-code',
-      data: { account, loginType, scene, challengeId, captchaId: captcha?.captchaId, captchaAnswer: captcha?.captchaAnswer },
+      data: {
+        account,
+        loginType,
+        scene,
+        challengeId,
+        captchaId: captcha?.captchaId,
+        captchaAnswer: captcha?.captchaAnswer,
+      },
     }),
   )
 }
@@ -111,12 +129,21 @@ export interface ResetPasswordInput {
   confirmPassword: string
 }
 
-export async function forgotPassword(account: string, loginType: 'email' | 'phone', captcha?: { captchaId: string; captchaAnswer: CaptchaAnswer }): Promise<SendCodeResult> {
+export async function forgotPassword(
+  account: string,
+  loginType: 'email' | 'phone',
+  captcha?: { captchaId: string; captchaAnswer: CaptchaAnswer },
+): Promise<SendCodeResult> {
   return parseSendCodeResult(
     await request<unknown>({
       method: 'POST',
       url: '/api/v1/auth/password/forgot',
-      data: { account, loginType, captchaId: captcha?.captchaId, captchaAnswer: captcha?.captchaAnswer },
+      data: {
+        account,
+        loginType,
+        captchaId: captcha?.captchaId,
+        captchaAnswer: captcha?.captchaAnswer,
+      },
     }),
   )
 }
@@ -245,7 +272,23 @@ function parseSendCodeResult(value: unknown): SendCodeResult {
 }
 
 function parseCaptchaChallenge(value: unknown): CaptchaChallenge {
-  const record = expectExactKeys(value, ['captchaId', 'captchaType', 'masterImage', 'tileImage', 'tileX', 'tileY', 'tileWidth', 'tileHeight', 'imageWidth', 'imageHeight', 'expiresIn'], 'captcha challenge')
+  const record = expectExactKeys(
+    value,
+    [
+      'captchaId',
+      'captchaType',
+      'masterImage',
+      'tileImage',
+      'tileX',
+      'tileY',
+      'tileWidth',
+      'tileHeight',
+      'imageWidth',
+      'imageHeight',
+      'expiresIn',
+    ],
+    'captcha challenge',
+  )
   if (record.captchaType !== 'slide') throw new ProtocolError('captcha challenge type is invalid')
   return {
     captchaId: expectString(record.captchaId, 'captcha challenge.captchaId'),

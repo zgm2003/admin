@@ -118,7 +118,9 @@ for (const file of [...walk(src), ...walk(tests)]) {
   }
   if (
     projectPath === 'src/utils/request.ts' &&
-    (!/import\s*\{[^}]*\bElNotification\b[^}]*\}\s*from\s*['"]element-plus(?:\/es\/components\/notification\/index)?['"]/.test(content) ||
+    (!/import\s*\{[^}]*\bElNotification\b[^}]*\}\s*from\s*['"]element-plus(?:\/es\/components\/notification\/index)?['"]/.test(
+      content,
+    ) ||
       !/\bElNotification\.error\s*\(/.test(content))
   ) {
     add('request-error-notification-owner', file, 'request.ts 必须统一展示非 401/403 接口错误')

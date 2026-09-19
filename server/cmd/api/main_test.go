@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
@@ -30,6 +31,83 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+type fakeRealtimeSubscriber struct {
+	ready  chan struct{}
+	events *[]string
+	err    error
+}
+
+func (f *fakeRealtimeSubscriber) Ready() <-chan struct{} { return f.ready }
+func (f *fakeRealtimeSubscriber) Run(ctx context.Context) error {
+	if f.err != nil {
+		return f.err
+	}
+	<-ctx.Done()
+	*f.events = append(*f.events, "subscriber-cancel")
+	return nil
+}
+
+type fakeRealtimeConnections struct{ events *[]string }
+
+func (f fakeRealtimeConnections) BeginDrain() { *f.events = append(*f.events, "begin-drain") }
+func (f fakeRealtimeConnections) CloseAll()   { *f.events = append(*f.events, "close-all") }
+
+type fakeHTTPRuntime struct {
+	events   *[]string
+	served   chan struct{}
+	serveErr error
+}
+
+func (f *fakeHTTPRuntime) ListenAndServe() error {
+	*f.events = append(*f.events, "http-listen")
+	close(f.served)
+	if f.serveErr != nil {
+		return f.serveErr
+	}
+	return http.ErrServerClosed
+}
+func (f *fakeHTTPRuntime) Shutdown(context.Context) error {
+	*f.events = append(*f.events, "http-shutdown")
+	return nil
+}
+
+func TestRealtimeRuntimeWaitsForSubscriberAndShutsDownInOrder(t *testing.T) {
+	events := []string{}
+	ctx, cancel := context.WithCancel(context.Background())
+	subscriber := &fakeRealtimeSubscriber{ready: make(chan struct{}), events: &events}
+	server := &fakeHTTPRuntime{events: &events, served: make(chan struct{})}
+	done := make(chan error, 1)
+	go func() { done <- runAPIRuntime(ctx, subscriber, fakeRealtimeConnections{&events}, server) }()
+	select {
+	case <-server.served:
+		t.Fatal("HTTP listened before subscriber ready")
+	case <-time.After(30 * time.Millisecond):
+	}
+	close(subscriber.ready)
+	<-server.served
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"http-listen", "begin-drain", "subscriber-cancel", "close-all", "http-shutdown"}
+	if !reflect.DeepEqual(events, want) {
+		t.Fatalf("events=%v want %v", events, want)
+	}
+}
+
+func TestRealtimeRuntimeDoesNotListenWhenSubscriberFails(t *testing.T) {
+	events := []string{}
+	subscriber := &fakeRealtimeSubscriber{ready: make(chan struct{}), events: &events, err: errors.New("redis unavailable")}
+	server := &fakeHTTPRuntime{events: &events, served: make(chan struct{})}
+	err := runAPIRuntime(context.Background(), subscriber, fakeRealtimeConnections{&events}, server)
+	if err == nil || !strings.Contains(err.Error(), "subscriber") {
+		t.Fatalf("error=%v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("events=%v want none", events)
+	}
+}
 
 type readyService struct{}
 

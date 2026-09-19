@@ -10,6 +10,17 @@ import { isYesNo, type YesNo } from '@/enums/yesNo'
 import { ProtocolError } from '@/types/http'
 
 export type SettingValueType = 1 | 2 | 3 | 4
+export const messageNotificationRetentionDaysKey = 'message.notification.retention_days'
+export const realtimeEventRetentionDaysKey = 'realtime.event.retention_days'
+export const retentionSettingRanges = {
+  [messageNotificationRetentionDaysKey]: { minimum: 30, maximum: 3650 },
+  [realtimeEventRetentionDaysKey]: { minimum: 1, maximum: 30 },
+} as const
+export type RetentionSettingKey = keyof typeof retentionSettingRanges
+
+export function isRetentionSettingKey(key: string): key is RetentionSettingKey {
+  return Object.prototype.hasOwnProperty.call(retentionSettingRanges, key)
+}
 export interface SystemSetting {
   id: number
   key: string

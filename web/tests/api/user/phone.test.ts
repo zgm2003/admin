@@ -65,13 +65,15 @@ describe('user phone identity API', () => {
     await expect(sendPhoneCode({ target: 'current' })).rejects.toThrow()
   })
 
-  it.each([{ phone: '15671628271' }, { phone: '+8612671628271' }, { phone: '' }, { phone: '+8615671628271', extra: true }])(
-    'rejects non-canonical phone identity responses',
-    async (response) => {
-      requestMock.mockResolvedValue(response)
-      await expect(
-        bindPhone({ nextPhone: '+8615671628271', nextChallengeId: 'challenge', nextCode: '123456' }),
-      ).rejects.toThrow()
-    },
-  )
+  it.each([
+    { phone: '15671628271' },
+    { phone: '+8612671628271' },
+    { phone: '' },
+    { phone: '+8615671628271', extra: true },
+  ])('rejects non-canonical phone identity responses', async (response) => {
+    requestMock.mockResolvedValue(response)
+    await expect(
+      bindPhone({ nextPhone: '+8615671628271', nextChallengeId: 'challenge', nextCode: '123456' }),
+    ).rejects.toThrow()
+  })
 })

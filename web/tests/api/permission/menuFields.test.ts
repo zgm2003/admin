@@ -28,10 +28,7 @@ describe('menu field protocol', () => {
     'permission:authPlatform:view',
     'permission:access-cache:rebuild',
     'message:mail:rate-limit:update',
-  ])(
-    'accepts menu code %s',
-    (value) => expect(menuCodePattern.test(value)).toBe(true),
-  )
+  ])('accepts menu code %s', (value) => expect(menuCodePattern.test(value)).toBe(true))
 
   it.each(['Permission:authPlatform:view', 'system:operation_log:list'])(
     'rejects menu code %s',
@@ -44,10 +41,7 @@ describe('menu field protocol', () => {
     '/reports/order-items',
     '/permission/authPlatform',
     '/system/operationLog',
-  ])(
-    'accepts route path %s',
-    (value) => expect(isMenuPath(value)).toBe(true),
-  )
+  ])('accepts route path %s', (value) => expect(isMenuPath(value)).toBe(true))
 
   it.each([
     '/login',
@@ -62,10 +56,12 @@ describe('menu field protocol', () => {
     '/system/operation_log',
   ])('rejects route path %s', (value) => expect(isMenuPath(value)).toBe(false))
 
-  it.each(['user/account', 'reports/order-items', 'permission/authPlatform', 'system/operationLog'])(
-    'accepts component path %s',
-    (value) => expect(isComponentPath(value)).toBe(true),
-  )
+  it.each([
+    'user/account',
+    'reports/order-items',
+    'permission/authPlatform',
+    'system/operationLog',
+  ])('accepts component path %s', (value) => expect(isComponentPath(value)).toBe(true))
 
   it.each([
     '/user/account',

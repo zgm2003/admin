@@ -76,10 +76,14 @@ function parsePhoneResult(value: unknown): PhoneResult {
 }
 
 function isChallengeID(value: string): boolean {
-  return value.length > 0 && value.length <= 128 && ![...value].some((character) => {
-    const code = character.charCodeAt(0)
-    return code <= 0x20 || code === 0x7f
-  })
+  return (
+    value.length > 0 &&
+    value.length <= 128 &&
+    ![...value].some((character) => {
+      const code = character.charCodeAt(0)
+      return code <= 0x20 || code === 0x7f
+    })
+  )
 }
 
 function isTimestamp(value: string): boolean {

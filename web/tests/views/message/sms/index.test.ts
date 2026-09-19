@@ -189,7 +189,7 @@ describe('SMS management page', () => {
     const wrapper = mountPage(['message:sms:list'])
     await flushPromises()
 
-    await selectTab(wrapper, '模板')
+    await selectTab(wrapper, '短信模板')
     expect(wrapper.text()).toContain('短信数据加载失败')
     expect(wrapper.text()).not.toContain('template unavailable')
     await wrapper.get('[data-testid="sms-tab-retry"]').trigger('click')
@@ -300,7 +300,7 @@ describe('SMS management page', () => {
       'message:sms:template:status',
     ])
     await flushPromises()
-    await selectTab(wrapper, '模板')
+    await selectTab(wrapper, '短信模板')
 
     await wrapper.get('[data-testid="sms-template-edit"]').trigger('click')
     await flushPromises()

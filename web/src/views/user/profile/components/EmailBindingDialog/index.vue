@@ -24,8 +24,7 @@ const canSubmit = computed(
   () =>
     nextChallengeID.value !== '' &&
     /^\d{6}$/.test(form.nextCode) &&
-    (!changing.value ||
-      (currentChallengeID.value !== '' && /^\d{6}$/.test(form.currentCode))),
+    (!changing.value || (currentChallengeID.value !== '' && /^\d{6}$/.test(form.currentCode))),
 )
 
 function startCountdown(value: typeof currentResendSeconds, seconds: number): void {
@@ -125,13 +124,7 @@ onBeforeUnmount(reset)
     width="min(520px, 94vw)"
     append-to-body
   >
-    <el-alert
-      v-if="errorMessage"
-      :title="errorMessage"
-      type="error"
-      :closable="false"
-      show-icon
-    />
+    <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" show-icon />
     <el-form label-position="top" @submit.prevent="submit">
       <template v-if="changing">
         <el-form-item :label="t('user.identity.currentEmail')">

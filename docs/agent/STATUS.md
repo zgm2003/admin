@@ -3,6 +3,14 @@
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 
+## 全项目实时通道与站内通知（2026-09-18，进行中）
+
+- 当前按已批准 Spec/Plan 串行实施 PostgreSQL durable realtime event/outbox、Redis Pub/Sub、WebSocket 恢复协议、个人站内通知和通知任务管理；PostgreSQL 是唯一业务事实来源，Redis 只承担一次性 ticket 与低延迟分发。
+- `web/` Admin Vue 是本期唯一端到端前端消费者；后端协议保持多平台扩展能力，不修改 Canvas，也不为 Canvas 写入 Vue 页面菜单。受众固定为指定用户、提交时点冻结的指定角色和 O(1) 平台广播。
+- 容量边界固定为显式用户最多 1000、内部与 Worker 单批最多 500、resume 最多 500、连接发送队列 128，并使用 cursor、租约和有界并发；Redis、Asynq 或进程故障不得丢失 PostgreSQL 通知与 event/outbox 事实。
+- 项目未上线，本次只实现新表、新 DTO、新 Redis channel 和新 WebSocket 路径，不增加 legacy、双读、双写或运行时兼容层。
+- 本切片完成后的下一个唯一真实模块是“通用定时任务管理”，负责接管通知到期唤醒与 realtime/notification retention cleanup 触发，并在回归后删除通知专用临时调度实现。
+
 ## COS 对象协议与统一配置缓存代际（2026-09-18，已实现并迁移）
 
 - COS 逻辑配置现为全局多配置，上传规则继续按认证平台隔离并选择 `cos_config_id`；每个平台至多一条活动规则。规则编码继续由规范化子表维护，允许跨规则和跨平台重复。普通管理 CRUD 使用 last-write-wins，不新增乐观锁。

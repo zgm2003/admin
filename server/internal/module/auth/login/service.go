@@ -68,14 +68,15 @@ type policyStore interface {
 }
 
 type Identity struct {
-	UserID         int64
-	SessionID      int64
-	PlatformID     int64
-	Platform       string
-	Version        int64
-	PolicyVersion  int64
-	AccessCacheTTL time.Duration
-	CacheResult    string
+	UserID          int64
+	SessionID       int64
+	PlatformID      int64
+	Platform        string
+	Version         int64
+	PolicyVersion   int64
+	AccessCacheTTL  time.Duration
+	CacheResult     string
+	AccessExpiresAt time.Time
 }
 
 type Service struct {
@@ -949,6 +950,7 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string, client a
 			return Identity{}, cacheErr
 		}
 		if hit {
+			cached.AccessExpiresAt = token.AccessExpiresAt
 			cached.CacheResult = "hit"
 			return cached, nil
 		}
@@ -989,6 +991,7 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string, client a
 		return Identity{}, err
 	}
 	identity := identityFromAuthority(authority, policy, cacheResult)
+	identity.AccessExpiresAt = token.AccessExpiresAt
 	userFact, userErr := s.ensureUserReady(ctx, authority.UserID, authority.UserIsEnabled == yesno.Yes, authority.UserDeleted)
 	if userErr != nil {
 		if isStateUpdating(userErr) {
@@ -1021,6 +1024,26 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string, client a
 		return Identity{}, err
 	}
 	return identity, nil
+}
+
+func (s *Service) ValidateRealtimeSession(ctx context.Context, platform string, userID, sessionID, sessionVersion int64) error {
+	if userID <= 0 || sessionID <= 0 || sessionVersion <= 0 || authclient.ValidatePlatform(platform) != nil {
+		return apperror.Unauthorized(fmt.Errorf("realtime session identity is invalid"))
+	}
+	userState, found, err := s.states.ReadUser(ctx, userID)
+	if err != nil || !found || userState.State != authstate.StateReady || userState.Deleted || !userState.IsEnabled {
+		return apperror.Unauthorized(errors.Join(fmt.Errorf("realtime user state is unavailable"), err))
+	}
+	sessionsState, found, err := s.states.ReadSessions(ctx, platform, userID)
+	if err != nil || !found || sessionsState.State != authstate.StateReady {
+		return apperror.Unauthorized(errors.Join(fmt.Errorf("realtime sessions state is unavailable"), err))
+	}
+	snapshot, found, err := s.sessionCache.Read(ctx, platform, sessionID)
+	if err != nil || !found || snapshot.UserID != userID || snapshot.SessionVersion != sessionVersion || snapshot.Revoked ||
+		snapshot.UserGeneration != userState.Generation || snapshot.SessionsGeneration != sessionsState.Generation || !snapshot.RefreshExpiresAt.After(s.now().UTC()) {
+		return apperror.Unauthorized(errors.Join(fmt.Errorf("realtime session is unavailable"), err))
+	}
+	return nil
 }
 
 func (s *Service) Refresh(ctx context.Context, input RefreshInput) (Credential, error) {

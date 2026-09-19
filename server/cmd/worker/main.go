@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,7 +12,11 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
+	"admin/server/internal/module/message/notification"
+	notificationtask "admin/server/internal/module/message/notificationTask"
+	"admin/server/internal/module/realtime"
 	"admin/server/internal/module/system/operationLog"
+	systemsetting "admin/server/internal/module/system/setting"
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/cacheGeneration"
@@ -28,6 +33,16 @@ type relayRunner interface {
 	Run(ctx context.Context) error
 }
 
+type namedRunner struct {
+	Name   string
+	Runner relayRunner
+}
+
+type runnerResult struct {
+	name string
+	err  error
+}
+
 type asynqServer interface {
 	Start(handler asynq.Handler) error
 	Shutdown()
@@ -37,7 +52,7 @@ type workerAssembly struct {
 	ProcessContext context.Context
 	Logger         *slog.Logger
 	Mux            *asynq.ServeMux
-	NewRelay       func() (relayRunner, error)
+	Runners        []namedRunner
 	NewServer      func() (asynqServer, error)
 }
 
@@ -70,23 +85,36 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer func() { _ = redisClient.Close() }()
+	queueClient, err := queue.NewClient(settings.RedisURL)
+	if err != nil {
+		return err
+	}
+	defer queueClient.Close()
 
 	operationLogRepository := operationlog.NewRepository(postgres.GORM)
 	operationLogService := operationlog.NewService(operationLogRepository)
-	mux := buildWorkerMux(operationLogService)
+	realtimeRepository := realtime.NewRepository(postgres.GORM)
+	notificationRepository := notification.NewRepository(postgres.GORM, realtimeRepository)
+	notificationTaskRepository := notificationtask.NewRepository(postgres.GORM)
+	notificationTaskHandler := notificationtask.NewTaskHandler(notificationtask.NewProcessor(postgres.GORM, realtimeRepository), notificationTaskRepository)
+	mux := buildWorkerMux(operationLogService, notificationTaskHandler)
+	settingService := systemsetting.NewService(systemsetting.NewRepository(postgres.GORM))
+	configRelay := cachegeneration.NewRelay(cachegeneration.NewRepository(postgres.GORM), cachegeneration.NewStore(redisClient), logger)
+	realtimeRelay := realtime.NewRelay(realtimeRepository, redisClient, logger)
+	dispatchRelay := notificationtask.NewDispatchRelay(notificationTaskRepository, notificationtask.NewQueueEnqueuer(queueClient), logger)
+	realtimeRetention := realtime.NewRetentionTrigger(realtime.NewRetentionService(realtimeRepository, settingService), logger)
+	notificationRetention := notification.NewRetentionTrigger(notification.NewRetentionService(notificationRepository, settingService), logger)
 
 	return runWorkerAssembly(workerAssembly{
 		ProcessContext: processContext,
 		Logger:         logger,
 		Mux:            mux,
-		NewRelay: func() (relayRunner, error) {
-			repository := cachegeneration.NewRepository(postgres.GORM)
-			store := cachegeneration.NewStore(redisClient)
-			relay := cachegeneration.NewRelay(repository, store, logger)
-			if relay == nil {
-				return nil, fmt.Errorf("build cache generation relay")
-			}
-			return relay, nil
+		Runners: []namedRunner{
+			{Name: "config-generation", Runner: configRelay},
+			{Name: "realtime-outbox", Runner: realtimeRelay},
+			{Name: "notification-dispatch", Runner: dispatchRelay},
+			{Name: "realtime-retention-trigger", Runner: realtimeRetention},
+			{Name: "notification-retention-trigger", Runner: notificationRetention},
 		},
 		NewServer: func() (asynqServer, error) {
 			return queue.NewServer(settings.RedisURL)
@@ -97,53 +125,72 @@ func run(logger *slog.Logger) error {
 // runWorkerAssembly 启动 relay goroutine 后启动 Asynq；任一启动失败都会
 // 关闭已启动资源。进程 context 取消时先停 relay 再 Shutdown Asynq。
 func runWorkerAssembly(assembly workerAssembly) error {
-	if assembly.ProcessContext == nil || assembly.Mux == nil || assembly.NewRelay == nil || assembly.NewServer == nil {
-		return fmt.Errorf("worker assembly requires context, mux, relay and server factories")
+	if assembly.ProcessContext == nil || assembly.Mux == nil || len(assembly.Runners) == 0 || assembly.NewServer == nil {
+		return fmt.Errorf("worker assembly requires context, mux, named runners and server factory")
 	}
-	relay, err := assembly.NewRelay()
-	if err != nil {
-		return fmt.Errorf("build cache generation relay: %w", err)
+	for _, runner := range assembly.Runners {
+		if runner.Name == "" || runner.Runner == nil {
+			return fmt.Errorf("worker assembly contains invalid named runner")
+		}
 	}
 	server, err := assembly.NewServer()
 	if err != nil {
 		return fmt.Errorf("build Asynq Worker: %w", err)
 	}
 
-	relayContext, stopRelay := context.WithCancel(assembly.ProcessContext)
-	relayDone := make(chan error, 1)
-	go func() { relayDone <- relay.Run(relayContext) }()
+	runnerContext, stopRunners := context.WithCancel(assembly.ProcessContext)
+	runnerDone := make(chan runnerResult, len(assembly.Runners))
+	for _, runner := range assembly.Runners {
+		runner := runner
+		go func() { runnerDone <- runnerResult{name: runner.Name, err: runner.Runner.Run(runnerContext)} }()
+	}
 
 	if err := server.Start(assembly.Mux); err != nil {
-		stopRelay()
-		waitForRelayShutdown(assembly.Logger, relayDone)
+		stopRunners()
+		waitForRunnerShutdown(assembly.Logger, runnerDone, len(assembly.Runners))
 		return fmt.Errorf("start Asynq Worker: %w", err)
 	}
 
-	<-assembly.ProcessContext.Done()
-	stopRelay()
-	waitForRelayShutdown(assembly.Logger, relayDone)
-	server.Shutdown()
-	return nil
+	select {
+	case <-assembly.ProcessContext.Done():
+		stopRunners()
+		waitForRunnerShutdown(assembly.Logger, runnerDone, len(assembly.Runners))
+		server.Shutdown()
+		return nil
+	case result := <-runnerDone:
+		stopRunners()
+		waitForRunnerShutdown(assembly.Logger, runnerDone, len(assembly.Runners)-1)
+		server.Shutdown()
+		if result.err == nil {
+			result.err = errors.New("runner stopped unexpectedly")
+		}
+		return fmt.Errorf("runner %s stopped: %w", result.name, result.err)
+	}
 }
 
-func waitForRelayShutdown(logger *slog.Logger, relayDone <-chan error) {
+func waitForRunnerShutdown(logger *slog.Logger, runnerDone <-chan runnerResult, count int) {
 	timer := time.NewTimer(workerRelayShutdownBudget)
 	defer timer.Stop()
-	select {
-	case err := <-relayDone:
-		if err != nil && logger != nil {
-			logger.Error("cache generation relay stopped with error", "errorClass", cachegeneration.ErrorClass(err))
-		}
-	case <-timer.C:
-		if logger != nil {
-			logger.Error("cache generation relay did not stop within the shutdown budget")
+	for count > 0 {
+		select {
+		case result := <-runnerDone:
+			count--
+			if result.err != nil && logger != nil {
+				logger.Error("worker runner stopped with error", "runner", result.name, "error", result.err)
+			}
+		case <-timer.C:
+			if logger != nil {
+				logger.Error("worker runners did not stop within the shutdown budget", "remaining", count)
+			}
+			return
 		}
 	}
 }
 
-func buildWorkerMux(operationLogProcessor operationlog.Processor) *asynq.ServeMux {
+func buildWorkerMux(operationLogProcessor operationlog.Processor, notificationHandler asynq.Handler) *asynq.ServeMux {
 	mux := asynq.NewServeMux()
 	operationlog.Register(mux, operationLogProcessor)
+	mux.Handle(notificationtask.TaskType, notificationHandler)
 	return mux
 }
 

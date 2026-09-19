@@ -228,9 +228,7 @@ export function useStorageForms(
     allowedExtensions: string[]
     allowedMimeTypes: string[]
   } | null {
-    const codes = ruleForm.value.codes
-      .map((item) => item.trim().toLowerCase())
-      .filter(Boolean)
+    const codes = ruleForm.value.codes.map((item) => item.trim().toLowerCase()).filter(Boolean)
     const allowedExtensions = ruleForm.value.allowedExtensions
       .map((item) => item.trim().toLowerCase().replace(/^\./, ''))
       .filter(Boolean)

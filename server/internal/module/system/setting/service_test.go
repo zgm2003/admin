@@ -59,6 +59,70 @@ func (f *fakeRepository) mutations() int {
 	return f.mutationCalls
 }
 
+func TestRetentionSettingValidationRejectsBeforeRepositoryAccess(t *testing.T) {
+	tests := []struct {
+		name      string
+		key       string
+		value     string
+		valueType int
+	}{
+		{"notification below minimum", sharedsetting.MessageNotificationRetentionDaysKey, "29", ValueTypeNumber},
+		{"notification above maximum", sharedsetting.MessageNotificationRetentionDaysKey, "3651", ValueTypeNumber},
+		{"realtime below minimum", sharedsetting.RealtimeEventRetentionDaysKey, "0", ValueTypeNumber},
+		{"realtime above maximum", sharedsetting.RealtimeEventRetentionDaysKey, "31", ValueTypeNumber},
+		{"wrong type", sharedsetting.RealtimeEventRetentionDaysKey, "7", ValueTypeString},
+		{"floating point", sharedsetting.RealtimeEventRetentionDaysKey, "1.5", ValueTypeNumber},
+		{"overflow", sharedsetting.MessageNotificationRetentionDaysKey, "999999999999999999999999", ValueTypeNumber},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			for _, operation := range []string{"create", "update"} {
+				t.Run(operation, func(t *testing.T) {
+					repository := &fakeRepository{rows: map[string]Record{test.key: {Key: test.key}}}
+					service := NewService(repository)
+					var err error
+					if operation == "create" {
+						_, err = service.Create(context.Background(), CreateInput{Key: test.key, Value: test.value, ValueType: test.valueType})
+					} else {
+						err = service.Update(context.Background(), test.key, UpdateInput{Value: test.value, ValueType: test.valueType})
+					}
+					if err == nil {
+						t.Fatal("expected invalid request")
+					}
+					if repository.findCalls() != 0 || repository.mutations() != 0 {
+						t.Fatalf("invalid input touched repository: finds=%d mutations=%d", repository.findCalls(), repository.mutations())
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestRetentionSettingValidationAcceptsBoundaries(t *testing.T) {
+	for _, test := range []struct{ key, value string }{
+		{sharedsetting.MessageNotificationRetentionDaysKey, "30"},
+		{sharedsetting.MessageNotificationRetentionDaysKey, "3650"},
+		{sharedsetting.RealtimeEventRetentionDaysKey, "1"},
+		{sharedsetting.RealtimeEventRetentionDaysKey, "30"},
+	} {
+		if err := validateInput(test.key, test.value, ValueTypeNumber, ""); err != nil {
+			t.Fatalf("validateInput(%q,%q)=%v", test.key, test.value, err)
+		}
+	}
+}
+
+func TestRequiredSettingCannotBeDisabledBeforeRepositoryAccess(t *testing.T) {
+	for _, key := range []string{sharedsetting.MessageNotificationRetentionDaysKey, sharedsetting.RealtimeEventRetentionDaysKey} {
+		repository := &fakeRepository{rows: map[string]Record{key: {Key: key}}}
+		if err := NewService(repository).UpdateStatus(context.Background(), key, yesno.No); err == nil {
+			t.Fatalf("UpdateStatus(%q, No) error=nil", key)
+		}
+		if repository.findCalls() != 0 || repository.mutations() != 0 {
+			t.Fatalf("disable %q touched repository", key)
+		}
+	}
+}
+
 func (f *fakeRepository) runMutation(ctx context.Context) (cachegeneration.MutationResult, error) {
 	f.mutex.Lock()
 	f.mutationCalls++

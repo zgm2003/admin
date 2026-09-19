@@ -2,6 +2,7 @@ package authstate
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -10,9 +11,17 @@ import (
 )
 
 const (
-	defaultLeaseTTL      = 30 * time.Second
-	defaultRenewInterval = 10 * time.Second
+	defaultLeaseTTL             = 30 * time.Second
+	defaultRenewInterval        = 10 * time.Second
+	realtimeInvalidationChannel = "auth:realtime-invalidation:v1"
 )
+
+type realtimeInvalidation struct {
+	SchemaVersion int    `json:"schemaVersion"`
+	TargetType    string `json:"targetType"`
+	PlatformCode  string `json:"platformCode,omitempty"`
+	UserID        int64  `json:"userId"`
+}
 
 type Invalidator struct {
 	store         *Store
@@ -57,7 +66,12 @@ func (i *Invalidator) Acquire(ctx context.Context, candidates MutationFacts) (*M
 			_ = i.restore(ctx, acquired)
 			return nil, encodeErr
 		}
-		result, evalErr := i.store.redis.EvalString(ctx, acquireStateScript, []string{entry.key}, entry.priorPayload, invalidatingPayload, i.leaseTTL.Milliseconds())
+		invalidationPayload, encodeErr := entry.realtimeInvalidationPayload()
+		if encodeErr != nil {
+			_ = i.restore(ctx, acquired)
+			return nil, encodeErr
+		}
+		result, evalErr := i.store.redis.EvalString(ctx, acquireStateScript, []string{entry.key}, entry.priorPayload, invalidatingPayload, i.leaseTTL.Milliseconds(), realtimeInvalidationChannel, invalidationPayload)
 		if evalErr != nil {
 			return nil, errors.Join(evalErr, i.restore(ctx, acquired))
 		}
@@ -222,6 +236,28 @@ func (e mutationEntry) invalidatingPayload() (string, error) {
 	return encodeState(sessionsStateFromFact(*e.sessions, StateInvalidating, &e.token))
 }
 
+func (e mutationEntry) realtimeInvalidationPayload() (string, error) {
+	payload := realtimeInvalidation{SchemaVersion: 1, UserID: e.identityUserID()}
+	if e.user != nil {
+		payload.TargetType = "user"
+	} else {
+		payload.TargetType = "platformUser"
+		payload.PlatformCode = e.sessions.Platform
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("encode realtime invalidation: %w", err)
+	}
+	return string(encoded), nil
+}
+
+func (e mutationEntry) identityUserID() int64 {
+	if e.user != nil {
+		return e.user.UserID
+	}
+	return e.sessions.UserID
+}
+
 func (e mutationEntry) identity() (int64, string) {
 	if e.user != nil {
 		return e.user.UserID, ""
@@ -264,6 +300,7 @@ local decoded = cjson.decode(current)
 if decoded.state == 'invalidating' then return 'updating' end
 if current ~= ARGV[1] then return 'changed' end
 redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+redis.call('PUBLISH', ARGV[4], ARGV[5])
 return 'acquired'
 `
 

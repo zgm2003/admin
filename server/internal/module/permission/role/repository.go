@@ -71,6 +71,59 @@ func (r *Repository) Create(ctx context.Context, value *Role) error {
 	return nil
 }
 
+func (r *Repository) FindNotificationBaseMenuIDs(ctx context.Context, codes []string) ([]int64, error) {
+	if len(codes) != 4 {
+		return nil, fmt.Errorf("notification base permission codes are invalid")
+	}
+	type row struct {
+		ID         int64
+		PlatformID int64
+		ParentID   *int64
+		MenuType   string
+		Code       string
+		IsHidden   yesno.Value
+	}
+	var rows []row
+	if err := r.db.WithContext(ctx).Table("permission_menu AS menu").Select("menu.id,menu.platform_id,menu.parent_id,menu.menu_type,menu.code,menu.is_hidden").Joins("JOIN permission_auth_platform platform ON platform.id=menu.platform_id AND platform.is_enabled=1 AND platform.deleted_at IS NULL").Where("menu.code IN ? AND menu.is_enabled=1 AND menu.deleted_at IS NULL", codes).Order("menu.platform_id,menu.id").Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("find notification base menus: %w", err)
+	}
+	byPlatform := map[int64][]row{}
+	for _, item := range rows {
+		byPlatform[item.PlatformID] = append(byPlatform[item.PlatformID], item)
+	}
+	result := make([]int64, 0, len(rows))
+	for platformID, nodes := range byPlatform {
+		if len(nodes) != 4 {
+			return nil, fmt.Errorf("notification base permission facts are incomplete for platform %d", platformID)
+		}
+		var pageID int64
+		seen := map[string]bool{}
+		for _, node := range nodes {
+			if seen[node.Code] {
+				return nil, fmt.Errorf("notification base permission code is duplicated")
+			}
+			seen[node.Code] = true
+			if node.Code == "message:notification:view" {
+				if node.MenuType != "page" || node.IsHidden != yesno.Yes || node.ParentID != nil {
+					return nil, fmt.Errorf("notification base page is invalid")
+				}
+				pageID = node.ID
+			}
+		}
+		if pageID == 0 {
+			return nil, fmt.Errorf("notification base page is missing")
+		}
+		for _, node := range nodes {
+			if node.Code != "message:notification:view" && (node.MenuType != "action" || node.ParentID == nil || *node.ParentID != pageID) {
+				return nil, fmt.Errorf("notification base action is invalid")
+			}
+			result = append(result, node.ID)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
+	return result, nil
+}
+
 func (r *Repository) LockActiveRole(ctx context.Context, id int64) (Role, error) {
 	var found Role
 	if err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).Take(&found).Error; err != nil {

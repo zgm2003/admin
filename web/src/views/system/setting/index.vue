@@ -12,6 +12,7 @@ import {
   updateSetting,
   updateBrandSettings,
   updateSettingStatus,
+  isRetentionSettingKey,
   type SettingValueType,
   type SystemSetting,
   type BrandSettings,
@@ -210,6 +211,22 @@ async function save(): Promise<void> {
     (editing.value === null && form.value.key.trim() === '')
   )
     return
+  if (
+    editing.value !== null &&
+    isRetentionSettingKey(editing.value.key) &&
+    Number(form.value.value) < Number(editing.value.value)
+  ) {
+    try {
+      await ElMessageBox.confirm(
+        t('setting.retentionDecreaseConfirm'),
+        t('setting.retentionDecreaseTitle'),
+        { type: 'warning' },
+      )
+    } catch (error: unknown) {
+      if (error === 'cancel' || error === 'close') return
+      throw error
+    }
+  }
   submitting.value = true
   try {
     if (editing.value === null) await createSetting(form.value)
@@ -317,7 +334,7 @@ onMounted(() => {
           >{{ t('setting.edit') }}</el-button
         >
         <el-button
-          v-if="canStatus"
+          v-if="canStatus && !isRetentionSettingKey(row.key)"
           data-testid="setting-status-toggle"
           text
           :icon="Switch"

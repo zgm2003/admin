@@ -11,16 +11,25 @@ import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
 import SettingPageView from '@/views/system/setting/index.vue'
 import UpMedia from '@/components/UpMedia/index.vue'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 
-vi.mock('@/api/system/setting', () => ({
-  createSetting: vi.fn(),
-  deleteSetting: vi.fn(),
-  getSettings: vi.fn(),
-  getBrandSettings: vi.fn(),
-  updateSetting: vi.fn(),
-  updateBrandSettings: vi.fn(),
-  updateSettingStatus: vi.fn(),
+vi.mock('element-plus/es/components/message-box/index', () => ({
+  ElMessageBox: { confirm: vi.fn() },
 }))
+
+vi.mock('@/api/system/setting', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/system/setting')>()
+  return {
+    ...actual,
+    createSetting: vi.fn(),
+    deleteSetting: vi.fn(),
+    getSettings: vi.fn(),
+    getBrandSettings: vi.fn(),
+    updateSetting: vi.fn(),
+    updateBrandSettings: vi.fn(),
+    updateSettingStatus: vi.fn(),
+  }
+})
 
 const builtinSetting = settingRow({ id: 1, key: 'auth.captcha.ttl_minutes', isBuiltin: YesNo.Yes })
 const customSetting = settingRow({ id: 2, key: 'auth.captcha.slide_padding', isBuiltin: YesNo.No })
@@ -48,6 +57,9 @@ describe('system setting page', () => {
     vi.mocked(settingAPI.updateBrandSettings).mockResolvedValue(undefined)
     vi.mocked(settingAPI.updateSettingStatus).mockResolvedValue(undefined)
     vi.mocked(settingAPI.deleteSetting).mockResolvedValue(undefined)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValue(
+      'confirm' as unknown as Awaited<ReturnType<typeof ElMessageBox.confirm>>,
+    )
   })
 
   afterEach(() => {
@@ -251,6 +263,154 @@ describe('system setting page', () => {
       valueType: 2,
       description: '',
     })
+  })
+
+  it('keeps required retention settings numeric and removes their disable action', async () => {
+    const retention = settingRow({
+      id: 10,
+      key: settingAPI.messageNotificationRetentionDaysKey,
+      value: '180',
+      valueType: 2,
+      isBuiltin: YesNo.Yes,
+    })
+    vi.mocked(settingAPI.getSettings).mockResolvedValue({
+      list: [retention],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage([
+      'system:setting:list',
+      'system:setting:update',
+      'system:setting:status',
+    ])
+    await flushPromises()
+    expect(wrapper.find('[data-testid="setting-status-toggle"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="setting-update"]').trigger('click')
+    const dialog = wrapper.getComponent({ name: 'SettingDialog' })
+    expect(dialog.props('form')).toMatchObject({ key: retention.key, valueType: 2 })
+    const valueRoot = document.querySelector('[data-testid="setting-form-value"]')
+    const input =
+      valueRoot instanceof HTMLInputElement ? valueRoot : valueRoot?.querySelector('input')
+    expect(input?.getAttribute('min')).toBe('30')
+    expect(input?.getAttribute('max')).toBe('3650')
+  })
+
+  it('confirms a retention decrease before updating', async () => {
+    const retention = settingRow({
+      id: 11,
+      key: settingAPI.realtimeEventRetentionDaysKey,
+      value: '7',
+      valueType: 2,
+      isBuiltin: YesNo.Yes,
+    })
+    vi.mocked(settingAPI.getSettings).mockResolvedValue({
+      list: [retention],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage(['system:setting:list', 'system:setting:update'])
+    await flushPromises()
+    await wrapper.get('[data-testid="setting-update"]').trigger('click')
+    const dialog = wrapper.getComponent({ name: 'SettingDialog' })
+    dialog.vm.$emit('update:form', { ...dialog.props('form'), value: '6' })
+    await nextTick()
+    await clickBody('setting-save')
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
+    expect(settingAPI.updateSetting).toHaveBeenCalledWith(
+      retention.key,
+      expect.objectContaining({ value: '6' }),
+    )
+  })
+
+  it('does not update when a retention decrease is cancelled', async () => {
+    const retention = settingRow({
+      id: 12,
+      key: settingAPI.realtimeEventRetentionDaysKey,
+      value: '7',
+      valueType: 2,
+      isBuiltin: YesNo.Yes,
+    })
+    vi.mocked(settingAPI.getSettings).mockResolvedValue({
+      list: [retention],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    vi.mocked(ElMessageBox.confirm).mockRejectedValue('cancel')
+    const wrapper = mountPage(['system:setting:list', 'system:setting:update'])
+    await flushPromises()
+    await wrapper.get('[data-testid="setting-update"]').trigger('click')
+    const dialog = wrapper.getComponent({ name: 'SettingDialog' })
+    dialog.vm.$emit('update:form', { ...dialog.props('form'), value: '6' })
+    await nextTick()
+    await clickBody('setting-save')
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
+    expect(settingAPI.updateSetting).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['equal', '7'],
+    ['increase', '8'],
+  ])('updates an %s retention value without confirmation', async (_case, value) => {
+    const retention = settingRow({
+      id: 13,
+      key: settingAPI.realtimeEventRetentionDaysKey,
+      value: '7',
+      valueType: 2,
+      isBuiltin: YesNo.Yes,
+    })
+    vi.mocked(settingAPI.getSettings).mockResolvedValue({
+      list: [retention],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage(['system:setting:list', 'system:setting:update'])
+    await flushPromises()
+    await wrapper.get('[data-testid="setting-update"]').trigger('click')
+    const dialog = wrapper.getComponent({ name: 'SettingDialog' })
+    dialog.vm.$emit('update:form', { ...dialog.props('form'), value })
+    await nextTick()
+    await clickBody('setting-save')
+    await flushPromises()
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+    expect(settingAPI.updateSetting).toHaveBeenCalledWith(
+      retention.key,
+      expect.objectContaining({ value }),
+    )
+  })
+
+  it('keeps the retention dialog open when the update request fails', async () => {
+    const retention = settingRow({
+      id: 14,
+      key: settingAPI.realtimeEventRetentionDaysKey,
+      value: '7',
+      valueType: 2,
+      isBuiltin: YesNo.Yes,
+    })
+    vi.mocked(settingAPI.getSettings).mockResolvedValue({
+      list: [retention],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    vi.mocked(settingAPI.updateSetting).mockRejectedValue(new Error('request failed'))
+    const wrapper = mountPage(['system:setting:list', 'system:setting:update'])
+    const errorHandler = vi.fn()
+    wrapper.vm.$.appContext.config.errorHandler = errorHandler
+    await flushPromises()
+    await wrapper.get('[data-testid="setting-update"]').trigger('click')
+    const dialog = wrapper.getComponent({ name: 'SettingDialog' })
+    dialog.vm.$emit('update:form', { ...dialog.props('form'), value: '8' })
+    await nextTick()
+    await clickBody('setting-save')
+    await flushPromises()
+    expect(errorHandler).toHaveBeenCalledOnce()
+    expect(document.querySelector('[data-testid="setting-save"]')).not.toBeNull()
   })
 })
 

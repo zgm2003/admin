@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import type { HeaderBreadcrumb } from '@/layout/breadcrumbs'
 import logoUrl from '@/assets/logo.png'
 import SettingDrawer from '@/layout/components/SettingDrawer/index.vue'
+import NotificationBell from '@/components/NotificationBell/index.vue'
 
 defineOptions({ name: 'AppHeader' })
 
@@ -64,6 +65,8 @@ const settingsOpen = ref(false)
 
     <div class="app-header__actions">
       <LocaleSwitch />
+
+      <NotificationBell />
 
       <el-tooltip :content="t('layout.header.settings')">
         <el-button

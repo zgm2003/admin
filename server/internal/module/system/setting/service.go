@@ -194,16 +194,16 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 
 func (s *Service) Update(ctx context.Context, key string, input UpdateInput) error {
 	key = strings.TrimSpace(key)
+	input.Value, input.Description = strings.TrimSpace(input.Value), strings.TrimSpace(input.Description)
+	if err := validateInput(key, input.Value, input.ValueType, input.Description); err != nil {
+		return apperror.InvalidRequest(err)
+	}
 	current, err := s.repository.Find(ctx, key)
 	if errors.Is(err, ErrNotFound) {
 		return apperror.NotFound(err)
 	}
 	if err != nil {
 		return apperror.DependencyUnavailable(err)
-	}
-	input.Value, input.Description = strings.TrimSpace(input.Value), strings.TrimSpace(input.Description)
-	if err := validateInput(key, input.Value, input.ValueType, input.Description); err != nil {
-		return apperror.InvalidRequest(err)
 	}
 	current.Value, current.ValueType, current.Description, current.UpdatedAt = input.Value, input.ValueType, input.Description, s.now().UTC()
 	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (cachegeneration.MutationResult, error) {
@@ -216,6 +216,9 @@ func (s *Service) UpdateStatus(ctx context.Context, key string, status yesno.Val
 		return apperror.InvalidRequest(fmt.Errorf("isEnabled must be 0 or 1"))
 	}
 	key = strings.TrimSpace(key)
+	if isRequiredSetting(key) && status == yesno.No {
+		return apperror.InvalidRequest(fmt.Errorf("required setting cannot be disabled"))
+	}
 	if _, err := s.repository.Find(ctx, key); errors.Is(err, ErrNotFound) {
 		return apperror.NotFound(err)
 	} else if err != nil {
@@ -605,7 +608,26 @@ func validateInput(key, value string, valueType int, description string) error {
 	if !keyPattern.MatchString(key) || utf8.RuneCountInString(key) > 128 || utf8.RuneCountInString(description) > 512 || !validSettingValue(value, valueType) {
 		return fmt.Errorf("setting input is invalid")
 	}
+	switch key {
+	case sharedsetting.MessageNotificationRetentionDaysKey:
+		if valueType != ValueTypeNumber || !integerInRange(value, 30, 3650) {
+			return fmt.Errorf("notification retention days must be an integer from 30 to 3650")
+		}
+	case sharedsetting.RealtimeEventRetentionDaysKey:
+		if valueType != ValueTypeNumber || !integerInRange(value, 1, 30) {
+			return fmt.Errorf("realtime event retention days must be an integer from 1 to 30")
+		}
+	}
 	return nil
+}
+
+func isRequiredSetting(key string) bool {
+	return key == sharedsetting.MessageNotificationRetentionDaysKey || key == sharedsetting.RealtimeEventRetentionDaysKey
+}
+
+func integerInRange(value string, minimum, maximum int) bool {
+	parsed, err := strconv.Atoi(value)
+	return err == nil && parsed >= minimum && parsed <= maximum
 }
 
 func validSettingValue(value string, valueType int) bool {

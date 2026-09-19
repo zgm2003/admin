@@ -291,15 +291,34 @@ describe('auth API', () => {
       confirmPassword: 'NewPassw0rd!',
     }
     requestMock.mockResolvedValueOnce({})
-    await expect(resetPassword({ account: 'admin@example.com', loginType: 'email', challengeId: 'challenge-1', ...input })).resolves.toBeUndefined()
+    await expect(
+      resetPassword({
+        account: 'admin@example.com',
+        loginType: 'email',
+        challengeId: 'challenge-1',
+        ...input,
+      }),
+    ).resolves.toBeUndefined()
     expect(requestMock).toHaveBeenCalledWith({
       method: 'POST',
       url: '/api/v1/auth/password/reset',
-      data: { account: 'admin@example.com', loginType: 'email', challengeId: 'challenge-1', ...input },
+      data: {
+        account: 'admin@example.com',
+        loginType: 'email',
+        challengeId: 'challenge-1',
+        ...input,
+      },
     })
 
     requestMock.mockResolvedValueOnce({ unexpected: true })
-    await expect(resetPassword({ account: 'admin@example.com', loginType: 'email', challengeId: 'challenge-1', ...input })).rejects.toThrow('reset password result')
+    await expect(
+      resetPassword({
+        account: 'admin@example.com',
+        loginType: 'email',
+        challengeId: 'challenge-1',
+        ...input,
+      }),
+    ).rejects.toThrow('reset password result')
   })
 
   it('rejects a current user response without the required phone field', async () => {

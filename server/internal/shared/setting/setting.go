@@ -15,8 +15,10 @@ const (
 	ValueTypeBool   = 3
 	ValueTypeJSON   = 4
 
-	AuthCaptchaTTLKey          = "auth.captcha.ttl_minutes"
-	AuthCaptchaSlidePaddingKey = "auth.captcha.slide_padding"
+	AuthCaptchaTTLKey                   = "auth.captcha.ttl_minutes"
+	AuthCaptchaSlidePaddingKey          = "auth.captcha.slide_padding"
+	RealtimeEventRetentionDaysKey       = "realtime.event.retention_days"
+	MessageNotificationRetentionDaysKey = "message.notification.retention_days"
 )
 
 type Record struct {

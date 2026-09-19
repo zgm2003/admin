@@ -19,9 +19,10 @@ type Counter struct {
 }
 
 type counterState struct {
-	mu     sync.Mutex
-	counts map[string]int
-	total  int
+	mu         sync.Mutex
+	counts     map[string]int
+	statements []string
+	total      int
 }
 
 func New(base logger.Interface, tables ...string) *Counter {
@@ -40,9 +41,10 @@ func (c *Counter) LogMode(level logger.LogLevel) logger.Interface {
 
 func (c *Counter) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
 	sql, rows := fc()
-	if err == nil && strings.HasPrefix(strings.ToUpper(strings.TrimSpace(sql)), "SELECT ") {
+	if err == nil && isReadQuery(sql) {
 		c.state.mu.Lock()
 		c.state.total++
+		c.state.statements = append(c.state.statements, strings.TrimSpace(sql))
 		for table, matcher := range c.matchers {
 			if matcher.MatchString(sql) {
 				c.state.counts[table]++
@@ -51,6 +53,11 @@ func (c *Counter) Trace(ctx context.Context, begin time.Time, fc func() (string,
 		c.state.mu.Unlock()
 	}
 	c.Interface.Trace(ctx, begin, func() (string, int64) { return sql, rows }, err)
+}
+
+func isReadQuery(sql string) bool {
+	normalized := strings.ToUpper(strings.TrimSpace(sql))
+	return strings.HasPrefix(normalized, "SELECT ") || strings.HasPrefix(normalized, "WITH ")
 }
 
 func (c *Counter) Count(table string) int {
@@ -65,10 +72,17 @@ func (c *Counter) Total() int {
 	return c.state.total
 }
 
+func (c *Counter) Statements() []string {
+	c.state.mu.Lock()
+	defer c.state.mu.Unlock()
+	return append([]string(nil), c.state.statements...)
+}
+
 func (c *Counter) Reset() {
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
 	c.state.total = 0
+	c.state.statements = nil
 	for table := range c.state.counts {
 		c.state.counts[table] = 0
 	}

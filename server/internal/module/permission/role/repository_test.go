@@ -12,6 +12,7 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	"admin/server/internal/module/auth/login"
+	"admin/server/internal/module/message/notification"
 	"admin/server/internal/module/permission/access"
 	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
@@ -530,4 +531,33 @@ func createRoleAccessUser(t *testing.T, tx *gorm.DB, ctx context.Context, roleID
 		}
 	}
 	return created
+}
+
+func TestCreateRoleGrantsCompleteNotificationBasePermissions(t *testing.T) {
+	db, ctx := openRoleDatabase(t)
+	platform := createRoleTestPlatform(t, db, ctx, "notify", "Notify", yesno.Yes)
+	path, component, i18nKey := "/message/notification", "message/notification", "menu.message.notification"
+	page := menu.Menu{PlatformID: platform.ID, MenuType: menu.TypePage, Name: "Notification", Code: "message:notification:view", Path: &path, ComponentPath: &component, I18nKey: &i18nKey, IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
+	if err := db.WithContext(ctx).Create(&page).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, code := range []string{"message:notification:list", "message:notification:read", "message:notification:delete"} {
+		if err := db.WithContext(ctx).Create(&menu.Menu{PlatformID: platform.ID, ParentID: &page.ID, MenuType: menu.TypeAction, Name: code, Code: code, IsEnabled: yesno.Yes, IsHidden: yesno.Yes}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	codes := notification.BasePermissionCodes()
+	codes[0] = "mutated"
+	if notification.BasePermissionCodes()[0] != "message:notification:view" {
+		t.Fatal("BasePermissionCodes did not return a copy")
+	}
+	service := role.NewService(role.NewRepository(db), nil, notification.BasePermissionCodes())
+	roleID, err := service.Create(ctx, role.CreateInput{Code: "notify_role", Name: "Notify Role"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var count int64
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM permission_role_menu role_menu JOIN permission_menu menu ON menu.id=role_menu.menu_id WHERE role_menu.role_id=? AND menu.platform_id=? AND role_menu.deleted_at IS NULL`, roleID, platform.ID).Scan(&count).Error; err != nil || count != 4 {
+		t.Fatalf("grants=%d err=%v", count, err)
+	}
 }

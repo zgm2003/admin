@@ -57,7 +57,8 @@ describe('cross-stack module identity', () => {
       for (const module of resource.modules) {
         expect(existsSync(resolve('src/api', `${module}.ts`))).toBe(true)
       }
-      const backendModules = 'backendModules' in resource ? resource.backendModules : resource.modules
+      const backendModules =
+        'backendModules' in resource ? resource.backendModules : resource.modules
       for (const module of backendModules) {
         expect(existsSync(resolve('../server/internal/module', module, 'model.go'))).toBe(true)
       }

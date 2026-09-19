@@ -23,9 +23,7 @@ export function useStorageDictionaries() {
   const commonExtensionValues = computed(() =>
     commonExtensionOptions.value.map((item) => item.value),
   )
-  const commonMimeTypeValues = computed(() =>
-    commonMimeTypeOptions.value.map((item) => item.value),
-  )
+  const commonMimeTypeValues = computed(() => commonMimeTypeOptions.value.map((item) => item.value))
   let requestSequence = 0
 
   function dictionaryOptions(code: (typeof storageDictionaryCodes)[number]): DictionaryOption[] {

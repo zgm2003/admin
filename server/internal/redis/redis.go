@@ -42,6 +42,17 @@ func (c *Client) GetString(ctx context.Context, key string) (string, bool, error
 	return value, true, nil
 }
 
+func (c *Client) GetDeleteString(ctx context.Context, key string) (string, bool, error) {
+	value, err := c.client.GetDel(ctx, key).Result()
+	if errors.Is(err, goredis.Nil) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("get and delete Redis key: %w", err)
+	}
+	return value, true, nil
+}
+
 func (c *Client) SetString(ctx context.Context, key, value string, ttl time.Duration) error {
 	if err := c.client.Set(ctx, key, value, ttl).Err(); err != nil {
 		return fmt.Errorf("set Redis key: %w", err)
@@ -55,6 +66,13 @@ func (c *Client) SetStringIfMissing(ctx context.Context, key, value string, ttl 
 		return false, fmt.Errorf("set Redis key if missing: %w", err)
 	}
 	return installed, nil
+}
+
+func (c *Client) Publish(ctx context.Context, channel string, payload []byte) error {
+	if err := c.client.Publish(ctx, channel, payload).Err(); err != nil {
+		return fmt.Errorf("publish Redis message: %w", err)
+	}
+	return nil
 }
 
 func (c *Client) TTL(ctx context.Context, key string) (time.Duration, bool, error) {

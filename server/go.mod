@@ -3,27 +3,33 @@ module admin/server
 go 1.26.5
 
 require (
+	github.com/coder/websocket v1.8.14
 	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/validator/v10 v10.30.3
-	github.com/go-redis/redis_rate/v10 v10.0.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/google/uuid v1.6.0
 	github.com/hibiken/asynq v0.26.0
 	github.com/hibiken/asynqmon v0.7.2
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/joho/godotenv v1.5.1
+	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.563
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/ses v1.0.563
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms v1.0.563
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.75
+	github.com/wenlng/go-captcha-assets v1.0.7
+	github.com/wenlng/go-captcha/v2 v2.0.5
 	golang.org/x/crypto v0.52.0
+	golang.org/x/net v0.54.0
 	golang.org/x/sync v0.20.0
 	gorm.io/driver/postgres v1.6.2
 	gorm.io/gorm v1.31.2
 )
 
 require (
+	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
@@ -38,7 +44,7 @@ require (
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/google/go-querystring v1.0.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
+	github.com/gorilla/css v1.0.1 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
@@ -60,13 +66,10 @@ require (
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
-	github.com/wenlng/go-captcha-assets v1.0.7 // indirect
-	github.com/wenlng/go-captcha/v2 v2.0.5 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/arch v0.23.0 // indirect
 	golang.org/x/image v0.16.0 // indirect
-	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.14.0 // indirect

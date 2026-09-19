@@ -8,6 +8,10 @@ import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
 import { useBrandStore } from '@/store/brand'
 import { useUIPreferencesStore } from '@/store/uiPreferences'
+import { useNotificationStore } from '@/store/notification'
+import { RealtimeRuntime } from '@/realtime'
+import { authPlatform } from '@/auth/platform'
+import { ElNotification } from 'element-plus'
 import { resolveBreadcrumbs } from './breadcrumbs'
 import AppAside from './components/AppAside/index.vue'
 import AppFooter from './components/AppFooter/index.vue'
@@ -22,6 +26,8 @@ const access = usePermissionStore()
 const auth = useAuthStore()
 const brand = useBrandStore()
 const uiPreferences = useUIPreferencesStore()
+const notifications = useNotificationStore()
+const realtimeRuntime = new RealtimeRuntime()
 const collapsed = ref(false)
 const mobileMenuOpen = ref(false)
 const isMobile = ref(window.innerWidth <= mobileBreakpoint)
@@ -84,6 +90,8 @@ async function handleLogout(): Promise<void> {
   logoutPending.value = true
   try {
     await logout()
+    realtimeRuntime.stop()
+    notifications.reset()
     access.reset()
     brand.reset()
     auth.setAnonymous()
@@ -94,6 +102,42 @@ async function handleLogout(): Promise<void> {
     logoutPending.value = false
   }
 }
+
+watch(
+  () => [auth.status, auth.user?.userId, auth.accessToken] as const,
+  ([status, userId, token]) => {
+    realtimeRuntime.stop()
+    if (status !== 'authenticated' || userId === undefined || token === '') return
+    realtimeRuntime.start(
+      { platformCode: authPlatform, userId },
+      {
+        event: async (event) => {
+          if (
+            (event.type === 'notification.created.v1' ||
+              event.type === 'notification.stateChanged.v1') &&
+            access.hasPermission('message:notification:list')
+          )
+            notifications.scheduleRefresh()
+        },
+        resync: async () => {
+          if (access.hasPermission('message:notification:list')) await notifications.load()
+        },
+        urgent: async (event) => {
+          if (
+            event.type === 'notification.created.v1' &&
+            access.hasPermission('message:notification:list')
+          )
+            ElNotification({
+              title: event.data.title,
+              message: event.data.summary,
+              type: event.data.variant,
+            })
+        },
+      },
+    )
+  },
+  { immediate: true },
+)
 
 watch(
   () => uiPreferences.preferences.showMenuToggle,
@@ -117,6 +161,7 @@ onMounted(() => {
   document.addEventListener('keydown', handleDocumentKeydown)
 })
 onBeforeUnmount(() => {
+  realtimeRuntime.stop()
   window.removeEventListener('resize', updateViewport)
   document.removeEventListener('keydown', handleDocumentKeydown)
 })

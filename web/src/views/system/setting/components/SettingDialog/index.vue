@@ -2,7 +2,12 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { SystemSetting, SettingValueType } from '@/api/system/setting'
+import {
+  isRetentionSettingKey,
+  retentionSettingRanges,
+  type SystemSetting,
+  type SettingValueType,
+} from '@/api/system/setting'
 
 defineOptions({ name: 'SettingDialog' })
 
@@ -44,6 +49,17 @@ function validateValue(): boolean {
       return false
     }
   }
+  if (isRetentionSettingKey(form.value.key)) {
+    const range = retentionSettingRanges[form.value.key]
+    const numeric = Number(form.value.value)
+    if (!Number.isInteger(numeric) || numeric < range.minimum || numeric > range.maximum) {
+      valueError.value = t('setting.retentionRange', {
+        minimum: range.minimum,
+        maximum: range.maximum,
+      })
+      return false
+    }
+  }
   return true
 }
 
@@ -82,6 +98,7 @@ function save(): void {
           v-model="form.valueType"
           data-testid="setting-form-type"
           :options="valueTypeOptions"
+          :disabled="isRetentionSettingKey(form.key)"
           style="width: 100%"
         />
       </el-form-item>
@@ -100,6 +117,13 @@ function save(): void {
           v-model="form.value"
           data-testid="setting-form-value"
           :type="form.valueType === 4 ? 'textarea' : form.valueType === 2 ? 'number' : 'text'"
+          :min="
+            isRetentionSettingKey(form.key) ? retentionSettingRanges[form.key].minimum : undefined
+          "
+          :max="
+            isRetentionSettingKey(form.key) ? retentionSettingRanges[form.key].maximum : undefined
+          "
+          :step="isRetentionSettingKey(form.key) ? 1 : undefined"
           :rows="form.valueType === 4 ? 8 : undefined"
           :placeholder="t('setting.valuePlaceholder')"
         />

@@ -66,13 +66,15 @@ describe('user email identity API', () => {
     await expect(sendEmailCode({ target: 'current' })).rejects.toThrow()
   })
 
-  it.each([{ email: 'missing-at' }, { email: 'UPPER@example.com' }, { email: '' }, { email: 'a@b.com', extra: true }])(
-    'rejects malformed email identity responses',
-    async (response) => {
-      requestMock.mockResolvedValue(response)
-      await expect(
-        bindEmail({ nextEmail: 'a@b.com', nextChallengeId: 'challenge', nextCode: '123456' }),
-      ).rejects.toThrow()
-    },
-  )
+  it.each([
+    { email: 'missing-at' },
+    { email: 'UPPER@example.com' },
+    { email: '' },
+    { email: 'a@b.com', extra: true },
+  ])('rejects malformed email identity responses', async (response) => {
+    requestMock.mockResolvedValue(response)
+    await expect(
+      bindEmail({ nextEmail: 'a@b.com', nextChallengeId: 'challenge', nextCode: '123456' }),
+    ).rejects.toThrow()
+  })
 })

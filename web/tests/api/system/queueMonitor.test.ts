@@ -17,7 +17,10 @@ describe('queue monitor API', () => {
   it('posts for a grant and strictly parses expiresAt', async () => {
     requestMock.mockResolvedValueOnce({ expiresAt: '2026-09-14T12:00:00Z' })
     await expect(grantQueueMonitor()).resolves.toEqual({ expiresAt: '2026-09-14T12:00:00Z' })
-    expect(requestMock).toHaveBeenCalledWith({ method: 'POST', url: '/api/admin/v1/system/queuemonitor/grant' })
+    expect(requestMock).toHaveBeenCalledWith({
+      method: 'POST',
+      url: '/api/admin/v1/system/queuemonitor/grant',
+    })
 
     requestMock.mockResolvedValueOnce({ expiresAt: 'bad' })
     await expect(grantQueueMonitor()).rejects.toBeInstanceOf(ProtocolError)

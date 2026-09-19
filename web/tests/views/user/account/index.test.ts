@@ -139,8 +139,12 @@ describe('user management', () => {
     if (usernameInput === null) return
     usernameInput.value = ' new_name '
     usernameInput.dispatchEvent(new Event('input'))
-    const emailInput = document.body.querySelector<HTMLInputElement>('[data-testid="user-email-readonly"]')
-    const phoneInput = document.body.querySelector<HTMLInputElement>('[data-testid="user-phone-readonly"]')
+    const emailInput = document.body.querySelector<HTMLInputElement>(
+      '[data-testid="user-email-readonly"]',
+    )
+    const phoneInput = document.body.querySelector<HTMLInputElement>(
+      '[data-testid="user-phone-readonly"]',
+    )
     expect(emailInput?.disabled).toBe(true)
     expect(emailInput?.value).toBe('alice@example.com')
     expect(phoneInput?.disabled).toBe(true)

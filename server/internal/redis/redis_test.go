@@ -102,6 +102,25 @@ func TestAtomicStringOperations(t *testing.T) {
 	}
 }
 
+func TestGetDeleteStringIsAtomicAndDistinguishesMissing(t *testing.T) {
+	client := openIntegrationClient(t)
+	ctx := context.Background()
+	key := "test:redis:getdelete:" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	t.Cleanup(func() { _ = client.Delete(context.Background(), key) })
+	if value, found, err := client.GetDeleteString(ctx, key); err != nil || found || value != "" {
+		t.Fatalf("missing=%q,%v,%v", value, found, err)
+	}
+	if err := client.SetString(ctx, key, "once", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if value, found, err := client.GetDeleteString(ctx, key); err != nil || !found || value != "once" {
+		t.Fatalf("first=%q,%v,%v", value, found, err)
+	}
+	if value, found, err := client.GetDeleteString(ctx, key); err != nil || found || value != "" {
+		t.Fatalf("second=%q,%v,%v", value, found, err)
+	}
+}
+
 func TestEvalStringComparesMutationToken(t *testing.T) {
 	client := openIntegrationClient(t)
 	ctx := context.Background()
