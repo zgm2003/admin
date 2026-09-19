@@ -10,6 +10,7 @@ import { usePermissionStore } from '@/store/permission'
 import { ProtocolError } from '@/types/http'
 import NotificationEditor from './components/NotificationEditor/index.vue'
 import NotificationTaskSearch from './components/NotificationTaskSearch/index.vue'
+import NotificationTaskStatusTabs from './components/NotificationTaskStatusTabs/index.vue'
 import NotificationTaskTable from './components/NotificationTaskTable/index.vue'
 import NotificationTaskDetail from './components/NotificationTaskDetail/index.vue'
 import { useNotificationTaskOptions } from './useNotificationTaskOptions'
@@ -84,7 +85,6 @@ const audienceOptions = computed(() =>
 const searchModel = computed<SearchFormModel>({
   get: () => ({
     platformId: platformIDFilter.value,
-    status: statusFilter.value,
     audienceType: audienceFilter.value,
     keyword: keywordFilter.value,
     timeRange: timeRange.value,
@@ -93,13 +93,6 @@ const searchModel = computed<SearchFormModel>({
     platformIDFilter.value =
       typeof value.platformId === 'string' || typeof value.platformId === 'number'
         ? String(value.platformId)
-        : ''
-    statusFilter.value =
-      typeof value.status === 'string' &&
-      ['draft', 'scheduled', 'queued', 'processing', 'completed', 'failed', 'canceled'].includes(
-        value.status,
-      )
-        ? (value.status as taskApi.NotificationTaskStatus)
         : ''
     audienceFilter.value =
       value.audienceType === 'user' ||
@@ -320,6 +313,12 @@ function updatePagination(next: TablePaginationState): void {
   void load()
 }
 
+function changeStatus(value: taskApi.NotificationTaskStatus | ''): void {
+  statusFilter.value = value
+  pagination.currentPage = 1
+  void load()
+}
+
 function search(): void {
   const platformID = platformIDFilter.value.trim()
   if (platformID !== '' && (!/^\d+$/.test(platformID) || Number(platformID) < 1)) {
@@ -346,6 +345,7 @@ onMounted(() => void load())
 <template>
   <AppPage>
     <NotificationTaskSearch v-model="searchModel" @query="search" @reset="resetSearch" />
+    <NotificationTaskStatusTabs v-model="statusFilter" @change="changeStatus" />
     <NotificationTaskTable
       :rows="rows"
       :loading="loading"

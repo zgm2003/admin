@@ -48,5 +48,47 @@ describe('NotificationTaskTable', () => {
     expect(wrapper.get('[data-testid="notification-task-edit-9"]').text()).toBe('编辑')
     expect(wrapper.get('[data-testid="notification-task-delete-9"]').text()).toBe('删除')
     expect(wrapper.get('[data-testid="notification-task-submit-9"]').text()).toBe('提交')
+    expect(wrapper.get('[data-testid="notification-task-detail-9"]').classes()).toContain(
+      'el-button--primary',
+    )
+    expect(wrapper.get('[data-testid="notification-task-edit-9"]').classes()).toContain(
+      'el-button--warning',
+    )
+    expect(wrapper.get('[data-testid="notification-task-delete-9"]').classes()).toContain(
+      'el-button--danger',
+    )
+    expect(wrapper.get('[data-testid="notification-task-submit-9"]').classes()).toContain(
+      'el-button--success',
+    )
+  })
+
+  it('uses semantic button colors for cancellation and copying', async () => {
+    usePermissionStore().permissionCodes = [
+      'message:notificationTask:cancel',
+      'message:notificationTask:copy',
+    ]
+    const wrapper = mount(NotificationTaskTable, {
+      props: {
+        rows: [
+          { ...draft, id: 10, status: 'scheduled', scheduledAt: '2026-09-20T08:00:00Z' },
+          { ...draft, id: 11, status: 'completed', completedAt: '2026-09-19T09:00:00Z' },
+        ],
+        loading: false,
+        errorMessage: '',
+        pagination: { currentPage: 1, pageSize: 20, total: 2 },
+      },
+      global: { plugins: [ElementPlus, appI18n] },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="notification-task-cancel-10"]').classes()).toContain(
+      'el-button--warning',
+    )
+    expect(wrapper.get('[data-testid="notification-task-copy-10"]').classes()).toContain(
+      'el-button--primary',
+    )
+    expect(wrapper.get('[data-testid="notification-task-copy-11"]').classes()).toContain(
+      'el-button--primary',
+    )
   })
 })

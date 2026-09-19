@@ -11,6 +11,7 @@ import {
   notificationEditorConfig,
   notificationToolbarKeys,
 } from '@/views/message/notificationTask/components/NotificationEditor/index.vue'
+import NotificationTaskSearch from '@/views/message/notificationTask/components/NotificationTaskSearch/index.vue'
 
 vi.mock('@/api/message/notificationTask', async (original) => ({
   ...(await original()),
@@ -96,6 +97,92 @@ describe('notification task management', () => {
     )
     expect(notificationEditorConfig.MENU_CONF.insertLink.checkLink('http://example.test')).toBe(
       false,
+    )
+  })
+  it('keeps status out of the search form because status is filtered by tabs', () => {
+    const wrapper = mount(NotificationTaskSearch, {
+      props: { modelValue: {} },
+      global: {
+        plugins: [appI18n],
+        stubs: {
+          AppSearch: {
+            name: 'AppSearch',
+            props: ['fields'],
+            template: '<div />',
+          },
+        },
+      },
+    })
+
+    expect(
+      (wrapper.getComponent({ name: 'AppSearch' }).props('fields') as Array<{ key: string }>).map(
+        (field) => field.key,
+      ),
+    ).toEqual(['keyword', 'platformId', 'audienceType', 'timeRange'])
+  })
+  it('filters the real list by status tabs and resets pagination', async () => {
+    usePermissionStore().permissionCodes = ['message:notificationTask:list']
+    const wrapper = mount(Page, {
+      global: {
+        plugins: [appI18n],
+        stubs: {
+          AppPage: { template: '<section><slot /></section>' },
+          NotificationTaskSearch: true,
+          NotificationTaskTable: {
+            name: 'NotificationTaskTable',
+            props: ['pagination'],
+            emits: ['update:pagination'],
+            template:
+              '<button data-testid="notification-task-page-three" @click="$emit(\'update:pagination\', { currentPage: 3, pageSize: 20, total: 1 })" />',
+          },
+          AppDialog: true,
+          ElTabs: {
+            name: 'ElTabs',
+            props: ['modelValue'],
+            emits: ['update:modelValue', 'tabChange'],
+            template: '<div><slot /></div>',
+          },
+          ElTabPane: {
+            name: 'ElTabPane',
+            props: ['name', 'label'],
+            template: '<div />',
+          },
+        },
+      },
+    })
+    await vi.waitFor(() => expect(api.listNotificationTasks).toHaveBeenCalledOnce())
+
+    expect(wrapper.findAllComponents({ name: 'ElTabPane' }).map((tab) => tab.props())).toEqual([
+      expect.objectContaining({ name: '', label: '全部' }),
+      expect.objectContaining({ name: 'draft', label: '草稿' }),
+      expect.objectContaining({ name: 'scheduled', label: '待调度' }),
+      expect.objectContaining({ name: 'queued', label: '已入队' }),
+      expect.objectContaining({ name: 'processing', label: '处理中' }),
+      expect.objectContaining({ name: 'completed', label: '已完成' }),
+      expect.objectContaining({ name: 'failed', label: '失败' }),
+      expect.objectContaining({ name: 'canceled', label: '已取消' }),
+    ])
+
+    await wrapper.get('[data-testid="notification-task-page-three"]').trigger('click')
+    await vi.waitFor(() =>
+      expect(api.listNotificationTasks).toHaveBeenLastCalledWith({ page: 3, pageSize: 20 }),
+    )
+
+    const tabs = wrapper.getComponent({ name: 'ElTabs' })
+    tabs.vm.$emit('update:modelValue', 'draft')
+    tabs.vm.$emit('tabChange', 'draft')
+    await vi.waitFor(() =>
+      expect(api.listNotificationTasks).toHaveBeenLastCalledWith({
+        page: 1,
+        pageSize: 20,
+        status: 'draft',
+      }),
+    )
+
+    tabs.vm.$emit('update:modelValue', '')
+    tabs.vm.$emit('tabChange', '')
+    await vi.waitFor(() =>
+      expect(api.listNotificationTasks).toHaveBeenLastCalledWith({ page: 1, pageSize: 20 }),
     )
   })
   it('shows draft commands only with exact permissions', async () => {
@@ -338,7 +425,7 @@ describe('notification task management', () => {
     expect(platformSelect.props('modelValue')).toBeNull()
   })
 
-  it('submits platform, status, audience, keyword, and time filters together', async () => {
+  it('submits platform, audience, keyword, and time filters together', async () => {
     usePermissionStore().permissionCodes = ['message:notificationTask:list']
     const wrapper = mount(Page, {
       global: {
@@ -347,7 +434,7 @@ describe('notification task management', () => {
           AppPage: { template: '<section><slot /></section>' },
           AppSearch: {
             emits: ['update:modelValue', 'query'],
-            template: `<button data-testid="notification-task-search" @click="$emit('update:modelValue', { platformId: '2', status: 'processing', audienceType: 'role', keyword: ' maintenance ', timeRange: ['2026-09-18T00:00:00Z', '2026-09-19T00:00:00Z'] }); $emit('query')">search</button>`,
+            template: `<button data-testid="notification-task-search" @click="$emit('update:modelValue', { platformId: '2', audienceType: 'role', keyword: ' maintenance ', timeRange: ['2026-09-18T00:00:00Z', '2026-09-19T00:00:00Z'] }); $emit('query')">search</button>`,
           },
           AppTable: { props: ['data'], template: '<div />' },
           AppDialog: true,
@@ -362,7 +449,6 @@ describe('notification task management', () => {
         page: 1,
         pageSize: 20,
         platformId: 2,
-        status: 'processing',
         audienceType: 'role',
         keyword: 'maintenance',
         from: '2026-09-18T00:00:00Z',

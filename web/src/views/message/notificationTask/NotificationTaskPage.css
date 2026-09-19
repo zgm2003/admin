@@ -1,3 +1,20 @@
+.notification-task-status-tabs {
+  min-width: 0;
+}
+
+.notification-task-status-tabs :deep(.el-tabs__header) {
+  margin: 0;
+}
+
+.notification-task-status-tabs :deep(.el-tabs__content) {
+  display: none;
+}
+
+.notification-task-status-tabs :deep(.el-tabs__item) {
+  padding: 0 18px;
+  font-weight: 500;
+}
+
 .notification-task-form__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -27,6 +44,10 @@
 }
 
 @media (max-width: 720px) {
+  .notification-task-status-tabs :deep(.el-tabs__item) {
+    padding: 0 12px;
+  }
+
   .notification-task-form__grid {
     grid-template-columns: 1fr;
   }

@@ -1140,7 +1140,7 @@ export const zhCN = {
   'notificationTask.completedAt': '完成时间',
   'notificationTask.updatedAt': '更新时间',
   'notificationTask.actions': '操作',
-  'notificationTask.statusAll': '全部状态',
+  'notificationTask.statusAll': '全部',
   'notificationTask.status.draft': '草稿',
   'notificationTask.status.scheduled': '待调度',
   'notificationTask.status.queued': '已入队',

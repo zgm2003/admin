@@ -62,6 +62,7 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         v-if="can('message:notificationTask:detail')"
         :data-testid="`notification-task-detail-${row.id}`"
         link
+        type="primary"
         @click.stop="emit('detail', row)"
         >{{ t('notificationTask.detail') }}</el-button
       >
@@ -69,6 +70,7 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         v-if="row.status === 'draft' && can('message:notificationTask:update')"
         :data-testid="`notification-task-edit-${row.id}`"
         link
+        type="warning"
         @click.stop="emit('edit', row)"
         >{{ t('notificationTask.edit') }}</el-button
       >
@@ -84,6 +86,7 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         v-if="row.status === 'draft' && can('message:notificationTask:submit')"
         :data-testid="`notification-task-submit-${row.id}`"
         link
+        type="success"
         @click.stop="emit('command', row, 'submit')"
         >{{ t('notificationTask.submit') }}</el-button
       >
@@ -94,6 +97,7 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         "
         :data-testid="`notification-task-cancel-${row.id}`"
         link
+        type="warning"
         @click.stop="emit('command', row, 'cancel')"
         >{{ t('notificationTask.cancel') }}</el-button
       >
@@ -101,6 +105,7 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         v-if="row.status !== 'draft' && can('message:notificationTask:copy')"
         :data-testid="`notification-task-copy-${row.id}`"
         link
+        type="primary"
         @click.stop="emit('command', row, 'copy')"
         >{{ t('notificationTask.copy') }}</el-button
       >

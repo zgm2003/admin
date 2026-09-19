@@ -1177,7 +1177,7 @@ export const enUS = {
   'notificationTask.completedAt': 'Completed at',
   'notificationTask.updatedAt': 'Updated at',
   'notificationTask.actions': 'Actions',
-  'notificationTask.statusAll': 'All statuses',
+  'notificationTask.statusAll': 'All',
   'notificationTask.status.draft': 'Draft',
   'notificationTask.status.scheduled': 'Scheduled',
   'notificationTask.status.queued': 'Queued',

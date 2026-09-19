@@ -8,12 +8,6 @@ const model = defineModel<SearchFormModel>({ required: true })
 const emit = defineEmits<{ query: []; reset: [] }>()
 const { t } = useI18n()
 
-const statusOptions = computed(() => [
-  { value: '', label: t('notificationTask.statusAll') },
-  ...(
-    ['draft', 'scheduled', 'queued', 'processing', 'completed', 'failed', 'canceled'] as const
-  ).map((value) => ({ value, label: t(`notificationTask.status.${value}`) })),
-])
 const audienceOptions = computed(() => [
   { value: '', label: t('notificationTask.audienceAll') },
   ...(['platform', 'user', 'role'] as const).map((value) => ({
@@ -38,15 +32,6 @@ const fields = computed<SearchField[]>(() => [
     clearable: true,
     width: 150,
     testId: 'notification-task-platform-id',
-  },
-  {
-    key: 'status',
-    type: 'select-v2',
-    label: t('notificationTask.statusLabel'),
-    placeholder: t('notificationTask.statusPlaceholder'),
-    options: statusOptions.value,
-    clearable: true,
-    width: 160,
   },
   {
     key: 'audienceType',
