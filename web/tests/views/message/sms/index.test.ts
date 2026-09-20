@@ -10,25 +10,29 @@ import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
 import SmsPage from '@/views/message/sms/index.vue'
 
-vi.mock('@/api/message/sms', () => ({
-  getSmsPageInit: vi.fn(),
-  getSmsConfig: vi.fn(),
-  saveSmsConfig: vi.fn(),
-  deleteSmsConfig: vi.fn(),
-  sendSmsTest: vi.fn(),
-  listSmsTemplates: vi.fn(),
-  updateSmsTemplate: vi.fn(),
-  updateSmsTemplateStatus: vi.fn(),
-  listSmsRules: vi.fn(),
-  createSmsRule: vi.fn(),
-  updateSmsRule: vi.fn(),
-  updateSmsRuleStatus: vi.fn(),
-  deleteSmsRule: vi.fn(),
-  listSmsLogs: vi.fn(),
-  getSmsLogDetail: vi.fn(),
-  listSmsRateLimitPolicies: vi.fn(),
-  updateSmsRateLimitPolicy: vi.fn(),
-}))
+vi.mock('@/api/message/sms', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/message/sms')>()
+  return {
+    ...actual,
+    getSmsPageInit: vi.fn(),
+    getSmsConfig: vi.fn(),
+    saveSmsConfig: vi.fn(),
+    deleteSmsConfig: vi.fn(),
+    sendSmsTest: vi.fn(),
+    listSmsTemplates: vi.fn(),
+    updateSmsTemplate: vi.fn(),
+    updateSmsTemplateStatus: vi.fn(),
+    listSmsRules: vi.fn(),
+    createSmsRule: vi.fn(),
+    updateSmsRule: vi.fn(),
+    updateSmsRuleStatus: vi.fn(),
+    deleteSmsRule: vi.fn(),
+    listSmsLogs: vi.fn(),
+    getSmsLogDetail: vi.fn(),
+    listSmsRateLimitPolicies: vi.fn(),
+    updateSmsRateLimitPolicy: vi.fn(),
+  }
+})
 vi.mock('@/api/system/dictionary', () => ({ getDictionaryOptions: vi.fn() }))
 
 const timestamp = '2026-09-11T08:00:00Z'
@@ -81,7 +85,7 @@ const log: smsApi.SmsLog = {
   scene: 'login',
   templateId: 1,
   toPhoneHint: '156****8271',
-  status: 'sent',
+  status: smsApi.SmsStatus.Sent,
   requestId: 'request-id',
   serialNo: 'serial-no',
   fee: 1,
@@ -127,7 +131,7 @@ describe('SMS management page', () => {
     vi.mocked(smsApi.deleteSmsConfig).mockResolvedValue(undefined)
     vi.mocked(smsApi.sendSmsTest).mockResolvedValue({
       logId: 3,
-      status: 'sent',
+      status: smsApi.SmsStatus.Sent,
       requestId: 'request-id',
       serialNo: 'serial-no',
     })

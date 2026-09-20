@@ -126,7 +126,9 @@ function toFilter(value: SearchFormModel): MailLogFilter {
     toEmail: typeof value.toEmail === 'string' ? value.toEmail : '',
     scene: typeof value.scene === 'string' ? value.scene : '',
     status:
-      value.status === MailStatus.Pending || value.status === MailStatus.Sent || value.status === MailStatus.Failed
+      value.status === MailStatus.Pending ||
+      value.status === MailStatus.Sent ||
+      value.status === MailStatus.Failed
         ? value.status
         : '',
     timeRange: Array.isArray(value.timeRange) ? (value.timeRange as [string, string] | []) : [],
@@ -143,7 +145,7 @@ function usernameText(value: string): string {
 
 function statusText(value: MailStatus): string {
   const key = statusLabels[value]
-  return key === undefined ? value : t(key)
+  return key === undefined ? String(value) : t(key)
 }
 
 const sceneNames = computed(() =>
@@ -204,7 +206,13 @@ async function inspect(row: MailLog): Promise<void> {
       </template>
       <template #cell-status="{ row }: { row: MailLog }">
         <el-tag
-          :type="row.status === MailStatus.Sent ? 'success' : row.status === MailStatus.Failed ? 'danger' : 'warning'"
+          :type="
+            row.status === MailStatus.Sent
+              ? 'success'
+              : row.status === MailStatus.Failed
+                ? 'danger'
+                : 'warning'
+          "
           effect="plain"
           >{{ statusText(row.status) }}</el-tag
         >

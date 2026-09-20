@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import * as smsApi from '@/api/message/sms'
+import { SmsStatus } from '@/api/message/sms'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { formatTime } from '@/utils/datetime'
@@ -41,9 +42,9 @@ const searchModel = computed<SearchFormModel>({
   },
 })
 const statusOptions = computed(() => [
-  { label: t('sms.status.pending'), value: smsApi.SmsStatus.Pending },
-  { label: t('sms.status.sent'), value: smsApi.SmsStatus.Sent },
-  { label: t('sms.status.failed'), value: smsApi.SmsStatus.Failed },
+  { label: t('sms.status.pending'), value: SmsStatus.Pending },
+  { label: t('sms.status.sent'), value: SmsStatus.Sent },
+  { label: t('sms.status.failed'), value: SmsStatus.Failed },
 ])
 const searchFields = computed<SearchField[]>(() => [
   {
@@ -128,7 +129,9 @@ function toFilter(value: SearchFormModel): SmsLogFilter {
         ? value.scene
         : '',
     status:
-      value.status === smsApi.SmsStatus.Pending || value.status === smsApi.SmsStatus.Sent || value.status === smsApi.SmsStatus.Failed
+      value.status === SmsStatus.Pending ||
+      value.status === SmsStatus.Sent ||
+      value.status === SmsStatus.Failed
         ? value.status
         : '',
     timeRange:
@@ -191,9 +194,19 @@ async function showDetail(row: smsApi.SmsLog): Promise<void> {
       </template>
       <template #cell-status="{ row }: { row: smsApi.SmsLog }">
         <el-tag
-          :type="row.status === smsApi.SmsStatus.Failed ? 'danger' : row.status === smsApi.SmsStatus.Sent ? 'success' : 'info'"
+          :type="
+            row.status === SmsStatus.Failed
+              ? 'danger'
+              : row.status === SmsStatus.Sent
+                ? 'success'
+                : 'info'
+          "
         >
-          {{ t(`sms.status.${row.status === smsApi.SmsStatus.Pending ? 'pending' : row.status === smsApi.SmsStatus.Sent ? 'sent' : 'failed'}`) }}
+          {{
+            t(
+              `sms.status.${row.status === SmsStatus.Pending ? 'pending' : row.status === SmsStatus.Sent ? 'sent' : 'failed'}`,
+            )
+          }}
         </el-tag>
       </template>
       <template #cell-sentAt="{ row }: { row: smsApi.SmsLog }">

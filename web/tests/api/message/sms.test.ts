@@ -14,6 +14,7 @@ import {
   parseSmsConfig,
   saveSmsConfig,
   sendSmsTest,
+  SmsStatus,
   updateSmsRateLimitPolicy,
   updateSmsRule,
   updateSmsRuleStatus,
@@ -74,7 +75,7 @@ const log = {
   scene: 'login' as const,
   templateId: 1,
   toPhoneHint: '156****8271',
-  status: 'sent' as const,
+  status: SmsStatus.Sent,
   requestId: 'request-id',
   serialNo: 'serial-no',
   fee: 1,
@@ -314,7 +315,12 @@ describe('SMS admin API protocol', () => {
     await expect(getSmsLogDetail(log.id)).resolves.toEqual(detail)
 
     const testInput = { toPhone: '15671628271', scene: 'login' as const }
-    const testResult = { logId: 3, status: 'sent', requestId: 'request-id', serialNo: 'serial-no' }
+    const testResult = {
+      logId: 3,
+      status: SmsStatus.Sent,
+      requestId: 'request-id',
+      serialNo: 'serial-no',
+    }
     requestMock.mockResolvedValueOnce(testResult)
     await expect(sendSmsTest(testInput)).resolves.toEqual(testResult)
     expect(requestMock).toHaveBeenLastCalledWith({

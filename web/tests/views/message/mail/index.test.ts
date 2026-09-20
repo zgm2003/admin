@@ -13,6 +13,7 @@ import MailPage from '@/views/message/mail/index.vue'
 const wrappers: VueWrapper[] = []
 
 vi.mock('@/api/message/mail', () => ({
+  MailStatus: { Pending: 1, Sent: 2, Failed: 3 },
   getMailConfig: vi.fn(),
   saveMailConfig: vi.fn(),
   deleteMailConfig: vi.fn(),
@@ -311,7 +312,7 @@ describe('mail service page', () => {
           templateId: 1,
           toEmail: '2093146753@qq.com',
           subject: '登录验证码',
-          status: 'sent',
+          status: mailApi.MailStatus.Sent,
           requestId: '',
           messageId: '',
           errorCode: '',
@@ -337,7 +338,7 @@ describe('mail service page', () => {
         templateId: 1,
         toEmail: '2093146753@qq.com',
         subject: '登录验证码',
-        status: 'sent',
+        status: mailApi.MailStatus.Sent,
         requestId: '',
         messageId: '',
         errorCode: '',
@@ -380,7 +381,7 @@ describe('mail service page', () => {
           templateId: 1,
           toEmail: 'pending@example.com',
           subject: '登录验证码',
-          status: 'pending',
+          status: mailApi.MailStatus.Pending,
           requestId: '',
           messageId: '',
           errorCode: '',
@@ -555,7 +556,7 @@ function mailLogRow(id: number, toEmail: string, scene: string): mailApi.MailLog
     templateId: 1,
     toEmail,
     subject: 'subject',
-    status: 'sent',
+    status: mailApi.MailStatus.Sent,
     requestId: '',
     messageId: '',
     errorCode: '',

@@ -9,6 +9,7 @@ import {
   parseMailRateLimitPolicy,
   parseMailRateLimitSnapshot,
   parseMailRateLimitUpdateResult,
+  MailStatus,
 } from '@/api/message/mail'
 
 describe('mail config protocol', () => {
@@ -57,7 +58,7 @@ describe('mail admin protocol', () => {
     templateId: 47941,
     toEmail: 'admin@example.com',
     subject: '登录验证码',
-    status: 'sent',
+    status: MailStatus.Sent,
     requestId: 'req',
     messageId: 'msg',
     errorCode: '',
