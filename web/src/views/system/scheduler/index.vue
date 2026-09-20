@@ -5,6 +5,7 @@ import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
 import { useI18n } from 'vue-i18n'
 import { usePermissionStore } from '@/store/permission'
+import { formatTime } from '@/utils/datetime'
 import type { TableColumn } from '@/components/AppTable'
 import {
   createSchedule,
@@ -19,6 +20,15 @@ import {
 } from '@/api/system/scheduler'
 import type { Job, JobStatus, Schedule, TaskOption } from '@/api/system/scheduler'
 import JobDetailDialog from './components/JobDetailDialog/index.vue'
+import {
+  CRON_PRESETS,
+  CUSTOM_CRON_VALUE,
+  getCronLabelKey,
+  getCronPresetValue,
+  getJobStatusKey,
+  getTriggerSourceKey,
+  resolveTaskDisplayName,
+} from './presentation'
 
 const { t } = useI18n()
 const access = usePermissionStore()
@@ -37,6 +47,7 @@ const form = ref({
   description: '',
   taskType: '',
   cronExpression: '*/5 * * * *',
+  cronPreset: '*/5 * * * *',
   timezone: 'Asia/Shanghai',
   params: {} as Record<string, unknown>,
   isEnabled: true,
@@ -50,10 +61,19 @@ const canStatus = computed(() => access.hasPermission('system:scheduler:status')
 const canDelete = computed(() => access.hasPermission('system:scheduler:delete'))
 const canExecute = computed(() => access.hasPermission('system:scheduler:execute'))
 const canRetry = computed(() => access.hasPermission('system:scheduler:retry'))
+const cronPresetOptions = computed(() =>
+  CRON_PRESETS.map((preset) => ({ value: preset.value, label: t(preset.labelKey) })),
+)
+const jobStatusOptions = computed(() => [
+  { label: t('scheduler.all'), value: '' },
+  { label: t('scheduler.completed'), value: 'completed' },
+  { label: t('scheduler.failed'), value: 'failed' },
+  { label: t('scheduler.running'), value: 'running' },
+])
 const scheduleColumns = computed<TableColumn<Schedule>[]>(() => [
   { prop: 'name', label: t('scheduler.name'), minWidth: 180 },
   { prop: 'taskType', label: t('scheduler.taskType'), minWidth: 220 },
-  { prop: 'cronExpression', label: t('scheduler.cron'), width: 150 },
+  { prop: 'cronExpression', label: t('scheduler.cron'), width: 180 },
   { prop: 'timezone', label: t('scheduler.timezone'), width: 150 },
   { key: 'status', prop: 'id', label: t('scheduler.status'), width: 100 },
   { key: 'actions', prop: 'id', label: t('scheduler.actions'), width: 330 },
@@ -61,10 +81,10 @@ const scheduleColumns = computed<TableColumn<Schedule>[]>(() => [
 const jobColumns = computed<TableColumn<Job>[]>(() => [
   { prop: 'id', label: t('scheduler.id'), width: 90 },
   { prop: 'taskType', label: t('scheduler.taskType'), minWidth: 220 },
-  { key: 'trigger', prop: 'triggerSource', label: t('scheduler.trigger'), width: 110 },
+  { key: 'trigger', prop: 'triggerSource', label: t('scheduler.trigger'), width: 120 },
   { key: 'status', prop: 'status', label: t('scheduler.status'), width: 120 },
   { prop: 'attemptCount', label: t('scheduler.attempt'), width: 100 },
-  { prop: 'createdAt', label: t('scheduler.createdAt'), width: 190 },
+  { prop: 'createdAt', label: t('scheduler.createdAt'), width: 180 },
   { key: 'actions', prop: 'id', label: t('scheduler.actions'), width: 160 },
 ])
 const state = computed<'loading' | 'error' | 'empty' | 'success'>(() =>
@@ -77,6 +97,9 @@ const state = computed<'loading' | 'error' | 'empty' | 'success'>(() =>
         : 'success',
 )
 const taskOptions = computed(() => options.value.filter((item) => item.adminCreatable))
+function taskDisplayName(type: string): string {
+  return resolveTaskDisplayName(type, options.value) || t('scheduler.taskTypeUnknown')
+}
 async function load(): Promise<void> {
   if (!canList.value) return
   loading.value = true
@@ -99,6 +122,7 @@ function openCreate(): void {
     description: '',
     taskType: first?.type ?? '',
     cronExpression: '*/5 * * * *',
+    cronPreset: '*/5 * * * *',
     timezone: 'Asia/Shanghai',
     params: first?.defaultParams ?? {},
     isEnabled: true,
@@ -112,11 +136,17 @@ function openEdit(row: Schedule): void {
     description: row.description,
     taskType: row.taskType,
     cronExpression: row.cronExpression,
+    cronPreset: getCronPresetValue(row.cronExpression),
     timezone: row.timezone,
     params: { ...row.params },
     isEnabled: row.isEnabled,
   }
   dialogVisible.value = true
+}
+function changeCronPreset(value: string | number | boolean): void {
+  const preset = String(value)
+  form.value.cronPreset = preset
+  if (preset !== CUSTOM_CRON_VALUE) form.value.cronExpression = preset
 }
 async function save(): Promise<void> {
   if (
@@ -128,7 +158,16 @@ async function save(): Promise<void> {
     return
   submitting.value = true
   try {
-    if (editing.value === null) await createSchedule(form.value)
+    if (editing.value === null)
+      await createSchedule({
+        name: form.value.name,
+        description: form.value.description,
+        taskType: form.value.taskType,
+        cronExpression: form.value.cronExpression,
+        timezone: form.value.timezone,
+        params: form.value.params,
+        isEnabled: form.value.isEnabled,
+      })
     else
       await updateSchedule(editing.value.id, {
         name: form.value.name,
@@ -217,6 +256,16 @@ onMounted(() => {
           row.isEnabled ? t('scheduler.enabled') : t('scheduler.disabled')
         }}</el-tag></template
       >
+      <template #cell-taskType="{ row }: { row: Schedule }">
+        <el-tooltip :content="row.taskType" placement="top">
+          <span>{{ taskDisplayName(row.taskType) }}</span>
+        </el-tooltip>
+      </template>
+      <template #cell-cronExpression="{ row }: { row: Schedule }">
+        <el-tooltip :content="row.cronExpression" placement="top">
+          <span>{{ t(getCronLabelKey(row.cronExpression)) }}</span>
+        </el-tooltip>
+      </template>
       <template #cell-actions="{ row }: { row: Schedule }"
         ><el-space
           ><el-button v-if="canUpdate" type="primary" link :icon="Edit" @click="openEdit(row)">{{
@@ -258,15 +307,21 @@ onMounted(() => {
     >
       <template #toolbar-left
         ><el-select-v2
+          class="scheduler-job-status-filter"
           :model-value="jobStatus"
-          :options="[
-            { label: t('scheduler.all'), value: '' },
-            { label: t('scheduler.completed'), value: 'completed' },
-            { label: t('scheduler.failed'), value: 'failed' },
-            { label: t('scheduler.running'), value: 'running' },
-          ]"
+          :options="jobStatusOptions"
           @update:model-value="changeJobStatus"
       /></template>
+      <template #cell-taskType="{ row }: { row: Job }">
+        <el-tooltip :content="row.taskType" placement="top">
+          <span>{{ taskDisplayName(row.taskType) }}</span>
+        </el-tooltip>
+      </template>
+      <template #cell-trigger="{ row }: { row: Job }">
+        <el-tooltip :content="row.triggerSource" placement="top">
+          <span>{{ t(getTriggerSourceKey(row.triggerSource)) }}</span>
+        </el-tooltip>
+      </template>
       <template #cell-status="{ row }: { row: Job }"
         ><el-tag
           :type="
@@ -278,9 +333,12 @@ onMounted(() => {
                   ? 'warning'
                   : 'info'
           "
-          >{{ t(`scheduler.status.${row.status}`) }}</el-tag
+          >{{ t(getJobStatusKey(row.status)) }}</el-tag
         ></template
       >
+      <template #cell-createdAt="{ row }: { row: Job }">
+        <span>{{ formatTime(row.createdAt) }}</span>
+      </template>
       <template #cell-actions="{ row }: { row: Job }"
         ><el-space
           ><el-button type="primary" link @click="openJob(row)">{{
@@ -313,7 +371,15 @@ onMounted(() => {
             :options="taskOptions.map((item) => ({ label: item.displayName, value: item.type }))"
             disabled /></el-form-item
         ><el-form-item :label="t('scheduler.cron')" required
-          ><el-input v-model="form.cronExpression" /></el-form-item
+          ><el-select-v2
+            v-model="form.cronPreset"
+            :options="cronPresetOptions"
+            @update:model-value="changeCronPreset" />
+          <el-input
+            v-if="form.cronPreset === CUSTOM_CRON_VALUE"
+            v-model="form.cronExpression"
+            class="scheduler-cron-custom-input"
+            :placeholder="t('scheduler.cronCustomPlaceholder')" /></el-form-item
         ><el-form-item :label="t('scheduler.timezone')" required
           ><el-input v-model="form.timezone" /></el-form-item
         ><template #footer
@@ -323,6 +389,22 @@ onMounted(() => {
         ></el-form
       >
     </AppDialog>
-    <JobDetailDialog v-model="detailVisible" :job="selectedJob" />
+    <JobDetailDialog v-model="detailVisible" :job="selectedJob" :task-options="options" />
   </AppPage>
 </template>
+
+<style scoped>
+.scheduler-job-status-filter {
+  width: 160px;
+}
+
+.scheduler-cron-custom-input {
+  margin-top: 8px;
+}
+
+@media (max-width: 900px) {
+  .scheduler-job-status-filter {
+    width: 100%;
+  }
+}
+</style>
