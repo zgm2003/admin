@@ -175,6 +175,11 @@ func (h *Handler) Execute(c *gin.Context) {
 func (h *Handler) ListJobs(c *gin.Context) {
 	var status *JobStatus
 	if value := c.Query("status"); value != "" {
+		value, parseErr := strconv.ParseInt(value, 10, 16)
+		if parseErr != nil {
+			response.Fail(c, apperror.InvalidRequest(errors.New("scheduler job status is invalid")))
+			return
+		}
 		parsed := JobStatus(value)
 		switch parsed {
 		case JobScheduled, JobQueued, JobRunning, JobCompleted, JobFailed, JobCanceled:

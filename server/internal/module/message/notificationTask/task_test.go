@@ -68,6 +68,9 @@ func TestProcessorKeepsPublishedAtStableAcrossBatches(t *testing.T) {
 	if err := db.WithContext(ctx).Exec(`INSERT INTO user_account(id,username,is_enabled,deleted_at) SELECT value,'user-' || value,1,NULL FROM generate_series(3,501) AS value`).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.WithContext(ctx).Exec(`INSERT INTO permission_user_role(user_id,role_id,created_at,updated_at) SELECT value,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP FROM generate_series(3,501) AS value`).Error; err != nil {
+		t.Fatal(err)
+	}
 	targets := make([]int64, 501)
 	for index := range targets {
 		targets[index] = int64(index + 1)

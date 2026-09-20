@@ -287,7 +287,7 @@ export async function commandNotificationTask(
 export async function listNotificationTaskOptions(
   intent: 'create' | 'update',
   kind: 'platform' | 'user' | 'role',
-  params: { keyword?: string; afterId?: number; limit?: number },
+  params: { platformId?: number; keyword?: string; afterId?: number; limit?: number },
 ): Promise<NotificationTaskOptions> {
   return parseNotificationTaskOptions(
     await request<unknown>({ method: 'GET', url: `${base}/${intent}/option/${kind}`, params }),

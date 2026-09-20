@@ -106,7 +106,7 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 }
 
 func parseOptionQuery(values url.Values) (optionQuery, error) {
-	allowed := map[string]bool{"keyword": true, "afterId": true, "limit": true}
+	allowed := map[string]bool{"platformId": true, "keyword": true, "afterId": true, "limit": true}
 	for key, entries := range values {
 		if !allowed[key] || len(entries) != 1 {
 			return optionQuery{}, apperror.InvalidRequest(fmt.Errorf("invalid or repeated query parameter"))

@@ -125,12 +125,94 @@ func (p *Processor) processPlatform(ctx context.Context, tx *gorm.DB, task Task,
 func (p *Processor) batchUsers(ctx context.Context, tx *gorm.DB, task Task) ([]int64, bool, error) {
 	var ids []int64
 	if task.AudienceType == AudienceUser {
-		err := tx.WithContext(ctx).Raw(`SELECT target_id FROM message_notification_task_target WHERE task_id=? AND target_type='user' AND deleted_at IS NULL AND target_id>? AND target_id<=? ORDER BY target_id LIMIT 501`, task.ID, task.NextUserID, *task.AudienceMaxUserID).Scan(&ids).Error
+		err := tx.WithContext(ctx).Raw(`
+WITH eligible_roles AS MATERIALIZED (
+  SELECT app_role.id
+  FROM permission_role app_role
+  WHERE app_role.is_enabled=1
+    AND app_role.deleted_at IS NULL
+    AND (
+      app_role.code='super_admin'
+      OR EXISTS (
+        SELECT 1
+        FROM permission_role_menu role_menu
+        JOIN permission_menu app_menu
+          ON app_menu.id=role_menu.menu_id
+         AND app_menu.platform_id=?
+         AND app_menu.is_enabled=1
+         AND app_menu.deleted_at IS NULL
+        WHERE role_menu.role_id=app_role.id
+          AND role_menu.created_at<=?
+          AND (role_menu.deleted_at IS NULL OR role_menu.deleted_at>?)
+      )
+    )
+)
+SELECT target.target_id
+FROM message_notification_task_target target
+JOIN user_account app_user
+  ON app_user.id=target.target_id
+ AND app_user.is_enabled=1
+ AND app_user.deleted_at IS NULL
+WHERE target.task_id=?
+  AND target.target_type='user'
+  AND target.deleted_at IS NULL
+  AND target.target_id>?
+  AND target.target_id<=?
+  AND EXISTS (
+    SELECT 1
+    FROM permission_user_role user_role
+    JOIN eligible_roles ON eligible_roles.id=user_role.role_id
+    WHERE user_role.user_id=app_user.id
+      AND user_role.created_at<=?
+      AND (user_role.deleted_at IS NULL OR user_role.deleted_at>?)
+  )
+ORDER BY target.target_id
+LIMIT 501`, task.PlatformID, *task.SubmittedAt, *task.SubmittedAt, task.ID, task.NextUserID, *task.AudienceMaxUserID, *task.SubmittedAt, *task.SubmittedAt).Scan(&ids).Error
 		if err != nil {
 			return nil, false, err
 		}
 	} else {
-		err := tx.WithContext(ctx).Raw(`SELECT DISTINCT user_role.user_id FROM permission_user_role user_role JOIN message_notification_task_target target ON target.task_id=? AND target.target_type='role' AND target.target_id=user_role.role_id AND target.deleted_at IS NULL WHERE user_role.created_at<=? AND (user_role.deleted_at IS NULL OR user_role.deleted_at>?) AND user_role.user_id>? AND user_role.user_id<=? ORDER BY user_role.user_id LIMIT 501`, task.ID, *task.SubmittedAt, *task.SubmittedAt, task.NextUserID, *task.AudienceMaxUserID).Scan(&ids).Error
+		err := tx.WithContext(ctx).Raw(`
+WITH eligible_roles AS MATERIALIZED (
+  SELECT app_role.id
+  FROM permission_role app_role
+  WHERE app_role.is_enabled=1
+    AND app_role.deleted_at IS NULL
+    AND (
+      app_role.code='super_admin'
+      OR EXISTS (
+        SELECT 1
+        FROM permission_role_menu role_menu
+        JOIN permission_menu app_menu
+          ON app_menu.id=role_menu.menu_id
+         AND app_menu.platform_id=?
+         AND app_menu.is_enabled=1
+         AND app_menu.deleted_at IS NULL
+        WHERE role_menu.role_id=app_role.id
+          AND role_menu.created_at<=?
+          AND (role_menu.deleted_at IS NULL OR role_menu.deleted_at>?)
+      )
+    )
+)
+SELECT DISTINCT user_role.user_id
+FROM permission_user_role user_role
+JOIN user_account app_user
+  ON app_user.id=user_role.user_id
+ AND app_user.is_enabled=1
+ AND app_user.deleted_at IS NULL
+JOIN eligible_roles
+		  ON eligible_roles.id=user_role.role_id
+JOIN message_notification_task_target target
+  ON target.task_id=?
+ AND target.target_type='role'
+ AND target.target_id=eligible_roles.id
+ AND target.deleted_at IS NULL
+WHERE user_role.created_at<=?
+  AND (user_role.deleted_at IS NULL OR user_role.deleted_at>?)
+  AND user_role.user_id>?
+  AND user_role.user_id<=?
+ORDER BY user_role.user_id
+LIMIT 501`, task.PlatformID, *task.SubmittedAt, *task.SubmittedAt, task.ID, *task.SubmittedAt, *task.SubmittedAt, task.NextUserID, *task.AudienceMaxUserID).Scan(&ids).Error
 		if err != nil {
 			return nil, false, err
 		}

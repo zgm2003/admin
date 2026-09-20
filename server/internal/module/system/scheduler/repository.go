@@ -101,62 +101,66 @@ func (r *Repository) SetScheduleEnabled(ctx context.Context, id int64, enabled b
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	var row struct {
-		CronExpression string `gorm:"column:cron_expression"`
-		Timezone       string `gorm:"column:timezone"`
-	}
-	if err := r.db.WithContext(ctx).Table("system_scheduler_schedule").Select("cron_expression,timezone").Where("id=? AND deleted_at IS NULL", id).Take(&row).Error; err != nil {
-		return err
-	}
-	var next *time.Time
-	if enabled {
-		value, err := nextRun(row.CronExpression, row.Timezone, now)
-		if err != nil {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row struct {
+			CronExpression string `gorm:"column:cron_expression"`
+			Timezone       string `gorm:"column:timezone"`
+		}
+		if err := tx.WithContext(ctx).Table("system_scheduler_schedule").Select("cron_expression,timezone").Where("id=? AND deleted_at IS NULL", id).Clauses(clause.Locking{Strength: "UPDATE"}).Take(&row).Error; err != nil {
 			return err
 		}
-		next = &value
-	}
-	result := r.db.WithContext(ctx).Model(&Schedule{}).Where("id=? AND deleted_at IS NULL", id).Updates(map[string]any{"is_enabled": boolToInt(enabled), "next_run_at": next, "updated_by": actor, "updated_at": now})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 {
-		return gorm.ErrRecordNotFound
-	}
-	return nil
+		var next *time.Time
+		if enabled {
+			value, err := nextRun(row.CronExpression, row.Timezone, now)
+			if err != nil {
+				return err
+			}
+			next = &value
+		}
+		result := tx.WithContext(ctx).Model(&Schedule{}).Where("id=? AND deleted_at IS NULL", id).Updates(map[string]any{"is_enabled": boolToInt(enabled), "next_run_at": next, "updated_by": actor, "updated_at": now})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
 }
 
 func (r *Repository) DeleteSchedule(ctx context.Context, id int64, now time.Time) error {
 	if id <= 0 {
 		return ErrInvalidSchedule
 	}
-	var row struct {
-		BuiltinKey *string `gorm:"column:builtin_key"`
-	}
-	if err := r.db.WithContext(ctx).Table("system_scheduler_schedule").Select("builtin_key").Where("id=? AND deleted_at IS NULL", id).Take(&row).Error; err != nil {
-		return err
-	}
-	if row.BuiltinKey != nil && strings.TrimSpace(*row.BuiltinKey) != "" {
-		return ErrBuiltinSchedule
-	}
-	var count int64
-	if err := r.db.WithContext(ctx).Table("system_scheduler_job").Where("schedule_id=? AND status IN ?", id, []JobStatus{JobScheduled, JobQueued, JobRunning}).Count(&count).Error; err != nil {
-		return err
-	}
-	if count > 0 {
-		return ErrActiveJobExists
-	}
-	if now.IsZero() {
-		now = time.Now().UTC()
-	}
-	res := r.db.WithContext(ctx).Model(&Schedule{}).Where("id=? AND deleted_at IS NULL", id).Updates(map[string]any{"deleted_at": now, "updated_at": now, "is_enabled": 0, "next_run_at": nil})
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected != 1 {
-		return gorm.ErrRecordNotFound
-	}
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row struct {
+			BuiltinKey *string `gorm:"column:builtin_key"`
+		}
+		if err := tx.WithContext(ctx).Table("system_scheduler_schedule").Select("builtin_key").Where("id=? AND deleted_at IS NULL", id).Clauses(clause.Locking{Strength: "UPDATE"}).Take(&row).Error; err != nil {
+			return err
+		}
+		if row.BuiltinKey != nil && strings.TrimSpace(*row.BuiltinKey) != "" {
+			return ErrBuiltinSchedule
+		}
+		var count int64
+		if err := tx.WithContext(ctx).Table("system_scheduler_job").Where("schedule_id=? AND status IN ?", id, []JobStatus{JobScheduled, JobQueued, JobRunning}).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return ErrActiveJobExists
+		}
+		if now.IsZero() {
+			now = time.Now().UTC()
+		}
+		res := tx.WithContext(ctx).Model(&Schedule{}).Where("id=? AND deleted_at IS NULL", id).Updates(map[string]any{"deleted_at": now, "updated_at": now, "is_enabled": 0, "next_run_at": nil})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
 }
 
 func (r *Repository) GetSchedule(ctx context.Context, id int64) (Schedule, error) {
@@ -248,7 +252,7 @@ func (w *BatchJobWriter) CancelBatchJobsTx(ctx context.Context, tx *gorm.DB, tas
 	if taskID <= 0 {
 		return ErrInvalidSchedule
 	}
-	result := tx.WithContext(ctx).Exec(`UPDATE system_scheduler_job SET status='canceled',publish_token=NULL,publish_lease_until=NULL,completed_at=?,updated_at=? WHERE task_type='message.notificationtask.batch' AND source_key LIKE ? AND status IN ('scheduled','queued')`, now, now, fmt.Sprintf("notificationTask:%d:%%", taskID))
+	result := tx.WithContext(ctx).Exec(`UPDATE system_scheduler_job SET status=6,publish_token=NULL,publish_lease_until=NULL,completed_at=?,updated_at=? WHERE task_type='message.notificationtask.batch' AND source_key LIKE ? AND status IN (1,2)`, now, now, fmt.Sprintf("notificationTask:%d:%%", taskID))
 	return result.Error
 }
 
@@ -321,7 +325,7 @@ func (r *Repository) ClaimPublishableJobs(ctx context.Context, now time.Time, li
 	until := now.Add(lease)
 	var rows []PublishableJob
 	err := r.db.WithContext(ctx).Raw(`WITH candidates AS (
-SELECT id FROM system_scheduler_job WHERE status='scheduled' AND available_at<=? AND (publish_lease_until IS NULL OR publish_lease_until<=?) ORDER BY available_at,id LIMIT ? FOR UPDATE SKIP LOCKED
+SELECT id FROM system_scheduler_job WHERE status=1 AND available_at<=? AND (publish_lease_until IS NULL OR publish_lease_until<=?) ORDER BY available_at,id LIMIT ? FOR UPDATE SKIP LOCKED
 ), claimed AS (
 UPDATE system_scheduler_job j SET publish_token=?,publish_lease_until=?,updated_at=? FROM candidates c WHERE j.id=c.id RETURNING j.*)
 SELECT *, ? AS dispatch_token FROM claimed ORDER BY available_at,id`, now, now, limit, token, until, now, token).Scan(&rows).Error
@@ -334,12 +338,12 @@ SELECT *, ? AS dispatch_token FROM claimed ORDER BY available_at,id`, now, now, 
 func (r *Repository) RecoverExpiredQueued(ctx context.Context, now time.Time, limit int) (int, error) {
 	limit = normalizeLimit(limit)
 	var recovered int
-	err := r.db.WithContext(ctx).Raw(`WITH candidates AS (SELECT id FROM system_scheduler_job WHERE status='queued' AND publish_lease_until<=? ORDER BY publish_lease_until,id LIMIT ? FOR UPDATE SKIP LOCKED), recovered AS (UPDATE system_scheduler_job j SET status='scheduled',publish_token=NULL,publish_lease_until=NULL,available_at=?,error_class='transport-lost',last_error='queued task delivery lease expired',updated_at=? FROM candidates c WHERE j.id=c.id AND j.status='queued' RETURNING j.id) SELECT count(*) FROM recovered`, now, limit, now, now).Scan(&recovered).Error
+	err := r.db.WithContext(ctx).Raw(`WITH candidates AS (SELECT id FROM system_scheduler_job WHERE status=2 AND publish_lease_until<=? ORDER BY publish_lease_until,id LIMIT ? FOR UPDATE SKIP LOCKED), recovered AS (UPDATE system_scheduler_job j SET status=1,publish_token=NULL,publish_lease_until=NULL,available_at=?,error_class='transport-lost',last_error='queued task delivery lease expired',updated_at=? FROM candidates c WHERE j.id=c.id AND j.status=2 RETURNING j.id) SELECT count(*) FROM recovered`, now, limit, now, now).Scan(&recovered).Error
 	return recovered, err
 }
 
 func (r *Repository) MarkQueued(ctx context.Context, id int64, token string, now time.Time) error {
-	res := r.db.WithContext(ctx).Exec(`UPDATE system_scheduler_job SET status='queued',updated_at=? WHERE id=? AND status='scheduled' AND publish_token=?`, now, id, token)
+	res := r.db.WithContext(ctx).Exec(`UPDATE system_scheduler_job SET status=2,updated_at=? WHERE id=? AND status=1 AND publish_token=?`, now, id, token)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -353,7 +357,7 @@ func (r *Repository) ReschedulePublish(ctx context.Context, id int64, token, saf
 	if len(safeError) > 1024 {
 		safeError = safeError[:1024]
 	}
-	res := r.db.WithContext(ctx).Exec(`UPDATE system_scheduler_job SET available_at=?,publish_token=NULL,publish_lease_until=NULL,error_class='publish',last_error=?,updated_at=? WHERE id=? AND status='scheduled' AND publish_token=?`, availableAt, safeError, now, id, token)
+	res := r.db.WithContext(ctx).Exec(`UPDATE system_scheduler_job SET available_at=?,publish_token=NULL,publish_lease_until=NULL,error_class='publish',last_error=?,updated_at=? WHERE id=? AND status=1 AND publish_token=?`, availableAt, safeError, now, id, token)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -384,14 +388,14 @@ func (r *Repository) ClaimRun(ctx context.Context, jobID int64, expectedAttempt 
 		}
 		attempt := job.AttemptCount + 1
 		finished := now.Add(lease)
-		result := tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status='queued' AND publish_token=?", jobID, dispatchToken).Updates(map[string]any{"status": "running", "attempt_count": attempt, "publish_token": nil, "publish_lease_until": nil, "run_token": token, "run_lease_until": finished, "worker_id": workerID, "updated_at": now})
+		result := tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status=? AND publish_token=?", jobID, JobQueued, dispatchToken).Updates(map[string]any{"status": JobRunning, "attempt_count": attempt, "publish_token": nil, "publish_lease_until": nil, "run_token": token, "run_lease_until": finished, "worker_id": workerID, "updated_at": now})
 		if result.Error != nil {
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
 			return ErrClaimLost
 		}
-		result = tx.WithContext(ctx).Table("system_scheduler_run").Create(map[string]any{"job_id": jobID, "attempt_no": attempt, "status": "running", "worker_id": workerID, "started_at": now, "created_at": now, "updated_at": now})
+		result = tx.WithContext(ctx).Table("system_scheduler_run").Create(map[string]any{"job_id": jobID, "attempt_no": attempt, "status": RunRunning, "worker_id": workerID, "started_at": now, "created_at": now, "updated_at": now})
 		if result.Error != nil {
 			return mapRepositoryError(result.Error)
 		}
@@ -415,14 +419,14 @@ func (r *Repository) CompleteRun(ctx context.Context, jobID int64, attempt int, 
 		summary = summary[:1024]
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		res := tx.WithContext(ctx).Model(&Run{}).Where("job_id=? AND attempt_no=? AND status='running'", jobID, attempt).Updates(map[string]any{"status": "succeeded", "finished_at": now, "duration_ms": gorm.Expr("GREATEST(0, EXTRACT(EPOCH FROM (? - started_at))*1000)::bigint", now), "result_summary": summary, "updated_at": now})
+		res := tx.WithContext(ctx).Model(&Run{}).Where("job_id=? AND attempt_no=? AND status=?", jobID, attempt, RunRunning).Updates(map[string]any{"status": RunSucceeded, "finished_at": now, "duration_ms": gorm.Expr("GREATEST(0, EXTRACT(EPOCH FROM (? - started_at))*1000)::bigint", now), "result_summary": summary, "updated_at": now})
 		if res.Error != nil {
 			return res.Error
 		}
 		if res.RowsAffected != 1 {
 			return ErrClaimLost
 		}
-		res = tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status='running' AND run_token=?", jobID, token).Updates(map[string]any{"status": "completed", "run_token": nil, "run_lease_until": nil, "completed_at": now, "updated_at": now})
+		res = tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status=? AND run_token=?", jobID, JobRunning, token).Updates(map[string]any{"status": JobCompleted, "run_token": nil, "run_lease_until": nil, "completed_at": now, "updated_at": now})
 		if res.Error != nil {
 			return res.Error
 		}
@@ -441,20 +445,20 @@ func (r *Repository) FailRun(ctx context.Context, jobID int64, attempt int, toke
 		class = class[:64]
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		res := tx.WithContext(ctx).Model(&Run{}).Where("job_id=? AND attempt_no=? AND status='running'", jobID, attempt).Updates(map[string]any{"status": "failed", "finished_at": now, "duration_ms": gorm.Expr("GREATEST(0, EXTRACT(EPOCH FROM (? - started_at))*1000)::bigint", now), "error_class": class, "error_message": message, "updated_at": now})
+		res := tx.WithContext(ctx).Model(&Run{}).Where("job_id=? AND attempt_no=? AND status=?", jobID, attempt, RunRunning).Updates(map[string]any{"status": RunFailed, "finished_at": now, "duration_ms": gorm.Expr("GREATEST(0, EXTRACT(EPOCH FROM (? - started_at))*1000)::bigint", now), "error_class": class, "error_message": message, "updated_at": now})
 		if res.Error != nil {
 			return res.Error
 		}
 		if res.RowsAffected != 1 {
 			return ErrClaimLost
 		}
-		updates := map[string]any{"status": "failed", "run_token": nil, "run_lease_until": nil, "error_class": class, "last_error": message, "completed_at": now, "updated_at": now}
+		updates := map[string]any{"status": JobFailed, "run_token": nil, "run_lease_until": nil, "error_class": class, "last_error": message, "completed_at": now, "updated_at": now}
 		if retryAt != nil {
-			updates["status"] = "scheduled"
+			updates["status"] = JobScheduled
 			updates["available_at"] = *retryAt
 			updates["completed_at"] = nil
 		}
-		res = tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status='running' AND run_token=?", jobID, token).Updates(updates)
+		res = tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status=? AND run_token=?", jobID, JobRunning, token).Updates(updates)
 		if res.Error != nil {
 			return res.Error
 		}
@@ -466,7 +470,7 @@ func (r *Repository) FailRun(ctx context.Context, jobID int64, attempt int, toke
 }
 
 func (r *Repository) CancelQueuedJobs(ctx context.Context, scheduleID int64, now time.Time) error {
-	res := r.db.WithContext(ctx).Model(&Job{}).Where("schedule_id=? AND status IN ?", scheduleID, []JobStatus{JobScheduled, JobQueued}).Updates(map[string]any{"status": "canceled", "publish_token": nil, "publish_lease_until": nil, "completed_at": now, "updated_at": now})
+	res := r.db.WithContext(ctx).Model(&Job{}).Where("schedule_id=? AND status IN ?", scheduleID, []JobStatus{JobScheduled, JobQueued}).Updates(map[string]any{"status": JobCanceled, "publish_token": nil, "publish_lease_until": nil, "completed_at": now, "updated_at": now})
 	return res.Error
 }
 
@@ -475,25 +479,25 @@ func (r *Repository) RecoverExpiredRuns(ctx context.Context, now time.Time, limi
 	recovered := 0
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var jobs []Job
-		if err := tx.WithContext(ctx).Raw(`SELECT * FROM system_scheduler_job WHERE status='running' AND run_lease_until<=? ORDER BY run_lease_until,id LIMIT ? FOR UPDATE SKIP LOCKED`, now, limit).Scan(&jobs).Error; err != nil {
+		if err := tx.WithContext(ctx).Raw(`SELECT * FROM system_scheduler_job WHERE status=3 AND run_lease_until<=? ORDER BY run_lease_until,id LIMIT ? FOR UPDATE SKIP LOCKED`, now, limit).Scan(&jobs).Error; err != nil {
 			return err
 		}
 		for _, job := range jobs {
-			result := tx.WithContext(ctx).Model(&Run{}).Where("job_id=? AND attempt_no=? AND status='running'", job.ID, job.AttemptCount).Updates(map[string]any{
-				"status": "failed", "finished_at": now,
+			result := tx.WithContext(ctx).Model(&Run{}).Where("job_id=? AND attempt_no=? AND status=?", job.ID, job.AttemptCount, RunRunning).Updates(map[string]any{
+				"status": RunFailed, "finished_at": now,
 				"duration_ms": gorm.Expr("GREATEST(0, EXTRACT(EPOCH FROM (? - started_at))*1000)::bigint", now),
 				"error_class": "worker-lost", "error_message": "worker execution lease expired", "updated_at": now,
 			})
 			if result.Error != nil {
 				return result.Error
 			}
-			updates := map[string]any{"status": "failed", "run_token": nil, "run_lease_until": nil, "worker_id": "", "error_class": "worker-lost", "last_error": "worker execution lease expired", "completed_at": now, "updated_at": now}
+			updates := map[string]any{"status": JobFailed, "run_token": nil, "run_lease_until": nil, "worker_id": "", "error_class": "worker-lost", "last_error": "worker execution lease expired", "completed_at": now, "updated_at": now}
 			if job.AttemptCount < job.MaxAttempts {
-				updates["status"] = "scheduled"
+				updates["status"] = JobScheduled
 				updates["available_at"] = now
 				updates["completed_at"] = nil
 			}
-			result = tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status='running' AND run_token=?", job.ID, job.RunToken).Updates(updates)
+			result = tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status=? AND run_token=?", job.ID, JobRunning, job.RunToken).Updates(updates)
 			if result.Error != nil {
 				return result.Error
 			}
@@ -576,7 +580,7 @@ func (r *Repository) CleanupTerminalHistory(ctx context.Context, cutoff time.Tim
 	limit = normalizeLimit(limit)
 	return deletedJobs, deletedRuns, r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var ids []int64
-		if err := tx.WithContext(ctx).Raw(`SELECT j.id FROM system_scheduler_job j WHERE j.status IN ('completed','failed','canceled') AND j.completed_at<? AND NOT EXISTS (SELECT 1 FROM system_scheduler_job active WHERE active.id=j.id AND active.status IN ('scheduled','queued','running')) ORDER BY j.completed_at,j.id LIMIT ? FOR UPDATE SKIP LOCKED`, cutoff, limit).Scan(&ids).Error; err != nil {
+		if err := tx.WithContext(ctx).Raw(`SELECT j.id FROM system_scheduler_job j WHERE j.status IN (4,5,6) AND j.completed_at<? AND NOT EXISTS (SELECT 1 FROM system_scheduler_job active WHERE active.id=j.id AND active.status IN (1,2,3)) ORDER BY j.completed_at,j.id LIMIT ? FOR UPDATE SKIP LOCKED`, cutoff, limit).Scan(&ids).Error; err != nil {
 			return err
 		}
 		if len(ids) == 0 {

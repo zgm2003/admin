@@ -4,15 +4,17 @@ import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import * as taskApi from '@/api/message/notificationTask'
+import type { NotificationPriority } from '@/api/message/notification'
 import type { SearchFormModel } from '@/components/AppSearch'
 import type { TablePaginationState } from '@/components/AppTable/types'
 import { usePermissionStore } from '@/store/permission'
 import { ProtocolError } from '@/types/http'
-import NotificationEditor from './components/NotificationEditor/index.vue'
 import NotificationTaskSearch from './components/NotificationTaskSearch/index.vue'
 import NotificationTaskStatusTabs from './components/NotificationTaskStatusTabs/index.vue'
 import NotificationTaskTable from './components/NotificationTaskTable/index.vue'
-import NotificationTaskDetail from './components/NotificationTaskDetail/index.vue'
+import NotificationTaskDialog, {
+  type NotificationTaskFormModel,
+} from './components/NotificationTaskDialog/index.vue'
 import { useNotificationTaskOptions } from './useNotificationTaskOptions'
 
 const access = usePermissionStore()
@@ -35,10 +37,6 @@ const saving = ref(false)
 const editingID = ref<number | null>(null)
 let listSequence = 0
 let dialogSequence = 0
-
-type NotificationTaskFormModel = Omit<taskApi.NotificationTaskInput, 'platformId'> & {
-  platformId: number | null
-}
 
 const emptyForm = (): NotificationTaskFormModel => ({
   platformId: null,
@@ -66,6 +64,7 @@ const {
   targetState,
 } = useNotificationTaskOptions(
   () => form.audienceType,
+  () => form.platformId,
   () => (dialogMode.value === 'create' ? 'create' : 'update'),
   () => t('notificationTask.optionFailed'),
 )
@@ -115,7 +114,7 @@ const variantOptions = computed(() =>
     label: t(`notificationTask.variant.${value}`),
   })),
 )
-const priorityOptions = computed(() => [
+const priorityOptions = computed<Array<{ value: NotificationPriority; label: string }>>(() => [
   { value: 'normal', label: t('notification.normal') },
   { value: 'urgent', label: t('notification.urgent') },
 ])
@@ -235,6 +234,10 @@ function updateDialogOpen(value: boolean): void {
   resetOptions()
 }
 
+function updateForm(value: Partial<NotificationTaskFormModel>): void {
+  Object.assign(form, value)
+}
+
 function openEdit(row: taskApi.NotificationTaskListItem): void {
   void loadDetail(row.id, 'edit')
 }
@@ -246,6 +249,11 @@ function openDetail(row: taskApi.NotificationTaskListItem): void {
 function changeAudience(value: taskApi.NotificationAudience): void {
   form.targetIds = []
   if (value !== 'platform') void loadOptions(value)
+}
+
+function changePlatform(value: number | null): void {
+  form.targetIds = []
+  if (value !== null && form.audienceType !== 'platform') void loadOptions(form.audienceType)
 }
 
 function changeLinkType(value: taskApi.NotificationTaskInput['linkType']): void {
@@ -360,137 +368,34 @@ onMounted(() => void load())
       @update:pagination="updatePagination"
     />
 
-    <AppDialog
-      :model-value="dialogOpen"
+    <NotificationTaskDialog
+      v-model="dialogOpen"
+      @update:form="updateForm"
       :title="dialogTitle"
-      width="760px"
-      :height="readonly ? 'min(460px, 64vh)' : '70vh'"
-      @update:model-value="updateDialogOpen"
-    >
-      <div v-if="dialogLoading" class="notification-task-form__state">
-        {{ t('notificationTask.loadingDetail') }}
-      </div>
-      <div v-else-if="dialogError" class="notification-task-form__state">
-        <span>{{ dialogError }}</span>
-        <el-button
-          v-if="editingID !== null"
-          link
-          type="primary"
-          @click="loadDetail(editingID, dialogMode === 'detail' ? 'detail' : 'edit')"
-          >{{ t('notificationTask.retry') }}</el-button
-        >
-      </div>
-      <NotificationTaskDetail v-else-if="readonly && detailTask !== null" :task="detailTask" />
-      <el-form v-else class="notification-task-form" label-position="top">
-        <div class="notification-task-form__grid">
-          <el-form-item :label="t('notificationTask.platform')">
-            <el-select-v2
-              v-model="form.platformId"
-              data-testid="notification-task-platform"
-              :options="platformOptions"
-              :placeholder="t('notificationTask.platformPlaceholder')"
-              filterable
-              remote
-              :loading="optionStates.platform.loading"
-              :remote-method="remotePlatformOptions"
-            />
-          </el-form-item>
-          <el-form-item :label="t('notificationTask.audienceLabel')">
-            <el-select-v2
-              v-model="form.audienceType"
-              data-testid="notification-task-audience"
-              :options="audienceOptions"
-              @change="changeAudience"
-            />
-          </el-form-item>
-        </div>
-        <el-form-item
-          v-if="form.audienceType !== 'platform'"
-          :label="t('notificationTask.targets')"
-        >
-          <el-select-v2
-            v-model="form.targetIds"
-            data-testid="notification-task-targets"
-            :options="targetState.items"
-            multiple
-            filterable
-            remote
-            :loading="targetState.loading"
-            :remote-method="remoteTargetOptions"
-          />
-          <el-button
-            v-if="targetState.nextAfterId !== null"
-            data-testid="notification-task-option-more"
-            link
-            @click="loadMoreOptions(targetKind)"
-            >{{ t('notificationTask.loadMoreOptions') }}</el-button
-          >
-          <span v-if="targetState.error" class="notification-task-form__error">{{
-            targetState.error
-          }}</span>
-        </el-form-item>
-        <el-button
-          v-else-if="optionStates.platform.nextAfterId !== null"
-          data-testid="notification-task-option-more"
-          link
-          @click="loadMoreOptions('platform')"
-          >{{ t('notificationTask.loadMoreOptions') }}</el-button
-        >
-        <el-form-item :label="t('notificationTask.title')"
-          ><el-input
-            v-model="form.title"
-            data-testid="notification-task-title"
-            maxlength="128"
-            show-word-limit
-        /></el-form-item>
-        <div class="notification-task-form__grid notification-task-form__grid--three">
-          <el-form-item :label="t('notificationTask.variantLabel')">
-            <el-select-v2
-              v-model="form.variant"
-              data-testid="notification-task-variant"
-              :options="variantOptions"
-            />
-          </el-form-item>
-          <el-form-item :label="t('notificationTask.priorityLabel')">
-            <el-select-v2
-              v-model="form.priority"
-              data-testid="notification-task-priority"
-              :options="priorityOptions"
-            />
-          </el-form-item>
-          <el-form-item :label="t('notificationTask.linkTypeLabel')">
-            <el-select-v2
-              v-model="form.linkType"
-              data-testid="notification-task-link-type"
-              :options="linkTypeOptions"
-              @change="changeLinkType"
-            />
-          </el-form-item>
-        </div>
-        <el-form-item :label="t('notificationTask.content')"
-          ><NotificationEditor v-model="form.contentHtml"
-        /></el-form-item>
-        <div class="notification-task-form__grid">
-          <el-form-item :label="t('notificationTask.scheduledAt')"
-            ><el-date-picker
-              v-model="form.scheduledAt"
-              class="notification-task-form__date-picker"
-              type="datetime"
-              value-format="YYYY-MM-DDTHH:mm:ss.SSSZ"
-              clearable
-          /></el-form-item>
-          <el-form-item v-if="form.linkType !== 'none'" :label="t('notificationTask.link')"
-            ><el-input v-model="form.link"
-          /></el-form-item>
-        </div>
-      </el-form>
-      <template #footer>
-        <el-button @click="updateDialogOpen(false)">{{ t('notificationTask.close') }}</el-button>
-        <el-button v-if="!readonly" type="primary" :loading="saving" @click="save">{{
-          t('notificationTask.save')
-        }}</el-button>
-      </template>
-    </AppDialog>
+      :readonly="readonly"
+      :loading="dialogLoading"
+      :error-message="dialogError"
+      :task-id="editingID"
+      :detail-task="detailTask"
+      :form="form"
+      :saving="saving"
+      :platform-options="platformOptions"
+      :option-states="optionStates"
+      :target-state="targetState"
+      :target-kind="targetKind"
+      :audience-options="audienceOptions"
+      :variant-options="variantOptions"
+      :priority-options="priorityOptions"
+      :link-type-options="linkTypeOptions"
+      :remote-platform-options="remotePlatformOptions"
+      :remote-target-options="remoteTargetOptions"
+      @save="save"
+      @retry="loadDetail"
+      @change-platform="changePlatform"
+      @change-audience="changeAudience"
+      @change-link-type="changeLinkType"
+      @load-more="loadMoreOptions"
+    />
   </AppPage>
 </template>
 

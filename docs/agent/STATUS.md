@@ -1,5 +1,18 @@
 # 项目状态
 
+## 简约架构审计与分批整改（2026-09-20，进行中）
+
+- 维护者确认：持久化业务状态（包含 Mail/SMS 日志、通知任务、Scheduler Job/Run）统一数值编码，由所属模块强类型 enum 管理；可配置展示选项由字典管理，不把状态机交给可编辑字典。HTTP 状态码保持协议值，Yes/No 暂保留 0/1；普通编辑继续 last-write-wins，缓存代际、对象物理版本和任务执行锁不按编辑乐观锁删除。
+- 当前第一工作单元：修复 Scheduler 删除与并发产生活动 Job、启停与并发 cron 修改的读写竞态。`DeleteSchedule` 和 `SetScheduleEnabled` 均在 PostgreSQL 事务内先锁定 schedule 行，再执行读校验与写入；公开 API/权限码、表结构不变，不新增通用抽象或 revision。
+- 容量与验证边界：沿用百万用户、多实例基线；本次只修改低频管理写路径，锁粒度为单 schedule 行，热读取和 Redis 协议不变。删除事务为行读取、活动任务计数、更新；启停为行读取、更新。真实 PostgreSQL 隔离 schema 的两连接并发测试，通过 pg_blocking_pids 确认阻塞点后提交竞争写入，不依赖固定 sleep 推测执行顺序。
+- 已观察失败再修复：删除原实现错误返回 nil；启用原实现使用旧 cron 算出 13:00 UTC，最新 cron 应为 12:05 UTC。已补齐 Scheduler 数字状态链路、通知任务跨平台目标过滤、API `request<unknown>` 边界和通知任务弹窗组件化；前端页面不再直接改写 Dialog prop。
+- 当前验证证据：后端 `go fmt ./...`、`go vet ./...`、`go test -p 1 ./... -count=1`、`go build ./...` 全部 exit 0；前端 `pnpm format:check`、`pnpm lint`、`pnpm check:architecture`、`pnpm typecheck`、全量 Vitest 100 文件/725 项和 `pnpm build` 全部 exit 0。Build 仅保留既有大 chunk 警告。
+- 后续待完成：追踪手动 Execute/Retry 与删除的所有任务创建入口、普通编辑与独立状态动作交错；复核 Publisher 重试/健康语义，不把正常重试直接定性为吞错；核对 notificationTask 权限规则所有权；逐域制定数值 enum 编码与前后端/数据库迁移；菜单图标单一维护来源；Redis key 数量/TTL/容量实测。
+- 已建立 `docs/agent/status-enum-catalog.md`：确认状态机按业务域使用独立数值编码，Scheduler 作为第一迁移域；Job/Run 的 SQL、Go、API、Worker 和前端必须同批切换，避免半迁移兼容分支。Mail/SMS/通知编码先记录基线，尚未改表或协议。
+- 全项目审计基线已落到 `docs/agent/audit/`：后端边界、前端质量、数据库结构、Redis 协议、状态/字典、菜单 icon 和整改优先级七份清单。当前这些文档只记录已核对证据与待验证项，不把建议误报为已修复。
+- 数据库只读复核：重复 user_session 用户外键、6 条空 device_id、permission_access_version.user_id 的 sequence 默认值仍存在。迁移尚未编写或执行；空 device_id 必须先查写入来源、有效会话及撤销缓存协议，不伪造设备 ID，也不直接删除会话事实。其余冗余索引、表字段仅列候选，不能根据引用数或 idx_scan 一次快照直接删除。
+- 工作流：不创建历史 superpowers 计划、不自动提交、不修改业务 public 数据；下一批按失败测试、最小修复、真实迁移验证推进。全项目整改尚未完成。
+
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。
 

@@ -6,30 +6,30 @@ import (
 	"time"
 )
 
-type ScheduleStatus string
+type ScheduleStatus int16
 
 const (
-	ScheduleEnabled  ScheduleStatus = "enabled"
-	ScheduleDisabled ScheduleStatus = "disabled"
+	ScheduleDisabled ScheduleStatus = 1
+	ScheduleEnabled  ScheduleStatus = 2
 )
 
-type JobStatus string
+type JobStatus int16
 
 const (
-	JobScheduled JobStatus = "scheduled"
-	JobQueued    JobStatus = "queued"
-	JobRunning   JobStatus = "running"
-	JobCompleted JobStatus = "completed"
-	JobFailed    JobStatus = "failed"
-	JobCanceled  JobStatus = "canceled"
+	JobScheduled JobStatus = 1
+	JobQueued    JobStatus = 2
+	JobRunning   JobStatus = 3
+	JobCompleted JobStatus = 4
+	JobFailed    JobStatus = 5
+	JobCanceled  JobStatus = 6
 )
 
-type RunStatus string
+type RunStatus int16
 
 const (
-	RunRunning   RunStatus = "running"
-	RunSucceeded RunStatus = "succeeded"
-	RunFailed    RunStatus = "failed"
+	RunRunning   RunStatus = 1
+	RunSucceeded RunStatus = 2
+	RunFailed    RunStatus = 3
 )
 
 type TriggerSource string

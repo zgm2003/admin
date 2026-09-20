@@ -289,6 +289,7 @@ describe('notification task management', () => {
       expect(api.listNotificationTaskOptions).toHaveBeenCalledWith('create', 'user', {
         afterId: 0,
         limit: 50,
+        platformId: 2,
       }),
     )
     const targetSelect = wrapper
@@ -305,6 +306,7 @@ describe('notification task management', () => {
       expect(api.listNotificationTaskOptions).toHaveBeenCalledWith('create', 'role', {
         afterId: 0,
         limit: 50,
+        platformId: 2,
       }),
     )
     await vi.waitFor(() =>

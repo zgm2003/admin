@@ -1,4 +1,5 @@
 import type { TaskOption } from '@/api/system/scheduler'
+import { isJobStatus, isRunStatus } from '@/enums/scheduler'
 
 export const CUSTOM_CRON_VALUE = '__custom__'
 
@@ -15,17 +16,6 @@ export const CRON_PRESETS = [
   { value: '0 0 1 * *', labelKey: 'scheduler.cronPreset.monthlyFirstDay' },
   { value: CUSTOM_CRON_VALUE, labelKey: 'scheduler.cronPreset.custom' },
 ] as const
-
-const JOB_STATUS_KEYS = new Set([
-  'scheduled',
-  'queued',
-  'running',
-  'completed',
-  'failed',
-  'canceled',
-])
-
-const RUN_STATUS_KEYS = new Set(['running', 'succeeded', 'failed', 'canceled'])
 
 function normalizeCronExpression(expression: string): string {
   const normalized = expression.trim()
@@ -68,12 +58,14 @@ export function getTriggerSourceKey(source: string): string {
   }
 }
 
-export function getJobStatusKey(status: string): string {
-  return JOB_STATUS_KEYS.has(status) ? `scheduler.status.${status}` : 'scheduler.status.unknown'
+export function getJobStatusKey(status: number): string {
+  if (!isJobStatus(status)) return 'scheduler.status.unknown'
+  const keys = ['scheduled', 'queued', 'running', 'completed', 'failed', 'canceled'] as const
+  return `scheduler.status.${keys[status - 1]}`
 }
 
-export function getRunStatusKey(status: string): string {
-  return RUN_STATUS_KEYS.has(status)
-    ? `scheduler.runStatus.${status}`
-    : 'scheduler.runStatus.unknown'
+export function getRunStatusKey(status: number): string {
+  if (!isRunStatus(status)) return 'scheduler.runStatus.unknown'
+  const keys = ['running', 'succeeded', 'failed'] as const
+  return `scheduler.runStatus.${keys[status - 1]}`
 }

@@ -4,7 +4,7 @@ import * as taskApi from '@/api/message/notificationTask'
 
 export type NotificationTaskOptionKind = 'platform' | 'user' | 'role'
 
-interface OptionState {
+export interface NotificationTaskOptionState {
   items: Array<{ value: number; label: string }>
   nextAfterId: number | null
   error: string
@@ -13,7 +13,12 @@ interface OptionState {
   sequence: number
 }
 
-const newOptionState = (): OptionState => ({
+export type NotificationTaskOptionStates = Record<
+  NotificationTaskOptionKind,
+  NotificationTaskOptionState
+>
+
+const newOptionState = (): NotificationTaskOptionState => ({
   items: [],
   nextAfterId: null,
   error: '',
@@ -24,10 +29,11 @@ const newOptionState = (): OptionState => ({
 
 export function useNotificationTaskOptions(
   audience: () => taskApi.NotificationAudience,
+  platformID: () => number | null,
   intent: () => 'create' | 'update',
   optionFailedMessage: () => string,
 ) {
-  const optionStates = reactive<Record<NotificationTaskOptionKind, OptionState>>({
+  const optionStates = reactive<NotificationTaskOptionStates>({
     platform: newOptionState(),
     user: newOptionState(),
     role: newOptionState(),
@@ -60,8 +66,17 @@ export function useNotificationTaskOptions(
     state.error = ''
     state.loading = true
     state.keyword = normalizedKeyword
+    const selectedPlatformID = platformID()
+    if (kind !== 'platform' && (selectedPlatformID === null || selectedPlatformID <= 0)) {
+      state.loading = false
+      state.error = optionFailedMessage()
+      return
+    }
     try {
       const result = await taskApi.listNotificationTaskOptions(intent(), kind, {
+        ...(kind === 'platform' || selectedPlatformID === null
+          ? {}
+          : { platformId: selectedPlatformID }),
         ...(normalizedKeyword === '' ? {} : { keyword: normalizedKeyword }),
         afterId,
         limit: 50,
@@ -93,6 +108,11 @@ export function useNotificationTaskOptions(
     state.error = ''
     state.loading = true
     state.keyword = normalizedKeyword
+    if (kind !== 'platform' && (platformID() === null || platformID()! <= 0)) {
+      state.loading = false
+      state.error = optionFailedMessage()
+      return
+    }
     optionTimers[kind] = window.setTimeout(() => {
       optionTimers[kind] = null
       void loadOptions(kind, normalizedKeyword)

@@ -25,7 +25,7 @@ CREATE TABLE system_scheduler_job (
   source_key VARCHAR(255) NULL,
   scheduled_at TIMESTAMPTZ NOT NULL,
   available_at TIMESTAMPTZ NOT NULL,
-  status VARCHAR(16) NOT NULL,
+  status SMALLINT NOT NULL,
   attempt_count INTEGER NOT NULL,
   max_attempts INTEGER NOT NULL,
   queue VARCHAR(64) NOT NULL,
@@ -48,7 +48,7 @@ CREATE TABLE system_scheduler_job (
 	if err := db.WithContext(ctx).Exec(`
 INSERT INTO system_scheduler_job (
   id,task_type,payload,trigger_source,scheduled_at,available_at,status,attempt_count,max_attempts,queue,timeout_seconds,error_class,last_error,created_at,updated_at
-) VALUES (1,'example','{}','manual',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'scheduled',0,1,'default',30,'','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`).Error; err != nil {
+) VALUES (1,'example','{}','manual',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,1,0,1,'default',30,'','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`).Error; err != nil {
 		t.Fatal(err)
 	}
 

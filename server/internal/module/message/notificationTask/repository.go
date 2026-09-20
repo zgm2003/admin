@@ -244,13 +244,69 @@ func (r *Repository) validateDraftFacts(ctx context.Context, input DraftInput) e
 	if input.AudienceType == AudiencePlatform {
 		return nil
 	}
-	table := "user_account"
-	if input.AudienceType == AudienceRole {
-		table = "permission_role"
-	}
 	var count int64
-	if err := r.db.WithContext(ctx).Table(table).Where("id IN ? AND is_enabled=1 AND deleted_at IS NULL", input.TargetIDs).Count(&count).Error; err != nil {
-		return err
+	switch input.AudienceType {
+	case AudienceUser:
+		err := r.db.WithContext(ctx).Raw(`
+SELECT count(*)
+FROM user_account app_user
+WHERE app_user.id IN ?
+  AND app_user.is_enabled=1
+  AND app_user.deleted_at IS NULL
+  AND EXISTS (
+    SELECT 1
+    FROM permission_user_role user_role
+    JOIN permission_role app_role
+      ON app_role.id=user_role.role_id
+     AND app_role.is_enabled=1
+     AND app_role.deleted_at IS NULL
+    WHERE user_role.user_id=app_user.id
+      AND user_role.created_at<=CURRENT_TIMESTAMP
+      AND (user_role.deleted_at IS NULL OR user_role.deleted_at>CURRENT_TIMESTAMP)
+      AND (
+        app_role.code='super_admin'
+        OR EXISTS (
+          SELECT 1
+          FROM permission_role_menu role_menu
+          JOIN permission_menu app_menu
+            ON app_menu.id=role_menu.menu_id
+           AND app_menu.platform_id=?
+           AND app_menu.is_enabled=1
+           AND app_menu.deleted_at IS NULL
+          WHERE role_menu.role_id=app_role.id
+            AND role_menu.created_at<=CURRENT_TIMESTAMP
+            AND (role_menu.deleted_at IS NULL OR role_menu.deleted_at>CURRENT_TIMESTAMP)
+        )
+      )
+  )`, input.TargetIDs, input.PlatformID).Scan(&count).Error
+		if err != nil {
+			return err
+		}
+	case AudienceRole:
+		err := r.db.WithContext(ctx).Raw(`
+SELECT count(*)
+FROM permission_role app_role
+WHERE app_role.id IN ?
+  AND app_role.is_enabled=1
+  AND app_role.deleted_at IS NULL
+  AND (
+    app_role.code='super_admin'
+    OR EXISTS (
+      SELECT 1
+      FROM permission_role_menu role_menu
+      JOIN permission_menu app_menu
+        ON app_menu.id=role_menu.menu_id
+       AND app_menu.platform_id=?
+       AND app_menu.is_enabled=1
+       AND app_menu.deleted_at IS NULL
+      WHERE role_menu.role_id=app_role.id
+        AND role_menu.created_at<=CURRENT_TIMESTAMP
+        AND (role_menu.deleted_at IS NULL OR role_menu.deleted_at>CURRENT_TIMESTAMP)
+    )
+  )`, input.TargetIDs, input.PlatformID).Scan(&count).Error
+		if err != nil {
+			return err
+		}
 	}
 	if count != int64(len(input.TargetIDs)) {
 		return fmt.Errorf("%w: target is unavailable", ErrInvalidFacts)
@@ -343,7 +399,11 @@ type Option struct {
 	Label string `json:"label"`
 }
 
-func (r *Repository) Options(ctx context.Context, kind, keyword string, after int64, limit int) ([]Option, error) {
+func (r *Repository) Options(ctx context.Context, kind string, platformID int64, keyword string, after int64, limit int) ([]Option, error) {
+	if platformID < 1 && kind != "platform" {
+		return nil, fmt.Errorf("platform is required for target options")
+	}
+	pattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(keyword) + "%"
 	table, name := "user_account", "username"
 	condition := "is_enabled=1 AND deleted_at IS NULL"
 	if kind == "role" {
@@ -351,7 +411,6 @@ func (r *Repository) Options(ctx context.Context, kind, keyword string, after in
 	}
 	var rows []Option
 	if kind == "platform" {
-		pattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(keyword) + "%"
 		var malformed int64
 		if err := r.db.WithContext(ctx).Raw(`
 SELECT count(*)
@@ -420,6 +479,62 @@ HAVING count(DISTINCT action.code)=3
 ORDER BY platform.id
 LIMIT ?`, after, keyword, pattern, limit).Scan(&rows).Error
 		return rows, err
+	}
+	if kind == "role" {
+		result := r.db.WithContext(ctx).Raw(`
+SELECT DISTINCT app_role.id, app_role.name AS label
+FROM permission_role app_role
+JOIN permission_role_menu role_menu
+  ON role_menu.role_id=app_role.id
+ AND role_menu.deleted_at IS NULL
+JOIN permission_menu app_menu
+  ON app_menu.id=role_menu.menu_id
+ AND app_menu.platform_id=?
+ AND app_menu.is_enabled=1
+ AND app_menu.deleted_at IS NULL
+WHERE app_role.id>?
+  AND app_role.is_enabled=1
+  AND app_role.deleted_at IS NULL
+  AND (?='' OR app_role.name ILIKE ? ESCAPE '\')
+ORDER BY app_role.id
+LIMIT ?`, platformID, after, keyword, pattern, limit).Scan(&rows)
+		return rows, result.Error
+	}
+	if kind == "user" {
+		result := r.db.WithContext(ctx).Raw(`
+SELECT app_user.id, app_user.username AS label
+FROM user_account app_user
+WHERE app_user.id>?
+  AND app_user.is_enabled=1
+  AND app_user.deleted_at IS NULL
+  AND (?='' OR app_user.username ILIKE ? ESCAPE '\')
+  AND EXISTS (
+    SELECT 1
+    FROM permission_user_role user_role
+    JOIN permission_role app_role
+      ON app_role.id=user_role.role_id
+     AND app_role.is_enabled=1
+     AND app_role.deleted_at IS NULL
+    WHERE user_role.user_id=app_user.id
+      AND user_role.deleted_at IS NULL
+      AND (
+        app_role.code='super_admin'
+        OR EXISTS (
+          SELECT 1
+          FROM permission_role_menu role_menu
+          JOIN permission_menu app_menu
+            ON app_menu.id=role_menu.menu_id
+           AND app_menu.platform_id=?
+           AND app_menu.is_enabled=1
+           AND app_menu.deleted_at IS NULL
+          WHERE role_menu.role_id=app_role.id
+            AND role_menu.deleted_at IS NULL
+        )
+      )
+  )
+ORDER BY app_user.id
+LIMIT ?`, after, keyword, pattern, platformID, limit).Scan(&rows)
+		return rows, result.Error
 	}
 	query := r.db.WithContext(ctx).Table(table).Select("id,"+name+" AS label").Where("id>? AND "+condition, after)
 	if keyword != "" {

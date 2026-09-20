@@ -10,8 +10,9 @@ import {
   expectString,
 } from '@/api/protocol'
 import { ProtocolError } from '@/types/http'
+import { isJobStatus, isRunStatus } from '@/enums/scheduler'
+import type { JobStatus, RunStatus } from '@/enums/scheduler'
 
-export type JobStatus = 'scheduled' | 'queued' | 'running' | 'completed' | 'failed' | 'canceled'
 export interface Schedule {
   id: number
   name: string
@@ -47,7 +48,7 @@ export interface Run {
   id: number
   jobId: number
   attemptNo: number
-  status: string
+  status: RunStatus
   workerId: string
   startedAt: string
   finishedAt: string | null
@@ -127,9 +128,8 @@ function parseJob(value: unknown, context: string): Job {
     ],
     context,
   )
-  const status = expectString(r.status, `${context}.status`)
-  if (!['scheduled', 'queued', 'running', 'completed', 'failed', 'canceled'].includes(status))
-    throw new ProtocolError(`${context}.status is invalid`)
+  const status = expectInteger(r.status, `${context}.status`)
+  if (!isJobStatus(status)) throw new ProtocolError(`${context}.status is invalid`)
   return {
     id: expectInteger(r.id, `${context}.id`),
     scheduleId: r.scheduleId === null ? null : expectInteger(r.scheduleId, `${context}.scheduleId`),
@@ -138,7 +138,7 @@ function parseJob(value: unknown, context: string): Job {
     triggerSource: expectString(r.triggerSource, `${context}.triggerSource`),
     scheduledAt: expectString(r.scheduledAt, `${context}.scheduledAt`),
     availableAt: expectString(r.availableAt, `${context}.availableAt`),
-    status: status as JobStatus,
+    status,
     attemptCount: expectInteger(r.attemptCount, `${context}.attemptCount`),
     maxAttempts: expectInteger(r.maxAttempts, `${context}.maxAttempts`),
     errorClass: expectString(r.errorClass, `${context}.errorClass`),
@@ -170,7 +170,11 @@ function parseRun(value: unknown, context: string): Run {
     id: expectInteger(r.id, `${context}.id`),
     jobId: expectInteger(r.jobId, `${context}.jobId`),
     attemptNo: expectInteger(r.attemptNo, `${context}.attemptNo`),
-    status: expectString(r.status, `${context}.status`),
+    status: (() => {
+      const status = expectInteger(r.status, `${context}.status`)
+      if (!isRunStatus(status)) throw new ProtocolError(`${context}.status is invalid`)
+      return status
+    })(),
     workerId: expectString(r.workerId, `${context}.workerId`),
     startedAt: expectString(r.startedAt, `${context}.startedAt`),
     finishedAt: expectNullableString(r.finishedAt, `${context}.finishedAt`),

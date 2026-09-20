@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { Run } from '@/api/system/scheduler'
+import { RunStatus } from '@/enums/scheduler'
 import { formatTime } from '@/utils/datetime'
 import { getRunStatusKey } from '@/views/system/scheduler/presentation'
 
@@ -19,7 +20,11 @@ defineProps<{ runs: Run[] }>()
       <el-space direction="vertical" alignment="start" size="small">
         <el-tag
           :type="
-            run.status === 'succeeded' ? 'success' : run.status === 'failed' ? 'danger' : 'warning'
+            run.status === RunStatus.succeeded
+              ? 'success'
+              : run.status === RunStatus.failed
+                ? 'danger'
+                : 'warning'
           "
           >{{ t(getRunStatusKey(run.status)) }}</el-tag
         >

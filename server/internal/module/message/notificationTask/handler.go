@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	auth "admin/server/internal/module/auth/login"
@@ -23,7 +24,7 @@ type taskService interface {
 	EditableDetail(context.Context, int64) (Task, error)
 	List(context.Context, ListQuery) ([]Task, int64, error)
 	Delete(context.Context, int64, time.Time) error
-	Options(context.Context, string, string, int64, int) ([]Option, *int64, error)
+	Options(context.Context, string, int64, string, int64, int) ([]Option, *int64, error)
 }
 type Handler struct {
 	service taskService
@@ -173,7 +174,18 @@ func (h *Handler) Option(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	items, next, err := h.service.Options(c.Request.Context(), kind, query.Keyword, query.AfterID, query.Limit)
+	platformID := int64(0)
+	if value := c.Query("platformId"); value != "" {
+		platformID, err = strconv.ParseInt(value, 10, 64)
+		if err != nil || platformID < 1 {
+			response.Fail(c, apperror.InvalidRequest(fmt.Errorf("platformId is invalid")))
+			return
+		}
+	} else if kind != "platform" {
+		response.Fail(c, apperror.InvalidRequest(fmt.Errorf("platformId is required")))
+		return
+	}
+	items, next, err := h.service.Options(c.Request.Context(), kind, platformID, query.Keyword, query.AfterID, query.Limit)
 	if err != nil {
 		response.Fail(c, err)
 		return

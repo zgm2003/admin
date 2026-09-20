@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { TaskOption } from '@/api/system/scheduler'
+import { JobStatus, RunStatus } from '@/enums/scheduler'
 import {
   CUSTOM_CRON_VALUE,
   CRON_PRESETS,
@@ -41,8 +42,8 @@ describe('scheduler presentation', () => {
     expect(getTriggerSourceKey('cron')).toBe('scheduler.triggerSource.cron')
     expect(getTriggerSourceKey('manual')).toBe('scheduler.triggerSource.manual')
     expect(getTriggerSourceKey('other')).toBe('scheduler.triggerSource.unknown')
-    expect(getJobStatusKey('queued')).toBe('scheduler.status.queued')
-    expect(getRunStatusKey('succeeded')).toBe('scheduler.runStatus.succeeded')
-    expect(getRunStatusKey('other')).toBe('scheduler.runStatus.unknown')
+    expect(getJobStatusKey(JobStatus.queued)).toBe('scheduler.status.queued')
+    expect(getRunStatusKey(RunStatus.succeeded)).toBe('scheduler.runStatus.succeeded')
+    expect(getRunStatusKey(99)).toBe('scheduler.runStatus.unknown')
   })
 })

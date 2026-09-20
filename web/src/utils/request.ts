@@ -31,16 +31,16 @@ interface RequestClientBundle {
   refreshAccessCredential: () => Promise<AccessCredential>
 }
 
-export function unwrapEnvelope<T>(value: unknown): T {
-  return unwrapSuccessEnvelope<T>(value)
+export function unwrapEnvelope(value: unknown): unknown {
+  return unwrapSuccessEnvelope(value)
 }
 
-function unwrapSuccessEnvelope<T>(value: unknown): T {
+function unwrapSuccessEnvelope(value: unknown): unknown {
   const envelope = parseEnvelope(value)
   if (envelope.code !== 0) {
     throw new ApiError(envelope.code, envelope.message)
   }
-  return envelope.data as T
+  return envelope.data
 }
 
 function parseEnvelope(value: unknown): ApiResponse<unknown> {
@@ -169,7 +169,7 @@ async function performRefresh(
     const response = await rawClient.post<unknown>('/api/v1/auth/refresh', undefined, {
       withCredentials: true,
     })
-    const credential = unwrapSuccessEnvelope<unknown>(response.data)
+    const credential = unwrapSuccessEnvelope(response.data)
     if (!isAccessCredential(credential)) {
       throw new ProtocolError('access credential response is invalid')
     }
@@ -265,8 +265,10 @@ export async function refreshAccessCredential(): Promise<AccessCredential> {
   return defaultBundle.refreshAccessCredential()
 }
 
-export async function request<T>(config: AxiosRequestConfig): Promise<T> {
-  const response = await client.request<T>(config)
+export function request(config: AxiosRequestConfig): Promise<unknown>
+export function request<_T>(config: AxiosRequestConfig): Promise<unknown>
+export async function request(config: AxiosRequestConfig): Promise<unknown> {
+  const response = await client.request(config)
   return response.data
 }
 

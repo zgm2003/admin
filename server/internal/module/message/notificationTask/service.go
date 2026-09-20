@@ -22,7 +22,7 @@ type taskAdminRepository interface {
 	Find(context.Context, int64) (Task, error)
 	List(context.Context, ListQuery) ([]Task, int64, error)
 	Delete(context.Context, int64, time.Time) error
-	Options(context.Context, string, string, int64, int) ([]Option, error)
+	Options(context.Context, string, int64, string, int64, int) ([]Option, error)
 }
 type Service struct{ repository taskRepository }
 
@@ -117,12 +117,12 @@ func (s *Service) Delete(ctx context.Context, id int64, now time.Time) error {
 	}
 	return mapTaskError(repository.Delete(ctx, id, now))
 }
-func (s *Service) Options(ctx context.Context, kind, keyword string, after int64, limit int) ([]Option, *int64, error) {
+func (s *Service) Options(ctx context.Context, kind string, platformID int64, keyword string, after int64, limit int) ([]Option, *int64, error) {
 	repository, ok := s.repository.(taskAdminRepository)
-	if (kind != "platform" && kind != "user" && kind != "role") || after < 0 || limit < 1 || limit > 50 || !ok {
+	if (kind != "platform" && kind != "user" && kind != "role") || (kind != "platform" && platformID < 1) || after < 0 || limit < 1 || limit > 50 || !ok {
 		return nil, nil, apperror.InvalidRequest(errors.New("option query is invalid"))
 	}
-	rows, err := repository.Options(ctx, kind, keyword, after, limit+1)
+	rows, err := repository.Options(ctx, kind, platformID, keyword, after, limit+1)
 	if err != nil {
 		return nil, nil, mapTaskError(err)
 	}

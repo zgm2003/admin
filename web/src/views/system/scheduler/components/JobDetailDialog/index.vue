@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Job, Run, TaskOption } from '@/api/system/scheduler'
+import { JobStatus } from '@/enums/scheduler'
 import { listRuns } from '@/api/system/scheduler'
 import { formatTime } from '@/utils/datetime'
 import RunTimeline from '@/views/system/scheduler/components/RunTimeline/index.vue'
@@ -63,7 +64,11 @@ watch(
       <el-descriptions-item :label="$t('scheduler.status')">
         <el-tag
           :type="
-            job.status === 'failed' ? 'danger' : job.status === 'completed' ? 'success' : 'info'
+            job.status === JobStatus.failed
+              ? 'danger'
+              : job.status === JobStatus.completed
+                ? 'success'
+                : 'info'
           "
           >{{ $t(getJobStatusKey(job.status)) }}</el-tag
         >

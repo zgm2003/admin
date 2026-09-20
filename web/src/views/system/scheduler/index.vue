@@ -18,7 +18,9 @@ import {
   setScheduleStatus,
   updateSchedule,
 } from '@/api/system/scheduler'
-import type { Job, JobStatus, Schedule, TaskOption } from '@/api/system/scheduler'
+import type { Job, Schedule, TaskOption } from '@/api/system/scheduler'
+import { JobStatus as JobStatusValue } from '@/enums/scheduler'
+import type { JobStatus } from '@/enums/scheduler'
 import JobDetailDialog from './components/JobDetailDialog/index.vue'
 import {
   CRON_PRESETS,
@@ -66,9 +68,9 @@ const cronPresetOptions = computed(() =>
 )
 const jobStatusOptions = computed(() => [
   { label: t('scheduler.all'), value: '' },
-  { label: t('scheduler.completed'), value: 'completed' },
-  { label: t('scheduler.failed'), value: 'failed' },
-  { label: t('scheduler.running'), value: 'running' },
+  { label: t('scheduler.completed'), value: JobStatusValue.completed },
+  { label: t('scheduler.failed'), value: JobStatusValue.failed },
+  { label: t('scheduler.running'), value: JobStatusValue.running },
 ])
 const scheduleColumns = computed<TableColumn<Schedule>[]>(() => [
   { prop: 'name', label: t('scheduler.name'), minWidth: 180 },
@@ -218,7 +220,7 @@ function changeTab(value: string): void {
   void load()
 }
 function changeJobStatus(value: string | number | boolean): void {
-  jobStatus.value = value === '' ? '' : (String(value) as JobStatus)
+  jobStatus.value = value === '' ? '' : (Number(value) as JobStatus)
   void load()
 }
 onMounted(() => {
@@ -325,11 +327,11 @@ onMounted(() => {
       <template #cell-status="{ row }: { row: Job }"
         ><el-tag
           :type="
-            row.status === 'completed'
+            row.status === JobStatusValue.completed
               ? 'success'
-              : row.status === 'failed'
+              : row.status === JobStatusValue.failed
                 ? 'danger'
-                : row.status === 'running'
+                : row.status === JobStatusValue.running
                   ? 'warning'
                   : 'info'
           "
@@ -345,7 +347,7 @@ onMounted(() => {
             t('scheduler.detail')
           }}</el-button
           ><el-button
-            v-if="canRetry && row.status === 'failed'"
+            v-if="canRetry && row.status === JobStatusValue.failed"
             type="warning"
             link
             @click="retry(row)"
