@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -677,8 +678,12 @@ func mapRepositoryError(err error) error {
 	if err == nil {
 		return nil
 	}
+	var pgError *pgconn.PgError
+	if errors.As(err, &pgError) && pgError.Code == "23505" {
+		return fmt.Errorf("%w: %w", ErrConflict, err)
+	}
 	if strings.Contains(err.Error(), "duplicate key") {
-		return ErrConflict
+		return fmt.Errorf("%w: %w", ErrConflict, err)
 	}
 	return err
 }
