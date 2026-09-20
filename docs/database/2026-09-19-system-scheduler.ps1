@@ -44,6 +44,16 @@ function Get-EffectiveSetting {
     return ''
 }
 
+function Get-LibpqDsn {
+    param([string]$Dsn)
+    if ([string]::IsNullOrWhiteSpace($Dsn)) { return '' }
+    if ($Dsn -match '^\s*postgres(?:ql)?://') {
+        return ($Dsn -replace '(?i)([?&])TimeZone=[^&]*', '$1' -replace '\?&', '?' -replace '[?&]$', '')
+    }
+    # Go's pgx DSN accepts TimeZone, but libpq tools reject that keyword.
+    return ($Dsn -replace '(?i)(^|\s+)TimeZone=\S+', '$1').Trim()
+}
+
 function Assert-NoServiceProcess {
     $processes = Get-CimInstance Win32_Process | Where-Object {
         $_.CommandLine -match '(cmd[\\/]api|cmd[\\/]worker|\\bapi\.exe\\b|\\bworker\.exe\\b)'
@@ -75,18 +85,20 @@ try {
     if ([string]::IsNullOrWhiteSpace($redisUrl) -or $redisUrl -notmatch '^rediss?://') { throw 'REDIS_URL 必须以 redis:// 或 rediss:// 开头。' }
     $env:POSTGRES_DSN = $postgresDsn
     $env:REDIS_URL = $redisUrl
+    $libpqDsn = Get-LibpqDsn -Dsn $postgresDsn
+    if ([string]::IsNullOrWhiteSpace($libpqDsn)) { throw 'POSTGRES_DSN 去除 Go 专用连接参数后为空。' }
 
     if (-not $CleanupOnly) {
         if (-not (Test-Path -LiteralPath $sqlPath)) { throw "找不到 migration SQL：$sqlPath" }
         $backupDir = Join-Path $env:LOCALAPPDATA ("Admin\backups\system-scheduler-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
         New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
         $dumpPath = Join-Path $backupDir 'public-before.dump'
-        & pg_dump --format=custom --schema=public --no-owner --no-privileges --dbname=$postgresDsn --file=$dumpPath
+        & pg_dump --format=custom --schema=public --no-owner --no-privileges --dbname=$libpqDsn --file=$dumpPath
         if ($LASTEXITCODE -ne 0) { throw "pg_dump 备份失败（exit $LASTEXITCODE）。" }
         & pg_restore --list $dumpPath | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'pg_restore --list 无法读取备份归档。' }
 
-        & psql -X -d $postgresDsn -v ON_ERROR_STOP=1 -f $sqlPath
+        & psql -X -d $libpqDsn -v ON_ERROR_STOP=1 -f $sqlPath
         if ($LASTEXITCODE -ne 0) { throw "migration SQL 失败（exit $LASTEXITCODE）：事务已回滚，Redis cleanup 未执行。" }
         $sqlCommitted = $true
         Write-Host 'migration SQL 已提交。'
@@ -95,13 +107,13 @@ try {
     Invoke-Cleanup -Phase '首次'
     Invoke-Cleanup -Phase '复验'
 
-    $tableCount = (& psql -X -At -d $postgresDsn -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relkind='r' AND c.relname IN ('system_scheduler_schedule','system_scheduler_job','system_scheduler_run');").Trim()
+    $tableCount = (& psql -X -At -d $libpqDsn -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relkind='r' AND c.relname IN ('system_scheduler_schedule','system_scheduler_job','system_scheduler_run');").Trim()
     if ($tableCount -ne '3') { throw "调度器目标表数量错误：$tableCount。" }
-    $oldTableCount = (& psql -X -At -d $postgresDsn -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relname='message_notification_dispatch_outbox';").Trim()
+    $oldTableCount = (& psql -X -At -d $libpqDsn -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relname='message_notification_dispatch_outbox';").Trim()
     if ($oldTableCount -ne '0') { throw "旧 notification dispatch outbox 仍存在：$oldTableCount。" }
-    $scheduleCount = (& psql -X -At -d $postgresDsn -c "SELECT count(*) FROM system_scheduler_schedule WHERE deleted_at IS NULL AND builtin_key IN ('realtime.retention.cleanup','message.notification.retention.cleanup','system.scheduler.history.cleanup');").Trim()
+    $scheduleCount = (& psql -X -At -d $libpqDsn -c "SELECT count(*) FROM system_scheduler_schedule WHERE deleted_at IS NULL AND builtin_key IN ('realtime.retention.cleanup','message.notification.retention.cleanup','system.scheduler.history.cleanup');").Trim()
     if ($scheduleCount -ne '3') { throw "内置调度计划数量错误：$scheduleCount。" }
-    $settingCount = (& psql -X -At -d $postgresDsn -c "SELECT count(*) FROM system_setting WHERE deleted_at IS NULL AND setting_key='system.scheduler.history_retention_days' AND value_type=2 AND is_enabled=1 AND is_builtin=1 AND value ~ '^[0-9]+$' AND value::BIGINT BETWEEN 7 AND 3650;").Trim()
+    $settingCount = (& psql -X -At -d $libpqDsn -c "SELECT count(*) FROM system_setting WHERE deleted_at IS NULL AND setting_key='system.scheduler.history_retention_days' AND value_type=2 AND is_enabled=1 AND is_builtin=1 AND value ~ '^[0-9]+$' AND value::BIGINT BETWEEN 7 AND 3650;").Trim()
     if ($settingCount -ne '1') { throw "调度器历史保留设置不合法：$settingCount。" }
     Write-Host '完成：调度器 SQL、两轮 Redis cleanup 和只读验证全部通过。'
     exit 0
