@@ -2,6 +2,13 @@ import { request } from '@/utils/request'
 import { isYesNo, type YesNo } from '@/enums/yesNo'
 import type { PageResult } from '@/types/pagination'
 import { ProtocolError } from '@/types/http'
+
+export const MailStatus = {
+  Pending: 1,
+  Sent: 2,
+  Failed: 3,
+} as const
+export type MailStatus = (typeof MailStatus)[keyof typeof MailStatus]
 import {
   expectArray,
   expectBoolean,
@@ -48,7 +55,7 @@ export interface MailLog {
   templateId: number
   toEmail: string
   subject: string
-  status: string
+  status: MailStatus
   requestId: string
   messageId: string
   errorCode: string
@@ -109,7 +116,7 @@ export interface MailTestInput {
 }
 export interface MailTestResult {
   logId: number
-  status: string
+  status: MailStatus
   requestId: string
   messageId: string
 }
@@ -130,6 +137,12 @@ function integer(value: unknown): value is number {
 }
 function text(value: unknown): value is string {
   return typeof value === 'string'
+}
+function status(value: unknown, context: string): MailStatus {
+  if (value !== MailStatus.Pending && value !== MailStatus.Sent && value !== MailStatus.Failed) {
+    throw new ProtocolError(`${context} is invalid`)
+  }
+  return value
 }
 function stringMap(value: unknown): value is Record<string, string> {
   const data = record(value)
@@ -284,7 +297,7 @@ export function parseMailLog(value: unknown): MailLog {
     !integer(data.templateId) ||
     !text(data.toEmail) ||
     !text(data.subject) ||
-    !text(data.status) ||
+    !Number.isInteger(data.status) ||
     !text(data.requestId) ||
     !text(data.messageId) ||
     !text(data.errorCode) ||
@@ -305,7 +318,7 @@ export function parseMailLog(value: unknown): MailLog {
     templateId: expectInteger(data.templateId, 'mail log.templateId'),
     toEmail: expectString(data.toEmail, 'mail log.toEmail'),
     subject: expectString(data.subject, 'mail log.subject'),
-    status: expectString(data.status, 'mail log.status'),
+    status: status(data.status, 'mail log.status'),
     requestId: expectString(data.requestId, 'mail log.requestId'),
     messageId: expectString(data.messageId, 'mail log.messageId'),
     errorCode: expectString(data.errorCode, 'mail log.errorCode'),
@@ -399,7 +412,7 @@ function parseMailTestResult(value: unknown): MailTestResult {
   )
   return {
     logId: expectInteger(data.logId, 'mail test result.logId'),
-    status: expectString(data.status, 'mail test result.status'),
+    status: status(data.status, 'mail test result.status'),
     requestId: expectString(data.requestId, 'mail test result.requestId'),
     messageId: expectString(data.messageId, 'mail test result.messageId'),
   }
@@ -469,7 +482,7 @@ export interface MailLogQuery {
   platform?: string
   toEmail?: string
   scene?: string
-  status?: string
+  status?: MailStatus
   from?: string
   to?: string
 }

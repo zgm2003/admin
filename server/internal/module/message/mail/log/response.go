@@ -16,7 +16,7 @@ type Response struct {
 	TemplateID   int     `json:"templateId"`
 	ToEmail      string  `json:"toEmail"`
 	Subject      string  `json:"subject"`
-	Status       string  `json:"status"`
+	Status       Status  `json:"status"`
 	RequestID    string  `json:"requestId"`
 	MessageID    string  `json:"messageId"`
 	ErrorCode    string  `json:"errorCode"`

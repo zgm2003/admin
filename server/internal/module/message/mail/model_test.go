@@ -120,7 +120,7 @@ func TestAdminTestResultUsesCamelCaseJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"logId":12,"status":"sent","requestId":"request-1","messageId":"message-1"}`
+	want := `{"logId":12,"status":2,"requestId":"request-1","messageId":"message-1"}`
 	if string(body) != want {
 		t.Fatalf("unexpected response: %s", body)
 	}

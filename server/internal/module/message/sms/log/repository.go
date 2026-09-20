@@ -39,7 +39,7 @@ func (r *Repository) FindActiveChallenge(ctx context.Context, platformID int64, 
 }
 
 // Finish closes one pending log. A finished log can never be rewritten.
-func (r *Repository) Finish(ctx context.Context, id, platformID int64, status, requestID, serialNo string, fee int, errorCode, errorSummary string, latencyMS int64, sentAt *time.Time, now time.Time) error {
+func (r *Repository) Finish(ctx context.Context, id, platformID int64, status Status, requestID, serialNo string, fee int, errorCode, errorSummary string, latencyMS int64, sentAt *time.Time, now time.Time) error {
 	result := r.db.WithContext(ctx).Model(&Model{}).
 		Where("id = ? AND platform_id = ? AND status = ?", id, platformID, StatusPending).
 		Updates(map[string]any{
@@ -70,7 +70,7 @@ type Query struct {
 	Platform    string
 	PhoneToHMAC *string
 	Scene       string
-	Status      string
+	Status      Status
 	From        *time.Time
 	To          *time.Time
 }
@@ -101,7 +101,7 @@ func (r *Repository) List(ctx context.Context, query Query) ([]ListRow, int64, e
 	if query.Scene != "" {
 		db = db.Where(Table+".scene = ?", query.Scene)
 	}
-	if query.Status != "" {
+	if query.Status != 0 {
 		db = db.Where(Table+".status = ?", query.Status)
 	}
 	if query.From != nil {

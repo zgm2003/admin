@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	smslog "admin/server/internal/module/message/sms/log"
 	"admin/server/internal/shared/cacheGeneration"
 )
 
@@ -83,10 +84,10 @@ type AdminTestInput struct {
 }
 
 type AdminTestResult struct {
-	LogID     int64  `json:"logId"`
-	Status    string `json:"status"`
-	RequestID string `json:"requestId"`
-	SerialNo  string `json:"serialNo"`
+	LogID     int64         `json:"logId"`
+	Status    smslog.Status `json:"status"`
+	RequestID string        `json:"requestId"`
+	SerialNo  string        `json:"serialNo"`
 }
 
 type LimitResult struct {

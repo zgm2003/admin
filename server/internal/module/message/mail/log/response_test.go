@@ -12,7 +12,7 @@ func TestLogResponseFormatsTimesAsUTC(t *testing.T) {
 	value := fromRow(ListRow{
 		Model: Model{
 			ID: 1, PlatformID: 2, Scene: "login", ToEmail: "user@example.com", Subject: "code",
-			Status: "sent", SentAt: &local, CreatedAt: local, UpdatedAt: local,
+			Status: StatusSent, SentAt: &local, CreatedAt: local, UpdatedAt: local,
 		},
 		Platform: "canvas",
 	})

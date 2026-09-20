@@ -30,7 +30,7 @@ type Item struct {
 	Scene        string  `json:"scene"`
 	TemplateID   int64   `json:"templateId"`
 	ToPhoneHint  string  `json:"toPhoneHint"`
-	Status       string  `json:"status"`
+	Status       Status  `json:"status"`
 	RequestID    string  `json:"requestId"`
 	SerialNo     string  `json:"serialNo"`
 	Fee          int     `json:"fee"`
@@ -66,7 +66,7 @@ type ListQuery struct {
 	Platform string
 	Phone    string
 	Scene    string
-	Status   string
+	Status   Status
 	From     *time.Time
 	To       *time.Time
 }
@@ -99,7 +99,7 @@ func (s *Service) List(ctx context.Context, query ListQuery) (ListResult, error)
 			return ListResult{}, apperror.InvalidRequest(fmt.Errorf("scene is invalid"))
 		}
 	}
-	if query.Status != "" && query.Status != StatusPending && query.Status != StatusSent && query.Status != StatusFailed {
+	if query.Status != 0 && !query.Status.Valid() {
 		return ListResult{}, apperror.InvalidRequest(fmt.Errorf("status is invalid"))
 	}
 

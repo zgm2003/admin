@@ -8,10 +8,24 @@
 - 已观察失败再修复：删除原实现错误返回 nil；启用原实现使用旧 cron 算出 13:00 UTC，最新 cron 应为 12:05 UTC。已补齐 Scheduler 数字状态链路、通知任务跨平台目标过滤、API `request<unknown>` 边界和通知任务弹窗组件化；前端页面不再直接改写 Dialog prop。
 - 当前验证证据：后端 `go fmt ./...`、`go vet ./...`、`go test -p 1 ./... -count=1`、`go build ./...` 全部 exit 0；前端 `pnpm format:check`、`pnpm lint`、`pnpm check:architecture`、`pnpm typecheck`、全量 Vitest 100 文件/725 项和 `pnpm build` 全部 exit 0。Build 仅保留既有大 chunk 警告。
 - 后续待完成：追踪手动 Execute/Retry 与删除的所有任务创建入口、普通编辑与独立状态动作交错；复核 Publisher 重试/健康语义，不把正常重试直接定性为吞错；核对 notificationTask 权限规则所有权；逐域制定数值 enum 编码与前后端/数据库迁移；菜单图标单一维护来源；Redis key 数量/TTL/容量实测。
-- 已建立 `docs/agent/status-enum-catalog.md`：确认状态机按业务域使用独立数值编码，Scheduler 作为第一迁移域；Job/Run 的 SQL、Go、API、Worker 和前端必须同批切换，避免半迁移兼容分支。Mail/SMS/通知编码先记录基线，尚未改表或协议。
+- 已建立 `docs/agent/status-enum-catalog.md`：确认状态机按业务域使用独立数值编码，Scheduler、Mail、SMS 已完成各自 SQL/Go/API/前端同批切换，避免半迁移兼容分支；通知任务仍待后续迁移。
 - 全项目审计基线已落到 `docs/agent/audit/`：后端边界、前端质量、数据库结构、Redis 协议、状态/字典、菜单 icon 和整改优先级七份清单。当前这些文档只记录已核对证据与待验证项，不把建议误报为已修复。
-- 数据库只读复核：重复 user_session 用户外键、6 条空 device_id、permission_access_version.user_id 的 sequence 默认值仍存在。迁移尚未编写或执行；空 device_id 必须先查写入来源、有效会话及撤销缓存协议，不伪造设备 ID，也不直接删除会话事实。其余冗余索引、表字段仅列候选，不能根据引用数或 idx_scan 一次快照直接删除。
+- 数据库复核已完成两项 forward migration：重复 user_session 用户外键、6 条空 device_id、permission_access_version.user_id 的 sequence 默认值已清理；空会话记录按维护者授权删除，不伪造设备 ID。其余冗余索引、表字段仍仅列候选，不能根据引用数或 idx_scan 一次快照直接删除。
 - 工作流：不创建历史 superpowers 计划、不自动提交、不修改业务 public 数据；下一批按失败测试、最小修复、真实迁移验证推进。全项目整改尚未完成。
+
+### Mail/SMS 日志状态数值化（2026-09-20，已迁移）
+
+- 已新增 `docs/database/2026-09-20-message-log-status-numeric.sql` 与同名 PowerShell runner；状态编码固定为 `1=pending`、`2=sent`、`3=failed`，迁移拒绝未知状态，保留现有数据、ID、约束和索引，并支持重复执行。
+- 真实 PostgreSQL 已于 2026-09-20 21:33（Asia/Shanghai）在 API/Worker 未运行时执行并复跑；Mail 16 条 `sent` 记录已转换为 `2`，SMS 当前 0 条；两列均为 `smallint`，Mail 四场景 CHECK、两张表状态 CHECK 和状态索引存在，非法状态写入被拒绝。
+- 迁移前备份：`%LOCALAPPDATA%/Admin/backups/message-log-status-numeric-20260920-213326/public-before.dump`，`pg_restore --list` 可读；加入 Mail scene CHECK 后复跑产生最新可读备份 `%LOCALAPPDATA%/Admin/backups/message-log-status-numeric-20260920-220949/public-before.dump`（241862 字节，SHA256 `D619652BD6727F007B0F31ED40281589F6AFF5BC4AF23D5642F9710A33579AF8`）。真实 schema 快照已刷新到 `docs/database/current.sql`，SHA256 `819CD9410831BD33C6A066E1312127C642BCC66960A0C15907CC5F7CFF0D39A1`。
+- 定向后端验证已通过：Mail/SMS 模块、数据库迁移夹具、架构测试。首次并行全量测试受 Redis/并发资源抖动影响出现 5 个非确定性失败；隔离重跑全部通过，随后串行 `go test -p 1 ./... -count=1`、`go vet ./...`、`go build ./...` 和 `go fmt ./...` 均通过。前端 `pnpm verify:frontend` 由维护者执行。
+
+### Schema hardening 迁移（2026-09-20，已迁移）
+
+- `docs/database/2026-09-20-schema-hardening.ps1` / `.sql` 已在 API/Worker 未运行时真实执行并复跑；修复 Windows PowerShell UTF-8 BOM，并放宽首次 6 条/后续 0 条的前置检查后，runner 可重复执行。
+- 结果：`user_session` 仅保留 `fk_user_session_user`，6 条空 `device_id` 已删除并增加 `ck_user_session_device_id_nonempty`；`permission_access_version.user_id` 默认值已移除，`rbac_access_version_user_id_seq` 已删除。
+- 删除前从归档核对 6 条记录均已有 `revoked_at`（无活动会话），因此没有需要额外清理的 `auth:session:<platform>:<id>` 活跃快照；未执行宽泛 Redis 清理。
+- 首次备份：`%LOCALAPPDATA%/Admin/backups/schema-hardening-20260920-220154/public-before.dump`，243709 字节，SHA256 `D221ED29BDCE3814F7591FA38D014F06B83465CC1DB03088014EBDAF36CAD4BD`，`pg_restore --list` 得到 441 个归档条目；幂等复跑备份为 `%LOCALAPPDATA%/Admin/backups/schema-hardening-20260920-222953/public-before.dump`（241862 字节，SHA256 `810B6373DD32ADA36039AD2BC63CAF00D6688E8A0104DF74FA4CB14A14FA5967`）。真实 schema 快照已刷新，SHA256 `819CD9410831BD33C6A066E1312127C642BCC66960A0C15907CC5F7CFF0D39A1`。
 
 > 这是当前唯一的进度入口。它记录现在要做什么、已经交付什么和下一步做什么；不回填历史
 > `docs/superpowers` plan。

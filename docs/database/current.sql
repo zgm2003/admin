@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 0fDjs6kYL9LU2OnlDP7n7d7jvv6oqvMFKhBemn1Z9ccWu4cyOGWu1KdgY2dK8Rb
+\restrict cpvi5y8OOKBXiQGdz6hzQqbqbyDEVf0prfCFlTdshepj5AGokB8zalDX5xGM2EG
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -88,7 +88,8 @@ CREATE TABLE public.user_session (
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT auth_session_updated_at_not_null NOT NULL,
     device_id character varying(36) CONSTRAINT auth_session_device_id_not_null NOT NULL,
     platform_id bigint NOT NULL,
-    CONSTRAINT ck_auth_session_version CHECK ((version >= 1))
+    CONSTRAINT ck_auth_session_version CHECK ((version >= 1)),
+    CONSTRAINT ck_user_session_device_id_nonempty CHECK ((btrim((device_id)::text) <> ''::text))
 );
 
 
@@ -170,7 +171,7 @@ CREATE TABLE public.message_mail_log (
     template_id integer NOT NULL,
     to_email character varying(254) NOT NULL,
     subject character varying(255) NOT NULL,
-    status character varying(16) NOT NULL,
+    status smallint NOT NULL,
     request_id character varying(128) DEFAULT ''::character varying NOT NULL,
     message_id character varying(128) DEFAULT ''::character varying NOT NULL,
     error_code character varying(128) DEFAULT ''::character varying NOT NULL,
@@ -179,7 +180,8 @@ CREATE TABLE public.message_mail_log (
     sent_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT message_mail_log_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'sent'::character varying, 'failed'::character varying])::text[])))
+    CONSTRAINT ck_message_mail_log_scene CHECK (((scene)::text = ANY ((ARRAY['login'::character varying, 'forget'::character varying, 'bind_email'::character varying, 'change_password'::character varying])::text[]))),
+    CONSTRAINT message_mail_log_status_check CHECK ((status = ANY (ARRAY[1, 2, 3])))
 );
 
 
@@ -604,7 +606,7 @@ CREATE TABLE public.message_sms_log (
     to_phone_ciphertext text NOT NULL,
     to_phone_hint character varying(32) NOT NULL,
     to_phone_hmac character varying(128) NOT NULL,
-    status character varying(16) NOT NULL,
+    status smallint NOT NULL,
     request_id character varying(128) DEFAULT ''::character varying NOT NULL,
     serial_no character varying(128) DEFAULT ''::character varying NOT NULL,
     fee integer DEFAULT 0 NOT NULL,
@@ -616,7 +618,7 @@ CREATE TABLE public.message_sms_log (
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT ck_message_sms_log_fee CHECK ((fee >= 0)),
     CONSTRAINT ck_message_sms_log_scene CHECK (((scene)::text = ANY ((ARRAY['login'::character varying, 'forget'::character varying, 'bind_phone'::character varying, 'change_password'::character varying])::text[]))),
-    CONSTRAINT ck_message_sms_log_status CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'sent'::character varying, 'failed'::character varying])::text[])))
+    CONSTRAINT ck_message_sms_log_status CHECK ((status = ANY (ARRAY[1, 2, 3])))
 );
 
 
@@ -934,25 +936,6 @@ CREATE TABLE public.permission_user_role (
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_user_role_updated_at_not_null NOT NULL,
     deleted_at timestamp with time zone
 );
-
-
---
--- Name: rbac_access_version_user_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.rbac_access_version_user_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: rbac_access_version_user_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.rbac_access_version_user_id_seq OWNED BY public.permission_access_version.user_id;
 
 
 --
@@ -1786,13 +1769,6 @@ ALTER TABLE ONLY public.message_sms_recipient_rule ALTER COLUMN id SET DEFAULT n
 --
 
 ALTER TABLE ONLY public.message_sms_template ALTER COLUMN id SET DEFAULT nextval('public.message_sms_template_id_seq'::regclass);
-
-
---
--- Name: permission_access_version user_id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.permission_access_version ALTER COLUMN user_id SET DEFAULT nextval('public.rbac_access_version_user_id_seq'::regclass);
 
 
 --
@@ -2981,14 +2957,6 @@ ALTER TABLE ONLY public.system_operation_log
 
 
 --
--- Name: user_session fk_auth_session_user; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.user_session
-    ADD CONSTRAINT fk_auth_session_user FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
-
-
---
 -- Name: message_notification_broadcast_state fk_message_notification_broadcast_notification; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3440,5 +3408,5 @@ ALTER TABLE ONLY public.system_dictionary_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 0fDjs6kYL9LU2OnlDP7n7d7jvv6oqvMFKhBemn1Z9ccWu4cyOGWu1KdgY2dK8Rb
+\unrestrict cpvi5y8OOKBXiQGdz6hzQqbqbyDEVf0prfCFlTdshepj5AGokB8zalDX5xGM2EG
 

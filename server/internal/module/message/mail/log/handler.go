@@ -69,7 +69,7 @@ func parseListFilter(values url.Values) (ListQuery, error) {
 		Platform: strings.TrimSpace(values.Get("platform")),
 		ToEmail:  strings.TrimSpace(values.Get("toEmail")),
 		Scene:    strings.TrimSpace(values.Get("scene")),
-		Status:   strings.TrimSpace(values.Get("status")),
+		Status:   0,
 	}
 	limits := []struct {
 		name  string
@@ -79,12 +79,18 @@ func parseListFilter(values url.Values) (ListQuery, error) {
 		{"platform", filter.Platform, 49},
 		{"toEmail", filter.ToEmail, 254},
 		{"scene", filter.Scene, 32},
-		{"status", filter.Status, 16},
 	}
 	for _, item := range limits {
 		if len([]rune(item.value)) > item.max {
 			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("query parameter %s is too long", item.name))
 		}
+	}
+	if raw := strings.TrimSpace(values.Get("status")); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || !Status(value).Valid() {
+			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("status is invalid"))
+		}
+		filter.Status = Status(value)
 	}
 	for key, target := range map[string]**time.Time{"from": &filter.From, "to": &filter.To} {
 		if v := values.Get(key); v != "" {

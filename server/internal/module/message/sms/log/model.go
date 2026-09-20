@@ -6,11 +6,17 @@ import (
 
 const (
 	Table = "message_sms_log"
-
-	StatusPending = "pending"
-	StatusSent    = "sent"
-	StatusFailed  = "failed"
 )
+
+type Status int16
+
+const (
+	StatusPending Status = 1
+	StatusSent    Status = 2
+	StatusFailed  Status = 3
+)
+
+func (s Status) Valid() bool { return s >= StatusPending && s <= StatusFailed }
 
 // Model is one append-only SMS sending audit row. The phone number exists only
 // as ciphertext, a masked hint and an HMAC; there is no deleted_at and no
@@ -25,7 +31,7 @@ type Model struct {
 	ToPhoneCiphertext string     `gorm:"column:to_phone_ciphertext;not null"`
 	ToPhoneHint       string     `gorm:"column:to_phone_hint;type:varchar(32);not null"`
 	ToPhoneHMAC       string     `gorm:"column:to_phone_hmac;type:varchar(128);not null"`
-	Status            string     `gorm:"column:status;type:varchar(16);not null"`
+	Status            Status     `gorm:"column:status;type:smallint;not null"`
 	RequestID         string     `gorm:"column:request_id;type:varchar(128);not null"`
 	SerialNo          string     `gorm:"column:serial_no;type:varchar(128);not null"`
 	Fee               int        `gorm:"column:fee;not null"`

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"admin/server/internal/authcontext"
+	smslog "admin/server/internal/module/message/sms/log"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,7 +20,7 @@ func (adminServiceTest) PageInit(context.Context) (PageInitResult, error) {
 }
 
 func (adminServiceTest) SendAdminTest(context.Context, AdminTestInput) (AdminTestResult, error) {
-	return AdminTestResult{LogID: 7, Status: "sent", RequestID: "request-1", SerialNo: "serial-1"}, nil
+	return AdminTestResult{LogID: 7, Status: smslog.StatusSent, RequestID: "request-1", SerialNo: "serial-1"}, nil
 }
 
 func TestAdminTestResponseIncludesFinalStatus(t *testing.T) {
@@ -44,8 +45,8 @@ func TestAdminTestResponseIncludesFinalStatus(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil {
 		t.Fatal(err)
 	}
-	if envelope.Data["status"] != "sent" {
-		t.Fatalf("data=%v, want sent status", envelope.Data)
+	if envelope.Data["status"] != float64(smslog.StatusSent) {
+		t.Fatalf("data=%v, want sent status value", envelope.Data)
 	}
 }
 

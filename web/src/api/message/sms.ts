@@ -11,7 +11,12 @@ import type { PageResult } from '@/types/pagination'
 import { request } from '@/utils/request'
 
 export type SmsScene = 'login' | 'forget' | 'bind_phone' | 'change_password'
-export type SmsStatus = 'pending' | 'sent' | 'failed'
+export const SmsStatus = {
+  Pending: 1,
+  Sent: 2,
+  Failed: 3,
+} as const
+export type SmsStatus = (typeof SmsStatus)[keyof typeof SmsStatus]
 export type SmsRuleScope = 'phone' | 'prefix'
 export type SmsRuleAction = 'allow' | 'deny'
 export type SmsRateLimitPolicyKey = 'business_phone_minute' | 'business_phone_10m'
@@ -174,7 +179,7 @@ export interface SmsLogQuery {
 
 const sceneValues: readonly SmsScene[] = ['login', 'forget', 'bind_phone', 'change_password']
 const scenes = new Set<SmsScene>(sceneValues)
-const statuses = new Set<SmsStatus>(['pending', 'sent', 'failed'])
+const statuses = new Set<SmsStatus>([SmsStatus.Pending, SmsStatus.Sent, SmsStatus.Failed])
 const ratePolicyKeys: readonly SmsRateLimitPolicyKey[] = [
   'business_phone_minute',
   'business_phone_10m',
@@ -231,7 +236,8 @@ function scene(value: unknown, context: string): SmsScene {
 }
 
 function status(value: unknown, context: string): SmsStatus {
-  const result = text(value, context) as SmsStatus
+  if (!Number.isInteger(value)) throw new ProtocolError(`${context} is invalid`)
+  const result = value as SmsStatus
   if (!statuses.has(result)) throw new ProtocolError(`${context} is invalid`)
   return result
 }

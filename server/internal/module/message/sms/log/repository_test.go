@@ -39,12 +39,12 @@ CREATE TABLE user_account(
 CREATE TABLE message_sms_log(
  id BIGSERIAL PRIMARY KEY, platform_id BIGINT NOT NULL, challenge_id VARCHAR(128), user_id BIGINT,
  scene VARCHAR(32) NOT NULL, template_id BIGINT NOT NULL, to_phone_ciphertext TEXT NOT NULL,
- to_phone_hint VARCHAR(32) NOT NULL, to_phone_hmac VARCHAR(128) NOT NULL, status VARCHAR(16) NOT NULL,
+ to_phone_hint VARCHAR(32) NOT NULL, to_phone_hmac VARCHAR(128) NOT NULL, status SMALLINT NOT NULL,
  request_id VARCHAR(128) NOT NULL DEFAULT '', serial_no VARCHAR(128) NOT NULL DEFAULT '', fee INTEGER NOT NULL DEFAULT 0,
  error_code VARCHAR(128) NOT NULL DEFAULT '', error_summary VARCHAR(512) NOT NULL DEFAULT '', latency_ms BIGINT NOT NULL DEFAULT 0,
  sent_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL);
 CREATE UNIQUE INDEX ux_message_sms_log_platform_challenge_active
- ON message_sms_log(platform_id, challenge_id) WHERE challenge_id IS NOT NULL AND status = 'pending';
+ ON message_sms_log(platform_id, challenge_id) WHERE challenge_id IS NOT NULL AND status = 1;
 CREATE TABLE message_sms_log_verification(
  id BIGSERIAL PRIMARY KEY, platform_id BIGINT NOT NULL, sms_log_id BIGINT NOT NULL UNIQUE,
  key_version VARCHAR(16) NOT NULL, code_ciphertext TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL,

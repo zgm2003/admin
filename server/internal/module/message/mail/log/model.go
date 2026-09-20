@@ -6,6 +6,16 @@ import (
 
 const Table = "message_mail_log"
 
+type Status int16
+
+const (
+	StatusPending Status = 1
+	StatusSent    Status = 2
+	StatusFailed  Status = 3
+)
+
+func (s Status) Valid() bool { return s >= StatusPending && s <= StatusFailed }
+
 type Model struct {
 	ID           int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	PlatformID   int64      `gorm:"column:platform_id;not null" json:"platformId"`
@@ -15,7 +25,7 @@ type Model struct {
 	TemplateID   int        `gorm:"column:template_id;not null" json:"templateId"`
 	ToEmail      string     `gorm:"column:to_email;type:varchar(254);not null" json:"toEmail"`
 	Subject      string     `gorm:"column:subject;type:varchar(255);not null" json:"subject"`
-	Status       string     `gorm:"column:status;type:varchar(16);not null" json:"status"`
+	Status       Status     `gorm:"column:status;type:smallint;not null" json:"status"`
 	RequestID    string     `gorm:"column:request_id;type:varchar(128);not null" json:"requestId"`
 	MessageID    string     `gorm:"column:message_id;type:varchar(128);not null" json:"messageId"`
 	ErrorCode    string     `gorm:"column:error_code;type:varchar(128);not null" json:"errorCode"`

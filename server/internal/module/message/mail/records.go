@@ -14,9 +14,9 @@ const (
 	SceneForget         = "forget"
 	SceneBindEmail      = "bind_email"
 	SceneChangePassword = "change_password"
-	StatusPending       = "pending"
-	StatusSent          = "sent"
-	StatusFailed        = "failed"
+	StatusPending       = maillog.StatusPending
+	StatusSent          = maillog.StatusSent
+	StatusFailed        = maillog.StatusFailed
 	RuleScopeEmail      = "email"
 	RuleScopeDomain     = "domain"
 	RuleActionAllow     = "allow"
@@ -26,6 +26,7 @@ const (
 type Config = mailconfig.Model
 type Template = mailtemplate.Model
 type Log = maillog.Model
+type Status = maillog.Status
 type Verification = logverification.Model
 type RateLimitPolicy = ratelimitpolicy.Model
 type RecipientRule = recipientrule.Model

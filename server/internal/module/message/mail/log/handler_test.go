@@ -100,12 +100,12 @@ func TestHandlerListTrimsFiltersAndParsesRFC3339Nano(t *testing.T) {
 	service := &handlerServiceStub{}
 	from := "2026-09-09T01:02:03.123456789+08:00"
 	to := "2026-09-09T02:03:04.987654321+08:00"
-	query := "?platform=%20Admin%20&toEmail=%20User%40Example.com%20&scene=%20login%20&status=%20sent%20&from=" + url.QueryEscape(from) + "&to=" + url.QueryEscape(to)
+	query := "?platform=%20Admin%20&toEmail=%20User%40Example.com%20&scene=%20login%20&status=2&from=" + url.QueryEscape(from) + "&to=" + url.QueryEscape(to)
 	response := requestLogList(service, query)
 	if response.Code != http.StatusOK || service.listCalls != 1 {
 		t.Fatalf("status=%d body=%s calls=%d", response.Code, response.Body.String(), service.listCalls)
 	}
-	if service.filter.Platform != "Admin" || service.filter.ToEmail != "User@Example.com" || service.filter.Scene != "login" || service.filter.Status != "sent" {
+	if service.filter.Platform != "Admin" || service.filter.ToEmail != "User@Example.com" || service.filter.Scene != "login" || service.filter.Status != StatusSent {
 		t.Fatalf("filter was not trimmed: %+v", service.filter)
 	}
 	wantFrom, _ := time.Parse(time.RFC3339Nano, from)

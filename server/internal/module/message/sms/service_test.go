@@ -46,7 +46,7 @@ type sendingLogStoreTest struct {
 	createErr error
 	finishErr error
 	created   *smslog.Model
-	finished  string
+	finished  smslog.Status
 }
 
 func (s *sendingLogStoreTest) CreatePending(_ context.Context, row *smslog.Model) error {
@@ -60,7 +60,7 @@ func (s *sendingLogStoreTest) CreatePending(_ context.Context, row *smslog.Model
 func (s *sendingLogStoreTest) FindActiveChallenge(context.Context, int64, string) (smslog.Model, error) {
 	return smslog.Model{}, errors.New("not used")
 }
-func (s *sendingLogStoreTest) Finish(_ context.Context, _ int64, _ int64, status, _, _ string, _ int, _, _ string, _ int64, _ *time.Time, _ time.Time) error {
+func (s *sendingLogStoreTest) Finish(_ context.Context, _ int64, _ int64, status smslog.Status, _, _ string, _ int, _, _ string, _ int64, _ *time.Time, _ time.Time) error {
 	s.finished = status
 	return s.finishErr
 }
@@ -169,7 +169,7 @@ func TestSendPreparedPhoneVerifyCodeClosesDeliveredLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.LogID != 19 || logs.finished != smslog.StatusSent || verification.calls != 1 || sender.calls != 1 {
-		t.Fatalf("result=%+v finished=%q verification=%d sender=%d", result, logs.finished, verification.calls, sender.calls)
+		t.Fatalf("result=%+v finished=%d verification=%d sender=%d", result, logs.finished, verification.calls, sender.calls)
 	}
 	if sender.input.SecretID != "secret-id" || sender.input.SecretKey != "secret-key" || sender.input.ToPhone != "+8615671628271" {
 		t.Fatalf("provider input=%+v", sender.input)
@@ -181,7 +181,7 @@ func TestSendPreparedPhoneVerifyCodeDoesNotSendWhenAuditFails(t *testing.T) {
 	verification.err = errors.New("audit unavailable")
 	_, err := service.SendPreparedPhoneVerifyCode(context.Background(), preparedSendingInput())
 	if appErrorCode(err) != apperror.CodeDependencyUnavailable || sender.calls != 0 || logs.finished != smslog.StatusFailed {
-		t.Fatalf("error=%v sender=%d finished=%q", err, sender.calls, logs.finished)
+		t.Fatalf("error=%v sender=%d finished=%d", err, sender.calls, logs.finished)
 	}
 }
 
@@ -195,7 +195,7 @@ func TestSendPreparedPhoneVerifyCodeSupportsExactlyTheFourScenes(t *testing.T) {
 				t.Fatal(err)
 			}
 			if logs.finished != smslog.StatusSent || verification.calls != 1 || sender.calls != 1 {
-				t.Fatalf("finished=%q verification=%d sender=%d", logs.finished, verification.calls, sender.calls)
+				t.Fatalf("finished=%d verification=%d sender=%d", logs.finished, verification.calls, sender.calls)
 			}
 		})
 	}
@@ -234,7 +234,7 @@ func TestSendAdminTestDoesNotCreateVerificationFact(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.Status != smslog.StatusSent || logs.finished != smslog.StatusSent || verification.calls != 0 || sender.calls != 1 {
-		t.Fatalf("result=%+v finished=%q verification=%d sender=%d", result, logs.finished, verification.calls, sender.calls)
+		t.Fatalf("result=%+v finished=%d verification=%d sender=%d", result, logs.finished, verification.calls, sender.calls)
 	}
 }
 
@@ -243,7 +243,7 @@ func TestSendPreparedPhoneVerifyCodeProviderFailureBestEffortClosesFailed(t *tes
 	sender.err = NewProviderError("ProviderRejected", "request rejected")
 	_, err := service.SendPreparedPhoneVerifyCode(context.Background(), preparedSendingInput())
 	if appErrorCode(err) != apperror.CodeDependencyUnavailable || logs.finished != smslog.StatusFailed {
-		t.Fatalf("error=%v finished=%q", err, logs.finished)
+		t.Fatalf("error=%v finished=%d", err, logs.finished)
 	}
 }
 

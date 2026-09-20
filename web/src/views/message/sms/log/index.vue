@@ -41,9 +41,9 @@ const searchModel = computed<SearchFormModel>({
   },
 })
 const statusOptions = computed(() => [
-  { label: t('sms.status.pending'), value: 'pending' },
-  { label: t('sms.status.sent'), value: 'sent' },
-  { label: t('sms.status.failed'), value: 'failed' },
+  { label: t('sms.status.pending'), value: smsApi.SmsStatus.Pending },
+  { label: t('sms.status.sent'), value: smsApi.SmsStatus.Sent },
+  { label: t('sms.status.failed'), value: smsApi.SmsStatus.Failed },
 ])
 const searchFields = computed<SearchField[]>(() => [
   {
@@ -128,7 +128,7 @@ function toFilter(value: SearchFormModel): SmsLogFilter {
         ? value.scene
         : '',
     status:
-      value.status === 'pending' || value.status === 'sent' || value.status === 'failed'
+      value.status === smsApi.SmsStatus.Pending || value.status === smsApi.SmsStatus.Sent || value.status === smsApi.SmsStatus.Failed
         ? value.status
         : '',
     timeRange:
@@ -191,9 +191,9 @@ async function showDetail(row: smsApi.SmsLog): Promise<void> {
       </template>
       <template #cell-status="{ row }: { row: smsApi.SmsLog }">
         <el-tag
-          :type="row.status === 'failed' ? 'danger' : row.status === 'sent' ? 'success' : 'info'"
+          :type="row.status === smsApi.SmsStatus.Failed ? 'danger' : row.status === smsApi.SmsStatus.Sent ? 'success' : 'info'"
         >
-          {{ t(`sms.status.${row.status}`) }}
+          {{ t(`sms.status.${row.status === smsApi.SmsStatus.Pending ? 'pending' : row.status === smsApi.SmsStatus.Sent ? 'sent' : 'failed'}`) }}
         </el-tag>
       </template>
       <template #cell-sentAt="{ row }: { row: smsApi.SmsLog }">

@@ -79,7 +79,7 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 - Repository 方法和查询行结构归属 repository 文件；事务由 Service 表达意图、Repository 执行 SQL/锁。
 - Model 保存持久化映射，业务校验、模板目录和事件输入放回模块的业务/协议文件，不混成表模型。
 - Redis、Storage、邮件 Provider 等 I/O 留在对应技术实现或业务模块，由 Service 编排，不塞进 PG Repository。
-- `shared` 只容纳跨域稳定、无业务模块依赖的协议/工具；不下沉某个模块的业务规则来消除循环依赖。
+- `server/internal/shared` 只容纳跨域稳定、无业务模块依赖的协议/工具；不下沉某个模块的业务规则来消除循环依赖。仓库根目录不得创建 `shared/` 运行时目录或跨部署共享目录；`server/internal/shared` 随 server 编译，web 部署不读取它。
 
 ## 邮件规则所有权
 

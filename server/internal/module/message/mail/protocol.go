@@ -1,6 +1,7 @@
 package mail
 
 import (
+	maillog "admin/server/internal/module/message/mail/log"
 	ratelimitpolicy "admin/server/internal/module/message/mail/rateLimitPolicy"
 	recipientrule "admin/server/internal/module/message/mail/recipientRule"
 	"context"
@@ -45,16 +46,16 @@ type AdminTestRequest struct {
 	Variables map[string]string `json:"variables"`
 }
 type AdminTestResult struct {
-	LogID     int64  `json:"logId"`
-	Status    string `json:"status"`
-	RequestID string `json:"requestId"`
-	MessageID string `json:"messageId"`
+	LogID     int64          `json:"logId"`
+	Status    maillog.Status `json:"status"`
+	RequestID string         `json:"requestId"`
+	MessageID string         `json:"messageId"`
 }
 type SendResult struct {
-	LogID     int64  `json:"logId"`
-	Status    string `json:"status"`
-	RequestID string `json:"requestId"`
-	MessageID string `json:"messageId"`
+	LogID     int64          `json:"logId"`
+	Status    maillog.Status `json:"status"`
+	RequestID string         `json:"requestId"`
+	MessageID string         `json:"messageId"`
 }
 type RateLimitPolicyInput = ratelimitpolicy.Input
 type RateLimitCatalog = ratelimitpolicy.Catalog

@@ -22,7 +22,7 @@ import (
 type logStore interface {
 	CreatePending(context.Context, *smslog.Model) error
 	FindActiveChallenge(context.Context, int64, string) (smslog.Model, error)
-	Finish(context.Context, int64, int64, string, string, string, int, string, string, int64, *time.Time, time.Time) error
+	Finish(context.Context, int64, int64, smslog.Status, string, string, int, string, string, int64, *time.Time, time.Time) error
 }
 
 type verificationStore interface {
@@ -353,7 +353,7 @@ func (s *Service) createPending(ctx context.Context, input PhoneVerifyCodeInput,
 
 // finishBestEffort closes a pending log as failed using a bounded detached
 // context; the pending row is kept for audit when the finish itself fails.
-func (s *Service) finishBestEffort(ctx context.Context, logRow *smslog.Model, status, requestID, serialNo string, fee int, code, summary string, started time.Time) {
+func (s *Service) finishBestEffort(ctx context.Context, logRow *smslog.Model, status smslog.Status, requestID, serialNo string, fee int, code, summary string, started time.Time) {
 	if logRow == nil || s.stores.Log == nil {
 		return
 	}

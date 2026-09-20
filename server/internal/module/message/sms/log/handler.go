@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -82,7 +83,11 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 		query.Scene = value[0]
 	}
 	if value, ok := values["status"]; ok {
-		query.Status = value[0]
+		status, err := strconv.Atoi(value[0])
+		if err != nil || !Status(status).Valid() {
+			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("status is invalid"))
+		}
+		query.Status = Status(status)
 	}
 	if value, ok := values["from"]; ok && value[0] != "" {
 		parsed, err := time.Parse(time.RFC3339Nano, value[0])

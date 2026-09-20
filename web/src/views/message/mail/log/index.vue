@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import {
   getMailLogDetail,
+  MailStatus,
   type MailLog,
   type MailLogDetail,
   type MailTemplate,
@@ -16,7 +17,7 @@ export interface MailLogFilter {
   platform: string
   toEmail: string
   scene: string
-  status: string
+  status: MailStatus | ''
   timeRange: [string, string] | []
 }
 
@@ -47,10 +48,10 @@ const searchModel = computed<SearchFormModel>({
 const sceneOptions = computed(() =>
   props.scenes.map((scene) => ({ label: scene.name, value: scene.scene })),
 )
-const statusLabels: Record<string, string> = {
-  pending: 'mail.statusPending',
-  sent: 'mail.statusSent',
-  failed: 'mail.statusFailed',
+const statusLabels: Record<MailStatus, string> = {
+  [MailStatus.Pending]: 'mail.statusPending',
+  [MailStatus.Sent]: 'mail.statusSent',
+  [MailStatus.Failed]: 'mail.statusFailed',
 }
 const searchFields = computed<SearchField[]>(() => [
   {
@@ -82,9 +83,9 @@ const searchFields = computed<SearchField[]>(() => [
     type: 'select-v2',
     label: t('mail.status'),
     options: [
-      { label: t('mail.statusPending'), value: 'pending' },
-      { label: t('mail.statusSent'), value: 'sent' },
-      { label: t('mail.statusFailed'), value: 'failed' },
+      { label: t('mail.statusPending'), value: MailStatus.Pending },
+      { label: t('mail.statusSent'), value: MailStatus.Sent },
+      { label: t('mail.statusFailed'), value: MailStatus.Failed },
     ],
     width: 130,
     testId: 'mail-log-status',
@@ -124,7 +125,10 @@ function toFilter(value: SearchFormModel): MailLogFilter {
     platform: typeof value.platform === 'string' ? value.platform : '',
     toEmail: typeof value.toEmail === 'string' ? value.toEmail : '',
     scene: typeof value.scene === 'string' ? value.scene : '',
-    status: typeof value.status === 'string' ? value.status : '',
+    status:
+      value.status === MailStatus.Pending || value.status === MailStatus.Sent || value.status === MailStatus.Failed
+        ? value.status
+        : '',
     timeRange: Array.isArray(value.timeRange) ? (value.timeRange as [string, string] | []) : [],
   }
 }
@@ -137,7 +141,7 @@ function usernameText(value: string): string {
   return value === '' ? '-' : value
 }
 
-function statusText(value: string): string {
+function statusText(value: MailStatus): string {
   const key = statusLabels[value]
   return key === undefined ? value : t(key)
 }
@@ -200,7 +204,7 @@ async function inspect(row: MailLog): Promise<void> {
       </template>
       <template #cell-status="{ row }: { row: MailLog }">
         <el-tag
-          :type="row.status === 'sent' ? 'success' : row.status === 'failed' ? 'danger' : 'warning'"
+          :type="row.status === MailStatus.Sent ? 'success' : row.status === MailStatus.Failed ? 'danger' : 'warning'"
           effect="plain"
           >{{ statusText(row.status) }}</el-tag
         >

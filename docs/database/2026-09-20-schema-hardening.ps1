@@ -1,4 +1,4 @@
-<#[.SYNOPSIS
+﻿<#[.SYNOPSIS
     Schema hygiene migration for duplicate session FK, empty device ids and access-version identity default.
 #>
 [CmdletBinding()]
@@ -47,8 +47,8 @@ $dsn = $dsn -replace '(?i)(^|\s+)TimeZone=\S+', '$1'
 if (-not (Test-Path -LiteralPath $sqlPath)) { throw "找不到 migration SQL：$sqlPath" }
 
 $before = Query $dsn "SELECT count(*) FROM user_session WHERE btrim(device_id) = '';"
-if ($before -ne '6') {
-    throw "拒绝执行：预期清理 6 条空 device_id，实际为 $before。请先人工复核数据。"
+if ($before -notin @('0', '6')) {
+    throw "拒绝执行：预期空 device_id 数量为 6（首次）或 0（已迁移），实际为 $before。请先人工复核数据。"
 }
 
 $backupDir = Join-Path $env:LOCALAPPDATA ('Admin\backups\schema-hardening-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))

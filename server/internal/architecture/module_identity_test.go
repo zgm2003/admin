@@ -41,6 +41,12 @@ func TestCompoundModuleDirectoriesUseLowerCamelCase(t *testing.T) {
 	}
 }
 
+func TestDeploymentUnitsDoNotUseRootSharedDirectory(t *testing.T) {
+	if _, err := os.Stat(filepath.Join("..", "..", "..", "shared")); !os.IsNotExist(err) {
+		t.Fatalf("repository root shared directory must not exist; server/internal/shared is the only allowed shared source boundary")
+	}
+}
+
 func TestBusinessModulesKeepCanonicalTableNames(t *testing.T) {
 	for module, tables := range map[string][]string{
 		"user/account": {"user_account"}, "user/profile": {"user_profile"},

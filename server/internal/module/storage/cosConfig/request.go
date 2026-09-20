@@ -29,6 +29,7 @@ type CreateInput struct {
 	IsEnabled                                        yesno.Value
 	Remark                                           string
 }
+
 // UpdateInput 保持 last-write-wins：AppID 创建后不可修改，也没有任何 expected generation/revision 字段。
 type UpdateInput struct {
 	Name, Bucket, Region   string

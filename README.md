@@ -10,6 +10,8 @@ router -> middleware -> handler -> service -> repository -> model -> PostgreSQL
 
 首期由 Vue Admin、Go API、Go Worker、PostgreSQL、Redis 和 Asynq 组成。项目不使用 Docker；Git 仓库按基础质量加固计划初始化和绑定远程，但不会自动提交或推送。
 
+部署边界固定为两个独立单元：`server/` 产出 API 和 Worker，可部署在 A 机器；`web/` 产出静态前端，可部署在 B 机器。两者只通过 HTTP API 通信，不依赖仓库根目录的 `shared/`、共享文件系统或跨机器运行时目录。`server/internal/shared/` 仅是 Go 服务内部的稳定公共源码包，随 server 编译，不是第三个部署单元。
+
 ## AI 施工规范
 
 AI 和开发者共同遵守根 [`AGENTS.md`](AGENTS.md) 的硬规则。任务路由见

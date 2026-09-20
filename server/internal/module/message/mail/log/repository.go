@@ -31,9 +31,9 @@ func (r *Repository) FindActiveChallenge(ctx context.Context, platformID int64, 
 func (r *Repository) MarkSent(ctx context.Context, platformID, id int64, result ProviderResult, latencyMs int64) error {
 	now := time.Now().UTC()
 	query := r.db.WithContext(ctx).Model(&Model{}).
-		Where("id = ? AND platform_id = ? AND status = ?", id, platformID, "pending").
+		Where("id = ? AND platform_id = ? AND status = ?", id, platformID, StatusPending).
 		Updates(map[string]any{
-			"status": "sent", "request_id": result.RequestID, "message_id": result.MessageID,
+			"status": StatusSent, "request_id": result.RequestID, "message_id": result.MessageID,
 			"latency_ms": latencyMs, "sent_at": now, "updated_at": now,
 		})
 	if query.Error != nil {
@@ -47,9 +47,9 @@ func (r *Repository) MarkSent(ctx context.Context, platformID, id int64, result 
 
 func (r *Repository) MarkFailed(ctx context.Context, platformID, id int64, errorCode, errorSummary string, latencyMs int64) error {
 	query := r.db.WithContext(ctx).Model(&Model{}).
-		Where("id = ? AND platform_id = ? AND status = ?", id, platformID, "pending").
+		Where("id = ? AND platform_id = ? AND status = ?", id, platformID, StatusPending).
 		Updates(map[string]any{
-			"status": "failed", "error_code": errorCode, "error_summary": errorSummary,
+			"status": StatusFailed, "error_code": errorCode, "error_summary": errorSummary,
 			"latency_ms": latencyMs, "updated_at": time.Now().UTC(),
 		})
 	if query.Error != nil {
@@ -76,7 +76,7 @@ type ListQuery struct {
 	Platform string
 	ToEmail  string
 	Scene    string
-	Status   string
+	Status   Status
 	From     *time.Time
 	To       *time.Time
 }
@@ -113,7 +113,7 @@ func applyListFilters(db *gorm.DB, filter ListQuery) *gorm.DB {
 	if filter.Scene != "" {
 		db = db.Where("message_mail_log.scene = ?", filter.Scene)
 	}
-	if filter.Status != "" {
+	if filter.Status != 0 {
 		db = db.Where("message_mail_log.status = ?", filter.Status)
 	}
 	if filter.From != nil {
