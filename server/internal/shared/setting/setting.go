@@ -19,6 +19,7 @@ const (
 	AuthCaptchaSlidePaddingKey          = "auth.captcha.slide_padding"
 	RealtimeEventRetentionDaysKey       = "realtime.event.retention_days"
 	MessageNotificationRetentionDaysKey = "message.notification.retention_days"
+	SchedulerHistoryRetentionDaysKey    = "system.scheduler.history_retention_days"
 )
 
 type Record struct {

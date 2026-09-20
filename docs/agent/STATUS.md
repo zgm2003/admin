@@ -835,6 +835,15 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 
 ## 状态条目模板
 
+### 通用 Scheduler 第一轮实现（2026-09-20，未迁移）
+
+- 已完成调度器领域契约、PostgreSQL schedule/job/run schema 与 PowerShell forward runner；runner 定向清理旧通知 Asynq task，修复删除分页收缩跳过任务的问题，并已验证脚本可解析。
+- 已实现 Repository 的 due claim、publish/run lease、重试、租约恢复、终态清理，Scanner、Publisher、Worker Executor、内置 realtime/notification/history 清理任务和 Scheduler 管理 API/RBAC。
+- 通知批次已改为 Scheduler Job，不再运行时读取 `message_notification_dispatch_outbox`、dispatch relay 或 retention trigger；旧表只在迁移 SQL 中删除，真实迁移尚未执行。
+- 新增 Scheduler 管理页、Job/Run 详情和中英文文案；API/Worker 已显式装配 scanner、publisher、scheduler envelope worker。
+- 验证：新增 Scheduler 迁移幂等/部分 schema 回滚 fixture，以及真实 PostgreSQL 中可空 lease 字段读取回归用例；`go test ./internal/database ./internal/module/system/scheduler ./cmd/api ./cmd/worker -count=1`、`go vet ./...`、`go build ./...` 和 PowerShell migration parser 均通过。全量后端此前唯一一次失败仍是 `system/setting` 并发 Redis scope flush 用例的抖动，单独重跑通过，未修改既有缓存协议；前端仅执行既有 `pnpm typecheck`、`pnpm build`，全量 Vitest 留给维护者。
+- 下一步/阻塞：仍未执行真实 SQL migration、Redis 清理或刷新 `docs/database/current.sql`。维护者停止 API/Worker 后执行 forward migration；成功后刷新快照、复验 runner 幂等和旧 Asynq task 清理，再由维护者做前端全量与浏览器链路验收。期间不要执行真实 SQL migration。
+
 复制以下四行到“后续事项”或新建当前工作条目即可：
 
 ```text

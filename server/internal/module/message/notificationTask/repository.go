@@ -11,11 +11,28 @@ import (
 	"time"
 )
 
-type Repository struct{ db *gorm.DB }
+type BatchJobWriter interface {
+	CreateBatchJobTx(context.Context, *gorm.DB, int64, int, time.Time, time.Time) error
+	CancelBatchJobsTx(context.Context, *gorm.DB, int64, time.Time) error
+}
 
-func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
+type Repository struct {
+	db   *gorm.DB
+	jobs BatchJobWriter
+}
+
+func NewRepository(db *gorm.DB, jobs ...BatchJobWriter) *Repository {
+	var writer BatchJobWriter
+	if len(jobs) > 0 {
+		writer = jobs[0]
+	}
+	return &Repository{db: db, jobs: writer}
+}
 func (r *Repository) Transaction(ctx context.Context, fn func(*Repository) error) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return fn(NewRepository(tx)) })
+	if r == nil || r.db == nil || r.jobs == nil {
+		return errors.New("notification task repository dependencies are required")
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return fn(NewRepository(tx, r.jobs)) })
 }
 func (r *Repository) Create(ctx context.Context, creator int64, input DraftInput) (Task, error) {
 	var task Task
@@ -109,8 +126,7 @@ func (r *Repository) Submit(ctx context.Context, id int64, now time.Time) (Task,
 		if result.RowsAffected != 1 {
 			return ErrNotDraft
 		}
-		outbox := DispatchOutbox{TaskID: id, BatchNo: 0, AvailableAt: available, CreatedAt: now, UpdatedAt: now}
-		if err = tx.db.WithContext(ctx).Create(&outbox).Error; err != nil {
+		if err = tx.jobs.CreateBatchJobTx(ctx, tx.db, id, 0, available, now); err != nil {
 			return err
 		}
 		task, err = tx.find(ctx, id)
@@ -131,7 +147,7 @@ func (r *Repository) Cancel(ctx context.Context, id int64, now time.Time) (Task,
 		if err = tx.db.WithContext(ctx).Model(&Task{}).Where("id=?", id).Updates(map[string]any{"status": StatusCanceled, "canceled_at": now, "updated_at": now}).Error; err != nil {
 			return err
 		}
-		if err = tx.db.WithContext(ctx).Where("task_id=? AND published_at IS NULL", id).Delete(&DispatchOutbox{}).Error; err != nil {
+		if err = tx.jobs.CancelBatchJobsTx(ctx, tx.db, id, now); err != nil {
 			return err
 		}
 		task, err = tx.find(ctx, id)

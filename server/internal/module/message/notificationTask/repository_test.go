@@ -15,9 +15,18 @@ import (
 	"time"
 )
 
+type discardBatchJobWriter struct{}
+
+func (discardBatchJobWriter) CreateBatchJobTx(context.Context, *gorm.DB, int64, int, time.Time, time.Time) error {
+	return nil
+}
+func (discardBatchJobWriter) CancelBatchJobsTx(context.Context, *gorm.DB, int64, time.Time) error {
+	return nil
+}
+
 func TestRepositoryRejectsPastScheduledTimeAtSubmit(t *testing.T) {
 	db, ctx := openTaskDB(t)
-	service := NewService(NewRepository(db))
+	service := NewService(NewRepository(db, discardBatchJobWriter{}))
 	past := time.Now().UTC().Add(-time.Minute)
 	created, err := service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: "past", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudiencePlatform, ScheduledAt: &past})
 	if err != nil {
@@ -33,15 +42,11 @@ func TestRepositoryRejectsPastScheduledTimeAtSubmit(t *testing.T) {
 	if task.Status != StatusDraft || task.SubmittedAt != nil {
 		t.Fatalf("task changed after rejected submit: %+v", task)
 	}
-	var outbox int64
-	if err = db.WithContext(ctx).Model(&DispatchOutbox{}).Where("task_id=?", created.ID).Count(&outbox).Error; err != nil || outbox != 0 {
-		t.Fatalf("outbox=%d err=%v", outbox, err)
-	}
 }
 
 func TestRepositoryListFiltersStatusAcrossTheWholePage(t *testing.T) {
 	db, ctx := openTaskDB(t)
-	service := NewService(NewRepository(db))
+	service := NewService(NewRepository(db, discardBatchJobWriter{}))
 	input := DraftInput{PlatformID: 1, Title: "draft", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudiencePlatform}
 	draft, err := service.Create(ctx, 1, input)
 	if err != nil {
@@ -54,7 +59,7 @@ func TestRepositoryListFiltersStatusAcrossTheWholePage(t *testing.T) {
 	if err = db.WithContext(ctx).Model(&Task{}).Where("id=?", completed.ID).Updates(map[string]any{"status": StatusCompleted, "completed_at": time.Now().UTC()}).Error; err != nil {
 		t.Fatal(err)
 	}
-	rows, total, err := NewRepository(db).List(ctx, ListQuery{Status: StatusDraft, Page: 1, PageSize: 20})
+	rows, total, err := NewRepository(db, discardBatchJobWriter{}).List(ctx, ListQuery{Status: StatusDraft, Page: 1, PageSize: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +73,7 @@ func TestRepositoryListFiltersStatusAcrossTheWholePage(t *testing.T) {
 
 func TestRepositoryListAppliesEveryApprovedFilter(t *testing.T) {
 	db, ctx := openTaskDB(t)
-	service := NewService(NewRepository(db))
+	service := NewService(NewRepository(db, discardBatchJobWriter{}))
 	matching, err := service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: "Planned Maintenance", ContentHTML: "<p>content</p>", Variant: notification.VariantWarning, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudienceRole, TargetIDs: []int64{1}})
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +83,7 @@ func TestRepositoryListAppliesEveryApprovedFilter(t *testing.T) {
 	}
 	from := matching.CreatedAt.Add(-time.Second)
 	to := matching.CreatedAt.Add(time.Second)
-	rows, total, err := NewRepository(db).List(ctx, ListQuery{PlatformID: &matching.PlatformID, Status: StatusDraft, AudienceType: AudienceRole, Keyword: "maintenance", From: &from, To: &to, Page: 1, PageSize: 20})
+	rows, total, err := NewRepository(db, discardBatchJobWriter{}).List(ctx, ListQuery{PlatformID: &matching.PlatformID, Status: StatusDraft, AudienceType: AudienceRole, Keyword: "maintenance", From: &from, To: &to, Page: 1, PageSize: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +94,7 @@ func TestRepositoryListAppliesEveryApprovedFilter(t *testing.T) {
 
 func TestRepositoryListTreatsKeywordWildcardsLiterally(t *testing.T) {
 	db, ctx := openTaskDB(t)
-	service := NewService(NewRepository(db))
+	service := NewService(NewRepository(db, discardBatchJobWriter{}))
 	matching, err := service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: `Release 100%_ready`, ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudiencePlatform})
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +102,7 @@ func TestRepositoryListTreatsKeywordWildcardsLiterally(t *testing.T) {
 	if _, err = service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: `Release 100X-ready`, ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudiencePlatform}); err != nil {
 		t.Fatal(err)
 	}
-	rows, total, err := NewRepository(db).List(ctx, ListQuery{Keyword: `%_`, Page: 1, PageSize: 20})
+	rows, total, err := NewRepository(db, discardBatchJobWriter{}).List(ctx, ListQuery{Keyword: `%_`, Page: 1, PageSize: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +113,7 @@ func TestRepositoryListTreatsKeywordWildcardsLiterally(t *testing.T) {
 
 func TestRepositoryDraftSubmitCancelCopyTransactions(t *testing.T) {
 	db, ctx := openTaskDB(t)
-	service := NewService(NewRepository(db))
+	service := NewService(NewRepository(db, discardBatchJobWriter{}))
 	future := time.Now().UTC().Add(time.Hour)
 	input := DraftInput{PlatformID: 1, Title: "notice", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudienceUser, TargetIDs: []int64{2, 1}, ScheduledAt: &future}
 	created, err := service.Create(ctx, 1, input)
@@ -128,19 +133,12 @@ func TestRepositoryDraftSubmitCancelCopyTransactions(t *testing.T) {
 	if submitted.Status != StatusScheduled || submitted.AudienceMaxUserID == nil || *submitted.AudienceMaxUserID != 2 || submitted.SubmittedAt == nil {
 		t.Fatalf("submitted=%+v", submitted)
 	}
-	var outbox int64
-	if err = db.WithContext(ctx).Raw(`SELECT count(*) FROM message_notification_dispatch_outbox WHERE task_id=? AND batch_no=0`, created.ID).Scan(&outbox).Error; err != nil || outbox != 1 {
-		t.Fatalf("outbox=%d err=%v", outbox, err)
-	}
 	if _, err = service.Submit(ctx, created.ID, time.Now().UTC()); err == nil {
 		t.Fatal("repeat submit accepted")
 	}
 	canceled, err := service.Cancel(ctx, created.ID, time.Now().UTC())
 	if err != nil || canceled.Status != StatusCanceled {
 		t.Fatalf("canceled=%+v err=%v", canceled, err)
-	}
-	if err = db.WithContext(ctx).Raw(`SELECT count(*) FROM message_notification_dispatch_outbox WHERE task_id=?`, created.ID).Scan(&outbox).Error; err != nil || outbox != 0 {
-		t.Fatalf("pending outbox=%d err=%v", outbox, err)
 	}
 	copied, err := service.Copy(ctx, created.ID, 2, time.Now().UTC())
 	if err != nil || copied.Status != StatusDraft || copied.SubmittedAt != nil || copied.AudienceMaxUserID != nil || len(copied.TargetIDs) != 2 {
@@ -149,7 +147,7 @@ func TestRepositoryDraftSubmitCancelCopyTransactions(t *testing.T) {
 }
 func TestRepositoryRejectsPlatformWithoutCompleteNotificationCapability(t *testing.T) {
 	db, ctx := openTaskDB(t)
-	service := NewService(NewRepository(db))
+	service := NewService(NewRepository(db, discardBatchJobWriter{}))
 	input := DraftInput{PlatformID: 2, Title: "notice", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudiencePlatform}
 	if _, err := service.Create(ctx, 1, input); err == nil {
 		t.Fatal("platform without capability accepted")
@@ -166,7 +164,7 @@ func TestRepositoryPlatformOptionsSkipIneligibleRowsWithoutBreakingCursor(t *tes
 			t.Fatal(err)
 		}
 	}
-	rows, err := NewRepository(db).Options(ctx, "platform", "", 0, 2)
+	rows, err := NewRepository(db, discardBatchJobWriter{}).Options(ctx, "platform", "", 0, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +178,7 @@ func TestRepositoryPlatformOptionsRejectIncompleteCapabilityFacts(t *testing.T) 
 	if err := db.WithContext(ctx).Exec(`INSERT INTO permission_menu VALUES(20,2,NULL,'page','message:notification:view',1,1,NULL)`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewRepository(db).Options(ctx, "platform", "", 0, 50); err == nil {
+	if _, err := NewRepository(db, discardBatchJobWriter{}).Options(ctx, "platform", "", 0, 50); err == nil {
 		t.Fatal("incomplete platform notification capability was silently skipped")
 	}
 }
@@ -204,7 +202,7 @@ func TestRepositoryOptionsTreatKeywordWildcardsAndBackslashesLiterally(t *testin
 		{kind: "user", want: 1},
 		{kind: "role", want: 1},
 	} {
-		rows, err := NewRepository(db).Options(ctx, test.kind, `%_C:\`, 0, 50)
+		rows, err := NewRepository(db, discardBatchJobWriter{}).Options(ctx, test.kind, `%_C:\`, 0, 50)
 		if err != nil {
 			t.Fatalf("kind=%s: %v", test.kind, err)
 		}

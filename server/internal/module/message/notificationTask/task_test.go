@@ -17,7 +17,7 @@ import (
 
 func TestProcessorPlatformAudienceIsConstantWrite(t *testing.T) {
 	db, ctx := openTaskDB(t)
-	service := NewService(NewRepository(db))
+	service := NewService(NewRepository(db, discardBatchJobWriter{}))
 	task, err := service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: "broadcast", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudiencePlatform})
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +28,7 @@ func TestProcessorPlatformAudienceIsConstantWrite(t *testing.T) {
 	}
 	probe := testquery.New(db.Logger, "user_account", "permission_user_role", "message_notification_task_target")
 	measured := db.Session(&gorm.Session{Logger: probe})
-	processor := NewProcessor(measured, realtime.NewRepository(measured))
+	processor := NewProcessor(measured, realtime.NewRepository(measured), discardBatchJobWriter{})
 	payload := BatchPayload{SchemaVersion: 1, TaskID: task.ID, BatchNo: 0}
 	if err = processor.Process(ctx, payload); err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestProcessorPlatformAudienceIsConstantWrite(t *testing.T) {
 }
 func TestProcessorUserAudienceCreatesRecipientsAndEventsOnce(t *testing.T) {
 	db, ctx := openTaskDB(t)
-	service := NewService(NewRepository(db))
+	service := NewService(NewRepository(db, discardBatchJobWriter{}))
 	task, err := service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: "users", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudienceUser, TargetIDs: []int64{1, 2}})
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestProcessorUserAudienceCreatesRecipientsAndEventsOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	processor := NewProcessor(db, realtime.NewRepository(db))
+	processor := NewProcessor(db, realtime.NewRepository(db), discardBatchJobWriter{})
 	payload := BatchPayload{SchemaVersion: 1, TaskID: task.ID, BatchNo: 0}
 	if err = processor.Process(ctx, payload); err != nil {
 		t.Fatal(err)
@@ -72,7 +72,7 @@ func TestProcessorKeepsPublishedAtStableAcrossBatches(t *testing.T) {
 	for index := range targets {
 		targets[index] = int64(index + 1)
 	}
-	service := NewService(NewRepository(db))
+	service := NewService(NewRepository(db, discardBatchJobWriter{}))
 	task, err := service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: "two batches", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudienceUser, TargetIDs: targets})
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestProcessorKeepsPublishedAtStableAcrossBatches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	processor := NewProcessor(db, realtime.NewRepository(db))
+	processor := NewProcessor(db, realtime.NewRepository(db), discardBatchJobWriter{})
 	if err = processor.Process(ctx, BatchPayload{SchemaVersion: 1, TaskID: task.ID, BatchNo: 0}); err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestProcessorUserAndRoleAudienceUseOneKeysetSelectionQuery(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			service := NewService(NewRepository(db))
+			service := NewService(NewRepository(db, discardBatchJobWriter{}))
 			task, err := service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: "keyset", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: audience, TargetIDs: []int64{1}})
 			if err != nil {
 				t.Fatal(err)
@@ -139,7 +139,7 @@ func TestProcessorUserAndRoleAudienceUseOneKeysetSelectionQuery(t *testing.T) {
 			}
 			probe := testquery.New(db.Logger, "message_notification_task_target", "permission_user_role", "user_account")
 			measured := db.Session(&gorm.Session{Logger: probe})
-			if err = NewProcessor(measured, realtime.NewRepository(measured)).Process(ctx, BatchPayload{SchemaVersion: 1, TaskID: task.ID, BatchNo: 0}); err != nil {
+			if err = NewProcessor(measured, realtime.NewRepository(measured), discardBatchJobWriter{}).Process(ctx, BatchPayload{SchemaVersion: 1, TaskID: task.ID, BatchNo: 0}); err != nil {
 				t.Fatal(err)
 			}
 			selectionTable := "message_notification_task_target"
@@ -160,7 +160,7 @@ func TestProcessorUserAndRoleAudienceUseOneKeysetSelectionQuery(t *testing.T) {
 
 func TestProcessorRollsBackRecipientsAndEventsWhenTaskAdvanceFails(t *testing.T) {
 	db, ctx := openTaskDB(t)
-	service := NewService(NewRepository(db))
+	service := NewService(NewRepository(db, discardBatchJobWriter{}))
 	task, err := service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: "rollback", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudienceUser, TargetIDs: []int64{1, 2}})
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestProcessorRollsBackRecipientsAndEventsWhenTaskAdvanceFails(t *testing.T)
 	if err = db.WithContext(ctx).Exec(`CREATE TRIGGER reject_task_advance BEFORE UPDATE ON message_notification_task FOR EACH ROW EXECUTE FUNCTION reject_task_advance()`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err = NewProcessor(db, realtime.NewRepository(db)).Process(ctx, BatchPayload{SchemaVersion: 1, TaskID: task.ID, BatchNo: 0}); err == nil {
+	if err = NewProcessor(db, realtime.NewRepository(db), discardBatchJobWriter{}).Process(ctx, BatchPayload{SchemaVersion: 1, TaskID: task.ID, BatchNo: 0}); err == nil {
 		t.Fatal("process succeeded despite forced task advance failure")
 	}
 	assertProcessCounts(t, db, ctx, 0, 0, 0)
@@ -183,7 +183,7 @@ func TestProcessorRollsBackRecipientsAndEventsWhenTaskAdvanceFails(t *testing.T)
 
 func TestCancelWaitsForBatchLockAndCannotOverwriteCompletion(t *testing.T) {
 	db, ctx := openTaskDB(t)
-	service := NewService(NewRepository(db))
+	service := NewService(NewRepository(db, discardBatchJobWriter{}))
 	task, err := service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: "race", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudienceUser, TargetIDs: []int64{1}})
 	if err != nil {
 		t.Fatal(err)
@@ -206,7 +206,7 @@ func TestCancelWaitsForBatchLockAndCannotOverwriteCompletion(t *testing.T) {
 	}
 	processResult := make(chan error, 1)
 	go func() {
-		processResult <- NewProcessor(db, realtime.NewRepository(db)).Process(ctx, BatchPayload{SchemaVersion: 1, TaskID: task.ID, BatchNo: 0})
+		processResult <- NewProcessor(db, realtime.NewRepository(db), discardBatchJobWriter{}).Process(ctx, BatchPayload{SchemaVersion: 1, TaskID: task.ID, BatchNo: 0})
 	}()
 	<-entered
 	cancelStarted, cancelResult := make(chan struct{}), make(chan error, 1)

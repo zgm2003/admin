@@ -16,6 +16,7 @@ import (
 	notificationtask "admin/server/internal/module/message/notificationTask"
 	"admin/server/internal/module/realtime"
 	"admin/server/internal/module/system/operationLog"
+	"admin/server/internal/module/system/scheduler"
 	systemsetting "admin/server/internal/module/system/setting"
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
@@ -26,7 +27,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// workerRelayShutdownBudget 是取消 relay 后等待其退出的上限。
+// workerRelayShutdownBudget 是取消 runner 后等待其退出的上限。
 const workerRelayShutdownBudget = 5 * time.Second
 
 // relayRunner 由 Asynq server 与进程 context 共享生命周期。
@@ -96,9 +97,20 @@ func run(logger *slog.Logger) error {
 	operationLogService := operationlog.NewService(operationLogRepository)
 	realtimeRepository := realtime.NewRepository(postgres.GORM)
 	notificationRepository := notification.NewRepository(postgres.GORM, realtimeRepository)
-	notificationTaskRepository := notificationtask.NewRepository(postgres.GORM)
-	notificationTaskHandler := notificationtask.NewTaskHandler(notificationtask.NewProcessor(postgres.GORM, realtimeRepository), notificationTaskRepository)
-	mux := buildWorkerMux(operationLogService, notificationTaskHandler)
+	schedulerRepository := scheduler.NewRepository(postgres.GORM)
+	var notificationProcessor *notificationtask.Processor
+	notificationDefinition := scheduler.NotificationBatchDefinition(func(ctx context.Context, execution scheduler.ExecutionContext) error {
+		payload, err := notificationtask.DecodeBatchPayload(execution.Payload)
+		if err != nil {
+			return err
+		}
+		return notificationProcessor.Process(ctx, payload)
+	})
+	batchJobWriter, err := scheduler.NewBatchJobWriter(schedulerRepository, notificationDefinition)
+	if err != nil {
+		return err
+	}
+	notificationProcessor = notificationtask.NewProcessor(postgres.GORM, realtimeRepository, batchJobWriter)
 	configGenerationRepository := cachegeneration.NewRepository(postgres.GORM)
 	configGenerationStore := cachegeneration.NewStore(redisClient)
 	settingService, err := buildWorkerSettingService(postgres.GORM, redisClient, configGenerationRepository, configGenerationStore, logger)
@@ -107,9 +119,17 @@ func run(logger *slog.Logger) error {
 	}
 	configRelay := cachegeneration.NewRelay(configGenerationRepository, configGenerationStore, logger)
 	realtimeRelay := realtime.NewRelay(realtimeRepository, redisClient, logger)
-	dispatchRelay := notificationtask.NewDispatchRelay(notificationTaskRepository, notificationtask.NewQueueEnqueuer(queueClient), logger)
-	realtimeRetention := realtime.NewRetentionTrigger(realtime.NewRetentionService(realtimeRepository, settingService), logger)
-	notificationRetention := notification.NewRetentionTrigger(notification.NewRetentionService(notificationRepository, settingService), logger)
+	realtimeRetention := realtime.NewRetentionService(realtimeRepository, settingService)
+	notificationRetention := notification.NewRetentionService(notificationRepository, settingService)
+	historyCleaner := scheduler.NewHistoryCleaner(schedulerRepository, settingService)
+	catalog, err := scheduler.NewTaskCatalog(append(scheduler.BuiltinDefinitions(realtimeRetention, notificationRetention, historyCleaner), notificationDefinition)...)
+	if err != nil {
+		return err
+	}
+	scanner := scheduler.NewScanner(schedulerRepository, catalog)
+	publisher := scheduler.NewPublisher(schedulerRepository, scheduler.NewAsynqEnqueuer(queueClient), catalog, logger)
+	executor := scheduler.NewExecutor(schedulerRepository, catalog, fmt.Sprintf("worker-%d", os.Getpid()))
+	mux := buildWorkerMux(operationLogService, scheduler.NewWorkerHandler(executor))
 
 	return runWorkerAssembly(workerAssembly{
 		ProcessContext: processContext,
@@ -118,9 +138,8 @@ func run(logger *slog.Logger) error {
 		Runners: []namedRunner{
 			{Name: "config-generation", Runner: configRelay},
 			{Name: "realtime-outbox", Runner: realtimeRelay},
-			{Name: "notification-dispatch", Runner: dispatchRelay},
-			{Name: "realtime-retention-trigger", Runner: realtimeRetention},
-			{Name: "notification-retention-trigger", Runner: notificationRetention},
+			{Name: "scheduler-scanner", Runner: scanner},
+			{Name: "scheduler-publisher", Runner: publisher},
 		},
 		NewServer: func() (asynqServer, error) {
 			return queue.NewServer(settings.RedisURL)
@@ -211,10 +230,10 @@ func waitForRunnerShutdown(logger *slog.Logger, runnerDone <-chan runnerResult, 
 	}
 }
 
-func buildWorkerMux(operationLogProcessor operationlog.Processor, notificationHandler asynq.Handler) *asynq.ServeMux {
+func buildWorkerMux(operationLogProcessor operationlog.Processor, schedulerHandler asynq.Handler) *asynq.ServeMux {
 	mux := asynq.NewServeMux()
 	operationlog.Register(mux, operationLogProcessor)
-	mux.Handle(notificationtask.TaskType, notificationHandler)
+	mux.Handle(scheduler.EnvelopeTaskType, schedulerHandler)
 	return mux
 }
 

@@ -46,6 +46,7 @@ import (
 	"admin/server/internal/module/system/dictionary"
 	"admin/server/internal/module/system/operationLog"
 	"admin/server/internal/module/system/queueMonitor"
+	"admin/server/internal/module/system/scheduler"
 	systemsetting "admin/server/internal/module/system/setting"
 	account "admin/server/internal/module/user/account"
 	useremail "admin/server/internal/module/user/email"
@@ -106,6 +107,7 @@ type routerDependencies struct {
 	Realtime          *realtime.Handler
 	Notification      *notification.Handler
 	NotificationTask  *notificationtask.Handler
+	Scheduler         *scheduler.Handler
 	OperationEnqueuer operationlog.Enqueuer
 	SessionAdmin      *usersession.SessionAdminHandler
 	AuthOrigin        gin.HandlerFunc
@@ -389,8 +391,19 @@ func run(logger *slog.Logger) error {
 	realtimeHandler := realtime.NewHandler(realtimeService, realtimeConnections, settings.CORSOrigin)
 	notificationRepository := notification.NewRepository(postgres.GORM, realtimeRepository)
 	notificationService := notification.NewService(notificationRepository, settingService)
-	notificationTaskRepository := notificationtask.NewRepository(postgres.GORM)
+	schedulerRepository := scheduler.NewRepository(postgres.GORM)
+	notificationDefinition := scheduler.NotificationBatchDefinition(nil)
+	batchJobWriter, err := scheduler.NewBatchJobWriter(schedulerRepository, notificationDefinition)
+	if err != nil {
+		return err
+	}
+	notificationTaskRepository := notificationtask.NewRepository(postgres.GORM, batchJobWriter)
 	notificationTaskService := notificationtask.NewService(notificationTaskRepository)
+	schedulerCatalog, err := scheduler.NewTaskCatalog(append(scheduler.BuiltinDefinitions(nil, nil, nil), notificationDefinition)...)
+	if err != nil {
+		return err
+	}
+	schedulerService := scheduler.NewService(schedulerRepository, schedulerCatalog)
 	if err := validateRuntimeDependencies(
 		runtimeDependency{name: "system.setting/global", validate: settingService.ValidateDependencies},
 		runtimeDependency{name: "system.dictionary/global", validate: dictionaryService.ValidateDependencies},
@@ -477,6 +490,7 @@ func run(logger *slog.Logger) error {
 		Realtime:          realtimeHandler,
 		Notification:      notification.NewHandler(notificationService),
 		NotificationTask:  notificationtask.NewHandler(notificationTaskService),
+		Scheduler:         scheduler.NewHandler(schedulerService),
 		OperationEnqueuer: operationLogEnqueuer,
 		SessionAdmin: usersession.NewSessionAdminHandler(sessionService, func(context *gin.Context) (usersession.Actor, bool) {
 			identity, ok := auth.IdentityFromContext(context)
@@ -631,6 +645,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	usersession.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
 	if dependencies.NotificationTask != nil {
 		notificationtask.RegisterRoutes(adminRoutes, dependencies.NotificationTask, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.Scheduler != nil {
+		scheduler.RegisterRoutes(adminRoutes, dependencies.Scheduler, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	return router
 }

@@ -50,19 +50,3 @@ type Target struct {
 }
 
 func (Target) TableName() string { return "message_notification_task_target" }
-
-type DispatchOutbox struct {
-	ID          int64      `gorm:"column:id;primaryKey"`
-	TaskID      int64      `gorm:"column:task_id"`
-	BatchNo     int        `gorm:"column:batch_no"`
-	Attempts    int        `gorm:"column:attempts"`
-	AvailableAt time.Time  `gorm:"column:available_at"`
-	LockedUntil *time.Time `gorm:"column:locked_until"`
-	LockToken   *string    `gorm:"column:lock_token"`
-	PublishedAt *time.Time `gorm:"column:published_at"`
-	LastError   *string    `gorm:"column:last_error"`
-	CreatedAt   time.Time  `gorm:"column:created_at"`
-	UpdatedAt   time.Time  `gorm:"column:updated_at"`
-}
-
-func (DispatchOutbox) TableName() string { return "message_notification_dispatch_outbox" }

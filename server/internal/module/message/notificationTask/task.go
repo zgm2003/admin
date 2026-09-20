@@ -1,16 +1,17 @@
 package notificationtask
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"admin/server/internal/module/message/notification"
 	"admin/server/internal/module/realtime"
 	"github.com/google/uuid"
-	"github.com/hibiken/asynq"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -18,16 +19,24 @@ import (
 type Processor struct {
 	db       *gorm.DB
 	realtime *realtime.Repository
+	jobs     BatchJobWriter
 }
 
 var ErrFrozenFacts = errors.New("notification task frozen facts are invalid")
 
-func NewProcessor(db *gorm.DB, realtimeRepository *realtime.Repository) *Processor {
-	return &Processor{db: db, realtime: realtimeRepository}
+func NewProcessor(db *gorm.DB, realtimeRepository *realtime.Repository, jobs ...BatchJobWriter) *Processor {
+	var writer BatchJobWriter
+	if len(jobs) > 0 {
+		writer = jobs[0]
+	}
+	return &Processor{db: db, realtime: realtimeRepository, jobs: writer}
 }
 func (p *Processor) Process(ctx context.Context, payload BatchPayload) error {
 	if payload.SchemaVersion != 1 || payload.TaskID <= 0 || payload.BatchNo < 0 {
 		return errors.New("invalid notification batch")
+	}
+	if p == nil || p.db == nil || p.realtime == nil || p.jobs == nil {
+		return errors.New("notification batch processor dependencies are required")
 	}
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return p.processTx(ctx, tx, payload) })
 }
@@ -82,7 +91,7 @@ func (p *Processor) processTx(ctx context.Context, tx *gorm.DB, payload BatchPay
 		return err
 	}
 	if more {
-		return tx.WithContext(ctx).Create(&DispatchOutbox{TaskID: task.ID, BatchNo: task.NextBatchNo + 1, AvailableAt: now, CreatedAt: now, UpdatedAt: now}).Error
+		return p.jobs.CreateBatchJobTx(ctx, tx, task.ID, task.NextBatchNo+1, now, now)
 	}
 	return nil
 }
@@ -164,59 +173,31 @@ func eventPayload(task Task, notificationID int64, publishedAt time.Time) (json.
 	}{notificationID, task.Title, task.Summary, task.Variant, task.Priority, task.LinkType, task.Link, publishedAt})
 }
 
-type batchProcessor interface {
-	Process(context.Context, BatchPayload) error
-}
-
-type TaskHandler struct {
-	processor batchProcessor
-	failer    interface {
-		MarkFailed(context.Context, int64, string, time.Time) error
-	}
-	retriesExhausted func(context.Context) bool
-}
-
-func NewTaskHandler(processor *Processor, failer interface {
-	MarkFailed(context.Context, int64, string, time.Time) error
-}) *TaskHandler {
-	return &TaskHandler{
-		processor: processor,
-		failer:    failer,
-		retriesExhausted: func(ctx context.Context) bool {
-			retryCount, hasRetryCount := asynq.GetRetryCount(ctx)
-			maxRetry, hasMaxRetry := asynq.GetMaxRetry(ctx)
-			return hasRetryCount && hasMaxRetry && retryCount >= maxRetry
-		},
-	}
-}
-func (h *TaskHandler) ProcessTask(ctx context.Context, task *asynq.Task) error {
-	payload, err := DecodeBatchPayload(task.Payload())
-	if err != nil {
-		return fmt.Errorf("invalid notification task payload: %v: %w", err, asynq.SkipRetry)
-	}
-	if err = h.processor.Process(ctx, payload); err != nil {
-		if errors.Is(err, ErrFrozenFacts) {
-			if h.failer == nil {
-				return errors.New("notification task failure persistence is unavailable")
-			}
-			if markErr := h.failer.MarkFailed(ctx, payload.TaskID, "frozen-facts-invalid", time.Now().UTC()); markErr != nil {
-				return fmt.Errorf("persist notification task failure: %w", markErr)
-			}
-			return fmt.Errorf("notification task cannot be processed: %w", asynq.SkipRetry)
-		}
-		if h.retriesExhausted != nil && h.retriesExhausted(ctx) && h.failer != nil {
-			if markErr := h.failer.MarkFailed(ctx, payload.TaskID, "worker-retries-exhausted", time.Now().UTC()); markErr != nil {
-				return fmt.Errorf("notification task failed after retries; persist failed state: %w", markErr)
-			}
-		}
-		return err
-	}
-	return nil
-}
-func Register(mux *asynq.ServeMux, handler *TaskHandler) { mux.Handle(TaskType, handler) }
 func (r *Repository) MarkFailed(ctx context.Context, id int64, message string, now time.Time) error {
 	if len(message) > 512 {
 		message = message[:512]
 	}
 	return r.db.WithContext(ctx).Model(&Task{}).Where("id=? AND status NOT IN ('completed','canceled','failed')", id).Updates(map[string]any{"status": StatusFailed, "failure_message": message, "failed_at": now, "updated_at": now}).Error
+}
+
+type BatchPayload struct {
+	SchemaVersion int   `json:"schemaVersion"`
+	TaskID        int64 `json:"taskId"`
+	BatchNo       int   `json:"batchNo"`
+}
+
+func DecodeBatchPayload(raw []byte) (BatchPayload, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var payload BatchPayload
+	if err := decoder.Decode(&payload); err != nil {
+		return BatchPayload{}, err
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return BatchPayload{}, errors.New("payload must contain one JSON document")
+	}
+	if payload.SchemaVersion != 1 || payload.TaskID <= 0 || payload.BatchNo < 0 {
+		return BatchPayload{}, errors.New("batch payload is invalid")
+	}
+	return payload, nil
 }

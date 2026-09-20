@@ -70,6 +70,8 @@ func TestRetentionSettingValidationRejectsBeforeRepositoryAccess(t *testing.T) {
 		{"notification above maximum", sharedsetting.MessageNotificationRetentionDaysKey, "3651", ValueTypeNumber},
 		{"realtime below minimum", sharedsetting.RealtimeEventRetentionDaysKey, "0", ValueTypeNumber},
 		{"realtime above maximum", sharedsetting.RealtimeEventRetentionDaysKey, "31", ValueTypeNumber},
+		{"scheduler below minimum", sharedsetting.SchedulerHistoryRetentionDaysKey, "6", ValueTypeNumber},
+		{"scheduler above maximum", sharedsetting.SchedulerHistoryRetentionDaysKey, "3651", ValueTypeNumber},
 		{"wrong type", sharedsetting.RealtimeEventRetentionDaysKey, "7", ValueTypeString},
 		{"floating point", sharedsetting.RealtimeEventRetentionDaysKey, "1.5", ValueTypeNumber},
 		{"overflow", sharedsetting.MessageNotificationRetentionDaysKey, "999999999999999999999999", ValueTypeNumber},

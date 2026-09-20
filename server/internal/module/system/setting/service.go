@@ -617,12 +617,16 @@ func validateInput(key, value string, valueType int, description string) error {
 		if valueType != ValueTypeNumber || !integerInRange(value, 1, 30) {
 			return fmt.Errorf("realtime event retention days must be an integer from 1 to 30")
 		}
+	case sharedsetting.SchedulerHistoryRetentionDaysKey:
+		if valueType != ValueTypeNumber || !integerInRange(value, 7, 3650) {
+			return fmt.Errorf("scheduler history retention days must be an integer from 7 to 3650")
+		}
 	}
 	return nil
 }
 
 func isRequiredSetting(key string) bool {
-	return key == sharedsetting.MessageNotificationRetentionDaysKey || key == sharedsetting.RealtimeEventRetentionDaysKey
+	return key == sharedsetting.MessageNotificationRetentionDaysKey || key == sharedsetting.RealtimeEventRetentionDaysKey || key == sharedsetting.SchedulerHistoryRetentionDaysKey
 }
 
 func integerInRange(value string, minimum, maximum int) bool {

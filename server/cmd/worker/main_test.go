@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"admin/server/internal/module/system/operationLog"
+	"admin/server/internal/module/system/scheduler"
 
 	"github.com/hibiken/asynq"
 )
@@ -46,7 +47,7 @@ func (p *workerOperationLogProcessor) Process(_ context.Context, payload operati
 	return nil
 }
 
-func TestBuildWorkerMuxRegistersOperationLogAndNotificationTasks(t *testing.T) {
+func TestBuildWorkerMuxRegistersOperationLogAndSchedulerTasks(t *testing.T) {
 	operationProcessor := &workerOperationLogProcessor{}
 	notificationProcessor := &fakeAsynqHandler{}
 	mux := buildWorkerMux(operationProcessor, notificationProcessor)
@@ -65,8 +66,8 @@ func TestBuildWorkerMuxRegistersOperationLogAndNotificationTasks(t *testing.T) {
 	if operationProcessor.processed != "request-1" {
 		t.Fatalf("processed operation=%q", operationProcessor.processed)
 	}
-	if err := mux.ProcessTask(context.Background(), asynq.NewTask("message:notificationtask:dispatch:v1", []byte(`{}`))); err != nil {
-		t.Fatalf("process notification task: %v", err)
+	if err := mux.ProcessTask(context.Background(), asynq.NewTask(scheduler.EnvelopeTaskType, []byte(`{}`))); err != nil {
+		t.Fatalf("process scheduler task: %v", err)
 	}
 	if notificationProcessor.calls != 1 {
 		t.Fatalf("notification calls=%d want 1", notificationProcessor.calls)
@@ -238,7 +239,7 @@ func TestWorkerAssemblyStartsAllNamedRunners(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	runners := []namedRunner{}
 	fakes := []*fakeRelayRunner{}
-	for _, name := range []string{"config-generation", "realtime-outbox", "notification-dispatch", "realtime-retention-trigger", "notification-retention-trigger"} {
+	for _, name := range []string{"config-generation", "realtime-outbox", "scheduler-scanner", "scheduler-publisher"} {
 		fake := newFakeRelayRunner()
 		fakes = append(fakes, fake)
 		runners = append(runners, namedRunner{Name: name, Runner: fake})
