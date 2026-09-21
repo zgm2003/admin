@@ -509,6 +509,45 @@ describe('mail service page', () => {
     expect(wrapper.text()).not.toContain('old@example.com')
   })
 
+  it('does not let an older config response overwrite a newer tab reload', async () => {
+    const older = deferred<mailApi.MailConfig>()
+    vi.mocked(mailApi.getMailConfig).mockReturnValueOnce(older.promise).mockResolvedValueOnce({
+      configured: true,
+      region: 'ap-guangzhou',
+      endpoint: '',
+      fromEmail: 'new@example.com',
+      fromName: 'New sender',
+      replyTo: '',
+      ttlMinutes: 10,
+      isEnabled: YesNo.Yes,
+      lastTestAt: null,
+      lastTestError: '',
+    })
+    const wrapper = mountPage(['message:mail:list'])
+    await vi.waitFor(() => expect(mailApi.getMailConfig).toHaveBeenCalledOnce())
+
+    await selectTab(wrapper, '邮件模板')
+    await selectTab(wrapper, '邮件配置')
+    expect(mailConfigInputValues(wrapper)).toContain('new@example.com')
+
+    older.resolve({
+      configured: true,
+      region: 'ap-guangzhou',
+      endpoint: '',
+      fromEmail: 'old@example.com',
+      fromName: 'Old sender',
+      replyTo: '',
+      ttlMinutes: 10,
+      isEnabled: YesNo.Yes,
+      lastTestAt: null,
+      lastTestError: '',
+    })
+    await flushPromises()
+
+    expect(mailConfigInputValues(wrapper)).toContain('new@example.com')
+    expect(mailConfigInputValues(wrapper)).not.toContain('old@example.com')
+  })
+
   it('shows the rate limit tab only with list permission and does not fetch it eagerly', async () => {
     const wrapper = mountPage(['message:mail:list'])
     await flushPromises()
@@ -566,6 +605,13 @@ function mailLogRow(id: number, toEmail: string, scene: string): mailApi.MailLog
     createdAt: '2026-09-09T00:00:00Z',
     updatedAt: '2026-09-09T00:00:00Z',
   }
+}
+
+function mailConfigInputValues(wrapper: VueWrapper): string[] {
+  return wrapper
+    .get('.mail-form')
+    .findAll('input')
+    .map((item) => (item.element as HTMLInputElement).value)
 }
 
 function deferred<T>() {

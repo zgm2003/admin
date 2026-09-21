@@ -49,14 +49,14 @@ export interface SessionRevokeResult {
 
 export async function getSessions(query: SessionListQuery): Promise<SessionPage> {
   return expectPage(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/user/session', params: query }),
+    await request({ method: 'GET', url: '/api/admin/v1/user/session', params: query }),
     parseSessionItem,
     'sessions',
   )
 }
 export async function getSessionStats(): Promise<SessionStats> {
   const value = expectRecord(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/user/session/stats' }),
+    await request({ method: 'GET', url: '/api/admin/v1/user/session/stats' }),
     'session stats',
   )
   const platforms = expectRecord(value.platforms, 'session stats.platforms')
@@ -70,12 +70,12 @@ export async function getSessionStats(): Promise<SessionStats> {
 }
 export async function revokeSession(id: number): Promise<SessionRevokeResult> {
   return parseRevokeResult(
-    await request<unknown>({ method: 'DELETE', url: '/api/admin/v1/user/session/' + id }),
+    await request({ method: 'DELETE', url: '/api/admin/v1/user/session/' + id }),
   )
 }
 export async function revokeSessions(ids: number[]): Promise<SessionRevokeResult> {
   return parseRevokeResult(
-    await request<unknown>({
+    await request({
       method: 'DELETE',
       url: '/api/admin/v1/user/session',
       data: { ids },

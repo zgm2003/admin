@@ -15,9 +15,7 @@ export function parseRealtimeTicket(value: unknown): RealtimeTicket {
 }
 
 export async function requestRealtimeTicket(): Promise<RealtimeTicket> {
-  return parseRealtimeTicket(
-    await request<unknown>({ method: 'POST', url: '/api/v1/realtime/ticket' }),
-  )
+  return parseRealtimeTicket(await request({ method: 'POST', url: '/api/v1/realtime/ticket' }))
 }
 
 export function buildRealtimeWebSocketURL(

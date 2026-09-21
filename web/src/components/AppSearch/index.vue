@@ -3,7 +3,7 @@
   lang="ts"
   generic="TModel extends Record<string, SearchFormValue> = Record<string, SearchFormValue>"
 >
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import type { SearchDateRange, SearchField, SearchFormValue } from './types'
@@ -45,10 +45,7 @@ const resolvedResetLabel = computed(() => props.resetLabel ?? t('search.reset'))
 const resolvedExpandLabel = computed(() => props.expandLabel ?? t('search.expand'))
 const resolvedCollapseLabel = computed(() => props.collapseLabel ?? t('search.collapse'))
 
-const form = reactive<Record<string, SearchFormValue>>({ ...props.modelValue } as Record<
-  string,
-  SearchFormValue
->)
+const form = shallowRef<TModel>({ ...props.modelValue })
 const collapsed = ref(false)
 const validationError = ref<string | null>(null)
 
@@ -69,7 +66,7 @@ function validateModel(fields: readonly SearchField<TModel>[], model: TModel): s
   for (const field of fields) {
     if (!Object.prototype.hasOwnProperty.call(model, field.key))
       return `missing:${String(field.key)}`
-    const value = (model as Record<string, unknown>)[field.key]
+    const value = model[field.key]
     if (field.type === 'date-range' ? !isDateRange(value) : !isScalar(value))
       return `invalid:${String(field.key)}`
   }
@@ -81,10 +78,7 @@ validationError.value = validateModel(props.fields, props.modelValue)
 watch(
   () => props.modelValue,
   (value) => {
-    for (const key of Object.keys(form)) {
-      if (!Object.prototype.hasOwnProperty.call(value, key)) delete form[key]
-    }
-    Object.assign(form, value)
+    form.value = { ...value }
     validationError.value = validateModel(props.fields, value)
   },
   { deep: true },
@@ -103,44 +97,48 @@ function resolveWidth(width: string | number | undefined): string {
 }
 
 function inputValue(key: string): string | number | null | undefined {
-  const value = form[key]
+  const value = form.value[key]
   return isScalar(value) ? value : undefined
 }
 
 function dateRangeValue(key: string): SearchDateRange {
-  const value = form[key]
+  const value = form.value[key]
   return isDateRange(value) ? value : []
 }
 
 function selectValue(key: string): string | number | null | undefined {
-  const value = form[key]
+  const value = form.value[key]
   return isScalar(value) ? value : undefined
 }
 
 function setSearchValue(key: string, value: unknown, dateRange = false): void {
   const candidateValue = dateRange && (value === null || value === undefined) ? [] : value
-  const candidate = { ...form, [key]: candidateValue } as TModel
+  const candidate = { ...form.value, [key]: candidateValue } as TModel
   const error = validateModel(props.fields, candidate)
   if (error !== null) {
     validationError.value = error
     return
   }
-  form[key] = candidateValue as SearchFormValue
+  form.value = candidate
   validationError.value = null
-  emit('update:modelValue', { ...form } as TModel)
+  emit('update:modelValue', { ...form.value })
 }
 
 function emitForm(event: 'query' | 'reset'): void {
-  validationError.value = validateModel(props.fields, { ...form } as TModel)
+  validationError.value = validateModel(props.fields, form.value)
   if (validationError.value) return
-  const value = { ...form }
-  emit('update:modelValue', value as TModel)
-  if (event === 'query') emit('query', value as TModel)
-  else emit('reset', value as TModel)
+  const value = { ...form.value }
+  emit('update:modelValue', value)
+  if (event === 'query') emit('query', value)
+  else emit('reset', value)
 }
 
 function reset(): void {
-  for (const field of props.fields) form[field.key] = field.type === 'date-range' ? [] : undefined
+  const value = { ...form.value }
+  for (const field of props.fields) {
+    Object.assign(value, { [field.key]: field.type === 'date-range' ? [] : undefined })
+  }
+  form.value = value
   emitForm('reset')
 }
 </script>

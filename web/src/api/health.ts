@@ -12,7 +12,7 @@ export interface Readiness {
 }
 
 export async function getHealth(): Promise<HealthStatus> {
-  const value = expectRecord(await request<unknown>({ method: 'GET', url: '/health' }), 'health')
+  const value = expectRecord(await request({ method: 'GET', url: '/health' }), 'health')
   if (Object.keys(value).some((key) => key !== 'status'))
     throw new ProtocolError('health has unknown fields')
   if (expectString(value.status, 'health.status') !== 'up')
@@ -21,7 +21,7 @@ export async function getHealth(): Promise<HealthStatus> {
 }
 
 export async function getReadiness(): Promise<Readiness> {
-  const value = expectRecord(await request<unknown>({ method: 'GET', url: '/ready' }), 'readiness')
+  const value = expectRecord(await request({ method: 'GET', url: '/ready' }), 'readiness')
   if (Object.keys(value).some((key) => key !== 'postgresql' && key !== 'redis')) {
     throw new ProtocolError('readiness has unknown fields')
   }

@@ -43,7 +43,7 @@ export interface OperationLogPage {
 
 export async function getOperationLogs(query: OperationLogListQuery): Promise<OperationLogPage> {
   return expectPage(
-    await request<unknown>({
+    await request({
       method: 'GET',
       url: '/api/admin/v1/system/operationlog',
       params: query,

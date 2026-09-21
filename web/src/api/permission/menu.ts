@@ -119,8 +119,8 @@ export async function getMenus(query?: MenuListQuery): Promise<MenuCatalogRespon
   }
   const raw =
     query === undefined
-      ? await request<unknown>({ method: 'GET', url: '/api/admin/v1/permission/menu' })
-      : await request<unknown>({
+      ? await request({ method: 'GET', url: '/api/admin/v1/permission/menu' })
+      : await request({
           method: 'GET',
           url: '/api/admin/v1/permission/menu',
           params: { platformId: query.platformId },
@@ -130,14 +130,14 @@ export async function getMenus(query?: MenuListQuery): Promise<MenuCatalogRespon
 
 export async function createMenu(input: CreateMenuInput): Promise<MenuIDResult> {
   return expectId(
-    await request<unknown>({ method: 'POST', url: '/api/admin/v1/permission/menu', data: input }),
+    await request({ method: 'POST', url: '/api/admin/v1/permission/menu', data: input }),
     'menu create result',
   )
 }
 
 export async function updateMenu(id: number, input: UpdateMenuInput): Promise<MenuIDResult> {
   return expectId(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: `/api/admin/v1/permission/menu/${id}`,
       data: input,
@@ -148,7 +148,7 @@ export async function updateMenu(id: number, input: UpdateMenuInput): Promise<Me
 
 export async function updateMenuStatus(id: number, isEnabled: YesNo): Promise<MenuStatusResult> {
   const value = expectExactKeys(
-    await request<unknown>({
+    await request({
       method: 'PATCH',
       url: `/api/admin/v1/permission/menu/${id}/status`,
       data: { isEnabled },
@@ -162,14 +162,14 @@ export async function updateMenuStatus(id: number, isEnabled: YesNo): Promise<Me
 
 export async function deleteMenu(id: number): Promise<MenuIDResult> {
   return expectId(
-    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/permission/menu/${id}` }),
+    await request({ method: 'DELETE', url: `/api/admin/v1/permission/menu/${id}` }),
     'menu delete result',
   )
 }
 
 export async function rebuildAccessCache(): Promise<RebuildAccessCacheResult> {
   const value = expectExactKeys(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/admin/v1/permission/menu/access-cache/rebuild',
     }),

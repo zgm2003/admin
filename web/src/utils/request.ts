@@ -265,8 +265,6 @@ export async function refreshAccessCredential(): Promise<AccessCredential> {
   return defaultBundle.refreshAccessCredential()
 }
 
-export function request(config: AxiosRequestConfig): Promise<unknown>
-export function request<_T>(config: AxiosRequestConfig): Promise<unknown>
 export async function request(config: AxiosRequestConfig): Promise<unknown> {
   const response = await client.request(config)
   return response.data

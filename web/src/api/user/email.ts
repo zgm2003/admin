@@ -30,7 +30,7 @@ export interface EmailResult {
 
 export async function sendEmailCode(input: EmailSendCodeInput): Promise<EmailSendCodeResult> {
   return parseSendCodeResult(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/admin/v1/user/email/send-code',
       data: input,
@@ -40,7 +40,7 @@ export async function sendEmailCode(input: EmailSendCodeInput): Promise<EmailSen
 
 export async function bindEmail(input: BindEmailInput): Promise<EmailResult> {
   return parseEmailResult(
-    await request<unknown>({ method: 'PUT', url: '/api/admin/v1/user/email', data: input }),
+    await request({ method: 'PUT', url: '/api/admin/v1/user/email', data: input }),
   )
 }
 

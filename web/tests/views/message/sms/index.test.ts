@@ -398,6 +398,23 @@ describe('SMS management page', () => {
     expect(wrapper.text()).not.toContain('156****8271')
   })
 
+  it('prevents an older config response from overwriting a newer tab reload', async () => {
+    const older = deferred<smsApi.SmsConfig>()
+    vi.mocked(smsApi.getSmsConfig)
+      .mockReturnValueOnce(older.promise)
+      .mockResolvedValueOnce({ ...config, signName: 'New sign' })
+    const wrapper = mountPage(['message:sms:list'])
+    await vi.waitFor(() => expect(smsApi.getSmsConfig).toHaveBeenCalledOnce())
+
+    await selectTab(wrapper, '短信模板')
+    await selectTab(wrapper, '短信配置')
+    expect(input(wrapper, 'sms-config-sign-name').value).toBe('New sign')
+
+    older.resolve({ ...config, signName: 'Old sign' })
+    await flushPromises()
+    expect(input(wrapper, 'sms-config-sign-name').value).toBe('New sign')
+  })
+
   it('shows sensitive log detail only with the exact detail permission', async () => {
     const denied = mountPage(['message:sms:list'])
     await flushPromises()

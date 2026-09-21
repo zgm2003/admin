@@ -77,7 +77,7 @@ export interface UploadRulePageInit {
 }
 export async function listUploadRules(query: UploadRuleQuery): Promise<PageResult<UploadRule>> {
   return expectPage(
-    await request<unknown>({
+    await request({
       method: 'GET',
       url: '/api/admin/v1/storage/uploadrule',
       params: query,
@@ -88,13 +88,13 @@ export async function listUploadRules(query: UploadRuleQuery): Promise<PageResul
 }
 export async function getUploadRule(id: number): Promise<UploadRule> {
   return parseUploadRule(
-    await request<unknown>({ method: 'GET', url: `/api/admin/v1/storage/uploadrule/${id}` }),
+    await request({ method: 'GET', url: `/api/admin/v1/storage/uploadrule/${id}` }),
     0,
   )
 }
 export async function getUploadRulePageInit(): Promise<UploadRulePageInit> {
   const result = expectRecord(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/storage/uploadrule/page-init' }),
+    await request({ method: 'GET', url: '/api/admin/v1/storage/uploadrule/page-init' }),
     'upload rule page init',
   )
   return {
@@ -104,7 +104,7 @@ export async function getUploadRulePageInit(): Promise<UploadRulePageInit> {
 }
 export async function createUploadRule(data: CreateUploadRuleInput): Promise<{ id: number }> {
   return expectId(
-    await request<unknown>({ method: 'POST', url: '/api/admin/v1/storage/uploadrule', data }),
+    await request({ method: 'POST', url: '/api/admin/v1/storage/uploadrule', data }),
     'upload rule create result',
   )
 }
@@ -113,7 +113,7 @@ export async function updateUploadRule(
   data: UpdateUploadRuleInput,
 ): Promise<Record<string, never>> {
   return expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: `/api/admin/v1/storage/uploadrule/${id}`,
       data,
@@ -126,7 +126,7 @@ export async function updateUploadRuleStatus(
   isEnabled: YesNo,
 ): Promise<{ id: number; isEnabled: YesNo }> {
   const result = expectRecord(
-    await request<unknown>({
+    await request({
       method: 'PATCH',
       url: `/api/admin/v1/storage/uploadrule/${id}/status`,
       data: { isEnabled },
@@ -138,7 +138,7 @@ export async function updateUploadRuleStatus(
 }
 export async function deleteUploadRule(id: number): Promise<Record<string, never>> {
   return expectEmptyObject(
-    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/storage/uploadrule/${id}` }),
+    await request({ method: 'DELETE', url: `/api/admin/v1/storage/uploadrule/${id}` }),
     'upload rule delete result',
   )
 }

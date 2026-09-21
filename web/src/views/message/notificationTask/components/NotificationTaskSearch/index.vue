@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
+import { notificationTaskAudienceMetadata } from '@/api/message/notificationTask'
 
 const model = defineModel<SearchFormModel>({ required: true })
 const emit = defineEmits<{ query: []; reset: [] }>()
@@ -10,9 +11,9 @@ const { t } = useI18n()
 
 const audienceOptions = computed(() => [
   { value: '', label: t('notificationTask.audienceAll') },
-  ...(['platform', 'user', 'role'] as const).map((value) => ({
-    value,
-    label: t(`notificationTask.audience.${value}`),
+  ...notificationTaskAudienceMetadata.map((item) => ({
+    value: item.value,
+    label: t(item.i18nKey),
   })),
 ])
 const fields = computed<SearchField[]>(() => [

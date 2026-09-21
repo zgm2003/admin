@@ -58,25 +58,25 @@ export interface UserRoleResult {
 
 export async function getUsers(query: UserListQuery): Promise<UserPage> {
   return parseUserPage(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/user/account', params: query }),
+    await request({ method: 'GET', url: '/api/admin/v1/user/account', params: query }),
   )
 }
 
 export async function getUserRoleOptions(): Promise<UserRoleOptions> {
   return parseUserRoleOptions(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/user/account/role-options' }),
+    await request({ method: 'GET', url: '/api/admin/v1/user/account/role-options' }),
   )
 }
 
 export async function updateUser(id: number, input: UpdateUserInput): Promise<UpdatedProfile> {
   return parseUpdatedProfile(
-    await request<unknown>({ method: 'PUT', url: `/api/admin/v1/user/account/${id}`, data: input }),
+    await request({ method: 'PUT', url: `/api/admin/v1/user/account/${id}`, data: input }),
   )
 }
 
 export async function updateUserStatus(id: number, isEnabled: YesNo): Promise<UserStatusResult> {
   return parseUserStatus(
-    await request<unknown>({
+    await request({
       method: 'PATCH',
       url: `/api/admin/v1/user/account/${id}/status`,
       data: { isEnabled },
@@ -86,14 +86,14 @@ export async function updateUserStatus(id: number, isEnabled: YesNo): Promise<Us
 
 export async function deleteUser(id: number): Promise<Record<string, never>> {
   return expectEmptyObject(
-    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/user/account/${id}` }),
+    await request({ method: 'DELETE', url: `/api/admin/v1/user/account/${id}` }),
     'user delete result',
   )
 }
 
 export async function getUserRoles(id: number): Promise<UserRolesResponse> {
   return parseUserRoles(
-    await request<unknown>({ method: 'GET', url: `/api/admin/v1/user/account/${id}/role` }),
+    await request({ method: 'GET', url: `/api/admin/v1/user/account/${id}/role` }),
   )
 }
 
@@ -102,7 +102,7 @@ export async function updateUserRoles(
   input: UpdateUserRolesInput,
 ): Promise<UserRoleResult> {
   return parseUserRoleResult(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: `/api/admin/v1/user/account/${id}/role`,
       data: { roleIds: input.roleIds },

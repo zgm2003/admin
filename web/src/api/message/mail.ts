@@ -434,43 +434,39 @@ function parseMailRuleStatus(value: unknown): { id: number; isEnabled: YesNo } {
 }
 
 export function getMailConfig() {
-  return request<unknown>({ method: 'GET', url: '/api/admin/v1/message/mail/config' }).then(
-    parseMailConfig,
-  )
+  return request({ method: 'GET', url: '/api/admin/v1/message/mail/config' }).then(parseMailConfig)
 }
 export function saveMailConfig(data: MailConfigInput) {
-  return request<unknown>({ method: 'PUT', url: '/api/admin/v1/message/mail/config', data }).then(
+  return request({ method: 'PUT', url: '/api/admin/v1/message/mail/config', data }).then(
     parseMailConfig,
   )
 }
 export async function deleteMailConfig(): Promise<Record<string, never>> {
   return expectEmptyObject(
-    await request<unknown>({ method: 'DELETE', url: '/api/admin/v1/message/mail/config' }),
+    await request({ method: 'DELETE', url: '/api/admin/v1/message/mail/config' }),
     'mail config delete result',
   )
 }
 export function sendMailTest(data: MailTestInput): Promise<MailTestResult> {
-  return request<unknown>({ method: 'POST', url: '/api/admin/v1/message/mail/test', data }).then(
+  return request({ method: 'POST', url: '/api/admin/v1/message/mail/test', data }).then(
     parseMailTestResult,
   )
 }
 export function listMailTemplates() {
-  return request<unknown>({ method: 'GET', url: '/api/admin/v1/message/mail/template' }).then(
-    (value) => {
-      if (!Array.isArray(value)) throw new ProtocolError('mail templates response is invalid')
-      return value.map(parseMailTemplate)
-    },
-  )
+  return request({ method: 'GET', url: '/api/admin/v1/message/mail/template' }).then((value) => {
+    if (!Array.isArray(value)) throw new ProtocolError('mail templates response is invalid')
+    return value.map(parseMailTemplate)
+  })
 }
 export function updateMailTemplate(id: number, data: MailTemplateInput) {
-  return request<unknown>({
+  return request({
     method: 'PUT',
     url: `/api/admin/v1/message/mail/template/${id}`,
     data,
   }).then((value) => expectEmptyObject(value, 'mail template update result'))
 }
 export function updateMailTemplateStatus(id: number, isEnabled: YesNo) {
-  return request<unknown>({
+  return request({
     method: 'PATCH',
     url: `/api/admin/v1/message/mail/template/${id}/status`,
     data: { isEnabled },
@@ -487,17 +483,17 @@ export interface MailLogQuery {
   to?: string
 }
 export function listMailLogs(params: MailLogQuery) {
-  return request<unknown>({ method: 'GET', url: '/api/admin/v1/message/mail/log', params }).then(
+  return request({ method: 'GET', url: '/api/admin/v1/message/mail/log', params }).then(
     parseMailLogPage,
   )
 }
 export function getMailLogDetail(id: number) {
-  return request<unknown>({ method: 'GET', url: `/api/admin/v1/message/mail/log/${id}` }).then(
+  return request({ method: 'GET', url: `/api/admin/v1/message/mail/log/${id}` }).then(
     parseMailLogDetail,
   )
 }
 export function listMailRules() {
-  return request<unknown>({ method: 'GET', url: '/api/admin/v1/message/mail/recipient-rule' }).then(
+  return request({ method: 'GET', url: '/api/admin/v1/message/mail/recipient-rule' }).then(
     (value) => {
       if (!Array.isArray(value)) throw new ProtocolError('mail recipient rules response is invalid')
       return value.map(parseMailRule)
@@ -505,28 +501,28 @@ export function listMailRules() {
   )
 }
 export function createMailRule(data: MailRuleInput): Promise<{ id: number }> {
-  return request<unknown>({
+  return request({
     method: 'POST',
     url: '/api/admin/v1/message/mail/recipient-rule',
     data,
   }).then((value) => expectId(value, 'mail rule create result'))
 }
 export function updateMailRule(id: number, data: MailRuleInput) {
-  return request<unknown>({
+  return request({
     method: 'PUT',
     url: `/api/admin/v1/message/mail/recipient-rule/${id}`,
     data,
   }).then((value) => expectEmptyObject(value, 'mail rule update result'))
 }
 export function updateMailRuleStatus(id: number, isEnabled: YesNo) {
-  return request<unknown>({
+  return request({
     method: 'PATCH',
     url: `/api/admin/v1/message/mail/recipient-rule/${id}/status`,
     data: { isEnabled },
   }).then(parseMailRuleStatus)
 }
 export function deleteMailRule(id: number): Promise<Record<string, never>> {
-  return request<unknown>({
+  return request({
     method: 'DELETE',
     url: `/api/admin/v1/message/mail/recipient-rule/${id}`,
   }).then((value) => expectEmptyObject(value, 'mail rule delete result'))
@@ -691,7 +687,7 @@ export function parseMailRateLimitUpdateResult(
 }
 
 export function listMailRateLimitPolicies(): Promise<MailRateLimitSnapshot> {
-  return request<unknown>({
+  return request({
     method: 'GET',
     url: '/api/admin/v1/message/mail/rate-limit-policy',
   }).then(parseMailRateLimitSnapshot)
@@ -702,7 +698,7 @@ export function updateMailRateLimitPolicy(
   key: string,
   data: MailRateLimitPolicyInput,
 ): Promise<MailRateLimitUpdateResult> {
-  return request<unknown>({
+  return request({
     method: 'PUT',
     url: `/api/admin/v1/message/mail/rate-limit-policy/${platformId}/${encodeURIComponent(key)}`,
     data,

@@ -94,11 +94,8 @@ for (const file of [...walk(src), ...walk(tests)]) {
   if (/\bany\[\]|\bas any\b|Record<[^>]*,\s*any>|@ts-ignore/.test(content)) {
     add('unsafe-any', file, '业务代码存在未约束 any')
   }
-  if (projectPath.startsWith('src/api/') && /request<(?!unknown\b)/.test(content)) {
-    add('api-unparsed-response', file, 'API 请求应使用 request<unknown>() 并在模块边界解析')
-  }
-  if (projectPath.startsWith('src/api/') && /\brequest\s*\(/.test(content)) {
-    add('api-unparsed-response', file, 'API 请求不得省略 unknown 响应边界')
+  if (projectPath.startsWith('src/api/') && /\brequest\s*</.test(content)) {
+    add('api-unparsed-response', file, 'request 不接受响应泛型，API 模块必须解析 unknown 响应')
   }
   if (projectPath.startsWith('src/api/') && /\?\?\s*\[\]/.test(content)) {
     add('required-array-fallback', file, '必填数组不得使用 ?? [] 静默修复')

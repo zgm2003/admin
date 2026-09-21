@@ -1,5 +1,37 @@
 # 项目状态
 
+## Batch 7 全量门禁（2026-09-21，已完成）
+
+- 后端：`go fmt ./...`、`go vet ./...`、`go test -p 1 ./... -count=1`、`go build ./...` 全部 exit 0；全量 Go 测试通过，包含 API、Worker、数据库迁移、Scheduler、NotificationTask、Mail/SMS、RBAC、Session 和 Redis 相关包。
+- Web：`pnpm verify:frontend` 全部通过：Prettier、ESLint、架构检查（0 baseline findings）、`vue-tsc -b`、103 个测试文件/742 项测试、生产构建均通过。构建仅保留既有大 chunk warning。
+- Canvas：`pnpm build` 通过（TypeScript、Vite，8978 modules transformed）；仅有既有动态导入提示和大 chunk warning。
+- 部署边界：`server`、`web`、`canvas` 未发现运行时引用根目录 `shared` 或 `contracts`；架构测试 `TestDeploymentUnitsDoNotUseRootSharedDirectory` 通过。根目录 `shared`/`contracts` 不纳入部署。
+- `git diff --check` 通过。当前未提交改动仍由维护者保留，Agent 未执行 commit、push、rebase 或回滚。
+
+## 数据库证据审查（2026-09-21，已完成）
+
+- 真实 PostgreSQL catalog 只读核对确认既有 schema-hardening 已生效：`user_session` 仅保留 `fk_user_session_user` 和 `fk_user_session_platform`，`ck_user_session_device_id_nonempty` 存在，空 `device_id` 为 0；`permission_access_version.user_id` 无默认值，`rbac_access_version_user_id_seq` 不存在。
+- 约束名称仍有 `auth_session_*` 前缀，这是历史表重命名残留的命名债务；本轮不改名，避免无业务收益的额外迁移风险。
+- 真实统计：`user_session` 86 行、`permission_access_version` 3 行、`message_notification_task` 3 行、`system_scheduler_job` 3 行。`EXPLAIN (ANALYZE, BUFFERS)` 已核对会话列表和 access version 查询；access version 使用主键索引，会话列表在当前 86 行规模下选择顺序扫描并在 0.322ms 内完成，未发现异常计划。
+- `pg_stat_user_indexes` 已审查会话、权限版本、邮件/SMS 日志、通知任务和 Scheduler 表。0 次使用的索引包含低频管理列表、定时清理、发布租约和空日志表索引；没有跨部署窗口、查询样本和容量数据，不删除任何索引或字段。后续如需清理，必须先积累完整负载窗口并逐项提供查询证据。
+- 本轮未执行 DDL、未修改业务数据、未清理 Redis；只读审查命令均 exit 0。
+
+## Redis 只读容量实测（2026-09-21，已完成）
+
+- 使用 `docs/local-work/2026-09-21-redis-probe.ps1` 从 `server/.env` 读取本地 Redis 配置；脚本只执行 `SCAN`、`TYPE`、`PTTL`、`DUMP` 和 `MEMORY USAGE`，不输出连接信息、key 名或 payload，也未执行任何写入或删除命令。
+- 实际命令 `& .\docs\local-work\2026-09-21-redis-probe.ps1` exit 0；单次 `SCAN MATCH * COUNT 200` 用时 39ms，每个固定命名空间最多采样 16 个 key。共观察到 49 个 key：31 个 config generation state、7 个 Asynq key、4 个 auth state、2 个 authz state、1 个 auth policy 和其余状态；读取错误、SCAN 重复、未分类 key 均为 0。
+- `config-cache:snapshot:v1:*`、`authz:permission:v8:*` 及所有短期租约/验证码/限流前缀当前均为 0；`config-cache:fill:v1:*` 与 `auth:current-session:*` 两个旧协议前缀也为 0。所有预期持久 state 均无 TTL，Asynq 仅 1 个内部 key 带 TTL；未发现应过期 key 缺少 TTL。
+- 当前 31 个配置 key 是小型 generation state，16 个样本的序列化长度均为 62B、Redis 内存样本为 118B 至 144B；没有“重复缓存 payload 过多”的证据，因此本轮不删 key、不改缓存协议。剩余风险是本次 API/Worker 低活动时没有 snapshot 样本，峰值基数和命中率仍需在真实负载窗口复测。
+- 后续风险：当前低活动窗口没有 snapshot 样本；Mail/SMS 聚合页、非日志 tab 旧响应和 AppSearch 字段边界整改已在 Batch 5 完成，watcher 创建时机与卸载归属已由对应测试覆盖。
+
+## 前端请求、通知 HTML 与域 metadata 收口（2026-09-21，代码已完成）
+
+- `request` 已移除响应泛型重载，固定返回 `Promise<unknown>`；全部 API 调用不再使用 `request<unknown>` 形式伪装响应类型，仍由各 API 模块严格解析 DTO。架构门禁现在禁止任何 `request<T>`。
+- 通知 API 边界新增“后端已净化 HTML”验证：只接受后端通知白名单元素、无属性普通元素和加固后的 HTTPS 锚点；事件属性、危险 URL、SVG/script、图片及不安全锚点均作为协议错误拒绝，两个 `v-html` 消费点不再信任任意字符串。
+- Notification、NotificationTask、SMS 和 Scheduler 的固定 variant/priority/audience/link/scene/status 展示值已收敛到所属域 metadata，页面只负责用 i18n key 生成 label；固定数值状态不进入可编辑字典。
+- TDD 证据：请求泛型负类型契约先以 `TS2578` 失败；6 个恶意 HTML 样本先被解析器放行后转绿；4 组 metadata 契约先因导出不存在失败后转绿。完整 `pnpm verify:frontend` 通过：100 个测试文件、735 项测试、生产构建成功，仅保留既有大 chunk 警告。
+- Redis 固定前缀只读 SCAN 探针已完成，结果见上方“Redis 只读容量实测”；后续只在真实负载窗口复测 snapshot 基数和命中率。
+
 ## NotificationTask 状态协议整改（2026-09-21，代码与迁移已落地）
 
 - 后端 `notificationTask.Status` 已改为 `int16` typed enum：`1=draft`、`2=scheduled`、`3=queued`、`4=processing`、`5=completed`、`6=failed`、`7=canceled`；提供固定 metadata/i18n key 和终态标记，查询参数只接受数值。
@@ -8,7 +40,7 @@
 - 本轮验证时误执行了该 runner（API/Worker 当时未运行），真实 PostgreSQL 的 `message_notification_task.status` 已从 `varchar` 转为 `smallint DEFAULT 1`；当前分布为 `draft=1`、`completed=2`，两项 CHECK 存在，runner 已重复执行通过。真实 schema 快照已刷新到 `docs/database/current.sql`，SHA256 `718EF89D28D970D06EC3412BE0628F803DA97420D94F29D625EA5DD3115AA6A4`。
 - 真实数据库只读核对后已执行 Scheduler runner：`system_scheduler_job.status` 与 `system_scheduler_run.status` 均已转为 `smallint`，未知值预检查、约束、索引和幂等复跑均通过；首次尝试暴露并修复了默认值未先移除的真实 SQL 缺陷。API/Worker 仍未由 Agent 启动。
 - Scheduler 迁移后真实 schema 快照再次刷新到 `docs/database/current.sql`，SHA256 `21A3FABA797108D764D93E68FC5416E1FFF287B4BA8F2D356FE11B36319EA2BD`。
-- 尚未完成：菜单 icon 单一来源、Redis 实测和字段候选清理。
+- 菜单 icon 按维护者决定冻结为后端、前端各自白名单，不再建立共享目录、catalog 或生成器。Redis 实测和数据库字段/索引候选证据审查已完成；字段/索引暂不删除，等待完整负载窗口后再评估。
 
 ### NotificationTask 权限边界收口（2026-09-21，代码已完成）
 

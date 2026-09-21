@@ -11,12 +11,23 @@ import type { PageResult } from '@/types/pagination'
 import { request } from '@/utils/request'
 
 export type SmsScene = 'login' | 'forget' | 'bind_phone' | 'change_password'
+export const smsSceneMetadata = [
+  { value: 'login', i18nKey: 'sms.scene.login' },
+  { value: 'forget', i18nKey: 'sms.scene.forget' },
+  { value: 'bind_phone', i18nKey: 'sms.scene.bindPhone' },
+  { value: 'change_password', i18nKey: 'sms.scene.changePassword' },
+] as const satisfies ReadonlyArray<{ value: SmsScene; i18nKey: string }>
 export const SmsStatus = {
   Pending: 1,
   Sent: 2,
   Failed: 3,
 } as const
 export type SmsStatus = (typeof SmsStatus)[keyof typeof SmsStatus]
+export const smsStatusMetadata = [
+  { value: SmsStatus.Pending, i18nKey: 'sms.status.pending', tagType: 'info' },
+  { value: SmsStatus.Sent, i18nKey: 'sms.status.sent', tagType: 'success' },
+  { value: SmsStatus.Failed, i18nKey: 'sms.status.failed', tagType: 'danger' },
+] as const
 export type SmsRuleScope = 'phone' | 'prefix'
 export type SmsRuleAction = 'allow' | 'deny'
 export type SmsRateLimitPolicyKey = 'business_phone_minute' | 'business_phone_10m'
@@ -177,9 +188,9 @@ export interface SmsLogQuery {
   to?: string
 }
 
-const sceneValues: readonly SmsScene[] = ['login', 'forget', 'bind_phone', 'change_password']
+const sceneValues: readonly SmsScene[] = smsSceneMetadata.map(({ value }) => value)
 const scenes = new Set<SmsScene>(sceneValues)
-const statuses = new Set<SmsStatus>([SmsStatus.Pending, SmsStatus.Sent, SmsStatus.Failed])
+const statuses = new Set<SmsStatus>(smsStatusMetadata.map(({ value }) => value))
 const ratePolicyKeys: readonly SmsRateLimitPolicyKey[] = [
   'business_phone_minute',
   'business_phone_10m',
@@ -543,19 +554,17 @@ export function parseSmsRateLimitSnapshot(value: unknown): SmsRateLimitSnapshot 
 
 export async function getSmsPageInit(): Promise<SmsPageInit> {
   return parseSmsPageInit(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/message/sms/page-init' }),
+    await request({ method: 'GET', url: '/api/admin/v1/message/sms/page-init' }),
   )
 }
 
 export async function getSmsConfig(): Promise<SmsConfig> {
-  return parseSmsConfig(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/message/sms/config' }),
-  )
+  return parseSmsConfig(await request({ method: 'GET', url: '/api/admin/v1/message/sms/config' }))
 }
 
 export async function saveSmsConfig(data: SmsConfigInput): Promise<SmsConfig> {
   return parseSmsConfig(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: '/api/admin/v1/message/sms/config',
       data,
@@ -565,20 +574,18 @@ export async function saveSmsConfig(data: SmsConfigInput): Promise<SmsConfig> {
 
 export async function deleteSmsConfig(): Promise<void> {
   expectEmptyObject(
-    await request<unknown>({ method: 'DELETE', url: '/api/admin/v1/message/sms/config' }),
+    await request({ method: 'DELETE', url: '/api/admin/v1/message/sms/config' }),
     'sms config delete',
   )
 }
 
 export async function sendSmsTest(data: SmsTestInput): Promise<SmsTestResult> {
-  return parseTest(
-    await request<unknown>({ method: 'POST', url: '/api/admin/v1/message/sms/test', data }),
-  )
+  return parseTest(await request({ method: 'POST', url: '/api/admin/v1/message/sms/test', data }))
 }
 
 export async function listSmsTemplates(): Promise<SmsTemplate[]> {
   const data = expectExactKeys(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/message/sms/template' }),
+    await request({ method: 'GET', url: '/api/admin/v1/message/sms/template' }),
     ['list'],
     'sms templates',
   )
@@ -587,7 +594,7 @@ export async function listSmsTemplates(): Promise<SmsTemplate[]> {
 
 export async function updateSmsTemplate(id: number, data: SmsTemplateInput): Promise<SmsTemplate> {
   return parseSmsTemplate(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: `/api/admin/v1/message/sms/template/${id}`,
       data,
@@ -597,7 +604,7 @@ export async function updateSmsTemplate(id: number, data: SmsTemplateInput): Pro
 
 export async function updateSmsTemplateStatus(id: number, isEnabled: YesNo): Promise<void> {
   expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'PATCH',
       url: `/api/admin/v1/message/sms/template/${id}/status`,
       data: { isEnabled },
@@ -608,7 +615,7 @@ export async function updateSmsTemplateStatus(id: number, isEnabled: YesNo): Pro
 
 export async function listSmsRules(): Promise<SmsRule[]> {
   const data = expectExactKeys(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/message/sms/recipient-rule' }),
+    await request({ method: 'GET', url: '/api/admin/v1/message/sms/recipient-rule' }),
     ['list'],
     'sms rules',
   )
@@ -617,7 +624,7 @@ export async function listSmsRules(): Promise<SmsRule[]> {
 
 export async function createSmsRule(data: SmsRuleInput): Promise<SmsRule> {
   return parseSmsRule(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/admin/v1/message/sms/recipient-rule',
       data,
@@ -627,7 +634,7 @@ export async function createSmsRule(data: SmsRuleInput): Promise<SmsRule> {
 
 export async function updateSmsRule(id: number, data: SmsRuleUpdateInput): Promise<SmsRule> {
   return parseSmsRule(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: `/api/admin/v1/message/sms/recipient-rule/${id}`,
       data,
@@ -637,7 +644,7 @@ export async function updateSmsRule(id: number, data: SmsRuleUpdateInput): Promi
 
 export async function updateSmsRuleStatus(id: number, isEnabled: YesNo): Promise<void> {
   expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'PATCH',
       url: `/api/admin/v1/message/sms/recipient-rule/${id}/status`,
       data: { isEnabled },
@@ -648,7 +655,7 @@ export async function updateSmsRuleStatus(id: number, isEnabled: YesNo): Promise
 
 export async function deleteSmsRule(id: number): Promise<void> {
   expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'DELETE',
       url: `/api/admin/v1/message/sms/recipient-rule/${id}`,
     }),
@@ -658,7 +665,7 @@ export async function deleteSmsRule(id: number): Promise<void> {
 
 export async function listSmsLogs(params: SmsLogQuery): Promise<PageResult<SmsLog>> {
   return parseSmsLogPage(
-    await request<unknown>({
+    await request({
       method: 'GET',
       url: '/api/admin/v1/message/sms/log',
       params,
@@ -668,13 +675,13 @@ export async function listSmsLogs(params: SmsLogQuery): Promise<PageResult<SmsLo
 
 export async function getSmsLogDetail(id: number): Promise<SmsLogDetail> {
   return parseSmsLogDetail(
-    await request<unknown>({ method: 'GET', url: `/api/admin/v1/message/sms/log/${id}` }),
+    await request({ method: 'GET', url: `/api/admin/v1/message/sms/log/${id}` }),
   )
 }
 
 export async function listSmsRateLimitPolicies(): Promise<SmsRateLimitSnapshot> {
   return parseSmsRateLimitSnapshot(
-    await request<unknown>({
+    await request({
       method: 'GET',
       url: '/api/admin/v1/message/sms/rate-limit-policy',
     }),
@@ -687,7 +694,7 @@ export async function updateSmsRateLimitPolicy(
   data: { limit: number; windowSeconds: number },
 ): Promise<SmsRateLimitPlatform> {
   return parsePlatform(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: `/api/admin/v1/message/sms/rate-limit-policy/${platformId}/${encodeURIComponent(key)}`,
       data,

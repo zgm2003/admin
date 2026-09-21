@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Job, Run, TaskOption } from '@/api/system/scheduler'
 import { JobStatus } from '@/enums/scheduler'
@@ -21,6 +21,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 const { t } = useI18n()
 const runs = ref<Run[]>([])
 const loading = ref(false)
+let loadSequence = 0
 const taskDisplayName = computed(() => {
   if (props.job === null) return ''
   return (
@@ -30,16 +31,30 @@ const taskDisplayName = computed(() => {
 watch(
   () => [props.modelValue, props.job?.id] as const,
   async ([visible]) => {
-    if (!visible || props.job === null) return
+    const sequence = ++loadSequence
+    runs.value = []
+    if (!visible || props.job === null) {
+      loading.value = false
+      return
+    }
+    const jobID = props.job.id
     loading.value = true
     try {
-      runs.value = await listRuns(props.job.id)
+      const result = await listRuns(jobID)
+      if (sequence === loadSequence && props.modelValue && props.job?.id === jobID) {
+        runs.value = result
+      }
+    } catch {
+      // request.ts owns the API error notification.
     } finally {
-      loading.value = false
+      if (sequence === loadSequence) loading.value = false
     }
   },
   { immediate: true },
 )
+onBeforeUnmount(() => {
+  loadSequence += 1
+})
 </script>
 
 <template>

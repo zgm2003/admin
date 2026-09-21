@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import * as mailApi from '@/api/message/mail'
+import {
+  useMessageAggregateTabs,
+  type MessageTabLoadContext,
+} from '@/composables/useMessageAggregateTabs'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
 import type { MailLogFilter } from './log/index.vue'
@@ -17,10 +21,6 @@ type TabName = 'config' | 'templates' | 'logs' | 'rules' | 'rateLimits'
 const access = usePermissionStore()
 const { t } = useI18n()
 const activeTab = ref<TabName>('config')
-const loading = ref(false)
-const loadError = ref('')
-const logLoading = ref(false)
-const logError = ref('')
 const config = ref<mailApi.MailConfig>({
   configured: false,
   region: '',
@@ -48,7 +48,6 @@ const logFilter = ref<MailLogFilter>({
   timeRange: [],
 })
 const templateCatalogAttempted = ref(false)
-let logRequestSequence = 0
 const can = (code: string) => access.hasPermission(code)
 const canList = computed(() => can('message:mail:list'))
 const visibleTabs = computed(() => [
@@ -65,32 +64,36 @@ function errorMessage(error: unknown): string {
   return error instanceof Error && error.message ? error.message : t('mail.loadFailed')
 }
 
-async function loadConfig(): Promise<void> {
-  config.value = await mailApi.getMailConfig()
+async function loadConfig(context?: MessageTabLoadContext): Promise<void> {
+  const result = await mailApi.getMailConfig()
+  if (context === undefined || context.isCurrent()) config.value = result
 }
 
-async function loadTemplates(): Promise<void> {
+async function loadTemplates(context?: MessageTabLoadContext): Promise<void> {
   templateCatalogAttempted.value = true
-  templates.value = await mailApi.listMailTemplates()
+  const result = await mailApi.listMailTemplates()
+  if (context === undefined || context.isCurrent()) templates.value = result
 }
 
-async function loadTemplateCatalogForLogs(): Promise<void> {
+async function loadTemplateCatalogForLogs(context: MessageTabLoadContext): Promise<void> {
   if (templateCatalogAttempted.value) return
   templateCatalogAttempted.value = true
   try {
-    templates.value = await mailApi.listMailTemplates()
+    const result = await mailApi.listMailTemplates()
+    if (context.isCurrent()) templates.value = result
   } catch {
     // Scene names are optional presentation data; request.ts owns the error notification.
   }
 }
 
-async function loadRules(): Promise<void> {
-  rules.value = await mailApi.listMailRules()
+async function loadRules(context?: MessageTabLoadContext): Promise<void> {
+  const result = await mailApi.listMailRules()
+  if (context === undefined || context.isCurrent()) rules.value = result
 }
 
-async function loadRateLimitPolicies(): Promise<void> {
+async function loadRateLimitPolicies(context?: MessageTabLoadContext): Promise<void> {
   const result = await mailApi.listMailRateLimitPolicies()
-  rateLimitPolicies.value = result.platforms.flatMap((platform) =>
+  const next = result.platforms.flatMap((platform) =>
     platform.policies.map((policy) => ({
       ...policy,
       platformId: platform.platformId,
@@ -99,74 +102,54 @@ async function loadRateLimitPolicies(): Promise<void> {
       rowId: `${platform.platformId}:${policy.key}`,
     })),
   )
+  if (context === undefined || context.isCurrent()) rateLimitPolicies.value = next
 }
 
-async function loadLogs(): Promise<void> {
-  const sequence = ++logRequestSequence
-  logLoading.value = true
-  logError.value = ''
+async function loadLogs(context: MessageTabLoadContext): Promise<void> {
   const filter = logFilter.value
   const [from, to] = filter.timeRange
-  try {
-    const result = await mailApi.listMailLogs({
-      page: logPage.value,
-      pageSize: logPageSize.value,
-      ...(filter.platform.trim() === '' ? {} : { platform: filter.platform.trim() }),
-      ...(filter.toEmail.trim() === '' ? {} : { toEmail: filter.toEmail.trim() }),
-      ...(filter.scene === '' ? {} : { scene: filter.scene }),
-      ...(filter.status === '' ? {} : { status: filter.status }),
-      ...(filter.timeRange.length === 0 ? {} : { from, to }),
-    })
-    if (sequence !== logRequestSequence) return
+  const result = await mailApi.listMailLogs({
+    page: logPage.value,
+    pageSize: logPageSize.value,
+    ...(filter.platform.trim() === '' ? {} : { platform: filter.platform.trim() }),
+    ...(filter.toEmail.trim() === '' ? {} : { toEmail: filter.toEmail.trim() }),
+    ...(filter.scene === '' ? {} : { scene: filter.scene }),
+    ...(filter.status === '' ? {} : { status: filter.status }),
+    ...(filter.timeRange.length === 0 ? {} : { from, to }),
+  })
+  if (context.isCurrent()) {
     logs.value = result.list
     logTotal.value = result.total
-  } catch (error: unknown) {
-    if (sequence === logRequestSequence) logError.value = errorMessage(error)
-  } finally {
-    if (sequence === logRequestSequence) logLoading.value = false
   }
 }
 
-async function loadActive(): Promise<void> {
-  if (!canList.value) return
-  if (activeTab.value === 'logs') {
-    void loadTemplateCatalogForLogs()
-    await loadLogs()
-    return
-  }
-  loading.value = true
-  loadError.value = ''
-  try {
-    if (activeTab.value === 'config') await loadConfig()
-    else if (activeTab.value === 'templates') await loadTemplates()
-    else if (activeTab.value === 'rules') await loadRules()
-    else await loadRateLimitPolicies()
-  } catch (error: unknown) {
-    loadError.value = errorMessage(error)
-  } finally {
-    loading.value = false
-  }
-}
+const { loading, errors, load } = useMessageAggregateTabs<TabName>({
+  activeTab,
+  canList,
+  loaders: {
+    config: loadConfig,
+    templates: loadTemplates,
+    logs: async (context) => {
+      void loadTemplateCatalogForLogs(context)
+      await loadLogs(context)
+    },
+    rules: loadRules,
+    rateLimits: loadRateLimitPolicies,
+  },
+  errorMessage,
+})
 
 function changeLogPage(next: { currentPage: number; pageSize: number }): void {
   logPage.value = next.currentPage
   logPageSize.value = next.pageSize
-  void loadLogs()
+  void load('logs')
 }
 
 function searchLogs(filter: MailLogFilter): void {
   logFilter.value = filter
   logPage.value = 1
-  void loadLogs()
+  void load('logs')
 }
-
-watch(
-  activeTab,
-  () => {
-    void loadActive()
-  },
-  { immediate: true },
-)
 </script>
 
 <template>
@@ -180,9 +163,9 @@ watch(
         lazy
       >
         <el-alert
-          v-if="tab.name === 'logs' ? logError : loadError"
+          v-if="errors[tab.name]"
           class="mail-error"
-          :title="tab.name === 'logs' ? logError : loadError"
+          :title="errors[tab.name]"
           type="error"
           show-icon
           :closable="false"
@@ -193,17 +176,17 @@ watch(
           :can-update="can('message:mail:config:update')"
           :can-test="can('message:mail:test')"
           :can-delete="can('message:mail:config:delete')"
-          @saved="loadConfig"
-          @deleted="loadConfig"
-          @tested="loadConfig"
+          @saved="load('config')"
+          @deleted="load('config')"
+          @tested="load('config')"
         />
         <MailTemplateTab
           v-else-if="tab.name === 'templates'"
           :templates="templates"
-          :loading="loading"
+          :loading="loading.templates"
           :can-update="can('message:mail:template:update')"
           :can-status="can('message:mail:template:status')"
-          @refresh="loadTemplates"
+          @refresh="load('templates')"
         />
         <MailLogTab
           v-else-if="tab.name === 'logs'"
@@ -212,27 +195,27 @@ watch(
           :total="logTotal"
           :page="logPage"
           :page-size="logPageSize"
-          :loading="logLoading"
-          @refresh="loadLogs"
+          :loading="loading.logs"
+          @refresh="() => load('logs')"
           @page-change="changeLogPage"
           @search="searchLogs"
         />
         <MailRuleTab
           v-else-if="tab.name === 'rules'"
           :rules="rules"
-          :loading="loading"
+          :loading="loading.rules"
           :can-create="can('message:mail:rule:create')"
           :can-update="can('message:mail:rule:update')"
           :can-status="can('message:mail:rule:status')"
           :can-delete="can('message:mail:rule:delete')"
-          @refresh="loadRules"
+          @refresh="load('rules')"
         />
         <MailRateLimitTab
           v-else
           :policies="rateLimitPolicies"
-          :loading="loading"
+          :loading="loading.rateLimits"
           :can-update="can('message:mail:rate-limit:update')"
-          @refresh="loadRateLimitPolicies"
+          @refresh="load('rateLimits')"
         />
       </el-tab-pane>
     </el-tabs>

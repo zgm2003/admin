@@ -29,6 +29,7 @@ import {
   getCronPresetValue,
   getJobStatusKey,
   getTriggerSourceKey,
+  jobStatusMetadata,
   resolveTaskDisplayName,
 } from './presentation'
 
@@ -68,9 +69,7 @@ const cronPresetOptions = computed(() =>
 )
 const jobStatusOptions = computed(() => [
   { label: t('scheduler.all'), value: '' },
-  { label: t('scheduler.completed'), value: JobStatusValue.completed },
-  { label: t('scheduler.failed'), value: JobStatusValue.failed },
-  { label: t('scheduler.running'), value: JobStatusValue.running },
+  ...jobStatusMetadata.map((item) => ({ label: t(item.i18nKey), value: item.value })),
 ])
 const scheduleColumns = computed<TableColumn<Schedule>[]>(() => [
   { prop: 'name', label: t('scheduler.name'), minWidth: 180 },

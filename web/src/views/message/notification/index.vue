@@ -5,6 +5,8 @@ import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
+  notificationPriorityMetadata,
+  notificationVariantMetadata,
   listNotifications,
   type NotificationItem,
   type NotificationPriority,
@@ -34,16 +36,16 @@ const filterOptions = computed(() => [
 ])
 const variantOptions = computed(() => [
   { value: '', label: t('notification.variantAll') },
-  ...(['info', 'success', 'warning', 'error'] as const).map((value) => ({
-    value,
-    label: t(`notification.variant.${value}`),
+  ...notificationVariantMetadata.map((item) => ({
+    value: item.value,
+    label: t(item.i18nKey),
   })),
 ])
 const priorityOptions = computed(() => [
   { value: '', label: t('notification.priorityAll') },
-  ...(['normal', 'urgent'] as const).map((value) => ({
-    value,
-    label: t(`notification.priority.${value}`),
+  ...notificationPriorityMetadata.map((item) => ({
+    value: item.value,
+    label: t(item.i18nKey),
   })),
 ])
 async function load(append = false): Promise<void> {

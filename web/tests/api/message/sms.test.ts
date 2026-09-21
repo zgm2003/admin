@@ -15,6 +15,8 @@ import {
   saveSmsConfig,
   sendSmsTest,
   SmsStatus,
+  smsSceneMetadata,
+  smsStatusMetadata,
   updateSmsRateLimitPolicy,
   updateSmsRule,
   updateSmsRuleStatus,
@@ -108,6 +110,20 @@ const policies = [
 
 describe('SMS admin API protocol', () => {
   beforeEach(() => requestMock.mockReset())
+
+  it('owns the fixed scene values in domain metadata', () => {
+    expect(smsSceneMetadata.map((item) => item.value)).toEqual([
+      'login',
+      'forget',
+      'bind_phone',
+      'change_password',
+    ])
+    expect(smsStatusMetadata.map((item) => item.value)).toEqual([
+      SmsStatus.Pending,
+      SmsStatus.Sent,
+      SmsStatus.Failed,
+    ])
+  })
 
   it('parses exact config and sends exact config requests', async () => {
     requestMock.mockResolvedValueOnce(config)

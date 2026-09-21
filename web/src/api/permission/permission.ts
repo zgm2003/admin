@@ -21,7 +21,7 @@ export interface PermissionSnapshot {
 }
 
 export async function getPermission(): Promise<PermissionSnapshot> {
-  return parsePermission(await request<unknown>({ method: 'GET', url: '/api/v1/access' }))
+  return parsePermission(await request({ method: 'GET', url: '/api/v1/access' }))
 }
 
 function parsePermission(value: unknown): PermissionSnapshot {

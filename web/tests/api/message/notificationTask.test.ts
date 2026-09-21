@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  notificationTaskAudienceMetadata,
+  notificationTaskLinkTypeMetadata,
+  notificationTaskPriorityMetadata,
+  notificationTaskVariantMetadata,
   NotificationTaskStatus,
   parseNotificationTask,
   parseNotificationTaskOptions,
@@ -37,6 +41,25 @@ const task = {
 }
 
 describe('notification task DTO', () => {
+  it('owns stable task option values in domain metadata', () => {
+    expect(notificationTaskAudienceMetadata.map((item) => item.value)).toEqual([
+      'platform',
+      'user',
+      'role',
+    ])
+    expect(notificationTaskVariantMetadata.map((item) => item.value)).toEqual([
+      'info',
+      'success',
+      'warning',
+      'error',
+    ])
+    expect(notificationTaskPriorityMetadata.map((item) => item.value)).toEqual(['normal', 'urgent'])
+    expect(notificationTaskLinkTypeMetadata.map((item) => item.value)).toEqual([
+      'none',
+      'internal',
+      'external',
+    ])
+  })
   it('parses nullable task fields and options', () => {
     expect(parseNotificationTask(task).status).toBe(NotificationTaskStatus.Draft)
     expect(
@@ -47,6 +70,9 @@ describe('notification task DTO', () => {
   it('rejects unknown and invalid enum values', () => {
     expect(() => parseNotificationTask({ ...task, revision: 1 })).toThrow()
     expect(() => parseNotificationTask({ ...task, status: 'draft' })).toThrow()
+    expect(() =>
+      parseNotificationTask({ ...task, contentHtml: '<p onmouseover="alert(1)">x</p>' }),
+    ).toThrow()
   })
   it('parses a list projection without accepting detail fields', () => {
     const page = parseNotificationTaskPage({

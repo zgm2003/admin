@@ -131,6 +131,29 @@ describe('AppSearch', () => {
     expect(typedFields.map((field) => field.key)).toEqual(['keyword', 'method', 'dateRange'])
   })
 
+  it('binds select option values to the selected model field type', () => {
+    interface TypedStatusSearchModel {
+      keyword: string
+      status: number | undefined
+    }
+
+    const typedFields: SearchField<TypedStatusSearchModel>[] = [
+      { key: 'keyword', type: 'input', label: 'Keyword' },
+      {
+        key: 'status',
+        type: 'select-v2',
+        label: 'Status',
+        options: [
+          { label: 'Enabled', value: 1 },
+          // @ts-expect-error status options must preserve the numeric model value type
+          { label: 'Invalid', value: 'enabled' },
+        ],
+      },
+    ]
+
+    expect(typedFields).toHaveLength(2)
+  })
+
   it.each([null, undefined])('maps a cleared date range value %s to an empty range', (value) => {
     const wrapper = mountDateRange()
     wrapper.findComponent({ name: 'ElDatePicker' }).vm.$emit('update:modelValue', value)

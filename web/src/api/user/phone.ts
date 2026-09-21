@@ -30,7 +30,7 @@ export interface PhoneResult {
 
 export async function sendPhoneCode(input: PhoneSendCodeInput): Promise<PhoneSendCodeResult> {
   return parseSendCodeResult(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/admin/v1/user/phone/send-code',
       data: input,
@@ -40,7 +40,7 @@ export async function sendPhoneCode(input: PhoneSendCodeInput): Promise<PhoneSen
 
 export async function bindPhone(input: BindPhoneInput): Promise<PhoneResult> {
   return parsePhoneResult(
-    await request<unknown>({ method: 'PUT', url: '/api/admin/v1/user/phone', data: input }),
+    await request({ method: 'PUT', url: '/api/admin/v1/user/phone', data: input }),
   )
 }
 

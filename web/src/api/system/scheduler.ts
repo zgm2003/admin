@@ -185,7 +185,7 @@ function parseRun(value: unknown, context: string): Run {
   }
 }
 export async function listSchedules(afterId = 0): Promise<Schedule[]> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'GET',
     url: '/api/admin/v1/system/scheduler/schedule',
     params: { afterId, limit: 100 },
@@ -195,7 +195,7 @@ export async function listSchedules(afterId = 0): Promise<Schedule[]> {
   )
 }
 export async function listJobs(afterId = 0, status?: JobStatus): Promise<Job[]> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'GET',
     url: '/api/admin/v1/system/scheduler/job',
     params: { afterId, limit: 100, ...(status ? { status } : {}) },
@@ -205,7 +205,7 @@ export async function listJobs(afterId = 0, status?: JobStatus): Promise<Job[]> 
   )
 }
 export async function listRuns(jobId: number): Promise<Run[]> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'GET',
     url: `/api/admin/v1/system/scheduler/job/${jobId}/run`,
     params: { afterId: 0, limit: 100 },
@@ -215,7 +215,7 @@ export async function listRuns(jobId: number): Promise<Run[]> {
   )
 }
 export async function getTaskOptions(): Promise<TaskOption[]> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'GET',
     url: '/api/admin/v1/system/scheduler/options',
   })
@@ -243,7 +243,7 @@ export async function createSchedule(input: {
   params: Record<string, unknown>
   isEnabled: boolean
 }): Promise<Schedule> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'POST',
     url: '/api/admin/v1/system/scheduler/schedule',
     data: input,
@@ -260,7 +260,7 @@ export async function updateSchedule(
     params: Record<string, unknown>
   },
 ): Promise<Schedule> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'PUT',
     url: `/api/admin/v1/system/scheduler/schedule/${id}`,
     data: input,
@@ -268,7 +268,7 @@ export async function updateSchedule(
   return parseSchedule(value, 'scheduler update')
 }
 export async function setScheduleStatus(id: number, isEnabled: boolean): Promise<void> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'PATCH',
     url: `/api/admin/v1/system/scheduler/schedule/${id}/status`,
     data: { isEnabled },
@@ -276,21 +276,21 @@ export async function setScheduleStatus(id: number, isEnabled: boolean): Promise
   expectEmptyObject(value, 'scheduler status')
 }
 export async function deleteSchedule(id: number): Promise<void> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'DELETE',
     url: `/api/admin/v1/system/scheduler/schedule/${id}`,
   })
   expectEmptyObject(value, 'scheduler delete')
 }
 export async function executeSchedule(id: number): Promise<Job> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'POST',
     url: `/api/admin/v1/system/scheduler/schedule/${id}/execute`,
   })
   return parseJob(value, 'scheduler execute')
 }
 export async function retryJob(id: number): Promise<Job> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'POST',
     url: `/api/admin/v1/system/scheduler/job/${id}/retry`,
   })

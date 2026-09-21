@@ -46,22 +46,20 @@ export interface ChangePasswordByCodeInput {
 }
 
 export async function getAccountProfile(): Promise<AccountProfile> {
-  return parseAccountProfile(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/user/profile' }),
-  )
+  return parseAccountProfile(await request({ method: 'GET', url: '/api/admin/v1/user/profile' }))
 }
 
 export async function updateAccountProfile(
   input: UpdateAccountProfileInput,
 ): Promise<UpdateAccountProfileResult> {
   return parseUpdatedAccountProfile(
-    await request<unknown>({ method: 'PUT', url: '/api/admin/v1/user/profile', data: input }),
+    await request({ method: 'PUT', url: '/api/admin/v1/user/profile', data: input }),
   )
 }
 
 export async function changePassword(input: ChangePasswordInput): Promise<void> {
   expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/admin/v1/user/password',
       data: input,
@@ -77,7 +75,7 @@ export interface SetPasswordInput {
 
 export async function setPassword(input: SetPasswordInput): Promise<void> {
   expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/admin/v1/user/password/set',
       data: input,
@@ -90,7 +88,7 @@ export async function sendPasswordCode(
   loginType: PasswordCodeLoginType,
 ): Promise<PasswordCodeResult> {
   return parsePasswordCodeResult(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/admin/v1/user/password/send-code',
       data: { loginType },
@@ -100,7 +98,7 @@ export async function sendPasswordCode(
 
 export async function changePasswordByCode(input: ChangePasswordByCodeInput): Promise<void> {
   expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: '/api/admin/v1/user/password/by-code',
       data: input,

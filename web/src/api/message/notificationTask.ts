@@ -6,6 +6,9 @@ import {
   expectString,
 } from '@/api/protocol'
 import {
+  notificationPriorityMetadata,
+  notificationVariantMetadata,
+  parseNotificationHtml,
   type NotificationLinkType,
   type NotificationPriority,
   type NotificationVariant,
@@ -14,6 +17,21 @@ import { ProtocolError } from '@/types/http'
 import { request } from '@/utils/request'
 
 export type NotificationAudience = 'user' | 'role' | 'platform'
+export const notificationTaskAudienceMetadata = [
+  { value: 'platform', i18nKey: 'notificationTask.audience.platform' },
+  { value: 'user', i18nKey: 'notificationTask.audience.user' },
+  { value: 'role', i18nKey: 'notificationTask.audience.role' },
+] as const satisfies ReadonlyArray<{ value: NotificationAudience; i18nKey: string }>
+export const notificationTaskVariantMetadata = notificationVariantMetadata.map(({ value }) => ({
+  value,
+  i18nKey: `notificationTask.variant.${value}`,
+})) satisfies ReadonlyArray<{ value: NotificationVariant; i18nKey: string }>
+export const notificationTaskPriorityMetadata = notificationPriorityMetadata
+export const notificationTaskLinkTypeMetadata = [
+  { value: 'none', i18nKey: 'notificationTask.linkType.none' },
+  { value: 'internal', i18nKey: 'notificationTask.linkType.internal' },
+  { value: 'external', i18nKey: 'notificationTask.linkType.external' },
+] as const satisfies ReadonlyArray<{ value: NotificationLinkType; i18nKey: string }>
 export const NotificationTaskStatus = {
   Draft: 1,
   Scheduled: 2,
@@ -145,10 +163,10 @@ export interface NotificationTaskListQuery {
   to?: string
 }
 
-const variants = new Set(['info', 'success', 'warning', 'error'])
-const priorities = new Set(['normal', 'urgent'])
-const links = new Set(['none', 'internal', 'external'])
-const audiences = new Set(['user', 'role', 'platform'])
+const variants = new Set(notificationTaskVariantMetadata.map(({ value }) => value))
+const priorities = new Set(notificationTaskPriorityMetadata.map(({ value }) => value))
+const links = new Set(notificationTaskLinkTypeMetadata.map(({ value }) => value))
+const audiences = new Set(notificationTaskAudienceMetadata.map(({ value }) => value))
 function oneOf<T extends string>(value: unknown, values: Set<string>, context: string): T {
   const parsed = expectString(value, context)
   if (!values.has(parsed)) throw new ProtocolError(`${context} is invalid`)
@@ -209,7 +227,7 @@ export function parseNotificationTask(value: unknown): NotificationTask {
     platformName: expectString(r.platformName, 'platformName'),
     notificationId: nullableInteger(r.notificationId, 'notificationId'),
     title: expectString(r.title, 'title'),
-    contentHtml: expectString(r.contentHtml, 'contentHtml'),
+    contentHtml: parseNotificationHtml(r.contentHtml),
     summary: expectString(r.summary, 'summary'),
     variant: oneOf(r.variant, variants, 'variant'),
     priority: oneOf(r.priority, priorities, 'priority'),
@@ -293,7 +311,7 @@ export async function listNotificationTasks(
   params: NotificationTaskListQuery,
 ): Promise<NotificationTaskPage> {
   return parseNotificationTaskPage(
-    await request<unknown>({
+    await request({
       method: 'GET',
       url: base,
       params,
@@ -301,34 +319,30 @@ export async function listNotificationTasks(
   )
 }
 export async function getNotificationTask(id: number): Promise<NotificationTask> {
-  return parseNotificationTask(await request<unknown>({ method: 'GET', url: `${base}/${id}` }))
+  return parseNotificationTask(await request({ method: 'GET', url: `${base}/${id}` }))
 }
 export async function getNotificationTaskForUpdate(id: number): Promise<NotificationTask> {
-  return parseNotificationTask(await request<unknown>({ method: 'GET', url: `${base}/${id}/edit` }))
+  return parseNotificationTask(await request({ method: 'GET', url: `${base}/${id}/edit` }))
 }
 export async function createNotificationTask(
   data: NotificationTaskInput,
 ): Promise<NotificationTask> {
-  return parseNotificationTask(await request<unknown>({ method: 'POST', url: base, data }))
+  return parseNotificationTask(await request({ method: 'POST', url: base, data }))
 }
 export async function updateNotificationTask(
   id: number,
   data: NotificationTaskInput,
 ): Promise<NotificationTask> {
-  return parseNotificationTask(
-    await request<unknown>({ method: 'PUT', url: `${base}/${id}`, data }),
-  )
+  return parseNotificationTask(await request({ method: 'PUT', url: `${base}/${id}`, data }))
 }
 export async function deleteNotificationTask(id: number): Promise<void> {
-  await request<unknown>({ method: 'DELETE', url: `${base}/${id}` })
+  await request({ method: 'DELETE', url: `${base}/${id}` })
 }
 export async function commandNotificationTask(
   id: number,
   command: 'submit' | 'cancel' | 'copy',
 ): Promise<NotificationTask> {
-  return parseNotificationTask(
-    await request<unknown>({ method: 'POST', url: `${base}/${id}/${command}` }),
-  )
+  return parseNotificationTask(await request({ method: 'POST', url: `${base}/${id}/${command}` }))
 }
 export async function listNotificationTaskOptions(
   intent: 'create' | 'update',
@@ -336,6 +350,6 @@ export async function listNotificationTaskOptions(
   params: { platformId?: number; keyword?: string; afterId?: number; limit?: number },
 ): Promise<NotificationTaskOptions> {
   return parseNotificationTaskOptions(
-    await request<unknown>({ method: 'GET', url: `${base}/${intent}/option/${kind}`, params }),
+    await request({ method: 'GET', url: `${base}/${intent}/option/${kind}`, params }),
   )
 }

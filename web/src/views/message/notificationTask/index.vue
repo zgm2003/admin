@@ -4,7 +4,6 @@ import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import * as taskApi from '@/api/message/notificationTask'
-import type { NotificationPriority } from '@/api/message/notification'
 import type { SearchFormModel } from '@/components/AppSearch'
 import type { TablePaginationState } from '@/components/AppTable/types'
 import { usePermissionStore } from '@/store/permission'
@@ -76,9 +75,9 @@ const dialogTitle = computed(() =>
     : t('notificationTask.dialogTitle'),
 )
 const audienceOptions = computed(() =>
-  (['platform', 'user', 'role'] as const).map((value) => ({
-    value,
-    label: t(`notificationTask.audience.${value}`),
+  taskApi.notificationTaskAudienceMetadata.map((item) => ({
+    value: item.value,
+    label: t(item.i18nKey),
   })),
 )
 const searchModel = computed<SearchFormModel>({
@@ -109,19 +108,21 @@ const searchModel = computed<SearchFormModel>({
   },
 })
 const variantOptions = computed(() =>
-  (['info', 'success', 'warning', 'error'] as const).map((value) => ({
-    value,
-    label: t(`notificationTask.variant.${value}`),
+  taskApi.notificationTaskVariantMetadata.map((item) => ({
+    value: item.value,
+    label: t(item.i18nKey),
   })),
 )
-const priorityOptions = computed<Array<{ value: NotificationPriority; label: string }>>(() => [
-  { value: 'normal', label: t('notification.normal') },
-  { value: 'urgent', label: t('notification.urgent') },
-])
+const priorityOptions = computed(() =>
+  taskApi.notificationTaskPriorityMetadata.map((item) => ({
+    value: item.value,
+    label: t(item.i18nKey),
+  })),
+)
 const linkTypeOptions = computed(() =>
-  (['none', 'internal', 'external'] as const).map((value) => ({
-    value,
-    label: t(`notificationTask.linkType.${value}`),
+  taskApi.notificationTaskLinkTypeMetadata.map((item) => ({
+    value: item.value,
+    label: t(item.i18nKey),
   })),
 )
 

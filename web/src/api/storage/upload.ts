@@ -28,7 +28,7 @@ export async function requestUploadCredentials(
   files: UploadFileInput[],
 ): Promise<UploadCredentialResponse> {
   return parseCredentials(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/v1/storage/upload-credential',
       data: { ruleCode, files },
@@ -38,7 +38,7 @@ export async function requestUploadCredentials(
 
 export async function requestObjectURL(objectKey: string): Promise<ObjectURLResult> {
   const value = expectExactKeys(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/v1/storage/object-url',
       data: { objectKey },

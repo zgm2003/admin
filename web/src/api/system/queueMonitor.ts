@@ -10,7 +10,7 @@ export interface QueueMonitorGrantResponse {
 
 export async function grantQueueMonitor(): Promise<QueueMonitorGrantResponse> {
   const value = expectExactKeys(
-    await request<unknown>({ method: 'POST', url: '/api/admin/v1/system/queuemonitor/grant' }),
+    await request({ method: 'POST', url: '/api/admin/v1/system/queuemonitor/grant' }),
     ['expiresAt'],
     'queue monitor grant',
   )

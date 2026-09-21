@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { getRolePermissions, updateRolePermissions } from '@/api/permission/role'
@@ -33,6 +33,7 @@ const selectedEffectiveMenuIDs = ref<number[]>([])
 const activePlatformID = ref<number | null>(null)
 const diffVisible = ref(false)
 const diff = ref<RolePermissionDiff>({ added: [], removed: [] })
+let loadSequence = 0
 
 const platforms = computed<RoleMatrixPlatform[]>(() =>
   data.value === null ? [] : buildRolePermissionMatrix(data.value.platforms),
@@ -59,8 +60,12 @@ const labelMap = computed(() => {
 const addedLabels = computed(() => permissionLabels(diff.value.added))
 const removedLabels = computed(() => permissionLabels(diff.value.removed))
 
-watch(visible, (isVisible) => {
+watch([visible, () => props.role?.id], ([isVisible]) => {
   if (isVisible) void loadPermissions()
+  else loadSequence += 1
+})
+onBeforeUnmount(() => {
+  loadSequence += 1
 })
 
 function errorMessage(cause: unknown): string {
@@ -70,6 +75,7 @@ function errorMessage(cause: unknown): string {
 async function loadPermissions(): Promise<void> {
   const role = props.role
   if (role === null) return
+  const sequence = ++loadSequence
   diffVisible.value = false
   loading.value = true
   error.value = ''
@@ -79,6 +85,7 @@ async function loadPermissions(): Promise<void> {
   selectedEffectiveMenuIDs.value = []
   try {
     const result = await getRolePermissions(role.id)
+    if (sequence !== loadSequence || !visible.value || props.role?.id !== role.id) return
     const matrixPlatforms = buildRolePermissionMatrix(result.platforms)
     const allGroups = matrixPlatforms.flatMap((platform) => platform.groups)
     const effectiveMenuIDs = expandDirectMenuIDs(allGroups, result.menuIds)
@@ -87,9 +94,11 @@ async function loadPermissions(): Promise<void> {
     originalEffectiveMenuIDs.value = effectiveMenuIDs
     selectedEffectiveMenuIDs.value = [...effectiveMenuIDs]
   } catch (cause: unknown) {
-    error.value = errorMessage(cause)
+    if (sequence === loadSequence && visible.value && props.role?.id === role.id) {
+      error.value = errorMessage(cause)
+    }
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
 }
 

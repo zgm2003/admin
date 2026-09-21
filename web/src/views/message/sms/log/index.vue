@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import * as smsApi from '@/api/message/sms'
-import { SmsStatus } from '@/api/message/sms'
+import { SmsStatus, smsStatusMetadata } from '@/api/message/sms'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { formatTime } from '@/utils/datetime'
@@ -42,10 +42,10 @@ const searchModel = computed<SearchFormModel>({
   },
 })
 const statusOptions = computed(() => [
-  { label: t('sms.status.pending'), value: SmsStatus.Pending },
-  { label: t('sms.status.sent'), value: SmsStatus.Sent },
-  { label: t('sms.status.failed'), value: SmsStatus.Failed },
+  ...smsStatusMetadata.map((item) => ({ label: t(item.i18nKey), value: item.value })),
 ])
+const statusPresentation = (status: smsApi.SmsStatus) =>
+  smsStatusMetadata.find((item) => item.value === status)
 const searchFields = computed<SearchField[]>(() => [
   {
     key: 'platform',
@@ -193,20 +193,8 @@ async function showDetail(row: smsApi.SmsLog): Promise<void> {
         {{ sceneOptions.find((option) => option.value === row.scene)?.label ?? row.scene }}
       </template>
       <template #cell-status="{ row }: { row: smsApi.SmsLog }">
-        <el-tag
-          :type="
-            row.status === SmsStatus.Failed
-              ? 'danger'
-              : row.status === SmsStatus.Sent
-                ? 'success'
-                : 'info'
-          "
-        >
-          {{
-            t(
-              `sms.status.${row.status === SmsStatus.Pending ? 'pending' : row.status === SmsStatus.Sent ? 'sent' : 'failed'}`,
-            )
-          }}
+        <el-tag :type="statusPresentation(row.status)?.tagType">
+          {{ t(statusPresentation(row.status)?.i18nKey ?? '') }}
         </el-tag>
       </template>
       <template #cell-sentAt="{ row }: { row: smsApi.SmsLog }">

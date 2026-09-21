@@ -133,7 +133,7 @@ export async function getDictionaries(params: {
   keyword?: string
   isEnabled?: YesNo
 }): Promise<DictionaryPage> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'GET',
     url: '/api/admin/v1/system/dictionary',
     params,
@@ -151,7 +151,7 @@ export async function getDictionaries(params: {
 }
 
 export async function getDictionary(id: number): Promise<DictionaryDetail> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'GET',
     url: `/api/admin/v1/system/dictionary/${id}`,
   })
@@ -165,7 +165,7 @@ export async function getDictionary(id: number): Promise<DictionaryDetail> {
 }
 
 export async function getDictionaryOptions(codes: string[]): Promise<DictionaryOptions> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'GET',
     url: '/api/v1/system/dictionary/options',
     params: { codes: codes.join(',') },
@@ -198,7 +198,7 @@ export async function createDictionary(input: {
   nameEn: string
   description: string
 }): Promise<number> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'POST',
     url: '/api/admin/v1/system/dictionary',
     data: input,
@@ -214,7 +214,7 @@ export async function updateDictionary(
     description: string
   },
 ): Promise<void> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'PUT',
     url: `/api/admin/v1/system/dictionary/${id}`,
     data: {
@@ -230,7 +230,7 @@ export async function updateDictionaryStatus(
   id: number,
   isEnabled: YesNo,
 ): Promise<DictionaryStatusResult> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'PATCH',
     url: `/api/admin/v1/system/dictionary/${id}/status`,
     data: { isEnabled },
@@ -239,7 +239,7 @@ export async function updateDictionaryStatus(
 }
 
 export async function deleteDictionary(id: number): Promise<void> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'DELETE',
     url: `/api/admin/v1/system/dictionary/${id}`,
   })
@@ -250,7 +250,7 @@ export async function createDictionaryItem(
   dictionaryId: number,
   input: { value: string; labelZh: string; labelEn: string; sort: number },
 ): Promise<number> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'POST',
     url: `/api/admin/v1/system/dictionary/${dictionaryId}/item`,
     data: input,
@@ -263,7 +263,7 @@ export async function updateDictionaryItem(
   itemId: number,
   input: { labelZh: string; labelEn: string; sort: number },
 ): Promise<void> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'PUT',
     url: `/api/admin/v1/system/dictionary/${dictionaryId}/item/${itemId}`,
     data: {
@@ -280,7 +280,7 @@ export async function updateDictionaryItemStatus(
   itemId: number,
   isEnabled: YesNo,
 ): Promise<DictionaryStatusResult> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'PATCH',
     url: `/api/admin/v1/system/dictionary/${dictionaryId}/item/${itemId}/status`,
     data: { isEnabled },
@@ -298,7 +298,7 @@ function parseStatusResult(value: unknown, context: string): DictionaryStatusRes
 }
 
 export async function deleteDictionaryItem(dictionaryId: number, itemId: number): Promise<void> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'DELETE',
     url: `/api/admin/v1/system/dictionary/${dictionaryId}/item/${itemId}`,
   })

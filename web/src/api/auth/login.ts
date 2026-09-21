@@ -71,9 +71,7 @@ export interface CaptchaAnswer {
 }
 
 export async function getCaptcha(): Promise<CaptchaChallenge> {
-  return parseCaptchaChallenge(
-    await request<unknown>({ method: 'GET', url: '/api/v1/auth/captcha' }),
-  )
+  return parseCaptchaChallenge(await request({ method: 'GET', url: '/api/v1/auth/captcha' }))
 }
 
 export interface CurrentUser {
@@ -87,14 +85,12 @@ export interface CurrentUser {
 
 export async function login(input: LoginInput): Promise<AccessCredential> {
   return parseAccessCredential(
-    await request<unknown>({ method: 'POST', url: '/api/v1/auth/login', data: input }),
+    await request({ method: 'POST', url: '/api/v1/auth/login', data: input }),
   )
 }
 
 export async function getLoginConfig(): Promise<LoginConfig> {
-  return parseLoginConfig(
-    await request<unknown>({ method: 'GET', url: '/api/v1/auth/login-config' }),
-  )
+  return parseLoginConfig(await request({ method: 'GET', url: '/api/v1/auth/login-config' }))
 }
 
 export async function sendLoginCode(
@@ -105,7 +101,7 @@ export async function sendLoginCode(
   captcha?: { captchaId: string; captchaAnswer: CaptchaAnswer },
 ): Promise<SendCodeResult> {
   return parseSendCodeResult(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/v1/auth/send-code',
       data: {
@@ -135,7 +131,7 @@ export async function forgotPassword(
   captcha?: { captchaId: string; captchaAnswer: CaptchaAnswer },
 ): Promise<SendCodeResult> {
   return parseSendCodeResult(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/v1/auth/password/forgot',
       data: {
@@ -150,7 +146,7 @@ export async function forgotPassword(
 
 export async function resetPassword(input: ResetPasswordInput): Promise<void> {
   expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/v1/auth/password/reset',
       data: input,
@@ -164,14 +160,11 @@ export async function refresh(): Promise<AccessCredential> {
 }
 
 export async function logout(): Promise<void> {
-  expectEmptyObject(
-    await request<unknown>({ method: 'POST', url: '/api/v1/auth/logout' }),
-    'logout result',
-  )
+  expectEmptyObject(await request({ method: 'POST', url: '/api/v1/auth/logout' }), 'logout result')
 }
 
 export async function getCurrentUser(): Promise<CurrentUser> {
-  return parseCurrentUser(await request<unknown>({ method: 'GET', url: '/api/v1/auth/me' }))
+  return parseCurrentUser(await request({ method: 'GET', url: '/api/v1/auth/me' }))
 }
 
 function parseCurrentUser(value: unknown): CurrentUser {

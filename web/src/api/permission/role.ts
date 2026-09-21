@@ -73,7 +73,7 @@ export interface RolePermissionResult {
 
 export async function getRoles(query: RoleListQuery): Promise<PageResult<RoleListItem>> {
   return expectPage(
-    await request<unknown>({
+    await request({
       method: 'GET',
       url: '/api/admin/v1/permission/role',
       params: query,
@@ -84,7 +84,7 @@ export async function getRoles(query: RoleListQuery): Promise<PageResult<RoleLis
 }
 export async function createRole(input: CreateRoleInput): Promise<{ id: number }> {
   return expectId(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/admin/v1/permission/role',
       data: { code: input.code, name: input.name },
@@ -97,7 +97,7 @@ export async function updateRole(
   input: UpdateRoleInput,
 ): Promise<Record<string, never>> {
   return expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: `/api/admin/v1/permission/role/${id}`,
       data: { name: input.name },
@@ -107,7 +107,7 @@ export async function updateRole(
 }
 export async function updateRoleStatus(id: number, isEnabled: YesNo): Promise<RoleStatusResult> {
   return parseRoleStatus(
-    await request<unknown>({
+    await request({
       method: 'PATCH',
       url: `/api/admin/v1/permission/role/${id}/status`,
       data: { isEnabled },
@@ -116,17 +116,17 @@ export async function updateRoleStatus(id: number, isEnabled: YesNo): Promise<Ro
 }
 export async function setDefaultRole(id: number): Promise<RoleDefaultResult> {
   return parseRoleDefault(
-    await request<unknown>({ method: 'PATCH', url: `/api/admin/v1/permission/role/${id}/default` }),
+    await request({ method: 'PATCH', url: `/api/admin/v1/permission/role/${id}/default` }),
   )
 }
 export async function deleteRole(id: number): Promise<Record<string, never>> {
   return expectEmptyObject(
-    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/permission/role/${id}` }),
+    await request({ method: 'DELETE', url: `/api/admin/v1/permission/role/${id}` }),
     'role delete result',
   )
 }
 export async function getRolePermissions(id: number): Promise<RolePermissionsResponse> {
-  const raw = await request<unknown>({
+  const raw = await request({
     method: 'GET',
     url: `/api/admin/v1/permission/role/${id}/permission`,
   })
@@ -137,7 +137,7 @@ export async function updateRolePermissions(
   input: UpdateRolePermissionsInput,
 ): Promise<RolePermissionResult> {
   return parseRolePermissionResult(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: `/api/admin/v1/permission/role/${id}/permission`,
       data: { menuIds: input.menuIds },

@@ -5,7 +5,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { pinia } from '@/store'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/store/auth'
-import { ApiError, ProtocolError, createRequestClient, unwrapEnvelope } from '@/utils/request'
+import {
+  ApiError,
+  ProtocolError,
+  createRequestClient,
+  request,
+  unwrapEnvelope,
+} from '@/utils/request'
+
+function assertRequestRejectsResponseTypeParameter(): void {
+  // @ts-expect-error callers must parse the unknown response at the API module boundary
+  void request<{ value: string }>({ method: 'GET', url: '/type-contract' })
+}
+void assertRequestRejectsResponseTypeParameter
 
 describe('unwrapEnvelope', () => {
   it('returns data from the only accepted success shape', () => {

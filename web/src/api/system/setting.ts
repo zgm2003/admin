@@ -82,7 +82,7 @@ export async function getSettings(params: {
   keyword?: string
   isEnabled?: YesNo
 }): Promise<SettingPage> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'GET',
     url: '/api/admin/v1/system/setting',
     params,
@@ -101,7 +101,7 @@ export async function getSettings(params: {
 
 export async function getBrandSettings(): Promise<BrandSettings> {
   const record = expectExactKeys(
-    await request<unknown>({ method: 'GET', url: '/api/admin/v1/system/setting/brand' }),
+    await request({ method: 'GET', url: '/api/admin/v1/system/setting/brand' }),
     ['titleZhCN', 'titleEnUS', 'defaultAvatar'],
     'brand settings',
   )
@@ -114,7 +114,7 @@ export async function getBrandSettings(): Promise<BrandSettings> {
 
 export async function updateBrandSettings(input: BrandSettings): Promise<void> {
   expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: '/api/admin/v1/system/setting/brand',
       data: input,
@@ -129,7 +129,7 @@ export async function createSetting(input: {
   valueType: SettingValueType
   description?: string
 }): Promise<number> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'POST',
     url: '/api/admin/v1/system/setting',
     data: input,
@@ -142,7 +142,7 @@ export async function updateSetting(
   input: { value: string; valueType: SettingValueType; description?: string },
 ): Promise<void> {
   expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: `/api/admin/v1/system/setting/${encodeURIComponent(key)}`,
       data: input,
@@ -153,7 +153,7 @@ export async function updateSetting(
 
 export async function updateSettingStatus(key: string, isEnabled: YesNo): Promise<void> {
   expectExactKeys(
-    await request<unknown>({
+    await request({
       method: 'PATCH',
       url: `/api/admin/v1/system/setting/${encodeURIComponent(key)}/status`,
       data: { isEnabled },
@@ -165,7 +165,7 @@ export async function updateSettingStatus(key: string, isEnabled: YesNo): Promis
 
 export async function deleteSetting(key: string): Promise<void> {
   expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'DELETE',
       url: `/api/admin/v1/system/setting/${encodeURIComponent(key)}`,
     }),

@@ -1,5 +1,11 @@
 import type { TaskOption } from '@/api/system/scheduler'
-import { isJobStatus, isRunStatus } from '@/enums/scheduler'
+import { JobStatus, isJobStatus, isRunStatus } from '@/enums/scheduler'
+
+export const jobStatusMetadata = [
+  { value: JobStatus.completed, i18nKey: 'scheduler.completed' },
+  { value: JobStatus.failed, i18nKey: 'scheduler.failed' },
+  { value: JobStatus.running, i18nKey: 'scheduler.running' },
+] as const
 
 export const CUSTOM_CRON_VALUE = '__custom__'
 

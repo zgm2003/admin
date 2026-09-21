@@ -5,13 +5,6 @@ export type SearchFormValue = SearchScalar | SearchDateRange
 
 export type SearchFieldType = 'input' | 'select-v2' | 'date-range'
 
-type KeysMatching<T extends object, V> = string extends keyof T
-  ? string
-  : {
-      [K in keyof T]-?: Exclude<T[K], undefined> extends V ? K : never
-    }[keyof T] &
-      string
-
 interface SearchFieldBase {
   label: string
   placeholder?: string
@@ -21,25 +14,22 @@ interface SearchFieldBase {
   testId?: string
 }
 
-export interface InputSearchField<
-  T extends object = Record<string, SearchFormValue>,
-> extends SearchFieldBase {
-  key: KeysMatching<T, SearchScalar>
+export interface InputSearchField<TKey extends string = string> extends SearchFieldBase {
+  key: TKey
   type: 'input'
 }
 
 export interface SelectSearchField<
-  T extends object = Record<string, SearchFormValue>,
+  TKey extends string = string,
+  TValue extends SearchOptionValue = SearchOptionValue,
 > extends SearchFieldBase {
-  key: KeysMatching<T, SearchScalar>
+  key: TKey
   type: 'select-v2'
-  options: SearchOption[]
+  options: SearchOption<TValue>[]
 }
 
-export interface DateRangeSearchField<
-  T extends object = Record<string, SearchFormValue>,
-> extends SearchFieldBase {
-  key: KeysMatching<T, SearchDateRange>
+export interface DateRangeSearchField<TKey extends string = string> extends SearchFieldBase {
+  key: TKey
   type: 'date-range'
   startPlaceholder?: string
   endPlaceholder?: string
@@ -47,12 +37,25 @@ export interface DateRangeSearchField<
   rangeSeparator?: string
 }
 
-export type SearchField<T extends object = Record<string, SearchFormValue>> =
-  InputSearchField<T> | SelectSearchField<T> | DateRangeSearchField<T>
+type SearchFieldForKey<T extends object, TKey extends keyof T & string> =
+  Exclude<T[TKey], undefined> extends SearchDateRange
+    ? DateRangeSearchField<TKey>
+    : Exclude<T[TKey], undefined> extends SearchScalar
+      ? | InputSearchField<TKey>
+        | SelectSearchField<TKey, Extract<Exclude<T[TKey], null | undefined>, SearchOptionValue>>
+      : never
+
+type StrictSearchField<T extends object> = {
+  [K in keyof T & string]: SearchFieldForKey<T, K>
+}[keyof T & string]
+
+export type SearchField<T extends object = Record<string, SearchFormValue>> = string extends keyof T
+  ? InputSearchField | SelectSearchField | DateRangeSearchField
+  : StrictSearchField<T>
 
 export type SearchFormModel<T extends object = Record<string, SearchFormValue>> = T
 
-export interface SearchOption {
+export interface SearchOption<TValue extends SearchOptionValue = SearchOptionValue> {
   label: string
-  value: SearchOptionValue
+  value: TValue
 }

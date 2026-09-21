@@ -72,7 +72,7 @@ export async function getAuthPlatforms(
   query: AuthPlatformListQuery,
 ): Promise<PageResult<AuthPlatformListItem>> {
   return expectPage(
-    await request<unknown>({
+    await request({
       method: 'GET',
       url: '/api/admin/v1/permission/authplatform',
       params: query,
@@ -84,7 +84,7 @@ export async function getAuthPlatforms(
 
 export async function createAuthPlatform(input: CreateAuthPlatformInput): Promise<{ id: number }> {
   return expectId(
-    await request<unknown>({
+    await request({
       method: 'POST',
       url: '/api/admin/v1/permission/authplatform',
       data: {
@@ -111,7 +111,7 @@ export async function updateAuthPlatform(
   input: UpdateAuthPlatformInput,
 ): Promise<Record<string, never>> {
   expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: `/api/admin/v1/permission/authplatform/${id}`,
       data: {
@@ -137,7 +137,7 @@ export async function updateAuthPlatformStatus(
   isEnabled: YesNo,
 ): Promise<AuthPlatformStatusResult> {
   const result = expectRecord(
-    await request<unknown>({
+    await request({
       method: 'PATCH',
       url: `/api/admin/v1/permission/authplatform/${id}/status`,
       data: { isEnabled },
@@ -150,7 +150,7 @@ export async function updateAuthPlatformStatus(
 
 export async function deleteAuthPlatform(id: number): Promise<Record<string, never>> {
   expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'DELETE',
       url: `/api/admin/v1/permission/authplatform/${id}`,
     }),

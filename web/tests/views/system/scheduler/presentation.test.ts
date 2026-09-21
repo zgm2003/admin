@@ -10,6 +10,7 @@ import {
   getJobStatusKey,
   getRunStatusKey,
   getTriggerSourceKey,
+  jobStatusMetadata,
   resolveTaskDisplayName,
 } from '@/views/system/scheduler/presentation'
 
@@ -24,6 +25,14 @@ const options: TaskOption[] = [
 ]
 
 describe('scheduler presentation', () => {
+  it('owns selectable job status metadata in scheduler presentation', () => {
+    expect(jobStatusMetadata.map((item) => item.value)).toEqual([4, 5, 3])
+    expect(jobStatusMetadata.map((item) => item.i18nKey)).toEqual([
+      'scheduler.completed',
+      'scheduler.failed',
+      'scheduler.running',
+    ])
+  })
   it('provides common cron presets and keeps custom expressions editable', () => {
     expect(CRON_PRESETS.map((item) => item.value)).toContain('*/5 * * * *')
     expect(getCronPresetValue('*/5 * * * *')).toBe('*/5 * * * *')

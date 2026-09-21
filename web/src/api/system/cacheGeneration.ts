@@ -126,7 +126,7 @@ export async function getCacheGenerations(params: {
   keyword?: string
   publishState?: CacheGenerationPublishState
 }): Promise<CacheGenerationPage> {
-  const value = await request<unknown>({
+  const value = await request({
     method: 'GET',
     url: '/api/admin/v1/system/cachegeneration',
     params,

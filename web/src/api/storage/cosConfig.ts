@@ -86,7 +86,7 @@ export function parseCosConfigResponse(v: unknown): CosConfig {
 }
 export async function listCosConfigs(query: CosConfigQuery): Promise<PageResult<CosConfig>> {
   return expectPage(
-    await request<unknown>({
+    await request({
       method: 'GET',
       url: '/api/admin/v1/storage/cosconfig',
       params: query,
@@ -96,13 +96,11 @@ export async function listCosConfigs(query: CosConfigQuery): Promise<PageResult<
   )
 }
 export async function getCosConfig(id: number): Promise<CosConfig> {
-  return parseConfig(
-    await request<unknown>({ method: 'GET', url: `/api/admin/v1/storage/cosconfig/${id}` }),
-  )
+  return parseConfig(await request({ method: 'GET', url: `/api/admin/v1/storage/cosconfig/${id}` }))
 }
 export async function createCosConfig(data: CreateCosConfigInput): Promise<{ id: number }> {
   return expectId(
-    await request<unknown>({ method: 'POST', url: '/api/admin/v1/storage/cosconfig', data }),
+    await request({ method: 'POST', url: '/api/admin/v1/storage/cosconfig', data }),
     'cos config create result',
   )
 }
@@ -111,7 +109,7 @@ export async function updateCosConfig(
   data: UpdateCosConfigInput,
 ): Promise<Record<string, never>> {
   return expectEmptyObject(
-    await request<unknown>({
+    await request({
       method: 'PUT',
       url: `/api/admin/v1/storage/cosconfig/${id}`,
       data,
@@ -124,7 +122,7 @@ export async function updateCosConfigStatus(
   isEnabled: YesNo,
 ): Promise<{ id: number; isEnabled: YesNo }> {
   const result = expectRecord(
-    await request<unknown>({
+    await request({
       method: 'PATCH',
       url: `/api/admin/v1/storage/cosconfig/${id}/status`,
       data: { isEnabled },
@@ -136,13 +134,13 @@ export async function updateCosConfigStatus(
 }
 export async function testCosConfig(id: number): Promise<Record<string, never>> {
   return expectEmptyObject(
-    await request<unknown>({ method: 'POST', url: `/api/admin/v1/storage/cosconfig/${id}/test` }),
+    await request({ method: 'POST', url: `/api/admin/v1/storage/cosconfig/${id}/test` }),
     'cos config test result',
   )
 }
 export async function deleteCosConfig(id: number): Promise<Record<string, never>> {
   return expectEmptyObject(
-    await request<unknown>({ method: 'DELETE', url: `/api/admin/v1/storage/cosconfig/${id}` }),
+    await request({ method: 'DELETE', url: `/api/admin/v1/storage/cosconfig/${id}` }),
     'cos config delete result',
   )
 }
