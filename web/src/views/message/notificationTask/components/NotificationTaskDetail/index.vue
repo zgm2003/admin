@@ -2,7 +2,12 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { NotificationTask, NotificationTaskStatus } from '@/api/message/notificationTask'
+import {
+  NotificationTaskStatus,
+  notificationTaskStatusMetadata,
+  type NotificationTask,
+  type NotificationTaskStatus as NotificationTaskStatusValue,
+} from '@/api/message/notificationTask'
 import { formatTime } from '@/utils/datetime'
 
 const props = defineProps<{ task: NotificationTask }>()
@@ -10,17 +15,13 @@ const { t } = useI18n()
 
 type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 
-const statusTagTypes: Record<NotificationTaskStatus, TagType> = {
-  draft: 'info',
-  scheduled: 'warning',
-  queued: 'primary',
-  processing: 'primary',
-  completed: 'success',
-  failed: 'danger',
-  canceled: 'info',
-}
+const statusTagTypes: Record<NotificationTaskStatusValue, TagType> = Object.fromEntries(
+  notificationTaskStatusMetadata.map((status) => [status.value, status.tagType]),
+) as Record<NotificationTaskStatusValue, TagType>
+const statusI18nKey = (status: NotificationTaskStatusValue): string =>
+  notificationTaskStatusMetadata.find((item) => item.value === status)?.i18nKey ?? ''
 const generatedText = computed(() =>
-  props.task.status === 'draft'
+  props.task.status === NotificationTaskStatus.Draft
     ? t('notificationTask.notGenerated')
     : t('notificationTask.generatedValue', { count: props.task.generatedCount }),
 )
@@ -47,7 +48,7 @@ function displayTime(value: string | null): string {
             effect="light"
             data-testid="notification-task-detail-status"
           >
-            {{ t(`notificationTask.status.${task.status}`) }}
+            {{ t(statusI18nKey(task.status)) }}
           </el-tag>
           <el-tag v-if="task.priority === 'urgent'" type="danger" effect="plain">
             {{ t('notification.urgent') }}

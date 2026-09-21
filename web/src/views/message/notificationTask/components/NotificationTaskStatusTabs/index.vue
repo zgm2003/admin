@@ -3,33 +3,31 @@ import { computed } from 'vue'
 import type { TabPaneName } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
-import type { NotificationTaskStatus } from '@/api/message/notificationTask'
+import {
+  notificationTaskStatusMetadata,
+  type NotificationTaskStatus,
+} from '@/api/message/notificationTask'
 
 const model = defineModel<NotificationTaskStatus | ''>({ required: true })
 const emit = defineEmits<{ change: [value: NotificationTaskStatus | ''] }>()
 const { t } = useI18n()
 
-const taskStatuses = [
-  'draft',
-  'scheduled',
-  'queued',
-  'processing',
-  'completed',
-  'failed',
-  'canceled',
-] as const
 const tabs = computed(() => [
   { value: '' as const, label: t('notificationTask.statusAll') },
-  ...taskStatuses.map((value) => ({
-    value,
-    label: t(`notificationTask.status.${value}`),
+  ...notificationTaskStatusMetadata.map((status) => ({
+    value: status.value,
+    label: t(status.i18nKey),
   })),
 ])
 
 function changeStatus(value: TabPaneName): void {
   const status =
-    typeof value === 'string' && taskStatuses.some((item) => item === value)
-      ? (value as NotificationTaskStatus)
+    (typeof value === 'number' &&
+      notificationTaskStatusMetadata.some((item) => item.value === value)) ||
+    (typeof value === 'string' &&
+      /^\d+$/.test(value) &&
+      notificationTaskStatusMetadata.some((item) => item.value === Number(value)))
+      ? (Number(value) as NotificationTaskStatus)
       : ''
   emit('change', status)
 }

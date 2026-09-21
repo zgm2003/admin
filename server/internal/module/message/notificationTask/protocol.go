@@ -16,17 +16,39 @@ const (
 	AudiencePlatform AudienceType = "platform"
 )
 
-type Status string
+type Status int16
 
 const (
-	StatusDraft      Status = "draft"
-	StatusScheduled  Status = "scheduled"
-	StatusQueued     Status = "queued"
-	StatusProcessing Status = "processing"
-	StatusCompleted  Status = "completed"
-	StatusFailed     Status = "failed"
-	StatusCanceled   Status = "canceled"
+	StatusDraft      Status = 1
+	StatusScheduled  Status = 2
+	StatusQueued     Status = 3
+	StatusProcessing Status = 4
+	StatusCompleted  Status = 5
+	StatusFailed     Status = 6
+	StatusCanceled   Status = 7
 )
+
+type StatusInfo struct {
+	Value    Status
+	I18nKey  string
+	Terminal bool
+}
+
+func StatusMetadata() []StatusInfo {
+	return []StatusInfo{
+		{Value: StatusDraft, I18nKey: "notificationTask.status.draft"},
+		{Value: StatusScheduled, I18nKey: "notificationTask.status.scheduled"},
+		{Value: StatusQueued, I18nKey: "notificationTask.status.queued"},
+		{Value: StatusProcessing, I18nKey: "notificationTask.status.processing"},
+		{Value: StatusCompleted, I18nKey: "notificationTask.status.completed", Terminal: true},
+		{Value: StatusFailed, I18nKey: "notificationTask.status.failed", Terminal: true},
+		{Value: StatusCanceled, I18nKey: "notificationTask.status.canceled", Terminal: true},
+	}
+}
+
+func (s Status) Valid() bool {
+	return s >= StatusDraft && s <= StatusCanceled
+}
 
 var (
 	ErrNotDraft          = errors.New("notification task is not draft")

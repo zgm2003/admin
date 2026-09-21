@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { describe, expect, it } from 'vitest'
 
-import type { NotificationTask } from '@/api/message/notificationTask'
+import { NotificationTaskStatus, type NotificationTask } from '@/api/message/notificationTask'
 import { appI18n } from '@/i18n'
 import NotificationTaskDetail from '@/views/message/notificationTask/components/NotificationTaskDetail/index.vue'
 
@@ -28,7 +28,7 @@ const draft = {
   canceledAt: null,
   failedAt: null,
   failureMessage: null,
-  status: 'draft',
+  status: NotificationTaskStatus.Draft,
   generatedCount: 0,
   createdBy: 3,
   createdAt: '2026-09-18T12:00:00Z',
@@ -63,7 +63,13 @@ describe('NotificationTaskDetail', () => {
 
   it('keeps a submitted zero count visible as a real business value', () => {
     const wrapper = mount(NotificationTaskDetail, {
-      props: { task: { ...draft, status: 'queued', submittedAt: '2026-09-18T12:01:00Z' } },
+      props: {
+        task: {
+          ...draft,
+          status: NotificationTaskStatus.Queued,
+          submittedAt: '2026-09-18T12:01:00Z',
+        },
+      },
       global: { plugins: [ElementPlus, appI18n] },
     })
 

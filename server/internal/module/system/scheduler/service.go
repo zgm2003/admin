@@ -95,20 +95,15 @@ func (s *Service) Execute(ctx context.Context, id, actor int64) (Job, error) {
 	if id <= 0 || actor <= 0 {
 		return Job{}, apperror.InvalidRequest(errors.New("scheduler execute input is invalid"))
 	}
-	schedule, err := s.GetSchedule(ctx, id)
-	if err != nil {
-		return Job{}, err
-	}
-	definition, ok := s.catalog.Lookup(schedule.TaskType)
-	if !ok {
-		return Job{}, apperror.DependencyUnavailable(ErrUnknownTaskType)
-	}
 	now := s.now().UTC()
-	job := Job{ScheduleID: &schedule.ID, TaskType: schedule.TaskType, Payload: append([]byte(nil), schedule.Params...), TriggerSource: TriggerManual, SourceKey: fmt.Sprintf("manual:%d:%d", schedule.ID, now.UnixNano()), ScheduledAt: now, AvailableAt: now, Status: JobScheduled, MaxAttempts: definition.MaxAttempts, Queue: definition.Queue, TimeoutSeconds: int(definition.Timeout / time.Second), TriggeredBy: &actor, CreatedAt: now, UpdatedAt: now}
-	if err = s.repository.CreateJob(ctx, &job); err != nil {
-		return Job{}, mapSchedulerError(err)
-	}
-	return job, nil
+	job, err := s.repository.CreateManualJob(ctx, id, actor, now, func(schedule Schedule, now time.Time) (Job, error) {
+		definition, ok := s.catalog.Lookup(schedule.TaskType)
+		if !ok {
+			return Job{}, ErrUnknownTaskType
+		}
+		return Job{TaskType: schedule.TaskType, Payload: append([]byte(nil), schedule.Params...), TriggerSource: TriggerManual, SourceKey: fmt.Sprintf("manual:%d:%d", schedule.ID, now.UnixNano()), ScheduledAt: now, AvailableAt: now, Status: JobScheduled, MaxAttempts: definition.MaxAttempts, Queue: definition.Queue, TimeoutSeconds: int(definition.Timeout / time.Second), CreatedAt: now, UpdatedAt: now}, nil
+	})
+	return job, mapSchedulerError(err)
 }
 func (s *Service) ListJobs(ctx context.Context, q JobQuery) ([]Job, error) {
 	if q.Limit < 1 || q.Limit > 100 || q.AfterID < 0 {

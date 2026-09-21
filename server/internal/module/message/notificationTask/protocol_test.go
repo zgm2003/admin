@@ -23,3 +23,16 @@ func TestDraftInputValidatesAudienceTargetsAndSchedule(t *testing.T) {
 		}
 	}
 }
+
+func TestStatusUsesStableNumericCodesAndMetadata(t *testing.T) {
+	if StatusDraft != Status(1) || StatusScheduled != Status(2) || StatusQueued != Status(3) || StatusProcessing != Status(4) || StatusCompleted != Status(5) || StatusFailed != Status(6) || StatusCanceled != Status(7) {
+		t.Fatalf("unexpected notification task status codes: %v %v %v %v %v %v %v", StatusDraft, StatusScheduled, StatusQueued, StatusProcessing, StatusCompleted, StatusFailed, StatusCanceled)
+	}
+	metadata := StatusMetadata()
+	if len(metadata) != 7 || metadata[0].Value != StatusDraft || metadata[0].I18nKey != "notificationTask.status.draft" || !metadata[4].Terminal {
+		t.Fatalf("unexpected status metadata: %+v", metadata)
+	}
+	if Status(0).Valid() || Status(8).Valid() || !StatusFailed.Valid() {
+		t.Fatal("status validity contract is invalid")
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -79,7 +80,7 @@ func TestPublisherReschedulesRedisFailure(t *testing.T) {
 	queue := &queueStub{err: errors.New("redis down")}
 	catalog, _ := NewTaskCatalog(testDefinition("example"))
 	publisher := NewPublisher(repository, queue, catalog, nil)
-	if count, err := publisher.RunOnce(context.Background(), now); err != nil || count != 0 || repository.rescheduled != 1 || repository.marked != 0 {
+	if count, err := publisher.RunOnce(context.Background(), now); err == nil || count != 0 || repository.rescheduled != 1 || repository.marked != 0 {
 		t.Fatalf("count=%d err=%v repository=%+v", count, err, repository)
 	}
 }
@@ -91,5 +92,24 @@ func TestPublisherTreatsTaskIDConflictAsAlreadyPublished(t *testing.T) {
 	publisher := NewPublisher(repository, queue, catalog, nil)
 	if count, err := publisher.RunOnce(context.Background(), now); err != nil || count != 1 || repository.marked != 1 {
 		t.Fatalf("count=%d err=%v repository=%+v", count, err, repository)
+	}
+}
+
+func TestPublisherStopsAfterConsecutiveDependencyFailures(t *testing.T) {
+	now := time.Now().UTC()
+	repository := &publishRepositoryStub{job: PublishableJob{Job: Job{ID: 1, TaskType: "example", AvailableAt: now}, DispatchToken: "lease"}}
+	queue := &queueStub{err: errors.New("redis down")}
+	catalog, _ := NewTaskCatalog(testDefinition("example"))
+	publisher := NewPublisher(repository, queue, catalog, nil)
+	publisher.idle = 0
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	err := publisher.Run(ctx)
+	if err == nil {
+		t.Fatal("expected publisher health error after consecutive dependency failures")
+	}
+	if !strings.Contains(err.Error(), "consecutive failures") {
+		t.Fatalf("error = %v, want consecutive failure context", err)
 	}
 }

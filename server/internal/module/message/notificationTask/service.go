@@ -95,7 +95,7 @@ func (s *Service) EditableDetail(ctx context.Context, id int64) (Task, error) {
 func (s *Service) List(ctx context.Context, query ListQuery) ([]Task, int64, error) {
 	repository, ok := s.repository.(taskAdminRepository)
 	validAudience := query.AudienceType == "" || query.AudienceType == AudienceUser || query.AudienceType == AudienceRole || query.AudienceType == AudiencePlatform
-	if (query.Status != "" && !validStatus(query.Status)) || !validAudience || query.Page < 1 || query.PageSize < 1 || query.PageSize > 100 || !ok {
+	if (query.Status != 0 && !validStatus(query.Status)) || !validAudience || query.Page < 1 || query.PageSize < 1 || query.PageSize > 100 || !ok {
 		return nil, 0, apperror.InvalidRequest(errors.New("task page is invalid"))
 	}
 	rows, total, err := repository.List(ctx, query)
@@ -103,12 +103,7 @@ func (s *Service) List(ctx context.Context, query ListQuery) ([]Task, int64, err
 }
 
 func validStatus(status Status) bool {
-	switch status {
-	case StatusDraft, StatusScheduled, StatusQueued, StatusProcessing, StatusCompleted, StatusFailed, StatusCanceled:
-		return true
-	default:
-		return false
-	}
+	return status.Valid()
 }
 func (s *Service) Delete(ctx context.Context, id int64, now time.Time) error {
 	repository, ok := s.repository.(taskAdminRepository)

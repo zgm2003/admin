@@ -11,7 +11,7 @@ func TestParseListQueryAcceptsApprovedFilters(t *testing.T) {
 		"page":         {"2"},
 		"pageSize":     {"50"},
 		"platformId":   {"7"},
-		"status":       {"processing"},
+		"status":       {"4"},
 		"audienceType": {"role"},
 		"keyword":      {" maintenance "},
 		"from":         {"2026-09-18T00:00:00Z"},
@@ -35,7 +35,8 @@ func TestParseListQueryRejectsMalformedFilters(t *testing.T) {
 		{"keyword": {string(make([]byte, 129))}},
 		{"from": {"2026-09-19T00:00:00Z"}, "to": {"2026-09-18T00:00:00Z"}},
 		{"from": {"not-a-time"}},
-		{"status": {"draft", "queued"}},
+		{"status": {"draft"}},
+		{"status": {"8"}},
 		{"unknown": {"value"}},
 	}
 	for _, values := range tests {

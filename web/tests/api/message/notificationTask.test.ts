@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  NotificationTaskStatus,
   parseNotificationTask,
   parseNotificationTaskOptions,
   parseNotificationTaskPage,
@@ -28,7 +29,7 @@ const task = {
   canceledAt: null,
   failedAt: null,
   failureMessage: null,
-  status: 'draft',
+  status: NotificationTaskStatus.Draft,
   generatedCount: 0,
   createdBy: 3,
   createdAt: '2026-09-18T12:00:00Z',
@@ -37,7 +38,7 @@ const task = {
 
 describe('notification task DTO', () => {
   it('parses nullable task fields and options', () => {
-    expect(parseNotificationTask(task).status).toBe('draft')
+    expect(parseNotificationTask(task).status).toBe(NotificationTaskStatus.Draft)
     expect(
       parseNotificationTaskOptions({ items: [{ id: 2, label: 'Admin' }], nextAfterId: null })
         .items[0]?.label,
@@ -45,7 +46,7 @@ describe('notification task DTO', () => {
   })
   it('rejects unknown and invalid enum values', () => {
     expect(() => parseNotificationTask({ ...task, revision: 1 })).toThrow()
-    expect(() => parseNotificationTask({ ...task, status: 'unknown' })).toThrow()
+    expect(() => parseNotificationTask({ ...task, status: 'draft' })).toThrow()
   })
   it('parses a list projection without accepting detail fields', () => {
     const page = parseNotificationTaskPage({
@@ -61,7 +62,7 @@ describe('notification task DTO', () => {
           scheduledAt: null,
           submittedAt: null,
           completedAt: '2026-09-18T12:01:00Z',
-          status: 'completed',
+          status: NotificationTaskStatus.Completed,
           generatedCount: 1,
           updatedAt: '2026-09-18T12:01:00Z',
         },

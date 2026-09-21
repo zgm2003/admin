@@ -72,7 +72,11 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 		query.PlatformID = &platformID
 	}
 	if value, ok := values["status"]; ok {
-		query.Status = Status(value[0])
+		status, parseErr := strconv.Atoi(value[0])
+		if parseErr != nil {
+			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("status is invalid"))
+		}
+		query.Status = Status(status)
 		if !validStatus(query.Status) {
 			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("status is invalid"))
 		}

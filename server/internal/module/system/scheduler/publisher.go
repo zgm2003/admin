@@ -14,6 +14,8 @@ import (
 
 const EnvelopeTaskType = "system:scheduler:execute:v1"
 
+const publisherMaxConsecutiveFailures = 5
+
 type QueueOptions struct {
 	TaskID    string
 	Queue     string
@@ -56,10 +58,20 @@ func (p *Publisher) Run(ctx context.Context) error {
 	if p == nil || p.repository == nil || p.queue == nil {
 		return errors.New("scheduler publisher is not configured")
 	}
+	consecutiveFailures := 0
 	for {
 		count, err := p.RunOnce(ctx, p.now().UTC())
-		if err != nil && ctx.Err() == nil {
-			p.logger.Error("scheduler publisher iteration failed", "error", err)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			consecutiveFailures++
+			p.logger.Error("scheduler publisher iteration failed", "error", err, "consecutiveFailures", consecutiveFailures)
+			if consecutiveFailures >= publisherMaxConsecutiveFailures {
+				return fmt.Errorf("scheduler publisher unhealthy after %d consecutive failures: %w", consecutiveFailures, err)
+			}
+		} else {
+			consecutiveFailures = 0
 		}
 		if ctx.Err() != nil {
 			return nil
@@ -122,6 +134,7 @@ func (p *Publisher) RunOnce(ctx context.Context, now time.Time) (int, error) {
 		if rescheduleErr := p.repository.ReschedulePublish(ctx, job.ID, claimed.DispatchToken, "dependency-unavailable", now.Add(delay), now); rescheduleErr != nil {
 			iterationErr = errors.Join(iterationErr, fmt.Errorf("reschedule scheduler job %d: %w", job.ID, rescheduleErr))
 		}
+		iterationErr = errors.Join(iterationErr, fmt.Errorf("enqueue scheduler job %d: %w", job.ID, enqueueErr))
 	}
 	return published, iterationErr
 }

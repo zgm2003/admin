@@ -14,8 +14,57 @@ import { ProtocolError } from '@/types/http'
 import { request } from '@/utils/request'
 
 export type NotificationAudience = 'user' | 'role' | 'platform'
+export const NotificationTaskStatus = {
+  Draft: 1,
+  Scheduled: 2,
+  Queued: 3,
+  Processing: 4,
+  Completed: 5,
+  Failed: 6,
+  Canceled: 7,
+} as const
 export type NotificationTaskStatus =
-  'draft' | 'scheduled' | 'queued' | 'processing' | 'completed' | 'failed' | 'canceled'
+  (typeof NotificationTaskStatus)[keyof typeof NotificationTaskStatus]
+export const notificationTaskStatusMetadata = [
+  {
+    value: NotificationTaskStatus.Draft,
+    i18nKey: 'notificationTask.status.draft',
+    tagType: 'info',
+  },
+  {
+    value: NotificationTaskStatus.Scheduled,
+    i18nKey: 'notificationTask.status.scheduled',
+    tagType: 'warning',
+  },
+  {
+    value: NotificationTaskStatus.Queued,
+    i18nKey: 'notificationTask.status.queued',
+    tagType: 'primary',
+  },
+  {
+    value: NotificationTaskStatus.Processing,
+    i18nKey: 'notificationTask.status.processing',
+    tagType: 'primary',
+  },
+  {
+    value: NotificationTaskStatus.Completed,
+    i18nKey: 'notificationTask.status.completed',
+    tagType: 'success',
+  },
+  {
+    value: NotificationTaskStatus.Failed,
+    i18nKey: 'notificationTask.status.failed',
+    tagType: 'danger',
+  },
+  {
+    value: NotificationTaskStatus.Canceled,
+    i18nKey: 'notificationTask.status.canceled',
+    tagType: 'info',
+  },
+] as const
+const statusValues = new Set<NotificationTaskStatus>(
+  notificationTaskStatusMetadata.map((item) => item.value),
+)
 export interface NotificationTask {
   id: number
   platformId: number
@@ -100,19 +149,16 @@ const variants = new Set(['info', 'success', 'warning', 'error'])
 const priorities = new Set(['normal', 'urgent'])
 const links = new Set(['none', 'internal', 'external'])
 const audiences = new Set(['user', 'role', 'platform'])
-const statuses = new Set([
-  'draft',
-  'scheduled',
-  'queued',
-  'processing',
-  'completed',
-  'failed',
-  'canceled',
-])
 function oneOf<T extends string>(value: unknown, values: Set<string>, context: string): T {
   const parsed = expectString(value, context)
   if (!values.has(parsed)) throw new ProtocolError(`${context} is invalid`)
   return parsed as T
+}
+function status(value: unknown, context: string): NotificationTaskStatus {
+  const parsed = expectInteger(value, context)
+  if (!statusValues.has(parsed as NotificationTaskStatus))
+    throw new ProtocolError(`${context} is invalid`)
+  return parsed as NotificationTaskStatus
 }
 function nullableInteger(value: unknown, context: string): number | null {
   return value === null ? null : expectInteger(value, context)
@@ -179,7 +225,7 @@ export function parseNotificationTask(value: unknown): NotificationTask {
     canceledAt: nullableDate(r.canceledAt, 'canceledAt'),
     failedAt: nullableDate(r.failedAt, 'failedAt'),
     failureMessage: nullableString(r.failureMessage, 'failureMessage'),
-    status: oneOf(r.status, statuses, 'status'),
+    status: status(r.status, 'status'),
     generatedCount: expectInteger(r.generatedCount, 'generatedCount'),
     createdBy: expectInteger(r.createdBy, 'createdBy'),
     createdAt: expectISODate(r.createdAt, 'createdAt'),
@@ -217,7 +263,7 @@ export function parseNotificationTaskListItem(value: unknown): NotificationTaskL
     scheduledAt: nullableDate(r.scheduledAt, 'scheduledAt'),
     submittedAt: nullableDate(r.submittedAt, 'submittedAt'),
     completedAt: nullableDate(r.completedAt, 'completedAt'),
-    status: oneOf(r.status, statuses, 'status'),
+    status: status(r.status, 'status'),
     generatedCount: expectInteger(r.generatedCount, 'generatedCount'),
     updatedAt: expectISODate(r.updatedAt, 'updatedAt'),
   }

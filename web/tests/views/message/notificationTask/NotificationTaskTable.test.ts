@@ -3,7 +3,10 @@ import ElementPlus from 'element-plus'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { NotificationTaskListItem } from '@/api/message/notificationTask'
+import {
+  NotificationTaskStatus,
+  type NotificationTaskListItem,
+} from '@/api/message/notificationTask'
 import { appI18n } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
 import { formatTime } from '@/utils/datetime'
@@ -20,7 +23,7 @@ const draft: NotificationTaskListItem = {
   scheduledAt: null,
   submittedAt: null,
   completedAt: null,
-  status: 'draft',
+  status: NotificationTaskStatus.Draft,
   generatedCount: 0,
   updatedAt: '2026-09-19T08:00:00Z',
 }
@@ -73,8 +76,18 @@ describe('NotificationTaskTable', () => {
     const wrapper = mount(NotificationTaskTable, {
       props: {
         rows: [
-          { ...draft, id: 10, status: 'scheduled', scheduledAt: '2026-09-20T08:00:00Z' },
-          { ...draft, id: 11, status: 'completed', completedAt: '2026-09-19T09:00:00Z' },
+          {
+            ...draft,
+            id: 10,
+            status: NotificationTaskStatus.Scheduled,
+            scheduledAt: '2026-09-20T08:00:00Z',
+          },
+          {
+            ...draft,
+            id: 11,
+            status: NotificationTaskStatus.Completed,
+            completedAt: '2026-09-19T09:00:00Z',
+          },
         ],
         loading: false,
         errorMessage: '',
@@ -100,7 +113,7 @@ describe('NotificationTaskTable', () => {
       ...draft,
       id: 11,
       audienceType: 'role',
-      status: 'completed',
+      status: NotificationTaskStatus.Completed,
       generatedCount: 1,
       submittedAt: '2026-09-19T08:30:00Z',
       completedAt: '2026-09-19T09:00:00Z',

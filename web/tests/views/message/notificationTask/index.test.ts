@@ -45,7 +45,7 @@ const task: api.NotificationTask = {
   canceledAt: null,
   failedAt: null,
   failureMessage: null,
-  status: 'draft',
+  status: api.NotificationTaskStatus.Draft,
   generatedCount: 0,
   createdBy: 3,
   createdAt: '2026-09-18T12:00:00Z',
@@ -155,13 +155,13 @@ describe('notification task management', () => {
 
     expect(wrapper.findAllComponents({ name: 'ElTabPane' }).map((tab) => tab.props())).toEqual([
       expect.objectContaining({ name: '', label: '全部' }),
-      expect.objectContaining({ name: 'draft', label: '草稿' }),
-      expect.objectContaining({ name: 'scheduled', label: '待调度' }),
-      expect.objectContaining({ name: 'queued', label: '已入队' }),
-      expect.objectContaining({ name: 'processing', label: '处理中' }),
-      expect.objectContaining({ name: 'completed', label: '已完成' }),
-      expect.objectContaining({ name: 'failed', label: '失败' }),
-      expect.objectContaining({ name: 'canceled', label: '已取消' }),
+      expect.objectContaining({ name: 1, label: '草稿' }),
+      expect.objectContaining({ name: 2, label: '待调度' }),
+      expect.objectContaining({ name: 3, label: '已入队' }),
+      expect.objectContaining({ name: 4, label: '处理中' }),
+      expect.objectContaining({ name: 5, label: '已完成' }),
+      expect.objectContaining({ name: 6, label: '失败' }),
+      expect.objectContaining({ name: 7, label: '已取消' }),
     ])
 
     await wrapper.get('[data-testid="notification-task-page-three"]').trigger('click')
@@ -170,13 +170,13 @@ describe('notification task management', () => {
     )
 
     const tabs = wrapper.getComponent({ name: 'ElTabs' })
-    tabs.vm.$emit('update:modelValue', 'draft')
-    tabs.vm.$emit('tabChange', 'draft')
+    tabs.vm.$emit('update:modelValue', 1)
+    tabs.vm.$emit('tabChange', 1)
     await vi.waitFor(() =>
       expect(api.listNotificationTasks).toHaveBeenLastCalledWith({
         page: 1,
         pageSize: 20,
-        status: 'draft',
+        status: 1,
       }),
     )
 
@@ -665,7 +665,13 @@ describe('notification task management', () => {
       'message:notificationTask:detail',
     ]
     vi.mocked(api.listNotificationTasks).mockResolvedValue({
-      list: [{ ...task, status: 'completed', completedAt: '2026-09-18T12:01:00Z' }],
+      list: [
+        {
+          ...task,
+          status: api.NotificationTaskStatus.Completed,
+          completedAt: '2026-09-18T12:01:00Z',
+        },
+      ],
       total: 1,
       page: 1,
       pageSize: 20,

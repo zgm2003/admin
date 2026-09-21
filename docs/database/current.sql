@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict cpvi5y8OOKBXiQGdz6hzQqbqbyDEVf0prfCFlTdshepj5AGokB8zalDX5xGM2EG
+\restrict s6DOOkqUtjUogLvyW61kDHzaiJJA8sdj3zRyb8XnMyvSSSQ2ighbpIwffaG17tg
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -476,7 +476,7 @@ CREATE TABLE public.message_notification_task (
     scheduled_at timestamp with time zone,
     audience_max_user_id bigint,
     submitted_at timestamp with time zone,
-    status character varying(16) DEFAULT 'draft'::character varying NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
     next_user_id bigint DEFAULT 0 NOT NULL,
     next_batch_no integer DEFAULT 0 NOT NULL,
     generated_count bigint DEFAULT 0 NOT NULL,
@@ -494,8 +494,8 @@ CREATE TABLE public.message_notification_task (
     CONSTRAINT ck_message_notification_task_counters CHECK (((next_user_id >= 0) AND (next_batch_no >= 0) AND (generated_count >= 0))),
     CONSTRAINT ck_message_notification_task_link CHECK (((((link_type)::text = 'none'::text) AND ((link)::text = ''::text)) OR (((link_type)::text = ANY ((ARRAY['internal'::character varying, 'external'::character varying])::text[])) AND (btrim((link)::text) <> ''::text)))),
     CONSTRAINT ck_message_notification_task_priority CHECK (((priority)::text = ANY ((ARRAY['normal'::character varying, 'urgent'::character varying])::text[]))),
-    CONSTRAINT ck_message_notification_task_state CHECK (((((status)::text = 'draft'::text) AND (submitted_at IS NULL) AND (audience_max_user_id IS NULL) AND (published_at IS NULL) AND (completed_at IS NULL) AND (canceled_at IS NULL) AND (failed_at IS NULL) AND (failure_message IS NULL)) OR (((status)::text <> 'draft'::text) AND (submitted_at IS NOT NULL) AND (audience_max_user_id IS NOT NULL) AND (audience_max_user_id >= 0) AND (((status)::text <> 'scheduled'::text) OR (scheduled_at IS NOT NULL)) AND (((status)::text <> 'completed'::text) OR (completed_at IS NOT NULL)) AND (((status)::text <> 'canceled'::text) OR (canceled_at IS NOT NULL)) AND (((status)::text <> 'failed'::text) OR ((failed_at IS NOT NULL) AND (failure_message IS NOT NULL) AND (btrim((failure_message)::text) <> ''::text)))))),
-    CONSTRAINT ck_message_notification_task_status CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'scheduled'::character varying, 'queued'::character varying, 'processing'::character varying, 'completed'::character varying, 'failed'::character varying, 'canceled'::character varying])::text[]))),
+    CONSTRAINT ck_message_notification_task_state CHECK ((((status = 1) AND (submitted_at IS NULL) AND (audience_max_user_id IS NULL) AND (published_at IS NULL) AND (completed_at IS NULL) AND (canceled_at IS NULL) AND (failed_at IS NULL) AND (failure_message IS NULL)) OR ((status <> 1) AND (submitted_at IS NOT NULL) AND (audience_max_user_id IS NOT NULL) AND (audience_max_user_id >= 0) AND ((status <> 2) OR (scheduled_at IS NOT NULL)) AND ((status <> 5) OR (completed_at IS NOT NULL)) AND ((status <> 7) OR (canceled_at IS NOT NULL)) AND ((status <> 6) OR ((failed_at IS NOT NULL) AND (failure_message IS NOT NULL) AND (btrim((failure_message)::text) <> ''::text)))))),
+    CONSTRAINT ck_message_notification_task_status CHECK (((status >= 1) AND (status <= 7))),
     CONSTRAINT ck_message_notification_task_summary CHECK ((char_length((summary)::text) <= 256)),
     CONSTRAINT ck_message_notification_task_title CHECK (((btrim((title)::text) <> ''::text) AND (char_length((title)::text) <= 128))),
     CONSTRAINT ck_message_notification_task_variant CHECK (((variant)::text = ANY ((ARRAY['info'::character varying, 'success'::character varying, 'warning'::character varying, 'error'::character varying])::text[])))
@@ -3408,5 +3408,5 @@ ALTER TABLE ONLY public.system_dictionary_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict cpvi5y8OOKBXiQGdz6hzQqbqbyDEVf0prfCFlTdshepj5AGokB8zalDX5xGM2EG
+\unrestrict s6DOOkqUtjUogLvyW61kDHzaiJJA8sdj3zRyb8XnMyvSSSQ2ighbpIwffaG17tg
 

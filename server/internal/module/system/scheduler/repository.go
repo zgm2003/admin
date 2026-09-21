@@ -213,6 +213,37 @@ func (r *Repository) CreateJob(ctx context.Context, job *Job) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return r.CreateJobTx(ctx, tx, job) })
 }
 
+type ManualJobBuilder func(schedule Schedule, now time.Time) (Job, error)
+
+// CreateManualJob locks the schedule while building and inserting a manual job.
+// This prevents a delete or concurrent schedule mutation from racing the job
+// creation after a stale schedule read.
+func (r *Repository) CreateManualJob(ctx context.Context, scheduleID, actor int64, now time.Time, builder ManualJobBuilder) (Job, error) {
+	if r == nil || r.db == nil || scheduleID <= 0 || actor <= 0 || builder == nil || now.IsZero() {
+		return Job{}, ErrInvalidSchedule
+	}
+	var job Job
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var schedule Schedule
+		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id=? AND deleted_at IS NULL", scheduleID).Take(&schedule).Error; err != nil {
+			return err
+		}
+		schedule.normalize()
+		built, err := builder(schedule, now.UTC())
+		if err != nil {
+			return err
+		}
+		built.ScheduleID = &schedule.ID
+		built.TriggeredBy = &actor
+		if err := r.CreateJobTx(ctx, tx, &built); err != nil {
+			return err
+		}
+		job = built
+		return nil
+	})
+	return job, err
+}
+
 type BatchJobWriter struct {
 	repository *Repository
 	definition TaskDefinition
@@ -512,36 +543,46 @@ func (r *Repository) RecoverExpiredRuns(ctx context.Context, now time.Time, limi
 }
 
 func (r *Repository) CreateRetryJob(ctx context.Context, jobID int64, actor *int64, now time.Time) (Job, error) {
-	var old Job
-	if err := r.db.WithContext(ctx).Where("id=?", jobID).First(&old).Error; err != nil {
-		return Job{}, err
+	if r == nil || r.db == nil || jobID <= 0 || now.IsZero() {
+		return Job{}, ErrInvalidSchedule
 	}
-	if old.Status != JobFailed {
-		return Job{}, ErrConflict
-	}
-	newJob := old
-	newJob.ID = 0
-	newJob.Status = JobScheduled
-	newJob.AttemptCount = 0
-	newJob.RetryOfJobID = &old.ID
-	newJob.TriggeredBy = actor
-	newJob.SourceKey = fmt.Sprintf("retry:%d:%d", old.ID, now.UnixNano())
-	newJob.AvailableAt = now
-	newJob.ScheduledAt = now
-	newJob.CompletedAt = nil
-	newJob.PublishToken = ""
-	newJob.PublishLeaseUntil = nil
-	newJob.RunToken = ""
-	newJob.RunLeaseUntil = nil
-	newJob.WorkerID = ""
-	newJob.ErrorClass = ""
-	newJob.LastError = ""
-	newJob.CreatedAt = now
-	newJob.UpdatedAt = now
-	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return r.CreateJobTx(ctx, tx, &newJob) }); err != nil {
-		return Job{}, err
-	}
-	return newJob, nil
+	var newJob Job
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var old Job
+		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id=?", jobID).First(&old).Error; err != nil {
+			return err
+		}
+		if old.Status != JobFailed {
+			return ErrConflict
+		}
+		if old.ScheduleID != nil {
+			var schedule struct{ ID int64 }
+			if err := tx.WithContext(ctx).Table("system_scheduler_schedule").Select("id").Where("id=? AND deleted_at IS NULL", *old.ScheduleID).Clauses(clause.Locking{Strength: "UPDATE"}).Take(&schedule).Error; err != nil {
+				return err
+			}
+		}
+		newJob = old
+		newJob.ID = 0
+		newJob.Status = JobScheduled
+		newJob.AttemptCount = 0
+		newJob.RetryOfJobID = &old.ID
+		newJob.TriggeredBy = actor
+		newJob.SourceKey = fmt.Sprintf("retry:%d:%d", old.ID, now.UnixNano())
+		newJob.AvailableAt = now
+		newJob.ScheduledAt = now
+		newJob.CompletedAt = nil
+		newJob.PublishToken = ""
+		newJob.PublishLeaseUntil = nil
+		newJob.RunToken = ""
+		newJob.RunLeaseUntil = nil
+		newJob.WorkerID = ""
+		newJob.ErrorClass = ""
+		newJob.LastError = ""
+		newJob.CreatedAt = now
+		newJob.UpdatedAt = now
+		return r.CreateJobTx(ctx, tx, &newJob)
+	})
+	return newJob, err
 }
 
 func (r *Repository) ListJobs(ctx context.Context, query JobQuery) ([]Job, error) {

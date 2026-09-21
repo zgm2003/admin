@@ -119,7 +119,7 @@ func (r *Repository) Submit(ctx context.Context, id int64, now time.Time) (Task,
 			available = normalized.ScheduledAt.UTC()
 		}
 		summary, _ := notification.SummaryFromHTML(normalized.ContentHTML)
-		result := tx.db.WithContext(ctx).Model(&Task{}).Where("id=? AND status='draft' AND deleted_at IS NULL", id).Updates(map[string]any{"content_html": normalized.ContentHTML, "summary": summary, "status": status, "audience_max_user_id": maximum, "submitted_at": now, "updated_at": now})
+		result := tx.db.WithContext(ctx).Model(&Task{}).Where("id=? AND status=? AND deleted_at IS NULL", id, StatusDraft).Updates(map[string]any{"content_html": normalized.ContentHTML, "summary": summary, "status": status, "audience_max_user_id": maximum, "submitted_at": now, "updated_at": now})
 		if result.Error != nil {
 			return result.Error
 		}
@@ -369,7 +369,7 @@ func (r *Repository) List(ctx context.Context, input ListQuery) ([]Task, int64, 
 	if input.PlatformID != nil {
 		query = query.Where("task.platform_id=?", *input.PlatformID)
 	}
-	if input.Status != "" {
+	if input.Status != 0 {
 		query = query.Where("task.status=?", input.Status)
 	}
 	if input.AudienceType != "" {

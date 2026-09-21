@@ -259,7 +259,7 @@ func (r *Repository) MarkFailed(ctx context.Context, id int64, message string, n
 	if len(message) > 512 {
 		message = message[:512]
 	}
-	return r.db.WithContext(ctx).Model(&Task{}).Where("id=? AND status NOT IN ('completed','canceled','failed')", id).Updates(map[string]any{"status": StatusFailed, "failure_message": message, "failed_at": now, "updated_at": now}).Error
+	return r.db.WithContext(ctx).Model(&Task{}).Where("id=? AND status NOT IN (?,?,?)", id, StatusCompleted, StatusCanceled, StatusFailed).Updates(map[string]any{"status": StatusFailed, "failure_message": message, "failed_at": now, "updated_at": now}).Error
 }
 
 type BatchPayload struct {

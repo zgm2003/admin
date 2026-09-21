@@ -2,9 +2,11 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type {
-  NotificationTaskListItem,
+import {
   NotificationTaskStatus,
+  notificationTaskStatusMetadata,
+  type NotificationTaskListItem,
+  type NotificationTaskStatus as NotificationTaskStatusValue,
 } from '@/api/message/notificationTask'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable/types'
 import { usePermissionStore } from '@/store/permission'
@@ -29,16 +31,12 @@ const access = usePermissionStore()
 const { t } = useI18n()
 const can = (code: string): boolean => access.hasPermission(code)
 type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
-const statusTagTypes: Record<NotificationTaskStatus, TagType> = {
-  draft: 'info',
-  scheduled: 'warning',
-  queued: 'primary',
-  processing: 'primary',
-  completed: 'success',
-  failed: 'danger',
-  canceled: 'info',
-}
-const statusTagType = (status: NotificationTaskStatus): TagType => statusTagTypes[status]
+const statusTagTypes: Record<NotificationTaskStatusValue, TagType> = Object.fromEntries(
+  notificationTaskStatusMetadata.map((status) => [status.value, status.tagType]),
+) as Record<NotificationTaskStatusValue, TagType>
+const statusTagType = (status: NotificationTaskStatusValue): TagType => statusTagTypes[status]
+const statusI18nKey = (status: NotificationTaskStatusValue): string =>
+  notificationTaskStatusMetadata.find((item) => item.value === status)?.i18nKey ?? ''
 const displayTime = (value: string | null): string => (value === null ? '-' : formatTime(value))
 const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
   { prop: 'title', label: t('notificationTask.title'), minWidth: 180 },
@@ -81,14 +79,14 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
     <template #cell-status="{ row }">
       <span v-if="row.id !== undefined" :data-testid="`notification-task-status-${row.id}`">
         <el-tag :type="statusTagType(row.status)" effect="light" size="small">
-          {{ t(`notificationTask.status.${row.status}`) }}
+          {{ t(statusI18nKey(row.status)) }}
         </el-tag>
       </span>
     </template>
     <template #cell-generatedCount="{ row }">
       <span v-if="row.id !== undefined" :data-testid="`notification-task-generated-${row.id}`">
         {{
-          row.status === 'draft'
+          row.status === NotificationTaskStatus.Draft
             ? t('notificationTask.notGenerated')
             : t('notificationTask.generatedValue', { count: row.generatedCount })
         }}
@@ -119,7 +117,7 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         >{{ t('notificationTask.detail') }}</el-button
       >
       <el-button
-        v-if="row.status === 'draft' && can('message:notificationTask:update')"
+        v-if="row.status === NotificationTaskStatus.Draft && can('message:notificationTask:update')"
         :data-testid="`notification-task-edit-${row.id}`"
         link
         type="warning"
@@ -127,7 +125,7 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         >{{ t('notificationTask.edit') }}</el-button
       >
       <el-button
-        v-if="row.status === 'draft' && can('message:notificationTask:delete')"
+        v-if="row.status === NotificationTaskStatus.Draft && can('message:notificationTask:delete')"
         :data-testid="`notification-task-delete-${row.id}`"
         link
         type="danger"
@@ -135,7 +133,7 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         >{{ t('notificationTask.delete') }}</el-button
       >
       <el-button
-        v-if="row.status === 'draft' && can('message:notificationTask:submit')"
+        v-if="row.status === NotificationTaskStatus.Draft && can('message:notificationTask:submit')"
         :data-testid="`notification-task-submit-${row.id}`"
         link
         type="success"
@@ -144,8 +142,11 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
       >
       <el-button
         v-if="
-          ['scheduled', 'queued', 'processing'].includes(row.status) &&
-          can('message:notificationTask:cancel')
+          [
+            NotificationTaskStatus.Scheduled,
+            NotificationTaskStatus.Queued,
+            NotificationTaskStatus.Processing,
+          ].includes(row.status) && can('message:notificationTask:cancel')
         "
         :data-testid="`notification-task-cancel-${row.id}`"
         link
@@ -154,7 +155,7 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         >{{ t('notificationTask.cancel') }}</el-button
       >
       <el-button
-        v-if="row.status !== 'draft' && can('message:notificationTask:copy')"
+        v-if="row.status !== NotificationTaskStatus.Draft && can('message:notificationTask:copy')"
         :data-testid="`notification-task-copy-${row.id}`"
         link
         type="primary"

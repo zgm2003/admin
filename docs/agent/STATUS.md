@@ -1,5 +1,14 @@
 # 项目状态
 
+## Scheduler 写路径与 Publisher 健康语义收口（2026-09-21，代码已完成）
+
+- 修复 Publisher 在队列依赖失败且 `ReschedulePublish` 成功时返回 `nil` 的吞错路径：现在保留任务重排，同时把入队错误返回给监督循环。
+- Publisher 连续 5 次非取消迭代失败后返回 `scheduler publisher unhealthy ...`，由 Worker runner 监督逻辑感知并退出；单次 Redis 抖动仍按现有 per-job backoff 重试，成功迭代会清零连续失败计数。
+- 手动 Execute 现在在同一事务中锁定未删除 schedule、读取最新任务定义并创建 Job；Retry 在同一事务中锁定失败 Job，并对有关联计划的 Job 再锁定未删除 schedule。删除先提交时 Execute/Retry 拒绝创建；Execute/Retry 先提交时删除能看到活动 Job 并拒绝删除。
+- 新增回归覆盖正常发布、Redis 失败重排并返回错误、Asynq TaskID 冲突幂等、连续依赖失败触发健康错误，以及 Execute/Retry 与计划并发写入的真实 PostgreSQL 行锁顺序。
+- 验证：`go fmt ./...`、`go vet ./...`、`go test -p 1 ./... -count=1`、`go build ./...` 全部 exit 0；未执行数据库迁移、API/Worker 重启或 Redis 清理。
+- 下一步：处理 notificationTask 权限事实下沉和平台受众隔离，再迁移其字符串状态；这些切片未在本次改动中假设已完成。
+
 ## 简约架构审计与分批整改（2026-09-20，进行中）
 
 - 维护者确认：持久化业务状态（包含 Mail/SMS 日志、通知任务、Scheduler Job/Run）统一数值编码，由所属模块强类型 enum 管理；可配置展示选项由字典管理，不把状态机交给可编辑字典。HTTP 状态码保持协议值，Yes/No 暂保留 0/1；普通编辑继续 last-write-wins，缓存代际、对象物理版本和任务执行锁不按编辑乐观锁删除。
@@ -7,7 +16,7 @@
 - 容量与验证边界：沿用百万用户、多实例基线；本次只修改低频管理写路径，锁粒度为单 schedule 行，热读取和 Redis 协议不变。删除事务为行读取、活动任务计数、更新；启停为行读取、更新。真实 PostgreSQL 隔离 schema 的两连接并发测试，通过 pg_blocking_pids 确认阻塞点后提交竞争写入，不依赖固定 sleep 推测执行顺序。
 - 已观察失败再修复：删除原实现错误返回 nil；启用原实现使用旧 cron 算出 13:00 UTC，最新 cron 应为 12:05 UTC。已补齐 Scheduler 数字状态链路、通知任务跨平台目标过滤、API `request<unknown>` 边界和通知任务弹窗组件化；前端页面不再直接改写 Dialog prop。
 - 当前验证证据：后端 `go fmt ./...`、`go vet ./...`、`go test -p 1 ./... -count=1`、`go build ./...` 全部 exit 0；前端 `pnpm format:check`、`pnpm lint`、`pnpm check:architecture`、`pnpm typecheck`、全量 Vitest 100 文件/725 项和 `pnpm build` 全部 exit 0。Build 仅保留既有大 chunk 警告。
-- 后续待完成：追踪手动 Execute/Retry 与删除的所有任务创建入口、普通编辑与独立状态动作交错；复核 Publisher 重试/健康语义，不把正常重试直接定性为吞错；核对 notificationTask 权限规则所有权；逐域制定数值 enum 编码与前后端/数据库迁移；菜单图标单一维护来源；Redis key 数量/TTL/容量实测。
+- 后续待完成：核对 notificationTask 权限规则所有权；逐域制定数值 enum 编码与前后端/数据库迁移；菜单图标单一维护来源；Redis key 数量/TTL/容量实测。
 - 已建立 `docs/agent/status-enum-catalog.md`：确认状态机按业务域使用独立数值编码，Scheduler、Mail、SMS 已完成各自 SQL/Go/API/前端同批切换，避免半迁移兼容分支；通知任务仍待后续迁移。
 - 全项目审计基线已落到 `docs/agent/audit/`：后端边界、前端质量、数据库结构、Redis 协议、状态/字典、菜单 icon 和整改优先级七份清单。当前这些文档只记录已核对证据与待验证项，不把建议误报为已修复。
 - 数据库复核已完成两项 forward migration：重复 user_session 用户外键、6 条空 device_id、permission_access_version.user_id 的 sequence 默认值已清理；空会话记录按维护者授权删除，不伪造设备 ID。其余冗余索引、表字段仍仅列候选，不能根据引用数或 idx_scan 一次快照直接删除。

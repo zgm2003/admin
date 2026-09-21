@@ -233,7 +233,7 @@ func TestCancelWaitsForBatchLockAndCannotOverwriteCompletion(t *testing.T) {
 	}
 	var status Status
 	if err = db.WithContext(ctx).Raw(`SELECT status FROM message_notification_task WHERE id=?`, task.ID).Scan(&status).Error; err != nil || status != StatusCompleted {
-		t.Fatalf("status=%q err=%v", status, err)
+		t.Fatalf("status=%d err=%v", status, err)
 	}
 }
 func assertProcessCounts(t *testing.T, db *gorm.DB, ctx context.Context, notifications, recipients, events int64) {
