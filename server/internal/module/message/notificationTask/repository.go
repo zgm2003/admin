@@ -2,6 +2,7 @@ package notificationtask
 
 import (
 	"admin/server/internal/module/message/notification"
+	permissionnotification "admin/server/internal/module/permission/notification"
 	"context"
 	"errors"
 	"fmt"
@@ -16,9 +17,13 @@ type BatchJobWriter interface {
 	CancelBatchJobsTx(context.Context, *gorm.DB, int64, time.Time) error
 }
 
+type PermissionReaderFactory func(*gorm.DB) permissionnotification.Reader
+
 type Repository struct {
-	db   *gorm.DB
-	jobs BatchJobWriter
+	db                *gorm.DB
+	jobs              BatchJobWriter
+	permissions       permissionnotification.Reader
+	permissionFactory func(*gorm.DB) permissionnotification.Reader
 }
 
 func NewRepository(db *gorm.DB, jobs ...BatchJobWriter) *Repository {
@@ -26,13 +31,26 @@ func NewRepository(db *gorm.DB, jobs ...BatchJobWriter) *Repository {
 	if len(jobs) > 0 {
 		writer = jobs[0]
 	}
-	return &Repository{db: db, jobs: writer}
+	return newRepository(db, writer, func(tx *gorm.DB) permissionnotification.Reader { return permissionnotification.NewRepository(tx) })
+}
+
+func NewRepositoryWithPermissions(db *gorm.DB, jobs BatchJobWriter, factory PermissionReaderFactory) *Repository {
+	return newRepository(db, jobs, factory)
+}
+
+func newRepository(db *gorm.DB, jobs BatchJobWriter, factory PermissionReaderFactory) *Repository {
+	if factory == nil {
+		return &Repository{db: db, jobs: jobs}
+	}
+	return &Repository{db: db, jobs: jobs, permissions: factory(db), permissionFactory: factory}
 }
 func (r *Repository) Transaction(ctx context.Context, fn func(*Repository) error) error {
-	if r == nil || r.db == nil || r.jobs == nil {
+	if r == nil || r.db == nil || r.jobs == nil || r.permissions == nil || r.permissionFactory == nil {
 		return errors.New("notification task repository dependencies are required")
 	}
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return fn(NewRepository(tx, r.jobs)) })
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(&Repository{db: tx, jobs: r.jobs, permissions: r.permissionFactory(tx), permissionFactory: r.permissionFactory})
+	})
 }
 func (r *Repository) Create(ctx context.Context, creator int64, input DraftInput) (Task, error) {
 	var task Task
@@ -200,9 +218,8 @@ func (r *Repository) Delete(ctx context.Context, id int64, now time.Time) error 
 func (r *Repository) find(ctx context.Context, id int64) (Task, error) {
 	var row Task
 	err := r.db.WithContext(ctx).Raw(`
-SELECT task.*, platform.name AS platform_name, notification.id AS notification_id
+SELECT task.*, notification.id AS notification_id
 FROM message_notification_task task
-JOIN permission_auth_platform platform ON platform.id=task.platform_id
 LEFT JOIN message_notification notification ON notification.source_task_id=task.id
 WHERE task.id=? AND task.deleted_at IS NULL`, id).Scan(&row).Error
 	if err != nil {
@@ -210,6 +227,11 @@ WHERE task.id=? AND task.deleted_at IS NULL`, id).Scan(&row).Error
 	}
 	if row.ID == 0 {
 		return Task{}, gorm.ErrRecordNotFound
+	}
+	if names, nameErr := r.permissions.PlatformNames(ctx, []int64{row.PlatformID}); nameErr != nil {
+		return Task{}, nameErr
+	} else {
+		row.PlatformName = names[row.PlatformID]
 	}
 	row.TargetIDs, err = r.targetIDs(ctx, id)
 	return row, err
@@ -238,134 +260,35 @@ func (r *Repository) replaceTargets(ctx context.Context, id int64, audience Audi
 	return r.db.WithContext(ctx).Create(&rows).Error
 }
 func (r *Repository) validateDraftFacts(ctx context.Context, input DraftInput) error {
-	if err := r.validatePlatformCapability(ctx, input.PlatformID); err != nil {
-		return err
+	if err := r.permissions.ValidatePlatformNotification(ctx, input.PlatformID); err != nil {
+		return mapPermissionFactError(err)
 	}
 	if input.AudienceType == AudiencePlatform {
 		return nil
 	}
-	var count int64
+	at := time.Now().UTC()
 	switch input.AudienceType {
 	case AudienceUser:
-		err := r.db.WithContext(ctx).Raw(`
-SELECT count(*)
-FROM user_account app_user
-WHERE app_user.id IN ?
-  AND app_user.is_enabled=1
-  AND app_user.deleted_at IS NULL
-  AND EXISTS (
-    SELECT 1
-    FROM permission_user_role user_role
-    JOIN permission_role app_role
-      ON app_role.id=user_role.role_id
-     AND app_role.is_enabled=1
-     AND app_role.deleted_at IS NULL
-    WHERE user_role.user_id=app_user.id
-      AND user_role.created_at<=CURRENT_TIMESTAMP
-      AND (user_role.deleted_at IS NULL OR user_role.deleted_at>CURRENT_TIMESTAMP)
-      AND (
-        app_role.code='super_admin'
-        OR EXISTS (
-          SELECT 1
-          FROM permission_role_menu role_menu
-          JOIN permission_menu app_menu
-            ON app_menu.id=role_menu.menu_id
-           AND app_menu.platform_id=?
-           AND app_menu.is_enabled=1
-           AND app_menu.deleted_at IS NULL
-          WHERE role_menu.role_id=app_role.id
-            AND role_menu.created_at<=CURRENT_TIMESTAMP
-            AND (role_menu.deleted_at IS NULL OR role_menu.deleted_at>CURRENT_TIMESTAMP)
-        )
-      )
-  )`, input.TargetIDs, input.PlatformID).Scan(&count).Error
-		if err != nil {
-			return err
+		if err := r.permissions.ValidateUserTargets(ctx, input.PlatformID, input.TargetIDs, at); err != nil {
+			return mapPermissionFactError(err)
 		}
 	case AudienceRole:
-		err := r.db.WithContext(ctx).Raw(`
-SELECT count(*)
-FROM permission_role app_role
-WHERE app_role.id IN ?
-  AND app_role.is_enabled=1
-  AND app_role.deleted_at IS NULL
-  AND (
-    app_role.code='super_admin'
-    OR EXISTS (
-      SELECT 1
-      FROM permission_role_menu role_menu
-      JOIN permission_menu app_menu
-        ON app_menu.id=role_menu.menu_id
-       AND app_menu.platform_id=?
-       AND app_menu.is_enabled=1
-       AND app_menu.deleted_at IS NULL
-      WHERE role_menu.role_id=app_role.id
-        AND role_menu.created_at<=CURRENT_TIMESTAMP
-        AND (role_menu.deleted_at IS NULL OR role_menu.deleted_at>CURRENT_TIMESTAMP)
-    )
-  )`, input.TargetIDs, input.PlatformID).Scan(&count).Error
-		if err != nil {
-			return err
+		if err := r.permissions.ValidateRoleTargets(ctx, input.PlatformID, input.TargetIDs, at); err != nil {
+			return mapPermissionFactError(err)
 		}
-	}
-	if count != int64(len(input.TargetIDs)) {
-		return fmt.Errorf("%w: target is unavailable", ErrInvalidFacts)
 	}
 	return nil
 }
-func (r *Repository) validatePlatformCapability(ctx context.Context, platformID int64) error {
-	var enabled int64
-	if err := r.db.WithContext(ctx).Raw(`SELECT count(*) FROM permission_auth_platform WHERE id=? AND is_enabled=1 AND deleted_at IS NULL`, platformID).Scan(&enabled).Error; err != nil {
-		return err
+
+func mapPermissionFactError(err error) error {
+	if errors.Is(err, permissionnotification.ErrInvalidFacts) {
+		return fmt.Errorf("%w: %v", ErrInvalidFacts, err)
 	}
-	if enabled != 1 {
-		return fmt.Errorf("%w: platform is unavailable", ErrInvalidFacts)
-	}
-	type node struct {
-		ID       int64
-		ParentID *int64
-		MenuType string
-		Code     string
-		IsHidden int16
-	}
-	var nodes []node
-	if err := r.db.WithContext(ctx).Raw(`SELECT id,parent_id,menu_type,code,is_hidden FROM permission_menu WHERE platform_id=? AND code IN ('message:notification:view','message:notification:list','message:notification:read','message:notification:delete') AND is_enabled=1 AND deleted_at IS NULL`, platformID).Scan(&nodes).Error; err != nil {
-		return err
-	}
-	if len(nodes) == 0 {
-		return fmt.Errorf("%w: notification capability is not enabled for platform", ErrInvalidFacts)
-	}
-	if len(nodes) != 4 {
-		return errors.New("notification capability facts are incomplete")
-	}
-	var pageID int64
-	actions := map[string]bool{}
-	for _, node := range nodes {
-		if node.Code == "message:notification:view" {
-			if node.MenuType != "page" || node.IsHidden != 1 || node.ParentID != nil {
-				return errors.New("notification page fact is invalid")
-			}
-			pageID = node.ID
-		} else {
-			actions[node.Code] = node.MenuType == "action" && node.ParentID != nil
-		}
-	}
-	if pageID == 0 {
-		return errors.New("notification page fact is missing")
-	}
-	for _, node := range nodes {
-		if node.Code != "message:notification:view" && (!actions[node.Code] || node.ParentID == nil || *node.ParentID != pageID) {
-			return errors.New("notification action fact is invalid")
-		}
-	}
-	return nil
+	return err
 }
 func (r *Repository) Find(ctx context.Context, id int64) (Task, error) { return r.find(ctx, id) }
 func (r *Repository) List(ctx context.Context, input ListQuery) ([]Task, int64, error) {
-	query := r.db.WithContext(ctx).
-		Table("message_notification_task task").
-		Joins("JOIN permission_auth_platform platform ON platform.id=task.platform_id").
-		Where("task.deleted_at IS NULL")
+	query := r.db.WithContext(ctx).Table("message_notification_task task").Where("task.deleted_at IS NULL")
 	if input.PlatformID != nil {
 		query = query.Where("task.platform_id=?", *input.PlatformID)
 	}
@@ -390,7 +313,18 @@ func (r *Repository) List(ctx context.Context, input ListQuery) ([]Task, int64, 
 		return nil, 0, err
 	}
 	var rows []Task
-	err := query.Select("task.*, platform.name AS platform_name").Order("task.id DESC").Limit(input.PageSize).Offset((input.Page - 1) * input.PageSize).Scan(&rows).Error
+	err := query.Select("task.*").Order("task.id DESC").Limit(input.PageSize).Offset((input.Page - 1) * input.PageSize).Scan(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	ids := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.PlatformID)
+	}
+	names, err := r.permissions.PlatformNames(ctx, ids)
+	for index := range rows {
+		rows[index].PlatformName = names[rows[index].PlatformID]
+	}
 	return rows, total, err
 }
 
@@ -400,149 +334,13 @@ type Option struct {
 }
 
 func (r *Repository) Options(ctx context.Context, kind string, platformID int64, keyword string, after int64, limit int) ([]Option, error) {
-	if platformID < 1 && kind != "platform" {
-		return nil, fmt.Errorf("platform is required for target options")
-	}
-	pattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(keyword) + "%"
-	table, name := "user_account", "username"
-	condition := "is_enabled=1 AND deleted_at IS NULL"
-	if kind == "role" {
-		table, name = "permission_role", "name"
-	}
-	var rows []Option
-	if kind == "platform" {
-		var malformed int64
-		if err := r.db.WithContext(ctx).Raw(`
-SELECT count(*)
-FROM permission_auth_platform platform
-WHERE platform.id>?
-  AND platform.is_enabled=1
-  AND platform.deleted_at IS NULL
-  AND (?='' OR platform.name ILIKE ? ESCAPE '\')
-  AND EXISTS (
-    SELECT 1 FROM permission_menu node
-    WHERE node.platform_id=platform.id
-      AND node.code IN ('message:notification:view','message:notification:list','message:notification:read','message:notification:delete')
-      AND node.is_enabled=1
-      AND node.deleted_at IS NULL
-  )
-  AND NOT EXISTS (
-    SELECT 1
-    FROM permission_menu page
-    WHERE page.platform_id=platform.id
-      AND page.code='message:notification:view'
-      AND page.menu_type='page'
-      AND page.parent_id IS NULL
-      AND page.is_hidden=1
-      AND page.is_enabled=1
-      AND page.deleted_at IS NULL
-      AND (
-        SELECT count(DISTINCT action.code)
-        FROM permission_menu action
-        WHERE action.platform_id=platform.id
-          AND action.parent_id=page.id
-          AND action.code IN ('message:notification:list','message:notification:read','message:notification:delete')
-          AND action.menu_type='action'
-          AND action.is_enabled=1
-          AND action.deleted_at IS NULL
-      )=3
-  )`, after, keyword, pattern).Scan(&malformed).Error; err != nil {
-			return nil, err
-		}
-		if malformed != 0 {
-			return nil, errors.New("notification platform capability facts are incomplete")
-		}
-		err := r.db.WithContext(ctx).Raw(`
-SELECT platform.id, platform.name AS label
-FROM permission_auth_platform platform
-JOIN permission_menu page
-  ON page.platform_id=platform.id
- AND page.code='message:notification:view'
- AND page.menu_type='page'
- AND page.parent_id IS NULL
- AND page.is_hidden=1
- AND page.is_enabled=1
- AND page.deleted_at IS NULL
-JOIN permission_menu action
-  ON action.platform_id=platform.id
- AND action.parent_id=page.id
- AND action.code IN ('message:notification:list','message:notification:read','message:notification:delete')
- AND action.menu_type='action'
- AND action.is_enabled=1
- AND action.deleted_at IS NULL
-WHERE platform.id>?
-  AND platform.is_enabled=1
-  AND platform.deleted_at IS NULL
-  AND (?='' OR platform.name ILIKE ? ESCAPE '\')
-GROUP BY platform.id,platform.name
-HAVING count(DISTINCT action.code)=3
-ORDER BY platform.id
-LIMIT ?`, after, keyword, pattern, limit).Scan(&rows).Error
-		return rows, err
-	}
-	if kind == "role" {
-		result := r.db.WithContext(ctx).Raw(`
-SELECT DISTINCT app_role.id, app_role.name AS label
-FROM permission_role app_role
-JOIN permission_role_menu role_menu
-  ON role_menu.role_id=app_role.id
- AND role_menu.deleted_at IS NULL
-JOIN permission_menu app_menu
-  ON app_menu.id=role_menu.menu_id
- AND app_menu.platform_id=?
- AND app_menu.is_enabled=1
- AND app_menu.deleted_at IS NULL
-WHERE app_role.id>?
-  AND app_role.is_enabled=1
-  AND app_role.deleted_at IS NULL
-  AND (?='' OR app_role.name ILIKE ? ESCAPE '\')
-ORDER BY app_role.id
-LIMIT ?`, platformID, after, keyword, pattern, limit).Scan(&rows)
-		return rows, result.Error
-	}
-	if kind == "user" {
-		result := r.db.WithContext(ctx).Raw(`
-SELECT app_user.id, app_user.username AS label
-FROM user_account app_user
-WHERE app_user.id>?
-  AND app_user.is_enabled=1
-  AND app_user.deleted_at IS NULL
-  AND (?='' OR app_user.username ILIKE ? ESCAPE '\')
-  AND EXISTS (
-    SELECT 1
-    FROM permission_user_role user_role
-    JOIN permission_role app_role
-      ON app_role.id=user_role.role_id
-     AND app_role.is_enabled=1
-     AND app_role.deleted_at IS NULL
-    WHERE user_role.user_id=app_user.id
-      AND user_role.deleted_at IS NULL
-      AND (
-        app_role.code='super_admin'
-        OR EXISTS (
-          SELECT 1
-          FROM permission_role_menu role_menu
-          JOIN permission_menu app_menu
-            ON app_menu.id=role_menu.menu_id
-           AND app_menu.platform_id=?
-           AND app_menu.is_enabled=1
-           AND app_menu.deleted_at IS NULL
-          WHERE role_menu.role_id=app_role.id
-            AND role_menu.deleted_at IS NULL
-        )
-      )
-  )
-ORDER BY app_user.id
-LIMIT ?`, after, keyword, pattern, platformID, limit).Scan(&rows)
-		return rows, result.Error
-	}
-	query := r.db.WithContext(ctx).Table(table).Select("id,"+name+" AS label").Where("id>? AND "+condition, after)
-	if keyword != "" {
-		pattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(keyword) + "%"
-		query = query.Where(name+` ILIKE ? ESCAPE '\'`, pattern)
-	}
-	if err := query.Order("id").Limit(limit).Scan(&rows).Error; err != nil {
+	rows, err := r.permissions.Options(ctx, kind, platformID, keyword, after, limit)
+	if err != nil {
 		return nil, err
 	}
-	return rows, nil
+	result := make([]Option, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, Option{ID: row.ID, Label: row.Label})
+	}
+	return result, nil
 }

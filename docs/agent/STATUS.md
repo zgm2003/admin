@@ -8,7 +8,14 @@
 - 本轮验证时误执行了该 runner（API/Worker 当时未运行），真实 PostgreSQL 的 `message_notification_task.status` 已从 `varchar` 转为 `smallint DEFAULT 1`；当前分布为 `draft=1`、`completed=2`，两项 CHECK 存在，runner 已重复执行通过。真实 schema 快照已刷新到 `docs/database/current.sql`，SHA256 `718EF89D28D970D06EC3412BE0628F803DA97420D94F29D625EA5DD3115AA6A4`。
 - 真实数据库只读核对后已执行 Scheduler runner：`system_scheduler_job.status` 与 `system_scheduler_run.status` 均已转为 `smallint`，未知值预检查、约束、索引和幂等复跑均通过；首次尝试暴露并修复了默认值未先移除的真实 SQL 缺陷。API/Worker 仍未由 Agent 启动。
 - Scheduler 迁移后真实 schema 快照再次刷新到 `docs/database/current.sql`，SHA256 `21A3FABA797108D764D93E68FC5416E1FFF287B4BA8F2D356FE11B36319EA2BD`。
-- 尚未完成：notificationTask 权限事实下沉、Worker 受众读取边界、菜单 icon 单一来源、Redis 实测和字段候选清理。
+- 尚未完成：菜单 icon 单一来源、Redis 实测和字段候选清理。
+
+### NotificationTask 权限边界收口（2026-09-21，代码已完成）
+
+- 新增 `permission/notification` 窄 Reader，由 Permission 模块独占平台、菜单、角色和用户角色查询；`message/notificationTask` 不再直接读取权限表。
+- API/Worker 入口显式注入 Reader factory；事务和批次处理使用事务连接创建 Permission Reader，保证锁、快照和请求 context 贯穿，不引入 DI 容器或通用 Manager。
+- 平台能力、用户/角色目标校验、平台/用户/角色选项、平台代理名称和批次受众展开均收口到 Reader，保持提交时角色冻结、`(platform_id,user_id)` 隔离与 keyset 分页。
+- 验证：前端 `pnpm verify:frontend` 全绿（100 文件/725 测试，build 通过）；后端通知任务、API、Worker 定向测试通过，`go vet ./...` 与 `go build ./...` 通过。全量 `go test -p 1 ./...` 曾因 `notificationTask` 包在整仓资源竞争下超过 11 分钟被测试超时终止，单独重跑该包 10.1 秒通过；需在低负载环境重新执行全量测试。
 
 ## Scheduler 写路径与 Publisher 健康语义收口（2026-09-21，代码已完成）
 

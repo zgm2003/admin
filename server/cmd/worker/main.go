@@ -14,6 +14,7 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/module/message/notification"
 	notificationtask "admin/server/internal/module/message/notificationTask"
+	permissionnotification "admin/server/internal/module/permission/notification"
 	"admin/server/internal/module/realtime"
 	"admin/server/internal/module/system/operationLog"
 	"admin/server/internal/module/system/scheduler"
@@ -110,7 +111,9 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	notificationProcessor = notificationtask.NewProcessor(postgres.GORM, realtimeRepository, batchJobWriter)
+	notificationProcessor = notificationtask.NewProcessor(postgres.GORM, realtimeRepository, batchJobWriter, func(db *gorm.DB) permissionnotification.Reader {
+		return permissionnotification.NewRepository(db)
+	})
 	configGenerationRepository := cachegeneration.NewRepository(postgres.GORM)
 	configGenerationStore := cachegeneration.NewStore(redisClient)
 	settingService, err := buildWorkerSettingService(postgres.GORM, redisClient, configGenerationRepository, configGenerationStore, logger)

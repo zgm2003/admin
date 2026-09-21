@@ -37,6 +37,7 @@ import (
 	"admin/server/internal/module/permission/access"
 	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
+	permissionnotification "admin/server/internal/module/permission/notification"
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/permission/state"
 	"admin/server/internal/module/realtime"
@@ -397,7 +398,9 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	notificationTaskRepository := notificationtask.NewRepository(postgres.GORM, batchJobWriter)
+	notificationTaskRepository := notificationtask.NewRepositoryWithPermissions(postgres.GORM, batchJobWriter, func(db *gorm.DB) permissionnotification.Reader {
+		return permissionnotification.NewRepository(db)
+	})
 	notificationTaskService := notificationtask.NewService(notificationTaskRepository)
 	schedulerCatalog, err := scheduler.NewTaskCatalog(append(scheduler.BuiltinDefinitions(nil, nil, nil), notificationDefinition)...)
 	if err != nil {

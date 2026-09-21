@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"admin/server/internal/module/message/notification"
+	permissionnotification "admin/server/internal/module/permission/notification"
 	"admin/server/internal/module/realtime"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -17,25 +18,27 @@ import (
 )
 
 type Processor struct {
-	db       *gorm.DB
-	realtime *realtime.Repository
-	jobs     BatchJobWriter
+	db                *gorm.DB
+	realtime          *realtime.Repository
+	jobs              BatchJobWriter
+	permissions       permissionnotification.Reader
+	permissionFactory PermissionReaderFactory
 }
 
 var ErrFrozenFacts = errors.New("notification task frozen facts are invalid")
 
-func NewProcessor(db *gorm.DB, realtimeRepository *realtime.Repository, jobs ...BatchJobWriter) *Processor {
-	var writer BatchJobWriter
-	if len(jobs) > 0 {
-		writer = jobs[0]
+func NewProcessor(db *gorm.DB, realtimeRepository *realtime.Repository, writer BatchJobWriter, factories ...PermissionReaderFactory) *Processor {
+	factory := PermissionReaderFactory(func(tx *gorm.DB) permissionnotification.Reader { return permissionnotification.NewRepository(tx) })
+	if len(factories) > 0 && factories[0] != nil {
+		factory = factories[0]
 	}
-	return &Processor{db: db, realtime: realtimeRepository, jobs: writer}
+	return &Processor{db: db, realtime: realtimeRepository, jobs: writer, permissions: factory(db), permissionFactory: factory}
 }
 func (p *Processor) Process(ctx context.Context, payload BatchPayload) error {
 	if payload.SchemaVersion != 1 || payload.TaskID <= 0 || payload.BatchNo < 0 {
 		return errors.New("invalid notification batch")
 	}
-	if p == nil || p.db == nil || p.realtime == nil || p.jobs == nil {
+	if p == nil || p.db == nil || p.realtime == nil || p.jobs == nil || p.permissions == nil || p.permissionFactory == nil {
 		return errors.New("notification batch processor dependencies are required")
 	}
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return p.processTx(ctx, tx, payload) })
@@ -123,99 +126,13 @@ func (p *Processor) processPlatform(ctx context.Context, tx *gorm.DB, task Task,
 	return tx.WithContext(ctx).Model(&Task{}).Where("id=?", task.ID).Updates(map[string]any{"status": StatusCompleted, "generated_count": 1, "next_batch_no": task.NextBatchNo + 1, "published_at": gorm.Expr("COALESCE(published_at, ?)", publishedAt), "completed_at": now, "updated_at": now}).Error
 }
 func (p *Processor) batchUsers(ctx context.Context, tx *gorm.DB, task Task) ([]int64, bool, error) {
-	var ids []int64
-	if task.AudienceType == AudienceUser {
-		err := tx.WithContext(ctx).Raw(`
-WITH eligible_roles AS MATERIALIZED (
-  SELECT app_role.id
-  FROM permission_role app_role
-  WHERE app_role.is_enabled=1
-    AND app_role.deleted_at IS NULL
-    AND (
-      app_role.code='super_admin'
-      OR EXISTS (
-        SELECT 1
-        FROM permission_role_menu role_menu
-        JOIN permission_menu app_menu
-          ON app_menu.id=role_menu.menu_id
-         AND app_menu.platform_id=?
-         AND app_menu.is_enabled=1
-         AND app_menu.deleted_at IS NULL
-        WHERE role_menu.role_id=app_role.id
-          AND role_menu.created_at<=?
-          AND (role_menu.deleted_at IS NULL OR role_menu.deleted_at>?)
-      )
-    )
-)
-SELECT target.target_id
-FROM message_notification_task_target target
-JOIN user_account app_user
-  ON app_user.id=target.target_id
- AND app_user.is_enabled=1
- AND app_user.deleted_at IS NULL
-WHERE target.task_id=?
-  AND target.target_type='user'
-  AND target.deleted_at IS NULL
-  AND target.target_id>?
-  AND target.target_id<=?
-  AND EXISTS (
-    SELECT 1
-    FROM permission_user_role user_role
-    JOIN eligible_roles ON eligible_roles.id=user_role.role_id
-    WHERE user_role.user_id=app_user.id
-      AND user_role.created_at<=?
-      AND (user_role.deleted_at IS NULL OR user_role.deleted_at>?)
-  )
-ORDER BY target.target_id
-LIMIT 501`, task.PlatformID, *task.SubmittedAt, *task.SubmittedAt, task.ID, task.NextUserID, *task.AudienceMaxUserID, *task.SubmittedAt, *task.SubmittedAt).Scan(&ids).Error
-		if err != nil {
-			return nil, false, err
-		}
-	} else {
-		err := tx.WithContext(ctx).Raw(`
-WITH eligible_roles AS MATERIALIZED (
-  SELECT app_role.id
-  FROM permission_role app_role
-  WHERE app_role.is_enabled=1
-    AND app_role.deleted_at IS NULL
-    AND (
-      app_role.code='super_admin'
-      OR EXISTS (
-        SELECT 1
-        FROM permission_role_menu role_menu
-        JOIN permission_menu app_menu
-          ON app_menu.id=role_menu.menu_id
-         AND app_menu.platform_id=?
-         AND app_menu.is_enabled=1
-         AND app_menu.deleted_at IS NULL
-        WHERE role_menu.role_id=app_role.id
-          AND role_menu.created_at<=?
-          AND (role_menu.deleted_at IS NULL OR role_menu.deleted_at>?)
-      )
-    )
-)
-SELECT DISTINCT user_role.user_id
-FROM permission_user_role user_role
-JOIN user_account app_user
-  ON app_user.id=user_role.user_id
- AND app_user.is_enabled=1
- AND app_user.deleted_at IS NULL
-JOIN eligible_roles
-		  ON eligible_roles.id=user_role.role_id
-JOIN message_notification_task_target target
-  ON target.task_id=?
- AND target.target_type='role'
- AND target.target_id=eligible_roles.id
- AND target.deleted_at IS NULL
-WHERE user_role.created_at<=?
-  AND (user_role.deleted_at IS NULL OR user_role.deleted_at>?)
-  AND user_role.user_id>?
-  AND user_role.user_id<=?
-ORDER BY user_role.user_id
-LIMIT 501`, task.PlatformID, *task.SubmittedAt, *task.SubmittedAt, task.ID, *task.SubmittedAt, *task.SubmittedAt, task.NextUserID, *task.AudienceMaxUserID).Scan(&ids).Error
-		if err != nil {
-			return nil, false, err
-		}
+	var targetIDs []int64
+	if err := tx.WithContext(ctx).Model(&Target{}).Where("task_id=? AND target_type=? AND deleted_at IS NULL", task.ID, task.AudienceType).Order("target_id").Pluck("target_id", &targetIDs).Error; err != nil {
+		return nil, false, err
+	}
+	ids, err := p.permissionFactory(tx).BatchUsers(ctx, task.PlatformID, string(task.AudienceType), targetIDs, *task.SubmittedAt, task.NextUserID, *task.AudienceMaxUserID, 501)
+	if err != nil {
+		return nil, false, err
 	}
 	more := len(ids) > 500
 	if more {
