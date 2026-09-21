@@ -1,5 +1,15 @@
 # 项目状态
 
+## NotificationTask 状态协议整改（2026-09-21，代码与迁移已落地）
+
+- 后端 `notificationTask.Status` 已改为 `int16` typed enum：`1=draft`、`2=scheduled`、`3=queued`、`4=processing`、`5=completed`、`6=failed`、`7=canceled`；提供固定 metadata/i18n key 和终态标记，查询参数只接受数值。
+- 前端 API parser、状态 tabs、表格、详情和测试已切换数值协议；label 由 enum metadata 的 i18n key 生成，不把状态交给可编辑字典。
+- 新增 `docs/database/2026-09-21-notification-task-status-numeric.sql` 与 PowerShell runner：转换前拒绝未知值，增加 `SMALLINT + CHECK`、状态机约束、幂等复跑和可读备份校验。
+- 本轮验证时误执行了该 runner（API/Worker 当时未运行），真实 PostgreSQL 的 `message_notification_task.status` 已从 `varchar` 转为 `smallint DEFAULT 1`；当前分布为 `draft=1`、`completed=2`，两项 CHECK 存在，runner 已重复执行通过。真实 schema 快照已刷新到 `docs/database/current.sql`，SHA256 `718EF89D28D970D06EC3412BE0628F803DA97420D94F29D625EA5DD3115AA6A4`。
+- 真实数据库只读核对后已执行 Scheduler runner：`system_scheduler_job.status` 与 `system_scheduler_run.status` 均已转为 `smallint`，未知值预检查、约束、索引和幂等复跑均通过；首次尝试暴露并修复了默认值未先移除的真实 SQL 缺陷。API/Worker 仍未由 Agent 启动。
+- Scheduler 迁移后真实 schema 快照再次刷新到 `docs/database/current.sql`，SHA256 `21A3FABA797108D764D93E68FC5416E1FFF287B4BA8F2D356FE11B36319EA2BD`。
+- 尚未完成：notificationTask 权限事实下沉、Worker 受众读取边界、菜单 icon 单一来源、Redis 实测和字段候选清理。
+
 ## Scheduler 写路径与 Publisher 健康语义收口（2026-09-21，代码已完成）
 
 - 修复 Publisher 在队列依赖失败且 `ReschedulePublish` 成功时返回 `nil` 的吞错路径：现在保留任务重排，同时把入队错误返回给监督循环。
@@ -7,17 +17,17 @@
 - 手动 Execute 现在在同一事务中锁定未删除 schedule、读取最新任务定义并创建 Job；Retry 在同一事务中锁定失败 Job，并对有关联计划的 Job 再锁定未删除 schedule。删除先提交时 Execute/Retry 拒绝创建；Execute/Retry 先提交时删除能看到活动 Job 并拒绝删除。
 - 新增回归覆盖正常发布、Redis 失败重排并返回错误、Asynq TaskID 冲突幂等、连续依赖失败触发健康错误，以及 Execute/Retry 与计划并发写入的真实 PostgreSQL 行锁顺序。
 - 验证：`go fmt ./...`、`go vet ./...`、`go test -p 1 ./... -count=1`、`go build ./...` 全部 exit 0；未执行数据库迁移、API/Worker 重启或 Redis 清理。
-- 下一步：处理 notificationTask 权限事实下沉和平台受众隔离，再迁移其字符串状态；这些切片未在本次改动中假设已完成。
+- 下一步：在 Scheduler 数据库迁移完成后，继续处理 notificationTask 权限事实下沉和平台受众隔离。
 
 ## 简约架构审计与分批整改（2026-09-20，进行中）
 
 - 维护者确认：持久化业务状态（包含 Mail/SMS 日志、通知任务、Scheduler Job/Run）统一数值编码，由所属模块强类型 enum 管理；可配置展示选项由字典管理，不把状态机交给可编辑字典。HTTP 状态码保持协议值，Yes/No 暂保留 0/1；普通编辑继续 last-write-wins，缓存代际、对象物理版本和任务执行锁不按编辑乐观锁删除。
 - 当前第一工作单元：修复 Scheduler 删除与并发产生活动 Job、启停与并发 cron 修改的读写竞态。`DeleteSchedule` 和 `SetScheduleEnabled` 均在 PostgreSQL 事务内先锁定 schedule 行，再执行读校验与写入；公开 API/权限码、表结构不变，不新增通用抽象或 revision。
 - 容量与验证边界：沿用百万用户、多实例基线；本次只修改低频管理写路径，锁粒度为单 schedule 行，热读取和 Redis 协议不变。删除事务为行读取、活动任务计数、更新；启停为行读取、更新。真实 PostgreSQL 隔离 schema 的两连接并发测试，通过 pg_blocking_pids 确认阻塞点后提交竞争写入，不依赖固定 sleep 推测执行顺序。
-- 已观察失败再修复：删除原实现错误返回 nil；启用原实现使用旧 cron 算出 13:00 UTC，最新 cron 应为 12:05 UTC。已补齐 Scheduler 数字状态链路、通知任务跨平台目标过滤、API `request<unknown>` 边界和通知任务弹窗组件化；前端页面不再直接改写 Dialog prop。
+- 已观察失败再修复：删除原实现错误返回 nil；启用原实现使用旧 cron 算出 13:00 UTC，最新 cron 应为 12:05 UTC。已补齐通知任务跨平台目标过滤、API `request<unknown>` 边界和通知任务弹窗组件化；前端页面不再直接改写 Dialog prop。Scheduler 数字代码已落地，但真实库迁移仍待执行。
 - 当前验证证据：后端 `go fmt ./...`、`go vet ./...`、`go test -p 1 ./... -count=1`、`go build ./...` 全部 exit 0；前端 `pnpm format:check`、`pnpm lint`、`pnpm check:architecture`、`pnpm typecheck`、全量 Vitest 100 文件/725 项和 `pnpm build` 全部 exit 0。Build 仅保留既有大 chunk 警告。
 - 后续待完成：核对 notificationTask 权限规则所有权；逐域制定数值 enum 编码与前后端/数据库迁移；菜单图标单一维护来源；Redis key 数量/TTL/容量实测。
-- 已建立 `docs/agent/status-enum-catalog.md`：确认状态机按业务域使用独立数值编码，Scheduler、Mail、SMS 已完成各自 SQL/Go/API/前端同批切换，避免半迁移兼容分支；通知任务仍待后续迁移。
+- 已建立 `docs/agent/status-enum-catalog.md`：确认状态机按业务域使用独立数值编码，Mail、SMS 已完成真实迁移；Scheduler 已完成 Go/API/前端代码和 SQL，真实库待执行；NotificationTask 已完成 Go/API/前端代码和真实库迁移。
 - 全项目审计基线已落到 `docs/agent/audit/`：后端边界、前端质量、数据库结构、Redis 协议、状态/字典、菜单 icon 和整改优先级七份清单。当前这些文档只记录已核对证据与待验证项，不把建议误报为已修复。
 - 数据库复核已完成两项 forward migration：重复 user_session 用户外键、6 条空 device_id、permission_access_version.user_id 的 sequence 默认值已清理；空会话记录按维护者授权删除，不伪造设备 ID。其余冗余索引、表字段仍仅列候选，不能根据引用数或 idx_scan 一次快照直接删除。
 - 工作流：不创建历史 superpowers 计划、不自动提交、不修改业务 public 数据；下一批按失败测试、最小修复、真实迁移验证推进。全项目整改尚未完成。

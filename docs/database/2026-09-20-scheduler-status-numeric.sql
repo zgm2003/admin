@@ -13,7 +13,14 @@ DROP INDEX IF EXISTS ux_system_scheduler_job_active_schedule;
 
 DO $$
 BEGIN
+  ALTER TABLE system_scheduler_job ALTER COLUMN status DROP DEFAULT;
   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='system_scheduler_job' AND column_name='status' AND data_type IN ('character varying','text')) THEN
+    IF EXISTS (
+      SELECT 1 FROM system_scheduler_job
+      WHERE status NOT IN ('scheduled', 'queued', 'running', 'completed', 'failed', 'canceled')
+    ) THEN
+      RAISE EXCEPTION 'system_scheduler_job contains an unknown status';
+    END IF;
     ALTER TABLE system_scheduler_job
       ALTER COLUMN status TYPE SMALLINT USING CASE status
         WHEN 'scheduled' THEN 1
@@ -26,6 +33,7 @@ BEGIN
       END;
   END IF;
 END $$;
+ALTER TABLE system_scheduler_job ALTER COLUMN status SET DEFAULT 1;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'system_scheduler_job'::regclass AND conname = 'ck_system_scheduler_job_status') THEN
@@ -55,7 +63,11 @@ DROP INDEX IF EXISTS ix_system_scheduler_run_cleanup;
 
 DO $$
 BEGIN
+  ALTER TABLE system_scheduler_run ALTER COLUMN status DROP DEFAULT;
   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='system_scheduler_run' AND column_name='status' AND data_type IN ('character varying','text')) THEN
+    IF EXISTS (SELECT 1 FROM system_scheduler_run WHERE status NOT IN ('running', 'succeeded', 'failed')) THEN
+      RAISE EXCEPTION 'system_scheduler_run contains an unknown status';
+    END IF;
     ALTER TABLE system_scheduler_run
       ALTER COLUMN status TYPE SMALLINT USING CASE status
         WHEN 'running' THEN 1
@@ -65,6 +77,7 @@ BEGIN
       END;
   END IF;
 END $$;
+ALTER TABLE system_scheduler_run ALTER COLUMN status SET DEFAULT 1;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'system_scheduler_run'::regclass AND conname = 'ck_system_scheduler_run_status') THEN

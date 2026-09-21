@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict s6DOOkqUtjUogLvyW61kDHzaiJJA8sdj3zRyb8XnMyvSSSQ2ighbpIwffaG17tg
+\restrict 7hbUzcwT0xVqkBsy4zcch9wD0SlR9LgOPUadR5RlhbKc5eLlP1vCt6BE7cUrhyg
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -1368,7 +1368,7 @@ CREATE TABLE public.system_scheduler_job (
     source_key character varying(255),
     scheduled_at timestamp with time zone NOT NULL,
     available_at timestamp with time zone NOT NULL,
-    status character varying(16) DEFAULT 'scheduled'::character varying NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
     attempt_count integer DEFAULT 0 NOT NULL,
     max_attempts integer NOT NULL,
     queue character varying(64) NOT NULL,
@@ -1385,12 +1385,12 @@ CREATE TABLE public.system_scheduler_job (
     completed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT ck_system_scheduler_job_completed_at CHECK ((((status)::text = ANY ((ARRAY['completed'::character varying, 'failed'::character varying, 'canceled'::character varying])::text[])) = (completed_at IS NOT NULL))),
+    CONSTRAINT ck_system_scheduler_job_completed_at CHECK (((status = ANY (ARRAY[4, 5, 6])) = (completed_at IS NOT NULL))),
     CONSTRAINT ck_system_scheduler_job_counters CHECK (((attempt_count >= 0) AND (max_attempts > 0) AND (timeout_seconds > 0))),
     CONSTRAINT ck_system_scheduler_job_payload CHECK ((jsonb_typeof(payload) = 'object'::text)),
-    CONSTRAINT ck_system_scheduler_job_publish_lease CHECK (((((status)::text = 'scheduled'::text) AND (((publish_lease_until IS NULL) AND (publish_token IS NULL)) OR ((publish_lease_until IS NOT NULL) AND (publish_token IS NOT NULL)))) OR (((status)::text = 'queued'::text) AND (publish_lease_until IS NOT NULL) AND (publish_token IS NOT NULL)) OR (((status)::text <> ALL ((ARRAY['scheduled'::character varying, 'queued'::character varying])::text[])) AND (publish_lease_until IS NULL) AND (publish_token IS NULL)))),
+    CONSTRAINT ck_system_scheduler_job_publish_lease CHECK ((((status = 1) AND (((publish_lease_until IS NULL) AND (publish_token IS NULL)) OR ((publish_lease_until IS NOT NULL) AND (publish_token IS NOT NULL)))) OR ((status = 2) AND (publish_lease_until IS NOT NULL) AND (publish_token IS NOT NULL)) OR ((status <> ALL (ARRAY[1, 2])) AND (publish_lease_until IS NULL) AND (publish_token IS NULL)))),
     CONSTRAINT ck_system_scheduler_job_run_lease CHECK ((((run_lease_until IS NULL) AND (run_token IS NULL)) OR ((run_lease_until IS NOT NULL) AND (run_token IS NOT NULL)))),
-    CONSTRAINT ck_system_scheduler_job_status CHECK (((status)::text = ANY ((ARRAY['scheduled'::character varying, 'queued'::character varying, 'running'::character varying, 'completed'::character varying, 'failed'::character varying, 'canceled'::character varying])::text[]))),
+    CONSTRAINT ck_system_scheduler_job_status CHECK (((status >= 1) AND (status <= 6))),
     CONSTRAINT ck_system_scheduler_job_task_type CHECK ((btrim((task_type)::text) <> ''::text)),
     CONSTRAINT ck_system_scheduler_job_trigger_source CHECK (((trigger_source)::text = ANY ((ARRAY['cron'::character varying, 'manual'::character varying, 'retry'::character varying, 'business'::character varying])::text[])))
 );
@@ -1418,7 +1418,7 @@ CREATE TABLE public.system_scheduler_run (
     id bigint NOT NULL,
     job_id bigint NOT NULL,
     attempt_no integer NOT NULL,
-    status character varying(16) NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
     worker_id character varying(128) NOT NULL,
     started_at timestamp with time zone NOT NULL,
     finished_at timestamp with time zone,
@@ -1430,8 +1430,8 @@ CREATE TABLE public.system_scheduler_run (
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT ck_system_scheduler_run_attempt CHECK ((attempt_no > 0)),
     CONSTRAINT ck_system_scheduler_run_duration CHECK (((duration_ms IS NULL) OR (duration_ms >= 0))),
-    CONSTRAINT ck_system_scheduler_run_finished CHECK (((((status)::text = 'running'::text) AND (finished_at IS NULL)) OR (((status)::text <> 'running'::text) AND (finished_at IS NOT NULL)))),
-    CONSTRAINT ck_system_scheduler_run_status CHECK (((status)::text = ANY ((ARRAY['running'::character varying, 'succeeded'::character varying, 'failed'::character varying])::text[])))
+    CONSTRAINT ck_system_scheduler_run_finished CHECK ((((status = 1) AND (finished_at IS NULL)) OR ((status <> 1) AND (finished_at IS NOT NULL)))),
+    CONSTRAINT ck_system_scheduler_run_status CHECK (((status >= 1) AND (status <= 3)))
 );
 
 
@@ -2511,21 +2511,21 @@ CREATE INDEX ix_system_scheduler_job_list ON public.system_scheduler_job USING b
 -- Name: ix_system_scheduler_job_publish; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX ix_system_scheduler_job_publish ON public.system_scheduler_job USING btree (available_at, id) WHERE ((status)::text = 'scheduled'::text);
+CREATE INDEX ix_system_scheduler_job_publish ON public.system_scheduler_job USING btree (available_at, id) WHERE (status = 1);
 
 
 --
 -- Name: ix_system_scheduler_job_publish_lease; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX ix_system_scheduler_job_publish_lease ON public.system_scheduler_job USING btree (publish_lease_until, id) WHERE (((status)::text = 'scheduled'::text) AND (publish_lease_until IS NOT NULL));
+CREATE INDEX ix_system_scheduler_job_publish_lease ON public.system_scheduler_job USING btree (publish_lease_until, id) WHERE ((status = 1) AND (publish_lease_until IS NOT NULL));
 
 
 --
 -- Name: ix_system_scheduler_job_run_lease; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX ix_system_scheduler_job_run_lease ON public.system_scheduler_job USING btree (run_lease_until, id) WHERE (((status)::text = 'running'::text) AND (run_lease_until IS NOT NULL));
+CREATE INDEX ix_system_scheduler_job_run_lease ON public.system_scheduler_job USING btree (run_lease_until, id) WHERE ((status = 3) AND (run_lease_until IS NOT NULL));
 
 
 --
@@ -2539,14 +2539,14 @@ CREATE INDEX ix_system_scheduler_job_schedule_list ON public.system_scheduler_jo
 -- Name: ix_system_scheduler_job_terminal_cleanup; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX ix_system_scheduler_job_terminal_cleanup ON public.system_scheduler_job USING btree (completed_at, id) WHERE ((status)::text = ANY ((ARRAY['completed'::character varying, 'failed'::character varying, 'canceled'::character varying])::text[]));
+CREATE INDEX ix_system_scheduler_job_terminal_cleanup ON public.system_scheduler_job USING btree (completed_at, id) WHERE (status = ANY (ARRAY[4, 5, 6]));
 
 
 --
 -- Name: ix_system_scheduler_run_cleanup; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX ix_system_scheduler_run_cleanup ON public.system_scheduler_run USING btree (finished_at, id) WHERE ((status)::text = ANY ((ARRAY['succeeded'::character varying, 'failed'::character varying])::text[]));
+CREATE INDEX ix_system_scheduler_run_cleanup ON public.system_scheduler_run USING btree (finished_at, id) WHERE (status = ANY (ARRAY[2, 3]));
 
 
 --
@@ -2875,7 +2875,7 @@ CREATE UNIQUE INDEX ux_system_dictionary_item_value_active ON public.system_dict
 -- Name: ux_system_scheduler_job_active_schedule; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX ux_system_scheduler_job_active_schedule ON public.system_scheduler_job USING btree (schedule_id) WHERE ((schedule_id IS NOT NULL) AND ((status)::text = ANY ((ARRAY['scheduled'::character varying, 'queued'::character varying, 'running'::character varying])::text[])));
+CREATE UNIQUE INDEX ux_system_scheduler_job_active_schedule ON public.system_scheduler_job USING btree (schedule_id) WHERE ((schedule_id IS NOT NULL) AND (status = ANY (ARRAY[1, 2, 3])));
 
 
 --
@@ -3408,5 +3408,5 @@ ALTER TABLE ONLY public.system_dictionary_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict s6DOOkqUtjUogLvyW61kDHzaiJJA8sdj3zRyb8XnMyvSSSQ2ighbpIwffaG17tg
+\unrestrict 7hbUzcwT0xVqkBsy4zcch9wD0SlR9LgOPUadR5RlhbKc5eLlP1vCt6BE7cUrhyg
 
