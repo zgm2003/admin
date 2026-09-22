@@ -18,6 +18,14 @@ import { useNotificationTaskOptions } from './useNotificationTaskOptions'
 
 const access = usePermissionStore()
 const { t } = useI18n()
+
+interface NotificationTaskSearchModel {
+  platformId: string
+  audienceType: '' | taskApi.NotificationAudience
+  keyword: string
+  timeRange: [] | [string, string]
+}
+
 const rows = ref<taskApi.NotificationTaskListItem[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
@@ -80,7 +88,7 @@ const audienceOptions = computed(() =>
     label: t(item.i18nKey),
   })),
 )
-const searchModel = computed<SearchFormModel>({
+const searchModel = computed<SearchFormModel<NotificationTaskSearchModel>>({
   get: () => ({
     platformId: platformIDFilter.value,
     audienceType: audienceFilter.value,

@@ -4,12 +4,17 @@ import type { TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
 
 type Translate = (key: string) => string
+export interface RoleSearchModel {
+  keyword: string
+  status: '' | YesNo
+}
 
-export function roleSearchFields(t: Translate): SearchField[] {
+export function roleSearchFields(t: Translate): SearchField<RoleSearchModel>[] {
   return [
     {
       key: 'keyword',
       type: 'input',
+      resetValue: '',
       label: t('role.keyword'),
       placeholder: t('role.keyword'),
       width: 260,
@@ -18,6 +23,7 @@ export function roleSearchFields(t: Translate): SearchField[] {
     {
       key: 'status',
       type: 'select-v2',
+      resetValue: '',
       label: t('role.status.all'),
       options: [
         { label: t('role.status.all'), value: '' },

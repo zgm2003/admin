@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import * as smsApi from '@/api/message/sms'
@@ -42,6 +42,7 @@ const logPage = ref(1)
 const logPageSize = ref(20)
 const logTotal = ref(0)
 const logFilter = ref<SmsLogFilter>(blankLogFilter())
+let catalogPromise: Promise<void> | null = null
 const can = (code: string) => access.hasPermission(code)
 const canList = computed(() => can('message:sms:list'))
 const visibleTabs = computed(() =>
@@ -67,15 +68,24 @@ function errorMessage(error: unknown): string {
   return error instanceof Error && error.message !== '' ? error.message : t('sms.loadFailed')
 }
 
-async function loadCatalog(): Promise<void> {
+function loadCatalog(): Promise<void> {
+  if (catalogReady.value) return Promise.resolve()
+  if (catalogPromise !== null) return catalogPromise
   catalogError.value = ''
-  try {
-    await smsApi.getSmsPageInit()
-    catalogReady.value = true
-  } catch (error: unknown) {
-    catalogReady.value = false
-    catalogError.value = errorMessage(error)
-  }
+  const pending = smsApi
+    .getSmsPageInit()
+    .then(() => {
+      catalogReady.value = true
+    })
+    .catch((error: unknown) => {
+      catalogReady.value = false
+      catalogError.value = errorMessage(error)
+    })
+    .finally(() => {
+      if (catalogPromise === pending) catalogPromise = null
+    })
+  catalogPromise = pending
+  return pending
 }
 
 async function loadConfig(context?: MessageTabLoadContext): Promise<void> {
@@ -142,10 +152,13 @@ function changeLogPage(value: TablePaginationState): void {
   void load('logs')
 }
 
-onMounted(() => {
-  if (!canList.value) return
-  void loadCatalog()
-})
+watch(
+  canList,
+  (allowed) => {
+    if (allowed) void loadCatalog()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>

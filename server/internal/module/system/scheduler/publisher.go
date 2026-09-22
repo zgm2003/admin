@@ -120,7 +120,7 @@ func (p *Publisher) RunOnce(ctx context.Context, now time.Time) (int, error) {
 			iterationErr = errors.Join(iterationErr, encodeErr)
 			continue
 		}
-		options := QueueOptions{TaskID: fmt.Sprintf("system-scheduler:%d:%d", job.ID, attempt), Queue: definition.Queue, Timeout: definition.Timeout, MaxRetry: definition.MaxAttempts - 1, ProcessAt: job.AvailableAt}
+		options := QueueOptions{TaskID: fmt.Sprintf("system-scheduler:%d:%d:%s", job.ID, attempt, claimed.DispatchToken), Queue: definition.Queue, Timeout: definition.Timeout, MaxRetry: definition.MaxAttempts - 1, ProcessAt: job.AvailableAt}
 		enqueueErr := p.queue.Enqueue(ctx, EnvelopeTaskType, raw, options)
 		if enqueueErr == nil || errors.Is(enqueueErr, asynq.ErrTaskIDConflict) {
 			if markErr := p.repository.MarkQueued(ctx, job.ID, claimed.DispatchToken, now); markErr != nil {

@@ -63,7 +63,7 @@ func TestPublisherEnqueuesStaticDefinitionAndMarksQueued(t *testing.T) {
 	if count != 1 || repository.marked != 1 || repository.rescheduled != 0 {
 		t.Fatalf("count=%d repository=%+v", count, repository)
 	}
-	if queue.taskType != EnvelopeTaskType || queue.options.TaskID != "system-scheduler:9:1" || queue.options.Queue != "default" {
+	if queue.taskType != EnvelopeTaskType || queue.options.TaskID != "system-scheduler:9:1:lease" || queue.options.Queue != "default" {
 		t.Fatalf("queue=%+v", queue)
 	}
 	var envelope JobEnvelope
@@ -84,7 +84,7 @@ func TestPublisherReschedulesRedisFailure(t *testing.T) {
 		t.Fatalf("count=%d err=%v repository=%+v", count, err, repository)
 	}
 }
-func TestPublisherTreatsTaskIDConflictAsAlreadyPublished(t *testing.T) {
+func TestPublisherTaskIDIncludesDispatchTokenForConflictSafety(t *testing.T) {
 	now := time.Now().UTC()
 	repository := &publishRepositoryStub{job: PublishableJob{Job: Job{ID: 1, TaskType: "example", AvailableAt: now}, DispatchToken: "lease"}}
 	queue := &queueStub{err: asynq.ErrTaskIDConflict}
@@ -92,6 +92,9 @@ func TestPublisherTreatsTaskIDConflictAsAlreadyPublished(t *testing.T) {
 	publisher := NewPublisher(repository, queue, catalog, nil)
 	if count, err := publisher.RunOnce(context.Background(), now); err != nil || count != 1 || repository.marked != 1 {
 		t.Fatalf("count=%d err=%v repository=%+v", count, err, repository)
+	}
+	if queue.options.TaskID != "system-scheduler:1:1:lease" {
+		t.Fatalf("task id = %q, want dispatch-token scoped id", queue.options.TaskID)
 	}
 }
 

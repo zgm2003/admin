@@ -4,6 +4,11 @@ import type { TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
 
 type Translate = (key: string) => string
+export interface UserSearchModel {
+  keyword: string
+  status: '' | YesNo
+  role: '' | number
+}
 
 export function userTableColumns(t: Translate): TableColumn<UserListItem>[] {
   return [
@@ -19,11 +24,15 @@ export function userTableColumns(t: Translate): TableColumn<UserListItem>[] {
   ]
 }
 
-export function userSearchFields(t: Translate, roles: readonly UserRoleSummary[]): SearchField[] {
+export function userSearchFields(
+  t: Translate,
+  roles: readonly UserRoleSummary[],
+): SearchField<UserSearchModel>[] {
   return [
     {
       key: 'keyword',
       type: 'input',
+      resetValue: '',
       label: t('user.keyword'),
       placeholder: t('user.keyword'),
       width: 280,
@@ -32,6 +41,7 @@ export function userSearchFields(t: Translate, roles: readonly UserRoleSummary[]
     {
       key: 'status',
       type: 'select-v2',
+      resetValue: '',
       label: t('user.status'),
       options: [
         { label: t('user.status'), value: '' },
@@ -43,6 +53,7 @@ export function userSearchFields(t: Translate, roles: readonly UserRoleSummary[]
     {
       key: 'role',
       type: 'select-v2',
+      resetValue: '',
       label: t('user.role'),
       options: [
         { label: t('user.role'), value: '' },

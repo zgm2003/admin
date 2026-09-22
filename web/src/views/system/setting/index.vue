@@ -49,6 +49,10 @@ const form = ref<{ key: string; value: string; valueType: SettingValueType; desc
   valueType: 1,
   description: '',
 })
+interface SettingSearchModel {
+  keyword: string
+  status: '' | YesNo
+}
 
 const canList = computed(() => access.hasPermission('system:setting:list'))
 const canCreate = computed(() => access.hasPermission('system:setting:create'))
@@ -56,17 +60,18 @@ const canUpdate = computed(() => access.hasPermission('system:setting:update'))
 const canStatus = computed(() => access.hasPermission('system:setting:status'))
 const canDelete = computed(() => access.hasPermission('system:setting:delete'))
 const canUpload = computed(() => access.hasPermission('storage:object:upload'))
-const searchModel = computed<SearchFormModel>({
+const searchModel = computed<SearchFormModel<SettingSearchModel>>({
   get: () => ({ keyword: keyword.value, status: status.value }),
   set: (value) => {
     keyword.value = typeof value.keyword === 'string' ? value.keyword : ''
     status.value = value.status === YesNo.Yes || value.status === YesNo.No ? value.status : ''
   },
 })
-const searchFields = computed<SearchField[]>(() => [
+const searchFields = computed<SearchField<SettingSearchModel>[]>(() => [
   {
     key: 'keyword',
     type: 'input',
+    resetValue: '',
     label: t('setting.key'),
     placeholder: t('setting.searchPlaceholder'),
     clearable: true,
@@ -75,6 +80,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'status',
     type: 'select-v2',
+    resetValue: '',
     label: t('setting.status'),
     options: [
       { label: t('setting.enabled'), value: YesNo.Yes },

@@ -66,7 +66,7 @@ function validateModel(fields: readonly SearchField<TModel>[], model: TModel): s
   for (const field of fields) {
     if (!Object.prototype.hasOwnProperty.call(model, field.key))
       return `missing:${String(field.key)}`
-    const value = model[field.key]
+    const value = model[field.key as keyof TModel]
     if (field.type === 'date-range' ? !isDateRange(value) : !isScalar(value))
       return `invalid:${String(field.key)}`
   }
@@ -136,7 +136,9 @@ function emitForm(event: 'query' | 'reset'): void {
 function reset(): void {
   const value = { ...form.value }
   for (const field of props.fields) {
-    Object.assign(value, { [field.key]: field.type === 'date-range' ? [] : undefined })
+    Object.assign(value, {
+      [field.key]: field.type === 'date-range' ? [...field.resetValue] : field.resetValue,
+    })
   }
   form.value = value
   emitForm('reset')

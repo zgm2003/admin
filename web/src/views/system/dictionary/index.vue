@@ -50,6 +50,10 @@ const itemVisible = ref(false)
 const editingItem = ref<DictionaryItem | null>(null)
 const itemForm = ref({ value: '', labelZh: '', labelEn: '', sort: 0 })
 const submitting = ref(false)
+interface DictionarySearchModel {
+  keyword: string
+  status: '' | YesNo
+}
 
 const canDetail = computed(() => access.hasPermission('system:dictionary:detail'))
 const canList = computed(() => access.hasPermission('system:dictionary:list'))
@@ -57,17 +61,18 @@ const canCreate = computed(() => access.hasPermission('system:dictionary:create'
 const canUpdate = computed(() => access.hasPermission('system:dictionary:update'))
 const canStatus = computed(() => access.hasPermission('system:dictionary:status'))
 const canDelete = computed(() => access.hasPermission('system:dictionary:delete'))
-const searchModel = computed<SearchFormModel>({
+const searchModel = computed<SearchFormModel<DictionarySearchModel>>({
   get: () => ({ keyword: keyword.value, status: statusFilter.value }),
   set: (value) => {
     keyword.value = typeof value.keyword === 'string' ? value.keyword : ''
     statusFilter.value = value.status === YesNo.Yes || value.status === YesNo.No ? value.status : ''
   },
 })
-const searchFields = computed<SearchField[]>(() => [
+const searchFields = computed<SearchField<DictionarySearchModel>[]>(() => [
   {
     key: 'keyword',
     type: 'input',
+    resetValue: '',
     label: t('dictionary.code'),
     placeholder: t('dictionary.searchPlaceholder'),
     clearable: true,
@@ -76,6 +81,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'status',
     type: 'select-v2',
+    resetValue: '',
     label: t('dictionary.status'),
     options: [
       { label: t('dictionary.enabled'), value: YesNo.Yes },

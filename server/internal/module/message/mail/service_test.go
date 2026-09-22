@@ -540,6 +540,48 @@ func TestPrepareEmailVerifyCodeReturnsConfigTTLAndResendWindow(t *testing.T) {
 	if len(limiter.requests) != 2 {
 		t.Fatalf("limiter requests = %d, want 2", len(limiter.requests))
 	}
+	if limiter.requests[0].Key == "" || limiter.requests[0].Limit != 1 || limiter.requests[0].Window != time.Minute {
+		t.Fatalf("minute verification request = %+v", limiter.requests[0])
+	}
+	if limiter.requests[1].Key == "" || limiter.requests[1].Limit != 5 || limiter.requests[1].Window != 10*time.Minute {
+		t.Fatalf("ten-minute verification request = %+v", limiter.requests[1])
+	}
+}
+
+func TestPrepareEmailVerifyCodeUsesBothEmailWindows(t *testing.T) {
+	limiter := &recordingLimiter{allowed: true}
+	service, ctx := openMailServiceWithReadiness(t, limiter, stubRateLimitPolicyStore{catalog: policyCatalogWith(map[string][2]int{
+		"business_email_minute": {2, 120},
+		"business_email_10m":    {1, 1},
+	})})
+
+	if _, err := service.PrepareEmailVerifyCode(ctx, EmailVerifyCodePrepareInput{
+		PlatformID: 1, ClientIP: "127.0.0.1", Scene: SceneLogin, ToEmail: "user@example.com",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(limiter.requests) != 2 {
+		t.Fatalf("limiter requests = %d, want 2", len(limiter.requests))
+	}
+	if request := limiter.requests[0]; request.Limit != 2 || request.Window != 120*time.Second {
+		t.Fatalf("minute verification request = %+v", request)
+	}
+	if request := limiter.requests[1]; request.Limit != 1 || request.Window != time.Second {
+		t.Fatalf("ten-minute verification request = %+v", request)
+	}
+}
+
+func TestPrepareEmailVerifyCodeRejectsMissingEmailWindowPolicy(t *testing.T) {
+	limiter := &recordingLimiter{allowed: true}
+	service, ctx := openMailServiceWithReadiness(t, limiter, stubRateLimitPolicyStore{catalog: policyCatalogWithout("business_email_10m")})
+
+	_, err := service.PrepareEmailVerifyCode(ctx, EmailVerifyCodePrepareInput{
+		PlatformID: 1, ClientIP: "127.0.0.1", Scene: SceneLogin, ToEmail: "user@example.com",
+	})
+	assertApplicationError(t, err, http.StatusServiceUnavailable, apperror.CodeDependencyUnavailable)
+	if len(limiter.requests) != 0 {
+		t.Fatalf("invalid catalog consumed %d rate limits before failing", len(limiter.requests))
+	}
 }
 
 func TestPrepareEmailVerifyCodeRateLimitsBeforeSend(t *testing.T) {

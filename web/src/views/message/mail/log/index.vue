@@ -20,6 +20,7 @@ export interface MailLogFilter {
   status: MailStatus | ''
   timeRange: [string, string] | []
 }
+type MailLogSearchModel = MailLogFilter
 
 const props = defineProps<{
   logs: MailLog[]
@@ -39,7 +40,7 @@ const { t } = useI18n()
 const detail = ref<MailLogDetail | null>(null)
 const detailVisible = ref(false)
 const filter = ref<MailLogFilter>(blankFilter())
-const searchModel = computed<SearchFormModel>({
+const searchModel = computed<SearchFormModel<MailLogSearchModel>>({
   get: () => filter.value,
   set: (value) => {
     filter.value = toFilter(value)
@@ -53,10 +54,11 @@ const statusLabels: Record<MailStatus, string> = {
   [MailStatus.Sent]: 'mail.statusSent',
   [MailStatus.Failed]: 'mail.statusFailed',
 }
-const searchFields = computed<SearchField[]>(() => [
+const searchFields = computed<SearchField<MailLogSearchModel>[]>(() => [
   {
     key: 'platform',
     type: 'input',
+    resetValue: '',
     label: t('mail.platform'),
     placeholder: t('mail.platformFilterPlaceholder'),
     width: 160,
@@ -65,6 +67,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'toEmail',
     type: 'input',
+    resetValue: '',
     label: t('mail.recipient'),
     placeholder: t('mail.recipient'),
     width: 220,
@@ -73,6 +76,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'scene',
     type: 'select-v2',
+    resetValue: '',
     label: t('mail.scene'),
     options: sceneOptions.value,
     width: 170,
@@ -81,6 +85,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'status',
     type: 'select-v2',
+    resetValue: '',
     label: t('mail.status'),
     options: [
       { label: t('mail.statusPending'), value: MailStatus.Pending },
@@ -93,6 +98,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'timeRange',
     type: 'date-range',
+    resetValue: [],
     label: t('mail.timeRange'),
     placeholder: t('mail.timeRange'),
     valueFormat: 'YYYY-MM-DDTHH:mm:ssZ',
@@ -120,7 +126,7 @@ function blankFilter(): MailLogFilter {
   return { platform: '', toEmail: '', scene: '', status: '', timeRange: [] }
 }
 
-function toFilter(value: SearchFormModel): MailLogFilter {
+function toFilter(value: SearchFormModel<MailLogSearchModel>): MailLogFilter {
   return {
     platform: typeof value.platform === 'string' ? value.platform : '',
     toEmail: typeof value.toEmail === 'string' ? value.toEmail : '',
@@ -156,11 +162,11 @@ function sceneText(value: string): string {
   return sceneNames.value[value] ?? value
 }
 
-function search(value: SearchFormModel): void {
+function search(value: SearchFormModel<MailLogSearchModel>): void {
   emit('search', toFilter(value))
 }
 
-function reset(value: SearchFormModel): void {
+function reset(value: SearchFormModel<MailLogSearchModel>): void {
   emit('search', toFilter(value))
 }
 

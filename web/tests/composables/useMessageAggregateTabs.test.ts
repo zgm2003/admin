@@ -7,6 +7,37 @@ import { useMessageAggregateTabs } from '@/composables/useMessageAggregateTabs'
 type TabName = 'config' | 'templates'
 
 describe('useMessageAggregateTabs', () => {
+  it('loads the active tab when list permission becomes ready asynchronously', async () => {
+    const activeTab = ref<TabName>('config')
+    const canList = ref(false)
+    const loaders = {
+      config: vi.fn(async () => undefined),
+      templates: vi.fn(async () => undefined),
+    }
+    const harness = mount(
+      defineComponent({
+        setup() {
+          useMessageAggregateTabs({
+            activeTab,
+            canList,
+            loaders,
+            errorMessage: () => 'load failed',
+          })
+          return () => null
+        },
+      }),
+    )
+
+    await nextTick()
+    expect(loaders.config).not.toHaveBeenCalled()
+
+    canList.value = true
+    await nextTick()
+    expect(loaders.config).toHaveBeenCalledOnce()
+
+    harness.unmount()
+  })
+
   it('does not commit an older tab response after the active tab changes', async () => {
     const activeTab = ref<TabName>('config')
     const value = ref('')
@@ -54,6 +85,41 @@ describe('useMessageAggregateTabs', () => {
     oldResponse.resolve()
     await oldResponse.promise
     expect(currentAfterUnmount).toBe(false)
+  })
+
+  it('marks an in-flight loader stale when list permission is revoked', async () => {
+    const activeTab = ref<TabName>('config')
+    const canList = ref(true)
+    const response = deferred<void>()
+    let currentAfterRevocation = true
+    const harness = mount(
+      defineComponent({
+        setup() {
+          useMessageAggregateTabs({
+            activeTab,
+            canList,
+            loaders: {
+              config: async ({ isCurrent }) => {
+                await response.promise
+                currentAfterRevocation = isCurrent()
+              },
+              templates: async () => undefined,
+            },
+            errorMessage: () => 'load failed',
+          })
+          return () => null
+        },
+      }),
+    )
+
+    await nextTick()
+    canList.value = false
+    await nextTick()
+    response.resolve()
+    await response.promise
+    expect(currentAfterRevocation).toBe(false)
+
+    harness.unmount()
   })
 })
 

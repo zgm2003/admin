@@ -5,21 +5,31 @@ import { useI18n } from 'vue-i18n'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import { notificationTaskAudienceMetadata } from '@/api/message/notificationTask'
 
-const model = defineModel<SearchFormModel>({ required: true })
+interface NotificationTaskSearchModel {
+  keyword: string
+  platformId: string
+  audienceType: '' | 'user' | 'role' | 'platform'
+  timeRange: [] | [string, string]
+}
+
+const model = defineModel<SearchFormModel<NotificationTaskSearchModel>>({ required: true })
 const emit = defineEmits<{ query: []; reset: [] }>()
 const { t } = useI18n()
 
-const audienceOptions = computed(() => [
+const audienceOptions = computed<
+  Array<{ value: NotificationTaskSearchModel['audienceType']; label: string }>
+>(() => [
   { value: '', label: t('notificationTask.audienceAll') },
   ...notificationTaskAudienceMetadata.map((item) => ({
     value: item.value,
     label: t(item.i18nKey),
   })),
 ])
-const fields = computed<SearchField[]>(() => [
+const fields = computed<SearchField<NotificationTaskSearchModel>[]>(() => [
   {
     key: 'keyword',
     type: 'input',
+    resetValue: '',
     label: t('notificationTask.keyword'),
     placeholder: t('notificationTask.keywordPlaceholder'),
     clearable: true,
@@ -28,6 +38,7 @@ const fields = computed<SearchField[]>(() => [
   {
     key: 'platformId',
     type: 'input',
+    resetValue: '',
     label: t('notificationTask.platformId'),
     placeholder: t('notificationTask.platformIdPlaceholder'),
     clearable: true,
@@ -37,6 +48,7 @@ const fields = computed<SearchField[]>(() => [
   {
     key: 'audienceType',
     type: 'select-v2',
+    resetValue: '',
     label: t('notificationTask.audienceLabel'),
     placeholder: t('notificationTask.audiencePlaceholder'),
     options: audienceOptions.value,
@@ -46,6 +58,7 @@ const fields = computed<SearchField[]>(() => [
   {
     key: 'timeRange',
     type: 'date-range',
+    resetValue: [],
     label: t('notificationTask.timeRange'),
     startPlaceholder: t('notificationTask.timeRangeStartPlaceholder'),
     endPlaceholder: t('notificationTask.timeRangeEndPlaceholder'),

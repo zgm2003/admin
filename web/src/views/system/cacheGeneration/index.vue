@@ -23,11 +23,15 @@ const publishState = ref<'' | CacheGenerationPublishState>('')
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+interface CacheGenerationSearchModel {
+  keyword: string
+  publishState: '' | CacheGenerationPublishState
+}
 
 const publishStates: readonly CacheGenerationPublishState[] = ['ready', 'pending', 'retrying']
 
 const canList = computed(() => access.hasPermission('system:cacheGeneration:list'))
-const searchModel = computed<SearchFormModel>({
+const searchModel = computed<SearchFormModel<CacheGenerationSearchModel>>({
   get: () => ({ keyword: keyword.value, publishState: publishState.value }),
   set: (value) => {
     keyword.value = typeof value.keyword === 'string' ? value.keyword : ''
@@ -43,10 +47,11 @@ const publishStateOptions = computed<Array<{ label: string; value: CacheGenerati
     { label: t('cacheGeneration.publishStateRetrying'), value: 'retrying' },
   ],
 )
-const searchFields = computed<SearchField[]>(() => [
+const searchFields = computed<SearchField<CacheGenerationSearchModel>[]>(() => [
   {
     key: 'keyword',
     type: 'input',
+    resetValue: '',
     label: t('cacheGeneration.keyword'),
     placeholder: t('cacheGeneration.searchPlaceholder'),
     clearable: true,
@@ -55,6 +60,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'publishState',
     type: 'select-v2',
+    resetValue: '',
     label: t('cacheGeneration.publishState'),
     options: publishStateOptions.value,
     clearable: true,

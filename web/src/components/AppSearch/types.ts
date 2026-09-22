@@ -14,23 +14,30 @@ interface SearchFieldBase {
   testId?: string
 }
 
-export interface InputSearchField<TKey extends string = string> extends SearchFieldBase {
+export interface InputSearchField<
+  TKey extends string = string,
+  TResetValue extends SearchScalar = SearchScalar,
+> extends SearchFieldBase {
   key: TKey
   type: 'input'
+  resetValue: TResetValue
 }
 
 export interface SelectSearchField<
   TKey extends string = string,
   TValue extends SearchOptionValue = SearchOptionValue,
+  TResetValue extends SearchScalar = SearchScalar,
 > extends SearchFieldBase {
   key: TKey
   type: 'select-v2'
   options: SearchOption<TValue>[]
+  resetValue: TResetValue
 }
 
 export interface DateRangeSearchField<TKey extends string = string> extends SearchFieldBase {
   key: TKey
   type: 'date-range'
+  resetValue: SearchDateRange
   startPlaceholder?: string
   endPlaceholder?: string
   valueFormat?: string
@@ -41,8 +48,12 @@ type SearchFieldForKey<T extends object, TKey extends keyof T & string> =
   Exclude<T[TKey], undefined> extends SearchDateRange
     ? DateRangeSearchField<TKey>
     : Exclude<T[TKey], undefined> extends SearchScalar
-      ? | InputSearchField<TKey>
-        | SelectSearchField<TKey, Extract<Exclude<T[TKey], null | undefined>, SearchOptionValue>>
+      ? | InputSearchField<TKey, Extract<T[TKey], SearchScalar>>
+        | SelectSearchField<
+            TKey,
+            Extract<Exclude<T[TKey], null | undefined>, SearchOptionValue>,
+            Extract<T[TKey], SearchScalar>
+          >
       : never
 
 type StrictSearchField<T extends object> = {

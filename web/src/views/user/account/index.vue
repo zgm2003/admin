@@ -37,6 +37,7 @@ import {
   protectedRoleIDs,
   userSearchFields,
   userTableColumns,
+  type UserSearchModel,
 } from './userRules'
 
 const { t } = useI18n()
@@ -91,7 +92,7 @@ const hasEnabledSelection = computed(() => {
   return roleData.value.roles.some((role) => role.isEnabled === YesNo.Yes && selected.has(role.id))
 })
 
-const searchModel = computed<SearchFormModel>({
+const searchModel = computed<SearchFormModel<UserSearchModel>>({
   get: () => ({
     keyword: keyword.value,
     status: statusFilter.value,

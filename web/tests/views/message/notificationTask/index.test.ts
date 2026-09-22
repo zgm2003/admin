@@ -102,7 +102,9 @@ describe('notification task management', () => {
   })
   it('keeps status out of the search form because status is filtered by tabs', () => {
     const wrapper = mount(NotificationTaskSearch, {
-      props: { modelValue: {} },
+      props: {
+        modelValue: { keyword: '', platformId: '', audienceType: '', timeRange: [] },
+      },
       global: {
         plugins: [appI18n],
         stubs: {

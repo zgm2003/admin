@@ -30,7 +30,7 @@ export function useMessageAggregateTabs<T extends string>({
   }
 
   function isCurrent(tab: T, sequence: number): boolean {
-    return mounted && sequence === requestSequence && activeTab.value === tab
+    return mounted && canList.value && sequence === requestSequence && activeTab.value === tab
   }
 
   async function load(tab: T = activeTab.value): Promise<void> {
@@ -48,7 +48,13 @@ export function useMessageAggregateTabs<T extends string>({
     }
   }
 
-  watch(activeTab, (tab) => void load(tab), { immediate: true })
+  watch(
+    [activeTab, canList],
+    ([tab, allowed]) => {
+      if (allowed) void load(tab)
+    },
+    { immediate: true },
+  )
   onUnmounted(() => {
     mounted = false
     requestSequence += 1

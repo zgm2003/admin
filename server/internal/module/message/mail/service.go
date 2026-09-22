@@ -113,8 +113,10 @@ func (s *Service) PrepareEmailVerifyCode(ctx context.Context, in EmailVerifyCode
 	if err != nil {
 		return EmailVerifyCodePreparation{}, dependency(err)
 	}
-	if _, ok := ratelimitpolicy.Find(catalog, "business_email_minute"); !ok {
-		return EmailVerifyCodePreparation{}, dependency(fmt.Errorf("mail resend rate-limit policy is invalid"))
+	for _, key := range []string{"business_email_minute", "business_email_10m"} {
+		if _, ok := ratelimitpolicy.Find(catalog, key); !ok {
+			return EmailVerifyCodePreparation{}, dependency(fmt.Errorf("mail resend rate-limit policy is invalid"))
+		}
 	}
 	reservation, err := s.reserveEmail(ctx, catalog, in.PlatformID, email)
 	if err != nil {

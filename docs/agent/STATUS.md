@@ -1,5 +1,43 @@
 # 项目状态
 
+## 七提交整改止损复核（2026-09-22，已完成）
+
+- 复核范围为 `2e820f52^..21e674ff` 七个提交及其后的未提交工作区。保留 Mail/SMS、Scheduler、NotificationTask 数值状态迁移，Scheduler 并发/健康与 dispatch-token TaskID 修复，NotificationTask Permission 窄 Reader，以及前端 DTO 解析、HTML 契约、聚合页时序和 AppSearch 类型收紧。
+- 确认并修复一项未提交误改：邮箱验证码预检曾被缩减为单分钟窗口，现恢复为同平台、同规范化邮箱的分钟与十分钟双窗口原子预占；普通发送、验证码和管理员测试继续共享额度。
+- 独立复核发现的两项前端收尾已修复：SMS 在列表权限异步就绪时同步加载页面目录并复用在途请求；`AppSearch` 字段显式声明与模型同类型的 `resetValue`，重置不再把必填标量伪装成 `undefined`。
+- 删除 `2e820f52` 新增但已失效的 `docs/agent/audit/` 七份快照。它们仍把已完成事项写成待办，并包含与当前硬规则冲突的 icon catalog 方向；状态数值契约目录继续保留。
+- `docs/local-work/2026-09-21-project-remediation-{spec,plan}.md` 不再作为执行计划：其中已验证的工作已经落地，数据库候选清理没有足够负载证据，不继续扩大整改。当前结论是完成本轮状态迁移与止损收尾后停止，后续只按真实需求创建小范围工作项。
+- 验证：Server `go fmt ./...`、`go vet ./...`、`go test -p 1 ./... -count=1`、`go build ./...` 全部 exit 0；Web `pnpm verify:frontend` 全部 exit 0（103 个测试文件、745 项测试、生产构建通过，仅保留既有大 chunk warning）。Canvas 按维护者要求不在本轮范围。未执行数据库迁移、未修改业务数据、未清理 Redis、未 commit/push/rebase。
+
+## Batch 11 AppSearch 字段值类型收口（2026-09-21，代码已完成）
+
+- 将所有生产 `AppSearch` 消费点从默认宽泛 `SearchField[]` / `SearchFormModel` 改为页面自身的明确搜索模型；字段 key、数值状态、字符串 enum、日期范围和动态关联 ID 现在在编译期保持关联。
+- Mail/SMS 日志、通知任务、权限平台/角色、对象存储、系统设置/字典/操作日志/缓存代际、用户/会话/登录日志页面均完成类型绑定；运行时筛选值、HTTP 参数和 UI 行为未改变。
+- `AppSearch` 内部只保留读取泛型对象字段所需的 `keyof TModel` 收窄；每个字段的 `resetValue` 与模型字段类型关联，不增加 `any`、`as any`、宽泛 ambient declaration 或新公共抽象。
+- 验证：`pnpm typecheck`、`pnpm lint`、`pnpm check:architecture`（0 findings）通过；受影响 14 个 Vitest 文件/166 项通过；受影响文件 Prettier 通过。未运行本轮前端全量 `verify:frontend` 和生产 build，由维护者执行；未执行数据库迁移、未修改 Canvas、未提交代码。
+
+## Batch 10 消息聚合页权限时序收口（2026-09-21，代码已完成）
+
+- 修复 `useMessageAggregateTabs` 只监听当前 tab、不监听列表权限异步就绪的问题：权限从 loading 变为 ready 后会加载当前 tab，避免页面已有权限但内容不请求。
+- 权限被撤销时，进行中的旧请求被视为过期，不再把响应写回已无权页面；组件卸载时原有序列失效保护保持不变。没有新增全局 watcher 或常驻状态。
+- 回归测试覆盖权限异步授予、权限撤销中的请求、tab 切换旧响应和组件卸载；SMS 页面目录也随列表权限就绪加载，并复用未完成的目录请求。
+- 验证：`pnpm vitest run tests/composables/useMessageAggregateTabs.test.ts tests/views/message/mail/index.test.ts tests/views/message/sms/index.test.ts --pool=threads --maxWorkers=1`（3 文件/38 项）通过；`pnpm typecheck`、受影响文件 ESLint、Prettier 通过。未运行前端全量 `verify:frontend`，由维护者执行；未执行数据库迁移、未修改 Canvas、未提交代码。
+
+## Batch 9 邮箱验证码双窗口限流止损（2026-09-22，代码已修复）
+
+- 撤销未提交代码中把验证码预检缩减为单分钟窗口的错误改动；`PrepareEmailVerifyCode` 重新原子消费所属平台、规范化邮箱共享的 `business_email_minute + business_email_10m` 两个窗口。
+- 验证码、普通业务邮件和管理员测试邮件继续共享同平台、同邮箱额度；任一策略缺失都失败闭合，不允许绕过十分钟总量限制。
+- 回归测试先证明单窗口实现会失败，再覆盖两个窗口的次数与时长，以及缺少十分钟策略时不消费任何额度。
+- 定向验证：相关回归测试、Mail 包连续三轮、Auth login、用户邮箱、Scheduler、NotificationTask 测试通过；一次并行包运行中的 Mail readiness 用例受环境负载瞬态失败，单测和 Mail 包连续三轮均通过，最终以串行全量门禁为准。未执行数据库迁移、未清理 Redis、未修改 Canvas、未提交代码。
+
+## Batch 8 真实 Server/Web 验收与 Scheduler TaskID 修复（2026-09-21，已完成）
+
+- 真实启动新 API、Worker 和 Web Vite 进程完成端到端验收；`/health`、`/ready`、登录、`/api/v1/auth/me`、`/api/v1/access`、字典 options、Mail/SMS 日志、NotificationTask CRUD、Scheduler options/schedule/job/execute/run、未登录 401、Canvas 平台访问 Admin API 403，以及字符串状态拒绝 400 均符合契约。
+- 真实 Web 验收覆盖登录页、Dashboard、邮件、短信、通知任务、定时任务和角色授权弹窗；页面加载与交互过程中没有 Console error，数字状态筛选和 enum metadata 展示正常。浏览器必须使用 `http://localhost:16300`，`127.0.0.1` 不在当前 CORS allowlist 内；保留的 `vue-i18n` flatten warning 为既有告警。
+- 首轮真实 Scheduler 运行发现旧 TaskID `system-scheduler:<jobId>:<attempt>` 在 Asynq 冲突时被 Publisher 错误视为已发布，旧 payload token 与新 Job 不一致，最终出现“数据库 queued、任务 archived”的假成功。已将 TaskID 改为 `system-scheduler:<jobId>:<attempt>:<dispatchToken>`，并补充冲突安全测试；`go test ./internal/module/system/scheduler -count=1` 通过。
+- 修复后内置 Job `1/2/3`、新建 Job `7/8`、手动 Execute Job `27` 以及后续真实定时 Job 均成功完成并产生成功 Run。旧 Job `1` 的详情仍保留修复前的 `queued task delivery lease expired` 历史错误，不回写历史记录；最新 Job `63` 详情无错误。
+- 本轮未执行数据库迁移、未清理 Redis、未修改 Canvas；临时 API/Worker/Web 进程在最终验证后停止。未提交代码，改动保留给维护者按提交规范整理。
+
 ## Batch 7 全量门禁（2026-09-21，已完成）
 
 - 后端：`go fmt ./...`、`go vet ./...`、`go test -p 1 ./... -count=1`、`go build ./...` 全部 exit 0；全量 Go 测试通过，包含 API、Worker、数据库迁移、Scheduler、NotificationTask、Mail/SMS、RBAC、Session 和 Redis 相关包。
@@ -58,18 +96,14 @@
 - 验证：`go fmt ./...`、`go vet ./...`、`go test -p 1 ./... -count=1`、`go build ./...` 全部 exit 0；未执行数据库迁移、API/Worker 重启或 Redis 清理。
 - 下一步：在 Scheduler 数据库迁移完成后，继续处理 notificationTask 权限事实下沉和平台受众隔离。
 
-## 简约架构审计与分批整改（2026-09-20，进行中）
+## 简约架构审计与分批整改（2026-09-20，已结束）
 
-- 维护者确认：持久化业务状态（包含 Mail/SMS 日志、通知任务、Scheduler Job/Run）统一数值编码，由所属模块强类型 enum 管理；可配置展示选项由字典管理，不把状态机交给可编辑字典。HTTP 状态码保持协议值，Yes/No 暂保留 0/1；普通编辑继续 last-write-wins，缓存代际、对象物理版本和任务执行锁不按编辑乐观锁删除。
-- 当前第一工作单元：修复 Scheduler 删除与并发产生活动 Job、启停与并发 cron 修改的读写竞态。`DeleteSchedule` 和 `SetScheduleEnabled` 均在 PostgreSQL 事务内先锁定 schedule 行，再执行读校验与写入；公开 API/权限码、表结构不变，不新增通用抽象或 revision。
-- 容量与验证边界：沿用百万用户、多实例基线；本次只修改低频管理写路径，锁粒度为单 schedule 行，热读取和 Redis 协议不变。删除事务为行读取、活动任务计数、更新；启停为行读取、更新。真实 PostgreSQL 隔离 schema 的两连接并发测试，通过 pg_blocking_pids 确认阻塞点后提交竞争写入，不依赖固定 sleep 推测执行顺序。
-- 已观察失败再修复：删除原实现错误返回 nil；启用原实现使用旧 cron 算出 13:00 UTC，最新 cron 应为 12:05 UTC。已补齐通知任务跨平台目标过滤、API `request<unknown>` 边界和通知任务弹窗组件化；前端页面不再直接改写 Dialog prop。Scheduler 数字代码已落地，但真实库迁移仍待执行。
-- 当前验证证据：后端 `go fmt ./...`、`go vet ./...`、`go test -p 1 ./... -count=1`、`go build ./...` 全部 exit 0；前端 `pnpm format:check`、`pnpm lint`、`pnpm check:architecture`、`pnpm typecheck`、全量 Vitest 100 文件/725 项和 `pnpm build` 全部 exit 0。Build 仅保留既有大 chunk 警告。
-- 后续待完成：核对 notificationTask 权限规则所有权；逐域制定数值 enum 编码与前后端/数据库迁移；菜单图标单一维护来源；Redis key 数量/TTL/容量实测。
-- 已建立 `docs/agent/status-enum-catalog.md`：确认状态机按业务域使用独立数值编码，Mail、SMS 已完成真实迁移；Scheduler 已完成 Go/API/前端代码和 SQL，真实库待执行；NotificationTask 已完成 Go/API/前端代码和真实库迁移。
-- 全项目审计基线已落到 `docs/agent/audit/`：后端边界、前端质量、数据库结构、Redis 协议、状态/字典、菜单 icon 和整改优先级七份清单。当前这些文档只记录已核对证据与待验证项，不把建议误报为已修复。
-- 数据库复核已完成两项 forward migration：重复 user_session 用户外键、6 条空 device_id、permission_access_version.user_id 的 sequence 默认值已清理；空会话记录按维护者授权删除，不伪造设备 ID。其余冗余索引、表字段仍仅列候选，不能根据引用数或 idx_scan 一次快照直接删除。
-- 工作流：不创建历史 superpowers 计划、不自动提交、不修改业务 public 数据；下一批按失败测试、最小修复、真实迁移验证推进。全项目整改尚未完成。
+- 本节是已完成批次的历史执行摘要，已由上方“七提交整改止损复核”收口，不再作为进行中计划或后续工作清单。
+- 已确认并保留的架构决策：持久化业务状态按业务域使用独立数值编码和强类型 enum；展示文案由所属域 metadata/i18n 管理，可编辑字典不承载状态机；HTTP 状态码和 Yes/No 保持各自协议语义。
+- Scheduler 删除/启停并发、Publisher 健康语义、dispatch-token TaskID、NotificationTask 权限 Reader 与平台隔离均已完成；Mail/SMS、Scheduler、NotificationTask 数值状态代码和真实 PostgreSQL 迁移均已落地，具体证据见对应完成条目。
+- Redis 容量探针和数据库候选字段/索引审查已完成。当前证据不支持继续删除索引、字段或改造缓存协议；只有出现真实负载证据或具体需求时才建立新的小范围工作项。
+- `docs/agent/audit/` 临时清单已在 2026-09-22 删除，菜单 icon catalog 方向已否决。状态契约继续以 `docs/agent/status-enum-catalog.md`、当前代码、测试和真实数据库为准。
+- 本批次至此停止，不再继续“全项目整改”；未列入当前状态的新工作不得从本节或旧 remediation plan 自动恢复。
 
 ### Mail/SMS 日志状态数值化（2026-09-20，已迁移）
 
@@ -769,7 +803,7 @@ schema 上验证两次执行幂等、跨平台菜单改名、原菜单 ID/角色
 已删除的 IP/场景/管理员专属策略停止参与判断，旧专属 key 自然过期；它们不是新版邮箱策略的新额度来源。
 旧 key 无 hash tag，该跨 key 归并针对当前 standalone Redis；不支持直接迁至 Redis Cluster 后再归并。
 
-后端维护验收清单（本轮进行中）：跨层命名约束与三个 Skill；DTO/Handler/Service/Repository/Model/shared
+后端维护验收清单（历史记录，已结束）：跨层命名约束与三个 Skill；DTO/Handler/Service/Repository/Model/shared
 责任归位与自动检查；首次设密原子写入；邮件全场景共享策略与旧 Redis 衔接；readiness 全场景失效；
 refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另需评估 Access/Auth Redis 故障无界回源、
 菜单全用户失效的容量风险，不能用文件移动代替这些问题的结论。

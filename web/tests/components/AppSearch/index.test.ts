@@ -15,14 +15,15 @@ describe('AppSearch', () => {
 
   const dateRangeType: SearchFieldType = 'date-range'
   const fields: SearchField[] = [
-    { key: 'keyword', type: 'input', label: 'Keyword' },
+    { key: 'keyword', type: 'input', label: 'Keyword', resetValue: '' },
     {
       key: 'status',
       type: 'select-v2',
       label: 'Status',
       options: [{ label: 'Enabled', value: 1 }],
+      resetValue: '',
     },
-    { key: 'role', type: 'input', label: 'Role' },
+    { key: 'role', type: 'input', label: 'Role', resetValue: '' },
   ]
 
   beforeEach(() => setLocale('zh-CN'))
@@ -42,9 +43,26 @@ describe('AppSearch', () => {
   })
 
   it('emits query and reset with a copied form model', async () => {
-    const model: SearchFormModel = { keyword: 'alice', status: 1 }
+    interface ResetSearchModel {
+      keyword: string
+      status: '' | 1
+    }
+    const model: SearchFormModel<ResetSearchModel> = { keyword: 'alice', status: 1 }
+    const resetFields: SearchField<ResetSearchModel>[] = [
+      { key: 'keyword', type: 'input', label: 'Keyword', resetValue: '' },
+      {
+        key: 'status',
+        type: 'select-v2',
+        label: 'Status',
+        options: [{ label: 'Enabled', value: 1 }],
+        resetValue: '',
+      },
+    ]
     const wrapper = mount(AppSearch, {
-      props: { modelValue: model, fields: fields.slice(0, 2) },
+      props: {
+        modelValue: model as unknown as SearchFormModel,
+        fields: resetFields as SearchField[],
+      },
       global: { plugins: [ElementPlus, appI18n] },
     })
     await wrapper.find('form').trigger('submit')
@@ -53,7 +71,10 @@ describe('AppSearch', () => {
       .findAll('button')
       .find((button) => button.text().includes('重置'))
       ?.trigger('click')
-    expect(wrapper.emitted('reset')?.[0]?.[0]).toEqual({ keyword: undefined, status: undefined })
+    expect(wrapper.emitted('reset')?.[0]?.[0]).toEqual({
+      keyword: '',
+      status: '',
+    })
   })
 
   it('emits query when the query button is clicked', async () => {
@@ -94,6 +115,7 @@ describe('AppSearch', () => {
             key: 'dateRange',
             type: 'date-range',
             label: 'Date range',
+            resetValue: [],
             startPlaceholder: 'Start time',
             endPlaceholder: 'End time',
           },
@@ -111,7 +133,7 @@ describe('AppSearch', () => {
     const wrapper = mount(AppSearch, {
       props: {
         modelValue: { keyword: ['bad'] } as never,
-        fields: [{ key: 'keyword', type: 'input', label: 'Keyword' }],
+        fields: [{ key: 'keyword', type: 'input', label: 'Keyword', resetValue: '' }],
       },
       global: { plugins: [ElementPlus, appI18n] },
     })
@@ -123,9 +145,9 @@ describe('AppSearch', () => {
 
   it('models all supported field kinds with keys from the search model', () => {
     const typedFields: SearchField<OperationLogSearchModel>[] = [
-      { key: 'keyword', type: 'input', label: 'Keyword' },
-      { key: 'method', type: 'select-v2', label: 'Method', options: [] },
-      { key: 'dateRange', type: 'date-range', label: 'Date range' },
+      { key: 'keyword', type: 'input', label: 'Keyword', resetValue: '' },
+      { key: 'method', type: 'select-v2', label: 'Method', options: [], resetValue: '' },
+      { key: 'dateRange', type: 'date-range', label: 'Date range', resetValue: [] },
     ]
 
     expect(typedFields.map((field) => field.key)).toEqual(['keyword', 'method', 'dateRange'])
@@ -138,11 +160,12 @@ describe('AppSearch', () => {
     }
 
     const typedFields: SearchField<TypedStatusSearchModel>[] = [
-      { key: 'keyword', type: 'input', label: 'Keyword' },
+      { key: 'keyword', type: 'input', label: 'Keyword', resetValue: '' },
       {
         key: 'status',
         type: 'select-v2',
         label: 'Status',
+        resetValue: undefined,
         options: [
           { label: 'Enabled', value: 1 },
           // @ts-expect-error status options must preserve the numeric model value type
@@ -151,7 +174,18 @@ describe('AppSearch', () => {
       },
     ]
 
-    expect(typedFields).toHaveLength(2)
+    const invalidResetFields: SearchField<TypedStatusSearchModel>[] = [
+      // @ts-expect-error status reset values must preserve the model field type
+      {
+        key: 'status',
+        type: 'select-v2',
+        label: 'Status',
+        options: [{ label: 'Enabled', value: 1 }],
+        resetValue: '',
+      },
+    ]
+
+    expect([...typedFields, ...invalidResetFields]).toHaveLength(3)
   })
 
   it.each([null, undefined])('maps a cleared date range value %s to an empty range', (value) => {
@@ -184,9 +218,9 @@ describe('AppSearch', () => {
           dateRange: ['2026-09-01T00:00:00Z', '2026-09-02T00:00:00Z'],
         },
         fields: [
-          { key: 'keyword', type: 'input', label: 'Keyword' },
-          { key: 'method', type: 'select-v2', label: 'Method', options: [] },
-          { key: 'dateRange', type: 'date-range', label: 'Date range' },
+          { key: 'keyword', type: 'input', label: 'Keyword', resetValue: '' },
+          { key: 'method', type: 'select-v2', label: 'Method', options: [], resetValue: '' },
+          { key: 'dateRange', type: 'date-range', label: 'Date range', resetValue: [] },
         ],
       },
       global: { plugins: [ElementPlus, appI18n] },

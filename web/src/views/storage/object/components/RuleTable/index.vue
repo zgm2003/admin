@@ -6,11 +6,12 @@ import type { UploadRule } from '@/api/storage/uploadRule'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
+import type { StorageRuleSearchModel } from '@/views/storage/object/storageView'
 
 const props = defineProps<{
   columns: TableColumn<UploadRule>[]
   data: UploadRule[]
-  fields: SearchField[]
+  fields: SearchField<StorageRuleSearchModel>[]
   loading: boolean
   pagination: TablePaginationState
   can: (code: string) => boolean
@@ -19,7 +20,7 @@ const props = defineProps<{
   canUpdate: boolean
   missingPrerequisite: boolean
 }>()
-const model = defineModel<SearchFormModel>({ required: true })
+const model = defineModel<SearchFormModel<StorageRuleSearchModel>>({ required: true })
 const emit = defineEmits<{
   delete: [row: UploadRule]
   open: [row?: UploadRule]

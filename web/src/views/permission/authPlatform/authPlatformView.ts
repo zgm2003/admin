@@ -4,12 +4,17 @@ import type { TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
+export interface AuthPlatformSearchModel {
+  keyword: string
+  status: '' | YesNo
+}
 
-export function authPlatformSearchFields(t: Translate): SearchField[] {
+export function authPlatformSearchFields(t: Translate): SearchField<AuthPlatformSearchModel>[] {
   return [
     {
       key: 'keyword',
       type: 'input',
+      resetValue: '',
       label: t('permission.authPlatform.keyword'),
       placeholder: t('permission.authPlatform.keyword'),
       width: 260,
@@ -18,6 +23,7 @@ export function authPlatformSearchFields(t: Translate): SearchField[] {
     {
       key: 'status',
       type: 'select-v2',
+      resetValue: '',
       label: t('permission.authPlatform.status.all'),
       placeholder: t('permission.authPlatform.status.all'),
       options: [

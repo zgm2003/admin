@@ -21,7 +21,7 @@ import type { SearchFormModel } from '@/components/AppSearch'
 import RoleFormDialog from './components/RoleFormDialog/index.vue'
 import RolePermissionDialog from './components/RolePermissionDialog/index.vue'
 import type { RoleFormState } from './components/types'
-import { roleSearchFields, roleTableColumns } from './roleView'
+import { roleSearchFields, roleTableColumns, type RoleSearchModel } from './roleView'
 import { formatTime } from '@/utils/datetime'
 
 const { t } = useI18n()
@@ -36,7 +36,7 @@ const loading = ref(false)
 const loadError = ref('')
 const mutationError = ref('')
 
-const searchModel = computed<SearchFormModel>({
+const searchModel = computed<SearchFormModel<RoleSearchModel>>({
   get: () => ({ keyword: keyword.value, status: statusFilter.value }),
   set: (value) => {
     keyword.value = typeof value.keyword === 'string' ? value.keyword : ''

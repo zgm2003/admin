@@ -33,6 +33,7 @@ import {
   authPlatformSessionLabel,
   authPlatformTableColumns,
   authPlatformTTLLabel,
+  type AuthPlatformSearchModel,
   formatAuthPlatformDate,
   formatAuthPlatformTime,
 } from './authPlatformView'
@@ -48,7 +49,7 @@ const statusFilter = ref<'' | YesNo>('')
 const loading = ref(false)
 const loadError = ref('')
 const mutationError = ref('')
-const searchModel = computed<SearchFormModel>({
+const searchModel = computed<SearchFormModel<AuthPlatformSearchModel>>({
   get: () => ({ keyword: keyword.value, status: statusFilter.value }),
   set: (value) => {
     keyword.value = typeof value.keyword === 'string' ? value.keyword : ''

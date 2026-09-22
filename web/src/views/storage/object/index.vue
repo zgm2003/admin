@@ -42,6 +42,8 @@ import {
   createConfigSearchFields,
   createRuleColumns,
   createRuleSearchFields,
+  type StorageConfigSearchModel,
+  type StorageRuleSearchModel,
 } from './storageView'
 const { t } = useI18n()
 const access = usePermissionStore()
@@ -116,14 +118,14 @@ const rulePagination = computed<TablePaginationState>(() => ({
   pageSize: ruleQuery.value.pageSize,
   total: ruleTotal.value,
 }))
-const configSearchModel = computed<SearchFormModel>({
+const configSearchModel = computed<SearchFormModel<StorageConfigSearchModel>>({
   get: () => ({ keyword: configKeyword.value, status: configStatus.value }),
   set: (value) => {
     configKeyword.value = typeof value.keyword === 'string' ? value.keyword : ''
     configStatus.value = value.status === YesNo.Yes || value.status === YesNo.No ? value.status : ''
   },
 })
-const ruleSearchModel = computed<SearchFormModel>({
+const ruleSearchModel = computed<SearchFormModel<StorageRuleSearchModel>>({
   get: () => ({
     keyword: ruleKeyword.value,
     status: ruleStatus.value,
@@ -143,7 +145,6 @@ const ruleSearchFields = computed(() =>
 )
 const configColumns = computed(() => createConfigColumns(t))
 const ruleColumns = computed(() => createRuleColumns(t))
-
 function errorMessage(error: unknown): string {
   return error instanceof Error && error.message ? error.message : t('storage.loadFailed')
 }

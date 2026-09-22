@@ -21,7 +21,14 @@ const success = ref<'' | YesNo>('')
 const timeRange = ref<[] | [string, string]>([])
 const loading = ref(false)
 const loadError = ref('')
-const searchModel = computed<SearchFormModel>({
+interface OperationLogSearchModel {
+  userID: string
+  action: string
+  route: string
+  success: '' | YesNo
+  timeRange: [] | [string, string]
+}
+const searchModel = computed<SearchFormModel<OperationLogSearchModel>>({
   get: () => ({
     userID: userID.value,
     action: action.value,
@@ -42,10 +49,11 @@ const searchModel = computed<SearchFormModel>({
         : []
   },
 })
-const searchFields = computed<SearchField[]>(() => [
+const searchFields = computed<SearchField<OperationLogSearchModel>[]>(() => [
   {
     key: 'userID',
     type: 'input',
+    resetValue: '',
     label: t('operationLog.userId'),
     placeholder: t('operationLog.userId'),
     width: 180,
@@ -54,6 +62,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'action',
     type: 'input',
+    resetValue: '',
     label: t('operationLog.action'),
     placeholder: t('operationLog.action'),
     width: 190,
@@ -62,6 +71,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'route',
     type: 'input',
+    resetValue: '',
     label: t('operationLog.route'),
     placeholder: t('operationLog.route'),
     width: 220,
@@ -70,6 +80,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'success',
     type: 'select-v2',
+    resetValue: '',
     label: t('operationLog.successLabel'),
     options: [
       { label: t('operationLog.all'), value: '' },
@@ -82,6 +93,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'timeRange',
     type: 'date-range',
+    resetValue: [],
     label: t('operationLog.timeRange'),
     placeholder: t('operationLog.timeRange'),
     valueFormat: 'YYYY-MM-DDTHH:mm:ssZ',

@@ -18,8 +18,14 @@ const account = ref('')
 const eventType = ref('')
 const success = ref<'' | 0 | 1>('')
 const timeRange = ref<[] | [string, string]>([])
+interface LoginLogSearchModel {
+  account: string
+  eventType: string
+  success: '' | 0 | 1
+  timeRange: [] | [string, string]
+}
 
-const searchModel = computed<SearchFormModel>({
+const searchModel = computed<SearchFormModel<LoginLogSearchModel>>({
   get: () => ({
     account: account.value,
     eventType: eventType.value,
@@ -36,10 +42,11 @@ const searchModel = computed<SearchFormModel>({
         : []
   },
 })
-const searchFields = computed<SearchField[]>(() => [
+const searchFields = computed<SearchField<LoginLogSearchModel>[]>(() => [
   {
     key: 'account',
     type: 'input',
+    resetValue: '',
     label: t('loginLog.account'),
     placeholder: t('loginLog.account'),
     width: 220,
@@ -48,6 +55,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'eventType',
     type: 'select-v2',
+    resetValue: '',
     label: t('loginLog.eventType'),
     options: [
       { label: t('loginLog.all'), value: '' },
@@ -59,6 +67,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'success',
     type: 'select-v2',
+    resetValue: '',
     label: t('loginLog.success'),
     options: [
       { label: t('loginLog.all'), value: '' },
@@ -70,6 +79,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'timeRange',
     type: 'date-range',
+    resetValue: [],
     label: t('loginLog.timeRange'),
     placeholder: t('loginLog.timeRange'),
     valueFormat: 'YYYY-MM-DDTHH:mm:ssZ',

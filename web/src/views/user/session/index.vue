@@ -28,6 +28,11 @@ const mutating = ref(false)
 const loadError = ref('')
 const statsError = ref('')
 const mutationError = ref('')
+interface SessionSearchModel {
+  username: string
+  platform: string
+  status: '' | SessionStatus
+}
 
 const tablePagination = computed<TablePaginationState | null>(() =>
   total.value > 0
@@ -50,7 +55,7 @@ const canRevoke = computed(() => access.hasPermission('user:session:revoke'))
 const platformStats = computed(() =>
   Object.entries(stats.value.platforms).sort(([left], [right]) => left.localeCompare(right)),
 )
-const searchModel = computed<SearchFormModel>({
+const searchModel = computed<SearchFormModel<SessionSearchModel>>({
   get: () => ({ username: username.value, platform: platform.value, status: status.value }),
   set: (value) => {
     username.value = typeof value.username === 'string' ? value.username : ''
@@ -61,10 +66,11 @@ const searchModel = computed<SearchFormModel>({
         : ''
   },
 })
-const searchFields = computed<SearchField[]>(() => [
+const searchFields = computed<SearchField<SessionSearchModel>[]>(() => [
   {
     key: 'username',
     type: 'input',
+    resetValue: '',
     label: t('session.username'),
     placeholder: t('session.username'),
     width: 220,
@@ -73,6 +79,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'platform',
     type: 'input',
+    resetValue: '',
     label: t('session.platform'),
     placeholder: t('session.platform'),
     width: 180,
@@ -81,6 +88,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'status',
     type: 'select-v2',
+    resetValue: '',
     label: t('session.statusLabel'),
     placeholder: t('session.statusLabel'),
     options: [

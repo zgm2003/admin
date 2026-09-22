@@ -5,12 +5,23 @@ import type { CosConfig } from '@/api/storage/cosConfig'
 import type { ConfigSummary, PlatformOption, UploadRule } from '@/api/storage/uploadRule'
 
 type Translate = (key: string) => string
+export interface StorageConfigSearchModel {
+  keyword: string
+  status: '' | YesNo
+}
+export interface StorageRuleSearchModel {
+  keyword: string
+  platform: '' | number
+  config: '' | number
+  status: '' | YesNo
+}
 
-export function createConfigSearchFields(t: Translate): SearchField[] {
+export function createConfigSearchFields(t: Translate): SearchField<StorageConfigSearchModel>[] {
   return [
     {
       key: 'keyword',
       type: 'input',
+      resetValue: '',
       label: t('storage.keyword'),
       placeholder: t('storage.keyword'),
       width: 260,
@@ -19,6 +30,7 @@ export function createConfigSearchFields(t: Translate): SearchField[] {
     {
       key: 'status',
       type: 'select-v2',
+      resetValue: '',
       label: t('storage.status'),
       options: [
         { label: t('storage.allStatus'), value: '' },
@@ -34,11 +46,12 @@ export function createRuleSearchFields(
   t: Translate,
   platforms: readonly PlatformOption[],
   configs: readonly ConfigSummary[],
-): SearchField[] {
+): SearchField<StorageRuleSearchModel>[] {
   return [
     {
       key: 'keyword',
       type: 'input',
+      resetValue: '',
       label: t('storage.keyword'),
       placeholder: t('storage.keyword'),
       width: 220,
@@ -47,6 +60,7 @@ export function createRuleSearchFields(
     {
       key: 'platform',
       type: 'select-v2',
+      resetValue: '',
       label: t('storage.platform'),
       options: [
         { label: t('storage.allPlatforms'), value: '' },
@@ -57,6 +71,7 @@ export function createRuleSearchFields(
     {
       key: 'config',
       type: 'select-v2',
+      resetValue: '',
       label: t('storage.config'),
       options: [
         { label: t('storage.allConfigs'), value: '' },
@@ -67,6 +82,7 @@ export function createRuleSearchFields(
     {
       key: 'status',
       type: 'select-v2',
+      resetValue: '',
       label: t('storage.status'),
       options: [
         { label: t('storage.allStatus'), value: '' },

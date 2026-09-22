@@ -6,18 +6,19 @@ import type { CosConfig } from '@/api/storage/cosConfig'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
+import type { StorageConfigSearchModel } from '@/views/storage/object/storageView'
 
 const props = defineProps<{
   columns: TableColumn<CosConfig>[]
   data: CosConfig[]
-  fields: SearchField[]
+  fields: SearchField<StorageConfigSearchModel>[]
   loading: boolean
   pagination: TablePaginationState
   can: (code: string) => boolean
   canCreate: boolean
   canUpdate: boolean
 }>()
-const model = defineModel<SearchFormModel>({ required: true })
+const model = defineModel<SearchFormModel<StorageConfigSearchModel>>({ required: true })
 const emit = defineEmits<{
   delete: [row: CosConfig]
   open: [row?: CosConfig]

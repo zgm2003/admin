@@ -15,6 +15,7 @@ export interface SmsLogFilter {
   status: smsApi.SmsStatus | ''
   timeRange: [string, string] | []
 }
+type SmsLogSearchModel = SmsLogFilter
 
 const props = defineProps<{
   logs: smsApi.SmsLog[]
@@ -35,7 +36,7 @@ const filter = ref<SmsLogFilter>(blankFilter())
 const detail = ref<smsApi.SmsLogDetail | null>(null)
 const detailVisible = ref(false)
 const detailLoading = ref(false)
-const searchModel = computed<SearchFormModel>({
+const searchModel = computed<SearchFormModel<SmsLogSearchModel>>({
   get: () => filter.value,
   set: (value) => {
     filter.value = toFilter(value)
@@ -46,10 +47,11 @@ const statusOptions = computed(() => [
 ])
 const statusPresentation = (status: smsApi.SmsStatus) =>
   smsStatusMetadata.find((item) => item.value === status)
-const searchFields = computed<SearchField[]>(() => [
+const searchFields = computed<SearchField<SmsLogSearchModel>[]>(() => [
   {
     key: 'platform',
     type: 'input',
+    resetValue: '',
     label: t('sms.platform'),
     placeholder: t('sms.platformPlaceholder'),
     width: 160,
@@ -58,6 +60,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'toPhone',
     type: 'input',
+    resetValue: '',
     label: t('sms.phone'),
     placeholder: t('sms.logPhonePlaceholder'),
     width: 210,
@@ -66,6 +69,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'scene',
     type: 'select-v2',
+    resetValue: '',
     label: t('sms.sceneLabel'),
     placeholder: t('sms.scenePlaceholder'),
     options: props.sceneOptions,
@@ -75,6 +79,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'status',
     type: 'select-v2',
+    resetValue: '',
     label: t('sms.statusLabel'),
     placeholder: t('sms.statusPlaceholder'),
     options: statusOptions.value,
@@ -84,6 +89,7 @@ const searchFields = computed<SearchField[]>(() => [
   {
     key: 'timeRange',
     type: 'date-range',
+    resetValue: [],
     label: t('sms.sentAt'),
     placeholder: t('sms.timePlaceholder'),
     valueFormat: 'YYYY-MM-DDTHH:mm:ssZ',
@@ -117,7 +123,7 @@ function blankFilter(): SmsLogFilter {
   return { platform: '', toPhone: '', scene: '', status: '', timeRange: [] }
 }
 
-function toFilter(value: SearchFormModel): SmsLogFilter {
+function toFilter(value: SearchFormModel<SmsLogSearchModel>): SmsLogFilter {
   return {
     platform: typeof value.platform === 'string' ? value.platform : '',
     toPhone: typeof value.toPhone === 'string' ? value.toPhone : '',
@@ -143,13 +149,13 @@ function toFilter(value: SearchFormModel): SmsLogFilter {
   }
 }
 
-function search(value: SearchFormModel): void {
+function search(value: SearchFormModel<SmsLogSearchModel>): void {
   const next = toFilter(value)
   filter.value = next
   emit('search', next)
 }
 
-function reset(value: SearchFormModel): void {
+function reset(value: SearchFormModel<SmsLogSearchModel>): void {
   const next = toFilter(value)
   filter.value = next
   emit('search', next)

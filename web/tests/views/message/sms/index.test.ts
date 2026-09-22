@@ -186,6 +186,40 @@ describe('SMS management page', () => {
     expect(smsApi.listSmsTemplates).not.toHaveBeenCalled()
   })
 
+  it('loads config and catalog when list permission becomes ready asynchronously', async () => {
+    const catalogResponse = deferred<smsApi.SmsPageInit>()
+    vi.mocked(smsApi.getSmsPageInit).mockReturnValueOnce(catalogResponse.promise)
+    const wrapper = mountPage(['message:sms:view'])
+    await flushPromises()
+
+    const access = usePermissionStore()
+    access.applySnapshot({
+      roleCodes: [],
+      menuTree: [],
+      permissionCodes: ['message:sms:list', 'message:sms:test'],
+    })
+    await flushPromises()
+
+    expect(smsApi.getSmsConfig).toHaveBeenCalledOnce()
+    expect(smsApi.getSmsPageInit).toHaveBeenCalledOnce()
+
+    access.applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: [] })
+    access.applySnapshot({
+      roleCodes: [],
+      menuTree: [],
+      permissionCodes: ['message:sms:list', 'message:sms:test'],
+    })
+    await flushPromises()
+    expect(smsApi.getSmsPageInit).toHaveBeenCalledOnce()
+
+    catalogResponse.resolve({ scenes })
+    await flushPromises()
+    const sceneSelect = wrapper
+      .findAllComponents({ name: 'ElSelectV2' })
+      .find((item) => item.attributes('data-testid') === 'sms-test-scene')
+    expect(sceneSelect?.props('disabled')).toBe(false)
+  })
+
   it('loads each tab on demand and exposes a retry for an independent failure', async () => {
     vi.mocked(smsApi.listSmsTemplates)
       .mockRejectedValueOnce(new Error('template unavailable'))
