@@ -2,7 +2,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus, { ElNotification } from 'element-plus'
 import { isVNode } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getCaptcha, getCurrentUser, getLoginConfig, login, sendLoginCode } from '@/api/auth/login'
 import { getPublicLegalDocument } from '@/api/system/setting'
@@ -31,8 +31,14 @@ const getLoginConfigMock = vi.mocked(getLoginConfig)
 const sendLoginCodeMock = vi.mocked(sendLoginCode)
 const getCaptchaMock = vi.mocked(getCaptcha)
 const getPublicLegalDocumentMock = vi.mocked(getPublicLegalDocument)
+const mountedWrappers: VueWrapper[] = []
 
 describe('Login page', () => {
+  afterEach(() => {
+    for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
   beforeEach(() => {
     localStorage.clear()
     setLocale('zh-CN')
@@ -461,6 +467,7 @@ async function mountLogin(initialPath = '/login') {
     attachTo: document.body,
     global: { plugins: [ElementPlus, pinia, router, appI18n] },
   })
+  mountedWrappers.push(wrapper)
   await flushPromises()
   return { wrapper, router }
 }
