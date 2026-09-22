@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, Picture } from '@element-plus/icons-vue'
+import { Check } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import type { BrandSettings } from '@/api/system/setting'
@@ -20,17 +20,9 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <section class="brand-settings" aria-labelledby="brand-settings-title">
-    <header class="brand-settings__header">
-      <div>
-        <div class="brand-settings__eyebrow">
-          <el-icon><Picture /></el-icon>
-          <span>{{ t('setting.brandIdentity') }}</span>
-        </div>
-        <h2 id="brand-settings-title">{{ t('setting.brandTitle') }}</h2>
-      </div>
+  <section class="brand-settings" :aria-label="t('setting.brandTitle')">
+    <header v-if="canUpdate" class="brand-settings__header">
       <el-button
-        v-if="canUpdate"
         data-testid="brand-save"
         type="primary"
         :icon="Check"
@@ -80,45 +72,25 @@ const { t } = useI18n()
 
 <style scoped>
 .brand-settings {
-  padding: 2px 0 22px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  width: min(920px, 100%);
 }
 
 .brand-settings__header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 20px;
-}
-
-.brand-settings__eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 5px;
-  color: var(--el-color-primary);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.brand-settings h2 {
-  margin: 0;
-  color: var(--el-text-color-primary);
-  font-size: 18px;
-  line-height: 1.4;
+  justify-content: flex-end;
+  margin-bottom: 16px;
 }
 
 .brand-settings__form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 180px;
-  gap: 28px;
+  grid-template-columns: minmax(0, 1fr) 160px;
+  gap: 32px;
 }
 
 .brand-settings__titles {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
 }
 
 .brand-settings__avatar {
@@ -126,18 +98,15 @@ const { t } = useI18n()
 }
 
 @media (max-width: 760px) {
-  .brand-settings__header,
   .brand-settings__form {
     display: block;
   }
 
   .brand-settings__header .el-button {
     width: 100%;
-    margin-top: 14px;
   }
 
   .brand-settings__titles {
-    grid-template-columns: 1fr;
     gap: 0;
   }
 

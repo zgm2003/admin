@@ -28,6 +28,7 @@ import BrandSettingsPanel from './components/BrandSettingsPanel/index.vue'
 const { t } = useI18n()
 const access = usePermissionStore()
 const brand = useBrandStore()
+const activeTab = ref<'brand' | 'advanced'>('brand')
 const rows = ref<SystemSetting[]>([])
 const loading = ref(false)
 const loadError = ref('')
@@ -274,93 +275,98 @@ onMounted(() => {
 
 <template>
   <AppPage class="setting-page">
-    <BrandSettingsPanel
-      v-model:form="brandForm"
-      :loading="brandLoading"
-      :saving="brandSaving"
-      :error="brandError"
-      :can-update="canUpdate"
-      :can-upload="canUpload"
-      @save="saveBrand"
-    />
-    <div class="setting-page__advanced-header">
-      <h2>{{ t('setting.advancedTitle') }}</h2>
-    </div>
-    <AppSearch
-      v-model="searchModel"
-      class="management-page__filters"
-      :fields="searchFields"
-      :query-label="t('search.query')"
-      :reset-label="t('search.reset')"
-      query-test-id="setting-search"
-      reset-test-id="setting-reset"
-      @query="search"
-      @reset="reset"
-    />
+    <el-tabs v-model="activeTab" class="setting-page__tabs">
+      <el-tab-pane name="brand" :label="t('setting.brandTitle')">
+        <BrandSettingsPanel
+          v-model:form="brandForm"
+          :loading="brandLoading"
+          :saving="brandSaving"
+          :error="brandError"
+          :can-update="canUpdate"
+          :can-upload="canUpload"
+          @save="saveBrand"
+        />
+      </el-tab-pane>
+      <el-tab-pane name="advanced" :label="t('setting.advancedTitle')">
+        <AppSearch
+          v-model="searchModel"
+          class="management-page__filters"
+          :fields="searchFields"
+          :query-label="t('search.query')"
+          :reset-label="t('search.reset')"
+          query-test-id="setting-search"
+          reset-test-id="setting-reset"
+          @query="search"
+          @reset="reset"
+        />
 
-    <AppTable
-      :columns="columns"
-      :data="rows"
-      :loading="loading"
-      :result-state="state"
-      :status-message="loadError"
-      row-key="id"
-      :pagination="pagination"
-      :aria-label="t('setting.title')"
-      :refresh-label="t('appTable.refresh')"
-      @refresh="load"
-      @update:pagination="updatePagination"
-    >
-      <template #toolbar-left>
-        <el-button
-          v-if="canCreate"
-          data-testid="setting-create"
-          type="primary"
-          :icon="CirclePlus"
-          @click="openCreate"
-          >{{ t('setting.create') }}</el-button
+        <AppTable
+          :columns="columns"
+          :data="rows"
+          :loading="loading"
+          :result-state="state"
+          :status-message="loadError"
+          row-key="id"
+          :pagination="pagination"
+          :aria-label="t('setting.title')"
+          :refresh-label="t('appTable.refresh')"
+          @refresh="load"
+          @update:pagination="updatePagination"
         >
-      </template>
-      <template #cell-type="{ row }: { row: SystemSetting }">{{
-        typeLabel(row.valueType)
-      }}</template>
-      <template #cell-status="{ row }: { row: SystemSetting }">
-        <el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">
-          {{ row.isEnabled === YesNo.Yes ? t('setting.enabled') : t('setting.disabled') }}
-        </el-tag>
-      </template>
-      <template #cell-actions="{ row }: { row: SystemSetting }">
-        <el-button
-          v-if="canUpdate"
-          data-testid="setting-update"
-          text
-          type="primary"
-          :icon="Edit"
-          @click="openEdit(row)"
-          >{{ t('setting.edit') }}</el-button
-        >
-        <el-button
-          v-if="canStatus && !isRetentionSettingKey(row.key)"
-          data-testid="setting-status-toggle"
-          text
-          :icon="Switch"
-          @click="toggle(row)"
-          >{{ row.isEnabled === YesNo.Yes ? t('setting.disable') : t('setting.enable') }}</el-button
-        >
-        <el-button
-          v-if="canDelete && row.isBuiltin === YesNo.No"
-          data-testid="setting-delete"
-          text
-          type="danger"
-          :icon="Delete"
-          @click="remove(row)"
-          >{{ t('setting.delete') }}</el-button
-        >
-      </template>
-      <template #empty
-        ><el-empty data-testid="setting-empty" :description="t('setting.empty')"
-      /></template>
-    </AppTable>
+          <template #toolbar-left>
+            <el-button
+              v-if="canCreate"
+              data-testid="setting-create"
+              type="primary"
+              :icon="CirclePlus"
+              @click="openCreate"
+              >{{ t('setting.create') }}</el-button
+            >
+          </template>
+          <template #cell-type="{ row }: { row: SystemSetting }">{{
+            typeLabel(row.valueType)
+          }}</template>
+          <template #cell-status="{ row }: { row: SystemSetting }">
+            <el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">
+              {{ row.isEnabled === YesNo.Yes ? t('setting.enabled') : t('setting.disabled') }}
+            </el-tag>
+          </template>
+          <template #cell-actions="{ row }: { row: SystemSetting }">
+            <el-button
+              v-if="canUpdate"
+              data-testid="setting-update"
+              text
+              type="primary"
+              :icon="Edit"
+              @click="openEdit(row)"
+              >{{ t('setting.edit') }}</el-button
+            >
+            <el-button
+              v-if="canStatus && !isRetentionSettingKey(row.key)"
+              data-testid="setting-status-toggle"
+              text
+              :icon="Switch"
+              @click="toggle(row)"
+              >{{
+                row.isEnabled === YesNo.Yes ? t('setting.disable') : t('setting.enable')
+              }}</el-button
+            >
+            <el-button
+              v-if="canDelete && row.isBuiltin === YesNo.No"
+              data-testid="setting-delete"
+              text
+              type="danger"
+              :icon="Delete"
+              @click="remove(row)"
+              >{{ t('setting.delete') }}</el-button
+            >
+          </template>
+          <template #empty
+            ><el-empty data-testid="setting-empty" :description="t('setting.empty')"
+          /></template>
+        </AppTable>
+      </el-tab-pane>
+    </el-tabs>
 
     <SettingDialog
       v-model="dialogVisible"
@@ -374,15 +380,27 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.setting-page__advanced-header {
-  margin: 24px 0 10px;
-  padding-bottom: 9px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+.setting-page__tabs :deep(.el-tabs__header) {
+  margin-bottom: 0;
 }
-.setting-page__advanced-header h2 {
-  margin: 0;
-  color: var(--el-text-color-primary);
-  font-size: 16px;
-  line-height: 1.5;
+
+.setting-page__tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background: var(--el-border-color-lighter);
+}
+
+.setting-page__tabs :deep(.el-tabs__item) {
+  height: 44px;
+  padding: 0 22px;
+  font-size: 14px;
+}
+
+.setting-page__tabs :deep(.el-tabs__item.is-active) {
+  font-weight: 600;
+}
+
+.setting-page__tabs :deep(.el-tabs__content) {
+  padding-top: 24px;
+  overflow: visible;
 }
 </style>

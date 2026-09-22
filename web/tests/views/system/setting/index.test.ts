@@ -110,6 +110,29 @@ describe('system setting page', () => {
     expect(wrapper.find('[data-testid="setting-empty"]').exists()).toBe(false)
   })
 
+  it('shows brand and advanced settings in separate tabs without losing unsaved brand input', async () => {
+    const wrapper = mountPage(['system:setting:list', 'system:setting:update'])
+    await flushPromises()
+
+    expect(wrapper.get('.el-tabs__item.is-active').text()).toBe('品牌设置')
+    expect(wrapper.getComponent({ name: 'BrandSettingsPanel' }).isVisible()).toBe(true)
+    expect(wrapper.getComponent({ name: 'AppSearch' }).isVisible()).toBe(false)
+
+    await wrapper.get('[data-testid="brand-title-zh-cn"]').setValue('新的品牌名')
+    await wrapper.get('#tab-advanced').trigger('click')
+    expect(wrapper.get('.el-tabs__item.is-active').text()).toBe('高级设置')
+    expect(wrapper.getComponent({ name: 'AppSearch' }).isVisible()).toBe(true)
+    expect(wrapper.getComponent({ name: 'BrandSettingsPanel' }).isVisible()).toBe(false)
+
+    await wrapper.get('#tab-brand').trigger('click')
+    expect(wrapper.get('[data-testid="brand-title-zh-cn"]').element).toHaveProperty(
+      'value',
+      '新的品牌名',
+    )
+    expect(settingAPI.getSettings).toHaveBeenCalledTimes(1)
+    expect(settingAPI.getBrandSettings).toHaveBeenCalledTimes(1)
+  })
+
   it('edits brand titles and reuses the single-image avatar upload rule', async () => {
     const wrapper = mountPage([
       'system:setting:list',
