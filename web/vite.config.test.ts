@@ -27,6 +27,26 @@ describe('Vite development server', () => {
     expect(config.resolve?.alias).toMatchObject({ '@': expect.any(String) })
   })
 
+  it('does not rediscover dependencies while loading lazy pages', () => {
+    expect(config.optimizeDeps).toMatchObject({
+      noDiscovery: true,
+      include: expect.arrayContaining([
+        'axios',
+        'element-plus',
+        'element-plus/es',
+        '@element-plus/icons-vue',
+        '@wangeditor-next/editor-for-vue',
+        'echarts/core',
+        'go-captcha-vue',
+        'lucide-vue-next',
+        'pinia',
+        'vue',
+        'vue-i18n',
+        'vue-router',
+      ]),
+    })
+  })
+
   it('bounds jsdom suites and runs them in one worker to avoid resource-driven timeouts', () => {
     expect(config.test).toMatchObject({
       pool: 'threads',

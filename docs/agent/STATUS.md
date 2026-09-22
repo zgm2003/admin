@@ -1,5 +1,12 @@
 # 项目状态
 
+## Vite 开发环境菜单跳转中断（2026-09-22，已修复）
+
+- 冷缓存复现 Vite 在懒页面加载期间分批发现 Element Plus 深层依赖，输出 `optimized dependencies changed. reloading`，并出现动态模块导入失败；整页刷新后内存凭据丢失，路由守卫调用 refresh，故 refresh 是后续现象而非最初触发者。该恢复逻辑早于七提交整改，保持生产旧 chunk 兜底不变。
+- 开发配置明确预构建当前第三方入口并关闭运行中自动发现，避免普通首次菜单跳转因 optimizer 更换版本触发整页刷新；配置断言先失败后通过。独立冷缓存浏览器顺序加载 19 个业务页面模块，全部成功，期间没有额外 document 导航或 refresh 请求。
+- 验证：Prettier、ESLint、前端架构检查（0 findings）、`vue-tsc -b` 与 `pnpm build` 通过；Vite 配置、路由和请求定向测试串行 5 文件/69 项通过。`pnpm verify:frontend` 的全量 Vitest 阶段运行约 12 分钟未返回结果，已主动终止；另一次并行构建时有一项路由测试超时，停止并发负载后定向复跑通过。全量 Vitest 尚未完成，不能视为全绿。
+- 该实验没有登录用户，也没有证明生产部署或外部网络断连不会导致动态资源加载失败；它针对已复现的 Vite 开发环境问题，不更改认证、RBAC、后端或 Canvas。
+
 ## 七提交整改止损复核（2026-09-22，已完成）
 
 - 复核范围为 `2e820f52^..21e674ff` 七个提交及其后的未提交工作区。保留 Mail/SMS、Scheduler、NotificationTask 数值状态迁移，Scheduler 并发/健康与 dispatch-token TaskID 修复，NotificationTask Permission 窄 Reader，以及前端 DTO 解析、HTML 契约、聚合页时序和 AppSearch 类型收紧。

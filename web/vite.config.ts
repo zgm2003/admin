@@ -24,6 +24,27 @@ export function createViteConfig(mode: string): ViteUserConfig {
         '@': resolve(process.cwd(), 'src'),
       },
     },
+    optimizeDeps: {
+      // Lazy pages and Element Plus auto-imported styles must not restart the dev page.
+      noDiscovery: true,
+      include: [
+        '@element-plus/icons-vue',
+        '@wangeditor-next/editor-for-vue',
+        'axios',
+        'echarts/charts',
+        'echarts/components',
+        'echarts/core',
+        'echarts/renderers',
+        'element-plus',
+        'element-plus/es',
+        'go-captcha-vue',
+        'lucide-vue-next',
+        'pinia',
+        'vue',
+        'vue-i18n',
+        'vue-router',
+      ],
+    },
     server: {
       host: 'localhost',
       port: 16300,
@@ -39,7 +60,7 @@ export function createViteConfig(mode: string): ViteUserConfig {
     },
     test: {
       environment: 'jsdom',
-      include: ['tests/**/*.{test,spec}.{ts,tsx,js,jsx}'],
+      include: ['tests/**/*.{test,spec}.{ts,tsx,js,jsx}', 'vite.config.test.ts'],
       pool: 'threads',
       maxWorkers: 1,
       fileParallelism: false,
