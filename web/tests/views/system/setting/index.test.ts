@@ -25,8 +25,10 @@ vi.mock('@/api/system/setting', async (importOriginal) => {
     deleteSetting: vi.fn(),
     getSettings: vi.fn(),
     getBrandSettings: vi.fn(),
+    getLegalDocument: vi.fn(),
     updateSetting: vi.fn(),
     updateBrandSettings: vi.fn(),
+    updateLegalDocument: vi.fn(),
     updateSettingStatus: vi.fn(),
   }
 })
@@ -52,9 +54,14 @@ describe('system setting page', () => {
       titleEnUS: 'ZHILAN',
       defaultAvatar: '',
     })
+    vi.mocked(settingAPI.getLegalDocument).mockImplementation(async (kind) => ({
+      kind,
+      contentHtml: kind === 'userAgreement' ? '<p>Agreement</p>' : '<p>Privacy</p>',
+    }))
     vi.mocked(settingAPI.createSetting).mockResolvedValue(3)
     vi.mocked(settingAPI.updateSetting).mockResolvedValue(undefined)
     vi.mocked(settingAPI.updateBrandSettings).mockResolvedValue(undefined)
+    vi.mocked(settingAPI.updateLegalDocument).mockResolvedValue(undefined)
     vi.mocked(settingAPI.updateSettingStatus).mockResolvedValue(undefined)
     vi.mocked(settingAPI.deleteSetting).mockResolvedValue(undefined)
     vi.mocked(ElMessageBox.confirm).mockResolvedValue(
@@ -110,11 +117,11 @@ describe('system setting page', () => {
     expect(wrapper.find('[data-testid="setting-empty"]').exists()).toBe(false)
   })
 
-  it('shows brand and advanced settings in separate tabs without losing unsaved brand input', async () => {
+  it('shows site, legal, and advanced settings in separate tabs without losing unsaved site input', async () => {
     const wrapper = mountPage(['system:setting:list', 'system:setting:update'])
     await flushPromises()
 
-    expect(wrapper.get('.el-tabs__item.is-active').text()).toBe('品牌设置')
+    expect(wrapper.get('.el-tabs__item.is-active').text()).toBe('站点信息')
     expect(wrapper.getComponent({ name: 'BrandSettingsPanel' }).isVisible()).toBe(true)
     expect(wrapper.getComponent({ name: 'AppSearch' }).isVisible()).toBe(false)
 
@@ -131,6 +138,32 @@ describe('system setting page', () => {
     )
     expect(settingAPI.getSettings).toHaveBeenCalledTimes(1)
     expect(settingAPI.getBrandSettings).toHaveBeenCalledTimes(1)
+  })
+
+  it('loads both single-language legal documents and saves the selected document', async () => {
+    const wrapper = mountPage(['system:setting:list', 'system:setting:update'])
+    await flushPromises()
+    await wrapper.get('#tab-legal').trigger('click')
+
+    const panel = wrapper.getComponent({ name: 'LegalSettingsPanel' })
+    expect(panel.props('documents')).toEqual({
+      userAgreement: '<p>Agreement</p>',
+      privacyPolicy: '<p>Privacy</p>',
+    })
+    panel.vm.$emit('update:documents', {
+      userAgreement: '<p>Updated agreement</p>',
+      privacyPolicy: '<p>Privacy</p>',
+    })
+    panel.vm.$emit('save', 'userAgreement')
+    await flushPromises()
+
+    expect(settingAPI.getLegalDocument).toHaveBeenCalledTimes(2)
+    expect(settingAPI.getLegalDocument).toHaveBeenCalledWith('userAgreement')
+    expect(settingAPI.getLegalDocument).toHaveBeenCalledWith('privacyPolicy')
+    expect(settingAPI.updateLegalDocument).toHaveBeenCalledWith(
+      'userAgreement',
+      '<p>Updated agreement</p>',
+    )
   })
 
   it('edits brand titles and reuses the single-image avatar upload rule', async () => {

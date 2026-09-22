@@ -57,6 +57,10 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 字典管理 CRUD 位于 `/api/admin/v1/system/dictionary` 并使用独立 action 权限；业务消费只读端点位于
 `/api/v1/system/dictionary/options`，要求有效登录态但不要求字典管理权限，只返回已启用字典及选项的本地化
 `label/value`。options 经过 Redis generation/mutation/snapshot 和有界冷回源租约，PostgreSQL 仍是事实来源。
+系统设置的用户协议与隐私政策使用 `app.legal.user_agreement`、`app.legal.privacy_policy` 两个内置字符串配置，
+复用 `system.setting/global` generation 缓存。后台读取与更新端点为
+`/api/admin/v1/system/setting/legal/:document`，更新使用 `system:setting:update`；登录页通过匿名只读端点
+`/api/v1/system/setting/legal/:document` 获取服务端净化后的单份 HTML，不按语言派生其他 key 或 DTO 字段。
 
 菜单 page 的 `componentPath` 精确对应 Views 页面，`path = "/" + componentPath`；菜单 `code` 与页面和动作
 权限各自对应，`i18nKey` 必须在中英文翻译中可解析。公共登录/找回密码页按静态认证路由处理，不强行创建

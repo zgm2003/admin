@@ -34,7 +34,7 @@ func (r *Repository) SetGenerations(generations *cachegeneration.Repository) {
 }
 
 func (r *Repository) List(ctx context.Context, query ListQuery) ([]Record, int64, error) {
-	db := r.db.WithContext(ctx).Model(&Model{})
+	db := r.db.WithContext(ctx).Model(&Model{}).Where("setting_key NOT IN ?", dedicatedSettingKeys)
 	if query.Keyword != "" {
 		pattern := "%" + strings.ReplaceAll(strings.ReplaceAll(query.Keyword, "%", `\%`), "_", `\_`) + "%"
 		db = db.Where("(setting_key LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')", pattern, pattern)

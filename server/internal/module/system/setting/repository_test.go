@@ -120,6 +120,32 @@ func TestRepositoryBrandMutationAdvancesGenerationOnce(t *testing.T) {
 	assertSettingOutbox(t, db, ctx, "global", 1, 2, false)
 }
 
+func TestRepositoryListExcludesSettingsManagedByDedicatedPanels(t *testing.T) {
+	db, ctx := openSettingDatabase(t)
+	now := time.Now().UTC()
+	for _, key := range []string{
+		BrandTitleZhCNKey,
+		BrandTitleEnUSKey,
+		BrandDefaultAvatarKey,
+		LegalUserAgreementKey,
+		LegalPrivacyPolicyKey,
+		"auth.captcha.ttl_minutes",
+	} {
+		seedSettingRow(t, db, ctx, Model{
+			Key: key, Value: "value", ValueType: ValueTypeString, Description: "",
+			IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now,
+		})
+	}
+
+	rows, total, err := NewRepository(db).List(ctx, ListQuery{Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(rows) != 1 || rows[0].Key != "auth.captcha.ttl_minutes" {
+		t.Fatalf("List() rows=%+v total=%d", rows, total)
+	}
+}
+
 type settingGenerationHarness struct {
 	ctx         context.Context
 	db          *gorm.DB

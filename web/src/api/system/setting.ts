@@ -43,6 +43,21 @@ export interface BrandSettings {
   titleEnUS: string
   defaultAvatar: string
 }
+export type LegalDocumentKind = 'userAgreement' | 'privacyPolicy'
+export interface LegalDocument {
+  kind: LegalDocumentKind
+  contentHtml: string
+}
+
+function parseLegalDocument(value: unknown, expectedKind: LegalDocumentKind): LegalDocument {
+  const record = expectExactKeys(value, ['kind', 'contentHtml'], 'legal document')
+  const kind = expectString(record.kind, 'legal document.kind')
+  if (kind !== expectedKind) throw new ProtocolError('legal document kind does not match request')
+  return {
+    kind: expectedKind,
+    contentHtml: expectString(record.contentHtml, 'legal document.contentHtml'),
+  }
+}
 
 function parseSetting(value: unknown, context: string): SystemSetting {
   const record = expectExactKeys(
@@ -120,6 +135,34 @@ export async function updateBrandSettings(input: BrandSettings): Promise<void> {
       data: input,
     }),
     'update brand settings',
+  )
+}
+
+export async function getPublicLegalDocument(kind: LegalDocumentKind): Promise<LegalDocument> {
+  return parseLegalDocument(
+    await request({ method: 'GET', url: `/api/v1/system/setting/legal/${kind}` }),
+    kind,
+  )
+}
+
+export async function getLegalDocument(kind: LegalDocumentKind): Promise<LegalDocument> {
+  return parseLegalDocument(
+    await request({ method: 'GET', url: `/api/admin/v1/system/setting/legal/${kind}` }),
+    kind,
+  )
+}
+
+export async function updateLegalDocument(
+  kind: LegalDocumentKind,
+  contentHtml: string,
+): Promise<void> {
+  expectEmptyObject(
+    await request({
+      method: 'PUT',
+      url: `/api/admin/v1/system/setting/legal/${kind}`,
+      data: { contentHtml },
+    }),
+    'update legal document',
   )
 }
 

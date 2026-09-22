@@ -1,5 +1,12 @@
 # 项目状态
 
+## 系统法律文档与登录页入口（2026-09-22，代码已完成，迁移待执行）
+
+- 系统设置整理为“站点信息 / 协议与隐私 / 高级设置”；用户协议与隐私政策各使用一份富文本正文，不按界面语言拆分，专用配置不再重复出现在高级设置列表。
+- 后台读取沿用登录态，保存使用 `system:setting:update`；登录页新增两个匿名只读查看入口，不增加强制勾选。服务端只保留有限格式与 HTTPS 链接，并给外链补 `noopener noreferrer`；空正文、非法类型和异常配置明确失败或展示未配置状态。
+- 新增幂等 forward migration `docs/database/2026-09-22-system-legal-documents.sql`，只 seed 两条空的内置配置，并在真实变化时将 `system.setting/global` generation 推进一次。该 migration 尚未执行，真实 PostgreSQL 和 `current.sql` 未改变，正式正文仍需维护者提供并在后台发布。
+- 定向验证：后端法律文档 Handler/Service/Route、专用列表隔离与 `cmd/api` 测试通过；前端系统设置 API、富文本编辑器、设置页和登录页共 37 项通过。全量格式、类型、架构、构建与后端门禁仍待本轮收尾执行。
+
 ## Vite 开发环境菜单跳转中断（2026-09-22，已修复）
 
 - 冷缓存复现 Vite 在懒页面加载期间分批发现 Element Plus 深层依赖，输出 `optimized dependencies changed. reloading`，并出现动态模块导入失败；整页刷新后内存凭据丢失，路由守卫调用 refresh，故 refresh 是后续现象而非最初触发者。该恢复逻辑早于七提交整改，保持生产旧 chunk 兜底不变。

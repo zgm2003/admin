@@ -28,6 +28,9 @@ type brandRequest struct {
 	TitleEnUS     *string `json:"titleEnUS"`
 	DefaultAvatar *string `json:"defaultAvatar"`
 }
+type legalDocumentRequest struct {
+	ContentHTML *string `json:"contentHtml"`
+}
 
 func (r createRequest) input() (CreateInput, error) {
 	if r.Key == nil || r.Value == nil || r.ValueType == nil {
@@ -54,6 +57,12 @@ func (r brandRequest) input() (BrandSettings, error) {
 		return BrandSettings{}, fmt.Errorf("titleZhCN, titleEnUS and defaultAvatar are required")
 	}
 	return BrandSettings{TitleZhCN: *r.TitleZhCN, TitleEnUS: *r.TitleEnUS, DefaultAvatar: *r.DefaultAvatar}, nil
+}
+func (r legalDocumentRequest) input() (string, error) {
+	if r.ContentHTML == nil {
+		return "", fmt.Errorf("contentHtml is required")
+	}
+	return *r.ContentHTML, nil
 }
 func parseListQuery(values url.Values) (ListQuery, error) {
 	for key, entries := range values {

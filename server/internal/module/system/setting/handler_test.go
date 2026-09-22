@@ -17,6 +17,7 @@ import (
 type detailHandlerService struct {
 	record Record
 	brand  BrandSettings
+	legal  LegalDocument
 }
 
 func (f detailHandlerService) List(context.Context, ListQuery) (ListResult, error) {
@@ -34,6 +35,12 @@ func (f detailHandlerService) UpdateStatus(context.Context, string, yesno.Value)
 func (f detailHandlerService) Delete(context.Context, string) error                    { return nil }
 func (f detailHandlerService) Brand(context.Context) (BrandSettings, error)            { return f.brand, nil }
 func (f detailHandlerService) UpdateBrand(context.Context, BrandSettings) error        { return nil }
+func (f detailHandlerService) LegalDocument(context.Context, LegalDocumentKind) (LegalDocument, error) {
+	return f.legal, nil
+}
+func (f detailHandlerService) UpdateLegalDocument(context.Context, LegalDocumentKind, string) error {
+	return nil
+}
 
 func TestDetailReturnsPersistenceMetadata(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -86,6 +93,43 @@ func TestBrandHandlersUseStrictContract(t *testing.T) {
 	} {
 		recorder = httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodPut, "/system/setting/brand", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("body=%s status=%d response=%s", body, recorder.Code, recorder.Body.String())
+		}
+	}
+}
+
+func TestLegalDocumentHandlersUseStrictContract(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	service := detailHandlerService{legal: LegalDocument{
+		Kind: LegalDocumentPrivacyPolicy, ContentHTML: `<h2>Privacy</h2><p>Body</p>`,
+	}}
+	router := gin.New()
+	handler := NewHandler(service)
+	router.GET("/system/setting/legal/:document", handler.LegalDocument)
+	router.PUT("/system/setting/legal/:document", handler.UpdateLegalDocument)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/system/setting/legal/privacyPolicy", nil))
+	var envelope struct {
+		Data LegalDocument `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if recorder.Code != http.StatusOK || envelope.Data != service.legal {
+		t.Fatalf("GET status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	for _, body := range []string{
+		`{"contentHtml":"<p>Body</p>"} {}`,
+		`{"contentHtml":"<p>Body</p>","unknown":true}`,
+		`{}`,
+	} {
+		recorder = httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPut, "/system/setting/legal/userAgreement", strings.NewReader(body))
 		request.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(recorder, request)
 		if recorder.Code != http.StatusBadRequest {

@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getCaptcha, getCurrentUser, getLoginConfig, login, sendLoginCode } from '@/api/auth/login'
+import { getPublicLegalDocument } from '@/api/system/setting'
 import AppCaptcha from '@/components/AppCaptcha/index.vue'
 import { appI18n, setLocale } from '@/i18n'
 import { pinia } from '@/store'
@@ -20,11 +21,16 @@ vi.mock('@/api/auth/login', () => ({
   getCaptcha: vi.fn(),
 }))
 
+vi.mock('@/api/system/setting', () => ({
+  getPublicLegalDocument: vi.fn(),
+}))
+
 const loginMock = vi.mocked(login)
 const getCurrentUserMock = vi.mocked(getCurrentUser)
 const getLoginConfigMock = vi.mocked(getLoginConfig)
 const sendLoginCodeMock = vi.mocked(sendLoginCode)
 const getCaptchaMock = vi.mocked(getCaptcha)
+const getPublicLegalDocumentMock = vi.mocked(getPublicLegalDocument)
 
 describe('Login page', () => {
   beforeEach(() => {
@@ -36,6 +42,7 @@ describe('Login page', () => {
     getLoginConfigMock.mockReset()
     sendLoginCodeMock.mockReset()
     getCaptchaMock.mockReset()
+    getPublicLegalDocumentMock.mockReset()
     getCaptchaMock.mockResolvedValue({
       captchaId: 'captcha-1',
       captchaType: 'slide',
@@ -56,6 +63,10 @@ describe('Login page', () => {
       ],
       allowRegister: false,
     })
+    getPublicLegalDocumentMock.mockImplementation(async (kind) => ({
+      kind,
+      contentHtml: kind === 'userAgreement' ? '<h2>User agreement</h2>' : '<h2>Privacy</h2>',
+    }))
   })
 
   it('renders the product identity and a login form', async () => {
@@ -77,6 +88,8 @@ describe('Login page', () => {
     const { wrapper } = await mountLogin()
     expect(wrapper.find('form').exists()).toBe(false)
     expect(wrapper.find('[data-testid="login-account"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="login-user-agreement"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-privacy-policy"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="login-config-error"]').text()).toContain(
       '暂时无法加载登录方式',
     )
@@ -380,6 +393,55 @@ describe('Login page', () => {
     const accountInput = wrapper.get('[data-testid="login-account"]')
     expect((accountInput.element as HTMLInputElement).value).toBe('Admin@Example.COM')
   })
+
+  it('opens the single public privacy policy and user agreement without blocking login', async () => {
+    const { wrapper } = await mountLogin()
+
+    expect(wrapper.find('[data-testid="login-legal-consent"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="login-privacy-policy"]').trigger('click')
+    await flushPromises()
+
+    expect(getPublicLegalDocumentMock).toHaveBeenCalledWith('privacyPolicy')
+    expect(wrapper.getComponent({ name: 'AppDialog' }).props('modelValue')).toBe(true)
+    expect(document.querySelector('[data-testid="legal-document-content"]')?.innerHTML).toContain(
+      '<h2>Privacy</h2>',
+    )
+
+    await wrapper.get('[data-testid="login-user-agreement"]').trigger('click')
+    await flushPromises()
+    expect(getPublicLegalDocumentMock).toHaveBeenCalledWith('userAgreement')
+  })
+
+  it('shows an explicit state when a legal document has not been configured', async () => {
+    getPublicLegalDocumentMock.mockResolvedValue({ kind: 'privacyPolicy', contentHtml: '' })
+    const { wrapper } = await mountLogin()
+    await wrapper.get('[data-testid="login-privacy-policy"]').trigger('click')
+    await flushPromises()
+    expect(document.querySelector('[data-testid="legal-document-empty"]')?.textContent).toContain(
+      '暂未配置',
+    )
+  })
+
+  it('ignores an older legal document response after another document is selected', async () => {
+    const privacy = deferred<{ kind: 'privacyPolicy'; contentHtml: string }>()
+    getPublicLegalDocumentMock.mockImplementation((kind) =>
+      kind === 'privacyPolicy'
+        ? privacy.promise
+        : Promise.resolve({ kind: 'userAgreement', contentHtml: '<p>Current agreement</p>' }),
+    )
+    const { wrapper } = await mountLogin()
+
+    await wrapper.get('[data-testid="login-privacy-policy"]').trigger('click')
+    await wrapper.get('[data-testid="login-user-agreement"]').trigger('click')
+    await flushPromises()
+    privacy.resolve({ kind: 'privacyPolicy', contentHtml: '<p>Stale privacy</p>' })
+    await flushPromises()
+
+    expect(document.querySelector('[data-testid="legal-document-content"]')?.innerHTML).toContain(
+      'Current agreement',
+    )
+    expect(document.body.textContent).not.toContain('Stale privacy')
+  })
 })
 
 async function mountLogin(initialPath = '/login') {
@@ -408,4 +470,18 @@ async function completeCaptcha(wrapper: VueWrapper): Promise<void> {
     .findComponent(AppCaptcha)
     .vm.$emit('complete', { captchaId: 'captcha-1', captchaAnswer: { x: 80, y: 40 } })
   await flushPromises()
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolvePromise: ((value: T) => void) | undefined
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve
+  })
+  return {
+    promise,
+    resolve: (value: T) => {
+      if (resolvePromise === undefined) throw new Error('deferred promise was not initialized')
+      resolvePromise(value)
+    },
+  }
 }

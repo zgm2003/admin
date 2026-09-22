@@ -133,6 +133,54 @@ func (s *Service) UpdateBrand(ctx context.Context, brand BrandSettings) error {
 	})
 }
 
+func (s *Service) LegalDocument(ctx context.Context, kind LegalDocumentKind) (LegalDocument, error) {
+	key, ok := legalDocumentKey(kind)
+	if !ok {
+		return LegalDocument{}, apperror.InvalidRequest(fmt.Errorf("legal document kind is invalid"))
+	}
+	row, err := s.Find(ctx, key)
+	if err != nil {
+		return LegalDocument{}, err
+	}
+	if row.ValueType != ValueTypeString || row.IsEnabled != yesno.Yes || row.IsBuiltin != yesno.Yes {
+		return LegalDocument{}, apperror.DependencyUnavailable(fmt.Errorf("legal document setting is unavailable"))
+	}
+	if strings.TrimSpace(row.Value) == "" {
+		return LegalDocument{Kind: kind, ContentHTML: ""}, nil
+	}
+	contentHTML, err := normalizeLegalDocumentHTML(row.Value)
+	if err != nil {
+		return LegalDocument{}, apperror.DependencyUnavailable(err)
+	}
+	return LegalDocument{Kind: kind, ContentHTML: contentHTML}, nil
+}
+
+func (s *Service) UpdateLegalDocument(ctx context.Context, kind LegalDocumentKind, contentHTML string) error {
+	key, ok := legalDocumentKey(kind)
+	if !ok {
+		return apperror.InvalidRequest(fmt.Errorf("legal document kind is invalid"))
+	}
+	normalized, err := normalizeLegalDocumentHTML(contentHTML)
+	if err != nil {
+		return apperror.InvalidRequest(err)
+	}
+	current, err := s.repository.Find(ctx, key)
+	if errors.Is(err, ErrNotFound) {
+		return apperror.NotFound(err)
+	}
+	if err != nil {
+		return apperror.DependencyUnavailable(err)
+	}
+	if current.ValueType != ValueTypeString || current.IsEnabled != yesno.Yes || current.IsBuiltin != yesno.Yes {
+		return apperror.DependencyUnavailable(fmt.Errorf("legal document setting is unavailable"))
+	}
+	current.Value = normalized
+	current.UpdatedAt = s.now().UTC()
+	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (cachegeneration.MutationResult, error) {
+		return s.repository.Update(mutationCtx, key, current, expected)
+	})
+}
+
 // Find 读取运行时设置：ready generation 快照命中零 PostgreSQL；
 // miss/损坏由 cacheFill 单 leader 有界回源；Redis 故障与等待超时 fail closed。
 func (s *Service) Find(ctx context.Context, key string) (Record, error) {
@@ -174,6 +222,9 @@ func (s *Service) List(ctx context.Context, query ListQuery) (ListResult, error)
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) {
 	input.Key, input.Value, input.Description = strings.TrimSpace(input.Key), strings.TrimSpace(input.Value), strings.TrimSpace(input.Description)
+	if _, managed := legalDocumentKindForKey(input.Key); managed {
+		return 0, apperror.InvalidRequest(fmt.Errorf("dedicated legal setting cannot be created"))
+	}
 	if err := validateInput(input.Key, input.Value, input.ValueType, input.Description); err != nil {
 		return 0, apperror.InvalidRequest(err)
 	}
@@ -195,6 +246,16 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 func (s *Service) Update(ctx context.Context, key string, input UpdateInput) error {
 	key = strings.TrimSpace(key)
 	input.Value, input.Description = strings.TrimSpace(input.Value), strings.TrimSpace(input.Description)
+	if _, managed := legalDocumentKindForKey(key); managed {
+		if input.ValueType != ValueTypeString {
+			return apperror.InvalidRequest(fmt.Errorf("legal document setting must be a string"))
+		}
+		normalized, err := normalizeLegalDocumentHTML(input.Value)
+		if err != nil {
+			return apperror.InvalidRequest(err)
+		}
+		input.Value = normalized
+	}
 	if err := validateInput(key, input.Value, input.ValueType, input.Description); err != nil {
 		return apperror.InvalidRequest(err)
 	}
@@ -605,7 +666,11 @@ func (s *Service) logGenerationFailure(message string, scope cachegeneration.Sco
 var keyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$`)
 
 func validateInput(key, value string, valueType int, description string) error {
-	if !keyPattern.MatchString(key) || utf8.RuneCountInString(key) > 128 || utf8.RuneCountInString(description) > 512 || !validSettingValue(value, valueType) {
+	validValue := validSettingValue(value, valueType)
+	if _, managed := legalDocumentKindForKey(key); managed {
+		validValue = valueType == ValueTypeString && utf8.RuneCountInString(value) <= maxLegalDocumentRunes
+	}
+	if !keyPattern.MatchString(key) || utf8.RuneCountInString(key) > 128 || utf8.RuneCountInString(description) > 512 || !validValue {
 		return fmt.Errorf("setting input is invalid")
 	}
 	switch key {
@@ -626,7 +691,8 @@ func validateInput(key, value string, valueType int, description string) error {
 }
 
 func isRequiredSetting(key string) bool {
-	return key == sharedsetting.MessageNotificationRetentionDaysKey || key == sharedsetting.RealtimeEventRetentionDaysKey || key == sharedsetting.SchedulerHistoryRetentionDaysKey
+	_, legal := legalDocumentKindForKey(key)
+	return legal || key == sharedsetting.MessageNotificationRetentionDaysKey || key == sharedsetting.RealtimeEventRetentionDaysKey || key == sharedsetting.SchedulerHistoryRetentionDaysKey
 }
 
 func integerInRange(value string, minimum, maximum int) bool {

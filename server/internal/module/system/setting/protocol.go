@@ -22,6 +22,14 @@ const (
 	PermissionDelete = "system:setting:delete"
 )
 
+var dedicatedSettingKeys = []string{
+	BrandTitleZhCNKey,
+	BrandTitleEnUSKey,
+	BrandDefaultAvatarKey,
+	LegalUserAgreementKey,
+	LegalPrivacyPolicyKey,
+}
+
 const (
 	ValueTypeString = sharedsetting.ValueTypeString
 	ValueTypeNumber = sharedsetting.ValueTypeNumber
@@ -33,6 +41,15 @@ const (
 	BrandTitleZhCNKey     = "app.brand.title_zh_cn"
 	BrandTitleEnUSKey     = "app.brand.title_en_us"
 	BrandDefaultAvatarKey = "app.brand.default_avatar"
+	LegalUserAgreementKey = "app.legal.user_agreement"
+	LegalPrivacyPolicyKey = "app.legal.privacy_policy"
+)
+
+type LegalDocumentKind string
+
+const (
+	LegalDocumentUserAgreement LegalDocumentKind = "userAgreement"
+	LegalDocumentPrivacyPolicy LegalDocumentKind = "privacyPolicy"
 )
 
 var ErrNotFound = errNotFound{}
@@ -74,6 +91,33 @@ type BrandSettings struct {
 	TitleZhCN     string `json:"titleZhCN"`
 	TitleEnUS     string `json:"titleEnUS"`
 	DefaultAvatar string `json:"defaultAvatar"`
+}
+
+type LegalDocument struct {
+	Kind        LegalDocumentKind `json:"kind"`
+	ContentHTML string            `json:"contentHtml"`
+}
+
+func legalDocumentKey(kind LegalDocumentKind) (string, bool) {
+	switch kind {
+	case LegalDocumentUserAgreement:
+		return LegalUserAgreementKey, true
+	case LegalDocumentPrivacyPolicy:
+		return LegalPrivacyPolicyKey, true
+	default:
+		return "", false
+	}
+}
+
+func legalDocumentKindForKey(key string) (LegalDocumentKind, bool) {
+	switch key {
+	case LegalUserAgreementKey:
+		return LegalDocumentUserAgreement, true
+	case LegalPrivacyPolicyKey:
+		return LegalDocumentPrivacyPolicy, true
+	default:
+		return "", false
+	}
 }
 
 type Detail struct{ Record Record }

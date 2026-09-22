@@ -8,14 +8,17 @@ import { useI18n } from 'vue-i18n'
 import {
   createSetting,
   deleteSetting,
+  getLegalDocument,
   getSettings,
   updateSetting,
   updateBrandSettings,
+  updateLegalDocument,
   updateSettingStatus,
   isRetentionSettingKey,
   type SettingValueType,
   type SystemSetting,
   type BrandSettings,
+  type LegalDocumentKind,
 } from '@/api/system/setting'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
@@ -24,11 +27,12 @@ import { usePermissionStore } from '@/store/permission'
 import { useBrandStore } from '@/store/brand'
 import SettingDialog from './components/SettingDialog/index.vue'
 import BrandSettingsPanel from './components/BrandSettingsPanel/index.vue'
+import LegalSettingsPanel from './components/LegalSettingsPanel/index.vue'
 
 const { t } = useI18n()
 const access = usePermissionStore()
 const brand = useBrandStore()
-const activeTab = ref<'brand' | 'advanced'>('brand')
+const activeTab = ref<'brand' | 'legal' | 'advanced'>('brand')
 const rows = ref<SystemSetting[]>([])
 const loading = ref(false)
 const loadError = ref('')
@@ -43,6 +47,13 @@ const brandLoading = ref(false)
 const brandSaving = ref(false)
 const brandError = ref('')
 const brandForm = ref<BrandSettings>({ titleZhCN: '', titleEnUS: '', defaultAvatar: '' })
+const legalLoading = ref(false)
+const legalSaving = ref(false)
+const legalError = ref('')
+const legalDocuments = ref<Record<LegalDocumentKind, string>>({
+  userAgreement: '',
+  privacyPolicy: '',
+})
 const editing = ref<SystemSetting | null>(null)
 const form = ref<{ key: string; value: string; valueType: SettingValueType; description: string }>({
   key: '',
@@ -181,6 +192,37 @@ async function saveBrand(): Promise<void> {
     brandSaving.value = false
   }
 }
+async function loadLegalDocuments(): Promise<void> {
+  legalLoading.value = true
+  legalError.value = ''
+  try {
+    const [userAgreement, privacyPolicy] = await Promise.all([
+      getLegalDocument('userAgreement'),
+      getLegalDocument('privacyPolicy'),
+    ])
+    legalDocuments.value = {
+      userAgreement: userAgreement.contentHtml,
+      privacyPolicy: privacyPolicy.contentHtml,
+    }
+  } catch {
+    legalError.value = t('setting.legalLoadFailed')
+  } finally {
+    legalLoading.value = false
+  }
+}
+async function saveLegalDocument(kind: LegalDocumentKind): Promise<void> {
+  if (!canUpdate.value || legalSaving.value) return
+  legalSaving.value = true
+  legalError.value = ''
+  try {
+    await updateLegalDocument(kind, legalDocuments.value[kind])
+    ElNotification.success({ title: t('setting.saved') })
+  } catch {
+    legalError.value = t('setting.legalSaveFailed')
+  } finally {
+    legalSaving.value = false
+  }
+}
 function search(): void {
   page.value = 1
   void load()
@@ -270,13 +312,14 @@ function typeLabel(value: SettingValueType): string {
 onMounted(() => {
   void load()
   void loadBrand()
+  void loadLegalDocuments()
 })
 </script>
 
 <template>
   <AppPage class="setting-page">
     <el-tabs v-model="activeTab" class="setting-page__tabs">
-      <el-tab-pane name="brand" :label="t('setting.brandTitle')">
+      <el-tab-pane name="brand" :label="t('setting.siteInfoTitle')">
         <BrandSettingsPanel
           v-model:form="brandForm"
           :loading="brandLoading"
@@ -285,6 +328,16 @@ onMounted(() => {
           :can-update="canUpdate"
           :can-upload="canUpload"
           @save="saveBrand"
+        />
+      </el-tab-pane>
+      <el-tab-pane name="legal" :label="t('setting.legalTitle')">
+        <LegalSettingsPanel
+          v-model:documents="legalDocuments"
+          :loading="legalLoading"
+          :saving="legalSaving"
+          :error="legalError"
+          :can-update="canUpdate"
+          @save="saveLegalDocument"
         />
       </el-tab-pane>
       <el-tab-pane name="advanced" :label="t('setting.advancedTitle')">

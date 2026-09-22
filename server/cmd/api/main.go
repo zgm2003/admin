@@ -598,6 +598,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 		notification.RegisterRoutes(sharedRoutes, dependencies.Notification, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	dictionary.RegisterOptionRoute(sharedRoutes, dependencies.Dictionary, dependencies.Authenticate)
+	if dependencies.Setting != nil {
+		systemsetting.RegisterPublicRoutes(sharedRoutes, dependencies.Setting)
+	}
 
 	adminRoutes := router.Group("/api/admin/v1")
 	adminRoutes.Use(authclient.Require(), authclient.RequireAdminPlatform())

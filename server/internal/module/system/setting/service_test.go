@@ -232,6 +232,21 @@ func TestServiceCreateRejectsUnknownValueTypeAndMalformedJSON(t *testing.T) {
 	}
 }
 
+func TestServiceCreateRejectsDedicatedLegalSettingKeys(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository)
+	for _, key := range []string{LegalUserAgreementKey, LegalPrivacyPolicyKey} {
+		if _, err := service.Create(context.Background(), CreateInput{
+			Key: key, Value: "<p>Injected</p>", ValueType: ValueTypeString,
+		}); err == nil {
+			t.Fatalf("Create(%q) error=nil", key)
+		}
+	}
+	if repository.findCalls() != 0 || repository.mutations() != 0 {
+		t.Fatalf("dedicated legal key creation touched repository: finds=%d mutations=%d", repository.findCalls(), repository.mutations())
+	}
+}
+
 func TestServiceCreateNormalizesAndReturnsSharedRecord(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	repo := &fakeRepository{}
@@ -304,6 +319,76 @@ func TestServiceRejectsInvalidBrandSettings(t *testing.T) {
 	} {
 		if err := service.UpdateBrand(context.Background(), input); err == nil {
 			t.Fatalf("input=%+v should fail", input)
+		}
+	}
+}
+
+func TestServiceReadsAndSanitizesSingleLegalDocuments(t *testing.T) {
+	repo := &fakeRepository{rows: map[string]Record{
+		LegalUserAgreementKey: {
+			Key: LegalUserAgreementKey, Value: "<p>Agreement</p>", ValueType: ValueTypeString,
+			IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+		},
+		LegalPrivacyPolicyKey: {
+			Key: LegalPrivacyPolicyKey, Value: "<p>Privacy</p>", ValueType: ValueTypeString,
+			IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+		},
+	}}
+	harness := openSettingGenerationHarness(t)
+	service := harness.service(repo)
+
+	document, err := service.LegalDocument(harness.ctx, LegalDocumentPrivacyPolicy)
+	if err != nil || document.Kind != LegalDocumentPrivacyPolicy || document.ContentHTML != "<p>Privacy</p>" {
+		t.Fatalf("LegalDocument() = %+v err=%v", document, err)
+	}
+
+	err = service.UpdateLegalDocument(harness.ctx, LegalDocumentUserAgreement, `<h2>Terms</h2><script>alert(1)</script><p><a href="http://unsafe.test">Unsafe</a><a href="https://safe.test">Safe</a></p>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(repo.update.Value, "script") || strings.Contains(repo.update.Value, "http://unsafe.test") {
+		t.Fatalf("stored legal HTML is unsafe: %s", repo.update.Value)
+	}
+	if !strings.Contains(repo.update.Value, `href="https://safe.test"`) || !strings.Contains(repo.update.Value, `rel="noopener noreferrer"`) {
+		t.Fatalf("stored legal HTML did not preserve and harden HTTPS link: %s", repo.update.Value)
+	}
+	if repo.update.Description != repo.rows[LegalUserAgreementKey].Description {
+		t.Fatalf("legal update changed description: %+v", repo.update)
+	}
+}
+
+func TestServiceRejectsInvalidLegalDocumentsBeforeRepositoryAccess(t *testing.T) {
+	repository := &fakeRepository{}
+	service := NewService(repository)
+	for _, test := range []struct {
+		name string
+		kind LegalDocumentKind
+		html string
+	}{
+		{name: "unknown document", kind: "unknown", html: "<p>Body</p>"},
+		{name: "empty document", kind: LegalDocumentPrivacyPolicy, html: "<p><br></p>"},
+		{name: "script only document", kind: LegalDocumentPrivacyPolicy, html: "<script>alert(1)</script>"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := service.UpdateLegalDocument(context.Background(), test.kind, test.html); err == nil {
+				t.Fatal("expected invalid request")
+			}
+		})
+	}
+	if repository.findCalls() != 0 || repository.mutations() != 0 {
+		t.Fatalf("invalid legal input touched repository: finds=%d mutations=%d", repository.findCalls(), repository.mutations())
+	}
+}
+
+func TestServiceLegalDocumentRejectsUnavailableSetting(t *testing.T) {
+	for _, row := range []Record{
+		{Key: LegalPrivacyPolicyKey, Value: "<p>Privacy</p>", ValueType: ValueTypeJSON, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
+		{Key: LegalPrivacyPolicyKey, Value: "<p>Privacy</p>", ValueType: ValueTypeString, IsEnabled: yesno.No, IsBuiltin: yesno.Yes},
+	} {
+		harness := openSettingGenerationHarness(t)
+		service := harness.service(&fakeRepository{rows: map[string]Record{LegalPrivacyPolicyKey: row}})
+		if _, err := service.LegalDocument(harness.ctx, LegalDocumentPrivacyPolicy); err == nil {
+			t.Fatalf("unavailable row was exposed: %+v", row)
 		}
 	}
 }

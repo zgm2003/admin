@@ -24,6 +24,8 @@ type service interface {
 	Delete(context.Context, string) error
 	Brand(context.Context) (BrandSettings, error)
 	UpdateBrand(context.Context, BrandSettings) error
+	LegalDocument(context.Context, LegalDocumentKind) (LegalDocument, error)
+	UpdateLegalDocument(context.Context, LegalDocumentKind, string) error
 }
 type Handler struct{ service service }
 
@@ -137,6 +139,33 @@ func (h *Handler) UpdateBrand(c *gin.Context) {
 		return
 	}
 	if err := h.service.UpdateBrand(c.Request.Context(), brand); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, struct{}{})
+}
+
+func (h *Handler) LegalDocument(c *gin.Context) {
+	document, err := h.service.LegalDocument(c.Request.Context(), LegalDocumentKind(c.Param("document")))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, document)
+}
+
+func (h *Handler) UpdateLegalDocument(c *gin.Context) {
+	var request legalDocumentRequest
+	if err := validate.BindJSON(c, &request); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	contentHTML, err := request.input()
+	if err != nil {
+		response.Fail(c, apperror.InvalidRequest(err))
+		return
+	}
+	if err := h.service.UpdateLegalDocument(c.Request.Context(), LegalDocumentKind(c.Param("document")), contentHTML); err != nil {
 		response.Fail(c, err)
 		return
 	}

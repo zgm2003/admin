@@ -15,8 +15,10 @@ import {
   type LoginConfigOption,
   type LoginType,
 } from '@/api/auth/login'
+import { getPublicLegalDocument, type LegalDocumentKind } from '@/api/system/setting'
 import logoUrl from '@/assets/logo.png'
 import AppCaptcha from '@/components/AppCaptcha/index.vue'
+import AppDialog from '@/components/AppDialog/index.vue'
 import { useAuthStore } from '@/store/auth'
 import { ApiError } from '@/types/http'
 import AuthDock from '@/views/auth/components/AuthDock/index.vue'
@@ -44,7 +46,13 @@ const resendSeconds = ref(0)
 const deliveryChallengeId = ref(generateChallengeID())
 const proofChallengeId = ref('')
 const captchaVisible = ref(false)
+const legalDialogVisible = ref(false)
+const legalDocumentKind = ref<LegalDocumentKind>('privacyPolicy')
+const legalDocumentContent = ref('')
+const legalDocumentLoading = ref(false)
+const legalDocumentError = ref('')
 let countdownTimer: ReturnType<typeof setInterval> | undefined
+let legalDocumentRequestSequence = 0
 const bootstrapError = computed(() => (auth.status === 'error' ? auth.errorMessage : ''))
 const brandPoints = computed(() => [
   t('auth.brand.pointOne'),
@@ -60,6 +68,13 @@ const accountPlaceholder = computed(() =>
   activeType.value === 'phone'
     ? t('auth.login.phonePlaceholder')
     : t('auth.login.accountPlaceholder'),
+)
+const legalDocumentTitle = computed(() =>
+  t(
+    legalDocumentKind.value === 'privacyPolicy'
+      ? 'auth.login.privacyPolicy'
+      : 'auth.login.userAgreement',
+  ),
 )
 
 watch(activeType, () => {
@@ -95,6 +110,29 @@ async function loadLoginConfig(): Promise<void> {
     configFailed.value = true
   } finally {
     loading.value = false
+  }
+}
+
+async function openLegalDocument(kind: LegalDocumentKind): Promise<void> {
+  const requestSequence = ++legalDocumentRequestSequence
+  legalDocumentKind.value = kind
+  legalDialogVisible.value = true
+  legalDocumentLoading.value = true
+  legalDocumentContent.value = ''
+  legalDocumentError.value = ''
+  try {
+    const document = await getPublicLegalDocument(kind)
+    if (requestSequence !== legalDocumentRequestSequence) return
+    if (document.contentHtml.trim() === '') {
+      legalDocumentError.value = t('auth.login.legalNotConfigured')
+      return
+    }
+    legalDocumentContent.value = document.contentHtml
+  } catch {
+    if (requestSequence !== legalDocumentRequestSequence) return
+    legalDocumentError.value = t('auth.login.legalLoadFailed')
+  } finally {
+    if (requestSequence === legalDocumentRequestSequence) legalDocumentLoading.value = false
   }
 }
 
@@ -426,6 +464,26 @@ function generateChallengeID(): string {
             </div>
           </el-form>
 
+          <div class="auth-legal-links" aria-label="legal documents">
+            <el-button
+              data-testid="login-user-agreement"
+              link
+              type="primary"
+              @click="openLegalDocument('userAgreement')"
+            >
+              {{ t('auth.login.userAgreement') }}
+            </el-button>
+            <span aria-hidden="true">·</span>
+            <el-button
+              data-testid="login-privacy-policy"
+              link
+              type="primary"
+              @click="openLegalDocument('privacyPolicy')"
+            >
+              {{ t('auth.login.privacyPolicy') }}
+            </el-button>
+          </div>
+
           <p class="auth-access-note">
             <el-icon><Lock /></el-icon>{{ t('auth.login.authorizedOnly') }}
           </p>
@@ -433,6 +491,29 @@ function generateChallengeID(): string {
       </section>
     </div>
     <AppCaptcha v-model="captchaVisible" :loading="sending" @complete="completeCaptcha" />
+    <AppDialog
+      v-model="legalDialogVisible"
+      :title="legalDocumentTitle"
+      width="760px"
+      mobile-width="calc(100vw - 28px)"
+      height="min(68vh, 640px)"
+    >
+      <el-skeleton v-if="legalDocumentLoading" :rows="8" animated />
+      <el-alert
+        v-else-if="legalDocumentError"
+        data-testid="legal-document-empty"
+        :title="legalDocumentError"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+      <article
+        v-else
+        class="auth-legal-document"
+        data-testid="legal-document-content"
+        v-html="legalDocumentContent"
+      />
+    </AppDialog>
   </main>
 </template>
 
