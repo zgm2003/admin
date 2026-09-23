@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { CircleCheckFilled, Lock, RefreshRight, User } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { ElLink } from 'element-plus/es/components/link/index'
 import { ElMessage } from 'element-plus/es/components/message/index'
-import { ElNotification } from 'element-plus/es/components/notification/index'
 
 import {
   getCurrentUser,
@@ -22,12 +20,13 @@ import AppDialog from '@/components/AppDialog/index.vue'
 import { useAuthStore } from '@/store/auth'
 import { ApiError } from '@/types/http'
 import AuthDock from '@/views/auth/components/AuthDock/index.vue'
-
-interface LoginForm {
-  account: string
-  password: string
-  code: string
-}
+import {
+  generateChallengeID,
+  isDigitChar,
+  safeRedirect,
+  showLoginSuccess,
+  type LoginForm,
+} from './loginPage'
 
 const route = useRoute()
 const router = useRouter()
@@ -140,10 +139,6 @@ onUnmounted(() => {
   if (countdownTimer !== undefined) clearInterval(countdownTimer)
 })
 
-function isDigitChar(char: string): boolean {
-  return /^\d$/.test(char)
-}
-
 function sendCode(): void {
   if (sending.value || resendSeconds.value > 0) return
   const loginType = activeType.value
@@ -229,7 +224,7 @@ async function submit(): Promise<void> {
     const currentUser = await getCurrentUser()
     auth.setAuthenticated(currentUser)
     await router.replace(safeRedirect(route.query.redirect))
-    showLoginSuccess(credential.isNewUser)
+    showLoginSuccess({ isNewUser: credential.isNewUser, t, router })
     if (currentUser.passwordSetRequired && !credential.isNewUser) {
       ElMessage.info(t('user.password.setupReminder'))
     }
@@ -240,47 +235,6 @@ async function submit(): Promise<void> {
   } finally {
     pending.value = false
   }
-}
-
-function showLoginSuccess(isNewUser: boolean): void {
-  if (!isNewUser) {
-    ElNotification.success({ title: t('auth.login.success') })
-    return
-  }
-
-  const profileLocation = router.resolve('/user/profile')
-  ElNotification.success({
-    title: t('auth.login.registeredSuccess'),
-    message: h('span', [
-      `${t('auth.login.registeredDescription')} `,
-      h(
-        ElLink,
-        {
-          type: 'primary',
-          href: profileLocation.href,
-          onClick: (event: MouseEvent) => {
-            event.preventDefault()
-            void router.push('/user/profile')
-          },
-        },
-        () => t('auth.login.openProfile'),
-      ),
-    ]),
-    duration: 8000,
-  })
-}
-
-function safeRedirect(value: unknown): string {
-  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')
-    ? value
-    : '/dashboard'
-}
-
-function generateChallengeID(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
-  }
-  return `c-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 </script>
 

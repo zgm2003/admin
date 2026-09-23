@@ -73,8 +73,11 @@ onBeforeUnmount(() => editor.value?.destroy())
 
 <style scoped>
 .legal-document-editor {
+  display: flex;
   width: 100%;
   min-width: 0;
+  min-height: 320px;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--el-border-color);
   border-radius: var(--el-border-radius-base);
@@ -82,12 +85,13 @@ onBeforeUnmount(() => editor.value?.destroy())
 }
 
 .legal-document-editor :deep(.w-e-toolbar) {
+  flex: 0 0 auto;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
 .legal-document-editor__body {
-  min-height: 360px;
-  max-height: 560px;
+  min-height: 0;
+  flex: 1 1 auto;
   overflow-y: auto;
 }
 

@@ -433,6 +433,18 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.setting-page {
+  height: 100%;
+  min-height: 0;
+}
+
+.setting-page__tabs {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
 .setting-page__tabs :deep(.el-tabs__header) {
   margin-bottom: 0;
 }
@@ -452,8 +464,16 @@ onMounted(() => {
   font-weight: 600;
 }
 
+/* 内容区自己滚动，页签保持可见；透明上边框不会像 padding 那样随滚动消失。 */
 .setting-page__tabs :deep(.el-tabs__content) {
-  padding-top: 24px;
-  overflow: visible;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  border-top: 24px solid transparent;
+}
+
+/* 面板按内容区高度布局，让内部编辑器自己滚动而不是整体滚页。 */
+.setting-page__tabs :deep(.el-tab-pane) {
+  height: 100%;
 }
 </style>

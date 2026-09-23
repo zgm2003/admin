@@ -107,7 +107,8 @@ export const enUS = {
   'setting.legalLoadFailed': 'Failed to load legal documents',
   'setting.legalSaveFailed': 'Failed to save legal document',
   'setting.brandIdentity': 'Brand identity',
-  'setting.brandIdentityDescription': 'Control how the brand appears across the sign-in page and system shell.',
+  'setting.brandIdentityDescription':
+    'Control how the brand appears across the sign-in page and system shell.',
   'setting.brandTitles': 'Site titles',
   'setting.brandTitlesDescription': 'Set the site name shown in Chinese and English environments.',
   'setting.brandTitleZhCN': 'Chinese title',
@@ -118,8 +119,6 @@ export const enUS = {
   'setting.brandLoadFailed': 'Failed to load brand settings',
   'setting.brandSaveFailed': 'Failed to save brand settings',
   'setting.brandTitleRequired': 'Chinese and English titles are required',
-  'setting.legalWorkspaceTitle': 'Document content',
-  'setting.legalWorkspaceDescription': 'Maintain the user agreement and privacy policy shown on the sign-in page.',
   'setting.advancedTitle': 'Advanced settings',
   'setting.valueRequired': 'Enter a setting value',
   'setting.jsonInvalid': 'Invalid JSON',

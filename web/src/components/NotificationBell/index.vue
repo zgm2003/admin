@@ -107,14 +107,22 @@ function retry(): void {
       v-for="item in notification.recent"
       v-else
       :key="item.id"
+      :class="['notification-bell__item', { 'is-unread': !item.isRead }]"
       :data-testid="`notification-bell-item-${item.id}`"
-      class="notification-bell__item"
       type="button"
       @click="openItem(item)"
     >
-      <span class="notification-bell__title">{{ item.title }}</span
-      ><span class="notification-bell__summary">{{ item.summary }}</span
-      ><span v-if="item.linkType === 'external'" class="notification-bell__link"
+      <span class="notification-bell__heading">
+        <span class="notification-bell__title">{{ item.title }}</span>
+        <span
+          v-if="!item.isRead"
+          class="notification-bell__unread"
+          :title="t('notification.unread')"
+          :aria-label="t('notification.unread')"
+        />
+      </span>
+      <span class="notification-bell__summary">{{ item.summary }}</span>
+      <span v-if="item.linkType === 'external'" class="notification-bell__link"
         ><el-icon><Link /></el-icon>{{ domain(item.link) }}</span
       >
     </button>
@@ -146,21 +154,61 @@ function retry(): void {
   color: var(--el-text-color-secondary);
 }
 .notification-bell__item {
+  position: relative;
   display: flex;
   width: 100%;
   min-height: 64px;
   flex-direction: column;
   gap: 4px;
-  padding: 9px 4px;
+  padding: 10px 8px 10px 12px;
   border: 0;
   border-top: 1px solid var(--el-border-color-lighter);
   background: transparent;
   text-align: left;
   cursor: pointer;
+  transition: background-color 160ms ease;
+}
+.notification-bell__item.is-unread {
+  background: var(--el-color-primary-light-9);
+}
+.notification-bell__item.is-unread::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--el-color-primary);
+  content: '';
+}
+.notification-bell__item:hover {
+  background: var(--el-fill-color-light);
+}
+.notification-bell__item.is-unread:hover {
+  background: var(--el-color-primary-light-8);
+}
+.notification-bell__item:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: -2px;
+}
+.notification-bell__heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
 }
 .notification-bell__title {
-  font-weight: 600;
+  min-width: 0;
+  font-weight: 500;
   color: var(--el-text-color-primary);
+  overflow-wrap: anywhere;
+}
+.notification-bell__item.is-unread .notification-bell__title {
+  font-weight: 650;
+}
+.notification-bell__unread {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--el-color-primary);
 }
 .notification-bell__summary {
   color: var(--el-text-color-secondary);

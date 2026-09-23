@@ -160,6 +160,58 @@ describe('NotificationBell', () => {
     expect(wrapper.find('[data-testid="notification-bell-view-all"]').exists()).toBe(false)
   })
 
+  it('marks unread entries with the shared unread affordance', async () => {
+    usePermissionStore().permissionCodes = ['message:notification:list']
+    vi.mocked(notificationApi.getNotificationSummary).mockResolvedValueOnce({
+      unreadCount: 1,
+      recent: [
+        {
+          id: 11,
+          title: 'Unread notice',
+          summary: 'Body',
+          variant: 'info',
+          priority: 'normal',
+          linkType: 'none',
+          link: '',
+          publishedAt: '2026-09-18T12:00:00Z',
+          isRead: false,
+        },
+        {
+          id: 12,
+          title: 'Read notice',
+          summary: 'Body',
+          variant: 'info',
+          priority: 'normal',
+          linkType: 'none',
+          link: '',
+          publishedAt: '2026-09-18T12:00:00Z',
+          isRead: true,
+        },
+      ],
+    })
+    const wrapper = mount(NotificationBell, {
+      global: {
+        plugins: [router, appI18n],
+        stubs: {
+          ElTooltip: { template: '<div><slot /></div>' },
+          ElPopover: { template: '<div><slot name="reference" /><slot /></div>' },
+          ElBadge: { template: '<span><slot /></span>' },
+          ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },
+        },
+      },
+    })
+    await vi.waitFor(() =>
+      expect(wrapper.find('[data-testid="notification-bell-item-11"]').exists()).toBe(true),
+    )
+    const unread = wrapper.get('[data-testid="notification-bell-item-11"]')
+    const read = wrapper.get('[data-testid="notification-bell-item-12"]')
+    expect(unread.classes()).toContain('is-unread')
+    expect(unread.find('.notification-bell__heading').exists()).toBe(true)
+    expect(unread.find('.notification-bell__unread').attributes('aria-label')).toBe('未读')
+    expect(read.classes()).not.toContain('is-unread')
+    expect(read.find('.notification-bell__unread').exists()).toBe(false)
+  })
+
   it('reports a rejected internal navigation without leaking the rejection', async () => {
     usePermissionStore().permissionCodes = [
       'message:notification:view',

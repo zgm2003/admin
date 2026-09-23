@@ -116,8 +116,6 @@ export const zhCN = {
   'setting.brandLoadFailed': '品牌设置加载失败',
   'setting.brandSaveFailed': '品牌设置保存失败',
   'setting.brandTitleRequired': '中文标题和英文标题不能为空',
-  'setting.legalWorkspaceTitle': '文档内容',
-  'setting.legalWorkspaceDescription': '维护登录页公开展示的用户协议和隐私政策正文。',
   'setting.advancedTitle': '高级设置',
   'setting.valueRequired': '请输入配置值',
   'setting.jsonInvalid': 'JSON 格式不正确',

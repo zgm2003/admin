@@ -149,21 +149,23 @@ describe('system setting page', () => {
     await flushPromises()
 
     const brandPanel = wrapper.getComponent({ name: 'BrandSettingsPanel' })
-    expect(brandPanel.get('.brand-settings__workspace').exists()).toBe(true)
-    expect(brandPanel.get('.brand-settings__identity-card').exists()).toBe(true)
-    expect(brandPanel.get('.brand-settings__avatar-card').exists()).toBe(true)
-    expect(brandPanel.get('.brand-settings__header [data-testid="brand-save"]').exists()).toBe(
+    expect(brandPanel.find('.brand-settings__workspace').exists()).toBe(true)
+    expect(brandPanel.find('.brand-settings__identity-card').exists()).toBe(true)
+    expect(brandPanel.find('.brand-settings__avatar-card').exists()).toBe(true)
+    expect(brandPanel.find('.brand-settings__header [data-testid="brand-save"]').exists()).toBe(
       true,
     )
 
     await wrapper.get('#tab-legal').trigger('click')
     const legalPanel = wrapper.getComponent({ name: 'LegalSettingsPanel' })
-    expect(legalPanel.get('.legal-settings__workspace').exists()).toBe(true)
-    expect(legalPanel.get('.legal-settings__document-bar').exists()).toBe(true)
+    expect(legalPanel.find('.legal-settings__header').exists()).toBe(false)
+    expect(legalPanel.find('.legal-settings__workspace').exists()).toBe(false)
+    expect(legalPanel.find('.legal-settings__editor-shell').exists()).toBe(false)
+    expect(legalPanel.find('.legal-settings__document-bar').exists()).toBe(true)
     expect(
-      legalPanel.get('.legal-settings__document-bar [data-testid="legal-document-save"]').exists(),
+      legalPanel.find('.legal-settings__document-bar [data-testid="legal-document-save"]').exists(),
     ).toBe(true)
-    expect(legalPanel.get('.legal-settings__editor-shell').exists()).toBe(true)
+    expect(legalPanel.findComponent({ name: 'LegalDocumentEditor' }).exists()).toBe(true)
   })
 
   it('loads both single-language legal documents and saves the selected document', async () => {
