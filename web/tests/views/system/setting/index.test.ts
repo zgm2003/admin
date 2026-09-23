@@ -140,6 +140,32 @@ describe('system setting page', () => {
     expect(settingAPI.getBrandSettings).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps site identity and legal editing actions inside balanced workspaces', async () => {
+    const wrapper = mountPage([
+      'system:setting:list',
+      'system:setting:update',
+      'storage:object:upload',
+    ])
+    await flushPromises()
+
+    const brandPanel = wrapper.getComponent({ name: 'BrandSettingsPanel' })
+    expect(brandPanel.get('.brand-settings__workspace').exists()).toBe(true)
+    expect(brandPanel.get('.brand-settings__identity-card').exists()).toBe(true)
+    expect(brandPanel.get('.brand-settings__avatar-card').exists()).toBe(true)
+    expect(brandPanel.get('.brand-settings__header [data-testid="brand-save"]').exists()).toBe(
+      true,
+    )
+
+    await wrapper.get('#tab-legal').trigger('click')
+    const legalPanel = wrapper.getComponent({ name: 'LegalSettingsPanel' })
+    expect(legalPanel.get('.legal-settings__workspace').exists()).toBe(true)
+    expect(legalPanel.get('.legal-settings__document-bar').exists()).toBe(true)
+    expect(
+      legalPanel.get('.legal-settings__document-bar [data-testid="legal-document-save"]').exists(),
+    ).toBe(true)
+    expect(legalPanel.get('.legal-settings__editor-shell').exists()).toBe(true)
+  })
+
   it('loads both single-language legal documents and saves the selected document', async () => {
     const wrapper = mountPage(['system:setting:list', 'system:setting:update'])
     await flushPromises()
