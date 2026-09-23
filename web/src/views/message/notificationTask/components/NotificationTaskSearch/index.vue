@@ -18,13 +18,12 @@ const { t } = useI18n()
 
 const audienceOptions = computed<
   Array<{ value: NotificationTaskSearchModel['audienceType']; label: string }>
->(() => [
-  { value: '', label: t('notificationTask.audienceAll') },
-  ...notificationTaskAudienceMetadata.map((item) => ({
+>(() =>
+  notificationTaskAudienceMetadata.map((item) => ({
     value: item.value,
     label: t(item.i18nKey),
   })),
-])
+)
 const fields = computed<SearchField<NotificationTaskSearchModel>[]>(() => [
   {
     key: 'keyword',
@@ -50,7 +49,7 @@ const fields = computed<SearchField<NotificationTaskSearchModel>[]>(() => [
     type: 'select-v2',
     resetValue: '',
     label: t('notificationTask.audienceLabel'),
-    placeholder: t('notificationTask.audiencePlaceholder'),
+    placeholder: t('notificationTask.audienceAll'),
     options: audienceOptions.value,
     clearable: true,
     width: 170,

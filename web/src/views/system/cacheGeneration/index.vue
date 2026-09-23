@@ -62,6 +62,7 @@ const searchFields = computed<SearchField<CacheGenerationSearchModel>[]>(() => [
     type: 'select-v2',
     resetValue: '',
     label: t('cacheGeneration.publishState'),
+    placeholder: t('cacheGeneration.allStates'),
     options: publishStateOptions.value,
     clearable: true,
     testId: 'cache-generation-publish-state',

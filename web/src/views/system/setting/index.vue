@@ -94,6 +94,7 @@ const searchFields = computed<SearchField<SettingSearchModel>[]>(() => [
     type: 'select-v2',
     resetValue: '',
     label: t('setting.status'),
+    placeholder: t('setting.allStatuses'),
     options: [
       { label: t('setting.enabled'), value: YesNo.Yes },
       { label: t('setting.disabled'), value: YesNo.No },

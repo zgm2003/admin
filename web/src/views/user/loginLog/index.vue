@@ -57,8 +57,8 @@ const searchFields = computed<SearchField<LoginLogSearchModel>[]>(() => [
     type: 'select-v2',
     resetValue: '',
     label: t('loginLog.eventType'),
+    placeholder: t('loginLog.allEventTypes'),
     options: [
-      { label: t('loginLog.all'), value: '' },
       { label: t('loginLog.login'), value: 'login' },
       { label: t('loginLog.logout'), value: 'logout' },
     ],
@@ -69,8 +69,8 @@ const searchFields = computed<SearchField<LoginLogSearchModel>[]>(() => [
     type: 'select-v2',
     resetValue: '',
     label: t('loginLog.success'),
+    placeholder: t('loginLog.allResults'),
     options: [
-      { label: t('loginLog.all'), value: '' },
       { label: t('loginLog.successYes'), value: 1 },
       { label: t('loginLog.successNo'), value: 0 },
     ],

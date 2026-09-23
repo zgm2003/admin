@@ -111,8 +111,16 @@ function selectValue(key: string): string | number | null | undefined {
   return isScalar(value) ? value : undefined
 }
 
+/** 清空即"未筛选"：下拉回落字段 resetValue，日期范围回落空数组。 */
+function clearedValue(key: string, value: null | undefined, dateRange: boolean): SearchFormValue {
+  if (dateRange) return []
+  const field = props.fields.find((item) => item.key === key)
+  return field !== undefined && field.type === 'select-v2' ? field.resetValue : value
+}
+
 function setSearchValue(key: string, value: unknown, dateRange = false): void {
-  const candidateValue = dateRange && (value === null || value === undefined) ? [] : value
+  const candidateValue =
+    value === null || value === undefined ? clearedValue(key, value, dateRange) : value
   const candidate = { ...form.value, [key]: candidateValue } as TModel
   const error = validateModel(props.fields, candidate)
   if (error !== null) {

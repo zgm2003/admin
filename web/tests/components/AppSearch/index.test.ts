@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
 
 import { AppSearch } from '@/components/AppSearch'
 import type { SearchField, SearchFieldType, SearchFormModel } from '@/components/AppSearch/types'
@@ -75,6 +76,33 @@ describe('AppSearch', () => {
       keyword: '',
       status: '',
     })
+  })
+
+  it('normalizes a cleared select to the field reset value', async () => {
+    interface ClearSearchModel {
+      keyword: string
+      status: '' | 1
+    }
+    const clearFields: SearchField<ClearSearchModel>[] = [
+      { key: 'keyword', type: 'input', label: 'Keyword', resetValue: '' },
+      {
+        key: 'status',
+        type: 'select-v2',
+        label: 'Status',
+        options: [{ label: 'Enabled', value: 1 }],
+        resetValue: '',
+      },
+    ]
+    const wrapper = mount(AppSearch, {
+      props: {
+        modelValue: { keyword: '', status: 1 } as unknown as SearchFormModel,
+        fields: clearFields as SearchField[],
+      },
+      global: { plugins: [ElementPlus, appI18n] },
+    })
+    wrapper.getComponent({ name: 'ElSelectV2' }).vm.$emit('update:modelValue', undefined)
+    await nextTick()
+    expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toEqual({ keyword: '', status: '' })
   })
 
   it('emits query when the query button is clicked', async () => {

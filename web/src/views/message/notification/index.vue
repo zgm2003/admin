@@ -1,84 +1,170 @@
 <script setup lang="ts">
-import { CheckCheck } from 'lucide-vue-next'
-import { computed, onMounted, ref, watch } from 'vue'
+import { ArrowUpRight, Check, CheckCheck, Trash2 } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+
 import {
+  listNotifications,
   notificationPriorityMetadata,
   notificationVariantMetadata,
-  listNotifications,
   type NotificationItem,
   type NotificationPriority,
+  type NotificationQuery,
   type NotificationVariant,
 } from '@/api/message/notification'
+import type { SearchField, SearchFormModel } from '@/components/AppSearch'
+import type { TableColumn } from '@/components/AppTable'
 import { useNotificationStore } from '@/store/notification'
 import { usePermissionStore } from '@/store/permission'
-
-import NotificationCenterList from './components/NotificationCenterList/index.vue'
+import { formatTime } from '@/utils/datetime'
 
 const access = usePermissionStore(),
   store = useNotificationStore(),
   router = useRouter(),
   { t } = useI18n()
-const items = ref<NotificationItem[]>([]),
+const rows = ref<NotificationItem[]>([]),
   loading = ref(false),
-  error = ref(''),
+  loadError = ref(''),
   nextBeforeId = ref<number | null>(null),
-  filter = ref<'all' | 'unread'>('all'),
+  unreadOnly = ref<'' | 'unread'>(''),
   variant = ref<NotificationVariant | ''>(''),
   priority = ref<NotificationPriority | ''>('')
 let sequence = 0
 const canList = computed(() => access.hasPermission('message:notification:list'))
-const filterOptions = computed(() => [
-  { value: 'all', label: t('notification.filterAll') },
-  { value: 'unread', label: t('notification.filterUnread') },
+const canRead = computed(() => access.hasPermission('message:notification:read'))
+const canDelete = computed(() => access.hasPermission('message:notification:delete'))
+
+interface NotificationSearchModel {
+  unreadOnly: '' | 'unread'
+  variant: NotificationVariant | ''
+  priority: NotificationPriority | ''
+}
+
+function isVariant(value: unknown): value is NotificationVariant {
+  return notificationVariantMetadata.some((item) => item.value === value)
+}
+
+function isPriority(value: unknown): value is NotificationPriority {
+  return notificationPriorityMetadata.some((item) => item.value === value)
+}
+
+const searchModel = computed<SearchFormModel<NotificationSearchModel>>({
+  get: () => ({ unreadOnly: unreadOnly.value, variant: variant.value, priority: priority.value }),
+  set: (value) => {
+    unreadOnly.value = value.unreadOnly === 'unread' ? 'unread' : ''
+    variant.value = isVariant(value.variant) ? value.variant : ''
+    priority.value = isPriority(value.priority) ? value.priority : ''
+  },
+})
+const searchFields = computed<SearchField<NotificationSearchModel>[]>(() => [
+  {
+    key: 'unreadOnly',
+    type: 'select-v2',
+    resetValue: '',
+    label: t('notification.columnStatus'),
+    placeholder: t('notification.allStatuses'),
+    options: [{ label: t('notification.unread'), value: 'unread' }],
+    clearable: true,
+    width: 150,
+    testId: 'notification-unread-filter',
+  },
+  {
+    key: 'variant',
+    type: 'select-v2',
+    resetValue: '',
+    label: t('notification.variantLabel'),
+    placeholder: t('notification.variantAll'),
+    options: notificationVariantMetadata.map((item) => ({
+      label: t(item.i18nKey),
+      value: item.value,
+    })),
+    clearable: true,
+    width: 160,
+    testId: 'notification-variant-filter',
+  },
+  {
+    key: 'priority',
+    type: 'select-v2',
+    resetValue: '',
+    label: t('notification.priorityLabel'),
+    placeholder: t('notification.priorityAll'),
+    options: notificationPriorityMetadata.map((item) => ({
+      label: t(item.i18nKey),
+      value: item.value,
+    })),
+    clearable: true,
+    width: 160,
+    testId: 'notification-priority-filter',
+  },
 ])
-const variantOptions = computed(() => [
-  { value: '', label: t('notification.variantAll') },
-  ...notificationVariantMetadata.map((item) => ({
-    value: item.value,
-    label: t(item.i18nKey),
-  })),
+const variantTagTypes: Record<NotificationVariant, 'primary' | 'success' | 'warning' | 'danger'> = {
+  info: 'primary',
+  success: 'success',
+  warning: 'warning',
+  error: 'danger',
+}
+const columns = computed<TableColumn<NotificationItem>[]>(() => [
+  { key: 'expand', prop: 'id', label: '', width: 48, expand: true },
+  { key: 'title', prop: 'title', label: t('notification.columnTitle'), minWidth: 260 },
+  { key: 'variant', prop: 'variant', label: t('notification.columnVariant'), width: 100 },
+  { key: 'priority', prop: 'priority', label: t('notification.columnPriority'), width: 100 },
+  { key: 'isRead', prop: 'isRead', label: t('notification.columnStatus'), width: 100 },
+  {
+    key: 'publishedAt',
+    prop: 'publishedAt',
+    label: t('notification.columnPublishedAt'),
+    width: 190,
+  },
+  { key: 'actions', prop: 'id', label: t('notification.columnActions'), width: 190 },
 ])
-const priorityOptions = computed(() => [
-  { value: '', label: t('notification.priorityAll') },
-  ...notificationPriorityMetadata.map((item) => ({
-    value: item.value,
-    label: t(item.i18nKey),
-  })),
-])
+
 async function load(append = false): Promise<void> {
   if (!canList.value) return
   const current = ++sequence
   loading.value = true
-  error.value = ''
+  loadError.value = ''
   try {
-    const query: {
-      beforeId?: number
-      limit: number
-      filter: 'all' | 'unread'
-      variant?: NotificationVariant
-      priority?: NotificationPriority
-    } = { limit: 20, filter: filter.value }
+    const query: NotificationQuery = {
+      limit: 20,
+      filter: unreadOnly.value === 'unread' ? 'unread' : 'all',
+    }
     if (append && nextBeforeId.value !== null) query.beforeId = nextBeforeId.value
     if (variant.value !== '') query.variant = variant.value
     if (priority.value !== '') query.priority = priority.value
     const result = await listNotifications(query)
     if (current !== sequence) return
-    items.value = append ? [...items.value, ...result.items] : result.items
+    rows.value = append ? [...rows.value, ...result.items] : result.items
     nextBeforeId.value = result.nextBeforeId
-  } catch (e) {
+  } catch (error: unknown) {
     if (current === sequence)
-      error.value = e instanceof Error ? e.message : t('notification.loadFailed')
+      loadError.value =
+        error instanceof Error && error.message !== ''
+          ? error.message
+          : t('notification.loadFailed')
   } finally {
     if (current === sequence) loading.value = false
   }
 }
+function reload(): void {
+  rows.value = []
+  nextBeforeId.value = null
+  void load()
+}
+function search(): void {
+  reload()
+}
+function reset(): void {
+  unreadOnly.value = ''
+  variant.value = ''
+  priority.value = ''
+  reload()
+}
 async function markRead(item: NotificationItem): Promise<void> {
   try {
     await store.markRead(item.id)
-    if (filter.value === 'unread') items.value = items.value.filter((value) => value.id !== item.id)
+    if (unreadOnly.value === 'unread') rows.value = rows.value.filter((row) => row.id !== item.id)
     else item.isRead = true
   } catch {
     // request.ts emits the single API error notification
@@ -87,10 +173,10 @@ async function markRead(item: NotificationItem): Promise<void> {
 async function markAllRead(): Promise<void> {
   try {
     await store.markAllRead()
-    if (filter.value === 'unread') {
-      items.value = []
+    if (unreadOnly.value === 'unread') {
+      rows.value = []
       nextBeforeId.value = null
-    } else items.value = items.value.map((item) => ({ ...item, isRead: true }))
+    } else rows.value = rows.value.map((item) => ({ ...item, isRead: true }))
   } catch {
     // request.ts emits the single API error notification
   }
@@ -98,16 +184,11 @@ async function markAllRead(): Promise<void> {
 async function remove(item: NotificationItem): Promise<void> {
   try {
     await store.remove(item.id)
-    items.value = items.value.filter((value) => value.id !== item.id)
+    rows.value = rows.value.filter((row) => row.id !== item.id)
   } catch {
     // request.ts emits the single API error notification
   }
 }
-watch([filter, variant, priority], () => {
-  items.value = []
-  nextBeforeId.value = null
-  void load()
-})
 function open(item: NotificationItem): void {
   if (item.linkType === 'external') window.open(item.link, '_blank', 'noopener,noreferrer')
   else if (item.linkType === 'internal') {
@@ -123,158 +204,176 @@ onMounted(() => void load())
 </script>
 <template>
   <AppPage class="notification-center">
-    <header class="notification-center__header">
-      <h1>{{ t('notification.center') }}</h1>
-      <el-button
-        v-if="access.hasPermission('message:notification:read')"
-        :icon="CheckCheck"
-        plain
-        type="primary"
-        @click="markAllRead"
-      >
-        {{ t('notification.readAll') }}
-      </el-button>
-    </header>
-    <div class="notification-center__filters">
-      <el-segmented
-        v-model="filter"
-        data-testid="notification-filter-mode"
-        :options="filterOptions"
-      />
-      <div class="notification-center__selectors">
-        <label class="notification-center__filter">
-          <span class="notification-center__filter-label">{{
-            t('notification.variantLabel')
-          }}</span>
-          <el-select-v2
-            v-model="variant"
-            data-testid="notification-variant-filter"
-            :options="variantOptions"
-            :aria-label="t('notification.variantLabel')"
-          />
-        </label>
-        <label class="notification-center__filter">
-          <span class="notification-center__filter-label">{{
-            t('notification.priorityLabel')
-          }}</span>
-          <el-select-v2
-            v-model="priority"
-            data-testid="notification-priority-filter"
-            :options="priorityOptions"
-            :aria-label="t('notification.priorityLabel')"
-          />
-        </label>
-      </div>
-    </div>
-    <el-empty v-if="!canList" :description="t('notification.noPermission')" />
-    <div v-else-if="error" class="notification-center__state">
-      {{ error }}<el-button link @click="load()">{{ t('notification.retry') }}</el-button>
-    </div>
-    <div v-else-if="loading && items.length === 0" class="notification-center__state">
-      {{ t('notification.loading') }}
-    </div>
-    <el-empty v-else-if="!loading && items.length === 0" :description="t('notification.empty')" />
-    <NotificationCenterList
-      v-else
-      :items="items"
-      :loading="loading"
-      :next-before-id="nextBeforeId"
-      :can-read="access.hasPermission('message:notification:read')"
-      :can-delete="access.hasPermission('message:notification:delete')"
-      @read="markRead"
-      @remove="remove"
-      @open="open"
-      @load-more="load(true)"
+    <AppSearch
+      v-model="searchModel"
+      class="management-page__filters"
+      :fields="searchFields"
+      query-test-id="notification-search"
+      reset-test-id="notification-reset"
+      @query="search"
+      @reset="reset"
     />
+
+    <el-empty v-if="!canList" :description="t('notification.noPermission')" />
+    <template v-else>
+      <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
+      <el-skeleton
+        v-if="loading && rows.length === 0"
+        data-testid="notification-loading"
+        :rows="6"
+        animated
+      />
+      <AppTable
+        v-else
+        data-testid="notification-table"
+        :columns="columns"
+        :data="rows"
+        row-key="id"
+        :aria-label="t('notification.center')"
+        :refresh-label="t('notification.refresh')"
+        @refresh="reload"
+      >
+        <template #toolbar-left>
+          <el-button
+            v-if="canRead"
+            data-testid="notification-read-all"
+            :icon="CheckCheck"
+            plain
+            type="primary"
+            @click="markAllRead"
+          >
+            {{ t('notification.readAll') }}
+          </el-button>
+        </template>
+        <template #cell-title="{ row }: { row: NotificationItem }">
+          <div class="notification-center__title">
+            <span>{{ row.title }}</span>
+            <small v-if="row.summary !== ''">{{ row.summary }}</small>
+          </div>
+        </template>
+        <template #cell-variant="{ row }: { row: NotificationItem }">
+          <el-tag
+            :data-testid="`notification-variant-${row.id}`"
+            :type="variantTagTypes[row.variant]"
+            effect="plain"
+            size="small"
+          >
+            {{ t(`notification.variant.${row.variant}`) }}
+          </el-tag>
+        </template>
+        <template #cell-priority="{ row }: { row: NotificationItem }">
+          <el-tag
+            v-if="row.priority === 'urgent'"
+            :data-testid="`notification-priority-${row.id}`"
+            effect="plain"
+            size="small"
+            type="danger"
+          >
+            {{ t('notification.priority.urgent') }}
+          </el-tag>
+          <span v-else>-</span>
+        </template>
+        <template #cell-isRead="{ row }: { row: NotificationItem }">
+          <el-tag :type="row.isRead ? 'info' : 'primary'" effect="plain" size="small">
+            {{ row.isRead ? t('notification.read') : t('notification.unread') }}
+          </el-tag>
+        </template>
+        <template #cell-publishedAt="{ row }: { row: NotificationItem }">
+          {{ formatTime(row.publishedAt) }}
+        </template>
+        <template #cell-actions="{ row }: { row: NotificationItem }">
+          <el-button
+            v-if="!row.isRead && canRead"
+            :data-testid="`notification-read-${row.id}`"
+            :icon="Check"
+            text
+            type="primary"
+            @click="markRead(row)"
+          >
+            {{ t('notification.markRead') }}
+          </el-button>
+          <el-button
+            v-if="canDelete"
+            :data-testid="`notification-delete-${row.id}`"
+            :icon="Trash2"
+            text
+            type="danger"
+            @click="remove(row)"
+          >
+            {{ t('notification.delete') }}
+          </el-button>
+        </template>
+        <template #expand="{ row }: { row: NotificationItem }">
+          <div class="notification-center__detail">
+            <div class="notification-center__body" v-html="row.contentHtml" />
+            <el-button
+              v-if="row.linkType !== 'none'"
+              :icon="ArrowUpRight"
+              link
+              type="primary"
+              @click="open(row)"
+            >
+              {{ t('notification.openLink') }}
+            </el-button>
+          </div>
+        </template>
+        <template #empty>
+          <el-empty data-testid="notification-empty" :description="t('notification.empty')" />
+        </template>
+      </AppTable>
+      <div v-if="nextBeforeId !== null" class="notification-center__more">
+        <el-button
+          data-testid="notification-load-more"
+          :loading="loading"
+          plain
+          @click="load(true)"
+        >
+          {{ t('notification.loadMore') }}
+        </el-button>
+      </div>
+    </template>
   </AppPage>
 </template>
 <style scoped>
-.notification-center {
-  gap: 0;
-}
-
-.notification-center__header {
+.notification-center__title {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.notification-center__header h1 {
-  margin: 0;
-  color: var(--el-text-color-primary);
-  font-size: 20px;
-  font-weight: 650;
-  letter-spacing: 0;
-}
-
-.notification-center__filters {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-
-.notification-center__selectors,
-.notification-center__filter {
-  display: flex;
-  align-items: center;
-}
-
-.notification-center__selectors {
-  gap: 16px;
-}
-
-.notification-center__filter {
-  gap: 8px;
-}
-
-.notification-center__filter-label {
-  flex: 0 0 auto;
+.notification-center__title small {
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
-.notification-center__filter :deep(.el-select) {
-  width: 150px;
-}
-
-.notification-center__state {
+.notification-center__detail {
   display: flex;
-  min-height: 180px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 8px;
+}
+
+.notification-center__body {
+  color: var(--el-text-color-regular);
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.notification-center__body :deep(> :first-child) {
+  margin-top: 0;
+}
+
+.notification-center__body :deep(> :last-child) {
+  margin-bottom: 0;
+}
+
+.notification-center__more {
+  display: flex;
   justify-content: center;
-  align-items: center;
-  gap: 8px;
-  padding: 40px;
-  color: var(--el-text-color-secondary);
-}
-
-@media (max-width: 768px) {
-  .notification-center__header {
-    align-items: flex-start;
-  }
-
-  .notification-center__filters,
-  .notification-center__selectors {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .notification-center__filters :deep(.el-segmented) {
-    align-self: flex-start;
-  }
-
-  .notification-center__filter {
-    display: grid;
-    grid-template-columns: 64px minmax(0, 1fr);
-  }
-
-  .notification-center__filter :deep(.el-select) {
-    width: 100%;
-  }
+  padding: 4px 0;
 }
 </style>

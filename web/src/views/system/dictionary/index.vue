@@ -83,6 +83,7 @@ const searchFields = computed<SearchField<DictionarySearchModel>[]>(() => [
     type: 'select-v2',
     resetValue: '',
     label: t('dictionary.status'),
+    placeholder: t('dictionary.allStatuses'),
     options: [
       { label: t('dictionary.enabled'), value: YesNo.Yes },
       { label: t('dictionary.disabled'), value: YesNo.No },

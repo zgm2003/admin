@@ -24,9 +24,9 @@ export function roleSearchFields(t: Translate): SearchField<RoleSearchModel>[] {
       key: 'status',
       type: 'select-v2',
       resetValue: '',
-      label: t('role.status.all'),
+      label: t('role.status'),
+      placeholder: t('role.status.all'),
       options: [
-        { label: t('role.status.all'), value: '' },
         { label: t('role.status.enabled'), value: YesNo.Yes },
         { label: t('role.status.disabled'), value: YesNo.No },
       ],

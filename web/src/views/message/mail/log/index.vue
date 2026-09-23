@@ -78,6 +78,7 @@ const searchFields = computed<SearchField<MailLogSearchModel>[]>(() => [
     type: 'select-v2',
     resetValue: '',
     label: t('mail.scene'),
+    placeholder: t('mail.allScenes'),
     options: sceneOptions.value,
     width: 170,
     testId: 'mail-log-scene',
@@ -87,6 +88,7 @@ const searchFields = computed<SearchField<MailLogSearchModel>[]>(() => [
     type: 'select-v2',
     resetValue: '',
     label: t('mail.status'),
+    placeholder: t('mail.allStatuses'),
     options: [
       { label: t('mail.statusPending'), value: MailStatus.Pending },
       { label: t('mail.statusSent'), value: MailStatus.Sent },

@@ -67,10 +67,9 @@ const canRetry = computed(() => access.hasPermission('system:scheduler:retry'))
 const cronPresetOptions = computed(() =>
   CRON_PRESETS.map((preset) => ({ value: preset.value, label: t(preset.labelKey) })),
 )
-const jobStatusOptions = computed(() => [
-  { label: t('scheduler.all'), value: '' },
-  ...jobStatusMetadata.map((item) => ({ label: t(item.i18nKey), value: item.value })),
-])
+const jobStatusOptions = computed(() =>
+  jobStatusMetadata.map((item) => ({ label: t(item.i18nKey), value: item.value })),
+)
 const scheduleColumns = computed<TableColumn<Schedule>[]>(() => [
   { prop: 'name', label: t('scheduler.name'), minWidth: 180 },
   { prop: 'taskType', label: t('scheduler.taskType'), minWidth: 220 },
@@ -218,8 +217,9 @@ function changeTab(value: string): void {
   activeTab.value = value === 'jobs' ? 'jobs' : 'schedules'
   void load()
 }
-function changeJobStatus(value: string | number | boolean): void {
-  jobStatus.value = value === '' ? '' : (Number(value) as JobStatus)
+function changeJobStatus(value: string | number | boolean | null | undefined): void {
+  jobStatus.value =
+    value === '' || value === null || value === undefined ? '' : (Number(value) as JobStatus)
   void load()
 }
 onMounted(() => {
@@ -311,6 +311,9 @@ onMounted(() => {
           class="scheduler-job-status-filter"
           :model-value="jobStatus"
           :options="jobStatusOptions"
+          :placeholder="t('scheduler.allStatus')"
+          :value-on-clear="''"
+          clearable
           @update:model-value="changeJobStatus"
       /></template>
       <template #cell-taskType="{ row }: { row: Job }">

@@ -90,7 +90,7 @@ const searchFields = computed<SearchField<SessionSearchModel>[]>(() => [
     type: 'select-v2',
     resetValue: '',
     label: t('session.statusLabel'),
-    placeholder: t('session.statusLabel'),
+    placeholder: t('session.allStatuses'),
     options: [
       { label: t('session.status.active'), value: 'active' },
       { label: t('session.status.expired'), value: 'expired' },

@@ -32,8 +32,8 @@ export function createConfigSearchFields(t: Translate): SearchField<StorageConfi
       type: 'select-v2',
       resetValue: '',
       label: t('storage.status'),
+      placeholder: t('storage.allStatus'),
       options: [
-        { label: t('storage.allStatus'), value: '' },
         { label: t('storage.enabled'), value: YesNo.Yes },
         { label: t('storage.disabled'), value: YesNo.No },
       ],
@@ -62,10 +62,8 @@ export function createRuleSearchFields(
       type: 'select-v2',
       resetValue: '',
       label: t('storage.platform'),
-      options: [
-        { label: t('storage.allPlatforms'), value: '' },
-        ...platforms.map((item) => ({ label: item.name, value: item.id })),
-      ],
+      options: platforms.map((item) => ({ label: item.name, value: item.id })),
+      placeholder: t('storage.allPlatforms'),
       width: 180,
     },
     {
@@ -73,10 +71,8 @@ export function createRuleSearchFields(
       type: 'select-v2',
       resetValue: '',
       label: t('storage.config'),
-      options: [
-        { label: t('storage.allConfigs'), value: '' },
-        ...configs.map((item) => ({ label: item.name, value: item.id })),
-      ],
+      options: configs.map((item) => ({ label: item.name, value: item.id })),
+      placeholder: t('storage.allConfigs'),
       width: 180,
     },
     {
@@ -84,8 +80,8 @@ export function createRuleSearchFields(
       type: 'select-v2',
       resetValue: '',
       label: t('storage.status'),
+      placeholder: t('storage.allStatus'),
       options: [
-        { label: t('storage.allStatus'), value: '' },
         { label: t('storage.enabled'), value: YesNo.Yes },
         { label: t('storage.disabled'), value: YesNo.No },
       ],

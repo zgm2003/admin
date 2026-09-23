@@ -43,8 +43,8 @@ export function userSearchFields(
       type: 'select-v2',
       resetValue: '',
       label: t('user.status'),
+      placeholder: t('user.allStatus'),
       options: [
-        { label: t('user.status'), value: '' },
         { label: t('user.enabled'), value: YesNo.Yes },
         { label: t('user.disabled'), value: YesNo.No },
       ],
@@ -55,13 +55,11 @@ export function userSearchFields(
       type: 'select-v2',
       resetValue: '',
       label: t('user.role'),
-      options: [
-        { label: t('user.role'), value: '' },
-        ...roles.map((role) => ({
-          label: `${role.name} (${role.code})${role.isEnabled === YesNo.No ? ` · ${t('user.roleDisabled')}` : ''}`,
-          value: role.id,
-        })),
-      ],
+      placeholder: t('user.allRoles'),
+      options: roles.map((role) => ({
+        label: `${role.name} (${role.code})${role.isEnabled === YesNo.No ? ` · ${t('user.roleDisabled')}` : ''}`,
+        value: role.id,
+      })),
       width: 220,
     },
   ]

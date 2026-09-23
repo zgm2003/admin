@@ -82,8 +82,8 @@ const searchFields = computed<SearchField<OperationLogSearchModel>[]>(() => [
     type: 'select-v2',
     resetValue: '',
     label: t('operationLog.successLabel'),
+    placeholder: t('operationLog.allResults'),
     options: [
-      { label: t('operationLog.all'), value: '' },
       { label: t('operationLog.success.yes'), value: YesNo.Yes },
       { label: t('operationLog.success.no'), value: YesNo.No },
     ],
