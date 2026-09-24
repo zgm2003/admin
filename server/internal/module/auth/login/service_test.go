@@ -179,7 +179,7 @@ func TestLoginRecordsFailedLoginWithoutCreatingSession(t *testing.T) {
 		t.Fatalf("login error=%v events=%+v", err, recorder.events)
 	}
 	event := recorder.events[0]
-	if event.EventType != loginlog.EventLogin || event.IsSuccess != yesno.No || event.LoginType == nil || *event.LoginType != loginlog.LoginPassword || event.UserID != nil || event.SessionID != nil {
+	if event.EventType != loginlog.EventLogin || event.IsSuccess != yesno.No || event.LoginType == nil || *event.LoginType != loginlog.LoginPassword || event.UserID != nil || event.Account != "missing@example.com" {
 		t.Fatalf("failed login event=%+v", event)
 	}
 }
@@ -359,6 +359,8 @@ func TestLoginPhoneAutoRegistersVerifiedIdentity(t *testing.T) {
 	cleanupAuthRedisKeys(t, redisClient, 82701, "admin", 82702)
 	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
 	service.SetVerificationCodeStore(store)
+	recorder := &recordingLoginLog{}
+	service.SetLoginLogRecorder(recorder)
 
 	credential, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypePhone, LoginAccount: "15671628271", ChallengeID: "challenge-1", Code: "123456", Client: testAuthClient()})
 	if err != nil {
@@ -366,6 +368,14 @@ func TestLoginPhoneAutoRegistersVerifiedIdentity(t *testing.T) {
 	}
 	if !credential.IsNewUser || credential.AccessToken == "" || users.verifiedInput.IdentityKind != "phone" || users.verifiedInput.Account != "+8615671628271" || users.verifiedInput.PasswordHash != "" {
 		t.Fatalf("credential=%+v verified input=%+v", credential, users.verifiedInput)
+	}
+	if len(recorder.events) != 2 || recorder.events[0].EventType != loginlog.EventRegister || recorder.events[1].EventType != loginlog.EventLogin {
+		t.Fatalf("auto-registration events = %+v", recorder.events)
+	}
+	for _, event := range recorder.events {
+		if event.Account != "+8615671628271" || event.UserID == nil || *event.UserID != 82701 || event.LoginType == nil || *event.LoginType != loginlog.LoginPhone {
+			t.Fatalf("auto-registration event fields = %+v", event)
+		}
 	}
 }
 
@@ -395,9 +405,14 @@ func TestLoginPhoneRegistrationPolicyAndConflictWinner(t *testing.T) {
 	cleanupAuthRedisKeys(t, redisClient, 82801, "admin", 82802)
 	service = newRedisTestService(t, redisClient, users, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
 	service.SetVerificationCodeStore(&fakeVerificationCodeStore{checkValid: true, consumeValid: true})
+	recorder := &recordingLoginLog{}
+	service.SetLoginLogRecorder(recorder)
 	credential, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypePhone, LoginAccount: "15671628271", ChallengeID: "challenge-1", Code: "123456", Client: testAuthClient()})
 	if err != nil || credential.AccessToken == "" || credential.IsNewUser || users.identityCalls != 2 {
 		t.Fatalf("winner credential=%+v error=%v identity calls=%d", credential, err, users.identityCalls)
+	}
+	if len(recorder.events) != 1 || recorder.events[0].EventType != loginlog.EventLogin {
+		t.Fatalf("conflict winner events = %+v", recorder.events)
 	}
 }
 
@@ -948,6 +963,34 @@ func TestLogoutRequiresRedisInvalidationBeforePostgreSQL(t *testing.T) {
 	}
 }
 
+func TestLogoutRecordsUsernameWithoutSessionOrLoginTypeAndIgnoresAuditFailure(t *testing.T) {
+	redisClient := openAuthRedis(t)
+	policy := testPolicy()
+	sessions := &fakeSessionStore{}
+	users := &fakeUserStore{username: "user_abc"}
+	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
+	recorder := &recordingLoginLog{}
+	service.SetLoginLogRecorder(recorder)
+	_, _, _ = service.states.InstallSessionsReadyIfMissing(context.Background(), authstate.SessionsFact{Platform: "admin", UserID: 87011, Generation: "sessions-ready"})
+
+	if err := service.Logout(context.Background(), Identity{UserID: 87011, SessionID: 87012, PlatformID: 1, Platform: "admin", Version: 1}, testAuthClient()); err != nil {
+		t.Fatal(err)
+	}
+	if len(recorder.events) != 1 {
+		t.Fatalf("logout events = %+v", recorder.events)
+	}
+	event := recorder.events[0]
+	if event.EventType != loginlog.EventLogout || event.Account != "user_abc" || event.LoginType != nil || event.UserID == nil || *event.UserID != 87011 {
+		t.Fatalf("logout event = %+v", event)
+	}
+
+	users.usernameErr = errors.New("user lookup unavailable")
+	service.SetLoginLogRecorder(failingLoginLog{})
+	if err := service.Logout(context.Background(), Identity{UserID: 87011, SessionID: 87013, PlatformID: 1, Platform: "admin", Version: 1}, testAuthClient()); err != nil {
+		t.Fatalf("logout returned audit error: %v", err)
+	}
+}
+
 func TestCurrentUserReturnsClosedIdentity(t *testing.T) {
 	redisClient := openAuthRedis(t)
 	phone := "+86 138-0000-0000"
@@ -1072,6 +1115,8 @@ type fakeUserStore struct {
 	credentialEmail string
 	current         user.Current
 	currentErr      error
+	username        string
+	usernameErr     error
 	identityCalls   int
 	identityKind    string
 	identityAccount string
@@ -1110,6 +1155,10 @@ func (f *fakeUserStore) CreateVerifiedIdentity(ctx context.Context, input user.V
 
 func (f *fakeUserStore) FindCurrent(context.Context, int64) (user.Current, error) {
 	return f.current, f.currentErr
+}
+
+func (f *fakeUserStore) FindUsernameByID(context.Context, int64) (string, error) {
+	return f.username, f.usernameErr
 }
 
 type fakeVerifyCodeSender struct {

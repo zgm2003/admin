@@ -4,19 +4,21 @@ import {
   expectArray,
   expectExactKeys,
   expectInteger,
-  expectNullableString,
   expectPage,
   expectString,
 } from '@/api/protocol'
 import { ProtocolError } from '@/types/http'
 
+export type LoginLogEventType = 1 | 2 | 3
+export type LoginLogType = 1 | 2 | 3
+
 export interface LoginLogListQuery extends PageRequest {
   userId?: number
   platformId?: number
-  eventType?: string
-  loginType?: string
+  eventType?: LoginLogEventType
+  loginType?: LoginLogType
   isSuccess?: 0 | 1
-  loginAccount?: string
+  account?: string
   from?: string
   to?: string
 }
@@ -24,11 +26,10 @@ export interface LoginLogListQuery extends PageRequest {
 export interface LoginLogItem {
   id: number
   userId: number | null
-  sessionId: number | null
   platform: string
-  loginAccount: string
-  eventType: string
-  loginType: string | null
+  account: string
+  eventType: LoginLogEventType
+  loginType: LoginLogType | null
   isSuccess: 0 | 1
   reasonCode: string
   clientIp: string
@@ -39,8 +40,8 @@ export interface LoginLogItem {
 export type LoginLogPage = PageResult<LoginLogItem>
 
 export interface LoginLogPageInit {
-  eventTypes: string[]
-  loginTypes: string[]
+  eventTypes: LoginLogEventType[]
+  loginTypes: LoginLogType[]
 }
 
 export function getLoginLogPageInit(): Promise<LoginLogPageInit> {
@@ -61,10 +62,10 @@ export function getLoginLogs(query: LoginLogListQuery): Promise<LoginLogPage> {
 function parseLoginLogPageInit(value: unknown): LoginLogPageInit {
   const record = expectExactKeys(value, ['eventTypes', 'loginTypes'], 'login log page init')
   const eventTypes = expectArray(record.eventTypes, 'login log page init.eventTypes').map((item) =>
-    expectString(item, 'login log page init.eventTypes[]'),
+    parseEnum(item, [1, 2, 3] as const, 'login log page init.eventTypes[]'),
   )
   const loginTypes = expectArray(record.loginTypes, 'login log page init.loginTypes').map((item) =>
-    expectString(item, 'login log page init.loginTypes[]'),
+    parseEnum(item, [1, 2, 3] as const, 'login log page init.loginTypes[]'),
   )
   return { eventTypes, loginTypes }
 }
@@ -75,9 +76,8 @@ function parseLoginLogItem(value: unknown, index: number): LoginLogItem {
     [
       'id',
       'userId',
-      'sessionId',
       'platform',
-      'loginAccount',
+      'account',
       'eventType',
       'loginType',
       'isSuccess',
@@ -94,18 +94,22 @@ function parseLoginLogItem(value: unknown, index: number): LoginLogItem {
     id: expectInteger(record.id, `login logs[${index}].id`),
     userId:
       record.userId === null ? null : expectInteger(record.userId, `login logs[${index}].userId`),
-    sessionId:
-      record.sessionId === null
-        ? null
-        : expectInteger(record.sessionId, `login logs[${index}].sessionId`),
     platform: expectString(record.platform, `login logs[${index}].platform`),
-    loginAccount: expectString(record.loginAccount, `login logs[${index}].loginAccount`),
-    eventType: expectString(record.eventType, `login logs[${index}].eventType`),
-    loginType: expectNullableString(record.loginType, `login logs[${index}].loginType`),
+    account: expectString(record.account, `login logs[${index}].account`),
+    eventType: parseEnum(record.eventType, [1, 2, 3] as const, `login logs[${index}].eventType`),
+    loginType:
+      record.loginType === null
+        ? null
+        : parseEnum(record.loginType, [1, 2, 3] as const, `login logs[${index}].loginType`),
     isSuccess,
     reasonCode: expectString(record.reasonCode, `login logs[${index}].reasonCode`),
     clientIp: expectString(record.clientIp, `login logs[${index}].clientIp`),
     userAgent: expectString(record.userAgent, `login logs[${index}].userAgent`),
     createdAt: expectString(record.createdAt, `login logs[${index}].createdAt`),
   }
+}
+
+function parseEnum<T extends number>(value: unknown, allowed: readonly T[], context: string): T {
+  if (!allowed.includes(value as T)) throw new ProtocolError(`${context} is invalid`)
+  return value as T
 }

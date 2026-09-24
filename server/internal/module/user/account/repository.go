@@ -436,6 +436,21 @@ func (r *Repository) FindCredentialByIdentity(ctx context.Context, identityKind,
 	}
 }
 
+func (r *Repository) FindUsernameByID(ctx context.Context, userID int64) (string, error) {
+	var username string
+	result := r.db.WithContext(ctx).Model(&User{}).
+		Select("username").
+		Where("id = ? AND deleted_at IS NULL", userID).
+		Take(&username)
+	if result.Error != nil {
+		return "", fmt.Errorf("find username by user id: %w", result.Error)
+	}
+	if strings.TrimSpace(username) == "" {
+		return "", fmt.Errorf("find username by user id: %w", ErrUserDataInvalid)
+	}
+	return username, nil
+}
+
 // SetPasswordHash conditionally writes the first password; concurrent losers
 // cannot overwrite an existing credential.
 func (r *Repository) SetPasswordHash(ctx context.Context, userID int64, passwordHash string, now time.Time) error {

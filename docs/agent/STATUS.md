@@ -1,5 +1,15 @@
 # 项目状态
 
+## 用户登录日志数值协议与审计（2026-09-24，代码与真实库迁移已完成）
+
+- `user_login_log` 已统一为数值协议：`event_type` 为 `1=register`、`2=login`、`3=logout`；`login_type` 为 `1=password`、`2=email`、`3=phone`。`login_account` 改为 `account`，日志表删除 `session_id`，登出账号写当前 `username`，不回查历史登录方式。
+- 邮箱/手机号验证码自动注册在创建用户成功后写 register，再写 login；并发唯一键竞争只写 login。登录、注册、登出审计均为带 500ms deadline 的 best-effort PostgreSQL 写入，不使用 Asynq，日志或登出用户名查询失败不阻断认证主流程。固定枚举保留在代码/数据库约束，不进入系统字典。
+- 新增 forward migration `docs/database/2026-09-23-user-login-log-numeric.sql` 与受保护 runner `docs/database/2026-09-23-user-login-log-numeric.ps1`；包含历史登出空账号按 `user_id -> user_account.username` 回填、未知值拒绝、约束、索引和幂等复跑。runner 已改为 ASCII 编码以兼容 Windows PowerShell 5.1，并要求显式传入 `-OldAPIStopped`。
+- 前端登录日志 DTO/查询改为严格整数协议，使用 `account`、移除 `sessionId`，增加登录方式列/筛选；注册/登录/登出 Tag 分别为 `primary/success/danger`，登出登录方式显示 `-`。
+- 验证：后端 `go vet ./...`、登录日志/认证登录/用户账户/数据库定向 `go test`、`go build ./...` 通过；前端架构检查、登录日志 API/页面定向 Vitest 2 文件、`pnpm prettier --check`、`pnpm lint`、`pnpm typecheck`、`pnpm build` 通过。后端 `go test ./... -count=1` 曾受 Mail/SMS 缓存预算和 Scheduler 健康时序用例的并发负载抖动影响，四个失败用例随后单独复跑均通过；该全量命令不记为全绿。构建仅保留既有大 chunk 警告；未提交代码。
+- 真实迁移：2026-09-24 11:14（Asia/Shanghai）确认 API/Worker 未运行后执行 runner；PostgreSQL 事务提交成功，重复执行同一 SQL 通过。只读核验为 `account` 存在且非空、`event_type/login_type` 为 `smallint`、`session_id`/`login_account` 不存在、数值约束和 `account, created_at` 索引存在；历史行 `id=132` 为 `account=admin,event_type=3,login_type=NULL`，`id=133` 为 `account=admin@qq.com,event_type=2,login_type=1`，非法计数为 0。
+- 迁移前备份：`%LOCALAPPDATA%\Admin\backups\user-login-log-numeric-20260924-091142\public-before.dump`，478356 bytes，SHA256 `D9D31309A70976AEDDEC0CF6C4F98BE52AAD5B095613BDBF14944675E1E16861`，`pg_restore --list` 已通过。真实 schema-only 快照已于 2026-09-24 11:16 刷新至 `docs/database/current.sql`。本迁移未清理 Redis、未重启 API/Worker。
+
 ## 管理页 UI 整改与筛选空值语义（2026-09-23，代码已完成）
 
 - 系统设置「协议与隐私」：删除与页签重复的区块标题与描述，收敛卡片层级（原先页面卡片内还套 workspace / editor-shell 两层），改为页签固定、内容区内部滚动，编辑器高度自适应并自身滚动。

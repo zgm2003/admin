@@ -41,6 +41,7 @@ type userStore interface {
 	FindCredentialByIdentity(context.Context, string, string) (user.Credential, error)
 	CreateVerifiedIdentity(context.Context, user.VerifiedIdentityInput) (user.User, error)
 	FindCurrent(context.Context, int64) (user.Current, error)
+	FindUsernameByID(context.Context, int64) (string, error)
 }
 
 type passwordStore interface {
@@ -162,6 +163,15 @@ func (s *Service) recordLoginEvent(ctx context.Context, event loginlog.Event) er
 	if s.loginLogs == nil {
 		return nil
 	}
+	auditCtx, cancel := context.WithTimeout(ctx, loginAuditTimeout)
+	defer cancel()
+	return s.recordLoginEventWithContext(auditCtx, event)
+}
+
+func (s *Service) recordLoginEventWithContext(ctx context.Context, event loginlog.Event) error {
+	if s.loginLogs == nil {
+		return nil
+	}
 	if err := s.loginLogs.Record(ctx, event); err != nil {
 		// Login-log persistence is best-effort: an outage must never change the
 		// completed login response.
@@ -172,7 +182,7 @@ func (s *Service) recordLoginEvent(ctx context.Context, event loginlog.Event) er
 	return nil
 }
 
-func stringPointer(value string) *string { return &value }
+func loginTypePointer(value loginlog.LoginType) *loginlog.LoginType { return &value }
 
 func (s *Service) SetPasswordStore(store passwordStore) {
 	s.passwords = store
@@ -335,6 +345,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Registered
 
 const (
 	verificationCodeCleanupTimeout = time.Second
+	loginAuditTimeout              = 500 * time.Millisecond
 )
 
 // LoginConfig returns the effective, channel-filtered login methods for the
@@ -694,7 +705,7 @@ func (s *Service) loginWithPassword(ctx context.Context, policy authplatform.Pol
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			_ = s.comparePassword(missingCredentialPasswordHash, input.Password)
-			if logErr := s.recordLoginEvent(ctx, loginlog.Event{PlatformID: policy.ID, LoginAccount: email, EventType: loginlog.EventLogin, LoginType: stringPointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "invalid_credentials", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent}); logErr != nil {
+			if logErr := s.recordLoginEvent(ctx, loginlog.Event{PlatformID: policy.ID, Account: email, EventType: loginlog.EventLogin, LoginType: loginTypePointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "invalid_credentials", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent}); logErr != nil {
 				return Credential{}, logErr
 			}
 			return Credential{}, invalidCredentialError(err)
@@ -702,17 +713,17 @@ func (s *Service) loginWithPassword(ctx context.Context, policy authplatform.Pol
 		return Credential{}, apperror.DependencyUnavailable(err)
 	}
 	if credential.IsEnabled != yesno.Yes {
-		if logErr := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, PlatformID: policy.ID, LoginAccount: email, EventType: loginlog.EventLogin, LoginType: stringPointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "account_disabled", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent}); logErr != nil {
+		if logErr := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, PlatformID: policy.ID, Account: email, EventType: loginlog.EventLogin, LoginType: loginTypePointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "account_disabled", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent}); logErr != nil {
 			return Credential{}, logErr
 		}
 		return Credential{}, apperror.Forbidden(fmt.Errorf("user is disabled"))
 	}
 	if credential.PasswordHash == "" {
-		_ = s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, PlatformID: policy.ID, LoginAccount: email, EventType: loginlog.EventLogin, LoginType: stringPointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "invalid_credentials", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent})
+		_ = s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, PlatformID: policy.ID, Account: email, EventType: loginlog.EventLogin, LoginType: loginTypePointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "invalid_credentials", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent})
 		return Credential{}, invalidCredentialError(fmt.Errorf("password credential is unavailable"))
 	}
 	if err := s.comparePassword(credential.PasswordHash, input.Password); err != nil {
-		if logErr := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, PlatformID: policy.ID, LoginAccount: email, EventType: loginlog.EventLogin, LoginType: stringPointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "invalid_credentials", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent}); logErr != nil {
+		if logErr := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, PlatformID: policy.ID, Account: email, EventType: loginlog.EventLogin, LoginType: loginTypePointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "invalid_credentials", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent}); logErr != nil {
 			return Credential{}, logErr
 		}
 		return Credential{}, invalidCredentialError(err)
@@ -792,6 +803,12 @@ func (s *Service) loginWithCode(ctx context.Context, policy authplatform.Policy,
 			}
 		} else {
 			credential = user.Credential{ID: created.ID, Username: created.Username, Email: created.Email, PasswordHash: created.PasswordHash, IsEnabled: created.IsEnabled}
+			loginType := loginTypeFor(input.LoginType)
+			_ = s.recordLoginEvent(ctx, loginlog.Event{
+				UserID: &credential.ID, PlatformID: policy.ID, Account: account,
+				EventType: loginlog.EventRegister, LoginType: &loginType, IsSuccess: yesno.Yes,
+				ReasonCode: "success", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent,
+			})
 		}
 	}
 	if credential.IsEnabled != yesno.Yes {
@@ -802,15 +819,15 @@ func (s *Service) loginWithCode(ctx context.Context, policy authplatform.Policy,
 
 func (s *Service) recordCodeLoginFailure(ctx context.Context, input LoginInput, policy authplatform.Policy, account string, userID *int64, reason string) {
 	_ = s.recordLoginEvent(ctx, loginlog.Event{
-		UserID: userID, PlatformID: policy.ID, LoginAccount: account, EventType: loginlog.EventLogin,
-		LoginType: stringPointer(loginTypeFor(input.LoginType)), IsSuccess: yesno.No, ReasonCode: reason,
+		UserID: userID, PlatformID: policy.ID, Account: account, EventType: loginlog.EventLogin,
+		LoginType: loginTypePointer(loginTypeFor(input.LoginType)), IsSuccess: yesno.No, ReasonCode: reason,
 		ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent,
 	})
 }
 
 // issueCredential is the shared success tail: auth-state readiness, session
 // creation/limit, snapshot publish, JWT issue and best-effort login log.
-func (s *Service) issueCredential(ctx context.Context, client authclient.Client, policy authplatform.Policy, credential user.Credential, loginAccount, loginType string, isNewUser bool) (Credential, error) {
+func (s *Service) issueCredential(ctx context.Context, client authclient.Client, policy authplatform.Policy, credential user.Credential, account string, loginType loginlog.LoginType, isNewUser bool) (Credential, error) {
 	userFact, err := s.ensureUserReady(ctx, credential.ID, true, false)
 	if err != nil {
 		return Credential{}, mapStateMutationError(err)
@@ -871,7 +888,7 @@ func (s *Service) issueCredential(ctx context.Context, client authclient.Client,
 	if created.ClientIP == "" {
 		created.ClientIP = client.ClientIP
 	}
-	if err := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, SessionID: &created.ID, PlatformID: policy.ID, LoginAccount: loginAccount, EventType: loginlog.EventLogin, LoginType: stringPointer(loginType), IsSuccess: yesno.Yes, ReasonCode: "success", ClientIP: client.ClientIP, UserAgent: client.UserAgent}); err != nil {
+	if err := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, PlatformID: policy.ID, Account: account, EventType: loginlog.EventLogin, LoginType: loginTypePointer(loginType), IsSuccess: yesno.Yes, ReasonCode: "success", ClientIP: client.ClientIP, UserAgent: client.UserAgent}); err != nil {
 		return Credential{}, err
 	}
 	authority := usersession.Authority{Session: created, UserID: credential.ID, UserIsEnabled: credential.IsEnabled}
@@ -908,7 +925,7 @@ func loginIdentityKind(loginType authplatform.LoginType) string {
 	return "email"
 }
 
-func loginTypeFor(loginType authplatform.LoginType) string {
+func loginTypeFor(loginType authplatform.LoginType) loginlog.LoginType {
 	switch loginType {
 	case authplatform.LoginTypeEmail:
 		return loginlog.LoginEmail
@@ -1132,14 +1149,21 @@ func (s *Service) Logout(ctx context.Context, identity Identity, client authclie
 	if err := s.revokeSession(ctx, identity.UserID, identity.SessionID, identity.Platform); err != nil {
 		return err
 	}
-	if s.loginLogs != nil {
-		if err := s.loginLogs.Record(ctx, loginlog.Event{
-			UserID: &identity.UserID, SessionID: &identity.SessionID, PlatformID: identity.PlatformID,
+	if s.loginLogs != nil && s.users != nil {
+		auditCtx, cancel := context.WithTimeout(ctx, loginAuditTimeout)
+		defer cancel()
+		username, usernameErr := s.users.FindUsernameByID(auditCtx, identity.UserID)
+		if usernameErr != nil || strings.TrimSpace(username) == "" {
+			if s.logger != nil && usernameErr != nil {
+				s.logger.WarnContext(auditCtx, "logout username lookup failed", "error", usernameErr)
+			}
+			return nil
+		}
+		_ = s.recordLoginEventWithContext(auditCtx, loginlog.Event{
+			UserID: &identity.UserID, Account: username, PlatformID: identity.PlatformID,
 			EventType: loginlog.EventLogout, IsSuccess: yesno.Yes, ReasonCode: "success",
 			ClientIP: client.ClientIP, UserAgent: client.UserAgent,
-		}); err != nil {
-			return apperror.DependencyUnavailable(err)
-		}
+		})
 	}
 	return nil
 }

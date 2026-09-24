@@ -3,7 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { getLoginLogs } from '@/api/user/loginLog'
-import type { LoginLogItem, LoginLogListQuery } from '@/api/user/loginLog'
+import type {
+  LoginLogEventType,
+  LoginLogItem,
+  LoginLogListQuery,
+  LoginLogType,
+} from '@/api/user/loginLog'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import { formatTime } from '@/utils/datetime'
@@ -15,12 +20,14 @@ const loading = ref(false)
 const loadError = ref('')
 const query = ref<LoginLogListQuery>({ page: 1, pageSize: 20 })
 const account = ref('')
-const eventType = ref('')
+const eventType = ref<LoginLogEventType | ''>('')
+const loginType = ref<LoginLogType | ''>('')
 const success = ref<'' | 0 | 1>('')
 const timeRange = ref<[] | [string, string]>([])
 interface LoginLogSearchModel {
   account: string
-  eventType: string
+  eventType: LoginLogEventType | ''
+  loginType: LoginLogType | ''
   success: '' | 0 | 1
   timeRange: [] | [string, string]
 }
@@ -29,12 +36,16 @@ const searchModel = computed<SearchFormModel<LoginLogSearchModel>>({
   get: () => ({
     account: account.value,
     eventType: eventType.value,
+    loginType: loginType.value,
     success: success.value,
     timeRange: timeRange.value,
   }),
   set: (value) => {
     account.value = typeof value.account === 'string' ? value.account : ''
-    eventType.value = typeof value.eventType === 'string' ? value.eventType : ''
+    eventType.value =
+      value.eventType === 1 || value.eventType === 2 || value.eventType === 3 ? value.eventType : ''
+    loginType.value =
+      value.loginType === 1 || value.loginType === 2 || value.loginType === 3 ? value.loginType : ''
     success.value = value.success === 0 || value.success === 1 ? value.success : ''
     timeRange.value =
       Array.isArray(value.timeRange) && value.timeRange.length === 2
@@ -59,10 +70,24 @@ const searchFields = computed<SearchField<LoginLogSearchModel>[]>(() => [
     label: t('loginLog.eventType'),
     placeholder: t('loginLog.allEventTypes'),
     options: [
-      { label: t('loginLog.login'), value: 'login' },
-      { label: t('loginLog.logout'), value: 'logout' },
+      { label: t('loginLog.register'), value: 1 },
+      { label: t('loginLog.login'), value: 2 },
+      { label: t('loginLog.logout'), value: 3 },
     ],
     width: 140,
+  },
+  {
+    key: 'loginType',
+    type: 'select-v2',
+    resetValue: '',
+    label: t('loginLog.loginType'),
+    placeholder: t('loginLog.allLoginTypes'),
+    options: [
+      { label: t('loginLog.password'), value: 1 },
+      { label: t('loginLog.email'), value: 2 },
+      { label: t('loginLog.phone'), value: 3 },
+    ],
+    width: 150,
   },
   {
     key: 'success',
@@ -93,9 +118,10 @@ const pagination = computed<TablePaginationState>(() => ({
   total: total.value,
 }))
 const columns = computed<TableColumn<LoginLogItem>[]>(() => [
-  { prop: 'loginAccount', label: t('loginLog.account'), minWidth: 190, overflowTooltip: true },
+  { prop: 'account', label: t('loginLog.account'), minWidth: 190, overflowTooltip: true },
   { prop: 'platform', label: t('loginLog.platform'), width: 120 },
   { key: 'event', prop: 'id', label: t('loginLog.eventType'), width: 110 },
+  { key: 'loginType', prop: 'id', label: t('loginLog.loginType'), width: 120 },
   { key: 'status', prop: 'id', label: t('loginLog.status'), width: 100 },
   { prop: 'clientIp', label: t('loginLog.clientIp'), minWidth: 140 },
   { prop: 'reasonCode', label: t('loginLog.reason'), minWidth: 160, overflowTooltip: true },
@@ -121,8 +147,9 @@ function search(): void {
   query.value = {
     page: 1,
     pageSize: query.value.pageSize,
-    ...(account.value.trim() ? { loginAccount: account.value.trim() } : {}),
+    ...(account.value.trim() ? { account: account.value.trim() } : {}),
     ...(eventType.value ? { eventType: eventType.value } : {}),
+    ...(loginType.value ? { loginType: loginType.value } : {}),
     ...(success.value === '' ? {} : { isSuccess: success.value }),
     ...(timeRange.value.length === 0 ? {} : { from: timeRange.value[0], to: timeRange.value[1] }),
   }
@@ -131,6 +158,7 @@ function search(): void {
 function reset(): void {
   account.value = ''
   eventType.value = ''
+  loginType.value = ''
   success.value = ''
   timeRange.value = []
   query.value = { page: 1, pageSize: query.value.pageSize }
@@ -144,8 +172,23 @@ function updatePagination(next: TablePaginationState): void {
   }
   void load()
 }
-function eventLabel(value: string): string {
-  return value === 'login' ? t('loginLog.login') : value === 'logout' ? t('loginLog.logout') : value
+function eventLabel(value: LoginLogEventType): string {
+  return value === 1
+    ? t('loginLog.register')
+    : value === 2
+      ? t('loginLog.login')
+      : t('loginLog.logout')
+}
+function eventTagType(value: LoginLogEventType): 'primary' | 'success' | 'danger' {
+  return value === 1 ? 'primary' : value === 2 ? 'success' : 'danger'
+}
+function loginTypeLabel(value: LoginLogType | null): string {
+  if (value === null) return '-'
+  return value === 1
+    ? t('loginLog.password')
+    : value === 2
+      ? t('loginLog.email')
+      : t('loginLog.phone')
 }
 
 onMounted(() => {
@@ -178,8 +221,13 @@ onMounted(() => {
       @update:pagination="updatePagination"
     >
       <template #cell-event="{ row }: { row: LoginLogItem }"
-        ><el-tag size="small" effect="plain">{{ eventLabel(row.eventType) }}</el-tag></template
+        ><el-tag size="small" effect="plain" :type="eventTagType(row.eventType)">{{
+          eventLabel(row.eventType)
+        }}</el-tag></template
       >
+      <template #cell-loginType="{ row }: { row: LoginLogItem }">{{
+        loginTypeLabel(row.loginType)
+      }}</template>
       <template #cell-status="{ row }: { row: LoginLogItem }"
         ><el-tag size="small" :type="row.isSuccess === 1 ? 'success' : 'danger'">{{
           row.isSuccess === 1 ? t('loginLog.successYes') : t('loginLog.successNo')

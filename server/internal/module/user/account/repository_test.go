@@ -57,6 +57,22 @@ func TestCreateWithRolePersistsUserAndRoleAtomically(t *testing.T) {
 	}
 }
 
+func TestFindUsernameByIDReadsOnlyCurrentUsername(t *testing.T) {
+	tx, ctx, roleRepository := openUserTransaction(t)
+	defaultRole, err := roleRepository.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := account.NewRepository(tx).CreateWithRole(ctx, newCreateInput("logout-name", defaultRole.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	username, err := account.NewRepository(tx).FindUsernameByID(ctx, created.ID)
+	if err != nil || username != created.Username {
+		t.Fatalf("FindUsernameByID() = %q, %v; want %q", username, err, created.Username)
+	}
+}
+
 func TestCreateWithRoleMapsUsernameConstraint(t *testing.T) {
 	tx, ctx, roleRepository := openUserTransaction(t)
 	defaultRole, err := roleRepository.FindDefault(ctx)

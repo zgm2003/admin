@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 7hbUzcwT0xVqkBsy4zcch9wD0SlR9LgOPUadR5RlhbKc5eLlP1vCt6BE7cUrhyg
+\restrict yBEWuNAxpcp5conojwaeyjXgI88fhKK6xBf7hkwYa2h6gopSuDzA2D1tId8IdT2
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -1617,20 +1617,20 @@ ALTER SEQUENCE public.user_email_change_log_id_seq OWNED BY public.user_email_ch
 CREATE TABLE public.user_login_log (
     id bigint NOT NULL,
     user_id bigint,
-    session_id bigint,
     platform_id bigint NOT NULL,
-    login_account character varying(254) NOT NULL,
-    event_type character varying(16) NOT NULL,
-    login_type character varying(32),
+    account character varying(254) CONSTRAINT user_login_log_login_account_not_null NOT NULL,
+    event_type smallint NOT NULL,
+    login_type smallint,
     is_success smallint NOT NULL,
     reason_code character varying(64) NOT NULL,
     client_ip character varying(64) NOT NULL,
     user_agent character varying(512) NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT ck_user_login_log_event_type CHECK (((event_type)::text = ANY ((ARRAY['login'::character varying, 'logout'::character varying])::text[]))),
+    CONSTRAINT ck_user_login_log_account CHECK ((btrim((account)::text) <> ''::text)),
+    CONSTRAINT ck_user_login_log_event_type CHECK ((event_type = ANY (ARRAY[1, 2, 3]))),
     CONSTRAINT ck_user_login_log_is_success CHECK ((is_success = ANY (ARRAY[0, 1]))),
-    CONSTRAINT ck_user_login_log_login_type CHECK (((((event_type)::text = 'login'::text) AND (login_type IS NOT NULL)) OR (((event_type)::text = 'logout'::text) AND (login_type IS NULL))))
+    CONSTRAINT ck_user_login_log_login_type CHECK ((((event_type = 1) AND (login_type = ANY (ARRAY[2, 3]))) OR ((event_type = 2) AND (login_type = ANY (ARRAY[1, 2, 3]))) OR ((event_type = 3) AND (login_type IS NULL))))
 );
 
 
@@ -2588,7 +2588,7 @@ CREATE INDEX ix_user_email_change_log_user_id_desc ON public.user_email_change_l
 -- Name: ix_user_login_log_account_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX ix_user_login_log_account_created_at ON public.user_login_log USING btree (login_account, created_at DESC);
+CREATE INDEX ix_user_login_log_account_created_at ON public.user_login_log USING btree (account, created_at DESC);
 
 
 --
@@ -3309,14 +3309,6 @@ ALTER TABLE ONLY public.user_login_log
 
 
 --
--- Name: user_login_log fk_user_login_log_session; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.user_login_log
-    ADD CONSTRAINT fk_user_login_log_session FOREIGN KEY (session_id) REFERENCES public.user_session(id) ON DELETE RESTRICT;
-
-
---
 -- Name: user_login_log fk_user_login_log_user; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3408,5 +3400,5 @@ ALTER TABLE ONLY public.system_dictionary_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 7hbUzcwT0xVqkBsy4zcch9wD0SlR9LgOPUadR5RlhbKc5eLlP1vCt6BE7cUrhyg
+\unrestrict yBEWuNAxpcp5conojwaeyjXgI88fhKK6xBf7hkwYa2h6gopSuDzA2D1tId8IdT2
 

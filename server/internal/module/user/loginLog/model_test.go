@@ -9,10 +9,10 @@ func TestLoginLogUsesPersistentTable(t *testing.T) {
 }
 
 func TestLoginLogEventValidationRequiresPlatformAndEventShape(t *testing.T) {
-	loginType := "password"
+	loginType := LoginPassword
 	cases := []Event{
-		{EventType: "login", LoginType: &loginType, PlatformID: 0, IsSuccess: 1},
-		{EventType: "logout", LoginType: &loginType, PlatformID: 1, IsSuccess: 1},
+		{EventType: EventLogin, LoginType: &loginType, PlatformID: 0, IsSuccess: 1},
+		{EventType: EventLogout, LoginType: &loginType, PlatformID: 1, IsSuccess: 1},
 	}
 	for _, event := range cases {
 		if err := ValidateEvent(event); err == nil {

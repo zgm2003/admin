@@ -24,7 +24,7 @@ type Handler struct{ service *Service }
 func NewHandler(service *Service) *Handler { return &Handler{service: service} }
 
 func (h *Handler) PageInit(context *gin.Context) {
-	response.OK(context, http.StatusOK, map[string]any{"eventTypes": []string{EventLogin, EventLogout}, "loginTypes": []string{LoginPassword, LoginEmail, LoginPhone}})
+	response.OK(context, http.StatusOK, map[string]any{"eventTypes": []EventType{EventRegister, EventLogin, EventLogout}, "loginTypes": []LoginType{LoginPassword, LoginEmail, LoginPhone}})
 }
 
 func (h *Handler) List(context *gin.Context) {
@@ -42,7 +42,7 @@ func (h *Handler) List(context *gin.Context) {
 }
 
 func parseListQuery(values url.Values) (ListQuery, error) {
-	allowed := map[string]bool{"page": true, "pageSize": true, "userId": true, "platformId": true, "eventType": true, "loginType": true, "isSuccess": true, "loginAccount": true, "from": true, "to": true}
+	allowed := map[string]bool{"page": true, "pageSize": true, "userId": true, "platformId": true, "eventType": true, "loginType": true, "isSuccess": true, "account": true, "from": true, "to": true}
 	for key, entries := range values {
 		if !allowed[key] || len(entries) != 1 {
 			return ListQuery{}, apperror.InvalidRequest(contextError("invalid or repeated query parameter"))
@@ -79,9 +79,23 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 		}
 		query.PlatformID = &id
 	}
-	query.EventType = strings.TrimSpace(values.Get("eventType"))
-	query.LoginType = strings.TrimSpace(values.Get("loginType"))
-	query.LoginAccount = strings.TrimSpace(values.Get("loginAccount"))
+	if v := strings.TrimSpace(values.Get("eventType")); v != "" {
+		n, e := strconv.ParseInt(v, 10, 16)
+		value := EventType(n)
+		if e != nil || !value.IsValid() {
+			return ListQuery{}, apperror.InvalidRequest(contextError("eventType is invalid"))
+		}
+		query.EventType = value
+	}
+	if v := strings.TrimSpace(values.Get("loginType")); v != "" {
+		n, e := strconv.ParseInt(v, 10, 16)
+		value := LoginType(n)
+		if e != nil || !value.IsValid() {
+			return ListQuery{}, apperror.InvalidRequest(contextError("loginType is invalid"))
+		}
+		query.LoginType = &value
+	}
+	query.Account = strings.TrimSpace(values.Get("account"))
 	if v := values.Get("isSuccess"); v != "" {
 		n, e := strconv.ParseInt(v, 10, 16)
 		value := yesno.Value(n)
