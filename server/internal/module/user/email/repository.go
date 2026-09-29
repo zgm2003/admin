@@ -56,6 +56,7 @@ func (r *Repository) Change(ctx context.Context, input ChangeInput) error {
 		}
 		if err := tx.Create(&ChangeLog{UserID: input.UserID, PlatformID: input.PlatformID, Action: input.Action,
 			OldEmailHint: input.OldHint, OldEmailHMAC: input.OldHMAC, NewEmailHint: input.NewHint, NewEmailHMAC: input.NewHMAC,
+			OldEmail: nullableEmail(input.OldEmail), NewEmail: input.NewEmail,
 			CreatedAt: input.Now.UTC(), UpdatedAt: input.Now.UTC()}).Error; err != nil {
 			return fmt.Errorf("append email change audit: %w", err)
 		}
@@ -65,6 +66,28 @@ func (r *Repository) Change(ctx context.Context, input ChangeInput) error {
 		return fmt.Errorf("change email transaction: %w", err)
 	}
 	return nil
+}
+
+func (r *Repository) ListChangeLogs(ctx context.Context, userID int64, page, pageSize int) (ChangeLogPage, error) {
+	var total int64
+	base := r.db.WithContext(ctx).Table("user_email_change_log AS log").Where("log.user_id = ?", userID)
+	if err := base.Count(&total).Error; err != nil {
+		return ChangeLogPage{}, fmt.Errorf("count email change logs: %w", err)
+	}
+	rows := make([]ChangeLogItem, 0, pageSize)
+	if err := base.Select("log.id, log.action, log.old_email, log.new_email, platform.code AS platform, log.created_at").
+		Joins("JOIN permission_auth_platform AS platform ON platform.id = log.platform_id").
+		Order("log.created_at DESC, log.id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Scan(&rows).Error; err != nil {
+		return ChangeLogPage{}, fmt.Errorf("list email change logs: %w", err)
+	}
+	return ChangeLogPage{List: rows, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
+func nullableEmail(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 func mapWriteError(err error) error {

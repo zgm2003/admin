@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict yBEWuNAxpcp5conojwaeyjXgI88fhKK6xBf7hkwYa2h6gopSuDzA2D1tId8IdT2
+\restrict eMYZ51xi6x7FcPTzE0iZPMkYHJJB4cmq10UPQrtYWiMaKN8h0Cem4aokqEuVBbh
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -1580,14 +1580,18 @@ CREATE TABLE public.user_email_change_log (
     id bigint NOT NULL,
     user_id bigint NOT NULL,
     platform_id bigint NOT NULL,
-    action character varying(16) NOT NULL,
+    action smallint NOT NULL,
     old_email_hint character varying(128) DEFAULT ''::character varying NOT NULL,
     old_email_hmac character varying(128) DEFAULT ''::character varying NOT NULL,
     new_email_hint character varying(128) DEFAULT ''::character varying NOT NULL,
     new_email_hmac character varying(128) DEFAULT ''::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT ck_user_email_change_log_action CHECK (((action)::text = ANY ((ARRAY['bind'::character varying, 'change'::character varying])::text[])))
+    old_email character varying(254),
+    new_email character varying(254) NOT NULL,
+    CONSTRAINT ck_user_email_change_log_action CHECK ((action = ANY (ARRAY[1, 2]))),
+    CONSTRAINT ck_user_email_change_log_email_shape CHECK (((btrim((new_email)::text) <> ''::text) AND (length((new_email)::text) <= 254) AND ((old_email IS NULL) OR ((btrim((old_email)::text) <> ''::text) AND (length((old_email)::text) <= 254))))),
+    CONSTRAINT ck_user_email_change_log_old_email CHECK ((((action = 1) AND (old_email IS NOT NULL)) OR ((action = 2) AND (old_email IS NULL))))
 );
 
 
@@ -1656,14 +1660,18 @@ CREATE TABLE public.user_phone_change_log (
     id bigint NOT NULL,
     user_id bigint NOT NULL,
     platform_id bigint NOT NULL,
-    action character varying(16) NOT NULL,
+    action smallint NOT NULL,
     old_phone_hint character varying(32) DEFAULT ''::character varying NOT NULL,
     old_phone_hmac character varying(128) DEFAULT ''::character varying NOT NULL,
     new_phone_hint character varying(32) DEFAULT ''::character varying NOT NULL,
     new_phone_hmac character varying(128) DEFAULT ''::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT ck_user_phone_change_log_action CHECK (((action)::text = ANY ((ARRAY['bind'::character varying, 'change'::character varying])::text[])))
+    old_phone character varying(32),
+    new_phone character varying(32) NOT NULL,
+    CONSTRAINT ck_user_phone_change_log_action CHECK ((action = ANY (ARRAY[1, 2]))),
+    CONSTRAINT ck_user_phone_change_log_old_phone CHECK ((((action = 1) AND (old_phone IS NOT NULL)) OR ((action = 2) AND (old_phone IS NULL)))),
+    CONSTRAINT ck_user_phone_change_log_phone_shape CHECK ((((new_phone)::text ~ '^[+]861[3-9][0-9]{9}$'::text) AND ((old_phone IS NULL) OR ((old_phone)::text ~ '^[+]861[3-9][0-9]{9}$'::text))))
 );
 
 
@@ -2578,6 +2586,13 @@ CREATE INDEX ix_system_setting_enabled_key ON public.system_setting USING btree 
 
 
 --
+-- Name: ix_user_email_change_log_user_created_id_desc; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_user_email_change_log_user_created_id_desc ON public.user_email_change_log USING btree (user_id, created_at DESC, id DESC);
+
+
+--
 -- Name: ix_user_email_change_log_user_id_desc; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2610,6 +2625,13 @@ CREATE INDEX ix_user_login_log_platform_created_at ON public.user_login_log USIN
 --
 
 CREATE INDEX ix_user_login_log_user_created_at ON public.user_login_log USING btree (user_id, created_at DESC);
+
+
+--
+-- Name: ix_user_phone_change_log_user_created_id_desc; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_user_phone_change_log_user_created_id_desc ON public.user_phone_change_log USING btree (user_id, created_at DESC, id DESC);
 
 
 --
@@ -3400,5 +3422,5 @@ ALTER TABLE ONLY public.system_dictionary_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict yBEWuNAxpcp5conojwaeyjXgI88fhKK6xBf7hkwYa2h6gopSuDzA2D1tId8IdT2
+\unrestrict eMYZ51xi6x7FcPTzE0iZPMkYHJJB4cmq10UPQrtYWiMaKN8h0Cem4aokqEuVBbh
 

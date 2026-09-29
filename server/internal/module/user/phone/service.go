@@ -33,6 +33,23 @@ type Service struct {
 	generateID   func() (string, error)
 }
 
+func (s *Service) ListChangeLogs(ctx context.Context, userID int64, page, pageSize int) (ChangeLogPage, error) {
+	if s == nil || s.accounts == nil {
+		return ChangeLogPage{}, apperror.DependencyUnavailable(fmt.Errorf("list phone change logs requires a repository"))
+	}
+	if userID < 1 || page < 1 || pageSize < 1 || pageSize > 100 {
+		return ChangeLogPage{}, apperror.InvalidRequest(fmt.Errorf("phone change log query is invalid"))
+	}
+	result, err := s.accounts.ListChangeLogs(ctx, userID, page, pageSize)
+	if err != nil {
+		return ChangeLogPage{}, apperror.DependencyUnavailable(err)
+	}
+	if result.List == nil {
+		result.List = make([]ChangeLogItem, 0)
+	}
+	return result, nil
+}
+
 func NewService(accounts accountStore, sender phoneCodeSender, verification VerificationCodeStore, keys *secretkey.KeyRing, authority authorityCoordinator) *Service {
 	return &Service{accounts: accounts, sender: sender, verification: verification, keys: keys, authority: authority, now: time.Now, generateCode: newCode, generateID: newID}
 }

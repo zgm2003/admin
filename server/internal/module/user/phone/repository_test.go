@@ -38,9 +38,10 @@ CREATE UNIQUE INDEX ux_user_account_phone_active ON user_account(phone) WHERE ph
 CREATE TABLE user_phone_change_log(
  id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES user_account(id) ON DELETE RESTRICT,
  platform_id BIGINT NOT NULL REFERENCES permission_auth_platform(id) ON DELETE RESTRICT,
- action VARCHAR(16) NOT NULL CHECK(action IN ('bind','change')),
+ action SMALLINT NOT NULL CHECK(action IN (1,2)),
  old_phone_hint VARCHAR(32) NOT NULL, old_phone_hmac VARCHAR(128) NOT NULL,
  new_phone_hint VARCHAR(32) NOT NULL, new_phone_hmac VARCHAR(128) NOT NULL,
+ old_phone VARCHAR(32), new_phone VARCHAR(32) NOT NULL,
  created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL
 );`).Error; err != nil {
 		t.Fatal(err)

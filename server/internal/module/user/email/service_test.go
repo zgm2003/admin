@@ -28,6 +28,9 @@ func (f *fakeAccountStore) Change(_ context.Context, input ChangeInput) error {
 	f.changeInput = input
 	return nil
 }
+func (*fakeAccountStore) ListChangeLogs(context.Context, int64, int, int) (ChangeLogPage, error) {
+	return ChangeLogPage{List: []ChangeLogItem{}}, nil
+}
 
 type fakeVerificationStore struct {
 	valid        bool
@@ -103,6 +106,20 @@ func testKeys(t *testing.T) *secretkey.KeyRing {
 	return keys
 }
 func actor() Actor { return Actor{UserID: 7, SessionID: 8, PlatformID: 1, Platform: "admin"} }
+
+func TestListChangeLogsValidatesPagingAndReturnsEmptyList(t *testing.T) {
+	accounts := &fakeAccountStore{}
+	service := NewService(accounts, nil, nil, nil, nil)
+	result, err := service.ListChangeLogs(context.Background(), 7, 1, 20)
+	if err != nil || result.List == nil {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	for _, input := range [][3]int64{{0, 1, 20}, {7, 0, 20}, {7, 1, 101}} {
+		if _, err := service.ListChangeLogs(context.Background(), input[0], int(input[1]), int(input[2])); appCode(err) != apperror.CodeInvalidRequest {
+			t.Fatalf("input=%v err=%v", input, err)
+		}
+	}
+}
 
 func TestBindOrChangeFirstBindConsumesOnlyNextProof(t *testing.T) {
 	accounts := &fakeAccountStore{current: Current{UserID: 7, IsEnabled: true}}

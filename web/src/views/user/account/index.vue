@@ -28,6 +28,7 @@ import { formatTime } from '@/utils/datetime'
 import UserEditDialog from './components/UserEditDialog/index.vue'
 import UserRoleDialog from './components/UserRoleDialog/index.vue'
 import type { UserFormState } from './components/types'
+import IdentityChangeHistoryAction from './components/IdentityChangeHistoryAction/index.vue'
 import {
   hasSuperAdminRole,
   isProtectedTarget,
@@ -83,6 +84,7 @@ const canUpdate = computed(() => access.hasPermission('user:account:update'))
 const canStatus = computed(() => access.hasPermission('user:account:status'))
 const canDelete = computed(() => access.hasPermission('user:account:delete'))
 const canRoles = computed(() => access.hasPermission('user:account:authorize'))
+const canIdentityDetail = computed(() => access.hasPermission('user:account:detail'))
 const isSuperAdminActor = computed(() => access.roleCodes.includes('super_admin'))
 const normalizedUsernameValue = computed(() => normalizedUsername(userForm.value.username))
 const usernameValid = computed(() => isUsernameValid(userForm.value.username))
@@ -248,6 +250,7 @@ async function openRoles(row: UserListItem): Promise<void> {
     roleLoading.value = false
   }
 }
+
 function protectedSelectedRoleIDs(): number[] {
   return protectedRoleIDs(roleData.value, isSuperAdminActor.value)
 }
@@ -430,6 +433,7 @@ onMounted(() => {
                 >{{ t('user.assignRoles') }}</el-button
               ></el-tooltip
             >
+            <IdentityChangeHistoryAction :user="row" :enabled="canIdentityDetail" />
             <el-tooltip v-if="canDelete" :content="protectionText(row, 'delete')"
               ><el-button
                 text

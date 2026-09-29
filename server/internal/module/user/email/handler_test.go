@@ -23,6 +23,9 @@ func (s *handlerStub) BindOrChange(_ context.Context, _ Actor, input BindOrChang
 	s.bind = input
 	return EmailResult{Email: "user@example.com"}, nil
 }
+func (*handlerStub) ListChangeLogs(context.Context, int64, int, int) (ChangeLogPage, error) {
+	return ChangeLogPage{List: []ChangeLogItem{}}, nil
+}
 
 func TestHandlerStrictlyBindsEmailRequests(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -52,6 +55,28 @@ func TestHandlerStrictlyBindsEmailRequests(t *testing.T) {
 		router.ServeHTTP(rec, req)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("body=%s status=%d", body, rec.Code)
+		}
+	}
+}
+
+func TestHandlerListsEmailChangeLogsWithStrictPathAndPagination(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	stub := &handlerStub{}
+	handler := NewHandler(stub, func(*gin.Context) (Actor, bool) { return actor(), true })
+	router := gin.New()
+	router.GET("/user/account/:id/email-change-log", handler.ListChangeLogs)
+	req := httptest.NewRequest(http.MethodGet, "/user/account/7/email-change-log?page=1&pageSize=20", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"list":[]`) {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	for _, path := range []string{"/user/account/0/email-change-log?page=1&pageSize=20", "/user/account/7/email-change-log?page=1&pageSize=101", "/user/account/7/email-change-log?page=1&pageSize=20&extra=1"} {
+		req = httptest.NewRequest(http.MethodGet, path, nil)
+		rec = httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("path=%s status=%d body=%s", path, rec.Code, rec.Body.String())
 		}
 	}
 }

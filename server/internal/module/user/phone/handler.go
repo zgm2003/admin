@@ -3,9 +3,11 @@ package phone
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 
 	projectmiddleware "admin/server/internal/middleware"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/response"
 	"admin/server/internal/shared/validate"
 	"github.com/gin-gonic/gin"
@@ -77,4 +79,32 @@ func (h *Handler) BindOrChange(c *gin.Context) {
 		return
 	}
 	response.OK(c, http.StatusOK, phoneResponse{Phone: result.Phone})
+}
+
+func (h *Handler) ListChangeLogs(c *gin.Context) {
+	userID, err := validate.ParsePositiveInt64(c.Param("id"), "user id")
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	query, err := parseChangeLogQuery(c.Request.URL.Query())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	result, err := h.service.ListChangeLogs(c.Request.Context(), userID, query.Page, query.PageSize)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, changeLogListResponse(result))
+}
+
+func parseChangeLogQuery(values url.Values) (pagination.Request, error) {
+	for key, entries := range values {
+		if (key != "page" && key != "pageSize") || len(entries) != 1 {
+			return pagination.Request{}, apperror.InvalidRequest(fmt.Errorf("invalid or repeated query parameter"))
+		}
+	}
+	return pagination.ParseRequest(values)
 }

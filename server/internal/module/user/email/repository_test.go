@@ -38,15 +38,44 @@ CREATE UNIQUE INDEX ux_user_account_email_active ON user_account(lower(email)) W
 CREATE TABLE user_email_change_log(
  id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES user_account(id) ON DELETE RESTRICT,
  platform_id BIGINT NOT NULL REFERENCES permission_auth_platform(id) ON DELETE RESTRICT,
- action VARCHAR(16) NOT NULL CHECK(action IN ('bind','change')),
+ action SMALLINT NOT NULL CHECK(action IN (1,2)),
  old_email_hint VARCHAR(128) NOT NULL, old_email_hmac VARCHAR(128) NOT NULL,
  new_email_hint VARCHAR(128) NOT NULL, new_email_hmac VARCHAR(128) NOT NULL,
+ old_email VARCHAR(254), new_email VARCHAR(254) NOT NULL,
  created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL
 );`).Error; err != nil {
 		t.Fatal(err)
 	}
 	return db, ctx
 }
+
+func TestRepositoryListsEmailChangeLogsWithPlaintextAndPlatform(t *testing.T) {
+	db, ctx := openEmailSchema(t)
+	if err := db.WithContext(ctx).Exec(`INSERT INTO permission_auth_platform(id,code) VALUES (1,'admin'),(2,'canvas')`).Error; err != nil {
+		t.Fatal(err)
+	}
+	user := account.User{Username: "history", PasswordHash: "hash", IsEnabled: yesno.Yes}
+	if err := db.WithContext(ctx).Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 29, 5, 0, 0, 0, time.UTC)
+	rows := []ChangeLog{
+		{UserID: user.ID, PlatformID: 1, Action: ActionChange, OldEmail: stringPtr("old@example.com"), NewEmail: "new@example.com", OldEmailHint: "o***@example.com", OldEmailHMAC: "old", NewEmailHint: "n***@example.com", NewEmailHMAC: "new", CreatedAt: now, UpdatedAt: now},
+		{UserID: user.ID, PlatformID: 2, Action: ActionBind, NewEmail: "bound@example.com", OldEmailHint: "", OldEmailHMAC: "", NewEmailHint: "b***@example.com", NewEmailHMAC: "bound", CreatedAt: now.Add(time.Minute), UpdatedAt: now.Add(time.Minute)},
+	}
+	if err := db.WithContext(ctx).Create(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewRepository(db).ListChangeLogs(ctx, user.ID, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Total != 2 || len(result.List) != 1 || result.List[0].Action != ActionBind || result.List[0].OldEmail != nil || result.List[0].NewEmail != "bound@example.com" || result.List[0].Platform != "canvas" {
+		t.Fatalf("result=%+v", result)
+	}
+}
+
+func stringPtr(value string) *string { return &value }
 
 func TestRepositoryChangeEmailLocksCurrentValueAndAppendsAudit(t *testing.T) {
 	db, ctx := openEmailSchema(t)

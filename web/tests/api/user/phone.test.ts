@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { bindPhone, sendPhoneCode } from '@/api/user/phone'
+import { bindPhone, getPhoneChangeLogs, sendPhoneCode } from '@/api/user/phone'
 import { request } from '@/utils/request'
 
 vi.mock('@/utils/request', () => ({ request: vi.fn() }))
@@ -75,5 +75,45 @@ describe('user phone identity API', () => {
     await expect(
       bindPhone({ nextPhone: '+8615671628271', nextChallengeId: 'challenge', nextCode: '123456' }),
     ).rejects.toThrow()
+  })
+
+  it('loads numeric phone change actions and plaintext history', async () => {
+    requestMock.mockResolvedValue({
+      list: [
+        {
+          id: 1,
+          action: 1,
+          oldPhone: '+8615671628271',
+          newPhone: '+8613800000000',
+          platform: 'admin',
+          createdAt: '2026-09-29T05:00:00Z',
+        },
+        {
+          id: 2,
+          action: 2,
+          oldPhone: null,
+          newPhone: '+8613900000000',
+          platform: 'admin',
+          createdAt: '2026-09-28T05:00:00Z',
+        },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    })
+    await expect(getPhoneChangeLogs(7, { page: 1, pageSize: 20 })).resolves.toEqual({
+      list: expect.arrayContaining([
+        expect.objectContaining({ action: 1, oldPhone: '+8615671628271' }),
+        expect.objectContaining({ action: 2, oldPhone: null }),
+      ]),
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    })
+    expect(requestMock).toHaveBeenCalledWith({
+      method: 'GET',
+      url: '/api/admin/v1/user/account/7/phone-change-log',
+      params: { page: 1, pageSize: 20 },
+    })
   })
 })

@@ -1,5 +1,15 @@
 # 项目状态
 
+## 用户邮箱/手机号变更记录整改（2026-09-29，代码与真实库迁移已完成）
+
+- `user_email_change_log` 与 `user_phone_change_log` 的 `action` 统一为数值协议：`1=change`、`2=bind`；新增明文旧值/新值字段、动作与值形状约束，并保留原有 hint/HMAC 审计字段。邮箱迁移从成功的绑定邮件日志恢复可验证历史值，无法恢复时事务回滚；手机号历史存在但缺少明文事实时事务回滚，不写假值。
+- 新增管理员详情接口：`GET /api/admin/v1/user/account/:id/email-change-log` 与 `GET /api/admin/v1/user/account/:id/phone-change-log`。两个接口均使用独立 `user:account:detail` action，返回明文旧值/新值、数值 action、平台和时间，沿用严格分页协议。
+- 用户管理操作列新增身份变更记录入口；弹窗使用 `el-tabs` 分为邮箱和手机号两套分页表格，按 `user:account:detail` 控制按钮，包含空态、加载失败、刷新和明文展示；分页/刷新/切换用户时用请求序号丢弃过期响应。新增 API DTO 严格解析、后端分层测试、页面/协议测试及两个 forward migration。
+- 已验证：前端 `pnpm typecheck`、`pnpm check:architecture`、用户管理/API 定向 Vitest（3 文件/30 项）和 `pnpm build` 通过；后端 email/phone/database 定向 Go 测试、`go vet ./...`、`go build ./...` 通过。`go test ./... -count=1` 首轮受既有 Mail/SMS/UploadRule 缓存并发预算用例的环境抖动影响失败，五个失败包逐个串行复跑均通过；本次变更包无失败。
+- 真实迁移：确认 PostgreSQL/Redis 运行且 API/Worker 未运行后，于 2026-09-29 18:14（Asia/Shanghai）执行两份 SQL。`user_email_change_log` 的 1 条历史记录恢复为 `old_email=zgm_2003@qq.com`、`new_email=123456@qq.com`、`action=1`；`user_phone_change_log` 原有历史记录为 0 条。两张表的 `action` 均为 `smallint`，明文字段、约束和 `(user_id, created_at DESC, id DESC)` 索引已核验。
+- Admin 平台写入隐藏 action `user:account:detail`，挂在 `user:account:view` 下，`menu_version` 从 13 增至 14；Canvas 保持 1。修正 action 名称为“查看用户身份变更记录”并复跑两份迁移，菜单版本保持 14，幂等通过；未清理 Redis，未重启 API/Worker。
+- 迁移前备份：`%LOCALAPPDATA%\Admin\backups\user-identity-change-log-20260929-181445\public-before.dump`，526027 bytes，SHA256 `99D3BFBED60303EF71685425815CC8DAB672DF14B6CEF27CFF371FE1AE3FB670`，`pg_restore --list` 已通过。真实 schema-only 快照已刷新至 `docs/database/current.sql`，大小 124207 bytes，SHA256 `F0B1E6EDAF4710D66970D9E8BB76367EC76C21397C3398A1E5977E1306F38D4C`。代码仍未提交。
+
 ## 用户登录日志数值协议与审计（2026-09-24，代码与真实库迁移已完成）
 
 - `user_login_log` 已统一为数值协议：`event_type` 为 `1=register`、`2=login`、`3=logout`；`login_type` 为 `1=password`、`2=email`、`3=phone`。`login_account` 改为 `account`，日志表删除 `session_id`，登出账号写当前 `username`，不回查历史登录方式。

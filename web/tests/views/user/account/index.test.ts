@@ -8,6 +8,8 @@ import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
 import * as userAPI from '@/api/user/account'
+import * as emailAPI from '@/api/user/email'
+import * as phoneAPI from '@/api/user/phone'
 import UserManagement from '@/views/user/account/index.vue'
 
 vi.mock('@/api/user/account', () => ({
@@ -19,6 +21,8 @@ vi.mock('@/api/user/account', () => ({
   getUserRoles: vi.fn(),
   updateUserRoles: vi.fn(),
 }))
+vi.mock('@/api/user/email', () => ({ getEmailChangeLogs: vi.fn() }))
+vi.mock('@/api/user/phone', () => ({ getPhoneChangeLogs: vi.fn() }))
 const getUsers = vi.mocked(userAPI.getUsers)
 const getRoleOptions = vi.mocked(userAPI.getUserRoleOptions)
 const updateUser = vi.mocked(userAPI.updateUser)
@@ -26,6 +30,8 @@ const updateStatus = vi.mocked(userAPI.updateUserStatus)
 const deleteUser = vi.mocked(userAPI.deleteUser)
 const getUserRoles = vi.mocked(userAPI.getUserRoles)
 const updateRoles = vi.mocked(userAPI.updateUserRoles)
+const getEmailChangeLogs = vi.mocked(emailAPI.getEmailChangeLogs)
+const getPhoneChangeLogs = vi.mocked(phoneAPI.getPhoneChangeLogs)
 
 describe('user management', () => {
   beforeEach(() => {
@@ -53,6 +59,30 @@ describe('user management', () => {
       roleIds: [2, 3],
     })
     updateRoles.mockResolvedValue({ id: 7, roleCount: 2 })
+    getEmailChangeLogs.mockResolvedValue({
+      list: [
+        {
+          id: 1,
+          action: 1,
+          oldEmail: 'old@example.com',
+          newEmail: 'new@example.com',
+          platform: 'admin',
+          createdAt: '2026-09-29T05:00:00Z',
+        },
+        {
+          id: 2,
+          action: 2,
+          oldEmail: null,
+          newEmail: 'bound@example.com',
+          platform: 'admin',
+          createdAt: '2026-09-28T05:00:00Z',
+        },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    })
+    getPhoneChangeLogs.mockResolvedValue({ list: [], total: 0, page: 1, pageSize: 20 })
     vi.spyOn(ElMessageBox, 'confirm').mockImplementation(async () =>
       Object.assign('confirm' as const, { value: '', action: 'confirm' as const }),
     )
@@ -123,6 +153,22 @@ describe('user management', () => {
       .findAll('button')
       .filter((button) => ['已禁用', '删除用户', '分配角色'].includes(button.text()))
     expect(dangerous.every((button) => button.attributes('disabled') !== undefined)).toBe(true)
+  })
+
+  it('shows email history only with detail action and renders plaintext values', async () => {
+    const withoutDetail = mountPage(['user:account:list'])
+    await flushPromises()
+    expect(withoutDetail.text()).not.toContain('邮箱变更记录')
+
+    const wrapper = mountPage(['user:account:list', 'user:account:detail'])
+    await flushPromises()
+    await findAriaButton(wrapper, '邮箱变更记录').trigger('click')
+    await flushPromises()
+    expect(getEmailChangeLogs).toHaveBeenCalledWith(7, { page: 1, pageSize: 20 })
+    expect(getPhoneChangeLogs).toHaveBeenCalledWith(7, { page: 1, pageSize: 20 })
+    expect(document.body.textContent).toContain('old@example.com')
+    expect(document.body.textContent).toContain('new@example.com')
+    expect(document.body.textContent).toContain('首次绑定')
   })
 
   it('edits only username while keeping email and phone as read-only identities', async () => {

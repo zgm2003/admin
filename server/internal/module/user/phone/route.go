@@ -6,4 +6,5 @@ func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.
 	userRoutes := routes.Group("/user")
 	userRoutes.POST("/phone/send-code", authenticate, requirePermission(PermissionUpdate), handler.SendCode)
 	userRoutes.PUT("/phone", authenticate, requirePermission(PermissionUpdate), handler.BindOrChange)
+	userRoutes.GET("/account/:id/phone-change-log", authenticate, requirePermission(PermissionDetail), handler.ListChangeLogs)
 }

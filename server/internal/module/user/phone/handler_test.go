@@ -25,6 +25,9 @@ func (s *handlerServiceStub) BindOrChange(_ context.Context, actor Actor, input 
 	s.actor, s.bindInput = actor, input
 	return PhoneResult{Phone: "+8615671628271"}, nil
 }
+func (*handlerServiceStub) ListChangeLogs(context.Context, int64, int, int) (ChangeLogPage, error) {
+	return ChangeLogPage{List: []ChangeLogItem{}}, nil
+}
 
 func TestHandlerStrictlyBindsPhoneRequests(t *testing.T) {
 	gin.SetMode(gin.TestMode)

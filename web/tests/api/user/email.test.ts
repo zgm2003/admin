@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { bindEmail, sendEmailCode } from '@/api/user/email'
+import { bindEmail, getEmailChangeLogs, sendEmailCode } from '@/api/user/email'
 import { request } from '@/utils/request'
 
 vi.mock('@/utils/request', () => ({ request: vi.fn() }))
@@ -76,5 +76,45 @@ describe('user email identity API', () => {
     await expect(
       bindEmail({ nextEmail: 'a@b.com', nextChallengeId: 'challenge', nextCode: '123456' }),
     ).rejects.toThrow()
+  })
+
+  it('loads numeric email change actions and plaintext history', async () => {
+    requestMock.mockResolvedValue({
+      list: [
+        {
+          id: 1,
+          action: 1,
+          oldEmail: 'old@example.com',
+          newEmail: 'new@example.com',
+          platform: 'admin',
+          createdAt: '2026-09-29T05:00:00Z',
+        },
+        {
+          id: 2,
+          action: 2,
+          oldEmail: null,
+          newEmail: 'bound@example.com',
+          platform: 'admin',
+          createdAt: '2026-09-28T05:00:00Z',
+        },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    })
+    await expect(getEmailChangeLogs(7, { page: 1, pageSize: 20 })).resolves.toEqual({
+      list: expect.arrayContaining([
+        expect.objectContaining({ action: 1, oldEmail: 'old@example.com' }),
+        expect.objectContaining({ action: 2, oldEmail: null }),
+      ]),
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    })
+    expect(requestMock).toHaveBeenCalledWith({
+      method: 'GET',
+      url: '/api/admin/v1/user/account/7/email-change-log',
+      params: { page: 1, pageSize: 20 },
+    })
   })
 })

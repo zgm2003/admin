@@ -50,6 +50,9 @@ func (f *fakeAccountStore) Change(_ context.Context, input ChangeInput) error {
 	f.changeInput = input
 	return f.changeErr
 }
+func (*fakeAccountStore) ListChangeLogs(context.Context, int64, int, int) (ChangeLogPage, error) {
+	return ChangeLogPage{List: []ChangeLogItem{}}, nil
+}
 
 type fakeVerificationStore struct {
 	consumeValid   bool

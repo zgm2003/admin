@@ -9,12 +9,15 @@ import (
 )
 
 const (
-	PermissionUpdate = "user:email:update"
-	TargetCurrent    = "current"
-	TargetNext       = "next"
-	ActionBind       = "bind"
-	ActionChange     = "change"
+	PermissionUpdate              = "user:email:update"
+	PermissionDetail              = "user:account:detail"
+	TargetCurrent                 = "current"
+	TargetNext                    = "next"
+	ActionChange     ChangeAction = 1
+	ActionBind       ChangeAction = 2
 )
+
+type ChangeAction int16
 
 var (
 	ErrCurrentEmailChanged = errors.New("current email changed")
@@ -61,7 +64,7 @@ type EmailResult struct{ Email string }
 type ChangeInput struct {
 	UserID     int64
 	PlatformID int64
-	Action     string
+	Action     ChangeAction
 	OldEmail   string
 	NewEmail   string
 	OldHint    string
@@ -71,10 +74,27 @@ type ChangeInput struct {
 	Now        time.Time
 }
 
+type ChangeLogPage struct {
+	List     []ChangeLogItem
+	Total    int64
+	Page     int
+	PageSize int
+}
+
+type ChangeLogItem struct {
+	ID        int64
+	Action    ChangeAction
+	OldEmail  *string
+	NewEmail  string
+	Platform  string
+	CreatedAt time.Time
+}
+
 type accountStore interface {
 	Current(context.Context, int64) (Current, error)
 	EmailInUse(context.Context, int64, string) (bool, error)
 	Change(context.Context, ChangeInput) error
+	ListChangeLogs(context.Context, int64, int, int) (ChangeLogPage, error)
 }
 
 type VerificationCodeStore interface {
@@ -97,4 +117,5 @@ type authorityCoordinator interface {
 type handlerService interface {
 	SendCode(context.Context, Actor, SendCodeInput) (SendCodeResult, error)
 	BindOrChange(context.Context, Actor, BindOrChangeInput) (EmailResult, error)
+	ListChangeLogs(context.Context, int64, int, int) (ChangeLogPage, error)
 }

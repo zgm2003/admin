@@ -2,6 +2,24 @@ import { expectExactKeys, expectInteger, expectString } from '@/api/protocol'
 import { ProtocolError } from '@/types/http'
 import { request } from '@/utils/request'
 
+export type EmailChangeAction = 1 | 2
+
+export interface EmailChangeLogItem {
+  id: number
+  action: EmailChangeAction
+  oldEmail: string | null
+  newEmail: string
+  platform: string
+  createdAt: string
+}
+
+export interface EmailChangeLogPage {
+  list: EmailChangeLogItem[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 export type IdentityTarget = 'current' | 'next'
 
 export interface EmailSendCodeInput {
@@ -44,6 +62,20 @@ export async function bindEmail(input: BindEmailInput): Promise<EmailResult> {
   )
 }
 
+export async function getEmailChangeLogs(
+  userId: number,
+  query: { page: number; pageSize: number },
+): Promise<EmailChangeLogPage> {
+  if (!Number.isInteger(userId) || userId < 1) throw new ProtocolError('user id is invalid')
+  return parseEmailChangeLogPage(
+    await request({
+      method: 'GET',
+      url: `/api/admin/v1/user/account/${userId}/email-change-log`,
+      params: query,
+    }),
+  )
+}
+
 function parseSendCodeResult(value: unknown): EmailSendCodeResult {
   const data = expectExactKeys(
     value,
@@ -71,6 +103,69 @@ function parseEmailResult(value: unknown): EmailResult {
   const email = expectString(data.email, 'email result.email')
   if (!isCanonicalEmail(email)) throw new ProtocolError('email result.email is invalid')
   return { email }
+}
+
+function parseEmailChangeLogPage(value: unknown): EmailChangeLogPage {
+  const data = expectExactKeys(value, ['list', 'total', 'page', 'pageSize'], 'email change logs')
+  if (!Array.isArray(data.list)) throw new ProtocolError('email change logs response is invalid')
+  const total = expectInteger(data.total, 'email change logs.total')
+  const page = expectInteger(data.page, 'email change logs.page')
+  const pageSize = expectInteger(data.pageSize, 'email change logs.pageSize')
+  if (total < 0 || page < 1 || pageSize < 1 || pageSize > 100)
+    throw new ProtocolError('email change logs response is invalid')
+  return {
+    list: data.list.map(parseEmailChangeLogItem),
+    total,
+    page,
+    pageSize,
+  }
+}
+
+function parseEmailChangeLogItem(value: unknown): EmailChangeLogItem {
+  const data = expectExactKeys(
+    value,
+    ['id', 'action', 'oldEmail', 'newEmail', 'platform', 'createdAt'],
+    'email change log item',
+  )
+  if (
+    typeof data.id !== 'number' ||
+    !Number.isInteger(data.id) ||
+    data.id < 1 ||
+    (data.action !== 1 && data.action !== 2) ||
+    !isNullableCanonicalEmail(data.oldEmail) ||
+    typeof data.newEmail !== 'string' ||
+    !isCanonicalEmail(data.newEmail) ||
+    typeof data.platform !== 'string' ||
+    data.platform.trim() === '' ||
+    typeof data.createdAt !== 'string' ||
+    !isTimestamp(data.createdAt)
+  ) {
+    throw new ProtocolError('email change log item is invalid')
+  }
+  if (data.action === 1 && data.oldEmail === null) {
+    throw new ProtocolError('email change log change action requires oldEmail')
+  }
+  if (data.action === 2 && data.oldEmail !== null) {
+    throw new ProtocolError('email change log bind action forbids oldEmail')
+  }
+  const id = expectInteger(data.id, 'email change log item.id')
+  const platform = expectString(data.platform, 'email change log item.platform')
+  const createdAt = expectString(data.createdAt, 'email change log item.createdAt')
+  const newEmail = expectString(data.newEmail, 'email change log item.newEmail')
+  if (id < 1 || platform.trim() === '' || !isCanonicalEmail(newEmail) || !isTimestamp(createdAt))
+    throw new ProtocolError('email change log item is invalid')
+  return {
+    id,
+    action: data.action,
+    oldEmail: data.oldEmail,
+    newEmail,
+    platform,
+    createdAt,
+  }
+}
+
+function isNullableCanonicalEmail(value: unknown): value is string | null {
+  return value === null || (typeof value === 'string' && isCanonicalEmail(value))
 }
 
 function isCanonicalEmail(value: string): boolean {

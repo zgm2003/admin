@@ -9,12 +9,15 @@ import (
 )
 
 const (
-	PermissionUpdate = "user:phone:update"
-	TargetCurrent    = "current"
-	TargetNext       = "next"
-	ActionBind       = "bind"
-	ActionChange     = "change"
+	PermissionUpdate              = "user:phone:update"
+	PermissionDetail              = "user:account:detail"
+	TargetCurrent                 = "current"
+	TargetNext                    = "next"
+	ActionChange     ChangeAction = 1
+	ActionBind       ChangeAction = 2
 )
+
+type ChangeAction int16
 
 var (
 	ErrCurrentPhoneChanged = errors.New("current phone changed")
@@ -63,7 +66,7 @@ type PhoneResult struct {
 type ChangeInput struct {
 	UserID     int64
 	PlatformID int64
-	Action     string
+	Action     ChangeAction
 	OldPhone   string
 	NewPhone   string
 	OldHint    string
@@ -73,10 +76,27 @@ type ChangeInput struct {
 	Now        time.Time
 }
 
+type ChangeLogPage struct {
+	List     []ChangeLogItem
+	Total    int64
+	Page     int
+	PageSize int
+}
+
+type ChangeLogItem struct {
+	ID        int64
+	Action    ChangeAction
+	OldPhone  *string
+	NewPhone  string
+	Platform  string
+	CreatedAt time.Time
+}
+
 type accountStore interface {
 	Current(context.Context, int64) (Current, error)
 	PhoneInUse(context.Context, int64, string) (bool, error)
 	Change(context.Context, ChangeInput) error
+	ListChangeLogs(context.Context, int64, int, int) (ChangeLogPage, error)
 }
 
 // VerificationCodeStore is the narrow Auth-owned verification contract used
@@ -104,4 +124,5 @@ type phoneCodeSender interface {
 type handlerService interface {
 	SendCode(context.Context, Actor, SendCodeInput) (SendCodeResult, error)
 	BindOrChange(context.Context, Actor, BindOrChangeInput) (PhoneResult, error)
+	ListChangeLogs(context.Context, int64, int, int) (ChangeLogPage, error)
 }

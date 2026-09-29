@@ -61,6 +61,7 @@ func (r *Repository) Change(ctx context.Context, input ChangeInput) error {
 			UserID: input.UserID, PlatformID: input.PlatformID, Action: input.Action,
 			OldPhoneHint: input.OldHint, OldPhoneHMAC: input.OldHMAC,
 			NewPhoneHint: input.NewHint, NewPhoneHMAC: input.NewHMAC,
+			OldPhone: nullablePhone(input.OldPhone), NewPhone: input.NewPhone,
 			CreatedAt: input.Now.UTC(), UpdatedAt: input.Now.UTC(),
 		}
 		if err := tx.Create(&logRow).Error; err != nil {
@@ -72,6 +73,28 @@ func (r *Repository) Change(ctx context.Context, input ChangeInput) error {
 		return fmt.Errorf("change phone transaction: %w", err)
 	}
 	return nil
+}
+
+func (r *Repository) ListChangeLogs(ctx context.Context, userID int64, page, pageSize int) (ChangeLogPage, error) {
+	var total int64
+	base := r.db.WithContext(ctx).Table("user_phone_change_log AS log").Where("log.user_id = ?", userID)
+	if err := base.Count(&total).Error; err != nil {
+		return ChangeLogPage{}, fmt.Errorf("count phone change logs: %w", err)
+	}
+	rows := make([]ChangeLogItem, 0, pageSize)
+	if err := base.Select("log.id, log.action, log.old_phone, log.new_phone, platform.code AS platform, log.created_at").
+		Joins("JOIN permission_auth_platform AS platform ON platform.id = log.platform_id").
+		Order("log.created_at DESC, log.id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Scan(&rows).Error; err != nil {
+		return ChangeLogPage{}, fmt.Errorf("list phone change logs: %w", err)
+	}
+	return ChangeLogPage{List: rows, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
+func nullablePhone(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 func mapWriteError(err error) error {
