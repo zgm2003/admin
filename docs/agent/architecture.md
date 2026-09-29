@@ -176,14 +176,15 @@ PostgreSQL 是通知和 durable realtime event 的唯一事实来源。业务事
 PostgreSQL 权威查询，正常热路径不读取 setting 表；保留期配置通过 `system.setting/global` generation 快照读取。
 
 通知任务提交后冻结事实。用户/角色每批最多 500，按 user ID cursor 展开；平台广播固定写一条 notification 和一条
-event/outbox。通用 Scheduler 已由 `system/scheduler` 模块和 Worker scanner/publisher 承担；
-`message_notification_dispatch_outbox` 与 Worker relay 仍是通知批次到期/续批的临时唤醒层，下一模块接管后必须删除
-该表、relay wiring 和 realtime/notification 的临时 retention trigger，不得保留双调度或兼容读取。
+event/outbox。通用 Scheduler 已由 `system/scheduler` 模块和 Worker scanner/publisher 承担，通知批次以
+`message.notificationtask.batch` Scheduler Job 作为唯一到期/续批入口；运行时不读取
+`message_notification_dispatch_outbox`，也不保留通知专用 relay。旧 outbox 仅由一次性 migration 删除并在历史
+测试 fixture 中保留，不得恢复双调度或兼容读取。
 
 容量边界为显式用户最多 1000、resume 最多 500、resume 数据库预算最多 2 次查询/2 秒且每实例最多 32 个并发、
 连接队列 128、Worker 批次 500。Redis 故障时新 ticket 失败闭合、已有连接关闭，PG 通知事实仍可在恢复后通过 HTTP/
-cursor 读取；PG 故障显式失败；Asynq 入队失败保留 dispatch outbox，重复运输由 task batch、recipient/event 唯一约束
-和 dedup key 幂等吸收。
+cursor 读取；PG 故障显式失败；Scheduler Job 在 Asynq 入队失败时保留发布租约并按退避重试，重复运输由 task batch、
+recipient/event 唯一约束和 dedup key 幂等吸收。
 
 ### 本轮收口的具体约束
 
