@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type * as taskApi from '@/api/message/notificationTask'
@@ -7,7 +8,6 @@ import type {
   NotificationPriority,
   NotificationVariant,
 } from '@/api/message/notification'
-import NotificationEditor from '@/views/message/notificationTask/components/NotificationEditor/index.vue'
 import NotificationTaskDetail from '@/views/message/notificationTask/components/NotificationTaskDetail/index.vue'
 import type {
   NotificationTaskOptionKind,
@@ -51,6 +51,9 @@ const emit = defineEmits<{
   loadMore: [kind: NotificationTaskOptionKind]
 }>()
 const { t } = useI18n()
+const NotificationEditor = defineAsyncComponent(
+  () => import('@/views/message/notificationTask/components/NotificationEditor/index.vue'),
+)
 
 const close = (): void => emit('update:modelValue', false)
 const setFormField = <K extends keyof NotificationTaskFormModel>(

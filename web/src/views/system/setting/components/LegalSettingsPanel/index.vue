@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { Check } from '@element-plus/icons-vue'
-import { ref } from 'vue'
+import { defineAsyncComponent, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { LegalDocumentKind } from '@/api/system/setting'
-import LegalDocumentEditor from '@/views/system/setting/components/LegalDocumentEditor/index.vue'
 
 defineOptions({ name: 'LegalSettingsPanel' })
 
@@ -18,6 +17,9 @@ const documents = defineModel<Record<LegalDocumentKind, string>>('documents', { 
 const emit = defineEmits<{ save: [kind: LegalDocumentKind] }>()
 const { t } = useI18n()
 const activeDocument = ref<LegalDocumentKind>('userAgreement')
+const LegalDocumentEditor = defineAsyncComponent(
+  () => import('@/views/system/setting/components/LegalDocumentEditor/index.vue'),
+)
 </script>
 
 <template>

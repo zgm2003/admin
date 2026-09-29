@@ -176,9 +176,9 @@ PostgreSQL 是通知和 durable realtime event 的唯一事实来源。业务事
 PostgreSQL 权威查询，正常热路径不读取 setting 表；保留期配置通过 `system.setting/global` generation 快照读取。
 
 通知任务提交后冻结事实。用户/角色每批最多 500，按 user ID cursor 展开；平台广播固定写一条 notification 和一条
-event/outbox。当前通用 scheduler 尚未实现，`message_notification_dispatch_outbox` 与 Worker relay 只作为明确的临时
-到期/续批唤醒层；下一模块接管后必须删除该表、relay wiring 和 realtime/notification 的临时 retention trigger，
-不得保留双调度或兼容读取。
+event/outbox。通用 Scheduler 已由 `system/scheduler` 模块和 Worker scanner/publisher 承担；
+`message_notification_dispatch_outbox` 与 Worker relay 仍是通知批次到期/续批的临时唤醒层，下一模块接管后必须删除
+该表、relay wiring 和 realtime/notification 的临时 retention trigger，不得保留双调度或兼容读取。
 
 容量边界为显式用户最多 1000、resume 最多 500、resume 数据库预算最多 2 次查询/2 秒且每实例最多 32 个并发、
 连接队列 128、Worker 批次 500。Redis 故障时新 ticket 失败闭合、已有连接关闭，PG 通知事实仍可在恢复后通过 HTTP/

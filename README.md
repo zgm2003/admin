@@ -38,9 +38,12 @@ HTTP_ADDR=:16301
 POSTGRES_DSN=host=127.0.0.1 user=postgres password=postgres dbname=admin port=5432 sslmode=disable TimeZone=Asia/Shanghai
 REDIS_URL=redis://127.0.0.1:6379/0
 CORS_ORIGIN=http://localhost:16300
+TRUSTED_PROXIES=none
+APP_SECRET=replace_with_at_least_64_random_characters_before_running_api_server
+AUTH_COOKIE_SECURE=0
 ```
 
-API 使用全部四项。Worker 只读取 `POSTGRES_DSN` 和 `REDIS_URL`。变量缺失、为空或格式错误时进程会明确退出，不提供默认地址。
+API 使用以上全部七项。`TRUSTED_PROXIES` 必须明确填写 `none` 或逗号分隔的 IP/CIDR；`APP_SECRET` 必须是至少 64 个 ASCII 字符的随机值；`AUTH_COOKIE_SECURE` 在本地 HTTP 使用 `0`，HTTPS 使用 `1`。Worker 只读取 `POSTGRES_DSN` 和 `REDIS_URL`。变量缺失、为空或格式错误时进程会明确退出，不提供默认地址。
 
 前端读取 `web/.env`：
 
@@ -48,7 +51,7 @@ API 使用全部四项。Worker 只读取 `POSTGRES_DSN` 和 `REDIS_URL`。变�
 VITE_API_BASE_URL=http://localhost:16301
 ```
 
-浏览器直接访问 Go API；项目不配置 Vite Proxy。
+开发环境中 Vite 将 `/api` 和 WebSocket 请求代理到 `VITE_API_BASE_URL`；生产构建仍由浏览器直接访问 Go API。
 
 模板分别位于 `server/.env.example` 和 `web/.env.example`。本机凭据只修改被忽略的 `.env`，不要把真实密码写入模板。
 
