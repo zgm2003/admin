@@ -7,7 +7,6 @@ import (
 	"time"
 
 	messagesms "admin/server/internal/module/message/sms"
-	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
 )
 
@@ -112,20 +111,11 @@ func (f *fakeAuthorityCoordinator) Mutate(_ context.Context, _ Current, mutation
 	return mutation(context.Background())
 }
 
-func testPhoneKeys(t *testing.T) *secretkey.KeyRing {
-	t.Helper()
-	keys, err := secretkey.New("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return keys
-}
-
 func TestBindOrChangeFirstBindConsumesOnlyNextProof(t *testing.T) {
 	accounts := &fakeAccountStore{current: Current{UserID: 7, IsEnabled: true}}
 	verification := &fakeVerificationStore{consumeValid: true}
 	authority := &fakeAuthorityCoordinator{}
-	service := NewService(accounts, nil, verification, testPhoneKeys(t), authority)
+	service := NewService(accounts, nil, verification, authority)
 	service.now = func() time.Time { return time.Date(2026, 9, 11, 1, 2, 3, 0, time.UTC) }
 
 	result, err := service.BindOrChange(context.Background(), Actor{UserID: 7, SessionID: 8, PlatformID: 1, Platform: "admin"}, BindOrChangeInput{
@@ -149,7 +139,7 @@ func TestBindOrChangeExistingPhoneRequiresAndAtomicallyConsumesBothProofs(t *tes
 	currentPhone := "+8613800000000"
 	accounts := &fakeAccountStore{current: Current{UserID: 7, Phone: &currentPhone, IsEnabled: true}}
 	verification := &fakeVerificationStore{consumeValid: true}
-	service := NewService(accounts, nil, verification, testPhoneKeys(t), &fakeAuthorityCoordinator{})
+	service := NewService(accounts, nil, verification, &fakeAuthorityCoordinator{})
 
 	_, err := service.BindOrChange(context.Background(), Actor{UserID: 7, SessionID: 8, PlatformID: 1, Platform: "admin"}, BindOrChangeInput{
 		NextPhone: "15671628271", NextChallengeID: "next", NextCode: "222222",
@@ -175,7 +165,7 @@ func TestBindOrChangeExistingPhoneRequiresAndAtomicallyConsumesBothProofs(t *tes
 func TestBindOrChangeRejectsUnavailableOrReusedProofBeforeDatabaseMutation(t *testing.T) {
 	accounts := &fakeAccountStore{current: Current{UserID: 7, IsEnabled: true}}
 	verification := &fakeVerificationStore{consumeValid: false}
-	service := NewService(accounts, nil, verification, testPhoneKeys(t), &fakeAuthorityCoordinator{})
+	service := NewService(accounts, nil, verification, &fakeAuthorityCoordinator{})
 
 	_, err := service.BindOrChange(context.Background(), Actor{UserID: 7, SessionID: 8, PlatformID: 1, Platform: "admin"}, BindOrChangeInput{
 		NextPhone: "15671628271", NextChallengeID: "next", NextCode: "123456",
@@ -197,7 +187,7 @@ func TestBindOrChangeLimitsInvalidProofAttemptsBeforeAtomicConsumption(t *testin
 	currentPhone := "+8613800000000"
 	accounts := &fakeAccountStore{current: Current{UserID: 7, Phone: &currentPhone, IsEnabled: true}}
 	verification := &fakeVerificationStore{consumeValid: true, checkInvalid: true}
-	service := NewService(accounts, nil, verification, testPhoneKeys(t), &fakeAuthorityCoordinator{})
+	service := NewService(accounts, nil, verification, &fakeAuthorityCoordinator{})
 	actor := Actor{UserID: 7, SessionID: 8, PlatformID: 1, Platform: "admin", ClientIP: "192.0.2.8"}
 	input := BindOrChangeInput{CurrentChallengeID: "current", CurrentCode: "111111", NextPhone: "15671628271", NextChallengeID: "next", NextCode: "222222"}
 
@@ -219,7 +209,7 @@ func TestBindOrChangeLimitsInvalidProofAttemptsBeforeAtomicConsumption(t *testin
 func TestSendCodeRejectsDisabledAccount(t *testing.T) {
 	currentPhone := "+8613800000000"
 	accounts := &fakeAccountStore{current: Current{UserID: 7, Phone: &currentPhone, IsEnabled: false}}
-	service := NewService(accounts, fakePhoneSender{}, &fakeVerificationStore{}, testPhoneKeys(t), &fakeAuthorityCoordinator{})
+	service := NewService(accounts, fakePhoneSender{}, &fakeVerificationStore{}, &fakeAuthorityCoordinator{})
 	_, err := service.SendCode(context.Background(), Actor{UserID: 7, SessionID: 8, PlatformID: 1, Platform: "admin"}, SendCodeInput{Target: TargetCurrent})
 	if appErrorCode(err) != apperror.CodeForbidden {
 		t.Fatalf("disabled account error=%v", err)
@@ -230,7 +220,7 @@ func TestBindOrChangeRejectsSameOrOccupiedNextPhoneWithoutConsumingProof(t *test
 	currentPhone := "+8615671628271"
 	accounts := &fakeAccountStore{current: Current{UserID: 7, Phone: &currentPhone, IsEnabled: true}}
 	verification := &fakeVerificationStore{consumeValid: true}
-	service := NewService(accounts, nil, verification, testPhoneKeys(t), &fakeAuthorityCoordinator{})
+	service := NewService(accounts, nil, verification, &fakeAuthorityCoordinator{})
 
 	_, err := service.BindOrChange(context.Background(), Actor{UserID: 7, SessionID: 8, PlatformID: 1, Platform: "admin"}, BindOrChangeInput{
 		CurrentChallengeID: "current", CurrentCode: "111111", NextPhone: "15671628271", NextChallengeID: "next", NextCode: "222222",
@@ -251,7 +241,7 @@ func TestBindOrChangeRejectsSameOrOccupiedNextPhoneWithoutConsumingProof(t *test
 
 func TestSendCodeRejectsCurrentTargetWithPhoneInBody(t *testing.T) {
 	value := "15671628271"
-	service := NewService(&fakeAccountStore{}, nil, nil, nil, nil)
+	service := NewService(&fakeAccountStore{}, nil, nil, nil)
 	_, err := service.SendCode(context.Background(), Actor{UserID: 7, SessionID: 8, PlatformID: 1, Platform: "admin"}, SendCodeInput{Target: TargetCurrent, Phone: &value})
 	if appErrorCode(err) != apperror.CodeInvalidRequest {
 		t.Fatalf("error=%v", err)

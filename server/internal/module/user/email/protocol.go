@@ -67,10 +67,6 @@ type ChangeInput struct {
 	Action     ChangeAction
 	OldEmail   string
 	NewEmail   string
-	OldHint    string
-	OldHMAC    string
-	NewHint    string
-	NewHMAC    string
 	Now        time.Time
 }
 

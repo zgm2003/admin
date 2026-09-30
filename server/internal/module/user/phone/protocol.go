@@ -69,10 +69,6 @@ type ChangeInput struct {
 	Action     ChangeAction
 	OldPhone   string
 	NewPhone   string
-	OldHint    string
-	OldHMAC    string
-	NewHint    string
-	NewHMAC    string
 	Now        time.Time
 }
 

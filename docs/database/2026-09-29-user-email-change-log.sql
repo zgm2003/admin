@@ -18,6 +18,10 @@ LOCK TABLE user_email_change_log IN SHARE ROW EXCLUSIVE MODE;
 ALTER TABLE user_email_change_log
   DROP CONSTRAINT IF EXISTS ck_user_email_change_log_action,
   DROP CONSTRAINT IF EXISTS user_email_change_log_action_check,
+  DROP COLUMN IF EXISTS old_email_hint,
+  DROP COLUMN IF EXISTS old_email_hmac,
+  DROP COLUMN IF EXISTS new_email_hint,
+  DROP COLUMN IF EXISTS new_email_hmac,
   ADD COLUMN IF NOT EXISTS old_email VARCHAR(254),
   ADD COLUMN IF NOT EXISTS new_email VARCHAR(254);
 

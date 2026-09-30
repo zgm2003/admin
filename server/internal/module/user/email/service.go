@@ -2,12 +2,9 @@ package email
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -15,7 +12,6 @@ import (
 	authstate "admin/server/internal/module/auth/state"
 	messagemail "admin/server/internal/module/message/mail"
 	mailtemplate "admin/server/internal/module/message/mail/template"
-	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
 	sharedemail "admin/server/internal/shared/email"
 	"admin/server/internal/shared/i18n"
@@ -26,7 +22,6 @@ type Service struct {
 	accounts     accountStore
 	sender       emailCodeSender
 	verification VerificationCodeStore
-	keys         *secretkey.KeyRing
 	authority    authorityCoordinator
 	now          func() time.Time
 	generateCode func() (string, error)
@@ -50,8 +45,8 @@ func (s *Service) ListChangeLogs(ctx context.Context, userID int64, page, pageSi
 	return result, nil
 }
 
-func NewService(accounts accountStore, sender emailCodeSender, verification VerificationCodeStore, keys *secretkey.KeyRing, authority authorityCoordinator) *Service {
-	return &Service{accounts: accounts, sender: sender, verification: verification, keys: keys, authority: authority, now: time.Now, generateCode: newCode, generateID: newID}
+func NewService(accounts accountStore, sender emailCodeSender, verification VerificationCodeStore, authority authorityCoordinator) *Service {
+	return &Service{accounts: accounts, sender: sender, verification: verification, authority: authority, now: time.Now, generateCode: newCode, generateID: newID}
 }
 
 func (s *Service) SendCode(ctx context.Context, actor Actor, input SendCodeInput) (SendCodeResult, error) {
@@ -112,7 +107,7 @@ func (s *Service) BindOrChange(ctx context.Context, actor Actor, input BindOrCha
 	if err := validateActor(actor); err != nil {
 		return EmailResult{}, err
 	}
-	if s.accounts == nil || s.verification == nil || s.keys == nil || s.authority == nil {
+	if s.accounts == nil || s.verification == nil || s.authority == nil {
 		return EmailResult{}, apperror.DependencyUnavailable(fmt.Errorf("email mutation dependencies are unavailable"))
 	}
 	if !validProof(input.NextChallengeID, input.NextCode) {
@@ -170,8 +165,7 @@ func (s *Service) BindOrChange(ctx context.Context, actor Actor, input BindOrCha
 		if !consumed {
 			return apperror.Unauthorized(fmt.Errorf("email verification proof is invalid or expired"))
 		}
-		if changeErr := s.accounts.Change(mutationCtx, ChangeInput{UserID: actor.UserID, PlatformID: actor.PlatformID, Action: action, OldEmail: oldEmail, NewEmail: nextEmail,
-			OldHint: sharedemail.Hint(oldEmail), OldHMAC: s.emailHMAC(oldEmail), NewHint: sharedemail.Hint(nextEmail), NewHMAC: s.emailHMAC(nextEmail), Now: s.now().UTC()}); changeErr != nil {
+		if changeErr := s.accounts.Change(mutationCtx, ChangeInput{UserID: actor.UserID, PlatformID: actor.PlatformID, Action: action, OldEmail: oldEmail, NewEmail: nextEmail, Now: s.now().UTC()}); changeErr != nil {
 			return mapRepositoryError(changeErr)
 		}
 		result = EmailResult{Email: nextEmail}
@@ -261,15 +255,6 @@ func (s *Service) deliver(ctx context.Context, actor Actor, destination, challen
 
 func normalizeEmail(value string) (string, error) {
 	return sharedemail.Normalize(value)
-}
-
-func (s *Service) emailHMAC(value string) string {
-	if value == "" {
-		return ""
-	}
-	mac := hmac.New(sha256.New, s.keys.MailRecipientHMACKey())
-	_, _ = mac.Write([]byte(value))
-	return hex.EncodeToString(mac.Sum(nil))
 }
 
 func validateActor(actor Actor) error {

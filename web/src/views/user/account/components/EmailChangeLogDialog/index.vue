@@ -51,7 +51,7 @@ function actionLabel(action: 1 | 2): string {
 <template>
   <AppDialog
     :model-value="props.modelValue"
-    :title="`${t('user.emailChangeTitle')} · ${props.username}`"
+    :title="`${t('user.identityChangeTitle')} · ${props.username}`"
     width="1100px"
     height="560px"
     @update:model-value="emit('update:modelValue', $event)"

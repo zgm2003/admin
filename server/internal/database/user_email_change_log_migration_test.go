@@ -38,6 +38,13 @@ func TestUserEmailChangeLogMigrationBackfillsPlaintextAndSeedsDetailAction(t *te
 	if actionType != "smallint" || oldEmail != "zgm_2003@qq.com" || newEmail != "123456@qq.com" {
 		t.Fatalf("action type=%q old=%q new=%q", actionType, oldEmail, newEmail)
 	}
+	var legacyColumns int
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='user_email_change_log' AND column_name IN ('old_email_hint', 'old_email_hmac', 'new_email_hint', 'new_email_hmac')`).Scan(&legacyColumns).Error; err != nil {
+		t.Fatal(err)
+	}
+	if legacyColumns != 0 {
+		t.Fatalf("legacy email columns remain: %d", legacyColumns)
+	}
 	var code, menuType, parentID string
 	var menuVersion int64
 	if err := db.WithContext(ctx).Raw(`SELECT menu.code, menu.menu_type, menu.parent_id::text, platform.menu_version FROM permission_menu menu JOIN permission_auth_platform platform ON platform.id=menu.platform_id WHERE menu.code='user:account:detail'`).Row().Scan(&code, &menuType, &parentID, &menuVersion); err != nil {

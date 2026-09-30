@@ -20,7 +20,7 @@ export function userTableColumns(t: Translate): TableColumn<UserListItem>[] {
     { key: 'status', prop: 'id', label: t('user.status'), width: 100 },
     { prop: 'createdAt', label: t('user.createdAt'), minWidth: 190 },
     { prop: 'updatedAt', label: t('user.updatedAt'), minWidth: 190 },
-    { key: 'actions', prop: 'id', label: t('user.actions'), width: 430 },
+    { key: 'actions', prop: 'id', label: t('user.actions'), width: 500 },
   ]
 }
 

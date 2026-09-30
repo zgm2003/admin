@@ -39,8 +39,6 @@ CREATE TABLE user_phone_change_log(
  id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES user_account(id) ON DELETE RESTRICT,
  platform_id BIGINT NOT NULL REFERENCES permission_auth_platform(id) ON DELETE RESTRICT,
  action SMALLINT NOT NULL CHECK(action IN (1,2)),
- old_phone_hint VARCHAR(32) NOT NULL, old_phone_hmac VARCHAR(128) NOT NULL,
- new_phone_hint VARCHAR(32) NOT NULL, new_phone_hmac VARCHAR(128) NOT NULL,
  old_phone VARCHAR(32), new_phone VARCHAR(32) NOT NULL,
  created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL
 );`).Error; err != nil {
@@ -61,7 +59,7 @@ func TestRepositoryChangePhoneLocksCurrentValueAndAppendsAudit(t *testing.T) {
 	}
 	repository := NewRepository(db)
 	now := time.Date(2026, 9, 11, 1, 2, 3, 0, time.UTC)
-	input := ChangeInput{UserID: user.ID, PlatformID: platform, Action: ActionBind, NewPhone: "+8615671628271", NewHint: "156****8271", NewHMAC: "new-hmac", Now: now}
+	input := ChangeInput{UserID: user.ID, PlatformID: platform, Action: ActionBind, NewPhone: "+8615671628271", Now: now}
 	if err := repository.Change(ctx, input); err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +71,7 @@ func TestRepositoryChangePhoneLocksCurrentValueAndAppendsAudit(t *testing.T) {
 	if err := db.WithContext(ctx).Take(&log).Error; err != nil {
 		t.Fatal(err)
 	}
-	if log.Action != ActionBind || log.NewPhoneHint != input.NewHint || log.NewPhoneHMAC != input.NewHMAC || !log.CreatedAt.Equal(now) {
+	if log.Action != ActionBind || log.NewPhone != input.NewPhone || log.OldPhone != nil || !log.CreatedAt.Equal(now) {
 		t.Fatalf("log=%+v", log)
 	}
 
@@ -99,7 +97,7 @@ func TestRepositoryChangePhoneRollsBackWhenAuditInsertFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := NewRepository(db)
-	err := repository.Change(ctx, ChangeInput{UserID: user.ID, PlatformID: 1, Action: ActionBind, NewPhone: "+8615671628271", NewHint: "156****8271", NewHMAC: "hmac", Now: time.Now()})
+	err := repository.Change(ctx, ChangeInput{UserID: user.ID, PlatformID: 1, Action: ActionBind, NewPhone: "+8615671628271", Now: time.Now()})
 	if err == nil {
 		t.Fatal("missing audit table was accepted")
 	}
@@ -123,7 +121,7 @@ func TestRepositoryMapsActivePhoneUniqueConflict(t *testing.T) {
 	if err := db.WithContext(ctx).Create(&second).Error; err != nil {
 		t.Fatal(err)
 	}
-	err := NewRepository(db).Change(ctx, ChangeInput{UserID: second.ID, PlatformID: 1, Action: ActionBind, NewPhone: phone, NewHint: "156****8271", NewHMAC: "hmac", Now: time.Now()})
+	err := NewRepository(db).Change(ctx, ChangeInput{UserID: second.ID, PlatformID: 1, Action: ActionBind, NewPhone: phone, Now: time.Now()})
 	if !errors.Is(err, ErrPhoneConflict) {
 		t.Fatalf("unique conflict error=%v", err)
 	}

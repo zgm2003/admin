@@ -2,12 +2,9 @@ package phone
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -15,7 +12,6 @@ import (
 	authstate "admin/server/internal/module/auth/state"
 	messagesms "admin/server/internal/module/message/sms"
 	smstemplate "admin/server/internal/module/message/sms/template"
-	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
 	sharedphone "admin/server/internal/shared/phone"
@@ -26,7 +22,6 @@ type Service struct {
 	accounts     accountStore
 	sender       phoneCodeSender
 	verification VerificationCodeStore
-	keys         *secretkey.KeyRing
 	authority    authorityCoordinator
 	now          func() time.Time
 	generateCode func() (string, error)
@@ -50,8 +45,8 @@ func (s *Service) ListChangeLogs(ctx context.Context, userID int64, page, pageSi
 	return result, nil
 }
 
-func NewService(accounts accountStore, sender phoneCodeSender, verification VerificationCodeStore, keys *secretkey.KeyRing, authority authorityCoordinator) *Service {
-	return &Service{accounts: accounts, sender: sender, verification: verification, keys: keys, authority: authority, now: time.Now, generateCode: newCode, generateID: newID}
+func NewService(accounts accountStore, sender phoneCodeSender, verification VerificationCodeStore, authority authorityCoordinator) *Service {
+	return &Service{accounts: accounts, sender: sender, verification: verification, authority: authority, now: time.Now, generateCode: newCode, generateID: newID}
 }
 
 func (s *Service) SendCode(ctx context.Context, actor Actor, input SendCodeInput) (SendCodeResult, error) {
@@ -112,7 +107,7 @@ func (s *Service) BindOrChange(ctx context.Context, actor Actor, input BindOrCha
 	if err := validateActor(actor); err != nil {
 		return PhoneResult{}, err
 	}
-	if s.accounts == nil || s.verification == nil || s.keys == nil || s.authority == nil {
+	if s.accounts == nil || s.verification == nil || s.authority == nil {
 		return PhoneResult{}, apperror.DependencyUnavailable(fmt.Errorf("phone mutation dependencies are unavailable"))
 	}
 	if !validProof(input.NextChallengeID, input.NextCode) {
@@ -177,8 +172,7 @@ func (s *Service) BindOrChange(ctx context.Context, actor Actor, input BindOrCha
 		change := ChangeInput{
 			UserID: actor.UserID, PlatformID: actor.PlatformID, Action: action,
 			OldPhone: oldPhone, NewPhone: nextPhone,
-			OldHint: sharedphone.Hint(oldPhone), OldHMAC: s.phoneHMAC(oldPhone),
-			NewHint: sharedphone.Hint(nextPhone), NewHMAC: s.phoneHMAC(nextPhone), Now: s.now().UTC(),
+			Now: s.now().UTC(),
 		}
 		if changeErr := s.accounts.Change(mutationCtx, change); changeErr != nil {
 			return mapRepositoryError(changeErr)
@@ -269,15 +263,6 @@ func (s *Service) deliver(ctx context.Context, actor Actor, destination, challen
 		return SendCodeResult{}, apperror.DependencyUnavailable(err)
 	}
 	return SendCodeResult{ChallengeID: challengeID, ExpiresAt: expiresAt, ResendAfterSeconds: preparation.ResendAfterSeconds}, nil
-}
-
-func (s *Service) phoneHMAC(value string) string {
-	if value == "" {
-		return ""
-	}
-	mac := hmac.New(sha256.New, s.keys.SMSRecipientHMACKey())
-	_, _ = mac.Write([]byte(value))
-	return hex.EncodeToString(mac.Sum(nil))
 }
 
 func validateActor(actor Actor) error {

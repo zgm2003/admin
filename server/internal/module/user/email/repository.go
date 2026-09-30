@@ -55,7 +55,6 @@ func (r *Repository) Change(ctx context.Context, input ChangeInput) error {
 			return gorm.ErrRecordNotFound
 		}
 		if err := tx.Create(&ChangeLog{UserID: input.UserID, PlatformID: input.PlatformID, Action: input.Action,
-			OldEmailHint: input.OldHint, OldEmailHMAC: input.OldHMAC, NewEmailHint: input.NewHint, NewEmailHMAC: input.NewHMAC,
 			OldEmail: nullableEmail(input.OldEmail), NewEmail: input.NewEmail,
 			CreatedAt: input.Now.UTC(), UpdatedAt: input.Now.UTC()}).Error; err != nil {
 			return fmt.Errorf("append email change audit: %w", err)

@@ -36,6 +36,13 @@ func TestUserPhoneChangeLogMigrationConvertsEmptyHistoryAndIsIdempotent(t *testi
 	if actionType != "smallint" {
 		t.Fatalf("action type=%q", actionType)
 	}
+	var legacyColumns int
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='user_phone_change_log' AND column_name IN ('old_phone_hint', 'old_phone_hmac', 'new_phone_hint', 'new_phone_hmac')`).Scan(&legacyColumns).Error; err != nil {
+		t.Fatal(err)
+	}
+	if legacyColumns != 0 {
+		t.Fatalf("legacy phone columns remain: %d", legacyColumns)
+	}
 	if err := db.WithContext(ctx).Exec(`INSERT INTO user_phone_change_log(id, user_id, platform_id, action, old_phone, new_phone, created_at, updated_at) VALUES (1, 1, 1, 2, NULL, '+8613800000000', now(), now())`).Error; err != nil {
 		t.Fatalf("valid phone history rejected: %v", err)
 	}

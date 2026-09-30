@@ -8,7 +8,6 @@ import (
 
 	authstate "admin/server/internal/module/auth/state"
 	messagemail "admin/server/internal/module/message/mail"
-	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
 )
 
@@ -98,18 +97,11 @@ func (f *fakeAuthority) Mutate(ctx context.Context, current Current, mutation fu
 	}
 	return mutation(ctx)
 }
-func testKeys(t *testing.T) *secretkey.KeyRing {
-	keys, err := secretkey.New("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return keys
-}
 func actor() Actor { return Actor{UserID: 7, SessionID: 8, PlatformID: 1, Platform: "admin"} }
 
 func TestListChangeLogsValidatesPagingAndReturnsEmptyList(t *testing.T) {
 	accounts := &fakeAccountStore{}
-	service := NewService(accounts, nil, nil, nil, nil)
+	service := NewService(accounts, nil, nil, nil)
 	result, err := service.ListChangeLogs(context.Background(), 7, 1, 20)
 	if err != nil || result.List == nil {
 		t.Fatalf("result=%+v err=%v", result, err)
@@ -124,12 +116,12 @@ func TestListChangeLogsValidatesPagingAndReturnsEmptyList(t *testing.T) {
 func TestBindOrChangeFirstBindConsumesOnlyNextProof(t *testing.T) {
 	accounts := &fakeAccountStore{current: Current{UserID: 7, IsEnabled: true}}
 	verification := &fakeVerificationStore{valid: true}
-	service := NewService(accounts, nil, verification, testKeys(t), &fakeAuthority{})
+	service := NewService(accounts, nil, verification, &fakeAuthority{})
 	result, err := service.BindOrChange(context.Background(), actor(), BindOrChangeInput{NextEmail: " USER@Example.COM ", NextChallengeID: "next", NextCode: "123456"})
 	if err != nil || result.Email != "user@example.com" || verification.calls != 1 || len(verification.keys) != 1 || accounts.changeCalls != 1 {
 		t.Fatalf("result=%+v err=%v calls=%d keys=%v changes=%d", result, err, verification.calls, verification.keys, accounts.changeCalls)
 	}
-	if len(verification.digests) != 1 || verification.digests[0] != "digest:next:123456" || accounts.changeInput.NewHint != "u***@example.com" {
+	if len(verification.digests) != 1 || verification.digests[0] != "digest:next:123456" || accounts.changeInput.NewEmail != "user@example.com" {
 		t.Fatalf("digests=%v change=%+v", verification.digests, accounts.changeInput)
 	}
 }
@@ -138,7 +130,7 @@ func TestBindOrChangeExistingEmailRequiresBothProofsAndDoesNotConsumeOnInvalidPr
 	old := "old@example.com"
 	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &old, IsEnabled: true}}
 	verification := &fakeVerificationStore{valid: false}
-	service := NewService(accounts, nil, verification, testKeys(t), &fakeAuthority{})
+	service := NewService(accounts, nil, verification, &fakeAuthority{})
 	_, err := service.BindOrChange(context.Background(), actor(), BindOrChangeInput{CurrentChallengeID: "current", CurrentCode: "111111", NextEmail: "new@example.com", NextChallengeID: "next", NextCode: "222222"})
 	if appCode(err) != apperror.CodeUnauthorized || verification.calls != 1 || len(verification.keys) != 2 || accounts.changeCalls != 0 {
 		t.Fatalf("err=%v calls=%d keys=%v changes=%d", err, verification.calls, verification.keys, accounts.changeCalls)
@@ -152,7 +144,7 @@ func TestBindOrChangeLimitsInvalidProofAttemptsBeforeAtomicConsumption(t *testin
 	old := "old@example.com"
 	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &old, IsEnabled: true}}
 	verification := &fakeVerificationStore{valid: true, checkInvalid: true}
-	service := NewService(accounts, nil, verification, testKeys(t), &fakeAuthority{})
+	service := NewService(accounts, nil, verification, &fakeAuthority{})
 	inputActor := actor()
 	inputActor.ClientIP = "192.0.2.8"
 	input := BindOrChangeInput{CurrentChallengeID: "current", CurrentCode: "111111", NextEmail: "new@example.com", NextChallengeID: "next", NextCode: "222222"}
@@ -175,7 +167,7 @@ func TestBindOrChangeLimitsInvalidProofAttemptsBeforeAtomicConsumption(t *testin
 func TestSendCodeRejectsDisabledAccount(t *testing.T) {
 	current := "old@example.com"
 	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &current, IsEnabled: false}}
-	service := NewService(accounts, &fakeEmailSender{}, &fakeVerificationStore{}, testKeys(t), &fakeAuthority{})
+	service := NewService(accounts, &fakeEmailSender{}, &fakeVerificationStore{}, &fakeAuthority{})
 	_, err := service.SendCode(context.Background(), actor(), SendCodeInput{Target: TargetCurrent})
 	if appCode(err) != apperror.CodeForbidden {
 		t.Fatalf("disabled account error=%v", err)
@@ -186,7 +178,7 @@ func TestBindOrChangeRejectsSameOrOccupiedEmailBeforeProofConsumption(t *testing
 	old := "user@example.com"
 	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &old, IsEnabled: true}}
 	verification := &fakeVerificationStore{valid: true}
-	service := NewService(accounts, nil, verification, testKeys(t), &fakeAuthority{})
+	service := NewService(accounts, nil, verification, &fakeAuthority{})
 	_, err := service.BindOrChange(context.Background(), actor(), BindOrChangeInput{CurrentChallengeID: "current", CurrentCode: "111111", NextEmail: old, NextChallengeID: "next", NextCode: "222222"})
 	if appCode(err) != apperror.CodeConflict || verification.calls != 0 {
 		t.Fatalf("same email err=%v calls=%d", err, verification.calls)
@@ -204,7 +196,7 @@ func TestBindOrChangeMapsAuthorityGenerationConflictToConflict(t *testing.T) {
 	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &old, IsEnabled: true}}
 	verification := &fakeVerificationStore{valid: true}
 	authority := &fakeAuthority{err: authstate.ErrGenerationChanged}
-	service := NewService(accounts, nil, verification, testKeys(t), authority)
+	service := NewService(accounts, nil, verification, authority)
 	_, err := service.BindOrChange(context.Background(), actor(), BindOrChangeInput{
 		CurrentChallengeID: "current", CurrentCode: "111111",
 		NextEmail: "new@example.com", NextChallengeID: "next", NextCode: "222222",
@@ -219,7 +211,7 @@ func TestSendCodePassesAuthenticatedClientIPToMail(t *testing.T) {
 	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &current, IsEnabled: true}}
 	verification := &fakeVerificationStore{}
 	sender := &fakeEmailSender{}
-	service := NewService(accounts, sender, verification, testKeys(t), &fakeAuthority{})
+	service := NewService(accounts, sender, verification, &fakeAuthority{})
 	service.generateCode = func() (string, error) { return "123456", nil }
 	service.generateID = func() (string, error) { return "generated-challenge", nil }
 	inputActor := actor()

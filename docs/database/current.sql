@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict eMYZ51xi6x7FcPTzE0iZPMkYHJJB4cmq10UPQrtYWiMaKN8h0Cem4aokqEuVBbh
+\restrict Mossbp3jaelVk2HDu4tf9aKMQBAdX9gwtQ084727K5vkTezgXG0ghKMQ7h0A0Gu
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -1581,10 +1581,6 @@ CREATE TABLE public.user_email_change_log (
     user_id bigint NOT NULL,
     platform_id bigint NOT NULL,
     action smallint NOT NULL,
-    old_email_hint character varying(128) DEFAULT ''::character varying NOT NULL,
-    old_email_hmac character varying(128) DEFAULT ''::character varying NOT NULL,
-    new_email_hint character varying(128) DEFAULT ''::character varying NOT NULL,
-    new_email_hmac character varying(128) DEFAULT ''::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     old_email character varying(254),
@@ -1661,10 +1657,6 @@ CREATE TABLE public.user_phone_change_log (
     user_id bigint NOT NULL,
     platform_id bigint NOT NULL,
     action smallint NOT NULL,
-    old_phone_hint character varying(32) DEFAULT ''::character varying NOT NULL,
-    old_phone_hmac character varying(128) DEFAULT ''::character varying NOT NULL,
-    new_phone_hint character varying(32) DEFAULT ''::character varying NOT NULL,
-    new_phone_hmac character varying(128) DEFAULT ''::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     old_phone character varying(32),
@@ -3422,5 +3414,5 @@ ALTER TABLE ONLY public.system_dictionary_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict eMYZ51xi6x7FcPTzE0iZPMkYHJJB4cmq10UPQrtYWiMaKN8h0Cem4aokqEuVBbh
+\unrestrict Mossbp3jaelVk2HDu4tf9aKMQBAdX9gwtQ084727K5vkTezgXG0ghKMQ7h0A0Gu
 

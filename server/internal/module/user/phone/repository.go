@@ -59,8 +59,6 @@ func (r *Repository) Change(ctx context.Context, input ChangeInput) error {
 		}
 		logRow := ChangeLog{
 			UserID: input.UserID, PlatformID: input.PlatformID, Action: input.Action,
-			OldPhoneHint: input.OldHint, OldPhoneHMAC: input.OldHMAC,
-			NewPhoneHint: input.NewHint, NewPhoneHMAC: input.NewHMAC,
 			OldPhone: nullablePhone(input.OldPhone), NewPhone: input.NewPhone,
 			CreatedAt: input.Now.UTC(), UpdatedAt: input.Now.UTC(),
 		}

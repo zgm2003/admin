@@ -158,14 +158,15 @@ describe('user management', () => {
   it('shows email history only with detail action and renders plaintext values', async () => {
     const withoutDetail = mountPage(['user:account:list'])
     await flushPromises()
-    expect(withoutDetail.text()).not.toContain('邮箱变更记录')
+    expect(withoutDetail.text()).not.toContain('身份变更记录')
 
     const wrapper = mountPage(['user:account:list', 'user:account:detail'])
     await flushPromises()
-    await findAriaButton(wrapper, '邮箱变更记录').trigger('click')
+    await findAriaButton(wrapper, '身份变更记录').trigger('click')
     await flushPromises()
     expect(getEmailChangeLogs).toHaveBeenCalledWith(7, { page: 1, pageSize: 20 })
     expect(getPhoneChangeLogs).toHaveBeenCalledWith(7, { page: 1, pageSize: 20 })
+    expect(document.body.textContent).toContain('身份变更记录')
     expect(document.body.textContent).toContain('old@example.com')
     expect(document.body.textContent).toContain('new@example.com')
     expect(document.body.textContent).toContain('首次绑定')

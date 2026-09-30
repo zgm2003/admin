@@ -39,8 +39,6 @@ CREATE TABLE user_email_change_log(
  id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES user_account(id) ON DELETE RESTRICT,
  platform_id BIGINT NOT NULL REFERENCES permission_auth_platform(id) ON DELETE RESTRICT,
  action SMALLINT NOT NULL CHECK(action IN (1,2)),
- old_email_hint VARCHAR(128) NOT NULL, old_email_hmac VARCHAR(128) NOT NULL,
- new_email_hint VARCHAR(128) NOT NULL, new_email_hmac VARCHAR(128) NOT NULL,
  old_email VARCHAR(254), new_email VARCHAR(254) NOT NULL,
  created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL
 );`).Error; err != nil {
@@ -60,8 +58,8 @@ func TestRepositoryListsEmailChangeLogsWithPlaintextAndPlatform(t *testing.T) {
 	}
 	now := time.Date(2026, 9, 29, 5, 0, 0, 0, time.UTC)
 	rows := []ChangeLog{
-		{UserID: user.ID, PlatformID: 1, Action: ActionChange, OldEmail: stringPtr("old@example.com"), NewEmail: "new@example.com", OldEmailHint: "o***@example.com", OldEmailHMAC: "old", NewEmailHint: "n***@example.com", NewEmailHMAC: "new", CreatedAt: now, UpdatedAt: now},
-		{UserID: user.ID, PlatformID: 2, Action: ActionBind, NewEmail: "bound@example.com", OldEmailHint: "", OldEmailHMAC: "", NewEmailHint: "b***@example.com", NewEmailHMAC: "bound", CreatedAt: now.Add(time.Minute), UpdatedAt: now.Add(time.Minute)},
+		{UserID: user.ID, PlatformID: 1, Action: ActionChange, OldEmail: stringPtr("old@example.com"), NewEmail: "new@example.com", CreatedAt: now, UpdatedAt: now},
+		{UserID: user.ID, PlatformID: 2, Action: ActionBind, NewEmail: "bound@example.com", CreatedAt: now.Add(time.Minute), UpdatedAt: now.Add(time.Minute)},
 	}
 	if err := db.WithContext(ctx).Create(&rows).Error; err != nil {
 		t.Fatal(err)
@@ -88,7 +86,7 @@ func TestRepositoryChangeEmailLocksCurrentValueAndAppendsAudit(t *testing.T) {
 	}
 	repository := NewRepository(db)
 	now := time.Date(2026, 9, 11, 1, 2, 3, 0, time.UTC)
-	input := ChangeInput{UserID: user.ID, PlatformID: 1, Action: ActionBind, NewEmail: "alice@example.com", NewHint: "a***@example.com", NewHMAC: "new-hmac", Now: now}
+	input := ChangeInput{UserID: user.ID, PlatformID: 1, Action: ActionBind, NewEmail: "alice@example.com", Now: now}
 	if err := repository.Change(ctx, input); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +98,7 @@ func TestRepositoryChangeEmailLocksCurrentValueAndAppendsAudit(t *testing.T) {
 	if err := db.WithContext(ctx).Take(&log).Error; err != nil {
 		t.Fatal(err)
 	}
-	if log.Action != ActionBind || log.NewEmailHint != input.NewHint || log.NewEmailHMAC != input.NewHMAC || !log.CreatedAt.Equal(now) {
+	if log.Action != ActionBind || log.NewEmail != input.NewEmail || log.OldEmail != nil || !log.CreatedAt.Equal(now) {
 		t.Fatalf("log=%+v", log)
 	}
 
@@ -125,7 +123,7 @@ func TestRepositoryChangeEmailRollsBackWhenAuditInsertFails(t *testing.T) {
 	if err := db.WithContext(ctx).Exec(`DROP TABLE user_email_change_log`).Error; err != nil {
 		t.Fatal(err)
 	}
-	err := NewRepository(db).Change(ctx, ChangeInput{UserID: user.ID, PlatformID: 1, Action: ActionBind, NewEmail: "bob@example.com", NewHint: "b***@example.com", NewHMAC: "hmac", Now: time.Now()})
+	err := NewRepository(db).Change(ctx, ChangeInput{UserID: user.ID, PlatformID: 1, Action: ActionBind, NewEmail: "bob@example.com", Now: time.Now()})
 	if err == nil {
 		t.Fatal("missing audit table was accepted")
 	}
@@ -148,7 +146,7 @@ func TestRepositoryMapsActiveEmailUniqueConflict(t *testing.T) {
 	if err := db.WithContext(ctx).Create(&second).Error; err != nil {
 		t.Fatal(err)
 	}
-	err := NewRepository(db).Change(ctx, ChangeInput{UserID: second.ID, PlatformID: 1, Action: ActionBind, NewEmail: "BOUND@example.com", NewHint: "b***@example.com", NewHMAC: "hmac", Now: time.Now()})
+	err := NewRepository(db).Change(ctx, ChangeInput{UserID: second.ID, PlatformID: 1, Action: ActionBind, NewEmail: "BOUND@example.com", Now: time.Now()})
 	if !errors.Is(err, ErrEmailConflict) {
 		t.Fatalf("unique conflict error=%v", err)
 	}

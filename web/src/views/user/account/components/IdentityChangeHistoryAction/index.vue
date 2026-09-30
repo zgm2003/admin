@@ -18,7 +18,7 @@ function open(): void {
 
 <template>
   <el-button v-if="props.enabled" text type="primary" @click="open">{{
-    t('user.emailChangeView')
+    t('user.identityChangeView')
   }}</el-button>
   <EmailChangeLogDialog
     v-if="logs.visible.value"
