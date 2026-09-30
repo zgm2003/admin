@@ -15,11 +15,12 @@ const (
 	ValueTypeBool   = 3
 	ValueTypeJSON   = 4
 
-	AuthCaptchaTTLKey                   = "auth.captcha.ttl_minutes"
-	AuthCaptchaSlidePaddingKey          = "auth.captcha.slide_padding"
-	RealtimeEventRetentionDaysKey       = "realtime.event.retention_days"
-	MessageNotificationRetentionDaysKey = "message.notification.retention_days"
-	SchedulerHistoryRetentionDaysKey    = "system.scheduler.history_retention_days"
+	AuthCaptchaTTLKey                        = "auth.captcha.ttl_minutes"
+	AuthCaptchaSlidePaddingKey               = "auth.captcha.slide_padding"
+	RealtimeEventRetentionDaysKey            = "realtime.event.retention_days"
+	MessageNotificationRetentionDaysKey      = "message.notification.retention_days"
+	SchedulerHistoryRetentionDaysKey         = "system.scheduler.history_retention_days"
+	MailRecipientRuleImportTemplateObjectKey = "message.mail.recipient_rule.import_template_object_key"
 )
 
 type Record struct {

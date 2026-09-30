@@ -91,6 +91,8 @@ func TestMailPermissionCodesUseMessageDomain(t *testing.T) {
 		recipientrule.PermissionUpdate,
 		recipientrule.PermissionStatus,
 		recipientrule.PermissionDelete,
+		recipientrule.PermissionImport,
+		recipientrule.PermissionExport,
 		ratelimitpolicy.PermissionUpdate,
 	}
 	want := []string{
@@ -106,6 +108,8 @@ func TestMailPermissionCodesUseMessageDomain(t *testing.T) {
 		"message:mail:rule:update",
 		"message:mail:rule:status",
 		"message:mail:rule:delete",
+		"message:mail:rule:import",
+		"message:mail:rule:export",
 		"message:mail:rate-limit:update",
 	}
 	for index := range want {

@@ -77,6 +77,9 @@ const (
 	KeySessionRevokeFailed          MessageKey = "session.revokeFailed"
 	KeyOperationLogQueryFailed      MessageKey = "operationLog.queryFailed"
 	KeyMailRecipientDenied          MessageKey = "mail.recipientDenied"
+	KeyMailRuleImportInvalid        MessageKey = "mail.ruleImportInvalid"
+	KeyMailRuleImportConflict       MessageKey = "mail.ruleImportConflict"
+	KeyMailRuleExportLimit          MessageKey = "mail.ruleExportLimit"
 	KeyMailRateLimitInvalid         MessageKey = "mail.rateLimitInvalid"
 	KeyMailRateLimitNotFound        MessageKey = "mail.rateLimitNotFound"
 	KeyMailRateLimitUnavailable     MessageKey = "mail.rateLimitUnavailable"
@@ -87,6 +90,9 @@ const (
 
 var catalogs = map[Locale]map[MessageKey]string{
 	ZhCN: {
+		KeyMailRuleImportInvalid:        "CSV 有错误，请重新预览并修正后导入，整批未写入",
+		KeyMailRuleImportConflict:       "CSV 中有重复或已存在的收件规则，请重新预览，整批未写入",
+		KeyMailRuleExportLimit:          "CSV 导出上限为 1000 条、1 MiB，未生成不完整文件",
 		KeyInternal:                     "服务内部错误",
 		KeyInvalidRequest:               "请求参数错误",
 		KeyUnauthorized:                 "未登录或登录已失效",
@@ -154,6 +160,9 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyLoginTypePassword:            "账号密码",
 	},
 	EnUS: {
+		KeyMailRuleImportInvalid:        "The CSV is invalid. Preview and correct it before importing. No rows were written",
+		KeyMailRuleImportConflict:       "Duplicate or existing recipient rules found. Preview again. No rows were written",
+		KeyMailRuleExportLimit:          "CSV export is limited to 1000 rules and 1 MiB. No partial file was generated",
 		KeyInternal:                     "Internal server error",
 		KeyInvalidRequest:               "Invalid request",
 		KeyUnauthorized:                 "Authentication is required or has expired",

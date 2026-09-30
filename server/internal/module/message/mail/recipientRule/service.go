@@ -13,6 +13,7 @@ import (
 	"admin/server/internal/shared/cacheGeneration"
 	sharedemail "admin/server/internal/shared/email"
 	"admin/server/internal/shared/i18n"
+	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
@@ -23,6 +24,7 @@ var domainLabel = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-
 type Service struct {
 	repository *Repository
 	runtime    RuntimeCoordinator
+	settings   sharedsetting.Reader
 }
 
 func NewService(repository *Repository) *Service { return &Service{repository: repository} }
@@ -30,6 +32,8 @@ func NewService(repository *Repository) *Service { return &Service{repository: r
 func (s *Service) SetRuntimeCoordinator(runtime RuntimeCoordinator) {
 	s.runtime = runtime
 }
+
+func (s *Service) SetSettings(settings sharedsetting.Reader) { s.settings = settings }
 
 func (s *Service) Evaluate(ctx context.Context, email string, _ SendMode) (Decision, error) {
 	email, err := NormalizeRecipient(email)

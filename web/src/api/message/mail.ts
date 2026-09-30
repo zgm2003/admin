@@ -1,3 +1,4 @@
+import { isStorageObjectKey } from '@/utils/storageObjectKey'
 import { request } from '@/utils/request'
 import { isYesNo, type YesNo } from '@/enums/yesNo'
 import type { PageResult } from '@/types/pagination'
@@ -526,6 +527,142 @@ export function deleteMailRule(id: number): Promise<Record<string, never>> {
     method: 'DELETE',
     url: `/api/admin/v1/message/mail/recipient-rule/${id}`,
   }).then((value) => expectEmptyObject(value, 'mail rule delete result'))
+}
+
+export const mailRuleCSVMaxRows = 1000
+export const mailRuleCSVMaxBytes = 1024 * 1024
+export const mailRuleCSVHeader = '类型,邮箱/域名,动作,名称,备注,启用状态'
+export const mailRuleCSVErrorCodes = [
+  'empty',
+  'too_large',
+  'too_many_rows',
+  'invalid_encoding',
+  'invalid_header',
+  'invalid_csv',
+  'invalid_columns',
+  'invalid_scope',
+  'invalid_pattern',
+  'invalid_action',
+  'invalid_name',
+  'invalid_remark',
+  'invalid_status',
+  'invalid_character',
+  'duplicate_file',
+  'duplicate_existing',
+] as const
+export type MailRuleCSVError = (typeof mailRuleCSVErrorCodes)[number]
+export interface MailRuleCSVRow {
+  line: number
+  values: string[]
+  errors: MailRuleCSVError[]
+}
+export interface MailRuleCSVPreview {
+  rows: MailRuleCSVRow[]
+  errors: MailRuleCSVError[]
+}
+export interface MailRuleCSVFile {
+  fileName: string
+  content: string
+}
+
+function parseCSVErrors(value: unknown): MailRuleCSVError[] {
+  const codes = expectArray(value, 'mail CSV errors').map((code) => {
+    const text = expectString(code, 'mail CSV error')
+    const known = mailRuleCSVErrorCodes.find((candidate) => candidate === text)
+    if (known === undefined) throw new ProtocolError('mail CSV error code is unknown')
+    return known
+  })
+  if (new Set(codes).size !== codes.length)
+    throw new ProtocolError('mail CSV errors are duplicated')
+  return codes
+}
+
+function parseMailRuleCSVPreview(value: unknown): MailRuleCSVPreview {
+  const data = expectExactKeys(value, ['rows', 'errors'], 'mail CSV preview')
+  let previousLine = 1
+  const rows = expectArray(data.rows, 'mail CSV rows').map((value): MailRuleCSVRow => {
+    const row = expectExactKeys(value, ['line', 'values', 'errors'], 'mail CSV row')
+    const line = expectInteger(row.line, 'mail CSV row.line')
+    if (line <= previousLine) throw new ProtocolError('mail CSV row lines are invalid')
+    previousLine = line
+    const values = expectArray(row.values, 'mail CSV row.values').map((value) =>
+      expectString(value, 'mail CSV cell'),
+    )
+    const errors = parseCSVErrors(row.errors)
+    if (values.length !== 6 && !errors.includes('invalid_columns'))
+      throw new ProtocolError('mail CSV row columns are invalid')
+    if (
+      errors.length === 0 &&
+      ((values[0] !== 'email' && values[0] !== 'domain') ||
+        values[1] === '' ||
+        (values[2] !== 'allow' && values[2] !== 'deny') ||
+        expectString(values[3], 'mail CSV name').trim() === '' ||
+        (values[5] !== '0' && values[5] !== '1'))
+    )
+      throw new ProtocolError('mail CSV valid row is invalid')
+    return { line, values, errors }
+  })
+  if (rows.length > mailRuleCSVMaxRows)
+    throw new ProtocolError('mail CSV preview exceeds row limit')
+  return { rows, errors: parseCSVErrors(data.errors) }
+}
+
+export async function getMailRuleImportTemplate(): Promise<{ objectKey: string }> {
+  const data = expectExactKeys(
+    await request({
+      method: 'GET',
+      url: '/api/admin/v1/message/mail/recipient-rule/import-template',
+    }),
+    ['objectKey'],
+    'mail CSV template',
+  )
+  const objectKey = expectString(data.objectKey, 'mail CSV template.objectKey')
+  if (objectKey !== '' && (!isStorageObjectKey(objectKey) || !objectKey.endsWith('.csv')))
+    throw new ProtocolError('mail CSV template object key is invalid')
+  return { objectKey }
+}
+
+export async function previewMailRuleImport(content: string): Promise<MailRuleCSVPreview> {
+  return parseMailRuleCSVPreview(
+    await request({
+      method: 'POST',
+      url: '/api/admin/v1/message/mail/recipient-rule/import/preview',
+      data: { content },
+    }),
+  )
+}
+
+export async function importMailRules(content: string): Promise<{ imported: number }> {
+  const data = expectExactKeys(
+    await request({
+      method: 'POST',
+      url: '/api/admin/v1/message/mail/recipient-rule/import',
+      data: { content },
+    }),
+    ['imported'],
+    'mail CSV import',
+  )
+  const imported = expectInteger(data.imported, 'mail CSV import.imported')
+  if (imported < 1 || imported > mailRuleCSVMaxRows)
+    throw new ProtocolError('mail CSV imported count is invalid')
+  return { imported }
+}
+
+export async function exportMailRules(): Promise<MailRuleCSVFile> {
+  const data = expectExactKeys(
+    await request({ method: 'GET', url: '/api/admin/v1/message/mail/recipient-rule/export' }),
+    ['fileName', 'content'],
+    'mail CSV export',
+  )
+  const fileName = expectString(data.fileName, 'mail CSV export.fileName')
+  const content = expectString(data.content, 'mail CSV export.content')
+  if (
+    fileName !== 'mail-recipient-rule.csv' ||
+    !content.startsWith(`\ufeff${mailRuleCSVHeader}\n`) ||
+    new TextEncoder().encode(content).byteLength > mailRuleCSVMaxBytes
+  )
+    throw new ProtocolError('mail CSV file is invalid')
+  return { fileName, content }
 }
 
 export interface MailRateLimitPolicy {

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as mailApi from '@/api/message/mail'
 import { getDictionaryOptions } from '@/api/system/dictionary'
+import { requestObjectURL } from '@/api/storage/upload'
 import { YesNo } from '@/enums/yesNo'
 import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
@@ -28,14 +29,26 @@ vi.mock('@/api/message/mail', () => ({
   updateMailRule: vi.fn(),
   updateMailRuleStatus: vi.fn(),
   deleteMailRule: vi.fn(),
+  mailRuleCSVMaxBytes: 1024 * 1024,
+  getMailRuleImportTemplate: vi.fn(),
+  previewMailRuleImport: vi.fn(),
+  importMailRules: vi.fn(),
+  exportMailRules: vi.fn(),
   listMailRateLimitPolicies: vi.fn(),
   updateMailRateLimitPolicy: vi.fn(),
 }))
 vi.mock('@/api/system/dictionary', () => ({ getDictionaryOptions: vi.fn() }))
+vi.mock('@/api/storage/upload', () => ({ requestObjectURL: vi.fn() }))
 
 describe('mail service page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(mailApi.getMailRuleImportTemplate).mockReset().mockResolvedValue({ objectKey: '' })
+    vi.mocked(requestObjectURL)
+      .mockReset()
+      .mockResolvedValue({ url: 'https://example.com/template.csv', expiresAt: null })
+    vi.mocked(mailApi.previewMailRuleImport).mockReset()
+    vi.mocked(mailApi.importMailRules).mockReset().mockResolvedValue({ imported: 1 })
     setLocale('zh-CN')
     vi.mocked(getDictionaryOptions)
       .mockReset()
@@ -107,6 +120,21 @@ describe('mail service page', () => {
     expect(wrapper.findAll('[role="tab"]')).toHaveLength(0)
     expect(mailApi.getMailConfig).not.toHaveBeenCalled()
   })
+
+  it.each(['import', 'export'])(
+    'exposes the independent CSV %s action without list access',
+    async (action) => {
+      const wrapper = mountPage(['message:mail:view', `message:mail:rule:${action}`])
+      await flushPromises()
+      expect(wrapper.findAll('[role="tab"]')).toHaveLength(1)
+      expect(wrapper.get('[role="tab"]').attributes('aria-selected')).toBe('true')
+      expect(wrapper.find(`[data-testid="mail-rule-${action}"]`).exists()).toBe(true)
+      expect(wrapper.text()).toContain('未授予收件规则读取权限')
+      expect(wrapper.findAllComponents({ name: 'AppTable' })).toHaveLength(0)
+      expect(mailApi.getMailConfig).not.toHaveBeenCalled()
+      expect(mailApi.listMailRules).not.toHaveBeenCalled()
+    },
+  )
 
   it('uses Tencent SES region choices and field names in the configuration form', async () => {
     const wrapper = mountPage(['message:mail:list'])
@@ -563,7 +591,215 @@ describe('mail service page', () => {
     await flushPromises()
     expect(mailApi.listMailRateLimitPolicies).not.toHaveBeenCalled()
   })
+
+  it('gates CSV import and export with their own independent actions', async () => {
+    const readonly = mountPage(['message:mail:list', 'message:mail:rule:create'])
+    await flushPromises()
+    await selectTab(readonly, '收件规则')
+    expect(readonly.find('[data-testid="mail-rule-import"]').exists()).toBe(false)
+    expect(readonly.find('[data-testid="mail-rule-export"]').exists()).toBe(false)
+    readonly.unmount()
+    const editable = mountPage([
+      'message:mail:list',
+      'message:mail:rule:import',
+      'message:mail:rule:export',
+    ])
+    await flushPromises()
+    await selectTab(editable, '收件规则')
+    expect(editable.find('[data-testid="mail-rule-import"]').exists()).toBe(true)
+    expect(editable.find('[data-testid="mail-rule-export"]').exists()).toBe(true)
+    expect(editable.find('[data-testid="mail-rule-create"]').exists()).toBe(false)
+  })
+
+  it('exports fresh server data with a native Blob download and revokes the object URL', async () => {
+    vi.mocked(mailApi.exportMailRules).mockResolvedValue({
+      fileName: 'mail-recipient-rule.csv',
+      content: '\ufeff类型,邮箱/域名,动作,名称,备注,启用状态\n',
+    })
+    const createURL = vi.fn(() => 'blob:mail-rules')
+    const revokeURL = vi.fn()
+    vi.stubGlobal(
+      'URL',
+      class extends URL {
+        static createObjectURL = createURL
+        static revokeObjectURL = revokeURL
+      },
+    )
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    const wrapper = mountPage(['message:mail:list', 'message:mail:rule:export'])
+    await flushPromises()
+    await selectTab(wrapper, '收件规则')
+    await wrapper.get('[data-testid="mail-rule-export"]').trigger('click')
+    await flushPromises()
+    expect(createURL).toHaveBeenCalledWith(expect.any(Blob))
+    expect(click).toHaveBeenCalledOnce()
+    expect(revokeURL).toHaveBeenCalledWith('blob:mail-rules')
+    expect(document.querySelector('a[download="mail-recipient-rule.csv"]')).toBeNull()
+    click.mockRestore()
+    vi.unstubAllGlobals()
+  })
+
+  it('previews an uploaded CSV before importing the unchanged content', async () => {
+    const content = '类型,邮箱/域名,动作,名称,备注,启用状态\nemail,a@example.com,deny,规则,,1\n'
+    vi.mocked(mailApi.getMailRuleImportTemplate).mockResolvedValue({
+      objectKey:
+        'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.csv',
+    })
+    vi.mocked(mailApi.previewMailRuleImport).mockResolvedValue({
+      rows: [{ line: 2, values: ['email', 'a@example.com', 'deny', '规则', '', '1'], errors: [] }],
+      errors: [],
+    })
+    const wrapper = mountPage(['message:mail:list', 'message:mail:rule:import'])
+    await flushPromises()
+    await selectTab(wrapper, '收件规则')
+    await wrapper.get('[data-testid="mail-rule-import"]').trigger('click')
+    await flushPromises()
+    expect(
+      document.querySelector('[data-testid="mail-rule-template-download"]')?.getAttribute('href'),
+    ).toBe('https://example.com/template.csv')
+    expect(requestObjectURL).toHaveBeenCalledWith(
+      'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.csv',
+    )
+    expect(bodyButton('mail-rule-import-confirm').disabled).toBe(true)
+    await uploadRuleCSV(new File([content], 'rules.csv', { type: 'text/csv' }))
+    await vi.waitFor(() => expect(mailApi.previewMailRuleImport).toHaveBeenCalledWith(content))
+    await flushPromises()
+    expect(document.body.textContent).toContain('a@example.com')
+    expect(bodyButton('mail-rule-import-confirm').disabled).toBe(false)
+    bodyButton('mail-rule-import-confirm').click()
+    await flushPromises()
+    expect(mailApi.importMailRules).toHaveBeenCalledWith(content)
+    expect(mailApi.listMailRules).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows row errors and does not allow a partial import', async () => {
+    vi.mocked(mailApi.previewMailRuleImport).mockResolvedValue({
+      rows: [
+        {
+          line: 2,
+          values: ['domain', '@qq.com', 'deny', '错误', '', '1'],
+          errors: ['invalid_pattern'],
+        },
+      ],
+      errors: [],
+    })
+    const wrapper = mountPage(['message:mail:list', 'message:mail:rule:import'])
+    await flushPromises()
+    await selectTab(wrapper, '收件规则')
+    await wrapper.get('[data-testid="mail-rule-import"]').trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).toContain('模板未配置')
+    await uploadRuleCSV(new File(['bad'], 'rules.csv', { type: 'text/csv' }))
+    await vi.waitFor(() => expect(mailApi.previewMailRuleImport).toHaveBeenCalledOnce())
+    await flushPromises()
+    expect(document.body.textContent).toContain('邮箱或域名格式无效')
+    expect(bodyButton('mail-rule-import-confirm').disabled).toBe(true)
+    expect(mailApi.importMailRules).not.toHaveBeenCalled()
+    expect(requestObjectURL).not.toHaveBeenCalled()
+  })
+
+  it('reports template object resolution failure without guessing a download URL', async () => {
+    vi.mocked(mailApi.getMailRuleImportTemplate).mockResolvedValue({
+      objectKey:
+        'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.csv',
+    })
+    vi.mocked(requestObjectURL).mockRejectedValue(new Error('storage unavailable'))
+    const wrapper = mountPage(['message:mail:view', 'message:mail:rule:import'])
+    await flushPromises()
+    await wrapper.get('[data-testid="mail-rule-import"]').trigger('click')
+    await flushPromises()
+    expect(requestObjectURL).toHaveBeenCalledOnce()
+    expect(document.querySelector('[data-testid="mail-rule-template-download"]')).toBeNull()
+    expect(document.body.textContent).toContain('模板下载地址加载失败')
+  })
+
+  it('discards an old template object URL after import permission is revoked', async () => {
+    vi.mocked(mailApi.getMailRuleImportTemplate).mockResolvedValue({
+      objectKey:
+        'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.csv',
+    })
+    const pending = deferred<{ url: string; expiresAt: null }>()
+    vi.mocked(requestObjectURL).mockReturnValue(pending.promise)
+    const wrapper = mountPage(['message:mail:list', 'message:mail:rule:import'])
+    await flushPromises()
+    await selectTab(wrapper, '收件规则')
+    await wrapper.get('[data-testid="mail-rule-import"]').trigger('click')
+    await flushPromises()
+    expect(requestObjectURL).toHaveBeenCalledOnce()
+    usePermissionStore().applySnapshot({
+      roleCodes: [],
+      menuTree: [],
+      permissionCodes: ['message:mail:list'],
+    })
+    pending.resolve({ url: 'https://example.com/stale.csv', expiresAt: null })
+    await flushPromises()
+    expect(document.querySelector('[data-testid="mail-rule-template-download"]')).toBeNull()
+  })
+
+  it('discards a stale preview after a new file is selected', async () => {
+    const older = deferred<mailApi.MailRuleCSVPreview>()
+    vi.mocked(mailApi.previewMailRuleImport)
+      .mockReturnValueOnce(older.promise)
+      .mockResolvedValueOnce({
+        rows: [
+          { line: 2, values: ['email', 'new@example.com', 'deny', 'new', '', '1'], errors: [] },
+        ],
+        errors: [],
+      })
+    const wrapper = mountPage(['message:mail:list', 'message:mail:rule:import'])
+    await flushPromises()
+    await selectTab(wrapper, '收件规则')
+    await wrapper.get('[data-testid="mail-rule-import"]').trigger('click')
+    await flushPromises()
+    await uploadRuleCSV(new File(['old'], 'old.csv', { type: 'text/csv' }))
+    await vi.waitFor(() => expect(mailApi.previewMailRuleImport).toHaveBeenCalledOnce())
+    await uploadRuleCSV(new File(['new'], 'new.csv', { type: 'text/csv' }))
+    await vi.waitFor(() => expect(mailApi.previewMailRuleImport).toHaveBeenCalledTimes(2))
+    await flushPromises()
+    older.resolve({
+      rows: [{ line: 2, values: ['email', 'old@example.com', 'deny', 'old', '', '1'], errors: [] }],
+      errors: [],
+    })
+    await flushPromises()
+    expect(document.body.textContent).toContain('new@example.com')
+    expect(document.body.textContent).not.toContain('old@example.com')
+  })
+
+  it('clears pending file reading when a replacement has an invalid extension', async () => {
+    const reader = vi
+      .spyOn(FileReader.prototype, 'readAsArrayBuffer')
+      .mockImplementation(() => undefined)
+    try {
+      const wrapper = mountPage(['message:mail:list', 'message:mail:rule:import'])
+      await flushPromises()
+      await selectTab(wrapper, '收件规则')
+      await wrapper.get('[data-testid="mail-rule-import"]').trigger('click')
+      await flushPromises()
+      await uploadRuleCSV(new File(['pending'], 'pending.csv', { type: 'text/csv' }))
+      expect(wrapper.findAllComponents({ name: 'AppTable' })).toHaveLength(2)
+      await uploadRuleCSV(new File(['not csv'], 'replacement.txt', { type: 'text/plain' }))
+      expect(document.body.textContent).toContain('请选择 .csv 文件')
+      expect(wrapper.findAllComponents({ name: 'AppTable' })).toHaveLength(1)
+      expect(mailApi.previewMailRuleImport).not.toHaveBeenCalled()
+    } finally {
+      reader.mockRestore()
+    }
+  })
 })
+
+function bodyButton(testId: string): HTMLButtonElement {
+  const button = document.querySelector(`[data-testid="${testId}"]`)
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`button missing: ${testId}`)
+  return button
+}
+
+async function uploadRuleCSV(file: File): Promise<void> {
+  const input = document.querySelector('[data-testid="mail-rule-import-file"]')
+  if (!(input instanceof HTMLInputElement)) throw new Error('CSV input missing')
+  Object.defineProperty(input, 'files', { configurable: true, value: [file] })
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+  await flushPromises()
+}
 
 function mountPage(permissionCodes: string[]): VueWrapper {
   const pinia = createPinia()

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Mossbp3jaelVk2HDu4tf9aKMQBAdX9gwtQ084727K5vkTezgXG0ghKMQ7h0A0Gu
+\restrict 8CegF7EXDouR0H20CjQZITRLsymMsCSJf9gcvOQvZrmD00dkV4J6CoGVnUPY9WF
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -18,6 +18,20 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
+
+--
+-- Name: public; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA public;
+
+
+--
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON SCHEMA public IS 'standard public schema';
+
 
 SET default_tablespace = '';
 
@@ -3414,5 +3428,5 @@ ALTER TABLE ONLY public.system_dictionary_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Mossbp3jaelVk2HDu4tf9aKMQBAdX9gwtQ084727K5vkTezgXG0ghKMQ7h0A0Gu
+\unrestrict 8CegF7EXDouR0H20CjQZITRLsymMsCSJf9gcvOQvZrmD00dkV4J6CoGVnUPY9WF
 

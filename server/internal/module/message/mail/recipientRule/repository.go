@@ -30,6 +30,41 @@ func (r *Repository) List(ctx context.Context) ([]Model, error) {
 	return values, err
 }
 
+func (r *Repository) ListForExport(ctx context.Context, limit int) ([]Model, error) {
+	var values []Model
+	err := r.db.WithContext(ctx).Order("id").Limit(limit).Find(&values).Error
+	return values, err
+}
+
+// FindMatching uses the active unique-key index and at most CSVMaxRows keys.
+func (r *Repository) FindMatching(ctx context.Context, keys [][]string) ([]Model, error) {
+	if len(keys) == 0 {
+		return []Model{}, nil
+	}
+	var values []Model
+	err := r.db.WithContext(ctx).Select("scope", "pattern", "action").Where("(scope, pattern, action) IN ?", keys).Find(&values).Error
+	return values, err
+}
+
+func (r *Repository) CreateBatch(ctx context.Context, values []Model, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
+	if len(values) == 0 || len(values) > CSVMaxRows {
+		return cachegeneration.MutationResult{}, fmt.Errorf("recipient rule batch size invalid")
+	}
+	originalIDs := make([]int64, len(values))
+	for index := range values {
+		originalIDs[index] = values[index].ID
+	}
+	result, err := r.mutate(ctx, expected, now, func(tx *gorm.DB) (bool, error) {
+		return true, tx.WithContext(ctx).CreateInBatches(&values, 200).Error
+	})
+	if err != nil {
+		for index := range values {
+			values[index].ID = originalIDs[index]
+		}
+	}
+	return result, err
+}
+
 func (r *Repository) Create(ctx context.Context, value *Model, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
 	if value == nil {
 		return cachegeneration.MutationResult{}, fmt.Errorf("mail recipient rule is required")

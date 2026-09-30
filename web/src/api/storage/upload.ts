@@ -47,7 +47,22 @@ export async function requestObjectURL(objectKey: string): Promise<ObjectURLResu
     'object url',
   )
   const url = expectString(value.url, 'object url.url')
-  if (url.trim() === '') throw new ProtocolError('object url.url must not be empty')
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    throw new ProtocolError('object url.url must be an HTTPS URL')
+  }
+  if (
+    parsed.protocol !== 'https:' ||
+    parsed.hostname === '' ||
+    parsed.username !== '' ||
+    parsed.password !== '' ||
+    url !== url.trim() ||
+    url.includes('\\') ||
+    [...url].some((character) => character.charCodeAt(0) <= 32 || character.charCodeAt(0) === 127)
+  )
+    throw new ProtocolError('object url.url must be an HTTPS URL without credentials')
   if (value.expiresAt === null) return { url, expiresAt: null }
   const expiresAt = expectString(value.expiresAt, 'object url.expiresAt')
   if (!expiresAt.endsWith('Z') || Number.isNaN(Date.parse(expiresAt))) {

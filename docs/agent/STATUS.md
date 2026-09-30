@@ -1,5 +1,29 @@
 # 项目状态
 
+## CSV 模板统一存储对象键（2026-09-30，代码与真实迁移已完成）
+
+- 当前契约：配置名为 `message.mail.recipient_rule.import_template_object_key`，原配置行 ID 13 保留；值为 `file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/4a3990efabc869c6448c200b525023c5.csv`，不含协议或域名，旧 `_url` 配置已不存在。模板接口只返回 objectKey，前端复用 `/api/v1/storage/object-url` 解析，运行时不保留旧 URL 兼容分支。
+- 实现位置：设置和邮件收件规则的后端校验、前端 API/弹窗/i18n 已统一为对象键。原 v2 编码及解析协议原样搬到 `server/internal/storage/objectKey`，供上传、设置和邮件复用，不把带认证依赖的 uploadRule 业务模块反向引入邮件模块。前端 `utils/storageObjectKey.ts` 校验同一格式，存储 URL DTO 只接受无凭据的 HTTPS 地址；模板解析失败和过期响应不会生成猜测链接。
+- 容量/权限：保留导入 action、配置 generation、对象物理版本和平台隔离；模板读取与对象解析复用现有 Redis 确认和有界回源，不新增每请求 PostgreSQL 配置查询。下载解析不额外要求文件上传权限。
+- 真实迁移：本轮再次取得维护者停止及迁移许可后，停止本项目 API/Worker，于 2026-09-30 16:36（Asia/Shanghai）执行 `docs/database/2026-09-30-mail-rule-template-object-key.ps1 -OldAPIStopped`，exit 0。通过当前 Admin 上传规则的 IssueCredentials 上传到标准 v2 路径，仅为该规则补充 `csv`/`text/csv`，未改文件大小、公私有、规则编码、平台或 COS 配置。配套 SQL 原位改名并推进 `system.setting/global` 15 → 16，Redis 同步为 16；Admin 菜单版本保持 15，Canvas 保持 1，邮件 generation 保持 3，规则和角色授权数量未变。
+- 断点与幂等：`server/cmd/mail-rule-template-object-key-migration` 在 `%LOCALAPPDATA%\Admin\maintenance\mail-rule-template-object-key.json` 留下无凭据 manifest；完整写入、Sync/Close 后以同卷链接原子发布，拒绝覆盖。所有新建/复用路径均校验哈希、平台/规则坐标及标准 resolver URL；上传后、改设置前验证实际下载。prepare、SQL、Redis 发布重复执行后完整事实快照不变。旧 COS 对象作为既有资源保留，未自动删除。
+- 备份：`%LOCALAPPDATA%\Admin\backups\mail-rule-template-object-key-20260930-163633\public-before.dump`，627086 bytes，SHA256 `EDB036769AB5797986CB04FE5C76ADD475D65E837E947AA095D7D9F7997D66E5`，`pg_restore --list` 通过；同目录保留 before/after JSON 和模板 manifest。此轮无表结构变更，未重复导出 schema 快照。
+- 已验证：新 SQL 原位保 ID、来源冲突/畸形键回滚、整批幂等；命令的 manifest 一致性、原子写入、白名单增量和下载错误测试；objectKey/uploadRule/recipientRule/setting/database 六包及架构、邮件根模块定向 Go 测试通过。前端 CSV API、存储 API、对象键、UpMedia、邮件页、设置页共 6 文件/64 项 Vitest 通过，变更文件 Prettier 通过。真实模板经标准存储 resolver 和匿名 HTTPS 下载逐字节验证为原 59-byte CSV，SHA256 `ce013c56fed4fec13fa098f42415017da517991e111664ae9dd187a62ccc47b8`。只读审查的三个问题已修复，复核无 Critical/Important 阻断。
+- 收尾验证：`go fmt ./...`、`go vet ./...`、`go build ./...`、`pnpm typecheck`、`pnpm lint`、`pnpm check:architecture`（0 findings）、`pnpm build`、`git diff --check` 均通过。URL 控制字符校验改成字符码判断后，存储 API 3 项再次通过；构建仅有既有 rich-editor 大 chunk 警告。本轮未重跑全量 Go/Vitest，未做浏览器人工验收或使用 Computer Use；API/Worker 保持停止，由维护者启动新版本并刷新前端。未提交 Git、未清理 Redis；邮件提示与登录重试 Bug 仍延期。
+
+## 邮件收件规则 CSV 导入/导出（2026-09-30，代码与真实库迁移已完成）
+
+- 范围：保留现有邮箱/域名匹配与字段类型；新增 UTF-8 CSV 模板、预览校验、整批事务导入和同格式导出。模板已按上方后续整改统一为系统设置中的标准 objectKey，为空时明确显示未配置，不虚造 COS 地址。
+- 权限：邮件 page 仍为 `message:mail:view`，列表沿用 `message:mail:list`；模板配置读取、CSV 预览与确认导入使用独立 `message:mail:rule:import`，导出使用 `message:mail:rule:export`，后端均接现有认证与权限 Middleware。有 page 与 CSV action、没有 list 时仍显示收件规则 tab 和对应按钮，不请求列表、不显示假空表；普通角色未自动获得新 action。
+- 容量/一致性：单次最多 1000 条、CSV 1 MiB；预览一次有界重复键查询，确认重新校验；不覆盖已有规则，任一错误不写入。批量写入复用 Mail runtime mutation，一次事务只推进一次 `message.mail/global` generation/outbox；设置读取复用现有 generation 缓存，Redis 故障不回退旧值。
+- 实现：后端 `message/mail/recipientRule` 新增模板链接、预览、确认导入与导出接口；导出包含启用和停用规则，不含软删除，超限明确失败而不截断。前端复用 AppDialog/AppTable 展示文件行号、错误与分页；切换文件、关闭弹窗或权限变化会丢弃旧响应，下载使用原生 Blob，未增加 Excel 依赖。入口严格检查原始 JSON UTF-8 和未配对 surrogate；批量事务回滚恢复生成的 ID，避免重试复用回滚 ID。
+- 首次模板发布记录（后续已转为上方标准对象键）：`docs/templates/mail-recipient-rule-import.csv`，59 bytes、UTF-8 BOM、六列中文表头、CRLF，仅表头而无会误导入的样例数据。维护者要求直接上传后，已复用现有 COS 配置 ID 1 发布固定公开模板，未放宽通用上传白名单。下载地址为 `https://cos.zgm2003.cn/system/templates/mail-recipient-rule/ce013c56fed4fec13fa098f42415017da517991e111664ae9dd187a62ccc47b8/mail-recipient-rule-import.csv`，通过现有系统设置 Service 回填 `message.mail.recipient_rule.import_template_url`，保留内置、启用和禁止删除约束。
+- 首次模板发布验证：匿名 HTTPS GET 与本地文件逐字节一致，SHA256 `ce013c56fed4fec13fa098f42415017da517991e111664ae9dd187a62ccc47b8`；HEAD 返回 200、`text/csv; charset=utf-8`、59 bytes 和附件下载文件名。邮件 ImportTemplate Service 消费到同一地址；`system.setting/global` 在本次配置更新中从 14 到 15，PostgreSQL/Redis 均为 15。重复执行只验证既有链接，不重复上传或推进 generation。发布使用一次性本地辅助程序，完成后已删除；未新增运行时代码，未停止或重启服务。
+- 真实迁移：维护者授权停止本项目 API/Worker 后，2026-09-30 15:34（Asia/Shanghai）完成备份、SQL 与 Redis 版本发布；首轮 schema 导出因 PowerShell 参数拼接失败，修正 runner 后于 15:37 整轮复跑 exit 0，SQL/Redis 两次幂等均通过。迁移文件为 `docs/database/2026-09-30-mail-recipient-rule-csv.{sql,ps1}`，固定状态命令为 `server/cmd/mail-recipient-rule-csv-migration`。Admin `menu_version` 从 14 到 15，Canvas 保持 1；`system.setting/global` 从 13 到 14，`message.mail/global` 保持 3。Redis Admin 菜单状态从陈旧的 13 同步到 15，设置状态同步到 14；未删除 Redis key，规则数量和角色授权数量不变。
+- 备份与快照：迁移前原始备份为 `%LOCALAPPDATA%\Admin\backups\mail-rule-csv-20260930-153429\public-before.dump`，624001 bytes，SHA256 `5BE1419694EB3C57CDF33E58572ACD405E7F68773CEDE8B47E2525B9960CB865`；成功复跑备份为同级 `mail-rule-csv-20260930-153710\public-before.dump`，624225 bytes，SHA256 `07082D021FC9FB3D91C727EF430AE2DCE2918F22C0BFCACF6C3EB9610B689A8D`。两份 `pg_restore --list` 均通过。`docs/database/current.sql` 已由真实库刷新，123757 bytes，SHA256 `753ADCC1BC4C29585F28F58F20A161C8439902084852480E5ADEEB812368AF17`。
+- 验证：后端 `go fmt ./...`、`go vet ./...`、`go test ./... -p 1 -count=1`、`go build ./...` 全部 exit 0，覆盖 CSV 空文件/编码/表头/引号/重复/超限、公式转义再导入、跨批事务回滚、并发重复、独立动作权限、迁移冲突与幂等。前端 `pnpm vitest run tests/api/message/mailRuleCSV.test.ts tests/views/message/mail/index.test.ts tests/api/system/setting.test.ts tests/views/system/setting/index.test.ts --pool=threads --maxWorkers=1` 共 4 文件/55 项通过；变更文件 Prettier、`pnpm lint`、`pnpm check:architecture`（0 findings）、`pnpm typecheck`、`pnpm build` 和 `git diff --check` 通过。构建仅保留既有 rich-editor 大 chunk 警告；只读审查无 Critical/Important 阻断项。
+- 未运行/保留项：未跑全量前端 Vitest，未使用 Computer Use 或做浏览器人工验收。全仓 `pnpm format:check` 在既有 `web/tests/views/user/account/index.test.ts` 格式问题处失败，已确认该文件与 HEAD 一致，未为本任务改动它。首次迁移后 API/Worker 保持停止，随后由维护者启动；对象键后续迁移的当前服务状态以上方条目为准。未提交 Git、未清理 Redis、未操作 Canvas。邮件错误提示与登录重试两个 Bug 按维护者要求延期。
+
 ## 用户邮箱/手机号变更记录整改（2026-09-29，代码与真实库迁移已完成）
 
 - `user_email_change_log` 与 `user_phone_change_log` 的 `action` 统一为数值协议：`1=change`、`2=bind`；仅保留明文旧值/新值字段，删除 8 个重复的 hint/HMAC 审计字段，并保留动作与值形状约束。邮箱迁移从成功的绑定邮件日志恢复可验证历史值，无法恢复时事务回滚；手机号历史存在但缺少明文事实时事务回滚，不写假值。

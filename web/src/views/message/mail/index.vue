@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import * as mailApi from '@/api/message/mail'
@@ -56,9 +56,21 @@ const visibleTabs = computed(() => [
   ...(canList.value && can('message:mail:detail')
     ? [{ name: 'logs' as const, label: t('mail.logsTab') }]
     : []),
-  ...(canList.value ? [{ name: 'rules' as const, label: t('mail.rulesTab') }] : []),
+  ...(canList.value || can('message:mail:rule:import') || can('message:mail:rule:export')
+    ? [{ name: 'rules' as const, label: t('mail.rulesTab') }]
+    : []),
   ...(canList.value ? [{ name: 'rateLimits' as const, label: t('mail.rateLimitsTab') }] : []),
 ])
+
+watch(
+  visibleTabs,
+  (tabs) => {
+    if (!tabs.some((tab) => tab.name === activeTab.value) && tabs[0]) {
+      activeTab.value = tabs[0].name
+    }
+  },
+  { immediate: true },
+)
 
 function errorMessage(error: unknown): string {
   return error instanceof Error && error.message ? error.message : t('mail.loadFailed')
@@ -204,10 +216,13 @@ function searchLogs(filter: MailLogFilter): void {
           v-else-if="tab.name === 'rules'"
           :rules="rules"
           :loading="loading.rules"
+          :can-list="canList"
           :can-create="can('message:mail:rule:create')"
           :can-update="can('message:mail:rule:update')"
           :can-status="can('message:mail:rule:status')"
           :can-delete="can('message:mail:rule:delete')"
+          :can-import="can('message:mail:rule:import')"
+          :can-export="can('message:mail:rule:export')"
           @refresh="load('rules')"
         />
         <MailRateLimitTab

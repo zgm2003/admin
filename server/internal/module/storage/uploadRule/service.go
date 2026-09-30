@@ -8,6 +8,7 @@ import (
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
 	storagecos "admin/server/internal/storage/cos"
+	"admin/server/internal/storage/objectKey"
 	"context"
 	"errors"
 	"fmt"
@@ -321,7 +322,7 @@ func (s *Service) IssueCredentials(ctx context.Context, identity auth.Identity, 
 		if err != nil {
 			return CredentialResponse{}, invalid(err)
 		}
-		key, err := generateObjectKey(target.Code, ObjectCoordinates{
+		key, err := objectkey.Generate(target.Code, objectkey.Coordinates{
 			PlatformID:  target.PlatformID,
 			RuleID:      target.RuleID,
 			CosConfigID: target.CosConfigID,
@@ -351,7 +352,7 @@ func (s *Service) ObjectURL(ctx context.Context, identity auth.Identity, objectK
 	if identity.PlatformID < 1 {
 		return ObjectURLResult{}, invalid(fmt.Errorf("object URL request invalid"))
 	}
-	coordinates, err := parseV2ObjectKey(strings.TrimSpace(objectKey))
+	coordinates, err := objectkey.Parse(strings.TrimSpace(objectKey))
 	if err != nil {
 		return ObjectURLResult{}, invalid(err)
 	}

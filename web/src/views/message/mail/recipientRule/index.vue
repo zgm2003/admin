@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { useI18n } from 'vue-i18n'
@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import {
   createMailRule,
   deleteMailRule,
+  exportMailRules,
   updateMailRule,
   updateMailRuleStatus,
   type MailRule,
@@ -14,20 +15,36 @@ import {
 } from '@/api/message/mail'
 import type { TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
+import MailRuleImportDialog from './components/MailRuleImportDialog/index.vue'
 
-defineProps<{
+const props = defineProps<{
   rules: MailRule[]
   loading: boolean
+  canList: boolean
   canCreate: boolean
   canUpdate: boolean
   canStatus: boolean
   canDelete: boolean
+  canImport: boolean
+  canExport: boolean
 }>()
 const emit = defineEmits<{ refresh: [] }>()
 const { t } = useI18n()
 const dialog = ref(false)
 const editing = ref<MailRule | null>(null)
 const saving = ref(false)
+const importing = ref(false)
+const exporting = ref(false)
+let exportSequence = 0
+onBeforeUnmount(() => {
+  exportSequence++
+})
+watch(
+  () => props.canExport,
+  () => {
+    exportSequence++
+  },
+)
 const form = ref<MailRuleInput>(blankRule())
 const scopeOptions = computed<Array<{ value: MailRuleInput['scope']; label: string }>>(() => [
   { value: 'email', label: t('mail.email') },
@@ -105,6 +122,31 @@ async function saveRule(): Promise<void> {
     saving.value = false
   }
 }
+
+async function exportRules(): Promise<void> {
+  if (!props.canExport || exporting.value) return
+  const sequence = ++exportSequence
+  exporting.value = true
+  try {
+    const file = await exportMailRules()
+    if (sequence !== exportSequence || !props.canExport) return
+    const url = URL.createObjectURL(new Blob([file.content], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    try {
+      link.href = url
+      link.download = file.fileName
+      document.body.appendChild(link)
+      link.click()
+    } finally {
+      link.remove()
+      URL.revokeObjectURL(url)
+    }
+  } catch {
+    // request.ts owns API error notifications.
+  } finally {
+    exporting.value = false
+  }
+}
 </script>
 
 <template>
@@ -117,6 +159,7 @@ async function saveRule(): Promise<void> {
       :closable="false"
     />
     <AppTable
+      v-if="canList"
       :columns="columns"
       :data="rules"
       :loading="loading"
@@ -128,6 +171,16 @@ async function saveRule(): Promise<void> {
         <el-button v-if="canCreate" data-testid="mail-rule-create" type="primary" @click="create">
           {{ t('mail.createRule') }}
         </el-button>
+        <el-button v-if="canImport" data-testid="mail-rule-import" @click="importing = true">{{
+          t('mail.ruleCSV.import')
+        }}</el-button>
+        <el-button
+          v-if="canExport"
+          data-testid="mail-rule-export"
+          :loading="exporting"
+          @click="exportRules"
+          >{{ t('mail.ruleCSV.export') }}</el-button
+        >
       </template>
       <template #cell-pattern="{ row }: { row: MailRule }">
         <div class="primary-cell">
@@ -161,6 +214,30 @@ async function saveRule(): Promise<void> {
         <el-empty :description="t('mail.noRules')" />
       </template>
     </AppTable>
+
+    <div v-else>
+      <el-alert
+        class="rule-hint"
+        :title="t('mail.ruleCSV.noReadAccess')"
+        type="info"
+        show-icon
+        :closable="false"
+      />
+      <div class="rule-csv-actions">
+        <el-button v-if="canImport" data-testid="mail-rule-import" @click="importing = true">{{
+          t('mail.ruleCSV.import')
+        }}</el-button>
+        <el-button
+          v-if="canExport"
+          data-testid="mail-rule-export"
+          :loading="exporting"
+          @click="exportRules"
+          >{{ t('mail.ruleCSV.export') }}</el-button
+        >
+      </div>
+    </div>
+
+    <MailRuleImportDialog v-model="importing" :can-import="canImport" @imported="emit('refresh')" />
 
     <el-dialog
       v-model="dialog"

@@ -18,6 +18,7 @@ import (
 	"admin/server/internal/shared/cacheGeneration"
 	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
+	"admin/server/internal/storage/objectKey"
 )
 
 const (
@@ -674,6 +675,13 @@ func validateInput(key, value string, valueType int, description string) error {
 		return fmt.Errorf("setting input is invalid")
 	}
 	switch key {
+	case sharedsetting.MailRecipientRuleImportTemplateObjectKey:
+		if valueType != ValueTypeString {
+			return fmt.Errorf("template object key must be a string")
+		}
+		if value != "" && (objectkey.Validate(value) != nil || !strings.HasSuffix(value, ".csv")) {
+			return fmt.Errorf("template must be a CSV storage object key, not a URL")
+		}
 	case sharedsetting.MessageNotificationRetentionDaysKey:
 		if valueType != ValueTypeNumber || !integerInRange(value, 30, 3650) {
 			return fmt.Errorf("notification retention days must be an integer from 30 to 3650")
@@ -692,7 +700,7 @@ func validateInput(key, value string, valueType int, description string) error {
 
 func isRequiredSetting(key string) bool {
 	_, legal := legalDocumentKindForKey(key)
-	return legal || key == sharedsetting.MessageNotificationRetentionDaysKey || key == sharedsetting.RealtimeEventRetentionDaysKey || key == sharedsetting.SchedulerHistoryRetentionDaysKey
+	return legal || key == sharedsetting.MailRecipientRuleImportTemplateObjectKey || key == sharedsetting.MessageNotificationRetentionDaysKey || key == sharedsetting.RealtimeEventRetentionDaysKey || key == sharedsetting.SchedulerHistoryRetentionDaysKey
 }
 
 func integerInRange(value string, minimum, maximum int) bool {

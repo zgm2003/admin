@@ -329,6 +329,7 @@ func run(logger *slog.Logger) error {
 	mailTemplateService.SetRuntimeCoordinator(mailRuntimeStore)
 	mailLogService := maillog.NewService(mailStores.Log, mailStores.LogVerification, keys)
 	mailRecipientRuleService.SetRuntimeCoordinator(mailRuntimeStore)
+	mailRecipientRuleService.SetSettings(settingService)
 	smsRuntimeCache := messagesms.NewRuntimeCache(redisClient)
 	smsRuntimeCache.SetGenerations(configGenerationRepository, configGenerationStore)
 	smsRuntimeCache.SetLogger(logger)

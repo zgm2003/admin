@@ -1,4 +1,4 @@
-package uploadrule
+package objectkey
 
 import (
 	"errors"
@@ -9,15 +9,15 @@ import (
 
 func TestGenerateObjectKeyIsSelfDescribingAndRoundTrips(t *testing.T) {
 	now := time.Date(2026, 9, 17, 13, 45, 1, 0, time.UTC)
-	coordinates := ObjectCoordinates{PlatformID: 1, RuleID: 20, CosConfigID: 10, Version: 3}
-	key, err := generateObjectKey("article/cover", coordinates, ".PNG", now)
+	coordinates := Coordinates{PlatformID: 1, RuleID: 20, CosConfigID: 10, Version: 3}
+	key, err := Generate("article/cover", coordinates, ".PNG", now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(key, "article/cover/.admin-storage/v2/p1/r20/c10/v3/2026/09/17/") || !strings.HasSuffix(key, ".png") {
 		t.Fatalf("generated key = %q", key)
 	}
-	parsed, err := parseV2ObjectKey(key)
+	parsed, err := Parse(key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,22 +29,22 @@ func TestGenerateObjectKeyIsSelfDescribingAndRoundTrips(t *testing.T) {
 	if len(longest) != 64 {
 		t.Fatalf("fixture code length = %d", len(longest))
 	}
-	longKey, err := generateObjectKey(longest, coordinates, "png", now)
+	longKey, err := Generate(longest, coordinates, "png", now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := parseV2ObjectKey(longKey); err != nil {
+	if _, err := Parse(longKey); err != nil {
 		t.Fatalf("longest code parse error = %v", err)
 	}
 }
 
 func TestGenerateObjectKeyRejectsInvalidInput(t *testing.T) {
 	now := time.Now().UTC()
-	valid := ObjectCoordinates{PlatformID: 1, RuleID: 1, CosConfigID: 1, Version: 1}
+	valid := Coordinates{PlatformID: 1, RuleID: 1, CosConfigID: 1, Version: 1}
 	for _, test := range []struct {
 		name   string
 		code   string
-		coords ObjectCoordinates
+		coords Coordinates
 		ext    string
 	}{
 		{"empty code", "", valid, "png"},
@@ -55,13 +55,13 @@ func TestGenerateObjectKeyRejectsInvalidInput(t *testing.T) {
 		{"dotdot", "a..b", valid, "png"},
 		{"unicode code", "头像", valid, "png"},
 		{"reserved marker", "evil/.admin-storage", valid, "png"},
-		{"zero platform", "avatar", ObjectCoordinates{PlatformID: 0, RuleID: 1, CosConfigID: 1, Version: 1}, "png"},
-		{"negative version", "avatar", ObjectCoordinates{PlatformID: 1, RuleID: 1, CosConfigID: 1, Version: -1}, "png"},
+		{"zero platform", "avatar", Coordinates{PlatformID: 0, RuleID: 1, CosConfigID: 1, Version: 1}, "png"},
+		{"negative version", "avatar", Coordinates{PlatformID: 1, RuleID: 1, CosConfigID: 1, Version: -1}, "png"},
 		{"bad extension", "avatar", valid, "p!ng"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := generateObjectKey(test.code, test.coords, test.ext, now); !errors.Is(err, ErrObjectKeyInvalid) {
-				t.Fatalf("generate error = %v want ErrObjectKeyInvalid", err)
+			if _, err := Generate(test.code, test.coords, test.ext, now); !errors.Is(err, ErrInvalid) {
+				t.Fatalf("generate error = %v want ErrInvalid", err)
 			}
 		})
 	}
@@ -69,7 +69,7 @@ func TestGenerateObjectKeyRejectsInvalidInput(t *testing.T) {
 
 func TestParseV2ObjectKeyRejectsInvalidKeys(t *testing.T) {
 	const valid = "avatar/.admin-storage/v2/p1/r2/c3/v4/2026/09/17/6e7e53334a6da066b130a89cc3f69535.png"
-	if _, err := parseV2ObjectKey(valid); err != nil {
+	if _, err := Parse(valid); err != nil {
 		t.Fatalf("valid key rejected: %v", err)
 	}
 	for _, test := range []struct {
@@ -99,8 +99,8 @@ func TestParseV2ObjectKeyRejectsInvalidKeys(t *testing.T) {
 		{"marker without code", ".admin-storage/v2/p1/r2/c3/v4/2026/09/17/6e7e53334a6da066b130a89cc3f69535.png"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := parseV2ObjectKey(test.key); !errors.Is(err, ErrObjectKeyInvalid) {
-				t.Fatalf("parse error = %v want ErrObjectKeyInvalid", err)
+			if _, err := Parse(test.key); !errors.Is(err, ErrInvalid) {
+				t.Fatalf("parse error = %v want ErrInvalid", err)
 			}
 		})
 	}

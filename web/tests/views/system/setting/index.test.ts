@@ -496,6 +496,40 @@ describe('system setting page', () => {
     expect(errorHandler).toHaveBeenCalledOnce()
     expect(document.querySelector('[data-testid="setting-save"]')).not.toBeNull()
   })
+
+  it('maintains the mail CSV template as an object key and rejects full URLs', async () => {
+    const key = 'message.mail.recipient_rule.import_template_object_key'
+    const objectKey =
+      'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.csv'
+    vi.mocked(settingAPI.getSettings).mockResolvedValue({
+      list: [settingRow({ key, value: objectKey, valueType: 1, isBuiltin: YesNo.Yes })],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage([
+      'system:setting:list',
+      'system:setting:update',
+      'system:setting:status',
+    ])
+    await flushPromises()
+    await wrapper.get('#tab-advanced').trigger('click')
+    expect(wrapper.text()).toContain('CSV 模板')
+    expect(wrapper.find('[data-testid="setting-status-toggle"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="setting-update"]').trigger('click')
+    const dialog = wrapper.getComponent({ name: 'SettingDialog' })
+    expect(dialog.getComponent({ name: 'ElSelectV2' }).props('disabled')).toBe(true)
+    await setBodyValue('setting-form-value', 'https://example.com/template.csv')
+    await clickBody('setting-save')
+    expect(settingAPI.updateSetting).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('对象键')
+    await setBodyValue('setting-form-value', '')
+    await clickBody('setting-save')
+    expect(settingAPI.updateSetting).toHaveBeenCalledWith(
+      key,
+      expect.objectContaining({ value: '', valueType: 1 }),
+    )
+  })
 })
 
 function mountPage(permissionCodes: string[]): VueWrapper {

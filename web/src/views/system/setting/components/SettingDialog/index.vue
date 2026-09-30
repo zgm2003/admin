@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { isStorageObjectKey } from '@/utils/storageObjectKey'
 import { useI18n } from 'vue-i18n'
 
 import {
   isRetentionSettingKey,
+  mailRecipientRuleImportTemplateObjectKey,
   retentionSettingRanges,
   type SystemSetting,
   type SettingValueType,
@@ -37,6 +39,19 @@ const valueError = ref('')
 
 function validateValue(): boolean {
   valueError.value = ''
+  if (form.value.key === mailRecipientRuleImportTemplateObjectKey) {
+    const value = form.value.value.trim()
+    if (form.value.valueType !== 1) {
+      valueError.value = t('setting.templateObjectKeyInvalid')
+      return false
+    }
+    if (value === '') return true
+    if (!isStorageObjectKey(value) || !value.endsWith('.csv')) {
+      valueError.value = t('setting.templateObjectKeyInvalid')
+      return false
+    }
+    return true
+  }
   if (form.value.value.trim() === '') {
     valueError.value = t('setting.valueRequired')
     return false
@@ -98,7 +113,9 @@ function save(): void {
           v-model="form.valueType"
           data-testid="setting-form-type"
           :options="valueTypeOptions"
-          :disabled="isRetentionSettingKey(form.key)"
+          :disabled="
+            isRetentionSettingKey(form.key) || form.key === mailRecipientRuleImportTemplateObjectKey
+          "
           style="width: 100%"
         />
       </el-form-item>
@@ -125,7 +142,11 @@ function save(): void {
           "
           :step="isRetentionSettingKey(form.key) ? 1 : undefined"
           :rows="form.valueType === 4 ? 8 : undefined"
-          :placeholder="t('setting.valuePlaceholder')"
+          :placeholder="
+            form.key === mailRecipientRuleImportTemplateObjectKey
+              ? t('setting.templateObjectKeyPlaceholder')
+              : t('setting.valuePlaceholder')
+          "
         />
         <div v-if="valueError" class="el-form-item__error setting-value-error">
           {{ valueError }}

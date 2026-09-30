@@ -17,6 +17,8 @@ const (
 	PermissionUpdate = "message:mail:rule:update"
 	PermissionStatus = "message:mail:rule:status"
 	PermissionDelete = "message:mail:rule:delete"
+	PermissionImport = "message:mail:rule:import"
+	PermissionExport = "message:mail:rule:export"
 )
 
 type SendMode string
@@ -47,4 +49,31 @@ type Input struct {
 	Name      string      `json:"name"`
 	Remark    string      `json:"remark"`
 	IsEnabled yesno.Value `json:"isEnabled"`
+}
+
+const (
+	CSVMaxRows  = 1000
+	CSVMaxBytes = 1 << 20
+)
+
+type CSVRow struct {
+	Line   int      `json:"line"`
+	Values []string `json:"values"`
+	Errors []string `json:"errors"`
+}
+
+type CSVPreview struct {
+	Rows   []CSVRow `json:"rows"`
+	Errors []string `json:"errors"`
+}
+
+type CSVImportResult struct {
+	Imported int `json:"imported"`
+}
+type CSVFile struct {
+	FileName string `json:"fileName"`
+	Content  string `json:"content"`
+}
+type ImportTemplate struct {
+	ObjectKey string `json:"objectKey"`
 }

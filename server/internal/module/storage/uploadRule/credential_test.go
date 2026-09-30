@@ -1,6 +1,7 @@
 package uploadrule
 
 import (
+	"admin/server/internal/storage/objectKey"
 	"context"
 	"errors"
 	"fmt"
@@ -115,7 +116,7 @@ func TestIssueCredentialsValidatesAndSignsPlatformRule(t *testing.T) {
 	if item.Method != "PUT" || !strings.HasPrefix(item.ObjectKey, "article-cover/.admin-storage/v2/") || strings.Contains(item.ObjectKey, "photo") || !strings.HasSuffix(item.ObjectKey, ".png") || item.PublicURL == nil || !strings.HasPrefix(*item.PublicURL, "https://cdn.example.com/article-cover/") {
 		t.Fatalf("item=%+v", item)
 	}
-	coordinates, err := parseV2ObjectKey(item.ObjectKey)
+	coordinates, err := objectkey.Parse(item.ObjectKey)
 	if err != nil || coordinates.PlatformID != platformID || coordinates.CosConfigID != configID || coordinates.Version != runtime.CurrentVersion {
 		t.Fatalf("coordinates=%+v error=%v", coordinates, err)
 	}
@@ -184,7 +185,7 @@ func TestObjectURLUsesImmutableRouteAndHistoricalPublicVersion(t *testing.T) {
 	cache := NewRouteCache(testRouteRedisClient(t))
 	cleanupRouteCacheKey(t, cache.client, ruleID)
 	service := NewService(repository, nil, nil, runtime, cache)
-	key, err := generateObjectKey("avatar", ObjectCoordinates{PlatformID: platformID, RuleID: ruleID, CosConfigID: configID, Version: 1}, "png", time.Date(2026, 9, 17, 0, 0, 0, 0, time.UTC))
+	key, err := objectkey.Generate("avatar", objectkey.Coordinates{PlatformID: platformID, RuleID: ruleID, CosConfigID: configID, Version: 1}, "png", time.Date(2026, 9, 17, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +266,7 @@ func TestObjectURLReadyRouteAndRuntimeUseZeroPostgresSelects(t *testing.T) {
 	routeCache := NewRouteCache(client)
 	cleanupRouteCacheKey(t, client, ruleID)
 	service := NewService(repository, keys, nil, configService, routeCache)
-	key, err := generateObjectKey("avatar", ObjectCoordinates{PlatformID: platformID, RuleID: ruleID, CosConfigID: configID, Version: 1}, "png", time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC))
+	key, err := objectkey.Generate("avatar", objectkey.Coordinates{PlatformID: platformID, RuleID: ruleID, CosConfigID: configID, Version: 1}, "png", time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,7 +313,7 @@ func TestObjectURLPresignsPrivateHistoricalVersionAndFailsClosed(t *testing.T) {
 	expiresAt := time.Now().UTC().Add(9 * time.Minute)
 	signer := &recordingSigner{getResult: storagecos.GetResult{URL: "https://download.example.com/private", ExpiresAt: expiresAt}}
 	service := NewService(repository, keys, signer, &fixedRuntimeSource{config: runtime}, cache)
-	key, err := generateObjectKey("private-file", ObjectCoordinates{PlatformID: platformID, RuleID: ruleID, CosConfigID: configID, Version: 1}, "png", time.Now().UTC())
+	key, err := objectkey.Generate("private-file", objectkey.Coordinates{PlatformID: platformID, RuleID: ruleID, CosConfigID: configID, Version: 1}, "png", time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}

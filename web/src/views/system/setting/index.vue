@@ -15,6 +15,7 @@ import {
   updateLegalDocument,
   updateSettingStatus,
   isRetentionSettingKey,
+  mailRecipientRuleImportTemplateObjectKey,
   type SettingValueType,
   type SystemSetting,
   type BrandSettings,
@@ -257,7 +258,8 @@ function openEdit(row: SystemSetting): void {
 async function save(): Promise<void> {
   if (
     submitting.value ||
-    form.value.value.trim() === '' ||
+    (form.value.value.trim() === '' &&
+      form.value.key !== mailRecipientRuleImportTemplateObjectKey) ||
     (editing.value === null && form.value.key.trim() === '')
   )
     return
@@ -342,6 +344,13 @@ onMounted(() => {
         />
       </el-tab-pane>
       <el-tab-pane name="advanced" :label="t('setting.advancedTitle')">
+        <el-alert
+          class="management-page__filters"
+          :title="t('setting.mailRuleTemplateHint')"
+          type="info"
+          :closable="false"
+          show-icon
+        />
         <AppSearch
           v-model="searchModel"
           class="management-page__filters"
@@ -396,7 +405,11 @@ onMounted(() => {
               >{{ t('setting.edit') }}</el-button
             >
             <el-button
-              v-if="canStatus && !isRetentionSettingKey(row.key)"
+              v-if="
+                canStatus &&
+                !isRetentionSettingKey(row.key) &&
+                row.key !== mailRecipientRuleImportTemplateObjectKey
+              "
               data-testid="setting-status-toggle"
               text
               :icon="Switch"

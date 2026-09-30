@@ -65,6 +65,11 @@ describe('storage upload API', () => {
   it('rejects malformed object URL responses', async () => {
     for (const value of [
       { url: '', expiresAt: null },
+      { url: 'javascript:alert(1)', expiresAt: null },
+      { url: 'http://cdn.example/object.csv', expiresAt: null },
+      { url: 'https://user:secret@cdn.example/object.csv', expiresAt: null },
+      { url: 'https://cdn.example/\nobject.csv', expiresAt: null },
+      { url: 'https://cdn.example/\\object.csv', expiresAt: null },
       { url: 'https://cdn.example/object.png' },
       { url: 'https://cdn.example/object.png', expiresAt: 'not-a-date' },
       { url: 'https://cdn.example/object.png', expiresAt: null, generation: 1 },

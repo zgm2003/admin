@@ -10,6 +10,8 @@ import { isYesNo, type YesNo } from '@/enums/yesNo'
 import { ProtocolError } from '@/types/http'
 
 export type SettingValueType = 1 | 2 | 3 | 4
+export const mailRecipientRuleImportTemplateObjectKey =
+  'message.mail.recipient_rule.import_template_object_key'
 export const messageNotificationRetentionDaysKey = 'message.notification.retention_days'
 export const realtimeEventRetentionDaysKey = 'realtime.event.retention_days'
 export const retentionSettingRanges = {

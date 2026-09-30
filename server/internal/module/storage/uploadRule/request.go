@@ -2,6 +2,7 @@ package uploadrule
 
 import (
 	"admin/server/internal/shared/yesno"
+	"admin/server/internal/storage/objectKey"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -94,7 +95,7 @@ func validateFields(platformID int64, codes []string, name string, configID int6
 		return fmt.Errorf("code/name invalid")
 	}
 	for _, code := range codes {
-		if !validCode(code) {
+		if !objectkey.ValidCode(code) {
 			return fmt.Errorf("code invalid")
 		}
 	}
