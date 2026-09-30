@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   getBrandSettings,
+  getSettings,
   getLegalDocument,
   getPublicLegalDocument,
   updateBrandSettings,
@@ -13,6 +14,32 @@ vi.mock('@/utils/request', () => ({ request: vi.fn() }))
 
 describe('system setting API', () => {
   beforeEach(() => vi.clearAllMocks())
+
+  it('parses media as value type 5 while keeping value a string object key', async () => {
+    const objectKey =
+      'setting/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.csv'
+    const row = {
+      id: 1,
+      key: 'app.assets.custom',
+      value: objectKey,
+      valueType: 5,
+      description: '',
+      isEnabled: 1,
+      isBuiltin: 0,
+      createdAt: '2026-09-30T00:00:00Z',
+      updatedAt: '2026-09-30T00:00:00Z',
+    }
+    const page = { list: [row], total: 1, page: 1, pageSize: 20 }
+    vi.mocked(request).mockResolvedValueOnce(page)
+    await expect(getSettings({ page: 1, pageSize: 20 })).resolves.toEqual(page)
+    for (const invalid of [
+      { ...row, valueType: 6 },
+      { ...row, value: 'https://example.com/file.csv' },
+    ]) {
+      vi.mocked(request).mockResolvedValueOnce({ ...page, list: [invalid] })
+      await expect(getSettings({ page: 1, pageSize: 20 })).rejects.toThrow()
+    }
+  })
 
   it('strictly parses and updates the brand settings contract', async () => {
     vi.mocked(request)

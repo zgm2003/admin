@@ -23,9 +23,6 @@ const (
 )
 
 var dedicatedSettingKeys = []string{
-	BrandTitleZhCNKey,
-	BrandTitleEnUSKey,
-	BrandDefaultAvatarKey,
 	LegalUserAgreementKey,
 	LegalPrivacyPolicyKey,
 }
@@ -35,6 +32,7 @@ const (
 	ValueTypeNumber = sharedsetting.ValueTypeNumber
 	ValueTypeBool   = sharedsetting.ValueTypeBool
 	ValueTypeJSON   = sharedsetting.ValueTypeJSON
+	ValueTypeMedia  = sharedsetting.ValueTypeMedia
 )
 
 const (

@@ -1,6 +1,6 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { appI18n } from '@/i18n'
 import { requestObjectURL, requestUploadCredentials } from '@/api/storage/upload'
@@ -12,8 +12,13 @@ vi.mock('@/api/storage/upload', () => ({
 }))
 const credentialsMock = vi.mocked(requestUploadCredentials)
 const objectURLMock = vi.mocked(requestObjectURL)
+const wrappers: VueWrapper[] = []
 
 describe('UpMedia', () => {
+  afterEach(() => {
+    for (const wrapper of wrappers.splice(0)) wrapper.unmount()
+    vi.unstubAllGlobals()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
@@ -42,6 +47,132 @@ describe('UpMedia', () => {
       expect.objectContaining({ method: 'PUT' }),
     )
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['avatar/2026/08/30/a.png'])
+  })
+
+  it('renders CSV as a file attachment instead of requesting an image preview', async () => {
+    const wrapper = mountComponent({
+      modelValue: 'setting/template.csv',
+      ruleCode: 'setting',
+      variant: 'file',
+      fileLabel: '收件规则导入模板.csv',
+      accept: '.csv,text/csv',
+    })
+    await flushPromises()
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect(wrapper.text()).toContain('收件规则导入模板.csv')
+    expect(wrapper.find('[data-testid="up-media-download"]').exists()).toBe(true)
+  })
+
+  it('normalizes browser CSV MIME aliases and exposes the pending upload state', async () => {
+    credentialsMock.mockResolvedValue({
+      items: [
+        {
+          uploadUrl: 'https://cos.example/upload',
+          objectKey: 'setting/template.csv',
+          method: 'PUT',
+          headers: {},
+          expiresAt: '2030-01-01T00:00:00Z',
+          publicUrl: 'https://cdn.example/template.csv',
+        },
+      ],
+    })
+    const wrapper = mountComponent({
+      modelValue: '',
+      ruleCode: 'setting',
+      variant: 'file',
+      accept: '.csv,text/csv',
+    })
+    await chooseFiles(wrapper, [
+      new File(['header'], 'template.csv', { type: 'application/vnd.ms-excel' }),
+    ])
+    expect(credentialsMock).toHaveBeenCalledWith('setting', [
+      { fileName: 'template.csv', contentType: 'text/csv', fileSizeBytes: 6 },
+    ])
+    expect(wrapper.emitted('uploading-change')).toContainEqual([true])
+    expect(wrapper.emitted('uploading-change')?.at(-1)).toEqual([false])
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['setting/template.csv'])
+  })
+
+  it('rejects a non-CSV selection before requesting upload credentials', async () => {
+    const wrapper = mountComponent({
+      modelValue: '',
+      ruleCode: 'setting',
+      variant: 'file',
+      accept: '.csv,text/csv',
+    })
+    await chooseFiles(wrapper, [
+      new File(['other'], 'other.exe', { type: 'application/octet-stream' }),
+    ])
+    expect(credentialsMock).not.toHaveBeenCalled()
+  })
+
+  it('shows an inline upload failure while preserving the existing file binding', async () => {
+    credentialsMock.mockRejectedValueOnce(new Error('credential request failed'))
+    const wrapper = mountComponent({
+      modelValue: 'setting/old.csv',
+      ruleCode: 'setting',
+      variant: 'file',
+      accept: '.csv',
+    })
+    await chooseFiles(wrapper, [new File(['csv'], 'new.csv', { type: 'text/csv' })])
+    expect(wrapper.text()).toContain('文件上传失败')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('does not upload or bind an old selection after upload is disabled', async () => {
+    const pending = deferred<Awaited<ReturnType<typeof requestUploadCredentials>>>()
+    credentialsMock.mockReturnValueOnce(pending.promise)
+    const wrapper = mountComponent({
+      modelValue: '',
+      ruleCode: 'setting',
+      variant: 'file',
+      accept: '.csv',
+    })
+    await chooseFiles(wrapper, [new File(['csv'], 'template.csv', { type: 'text/csv' })])
+    await wrapper.setProps({ uploadDisabled: true })
+    pending.resolve({
+      items: [
+        {
+          uploadUrl: 'https://cos.example/upload',
+          objectKey: 'setting/template.csv',
+          method: 'PUT',
+          headers: {},
+          expiresAt: '2030-01-01T00:00:00Z',
+        },
+      ],
+    })
+    await flushPromises()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('cancels a pending upload when the parent replaces the model value', async () => {
+    const pending = deferred<Awaited<ReturnType<typeof requestUploadCredentials>>>()
+    credentialsMock.mockReturnValueOnce(pending.promise)
+    const wrapper = mountComponent({
+      modelValue: 'setting/old.csv',
+      ruleCode: 'setting',
+      variant: 'file',
+      accept: '.csv',
+    })
+    await chooseFiles(wrapper, [new File(['csv'], 'template.csv', { type: 'text/csv' })])
+    await wrapper.setProps({ modelValue: 'setting/replaced.csv' })
+    pending.resolve({
+      items: [
+        {
+          uploadUrl: 'https://cos.example/upload',
+          objectKey: 'setting/uploaded.csv',
+          method: 'PUT',
+          headers: {},
+          expiresAt: '2030-01-01T00:00:00Z',
+        },
+      ],
+    })
+    await flushPromises()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper.emitted('uploading-change')?.at(-1)).toEqual([false])
   })
 
   it('appends all uploaded object keys when multiple is enabled', async () => {
@@ -179,15 +310,68 @@ describe('UpMedia', () => {
     expect(objectURLMock).toHaveBeenCalledTimes(2)
     expect(wrapper.get('.avatar').attributes('src')).toBe('https://cos.example/refreshed')
   })
+
+  it('stops retrying a persistently broken image', async () => {
+    const wrapper = mountComponent({
+      modelValue: 'avatar/broken.png',
+      ruleCode: 'avatar',
+      variant: 'avatar',
+    })
+    await flushPromises()
+    await wrapper.get('.avatar').trigger('error')
+    await flushPromises()
+    await wrapper.get('.avatar').trigger('error')
+    await flushPromises()
+    expect(objectURLMock).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('.avatar').exists()).toBe(false)
+  })
+
+  it('resolves a fresh file URL at download time instead of using an expired signature', async () => {
+    objectURLMock
+      .mockResolvedValueOnce({
+        url: 'https://cos.example/expired',
+        expiresAt: '2020-01-01T00:00:00Z',
+      })
+      .mockResolvedValueOnce({
+        url: 'https://cos.example/fresh',
+        expiresAt: '2030-01-01T00:00:00Z',
+      })
+    const clicked: string[] = []
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicked.push(this.href)
+    })
+    try {
+      const wrapper = mountComponent({
+        modelValue: 'setting/template.csv',
+        ruleCode: 'setting',
+        variant: 'file',
+      })
+      await flushPromises()
+      await wrapper.get('[data-testid="up-media-download"]').trigger('click')
+      await flushPromises()
+      expect(objectURLMock).toHaveBeenCalledTimes(2)
+      expect(clicked).toEqual(['https://cos.example/fresh'])
+    } finally {
+      click.mockRestore()
+    }
+  })
 })
 
 function mountComponent(props: {
   modelValue: string | string[]
   ruleCode: string
   multiple?: boolean
-  variant?: 'default' | 'avatar'
+  variant?: 'default' | 'avatar' | 'file'
+  fileLabel?: string
+  accept?: string
+  disabled?: boolean
+  uploadDisabled?: boolean
 }) {
-  return mount(UpMedia, { props, global: { plugins: [ElementPlus, appI18n] } })
+  const wrapper = mount(UpMedia, { props, global: { plugins: [ElementPlus, appI18n] } })
+  wrappers.push(wrapper)
+  return wrapper
 }
 
 async function chooseFiles(wrapper: ReturnType<typeof mount>, files: File[]): Promise<void> {

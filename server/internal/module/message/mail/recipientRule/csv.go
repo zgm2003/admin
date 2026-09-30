@@ -32,7 +32,7 @@ func (s *Service) ImportTemplate(ctx context.Context) (ImportTemplate, error) {
 	if err != nil {
 		return ImportTemplate{}, apperror.DependencyUnavailable(err)
 	}
-	if row.ValueType != sharedsetting.ValueTypeString || row.IsEnabled != yesno.Yes {
+	if row.ValueType != sharedsetting.ValueTypeMedia || row.IsEnabled != yesno.Yes {
 		return ImportTemplate{}, apperror.DependencyUnavailable(fmt.Errorf("recipient rule template setting invalid"))
 	}
 	value := strings.TrimSpace(row.Value)

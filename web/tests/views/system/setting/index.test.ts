@@ -35,6 +35,23 @@ vi.mock('@/api/system/setting', async (importOriginal) => {
 
 const builtinSetting = settingRow({ id: 1, key: 'auth.captcha.ttl_minutes', isBuiltin: YesNo.Yes })
 const customSetting = settingRow({ id: 2, key: 'auth.captcha.slide_padding', isBuiltin: YesNo.No })
+const mediaAvatar = settingRow({
+  id: 3,
+  key: 'app.brand.default_avatar',
+  value: '',
+  valueType: 5,
+  isBuiltin: YesNo.Yes,
+})
+const mediaCSV = settingRow({
+  id: 4,
+  key: 'message.mail.recipient_rule.import_template_object_key',
+  value: '',
+  valueType: 5,
+  isBuiltin: YesNo.Yes,
+})
+const uploadedImage =
+  'setting/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.png'
+const uploadedCSV = uploadedImage.replace('.png', '.csv')
 const mountedWrappers: VueWrapper[] = []
 
 describe('system setting page', () => {
@@ -117,55 +134,17 @@ describe('system setting page', () => {
     expect(wrapper.find('[data-testid="setting-empty"]').exists()).toBe(false)
   })
 
-  it('shows site, legal, and advanced settings in separate tabs without losing unsaved site input', async () => {
+  it('keeps only advanced and legal tabs, with advanced selected first', async () => {
     const wrapper = mountPage(['system:setting:list', 'system:setting:update'])
     await flushPromises()
-
-    expect(wrapper.get('.el-tabs__item.is-active').text()).toBe('站点信息')
-    expect(wrapper.getComponent({ name: 'BrandSettingsPanel' }).isVisible()).toBe(true)
-    expect(wrapper.getComponent({ name: 'AppSearch' }).isVisible()).toBe(false)
-
-    await wrapper.get('[data-testid="brand-title-zh-cn"]').setValue('新的品牌名')
-    await wrapper.get('#tab-advanced').trigger('click')
-    expect(wrapper.get('.el-tabs__item.is-active').text()).toBe('高级设置')
-    expect(wrapper.getComponent({ name: 'AppSearch' }).isVisible()).toBe(true)
-    expect(wrapper.getComponent({ name: 'BrandSettingsPanel' }).isVisible()).toBe(false)
-
-    await wrapper.get('#tab-brand').trigger('click')
-    expect(wrapper.get('[data-testid="brand-title-zh-cn"]').element).toHaveProperty(
-      'value',
-      '新的品牌名',
-    )
-    expect(settingAPI.getSettings).toHaveBeenCalledTimes(1)
-    expect(settingAPI.getBrandSettings).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps site identity and legal editing actions inside balanced workspaces', async () => {
-    const wrapper = mountPage([
-      'system:setting:list',
-      'system:setting:update',
-      'storage:object:upload',
-    ])
-    await flushPromises()
-
-    const brandPanel = wrapper.getComponent({ name: 'BrandSettingsPanel' })
-    expect(brandPanel.find('.brand-settings__workspace').exists()).toBe(true)
-    expect(brandPanel.find('.brand-settings__identity-card').exists()).toBe(true)
-    expect(brandPanel.find('.brand-settings__avatar-card').exists()).toBe(true)
-    expect(brandPanel.find('.brand-settings__header [data-testid="brand-save"]').exists()).toBe(
-      true,
-    )
-
-    await wrapper.get('#tab-legal').trigger('click')
-    const legalPanel = wrapper.getComponent({ name: 'LegalSettingsPanel' })
-    expect(legalPanel.find('.legal-settings__header').exists()).toBe(false)
-    expect(legalPanel.find('.legal-settings__workspace').exists()).toBe(false)
-    expect(legalPanel.find('.legal-settings__editor-shell').exists()).toBe(false)
-    expect(legalPanel.find('.legal-settings__document-bar').exists()).toBe(true)
     expect(
-      legalPanel.find('.legal-settings__document-bar [data-testid="legal-document-save"]').exists(),
-    ).toBe(true)
-    expect(legalPanel.findComponent({ name: 'LegalDocumentEditor' }).exists()).toBe(true)
+      wrapper
+        .findAll('.setting-page__tabs > .el-tabs__header [role="tab"]')
+        .map((tab) => tab.text()),
+    ).toEqual(['高级设置', '协议与隐私'])
+    expect(wrapper.get('.el-tabs__item.is-active').text()).toBe('高级设置')
+    expect(wrapper.findComponent({ name: 'MediaSettingsPanel' }).exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'BrandSettingsPanel' }).exists()).toBe(false)
   })
 
   it('loads both single-language legal documents and saves the selected document', async () => {
@@ -194,43 +173,111 @@ describe('system setting page', () => {
     )
   })
 
-  it('edits brand titles and reuses the single-image avatar upload rule', async () => {
+  it('offers media value type in the common create dialog and stores only its object key', async () => {
     const wrapper = mountPage([
       'system:setting:list',
-      'system:setting:update',
+      'system:setting:create',
       'storage:object:upload',
     ])
     await flushPromises()
-
-    const media = wrapper.getComponent(UpMedia)
-    expect(media.props()).toMatchObject({
-      modelValue: '',
-      ruleCode: 'avatar',
-      multiple: false,
-      accept: 'image/*',
-      variant: 'avatar',
-      disabled: false,
-    })
-    await wrapper.get('[data-testid="brand-title-zh-cn"]').setValue(' 新标题 ')
-    await wrapper.get('[data-testid="brand-title-en-us"]').setValue(' New title ')
-    media.vm.$emit('update:modelValue', 'avatar/2026/09/15/default.png')
-    await wrapper.get('[data-testid="brand-save"]').trigger('click')
+    await wrapper.get('[data-testid="setting-create"]').trigger('click')
+    const dialog = wrapper.getComponent({ name: 'SettingDialog' })
+    const select = dialog.getComponent({ name: 'ElSelectV2' })
+    expect(select.props('options')).toContainEqual({ label: '媒体', value: 5 })
+    await setBodyValue('setting-form-key', 'app.assets.custom')
+    select.vm.$emit('update:modelValue', 5)
+    await nextTick()
+    const media = dialog.getComponent(UpMedia)
+    expect(media.props('ruleCode')).toBe('setting')
+    expect(document.querySelector('[data-testid="setting-form-value"]')).toBeNull()
+    media.vm.$emit('uploading-change', true)
+    media.vm.$emit('update:modelValue', uploadedCSV)
+    await nextTick()
+    expect(document.querySelector('[data-testid="setting-save"]')).toHaveProperty('disabled', true)
+    media.vm.$emit('uploading-change', false)
+    await nextTick()
+    await clickBody('setting-save')
     await flushPromises()
-
-    expect(settingAPI.updateBrandSettings).toHaveBeenCalledWith({
-      titleZhCN: '新标题',
-      titleEnUS: 'New title',
-      defaultAvatar: 'avatar/2026/09/15/default.png',
+    expect(settingAPI.createSetting).toHaveBeenCalledWith({
+      key: 'app.assets.custom',
+      value: uploadedCSV,
+      valueType: 5,
+      description: '',
     })
   })
 
-  it('keeps brand values visible but disables mutations without their permissions', async () => {
-    const wrapper = mountPage(['system:setting:list'])
+  it('edits builtin media in the common dialog and allows clearing without upload permission', async () => {
+    vi.mocked(settingAPI.getSettings).mockResolvedValue({
+      list: [{ ...mediaAvatar, value: uploadedImage }],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage(['system:setting:list', 'system:setting:update'])
     await flushPromises()
+    await wrapper.get('[data-testid="setting-update"]').trigger('click')
+    const dialog = wrapper.getComponent({ name: 'SettingDialog' })
+    expect(dialog.getComponent({ name: 'ElSelectV2' }).props('disabled')).toBe(true)
+    const media = dialog.getComponent(UpMedia)
+    expect(media.props()).toMatchObject({
+      ruleCode: 'setting',
+      variant: 'avatar',
+      uploadDisabled: true,
+      disabled: false,
+    })
+    media.vm.$emit('update:modelValue', '')
+    await nextTick()
+    await clickBody('setting-save')
+    await flushPromises()
+    expect(settingAPI.updateSetting).toHaveBeenCalledWith(mediaAvatar.key, {
+      value: '',
+      valueType: 5,
+      description: mediaAvatar.description,
+    })
+    expect(settingAPI.deleteSetting).not.toHaveBeenCalled()
+  })
 
-    expect(wrapper.get('[data-testid="brand-title-zh-cn"]').attributes('disabled')).toBeDefined()
-    expect(wrapper.getComponent(UpMedia).props('disabled')).toBe(true)
-    expect(wrapper.find('[data-testid="brand-save"]').exists()).toBe(false)
+  it('edits titles in advanced settings and refreshes runtime brand values', async () => {
+    const title = settingRow({
+      key: 'app.brand.title_zh_cn',
+      value: '旧标题',
+      valueType: 1,
+      isBuiltin: YesNo.Yes,
+    })
+    vi.mocked(settingAPI.getSettings).mockResolvedValue({
+      list: [title],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage([
+      'system:setting:list',
+      'system:setting:update',
+      'system:setting:status',
+    ])
+    await flushPromises()
+    expect(wrapper.find('[data-testid="setting-status-toggle"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="setting-update"]').trigger('click')
+    const dialog = wrapper.getComponent({ name: 'SettingDialog' })
+    expect(dialog.getComponent({ name: 'ElSelectV2' }).props('disabled')).toBe(true)
+    await setBodyValue('setting-form-value', '新标题')
+    await clickBody('setting-save')
+    await flushPromises()
+    expect(settingAPI.updateSetting).toHaveBeenCalledWith(
+      title.key,
+      expect.objectContaining({ value: '新标题', valueType: 1 }),
+    )
+    expect(settingAPI.getBrandSettings).toHaveBeenCalledOnce()
+    expect(settingAPI.updateBrandSettings).not.toHaveBeenCalled()
+  })
+
+  it('does not render fake empty settings or request media without read access', async () => {
+    const wrapper = mountPage(['system:setting:view'])
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'AppTable' }).exists()).toBe(false)
+    expect(wrapper.text()).toContain('未授予系统设置读取权限')
+    expect(wrapper.findComponent(UpMedia).exists()).toBe(false)
+    expect(settingAPI.getSettings).not.toHaveBeenCalled()
   })
 
   it('formats valid JSON and blocks malformed JSON in the typed setting editor', async () => {
@@ -493,42 +540,42 @@ describe('system setting page', () => {
     await nextTick()
     await clickBody('setting-save')
     await flushPromises()
-    expect(errorHandler).toHaveBeenCalledOnce()
+    expect(errorHandler).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('保存失败')
     expect(document.querySelector('[data-testid="setting-save"]')).not.toBeNull()
   })
 
-  it('maintains the mail CSV template as an object key and rejects full URLs', async () => {
-    const key = 'message.mail.recipient_rule.import_template_object_key'
-    const objectKey =
-      'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.csv'
+  it('keeps an uploaded media draft when saving fails', async () => {
     vi.mocked(settingAPI.getSettings).mockResolvedValue({
-      list: [settingRow({ key, value: objectKey, valueType: 1, isBuiltin: YesNo.Yes })],
+      list: [mediaCSV],
       total: 1,
       page: 1,
       pageSize: 20,
     })
+    vi.mocked(settingAPI.updateSetting).mockRejectedValueOnce(new Error('save failed'))
     const wrapper = mountPage([
       'system:setting:list',
       'system:setting:update',
-      'system:setting:status',
+      'storage:object:upload',
     ])
     await flushPromises()
-    await wrapper.get('#tab-advanced').trigger('click')
-    expect(wrapper.text()).toContain('CSV 模板')
-    expect(wrapper.find('[data-testid="setting-status-toggle"]').exists()).toBe(false)
     await wrapper.get('[data-testid="setting-update"]').trigger('click')
     const dialog = wrapper.getComponent({ name: 'SettingDialog' })
-    expect(dialog.getComponent({ name: 'ElSelectV2' }).props('disabled')).toBe(true)
-    await setBodyValue('setting-form-value', 'https://example.com/template.csv')
+    const media = dialog.getComponent(UpMedia)
+    expect(media.props('accept')).toBe('.csv,text/csv')
+    media.vm.$emit('update:modelValue', uploadedCSV)
+    await nextTick()
     await clickBody('setting-save')
-    expect(settingAPI.updateSetting).not.toHaveBeenCalled()
-    expect(document.body.textContent).toContain('对象键')
-    await setBodyValue('setting-form-value', '')
+    await flushPromises()
+    expect(media.props('modelValue')).toBe(uploadedCSV)
+    expect(document.body.textContent).toContain('保存失败')
     await clickBody('setting-save')
-    expect(settingAPI.updateSetting).toHaveBeenCalledWith(
-      key,
-      expect.objectContaining({ value: '', valueType: 1 }),
-    )
+    await flushPromises()
+    expect(settingAPI.updateSetting).toHaveBeenLastCalledWith(mediaCSV.key, {
+      value: uploadedCSV,
+      valueType: 5,
+      description: mediaCSV.description,
+    })
   })
 })
 

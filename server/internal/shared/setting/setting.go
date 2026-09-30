@@ -14,6 +14,7 @@ const (
 	ValueTypeNumber = 2
 	ValueTypeBool   = 3
 	ValueTypeJSON   = 4
+	ValueTypeMedia  = 5
 
 	AuthCaptchaTTLKey                        = "auth.captcha.ttl_minutes"
 	AuthCaptchaSlidePaddingKey               = "auth.captcha.slide_padding"

@@ -126,8 +126,8 @@ func (s *Service) UpdateBrand(ctx context.Context, brand BrandSettings) error {
 	if utf8.RuneCountInString(brand.TitleZhCN) == 0 || utf8.RuneCountInString(brand.TitleZhCN) > 128 || utf8.RuneCountInString(brand.TitleEnUS) == 0 || utf8.RuneCountInString(brand.TitleEnUS) > 128 {
 		return apperror.InvalidRequest(fmt.Errorf("brand title is invalid"))
 	}
-	if brand.DefaultAvatar != "" && (!strings.HasPrefix(brand.DefaultAvatar, "avatar/") || strings.Contains(brand.DefaultAvatar, "..") || strings.ContainsAny(brand.DefaultAvatar, "\\\r\n\t")) {
-		return apperror.InvalidRequest(fmt.Errorf("brand avatar is invalid"))
+	if err := validateInput(BrandDefaultAvatarKey, brand.DefaultAvatar, ValueTypeMedia, ""); err != nil {
+		return apperror.InvalidRequest(err)
 	}
 	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (cachegeneration.MutationResult, error) {
 		return s.repository.UpdateBrand(mutationCtx, brand, expected, s.now().UTC())
@@ -675,9 +675,20 @@ func validateInput(key, value string, valueType int, description string) error {
 		return fmt.Errorf("setting input is invalid")
 	}
 	switch key {
+	case BrandTitleZhCNKey, BrandTitleEnUSKey:
+		if valueType != ValueTypeString || strings.TrimSpace(value) == "" || utf8.RuneCountInString(value) > 128 {
+			return fmt.Errorf("brand title must be a non-empty string of at most 128 characters")
+		}
+	case BrandDefaultAvatarKey:
+		if valueType != ValueTypeMedia {
+			return fmt.Errorf("default avatar must use the media value type")
+		}
+		if !validBrandAvatar(value) {
+			return fmt.Errorf("default avatar must be an image storage object key")
+		}
 	case sharedsetting.MailRecipientRuleImportTemplateObjectKey:
-		if valueType != ValueTypeString {
-			return fmt.Errorf("template object key must be a string")
+		if valueType != ValueTypeMedia {
+			return fmt.Errorf("template must use the media value type")
 		}
 		if value != "" && (objectkey.Validate(value) != nil || !strings.HasSuffix(value, ".csv")) {
 			return fmt.Errorf("template must be a CSV storage object key, not a URL")
@@ -700,7 +711,7 @@ func validateInput(key, value string, valueType int, description string) error {
 
 func isRequiredSetting(key string) bool {
 	_, legal := legalDocumentKindForKey(key)
-	return legal || key == sharedsetting.MailRecipientRuleImportTemplateObjectKey || key == sharedsetting.MessageNotificationRetentionDaysKey || key == sharedsetting.RealtimeEventRetentionDaysKey || key == sharedsetting.SchedulerHistoryRetentionDaysKey
+	return legal || key == BrandTitleZhCNKey || key == BrandTitleEnUSKey || key == BrandDefaultAvatarKey || key == sharedsetting.MailRecipientRuleImportTemplateObjectKey || key == sharedsetting.MessageNotificationRetentionDaysKey || key == sharedsetting.RealtimeEventRetentionDaysKey || key == sharedsetting.SchedulerHistoryRetentionDaysKey
 }
 
 func integerInRange(value string, minimum, maximum int) bool {
@@ -719,6 +730,24 @@ func validSettingValue(value string, valueType int) bool {
 		return value == "0" || value == "1" || value == "true" || value == "false"
 	case ValueTypeJSON:
 		return json.Valid([]byte(value))
+	case ValueTypeMedia:
+		return value == "" || objectkey.Validate(value) == nil
+	default:
+		return false
+	}
+}
+
+func validBrandAvatar(value string) bool {
+	if value == "" {
+		return true
+	}
+	if objectkey.Validate(value) != nil {
+		return false
+	}
+	extension := value[strings.LastIndex(value, ".")+1:]
+	switch extension {
+	case "jpg", "jpeg", "png", "gif", "webp":
+		return true
 	default:
 		return false
 	}

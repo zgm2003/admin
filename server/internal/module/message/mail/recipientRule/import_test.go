@@ -212,11 +212,11 @@ func TestCSVTemplateReadsObjectKeyAndFailsClosed(t *testing.T) {
 		valueType int
 		wantError bool
 	}{
-		{"", yesno.Yes, 1, false}, {objectKey, yesno.Yes, 1, false},
-		{"https://example.com/template.csv", yesno.Yes, 1, true},
-		{"file/template.csv", yesno.Yes, 1, true},
-		{"javascript:alert(1)", yesno.Yes, 1, true}, {"https://user:password@example.com/t.csv", yesno.Yes, 1, true},
-		{"https://example.com/t.csv", yesno.No, 1, true}, {"https://example.com/t.csv", yesno.Yes, 2, true},
+		{"", yesno.Yes, 5, false}, {objectKey, yesno.Yes, 5, false}, {objectKey, yesno.Yes, 1, true},
+		{"https://example.com/template.csv", yesno.Yes, 5, true},
+		{"file/template.csv", yesno.Yes, 5, true},
+		{"javascript:alert(1)", yesno.Yes, 5, true}, {"https://user:password@example.com/t.csv", yesno.Yes, 5, true},
+		{"https://example.com/t.csv", yesno.No, 5, true}, {"https://example.com/t.csv", yesno.Yes, 2, true},
 	} {
 		s.SetSettings(templateReaderFunc(func(ctx context.Context, key string) (sharedsetting.Record, error) {
 			if key != "message.mail.recipient_rule.import_template_object_key" {

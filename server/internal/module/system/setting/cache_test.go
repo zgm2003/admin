@@ -72,6 +72,9 @@ func TestCacheBrandPayloadRejectsUnknownAndInvalidFields(t *testing.T) {
 		payload string
 	}{
 		{"zero generation", strings.Replace(valid, `"generation":12`, `"generation":0`, 1)},
+		{"avatar URL", strings.Replace(valid, `"defaultAvatar":""`, `"defaultAvatar":"https://example.com/avatar.png"`, 1)},
+		{"avatar legacy key", strings.Replace(valid, `"defaultAvatar":""`, `"defaultAvatar":"avatar/old.png"`, 1)},
+		{"avatar CSV", strings.Replace(valid, `"defaultAvatar":""`, `"defaultAvatar":"setting/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.csv"`, 1)},
 		{"unknown field", strings.Replace(valid, `"defaultAvatar":""`, `"defaultAvatar":"","extra":1`, 1)},
 		{"trailing content", valid + ` {}`},
 		{"not an object", `not-json`},

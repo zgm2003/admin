@@ -1,63 +1,83 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { CircleCloseFilled, Picture, Plus } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus/es/components/message/index'
 import type { UploadRequestOptions } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
-import {
-  requestObjectURL,
-  requestUploadCredentials,
-  type UploadCredentialItem,
-} from '@/api/storage/upload'
+import { requestObjectURL } from '@/api/storage/upload'
+import { uploadMediaFiles, DirectUploadError, sameMediaValue } from './upload'
+import type { UpMediaProps, PreviewState, MediaFileItem } from './types'
+import FileList from './components/FileList/index.vue'
 
 defineOptions({ name: 'UpMedia' })
 
-const props = withDefaults(
-  defineProps<{
-    modelValue: string | string[]
-    ruleCode: string
-    multiple?: boolean
-    variant?: 'default' | 'avatar'
-    accept?: string
-    disabled?: boolean
-    clearable?: boolean
-    width?: string
-  }>(),
-  {
-    multiple: false,
-    variant: 'default',
-    accept: 'image/*',
-    disabled: false,
-    clearable: true,
-    width: '112px',
-  },
-)
+const props = withDefaults(defineProps<UpMediaProps>(), {
+  multiple: false,
+  variant: 'default',
+  fileLabel: '',
+  uploadDisabled: false,
+  accept: 'image/*',
+  disabled: false,
+  clearable: true,
+  width: '112px',
+})
 
 const emit = defineEmits<{
   'update:modelValue': [value: string | string[]]
   'preview-change': [value: string]
+  'uploading-change': [value: boolean]
 }>()
 const { t } = useI18n()
 const inputRef = ref<HTMLInputElement>()
 const loading = ref(false)
-interface PreviewState {
-  url: string
-  expiresAt: string | null
-  requestId: number
-  pending: boolean
-}
+const uploadError = ref('')
+let emittedModel: string | string[] | null = null
 const previews = ref<Record<string, PreviewState>>({})
 let nextRequestId = 0
 let active = true
+let uploadSequence = 0
+let uploadController: AbortController | null = null
+const refreshedImages = new Set<string>()
+watch(loading, (value) => emit('uploading-change', value), { flush: 'sync' })
+watch(
+  [
+    () => props.disabled,
+    () => props.uploadDisabled,
+    () => props.ruleCode,
+    () => props.modelValue,
+  ] as const,
+  (next, previous) => {
+    if (
+      emittedModel !== null &&
+      sameMediaValue(next[3], emittedModel) &&
+      next[0] === previous[0] &&
+      next[1] === previous[1] &&
+      next[2] === previous[2]
+    ) {
+      emittedModel = null
+      return
+    }
+    emittedModel = null
+    uploadSequence++
+    uploadController?.abort()
+    loading.value = false
+    uploadError.value = ''
+  },
+  { deep: true, flush: 'sync' },
+)
 
 const values = computed(() =>
   Array.isArray(props.modelValue) ? props.modelValue : props.modelValue ? [props.modelValue] : [],
 )
-const displayItems = computed(() =>
+const displayItems = computed<MediaFileItem[]>(() =>
   values.value.map((objectKey) => ({
     objectKey,
     previewUrl: previews.value[objectKey]?.url ?? '',
+    pending: previews.value[objectKey]?.pending ?? false,
+    failed:
+      previews.value[objectKey] !== undefined &&
+      !previews.value[objectKey]?.pending &&
+      !previews.value[objectKey]?.url,
   })),
 )
 const avatarItem = computed(() => displayItems.value[0])
@@ -68,16 +88,16 @@ watch(
   { immediate: true },
 )
 
-async function resolvePreview(objectKey: string, force = false): Promise<void> {
-  if (!active) return
+async function resolvePreview(objectKey: string, force = false): Promise<string> {
+  if (!active) return ''
   const current = previews.value[objectKey]
-  if (current?.pending) return
+  if (current?.pending) return ''
   if (
     !force &&
     current?.url &&
     (current.expiresAt === null || Date.parse(current.expiresAt) > Date.now())
   ) {
-    return
+    return current.url
   }
   const requestId = ++nextRequestId
   previews.value = {
@@ -91,23 +111,26 @@ async function resolvePreview(objectKey: string, force = false): Promise<void> {
   }
   try {
     const result = await requestObjectURL(objectKey)
-    if (!active || previews.value[objectKey]?.requestId !== requestId) return
+    if (!active || previews.value[objectKey]?.requestId !== requestId) return ''
     previews.value = {
       ...previews.value,
       [objectKey]: { url: result.url, expiresAt: result.expiresAt, requestId, pending: false },
     }
+    return result.url
   } catch {
-    if (!active || previews.value[objectKey]?.requestId !== requestId) return
+    if (!active || previews.value[objectKey]?.requestId !== requestId) return ''
     previews.value = {
       ...previews.value,
       [objectKey]: { url: '', expiresAt: null, requestId, pending: false },
     }
+    return ''
   }
 }
 
 watch(
   values,
   (next) => {
+    for (const key of refreshedImages) if (!next.includes(key)) refreshedImages.delete(key)
     const retained: Record<string, PreviewState> = {}
     for (const objectKey of next) {
       retained[objectKey] = previews.value[objectKey] ?? {
@@ -125,12 +148,14 @@ watch(
 
 onBeforeUnmount(() => {
   active = false
+  uploadSequence++
+  uploadController?.abort()
   nextRequestId += 1
   previews.value = {}
 })
 
 function openPicker(): void {
-  if (!props.disabled && !loading.value) inputRef.value?.click()
+  if (!props.disabled && !props.uploadDisabled && !loading.value) inputRef.value?.click()
 }
 
 async function onFileChange(event: Event): Promise<void> {
@@ -147,38 +172,29 @@ async function onAvatarUpload(options: UploadRequestOptions): Promise<void> {
 }
 
 async function uploadSelected(selected: File[]): Promise<boolean> {
+  if (props.disabled || props.uploadDisabled || loading.value || selected.length === 0) return false
+  emittedModel = null
+  uploadError.value = ''
+  const sequence = ++uploadSequence
+  const current = () =>
+    active && sequence === uploadSequence && !props.disabled && !props.uploadDisabled
+  const controller = new AbortController()
+  uploadController = controller
   loading.value = true
   try {
-    const credentials = await requestUploadCredentials(
+    const uploaded = await uploadMediaFiles(
       props.ruleCode,
-      selected.map((file) => ({
-        fileName: file.name,
-        contentType: file.type,
-        fileSizeBytes: file.size,
-      })),
+      selected,
+      props.accept,
+      controller.signal,
+      current,
     )
-    if (credentials.items.length !== selected.length)
-      throw new DirectUploadError(t('components.upMedia.uploadFailed'))
-    const uploaded: UploadCredentialItem[] = []
-    for (const [index, item] of credentials.items.entries()) {
-      const file = selected[index]
-      if (!file) continue
-      let response: Response
-      try {
-        response = await fetch(item.uploadUrl, {
-          method: item.method,
-          headers: item.headers,
-          body: file,
-        })
-      } catch {
-        throw new DirectUploadError(t('components.upMedia.uploadFailed'))
-      }
-      if (!response.ok) throw new DirectUploadError(t('components.upMedia.uploadFailed'))
-      uploaded.push(item)
-    }
+    if (!current()) return false
+    const first = uploaded[0]
+    if (!first) throw new DirectUploadError('uploadFailed')
     const next = props.multiple
       ? [...values.value, ...uploaded.map((item) => item.objectKey)]
-      : (uploaded[0]?.objectKey ?? '')
+      : first.objectKey
     const nextPreviews: Record<string, PreviewState> = {}
     if (props.multiple) {
       for (const objectKey of values.value) {
@@ -195,20 +211,29 @@ async function uploadSelected(selected: File[]): Promise<boolean> {
       }
     }
     previews.value = nextPreviews
+    emittedModel = next
     emit('update:modelValue', next)
     for (const item of uploaded) {
       if (!item.publicUrl) void resolvePreview(item.objectKey, true)
     }
     return true
   } catch (error: unknown) {
-    if (error instanceof DirectUploadError) ElMessage.error(error.message)
+    if (current())
+      uploadError.value = t(
+        `components.upMedia.${error instanceof DirectUploadError ? error.reason : 'uploadFailed'}`,
+      )
     return false
   } finally {
-    loading.value = false
+    if (sequence === uploadSequence) {
+      loading.value = false
+      uploadController = null
+    }
   }
 }
 
 function clearAt(index: number): void {
+  if (props.disabled || loading.value) return
+  uploadError.value = ''
   const next = values.value.filter((_value, itemIndex) => itemIndex !== index)
   const removed = values.value[index]
   if (removed) {
@@ -220,10 +245,27 @@ function clearAt(index: number): void {
 }
 
 function handlePreviewError(objectKey: string): void {
+  if (refreshedImages.has(objectKey)) {
+    const preview = previews.value[objectKey]
+    if (preview)
+      previews.value = { ...previews.value, [objectKey]: { ...preview, url: '', pending: false } }
+    return
+  }
+  refreshedImages.add(objectKey)
   void resolvePreview(objectKey, true)
 }
 
-class DirectUploadError extends Error {}
+async function downloadFile(objectKey: string): Promise<void> {
+  const url = await resolvePreview(objectKey, true)
+  if (!url || !active || !values.value.includes(objectKey)) return
+  const link = document.createElement('a')
+  link.href = url
+  link.download = props.fileLabel || objectKey.split('/').at(-1) || 'download'
+  link.rel = 'noopener noreferrer'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+}
 </script>
 
 <template>
@@ -239,7 +281,7 @@ class DirectUploadError extends Error {}
       class="avatar-uploader"
       :show-file-list="false"
       :accept="accept"
-      :disabled="disabled || loading"
+      :disabled="disabled || uploadDisabled || loading"
       :http-request="onAvatarUpload"
     >
       <img
@@ -252,7 +294,7 @@ class DirectUploadError extends Error {}
       <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
     </el-upload>
     <button
-      v-if="clearable && avatarItem && !disabled"
+      v-if="clearable && avatarItem && !disabled && !loading"
       type="button"
       class="up-media__avatar-clear"
       :aria-label="t('components.upMedia.clear')"
@@ -260,6 +302,7 @@ class DirectUploadError extends Error {}
     >
       <CircleCloseFilled />
     </button>
+    <p v-if="uploadError" class="up-media__error" role="alert">{{ uploadError }}</p>
   </div>
   <div
     v-else
@@ -274,51 +317,68 @@ class DirectUploadError extends Error {}
       type="file"
       :accept="accept"
       :multiple="multiple"
-      :disabled="disabled || loading"
+      :disabled="disabled || uploadDisabled || loading"
       @change="onFileChange"
     />
-    <div
-      v-for="(item, index) in displayItems"
-      :key="item.objectKey"
-      class="up-media__item"
-      :style="{ width, height: width }"
-      :title="item.objectKey"
-    >
+    <FileList
+      v-if="variant === 'file'"
+      :items="displayItems"
+      :label="fileLabel"
+      :disabled="disabled"
+      :upload-disabled="uploadDisabled"
+      :loading="loading"
+      :clearable="clearable"
+      :multiple="multiple"
+      @select="openPicker"
+      @clear="clearAt"
+      @download="downloadFile"
+      @retry="(key) => resolvePreview(key, true)"
+    />
+    <template v-else>
+      <div
+        v-for="(item, index) in displayItems"
+        :key="item.objectKey"
+        class="up-media__item"
+        :style="{ width, height: width }"
+        :title="item.objectKey"
+      >
+        <button
+          type="button"
+          class="up-media__preview"
+          :disabled="disabled || uploadDisabled || loading || multiple"
+          @click="openPicker"
+        >
+          <img
+            v-if="item.previewUrl"
+            :src="item.previewUrl"
+            alt=""
+            @error="handlePreviewError(item.objectKey)"
+          />
+          <Picture v-else class="up-media__placeholder" />
+        </button>
+        <button
+          v-if="clearable && !disabled && !loading"
+          type="button"
+          class="up-media__clear"
+          :aria-label="t('components.upMedia.clear')"
+          @click="clearAt(index)"
+        >
+          <CircleCloseFilled />
+        </button>
+      </div>
       <button
+        v-if="multiple || displayItems.length === 0"
         type="button"
-        class="up-media__preview"
-        :disabled="disabled || loading || multiple"
+        class="up-media__trigger"
+        :style="{ width, height: width }"
+        :disabled="disabled || uploadDisabled || loading"
+        :aria-label="t('components.upMedia.select')"
         @click="openPicker"
       >
-        <img
-          v-if="item.previewUrl"
-          :src="item.previewUrl"
-          alt=""
-          @error="handlePreviewError(item.objectKey)"
-        />
-        <Picture v-else class="up-media__placeholder" />
+        <Plus />
       </button>
-      <button
-        v-if="clearable && !disabled"
-        type="button"
-        class="up-media__clear"
-        :aria-label="t('components.upMedia.clear')"
-        @click="clearAt(index)"
-      >
-        <CircleCloseFilled />
-      </button>
-    </div>
-    <button
-      v-if="multiple || displayItems.length === 0"
-      type="button"
-      class="up-media__trigger"
-      :style="{ width, height: width }"
-      :disabled="disabled || loading"
-      :aria-label="t('components.upMedia.select')"
-      @click="openPicker"
-    >
-      <Plus />
-    </button>
+    </template>
+    <p v-if="uploadError" class="up-media__error" role="alert">{{ uploadError }}</p>
   </div>
 </template>
 

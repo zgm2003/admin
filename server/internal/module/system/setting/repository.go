@@ -159,7 +159,7 @@ func (r *Repository) FindBrand(ctx context.Context) (BrandSettings, error) {
 	}
 	values := make(map[string]string, len(rows))
 	for _, row := range rows {
-		if row.ValueType != ValueTypeString || row.IsEnabled != yesno.Yes {
+		if row.ValueType != brandValueType(row.Key) || row.IsEnabled != yesno.Yes {
 			return BrandSettings{}, fmt.Errorf("brand setting unavailable")
 		}
 		values[row.Key] = row.Value
@@ -193,7 +193,7 @@ func (r *Repository) UpdateBrand(ctx context.Context, brand BrandSettings, expec
 		}
 		changed := false
 		for _, row := range rows {
-			if row.Value != values[row.Key] || row.ValueType != ValueTypeString || row.IsEnabled != yesno.Yes || row.IsBuiltin != yesno.Yes {
+			if row.Value != values[row.Key] || row.ValueType != brandValueType(row.Key) || row.IsEnabled != yesno.Yes || row.IsBuiltin != yesno.Yes {
 				changed = true
 				break
 			}
@@ -203,7 +203,7 @@ func (r *Repository) UpdateBrand(ctx context.Context, brand BrandSettings, expec
 		}
 		for _, row := range rows {
 			result := tx.WithContext(ctx).Model(&Model{}).Where("id = ?", row.ID).Updates(map[string]any{
-				"value": values[row.Key], "value_type": ValueTypeString, "is_enabled": yesno.Yes, "is_builtin": yesno.Yes, "updated_at": now,
+				"value": values[row.Key], "value_type": brandValueType(row.Key), "is_enabled": yesno.Yes, "is_builtin": yesno.Yes, "updated_at": now,
 			})
 			if result.Error != nil {
 				return false, result.Error
@@ -214,6 +214,13 @@ func (r *Repository) UpdateBrand(ctx context.Context, brand BrandSettings, expec
 		}
 		return true, nil
 	})
+}
+
+func brandValueType(key string) int {
+	if key == BrandDefaultAvatarKey {
+		return ValueTypeMedia
+	}
+	return ValueTypeString
 }
 
 // mutate 是私有的业务事务 helper：只执行显式业务变更，并在真实变化时

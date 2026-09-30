@@ -74,7 +74,16 @@
 .up-media--avatar {
   position: relative;
   display: inline-flex;
+  flex-direction: column;
   width: var(--up-media-avatar-size);
+}
+
+.up-media__error {
+  width: 100%;
+  margin: 0;
+  color: var(--el-color-danger);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .avatar-uploader .avatar {

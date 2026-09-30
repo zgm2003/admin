@@ -1,5 +1,14 @@
 # 项目状态
 
+## 系统设置媒体值类型（2026-09-30，代码与真实迁移已完成）
+
+- 最终契约：媒体是通用设置编辑器的值类型 `5`，与字符串、数字、布尔值、JSON 并列；没有独立媒体页签。系统设置保留“高级设置 / 协议与隐私”，默认高级设置。默认头像、CSV 模板和任意自定义媒体设置都在高级列表的新增/编辑弹窗中使用 UpMedia，统一上传编码 `setting`，配置值仍保存 TEXT 对象键。
+- 代码：`SettingDialog` 的媒体类型显示 UpMedia，上传中锁定类型/保存，关闭或切换类型取消旧上传；上传权限与设置保存权限独立，清除只写空字符串。前端和后端严格接受 v2 对象键；品牌默认头像限定图片扩展名，CSV 模板限定 `.csv`。品牌缓存/设置 record 缓存拒绝 URL、旧路径、错误扩展和损坏媒体快照。
+- 真实迁移：维护者允许停止 API/Worker 后，已核验二进制模块路径并停止 PID 15028/30872 及其 api/worker 子进程，于 2026-09-30 20:19 执行 `docs/database/2026-09-30-system-setting-media-value-type.ps1 -OldAPIStopped`，exit 0。`system_setting.value_type` CHECK 从 1–4 扩展为 1–5；仅 ID 5 `app.brand.default_avatar` 和 ID 13 `message.mail.recipient_rule.import_template_object_key` 从类型 1 改为 5，value/objectKey 原样不变；标题保持类型 1，`value` 列仍为 `text`。
+- 版本与幂等：`system.setting/global` 从 16 推进至 17，Redis 定向状态同步为 17；Admin 菜单 15、Canvas 1、`message.mail/global` 3 保持不变。SQL/Redis 两次幂等、坏源数据整批回滚、约束和值核验通过；未删除 Redis key、未修改 COS 文件或配置。API/Worker 当前仍停止，由维护者启动新版本。
+- 备份：`%LOCALAPPDATA%\Admin\backups\system-setting-media-type-20260930-201958\public-before.dump`，SHA256 `EE2C9428C31CE00A79020558A2064787DA9E04B450BC78165265C2368AF2C78D`，`pg_restore --list` 通过；`docs/database/current.sql` 已刷新。未提交 Git。
+- 验证：后端设置/邮件/数据库/架构定向测试、`go fmt`、`go vet`、`go build` 通过；前端设置/API/UpMedia/邮件、用户和布局相关 8 文件/97 项 Vitest 通过，`pnpm typecheck`、`pnpm lint`、`pnpm check:architecture`（0 findings）、变更文件 Prettier、`pnpm build` 与 `git diff --check` 通过，仅保留既有 rich-editor 大 chunk 警告。未跑全量 Go/Vitest、未做浏览器人工验收或使用 Computer Use。邮件提示和登录重试 Bug 继续延期。
+
 ## CSV 模板统一存储对象键（2026-09-30，代码与真实迁移已完成）
 
 - 当前契约：配置名为 `message.mail.recipient_rule.import_template_object_key`，原配置行 ID 13 保留；值为 `file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/4a3990efabc869c6448c200b525023c5.csv`，不含协议或域名，旧 `_url` 配置已不存在。模板接口只返回 objectKey，前端复用 `/api/v1/storage/object-url` 解析，运行时不保留旧 URL 兼容分支。

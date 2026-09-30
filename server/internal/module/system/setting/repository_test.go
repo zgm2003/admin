@@ -102,7 +102,7 @@ func TestRepositoryBrandMutationAdvancesGenerationOnce(t *testing.T) {
 	for _, row := range []Model{
 		{Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 		{Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeString, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMedia, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 	} {
 		seedSettingRow(t, db, ctx, row)
 	}
@@ -141,7 +141,7 @@ func TestRepositoryListExcludesSettingsManagedByDedicatedPanels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if total != 1 || len(rows) != 1 || rows[0].Key != "auth.captcha.ttl_minutes" {
+	if total != 4 || len(rows) != 4 || rows[0].Key != BrandDefaultAvatarKey || rows[1].Key != BrandTitleEnUSKey || rows[2].Key != BrandTitleZhCNKey || rows[3].Key != "auth.captcha.ttl_minutes" {
 		t.Fatalf("List() rows=%+v total=%d", rows, total)
 	}
 }

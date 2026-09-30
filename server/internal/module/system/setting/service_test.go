@@ -288,7 +288,7 @@ func TestServiceReadsAndAtomicallyUpdatesBrandSettings(t *testing.T) {
 	repo := &fakeRepository{rows: map[string]Record{
 		BrandTitleZhCNKey:     {Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
 		BrandTitleEnUSKey:     {Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
-		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMedia, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
 	}}
 	harness := openSettingGenerationHarness(t)
 	service := harness.service(repo)
@@ -298,12 +298,12 @@ func TestServiceReadsAndAtomicallyUpdatesBrandSettings(t *testing.T) {
 	}
 
 	err = service.UpdateBrand(harness.ctx, BrandSettings{
-		TitleZhCN: " 新标题 ", TitleEnUS: " New title ", DefaultAvatar: "avatar/2026/09/15/default.png",
+		TitleZhCN: " 新标题 ", TitleEnUS: " New title ", DefaultAvatar: settingImageKey,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := BrandSettings{TitleZhCN: "新标题", TitleEnUS: "New title", DefaultAvatar: "avatar/2026/09/15/default.png"}
+	want := BrandSettings{TitleZhCN: "新标题", TitleEnUS: "New title", DefaultAvatar: settingImageKey}
 	if repo.brand != want {
 		t.Fatalf("updated brand=%+v want=%+v", repo.brand, want)
 	}
@@ -887,7 +887,7 @@ func TestServiceBrandUsesSingleSnapshotVariant(t *testing.T) {
 	fake := &fakeRepository{rows: map[string]Record{
 		BrandTitleZhCNKey:     {Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
 		BrandTitleEnUSKey:     {Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
-		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMedia, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
 	}}
 	service := harness.service(fake)
 

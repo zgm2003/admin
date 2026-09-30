@@ -1,3 +1,4 @@
+import { isStorageObjectKey } from '@/utils/storageObjectKey'
 import { request } from '@/utils/request'
 import {
   expectArray,
@@ -9,9 +10,18 @@ import {
 import { isYesNo, type YesNo } from '@/enums/yesNo'
 import { ProtocolError } from '@/types/http'
 
-export type SettingValueType = 1 | 2 | 3 | 4
+export type SettingValueType = 1 | 2 | 3 | 4 | 5
+export const defaultAvatarSettingKey = 'app.brand.default_avatar'
+export const brandTitleZhCNKey = 'app.brand.title_zh_cn'
+export const brandTitleEnUSKey = 'app.brand.title_en_us'
+export function isBrandTitleSettingKey(key: string): boolean {
+  return key === brandTitleZhCNKey || key === brandTitleEnUSKey
+}
 export const mailRecipientRuleImportTemplateObjectKey =
   'message.mail.recipient_rule.import_template_object_key'
+export function isBuiltinMediaSettingKey(key: string): boolean {
+  return key === defaultAvatarSettingKey || key === mailRecipientRuleImportTemplateObjectKey
+}
 export const messageNotificationRetentionDaysKey = 'message.notification.retention_days'
 export const realtimeEventRetentionDaysKey = 'realtime.event.retention_days'
 export const retentionSettingRanges = {
@@ -78,12 +88,15 @@ function parseSetting(value: unknown, context: string): SystemSetting {
     context,
   )
   const valueType = expectInteger(record.valueType, `${context}.valueType`)
-  if (valueType < 1 || valueType > 4 || !isYesNo(record.isEnabled) || !isYesNo(record.isBuiltin))
+  if (valueType < 1 || valueType > 5 || !isYesNo(record.isEnabled) || !isYesNo(record.isBuiltin))
     throw new ProtocolError(`${context} has invalid fields`)
+  const settingValue = expectString(record.value, `${context}.value`)
+  if (valueType === 5 && settingValue !== '' && !isStorageObjectKey(settingValue))
+    throw new ProtocolError(`${context}.value must be a storage object key`)
   return {
     id: expectInteger(record.id, `${context}.id`),
     key: expectString(record.key, `${context}.key`),
-    value: expectString(record.value, `${context}.value`),
+    value: settingValue,
     valueType: valueType as SettingValueType,
     description: expectString(record.description, `${context}.description`),
     isEnabled: record.isEnabled,

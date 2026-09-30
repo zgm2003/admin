@@ -177,7 +177,7 @@ func (p recordPayload) record() Record {
 }
 
 func encodeRecordPayload(generation int64, row Record) (string, error) {
-	if generation < 1 || row.Key == "" {
+	if generation < 1 || row.Key == "" || (row.ValueType == ValueTypeMedia && !validSettingValue(row.Value, ValueTypeMedia)) {
 		return "", fmt.Errorf("setting snapshot payload is invalid")
 	}
 	payload, err := json.Marshal(recordPayload{
@@ -206,8 +206,11 @@ func decodeRecordPayload(raw string) (recordPayload, error) {
 	if payload.Generation < 1 || payload.Key == "" {
 		return recordPayload{}, fmt.Errorf("%w: setting snapshot coordinates are invalid", ErrSnapshotCorrupt)
 	}
-	if payload.ValueType < ValueTypeString || payload.ValueType > ValueTypeJSON {
+	if payload.ValueType < ValueTypeString || payload.ValueType > ValueTypeMedia {
 		return recordPayload{}, fmt.Errorf("%w: setting snapshot value type is invalid", ErrSnapshotCorrupt)
+	}
+	if payload.ValueType == ValueTypeMedia && !validSettingValue(payload.Value, ValueTypeMedia) {
+		return recordPayload{}, fmt.Errorf("%w: setting media object key is invalid", ErrSnapshotCorrupt)
 	}
 	if !yesno.IsValid(payload.IsEnabled) || !yesno.IsValid(payload.IsBuiltin) {
 		return recordPayload{}, fmt.Errorf("%w: setting snapshot flags are invalid", ErrSnapshotCorrupt)
@@ -224,7 +227,7 @@ type brandPayload struct {
 }
 
 func encodeBrandPayload(generation int64, brand BrandSettings) (string, error) {
-	if generation < 1 {
+	if generation < 1 || !validBrandAvatar(brand.DefaultAvatar) {
 		return "", fmt.Errorf("setting brand snapshot payload is invalid")
 	}
 	payload, err := json.Marshal(brandPayload{
@@ -251,6 +254,9 @@ func decodeBrandPayload(raw string) (brandPayload, error) {
 	}
 	if payload.Generation < 1 {
 		return brandPayload{}, fmt.Errorf("%w: setting brand snapshot coordinates are invalid", ErrSnapshotCorrupt)
+	}
+	if !validBrandAvatar(payload.DefaultAvatar) {
+		return brandPayload{}, fmt.Errorf("%w: setting brand avatar is invalid", ErrSnapshotCorrupt)
 	}
 	return payload, nil
 }

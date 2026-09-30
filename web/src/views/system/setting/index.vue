@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { CirclePlus, Delete, Edit, Switch } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
@@ -11,14 +11,14 @@ import {
   getLegalDocument,
   getSettings,
   updateSetting,
-  updateBrandSettings,
   updateLegalDocument,
   updateSettingStatus,
   isRetentionSettingKey,
-  mailRecipientRuleImportTemplateObjectKey,
+  defaultAvatarSettingKey,
+  isBrandTitleSettingKey,
+  isBuiltinMediaSettingKey,
   type SettingValueType,
   type SystemSetting,
-  type BrandSettings,
   type LegalDocumentKind,
 } from '@/api/system/setting'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
@@ -27,13 +27,12 @@ import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
 import { useBrandStore } from '@/store/brand'
 import SettingDialog from './components/SettingDialog/index.vue'
-import BrandSettingsPanel from './components/BrandSettingsPanel/index.vue'
 import LegalSettingsPanel from './components/LegalSettingsPanel/index.vue'
 
 const { t } = useI18n()
 const access = usePermissionStore()
 const brand = useBrandStore()
-const activeTab = ref<'brand' | 'legal' | 'advanced'>('brand')
+const activeTab = ref<'advanced' | 'legal'>('advanced')
 const rows = ref<SystemSetting[]>([])
 const loading = ref(false)
 const loadError = ref('')
@@ -44,10 +43,7 @@ const pageSize = ref(20)
 const total = ref(0)
 const dialogVisible = ref(false)
 const submitting = ref(false)
-const brandLoading = ref(false)
-const brandSaving = ref(false)
-const brandError = ref('')
-const brandForm = ref<BrandSettings>({ titleZhCN: '', titleEnUS: '', defaultAvatar: '' })
+const submitError = ref('')
 const legalLoading = ref(false)
 const legalSaving = ref(false)
 const legalError = ref('')
@@ -73,6 +69,21 @@ const canUpdate = computed(() => access.hasPermission('system:setting:update'))
 const canStatus = computed(() => access.hasPermission('system:setting:status'))
 const canDelete = computed(() => access.hasPermission('system:setting:delete'))
 const canUpload = computed(() => access.hasPermission('storage:object:upload'))
+const canSubmit = computed(() => (editing.value === null ? canCreate.value : canUpdate.value))
+let pageMounted = true
+let loadSequence = 0
+watch(canList, (allowed) => {
+  loadSequence++
+  rows.value = []
+  total.value = 0
+  loading.value = false
+  loadError.value = ''
+  if (allowed) void load()
+})
+onBeforeUnmount(() => {
+  pageMounted = false
+  loadSequence++
+})
 const searchModel = computed<SearchFormModel<SettingSearchModel>>({
   get: () => ({ keyword: keyword.value, status: status.value }),
   set: (value) => {
@@ -109,6 +120,7 @@ const valueTypeOptions = computed<Array<{ label: string; value: SettingValueType
   { label: t('setting.typeNumber'), value: 2 },
   { label: t('setting.typeBoolean'), value: 3 },
   { label: t('setting.typeJson'), value: 4 },
+  { label: t('setting.typeMedia'), value: 5 },
 ])
 
 const state = computed<'loading' | 'error' | 'empty' | 'success'>(() =>
@@ -141,6 +153,8 @@ const pagination = computed<TablePaginationState>(() => ({
 
 async function load(): Promise<void> {
   if (!canList.value) return
+  const sequence = ++loadSequence
+  const current = () => pageMounted && canList.value && sequence === loadSequence
   loading.value = true
   loadError.value = ''
   try {
@@ -150,48 +164,26 @@ async function load(): Promise<void> {
       ...(keyword.value.trim() ? { keyword: keyword.value.trim() } : {}),
       ...(status.value === '' ? {} : { isEnabled: status.value }),
     })
-    rows.value = result.list
-    total.value = result.total
+    if (current()) {
+      rows.value = result.list
+      total.value = result.total
+    }
   } catch {
-    loadError.value = t('setting.loadFailed')
+    if (current()) {
+      rows.value = []
+      total.value = 0
+      loadError.value = t('setting.loadFailed')
+    }
   } finally {
-    loading.value = false
+    if (current()) loading.value = false
   }
 }
-async function loadBrand(): Promise<void> {
-  brandLoading.value = true
-  brandError.value = ''
+async function refreshBrand(): Promise<void> {
+  brand.reset()
   try {
     await brand.load()
-    brandForm.value = { ...brand.settings }
   } catch {
-    brandError.value = t('setting.brandLoadFailed')
-  } finally {
-    brandLoading.value = false
-  }
-}
-async function saveBrand(): Promise<void> {
-  if (!canUpdate.value || brandSaving.value) return
-  const next = {
-    titleZhCN: brandForm.value.titleZhCN.trim(),
-    titleEnUS: brandForm.value.titleEnUS.trim(),
-    defaultAvatar: brandForm.value.defaultAvatar.trim(),
-  }
-  if (next.titleZhCN === '' || next.titleEnUS === '') {
-    brandError.value = t('setting.brandTitleRequired')
-    return
-  }
-  brandSaving.value = true
-  brandError.value = ''
-  try {
-    await updateBrandSettings(next)
-    brand.apply(next)
-    brandForm.value = next
-    ElNotification.success({ title: t('setting.saved') })
-  } catch {
-    brandError.value = t('setting.brandSaveFailed')
-  } finally {
-    brandSaving.value = false
+    /* The brand store records failure; request.ts owns notifications. */
   }
 }
 async function loadLegalDocuments(): Promise<void> {
@@ -241,11 +233,13 @@ function updatePagination(next: TablePaginationState): void {
   void load()
 }
 function openCreate(): void {
+  submitError.value = ''
   editing.value = null
   form.value = { key: '', value: '', valueType: 1, description: '' }
   dialogVisible.value = true
 }
 function openEdit(row: SystemSetting): void {
+  submitError.value = ''
   editing.value = row
   form.value = {
     key: row.key,
@@ -257,9 +251,9 @@ function openEdit(row: SystemSetting): void {
 }
 async function save(): Promise<void> {
   if (
+    !canSubmit.value ||
     submitting.value ||
-    (form.value.value.trim() === '' &&
-      form.value.key !== mailRecipientRuleImportTemplateObjectKey) ||
+    (form.value.value.trim() === '' && form.value.valueType !== 5) ||
     (editing.value === null && form.value.key.trim() === '')
   )
     return
@@ -280,6 +274,7 @@ async function save(): Promise<void> {
     }
   }
   submitting.value = true
+  submitError.value = ''
   try {
     if (editing.value === null) await createSetting(form.value)
     else
@@ -289,8 +284,12 @@ async function save(): Promise<void> {
         description: form.value.description,
       })
     dialogVisible.value = false
+    if (isBrandTitleSettingKey(form.value.key) || form.value.key === defaultAvatarSettingKey)
+      await refreshBrand()
     await load()
     ElNotification.success({ title: t('setting.saved') })
+  } catch {
+    submitError.value = t('setting.saveFailed')
   } finally {
     submitting.value = false
   }
@@ -314,7 +313,6 @@ function typeLabel(value: SettingValueType): string {
 
 onMounted(() => {
   void load()
-  void loadBrand()
   void loadLegalDocuments()
 })
 </script>
@@ -322,36 +320,24 @@ onMounted(() => {
 <template>
   <AppPage class="setting-page">
     <el-tabs v-model="activeTab" class="setting-page__tabs">
-      <el-tab-pane name="brand" :label="t('setting.siteInfoTitle')">
-        <BrandSettingsPanel
-          v-model:form="brandForm"
-          :loading="brandLoading"
-          :saving="brandSaving"
-          :error="brandError"
-          :can-update="canUpdate"
-          :can-upload="canUpload"
-          @save="saveBrand"
-        />
-      </el-tab-pane>
-      <el-tab-pane name="legal" :label="t('setting.legalTitle')">
-        <LegalSettingsPanel
-          v-model:documents="legalDocuments"
-          :loading="legalLoading"
-          :saving="legalSaving"
-          :error="legalError"
-          :can-update="canUpdate"
-          @save="saveLegalDocument"
-        />
-      </el-tab-pane>
       <el-tab-pane name="advanced" :label="t('setting.advancedTitle')">
         <el-alert
-          class="management-page__filters"
-          :title="t('setting.mailRuleTemplateHint')"
+          v-if="!canList"
+          :title="t('setting.readDenied')"
           type="info"
           :closable="false"
           show-icon
         />
+        <el-button
+          v-if="!canList && canCreate"
+          data-testid="setting-create"
+          type="primary"
+          :icon="CirclePlus"
+          @click="openCreate"
+          >{{ t('setting.create') }}</el-button
+        >
         <AppSearch
+          v-if="canList"
           v-model="searchModel"
           class="management-page__filters"
           :fields="searchFields"
@@ -364,6 +350,7 @@ onMounted(() => {
         />
 
         <AppTable
+          v-if="canList"
           :columns="columns"
           :data="rows"
           :loading="loading"
@@ -408,7 +395,8 @@ onMounted(() => {
               v-if="
                 canStatus &&
                 !isRetentionSettingKey(row.key) &&
-                row.key !== mailRecipientRuleImportTemplateObjectKey
+                !isBrandTitleSettingKey(row.key) &&
+                !isBuiltinMediaSettingKey(row.key)
               "
               data-testid="setting-status-toggle"
               text
@@ -433,6 +421,16 @@ onMounted(() => {
           /></template>
         </AppTable>
       </el-tab-pane>
+      <el-tab-pane name="legal" :label="t('setting.legalTitle')">
+        <LegalSettingsPanel
+          v-model:documents="legalDocuments"
+          :loading="legalLoading"
+          :saving="legalSaving"
+          :error="legalError"
+          :can-update="canUpdate"
+          @save="saveLegalDocument"
+        />
+      </el-tab-pane>
     </el-tabs>
 
     <SettingDialog
@@ -440,6 +438,9 @@ onMounted(() => {
       v-model:form="form"
       :editing="editing"
       :submitting="submitting"
+      :error="submitError"
+      :can-save="canSubmit"
+      :can-upload="canUpload"
       :value-type-options="valueTypeOptions"
       @save="save"
     />
