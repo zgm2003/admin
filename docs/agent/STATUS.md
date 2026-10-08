@@ -1,5 +1,13 @@
 # 项目状态
 
+## Excel/WPS 保存后导入兼容性（2026-10-08，已修复并回归通过）
+
+- 维护者提供真实 WPS 保存后的文件，现有解析器错误返回 `invalid_xlsx`。根因是把普通 ZIP 空目录项、工作簿 `AlternateContent/absPath` 保存位置元数据、输入邮箱后自动生成的 `mailto:` 展示关系也一概拒绝；此前测试仅覆盖生成器与 Excelize 回写，没有覆盖此编辑器保存形态。
+- 最小修复只在 `recipientRule/xlsxArchive.go`：接受限定的空目录（仍检查大小及 CRC）、限定命名空间/层级的保存路径元数据；工作表内自动邮箱链接只作为忽略的展示信息，不读取或访问目标，业务仍只取单元格文本。HTTP/file 链接、外部数据关系、未知兼容性内容、宏/公式及路径穿越继续拒绝；行列与解压上限不变。
+- 新增 `xlsxSecurity_test.go` 的 WPS 保存结构回归及安全反例。已用维护者原文件直接调用实际解析器，读取 1 条合法规则（scope=0/action=1/isEnabled=1），文件 SHA256 `EDD19754F464E7FFF87674939A7108277AC0F619DA41397F2313AA4BF4B03CEE` 原样保持；没有改写用户文件、上传 COS、执行业务导入或停止服务。临时诊断测试已移除，永久测试仅使用合成数据、不包含用户邮箱。
+- 定向验证：`go test -p 1 ./internal/module/message/mail/... ./internal/architecture -count=1` 303 项通过，`go vet ./internal/module/message/mail/...` 和 `go build ./cmd/api ./cmd/worker` 通过；`git diff --check` 通过。维护者可直接用原下载文件重试。
+- 本轮无需配置发布或数据库迁移，前端协议不变。维护者重启 API 后可直接重试同一文件。
+
 ## 邮件收件规则 XLSX 模板与导入导出（2026-10-08，代码与真实发布已完成）
 
 - 维护者已确认统一改 `.xlsx`，不再提供 CSV/.xls/.xlsm 导入兼容。业务表继续使用已迁移的 scope/action 0/1，权限、规则优先级、原子导入、重验证及不覆盖已有规则的行为不变。

@@ -115,3 +115,81 @@ func TestXlsxMalformedCellCannotBecomePartialPreviewSuccess(t *testing.T) {
 		}
 	}
 }
+
+func wpsXlsxFixture(t *testing.T) []byte {
+	t.Helper()
+	input := xlsxInput(t, importHeader+"email,user@example.com,deny,valid,,1\n")
+	data := rewriteXlsxPart(t, input, "xl/workbook.xml", func(raw string) string {
+		return strings.Replace(raw, "</workbook>", `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="x15"><x15ac:absPath url="C:\\Users\\Downloads\\" xmlns:x15ac="http://schemas.microsoft.com/office/spreadsheetml/2010/11/ac"/></mc:Choice></mc:AlternateContent></workbook>`, 1)
+	})
+	data = rewriteXlsxPart(t, XlsxImportInput{ContentBase64: base64.StdEncoding.EncodeToString(data)}, "xl/worksheets/sheet1.xml", func(raw string) string {
+		return strings.Replace(raw, "</worksheet>", `<hyperlinks><hyperlink ref="B2" r:id="rId1"/></hyperlinks></worksheet>`, 1)
+	})
+	var out bytes.Buffer
+	z, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := zip.NewWriter(&out)
+	for _, entry := range z.File {
+		if err := w.Copy(entry); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"xl/", "xl/worksheets/", "xl/worksheets/_rels/"} {
+		if _, err := w.Create(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p, err := w.Create("xl/worksheets/_rels/sheet1.xml.rels")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(p, `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="mailto:user@example.com" TargetMode="External"/></Relationships>`); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
+}
+
+func TestXlsxImportAcceptsWPSCompatibilityPartsAndMailtoHyperlink(t *testing.T) {
+	preview := parseXlsx(context.Background(), wpsXlsxFixture(t))
+	if len(preview.Errors) != 0 || len(preview.Rows) != 1 || preview.Rows[0].Data == nil {
+		t.Fatalf("WPS-compatible workbook rejected: %+v", preview)
+	}
+	if preview.Rows[0].Data.Pattern != "user@example.com" || preview.Rows[0].Data.Action != ActionDeny {
+		t.Fatalf("cell values changed by presentation metadata: %+v", preview.Rows[0].Data)
+	}
+}
+
+func TestXlsxWPSCompatibilityStillRejectsActiveOrUnsafeParts(t *testing.T) {
+	input := XlsxImportInput{ContentBase64: base64.StdEncoding.EncodeToString(wpsXlsxFixture(t))}
+	for _, tc := range []struct{ name, part, from, to string }{
+		{"HTTP link", "xl/worksheets/_rels/sheet1.xml.rels", "mailto:user@example.com", "https://example.com/book.xlsx"},
+		{"file link", "xl/worksheets/_rels/sheet1.xml.rels", "mailto:user@example.com", "file:///C:/private/file.xlsx"},
+		{"external data", "xl/worksheets/_rels/sheet1.xml.rels", "/hyperlink", "/externalLink"},
+		{"wrong relationship mode", "xl/worksheets/_rels/sheet1.xml.rels", `TargetMode="External"`, `TargetMode="Internal"`},
+		{"compatibility drawing", "xl/workbook.xml", "<x15ac:absPath", "<drawing"},
+		{"compatibility namespace", "xl/workbook.xml", `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"`, `<mc:AlternateContent xmlns:mc="https://example.com/untrusted"`},
+		{"cached formula", "xl/worksheets/sheet1.xml", `</sheetData>`, `<row r="3"><c r="A3"><f>1+1</f><v>2</v></c></row></sheetData>`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			content := rewriteXlsxPart(t, input, tc.part, func(raw string) string {
+				if !strings.Contains(raw, tc.from) {
+					t.Fatalf("missing fixture fragment %q", tc.from)
+				}
+				return strings.Replace(raw, tc.from, tc.to, 1)
+			})
+			if code := validateXlsxArchive(context.Background(), content); code == "" {
+				t.Fatal("unsafe workbook accepted")
+			}
+		})
+	}
+	for _, directory := range []string{"../xl/", "/xl/", "xl/../", `xl\worksheets/`, "xl/embeddings/"} {
+		if safeXlsxEntryName(directory) {
+			t.Errorf("unsafe ZIP directory accepted: %q", directory)
+		}
+	}
+}

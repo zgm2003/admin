@@ -19,7 +19,10 @@ const xlsxXMLMaxElements = 100000
 const xlsxMaxSharedStrings = 2 * (XlsxMaxRows + 1) * 6
 
 type xlsxSheet struct{ name, relationshipID string }
-type xlsxRelationship struct{ kind, target string }
+type xlsxRelationship struct {
+	kind, target  string
+	ignoredMailto bool
+}
 type xlsxSheetBounds struct {
 	lastRow int
 	merged  bool
@@ -62,10 +65,14 @@ func inspectXlsxArchive(ctx context.Context, content []byte) (*xlsxArchive, stri
 		if entry.UncompressedSize64 > uint64(xlsxUnzipLimit-total) {
 			return nil, "too_large"
 		}
-		if a.parts[name] || !safeXlsxPartName(name) || entry.Flags&1 != 0 {
+		if a.parts[name] || !safeXlsxEntryName(name) || entry.Flags&1 != 0 {
 			return nil, "invalid_xlsx"
 		}
 		a.parts[name] = true
+		directory := strings.HasSuffix(name, "/")
+		if directory && entry.UncompressedSize64 != 0 {
+			return nil, "invalid_xlsx"
+		}
 		r, err := entry.Open()
 		if err != nil {
 			return nil, "invalid_xlsx"
@@ -79,6 +86,12 @@ func inspectXlsxArchive(ctx context.Context, content []byte) (*xlsxArchive, stri
 		if total > xlsxUnzipLimit {
 			return nil, "too_large"
 		}
+		if directory {
+			if len(raw) != 0 {
+				return nil, "invalid_xlsx"
+			}
+			continue
+		}
 		if !utf8.Valid(raw) {
 			return nil, "invalid_xlsx"
 		}
@@ -89,8 +102,14 @@ func inspectXlsxArchive(ctx context.Context, content []byte) (*xlsxArchive, stri
 	if !a.parts["[Content_Types].xml"] || !a.parts["xl/workbook.xml"] || !a.parts["_rels/.rels"] || !a.parts["xl/_rels/workbook.xml.rels"] || a.maxSharedIndex >= a.sharedStrings {
 		return nil, "invalid_xlsx"
 	}
-	for _, relationships := range a.relationships {
+	for part, relationships := range a.relationships {
+		if strings.HasPrefix(part, "xl/worksheets/_rels/") && !a.parts["xl/worksheets/"+strings.TrimSuffix(path.Base(part), ".rels")] {
+			return nil, "invalid_xlsx"
+		}
 		for _, relationship := range relationships {
+			if relationship.ignoredMailto {
+				continue
+			}
 			if !a.parts[relationship.target] {
 				return nil, "invalid_xlsx"
 			}
@@ -132,14 +151,29 @@ func safeXlsxPartName(name string) bool {
 	case "[Content_Types].xml", "_rels/.rels", "xl/workbook.xml", "xl/_rels/workbook.xml.rels", "xl/styles.xml", "xl/sharedStrings.xml", "docProps/app.xml", "docProps/core.xml", "docProps/custom.xml":
 		return true
 	}
+	if strings.HasPrefix(name, "xl/worksheets/_rels/sheet") && strings.HasSuffix(name, ".xml.rels") {
+		return strings.Count(name, "/") == 3
+	}
 	return (strings.HasPrefix(name, "xl/worksheets/sheet") || strings.HasPrefix(name, "xl/theme/theme")) && strings.HasSuffix(name, ".xml") && !strings.Contains(strings.TrimPrefix(name, "xl/"), "/../") && strings.Count(name, "/") == 2
+}
+
+func safeXlsxEntryName(name string) bool {
+	if strings.HasSuffix(name, "/") {
+		switch name {
+		case "_rels/", "docProps/", "xl/", "xl/_rels/", "xl/theme/", "xl/worksheets/", "xl/worksheets/_rels/":
+			return true
+		}
+		return false
+	}
+	return safeXlsxPartName(name)
 }
 
 func (a *xlsxArchive) scanXML(ctx context.Context, name string, raw []byte) string {
 	d := xml.NewDecoder(bytes.NewReader(raw))
 	stack := []string{}
 	rootSeen, sheetDataSeen := false, false
-	worksheet := strings.HasPrefix(name, "xl/worksheets/")
+	worksheet := strings.HasPrefix(name, "xl/worksheets/") && strings.HasSuffix(name, ".xml")
+	alternateDepth := 0
 	row, column := 0, 0
 	bounds := xlsxSheetBounds{}
 	cellType, cellValue := "", ""
@@ -185,6 +219,9 @@ func (a *xlsxArchive) scanXML(ctx context.Context, name string, raw []byte) stri
 					return "invalid_xlsx"
 				}
 			}
+			if len(stack) == alternateDepth {
+				alternateDepth = 0
+			}
 			stack = stack[:len(stack)-1]
 		case xml.StartElement:
 			a.elements++
@@ -216,11 +253,25 @@ func (a *xlsxArchive) scanXML(ctx context.Context, name string, raw []byte) stri
 				}
 			}
 			stack = append(stack, local)
+			// WPS/Excel save the last local folder in a compatibility block. It is
+			// inert metadata, never a path to read or a relationship to follow.
+			if alternateDepth != 0 {
+				choice := len(stack) == 3 && parent == "AlternateContent" && (local == "Choice" || local == "Fallback") && element.Name.Space == "http://schemas.openxmlformats.org/markup-compatibility/2006"
+				folder := len(stack) == 4 && (parent == "Choice" || parent == "Fallback") && local == "absPath" && element.Name.Space == "http://schemas.microsoft.com/office/spreadsheetml/2010/11/ac"
+				if !choice && !folder {
+					return "invalid_xlsx"
+				}
+			}
 			switch local {
 			case "f":
 				return "unsupported_formula"
-			case "definedName", "externalReference", "oleObject", "control", "drawing", "legacyDrawing", "legacyDrawingHF", "AlternateContent", "ddeLink":
+			case "definedName", "externalReference", "oleObject", "control", "drawing", "legacyDrawing", "legacyDrawingHF", "ddeLink":
 				return "invalid_xlsx"
+			case "AlternateContent":
+				if name != "xl/workbook.xml" || parent != "workbook" || len(stack) != 2 || element.Name.Space != "http://schemas.openxmlformats.org/markup-compatibility/2006" {
+					return "invalid_xlsx"
+				}
+				alternateDepth = len(stack)
 			}
 			if strings.HasSuffix(name, ".rels") && local == "Relationship" {
 				if parent != "Relationships" || len(stack) != 2 {
@@ -347,12 +398,32 @@ func xlsxXMLRoot(name, root string) bool {
 
 func (a *xlsxArchive) addRelationship(name string, attrs map[string]string) string {
 	kind, target, id := path.Base(attrs["Type"]), attrs["Target"], attrs["Id"]
-	if id == "" || target == "" || (attrs["TargetMode"] != "" && attrs["TargetMode"] != "Internal") || strings.ContainsAny(target, "\\:%?#") || strings.Contains(target, "..") || strings.TrimSpace(target) != target {
+	if id == "" || target == "" || strings.Contains(target, "..") || strings.TrimSpace(target) != target {
 		return "invalid_xlsx"
 	}
 	switch kind {
 	case "officeDocument", "worksheet", "styles", "theme", "sharedStrings", "core-properties", "extended-properties", "custom-properties":
+	case "hyperlink":
+		if !strings.HasPrefix(name, "xl/worksheets/_rels/") || attrs["Type"] != "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" || attrs["TargetMode"] != "External" || !strings.HasPrefix(strings.ToLower(target), "mailto:") || strings.ContainsAny(target, "\\\x00\r\n") {
+			return "invalid_xlsx"
+		}
+		if a.relationships[name] == nil {
+			a.relationships[name] = map[string]xlsxRelationship{}
+		}
+		if _, exists := a.relationships[name][id]; exists {
+			return "invalid_xlsx"
+		}
+		// Spreadsheet editors automatically decorate email cells with mailto:
+		// links. Only GetCellValue is used; this target is never read or followed.
+		a.relationships[name][id] = xlsxRelationship{kind: kind, ignoredMailto: true}
+		return ""
 	default:
+		return "invalid_xlsx"
+	}
+	if attrs["TargetMode"] != "" && attrs["TargetMode"] != "Internal" {
+		return "invalid_xlsx"
+	}
+	if strings.ContainsAny(target, "\\:%?#") {
 		return "invalid_xlsx"
 	}
 	if strings.HasPrefix(target, "/") {
@@ -373,7 +444,7 @@ func (a *xlsxArchive) addRelationship(name string, attrs map[string]string) stri
 	if _, exists := a.relationships[name][id]; exists {
 		return "invalid_xlsx"
 	}
-	a.relationships[name][id] = xlsxRelationship{kind, target}
+	a.relationships[name][id] = xlsxRelationship{kind: kind, target: target}
 	return ""
 }
 
