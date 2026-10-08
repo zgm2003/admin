@@ -1,5 +1,11 @@
 # 项目状态
 
+## 收件规则导入弹窗微调（2026-10-08，已完成）
+
+- `MailRuleImportDialog/index.vue` 文件行号列从 80px 改为 120px；删除底部重复的“预览校验”，仅保留表格上方入口，底部为“取消 / 确认整批导入”。
+- 保留已读取文件对应的预览表格，使预览失败或确认失败后仍能用上方按钮重新校验。`web/tests/views/message/mail/index.test.ts` 覆盖单一入口、列宽和失败重试；46 项通过，`pnpm typecheck`、定向 ESLint、Prettier 和 `pnpm check:architecture`（0 findings）通过。
+- 本轮仅前端局部调整，未改后端/协议/数据库/COS、未停服、未提交。未重跑全量前端测试/构建或浏览器人工验收，刷新前端即可检查。
+
 ## Excel/WPS 保存后导入兼容性（2026-10-08，已修复并回归通过）
 
 - 维护者提供真实 WPS 保存后的文件，现有解析器错误返回 `invalid_xlsx`。根因是把普通 ZIP 空目录项、工作簿 `AlternateContent/absPath` 保存位置元数据、输入邮箱后自动生成的 `mailto:` 展示关系也一概拒绝；此前测试仅覆盖生成器与 Excelize 回写，没有覆盖此编辑器保存形态。

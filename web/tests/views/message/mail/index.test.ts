@@ -860,6 +860,16 @@ describe('mail service page', () => {
     )
     await flushPromises()
     expect(document.body.textContent).toContain('a@example.com')
+    const dialog = bodyButton('mail-rule-import-confirm').closest('.el-dialog')
+    expect(dialog?.querySelectorAll('[data-testid="app-table-refresh"]')).toHaveLength(1)
+    expect(dialog?.querySelectorAll('.el-dialog__footer button')).toHaveLength(2)
+    expect(document.querySelector('[data-testid="mail-rule-import-preview"]')).toBeNull()
+    expect(
+      wrapper.findAllComponents({ name: 'AppTable' }).at(-1)?.props('columns')[0],
+    ).toMatchObject({
+      prop: 'line',
+      width: 120,
+    })
     expect(bodyButton('mail-rule-import-confirm').disabled).toBe(false)
     bodyButton('mail-rule-import-confirm').click()
     await flushPromises()
@@ -1085,7 +1095,7 @@ describe('mail service page', () => {
     await uploadRuleXLSX(xlsxFile())
     await vi.waitFor(() => expect(document.body.textContent).toContain('预览失败'))
     expect(bodyButton('mail-rule-import-confirm').disabled).toBe(true)
-    bodyButton('mail-rule-import-preview').click()
+    importPreviewButton().click()
     await flushPromises()
     expect(bodyButton('mail-rule-import-confirm').disabled).toBe(false)
     vi.mocked(mailApi.importMailRuleXlsx).mockRejectedValueOnce(new Error('conflict'))
@@ -1093,8 +1103,8 @@ describe('mail service page', () => {
     await flushPromises()
     expect(document.body.textContent).toContain('导入未确认成功')
     expect(bodyButton('mail-rule-import-confirm').disabled).toBe(true)
-    expect(wrapper.findAllComponents({ name: 'AppTable' })).toHaveLength(1)
-    bodyButton('mail-rule-import-preview').click()
+    expect(wrapper.findAllComponents({ name: 'AppTable' })).toHaveLength(2)
+    importPreviewButton().click()
     await flushPromises()
     expect(bodyButton('mail-rule-import-confirm').disabled).toBe(false)
   })
@@ -1266,6 +1276,12 @@ describe('mail service page', () => {
 function bodyButton(testId: string): HTMLButtonElement {
   const button = document.querySelector(`[data-testid="${testId}"]`)
   if (!(button instanceof HTMLButtonElement)) throw new Error(`button missing: ${testId}`)
+  return button
+}
+
+function importPreviewButton(): HTMLButtonElement {
+  const button = document.querySelector('.el-dialog [data-testid="app-table-refresh"]')
+  if (!(button instanceof HTMLButtonElement)) throw new Error('import preview retry button missing')
   return button
 }
 

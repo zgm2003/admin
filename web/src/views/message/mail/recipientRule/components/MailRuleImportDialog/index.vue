@@ -68,7 +68,7 @@ const pagination = computed<TablePaginationState>(() => ({
   total: rows.value.length,
 }))
 const columns = computed<TableColumn<PreviewRow>[]>(() => [
-  { prop: 'line', label: t('mail.ruleXlsx.line'), width: 80 },
+  { prop: 'line', label: t('mail.ruleXlsx.line'), width: 120 },
   { key: 'values', prop: 'rawValues', label: t('mail.ruleXlsx.values'), minWidth: 360 },
   { key: 'errors', prop: 'errors', label: t('mail.ruleXlsx.validation'), minWidth: 260 },
 ])
@@ -337,7 +337,7 @@ function changePage(next: TablePaginationState): void {
       }}
     </p>
     <AppTable
-      v-if="preview !== null || reading || previewing"
+      v-if="content !== null || reading || previewing"
       :columns="columns"
       :data="pageRows"
       :loading="reading || previewing"
@@ -367,13 +367,6 @@ function changePage(next: TablePaginationState): void {
         data-testid="mail-rule-import-cancel"
         @click="visible = false"
         >{{ t('mail.cancel') }}</el-button
-      >
-      <el-button
-        :disabled="content === null || reading || previewing || saving"
-        :loading="previewing"
-        data-testid="mail-rule-import-preview"
-        @click="retryPreview"
-        >{{ t('mail.ruleXlsx.preview') }}</el-button
       >
       <el-button
         type="primary"
