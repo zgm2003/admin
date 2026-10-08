@@ -242,8 +242,7 @@ function changePage(next: TablePaginationState): void {
         rel="noopener noreferrer"
         download="mail-recipient-rule-import.csv"
         data-testid="mail-rule-template-download"
-        >{{ t('mail.ruleCSV.downloadTemplate') }}</a
-      >
+        >{{ t('mail.ruleCSV.downloadTemplate') }}</a>
       <el-button v-else :loading="templateLoading" disabled>{{
         t('mail.ruleCSV.downloadTemplate')
       }}</el-button>

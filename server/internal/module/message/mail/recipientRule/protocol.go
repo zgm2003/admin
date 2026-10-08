@@ -7,12 +7,25 @@ import (
 	"admin/server/internal/shared/yesno"
 )
 
-const (
-	ScopeEmail  = "email"
-	ScopeDomain = "domain"
-	ActionAllow = "allow"
-	ActionDeny  = "deny"
+type Scope int16
 
+const (
+	ScopeEmail  Scope = 0
+	ScopeDomain Scope = 1
+)
+
+func (s Scope) IsValid() bool { return s == ScopeEmail || s == ScopeDomain }
+
+type Action int16
+
+const (
+	ActionDeny  Action = 0
+	ActionAllow Action = 1
+)
+
+func (a Action) IsValid() bool { return a == ActionDeny || a == ActionAllow }
+
+const (
 	PermissionCreate = "message:mail:rule:create"
 	PermissionUpdate = "message:mail:rule:update"
 	PermissionStatus = "message:mail:rule:status"
@@ -43,9 +56,9 @@ type RuntimeCoordinator interface {
 }
 
 type Input struct {
-	Scope     string      `json:"scope"`
+	Scope     Scope       `json:"scope"`
 	Pattern   string      `json:"pattern"`
-	Action    string      `json:"action"`
+	Action    Action      `json:"action"`
 	Name      string      `json:"name"`
 	Remark    string      `json:"remark"`
 	IsEnabled yesno.Value `json:"isEnabled"`

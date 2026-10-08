@@ -36,13 +36,23 @@ func (r *Repository) ListForExport(ctx context.Context, limit int) ([]Model, err
 	return values, err
 }
 
+type ruleKey struct {
+	Scope   Scope
+	Pattern string
+	Action  Action
+}
+
 // FindMatching uses the active unique-key index and at most CSVMaxRows keys.
-func (r *Repository) FindMatching(ctx context.Context, keys [][]string) ([]Model, error) {
+func (r *Repository) FindMatching(ctx context.Context, keys []ruleKey) ([]Model, error) {
 	if len(keys) == 0 {
 		return []Model{}, nil
 	}
+	tuples := make([][]any, len(keys))
+	for index, key := range keys {
+		tuples[index] = []any{key.Scope, key.Pattern, key.Action}
+	}
 	var values []Model
-	err := r.db.WithContext(ctx).Select("scope", "pattern", "action").Where("(scope, pattern, action) IN ?", keys).Find(&values).Error
+	err := r.db.WithContext(ctx).Select("scope", "pattern", "action").Where("(scope, pattern, action) IN ?", tuples).Find(&values).Error
 	return values, err
 }
 
@@ -186,11 +196,11 @@ func applyRuleValues(row *Model, values map[string]any) {
 	for key, value := range values {
 		switch key {
 		case "scope":
-			row.Scope = value.(string)
+			row.Scope = value.(Scope)
 		case "pattern":
 			row.Pattern = value.(string)
 		case "action":
-			row.Action = value.(string)
+			row.Action = value.(Action)
 		case "name":
 			row.Name = value.(string)
 		case "remark":

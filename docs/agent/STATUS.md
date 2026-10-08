@@ -1,5 +1,17 @@
 # 项目状态
 
+## 邮件收件规则数值协议（2026-10-08，代码与真实迁移已完成）
+
+- 维护者最后确认的契约：仅 `message_mail_recipient_rule` 的 `scope/action` 改为 SMALLINT；`scope: 0=email, 1=domain`，`action: 0=deny, 1=allow`。Go 使用独立 int16 枚举，API 使用数字，前端常量+i18n label；固定程序协议不迁入可编辑字典。0 是合法值，HTTP 缺字段/null/旧字符串/未知值仍须拒绝。
+- 既有规则保持：邮箱优先、同级拒绝优先、默认允许；未删除 `(scope,pattern,action)` 唯一；CSV 仍用 email/domain、allow/deny，模板/COS 对象不变；页面及 CRUD/CSV 动作权限全部不变，不修改 SMS 或身份变更日志。
+- 容量与一致性：沿用百万用户/多实例基线、现有 runtime generation 和有界冷回源，不新增热路径数据库查询。数值快照严格拒绝缺枚举/旧字符串/非法枚举；迁移原位转换全表（含软删），同事务推进 `message.mail/global` generation/outbox 一次并定向发布 Redis 状态，不删除业务 Redis key、不重置限流额度。
+- 已实现：后端 `recipientRule` 使用独立 Scope/Action int16，HTTP 指针 DTO 区分缺字段/null 与合法 0；Repository 组合键与更新写入数字，CSV 文件边界双向转换原文本 token。Mail runtime schema 升至 2，拒绝旧字符串、规则字段缺失/null/非法值；Model 仍只保留持久化映射。前端 `enums/mailRecipientRule.ts`、Mail API 和规则页面使用封闭数值类型与现有 i18n，默认邮箱/拒绝均为 0，创建/编辑零值不丢失。
+- 实际迁移：维护者本轮明确允许停止并迁移；2026-10-08 13:31（Asia/Shanghai）核对本项目 API/Worker 未运行、16301 无监听，无需停止任何进程。执行 `docs/database/2026-10-08-mail-recipient-rule-numeric.ps1 -OldAPIStopped`，exit 0。真实 PostgreSQL 原 1 条 email/allow 转成 scope=0/action=1，所有其余字段、ID、时间和规则数保持，两个 SMALLINT 的 CHECK 都为 0/1，原唯一索引保持；`message.mail/global` 3 → 4，Redis ready=4。重复 SQL 与同步完整审计哈希不变；其他 generation、平台菜单版本不变。
+- 备份/审计：`%LOCALAPPDATA%\Admin\backups\mail-rule-numeric-20261008-133140-9550d023\public-before.dump`，SHA256 `BD15AC2C5C2626CA596AA903D4FCBCA23213731878116CAE4544C5E80C346C83`，`pg_restore --list` 通过；同目录 before/after/repeat JSON 的规范化规则哈希一致，schema-only 实库导出已更新 `docs/database/current.sql`。未删除 Redis key、未修改限流额度、COS 文件或模板设置；API/Worker 保持停止，由维护者启动新版本。
+- 后端验证：数值/严格绑定/缓存/CSV 红测后通过；`go test ./internal/module/message/mail/... ./internal/database ./cmd/mail-recipient-rule-numeric-migration -count=1`、`go test ./internal/architecture -count=1`、`go test ./... -run '^$'`、`go fmt ./...`、`go vet ./...`、`go build ./...` 均通过。迁移测试在隔离 PostgreSQL schema 覆盖四组映射、软删记录、数据保持、约束、唯一性、幂等及源数据异常整批回滚；helper 的隔离 PG/Redis DB13 测试验证审计哈希与定向单调发布。开发中一次缓存 500ms budget 用例受并发负载失败，单测及最终完整相关包重新运行均通过，未放宽预算。
+- 前端验证：`pnpm vitest run tests/api/message/mail.test.ts tests/api/message/mailRuleCSV.test.ts tests/views/message/mail/index.test.ts --pool=threads --maxWorkers=1`，3 文件/54 项通过；`pnpm typecheck`、`pnpm lint`、`pnpm check:architecture`（0 findings）、变更文件 Prettier、`pnpm build` 与 `git diff --check` 通过，只有既有富文本大 chunk 提醒。独立最终审查无遗留问题。未跑全量 Go/Vitest、浏览器人工验收或真实邮件发送。
+- 工作区：开始时 HEAD `4e90fe75`、工作区干净；未提交。期间出现非本任务产生的 `MailRuleImportDialog/index.vue` 单行格式改动，保留，不计入本轮功能。维护者新反馈：CSV 模板只有表头不易填写，已解释 CSV 与 .xlsx/.xls 差异，建议 .xlsx 的说明页+数据页+下拉；等待确认是否统一改 .xlsx，当前格式/COS 模板未变。
+
 ## 登录页后端恢复后的重试（2026-10-08，代码已完成）
 
 - 范围：保留上一轮未提交的邮件修复，只处理登录页初始化失败后的恢复；未新增权限、修改后端/数据库、清理 Redis 或操作运行中的服务，未提交 Git。

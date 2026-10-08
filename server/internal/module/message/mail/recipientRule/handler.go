@@ -140,8 +140,8 @@ func (h *Handler) List(ctx *gin.Context) {
 }
 
 func (h *Handler) Create(ctx *gin.Context) {
-	var input Input
-	if err := validate.BindJSON(ctx, &input); err != nil {
+	input, err := bindInput(ctx)
+	if err != nil {
 		response.Fail(ctx, err)
 		return
 	}
@@ -159,8 +159,8 @@ func (h *Handler) Update(ctx *gin.Context) {
 		response.Fail(ctx, err)
 		return
 	}
-	var input Input
-	if err = validate.BindJSON(ctx, &input); err != nil {
+	input, err := bindInput(ctx)
+	if err != nil {
 		response.Fail(ctx, err)
 		return
 	}
@@ -206,4 +206,22 @@ func (h *Handler) Delete(ctx *gin.Context) {
 		return
 	}
 	response.OK(ctx, http.StatusOK, map[string]any{})
+}
+
+func bindInput(ctx *gin.Context) (Input, error) {
+	var request struct {
+		Scope     *Scope       `json:"scope" binding:"required"`
+		Pattern   string       `json:"pattern"`
+		Action    *Action      `json:"action" binding:"required"`
+		Name      string       `json:"name"`
+		Remark    string       `json:"remark"`
+		IsEnabled *yesno.Value `json:"isEnabled" binding:"required"`
+	}
+	if err := validate.BindJSON(ctx, &request); err != nil {
+		return Input{}, err
+	}
+	if !request.Scope.IsValid() || !request.Action.IsValid() || !yesno.IsValid(*request.IsEnabled) {
+		return Input{}, apperror.InvalidRequest(fmt.Errorf("recipient rule enum is invalid"))
+	}
+	return Input{Scope: *request.Scope, Pattern: request.Pattern, Action: *request.Action, Name: request.Name, Remark: request.Remark, IsEnabled: *request.IsEnabled}, nil
 }

@@ -11,9 +11,9 @@ const Table = "message_mail_recipient_rule"
 
 type Model struct {
 	ID        int64          `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	Scope     string         `gorm:"column:scope;type:varchar(16);not null" json:"scope"`
+	Scope     Scope          `gorm:"column:scope;type:smallint;not null" json:"scope"`
 	Pattern   string         `gorm:"column:pattern;type:varchar(254);not null" json:"pattern"`
-	Action    string         `gorm:"column:action;type:varchar(16);not null" json:"action"`
+	Action    Action         `gorm:"column:action;type:smallint;not null" json:"action"`
 	Name      string         `gorm:"column:name;type:varchar(128);not null" json:"name"`
 	Remark    string         `gorm:"column:remark;type:varchar(512);not null" json:"remark"`
 	IsEnabled yesno.Value    `gorm:"column:is_enabled;type:smallint;not null" json:"isEnabled"`

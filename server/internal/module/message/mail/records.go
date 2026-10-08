@@ -17,10 +17,10 @@ const (
 	StatusPending       = maillog.StatusPending
 	StatusSent          = maillog.StatusSent
 	StatusFailed        = maillog.StatusFailed
-	RuleScopeEmail      = "email"
-	RuleScopeDomain     = "domain"
-	RuleActionAllow     = "allow"
-	RuleActionDeny      = "deny"
+	RuleScopeEmail      = recipientrule.ScopeEmail
+	RuleScopeDomain     = recipientrule.ScopeDomain
+	RuleActionAllow     = recipientrule.ActionAllow
+	RuleActionDeny      = recipientrule.ActionDeny
 )
 
 type Config = mailconfig.Model

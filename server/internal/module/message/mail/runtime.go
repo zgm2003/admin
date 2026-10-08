@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mailCacheSchemaVersion = 1
+	mailCacheSchemaVersion = 2
 	mailSnapshotTTL        = 10 * time.Minute
 	mailReadBudget         = 500 * time.Millisecond
 	mailWriteBudget        = 500 * time.Millisecond
@@ -616,6 +616,9 @@ func validateRuntimeSnapshot(snapshot runtimeSnapshot, scene string) error {
 	if snapshot.SchemaVersion != mailCacheSchemaVersion || snapshot.Generation < 1 {
 		return fmt.Errorf("mail runtime snapshot coordinates are invalid")
 	}
+	if err := validateRuntimeRuleEnums(snapshot.Rules); err != nil {
+		return err
+	}
 	if err := snapshot.Config.valid(); err != nil {
 		return err
 	}
@@ -639,6 +642,9 @@ func encodeRuntimeSnapshot(snapshot runtimeSnapshot) (string, error) {
 	if snapshot.SchemaVersion != mailCacheSchemaVersion || snapshot.Generation < 1 {
 		return "", fmt.Errorf("%w: coordinates are invalid", ErrRuntimeSnapshotCorrupt)
 	}
+	if err := validateRuntimeRuleEnums(snapshot.Rules); err != nil {
+		return "", fmt.Errorf("%w: %v", ErrRuntimeSnapshotCorrupt, err)
+	}
 	payload, err := json.Marshal(snapshot)
 	if err != nil {
 		return "", fmt.Errorf("encode mail runtime snapshot: %w", err)
@@ -648,6 +654,9 @@ func encodeRuntimeSnapshot(snapshot runtimeSnapshot) (string, error) {
 
 func decodeRuntimeSnapshot(raw string) (runtimeSnapshot, error) {
 	if err := rejectDuplicateJSONKeys([]byte(raw)); err != nil {
+		return runtimeSnapshot{}, fmt.Errorf("%w: %v", ErrRuntimeSnapshotCorrupt, err)
+	}
+	if err := validateRuntimeRuleJSON([]byte(raw)); err != nil {
 		return runtimeSnapshot{}, fmt.Errorf("%w: %v", ErrRuntimeSnapshotCorrupt, err)
 	}
 	decoder := json.NewDecoder(bytes.NewBufferString(raw))
@@ -663,7 +672,49 @@ func decodeRuntimeSnapshot(raw string) (runtimeSnapshot, error) {
 	if snapshot.SchemaVersion != mailCacheSchemaVersion || snapshot.Generation < 1 {
 		return runtimeSnapshot{}, fmt.Errorf("%w: coordinates are invalid", ErrRuntimeSnapshotCorrupt)
 	}
+	if err := validateRuntimeRuleEnums(snapshot.Rules); err != nil {
+		return runtimeSnapshot{}, fmt.Errorf("%w: %v", ErrRuntimeSnapshotCorrupt, err)
+	}
 	return snapshot, nil
+}
+
+// Validate presence and JSON number shape before decoding into value enums: zero is valid,
+// while missing/null fields must not silently become zero.
+func validateRuntimeRuleJSON(payload []byte) error {
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return err
+	}
+	rawRules, ok := envelope["rules"]
+	if !ok {
+		return fmt.Errorf("rules is required")
+	}
+	var rules []json.RawMessage
+	if err := json.Unmarshal(rawRules, &rules); err != nil {
+		return err
+	}
+	for _, rawRule := range rules {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(rawRule, &fields); err != nil {
+			return err
+		}
+		for _, name := range []string{"scope", "action", "isEnabled"} {
+			raw, ok := fields[name]
+			if !ok || string(raw) == "null" || len(raw) == 0 || (raw[0] != '-' && (raw[0] < '0' || raw[0] > '9')) {
+				return fmt.Errorf("rule %s must be a JSON number", name)
+			}
+		}
+	}
+	return nil
+}
+
+func validateRuntimeRuleEnums(rules []RecipientRule) error {
+	for _, rule := range rules {
+		if !rule.Scope.IsValid() || !rule.Action.IsValid() || !yesno.IsValid(rule.IsEnabled) {
+			return fmt.Errorf("mail runtime recipient rule enum is invalid")
+		}
+	}
+	return nil
 }
 
 func waitForMailCache(ctx context.Context, duration time.Duration) error {

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 6efa6zFIvSsii5FdfPh5nMyULmYHo58UEXd715q95o3S5Ga9HkrGABxxsKCVhs3
+\restrict aDA3VFA0EQoyEsFUygYXoGgcsWODaxA8iEY8WcI9uMT7bBgdeEpnNlADY5TocH9
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -277,18 +277,18 @@ CREATE TABLE public.message_mail_rate_limit_policy (
 
 CREATE TABLE public.message_mail_recipient_rule (
     id bigint NOT NULL,
-    scope character varying(16) NOT NULL,
+    scope smallint NOT NULL,
     pattern character varying(254) NOT NULL,
-    action character varying(16) NOT NULL,
+    action smallint NOT NULL,
     name character varying(128) NOT NULL,
     remark character varying(512) DEFAULT ''::character varying NOT NULL,
     is_enabled smallint DEFAULT 1 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
-    CONSTRAINT message_mail_recipient_rule_action_check CHECK (((action)::text = ANY ((ARRAY['allow'::character varying, 'deny'::character varying])::text[]))),
+    CONSTRAINT message_mail_recipient_rule_action_check CHECK ((action = ANY (ARRAY[0, 1]))),
     CONSTRAINT message_mail_recipient_rule_is_enabled_check CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
-    CONSTRAINT message_mail_recipient_rule_scope_check CHECK (((scope)::text = ANY ((ARRAY['email'::character varying, 'domain'::character varying])::text[])))
+    CONSTRAINT message_mail_recipient_rule_scope_check CHECK ((scope = ANY (ARRAY[0, 1])))
 );
 
 
@@ -3435,5 +3435,5 @@ ALTER TABLE ONLY public.system_dictionary_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 6efa6zFIvSsii5FdfPh5nMyULmYHo58UEXd715q95o3S5Ga9HkrGABxxsKCVhs3
+\unrestrict aDA3VFA0EQoyEsFUygYXoGgcsWODaxA8iEY8WcI9uMT7bBgdeEpnNlADY5TocH9
 

@@ -47,10 +47,15 @@ func (s *Service) PreviewCSV(ctx context.Context, content string) (CSVPreview, e
 	if len(preview.Errors) != 0 {
 		return preview, nil
 	}
-	keys := make([][]string, 0, len(preview.Rows))
+	keys := make([]ruleKey, 0, len(preview.Rows))
 	for _, row := range preview.Rows {
 		if len(row.Errors) == 0 || (len(row.Errors) == 1 && row.Errors[0] == "duplicate_file") {
-			keys = append(keys, []string{row.Values[0], row.Values[1], row.Values[2]})
+			scope, scopeErr := parseCSVScope(row.Values[0])
+			action, actionErr := parseCSVAction(row.Values[2])
+			if scopeErr != nil || actionErr != nil {
+				return CSVPreview{}, csvInvalidRequest(i18n.KeyMailRuleImportInvalid, fmt.Errorf("CSV enum invalid"))
+			}
+			keys = append(keys, ruleKey{Scope: scope, Pattern: row.Values[1], Action: action})
 		}
 	}
 	existing, err := s.repository.FindMatching(ctx, keys)
@@ -59,7 +64,12 @@ func (s *Service) PreviewCSV(ctx context.Context, content string) (CSVPreview, e
 	}
 	seen := make(map[string]bool, len(existing))
 	for _, row := range existing {
-		seen[csvKey([]string{row.Scope, row.Pattern, row.Action})] = true
+		scope, scopeErr := formatCSVScope(row.Scope)
+		action, actionErr := formatCSVAction(row.Action)
+		if scopeErr != nil || actionErr != nil {
+			return CSVPreview{}, wrapRepository(fmt.Errorf("stored recipient rule enum invalid"))
+		}
+		seen[csvKey([]string{scope, row.Pattern, action})] = true
 	}
 	for index := range preview.Rows {
 		row := &preview.Rows[index]
@@ -102,7 +112,12 @@ func (s *Service) ImportCSV(ctx context.Context, content string) (CSVImportResul
 	values := make([]Model, len(preview.Rows))
 	for index, row := range preview.Rows {
 		cells := row.Values
-		values[index] = Model{Scope: cells[0], Pattern: cells[1], Action: cells[2], Name: cells[3], Remark: cells[4], IsEnabled: yesno.Value(cells[5][0] - '0'), CreatedAt: now, UpdatedAt: now}
+		scope, scopeErr := parseCSVScope(cells[0])
+		action, actionErr := parseCSVAction(cells[2])
+		if scopeErr != nil || actionErr != nil {
+			return CSVImportResult{}, csvInvalidRequest(i18n.KeyMailRuleImportInvalid, fmt.Errorf("CSV enum invalid"))
+		}
+		values[index] = Model{Scope: scope, Pattern: cells[1], Action: action, Name: cells[3], Remark: cells[4], IsEnabled: yesno.Value(cells[5][0] - '0'), CreatedAt: now, UpdatedAt: now}
 	}
 	err = s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
 		return s.repository.CreateBatch(writeContext, values, expected, now)
@@ -132,7 +147,12 @@ func (s *Service) ExportCSV(ctx context.Context) (CSVFile, error) {
 		return CSVFile{}, apperror.Internal(err)
 	}
 	for _, row := range rows {
-		cells := []string{row.Scope, row.Pattern, row.Action, row.Name, row.Remark, strconv.Itoa(int(row.IsEnabled))}
+		scope, scopeErr := formatCSVScope(row.Scope)
+		action, actionErr := formatCSVAction(row.Action)
+		if scopeErr != nil || actionErr != nil {
+			return CSVFile{}, wrapRepository(fmt.Errorf("stored recipient rule enum invalid"))
+		}
+		cells := []string{scope, row.Pattern, action, row.Name, row.Remark, strconv.Itoa(int(row.IsEnabled))}
 		for index := range cells {
 			cells[index] = escapeCSVCell(cells[index])
 		}
@@ -233,14 +253,15 @@ func validateCSVRow(row *CSVRow) {
 	for _, index := range []int{0, 1, 2, 3, 5} {
 		cells[index] = strings.TrimSpace(cells[index])
 	}
-	if cells[0] != ScopeEmail && cells[0] != ScopeDomain {
+	scope, err := parseCSVScope(cells[0])
+	if err != nil {
 		row.Errors = append(row.Errors, "invalid_scope")
-	} else if pattern, err := NormalizeRule(cells[0], cells[1]); err != nil {
+	} else if pattern, err := NormalizeRule(scope, cells[1]); err != nil {
 		row.Errors = append(row.Errors, "invalid_pattern")
 	} else {
 		cells[1] = pattern
 	}
-	if cells[2] != ActionAllow && cells[2] != ActionDeny {
+	if _, err := parseCSVAction(cells[2]); err != nil {
 		row.Errors = append(row.Errors, "invalid_action")
 	}
 	if cells[3] == "" || utf8.RuneCountInString(cells[3]) > 128 {
@@ -283,4 +304,41 @@ func csvInvalidRequest(key i18n.MessageKey, cause error) error {
 	err := apperror.InvalidRequest(cause)
 	err.MessageKey = key
 	return err
+}
+
+func parseCSVScope(value string) (Scope, error) {
+	switch value {
+	case "email":
+		return ScopeEmail, nil
+	case "domain":
+		return ScopeDomain, nil
+	}
+	return 0, fmt.Errorf("invalid CSV scope")
+}
+func parseCSVAction(value string) (Action, error) {
+	switch value {
+	case "deny":
+		return ActionDeny, nil
+	case "allow":
+		return ActionAllow, nil
+	}
+	return 0, fmt.Errorf("invalid CSV action")
+}
+func formatCSVScope(value Scope) (string, error) {
+	switch value {
+	case ScopeEmail:
+		return "email", nil
+	case ScopeDomain:
+		return "domain", nil
+	}
+	return "", fmt.Errorf("invalid recipient rule scope")
+}
+func formatCSVAction(value Action) (string, error) {
+	switch value {
+	case ActionDeny:
+		return "deny", nil
+	case ActionAllow:
+		return "allow", nil
+	}
+	return "", fmt.Errorf("invalid recipient rule action")
 }

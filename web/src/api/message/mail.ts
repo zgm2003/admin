@@ -1,6 +1,12 @@
 import { isStorageObjectKey } from '@/utils/storageObjectKey'
 import { request } from '@/utils/request'
 import { isYesNo, type YesNo } from '@/enums/yesNo'
+import {
+  isMailRuleAction,
+  isMailRuleScope,
+  type MailRuleAction,
+  type MailRuleScope,
+} from '@/enums/mailRecipientRule'
 import type { PageResult } from '@/types/pagination'
 import { ProtocolError } from '@/types/http'
 
@@ -73,9 +79,9 @@ export interface MailLogDetail {
 }
 export interface MailRule {
   id: number
-  scope: 'email' | 'domain'
+  scope: MailRuleScope
   pattern: string
-  action: 'allow' | 'deny'
+  action: MailRuleAction
   name: string
   remark: string
   isEnabled: YesNo
@@ -103,9 +109,9 @@ export interface MailTemplateInput {
   exampleVariables: Record<string, string>
 }
 export interface MailRuleInput {
-  scope: 'email' | 'domain'
+  scope: MailRuleScope
   pattern: string
-  action: 'allow' | 'deny'
+  action: MailRuleAction
   name: string
   remark: string
   isEnabled: YesNo
@@ -350,9 +356,9 @@ export function parseMailRule(value: unknown): MailRule {
   const isEnabled = data.isEnabled
   if (
     !integer(data.id) ||
-    (scope !== 'email' && scope !== 'domain') ||
+    !isMailRuleScope(scope) ||
     !text(data.pattern) ||
-    (action !== 'allow' && action !== 'deny') ||
+    !isMailRuleAction(action) ||
     !text(data.name) ||
     !text(data.remark) ||
     !isYesNo(isEnabled) ||

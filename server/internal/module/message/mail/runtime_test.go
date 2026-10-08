@@ -39,7 +39,7 @@ func TestRuntimeSnapshotCodecPreservesCiphertextAndRejectsMalformedPayloads(t *t
 		"unknown field":   strings.Replace(raw, `{`, `{"extra":true,`, 1),
 		"duplicate field": strings.Replace(raw, `"generation":3`, `"generation":3,"generation":4`, 1),
 		"trailing value":  raw + `{}`,
-		"wrong schema":    strings.Replace(raw, `"schemaVersion":1`, `"schemaVersion":2`, 1),
+		"wrong schema":    strings.Replace(raw, `"schemaVersion":2`, `"schemaVersion":1`, 1),
 		"zero generation": strings.Replace(raw, `"generation":3`, `"generation":0`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -256,5 +256,44 @@ func intPointer(value int) *int { return &value }
 func TestRuntimeStoreValidateDependenciesRejectsIncompleteStartupWiring(t *testing.T) {
 	if err := newRuntimeStore(nil, nil).ValidateDependencies(); err == nil {
 		t.Fatal("ValidateDependencies accepted missing Mail runtime dependencies")
+	}
+}
+
+func TestRuntimeSnapshotRequiresNumericRecipientRuleEnums(t *testing.T) {
+	snapshot := validRuntimeSnapshot(1)
+	snapshot.Rules = []RecipientRule{{ID: 1, Scope: RuleScopeEmail, Pattern: "user@example.com", Action: RuleActionDeny, Name: "deny", IsEnabled: yesno.Yes}}
+	raw, err := encodeRuntimeSnapshot(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(raw, `"scope":0`) || !strings.Contains(raw, `"action":0`) {
+		t.Errorf("snapshot does not emit zero-based enums: %s", raw)
+	}
+	// Build malformed rule payloads independently from the pre-migration enum representation.
+	for name, rule := range map[string]string{
+		"old strings":    `{"scope":"email","action":"deny","isEnabled":1}`,
+		"missing scope":  `{"action":0,"isEnabled":1}`,
+		"missing action": `{"scope":0,"isEnabled":1}`,
+		"null scope":     `{"scope":null,"action":0,"isEnabled":1}`,
+		"null action":    `{"scope":0,"action":null,"isEnabled":1}`,
+		"unknown scope":  `{"scope":2,"action":0,"isEnabled":1}`,
+		"unknown action": `{"scope":0,"action":2,"isEnabled":1}`,
+		"fraction":       `{"scope":0.5,"action":0,"isEnabled":1}`,
+		"missing status": `{"scope":0,"action":0}`,
+		"null status":    `{"scope":0,"action":0,"isEnabled":null}`,
+		"unknown status": `{"scope":0,"action":0,"isEnabled":2}`,
+		"string status":  `{"scope":0,"action":0,"isEnabled":"1"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			empty := validRuntimeSnapshot(1)
+			payload, err := encodeRuntimeSnapshot(empty)
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload = strings.Replace(payload, `"rules":[]`, `"rules":[`+rule+`]`, 1)
+			if _, err := decodeRuntimeSnapshot(payload); !errors.Is(err, ErrRuntimeSnapshotCorrupt) {
+				t.Fatalf("decode error=%v want ErrRuntimeSnapshotCorrupt", err)
+			}
+		})
 	}
 }

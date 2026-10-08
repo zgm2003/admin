@@ -284,22 +284,141 @@ describe('mail service page', () => {
     const scope = selects.find((select) => select.attributes('data-testid') === 'mail-rule-scope')
     const action = selects.find((select) => select.attributes('data-testid') === 'mail-rule-action')
     expect(scope?.props('options')).toEqual([
-      { value: 'email', label: '邮箱' },
-      { value: 'domain', label: '域名' },
+      { value: 0, label: '邮箱' },
+      { value: 1, label: '域名' },
     ])
     expect(action?.props('options')).toEqual([
-      { value: 'allow', label: '允许' },
-      { value: 'deny', label: '拒绝' },
+      { value: 1, label: '允许' },
+      { value: 0, label: '拒绝' },
     ])
+    expect(scope?.props('modelValue')).toBe(0)
+    expect(action?.props('modelValue')).toBe(0)
+    expect(scope?.props('clearable')).toBe(false)
+    expect(action?.props('clearable')).toBe(false)
+
+    setLocale('en-US')
+    await flushPromises()
+    expect(scope?.props('options')).toEqual([
+      { value: 0, label: 'Email' },
+      { value: 1, label: 'Domain' },
+    ])
+    expect(action?.props('options')).toEqual([
+      { value: 1, label: 'Allowlist' },
+      { value: 0, label: 'Denylist' },
+    ])
+    expect(getDictionaryOptions).toHaveBeenCalledTimes(2)
+    expect(
+      vi
+        .mocked(getDictionaryOptions)
+        .mock.calls.every(([codes]) => codes.length === 1 && codes[0] === 'message.mail.region'),
+    ).toBe(true)
+  })
+
+  it('creates an email deny rule with both zero enum values', async () => {
+    vi.mocked(mailApi.createMailRule).mockResolvedValueOnce({ id: 7 })
+    const wrapper = mountPage(['message:mail:list', 'message:mail:rule:create'])
+    await flushPromises()
+    await selectTab(wrapper, '收件规则')
+    await wrapper.get('[data-testid="mail-rule-create"]').trigger('click')
+    await flushPromises()
+    const dialog = wrapper
+      .findAllComponents({ name: 'ElDialog' })
+      .find((item) => item.props('modelValue') === true)
+    expect(dialog).toBeDefined()
+    if (!dialog) throw new Error('recipient rule dialog missing')
+    await dialog.get('[data-testid="mail-rule-pattern"]').setValue('a@example.com')
+    expect(dialog.get('[data-testid="mail-rule-pattern"]').attributes('placeholder')).toContain(
+      '完整邮箱',
+    )
+    await dialog.get('.el-dialog__footer .el-button--primary').trigger('click')
+    await flushPromises()
+    expect(mailApi.createMailRule).toHaveBeenCalledWith({
+      scope: 0,
+      pattern: 'a@example.com',
+      action: 0,
+      name: '',
+      remark: '',
+      isEnabled: 1,
+    })
+    expect(mailApi.listMailRules).toHaveBeenCalledTimes(2)
+  })
+
+  it('renders both numeric enum choices and edits domain allow into email deny', async () => {
+    const timestamp = '2026-09-01T00:00:00Z'
+    vi.mocked(mailApi.listMailRules).mockResolvedValue([
+      {
+        id: 7,
+        scope: 1,
+        pattern: 'example.com',
+        action: 1,
+        name: 'Domain allow',
+        remark: '',
+        isEnabled: 1,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: 8,
+        scope: 0,
+        pattern: 'a@example.com',
+        action: 0,
+        name: 'Email deny',
+        remark: '',
+        isEnabled: 1,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ])
+    vi.mocked(mailApi.updateMailRule).mockResolvedValueOnce({})
+    const wrapper = mountPage(['message:mail:list', 'message:mail:rule:update'])
+    await flushPromises()
+    await selectTab(wrapper, '收件规则')
+    const rows = wrapper.findAll('.el-table__body-wrapper tbody tr')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].text()).toContain('域名')
+    expect(rows[0].text()).toContain('允许')
+    expect(rows[0].get('.el-tag').classes()).toContain('el-tag--success')
+    expect(rows[1].text()).toContain('邮箱')
+    expect(rows[1].text()).toContain('拒绝')
+    expect(rows[1].get('.el-tag').classes()).toContain('el-tag--danger')
+    await rows[0].get('.el-button').trigger('click')
+    await flushPromises()
+    const dialog = wrapper
+      .findAllComponents({ name: 'ElDialog' })
+      .find((item) => item.props('modelValue') === true)
+    expect(dialog).toBeDefined()
+    if (!dialog) throw new Error('recipient rule dialog missing')
+    const selects = dialog.findAllComponents({ name: 'ElSelectV2' })
+    const scope = selects.find((select) => select.attributes('data-testid') === 'mail-rule-scope')
+    const action = selects.find((select) => select.attributes('data-testid') === 'mail-rule-action')
+    expect(scope?.props('modelValue')).toBe(1)
+    expect(action?.props('modelValue')).toBe(1)
+    expect(dialog.get('[data-testid="mail-rule-pattern"]').attributes('placeholder')).toContain(
+      '域名',
+    )
+    scope?.vm.$emit('update:modelValue', 0)
+    action?.vm.$emit('update:modelValue', 0)
+    await dialog.get('[data-testid="mail-rule-pattern"]').setValue('b@example.com')
+    await dialog.get('.el-dialog__footer .el-button--primary').trigger('click')
+    await flushPromises()
+    expect(mailApi.updateMailRule).toHaveBeenCalledWith(7, {
+      scope: 0,
+      pattern: 'b@example.com',
+      action: 0,
+      name: 'Domain allow',
+      remark: '',
+      isEnabled: 1,
+    })
+    expect(mailApi.listMailRules).toHaveBeenCalledTimes(2)
   })
 
   it('passes the recipient rule id when toggling its status', async () => {
     vi.mocked(mailApi.listMailRules).mockResolvedValue([
       {
         id: 7,
-        scope: 'domain',
+        scope: 1,
         pattern: 'example.com',
-        action: 'deny',
+        action: 0,
         name: 'Blocked domain',
         remark: '',
         isEnabled: YesNo.Yes,

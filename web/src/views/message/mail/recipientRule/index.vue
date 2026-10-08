@@ -15,6 +15,7 @@ import {
 } from '@/api/message/mail'
 import type { TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
+import { MailRuleAction, MailRuleScope } from '@/enums/mailRecipientRule'
 import MailRuleImportDialog from './components/MailRuleImportDialog/index.vue'
 
 const props = defineProps<{
@@ -47,12 +48,12 @@ watch(
 )
 const form = ref<MailRuleInput>(blankRule())
 const scopeOptions = computed<Array<{ value: MailRuleInput['scope']; label: string }>>(() => [
-  { value: 'email', label: t('mail.email') },
-  { value: 'domain', label: t('mail.domain') },
+  { value: MailRuleScope.Email, label: t('mail.email') },
+  { value: MailRuleScope.Domain, label: t('mail.domain') },
 ])
 const actionOptions = computed<Array<{ value: MailRuleInput['action']; label: string }>>(() => [
-  { value: 'allow', label: t('mail.allow') },
-  { value: 'deny', label: t('mail.deny') },
+  { value: MailRuleAction.Allow, label: t('mail.allow') },
+  { value: MailRuleAction.Deny, label: t('mail.deny') },
 ])
 const columns = computed<TableColumn<MailRule>[]>(() => [
   { key: 'pattern', prop: 'pattern', label: t('mail.rule'), minWidth: 220 },
@@ -77,7 +78,14 @@ watch(editing, (value) => {
 })
 
 function blankRule(): MailRuleInput {
-  return { scope: 'email', pattern: '', action: 'deny', name: '', remark: '', isEnabled: YesNo.Yes }
+  return {
+    scope: MailRuleScope.Email,
+    pattern: '',
+    action: MailRuleAction.Deny,
+    name: '',
+    remark: '',
+    isEnabled: YesNo.Yes,
+  }
 }
 
 function create(): void {
@@ -185,12 +193,12 @@ async function exportRules(): Promise<void> {
       <template #cell-pattern="{ row }: { row: MailRule }">
         <div class="primary-cell">
           <strong>{{ row.pattern }}</strong>
-          <span>{{ row.scope === 'email' ? t('mail.email') : t('mail.domain') }}</span>
+          <span>{{ row.scope === MailRuleScope.Email ? t('mail.email') : t('mail.domain') }}</span>
         </div>
       </template>
       <template #cell-action="{ row }: { row: MailRule }">
-        <el-tag :type="row.action === 'allow' ? 'success' : 'danger'" effect="plain">
-          {{ row.action === 'allow' ? t('mail.allow') : t('mail.deny') }}
+        <el-tag :type="row.action === MailRuleAction.Allow ? 'success' : 'danger'" effect="plain">
+          {{ row.action === MailRuleAction.Allow ? t('mail.allow') : t('mail.deny') }}
         </el-tag>
       </template>
       <template #cell-enabled="{ row }: { row: MailRule }">
@@ -252,6 +260,7 @@ async function exportRules(): Promise<void> {
               <el-select-v2
                 v-model="form.scope"
                 :options="scopeOptions"
+                :clearable="false"
                 data-testid="mail-rule-scope"
                 class="mail-rule-select"
               />
@@ -262,6 +271,7 @@ async function exportRules(): Promise<void> {
               <el-select-v2
                 v-model="form.action"
                 :options="actionOptions"
+                :clearable="false"
                 data-testid="mail-rule-action"
                 class="mail-rule-select"
               />
@@ -272,7 +282,7 @@ async function exportRules(): Promise<void> {
           <el-input
             v-model="form.pattern"
             :placeholder="
-              form.scope === 'email'
+              form.scope === MailRuleScope.Email
                 ? t('mail.rulePatternEmailPlaceholder')
                 : t('mail.rulePatternDomainPlaceholder')
             "

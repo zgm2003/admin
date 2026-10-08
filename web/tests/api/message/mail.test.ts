@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { request } from '@/utils/request'
 import {
+  createMailRule,
+  listMailRules,
+  updateMailRule,
   parseMailConfig,
   parseMailLog,
   parseMailLogDetail,
@@ -11,6 +15,10 @@ import {
   parseMailRateLimitUpdateResult,
   MailStatus,
 } from '@/api/message/mail'
+
+vi.mock('@/utils/request', () => ({ request: vi.fn() }))
+
+beforeEach(() => vi.mocked(request).mockReset())
 
 describe('mail config protocol', () => {
   const valid = {
@@ -70,9 +78,9 @@ describe('mail admin protocol', () => {
   }
   const rule = {
     id: 3,
-    scope: 'domain',
+    scope: 1,
     pattern: 'example.com',
-    action: 'deny',
+    action: 0,
     name: '临时邮箱',
     remark: '阻断',
     isEnabled: 1,
@@ -84,6 +92,90 @@ describe('mail admin protocol', () => {
     expect(parseMailTemplate(template)).toEqual(template)
     expect(parseMailLog(log)).toEqual(log)
     expect(parseMailRule(rule)).toEqual(rule)
+  })
+
+  it.each([
+    [0, 0],
+    [0, 1],
+    [1, 0],
+    [1, 1],
+  ])(
+    'accepts numeric recipient scope %s and action %s without treating zero as absent',
+    (scope, action) => {
+      const value = { ...rule, scope, action }
+      expect(parseMailRule(value)).toEqual(value)
+    },
+  )
+
+  it.each(['scope', 'action'] as const)('rejects malformed recipient %s codes', (field) => {
+    for (const value of [
+      '0',
+      '1',
+      'email',
+      'domain',
+      'allow',
+      'deny',
+      '',
+      null,
+      undefined,
+      true,
+      false,
+      0.5,
+      -1,
+      2,
+      NaN,
+      Infinity,
+      {},
+      [],
+    ]) {
+      expect(() => parseMailRule({ ...rule, [field]: value }), String(value)).toThrow()
+    }
+    const missing: Record<string, unknown> = { ...rule }
+    delete missing[field]
+    expect(() => parseMailRule(missing)).toThrow()
+  })
+
+  it('strictly parses recipient lists and preserves numeric zero codes', async () => {
+    const emailDeny = { ...rule, scope: 0, action: 0 }
+    vi.mocked(request).mockResolvedValue([emailDeny, { ...rule, action: 1 }])
+    await expect(listMailRules()).resolves.toEqual([emailDeny, { ...rule, action: 1 }])
+    expect(request).toHaveBeenCalledWith({
+      method: 'GET',
+      url: '/api/admin/v1/message/mail/recipient-rule',
+    })
+    for (const value of [
+      null,
+      {},
+      [{ ...rule, action: 'deny' }],
+      [emailDeny, { ...rule, scope: 'domain' }],
+    ]) {
+      vi.mocked(request).mockResolvedValue(value)
+      await expect(listMailRules()).rejects.toThrow()
+    }
+  })
+
+  it('sends zero scope and action in recipient create and update bodies', async () => {
+    const input = {
+      scope: 0,
+      pattern: 'a@example.com',
+      action: 0,
+      name: 'Email deny',
+      remark: '',
+      isEnabled: 1,
+    } as const
+    vi.mocked(request).mockResolvedValueOnce({ id: 7 }).mockResolvedValueOnce({})
+    await expect(createMailRule(input)).resolves.toEqual({ id: 7 })
+    await expect(updateMailRule(7, input)).resolves.toEqual({})
+    expect(request).toHaveBeenNthCalledWith(1, {
+      method: 'POST',
+      url: '/api/admin/v1/message/mail/recipient-rule',
+      data: input,
+    })
+    expect(request).toHaveBeenNthCalledWith(2, {
+      method: 'PUT',
+      url: '/api/admin/v1/message/mail/recipient-rule/7',
+      data: input,
+    })
   })
 
   it('rejects unknown fields and malformed pages', () => {

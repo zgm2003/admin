@@ -148,7 +148,7 @@ func NormalizeRecipient(value string) (string, error) {
 	return sharedemail.Normalize(value)
 }
 
-func NormalizeRule(scope, pattern string) (string, error) {
+func NormalizeRule(scope Scope, pattern string) (string, error) {
 	pattern = strings.ToLower(strings.TrimSpace(strings.TrimSuffix(pattern, ".")))
 	if scope == ScopeEmail {
 		return NormalizeRecipient(pattern)
@@ -169,7 +169,7 @@ func NormalizeRule(scope, pattern string) (string, error) {
 }
 
 func validateInput(input Input) error {
-	if (input.Action != ActionAllow && input.Action != ActionDeny) ||
+	if !input.Scope.IsValid() || !input.Action.IsValid() ||
 		!yesno.IsValid(input.IsEnabled) || strings.TrimSpace(input.Name) == "" {
 		return fmt.Errorf("invalid recipient rule")
 	}
@@ -178,10 +178,14 @@ func validateInput(input Input) error {
 
 func choose(groups ...[]Model) Decision {
 	for _, group := range groups {
-		for _, action := range []string{ActionDeny, ActionAllow} {
+		for _, action := range []Action{ActionDeny, ActionAllow} {
 			for _, rule := range group {
 				if rule.Action == action {
-					return Decision{Allowed: action == ActionAllow, RuleID: rule.ID, Reason: action}
+					reason := "deny"
+					if action == ActionAllow {
+						reason = "allow"
+					}
+					return Decision{Allowed: action == ActionAllow, RuleID: rule.ID, Reason: reason}
 				}
 			}
 		}
