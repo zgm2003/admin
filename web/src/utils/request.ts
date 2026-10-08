@@ -250,6 +250,9 @@ function errorMessage(error: unknown): string {
 
 function handleUnauthorized(): void {
   usePermissionStore(pinia).reset()
+  // A bootstrap retry can confirm an expired session while Login is already
+  // mounted. Keep its original redirect instead of nesting Login inside it.
+  if (/^\/login\/?$/.test(window.location.pathname)) return
   const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`
   window.location.assign(`/login?redirect=${encodeURIComponent(redirect)}`)
 }

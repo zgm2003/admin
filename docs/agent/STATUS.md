@@ -1,5 +1,27 @@
 # 项目状态
 
+## 登录页后端恢复后的重试（2026-10-08，代码已完成）
+
+- 范围：保留上一轮未提交的邮件修复，只处理登录页初始化失败后的恢复；未新增权限、修改后端/数据库、清理 Redis 或操作运行中的服务，未提交 Git。
+- 根因：登录方式失败在页面 `configFailed`，认证初始化失败在 Auth Store；现有按钮只重跑 `getLoginConfig`，即使成功也不会重新确认会话，旧的 `auth.errorMessage` 始终显示。仅认证失败而配置成功时还缺少重试入口。
+- 实现：页面私有 `web/src/views/auth/login/useLoginInitialization.ts` 管理配置、失败状态和手动重试；`index.vue` 继续编排表单。重试复用原受保护路由守卫的 refresh → me → Access 流程，不把配置成功当作认证成功；有效会话返回原目标，401 留在登录页，依赖持续失败保留可重试状态。公开或外部 redirect 回落 Dashboard，认证已恢复但路由失败时仅提供跳转重试、不再展示登录表单。
+- 请求层：`web/src/utils/request.ts` 的终态 401 仍清理 Auth/Access、通知一次；已处于 `/login` 或 `/login/` 时不再整页跳回自身，避免 `redirect` 嵌套及原目标丢失，受保护页面的跳转行为不变。
+- 交互/故障边界：重试期间锁定按钮和表单，refresh 成功而 me 尚未完成时保持加载反馈；离页后不再加载旧配置。配置瞬时失败保留选择/草稿但清空可用选项、隐藏表单，并在发送码、完成 Captcha、提交入口拒绝失败状态；成功新配置不再允许原方式时才切换并清理旧 proof。初始化逻辑拆出后 SFC 为 467 行，未绕过 500 行架构限制。
+- 红绿回归：新增 `web/tests/views/auth/login/retry.test.ts`、`web/tests/utils/requestLoginRecovery.test.ts`，通过真实 Login/Router/Pinia、受控 API 和真实 Axios 请求层模拟后端故障及恢复。旧错误残留、缺重试入口、401 嵌套、加载反馈消失、草稿丢失及跳转失败后误展示表单均先观察到失败，再修复通过；未访问真实后端。
+- 已运行（`web`）：`pnpm vitest run tests/views/auth/login/index.test.ts tests/views/auth/login/retry.test.ts tests/utils/requestLoginRecovery.test.ts tests/utils/request.test.ts tests/router/index.test.ts tests/api/auth/login.test.ts tests/store/auth.test.ts --pool=threads --maxWorkers=1`，7 文件 / 103 项通过。`pnpm typecheck`、`pnpm lint`、`pnpm check:architecture`（0 findings）、变更文件 `pnpm exec prettier --check`、`pnpm build` 与根目录 `git diff --check` 通过。只读审查及最终增量复核无遗留问题；构建仅保留既有 rich-editor 大 chunk 警告。
+- 未运行/后续：未跑全量 Vitest、未重跑后端测试，未使用 Computer Use 或进行浏览器人工验收。维护者刷新前端后可按“后端未启动 → 打开受保护页/登录页 → 后端恢复 → 重试”验收；本轮无需迁移或重启后端。邮件提示与登录重试两项代码修复完成，下一步再逐项处理数据库字段。
+
+## 邮件发送失败提示修复（2026-10-08，代码已完成）
+
+- 范围：维护者已确认先修改邮箱时的邮件错误提示；本轮未处理登录重试、字段整改、CSV 或媒体设置。开始时工作区干净；未提交、停服、重启或执行业务库迁移，未清理业务 Redis 数据。
+- 根因与修复：SES Client 原先把供应商错误码压成 `ses_error`，Mail Service 再统一映射 `503/10006`“服务暂未就绪”。现在保留腾讯云错误码，发送渠道失败使用 `503/18001`，按明确的供应商代码区分拒收、超时、限频、配额/模板不可用；未知错误使用明确的“邮件发送失败”提示，中英文同时提供。收件规则拒绝仍为 `403/18000`，本地额度限制、数据库/Redis 失败保持原语义。
+- 诊断与失败边界：管理员日志保留供应商代码、摘要及可用的 RequestId，遮盖当前 SecretID/SecretKey/验证码；普通用户只收到固定公开文案。代码限长及字符校验、摘要 NUL/非法 UTF-8 修复和安全截断避免坏响应破坏日志；缺少发送回执不再当作成功。包装错误使用 `errors.As`，日志写失败保留供应商与数据库两条错误链。SDK 会压平网络错误，因此在每次 Send 独立的 transport 边界捕获超时类型，不解析错误文案、不新增重试或共享可变请求状态。
+- 实际修改：`server/internal/storage/mail/tencent_ses.go`、`server/internal/module/message/mail/{errors,provider,service}.go`、`server/internal/shared/i18n/catalog.go` 及其测试；补充 `user/email` Handler/Service 回归和 `web/tests/utils/request.test.ts`。前端生产代码无需修改，现有请求层保留邮件提示且只通知一次；失败发送清理未发送 proof、不启动前端成功倒计时的既有协议不变。
+- 红绿验证：原先公开错误码/文案、SDK 错误码保留、包装错误、日志双错误链、畸形回执、诊断截断/脱敏、网络提前超时均先观察到预期失败，再修复通过。腾讯云请求全由本地 HTTP transport 模拟；数据库集成测试使用隔离 schema，未发送真实邮件。
+- 后端验证（`server`）：`go test ./internal/storage/mail -count=1`；`go test ./internal/module/message/mail/... ./internal/module/user/email ./internal/module/auth/login ./internal/shared/i18n ./internal/shared/response ./internal/architecture -count=1`；`go fmt ./...`、`go vet ./...`、`go build ./...` 均通过。
+- 前端验证（`web`）：`pnpm vitest run tests/utils/request.test.ts tests/api/user/email.test.ts tests/views/user/profile/index.test.ts --pool=threads --maxWorkers=1` 为 3 文件 / 64 项通过；`pnpm typecheck`、`pnpm exec eslint tests/utils/request.test.ts --max-warnings 0`、`pnpm exec prettier --check tests/utils/request.test.ts` 和根目录 `git diff --check` 通过。只读审查及超时补充复核无遗留问题。
+- 未运行与后续：未跑全量 Go/Vitest、前端构建或浏览器验收，未做真实腾讯云发送联调；维护者重启后端后检查实际失败反馈，本轮不需要数据库迁移。下一项仍是登录页后端恢复后的重试 Bug，再恢复字段清理。
+
 ## 系统设置媒体值类型（2026-09-30，代码与真实迁移已完成）
 
 - 最终契约：媒体是通用设置编辑器的值类型 `5`，与字符串、数字、布尔值、JSON 并列；没有独立媒体页签。系统设置保留“高级设置 / 协议与隐私”，默认高级设置。默认头像、CSV 模板和任意自定义媒体设置都在高级列表的新增/编辑弹窗中使用 UpMedia，统一上传编码 `setting`，配置值仍保存 TEXT 对象键。

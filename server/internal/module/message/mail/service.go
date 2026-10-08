@@ -366,9 +366,10 @@ func (s *Service) failPending(ctx context.Context, platformID, logID int64, caus
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 	defer cancel()
 	if me := s.stores.Log.MarkFailed(cleanupCtx, platformID, logID, providerErrorValue.Code, providerErrorValue.Summary, time.Since(started).Milliseconds()); me != nil {
-		return SendResult{LogID: logID, Status: StatusPending}, dependency(fmt.Errorf("persist failed mail status: %w", me))
+		return SendResult{LogID: logID, Status: StatusPending}, dependency(fmt.Errorf("persist failed mail status: %w", errors.Join(cause, me)))
 	}
-	if _, ok := cause.(*ProviderError); ok {
+	var failure *ProviderError
+	if errors.As(cause, &failure) {
 		return SendResult{LogID: logID, Status: StatusFailed}, providerFailure(cause)
 	}
 	return SendResult{LogID: logID, Status: StatusFailed}, dependency(cause)
@@ -406,12 +407,6 @@ func errorSummary(err error) string {
 	return truncateErrorSummary(err.Error())
 }
 
-func truncateErrorSummary(value string) string {
-	if len(value) > 512 {
-		return value[:512]
-	}
-	return value
-}
 func fixedTemplate(scene string) (mailtemplate.Fixed, bool) { return mailtemplate.FindFixed(scene) }
 func decryptMailSecret(k *secretkey.KeyRing, ct string) (string, error) {
 	if k == nil {

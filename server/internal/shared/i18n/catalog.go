@@ -77,6 +77,11 @@ const (
 	KeySessionRevokeFailed          MessageKey = "session.revokeFailed"
 	KeyOperationLogQueryFailed      MessageKey = "operationLog.queryFailed"
 	KeyMailRecipientDenied          MessageKey = "mail.recipientDenied"
+	KeyMailSendFailed               MessageKey = "mail.sendFailed"
+	KeyMailSendTimeout              MessageKey = "mail.sendTimeout"
+	KeyMailRecipientRejected        MessageKey = "mail.recipientRejected"
+	KeyMailProviderLimited          MessageKey = "mail.providerLimited"
+	KeyMailProviderUnavailable      MessageKey = "mail.providerUnavailable"
 	KeyMailRuleImportInvalid        MessageKey = "mail.ruleImportInvalid"
 	KeyMailRuleImportConflict       MessageKey = "mail.ruleImportConflict"
 	KeyMailRuleExportLimit          MessageKey = "mail.ruleExportLimit"
@@ -152,6 +157,11 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySessionRevokeFailed:          "会话撤销失败",
 		KeyOperationLogQueryFailed:      "操作日志查询失败",
 		KeyMailRecipientDenied:          "收件邮箱被收件规则拒绝",
+		KeyMailSendFailed:               "邮件发送失败，请稍后重试；如持续失败，请联系管理员",
+		KeyMailSendTimeout:              "邮件发送超时，请稍后重试",
+		KeyMailRecipientRejected:        "邮件服务商拒绝向该邮箱发送邮件，请检查邮箱地址或更换邮箱",
+		KeyMailProviderLimited:          "邮件服务商发送频率受限，请稍后重试",
+		KeyMailProviderUnavailable:      "邮件发送服务暂不可用，请联系管理员处理",
 		KeyMailRateLimitInvalid:         "邮件限流策略参数无效",
 		KeyMailRateLimitNotFound:        "邮件限流策略不存在",
 		KeyMailRateLimitUnavailable:     "邮件限流策略暂不可用",
@@ -222,6 +232,11 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySessionRevokeFailed:          "Failed to revoke session",
 		KeyOperationLogQueryFailed:      "Failed to query operation logs",
 		KeyMailRecipientDenied:          "Recipient rejected by mail rule",
+		KeyMailSendFailed:               "Email could not be sent. Please try again later or contact an administrator if the problem persists",
+		KeyMailSendTimeout:              "Email sending timed out. Please try again later",
+		KeyMailRecipientRejected:        "The email provider rejected this recipient. Please check the email address or use another one",
+		KeyMailProviderLimited:          "The email provider is rate limiting delivery. Please try again later",
+		KeyMailProviderUnavailable:      "The email sending service is unavailable. Please contact an administrator",
 		KeyMailRateLimitInvalid:         "Mail rate limit policy parameters are invalid",
 		KeyMailRateLimitNotFound:        "Mail rate limit policy not found",
 		KeyMailRateLimitUnavailable:     "Mail rate limit policy is unavailable",

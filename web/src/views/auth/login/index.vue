@@ -5,14 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus/es/components/message/index'
 
-import {
-  getCurrentUser,
-  getLoginConfig,
-  login,
-  sendLoginCode,
-  type LoginConfigOption,
-  type LoginType,
-} from '@/api/auth/login'
+import { getCurrentUser, login, sendLoginCode } from '@/api/auth/login'
 import { getPublicLegalDocument, type LegalDocumentKind } from '@/api/system/setting'
 import logoUrl from '@/assets/logo.png'
 import AppCaptcha from '@/components/AppCaptcha/index.vue'
@@ -27,20 +20,27 @@ import {
   showLoginSuccess,
   type LoginForm,
 } from './loginPage'
+import { useLoginInitialization } from './useLoginInitialization'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const auth = useAuthStore()
 const form = ref<LoginForm>({ account: '', password: '', code: '' })
-const options = ref<LoginConfigOption[]>([])
-const allowRegister = ref(false)
-const activeType = ref<LoginType>()
-const loading = ref(false)
-const configFailed = ref(false)
 const pending = ref(false)
 const submitError = ref('')
 const sending = ref(false)
+const {
+  options,
+  allowRegister,
+  activeType,
+  loading,
+  retrying,
+  configFailed,
+  bootstrapError,
+  loadLoginConfig,
+  retryInitialization,
+} = useLoginInitialization(() => pending.value || sending.value)
 const resendSeconds = ref(0)
 const deliveryChallengeId = ref(generateChallengeID())
 const proofChallengeId = ref('')
@@ -52,7 +52,6 @@ const legalDocumentLoading = ref(false)
 const legalDocumentError = ref('')
 let countdownTimer: ReturnType<typeof setInterval> | undefined
 let legalDocumentRequestSequence = 0
-const bootstrapError = computed(() => (auth.status === 'error' ? auth.errorMessage : ''))
 const brandPoints = computed(() => [
   t('auth.brand.pointOne'),
   t('auth.brand.pointTwo'),
@@ -93,25 +92,6 @@ onMounted(() => {
   void loadLoginConfig()
 })
 
-async function loadLoginConfig(): Promise<void> {
-  if (loading.value) return
-  loading.value = true
-  try {
-    const config = await getLoginConfig()
-    options.value = config.loginTypes
-    allowRegister.value = config.allowRegister
-    activeType.value = config.loginTypes[0]?.value
-    configFailed.value = false
-  } catch {
-    options.value = []
-    allowRegister.value = false
-    activeType.value = undefined
-    configFailed.value = true
-  } finally {
-    loading.value = false
-  }
-}
-
 async function openLegalDocument(kind: LegalDocumentKind): Promise<void> {
   const requestSequence = ++legalDocumentRequestSequence
   legalDocumentKind.value = kind
@@ -140,7 +120,14 @@ onUnmounted(() => {
 })
 
 function sendCode(): void {
-  if (sending.value || resendSeconds.value > 0) return
+  if (
+    configFailed.value ||
+    loading.value ||
+    retrying.value ||
+    sending.value ||
+    resendSeconds.value > 0
+  )
+    return
   const loginType = activeType.value
   if (loginType !== 'email' && loginType !== 'phone') return
   if (form.value.account.trim() === '') {
@@ -155,7 +142,7 @@ async function completeCaptcha(value: {
   captchaId: string
   captchaAnswer: { x: number; y: number }
 }): Promise<void> {
-  if (sending.value) return
+  if (configFailed.value || loading.value || retrying.value || sending.value) return
   const loginType = activeType.value
   if (loginType !== 'email' && loginType !== 'phone') return
   sending.value = true
@@ -192,7 +179,7 @@ function startCountdown(): void {
 }
 
 async function submit(): Promise<void> {
-  if (pending.value) return
+  if (configFailed.value || loading.value || retrying.value || pending.value) return
   const loginType = activeType.value
   if (loginType === undefined) return
   if (form.value.account.trim() === '') {
@@ -294,27 +281,33 @@ async function submit(): Promise<void> {
           <p v-if="submitError" class="auth-error" data-testid="login-error">{{ submitError }}</p>
 
           <div
-            v-if="configFailed"
+            v-if="configFailed || bootstrapError || retrying"
             class="auth-config-error"
-            data-testid="login-config-error"
             role="status"
           >
-            <p>{{ t('auth.login.configUnavailable') }}</p>
+            <p v-if="configFailed" data-testid="login-config-error">
+              {{ t('auth.login.configUnavailable') }}
+            </p>
             <el-button
               data-testid="login-config-retry"
               type="primary"
               plain
-              :loading="loading"
-              :disabled="loading"
+              :loading="loading || retrying"
+              :disabled="loading || retrying || pending || sending"
               :icon="RefreshRight"
-              @click="loadLoginConfig"
+              @click="retryInitialization"
             >
               {{ t('auth.login.configRetry') }}
             </el-button>
           </div>
 
           <el-form
-            v-if="!loading && options.length > 0"
+            v-if="
+              !loading &&
+              !retrying &&
+              options.length > 0 &&
+              (auth.status !== 'authenticated' || pending)
+            "
             class="auth-form"
             :model="form"
             label-position="top"

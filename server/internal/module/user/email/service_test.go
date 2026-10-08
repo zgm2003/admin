@@ -40,11 +40,16 @@ type fakeVerificationStore struct {
 	checkLimited bool
 	checkCalls   int
 	checkIPs     []string
+	putCalls     int
+	deleteCalls  int
+	releaseCalls int
+	deleteErr    error
 }
 
 type fakeEmailSender struct {
 	prepareInput messagemail.EmailVerifyCodePrepareInput
 	sendInput    messagemail.EmailVerifyCodeInput
+	sendErr      error
 }
 
 func (*fakeEmailSender) VerifyCodeReady(context.Context, string) (messagemail.VerifyCodeReadiness, error) {
@@ -56,7 +61,7 @@ func (f *fakeEmailSender) PrepareEmailVerifyCode(_ context.Context, input messag
 }
 func (f *fakeEmailSender) SendPreparedEmailVerifyCode(_ context.Context, input messagemail.EmailVerifyCodeInput) (messagemail.EmailVerifyCodeResult, error) {
 	f.sendInput = input
-	return messagemail.EmailVerifyCodeResult{ChallengeID: input.ChallengeID, ExpiresAt: input.ExpiresAt}, nil
+	return messagemail.EmailVerifyCodeResult{ChallengeID: input.ChallengeID, ExpiresAt: input.ExpiresAt}, f.sendErr
 }
 
 func (f *fakeVerificationStore) VerificationKey(platform, scene, loginType, account string) string {
@@ -68,7 +73,8 @@ func (*fakeVerificationStore) ProofDigest(challengeID, code string) string {
 func (*fakeVerificationStore) AcquireDelivery(context.Context, string, string, time.Duration) (bool, error) {
 	return true, nil
 }
-func (*fakeVerificationStore) Put(context.Context, string, string, string, time.Duration) error {
+func (f *fakeVerificationStore) Put(context.Context, string, string, string, time.Duration) error {
+	f.putCalls++
 	return nil
 }
 func (f *fakeVerificationStore) CheckAttempt(_ context.Context, _ string, _ string, clientIP string) (bool, bool, error) {
@@ -82,8 +88,14 @@ func (f *fakeVerificationStore) ConsumeMany(_ context.Context, keys, digests []s
 	f.digests = append([]string(nil), digests...)
 	return f.valid, nil
 }
-func (*fakeVerificationStore) DeleteIfOwned(context.Context, string, string) error   { return nil }
-func (*fakeVerificationStore) ReleaseDelivery(context.Context, string, string) error { return nil }
+func (f *fakeVerificationStore) DeleteIfOwned(context.Context, string, string) error {
+	f.deleteCalls++
+	return f.deleteErr
+}
+func (f *fakeVerificationStore) ReleaseDelivery(context.Context, string, string) error {
+	f.releaseCalls++
+	return nil
+}
 
 type fakeAuthority struct {
 	calls int

@@ -16,6 +16,10 @@ import (
 // RBAC forbidden code so clients can tell the two 403 semantics apart.
 const CodeRecipientDenied = 18000
 
+// CodeSendFailed distinguishes an upstream delivery failure from local
+// infrastructure/readiness failures. Provider diagnostics remain internal.
+const CodeSendFailed = 18001
+
 var (
 	ErrRecipientDenied = errors.New("mail recipient denied")
 	ErrRateLimited     = errors.New("mail rate limited")
@@ -36,7 +40,28 @@ func denied(err error) error {
 	}
 }
 func providerFailure(err error) error {
-	return apperror.DependencyUnavailable(fmt.Errorf("mail provider: %w", err))
+	key := i18n.KeyMailSendFailed
+	var failure *ProviderError
+	if errors.As(err, &failure) {
+		switch failure.Code {
+		case "timeout":
+			key = i18n.KeyMailSendTimeout
+		case "FailedOperation.EmailAddrInBlacklist", "FailedOperation.ReceiverHasUnsubscribed",
+			"FailedOperation.RejectedByRecipients", "InvalidParameterValue.ReceiverEmailInvalid":
+			key = i18n.KeyMailRecipientRejected
+		case "FailedOperation.FrequencyLimit", "RequestLimitExceeded":
+			key = i18n.KeyMailProviderLimited
+		case "FailedOperation.InsufficientBalance", "FailedOperation.InsufficientQuota",
+			"FailedOperation.InvalidTemplateID", "FailedOperation.NotAuthenticatedSender":
+			key = i18n.KeyMailProviderUnavailable
+		}
+	}
+	return &apperror.Error{
+		HTTPStatus: http.StatusServiceUnavailable,
+		Code:       CodeSendFailed,
+		MessageKey: key,
+		Cause:      fmt.Errorf("mail provider: %w", err),
+	}
 }
 
 func rateLimitInvalid(err error) error {

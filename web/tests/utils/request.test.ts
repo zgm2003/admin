@@ -220,6 +220,32 @@ describe('createRequestClient', () => {
     expect(ElNotification.error).toHaveBeenCalledOnce()
   })
 
+  it('preserves mail delivery feedback and notifies once without refreshing the session', async () => {
+    const auth = useAuthStore(pinia)
+    auth.setCredential({
+      accessToken: 'existing-access-token',
+      expiresIn: 900,
+      isNewUser: false,
+      passwordSetRequired: false,
+    })
+    const message = '邮件服务商拒绝向该邮箱发送邮件，请检查邮箱地址或更换邮箱'
+    const adapter = vi.fn(failureAdapter(503, { code: 18001, data: null, message }))
+    const client = createRequestClient('http://localhost:16301', adapter)
+
+    await expect(
+      client.post('/api/admin/v1/user/email/send-code', {
+        target: 'next',
+        email: 'recipient@example.com',
+      }),
+    ).rejects.toMatchObject({ code: 18001, httpStatus: 503, message })
+
+    expect(adapter).toHaveBeenCalledOnce()
+    expect(ElNotification.error).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message }),
+    )
+    expect(auth.accessToken).toBe('existing-access-token')
+  })
+
   it('does not notify an intermediate 401 that is recovered by Refresh', async () => {
     let refreshed = false
     const adapter: AxiosAdapter = async (config) => {
