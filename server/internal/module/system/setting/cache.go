@@ -12,6 +12,7 @@ import (
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/cacheFill"
 	"admin/server/internal/shared/cacheGeneration"
+	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -180,6 +181,9 @@ func encodeRecordPayload(generation int64, row Record) (string, error) {
 	if generation < 1 || row.Key == "" || (row.ValueType == ValueTypeMedia && !validSettingValue(row.Value, ValueTypeMedia)) {
 		return "", fmt.Errorf("setting snapshot payload is invalid")
 	}
+	if row.Key == sharedsetting.MailRecipientRuleImportTemplateObjectKey && validateInput(row.Key, row.Value, row.ValueType, row.Description) != nil {
+		return "", fmt.Errorf("setting template snapshot is invalid")
+	}
 	payload, err := json.Marshal(recordPayload{
 		SchemaVersion: cachePayloadSchemaVersion, Generation: generation,
 		ID: row.ID, Key: row.Key, Value: row.Value, ValueType: row.ValueType, Description: row.Description,
@@ -211,6 +215,9 @@ func decodeRecordPayload(raw string) (recordPayload, error) {
 	}
 	if payload.ValueType == ValueTypeMedia && !validSettingValue(payload.Value, ValueTypeMedia) {
 		return recordPayload{}, fmt.Errorf("%w: setting media object key is invalid", ErrSnapshotCorrupt)
+	}
+	if payload.Key == sharedsetting.MailRecipientRuleImportTemplateObjectKey && validateInput(payload.Key, payload.Value, payload.ValueType, payload.Description) != nil {
+		return recordPayload{}, fmt.Errorf("%w: setting template object key is invalid", ErrSnapshotCorrupt)
 	}
 	if !yesno.IsValid(payload.IsEnabled) || !yesno.IsValid(payload.IsBuiltin) {
 		return recordPayload{}, fmt.Errorf("%w: setting snapshot flags are invalid", ErrSnapshotCorrupt)

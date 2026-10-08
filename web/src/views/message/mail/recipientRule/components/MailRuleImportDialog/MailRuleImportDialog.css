@@ -1,0 +1,31 @@
+.xlsx-format,
+.xlsx-template-hint {
+  color: var(--el-text-color-secondary);
+  line-height: 1.7;
+  font-size: 13px;
+}
+.xlsx-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+.xlsx-file-input {
+  display: none;
+}
+.xlsx-file-name {
+  overflow-wrap: anywhere;
+}
+.xlsx-alert {
+  margin: 12px 0;
+}
+.xlsx-values {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.xlsx-errors {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--el-color-danger);
+}

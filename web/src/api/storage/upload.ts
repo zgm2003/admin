@@ -36,12 +36,16 @@ export async function requestUploadCredentials(
   )
 }
 
-export async function requestObjectURL(objectKey: string): Promise<ObjectURLResult> {
+export async function requestObjectURL(
+  objectKey: string,
+  signal?: AbortSignal,
+): Promise<ObjectURLResult> {
   const value = expectExactKeys(
     await request({
       method: 'POST',
       url: '/api/v1/storage/object-url',
       data: { objectKey },
+      ...(signal ? { signal } : {}),
     }),
     ['url', 'expiresAt'] as const,
     'object url',

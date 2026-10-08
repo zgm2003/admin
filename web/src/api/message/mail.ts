@@ -535,16 +535,17 @@ export function deleteMailRule(id: number): Promise<Record<string, never>> {
   }).then((value) => expectEmptyObject(value, 'mail rule delete result'))
 }
 
-export const mailRuleCSVMaxRows = 1000
-export const mailRuleCSVMaxBytes = 1024 * 1024
-export const mailRuleCSVHeader = '类型,邮箱/域名,动作,名称,备注,启用状态'
-export const mailRuleCSVErrorCodes = [
+export const mailRuleXlsxMaxRows = 1000
+export const mailRuleXlsxMaxBytes = 2 * 1024 * 1024
+export const mailRuleXlsxMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+export const mailRuleXlsxErrorCodes = [
   'empty',
   'too_large',
   'too_many_rows',
-  'invalid_encoding',
   'invalid_header',
-  'invalid_csv',
+  'invalid_xlsx',
+  'missing_sheet',
+  'unsupported_formula',
   'invalid_columns',
   'invalid_scope',
   'invalid_pattern',
@@ -556,119 +557,212 @@ export const mailRuleCSVErrorCodes = [
   'duplicate_file',
   'duplicate_existing',
 ] as const
-export type MailRuleCSVError = (typeof mailRuleCSVErrorCodes)[number]
-export interface MailRuleCSVRow {
+export type MailRuleXlsxError = (typeof mailRuleXlsxErrorCodes)[number]
+export interface MailRuleXlsxRow {
   line: number
-  values: string[]
-  errors: MailRuleCSVError[]
+  rawValues: string[]
+  data: MailRuleInput | null
+  errors: MailRuleXlsxError[]
 }
-export interface MailRuleCSVPreview {
-  rows: MailRuleCSVRow[]
-  errors: MailRuleCSVError[]
+export interface MailRuleXlsxPreview {
+  rows: MailRuleXlsxRow[]
+  errors: MailRuleXlsxError[]
 }
-export interface MailRuleCSVFile {
+export interface MailRuleXlsxExportFile {
   fileName: string
-  content: string
+  content: ArrayBuffer
 }
 
-function parseCSVErrors(value: unknown): MailRuleCSVError[] {
-  const codes = expectArray(value, 'mail CSV errors').map((code) => {
-    const text = expectString(code, 'mail CSV error')
-    const known = mailRuleCSVErrorCodes.find((candidate) => candidate === text)
-    if (known === undefined) throw new ProtocolError('mail CSV error code is unknown')
+const mailRuleXlsxFileErrors = new Set<MailRuleXlsxError>([
+  'empty',
+  'too_large',
+  'too_many_rows',
+  'invalid_header',
+  'invalid_xlsx',
+  'missing_sheet',
+  'unsupported_formula',
+  'invalid_columns',
+])
+
+function parseXlsxErrors(value: unknown, level: 'file' | 'row'): MailRuleXlsxError[] {
+  const codes = expectArray(value, 'mail XLSX errors').map((code) => {
+    const text = expectString(code, 'mail XLSX error')
+    const known = mailRuleXlsxErrorCodes.find((candidate) => candidate === text)
+    if (known === undefined) throw new ProtocolError('mail XLSX error code is unknown')
+    if (mailRuleXlsxFileErrors.has(known) !== (level === 'file'))
+      throw new ProtocolError('mail XLSX error level is invalid')
     return known
   })
   if (new Set(codes).size !== codes.length)
-    throw new ProtocolError('mail CSV errors are duplicated')
+    throw new ProtocolError('mail XLSX errors are duplicated')
   return codes
 }
 
-function parseMailRuleCSVPreview(value: unknown): MailRuleCSVPreview {
-  const data = expectExactKeys(value, ['rows', 'errors'], 'mail CSV preview')
-  let previousLine = 1
-  const rows = expectArray(data.rows, 'mail CSV rows').map((value): MailRuleCSVRow => {
-    const row = expectExactKeys(value, ['line', 'values', 'errors'], 'mail CSV row')
-    const line = expectInteger(row.line, 'mail CSV row.line')
-    if (line <= previousLine) throw new ProtocolError('mail CSV row lines are invalid')
-    previousLine = line
-    const values = expectArray(row.values, 'mail CSV row.values').map((value) =>
-      expectString(value, 'mail CSV cell'),
-    )
-    const errors = parseCSVErrors(row.errors)
-    if (values.length !== 6 && !errors.includes('invalid_columns'))
-      throw new ProtocolError('mail CSV row columns are invalid')
-    if (
-      errors.length === 0 &&
-      ((values[0] !== 'email' && values[0] !== 'domain') ||
-        values[1] === '' ||
-        (values[2] !== 'allow' && values[2] !== 'deny') ||
-        expectString(values[3], 'mail CSV name').trim() === '' ||
-        (values[5] !== '0' && values[5] !== '1'))
-    )
-      throw new ProtocolError('mail CSV valid row is invalid')
-    return { line, values, errors }
-  })
-  if (rows.length > mailRuleCSVMaxRows)
-    throw new ProtocolError('mail CSV preview exceeds row limit')
-  return { rows, errors: parseCSVErrors(data.errors) }
+function parseMailRuleXlsxData(value: unknown): MailRuleInput {
+  const data = expectExactKeys(
+    value,
+    ['scope', 'pattern', 'action', 'name', 'remark', 'isEnabled'],
+    'mail XLSX row.data',
+  )
+  if (!isMailRuleScope(data.scope) || !isMailRuleAction(data.action) || !isYesNo(data.isEnabled))
+    throw new ProtocolError('mail XLSX row.data enum is invalid')
+  return {
+    scope: data.scope,
+    pattern: expectString(data.pattern, 'mail XLSX row.data.pattern'),
+    action: data.action,
+    name: expectString(data.name, 'mail XLSX row.data.name'),
+    remark: expectString(data.remark, 'mail XLSX row.data.remark'),
+    isEnabled: data.isEnabled,
+  }
 }
 
-export async function getMailRuleImportTemplate(): Promise<{ objectKey: string }> {
+function parseMailRuleXlsxPreview(value: unknown): MailRuleXlsxPreview {
+  const data = expectExactKeys(value, ['rows', 'errors'], 'mail XLSX preview')
+  let previousLine = 1
+  const rows = expectArray(data.rows, 'mail XLSX rows').map((value): MailRuleXlsxRow => {
+    const row = expectExactKeys(value, ['line', 'rawValues', 'data', 'errors'], 'mail XLSX row')
+    const line = expectInteger(row.line, 'mail XLSX row.line')
+    if (line <= previousLine || line > mailRuleXlsxMaxRows + 1)
+      throw new ProtocolError('mail XLSX row lines are invalid')
+    previousLine = line
+    const rawValues = expectArray(row.rawValues, 'mail XLSX row.rawValues').map((value) =>
+      expectString(value, 'mail XLSX raw cell'),
+    )
+    if (rawValues.length !== 6) throw new ProtocolError('mail XLSX raw columns are invalid')
+    const errors = parseXlsxErrors(row.errors, 'row')
+    const parsedData = row.data === null ? null : parseMailRuleXlsxData(row.data)
+    const duplicate = (error: MailRuleXlsxError) =>
+      error === 'duplicate_file' || error === 'duplicate_existing'
+    if (
+      parsedData === null
+        ? errors.length === 0 || errors.some(duplicate)
+        : errors.some((error) => !duplicate(error))
+    )
+      throw new ProtocolError('mail XLSX row data and errors are inconsistent')
+    return { line, rawValues, data: parsedData, errors }
+  })
+  if (rows.length > mailRuleXlsxMaxRows)
+    throw new ProtocolError('mail XLSX preview exceeds row limit')
+  return { rows, errors: parseXlsxErrors(data.errors, 'file') }
+}
+
+export async function getMailRuleImportTemplate(
+  signal?: AbortSignal,
+): Promise<{ objectKey: string }> {
   const data = expectExactKeys(
     await request({
       method: 'GET',
       url: '/api/admin/v1/message/mail/recipient-rule/import-template',
+      ...(signal ? { signal } : {}),
     }),
     ['objectKey'],
-    'mail CSV template',
+    'mail Xlsx template',
   )
-  const objectKey = expectString(data.objectKey, 'mail CSV template.objectKey')
-  if (objectKey !== '' && (!isStorageObjectKey(objectKey) || !objectKey.endsWith('.csv')))
-    throw new ProtocolError('mail CSV template object key is invalid')
+  const objectKey = expectString(data.objectKey, 'mail Xlsx template.objectKey')
+  if (objectKey !== '' && (!isStorageObjectKey(objectKey) || !objectKey.endsWith('.xlsx')))
+    throw new ProtocolError('mail Xlsx template object key is invalid')
   return { objectKey }
 }
 
-export async function previewMailRuleImport(content: string): Promise<MailRuleCSVPreview> {
-  return parseMailRuleCSVPreview(
+export async function previewMailRuleXlsx(
+  input: MailRuleXlsxImportInput,
+  signal?: AbortSignal,
+): Promise<MailRuleXlsxPreview> {
+  const data = parseMailRuleXlsxInput(input)
+  return parseMailRuleXlsxPreview(
     await request({
       method: 'POST',
       url: '/api/admin/v1/message/mail/recipient-rule/import/preview',
-      data: { content },
+      data,
+      ...(signal ? { signal } : {}),
     }),
   )
 }
 
-export async function importMailRules(content: string): Promise<{ imported: number }> {
+export async function importMailRuleXlsx(
+  input: MailRuleXlsxImportInput,
+  signal?: AbortSignal,
+): Promise<{ imported: number }> {
+  const payload = parseMailRuleXlsxInput(input)
   const data = expectExactKeys(
     await request({
       method: 'POST',
       url: '/api/admin/v1/message/mail/recipient-rule/import',
-      data: { content },
+      data: payload,
+      ...(signal ? { signal } : {}),
     }),
     ['imported'],
-    'mail CSV import',
+    'mail Xlsx import',
   )
-  const imported = expectInteger(data.imported, 'mail CSV import.imported')
-  if (imported < 1 || imported > mailRuleCSVMaxRows)
-    throw new ProtocolError('mail CSV imported count is invalid')
+  const imported = expectInteger(data.imported, 'mail Xlsx import.imported')
+  if (imported < 1 || imported > mailRuleXlsxMaxRows)
+    throw new ProtocolError('mail Xlsx imported count is invalid')
   return { imported }
 }
 
-export async function exportMailRules(): Promise<MailRuleCSVFile> {
+export async function exportMailRuleXlsx(signal?: AbortSignal): Promise<MailRuleXlsxExportFile> {
   const data = expectExactKeys(
-    await request({ method: 'GET', url: '/api/admin/v1/message/mail/recipient-rule/export' }),
-    ['fileName', 'content'],
-    'mail CSV export',
+    await request({
+      method: 'GET',
+      url: '/api/admin/v1/message/mail/recipient-rule/export',
+      ...(signal ? { signal } : {}),
+    }),
+    ['fileName', 'contentBase64'],
+    'mail xlsx export',
   )
-  const fileName = expectString(data.fileName, 'mail CSV export.fileName')
-  const content = expectString(data.content, 'mail CSV export.content')
-  if (
-    fileName !== 'mail-recipient-rule.csv' ||
-    !content.startsWith(`\ufeff${mailRuleCSVHeader}\n`) ||
-    new TextEncoder().encode(content).byteLength > mailRuleCSVMaxBytes
-  )
-    throw new ProtocolError('mail CSV file is invalid')
+  const fileName = expectString(data.fileName, 'xlsx filename')
+  if (fileName !== 'mail-recipient-rule.xlsx') throw new ProtocolError('xlsx filename is invalid')
+  const content = decodeMailRuleXlsx(expectString(data.contentBase64, 'xlsx content'))
   return { fileName, content }
+}
+
+export interface MailRuleXlsxImportInput {
+  fileName: string
+  contentBase64: string
+}
+
+function parseMailRuleXlsxInput(value: unknown): MailRuleXlsxImportInput {
+  const data = expectExactKeys(value, ['fileName', 'contentBase64'], 'mail XLSX input')
+  const fileName = expectString(data.fileName, 'mail XLSX input.fileName')
+  if (
+    fileName !== fileName.trim() ||
+    fileName.length <= 5 ||
+    fileName.length > 255 ||
+    !fileName.toLowerCase().endsWith('.xlsx') ||
+    /[\\/:*?"<>|]/u.test(fileName) ||
+    [...fileName].some(
+      (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+    )
+  )
+    throw new ProtocolError('mail XLSX input filename is invalid')
+  const contentBase64 = expectString(data.contentBase64, 'mail XLSX input.contentBase64')
+  decodeMailRuleXlsx(contentBase64)
+  return { fileName, contentBase64 }
+}
+
+export function decodeMailRuleXlsx(value: string): ArrayBuffer {
+  if (
+    value.length === 0 ||
+    value.length > 4 * Math.ceil(mailRuleXlsxMaxBytes / 3) ||
+    value.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(value)
+  )
+    throw new ProtocolError('xlsx base64 is invalid')
+  let binary: string
+  try {
+    binary = atob(value)
+  } catch {
+    throw new ProtocolError('xlsx base64 is invalid')
+  }
+  if (
+    btoa(binary) !== value ||
+    binary.length > mailRuleXlsxMaxBytes ||
+    binary.slice(0, 4) !== 'PK\x03\x04'
+  )
+    throw new ProtocolError('xlsx bytes are invalid')
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes.buffer
 }
 
 export interface MailRateLimitPolicy {

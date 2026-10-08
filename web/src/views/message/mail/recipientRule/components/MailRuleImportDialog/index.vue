@@ -4,14 +4,17 @@ import { ElMessage } from 'element-plus/es/components/message/index'
 import { useI18n } from 'vue-i18n'
 import {
   getMailRuleImportTemplate,
-  importMailRules,
-  mailRuleCSVMaxBytes,
-  previewMailRuleImport,
-  type MailRuleCSVPreview,
-  type MailRuleCSVRow,
+  importMailRuleXlsx,
+  mailRuleXlsxMaxBytes,
+  previewMailRuleXlsx,
+  type MailRuleXlsxPreview,
+  type MailRuleXlsxRow,
 } from '@/api/message/mail'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { requestObjectURL } from '@/api/storage/upload'
+import { MailRuleAction, MailRuleScope } from '@/enums/mailRecipientRule'
+import { YesNo } from '@/enums/yesNo'
+import { readXlsxFile } from './readXlsxFile'
 
 const props = defineProps<{ canImport: boolean }>()
 const visible = defineModel<boolean>({ required: true })
@@ -20,7 +23,7 @@ const { t } = useI18n()
 const fileInput = ref<HTMLInputElement | null>(null)
 const fileName = ref('')
 const content = ref<string | null>(null)
-const preview = ref<MailRuleCSVPreview | null>(null)
+const preview = ref<MailRuleXlsxPreview | null>(null)
 const templateURL = ref('')
 const templateLoading = ref(false)
 const templateError = ref('')
@@ -33,8 +36,10 @@ const pageSize = ref(20)
 let previewSequence = 0
 let templateSequence = 0
 let mounted = true
+let previewController: AbortController | null = null
+let templateController: AbortController | null = null
 
-interface PreviewRow extends MailRuleCSVRow {
+interface PreviewRow extends MailRuleXlsxRow {
   rowId: string
 }
 const rows = computed<PreviewRow[]>(() =>
@@ -63,10 +68,26 @@ const pagination = computed<TablePaginationState>(() => ({
   total: rows.value.length,
 }))
 const columns = computed<TableColumn<PreviewRow>[]>(() => [
-  { prop: 'line', label: t('mail.ruleCSV.line'), width: 80 },
-  { key: 'values', prop: 'values', label: t('mail.ruleCSV.values'), minWidth: 360 },
-  { key: 'errors', prop: 'errors', label: t('mail.ruleCSV.validation'), minWidth: 260 },
+  { prop: 'line', label: t('mail.ruleXlsx.line'), width: 80 },
+  { key: 'values', prop: 'rawValues', label: t('mail.ruleXlsx.values'), minWidth: 360 },
+  { key: 'errors', prop: 'errors', label: t('mail.ruleXlsx.validation'), minWidth: 260 },
 ])
+
+function displayValues(row: MailRuleXlsxRow): string {
+  const data = row.data
+  return (
+    data === null
+      ? row.rawValues
+      : [
+          t(data.scope === MailRuleScope.Email ? 'mail.email' : 'mail.domain'),
+          data.pattern,
+          t(data.action === MailRuleAction.Allow ? 'mail.allow' : 'mail.deny'),
+          data.name,
+          data.remark,
+          t(data.isEnabled === YesNo.Yes ? 'mail.enabled' : 'mail.disabled'),
+        ]
+  ).join(' | ')
+}
 
 function current(sequence: number): boolean {
   return mounted && visible.value && props.canImport && sequence === previewSequence
@@ -75,12 +96,15 @@ function current(sequence: number): boolean {
 function invalidate(): void {
   previewSequence++
   templateSequence++
+  previewController?.abort()
+  templateController?.abort()
   content.value = null
   preview.value = null
   fileName.value = ''
   error.value = ''
   reading.value = false
   previewing.value = false
+  saving.value = false
   templateURL.value = ''
   templateLoading.value = false
   templateError.value = ''
@@ -88,18 +112,24 @@ function invalidate(): void {
 }
 
 async function loadTemplate(): Promise<void> {
+  if (!visible.value || !props.canImport || templateLoading.value) return
   const sequence = ++templateSequence
+  templateController?.abort()
+  const controller = new AbortController()
+  templateController = controller
   templateLoading.value = true
+  templateError.value = ''
+  templateURL.value = ''
   try {
-    const result = await getMailRuleImportTemplate()
+    const result = await getMailRuleImportTemplate(controller.signal)
     if (!mounted || !visible.value || !props.canImport || sequence !== templateSequence) return
     if (result.objectKey === '') return
-    const resolved = await requestObjectURL(result.objectKey)
+    const resolved = await requestObjectURL(result.objectKey, controller.signal)
     if (mounted && visible.value && props.canImport && sequence === templateSequence)
       templateURL.value = resolved.url
   } catch {
     if (mounted && visible.value && sequence === templateSequence)
-      templateError.value = t('mail.ruleCSV.templateFailed')
+      templateError.value = t('mail.ruleXlsx.templateFailed')
   } finally {
     if (sequence === templateSequence) templateLoading.value = false
   }
@@ -112,39 +142,28 @@ watch(
     if (open && allowed) void loadTemplate()
     else if (open && !allowed) visible.value = false
   },
-  { flush: 'sync' },
+  { flush: 'sync', immediate: true },
 )
 onBeforeUnmount(() => {
   mounted = false
   invalidate()
 })
 
-function readFile(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(new Error(t('mail.ruleCSV.readFailed')))
-    reader.onabort = () => reject(new Error(t('mail.ruleCSV.readFailed')))
-    reader.onload = () => {
-      if (!(reader.result instanceof ArrayBuffer)) {
-        reject(new Error(t('mail.ruleCSV.readFailed')))
-        return
-      }
-      try {
-        resolve(new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(reader.result)))
-      } catch {
-        reject(new Error(t('mail.ruleCSV.error.invalid_encoding')))
-      }
-    }
-    reader.readAsArrayBuffer(file)
-  })
-}
-
 async function selectFile(event: Event): Promise<void> {
-  if (!(event.target instanceof HTMLInputElement) || saving.value || !props.canImport) return
+  if (
+    !(event.target instanceof HTMLInputElement) ||
+    !visible.value ||
+    saving.value ||
+    !props.canImport
+  )
+    return
   const file = event.target.files === null ? undefined : event.target.files[0]
   event.target.value = ''
   if (file === undefined || file === null) return
   const sequence = ++previewSequence
+  previewController?.abort()
+  const controller = new AbortController()
+  previewController = controller
   preview.value = null
   content.value = null
   fileName.value = file.name
@@ -152,24 +171,27 @@ async function selectFile(event: Event): Promise<void> {
   error.value = ''
   reading.value = false
   previewing.value = false
-  if (!file.name.toLowerCase().endsWith('.csv')) {
-    error.value = t('mail.ruleCSV.csvOnly')
+  if (!file.name.toLowerCase().endsWith('.xlsx')) {
+    error.value = t('mail.ruleXlsx.xlsxOnly')
     return
   }
-  if (file.size > mailRuleCSVMaxBytes) {
-    error.value = t('mail.ruleCSV.error.too_large')
+  if (file.size > mailRuleXlsxMaxBytes) {
+    error.value = t('mail.ruleXlsx.error.too_large')
+    return
+  }
+  if (file.size === 0) {
+    error.value = t('mail.ruleXlsx.error.empty')
     return
   }
   reading.value = true
   try {
-    const value = await readFile(file)
+    const value = await readXlsxFile(file, controller.signal)
     if (!current(sequence)) return
     content.value = value
     reading.value = false
     await runPreview(sequence, value)
-  } catch (cause: unknown) {
-    if (current(sequence))
-      error.value = cause instanceof Error ? cause.message : t('mail.ruleCSV.readFailed')
+  } catch {
+    if (current(sequence)) error.value = t('mail.ruleXlsx.readFailed')
   } finally {
     if (current(sequence)) reading.value = false
   }
@@ -180,18 +202,31 @@ async function runPreview(sequence: number, value: string): Promise<void> {
   preview.value = null
   error.value = ''
   try {
-    const result = await previewMailRuleImport(value)
+    const result = await previewMailRuleXlsx(
+      { fileName: fileName.value, contentBase64: value },
+      previewController?.signal,
+    )
     if (current(sequence)) preview.value = result
   } catch {
-    if (current(sequence)) error.value = t('mail.ruleCSV.previewFailed')
+    if (current(sequence)) error.value = t('mail.ruleXlsx.previewFailed')
   } finally {
     if (current(sequence)) previewing.value = false
   }
 }
 
 function retryPreview(): void {
-  if (content.value !== null && props.canImport && !saving.value && !reading.value)
-    void runPreview(++previewSequence, content.value)
+  if (
+    content.value === null ||
+    !visible.value ||
+    !props.canImport ||
+    saving.value ||
+    reading.value ||
+    previewing.value
+  )
+    return
+  previewController?.abort()
+  previewController = new AbortController()
+  void runPreview(++previewSequence, content.value)
 }
 
 async function confirmImport(): Promise<void> {
@@ -199,19 +234,22 @@ async function confirmImport(): Promise<void> {
   const sequence = previewSequence
   saving.value = true
   try {
-    const result = await importMailRules(content.value)
-    emit('imported')
+    const result = await importMailRuleXlsx(
+      { fileName: fileName.value, contentBase64: content.value },
+      previewController?.signal,
+    )
     if (current(sequence)) {
-      ElMessage.success(t('mail.ruleCSV.imported', { count: result.imported }))
+      emit('imported')
+      ElMessage.success(t('mail.ruleXlsx.imported', { count: result.imported }))
       visible.value = false
     }
   } catch {
     if (current(sequence)) {
       preview.value = null
-      error.value = t('mail.ruleCSV.confirmFailed')
+      error.value = t('mail.ruleXlsx.confirmFailed')
     }
   } finally {
-    saving.value = false
+    if (current(sequence)) saving.value = false
   }
 }
 
@@ -224,45 +262,53 @@ function changePage(next: TablePaginationState): void {
 <template>
   <AppDialog
     v-model="visible"
-    :title="t('mail.ruleCSV.importTitle')"
+    :title="t('mail.ruleXlsx.importTitle')"
     width="min(1000px, 96vw)"
     height="560px"
     :show-close="!saving"
     :close-on-press-escape="!saving"
     :close-on-click-modal="false"
   >
-    <el-alert :title="t('mail.ruleCSV.instructions')" type="info" :closable="false" show-icon />
-    <p class="csv-format">{{ t('mail.ruleCSV.format') }}</p>
-    <div class="csv-toolbar">
+    <el-alert :title="t('mail.ruleXlsx.instructions')" type="info" :closable="false" show-icon />
+    <p class="xlsx-format">{{ t('mail.ruleXlsx.format') }}</p>
+    <div class="xlsx-toolbar">
       <a
         v-if="templateURL"
         class="el-button"
         :href="templateURL"
         target="_blank"
         rel="noopener noreferrer"
-        download="mail-recipient-rule-import.csv"
+        download="mail-recipient-rule-import.xlsx"
         data-testid="mail-rule-template-download"
-        >{{ t('mail.ruleCSV.downloadTemplate') }}</a>
+        >{{ t('mail.ruleXlsx.downloadTemplate') }}</a
+      >
       <el-button v-else :loading="templateLoading" disabled>{{
-        t('mail.ruleCSV.downloadTemplate')
+        t('mail.ruleXlsx.downloadTemplate')
       }}</el-button>
       <el-button :disabled="saving || !canImport" @click="fileInput?.click()">{{
-        t('mail.ruleCSV.selectFile')
+        t('mail.ruleXlsx.selectFile')
       }}</el-button>
       <input
         ref="fileInput"
         type="file"
-        accept=".csv,text/csv"
-        class="csv-file-input"
+        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        class="xlsx-file-input"
         data-testid="mail-rule-import-file"
         :disabled="saving || !canImport"
-        :aria-label="t('mail.ruleCSV.selectFile')"
+        :aria-label="t('mail.ruleXlsx.selectFile')"
         @change="selectFile"
       />
-      <span class="csv-file-name">{{ fileName }}</span>
+      <span class="xlsx-file-name">{{ fileName }}</span>
     </div>
-    <p v-if="!templateLoading && !templateURL" class="csv-template-hint">
-      {{ templateError || t('mail.ruleCSV.templateMissing') }}
+    <p v-if="!templateLoading && !templateURL" class="xlsx-template-hint">
+      {{ templateError || t('mail.ruleXlsx.templateMissing') }}
+      <el-button
+        v-if="templateError"
+        text
+        data-testid="mail-rule-template-retry"
+        @click="loadTemplate"
+        >{{ t('mail.ruleXlsx.retryTemplate') }}</el-button
+      >
     </p>
     <el-alert
       v-if="error"
@@ -270,20 +316,20 @@ function changePage(next: TablePaginationState): void {
       type="error"
       :closable="false"
       show-icon
-      class="csv-alert"
+      class="xlsx-alert"
     />
     <el-alert
       v-for="code in preview === null ? [] : preview.errors"
       :key="code"
-      :title="t(`mail.ruleCSV.error.${code}`)"
+      :title="t(`mail.ruleXlsx.error.${code}`)"
       type="error"
       :closable="false"
       show-icon
-      class="csv-alert"
+      class="xlsx-alert"
     />
     <p v-if="preview !== null" data-testid="mail-rule-import-summary">
       {{
-        t('mail.ruleCSV.summary', {
+        t('mail.ruleXlsx.summary', {
           total: rows.length,
           valid: validCount,
           invalid: rows.length - validCount,
@@ -297,29 +343,37 @@ function changePage(next: TablePaginationState): void {
       :loading="reading || previewing"
       row-key="rowId"
       :pagination="pagination"
-      :aria-label="t('mail.ruleCSV.preview')"
-      :refresh-label="t('mail.ruleCSV.preview')"
+      :aria-label="t('mail.ruleXlsx.preview')"
+      :refresh-label="t('mail.ruleXlsx.preview')"
       @refresh="retryPreview"
       @update:pagination="changePage"
     >
       <template #cell-values="{ row }: { row: PreviewRow }"
-        ><span class="csv-values">{{ row.values.join(' | ') }}</span></template
+        ><span class="xlsx-values">{{ displayValues(row) }}</span></template
       >
       <template #cell-errors="{ row }: { row: PreviewRow }">
-        <el-tag v-if="row.errors.length === 0" type="success">{{ t('mail.ruleCSV.valid') }}</el-tag>
-        <ul v-else class="csv-errors">
-          <li v-for="code in row.errors" :key="code">{{ t(`mail.ruleCSV.error.${code}`) }}</li>
+        <el-tag v-if="row.errors.length === 0" type="success">{{
+          t('mail.ruleXlsx.valid')
+        }}</el-tag>
+        <ul v-else class="xlsx-errors">
+          <li v-for="code in row.errors" :key="code">{{ t(`mail.ruleXlsx.error.${code}`) }}</li>
         </ul>
       </template>
     </AppTable>
+    <p v-else-if="!error" class="xlsx-template-hint">{{ t('mail.ruleXlsx.emptyPreview') }}</p>
     <template #footer>
-      <el-button :disabled="saving" @click="visible = false">{{ t('mail.cancel') }}</el-button>
+      <el-button
+        :disabled="saving"
+        data-testid="mail-rule-import-cancel"
+        @click="visible = false"
+        >{{ t('mail.cancel') }}</el-button
+      >
       <el-button
         :disabled="content === null || reading || previewing || saving"
         :loading="previewing"
         data-testid="mail-rule-import-preview"
         @click="retryPreview"
-        >{{ t('mail.ruleCSV.preview') }}</el-button
+        >{{ t('mail.ruleXlsx.preview') }}</el-button
       >
       <el-button
         type="primary"
@@ -327,42 +381,10 @@ function changePage(next: TablePaginationState): void {
         :loading="saving"
         data-testid="mail-rule-import-confirm"
         @click="confirmImport"
-        >{{ t('mail.ruleCSV.confirm') }}</el-button
+        >{{ t('mail.ruleXlsx.confirm') }}</el-button
       >
     </template>
   </AppDialog>
 </template>
 
-<style scoped>
-.csv-format,
-.csv-template-hint {
-  color: var(--el-text-color-secondary);
-  line-height: 1.7;
-  font-size: 13px;
-}
-.csv-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin: 14px 0;
-}
-.csv-file-input {
-  display: none;
-}
-.csv-file-name {
-  overflow-wrap: anywhere;
-}
-.csv-alert {
-  margin: 12px 0;
-}
-.csv-values {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.csv-errors {
-  margin: 0;
-  padding-left: 16px;
-  color: var(--el-color-danger);
-}
-</style>
+<style scoped src="./MailRuleImportDialog.css"></style>

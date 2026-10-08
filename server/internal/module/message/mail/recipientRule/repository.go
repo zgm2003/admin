@@ -42,7 +42,7 @@ type ruleKey struct {
 	Action  Action
 }
 
-// FindMatching uses the active unique-key index and at most CSVMaxRows keys.
+// FindMatching uses the active unique-key index and at most XlsxMaxRows keys.
 func (r *Repository) FindMatching(ctx context.Context, keys []ruleKey) ([]Model, error) {
 	if len(keys) == 0 {
 		return []Model{}, nil
@@ -57,7 +57,7 @@ func (r *Repository) FindMatching(ctx context.Context, keys []ruleKey) ([]Model,
 }
 
 func (r *Repository) CreateBatch(ctx context.Context, values []Model, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
-	if len(values) == 0 || len(values) > CSVMaxRows {
+	if len(values) == 0 || len(values) > XlsxMaxRows {
 		return cachegeneration.MutationResult{}, fmt.Errorf("recipient rule batch size invalid")
 	}
 	originalIDs := make([]int64, len(values))

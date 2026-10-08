@@ -65,28 +65,34 @@ type Input struct {
 }
 
 const (
-	CSVMaxRows  = 1000
-	CSVMaxBytes = 1 << 20
+	XlsxMaxRows  = 1000
+	XlsxMaxBytes = 2 << 20
 )
 
-type CSVRow struct {
-	Line   int      `json:"line"`
-	Values []string `json:"values"`
-	Errors []string `json:"errors"`
+type XlsxRow struct {
+	Line      int      `json:"line"`
+	RawValues []string `json:"rawValues"`
+	Data      *Input   `json:"data"`
+	Errors    []string `json:"errors"`
 }
 
-type CSVPreview struct {
-	Rows   []CSVRow `json:"rows"`
-	Errors []string `json:"errors"`
+type XlsxPreview struct {
+	Rows   []XlsxRow `json:"rows"`
+	Errors []string  `json:"errors"`
 }
 
-type CSVImportResult struct {
+type XlsxImportResult struct {
 	Imported int `json:"imported"`
 }
-type CSVFile struct {
-	FileName string `json:"fileName"`
-	Content  string `json:"content"`
+type XlsxExportFile struct {
+	FileName      string `json:"fileName"`
+	ContentBase64 string `json:"contentBase64"`
 }
 type ImportTemplate struct {
 	ObjectKey string `json:"objectKey"`
+}
+
+type XlsxImportInput struct {
+	FileName      string `json:"fileName"`
+	ContentBase64 string `json:"contentBase64"`
 }

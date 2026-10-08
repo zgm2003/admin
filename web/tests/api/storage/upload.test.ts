@@ -62,6 +62,18 @@ describe('storage upload API', () => {
     })
   })
 
+  it('forwards a dialog cancellation signal without changing object URL requests', async () => {
+    const signal = new AbortController().signal
+    requestMock.mockResolvedValue({ url: 'https://cdn.example/template.xlsx', expiresAt: null })
+    await requestObjectURL('template-key', signal)
+    expect(requestMock).toHaveBeenCalledExactlyOnceWith({
+      method: 'POST',
+      url: '/api/v1/storage/object-url',
+      data: { objectKey: 'template-key' },
+      signal,
+    })
+  })
+
   it('rejects malformed object URL responses', async () => {
     for (const value of [
       { url: '', expiresAt: null },

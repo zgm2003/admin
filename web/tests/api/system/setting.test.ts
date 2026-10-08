@@ -41,6 +41,36 @@ describe('system setting API', () => {
     }
   })
 
+  it('rejects non-XLSX and non-string values for the built-in Excel template setting', async () => {
+    const objectKey =
+      'setting/.admin-storage/v2/p1/r1/c1/v1/2026/10/08/0123456789abcdef0123456789abcdef.xlsx'
+    const row = {
+      id: 1,
+      key: 'message.mail.recipient_rule.import_template_object_key',
+      value: objectKey,
+      valueType: 5,
+      description: '',
+      isEnabled: 1,
+      isBuiltin: 1,
+      createdAt: '2026-10-08T00:00:00Z',
+      updatedAt: '2026-10-08T00:00:00Z',
+    }
+    const page = { list: [row], total: 1, page: 1, pageSize: 20 }
+    vi.mocked(request).mockResolvedValue(page)
+    await expect(getSettings({ page: 1, pageSize: 20 })).resolves.toEqual(page)
+    for (const invalid of [
+      { ...row, value: objectKey.replace('.xlsx', '.csv') },
+      { ...row, value: objectKey.replace('.xlsx', '.xlsm') },
+      { ...row, value: null },
+      { ...row, value: [objectKey] },
+      { ...row, value: 'https://example.com/template.xlsx' },
+      { ...row, valueType: 1 },
+    ]) {
+      vi.mocked(request).mockResolvedValue({ ...page, list: [invalid] })
+      await expect(getSettings({ page: 1, pageSize: 20 })).rejects.toThrow()
+    }
+  })
+
   it('strictly parses and updates the brand settings contract', async () => {
     vi.mocked(request)
       .mockResolvedValueOnce({

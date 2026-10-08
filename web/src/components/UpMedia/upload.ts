@@ -15,6 +15,8 @@ export class DirectUploadError extends Error {
 }
 
 function contentType(file: File): string {
+  if (file.name.toLowerCase().endsWith('.xlsx'))
+    return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   // Windows may identify CSV as an Excel MIME type, or leave File.type empty.
   return file.name.toLowerCase().endsWith('.csv') ? 'text/csv' : file.type.toLowerCase()
 }
@@ -25,6 +27,14 @@ function accepts(file: File, accept: string): boolean {
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean)
+  const xlsxOnly =
+    choices.includes('.xlsx') &&
+    choices.every(
+      (choice) =>
+        choice === '.xlsx' ||
+        choice === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+  if (xlsxOnly && !file.name.toLowerCase().endsWith('.xlsx')) return false
   return (
     choices.length === 0 ||
     choices.some((choice) =>

@@ -49,30 +49,30 @@ describe('UpMedia', () => {
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['avatar/2026/08/30/a.png'])
   })
 
-  it('renders CSV as a file attachment instead of requesting an image preview', async () => {
+  it('renders XLSX as a file attachment instead of requesting an image preview', async () => {
     const wrapper = mountComponent({
-      modelValue: 'setting/template.csv',
+      modelValue: 'setting/template.xlsx',
       ruleCode: 'setting',
       variant: 'file',
-      fileLabel: '收件规则导入模板.csv',
-      accept: '.csv,text/csv',
+      fileLabel: '收件规则导入模板.xlsx',
+      accept: '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     })
     await flushPromises()
     expect(wrapper.find('img').exists()).toBe(false)
-    expect(wrapper.text()).toContain('收件规则导入模板.csv')
+    expect(wrapper.text()).toContain('收件规则导入模板.xlsx')
     expect(wrapper.find('[data-testid="up-media-download"]').exists()).toBe(true)
   })
 
-  it('normalizes browser CSV MIME aliases and exposes the pending upload state', async () => {
+  it('normalizes browser XLSX MIME aliases and exposes the pending upload state', async () => {
     credentialsMock.mockResolvedValue({
       items: [
         {
           uploadUrl: 'https://cos.example/upload',
-          objectKey: 'setting/template.csv',
+          objectKey: 'setting/template.xlsx',
           method: 'PUT',
           headers: {},
           expiresAt: '2030-01-01T00:00:00Z',
-          publicUrl: 'https://cdn.example/template.csv',
+          publicUrl: 'https://cdn.example/template.xlsx',
         },
       ],
     })
@@ -80,41 +80,74 @@ describe('UpMedia', () => {
       modelValue: '',
       ruleCode: 'setting',
       variant: 'file',
-      accept: '.csv,text/csv',
+      accept: '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     })
-    await chooseFiles(wrapper, [
-      new File(['header'], 'template.csv', { type: 'application/vnd.ms-excel' }),
-    ])
+    await chooseFiles(wrapper, [new File(['header'], 'template.xlsx', { type: '' })])
     expect(credentialsMock).toHaveBeenCalledWith('setting', [
-      { fileName: 'template.csv', contentType: 'text/csv', fileSizeBytes: 6 },
+      {
+        fileName: 'template.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        fileSizeBytes: 6,
+      },
     ])
     expect(wrapper.emitted('uploading-change')).toContainEqual([true])
     expect(wrapper.emitted('uploading-change')?.at(-1)).toEqual([false])
-    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['setting/template.csv'])
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['setting/template.xlsx'])
   })
 
-  it('rejects a non-CSV selection before requesting upload credentials', async () => {
+  it.each(['other.csv', 'other.xls', 'other.xlsm', 'other.exe'])(
+    'rejects %s even with a spoofed XLSX MIME type',
+    async (fileName) => {
+      const wrapper = mountComponent({
+        modelValue: '',
+        ruleCode: 'setting',
+        variant: 'file',
+        accept: '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      await chooseFiles(wrapper, [
+        new File(['other'], fileName, {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }),
+      ])
+      expect(credentialsMock).not.toHaveBeenCalled()
+    },
+  )
+
+  it('keeps other explicitly accepted extensions available in a mixed file picker', async () => {
+    credentialsMock.mockResolvedValue({
+      items: [
+        {
+          uploadUrl: 'https://cos.example/upload',
+          objectKey: 'setting/image.png',
+          method: 'PUT',
+          headers: {},
+          expiresAt: '2030-01-01T00:00:00Z',
+        },
+      ],
+    })
     const wrapper = mountComponent({
       modelValue: '',
       ruleCode: 'setting',
       variant: 'file',
-      accept: '.csv,text/csv',
+      accept: '.xlsx,.png',
     })
-    await chooseFiles(wrapper, [
-      new File(['other'], 'other.exe', { type: 'application/octet-stream' }),
-    ])
-    expect(credentialsMock).not.toHaveBeenCalled()
+    await chooseFiles(wrapper, [new File(['image'], 'image.png', { type: 'image/png' })])
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['setting/image.png'])
   })
 
   it('shows an inline upload failure while preserving the existing file binding', async () => {
     credentialsMock.mockRejectedValueOnce(new Error('credential request failed'))
     const wrapper = mountComponent({
-      modelValue: 'setting/old.csv',
+      modelValue: 'setting/old.xlsx',
       ruleCode: 'setting',
       variant: 'file',
-      accept: '.csv',
+      accept: '.xlsx',
     })
-    await chooseFiles(wrapper, [new File(['csv'], 'new.csv', { type: 'text/csv' })])
+    await chooseFiles(wrapper, [
+      new File(['csv'], 'new.xlsx', {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    ])
     expect(wrapper.text()).toContain('文件上传失败')
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
     expect(fetch).not.toHaveBeenCalled()
@@ -127,15 +160,19 @@ describe('UpMedia', () => {
       modelValue: '',
       ruleCode: 'setting',
       variant: 'file',
-      accept: '.csv',
+      accept: '.xlsx',
     })
-    await chooseFiles(wrapper, [new File(['csv'], 'template.csv', { type: 'text/csv' })])
+    await chooseFiles(wrapper, [
+      new File(['csv'], 'template.xlsx', {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    ])
     await wrapper.setProps({ uploadDisabled: true })
     pending.resolve({
       items: [
         {
           uploadUrl: 'https://cos.example/upload',
-          objectKey: 'setting/template.csv',
+          objectKey: 'setting/template.xlsx',
           method: 'PUT',
           headers: {},
           expiresAt: '2030-01-01T00:00:00Z',
@@ -151,18 +188,22 @@ describe('UpMedia', () => {
     const pending = deferred<Awaited<ReturnType<typeof requestUploadCredentials>>>()
     credentialsMock.mockReturnValueOnce(pending.promise)
     const wrapper = mountComponent({
-      modelValue: 'setting/old.csv',
+      modelValue: 'setting/old.xlsx',
       ruleCode: 'setting',
       variant: 'file',
-      accept: '.csv',
+      accept: '.xlsx',
     })
-    await chooseFiles(wrapper, [new File(['csv'], 'template.csv', { type: 'text/csv' })])
-    await wrapper.setProps({ modelValue: 'setting/replaced.csv' })
+    await chooseFiles(wrapper, [
+      new File(['csv'], 'template.xlsx', {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    ])
+    await wrapper.setProps({ modelValue: 'setting/replaced.xlsx' })
     pending.resolve({
       items: [
         {
           uploadUrl: 'https://cos.example/upload',
-          objectKey: 'setting/uploaded.csv',
+          objectKey: 'setting/uploaded.xlsx',
           method: 'PUT',
           headers: {},
           expiresAt: '2030-01-01T00:00:00Z',
@@ -344,7 +385,7 @@ describe('UpMedia', () => {
     })
     try {
       const wrapper = mountComponent({
-        modelValue: 'setting/template.csv',
+        modelValue: 'setting/template.xlsx',
         ruleCode: 'setting',
         variant: 'file',
       })

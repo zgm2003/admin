@@ -7,7 +7,8 @@ import { useI18n } from 'vue-i18n'
 import {
   createMailRule,
   deleteMailRule,
-  exportMailRules,
+  exportMailRuleXlsx,
+  mailRuleXlsxMime,
   updateMailRule,
   updateMailRuleStatus,
   type MailRule,
@@ -36,15 +37,22 @@ const editing = ref<MailRule | null>(null)
 const saving = ref(false)
 const importing = ref(false)
 const exporting = ref(false)
+const exportFailed = ref(false)
 let exportSequence = 0
+let exportController: AbortController | null = null
 onBeforeUnmount(() => {
   exportSequence++
+  exportController?.abort()
 })
 watch(
   () => props.canExport,
   () => {
     exportSequence++
+    exportController?.abort()
+    exporting.value = false
+    exportFailed.value = false
   },
+  { flush: 'sync' },
 )
 const form = ref<MailRuleInput>(blankRule())
 const scopeOptions = computed<Array<{ value: MailRuleInput['scope']; label: string }>>(() => [
@@ -134,31 +142,42 @@ async function saveRule(): Promise<void> {
 async function exportRules(): Promise<void> {
   if (!props.canExport || exporting.value) return
   const sequence = ++exportSequence
+  const controller = new AbortController()
+  exportController = controller
   exporting.value = true
+  exportFailed.value = false
   try {
-    const file = await exportMailRules()
+    const file = await exportMailRuleXlsx(controller.signal)
     if (sequence !== exportSequence || !props.canExport) return
-    const url = URL.createObjectURL(new Blob([file.content], { type: 'text/csv;charset=utf-8' }))
+    const url = URL.createObjectURL(new Blob([file.content], { type: mailRuleXlsxMime }))
     const link = document.createElement('a')
     try {
       link.href = url
       link.download = file.fileName
       document.body.appendChild(link)
       link.click()
+      ElMessage.success(t('mail.ruleXlsx.exported'))
     } finally {
       link.remove()
       URL.revokeObjectURL(url)
     }
   } catch {
-    // request.ts owns API error notifications.
+    if (sequence === exportSequence && props.canExport) exportFailed.value = true
   } finally {
-    exporting.value = false
+    if (sequence === exportSequence) exporting.value = false
   }
 }
 </script>
 
 <template>
   <div class="table-tab">
+    <el-alert
+      v-if="exportFailed"
+      :title="t('mail.ruleXlsx.exportFailed')"
+      type="error"
+      :closable="false"
+      show-icon
+    />
     <el-alert
       class="rule-hint"
       :title="t('mail.ruleHint')"
@@ -180,14 +199,14 @@ async function exportRules(): Promise<void> {
           {{ t('mail.createRule') }}
         </el-button>
         <el-button v-if="canImport" data-testid="mail-rule-import" @click="importing = true">{{
-          t('mail.ruleCSV.import')
+          t('mail.ruleXlsx.import')
         }}</el-button>
         <el-button
           v-if="canExport"
           data-testid="mail-rule-export"
           :loading="exporting"
           @click="exportRules"
-          >{{ t('mail.ruleCSV.export') }}</el-button
+          >{{ t('mail.ruleXlsx.export') }}</el-button
         >
       </template>
       <template #cell-pattern="{ row }: { row: MailRule }">
@@ -226,21 +245,21 @@ async function exportRules(): Promise<void> {
     <div v-else>
       <el-alert
         class="rule-hint"
-        :title="t('mail.ruleCSV.noReadAccess')"
+        :title="t('mail.ruleXlsx.noReadAccess')"
         type="info"
         show-icon
         :closable="false"
       />
-      <div class="rule-csv-actions">
+      <div class="rule-xlsx-actions">
         <el-button v-if="canImport" data-testid="mail-rule-import" @click="importing = true">{{
-          t('mail.ruleCSV.import')
+          t('mail.ruleXlsx.import')
         }}</el-button>
         <el-button
           v-if="canExport"
           data-testid="mail-rule-export"
           :loading="exporting"
           @click="exportRules"
-          >{{ t('mail.ruleCSV.export') }}</el-button
+          >{{ t('mail.ruleXlsx.export') }}</el-button
         >
       </div>
     </div>

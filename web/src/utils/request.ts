@@ -128,6 +128,7 @@ function buildRequestClient(
       }
     },
     async (error: unknown) => {
+      if (axios.isCancel(error)) return Promise.reject(error)
       const normalizedError = normalizeResponseError(error)
       if (
         !axios.isAxiosError(error) ||

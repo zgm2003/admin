@@ -690,8 +690,8 @@ func validateInput(key, value string, valueType int, description string) error {
 		if valueType != ValueTypeMedia {
 			return fmt.Errorf("template must use the media value type")
 		}
-		if value != "" && (objectkey.Validate(value) != nil || !strings.HasSuffix(value, ".csv")) {
-			return fmt.Errorf("template must be a CSV storage object key, not a URL")
+		if value != "" && (objectkey.Validate(value) != nil || !strings.HasSuffix(value, ".xlsx")) {
+			return fmt.Errorf("template must be an XLSX storage object key, not a URL")
 		}
 	case sharedsetting.MessageNotificationRetentionDaysKey:
 		if valueType != ValueTypeNumber || !integerInRange(value, 30, 3650) {

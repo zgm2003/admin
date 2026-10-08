@@ -103,6 +103,20 @@ Mail 管理的限流策略与 `message_mail_config.ttl_minutes` 是所有邮件�
 切换旧的按场景 Redis 限流状态时必须保留已消耗额度，并明确旧进程退出顺序、原子迁移和故障行为；不能只
 换 key 后声称窗口连续。该契约的实现与验证进度见 STATUS。
 
+## Excel 导入导出边界
+
+邮件收件规则是当前唯一 Excel 业务模块。前端只读取文件字节、发送严格 `{fileName,contentBase64}` DTO，并用
+Blob 下载；服务端 Excelize 负责基础读写，模块私有代码负责 ZIP/XML 有界预扫、表头及中文枚举转换。
+不创建 Excel 中间件、通用业务框架或运行时注册器；第二个真实使用模块出现后才抽取稳定格式工具。
+
+预览行严格使用 `{line,rawValues,data,errors}`：六项 `rawValues` 保留原文，`data` 是数值枚举的业务字段，
+字段校验失败时为 null，重复错误仍保留合法 data。前端只校验 DTO 结构/枚举，用现有 i18n 展示，不解析或
+判断 Excel 中文值。预览不写库；确认提交原文件并重新校验；同一 Repository 事务整批写入及推进邮件 generation。
+
+仅系统模板存 COS，媒体值类型 5 保存标准 objectKey；用户导入文件在请求内处理，不存 COS/数据库，导出直接下载。
+文件原始大小上限 2 MiB，最多 1000 数据行、六列和两页；超限、公式、宏、外链、嵌入对象及畸形文件显式拒绝。
+独立 import/export action 和既有 generation/outbox 协议不变，无每请求 PostgreSQL 配置查询或额外持久化表。
+
 ## Email/Phone 身份与 SMS 边界
 
 `user/email` 与 `user/phone` 是对称的用户身份管理模块，分别使用 `shared/email` 与 `shared/phone` 的唯一

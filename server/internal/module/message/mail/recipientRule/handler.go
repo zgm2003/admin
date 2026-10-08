@@ -1,13 +1,8 @@
 package recipientrule
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"strconv"
-	"unicode/utf8"
 
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
@@ -29,27 +24,13 @@ func (h *Handler) ImportTemplate(ctx *gin.Context) {
 	response.OK(ctx, http.StatusOK, value)
 }
 
-func (h *Handler) PreviewCSV(ctx *gin.Context) {
-	content, err := bindCSVContent(ctx)
+func (h *Handler) PreviewXlsx(ctx *gin.Context) {
+	content, err := bindXlsxImportInput(ctx)
 	if err != nil {
 		response.Fail(ctx, err)
 		return
 	}
-	value, err := h.service.PreviewCSV(ctx.Request.Context(), content)
-	if err != nil {
-		response.Fail(ctx, err)
-		return
-	}
-	response.OK(ctx, http.StatusOK, value)
-}
-
-func (h *Handler) ImportCSV(ctx *gin.Context) {
-	content, err := bindCSVContent(ctx)
-	if err != nil {
-		response.Fail(ctx, err)
-		return
-	}
-	value, err := h.service.ImportCSV(ctx.Request.Context(), content)
+	value, err := h.service.PreviewXlsx(ctx.Request.Context(), content)
 	if err != nil {
 		response.Fail(ctx, err)
 		return
@@ -57,8 +38,13 @@ func (h *Handler) ImportCSV(ctx *gin.Context) {
 	response.OK(ctx, http.StatusOK, value)
 }
 
-func (h *Handler) ExportCSV(ctx *gin.Context) {
-	value, err := h.service.ExportCSV(ctx.Request.Context())
+func (h *Handler) ImportXlsx(ctx *gin.Context) {
+	content, err := bindXlsxImportInput(ctx)
+	if err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	value, err := h.service.ImportXlsx(ctx.Request.Context(), content)
 	if err != nil {
 		response.Fail(ctx, err)
 		return
@@ -66,68 +52,25 @@ func (h *Handler) ExportCSV(ctx *gin.Context) {
 	response.OK(ctx, http.StatusOK, value)
 }
 
-func bindCSVContent(ctx *gin.Context) (string, error) {
-	// JSON escaping can expand a CSV byte up to six bytes.
-	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, 6*CSVMaxBytes+1024)
-	payload, err := io.ReadAll(ctx.Request.Body)
+func (h *Handler) ExportXlsx(ctx *gin.Context) {
+	value, err := h.service.ExportXlsx(ctx.Request.Context())
 	if err != nil {
-		return "", apperror.InvalidRequest(err)
+		response.Fail(ctx, err)
+		return
 	}
-	// encoding/json otherwise silently substitutes U+FFFD for invalid bytes.
-	if !utf8.Valid(payload) {
-		return "", apperror.InvalidRequest(fmt.Errorf("CSV JSON must be valid UTF-8"))
-	}
-	ctx.Request.Body = io.NopCloser(bytes.NewReader(payload))
-	var input struct {
-		Content *string `json:"content" binding:"required"`
-	}
-	if err := validate.BindJSON(ctx, &input); err != nil {
-		return "", err
-	}
-	var raw struct {
-		Content json.RawMessage `json:"content"`
-	}
-	if err := json.Unmarshal(payload, &raw); err != nil {
-		return "", apperror.InvalidRequest(err)
-	}
-	if !validCSVJSONUnicode(raw.Content) {
-		return "", apperror.InvalidRequest(fmt.Errorf("CSV JSON has an unpaired Unicode surrogate"))
-	}
-	return *input.Content, nil
+	response.OK(ctx, http.StatusOK, value)
 }
 
-// The JSON binder already checked syntax and field shape. Inspect only escaped
-// Unicode in the original content string, before JSON replacement can hide it.
-func validCSVJSONUnicode(raw []byte) bool {
-	for index := 1; index < len(raw)-1; index++ {
-		if raw[index] != '\\' {
-			continue
-		}
-		index++
-		if raw[index] != 'u' {
-			continue
-		}
-		value, err := strconv.ParseUint(string(raw[index+1:index+5]), 16, 16)
-		if err != nil {
-			return false
-		}
-		index += 4
-		if value >= 0xDC00 && value <= 0xDFFF {
-			return false
-		}
-		if value < 0xD800 || value > 0xDBFF {
-			continue
-		}
-		if index+6 >= len(raw) || raw[index+1] != '\\' || raw[index+2] != 'u' {
-			return false
-		}
-		low, err := strconv.ParseUint(string(raw[index+3:index+7]), 16, 16)
-		if err != nil || low < 0xDC00 || low > 0xDFFF {
-			return false
-		}
-		index += 6
+func bindXlsxImportInput(ctx *gin.Context) (XlsxImportInput, error) {
+	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, 4*((XlsxMaxBytes+2)/3)+2048)
+	var in XlsxImportInput
+	if err := validate.BindJSON(ctx, &in); err != nil {
+		return XlsxImportInput{}, err
 	}
-	return true
+	if _, err := decodeXlsxImportInput(in); err != nil {
+		return XlsxImportInput{}, apperror.InvalidRequest(err)
+	}
+	return in, nil
 }
 
 func (h *Handler) List(ctx *gin.Context) {

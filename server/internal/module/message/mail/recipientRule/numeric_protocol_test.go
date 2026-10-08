@@ -89,7 +89,7 @@ func TestRecipientRuleHandlersRequireStrictNumericEnumsAndPresence(t *testing.T)
 	}
 }
 
-func TestCSVImportPersistsNumericEnumsAndExportsStableTextTokens(t *testing.T) {
+func TestXlsxImportPersistsNumericEnumsAndExportsStableTextTokens(t *testing.T) {
 	database, ctx := openServiceDatabase(t)
 	service := NewService(configuredRepository(database))
 	service.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
@@ -97,7 +97,7 @@ func TestCSVImportPersistsNumericEnumsAndExportsStableTextTokens(t *testing.T) {
 		return err
 	}))
 	content := importHeader + "email,user@example.com,deny,first,,1\ndomain,example.org,allow,second,,0\n"
-	if _, err := service.ImportCSV(ctx, content); err != nil {
+	if _, err := service.ImportXlsx(ctx, xlsxInput(t, content)); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := service.List(ctx)
@@ -124,11 +124,12 @@ func TestCSVImportPersistsNumericEnumsAndExportsStableTextTokens(t *testing.T) {
 			t.Errorf("imported JSON=%s", raw)
 		}
 	}
-	exported, err := service.ExportCSV(ctx)
+	exported, err := service.ExportXlsx(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimPrefix(exported.Content, "\ufeff") != content {
-		t.Errorf("export=%q want=%q", exported.Content, content)
+	rowsOut := xlsxRows(t, exported.ContentBase64)
+	if len(rowsOut) != 3 || rowsOut[1][0] != "邮箱" || rowsOut[1][2] != "拒绝" || rowsOut[2][0] != "域名" || rowsOut[2][2] != "允许" {
+		t.Fatalf("export=%v", rowsOut)
 	}
 }

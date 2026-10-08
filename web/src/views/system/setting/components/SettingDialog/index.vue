@@ -8,6 +8,7 @@ import {
   isRetentionSettingKey,
   isBrandTitleSettingKey,
   isBuiltinMediaSettingKey,
+  isSettingMediaValue,
   defaultAvatarSettingKey,
   mailRecipientRuleImportTemplateObjectKey,
   retentionSettingRanges,
@@ -48,7 +49,7 @@ const mediaAccept = computed(() =>
   form.value.key === defaultAvatarSettingKey
     ? '.png,.jpg,.jpeg,.gif,.webp'
     : form.value.key === mailRecipientRuleImportTemplateObjectKey
-      ? '.csv,text/csv'
+      ? '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       : '',
 )
 const mediaVariant = computed<'avatar' | 'default' | 'file'>(() =>
@@ -87,7 +88,7 @@ function validateValue(): boolean {
     return false
   }
   if (form.value.valueType === 5) {
-    if (form.value.value !== '' && !isStorageObjectKey(form.value.value)) {
+    if (!isSettingMediaValue(form.value.key, form.value.value)) {
       valueError.value = t('setting.mediaInvalid')
       return false
     }
@@ -188,6 +189,11 @@ function save(): void {
             :multiple="false"
             :variant="mediaVariant"
             :accept="mediaAccept"
+            :file-label="
+              form.key === mailRecipientRuleImportTemplateObjectKey
+                ? t('mail.ruleXlsx.templateLabel')
+                : ''
+            "
             :disabled="submitting || !canSave"
             :upload-disabled="!canUpload"
             @update:model-value="setMedia"

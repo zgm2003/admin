@@ -1,4 +1,10 @@
-import { AxiosError, AxiosHeaders, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios'
+import {
+  AxiosError,
+  AxiosHeaders,
+  CanceledError,
+  type AxiosAdapter,
+  type InternalAxiosRequestConfig,
+} from 'axios'
 import { ElNotification } from 'element-plus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -70,6 +76,24 @@ describe('createRequestClient', () => {
 
     await expect(client.get('/health', { adapter })).rejects.toBe(networkError)
     expect(ElNotification.error).toHaveBeenCalledOnce()
+  })
+
+  it('keeps canceled requests silent without clearing an authenticated session', async () => {
+    const error = new CanceledError('dialog closed')
+    const adapter: AxiosAdapter = async () => Promise.reject(error)
+    const unauthorized = vi.fn()
+    const client = createRequestClient('http://localhost:16301', adapter, unauthorized)
+    const auth = useAuthStore(pinia)
+    auth.setCredential({
+      accessToken: 'existing-token',
+      expiresIn: 900,
+      isNewUser: false,
+      passwordSetRequired: false,
+    })
+    await expect(client.get('/mail/import/preview', { adapter })).rejects.toBe(error)
+    expect(ElNotification.error).not.toHaveBeenCalled()
+    expect(auth.accessToken).toBe('existing-token')
+    expect(unauthorized).not.toHaveBeenCalled()
   })
 
   it.each([

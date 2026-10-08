@@ -42,7 +42,7 @@ const mediaAvatar = settingRow({
   valueType: 5,
   isBuiltin: YesNo.Yes,
 })
-const mediaCSV = settingRow({
+const mediaXlsx = settingRow({
   id: 4,
   key: 'message.mail.recipient_rule.import_template_object_key',
   value: '',
@@ -51,7 +51,7 @@ const mediaCSV = settingRow({
 })
 const uploadedImage =
   'setting/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.png'
-const uploadedCSV = uploadedImage.replace('.png', '.csv')
+const uploadedXlsx = uploadedImage.replace('.png', '.xlsx')
 const mountedWrappers: VueWrapper[] = []
 
 describe('system setting page', () => {
@@ -191,7 +191,7 @@ describe('system setting page', () => {
     expect(media.props('ruleCode')).toBe('setting')
     expect(document.querySelector('[data-testid="setting-form-value"]')).toBeNull()
     media.vm.$emit('uploading-change', true)
-    media.vm.$emit('update:modelValue', uploadedCSV)
+    media.vm.$emit('update:modelValue', uploadedXlsx)
     await nextTick()
     expect(document.querySelector('[data-testid="setting-save"]')).toHaveProperty('disabled', true)
     media.vm.$emit('uploading-change', false)
@@ -200,7 +200,7 @@ describe('system setting page', () => {
     await flushPromises()
     expect(settingAPI.createSetting).toHaveBeenCalledWith({
       key: 'app.assets.custom',
-      value: uploadedCSV,
+      value: uploadedXlsx,
       valueType: 5,
       description: '',
     })
@@ -547,7 +547,7 @@ describe('system setting page', () => {
 
   it('keeps an uploaded media draft when saving fails', async () => {
     vi.mocked(settingAPI.getSettings).mockResolvedValue({
-      list: [mediaCSV],
+      list: [mediaXlsx],
       total: 1,
       page: 1,
       pageSize: 20,
@@ -562,19 +562,21 @@ describe('system setting page', () => {
     await wrapper.get('[data-testid="setting-update"]').trigger('click')
     const dialog = wrapper.getComponent({ name: 'SettingDialog' })
     const media = dialog.getComponent(UpMedia)
-    expect(media.props('accept')).toBe('.csv,text/csv')
-    media.vm.$emit('update:modelValue', uploadedCSV)
+    expect(media.props('accept')).toBe(
+      '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    media.vm.$emit('update:modelValue', uploadedXlsx)
     await nextTick()
     await clickBody('setting-save')
     await flushPromises()
-    expect(media.props('modelValue')).toBe(uploadedCSV)
+    expect(media.props('modelValue')).toBe(uploadedXlsx)
     expect(document.body.textContent).toContain('保存失败')
     await clickBody('setting-save')
     await flushPromises()
-    expect(settingAPI.updateSetting).toHaveBeenLastCalledWith(mediaCSV.key, {
-      value: uploadedCSV,
+    expect(settingAPI.updateSetting).toHaveBeenLastCalledWith(mediaXlsx.key, {
+      value: uploadedXlsx,
       valueType: 5,
-      description: mediaCSV.description,
+      description: mediaXlsx.description,
     })
   })
 })

@@ -1,5 +1,18 @@
 # 项目状态
 
+## 邮件收件规则 XLSX 模板与导入导出（2026-10-08，代码与真实发布已完成）
+
+- 维护者已确认统一改 `.xlsx`，不再提供 CSV/.xls/.xlsm 导入兼容。业务表继续使用已迁移的 scope/action 0/1，权限、规则优先级、原子导入、重验证及不覆盖已有规则的行为不变。
+- 模板契约：固定“填写说明”“导入数据”两页，只读“导入数据”；A1:F1 为“类型,邮箱/域名,动作,名称,备注,启用状态”，第二行起填写，最多 1000 条，原文件上限 2 MiB。文件内下拉固定中文：邮箱/域名、允许/拒绝、启用/停用；后端转换为数字枚举，预览随界面语言显示。说明页含字段解释、限制和不参与导入的示例，数据页不预填示例；导出只有“导入数据”页，允许回导。
+- API 契约：现有 import/preview/import/export URL 与 action 不变；导入 JSON 为 `{fileName,contentBase64}`，预览改为 `{rows:[{line,rawValues,data,errors}],errors}`。`rawValues` 保留六格原文，字段合法时 `data` 是 `{scope,pattern,action,name,remark,isEnabled}` 数值枚举/规范化结构，字段错误时为 null；重复行仍保留合法 data。Excel 中文转换只发生在后端，前端严格解析数字 DTO、使用现有枚举+i18n 显示，不识别中文业务值。导出 envelope data 为 `{fileName:'mail-recipient-rule.xlsx',contentBase64}`。
+- 维护者讨论后确认边界：Go 使用 Excelize，前端仅原生 FileReader/Blob；模板上传 COS，用户导入文件直传业务 API、不落 COS/数据库，导出直接下载。不新增 Excel 中间件、通用业务框架或异步任务；文件安全、基础读写、业务编排分别留在模块私有 `xlsxArchive.go/xlsxCodec.go/xlsx.go`。保留 2 MiB/1000 行、解压 16 MiB/128 ZIP entry、最多两页/六列的有界检查，拒绝公式、宏、外链和伪装文件。百万用户、多实例基线不变；仅管理员低频动作处理文件，不新增热路径数据库查询，整批事务和既有 generation/outbox 一致性不变。
+- 模板与配置：使用现有 `setting` 上传规则和标准 COS v2 objectKey；系统模板配置键和值类型 5 不改，仅把文件限制和对象引用切换为 `.xlsx`。不存完整 URL、不删除旧 COS 文件；新模板上传下载逐字节核验后才绑定。无需改表结构。
+- 真实发布：维护者此前已允许本轮停服发布；脚本 `docs/database/2026-10-08-mail-rule-xlsx-template.ps1 -OldAPIStopped` 先检查 API/Worker 未运行、备份并通过 `pg_restore --list`，再构建一次性命令。最终发布于 2026-10-08 16:55（Asia/Shanghai）完成：旧 CSV 对象保留，新对象键为 `setting/.admin-storage/v2/p1/r1/c1/v1/2026/10/08/01b79dd8136197ec8548c1ae99eb41c8.xlsx`，COS 下载逐字节匹配；上传规则仅增加 XLSX MIME，`system.setting/global` 17 → 18，`message.mail/global` 4 不变，Redis ready=18，未清 Redis、未改表结构、未删除旧 COS。备份与审计位于 `%LOCALAPPDATA%\Admin\backups\mail-rule-xlsx-20261008-165422-6454f26a`，SHA256 `D08A35CB907E8E9E51EC6699E109EF9B5F86F8CE7A049C1C2B93F8FF866728A4`；不可变 manifest 位于 `%LOCALAPPDATA%\Admin\maintenance\mail-rule-xlsx-template.json`，重复 publish/verify 后事实快照一致。
+- 联合验证：后端 `go test -p 1 ./... -count=1` 1992 项通过，`go vet ./...`、`go build ./...` 通过；前端 `pnpm vitest run --pool=threads --maxWorkers=1` 112 文件/960 项通过，`pnpm typecheck`、`pnpm lint`、`pnpm check:architecture`（0 findings）、`pnpm build` 通过；模板经 Artifact Tool inspect/render 及后端解析测试确认两页、空数据页、三组下拉、固定表头和示例不导入。构建仅有既有大 chunk 警告。当前未提交 Git；由维护者启动 API/Worker 后刷新前端验收。
+- 实际文件：后端 `message/mail/recipientRule/{xlsx,xlsxCodec,xlsxArchive,handler,protocol,repository,route}.go` 及 XLSX/数值测试，替换原 CSV 实现及对应测试；`system/setting/{service,cache,mail_template_object_key_test}.go`、`shared/i18n/catalog.go`、`go.mod/go.sum`。前端 `api/message/mail.ts`、`api/{storage/upload,system/setting}.ts`、收件规则页及 `MailRuleImportDialog` 私有读文件/CSS、`SettingDialog`、`UpMedia/upload.ts`、`utils/request.ts`、中英文 i18n 和镜像测试。新增模板、一次性 `cmd/mail-rule-xlsx-template-publish`、PowerShell runner，并更新本文件/design/architecture。
+- 公共改动边界：请求层仅让主动取消不弹错误通知；存储 URL API 增加可选 AbortSignal；UpMedia 规范 `.xlsx` MIME 并保留混合类型选择器行为；设置只收紧当前模板的 `.xlsx` 媒体对象键。这些改动均有定向及全量回归，不加入前端 Excel 解析依赖。
+- 红绿证据/未运行项：结构化预览先复现旧 `values` 文本响应失败，再实现 `rawValues/data`；非法 Sheet/稀疏坐标/损坏共享字符串部分读取、严格 DTO、设置旧格式缓存、取消及发布失败恢复均先失败后通过。发布 runner 两次前置检查失败（DSN 使用关键字格式、pg_dump 不接受 TimeZone）时尚未业务写入，修正后备份/上传/绑定/幂等验证通过。未做浏览器或真实 Excel 应用人工验收、未使用 Computer Use；独立审查代理多次因模型容量错误未能完成，不宣称独立审查通过。此前实施期间误停过一个 go 进程已告知维护者，影响未确认；本次最终全量验证已重新运行，发布阶段无需停止进程。
+
 ## 邮件收件规则数值协议（2026-10-08，代码与真实迁移已完成）
 
 - 维护者最后确认的契约：仅 `message_mail_recipient_rule` 的 `scope/action` 改为 SMALLINT；`scope: 0=email, 1=domain`，`action: 0=deny, 1=allow`。Go 使用独立 int16 枚举，API 使用数字，前端常量+i18n label；固定程序协议不迁入可编辑字典。0 是合法值，HTTP 缺字段/null/旧字符串/未知值仍须拒绝。

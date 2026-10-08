@@ -7,6 +7,7 @@ import * as mailApi from '@/api/message/mail'
 import { getDictionaryOptions } from '@/api/system/dictionary'
 import { requestObjectURL } from '@/api/storage/upload'
 import { YesNo } from '@/enums/yesNo'
+import { MailRuleAction, MailRuleScope } from '@/enums/mailRecipientRule'
 import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
 import MailPage from '@/views/message/mail/index.vue'
@@ -29,11 +30,12 @@ vi.mock('@/api/message/mail', () => ({
   updateMailRule: vi.fn(),
   updateMailRuleStatus: vi.fn(),
   deleteMailRule: vi.fn(),
-  mailRuleCSVMaxBytes: 1024 * 1024,
+  mailRuleXlsxMaxBytes: 2 * 1024 * 1024,
+  mailRuleXlsxMime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   getMailRuleImportTemplate: vi.fn(),
-  previewMailRuleImport: vi.fn(),
-  importMailRules: vi.fn(),
-  exportMailRules: vi.fn(),
+  previewMailRuleXlsx: vi.fn(),
+  importMailRuleXlsx: vi.fn(),
+  exportMailRuleXlsx: vi.fn(),
   listMailRateLimitPolicies: vi.fn(),
   updateMailRateLimitPolicy: vi.fn(),
 }))
@@ -46,9 +48,10 @@ describe('mail service page', () => {
     vi.mocked(mailApi.getMailRuleImportTemplate).mockReset().mockResolvedValue({ objectKey: '' })
     vi.mocked(requestObjectURL)
       .mockReset()
-      .mockResolvedValue({ url: 'https://example.com/template.csv', expiresAt: null })
-    vi.mocked(mailApi.previewMailRuleImport).mockReset()
-    vi.mocked(mailApi.importMailRules).mockReset().mockResolvedValue({ imported: 1 })
+      .mockResolvedValue({ url: 'https://example.com/template.xlsx', expiresAt: null })
+    vi.mocked(mailApi.previewMailRuleXlsx).mockReset()
+    vi.mocked(mailApi.importMailRuleXlsx).mockReset().mockResolvedValue({ imported: 1 })
+    vi.mocked(mailApi.exportMailRuleXlsx).mockReset()
     setLocale('zh-CN')
     vi.mocked(getDictionaryOptions)
       .mockReset()
@@ -122,7 +125,7 @@ describe('mail service page', () => {
   })
 
   it.each(['import', 'export'])(
-    'exposes the independent CSV %s action without list access',
+    'exposes the independent XLSX %s action without list access',
     async (action) => {
       const wrapper = mountPage(['message:mail:view', `message:mail:rule:${action}`])
       await flushPromises()
@@ -711,7 +714,7 @@ describe('mail service page', () => {
     expect(mailApi.listMailRateLimitPolicies).not.toHaveBeenCalled()
   })
 
-  it('gates CSV import and export with their own independent actions', async () => {
+  it('gates XLSX import and export with their own independent actions', async () => {
     const readonly = mountPage(['message:mail:list', 'message:mail:rule:create'])
     await flushPromises()
     await selectTab(readonly, '收件规则')
@@ -731,9 +734,9 @@ describe('mail service page', () => {
   })
 
   it('exports fresh server data with a native Blob download and revokes the object URL', async () => {
-    vi.mocked(mailApi.exportMailRules).mockResolvedValue({
-      fileName: 'mail-recipient-rule.csv',
-      content: '\ufeff类型,邮箱/域名,动作,名称,备注,启用状态\n',
+    vi.mocked(mailApi.exportMailRuleXlsx).mockResolvedValue({
+      fileName: 'mail-recipient-rule.xlsx',
+      content: new Uint8Array([80, 75, 3, 4, 0]).buffer,
     })
     const createURL = vi.fn(() => 'blob:mail-rules')
     const revokeURL = vi.fn()
@@ -753,19 +756,82 @@ describe('mail service page', () => {
     expect(createURL).toHaveBeenCalledWith(expect.any(Blob))
     expect(click).toHaveBeenCalledOnce()
     expect(revokeURL).toHaveBeenCalledWith('blob:mail-rules')
-    expect(document.querySelector('a[download="mail-recipient-rule.csv"]')).toBeNull()
+    expect(document.querySelector('a[download="mail-recipient-rule.xlsx"]')).toBeNull()
     click.mockRestore()
     vi.unstubAllGlobals()
   })
 
-  it('previews an uploaded CSV before importing the unchanged content', async () => {
-    const content = '类型,邮箱/域名,动作,名称,备注,启用状态\nemail,a@example.com,deny,规则,,1\n'
+  it('locks duplicate exports and offers a retry after failure', async () => {
+    const pending = deferred<mailApi.MailRuleXlsxExportFile>()
+    vi.mocked(mailApi.exportMailRuleXlsx).mockReturnValueOnce(pending.promise)
+    const wrapper = mountPage(['message:mail:view', 'message:mail:rule:export'])
+    await flushPromises()
+    const button = wrapper.get('[data-testid="mail-rule-export"]')
+    await button.trigger('click')
+    await button.trigger('click')
+    expect(mailApi.exportMailRuleXlsx).toHaveBeenCalledOnce()
+    pending.reject(new Error('offline'))
+    await flushPromises()
+    expect(wrapper.text()).toContain('导出失败，请重试')
+    const retry = deferred<mailApi.MailRuleXlsxExportFile>()
+    vi.mocked(mailApi.exportMailRuleXlsx).mockReturnValueOnce(retry.promise)
+    await button.trigger('click')
+    expect(mailApi.exportMailRuleXlsx).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).not.toContain('导出失败，请重试')
+    retry.reject(new Error('still offline'))
+    await flushPromises()
+  })
+
+  it('cancels exports and prevents stale downloads when permission is revoked', async () => {
+    const pending = deferred<mailApi.MailRuleXlsxExportFile>()
+    vi.mocked(mailApi.exportMailRuleXlsx).mockReturnValueOnce(pending.promise)
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    try {
+      const wrapper = mountPage(['message:mail:view', 'message:mail:rule:export'])
+      await flushPromises()
+      await wrapper.get('[data-testid="mail-rule-export"]').trigger('click')
+      const signal = vi.mocked(mailApi.exportMailRuleXlsx).mock.calls[0]?.[0]
+      expect(signal).toBeInstanceOf(AbortSignal)
+      usePermissionStore().applySnapshot({
+        roleCodes: [],
+        menuTree: [],
+        permissionCodes: ['message:mail:list'],
+      })
+      await flushPromises()
+      expect(signal?.aborted).toBe(true)
+      pending.resolve({
+        fileName: 'mail-recipient-rule.xlsx',
+        content: new Uint8Array([80, 75, 3, 4, 0]).buffer,
+      })
+      await flushPromises()
+      expect(click).not.toHaveBeenCalled()
+    } finally {
+      click.mockRestore()
+    }
+  })
+
+  it('previews an uploaded XLSX before importing the unchanged content', async () => {
+    const content = new Uint8Array([80, 75, 3, 4, 0])
     vi.mocked(mailApi.getMailRuleImportTemplate).mockResolvedValue({
       objectKey:
-        'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.csv',
+        'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.xlsx',
     })
-    vi.mocked(mailApi.previewMailRuleImport).mockResolvedValue({
-      rows: [{ line: 2, values: ['email', 'a@example.com', 'deny', '规则', '', '1'], errors: [] }],
+    vi.mocked(mailApi.previewMailRuleXlsx).mockResolvedValue({
+      rows: [
+        {
+          line: 2,
+          rawValues: ['邮箱', 'a@example.com', '拒绝', '规则', '', '启用'],
+          data: {
+            scope: MailRuleScope.Email,
+            pattern: 'a@example.com',
+            action: MailRuleAction.Deny,
+            name: '规则',
+            remark: '',
+            isEnabled: YesNo.Yes,
+          },
+          errors: [],
+        },
+      ],
       errors: [],
     })
     const wrapper = mountPage(['message:mail:list', 'message:mail:rule:import'])
@@ -775,28 +841,100 @@ describe('mail service page', () => {
     await flushPromises()
     expect(
       document.querySelector('[data-testid="mail-rule-template-download"]')?.getAttribute('href'),
-    ).toBe('https://example.com/template.csv')
+    ).toBe('https://example.com/template.xlsx')
     expect(requestObjectURL).toHaveBeenCalledWith(
-      'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.csv',
+      'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.xlsx',
+      expect.any(AbortSignal),
     )
     expect(bodyButton('mail-rule-import-confirm').disabled).toBe(true)
-    await uploadRuleCSV(new File([content], 'rules.csv', { type: 'text/csv' }))
-    await vi.waitFor(() => expect(mailApi.previewMailRuleImport).toHaveBeenCalledWith(content))
+    await uploadRuleXLSX(
+      new File([content], 'rules.xlsx', {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    )
+    await vi.waitFor(() =>
+      expect(mailApi.previewMailRuleXlsx).toHaveBeenCalledWith(
+        { fileName: 'rules.xlsx', contentBase64: 'UEsDBAA=' },
+        expect.any(AbortSignal),
+      ),
+    )
     await flushPromises()
     expect(document.body.textContent).toContain('a@example.com')
     expect(bodyButton('mail-rule-import-confirm').disabled).toBe(false)
     bodyButton('mail-rule-import-confirm').click()
     await flushPromises()
-    expect(mailApi.importMailRules).toHaveBeenCalledWith(content)
+    expect(mailApi.importMailRuleXlsx).toHaveBeenCalledWith(
+      { fileName: 'rules.xlsx', contentBase64: 'UEsDBAA=' },
+      expect.any(AbortSignal),
+    )
     expect(mailApi.listMailRules).toHaveBeenCalledTimes(2)
   })
 
-  it('shows row errors and does not allow a partial import', async () => {
-    vi.mocked(mailApi.previewMailRuleImport).mockResolvedValue({
+  it('displays parsed numeric enums in the active language and raw text only for invalid rows', async () => {
+    vi.mocked(mailApi.previewMailRuleXlsx).mockResolvedValue({
       rows: [
         {
           line: 2,
-          values: ['domain', '@qq.com', 'deny', '错误', '', '1'],
+          rawValues: ['RAW-TYPE', 'RAW-PATTERN', 'RAW-ACTION', 'RAW-NAME', '', 'RAW-STATUS'],
+          data: {
+            scope: MailRuleScope.Email,
+            pattern: 'parsed@example.com',
+            action: MailRuleAction.Deny,
+            name: 'parsed-name',
+            remark: '',
+            isEnabled: YesNo.Yes,
+          },
+          errors: [],
+        },
+        {
+          line: 3,
+          rawValues: ['RAW-TYPE', 'RAW-PATTERN', 'RAW-ACTION', 'RAW-NAME', '', 'RAW-STATUS'],
+          data: {
+            scope: MailRuleScope.Domain,
+            pattern: 'example.com',
+            action: MailRuleAction.Allow,
+            name: 'duplicate-name',
+            remark: '',
+            isEnabled: YesNo.No,
+          },
+          errors: ['duplicate_existing'],
+        },
+        {
+          line: 4,
+          rawValues: ['原始错误类型', '@raw-domain', '原始错误动作', '原始名称', '', '原始状态'],
+          data: null,
+          errors: ['invalid_scope', 'invalid_action'],
+        },
+      ],
+      errors: [],
+    })
+    await openImport()
+    await uploadRuleXLSX(xlsxFile())
+    await vi.waitFor(() => expect(document.querySelectorAll('.xlsx-values')).toHaveLength(3))
+    const displayedRows = () =>
+      [...document.querySelectorAll('.xlsx-values')].map((row) => row.textContent)
+    expect(displayedRows()).toEqual([
+      '邮箱 | parsed@example.com | 拒绝 | parsed-name |  | 启用',
+      '域名 | example.com | 允许 | duplicate-name |  | 停用',
+      '原始错误类型 | @raw-domain | 原始错误动作 | 原始名称 |  | 原始状态',
+    ])
+    setLocale('en-US')
+    await flushPromises()
+    expect(displayedRows()).toEqual([
+      'Email | parsed@example.com | Denylist | parsed-name |  | Enabled',
+      'Domain | example.com | Allowlist | duplicate-name |  | Disabled',
+      '原始错误类型 | @raw-domain | 原始错误动作 | 原始名称 |  | 原始状态',
+    ])
+    expect(bodyButton('mail-rule-import-confirm').disabled).toBe(true)
+  })
+
+  it('shows row errors and does not allow a partial import', async () => {
+    vi.mocked(mailApi.previewMailRuleXlsx).mockResolvedValue({
+      rows: [
+        {
+          line: 2,
+          rawValues: ['域名', '@qq.com', '拒绝', '错误', '', '启用'],
+          data: null,
           errors: ['invalid_pattern'],
         },
       ],
@@ -808,19 +946,23 @@ describe('mail service page', () => {
     await wrapper.get('[data-testid="mail-rule-import"]').trigger('click')
     await flushPromises()
     expect(document.body.textContent).toContain('模板未配置')
-    await uploadRuleCSV(new File(['bad'], 'rules.csv', { type: 'text/csv' }))
-    await vi.waitFor(() => expect(mailApi.previewMailRuleImport).toHaveBeenCalledOnce())
+    await uploadRuleXLSX(
+      new File(['bad'], 'rules.xlsx', {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    )
+    await vi.waitFor(() => expect(mailApi.previewMailRuleXlsx).toHaveBeenCalledOnce())
     await flushPromises()
     expect(document.body.textContent).toContain('邮箱或域名格式无效')
     expect(bodyButton('mail-rule-import-confirm').disabled).toBe(true)
-    expect(mailApi.importMailRules).not.toHaveBeenCalled()
+    expect(mailApi.importMailRuleXlsx).not.toHaveBeenCalled()
     expect(requestObjectURL).not.toHaveBeenCalled()
   })
 
   it('reports template object resolution failure without guessing a download URL', async () => {
     vi.mocked(mailApi.getMailRuleImportTemplate).mockResolvedValue({
       objectKey:
-        'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.csv',
+        'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.xlsx',
     })
     vi.mocked(requestObjectURL).mockRejectedValue(new Error('storage unavailable'))
     const wrapper = mountPage(['message:mail:view', 'message:mail:rule:import'])
@@ -835,7 +977,7 @@ describe('mail service page', () => {
   it('discards an old template object URL after import permission is revoked', async () => {
     vi.mocked(mailApi.getMailRuleImportTemplate).mockResolvedValue({
       objectKey:
-        'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.csv',
+        'file/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.xlsx',
     })
     const pending = deferred<{ url: string; expiresAt: null }>()
     vi.mocked(requestObjectURL).mockReturnValue(pending.promise)
@@ -850,18 +992,30 @@ describe('mail service page', () => {
       menuTree: [],
       permissionCodes: ['message:mail:list'],
     })
-    pending.resolve({ url: 'https://example.com/stale.csv', expiresAt: null })
+    pending.resolve({ url: 'https://example.com/stale.xlsx', expiresAt: null })
     await flushPromises()
     expect(document.querySelector('[data-testid="mail-rule-template-download"]')).toBeNull()
   })
 
   it('discards a stale preview after a new file is selected', async () => {
-    const older = deferred<mailApi.MailRuleCSVPreview>()
-    vi.mocked(mailApi.previewMailRuleImport)
+    const older = deferred<mailApi.MailRuleXlsxPreview>()
+    vi.mocked(mailApi.previewMailRuleXlsx)
       .mockReturnValueOnce(older.promise)
       .mockResolvedValueOnce({
         rows: [
-          { line: 2, values: ['email', 'new@example.com', 'deny', 'new', '', '1'], errors: [] },
+          {
+            line: 2,
+            rawValues: ['邮箱', 'new@example.com', '拒绝', 'new', '', '启用'],
+            data: {
+              scope: MailRuleScope.Email,
+              pattern: 'new@example.com',
+              action: MailRuleAction.Deny,
+              name: 'new',
+              remark: '',
+              isEnabled: YesNo.Yes,
+            },
+            errors: [],
+          },
         ],
         errors: [],
       })
@@ -870,18 +1024,217 @@ describe('mail service page', () => {
     await selectTab(wrapper, '收件规则')
     await wrapper.get('[data-testid="mail-rule-import"]').trigger('click')
     await flushPromises()
-    await uploadRuleCSV(new File(['old'], 'old.csv', { type: 'text/csv' }))
-    await vi.waitFor(() => expect(mailApi.previewMailRuleImport).toHaveBeenCalledOnce())
-    await uploadRuleCSV(new File(['new'], 'new.csv', { type: 'text/csv' }))
-    await vi.waitFor(() => expect(mailApi.previewMailRuleImport).toHaveBeenCalledTimes(2))
+    await uploadRuleXLSX(
+      new File(['old'], 'old.xlsx', {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    )
+    await vi.waitFor(() => expect(mailApi.previewMailRuleXlsx).toHaveBeenCalledOnce())
+    await uploadRuleXLSX(
+      new File(['new'], 'new.xlsx', {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    )
+    await vi.waitFor(() => expect(mailApi.previewMailRuleXlsx).toHaveBeenCalledTimes(2))
     await flushPromises()
     older.resolve({
-      rows: [{ line: 2, values: ['email', 'old@example.com', 'deny', 'old', '', '1'], errors: [] }],
+      rows: [
+        {
+          line: 2,
+          rawValues: ['邮箱', 'old@example.com', '拒绝', 'old', '', '启用'],
+          data: {
+            scope: MailRuleScope.Email,
+            pattern: 'old@example.com',
+            action: MailRuleAction.Deny,
+            name: 'old',
+            remark: '',
+            isEnabled: YesNo.Yes,
+          },
+          errors: [],
+        },
+      ],
       errors: [],
     })
     await flushPromises()
     expect(document.body.textContent).toContain('new@example.com')
     expect(document.body.textContent).not.toContain('old@example.com')
+  })
+
+  it('shows a preview failure and retries the unchanged XLSX before confirming', async () => {
+    vi.mocked(mailApi.previewMailRuleXlsx)
+      .mockRejectedValueOnce(new Error('unavailable'))
+      .mockResolvedValue({
+        rows: [
+          {
+            line: 2,
+            rawValues: ['邮箱', 'retry@example.com', '拒绝', '重试', '', '启用'],
+            data: {
+              scope: MailRuleScope.Email,
+              pattern: 'retry@example.com',
+              action: MailRuleAction.Deny,
+              name: '重试',
+              remark: '',
+              isEnabled: YesNo.Yes,
+            },
+            errors: [],
+          },
+        ],
+        errors: [],
+      })
+    const wrapper = await openImport()
+    await uploadRuleXLSX(xlsxFile())
+    await vi.waitFor(() => expect(document.body.textContent).toContain('预览失败'))
+    expect(bodyButton('mail-rule-import-confirm').disabled).toBe(true)
+    bodyButton('mail-rule-import-preview').click()
+    await flushPromises()
+    expect(bodyButton('mail-rule-import-confirm').disabled).toBe(false)
+    vi.mocked(mailApi.importMailRuleXlsx).mockRejectedValueOnce(new Error('conflict'))
+    bodyButton('mail-rule-import-confirm').click()
+    await flushPromises()
+    expect(document.body.textContent).toContain('导入未确认成功')
+    expect(bodyButton('mail-rule-import-confirm').disabled).toBe(true)
+    expect(wrapper.findAllComponents({ name: 'AppTable' })).toHaveLength(1)
+    bodyButton('mail-rule-import-preview').click()
+    await flushPromises()
+    expect(bodyButton('mail-rule-import-confirm').disabled).toBe(false)
+  })
+
+  it.each(['rules.csv', 'rules.xls', 'rules.xlsm'])(
+    'rejects %s before reading or previewing',
+    async (fileName) => {
+      await openImport()
+      await uploadRuleXLSX(xlsxFile(fileName))
+      expect(document.body.textContent).toContain('请选择 .xlsx 文件')
+      expect(mailApi.previewMailRuleXlsx).not.toHaveBeenCalled()
+    },
+  )
+
+  it('rejects empty and oversized files before previewing', async () => {
+    await openImport()
+    await uploadRuleXLSX(new File([], 'empty.xlsx'))
+    expect(document.body.textContent).toContain('没有可导入的规则')
+    await uploadRuleXLSX(new File([new Uint8Array(2 * 1024 * 1024 + 1)], 'large.xlsx'))
+    expect(document.body.textContent).toContain('不能超过 2 MiB')
+    expect(mailApi.previewMailRuleXlsx).not.toHaveBeenCalled()
+  })
+
+  it('renders empty validation results without allowing confirmation', async () => {
+    vi.mocked(mailApi.previewMailRuleXlsx).mockResolvedValue({ rows: [], errors: ['empty'] })
+    await openImport()
+    await uploadRuleXLSX(xlsxFile())
+    await vi.waitFor(() => expect(document.body.textContent).toContain('没有可导入的规则'))
+    expect(bodyButton('mail-rule-import-confirm').disabled).toBe(true)
+  })
+
+  it('cancels a pending preview on close and ignores its eventual response', async () => {
+    const pending = deferred<mailApi.MailRuleXlsxPreview>()
+    vi.mocked(mailApi.previewMailRuleXlsx).mockReturnValue(pending.promise)
+    const wrapper = await openImport()
+    await uploadRuleXLSX(xlsxFile())
+    await vi.waitFor(() => expect(mailApi.previewMailRuleXlsx).toHaveBeenCalledOnce())
+    const signal = vi.mocked(mailApi.previewMailRuleXlsx).mock.calls[0]?.[1]
+    expect(signal).toBeInstanceOf(AbortSignal)
+    bodyButton('mail-rule-import-cancel').click()
+    await flushPromises()
+    expect(signal?.aborted).toBe(true)
+    pending.resolve({
+      rows: [
+        {
+          line: 2,
+          rawValues: ['邮箱', 'stale@example.com', '拒绝', '过期', '', '启用'],
+          data: {
+            scope: MailRuleScope.Email,
+            pattern: 'stale@example.com',
+            action: MailRuleAction.Deny,
+            name: '过期',
+            remark: '',
+            isEnabled: YesNo.Yes,
+          },
+          errors: [],
+        },
+      ],
+      errors: [],
+    })
+    await flushPromises()
+    await wrapper.get('[data-testid="mail-rule-import"]').trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).not.toContain('stale@example.com')
+    expect(bodyButton('mail-rule-import-confirm').disabled).toBe(true)
+  })
+
+  it('does not duplicate preview or confirmation requests while pending', async () => {
+    const pending = deferred<mailApi.MailRuleXlsxPreview>()
+    vi.mocked(mailApi.previewMailRuleXlsx).mockReturnValue(pending.promise)
+    const wrapper = await openImport()
+    await uploadRuleXLSX(xlsxFile())
+    await vi.waitFor(() => expect(mailApi.previewMailRuleXlsx).toHaveBeenCalledOnce())
+    const tables = wrapper.findAllComponents({ name: 'AppTable' })
+    tables.at(-1)?.vm.$emit('refresh')
+    tables.at(-1)?.vm.$emit('refresh')
+    await flushPromises()
+    expect(mailApi.previewMailRuleXlsx).toHaveBeenCalledOnce()
+    pending.resolve({
+      rows: [
+        {
+          line: 2,
+          rawValues: ['邮箱', 'a@example.com', '拒绝', '名称', '', '启用'],
+          data: {
+            scope: MailRuleScope.Email,
+            pattern: 'a@example.com',
+            action: MailRuleAction.Deny,
+            name: '名称',
+            remark: '',
+            isEnabled: YesNo.Yes,
+          },
+          errors: [],
+        },
+      ],
+      errors: [],
+    })
+    await flushPromises()
+    const imported = deferred<{ imported: number }>()
+    vi.mocked(mailApi.importMailRuleXlsx).mockReturnValueOnce(imported.promise)
+    bodyButton('mail-rule-import-confirm').click()
+    bodyButton('mail-rule-import-confirm').click()
+    await flushPromises()
+    expect(mailApi.importMailRuleXlsx).toHaveBeenCalledOnce()
+    usePermissionStore().applySnapshot({
+      roleCodes: [],
+      menuTree: [],
+      permissionCodes: ['message:mail:list'],
+    })
+    imported.resolve({ imported: 1 })
+    await flushPromises()
+    expect(mailApi.listMailRules).toHaveBeenCalledOnce()
+  })
+
+  it('retries failed template loading inside the dialog', async () => {
+    vi.mocked(mailApi.getMailRuleImportTemplate)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        objectKey:
+          'setting/.admin-storage/v2/p1/r1/c1/v1/2026/10/08/0123456789abcdef0123456789abcdef.xlsx',
+      })
+    await openImport()
+    expect(document.body.textContent).toContain('模板下载地址加载失败')
+    bodyButton('mail-rule-template-retry').click()
+    await flushPromises()
+    expect(
+      document.querySelector('[data-testid="mail-rule-template-download"]')?.textContent,
+    ).toContain('下载 Excel 模板')
+  })
+
+  it('uses Excel instructions in both languages and preserves Chinese enum guidance', async () => {
+    const wrapper = await openImport()
+    expect(document.body.textContent).toContain('Excel 模板（.xlsx）')
+    expect(document.body.textContent).toContain('邮箱/域名')
+    expect(document.body.textContent).not.toMatch(/CSV|Workbook|ruleXlsx/u)
+    setLocale('en-US')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Import Excel')
+    expect(document.body.textContent).toContain('Excel template (.xlsx)')
+    expect(document.body.textContent).toContain('启用/停用')
+    expect(document.body.textContent).not.toMatch(/CSV|Workbook|ruleXlsx/u)
   })
 
   it('clears pending file reading when a replacement has an invalid extension', async () => {
@@ -894,12 +1247,16 @@ describe('mail service page', () => {
       await selectTab(wrapper, '收件规则')
       await wrapper.get('[data-testid="mail-rule-import"]').trigger('click')
       await flushPromises()
-      await uploadRuleCSV(new File(['pending'], 'pending.csv', { type: 'text/csv' }))
+      await uploadRuleXLSX(
+        new File(['pending'], 'pending.xlsx', {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }),
+      )
       expect(wrapper.findAllComponents({ name: 'AppTable' })).toHaveLength(2)
-      await uploadRuleCSV(new File(['not csv'], 'replacement.txt', { type: 'text/plain' }))
-      expect(document.body.textContent).toContain('请选择 .csv 文件')
+      await uploadRuleXLSX(new File(['not Excel'], 'replacement.txt', { type: 'text/plain' }))
+      expect(document.body.textContent).toContain('请选择 .xlsx 文件')
       expect(wrapper.findAllComponents({ name: 'AppTable' })).toHaveLength(1)
-      expect(mailApi.previewMailRuleImport).not.toHaveBeenCalled()
+      expect(mailApi.previewMailRuleXlsx).not.toHaveBeenCalled()
     } finally {
       reader.mockRestore()
     }
@@ -912,9 +1269,24 @@ function bodyButton(testId: string): HTMLButtonElement {
   return button
 }
 
-async function uploadRuleCSV(file: File): Promise<void> {
+async function openImport(): Promise<VueWrapper> {
+  const wrapper = mountPage(['message:mail:list', 'message:mail:rule:import'])
+  await flushPromises()
+  await selectTab(wrapper, '收件规则')
+  await wrapper.get('[data-testid="mail-rule-import"]').trigger('click')
+  await flushPromises()
+  return wrapper
+}
+
+function xlsxFile(fileName = 'rules.xlsx'): File {
+  return new File([new Uint8Array([80, 75, 3, 4, 0])], fileName, {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+}
+
+async function uploadRuleXLSX(file: File): Promise<void> {
   const input = document.querySelector('[data-testid="mail-rule-import-file"]')
-  if (!(input instanceof HTMLInputElement)) throw new Error('CSV input missing')
+  if (!(input instanceof HTMLInputElement)) throw new Error('XLSX input missing')
   Object.defineProperty(input, 'files', { configurable: true, value: [file] })
   input.dispatchEvent(new Event('change', { bubbles: true }))
   await flushPromises()

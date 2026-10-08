@@ -22,6 +22,13 @@ export const mailRecipientRuleImportTemplateObjectKey =
 export function isBuiltinMediaSettingKey(key: string): boolean {
   return key === defaultAvatarSettingKey || key === mailRecipientRuleImportTemplateObjectKey
 }
+export function isSettingMediaValue(key: string, value: string): boolean {
+  return (
+    value === '' ||
+    (isStorageObjectKey(value) &&
+      (key !== mailRecipientRuleImportTemplateObjectKey || value.endsWith('.xlsx')))
+  )
+}
 export const messageNotificationRetentionDaysKey = 'message.notification.retention_days'
 export const realtimeEventRetentionDaysKey = 'realtime.event.retention_days'
 export const retentionSettingRanges = {
@@ -91,11 +98,14 @@ function parseSetting(value: unknown, context: string): SystemSetting {
   if (valueType < 1 || valueType > 5 || !isYesNo(record.isEnabled) || !isYesNo(record.isBuiltin))
     throw new ProtocolError(`${context} has invalid fields`)
   const settingValue = expectString(record.value, `${context}.value`)
-  if (valueType === 5 && settingValue !== '' && !isStorageObjectKey(settingValue))
+  const key = expectString(record.key, `${context}.key`)
+  if (key === mailRecipientRuleImportTemplateObjectKey && valueType !== 5)
+    throw new ProtocolError(`${context}.valueType must be media`)
+  if (valueType === 5 && !isSettingMediaValue(key, settingValue))
     throw new ProtocolError(`${context}.value must be a storage object key`)
   return {
     id: expectInteger(record.id, `${context}.id`),
-    key: expectString(record.key, `${context}.key`),
+    key,
     value: settingValue,
     valueType: valueType as SettingValueType,
     description: expectString(record.description, `${context}.description`),
