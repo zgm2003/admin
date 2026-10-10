@@ -2,11 +2,11 @@ package recipientRule
 
 import "strings"
 
-// RulePattern is one decrypted rule for the runtime matcher.
+// RulePattern is one normalized plaintext rule for the runtime matcher.
 type RulePattern struct {
 	ID      int64
-	Scope   string
-	Action  string
+	Scope   Scope
+	Action  Action
 	Pattern string
 }
 

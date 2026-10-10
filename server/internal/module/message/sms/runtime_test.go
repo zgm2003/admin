@@ -74,8 +74,8 @@ func validRuntimeSnapshotForTest() runtimeSnapshot {
 		IsEnabled:           int16(yesno.Yes),
 		Templates:           templates,
 		Rules: []ruleRow{{
-			ID: 1, Scope: recipientRule.ScopePhone, Action: recipientRule.ActionDeny,
-			PatternCiphertext: "ciphertext-rule", PatternHint: "156****8271", IsEnabled: int16(yesno.Yes),
+			ID: 1, Scope: int16(recipientRule.ScopePhone), Action: int16(recipientRule.ActionDeny),
+			Pattern: "+8615671628271", IsEnabled: int16(yesno.Yes),
 		}},
 	}
 }
@@ -103,8 +103,8 @@ func TestDecodeRuntimeSnapshotRejectsInvalidNestedFacts(t *testing.T) {
 		func(value *runtimeSnapshot) { value.IsEnabled = 2 },
 		func(value *runtimeSnapshot) { value.TTLMinutes = 0 },
 		func(value *runtimeSnapshot) { value.Templates[template.SceneLogin] = templateRow{} },
-		func(value *runtimeSnapshot) { value.Rules[0].Scope = "email" },
-		func(value *runtimeSnapshot) { value.Rules[0].PatternCiphertext = "" },
+		func(value *runtimeSnapshot) { value.Rules[0].Scope = 9 },
+		func(value *runtimeSnapshot) { value.Rules[0].Pattern = "" },
 	} {
 		snapshot := validRuntimeSnapshotForTest()
 		mutate(&snapshot)
@@ -118,7 +118,7 @@ func TestDecodeRuntimeSnapshotRejectsInvalidNestedFacts(t *testing.T) {
 	}
 }
 
-func TestRuntimeSnapshotCodecIsStrictAndPreservesCiphertext(t *testing.T) {
+func TestRuntimeSnapshotCodecIsStrictAndPreservesPlaintextPattern(t *testing.T) {
 	snapshot := validRuntimeSnapshotForTest()
 	facts := factsOf(snapshot)
 	raw, err := encodeRuntimeSnapshot(7, facts)
@@ -138,7 +138,7 @@ func TestRuntimeSnapshotCodecIsStrictAndPreservesCiphertext(t *testing.T) {
 		"unknown field":       strings.Replace(raw, `{`, `{"extra":true,`, 1),
 		"duplicate field":     strings.Replace(raw, `"generation":7`, `"generation":7,"generation":8`, 1),
 		"trailing value":      raw + `{}`,
-		"wrong schema":        strings.Replace(raw, `"schemaVersion":1`, `"schemaVersion":2`, 1),
+		"wrong schema":        strings.Replace(raw, `"schemaVersion":2`, `"schemaVersion":1`, 1),
 		"wrong generation":    strings.Replace(raw, `"generation":7`, `"generation":8`, 1),
 		"missing fixed scene": strings.Replace(raw, `"forget":`, `"unknown":`, 1),
 	} {
@@ -165,6 +165,55 @@ func TestRuntimeLoaderCarriesCiphertextInsteadOfPlainCredentials(t *testing.T) {
 	}
 	if !strings.Contains(string(payload), "sms:v1:cipher-id") || !strings.Contains(string(payload), "sms:v1:cipher-key") {
 		t.Fatalf("runtime facts omitted encrypted credentials: %s", payload)
+	}
+}
+
+func TestRuntimePlaintextRulesRejectMissingNullAndLegacyProtocolValues(t *testing.T) {
+	raw, err := encodeRuntimeSnapshot(7, factsOf(validRuntimeSnapshotForTest()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"id", "scope", "action", "pattern", "isEnabled"} {
+		for _, mode := range []string{"missing", "null"} {
+			t.Run(field+"-"+mode, func(t *testing.T) {
+				var fields map[string]json.RawMessage
+				if err := json.Unmarshal([]byte(raw), &fields); err != nil {
+					t.Fatal(err)
+				}
+				var rules []map[string]json.RawMessage
+				if err := json.Unmarshal(fields["rules"], &rules); err != nil {
+					t.Fatal(err)
+				}
+				if mode == "missing" {
+					delete(rules[0], field)
+				} else {
+					rules[0][field] = json.RawMessage("null")
+				}
+				fields["rules"], err = json.Marshal(rules)
+				if err != nil {
+					t.Fatal(err)
+				}
+				payload, err := json.Marshal(fields)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := decodeRuntimeSnapshot(string(payload), 7); !errors.Is(err, ErrRuntimeSnapshotCorrupt) {
+					t.Fatalf("missing/null %s accepted: %v", field, err)
+				}
+			})
+		}
+	}
+	for name, payload := range map[string]string{
+		"legacy string scope":     strings.Replace(raw, `"scope":0`, `"scope":"phone"`, 1),
+		"legacy string action":    strings.Replace(raw, `"action":0`, `"action":"deny"`, 1),
+		"legacy ciphertext field": strings.Replace(raw, `"pattern":"+8615671628271"`, `"pattern":"+8615671628271","patternCiphertext":"sms:v1:old"`, 1),
+		"noncanonical phone":      strings.Replace(raw, `"pattern":"+8615671628271"`, `"pattern":"15671628271"`, 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := decodeRuntimeSnapshot(payload, 7); !errors.Is(err, ErrRuntimeSnapshotCorrupt) {
+				t.Fatalf("bad rule accepted: %v", err)
+			}
+		})
 	}
 }
 

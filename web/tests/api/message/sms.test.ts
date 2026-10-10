@@ -58,9 +58,9 @@ const template = {
 
 const rule = {
   id: 2,
-  scope: 'phone' as const,
-  patternHint: '156****8271',
-  action: 'deny' as const,
+  scope: 0 as const,
+  pattern: '+8615671628271',
+  action: 0 as const,
   name: 'Blocked recipient',
   remark: '',
   isEnabled: YesNo.Yes,
@@ -76,7 +76,7 @@ const log = {
   username: 'alice',
   scene: 'login' as const,
   templateId: 1,
-  toPhoneHint: '156****8271',
+  toPhone: '+8615671628271',
   status: SmsStatus.Sent,
   requestId: 'request-id',
   serialNo: 'serial-no',
@@ -271,9 +271,9 @@ describe('SMS admin API protocol', () => {
     await expect(listSmsRules()).resolves.toEqual([rule])
 
     const createInput = {
-      scope: 'phone' as const,
+      scope: 0 as const,
       pattern: '15671628271',
-      action: 'deny' as const,
+      action: 0 as const,
       name: 'Blocked recipient',
       remark: '',
       isEnabled: YesNo.Yes,
@@ -323,7 +323,6 @@ describe('SMS admin API protocol', () => {
 
     const detail = {
       log,
-      toPhone: '+8615671628271',
       verificationCode: '123456',
       verificationExpiresAt: timestamp,
     }
@@ -362,15 +361,13 @@ describe('SMS admin API protocol', () => {
     requestMock.mockResolvedValueOnce({ list: [], total: -1, page: 1, pageSize: 20 })
     await expect(listSmsLogs({ page: 1, pageSize: 20 })).rejects.toThrow()
     requestMock.mockResolvedValueOnce({
-      log,
-      toPhone: '15671628271',
+      log: { ...log, toPhone: '15671628271' },
       verificationCode: '123456',
       verificationExpiresAt: timestamp,
     })
     await expect(getSmsLogDetail(log.id)).rejects.toThrow()
     requestMock.mockResolvedValueOnce({
       log,
-      toPhone: '+8615671628271',
       verificationCode: '123456',
       verificationExpiresAt: timestamp,
       ciphertext: 'secret',

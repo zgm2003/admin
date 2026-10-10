@@ -62,17 +62,16 @@ func (r *Repository) Finish(ctx context.Context, id, platformID int64, status St
 	return nil
 }
 
-// Query is the administrative list filter. PhoneToHMAC carries the exact-match
-// HMAC of a complete phone number, never the plaintext number.
+// Query is the administrative list filter. Phone carries a normalized number.
 type Query struct {
-	Page        int
-	PageSize    int
-	Platform    string
-	PhoneToHMAC *string
-	Scene       string
-	Status      Status
-	From        *time.Time
-	To          *time.Time
+	Page     int
+	PageSize int
+	Platform string
+	Phone    *string
+	Scene    string
+	Status   Status
+	From     *time.Time
+	To       *time.Time
 }
 
 type ListRow struct {
@@ -95,8 +94,8 @@ func (r *Repository) List(ctx context.Context, query Query) ([]ListRow, int64, e
 	if query.Platform != "" {
 		db = db.Where("platform.code LIKE ? ESCAPE '\\'", escapeLikePrefix(query.Platform))
 	}
-	if query.PhoneToHMAC != nil {
-		db = db.Where(Table+".to_phone_hmac = ?", *query.PhoneToHMAC)
+	if query.Phone != nil {
+		db = db.Where(Table+".to_phone = ?", *query.Phone)
 	}
 	if query.Scene != "" {
 		db = db.Where(Table+".scene = ?", query.Scene)

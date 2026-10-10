@@ -100,7 +100,7 @@ const searchFields = computed<SearchField<SmsLogSearchModel>[]>(() => [
 const columns = computed<TableColumn<smsApi.SmsLog>[]>(() => [
   { prop: 'platform', label: t('sms.platform'), width: 120 },
   { key: 'scene', prop: 'scene', label: t('sms.sceneLabel'), minWidth: 150 },
-  { prop: 'toPhoneHint', label: t('sms.phone'), width: 150 },
+  { prop: 'toPhone', label: t('sms.phone'), width: 170 },
   { key: 'status', prop: 'status', label: t('sms.statusLabel'), width: 100 },
   { key: 'sentAt', prop: 'sentAt', label: t('sms.sentAt'), minWidth: 180 },
   { prop: 'errorSummary', label: t('sms.error'), minWidth: 180, overflowTooltip: true },
@@ -235,7 +235,9 @@ async function showDetail(row: smsApi.SmsLog): Promise<void> {
         <el-descriptions-item :label="t('sms.sceneLabel')">{{
           detail.log.scene
         }}</el-descriptions-item>
-        <el-descriptions-item :label="t('sms.phone')">{{ detail.toPhone }}</el-descriptions-item>
+        <el-descriptions-item :label="t('sms.phone')">{{
+          detail.log.toPhone
+        }}</el-descriptions-item>
         <el-descriptions-item :label="t('sms.verificationCode')">
           {{ detail.verificationCode || '-' }}
         </el-descriptions-item>

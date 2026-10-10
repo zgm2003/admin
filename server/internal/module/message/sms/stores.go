@@ -123,7 +123,7 @@ func (s Stores) loadRulesInto(ctx context.Context, facts *RuntimeFacts) (int, er
 	for _, row := range rows {
 		facts.Rules = append(facts.Rules, RuleFact{
 			ID: row.ID, Scope: row.Scope, Action: row.Action,
-			PatternCiphertext: row.PatternCiphertext, PatternHint: row.PatternHint,
+			Pattern:   row.Pattern,
 			IsEnabled: row.IsEnabled,
 		})
 	}

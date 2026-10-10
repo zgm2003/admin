@@ -38,8 +38,8 @@ CREATE TABLE user_account(
  created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL, deleted_at TIMESTAMPTZ);
 CREATE TABLE message_sms_log(
  id BIGSERIAL PRIMARY KEY, platform_id BIGINT NOT NULL, challenge_id VARCHAR(128), user_id BIGINT,
- scene VARCHAR(32) NOT NULL, template_id BIGINT NOT NULL, to_phone_ciphertext TEXT NOT NULL,
- to_phone_hint VARCHAR(32) NOT NULL, to_phone_hmac VARCHAR(128) NOT NULL, status SMALLINT NOT NULL,
+ scene VARCHAR(32) NOT NULL, template_id BIGINT NOT NULL, to_phone VARCHAR(32) NOT NULL,
+ status SMALLINT NOT NULL,
  request_id VARCHAR(128) NOT NULL DEFAULT '', serial_no VARCHAR(128) NOT NULL DEFAULT '', fee INTEGER NOT NULL DEFAULT 0,
  error_code VARCHAR(128) NOT NULL DEFAULT '', error_summary VARCHAR(512) NOT NULL DEFAULT '', latency_ms BIGINT NOT NULL DEFAULT 0,
  sent_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL);
@@ -67,16 +67,16 @@ func TestRepositoryListsAcrossPlatformsWithExactPhoneAndStablePagination(t *test
 		t.Fatal(err)
 	}
 	rows := []*Model{
-		{PlatformID: 1, UserID: pointer[int64](7), Scene: "login", TemplateID: 1, ToPhoneCiphertext: "cipher-a", ToPhoneHint: "156****8271", ToPhoneHMAC: "hmac-a", Status: StatusSent, CreatedAt: now, UpdatedAt: now},
-		{PlatformID: 2, Scene: "forget", TemplateID: 2, ToPhoneCiphertext: "cipher-b", ToPhoneHint: "138****0000", ToPhoneHMAC: "hmac-b", Status: StatusFailed, CreatedAt: now.Add(-time.Hour), UpdatedAt: now},
-		{PlatformID: 1, Scene: "login", TemplateID: 1, ToPhoneCiphertext: "cipher-a", ToPhoneHint: "156****8271", ToPhoneHMAC: "hmac-a", Status: StatusSent, CreatedAt: now.Add(-48 * time.Hour), UpdatedAt: now},
+		{PlatformID: 1, UserID: pointer[int64](7), Scene: "login", TemplateID: 1, ToPhone: "+8615671628271", Status: StatusSent, CreatedAt: now, UpdatedAt: now},
+		{PlatformID: 2, Scene: "forget", TemplateID: 2, ToPhone: "+8613800000000", Status: StatusFailed, CreatedAt: now.Add(-time.Hour), UpdatedAt: now},
+		{PlatformID: 1, Scene: "login", TemplateID: 1, ToPhone: "+8615671628271", Status: StatusSent, CreatedAt: now.Add(-48 * time.Hour), UpdatedAt: now},
 	}
 	for _, row := range rows {
 		if err := repository.CreatePending(ctx, row); err != nil {
 			t.Fatal(err)
 		}
 	}
-	listed, total, err := repository.List(ctx, Query{Page: 1, PageSize: 1, Platform: "ad", PhoneToHMAC: pointer("hmac-a"), Scene: "login", Status: StatusSent})
+	listed, total, err := repository.List(ctx, Query{Page: 1, PageSize: 1, Platform: "ad", Phone: pointer("+8615671628271"), Scene: "login", Status: StatusSent})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestRepositoryListsAcrossPlatformsWithExactPhoneAndStablePagination(t *test
 	}
 }
 
-func TestServiceDecryptsSensitiveDetailByLogID(t *testing.T) {
+func TestServiceReturnsPlaintextPhoneAndDecryptsOnlyVerificationCode(t *testing.T) {
 	db, ctx := openSMSLogSchema(t)
 	keys, err := secretkey.New(strings.Repeat("s", 64))
 	if err != nil {
@@ -102,11 +102,7 @@ func TestServiceDecryptsSensitiveDetailByLogID(t *testing.T) {
 	if err := db.WithContext(ctx).Exec(`INSERT INTO permission_auth_platform(id,code,name) VALUES (2,'canvas','Canvas')`).Error; err != nil {
 		t.Fatal(err)
 	}
-	phoneCiphertext, _, err := secretkey.EncryptSMSValue(keys.SMSEncryptionKey(), "+8615671628271")
-	if err != nil {
-		t.Fatal(err)
-	}
-	row := &Model{PlatformID: 2, Scene: "login", TemplateID: 1, ToPhoneCiphertext: phoneCiphertext, ToPhoneHint: "156****8271", ToPhoneHMAC: "hmac", Status: StatusSent, CreatedAt: now, UpdatedAt: now}
+	row := &Model{PlatformID: 2, Scene: "login", TemplateID: 1, ToPhone: "+8615671628271", Status: StatusSent, CreatedAt: now, UpdatedAt: now}
 	if err := NewRepository(db).CreatePending(ctx, row); err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +116,7 @@ func TestServiceDecryptsSensitiveDetailByLogID(t *testing.T) {
 		t.Fatal(err)
 	}
 	detail, err := NewService(NewRepository(db), verificationRepository, keys).Detail(ctx, row.ID)
-	if err != nil || detail.ToPhone != "+8615671628271" || detail.VerificationCode != "123456" || detail.VerificationExpiresAt == nil {
+	if err != nil || detail.Log.ToPhone != "+8615671628271" || detail.VerificationCode != "123456" || detail.VerificationExpiresAt == nil {
 		t.Fatalf("detail=%+v err=%v", detail, err)
 	}
 }

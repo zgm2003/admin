@@ -25,18 +25,18 @@ type Handler struct{ service service }
 func NewHandler(service service) *Handler { return &Handler{service: service} }
 
 type createRequest struct {
-	Scope     *string      `json:"scope"`
+	Scope     *Scope       `json:"scope"`
 	Pattern   *string      `json:"pattern"`
-	Action    *string      `json:"action"`
+	Action    *Action      `json:"action"`
 	Name      *string      `json:"name"`
 	Remark    *string      `json:"remark"`
 	IsEnabled *yesno.Value `json:"isEnabled"`
 }
 
 type updateRequest struct {
-	Scope     *string      `json:"scope"`
+	Scope     *Scope       `json:"scope"`
 	Pattern   *string      `json:"pattern"`
-	Action    *string      `json:"action"`
+	Action    *Action      `json:"action"`
 	Name      *string      `json:"name"`
 	Remark    *string      `json:"remark"`
 	IsEnabled *yesno.Value `json:"isEnabled"`

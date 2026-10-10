@@ -6,6 +6,12 @@ import {
   expectString,
 } from '@/api/protocol'
 import { isYesNo, type YesNo } from '@/enums/yesNo'
+import {
+  isSmsRuleAction,
+  isSmsRuleScope,
+  type SmsRuleAction,
+  type SmsRuleScope,
+} from '@/enums/smsRecipientRule'
 import { ProtocolError } from '@/types/http'
 import type { PageResult } from '@/types/pagination'
 import { request } from '@/utils/request'
@@ -28,8 +34,6 @@ export const smsStatusMetadata = [
   { value: SmsStatus.Sent, i18nKey: 'sms.status.sent', tagType: 'success' },
   { value: SmsStatus.Failed, i18nKey: 'sms.status.failed', tagType: 'danger' },
 ] as const
-export type SmsRuleScope = 'phone' | 'prefix'
-export type SmsRuleAction = 'allow' | 'deny'
 export type SmsRateLimitPolicyKey = 'business_phone_minute' | 'business_phone_10m'
 
 export interface SmsConfig {
@@ -80,7 +84,7 @@ export interface SmsTemplateInput {
 export interface SmsRule {
   id: number
   scope: SmsRuleScope
-  patternHint: string
+  pattern: string
   action: SmsRuleAction
   name: string
   remark: string
@@ -97,7 +101,7 @@ export interface SmsLog {
   username: string
   scene: SmsScene
   templateId: number
-  toPhoneHint: string
+  toPhone: string
   status: SmsStatus
   requestId: string
   serialNo: string
@@ -112,7 +116,6 @@ export interface SmsLog {
 
 export interface SmsLogDetail {
   log: SmsLog
-  toPhone: string
   verificationCode: string
   verificationExpiresAt: string | null
 }
@@ -205,6 +208,12 @@ function text(value: unknown, context: string): string {
 function nonEmptyText(value: unknown, context: string): string {
   const result = text(value, context)
   if (result.trim() === '') throw new ProtocolError(`${context} is empty`)
+  return result
+}
+
+function nonEmptyPhone(value: unknown, context: string): string {
+  const result = nonEmptyText(value, context)
+  if (!/^\+861[3-9][0-9]{9}$/.test(result)) throw new ProtocolError(`${context} is invalid`)
   return result
 }
 
@@ -346,32 +355,18 @@ export function parseSmsTemplate(value: unknown): SmsTemplate {
 export function parseSmsRule(value: unknown): SmsRule {
   const data = expectExactKeys(
     value,
-    [
-      'id',
-      'scope',
-      'patternHint',
-      'action',
-      'name',
-      'remark',
-      'isEnabled',
-      'createdAt',
-      'updatedAt',
-    ],
+    ['id', 'scope', 'pattern', 'action', 'name', 'remark', 'isEnabled', 'createdAt', 'updatedAt'],
     'sms rule',
   )
-  const scope = text(data.scope, 'sms rule.scope')
-  const action = text(data.action, 'sms rule.action')
-  if (
-    (scope !== 'phone' && scope !== 'prefix') ||
-    (action !== 'allow' && action !== 'deny') ||
-    !isYesNo(data.isEnabled)
-  ) {
+  if (!isSmsRuleScope(data.scope) || !isSmsRuleAction(data.action) || !isYesNo(data.isEnabled)) {
     throw new ProtocolError('sms rule is invalid')
   }
+  const scope = data.scope
+  const action = data.action
   return {
     id: positiveInteger(data.id, 'sms rule.id'),
     scope,
-    patternHint: nonEmptyText(data.patternHint, 'sms rule.patternHint'),
+    pattern: nonEmptyText(data.pattern, 'sms rule.pattern'),
     action,
     name: nonEmptyText(data.name, 'sms rule.name'),
     remark: text(data.remark, 'sms rule.remark'),
@@ -392,7 +387,7 @@ export function parseSmsLog(value: unknown): SmsLog {
       'username',
       'scene',
       'templateId',
-      'toPhoneHint',
+      'toPhone',
       'status',
       'requestId',
       'serialNo',
@@ -414,7 +409,7 @@ export function parseSmsLog(value: unknown): SmsLog {
     username: text(data.username, 'sms log.username'),
     scene: scene(data.scene, 'sms log.scene'),
     templateId: positiveInteger(data.templateId, 'sms log.templateId'),
-    toPhoneHint: nonEmptyText(data.toPhoneHint, 'sms log.toPhoneHint'),
+    toPhone: nonEmptyPhone(data.toPhone, 'sms log.toPhone'),
     status: status(data.status, 'sms log.status'),
     requestId: text(data.requestId, 'sms log.requestId'),
     serialNo: text(data.serialNo, 'sms log.serialNo'),
@@ -441,20 +436,15 @@ export function parseSmsLogPage(value: unknown): PageResult<SmsLog> {
 export function parseSmsLogDetail(value: unknown): SmsLogDetail {
   const data = expectExactKeys(
     value,
-    ['log', 'toPhone', 'verificationCode', 'verificationExpiresAt'],
+    ['log', 'verificationCode', 'verificationExpiresAt'],
     'sms log detail',
   )
-  const toPhone = text(data.toPhone, 'sms log detail.toPhone')
   const verificationCode = text(data.verificationCode, 'sms log detail.verificationCode')
-  if (!/^\+861[3-9][0-9]{9}$/.test(toPhone)) {
-    throw new ProtocolError('sms log detail.toPhone is invalid')
-  }
   if (verificationCode !== '' && !/^\d{6}$/.test(verificationCode)) {
     throw new ProtocolError('sms log detail.verificationCode is invalid')
   }
   return {
     log: parseSmsLog(data.log),
-    toPhone,
     verificationCode,
     verificationExpiresAt:
       data.verificationExpiresAt === null

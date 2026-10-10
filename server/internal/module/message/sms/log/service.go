@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"admin/server/internal/module/message/sms/logVerification"
-	"admin/server/internal/module/message/sms/recipientRule"
 	"admin/server/internal/module/message/sms/template"
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
@@ -20,7 +19,7 @@ const (
 	PermissionDetail = "message:sms:detail"
 )
 
-// Item is the administrative log shape. It only ever carries the phone hint.
+// Item is the administrative log shape and carries the normalized phone.
 type Item struct {
 	ID           int64   `json:"id"`
 	PlatformID   int64   `json:"platformId"`
@@ -29,7 +28,7 @@ type Item struct {
 	Username     string  `json:"username"`
 	Scene        string  `json:"scene"`
 	TemplateID   int64   `json:"templateId"`
-	ToPhoneHint  string  `json:"toPhoneHint"`
+	ToPhone      string  `json:"toPhone"`
 	Status       Status  `json:"status"`
 	RequestID    string  `json:"requestId"`
 	SerialNo     string  `json:"serialNo"`
@@ -49,17 +48,16 @@ type ListResult struct {
 	PageSize int    `json:"pageSize"`
 }
 
-// Detail additionally decrypts the phone and the verification code. It is only
+// Detail returns the plaintext phone and decrypts only the verification code. It is only
 // reachable with the message:sms:detail permission.
 type Detail struct {
 	Log                   Item    `json:"log"`
-	ToPhone               string  `json:"toPhone"`
 	VerificationCode      string  `json:"verificationCode"`
 	VerificationExpiresAt *string `json:"verificationExpiresAt"`
 }
 
-// ListQuery is the validated administrative filter. Phone is the raw input and
-// is normalized and HMAC'd before it reaches the repository.
+// ListQuery is the validated administrative filter. Phone is normalized before
+// it reaches the repository.
 type ListQuery struct {
 	Page     int
 	PageSize int
@@ -105,15 +103,11 @@ func (s *Service) List(ctx context.Context, query ListQuery) (ListResult, error)
 
 	repositoryQuery := Query{Page: query.Page, PageSize: query.PageSize, Platform: query.Platform, Scene: query.Scene, Status: query.Status, From: query.From, To: query.To}
 	if query.Phone != "" {
-		if s.keys == nil {
-			return ListResult{}, apperror.DependencyUnavailable(fmt.Errorf("sms keys are unavailable"))
-		}
 		normalized, err := phone.Normalize(query.Phone)
 		if err != nil {
 			return ListResult{}, apperror.InvalidRequest(fmt.Errorf("phone filter must be a mainland number"))
 		}
-		hmac := recipientRule.HMACValue(s.keys, normalized)
-		repositoryQuery.PhoneToHMAC = &hmac
+		repositoryQuery.Phone = &normalized
 	}
 
 	rows, total, err := s.repository.List(ctx, repositoryQuery)
@@ -138,11 +132,7 @@ func (s *Service) Detail(ctx context.Context, id int64) (Detail, error) {
 	if err != nil {
 		return Detail{}, apperror.DependencyUnavailable(fmt.Errorf("sms log repository: %w", err))
 	}
-	toPhone, err := decryptWith(s.keys, row.ToPhoneCiphertext)
-	if err != nil {
-		return Detail{}, apperror.DependencyUnavailable(fmt.Errorf("decrypt sms log phone: %w", err))
-	}
-	detail := Detail{Log: itemOf(row), ToPhone: toPhone}
+	detail := Detail{Log: itemOf(row)}
 	if verification, err := s.verification.FindBySMSLog(ctx, row.PlatformID, row.ID); err == nil {
 		code, err := decryptWith(s.keys, verification.CodeCiphertext)
 		if err != nil {
@@ -161,7 +151,7 @@ func itemOf(row ListRow) Item {
 	item := Item{
 		ID: row.ID, PlatformID: row.PlatformID, Platform: row.Platform,
 		UserID: row.UserID, Username: row.Username, Scene: row.Scene,
-		TemplateID: row.TemplateID, ToPhoneHint: row.ToPhoneHint, Status: row.Status,
+		TemplateID: row.TemplateID, ToPhone: row.ToPhone, Status: row.Status,
 		RequestID: row.RequestID, SerialNo: row.SerialNo, Fee: row.Fee,
 		ErrorCode: row.ErrorCode, ErrorSummary: row.ErrorSummary, LatencyMS: row.LatencyMS,
 		CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano),

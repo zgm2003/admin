@@ -134,6 +134,11 @@ key；verification key 通过 channel、scene、loginType 和规范化身份隔�
 SMS 管理页是五 tab 聚合页，配置/模板/收件规则全局共享，限流策略按认证平台维护，日志保留来源平台；SMS 日志、
 verification 和身份 change log 均无删除 API。
 
+SMS 收件规则与发送日志的手机号采用与邮件地址一致的明文业务事实：规则保存规范化 `pattern`，日志保存
+规范化 `to_phone`，管理员列表/详情按既有权限展示。短信验证码、腾讯云 SecretID/SecretKey 仍使用独立加密；
+限流 Redis key 继续使用服务端 HMAC 摘要，不把手机号放入共享缓存键。SMS runtime snapshot schema 与数据库
+迁移同步升级，拒绝旧密文/脱敏字段和旧字符串枚举，不保留双读双写兼容。
+
 ## 容量与一致性
 
 项目默认按百万级用户、多实例和高并发访问设计。共享请求热路径不得把 PostgreSQL 当作每请求配置中心，

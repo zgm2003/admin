@@ -5,12 +5,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"admin/server/internal/config"
 	"admin/server/internal/database/testschema"
-	"admin/server/internal/secretkey"
 	cachegeneration "admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/yesno"
 	"github.com/joho/godotenv"
@@ -30,11 +28,9 @@ func openRuleSchema(t *testing.T) (*gorm.DB, context.Context) {
 	if err := db.WithContext(ctx).Exec(`
 CREATE TABLE message_sms_recipient_rule(
  id BIGSERIAL PRIMARY KEY,
- scope VARCHAR(16) NOT NULL,
- pattern_ciphertext TEXT NOT NULL,
- pattern_hint VARCHAR(64) NOT NULL,
- pattern_hmac VARCHAR(128) NOT NULL,
- action VARCHAR(16) NOT NULL,
+ scope SMALLINT NOT NULL CHECK(scope IN (0,1)),
+ pattern VARCHAR(32) NOT NULL,
+ action SMALLINT NOT NULL CHECK(action IN (0,1)),
  name VARCHAR(128) NOT NULL,
  remark VARCHAR(512) NOT NULL DEFAULT '',
  is_enabled SMALLINT NOT NULL DEFAULT 1,
@@ -43,7 +39,7 @@ CREATE TABLE message_sms_recipient_rule(
  deleted_at TIMESTAMPTZ
 );
 CREATE UNIQUE INDEX ux_message_sms_recipient_rule_pattern_action_active
-ON message_sms_recipient_rule(scope, pattern_hmac, action) WHERE deleted_at IS NULL;`).Error; err != nil {
+ON message_sms_recipient_rule(scope, pattern, action) WHERE deleted_at IS NULL;`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.WithContext(ctx).Exec(`
@@ -71,18 +67,9 @@ func newSMSRuleRepository(db *gorm.DB) *Repository {
 	return repository
 }
 
-func realKeys(t *testing.T) *secretkey.KeyRing {
-	t.Helper()
-	keys, err := secretkey.New(strings.Repeat("s", 64))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return keys
-}
-
 func TestRepositoryRejectsADuplicateActivePatternAndAction(t *testing.T) {
 	db, ctx := openRuleSchema(t)
-	service := newMutationService(newSMSRuleRepository(db), realKeys(t))
+	service := newMutationService(newSMSRuleRepository(db))
 
 	first, err := service.Create(ctx, CreateInput{
 		Scope: ScopePhone, Pattern: "15671628271", Action: ActionDeny, Name: "黑名单", IsEnabled: yesno.Yes,
@@ -90,8 +77,8 @@ func TestRepositoryRejectsADuplicateActivePatternAndAction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
-	if first.PatternHint != "156****8271" {
-		t.Fatalf("hint = %q", first.PatternHint)
+	if first.Pattern != "+8615671628271" {
+		t.Fatalf("pattern = %q", first.Pattern)
 	}
 
 	_, err = service.Create(ctx, CreateInput{
@@ -111,7 +98,7 @@ func TestRepositoryRejectsADuplicateActivePatternAndAction(t *testing.T) {
 
 func TestRepositoryIgnoresSoftDeletedRules(t *testing.T) {
 	db, ctx := openRuleSchema(t)
-	service := newMutationService(newSMSRuleRepository(db), realKeys(t))
+	service := newMutationService(newSMSRuleRepository(db))
 
 	created, err := service.Create(ctx, CreateInput{
 		Scope: ScopePrefix, Pattern: "+86156", Action: ActionDeny, Name: "前缀", IsEnabled: yesno.Yes,
@@ -140,7 +127,7 @@ func TestRepositoryIgnoresSoftDeletedRules(t *testing.T) {
 func TestRepositoryUpdateKeepsTheStoredPatternWhenOmitted(t *testing.T) {
 	db, ctx := openRuleSchema(t)
 	repository := newSMSRuleRepository(db)
-	service := newMutationService(repository, realKeys(t))
+	service := newMutationService(repository)
 
 	created, err := service.Create(ctx, CreateInput{
 		Scope: ScopePhone, Pattern: "15671628271", Action: ActionDeny, Name: "黑名单", IsEnabled: yesno.Yes,
@@ -154,7 +141,7 @@ func TestRepositoryUpdateKeepsTheStoredPatternWhenOmitted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
-	if updated.PatternHint != created.PatternHint || updated.Action != ActionAllow {
+	if updated.Pattern != created.Pattern || updated.Action != ActionAllow {
 		t.Fatalf("updated = %+v", updated)
 	}
 
@@ -162,7 +149,7 @@ func TestRepositoryUpdateKeepsTheStoredPatternWhenOmitted(t *testing.T) {
 	if err := db.WithContext(ctx).First(&stored, created.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.PatternHMAC == "" || stored.PatternCiphertext[:7] != "sms:v1:" {
+	if stored.Pattern != "+8615671628271" {
 		t.Fatalf("stored = %+v", stored)
 	}
 }

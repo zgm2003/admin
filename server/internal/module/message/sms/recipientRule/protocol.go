@@ -17,13 +17,25 @@ import (
 	"admin/server/internal/shared/yesno"
 )
 
+type Scope int16
+
 const (
-	ScopePhone  = "phone"
-	ScopePrefix = "prefix"
+	ScopePhone  Scope = 0
+	ScopePrefix Scope = 1
+)
 
-	ActionAllow = "allow"
-	ActionDeny  = "deny"
+func (s Scope) Valid() bool { return s == ScopePhone || s == ScopePrefix }
 
+type Action int16
+
+const (
+	ActionDeny  Action = 0
+	ActionAllow Action = 1
+)
+
+func (a Action) Valid() bool { return a == ActionDeny || a == ActionAllow }
+
+const (
 	PermissionList   = "message:sms:list"
 	PermissionCreate = "message:sms:rule:create"
 	PermissionUpdate = "message:sms:rule:update"
@@ -37,11 +49,10 @@ const (
 	maxNameLength   = 128
 	maxRemarkLength = 512
 	countryCode     = "+86"
-	prefixMask      = "****"
 )
 
 // ErrConflict is produced by the repository when the active partial unique index
-// rejects a duplicate (scope, pattern hmac, action) combination.
+// rejects a duplicate (scope, pattern, action) combination.
 var ErrConflict = errors.New("sms recipient rule conflicts with an existing record")
 
 var prefixNationalPattern = regexp.MustCompile(`^[0-9]{3,10}$`)
@@ -53,15 +64,15 @@ type Decision struct {
 }
 
 type Safe struct {
-	ID          int64       `json:"id"`
-	Scope       string      `json:"scope"`
-	PatternHint string      `json:"patternHint"`
-	Action      string      `json:"action"`
-	Name        string      `json:"name"`
-	Remark      string      `json:"remark"`
-	IsEnabled   yesno.Value `json:"isEnabled"`
-	CreatedAt   string      `json:"createdAt"`
-	UpdatedAt   string      `json:"updatedAt"`
+	ID        int64       `json:"id"`
+	Scope     Scope       `json:"scope"`
+	Pattern   string      `json:"pattern"`
+	Action    Action      `json:"action"`
+	Name      string      `json:"name"`
+	Remark    string      `json:"remark"`
+	IsEnabled yesno.Value `json:"isEnabled"`
+	CreatedAt string      `json:"createdAt"`
+	UpdatedAt string      `json:"updatedAt"`
 }
 
 type ListResponse struct {
@@ -69,9 +80,9 @@ type ListResponse struct {
 }
 
 type CreateInput struct {
-	Scope     string
+	Scope     Scope
 	Pattern   string
-	Action    string
+	Action    Action
 	Name      string
 	Remark    string
 	IsEnabled yesno.Value
@@ -80,9 +91,9 @@ type CreateInput struct {
 // UpdateInput keeps the pattern optional: omitting it preserves the stored
 // pattern and scope, while a scope change requires a complete new pattern.
 type UpdateInput struct {
-	Scope     string
+	Scope     Scope
 	Pattern   *string
-	Action    string
+	Action    Action
 	Name      string
 	Remark    string
 	IsEnabled yesno.Value
@@ -104,41 +115,27 @@ type RuntimeCoordinator interface {
 
 func safeOf(value Model) Safe {
 	return Safe{
-		ID:          value.ID,
-		Scope:       value.Scope,
-		PatternHint: value.PatternHint,
-		Action:      value.Action,
-		Name:        value.Name,
-		Remark:      value.Remark,
-		IsEnabled:   value.IsEnabled,
-		CreatedAt:   value.CreatedAt.UTC().Format(time.RFC3339Nano),
-		UpdatedAt:   value.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		ID:        value.ID,
+		Scope:     value.Scope,
+		Pattern:   value.Pattern,
+		Action:    value.Action,
+		Name:      value.Name,
+		Remark:    value.Remark,
+		IsEnabled: value.IsEnabled,
+		CreatedAt: value.CreatedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt: value.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 
-// HMACValue is the deterministic HMAC shared by rule patterns, log phone
-// filters and quota keys. The plaintext never appears in any key or index.
+// HMACValue is retained only for internal rate-limit Redis keys. It is not
+// persisted as a business field and never leaves the server API.
 func HMACValue(keys *secretkey.KeyRing, value string) string {
 	mac := hmac.New(sha256.New, keys.SMSRecipientHMACKey())
 	mac.Write([]byte(value))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// patternHMAC is the deterministic lookup value; it never leaves the server.
-func patternHMAC(keys *secretkey.KeyRing, pattern string) string {
-	return HMACValue(keys, pattern)
-}
-
-// patternHint is the only representation shown to administrators. Full numbers
-// keep the mainland masking, prefixes keep the configured prefix.
-func patternHint(scope, pattern string) string {
-	if scope == ScopePhone {
-		return phone.Hint(pattern)
-	}
-	return pattern + prefixMask
-}
-
-func normalizePattern(scope, value string) (string, error) {
+func normalizePattern(scope Scope, value string) (string, error) {
 	switch scope {
 	case ScopePhone:
 		return phone.Normalize(value)
@@ -157,6 +154,16 @@ func normalizePattern(scope, value string) (string, error) {
 	}
 }
 
-func validAction(action string) bool {
-	return action == ActionAllow || action == ActionDeny
+// ValidatePattern enforces the canonical stored SMS rule representation.
+func ValidatePattern(scope Scope, value string) error {
+	normalized, err := normalizePattern(scope, value)
+	if err != nil || normalized != value {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("sms pattern is not canonical")
+	}
+	return nil
 }
+
+func validAction(action Action) bool { return action.Valid() }

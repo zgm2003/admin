@@ -1,5 +1,15 @@
 # 项目状态
 
+## 短信手机号明文统一（2026-10-08，代码与真实迁移已完成）
+
+- 维护者确认短信手机号与邮件地址采用同一可维护策略：`message_sms_recipient_rule` 的手机号规则明文保存和返回，`message_sms_log` 的收件手机号明文保存和返回；不再保留手机号密文、脱敏 hint 或数据库 HMAC 字段。
+- 规则协议拟统一为数值：`scope: 0=phone, 1=prefix`，`action: 0=deny, 1=allow`；`pattern` 保存规范化 `+861...` 完整号码或 `+86` 前缀。唯一索引改为 `(scope, pattern, action)`，日志精确过滤直接使用 `to_phone`。
+- 必须保留的加密：短信验证码 `code_ciphertext`、腾讯云 SMS SecretID/SecretKey；限流 Redis key 暂保留内部 HMAC 摘要，避免在共享缓存键中泄露手机号，不作为业务字段或管理员 DTO。
+- 影响面已审计：SMS recipientRule Model/Service/Repository/Runtime snapshot/readiness/matcher；SMS send/log/service/repository/DTO/前端列表和详情；数据库 `message_sms_recipient_rule`、`message_sms_log` 约束/索引/current.sql；Redis `message.sms/global` generation/schema。当前真实库两张 SMS 目标表均为 0 行，旧加密数据迁移仍需显式失败保护，不能写假明文。
+- 已实现：SMS recipientRule 的 `scope/action` 为数值 0/1，`pattern` 明文；SMS log 使用 `toPhone` 明文；运行时快照 schema 升为 2 并拒绝旧密文/旧字符串/缺失/null 字段；前端 DTO、规则编辑、日志列表统一数字枚举和明文号码。短信验证码、腾讯云密钥仍加密，限流 Redis key 保留内部 HMAC 摘要。
+- 迁移：`docs/database/2026-10-08-message-sms-plaintext.sql/.ps1` 已备份并执行，当前真实库两张目标表均为 0 行，旧密文列安全删除，`message.sms/global` 1 → 2，Redis ready=2；SQL 重复执行、快照/约束/索引验证通过。备份和审计目录见 `%LOCALAPPDATA%\Admin\backups\message-sms-plaintext-20261008-211622-34bc81d8`，未清 Redis、未删除其他业务数据。API/Worker 仍保持停止，由维护者启动新版本。
+- 验证：后端 `go test -p 1 ./... -count=1` 全部通过，`go vet ./...` 与 `go build ./...` 通过；前端 SMS API/页面 51 项、`pnpm typecheck`、`pnpm lint`、`pnpm check:architecture`（0 findings）和 `pnpm build` 通过。未做浏览器人工验收或真实短信发送。
+
 ## 收件规则导入弹窗微调（2026-10-08，已完成）
 
 - `MailRuleImportDialog/index.vue` 文件行号列从 80px 改为 120px；删除底部重复的“预览校验”，仅保留表格上方入口，底部为“取消 / 确认整批导入”。

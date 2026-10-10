@@ -68,8 +68,7 @@ func (r *Repository) Update(ctx context.Context, value *Model, expected int64, n
 			return false, nil
 		}
 		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ? AND deleted_at IS NULL", value.ID).Updates(map[string]any{
-			"scope": value.Scope, "pattern_ciphertext": value.PatternCiphertext,
-			"pattern_hint": value.PatternHint, "pattern_hmac": value.PatternHMAC,
+			"scope": value.Scope, "pattern": value.Pattern,
 			"action": value.Action, "name": value.Name, "remark": value.Remark,
 			"is_enabled": value.IsEnabled, "updated_at": now,
 		})
@@ -164,8 +163,7 @@ func lockRule(ctx context.Context, tx *gorm.DB, id int64) (Model, error) {
 }
 
 func sameRule(left, right Model) bool {
-	return left.Scope == right.Scope && left.PatternCiphertext == right.PatternCiphertext &&
-		left.PatternHint == right.PatternHint && left.PatternHMAC == right.PatternHMAC &&
+	return left.Scope == right.Scope && left.Pattern == right.Pattern &&
 		left.Action == right.Action && left.Name == right.Name && left.Remark == right.Remark && left.IsEnabled == right.IsEnabled
 }
 

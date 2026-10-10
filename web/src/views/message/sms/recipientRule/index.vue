@@ -7,6 +7,12 @@ import { useI18n } from 'vue-i18n'
 
 import * as smsApi from '@/api/message/sms'
 import type { TableColumn } from '@/components/AppTable'
+import {
+  SmsRuleAction,
+  SmsRuleScope,
+  smsRuleActionMetadata,
+  smsRuleScopeMetadata,
+} from '@/enums/smsRecipientRule'
 import { YesNo, type YesNo as YesNoValue } from '@/enums/yesNo'
 
 const props = defineProps<{
@@ -25,16 +31,14 @@ const saving = ref(false)
 const form = ref<smsApi.SmsRuleInput>(blankRule())
 
 const scopeOptions = computed(() => [
-  { value: 'phone', label: t('sms.scope.phone') },
-  { value: 'prefix', label: t('sms.scope.prefix') },
+  ...smsRuleScopeMetadata.map((item) => ({ value: item.value, label: t(item.i18nKey) })),
 ])
 const actionOptions = computed(() => [
-  { value: 'allow', label: t('sms.action.allow') },
-  { value: 'deny', label: t('sms.action.deny') },
+  ...smsRuleActionMetadata.map((item) => ({ value: item.value, label: t(item.i18nKey) })),
 ])
 const hasRowActions = computed(() => props.canUpdate || props.canStatus || props.canDelete)
 const columns = computed<TableColumn<smsApi.SmsRule>[]>(() => [
-  { prop: 'patternHint', label: t('sms.rulePattern'), minWidth: 160 },
+  { prop: 'pattern', label: t('sms.rulePattern'), minWidth: 190 },
   { key: 'scope', prop: 'scope', label: t('sms.ruleScope'), width: 120 },
   { key: 'action', prop: 'action', label: t('sms.ruleAction'), width: 100 },
   { prop: 'name', label: t('sms.name'), minWidth: 160 },
@@ -52,9 +56,9 @@ const columns = computed<TableColumn<smsApi.SmsRule>[]>(() => [
 
 function blankRule(): smsApi.SmsRuleInput {
   return {
-    scope: 'phone',
+    scope: SmsRuleScope.Phone,
     pattern: '',
-    action: 'deny',
+    action: SmsRuleAction.Deny,
     name: '',
     remark: '',
     isEnabled: YesNo.Yes,
@@ -71,7 +75,7 @@ function edit(row: smsApi.SmsRule): void {
   editingID.value = row.id
   form.value = {
     scope: row.scope,
-    pattern: '',
+    pattern: row.pattern,
     action: row.action,
     name: row.name,
     remark: row.remark,
@@ -151,11 +155,13 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
         </el-button>
       </template>
       <template #cell-scope="{ row }: { row: smsApi.SmsRule | undefined }">
-        <template v-if="row">{{ t(`sms.scope.${row.scope}`) }}</template>
+        <template v-if="row">{{
+          t(row.scope === SmsRuleScope.Phone ? 'sms.scope.phone' : 'sms.scope.prefix')
+        }}</template>
       </template>
       <template #cell-action="{ row }: { row: smsApi.SmsRule | undefined }">
-        <el-tag v-if="row" :type="row.action === 'deny' ? 'danger' : 'success'">
-          {{ t(`sms.action.${row.action}`) }}
+        <el-tag v-if="row" :type="row.action === SmsRuleAction.Deny ? 'danger' : 'success'">
+          {{ t(row.action === SmsRuleAction.Deny ? 'sms.action.deny' : 'sms.action.allow') }}
         </el-tag>
       </template>
       <template #cell-status="{ row }: { row: smsApi.SmsRule }">

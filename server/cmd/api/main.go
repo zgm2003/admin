@@ -342,7 +342,7 @@ func run(logger *slog.Logger) error {
 	smsTemplateService.SetRuntimeCoordinator(smsRuntimeCache)
 	smsRecipientRuleRepository := smsrecipientrule.NewRepository(postgres.GORM)
 	smsRecipientRuleRepository.SetGenerations(configGenerationRepository, messagesms.CacheGenerationScope())
-	smsRecipientRuleService := smsrecipientrule.NewService(smsRecipientRuleRepository, keys)
+	smsRecipientRuleService := smsrecipientrule.NewService(smsRecipientRuleRepository)
 	smsRecipientRuleService.SetRuntimeCoordinator(smsRuntimeCache)
 	smsRateLimitRepository := smsratelimitpolicy.NewRepository(postgres.GORM)
 	smsRateLimitRepository.SetGenerations(configGenerationRepository, messagesms.CacheGenerationScope())

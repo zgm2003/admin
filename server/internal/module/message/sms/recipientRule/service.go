@@ -8,7 +8,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/cacheGeneration"
 	"admin/server/internal/shared/i18n"
@@ -18,13 +17,10 @@ import (
 
 type Service struct {
 	repository repository
-	keys       *secretkey.KeyRing
 	runtime    RuntimeCoordinator
 }
 
-func NewService(repository repository, keys *secretkey.KeyRing) *Service {
-	return &Service{repository: repository, keys: keys}
-}
+func NewService(repository repository) *Service { return &Service{repository: repository} }
 
 func (s *Service) SetRuntimeCoordinator(runtime RuntimeCoordinator) {
 	s.runtime = runtime
@@ -55,9 +51,6 @@ func (s *Service) List(ctx context.Context) ([]Safe, error) {
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (Safe, error) {
-	if s.keys == nil {
-		return Safe{}, apperror.DependencyUnavailable(fmt.Errorf("sms keys are unavailable"))
-	}
 	if !validAction(input.Action) || !yesno.IsValid(input.IsEnabled) {
 		return Safe{}, apperror.InvalidRequest(fmt.Errorf("sms recipient rule input is invalid"))
 	}
@@ -69,23 +62,16 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Safe, error) {
 	if err != nil {
 		return Safe{}, apperror.InvalidRequest(fmt.Errorf("sms recipient rule pattern is invalid"))
 	}
-	ciphertext, _, err := secretkey.EncryptSMSValue(s.keys.SMSEncryptionKey(), pattern)
-	if err != nil {
-		return Safe{}, apperror.DependencyUnavailable(fmt.Errorf("encrypt sms recipient rule pattern: %w", err))
-	}
-
 	now := time.Now().UTC()
 	value := Model{
-		Scope:             input.Scope,
-		PatternCiphertext: ciphertext,
-		PatternHint:       patternHint(input.Scope, pattern),
-		PatternHMAC:       patternHMAC(s.keys, pattern),
-		Action:            input.Action,
-		Name:              name,
-		Remark:            remark,
-		IsEnabled:         input.IsEnabled,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		Scope:     input.Scope,
+		Pattern:   pattern,
+		Action:    input.Action,
+		Name:      name,
+		Remark:    remark,
+		IsEnabled: input.IsEnabled,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 	if err := s.mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
 		return s.repository.Create(writeContext, &value, expected, now)
@@ -103,9 +89,6 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (Safe
 	if err != nil {
 		return Safe{}, apperror.DependencyUnavailable(fmt.Errorf("sms recipient rule repository: %w", err))
 	}
-	if s.keys == nil {
-		return Safe{}, apperror.DependencyUnavailable(fmt.Errorf("sms keys are unavailable"))
-	}
 	if !validAction(input.Action) || !yesno.IsValid(input.IsEnabled) {
 		return Safe{}, apperror.InvalidRequest(fmt.Errorf("sms recipient rule input is invalid"))
 	}
@@ -115,23 +98,17 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (Safe
 	}
 
 	if input.Pattern == nil {
-		if scope := strings.TrimSpace(input.Scope); scope != "" && scope != current.Scope {
+		if input.Scope != current.Scope {
 			return Safe{}, apperror.InvalidRequest(fmt.Errorf("changing the sms recipient rule scope requires a new pattern"))
 		}
 	} else {
-		scope := strings.TrimSpace(input.Scope)
+		scope := input.Scope
 		pattern, err := normalizePattern(scope, *input.Pattern)
 		if err != nil {
 			return Safe{}, apperror.InvalidRequest(fmt.Errorf("sms recipient rule pattern is invalid"))
 		}
-		ciphertext, _, err := secretkey.EncryptSMSValue(s.keys.SMSEncryptionKey(), pattern)
-		if err != nil {
-			return Safe{}, apperror.DependencyUnavailable(fmt.Errorf("encrypt sms recipient rule pattern: %w", err))
-		}
 		current.Scope = scope
-		current.PatternCiphertext = ciphertext
-		current.PatternHint = patternHint(scope, pattern)
-		current.PatternHMAC = patternHMAC(s.keys, pattern)
+		current.Pattern = pattern
 	}
 
 	current.Action = input.Action
@@ -189,19 +166,12 @@ func (s *Service) Evaluate(ctx context.Context, toPhone string) (Decision, error
 	if err != nil {
 		return Decision{}, apperror.DependencyUnavailable(fmt.Errorf("sms recipient rule repository: %w", err))
 	}
-	if s.keys == nil {
-		return Decision{}, apperror.DependencyUnavailable(fmt.Errorf("sms keys are unavailable"))
-	}
 	patterns := make([]RulePattern, 0, len(rows))
 	for _, row := range rows {
 		if row.IsEnabled != yesno.Yes {
 			continue
 		}
-		pattern, err := secretkey.DecryptSMSValue(s.keys.SMSEncryptionKey(), row.PatternCiphertext)
-		if err != nil {
-			return Decision{}, apperror.DependencyUnavailable(fmt.Errorf("decrypt sms recipient rule pattern: %w", err))
-		}
-		patterns = append(patterns, RulePattern{ID: row.ID, Scope: row.Scope, Action: row.Action, Pattern: pattern})
+		patterns = append(patterns, RulePattern{ID: row.ID, Scope: row.Scope, Action: row.Action, Pattern: row.Pattern})
 	}
 	return Match(toPhone, patterns), nil
 }

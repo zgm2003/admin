@@ -101,7 +101,7 @@ func (s *Service) PreparePhoneVerifyCode(ctx context.Context, input PhoneVerifyC
 	if s.keys == nil {
 		return PhoneVerifyCodePreparation{}, dependency(fmt.Errorf("sms keys are unavailable"))
 	}
-	decision, err := evaluateRules(s.keys, facts.Rules, normalized)
+	decision, err := evaluateRules(facts.Rules, normalized)
 	if err != nil {
 		return PhoneVerifyCodePreparation{}, dependency(err)
 	}
@@ -227,7 +227,7 @@ func (s *Service) SendAdminTest(ctx context.Context, input AdminTestInput) (Admi
 	if s.keys == nil {
 		return AdminTestResult{}, dependency(fmt.Errorf("sms keys are unavailable"))
 	}
-	decision, err := evaluateRules(s.keys, facts.Rules, normalized)
+	decision, err := evaluateRules(facts.Rules, normalized)
 	if err != nil {
 		return AdminTestResult{}, dependency(err)
 	}
@@ -251,15 +251,10 @@ func (s *Service) SendAdminTest(ctx context.Context, input AdminTestInput) (Admi
 		variables = append(variables, tpl.ExampleVariables[key])
 	}
 	started := s.now().UTC()
-	phoneHMAC := recipientRule.HMACValue(s.keys, normalized)
-	ciphertext, _, err := secretkey.EncryptSMSValue(s.keys.SMSEncryptionKey(), normalized)
-	if err != nil {
-		return AdminTestResult{}, dependency(err)
-	}
 	logRow := &smslog.Model{
 		PlatformID: input.PlatformID, Scene: input.Scene, TemplateID: templateID,
-		ToPhoneCiphertext: ciphertext, ToPhoneHint: phone.Hint(normalized), ToPhoneHMAC: phoneHMAC,
-		Status: smslog.StatusPending, CreatedAt: started, UpdatedAt: started,
+		ToPhone: normalized,
+		Status:  smslog.StatusPending, CreatedAt: started, UpdatedAt: started,
 	}
 	if err := s.stores.Log.CreatePending(ctx, logRow); err != nil {
 		if errors.Is(err, smslog.ErrChallengeActive) {
@@ -319,11 +314,6 @@ func (s *Service) reserve(ctx context.Context, platformID int64, normalizedPhone
 }
 
 func (s *Service) createPending(ctx context.Context, input PhoneVerifyCodeInput, normalized string, facts RuntimeFacts, templateID int64, started time.Time) (*smslog.Model, error) {
-	phoneHMAC := recipientRule.HMACValue(s.keys, normalized)
-	ciphertext, _, err := secretkey.EncryptSMSValue(s.keys.SMSEncryptionKey(), normalized)
-	if err != nil {
-		return nil, dependency(err)
-	}
 	codeCiphertext, _, err := secretkey.EncryptSMSValue(s.keys.SMSEncryptionKey(), input.Code)
 	if err != nil {
 		return nil, dependency(err)
@@ -331,8 +321,8 @@ func (s *Service) createPending(ctx context.Context, input PhoneVerifyCodeInput,
 	logRow := &smslog.Model{
 		PlatformID: input.PlatformID, ChallengeID: &input.ChallengeID, UserID: input.UserID,
 		Scene: input.Scene, TemplateID: templateID,
-		ToPhoneCiphertext: ciphertext, ToPhoneHint: phone.Hint(normalized), ToPhoneHMAC: phoneHMAC,
-		Status: smslog.StatusPending, CreatedAt: started, UpdatedAt: started,
+		ToPhone: normalized,
+		Status:  smslog.StatusPending, CreatedAt: started, UpdatedAt: started,
 	}
 	if err := s.stores.Log.CreatePending(ctx, logRow); err != nil {
 		if errors.Is(err, smslog.ErrChallengeActive) {

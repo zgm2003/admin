@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict aDA3VFA0EQoyEsFUygYXoGgcsWODaxA8iEY8WcI9uMT7bBgdeEpnNlADY5TocH9
+\restrict W8MvmhmNMhj2CgYTTYMdSIL1deWypSA0cv9IybSU5yR58NuKt7Ea4E0BwfxSnkG
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -617,9 +617,6 @@ CREATE TABLE public.message_sms_log (
     user_id bigint,
     scene character varying(32) NOT NULL,
     template_id bigint NOT NULL,
-    to_phone_ciphertext text NOT NULL,
-    to_phone_hint character varying(32) NOT NULL,
-    to_phone_hmac character varying(128) NOT NULL,
     status smallint NOT NULL,
     request_id character varying(128) DEFAULT ''::character varying NOT NULL,
     serial_no character varying(128) DEFAULT ''::character varying NOT NULL,
@@ -630,9 +627,11 @@ CREATE TABLE public.message_sms_log (
     sent_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    to_phone character varying(32) NOT NULL,
     CONSTRAINT ck_message_sms_log_fee CHECK ((fee >= 0)),
     CONSTRAINT ck_message_sms_log_scene CHECK (((scene)::text = ANY ((ARRAY['login'::character varying, 'forget'::character varying, 'bind_phone'::character varying, 'change_password'::character varying])::text[]))),
-    CONSTRAINT ck_message_sms_log_status CHECK ((status = ANY (ARRAY[1, 2, 3])))
+    CONSTRAINT ck_message_sms_log_status CHECK ((status = ANY (ARRAY[1, 2, 3]))),
+    CONSTRAINT message_sms_log_to_phone_check CHECK (((to_phone)::text ~ '^[+]861[3-9][0-9]{9}$'::text))
 );
 
 
@@ -715,20 +714,19 @@ CREATE TABLE public.message_sms_rate_limit_policy (
 
 CREATE TABLE public.message_sms_recipient_rule (
     id bigint NOT NULL,
-    scope character varying(16) NOT NULL,
-    pattern_ciphertext text NOT NULL,
-    pattern_hint character varying(64) NOT NULL,
-    pattern_hmac character varying(128) NOT NULL,
-    action character varying(16) NOT NULL,
+    scope smallint NOT NULL,
+    action smallint NOT NULL,
     name character varying(128) NOT NULL,
     remark character varying(512) DEFAULT ''::character varying NOT NULL,
     is_enabled smallint DEFAULT 1 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
-    CONSTRAINT ck_message_sms_recipient_rule_action CHECK (((action)::text = ANY ((ARRAY['allow'::character varying, 'deny'::character varying])::text[]))),
+    pattern character varying(32) NOT NULL,
     CONSTRAINT ck_message_sms_recipient_rule_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
-    CONSTRAINT ck_message_sms_recipient_rule_scope CHECK (((scope)::text = ANY ((ARRAY['phone'::character varying, 'prefix'::character varying])::text[])))
+    CONSTRAINT message_sms_recipient_rule_action_check CHECK ((action = ANY (ARRAY[0, 1]))),
+    CONSTRAINT message_sms_recipient_rule_pattern_check CHECK ((((scope = 0) AND ((pattern)::text ~ '^[+]861[3-9][0-9]{9}$'::text)) OR ((scope = 1) AND ((pattern)::text ~ '^[+]86[0-9]{3,10}$'::text)))),
+    CONSTRAINT message_sms_recipient_rule_scope_check CHECK ((scope = ANY (ARRAY[0, 1])))
 );
 
 
@@ -2417,13 +2415,6 @@ CREATE INDEX ix_message_sms_log_status_id_desc ON public.message_sms_log USING b
 
 
 --
--- Name: ix_message_sms_log_to_phone_hmac_id_desc; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_message_sms_log_to_phone_hmac_id_desc ON public.message_sms_log USING btree (to_phone_hmac, id DESC);
-
-
---
 -- Name: ix_permission_auth_platform_code_history_prefix; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2770,7 +2761,7 @@ CREATE UNIQUE INDEX ux_message_sms_log_verification_log ON public.message_sms_lo
 -- Name: ux_message_sms_recipient_rule_pattern_action_active; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX ux_message_sms_recipient_rule_pattern_action_active ON public.message_sms_recipient_rule USING btree (scope, pattern_hmac, action) WHERE (deleted_at IS NULL);
+CREATE UNIQUE INDEX ux_message_sms_recipient_rule_pattern_action_active ON public.message_sms_recipient_rule USING btree (scope, pattern, action) WHERE (deleted_at IS NULL);
 
 
 --
@@ -3435,5 +3426,5 @@ ALTER TABLE ONLY public.system_dictionary_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict aDA3VFA0EQoyEsFUygYXoGgcsWODaxA8iEY8WcI9uMT7bBgdeEpnNlADY5TocH9
+\unrestrict W8MvmhmNMhj2CgYTTYMdSIL1deWypSA0cv9IybSU5yR58NuKt7Ea4E0BwfxSnkG
 

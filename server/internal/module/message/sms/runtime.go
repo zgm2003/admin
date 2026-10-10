@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	runtimeCacheSchemaVersion = 1
+	runtimeCacheSchemaVersion = 2
 	runtimeSnapshotVariant    = "runtime"
 	runtimeSnapshotTTL        = 10 * time.Minute
 	readinessTTL              = 10 * time.Minute
@@ -61,12 +61,11 @@ type TemplateFact struct {
 }
 
 type RuleFact struct {
-	ID                int64
-	Scope             string
-	Action            string
-	PatternCiphertext string
-	PatternHint       string
-	IsEnabled         yesno.Value
+	ID        int64
+	Scope     recipientRule.Scope
+	Action    recipientRule.Action
+	Pattern   string
+	IsEnabled yesno.Value
 }
 
 // RuntimeFacts is everything the sending path needs, loaded from PostgreSQL.
@@ -102,12 +101,11 @@ type templateRow struct {
 }
 
 type ruleRow struct {
-	ID                int64  `json:"id"`
-	Scope             string `json:"scope"`
-	Action            string `json:"action"`
-	PatternCiphertext string `json:"patternCiphertext"`
-	PatternHint       string `json:"patternHint"`
-	IsEnabled         int16  `json:"isEnabled"`
+	ID        int64  `json:"id"`
+	Scope     int16  `json:"scope"`
+	Action    int16  `json:"action"`
+	Pattern   string `json:"pattern"`
+	IsEnabled int16  `json:"isEnabled"`
 }
 
 type readinessPayload struct {
@@ -671,8 +669,7 @@ func snapshotOf(generation int64, facts RuntimeFacts) runtimeSnapshot {
 	}
 	for _, rule := range facts.Rules {
 		snapshot.Rules = append(snapshot.Rules, ruleRow{
-			ID: rule.ID, Scope: rule.Scope, Action: rule.Action,
-			PatternCiphertext: rule.PatternCiphertext, PatternHint: rule.PatternHint,
+			ID: rule.ID, Scope: int16(rule.Scope), Action: int16(rule.Action), Pattern: rule.Pattern,
 			IsEnabled: int16(rule.IsEnabled),
 		})
 	}
@@ -695,10 +692,44 @@ func decodeRuntimeSnapshot(raw string, generation int64) (runtimeSnapshot, error
 	if snapshot.SchemaVersion != runtimeCacheSchemaVersion || snapshot.Generation != generation || generation < 1 {
 		return runtimeSnapshot{}, fmt.Errorf("%w: coordinates are invalid", ErrRuntimeSnapshotCorrupt)
 	}
+	if err := validateRawRuleRows(raw); err != nil {
+		return runtimeSnapshot{}, fmt.Errorf("%w: %v", ErrRuntimeSnapshotCorrupt, err)
+	}
 	if err := validateRuntimeSnapshot(snapshot); err != nil {
 		return runtimeSnapshot{}, fmt.Errorf("%w: %v", ErrRuntimeSnapshotCorrupt, err)
 	}
 	return snapshot, nil
+}
+
+func validateRawRuleRows(raw string) error {
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &root); err != nil {
+		return err
+	}
+	rowsRaw, ok := root["rules"]
+	if !ok {
+		return fmt.Errorf("rules field is missing")
+	}
+	var rows []json.RawMessage
+	if err := json.Unmarshal(rowsRaw, &rows); err != nil {
+		return fmt.Errorf("rules field is invalid")
+	}
+	for _, rowRaw := range rows {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(rowRaw, &fields); err != nil {
+			return fmt.Errorf("rule row is invalid")
+		}
+		for _, key := range []string{"id", "scope", "action", "pattern", "isEnabled"} {
+			value, exists := fields[key]
+			if !exists || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+				return fmt.Errorf("rule field %q is missing or null", key)
+			}
+		}
+		if len(fields) != 5 {
+			return fmt.Errorf("rule fields are invalid")
+		}
+	}
+	return nil
 }
 
 func validateRuntimeSnapshot(snapshot runtimeSnapshot) error {
@@ -735,9 +766,9 @@ func validateRuntimeSnapshot(snapshot runtimeSnapshot) error {
 
 	seenRules := make(map[int64]struct{}, len(snapshot.Rules))
 	for _, row := range snapshot.Rules {
-		if row.ID < 1 || (row.Scope != recipientRule.ScopePhone && row.Scope != recipientRule.ScopePrefix) ||
-			(row.Action != recipientRule.ActionAllow && row.Action != recipientRule.ActionDeny) ||
-			row.PatternCiphertext == "" || strings.TrimSpace(row.PatternHint) == "" ||
+		if row.ID < 1 || (row.Scope != int16(recipientRule.ScopePhone) && row.Scope != int16(recipientRule.ScopePrefix)) ||
+			(row.Action != int16(recipientRule.ActionAllow) && row.Action != int16(recipientRule.ActionDeny)) ||
+			recipientRule.ValidatePattern(recipientRule.Scope(row.Scope), row.Pattern) != nil ||
 			!yesno.IsValid(yesno.Value(row.IsEnabled)) {
 			return fmt.Errorf("sms runtime recipient rule is invalid")
 		}
@@ -859,8 +890,7 @@ func factsOf(snapshot runtimeSnapshot) RuntimeFacts {
 	}
 	for _, row := range snapshot.Rules {
 		facts.Rules = append(facts.Rules, RuleFact{
-			ID: row.ID, Scope: row.Scope, Action: row.Action,
-			PatternCiphertext: row.PatternCiphertext, PatternHint: row.PatternHint,
+			ID: row.ID, Scope: recipientRule.Scope(row.Scope), Action: recipientRule.Action(row.Action), Pattern: row.Pattern,
 			IsEnabled: yesno.Value(row.IsEnabled),
 		})
 	}

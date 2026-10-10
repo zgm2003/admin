@@ -67,9 +67,9 @@ const template: smsApi.SmsTemplate = {
 }
 const rule: smsApi.SmsRule = {
   id: 2,
-  scope: 'phone',
-  patternHint: '156****8271',
-  action: 'deny',
+  scope: 0,
+  pattern: '+8615671628271',
+  action: 0,
   name: '阻止号码',
   remark: '测试',
   isEnabled: YesNo.Yes,
@@ -84,7 +84,7 @@ const log: smsApi.SmsLog = {
   username: 'alice',
   scene: 'login',
   templateId: 1,
-  toPhoneHint: '156****8271',
+  toPhone: '+8615671628271',
   status: smsApi.SmsStatus.Sent,
   requestId: 'request-id',
   serialNo: 'serial-no',
@@ -151,7 +151,6 @@ describe('SMS management page', () => {
     })
     vi.mocked(smsApi.getSmsLogDetail).mockResolvedValue({
       log,
-      toPhone: '+8615671628271',
       verificationCode: '123456',
       verificationExpiresAt: timestamp,
     })
@@ -366,7 +365,7 @@ describe('SMS management page', () => {
     expect(smsApi.updateSmsTemplateStatus).toHaveBeenCalledWith(1, YesNo.No)
   })
 
-  it('keeps rule patterns secret on edit and gates every rule action independently', async () => {
+  it('shows plaintext rule patterns on edit and gates every rule action independently', async () => {
     const wrapper = mountPage([
       'message:sms:list',
       'message:sms:rule:update',
@@ -374,7 +373,7 @@ describe('SMS management page', () => {
     ])
     await flushPromises()
     await selectTab(wrapper, '收件规则')
-    expect(wrapper.text()).toContain('156****8271')
+    expect(wrapper.text()).toContain('+8615671628271')
     expect(wrapper.find('[data-testid="sms-rule-create"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="sms-rule-delete-2"]').exists()).toBe(false)
 
@@ -383,13 +382,13 @@ describe('SMS management page', () => {
     const pattern = document.body.querySelector<HTMLInputElement>(
       '[data-testid="sms-rule-pattern"]',
     )
-    expect(pattern?.value).toBe('')
-    expect(pattern?.placeholder).toContain('留空')
+    expect(pattern?.value).toBe('+8615671628271')
     await clickBody('sms-rule-save')
     await flushPromises()
     expect(smsApi.updateSmsRule).toHaveBeenCalledWith(2, {
-      scope: 'phone',
-      action: 'deny',
+      scope: 0,
+      action: 0,
+      pattern: '+8615671628271',
       name: '阻止号码',
       remark: '测试',
       isEnabled: YesNo.Yes,
@@ -408,7 +407,7 @@ describe('SMS management page', () => {
     vi.mocked(smsApi.listSmsLogs)
       .mockReturnValueOnce(older.promise)
       .mockResolvedValueOnce({
-        list: [{ ...log, id: 4, toPhoneHint: '138****0000' }],
+        list: [{ ...log, id: 4, toPhone: '+8613800000000' }],
         total: 1,
         page: 1,
         pageSize: 20,
@@ -425,11 +424,11 @@ describe('SMS management page', () => {
       timeRange: [],
     })
     await flushPromises()
-    expect(wrapper.text()).toContain('138****0000')
+    expect(wrapper.text()).toContain('+8613800000000')
     older.resolve({ list: [log], total: 1, page: 1, pageSize: 20 })
     await flushPromises()
-    expect(wrapper.text()).toContain('138****0000')
-    expect(wrapper.text()).not.toContain('156****8271')
+    expect(wrapper.text()).toContain('+8613800000000')
+    expect(wrapper.text()).not.toContain('+8615671628271')
   })
 
   it('prevents an older config response from overwriting a newer tab reload', async () => {

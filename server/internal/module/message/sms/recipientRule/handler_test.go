@@ -86,8 +86,8 @@ func TestCreateRequiresEveryField(t *testing.T) {
 	router.POST("/recipient-rule", NewHandler(service).Create)
 
 	for _, body := range []string{
-		`{"scope":"phone","pattern":"+8615671628271","action":"deny","name":"n","isEnabled":1}`,
-		`{"scope":"phone","pattern":"+8615671628271","action":"deny","name":"n","remark":"","isEnabled":1,"extra":1}`,
+		`{"scope":0,"pattern":"+8615671628271","action":0,"name":"n","isEnabled":1}`,
+		`{"scope":0,"pattern":"+8615671628271","action":0,"name":"n","remark":"","isEnabled":1,"extra":1}`,
 	} {
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodPost, "/recipient-rule", strings.NewReader(body))
@@ -103,7 +103,7 @@ func TestCreateRequiresEveryField(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 	valid := httptest.NewRequest(http.MethodPost, "/recipient-rule", strings.NewReader(
-		`{"scope":"prefix","pattern":"+86156","action":"allow","name":"白名单","remark":"","isEnabled":1}`))
+		`{"scope":1,"pattern":"+86156","action":1,"name":"白名单","remark":"","isEnabled":1}`))
 	valid.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(recorder, valid)
 	if recorder.Code != http.StatusCreated || service.createIn.Pattern != "+86156" || service.createIn.Scope != ScopePrefix {
@@ -119,7 +119,7 @@ func TestUpdateAllowsAnOmittedPattern(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPut, "/recipient-rule/7", strings.NewReader(
-		`{"scope":"phone","action":"deny","name":"改名","remark":"","isEnabled":1}`))
+		`{"scope":0,"action":0,"name":"改名","remark":"","isEnabled":1}`))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(recorder, request)
 
@@ -129,7 +129,7 @@ func TestUpdateAllowsAnOmittedPattern(t *testing.T) {
 
 	withPattern := httptest.NewRecorder()
 	request = httptest.NewRequest(http.MethodPut, "/recipient-rule/7", strings.NewReader(
-		`{"scope":"prefix","pattern":"+86156","action":"deny","name":"改名","remark":"","isEnabled":1}`))
+		`{"scope":1,"pattern":"+86156","action":0,"name":"改名","remark":"","isEnabled":1}`))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(withPattern, request)
 	if withPattern.Code != http.StatusOK || service.updateIn.Pattern == nil || *service.updateIn.Pattern != "+86156" {

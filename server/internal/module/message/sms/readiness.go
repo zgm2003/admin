@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"admin/server/internal/module/message/sms/recipientRule"
-	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -27,22 +26,15 @@ func readinessOf(facts RuntimeFacts, scene string) (VerifyCodeReadiness, error) 
 	return VerifyCodeReadiness{Ready: true, TTLMinutes: facts.Config.TTLMinutes}, nil
 }
 
-// evaluateRules decrypts the runtime rule ciphertexts and delegates to the
-// single precedence implementation shared with the management module.
-func evaluateRules(keys *secretkey.KeyRing, rules []RuleFact, toPhone string) (recipientRule.Decision, error) {
-	if keys == nil {
-		return recipientRule.Decision{}, fmt.Errorf("sms keys are unavailable")
-	}
+// evaluateRules delegates plaintext patterns to the single precedence
+// implementation shared with the management module.
+func evaluateRules(rules []RuleFact, toPhone string) (recipientRule.Decision, error) {
 	patterns := make([]recipientRule.RulePattern, 0, len(rules))
 	for _, rule := range rules {
 		if rule.IsEnabled != yesno.Yes {
 			continue
 		}
-		pattern, err := secretkey.DecryptSMSValue(keys.SMSEncryptionKey(), rule.PatternCiphertext)
-		if err != nil {
-			return recipientRule.Decision{}, fmt.Errorf("decrypt sms recipient rule pattern: %w", err)
-		}
-		patterns = append(patterns, recipientRule.RulePattern{ID: rule.ID, Scope: rule.Scope, Action: rule.Action, Pattern: pattern})
+		patterns = append(patterns, recipientRule.RulePattern{ID: rule.ID, Scope: rule.Scope, Action: rule.Action, Pattern: rule.Pattern})
 	}
 	return recipientRule.Match(toPhone, patterns), nil
 }
