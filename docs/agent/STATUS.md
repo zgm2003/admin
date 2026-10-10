@@ -1,6 +1,6 @@
 # 项目状态
 
-## 当前工作：全项目后端业务归责与前端减法（2026-10-10，代码整改与全量验证完成，离线迁移待维护者执行）
+## 当前工作：全项目后端业务归责与前端减法（2026-10-10，代码整改、全量验证与真实离线迁移完成）
 
 - 维护者已明确要求一口气实施全项目整改，不停留在计划。按所属 Go 模块集中拥有枚举、候选项、本地化标签、默认值、约束、业务保护和状态动作；前端保留明确 DTO、即时表单 rules、交互/展示和浏览器运输。数字/字符串 value 原类型保真；新增业务值不由前端 parser/名单拦截。
 - 已实际完成五方法泛型 request 与现有全部业务 API 瘦身，删除 api/protocol.ts 和逐接口 expect/parse；保留 envelope、认证凭据、刷新 single-flight/一次重试、终态通知一次及登录内联错误。Base64 下载和实时帧校验只保留在实际浏览器/运输用途文件。
@@ -8,11 +8,14 @@
 - 其他业务 options/actions/constraints 覆盖登录/身份变更日志、会话、通知/任务、Mail/SMS、Scheduler、设置、认证平台、菜单、用户与角色；操作日志 55 种动作标签由 Go 按请求语言生成，未知动作保留原值，列表仍只 count + page 两次 PostgreSQL 查询；操作结论与 Access 交叉检查，后端写入仍校验最新事实/锁/事务。上传规则字段与可选状态通过一次 PUT 原子保存，不再前端 PUT 后 PATCH 制造部分成功。
 - 14 个自有 CSS 文件迁移 SCSS，Vue 自有 style 全部 lang=scss，保留 scoped、主题变量与响应式选择器；退出 500/400 行强拆、SCSS 必须特定 Sass 语法及 API parser 门禁。组件按职责/真实复用组织，第三方 CSS 原样保留。AGENTS/design/architecture/status-enum-catalog 已同步责任边界。
 - 配置缓存代际产品定位、页面/API/权限/代际协议不改；仅退出字典 scope，并将既有展示映射归后端。权限/Session/限流/队列等独立缓存协议不删除，也不把枚举套入配置中心。
-- 交付 `docs/database/2026-10-10-remove-system-dictionary.sql/.ps1` 与 `server/cmd/remove-system-dictionary`：离线、幂等 forward removal、durable manifest、受影响平台 menu_version/token lease 衔接、固定 patterns SCAN/UNLINK 与部分失败非零。仅做真实库只读依赖盘点及隔离 schema 集成测试；真实业务表/菜单/Redis 尚未执行退出，`current.sql` 未虚构刷新。
+- 交付 `docs/database/2026-10-10-remove-system-dictionary.sql/.ps1` 与 `server/cmd/remove-system-dictionary`：离线、幂等 forward removal、durable manifest、受影响平台 menu_version/token lease 衔接、固定 patterns SCAN/UNLINK 与部分失败非零。先完成真实库只读依赖盘点与隔离 schema 集成测试，再按维护者“迁移”指令执行真实业务库退出，结果见下方执行记录。
 - 独立审查发现的授权弹窗串用户/旧保存污染、上传规则 PATCH 未锁 no-op/公共配置空域名、设置媒体必填被绕过与确认期间切换目标均按失败测试→修复→回归收口。Account 新增 13 项生命周期回归、Setting Vue/API 45 项、Menu/AuthPlatform 86 项及 OperationLog 10 项定向通过，独立最终审查无未修 Critical/Important。
 - 冻结代码后的整体验证已完成：server 的 `go fmt ./...`、`go vet ./...`、`go test -p 1 ./... -count=1`、`go build ./...` 全部 exit 0；web 的 `pnpm format:check`、`pnpm typecheck`、`pnpm check:architecture`（0 findings）、`pnpm lint`、`pnpm vitest run --pool=threads --maxWorkers=1`（117 文件、1066/1066 项）和 `pnpm build` 全部 exit 0。Build 仅保留既有 rich-editor-core 大 chunk 告警，未放宽限制。退出 PowerShell 脚本通过 Parser 语法检查，`git diff --check` 通过。
-- Go 首轮唯一失败是 CacheGeneration 旧封闭 DTO 断言遗漏新增展示字段；补齐字段名单后定向与最终全包通过，保持严格字段数检查。测试使用隔离 PostgreSQL schema 与现有 Redis 测试 DB（运行时 Redis DB0，uploadRule 测试 DB3），未执行业务 Redis 清理或迁移 runner。
-- 发布前须先备份 PostgreSQL、停止旧 API/Worker，再运行退出脚本；失败保留同一 manifest/SQL 并重试，确认 verified=true 后才启动新版。真实迁移/Redis 维护端到端、浏览器和第三方发送未执行，current.sql 未刷新；未 commit/fetch/pull/push、停服或启动服务。
+- Go 首轮唯一失败是 CacheGeneration 旧封闭 DTO 断言遗漏新增展示字段；补齐字段名单后定向与最终全包通过，保持严格字段数检查。代码整改轮测试使用隔离 PostgreSQL schema 与现有 Redis 测试 DB（运行时 Redis DB0，uploadRule 测试 DB3），未在该测试轮执行业务 Redis 清理或迁移 runner。
+- 真实迁移执行于 **2026-10-10 23:32–23:33 +08:00**：核对本项目 API/Worker 未运行、其他 PostgreSQL 客户端连接为 0，无需停止任何进程；备份校验后执行 `2026-10-10-remove-system-dictionary.ps1 -OldServicesStopped`，首次及使用同一 manifest/SQL 的重复执行均 exit 0，审计 `postgresCommitted=true`、`verified=true`。两张字典表删除，原 6 个字典/35 个条目、7 个菜单、字典 global generation/outbox 各 1 条退出，相关角色授权原为 0；平台 1 menu_version **15 → 16**、Redis menu state ready=16，平台 2 menu_version=1 与原缺失 Redis menu state 保持不变，两平台 policy_version 不变。
+- PostgreSQL 迁移前备份位于 `%LOCALAPPDATA%\Admin\backups\remove-system-dictionary-20261010-233119\public-before.dump`（1,114,609 字节），SHA256 `3AD5F7D4A77F26FE3075719DAD542CDF2B443B863F4324764D574F2D0318D224`；`pg_restore --list` 及 `pg_restore --no-owner --no-acl --file=NUL` 完整归档读取均通过，执行后原备份哈希未变。同目录保留 before/after/repeat、Redis/menu state 对照、备份及执行元数据；durable manifest 位于 `%LOCALAPPDATA%\Admin\maintenance\remove-system-dictionary\manifest.json`，重跑时必须保留。
+- 真实验证：六个固定 Redis pattern 均 remaining=0；无关菜单、角色菜单、配置 generation/outbox 全行哈希前后相同，无孤立 role_menu，重复执行后 PostgreSQL 事实、菜单版本、Redis 定向计数与菜单 state 完全不变。只清理字典缓存，未重置 Session/Access/发送额度或其他缓存。`docs/database/current.sql` 已通过 `pg_dump --schema-only --schema=public --no-owner --no-acl` 从真实库刷新（118,794 字节），SHA256 `DC8804B9C14F9AD91B27C0D70B8EFDE5009754789EE60121ED183422F12381DD`，无字典表或业务数据。
+- 本次迁移另运行 `go test ./cmd/remove-system-dictionary ./internal/module/permission/state -count=1`，两包通过；迁移及快照/状态更新的 `git diff --check` 通过。未重复运行上一代码整改轮全量 Go/前端套件，未做浏览器验收或第三方发送，未 commit/fetch/pull/push、停服或启动服务；API/Worker 保持停止，由维护者启动新版。
 
 ### 本轮实施前审查记录（保留）
 
