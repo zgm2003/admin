@@ -26,6 +26,7 @@ import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import DictionaryDetailDialog from './components/DictionaryDetailDialog/index.vue'
 import DictionaryFormDialog from './components/DictionaryFormDialog/index.vue'
 import DictionaryItemDialog from './components/DictionaryItemDialog/index.vue'
+import { getDictionaryUsage } from './dictionaryUsage'
 
 const { t } = useI18n()
 const access = usePermissionStore()
@@ -96,6 +97,7 @@ const columns = computed<TableColumn<Dictionary>[]>(() => [
   { prop: 'code', label: t('dictionary.code'), minWidth: 180 },
   { prop: 'nameZh', label: t('dictionary.nameZh'), minWidth: 140 },
   { prop: 'nameEn', label: t('dictionary.nameEn'), minWidth: 140 },
+  { key: 'usage', prop: 'code', label: t('dictionary.usage'), minWidth: 150 },
   { prop: 'itemCount', label: t('dictionary.itemCount'), width: 100 },
   { key: 'status', prop: 'id', label: t('dictionary.status'), width: 100 },
   { key: 'actions', prop: 'id', label: t('dictionary.actions'), width: 230 },
@@ -310,6 +312,9 @@ onMounted(() => void load())
           row.isEnabled === YesNo.Yes ? t('dictionary.enabled') : t('dictionary.disabled')
         }}</el-tag></template
       >
+      <template #cell-usage="{ row }">
+        {{ t(getDictionaryUsage(row.code).consumerLabelKey) }}
+      </template>
       <template #cell-actions="{ row }"
         ><el-button
           v-if="canUpdate"
@@ -319,7 +324,7 @@ onMounted(() => void load())
           @click.stop="openEdit(row)"
           >{{ t('dictionary.edit') }}</el-button
         ><el-button
-          v-if="canStatus"
+          v-if="canStatus && getDictionaryUsage(row.code).valuePolicy === 'extensible'"
           data-testid="dictionary-status-toggle"
           text
           :icon="Switch"
@@ -349,7 +354,7 @@ onMounted(() => void load())
       v-model="detailVisible"
       :dictionary="selectedDictionary"
       :items="items"
-      :can-create="canCreate"
+      :can-create-items="canCreate"
       :can-update="canUpdate"
       :can-status="canStatus"
       :can-delete="canDelete"

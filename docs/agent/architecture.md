@@ -57,6 +57,8 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 字典管理 CRUD 位于 `/api/admin/v1/system/dictionary` 并使用独立 action 权限；业务消费只读端点位于
 `/api/v1/system/dictionary/options`，要求有效登录态但不要求字典管理权限，只返回已启用字典及选项的本地化
 `label/value`。options 经过 Redis generation/mutation/snapshot 和有界冷回源租约，PostgreSQL 仍是事实来源。
+字典管理页维护六个已登记消费编码的用途提示；`user.gender` 的内置 `0/1/2` 值由业务协议固定，后端拒绝
+新增、停用或删除不兼容值，其他扩展型展示字典仍可维护选项。
 系统设置的用户协议与隐私政策使用 `app.legal.user_agreement`、`app.legal.privacy_policy` 两个内置字符串配置，
 复用 `system.setting/global` generation 缓存。后台读取与更新端点为
 `/api/admin/v1/system/setting/legal/:document`，更新使用 `system:setting:update`；登录页通过匿名只读端点
@@ -165,6 +167,11 @@ generation 只承担缓存代际，不是管理员乐观锁。普通管理 CRUD 
 历史对象所在的物理配置。`permission_auth_platform.menu_version/policy_version`、
 `permission_access_version.version`、Session/authority generation、验证码、限流计数和队列状态保持原有事实归属，
 不得迁入配置 generation 表。
+
+配置缓存代际页面保持原有页面标题、API 路径、Go 模块、数据库表、Redis namespace 和权限码；用户界面只将
+固定 namespace/scope/status 映射为中文，并把 generation、outbox 计数和内部坐标放入只读详情。Redis state
+缺失表示可由现有 cold-fill 协议重建的 `missing`，不等同于 PostgreSQL 数据丢失；`corrupt` 和
+`unavailable` 仍按异常状态展示。
 
 ### COS 对象路由
 

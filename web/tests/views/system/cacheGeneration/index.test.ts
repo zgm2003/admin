@@ -38,6 +38,13 @@ const retryingRow: CacheGeneration = {
   latestPublishedAt: '2026-09-16T06:00:00Z',
   updatedAt: '2026-09-16T07:30:00Z',
 }
+const missingRow: CacheGeneration = {
+  ...readyRow,
+  namespace: 'message.mail',
+  status: 'missing',
+  latestPublishedGeneration: null,
+  latestPublishedAt: null,
+}
 
 const mountedWrappers: VueWrapper[] = []
 
@@ -48,8 +55,8 @@ describe('cache generation page', () => {
     vi.clearAllMocks()
     setLocale('zh-CN')
     vi.mocked(cacheGenerationAPI.getCacheGenerations).mockResolvedValue({
-      list: [readyRow, retryingRow],
-      total: 2,
+      list: [readyRow, retryingRow, missingRow],
+      total: 3,
       page: 1,
       pageSize: 20,
     })
@@ -82,17 +89,13 @@ describe('cache generation page', () => {
       .map((column: { label: string }) => column.label)
       .join('|')
     for (const label of [
-      '命名空间',
-      'Scope',
-      '当前代际',
+      '配置项',
+      '作用范围',
       '状态',
-      '待发布事件',
-      '最早待发布时间',
-      '最近尝试次数',
+      '待同步事件',
       '最近错误',
-      '最近发布代际',
-      '最近发布时间',
-      '更新时间',
+      '最近同步时间',
+      '同步详情',
     ]) {
       expect(columnLabels).toContain(label)
     }
@@ -102,14 +105,27 @@ describe('cache generation page', () => {
     const wrapper = mountPage(['system:cacheGeneration:list'])
     await flushPromises()
 
-    expect(wrapper.findAll('[data-testid="cache-generation-status"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid="cache-generation-status"]')).toHaveLength(3)
     const tags = wrapper.findAll('.el-tag')
-    expect(tags).toHaveLength(2)
+    expect(tags).toHaveLength(3)
     expect(tags[0]?.classes()).toContain('el-tag--success')
     expect(tags[1]?.classes()).toContain('el-tag--danger')
+    expect(tags[2]?.classes()).toContain('el-tag--warning')
     expect(wrapper.text()).toContain('就绪')
     expect(wrapper.text()).toContain('重试中')
+    expect(wrapper.text()).toContain('等待缓存重建')
     expect(wrapper.text()).toContain('dependency-unavailable: redis unavailable')
+  })
+
+  it('opens technical details without changing the page identity', async () => {
+    const wrapper = mountPage(['system:cacheGeneration:list'])
+    await flushPromises()
+
+    await wrapper.find('[data-testid="cache-generation-detail"]').trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).toContain('内部命名空间')
+    expect(document.body.textContent).toContain('system.setting')
+    expect(wrapper.getComponent({ name: 'AppTable' }).props('ariaLabel')).toBe('配置缓存代际')
   })
 
   it('shows loading, empty and error states', async () => {

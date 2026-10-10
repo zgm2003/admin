@@ -148,6 +148,9 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, status yesno.Va
 		if err != nil {
 			return false, err
 		}
+		if err := validateFixedDictionaryStatus(row, status); err != nil {
+			return false, err
+		}
 		if row.IsEnabled == status {
 			return false, nil
 		}
@@ -189,6 +192,9 @@ func (r *Repository) CreateItem(ctx context.Context, value *Item, expected int64
 		}
 		if parent.IsEnabled != yesno.Yes {
 			return false, ErrConflict
+		}
+		if err := validateFixedValueCreate(parent, value.Value); err != nil {
+			return false, err
 		}
 		return true, tx.WithContext(ctx).Create(value).Error
 	})
@@ -233,11 +239,15 @@ func (r *Repository) UpdateItem(ctx context.Context, dictionaryID, itemID int64,
 
 func (r *Repository) UpdateItemStatus(ctx context.Context, dictionaryID, itemID int64, status yesno.Value, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
 	return r.mutate(ctx, expected, now, func(tx *gorm.DB) (bool, error) {
-		if _, err := lockDictionary(ctx, tx, dictionaryID); err != nil {
+		parent, err := lockDictionary(ctx, tx, dictionaryID)
+		if err != nil {
 			return false, err
 		}
 		row, err := lockDictionaryItem(ctx, tx, dictionaryID, itemID)
 		if err != nil {
+			return false, err
+		}
+		if err := validateFixedValueStatus(parent, row, status); err != nil {
 			return false, err
 		}
 		if row.IsEnabled == status {
@@ -252,11 +262,15 @@ func (r *Repository) UpdateItemStatus(ctx context.Context, dictionaryID, itemID 
 
 func (r *Repository) DeleteItem(ctx context.Context, dictionaryID, itemID int64, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
 	return r.mutate(ctx, expected, now, func(tx *gorm.DB) (bool, error) {
-		if _, err := lockDictionary(ctx, tx, dictionaryID); err != nil {
+		parent, err := lockDictionary(ctx, tx, dictionaryID)
+		if err != nil {
 			return false, err
 		}
 		row, err := lockDictionaryItem(ctx, tx, dictionaryID, itemID)
 		if err != nil {
+			return false, err
+		}
+		if err := validateFixedValueDelete(parent, row); err != nil {
 			return false, err
 		}
 		if row.IsBuiltin == yesno.Yes {

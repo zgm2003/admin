@@ -6,13 +6,14 @@ import { useI18n } from 'vue-i18n'
 import type { Dictionary, DictionaryItem } from '@/api/system/dictionary'
 import type { TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
+import { getDictionaryUsage } from '../../dictionaryUsage'
 
 defineOptions({ name: 'DictionaryDetailDialog' })
 
-defineProps<{
+const props = defineProps<{
   dictionary: Dictionary | null
   items: DictionaryItem[]
-  canCreate: boolean
+  canCreateItems: boolean
   canUpdate: boolean
   canStatus: boolean
   canDelete: boolean
@@ -27,6 +28,11 @@ const emit = defineEmits<{
   'remove-item': [item: DictionaryItem]
 }>()
 const { t } = useI18n()
+const usage = computed(() => getDictionaryUsage(props.dictionary?.code ?? ''))
+const canCreateItems = computed(
+  () => props.canCreateItems && usage.value.valuePolicy === 'extensible',
+)
+const canMutateItemValues = computed(() => usage.value.valuePolicy === 'extensible')
 
 const itemColumns = computed<TableColumn<DictionaryItem>[]>(() => [
   { prop: 'value', label: t('dictionary.value'), minWidth: 140 },
@@ -40,6 +46,14 @@ const itemColumns = computed<TableColumn<DictionaryItem>[]>(() => [
 
 <template>
   <AppDialog v-model="visible" :title="dictionary?.code ?? t('dictionary.items')" width="900px">
+    <el-alert
+      :title="t(usage.consumerLabelKey)"
+      :description="`${t(usage.impactLabelKey)} ${t(usage.valueHintKey)}`"
+      type="info"
+      :closable="false"
+      show-icon
+      class="dictionary-detail__usage"
+    />
     <AppTable
       :data="items"
       :columns="itemColumns"
@@ -50,7 +64,7 @@ const itemColumns = computed<TableColumn<DictionaryItem>[]>(() => [
     >
       <template #toolbar-left>
         <el-button
-          v-if="canCreate"
+          v-if="canCreateItems"
           data-testid="dictionary-item-create"
           type="primary"
           :icon="CirclePlus"
@@ -73,7 +87,7 @@ const itemColumns = computed<TableColumn<DictionaryItem>[]>(() => [
           >{{ t('dictionary.edit') }}</el-button
         >
         <el-button
-          v-if="canStatus"
+          v-if="canStatus && canMutateItemValues"
           data-testid="dictionary-item-status"
           text
           :icon="Switch"
@@ -83,7 +97,7 @@ const itemColumns = computed<TableColumn<DictionaryItem>[]>(() => [
           }}</el-button
         >
         <el-button
-          v-if="canDelete && row.isBuiltin === YesNo.No"
+          v-if="canDelete && canMutateItemValues && row.isBuiltin === YesNo.No"
           data-testid="dictionary-item-delete"
           text
           type="danger"

@@ -95,6 +95,14 @@ describe('system dictionary page', () => {
     ])
     await flushPromises()
 
+    const table = wrapper.getComponent({ name: 'AppTable' })
+    const columnLabels = table
+      .props('columns')
+      .map((column: { label: string }) => column.label)
+      .join('|')
+    expect(columnLabels).toContain('使用场景')
+    expect(wrapper.text()).toContain('个人资料')
+
     expect(wrapper.findComponent({ name: 'DictionaryFormDialog' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'DictionaryDetailDialog' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'DictionaryItemDialog' }).exists()).toBe(true)
@@ -145,7 +153,7 @@ describe('system dictionary page', () => {
 
     expect(wrapper.find('[data-testid="dictionary-create"]').exists()).toBe(true)
     expect(wrapper.findAll('[data-testid="dictionary-update"]')).toHaveLength(2)
-    expect(wrapper.findAll('[data-testid="dictionary-status-toggle"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid="dictionary-status-toggle"]')).toHaveLength(1)
     expect(wrapper.findAll('[data-testid="dictionary-delete"]')).toHaveLength(1)
 
     wrapper.unmount()
@@ -192,7 +200,7 @@ describe('system dictionary page', () => {
     })
   })
 
-  it('opens details and creates and edits items with immutable values', async () => {
+  it('opens fixed dictionary details and only edits labels with immutable values', async () => {
     const wrapper = mountPage([
       'system:dictionary:list',
       'system:dictionary:detail',
@@ -206,22 +214,10 @@ describe('system dictionary page', () => {
     await flushPromises()
 
     expect(dictionaryAPI.getDictionary).toHaveBeenCalledWith(1)
-    expect(document.body.querySelectorAll('[data-testid="dictionary-item-delete"]')).toHaveLength(1)
-    expect(document.body.querySelectorAll('[data-testid="dictionary-item-status"]')).toHaveLength(2)
-
-    await clickBody('[data-testid="dictionary-item-create"]')
-    await setBodyInput('[data-testid="dictionary-item-form-value"]', ' 4 ')
-    await setBodyInput('[data-testid="dictionary-item-form-label-zh"]', '其他')
-    await setBodyInput('[data-testid="dictionary-item-form-label-en"]', 'Other')
-    await setBodyInput('[data-testid="dictionary-item-form-sort"] input', '4')
-    await clickBody('[data-testid="dictionary-item-save"]')
-    await flushPromises()
-    expect(dictionaryAPI.createDictionaryItem).toHaveBeenCalledWith(1, {
-      value: ' 4 ',
-      labelZh: '其他',
-      labelEn: 'Other',
-      sort: 4,
-    })
+    expect(document.body.textContent).toContain('性别值由业务协议固定')
+    expect(document.body.querySelector('[data-testid="dictionary-item-create"]')).toBeNull()
+    expect(document.body.querySelectorAll('[data-testid="dictionary-item-delete"]')).toHaveLength(0)
+    expect(document.body.querySelectorAll('[data-testid="dictionary-item-status"]')).toHaveLength(0)
 
     await clickBody('[data-testid="dictionary-item-update"]', 1)
     expect(bodyElement('[data-testid="dictionary-item-form-value"]').hasAttribute('disabled')).toBe(

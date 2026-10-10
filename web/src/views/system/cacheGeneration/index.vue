@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { View } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -12,6 +13,8 @@ import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { usePermissionStore } from '@/store/permission'
 import { formatTime } from '@/utils/datetime'
+import CacheGenerationDetailDialog from './components/CacheGenerationDetailDialog/index.vue'
+import { displayNamespace, displayScope, displayStatus } from './presentation'
 
 const { t } = useI18n()
 const access = usePermissionStore()
@@ -23,6 +26,8 @@ const publishState = ref<'' | CacheGenerationPublishState>('')
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const detailVisible = ref(false)
+const selectedRow = ref<CacheGeneration | null>(null)
 interface CacheGenerationSearchModel {
   keyword: string
   publishState: '' | CacheGenerationPublishState
@@ -80,16 +85,8 @@ const state = computed<'loading' | 'error' | 'empty' | 'success'>(() =>
 const columns = computed<TableColumn<CacheGeneration>[]>(() => [
   { prop: 'namespace', label: t('cacheGeneration.namespace'), minWidth: 180 },
   { prop: 'scopeKey', label: t('cacheGeneration.scopeKey'), minWidth: 140 },
-  { prop: 'generation', label: t('cacheGeneration.generation'), width: 110 },
   { key: 'status', prop: 'status', label: t('cacheGeneration.status'), width: 130 },
-  { prop: 'pendingCount', label: t('cacheGeneration.pendingCount'), width: 110 },
-  {
-    key: 'oldestPendingAt',
-    prop: 'oldestPendingAt',
-    label: t('cacheGeneration.oldestPendingAt'),
-    width: 190,
-  },
-  { prop: 'latestAttempts', label: t('cacheGeneration.latestAttempts'), width: 110 },
+  { prop: 'pendingCount', label: t('cacheGeneration.pendingCount'), width: 120 },
   {
     key: 'lastError',
     prop: 'lastError',
@@ -98,18 +95,12 @@ const columns = computed<TableColumn<CacheGeneration>[]>(() => [
     overflowTooltip: true,
   },
   {
-    key: 'latestPublishedGeneration',
-    prop: 'latestPublishedGeneration',
-    label: t('cacheGeneration.latestPublishedGeneration'),
-    width: 170,
-  },
-  {
     key: 'latestPublishedAt',
     prop: 'latestPublishedAt',
     label: t('cacheGeneration.latestPublishedAt'),
     width: 190,
   },
-  { key: 'updatedAt', prop: 'updatedAt', label: t('cacheGeneration.updatedAt'), width: 190 },
+  { key: 'actions', prop: 'namespace', label: t('cacheGeneration.details'), width: 100 },
 ])
 const pagination = computed<TablePaginationState>(() => ({
   currentPage: page.value,
@@ -117,15 +108,6 @@ const pagination = computed<TablePaginationState>(() => ({
   total: total.value,
 }))
 
-const statusLabels: Readonly<Record<CacheGenerationStatus, string>> = {
-  ready: 'cacheGeneration.statusReady',
-  pending: 'cacheGeneration.statusPending',
-  retrying: 'cacheGeneration.statusRetrying',
-  invalidating: 'cacheGeneration.statusInvalidating',
-  missing: 'cacheGeneration.statusMissing',
-  corrupt: 'cacheGeneration.statusCorrupt',
-  unavailable: 'cacheGeneration.statusUnavailable',
-}
 const statusTagTypes: Readonly<
   Record<CacheGenerationStatus, 'success' | 'warning' | 'danger' | 'info'>
 > = {
@@ -133,13 +115,13 @@ const statusTagTypes: Readonly<
   pending: 'warning',
   retrying: 'danger',
   invalidating: 'warning',
-  missing: 'danger',
+  missing: 'warning',
   corrupt: 'danger',
   unavailable: 'danger',
 }
 
 function statusLabel(status: CacheGenerationStatus): string {
-  return t(statusLabels[status])
+  return t(displayStatus(status))
 }
 function statusTagType(status: CacheGenerationStatus) {
   return statusTagTypes[status]
@@ -147,11 +129,12 @@ function statusTagType(status: CacheGenerationStatus) {
 function displayTime(value: string | null): string {
   return value === null ? '-' : formatTime(value)
 }
-function displayNumber(value: number | null): string {
-  return value === null ? '-' : String(value)
-}
 function rowKey(row: CacheGeneration): string {
   return `${row.namespace}:${row.scopeKey}`
+}
+function openDetail(row: CacheGeneration): void {
+  selectedRow.value = row
+  detailVisible.value = true
 }
 
 async function load(): Promise<void> {
@@ -221,27 +204,43 @@ onMounted(() => {
       @refresh="load"
       @update:pagination="updatePagination"
     >
+      <template #cell-namespace="{ row }: { row: CacheGeneration }">
+        {{ t(displayNamespace(row.namespace)) }}
+      </template>
+      <template #cell-scopeKey="{ row }: { row: CacheGeneration }">
+        <template v-if="displayScope(row.namespace, row.scopeKey).kind === 'platform'">
+          {{ t(displayScope(row.namespace, row.scopeKey).labelKey, { value: row.scopeKey }) }}
+        </template>
+        <template v-else-if="displayScope(row.namespace, row.scopeKey).kind === 'unknown'">
+          {{ t(displayScope(row.namespace, row.scopeKey).labelKey, { value: row.scopeKey }) }}
+        </template>
+        <template v-else>
+          {{ t(displayScope(row.namespace, row.scopeKey).labelKey) }}
+        </template>
+      </template>
       <template #cell-status="{ row }: { row: CacheGeneration }">
-        <el-tag :type="statusTagType(row.status)" data-testid="cache-generation-status">
+        <el-tooltip v-if="row.status === 'missing'" :content="t('cacheGeneration.missingHint')">
+          <el-tag :type="statusTagType(row.status)" data-testid="cache-generation-status">
+            {{ statusLabel(row.status) }}
+          </el-tag>
+        </el-tooltip>
+        <el-tag v-else :type="statusTagType(row.status)" data-testid="cache-generation-status">
           {{ statusLabel(row.status) }}
         </el-tag>
       </template>
-      <template #cell-oldestPendingAt="{ row }: { row: CacheGeneration }">{{
-        displayTime(row.oldestPendingAt)
-      }}</template>
-      <template #cell-latestPublishedGeneration="{ row }: { row: CacheGeneration }">{{
-        displayNumber(row.latestPublishedGeneration)
-      }}</template>
       <template #cell-latestPublishedAt="{ row }: { row: CacheGeneration }">{{
         displayTime(row.latestPublishedAt)
       }}</template>
-      <template #cell-updatedAt="{ row }: { row: CacheGeneration }">{{
-        displayTime(row.updatedAt)
-      }}</template>
+      <template #cell-actions="{ row }: { row: CacheGeneration }">
+        <el-button data-testid="cache-generation-detail" text :icon="View" @click="openDetail(row)">
+          {{ t('cacheGeneration.details') }}
+        </el-button>
+      </template>
       <template #empty
         ><el-empty data-testid="cache-generation-empty" :description="t('cacheGeneration.empty')"
       /></template>
     </AppTable>
+    <CacheGenerationDetailDialog v-model="detailVisible" :row="selectedRow" />
   </AppPage>
 </template>
 

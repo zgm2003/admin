@@ -106,8 +106,10 @@ PascalCase，CSS class 与测试定位符使用 kebab-case。
   `message.sms/global` 和 `storage.cosconfig/<configId>`。权限的 menu/policy/access version、Session/authority
   generation、验证码、限流计数和队列数据保持各自业务语义，不迁入配置 generation。
 - 系统字典全平台共享，负责可由后台维护的展示型选项及中英文标签；`code`/`value` 是稳定业务值，
-  `isBuiltin` 只表示禁止删除。登录方式、Session/邮件状态、权限节点类型、Yes/No 等参与后端分支、协议或
-  数据库约束的 enum 不迁入字典。消费页不得用硬编码选项掩盖字典加载失败或畸形值。
+  `isBuiltin` 只表示禁止删除。字典管理页必须标明消费页面和修改影响；`user.gender` 是由数据库与前端
+  协议固定为 `0/1/2` 的特殊字典，只允许维护标签和排序，不允许新增或停用值。登录方式、Session/邮件状态、
+  权限节点类型、Yes/No 等参与后端分支、协议或数据库约束的 enum 不迁入字典。消费页不得用硬编码选项掩盖
+  字典加载失败或畸形值。
 - Yes/No 统一为 `0 = No`、`1 = Yes`。有真实删除行为时使用 `deleted_at`，不并列维护另一套删除标记。
 - 页面状态必须区分初始加载、成功空态、失败、提交中和提交失败；不以空数组、默认对象或旧快照掩盖依赖错误。
 - Mail 发送日志与验证码记录是审计事实，采用 append-only 语义，不提供管理员单条、批量删除或恢复操作。
