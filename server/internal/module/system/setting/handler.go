@@ -71,7 +71,7 @@ func (h *Handler) Create(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, http.StatusCreated, idResponse{ID: id})
+	response.OK(c, http.StatusCreated, createdResponse(id, input))
 }
 func (h *Handler) Update(c *gin.Context) {
 	var request updateRequest
@@ -170,4 +170,8 @@ func (h *Handler) UpdateLegalDocument(c *gin.Context) {
 		return
 	}
 	response.OK(c, http.StatusOK, struct{}{})
+}
+
+func (h *Handler) FormOptions(c *gin.Context) {
+	response.OK(c, http.StatusOK, adminOptions(c.Request.Context()))
 }

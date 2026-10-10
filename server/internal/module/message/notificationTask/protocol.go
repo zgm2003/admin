@@ -18,6 +18,23 @@ const (
 
 type Status int16
 
+// TaskActions describes state-dependent operations only. HTTP middleware still
+// checks each independent action permission and writes re-check current facts.
+type TaskActions struct {
+	Edit   bool `json:"edit"`
+	Delete bool `json:"delete"`
+	Submit bool `json:"submit"`
+	Cancel bool `json:"cancel"`
+	Copy   bool `json:"copy"`
+}
+
+func (s Status) Actions() TaskActions {
+	draft := s == StatusDraft
+	return TaskActions{Edit: draft, Delete: draft, Submit: draft,
+		Cancel: s == StatusScheduled || s == StatusQueued || s == StatusProcessing,
+		Copy:   s.Valid() && !draft}
+}
+
 const (
 	StatusDraft      Status = 1
 	StatusScheduled  Status = 2

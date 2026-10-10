@@ -1,424 +1,329 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import {
-  createSmsRule,
-  deleteSmsConfig,
-  deleteSmsRule,
-  getSmsConfig,
-  getSmsLogDetail,
-  getSmsPageInit,
-  listSmsLogs,
-  listSmsRateLimitPolicies,
-  listSmsRules,
-  listSmsTemplates,
-  parseSmsConfig,
-  saveSmsConfig,
-  sendSmsTest,
-  SmsStatus,
-  smsSceneMetadata,
-  smsStatusMetadata,
-  updateSmsRateLimitPolicy,
-  updateSmsRule,
-  updateSmsRuleStatus,
-  updateSmsTemplate,
-  updateSmsTemplateStatus,
-} from '@/api/message/sms'
-import { YesNo } from '@/enums/yesNo'
+import * as api from '@/api/message/sms'
 import { request } from '@/utils/request'
-
-vi.mock('@/utils/request', () => ({ request: vi.fn() }))
-
-const requestMock = vi.mocked(request)
-const timestamp = '2026-09-11T08:00:00Z'
-
-const config = {
-  configured: true,
-  smsSdkAppId: '1400000000',
-  signName: 'Admin',
-  region: 'ap-guangzhou',
-  endpoint: '',
-  ttlMinutes: 5,
-  isEnabled: YesNo.Yes,
-  lastTestAt: timestamp,
-  lastTestError: '',
-}
-
-const template = {
-  id: 1,
-  scene: 'login' as const,
-  name: 'Login code',
-  tencentTemplateId: '100001',
-  content: '{1} 有效期 {2} 分钟',
-  variableKeys: ['code', 'ttl_minutes'] as ['code', 'ttl_minutes'],
-  exampleVariables: { code: '123456', ttl_minutes: '5' },
-  isEnabled: YesNo.Yes,
-  createdAt: timestamp,
-  updatedAt: timestamp,
-}
-
-const rule = {
-  id: 2,
-  scope: 0 as const,
-  pattern: '+8615671628271',
-  action: 0 as const,
-  name: 'Blocked recipient',
-  remark: '',
-  isEnabled: YesNo.Yes,
-  createdAt: timestamp,
-  updatedAt: timestamp,
-}
-
-const log = {
-  id: 3,
-  platformId: 1,
-  platform: 'admin',
-  userId: 7,
-  username: 'alice',
-  scene: 'login' as const,
-  templateId: 1,
-  toPhone: '+8615671628271',
-  status: SmsStatus.Sent,
-  requestId: 'request-id',
-  serialNo: 'serial-no',
-  fee: 1,
-  errorCode: '',
-  errorSummary: '',
-  latencyMs: 30,
-  sentAt: timestamp,
-  createdAt: timestamp,
-  updatedAt: timestamp,
-}
-
-const policies = [
-  {
-    key: 'business_phone_minute' as const,
-    mode: 'business' as const,
-    dimension: 'platform_phone' as const,
-    limit: 1,
-    windowSeconds: 60,
-    updatedAt: timestamp,
-  },
-  {
-    key: 'business_phone_10m' as const,
-    mode: 'business' as const,
-    dimension: 'platform_phone' as const,
-    limit: 5,
-    windowSeconds: 600,
-    updatedAt: timestamp,
-  },
-]
-
-describe('SMS admin API protocol', () => {
-  beforeEach(() => requestMock.mockReset())
-
-  it('owns the fixed scene values in domain metadata', () => {
-    expect(smsSceneMetadata.map((item) => item.value)).toEqual([
-      'login',
-      'forget',
-      'bind_phone',
-      'change_password',
-    ])
-    expect(smsStatusMetadata.map((item) => item.value)).toEqual([
-      SmsStatus.Pending,
-      SmsStatus.Sent,
-      SmsStatus.Failed,
-    ])
+vi.mock('@/utils/request', () => ({
+  request: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  refreshAccessCredential: vi.fn(),
+}))
+beforeEach(() => vi.resetAllMocks())
+describe('thin API HTTP contract', () => {
+  it('getSmsPageInit preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getSmsPageInit()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/sms/page-init')
   })
-
-  it('parses exact config and sends exact config requests', async () => {
-    requestMock.mockResolvedValueOnce(config)
-    await expect(getSmsConfig()).resolves.toEqual(config)
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'GET',
-      url: '/api/admin/v1/message/sms/config',
-    })
-
-    const input = {
-      secretId: '',
-      secretKey: '',
-      smsSdkAppId: '1400000000',
-      signName: 'Admin',
-      region: 'ap-guangzhou',
-      endpoint: '',
-      ttlMinutes: 5,
-      isEnabled: YesNo.Yes,
+  it('getSmsPageInit propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getSmsPageInit()).rejects.toBe(error)
+  })
+  it('getSmsConfig preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getSmsConfig()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/sms/config')
+  })
+  it('getSmsConfig propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getSmsConfig()).rejects.toBe(error)
+  })
+  it('saveSmsConfig preserves the HTTP contract and backend data', async () => {
+    const data: Parameters<typeof api.saveSmsConfig>[0] = {
+      secretId: 'sample',
+      secretKey: 'sample',
+      smsSdkAppId: 'sample',
+      signName: 'sample',
+      region: 'sample',
+      endpoint: 'sample',
+      ttlMinutes: 1,
+      isEnabled: 0,
     }
-    requestMock.mockResolvedValueOnce(config)
-    await expect(saveSmsConfig(input)).resolves.toEqual(config)
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'PUT',
-      url: '/api/admin/v1/message/sms/config',
-      data: input,
-    })
-
-    requestMock.mockResolvedValueOnce({})
-    await expect(deleteSmsConfig()).resolves.toBeUndefined()
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.saveSmsConfig(data)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/sms/config', data)
   })
-
-  it.each([
-    { ...config, secretId: 'must-not-leak' },
-    { ...config, configured: undefined },
-    { ...config, ttlMinutes: 0 },
-    { ...config, ttlMinutes: 61 },
-    { ...config, isEnabled: 2 },
-    { ...config, lastTestAt: '2026-09-11' },
-  ])('rejects malformed or unsafe config responses', async (response) => {
-    requestMock.mockResolvedValue(response)
-    await expect(getSmsConfig()).rejects.toThrow()
-  })
-
-  it('accepts an unconfigured response with zero TTL', () => {
-    expect(
-      parseSmsConfig({
-        configured: false,
-        smsSdkAppId: '',
-        signName: '',
-        region: '',
-        endpoint: '',
-        ttlMinutes: 0,
-        isEnabled: YesNo.No,
-        lastTestAt: null,
-        lastTestError: '',
-      }),
-    ).toEqual({
-      configured: false,
-      smsSdkAppId: '',
-      signName: '',
-      region: '',
-      endpoint: '',
-      ttlMinutes: 0,
-      isEnabled: YesNo.No,
-      lastTestAt: null,
-      lastTestError: '',
-    })
-  })
-
-  it('freezes the exact four scene catalog and strict template shape', async () => {
-    const scenes = [
-      { scene: 'login', name: 'Login', variableKeys: ['code', 'ttl_minutes'] },
-      { scene: 'forget', name: 'Forget', variableKeys: ['code', 'ttl_minutes'] },
-      { scene: 'bind_phone', name: 'Bind phone', variableKeys: ['code', 'ttl_minutes'] },
-      {
-        scene: 'change_password',
-        name: 'Change password',
-        variableKeys: ['code', 'ttl_minutes'],
-      },
-    ]
-    requestMock.mockResolvedValueOnce({ scenes })
-    await expect(getSmsPageInit()).resolves.toEqual({ scenes })
-    requestMock.mockResolvedValueOnce({ list: [template] })
-    await expect(listSmsTemplates()).resolves.toEqual([template])
-  })
-
-  it.each([
-    {
-      scenes: Array.from({ length: 4 }, () => ({
-        scene: 'login',
-        name: 'Duplicate',
-        variableKeys: ['code', 'ttl_minutes'],
-      })),
-    },
-    {
-      scenes: [
-        { scene: 'login', name: 'Login', variableKeys: ['code', 'ttl_minutes'] },
-        { scene: 'forget', name: 'Forget', variableKeys: ['code', 'ttl_minutes'] },
-        { scene: 'bind_phone', name: 'Bind', variableKeys: ['code', 'ttl_minutes'] },
-      ],
-    },
-  ])('rejects incomplete or duplicate scene catalogs', async (response) => {
-    requestMock.mockResolvedValue(response)
-    await expect(getSmsPageInit()).rejects.toThrow()
-  })
-
-  it.each([
-    { ...template, exampleVariables: { ...template.exampleVariables, extra: 'value' } },
-    { ...template, variableKeys: ['code', 'code'] },
-    { ...template, scene: 'test' },
-    { ...template, id: 0 },
-    { ...template, createdAt: 'not-a-date' },
-  ])('rejects malformed template responses', async (item) => {
-    requestMock.mockResolvedValue({ list: [item] })
-    await expect(listSmsTemplates()).rejects.toThrow()
-  })
-
-  it('uses exact template mutation paths and bodies', async () => {
-    const input = {
-      scene: template.scene,
-      name: template.name,
-      tencentTemplateId: template.tencentTemplateId,
-      content: template.content,
-      variableKeys: template.variableKeys,
-      exampleVariables: template.exampleVariables,
+  it('saveSmsConfig propagates request failures unchanged', async () => {
+    const data: Parameters<typeof api.saveSmsConfig>[0] = {
+      secretId: 'sample',
+      secretKey: 'sample',
+      smsSdkAppId: 'sample',
+      signName: 'sample',
+      region: 'sample',
+      endpoint: 'sample',
+      ttlMinutes: 1,
+      isEnabled: 0,
     }
-    requestMock.mockResolvedValueOnce(template)
-    await updateSmsTemplate(template.id, input)
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'PUT',
-      url: '/api/admin/v1/message/sms/template/1',
-      data: input,
-    })
-    requestMock.mockResolvedValueOnce({})
-    await updateSmsTemplateStatus(template.id, YesNo.No)
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'PATCH',
-      url: '/api/admin/v1/message/sms/template/1/status',
-      data: { isEnabled: YesNo.No },
-    })
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.saveSmsConfig(data)).rejects.toBe(error)
   })
-
-  it('parses strict recipient rules and uses exact mutation paths', async () => {
-    requestMock.mockResolvedValueOnce({ list: [rule] })
-    await expect(listSmsRules()).resolves.toEqual([rule])
-
-    const createInput = {
-      scope: 0 as const,
-      pattern: '15671628271',
-      action: 0 as const,
-      name: 'Blocked recipient',
-      remark: '',
-      isEnabled: YesNo.Yes,
+  it('deleteSmsConfig preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.delete).mockResolvedValue(dataFromServer)
+    const result = await api.deleteSmsConfig()
+    expect(result).toBe(dataFromServer)
+    expect(request.delete).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/sms/config')
+  })
+  it('deleteSmsConfig propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.delete).mockRejectedValue(error)
+    await expect(api.deleteSmsConfig()).rejects.toBe(error)
+  })
+  it('sendSmsTest preserves the HTTP contract and backend data', async () => {
+    const data: Parameters<typeof api.sendSmsTest>[0] = { toPhone: 'sample', scene: 'login' }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.sendSmsTest(data)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/sms/test', data)
+  })
+  it('sendSmsTest propagates request failures unchanged', async () => {
+    const data: Parameters<typeof api.sendSmsTest>[0] = { toPhone: 'sample', scene: 'login' }
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.sendSmsTest(data)).rejects.toBe(error)
+  })
+  it('listSmsTemplates preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.listSmsTemplates()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/sms/template')
+  })
+  it('listSmsTemplates propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.listSmsTemplates()).rejects.toBe(error)
+  })
+  it('updateSmsTemplate preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.updateSmsTemplate>[0] = 1
+    const data: Parameters<typeof api.updateSmsTemplate>[1] = {
+      scene: 'login',
+      name: 'sample',
+      tencentTemplateId: 'sample',
+      content: 'sample',
+      variableKeys: ['sample'],
+      exampleVariables: {},
     }
-    requestMock.mockResolvedValueOnce(rule)
-    await createSmsRule(createInput)
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'POST',
-      url: '/api/admin/v1/message/sms/recipient-rule',
-      data: createInput,
-    })
-
-    const updateInput = { ...createInput, pattern: undefined }
-    requestMock.mockResolvedValueOnce(rule)
-    await updateSmsRule(rule.id, updateInput)
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'PUT',
-      url: '/api/admin/v1/message/sms/recipient-rule/2',
-      data: updateInput,
-    })
-    requestMock.mockResolvedValueOnce({})
-    await updateSmsRuleStatus(rule.id, YesNo.No)
-    requestMock.mockResolvedValueOnce({})
-    await deleteSmsRule(rule.id)
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.updateSmsTemplate(id, data)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/message/sms/template/${id}`,
+      data,
+    )
   })
-
-  it.each([
-    { ...rule, scope: 'domain' },
-    { ...rule, action: 'block' },
-    { ...rule, isEnabled: 2 },
-    { ...rule, unknown: true },
-  ])('rejects malformed recipient rules', async (item) => {
-    requestMock.mockResolvedValue({ list: [item] })
-    await expect(listSmsRules()).rejects.toThrow()
-  })
-
-  it('parses logs, protected detail, exact-phone filters, and admin test results', async () => {
-    requestMock.mockResolvedValueOnce({ list: [log], total: 1, page: 1, pageSize: 20 })
-    await expect(
-      listSmsLogs({ page: 1, pageSize: 20, toPhone: '15671628271', scene: 'login' }),
-    ).resolves.toEqual({ list: [log], total: 1, page: 1, pageSize: 20 })
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'GET',
-      url: '/api/admin/v1/message/sms/log',
-      params: { page: 1, pageSize: 20, toPhone: '15671628271', scene: 'login' },
-    })
-
-    const detail = {
-      log,
-      verificationCode: '123456',
-      verificationExpiresAt: timestamp,
+  it('updateSmsTemplate propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.updateSmsTemplate>[0] = 1
+    const data: Parameters<typeof api.updateSmsTemplate>[1] = {
+      scene: 'login',
+      name: 'sample',
+      tencentTemplateId: 'sample',
+      content: 'sample',
+      variableKeys: ['sample'],
+      exampleVariables: {},
     }
-    requestMock.mockResolvedValueOnce(detail)
-    await expect(getSmsLogDetail(log.id)).resolves.toEqual(detail)
-
-    const testInput = { toPhone: '15671628271', scene: 'login' as const }
-    const testResult = {
-      logId: 3,
-      status: SmsStatus.Sent,
-      requestId: 'request-id',
-      serialNo: 'serial-no',
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.updateSmsTemplate(id, data)).rejects.toBe(error)
+  })
+  it('updateSmsTemplateStatus preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.updateSmsTemplateStatus>[0] = 1
+    const isEnabled: Parameters<typeof api.updateSmsTemplateStatus>[1] = 0
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.patch).mockResolvedValue(dataFromServer)
+    const result = await api.updateSmsTemplateStatus(id, isEnabled)
+    expect(result).toBe(dataFromServer)
+    expect(request.patch).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/message/sms/template/${id}/status`,
+      { isEnabled },
+    )
+  })
+  it('updateSmsTemplateStatus propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.updateSmsTemplateStatus>[0] = 1
+    const isEnabled: Parameters<typeof api.updateSmsTemplateStatus>[1] = 0
+    const error = new Error('request failed')
+    vi.mocked(request.patch).mockRejectedValue(error)
+    await expect(api.updateSmsTemplateStatus(id, isEnabled)).rejects.toBe(error)
+  })
+  it('listSmsRules preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.listSmsRules()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/sms/recipient-rule')
+  })
+  it('listSmsRules propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.listSmsRules()).rejects.toBe(error)
+  })
+  it('createSmsRule preserves the HTTP contract and backend data', async () => {
+    const data: Parameters<typeof api.createSmsRule>[0] = {
+      scope: 0,
+      pattern: 'sample',
+      action: 0,
+      name: 'sample',
+      remark: 'sample',
+      isEnabled: 0,
     }
-    requestMock.mockResolvedValueOnce(testResult)
-    await expect(sendSmsTest(testInput)).resolves.toEqual(testResult)
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'POST',
-      url: '/api/admin/v1/message/sms/test',
-      data: testInput,
-    })
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.createSmsRule(data)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/message/sms/recipient-rule',
+      data,
+    )
   })
-
-  it.each([
-    { ...log, id: 0 },
-    { ...log, platformId: -1 },
-    { ...log, fee: -1 },
-    { ...log, latencyMs: -1 },
-    { ...log, status: 'unknown' },
-    { ...log, sentAt: '2026-09-11' },
-  ])('rejects malformed log responses', async (item) => {
-    requestMock.mockResolvedValue({ list: [item], total: 1, page: 1, pageSize: 20 })
-    await expect(listSmsLogs({ page: 1, pageSize: 20 })).rejects.toThrow()
-  })
-
-  it('rejects unsafe detail fields and malformed pages', async () => {
-    requestMock.mockResolvedValueOnce({ list: [], total: -1, page: 1, pageSize: 20 })
-    await expect(listSmsLogs({ page: 1, pageSize: 20 })).rejects.toThrow()
-    requestMock.mockResolvedValueOnce({
-      log: { ...log, toPhone: '15671628271' },
-      verificationCode: '123456',
-      verificationExpiresAt: timestamp,
-    })
-    await expect(getSmsLogDetail(log.id)).rejects.toThrow()
-    requestMock.mockResolvedValueOnce({
-      log,
-      verificationCode: '123456',
-      verificationExpiresAt: timestamp,
-      ciphertext: 'secret',
-    })
-    await expect(getSmsLogDetail(log.id)).rejects.toThrow()
-  })
-
-  it('parses two fixed rate policies per platform and updates one exact policy', async () => {
-    const snapshot = {
-      platforms: [{ platformId: 1, platformCode: 'admin', platformName: 'Admin', policies }],
+  it('createSmsRule propagates request failures unchanged', async () => {
+    const data: Parameters<typeof api.createSmsRule>[0] = {
+      scope: 0,
+      pattern: 'sample',
+      action: 0,
+      name: 'sample',
+      remark: 'sample',
+      isEnabled: 0,
     }
-    requestMock.mockResolvedValueOnce(snapshot)
-    await expect(listSmsRateLimitPolicies()).resolves.toEqual(snapshot)
-
-    const updated = {
-      ...snapshot.platforms[0],
-      policies: [{ ...policies[0], limit: 2 }, policies[1]],
-    }
-    requestMock.mockResolvedValueOnce(updated)
-    await expect(
-      updateSmsRateLimitPolicy(1, 'business_phone_minute', {
-        limit: 2,
-        windowSeconds: 60,
-      }),
-    ).resolves.toEqual(updated)
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'PUT',
-      url: '/api/admin/v1/message/sms/rate-limit-policy/1/business_phone_minute',
-      data: { limit: 2, windowSeconds: 60 },
-    })
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.createSmsRule(data)).rejects.toBe(error)
   })
-
-  it.each([
-    { invalidPolicies: [{ ...policies[0], limit: 0 }, policies[1]] },
-    { invalidPolicies: [{ ...policies[0], windowSeconds: 0 }, policies[1]] },
-    { invalidPolicies: [{ ...policies[0], revision: 2 }, policies[1]] },
-    {
-      invalidPolicies: [policies[0], { ...policies[1], key: 'business_phone_minute' }],
-    },
-    { invalidPolicies: [policies[0], { ...policies[1], key: 'unknown' }] },
-  ])('rejects malformed rate policy snapshots', async ({ invalidPolicies }) => {
-    requestMock.mockResolvedValue({
-      platforms: [
-        {
-          platformId: 1,
-          platformCode: 'admin',
-          platformName: 'Admin',
-          policies: invalidPolicies,
-        },
-      ],
-    })
-    await expect(listSmsRateLimitPolicies()).rejects.toThrow()
+  it('updateSmsRule preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.updateSmsRule>[0] = 1
+    const data: Parameters<typeof api.updateSmsRule>[1] = {
+      scope: 0,
+      action: 0,
+      name: 'sample',
+      remark: 'sample',
+      isEnabled: 0,
+    }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.updateSmsRule(id, data)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/message/sms/recipient-rule/${id}`,
+      data,
+    )
+  })
+  it('updateSmsRule propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.updateSmsRule>[0] = 1
+    const data: Parameters<typeof api.updateSmsRule>[1] = {
+      scope: 0,
+      action: 0,
+      name: 'sample',
+      remark: 'sample',
+      isEnabled: 0,
+    }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.updateSmsRule(id, data)).rejects.toBe(error)
+  })
+  it('updateSmsRuleStatus preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.updateSmsRuleStatus>[0] = 1
+    const isEnabled: Parameters<typeof api.updateSmsRuleStatus>[1] = 0
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.patch).mockResolvedValue(dataFromServer)
+    const result = await api.updateSmsRuleStatus(id, isEnabled)
+    expect(result).toBe(dataFromServer)
+    expect(request.patch).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/message/sms/recipient-rule/${id}/status`,
+      { isEnabled },
+    )
+  })
+  it('updateSmsRuleStatus propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.updateSmsRuleStatus>[0] = 1
+    const isEnabled: Parameters<typeof api.updateSmsRuleStatus>[1] = 0
+    const error = new Error('request failed')
+    vi.mocked(request.patch).mockRejectedValue(error)
+    await expect(api.updateSmsRuleStatus(id, isEnabled)).rejects.toBe(error)
+  })
+  it('deleteSmsRule preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.deleteSmsRule>[0] = 1
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.delete).mockResolvedValue(dataFromServer)
+    const result = await api.deleteSmsRule(id)
+    expect(result).toBe(dataFromServer)
+    expect(request.delete).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/message/sms/recipient-rule/${id}`,
+    )
+  })
+  it('deleteSmsRule propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.deleteSmsRule>[0] = 1
+    const error = new Error('request failed')
+    vi.mocked(request.delete).mockRejectedValue(error)
+    await expect(api.deleteSmsRule(id)).rejects.toBe(error)
+  })
+  it('listSmsLogs preserves the HTTP contract and backend data', async () => {
+    const params: Parameters<typeof api.listSmsLogs>[0] = { page: 1, pageSize: 1 }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.listSmsLogs(params)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/sms/log', { params })
+  })
+  it('listSmsLogs propagates request failures unchanged', async () => {
+    const params: Parameters<typeof api.listSmsLogs>[0] = { page: 1, pageSize: 1 }
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.listSmsLogs(params)).rejects.toBe(error)
+  })
+  it('getSmsLogDetail preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.getSmsLogDetail>[0] = 1
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getSmsLogDetail(id)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith(`/api/admin/v1/message/sms/log/${id}`)
+  })
+  it('getSmsLogDetail propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.getSmsLogDetail>[0] = 1
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getSmsLogDetail(id)).rejects.toBe(error)
+  })
+  it('listSmsRateLimitPolicies preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.listSmsRateLimitPolicies()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/message/sms/rate-limit-policy',
+    )
+  })
+  it('listSmsRateLimitPolicies propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.listSmsRateLimitPolicies()).rejects.toBe(error)
+  })
+  it('updateSmsRateLimitPolicy preserves the HTTP contract and backend data', async () => {
+    const platformId: Parameters<typeof api.updateSmsRateLimitPolicy>[0] = 1
+    const key: Parameters<typeof api.updateSmsRateLimitPolicy>[1] = 'business_phone_minute'
+    const data: Parameters<typeof api.updateSmsRateLimitPolicy>[2] = { limit: 1, windowSeconds: 1 }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.updateSmsRateLimitPolicy(platformId, key, data)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/message/sms/rate-limit-policy/${platformId}/${encodeURIComponent(key)}`,
+      data,
+    )
+  })
+  it('updateSmsRateLimitPolicy propagates request failures unchanged', async () => {
+    const platformId: Parameters<typeof api.updateSmsRateLimitPolicy>[0] = 1
+    const key: Parameters<typeof api.updateSmsRateLimitPolicy>[1] = 'business_phone_minute'
+    const data: Parameters<typeof api.updateSmsRateLimitPolicy>[2] = { limit: 1, windowSeconds: 1 }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.updateSmsRateLimitPolicy(platformId, key, data)).rejects.toBe(error)
   })
 })

@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 
 import * as settingAPI from '@/api/system/setting'
+import * as optionsAPI from '@/api/system/settingOptions'
+import type { SettingPresentation } from '@/api/system/settingOptions'
 import type { SettingPage, SystemSetting } from '@/api/system/setting'
 import { YesNo } from '@/enums/yesNo'
 import { appI18n, setLocale } from '@/i18n'
@@ -33,6 +35,8 @@ vi.mock('@/api/system/setting', async (importOriginal) => {
   }
 })
 
+vi.mock('@/api/system/settingOptions', () => ({ getSettingOptions: vi.fn() }))
+
 const builtinSetting = settingRow({ id: 1, key: 'auth.captcha.ttl_minutes', isBuiltin: YesNo.Yes })
 const customSetting = settingRow({ id: 2, key: 'auth.captcha.slide_padding', isBuiltin: YesNo.No })
 const mediaAvatar = settingRow({
@@ -60,6 +64,17 @@ describe('system setting page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setLocale('zh-CN')
+    vi.mocked(optionsAPI.getSettingOptions).mockResolvedValue({
+      valueTypes: [
+        { value: 1, label: '字符串', editor: 'text', allowEmpty: true },
+        { value: 2, label: '数字', editor: 'number', allowEmpty: false },
+        { value: 3, label: '布尔值', editor: 'boolean', allowEmpty: false },
+        { value: 4, label: 'JSON', editor: 'json', allowEmpty: false },
+        { value: 5, label: '媒体', editor: 'media', allowEmpty: true },
+      ],
+      defaultValueType: 1,
+      defaultPresentation: fixturePresentation(),
+    })
     vi.mocked(settingAPI.getSettings).mockResolvedValue({
       list: [builtinSetting, customSetting],
       total: 2,
@@ -75,7 +90,10 @@ describe('system setting page', () => {
       kind,
       contentHtml: kind === 'userAgreement' ? '<p>Agreement</p>' : '<p>Privacy</p>',
     }))
-    vi.mocked(settingAPI.createSetting).mockResolvedValue(3)
+    vi.mocked(settingAPI.createSetting).mockResolvedValue({
+      id: 3,
+      presentation: fixturePresentation(),
+    })
     vi.mocked(settingAPI.updateSetting).mockResolvedValue(undefined)
     vi.mocked(settingAPI.updateBrandSettings).mockResolvedValue(undefined)
     vi.mocked(settingAPI.updateLegalDocument).mockResolvedValue(undefined)
@@ -89,6 +107,144 @@ describe('system setting page', () => {
   afterEach(() => {
     for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
+  })
+
+  it('honors backend empty rules and create-result brand refresh without interpreting keys', async () => {
+    vi.mocked(optionsAPI.getSettingOptions).mockResolvedValue({
+      valueTypes: [{ value: 88, label: '后端文本', editor: 'text', allowEmpty: true }],
+      defaultValueType: 88,
+      defaultPresentation: { ...fixturePresentation(), allowEmpty: true },
+    })
+    vi.mocked(settingAPI.createSetting).mockResolvedValue({
+      id: 9,
+      presentation: { ...fixturePresentation(), refreshBrand: true },
+    })
+    const wrapper = mountPage(['system:setting:list', 'system:setting:create'])
+    await flushPromises()
+    await wrapper.get('[data-testid="setting-create"]').trigger('click')
+    await setBodyValue('setting-form-key', 'new.domain.display')
+    await clickBody('setting-save')
+    expect(settingAPI.createSetting).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'new.domain.display', value: '', valueType: 88 }),
+    )
+    expect(settingAPI.getBrandSettings).toHaveBeenCalledOnce()
+  })
+
+  it('clears failed options and visibly disables creation rather than guessing defaults', async () => {
+    vi.mocked(optionsAPI.getSettingOptions).mockRejectedValueOnce(new Error('options unavailable'))
+    const wrapper = mountPage(['system:setting:list', 'system:setting:create'])
+    await flushPromises()
+    expect(wrapper.get('[data-testid="setting-options-error"]').text()).toContain(
+      '系统设置加载失败',
+    )
+    expect(wrapper.get('[data-testid="setting-create"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="setting-create"]').trigger('click')
+    expect(wrapper.findComponent({ name: 'SettingDialog' }).exists()).toBe(false)
+    expect(settingAPI.createSetting).not.toHaveBeenCalled()
+  })
+
+  it('enforces a backend-required media value instead of assuming media is optional', async () => {
+    const row = settingRow({
+      key: 'new.domain.required_media',
+      value: '',
+      valueType: 5,
+      presentation: { ...fixturePresentation({ valueType: 5 }), allowEmpty: false },
+    })
+    vi.mocked(settingAPI.getSettings).mockResolvedValue({
+      list: [row],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage(['system:setting:list', 'system:setting:update'])
+    await flushPromises()
+    await wrapper.get('[data-testid="setting-update"]').trigger('click')
+    await clickBody('setting-save')
+    expect(settingAPI.updateSetting).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('请输入配置值')
+  })
+
+  it('locks the target and form throughout retention confirmation and rechecks access', async () => {
+    const row = settingRow({ key: 'realtime.event.retention_days', value: '7', valueType: 2 })
+    vi.mocked(settingAPI.getSettings).mockResolvedValue({
+      list: [row, customSetting],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    })
+    const confirmed = deferred<Awaited<ReturnType<typeof ElMessageBox.confirm>>>()
+    vi.mocked(ElMessageBox.confirm).mockReturnValueOnce(confirmed.promise)
+    const wrapper = mountPage([
+      'system:setting:list',
+      'system:setting:create',
+      'system:setting:update',
+    ])
+    await flushPromises()
+    await wrapper.findAll('[data-testid="setting-update"]')[0]!.trigger('click')
+    const dialog = wrapper.getComponent({ name: 'SettingDialog' })
+    dialog.vm.$emit('update:form', { ...dialog.props('form'), value: '6' })
+    await nextTick()
+    await clickBody('setting-save')
+    expect(dialog.props('submitting')).toBe(true)
+    await wrapper.findAll('[data-testid="setting-update"]')[1]!.trigger('click')
+    await wrapper.get('[data-testid="setting-create"]').trigger('click')
+    expect(dialog.props('editing')).toMatchObject({ key: row.key })
+    usePermissionStore().applySnapshot({
+      roleCodes: [],
+      menuTree: [],
+      permissionCodes: ['system:setting:list'],
+    })
+    await nextTick()
+    confirmed.resolve('confirm' as unknown as Awaited<ReturnType<typeof ElMessageBox.confirm>>)
+    await flushPromises()
+    expect(settingAPI.updateSetting).not.toHaveBeenCalled()
+  })
+
+  it('uses a backend numeric type and row constraints without a frontend value whitelist', async () => {
+    const presentation = {
+      ...fixturePresentation(),
+      editor: 'number' as const,
+      minimum: 13,
+      maximum: 17,
+      valueTypeLocked: true,
+      actions: { status: false, delete: false },
+    }
+    const row = settingRow({ key: 'new.domain.limit', value: '15', valueType: 99, presentation })
+    vi.mocked(settingAPI.getSettings).mockResolvedValue({
+      list: [row],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    vi.mocked(optionsAPI.getSettingOptions).mockResolvedValue({
+      valueTypes: [{ value: 99, label: '后端新类型', editor: 'number', allowEmpty: false }],
+      defaultValueType: 99,
+      defaultPresentation: presentation,
+    })
+    const wrapper = mountPage([
+      'system:setting:list',
+      'system:setting:update',
+      'system:setting:status',
+      'system:setting:delete',
+    ])
+    await flushPromises()
+    expect(wrapper.text()).toContain('后端新类型')
+    expect(wrapper.find('[data-testid="setting-delete"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="setting-status-toggle"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="setting-update"]').trigger('click')
+    const root = document.querySelector('[data-testid="setting-form-value"]')
+    const input = root instanceof HTMLInputElement ? root : root?.querySelector('input')
+    expect(input?.getAttribute('min')).toBe('13')
+    expect(input?.getAttribute('max')).toBe('17')
+    await setBodyValue('setting-form-value', '18')
+    await clickBody('setting-save')
+    expect(settingAPI.updateSetting).not.toHaveBeenCalled()
+    await setBodyValue('setting-form-value', '16')
+    await clickBody('setting-save')
+    expect(settingAPI.updateSetting).toHaveBeenCalledWith(
+      row.key,
+      expect.objectContaining({ value: '16', valueType: 99 }),
+    )
   })
 
   it('exposes loading, empty, and error states while loading settings', async () => {
@@ -183,7 +339,9 @@ describe('system setting page', () => {
     await wrapper.get('[data-testid="setting-create"]').trigger('click')
     const dialog = wrapper.getComponent({ name: 'SettingDialog' })
     const select = dialog.getComponent({ name: 'ElSelectV2' })
-    expect(select.props('options')).toContainEqual({ label: '媒体', value: 5 })
+    expect(select.props('options')).toContainEqual(
+      expect.objectContaining({ label: '媒体', value: 5 }),
+    )
     await setBodyValue('setting-form-key', 'app.assets.custom')
     select.vm.$emit('update:modelValue', 5)
     await nextTick()
@@ -399,7 +557,7 @@ describe('system setting page', () => {
   it('keeps required retention settings numeric and removes their disable action', async () => {
     const retention = settingRow({
       id: 10,
-      key: settingAPI.messageNotificationRetentionDaysKey,
+      key: 'message.notification.retention_days',
       value: '180',
       valueType: 2,
       isBuiltin: YesNo.Yes,
@@ -430,7 +588,7 @@ describe('system setting page', () => {
   it('confirms a retention decrease before updating', async () => {
     const retention = settingRow({
       id: 11,
-      key: settingAPI.realtimeEventRetentionDaysKey,
+      key: 'realtime.event.retention_days',
       value: '7',
       valueType: 2,
       isBuiltin: YesNo.Yes,
@@ -459,7 +617,7 @@ describe('system setting page', () => {
   it('does not update when a retention decrease is cancelled', async () => {
     const retention = settingRow({
       id: 12,
-      key: settingAPI.realtimeEventRetentionDaysKey,
+      key: 'realtime.event.retention_days',
       value: '7',
       valueType: 2,
       isBuiltin: YesNo.Yes,
@@ -489,7 +647,7 @@ describe('system setting page', () => {
   ])('updates an %s retention value without confirmation', async (_case, value) => {
     const retention = settingRow({
       id: 13,
-      key: settingAPI.realtimeEventRetentionDaysKey,
+      key: 'realtime.event.retention_days',
       value: '7',
       valueType: 2,
       isBuiltin: YesNo.Yes,
@@ -518,7 +676,7 @@ describe('system setting page', () => {
   it('keeps the retention dialog open when the update request fails', async () => {
     const retention = settingRow({
       id: 14,
-      key: settingAPI.realtimeEventRetentionDaysKey,
+      key: 'realtime.event.retention_days',
       value: '7',
       valueType: 2,
       isBuiltin: YesNo.Yes,
@@ -605,7 +763,70 @@ function settingRow(overrides: Partial<SystemSetting>): SystemSetting {
     createdAt: '2026-09-12T00:00:00Z',
     updatedAt: '2026-09-12T00:00:00Z',
     ...overrides,
+    presentation: overrides.presentation ?? fixturePresentation(overrides),
   }
+}
+
+// Captured backend presentation fixtures, not production frontend key rules.
+function fixturePresentation(row: Partial<SystemSetting> = {}): SettingPresentation {
+  const common: SettingPresentation = {
+    editor: 'text',
+    valueTypeLocked: false,
+    minimum: null,
+    maximum: null,
+    maxLength: null,
+    allowEmpty: false,
+    warnOnDecrease: false,
+    refreshBrand: false,
+    mediaAccept: '',
+    mediaVariant: 'file',
+    mediaRuleCode: 'setting',
+    actions: { status: true, delete: row.isBuiltin !== YesNo.Yes },
+  }
+  const types = new Map<number, SettingPresentation['editor']>([
+    [1, 'text'],
+    [2, 'number'],
+    [3, 'boolean'],
+    [4, 'json'],
+    [5, 'media'],
+  ])
+  common.editor = types.get(row.valueType ?? 1) ?? 'text'
+  common.allowEmpty = common.editor === 'media'
+  const captured: Record<string, Partial<SettingPresentation>> = {
+    'app.brand.default_avatar': {
+      valueTypeLocked: true,
+      refreshBrand: true,
+      mediaVariant: 'avatar',
+      mediaAccept: '.png,.jpg,.jpeg,.gif,.webp',
+      actions: { status: false, delete: false },
+    },
+    'app.brand.title_zh_cn': {
+      valueTypeLocked: true,
+      refreshBrand: true,
+      maxLength: 128,
+      actions: { status: false, delete: false },
+    },
+    'message.mail.recipient_rule.import_template_object_key': {
+      valueTypeLocked: true,
+      mediaAccept: '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      actions: { status: false, delete: false },
+    },
+    'message.notification.retention_days': {
+      valueTypeLocked: true,
+      minimum: 30,
+      maximum: 3650,
+      warnOnDecrease: true,
+      actions: { status: false, delete: false },
+    },
+    'realtime.event.retention_days': {
+      valueTypeLocked: true,
+      minimum: 1,
+      maximum: 30,
+      warnOnDecrease: true,
+      actions: { status: false, delete: false },
+    },
+  }
+  return { ...common, ...captured[row.key ?? ''] }
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {

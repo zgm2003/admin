@@ -15,8 +15,12 @@ import type {
   NotificationTaskOptionStates,
 } from '@/views/message/notificationTask/useNotificationTaskOptions'
 
-export type NotificationTaskFormModel = Omit<taskApi.NotificationTaskInput, 'platformId'> & {
+export type NotificationTaskFormModel = Omit<
+  taskApi.NotificationTaskInput,
+  'platformId' | 'audienceType'
+> & {
   platformId: number | null
+  audienceType: taskApi.NotificationAudience | ''
 }
 
 const props = defineProps<{
@@ -37,6 +41,8 @@ const props = defineProps<{
   variantOptions: Array<{ value: NotificationVariant; label: string }>
   priorityOptions: Array<{ value: NotificationPriority; label: string }>
   linkTypeOptions: Array<{ value: NotificationLinkType; label: string }>
+  statusOptions: Array<{ value: number; label: string }>
+  titleMaxLength?: number
   remotePlatformOptions: (keyword: string) => void
   remoteTargetOptions: (keyword: string) => void
 }>()
@@ -73,7 +79,10 @@ const setFormField = <K extends keyof NotificationTaskFormModel>(
     <div v-if="props.loading" class="notification-task-form__state">
       {{ t('notificationTask.loadingDetail') }}
     </div>
-    <div v-else-if="props.errorMessage" class="notification-task-form__state">
+    <div
+      v-else-if="props.errorMessage && props.taskId !== null && props.detailTask === null"
+      class="notification-task-form__state"
+    >
       <span>{{ props.errorMessage }}</span>
       <el-button
         v-if="props.taskId !== null"
@@ -86,8 +95,19 @@ const setFormField = <K extends keyof NotificationTaskFormModel>(
     <NotificationTaskDetail
       v-else-if="props.readonly && props.detailTask !== null"
       :task="props.detailTask"
+      :statuses="props.statusOptions"
+      :audiences="props.audienceOptions"
+      :variants="props.variantOptions"
+      :priorities="props.priorityOptions"
     />
     <el-form v-else class="notification-task-form" label-position="top">
+      <el-alert
+        v-if="props.errorMessage"
+        :title="props.errorMessage"
+        type="error"
+        :closable="false"
+        show-icon
+      />
       <div class="notification-task-form__grid">
         <el-form-item :label="t('notificationTask.platform')">
           <el-select-v2
@@ -114,7 +134,7 @@ const setFormField = <K extends keyof NotificationTaskFormModel>(
         </el-form-item>
       </div>
       <el-form-item
-        v-if="props.form.audienceType !== 'platform'"
+        v-if="props.form.audienceType !== '' && props.form.audienceType !== 'platform'"
         :label="t('notificationTask.targets')"
       >
         <el-select-v2
@@ -150,7 +170,7 @@ const setFormField = <K extends keyof NotificationTaskFormModel>(
         <el-input
           :model-value="props.form.title"
           data-testid="notification-task-title"
-          maxlength="128"
+          :maxlength="props.titleMaxLength"
           show-word-limit
           @update:model-value="setFormField('title', $event)"
         />

@@ -13,6 +13,8 @@ type Priority string
 type LinkType string
 type AudienceType string
 
+const TitleMaxLength = 128
+
 const (
 	VariantInfo    Variant = "info"
 	VariantSuccess Variant = "success"
@@ -41,7 +43,7 @@ type Content struct {
 }
 
 func ValidateContent(content Content) error {
-	if strings.TrimSpace(content.Title) == "" || utf8.RuneCountInString(content.Title) > 128 {
+	if strings.TrimSpace(content.Title) == "" || utf8.RuneCountInString(content.Title) > TitleMaxLength {
 		return errors.New("notification title must contain 1..128 characters")
 	}
 	if strings.TrimSpace(content.ContentHTML) == "" || utf8.RuneCountInString(content.ContentHTML) > 16384 {

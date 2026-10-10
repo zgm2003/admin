@@ -1,120 +1,134 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as api from '@/api/user/profile'
 import { request } from '@/utils/request'
-import {
-  changePassword,
-  changePasswordByCode,
-  getAccountProfile,
-  sendPasswordCode,
-  updateAccountProfile,
-} from '@/api/user/profile'
-
 vi.mock('@/utils/request', () => ({
-  request: vi.fn(),
-  ProtocolError: class ProtocolError extends Error {},
+  request: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  refreshAccessCredential: vi.fn(),
 }))
-const requestMock = vi.mocked(request)
-
-describe('account API', () => {
-  beforeEach(() => requestMock.mockReset())
-
-  it('uses the admin account endpoints and preserves profile fields', async () => {
-    const profile = {
-      userId: 7,
-      username: 'alice',
-      email: 'alice@example.com',
-      phone: null,
-      avatar: 'avatar/a.png',
-      birthday: '2000-01-02',
-      gender: 2,
+beforeEach(() => vi.resetAllMocks())
+describe('thin API HTTP contract', () => {
+  it('getAccountProfile preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getAccountProfile()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/user/profile')
+  })
+  it('getAccountProfile propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getAccountProfile()).rejects.toBe(error)
+  })
+  it('updateAccountProfile preserves the HTTP contract and backend data', async () => {
+    const input: Parameters<typeof api.updateAccountProfile>[0] = {
+      username: 'sample',
+      avatar: 'sample',
+      birthday: null,
+      gender: 0,
     }
-    requestMock.mockResolvedValueOnce(profile)
-    await expect(getAccountProfile()).resolves.toEqual(profile)
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'GET',
-      url: '/api/admin/v1/user/profile',
-    })
-
-    requestMock.mockResolvedValueOnce({ ...profile, updatedAt: '2026-08-28T00:00:00Z' })
-    await updateAccountProfile({
-      username: 'alice',
-      avatar: 'avatar/a.png',
-      birthday: '2000-01-02',
-      gender: 2,
-    })
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'PUT',
-      url: '/api/admin/v1/user/profile',
-      data: {
-        username: 'alice',
-        avatar: 'avatar/a.png',
-        birthday: '2000-01-02',
-        gender: 2,
-      },
-    })
-
-    requestMock.mockResolvedValueOnce({})
-    await changePassword({
-      currentPassword: 'old-pass',
-      newPassword: 'new-pass',
-      confirmPassword: 'new-pass',
-    })
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'POST',
-      url: '/api/admin/v1/user/password',
-      data: { currentPassword: 'old-pass', newPassword: 'new-pass', confirmPassword: 'new-pass' },
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.updateAccountProfile(input)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/user/profile', input)
+  })
+  it('updateAccountProfile propagates request failures unchanged', async () => {
+    const input: Parameters<typeof api.updateAccountProfile>[0] = {
+      username: 'sample',
+      avatar: 'sample',
+      birthday: null,
+      gender: 0,
+    }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.updateAccountProfile(input)).rejects.toBe(error)
+  })
+  it('changePassword preserves the HTTP contract and backend data', async () => {
+    const input: Parameters<typeof api.changePassword>[0] = {
+      currentPassword: 'sample',
+      newPassword: 'sample',
+      confirmPassword: 'sample',
+    }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.changePassword(input)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/user/password', input)
+  })
+  it('changePassword propagates request failures unchanged', async () => {
+    const input: Parameters<typeof api.changePassword>[0] = {
+      currentPassword: 'sample',
+      newPassword: 'sample',
+      confirmPassword: 'sample',
+    }
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.changePassword(input)).rejects.toBe(error)
+  })
+  it('setPassword preserves the HTTP contract and backend data', async () => {
+    const input: Parameters<typeof api.setPassword>[0] = {
+      newPassword: 'sample',
+      confirmPassword: 'sample',
+    }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.setPassword(input)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/user/password/set', input)
+  })
+  it('setPassword propagates request failures unchanged', async () => {
+    const input: Parameters<typeof api.setPassword>[0] = {
+      newPassword: 'sample',
+      confirmPassword: 'sample',
+    }
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.setPassword(input)).rejects.toBe(error)
+  })
+  it('sendPasswordCode preserves the HTTP contract and backend data', async () => {
+    const loginType: Parameters<typeof api.sendPasswordCode>[0] = 'email'
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.sendPasswordCode(loginType)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/user/password/send-code', {
+      loginType,
     })
   })
-
-  it('uses symmetric email and phone password-code endpoints', async () => {
-    requestMock.mockResolvedValueOnce({
-      challengeId: 'password-challenge',
-      expiresAt: '2026-09-11T08:00:00Z',
-      resendAfterSeconds: 60,
-    })
-    await expect(sendPasswordCode('email')).resolves.toEqual({
-      challengeId: 'password-challenge',
-      expiresAt: '2026-09-11T08:00:00Z',
-      resendAfterSeconds: 60,
-    })
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'POST',
-      url: '/api/admin/v1/user/password/send-code',
-      data: { loginType: 'email' },
-    })
-
-    const input = {
-      loginType: 'phone' as const,
-      challengeId: 'password-challenge',
-      code: '123456',
-      newPassword: 'NewPassw0rd!',
-      confirmPassword: 'NewPassw0rd!',
-    }
-    requestMock.mockResolvedValueOnce({})
-    await expect(changePasswordByCode(input)).resolves.toBeUndefined()
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'PUT',
-      url: '/api/admin/v1/user/password/by-code',
-      data: input,
-    })
+  it('sendPasswordCode propagates request failures unchanged', async () => {
+    const loginType: Parameters<typeof api.sendPasswordCode>[0] = 'email'
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.sendPasswordCode(loginType)).rejects.toBe(error)
   })
-
-  it('rejects malformed password-code responses', async () => {
-    requestMock.mockResolvedValueOnce({
-      challengeId: '',
-      expiresAt: 'invalid',
-      resendAfterSeconds: -1,
-    })
-    await expect(sendPasswordCode('phone')).rejects.toThrow()
-
-    requestMock.mockResolvedValueOnce({ ignored: true })
-    await expect(
-      changePasswordByCode({
-        loginType: 'email',
-        challengeId: 'challenge',
-        code: '123456',
-        newPassword: 'NewPassw0rd!',
-        confirmPassword: 'NewPassw0rd!',
-      }),
-    ).rejects.toThrow('password code result')
+  it('changePasswordByCode preserves the HTTP contract and backend data', async () => {
+    const input: Parameters<typeof api.changePasswordByCode>[0] = {
+      loginType: 'email',
+      challengeId: 'sample',
+      code: 'sample',
+      newPassword: 'sample',
+      confirmPassword: 'sample',
+    }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.changePasswordByCode(input)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/user/password/by-code',
+      input,
+    )
+  })
+  it('changePasswordByCode propagates request failures unchanged', async () => {
+    const input: Parameters<typeof api.changePasswordByCode>[0] = {
+      loginType: 'email',
+      challengeId: 'sample',
+      code: 'sample',
+      newPassword: 'sample',
+      confirmPassword: 'sample',
+    }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.changePasswordByCode(input)).rejects.toBe(error)
   })
 })

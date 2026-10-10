@@ -123,7 +123,7 @@ func (s *Service) UpdateBrand(ctx context.Context, brand BrandSettings) error {
 	brand.TitleZhCN = strings.TrimSpace(brand.TitleZhCN)
 	brand.TitleEnUS = strings.TrimSpace(brand.TitleEnUS)
 	brand.DefaultAvatar = strings.TrimSpace(brand.DefaultAvatar)
-	if utf8.RuneCountInString(brand.TitleZhCN) == 0 || utf8.RuneCountInString(brand.TitleZhCN) > 128 || utf8.RuneCountInString(brand.TitleEnUS) == 0 || utf8.RuneCountInString(brand.TitleEnUS) > 128 {
+	if utf8.RuneCountInString(brand.TitleZhCN) == 0 || utf8.RuneCountInString(brand.TitleZhCN) > brandTitleMaxRunes || utf8.RuneCountInString(brand.TitleEnUS) == 0 || utf8.RuneCountInString(brand.TitleEnUS) > brandTitleMaxRunes {
 		return apperror.InvalidRequest(fmt.Errorf("brand title is invalid"))
 	}
 	if err := validateInput(BrandDefaultAvatarKey, brand.DefaultAvatar, ValueTypeMedia, ""); err != nil {
@@ -300,7 +300,7 @@ func (s *Service) Delete(ctx context.Context, key string) error {
 	if err != nil {
 		return apperror.DependencyUnavailable(err)
 	}
-	if row.IsBuiltin == yesno.Yes {
+	if row.IsBuiltin == yesno.Yes || isRequiredSetting(key) {
 		return apperror.Conflict("error.conflict", nil, fmt.Errorf("builtin setting cannot be deleted"))
 	}
 	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (cachegeneration.MutationResult, error) {
@@ -676,7 +676,7 @@ func validateInput(key, value string, valueType int, description string) error {
 	}
 	switch key {
 	case BrandTitleZhCNKey, BrandTitleEnUSKey:
-		if valueType != ValueTypeString || strings.TrimSpace(value) == "" || utf8.RuneCountInString(value) > 128 {
+		if valueType != ValueTypeString || strings.TrimSpace(value) == "" || utf8.RuneCountInString(value) > brandTitleMaxRunes {
 			return fmt.Errorf("brand title must be a non-empty string of at most 128 characters")
 		}
 	case BrandDefaultAvatarKey:
@@ -694,15 +694,18 @@ func validateInput(key, value string, valueType int, description string) error {
 			return fmt.Errorf("template must be an XLSX storage object key, not a URL")
 		}
 	case sharedsetting.MessageNotificationRetentionDaysKey:
-		if valueType != ValueTypeNumber || !integerInRange(value, 30, 3650) {
+		bounds := retentionLimits[key]
+		if valueType != ValueTypeNumber || !integerInRange(value, bounds.Minimum, bounds.Maximum) {
 			return fmt.Errorf("notification retention days must be an integer from 30 to 3650")
 		}
 	case sharedsetting.RealtimeEventRetentionDaysKey:
-		if valueType != ValueTypeNumber || !integerInRange(value, 1, 30) {
+		bounds := retentionLimits[key]
+		if valueType != ValueTypeNumber || !integerInRange(value, bounds.Minimum, bounds.Maximum) {
 			return fmt.Errorf("realtime event retention days must be an integer from 1 to 30")
 		}
 	case sharedsetting.SchedulerHistoryRetentionDaysKey:
-		if valueType != ValueTypeNumber || !integerInRange(value, 7, 3650) {
+		bounds := retentionLimits[key]
+		if valueType != ValueTypeNumber || !integerInRange(value, bounds.Minimum, bounds.Maximum) {
 			return fmt.Errorf("scheduler history retention days must be an integer from 7 to 3650")
 		}
 	}

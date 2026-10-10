@@ -8,6 +8,7 @@ const props = defineProps<{
   editError: string
   editSaving: boolean
   usernameValid: boolean
+  usernameMaxLength: number | undefined
 }>()
 const visible = defineModel<boolean>({ required: true })
 const form = defineModel<UserFormState>('form', { required: true })
@@ -38,7 +39,7 @@ const { t } = useI18n()
       ><el-form-item
         :label="t('user.username')"
         :error="form.username !== '' && !props.usernameValid ? t('user.invalidUsername') : ''"
-        ><el-input v-model="form.username" maxlength="64" /></el-form-item
+        ><el-input v-model="form.username" :maxlength="props.usernameMaxLength" /></el-form-item
     ></el-form>
     <template #footer
       ><el-button @click="visible = false">{{ t('user.cancel') }}</el-button

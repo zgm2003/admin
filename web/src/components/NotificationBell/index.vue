@@ -138,7 +138,7 @@ function retry(): void {
   </el-popover>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .notification-bell__header {
   display: flex;
   align-items: center;
@@ -167,26 +167,26 @@ function retry(): void {
   text-align: left;
   cursor: pointer;
   transition: background-color 160ms ease;
-}
-.notification-bell__item.is-unread {
-  background: var(--el-color-primary-light-9);
-}
-.notification-bell__item.is-unread::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--el-color-primary);
-  content: '';
-}
-.notification-bell__item:hover {
-  background: var(--el-fill-color-light);
-}
-.notification-bell__item.is-unread:hover {
-  background: var(--el-color-primary-light-8);
-}
-.notification-bell__item:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: -2px;
+  &.is-unread {
+    background: var(--el-color-primary-light-9);
+  }
+  &.is-unread::before {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--el-color-primary);
+    content: '';
+  }
+  &:hover {
+    background: var(--el-fill-color-light);
+  }
+  &.is-unread:hover {
+    background: var(--el-color-primary-light-8);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: -2px;
+  }
 }
 .notification-bell__heading {
   display: flex;
@@ -200,8 +200,10 @@ function retry(): void {
   color: var(--el-text-color-primary);
   overflow-wrap: anywhere;
 }
-.notification-bell__item.is-unread .notification-bell__title {
-  font-weight: 650;
+.notification-bell__item {
+  &.is-unread .notification-bell__title {
+    font-weight: 650;
+  }
 }
 .notification-bell__unread {
   width: 7px;

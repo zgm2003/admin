@@ -16,7 +16,7 @@ func NotificationBatchDefinition(execute TaskExecutor) TaskDefinition {
 			return errors.New("notification batch executor is unavailable")
 		}
 	}
-	return TaskDefinition{Type: "message.notificationtask.batch", DisplayName: "站内通知批次", AdminCreatable: false, DefaultParams: json.RawMessage(`{}`), Queue: "default", Timeout: 60 * time.Second, MaxAttempts: 10, Backoff: func(attempt int) time.Duration { return publishBackoff(attempt) }, ValidateParams: func(raw json.RawMessage) error {
+	return TaskDefinition{Type: "message.notificationtask.batch", DisplayName: "站内通知批次", DisplayNameEnglish: "Notification batch", AdminCreatable: false, DefaultParams: json.RawMessage(`{}`), Queue: "default", Timeout: 60 * time.Second, MaxAttempts: 10, Backoff: func(attempt int) time.Duration { return publishBackoff(attempt) }, ValidateParams: func(raw json.RawMessage) error {
 		var payload struct {
 			SchemaVersion int   `json:"schemaVersion"`
 			TaskID        int64 `json:"taskId"`
@@ -94,7 +94,7 @@ func (c TaskCatalog) ValidatePayload(taskType string, payload json.RawMessage) e
 func (c TaskCatalog) Options() []TaskOption {
 	options := make([]TaskOption, 0, len(c.definitions))
 	for _, definition := range c.definitions {
-		options = append(options, TaskOption{Type: definition.Type, DisplayName: definition.DisplayName, AdminCreatable: definition.AdminCreatable, BuiltinKey: definition.BuiltinKey, DefaultParams: append(json.RawMessage(nil), definition.DefaultParams...)})
+		options = append(options, TaskOption{Type: definition.Type, DisplayName: definition.DisplayName, DisplayNameEnglish: definition.DisplayNameEnglish, AdminCreatable: definition.AdminCreatable, BuiltinKey: definition.BuiltinKey, DefaultParams: append(json.RawMessage(nil), definition.DefaultParams...)})
 	}
 	sort.Slice(options, func(i, j int) bool { return options[i].Type < options[j].Type })
 	return options

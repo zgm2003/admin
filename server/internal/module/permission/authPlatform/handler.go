@@ -29,7 +29,7 @@ func (h *Handler) List(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	body, err := newListResponse(result.List, result.Total, result.Page, result.PageSize)
+	body, err := newListResponse(context.Request.Context(), result.List, result.Total, result.Page, result.PageSize)
 	if err != nil {
 		response.Fail(context, dependencyUnavailable(err))
 		return
@@ -140,4 +140,8 @@ func (h *Handler) Policy(context *gin.Context) {
 		return
 	}
 	response.OK(context, http.StatusOK, newPublicPolicyResponse(policy))
+}
+
+func (h *Handler) FormOptions(c *gin.Context) {
+	response.OK(c, http.StatusOK, adminOptions(c.Request.Context()))
 }

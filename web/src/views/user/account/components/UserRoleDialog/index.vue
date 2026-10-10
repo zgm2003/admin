@@ -1,15 +1,13 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { YesNo } from '@/enums/yesNo'
-import type { UserRolesResponse, UserRoleSummary } from '@/api/user/account'
+import type { UserRolesResponse } from '@/api/user/account'
 
 const props = defineProps<{
   roleData: UserRolesResponse | null
   roleLoading: boolean
   roleError: string
   roleSaving: boolean
-  hasEnabledSelection: boolean
-  roleToggleDisabled: (role: UserRoleSummary) => boolean
 }>()
 const visible = defineModel<boolean>({ required: true })
 const selectedRoleIDs = defineModel<number[]>('selectedRoleIDs', { required: true })
@@ -32,25 +30,29 @@ const { t } = useI18n()
         v-if="props.roleData"
       >
         <el-space class="role-dialog-toolbar" wrap :size="8">
-          <el-button @click="emit('select-all')">{{ t('user.selectAll') }}</el-button
-          ><el-button @click="emit('clear')">{{ t('user.clear') }}</el-button>
+          <el-button
+            :disabled="props.roleLoading || props.roleSaving"
+            @click="emit('select-all')"
+            >{{ t('user.selectAll') }}</el-button
+          ><el-button :disabled="props.roleLoading || props.roleSaving" @click="emit('clear')">{{
+            t('user.clear')
+          }}</el-button>
         </el-space>
-        <el-checkbox-group v-model="selectedRoleIDs" class="role-checks"
+        <el-checkbox-group
+          v-model="selectedRoleIDs"
+          class="role-checks"
+          :disabled="props.roleLoading || props.roleSaving"
           ><el-checkbox
             v-for="role in props.roleData.roles"
             :key="role.id"
             :value="role.id"
-            :disabled="props.roleToggleDisabled(role)"
+            :disabled="!role.selectable || role.locked"
             ><span>{{ role.name }} ({{ role.code }})</span
             ><el-tag v-if="role.isEnabled === YesNo.No" type="info" size="small">{{
               t('user.roleDisabled')
             }}</el-tag></el-checkbox
           ></el-checkbox-group
-        ><el-alert
-          v-if="!props.hasEnabledSelection"
-          :title="t('user.enabledRoleRequired')"
-          type="warning"
-        />
+        >
       </template>
     </div>
     <template #footer
@@ -58,7 +60,7 @@ const { t } = useI18n()
       ><el-button
         type="primary"
         :loading="props.roleSaving"
-        :disabled="props.roleData === null || !props.hasEnabledSelection"
+        :disabled="props.roleData === null || props.roleLoading || props.roleSaving"
         @click="emit('save')"
         >{{ t('user.save') }}</el-button
       ></template

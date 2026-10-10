@@ -77,8 +77,15 @@ view -> api/<module>.ts -> utils/request.ts -> Go API
 - HTTP envelope 只有 `code`、`data`、`message`。`utils/request.ts` 统一处理业务、HTTP、网络和协议错误；
   自动刷新期间的中间 401 不弹通知，终态 401/403 由请求层通知一次。登录接口的凭据错误由登录页内联展示，
   请求层不得对同一错误重复通知；页面与组件不得重复弹同一接口错误。
-- API 模块从 `unknown` 严格解析 DTO；View、Props、Emits、Pinia 和组合式函数使用明确类型。业务代码禁止
-  `any`、`as any`、`@ts-ignore`、宽泛 ambient declaration 和关闭 strict。
+- API 模块只定义明确 DTO 类型和 HTTP 调用，使用 `request.get<T>/post<T,D>/put<T,D>/patch<T,D>/delete<T,D>`；
+  不做逐接口运行时 DTO parser、枚举合法值过滤或业务规则重算。后端通过输入校验、输出 DTO 与契约测试保证保真；
+  泛型不是运行时验证。请求层仍严格校验 envelope、认证凭据与错误协议。View、Props、Emits、Pinia 和组合式函数
+  保留明确类型与 strict，禁止 `any`、`as any`、`@ts-ignore` 和宽泛 ambient declaration。
+- 业务枚举、候选项、默认值、限制、状态转换与可操作结论由所属后端模块拥有；静态 options 按请求语言输出
+  `{value,label}`，保留数字/字符串原类型，不查 PostgreSQL/Redis。前端只消费后端结论并交叉检查 Access，
+  保留即时表单 rules、交互状态、浏览器文件/路由/实时运输；未知展示值保留原值，不伪装为另一个状态。
+- 自有样式使用 SCSS，保留主题变量和 scoped；第三方原始 CSS 不迁移。组件按实际交互职责与真实复用组织，
+  不设 500/400 行强拆门禁，不创建仅用于降行数的组件或解析工具。
 - 下拉选择统一使用 `el-select-v2` 和显式、强类型 `options`；禁止新增 `el-select`/`el-option`。动态文案使用
   `computed` 生成选项，迁移时必须保留原值类型、多选、筛选、可创建、禁用项和自定义下拉插槽行为。
 - 优先复用现有 `AppDialog`、`AppTable`、`Search`、`DIcon`、`IconSelect`；公共组件只抽取多个真实页面已

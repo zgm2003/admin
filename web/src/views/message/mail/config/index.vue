@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -7,31 +7,35 @@ import { Send } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
 import * as mailApi from '@/api/message/mail'
-import type { DictionaryOptions } from '@/api/system/dictionary'
+import { getMailConfigOptions, type MailConfigOptions } from '@/api/message/mailConfigOptions'
 import { YesNo } from '@/enums/yesNo'
-import { useSystemDictionaryStore } from '@/store/systemDictionary'
 
 const props = defineProps<{
   config: mailApi.MailConfig
+  sceneOptions: mailApi.MailOptions['scenes']
+  catalogReady: boolean
   canUpdate: boolean
   canTest: boolean
   canDelete: boolean
 }>()
 
 const emit = defineEmits<{ saved: []; deleted: []; tested: [] }>()
-type DictionaryOption = DictionaryOptions[string][number]
+type RegionOption = MailConfigOptions['regions'][number]
 
 const { t, locale } = useI18n()
-const dictionaries = useSystemDictionaryStore()
 const formRef = ref<FormInstance>()
 const saving = ref(false)
 const testing = ref(false)
 const testEmail = ref('')
 const form = ref<mailApi.MailConfigInput>(blankForm())
-const regionOptions = ref<DictionaryOption[]>([])
+const regionOptions = ref<RegionOption[]>([])
 const regionOptionsLoading = ref(false)
 const regionOptionsError = ref('')
+const constraints = ref<MailConfigOptions['constraints'] | null>(null)
 let regionOptionsRequest = 0
+onBeforeUnmount(() => {
+  regionOptionsRequest++
+})
 
 const rules = computed<FormRules<mailApi.MailConfigInput>>(() => ({
   region: [{ required: true, message: t('mail.regionRequired'), trigger: 'change' }],
@@ -40,7 +44,14 @@ const rules = computed<FormRules<mailApi.MailConfigInput>>(() => ({
   ],
   fromName: [{ required: true, whitespace: true, message: t('mail.fromName'), trigger: 'blur' }],
   ttlMinutes: [
-    { required: true, type: 'number', min: 1, max: 60, message: t('mail.ttl'), trigger: 'change' },
+    {
+      required: true,
+      type: 'number',
+      min: constraints.value?.minTTLMinutes,
+      max: constraints.value?.maxTTLMinutes,
+      message: t('mail.ttl'),
+      trigger: 'change',
+    },
   ],
 }))
 
@@ -81,12 +92,13 @@ async function loadRegionOptions(): Promise<void> {
   const request = ++regionOptionsRequest
   regionOptionsLoading.value = true
   regionOptionsError.value = ''
+  constraints.value = null
+  regionOptions.value = []
   try {
-    await dictionaries.load(['message.mail.region'])
+    const options = await getMailConfigOptions()
     if (request !== regionOptionsRequest) return
-    const options = dictionaries.options('message.mail.region').value
-    if (options === undefined) throw new Error('message.mail.region dictionary is not ready')
-    regionOptions.value = options.map((item) => ({ ...item }))
+    regionOptions.value = options.regions
+    constraints.value = options.constraints
   } catch {
     if (request !== regionOptionsRequest) return
     regionOptions.value = []
@@ -97,7 +109,7 @@ async function loadRegionOptions(): Promise<void> {
 }
 
 async function save(): Promise<void> {
-  if (regionOptionsLoading.value || regionOptionsError.value !== '') return
+  if (!constraints.value || regionOptionsLoading.value || regionOptionsError.value !== '') return
   if (!(await formRef.value?.validate().catch(() => false))) return
 
   saving.value = true
@@ -111,13 +123,14 @@ async function save(): Promise<void> {
 }
 
 async function sendTest(): Promise<void> {
-  if (!testEmail.value.trim()) return
+  const scene = props.sceneOptions[0]?.value
+  if (!testEmail.value.trim() || !props.catalogReady || scene === undefined) return
 
   testing.value = true
   try {
     await mailApi.sendMailTest({
       toEmail: testEmail.value.trim(),
-      scene: 'login',
+      scene,
       variables: {
         code: '123456',
         ttl_minutes: String(form.value.ttlMinutes),
@@ -192,7 +205,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
               v-model="form.region"
               :options="regionOptions"
               :loading="regionOptionsLoading"
-              :disabled="regionOptionsLoading || regionOptionsError !== ''"
+              :disabled="!constraints || regionOptionsLoading || regionOptionsError !== ''"
               :placeholder="t('mail.regionPlaceholder')"
               style="width: 100%"
             />
@@ -225,8 +238,8 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
           <el-form-item :label="t('mail.ttl')" prop="ttlMinutes">
             <el-input-number
               v-model="form.ttlMinutes"
-              :min="1"
-              :max="60"
+              :min="constraints?.minTTLMinutes"
+              :max="constraints?.maxTTLMinutes"
               controls-position="right"
             />
             <span class="input-unit">min</span>
@@ -251,7 +264,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
               <el-button
                 data-testid="mail-config-test"
                 :loading="testing"
-                :disabled="!config.configured || config.isEnabled !== YesNo.Yes"
+                :disabled="!catalogReady || !config.configured || config.isEnabled !== YesNo.Yes"
                 :icon="Send"
                 @click="sendTest"
               >
@@ -280,7 +293,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
           data-testid="mail-config-save"
           type="primary"
           :loading="saving"
-          :disabled="regionOptionsLoading || regionOptionsError !== ''"
+          :disabled="!constraints || regionOptionsLoading || regionOptionsError !== ''"
           @click="save"
         >
           {{ t('mail.save') }}
@@ -290,13 +303,13 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .mail-form {
   max-width: none;
-}
 
-.mail-form :deep(.el-input-number) {
-  width: calc(100% - 32px);
+  :deep(.el-input-number) {
+    width: calc(100% - 32px);
+  }
 }
 
 .input-unit {
@@ -319,14 +332,14 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
   margin-top: 2px;
   padding-top: 12px;
   border-top: 1px solid var(--el-border-color-lighter);
+
+  > span {
+    flex: 1;
+  }
 }
 
-.form-actions > span {
-  flex: 1;
-}
-
-@media (max-width: 640px) {
-  .test-input {
+.test-input {
+  @media (max-width: 640px) {
     flex-direction: column;
   }
 }

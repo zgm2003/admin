@@ -92,43 +92,43 @@ function updateSource(next: string): void {
     />
   </div>
 </template>
-<style scoped>
+<style scoped lang="scss">
 .mail-html-editor {
   display: grid;
   gap: 12px;
   min-width: 0;
-}
-.mail-html-editor__tabs {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-.mail-html-editor__tabs span {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-.mail-html-editor__canvas {
-  overflow: hidden;
-  border: 1px solid var(--el-border-color);
-  border-radius: var(--el-border-radius-base);
-  background: var(--el-bg-color);
-}
-.mail-html-editor__toolbar {
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-.mail-html-editor__content {
-  min-height: 280px;
-  max-height: 360px;
-  overflow-y: auto;
-}
-.mail-html-editor__source {
-  width: 100%;
-}
-.mail-html-editor__source :deep(textarea) {
-  min-height: 360px !important;
-  font-family: Consolas, 'SFMono-Regular', monospace;
-  font-size: 13px;
-  line-height: 1.65;
+  &__tabs {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  &__tabs span {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+  }
+  &__canvas {
+    overflow: hidden;
+    border: 1px solid var(--el-border-color);
+    border-radius: var(--el-border-radius-base);
+    background: var(--el-bg-color);
+  }
+  &__toolbar {
+    border-bottom: 1px solid var(--el-border-color-lighter);
+  }
+  &__content {
+    min-height: 280px;
+    max-height: 360px;
+    overflow-y: auto;
+  }
+  &__source {
+    width: 100%;
+  }
+  &__source :deep(textarea) {
+    min-height: 360px !important;
+    font-family: Consolas, 'SFMono-Regular', monospace;
+    font-size: 13px;
+    line-height: 1.65;
+  }
 }
 </style>

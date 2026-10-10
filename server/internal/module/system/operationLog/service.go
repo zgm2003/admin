@@ -35,5 +35,8 @@ func (s *Service) List(ctx context.Context, query ListQuery) (ListResult, error)
 	if err != nil {
 		return ListResult{}, apperror.DependencyUnavailable(err)
 	}
+	for index := range items {
+		items[index].ActionLabel = actionLabel(ctx, items[index].Action)
+	}
 	return ListResult{List: items, Total: total, Page: query.Page, PageSize: query.PageSize}, nil
 }

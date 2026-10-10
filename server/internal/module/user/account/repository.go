@@ -802,3 +802,23 @@ func mapUserWriteError(operation string, err error) error {
 	}
 	return fmt.Errorf("%s: %w", operation, err)
 }
+
+// FindActorFacts is one bounded query per admin request, never one query per row.
+func (r *Repository) FindActorFacts(ctx context.Context, actorID int64) (actorFacts, error) {
+	var facts actorFacts
+	err := r.db.WithContext(ctx).Raw(`
+  SELECT EXISTS (SELECT 1 FROM user_account WHERE id = ? AND deleted_at IS NULL AND is_enabled = 1) AS actor_active,
+   EXISTS (SELECT 1 FROM permission_user_role ur
+    JOIN permission_role role ON role.id = ur.role_id AND role.deleted_at IS NULL AND role.is_enabled = 1
+    JOIN user_account account ON account.id = ur.user_id AND account.deleted_at IS NULL AND account.is_enabled = 1
+    WHERE ur.user_id = ? AND ur.deleted_at IS NULL AND role.code = ?) AS actor_super,
+   (SELECT count(*) FROM (SELECT ur.user_id FROM permission_user_role ur
+    JOIN permission_role role ON role.id = ur.role_id AND role.deleted_at IS NULL AND role.is_enabled = 1
+    JOIN user_account account ON account.id = ur.user_id AND account.deleted_at IS NULL AND account.is_enabled = 1
+    WHERE ur.deleted_at IS NULL AND role.code = ? LIMIT 2) effective_admins) AS effective_super_admins
+ `, actorID, actorID, role.CodeSuperAdmin, role.CodeSuperAdmin).Scan(&facts).Error
+	if err != nil {
+		return actorFacts{}, fmt.Errorf("find actor policy facts: %w", err)
+	}
+	return facts, nil
+}

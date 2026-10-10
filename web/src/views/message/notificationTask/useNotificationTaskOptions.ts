@@ -28,7 +28,7 @@ const newOptionState = (): NotificationTaskOptionState => ({
 })
 
 export function useNotificationTaskOptions(
-  audience: () => taskApi.NotificationAudience,
+  audience: () => taskApi.NotificationAudience | '',
   platformID: () => number | null,
   intent: () => 'create' | 'update',
   optionFailedMessage: () => string,
@@ -44,7 +44,10 @@ export function useNotificationTaskOptions(
     role: null,
   }
   const platformOptions = computed(() => optionStates.platform.items)
-  const targetKind = computed<NotificationTaskOptionKind>(() => audience())
+  const targetKind = computed<NotificationTaskOptionKind>(() => {
+    const value = audience()
+    return value === '' ? 'platform' : value
+  })
   const targetState = computed(() => optionStates[targetKind.value])
 
   async function loadOptions(

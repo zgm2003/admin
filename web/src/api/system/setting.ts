@@ -1,46 +1,11 @@
-import { isStorageObjectKey } from '@/utils/storageObjectKey'
 import { request } from '@/utils/request'
-import {
-  expectArray,
-  expectEmptyObject,
-  expectExactKeys,
-  expectInteger,
-  expectString,
-} from '@/api/protocol'
-import { isYesNo, type YesNo } from '@/enums/yesNo'
-import { ProtocolError } from '@/types/http'
+import { type YesNo } from '@/enums/yesNo'
+import type { SettingPresentation } from '@/api/system/settingOptions'
 
-export type SettingValueType = 1 | 2 | 3 | 4 | 5
-export const defaultAvatarSettingKey = 'app.brand.default_avatar'
-export const brandTitleZhCNKey = 'app.brand.title_zh_cn'
-export const brandTitleEnUSKey = 'app.brand.title_en_us'
-export function isBrandTitleSettingKey(key: string): boolean {
-  return key === brandTitleZhCNKey || key === brandTitleEnUSKey
-}
-export const mailRecipientRuleImportTemplateObjectKey =
-  'message.mail.recipient_rule.import_template_object_key'
-export function isBuiltinMediaSettingKey(key: string): boolean {
-  return key === defaultAvatarSettingKey || key === mailRecipientRuleImportTemplateObjectKey
-}
-export function isSettingMediaValue(key: string, value: string): boolean {
-  return (
-    value === '' ||
-    (isStorageObjectKey(value) &&
-      (key !== mailRecipientRuleImportTemplateObjectKey || value.endsWith('.xlsx')))
-  )
-}
-export const messageNotificationRetentionDaysKey = 'message.notification.retention_days'
-export const realtimeEventRetentionDaysKey = 'realtime.event.retention_days'
-export const retentionSettingRanges = {
-  [messageNotificationRetentionDaysKey]: { minimum: 30, maximum: 3650 },
-  [realtimeEventRetentionDaysKey]: { minimum: 1, maximum: 30 },
-} as const
-export type RetentionSettingKey = keyof typeof retentionSettingRanges
+export type SettingValueType = number
 
-export function isRetentionSettingKey(key: string): key is RetentionSettingKey {
-  return Object.prototype.hasOwnProperty.call(retentionSettingRanges, key)
-}
 export interface SystemSetting {
+  presentation: SettingPresentation
   id: number
   key: string
   value: string
@@ -51,69 +16,25 @@ export interface SystemSetting {
   createdAt: string
   updatedAt: string
 }
+
 export interface SettingPage {
   list: SystemSetting[]
   total: number
   page: number
   pageSize: number
 }
+
 export interface BrandSettings {
   titleZhCN: string
   titleEnUS: string
   defaultAvatar: string
 }
+
 export type LegalDocumentKind = 'userAgreement' | 'privacyPolicy'
+
 export interface LegalDocument {
   kind: LegalDocumentKind
   contentHtml: string
-}
-
-function parseLegalDocument(value: unknown, expectedKind: LegalDocumentKind): LegalDocument {
-  const record = expectExactKeys(value, ['kind', 'contentHtml'], 'legal document')
-  const kind = expectString(record.kind, 'legal document.kind')
-  if (kind !== expectedKind) throw new ProtocolError('legal document kind does not match request')
-  return {
-    kind: expectedKind,
-    contentHtml: expectString(record.contentHtml, 'legal document.contentHtml'),
-  }
-}
-
-function parseSetting(value: unknown, context: string): SystemSetting {
-  const record = expectExactKeys(
-    value,
-    [
-      'id',
-      'key',
-      'value',
-      'valueType',
-      'description',
-      'isEnabled',
-      'isBuiltin',
-      'createdAt',
-      'updatedAt',
-    ],
-    context,
-  )
-  const valueType = expectInteger(record.valueType, `${context}.valueType`)
-  if (valueType < 1 || valueType > 5 || !isYesNo(record.isEnabled) || !isYesNo(record.isBuiltin))
-    throw new ProtocolError(`${context} has invalid fields`)
-  const settingValue = expectString(record.value, `${context}.value`)
-  const key = expectString(record.key, `${context}.key`)
-  if (key === mailRecipientRuleImportTemplateObjectKey && valueType !== 5)
-    throw new ProtocolError(`${context}.valueType must be media`)
-  if (valueType === 5 && !isSettingMediaValue(key, settingValue))
-    throw new ProtocolError(`${context}.value must be a storage object key`)
-  return {
-    id: expectInteger(record.id, `${context}.id`),
-    key,
-    value: settingValue,
-    valueType: valueType as SettingValueType,
-    description: expectString(record.description, `${context}.description`),
-    isEnabled: record.isEnabled,
-    isBuiltin: record.isBuiltin,
-    createdAt: expectString(record.createdAt, `${context}.createdAt`),
-    updatedAt: expectString(record.updatedAt, `${context}.updatedAt`),
-  }
 }
 
 export async function getSettings(params: {
@@ -122,73 +43,35 @@ export async function getSettings(params: {
   keyword?: string
   isEnabled?: YesNo
 }): Promise<SettingPage> {
-  const value = await request({
-    method: 'GET',
-    url: '/api/admin/v1/system/setting',
-    params,
-  })
-  const record = expectExactKeys(value, ['list', 'total', 'page', 'pageSize'], 'settings')
-  const list = expectArray(record.list, 'settings.list').map((item, index) =>
-    parseSetting(item, `settings.list[${index}]`),
-  )
-  return {
-    list,
-    total: expectInteger(record.total, 'settings.total'),
-    page: expectInteger(record.page, 'settings.page'),
-    pageSize: expectInteger(record.pageSize, 'settings.pageSize'),
-  }
+  return request.get<SettingPage>('/api/admin/v1/system/setting', { params })
 }
 
 export async function getBrandSettings(): Promise<BrandSettings> {
-  const record = expectExactKeys(
-    await request({ method: 'GET', url: '/api/admin/v1/system/setting/brand' }),
-    ['titleZhCN', 'titleEnUS', 'defaultAvatar'],
-    'brand settings',
-  )
-  return {
-    titleZhCN: expectString(record.titleZhCN, 'brand settings.titleZhCN'),
-    titleEnUS: expectString(record.titleEnUS, 'brand settings.titleEnUS'),
-    defaultAvatar: expectString(record.defaultAvatar, 'brand settings.defaultAvatar'),
-  }
+  return request.get<BrandSettings>('/api/admin/v1/system/setting/brand')
 }
 
 export async function updateBrandSettings(input: BrandSettings): Promise<void> {
-  expectEmptyObject(
-    await request({
-      method: 'PUT',
-      url: '/api/admin/v1/system/setting/brand',
-      data: input,
-    }),
-    'update brand settings',
-  )
+  return request.put<void>('/api/admin/v1/system/setting/brand', input)
 }
 
 export async function getPublicLegalDocument(kind: LegalDocumentKind): Promise<LegalDocument> {
-  return parseLegalDocument(
-    await request({ method: 'GET', url: `/api/v1/system/setting/legal/${kind}` }),
-    kind,
-  )
+  return request.get<LegalDocument>(`/api/v1/system/setting/legal/${kind}`)
 }
 
 export async function getLegalDocument(kind: LegalDocumentKind): Promise<LegalDocument> {
-  return parseLegalDocument(
-    await request({ method: 'GET', url: `/api/admin/v1/system/setting/legal/${kind}` }),
-    kind,
-  )
+  return request.get<LegalDocument>(`/api/admin/v1/system/setting/legal/${kind}`)
 }
 
 export async function updateLegalDocument(
   kind: LegalDocumentKind,
   contentHtml: string,
 ): Promise<void> {
-  expectEmptyObject(
-    await request({
-      method: 'PUT',
-      url: `/api/admin/v1/system/setting/legal/${kind}`,
-      data: { contentHtml },
-    }),
-    'update legal document',
-  )
+  return request.put<void>(`/api/admin/v1/system/setting/legal/${kind}`, { contentHtml })
+}
+
+export interface CreateSettingResult {
+  id: number
+  presentation: SettingPresentation
 }
 
 export async function createSetting(input: {
@@ -196,47 +79,23 @@ export async function createSetting(input: {
   value: string
   valueType: SettingValueType
   description?: string
-}): Promise<number> {
-  const value = await request({
-    method: 'POST',
-    url: '/api/admin/v1/system/setting',
-    data: input,
-  })
-  return expectInteger(expectExactKeys(value, ['id'], 'create setting').id, 'create setting.id')
+}): Promise<CreateSettingResult> {
+  return request.post<CreateSettingResult>('/api/admin/v1/system/setting', input)
 }
 
 export async function updateSetting(
   key: string,
   input: { value: string; valueType: SettingValueType; description?: string },
 ): Promise<void> {
-  expectEmptyObject(
-    await request({
-      method: 'PUT',
-      url: `/api/admin/v1/system/setting/${encodeURIComponent(key)}`,
-      data: input,
-    }),
-    'update setting',
-  )
+  return request.put<void>(`/api/admin/v1/system/setting/${encodeURIComponent(key)}`, input)
 }
 
 export async function updateSettingStatus(key: string, isEnabled: YesNo): Promise<void> {
-  expectExactKeys(
-    await request({
-      method: 'PATCH',
-      url: `/api/admin/v1/system/setting/${encodeURIComponent(key)}/status`,
-      data: { isEnabled },
-    }),
-    ['key', 'isEnabled'],
-    'setting status',
-  )
+  return request.patch<void>(`/api/admin/v1/system/setting/${encodeURIComponent(key)}/status`, {
+    isEnabled,
+  })
 }
 
 export async function deleteSetting(key: string): Promise<void> {
-  expectEmptyObject(
-    await request({
-      method: 'DELETE',
-      url: `/api/admin/v1/system/setting/${encodeURIComponent(key)}`,
-    }),
-    'delete setting',
-  )
+  return request.delete<void>(`/api/admin/v1/system/setting/${encodeURIComponent(key)}`)
 }

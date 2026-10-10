@@ -1,4 +1,4 @@
-import type { UserListItem, UserRolesResponse, UserRoleSummary } from '@/api/user/account'
+import type { UserListItem, UserRoleSummary } from '@/api/user/account'
 import type { SearchField } from '@/components/AppSearch'
 import type { TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
@@ -67,44 +67,4 @@ export function userSearchFields(
 
 export function normalizedUsername(value: string): string {
   return value.trim()
-}
-
-export function normalizedPhone(value: string): string {
-  return value.trim()
-}
-
-export function isUsernameValid(value: string): boolean {
-  const normalized = normalizedUsername(value)
-  const characters = [...normalized]
-  return (
-    characters.length >= 3 &&
-    characters.length <= 64 &&
-    characters.every((character) => /[\p{L}\p{N}_-]/u.test(character))
-  )
-}
-
-export function isPhoneValid(value: string): boolean {
-  const normalized = normalizedPhone(value)
-  return normalized === '' || ([...normalized].length <= 32 && !/\p{Cc}/u.test(normalized))
-}
-
-export function hasSuperAdminRole(user: UserListItem): boolean {
-  return user.roles.some((role) => role.code === 'super_admin')
-}
-
-export function isProtectedTarget(user: UserListItem, actorIsSuperAdmin: boolean): boolean {
-  return hasSuperAdminRole(user) && !actorIsSuperAdmin
-}
-
-export function protectedRoleIDs(
-  data: UserRolesResponse | null,
-  actorIsSuperAdmin: boolean,
-): number[] {
-  if (actorIsSuperAdmin || data === null) return []
-  const role = data.roles.find((item) => item.code === 'super_admin')
-  return role !== undefined && data.roleIds.includes(role.id) ? [role.id] : []
-}
-
-export function isRoleToggleDisabled(role: UserRoleSummary, actorIsSuperAdmin: boolean): boolean {
-  return role.code === 'super_admin' && !actorIsSuperAdmin
 }

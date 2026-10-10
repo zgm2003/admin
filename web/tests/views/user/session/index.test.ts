@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 
 import * as sessionAPI from '@/api/user/session'
+import * as sessionOptionsAPI from '@/api/user/sessionOptions'
 import type { SessionItem } from '@/api/user/session'
 import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
@@ -16,6 +17,7 @@ vi.mock('@/api/user/session', () => ({
   revokeSession: vi.fn(),
   revokeSessions: vi.fn(),
 }))
+vi.mock('@/api/user/sessionOptions', () => ({ getSessionOptions: vi.fn() }))
 
 const getSessions = vi.mocked(sessionAPI.getSessions)
 const getSessionStats = vi.mocked(sessionAPI.getSessionStats)
@@ -27,6 +29,12 @@ describe('session management', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setLocale('zh-CN')
+    vi.mocked(sessionOptionsAPI.getSessionOptions).mockResolvedValue({
+      statuses: [
+        { value: 'active', label: '后端活跃' },
+        { value: 'future-status', label: '未来会话状态' },
+      ],
+    })
     getSessions.mockResolvedValue({ list: rows(), total: 2, page: 1, pageSize: 20 })
     getSessionStats.mockResolvedValue({ activeTotal: 2, platforms: { admin: 2 } })
     revokeSession.mockResolvedValue({ revoked: 1, skippedCurrent: 0, skippedRevoked: 0 })
@@ -77,6 +85,55 @@ describe('session management', () => {
     })
   })
 
+  it('consumes backend options and actions without checking a frontend status allow-list', async () => {
+    getSessions.mockResolvedValue({
+      list: [
+        { ...rows()[1]!, status: 'future-status', isCurrent: true, actions: { revoke: true } },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage(['user:session:list', 'user:session:revoke'])
+    await flushPromises()
+    expect(sessionOptionsAPI.getSessionOptions).toHaveBeenCalledOnce()
+    expect(wrapper.getComponent({ name: 'ElSelectV2' }).props('options')).toEqual([
+      { value: 'active', label: '后端活跃' },
+      { value: 'future-status', label: '未来会话状态' },
+    ])
+    expect(wrapper.text()).toContain('未来会话状态')
+    await wrapper.get('[data-testid="session-revoke-2"]').trigger('click')
+    await flushPromises()
+    expect(revokeSession).toHaveBeenCalledWith(2)
+  })
+
+  it('preserves unknown status text and respects a false action even for an active row', async () => {
+    getSessions.mockResolvedValue({
+      list: [{ ...rows()[1]!, status: 'unregistered-status', actions: { revoke: false } }],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage(['user:session:list', 'user:session:revoke'])
+    await flushPromises()
+    expect(wrapper.text()).toContain('unregistered-status')
+    expect(wrapper.find('[data-testid="session-revoke-2"]').exists()).toBe(false)
+  })
+
+  it('clears failed options, presents the failure, and reloads localized labels', async () => {
+    vi.mocked(sessionOptionsAPI.getSessionOptions)
+      .mockRejectedValueOnce(new Error('候选项不可用'))
+      .mockResolvedValue({ statuses: [{ value: 'active', label: 'Active from Go' }] })
+    const wrapper = mountPage(['user:session:list'])
+    await flushPromises()
+    expect(wrapper.text()).toContain('候选项不可用')
+    expect(wrapper.getComponent({ name: 'ElSelectV2' }).props('options')).toEqual([])
+    setLocale('en-US')
+    await flushPromises()
+    expect(sessionOptionsAPI.getSessionOptions).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('Active from Go')
+  })
+
   it('keeps the statistics strip compact and vertically centered', async () => {
     const wrapper = mountPage(['user:session:list'])
     await flushPromises()
@@ -121,6 +178,27 @@ describe('session management', () => {
     expect(revokeSessions).toHaveBeenCalledWith([2])
     expect(getSessions).toHaveBeenCalledTimes(2)
     expect(getSessionStats).toHaveBeenCalledTimes(2)
+  })
+
+  it('locks revocation before confirmation and unlocks after cancellation', async () => {
+    let cancel!: (reason: string) => void
+    vi.mocked(ElMessageBox.confirm).mockReturnValueOnce(
+      new Promise((_, reject) => {
+        cancel = reject
+      }),
+    )
+    const wrapper = mountPage(['user:session:list', 'user:session:revoke'])
+    await flushPromises()
+    const revoke = wrapper.get('[data-testid="session-revoke-2"]')
+    await revoke.trigger('click')
+    await revoke.trigger('click')
+    expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
+    expect(revokeSession).not.toHaveBeenCalled()
+    cancel('cancel')
+    await flushPromises()
+    await revoke.trigger('click')
+    await flushPromises()
+    expect(revokeSession).toHaveBeenCalledExactlyOnceWith(2)
   })
 
   it('renders explicit loading, empty, and error states', async () => {
@@ -178,6 +256,7 @@ function rows(): SessionItem[] {
       revokedAt: null,
       status: 'active',
       isCurrent: true,
+      actions: { revoke: false },
     },
     {
       id: 2,
@@ -193,6 +272,7 @@ function rows(): SessionItem[] {
       revokedAt: null,
       status: 'active',
       isCurrent: false,
+      actions: { revoke: true },
     },
   ]
 }

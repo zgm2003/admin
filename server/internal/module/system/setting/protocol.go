@@ -121,13 +121,14 @@ func legalDocumentKindForKey(key string) (LegalDocumentKind, bool) {
 type Detail struct{ Record Record }
 
 type listItem struct {
-	ID          int64       `json:"id"`
-	Key         string      `json:"key"`
-	Value       string      `json:"value"`
-	ValueType   int         `json:"valueType"`
-	Description string      `json:"description"`
-	IsEnabled   yesno.Value `json:"isEnabled"`
-	IsBuiltin   yesno.Value `json:"isBuiltin"`
-	CreatedAt   time.Time   `json:"createdAt"`
-	UpdatedAt   time.Time   `json:"updatedAt"`
+	Presentation settingPresentation `json:"presentation"`
+	ID           int64               `json:"id"`
+	Key          string              `json:"key"`
+	Value        string              `json:"value"`
+	ValueType    int                 `json:"valueType"`
+	Description  string              `json:"description"`
+	IsEnabled    yesno.Value         `json:"isEnabled"`
+	IsBuiltin    yesno.Value         `json:"isBuiltin"`
+	CreatedAt    time.Time           `json:"createdAt"`
+	UpdatedAt    time.Time           `json:"updatedAt"`
 }

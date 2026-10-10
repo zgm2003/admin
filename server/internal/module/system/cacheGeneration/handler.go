@@ -34,7 +34,11 @@ func (h *Handler) List(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, http.StatusOK, listResultResponse(result))
+	response.OK(c, http.StatusOK, listResultResponse(c.Request.Context(), result))
+}
+
+func (h *Handler) FormOptions(c *gin.Context) {
+	response.OK(c, http.StatusOK, formOptions(c.Request.Context()))
 }
 
 func parseListQuery(values url.Values) (ListQuery, error) {

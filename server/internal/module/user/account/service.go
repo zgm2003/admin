@@ -27,11 +27,12 @@ type Service struct {
 }
 
 type ListQuery struct {
-	Page      int
-	PageSize  int
-	Keyword   string
-	IsEnabled *yesno.Value
-	RoleID    *int64
+	ActorUserID int64
+	Page        int
+	PageSize    int
+	Keyword     string
+	IsEnabled   *yesno.Value
+	RoleID      *int64
 }
 
 type RoleSummary struct {
@@ -42,14 +43,16 @@ type RoleSummary struct {
 }
 
 type ListItem struct {
-	ID        int64
-	Username  string
-	Email     string
-	Phone     *string
-	IsEnabled yesno.Value
-	Roles     []RoleSummary
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Actions      Actions      `gorm:"-"`
+	ActionLabels ActionLabels `gorm:"-"`
+	ID           int64
+	Username     string
+	Email        string
+	Phone        *string
+	IsEnabled    yesno.Value
+	Roles        []RoleSummary
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type Summary struct {
@@ -62,7 +65,7 @@ type Summary struct {
 
 type Roles struct {
 	User    Summary
-	Roles   []RoleSummary
+	Roles   []AssignmentRole
 	RoleIDs []int64
 }
 
@@ -100,6 +103,9 @@ func (s *Service) List(ctx context.Context, query ListQuery) (pagination.Result[
 		(query.RoleID != nil && *query.RoleID <= 0) || utf8.RuneCountInString(query.Keyword) > 254 {
 		return pagination.Result[ListItem]{}, apperror.InvalidRequest(fmt.Errorf("user list query is invalid"))
 	}
+	if query.ActorUserID <= 0 {
+		return pagination.Result[ListItem]{}, apperror.Unauthorized(fmt.Errorf("actor identity is missing"))
+	}
 	total, err := s.repository.Count(ctx, query)
 	if err != nil {
 		return pagination.Result[ListItem]{}, mapUserRepositoryError(err)
@@ -110,6 +116,16 @@ func (s *Service) List(ctx context.Context, query ListQuery) (pagination.Result[
 	}
 	if items == nil {
 		items = make([]ListItem, 0)
+	}
+	facts, err := s.repository.FindActorFacts(ctx, query.ActorUserID)
+	if err != nil {
+		return pagination.Result[ListItem]{}, mapUserRepositoryError(err)
+	}
+	if !facts.ActorActive {
+		return pagination.Result[ListItem]{}, apperror.Unauthorized(fmt.Errorf("actor identity is not active"))
+	}
+	for index := range items {
+		items[index].Actions, items[index].ActionLabels = accountActions(ctx, query.ActorUserID, facts, items[index])
 	}
 	return pagination.Result[ListItem]{List: items, Total: total, Page: query.Page, PageSize: query.PageSize}, nil
 }
@@ -201,11 +217,11 @@ func currentUpdatedProfile(value User) UpdatedProfile {
 	return UpdatedProfile{ID: value.ID, Username: value.Username, Phone: value.Phone, UpdatedAt: value.UpdatedAt}
 }
 
-func (s *Service) Roles(ctx context.Context, targetUserID int64) (Roles, error) {
+func (s *Service) Roles(ctx context.Context, actorUserID, targetUserID int64) (Roles, error) {
 	if s == nil || s.repository == nil {
 		return Roles{}, apperror.DependencyUnavailable(fmt.Errorf("query user roles requires a repository"))
 	}
-	if targetUserID <= 0 {
+	if actorUserID <= 0 || targetUserID <= 0 {
 		return Roles{}, apperror.InvalidRequest(fmt.Errorf("target user id is invalid"))
 	}
 	target, err := s.repository.FindUser(ctx, targetUserID)
@@ -227,9 +243,17 @@ func (s *Service) Roles(ctx context.Context, targetUserID int64) (Roles, error) 
 	if err != nil {
 		return Roles{}, userDataInvalid(err)
 	}
+	facts, err := s.repository.FindActorFacts(ctx, actorUserID)
+	if err != nil {
+		return Roles{}, mapUserRepositoryError(err)
+	}
+	if !facts.ActorActive {
+		return Roles{}, apperror.Unauthorized(fmt.Errorf("actor identity is not active"))
+	}
+	summary := Summary{ID: target.ID, Username: target.Username, Email: target.Email, Phone: target.Phone, IsEnabled: target.IsEnabled}
 	return Roles{
-		User:  Summary{ID: target.ID, Username: target.Username, Email: target.Email, Phone: target.Phone, IsEnabled: target.IsEnabled},
-		Roles: options, RoleIDs: roleIDs,
+		User:  summary,
+		Roles: assignmentOptions(actorUserID, facts, summary, options, roleIDs), RoleIDs: roleIDs,
 	}, nil
 }
 

@@ -125,8 +125,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (int64, error) {
 			}
 			return dependency(e)
 		}
-		if in.AccessMode == "public" && (config.BucketDomain == nil || strings.TrimSpace(*config.BucketDomain) == "") {
-			return conflict(fmt.Errorf("public rule requires bucket domain"))
+		if e = validatePublicConfig(in.AccessMode, config); e != nil {
+			return e
 		}
 		now := time.Now().UTC()
 		if in.IsEnabled == yesno.Yes {
@@ -162,35 +162,105 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) error {
 	if id < 1 {
 		return invalid(fmt.Errorf("id invalid"))
 	}
+	if in.IsEnabled != nil && !yesno.IsValid(*in.IsEnabled) {
+		return invalid(fmt.Errorf("isEnabled invalid"))
+	}
 	in = normalizeUpdateInput(in)
-	if e := validateFields(1, in.Codes, in.Name, 1, in.MaxFileSizeBytes, in.AllowedExtensions, in.AllowedMimeTypes, "", in.Remark, false); e != nil {
-		return invalid(e)
+	if err := validateFields(1, in.Codes, in.Name, 1, in.MaxFileSizeBytes, in.AllowedExtensions, in.AllowedMimeTypes, "", in.Remark, false); err != nil {
+		return invalid(err)
 	}
 	return s.repository.Transaction(ctx, func(r *Repository) error {
-		m, e := r.LockByID(ctx, id)
-		if e != nil {
-			if errors.Is(e, gorm.ErrRecordNotFound) {
-				return notFound(e)
-			}
-			return dependency(e)
+		enabling := in.IsEnabled != nil && *in.IsEnabled == yesno.Yes
+		m, err := lockMutationTarget(ctx, r, id, enabling)
+		if err != nil {
+			return err
 		}
-		now := time.Now().UTC()
-		// last-write-wins：platform/config/access 创建后不可修改，只做 code 差集与可编辑字段更新。
-		if e = r.ReplaceCodes(ctx, id, m.Codes, in.Codes, now); e != nil {
-			if errors.Is(e, ErrConflict) {
-				return conflict(e)
+		now := s.now().UTC()
+		if enabling {
+			others, err := r.LockEnabledOtherRules(ctx, m.PlatformID, id)
+			if err != nil {
+				return dependency(err)
 			}
-			return dependency(e)
-		}
-		if e = r.Update(ctx, id, map[string]any{"name": in.Name, "max_file_size_bytes": in.MaxFileSizeBytes, "allowed_extensions": StringArray(in.AllowedExtensions), "allowed_mime_types": StringArray(in.AllowedMimeTypes), "remark": in.Remark, "updated_at": now}); e != nil {
-			if errors.Is(e, ErrConflict) {
-				return conflict(e)
+			if err = r.DisableRules(ctx, others, now); err != nil {
+				return dependency(err)
 			}
-			return dependency(e)
 		}
-		return nil
+		if err = r.ReplaceCodes(ctx, id, m.Codes, in.Codes, now); err != nil {
+			return mutationWriteError(err)
+		}
+		values := map[string]any{"name": in.Name, "max_file_size_bytes": in.MaxFileSizeBytes, "allowed_extensions": StringArray(in.AllowedExtensions), "allowed_mime_types": StringArray(in.AllowedMimeTypes), "remark": in.Remark, "updated_at": now}
+		if in.IsEnabled != nil {
+			values["is_enabled"] = *in.IsEnabled
+		}
+		return mutationWriteError(r.Update(ctx, id, values))
 	})
 }
+
+func lockMutationTarget(ctx context.Context, r *Repository, id int64, enabling bool) (Model, error) {
+	// Parent identities are immutable; the unlocked read only selects lock keys.
+	current, err := r.FindByID(ctx, id)
+	if err != nil {
+		return Model{}, mutationReadError(err)
+	}
+	// PUT and PATCH share platform -> config -> target -> enabled peers.
+	if enabling {
+		err = r.LockPlatform(ctx, current.PlatformID)
+	} else {
+		err = r.LockPlatformForEdit(ctx, current.PlatformID)
+	}
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return Model{}, conflict(fmt.Errorf("platform unavailable"))
+		}
+		return Model{}, dependency(err)
+	}
+	var config cosconfig.Current
+	if enabling {
+		config, err = r.LockConfig(ctx, current.CosConfigID)
+	} else {
+		config, err = r.LockConfigForEdit(ctx, current.CosConfigID)
+	}
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return Model{}, conflict(fmt.Errorf("COS config unavailable"))
+		}
+		return Model{}, dependency(err)
+	}
+	target, err := r.LockByID(ctx, id)
+	if err != nil {
+		return Model{}, mutationReadError(err)
+	}
+	if enabling {
+		if err = validatePublicConfig(target.AccessMode, config); err != nil {
+			return Model{}, err
+		}
+	}
+	return target, nil
+}
+
+func validatePublicConfig(accessMode string, config cosconfig.Current) error {
+	if accessMode == "public" && (config.BucketDomain == nil || strings.TrimSpace(*config.BucketDomain) == "") {
+		return conflict(fmt.Errorf("public rule requires bucket domain"))
+	}
+	return nil
+}
+
+func mutationReadError(err error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return notFound(err)
+	}
+	return dependency(err)
+}
+func mutationWriteError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, ErrConflict) {
+		return conflict(err)
+	}
+	return dependency(err)
+}
+
 func (s *Service) UpdateStatus(ctx context.Context, id int64, v yesno.Value) error {
 	if id < 1 {
 		return invalid(fmt.Errorf("id invalid"))
@@ -199,38 +269,16 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, v yesno.Value) err
 		return invalid(fmt.Errorf("isEnabled invalid"))
 	}
 	return s.repository.Transaction(ctx, func(r *Repository) error {
-		current, e := r.FindByID(ctx, id)
+		current, e := lockMutationTarget(ctx, r, id, v == yesno.Yes)
 		if e != nil {
-			if errors.Is(e, gorm.ErrRecordNotFound) {
-				return notFound(e)
-			}
-			return dependency(e)
+			return e
 		}
+		// Only the locked target may establish a no-op; a concurrent PUT/PATCH
+		// can change the status after the parent-key read.
 		if current.IsEnabled == v {
 			return nil
 		}
-		if v == yesno.Yes {
-			// 固定锁顺序：平台行 -> COS 配置行 -> 目标行 -> 同平台其它活动规则 -> 停用它们。
-			if e := r.LockPlatform(ctx, current.PlatformID); e != nil {
-				if errors.Is(e, gorm.ErrRecordNotFound) {
-					return conflict(fmt.Errorf("platform unavailable"))
-				}
-				return dependency(e)
-			}
-			if _, e := r.LockConfig(ctx, current.CosConfigID); e != nil {
-				if errors.Is(e, gorm.ErrRecordNotFound) {
-					return conflict(fmt.Errorf("COS config unavailable"))
-				}
-				return dependency(e)
-			}
-		}
-		if _, e := r.LockByID(ctx, id); e != nil {
-			if errors.Is(e, gorm.ErrRecordNotFound) {
-				return notFound(e)
-			}
-			return dependency(e)
-		}
-		now := time.Now().UTC()
+		now := s.now().UTC()
 		if v == yesno.Yes {
 			others, e := r.LockEnabledOtherRules(ctx, current.PlatformID, id)
 			if e != nil {
@@ -240,13 +288,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, v yesno.Value) err
 				return dependency(e)
 			}
 		}
-		if e = r.Update(ctx, id, map[string]any{"is_enabled": v, "updated_at": now}); e != nil {
-			if errors.Is(e, ErrConflict) {
-				return conflict(e)
-			}
-			return dependency(e)
-		}
-		return nil
+		return mutationWriteError(r.Update(ctx, id, map[string]any{"is_enabled": v, "updated_at": now}))
 	})
 }
 

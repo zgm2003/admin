@@ -61,7 +61,7 @@ const LegalDocumentEditor = defineAsyncComponent(
   </section>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .legal-settings {
   display: flex;
   width: min(1120px, 100%);
@@ -70,41 +70,43 @@ const LegalDocumentEditor = defineAsyncComponent(
   margin: 0 auto;
   flex-direction: column;
   gap: 12px;
-}
 
-.legal-settings__document-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
+  &__document-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
 
-.legal-settings__tabs {
-  min-width: 0;
-}
+  &__tabs {
+    min-width: 0;
+  }
 
-.legal-settings__tabs :deep(.el-tabs__header) {
-  margin: 0;
-}
+  &__tabs :deep(.el-tabs__header) {
+    margin: 0;
+  }
 
-.legal-settings__tabs :deep(.el-tabs__content) {
-  display: none;
-}
+  &__tabs :deep(.el-tabs__content) {
+    display: none;
+  }
 
-.legal-settings__editor {
-  min-height: 0;
-  flex: 1 1 auto;
+  &__editor {
+    min-height: 0;
+    flex: 1 1 auto;
+  }
 }
 
 @media (max-width: 760px) {
-  .legal-settings__document-bar {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 8px;
-  }
+  .legal-settings {
+    &__document-bar {
+      align-items: stretch;
+      flex-direction: column;
+      gap: 8px;
+    }
 
-  .legal-settings__document-bar .el-button {
-    width: 100%;
+    &__document-bar .el-button {
+      width: 100%;
+    }
   }
 }
 </style>

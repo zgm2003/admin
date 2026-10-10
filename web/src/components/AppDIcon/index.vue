@@ -40,7 +40,7 @@ const invalidMessage = computed(() => {
   </i>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .d-icon {
   display: inline-flex;
   align-items: center;

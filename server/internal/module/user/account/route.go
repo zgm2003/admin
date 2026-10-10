@@ -3,6 +3,7 @@ package account
 import "github.com/gin-gonic/gin"
 
 func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
+	routes.GET("/user/account/options", authenticate, handler.FormOptions)
 	routes.GET("/user/account", authenticate, requirePermission(PermissionList), handler.List)
 	routes.GET("/user/account/role-options", authenticate, requirePermission(PermissionList), handler.RoleOptions)
 	routes.PUT("/user/account/:id", authenticate, requirePermission(PermissionUpdate), handler.Update)

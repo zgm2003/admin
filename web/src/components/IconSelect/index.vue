@@ -91,15 +91,15 @@ function handleItemKeydown(event: KeyboardEvent, name: MenuIconName): void {
   </AppDialog>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .icon-select-toolbar {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 14px;
-}
-.icon-select-toolbar .el-input {
-  flex: 1;
+  .el-input {
+    flex: 1;
+  }
 }
 .icon-select-scroll {
   padding: 2px;
@@ -128,24 +128,24 @@ function handleItemKeydown(event: KeyboardEvent, name: MenuIconName): void {
     border-color 0.2s,
     color 0.2s,
     background-color 0.2s;
-}
-.icon-select-item span {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.icon-select-item:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 2px;
-}
-.icon-select-item:hover,
-.icon-select-item.is-selected {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-}
-.icon-select-item.is-selected {
-  box-shadow: 0 0 0 2px var(--el-color-primary-light-8);
+  span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  &:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
+  }
+  &:hover,
+  &.is-selected {
+    border-color: var(--el-color-primary);
+    background: var(--el-color-primary-light-9);
+    color: var(--el-color-primary);
+  }
+  &.is-selected {
+    box-shadow: 0 0 0 2px var(--el-color-primary-light-8);
+  }
 }
 </style>

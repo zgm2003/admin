@@ -6,17 +6,24 @@ import { useI18n } from 'vue-i18n'
 import {
   updateSmsRateLimitPolicy,
   type SmsRateLimitPlatform,
+  type SmsOptions,
   type SmsRateLimitPolicy,
 } from '@/api/message/sms'
 import type { TableColumn } from '@/components/AppTable'
 
 const props = defineProps<{
+  options: SmsOptions | null
   platforms: SmsRateLimitPlatform[]
   loading: boolean
   canUpdate: boolean
 }>()
 const emit = defineEmits<{ refresh: [] }>()
 const { t } = useI18n()
+const constraints = computed(() => props.options?.rateLimitConstraints)
+const optionLabel = (
+  kind: 'rateLimitPolicies' | 'rateLimitModes' | 'rateLimitDimensions',
+  value: string,
+) => props.options?.[kind].find((option) => option.value === value)?.label ?? value
 
 type PolicyRow = SmsRateLimitPolicy & {
   platformId: number
@@ -76,12 +83,15 @@ function draftOf(policy: PolicyRow): Draft {
 
 function validDraft(policy: PolicyRow): boolean {
   const draft = draftOf(policy)
-  if (draft.limit === null || draft.windowSeconds === null) return false
+  const bounds = constraints.value
+  if (!bounds || draft.limit === null || draft.windowSeconds === null) return false
   return (
-    draft.limit >= 1 &&
-    draft.limit <= 100000 &&
-    draft.windowSeconds >= 1 &&
-    draft.windowSeconds <= 86400
+    Number.isInteger(draft.limit) &&
+    Number.isInteger(draft.windowSeconds) &&
+    draft.limit >= bounds.minLimit &&
+    draft.limit <= bounds.maxLimit &&
+    draft.windowSeconds >= bounds.minWindowSeconds &&
+    draft.windowSeconds <= bounds.maxWindowSeconds
   )
 }
 
@@ -159,23 +169,23 @@ async function save(policy: PolicyRow): Promise<void> {
       </template>
       <template #cell-name="{ row }: { row: PolicyRow | undefined }">
         <div v-if="row?.key" class="sms-rate-limit__name">
-          <strong>{{ t(`sms.rateLimit.${row.key}`) }}</strong>
+          <strong>{{ optionLabel('rateLimitPolicies', row.key) }}</strong>
           <code>{{ row.key }}</code>
         </div>
       </template>
       <template #cell-mode="{ row }: { row: PolicyRow | undefined }">
-        <template v-if="row?.key">{{ t('sms.rateLimit.modeBusiness') }}</template>
+        <template v-if="row?.key">{{ optionLabel('rateLimitModes', row.mode) }}</template>
       </template>
       <template #cell-dimension="{ row }: { row: PolicyRow | undefined }">
-        <template v-if="row?.key">{{ t('sms.rateLimit.dimensionPlatformPhone') }}</template>
+        <template v-if="row?.key">{{ optionLabel('rateLimitDimensions', row.dimension) }}</template>
       </template>
       <template #cell-limit="{ row }: { row: PolicyRow | undefined }">
         <el-input-number
           v-if="row?.key"
           :model-value="draftOf(row).limit"
-          :min="1"
-          :max="100000"
-          :disabled="!canUpdate"
+          :min="constraints?.minLimit"
+          :max="constraints?.maxLimit"
+          :disabled="!canUpdate || !constraints"
           :placeholder="t('sms.rateLimit.limitPlaceholder')"
           controls-position="right"
           :data-testid="`sms-rate-limit-${row.platformId}-${row.key}`"
@@ -186,9 +196,9 @@ async function save(policy: PolicyRow): Promise<void> {
         <template v-if="row?.key">
           <el-input-number
             :model-value="draftOf(row).windowSeconds"
-            :min="1"
-            :max="86400"
-            :disabled="!canUpdate"
+            :min="constraints?.minWindowSeconds"
+            :max="constraints?.maxWindowSeconds"
+            :disabled="!canUpdate || !constraints"
             :placeholder="t('sms.rateLimit.windowPlaceholder')"
             controls-position="right"
             :data-testid="`sms-rate-window-${row.platformId}-${row.key}`"
@@ -217,28 +227,28 @@ async function save(policy: PolicyRow): Promise<void> {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .sms-rate-limit {
   min-width: 0;
-}
 
-.sms-rate-limit__hint {
-  margin-bottom: 12px;
-}
+  &__hint {
+    margin-bottom: 12px;
+  }
 
-.sms-rate-limit__name {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
+  &__name {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
 
-.sms-rate-limit__name code,
-.sms-rate-limit__unit {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
+  &__name code,
+  &__unit {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+  }
 
-.sms-rate-limit__unit {
-  margin-left: 6px;
+  &__unit {
+    margin-left: 6px;
+  }
 }
 </style>

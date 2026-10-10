@@ -4,10 +4,10 @@ import { useI18n } from 'vue-i18n'
 
 import {
   getMailLogDetail,
-  MailStatus,
+  type MailStatus,
   type MailLog,
   type MailLogDetail,
-  type MailTemplate,
+  type MailOptions,
 } from '@/api/message/mail'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
@@ -24,7 +24,7 @@ type MailLogSearchModel = MailLogFilter
 
 const props = defineProps<{
   logs: MailLog[]
-  scenes: MailTemplate[]
+  options: MailOptions | null
   total: number
   page: number
   pageSize: number
@@ -46,14 +46,10 @@ const searchModel = computed<SearchFormModel<MailLogSearchModel>>({
     filter.value = toFilter(value)
   },
 })
-const sceneOptions = computed(() =>
-  props.scenes.map((scene) => ({ label: scene.name, value: scene.scene })),
-)
-const statusLabels: Record<MailStatus, string> = {
-  [MailStatus.Pending]: 'mail.statusPending',
-  [MailStatus.Sent]: 'mail.statusSent',
-  [MailStatus.Failed]: 'mail.statusFailed',
-}
+const sceneOptions = computed(() => props.options?.scenes ?? [])
+const statusOptions = computed(() => props.options?.statuses ?? [])
+const statusPresentation = (value: number) =>
+  statusOptions.value.find((option) => option.value === value)
 const searchFields = computed<SearchField<MailLogSearchModel>[]>(() => [
   {
     key: 'platform',
@@ -89,11 +85,7 @@ const searchFields = computed<SearchField<MailLogSearchModel>[]>(() => [
     resetValue: '',
     label: t('mail.status'),
     placeholder: t('mail.allStatuses'),
-    options: [
-      { label: t('mail.statusPending'), value: MailStatus.Pending },
-      { label: t('mail.statusSent'), value: MailStatus.Sent },
-      { label: t('mail.statusFailed'), value: MailStatus.Failed },
-    ],
+    options: statusOptions.value,
     width: 130,
     testId: 'mail-log-status',
   },
@@ -133,12 +125,7 @@ function toFilter(value: SearchFormModel<MailLogSearchModel>): MailLogFilter {
     platform: typeof value.platform === 'string' ? value.platform : '',
     toEmail: typeof value.toEmail === 'string' ? value.toEmail : '',
     scene: typeof value.scene === 'string' ? value.scene : '',
-    status:
-      value.status === MailStatus.Pending ||
-      value.status === MailStatus.Sent ||
-      value.status === MailStatus.Failed
-        ? value.status
-        : '',
+    status: typeof value.status === 'number' ? value.status : '',
     timeRange: Array.isArray(value.timeRange) ? (value.timeRange as [string, string] | []) : [],
   }
 }
@@ -152,12 +139,10 @@ function usernameText(value: string): string {
 }
 
 function statusText(value: MailStatus): string {
-  const key = statusLabels[value]
-  return key === undefined ? String(value) : t(key)
+  return statusPresentation(value)?.label ?? String(value)
 }
-
 const sceneNames = computed(() =>
-  Object.fromEntries(props.scenes.map((scene) => [scene.scene, scene.name])),
+  Object.fromEntries(sceneOptions.value.map((scene) => [scene.value, scene.label])),
 )
 
 function sceneText(value: string): string {
@@ -213,17 +198,9 @@ async function inspect(row: MailLog): Promise<void> {
         {{ sceneText(row.scene) }}
       </template>
       <template #cell-status="{ row }: { row: MailLog }">
-        <el-tag
-          :type="
-            row.status === MailStatus.Sent
-              ? 'success'
-              : row.status === MailStatus.Failed
-                ? 'danger'
-                : 'warning'
-          "
-          effect="plain"
-          >{{ statusText(row.status) }}</el-tag
-        >
+        <el-tag :type="statusPresentation(row.status)?.tone ?? 'info'" effect="plain">{{
+          statusText(row.status)
+        }}</el-tag>
       </template>
       <template #cell-latency="{ row }: { row: MailLog }">{{ row.latencyMs }} ms</template>
       <template #cell-sentAt="{ row }: { row: MailLog }">{{
@@ -275,7 +252,7 @@ async function inspect(row: MailLog): Promise<void> {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .table-tab {
   min-width: 0;
 }

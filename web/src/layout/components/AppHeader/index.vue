@@ -83,7 +83,7 @@ const settingsOpen = ref(false)
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .app-header {
   display: flex;
   align-items: center;
@@ -92,55 +92,55 @@ const settingsOpen = ref(false)
   gap: 14px;
   padding: 0 18px;
   color: var(--admin-text);
+
+  &__leading,
+  &__actions {
+    display: flex;
+    align-items: center;
+  }
+
+  &__leading {
+    min-width: 0;
+    gap: 12px;
+  }
+
+  &__brand {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 9px;
+  }
+
+  &__brand-logo {
+    width: auto;
+    height: 30px;
+    flex: 0 0 auto;
+    object-fit: contain;
+  }
+
+  &__brand-name {
+    font-size: 14px;
+    font-weight: 750;
+  }
+
+  &__breadcrumb {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  &__breadcrumb :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
+    color: var(--el-text-color-primary);
+    font-weight: 700;
+  }
+
+  &__actions {
+    gap: 4px;
+    margin-left: auto;
+  }
 }
 
-.app-header__leading,
-.app-header__actions {
-  display: flex;
-  align-items: center;
-}
-
-.app-header__leading {
-  min-width: 0;
-  gap: 12px;
-}
-
-.app-header__brand {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-  gap: 9px;
-}
-
-.app-header__brand-logo {
-  width: auto;
-  height: 30px;
-  flex: 0 0 auto;
-  object-fit: contain;
-}
-
-.app-header__brand-name {
-  font-size: 14px;
-  font-weight: 750;
-}
-
-.app-header__breadcrumb {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.app-header__breadcrumb :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
-  color: var(--el-text-color-primary);
-  font-weight: 700;
-}
-
-.app-header__actions {
-  gap: 4px;
-  margin-left: auto;
-}
-
-@media (max-width: 650px) {
-  .app-header {
+.app-header {
+  @media (max-width: 650px) {
     gap: 8px;
     padding: 0 12px;
   }

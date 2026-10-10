@@ -4,18 +4,19 @@ import ElementPlus from 'element-plus'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as mailApi from '@/api/message/mail'
-import { getDictionaryOptions } from '@/api/system/dictionary'
+import { getMailConfigOptions } from '@/api/message/mailConfigOptions'
 import { requestObjectURL } from '@/api/storage/upload'
 import { YesNo } from '@/enums/yesNo'
-import { MailRuleAction, MailRuleScope } from '@/enums/mailRecipientRule'
 import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
 import MailPage from '@/views/message/mail/index.vue'
 
+import { mailOptions, ttlConstraints } from './fixtures'
+
 const wrappers: VueWrapper[] = []
 
 vi.mock('@/api/message/mail', () => ({
-  MailStatus: { Pending: 1, Sent: 2, Failed: 3 },
+  getMailOptions: vi.fn(),
   getMailConfig: vi.fn(),
   saveMailConfig: vi.fn(),
   deleteMailConfig: vi.fn(),
@@ -30,7 +31,6 @@ vi.mock('@/api/message/mail', () => ({
   updateMailRule: vi.fn(),
   updateMailRuleStatus: vi.fn(),
   deleteMailRule: vi.fn(),
-  mailRuleXlsxMaxBytes: 2 * 1024 * 1024,
   mailRuleXlsxMime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   getMailRuleImportTemplate: vi.fn(),
   previewMailRuleXlsx: vi.fn(),
@@ -39,7 +39,7 @@ vi.mock('@/api/message/mail', () => ({
   listMailRateLimitPolicies: vi.fn(),
   updateMailRateLimitPolicy: vi.fn(),
 }))
-vi.mock('@/api/system/dictionary', () => ({ getDictionaryOptions: vi.fn() }))
+vi.mock('@/api/message/mailConfigOptions', () => ({ getMailConfigOptions: vi.fn() }))
 vi.mock('@/api/storage/upload', () => ({ requestObjectURL: vi.fn() }))
 
 describe('mail service page', () => {
@@ -53,10 +53,14 @@ describe('mail service page', () => {
     vi.mocked(mailApi.importMailRuleXlsx).mockReset().mockResolvedValue({ imported: 1 })
     vi.mocked(mailApi.exportMailRuleXlsx).mockReset()
     setLocale('zh-CN')
-    vi.mocked(getDictionaryOptions)
+    vi.mocked(mailApi.getMailOptions)
+      .mockReset()
+      .mockImplementation(async () => mailOptions(appI18n.global.locale.value === 'en-US'))
+    vi.mocked(getMailConfigOptions)
       .mockReset()
       .mockResolvedValue({
-        'message.mail.region': [
+        constraints: ttlConstraints,
+        regions: [
           { value: 'ap-guangzhou', label: '广州（ap-guangzhou）' },
           { value: 'ap-hongkong', label: '中国香港（ap-hongkong）' },
         ],
@@ -95,6 +99,70 @@ describe('mail service page', () => {
   afterEach(() => {
     for (const wrapper of wrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
+  })
+
+  it('consumes new backend rule values and sends their numeric values unchanged', async () => {
+    const options = mailOptions()
+    options.ruleScopes.push({ value: 71, label: '后端新增范围' })
+    options.ruleActions.push({ value: 83, label: '后端新增动作', tone: 'warning' })
+    options.ruleDefaults = { scope: 71, action: 83 }
+    vi.mocked(mailApi.getMailOptions).mockResolvedValue(options)
+    vi.mocked(mailApi.createMailRule).mockResolvedValue({ id: 9 })
+    const wrapper = mountPage(['message:mail:list', 'message:mail:rule:create'])
+    await flushPromises()
+    await selectTab(wrapper, '收件规则')
+    await wrapper.get('[data-testid="mail-rule-create"]').trigger('click')
+    await flushPromises()
+    const selects = wrapper.findAllComponents({ name: 'ElSelectV2' })
+    expect(
+      selects
+        .find((select) => select.attributes('data-testid') === 'mail-rule-scope')
+        ?.props('options'),
+    ).toContainEqual({ value: 71, label: '后端新增范围' })
+    const dialog = wrapper
+      .findAllComponents({ name: 'ElDialog' })
+      .find((item) => item.props('modelValue') === true)
+    if (!dialog) throw new Error('rule dialog missing')
+    await dialog.get('[data-testid="mail-rule-pattern"]').setValue('fixture-value')
+    await dialog.get('.el-dialog__footer .el-button--primary').trigger('click')
+    await flushPromises()
+    expect(mailApi.createMailRule).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 71, action: 83 }),
+    )
+  })
+
+  it('keeps the newest locale options when an older request resolves last', async () => {
+    const older = deferred<mailApi.MailOptions>()
+    vi.mocked(mailApi.getMailOptions)
+      .mockReturnValueOnce(older.promise)
+      .mockResolvedValueOnce(mailOptions(true))
+    const wrapper = mountPage(['message:mail:list', 'message:mail:rule:create'])
+    await flushPromises()
+    setLocale('en-US')
+    await flushPromises()
+    await selectTab(wrapper, 'Recipient rules')
+    await wrapper.get('[data-testid="mail-rule-create"]').trigger('click')
+    await flushPromises()
+    older.resolve(mailOptions(false))
+    await flushPromises()
+    const scope = wrapper
+      .findAllComponents({ name: 'ElSelectV2' })
+      .find((select) => select.attributes('data-testid') === 'mail-rule-scope')
+    expect(scope?.props('options')).toEqual(mailOptions(true).ruleScopes)
+  })
+
+  it('fails closed after business options reload fails without restoring a frontend list', async () => {
+    vi.mocked(mailApi.getMailOptions)
+      .mockResolvedValueOnce(mailOptions())
+      .mockRejectedValueOnce(new Error('options unavailable'))
+    const wrapper = mountPage(['message:mail:list', 'message:mail:rule:create'])
+    await flushPromises()
+    await selectTab(wrapper, '收件规则')
+    expect(wrapper.get('[data-testid="mail-rule-create"]').attributes('disabled')).toBeUndefined()
+    setLocale('en-US')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="mail-rule-create"]').attributes('disabled')).toBeDefined()
+    expect(mailApi.createMailRule).not.toHaveBeenCalled()
   })
 
   it('hides the log tab without detail permission and never restores secrets from config', async () => {
@@ -150,7 +218,7 @@ describe('mail service page', () => {
       { value: 'ap-guangzhou', label: '广州（ap-guangzhou）' },
       { value: 'ap-hongkong', label: '中国香港（ap-hongkong）' },
     ])
-    expect(getDictionaryOptions).toHaveBeenCalledWith(['message.mail.region'])
+    expect(getMailConfigOptions).toHaveBeenCalledWith()
 
     const configForm = wrapper.findComponent({ name: 'ElForm' })
     expect(configForm.props('labelWidth')).toBe('120px')
@@ -159,8 +227,8 @@ describe('mail service page', () => {
     expect(wrapper.text()).toContain('发件人别名')
   })
 
-  it('does not substitute hardcoded mail regions when dictionary loading fails', async () => {
-    vi.mocked(getDictionaryOptions).mockRejectedValueOnce(new Error('dictionary unavailable'))
+  it('does not substitute hardcoded mail regions when code options loading fails', async () => {
+    vi.mocked(getMailConfigOptions).mockRejectedValueOnce(new Error('code options unavailable'))
     const wrapper = mountPage(['message:mail:list'])
     await flushPromises()
 
@@ -171,13 +239,15 @@ describe('mail service page', () => {
   })
 
   it('reloads mail region labels when the active language changes', async () => {
-    vi.mocked(getDictionaryOptions)
+    vi.mocked(getMailConfigOptions)
       .mockReset()
       .mockResolvedValueOnce({
-        'message.mail.region': [{ value: 'ap-guangzhou', label: '广州（ap-guangzhou）' }],
+        constraints: ttlConstraints,
+        regions: [{ value: 'ap-guangzhou', label: '广州（ap-guangzhou）' }],
       })
       .mockResolvedValueOnce({
-        'message.mail.region': [{ value: 'ap-guangzhou', label: 'Guangzhou (ap-guangzhou)' }],
+        constraints: ttlConstraints,
+        regions: [{ value: 'ap-guangzhou', label: 'Guangzhou (ap-guangzhou)' }],
       })
     const wrapper = mountPage(['message:mail:list'])
     await flushPromises()
@@ -189,7 +259,7 @@ describe('mail service page', () => {
     setLocale('en-US')
     await flushPromises()
 
-    expect(getDictionaryOptions).toHaveBeenCalledTimes(2)
+    expect(getMailConfigOptions).toHaveBeenCalledTimes(2)
     expect(regionSelect.props('options')).toEqual([
       { value: 'ap-guangzhou', label: 'Guangzhou (ap-guangzhou)' },
     ])
@@ -309,12 +379,8 @@ describe('mail service page', () => {
       { value: 1, label: 'Allowlist' },
       { value: 0, label: 'Denylist' },
     ])
-    expect(getDictionaryOptions).toHaveBeenCalledTimes(2)
-    expect(
-      vi
-        .mocked(getDictionaryOptions)
-        .mock.calls.every(([codes]) => codes.length === 1 && codes[0] === 'message.mail.region'),
-    ).toBe(true)
+    expect(getMailConfigOptions).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(getMailConfigOptions).mock.calls.every((args) => args.length === 0)).toBe(true)
   })
 
   it('creates an email deny rule with both zero enum values', async () => {
@@ -331,7 +397,7 @@ describe('mail service page', () => {
     if (!dialog) throw new Error('recipient rule dialog missing')
     await dialog.get('[data-testid="mail-rule-pattern"]').setValue('a@example.com')
     expect(dialog.get('[data-testid="mail-rule-pattern"]').attributes('placeholder')).toContain(
-      '完整邮箱',
+      '规则',
     )
     await dialog.get('.el-dialog__footer .el-button--primary').trigger('click')
     await flushPromises()
@@ -397,7 +463,7 @@ describe('mail service page', () => {
     expect(scope?.props('modelValue')).toBe(1)
     expect(action?.props('modelValue')).toBe(1)
     expect(dialog.get('[data-testid="mail-rule-pattern"]').attributes('placeholder')).toContain(
-      '域名',
+      '规则',
     )
     scope?.vm.$emit('update:modelValue', 0)
     action?.vm.$emit('update:modelValue', 0)
@@ -462,7 +528,7 @@ describe('mail service page', () => {
           templateId: 1,
           toEmail: '2093146753@qq.com',
           subject: '登录验证码',
-          status: mailApi.MailStatus.Sent,
+          status: 2,
           requestId: '',
           messageId: '',
           errorCode: '',
@@ -488,7 +554,7 @@ describe('mail service page', () => {
         templateId: 1,
         toEmail: '2093146753@qq.com',
         subject: '登录验证码',
-        status: mailApi.MailStatus.Sent,
+        status: 2,
         requestId: '',
         messageId: '',
         errorCode: '',
@@ -531,7 +597,7 @@ describe('mail service page', () => {
           templateId: 1,
           toEmail: 'pending@example.com',
           subject: '登录验证码',
-          status: mailApi.MailStatus.Pending,
+          status: 1,
           requestId: '',
           messageId: '',
           errorCode: '',
@@ -610,7 +676,7 @@ describe('mail service page', () => {
     expect(wrapper.find('.mail-error').exists()).toBe(false)
   })
 
-  it('attempts an empty template catalog only once while paging logs', async () => {
+  it('uses static backend scene options without fetching template data while paging logs', async () => {
     vi.mocked(mailApi.listMailTemplates).mockResolvedValueOnce([])
     const wrapper = mountPage(['message:mail:list', 'message:mail:detail'])
     await flushPromises()
@@ -619,7 +685,8 @@ describe('mail service page', () => {
     wrapper.findComponent({ name: 'ElPagination' }).vm.$emit('current-change', 2)
     await flushPromises()
 
-    expect(mailApi.listMailTemplates).toHaveBeenCalledOnce()
+    expect(mailApi.listMailTemplates).not.toHaveBeenCalled()
+    expect(mailApi.getMailOptions).toHaveBeenCalledOnce()
     expect(mailApi.listMailLogs).toHaveBeenCalledTimes(2)
   })
 
@@ -736,7 +803,7 @@ describe('mail service page', () => {
   it('exports fresh server data with a native Blob download and revokes the object URL', async () => {
     vi.mocked(mailApi.exportMailRuleXlsx).mockResolvedValue({
       fileName: 'mail-recipient-rule.xlsx',
-      content: new Uint8Array([80, 75, 3, 4, 0]).buffer,
+      contentBase64: 'UEsDBAA=',
     })
     const createURL = vi.fn(() => 'blob:mail-rules')
     const revokeURL = vi.fn()
@@ -801,7 +868,7 @@ describe('mail service page', () => {
       expect(signal?.aborted).toBe(true)
       pending.resolve({
         fileName: 'mail-recipient-rule.xlsx',
-        content: new Uint8Array([80, 75, 3, 4, 0]).buffer,
+        contentBase64: 'UEsDBAA=',
       })
       await flushPromises()
       expect(click).not.toHaveBeenCalled()
@@ -822,9 +889,9 @@ describe('mail service page', () => {
           line: 2,
           rawValues: ['邮箱', 'a@example.com', '拒绝', '规则', '', '启用'],
           data: {
-            scope: MailRuleScope.Email,
+            scope: 0,
             pattern: 'a@example.com',
-            action: MailRuleAction.Deny,
+            action: 0,
             name: '规则',
             remark: '',
             isEnabled: YesNo.Yes,
@@ -887,9 +954,9 @@ describe('mail service page', () => {
           line: 2,
           rawValues: ['RAW-TYPE', 'RAW-PATTERN', 'RAW-ACTION', 'RAW-NAME', '', 'RAW-STATUS'],
           data: {
-            scope: MailRuleScope.Email,
+            scope: 0,
             pattern: 'parsed@example.com',
-            action: MailRuleAction.Deny,
+            action: 0,
             name: 'parsed-name',
             remark: '',
             isEnabled: YesNo.Yes,
@@ -900,9 +967,9 @@ describe('mail service page', () => {
           line: 3,
           rawValues: ['RAW-TYPE', 'RAW-PATTERN', 'RAW-ACTION', 'RAW-NAME', '', 'RAW-STATUS'],
           data: {
-            scope: MailRuleScope.Domain,
+            scope: 1,
             pattern: 'example.com',
-            action: MailRuleAction.Allow,
+            action: 1,
             name: 'duplicate-name',
             remark: '',
             isEnabled: YesNo.No,
@@ -1017,9 +1084,9 @@ describe('mail service page', () => {
             line: 2,
             rawValues: ['邮箱', 'new@example.com', '拒绝', 'new', '', '启用'],
             data: {
-              scope: MailRuleScope.Email,
+              scope: 0,
               pattern: 'new@example.com',
-              action: MailRuleAction.Deny,
+              action: 0,
               name: 'new',
               remark: '',
               isEnabled: YesNo.Yes,
@@ -1053,9 +1120,9 @@ describe('mail service page', () => {
           line: 2,
           rawValues: ['邮箱', 'old@example.com', '拒绝', 'old', '', '启用'],
           data: {
-            scope: MailRuleScope.Email,
+            scope: 0,
             pattern: 'old@example.com',
-            action: MailRuleAction.Deny,
+            action: 0,
             name: 'old',
             remark: '',
             isEnabled: YesNo.Yes,
@@ -1079,9 +1146,9 @@ describe('mail service page', () => {
             line: 2,
             rawValues: ['邮箱', 'retry@example.com', '拒绝', '重试', '', '启用'],
             data: {
-              scope: MailRuleScope.Email,
+              scope: 0,
               pattern: 'retry@example.com',
-              action: MailRuleAction.Deny,
+              action: 0,
               name: '重试',
               remark: '',
               isEnabled: YesNo.Yes,
@@ -1153,9 +1220,9 @@ describe('mail service page', () => {
           line: 2,
           rawValues: ['邮箱', 'stale@example.com', '拒绝', '过期', '', '启用'],
           data: {
-            scope: MailRuleScope.Email,
+            scope: 0,
             pattern: 'stale@example.com',
-            action: MailRuleAction.Deny,
+            action: 0,
             name: '过期',
             remark: '',
             isEnabled: YesNo.Yes,
@@ -1189,9 +1256,9 @@ describe('mail service page', () => {
           line: 2,
           rawValues: ['邮箱', 'a@example.com', '拒绝', '名称', '', '启用'],
           data: {
-            scope: MailRuleScope.Email,
+            scope: 0,
             pattern: 'a@example.com',
-            action: MailRuleAction.Deny,
+            action: 0,
             name: '名称',
             remark: '',
             isEnabled: YesNo.Yes,
@@ -1338,7 +1405,7 @@ function mailLogRow(id: number, toEmail: string, scene: string): mailApi.MailLog
     templateId: 1,
     toEmail,
     subject: 'subject',
-    status: mailApi.MailStatus.Sent,
+    status: 2,
     requestId: '',
     messageId: '',
     errorCode: '',

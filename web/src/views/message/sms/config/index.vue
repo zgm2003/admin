@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { Send } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
 import * as smsApi from '@/api/message/sms'
-import type { DictionaryOptions } from '@/api/system/dictionary'
+import { getSmsConfigOptions, type SmsConfigOptions } from '@/api/message/smsConfigOptions'
 import { YesNo } from '@/enums/yesNo'
-import { useSystemDictionaryStore } from '@/store/systemDictionary'
 
 const props = defineProps<{
   config: smsApi.SmsConfig
@@ -20,19 +19,31 @@ const props = defineProps<{
   canTest: boolean
 }>()
 const emit = defineEmits<{ saved: []; deleted: [] }>()
-type DictionaryOption = DictionaryOptions[string][number]
+type RegionOption = SmsConfigOptions['regions'][number]
 
 const { t, locale } = useI18n()
-const dictionaries = useSystemDictionaryStore()
 const form = ref<smsApi.SmsConfigInput>(blankForm())
 const testPhone = ref('')
-const testScene = ref<smsApi.SmsScene>('login')
+const testScene = ref<smsApi.SmsScene>('')
+watch(
+  () => props.sceneOptions,
+  (options) => {
+    if (options.length > 0 && !options.some((option) => option.value === testScene.value)) {
+      testScene.value = options[0]?.value ?? ''
+    }
+  },
+  { immediate: true },
+)
 const saving = ref(false)
 const testing = ref(false)
-const regionOptions = ref<DictionaryOption[]>([])
+const regionOptions = ref<RegionOption[]>([])
 const regionOptionsLoading = ref(false)
 const regionOptionsError = ref('')
+const constraints = ref<SmsConfigOptions['constraints'] | null>(null)
 let regionOptionsRequest = 0
+onBeforeUnmount(() => {
+  regionOptionsRequest++
+})
 
 const canSave = computed(
   () =>
@@ -43,8 +54,10 @@ const canSave = computed(
     form.value.smsSdkAppId.trim() !== '' &&
     form.value.signName.trim() !== '' &&
     form.value.region !== '' &&
-    form.value.ttlMinutes >= 1 &&
-    form.value.ttlMinutes <= 60,
+    constraints.value !== null &&
+    Number.isInteger(form.value.ttlMinutes) &&
+    form.value.ttlMinutes >= constraints.value.minTTLMinutes &&
+    form.value.ttlMinutes <= constraints.value.maxTTLMinutes,
 )
 
 watch(
@@ -72,7 +85,7 @@ function blankForm(): smsApi.SmsConfigInput {
     signName: '',
     region: '',
     endpoint: '',
-    ttlMinutes: 5,
+    ttlMinutes: 0,
     isEnabled: YesNo.No,
   }
 }
@@ -81,12 +94,13 @@ async function loadRegionOptions(): Promise<void> {
   const request = ++regionOptionsRequest
   regionOptionsLoading.value = true
   regionOptionsError.value = ''
+  constraints.value = null
+  regionOptions.value = []
   try {
-    await dictionaries.load(['message.sms.region'])
+    const options = await getSmsConfigOptions()
     if (request !== regionOptionsRequest) return
-    const options = dictionaries.options('message.sms.region').value
-    if (options === undefined) throw new Error('message.sms.region dictionary is not ready')
-    regionOptions.value = options.map((item) => ({ ...item }))
+    regionOptions.value = options.regions
+    constraints.value = options.constraints
   } catch {
     if (request !== regionOptionsRequest) return
     regionOptions.value = []
@@ -128,7 +142,7 @@ async function remove(): Promise<void> {
 
 async function sendTest(): Promise<void> {
   const toPhone = testPhone.value.trim()
-  if (testing.value || !props.catalogReady || toPhone === '') return
+  if (testing.value || !props.catalogReady || toPhone === '' || testScene.value === '') return
   testing.value = true
   try {
     await smsApi.sendSmsTest({ toPhone, scene: testScene.value })
@@ -227,8 +241,8 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
             <el-input-number
               v-model="form.ttlMinutes"
               data-testid="sms-config-ttl"
-              :min="1"
-              :max="60"
+              :min="constraints?.minTTLMinutes"
+              :max="constraints?.maxTTLMinutes"
               :placeholder="t('sms.ttlPlaceholder')"
               controls-position="right"
             />
@@ -298,47 +312,51 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
   </div>
 </template>
 
-<style scoped>
-.sms-config__form {
-  max-width: none;
-}
+<style scoped lang="scss">
+.sms-config {
+  &__form {
+    max-width: none;
+  }
 
-.sms-config__full {
-  width: 100%;
-}
+  &__full {
+    width: 100%;
+  }
 
-.sms-config :deep(.el-input-number) {
-  width: 100%;
-}
+  :deep(.el-input-number) {
+    width: 100%;
+  }
 
-.sms-config__actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 2px;
-  padding-top: 12px;
-  border-top: 1px solid var(--el-border-color-lighter);
-}
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 2px;
+    padding-top: 12px;
+    border-top: 1px solid var(--el-border-color-lighter);
+  }
 
-.sms-config__actions > span {
-  flex: 1;
-}
+  &__actions > span {
+    flex: 1;
+  }
 
-.sms-config__test-scene {
-  min-width: 0;
-  flex: 1;
-}
+  &__test-scene {
+    min-width: 0;
+    flex: 1;
+  }
 
-.sms-config__test-action {
-  display: flex;
-  width: 100%;
-  gap: 8px;
+  &__test-action {
+    display: flex;
+    width: 100%;
+    gap: 8px;
+  }
 }
 
 @media (max-width: 640px) {
-  .sms-config__test-action {
-    align-items: stretch;
-    flex-direction: column;
+  .sms-config {
+    &__test-action {
+      align-items: stretch;
+      flex-direction: column;
+    }
   }
 }
 </style>

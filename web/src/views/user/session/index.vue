@@ -6,6 +6,8 @@ import { useI18n } from 'vue-i18n'
 
 import { getSessions, getSessionStats, revokeSession, revokeSessions } from '@/api/user/session'
 import type { SessionItem, SessionListQuery, SessionStats, SessionStatus } from '@/api/user/session'
+import { getSessionOptions } from '@/api/user/sessionOptions'
+import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 import { usePermissionStore } from '@/store/permission'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
@@ -13,6 +15,11 @@ import { formatTime } from '@/utils/datetime'
 
 const { t } = useI18n()
 const access = usePermissionStore()
+const {
+  options: catalog,
+  error: optionsError,
+  reload: reloadOptions,
+} = useLocalizedOptions(getSessionOptions, () => ({ statuses: [] }))
 
 const rows = ref<SessionItem[]>([])
 const total = ref(0)
@@ -60,10 +67,7 @@ const searchModel = computed<SearchFormModel<SessionSearchModel>>({
   set: (value) => {
     username.value = typeof value.username === 'string' ? value.username : ''
     platform.value = typeof value.platform === 'string' ? value.platform : ''
-    status.value =
-      value.status === 'active' || value.status === 'expired' || value.status === 'revoked'
-        ? value.status
-        : ''
+    status.value = typeof value.status === 'string' ? value.status : ''
   },
 })
 const searchFields = computed<SearchField<SessionSearchModel>[]>(() => [
@@ -91,11 +95,7 @@ const searchFields = computed<SearchField<SessionSearchModel>[]>(() => [
     resetValue: '',
     label: t('session.statusLabel'),
     placeholder: t('session.allStatuses'),
-    options: [
-      { label: t('session.status.active'), value: 'active' },
-      { label: t('session.status.expired'), value: 'expired' },
-      { label: t('session.status.revoked'), value: 'revoked' },
-    ],
+    options: catalog.value.statuses,
     width: 160,
     testId: 'session-status',
   },
@@ -182,14 +182,11 @@ function updateTablePagination(next: TablePaginationState): void {
 }
 
 function selectable(row: SessionItem): boolean {
-  return canRevoke.value && row.status === 'active' && !row.isCurrent
+  return canRevoke.value && row.actions.revoke
 }
 
 function selectionChanged(selection: SessionItem[]): void {
-  selectedIDs.value = selection
-    .filter(selectable)
-    .slice(0, 100)
-    .map((row) => row.id)
+  selectedIDs.value = selection.filter(selectable).map((row) => row.id)
 }
 
 async function reloadAuthoritativeData(): Promise<void> {
@@ -202,10 +199,10 @@ function canceled(error: unknown): boolean {
 
 async function revokeOne(row: SessionItem): Promise<void> {
   if (!selectable(row) || mutating.value) return
+  mutating.value = true
+  mutationError.value = ''
   try {
     await ElMessageBox.confirm(t('session.revokeConfirm'), t('session.revoke'), { type: 'warning' })
-    mutating.value = true
-    mutationError.value = ''
     await revokeSession(row.id)
     await reloadAuthoritativeData()
     ElNotification.success({ title: t('session.revokeSuccess') })
@@ -218,12 +215,12 @@ async function revokeOne(row: SessionItem): Promise<void> {
 
 async function revokeSelected(): Promise<void> {
   if (!canRevoke.value || selectedIDs.value.length === 0 || mutating.value) return
+  mutating.value = true
+  mutationError.value = ''
   try {
     await ElMessageBox.confirm(t('session.revokeConfirm'), t('session.batchRevoke'), {
       type: 'warning',
     })
-    mutating.value = true
-    mutationError.value = ''
     await revokeSessions([...new Set(selectedIDs.value)].sort((left, right) => left - right))
     await reloadAuthoritativeData()
     ElNotification.success({ title: t('session.revokeSuccess') })
@@ -234,10 +231,8 @@ async function revokeSelected(): Promise<void> {
   }
 }
 
-function statusTagType(value: SessionStatus): 'success' | 'info' | 'danger' {
-  if (value === 'active') return 'success'
-  if (value === 'expired') return 'info'
-  return 'danger'
+function statusLabel(value: SessionStatus): string {
+  return catalog.value.statuses.find((option) => option.value === value)?.label ?? value
 }
 
 onMounted(() => {
@@ -279,6 +274,10 @@ onMounted(() => {
       @query="search"
       @reset="reset"
     />
+
+    <el-alert v-if="optionsError" :title="optionsError" type="error" :closable="false" show-icon>
+      <el-button link @click="reloadOptions">{{ t('session.refresh') }}</el-button>
+    </el-alert>
 
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
     <el-alert
@@ -333,9 +332,7 @@ onMounted(() => {
         row.id > 0 ? formatTime(row.refreshExpiresAt) : ''
       }}</template>
       <template #cell-status="{ row }: { row: SessionItem }">
-        <el-tag v-if="row.id > 0" :type="statusTagType(row.status)" effect="light">{{
-          t(`session.status.${row.status}`)
-        }}</el-tag>
+        <el-tag v-if="row.id > 0" type="info" effect="light">{{ statusLabel(row.status) }}</el-tag>
       </template>
       <template #cell-actions="{ row }: { row: SessionItem }"
         ><template v-if="row.id > 0">
@@ -343,7 +340,7 @@ onMounted(() => {
             t('session.current')
           }}</el-tag>
           <el-button
-            v-else-if="canRevoke && row.status === 'active'"
+            v-if="canRevoke && row.actions.revoke"
             :data-testid="`session-revoke-${row.id}`"
             type="danger"
             text
@@ -359,7 +356,7 @@ onMounted(() => {
   </AppPage>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .session-page {
   min-width: 0;
 }
@@ -378,12 +375,12 @@ onMounted(() => {
   min-width: 140px;
   flex-direction: column;
   gap: 4px;
-}
-.session-stat-primary--inline {
-  flex-direction: row;
-  align-items: baseline;
-  gap: 10px;
-  min-height: 36px;
+  &--inline {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
+    min-height: 36px;
+  }
 }
 .session-stat-primary span,
 .session-platform-title,
@@ -391,33 +388,43 @@ small {
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }
-.session-stat-primary strong {
-  font-size: 24px;
-  line-height: 1;
+.session-stat-primary {
+  strong {
+    font-size: 24px;
+    line-height: 1;
+  }
 }
-.session-platform-stats--inline {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 36px;
+.session-platform-stats {
+  &--inline {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 36px;
+  }
 }
-.session-filters .el-input {
-  width: 220px;
+.session-filters {
+  .el-input {
+    width: 220px;
+  }
+  .el-select-v2 {
+    width: 150px;
+  }
 }
-.session-filters .el-select-v2 {
-  width: 150px;
-}
-.el-table strong,
-.el-table small {
-  display: block;
+.el-table {
+  strong,
+  small {
+    display: block;
+  }
 }
 .el-pagination {
   justify-content: flex-end;
 }
 @media (max-width: 900px) {
-  .session-filters .el-input,
-  .session-filters .el-select-v2 {
-    width: 100%;
+  .session-filters {
+    .el-input,
+    .el-select-v2 {
+      width: 100%;
+    }
   }
 }
 </style>

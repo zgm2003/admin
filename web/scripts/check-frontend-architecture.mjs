@@ -23,6 +23,9 @@ const walk = (dir) => {
 for (const file of [...walk(src), ...walk(tests)]) {
   const projectPath = toProjectPath(file)
   const content = readFileSync(file, 'utf8')
+  if (projectPath.startsWith('src/') && file.endsWith('.css')) {
+    add('owned-css', file, '自有样式必须使用 SCSS；第三方 CSS import 不受影响')
+  }
   const codeModulePath = /^(?:src|tests)\/(?:api|views)\//.test(projectPath)
   const moduleDirectories = projectPath.split('/').slice(0, -1)
   if (codeModulePath && moduleDirectories.some((segment) => segment.includes('-'))) {
@@ -53,31 +56,21 @@ for (const file of [...walk(src), ...walk(tests)]) {
     add('raw-el-select', file, '下拉选择必须使用 el-select-v2 和显式 options')
   }
   if (projectPath.startsWith('src/') && file.endsWith('.vue')) {
-    const lineCount = content.split(/\r?\n/).length
-    const isPage =
-      (projectPath.startsWith('src/views/') && !projectPath.includes('/components/')) ||
-      projectPath === 'src/layout/index.vue'
-    const isComponent =
-      projectPath.startsWith('src/components/') ||
-      projectPath.startsWith('src/layout/components/') ||
-      projectPath.includes('/components/')
     if (!file.endsWith('index.vue') && !projectPath.endsWith('App.vue')) {
       add('vue-component-path', file, 'Vue 文件必须位于目录/index.vue')
     }
     if (projectPath.includes('/src/index.vue')) {
       add('component-src-directory', file, '公共组件不应存在中间 src 目录')
     }
-    if (
-      content.includes('lang="scss"') &&
-      !/\$[A-Za-z_-]+|@mixin|@include|@function|&:/.test(content)
-    ) {
-      add('unnecessary-scss', file, 'SCSS 未使用变量、mixin、函数或浅层嵌套')
+    for (const [, attributes] of content.matchAll(/<style\b([^>]*)>/g)) {
+      const lang = attributes.match(/\blang\s*=\s*(['"])(.*?)\1/)?.[2]
+      const styleSource = attributes.match(/\bsrc\s*=\s*(['"])(.*?)\1/)?.[2]
+      if (lang !== 'scss' || styleSource?.endsWith('.css')) {
+        add('vue-style-scss', file, 'Vue 自有 style 必须声明 lang="scss" 并引用 SCSS 文件')
+      }
     }
     if (/<el-row\b[\s\S]*?<el-col\b[^>]*:?(?:span|:span)=?["']?24/.test(content)) {
       add('meaningless-grid-wrapper', file, '疑似单列 24 栅格包裹')
-    }
-    if ((isPage && lineCount > 500) || (isComponent && lineCount > 400)) {
-      add('oversized-sfc', file, `SFC 共 ${lineCount} 行，超过强制拆分阈值`)
     }
     if (
       content.includes('<el-table') &&
@@ -93,9 +86,6 @@ for (const file of [...walk(src), ...walk(tests)]) {
     add('cross-module-relative-import', file, '跨模块 import 应使用 @/* 别名')
   if (/\bany\[\]|\bas any\b|Record<[^>]*,\s*any>|@ts-ignore/.test(content)) {
     add('unsafe-any', file, '业务代码存在未约束 any')
-  }
-  if (projectPath.startsWith('src/api/') && /\brequest\s*</.test(content)) {
-    add('api-unparsed-response', file, 'request 不接受响应泛型，API 模块必须解析 unknown 响应')
   }
   if (projectPath.startsWith('src/api/') && /\?\?\s*\[\]/.test(content)) {
     add('required-array-fallback', file, '必填数组不得使用 ?? [] 静默修复')

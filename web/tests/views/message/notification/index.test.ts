@@ -6,6 +6,7 @@ import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import * as api from '@/api/message/notification'
+import * as catalogApi from '@/api/message/notificationOptions'
 import type { NotificationItem } from '@/api/message/notification'
 import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
@@ -22,6 +23,7 @@ vi.mock('@/api/message/notification', async (importOriginal) => {
     deleteNotification: vi.fn().mockResolvedValue(undefined),
   }
 })
+vi.mock('@/api/message/notificationOptions', () => ({ getNotificationOptions: vi.fn() }))
 
 const listNotifications = vi.mocked(api.listNotifications)
 const mountedWrappers: VueWrapper[] = []
@@ -30,6 +32,18 @@ describe('notification center', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setLocale('zh-CN')
+    vi.mocked(catalogApi.getNotificationOptions).mockResolvedValue({
+      variants: [
+        { value: 'info', label: '信息' },
+        { value: 'warning', label: '警告' },
+        { value: 'future-variant', label: '未来展示类型' },
+      ],
+      priorities: [
+        { value: 'normal', label: '普通' },
+        { value: 'urgent', label: '紧急' },
+        { value: 'future-priority', label: '未来优先级' },
+      ],
+    })
     listNotifications.mockResolvedValue({ items: [], nextBeforeId: null })
   })
   afterEach(() => {
@@ -142,7 +156,7 @@ describe('notification center', () => {
     await vi.waitFor(() => expect(wrapper.text()).not.toContain('未读'))
   })
 
-  it('keeps urgent priority visible and normal rows quiet', async () => {
+  it('shows priority facts from backend labels rather than suppressing a frontend value', async () => {
     listNotifications.mockResolvedValue({
       items: [row({ id: 5, priority: 'urgent', isRead: true }), row({ id: 6, isRead: true })],
       nextBeforeId: null,
@@ -150,7 +164,66 @@ describe('notification center', () => {
     const wrapper = mountPage(['message:notification:list'])
     await flushPromises()
     expect(wrapper.get('[data-testid="notification-priority-5"]').text()).toBe('紧急')
-    expect(wrapper.find('[data-testid="notification-priority-6"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="notification-priority-6"]').text()).toBe('普通')
+  })
+
+  it('passes new backend filter values through and renders unknown labels neutrally', async () => {
+    listNotifications.mockResolvedValue({
+      items: [
+        row({ variant: 'future-variant', priority: 'future-priority' }),
+        row({ id: 2, variant: 'unregistered-variant', priority: 'unregistered-priority' }),
+      ],
+      nextBeforeId: null,
+    })
+    const wrapper = mountPage(['message:notification:list'])
+    await flushPromises()
+    expect(selectByTestId(wrapper, 'notification-variant-filter').props('options')).toContainEqual({
+      value: 'future-variant',
+      label: '未来展示类型',
+    })
+    expect(wrapper.get('[data-testid="notification-variant-1"]').text()).toBe('未来展示类型')
+    expect(wrapper.get('[data-testid="notification-priority-1"]').text()).toBe('未来优先级')
+    expect(wrapper.get('[data-testid="notification-variant-2"]').text()).toBe(
+      'unregistered-variant',
+    )
+    expect(wrapper.get('[data-testid="notification-priority-2"]').text()).toBe(
+      'unregistered-priority',
+    )
+    const unknownVariantTag = wrapper
+      .findAllComponents({ name: 'ElTag' })
+      .find((tag) => tag.attributes('data-testid') === 'notification-variant-2')
+    expect(unknownVariantTag?.props('type')).toBe('info')
+    selectByTestId(wrapper, 'notification-variant-filter').vm.$emit(
+      'update:modelValue',
+      'future-variant',
+    )
+    selectByTestId(wrapper, 'notification-priority-filter').vm.$emit(
+      'update:modelValue',
+      'future-priority',
+    )
+    await wrapper.get('[data-testid="notification-search"]').trigger('click')
+    await flushPromises()
+    expect(listNotifications).toHaveBeenLastCalledWith({
+      limit: 20,
+      filter: 'all',
+      variant: 'future-variant',
+      priority: 'future-priority',
+    })
+  })
+
+  it('clears failed options and reloads backend labels on locale changes', async () => {
+    vi.mocked(catalogApi.getNotificationOptions)
+      .mockRejectedValueOnce(new Error('目录不可用'))
+      .mockResolvedValue({ variants: [{ value: 'info', label: 'Info from Go' }], priorities: [] })
+    listNotifications.mockResolvedValue({ items: [row()], nextBeforeId: null })
+    const wrapper = mountPage(['message:notification:list'])
+    await flushPromises()
+    expect(wrapper.text()).toContain('目录不可用')
+    expect(selectByTestId(wrapper, 'notification-variant-filter').props('options')).toEqual([])
+    setLocale('en-US')
+    await flushPromises()
+    expect(catalogApi.getNotificationOptions).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-testid="notification-variant-1"]').text()).toBe('Info from Go')
   })
 
   it('loads the next cursor page on demand', async () => {

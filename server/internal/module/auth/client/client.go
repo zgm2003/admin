@@ -29,6 +29,10 @@ func ValidatePlatform(value string) error {
 	return nil
 }
 
+// PlatformCodePattern exposes the same syntax used by server validation for
+// immediate form feedback; it does not create a second validation rule.
+func PlatformCodePattern() string { return platformPattern.String() }
+
 func ValidateDeviceID(value string) error {
 	if !deviceIDPattern.MatchString(value) {
 		return fmt.Errorf("device ID is invalid")

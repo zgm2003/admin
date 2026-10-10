@@ -1,7 +1,9 @@
 package role
 
 import (
+	"admin/server/internal/shared/apperror"
 	"context"
+	"fmt"
 	"net/http"
 
 	"admin/server/internal/shared/pagination"
@@ -178,4 +180,12 @@ func (h *Handler) UpdatePermissions(context *gin.Context) {
 		return
 	}
 	response.OK(context, http.StatusOK, permissionResultResponse{ID: id, PermissionCount: count})
+}
+
+func (h *Handler) FormOptions(ctx *gin.Context) {
+	if len(ctx.Request.URL.Query()) != 0 {
+		response.Fail(ctx, apperror.InvalidRequest(fmt.Errorf("form options accepts no query parameters")))
+		return
+	}
+	response.OK(ctx, http.StatusOK, RoleFormOptions())
 }

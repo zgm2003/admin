@@ -27,7 +27,7 @@ func TestHandlerUserSuccessContracts(t *testing.T) {
 		listResult:  pagination.Result[account.ListItem]{List: []account.ListItem{{ID: 7, Username: "alice", Email: "alice@example.com", Phone: &phone, IsEnabled: yesno.Yes, Roles: []account.RoleSummary{{ID: 2, Code: "member", Name: "Member", IsEnabled: yesno.Yes}}, CreatedAt: now, UpdatedAt: now}}, Total: 1, Page: 1, PageSize: 20},
 		roleOptions: []account.RoleSummary{},
 		updated:     account.UpdatedProfile{ID: 7, Username: "alice_new", Phone: &phone, UpdatedAt: now},
-		roles:       account.Roles{User: account.Summary{ID: 7, Username: "alice", Email: "alice@example.com", Phone: &phone, IsEnabled: yesno.Yes}, Roles: []account.RoleSummary{}, RoleIDs: []int64{}},
+		roles:       account.Roles{User: account.Summary{ID: 7, Username: "alice", Email: "alice@example.com", Phone: &phone, IsEnabled: yesno.Yes}, Roles: []account.AssignmentRole{}, RoleIDs: []int64{}},
 		roleCount:   2,
 	}
 	tests := []struct{ method, path, body string }{
@@ -43,10 +43,10 @@ func TestHandlerUserSuccessContracts(t *testing.T) {
 		recorder := serveUserRequest(t, service, test.method, test.path, test.body, true)
 		assertUserEnvelope(t, recorder, http.StatusOK, 0)
 	}
-	assertUserEnvelopeDataJSON(t, serveUserRequest(t, service, http.MethodGet, "/api/admin/v1/user/account?page=1&pageSize=20", "", true), `{"list":[{"id":7,"username":"alice","email":"alice@example.com","phone":"+86 138-0000-0000","isEnabled":1,"roles":[{"id":2,"code":"member","name":"Member","isEnabled":1}],"createdAt":"2026-08-20T01:02:03.000000004Z","updatedAt":"2026-08-20T01:02:03.000000004Z"}],"total":1,"page":1,"pageSize":20}`)
+	assertUserEnvelopeDataJSON(t, serveUserRequest(t, service, http.MethodGet, "/api/admin/v1/user/account?page=1&pageSize=20", "", true), `{"list":[{"id":7,"username":"alice","email":"alice@example.com","phone":"+86 138-0000-0000","isEnabled":1,"actions":{"update":false,"status":false,"delete":false,"authorize":false},"actionLabels":{"update":"","status":"","delete":"","authorize":""},"roles":[{"id":2,"code":"member","name":"Member","isEnabled":1}],"createdAt":"2026-08-20T01:02:03.000000004Z","updatedAt":"2026-08-20T01:02:03.000000004Z"}],"total":1,"page":1,"pageSize":20}`)
 	assertUserEnvelopeDataJSON(t, serveUserRequest(t, service, http.MethodGet, "/api/admin/v1/user/account/7/role", "", true), `{"user":{"id":7,"username":"alice","email":"alice@example.com","phone":"+86 138-0000-0000","isEnabled":1},"roles":[],"roleIds":[]}`)
 	assertUserEnvelopeDataJSON(t, serveUserRequest(t, service, http.MethodPut, "/api/admin/v1/user/account/7", `{"username":"alice_new"}`, true), `{"id":7,"username":"alice_new","phone":"+86 138-0000-0000","updatedAt":"2026-08-20T01:02:03.000000004Z"}`)
-	if service.listQuery != (account.ListQuery{Page: 1, PageSize: 20}) || service.actorID != 41 || service.targetID != 7 || service.updateInput.Username != "alice_new" || service.statusValue != yesno.No || !reflect.DeepEqual(service.roleIDs, []int64{5, 2, 5}) {
+	if service.listQuery != (account.ListQuery{ActorUserID: 41, Page: 1, PageSize: 20}) || service.actorID != 41 || service.targetID != 7 || service.updateInput.Username != "alice_new" || service.statusValue != yesno.No || !reflect.DeepEqual(service.roleIDs, []int64{5, 2, 5}) {
 		t.Fatalf("service calls = %+v", service)
 	}
 }
@@ -56,7 +56,7 @@ func TestHandlerUserUpdateRejectsPhoneAndReturnsClosedProfiles(t *testing.T) {
 	service := &userHTTPService{
 		listResult: pagination.Result[account.ListItem]{List: []account.ListItem{{ID: 7, Username: "alice", Email: "alice@example.com", IsEnabled: yesno.Yes, Roles: []account.RoleSummary{}, CreatedAt: now, UpdatedAt: now}}, Total: 1, Page: 1, PageSize: 20},
 		updated:    account.UpdatedProfile{ID: 7, Username: "alice", UpdatedAt: now},
-		roles:      account.Roles{User: account.Summary{ID: 7, Username: "alice", Email: "alice@example.com", IsEnabled: yesno.Yes}, Roles: []account.RoleSummary{}, RoleIDs: []int64{}},
+		roles:      account.Roles{User: account.Summary{ID: 7, Username: "alice", Email: "alice@example.com", IsEnabled: yesno.Yes}, Roles: []account.AssignmentRole{}, RoleIDs: []int64{}},
 	}
 
 	for _, test := range []struct {
@@ -72,7 +72,7 @@ func TestHandlerUserUpdateRejectsPhoneAndReturnsClosedProfiles(t *testing.T) {
 		assertUserEnvelope(t, recorder, test.wantStatus, map[bool]int{true: 0, false: apperror.CodeInvalidRequest}[test.wantStatus == http.StatusOK])
 	}
 
-	assertUserEnvelopeDataJSON(t, serveUserRequest(t, service, http.MethodGet, "/api/admin/v1/user/account?page=1&pageSize=20", "", true), `{"list":[{"id":7,"username":"alice","email":"alice@example.com","phone":null,"isEnabled":1,"roles":[],"createdAt":"2026-08-20T01:02:03.000000004Z","updatedAt":"2026-08-20T01:02:03.000000004Z"}],"total":1,"page":1,"pageSize":20}`)
+	assertUserEnvelopeDataJSON(t, serveUserRequest(t, service, http.MethodGet, "/api/admin/v1/user/account?page=1&pageSize=20", "", true), `{"list":[{"id":7,"username":"alice","email":"alice@example.com","phone":null,"isEnabled":1,"actions":{"update":false,"status":false,"delete":false,"authorize":false},"actionLabels":{"update":"","status":"","delete":"","authorize":""},"roles":[],"createdAt":"2026-08-20T01:02:03.000000004Z","updatedAt":"2026-08-20T01:02:03.000000004Z"}],"total":1,"page":1,"pageSize":20}`)
 	assertUserEnvelopeDataJSON(t, serveUserRequest(t, service, http.MethodGet, "/api/admin/v1/user/account/7/role", "", true), `{"user":{"id":7,"username":"alice","email":"alice@example.com","phone":null,"isEnabled":1},"roles":[],"roleIds":[]}`)
 	assertUserEnvelopeDataJSON(t, serveUserRequest(t, service, http.MethodPut, "/api/admin/v1/user/account/7", `{"username":"alice"}`, true), `{"id":7,"username":"alice","phone":null,"updatedAt":"2026-08-20T01:02:03.000000004Z"}`)
 }
@@ -116,6 +116,9 @@ func TestHandlerUserRejectsMalformedQueriesIDsBodiesAndIdentity(t *testing.T) {
 		{http.MethodGet, "/api/admin/v1/user/account?page=1&page=2&pageSize=20", "", true},
 		{http.MethodGet, "/api/admin/v1/user/account?page=1&pageSize=20&isEnabled=2", "", true},
 		{http.MethodGet, "/api/admin/v1/user/account?page=1&pageSize=20&roleId=0", "", true},
+		{http.MethodGet, "/api/admin/v1/user/account?page=1&pageSize=20&actorUserId=41", "", true},
+		{http.MethodGet, "/api/admin/v1/user/account?page=1&pageSize=20", "", false},
+		{http.MethodGet, "/api/admin/v1/user/account/7/role", "", false},
 		{http.MethodPut, "/api/admin/v1/user/account/0", `{"username":"alice"}`, true},
 		{http.MethodPut, "/api/admin/v1/user/account/+7", `{"username":"alice"}`, true},
 		{http.MethodPut, "/api/admin/v1/user/account/7", `{}`, true},
@@ -194,9 +197,9 @@ func (s *userHTTPService) Delete(_ context.Context, actor, target int64) error {
 	s.actorID, s.targetID = actor, target
 	return nil
 }
-func (s *userHTTPService) Roles(_ context.Context, target int64) (account.Roles, error) {
+func (s *userHTTPService) Roles(_ context.Context, actor, target int64) (account.Roles, error) {
 	s.calls++
-	s.targetID = target
+	s.actorID, s.targetID = actor, target
 	return s.roles, nil
 }
 func (s *userHTTPService) UpdateRoles(_ context.Context, actor, target int64, ids []int64) (int64, error) {

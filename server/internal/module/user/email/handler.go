@@ -96,7 +96,7 @@ func (h *Handler) ListChangeLogs(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, http.StatusOK, changeLogListResponse(result))
+	response.OK(c, http.StatusOK, changeLogListResponse(c.Request.Context(), result))
 }
 
 func parseChangeLogQuery(values url.Values) (pagination.Request, error) {
@@ -106,4 +106,8 @@ func parseChangeLogQuery(values url.Values) (pagination.Request, error) {
 		}
 	}
 	return pagination.ParseRequest(values)
+}
+
+func (h *Handler) FormOptions(c *gin.Context) {
+	response.OK(c, http.StatusOK, adminOptions(c.Request.Context()))
 }

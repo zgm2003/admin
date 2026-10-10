@@ -382,4 +382,4 @@ async function downloadFile(objectKey: string): Promise<void> {
   </div>
 </template>
 
-<style scoped src="./UpMedia.css"></style>
+<style scoped src="./UpMedia.scss" lang="scss"></style>

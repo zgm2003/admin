@@ -1,34 +1,19 @@
 # 持久化业务状态枚举目录
 
-本目录是迁移基线。每个业务域独立维护数值语义；相同数字在不同域不代表相同状态。数据库使用 `SMALLINT` 与域内 `CHECK`，Go 使用 typed enum，前端使用对应的数值 union/enum。所有下拉选项都遵循 `{ label, value }`：`value` 是稳定数值协议，`label` 由固定 enum 元数据或字典 options 提供，页面不得自行写裸选项。
+每个业务域独立拥有稳定数值语义；相同数字在不同域不代表相同状态。数据库使用 `SMALLINT + CHECK`，Go 使用
+所属域 typed enum。前端 DTO 保留实际数字/字符串类型，候选项与本地化 label 由后端提供，不另维护合法值名单。
 
 ## Label / Value 所有权
 
-### 固定状态 enum
-
-状态集合、状态转换和数据库约束属于代码契约，不能由管理员在字典页面修改。后端为每个状态 enum 提供固定的 metadata（数值、i18n key、可选的 tag 类型）；前端 API parser 验证数值后，使用本地 i18n 根据 metadata 生成 `{ label, value }`。后端返回状态数值，不返回可被页面当作事实的自由文本 label。
-
-示例：
-
-```ts
-const jobStatusOptions = computed(() =>
-  schedulerJobStatuses.map((status) => ({
-    value: status.value,
-    label: t(status.i18nKey),
-  })),
-)
-```
-
-### 可配置业务字典
-
-展示分类、业务类型、运营标签等允许管理员维护的选项使用 `system_dictionary` / `system_dictionary_item`。数据库保存稳定的数值或代码 value、启用状态、排序和中英文 label；业务 API 通过 options 端点返回严格的 `{ label, value }`。消费页面加载失败或遇到非法 value 必须报协议错误，不能偷偷回退硬编码 options。
-
-### 禁止混用
-
-- 不把 Job/Run/发送状态迁移到字典表，避免管理员改变状态机语义。
-- 不把可配置选项复制成前端 enum，避免数据库与页面两份事实。
-- 不让后端根据数字临时拼接 label，也不让前端根据数字猜文案。
-- 同一个数字只在所属域内有意义；Mail 的 `1` 不得被通用状态组件解释成 Scheduler 的 `scheduled`。
+- 枚举常量、合法值校验、默认值、限制和状态机均属于后端代码；选项通过所属模块认证 `/options` 返回
+  `{value,label}`，必要时带表单 constraints/展示 tone。HTTP Middleware 提供请求语言，模块负责本地化。
+- 静态 options 不读 PostgreSQL/Redis。未来动态分类或运营数据建立具名业务资源；不恢复通用字典表、管理页、
+  DictService 或运行时注册器。地域、扩展名和 MIME 的预设同样归业务代码；可创建值由后端验证。
+- 前端 API 仅类型和调用；页面用 options 或列表/详情 label 展示原值，不自行拼接 `status - 1` 文案。
+  未知展示值显示原值/中性样式，禁止映射为已知业务状态。options 加载失败清空并提示，不偷偷硬编码兜底。
+- 可操作结论由后端 DTO 的 actions 提供，前端与独立 Access action 交叉检查；动作结论不是安全边界，后端写入
+  仍检查最新事实、权限、锁和事务。列表 actions 基于已有行与一次 actor 上下文，不引入逐行附加查询。
+- 前端保留交互状态、即时表单 rules、浏览器文件和路由/实时运输；浏览器展示能力 union 不等于业务合法值名单。
 
 ## Scheduler
 
@@ -68,7 +53,7 @@ const jobStatusOptions = computed(() =>
 ## 迁移规则
 
 1. 每个域先增加 typed enum 与失败契约测试，再执行数据回填和 `SMALLINT` 类型迁移。
-2. API 新契约只传数值；旧字符串不在运行时双读，迁移 runner 负责一次性转换。
-3. 前端 API parser 拒绝未知数值，展示文案集中在域 presentation 文件；不在页面散落裸数字。
-4. 状态数字不能作为跨域通用字典；新增状态必须同步 Go、SQL、API、TypeScript、i18n 和状态转换测试。
+2. 持久化状态字段保持数字，展示 options/label/actions 可同时返回；旧状态字符串不运行时双读，迁移 runner 一次转换。
+3. 后端拒绝非法写值；前端不再以 parser 拒绝新增状态，展示只消费所属域 options/label/actions，未知值显示原值。
+4. 状态数字不能作为跨域通用字典；新增状态同步 Go、SQL、后端 options/本地化与转换测试，DTO形状变更才同步前端类型。
 5. 普通编辑保持 last-write-wins；状态转换的并发保护只使用数据库条件更新/事务，不新增管理员 revision。

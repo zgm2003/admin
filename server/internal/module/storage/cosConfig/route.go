@@ -15,6 +15,7 @@ const (
 
 func RegisterRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, req func(string) gin.HandlerFunc) {
 	g := r.Group("/storage/cosconfig")
+	g.GET("/options", auth, h.Options)
 	g.GET("", auth, req(PermissionList), h.List)
 	g.POST("", auth, req(PermissionCreate), h.Create)
 	g.GET("/:id", auth, req(PermissionDetail), h.Get)

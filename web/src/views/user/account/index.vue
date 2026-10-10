@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
 import { useI18n } from 'vue-i18n'
@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import {
   deleteUser,
   getUserRoleOptions,
+  getUserFormOptions,
   getUserRoles,
   getUsers,
   updateUser,
@@ -15,6 +16,7 @@ import {
 } from '@/api/user/account'
 import type {
   UserListItem,
+  UserFormOptions,
   UserListQuery,
   UserRolesResponse,
   UserRoleSummary,
@@ -30,12 +32,7 @@ import UserRoleDialog from './components/UserRoleDialog/index.vue'
 import type { UserFormState } from './components/types'
 import IdentityChangeHistoryAction from './components/IdentityChangeHistoryAction/index.vue'
 import {
-  hasSuperAdminRole,
-  isProtectedTarget,
-  isRoleToggleDisabled,
-  isUsernameValid,
   normalizedUsername,
-  protectedRoleIDs,
   userSearchFields,
   userTableColumns,
   type UserSearchModel,
@@ -72,6 +69,8 @@ const selectedRoleIDs = ref<number[]>([])
 const roleLoading = ref(false)
 const roleSaving = ref(false)
 const roleError = ref('')
+let roleDialogSequence = 0
+let active = true
 
 const tablePagination = computed<TablePaginationState>(() => ({
   currentPage: query.value.page,
@@ -85,14 +84,28 @@ const canStatus = computed(() => access.hasPermission('user:account:status'))
 const canDelete = computed(() => access.hasPermission('user:account:delete'))
 const canRoles = computed(() => access.hasPermission('user:account:authorize'))
 const canIdentityDetail = computed(() => access.hasPermission('user:account:detail'))
-const isSuperAdminActor = computed(() => access.roleCodes.includes('super_admin'))
 const normalizedUsernameValue = computed(() => normalizedUsername(userForm.value.username))
-const usernameValid = computed(() => isUsernameValid(userForm.value.username))
-const hasEnabledSelection = computed(() => {
-  if (roleData.value === null) return false
-  const selected = new Set(selectedRoleIDs.value)
-  return roleData.value.roles.some((role) => role.isEnabled === YesNo.Yes && selected.has(role.id))
+const formOptionsError = ref('')
+const formOptions = ref<UserFormOptions | null>(null)
+const usernameValid = computed(() => {
+  const options = formOptions.value
+  if (options === null) return false
+  const value = normalizedUsernameValue.value
+  const length = [...value].length
+  return (
+    length >= options.usernameMinLength &&
+    length <= options.usernameMaxLength &&
+    new RegExp(options.usernamePattern, 'u').test(value)
+  )
 })
+async function loadFormOptions(): Promise<void> {
+  formOptionsError.value = ''
+  try {
+    formOptions.value = await getUserFormOptions()
+  } catch (error: unknown) {
+    formOptionsError.value = errorMessage(error, 'user.loadFailed')
+  }
+}
 
 const searchModel = computed<SearchFormModel<UserSearchModel>>({
   get: () => ({
@@ -172,40 +185,8 @@ function updateTablePagination(next: TablePaginationState): void {
   }
   changePage(next.currentPage)
 }
-function isSelf(row: UserListItem): boolean {
-  return auth.user?.userId === row.id
-}
-function hasSuperAdmin(row: UserListItem): boolean {
-  return hasSuperAdminRole(row)
-}
-function targetProtected(row: UserListItem): boolean {
-  return isProtectedTarget(row, isSuperAdminActor.value)
-}
-function editDisabled(row: UserListItem): boolean {
-  return targetProtected(row)
-}
-function dangerDisabled(row: UserListItem): boolean {
-  return isSelf(row) || targetProtected(row)
-}
-function protectionText(row: UserListItem, operation: 'status' | 'roles' | 'delete'): string {
-  if (targetProtected(row)) return t('user.superAdminBlocked')
-  if (isSelf(row))
-    return t(
-      operation === 'status'
-        ? 'user.selfStatusBlocked'
-        : operation === 'roles'
-          ? 'user.selfRolesBlocked'
-          : 'user.selfDeleteBlocked',
-    )
-  return operation === 'roles'
-    ? t('user.assignRoles')
-    : operation === 'delete'
-      ? t('permission.userDelete')
-      : t('user.status')
-}
-
 function openEdit(row: UserListItem): void {
-  if (editDisabled(row)) return
+  if (!canUpdate.value || !row.actions.update) return
   editingUser.value = row
   userForm.value = { username: row.username }
   editError.value = ''
@@ -213,7 +194,14 @@ function openEdit(row: UserListItem): void {
 }
 async function saveEdit(): Promise<void> {
   const target = editingUser.value
-  if (target === null || !usernameValid.value || editSaving.value) return
+  if (
+    target === null ||
+    !canUpdate.value ||
+    !target.actions.update ||
+    !usernameValid.value ||
+    editSaving.value
+  )
+    return
   editSaving.value = true
   editError.value = ''
   try {
@@ -232,8 +220,42 @@ async function saveEdit(): Promise<void> {
   }
 }
 
+function closeRoleDialog(): void {
+  roleDialogSequence += 1
+  roleDialogVisible.value = false
+  roleTarget.value = null
+  roleData.value = null
+  selectedRoleIDs.value = []
+  roleError.value = ''
+  roleLoading.value = false
+}
+function updateRoleDialogVisible(visible: boolean): void {
+  if (!visible) closeRoleDialog()
+}
+function isCurrentRoleDialog(sequence: number, targetID: number): boolean {
+  return (
+    active &&
+    sequence === roleDialogSequence &&
+    roleDialogVisible.value &&
+    roleTarget.value?.id === targetID &&
+    canRoles.value &&
+    roleTarget.value.actions.authorize
+  )
+}
+function canEditRoleSelection(): boolean {
+  const target = roleTarget.value
+  return (
+    target !== null &&
+    isCurrentRoleDialog(roleDialogSequence, target.id) &&
+    roleData.value?.user.id === target.id &&
+    !roleLoading.value &&
+    !roleSaving.value
+  )
+}
 async function openRoles(row: UserListItem): Promise<void> {
-  if (dangerDisabled(row)) return
+  if (!active || !canRoles.value || !row.actions.authorize) return
+  const sequence = ++roleDialogSequence
+  const targetID = row.id
   roleTarget.value = row
   roleDialogVisible.value = true
   roleLoading.value = true
@@ -241,60 +263,84 @@ async function openRoles(row: UserListItem): Promise<void> {
   roleData.value = null
   selectedRoleIDs.value = []
   try {
-    const data = await getUserRoles(row.id)
+    const data = await getUserRoles(targetID)
+    if (!isCurrentRoleDialog(sequence, targetID)) return
+    if (data.user.id !== targetID) {
+      roleError.value = t('user.roleLoadFailed')
+      return
+    }
     roleData.value = data
     selectedRoleIDs.value = [...data.roleIds]
   } catch (error: unknown) {
-    roleError.value = errorMessage(error, 'user.roleLoadFailed')
+    if (isCurrentRoleDialog(sequence, targetID))
+      roleError.value = errorMessage(error, 'user.roleLoadFailed')
   } finally {
-    roleLoading.value = false
+    if (isCurrentRoleDialog(sequence, targetID)) roleLoading.value = false
   }
 }
 
-function protectedSelectedRoleIDs(): number[] {
-  return protectedRoleIDs(roleData.value, isSuperAdminActor.value)
+function updateSelectedRoleIDs(ids: number[]): void {
+  if (canEditRoleSelection()) selectedRoleIDs.value = [...ids]
+}
+function lockedSelectedRoleIDs(): number[] {
+  const data = roleData.value
+  if (data === null) return []
+  return data.roles
+    .filter((role) => role.locked && data.roleIds.includes(role.id))
+    .map((role) => role.id)
 }
 function selectAllRoles(): void {
-  if (roleData.value === null) return
-  const protectedIDs = new Set(protectedSelectedRoleIDs())
+  if (!canEditRoleSelection() || roleData.value === null) return
   selectedRoleIDs.value = [
-    ...roleData.value.roles
-      .filter((role) => isSuperAdminActor.value || role.code !== 'super_admin')
-      .map((role) => role.id),
-    ...protectedIDs,
+    ...new Set([
+      ...roleData.value.roles.filter((role) => role.selectable).map((role) => role.id),
+      ...lockedSelectedRoleIDs(),
+    ]),
   ].sort((a, b) => a - b)
 }
 function clearRoles(): void {
-  selectedRoleIDs.value = protectedSelectedRoleIDs()
-}
-function roleToggleDisabled(role: UserRoleSummary): boolean {
-  return isRoleToggleDisabled(role, isSuperAdminActor.value)
+  if (!canEditRoleSelection()) return
+  selectedRoleIDs.value = lockedSelectedRoleIDs()
 }
 async function saveRoles(): Promise<void> {
   const target = roleTarget.value
-  if (target === null || roleData.value === null || !hasEnabledSelection.value || roleSaving.value)
-    return
+  if (target === null || !canEditRoleSelection()) return
+  const targetID = target.id
+  const sequence = roleDialogSequence
+  const roleIds = [...new Set(selectedRoleIDs.value)].sort((a, b) => a - b)
   roleSaving.value = true
   roleError.value = ''
   try {
-    const roleIds = [...new Set(selectedRoleIDs.value)].sort((a, b) => a - b)
-    await updateUserRoles(target.id, { roleIds })
-    if (await loadUsers()) {
-      roleDialogVisible.value = false
+    await updateUserRoles(targetID, { roleIds })
+    if (!active) return
+    if ((await loadUsers()) && isCurrentRoleDialog(sequence, targetID)) {
+      closeRoleDialog()
       ElNotification.success({ title: t('user.rolesSuccess') })
     }
   } catch (error: unknown) {
-    roleError.value = errorMessage(error, 'user.saveFailed')
+    if (isCurrentRoleDialog(sequence, targetID))
+      roleError.value = errorMessage(error, 'user.saveFailed')
   } finally {
     roleSaving.value = false
   }
 }
 
+watch(
+  () => [canRoles.value, roleTarget.value?.actions.authorize],
+  ([authorized, targetAuthorized]) => {
+    if (roleDialogVisible.value && (!authorized || !targetAuthorized)) closeRoleDialog()
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => {
+  active = false
+  closeRoleDialog()
+})
+
 async function changeStatus(row: UserListItem): Promise<void> {
-  if (dangerDisabled(row) || mutating.value) return
+  if (!canStatus.value || !row.actions.status || mutating.value) return
   const next = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
-  let message = t(next === YesNo.No ? 'user.disableConfirm' : 'user.enableConfirm')
-  if (hasSuperAdmin(row)) message += ` ${t('user.superAdminImpact')}`
+  const message = t(next === YesNo.No ? 'user.disableConfirm' : 'user.enableConfirm')
   try {
     await ElMessageBox.confirm(message, t('user.status'), { type: 'warning' })
     mutating.value = true
@@ -309,9 +355,8 @@ async function changeStatus(row: UserListItem): Promise<void> {
   }
 }
 async function removeUser(row: UserListItem): Promise<void> {
-  if (dangerDisabled(row) || mutating.value) return
-  let message = t('user.deleteConfirm')
-  if (hasSuperAdmin(row)) message += ` ${t('user.superAdminImpact')}`
+  if (!canDelete.value || !row.actions.delete || mutating.value) return
+  const message = t('user.deleteConfirm')
   try {
     await ElMessageBox.confirm(message, t('permission.userDelete'), {
       type: 'warning',
@@ -331,6 +376,7 @@ async function removeUser(row: UserListItem): Promise<void> {
 }
 
 onMounted(() => {
+  void loadFormOptions()
   void loadRoleOptions()
   void loadUsers()
 })
@@ -338,6 +384,9 @@ onMounted(() => {
 
 <template>
   <AppPage class="user-management">
+    <el-alert v-if="formOptionsError" :title="formOptionsError" type="error" show-icon>
+      <el-button text @click="loadFormOptions">{{ t('user.reset') }}</el-button>
+    </el-alert>
     <AppSearch
       v-model="searchModel"
       class="user-filters management-page__filters"
@@ -402,43 +451,41 @@ onMounted(() => {
       <template #cell-actions="{ row }: { row: UserListItem }"
         ><template v-if="row.id > 0">
           <el-space wrap :size="6">
-            <el-tooltip
-              v-if="canUpdate"
-              :content="editDisabled(row) ? t('user.superAdminBlocked') : t('user.edit')"
+            <el-tooltip v-if="canUpdate" :content="row.actionLabels.update"
               ><el-button
                 text
                 type="primary"
-                :disabled="editDisabled(row)"
+                :disabled="!row.actions.update"
                 @click="openEdit(row)"
                 >{{ t('user.edit') }}</el-button
               ></el-tooltip
             >
-            <el-tooltip v-if="canStatus" :content="protectionText(row, 'status')"
+            <el-tooltip v-if="canStatus" :content="row.actionLabels.status"
               ><el-button
                 text
                 type="warning"
-                :disabled="dangerDisabled(row) || mutating"
+                :disabled="!row.actions.status || mutating"
                 @click="changeStatus(row)"
                 >{{
                   row.isEnabled === YesNo.Yes ? t('user.disabled') : t('user.enabled')
                 }}</el-button
               ></el-tooltip
             >
-            <el-tooltip v-if="canRoles" :content="protectionText(row, 'roles')"
+            <el-tooltip v-if="canRoles" :content="row.actionLabels.authorize"
               ><el-button
                 text
                 type="primary"
-                :disabled="dangerDisabled(row)"
+                :disabled="!row.actions.authorize"
                 @click="openRoles(row)"
                 >{{ t('user.assignRoles') }}</el-button
               ></el-tooltip
             >
             <IdentityChangeHistoryAction :user="row" :enabled="canIdentityDetail" />
-            <el-tooltip v-if="canDelete" :content="protectionText(row, 'delete')"
+            <el-tooltip v-if="canDelete" :content="row.actionLabels.delete"
               ><el-button
                 text
                 type="danger"
-                :disabled="dangerDisabled(row) || mutating"
+                :disabled="!row.actions.delete || mutating"
                 @click="removeUser(row)"
                 >{{ t('permission.userDelete') }}</el-button
               ></el-tooltip
@@ -456,17 +503,18 @@ onMounted(() => {
       :edit-error="editError"
       :edit-saving="editSaving"
       :username-valid="usernameValid"
+      :username-max-length="formOptions?.usernameMaxLength"
       @save="saveEdit"
     />
     <UserRoleDialog
-      v-model="roleDialogVisible"
-      v-model:selected-role-i-ds="selectedRoleIDs"
+      :model-value="roleDialogVisible"
+      :selected-role-i-ds="selectedRoleIDs"
       :role-data="roleData"
       :role-loading="roleLoading"
       :role-error="roleError"
       :role-saving="roleSaving"
-      :has-enabled-selection="hasEnabledSelection"
-      :role-toggle-disabled="roleToggleDisabled"
+      @update:model-value="updateRoleDialogVisible"
+      @update:selected-role-i-ds="updateSelectedRoleIDs"
       @select-all="selectAllRoles"
       @clear="clearRoles"
       @save="saveRoles"
@@ -474,4 +522,4 @@ onMounted(() => {
   </AppPage>
 </template>
 
-<style scoped src="./UserManagement.css"></style>
+<style scoped src="./UserManagement.scss" lang="scss"></style>

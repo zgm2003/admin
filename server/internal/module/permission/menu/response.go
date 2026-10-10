@@ -1,12 +1,16 @@
 package menu
 
 import (
+	"context"
 	"time"
 
+	"admin/server/internal/shared/option"
 	"admin/server/internal/shared/yesno"
 )
 
 type managedMenuResponse struct {
+	Presentation  menuPresentation      `json:"presentation"`
+	Actions       menuActions           `json:"actions"`
 	ID            int64                 `json:"id"`
 	PlatformID    int64                 `json:"platformId"`
 	PlatformCode  string                `json:"platformCode"`
@@ -37,8 +41,9 @@ type platformOptionResponse struct {
 }
 
 type menuCatalogResponse struct {
-	Platforms []platformOptionResponse `json:"platforms"`
-	MenuTree  []managedMenuResponse    `json:"menuTree"`
+	AllowedRootTypes []Type                   `json:"allowedRootTypes"`
+	Platforms        []platformOptionResponse `json:"platforms"`
+	MenuTree         []managedMenuResponse    `json:"menuTree"`
 }
 
 type menuIDResponse struct {
@@ -50,20 +55,27 @@ type menuStatusResponse struct {
 	IsEnabled int16 `json:"isEnabled"`
 }
 
-func newManagedMenuResponses(items []ManagedMenu) []managedMenuResponse {
+func newManagedMenuResponses(ctx context.Context, items []ManagedMenu) []managedMenuResponse {
 	result := make([]managedMenuResponse, 0, len(items))
 	for _, item := range items {
-		result = append(result, newManagedMenuResponse(item))
+		result = append(result, newManagedMenuResponse(ctx, item, false))
 	}
 	return result
 }
 
-func newManagedMenuResponse(item ManagedMenu) managedMenuResponse {
+func newManagedMenuResponse(ctx context.Context, item ManagedMenu, ancestorDisabled bool) managedMenuResponse {
 	children := make([]managedMenuResponse, 0, len(item.Children))
 	for _, child := range item.Children {
-		children = append(children, newManagedMenuResponse(child))
+		children = append(children, newManagedMenuResponse(ctx, child, ancestorDisabled || item.IsEnabled != yesno.Yes))
+	}
+	presentation := newMenuPresentation(ctx, item)
+	if ancestorDisabled && item.IsEnabled != yesno.Yes {
+		presentation.StatusReason = option.New(ctx, 1, "请先启用父级菜单", "Enable parent menus first").Label
+	} else if item.IsProtected && item.IsEnabled == yesno.Yes {
+		presentation.StatusReason = presentation.ProtectionReason
 	}
 	return managedMenuResponse{
+		Presentation: presentation, Actions: newMenuActions(item, ancestorDisabled),
 		ID: item.ID, PlatformID: item.PlatformID, PlatformCode: item.PlatformCode, PlatformName: item.PlatformName,
 		ParentID: item.ParentID, MenuType: item.MenuType, Name: item.Name, Code: item.Code,
 		I18nKey: item.I18nKey, Path: item.Path, ComponentPath: item.ComponentPath, Icon: item.Icon, Remark: item.Remark,
@@ -73,14 +85,14 @@ func newManagedMenuResponse(item ManagedMenu) managedMenuResponse {
 	}
 }
 
-func newMenuCatalogResponse(catalog Catalog) menuCatalogResponse {
+func newMenuCatalogResponse(ctx context.Context, catalog Catalog) menuCatalogResponse {
 	platforms := make([]platformOptionResponse, 0, len(catalog.Platforms))
 	for _, platform := range catalog.Platforms {
 		platforms = append(platforms, platformOptionResponse{
 			ID: platform.ID, Code: platform.Code, Name: platform.Name, IsEnabled: int16(platform.IsEnabled),
 		})
 	}
-	return menuCatalogResponse{Platforms: platforms, MenuTree: newManagedMenuResponses(catalog.MenuTree)}
+	return menuCatalogResponse{AllowedRootTypes: []Type{TypeDirectory, TypePage}, Platforms: platforms, MenuTree: newManagedMenuResponses(ctx, catalog.MenuTree)}
 }
 
 func protectedValue(isProtected bool) int16 {

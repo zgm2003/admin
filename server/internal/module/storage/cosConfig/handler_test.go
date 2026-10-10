@@ -142,3 +142,7 @@ func performConfigJSON(router *gin.Engine, method, path, body string) *httptest.
 	router.ServeHTTP(recorder, request)
 	return recorder
 }
+
+func (*configHTTPService) Options(ctx context.Context) (Options, error) {
+	return (&Service{}).Options(ctx)
+}

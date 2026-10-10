@@ -223,7 +223,7 @@ defineExpose({ validate: () => formRef.value?.validate() })
   </AppDialog>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .form-help {
   margin-top: 6px;
   color: var(--el-text-color-secondary);

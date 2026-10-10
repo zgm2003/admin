@@ -32,7 +32,8 @@ PascalCase，CSS class 与测试定位符使用 kebab-case。
 - 优先使用已有 `AppDialog`、`AppTable`、`Search`、`DIcon`、`IconSelect`。只有多个真实页面已经复用且交互
   稳定时才新增公共组件。
 - 所有下拉选择使用 `el-select-v2` 的 `options` 数据契约，不使用 `el-select`/`el-option` 子节点；选项文案走
-  i18n，值保持业务 DTO 的精确类型，多选、可创建和禁用状态不得在迁移中降级。
+  所属后端模块按请求语言输出的 label（界面按钮/提示仍走前端 i18n），值保持 DTO 原类型；多选、可创建和
+  禁用状态不得在迁移中降级。
 - 所有可见文案走 i18n；JSON 和 TypeScript 字段使用 lower camel case。表格、树和分页保持可扫描的管理后台
   密度，并在窄屏下不产生遮挡或横向溢出。
 - 系统设置按“高级设置 / 协议与隐私”分区，默认高级设置。媒体是值类型 `5`，与字符串、数字、布尔值和 JSON
@@ -55,8 +56,9 @@ PascalCase，CSS class 与测试定位符使用 kebab-case。
 }
 ```
 
-不接受 `msg` 或静默兼容字段。请求层先校验 envelope，业务 API 再把 `unknown` 缩小成明确 DTO；必填字段缺失、
-协议错误和依赖不可用都应显式失败。
+不接受 `msg` 或静默兼容字段。请求层校验 envelope、统一错误、鉴权和刷新；业务 API 仅声明 DTO 和调用泛型
+HTTP 方法，不重复解析每个 DTO。后端负责类型、必填字段、数值、null/空数组、分页及公开错误语义的契约测试。
+前端 strict 类型检查保留，泛型不被当作运行时校验。浏览器字节转换、实时帧和认证凭据等运输边界仍显式校验。
 
 ## 权限设计
 
@@ -102,14 +104,17 @@ PascalCase，CSS class 与测试定位符使用 kebab-case。
 
 - PostgreSQL 保存用户、权限、菜单、配置、日志等业务事实；Redis 只做会话、Access 版本/快照和队列存储等
   明确用途，不成为第二个权限来源。
-- 配置缓存固定覆盖 `system.setting/global`、`system.dictionary/global`、`message.mail/global`、
+- 配置缓存固定覆盖 `system.setting/global`、`message.mail/global`、
   `message.sms/global` 和 `storage.cosconfig/<configId>`。权限的 menu/policy/access version、Session/authority
   generation、验证码、限流计数和队列数据保持各自业务语义，不迁入配置 generation。
-- 系统字典全平台共享，负责可由后台维护的展示型选项及中英文标签；`code`/`value` 是稳定业务值，
-  `isBuiltin` 只表示禁止删除。字典管理页必须标明消费页面和修改影响；`user.gender` 是由数据库与前端
-  协议固定为 `0/1/2` 的特殊字典，只允许维护标签和排序，不允许新增或停用值。登录方式、Session/邮件状态、
-  权限节点类型、Yes/No 等参与后端分支、协议或数据库约束的 enum 不迁入字典。消费页不得用硬编码选项掩盖
-  字典加载失败或畸形值。
+- 字典管理及其通用数据库/缓存目录退出。业务枚举、候选项、默认值、限制、状态转换和可操作结论放回所属
+  后端模块，静态 options 使用代码常量、按请求语言输出 `{value,label}`，不查 PostgreSQL/Redis；前端不维护
+  第二份业务数值名单或按状态推断操作。性别保持 JSON 数字，地域/扩展名/MIME 保持字符串；上传可创建值仍由
+  后端验证，不因删除字典丢失多选、自定义值和权限。未来真正可维护的数据建立具名业务资源，不恢复通用字典。
+- 前端交叉检查后端 actions 与 Access action，写入时后端重新检查当前事实与并发状态。表单 rules 消费后端
+  限制提供即时反馈，不能作为安全边界。语言切换拒绝过期 options；加载失败清空并明确展示，禁止猜默认值。
+- 自有样式统一 SCSS，优先 Element Plus 和现有 AppDialog/AppTable/AppSearch；按独立交互职责或真实复用
+  抽组件，不以 500/400 行上限碎片化拆分；第三方 CSS 保持原样。
 - Yes/No 统一为 `0 = No`、`1 = Yes`。有真实删除行为时使用 `deleted_at`，不并列维护另一套删除标记。
 - 页面状态必须区分初始加载、成功空态、失败、提交中和提交失败；不以空数组、默认对象或旧快照掩盖依赖错误。
 - Mail 发送日志与验证码记录是审计事实，采用 append-only 语义，不提供管理员单条、批量删除或恢复操作。

@@ -49,7 +49,7 @@ const offlineTime = computed(() => {
   </Transition>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .network-status {
   position: fixed;
   z-index: 4000;
@@ -68,58 +68,58 @@ const offlineTime = computed(() => {
   background: color-mix(in srgb, var(--el-bg-color-overlay) 92%, var(--el-color-warning-light-9));
   box-shadow: var(--admin-shadow-md);
   transform: translateX(-50%);
-}
 
-.network-status__icon {
-  color: var(--el-color-warning-dark-2);
-}
+  &__icon {
+    color: var(--el-color-warning-dark-2);
+  }
 
-.network-status__content {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
+  &__content {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+  }
 
-.network-status__content strong {
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.35;
-}
+  &__content strong {
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.35;
+  }
 
-.network-status__content span {
-  color: var(--el-text-color-regular);
-  font-size: 12px;
-  line-height: 1.45;
-}
+  &__content span {
+    color: var(--el-text-color-regular);
+    font-size: 12px;
+    line-height: 1.45;
+  }
 
-.network-status__content small {
-  margin-left: 6px;
-  color: var(--el-text-color-secondary);
-  font-size: inherit;
-}
+  &__content small {
+    margin-left: 6px;
+    color: var(--el-text-color-secondary);
+    font-size: inherit;
+  }
 
-.network-status__refresh {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  place-items: center;
-  color: var(--el-text-color-regular);
-  border: 1px solid var(--el-border-color);
-  border-radius: 6px;
-  background: var(--el-fill-color-blank);
-  cursor: pointer;
-}
+  &__refresh {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    place-items: center;
+    color: var(--el-text-color-regular);
+    border: 1px solid var(--el-border-color);
+    border-radius: 6px;
+    background: var(--el-fill-color-blank);
+    cursor: pointer;
+  }
 
-.network-status__refresh:hover {
-  color: var(--el-color-warning-dark-2);
-  border-color: var(--el-color-warning-light-3);
-  background: var(--el-color-warning-light-9);
-}
+  &__refresh:hover {
+    color: var(--el-color-warning-dark-2);
+    border-color: var(--el-color-warning-light-3);
+    background: var(--el-color-warning-light-9);
+  }
 
-.network-status__refresh:focus-visible {
-  outline: 2px solid var(--el-color-warning);
-  outline-offset: 2px;
+  &__refresh:focus-visible {
+    outline: 2px solid var(--el-color-warning);
+    outline-offset: 2px;
+  }
 }
 
 .network-status-enter-active,
@@ -139,17 +139,17 @@ const offlineTime = computed(() => {
   .network-status {
     top: 8px;
     width: calc(100vw - 16px);
-  }
 
-  .network-status__content small {
-    display: block;
-    margin-left: 0;
+    &__content small {
+      display: block;
+      margin-left: 0;
+    }
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .network-status-enter-active,
-  .network-status-leave-active {
+.network-status-enter-active,
+.network-status-leave-active {
+  @media (prefers-reduced-motion: reduce) {
     transition: none;
   }
 }

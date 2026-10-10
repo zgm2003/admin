@@ -1,6 +1,10 @@
 package authplatform
 
-import "time"
+import (
+	"admin/server/internal/shared/yesno"
+	"context"
+	"time"
+)
 
 type emptyResponse struct{}
 
@@ -28,23 +32,25 @@ func newPublicPolicyResponse(policy Policy) publicPolicyResponse {
 }
 
 type listItemResponse struct {
-	ID                     int64       `json:"id"`
-	Code                   string      `json:"code"`
-	Name                   string      `json:"name"`
-	LoginTypes             []LoginType `json:"loginTypes"`
-	PolicyVersion          int64       `json:"policyVersion"`
-	AccessTTLSeconds       int         `json:"accessTTLSeconds"`
-	RefreshTTLSeconds      int         `json:"refreshTTLSeconds"`
-	SessionCacheTTLSeconds int         `json:"sessionCacheTTLSeconds"`
-	AccessCacheTTLSeconds  int         `json:"accessCacheTTLSeconds"`
-	BindDevice             int16       `json:"bindDevice"`
-	BindIP                 int16       `json:"bindIP"`
-	MaxSessions            int16       `json:"maxSessions"`
-	AllowRegister          int16       `json:"allowRegister"`
-	IsEnabled              int16       `json:"isEnabled"`
-	IsBuiltin              int16       `json:"isBuiltin"`
-	CreatedAt              string      `json:"createdAt"`
-	UpdatedAt              string      `json:"updatedAt"`
+	Presentation           platformPresentation `json:"presentation"`
+	Actions                platformActions      `json:"actions"`
+	ID                     int64                `json:"id"`
+	Code                   string               `json:"code"`
+	Name                   string               `json:"name"`
+	LoginTypes             []LoginType          `json:"loginTypes"`
+	PolicyVersion          int64                `json:"policyVersion"`
+	AccessTTLSeconds       int                  `json:"accessTTLSeconds"`
+	RefreshTTLSeconds      int                  `json:"refreshTTLSeconds"`
+	SessionCacheTTLSeconds int                  `json:"sessionCacheTTLSeconds"`
+	AccessCacheTTLSeconds  int                  `json:"accessCacheTTLSeconds"`
+	BindDevice             int16                `json:"bindDevice"`
+	BindIP                 int16                `json:"bindIP"`
+	MaxSessions            int16                `json:"maxSessions"`
+	AllowRegister          int16                `json:"allowRegister"`
+	IsEnabled              int16                `json:"isEnabled"`
+	IsBuiltin              int16                `json:"isBuiltin"`
+	CreatedAt              string               `json:"createdAt"`
+	UpdatedAt              string               `json:"updatedAt"`
 }
 
 type listResponse struct {
@@ -54,7 +60,7 @@ type listResponse struct {
 	PageSize int                `json:"pageSize"`
 }
 
-func newListResponse(items []ListItem, total int64, page, pageSize int) (listResponse, error) {
+func newListResponse(ctx context.Context, items []ListItem, total int64, page, pageSize int) (listResponse, error) {
 	list := make([]listItemResponse, 0, len(items))
 	for _, item := range items {
 		value := item.Platform
@@ -63,6 +69,7 @@ func newListResponse(items []ListItem, total int64, page, pageSize int) (listRes
 			return listResponse{}, err
 		}
 		list = append(list, listItemResponse{
+			Presentation: newPlatformPresentation(ctx, value, loginTypes), Actions: platformActions{Update: true, Status: true, Delete: value.IsBuiltin == yesno.No},
 			ID: value.ID, Code: value.Code, Name: value.Name, LoginTypes: loginTypes, PolicyVersion: value.PolicyVersion,
 			AccessTTLSeconds: value.AccessTTLSeconds, RefreshTTLSeconds: value.RefreshTTLSeconds,
 			SessionCacheTTLSeconds: value.SessionCacheTTLSeconds, AccessCacheTTLSeconds: value.AccessCacheTTLSeconds,

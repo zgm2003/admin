@@ -21,7 +21,7 @@ import type {
 } from '@/api/user/profile'
 import { usePermissionStore } from '@/store/permission'
 import { useAuthStore } from '@/store/auth'
-import { useSystemDictionaryStore } from '@/store/systemDictionary'
+import { getUserProfileOptions } from '@/api/user/profileOptions'
 import EmailBindingDialog from '@/views/user/profile/components/EmailBindingDialog/index.vue'
 import PhoneBindingDialog from '@/views/user/profile/components/PhoneBindingDialog/index.vue'
 import PasswordSecurityForm from '@/views/user/profile/components/PasswordSecurityForm/index.vue'
@@ -35,7 +35,6 @@ const { t, locale } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
 const access = usePermissionStore()
-const dictionaries = useSystemDictionaryStore()
 const canUpdateProfile = computed(() => access.hasPermission('user:profile:update'))
 const canUpdatePassword = computed(() => access.hasPermission('user:password:update'))
 const canUpdateEmail = computed(() => access.hasPermission('user:email:update'))
@@ -121,17 +120,9 @@ async function loadGenderOptions(): Promise<void> {
   genderOptionsLoading.value = true
   genderOptionsError.value = ''
   try {
-    await dictionaries.load(['user.gender'])
+    const options = await getUserProfileOptions()
     if (request !== genderOptionsRequest) return
-    const options = dictionaries.options('user.gender').value
-    if (options === undefined) throw new Error('user.gender dictionary is not ready')
-    const seen = new Set<number>()
-    genderOptions.value = options.map((option) => {
-      const value = parseGenderValue(option.value)
-      if (seen.has(value)) throw new Error('user.gender dictionary contains duplicate values')
-      seen.add(value)
-      return { label: option.label, value }
-    })
+    genderOptions.value = options.genders
   } catch {
     if (request !== genderOptionsRequest) return
     genderOptions.value = []
@@ -139,13 +130,6 @@ async function loadGenderOptions(): Promise<void> {
   } finally {
     if (request === genderOptionsRequest) genderOptionsLoading.value = false
   }
-}
-
-function parseGenderValue(value: string): UpdateAccountProfileInput['gender'] {
-  if (value === '0') return 0
-  if (value === '1') return 1
-  if (value === '2') return 2
-  throw new Error('user.gender dictionary value is invalid')
 }
 
 async function saveProfile(): Promise<void> {
@@ -372,7 +356,7 @@ onBeforeUnmount(stopPasswordCountdown)
   </section>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .account-profile {
   display: grid;
   max-width: 960px;
@@ -381,106 +365,112 @@ onBeforeUnmount(stopPasswordCountdown)
 }
 
 /* Tab navigation. */
-.account-profile__tabs {
-  display: inline-flex;
-  width: fit-content;
-  max-width: 100%;
-  padding: 4px;
-  gap: 4px;
-  background: var(--admin-surface);
-  border: 1px solid var(--admin-border);
-  border-radius: 8px;
-  box-shadow: var(--admin-shadow-sm);
-}
+.account-profile {
+  &__tabs {
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+    padding: 4px;
+    gap: 4px;
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    box-shadow: var(--admin-shadow-sm);
+  }
 
-.account-profile__tab {
-  padding: 8px 18px;
-  color: var(--admin-text-soft);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 650;
-  white-space: nowrap;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  transition:
-    color 0.16s ease,
-    background-color 0.16s ease,
-    box-shadow 0.16s ease;
-}
+  &__tab {
+    padding: 8px 18px;
+    color: var(--admin-text-soft);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 650;
+    white-space: nowrap;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+    transition:
+      color 0.16s ease,
+      background-color 0.16s ease,
+      box-shadow 0.16s ease;
+  }
 
-.account-profile__tab:hover {
-  color: var(--admin-text);
-}
+  &__tab:hover {
+    color: var(--admin-text);
+  }
 
-.account-profile__tab.is-active {
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  box-shadow: 0 0 0 1px var(--el-color-primary-light-8) inset;
-}
+  &__tab.is-active {
+    color: var(--el-color-primary);
+    background: var(--el-color-primary-light-9);
+    box-shadow: 0 0 0 1px var(--el-color-primary-light-8) inset;
+  }
 
-.account-profile__tab:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 2px;
+  &__tab:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
+  }
 }
 
 /* Form panels. */
-.account-profile__pane {
-  min-width: 0;
-}
+.account-profile {
+  &__pane {
+    min-width: 0;
+  }
 
-.account-profile__card {
-  padding: 26px 28px;
-  background: var(--admin-surface);
-  border: 1px solid var(--admin-border);
-  border-radius: 8px;
-  box-shadow: var(--admin-shadow-sm);
-}
+  &__card {
+    padding: 26px 28px;
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    box-shadow: var(--admin-shadow-sm);
+  }
 
-.account-profile__card--narrow {
-  max-width: 520px;
-}
+  &__card--narrow {
+    max-width: 520px;
+  }
 
-.account-profile__card-head {
-  margin-bottom: 18px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--admin-border);
-}
+  &__card-head {
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--admin-border);
+  }
 
-.account-profile__card-title {
-  margin: 0;
-  color: var(--admin-text);
-  font-size: 16px;
-  font-weight: 700;
-}
+  &__card-title {
+    margin: 0;
+    color: var(--admin-text);
+    font-size: 16px;
+    font-weight: 700;
+  }
 
-.account-profile__full {
-  width: 100%;
-}
+  &__full {
+    width: 100%;
+  }
 
-.account-profile__identity-row,
-.account-profile__code-row {
-  display: grid;
-  width: 100%;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-}
+  &__identity-row,
+  &__code-row {
+    display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
 
-.account-profile__actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 6px;
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6px;
+  }
 }
 
 @media (max-width: 560px) {
-  .account-profile__card {
-    padding: 20px 18px;
-  }
+  .account-profile {
+    &__card {
+      padding: 20px 18px;
+    }
 
-  .account-profile__identity-row,
-  .account-profile__code-row {
-    grid-template-columns: 1fr;
+    &__identity-row,
+    &__code-row {
+      grid-template-columns: 1fr;
+    }
   }
 }
 </style>

@@ -121,3 +121,7 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 }
 
 func contextError(message string) error { return fmt.Errorf("%s", message) }
+
+func (h *Handler) FormOptions(c *gin.Context) {
+	response.OK(c, http.StatusOK, adminOptions(c.Request.Context()))
+}

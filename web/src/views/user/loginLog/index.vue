@@ -3,6 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { getLoginLogs } from '@/api/user/loginLog'
+import { getLoginLogOptions } from '@/api/user/loginLogOptions'
+import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 import type {
   LoginLogEventType,
   LoginLogItem,
@@ -14,6 +16,11 @@ import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import { formatTime } from '@/utils/datetime'
 
 const { t } = useI18n()
+const {
+  options: catalog,
+  error: optionsError,
+  reload: reloadOptions,
+} = useLocalizedOptions(getLoginLogOptions, () => ({ eventTypes: [], loginTypes: [] }))
 const rows = ref<LoginLogItem[]>([])
 const total = ref(0)
 const loading = ref(false)
@@ -42,10 +49,8 @@ const searchModel = computed<SearchFormModel<LoginLogSearchModel>>({
   }),
   set: (value) => {
     account.value = typeof value.account === 'string' ? value.account : ''
-    eventType.value =
-      value.eventType === 1 || value.eventType === 2 || value.eventType === 3 ? value.eventType : ''
-    loginType.value =
-      value.loginType === 1 || value.loginType === 2 || value.loginType === 3 ? value.loginType : ''
+    eventType.value = typeof value.eventType === 'number' ? value.eventType : ''
+    loginType.value = typeof value.loginType === 'number' ? value.loginType : ''
     success.value = value.success === 0 || value.success === 1 ? value.success : ''
     timeRange.value =
       Array.isArray(value.timeRange) && value.timeRange.length === 2
@@ -69,11 +74,7 @@ const searchFields = computed<SearchField<LoginLogSearchModel>[]>(() => [
     resetValue: '',
     label: t('loginLog.eventType'),
     placeholder: t('loginLog.allEventTypes'),
-    options: [
-      { label: t('loginLog.register'), value: 1 },
-      { label: t('loginLog.login'), value: 2 },
-      { label: t('loginLog.logout'), value: 3 },
-    ],
+    options: catalog.value.eventTypes,
     width: 140,
   },
   {
@@ -82,11 +83,7 @@ const searchFields = computed<SearchField<LoginLogSearchModel>[]>(() => [
     resetValue: '',
     label: t('loginLog.loginType'),
     placeholder: t('loginLog.allLoginTypes'),
-    options: [
-      { label: t('loginLog.password'), value: 1 },
-      { label: t('loginLog.email'), value: 2 },
-      { label: t('loginLog.phone'), value: 3 },
-    ],
+    options: catalog.value.loginTypes,
     width: 150,
   },
   {
@@ -148,8 +145,8 @@ function search(): void {
     page: 1,
     pageSize: query.value.pageSize,
     ...(account.value.trim() ? { account: account.value.trim() } : {}),
-    ...(eventType.value ? { eventType: eventType.value } : {}),
-    ...(loginType.value ? { loginType: loginType.value } : {}),
+    ...(eventType.value === '' ? {} : { eventType: eventType.value }),
+    ...(loginType.value === '' ? {} : { loginType: loginType.value }),
     ...(success.value === '' ? {} : { isSuccess: success.value }),
     ...(timeRange.value.length === 0 ? {} : { from: timeRange.value[0], to: timeRange.value[1] }),
   }
@@ -173,22 +170,11 @@ function updatePagination(next: TablePaginationState): void {
   void load()
 }
 function eventLabel(value: LoginLogEventType): string {
-  return value === 1
-    ? t('loginLog.register')
-    : value === 2
-      ? t('loginLog.login')
-      : t('loginLog.logout')
-}
-function eventTagType(value: LoginLogEventType): 'primary' | 'success' | 'danger' {
-  return value === 1 ? 'primary' : value === 2 ? 'success' : 'danger'
+  return catalog.value.eventTypes.find((option) => option.value === value)?.label ?? String(value)
 }
 function loginTypeLabel(value: LoginLogType | null): string {
   if (value === null) return '-'
-  return value === 1
-    ? t('loginLog.password')
-    : value === 2
-      ? t('loginLog.email')
-      : t('loginLog.phone')
+  return catalog.value.loginTypes.find((option) => option.value === value)?.label ?? String(value)
 }
 
 onMounted(() => {
@@ -209,6 +195,9 @@ onMounted(() => {
       @query="search"
       @reset="reset"
     />
+    <el-alert v-if="optionsError" :title="optionsError" type="error" :closable="false" show-icon>
+      <el-button link @click="reloadOptions">{{ t('loginLog.refresh') }}</el-button>
+    </el-alert>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
     <AppTable
       :columns="columns"
@@ -221,7 +210,7 @@ onMounted(() => {
       @update:pagination="updatePagination"
     >
       <template #cell-event="{ row }: { row: LoginLogItem }"
-        ><el-tag size="small" effect="plain" :type="eventTagType(row.eventType)">{{
+        ><el-tag size="small" effect="plain" type="info">{{
           eventLabel(row.eventType)
         }}</el-tag></template
       >
@@ -241,7 +230,7 @@ onMounted(() => {
   </AppPage>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .login-log-page {
   min-width: 0;
 }

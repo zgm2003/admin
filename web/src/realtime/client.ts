@@ -1,8 +1,4 @@
-import {
-  buildRealtimeWebSocketURL,
-  requestRealtimeTicket,
-  type RealtimeTicket,
-} from '@/api/realtime'
+import { requestRealtimeTicket, type RealtimeTicket } from '@/api/realtime'
 import { createCursorStore } from './cursor'
 import {
   createLeaderElector,
@@ -10,7 +6,7 @@ import {
   leaderHeartbeatMilliseconds,
   realtimeChannelName,
 } from './leader'
-import { parseRealtimeEnvelope, type RealtimeEnvelope } from './protocol'
+import { buildRealtimeWebSocketURL, parseRealtimeEnvelope, type RealtimeEnvelope } from './protocol'
 
 interface SocketLike {
   onopen: ((event: Event) => void) | null

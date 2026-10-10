@@ -13,6 +13,7 @@ type Item struct {
 	Route        string    `json:"route"`
 	Module       string    `json:"module"`
 	Action       string    `json:"action"`
+	ActionLabel  string    `json:"actionLabel" gorm:"-"`
 	ClientIP     string    `json:"clientIp"`
 	UserAgent    string    `json:"userAgent"`
 	StatusCode   int32     `json:"statusCode"`

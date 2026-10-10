@@ -50,6 +50,14 @@ describe('RolePermissionDialog request lifecycle', () => {
 
 function role(id: number, code: string, name: string): RoleListItem {
   return {
+    actions: { update: true, status: true, setDefault: true, delete: true, authorize: true },
+    actionLabels: {
+      update: '编辑',
+      status: '禁用',
+      setDefault: '设为默认',
+      delete: '删除',
+      authorize: '授权',
+    },
     id,
     code,
     name,

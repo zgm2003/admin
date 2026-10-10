@@ -1,17 +1,7 @@
 import { request } from '@/utils/request'
-import { isYesNo, type YesNo } from '@/enums/yesNo'
+import { type YesNo } from '@/enums/yesNo'
 import type { PageRequest, PageResult } from '@/types/pagination'
-import {
-  expectArray,
-  expectEmptyObject,
-  expectExactKeys,
-  expectId,
-  expectInteger,
-  expectPage,
-  expectRecord,
-  expectString,
-} from '@/api/protocol'
-import { ProtocolError } from '@/types/http'
+
 export interface UploadRule {
   id: number
   platformId: number
@@ -30,12 +20,14 @@ export interface UploadRule {
   createdAt: string
   updatedAt: string
 }
+
 export interface UploadRuleQuery extends PageRequest {
   platformId?: number
   cosConfigId?: number
   keyword?: string
   isEnabled?: YesNo
 }
+
 interface UploadRuleCreateFields {
   codes: string[]
   name: string
@@ -46,10 +38,12 @@ interface UploadRuleCreateFields {
   accessMode: 'private' | 'public'
   remark: string
 }
+
 export interface CreateUploadRuleInput extends UploadRuleCreateFields {
   platformId: number
   isEnabled: YesNo
 }
+
 export interface UpdateUploadRuleInput {
   codes: string[]
   name: string
@@ -57,13 +51,16 @@ export interface UpdateUploadRuleInput {
   allowedExtensions: string[]
   allowedMimeTypes: string[]
   remark: string
+  isEnabled?: YesNo
 }
+
 export interface PlatformOption {
   id: number
   code: string
   name: string
   isEnabled: YesNo
 }
+
 export interface ConfigSummary {
   id: number
   name: string
@@ -71,149 +68,45 @@ export interface ConfigSummary {
   region: string
   isEnabled: YesNo
 }
+
 export interface UploadRulePageInit {
   platforms: PlatformOption[]
   configs: ConfigSummary[]
 }
+
 export async function listUploadRules(query: UploadRuleQuery): Promise<PageResult<UploadRule>> {
-  return expectPage(
-    await request({
-      method: 'GET',
-      url: '/api/admin/v1/storage/uploadrule',
-      params: query,
-    }),
-    parseUploadRule,
-    'upload rules',
-  )
+  return request.get<PageResult<UploadRule>>('/api/admin/v1/storage/uploadrule', { params: query })
 }
+
 export async function getUploadRule(id: number): Promise<UploadRule> {
-  return parseUploadRule(
-    await request({ method: 'GET', url: `/api/admin/v1/storage/uploadrule/${id}` }),
-    0,
-  )
+  return request.get<UploadRule>(`/api/admin/v1/storage/uploadrule/${id}`)
 }
+
 export async function getUploadRulePageInit(): Promise<UploadRulePageInit> {
-  const result = expectRecord(
-    await request({ method: 'GET', url: '/api/admin/v1/storage/uploadrule/page-init' }),
-    'upload rule page init',
-  )
-  return {
-    platforms: expectArray(result.platforms, 'upload rule page init.platforms').map(parsePlatform),
-    configs: expectArray(result.configs, 'upload rule page init.configs').map(parseConfig),
-  }
+  return request.get<UploadRulePageInit>('/api/admin/v1/storage/uploadrule/page-init')
 }
+
 export async function createUploadRule(data: CreateUploadRuleInput): Promise<{ id: number }> {
-  return expectId(
-    await request({ method: 'POST', url: '/api/admin/v1/storage/uploadrule', data }),
-    'upload rule create result',
-  )
+  return request.post<{ id: number }>('/api/admin/v1/storage/uploadrule', data)
 }
+
 export async function updateUploadRule(
   id: number,
   data: UpdateUploadRuleInput,
 ): Promise<Record<string, never>> {
-  return expectEmptyObject(
-    await request({
-      method: 'PUT',
-      url: `/api/admin/v1/storage/uploadrule/${id}`,
-      data,
-    }),
-    'upload rule update result',
-  )
+  return request.put<Record<string, never>>(`/api/admin/v1/storage/uploadrule/${id}`, data)
 }
+
 export async function updateUploadRuleStatus(
   id: number,
   isEnabled: YesNo,
 ): Promise<{ id: number; isEnabled: YesNo }> {
-  const result = expectRecord(
-    await request({
-      method: 'PATCH',
-      url: `/api/admin/v1/storage/uploadrule/${id}/status`,
-      data: { isEnabled },
-    }),
-    'upload rule status result',
-  )
-  if (!isYesNo(result.isEnabled)) throw new ProtocolError('upload rule status is invalid')
-  return { id: expectInteger(result.id, 'upload rule status id'), isEnabled: result.isEnabled }
-}
-export async function deleteUploadRule(id: number): Promise<Record<string, never>> {
-  return expectEmptyObject(
-    await request({ method: 'DELETE', url: `/api/admin/v1/storage/uploadrule/${id}` }),
-    'upload rule delete result',
+  return request.patch<{ id: number; isEnabled: YesNo }>(
+    `/api/admin/v1/storage/uploadrule/${id}/status`,
+    { isEnabled },
   )
 }
 
-function parseUploadRule(value: unknown, index: number): UploadRule {
-  const item = expectExactKeys(
-    value,
-    [
-      'id',
-      'platformId',
-      'platformCode',
-      'platformName',
-      'codes',
-      'name',
-      'cosConfigId',
-      'cosConfigName',
-      'maxFileSizeBytes',
-      'allowedExtensions',
-      'allowedMimeTypes',
-      'accessMode',
-      'isEnabled',
-      'remark',
-      'createdAt',
-      'updatedAt',
-    ] as const,
-    `upload rules[${index}]`,
-  )
-  const accessMode = item.accessMode
-  const isEnabled = item.isEnabled
-  if (accessMode !== 'private' && accessMode !== 'public')
-    throw new ProtocolError('upload rule access mode is invalid')
-  if (!isYesNo(isEnabled)) throw new ProtocolError('upload rule status is invalid')
-  const strings = (field: string) =>
-    expectArray(item[field], `upload rule.${field}`).map((entry, entryIndex) =>
-      expectString(entry, `upload rule.${field}[${entryIndex}]`),
-    )
-  return {
-    id: expectInteger(item.id, 'upload rule.id'),
-    platformId: expectInteger(item.platformId, 'upload rule.platformId'),
-    platformCode: expectString(item.platformCode, 'upload rule.platformCode'),
-    platformName: expectString(item.platformName, 'upload rule.platformName'),
-    codes: strings('codes'),
-    name: expectString(item.name, 'upload rule.name'),
-    cosConfigId: expectInteger(item.cosConfigId, 'upload rule.cosConfigId'),
-    cosConfigName: expectString(item.cosConfigName, 'upload rule.cosConfigName'),
-    maxFileSizeBytes: expectInteger(item.maxFileSizeBytes, 'upload rule.maxFileSizeBytes'),
-    allowedExtensions: strings('allowedExtensions'),
-    allowedMimeTypes: strings('allowedMimeTypes'),
-    accessMode,
-    isEnabled,
-    remark: expectString(item.remark, 'upload rule.remark'),
-    createdAt: expectString(item.createdAt, 'upload rule.createdAt'),
-    updatedAt: expectString(item.updatedAt, 'upload rule.updatedAt'),
-  }
-}
-function parsePlatform(value: unknown, index: number): PlatformOption {
-  const item = expectRecord(value, `platforms[${index}]`)
-  const isEnabled = item.isEnabled
-  if (!isYesNo(isEnabled)) throw new ProtocolError('platform status is invalid')
-  return {
-    id: expectInteger(item.id, 'platform.id'),
-    code: expectString(item.code, 'platform.code'),
-    name: expectString(item.name, 'platform.name'),
-    isEnabled,
-  }
-}
-function parseConfig(value: unknown, index: number): ConfigSummary {
-  const item = expectRecord(value, `configs[${index}]`)
-  const isEnabled = item.isEnabled
-  if (!isYesNo(isEnabled)) throw new ProtocolError('config status is invalid')
-  return {
-    id: expectInteger(item.id, 'config.id'),
-    name: expectString(item.name, 'config.name'),
-    bucket: expectString(item.bucket, 'config.bucket'),
-    region: expectString(item.region, 'config.region'),
-    isEnabled,
-  }
+export async function deleteUploadRule(id: number): Promise<Record<string, never>> {
+  return request.delete<Record<string, never>>(`/api/admin/v1/storage/uploadrule/${id}`)
 }

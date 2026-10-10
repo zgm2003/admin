@@ -74,7 +74,7 @@ function errorMessage(cause: unknown): string {
 
 async function loadPermissions(): Promise<void> {
   const role = props.role
-  if (role === null) return
+  if (role === null || !role.actions.authorize) return
   const sequence = ++loadSequence
   diffVisible.value = false
   loading.value = true
@@ -124,7 +124,7 @@ function permissionLabels(menuIDs: readonly number[]): string[] {
 }
 
 function prepareSave(): void {
-  if (data.value === null || saving.value) return
+  if (data.value === null || props.role?.actions.authorize !== true || saving.value) return
   error.value = ''
   const nextDiff = diffMenuIDs(originalEffectiveMenuIDs.value, selectedEffectiveMenuIDs.value)
   if (nextDiff.added.length === 0 && nextDiff.removed.length === 0) {
@@ -136,7 +136,7 @@ function prepareSave(): void {
 }
 
 async function save(): Promise<void> {
-  if (data.value === null || saving.value) return
+  if (data.value === null || props.role?.actions.authorize !== true || saving.value) return
   saving.value = true
   error.value = ''
   try {
@@ -230,4 +230,4 @@ async function save(): Promise<void> {
   />
 </template>
 
-<style scoped src="./RolePermissionDialog.css"></style>
+<style scoped src="./RolePermissionDialog.scss" lang="scss"></style>

@@ -96,7 +96,7 @@ onBeforeUnmount(() => {
   />
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .readiness-chart {
   width: 100%;
   height: 220px;

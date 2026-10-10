@@ -1,0 +1,60 @@
+.notification-task-status-tabs {
+  min-width: 0;
+
+  :deep(.el-tabs__header) {
+    margin: 0;
+  }
+
+  :deep(.el-tabs__content) {
+    display: none;
+  }
+
+  :deep(.el-tabs__item) {
+    padding: 0 18px;
+    font-weight: 500;
+  }
+}
+
+.notification-task-form {
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  :deep(.el-select),
+  &__date-picker {
+    width: 100%;
+  }
+
+  &__error {
+    color: var(--el-color-danger);
+    font-size: 12px;
+  }
+
+  &__grid--three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  &__state {
+    display: flex;
+    min-height: 160px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 720px) {
+  .notification-task-status-tabs {
+    :deep(.el-tabs__item) {
+      padding: 0 12px;
+    }
+  }
+
+  .notification-task-form {
+    &__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+}

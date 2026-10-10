@@ -1,93 +1,56 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
+import * as api from '@/api/storage/upload'
 import { request } from '@/utils/request'
-import { requestObjectURL, requestUploadCredentials } from '@/api/storage/upload'
-import { ProtocolError } from '@/types/http'
-
-vi.mock('@/utils/request', () => ({ request: vi.fn() }))
-const requestMock = vi.mocked(request)
-
-describe('storage upload API', () => {
-  beforeEach(() => requestMock.mockReset())
-
-  it('requests credentials with the unified rule code and file metadata', async () => {
-    const result = {
-      items: [
-        {
-          uploadUrl: 'https://cos.example/upload',
-          objectKey: 'avatar/2026/08/30/a.png',
-          method: 'PUT' as const,
-          headers: { 'Content-Type': 'image/png' },
-          expiresAt: '2026-08-30T00:10:00Z',
-          publicUrl: 'https://cdn.example/avatar/2026/08/30/a.png',
-        },
-      ],
-    }
-    requestMock.mockResolvedValue(result)
-
-    await expect(
-      requestUploadCredentials('avatar', [
-        { fileName: 'a.png', contentType: 'image/png', fileSizeBytes: 10 },
-      ]),
-    ).resolves.toEqual(result)
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'POST',
-      url: '/api/v1/storage/upload-credential',
-      data: {
-        ruleCode: 'avatar',
-        files: [{ fileName: 'a.png', contentType: 'image/png', fileSizeBytes: 10 }],
-      },
+vi.mock('@/utils/request', () => ({
+  request: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  refreshAccessCredential: vi.fn(),
+}))
+beforeEach(() => vi.resetAllMocks())
+describe('thin API HTTP contract', () => {
+  it('requestUploadCredentials preserves the HTTP contract and backend data', async () => {
+    const ruleCode: Parameters<typeof api.requestUploadCredentials>[0] = 'sample'
+    const files: Parameters<typeof api.requestUploadCredentials>[1] = [
+      { fileName: 'sample', contentType: 'sample', fileSizeBytes: 1 },
+    ]
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.requestUploadCredentials(ruleCode, files)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/v1/storage/upload-credential', {
+      ruleCode,
+      files,
     })
   })
-
-  it('parses public and private object URLs using only the object key', async () => {
-    requestMock.mockResolvedValueOnce({ url: 'https://cdn.example/object.png', expiresAt: null })
-    await expect(requestObjectURL('object-key')).resolves.toEqual({
-      url: 'https://cdn.example/object.png',
-      expiresAt: null,
-    })
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'POST',
-      url: '/api/v1/storage/object-url',
-      data: { objectKey: 'object-key' },
-    })
-
-    requestMock.mockResolvedValueOnce({
-      url: 'https://cos.example/signed',
-      expiresAt: '2026-09-17T00:10:00Z',
-    })
-    await expect(requestObjectURL('private-key')).resolves.toEqual({
-      url: 'https://cos.example/signed',
-      expiresAt: '2026-09-17T00:10:00Z',
-    })
+  it('requestUploadCredentials propagates request failures unchanged', async () => {
+    const ruleCode: Parameters<typeof api.requestUploadCredentials>[0] = 'sample'
+    const files: Parameters<typeof api.requestUploadCredentials>[1] = [
+      { fileName: 'sample', contentType: 'sample', fileSizeBytes: 1 },
+    ]
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.requestUploadCredentials(ruleCode, files)).rejects.toBe(error)
   })
-
-  it('forwards a dialog cancellation signal without changing object URL requests', async () => {
-    const signal = new AbortController().signal
-    requestMock.mockResolvedValue({ url: 'https://cdn.example/template.xlsx', expiresAt: null })
-    await requestObjectURL('template-key', signal)
-    expect(requestMock).toHaveBeenCalledExactlyOnceWith({
-      method: 'POST',
-      url: '/api/v1/storage/object-url',
-      data: { objectKey: 'template-key' },
-      signal,
-    })
+  it('requestObjectURL preserves the HTTP contract and backend data', async () => {
+    const controller = new AbortController()
+    const objectKey: Parameters<typeof api.requestObjectURL>[0] = 'sample'
+    const signal: Parameters<typeof api.requestObjectURL>[1] = controller.signal
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.requestObjectURL(objectKey, signal)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith(
+      '/api/v1/storage/object-url',
+      { objectKey },
+      { ...(signal ? { signal } : {}) },
+    )
   })
-
-  it('rejects malformed object URL responses', async () => {
-    for (const value of [
-      { url: '', expiresAt: null },
-      { url: 'javascript:alert(1)', expiresAt: null },
-      { url: 'http://cdn.example/object.csv', expiresAt: null },
-      { url: 'https://user:secret@cdn.example/object.csv', expiresAt: null },
-      { url: 'https://cdn.example/\nobject.csv', expiresAt: null },
-      { url: 'https://cdn.example/\\object.csv', expiresAt: null },
-      { url: 'https://cdn.example/object.png' },
-      { url: 'https://cdn.example/object.png', expiresAt: 'not-a-date' },
-      { url: 'https://cdn.example/object.png', expiresAt: null, generation: 1 },
-    ]) {
-      requestMock.mockResolvedValueOnce(value)
-      await expect(requestObjectURL('object-key')).rejects.toThrow(ProtocolError)
-    }
+  it('requestObjectURL propagates request failures unchanged', async () => {
+    const controller = new AbortController()
+    const objectKey: Parameters<typeof api.requestObjectURL>[0] = 'sample'
+    const signal: Parameters<typeof api.requestObjectURL>[1] = controller.signal
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.requestObjectURL(objectKey, signal)).rejects.toBe(error)
   })
 })

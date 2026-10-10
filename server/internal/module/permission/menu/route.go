@@ -8,6 +8,7 @@ func RegisterRoutes(
 	authenticate gin.HandlerFunc,
 	requirePermission func(string) gin.HandlerFunc,
 ) {
+	routes.GET("/permission/menu/options", authenticate, handler.FormOptions)
 	routes.GET("/permission/menu", authenticate, requirePermission(PermissionList), handler.List)
 	routes.POST("/permission/menu", authenticate, requirePermission(PermissionCreate), handler.Create)
 	routes.PUT("/permission/menu/:id", authenticate, requirePermission(PermissionUpdate), handler.Update)

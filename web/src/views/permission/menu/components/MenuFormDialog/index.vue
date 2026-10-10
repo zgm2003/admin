@@ -3,11 +3,13 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { ManagedMenuType, MenuPlatformOption } from '@/api/permission/menu'
+import type { MenuConstraints } from '@/api/permission/menuOptions'
 import { YesNo } from '@/enums/yesNo'
 import type { MenuIconName } from '@/icons/menuIcons'
 import type { MenuFormState } from '@/views/permission/menu/components/types'
 
 const props = defineProps<{
+  constraints: MenuConstraints
   dialogMode: 'create' | 'edit'
   mutationError: string
   editingProtected: boolean
@@ -95,6 +97,7 @@ function selectMenuIcon(value: MenuIconName): void {
           <el-input
             v-model="form.code"
             data-testid="menu-form-code"
+            :maxlength="props.constraints.codeMaxLength"
             :readonly="props.dialogMode === 'edit'"
             :disabled="props.editingProtected"
             :title="props.editingProtected ? t('menu.form.protectedHint') : undefined"
@@ -105,7 +108,11 @@ function selectMenuIcon(value: MenuIconName): void {
       </el-form-item>
 
       <el-form-item :label="t('menu.form.name')">
-        <el-input v-model="form.name" data-testid="menu-form-name" maxlength="128" />
+        <el-input
+          v-model="form.name"
+          data-testid="menu-form-name"
+          :maxlength="props.constraints.nameMaxLength"
+        />
       </el-form-item>
 
       <el-form-item :label="t('menu.form.remark')">
@@ -122,7 +129,11 @@ function selectMenuIcon(value: MenuIconName): void {
 
       <el-form-item v-if="form.menuType !== 'action'" :label="t('menu.form.i18nKey')">
         <div class="menu-form__control">
-          <el-input v-model="form.i18nKey" data-testid="menu-form-i18n-key" />
+          <el-input
+            v-model="form.i18nKey"
+            data-testid="menu-form-i18n-key"
+            :maxlength="props.constraints.i18nKeyMaxLength"
+          />
           <p class="menu-form__hint">{{ t('menu.form.i18nKeyHint') }}</p>
         </div>
       </el-form-item>
@@ -132,6 +143,7 @@ function selectMenuIcon(value: MenuIconName): void {
           <el-input
             v-model="form.path"
             data-testid="menu-form-path"
+            :maxlength="props.constraints.pathMaxLength"
             :disabled="props.editingProtected"
             :title="props.editingProtected ? t('menu.form.protectedHint') : undefined"
             :placeholder="t('menu.form.pathPlaceholder')"
@@ -145,6 +157,7 @@ function selectMenuIcon(value: MenuIconName): void {
           <el-input
             v-model="form.componentPath"
             data-testid="menu-form-component-path"
+            :maxlength="props.constraints.pathMaxLength"
             :disabled="props.editingProtected"
             :title="props.editingProtected ? t('menu.form.protectedHint') : undefined"
             :placeholder="t('menu.form.componentPathPlaceholder')"
@@ -260,41 +273,45 @@ function selectMenuIcon(value: MenuIconName): void {
   />
 </template>
 
-<style scoped>
-.menu-form__readonly {
-  display: inline-flex;
-  min-width: 0;
-  min-height: 32px;
-  align-items: center;
-  gap: 7px;
-  color: var(--admin-text);
-}
-.menu-form__readonly code {
-  color: var(--admin-text-soft);
-  font-family: Consolas, 'SFMono-Regular', monospace;
-  font-size: 12px;
+<style scoped lang="scss">
+.menu-form {
+  &__readonly {
+    display: inline-flex;
+    min-width: 0;
+    min-height: 32px;
+    align-items: center;
+    gap: 7px;
+    color: var(--admin-text);
+  }
+  &__readonly code {
+    color: var(--admin-text-soft);
+    font-family: Consolas, 'SFMono-Regular', monospace;
+    font-size: 12px;
+  }
 }
 .menu-form-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
-.menu-form__grid,
-.menu-form__control {
-  width: 100%;
-}
-.menu-form :deep(.el-segmented) {
-  width: 100%;
-}
-.menu-form__grid :deep(.el-input),
-.menu-form__grid :deep(.el-select),
-.menu-form__grid :deep(.el-input-number) {
-  width: 100%;
-}
-.menu-form__hint {
-  margin: 6px 0 0;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  line-height: 1.5;
+.menu-form {
+  &__grid,
+  &__control {
+    width: 100%;
+  }
+  :deep(.el-segmented) {
+    width: 100%;
+  }
+  &__grid :deep(.el-input),
+  &__grid :deep(.el-select),
+  &__grid :deep(.el-input-number) {
+    width: 100%;
+  }
+  &__hint {
+    margin: 6px 0 0;
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+  }
 }
 </style>

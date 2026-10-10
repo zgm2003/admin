@@ -13,6 +13,7 @@ import (
 )
 
 type service interface {
+	Options(context.Context) (Options, error)
 	Load(context.Context) (Safe, error)
 	Update(context.Context, Input) (Safe, error)
 	Delete(context.Context) error
@@ -88,4 +89,13 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 	response.OK(c, http.StatusOK, struct{}{})
+}
+
+func (h *Handler) Options(c *gin.Context) {
+	result, err := h.service.Options(c.Request.Context())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, result)
 }

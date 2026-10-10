@@ -34,7 +34,7 @@ import ConfigDialog from './components/ConfigDialog/index.vue'
 import ConfigTable from './components/ConfigTable/index.vue'
 import RuleDialog from './components/RuleDialog/index.vue'
 import RuleTable from './components/RuleTable/index.vue'
-import { useStorageDictionaries } from './storageDictionaries'
+import { useStorageOptions } from './storageOptions'
 import { useStorageForms } from './storageForms'
 import { saveExistingRule, saveNewRule } from './storageRuleSave'
 import {
@@ -72,7 +72,7 @@ const {
   cosRegionOptions,
   storageOptionsError,
   storageOptionsLoading,
-} = useStorageDictionaries()
+} = useStorageOptions()
 const {
   allExtensionsSelected,
   allMimeTypesSelected,
@@ -296,8 +296,6 @@ async function saveRule(): Promise<void> {
       await saveExistingRule(
         editingRule.value,
         ruleForm.value,
-        rules.value.find((rule) => rule.id === editingRule.value),
-        rules.value,
         canUpdateRuleStatus.value,
         mutable,
         t,
@@ -305,7 +303,6 @@ async function saveRule(): Promise<void> {
     } else {
       await saveNewRule(
         ruleForm.value,
-        rules.value,
         {
           ...mutable,
           platformId: ruleForm.value.platformId,
@@ -485,15 +482,15 @@ watch(cosRegionOptions, (options) => {
   </AppPage>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .storage-page {
   min-width: 0;
-}
-.storage-page :deep(.el-tabs__content) {
-  min-height: 0;
-}
-.storage-page :deep(.el-select),
-.storage-page :deep(.el-input-number) {
-  width: 100%;
+  :deep(.el-tabs__content) {
+    min-height: 0;
+  }
+  :deep(.el-select),
+  :deep(.el-input-number) {
+    width: 100%;
+  }
 }
 </style>

@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { ElNotification } from 'element-plus'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { ElMessageBox, ElNotification } from 'element-plus'
 import { createPinia, setActivePinia } from 'pinia'
-import { appI18n } from '@/i18n'
+import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
-import { ProtocolError } from '@/types/http'
+import * as catalogApi from '@/api/message/notificationTaskOptions'
 import * as api from '@/api/message/notificationTask'
 import Page from '@/views/message/notificationTask/index.vue'
 import {
@@ -12,6 +12,11 @@ import {
   notificationToolbarKeys,
 } from '@/views/message/notificationTask/components/NotificationEditor/index.vue'
 import NotificationTaskSearch from '@/views/message/notificationTask/components/NotificationTaskSearch/index.vue'
+import { taskCatalog, draftActions, completedActions } from './fixtures'
+
+enableAutoUnmount(afterEach)
+
+vi.mock('@/api/message/notificationTaskOptions', () => ({ getNotificationTaskOptions: vi.fn() }))
 
 vi.mock('@/api/message/notificationTask', async (original) => ({
   ...(await original()),
@@ -21,9 +26,12 @@ vi.mock('@/api/message/notificationTask', async (original) => ({
   listNotificationTaskOptions: vi.fn(),
   createNotificationTask: vi.fn(),
   updateNotificationTask: vi.fn(),
+  commandNotificationTask: vi.fn(),
+  deleteNotificationTask: vi.fn(),
 }))
 
 const task: api.NotificationTask = {
+  actions: draftActions,
   id: 1,
   platformId: 2,
   platformName: 'Canvas',
@@ -45,25 +53,33 @@ const task: api.NotificationTask = {
   canceledAt: null,
   failedAt: null,
   failureMessage: null,
-  status: api.NotificationTaskStatus.Draft,
+  status: 1,
   generatedCount: 0,
   createdBy: 3,
   createdAt: '2026-09-18T12:00:00Z',
   updatedAt: '2026-09-18T12:00:00Z',
 }
 
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason: unknown) => void
+} {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((next) => {
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((next, fail) => {
     resolve = next
+    reject = fail
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 describe('notification task management', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    setLocale('zh-CN')
+    vi.mocked(catalogApi.getNotificationTaskOptions).mockResolvedValue(taskCatalog)
     vi.mocked(api.listNotificationTasks).mockResolvedValue({
       list: [task],
       total: 1,
@@ -78,8 +94,169 @@ describe('notification task management', () => {
     vi.mocked(api.getNotificationTaskForUpdate).mockResolvedValue(task)
     vi.mocked(api.createNotificationTask).mockResolvedValue(task)
     vi.mocked(api.updateNotificationTask).mockResolvedValue(task)
+    vi.mocked(api.commandNotificationTask).mockResolvedValue(task)
+    vi.mocked(api.deleteNotificationTask).mockResolvedValue()
   })
   afterEach(() => vi.restoreAllMocks())
+
+  it('uses backend defaults and title constraints rather than the first option', async () => {
+    vi.mocked(catalogApi.getNotificationTaskOptions).mockResolvedValue({
+      ...taskCatalog,
+      audiences: [...taskCatalog.audiences].reverse(),
+      defaults: {
+        audienceType: 'platform',
+        variant: 'future-variant',
+        priority: 'future-priority',
+        linkType: 'future-link',
+      },
+      constraints: { titleMaxLength: 77 },
+    })
+    const wrapper = mountControls(['message:notificationTask:create'])
+    await flushPromises()
+    wrapper.getComponent({ name: 'NotificationTaskTable' }).vm.$emit('create')
+    await flushPromises()
+    const dialog = wrapper.getComponent({ name: 'NotificationTaskDialog' })
+    expect(dialog.props('form')).toMatchObject({
+      audienceType: 'platform',
+      variant: 'future-variant',
+      priority: 'future-priority',
+      linkType: 'future-link',
+    })
+    expect(dialog.props('titleMaxLength')).toBe(77)
+  })
+
+  it('blocks draft creation until backend options succeed and exposes a retry', async () => {
+    vi.mocked(catalogApi.getNotificationTaskOptions).mockRejectedValueOnce(new Error('目录失败'))
+    const wrapper = mountControls(['message:notificationTask:create'])
+    await flushPromises()
+    const table = wrapper.getComponent({ name: 'NotificationTaskTable' })
+    table.vm.$emit('create')
+    await flushPromises()
+    expect(table.props('createDisabled')).toBe(true)
+    expect(wrapper.getComponent({ name: 'NotificationTaskDialog' }).props('modelValue')).toBe(false)
+    expect(wrapper.text()).toContain('目录失败')
+    await wrapper.get('[data-testid="notification-task-options-retry"]').trigger('click')
+    await flushPromises()
+    expect(table.props('createDisabled')).toBe(false)
+  })
+
+  it('does not submit a draft twice while the first save is pending', async () => {
+    const pending = deferred<api.NotificationTask>()
+    vi.mocked(api.createNotificationTask).mockReturnValueOnce(pending.promise)
+    vi.spyOn(ElNotification, 'success').mockImplementation(() => ({ close: () => undefined }))
+    const wrapper = mountControls(['message:notificationTask:create'])
+    await flushPromises()
+    wrapper.getComponent({ name: 'NotificationTaskTable' }).vm.$emit('create')
+    const dialog = wrapper.getComponent({ name: 'NotificationTaskDialog' })
+    dialog.vm.$emit('update:form', { platformId: 2 })
+    dialog.vm.$emit('save')
+    dialog.vm.$emit('save')
+    await flushPromises()
+    expect(api.createNotificationTask).toHaveBeenCalledOnce()
+    expect(dialog.props('saving')).toBe(true)
+    pending.resolve(task)
+    await flushPromises()
+    expect(dialog.props('modelValue')).toBe(false)
+  })
+
+  it.each(['success', 'failure'] as const)(
+    'does not let a stale save %s overwrite a newly opened draft',
+    async (outcome) => {
+      const pending = deferred<api.NotificationTask>()
+      vi.mocked(api.createNotificationTask).mockReturnValueOnce(pending.promise)
+      vi.spyOn(ElNotification, 'success').mockImplementation(() => ({ close: () => undefined }))
+      const wrapper = mountControls(['message:notificationTask:create'])
+      await flushPromises()
+      const table = wrapper.getComponent({ name: 'NotificationTaskTable' })
+      const dialog = wrapper.getComponent({ name: 'NotificationTaskDialog' })
+      table.vm.$emit('create')
+      dialog.vm.$emit('update:form', { platformId: 2 })
+      dialog.vm.$emit('save')
+      await flushPromises()
+      dialog.vm.$emit('update:modelValue', false)
+      table.vm.$emit('create')
+      dialog.vm.$emit('update:form', { title: 'Current draft' })
+      await flushPromises()
+      if (outcome === 'success') pending.resolve(task)
+      else pending.reject(new Error('Obsolete save failure'))
+      await flushPromises()
+      expect(dialog.props('modelValue')).toBe(true)
+      expect(dialog.props('form')).toMatchObject({ title: 'Current draft', platformId: null })
+      expect(dialog.props('errorMessage')).toBe('')
+    },
+  )
+
+  it('locks row commands during confirmation without checking a frontend status list', async () => {
+    const confirmation = deferred<Awaited<ReturnType<typeof ElMessageBox.confirm>>>()
+    vi.spyOn(ElMessageBox, 'confirm').mockReturnValueOnce(confirmation.promise)
+    vi.spyOn(ElNotification, 'success').mockImplementation(() => ({ close: () => undefined }))
+    const wrapper = mountControls(['message:notificationTask:submit'])
+    await flushPromises()
+    const table = wrapper.getComponent({ name: 'NotificationTaskTable' })
+    table.vm.$emit('command', { ...task, status: 99 }, 'submit')
+    table.vm.$emit('command', { ...task, status: 99 }, 'submit')
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
+    expect(table.props('busyIds')).toEqual([1])
+    confirmation.resolve(
+      Object.assign('confirm' as const, { value: '', action: 'confirm' as const }),
+    )
+    await flushPromises()
+    expect(api.commandNotificationTask).toHaveBeenCalledExactlyOnceWith(1, 'submit')
+    expect(table.props('busyIds')).toEqual([])
+  })
+
+  it('checks backend actions and exact action permission before executing a row command', async () => {
+    const wrapper = mountControls(['message:notificationTask:submit'])
+    await flushPromises()
+    const table = wrapper.getComponent({ name: 'NotificationTaskTable' })
+    table.vm.$emit('command', { ...task, actions: { ...draftActions, submit: false } }, 'submit')
+    table.vm.$emit('command', { ...task, actions: { ...draftActions, copy: true } }, 'copy')
+    table.vm.$emit('remove', task)
+    table.vm.$emit('edit', task)
+    await flushPromises()
+    expect(api.commandNotificationTask).not.toHaveBeenCalled()
+    expect(api.deleteNotificationTask).not.toHaveBeenCalled()
+    expect(api.getNotificationTaskForUpdate).not.toHaveBeenCalled()
+  })
+
+  it('shows command failures inline, unlocks the row, and allows retry without a second notification', async () => {
+    vi.mocked(api.commandNotificationTask).mockRejectedValueOnce(new Error('复制失败'))
+    const error = vi
+      .spyOn(ElNotification, 'error')
+      .mockImplementation(() => ({ close: () => undefined }))
+    vi.spyOn(ElNotification, 'success').mockImplementation(() => ({ close: () => undefined }))
+    const wrapper = mountControls(['message:notificationTask:copy'])
+    await flushPromises()
+    const table = wrapper.getComponent({ name: 'NotificationTaskTable' })
+    table.vm.$emit('command', { ...task, actions: completedActions }, 'copy')
+    await flushPromises()
+    expect(table.props('errorMessage')).toBe('复制失败')
+    expect(table.props('busyIds')).toEqual([])
+    expect(error).not.toHaveBeenCalled()
+    table.vm.$emit('command', { ...task, actions: completedActions }, 'copy')
+    await flushPromises()
+    expect(api.commandNotificationTask).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not open a copied task for editing when the returned action forbids it', async () => {
+    vi.mocked(api.commandNotificationTask).mockResolvedValue({
+      ...task,
+      id: 2,
+      actions: completedActions,
+    })
+    vi.spyOn(ElNotification, 'success').mockImplementation(() => ({ close: () => undefined }))
+    const wrapper = mountControls([
+      'message:notificationTask:copy',
+      'message:notificationTask:update',
+    ])
+    await flushPromises()
+    wrapper
+      .getComponent({ name: 'NotificationTaskTable' })
+      .vm.$emit('command', { ...task, actions: completedActions }, 'copy')
+    await flushPromises()
+    expect(api.getNotificationTaskForUpdate).not.toHaveBeenCalled()
+  })
   it('uses only the approved editor controls and HTTPS links', () => {
     expect(notificationToolbarKeys).toEqual([
       'bold',
@@ -104,6 +281,7 @@ describe('notification task management', () => {
     const wrapper = mount(NotificationTaskSearch, {
       props: {
         modelValue: { keyword: '', platformId: '', audienceType: '', timeRange: [] },
+        audienceOptions: taskCatalog.audiences,
       },
       global: {
         plugins: [appI18n],
@@ -164,6 +342,7 @@ describe('notification task management', () => {
       expect.objectContaining({ name: 5, label: '已完成' }),
       expect.objectContaining({ name: 6, label: '失败' }),
       expect.objectContaining({ name: 7, label: '已取消' }),
+      expect.objectContaining({ name: 99, label: '未来任务状态' }),
     ])
 
     await wrapper.get('[data-testid="notification-task-page-three"]').trigger('click')
@@ -233,7 +412,7 @@ describe('notification task management', () => {
         stubs: {
           AppPage: { template: '<section><slot /></section>' },
           AppTable: { props: ['data'], template: '<div><slot name="toolbar-right" /></div>' },
-          AppDialog: { template: '<div><slot /></div><slot name="footer" />' },
+          AppDialog: { template: '<div><slot /><slot name="footer" /></div>' },
           NotificationEditor: true,
           ElButton: {
             template: '<button v-bind="$attrs"><slot /></button>',
@@ -250,6 +429,7 @@ describe('notification task management', () => {
         },
       },
     })
+    await flushPromises()
     await wrapper.get('[data-testid="notification-task-create"]').trigger('click')
     const platformSelect = wrapper
       .findAllComponents({ name: 'ElSelectV2' })
@@ -331,7 +511,7 @@ describe('notification task management', () => {
         stubs: {
           AppPage: { template: '<section><slot /></section>' },
           AppTable: { props: ['data'], template: '<div><slot name="toolbar-right" /></div>' },
-          AppDialog: { template: '<div><slot /></div><slot name="footer" />' },
+          AppDialog: { template: '<div><slot /><slot name="footer" /></div>' },
           NotificationEditor: true,
           ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },
           ElSelectV2: {
@@ -345,6 +525,7 @@ describe('notification task management', () => {
         },
       },
     })
+    await flushPromises()
     const create = wrapper.get('[data-testid="notification-task-create"]')
     await create.trigger('click')
     expect(wrapper.find('[data-testid="notification-task-option-more"]').exists()).toBe(false)
@@ -392,7 +573,7 @@ describe('notification task management', () => {
             name: 'AppDialog',
             props: ['modelValue'],
             emits: ['update:modelValue'],
-            template: '<div><slot /></div><slot name="footer" />',
+            template: '<div><slot /><slot name="footer" /></div>',
           },
           NotificationEditor: true,
           ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },
@@ -524,7 +705,7 @@ describe('notification task management', () => {
             name: 'AppDialog',
             props: ['modelValue'],
             emits: ['update:modelValue'],
-            template: '<div><slot /></div><slot name="footer" />',
+            template: '<div><slot /><slot name="footer" /></div>',
           },
           NotificationEditor: true,
           ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },
@@ -559,14 +740,12 @@ describe('notification task management', () => {
     expect(api.listNotificationTasks).toHaveBeenCalledTimes(2)
   })
 
-  it('notifies once and keeps the dialog open when a saved response violates the DTO', async () => {
+  it('keeps the dialog open and shows a backend save failure without notifying it twice', async () => {
     usePermissionStore().permissionCodes = [
       'message:notificationTask:list',
       'message:notificationTask:create',
     ]
-    vi.mocked(api.createNotificationTask).mockRejectedValue(
-      new ProtocolError('targetIds must be an array'),
-    )
+    vi.mocked(api.createNotificationTask).mockRejectedValue(new Error('后端保存失败'))
     const success = vi.spyOn(ElNotification, 'success').mockImplementation(() => ({
       close: () => undefined,
     }))
@@ -583,7 +762,7 @@ describe('notification task management', () => {
             name: 'AppDialog',
             props: ['modelValue'],
             emits: ['update:modelValue'],
-            template: '<div><slot /></div><slot name="footer" />',
+            template: '<div><slot /><slot name="footer" /></div>',
           },
           NotificationEditor: true,
           ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },
@@ -611,14 +790,11 @@ describe('notification task management', () => {
     const save = wrapper.findAll('button').find((button) => button.text().includes('保存'))
     if (save === undefined) throw new Error('save button is missing')
     await save.trigger('click')
-    await vi.waitFor(() => expect(error).toHaveBeenCalledOnce())
-
-    expect(error).toHaveBeenCalledWith({
-      title: '请求失败',
-      message: '服务响应格式无效',
-    })
+    await vi.waitFor(() => expect(wrapper.text()).toContain('后端保存失败'))
+    expect(error).not.toHaveBeenCalled()
     expect(success).not.toHaveBeenCalled()
     expect(wrapper.getComponent({ name: 'AppDialog' }).props('modelValue')).toBe(true)
+    expect(wrapper.find('[data-testid="notification-task-title"]').exists()).toBe(true)
     expect(api.listNotificationTasks).toHaveBeenCalledTimes(1)
   })
 
@@ -636,7 +812,7 @@ describe('notification task management', () => {
             props: ['data'],
             template: '<div><slot v-if="data.length" name="cell-actions" :row="data[0]" /></div>',
           },
-          AppDialog: { template: '<div><slot /></div><slot name="footer" />' },
+          AppDialog: { template: '<div><slot /><slot name="footer" /></div>' },
           NotificationEditor: true,
           ElButton: {
             template: '<button v-bind="$attrs"><slot /></button>',
@@ -670,7 +846,8 @@ describe('notification task management', () => {
       list: [
         {
           ...task,
-          status: api.NotificationTaskStatus.Completed,
+          status: 5,
+          actions: completedActions,
           completedAt: '2026-09-18T12:01:00Z',
         },
       ],
@@ -699,3 +876,31 @@ describe('notification task management', () => {
     expect(wrapper.find('[data-testid="notification-task-edit-1"]').exists()).toBe(false)
   })
 })
+
+function mountControls(permissions: string[]) {
+  usePermissionStore().permissionCodes = permissions
+  return mount(Page, {
+    global: {
+      plugins: [appI18n],
+      stubs: {
+        AppPage: { template: '<section><slot /></section>' },
+        NotificationTaskSearch: true,
+        NotificationTaskStatusTabs: true,
+        NotificationTaskTable: {
+          name: 'NotificationTaskTable',
+          props: ['createDisabled', 'busyIds', 'errorMessage'],
+          emits: ['create', 'command', 'remove', 'edit'],
+          template: '<div />',
+        },
+        NotificationTaskDialog: {
+          name: 'NotificationTaskDialog',
+          props: ['modelValue', 'form', 'saving', 'titleMaxLength', 'errorMessage'],
+          emits: ['save', 'update:form', 'update:modelValue'],
+          template: '<div />',
+        },
+        ElAlert: { props: ['title'], template: '<div>{{ title }}<slot /></div>' },
+        ElButton: { template: '<button v-bind="$attrs"><slot /></button>' },
+      },
+    },
+  })
+}

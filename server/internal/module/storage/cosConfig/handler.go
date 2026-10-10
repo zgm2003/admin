@@ -13,6 +13,7 @@ import (
 )
 
 type handlerService interface {
+	Options(context.Context) (Options, error)
 	List(context.Context, ListQuery) (pagination.Result[SafeValue], error)
 	Get(context.Context, int64) (SafeValue, error)
 	Create(context.Context, CreateInput) (int64, error)
@@ -158,4 +159,13 @@ func (h *Handler) Delete(context *gin.Context) {
 		return
 	}
 	response.OK(context, http.StatusOK, emptyResponse{})
+}
+
+func (h *Handler) Options(c *gin.Context) {
+	result, err := h.service.Options(c.Request.Context())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, result)
 }

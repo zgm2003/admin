@@ -277,7 +277,7 @@ async function saveTemplate(): Promise<void> {
     </AppDialog>
   </div>
 </template>
-<style scoped>
+<style scoped lang="scss">
 .table-tab {
   min-width: 0;
 }
@@ -286,10 +286,10 @@ async function saveTemplate(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 3px;
-}
 
-.table-summary strong {
-  font-size: 14px;
+  strong {
+    font-size: 14px;
+  }
 }
 
 .table-summary span,
@@ -302,10 +302,10 @@ async function saveTemplate(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 3px;
-}
 
-.primary-cell strong {
-  font-weight: 600;
+  strong {
+    font-weight: 600;
+  }
 }
 
 .mail-preview {
@@ -318,9 +318,9 @@ async function saveTemplate(): Promise<void> {
 .mail-template-form__meta {
   padding: 20px 24px 4px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-}
-.mail-template-form__meta :deep(.el-input-number) {
-  width: 100%;
+  :deep(.el-input-number) {
+    width: 100%;
+  }
 }
 .mail-template-form__examples {
   display: grid;
@@ -333,34 +333,34 @@ async function saveTemplate(): Promise<void> {
   grid-template-columns: minmax(0, 1fr) minmax(360px, 0.85fr);
   gap: 16px;
   padding: 20px 24px 24px;
-}
-.mail-template-workbench__pane {
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  background: var(--el-bg-color);
-}
-.mail-template-workbench__pane > header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-.mail-template-workbench__pane > header strong {
-  font-size: 14px;
-}
-.mail-template-workbench__pane > header span {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-.mail-template-workbench__pane :deep(.mail-html-editor) {
-  padding: 14px;
-}
-.mail-template-workbench__preview {
-  background: #f4f7fb;
+  &__pane {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 8px;
+    background: var(--el-bg-color);
+  }
+  &__pane > header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--el-border-color-lighter);
+  }
+  &__pane > header strong {
+    font-size: 14px;
+  }
+  &__pane > header span {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+  }
+  &__pane :deep(.mail-html-editor) {
+    padding: 14px;
+  }
+  &__preview {
+    background: #f4f7fb;
+  }
 }
 .mail-template-dialog__footer {
   display: flex;

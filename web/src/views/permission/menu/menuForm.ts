@@ -1,10 +1,5 @@
-import {
-  isComponentPath,
-  isMenuI18nKey,
-  isMenuIcon,
-  isMenuPath,
-  menuCodePattern,
-} from '@/api/permission/menu'
+import type { MenuConstraints } from '@/api/permission/menuOptions'
+import { isMenuIconName } from '@/icons/menuIcons'
 import type {
   CreateMenuInput,
   ManagedMenuNode,
@@ -87,17 +82,31 @@ export function menuCodeError(form: MenuFormState): MenuCodeError {
   return null
 }
 
-export function isMenuFormSubmittable(form: MenuFormState): boolean {
-  if (form.name === '' || form.name.trim() !== form.name || form.name.length > 128) return false
-  if (form.code.length > 128 || !menuCodePattern.test(form.code)) return false
-  if (form.menuType !== 'action' && !isMenuI18nKey(form.i18nKey)) return false
-  if (form.icon !== null && !isMenuIcon(form.icon)) return false
+export function isMenuFormSubmittable(form: MenuFormState, rules: MenuConstraints): boolean {
+  if (
+    form.name === '' ||
+    form.name.trim() !== form.name ||
+    [...form.name].length > rules.nameMaxLength
+  )
+    return false
+  if ([...form.code].length > rules.codeMaxLength || !new RegExp(rules.codePattern).test(form.code))
+    return false
+  if (
+    form.menuType !== 'action' &&
+    ([...form.i18nKey].length > rules.i18nKeyMaxLength ||
+      !new RegExp(rules.i18nKeyPattern).test(form.i18nKey))
+  )
+    return false
+  if (form.icon !== null && !isMenuIconName(form.icon)) return false
   if (form.menuType === 'page') {
     return (
       form.path !== null &&
-      isMenuPath(form.path) &&
+      [...form.path].length <= rules.pathMaxLength &&
+      !rules.reservedPagePaths.includes(form.path) &&
+      new RegExp(rules.pathPattern).test(form.path) &&
       form.componentPath !== null &&
-      isComponentPath(form.componentPath)
+      [...form.componentPath].length <= rules.pathMaxLength &&
+      new RegExp(rules.componentPathPattern).test(form.componentPath)
     )
   }
   if (form.menuType === 'directory') return form.path === null && form.componentPath === null

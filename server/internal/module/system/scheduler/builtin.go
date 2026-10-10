@@ -62,25 +62,25 @@ func (h *HistoryCleaner) Cleanup(ctx context.Context) error {
 }
 
 func BuiltinDefinitions(realtimeCleaner realtimeRetentionCleaner, notificationCleaner notificationRetentionCleaner, historyCleaner *HistoryCleaner) []TaskDefinition {
-	fixed := func(taskType, name, builtinKey string, timeout time.Duration, execute TaskExecutor) TaskDefinition {
-		return TaskDefinition{Type: taskType, DisplayName: name, BuiltinKey: builtinKey, DefaultParams: json.RawMessage(`{}`), ValidateParams: validateEmptyObject, Queue: "maintenance", Timeout: timeout, MaxAttempts: 3, Backoff: publishBackoff, Execute: execute}
+	fixed := func(taskType, name, englishName, builtinKey string, timeout time.Duration, execute TaskExecutor) TaskDefinition {
+		return TaskDefinition{Type: taskType, DisplayName: name, DisplayNameEnglish: englishName, BuiltinKey: builtinKey, DefaultParams: json.RawMessage(`{}`), ValidateParams: validateEmptyObject, Queue: "maintenance", Timeout: timeout, MaxAttempts: 3, Backoff: publishBackoff, Execute: execute}
 	}
 	return []TaskDefinition{
-		fixed("realtime.retention.cleanup", "实时事件历史清理", "realtime.retention.cleanup", 30*time.Second, func(ctx context.Context, _ ExecutionContext) error {
+		fixed("realtime.retention.cleanup", "实时事件历史清理", "Realtime event history cleanup", "realtime.retention.cleanup", 30*time.Second, func(ctx context.Context, _ ExecutionContext) error {
 			if realtimeCleaner == nil {
 				return errors.New("realtime retention cleaner is unavailable")
 			}
 			_, err := realtimeCleaner.Cleanup(ctx)
 			return err
 		}),
-		fixed("message.notification.retention.cleanup", "站内通知历史清理", "message.notification.retention.cleanup", 30*time.Second, func(ctx context.Context, _ ExecutionContext) error {
+		fixed("message.notification.retention.cleanup", "站内通知历史清理", "Notification history cleanup", "message.notification.retention.cleanup", 30*time.Second, func(ctx context.Context, _ ExecutionContext) error {
 			if notificationCleaner == nil {
 				return errors.New("notification retention cleaner is unavailable")
 			}
 			_, err := notificationCleaner.Cleanup(ctx)
 			return err
 		}),
-		fixed("system.scheduler.history.cleanup", "调度器历史清理", "system.scheduler.history.cleanup", 30*time.Second, func(ctx context.Context, _ ExecutionContext) error {
+		fixed("system.scheduler.history.cleanup", "调度器历史清理", "Scheduler history cleanup", "system.scheduler.history.cleanup", 30*time.Second, func(ctx context.Context, _ ExecutionContext) error {
 			if historyCleaner == nil {
 				return errors.New("scheduler history cleaner is unavailable")
 			}

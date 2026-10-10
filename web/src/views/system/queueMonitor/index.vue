@@ -111,7 +111,7 @@ function stop(): void {
   </AppPage>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .queue-monitor-page {
   display: flex;
   min-height: 0;

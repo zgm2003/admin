@@ -1,149 +1,193 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import {
-  getBrandSettings,
-  getSettings,
-  getLegalDocument,
-  getPublicLegalDocument,
-  updateBrandSettings,
-  updateLegalDocument,
-} from '@/api/system/setting'
+import * as api from '@/api/system/setting'
 import { request } from '@/utils/request'
-
-vi.mock('@/utils/request', () => ({ request: vi.fn() }))
-
-describe('system setting API', () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it('parses media as value type 5 while keeping value a string object key', async () => {
-    const objectKey =
-      'setting/.admin-storage/v2/p1/r1/c1/v1/2026/09/30/0123456789abcdef0123456789abcdef.csv'
-    const row = {
-      id: 1,
-      key: 'app.assets.custom',
-      value: objectKey,
-      valueType: 5,
-      description: '',
-      isEnabled: 1,
-      isBuiltin: 0,
-      createdAt: '2026-09-30T00:00:00Z',
-      updatedAt: '2026-09-30T00:00:00Z',
+vi.mock('@/utils/request', () => ({
+  request: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  refreshAccessCredential: vi.fn(),
+}))
+beforeEach(() => vi.resetAllMocks())
+describe('thin API HTTP contract', () => {
+  it('URL-encodes setting keys without changing submitted values', async () => {
+    vi.mocked(request.put).mockResolvedValue({})
+    const input = { value: 'unchanged', valueType: 1 }
+    await api.updateSetting('app.a/b ?', input)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/system/setting/app.a%2Fb%20%3F',
+      input,
+    )
+  })
+  it('getSettings preserves the HTTP contract and backend data', async () => {
+    const params: Parameters<typeof api.getSettings>[0] = { page: 1, pageSize: 1 }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getSettings(params)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/system/setting', { params })
+  })
+  it('getSettings propagates request failures unchanged', async () => {
+    const params: Parameters<typeof api.getSettings>[0] = { page: 1, pageSize: 1 }
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getSettings(params)).rejects.toBe(error)
+  })
+  it('getBrandSettings preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getBrandSettings()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/system/setting/brand')
+  })
+  it('getBrandSettings propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getBrandSettings()).rejects.toBe(error)
+  })
+  it('updateBrandSettings preserves the HTTP contract and backend data', async () => {
+    const input: Parameters<typeof api.updateBrandSettings>[0] = {
+      titleZhCN: 'sample',
+      titleEnUS: 'sample',
+      defaultAvatar: 'sample',
     }
-    const page = { list: [row], total: 1, page: 1, pageSize: 20 }
-    vi.mocked(request).mockResolvedValueOnce(page)
-    await expect(getSettings({ page: 1, pageSize: 20 })).resolves.toEqual(page)
-    for (const invalid of [
-      { ...row, valueType: 6 },
-      { ...row, value: 'https://example.com/file.csv' },
-    ]) {
-      vi.mocked(request).mockResolvedValueOnce({ ...page, list: [invalid] })
-      await expect(getSettings({ page: 1, pageSize: 20 })).rejects.toThrow()
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.updateBrandSettings(input)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/system/setting/brand', input)
+  })
+  it('updateBrandSettings propagates request failures unchanged', async () => {
+    const input: Parameters<typeof api.updateBrandSettings>[0] = {
+      titleZhCN: 'sample',
+      titleEnUS: 'sample',
+      defaultAvatar: 'sample',
     }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.updateBrandSettings(input)).rejects.toBe(error)
   })
-
-  it('rejects non-XLSX and non-string values for the built-in Excel template setting', async () => {
-    const objectKey =
-      'setting/.admin-storage/v2/p1/r1/c1/v1/2026/10/08/0123456789abcdef0123456789abcdef.xlsx'
-    const row = {
-      id: 1,
-      key: 'message.mail.recipient_rule.import_template_object_key',
-      value: objectKey,
-      valueType: 5,
-      description: '',
-      isEnabled: 1,
-      isBuiltin: 1,
-      createdAt: '2026-10-08T00:00:00Z',
-      updatedAt: '2026-10-08T00:00:00Z',
+  it('getPublicLegalDocument preserves the HTTP contract and backend data', async () => {
+    const kind: Parameters<typeof api.getPublicLegalDocument>[0] = 'userAgreement'
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getPublicLegalDocument(kind)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith(`/api/v1/system/setting/legal/${kind}`)
+  })
+  it('getPublicLegalDocument propagates request failures unchanged', async () => {
+    const kind: Parameters<typeof api.getPublicLegalDocument>[0] = 'userAgreement'
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getPublicLegalDocument(kind)).rejects.toBe(error)
+  })
+  it('getLegalDocument preserves the HTTP contract and backend data', async () => {
+    const kind: Parameters<typeof api.getLegalDocument>[0] = 'userAgreement'
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getLegalDocument(kind)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/system/setting/legal/${kind}`,
+    )
+  })
+  it('getLegalDocument propagates request failures unchanged', async () => {
+    const kind: Parameters<typeof api.getLegalDocument>[0] = 'userAgreement'
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getLegalDocument(kind)).rejects.toBe(error)
+  })
+  it('updateLegalDocument preserves the HTTP contract and backend data', async () => {
+    const kind: Parameters<typeof api.updateLegalDocument>[0] = 'userAgreement'
+    const contentHtml: Parameters<typeof api.updateLegalDocument>[1] = 'sample'
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.updateLegalDocument(kind, contentHtml)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/system/setting/legal/${kind}`,
+      { contentHtml },
+    )
+  })
+  it('updateLegalDocument propagates request failures unchanged', async () => {
+    const kind: Parameters<typeof api.updateLegalDocument>[0] = 'userAgreement'
+    const contentHtml: Parameters<typeof api.updateLegalDocument>[1] = 'sample'
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.updateLegalDocument(kind, contentHtml)).rejects.toBe(error)
+  })
+  it('createSetting preserves the HTTP contract and backend data', async () => {
+    const input: Parameters<typeof api.createSetting>[0] = {
+      key: 'sample',
+      value: 'sample',
+      valueType: 1,
     }
-    const page = { list: [row], total: 1, page: 1, pageSize: 20 }
-    vi.mocked(request).mockResolvedValue(page)
-    await expect(getSettings({ page: 1, pageSize: 20 })).resolves.toEqual(page)
-    for (const invalid of [
-      { ...row, value: objectKey.replace('.xlsx', '.csv') },
-      { ...row, value: objectKey.replace('.xlsx', '.xlsm') },
-      { ...row, value: null },
-      { ...row, value: [objectKey] },
-      { ...row, value: 'https://example.com/template.xlsx' },
-      { ...row, valueType: 1 },
-    ]) {
-      vi.mocked(request).mockResolvedValue({ ...page, list: [invalid] })
-      await expect(getSettings({ page: 1, pageSize: 20 })).rejects.toThrow()
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.createSetting(input)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/system/setting', input)
+  })
+  it('createSetting propagates request failures unchanged', async () => {
+    const input: Parameters<typeof api.createSetting>[0] = {
+      key: 'sample',
+      value: 'sample',
+      valueType: 1,
     }
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.createSetting(input)).rejects.toBe(error)
   })
-
-  it('strictly parses and updates the brand settings contract', async () => {
-    vi.mocked(request)
-      .mockResolvedValueOnce({
-        titleZhCN: '智澜',
-        titleEnUS: 'ZHILAN',
-        defaultAvatar: 'avatar/2026/default.png',
-      })
-      .mockResolvedValueOnce({})
-
-    await expect(getBrandSettings()).resolves.toEqual({
-      titleZhCN: '智澜',
-      titleEnUS: 'ZHILAN',
-      defaultAvatar: 'avatar/2026/default.png',
-    })
-    await expect(
-      updateBrandSettings({ titleZhCN: '新标题', titleEnUS: 'New title', defaultAvatar: '' }),
-    ).resolves.toBeUndefined()
-    expect(request).toHaveBeenNthCalledWith(1, {
-      method: 'GET',
-      url: '/api/admin/v1/system/setting/brand',
-    })
-    expect(request).toHaveBeenNthCalledWith(2, {
-      method: 'PUT',
-      url: '/api/admin/v1/system/setting/brand',
-      data: { titleZhCN: '新标题', titleEnUS: 'New title', defaultAvatar: '' },
-    })
+  it('updateSetting preserves the HTTP contract and backend data', async () => {
+    const key: Parameters<typeof api.updateSetting>[0] = 'sample'
+    const input: Parameters<typeof api.updateSetting>[1] = { value: 'sample', valueType: 1 }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.updateSetting(key, input)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/system/setting/${encodeURIComponent(key)}`,
+      input,
+    )
   })
-
-  it('rejects malformed brand settings responses', async () => {
-    vi.mocked(request).mockResolvedValue({ titleZhCN: '智澜', titleEnUS: 'ZHILAN' })
-    await expect(getBrandSettings()).rejects.toThrow()
+  it('updateSetting propagates request failures unchanged', async () => {
+    const key: Parameters<typeof api.updateSetting>[0] = 'sample'
+    const input: Parameters<typeof api.updateSetting>[1] = { value: 'sample', valueType: 1 }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.updateSetting(key, input)).rejects.toBe(error)
   })
-
-  it('strictly parses public and management legal document contracts', async () => {
-    vi.mocked(request)
-      .mockResolvedValueOnce({ kind: 'privacyPolicy', contentHtml: '<p>Privacy</p>' })
-      .mockResolvedValueOnce({ kind: 'userAgreement', contentHtml: '<p>Terms</p>' })
-      .mockResolvedValueOnce({})
-
-    await expect(getPublicLegalDocument('privacyPolicy')).resolves.toEqual({
-      kind: 'privacyPolicy',
-      contentHtml: '<p>Privacy</p>',
-    })
-    await expect(getLegalDocument('userAgreement')).resolves.toEqual({
-      kind: 'userAgreement',
-      contentHtml: '<p>Terms</p>',
-    })
-    await expect(updateLegalDocument('userAgreement', '<p>Updated</p>')).resolves.toBeUndefined()
-
-    expect(request).toHaveBeenNthCalledWith(1, {
-      method: 'GET',
-      url: '/api/v1/system/setting/legal/privacyPolicy',
-    })
-    expect(request).toHaveBeenNthCalledWith(2, {
-      method: 'GET',
-      url: '/api/admin/v1/system/setting/legal/userAgreement',
-    })
-    expect(request).toHaveBeenNthCalledWith(3, {
-      method: 'PUT',
-      url: '/api/admin/v1/system/setting/legal/userAgreement',
-      data: { contentHtml: '<p>Updated</p>' },
-    })
+  it('updateSettingStatus preserves the HTTP contract and backend data', async () => {
+    const key: Parameters<typeof api.updateSettingStatus>[0] = 'sample'
+    const isEnabled: Parameters<typeof api.updateSettingStatus>[1] = 0
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.patch).mockResolvedValue(dataFromServer)
+    const result = await api.updateSettingStatus(key, isEnabled)
+    expect(result).toBe(dataFromServer)
+    expect(request.patch).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/system/setting/${encodeURIComponent(key)}/status`,
+      { isEnabled },
+    )
   })
-
-  it('rejects malformed and mismatched legal document responses', async () => {
-    vi.mocked(request)
-      .mockResolvedValueOnce({
-        kind: 'privacyPolicy',
-        contentHtml: '<p>Privacy</p>',
-        locale: 'zh-CN',
-      })
-      .mockResolvedValueOnce({ kind: 'privacyPolicy', contentHtml: '<p>Privacy</p>' })
-    await expect(getPublicLegalDocument('privacyPolicy')).rejects.toThrow()
-    await expect(getLegalDocument('userAgreement')).rejects.toThrow()
+  it('updateSettingStatus propagates request failures unchanged', async () => {
+    const key: Parameters<typeof api.updateSettingStatus>[0] = 'sample'
+    const isEnabled: Parameters<typeof api.updateSettingStatus>[1] = 0
+    const error = new Error('request failed')
+    vi.mocked(request.patch).mockRejectedValue(error)
+    await expect(api.updateSettingStatus(key, isEnabled)).rejects.toBe(error)
+  })
+  it('deleteSetting preserves the HTTP contract and backend data', async () => {
+    const key: Parameters<typeof api.deleteSetting>[0] = 'sample'
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.delete).mockResolvedValue(dataFromServer)
+    const result = await api.deleteSetting(key)
+    expect(result).toBe(dataFromServer)
+    expect(request.delete).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/system/setting/${encodeURIComponent(key)}`,
+    )
+  })
+  it('deleteSetting propagates request failures unchanged', async () => {
+    const key: Parameters<typeof api.deleteSetting>[0] = 'sample'
+    const error = new Error('request failed')
+    vi.mocked(request.delete).mockRejectedValue(error)
+    await expect(api.deleteSetting(key)).rejects.toBe(error)
   })
 })

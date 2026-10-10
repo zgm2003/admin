@@ -8,6 +8,7 @@ const props = defineProps<{
   mutationError: string
   submitting: boolean
   formValid: boolean
+  nameMaxLength: number | undefined
 }>()
 const visible = defineModel<boolean>({ required: true })
 const form = defineModel<RoleFormState>('form', { required: true })
@@ -28,7 +29,7 @@ const { t } = useI18n()
         <el-input v-model="form.code" :disabled="props.editing" />
       </el-form-item>
       <el-form-item :label="t('role.form.name')">
-        <el-input v-model="form.name" maxlength="64" />
+        <el-input v-model="form.name" :maxlength="props.nameMaxLength" />
       </el-form-item>
     </el-form>
     <template #footer>

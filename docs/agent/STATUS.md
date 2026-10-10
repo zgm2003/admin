@@ -1,5 +1,39 @@
 # 项目状态
 
+## 当前工作：全项目后端业务归责与前端减法（2026-10-10，代码整改与全量验证完成，离线迁移待维护者执行）
+
+- 维护者已明确要求一口气实施全项目整改，不停留在计划。按所属 Go 模块集中拥有枚举、候选项、本地化标签、默认值、约束、业务保护和状态动作；前端保留明确 DTO、即时表单 rules、交互/展示和浏览器运输。数字/字符串 value 原类型保真；新增业务值不由前端 parser/名单拦截。
+- 已实际完成五方法泛型 request 与现有全部业务 API 瘦身，删除 api/protocol.ts 和逐接口 expect/parse；保留 envelope、认证凭据、刷新 single-flight/一次重试、终态通知一次及登录内联错误。Base64 下载和实时帧校验只保留在实际浏览器/运输用途文件。
+- 字典生产模块、装配、路由、页面、API、Store、专属 i18n 与专属缓存消费退出。性别、COS region/extension/MIME、Mail/SMS region 回归所属后端代码 `/options`；语言乱序保护、加载失败清空、上传多选/自定义值保留。候选项构建的额外 PostgreSQL/Redis 查询预算均为 0。
+- 其他业务 options/actions/constraints 覆盖登录/身份变更日志、会话、通知/任务、Mail/SMS、Scheduler、设置、认证平台、菜单、用户与角色；操作日志 55 种动作标签由 Go 按请求语言生成，未知动作保留原值，列表仍只 count + page 两次 PostgreSQL 查询；操作结论与 Access 交叉检查，后端写入仍校验最新事实/锁/事务。上传规则字段与可选状态通过一次 PUT 原子保存，不再前端 PUT 后 PATCH 制造部分成功。
+- 14 个自有 CSS 文件迁移 SCSS，Vue 自有 style 全部 lang=scss，保留 scoped、主题变量与响应式选择器；退出 500/400 行强拆、SCSS 必须特定 Sass 语法及 API parser 门禁。组件按职责/真实复用组织，第三方 CSS 原样保留。AGENTS/design/architecture/status-enum-catalog 已同步责任边界。
+- 配置缓存代际产品定位、页面/API/权限/代际协议不改；仅退出字典 scope，并将既有展示映射归后端。权限/Session/限流/队列等独立缓存协议不删除，也不把枚举套入配置中心。
+- 交付 `docs/database/2026-10-10-remove-system-dictionary.sql/.ps1` 与 `server/cmd/remove-system-dictionary`：离线、幂等 forward removal、durable manifest、受影响平台 menu_version/token lease 衔接、固定 patterns SCAN/UNLINK 与部分失败非零。仅做真实库只读依赖盘点及隔离 schema 集成测试；真实业务表/菜单/Redis 尚未执行退出，`current.sql` 未虚构刷新。
+- 独立审查发现的授权弹窗串用户/旧保存污染、上传规则 PATCH 未锁 no-op/公共配置空域名、设置媒体必填被绕过与确认期间切换目标均按失败测试→修复→回归收口。Account 新增 13 项生命周期回归、Setting Vue/API 45 项、Menu/AuthPlatform 86 项及 OperationLog 10 项定向通过，独立最终审查无未修 Critical/Important。
+- 冻结代码后的整体验证已完成：server 的 `go fmt ./...`、`go vet ./...`、`go test -p 1 ./... -count=1`、`go build ./...` 全部 exit 0；web 的 `pnpm format:check`、`pnpm typecheck`、`pnpm check:architecture`（0 findings）、`pnpm lint`、`pnpm vitest run --pool=threads --maxWorkers=1`（117 文件、1066/1066 项）和 `pnpm build` 全部 exit 0。Build 仅保留既有 rich-editor-core 大 chunk 告警，未放宽限制。退出 PowerShell 脚本通过 Parser 语法检查，`git diff --check` 通过。
+- Go 首轮唯一失败是 CacheGeneration 旧封闭 DTO 断言遗漏新增展示字段；补齐字段名单后定向与最终全包通过，保持严格字段数检查。测试使用隔离 PostgreSQL schema 与现有 Redis 测试 DB（运行时 Redis DB0，uploadRule 测试 DB3），未执行业务 Redis 清理或迁移 runner。
+- 发布前须先备份 PostgreSQL、停止旧 API/Worker，再运行退出脚本；失败保留同一 manifest/SQL 并重试，确认 verified=true 后才启动新版。真实迁移/Redis 维护端到端、浏览器和第三方发送未执行，current.sql 未刷新；未 commit/fetch/pull/push、停服或启动服务。
+
+### 本轮实施前审查记录（保留）
+
+- 维护者已将目标从删除字典管理扩大为全项目责任边界整改：后端集中拥有业务枚举、合法值、业务限制、状态转换和本地化业务文案，前端消费后端结果并承担交互与展示，不再手工维护第二份业务事实。已进一步明确前端整改：API 只保留类型和接口调用，request 提供 `get/post/put/patch/delete` 泛型门面，取消逐接口 DTO 运行时解析及重复业务规则；表单做好 rules，页面做好组件交互；撤销页面 500 行/组件 400 行强制拆分，自有样式统一 SCSS，按交互职责和复用拆组件，不按行数凑文件。具体逐模块契约与施工分批仍需评审，不凭总体方向直接批量改接口或业务代码。
+- 已只读审查 PHP 参考项目 `D:\github-project\admin_back` 的性别与 AI 枚举链：代码枚举复用于校验、页面 init、列表/导出和 Provider 协议映射；`DictService::enumToDict` 保留数字/字符串 value，静态枚举转换不查数据库、不进 Redis。借鉴后端单一维护入口与按业务需要提供选项，不照搬其通用服务、基类或旧数值协议。
+- 已完成当前生产代码目录盘点：前端 197 个 TS/Vue 文件（含 97 个 views 文件、27 个 API 文件），后端 8 个顶层域、344 个模块生产 Go 文件；按 enums/API/views、Store/router、业务协议/校验和相关测试定位问题，并核查关键前后端调用链。该数字是盘点范围，不代表所有文件、所有运行分支均已逐行审完；全量逐模块责任清单仍在进行。
+- 已确认的重复维护点：`api/message/{sms,notificationTask,notification}.ts`、`enums/{scheduler,smsRecipientRule,mailRecipientRule}.ts` 维护业务值/metadata；用户登录日志、会话和身份变更页各自映射文案；Scheduler presentation 按 `status - 1` 拼状态文案并维护 cron 预设；缓存页维护 namespace/scope/status 显示映射。需逐项区分业务语义与纯 UI 呈现后决定后端契约。
+- 已确认的重复业务限制：系统设置 API/弹窗维护保留天数范围、内置 key 和媒体类型规则，后端 `system/setting/service.go` 已有对应校验；认证平台表单写死登录方式、TTL 范围和最大会话数，后端 `permission/authPlatform/protocol.go` 已有对应常量/校验；菜单 API 另维护与后端 `permission/menu/tree.go` 对应的语法规则。Mail/SMS 限流前端另识别固定 policy key/mode/dimension，需要审查是否可直接消费后端事实。
+- 已确认的操作归责点：通知任务表格自行枚举草稿可编辑/删除/提交和可取消状态；会话页按状态与当前会话推导撤销按钮；上传规则保存先根据当前列表推断替换提示，再分别保存字段和状态。后续需核对后端动作结论、权限快照、事务原子性、并发变化和部分失败，不把按钮判断当业务权限事实。
+- 已有后端驱动链应保留：登录配置接口返回本地化 `loginTypes`，验证码倒计时消费服务端 `resendAfterSeconds`，通知任务用户/角色选项由后端有界查询，邮件 Excel 导入由后端解析/校验。请求错误、加载/提交状态、浏览器路由组件解析、上传运输、实时连接与跨标签协调属于前端/传输责任，不因业务减法一并删除；具体交互简化仍待维护者确认。
+- 相关测试也固化了旧归属：`web/tests/api/message/{sms,notificationTask}.test.ts` 明确断言前端拥有固定业务 metadata。确认新契约后，应同步迁移为后端定义/本地化/非法请求/动作规则测试与前端消费测试，不能只移动数组或删除失败断言；`design.md`、`architecture.md`、`status-enum-catalog.md` 的旧归属约定也待随实际实现更新。
+- 请求/API 专项核查：当前 `web/src/utils/request.ts` 为 292 行，导出的 `request(config)` 固定返回 `Promise<unknown>`；27 个 API 文件共 6,355 行，Mail 943 行、SMS 693 行（均含必要 DTO 类型，不能把全部行数视为冗余）。`api/protocol.ts` 的 expect/parse 辅助和各域重复 parser 将响应契约再维护一遍；部分 parser/helper 还被实时通道和菜单表单引用，退出 API 时必须核对所有消费方，不原样搬去另一个目录继续逐接口解析。
+- 规范根因已确认：`AGENTS.md` 和 `design.md` 要求 API 从 unknown 严格解析，`web/scripts/check-frontend-architecture.mjs` 的 `api-unparsed-response` 拒绝直接响应泛型，`oversized-sfc` 强制页面 500 行/组件 400 行拆分，`unnecessary-scss` 拒绝没有特定 Sass 语法的 SCSS。这些旧要求与维护者本次明确指令冲突，本次指令优先；施工时须同步修改规范、门禁及相关测试，不以新 helper/schema/框架换名延续旧设计。本轮尚未修改这些规范或脚本。
+- 已只读对照 `D:\github-project\admin_front_ts\src/utils/request.ts` 及代表性 API：其五个方法的调用门面符合目标；但当前参考目录内部也存在 operations/installed client/Zod/schema/参数规范化，不能声称整套旧实现只有简单调用，也不将这些运行时抽象搬入当前项目。新方案沿用简洁门面和业务 API，而非原样复制旧框架、路径或协议。
+- 样式盘点：91 个 Vue 文件中有 67 个 style 块，52 个普通内联块、15 个外部引用块，无内联 SCSS；另有 14 个自有 CSS 文件、3 个全局 SCSS 文件。整改需将自有样式组织为 scoped SCSS 或明确共享的 SCSS，保留主题 CSS 变量、作用域和响应式行为，避免只改扩展名/添加 lang 属性；第三方库原始 CSS 引入不属于自有源码迁移。优先 Element Plus 与现有 AppDialog/AppTable/AppSearch 等真实组件，独立交互按职责组件化，不制造只用于降行数的碎片组件。
+- 后端保真与请求边界：后端通过输出 DTO/序列化、业务校验、富文本净化和契约测试保证字段、数值、null/空数组、分页及错误语义，不依赖前端 parser 补救；TypeScript 类型和 strict 保留，泛型不是运行时验证。request 集中负责响应 envelope 解包、公共请求头、鉴权/单次重试/并发刷新、取消/网络错误与一次通知，不承接各模块业务逻辑。已有请求回归测试覆盖这些行为，瘦身不能顺带破坏登录刷新或复制错误通知。
+- 原删除字典的本地文件 `docs/local-work/2026-10-10-remove-system-dictionary-spec.md`、`docs/local-work/2026-10-10-remove-system-dictionary-plan.md` 仍存在且由 Git 忽略；其中前端静态候选与本地枚举翻译方案已不符合最新方向，标记待修订，不得继续执行。本轮未读取或改写这些文件。删除字典管理目标保留，配置缓存代际的产品定位仍待后续讨论，尚未决定删除其他配置/权限/会话缓存协议。
+- 后续跨模块设计需按百万用户、多实例基线记录热点查询预算、缓存策略和并发验证：代码静态枚举不套 PostgreSQL/Redis 配置缓存，动态关系选项有界分页，动作展示结论不得制造逐行查询；接口展示结论不能替代写入时的后端校验和并发保护。具体契约/实施分批需维护者评审。
+- 本轮只更新本状态入口并做静态审查，未修改业务代码、运行测试套件/构建、执行数据库迁移、清理 Redis、停服、启动服务或提交 Git。下一步按已收到的前端整改要求补齐逐域“前端删除/后端归属/契约与测试/保留交互”清单，先评审后端保真与薄 API 设计，再确认完整实施计划；运行时改动前同步处理上述冲突规范/门禁。
+
+
 ## 字典管理与缓存状态页面减法（2026-10-10，代码完成，验证待维护者）
 
 - 已确认不改“配置缓存代际”页面标题，也不改 `system/cacheGeneration` 页面目录、API 路径、Go 模块、数据库表、Redis namespace 或权限码。

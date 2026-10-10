@@ -43,7 +43,7 @@ func (s *Service) Get(ctx context.Context) (Safe, error) {
 }
 
 func (s *Service) Save(ctx context.Context, input Input) (Safe, error) {
-	if input.TTLMinutes < 1 || input.TTLMinutes > 60 || !yesno.IsValid(input.IsEnabled) {
+	if input.TTLMinutes < minTTLMinutes || input.TTLMinutes > maxTTLMinutes || !yesno.IsValid(input.IsEnabled) {
 		return Safe{}, apperror.InvalidRequest(fmt.Errorf("invalid mail config"))
 	}
 	fromEmail, err := normalizeAddress(input.FromEmail)

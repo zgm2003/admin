@@ -234,63 +234,65 @@ function onSelectionChange(selection: Row[]): void {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .app-table {
   display: flex;
   min-width: 0;
   flex-direction: column;
-}
-.app-table--fixed-footer {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-.app-table__toolbar {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-.app-table__toolbar-left,
-.app-table__toolbar-right {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-}
-.app-table__table--fixed {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-.app-table__pagination {
-  display: flex;
-  flex-shrink: 0;
-  justify-content: flex-end;
-  margin-top: 8px;
-}
-.app-table__error {
-  padding: 12px;
-  color: var(--el-color-danger);
+  &--fixed-footer {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+  &__toolbar {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  &__toolbar-left,
+  &__toolbar-right {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+  }
+  &__table--fixed {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  &__pagination {
+    display: flex;
+    flex-shrink: 0;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+  &__error {
+    padding: 12px;
+    color: var(--el-color-danger);
+  }
 }
 @media (max-width: 768px) {
-  .app-table__toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-  .app-table__toolbar-left,
-  .app-table__toolbar-right {
-    flex-wrap: wrap;
-  }
-  .app-table__pagination {
-    justify-content: space-between;
-    overflow-x: auto;
-  }
-  .app-table__pagination--distributed :deep(.el-pagination) {
-    width: 100%;
-    justify-content: flex-start;
-  }
-  .app-table__pagination--distributed :deep(.el-pagination__total) {
-    margin-right: auto;
+  .app-table {
+    &__toolbar {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    &__toolbar-left,
+    &__toolbar-right {
+      flex-wrap: wrap;
+    }
+    &__pagination {
+      justify-content: space-between;
+      overflow-x: auto;
+    }
+    &__pagination--distributed :deep(.el-pagination) {
+      width: 100%;
+      justify-content: flex-start;
+    }
+    &__pagination--distributed :deep(.el-pagination__total) {
+      margin-right: auto;
+    }
   }
 }
 </style>

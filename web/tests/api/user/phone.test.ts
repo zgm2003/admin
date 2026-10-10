@@ -1,119 +1,69 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import { bindPhone, getPhoneChangeLogs, sendPhoneCode } from '@/api/user/phone'
+import * as api from '@/api/user/phone'
 import { request } from '@/utils/request'
-
-vi.mock('@/utils/request', () => ({ request: vi.fn() }))
-const requestMock = vi.mocked(request)
-
-describe('user phone identity API', () => {
-  beforeEach(() => requestMock.mockReset())
-
-  it('sends exact current, next, and bind request shapes', async () => {
-    requestMock.mockResolvedValueOnce({
-      challengeId: 'current-challenge',
-      expiresAt: '2026-09-11T08:00:00Z',
-      resendAfterSeconds: 60,
-    })
-    await sendPhoneCode({ target: 'current' })
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'POST',
-      url: '/api/admin/v1/user/phone/send-code',
-      data: { target: 'current' },
-    })
-
-    requestMock.mockResolvedValueOnce({
-      challengeId: 'next-challenge',
-      expiresAt: '2026-09-11T08:00:00Z',
-      resendAfterSeconds: 0,
-    })
-    await sendPhoneCode({ target: 'next', phone: '+8615671628271' })
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'POST',
-      url: '/api/admin/v1/user/phone/send-code',
-      data: { target: 'next', phone: '+8615671628271' },
-    })
-
-    const input = {
-      currentChallengeId: 'current-challenge',
-      currentCode: '111111',
-      nextPhone: '+8615671628271',
-      nextChallengeId: 'next-challenge',
-      nextCode: '222222',
+vi.mock('@/utils/request', () => ({
+  request: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  refreshAccessCredential: vi.fn(),
+}))
+beforeEach(() => vi.resetAllMocks())
+describe('thin API HTTP contract', () => {
+  it('sendPhoneCode preserves the HTTP contract and backend data', async () => {
+    const input: Parameters<typeof api.sendPhoneCode>[0] = { target: 'current' }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.sendPhoneCode(input)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/user/phone/send-code',
+      input,
+    )
+  })
+  it('sendPhoneCode propagates request failures unchanged', async () => {
+    const input: Parameters<typeof api.sendPhoneCode>[0] = { target: 'current' }
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.sendPhoneCode(input)).rejects.toBe(error)
+  })
+  it('bindPhone preserves the HTTP contract and backend data', async () => {
+    const input: Parameters<typeof api.bindPhone>[0] = {
+      nextPhone: 'sample',
+      nextChallengeId: 'sample',
+      nextCode: 'sample',
     }
-    requestMock.mockResolvedValueOnce({ phone: '+8615671628271' })
-    await expect(bindPhone(input)).resolves.toEqual({ phone: '+8615671628271' })
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'PUT',
-      url: '/api/admin/v1/user/phone',
-      data: input,
-    })
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.bindPhone(input)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/user/phone', input)
   })
-
-  it.each([
-    { challengeId: '', expiresAt: '2026-09-11T08:00:00Z', resendAfterSeconds: 60 },
-    { challengeId: 'challenge', expiresAt: 'invalid', resendAfterSeconds: 60 },
-    { challengeId: 'challenge', expiresAt: '2026-09-11T08:00:00Z', resendAfterSeconds: -1 },
-    {
-      challengeId: 'challenge',
-      expiresAt: '2026-09-11T08:00:00Z',
-      resendAfterSeconds: 60,
-      extra: true,
-    },
-  ])('rejects malformed send-code responses', async (response) => {
-    requestMock.mockResolvedValue(response)
-    await expect(sendPhoneCode({ target: 'current' })).rejects.toThrow()
+  it('bindPhone propagates request failures unchanged', async () => {
+    const input: Parameters<typeof api.bindPhone>[0] = {
+      nextPhone: 'sample',
+      nextChallengeId: 'sample',
+      nextCode: 'sample',
+    }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.bindPhone(input)).rejects.toBe(error)
   })
-
-  it.each([
-    { phone: '15671628271' },
-    { phone: '+8612671628271' },
-    { phone: '' },
-    { phone: '+8615671628271', extra: true },
-  ])('rejects non-canonical phone identity responses', async (response) => {
-    requestMock.mockResolvedValue(response)
-    await expect(
-      bindPhone({ nextPhone: '+8615671628271', nextChallengeId: 'challenge', nextCode: '123456' }),
-    ).rejects.toThrow()
+  it('getPhoneChangeLogs preserves the HTTP contract and backend data', async () => {
+    const userId: Parameters<typeof api.getPhoneChangeLogs>[0] = 1
+    const query: Parameters<typeof api.getPhoneChangeLogs>[1] = { page: 1, pageSize: 1 }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getPhoneChangeLogs(userId, query)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/user/account/${userId}/phone-change-log`,
+      { params: query },
+    )
   })
-
-  it('loads numeric phone change actions and plaintext history', async () => {
-    requestMock.mockResolvedValue({
-      list: [
-        {
-          id: 1,
-          action: 1,
-          oldPhone: '+8615671628271',
-          newPhone: '+8613800000000',
-          platform: 'admin',
-          createdAt: '2026-09-29T05:00:00Z',
-        },
-        {
-          id: 2,
-          action: 2,
-          oldPhone: null,
-          newPhone: '+8613900000000',
-          platform: 'admin',
-          createdAt: '2026-09-28T05:00:00Z',
-        },
-      ],
-      total: 2,
-      page: 1,
-      pageSize: 20,
-    })
-    await expect(getPhoneChangeLogs(7, { page: 1, pageSize: 20 })).resolves.toEqual({
-      list: expect.arrayContaining([
-        expect.objectContaining({ action: 1, oldPhone: '+8615671628271' }),
-        expect.objectContaining({ action: 2, oldPhone: null }),
-      ]),
-      total: 2,
-      page: 1,
-      pageSize: 20,
-    })
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'GET',
-      url: '/api/admin/v1/user/account/7/phone-change-log',
-      params: { page: 1, pageSize: 20 },
-    })
+  it('getPhoneChangeLogs propagates request failures unchanged', async () => {
+    const userId: Parameters<typeof api.getPhoneChangeLogs>[0] = 1
+    const query: Parameters<typeof api.getPhoneChangeLogs>[1] = { page: 1, pageSize: 1 }
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getPhoneChangeLogs(userId, query)).rejects.toBe(error)
   })
 })

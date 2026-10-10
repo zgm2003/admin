@@ -1,6 +1,9 @@
 package cachegeneration
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 const (
 	PermissionView = "system:cacheGeneration:view"
@@ -58,6 +61,12 @@ type ListResult struct {
 }
 
 type listItem struct {
+	NamespaceLabel            string     `json:"namespaceLabel"`
+	ScopeLabel                string     `json:"scopeLabel"`
+	StatusLabel               string     `json:"statusLabel"`
+	StatusTone                string     `json:"statusTone"`
+	StatusHint                string     `json:"statusHint"`
+	PublishedVersion          *int64     `json:"publishedVersion"`
 	Namespace                 string     `json:"namespace"`
 	ScopeKey                  string     `json:"scopeKey"`
 	Generation                int64      `json:"generation"`
@@ -87,8 +96,15 @@ func IsPublishState(value string) bool {
 	}
 }
 
-func listItemResponse(item Item) listItem {
+func listItemResponse(ctx context.Context, item Item) listItem {
+	label, tone, hint := statusDisplay(ctx, item.Status)
+	var published *int64
+	if item.Status == StatusReady {
+		published = item.LatestPublishedGeneration
+	}
 	return listItem{
+		NamespaceLabel: namespaceLabel(ctx, item.Namespace), ScopeLabel: scopeLabel(ctx, item.Namespace, item.ScopeKey),
+		StatusLabel: label, StatusTone: tone, StatusHint: hint, PublishedVersion: published,
 		Namespace:                 item.Namespace,
 		ScopeKey:                  item.ScopeKey,
 		Generation:                item.Generation,
@@ -103,10 +119,10 @@ func listItemResponse(item Item) listItem {
 	}
 }
 
-func listResultResponse(result ListResult) listResponse {
+func listResultResponse(ctx context.Context, result ListResult) listResponse {
 	items := make([]listItem, 0, len(result.Items))
 	for _, item := range result.Items {
-		items = append(items, listItemResponse(item))
+		items = append(items, listItemResponse(ctx, item))
 	}
 	return listResponse{List: items, Total: result.Total, Page: result.Page, PageSize: result.PageSize}
 }

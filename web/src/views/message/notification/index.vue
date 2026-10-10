@@ -7,13 +7,13 @@ import { useI18n } from 'vue-i18n'
 
 import {
   listNotifications,
-  notificationPriorityMetadata,
-  notificationVariantMetadata,
   type NotificationItem,
   type NotificationPriority,
   type NotificationQuery,
   type NotificationVariant,
 } from '@/api/message/notification'
+import { getNotificationOptions } from '@/api/message/notificationOptions'
+import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn } from '@/components/AppTable'
 import { useNotificationStore } from '@/store/notification'
@@ -24,6 +24,11 @@ const access = usePermissionStore(),
   store = useNotificationStore(),
   router = useRouter(),
   { t } = useI18n()
+const {
+  options: catalog,
+  error: optionsError,
+  reload: reloadOptions,
+} = useLocalizedOptions(getNotificationOptions, () => ({ variants: [], priorities: [] }))
 const rows = ref<NotificationItem[]>([]),
   loading = ref(false),
   loadError = ref(''),
@@ -42,20 +47,12 @@ interface NotificationSearchModel {
   priority: NotificationPriority | ''
 }
 
-function isVariant(value: unknown): value is NotificationVariant {
-  return notificationVariantMetadata.some((item) => item.value === value)
-}
-
-function isPriority(value: unknown): value is NotificationPriority {
-  return notificationPriorityMetadata.some((item) => item.value === value)
-}
-
 const searchModel = computed<SearchFormModel<NotificationSearchModel>>({
   get: () => ({ unreadOnly: unreadOnly.value, variant: variant.value, priority: priority.value }),
   set: (value) => {
     unreadOnly.value = value.unreadOnly === 'unread' ? 'unread' : ''
-    variant.value = isVariant(value.variant) ? value.variant : ''
-    priority.value = isPriority(value.priority) ? value.priority : ''
+    variant.value = typeof value.variant === 'string' ? value.variant : ''
+    priority.value = typeof value.priority === 'string' ? value.priority : ''
   },
 })
 const searchFields = computed<SearchField<NotificationSearchModel>[]>(() => [
@@ -76,10 +73,7 @@ const searchFields = computed<SearchField<NotificationSearchModel>[]>(() => [
     resetValue: '',
     label: t('notification.variantLabel'),
     placeholder: t('notification.variantAll'),
-    options: notificationVariantMetadata.map((item) => ({
-      label: t(item.i18nKey),
-      value: item.value,
-    })),
+    options: catalog.value.variants,
     clearable: true,
     width: 160,
     testId: 'notification-variant-filter',
@@ -90,21 +84,16 @@ const searchFields = computed<SearchField<NotificationSearchModel>[]>(() => [
     resetValue: '',
     label: t('notification.priorityLabel'),
     placeholder: t('notification.priorityAll'),
-    options: notificationPriorityMetadata.map((item) => ({
-      label: t(item.i18nKey),
-      value: item.value,
-    })),
+    options: catalog.value.priorities,
     clearable: true,
     width: 160,
     testId: 'notification-priority-filter',
   },
 ])
-const variantTagTypes: Record<NotificationVariant, 'primary' | 'success' | 'warning' | 'danger'> = {
-  info: 'primary',
-  success: 'success',
-  warning: 'warning',
-  error: 'danger',
-}
+const variantLabel = (value: string): string =>
+  catalog.value.variants.find((item) => item.value === value)?.label ?? value
+const priorityLabel = (value: string): string =>
+  catalog.value.priorities.find((item) => item.value === value)?.label ?? value
 const columns = computed<TableColumn<NotificationItem>[]>(() => [
   { key: 'expand', prop: 'id', label: '', width: 48, expand: true },
   { key: 'title', prop: 'title', label: t('notification.columnTitle'), minWidth: 260 },
@@ -214,6 +203,10 @@ onMounted(() => void load())
       @reset="reset"
     />
 
+    <el-alert v-if="optionsError" :title="optionsError" type="error" :closable="false" show-icon>
+      <el-button link @click="reloadOptions">{{ t('notification.refresh') }}</el-button>
+    </el-alert>
+
     <el-empty v-if="!canList" :description="t('notification.noPermission')" />
     <template v-else>
       <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
@@ -254,24 +247,22 @@ onMounted(() => void load())
         <template #cell-variant="{ row }: { row: NotificationItem }">
           <el-tag
             :data-testid="`notification-variant-${row.id}`"
-            :type="variantTagTypes[row.variant]"
+            type="info"
             effect="plain"
             size="small"
           >
-            {{ t(`notification.variant.${row.variant}`) }}
+            {{ variantLabel(row.variant) }}
           </el-tag>
         </template>
         <template #cell-priority="{ row }: { row: NotificationItem }">
           <el-tag
-            v-if="row.priority === 'urgent'"
             :data-testid="`notification-priority-${row.id}`"
             effect="plain"
             size="small"
-            type="danger"
+            type="info"
           >
-            {{ t('notification.priority.urgent') }}
+            {{ priorityLabel(row.priority) }}
           </el-tag>
-          <span v-else>-</span>
         </template>
         <template #cell-isRead="{ row }: { row: NotificationItem }">
           <el-tag :type="row.isRead ? 'info' : 'primary'" effect="plain" size="small">
@@ -334,18 +325,18 @@ onMounted(() => void load())
     </template>
   </AppPage>
 </template>
-<style scoped>
+<style scoped lang="scss">
 .notification-center__title {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 2px;
-}
 
-.notification-center__title small {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  overflow-wrap: anywhere;
+  small {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
 }
 
 .notification-center__detail {
@@ -361,14 +352,14 @@ onMounted(() => void load())
   font-size: 14px;
   line-height: 1.65;
   overflow-wrap: anywhere;
-}
 
-.notification-center__body :deep(> :first-child) {
-  margin-top: 0;
-}
+  :deep(> :first-child) {
+    margin-top: 0;
+  }
 
-.notification-center__body :deep(> :last-child) {
-  margin-bottom: 0;
+  :deep(> :last-child) {
+    margin-bottom: 0;
+  }
 }
 
 .notification-center__more {

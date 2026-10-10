@@ -8,6 +8,7 @@ import {
   deleteRole,
   getRolePermissions,
   getRoles,
+  getRoleFormOptions,
   setDefaultRole,
   updateRole,
   updateRolePermissions,
@@ -22,6 +23,7 @@ import RoleManagement from '@/views/permission/role/index.vue'
 
 vi.mock('@/api/permission/role', () => ({
   getRoles: vi.fn(),
+  getRoleFormOptions: vi.fn(),
   createRole: vi.fn(),
   updateRole: vi.fn(),
   updateRoleStatus: vi.fn(),
@@ -46,9 +48,22 @@ describe('RoleManagement', () => {
     localStorage.clear()
     setLocale('zh-CN')
     vi.clearAllMocks()
+    vi.mocked(getRoleFormOptions).mockResolvedValue({
+      codePattern: '^[a-z][a-z0-9_]{2,63}$',
+      nameMinLength: 1,
+      nameMaxLength: 64,
+    })
     getRolesMock.mockResolvedValue({
       list: [
         {
+          actions: { update: true, status: true, setDefault: true, delete: false, authorize: true },
+          actionLabels: {
+            update: '编辑',
+            status: '禁用',
+            setDefault: '设为默认',
+            delete: '该角色仍绑定 2 个用户，不能删除。',
+            authorize: '授权',
+          },
           id: 3,
           code: 'tester',
           name: '测试员',
@@ -71,6 +86,47 @@ describe('RoleManagement', () => {
     deleteRoleMock.mockResolvedValue({})
     getRolePermissionsMock.mockResolvedValue(permissionResponse())
     updateRolePermissionsMock.mockResolvedValue({ id: 3, permissionCount: 1 })
+  })
+
+  it('uses backend actions even when ordinary role fields suggest it can be edited', async () => {
+    getRolesMock.mockResolvedValueOnce({
+      list: [
+        {
+          ...roleItem({ userCount: 0 }),
+          actions: {
+            update: false,
+            status: false,
+            setDefault: false,
+            delete: false,
+            authorize: false,
+          },
+          actionLabels: {
+            update: '后端编辑保护',
+            status: '后端状态保护',
+            setDefault: '后端默认保护',
+            delete: '后端删除保护',
+            authorize: '后端授权保护',
+          },
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage(['permission:role:update', 'permission:role:authorize'])
+    await flushPromises()
+    expect(
+      wrapper
+        .findAll('button')
+        .find((button) => button.text() === '编辑')
+        ?.attributes('disabled'),
+    ).toBeDefined()
+    expect(
+      wrapper
+        .findAll('button')
+        .find((button) => button.text() === '授权')
+        ?.attributes('disabled'),
+    ).toBeDefined()
   })
 
   it('loads explicit pagination once and renders the role row', async () => {
@@ -213,7 +269,20 @@ describe('RoleManagement', () => {
 
   it('shows status, default, and delete impact before mutating', async () => {
     getRolesMock.mockResolvedValue({
-      list: [roleItem({ userCount: 2, permissionCount: 0 })],
+      list: [
+        roleItem({
+          userCount: 2,
+          permissionCount: 0,
+          actions: { update: true, status: true, setDefault: true, delete: false, authorize: true },
+          actionLabels: {
+            update: '编辑',
+            status: '禁用',
+            setDefault: '设为默认',
+            delete: '该角色仍绑定 2 个用户，不能删除。',
+            authorize: '授权',
+          },
+        }),
+      ],
       total: 1,
       page: 1,
       pageSize: 20,
@@ -475,11 +544,92 @@ describe('RoleManagement', () => {
   it('explains every protected role action in its tooltip', async () => {
     getRolesMock.mockResolvedValue({
       list: [
-        roleItem({ id: 1, code: 'super_admin', name: '超级管理员' }),
-        roleItem({ id: 2, code: 'registered_user', name: '普通用户' }),
-        roleItem({ id: 3, code: 'default_role', name: '默认角色', isDefault: YesNo.Yes }),
-        roleItem({ id: 4, code: 'disabled_role', name: '禁用角色', isEnabled: YesNo.No }),
-        roleItem({ id: 5, code: 'attached_role', name: '已绑定角色', userCount: 2 }),
+        roleItem({
+          id: 1,
+          code: 'super_admin',
+          name: '超级管理员',
+          actions: {
+            update: false,
+            status: false,
+            setDefault: false,
+            delete: false,
+            authorize: false,
+          },
+          actionLabels: {
+            update: '系统角色名称固定，不能编辑。',
+            status: '超级管理员必须保持启用。',
+            setDefault: '超级管理员不能设为默认角色。',
+            delete: '系统角色不能删除。',
+            authorize: '超级管理员通过固定规则拥有全部权限，无需配置。',
+          },
+        }),
+        roleItem({
+          id: 2,
+          code: 'registered_user',
+          name: '普通用户',
+          actions: {
+            update: false,
+            status: true,
+            setDefault: true,
+            delete: false,
+            authorize: true,
+          },
+          actionLabels: {
+            update: '系统角色名称固定，不能编辑。',
+            status: '禁用',
+            setDefault: '设为默认',
+            delete: '系统角色不能删除。',
+            authorize: '授权',
+          },
+        }),
+        roleItem({
+          id: 3,
+          code: 'default_role',
+          name: '默认角色',
+          isDefault: YesNo.Yes,
+          actions: {
+            update: true,
+            status: false,
+            setDefault: false,
+            delete: false,
+            authorize: true,
+          },
+          actionLabels: {
+            update: '编辑',
+            status: '默认角色不能禁用。',
+            setDefault: '当前角色已经是默认角色。',
+            delete: '默认角色不能删除。',
+            authorize: '授权',
+          },
+        }),
+        roleItem({
+          id: 4,
+          code: 'disabled_role',
+          name: '禁用角色',
+          isEnabled: YesNo.No,
+          actions: { update: true, status: true, setDefault: false, delete: true, authorize: true },
+          actionLabels: {
+            update: '编辑',
+            status: '启用',
+            setDefault: '请先启用角色，再将其设为默认角色。',
+            delete: '删除',
+            authorize: '授权',
+          },
+        }),
+        roleItem({
+          id: 5,
+          code: 'attached_role',
+          name: '已绑定角色',
+          userCount: 2,
+          actions: { update: true, status: true, setDefault: true, delete: false, authorize: true },
+          actionLabels: {
+            update: '编辑',
+            status: '禁用',
+            setDefault: '设为默认',
+            delete: '该角色仍绑定 2 个用户，不能删除。',
+            authorize: '授权',
+          },
+        }),
       ],
       total: 5,
       page: 1,
@@ -501,7 +651,7 @@ describe('RoleManagement', () => {
     expect(tooltipContents).toContain('系统角色名称固定，不能编辑。')
     expect(tooltipContents).toContain('超级管理员必须保持启用。')
     expect(tooltipContents).toContain('超级管理员不能设为默认角色。')
-    expect(tooltipContents).not.toContain('超级管理员通过固定规则拥有全部权限，无需配置。')
+    expect(tooltipContents).toContain('超级管理员通过固定规则拥有全部权限，无需配置。')
     expect(tooltipContents.filter((content) => content === '授权')).toHaveLength(4)
     expect(tooltipContents).toContain('系统角色不能删除。')
     expect(tooltipContents).toContain('默认角色不能禁用。')
@@ -529,6 +679,14 @@ function roleItem(overrides: Partial<RoleListItem>): RoleListItem {
 
 function baseRoleItem(): RoleListItem {
   return {
+    actions: { update: true, status: true, setDefault: true, delete: true, authorize: true },
+    actionLabels: {
+      update: '编辑',
+      status: '禁用',
+      setDefault: '设为默认',
+      delete: '删除',
+      authorize: '授权',
+    },
     id: 3,
     code: 'tester',
     name: '测试员',

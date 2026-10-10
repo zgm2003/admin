@@ -166,4 +166,4 @@ function handleAccountCommand(command: string | number | object): void {
   </aside>
 </template>
 
-<style scoped src="./AppAside.css"></style>
+<style scoped src="./AppAside.scss" lang="scss"></style>

@@ -10,9 +10,18 @@ import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
 import CacheGenerationPageView from '@/views/system/cacheGeneration/index.vue'
 
-vi.mock('@/api/system/cacheGeneration', () => ({ getCacheGenerations: vi.fn() }))
+vi.mock('@/api/system/cacheGeneration', () => ({
+  getCacheGenerations: vi.fn(),
+  getCacheGenerationOptions: vi.fn(),
+}))
 
 const readyRow: CacheGeneration = {
+  namespaceLabel: '系统设置',
+  scopeLabel: '全局',
+  statusLabel: '就绪',
+  statusTone: 'success',
+  statusHint: '',
+  publishedVersion: 12,
   namespace: 'system.setting',
   scopeKey: 'global',
   generation: 12,
@@ -26,7 +35,13 @@ const readyRow: CacheGeneration = {
   updatedAt: '2026-09-16T08:00:00Z',
 }
 const retryingRow: CacheGeneration = {
-  namespace: 'system.dictionary',
+  namespaceLabel: '短信服务',
+  scopeLabel: '全局',
+  statusLabel: '重试中',
+  statusTone: 'danger',
+  statusHint: '',
+  publishedVersion: null,
+  namespace: 'message.sms',
   scopeKey: 'global',
   generation: 5,
   status: 'retrying',
@@ -42,6 +57,11 @@ const missingRow: CacheGeneration = {
   ...readyRow,
   namespace: 'message.mail',
   status: 'missing',
+  namespaceLabel: '邮件服务',
+  statusLabel: '等待缓存重建',
+  statusTone: 'warning',
+  statusHint: '后端重建提示',
+  publishedVersion: null,
   latestPublishedGeneration: null,
   latestPublishedAt: null,
 }
@@ -54,6 +74,13 @@ describe('cache generation page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setLocale('zh-CN')
+    vi.mocked(cacheGenerationAPI.getCacheGenerationOptions).mockResolvedValue({
+      publishStates: [
+        { value: 'ready', label: '已发布' },
+        { value: 'pending', label: '待发布' },
+        { value: 'retrying', label: '重试中' },
+      ],
+    })
     vi.mocked(cacheGenerationAPI.getCacheGenerations).mockResolvedValue({
       list: [readyRow, retryingRow, missingRow],
       total: 3,
@@ -65,6 +92,69 @@ describe('cache generation page', () => {
   afterEach(() => {
     for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
+  })
+
+  it('renders backend labels and forwards future filter values without business guessing', async () => {
+    vi.mocked(cacheGenerationAPI.getCacheGenerations).mockResolvedValue({
+      list: [
+        {
+          ...readyRow,
+          status: 'future',
+          namespaceLabel: '后端模块',
+          scopeLabel: '后端作用域',
+          statusLabel: '后端新状态',
+          statusTone: 'info',
+          publishedVersion: null,
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    vi.mocked(cacheGenerationAPI.getCacheGenerationOptions).mockResolvedValue({
+      publishStates: [{ value: 'future', label: '后端新筛选' }],
+    })
+    const wrapper = mountPage(['system:cacheGeneration:list'])
+    await flushPromises()
+    expect(wrapper.text()).toContain('后端模块')
+    expect(wrapper.text()).toContain('后端作用域')
+    expect(wrapper.text()).toContain('后端新状态')
+    const filter = wrapper
+      .findAllComponents({ name: 'ElSelectV2' })
+      .find((item) => item.attributes('data-testid') === 'cache-generation-publish-state')
+    if (!filter) throw new Error('filter missing')
+    expect(filter.props('options')).toEqual([{ value: 'future', label: '后端新筛选' }])
+    filter.vm.$emit('update:modelValue', 'future')
+    await wrapper.get('[data-testid="cache-generation-search"]').trigger('click')
+    await flushPromises()
+    expect(cacheGenerationAPI.getCacheGenerations).toHaveBeenLastCalledWith(
+      expect.objectContaining({ publishState: 'future' }),
+    )
+  })
+
+  it('clears rows and details on lost list access and rejects a late response', async () => {
+    const wrapper = mountPage(['system:cacheGeneration:list'])
+    await flushPromises()
+    await wrapper.get('[data-testid="cache-generation-detail"]').trigger('click')
+    const late = deferred<CacheGenerationPage>()
+    vi.mocked(cacheGenerationAPI.getCacheGenerations).mockReturnValueOnce(late.promise)
+    wrapper.getComponent({ name: 'AppTable' }).vm.$emit('refresh')
+    await nextTick()
+    usePermissionStore().applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: [] })
+    await flushPromises()
+    expect(wrapper.getComponent({ name: 'AppTable' }).props('data')).toEqual([])
+    expect(wrapper.getComponent({ name: 'AppTable' }).props('loading')).toBe(false)
+    expect(wrapper.getComponent({ name: 'CacheGenerationDetailDialog' }).props('row')).toBeNull()
+    late.resolve({ list: [readyRow], total: 1, page: 1, pageSize: 20 })
+    await flushPromises()
+    expect(wrapper.getComponent({ name: 'AppTable' }).props('data')).toEqual([])
+    usePermissionStore().applySnapshot({
+      roleCodes: [],
+      menuTree: [],
+      permissionCodes: ['system:cacheGeneration:list'],
+    })
+    await flushPromises()
+    expect(cacheGenerationAPI.getCacheGenerations).toHaveBeenCalledTimes(3)
   })
 
   it('renders the read-only management shell without mutation controls', async () => {

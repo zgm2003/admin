@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as mailApi from '@/api/message/mail'
 import { appI18n, setLocale } from '@/i18n'
+import { mailOptions } from './fixtures'
 import RateLimitTab from '@/views/message/mail/rateLimitPolicy/index.vue'
 
 vi.mock('@/api/message/mail', async (importOriginal) => {
@@ -56,7 +57,7 @@ const policies = [
 
 function mountTab(canUpdate: boolean): VueWrapper {
   return mount(RateLimitTab, {
-    props: { policies, loading: false, canUpdate },
+    props: { options: mailOptions(), policies, loading: false, canUpdate },
     global: { plugins: [ElementPlus, appI18n] },
   })
 }
@@ -65,6 +66,30 @@ describe('mail rate limit tab', () => {
   beforeEach(() => {
     setLocale('zh-CN')
     vi.clearAllMocks()
+  })
+
+  it('takes numeric bounds from backend constraints and fails closed when unavailable', async () => {
+    const options = mailOptions()
+    options.rateLimitConstraints = {
+      minLimit: 2,
+      maxLimit: 7,
+      minWindowSeconds: 20,
+      maxWindowSeconds: 90,
+    }
+    const wrapper = mountTab(true)
+    await wrapper.setProps({ options })
+    await flushPromises()
+    const limitInput = wrapper.get('[data-testid="rate-limit-input"] input')
+    const windowInput = wrapper.get('[data-testid="rate-limit-window-input"] input')
+    expect(limitInput.attributes('min')).toBe('2')
+    expect(limitInput.attributes('max')).toBe('7')
+    expect(windowInput.attributes('max')).toBe('90')
+    await wrapper.setProps({ options: null })
+    expect(limitInput.attributes('disabled')).toBeDefined()
+    expect(
+      wrapper.get('[data-testid="rate-limit-save-1:business_email_minute"]').attributes('disabled'),
+    ).toBeDefined()
+    wrapper.unmount()
   })
 
   it('renders every platform catalog with localized placeholders', async () => {

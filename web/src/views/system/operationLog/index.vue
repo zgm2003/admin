@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { getOperationLogs } from '@/api/system/operationLog'
@@ -8,8 +8,12 @@ import { YesNo } from '@/enums/yesNo'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import { formatTime } from '@/utils/datetime'
+import { usePermissionStore } from '@/store/permission'
 
-const { t, te } = useI18n()
+const { t, locale } = useI18n()
+const access = usePermissionStore()
+const canList = computed(() => access.hasPermission('system:operationLog:list'))
+let requestSequence = 0
 
 const rows = ref<OperationLogItem[]>([])
 const total = ref(0)
@@ -111,7 +115,13 @@ const tablePagination = computed<TablePaginationState>(() => ({
 const tableColumns = computed<TableColumn<OperationLogItem>[]>(() => [
   { key: 'expand', prop: 'id', label: '', width: 48, expand: true },
   { key: 'method', prop: 'id', label: t('operationLog.column.method'), width: 90 },
-  { prop: 'action', label: t('operationLog.column.action'), minWidth: 160, overflowTooltip: true },
+  {
+    key: 'action',
+    prop: 'actionLabel',
+    label: t('operationLog.column.action'),
+    minWidth: 160,
+    overflowTooltip: true,
+  },
   { prop: 'route', label: t('operationLog.column.route'), minWidth: 220, overflowTooltip: true },
   {
     key: 'user',
@@ -133,19 +143,30 @@ function errorMessage(error: unknown): string {
 }
 
 async function loadLogs(): Promise<boolean> {
-  if (loading.value) return false
-  loading.value = true
+  const request = ++requestSequence
+  rows.value = []
+  total.value = 0
   loadError.value = ''
+  if (!canList.value) {
+    loading.value = false
+    return false
+  }
+  const requestLocale = locale.value
+  loading.value = true
   try {
-    const result = await getOperationLogs(query.value)
+    const result = await getOperationLogs({ ...query.value })
+    if (request !== requestSequence || !canList.value || locale.value !== requestLocale)
+      return false
     rows.value = result.list
     total.value = result.total
     return true
   } catch (error: unknown) {
+    if (request !== requestSequence || !canList.value || locale.value !== requestLocale)
+      return false
     loadError.value = errorMessage(error)
     return false
   } finally {
-    loading.value = false
+    if (request === requestSequence) loading.value = false
   }
 }
 
@@ -212,11 +233,6 @@ function formatJSON(value: unknown): string {
   return JSON.stringify(value, null, 2) ?? '-'
 }
 
-function actionLabel(actionCode: string): string {
-  const key = `operationLog.actions.${actionCode}`
-  return te(key) ? t(key) : actionCode
-}
-
 function methodTagType(method: string): 'primary' | 'success' | 'warning' | 'danger' | 'info' {
   if (method === 'POST') return 'success'
   if (method === 'PUT' || method === 'PATCH') return 'warning'
@@ -225,8 +241,9 @@ function methodTagType(method: string): 'primary' | 'success' | 'warning' | 'dan
   return 'info'
 }
 
-onMounted(() => {
-  void loadLogs()
+watch([locale, canList], () => void loadLogs(), { immediate: true })
+onBeforeUnmount(() => {
+  requestSequence += 1
 })
 </script>
 
@@ -299,9 +316,7 @@ onMounted(() => {
           row.method
         }}</el-tag></template
       >
-      <template #cell-action="{ row }: { row: OperationLogItem }">{{
-        actionLabel(row.action)
-      }}</template>
+      <template #cell-action="{ row }: { row: OperationLogItem }">{{ row.actionLabel }}</template>
       <template #cell-user="{ row }: { row: OperationLogItem }">{{
         row.userId === null
           ? '-'
@@ -323,7 +338,7 @@ onMounted(() => {
   </AppPage>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .operation-log-page {
   min-width: 0;
 }
@@ -331,54 +346,54 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-.operation-log-filters {
-  flex-wrap: wrap;
-}
-.operation-log-filters .el-input {
-  width: 190px;
-}
-.operation-log-filters .el-select-v2 {
-  width: 130px;
+  & {
+    flex-wrap: wrap;
+  }
+  .el-input {
+    width: 190px;
+  }
+  .el-select-v2 {
+    width: 130px;
+  }
 }
 .operation-log-detail {
   padding: 4px 24px 18px;
-}
-.operation-log-detail h2 {
-  margin: 0 0 12px;
-  font-size: 16px;
-}
-.operation-log-detail__meta {
-  margin: 0 0 16px;
-}
-.operation-log-detail__meta :deep(.el-col) {
-  min-width: 0;
-}
-.operation-log-detail dt {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-.operation-log-detail dd {
-  margin: 4px 0 0;
-  overflow-wrap: anywhere;
+  h2 {
+    margin: 0 0 12px;
+    font-size: 16px;
+  }
+  &__meta {
+    margin: 0 0 16px;
+  }
+  &__meta :deep(.el-col) {
+    min-width: 0;
+  }
+  dt {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+  }
+  dd {
+    margin: 4px 0 0;
+    overflow-wrap: anywhere;
+  }
 }
 .operation-log-summaries {
   width: 100%;
-}
-.operation-log-summaries h3 {
-  margin: 0 0 8px;
-  font-size: 14px;
-}
-.operation-log-summaries pre {
-  min-height: 88px;
-  margin: 0;
-  padding: 12px;
-  overflow: auto;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 4px;
-  background: var(--el-fill-color-light);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+  }
+  pre {
+    min-height: 88px;
+    margin: 0;
+    padding: 12px;
+    overflow: auto;
+    border: 1px solid var(--el-border-color-light);
+    border-radius: 4px;
+    background: var(--el-fill-color-light);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
 }
 .el-pagination {
   justify-content: flex-end;
@@ -387,10 +402,10 @@ onMounted(() => {
   .operation-log-filters {
     align-items: stretch;
     flex-direction: column;
-  }
-  .operation-log-filters .el-input,
-  .operation-log-filters .el-select-v2 {
-    width: 100%;
+    .el-input,
+    .el-select-v2 {
+      width: 100%;
+    }
   }
 }
 </style>

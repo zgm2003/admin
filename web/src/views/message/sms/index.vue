@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import * as smsApi from '@/api/message/sms'
@@ -19,9 +19,12 @@ import SmsTemplateTab from './template/index.vue'
 type TabName = 'config' | 'templates' | 'logs' | 'rules' | 'policies'
 
 const access = usePermissionStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const activeTab = ref<TabName>('config')
-const catalogReady = ref(false)
+const options = ref<smsApi.SmsOptions | null>(null)
+const optionsLoading = ref(false)
+const catalogReady = computed(() => options.value !== null && !optionsLoading.value)
+let catalogSequence = 0
 const catalogError = ref('')
 const config = ref<smsApi.SmsConfig>({
   configured: false,
@@ -29,7 +32,7 @@ const config = ref<smsApi.SmsConfig>({
   signName: '',
   region: '',
   endpoint: '',
-  ttlMinutes: 5,
+  ttlMinutes: 0,
   isEnabled: YesNo.No,
   lastTestAt: null,
   lastTestError: '',
@@ -42,7 +45,6 @@ const logPage = ref(1)
 const logPageSize = ref(20)
 const logTotal = ref(0)
 const logFilter = ref<SmsLogFilter>(blankLogFilter())
-let catalogPromise: Promise<void> | null = null
 const can = (code: string) => access.hasPermission(code)
 const canList = computed(() => can('message:sms:list'))
 const visibleTabs = computed(() =>
@@ -56,9 +58,7 @@ const visibleTabs = computed(() =>
       ]
     : [],
 )
-const sceneOptions = computed<Array<{ label: string; value: smsApi.SmsScene }>>(() => [
-  ...smsApi.smsSceneMetadata.map((item) => ({ value: item.value, label: t(item.i18nKey) })),
-])
+const sceneOptions = computed(() => options.value?.scenes ?? [])
 
 function blankLogFilter(): SmsLogFilter {
   return { platform: '', toPhone: '', scene: '', status: '', timeRange: [] }
@@ -68,24 +68,20 @@ function errorMessage(error: unknown): string {
   return error instanceof Error && error.message !== '' ? error.message : t('sms.loadFailed')
 }
 
-function loadCatalog(): Promise<void> {
-  if (catalogReady.value) return Promise.resolve()
-  if (catalogPromise !== null) return catalogPromise
+async function loadCatalog(): Promise<void> {
+  const sequence = ++catalogSequence
+  options.value = null
   catalogError.value = ''
-  const pending = smsApi
-    .getSmsPageInit()
-    .then(() => {
-      catalogReady.value = true
-    })
-    .catch((error: unknown) => {
-      catalogReady.value = false
-      catalogError.value = errorMessage(error)
-    })
-    .finally(() => {
-      if (catalogPromise === pending) catalogPromise = null
-    })
-  catalogPromise = pending
-  return pending
+  optionsLoading.value = canList.value
+  if (!canList.value) return
+  try {
+    const result = await smsApi.getSmsOptions()
+    if (sequence === catalogSequence) options.value = result
+  } catch (error: unknown) {
+    if (sequence === catalogSequence) catalogError.value = errorMessage(error)
+  } finally {
+    if (sequence === catalogSequence) optionsLoading.value = false
+  }
 }
 
 async function loadConfig(context?: MessageTabLoadContext): Promise<void> {
@@ -152,13 +148,10 @@ function changeLogPage(value: TablePaginationState): void {
   void load('logs')
 }
 
-watch(
-  canList,
-  (allowed) => {
-    if (allowed) void loadCatalog()
-  },
-  { immediate: true },
-)
+watch([locale, canList], () => void loadCatalog(), { immediate: true, flush: 'sync' })
+onBeforeUnmount(() => {
+  catalogSequence++
+})
 </script>
 
 <template>
@@ -168,7 +161,7 @@ watch(
       <el-alert
         v-if="catalogError"
         class="sms-page__catalog-error"
-        :title="t('sms.loadFailed')"
+        :title="catalogError"
         type="warning"
         :closable="false"
         show-icon
@@ -205,6 +198,7 @@ watch(
             <SmsLogTab
               v-else-if="tab.name === 'logs' && !errors.logs"
               :logs="logs"
+              :options="options"
               :scene-options="sceneOptions"
               :total="logTotal"
               :page="logPage"
@@ -218,6 +212,7 @@ watch(
             <SmsRecipientRuleTab
               v-else-if="tab.name === 'rules' && !errors.rules"
               :rules="rules"
+              :options="options"
               :loading="loading.rules"
               :can-create="can('message:sms:rule:create')"
               :can-update="can('message:sms:rule:update')"
@@ -228,6 +223,7 @@ watch(
             <SmsRateLimitPolicyTab
               v-else-if="tab.name === 'policies' && !errors.policies"
               :platforms="policies"
+              :options="options"
               :loading="loading.policies"
               :can-update="can('message:sms:rate-limit:update')"
               @refresh="load('policies')"
@@ -239,53 +235,57 @@ watch(
   </AppPage>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .sms-page {
   min-width: 0;
+
+  &__catalog-error {
+    margin-bottom: 12px;
+  }
 }
 
-.sms-page__catalog-error {
-  margin-bottom: 12px;
-}
+.sms-tabs {
+  :deep(.el-tabs__content) {
+    overflow: visible;
+    padding-top: 12px;
+  }
 
-.sms-tabs :deep(.el-tabs__content) {
-  overflow: visible;
-  padding-top: 12px;
-}
+  :deep(.el-tabs__header) {
+    margin: 0;
+  }
 
-.sms-tabs :deep(.el-tabs__header) {
-  margin: 0;
-}
+  :deep(.el-tabs__nav-wrap::after) {
+    height: 1px;
+    background: var(--el-border-color-lighter);
+  }
 
-.sms-tabs :deep(.el-tabs__nav-wrap::after) {
-  height: 1px;
-  background: var(--el-border-color-lighter);
-}
-
-.sms-tabs :deep(.el-tabs__item) {
-  height: 40px;
-  padding: 0 20px;
-  font-weight: 500;
+  :deep(.el-tabs__item) {
+    height: 40px;
+    padding: 0 20px;
+    font-weight: 500;
+  }
 }
 
 .sms-panel {
   min-height: 240px;
-}
 
-.sms-panel__error {
-  display: flex;
-  min-height: 180px;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 12px;
-  color: var(--el-color-danger);
-  text-align: center;
+  &__error {
+    display: flex;
+    min-height: 180px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    color: var(--el-color-danger);
+    text-align: center;
+  }
 }
 
 @media (max-width: 640px) {
-  .sms-tabs :deep(.el-tabs__item) {
-    padding: 0 14px;
+  .sms-tabs {
+    :deep(.el-tabs__item) {
+      padding: 0 14px;
+    }
   }
 }
 </style>

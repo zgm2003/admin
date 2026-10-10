@@ -101,3 +101,7 @@ func (h *SessionAdminHandler) RevokeMany(context *gin.Context) {
 	}
 	response.OK(context, http.StatusOK, sessionAdminRevokeResponse{Revoked: len(result.Revoked), SkippedCurrent: result.SkippedCurrent, SkippedRevoked: result.SkippedRevoked})
 }
+
+func (h *SessionAdminHandler) FormOptions(c *gin.Context) {
+	response.OK(c, http.StatusOK, adminOptions(c.Request.Context()))
+}

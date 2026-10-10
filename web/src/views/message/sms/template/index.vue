@@ -47,12 +47,12 @@ const columns = computed<TableColumn<smsApi.SmsTemplate>[]>(() => [
 
 function blankTemplate(): smsApi.SmsTemplateInput {
   return {
-    scene: 'login',
+    scene: '',
     name: '',
     tencentTemplateId: '',
-    content: '{1} 有效期 {2} 分钟',
-    variableKeys: ['code', 'ttl_minutes'],
-    exampleVariables: { code: '123456', ttl_minutes: '5' },
+    content: '',
+    variableKeys: [],
+    exampleVariables: {},
   }
 }
 
@@ -216,19 +216,19 @@ async function toggle(row: smsApi.SmsTemplate, value: YesNoValue): Promise<void>
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .sms-template {
   min-width: 0;
-}
 
-.sms-template__name {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
+  &__name {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
 
-.sms-template__name code {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
+  &__name code {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+  }
 }
 </style>

@@ -214,7 +214,7 @@ function complete(point: SlidePoint): void {
   </Teleport>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .app-captcha-overlay {
   position: fixed;
   inset: 0;
@@ -244,14 +244,14 @@ function complete(point: SlidePoint): void {
   overflow: hidden;
   border-radius: 8px;
   box-shadow: var(--admin-shadow-lg);
-}
 
-.app-captcha-panel :deep(.go-captcha.gc-theme) {
-  box-shadow: none;
-}
+  :deep(.go-captcha.gc-theme) {
+    box-shadow: none;
+  }
 
-.app-captcha-panel :deep(.gc-header) {
-  font-weight: 600;
+  :deep(.gc-header) {
+    font-weight: 600;
+  }
 }
 
 .app-captcha-loading {
@@ -265,15 +265,15 @@ function complete(point: SlidePoint): void {
   background: var(--el-bg-color-overlay);
   border: 1px solid var(--el-border-color-light);
   font-size: 13px;
-}
 
-.app-captcha-loading__spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--el-border-color);
-  border-top-color: var(--el-color-primary);
-  border-radius: 50%;
-  animation: app-captcha-spin 700ms linear infinite;
+  &__spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--el-border-color);
+    border-top-color: var(--el-color-primary);
+    border-radius: 50%;
+    animation: app-captcha-spin 700ms linear infinite;
+  }
 }
 
 .app-captcha-retry {
@@ -289,15 +289,15 @@ function complete(point: SlidePoint): void {
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-}
 
-.app-captcha-retry:hover {
-  background: var(--el-color-primary-light-8);
-}
+  &:hover {
+    background: var(--el-color-primary-light-8);
+  }
 
-.app-captcha-retry:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 2px;
+  &:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
+  }
 }
 
 .app-captcha-pending {
@@ -335,15 +335,17 @@ function complete(point: SlidePoint): void {
   }
 }
 
-@media (max-width: 340px) {
-  .app-captcha-panel {
+.app-captcha-panel {
+  @media (max-width: 340px) {
     transform: scale(0.86);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .app-captcha-loading__spinner {
-    animation-duration: 1.8s;
+  .app-captcha-loading {
+    &__spinner {
+      animation-duration: 1.8s;
+    }
   }
 }
 </style>

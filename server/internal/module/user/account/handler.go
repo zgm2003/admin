@@ -21,7 +21,7 @@ type userService interface {
 	Update(context.Context, int64, int64, UpdateInput) (UpdatedProfile, error)
 	UpdateStatus(context.Context, int64, int64, yesno.Value) error
 	Delete(context.Context, int64, int64) error
-	Roles(context.Context, int64) (Roles, error)
+	Roles(context.Context, int64, int64) (Roles, error)
 	UpdateRoles(context.Context, int64, int64, []int64) (int64, error)
 }
 
@@ -40,6 +40,16 @@ func (h *Handler) List(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
+	if h.actorUserID == nil {
+		response.Fail(context, apperror.Unauthorized(fmt.Errorf("actor identity is missing")))
+		return
+	}
+	actor, exists := h.actorUserID(context)
+	if !exists || actor <= 0 {
+		response.Fail(context, apperror.Unauthorized(fmt.Errorf("actor identity is missing")))
+		return
+	}
+	query.ActorUserID = actor
 	result, err := h.service.List(context.Request.Context(), query)
 	if err != nil {
 		response.Fail(context, err)
@@ -126,12 +136,11 @@ func (h *Handler) Delete(context *gin.Context) {
 }
 
 func (h *Handler) Roles(context *gin.Context) {
-	target, err := parseUserID(context.Param("id"))
-	if err != nil {
-		response.Fail(context, err)
+	actor, target, ok := h.mutationIDs(context)
+	if !ok {
 		return
 	}
-	value, err := h.service.Roles(context.Request.Context(), target)
+	value, err := h.service.Roles(context.Request.Context(), actor, target)
 	if err != nil {
 		response.Fail(context, err)
 		return
@@ -179,4 +188,12 @@ func (h *Handler) mutationIDs(context *gin.Context) (int64, int64, bool) {
 		return 0, 0, false
 	}
 	return actor, target, true
+}
+
+func (h *Handler) FormOptions(ctx *gin.Context) {
+	if len(ctx.Request.URL.Query()) != 0 {
+		response.Fail(ctx, apperror.InvalidRequest(fmt.Errorf("form options accepts no query parameters")))
+		return
+	}
+	response.OK(ctx, http.StatusOK, AccountFormOptions())
 }

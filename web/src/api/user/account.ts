@@ -1,8 +1,6 @@
 import { YesNo } from '@/enums/yesNo'
 import type { PageRequest, PageResult } from '@/types/pagination'
 import { request } from '@/utils/request'
-import { ProtocolError } from '@/types/http'
-import { expectEmptyObject, expectExactKeys, expectInteger } from '@/api/protocol'
 
 export interface UserListQuery extends PageRequest {
   keyword?: string
@@ -16,7 +14,26 @@ export interface UserRoleSummary {
   name: string
   isEnabled: YesNo
 }
+
+export interface UserActions {
+  update: boolean
+  status: boolean
+  delete: boolean
+  authorize: boolean
+}
+export interface UserActionLabels {
+  update: string
+  status: string
+  delete: string
+  authorize: string
+}
+export interface UserAssignmentRole extends UserRoleSummary {
+  selectable: boolean
+  locked: boolean
+}
 export interface UserListItem {
+  actions: UserActions
+  actionLabels: UserActionLabels
   id: number
   username: string
   email: string
@@ -26,245 +43,82 @@ export interface UserListItem {
   createdAt: string
   updatedAt: string
 }
+
 export type UserPage = PageResult<UserListItem>
+
 export interface UserRolesResponse {
   user: { id: number; username: string; email: string; phone: string | null; isEnabled: YesNo }
-  roles: UserRoleSummary[]
+  roles: UserAssignmentRole[]
   roleIds: number[]
 }
+
 export interface UpdateUserInput {
   username: string
 }
+
 export interface UpdateUserRolesInput {
   roleIds: number[]
 }
+
 export interface UpdatedProfile {
   id: number
   username: string
   phone: string | null
   updatedAt: string
 }
+
 export interface UserStatusResult {
   id: number
   isEnabled: YesNo
 }
+
 export interface UserRoleOptions {
   roles: UserRoleSummary[]
 }
+
 export interface UserRoleResult {
   id: number
   roleCount: number
 }
 
 export async function getUsers(query: UserListQuery): Promise<UserPage> {
-  return parseUserPage(
-    await request({ method: 'GET', url: '/api/admin/v1/user/account', params: query }),
-  )
+  return request.get<UserPage>('/api/admin/v1/user/account', { params: query })
 }
 
 export async function getUserRoleOptions(): Promise<UserRoleOptions> {
-  return parseUserRoleOptions(
-    await request({ method: 'GET', url: '/api/admin/v1/user/account/role-options' }),
-  )
+  return request.get<UserRoleOptions>('/api/admin/v1/user/account/role-options')
 }
 
 export async function updateUser(id: number, input: UpdateUserInput): Promise<UpdatedProfile> {
-  return parseUpdatedProfile(
-    await request({ method: 'PUT', url: `/api/admin/v1/user/account/${id}`, data: input }),
-  )
+  return request.put<UpdatedProfile>(`/api/admin/v1/user/account/${id}`, input)
 }
 
 export async function updateUserStatus(id: number, isEnabled: YesNo): Promise<UserStatusResult> {
-  return parseUserStatus(
-    await request({
-      method: 'PATCH',
-      url: `/api/admin/v1/user/account/${id}/status`,
-      data: { isEnabled },
-    }),
-  )
+  return request.patch<UserStatusResult>(`/api/admin/v1/user/account/${id}/status`, { isEnabled })
 }
 
 export async function deleteUser(id: number): Promise<Record<string, never>> {
-  return expectEmptyObject(
-    await request({ method: 'DELETE', url: `/api/admin/v1/user/account/${id}` }),
-    'user delete result',
-  )
+  return request.delete<Record<string, never>>(`/api/admin/v1/user/account/${id}`)
 }
 
 export async function getUserRoles(id: number): Promise<UserRolesResponse> {
-  return parseUserRoles(
-    await request({ method: 'GET', url: `/api/admin/v1/user/account/${id}/role` }),
-  )
+  return request.get<UserRolesResponse>(`/api/admin/v1/user/account/${id}/role`)
 }
 
 export async function updateUserRoles(
   id: number,
   input: UpdateUserRolesInput,
 ): Promise<UserRoleResult> {
-  return parseUserRoleResult(
-    await request({
-      method: 'PUT',
-      url: `/api/admin/v1/user/account/${id}/role`,
-      data: { roleIds: input.roleIds },
-    }),
-  )
+  return request.put<UserRoleResult>(`/api/admin/v1/user/account/${id}/role`, {
+    roleIds: input.roleIds,
+  })
 }
 
-function parseUserRoleOptions(value: unknown): UserRoleOptions {
-  const record = expectExactKeys(value, ['roles'], 'user role options response')
-  if (!Array.isArray(record.roles)) throw new ProtocolError('user role options response is invalid')
-  return { roles: record.roles.map(parseUserRoleSummary) }
+export interface UserFormOptions {
+  usernameMinLength: number
+  usernameMaxLength: number
+  usernamePattern: string
 }
-
-function parseUserStatus(value: unknown): UserStatusResult {
-  const record = expectExactKeys(value, ['id', 'isEnabled'], 'user status response')
-  const isEnabled = record.isEnabled
-  if (!isYesNo(isEnabled)) throw new ProtocolError('user status response is invalid')
-  return { id: expectInteger(record.id, 'user status.id'), isEnabled }
-}
-
-function parseUserRoleResult(value: unknown): UserRoleResult {
-  const record = expectExactKeys(value, ['id', 'roleCount'], 'user role result')
-  return {
-    id: expectInteger(record.id, 'user role result.id'),
-    roleCount: expectInteger(record.roleCount, 'user role result.roleCount'),
-  }
-}
-
-function parseUserPage(value: unknown): UserPage {
-  if (
-    !isExactRecord(value, ['list', 'total', 'page', 'pageSize']) ||
-    !Array.isArray(value.list) ||
-    !isNonNegativeInteger(value.total) ||
-    !isPositiveInteger(value.page) ||
-    !isPositiveInteger(value.pageSize)
-  ) {
-    throw new ProtocolError('user list response is invalid')
-  }
-  return {
-    list: value.list.map(parseUserListItem),
-    total: value.total,
-    page: value.page,
-    pageSize: value.pageSize,
-  }
-}
-
-function parseUserListItem(value: unknown): UserListItem {
-  if (
-    !isExactRecord(value, [
-      'id',
-      'username',
-      'email',
-      'phone',
-      'isEnabled',
-      'roles',
-      'createdAt',
-      'updatedAt',
-    ]) ||
-    !isPositiveInteger(value.id) ||
-    typeof value.username !== 'string' ||
-    typeof value.email !== 'string' ||
-    !isNullableString(value.phone) ||
-    !isYesNo(value.isEnabled) ||
-    !Array.isArray(value.roles) ||
-    typeof value.createdAt !== 'string' ||
-    typeof value.updatedAt !== 'string'
-  ) {
-    throw new ProtocolError('user list item response is invalid')
-  }
-  return {
-    id: value.id,
-    username: value.username,
-    email: value.email,
-    phone: value.phone,
-    isEnabled: value.isEnabled,
-    roles: value.roles.map(parseUserRoleSummary),
-    createdAt: value.createdAt,
-    updatedAt: value.updatedAt,
-  }
-}
-
-function parseUpdatedProfile(value: unknown): UpdatedProfile {
-  if (
-    !isExactRecord(value, ['id', 'username', 'phone', 'updatedAt']) ||
-    !isPositiveInteger(value.id) ||
-    typeof value.username !== 'string' ||
-    !isNullableString(value.phone) ||
-    typeof value.updatedAt !== 'string'
-  ) {
-    throw new ProtocolError('updated user profile response is invalid')
-  }
-  return { id: value.id, username: value.username, phone: value.phone, updatedAt: value.updatedAt }
-}
-
-function parseUserRoles(value: unknown): UserRolesResponse {
-  if (
-    !isExactRecord(value, ['user', 'roles', 'roleIds']) ||
-    !Array.isArray(value.roles) ||
-    !Array.isArray(value.roleIds) ||
-    !value.roleIds.every(isPositiveInteger)
-  ) {
-    throw new ProtocolError('user roles response is invalid')
-  }
-  return {
-    user: parseUserSummary(value.user),
-    roles: value.roles.map(parseUserRoleSummary),
-    roleIds: value.roleIds,
-  }
-}
-
-function parseUserSummary(value: unknown): UserRolesResponse['user'] {
-  if (
-    !isExactRecord(value, ['id', 'username', 'email', 'phone', 'isEnabled']) ||
-    !isPositiveInteger(value.id) ||
-    typeof value.username !== 'string' ||
-    typeof value.email !== 'string' ||
-    !isNullableString(value.phone) ||
-    !isYesNo(value.isEnabled)
-  ) {
-    throw new ProtocolError('user role summary response is invalid')
-  }
-  return {
-    id: value.id,
-    username: value.username,
-    email: value.email,
-    phone: value.phone,
-    isEnabled: value.isEnabled,
-  }
-}
-
-function parseUserRoleSummary(value: unknown): UserRoleSummary {
-  if (
-    !isExactRecord(value, ['id', 'code', 'name', 'isEnabled']) ||
-    !isPositiveInteger(value.id) ||
-    typeof value.code !== 'string' ||
-    typeof value.name !== 'string' ||
-    !isYesNo(value.isEnabled)
-  ) {
-    throw new ProtocolError('user role response is invalid')
-  }
-  return { id: value.id, code: value.code, name: value.name, isEnabled: value.isEnabled }
-}
-
-function isExactRecord(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-  const actual = Object.keys(value).sort()
-  const expected = [...keys].sort()
-  return actual.length === expected.length && actual.every((key, index) => key === expected[index])
-}
-
-function isPositiveInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0
-}
-
-function isNonNegativeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0
-}
-
-function isNullableString(value: unknown): value is string | null {
-  return value === null || typeof value === 'string'
-}
-
-function isYesNo(value: unknown): value is YesNo {
-  return value === YesNo.No || value === YesNo.Yes
+export async function getUserFormOptions(): Promise<UserFormOptions> {
+  return request.get<UserFormOptions>('/api/admin/v1/user/account/options')
 }

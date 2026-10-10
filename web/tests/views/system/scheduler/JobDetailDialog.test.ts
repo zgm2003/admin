@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { listRuns } from '@/api/system/scheduler'
 import type { Job, Run } from '@/api/system/scheduler'
-import { JobStatus, RunStatus } from '@/enums/scheduler'
 import { appI18n, setLocale } from '@/i18n'
 import JobDetailDialog from '@/views/system/scheduler/components/JobDetailDialog/index.vue'
 
@@ -27,7 +26,7 @@ describe('JobDetailDialog request lifecycle', () => {
       .mockResolvedValueOnce([run(2, 2, 'new-worker')])
     const wrapper = mount(JobDetailDialog, {
       attachTo: document.body,
-      props: { modelValue: false, job: job(1), taskOptions: [] },
+      props: { modelValue: false, job: job(1), taskOptions: [], options: null },
       global: { plugins: [ElementPlus, appI18n] },
     })
 
@@ -57,7 +56,8 @@ function job(id: number): Job {
     triggerSource: 'manual',
     scheduledAt: '2026-09-21T00:00:00Z',
     availableAt: '2026-09-21T00:00:00Z',
-    status: JobStatus.completed,
+    status: 4,
+    actions: { retry: false },
     attemptCount: 1,
     maxAttempts: 3,
     errorClass: '',
@@ -73,7 +73,7 @@ function run(id: number, jobId: number, workerId: string): Run {
     id,
     jobId,
     attemptNo: 1,
-    status: RunStatus.succeeded,
+    status: 2,
     workerId,
     startedAt: '2026-09-21T00:00:00Z',
     finishedAt: '2026-09-21T00:00:01Z',

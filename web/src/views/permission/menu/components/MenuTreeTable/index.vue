@@ -3,8 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CirclePlus, Refresh } from '@element-plus/icons-vue'
 
-import type { ManagedMenuNode, ManagedMenuType } from '@/api/permission/menu'
-import { YesNo } from '@/enums/yesNo'
+import type { ManagedMenuNode } from '@/api/permission/menu'
 import { filterManagedMenuTree } from '@/views/permission/menu/filterMenuTree'
 import { flattenWithChildren, menuRowKey } from '@/views/permission/menu/menuTree'
 
@@ -43,16 +42,6 @@ watch(
     if (keyword.value.trim() === '') collapseAll()
   },
 )
-
-function menuTypeLabel(menuType: ManagedMenuType): string {
-  return t(`menu.type.${menuType}`)
-}
-
-function menuTypeTag(menuType: ManagedMenuType): 'primary' | 'success' | 'warning' {
-  if (menuType === 'directory') return 'primary'
-  if (menuType === 'page') return 'success'
-  return 'warning'
-}
 
 function expandAll(): void {
   expandedIDs.value = new Set(
@@ -153,8 +142,8 @@ function updateKeyword(value: string): void {
         header-align="center"
       >
         <template #default="{ row }: { row: ManagedMenuNode }">
-          <el-tag size="small" effect="plain" :type="menuTypeTag(row.menuType)">
-            {{ menuTypeLabel(row.menuType) }}
+          <el-tag size="small" effect="plain" :type="row.presentation.typeTone">
+            {{ row.presentation.typeLabel }}
           </el-tag>
         </template>
       </el-table-column>
@@ -236,14 +225,8 @@ function updateKeyword(value: string): void {
         header-align="center"
       >
         <template #default="{ row }: { row: ManagedMenuNode }">
-          <el-tag
-            :type="row.isHidden === YesNo.No ? 'success' : 'info'"
-            size="small"
-            effect="plain"
-          >
-            {{
-              row.isHidden === YesNo.No ? t('menu.visibility.visible') : t('menu.visibility.hidden')
-            }}
+          <el-tag :type="row.presentation.visibilityTone" size="small" effect="plain">
+            {{ row.presentation.visibilityLabel }}
           </el-tag>
         </template>
       </el-table-column>
@@ -256,14 +239,8 @@ function updateKeyword(value: string): void {
       >
         <template #default="{ row }: { row: ManagedMenuNode }">
           <span :data-menu-enabled="row.isEnabled">
-            <el-tag
-              :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'"
-              size="small"
-              effect="plain"
-            >
-              {{
-                row.isEnabled === YesNo.Yes ? t('menu.status.enabled') : t('menu.status.disabled')
-              }}
+            <el-tag :type="row.presentation.statusTone" size="small" effect="plain">
+              {{ row.presentation.statusLabel }}
             </el-tag>
           </span>
         </template>
@@ -278,7 +255,7 @@ function updateKeyword(value: string): void {
       >
         <template #default="{ row }: { row: ManagedMenuNode }">
           <el-button
-            v-if="canCreate && row.menuType !== 'action'"
+            v-if="canCreate && row.actions.addChild"
             :data-testid="`add-child-${row.id}`"
             text
             type="primary"
@@ -289,6 +266,7 @@ function updateKeyword(value: string): void {
           <el-button
             v-if="canUpdate"
             :data-testid="`edit-${row.id}`"
+            :disabled="!row.actions.update"
             text
             type="primary"
             @click="emit('edit', row)"
@@ -300,19 +278,19 @@ function updateKeyword(value: string): void {
             :data-testid="`status-${row.id}`"
             text
             type="warning"
-            :disabled="row.isProtected === YesNo.Yes"
-            :title="row.isProtected === YesNo.Yes ? t('menu.form.protectedHint') : undefined"
+            :disabled="!row.actions.status"
+            :title="row.presentation.statusReason || undefined"
             @click="emit('status', row)"
           >
-            {{ row.isEnabled === YesNo.Yes ? t('menu.disable') : t('menu.enable') }}
+            {{ row.presentation.statusActionLabel }}
           </el-button>
           <el-button
             v-if="canDelete"
             :data-testid="`delete-${row.id}`"
             text
             type="danger"
-            :disabled="row.isProtected === YesNo.Yes"
-            :title="row.isProtected === YesNo.Yes ? t('menu.form.protectedHint') : undefined"
+            :disabled="!row.actions.delete"
+            :title="row.presentation.protectionReason || undefined"
             @click="emit('delete', row)"
           >
             {{ t('menu.delete') }}
@@ -329,4 +307,4 @@ function updateKeyword(value: string): void {
   </div>
 </template>
 
-<style scoped src="./MenuTreeTable.css"></style>
+<style scoped src="./MenuTreeTable.scss" lang="scss"></style>

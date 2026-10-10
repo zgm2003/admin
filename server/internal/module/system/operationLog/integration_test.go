@@ -10,7 +10,9 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
+	"admin/server/internal/database/testquery"
 	"admin/server/internal/module/system/operationLog"
+	"admin/server/internal/shared/i18n"
 
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5"
@@ -104,6 +106,21 @@ func TestOperationLogWorkerPersistsIdempotently(t *testing.T) {
 	}
 	if total != 1 || len(items) != 1 || items[0].Platform != "admin" || items[0].UserName != "integration-user" {
 		t.Fatalf("listed operation logs = %+v, total = %d", items, total)
+	}
+	counter := testquery.New(connection.GORM.Logger, "system_operation_log")
+	service := operationlog.NewService(operationlog.NewRepository(connection.GORM.Session(&gorm.Session{Logger: counter})))
+	for _, tc := range []struct {
+		locale i18n.Locale
+		label  string
+	}{{i18n.ZhCN, "编辑用户"}, {i18n.EnUS, "Edit user"}} {
+		counter.Reset()
+		result, err := service.List(i18n.WithLocale(ctx, tc.locale), operationlog.ListQuery{Page: 1, PageSize: 20})
+		if err != nil || result.Total != 1 || len(result.List) != 1 || result.List[0].Action != "user.update" || result.List[0].ActionLabel != tc.label {
+			t.Fatalf("localized persisted log: locale=%s result=%+v err=%v", tc.locale, result, err)
+		}
+		if counter.Total() != 2 || counter.Count("system_operation_log") != 2 {
+			t.Fatalf("localized list exceeded count+page budget: total=%d log=%d", counter.Total(), counter.Count("system_operation_log"))
+		}
 	}
 }
 

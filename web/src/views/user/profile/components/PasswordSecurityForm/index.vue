@@ -171,17 +171,17 @@ function updatePasswordCode(value: string): void {
   </section>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .account-profile__card {
   padding: 26px 28px;
   background: var(--admin-surface);
   border: 1px solid var(--admin-border);
   border-radius: 8px;
   box-shadow: var(--admin-shadow-sm);
-}
 
-.account-profile__card--narrow {
-  max-width: 520px;
+  &--narrow {
+    max-width: 520px;
+  }
 }
 
 .account-profile__card-head {

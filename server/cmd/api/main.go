@@ -44,7 +44,6 @@ import (
 	"admin/server/internal/module/storage/cosConfig"
 	"admin/server/internal/module/storage/uploadRule"
 	systemcachegeneration "admin/server/internal/module/system/cacheGeneration"
-	"admin/server/internal/module/system/dictionary"
 	"admin/server/internal/module/system/operationLog"
 	"admin/server/internal/module/system/queueMonitor"
 	"admin/server/internal/module/system/scheduler"
@@ -87,7 +86,6 @@ type routerDependencies struct {
 	COSConfig         *cosconfig.Handler
 	UploadRule        *uploadrule.Handler
 	OperationLog      *operationlog.Handler
-	Dictionary        *dictionary.Handler
 	Setting           *systemsetting.Handler
 	CacheGeneration   *systemcachegeneration.Handler
 	QueueMonitor      *queuemonitor.Handler
@@ -375,14 +373,6 @@ func run(logger *slog.Logger) error {
 	permissionService := permission.NewService(permissionRepository, accessStateStore, permission.NewSnapshotCache(redisClient), permission.NewLocalSnapshotCache(1024), logger, menuStateStore)
 	operationLogRepository := operationlog.NewRepository(postgres.GORM)
 	operationLogService := operationlog.NewService(operationLogRepository)
-	dictionaryRepository := dictionary.NewRepository(postgres.GORM)
-	dictionaryRepository.SetGenerations(configGenerationRepository, dictionary.CacheGenerationScope())
-	dictionaryCache := dictionary.NewOptionsCache(redisClient)
-	dictionaryCache.SetStateStore(configGenerationStore)
-	dictionaryService := dictionary.NewService(dictionaryRepository)
-	dictionaryService.SetCache(dictionaryCache)
-	dictionaryService.SetGenerations(configGenerationRepository, configGenerationStore)
-	dictionaryService.SetLogger(logger)
 	realtimeRepository := realtime.NewRepository(postgres.GORM)
 	realtimeTickets := realtime.NewTicketStore(redisClient)
 	realtimeConnections := realtime.NewConnectionSet(settings.Realtime.MaxConnections, settings.Realtime.MaxConnectionsPerUser)
@@ -410,7 +400,6 @@ func run(logger *slog.Logger) error {
 	schedulerService := scheduler.NewService(schedulerRepository, schedulerCatalog)
 	if err := validateRuntimeDependencies(
 		runtimeDependency{name: "system.setting/global", validate: settingService.ValidateDependencies},
-		runtimeDependency{name: "system.dictionary/global", validate: dictionaryService.ValidateDependencies},
 		runtimeDependency{name: "message.mail/global runtime", validate: mailRuntimeStore.ValidateDependencies},
 		runtimeDependency{name: "message.mail/global rate-limit", validate: mailRateLimitStore.ValidateDependencies},
 		runtimeDependency{name: "message.sms/global runtime", validate: smsRuntimeCache.ValidateDependencies},
@@ -473,7 +462,6 @@ func run(logger *slog.Logger) error {
 		COSConfig:         cosconfig.NewHandler(cosConfigService),
 		UploadRule:        uploadrule.NewHandler(uploadRuleService),
 		OperationLog:      operationlog.NewHandler(operationLogService),
-		Dictionary:        dictionary.NewHandler(dictionaryService),
 		Setting:           systemsetting.NewHandler(settingService),
 		CacheGeneration:   systemcachegeneration.NewHandler(cacheGenerationService),
 		QueueMonitor:      queuemonitor.NewHandler(queueMonitorService, settings.Auth.CookieSecure, queuemonitor.SubjectFromContext),
@@ -598,7 +586,6 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	if dependencies.Notification != nil {
 		notification.RegisterRoutes(sharedRoutes, dependencies.Notification, dependencies.Authenticate, dependencies.RequirePermission)
 	}
-	dictionary.RegisterOptionRoute(sharedRoutes, dependencies.Dictionary, dependencies.Authenticate)
 	if dependencies.Setting != nil {
 		systemsetting.RegisterPublicRoutes(sharedRoutes, dependencies.Setting)
 	}
@@ -639,7 +626,6 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 		smsrecipientrule.RegisterRoutes(smsRoutes, dependencies.SMSRecipientRule, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	operationlog.RegisterRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
-	dictionary.RegisterRoutes(adminRoutes, dependencies.Dictionary, dependencies.Authenticate, dependencies.RequirePermission)
 	if dependencies.Setting != nil {
 		systemsetting.RegisterRoutes(adminRoutes, dependencies.Setting, dependencies.Authenticate, dependencies.RequirePermission)
 	}

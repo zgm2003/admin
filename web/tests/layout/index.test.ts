@@ -14,9 +14,16 @@ import { useAuthStore } from '@/store/auth'
 import { useBrandStore } from '@/store/brand'
 import { useUIPreferencesStore } from '@/store/uiPreferences'
 import Layout from '@/layout/index.vue'
+import type { RealtimeRuntime, RealtimeEnvelope } from '@/realtime'
 
-const realtimeStartMock = vi.hoisted(() => vi.fn())
+const realtimeStartMock = vi.hoisted(() => vi.fn<RealtimeRuntime['start']>())
 const realtimeStopMock = vi.hoisted(() => vi.fn())
+const notificationMock = vi.hoisted(() => vi.fn())
+
+vi.mock('element-plus', async (original) => ({
+  ...(await original<typeof import('element-plus')>()),
+  ElNotification: notificationMock,
+}))
 
 vi.mock('@/api/auth/login', () => ({ logout: vi.fn() }))
 vi.mock('@/api/storage/upload', () => ({ requestObjectURL: vi.fn() }))
@@ -51,6 +58,7 @@ describe('admin layout', () => {
     })
     realtimeStartMock.mockReset()
     realtimeStopMock.mockReset()
+    notificationMock.mockReset()
     localStorage.clear()
     document.documentElement.classList.remove('dark')
     document.documentElement.style.removeProperty('color-scheme')
@@ -115,6 +123,42 @@ describe('admin layout', () => {
     usePermissionStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: [] })
     await wrapper.vm.$nextTick()
     expect(realtimeStopMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('uses a neutral notification presentation for an unknown backend variant', async () => {
+    const { wrapper } = await mountLayout()
+    usePermissionStore(pinia).applySnapshot({
+      roleCodes: [],
+      menuTree: [],
+      permissionCodes: ['message:notification:list'],
+    })
+    await wrapper.vm.$nextTick()
+    const handlers = realtimeStartMock.mock.calls[0]?.[1]
+    if (handlers === undefined) throw new Error('realtime handlers are missing')
+    const event: RealtimeEnvelope = {
+      eventId: 'future-event',
+      sequence: 1,
+      occurredAt: '2026-10-10T00:00:00Z',
+      durability: 'durable',
+      type: 'notification.created.v1',
+      data: {
+        notificationId: 1,
+        title: 'Future',
+        summary: 'Preserved body',
+        variant: 'future-variant',
+        priority: 'urgent',
+        linkType: 'none',
+        link: '',
+        publishedAt: '2026-10-10T00:00:00Z',
+      },
+    }
+    await handlers.urgent(event)
+    expect(notificationMock).toHaveBeenCalledExactlyOnceWith({
+      title: 'Future',
+      message: 'Preserved body',
+      type: 'info',
+    })
+    expect(event.data.variant).toBe('future-variant')
   })
 
   it('collapses the desktop Aside without changing the shell tracks', async () => {

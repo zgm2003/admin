@@ -1,62 +1,69 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import { getSessions, getSessionStats, revokeSession, revokeSessions } from '@/api/user/session'
+import * as api from '@/api/user/session'
 import { request } from '@/utils/request'
-
-vi.mock('@/utils/request', () => ({ request: vi.fn() }))
-
-const requestMock = vi.mocked(request)
-
-describe('session API', () => {
-  beforeEach(() => requestMock.mockReset())
-
-  it('uses only the Admin session namespace', async () => {
-    requestMock
-      .mockResolvedValueOnce({ list: [sessionItem()], total: 1, page: 1, pageSize: 20 })
-      .mockResolvedValueOnce({ activeTotal: 1, platforms: { web: 1 } })
-      .mockResolvedValueOnce({ revoked: 1, skippedCurrent: 0, skippedRevoked: 0 })
-      .mockResolvedValueOnce({ revoked: 1, skippedCurrent: 0, skippedRevoked: 0 })
-    const query = { page: 1, pageSize: 20 }
-    await getSessions(query)
-    await getSessionStats()
-    await revokeSession(7)
-    await revokeSessions([7, 8])
-
-    expect(requestMock).toHaveBeenNthCalledWith(1, {
-      method: 'GET',
-      url: '/api/admin/v1/user/session',
+vi.mock('@/utils/request', () => ({
+  request: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  refreshAccessCredential: vi.fn(),
+}))
+beforeEach(() => vi.resetAllMocks())
+describe('thin API HTTP contract', () => {
+  it('getSessions preserves the HTTP contract and backend data', async () => {
+    const query: Parameters<typeof api.getSessions>[0] = { page: 1, pageSize: 1 }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getSessions(query)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/user/session', {
       params: query,
     })
-    expect(requestMock).toHaveBeenNthCalledWith(2, {
-      method: 'GET',
-      url: '/api/admin/v1/user/session/stats',
-    })
-    expect(requestMock).toHaveBeenNthCalledWith(3, {
-      method: 'DELETE',
-      url: '/api/admin/v1/user/session/7',
-    })
-    expect(requestMock).toHaveBeenNthCalledWith(4, {
-      method: 'DELETE',
-      url: '/api/admin/v1/user/session',
-      data: { ids: [7, 8] },
+  })
+  it('getSessions propagates request failures unchanged', async () => {
+    const query: Parameters<typeof api.getSessions>[0] = { page: 1, pageSize: 1 }
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getSessions(query)).rejects.toBe(error)
+  })
+  it('getSessionStats preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getSessionStats()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/user/session/stats')
+  })
+  it('getSessionStats propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getSessionStats()).rejects.toBe(error)
+  })
+  it('revokeSession preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.revokeSession>[0] = 1
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.delete).mockResolvedValue(dataFromServer)
+    const result = await api.revokeSession(id)
+    expect(result).toBe(dataFromServer)
+    expect(request.delete).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/user/session/' + id)
+  })
+  it('revokeSession propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.revokeSession>[0] = 1
+    const error = new Error('request failed')
+    vi.mocked(request.delete).mockRejectedValue(error)
+    await expect(api.revokeSession(id)).rejects.toBe(error)
+  })
+  it('revokeSessions preserves the HTTP contract and backend data', async () => {
+    const ids: Parameters<typeof api.revokeSessions>[0] = [1]
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.delete).mockResolvedValue(dataFromServer)
+    const result = await api.revokeSessions(ids)
+    expect(result).toBe(dataFromServer)
+    expect(request.delete).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/user/session', {
+      data: { ids },
     })
   })
+  it('revokeSessions propagates request failures unchanged', async () => {
+    const ids: Parameters<typeof api.revokeSessions>[0] = [1]
+    const error = new Error('request failed')
+    vi.mocked(request.delete).mockRejectedValue(error)
+    await expect(api.revokeSessions(ids)).rejects.toBe(error)
+  })
 })
-
-function sessionItem() {
-  return {
-    id: 7,
-    userId: 1,
-    username: 'admin',
-    platform: 'web',
-    deviceId: 'device-1',
-    clientIp: '127.0.0.1',
-    userAgent: 'Vitest',
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-    refreshExpiresAt: '2026-01-02T00:00:00Z',
-    revokedAt: null,
-    status: 'active',
-    isCurrent: true,
-  } as const
-}

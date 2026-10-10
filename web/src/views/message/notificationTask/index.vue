@@ -4,10 +4,14 @@ import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import * as taskApi from '@/api/message/notificationTask'
+import {
+  getNotificationTaskOptions,
+  type NotificationTaskAdminOptions,
+} from '@/api/message/notificationTaskOptions'
+import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 import type { SearchFormModel } from '@/components/AppSearch'
 import type { TablePaginationState } from '@/components/AppTable/types'
 import { usePermissionStore } from '@/store/permission'
-import { ProtocolError } from '@/types/http'
 import NotificationTaskSearch from './components/NotificationTaskSearch/index.vue'
 import NotificationTaskStatusTabs from './components/NotificationTaskStatusTabs/index.vue'
 import NotificationTaskTable from './components/NotificationTaskTable/index.vue'
@@ -18,10 +22,15 @@ import { useNotificationTaskOptions } from './useNotificationTaskOptions'
 
 const access = usePermissionStore()
 const { t } = useI18n()
+const {
+  options: catalog,
+  error: optionsError,
+  reload: reloadOptions,
+} = useLocalizedOptions<NotificationTaskAdminOptions | null>(getNotificationTaskOptions, () => null)
 
 interface NotificationTaskSearchModel {
   platformId: string
-  audienceType: '' | taskApi.NotificationAudience
+  audienceType: string
   keyword: string
   timeRange: [] | [string, string]
 }
@@ -31,7 +40,7 @@ const loading = ref(false)
 const errorMessage = ref('')
 const platformIDFilter = ref('')
 const statusFilter = ref<taskApi.NotificationTaskStatus | ''>('')
-const audienceFilter = ref<taskApi.NotificationAudience | ''>('')
+const audienceFilter = ref('')
 const keywordFilter = ref('')
 const timeRange = ref<[] | [string, string]>([])
 const pagination = reactive<TablePaginationState>({ currentPage: 1, pageSize: 20, total: 0 })
@@ -41,6 +50,7 @@ const dialogLoading = ref(false)
 const dialogError = ref('')
 const detailTask = ref<taskApi.NotificationTask | null>(null)
 const saving = ref(false)
+const busyIDs = ref<number[]>([])
 const editingID = ref<number | null>(null)
 let listSequence = 0
 let dialogSequence = 0
@@ -49,11 +59,11 @@ const emptyForm = (): NotificationTaskFormModel => ({
   platformId: null,
   title: '',
   contentHtml: '',
-  variant: 'info',
-  priority: 'normal',
-  linkType: 'none',
+  variant: catalog.value?.defaults.variant ?? '',
+  priority: catalog.value?.defaults.priority ?? '',
+  linkType: catalog.value?.defaults.linkType ?? '',
   link: '',
-  audienceType: 'platform',
+  audienceType: catalog.value?.defaults.audienceType ?? '',
   targetIds: [],
   scheduledAt: null,
 })
@@ -82,12 +92,8 @@ const dialogTitle = computed(() =>
     ? t('notificationTask.detailTitle')
     : t('notificationTask.dialogTitle'),
 )
-const audienceOptions = computed(() =>
-  taskApi.notificationTaskAudienceMetadata.map((item) => ({
-    value: item.value,
-    label: t(item.i18nKey),
-  })),
-)
+const audienceOptions = computed(() => catalog.value?.audiences ?? [])
+const statusOptions = computed(() => catalog.value?.statuses ?? [])
 const searchModel = computed<SearchFormModel<NotificationTaskSearchModel>>({
   get: () => ({
     platformId: platformIDFilter.value,
@@ -100,12 +106,7 @@ const searchModel = computed<SearchFormModel<NotificationTaskSearchModel>>({
       typeof value.platformId === 'string' || typeof value.platformId === 'number'
         ? String(value.platformId)
         : ''
-    audienceFilter.value =
-      value.audienceType === 'user' ||
-      value.audienceType === 'role' ||
-      value.audienceType === 'platform'
-        ? value.audienceType
-        : ''
+    audienceFilter.value = typeof value.audienceType === 'string' ? value.audienceType : ''
     keywordFilter.value = typeof value.keyword === 'string' ? value.keyword : ''
     timeRange.value =
       Array.isArray(value.timeRange) &&
@@ -115,24 +116,9 @@ const searchModel = computed<SearchFormModel<NotificationTaskSearchModel>>({
         : []
   },
 })
-const variantOptions = computed(() =>
-  taskApi.notificationTaskVariantMetadata.map((item) => ({
-    value: item.value,
-    label: t(item.i18nKey),
-  })),
-)
-const priorityOptions = computed(() =>
-  taskApi.notificationTaskPriorityMetadata.map((item) => ({
-    value: item.value,
-    label: t(item.i18nKey),
-  })),
-)
-const linkTypeOptions = computed(() =>
-  taskApi.notificationTaskLinkTypeMetadata.map((item) => ({
-    value: item.value,
-    label: t(item.i18nKey),
-  })),
-)
+const variantOptions = computed(() => catalog.value?.variants ?? [])
+const priorityOptions = computed(() => catalog.value?.priorities ?? [])
+const linkTypeOptions = computed(() => catalog.value?.linkTypes ?? [])
 
 async function load(): Promise<void> {
   if (!can('message:notificationTask:list')) return
@@ -172,6 +158,7 @@ function resetForm(): void {
 }
 
 function openCreate(): void {
+  if (catalog.value === null || !can('message:notificationTask:create')) return
   resetForm()
   dialogMode.value = 'create'
   dialogOpen.value = true
@@ -248,10 +235,17 @@ function updateForm(value: Partial<NotificationTaskFormModel>): void {
 }
 
 function openEdit(row: taskApi.NotificationTaskListItem): void {
+  if (
+    !row.actions.edit ||
+    !can('message:notificationTask:update') ||
+    busyIDs.value.includes(row.id)
+  )
+    return
   void loadDetail(row.id, 'edit')
 }
 
 function openDetail(row: taskApi.NotificationTaskListItem): void {
+  if (!can('message:notificationTask:detail')) return
   void loadDetail(row.id, 'detail')
 }
 
@@ -262,7 +256,8 @@ function changeAudience(value: taskApi.NotificationAudience): void {
 
 function changePlatform(value: number | null): void {
   form.targetIds = []
-  if (value !== null && form.audienceType !== 'platform') void loadOptions(form.audienceType)
+  if (value !== null && form.audienceType !== '' && form.audienceType !== 'platform')
+    void loadOptions(form.audienceType)
 }
 
 function changeLinkType(value: taskApi.NotificationTaskInput['linkType']): void {
@@ -270,6 +265,10 @@ function changeLinkType(value: taskApi.NotificationTaskInput['linkType']): void 
 }
 
 async function save(): Promise<void> {
+  if (saving.value || catalog.value === null || !dialogOpen.value || readonly.value) return
+  const permission =
+    editingID.value === null ? 'message:notificationTask:create' : 'message:notificationTask:update'
+  if (!can(permission) || (editingID.value !== null && !detailTask.value?.actions.edit)) return
   const platformID = form.platformId
   if (platformID === null || !Number.isInteger(platformID) || platformID < 1) {
     ElMessage.warning(t('notificationTask.platformRequired'))
@@ -279,50 +278,84 @@ async function save(): Promise<void> {
     ElMessage.warning(t('notificationTask.scheduledAtFuture'))
     return
   }
-  if (form.audienceType !== 'platform' && form.targetIds.length === 0) {
+  const audienceType = form.audienceType
+  if (audienceType === '' || (audienceType !== 'platform' && form.targetIds.length === 0)) {
     ElMessage.warning(t('notificationTask.targetsRequired'))
     return
   }
   saving.value = true
+  dialogError.value = ''
+  const currentDialog = dialogSequence
   try {
-    const payload: taskApi.NotificationTaskInput = { ...form, platformId: platformID }
+    const payload: taskApi.NotificationTaskInput = {
+      ...form,
+      platformId: platformID,
+      audienceType,
+      targetIds: [...form.targetIds],
+    }
     if (editingID.value === null) await taskApi.createNotificationTask(payload)
     else await taskApi.updateNotificationTask(editingID.value, payload)
     ElNotification.success({ title: t('notificationTask.saveSuccess') })
-    updateDialogOpen(false)
+    if (currentDialog === dialogSequence) updateDialogOpen(false)
     await load()
   } catch (error) {
-    if (error instanceof ProtocolError) {
-      ElNotification.error({
-        title: t('request.failed'),
-        message: t('request.protocolError'),
-      })
-    }
+    if (currentDialog === dialogSequence)
+      dialogError.value = error instanceof Error ? error.message : t('notificationTask.loadFailed')
   } finally {
     saving.value = false
   }
 }
 
 async function remove(row: taskApi.NotificationTaskListItem): Promise<void> {
-  await ElMessageBox.confirm(t('notificationTask.deleteConfirm'), t('notificationTask.delete'))
-  await taskApi.deleteNotificationTask(row.id)
-  ElNotification.success({ title: t('notificationTask.deleteSuccess') })
-  await load()
+  if (
+    !row.actions.delete ||
+    !can('message:notificationTask:delete') ||
+    busyIDs.value.includes(row.id)
+  )
+    return
+  busyIDs.value = [...busyIDs.value, row.id]
+  errorMessage.value = ''
+  try {
+    await ElMessageBox.confirm(t('notificationTask.deleteConfirm'), t('notificationTask.delete'))
+    await taskApi.deleteNotificationTask(row.id)
+    ElNotification.success({ title: t('notificationTask.deleteSuccess') })
+    await load()
+  } catch (error: unknown) {
+    if (error !== 'cancel' && error !== 'close')
+      errorMessage.value = error instanceof Error ? error.message : t('notificationTask.loadFailed')
+  } finally {
+    busyIDs.value = busyIDs.value.filter((id) => id !== row.id)
+  }
 }
 
 async function command(
   row: taskApi.NotificationTaskListItem,
   action: 'submit' | 'cancel' | 'copy',
 ): Promise<void> {
-  if (action === 'submit')
-    await ElMessageBox.confirm(t('notificationTask.submitConfirm'), t('notificationTask.submit'))
-  if (action === 'cancel')
-    await ElMessageBox.confirm(t('notificationTask.cancelConfirm'), t('notificationTask.cancel'))
-  const result = await taskApi.commandNotificationTask(row.id, action)
-  ElNotification.success({ title: t(`notificationTask.${action}Success`) })
-  await load()
-  if (action === 'copy' && can('message:notificationTask:update'))
-    await loadDetail(result.id, 'edit')
+  if (
+    !row.actions[action] ||
+    !can(`message:notificationTask:${action}`) ||
+    busyIDs.value.includes(row.id)
+  )
+    return
+  busyIDs.value = [...busyIDs.value, row.id]
+  errorMessage.value = ''
+  try {
+    if (action === 'submit')
+      await ElMessageBox.confirm(t('notificationTask.submitConfirm'), t('notificationTask.submit'))
+    if (action === 'cancel')
+      await ElMessageBox.confirm(t('notificationTask.cancelConfirm'), t('notificationTask.cancel'))
+    const result = await taskApi.commandNotificationTask(row.id, action)
+    ElNotification.success({ title: t(`notificationTask.${action}Success`) })
+    await load()
+    if (action === 'copy' && result.actions.edit && can('message:notificationTask:update'))
+      await loadDetail(result.id, 'edit')
+  } catch (error: unknown) {
+    if (error !== 'cancel' && error !== 'close')
+      errorMessage.value = error instanceof Error ? error.message : t('notificationTask.loadFailed')
+  } finally {
+    busyIDs.value = busyIDs.value.filter((id) => id !== row.id)
+  }
 }
 
 function updatePagination(next: TablePaginationState): void {
@@ -361,13 +394,31 @@ onMounted(() => void load())
 
 <template>
   <AppPage>
-    <NotificationTaskSearch v-model="searchModel" @query="search" @reset="resetSearch" />
-    <NotificationTaskStatusTabs v-model="statusFilter" @change="changeStatus" />
+    <el-alert v-if="optionsError" :title="optionsError" type="error" :closable="false" show-icon>
+      <el-button data-testid="notification-task-options-retry" link @click="reloadOptions">{{
+        t('notificationTask.retry')
+      }}</el-button>
+    </el-alert>
+    <NotificationTaskSearch
+      v-model="searchModel"
+      :audience-options="audienceOptions"
+      @query="search"
+      @reset="resetSearch"
+    />
+    <NotificationTaskStatusTabs
+      v-model="statusFilter"
+      :statuses="statusOptions"
+      @change="changeStatus"
+    />
     <NotificationTaskTable
       :rows="rows"
       :loading="loading"
       :pagination="pagination"
       :error-message="errorMessage"
+      :statuses="statusOptions"
+      :audiences="audienceOptions"
+      :create-disabled="catalog === null"
+      :busy-ids="busyIDs"
       @create="openCreate"
       @detail="openDetail"
       @edit="openEdit"
@@ -393,6 +444,8 @@ onMounted(() => void load())
       :target-state="targetState"
       :target-kind="targetKind"
       :audience-options="audienceOptions"
+      :status-options="statusOptions"
+      :title-max-length="catalog?.constraints.titleMaxLength"
       :variant-options="variantOptions"
       :priority-options="priorityOptions"
       :link-type-options="linkTypeOptions"
@@ -408,4 +461,4 @@ onMounted(() => void load())
   </AppPage>
 </template>
 
-<style scoped src="./NotificationTaskPage.css"></style>
+<style scoped src="./NotificationTaskPage.scss" lang="scss"></style>

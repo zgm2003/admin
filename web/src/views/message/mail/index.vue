@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import * as mailApi from '@/api/message/mail'
@@ -19,7 +19,7 @@ import MailTemplateTab from './template/index.vue'
 type TabName = 'config' | 'templates' | 'logs' | 'rules' | 'rateLimits'
 
 const access = usePermissionStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const activeTab = ref<TabName>('config')
 const config = ref<mailApi.MailConfig>({
   configured: false,
@@ -47,7 +47,28 @@ const logFilter = ref<MailLogFilter>({
   status: '',
   timeRange: [],
 })
-const templateCatalogAttempted = ref(false)
+const options = ref<mailApi.MailOptions | null>(null)
+const optionsLoading = ref(false)
+const optionsError = ref('')
+let optionsSequence = 0
+async function loadOptions(): Promise<void> {
+  const sequence = ++optionsSequence
+  options.value = null
+  optionsLoading.value = true
+  optionsError.value = ''
+  try {
+    const result = await mailApi.getMailOptions()
+    if (sequence === optionsSequence) options.value = result
+  } catch (error: unknown) {
+    if (sequence === optionsSequence) optionsError.value = errorMessage(error)
+  } finally {
+    if (sequence === optionsSequence) optionsLoading.value = false
+  }
+}
+watch(locale, () => void loadOptions(), { immediate: true, flush: 'sync' })
+onBeforeUnmount(() => {
+  optionsSequence++
+})
 const can = (code: string) => access.hasPermission(code)
 const canList = computed(() => can('message:mail:list'))
 const visibleTabs = computed(() => [
@@ -82,20 +103,8 @@ async function loadConfig(context?: MessageTabLoadContext): Promise<void> {
 }
 
 async function loadTemplates(context?: MessageTabLoadContext): Promise<void> {
-  templateCatalogAttempted.value = true
   const result = await mailApi.listMailTemplates()
   if (context === undefined || context.isCurrent()) templates.value = result
-}
-
-async function loadTemplateCatalogForLogs(context: MessageTabLoadContext): Promise<void> {
-  if (templateCatalogAttempted.value) return
-  templateCatalogAttempted.value = true
-  try {
-    const result = await mailApi.listMailTemplates()
-    if (context.isCurrent()) templates.value = result
-  } catch {
-    // Scene names are optional presentation data; request.ts owns the error notification.
-  }
 }
 
 async function loadRules(context?: MessageTabLoadContext): Promise<void> {
@@ -141,10 +150,7 @@ const { loading, errors, load } = useMessageAggregateTabs<TabName>({
   loaders: {
     config: loadConfig,
     templates: loadTemplates,
-    logs: async (context) => {
-      void loadTemplateCatalogForLogs(context)
-      await loadLogs(context)
-    },
+    logs: loadLogs,
     rules: loadRules,
     rateLimits: loadRateLimitPolicies,
   },
@@ -166,6 +172,7 @@ function searchLogs(filter: MailLogFilter): void {
 
 <template>
   <AppPage class="mail-page">
+    <el-alert v-if="optionsError" :title="optionsError" type="error" :closable="false" show-icon />
     <el-tabs v-model="activeTab" class="mail-tabs">
       <el-tab-pane
         v-for="tab in visibleTabs"
@@ -185,6 +192,8 @@ function searchLogs(filter: MailLogFilter): void {
         <MailConfigTab
           v-if="tab.name === 'config'"
           :config="config"
+          :scene-options="options?.scenes ?? []"
+          :catalog-ready="options !== null && !optionsLoading"
           :can-update="can('message:mail:config:update')"
           :can-test="can('message:mail:test')"
           :can-delete="can('message:mail:config:delete')"
@@ -203,7 +212,7 @@ function searchLogs(filter: MailLogFilter): void {
         <MailLogTab
           v-else-if="tab.name === 'logs'"
           :logs="logs"
-          :scenes="templates"
+          :options="options"
           :total="logTotal"
           :page="logPage"
           :page-size="logPageSize"
@@ -215,6 +224,7 @@ function searchLogs(filter: MailLogFilter): void {
         <MailRuleTab
           v-else-if="tab.name === 'rules'"
           :rules="rules"
+          :options="options"
           :loading="loading.rules"
           :can-list="canList"
           :can-create="can('message:mail:rule:create')"
@@ -228,6 +238,7 @@ function searchLogs(filter: MailLogFilter): void {
         <MailRateLimitTab
           v-else
           :policies="rateLimitPolicies"
+          :options="options"
           :loading="loading.rateLimits"
           :can-update="can('message:mail:rate-limit:update')"
           @refresh="load('rateLimits')"
@@ -237,29 +248,31 @@ function searchLogs(filter: MailLogFilter): void {
   </AppPage>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .mail-page {
   min-width: 0;
 }
 
-.mail-tabs :deep(.el-tabs__header) {
-  margin: 0;
-}
+.mail-tabs {
+  :deep(.el-tabs__header) {
+    margin: 0;
+  }
 
-.mail-tabs :deep(.el-tabs__nav-wrap::after) {
-  height: 1px;
-  background: var(--el-border-color-lighter);
-}
+  :deep(.el-tabs__nav-wrap::after) {
+    height: 1px;
+    background: var(--el-border-color-lighter);
+  }
 
-.mail-tabs :deep(.el-tabs__item) {
-  height: 40px;
-  padding: 0 20px;
-  font-weight: 500;
-}
+  :deep(.el-tabs__item) {
+    height: 40px;
+    padding: 0 20px;
+    font-weight: 500;
+  }
 
-.mail-tabs :deep(.el-tabs__content) {
-  overflow: visible;
-  padding-top: 12px;
+  :deep(.el-tabs__content) {
+    overflow: visible;
+    padding-top: 12px;
+  }
 }
 
 .mail-error {
@@ -267,8 +280,10 @@ function searchLogs(filter: MailLogFilter): void {
 }
 
 @media (max-width: 640px) {
-  .mail-tabs :deep(.el-tabs__item) {
-    padding: 0 14px;
+  .mail-tabs {
+    :deep(.el-tabs__item) {
+      padding: 0 14px;
+    }
   }
 }
 </style>

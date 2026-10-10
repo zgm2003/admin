@@ -12,7 +12,7 @@ func TestRoutesBindExactNotificationPermissionsAndStaticReadAll(t *testing.T) {
 	require := func(code string) gin.HandlerFunc { codes = append(codes, code); return middleware(code) }
 	router := gin.New()
 	RegisterRoutes(router.Group("/api/v1"), NewHandler(mailboxServiceStub{}), middleware("auth"), require)
-	want := []string{PermissionList, PermissionList, PermissionRead, PermissionRead, PermissionDelete}
+	want := []string{PermissionList, PermissionList, PermissionList, PermissionRead, PermissionRead, PermissionDelete}
 	if len(codes) != len(want) {
 		t.Fatalf("codes=%v", codes)
 	}

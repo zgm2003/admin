@@ -7,16 +7,11 @@ import { useI18n } from 'vue-i18n'
 
 import * as smsApi from '@/api/message/sms'
 import type { TableColumn } from '@/components/AppTable'
-import {
-  SmsRuleAction,
-  SmsRuleScope,
-  smsRuleActionMetadata,
-  smsRuleScopeMetadata,
-} from '@/enums/smsRecipientRule'
 import { YesNo, type YesNo as YesNoValue } from '@/enums/yesNo'
 
 const props = defineProps<{
   rules: smsApi.SmsRule[]
+  options: smsApi.SmsOptions | null
   loading: boolean
   canCreate: boolean
   canUpdate: boolean
@@ -28,14 +23,22 @@ const { t } = useI18n()
 const dialogVisible = ref(false)
 const editingID = ref<number | null>(null)
 const saving = ref(false)
-const form = ref<smsApi.SmsRuleInput>(blankRule())
+type RuleForm = Omit<smsApi.SmsRuleInput, 'scope' | 'action'> & {
+  scope: number | undefined
+  action: number | undefined
+}
+const form = ref<RuleForm>(blankRule())
 
-const scopeOptions = computed(() => [
-  ...smsRuleScopeMetadata.map((item) => ({ value: item.value, label: t(item.i18nKey) })),
-])
-const actionOptions = computed(() => [
-  ...smsRuleActionMetadata.map((item) => ({ value: item.value, label: t(item.i18nKey) })),
-])
+const scopeOptions = computed(() => props.options?.ruleScopes ?? [])
+const actionOptions = computed(
+  () => props.options?.ruleActions.map(({ value, label }) => ({ value, label })) ?? [],
+)
+const actionTone = (value: number) =>
+  props.options?.ruleActions.find((option) => option.value === value)?.tone ?? 'info'
+const scopeLabel = (value: number) =>
+  scopeOptions.value.find((option) => option.value === value)?.label ?? String(value)
+const actionLabel = (value: number) =>
+  actionOptions.value.find((option) => option.value === value)?.label ?? String(value)
 const hasRowActions = computed(() => props.canUpdate || props.canStatus || props.canDelete)
 const columns = computed<TableColumn<smsApi.SmsRule>[]>(() => [
   { prop: 'pattern', label: t('sms.rulePattern'), minWidth: 190 },
@@ -54,11 +57,11 @@ const columns = computed<TableColumn<smsApi.SmsRule>[]>(() => [
   },
 ])
 
-function blankRule(): smsApi.SmsRuleInput {
+function blankRule(): RuleForm {
   return {
-    scope: SmsRuleScope.Phone,
+    scope: props.options?.ruleDefaults.scope,
     pattern: '',
-    action: SmsRuleAction.Deny,
+    action: props.options?.ruleDefaults.action,
     name: '',
     remark: '',
     isEnabled: YesNo.Yes,
@@ -66,6 +69,7 @@ function blankRule(): smsApi.SmsRuleInput {
 }
 
 function create(): void {
+  if (props.options === null) return
   editingID.value = null
   form.value = blankRule()
   dialogVisible.value = true
@@ -85,17 +89,19 @@ function edit(row: smsApi.SmsRule): void {
 }
 
 async function save(): Promise<void> {
+  const { scope, action } = form.value
+  if (scope === undefined || action === undefined || props.options === null) return
   const pattern = form.value.pattern.trim()
   const name = form.value.name.trim()
   if (name === '' || (editingID.value === null && pattern === '')) return
   saving.value = true
   try {
     if (editingID.value === null) {
-      await smsApi.createSmsRule({ ...form.value, pattern, name })
+      await smsApi.createSmsRule({ ...form.value, scope, action, pattern, name })
     } else {
       await smsApi.updateSmsRule(editingID.value, {
-        scope: form.value.scope,
-        action: form.value.action,
+        scope,
+        action,
         name,
         remark: form.value.remark.trim(),
         isEnabled: form.value.isEnabled,
@@ -146,6 +152,7 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
       <template #toolbar-left>
         <el-button
           v-if="canCreate"
+          :disabled="options === null"
           data-testid="sms-rule-create"
           type="primary"
           :icon="Plus"
@@ -155,13 +162,11 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
         </el-button>
       </template>
       <template #cell-scope="{ row }: { row: smsApi.SmsRule | undefined }">
-        <template v-if="row">{{
-          t(row.scope === SmsRuleScope.Phone ? 'sms.scope.phone' : 'sms.scope.prefix')
-        }}</template>
+        <template v-if="row">{{ scopeLabel(row.scope) }}</template>
       </template>
       <template #cell-action="{ row }: { row: smsApi.SmsRule | undefined }">
-        <el-tag v-if="row" :type="row.action === SmsRuleAction.Deny ? 'danger' : 'success'">
-          {{ t(row.action === SmsRuleAction.Deny ? 'sms.action.deny' : 'sms.action.allow') }}
+        <el-tag v-if="row" :type="actionTone(row.action)">
+          {{ actionLabel(row.action) }}
         </el-tag>
       </template>
       <template #cell-status="{ row }: { row: smsApi.SmsRule }">
@@ -275,10 +280,12 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
   </div>
 </template>
 
-<style scoped>
-.sms-rule,
-.sms-rule__full {
-  min-width: 0;
-  width: 100%;
+<style scoped lang="scss">
+.sms-rule {
+  &,
+  &__full {
+    min-width: 0;
+    width: 100%;
+  }
 }
 </style>

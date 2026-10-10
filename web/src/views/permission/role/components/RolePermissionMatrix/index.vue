@@ -203,4 +203,4 @@ function toggleGroupCollapse(group: RoleMatrixGroup): void {
   </div>
 </template>
 
-<style scoped src="./RolePermissionMatrix.css"></style>
+<style scoped src="./RolePermissionMatrix.scss" lang="scss"></style>

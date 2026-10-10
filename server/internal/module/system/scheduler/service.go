@@ -20,7 +20,6 @@ type Service struct {
 func NewService(repository *Repository, catalog TaskCatalog) *Service {
 	return &Service{repository: repository, catalog: catalog, now: time.Now}
 }
-func (s *Service) Options() []TaskOption { return s.catalog.Options() }
 func (s *Service) ListSchedules(ctx context.Context, q ScheduleQuery) ([]Schedule, error) {
 	if q.Limit < 1 || q.Limit > 100 || q.AfterID < 0 {
 		return nil, apperror.InvalidRequest(errors.New("scheduler schedule query is invalid"))

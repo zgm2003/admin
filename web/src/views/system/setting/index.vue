@@ -13,14 +13,12 @@ import {
   updateSetting,
   updateLegalDocument,
   updateSettingStatus,
-  isRetentionSettingKey,
-  defaultAvatarSettingKey,
-  isBrandTitleSettingKey,
-  isBuiltinMediaSettingKey,
   type SettingValueType,
   type SystemSetting,
   type LegalDocumentKind,
 } from '@/api/system/setting'
+import { getSettingOptions, type SettingOptions } from '@/api/system/settingOptions'
+import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
@@ -32,6 +30,12 @@ import LegalSettingsPanel from './components/LegalSettingsPanel/index.vue'
 const { t } = useI18n()
 const access = usePermissionStore()
 const brand = useBrandStore()
+const {
+  options: formOptions,
+  loading: optionsLoading,
+  error: optionsError,
+  reload: reloadOptions,
+} = useLocalizedOptions<SettingOptions | null>(getSettingOptions, () => null)
 const activeTab = ref<'advanced' | 'legal'>('advanced')
 const rows = ref<SystemSetting[]>([])
 const loading = ref(false)
@@ -69,7 +73,13 @@ const canUpdate = computed(() => access.hasPermission('system:setting:update'))
 const canStatus = computed(() => access.hasPermission('system:setting:status'))
 const canDelete = computed(() => access.hasPermission('system:setting:delete'))
 const canUpload = computed(() => access.hasPermission('storage:object:upload'))
-const canSubmit = computed(() => (editing.value === null ? canCreate.value : canUpdate.value))
+const canSubmit = computed(
+  () =>
+    formOptions.value !== null &&
+    !optionsLoading.value &&
+    optionsError.value === '' &&
+    (editing.value === null ? canCreate.value : canUpdate.value),
+)
 let pageMounted = true
 let loadSequence = 0
 watch(canList, (allowed) => {
@@ -115,13 +125,7 @@ const searchFields = computed<SearchField<SettingSearchModel>[]>(() => [
     testId: 'setting-status-filter',
   },
 ])
-const valueTypeOptions = computed<Array<{ label: string; value: SettingValueType }>>(() => [
-  { label: t('setting.typeString'), value: 1 },
-  { label: t('setting.typeNumber'), value: 2 },
-  { label: t('setting.typeBoolean'), value: 3 },
-  { label: t('setting.typeJson'), value: 4 },
-  { label: t('setting.typeMedia'), value: 5 },
-])
+const valueTypeOptions = computed(() => formOptions.value?.valueTypes ?? [])
 
 const state = computed<'loading' | 'error' | 'empty' | 'success'>(() =>
   loading.value
@@ -233,12 +237,33 @@ function updatePagination(next: TablePaginationState): void {
   void load()
 }
 function openCreate(): void {
+  if (
+    !canCreate.value ||
+    submitting.value ||
+    formOptions.value === null ||
+    optionsLoading.value ||
+    optionsError.value !== ''
+  )
+    return
   submitError.value = ''
   editing.value = null
-  form.value = { key: '', value: '', valueType: 1, description: '' }
+  form.value = {
+    key: '',
+    value: '',
+    valueType: formOptions.value.defaultValueType,
+    description: '',
+  }
   dialogVisible.value = true
 }
 function openEdit(row: SystemSetting): void {
+  if (
+    !canUpdate.value ||
+    submitting.value ||
+    formOptions.value === null ||
+    optionsLoading.value ||
+    optionsError.value !== ''
+  )
+    return
   submitError.value = ''
   editing.value = row
   form.value = {
@@ -253,39 +278,43 @@ async function save(): Promise<void> {
   if (
     !canSubmit.value ||
     submitting.value ||
-    (form.value.value.trim() === '' && form.value.valueType !== 5) ||
     (editing.value === null && form.value.key.trim() === '')
   )
     return
-  if (
-    editing.value !== null &&
-    isRetentionSettingKey(editing.value.key) &&
-    Number(form.value.value) < Number(editing.value.value)
-  ) {
-    try {
-      await ElMessageBox.confirm(
-        t('setting.retentionDecreaseConfirm'),
-        t('setting.retentionDecreaseTitle'),
-        { type: 'warning' },
-      )
-    } catch (error: unknown) {
-      if (error === 'cancel' || error === 'close') return
-      throw error
-    }
-  }
   submitting.value = true
   submitError.value = ''
+  const target = editing.value
+  const payload = { ...form.value }
   try {
-    if (editing.value === null) await createSetting(form.value)
-    else
-      await updateSetting(editing.value.key, {
-        value: form.value.value,
-        valueType: form.value.valueType,
-        description: form.value.description,
+    if (
+      target !== null &&
+      target.presentation.warnOnDecrease &&
+      Number(payload.value) < Number(target.value)
+    ) {
+      try {
+        await ElMessageBox.confirm(
+          t('setting.retentionDecreaseConfirm'),
+          t('setting.retentionDecreaseTitle'),
+          { type: 'warning' },
+        )
+      } catch (error: unknown) {
+        if (error === 'cancel' || error === 'close') return
+        throw error
+      }
+    }
+    if (!pageMounted || !dialogVisible.value || !canSubmit.value) return
+    let refresh = target?.presentation.refreshBrand === true
+    if (target === null) {
+      const created = await createSetting(payload)
+      refresh = created.presentation.refreshBrand
+    } else
+      await updateSetting(target.key, {
+        value: payload.value,
+        valueType: payload.valueType,
+        description: payload.description,
       })
     dialogVisible.value = false
-    if (isBrandTitleSettingKey(form.value.key) || form.value.key === defaultAvatarSettingKey)
-      await refreshBrand()
+    if (refresh) await refreshBrand()
     await load()
     ElNotification.success({ title: t('setting.saved') })
   } catch {
@@ -295,12 +324,12 @@ async function save(): Promise<void> {
   }
 }
 async function toggle(row: SystemSetting): Promise<void> {
-  if (!canStatus.value) return
+  if (!canStatus.value || !row.presentation.actions.status) return
   await updateSettingStatus(row.key, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
   await load()
 }
 async function remove(row: SystemSetting): Promise<void> {
-  if (row.isBuiltin === YesNo.Yes || !canDelete.value) return
+  if (!row.presentation.actions.delete || !canDelete.value) return
   await ElMessageBox.confirm(t('setting.deleteConfirm'), t('setting.deleteTitle'), {
     type: 'warning',
   })
@@ -319,6 +348,18 @@ onMounted(() => {
 
 <template>
   <AppPage class="setting-page">
+    <el-alert
+      v-if="optionsError"
+      data-testid="setting-options-error"
+      :title="t('setting.loadFailed')"
+      type="error"
+      :closable="false"
+      show-icon
+    >
+      <el-button data-testid="setting-options-retry" @click="reloadOptions">{{
+        t('appTable.refresh')
+      }}</el-button>
+    </el-alert>
     <el-tabs v-model="activeTab" class="setting-page__tabs">
       <el-tab-pane name="advanced" :label="t('setting.advancedTitle')">
         <el-alert
@@ -331,6 +372,7 @@ onMounted(() => {
         <el-button
           v-if="!canList && canCreate"
           data-testid="setting-create"
+          :disabled="formOptions === null || optionsLoading"
           type="primary"
           :icon="CirclePlus"
           @click="openCreate"
@@ -367,6 +409,7 @@ onMounted(() => {
             <el-button
               v-if="canCreate"
               data-testid="setting-create"
+              :disabled="formOptions === null || optionsLoading"
               type="primary"
               :icon="CirclePlus"
               @click="openCreate"
@@ -385,6 +428,7 @@ onMounted(() => {
             <el-button
               v-if="canUpdate"
               data-testid="setting-update"
+              :disabled="formOptions === null || optionsLoading"
               text
               type="primary"
               :icon="Edit"
@@ -392,12 +436,7 @@ onMounted(() => {
               >{{ t('setting.edit') }}</el-button
             >
             <el-button
-              v-if="
-                canStatus &&
-                !isRetentionSettingKey(row.key) &&
-                !isBrandTitleSettingKey(row.key) &&
-                !isBuiltinMediaSettingKey(row.key)
-              "
+              v-if="canStatus && row.presentation.actions.status"
               data-testid="setting-status-toggle"
               text
               :icon="Switch"
@@ -407,7 +446,7 @@ onMounted(() => {
               }}</el-button
             >
             <el-button
-              v-if="canDelete && row.isBuiltin === YesNo.No"
+              v-if="canDelete && row.presentation.actions.delete"
               data-testid="setting-delete"
               text
               type="danger"
@@ -434,6 +473,8 @@ onMounted(() => {
     </el-tabs>
 
     <SettingDialog
+      v-if="formOptions !== null"
+      :default-presentation="formOptions.defaultPresentation"
       v-model="dialogVisible"
       v-model:form="form"
       :editing="editing"
@@ -447,48 +488,52 @@ onMounted(() => {
   </AppPage>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .setting-page {
   height: 100%;
   min-height: 0;
-}
 
-.setting-page__tabs {
-  display: flex;
-  min-height: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-}
+  &__tabs {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
 
-.setting-page__tabs :deep(.el-tabs__header) {
-  margin-bottom: 0;
-}
+  &__tabs :deep(.el-tabs__header) {
+    margin-bottom: 0;
+  }
 
-.setting-page__tabs :deep(.el-tabs__nav-wrap::after) {
-  height: 1px;
-  background: var(--el-border-color-lighter);
-}
+  &__tabs :deep(.el-tabs__nav-wrap::after) {
+    height: 1px;
+    background: var(--el-border-color-lighter);
+  }
 
-.setting-page__tabs :deep(.el-tabs__item) {
-  height: 44px;
-  padding: 0 22px;
-  font-size: 14px;
-}
+  &__tabs :deep(.el-tabs__item) {
+    height: 44px;
+    padding: 0 22px;
+    font-size: 14px;
+  }
 
-.setting-page__tabs :deep(.el-tabs__item.is-active) {
-  font-weight: 600;
+  &__tabs :deep(.el-tabs__item.is-active) {
+    font-weight: 600;
+  }
 }
 
 /* 内容区自己滚动，页签保持可见；透明上边框不会像 padding 那样随滚动消失。 */
-.setting-page__tabs :deep(.el-tabs__content) {
-  min-height: 0;
-  flex: 1 1 auto;
-  overflow: auto;
-  border-top: 24px solid transparent;
+.setting-page {
+  &__tabs :deep(.el-tabs__content) {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+    border-top: 24px solid transparent;
+  }
 }
 
 /* 面板按内容区高度布局，让内部编辑器自己滚动而不是整体滚页。 */
-.setting-page__tabs :deep(.el-tab-pane) {
-  height: 100%;
+.setting-page {
+  &__tabs :deep(.el-tab-pane) {
+    height: 100%;
+  }
 }
 </style>

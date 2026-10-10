@@ -4,17 +4,8 @@ import UpMedia from '@/components/UpMedia/index.vue'
 import { isStorageObjectKey } from '@/utils/storageObjectKey'
 import { useI18n } from 'vue-i18n'
 
-import {
-  isRetentionSettingKey,
-  isBrandTitleSettingKey,
-  isBuiltinMediaSettingKey,
-  isSettingMediaValue,
-  defaultAvatarSettingKey,
-  mailRecipientRuleImportTemplateObjectKey,
-  retentionSettingRanges,
-  type SystemSetting,
-  type SettingValueType,
-} from '@/api/system/setting'
+import type { SystemSetting, SettingValueType } from '@/api/system/setting'
+import type { SettingPresentation, SettingTypeOption } from '@/api/system/settingOptions'
 
 defineOptions({ name: 'SettingDialog' })
 
@@ -25,12 +16,8 @@ type SettingForm = {
   description: string
 }
 
-type SettingTypeOption = {
-  label: string
-  value: SettingValueType
-}
-
 const props = defineProps<{
+  defaultPresentation: SettingPresentation
   editing: SystemSetting | null
   submitting: boolean
   canSave: boolean
@@ -45,19 +32,26 @@ const emit = defineEmits<{ save: [] }>()
 const { t } = useI18n()
 const valueError = ref('')
 const uploading = ref(false)
-const mediaAccept = computed(() =>
-  form.value.key === defaultAvatarSettingKey
-    ? '.png,.jpg,.jpeg,.gif,.webp'
-    : form.value.key === mailRecipientRuleImportTemplateObjectKey
-      ? '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      : '',
+const presentation = computed(() => props.editing?.presentation ?? props.defaultPresentation)
+const editor = computed(
+  () =>
+    props.valueTypeOptions.find((option) => option.value === form.value.valueType)?.editor ??
+    presentation.value.editor,
 )
-const mediaVariant = computed<'avatar' | 'default' | 'file'>(() =>
-  form.value.key === defaultAvatarSettingKey
+const mediaAccept = computed(() => presentation.value.mediaAccept)
+// File preview classification is browser presentation, not upload acceptance.
+const mediaVariant = computed(() =>
+  presentation.value.mediaVariant === 'avatar'
     ? 'avatar'
     : /\.(?:png|jpg|jpeg|gif|webp)$/u.test(form.value.value)
       ? 'default'
-      : 'file',
+      : presentation.value.mediaVariant,
+)
+const allowEmpty = computed(() =>
+  props.editing?.valueType === form.value.valueType
+    ? presentation.value.allowEmpty
+    : (props.valueTypeOptions.find((option) => option.value === form.value.valueType)?.allowEmpty ??
+      presentation.value.allowEmpty),
 )
 watch(visible, () => {
   valueError.value = ''
@@ -68,7 +62,11 @@ watch(
   (type) => {
     valueError.value = ''
     uploading.value = false
-    if (type === 5 && form.value.value !== '' && !isStorageObjectKey(form.value.value))
+    if (
+      props.valueTypeOptions.find((option) => option.value === type)?.editor === 'media' &&
+      form.value.value !== '' &&
+      !isStorageObjectKey(form.value.value)
+    )
       form.value.value = ''
   },
 )
@@ -80,25 +78,24 @@ function setMedia(value: string | string[]): void {
 
 function validateValue(): boolean {
   valueError.value = ''
-  if (
-    isBrandTitleSettingKey(form.value.key) &&
-    (form.value.valueType !== 1 || [...form.value.value.trim()].length > 128)
-  ) {
-    valueError.value = t('setting.brandTitleInvalid')
+  const rules = presentation.value
+  if (form.value.value.trim() === '') {
+    if (allowEmpty.value) return true
+    valueError.value = t('setting.valueRequired')
     return false
   }
-  if (form.value.valueType === 5) {
-    if (!isSettingMediaValue(form.value.key, form.value.value)) {
+  if (editor.value === 'media') {
+    if (form.value.value !== '' && !isStorageObjectKey(form.value.value)) {
       valueError.value = t('setting.mediaInvalid')
       return false
     }
     return true
   }
-  if (form.value.value.trim() === '') {
-    valueError.value = t('setting.valueRequired')
+  if (rules.maxLength !== null && [...form.value.value.trim()].length > rules.maxLength) {
+    valueError.value = t('setting.brandTitleInvalid')
     return false
   }
-  if (form.value.valueType === 4) {
+  if (editor.value === 'json') {
     try {
       JSON.parse(form.value.value)
     } catch {
@@ -106,13 +103,12 @@ function validateValue(): boolean {
       return false
     }
   }
-  if (isRetentionSettingKey(form.value.key)) {
-    const range = retentionSettingRanges[form.value.key]
+  if (rules.minimum !== null && rules.maximum !== null) {
     const numeric = Number(form.value.value)
-    if (!Number.isInteger(numeric) || numeric < range.minimum || numeric > range.maximum) {
+    if (!Number.isInteger(numeric) || numeric < rules.minimum || numeric > rules.maximum) {
       valueError.value = t('setting.retentionRange', {
-        minimum: range.minimum,
-        maximum: range.maximum,
+        minimum: rules.minimum,
+        maximum: rules.maximum,
       })
       return false
     }
@@ -167,33 +163,21 @@ function save(): void {
           v-model="form.valueType"
           data-testid="setting-form-type"
           :options="valueTypeOptions"
-          :disabled="
-            uploading ||
-            submitting ||
-            !canSave ||
-            (editing !== null &&
-              (isRetentionSettingKey(form.key) ||
-                isBrandTitleSettingKey(form.key) ||
-                isBuiltinMediaSettingKey(form.key)))
-          "
+          :disabled="uploading || submitting || !canSave || presentation.valueTypeLocked"
           style="width: 100%"
         />
       </el-form-item>
       <el-form-item :label="t('setting.value')">
-        <template v-if="form.valueType === 5">
+        <template v-if="editor === 'media'">
           <UpMedia
             v-if="visible"
             :key="form.key"
             :model-value="form.value"
-            rule-code="setting"
+            :rule-code="presentation.mediaRuleCode"
             :multiple="false"
             :variant="mediaVariant"
             :accept="mediaAccept"
-            :file-label="
-              form.key === mailRecipientRuleImportTemplateObjectKey
-                ? t('mail.ruleXlsx.templateLabel')
-                : ''
-            "
+            :file-label="''"
             :disabled="submitting || !canSave"
             :upload-disabled="!canUpload"
             @update:model-value="setMedia"
@@ -202,7 +186,7 @@ function save(): void {
           <p class="setting-media-hint">{{ t('setting.mediaHint') }}</p>
         </template>
         <el-switch
-          v-else-if="form.valueType === 3"
+          v-else-if="editor === 'boolean'"
           v-model="form.value"
           data-testid="setting-form-value"
           :disabled="submitting || !canSave"
@@ -216,23 +200,19 @@ function save(): void {
           v-model="form.value"
           data-testid="setting-form-value"
           :disabled="submitting || !canSave"
-          :type="form.valueType === 4 ? 'textarea' : form.valueType === 2 ? 'number' : 'text'"
-          :min="
-            isRetentionSettingKey(form.key) ? retentionSettingRanges[form.key].minimum : undefined
-          "
-          :max="
-            isRetentionSettingKey(form.key) ? retentionSettingRanges[form.key].maximum : undefined
-          "
-          :step="isRetentionSettingKey(form.key) ? 1 : undefined"
-          :rows="form.valueType === 4 ? 8 : undefined"
-          :maxlength="isBrandTitleSettingKey(form.key) ? 128 : undefined"
+          :type="editor === 'json' ? 'textarea' : editor === 'number' ? 'number' : 'text'"
+          :min="presentation.minimum ?? undefined"
+          :max="presentation.maximum ?? undefined"
+          :step="presentation.minimum !== null ? 1 : undefined"
+          :rows="editor === 'json' ? 8 : undefined"
+          :maxlength="presentation.maxLength ?? undefined"
           :placeholder="t('setting.valuePlaceholder')"
         />
         <div v-if="valueError" class="el-form-item__error setting-value-error">
           {{ valueError }}
         </div>
         <el-button
-          v-if="form.valueType === 4"
+          v-if="editor === 'json'"
           data-testid="setting-json-format"
           class="setting-json-format"
           text
@@ -267,7 +247,7 @@ function save(): void {
   </AppDialog>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .setting-submit-error {
   margin-bottom: 16px;
 }

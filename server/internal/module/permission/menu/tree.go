@@ -11,6 +11,11 @@ import (
 	"admin/server/internal/shared/yesno"
 )
 
+const (
+	menuTextMaxRunes = 128
+	menuPathMaxRunes = 255
+)
+
 var (
 	errMenuTreeInvalid = errors.New("menu tree data is invalid")
 	errMenuParent      = errors.New("menu parent is invalid")
@@ -291,25 +296,25 @@ func sortMenuIDs(ids []int64, byID map[int64]Menu) {
 }
 
 func validMenuCode(value string) bool {
-	return value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 128 && menuCodePattern.MatchString(value)
+	return value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= menuTextMaxRunes && menuCodePattern.MatchString(value)
 }
 
 func validMenuName(value string) bool {
 	count := utf8.RuneCountInString(value)
-	return value == strings.TrimSpace(value) && count >= 1 && count <= 128
+	return value == strings.TrimSpace(value) && count >= 1 && count <= menuTextMaxRunes
 }
 
 func validMenuI18nKey(value string) bool {
-	return value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 128 && menuI18nKeyPattern.MatchString(value)
+	return value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= menuTextMaxRunes && menuI18nKeyPattern.MatchString(value)
 }
 
 func validMenuPath(value string) bool {
 	_, reserved := staticPagePaths[value]
-	return !reserved && value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 255 && menuPathPattern.MatchString(value)
+	return !reserved && value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= menuPathMaxRunes && menuPathPattern.MatchString(value)
 }
 
 func validMenuComponentPath(value string) bool {
-	return value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= 255 && menuComponentPathPattern.MatchString(value)
+	return value == strings.TrimSpace(value) && utf8.RuneCountInString(value) <= menuPathMaxRunes && menuComponentPathPattern.MatchString(value)
 }
 
 func validMenuIcon(value string) bool {

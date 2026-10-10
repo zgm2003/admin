@@ -8,32 +8,32 @@
   background: var(--admin-surface);
   border: 1px solid var(--admin-border);
   border-radius: 8px;
-}
 
-.management-page__filters,
-.management-page__actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
+  &__filters,
+  &__actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
 
-.management-page__actions {
-  justify-content: flex-end;
-}
+  &__actions {
+    justify-content: flex-end;
+  }
 
-.management-page > .app-table {
-  min-height: 0;
+  > .app-table {
+    min-height: 0;
+  }
 }
 
 @media (max-width: 768px) {
   .management-page {
     min-height: 100%;
     padding: 12px;
-  }
 
-  .management-page__filters,
-  .management-page__actions {
-    align-items: stretch;
+    &__filters,
+    &__actions {
+      align-items: stretch;
+    }
   }
 }

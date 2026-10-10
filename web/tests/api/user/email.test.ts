@@ -1,120 +1,69 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import { bindEmail, getEmailChangeLogs, sendEmailCode } from '@/api/user/email'
+import * as api from '@/api/user/email'
 import { request } from '@/utils/request'
-
-vi.mock('@/utils/request', () => ({ request: vi.fn() }))
-const requestMock = vi.mocked(request)
-
-describe('user email identity API', () => {
-  beforeEach(() => requestMock.mockReset())
-
-  it('sends exact current, next, and bind request shapes', async () => {
-    requestMock.mockResolvedValueOnce({
-      challengeId: 'current-challenge',
-      expiresAt: '2026-09-11T08:00:00Z',
-      resendAfterSeconds: 60,
-    })
-    await sendEmailCode({ target: 'current' })
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'POST',
-      url: '/api/admin/v1/user/email/send-code',
-      data: { target: 'current' },
-    })
-
-    requestMock.mockResolvedValueOnce({
-      challengeId: 'next-challenge',
-      expiresAt: '2026-09-11T08:00:00Z',
-      resendAfterSeconds: 0,
-    })
-    await sendEmailCode({ target: 'next', email: 'next@example.com' })
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'POST',
-      url: '/api/admin/v1/user/email/send-code',
-      data: { target: 'next', email: 'next@example.com' },
-    })
-
-    const input = {
-      currentChallengeId: 'current-challenge',
-      currentCode: '111111',
-      nextEmail: 'next@example.com',
-      nextChallengeId: 'next-challenge',
-      nextCode: '222222',
+vi.mock('@/utils/request', () => ({
+  request: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  refreshAccessCredential: vi.fn(),
+}))
+beforeEach(() => vi.resetAllMocks())
+describe('thin API HTTP contract', () => {
+  it('sendEmailCode preserves the HTTP contract and backend data', async () => {
+    const input: Parameters<typeof api.sendEmailCode>[0] = { target: 'current' }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.sendEmailCode(input)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/user/email/send-code',
+      input,
+    )
+  })
+  it('sendEmailCode propagates request failures unchanged', async () => {
+    const input: Parameters<typeof api.sendEmailCode>[0] = { target: 'current' }
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.sendEmailCode(input)).rejects.toBe(error)
+  })
+  it('bindEmail preserves the HTTP contract and backend data', async () => {
+    const input: Parameters<typeof api.bindEmail>[0] = {
+      nextEmail: 'sample',
+      nextChallengeId: 'sample',
+      nextCode: 'sample',
     }
-    requestMock.mockResolvedValueOnce({ email: 'next@example.com' })
-    await expect(bindEmail(input)).resolves.toEqual({ email: 'next@example.com' })
-    expect(requestMock).toHaveBeenLastCalledWith({
-      method: 'PUT',
-      url: '/api/admin/v1/user/email',
-      data: input,
-    })
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.bindEmail(input)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/user/email', input)
   })
-
-  it.each([
-    { challengeId: '', expiresAt: '2026-09-11T08:00:00Z', resendAfterSeconds: 60 },
-    { challengeId: 'challenge', expiresAt: 'invalid', resendAfterSeconds: 60 },
-    { challengeId: 'challenge', expiresAt: '2026-09-11T08:00:00Z', resendAfterSeconds: -1 },
-    { challengeId: 'challenge', expiresAt: '2026-09-11T08:00:00Z', resendAfterSeconds: 86401 },
-    {
-      challengeId: 'challenge',
-      expiresAt: '2026-09-11T08:00:00Z',
-      resendAfterSeconds: 60,
-      extra: true,
-    },
-  ])('rejects malformed send-code responses', async (response) => {
-    requestMock.mockResolvedValue(response)
-    await expect(sendEmailCode({ target: 'current' })).rejects.toThrow()
+  it('bindEmail propagates request failures unchanged', async () => {
+    const input: Parameters<typeof api.bindEmail>[0] = {
+      nextEmail: 'sample',
+      nextChallengeId: 'sample',
+      nextCode: 'sample',
+    }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.bindEmail(input)).rejects.toBe(error)
   })
-
-  it.each([
-    { email: 'missing-at' },
-    { email: 'UPPER@example.com' },
-    { email: '' },
-    { email: 'a@b.com', extra: true },
-  ])('rejects malformed email identity responses', async (response) => {
-    requestMock.mockResolvedValue(response)
-    await expect(
-      bindEmail({ nextEmail: 'a@b.com', nextChallengeId: 'challenge', nextCode: '123456' }),
-    ).rejects.toThrow()
+  it('getEmailChangeLogs preserves the HTTP contract and backend data', async () => {
+    const userId: Parameters<typeof api.getEmailChangeLogs>[0] = 1
+    const query: Parameters<typeof api.getEmailChangeLogs>[1] = { page: 1, pageSize: 1 }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getEmailChangeLogs(userId, query)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/user/account/${userId}/email-change-log`,
+      { params: query },
+    )
   })
-
-  it('loads numeric email change actions and plaintext history', async () => {
-    requestMock.mockResolvedValue({
-      list: [
-        {
-          id: 1,
-          action: 1,
-          oldEmail: 'old@example.com',
-          newEmail: 'new@example.com',
-          platform: 'admin',
-          createdAt: '2026-09-29T05:00:00Z',
-        },
-        {
-          id: 2,
-          action: 2,
-          oldEmail: null,
-          newEmail: 'bound@example.com',
-          platform: 'admin',
-          createdAt: '2026-09-28T05:00:00Z',
-        },
-      ],
-      total: 2,
-      page: 1,
-      pageSize: 20,
-    })
-    await expect(getEmailChangeLogs(7, { page: 1, pageSize: 20 })).resolves.toEqual({
-      list: expect.arrayContaining([
-        expect.objectContaining({ action: 1, oldEmail: 'old@example.com' }),
-        expect.objectContaining({ action: 2, oldEmail: null }),
-      ]),
-      total: 2,
-      page: 1,
-      pageSize: 20,
-    })
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'GET',
-      url: '/api/admin/v1/user/account/7/email-change-log',
-      params: { page: 1, pageSize: 20 },
-    })
+  it('getEmailChangeLogs propagates request failures unchanged', async () => {
+    const userId: Parameters<typeof api.getEmailChangeLogs>[0] = 1
+    const query: Parameters<typeof api.getEmailChangeLogs>[1] = { page: 1, pageSize: 1 }
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getEmailChangeLogs(userId, query)).rejects.toBe(error)
   })
 })

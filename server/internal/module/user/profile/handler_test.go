@@ -245,3 +245,7 @@ func registerTestRoutes(router *gin.Engine, profile profileService, password pas
 		return func(c *gin.Context) { c.Set("permission", code); c.Next() }
 	})
 }
+
+func (*profileServiceStub) Options(ctx context.Context) (Options, error) {
+	return (&Service{}).Options(ctx)
+}

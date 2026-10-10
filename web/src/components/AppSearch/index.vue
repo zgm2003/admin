@@ -219,14 +219,14 @@ function reset(): void {
   </el-form>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .search-form {
   display: flex;
   flex-wrap: wrap;
   gap: 0 12px;
-}
 
-.search-form :deep(.el-form-item) {
-  margin-bottom: 12px;
+  :deep(.el-form-item) {
+    margin-bottom: 12px;
+  }
 }
 </style>

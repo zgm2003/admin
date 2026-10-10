@@ -43,9 +43,6 @@ const phoneColumns = computed<TableColumn<PhoneChangeLogItem>[]>(() => [
   { prop: 'platform', label: t('user.emailChangePlatform'), width: 120 },
   { prop: 'createdAt', label: t('user.emailChangeCreatedAt'), minWidth: 190 },
 ])
-function actionLabel(action: 1 | 2): string {
-  return t(action === 1 ? 'user.emailChangeActionChange' : 'user.emailChangeActionBind')
-}
 </script>
 
 <template>
@@ -69,9 +66,7 @@ function actionLabel(action: 1 | 2): string {
           @update:pagination="emit('update:pagination', $event)"
         >
           <template #cell-action="{ row }: { row: EmailChangeLogItem }"
-            ><el-tag :type="row.action === 1 ? 'warning' : 'success'">{{
-              actionLabel(row.action)
-            }}</el-tag></template
+            ><el-tag type="info">{{ row.actionLabel }}</el-tag></template
           >
           <template #cell-oldEmail="{ row }: { row: EmailChangeLogItem }">{{
             row.oldEmail ?? '-'
@@ -94,9 +89,7 @@ function actionLabel(action: 1 | 2): string {
           @update:pagination="emit('update:phone-pagination', $event)"
         >
           <template #cell-action="{ row }: { row: PhoneChangeLogItem }"
-            ><el-tag :type="row.action === 1 ? 'warning' : 'success'">{{
-              actionLabel(row.action)
-            }}</el-tag></template
+            ><el-tag type="info">{{ row.actionLabel }}</el-tag></template
           >
           <template #cell-oldPhone="{ row }: { row: PhoneChangeLogItem }">{{
             row.oldPhone ?? '-'

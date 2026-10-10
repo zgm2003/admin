@@ -3,16 +3,26 @@ import { computed, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import { useI18n } from 'vue-i18n'
 
-import { updateMailRateLimitPolicy, type MailRateLimitPolicy } from '@/api/message/mail'
+import {
+  updateMailRateLimitPolicy,
+  type MailRateLimitPolicy,
+  type MailOptions,
+} from '@/api/message/mail'
 import type { TableColumn } from '@/components/AppTable'
 
 const props = defineProps<{
+  options: MailOptions | null
   policies: MailRateLimitPolicy[]
   loading: boolean
   canUpdate: boolean
 }>()
 const emit = defineEmits<{ refresh: [] }>()
 const { t } = useI18n()
+const constraints = computed(() => props.options?.rateLimitConstraints)
+const optionLabel = (
+  kind: 'rateLimitPolicies' | 'rateLimitModes' | 'rateLimitDimensions',
+  value: string,
+) => props.options?.[kind].find((option) => option.value === value)?.label ?? value
 
 type Draft = { limit: number | null; windowSeconds: number | null }
 const drafts = reactive<Record<string, Draft>>({})
@@ -51,12 +61,15 @@ function draftOf(policy: MailRateLimitPolicy): Draft {
 
 function validDraft(policy: MailRateLimitPolicy): boolean {
   const draft = draftOf(policy)
-  if (draft.limit === null || draft.windowSeconds === null) return false
+  const bounds = constraints.value
+  if (!bounds || draft.limit === null || draft.windowSeconds === null) return false
   return (
-    draft.limit >= 1 &&
-    draft.limit <= 100000 &&
-    draft.windowSeconds >= 1 &&
-    draft.windowSeconds <= 86400
+    Number.isInteger(draft.limit) &&
+    Number.isInteger(draft.windowSeconds) &&
+    draft.limit >= bounds.minLimit &&
+    draft.limit <= bounds.maxLimit &&
+    draft.windowSeconds >= bounds.minWindowSeconds &&
+    draft.windowSeconds <= bounds.maxWindowSeconds
   )
 }
 
@@ -68,7 +81,14 @@ function dirty(policy: MailRateLimitPolicy): boolean {
 async function save(policy: MailRateLimitPolicy): Promise<void> {
   const id = policyId(policy)
   const draft = draftOf(policy)
-  if (draft.limit === null || draft.windowSeconds === null || saving[id]) return
+  if (
+    draft.limit === null ||
+    draft.windowSeconds === null ||
+    saving[id] ||
+    !validDraft(policy) ||
+    !props.canUpdate
+  )
+    return
   saving[id] = true
   try {
     const result = await updateMailRateLimitPolicy(policy.platformId, policy.key, {
@@ -110,32 +130,26 @@ async function save(policy: MailRateLimitPolicy): Promise<void> {
       <template #cell-name="{ row }: { row: MailRateLimitPolicy | undefined }">
         <template v-if="row?.key">
           <div class="rate-limit-name">
-            <strong>{{ t(`mail.rateLimit.policy.${row.key}`) }}</strong>
+            <strong>{{ optionLabel('rateLimitPolicies', row.key) }}</strong>
             <code>{{ row.key }}</code>
           </div>
         </template>
       </template>
       <template #cell-mode="{ row }: { row: MailRateLimitPolicy | undefined }">
         <template v-if="row?.key">
-          {{
-            t(
-              row.mode === 'business'
-                ? 'mail.rateLimit.modeBusiness'
-                : 'mail.rateLimit.modeAdminTest',
-            )
-          }}
+          {{ optionLabel('rateLimitModes', row.mode) }}
         </template>
       </template>
       <template #cell-dimension="{ row }: { row: MailRateLimitPolicy | undefined }">
-        <template v-if="row?.key">{{ t(`mail.rateLimit.dimension.${row.dimension}`) }}</template>
+        <template v-if="row?.key">{{ optionLabel('rateLimitDimensions', row.dimension) }}</template>
       </template>
       <template #cell-limit="{ row }: { row: MailRateLimitPolicy | undefined }">
         <template v-if="row?.key">
           <el-input-number
             v-model="draftOf(row).limit"
-            :min="1"
-            :max="100000"
-            :disabled="!canUpdate"
+            :min="constraints?.minLimit"
+            :max="constraints?.maxLimit"
+            :disabled="!canUpdate || !constraints"
             :placeholder="t('mail.rateLimit.limitPlaceholder')"
             controls-position="right"
             data-testid="rate-limit-input"
@@ -146,9 +160,9 @@ async function save(policy: MailRateLimitPolicy): Promise<void> {
         <template v-if="row?.key">
           <el-input-number
             v-model="draftOf(row).windowSeconds"
-            :min="1"
-            :max="86400"
-            :disabled="!canUpdate"
+            :min="constraints?.minWindowSeconds"
+            :max="constraints?.maxWindowSeconds"
+            :disabled="!canUpdate || !constraints"
             :placeholder="t('mail.rateLimit.windowPlaceholder')"
             controls-position="right"
             data-testid="rate-limit-window-input"
@@ -176,7 +190,7 @@ async function save(policy: MailRateLimitPolicy): Promise<void> {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .table-tab {
   min-width: 0;
 }
@@ -189,11 +203,11 @@ async function save(policy: MailRateLimitPolicy): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
 
-.rate-limit-name code {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  code {
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+  }
 }
 
 .rate-limit-unit {

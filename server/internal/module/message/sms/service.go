@@ -13,7 +13,6 @@ import (
 	"admin/server/internal/module/message/sms/logVerification"
 	"admin/server/internal/module/message/sms/rateLimitPolicy"
 	"admin/server/internal/module/message/sms/recipientRule"
-	"admin/server/internal/module/message/sms/template"
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/phone"
 )
@@ -44,11 +43,11 @@ func NewService(stores Stores, keys *secretkey.KeyRing) *Service {
 }
 
 // PageInit returns the four fixed scenes for the admin page bootstrap.
-func (s *Service) PageInit(context.Context) (PageInitResult, error) {
-	catalog := template.FixedCatalog()
+func (s *Service) PageInit(ctx context.Context) (PageInitResult, error) {
+	catalog := Options(ctx).Scenes
 	scenes := make([]SceneOption, 0, len(catalog))
 	for _, fixed := range catalog {
-		scenes = append(scenes, SceneOption{Scene: fixed.Scene, Name: fixed.Name, VariableKeys: fixed.VariableKeys})
+		scenes = append(scenes, SceneOption{Scene: fixed.Value, Name: fixed.Label, VariableKeys: fixed.VariableKeys})
 	}
 	return PageInitResult{Scenes: scenes}, nil
 }

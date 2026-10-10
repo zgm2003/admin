@@ -1,77 +1,83 @@
-import { describe, expect, it } from 'vitest'
-
-import {
-  notificationPriorityMetadata,
-  notificationVariantMetadata,
-  parseNotificationList,
-  parseNotificationSummary,
-} from '@/api/message/notification'
-
-const recent = {
-  id: 1,
-  title: 'Title',
-  summary: 'Summary',
-  variant: 'info',
-  priority: 'normal',
-  linkType: 'none',
-  link: '',
-  publishedAt: '2026-09-18T12:00:00Z',
-  isRead: false,
-}
-
-describe('notification DTO', () => {
-  it('owns stable variant and priority values in domain metadata', () => {
-    expect(notificationVariantMetadata.map((item) => item.value)).toEqual([
-      'info',
-      'success',
-      'warning',
-      'error',
-    ])
-    expect(notificationPriorityMetadata.map((item) => item.value)).toEqual(['normal', 'urgent'])
+// @vitest-environment node
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as api from '@/api/message/notification'
+import { request } from '@/utils/request'
+vi.mock('@/utils/request', () => ({
+  request: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  refreshAccessCredential: vi.fn(),
+}))
+beforeEach(() => vi.resetAllMocks())
+describe('thin API HTTP contract', () => {
+  it('getNotificationSummary preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getNotificationSummary()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/v1/message/notification/summary')
   })
-  it('parses list and summary exactly', () => {
-    expect(parseNotificationSummary({ unreadCount: 1, recent: [recent] }).unreadCount).toBe(1)
-    expect(
-      parseNotificationList({
-        items: [{ ...recent, contentHtml: '<p>Body</p>' }],
-        nextBeforeId: null,
-      }).items,
-    ).toHaveLength(1)
+  it('getNotificationSummary propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getNotificationSummary()).rejects.toBe(error)
   })
-
-  it('rejects summary rich content and snake case', () => {
-    expect(() =>
-      parseNotificationSummary({
-        unreadCount: 1,
-        recent: [{ ...recent, contentHtml: '<p>x</p>' }],
-      }),
-    ).toThrow()
-    expect(() => parseNotificationSummary({ unread_count: 1, recent: [] })).toThrow()
+  it('listNotifications preserves the HTTP contract and backend data', async () => {
+    const params: Parameters<typeof api.listNotifications>[0] = {}
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.listNotifications(params)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/v1/message/notification', { params })
   })
-
-  it('accepts only the sanitized notification HTML contract', () => {
-    const safeHtml =
-      '<h2>Title</h2><p>Hello <strong>bold</strong><em>em</em><u>u</u><br><a href="https://example.com/a?q=1" target="_blank" rel="noopener noreferrer">link</a></p><ul><li>one</li></ul><ol><li>two</li></ol>'
-    expect(
-      parseNotificationList({
-        items: [{ ...recent, contentHtml: safeHtml }],
-        nextBeforeId: null,
-      }).items[0]?.contentHtml,
-    ).toBe(safeHtml)
+  it('listNotifications propagates request failures unchanged', async () => {
+    const params: Parameters<typeof api.listNotifications>[0] = {}
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.listNotifications(params)).rejects.toBe(error)
   })
-
-  it.each([
-    '<p onclick="alert(1)">event handler</p>',
-    '<p><img src=x onerror="alert(1)">image</p>',
-    '<p><a href="javascript:alert(1)">link</a></p>',
-    '<p><a href="https://example.com" target="_self" rel="opener">link</a></p>',
-    '<svg><script>alert(1)</script></svg>',
-  ])('rejects notification HTML outside the backend sanitizer contract: %s', (contentHtml) => {
-    expect(() =>
-      parseNotificationList({
-        items: [{ ...recent, contentHtml }],
-        nextBeforeId: null,
-      }),
-    ).toThrow()
+  it('readNotification preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.readNotification>[0] = 1
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.patch).mockResolvedValue(dataFromServer)
+    const result = await api.readNotification(id)
+    expect(result).toBe(dataFromServer)
+    expect(request.patch).toHaveBeenCalledExactlyOnceWith(
+      `/api/v1/message/notification/${id}/read`,
+      undefined,
+    )
+  })
+  it('readNotification propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.readNotification>[0] = 1
+    const error = new Error('request failed')
+    vi.mocked(request.patch).mockRejectedValue(error)
+    await expect(api.readNotification(id)).rejects.toBe(error)
+  })
+  it('readAllNotifications preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.patch).mockResolvedValue(dataFromServer)
+    const result = await api.readAllNotifications()
+    expect(result).toBe(dataFromServer)
+    expect(request.patch).toHaveBeenCalledExactlyOnceWith(
+      '/api/v1/message/notification/read-all',
+      undefined,
+    )
+  })
+  it('readAllNotifications propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.patch).mockRejectedValue(error)
+    await expect(api.readAllNotifications()).rejects.toBe(error)
+  })
+  it('deleteNotification preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.deleteNotification>[0] = 1
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.delete).mockResolvedValue(dataFromServer)
+    const result = await api.deleteNotification(id)
+    expect(result).toBe(dataFromServer)
+    expect(request.delete).toHaveBeenCalledExactlyOnceWith(`/api/v1/message/notification/${id}`)
+  })
+  it('deleteNotification propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.deleteNotification>[0] = 1
+    const error = new Error('request failed')
+    vi.mocked(request.delete).mockRejectedValue(error)
+    await expect(api.deleteNotification(id)).rejects.toBe(error)
   })
 })

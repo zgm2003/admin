@@ -1,40 +1,34 @@
-import {
-  expectArray,
-  expectEmptyObject,
-  expectExactKeys,
-  expectInteger,
-  expectString,
-} from '@/api/protocol'
-import { isYesNo, type YesNo } from '@/enums/yesNo'
-import {
-  isSmsRuleAction,
-  isSmsRuleScope,
-  type SmsRuleAction,
-  type SmsRuleScope,
-} from '@/enums/smsRecipientRule'
-import { ProtocolError } from '@/types/http'
+import { type YesNo } from '@/enums/yesNo'
 import type { PageResult } from '@/types/pagination'
 import { request } from '@/utils/request'
+import type { BackendOption, StatusOption } from '@/types/option'
 
-export type SmsScene = 'login' | 'forget' | 'bind_phone' | 'change_password'
-export const smsSceneMetadata = [
-  { value: 'login', i18nKey: 'sms.scene.login' },
-  { value: 'forget', i18nKey: 'sms.scene.forget' },
-  { value: 'bind_phone', i18nKey: 'sms.scene.bindPhone' },
-  { value: 'change_password', i18nKey: 'sms.scene.changePassword' },
-] as const satisfies ReadonlyArray<{ value: SmsScene; i18nKey: string }>
-export const SmsStatus = {
-  Pending: 1,
-  Sent: 2,
-  Failed: 3,
-} as const
-export type SmsStatus = (typeof SmsStatus)[keyof typeof SmsStatus]
-export const smsStatusMetadata = [
-  { value: SmsStatus.Pending, i18nKey: 'sms.status.pending', tagType: 'info' },
-  { value: SmsStatus.Sent, i18nKey: 'sms.status.sent', tagType: 'success' },
-  { value: SmsStatus.Failed, i18nKey: 'sms.status.failed', tagType: 'danger' },
-] as const
-export type SmsRateLimitPolicyKey = 'business_phone_minute' | 'business_phone_10m'
+export type SmsScene = string
+
+export type SmsStatus = number
+
+export interface SmsOptions {
+  rateLimitConstraints: {
+    minLimit: number
+    maxLimit: number
+    minWindowSeconds: number
+    maxWindowSeconds: number
+  }
+  scenes: Array<BackendOption<string> & { variableKeys: string[] }>
+  statuses: StatusOption[]
+  ruleScopes: BackendOption<number>[]
+  ruleActions: StatusOption[]
+  ruleDefaults: { scope: number; action: number }
+  rateLimitPolicies: BackendOption<string>[]
+  rateLimitModes: BackendOption<string>[]
+  rateLimitDimensions: BackendOption<string>[]
+}
+
+export function getSmsOptions(): Promise<SmsOptions> {
+  return request.get<SmsOptions>('/api/admin/v1/message/sms/options')
+}
+
+export type SmsRateLimitPolicyKey = string
 
 export interface SmsConfig {
   configured: boolean
@@ -83,9 +77,9 @@ export interface SmsTemplateInput {
 
 export interface SmsRule {
   id: number
-  scope: SmsRuleScope
+  scope: number
   pattern: string
-  action: SmsRuleAction
+  action: number
   name: string
   remark: string
   isEnabled: YesNo
@@ -143,18 +137,18 @@ export interface SmsPageInit {
 }
 
 export interface SmsRuleInput {
-  scope: SmsRuleScope
+  scope: number
   pattern: string
-  action: SmsRuleAction
+  action: number
   name: string
   remark: string
   isEnabled: YesNo
 }
 
 export interface SmsRuleUpdateInput {
-  scope: SmsRuleScope
+  scope: number
   pattern?: string
-  action: SmsRuleAction
+  action: number
   name: string
   remark: string
   isEnabled: YesNo
@@ -191,491 +185,68 @@ export interface SmsLogQuery {
   to?: string
 }
 
-const sceneValues: readonly SmsScene[] = smsSceneMetadata.map(({ value }) => value)
-const scenes = new Set<SmsScene>(sceneValues)
-const statuses = new Set<SmsStatus>(smsStatusMetadata.map(({ value }) => value))
-const ratePolicyKeys: readonly SmsRateLimitPolicyKey[] = [
-  'business_phone_minute',
-  'business_phone_10m',
-]
-const ratePolicyKeySet = new Set<SmsRateLimitPolicyKey>(ratePolicyKeys)
-const rfc3339Pattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
-
-function text(value: unknown, context: string): string {
-  return expectString(value, context)
-}
-
-function nonEmptyText(value: unknown, context: string): string {
-  const result = text(value, context)
-  if (result.trim() === '') throw new ProtocolError(`${context} is empty`)
-  return result
-}
-
-function nonEmptyPhone(value: unknown, context: string): string {
-  const result = nonEmptyText(value, context)
-  if (!/^\+861[3-9][0-9]{9}$/.test(result)) throw new ProtocolError(`${context} is invalid`)
-  return result
-}
-
-function integer(value: unknown, context: string): number {
-  return expectInteger(value, context)
-}
-
-function positiveInteger(value: unknown, context: string): number {
-  const result = integer(value, context)
-  if (result < 1) throw new ProtocolError(`${context} must be positive`)
-  return result
-}
-
-function nonNegativeInteger(value: unknown, context: string): number {
-  const result = integer(value, context)
-  if (result < 0) throw new ProtocolError(`${context} must not be negative`)
-  return result
-}
-
-function boundedInteger(value: unknown, minimum: number, maximum: number, context: string): number {
-  const result = integer(value, context)
-  if (result < minimum || result > maximum) {
-    throw new ProtocolError(`${context} is out of range`)
-  }
-  return result
-}
-
-function timestamp(value: unknown, context: string): string {
-  const result = text(value, context)
-  if (!rfc3339Pattern.test(result) || Number.isNaN(Date.parse(result))) {
-    throw new ProtocolError(`${context} must be an RFC3339 timestamp`)
-  }
-  return result
-}
-
-function scene(value: unknown, context: string): SmsScene {
-  const result = text(value, context) as SmsScene
-  if (!scenes.has(result)) throw new ProtocolError(`${context} is invalid`)
-  return result
-}
-
-function status(value: unknown, context: string): SmsStatus {
-  if (!Number.isInteger(value)) throw new ProtocolError(`${context} is invalid`)
-  const result = value as SmsStatus
-  if (!statuses.has(result)) throw new ProtocolError(`${context} is invalid`)
-  return result
-}
-
-function variableKeys(value: unknown, context: string): string[] {
-  const values = expectArray(value, context)
-  if (
-    values.length < 2 ||
-    values.some((item) => typeof item !== 'string') ||
-    new Set(values as string[]).size !== values.length
-  )
-    throw new ProtocolError(`${context} is invalid`)
-  return values as string[]
-}
-
-function exampleVariables(value: unknown, context: string): Record<string, string> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value))
-    throw new ProtocolError(`${context} is invalid`)
-  const result: Record<string, string> = {}
-  for (const [key, item] of Object.entries(value)) result[key] = text(item, `${context}.${key}`)
-  return result
-}
-
-export function parseSmsConfig(value: unknown): SmsConfig {
-  const data = expectExactKeys(
-    value,
-    [
-      'configured',
-      'smsSdkAppId',
-      'signName',
-      'region',
-      'endpoint',
-      'ttlMinutes',
-      'isEnabled',
-      'lastTestAt',
-      'lastTestError',
-    ],
-    'sms config',
-  )
-  if (typeof data.configured !== 'boolean' || !isYesNo(data.isEnabled)) {
-    throw new ProtocolError('sms config is invalid')
-  }
-  return {
-    configured: data.configured,
-    smsSdkAppId: text(data.smsSdkAppId, 'sms config.smsSdkAppId'),
-    signName: text(data.signName, 'sms config.signName'),
-    region: text(data.region, 'sms config.region'),
-    endpoint: text(data.endpoint, 'sms config.endpoint'),
-    ttlMinutes: data.configured
-      ? boundedInteger(data.ttlMinutes, 1, 60, 'sms config.ttlMinutes')
-      : boundedInteger(data.ttlMinutes, 0, 0, 'sms config.ttlMinutes'),
-    isEnabled: data.isEnabled,
-    lastTestAt:
-      data.lastTestAt === null ? null : timestamp(data.lastTestAt, 'sms config.lastTestAt'),
-    lastTestError: text(data.lastTestError, 'sms config.lastTestError'),
-  }
-}
-
-export function parseSmsTemplate(value: unknown): SmsTemplate {
-  const data = expectExactKeys(
-    value,
-    [
-      'id',
-      'scene',
-      'name',
-      'tencentTemplateId',
-      'content',
-      'variableKeys',
-      'exampleVariables',
-      'isEnabled',
-      'createdAt',
-      'updatedAt',
-    ],
-    'sms template',
-  )
-  if (!isYesNo(data.isEnabled)) throw new ProtocolError('sms template is invalid')
-  const keys = variableKeys(data.variableKeys, 'sms template.variableKeys')
-  const examples = exampleVariables(data.exampleVariables, 'sms template.exampleVariables')
-  if (Object.keys(examples).length !== keys.length || keys.some((key) => !(key in examples)))
-    throw new ProtocolError('sms template example variables do not match variableKeys')
-  return {
-    id: positiveInteger(data.id, 'sms template.id'),
-    scene: scene(data.scene, 'sms template.scene'),
-    name: nonEmptyText(data.name, 'sms template.name'),
-    tencentTemplateId: text(data.tencentTemplateId, 'sms template.tencentTemplateId'),
-    content: text(data.content, 'sms template.content'),
-    variableKeys: keys,
-    exampleVariables: examples,
-    isEnabled: data.isEnabled,
-    createdAt: timestamp(data.createdAt, 'sms template.createdAt'),
-    updatedAt: timestamp(data.updatedAt, 'sms template.updatedAt'),
-  }
-}
-
-export function parseSmsRule(value: unknown): SmsRule {
-  const data = expectExactKeys(
-    value,
-    ['id', 'scope', 'pattern', 'action', 'name', 'remark', 'isEnabled', 'createdAt', 'updatedAt'],
-    'sms rule',
-  )
-  if (!isSmsRuleScope(data.scope) || !isSmsRuleAction(data.action) || !isYesNo(data.isEnabled)) {
-    throw new ProtocolError('sms rule is invalid')
-  }
-  const scope = data.scope
-  const action = data.action
-  return {
-    id: positiveInteger(data.id, 'sms rule.id'),
-    scope,
-    pattern: nonEmptyText(data.pattern, 'sms rule.pattern'),
-    action,
-    name: nonEmptyText(data.name, 'sms rule.name'),
-    remark: text(data.remark, 'sms rule.remark'),
-    isEnabled: data.isEnabled,
-    createdAt: timestamp(data.createdAt, 'sms rule.createdAt'),
-    updatedAt: timestamp(data.updatedAt, 'sms rule.updatedAt'),
-  }
-}
-
-export function parseSmsLog(value: unknown): SmsLog {
-  const data = expectExactKeys(
-    value,
-    [
-      'id',
-      'platformId',
-      'platform',
-      'userId',
-      'username',
-      'scene',
-      'templateId',
-      'toPhone',
-      'status',
-      'requestId',
-      'serialNo',
-      'fee',
-      'errorCode',
-      'errorSummary',
-      'latencyMs',
-      'sentAt',
-      'createdAt',
-      'updatedAt',
-    ],
-    'sms log',
-  )
-  return {
-    id: positiveInteger(data.id, 'sms log.id'),
-    platformId: positiveInteger(data.platformId, 'sms log.platformId'),
-    platform: nonEmptyText(data.platform, 'sms log.platform'),
-    userId: data.userId === null ? null : positiveInteger(data.userId, 'sms log.userId'),
-    username: text(data.username, 'sms log.username'),
-    scene: scene(data.scene, 'sms log.scene'),
-    templateId: positiveInteger(data.templateId, 'sms log.templateId'),
-    toPhone: nonEmptyPhone(data.toPhone, 'sms log.toPhone'),
-    status: status(data.status, 'sms log.status'),
-    requestId: text(data.requestId, 'sms log.requestId'),
-    serialNo: text(data.serialNo, 'sms log.serialNo'),
-    fee: nonNegativeInteger(data.fee, 'sms log.fee'),
-    errorCode: text(data.errorCode, 'sms log.errorCode'),
-    errorSummary: text(data.errorSummary, 'sms log.errorSummary'),
-    latencyMs: nonNegativeInteger(data.latencyMs, 'sms log.latencyMs'),
-    sentAt: data.sentAt === null ? null : timestamp(data.sentAt, 'sms log.sentAt'),
-    createdAt: timestamp(data.createdAt, 'sms log.createdAt'),
-    updatedAt: timestamp(data.updatedAt, 'sms log.updatedAt'),
-  }
-}
-
-export function parseSmsLogPage(value: unknown): PageResult<SmsLog> {
-  const data = expectExactKeys(value, ['list', 'total', 'page', 'pageSize'], 'sms log page')
-  return {
-    list: expectArray(data.list, 'sms log page.list').map(parseSmsLog),
-    total: nonNegativeInteger(data.total, 'sms log page.total'),
-    page: positiveInteger(data.page, 'sms log page.page'),
-    pageSize: positiveInteger(data.pageSize, 'sms log page.pageSize'),
-  }
-}
-
-export function parseSmsLogDetail(value: unknown): SmsLogDetail {
-  const data = expectExactKeys(
-    value,
-    ['log', 'verificationCode', 'verificationExpiresAt'],
-    'sms log detail',
-  )
-  const verificationCode = text(data.verificationCode, 'sms log detail.verificationCode')
-  if (verificationCode !== '' && !/^\d{6}$/.test(verificationCode)) {
-    throw new ProtocolError('sms log detail.verificationCode is invalid')
-  }
-  return {
-    log: parseSmsLog(data.log),
-    verificationCode,
-    verificationExpiresAt:
-      data.verificationExpiresAt === null
-        ? null
-        : timestamp(data.verificationExpiresAt, 'sms log detail.verificationExpiresAt'),
-  }
-}
-
-export function parseSmsPageInit(value: unknown): SmsPageInit {
-  const data = expectExactKeys(value, ['scenes'], 'sms page init')
-  const result = expectArray(data.scenes, 'sms page init.scenes').map((item) => {
-    const option = expectExactKeys(item, ['scene', 'name', 'variableKeys'], 'sms scene')
-    return {
-      scene: scene(option.scene, 'sms scene.scene'),
-      name: nonEmptyText(option.name, 'sms scene.name'),
-      variableKeys: variableKeys(option.variableKeys, 'sms scene.variableKeys'),
-    }
-  })
-  if (
-    result.length !== sceneValues.length ||
-    result.some((option, index) => option.scene !== sceneValues[index])
-  ) {
-    throw new ProtocolError('sms page init scenes are incomplete or out of order')
-  }
-  return { scenes: result }
-}
-
-function parseTest(value: unknown): SmsTestResult {
-  const data = expectExactKeys(
-    value,
-    ['logId', 'status', 'requestId', 'serialNo'],
-    'sms test result',
-  )
-  return {
-    logId: positiveInteger(data.logId, 'sms test.logId'),
-    status: status(data.status, 'sms test.status'),
-    requestId: text(data.requestId, 'sms test.requestId'),
-    serialNo: text(data.serialNo, 'sms test.serialNo'),
-  }
-}
-
-function parsePolicy(value: unknown): SmsRateLimitPolicy {
-  const data = expectExactKeys(
-    value,
-    ['key', 'mode', 'dimension', 'limit', 'windowSeconds', 'updatedAt'],
-    'sms rate policy',
-  )
-  const key = text(data.key, 'sms rate policy.key') as SmsRateLimitPolicyKey
-  if (
-    !ratePolicyKeySet.has(key) ||
-    data.mode !== 'business' ||
-    data.dimension !== 'platform_phone'
-  ) {
-    throw new ProtocolError('sms rate policy metadata is invalid')
-  }
-  return {
-    key,
-    mode: 'business',
-    dimension: 'platform_phone',
-    limit: boundedInteger(data.limit, 1, 100000, 'sms rate policy.limit'),
-    windowSeconds: boundedInteger(data.windowSeconds, 1, 86400, 'sms rate policy.windowSeconds'),
-    updatedAt: timestamp(data.updatedAt, 'sms rate policy.updatedAt'),
-  }
-}
-
-function parsePlatform(value: unknown): SmsRateLimitPlatform {
-  const data = expectExactKeys(
-    value,
-    ['platformId', 'platformCode', 'platformName', 'policies'],
-    'sms rate platform',
-  )
-  const policies = expectArray(data.policies, 'sms rate policies').map(parsePolicy)
-  if (
-    policies.length !== ratePolicyKeys.length ||
-    new Set(policies.map((policy) => policy.key)).size !== ratePolicyKeys.length ||
-    !ratePolicyKeys.every((key) => policies.some((policy) => policy.key === key))
-  ) {
-    throw new ProtocolError('sms rate policies are incomplete or duplicated')
-  }
-  return {
-    platformId: positiveInteger(data.platformId, 'sms platform.id'),
-    platformCode: nonEmptyText(data.platformCode, 'sms platform.code'),
-    platformName: nonEmptyText(data.platformName, 'sms platform.name'),
-    policies,
-  }
-}
-
-export function parseSmsRateLimitSnapshot(value: unknown): SmsRateLimitSnapshot {
-  const data = expectExactKeys(value, ['platforms'], 'sms rate snapshot')
-  const platforms = expectArray(data.platforms, 'sms rate snapshot.platforms').map(parsePlatform)
-  if (platforms.length === 0) throw new ProtocolError('sms rate snapshot is empty')
-  if (new Set(platforms.map((platform) => platform.platformId)).size !== platforms.length) {
-    throw new ProtocolError('sms rate snapshot contains duplicate platforms')
-  }
-  return { platforms }
-}
-
 export async function getSmsPageInit(): Promise<SmsPageInit> {
-  return parseSmsPageInit(
-    await request({ method: 'GET', url: '/api/admin/v1/message/sms/page-init' }),
-  )
+  return request.get<SmsPageInit>('/api/admin/v1/message/sms/page-init')
 }
 
 export async function getSmsConfig(): Promise<SmsConfig> {
-  return parseSmsConfig(await request({ method: 'GET', url: '/api/admin/v1/message/sms/config' }))
+  return request.get<SmsConfig>('/api/admin/v1/message/sms/config')
 }
 
 export async function saveSmsConfig(data: SmsConfigInput): Promise<SmsConfig> {
-  return parseSmsConfig(
-    await request({
-      method: 'PUT',
-      url: '/api/admin/v1/message/sms/config',
-      data,
-    }),
-  )
+  return request.put<SmsConfig>('/api/admin/v1/message/sms/config', data)
 }
 
 export async function deleteSmsConfig(): Promise<void> {
-  expectEmptyObject(
-    await request({ method: 'DELETE', url: '/api/admin/v1/message/sms/config' }),
-    'sms config delete',
-  )
+  return request.delete<void>('/api/admin/v1/message/sms/config')
 }
 
 export async function sendSmsTest(data: SmsTestInput): Promise<SmsTestResult> {
-  return parseTest(await request({ method: 'POST', url: '/api/admin/v1/message/sms/test', data }))
+  return request.post<SmsTestResult>('/api/admin/v1/message/sms/test', data)
 }
 
 export async function listSmsTemplates(): Promise<SmsTemplate[]> {
-  const data = expectExactKeys(
-    await request({ method: 'GET', url: '/api/admin/v1/message/sms/template' }),
-    ['list'],
-    'sms templates',
-  )
-  return expectArray(data.list, 'sms templates.list').map(parseSmsTemplate)
+  return request.get<SmsTemplate[]>('/api/admin/v1/message/sms/template')
 }
 
 export async function updateSmsTemplate(id: number, data: SmsTemplateInput): Promise<SmsTemplate> {
-  return parseSmsTemplate(
-    await request({
-      method: 'PUT',
-      url: `/api/admin/v1/message/sms/template/${id}`,
-      data,
-    }),
-  )
+  return request.put<SmsTemplate>(`/api/admin/v1/message/sms/template/${id}`, data)
 }
 
 export async function updateSmsTemplateStatus(id: number, isEnabled: YesNo): Promise<void> {
-  expectEmptyObject(
-    await request({
-      method: 'PATCH',
-      url: `/api/admin/v1/message/sms/template/${id}/status`,
-      data: { isEnabled },
-    }),
-    'sms template status',
-  )
+  return request.patch<void>(`/api/admin/v1/message/sms/template/${id}/status`, { isEnabled })
 }
 
 export async function listSmsRules(): Promise<SmsRule[]> {
-  const data = expectExactKeys(
-    await request({ method: 'GET', url: '/api/admin/v1/message/sms/recipient-rule' }),
-    ['list'],
-    'sms rules',
-  )
-  return expectArray(data.list, 'sms rules.list').map(parseSmsRule)
+  return request.get<SmsRule[]>('/api/admin/v1/message/sms/recipient-rule')
 }
 
 export async function createSmsRule(data: SmsRuleInput): Promise<SmsRule> {
-  return parseSmsRule(
-    await request({
-      method: 'POST',
-      url: '/api/admin/v1/message/sms/recipient-rule',
-      data,
-    }),
-  )
+  return request.post<SmsRule>('/api/admin/v1/message/sms/recipient-rule', data)
 }
 
 export async function updateSmsRule(id: number, data: SmsRuleUpdateInput): Promise<SmsRule> {
-  return parseSmsRule(
-    await request({
-      method: 'PUT',
-      url: `/api/admin/v1/message/sms/recipient-rule/${id}`,
-      data,
-    }),
-  )
+  return request.put<SmsRule>(`/api/admin/v1/message/sms/recipient-rule/${id}`, data)
 }
 
 export async function updateSmsRuleStatus(id: number, isEnabled: YesNo): Promise<void> {
-  expectEmptyObject(
-    await request({
-      method: 'PATCH',
-      url: `/api/admin/v1/message/sms/recipient-rule/${id}/status`,
-      data: { isEnabled },
-    }),
-    'sms rule status',
-  )
+  return request.patch<void>(`/api/admin/v1/message/sms/recipient-rule/${id}/status`, { isEnabled })
 }
 
 export async function deleteSmsRule(id: number): Promise<void> {
-  expectEmptyObject(
-    await request({
-      method: 'DELETE',
-      url: `/api/admin/v1/message/sms/recipient-rule/${id}`,
-    }),
-    'sms rule delete',
-  )
+  return request.delete<void>(`/api/admin/v1/message/sms/recipient-rule/${id}`)
 }
 
 export async function listSmsLogs(params: SmsLogQuery): Promise<PageResult<SmsLog>> {
-  return parseSmsLogPage(
-    await request({
-      method: 'GET',
-      url: '/api/admin/v1/message/sms/log',
-      params,
-    }),
-  )
+  return request.get<PageResult<SmsLog>>('/api/admin/v1/message/sms/log', { params })
 }
 
 export async function getSmsLogDetail(id: number): Promise<SmsLogDetail> {
-  return parseSmsLogDetail(
-    await request({ method: 'GET', url: `/api/admin/v1/message/sms/log/${id}` }),
-  )
+  return request.get<SmsLogDetail>(`/api/admin/v1/message/sms/log/${id}`)
 }
 
 export async function listSmsRateLimitPolicies(): Promise<SmsRateLimitSnapshot> {
-  return parseSmsRateLimitSnapshot(
-    await request({
-      method: 'GET',
-      url: '/api/admin/v1/message/sms/rate-limit-policy',
-    }),
-  )
+  return request.get<SmsRateLimitSnapshot>('/api/admin/v1/message/sms/rate-limit-policy')
 }
 
 export async function updateSmsRateLimitPolicy(
@@ -683,11 +254,8 @@ export async function updateSmsRateLimitPolicy(
   key: SmsRateLimitPolicyKey,
   data: { limit: number; windowSeconds: number },
 ): Promise<SmsRateLimitPlatform> {
-  return parsePlatform(
-    await request({
-      method: 'PUT',
-      url: `/api/admin/v1/message/sms/rate-limit-policy/${platformId}/${encodeURIComponent(key)}`,
-      data,
-    }),
+  return request.put<SmsRateLimitPlatform>(
+    `/api/admin/v1/message/sms/rate-limit-policy/${platformId}/${encodeURIComponent(key)}`,
+    data,
   )
 }

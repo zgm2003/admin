@@ -24,7 +24,7 @@ export function authPlatformSearchFields(t: Translate): SearchField<AuthPlatform
       key: 'status',
       type: 'select-v2',
       resetValue: '',
-      label: t('permission.authPlatform.status'),
+      label: t('permission.authPlatform.statusLabel'),
       placeholder: t('permission.authPlatform.status.all'),
       options: [
         { label: t('permission.authPlatform.status.enabled'), value: YesNo.Yes },
@@ -84,12 +84,6 @@ export function authPlatformTableColumns(t: Translate): TableColumn<AuthPlatform
       fixed: 'right',
     },
   ]
-}
-
-export function authPlatformSessionLabel(value: number, t: Translate): string {
-  if (value === 0) return t('permission.authPlatform.unlimited')
-  if (value === 1) return t('permission.authPlatform.singleSession')
-  return t('permission.authPlatform.maxSessions', { count: value })
 }
 
 export function authPlatformTTLLabel(value: number, t: Translate): string {

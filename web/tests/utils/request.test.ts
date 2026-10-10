@@ -19,11 +19,52 @@ import {
   unwrapEnvelope,
 } from '@/utils/request'
 
-function assertRequestRejectsResponseTypeParameter(): void {
-  // @ts-expect-error callers must parse the unknown response at the API module boundary
-  void request<{ value: string }>({ method: 'GET', url: '/type-contract' })
-}
-void assertRequestRejectsResponseTypeParameter
+describe('generic request methods', () => {
+  const result = { value: 'server-owned', addedField: { enabled: true } }
+  const body = { ids: [1, 2] }
+  let received: InternalAxiosRequestConfig | undefined
+  const adapter: AxiosAdapter = async (config) => {
+    received = config
+    return successResponse(config, { code: 0, data: result, message: 'ok' })
+  }
+
+  beforeEach(() => {
+    received = undefined
+    useAuthStore(pinia).$reset()
+  })
+
+  it.each(['get', 'post', 'put', 'patch', 'delete'] as const)(
+    '%s returns typed envelope data without filtering backend fields',
+    async (method) => {
+      const config = { adapter, params: { page: 2 } }
+      const value: { value: string } =
+        method === 'get'
+          ? await request.get<{ value: string }>('/typed', config)
+          : method === 'delete'
+            ? await request.delete<{ value: string }, typeof body>('/typed', {
+                ...config,
+                data: body,
+              })
+            : await request[method]<{ value: string }, typeof body>('/typed', body, config)
+      expect(value).toBe(result)
+      expect(received?.method).toBe(method)
+      expect(received?.url).toBe('/typed')
+      expect(received?.params).toEqual({ page: 2 })
+      expect(received?.data).toBe(method === 'get' ? undefined : JSON.stringify(body))
+    },
+  )
+
+  it('forwards cancellation signals and custom headers', async () => {
+    const controller = new AbortController()
+    await request.get('/typed', {
+      adapter,
+      signal: controller.signal,
+      headers: { 'X-Test': 'yes' },
+    })
+    expect(received?.signal).toBe(controller.signal)
+    expect(AxiosHeaders.from(received?.headers).get('X-Test')).toBe('yes')
+  })
+})
 
 describe('unwrapEnvelope', () => {
   it('returns data from the only accepted success shape', () => {
@@ -68,6 +109,21 @@ describe('createRequestClient', () => {
   it('requires an explicit API base URL', () => {
     expect(() => createRequestClient('  ')).toThrow(ProtocolError)
   })
+
+  it.each(['/api/v1/auth/login', '/api/v1/auth/refresh'])(
+    'validates authentication credentials at the transport boundary for %s',
+    async (url) => {
+      const adapter: AxiosAdapter = async (config) =>
+        successResponse(config, {
+          code: 0,
+          data: { accessToken: '', expiresIn: 0, isNewUser: false, passwordSetRequired: false },
+          message: 'ok',
+        })
+      const client = createRequestClient('http://localhost:16301', adapter)
+      await expect(client.post(url)).rejects.toBeInstanceOf(ProtocolError)
+      expect(ElNotification.error).toHaveBeenCalledOnce()
+    },
+  )
 
   it('returns network errors unchanged and shows one notification', async () => {
     const networkError = new AxiosError('connection refused', AxiosError.ERR_NETWORK)

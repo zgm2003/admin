@@ -13,14 +13,16 @@ import {
   updateMailRuleStatus,
   type MailRule,
   type MailRuleInput,
+  type MailOptions,
 } from '@/api/message/mail'
+import { decodeBase64Bytes } from '@/utils/browserFile'
 import type { TableColumn } from '@/components/AppTable'
 import { YesNo } from '@/enums/yesNo'
-import { MailRuleAction, MailRuleScope } from '@/enums/mailRecipientRule'
 import MailRuleImportDialog from './components/MailRuleImportDialog/index.vue'
 
 const props = defineProps<{
   rules: MailRule[]
+  options: MailOptions | null
   loading: boolean
   canList: boolean
   canCreate: boolean
@@ -54,15 +56,21 @@ watch(
   },
   { flush: 'sync' },
 )
-const form = ref<MailRuleInput>(blankRule())
-const scopeOptions = computed<Array<{ value: MailRuleInput['scope']; label: string }>>(() => [
-  { value: MailRuleScope.Email, label: t('mail.email') },
-  { value: MailRuleScope.Domain, label: t('mail.domain') },
-])
-const actionOptions = computed<Array<{ value: MailRuleInput['action']; label: string }>>(() => [
-  { value: MailRuleAction.Allow, label: t('mail.allow') },
-  { value: MailRuleAction.Deny, label: t('mail.deny') },
-])
+type RuleForm = Omit<MailRuleInput, 'scope' | 'action'> & {
+  scope: number | undefined
+  action: number | undefined
+}
+const form = ref<RuleForm>(blankRule())
+const scopeOptions = computed(() => props.options?.ruleScopes ?? [])
+const actionOptions = computed(
+  () => props.options?.ruleActions.map(({ value, label }) => ({ value, label })) ?? [],
+)
+const actionTone = (value: number) =>
+  props.options?.ruleActions.find((option) => option.value === value)?.tone ?? 'info'
+const scopeLabel = (value: number) =>
+  scopeOptions.value.find((option) => option.value === value)?.label ?? String(value)
+const actionLabel = (value: number) =>
+  actionOptions.value.find((option) => option.value === value)?.label ?? String(value)
 const columns = computed<TableColumn<MailRule>[]>(() => [
   { key: 'pattern', prop: 'pattern', label: t('mail.rule'), minWidth: 220 },
   { prop: 'action', label: t('mail.action'), width: 120 },
@@ -85,11 +93,11 @@ watch(editing, (value) => {
     : blankRule()
 })
 
-function blankRule(): MailRuleInput {
+function blankRule(): RuleForm {
   return {
-    scope: MailRuleScope.Email,
+    scope: props.options?.ruleDefaults.scope,
     pattern: '',
-    action: MailRuleAction.Deny,
+    action: props.options?.ruleDefaults.action,
     name: '',
     remark: '',
     isEnabled: YesNo.Yes,
@@ -97,7 +105,9 @@ function blankRule(): MailRuleInput {
 }
 
 function create(): void {
+  if (props.options === null) return
   editing.value = null
+  form.value = blankRule()
   dialog.value = true
 }
 
@@ -127,10 +137,13 @@ async function remove(row: MailRule): Promise<void> {
 }
 
 async function saveRule(): Promise<void> {
+  const { scope, action } = form.value
+  if (scope === undefined || action === undefined || props.options === null) return
+  const input: MailRuleInput = { ...form.value, scope, action }
   saving.value = true
   try {
-    if (editing.value) await updateMailRule(editing.value.id, form.value)
-    else await createMailRule(form.value)
+    if (editing.value) await updateMailRule(editing.value.id, input)
+    else await createMailRule(input)
     ElMessage.success(t('mail.updated'))
     dialog.value = false
     emit('refresh')
@@ -149,7 +162,9 @@ async function exportRules(): Promise<void> {
   try {
     const file = await exportMailRuleXlsx(controller.signal)
     if (sequence !== exportSequence || !props.canExport) return
-    const url = URL.createObjectURL(new Blob([file.content], { type: mailRuleXlsxMime }))
+    const url = URL.createObjectURL(
+      new Blob([decodeBase64Bytes(file.contentBase64)], { type: mailRuleXlsxMime }),
+    )
     const link = document.createElement('a')
     try {
       link.href = url
@@ -195,7 +210,13 @@ async function exportRules(): Promise<void> {
       @refresh="emit('refresh')"
     >
       <template #toolbar-left>
-        <el-button v-if="canCreate" data-testid="mail-rule-create" type="primary" @click="create">
+        <el-button
+          v-if="canCreate"
+          :disabled="options === null"
+          data-testid="mail-rule-create"
+          type="primary"
+          @click="create"
+        >
           {{ t('mail.createRule') }}
         </el-button>
         <el-button v-if="canImport" data-testid="mail-rule-import" @click="importing = true">{{
@@ -212,12 +233,12 @@ async function exportRules(): Promise<void> {
       <template #cell-pattern="{ row }: { row: MailRule }">
         <div class="primary-cell">
           <strong>{{ row.pattern }}</strong>
-          <span>{{ row.scope === MailRuleScope.Email ? t('mail.email') : t('mail.domain') }}</span>
+          <span>{{ scopeLabel(row.scope) }}</span>
         </div>
       </template>
       <template #cell-action="{ row }: { row: MailRule }">
-        <el-tag :type="row.action === MailRuleAction.Allow ? 'success' : 'danger'" effect="plain">
-          {{ row.action === MailRuleAction.Allow ? t('mail.allow') : t('mail.deny') }}
+        <el-tag :type="actionTone(row.action)" effect="plain">
+          {{ actionLabel(row.action) }}
         </el-tag>
       </template>
       <template #cell-enabled="{ row }: { row: MailRule }">
@@ -264,7 +285,12 @@ async function exportRules(): Promise<void> {
       </div>
     </div>
 
-    <MailRuleImportDialog v-model="importing" :can-import="canImport" @imported="emit('refresh')" />
+    <MailRuleImportDialog
+      v-model="importing"
+      :can-import="canImport"
+      :options="options"
+      @imported="emit('refresh')"
+    />
 
     <el-dialog
       v-model="dialog"
@@ -300,11 +326,7 @@ async function exportRules(): Promise<void> {
         <el-form-item :label="t('mail.rule')">
           <el-input
             v-model="form.pattern"
-            :placeholder="
-              form.scope === MailRuleScope.Email
-                ? t('mail.rulePatternEmailPlaceholder')
-                : t('mail.rulePatternDomainPlaceholder')
-            "
+            :placeholder="t('mail.rule')"
             data-testid="mail-rule-pattern"
           />
         </el-form-item>
@@ -337,7 +359,7 @@ async function exportRules(): Promise<void> {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .table-tab {
   min-width: 0;
 }
@@ -346,16 +368,16 @@ async function exportRules(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 3px;
-}
 
-.primary-cell strong {
-  font-size: 14px;
-  font-weight: 600;
-}
+  strong {
+    font-size: 14px;
+    font-weight: 600;
+  }
 
-.primary-cell span {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
+  span {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+  }
 }
 
 .mail-table {

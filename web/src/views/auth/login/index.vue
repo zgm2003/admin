@@ -464,4 +464,4 @@ async function submit(): Promise<void> {
   </main>
 </template>
 
-<style scoped src="../authPage.css"></style>
+<style scoped src="../authPage.scss" lang="scss"></style>

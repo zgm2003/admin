@@ -21,7 +21,7 @@ const (
 func NormalizeUsername(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	count := utf8.RuneCountInString(value)
-	if count < 3 || count > 64 {
+	if count < usernameMinLength || count > usernameMaxLength {
 		return "", fmt.Errorf("username must contain 3 to 64 Unicode characters")
 	}
 	for _, character := range value {

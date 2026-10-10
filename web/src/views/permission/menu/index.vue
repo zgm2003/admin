@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
 import { Refresh } from '@element-plus/icons-vue'
@@ -14,6 +14,8 @@ import {
   rebuildAccessCache,
 } from '@/api/permission/menu'
 import type { ManagedMenuNode, ManagedMenuType, MenuPlatformOption } from '@/api/permission/menu'
+import { getMenuOptions, type MenuOptions } from '@/api/permission/menuOptions'
+import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
 import MenuFormDialog from './components/MenuFormDialog/index.vue'
@@ -30,10 +32,17 @@ import {
 } from './menuForm'
 import { menuParentOptions } from './menuTree'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const {
+  options: formOptions,
+  error: optionsError,
+  loading: optionsLoading,
+  reload: reloadOptions,
+} = useLocalizedOptions<MenuOptions | null>(getMenuOptions, () => null)
 const access = usePermissionStore()
 
 const menus = ref<ManagedMenuNode[]>([])
+const allowedRootTypes = ref<ManagedMenuType[]>([])
 const platforms = ref<MenuPlatformOption[]>([])
 const activePlatformID = ref<number | null>(null)
 const loading = ref(false)
@@ -46,6 +55,7 @@ const editingID = ref<number | null>(null)
 
 const form = ref<MenuFormState>(createMenuForm())
 
+const canList = computed(() => access.hasPermission('permission:menu:list'))
 const canCreate = computed(() => access.hasPermission('permission:menu:create'))
 const canUpdate = computed(() => access.hasPermission('permission:menu:update'))
 const canDelete = computed(() => access.hasPermission('permission:menu:delete'))
@@ -68,24 +78,27 @@ const editingProtected = computed(
 const parentOptions = computed(() =>
   menuParentOptions(menus.value, form.value.menuType, editingID.value),
 )
-const canSubmitForm = computed(() => isMenuFormSubmittable(form.value))
+const canSubmitForm = computed(
+  () =>
+    formOptions.value !== null &&
+    !optionsLoading.value &&
+    isMenuFormSubmittable(form.value, formOptions.value.constraints),
+)
 
 const rootParentValue = '__root__' as const
 
 const parentSelectOptions = computed<
   Array<{ label: string; value: number | typeof rootParentValue }>
 >(() => [
-  { label: t('menu.form.root'), value: rootParentValue },
+  ...(allowedRootTypes.value.includes(form.value.menuType)
+    ? [{ label: t('menu.form.root'), value: rootParentValue }]
+    : []),
   ...parentOptions.value.map((node) => ({
     label: parentLabel(node),
     value: node.id,
   })),
 ])
-const menuTypeOptions = computed<Array<{ label: string; value: ManagedMenuType }>>(() => [
-  { label: t('menu.type.directory'), value: 'directory' },
-  { label: t('menu.type.page'), value: 'page' },
-  { label: t('menu.type.action'), value: 'action' },
-])
+const menuTypeOptions = computed(() => formOptions.value?.menuTypes ?? [])
 const parentSelection = computed<number | typeof rootParentValue>({
   get: () => form.value.parentId ?? rootParentValue,
   set: (value) => {
@@ -105,6 +118,13 @@ function handleFormTypeChange(nextType: ManagedMenuType): void {
 }
 
 function openCreate(parent: ManagedMenuNode | null = null): void {
+  if (
+    formOptions.value === null ||
+    optionsLoading.value ||
+    !canCreate.value ||
+    (parent !== null && !parent.actions.addChild)
+  )
+    return
   dialogMode.value = 'create'
   editingID.value = null
   mutationError.value = ''
@@ -113,6 +133,13 @@ function openCreate(parent: ManagedMenuNode | null = null): void {
 }
 
 function openEdit(node: ManagedMenuNode): void {
+  if (
+    formOptions.value === null ||
+    optionsLoading.value ||
+    !canUpdate.value ||
+    !node.actions.update
+  )
+    return
   dialogMode.value = 'edit'
   editingID.value = node.id
   mutationError.value = ''
@@ -167,6 +194,7 @@ function notifyMutation(messageKey: string): void {
 }
 
 async function changeStatus(node: ManagedMenuNode): Promise<void> {
+  if (!canUpdate.value || !node.actions.status) return
   const nextValue = node.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
   try {
     if (nextValue === YesNo.No) {
@@ -186,6 +214,7 @@ async function changeStatus(node: ManagedMenuNode): Promise<void> {
 }
 
 async function removeNode(node: ManagedMenuNode): Promise<void> {
+  if (!canDelete.value || !node.actions.delete) return
   try {
     await ElMessageBox.confirm(t('menu.confirm.deleteMessage'), t('menu.confirm.deleteTitle'), {
       confirmButtonText: t('menu.confirm.confirm'),
@@ -227,12 +256,20 @@ async function rebuildAccessCacheNow(): Promise<void> {
   }
 }
 
+let listRequest = 0
+
 async function loadMenus(platformID?: number): Promise<void> {
+  if (!canList.value) return
+  const request = ++listRequest
+  const requestedLocale = locale.value
+  const accepted = () =>
+    request === listRequest && requestedLocale === locale.value && canList.value
   loading.value = true
   loadError.value = ''
   try {
     const result =
       platformID === undefined ? await getMenus() : await getMenus({ platformId: platformID })
+    if (!accepted()) return
     const selectedPlatform =
       platformID === undefined
         ? (result.platforms.find((platform) => platform.code === 'admin') ?? result.platforms[0])
@@ -240,13 +277,14 @@ async function loadMenus(platformID?: number): Promise<void> {
     if (selectedPlatform === undefined) {
       throw new Error(t('menu.platform.unavailable'))
     }
+    allowedRootTypes.value = result.allowedRootTypes
     platforms.value = result.platforms
     activePlatformID.value = selectedPlatform.id
     menus.value = result.menuTree
   } catch (error: unknown) {
-    loadError.value = publicErrorMessage(error)
+    if (accepted()) loadError.value = publicErrorMessage(error)
   } finally {
-    loading.value = false
+    if (request === listRequest) loading.value = false
   }
 }
 
@@ -268,11 +306,36 @@ async function switchPlatform(value: string | number): Promise<void> {
   await loadMenus(platformID)
 }
 
-onMounted(() => loadMenus())
+watch(
+  [canList, locale],
+  () => {
+    ++listRequest
+    loading.value = false
+    menus.value = []
+    loadError.value = ''
+    if (canList.value) void reloadMenus()
+    else {
+      platforms.value = []
+      activePlatformID.value = null
+      allowedRootTypes.value = []
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <AppPage class="menu-management-page" :aria-label="t('menu.title')">
+    <el-alert
+      v-if="optionsError"
+      data-testid="menu-options-error"
+      :title="t('menu.loadFailed')"
+      type="error"
+      :closable="false"
+      show-icon
+    >
+      <el-button @click="reloadOptions">{{ t('menu.retry') }}</el-button>
+    </el-alert>
     <el-tabs
       v-if="platforms.length > 0"
       v-model="activePlatformID"
@@ -325,7 +388,9 @@ onMounted(() => loadMenus())
         :can-update="canUpdate"
         :can-delete="canDelete"
         :can-rebuild-access-cache="canRebuildAccessCache"
-        :active-platform-available="activePlatform !== null"
+        :active-platform-available="
+          activePlatform !== null && formOptions !== null && !optionsLoading
+        "
         :rebuilding-access-cache="rebuildingAccessCache"
         @create-root="openCreate()"
         @create-child="openCreate"
@@ -338,6 +403,8 @@ onMounted(() => loadMenus())
     </div>
 
     <MenuFormDialog
+      v-if="formOptions !== null"
+      :constraints="formOptions.constraints"
       v-model="dialogVisible"
       v-model:form="form"
       v-model:parent-selection="parentSelection"
@@ -355,7 +422,7 @@ onMounted(() => loadMenus())
   </AppPage>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .menu-platform-tabs {
   min-width: 0;
   margin-bottom: 8px;
@@ -366,12 +433,12 @@ onMounted(() => loadMenus())
   align-items: center;
   gap: 7px;
   min-width: 0;
-}
 
-.menu-platform-tab code {
-  color: var(--admin-text-soft);
-  font-family: Consolas, 'SFMono-Regular', monospace;
-  font-size: 12px;
+  code {
+    color: var(--admin-text-soft);
+    font-family: Consolas, 'SFMono-Regular', monospace;
+    font-size: 12px;
+  }
 }
 
 .menu-management__content {

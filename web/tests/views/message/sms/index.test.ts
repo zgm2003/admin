@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as smsApi from '@/api/message/sms'
-import { getDictionaryOptions } from '@/api/system/dictionary'
+import { getSmsConfigOptions } from '@/api/message/smsConfigOptions'
 import { YesNo } from '@/enums/yesNo'
 import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
@@ -14,7 +14,7 @@ vi.mock('@/api/message/sms', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/message/sms')>()
   return {
     ...actual,
-    getSmsPageInit: vi.fn(),
+    getSmsOptions: vi.fn(),
     getSmsConfig: vi.fn(),
     saveSmsConfig: vi.fn(),
     deleteSmsConfig: vi.fn(),
@@ -33,15 +33,9 @@ vi.mock('@/api/message/sms', async (importOriginal) => {
     updateSmsRateLimitPolicy: vi.fn(),
   }
 })
-vi.mock('@/api/system/dictionary', () => ({ getDictionaryOptions: vi.fn() }))
+vi.mock('@/api/message/smsConfigOptions', () => ({ getSmsConfigOptions: vi.fn() }))
 
 const timestamp = '2026-09-11T08:00:00Z'
-const scenes: smsApi.SmsSceneOption[] = [
-  { scene: 'login', name: '登录验证码', variableKeys: ['code', 'ttl_minutes'] },
-  { scene: 'forget', name: '找回密码', variableKeys: ['code', 'ttl_minutes'] },
-  { scene: 'bind_phone', name: '绑定/换绑手机', variableKeys: ['code', 'ttl_minutes'] },
-  { scene: 'change_password', name: '修改密码', variableKeys: ['code', 'ttl_minutes'] },
-]
 const config: smsApi.SmsConfig = {
   configured: true,
   smsSdkAppId: '1400000000',
@@ -85,7 +79,7 @@ const log: smsApi.SmsLog = {
   scene: 'login',
   templateId: 1,
   toPhone: '+8615671628271',
-  status: smsApi.SmsStatus.Sent,
+  status: 2,
   requestId: 'request-id',
   serialNo: 'serial-no',
   fee: 1,
@@ -119,19 +113,23 @@ const ratePlatform: smsApi.SmsRateLimitPlatform = {
     },
   ],
 }
+import { smsOptions, ttlConstraints } from './fixtures'
+
 const wrappers: VueWrapper[] = []
 
 describe('SMS management page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setLocale('zh-CN')
-    vi.mocked(smsApi.getSmsPageInit).mockResolvedValue({ scenes })
+    vi.mocked(smsApi.getSmsOptions)
+      .mockReset()
+      .mockImplementation(async () => smsOptions(appI18n.global.locale.value === 'en-US'))
     vi.mocked(smsApi.getSmsConfig).mockResolvedValue(config)
     vi.mocked(smsApi.saveSmsConfig).mockResolvedValue(config)
     vi.mocked(smsApi.deleteSmsConfig).mockResolvedValue(undefined)
     vi.mocked(smsApi.sendSmsTest).mockResolvedValue({
       logId: 3,
-      status: smsApi.SmsStatus.Sent,
+      status: 2,
       requestId: 'request-id',
       serialNo: 'serial-no',
     })
@@ -158,8 +156,9 @@ describe('SMS management page', () => {
       platforms: [ratePlatform],
     })
     vi.mocked(smsApi.updateSmsRateLimitPolicy).mockResolvedValue(ratePlatform)
-    vi.mocked(getDictionaryOptions).mockResolvedValue({
-      'message.sms.region': [{ label: '广州', value: 'ap-guangzhou' }],
+    vi.mocked(getSmsConfigOptions).mockResolvedValue({
+      constraints: ttlConstraints,
+      regions: [{ label: '广州', value: 'ap-guangzhou' }],
     })
   })
 
@@ -172,7 +171,7 @@ describe('SMS management page', () => {
     const denied = mountPage(['message:sms:view'])
     await flushPromises()
     expect(denied.findAll('[role="tab"]')).toHaveLength(0)
-    expect(smsApi.getSmsPageInit).not.toHaveBeenCalled()
+    expect(smsApi.getSmsOptions).not.toHaveBeenCalled()
     expect(smsApi.getSmsConfig).not.toHaveBeenCalled()
     denied.unmount()
 
@@ -180,14 +179,14 @@ describe('SMS management page', () => {
     await flushPromises()
     expect(allowed.findAll('[role="tab"]')).toHaveLength(5)
     expect(allowed.findAll('[role="tab"]')[0]?.text()).toBe('短信配置')
-    expect(smsApi.getSmsPageInit).toHaveBeenCalledOnce()
+    expect(smsApi.getSmsOptions).toHaveBeenCalledOnce()
     expect(smsApi.getSmsConfig).toHaveBeenCalledOnce()
     expect(smsApi.listSmsTemplates).not.toHaveBeenCalled()
   })
 
   it('loads config and catalog when list permission becomes ready asynchronously', async () => {
-    const catalogResponse = deferred<smsApi.SmsPageInit>()
-    vi.mocked(smsApi.getSmsPageInit).mockReturnValueOnce(catalogResponse.promise)
+    const catalogResponse = deferred<smsApi.SmsOptions>()
+    vi.mocked(smsApi.getSmsOptions).mockReturnValueOnce(catalogResponse.promise)
     const wrapper = mountPage(['message:sms:view'])
     await flushPromises()
 
@@ -200,7 +199,7 @@ describe('SMS management page', () => {
     await flushPromises()
 
     expect(smsApi.getSmsConfig).toHaveBeenCalledOnce()
-    expect(smsApi.getSmsPageInit).toHaveBeenCalledOnce()
+    expect(smsApi.getSmsOptions).toHaveBeenCalledOnce()
 
     access.applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: [] })
     access.applySnapshot({
@@ -209,9 +208,9 @@ describe('SMS management page', () => {
       permissionCodes: ['message:sms:list', 'message:sms:test'],
     })
     await flushPromises()
-    expect(smsApi.getSmsPageInit).toHaveBeenCalledOnce()
+    expect(smsApi.getSmsOptions).toHaveBeenCalledTimes(2)
 
-    catalogResponse.resolve({ scenes })
+    catalogResponse.resolve(smsOptions())
     await flushPromises()
     const sceneSelect = wrapper
       .findAllComponents({ name: 'ElSelectV2' })
@@ -243,10 +242,11 @@ describe('SMS management page', () => {
   })
 
   it('fails closed when region options cannot load and reloads labels with locale', async () => {
-    vi.mocked(getDictionaryOptions)
-      .mockRejectedValueOnce(new Error('dictionary unavailable'))
+    vi.mocked(getSmsConfigOptions)
+      .mockRejectedValueOnce(new Error('code options unavailable'))
       .mockResolvedValueOnce({
-        'message.sms.region': [{ label: 'Guangzhou', value: 'ap-guangzhou' }],
+        constraints: ttlConstraints,
+        regions: [{ label: 'Guangzhou', value: 'ap-guangzhou' }],
       })
     const wrapper = mountPage(['message:sms:list', 'message:sms:config:update'])
     await flushPromises()
@@ -260,7 +260,7 @@ describe('SMS management page', () => {
 
     setLocale('en-US')
     await flushPromises()
-    expect(getDictionaryOptions).toHaveBeenCalledTimes(2)
+    expect(getSmsConfigOptions).toHaveBeenCalledTimes(2)
     expect(region?.props('options')).toEqual([{ label: 'Guangzhou', value: 'ap-guangzhou' }])
   })
 

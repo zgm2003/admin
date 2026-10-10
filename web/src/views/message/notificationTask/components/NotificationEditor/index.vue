@@ -69,7 +69,7 @@ onBeforeUnmount(() => editor.value?.destroy())
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .notification-editor {
   width: 100%;
   min-width: 0;
@@ -77,13 +77,13 @@ onBeforeUnmount(() => editor.value?.destroy())
   border: 1px solid var(--el-border-color);
   border-radius: var(--el-border-radius-base);
   background: var(--el-bg-color);
-}
-.notification-editor :deep(.w-e-toolbar) {
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-.notification-editor__body {
-  min-height: 220px;
-  max-height: 320px;
-  overflow-y: auto;
+  :deep(.w-e-toolbar) {
+    border-bottom: 1px solid var(--el-border-color-lighter);
+  }
+  &__body {
+    min-height: 220px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
 }
 </style>

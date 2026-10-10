@@ -7,6 +7,7 @@ func RegisterPublicRoutes(routes *gin.RouterGroup, handler *Handler) {
 }
 
 func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
+	routes.GET("/system/setting/options", authenticate, handler.FormOptions)
 	routes.GET("/system/setting", authenticate, requirePermission(PermissionList), handler.List)
 	routes.GET("/system/setting/brand", authenticate, handler.Brand)
 	routes.GET("/system/setting/legal/:document", authenticate, handler.LegalDocument)

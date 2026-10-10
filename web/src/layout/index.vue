@@ -28,6 +28,10 @@ const brand = useBrandStore()
 const uiPreferences = useUIPreferencesStore()
 const notifications = useNotificationStore()
 const realtimeRuntime = new RealtimeRuntime()
+// Element Plus presentation capability, not validation of the backend DTO.
+function notificationPresentationType(value: string): 'info' | 'success' | 'warning' | 'error' {
+  return value === 'success' || value === 'warning' || value === 'error' ? value : 'info'
+}
 const collapsed = ref(false)
 const mobileMenuOpen = ref(false)
 const isMobile = ref(window.innerWidth <= mobileBreakpoint)
@@ -144,7 +148,7 @@ watch(
             ElNotification({
               title: event.data.title,
               message: event.data.summary,
-              type: event.data.variant,
+              type: notificationPresentationType(event.data.variant),
             })
         },
       },

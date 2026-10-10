@@ -70,7 +70,7 @@ function setPrimaryColor(color: string): void {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .auth-dock {
   position: absolute;
   top: 18px;
@@ -86,61 +86,61 @@ function setPrimaryColor(color: string): void {
   box-shadow: var(--admin-shadow-sm);
   backdrop-filter: blur(12px);
   animation: auth-dock-in 0.5s 0.3s cubic-bezier(0.22, 0.8, 0.32, 1) backwards;
-}
 
-.auth-dock__swatch {
-  display: block;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 55%);
-}
+  &__swatch {
+    display: block;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 2px rgb(255 255 255 / 55%);
+  }
 
-.auth-dock__colors-title {
-  margin: 0 0 10px;
-  color: var(--el-text-color-primary);
-  font-size: 13px;
-  font-weight: 650;
-}
+  &__colors-title {
+    margin: 0 0 10px;
+    color: var(--el-text-color-primary);
+    font-size: 13px;
+    font-weight: 650;
+  }
 
-.auth-dock__colors {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 8px;
-}
+  &__colors {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
 
-.auth-dock__color {
-  padding: 3px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
-  transition:
-    transform 0.15s ease,
-    border-color 0.15s ease;
-}
+  &__color {
+    padding: 3px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+    transition:
+      transform 0.15s ease,
+      border-color 0.15s ease;
+  }
 
-.auth-dock__color:hover {
-  transform: scale(1.08);
-}
+  &__color:hover {
+    transform: scale(1.08);
+  }
 
-.auth-dock__color.is-active {
-  border-color: var(--el-color-primary);
-}
+  &__color.is-active {
+    border-color: var(--el-color-primary);
+  }
 
-.auth-dock__color:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 2px;
-}
+  &__color:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
+  }
 
-.auth-dock__color-fill {
-  display: grid;
-  width: 100%;
-  place-items: center;
-  color: #fff;
-  border-radius: 6px;
-  font-size: 13px;
-  aspect-ratio: 1;
+  &__color-fill {
+    display: grid;
+    width: 100%;
+    place-items: center;
+    color: #fff;
+    border-radius: 6px;
+    font-size: 13px;
+    aspect-ratio: 1;
+  }
 }
 
 @keyframes auth-dock-in {
@@ -155,8 +155,8 @@ function setPrimaryColor(color: string): void {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .auth-dock {
+.auth-dock {
+  @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
 }

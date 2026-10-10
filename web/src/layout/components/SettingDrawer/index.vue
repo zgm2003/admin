@@ -307,10 +307,12 @@ function resetPreferences(): void {
   </el-drawer>
 </template>
 
-<style>
-.setting-drawer .el-drawer__body {
-  padding: 16px 18px;
+<style lang="scss">
+.setting-drawer {
+  .el-drawer__body {
+    padding: 16px 18px;
+  }
 }
 </style>
 
-<style scoped src="./SettingDrawer.css"></style>
+<style scoped src="./SettingDrawer.scss" lang="scss"></style>

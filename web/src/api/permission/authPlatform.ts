@@ -1,24 +1,21 @@
-import { isYesNo, type YesNo } from '@/enums/yesNo'
+import { type YesNo } from '@/enums/yesNo'
 import { request } from '@/utils/request'
 import type { PageResult, PageRequest } from '@/types/pagination'
-import {
-  expectArray,
-  expectEmptyObject,
-  expectId,
-  expectInteger,
-  expectPage,
-  expectRecord,
-  expectString,
-} from '@/api/protocol'
-import { ProtocolError } from '@/types/http'
 
-export type LoginType = 'email' | 'phone' | 'password'
+export type LoginType = string
 
 export interface AuthPlatformListQuery extends PageRequest {
   keyword?: string
   isEnabled?: YesNo
 }
+
 export interface AuthPlatformListItem {
+  presentation: {
+    loginTypes: Array<{ value: LoginType; label: string }>
+    maxSessionsLabel: string
+    deleteReason: string
+  }
+  actions: { update: boolean; status: boolean; delete: boolean }
   id: number
   code: string
   name: string
@@ -37,6 +34,7 @@ export interface AuthPlatformListItem {
   createdAt: string
   updatedAt: string
 }
+
 export interface CreateAuthPlatformInput {
   code: string
   name: string
@@ -51,6 +49,7 @@ export interface CreateAuthPlatformInput {
   allowRegister: YesNo
   isEnabled: YesNo
 }
+
 export interface UpdateAuthPlatformInput {
   name: string
   loginTypes: LoginType[]
@@ -63,6 +62,7 @@ export interface UpdateAuthPlatformInput {
   maxSessions: number
   allowRegister: YesNo
 }
+
 export interface AuthPlatformStatusResult {
   id: number
   isEnabled: YesNo
@@ -71,152 +71,56 @@ export interface AuthPlatformStatusResult {
 export async function getAuthPlatforms(
   query: AuthPlatformListQuery,
 ): Promise<PageResult<AuthPlatformListItem>> {
-  return expectPage(
-    await request({
-      method: 'GET',
-      url: '/api/admin/v1/permission/authplatform',
-      params: query,
-    }),
-    parseAuthPlatform,
-    'auth platforms',
-  )
+  return request.get<PageResult<AuthPlatformListItem>>('/api/admin/v1/permission/authplatform', {
+    params: query,
+  })
 }
 
 export async function createAuthPlatform(input: CreateAuthPlatformInput): Promise<{ id: number }> {
-  return expectId(
-    await request({
-      method: 'POST',
-      url: '/api/admin/v1/permission/authplatform',
-      data: {
-        code: input.code,
-        name: input.name,
-        loginTypes: input.loginTypes,
-        accessTTLSeconds: input.accessTTLSeconds,
-        refreshTTLSeconds: input.refreshTTLSeconds,
-        sessionCacheTTLSeconds: input.sessionCacheTTLSeconds,
-        accessCacheTTLSeconds: input.accessCacheTTLSeconds,
-        bindDevice: input.bindDevice,
-        bindIP: input.bindIP,
-        maxSessions: input.maxSessions,
-        allowRegister: input.allowRegister,
-        isEnabled: input.isEnabled,
-      },
-    }),
-    'auth platform create result',
-  )
+  return request.post<{ id: number }>('/api/admin/v1/permission/authplatform', {
+    code: input.code,
+    name: input.name,
+    loginTypes: input.loginTypes,
+    accessTTLSeconds: input.accessTTLSeconds,
+    refreshTTLSeconds: input.refreshTTLSeconds,
+    sessionCacheTTLSeconds: input.sessionCacheTTLSeconds,
+    accessCacheTTLSeconds: input.accessCacheTTLSeconds,
+    bindDevice: input.bindDevice,
+    bindIP: input.bindIP,
+    maxSessions: input.maxSessions,
+    allowRegister: input.allowRegister,
+    isEnabled: input.isEnabled,
+  })
 }
 
 export async function updateAuthPlatform(
   id: number,
   input: UpdateAuthPlatformInput,
 ): Promise<Record<string, never>> {
-  expectEmptyObject(
-    await request({
-      method: 'PUT',
-      url: `/api/admin/v1/permission/authplatform/${id}`,
-      data: {
-        name: input.name,
-        loginTypes: input.loginTypes,
-        accessTTLSeconds: input.accessTTLSeconds,
-        refreshTTLSeconds: input.refreshTTLSeconds,
-        sessionCacheTTLSeconds: input.sessionCacheTTLSeconds,
-        accessCacheTTLSeconds: input.accessCacheTTLSeconds,
-        bindDevice: input.bindDevice,
-        bindIP: input.bindIP,
-        maxSessions: input.maxSessions,
-        allowRegister: input.allowRegister,
-      },
-    }),
-    'auth platform update result',
-  )
-  return {}
+  return request.put<Record<string, never>>(`/api/admin/v1/permission/authplatform/${id}`, {
+    name: input.name,
+    loginTypes: input.loginTypes,
+    accessTTLSeconds: input.accessTTLSeconds,
+    refreshTTLSeconds: input.refreshTTLSeconds,
+    sessionCacheTTLSeconds: input.sessionCacheTTLSeconds,
+    accessCacheTTLSeconds: input.accessCacheTTLSeconds,
+    bindDevice: input.bindDevice,
+    bindIP: input.bindIP,
+    maxSessions: input.maxSessions,
+    allowRegister: input.allowRegister,
+  })
 }
 
 export async function updateAuthPlatformStatus(
   id: number,
   isEnabled: YesNo,
 ): Promise<AuthPlatformStatusResult> {
-  const result = expectRecord(
-    await request({
-      method: 'PATCH',
-      url: `/api/admin/v1/permission/authplatform/${id}/status`,
-      data: { isEnabled },
-    }),
-    'auth platform status result',
+  return request.patch<AuthPlatformStatusResult>(
+    `/api/admin/v1/permission/authplatform/${id}/status`,
+    { isEnabled },
   )
-  if (!isYesNo(result.isEnabled)) throw new ProtocolError('auth platform status is invalid')
-  return { id: expectInteger(result.id, 'auth platform status id'), isEnabled: result.isEnabled }
 }
 
 export async function deleteAuthPlatform(id: number): Promise<Record<string, never>> {
-  expectEmptyObject(
-    await request({
-      method: 'DELETE',
-      url: `/api/admin/v1/permission/authplatform/${id}`,
-    }),
-    'auth platform delete result',
-  )
-  return {}
-}
-
-const loginTypes = ['email', 'phone', 'password'] as const
-const loginTypeSet = new Set<string>(loginTypes)
-
-export function parseLoginTypes(value: unknown, context: string): LoginType[] {
-  const values = expectArray(value, context)
-  if (values.length < 1 || values.length > 3) {
-    throw new ProtocolError(`${context} must contain 1 to 3 values`)
-  }
-  const seen = new Set<string>()
-  return values.map((item) => {
-    const loginType = expectString(item, `${context}[]`)
-    if (!loginTypeSet.has(loginType) || seen.has(loginType)) {
-      throw new ProtocolError(`${context} contains an invalid or duplicate login type`)
-    }
-    seen.add(loginType)
-    return loginType as LoginType
-  })
-}
-
-function parseAuthPlatform(value: unknown, index: number): AuthPlatformListItem {
-  const item = expectRecord(value, `auth platforms.list[${index}]`)
-  const bindDevice = item.bindDevice
-  const bindIP = item.bindIP
-  const allowRegister = item.allowRegister
-  const isEnabled = item.isEnabled
-  const isBuiltin = item.isBuiltin
-  if (
-    !isYesNo(bindDevice) ||
-    !isYesNo(bindIP) ||
-    !isYesNo(allowRegister) ||
-    !isYesNo(isEnabled) ||
-    !isYesNo(isBuiltin)
-  ) {
-    throw new ProtocolError('auth platform yes/no field is invalid')
-  }
-  return {
-    id: expectInteger(item.id, 'auth platform.id'),
-    code: expectString(item.code, 'auth platform.code'),
-    name: expectString(item.name, 'auth platform.name'),
-    loginTypes: parseLoginTypes(item.loginTypes, 'auth platform.loginTypes'),
-    policyVersion: expectInteger(item.policyVersion, 'auth platform.policyVersion'),
-    accessTTLSeconds: expectInteger(item.accessTTLSeconds, 'auth platform.accessTTLSeconds'),
-    refreshTTLSeconds: expectInteger(item.refreshTTLSeconds, 'auth platform.refreshTTLSeconds'),
-    sessionCacheTTLSeconds: expectInteger(
-      item.sessionCacheTTLSeconds,
-      'auth platform.sessionCacheTTLSeconds',
-    ),
-    accessCacheTTLSeconds: expectInteger(
-      item.accessCacheTTLSeconds,
-      'auth platform.accessCacheTTLSeconds',
-    ),
-    bindDevice,
-    bindIP,
-    maxSessions: expectInteger(item.maxSessions, 'auth platform.maxSessions'),
-    allowRegister,
-    isEnabled,
-    isBuiltin,
-    createdAt: expectString(item.createdAt, 'auth platform.createdAt'),
-    updatedAt: expectString(item.updatedAt, 'auth platform.updatedAt'),
-  }
+  return request.delete<Record<string, never>>(`/api/admin/v1/permission/authplatform/${id}`)
 }

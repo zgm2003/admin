@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
 import type { Run } from '@/api/system/scheduler'
-import { RunStatus } from '@/enums/scheduler'
+import type { StatusOption } from '@/types/option'
 import { formatTime } from '@/utils/datetime'
-import { getRunStatusKey } from '@/views/system/scheduler/presentation'
+import { resolveOptionLabel } from '@/views/system/scheduler/presentation'
 
-const { t } = useI18n()
-defineProps<{ runs: Run[] }>()
+defineProps<{ runs: Run[]; statuses: StatusOption[] }>()
 </script>
 
 <template>
@@ -18,16 +16,9 @@ defineProps<{ runs: Run[] }>()
       placement="top"
     >
       <el-space direction="vertical" alignment="start" size="small">
-        <el-tag
-          :type="
-            run.status === RunStatus.succeeded
-              ? 'success'
-              : run.status === RunStatus.failed
-                ? 'danger'
-                : 'warning'
-          "
-          >{{ t(getRunStatusKey(run.status)) }}</el-tag
-        >
+        <el-tag :type="statuses.find((option) => option.value === run.status)?.tone ?? 'info'">{{
+          resolveOptionLabel(run.status, statuses)
+        }}</el-tag>
         <span>{{ run.workerId }} · #{{ run.attemptNo }}</span>
         <span v-if="run.errorMessage" class="run-error">{{ run.errorMessage }}</span>
       </el-space>
@@ -36,7 +27,7 @@ defineProps<{ runs: Run[] }>()
   <el-empty v-else :description="$t('scheduler.noRuns')" />
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .run-error {
   color: var(--el-color-danger);
 }

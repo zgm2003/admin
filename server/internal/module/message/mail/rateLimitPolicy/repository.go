@@ -184,7 +184,7 @@ func buildCatalog(platformID int64, rows []Model) (Catalog, error) {
 		if !found || row.Mode != spec.Mode || row.Dimension != spec.Dimension {
 			return Catalog{}, fmt.Errorf("rate limit policy %q has invalid mode or dimension", row.Key)
 		}
-		if row.Limit < 1 || row.Limit > 100000 || row.WindowSeconds < 1 || row.WindowSeconds > 86400 {
+		if row.Limit < minLimit || row.Limit > maxLimit || row.WindowSeconds < minWindowSeconds || row.WindowSeconds > maxWindowSeconds {
 			return Catalog{}, fmt.Errorf("rate limit policy %q values are out of range", row.Key)
 		}
 		if row.CreatedAt.IsZero() || row.UpdatedAt.IsZero() {

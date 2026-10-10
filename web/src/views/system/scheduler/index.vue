@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { CirclePlus, Delete, Edit, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
@@ -11,33 +11,28 @@ import {
   createSchedule,
   deleteSchedule,
   executeSchedule,
-  getTaskOptions,
+  getSchedulerOptions,
   listJobs,
   listSchedules,
   retryJob,
   setScheduleStatus,
   updateSchedule,
 } from '@/api/system/scheduler'
-import type { Job, Schedule, TaskOption } from '@/api/system/scheduler'
-import { JobStatus as JobStatusValue } from '@/enums/scheduler'
-import type { JobStatus } from '@/enums/scheduler'
+import type { Job, Schedule, JobStatus, SchedulerOptions } from '@/api/system/scheduler'
 import JobDetailDialog from './components/JobDetailDialog/index.vue'
 import {
-  CRON_PRESETS,
   CUSTOM_CRON_VALUE,
-  getCronLabelKey,
   getCronPresetValue,
-  getJobStatusKey,
-  getTriggerSourceKey,
-  jobStatusMetadata,
+  resolveOptionLabel,
   resolveTaskDisplayName,
 } from './presentation'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const access = usePermissionStore()
 const schedules = ref<Schedule[]>([])
 const jobs = ref<Job[]>([])
-const options = ref<TaskOption[]>([])
+const options = ref<SchedulerOptions | null>(null)
+let loadSequence = 0
 const loading = ref(false)
 const loadError = ref('')
 const activeTab = ref<'schedules' | 'jobs'>('schedules')
@@ -49,9 +44,9 @@ const form = ref({
   name: '',
   description: '',
   taskType: '',
-  cronExpression: '*/5 * * * *',
-  cronPreset: '*/5 * * * *',
-  timezone: 'Asia/Shanghai',
+  cronExpression: '',
+  cronPreset: CUSTOM_CRON_VALUE,
+  timezone: '',
   params: {} as Record<string, unknown>,
   isEnabled: true,
 })
@@ -64,12 +59,18 @@ const canStatus = computed(() => access.hasPermission('system:scheduler:status')
 const canDelete = computed(() => access.hasPermission('system:scheduler:delete'))
 const canExecute = computed(() => access.hasPermission('system:scheduler:execute'))
 const canRetry = computed(() => access.hasPermission('system:scheduler:retry'))
-const cronPresetOptions = computed(() =>
-  CRON_PRESETS.map((preset) => ({ value: preset.value, label: t(preset.labelKey) })),
-)
-const jobStatusOptions = computed(() =>
-  jobStatusMetadata.map((item) => ({ label: t(item.i18nKey), value: item.value })),
-)
+const cronPresetOptions = computed(() => [
+  ...(options.value?.cronPresets ?? []),
+  { value: CUSTOM_CRON_VALUE, label: t('scheduler.cronPreset.custom') },
+])
+const jobStatusOptions = computed(() => options.value?.jobStatuses ?? [])
+const jobStatusPresentation = (value: number) =>
+  jobStatusOptions.value.find((option) => option.value === value)
+const scheduleStatuses = computed(() => options.value?.scheduleStatuses ?? [])
+const scheduleStatusPresentation = (value: number) =>
+  scheduleStatuses.value.find((option) => option.value === value)
+const triggerSources = computed(() => options.value?.triggerSources ?? [])
+const cronPresets = computed(() => options.value?.cronPresets ?? [])
 const scheduleColumns = computed<TableColumn<Schedule>[]>(() => [
   { prop: 'name', label: t('scheduler.name'), minWidth: 180 },
   { prop: 'taskType', label: t('scheduler.taskType'), minWidth: 220 },
@@ -96,34 +97,59 @@ const state = computed<'loading' | 'error' | 'empty' | 'success'>(() =>
         ? 'empty'
         : 'success',
 )
-const taskOptions = computed(() => options.value.filter((item) => item.adminCreatable))
+const tasks = computed(() => options.value?.tasks ?? [])
+const taskOptions = computed(() => tasks.value.filter((item) => item.adminCreatable))
 function taskDisplayName(type: string): string {
-  return resolveTaskDisplayName(type, options.value) || t('scheduler.taskTypeUnknown')
+  return resolveTaskDisplayName(type, tasks.value)
 }
 async function load(): Promise<void> {
-  if (!canList.value) return
+  const sequence = ++loadSequence
+  if (!canList.value) {
+    options.value = null
+    schedules.value = []
+    jobs.value = []
+    loading.value = false
+    return
+  }
   loading.value = true
   loadError.value = ''
   try {
-    if (options.value.length === 0) options.value = await getTaskOptions()
-    if (activeTab.value === 'schedules') schedules.value = await listSchedules()
-    else jobs.value = await listJobs(0, jobStatus.value || undefined)
-  } catch {
-    loadError.value = t('scheduler.loadFailed')
+    if (options.value === null) {
+      const result = await getSchedulerOptions()
+      if (sequence !== loadSequence) return
+      options.value = result
+    }
+    if (activeTab.value === 'schedules') {
+      const result = await listSchedules()
+      if (sequence === loadSequence) schedules.value = result
+    } else {
+      const result = await listJobs(0, jobStatus.value === '' ? undefined : jobStatus.value)
+      if (sequence === loadSequence) jobs.value = result
+    }
+  } catch (error: unknown) {
+    if (sequence === loadSequence) {
+      schedules.value = []
+      jobs.value = []
+      loadError.value = error instanceof Error ? error.message : t('scheduler.loadFailed')
+    }
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
 }
 function openCreate(): void {
+  if (options.value === null) return
   editing.value = null
   const first = taskOptions.value[0]
   form.value = {
     name: '',
     description: '',
     taskType: first?.type ?? '',
-    cronExpression: '*/5 * * * *',
-    cronPreset: '*/5 * * * *',
-    timezone: 'Asia/Shanghai',
+    cronExpression: options.value.defaults.cronExpression,
+    cronPreset: getCronPresetValue(
+      options.value.defaults.cronExpression,
+      options.value.cronPresets,
+    ),
+    timezone: options.value.defaults.timezone,
     params: first?.defaultParams ?? {},
     isEnabled: true,
   }
@@ -136,7 +162,7 @@ function openEdit(row: Schedule): void {
     description: row.description,
     taskType: row.taskType,
     cronExpression: row.cronExpression,
-    cronPreset: getCronPresetValue(row.cronExpression),
+    cronPreset: getCronPresetValue(row.cronExpression, cronPresets.value),
     timezone: row.timezone,
     params: { ...row.params },
     isEnabled: row.isEnabled,
@@ -150,6 +176,7 @@ function changeCronPreset(value: string | number | boolean): void {
 }
 async function save(): Promise<void> {
   if (
+    options.value === null ||
     submitting.value ||
     form.value.name.trim() === '' ||
     form.value.cronExpression.trim() === '' ||
@@ -189,7 +216,7 @@ async function toggle(row: Schedule): Promise<void> {
   await load()
 }
 async function remove(row: Schedule): Promise<void> {
-  if (row.builtinKey || !canDelete.value) return
+  if (!row.actions.delete || !canDelete.value) return
   await ElMessageBox.confirm(t('scheduler.deleteConfirm'), t('scheduler.deleteTitle'), {
     type: 'warning',
   })
@@ -204,7 +231,7 @@ async function execute(row: Schedule): Promise<void> {
   ElNotification.success({ title: t('scheduler.executed') })
 }
 async function retry(row: Job): Promise<void> {
-  if (!canRetry.value) return
+  if (!canRetry.value || !row.actions.retry) return
   await retryJob(row.id)
   await load()
   ElNotification.success({ title: t('scheduler.retried') })
@@ -218,12 +245,19 @@ function changeTab(value: string): void {
   void load()
 }
 function changeJobStatus(value: string | number | boolean | null | undefined): void {
-  jobStatus.value =
-    value === '' || value === null || value === undefined ? '' : (Number(value) as JobStatus)
+  jobStatus.value = typeof value === 'number' && Number.isFinite(value) ? value : ''
   void load()
 }
-onMounted(() => {
-  void load()
+watch(
+  [locale, canList],
+  () => {
+    options.value = null
+    void load()
+  },
+  { immediate: true, flush: 'sync' },
+)
+onBeforeUnmount(() => {
+  loadSequence++
 })
 </script>
 
@@ -253,8 +287,8 @@ onMounted(() => {
         ></template
       >
       <template #cell-status="{ row }: { row: Schedule }"
-        ><el-tag :type="row.isEnabled ? 'success' : 'info'">{{
-          row.isEnabled ? t('scheduler.enabled') : t('scheduler.disabled')
+        ><el-tag :type="scheduleStatusPresentation(row.status)?.tone ?? 'info'">{{
+          resolveOptionLabel(row.status, scheduleStatuses)
         }}</el-tag></template
       >
       <template #cell-taskType="{ row }: { row: Schedule }">
@@ -264,7 +298,7 @@ onMounted(() => {
       </template>
       <template #cell-cronExpression="{ row }: { row: Schedule }">
         <el-tooltip :content="row.cronExpression" placement="top">
-          <span>{{ t(getCronLabelKey(row.cronExpression)) }}</span>
+          <span>{{ resolveOptionLabel(row.cronExpression, cronPresets) }}</span>
         </el-tooltip>
       </template>
       <template #cell-actions="{ row }: { row: Schedule }"
@@ -286,7 +320,7 @@ onMounted(() => {
             @click="execute(row)"
             >{{ t('scheduler.execute') }}</el-button
           ><el-button
-            v-if="canDelete && !row.builtinKey"
+            v-if="canDelete && row.actions.delete"
             type="danger"
             link
             :icon="Delete"
@@ -323,22 +357,13 @@ onMounted(() => {
       </template>
       <template #cell-trigger="{ row }: { row: Job }">
         <el-tooltip :content="row.triggerSource" placement="top">
-          <span>{{ t(getTriggerSourceKey(row.triggerSource)) }}</span>
+          <span>{{ resolveOptionLabel(row.triggerSource, triggerSources) }}</span>
         </el-tooltip>
       </template>
       <template #cell-status="{ row }: { row: Job }"
-        ><el-tag
-          :type="
-            row.status === JobStatusValue.completed
-              ? 'success'
-              : row.status === JobStatusValue.failed
-                ? 'danger'
-                : row.status === JobStatusValue.running
-                  ? 'warning'
-                  : 'info'
-          "
-          >{{ t(getJobStatusKey(row.status)) }}</el-tag
-        ></template
+        ><el-tag :type="jobStatusPresentation(row.status)?.tone ?? 'info'">{{
+          resolveOptionLabel(row.status, jobStatusOptions)
+        }}</el-tag></template
       >
       <template #cell-createdAt="{ row }: { row: Job }">
         <span>{{ formatTime(row.createdAt) }}</span>
@@ -349,7 +374,7 @@ onMounted(() => {
             t('scheduler.detail')
           }}</el-button
           ><el-button
-            v-if="canRetry && row.status === JobStatusValue.failed"
+            v-if="canRetry && row.actions.retry"
             type="warning"
             link
             @click="retry(row)"
@@ -393,11 +418,16 @@ onMounted(() => {
         ></el-form
       >
     </AppDialog>
-    <JobDetailDialog v-model="detailVisible" :job="selectedJob" :task-options="options" />
+    <JobDetailDialog
+      v-model="detailVisible"
+      :job="selectedJob"
+      :task-options="tasks"
+      :options="options"
+    />
   </AppPage>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .scheduler-job-status-filter {
   width: 160px;
 }
@@ -406,8 +436,8 @@ onMounted(() => {
   margin-top: 8px;
 }
 
-@media (max-width: 900px) {
-  .scheduler-job-status-filter {
+.scheduler-job-status-filter {
+  @media (max-width: 900px) {
     width: 100%;
   }
 }

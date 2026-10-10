@@ -23,15 +23,17 @@ type permissionResultResponse struct {
 	PermissionCount int64 `json:"permissionCount"`
 }
 type listItemResponse struct {
-	ID              int64  `json:"id"`
-	Code            string `json:"code"`
-	Name            string `json:"name"`
-	IsDefault       int16  `json:"isDefault"`
-	IsEnabled       int16  `json:"isEnabled"`
-	UserCount       int64  `json:"userCount"`
-	PermissionCount int64  `json:"permissionCount"`
-	CreatedAt       string `json:"createdAt"`
-	UpdatedAt       string `json:"updatedAt"`
+	Actions         Actions      `json:"actions"`
+	ActionLabels    ActionLabels `json:"actionLabels"`
+	ID              int64        `json:"id"`
+	Code            string       `json:"code"`
+	Name            string       `json:"name"`
+	IsDefault       int16        `json:"isDefault"`
+	IsEnabled       int16        `json:"isEnabled"`
+	UserCount       int64        `json:"userCount"`
+	PermissionCount int64        `json:"permissionCount"`
+	CreatedAt       string       `json:"createdAt"`
+	UpdatedAt       string       `json:"updatedAt"`
 }
 
 type listResponse struct {
@@ -77,6 +79,7 @@ func roleListResponse(items []ListItem, total int64, page, pageSize int) listRes
 	rows := make([]listItemResponse, 0, len(items))
 	for _, item := range items {
 		rows = append(rows, listItemResponse{
+			Actions: item.Actions, ActionLabels: item.ActionLabels,
 			ID:              item.ID,
 			Code:            item.Code,
 			Name:            item.Name,

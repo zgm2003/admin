@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, toRefs } from 'vue'
+import { toRefs } from 'vue'
 import { CircleHelp, RotateCcw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
 import { YesNo } from '@/enums/yesNo'
+import type { AuthPlatformOptions } from '@/api/permission/authPlatformOptions'
 import type { AuthPlatformForm } from './types'
 
 const props = defineProps<{
+  options: AuthPlatformOptions
   dialogMode: 'create' | 'edit'
   isEditing: boolean
   submitting: boolean
@@ -17,13 +19,6 @@ const visible = defineModel<boolean>({ required: true })
 const form = defineModel<AuthPlatformForm>('form', { required: true })
 const emit = defineEmits<{ save: []; 'restore-defaults': [] }>()
 const { t } = useI18n()
-const loginTypeOptions = computed<
-  Array<{ value: AuthPlatformForm['loginTypes'][number]; label: string }>
->(() => [
-  { value: 'email', label: t('loginType.email') },
-  { value: 'phone', label: t('loginType.phone') },
-  { value: 'password', label: t('loginType.password') },
-])
 </script>
 
 <template>
@@ -65,7 +60,7 @@ const loginTypeOptions = computed<
             <el-form-item :label="t('permission.authPlatform.loginTypes')">
               <el-select-v2
                 v-model="form.loginTypes"
-                :options="loginTypeOptions"
+                :options="options.loginTypes"
                 multiple
                 data-testid="auth-platform-login-types"
                 class="auth-platform-login-types"
@@ -94,32 +89,32 @@ const loginTypeOptions = computed<
                 testId: 'auth-platform-access-ttl',
                 label: 'permission.authPlatform.accessTTL',
                 help: 'permission.authPlatform.form.accessTTLHelp',
-                min: 60,
-                max: 2_592_000,
+                min: options.limits.accessTTLSeconds.minimum,
+                max: options.limits.accessTTLSeconds.maximum,
               },
               {
                 key: 'refreshTTLSeconds',
                 testId: 'auth-platform-refresh-ttl',
                 label: 'permission.authPlatform.refreshTTL',
                 help: 'permission.authPlatform.form.refreshTTLHelp',
-                min: 60,
-                max: 31_536_000,
+                min: options.limits.refreshTTLSeconds.minimum,
+                max: options.limits.refreshTTLSeconds.maximum,
               },
               {
                 key: 'sessionCacheTTLSeconds',
                 testId: 'auth-platform-session-cache-ttl',
                 label: 'permission.authPlatform.sessionCacheTTL',
                 help: 'permission.authPlatform.form.sessionCacheTTLHelp',
-                min: 60,
-                max: 86_400,
+                min: options.limits.sessionCacheTTLSeconds.minimum,
+                max: options.limits.sessionCacheTTLSeconds.maximum,
               },
               {
                 key: 'accessCacheTTLSeconds',
                 testId: 'auth-platform-access-cache-ttl',
                 label: 'permission.authPlatform.accessCacheTTL',
                 help: 'permission.authPlatform.form.accessCacheTTLHelp',
-                min: 60,
-                max: 86_400,
+                min: options.limits.accessCacheTTLSeconds.minimum,
+                max: options.limits.accessCacheTTLSeconds.maximum,
               },
             ]"
             :key="field.key"
@@ -196,8 +191,8 @@ const loginTypeOptions = computed<
             <el-form-item :label="t('permission.authPlatform.maxSessionsField')">
               <el-input-number
                 v-model="form.maxSessions"
-                :min="0"
-                :max="100"
+                :min="options.limits.maxSessions.minimum"
+                :max="options.limits.maxSessions.maximum"
                 class="auth-platform-number"
               />
             </el-form-item>
@@ -218,4 +213,4 @@ const loginTypeOptions = computed<
   </AppDialog>
 </template>
 
-<style scoped src="./AuthPlatformDialog.css"></style>
+<style scoped src="./AuthPlatformDialog.scss" lang="scss"></style>

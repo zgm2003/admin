@@ -146,6 +146,69 @@ func TestRepositoryDraftSubmitCancelCopyTransactions(t *testing.T) {
 	}
 }
 
+func TestRepositoryCopyRejectsDraftAndUnknownStatusWithoutCreatingRows(t *testing.T) {
+	db, ctx := openTaskDB(t)
+	repository := NewRepository(db, discardBatchJobWriter{})
+	service := NewService(repository)
+	created, err := service.Create(ctx, 1, DraftInput{PlatformID: 1, Title: "copy guard", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudiencePlatform})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, status := range []Status{StatusDraft, Status(99)} {
+		if err := db.WithContext(ctx).Model(&Task{}).Where("id=?", created.ID).Update("status", status).Error; err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.Copy(ctx, created.ID, 2, time.Now().UTC()); !errors.Is(err, ErrInvalidTransition) {
+			t.Fatalf("copy status=%d err=%v want ErrInvalidTransition", status, err)
+		}
+	}
+	var count int64
+	if err := db.WithContext(ctx).Model(&Task{}).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("rejected copy created task rows: %d", count)
+	}
+}
+
+func TestRepositoryCopyWaitsForSourceLockAndRechecksStatus(t *testing.T) {
+	db, ctx := openTaskDB(t)
+	repository := NewRepository(db, discardBatchJobWriter{})
+	created, err := NewService(repository).Create(ctx, 1, DraftInput{PlatformID: 1, Title: "copy race", ContentHTML: "<p>content</p>", Variant: notification.VariantInfo, Priority: notification.PriorityNormal, LinkType: notification.LinkNone, AudienceType: AudiencePlatform})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.WithContext(ctx).Model(&Task{}).Where("id=?", created.ID).Update("status", StatusCompleted).Error; err != nil {
+		t.Fatal(err)
+	}
+	tx := db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		t.Fatal(tx.Error)
+	}
+	defer tx.Rollback()
+	if err := tx.Exec("SELECT id FROM message_notification_task WHERE id=? FOR UPDATE", created.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	copyCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { _, err := repository.Copy(copyCtx, created.ID, 2, time.Now().UTC()); result <- err }()
+	select {
+	case err := <-result:
+		t.Fatalf("copy bypassed source lock: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	if err := tx.Model(&Task{}).Where("id=?", created.ID).Update("status", StatusDraft).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit().Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-result; !errors.Is(err, ErrInvalidTransition) {
+		t.Fatalf("copy used stale source status: %v", err)
+	}
+}
+
 func TestRepositoryRejectsTargetsWithoutPlatformAccess(t *testing.T) {
 	db, ctx := openTaskDB(t)
 	statements := []string{

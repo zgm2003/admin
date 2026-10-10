@@ -3,32 +3,22 @@ import { computed } from 'vue'
 import type { TabPaneName } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
-import {
-  notificationTaskStatusMetadata,
-  type NotificationTaskStatus,
-} from '@/api/message/notificationTask'
+import type { NotificationTaskStatus } from '@/api/message/notificationTask'
+import type { NotificationTaskAdminOptions } from '@/api/message/notificationTaskOptions'
 
 const model = defineModel<NotificationTaskStatus | ''>({ required: true })
 const emit = defineEmits<{ change: [value: NotificationTaskStatus | ''] }>()
 const { t } = useI18n()
+const props = defineProps<{ statuses: NotificationTaskAdminOptions['statuses'] }>()
 
 const tabs = computed(() => [
   { value: '' as const, label: t('notificationTask.statusAll') },
-  ...notificationTaskStatusMetadata.map((status) => ({
-    value: status.value,
-    label: t(status.i18nKey),
-  })),
+  ...props.statuses,
 ])
 
 function changeStatus(value: TabPaneName): void {
-  const status =
-    (typeof value === 'number' &&
-      notificationTaskStatusMetadata.some((item) => item.value === value)) ||
-    (typeof value === 'string' &&
-      /^\d+$/.test(value) &&
-      notificationTaskStatusMetadata.some((item) => item.value === Number(value)))
-      ? (Number(value) as NotificationTaskStatus)
-      : ''
+  const parsed = value === '' ? '' : Number(value)
+  const status = parsed === '' || Number.isFinite(parsed) ? parsed : ''
   emit('change', status)
 }
 </script>

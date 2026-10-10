@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"admin/server/internal/authcontext"
-	mailtemplate "admin/server/internal/module/message/mail/template"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
 	"admin/server/internal/shared/validate"
@@ -23,7 +22,11 @@ type Handler struct{ service *Service }
 func NewHandler(service *Service) *Handler { return &Handler{service: service} }
 
 func (h *Handler) PageInit(ctx *gin.Context) {
-	response.OK(ctx, http.StatusOK, map[string]any{"scenes": mailtemplate.FixedCatalog()})
+	response.OK(ctx, http.StatusOK, PageInit(ctx.Request.Context()))
+}
+
+func (h *Handler) Options(ctx *gin.Context) {
+	response.OK(ctx, http.StatusOK, Options(ctx.Request.Context()))
 }
 
 func (h *Handler) Test(ctx *gin.Context) {

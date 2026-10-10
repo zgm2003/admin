@@ -202,7 +202,7 @@ onBeforeUnmount(reset)
   </AppDialog>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .identity-proof-row {
   display: grid;
   width: 100%;
@@ -210,8 +210,8 @@ onBeforeUnmount(reset)
   gap: 8px;
 }
 
-@media (max-width: 480px) {
-  .identity-proof-row {
+.identity-proof-row {
+  @media (max-width: 480px) {
     grid-template-columns: 1fr;
   }
 }

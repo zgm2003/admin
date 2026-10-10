@@ -34,6 +34,7 @@ type UpdateInput struct {
 	Name                                string
 	MaxFileSizeBytes                    int64
 	AllowedExtensions, AllowedMimeTypes []string
+	IsEnabled                           *yesno.Value
 	Remark                              string
 }
 type FileInput struct {
@@ -58,12 +59,13 @@ type createRequest struct {
 	Remark            string      `json:"remark"`
 }
 type updateRequest struct {
-	Codes             []string `json:"codes"`
-	Name              string   `json:"name"`
-	MaxFileSizeBytes  int64    `json:"maxFileSizeBytes"`
-	AllowedExtensions []string `json:"allowedExtensions"`
-	AllowedMimeTypes  []string `json:"allowedMimeTypes"`
-	Remark            string   `json:"remark"`
+	Codes             []string        `json:"codes"`
+	Name              string          `json:"name"`
+	MaxFileSizeBytes  int64           `json:"maxFileSizeBytes"`
+	AllowedExtensions []string        `json:"allowedExtensions"`
+	AllowedMimeTypes  []string        `json:"allowedMimeTypes"`
+	IsEnabled         json.RawMessage `json:"isEnabled"`
+	Remark            string          `json:"remark"`
 }
 type statusRequest struct {
 	IsEnabled *yesno.Value `json:"isEnabled"`
@@ -136,7 +138,18 @@ func (r updateRequest) input() (UpdateInput, error) {
 	if err := validateFields(1, r.Codes, r.Name, 1, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, "", r.Remark, false); err != nil {
 		return UpdateInput{}, err
 	}
-	return UpdateInput{r.Codes, r.Name, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.Remark}, nil
+	var status *yesno.Value
+	if len(r.IsEnabled) > 0 {
+		var value yesno.Value
+		if strings.TrimSpace(string(r.IsEnabled)) == "null" {
+			return UpdateInput{}, fmt.Errorf("isEnabled must not be null")
+		}
+		if err := json.Unmarshal(r.IsEnabled, &value); err != nil || !yesno.IsValid(value) {
+			return UpdateInput{}, fmt.Errorf("isEnabled invalid")
+		}
+		status = &value
+	}
+	return UpdateInput{Codes: r.Codes, Name: r.Name, MaxFileSizeBytes: r.MaxFileSizeBytes, AllowedExtensions: r.AllowedExtensions, AllowedMimeTypes: r.AllowedMimeTypes, Remark: r.Remark, IsEnabled: status}, nil
 }
 func parseListQuery(v url.Values) (ListQuery, error) {
 	allowed := map[string]bool{"page": true, "pageSize": true, "platformId": true, "cosConfigId": true, "keyword": true, "isEnabled": true}
@@ -175,5 +188,3 @@ func parseListQuery(v url.Values) (ListQuery, error) {
 	}
 	return q, nil
 }
-
-var _ = json.RawMessage{}

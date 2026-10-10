@@ -1,35 +1,29 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { Job, Run, TaskOption } from '@/api/system/scheduler'
-import { JobStatus } from '@/enums/scheduler'
+import type { Job, Run, TaskOption, SchedulerOptions } from '@/api/system/scheduler'
 import { listRuns } from '@/api/system/scheduler'
 import { formatTime } from '@/utils/datetime'
 import RunTimeline from '@/views/system/scheduler/components/RunTimeline/index.vue'
-import {
-  getJobStatusKey,
-  getTriggerSourceKey,
-  resolveTaskDisplayName,
-} from '@/views/system/scheduler/presentation'
+import { resolveOptionLabel, resolveTaskDisplayName } from '@/views/system/scheduler/presentation'
 
 const props = defineProps<{
   modelValue: boolean
   job: Job | null
   taskOptions: TaskOption[]
+  options: SchedulerOptions | null
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
-const { t } = useI18n()
+const { locale } = useI18n()
 const runs = ref<Run[]>([])
 const loading = ref(false)
 let loadSequence = 0
 const taskDisplayName = computed(() => {
   if (props.job === null) return ''
-  return (
-    resolveTaskDisplayName(props.job.taskType, props.taskOptions) || t('scheduler.taskTypeUnknown')
-  )
+  return resolveTaskDisplayName(props.job.taskType, props.taskOptions)
 })
 watch(
-  () => [props.modelValue, props.job?.id] as const,
+  () => [props.modelValue, props.job?.id, locale.value] as const,
   async ([visible]) => {
     const sequence = ++loadSequence
     runs.value = []
@@ -73,19 +67,15 @@ onBeforeUnmount(() => {
       </el-descriptions-item>
       <el-descriptions-item :label="$t('scheduler.trigger')">
         <el-tooltip :content="job.triggerSource" placement="top">
-          <span>{{ $t(getTriggerSourceKey(job.triggerSource)) }}</span>
+          <span>{{ resolveOptionLabel(job.triggerSource, options?.triggerSources ?? []) }}</span>
         </el-tooltip>
       </el-descriptions-item>
       <el-descriptions-item :label="$t('scheduler.status')">
         <el-tag
           :type="
-            job.status === JobStatus.failed
-              ? 'danger'
-              : job.status === JobStatus.completed
-                ? 'success'
-                : 'info'
+            options?.jobStatuses.find((option) => option.value === job?.status)?.tone ?? 'info'
           "
-          >{{ $t(getJobStatusKey(job.status)) }}</el-tag
+          >{{ resolveOptionLabel(job.status, options?.jobStatuses ?? []) }}</el-tag
         >
       </el-descriptions-item>
       <el-descriptions-item :label="$t('scheduler.attempt')"
@@ -108,6 +98,8 @@ onBeforeUnmount(() => {
       }}</el-descriptions-item>
     </el-descriptions>
     <el-divider>{{ $t('scheduler.runs') }}</el-divider>
-    <div v-loading="loading"><RunTimeline :runs="runs" /></div>
+    <div v-loading="loading">
+      <RunTimeline :runs="runs" :statuses="options?.runStatuses ?? []" />
+    </div>
   </AppDialog>
 </template>

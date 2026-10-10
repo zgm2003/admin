@@ -26,9 +26,15 @@ import (
 )
 
 func TestListServiceValidatesQueryAndReturnsNonNilEmptyPage(t *testing.T) {
-	tx, ctx, _ := openUserTransaction(t)
+	tx, ctx, roles := openUserTransaction(t)
+	ordinary, err := roles.FindDefault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	actor := createListedUser(t, tx, ctx, "listactor"+suffix, "listactor"+suffix+"@example.com", yesno.Yes, time.Now(), ordinary.ID)
 	service := newUserTestService(t, account.NewRepository(tx))
-	result, err := service.List(ctx, account.ListQuery{Page: 1, PageSize: 20, Keyword: "missing_user_list_value"})
+	result, err := service.List(ctx, account.ListQuery{ActorUserID: actor.ID, Page: 1, PageSize: 20, Keyword: "missing_user_list_value"})
 	if err != nil || result.List == nil || result.Total != 0 || result.Page != 1 || result.PageSize != 20 {
 		t.Fatalf("empty List() = %#v,%v", result, err)
 	}
@@ -56,7 +62,7 @@ func TestListServiceMapsInvalidStoredRelations(t *testing.T) {
 	if err := tx.WithContext(ctx).Create(&account.User{Username: unique, Email: unique + "@example.com", PasswordHash: "hash", IsEnabled: yesno.Yes}).Error; err != nil {
 		t.Fatal(err)
 	}
-	_, err := newUserTestService(t, account.NewRepository(tx)).List(ctx, account.ListQuery{Page: 1, PageSize: 20, Keyword: unique})
+	_, err := newUserTestService(t, account.NewRepository(tx)).List(ctx, account.ListQuery{ActorUserID: 1, Page: 1, PageSize: 20, Keyword: unique})
 	var appErr *apperror.Error
 	if !errors.As(err, &appErr) || appErr.Code != account.CodeUserDataInvalid {
 		t.Fatalf("invalid relation error = %v", err)
@@ -210,7 +216,7 @@ func TestServiceRolesReturnsCompleteOptionsAndStrictCurrentRelations(t *testing.
 		t.Fatal(err)
 	}
 	target := createListedUser(t, tx, ctx, fmt.Sprintf("roles%d", time.Now().UnixNano()), fmt.Sprintf("roles%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), disabled.ID, defaultRole.ID)
-	result, err := newUserTestService(t, account.NewRepository(tx)).Roles(ctx, target.ID)
+	result, err := newUserTestService(t, account.NewRepository(tx)).Roles(ctx, target.ID, target.ID)
 	if err != nil || result.User.ID != target.ID || result.Roles == nil || !reflect.DeepEqual(result.RoleIDs, []int64{defaultRole.ID, disabled.ID}) {
 		t.Fatalf("Roles() = %+v,%v", result, err)
 	}
@@ -223,14 +229,14 @@ func TestServiceRolesReturnsCompleteOptionsAndStrictCurrentRelations(t *testing.
 	if !foundDisabled {
 		t.Fatal("disabled role was omitted from role query")
 	}
-	if _, err := newUserTestService(t, account.NewRepository(tx)).Roles(ctx, 9223372036854770000); appErrorCodeForUser(err) != account.CodeUserNotFound {
+	if _, err := newUserTestService(t, account.NewRepository(tx)).Roles(ctx, target.ID, 9223372036854770000); appErrorCodeForUser(err) != account.CodeUserNotFound {
 		t.Fatalf("unknown Roles() error = %v", err)
 	}
 	corrupt := account.User{Username: fmt.Sprintf("corrupt%d", time.Now().UnixNano()), Email: fmt.Sprintf("corrupt%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", IsEnabled: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&corrupt).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := newUserTestService(t, account.NewRepository(tx)).Roles(ctx, corrupt.ID); appErrorCodeForUser(err) != account.CodeUserDataInvalid {
+	if _, err := newUserTestService(t, account.NewRepository(tx)).Roles(ctx, target.ID, corrupt.ID); appErrorCodeForUser(err) != account.CodeUserDataInvalid {
 		t.Fatalf("corrupt Roles() error = %v", err)
 	}
 }

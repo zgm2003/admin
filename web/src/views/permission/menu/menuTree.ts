@@ -33,6 +33,6 @@ export function menuParentOptions(
 
   return flattenWithChildren(nodes).filter((node) => {
     if (excluded.has(node.id)) return false
-    return menuType === 'action' ? node.menuType === 'page' : node.menuType === 'directory'
+    return node.actions.allowedChildTypes.includes(menuType)
   })
 }

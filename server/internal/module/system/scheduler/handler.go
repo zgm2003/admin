@@ -58,12 +58,7 @@ func (h *Handler) GetSchedule(c *gin.Context) {
 	response.OK(c, http.StatusOK, scheduleDTO(row))
 }
 func (h *Handler) Options(c *gin.Context) {
-	items := h.service.Options()
-	out := make([]taskOptionResponse, 0, len(items))
-	for _, item := range items {
-		out = append(out, taskOptionDTO(item))
-	}
-	response.OK(c, http.StatusOK, out)
+	response.OK(c, http.StatusOK, h.service.Options(c.Request.Context()))
 }
 func (h *Handler) CreateSchedule(c *gin.Context) {
 	actor, ok := h.actor(c)

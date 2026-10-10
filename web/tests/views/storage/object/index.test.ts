@@ -6,7 +6,7 @@ import { createPinia, setActivePinia } from 'pinia'
 
 import { appI18n } from '@/i18n'
 import { setLocale } from '@/i18n'
-import { getDictionaryOptions } from '@/api/system/dictionary'
+import { getCosConfigOptions } from '@/api/storage/cosConfigOptions'
 import { AppDialog } from '@/components/AppDialog'
 import { AppTable } from '@/components/AppTable'
 import { AppSearch } from '@/components/AppSearch'
@@ -26,7 +26,7 @@ import {
   updateUploadRuleStatus,
 } from '@/api/storage/uploadRule'
 
-vi.mock('@/api/system/dictionary', () => ({ getDictionaryOptions: vi.fn() }))
+vi.mock('@/api/storage/cosConfigOptions', () => ({ getCosConfigOptions: vi.fn() }))
 
 vi.mock('@/api/storage/cosConfig', () => ({
   listCosConfigs: vi.fn(),
@@ -66,7 +66,7 @@ describe('ObjectStorage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setLocale('zh-CN')
-    vi.mocked(getDictionaryOptions).mockReset().mockResolvedValue(storageDictionaryOptions())
+    vi.mocked(getCosConfigOptions).mockReset().mockResolvedValue(storageCodeOptions())
     vi.mocked(listCosConfigs).mockResolvedValue({
       list: [],
       total: 0,
@@ -104,20 +104,16 @@ describe('ObjectStorage', () => {
     expect(listCosConfigs).toHaveBeenCalledOnce()
     expect(listCosConfigs).toHaveBeenLastCalledWith({ page: 1, pageSize: 20 })
     expect(listUploadRules).not.toHaveBeenCalled()
-    expect(getDictionaryOptions).toHaveBeenCalledWith([
-      'storage.cos.region',
-      'storage.file.extension',
-      'storage.mime.type',
-    ])
+    expect(getCosConfigOptions).toHaveBeenCalledWith()
   })
 
-  it('reloads localized storage dictionary labels when the language changes', async () => {
-    vi.mocked(getDictionaryOptions)
+  it('reloads localized storage code options labels when the language changes', async () => {
+    vi.mocked(getCosConfigOptions)
       .mockReset()
-      .mockResolvedValueOnce(storageDictionaryOptions())
+      .mockResolvedValueOnce(storageCodeOptions())
       .mockResolvedValueOnce({
-        ...storageDictionaryOptions(),
-        'storage.cos.region': [{ value: 'ap-guangzhou', label: 'Guangzhou (ap-guangzhou)' }],
+        ...storageCodeOptions(),
+        regions: [{ value: 'ap-guangzhou', label: 'Guangzhou (ap-guangzhou)' }],
       })
     const wrapper = mountPage(['storage:object:list', 'storage:cosConfig:create'])
     await flushPromises()
@@ -135,14 +131,14 @@ describe('ObjectStorage', () => {
     setLocale('en-US')
     await flushPromises()
 
-    expect(getDictionaryOptions).toHaveBeenCalledTimes(2)
+    expect(getCosConfigOptions).toHaveBeenCalledTimes(2)
     expect(regionSelect.props('options')).toEqual([
       { value: 'ap-guangzhou', label: 'Guangzhou (ap-guangzhou)' },
     ])
   })
 
-  it('does not substitute hardcoded storage options when dictionary loading fails', async () => {
-    vi.mocked(getDictionaryOptions).mockRejectedValueOnce(new Error('dictionary unavailable'))
+  it('does not substitute hardcoded storage options when code options loading fails', async () => {
+    vi.mocked(getCosConfigOptions).mockRejectedValueOnce(new Error('code options unavailable'))
     const wrapper = mountPage(['storage:object:list', 'storage:cosConfig:create'])
     await flushPromises()
     await wrapper.get('[data-testid="storage-add-config"]').trigger('click')
@@ -156,9 +152,9 @@ describe('ObjectStorage', () => {
     expect(wrapper.text()).toContain('存储选项加载失败')
   })
 
-  it('disables dictionary-backed controls while storage options are loading', async () => {
-    const pending = deferred<ReturnType<typeof storageDictionaryOptions>>()
-    vi.mocked(getDictionaryOptions).mockReset().mockReturnValueOnce(pending.promise)
+  it('disables code options-backed controls while storage options are loading', async () => {
+    const pending = deferred<ReturnType<typeof storageCodeOptions>>()
+    vi.mocked(getCosConfigOptions).mockReset().mockReturnValueOnce(pending.promise)
     const wrapper = mountPage(['storage:object:list', 'storage:cosConfig:create'])
     await flushPromises()
     await wrapper.get('[data-testid="storage-add-config"]').trigger('click')
@@ -169,7 +165,7 @@ describe('ObjectStorage', () => {
     })
     expect(regionSelect.props()).toMatchObject({ loading: true, disabled: true })
 
-    pending.resolve(storageDictionaryOptions())
+    pending.resolve(storageCodeOptions())
     await flushPromises()
     expect(regionSelect.props()).toMatchObject({ loading: false, disabled: false })
   })
@@ -255,6 +251,9 @@ describe('ObjectStorage', () => {
   })
 
   it('shows the file size in MB and converts it back to bytes when creating', async () => {
+    vi.spyOn(ElMessageBox, 'confirm').mockImplementation(async () =>
+      Object.assign('confirm' as const, { value: '', action: 'confirm' as const }),
+    )
     vi.mocked(getUploadRulePageInit).mockResolvedValue({
       platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
       configs: [
@@ -762,8 +761,9 @@ describe('ObjectStorage', () => {
       allowedExtensions: ['png'],
       allowedMimeTypes: ['image/png'],
       remark: '',
+      isEnabled: 0,
     })
-    expect(updateUploadRuleStatus).toHaveBeenCalledWith(9, 0)
+    expect(updateUploadRuleStatus).not.toHaveBeenCalled()
   })
 
   it('confirms replacing the enabled rule before creating another enabled rule', async () => {
@@ -829,13 +829,13 @@ describe('ObjectStorage', () => {
   })
 })
 
-function storageDictionaryOptions() {
+function storageCodeOptions() {
   return {
-    'storage.cos.region': [
+    regions: [
       { value: 'ap-guangzhou', label: '广州（ap-guangzhou）' },
       { value: 'ap-hongkong', label: '中国香港（ap-hongkong）' },
     ],
-    'storage.file.extension': [
+    extensions: [
       'jpg',
       'jpeg',
       'png',
@@ -848,7 +848,7 @@ function storageDictionaryOptions() {
       'xlsx',
       'zip',
     ].map((value) => ({ value, label: value })),
-    'storage.mime.type': [
+    mimeTypes: [
       'image/jpeg',
       'image/png',
       'image/gif',

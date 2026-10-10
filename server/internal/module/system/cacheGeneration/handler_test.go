@@ -107,6 +107,7 @@ func TestHandlerListReturnsStrictResponseShape(t *testing.T) {
 	wantKeys := []string{
 		"namespace", "scopeKey", "generation", "status", "pendingCount", "oldestPendingAt",
 		"latestAttempts", "lastError", "latestPublishedGeneration", "latestPublishedAt", "updatedAt",
+		"namespaceLabel", "scopeLabel", "statusLabel", "statusTone", "statusHint", "publishedVersion",
 	}
 	if len(row) != len(wantKeys) {
 		t.Fatalf("row keys = %v want %v", row, wantKeys)

@@ -134,3 +134,5 @@ func TestDeleteRequiresAnEmptyBody(t *testing.T) {
 		t.Fatalf("status = %d calls = %d", recorder.Code, service.deleteCalls)
 	}
 }
+
+func (*stubService) Options(ctx context.Context) (Options, error) { return (&Service{}).Options(ctx) }

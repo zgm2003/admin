@@ -48,17 +48,18 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 | 无独立页面 | `realtime` | `realtime_event*`、`realtime_retention_state` |
 | `storage/object` | `storage/cosConfig`、`storage/uploadRule`、`storage/upload` | `storage_cos_config`、`storage_upload_rule*` |
 | `system/operationLog` | `system/operationLog` | `system_operation_log` |
-| `system/dictionary` | `system/dictionary` | `system_dictionary`、`system_dictionary_item` |
 
 复合代码模块统一使用 lower camel case；数据库仍使用 snake_case，HTTP API 仍使用小写资源段。Mail 是聚合
 页面，后端按表资源拆为 `message/mail/config`、`template`、`log`、`logVerification`、`rateLimitPolicy`、
 `recipientRule`；根 `message/mail` 只保留发送编排、Provider、Limiter、Readiness、管理测试和路由聚合。
 `logVerification` 是 `log` 详情的下属持久化模块，不单独创建页面或公开 CRUD。
-字典管理 CRUD 位于 `/api/admin/v1/system/dictionary` 并使用独立 action 权限；业务消费只读端点位于
-`/api/v1/system/dictionary/options`，要求有效登录态但不要求字典管理权限，只返回已启用字典及选项的本地化
-`label/value`。options 经过 Redis generation/mutation/snapshot 和有界冷回源租约，PostgreSQL 仍是事实来源。
-字典管理页维护六个已登记消费编码的用途提示；`user.gender` 的内置 `0/1/2` 值由业务协议固定，后端拒绝
-新增、停用或删除不兼容值，其他扩展型展示字典仍可维护选项。
+业务候选项归属各模块的认证 `/options` 端点，例如 `user/profile/options`、`storage/cosconfig/options`、
+`message/mail/config/options`、`message/sms/config/options`。代码静态选项按 Request.Context 语言输出
+`{value,label}`，数字/字符串类型保真，零 PostgreSQL/Redis 查询；不创建 DictService、注册器或选项缓存中心。
+动态用户/角色候选仍由所属 Repository 有界查询。列表/详情 actions、系统设置 presentation 与表单 constraints
+由后端计算，前端仅展示、交叉检查 Access 并提供即时 rules；写入时重新验证，不信任客户端展示快照。
+字典生产模块、路由、菜单页面和专属缓存已移除；真实表/菜单/缓存退出由维护者离线执行
+`docs/database/2026-10-10-remove-system-dictionary.ps1 -OldServicesStopped`，不是 API/Worker 启动行为。
 系统设置的用户协议与隐私政策使用 `app.legal.user_agreement`、`app.legal.privacy_policy` 两个内置字符串配置，
 复用 `system.setting/global` generation 缓存。后台读取与更新端点为
 `/api/admin/v1/system/setting/legal/:document`，更新使用 `system:setting:update`；登录页通过匿名只读端点
@@ -112,8 +113,8 @@ Blob 下载；服务端 Excelize 负责基础读写，模块私有代码负责 Z
 不创建 Excel 中间件、通用业务框架或运行时注册器；第二个真实使用模块出现后才抽取稳定格式工具。
 
 预览行严格使用 `{line,rawValues,data,errors}`：六项 `rawValues` 保留原文，`data` 是数值枚举的业务字段，
-字段校验失败时为 null，重复错误仍保留合法 data。前端只校验 DTO 结构/枚举，用现有 i18n 展示，不解析或
-判断 Excel 中文值。预览不写库；确认提交原文件并重新校验；同一 Repository 事务整批写入及推进邮件 generation。
+字段校验失败时为 null，重复错误仍保留合法 data。前端按明确 DTO 展示服务端错误与本地化候选，
+不再逐项解析 DTO、校验业务枚举或判断 Excel 中文值。预览不写库；确认提交原文件并重新校验；同一 Repository 事务整批写入及推进邮件 generation。
 
 仅系统模板存 COS，媒体值类型 5 保存标准 objectKey；用户导入文件在请求内处理，不存 COS/数据库，导出直接下载。
 文件原始大小上限 2 MiB，最多 1000 数据行、六列和两页；超限、公式、宏、外链、嵌入对象及畸形文件显式拒绝。
@@ -153,7 +154,6 @@ SMS 收件规则与发送日志的手机号采用与邮件地址一致的明文�
 `ready/invalidating` state、generation 不可变 snapshot 和 `shared/cacheFill` 有界冷回源。固定 scopes 为：
 
 - `system.setting/global`
-- `system.dictionary/global`
 - `message.mail/global`
 - `message.sms/global`
 - `storage.cosconfig/<configId>`
@@ -263,7 +263,7 @@ DTO。入队和消费边界都必须校验载荷，任务 Handler 不直接写�
 web/src/views/** -> web/src/api/<module>.ts -> web/src/utils/request.ts -> Go API
 ```
 
-Router 和 Access Store 根据后端快照动态注册业务页面。API 模块负责 DTO 解析，不把请求放进公共组件；页面
+Router 和 Access Store 根据后端快照动态注册业务页面。API 模块只保留 DTO 类型和泛型 HTTP 调用，不做逐接口 DTO 解析或业务规则重算；页面
 只编排视图状态。Element Plus 树/表格行 key 统一为字符串，不能混用数字 ID。
 
 ## RBAC 与缓存

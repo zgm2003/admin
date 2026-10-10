@@ -18,6 +18,15 @@ type scheduleResponse struct {
 	BuiltinKey     string          `json:"builtinKey"`
 	CreatedAt      time.Time       `json:"createdAt"`
 	UpdatedAt      time.Time       `json:"updatedAt"`
+	Status         ScheduleStatus  `json:"status"`
+	Actions        scheduleActions `json:"actions"`
+}
+
+type scheduleActions struct {
+	Delete bool `json:"delete"`
+}
+type jobActions struct {
+	Retry bool `json:"retry"`
 }
 
 type taskOptionResponse struct {
@@ -37,7 +46,11 @@ func scheduleDTO(row Schedule) scheduleResponse {
 	if row.BuiltinKey != nil {
 		builtinKey = *row.BuiltinKey
 	}
-	return scheduleResponse{row.ID, row.Name, row.Description, row.TaskType, row.CronExpression, row.Timezone, row.Params, row.IsEnabled == 1, row.NextRunAt, builtinKey, row.CreatedAt, row.UpdatedAt}
+	status := ScheduleDisabled
+	if row.IsEnabled == 1 {
+		status = ScheduleEnabled
+	}
+	return scheduleResponse{row.ID, row.Name, row.Description, row.TaskType, row.CronExpression, row.Timezone, row.Params, row.IsEnabled == 1, row.NextRunAt, builtinKey, row.CreatedAt, row.UpdatedAt, status, scheduleActions{Delete: row.BuiltinKey == nil}}
 }
 
 type jobResponse struct {
@@ -56,10 +69,11 @@ type jobResponse struct {
 	CompletedAt   *time.Time      `json:"completedAt"`
 	CreatedAt     time.Time       `json:"createdAt"`
 	UpdatedAt     time.Time       `json:"updatedAt"`
+	Actions       jobActions      `json:"actions"`
 }
 
 func jobDTO(row Job) jobResponse {
-	return jobResponse{row.ID, row.ScheduleID, row.TaskType, row.Payload, row.TriggerSource, row.ScheduledAt, row.AvailableAt, row.Status, row.AttemptCount, row.MaxAttempts, row.ErrorClass, row.LastError, row.CompletedAt, row.CreatedAt, row.UpdatedAt}
+	return jobResponse{row.ID, row.ScheduleID, row.TaskType, row.Payload, row.TriggerSource, row.ScheduledAt, row.AvailableAt, row.Status, row.AttemptCount, row.MaxAttempts, row.ErrorClass, row.LastError, row.CompletedAt, row.CreatedAt, row.UpdatedAt, jobActions{Retry: row.Status == JobFailed}}
 }
 
 type runResponse struct {

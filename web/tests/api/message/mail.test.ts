@@ -1,288 +1,431 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as api from '@/api/message/mail'
 import { request } from '@/utils/request'
-import {
-  createMailRule,
-  listMailRules,
-  updateMailRule,
-  parseMailConfig,
-  parseMailLog,
-  parseMailLogDetail,
-  parseMailRule,
-  parseMailTemplate,
-  parseMailLogPage,
-  parseMailRateLimitPolicy,
-  parseMailRateLimitSnapshot,
-  parseMailRateLimitUpdateResult,
-  MailStatus,
-} from '@/api/message/mail'
-
-vi.mock('@/utils/request', () => ({ request: vi.fn() }))
-
-beforeEach(() => vi.mocked(request).mockReset())
-
-describe('mail config protocol', () => {
-  const valid = {
-    configured: true,
-    region: 'ap-guangzhou',
-    endpoint: '',
-    fromEmail: 'noreply@example.com',
-    fromName: 'Admin',
-    replyTo: '',
-    ttlMinutes: 10,
-    isEnabled: 1,
-    lastTestAt: null,
-    lastTestError: '',
-  }
-  it('accepts the safe configuration projection', () => {
-    expect(parseMailConfig(valid)).toEqual(valid)
+vi.mock('@/utils/request', () => ({
+  request: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  refreshAccessCredential: vi.fn(),
+}))
+beforeEach(() => vi.resetAllMocks())
+describe('thin API HTTP contract', () => {
+  it('getMailConfig preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getMailConfig()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/mail/config')
   })
-  it('rejects secrets and unknown fields', () => {
-    expect(() => parseMailConfig({ ...valid, secretId: 'secret' })).toThrow()
-    expect(() => parseMailConfig({ ...valid, configured: undefined })).toThrow()
+  it('getMailConfig propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getMailConfig()).rejects.toBe(error)
   })
-})
-
-describe('mail admin protocol', () => {
-  const template = {
-    id: 1,
-    scene: 'login',
-    name: '登录验证码',
-    subject: '登录验证码',
-    tencentTemplateId: 47941,
-    content: '<!DOCTYPE html><html><head></head><body>{{code}} {{ttl_minutes}}</body></html>',
-    variableKeys: ['code', 'ttl_minutes'],
-    exampleVariables: { code: '123456', ttl_minutes: '10' },
-    isEnabled: 1,
-    createdAt: '2026-09-01T00:00:00Z',
-    updatedAt: '2026-09-01T00:00:00Z',
-  }
-  const log = {
-    id: 2,
-    platformId: 1,
-    platform: 'admin',
-    userId: 169,
-    username: 'tester',
-    scene: 'login',
-    templateId: 47941,
-    toEmail: 'admin@example.com',
-    subject: '登录验证码',
-    status: MailStatus.Sent,
-    requestId: 'req',
-    messageId: 'msg',
-    errorCode: '',
-    errorSummary: '',
-    latencyMs: 32,
-    sentAt: '2026-09-01T00:00:01Z',
-    createdAt: '2026-09-01T00:00:00Z',
-    updatedAt: '2026-09-01T00:00:01Z',
-  }
-  const rule = {
-    id: 3,
-    scope: 1,
-    pattern: 'example.com',
-    action: 0,
-    name: '临时邮箱',
-    remark: '阻断',
-    isEnabled: 1,
-    createdAt: '2026-09-01T00:00:00Z',
-    updatedAt: '2026-09-01T00:00:00Z',
-  }
-
-  it('accepts exact template, log and recipient rule projections', () => {
-    expect(parseMailTemplate(template)).toEqual(template)
-    expect(parseMailLog(log)).toEqual(log)
-    expect(parseMailRule(rule)).toEqual(rule)
-  })
-
-  it.each([
-    [0, 0],
-    [0, 1],
-    [1, 0],
-    [1, 1],
-  ])(
-    'accepts numeric recipient scope %s and action %s without treating zero as absent',
-    (scope, action) => {
-      const value = { ...rule, scope, action }
-      expect(parseMailRule(value)).toEqual(value)
-    },
-  )
-
-  it.each(['scope', 'action'] as const)('rejects malformed recipient %s codes', (field) => {
-    for (const value of [
-      '0',
-      '1',
-      'email',
-      'domain',
-      'allow',
-      'deny',
-      '',
-      null,
-      undefined,
-      true,
-      false,
-      0.5,
-      -1,
-      2,
-      NaN,
-      Infinity,
-      {},
-      [],
-    ]) {
-      expect(() => parseMailRule({ ...rule, [field]: value }), String(value)).toThrow()
+  it('saveMailConfig preserves the HTTP contract and backend data', async () => {
+    const data: Parameters<typeof api.saveMailConfig>[0] = {
+      secretId: 'sample',
+      secretKey: 'sample',
+      region: 'sample',
+      endpoint: 'sample',
+      fromEmail: 'sample',
+      fromName: 'sample',
+      replyTo: 'sample',
+      ttlMinutes: 1,
+      isEnabled: 0,
     }
-    const missing: Record<string, unknown> = { ...rule }
-    delete missing[field]
-    expect(() => parseMailRule(missing)).toThrow()
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.saveMailConfig(data)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/mail/config', data)
   })
-
-  it('strictly parses recipient lists and preserves numeric zero codes', async () => {
-    const emailDeny = { ...rule, scope: 0, action: 0 }
-    vi.mocked(request).mockResolvedValue([emailDeny, { ...rule, action: 1 }])
-    await expect(listMailRules()).resolves.toEqual([emailDeny, { ...rule, action: 1 }])
-    expect(request).toHaveBeenCalledWith({
-      method: 'GET',
-      url: '/api/admin/v1/message/mail/recipient-rule',
+  it('saveMailConfig propagates request failures unchanged', async () => {
+    const data: Parameters<typeof api.saveMailConfig>[0] = {
+      secretId: 'sample',
+      secretKey: 'sample',
+      region: 'sample',
+      endpoint: 'sample',
+      fromEmail: 'sample',
+      fromName: 'sample',
+      replyTo: 'sample',
+      ttlMinutes: 1,
+      isEnabled: 0,
+    }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.saveMailConfig(data)).rejects.toBe(error)
+  })
+  it('deleteMailConfig preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.delete).mockResolvedValue(dataFromServer)
+    const result = await api.deleteMailConfig()
+    expect(result).toBe(dataFromServer)
+    expect(request.delete).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/mail/config')
+  })
+  it('deleteMailConfig propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.delete).mockRejectedValue(error)
+    await expect(api.deleteMailConfig()).rejects.toBe(error)
+  })
+  it('sendMailTest preserves the HTTP contract and backend data', async () => {
+    const data: Parameters<typeof api.sendMailTest>[0] = {
+      toEmail: 'sample',
+      scene: 'sample',
+      variables: {},
+    }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.sendMailTest(data)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/mail/test', data)
+  })
+  it('sendMailTest propagates request failures unchanged', async () => {
+    const data: Parameters<typeof api.sendMailTest>[0] = {
+      toEmail: 'sample',
+      scene: 'sample',
+      variables: {},
+    }
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.sendMailTest(data)).rejects.toBe(error)
+  })
+  it('listMailTemplates preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.listMailTemplates()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/mail/template')
+  })
+  it('listMailTemplates propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.listMailTemplates()).rejects.toBe(error)
+  })
+  it('updateMailTemplate preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.updateMailTemplate>[0] = 1
+    const data: Parameters<typeof api.updateMailTemplate>[1] = {
+      scene: 'sample',
+      name: 'sample',
+      subject: 'sample',
+      tencentTemplateId: null,
+      content: 'sample',
+      variableKeys: ['sample'],
+      exampleVariables: {},
+    }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.updateMailTemplate(id, data)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/message/mail/template/${id}`,
+      data,
+    )
+  })
+  it('updateMailTemplate propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.updateMailTemplate>[0] = 1
+    const data: Parameters<typeof api.updateMailTemplate>[1] = {
+      scene: 'sample',
+      name: 'sample',
+      subject: 'sample',
+      tencentTemplateId: null,
+      content: 'sample',
+      variableKeys: ['sample'],
+      exampleVariables: {},
+    }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.updateMailTemplate(id, data)).rejects.toBe(error)
+  })
+  it('updateMailTemplateStatus preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.updateMailTemplateStatus>[0] = 1
+    const isEnabled: Parameters<typeof api.updateMailTemplateStatus>[1] = 0
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.patch).mockResolvedValue(dataFromServer)
+    const result = await api.updateMailTemplateStatus(id, isEnabled)
+    expect(result).toBe(dataFromServer)
+    expect(request.patch).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/message/mail/template/${id}/status`,
+      { isEnabled },
+    )
+  })
+  it('updateMailTemplateStatus propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.updateMailTemplateStatus>[0] = 1
+    const isEnabled: Parameters<typeof api.updateMailTemplateStatus>[1] = 0
+    const error = new Error('request failed')
+    vi.mocked(request.patch).mockRejectedValue(error)
+    await expect(api.updateMailTemplateStatus(id, isEnabled)).rejects.toBe(error)
+  })
+  it('listMailLogs preserves the HTTP contract and backend data', async () => {
+    const params: Parameters<typeof api.listMailLogs>[0] = { page: 1, pageSize: 1 }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.listMailLogs(params)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/mail/log', {
+      params,
     })
-    for (const value of [
-      null,
-      {},
-      [{ ...rule, action: 'deny' }],
-      [emailDeny, { ...rule, scope: 'domain' }],
-    ]) {
-      vi.mocked(request).mockResolvedValue(value)
-      await expect(listMailRules()).rejects.toThrow()
-    }
   })
-
-  it('sends zero scope and action in recipient create and update bodies', async () => {
-    const input = {
+  it('listMailLogs propagates request failures unchanged', async () => {
+    const params: Parameters<typeof api.listMailLogs>[0] = { page: 1, pageSize: 1 }
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.listMailLogs(params)).rejects.toBe(error)
+  })
+  it('getMailLogDetail preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.getMailLogDetail>[0] = 1
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getMailLogDetail(id)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith(`/api/admin/v1/message/mail/log/${id}`)
+  })
+  it('getMailLogDetail propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.getMailLogDetail>[0] = 1
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getMailLogDetail(id)).rejects.toBe(error)
+  })
+  it('listMailRules preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.listMailRules()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/mail/recipient-rule')
+  })
+  it('listMailRules propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.listMailRules()).rejects.toBe(error)
+  })
+  it('createMailRule preserves the HTTP contract and backend data', async () => {
+    const data: Parameters<typeof api.createMailRule>[0] = {
       scope: 0,
-      pattern: 'a@example.com',
+      pattern: 'sample',
       action: 0,
-      name: 'Email deny',
-      remark: '',
-      isEnabled: 1,
-    } as const
-    vi.mocked(request).mockResolvedValueOnce({ id: 7 }).mockResolvedValueOnce({})
-    await expect(createMailRule(input)).resolves.toEqual({ id: 7 })
-    await expect(updateMailRule(7, input)).resolves.toEqual({})
-    expect(request).toHaveBeenNthCalledWith(1, {
-      method: 'POST',
-      url: '/api/admin/v1/message/mail/recipient-rule',
-      data: input,
-    })
-    expect(request).toHaveBeenNthCalledWith(2, {
-      method: 'PUT',
-      url: '/api/admin/v1/message/mail/recipient-rule/7',
-      data: input,
-    })
-  })
-
-  it('rejects unknown fields and malformed pages', () => {
-    expect(() => parseMailTemplate({ ...template, secretId: 'secret' })).toThrow()
-    expect(() => parseMailTemplate({ ...template, platformId: 1 })).toThrow()
-    expect(() => parseMailRule({ ...rule, platformId: 1 })).toThrow()
-    expect(() => parseMailLog({ ...log, platform: undefined })).toThrow()
-    expect(() => parseMailLogPage({ list: [log], total: 1, page: 1 })).toThrow()
-  })
-
-  it('accepts protected log detail without ciphertext', () => {
-    const value = { log, verificationCode: '123456', verificationExpiresAt: '2026-09-01T00:10:00Z' }
-    expect(parseMailLogDetail(value)).toEqual(value)
-    expect(() => parseMailLogDetail({ ...value, codeCiphertext: 'mail:v1:secret' })).toThrow()
-  })
-})
-
-describe('mail rate limit protocol', () => {
-  const policyMetadata = {
-    business_email_minute: ['business', 'platform_email'],
-    business_email_10m: ['business', 'platform_email'],
-  } as const
-  const policy = policyFor('business_email_minute')
-
-  function policyFor(key: keyof typeof policyMetadata) {
-    const [mode, dimension] = policyMetadata[key]
-    return { key, mode, dimension, limit: 1, windowSeconds: 60, updatedAt: '2026-09-04T12:00:00Z' }
-  }
-
-  it('accepts the exact policy and snapshot shapes', () => {
-    expect(parseMailRateLimitPolicy({ ...policy, platformId: 1 })).toEqual({
-      ...policy,
-      platformId: 1,
-    })
-    const policies = Object.keys(policyMetadata).map((key) =>
-      policyFor(key as keyof typeof policyMetadata),
+      name: 'sample',
+      remark: 'sample',
+      isEnabled: 0,
+    }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.createMailRule(data)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/message/mail/recipient-rule',
+      data,
     )
-    expect(
-      parseMailRateLimitSnapshot({
-        platforms: [{ platformId: 1, platformCode: 'admin', platformName: 'Admin', policies }],
-      }),
-    ).toEqual({
-      platforms: [
-        {
-          platformId: 1,
-          platformCode: 'admin',
-          platformName: 'Admin',
-          policies: policies.map((policy) => ({ ...policy, platformId: 1 })),
-        },
-      ],
-    })
-    expect(parseMailRateLimitUpdateResult({ platformId: 1, policy })).toEqual({
-      platformId: 1,
-      policy: { ...policy, platformId: 1 },
-    })
-    expect(() =>
-      parseMailRateLimitUpdateResult({ platformId: 1, policy }, 'business_ip_minute'),
-    ).toThrow()
   })
-
-  it('rejects unknown fields, invalid keys and out-of-range values', () => {
-    expect(() => parseMailRateLimitPolicy({ ...policy, extra: true })).toThrow()
-    expect(() => parseMailRateLimitPolicy({ ...policy, key: 'unknown' })).toThrow()
-    expect(() => parseMailRateLimitPolicy({ ...policy, limit: 0 })).toThrow()
-    expect(() => parseMailRateLimitPolicy({ ...policy, windowSeconds: 0 })).toThrow()
-    expect(() => parseMailRateLimitPolicy({ ...policy, mode: 'invalid' })).toThrow()
-    expect(() => parseMailRateLimitPolicy({ ...policy, updatedAt: 'not-a-date' })).toThrow()
-    expect(() => parseMailRateLimitPolicy({ ...policy, mode: 'admin_test' })).toThrow()
-    expect(() => parseMailRateLimitPolicy({ ...policy, dimension: 'email' })).toThrow()
+  it('createMailRule propagates request failures unchanged', async () => {
+    const data: Parameters<typeof api.createMailRule>[0] = {
+      scope: 0,
+      pattern: 'sample',
+      action: 0,
+      name: 'sample',
+      remark: 'sample',
+      isEnabled: 0,
+    }
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.createMailRule(data)).rejects.toBe(error)
   })
-
-  it('rejects incomplete snapshots and obsolete version fields', () => {
-    expect(() =>
-      parseMailRateLimitSnapshot({
-        platforms: [
-          { platformId: 1, platformCode: 'admin', platformName: 'Admin', policies: [policy] },
-        ],
-      }),
-    ).toThrow()
-    const policies = Object.keys(policyMetadata).map((key) =>
-      policyFor(key as keyof typeof policyMetadata),
+  it('updateMailRule preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.updateMailRule>[0] = 1
+    const data: Parameters<typeof api.updateMailRule>[1] = {
+      scope: 0,
+      pattern: 'sample',
+      action: 0,
+      name: 'sample',
+      remark: 'sample',
+      isEnabled: 0,
+    }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.updateMailRule(id, data)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/message/mail/recipient-rule/${id}`,
+      data,
     )
-    expect(() =>
-      parseMailRateLimitSnapshot({
-        platforms: [
-          { platformId: 1, platformCode: 'admin', platformName: 'Admin', version: 3, policies },
-        ],
-      }),
-    ).toThrow()
-    expect(() => parseMailRateLimitUpdateResult({ platformId: 1, version: 3, policy })).toThrow()
   })
-
-  it('rejects snapshots with duplicate policy keys', () => {
-    const policies = Object.keys(policyMetadata).map((key) =>
-      policyFor(key as keyof typeof policyMetadata),
+  it('updateMailRule propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.updateMailRule>[0] = 1
+    const data: Parameters<typeof api.updateMailRule>[1] = {
+      scope: 0,
+      pattern: 'sample',
+      action: 0,
+      name: 'sample',
+      remark: 'sample',
+      isEnabled: 0,
+    }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.updateMailRule(id, data)).rejects.toBe(error)
+  })
+  it('updateMailRuleStatus preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.updateMailRuleStatus>[0] = 1
+    const isEnabled: Parameters<typeof api.updateMailRuleStatus>[1] = 0
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.patch).mockResolvedValue(dataFromServer)
+    const result = await api.updateMailRuleStatus(id, isEnabled)
+    expect(result).toBe(dataFromServer)
+    expect(request.patch).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/message/mail/recipient-rule/${id}/status`,
+      { isEnabled },
     )
-    expect(() =>
-      parseMailRateLimitSnapshot({
-        platforms: [
-          {
-            platformId: 1,
-            platformCode: 'admin',
-            platformName: 'Admin',
-            policies: [...policies, policyFor('business_email_minute')],
-          },
-        ],
-      }),
-    ).toThrow()
+  })
+  it('updateMailRuleStatus propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.updateMailRuleStatus>[0] = 1
+    const isEnabled: Parameters<typeof api.updateMailRuleStatus>[1] = 0
+    const error = new Error('request failed')
+    vi.mocked(request.patch).mockRejectedValue(error)
+    await expect(api.updateMailRuleStatus(id, isEnabled)).rejects.toBe(error)
+  })
+  it('deleteMailRule preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.deleteMailRule>[0] = 1
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.delete).mockResolvedValue(dataFromServer)
+    const result = await api.deleteMailRule(id)
+    expect(result).toBe(dataFromServer)
+    expect(request.delete).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/message/mail/recipient-rule/${id}`,
+    )
+  })
+  it('deleteMailRule propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.deleteMailRule>[0] = 1
+    const error = new Error('request failed')
+    vi.mocked(request.delete).mockRejectedValue(error)
+    await expect(api.deleteMailRule(id)).rejects.toBe(error)
+  })
+  it('getMailRuleImportTemplate preserves the HTTP contract and backend data', async () => {
+    const controller = new AbortController()
+    const signal: Parameters<typeof api.getMailRuleImportTemplate>[0] = controller.signal
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getMailRuleImportTemplate(signal)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/message/mail/recipient-rule/import-template',
+      { ...(signal ? { signal } : {}) },
+    )
+  })
+  it('getMailRuleImportTemplate propagates request failures unchanged', async () => {
+    const controller = new AbortController()
+    const signal: Parameters<typeof api.getMailRuleImportTemplate>[0] = controller.signal
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getMailRuleImportTemplate(signal)).rejects.toBe(error)
+  })
+  it('previewMailRuleXlsx preserves the HTTP contract and backend data', async () => {
+    const controller = new AbortController()
+    const input: Parameters<typeof api.previewMailRuleXlsx>[0] = {
+      fileName: 'sample',
+      contentBase64: 'sample',
+    }
+    const signal: Parameters<typeof api.previewMailRuleXlsx>[1] = controller.signal
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.previewMailRuleXlsx(input, signal)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/message/mail/recipient-rule/import/preview',
+      input,
+      { ...(signal ? { signal } : {}) },
+    )
+  })
+  it('previewMailRuleXlsx propagates request failures unchanged', async () => {
+    const controller = new AbortController()
+    const input: Parameters<typeof api.previewMailRuleXlsx>[0] = {
+      fileName: 'sample',
+      contentBase64: 'sample',
+    }
+    const signal: Parameters<typeof api.previewMailRuleXlsx>[1] = controller.signal
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.previewMailRuleXlsx(input, signal)).rejects.toBe(error)
+  })
+  it('importMailRuleXlsx preserves the HTTP contract and backend data', async () => {
+    const controller = new AbortController()
+    const input: Parameters<typeof api.importMailRuleXlsx>[0] = {
+      fileName: 'sample',
+      contentBase64: 'sample',
+    }
+    const signal: Parameters<typeof api.importMailRuleXlsx>[1] = controller.signal
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.importMailRuleXlsx(input, signal)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/message/mail/recipient-rule/import',
+      input,
+      { ...(signal ? { signal } : {}) },
+    )
+  })
+  it('importMailRuleXlsx propagates request failures unchanged', async () => {
+    const controller = new AbortController()
+    const input: Parameters<typeof api.importMailRuleXlsx>[0] = {
+      fileName: 'sample',
+      contentBase64: 'sample',
+    }
+    const signal: Parameters<typeof api.importMailRuleXlsx>[1] = controller.signal
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.importMailRuleXlsx(input, signal)).rejects.toBe(error)
+  })
+  it('exportMailRuleXlsx preserves the HTTP contract and backend data', async () => {
+    const controller = new AbortController()
+    const signal: Parameters<typeof api.exportMailRuleXlsx>[0] = controller.signal
+    const dataFromServer = {
+      fileName: 'server-file.xlsx',
+      contentBase64: 'UEsDBAA=',
+      serverAdded: true,
+    }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.exportMailRuleXlsx(signal)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/message/mail/recipient-rule/export',
+      { ...(signal ? { signal } : {}) },
+    )
+  })
+  it('exportMailRuleXlsx propagates request failures unchanged', async () => {
+    const controller = new AbortController()
+    const signal: Parameters<typeof api.exportMailRuleXlsx>[0] = controller.signal
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.exportMailRuleXlsx(signal)).rejects.toBe(error)
+  })
+  it('listMailRateLimitPolicies preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.listMailRateLimitPolicies()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/message/mail/rate-limit-policy',
+    )
+  })
+  it('listMailRateLimitPolicies propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.listMailRateLimitPolicies()).rejects.toBe(error)
+  })
+  it('updateMailRateLimitPolicy preserves the HTTP contract and backend data', async () => {
+    const platformId: Parameters<typeof api.updateMailRateLimitPolicy>[0] = 1
+    const key: Parameters<typeof api.updateMailRateLimitPolicy>[1] = 'sample'
+    const data: Parameters<typeof api.updateMailRateLimitPolicy>[2] = { limit: 1, windowSeconds: 1 }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.updateMailRateLimitPolicy(platformId, key, data)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/message/mail/rate-limit-policy/${platformId}/${encodeURIComponent(key)}`,
+      data,
+    )
+  })
+  it('updateMailRateLimitPolicy propagates request failures unchanged', async () => {
+    const platformId: Parameters<typeof api.updateMailRateLimitPolicy>[0] = 1
+    const key: Parameters<typeof api.updateMailRateLimitPolicy>[1] = 'sample'
+    const data: Parameters<typeof api.updateMailRateLimitPolicy>[2] = { limit: 1, windowSeconds: 1 }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.updateMailRateLimitPolicy(platformId, key, data)).rejects.toBe(error)
   })
 })

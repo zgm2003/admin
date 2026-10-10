@@ -46,3 +46,12 @@ func (h *Handler) Delete(ctx *gin.Context) {
 	}
 	response.OK(ctx, http.StatusOK, map[string]any{})
 }
+
+func (h *Handler) Options(c *gin.Context) {
+	result, err := h.service.Options(c.Request.Context())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, result)
+}

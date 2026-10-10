@@ -26,6 +26,7 @@ const (
 	MinimumAccessCacheTTLSeconds  = 60
 	MaximumAccessCacheTTLSeconds  = 86_400
 	MaximumSessions               = 100
+	MaximumNameBytes              = 64
 )
 
 func ValidateCode(code string) error {
@@ -39,8 +40,8 @@ func ValidatePlatform(value Platform) error {
 	if _, err := parseLoginTypes(value.LoginTypes); err != nil {
 		return fmt.Errorf("platform login types are invalid: %w", err)
 	}
-	if value.Name == "" || len(value.Name) > 64 {
-		return fmt.Errorf("platform name must contain 1 to 64 bytes")
+	if value.Name == "" || len(value.Name) > MaximumNameBytes {
+		return fmt.Errorf("platform name must contain 1 to %d bytes", MaximumNameBytes)
 	}
 	if value.PolicyVersion < 1 {
 		return fmt.Errorf("policy version must be at least 1")

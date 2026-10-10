@@ -254,12 +254,18 @@ func (r *Repository) LockPlatform(ctx context.Context, id int64) error {
 
 // LockConfig 锁定并确认目标 COS 配置活动（物理字段来自当前版本）。
 func (r *Repository) LockConfig(ctx context.Context, id int64) (cosconfig.Current, error) {
+	return r.lockConfig(ctx, id, true)
+}
+func (r *Repository) lockConfig(ctx context.Context, id int64, enabledOnly bool) (cosconfig.Current, error) {
 	var row cosconfig.Current
-	err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE", Options: "OF storage_cos_config"}).
-		Table("storage_cos_config").
+	query := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE", Options: "OF storage_cos_config"}).Table("storage_cos_config").
 		Select("storage_cos_config.*, current_version.bucket AS bucket, current_version.region AS region, current_version.endpoint AS endpoint, current_version.bucket_domain AS bucket_domain").
 		Joins("JOIN storage_cos_config_version AS current_version ON current_version.cos_config_id = storage_cos_config.id AND current_version.version = storage_cos_config.current_version").
-		Where("storage_cos_config.id = ? AND storage_cos_config.is_enabled = 1 AND storage_cos_config.deleted_at IS NULL", id).Take(&row).Error
+		Where("storage_cos_config.id = ? AND storage_cos_config.deleted_at IS NULL", id)
+	if enabledOnly {
+		query = query.Where("storage_cos_config.is_enabled=1")
+	}
+	err := query.Take(&row).Error
 	return row, err
 }
 
@@ -296,4 +302,20 @@ func (r *Repository) loadCodes(ctx context.Context, m *Model) error {
 }
 func (r *Repository) Transaction(ctx context.Context, fn func(*Repository) error) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return fn(NewRepository(tx)) })
+}
+
+// LockPlatformForEdit preserves field-only/disable editing on disabled platforms.
+// Enabling continues to use LockPlatform's enabled-parent check.
+func (r *Repository) LockPlatformForEdit(ctx context.Context, id int64) error {
+	var ids []int64
+	if err := r.db.WithContext(ctx).Raw(`SELECT id FROM permission_auth_platform WHERE id=? AND deleted_at IS NULL FOR UPDATE`, id).Scan(&ids).Error; err != nil {
+		return err
+	}
+	if len(ids) != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+func (r *Repository) LockConfigForEdit(ctx context.Context, id int64) (cosconfig.Current, error) {
+	return r.lockConfig(ctx, id, false)
 }

@@ -1,30 +1,26 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import { grantQueueMonitor, QUEUE_MONITOR_UI_URL } from '@/api/system/queueMonitor'
-import { ProtocolError } from '@/types/http'
+import * as api from '@/api/system/queueMonitor'
 import { request } from '@/utils/request'
-
-vi.mock('@/utils/request', () => ({ request: vi.fn() }))
-const requestMock = vi.mocked(request)
-
-describe('queue monitor API', () => {
-  beforeEach(() => requestMock.mockReset())
-
-  it('uses the same-origin UI path', () => {
-    expect(QUEUE_MONITOR_UI_URL).toBe('/api/admin/v1/system/queuemonitor/ui/')
+vi.mock('@/utils/request', () => ({
+  request: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  refreshAccessCredential: vi.fn(),
+}))
+beforeEach(() => vi.resetAllMocks())
+describe('thin API HTTP contract', () => {
+  it('grantQueueMonitor preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.grantQueueMonitor()
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/system/queuemonitor/grant',
+      undefined,
+    )
   })
-
-  it('posts for a grant and strictly parses expiresAt', async () => {
-    requestMock.mockResolvedValueOnce({ expiresAt: '2026-09-14T12:00:00Z' })
-    await expect(grantQueueMonitor()).resolves.toEqual({ expiresAt: '2026-09-14T12:00:00Z' })
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'POST',
-      url: '/api/admin/v1/system/queuemonitor/grant',
-    })
-
-    requestMock.mockResolvedValueOnce({ expiresAt: 'bad' })
-    await expect(grantQueueMonitor()).rejects.toBeInstanceOf(ProtocolError)
-    requestMock.mockResolvedValueOnce({ expiresAt: '2026-09-14T12:00:00Z', token: 'leak' })
-    await expect(grantQueueMonitor()).rejects.toBeInstanceOf(ProtocolError)
+  it('grantQueueMonitor propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.grantQueueMonitor()).rejects.toBe(error)
   })
 })

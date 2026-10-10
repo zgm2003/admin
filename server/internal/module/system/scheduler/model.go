@@ -54,23 +54,25 @@ type ExecutionContext struct {
 type TaskExecutor func(context.Context, ExecutionContext) error
 
 type TaskDefinition struct {
-	Type           string
-	DisplayName    string
-	AdminCreatable bool
-	BuiltinKey     string
-	DefaultParams  json.RawMessage
-	ValidateParams func(json.RawMessage) error
-	Queue          string
-	Timeout        time.Duration
-	MaxAttempts    int
-	Backoff        func(attempt int) time.Duration
-	Execute        TaskExecutor
+	Type               string
+	DisplayName        string
+	DisplayNameEnglish string
+	AdminCreatable     bool
+	BuiltinKey         string
+	DefaultParams      json.RawMessage
+	ValidateParams     func(json.RawMessage) error
+	Queue              string
+	Timeout            time.Duration
+	MaxAttempts        int
+	Backoff            func(attempt int) time.Duration
+	Execute            TaskExecutor
 }
 
 type TaskOption struct {
-	Type           string
-	DisplayName    string
-	AdminCreatable bool
-	BuiltinKey     string
-	DefaultParams  json.RawMessage
+	Type               string
+	DisplayName        string
+	DisplayNameEnglish string
+	AdminCreatable     bool
+	BuiltinKey         string
+	DefaultParams      json.RawMessage
 }

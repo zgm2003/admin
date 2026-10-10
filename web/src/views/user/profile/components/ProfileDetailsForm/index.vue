@@ -153,7 +153,7 @@ function updateGender(value: UpdateAccountProfileInput['gender']): void {
   </section>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .account-profile__card {
   padding: 26px 28px;
   background: var(--admin-surface);

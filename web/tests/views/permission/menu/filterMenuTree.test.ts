@@ -1,3 +1,4 @@
+import { menuRowDisplay } from './fixtures'
 import { describe, expect, it } from 'vitest'
 import type { ManagedMenuNode } from '@/api/permission/menu'
 import { filterManagedMenuTree } from '@/views/permission/menu/filterMenuTree'
@@ -9,6 +10,7 @@ const action = (id: number, code: string, name: string): ManagedMenuNode => ({
   platformName: 'Admin',
   parentId: 2,
   menuType: 'action',
+  ...menuRowDisplay('action'),
   name,
   code,
   i18nKey: null,
@@ -32,6 +34,7 @@ const tree = (): ManagedMenuNode[] => [
     platformName: 'Admin',
     parentId: null,
     menuType: 'directory',
+    ...menuRowDisplay('directory'),
     name: '权限与认证',
     code: 'access',
     i18nKey: 'navigation.permission',
@@ -52,6 +55,7 @@ const tree = (): ManagedMenuNode[] => [
         platformName: 'Admin',
         parentId: 1,
         menuType: 'page',
+        ...menuRowDisplay('page'),
         name: '菜单管理',
         code: 'permission:menu:list',
         i18nKey: 'navigation.permissionMenu',

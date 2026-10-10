@@ -47,7 +47,7 @@ func (h *Handler) List(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	response.OK(context, http.StatusOK, newMenuCatalogResponse(catalog))
+	response.OK(context, http.StatusOK, newMenuCatalogResponse(context.Request.Context(), catalog))
 }
 
 func (h *Handler) Create(context *gin.Context) {
@@ -130,4 +130,8 @@ func (h *Handler) Delete(context *gin.Context) {
 		return
 	}
 	response.OK(context, http.StatusOK, menuIDResponse{ID: id})
+}
+
+func (h *Handler) FormOptions(c *gin.Context) {
+	response.OK(c, http.StatusOK, formOptions(c.Request.Context()))
 }

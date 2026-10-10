@@ -36,6 +36,8 @@ type ListQuery struct {
 }
 
 type ListItem struct {
+	Actions         Actions      `gorm:"-"`
+	ActionLabels    ActionLabels `gorm:"-"`
 	ID              int64
 	Code            string
 	Name            string
@@ -132,6 +134,9 @@ func (s *Service) List(ctx context.Context, query ListQuery) (pagination.Result[
 	}
 	if items == nil {
 		items = make([]ListItem, 0)
+	}
+	for index := range items {
+		items[index].Actions, items[index].ActionLabels = roleActions(ctx, items[index])
 	}
 	return pagination.Result[ListItem]{List: items, Total: total, Page: query.Page, PageSize: query.PageSize}, nil
 }
@@ -582,7 +587,7 @@ func equalInt64Slices(left, right []int64) bool {
 
 func isValidRoleName(name string) bool {
 	count := utf8.RuneCountInString(name)
-	return count >= 1 && count <= 64
+	return count >= roleNameMinLength && count <= roleNameMaxLength
 }
 
 func mapRoleRepositoryError(err error, code, name string) error {

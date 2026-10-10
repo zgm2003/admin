@@ -3,28 +3,13 @@ import type {
   CreateAuthPlatformInput,
   UpdateAuthPlatformInput,
 } from '@/api/permission/authPlatform'
-import { YesNo } from '@/enums/yesNo'
+import type { AuthPlatformOptions } from '@/api/permission/authPlatformOptions'
 import type { AuthPlatformForm } from './components/AuthPlatformDialog/types'
 
-export const authPlatformDefaultTTL = Object.freeze({
-  accessTTLSeconds: 900,
-  refreshTTLSeconds: 86_400,
-  sessionCacheTTLSeconds: 7_200,
-  accessCacheTTLSeconds: 600,
-})
-
-export function createAuthPlatformForm(): AuthPlatformForm {
-  return {
-    code: '',
-    name: '',
-    loginTypes: ['email', 'password'],
-    ...authPlatformDefaultTTL,
-    bindDevice: YesNo.Yes,
-    bindIP: YesNo.No,
-    maxSessions: 1,
-    allowRegister: YesNo.No,
-    isEnabled: YesNo.Yes,
-  }
+export function createAuthPlatformForm(
+  defaults: AuthPlatformOptions['defaults'],
+): AuthPlatformForm {
+  return { code: '', name: '', ...defaults, loginTypes: [...defaults.loginTypes] }
 }
 
 export function editAuthPlatformForm(platform: AuthPlatformListItem): AuthPlatformForm {
@@ -48,24 +33,20 @@ function inRange(value: number, minimum: number, maximum: number): boolean {
   return Number.isInteger(value) && value >= minimum && value <= maximum
 }
 
-export function isAuthPlatformFormValid(form: AuthPlatformForm, isEditing: boolean): boolean {
-  const codeValid = isEditing || /^[a-z][a-z0-9_]{1,48}$/.test(form.code.trim())
-  const loginTypeSet = new Set(form.loginTypes)
-  const loginTypesValid =
-    form.loginTypes.length >= 1 &&
-    form.loginTypes.length <= 3 &&
-    loginTypeSet.size === form.loginTypes.length &&
-    form.loginTypes.every((value) => value === 'email' || value === 'phone' || value === 'password')
+export function isAuthPlatformFormValid(
+  form: AuthPlatformForm,
+  isEditing: boolean,
+  options: AuthPlatformOptions | null,
+): boolean {
+  if (options === null) return false
   return (
-    codeValid &&
+    (isEditing || new RegExp(options.codePattern).test(form.code.trim())) &&
     form.name.trim() !== '' &&
-    form.name.trim().length <= 64 &&
-    loginTypesValid &&
-    inRange(form.accessTTLSeconds, 60, 2_592_000) &&
-    inRange(form.refreshTTLSeconds, 60, 31_536_000) &&
-    inRange(form.sessionCacheTTLSeconds, 60, 86_400) &&
-    inRange(form.accessCacheTTLSeconds, 60, 86_400) &&
-    inRange(form.maxSessions, 0, 100)
+    new TextEncoder().encode(form.name.trim()).length <= options.nameMaxBytes &&
+    form.loginTypes.length > 0 &&
+    Object.entries(options.limits).every(([key, range]) =>
+      inRange(form[key as keyof typeof options.limits], range.minimum, range.maximum),
+    )
   )
 }
 

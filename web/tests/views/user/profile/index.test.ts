@@ -8,7 +8,7 @@ import { appI18n, setLocale } from '@/i18n'
 import * as profileAPI from '@/api/user/profile'
 import * as emailAPI from '@/api/user/email'
 import * as phoneAPI from '@/api/user/phone'
-import { getDictionaryOptions } from '@/api/system/dictionary'
+import { getUserProfileOptions } from '@/api/user/profileOptions'
 import ProfilePage from '@/views/user/profile/index.vue'
 import UpMedia from '@/components/UpMedia/index.vue'
 import ProfileHero from '@/views/user/profile/components/ProfileHero/index.vue'
@@ -25,7 +25,7 @@ vi.mock('@/api/user/profile', () => ({
 }))
 vi.mock('@/api/user/email', () => ({ sendEmailCode: vi.fn(), bindEmail: vi.fn() }))
 vi.mock('@/api/user/phone', () => ({ sendPhoneCode: vi.fn(), bindPhone: vi.fn() }))
-vi.mock('@/api/system/dictionary', () => ({ getDictionaryOptions: vi.fn() }))
+vi.mock('@/api/user/profileOptions', () => ({ getUserProfileOptions: vi.fn() }))
 
 const getAccountProfile = vi.mocked(profileAPI.getAccountProfile)
 const updateAccountProfile = vi.mocked(profileAPI.updateAccountProfile)
@@ -37,18 +37,18 @@ const sendEmailCode = vi.mocked(emailAPI.sendEmailCode)
 const bindEmail = vi.mocked(emailAPI.bindEmail)
 const sendPhoneCode = vi.mocked(phoneAPI.sendPhoneCode)
 const bindPhone = vi.mocked(phoneAPI.bindPhone)
-const getDictionaryOptionsMock = vi.mocked(getDictionaryOptions)
+const getUserProfileOptionsMock = vi.mocked(getUserProfileOptions)
 const mountedWrappers: VueWrapper[] = []
 
 describe('account profile permissions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setLocale('zh-CN')
-    getDictionaryOptionsMock.mockResolvedValue({
-      'user.gender': [
-        { label: '未知', value: '0' },
-        { label: '男', value: '1' },
-        { label: '女', value: '2' },
+    getUserProfileOptionsMock.mockResolvedValue({
+      genders: [
+        { label: '未知', value: 0 },
+        { label: '男', value: 1 },
+        { label: '女', value: 2 },
       ],
     })
     getAccountProfile.mockResolvedValue({
@@ -97,11 +97,11 @@ describe('account profile permissions', () => {
     expect(wrapper.find('[data-testid="account-password-submit"]').exists()).toBe(password)
   })
 
-  it('loads localized gender options from the system dictionary and preserves numeric values', async () => {
+  it('loads localized gender options from the user module and preserves numeric values', async () => {
     const wrapper = mountPage([])
     await flushPromises()
 
-    expect(getDictionaryOptionsMock).toHaveBeenCalledWith(['user.gender'])
+    expect(getUserProfileOptionsMock).toHaveBeenCalledWith()
     const genderSelect = wrapper.getComponent({ name: 'ElSelectV2' })
     expect(genderSelect.attributes('data-testid')).toBe('account-profile-gender')
     expect(genderSelect.props('options')).toEqual([
@@ -111,8 +111,8 @@ describe('account profile permissions', () => {
     ])
   })
 
-  it('does not substitute hardcoded gender options when the dictionary fails', async () => {
-    getDictionaryOptionsMock.mockRejectedValueOnce(new Error('dictionary unavailable'))
+  it('does not substitute hardcoded gender options when the options endpoint fails', async () => {
+    getUserProfileOptionsMock.mockRejectedValueOnce(new Error('options unavailable'))
     const wrapper = mountPage([])
     await flushPromises()
 
@@ -122,32 +122,33 @@ describe('account profile permissions', () => {
     expect(wrapper.text()).toContain('性别选项加载失败')
   })
 
-  it('rejects malformed gender dictionary values instead of coercing them', async () => {
-    getDictionaryOptionsMock.mockResolvedValueOnce({
-      'user.gender': [{ label: '其他', value: 'female' }],
+  it('displays a new server-owned numeric gender without a frontend allow-list', async () => {
+    getUserProfileOptionsMock.mockResolvedValueOnce({
+      genders: [{ label: '其他', value: 3 }],
     })
     const wrapper = mountPage([])
     await flushPromises()
 
-    expect(wrapper.getComponent({ name: 'ElSelectV2' }).props('options')).toEqual([])
-    expect(wrapper.text()).toContain('性别选项加载失败')
+    expect(wrapper.getComponent({ name: 'ElSelectV2' }).props('options')).toEqual([
+      { label: '其他', value: 3 },
+    ])
   })
 
   it('reloads gender labels when the active language changes', async () => {
-    getDictionaryOptionsMock
+    getUserProfileOptionsMock
       .mockReset()
       .mockResolvedValueOnce({
-        'user.gender': [
-          { label: '未知', value: '0' },
-          { label: '男', value: '1' },
-          { label: '女', value: '2' },
+        genders: [
+          { label: '未知', value: 0 },
+          { label: '男', value: 1 },
+          { label: '女', value: 2 },
         ],
       })
       .mockResolvedValueOnce({
-        'user.gender': [
-          { label: 'Unknown', value: '0' },
-          { label: 'Male', value: '1' },
-          { label: 'Female', value: '2' },
+        genders: [
+          { label: 'Unknown', value: 0 },
+          { label: 'Male', value: 1 },
+          { label: 'Female', value: 2 },
         ],
       })
     const wrapper = mountPage([])
@@ -156,7 +157,7 @@ describe('account profile permissions', () => {
     setLocale('en-US')
     await flushPromises()
 
-    expect(getDictionaryOptionsMock).toHaveBeenCalledTimes(2)
+    expect(getUserProfileOptionsMock).toHaveBeenCalledTimes(2)
     expect(wrapper.getComponent({ name: 'ElSelectV2' }).props('options')).toEqual([
       { label: 'Unknown', value: 0 },
       { label: 'Male', value: 1 },

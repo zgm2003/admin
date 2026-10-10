@@ -1,80 +1,39 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import { getLoginLogPageInit, getLoginLogs } from '@/api/user/loginLog'
+import * as api from '@/api/user/loginLog'
 import { request } from '@/utils/request'
-
-vi.mock('@/utils/request', () => ({ request: vi.fn() }))
-
-const requestMock = vi.mocked(request)
-
-describe('login log API', () => {
-  beforeEach(() => requestMock.mockReset())
-
-  it('uses the exact Admin endpoints', async () => {
-    requestMock.mockResolvedValueOnce({ eventTypes: [1, 2, 3], loginTypes: [1, 2, 3] })
-    requestMock.mockResolvedValueOnce({ list: [], total: 0, page: 1, pageSize: 20 })
-
-    await getLoginLogPageInit()
-    await getLoginLogs({ page: 1, pageSize: 20, eventType: 2, loginType: 1, isSuccess: 1 })
-
-    expect(requestMock).toHaveBeenNthCalledWith(1, {
-      method: 'GET',
-      url: '/api/admin/v1/user/loginlog/page-init',
-    })
-    expect(requestMock).toHaveBeenNthCalledWith(2, {
-      method: 'GET',
-      url: '/api/admin/v1/user/loginlog',
-      params: { page: 1, pageSize: 20, eventType: 2, loginType: 1, isSuccess: 1 },
+vi.mock('@/utils/request', () => ({
+  request: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  refreshAccessCredential: vi.fn(),
+}))
+beforeEach(() => vi.resetAllMocks())
+describe('thin API HTTP contract', () => {
+  it('getLoginLogPageInit preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getLoginLogPageInit()
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/user/loginlog/page-init')
+  })
+  it('getLoginLogPageInit propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getLoginLogPageInit()).rejects.toBe(error)
+  })
+  it('getLoginLogs preserves the HTTP contract and backend data', async () => {
+    const query: Parameters<typeof api.getLoginLogs>[0] = { page: 1, pageSize: 1 }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getLoginLogs(query)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/user/loginlog', {
+      params: query,
     })
   })
-
-  it('parses the numeric audit contract and rejects legacy fields', async () => {
-    requestMock.mockResolvedValueOnce({
-      list: [
-        {
-          id: 1,
-          userId: 7,
-          platform: 'admin',
-          account: 'user@example.com',
-          eventType: 2,
-          loginType: 2,
-          isSuccess: 1,
-          reasonCode: 'success',
-          clientIp: '127.0.0.1',
-          userAgent: 'Vitest',
-          createdAt: '2026-01-01T00:00:00Z',
-        },
-      ],
-      total: 1,
-      page: 1,
-      pageSize: 20,
-    })
-    const result = await getLoginLogs({ page: 1, pageSize: 20 })
-    expect(result.list[0].account).toBe('user@example.com')
-    expect(result.list[0].eventType).toBe(2)
-    expect(result.list[0].loginType).toBe(2)
-
-    requestMock.mockResolvedValueOnce({
-      list: [
-        {
-          id: 1,
-          userId: null,
-          sessionId: null,
-          platform: 'admin',
-          loginAccount: 'user@example.com',
-          eventType: 'login',
-          loginType: 'email',
-          isSuccess: 1,
-          reasonCode: 'success',
-          clientIp: '127.0.0.1',
-          userAgent: 'Vitest',
-          createdAt: '2026-01-01T00:00:00Z',
-        },
-      ],
-      total: 1,
-      page: 1,
-      pageSize: 20,
-    })
-    await expect(getLoginLogs({ page: 1, pageSize: 20 })).rejects.toThrow()
+  it('getLoginLogs propagates request failures unchanged', async () => {
+    const query: Parameters<typeof api.getLoginLogs>[0] = { page: 1, pageSize: 1 }
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getLoginLogs(query)).rejects.toBe(error)
   })
 })

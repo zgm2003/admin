@@ -71,7 +71,7 @@ onBeforeUnmount(() => editor.value?.destroy())
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .legal-document-editor {
   display: flex;
   width: 100%;
@@ -82,20 +82,20 @@ onBeforeUnmount(() => editor.value?.destroy())
   border: 1px solid var(--el-border-color);
   border-radius: var(--el-border-radius-base);
   background: var(--el-bg-color);
-}
 
-.legal-document-editor :deep(.w-e-toolbar) {
-  flex: 0 0 auto;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
+  :deep(.w-e-toolbar) {
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--el-border-color-lighter);
+  }
 
-.legal-document-editor__body {
-  min-height: 0;
-  flex: 1 1 auto;
-  overflow-y: auto;
-}
+  &__body {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+  }
 
-.legal-document-editor.is-disabled {
-  background: var(--el-disabled-bg-color);
+  &.is-disabled {
+    background: var(--el-disabled-bg-color);
+  }
 }
 </style>

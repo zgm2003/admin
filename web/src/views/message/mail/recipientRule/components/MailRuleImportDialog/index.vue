@@ -5,18 +5,17 @@ import { useI18n } from 'vue-i18n'
 import {
   getMailRuleImportTemplate,
   importMailRuleXlsx,
-  mailRuleXlsxMaxBytes,
   previewMailRuleXlsx,
   type MailRuleXlsxPreview,
   type MailRuleXlsxRow,
+  type MailOptions,
 } from '@/api/message/mail'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { requestObjectURL } from '@/api/storage/upload'
-import { MailRuleAction, MailRuleScope } from '@/enums/mailRecipientRule'
 import { YesNo } from '@/enums/yesNo'
 import { readXlsxFile } from './readXlsxFile'
 
-const props = defineProps<{ canImport: boolean }>()
+const props = defineProps<{ canImport: boolean; options: MailOptions | null }>()
 const visible = defineModel<boolean>({ required: true })
 const emit = defineEmits<{ imported: [] }>()
 const { t } = useI18n()
@@ -50,10 +49,15 @@ const rows = computed<PreviewRow[]>(() =>
 const pageRows = computed(() =>
   rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value),
 )
+const importLimits = computed(() => ({
+  maxRows: props.options?.importConstraints.maxRows ?? '',
+  maxMiB: props.options === null ? '' : props.options.importConstraints.maxBytes / (1024 * 1024),
+}))
 const validCount = computed(() => rows.value.filter((row) => row.errors.length === 0).length)
 const canConfirm = computed(
   () =>
     props.canImport &&
+    props.options !== null &&
     !reading.value &&
     !previewing.value &&
     !saving.value &&
@@ -79,9 +83,11 @@ function displayValues(row: MailRuleXlsxRow): string {
     data === null
       ? row.rawValues
       : [
-          t(data.scope === MailRuleScope.Email ? 'mail.email' : 'mail.domain'),
+          props.options?.ruleScopes.find((option) => option.value === data.scope)?.label ??
+            String(data.scope),
           data.pattern,
-          t(data.action === MailRuleAction.Allow ? 'mail.allow' : 'mail.deny'),
+          props.options?.ruleActions.find((option) => option.value === data.action)?.label ??
+            String(data.action),
           data.name,
           data.remark,
           t(data.isEnabled === YesNo.Yes ? 'mail.enabled' : 'mail.disabled'),
@@ -175,8 +181,13 @@ async function selectFile(event: Event): Promise<void> {
     error.value = t('mail.ruleXlsx.xlsxOnly')
     return
   }
-  if (file.size > mailRuleXlsxMaxBytes) {
-    error.value = t('mail.ruleXlsx.error.too_large')
+  const maxBytes = props.options?.importConstraints.maxBytes
+  if (maxBytes === undefined) {
+    error.value = t('mail.loadFailed')
+    return
+  }
+  if (file.size > maxBytes) {
+    error.value = t('mail.ruleXlsx.error.too_large', importLimits.value)
     return
   }
   if (file.size === 0) {
@@ -269,7 +280,12 @@ function changePage(next: TablePaginationState): void {
     :close-on-press-escape="!saving"
     :close-on-click-modal="false"
   >
-    <el-alert :title="t('mail.ruleXlsx.instructions')" type="info" :closable="false" show-icon />
+    <el-alert
+      :title="t('mail.ruleXlsx.instructions', importLimits)"
+      type="info"
+      :closable="false"
+      show-icon
+    />
     <p class="xlsx-format">{{ t('mail.ruleXlsx.format') }}</p>
     <div class="xlsx-toolbar">
       <a
@@ -321,7 +337,7 @@ function changePage(next: TablePaginationState): void {
     <el-alert
       v-for="code in preview === null ? [] : preview.errors"
       :key="code"
-      :title="t(`mail.ruleXlsx.error.${code}`)"
+      :title="t(`mail.ruleXlsx.error.${code}`, importLimits)"
       type="error"
       :closable="false"
       show-icon
@@ -356,7 +372,9 @@ function changePage(next: TablePaginationState): void {
           t('mail.ruleXlsx.valid')
         }}</el-tag>
         <ul v-else class="xlsx-errors">
-          <li v-for="code in row.errors" :key="code">{{ t(`mail.ruleXlsx.error.${code}`) }}</li>
+          <li v-for="code in row.errors" :key="code">
+            {{ t(`mail.ruleXlsx.error.${code}`, importLimits) }}
+          </li>
         </ul>
       </template>
     </AppTable>
@@ -380,4 +398,4 @@ function changePage(next: TablePaginationState): void {
   </AppDialog>
 </template>
 
-<style scoped src="./MailRuleImportDialog.css"></style>
+<style scoped src="./MailRuleImportDialog.scss" lang="scss"></style>

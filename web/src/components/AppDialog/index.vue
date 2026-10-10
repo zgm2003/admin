@@ -162,48 +162,52 @@ const bodyStyle = computed(() => ({
   </el-dialog>
 </template>
 
-<style scoped>
-.app-dialog :deep(.el-dialog__body) {
-  padding: 0;
-}
-.app-dialog--header-hidden :deep(.el-dialog__header) {
-  display: none;
-}
-.app-dialog--custom-header-padding :deep(.el-dialog__header) {
-  padding: var(--app-dialog-header-padding);
-}
-.app-dialog--custom-footer-padding :deep(.el-dialog__footer) {
-  padding: var(--app-dialog-footer-padding);
-}
-.app-dialog :deep(.el-dialog__footer) {
-  border-top: 1px solid var(--el-border-color-lighter);
-}
-.app-dialog__body,
-.app-dialog__content,
-.app-dialog__header-content,
-.app-dialog__scrollbar {
-  width: 100%;
-}
-.app-dialog__body--scroll :deep(.el-scrollbar__wrap) {
-  overflow-x: hidden;
-}
-.app-dialog__sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+<style scoped lang="scss">
+.app-dialog {
+  :deep(.el-dialog__body) {
+    padding: 0;
+  }
+  &--header-hidden :deep(.el-dialog__header) {
+    display: none;
+  }
+  &--custom-header-padding :deep(.el-dialog__header) {
+    padding: var(--app-dialog-header-padding);
+  }
+  &--custom-footer-padding :deep(.el-dialog__footer) {
+    padding: var(--app-dialog-footer-padding);
+  }
+  :deep(.el-dialog__footer) {
+    border-top: 1px solid var(--el-border-color-lighter);
+  }
+  &__body,
+  &__content,
+  &__header-content,
+  &__scrollbar {
+    width: 100%;
+  }
+  &__body--scroll :deep(.el-scrollbar__wrap) {
+    overflow-x: hidden;
+  }
+  &__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 }
 @media (max-width: 768px) {
-  .app-dialog :deep(.el-dialog) {
-    margin: 3vh auto !important;
-    left: 0 !important;
-    right: 0 !important;
-    transform: none !important;
+  .app-dialog {
+    :deep(.el-dialog) {
+      margin: 3vh auto !important;
+      left: 0 !important;
+      right: 0 !important;
+      transform: none !important;
+    }
   }
 }
 </style>

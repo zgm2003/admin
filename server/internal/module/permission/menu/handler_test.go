@@ -36,7 +36,7 @@ func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	var data map[string]json.RawMessage
-	if err := json.Unmarshal(envelope["data"], &data); err != nil || len(data) != 2 || data["platforms"] == nil || data["menuTree"] == nil {
+	if err := json.Unmarshal(envelope["data"], &data); err != nil || len(data) != 3 || data["platforms"] == nil || data["menuTree"] == nil || data["allowedRootTypes"] == nil {
 		t.Fatalf("data = %s error=%v", envelope["data"], err)
 	}
 	var platforms []map[string]json.RawMessage
@@ -52,7 +52,7 @@ func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 	if err := json.Unmarshal(data["menuTree"], &rows); err != nil || len(rows) != 1 {
 		t.Fatalf("menuTree = %s error=%v", data["menuTree"], err)
 	}
-	wantKeys := []string{"id", "platformId", "platformCode", "platformName", "parentId", "menuType", "name", "code", "i18nKey", "path", "componentPath", "icon", "remark", "sortOrder", "isEnabled", "isHidden", "createdAt", "updatedAt", "isProtected", "children"}
+	wantKeys := []string{"presentation", "actions", "id", "platformId", "platformCode", "platformName", "parentId", "menuType", "name", "code", "i18nKey", "path", "componentPath", "icon", "remark", "sortOrder", "isEnabled", "isHidden", "createdAt", "updatedAt", "isProtected", "children"}
 	if len(rows[0]) != len(wantKeys) {
 		t.Fatalf("menu response keys = %v", rows[0])
 	}

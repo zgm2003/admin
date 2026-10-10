@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { CirclePlus } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
@@ -13,6 +13,11 @@ import {
   updateAuthPlatformStatus,
 } from '@/api/permission/authPlatform'
 import type { AuthPlatformListItem, AuthPlatformListQuery } from '@/api/permission/authPlatform'
+import {
+  getAuthPlatformOptions,
+  type AuthPlatformOptions,
+} from '@/api/permission/authPlatformOptions'
+import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
 import type { TablePaginationState } from '@/components/AppTable'
@@ -20,7 +25,6 @@ import type { SearchFormModel } from '@/components/AppSearch'
 import AuthPlatformDialog from './components/AuthPlatformDialog/index.vue'
 import type { AuthPlatformForm } from './components/AuthPlatformDialog/types'
 import {
-  authPlatformDefaultTTL,
   authPlatformSecurityChanged,
   createAuthPlatformForm,
   createAuthPlatformInput,
@@ -30,7 +34,6 @@ import {
 } from './authPlatformForm'
 import {
   authPlatformSearchFields,
-  authPlatformSessionLabel,
   authPlatformTableColumns,
   authPlatformTTLLabel,
   type AuthPlatformSearchModel,
@@ -40,6 +43,11 @@ import {
 
 const { t, locale } = useI18n()
 const access = usePermissionStore()
+const {
+  options: formOptions,
+  loading: optionsLoading,
+  error: optionsError,
+} = useLocalizedOptions<AuthPlatformOptions | null>(getAuthPlatformOptions, () => null)
 
 const rows = ref<AuthPlatformListItem[]>([])
 const total = ref(0)
@@ -69,7 +77,20 @@ const tablePagination = computed<TablePaginationState>(() => ({
   total: total.value,
 }))
 const tableColumns = computed(() => authPlatformTableColumns(t))
-const form = ref<AuthPlatformForm>(createAuthPlatformForm())
+const form = ref<AuthPlatformForm>({
+  code: '',
+  name: '',
+  loginTypes: [],
+  accessTTLSeconds: 0,
+  refreshTTLSeconds: 0,
+  sessionCacheTTLSeconds: 0,
+  accessCacheTTLSeconds: 0,
+  bindDevice: YesNo.No,
+  bindIP: YesNo.No,
+  maxSessions: 0,
+  allowRegister: YesNo.No,
+  isEnabled: YesNo.No,
+})
 
 const canList = computed(() => access.hasPermission('permission:authPlatform:list'))
 const canCreate = computed(() => access.hasPermission('permission:authPlatform:create'))
@@ -77,20 +98,32 @@ const canUpdate = computed(() => access.hasPermission('permission:authPlatform:u
 const canStatus = computed(() => access.hasPermission('permission:authPlatform:status'))
 const canDelete = computed(() => access.hasPermission('permission:authPlatform:delete'))
 const isEditing = computed(() => dialogMode.value === 'edit')
-const formValid = computed(() => isAuthPlatformFormValid(form.value, isEditing.value))
+const formValid = computed(
+  () =>
+    isAuthPlatformFormValid(form.value, isEditing.value, formOptions.value) &&
+    !optionsLoading.value &&
+    optionsError.value === '',
+)
+
+let listRequest = 0
 
 async function loadPage(): Promise<void> {
   if (!canList.value) return
+  const request = ++listRequest
+  const requestedLocale = locale.value
+  const accepted = () =>
+    request === listRequest && requestedLocale === locale.value && canList.value
   loading.value = true
   loadError.value = ''
   try {
     const result = await getAuthPlatforms(query.value)
+    if (!accepted()) return
     rows.value = result.list
     total.value = result.total
   } catch (error: unknown) {
-    loadError.value = errorMessage(error, 'permission.authPlatform.loadFailed')
+    if (accepted()) loadError.value = errorMessage(error, 'permission.authPlatform.loadFailed')
   } finally {
-    loading.value = false
+    if (request === listRequest) loading.value = false
   }
 }
 
@@ -135,14 +168,16 @@ function updateTablePagination(next: TablePaginationState): void {
 }
 
 function openCreate(): void {
+  if (formOptions.value === null || optionsLoading.value) return
   dialogMode.value = 'create'
   editingPlatform.value = null
-  Object.assign(form.value, createAuthPlatformForm())
+  Object.assign(form.value, createAuthPlatformForm(formOptions.value.defaults))
   mutationError.value = ''
   dialogVisible.value = true
 }
 
 function openEdit(platform: AuthPlatformListItem): void {
+  if (!canUpdate.value || !platform.actions.update) return
   dialogMode.value = 'edit'
   editingPlatform.value = platform
   Object.assign(form.value, editAuthPlatformForm(platform))
@@ -191,7 +226,7 @@ async function submit(): Promise<void> {
 }
 
 async function toggleStatus(platform: AuthPlatformListItem): Promise<void> {
-  if (!canStatus.value) return
+  if (!canStatus.value || !platform.actions.status) return
   const next = platform.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
   if (next === YesNo.No && !(await confirmAction('permission.authPlatform.confirm.disable'))) return
   try {
@@ -204,7 +239,7 @@ async function toggleStatus(platform: AuthPlatformListItem): Promise<void> {
 }
 
 async function remove(platform: AuthPlatformListItem): Promise<void> {
-  if (!canDelete.value || platform.isBuiltin === YesNo.Yes) return
+  if (!canDelete.value || !platform.actions.delete) return
   if (!(await confirmAction('permission.authPlatform.confirm.delete'))) return
   try {
     await deleteAuthPlatform(platform.id)
@@ -234,10 +269,6 @@ async function confirmAction(
   }
 }
 
-function sessionLabel(value: number): string {
-  return authPlatformSessionLabel(value, t)
-}
-
 function ttlLabel(value: number): string {
   return authPlatformTTLLabel(value, t)
 }
@@ -251,7 +282,14 @@ function formatUpdatedTime(value: string): string {
 }
 
 function restoreDefaultTTL(): void {
-  Object.assign(form.value, authPlatformDefaultTTL)
+  if (formOptions.value === null) return
+  const defaults = formOptions.value.defaults
+  Object.assign(form.value, {
+    accessTTLSeconds: defaults.accessTTLSeconds,
+    refreshTTLSeconds: defaults.refreshTTLSeconds,
+    sessionCacheTTLSeconds: defaults.sessionCacheTTLSeconds,
+    accessCacheTTLSeconds: defaults.accessCacheTTLSeconds,
+  })
 }
 
 function errorMessage(
@@ -261,9 +299,18 @@ function errorMessage(
   return error instanceof Error && error.message !== '' ? error.message : t(fallbackKey)
 }
 
-onMounted(() => {
-  void loadPage()
-})
+watch(
+  [canList, locale],
+  () => {
+    ++listRequest
+    loading.value = false
+    rows.value = []
+    total.value = 0
+    loadError.value = ''
+    if (canList.value) void loadPage()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -319,6 +366,15 @@ onMounted(() => {
             <el-tag v-if="row.isBuiltin === YesNo.Yes" size="small" type="info" effect="plain">{{
               t('permission.authPlatform.builtin')
             }}</el-tag>
+          </div>
+          <div class="auth-platform-tag-list" data-testid="auth-platform-login-labels">
+            <el-tag
+              v-for="loginType in row.presentation.loginTypes"
+              :key="loginType.value"
+              size="small"
+              effect="plain"
+              >{{ loginType.label }}</el-tag
+            >
           </div>
         </div>
       </template>
@@ -387,7 +443,7 @@ onMounted(() => {
         </div>
       </template>
       <template #cell-sessions="{ row }: { row: AuthPlatformListItem }">
-        <el-tag size="small" effect="plain">{{ sessionLabel(row.maxSessions) }}</el-tag>
+        <el-tag size="small" effect="plain">{{ row.presentation.maxSessionsLabel }}</el-tag>
       </template>
       <template #cell-registration="{ row }: { row: AuthPlatformListItem }">
         <el-tag
@@ -422,7 +478,7 @@ onMounted(() => {
       <template #cell-actions="{ row }: { row: AuthPlatformListItem }"
         ><template v-if="row.id > 0">
           <el-button
-            v-if="canUpdate"
+            v-if="canUpdate && row.actions.update"
             text
             type="primary"
             data-testid="auth-platform-update"
@@ -430,7 +486,7 @@ onMounted(() => {
             >{{ t('permission.authPlatform.edit') }}</el-button
           >
           <el-button
-            v-if="canStatus"
+            v-if="canStatus && row.actions.status"
             text
             type="warning"
             data-testid="auth-platform-status"
@@ -444,7 +500,7 @@ onMounted(() => {
             }}</el-button
           >
           <el-button
-            v-if="canDelete && row.isBuiltin === YesNo.No"
+            v-if="canDelete && row.actions.delete"
             text
             type="danger"
             data-testid="auth-platform-delete"
@@ -457,6 +513,8 @@ onMounted(() => {
     </AppTable>
 
     <AuthPlatformDialog
+      v-if="formOptions !== null"
+      :options="formOptions"
       v-model="dialogVisible"
       v-model:form="form"
       :dialog-mode="dialogMode"
@@ -469,4 +527,4 @@ onMounted(() => {
   </AppPage>
 </template>
 
-<style scoped src="./AuthPlatformPage.css"></style>
+<style scoped src="./AuthPlatformPage.scss" lang="scss"></style>

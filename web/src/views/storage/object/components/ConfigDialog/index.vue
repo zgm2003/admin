@@ -147,7 +147,7 @@ defineExpose({ validate: () => formRef.value?.validate() })
   </AppDialog>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .storage-config-select {
   width: 100%;
 }

@@ -1,187 +1,159 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import { YesNo } from '@/enums/yesNo'
+import * as api from '@/api/permission/role'
 import { request } from '@/utils/request'
-import {
-  createRole,
-  deleteRole,
-  getRolePermissions,
-  getRoles,
-  setDefaultRole,
-  updateRole,
-  updateRolePermissions,
-  updateRoleStatus,
-} from '@/api/permission/role'
-
-vi.mock('@/utils/request', () => ({ request: vi.fn() }))
-
-const requestMock = vi.mocked(request)
-
-describe('role API', () => {
-  beforeEach(() => {
-    requestMock.mockReset()
-  })
-
-  it('sends explicit pagination and only present filters', async () => {
-    requestMock.mockResolvedValue({ list: [], total: 0, page: 2, pageSize: 50 })
-
-    await expect(
-      getRoles({ page: 2, pageSize: 50, keyword: 'tester', isEnabled: YesNo.No }),
-    ).resolves.toEqual({ list: [], total: 0, page: 2, pageSize: 50 })
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'GET',
-      url: '/api/admin/v1/permission/role',
-      params: { page: 2, pageSize: 50, keyword: 'tester', isEnabled: YesNo.No },
+vi.mock('@/utils/request', () => ({
+  request: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  refreshAccessCredential: vi.fn(),
+}))
+beforeEach(() => vi.resetAllMocks())
+describe('thin API HTTP contract', () => {
+  it('getRoles preserves the HTTP contract and backend data', async () => {
+    const query: Parameters<typeof api.getRoles>[0] = { page: 1, pageSize: 1 }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getRoles(query)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/permission/role', {
+      params: query,
     })
   })
-
-  it('creates with only code and name', async () => {
-    requestMock.mockResolvedValue({ id: 7 })
-
-    await expect(createRole({ code: 'tester', name: 'Tester' })).resolves.toEqual({ id: 7 })
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'POST',
-      url: '/api/admin/v1/permission/role',
-      data: { code: 'tester', name: 'Tester' },
+  it('getRoles propagates request failures unchanged', async () => {
+    const query: Parameters<typeof api.getRoles>[0] = { page: 1, pageSize: 1 }
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getRoles(query)).rejects.toBe(error)
+  })
+  it('createRole preserves the HTTP contract and backend data', async () => {
+    const input: Parameters<typeof api.createRole>[0] = { code: 'sample', name: 'sample' }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.createRole(input)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/permission/role', {
+      code: input.code,
+      name: input.name,
     })
   })
-
-  it('updates with only name', async () => {
-    requestMock.mockResolvedValue({})
-
-    await expect(updateRole(7, { name: 'Updated' })).resolves.toEqual({})
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'PUT',
-      url: '/api/admin/v1/permission/role/7',
-      data: { name: 'Updated' },
+  it('createRole propagates request failures unchanged', async () => {
+    const input: Parameters<typeof api.createRole>[0] = { code: 'sample', name: 'sample' }
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.createRole(input)).rejects.toBe(error)
+  })
+  it('updateRole preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.updateRole>[0] = 1
+    const input: Parameters<typeof api.updateRole>[1] = { name: 'sample' }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.updateRole(id, input)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith(`/api/admin/v1/permission/role/${id}`, {
+      name: input.name,
     })
   })
-
-  it('updates status with only isEnabled', async () => {
-    requestMock.mockResolvedValue({ id: 7, isEnabled: YesNo.No })
-
-    await expect(updateRoleStatus(7, YesNo.No)).resolves.toEqual({
-      id: 7,
-      isEnabled: YesNo.No,
-    })
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'PATCH',
-      url: '/api/admin/v1/permission/role/7/status',
-      data: { isEnabled: YesNo.No },
-    })
+  it('updateRole propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.updateRole>[0] = 1
+    const input: Parameters<typeof api.updateRole>[1] = { name: 'sample' }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.updateRole(id, input)).rejects.toBe(error)
   })
-
-  it('sets default without a request body', async () => {
-    requestMock.mockResolvedValue({ id: 7, isDefault: YesNo.Yes })
-
-    await expect(setDefaultRole(7)).resolves.toEqual({ id: 7, isDefault: YesNo.Yes })
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'PATCH',
-      url: '/api/admin/v1/permission/role/7/default',
-    })
-  })
-
-  it('deletes without a request body', async () => {
-    requestMock.mockResolvedValue({})
-
-    await expect(deleteRole(7)).resolves.toEqual({})
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'DELETE',
-      url: '/api/admin/v1/permission/role/7',
-    })
-  })
-
-  it('gets permissions without request data', async () => {
-    requestMock.mockResolvedValue(permissionResponse())
-
-    await expect(getRolePermissions(7)).resolves.toEqual(permissionResponse())
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'GET',
-      url: '/api/admin/v1/permission/role/7/permission',
-    })
-  })
-
-  it.each([
-    { role: permissionResponse().role, menuTree: [], menuIds: [] },
-    {
-      role: permissionResponse().role,
-      platforms: [{ id: 1, code: 'admin', name: 'Admin', menuTree: [] }],
-      menuIds: [],
-    },
-    { role: permissionResponse().role, platforms: [], menuIds: [], extra: true },
-  ])('rejects invalid permission responses: %j', async (value) => {
-    requestMock.mockResolvedValue(value)
-    await expect(getRolePermissions(7)).rejects.toThrow('role permissions response is invalid')
-  })
-
-  it('updates permissions with only menuIds', async () => {
-    requestMock.mockResolvedValue({ id: 7, permissionCount: 1 })
-
-    await expect(updateRolePermissions(7, { menuIds: [3] })).resolves.toEqual({
-      id: 7,
-      permissionCount: 1,
-    })
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'PUT',
-      url: '/api/admin/v1/permission/role/7/permission',
-      data: { menuIds: [3] },
-    })
-  })
-
-  it('rejects legacy result field names', async () => {
-    const result = { id: 7, permission_count: 1 }
-    requestMock.mockResolvedValue(result)
-    await expect(updateRolePermissions(7, { menuIds: [] })).rejects.toThrow(
-      'role permission count must be an integer',
+  it('updateRoleStatus preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.updateRoleStatus>[0] = 1
+    const isEnabled: Parameters<typeof api.updateRoleStatus>[1] = 0
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.patch).mockResolvedValue(dataFromServer)
+    const result = await api.updateRoleStatus(id, isEnabled)
+    expect(result).toBe(dataFromServer)
+    expect(request.patch).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/permission/role/${id}/status`,
+      { isEnabled },
     )
+  })
+  it('updateRoleStatus propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.updateRoleStatus>[0] = 1
+    const isEnabled: Parameters<typeof api.updateRoleStatus>[1] = 0
+    const error = new Error('request failed')
+    vi.mocked(request.patch).mockRejectedValue(error)
+    await expect(api.updateRoleStatus(id, isEnabled)).rejects.toBe(error)
+  })
+  it('setDefaultRole preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.setDefaultRole>[0] = 1
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.patch).mockResolvedValue(dataFromServer)
+    const result = await api.setDefaultRole(id)
+    expect(result).toBe(dataFromServer)
+    expect(request.patch).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/permission/role/${id}/default`,
+      undefined,
+    )
+  })
+  it('setDefaultRole propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.setDefaultRole>[0] = 1
+    const error = new Error('request failed')
+    vi.mocked(request.patch).mockRejectedValue(error)
+    await expect(api.setDefaultRole(id)).rejects.toBe(error)
+  })
+  it('deleteRole preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.deleteRole>[0] = 1
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.delete).mockResolvedValue(dataFromServer)
+    const result = await api.deleteRole(id)
+    expect(result).toBe(dataFromServer)
+    expect(request.delete).toHaveBeenCalledExactlyOnceWith(`/api/admin/v1/permission/role/${id}`)
+  })
+  it('deleteRole propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.deleteRole>[0] = 1
+    const error = new Error('request failed')
+    vi.mocked(request.delete).mockRejectedValue(error)
+    await expect(api.deleteRole(id)).rejects.toBe(error)
+  })
+  it('getRolePermissions preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.getRolePermissions>[0] = 1
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getRolePermissions(id)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/permission/role/${id}/permission`,
+    )
+  })
+  it('getRolePermissions propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.getRolePermissions>[0] = 1
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getRolePermissions(id)).rejects.toBe(error)
+  })
+  it('updateRolePermissions preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.updateRolePermissions>[0] = 1
+    const input: Parameters<typeof api.updateRolePermissions>[1] = { menuIds: [1] }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.updateRolePermissions(id, input)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/permission/role/${id}/permission`,
+      { menuIds: input.menuIds },
+    )
+  })
+  it('updateRolePermissions propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.updateRolePermissions>[0] = 1
+    const input: Parameters<typeof api.updateRolePermissions>[1] = { menuIds: [1] }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.updateRolePermissions(id, input)).rejects.toBe(error)
   })
 })
 
-function permissionResponse() {
-  return {
-    role: {
-      id: 7,
-      code: 'tester',
-      name: 'Tester',
-      isDefault: YesNo.No,
-      isEnabled: YesNo.Yes,
-    },
-    platforms: [
-      {
-        id: 1,
-        code: 'admin',
-        name: 'Admin',
-        isEnabled: YesNo.Yes,
-        menuTree: [
-          {
-            id: 3,
-            parentId: null,
-            menuType: 'page',
-            code: 'admin:test',
-            name: 'Admin Test',
-            isEnabled: YesNo.Yes,
-            children: [],
-          },
-        ],
-      },
-      {
-        id: 2,
-        code: 'canvas',
-        name: 'Canvas',
-        isEnabled: YesNo.No,
-        menuTree: [
-          {
-            id: 20,
-            parentId: null,
-            menuType: 'page',
-            code: 'canvas:test:list',
-            name: 'Canvas Test',
-            isEnabled: YesNo.Yes,
-            children: [],
-          },
-        ],
-      },
-    ],
-    menuIds: [3, 20],
-  }
-}
+describe('backend-owned form options', () => {
+  it('preserves constraints and propagates failures', async () => {
+    const options = { source: 'server' }
+    vi.mocked(request.get).mockResolvedValueOnce(options)
+    expect(await api.getRoleFormOptions()).toBe(options)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/permission/role/options')
+    const error = new Error('options unavailable')
+    vi.mocked(request.get).mockRejectedValueOnce(error)
+    await expect(api.getRoleFormOptions()).rejects.toBe(error)
+  })
+})

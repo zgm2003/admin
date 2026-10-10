@@ -120,6 +120,10 @@ function buildRequestClient(
     (response) => {
       try {
         response.data = unwrapSuccessEnvelope(response.data)
+        const path = requestPath(response.config.url, baseURL)
+        if (noBearerPaths.has(path) && !isAccessCredential(response.data)) {
+          throw new ProtocolError('access credential response is invalid')
+        }
         return response
       } catch (error: unknown) {
         const path = requestPath(response.config.url, baseURL)
@@ -269,9 +273,39 @@ export async function refreshAccessCredential(): Promise<AccessCredential> {
   return defaultBundle.refreshAccessCredential()
 }
 
-export async function request(config: AxiosRequestConfig): Promise<unknown> {
-  const response = await client.request(config)
-  return response.data
+export const request = {
+  async get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await client.get<T>(url, config)
+    return response.data
+  },
+  async post<T = unknown, D = unknown>(
+    url: string,
+    data?: D,
+    config?: AxiosRequestConfig<D>,
+  ): Promise<T> {
+    const response = await client.post<T>(url, data, config)
+    return response.data
+  },
+  async put<T = unknown, D = unknown>(
+    url: string,
+    data?: D,
+    config?: AxiosRequestConfig<D>,
+  ): Promise<T> {
+    const response = await client.put<T>(url, data, config)
+    return response.data
+  },
+  async patch<T = unknown, D = unknown>(
+    url: string,
+    data?: D,
+    config?: AxiosRequestConfig<D>,
+  ): Promise<T> {
+    const response = await client.patch<T>(url, data, config)
+    return response.data
+  },
+  async delete<T = unknown, D = unknown>(url: string, config?: AxiosRequestConfig<D>): Promise<T> {
+    const response = await client.delete<T>(url, config)
+    return response.data
+  },
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

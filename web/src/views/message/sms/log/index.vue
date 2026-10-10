@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import * as smsApi from '@/api/message/sms'
-import { SmsStatus, smsStatusMetadata } from '@/api/message/sms'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { formatTime } from '@/utils/datetime'
@@ -19,6 +18,7 @@ type SmsLogSearchModel = SmsLogFilter
 
 const props = defineProps<{
   logs: smsApi.SmsLog[]
+  options: smsApi.SmsOptions | null
   sceneOptions: Array<{ label: string; value: smsApi.SmsScene }>
   total: number
   page: number
@@ -42,11 +42,9 @@ const searchModel = computed<SearchFormModel<SmsLogSearchModel>>({
     filter.value = toFilter(value)
   },
 })
-const statusOptions = computed(() => [
-  ...smsStatusMetadata.map((item) => ({ label: t(item.i18nKey), value: item.value })),
-])
-const statusPresentation = (status: smsApi.SmsStatus) =>
-  smsStatusMetadata.find((item) => item.value === status)
+const statusOptions = computed(() => props.options?.statuses ?? [])
+const statusPresentation = (status: number) =>
+  statusOptions.value.find((item) => item.value === status)
 const searchFields = computed<SearchField<SmsLogSearchModel>[]>(() => [
   {
     key: 'platform',
@@ -127,19 +125,8 @@ function toFilter(value: SearchFormModel<SmsLogSearchModel>): SmsLogFilter {
   return {
     platform: typeof value.platform === 'string' ? value.platform : '',
     toPhone: typeof value.toPhone === 'string' ? value.toPhone : '',
-    scene:
-      value.scene === 'login' ||
-      value.scene === 'forget' ||
-      value.scene === 'bind_phone' ||
-      value.scene === 'change_password'
-        ? value.scene
-        : '',
-    status:
-      value.status === SmsStatus.Pending ||
-      value.status === SmsStatus.Sent ||
-      value.status === SmsStatus.Failed
-        ? value.status
-        : '',
+    scene: typeof value.scene === 'string' ? value.scene : '',
+    status: typeof value.status === 'number' ? value.status : '',
     timeRange:
       Array.isArray(value.timeRange) &&
       value.timeRange.length === 2 &&
@@ -199,8 +186,8 @@ async function showDetail(row: smsApi.SmsLog): Promise<void> {
         {{ sceneOptions.find((option) => option.value === row.scene)?.label ?? row.scene }}
       </template>
       <template #cell-status="{ row }: { row: smsApi.SmsLog }">
-        <el-tag :type="statusPresentation(row.status)?.tagType">
-          {{ t(statusPresentation(row.status)?.i18nKey ?? '') }}
+        <el-tag :type="statusPresentation(row.status)?.tone ?? 'info'">
+          {{ statusPresentation(row.status)?.label ?? String(row.status) }}
         </el-tag>
       </template>
       <template #cell-sentAt="{ row }: { row: smsApi.SmsLog }">
@@ -258,7 +245,7 @@ async function showDetail(row: smsApi.SmsLog): Promise<void> {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .sms-log {
   min-width: 0;
 }

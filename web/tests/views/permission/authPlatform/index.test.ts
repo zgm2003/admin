@@ -11,8 +11,12 @@ import {
   updateAuthPlatformStatus,
   type LoginType,
 } from '@/api/permission/authPlatform'
+import {
+  getAuthPlatformOptions,
+  type AuthPlatformOptions,
+} from '@/api/permission/authPlatformOptions'
 import { YesNo } from '@/enums/yesNo'
-import { appI18n } from '@/i18n'
+import { appI18n, setLocale } from '@/i18n'
 import { pinia } from '@/store'
 import { usePermissionStore } from '@/store/permission'
 import AuthPlatformsPage from '@/views/permission/authPlatform/index.vue'
@@ -25,6 +29,8 @@ vi.mock('@/api/permission/authPlatform', () => ({
   updateAuthPlatformStatus: vi.fn(),
 }))
 
+vi.mock('@/api/permission/authPlatformOptions', () => ({ getAuthPlatformOptions: vi.fn() }))
+
 const getAuthPlatformsMock = vi.mocked(getAuthPlatforms)
 const createAuthPlatformMock = vi.mocked(createAuthPlatform)
 const updateAuthPlatformMock = vi.mocked(updateAuthPlatform)
@@ -33,6 +39,15 @@ const deleteAuthPlatformMock = vi.mocked(deleteAuthPlatform)
 const mountedWrappers: VueWrapper[] = []
 
 const adminRow = {
+  presentation: {
+    maxSessionsLabel: '不限',
+    loginTypes: [
+      { value: 'email', label: '邮箱验证码' },
+      { value: 'password', label: '密码' },
+    ],
+    deleteReason: '内置认证平台不可删除',
+  },
+  actions: { update: true, status: true, delete: false },
   id: 2,
   code: 'admin',
   name: 'Admin',
@@ -54,6 +69,8 @@ const adminRow = {
 
 describe('authentication platform page', () => {
   beforeEach(() => {
+    setLocale('zh-CN')
+    vi.mocked(getAuthPlatformOptions).mockReset().mockResolvedValue(platformOptions())
     const access = usePermissionStore(pinia)
     access.reset()
     getAuthPlatformsMock.mockReset()
@@ -67,6 +84,103 @@ describe('authentication platform page', () => {
   afterEach(() => {
     for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
+  })
+
+  it('consumes server-owned login labels and form limits', async () => {
+    const options = platformOptions()
+    options.loginTypes[0] = { value: 'email', label: '服务端邮箱登录' }
+    options.limits.accessTTLSeconds.maximum = 7777
+    vi.mocked(getAuthPlatformOptions).mockResolvedValueOnce(options)
+    setPermissions(['permission:authPlatform:list', 'permission:authPlatform:create'])
+    const { wrapper } = await mountPage()
+    await wrapper.get('[data-testid="auth-platform-create"]').trigger('click')
+    await flushPromises()
+    expect(getAuthPlatformOptions).toHaveBeenCalledOnce()
+    const login = wrapper
+      .get('[data-testid="auth-platform-form"]')
+      .getComponent({ name: 'ElSelectV2' })
+    expect(login.props('options')[0]).toEqual({ value: 'email', label: '服务端邮箱登录' })
+    const ttl = wrapper
+      .findAllComponents({ name: 'ElInputNumber' })
+      .find((input) => input.attributes('data-testid') === 'auth-platform-access-ttl')
+    expect(ttl?.props('max')).toBe(7777)
+  })
+
+  it('renders list labels and capabilities owned by the backend rather than inferring builtin or limits', async () => {
+    getAuthPlatformsMock.mockResolvedValue({
+      list: [
+        {
+          ...adminRow,
+          presentation: {
+            ...adminRow.presentation,
+            maxSessionsLabel: '服务端会话策略',
+            loginTypes: [{ value: 'email', label: '服务端登录方式' }],
+          },
+          actions: { update: false, status: false, delete: true },
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    setPermissions([
+      'permission:authPlatform:list',
+      'permission:authPlatform:update',
+      'permission:authPlatform:status',
+      'permission:authPlatform:delete',
+    ])
+    const { wrapper } = await mountPage()
+    expect(wrapper.text()).toContain('服务端会话策略')
+    expect(wrapper.text()).toContain('服务端登录方式')
+    expect(wrapper.find('[data-testid="auth-platform-update"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="auth-platform-status"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="auth-platform-delete"]').exists()).toBe(true)
+  })
+
+  it('enforces the backend UTF-8 byte name limit', async () => {
+    setPermissions(['permission:authPlatform:list', 'permission:authPlatform:create'])
+    const { wrapper } = await mountPage()
+    await wrapper.get('[data-testid="auth-platform-create"]').trigger('click')
+    await wrapper.get('[data-testid="auth-platform-code"]').setValue('portal')
+    await wrapper.get('[data-testid="auth-platform-name"]').setValue('中'.repeat(22))
+    expect(
+      wrapper.get('.el-dialog__footer .el-button--primary').attributes('disabled'),
+    ).toBeDefined()
+    await wrapper.get('[data-testid="auth-platform-name"]').setValue('中'.repeat(21))
+    expect(
+      wrapper.get('.el-dialog__footer .el-button--primary').attributes('disabled'),
+    ).toBeUndefined()
+  })
+
+  it('reloads localized rows and discards stale-language responses', async () => {
+    let resolveOld!: (value: Awaited<ReturnType<typeof getAuthPlatforms>>) => void
+    getAuthPlatformsMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveOld = resolve
+      }),
+    )
+    setPermissions(['permission:authPlatform:list'])
+    const { wrapper } = await mountPage()
+    getAuthPlatformsMock.mockResolvedValue({
+      list: [
+        {
+          ...adminRow,
+          presentation: { ...adminRow.presentation, maxSessionsLabel: 'SERVER SESSIONS' },
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    setLocale('en-US')
+    await flushPromises()
+    expect(wrapper.text()).toContain('SERVER SESSIONS')
+    resolveOld({ list: [adminRow], total: 1, page: 1, pageSize: 20 })
+    await flushPromises()
+    expect(wrapper.text()).toContain('SERVER SESSIONS')
+    setPermissions([])
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('Admin')
   })
 
   it('loads the platform list with list permission', async () => {
@@ -304,7 +418,7 @@ describe('authentication platform page', () => {
     expect(loginTypes.props('options')).toEqual([
       { value: 'email', label: '邮箱验证码' },
       { value: 'phone', label: '手机验证码' },
-      { value: 'password', label: '账号密码' },
+      { value: 'password', label: '密码' },
     ])
     await loginTypes.vm.$emit('update:modelValue', [])
     await flushPromises()
@@ -352,4 +466,35 @@ function ttlInputValue(
   const input = wrapper.get(`[data-testid="auth-platform-${name}-ttl"]`).get('input')
     .element as HTMLInputElement
   return Number(input.value)
+}
+
+function platformOptions(): AuthPlatformOptions {
+  return {
+    loginTypes: [
+      { value: 'email', label: '邮箱验证码' },
+      { value: 'phone', label: '手机验证码' },
+      { value: 'password', label: '密码' },
+    ],
+    limits: {
+      accessTTLSeconds: { minimum: 60, maximum: 2592000 },
+      refreshTTLSeconds: { minimum: 60, maximum: 31536000 },
+      sessionCacheTTLSeconds: { minimum: 60, maximum: 86400 },
+      accessCacheTTLSeconds: { minimum: 60, maximum: 86400 },
+      maxSessions: { minimum: 0, maximum: 100 },
+    },
+    defaults: {
+      loginTypes: ['email', 'password'],
+      accessTTLSeconds: 900,
+      refreshTTLSeconds: 86400,
+      sessionCacheTTLSeconds: 7200,
+      accessCacheTTLSeconds: 600,
+      bindDevice: YesNo.Yes,
+      bindIP: YesNo.No,
+      maxSessions: 1,
+      allowRegister: YesNo.No,
+      isEnabled: YesNo.Yes,
+    },
+    codePattern: '^[a-z][a-z0-9_]{1,48}$',
+    nameMaxBytes: 64,
+  }
 }

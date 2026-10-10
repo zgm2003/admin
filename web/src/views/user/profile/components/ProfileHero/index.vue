@@ -32,7 +32,7 @@ const initial = computed(() => props.name.slice(0, 1).toUpperCase() || 'A')
   </header>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .profile-hero {
   display: flex;
   align-items: center;
@@ -44,52 +44,52 @@ const initial = computed(() => props.name.slice(0, 1).toUpperCase() || 'A')
   border: 1px solid var(--el-color-primary-dark-2);
   border-radius: 8px;
   box-shadow: var(--admin-shadow-md);
+
+  &__avatar {
+    flex: 0 0 auto;
+    color: var(--el-color-primary);
+    background: rgb(255 255 255 / 94%);
+    border: 3px solid rgb(255 255 255 / 55%);
+    box-shadow: 0 10px 24px rgb(15 23 42 / 22%);
+    font-size: 26px;
+    font-weight: 800;
+  }
+
+  &__copy {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+  }
+
+  &__copy p,
+  &__copy h1,
+  &__copy span {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__copy p,
+  &__copy span {
+    color: rgb(255 255 255 / 78%);
+    font-size: 13px;
+  }
+
+  &__copy p {
+    font-size: 11px;
+    font-weight: 750;
+    text-transform: uppercase;
+  }
+
+  &__copy h1 {
+    font-size: 24px;
+    font-weight: 760;
+  }
 }
 
-.profile-hero__avatar {
-  flex: 0 0 auto;
-  color: var(--el-color-primary);
-  background: rgb(255 255 255 / 94%);
-  border: 3px solid rgb(255 255 255 / 55%);
-  box-shadow: 0 10px 24px rgb(15 23 42 / 22%);
-  font-size: 26px;
-  font-weight: 800;
-}
-
-.profile-hero__copy {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-
-.profile-hero__copy p,
-.profile-hero__copy h1,
-.profile-hero__copy span {
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-hero__copy p,
-.profile-hero__copy span {
-  color: rgb(255 255 255 / 78%);
-  font-size: 13px;
-}
-
-.profile-hero__copy p {
-  font-size: 11px;
-  font-weight: 750;
-  text-transform: uppercase;
-}
-
-.profile-hero__copy h1 {
-  font-size: 24px;
-  font-weight: 760;
-}
-
-@media (max-width: 560px) {
-  .profile-hero {
+.profile-hero {
+  @media (max-width: 560px) {
     align-items: flex-start;
     flex-direction: column;
     padding: 24px 20px;

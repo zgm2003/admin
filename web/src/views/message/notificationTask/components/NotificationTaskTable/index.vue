@@ -2,21 +2,21 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import {
-  NotificationTaskStatus,
-  notificationTaskStatusMetadata,
-  type NotificationTaskListItem,
-  type NotificationTaskStatus as NotificationTaskStatusValue,
-} from '@/api/message/notificationTask'
+import type { NotificationTaskListItem } from '@/api/message/notificationTask'
+import type { NotificationTaskAdminOptions } from '@/api/message/notificationTaskOptions'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable/types'
 import { usePermissionStore } from '@/store/permission'
 import { formatTime } from '@/utils/datetime'
 
-defineProps<{
+const props = defineProps<{
   rows: NotificationTaskListItem[]
   loading: boolean
   errorMessage: string
   pagination: TablePaginationState
+  statuses: NotificationTaskAdminOptions['statuses']
+  audiences: NotificationTaskAdminOptions['audiences']
+  busyIds?: readonly number[]
+  createDisabled?: boolean
 }>()
 const emit = defineEmits<{
   refresh: []
@@ -30,13 +30,10 @@ const emit = defineEmits<{
 const access = usePermissionStore()
 const { t } = useI18n()
 const can = (code: string): boolean => access.hasPermission(code)
-type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
-const statusTagTypes: Record<NotificationTaskStatusValue, TagType> = Object.fromEntries(
-  notificationTaskStatusMetadata.map((status) => [status.value, status.tagType]),
-) as Record<NotificationTaskStatusValue, TagType>
-const statusTagType = (status: NotificationTaskStatusValue): TagType => statusTagTypes[status]
-const statusI18nKey = (status: NotificationTaskStatusValue): string =>
-  notificationTaskStatusMetadata.find((item) => item.value === status)?.i18nKey ?? ''
+const statusLabel = (value: number): string =>
+  props.statuses.find((option) => option.value === value)?.label ?? String(value)
+const audienceLabel = (value: string): string =>
+  props.audiences.find((option) => option.value === value)?.label ?? value
 const displayTime = (value: string | null): string => (value === null ? '-' : formatTime(value))
 const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
   { prop: 'title', label: t('notificationTask.title'), minWidth: 180 },
@@ -67,29 +64,26 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         v-if="can('message:notificationTask:create')"
         data-testid="notification-task-create"
         type="primary"
+        :disabled="createDisabled"
         @click="emit('create')"
         >{{ t('notificationTask.create') }}</el-button
       >
     </template>
     <template #cell-audienceType="{ row }">
       <span v-if="row.id !== undefined" :data-testid="`notification-task-audience-${row.id}`">
-        {{ t(`notificationTask.audience.${row.audienceType}`) }}
+        {{ audienceLabel(row.audienceType) }}
       </span>
     </template>
     <template #cell-status="{ row }">
       <span v-if="row.id !== undefined" :data-testid="`notification-task-status-${row.id}`">
-        <el-tag :type="statusTagType(row.status)" effect="light" size="small">
-          {{ t(statusI18nKey(row.status)) }}
+        <el-tag type="info" effect="light" size="small">
+          {{ statusLabel(row.status) }}
         </el-tag>
       </span>
     </template>
     <template #cell-generatedCount="{ row }">
       <span v-if="row.id !== undefined" :data-testid="`notification-task-generated-${row.id}`">
-        {{
-          row.status === NotificationTaskStatus.Draft
-            ? t('notificationTask.notGenerated')
-            : t('notificationTask.generatedValue', { count: row.generatedCount })
-        }}
+        {{ t('notificationTask.generatedValue', { count: row.generatedCount }) }}
       </span>
     </template>
     <template #cell-scheduledAt="{ row }">
@@ -117,48 +111,47 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         >{{ t('notificationTask.detail') }}</el-button
       >
       <el-button
-        v-if="row.status === NotificationTaskStatus.Draft && can('message:notificationTask:update')"
+        v-if="row.actions.edit && can('message:notificationTask:update')"
         :data-testid="`notification-task-edit-${row.id}`"
         link
         type="warning"
+        :disabled="busyIds?.includes(row.id)"
         @click.stop="emit('edit', row)"
         >{{ t('notificationTask.edit') }}</el-button
       >
       <el-button
-        v-if="row.status === NotificationTaskStatus.Draft && can('message:notificationTask:delete')"
+        v-if="row.actions.delete && can('message:notificationTask:delete')"
         :data-testid="`notification-task-delete-${row.id}`"
         link
         type="danger"
+        :disabled="busyIds?.includes(row.id)"
         @click.stop="emit('remove', row)"
         >{{ t('notificationTask.delete') }}</el-button
       >
       <el-button
-        v-if="row.status === NotificationTaskStatus.Draft && can('message:notificationTask:submit')"
+        v-if="row.actions.submit && can('message:notificationTask:submit')"
         :data-testid="`notification-task-submit-${row.id}`"
         link
         type="success"
+        :disabled="busyIds?.includes(row.id)"
         @click.stop="emit('command', row, 'submit')"
         >{{ t('notificationTask.submit') }}</el-button
       >
       <el-button
-        v-if="
-          [
-            NotificationTaskStatus.Scheduled,
-            NotificationTaskStatus.Queued,
-            NotificationTaskStatus.Processing,
-          ].includes(row.status) && can('message:notificationTask:cancel')
-        "
+        v-if="row.actions.cancel && can('message:notificationTask:cancel')"
         :data-testid="`notification-task-cancel-${row.id}`"
         link
         type="warning"
+        :disabled="busyIds?.includes(row.id)"
         @click.stop="emit('command', row, 'cancel')"
         >{{ t('notificationTask.cancel') }}</el-button
       >
       <el-button
-        v-if="row.status !== NotificationTaskStatus.Draft && can('message:notificationTask:copy')"
+        v-if="row.actions.copy && can('message:notificationTask:copy')"
         :data-testid="`notification-task-copy-${row.id}`"
         link
         type="primary"
+        :disabled="busyIds?.includes(row.id)"
         @click.stop="emit('command', row, 'copy')"
         >{{ t('notificationTask.copy') }}</el-button
       >

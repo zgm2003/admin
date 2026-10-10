@@ -69,11 +69,11 @@ func ValidateRateLimitPolicyInput(input RateLimitPolicyInput) error {
 	if _, ok := fixedRateLimitSpecByKey(input.Key); !ok {
 		return fmt.Errorf("unknown rate limit policy key")
 	}
-	if input.Limit < 1 || input.Limit > 100000 {
-		return fmt.Errorf("rate limit count must be between 1 and 100000")
+	if input.Limit < minLimit || input.Limit > maxLimit {
+		return fmt.Errorf("rate limit count must be between %d and %d", minLimit, maxLimit)
 	}
-	if input.WindowSeconds < 1 || input.WindowSeconds > 86400 {
-		return fmt.Errorf("rate limit window must be between 1 and 86400 seconds")
+	if input.WindowSeconds < minWindowSeconds || input.WindowSeconds > maxWindowSeconds {
+		return fmt.Errorf("rate limit window must be between %d and %d seconds", minWindowSeconds, maxWindowSeconds)
 	}
 	return nil
 }
@@ -129,7 +129,7 @@ func validateRateLimitSnapshotPolicies(policies map[string]rateLimitPolicyValue)
 		if !ok {
 			return fmt.Errorf("rate limit policy snapshot is missing policy %q", key)
 		}
-		if value.Limit < 1 || value.Limit > 100000 || value.WindowSeconds < 1 || value.WindowSeconds > 86400 {
+		if value.Limit < minLimit || value.Limit > maxLimit || value.WindowSeconds < minWindowSeconds || value.WindowSeconds > maxWindowSeconds {
 			return fmt.Errorf("rate limit policy %q values are out of range", key)
 		}
 		if value.UpdatedAt.IsZero() {

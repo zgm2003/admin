@@ -11,9 +11,11 @@ import * as userAPI from '@/api/user/account'
 import * as emailAPI from '@/api/user/email'
 import * as phoneAPI from '@/api/user/phone'
 import UserManagement from '@/views/user/account/index.vue'
+import UserRoleDialog from '@/views/user/account/components/UserRoleDialog/index.vue'
 
 vi.mock('@/api/user/account', () => ({
   getUsers: vi.fn(),
+  getUserFormOptions: vi.fn(),
   getUserRoleOptions: vi.fn(),
   updateUser: vi.fn(),
   updateUserStatus: vi.fn(),
@@ -36,6 +38,13 @@ const getPhoneChangeLogs = vi.mocked(phoneAPI.getPhoneChangeLogs)
 describe('user management', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    getUserRoles.mockReset()
+    updateRoles.mockReset()
+    vi.mocked(userAPI.getUserFormOptions).mockResolvedValue({
+      usernameMinLength: 3,
+      usernameMaxLength: 64,
+      usernamePattern: String.raw`^[\p{L}\p{Nd}_-]+$`,
+    })
     setLocale('zh-CN')
     getRoleOptions.mockResolvedValue({ roles: roles() })
     getUsers.mockResolvedValue({ list: [row()], total: 1, page: 1, pageSize: 20 })
@@ -64,6 +73,7 @@ describe('user management', () => {
         {
           id: 1,
           action: 1,
+          actionLabel: '修改邮箱',
           oldEmail: 'old@example.com',
           newEmail: 'new@example.com',
           platform: 'admin',
@@ -72,6 +82,7 @@ describe('user management', () => {
         {
           id: 2,
           action: 2,
+          actionLabel: '首次绑定',
           oldEmail: null,
           newEmail: 'bound@example.com',
           platform: 'admin',
@@ -127,6 +138,39 @@ describe('user management', () => {
     })
   })
 
+  it('consumes backend action decisions without inferring actor or role protection', async () => {
+    getUsers.mockResolvedValueOnce({
+      list: [
+        {
+          ...row(),
+          actions: { update: false, status: false, delete: false, authorize: false },
+          actionLabels: {
+            update: '后端编辑保护',
+            status: '后端状态保护',
+            delete: '后端删除保护',
+            authorize: '后端授权保护',
+          },
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage(
+      [
+        'user:account:update',
+        'user:account:status',
+        'user:account:delete',
+        'user:account:authorize',
+      ],
+      9,
+    )
+    await flushPromises()
+    expect(findAriaButton(wrapper, '编辑').attributes('disabled')).toBeDefined()
+    expect(findAriaButton(wrapper, '分配角色').attributes('disabled')).toBeDefined()
+    expect(updateUser).not.toHaveBeenCalled()
+  })
+
   it('formats user timestamps instead of rendering raw API strings', async () => {
     const wrapper = mountPage(['user:account:list'])
     await flushPromises()
@@ -136,7 +180,15 @@ describe('user management', () => {
     expect(wrapper.text()).not.toContain('2026-08-20T01:00:00')
   })
 
-  it('renders only granted commands and protects self and super targets', async () => {
+  it('renders only granted commands and consumes backend self protection', async () => {
+    getUsers.mockResolvedValueOnce({
+      list: [
+        { ...row(), actions: { update: true, status: false, delete: false, authorize: false } },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
     const wrapper = mountPage([
       'user:account:update',
       'user:account:status',
@@ -218,6 +270,225 @@ describe('user management', () => {
     expect(vi.spyOn(usePermissionStore(), 'load')).not.toHaveBeenCalled()
   })
 
+  describe('role assignment lifecycle', () => {
+    beforeEach(() => {
+      getUsers.mockResolvedValue({
+        list: [row(), { ...row(), id: 8, username: 'bob' }],
+        total: 2,
+        page: 1,
+        pageSize: 20,
+      })
+    })
+    it('keeps B ownership when A succeeds after B has loaded', async () => {
+      const a = deferred<userAPI.UserRolesResponse>()
+      const b = deferred<userAPI.UserRolesResponse>()
+      getUserRoles.mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise)
+      const wrapper = mountPage(['user:account:authorize'], 9)
+      await flushPromises()
+      const buttons = wrapper.findAll('button').filter((button) => button.text() === '分配角色')
+      await buttons[0].trigger('click')
+      await buttons[1].trigger('click')
+      b.resolve(roleResponse(8, [3]))
+      await flushPromises()
+      a.resolve(roleResponse(7, [2]))
+      await flushPromises()
+      const dialog = wrapper.getComponent(UserRoleDialog)
+      expect(dialog.props('roleData')?.user.id).toBe(8)
+      dialog.vm.$emit('save')
+      await flushPromises()
+      expect(updateRoles).toHaveBeenCalledExactlyOnceWith(8, { roleIds: [3] })
+      wrapper.unmount()
+    })
+    it('invalidates an old request when reopening the same user', async () => {
+      const oldRequest = deferred<userAPI.UserRolesResponse>()
+      const newRequest = deferred<userAPI.UserRolesResponse>()
+      getUserRoles.mockReturnValueOnce(oldRequest.promise).mockReturnValueOnce(newRequest.promise)
+      const wrapper = mountPage(['user:account:authorize'], 9)
+      await flushPromises()
+      await findAriaButton(wrapper, '分配角色').trigger('click')
+      const dialog = wrapper.getComponent(UserRoleDialog)
+      dialog.vm.$emit('update:modelValue', false)
+      await flushPromises()
+      await findAriaButton(wrapper, '分配角色').trigger('click')
+      newRequest.resolve(roleResponse(7, [3]))
+      await flushPromises()
+      oldRequest.resolve(roleResponse(7, [2]))
+      await flushPromises()
+      expect(dialog.props('selectedRoleIDs')).toEqual([3])
+      dialog.vm.$emit('save')
+      await flushPromises()
+      expect(updateRoles).toHaveBeenCalledExactlyOnceWith(7, { roleIds: [3] })
+      wrapper.unmount()
+    })
+    it.each(['success', 'failure'] as const)(
+      'ignores A %s while B is still loading',
+      async (outcome) => {
+        const a = deferred<userAPI.UserRolesResponse>()
+        const b = deferred<userAPI.UserRolesResponse>()
+        getUserRoles.mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise)
+        const wrapper = mountPage(['user:account:authorize'], 9)
+        await flushPromises()
+        const buttons = wrapper.findAll('button').filter((button) => button.text() === '分配角色')
+        await buttons[0].trigger('click')
+        await buttons[1].trigger('click')
+        if (outcome === 'success') a.resolve(roleResponse(7, [2]))
+        else a.reject(new Error('stale A load failure'))
+        await flushPromises()
+        const dialog = wrapper.getComponent(UserRoleDialog)
+        expect(dialog.props('roleLoading')).toBe(true)
+        expect(dialog.props('roleError')).toBe('')
+        expect(dialog.props('roleData')).toBeNull()
+        b.resolve(roleResponse(8, [3]))
+        await flushPromises()
+        expect(dialog.props('roleData')?.user.id).toBe(8)
+        wrapper.unmount()
+      },
+    )
+    it.each(['success', 'failure'] as const)(
+      'invalidates a closed dialog before a late %s',
+      async (outcome) => {
+        const a = deferred<userAPI.UserRolesResponse>()
+        getUserRoles.mockReturnValueOnce(a.promise)
+        const wrapper = mountPage(['user:account:authorize'], 9)
+        await flushPromises()
+        await findAriaButton(wrapper, '分配角色').trigger('click')
+        const dialog = wrapper.getComponent(UserRoleDialog)
+        dialog.vm.$emit('update:modelValue', false)
+        await flushPromises()
+        if (outcome === 'success') a.resolve(roleResponse(7, [2]))
+        else a.reject(new Error('closed dialog failure'))
+        await flushPromises()
+        expect(dialog.props('modelValue')).toBe(false)
+        expect(dialog.props('roleData')).toBeNull()
+        expect(dialog.props('selectedRoleIDs')).toEqual([])
+        expect(dialog.props('roleError')).toBe('')
+        dialog.vm.$emit('save')
+        await flushPromises()
+        expect(updateRoles).not.toHaveBeenCalled()
+        wrapper.unmount()
+      },
+    )
+    it('invalidates in-flight roles when authorize permission is lost', async () => {
+      const a = deferred<userAPI.UserRolesResponse>()
+      getUserRoles.mockReturnValueOnce(a.promise)
+      const wrapper = mountPage(['user:account:authorize'], 9)
+      await flushPromises()
+      await findAriaButton(wrapper, '分配角色').trigger('click')
+      usePermissionStore().permissionCodes = []
+      await flushPromises()
+      const dialog = wrapper.getComponent(UserRoleDialog)
+      expect(dialog.props('modelValue')).toBe(false)
+      a.resolve(roleResponse(7, [2]))
+      await flushPromises()
+      expect(dialog.props('roleData')).toBeNull()
+      expect(dialog.props('selectedRoleIDs')).toEqual([])
+      dialog.vm.$emit('save')
+      await flushPromises()
+      expect(updateRoles).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+    it('never saves selections whose response belongs to a different user', async () => {
+      getUserRoles.mockResolvedValueOnce(roleResponse(8, [3]))
+      const wrapper = mountPage(['user:account:authorize'], 9)
+      await flushPromises()
+      await findAriaButton(wrapper, '分配角色').trigger('click')
+      await flushPromises()
+      wrapper.getComponent(UserRoleDialog).vm.$emit('save')
+      await flushPromises()
+      expect(updateRoles).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+    it('does not revive loaded selections when permission is restored', async () => {
+      getUserRoles.mockResolvedValueOnce(roleResponse(7, [2]))
+      const wrapper = mountPage(['user:account:authorize'], 9)
+      await flushPromises()
+      await findAriaButton(wrapper, '分配角色').trigger('click')
+      await flushPromises()
+      const dialog = wrapper.getComponent(UserRoleDialog)
+      usePermissionStore().permissionCodes = []
+      await flushPromises()
+      usePermissionStore().permissionCodes = ['user:account:authorize']
+      await flushPromises()
+      expect(dialog.props('modelValue')).toBe(false)
+      expect(dialog.props('roleData')).toBeNull()
+      expect(dialog.props('selectedRoleIDs')).toEqual([])
+      dialog.vm.$emit('save')
+      await flushPromises()
+      expect(updateRoles).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+    it.each(['success', 'failure'] as const)(
+      'locks writes and does not let A save %s mutate reopened B',
+      async (outcome) => {
+        const write = deferred<userAPI.UserRoleResult>()
+        updateRoles.mockReturnValueOnce(write.promise)
+        getUserRoles
+          .mockResolvedValueOnce(roleResponse(7, [2]))
+          .mockResolvedValueOnce(roleResponse(8, [3]))
+        const wrapper = mountPage(['user:account:authorize'], 9)
+        await flushPromises()
+        const buttons = wrapper.findAll('button').filter((button) => button.text() === '分配角色')
+        await buttons[0].trigger('click')
+        await flushPromises()
+        const dialog = wrapper.getComponent(UserRoleDialog)
+        dialog.vm.$emit('save')
+        await flushPromises()
+        expect(updateRoles).toHaveBeenCalledExactlyOnceWith(7, { roleIds: [2] })
+        expect(dialog.getComponent({ name: 'ElCheckboxGroup' }).props('disabled')).toBe(true)
+        const toolbar = Array.from(
+          document.body.querySelectorAll<HTMLButtonElement>('.user-role-dialog button'),
+        ).filter((button) => ['全选', '清空'].includes(button.textContent?.trim() ?? ''))
+        expect(toolbar).toHaveLength(2)
+        expect(toolbar.every((button) => button.disabled)).toBe(true)
+        dialog.vm.$emit('update:selectedRoleIDs', [3])
+        dialog.vm.$emit('select-all')
+        dialog.vm.$emit('clear')
+        dialog.vm.$emit('save')
+        await flushPromises()
+        expect(dialog.props('selectedRoleIDs')).toEqual([2])
+        expect(updateRoles).toHaveBeenCalledTimes(1)
+        dialog.vm.$emit('update:modelValue', false)
+        await flushPromises()
+        await buttons[1].trigger('click')
+        await flushPromises()
+        dialog.vm.$emit('save')
+        await flushPromises()
+        expect(updateRoles).toHaveBeenCalledTimes(1)
+        if (outcome === 'success') write.resolve({ id: 7, roleCount: 1 })
+        else write.reject(new Error('stale A save failure'))
+        await flushPromises()
+        expect(dialog.props('modelValue')).toBe(true)
+        expect(dialog.props('roleData')?.user.id).toBe(8)
+        expect(dialog.props('roleError')).toBe('')
+        expect(dialog.props('roleSaving')).toBe(false)
+        dialog.vm.$emit('save')
+        await flushPromises()
+        expect(updateRoles).toHaveBeenLastCalledWith(8, { roleIds: [3] })
+        wrapper.unmount()
+      },
+    )
+    it.each(['success', 'failure'] as const)(
+      'does not refresh the page after an unmounted save %s',
+      async (outcome) => {
+        const write = deferred<userAPI.UserRoleResult>()
+        updateRoles.mockReturnValueOnce(write.promise)
+        getUserRoles.mockResolvedValueOnce(roleResponse(7, [2]))
+        const wrapper = mountPage(['user:account:authorize'], 9)
+        await flushPromises()
+        await findAriaButton(wrapper, '分配角色').trigger('click')
+        await flushPromises()
+        wrapper.getComponent(UserRoleDialog).vm.$emit('save')
+        await flushPromises()
+        wrapper.unmount()
+        if (outcome === 'success') write.resolve({ id: 7, roleCount: 1 })
+        else write.reject(new Error('unmounted save failure'))
+        await flushPromises()
+        expect(getUsers).toHaveBeenCalledTimes(1)
+        expect(updateRoles).toHaveBeenCalledExactlyOnceWith(7, { roleIds: [2] })
+      },
+    )
+  })
+
   it('does not change the super administrator selection when an ordinary actor selects all roles', async () => {
     getUserRoles.mockResolvedValue({
       user: {
@@ -228,9 +499,30 @@ describe('user management', () => {
         isEnabled: YesNo.Yes,
       },
       roles: [
-        { id: 3, code: 'ai_tester', name: 'AI Tester', isEnabled: YesNo.No },
-        { id: 2, code: 'member', name: 'Member', isEnabled: YesNo.Yes },
-        { id: 1, code: 'super_admin', name: 'Super Admin', isEnabled: YesNo.Yes },
+        {
+          id: 3,
+          code: 'ai_tester',
+          name: 'AI Tester',
+          isEnabled: YesNo.No,
+          selectable: true,
+          locked: false,
+        },
+        {
+          id: 2,
+          code: 'member',
+          name: 'Member',
+          isEnabled: YesNo.Yes,
+          selectable: true,
+          locked: false,
+        },
+        {
+          id: 1,
+          code: 'super_admin',
+          name: 'Super Admin',
+          isEnabled: YesNo.Yes,
+          selectable: false,
+          locked: false,
+        },
       ],
       roleIds: [2],
     })
@@ -242,6 +534,57 @@ describe('user management', () => {
     await bodyButton('保存').trigger('click')
     await flushPromises()
     expect(updateRoles).toHaveBeenCalledWith(7, { roleIds: [2, 3] })
+  })
+
+  it('keeps backend-locked selections on clear and allows backend to reject an empty selection', async () => {
+    getUserRoles.mockResolvedValueOnce({
+      user: {
+        id: 7,
+        username: 'alice',
+        email: 'alice@example.com',
+        phone: null,
+        isEnabled: YesNo.Yes,
+      },
+      roles: [
+        {
+          id: 1,
+          code: 'backend_locked',
+          name: 'Locked',
+          isEnabled: YesNo.No,
+          selectable: false,
+          locked: true,
+        },
+        ...roles(),
+      ],
+      roleIds: [1, 2],
+    })
+    const wrapper = mountPage(['user:account:authorize'], 9)
+    await flushPromises()
+    await findAriaButton(wrapper, '分配角色').trigger('click')
+    await flushPromises()
+    await bodyButton('清空').trigger('click')
+    await bodyButton('保存').trigger('click')
+    await flushPromises()
+    expect(updateRoles).toHaveBeenCalledWith(7, { roleIds: [1] })
+    getUserRoles.mockResolvedValueOnce({
+      user: {
+        id: 7,
+        username: 'alice',
+        email: 'alice@example.com',
+        phone: null,
+        isEnabled: YesNo.Yes,
+      },
+      roles: roles(),
+      roleIds: [2],
+    })
+    updateRoles.mockRejectedValueOnce(new Error('后端至少一个有效角色校验'))
+    await findAriaButton(wrapper, '分配角色').trigger('click')
+    await flushPromises()
+    await bodyButton('清空').trigger('click')
+    await bodyButton('保存').trigger('click')
+    await flushPromises()
+    expect(updateRoles).toHaveBeenLastCalledWith(7, { roleIds: [] })
+    expect(document.body.textContent).toContain('后端至少一个有效角色校验')
   })
 
   it('confirms status and delete consequences then refreshes the applied page', async () => {
@@ -304,6 +647,8 @@ function row() {
     email: 'alice@example.com',
     phone: '+86 138-0000-0000',
     isEnabled: YesNo.Yes,
+    actions: { update: true, status: true, delete: true, authorize: true },
+    actionLabels: { update: '编辑', status: '禁用', delete: '删除用户', authorize: '分配角色' },
     roles: roles(),
     createdAt: '2026-08-20T00:00:00Z',
     updatedAt: '2026-08-20T01:00:00Z',
@@ -311,8 +656,22 @@ function row() {
 }
 function roles() {
   return [
-    { id: 3, code: 'ai_tester', name: 'AI Tester', isEnabled: YesNo.No },
-    { id: 2, code: 'member', name: 'Member', isEnabled: YesNo.Yes },
+    {
+      id: 3,
+      code: 'ai_tester',
+      name: 'AI Tester',
+      isEnabled: YesNo.No,
+      selectable: true,
+      locked: false,
+    },
+    {
+      id: 2,
+      code: 'member',
+      name: 'Member',
+      isEnabled: YesNo.Yes,
+      selectable: true,
+      locked: false,
+    },
   ].sort((a, b) => a.code.localeCompare(b.code) || a.id - b.id)
 }
 function findButton(wrapper: VueWrapper, text: string) {
@@ -340,4 +699,27 @@ function bodyButton(text: string) {
       await Promise.resolve(event)
     },
   }
+}
+
+function roleResponse(id: number, roleIds: number[]): userAPI.UserRolesResponse {
+  return {
+    user: {
+      id,
+      username: `user${id}`,
+      email: `user${id}@example.com`,
+      phone: null,
+      isEnabled: YesNo.Yes,
+    },
+    roles: roles(),
+    roleIds,
+  }
+}
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: Error) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
 }

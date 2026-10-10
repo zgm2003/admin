@@ -85,28 +85,28 @@ const hasRemoved = computed(() => props.removedLabels.length > 0)
   </el-dialog>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .role-permission-diff {
   display: flex;
   flex-direction: column;
   gap: 14px;
   margin-top: 12px;
-}
 
-.role-permission-diff__section {
-  padding: 12px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-}
+  &__section {
+    padding: 12px;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 8px;
+  }
 
-.role-permission-diff__title {
-  margin-bottom: 10px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
+  &__title {
+    margin-bottom: 10px;
+    font-weight: 600;
+    color: var(--el-text-color-primary);
+  }
 
-.role-permission-diff__tag {
-  margin-right: 8px;
-  margin-bottom: 8px;
+  &__tag {
+    margin-right: 8px;
+    margin-bottom: 8px;
+  }
 }
 </style>

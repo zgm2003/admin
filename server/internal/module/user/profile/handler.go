@@ -17,6 +17,7 @@ import (
 )
 
 type profileService interface {
+	Options(context.Context) (Options, error)
 	Current(context.Context, int64) (Value, error)
 	Update(context.Context, int64, int64, Input) (Value, error)
 }
@@ -227,3 +228,12 @@ func (h *Handler) ChangePasswordByCode(c *gin.Context) {
 }
 
 type emptyResponse struct{}
+
+func (h *Handler) Options(c *gin.Context) {
+	result, err := h.profile.Options(c.Request.Context())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, result)
+}

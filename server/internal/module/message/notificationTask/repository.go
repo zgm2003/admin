@@ -176,9 +176,12 @@ func (r *Repository) Cancel(ctx context.Context, id int64, now time.Time) (Task,
 func (r *Repository) Copy(ctx context.Context, id, creator int64, now time.Time) (Task, error) {
 	var copied Task
 	err := r.Transaction(ctx, func(tx *Repository) error {
-		source, err := tx.find(ctx, id)
+		source, err := tx.lockTask(ctx, id)
 		if err != nil {
 			return err
+		}
+		if !source.Status.Actions().Copy {
+			return ErrInvalidTransition
 		}
 		targets, err := tx.targetIDs(ctx, id)
 		if err != nil {

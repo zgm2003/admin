@@ -3,27 +3,20 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
-import { notificationTaskAudienceMetadata } from '@/api/message/notificationTask'
+import type { NotificationTaskAdminOptions } from '@/api/message/notificationTaskOptions'
 
 interface NotificationTaskSearchModel {
   keyword: string
   platformId: string
-  audienceType: '' | 'user' | 'role' | 'platform'
+  audienceType: string
   timeRange: [] | [string, string]
 }
 
 const model = defineModel<SearchFormModel<NotificationTaskSearchModel>>({ required: true })
 const emit = defineEmits<{ query: []; reset: [] }>()
 const { t } = useI18n()
+const props = defineProps<{ audienceOptions: NotificationTaskAdminOptions['audiences'] }>()
 
-const audienceOptions = computed<
-  Array<{ value: NotificationTaskSearchModel['audienceType']; label: string }>
->(() =>
-  notificationTaskAudienceMetadata.map((item) => ({
-    value: item.value,
-    label: t(item.i18nKey),
-  })),
-)
 const fields = computed<SearchField<NotificationTaskSearchModel>[]>(() => [
   {
     key: 'keyword',
@@ -50,7 +43,7 @@ const fields = computed<SearchField<NotificationTaskSearchModel>[]>(() => [
     resetValue: '',
     label: t('notificationTask.audienceLabel'),
     placeholder: t('notificationTask.audienceAll'),
-    options: audienceOptions.value,
+    options: props.audienceOptions,
     clearable: true,
     width: 170,
   },

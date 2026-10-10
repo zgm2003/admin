@@ -9,11 +9,12 @@ import {
   createRole,
   deleteRole,
   getRoles,
+  getRoleFormOptions,
   setDefaultRole,
   updateRole,
   updateRoleStatus,
 } from '@/api/permission/role'
-import type { RoleListItem, RoleListQuery } from '@/api/permission/role'
+import type { RoleListItem, RoleListQuery, RoleFormOptions } from '@/api/permission/role'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
 import type { TablePaginationState } from '@/components/AppTable'
@@ -69,12 +70,27 @@ const canDefault = computed(() => access.hasPermission('permission:role:default'
 const canDelete = computed(() => access.hasPermission('permission:role:delete'))
 const canAuthorize = computed(() => access.hasPermission('permission:role:authorize'))
 
+const formOptionsError = ref('')
+const formOptions = ref<RoleFormOptions | null>(null)
 const formValid = computed(() => {
+  const options = formOptions.value
+  if (options === null) return false
   const code = form.value.code.trim()
-  const name = form.value.name.trim()
-
-  return /^[a-z][a-z0-9_]{2,63}$/.test(code) && name.length > 0 && [...name].length <= 64
+  const length = [...form.value.name.trim()].length
+  return (
+    new RegExp(options.codePattern).test(code) &&
+    length >= options.nameMinLength &&
+    length <= options.nameMaxLength
+  )
 })
+async function loadFormOptions(): Promise<void> {
+  formOptionsError.value = ''
+  try {
+    formOptions.value = await getRoleFormOptions()
+  } catch (error: unknown) {
+    formOptionsError.value = errorMessage(error)
+  }
+}
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message !== '') {
@@ -140,6 +156,7 @@ function updateTablePagination(next: TablePaginationState): void {
 }
 
 function openCreate(): void {
+  if (!canCreate.value) return
   dialogMode.value = 'create'
   editingRole.value = null
   form.value = { code: '', name: '' }
@@ -148,6 +165,7 @@ function openCreate(): void {
 }
 
 function openEdit(role: RoleListItem): void {
+  if (!canUpdate.value || !role.actions.update) return
   dialogMode.value = 'edit'
   editingRole.value = role
   form.value = { code: role.code, name: role.name }
@@ -156,6 +174,12 @@ function openEdit(role: RoleListItem): void {
 }
 
 async function submitForm(): Promise<void> {
+  if (dialogMode.value === 'create' && !canCreate.value) return
+  if (
+    dialogMode.value === 'edit' &&
+    (!canUpdate.value || editingRole.value?.actions.update !== true)
+  )
+    return
   if (!formValid.value || submitting.value) {
     return
   }
@@ -190,6 +214,7 @@ async function submitForm(): Promise<void> {
 }
 
 async function changeStatus(role: RoleListItem): Promise<void> {
+  if (!canStatus.value || !role.actions.status) return
   const next = role.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
   const message =
     next === YesNo.Yes
@@ -210,6 +235,7 @@ async function changeStatus(role: RoleListItem): Promise<void> {
 }
 
 async function makeDefault(role: RoleListItem): Promise<void> {
+  if (!canDefault.value || !role.actions.setDefault) return
   const zeroPermissionWarning = role.permissionCount === 0 ? t('role.warning.zeroPermission') : ''
   const message = `${t('role.confirm.defaultMessage')} ${zeroPermissionWarning}`
 
@@ -228,6 +254,7 @@ async function makeDefault(role: RoleListItem): Promise<void> {
 }
 
 async function removeRole(role: RoleListItem): Promise<void> {
+  if (!canDelete.value || !role.actions.delete) return
   try {
     await ElMessageBox.confirm(t('role.confirm.deleteMessage'), t('role.action.delete'), {
       type: 'warning',
@@ -249,6 +276,7 @@ async function removeRole(role: RoleListItem): Promise<void> {
 }
 
 function openPermissions(role: RoleListItem): void {
+  if (!canAuthorize.value || !role.actions.authorize) return
   permissionTarget.value = role
   permissionDialogVisible.value = true
 }
@@ -257,57 +285,17 @@ async function handlePermissionsSaved(): Promise<void> {
   if (await loadRoles()) ElNotification.success({ title: t('role.success.authorized') })
 }
 
-function isSystem(role: RoleListItem): boolean {
-  return role.code === 'super_admin' || role.code === 'registered_user'
-}
-
-function editTooltip(role: RoleListItem): string {
-  return isSystem(role) ? t('role.protection.systemName') : t('role.action.edit')
-}
-
-function statusTooltip(role: RoleListItem): string {
-  if (role.code === 'super_admin') {
-    return t('role.protection.superAdminEnabled')
-  }
-  if (role.isDefault === YesNo.Yes) {
-    return t('role.protection.defaultEnabled')
-  }
-  return t(role.isEnabled === YesNo.Yes ? 'role.action.disable' : 'role.action.enable')
-}
-
-function defaultTooltip(role: RoleListItem): string {
-  if (role.code === 'super_admin') {
-    return t('role.protection.superAdminDefault')
-  }
-  if (role.isDefault === YesNo.Yes) {
-    return t('role.protection.alreadyDefault')
-  }
-  if (role.isEnabled === YesNo.No) {
-    return t('role.protection.disabledDefault')
-  }
-  return t('role.action.default')
-}
-
-function deleteTooltip(role: RoleListItem): string {
-  if (isSystem(role)) {
-    return t('role.protection.systemDelete')
-  }
-  if (role.isDefault === YesNo.Yes) {
-    return t('role.protection.defaultDelete')
-  }
-  if (role.userCount > 0) {
-    return t('role.protection.usersDelete', { count: role.userCount })
-  }
-  return t('role.action.delete')
-}
-
 onMounted(() => {
+  void loadFormOptions()
   void loadRoles()
 })
 </script>
 
 <template>
   <AppPage class="role-page">
+    <el-alert v-if="formOptionsError" :title="formOptionsError" type="error" show-icon>
+      <el-button text @click="loadFormOptions">{{ t('role.retry') }}</el-button>
+    </el-alert>
     <AppSearch
       v-model="searchModel"
       class="role-filters management-page__filters"
@@ -369,48 +357,49 @@ onMounted(() => {
       <template #cell-actions="{ row }: { row: RoleListItem }">
         <template v-if="row.id > 0">
           <el-space wrap :size="6">
-            <el-tooltip v-if="canUpdate" :content="editTooltip(row)">
-              <el-button text type="primary" :disabled="isSystem(row)" @click="openEdit(row)">{{
-                t('role.action.edit')
-              }}</el-button>
+            <el-tooltip v-if="canUpdate" :content="row.actionLabels.update">
+              <el-button
+                text
+                type="primary"
+                :disabled="!row.actions.update"
+                @click="openEdit(row)"
+                >{{ t('role.action.edit') }}</el-button
+              >
             </el-tooltip>
-            <el-tooltip v-if="canStatus" :content="statusTooltip(row)">
+            <el-tooltip v-if="canStatus" :content="row.actionLabels.status">
               <el-button
                 text
                 type="warning"
-                :disabled="row.code === 'super_admin' || row.isDefault === YesNo.Yes"
+                :disabled="!row.actions.status"
                 @click="changeStatus(row)"
                 >{{
                   row.isEnabled === YesNo.Yes ? t('role.action.disable') : t('role.action.enable')
                 }}</el-button
               >
             </el-tooltip>
-            <el-tooltip v-if="canDefault" :content="defaultTooltip(row)">
+            <el-tooltip v-if="canDefault" :content="row.actionLabels.setDefault">
               <el-button
                 text
                 type="success"
-                :disabled="
-                  row.code === 'super_admin' ||
-                  row.isDefault === YesNo.Yes ||
-                  row.isEnabled === YesNo.No
-                "
+                :disabled="!row.actions.setDefault"
                 @click="makeDefault(row)"
                 >{{ t('role.action.default') }}</el-button
               >
             </el-tooltip>
-            <el-tooltip
-              v-if="canAuthorize && row.code !== 'super_admin'"
-              :content="t('role.action.authorize')"
-            >
-              <el-button text type="primary" @click="openPermissions(row)">{{
-                t('role.action.authorize')
-              }}</el-button>
+            <el-tooltip v-if="canAuthorize" :content="row.actionLabels.authorize">
+              <el-button
+                text
+                type="primary"
+                :disabled="!row.actions.authorize"
+                @click="openPermissions(row)"
+                >{{ t('role.action.authorize') }}</el-button
+              >
             </el-tooltip>
-            <el-tooltip v-if="canDelete" :content="deleteTooltip(row)">
+            <el-tooltip v-if="canDelete" :content="row.actionLabels.delete">
               <el-button
                 text
                 type="danger"
-                :disabled="isSystem(row) || row.isDefault === YesNo.Yes || row.userCount > 0"
+                :disabled="!row.actions.delete"
                 @click="removeRole(row)"
                 >{{ t('role.action.delete') }}</el-button
               >
@@ -430,6 +419,7 @@ onMounted(() => {
       :mutation-error="mutationError"
       :submitting="submitting"
       :form-valid="formValid"
+      :name-max-length="formOptions?.nameMaxLength"
       @save="submitForm"
     />
     <RolePermissionDialog
@@ -440,4 +430,4 @@ onMounted(() => {
   </AppPage>
 </template>
 
-<style scoped src="./RolePage.css"></style>
+<style scoped src="./RolePage.scss" lang="scss"></style>

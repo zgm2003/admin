@@ -77,7 +77,7 @@ const { t } = useI18n()
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .media-files {
   width: 100%;
   min-width: 0;
@@ -89,45 +89,45 @@ const { t } = useI18n()
   padding: 12px 14px;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: var(--el-border-radius-base);
-}
-.media-file__icon {
-  color: var(--el-color-primary);
-  font-size: 24px;
-}
-.media-file__info {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-}
-.media-file__info strong {
-  overflow: hidden;
-  font-size: 14px;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.media-file__info span {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-.media-file__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-.media-file__actions .el-button {
-  margin-left: 0;
+  &__icon {
+    color: var(--el-color-primary);
+    font-size: 24px;
+  }
+  &__info {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+  }
+  &__info strong {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  &__info span {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+  }
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+  &__actions .el-button {
+    margin-left: 0;
+  }
 }
 @media (max-width: 640px) {
   .media-file {
     flex-wrap: wrap;
-  }
-  .media-file__actions {
-    width: 100%;
-    padding-left: 36px;
+    &__actions {
+      width: 100%;
+      padding-left: 36px;
+    }
   }
 }
 </style>

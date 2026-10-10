@@ -1,144 +1,173 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
+import * as api from '@/api/permission/menu'
 import { request } from '@/utils/request'
-import { YesNo } from '@/enums/yesNo'
-import {
-  createMenu,
-  deleteMenu,
-  getMenus,
-  updateMenu,
-  updateMenuStatus,
-} from '@/api/permission/menu'
-import type { CreateMenuInput, UpdateMenuInput } from '@/api/permission/menu'
-
-vi.mock('@/utils/request', () => ({ request: vi.fn() }))
-
-const requestMock = vi.mocked(request)
-
-describe('menu API', () => {
-  beforeEach(() => {
-    requestMock.mockReset()
+vi.mock('@/utils/request', () => ({
+  request: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  refreshAccessCredential: vi.fn(),
+}))
+beforeEach(() => vi.resetAllMocks())
+describe('thin API HTTP contract', () => {
+  it('omits platform query config when loading the full menu catalog', async () => {
+    const result = { platforms: [], menuTree: [], serverAdded: true }
+    vi.mocked(request.get).mockResolvedValue(result)
+    await expect(api.getMenus()).resolves.toBe(result)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/permission/menu')
   })
 
-  it('loads and validates the platform menu catalog', async () => {
-    const catalog = menuCatalog()
-    requestMock.mockResolvedValue(catalog)
-    await expect(getMenus({ platformId: 2 })).resolves.toEqual(catalog)
-    expect(catalog.menuTree[0]?.icon).toBe('lucide:database-zap')
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'GET',
-      url: '/api/admin/v1/permission/menu',
-      params: { platformId: 2 },
+  it('leaves invalid platform query rejection to the backend', async () => {
+    const error = new Error('backend rejected the platform')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getMenus({ platformId: 0 })).rejects.toBe(error)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/permission/menu', {
+      params: { platformId: 0 },
     })
   })
-
-  it.each([
-    [],
-    null,
-    { platforms: menuCatalog().platforms },
-    { platforms: menuCatalog().platforms, menuTree: [], extra: true },
-    { platforms: [{ id: 2, code: 'canvas', name: 'Canvas', isEnabled: 2 }], menuTree: [] },
-  ])('rejects invalid menu catalogs: %j', async (value) => {
-    requestMock.mockResolvedValue(value)
-    await expect(getMenus()).rejects.toThrow('menu catalog response is invalid')
+  it('getMenus preserves the HTTP contract and backend data', async () => {
+    const query: Parameters<typeof api.getMenus>[0] = { platformId: 1 }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.get).mockResolvedValue(dataFromServer)
+    const result = await api.getMenus(query)
+    expect(result).toBe(dataFromServer)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/permission/menu', {
+      params: { platformId: query.platformId },
+    })
   })
-
-  it('creates a menu with the exact payload and validates the result', async () => {
-    const input: CreateMenuInput = {
-      platformId: 2,
+  it('getMenus propagates request failures unchanged', async () => {
+    const query: Parameters<typeof api.getMenus>[0] = { platformId: 1 }
+    const error = new Error('request failed')
+    vi.mocked(request.get).mockRejectedValue(error)
+    await expect(api.getMenus(query)).rejects.toBe(error)
+  })
+  it('createMenu preserves the HTTP contract and backend data', async () => {
+    const input: Parameters<typeof api.createMenu>[0] = {
+      platformId: 1,
       parentId: null,
       menuType: 'directory',
-      name: '报表',
-      code: 'reports',
-      i18nKey: 'navigation.system',
+      name: 'sample',
+      code: 'sample',
+      i18nKey: null,
       path: null,
       componentPath: null,
-      icon: 'lucide:folder',
+      icon: null,
       remark: null,
-      sortOrder: 10,
-      isEnabled: YesNo.Yes,
-      isHidden: YesNo.No,
+      sortOrder: 1,
+      isEnabled: 0,
+      isHidden: 0,
     }
-    requestMock.mockResolvedValue({ id: 7 })
-    await expect(createMenu(input)).resolves.toEqual({ id: 7 })
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'POST',
-      url: '/api/admin/v1/permission/menu',
-      data: input,
-    })
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.createMenu(input)
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/permission/menu', input)
   })
-
-  it('updates a menu without code or status', async () => {
-    const input: UpdateMenuInput = {
-      parentId: 1,
-      menuType: 'page',
-      name: '用户管理',
-      i18nKey: 'navigation.permissionMenu',
-      path: '/user/account',
-      componentPath: 'user/account',
-      icon: 'lucide:panel-left',
+  it('createMenu propagates request failures unchanged', async () => {
+    const input: Parameters<typeof api.createMenu>[0] = {
+      platformId: 1,
+      parentId: null,
+      menuType: 'directory',
+      name: 'sample',
+      code: 'sample',
+      i18nKey: null,
+      path: null,
+      componentPath: null,
+      icon: null,
       remark: null,
-      sortOrder: 10,
-      isHidden: YesNo.No,
+      sortOrder: 1,
+      isEnabled: 0,
+      isHidden: 0,
     }
-    requestMock.mockResolvedValue({ id: 7 })
-    await expect(updateMenu(7, input)).resolves.toEqual({ id: 7 })
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'PUT',
-      url: '/api/admin/v1/permission/menu/7',
-      data: input,
-    })
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.createMenu(input)).rejects.toBe(error)
   })
-
-  it('updates status with only isEnabled', async () => {
-    requestMock.mockResolvedValue({ id: 7, isEnabled: 0 })
-    await expect(updateMenuStatus(7, YesNo.No)).resolves.toEqual({ id: 7, isEnabled: 0 })
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'PATCH',
-      url: '/api/admin/v1/permission/menu/7/status',
-      data: { isEnabled: YesNo.No },
-    })
+  it('updateMenu preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.updateMenu>[0] = 1
+    const input: Parameters<typeof api.updateMenu>[1] = {
+      parentId: null,
+      menuType: 'directory',
+      name: 'sample',
+      i18nKey: null,
+      path: null,
+      componentPath: null,
+      icon: null,
+      remark: null,
+      sortOrder: 1,
+      isHidden: 0,
+    }
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.put).mockResolvedValue(dataFromServer)
+    const result = await api.updateMenu(id, input)
+    expect(result).toBe(dataFromServer)
+    expect(request.put).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/permission/menu/${id}`,
+      input,
+    )
   })
-
-  it('deletes without a request body and validates the backend result', async () => {
-    requestMock.mockResolvedValue({ id: 7 })
-    await expect(deleteMenu(7)).resolves.toEqual({ id: 7 })
-    expect(requestMock).toHaveBeenCalledWith({
-      method: 'DELETE',
-      url: '/api/admin/v1/permission/menu/7',
-    })
-
-    requestMock.mockResolvedValue({ id: 7, extra: true })
-    await expect(deleteMenu(7)).rejects.toThrow('menu delete result')
+  it('updateMenu propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.updateMenu>[0] = 1
+    const input: Parameters<typeof api.updateMenu>[1] = {
+      parentId: null,
+      menuType: 'directory',
+      name: 'sample',
+      i18nKey: null,
+      path: null,
+      componentPath: null,
+      icon: null,
+      remark: null,
+      sortOrder: 1,
+      isHidden: 0,
+    }
+    const error = new Error('request failed')
+    vi.mocked(request.put).mockRejectedValue(error)
+    await expect(api.updateMenu(id, input)).rejects.toBe(error)
+  })
+  it('updateMenuStatus preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.updateMenuStatus>[0] = 1
+    const isEnabled: Parameters<typeof api.updateMenuStatus>[1] = 0
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.patch).mockResolvedValue(dataFromServer)
+    const result = await api.updateMenuStatus(id, isEnabled)
+    expect(result).toBe(dataFromServer)
+    expect(request.patch).toHaveBeenCalledExactlyOnceWith(
+      `/api/admin/v1/permission/menu/${id}/status`,
+      { isEnabled },
+    )
+  })
+  it('updateMenuStatus propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.updateMenuStatus>[0] = 1
+    const isEnabled: Parameters<typeof api.updateMenuStatus>[1] = 0
+    const error = new Error('request failed')
+    vi.mocked(request.patch).mockRejectedValue(error)
+    await expect(api.updateMenuStatus(id, isEnabled)).rejects.toBe(error)
+  })
+  it('deleteMenu preserves the HTTP contract and backend data', async () => {
+    const id: Parameters<typeof api.deleteMenu>[0] = 1
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.delete).mockResolvedValue(dataFromServer)
+    const result = await api.deleteMenu(id)
+    expect(result).toBe(dataFromServer)
+    expect(request.delete).toHaveBeenCalledExactlyOnceWith(`/api/admin/v1/permission/menu/${id}`)
+  })
+  it('deleteMenu propagates request failures unchanged', async () => {
+    const id: Parameters<typeof api.deleteMenu>[0] = 1
+    const error = new Error('request failed')
+    vi.mocked(request.delete).mockRejectedValue(error)
+    await expect(api.deleteMenu(id)).rejects.toBe(error)
+  })
+  it('rebuildAccessCache preserves the HTTP contract and backend data', async () => {
+    const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
+    vi.mocked(request.post).mockResolvedValue(dataFromServer)
+    const result = await api.rebuildAccessCache()
+    expect(result).toBe(dataFromServer)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith(
+      '/api/admin/v1/permission/menu/access-cache/rebuild',
+      undefined,
+    )
+  })
+  it('rebuildAccessCache propagates request failures unchanged', async () => {
+    const error = new Error('request failed')
+    vi.mocked(request.post).mockRejectedValue(error)
+    await expect(api.rebuildAccessCache()).rejects.toBe(error)
   })
 })
-
-function menuCatalog() {
-  return {
-    platforms: [{ id: 2, code: 'canvas', name: 'Canvas', isEnabled: YesNo.Yes }],
-    menuTree: [
-      {
-        id: 7,
-        platformId: 2,
-        platformCode: 'canvas',
-        platformName: 'Canvas',
-        parentId: null,
-        menuType: 'page',
-        name: 'Test',
-        code: 'canvas:test:list',
-        i18nKey: 'navigation.test',
-        path: '/test',
-        componentPath: 'test',
-        icon: 'lucide:database-zap',
-        remark: null,
-        sortOrder: 10,
-        isEnabled: YesNo.Yes,
-        isHidden: YesNo.No,
-        isProtected: YesNo.No,
-        createdAt: '2026-08-27T00:00:00Z',
-        updatedAt: '2026-08-27T00:00:00Z',
-        children: [],
-      },
-    ],
-  }
-}

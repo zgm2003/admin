@@ -36,6 +36,10 @@ func (h *Handler) PageInit(c *gin.Context) {
 	response.OK(c, http.StatusOK, result)
 }
 
+func (h *Handler) Options(c *gin.Context) {
+	response.OK(c, http.StatusOK, Options(c.Request.Context()))
+}
+
 func (h *Handler) Test(c *gin.Context) {
 	identity, found := authcontext.Get(c)
 	if !found || identity.UserID < 1 || identity.PlatformID < 1 {

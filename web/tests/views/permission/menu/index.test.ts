@@ -1,7 +1,9 @@
+import { getMenuOptions } from '@/api/permission/menuOptions'
+import { menuOptionsFixture, menuRowDisplay } from './fixtures'
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createMenu,
@@ -38,6 +40,8 @@ vi.mock('@/api/permission/menu', async (importOriginal) => {
   }
 })
 
+vi.mock('@/api/permission/menuOptions', () => ({ getMenuOptions: vi.fn() }))
+
 const getMenusMock = vi.mocked(getMenus)
 const createMenuMock = vi.mocked(createMenu)
 const updateMenuMock = vi.mocked(updateMenu)
@@ -45,7 +49,12 @@ const updateMenuStatusMock = vi.mocked(updateMenuStatus)
 const deleteMenuMock = vi.mocked(deleteMenu)
 const rebuildAccessCacheMock = vi.mocked(rebuildAccessCache)
 
+const mountedWrappers: VueWrapper[] = []
+
 describe('MenuManagement', () => {
+  afterEach(() => {
+    for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
+  })
   let pinia: Pinia
 
   beforeEach(() => {
@@ -57,6 +66,7 @@ describe('MenuManagement', () => {
     // resetAllMocks (not clearAllMocks): clearAllMocks keeps queued
     // mockResolvedValueOnce implementations, which leaks fixtures across tests.
     vi.resetAllMocks()
+    vi.mocked(getMenuOptions).mockResolvedValue(menuOptionsFixture)
     getMenusMock.mockResolvedValue(menuCatalog())
     rebuildAccessCacheMock.mockResolvedValue({ rebuiltPlatforms: 2 })
   })
@@ -79,6 +89,67 @@ describe('MenuManagement', () => {
     await flushPromises()
     expect(rebuildAccessCacheMock).toHaveBeenCalledOnce()
     expect(getMenusMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('uses backend row presentation and independent action capabilities', async () => {
+    const tree = menuTree()
+    const root = tree[0]!
+    root.presentation.typeLabel = '服务端类型'
+    root.presentation.typeTone = 'danger'
+    root.actions = {
+      update: false,
+      status: false,
+      delete: false,
+      addChild: false,
+      allowedChildTypes: [],
+    }
+    root.presentation.statusReason = '服务端状态保护原因'
+    root.presentation.protectionReason = '服务端删除保护原因'
+    getMenusMock.mockResolvedValue(menuCatalog(tree))
+    const wrapper = mountPage(pinia, [
+      'permission:menu:list',
+      'permission:menu:create',
+      'permission:menu:update',
+      'permission:menu:delete',
+    ])
+    await flushPromises()
+    expect(wrapper.text()).toContain('服务端类型')
+    expect(wrapper.find(`[data-testid="add-child-${root.id}"]`).exists()).toBe(false)
+    expect(wrapper.get(`[data-testid="edit-${root.id}"]`).attributes('disabled')).toBeDefined()
+    expect(wrapper.get(`[data-testid="status-${root.id}"]`).attributes('title')).toBe(
+      '服务端状态保护原因',
+    )
+    expect(wrapper.get(`[data-testid="delete-${root.id}"]`).attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+
+  it('reloads localized rows and rejects an older-language response', async () => {
+    let resolveOld!: (value: MenuCatalogResponse) => void
+    getMenusMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveOld = resolve
+      }),
+    )
+    const wrapper = mountPage(pinia, ['permission:menu:list'])
+    await flushPromises()
+    const english = menuCatalog()
+    english.menuTree[0]!.presentation.typeLabel = 'SERVER DIRECTORY'
+    getMenusMock.mockResolvedValue(english)
+    setLocale('en-US')
+    await flushPromises()
+    expect(wrapper.text()).toContain('SERVER DIRECTORY')
+    resolveOld(menuCatalog())
+    await flushPromises()
+    expect(wrapper.text()).toContain('SERVER DIRECTORY')
+    usePermissionStore(pinia).reset()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('系统管理')
+  })
+
+  it('does not load management rows without list permission', async () => {
+    mountPage(pinia, ['permission:menu:update'])
+    await flushPromises()
+    expect(getMenusMock).not.toHaveBeenCalled()
   })
 
   it('loads once and renders the complete database-named tree table', async () => {
@@ -192,7 +263,7 @@ describe('MenuManagement', () => {
   })
 
   it('uses create, update, and delete permissions independently', async () => {
-    const createWrapper = mountPage(pinia, ['permission:menu:create'])
+    const createWrapper = mountPage(pinia, ['permission:menu:list', 'permission:menu:create'])
     await flushPromises()
     expect(createWrapper.find('[data-testid="add-root-menu"]').exists()).toBe(true)
     expect(createWrapper.findAll('[data-testid^="add-child-"]').length).toBeGreaterThan(0)
@@ -201,7 +272,7 @@ describe('MenuManagement', () => {
     createWrapper.unmount()
 
     pinia = createPinia()
-    const updateWrapper = mountPage(pinia, ['permission:menu:update'])
+    const updateWrapper = mountPage(pinia, ['permission:menu:list', 'permission:menu:update'])
     await flushPromises()
     expect(updateWrapper.find('[data-testid="add-root-menu"]').exists()).toBe(false)
     expect(updateWrapper.find('[data-testid^="edit-"]').exists()).toBe(true)
@@ -210,14 +281,18 @@ describe('MenuManagement', () => {
     updateWrapper.unmount()
 
     pinia = createPinia()
-    const deleteWrapper = mountPage(pinia, ['permission:menu:delete'])
+    const deleteWrapper = mountPage(pinia, ['permission:menu:list', 'permission:menu:delete'])
     await flushPromises()
     expect(deleteWrapper.find('[data-testid^="edit-"]').exists()).toBe(false)
     expect(deleteWrapper.find('[data-testid^="delete-"]').exists()).toBe(true)
   })
 
   it('allows every ordinary menu record to be edited, disabled, and deleted', async () => {
-    const wrapper = mountPage(pinia, ['permission:menu:update', 'permission:menu:delete'])
+    const wrapper = mountPage(pinia, [
+      'permission:menu:list',
+      'permission:menu:update',
+      'permission:menu:delete',
+    ])
     await flushPromises()
 
     expect(
@@ -245,7 +320,7 @@ describe('MenuManagement', () => {
   it('creates a root with explicit nulls and reloads only the management tree', async () => {
     getMenusMock.mockResolvedValueOnce(menuCatalog()).mockResolvedValueOnce(menuCatalog())
     createMenuMock.mockResolvedValue({ id: 9 })
-    const wrapper = mountPage(pinia, ['permission:menu:create'])
+    const wrapper = mountPage(pinia, ['permission:menu:list', 'permission:menu:create'])
     await flushPromises()
     // The enabled Admin platform must be the default active tab even though a
     // disabled Canvas platform exists alongside it.
@@ -287,7 +362,7 @@ describe('MenuManagement', () => {
       .mockResolvedValueOnce(menuCatalog(canvasMenuTree()))
       .mockResolvedValueOnce(menuCatalog(canvasMenuTree()))
     createMenuMock.mockResolvedValue({ id: 9 })
-    const wrapper = mountPage(pinia, ['permission:menu:create'])
+    const wrapper = mountPage(pinia, ['permission:menu:list', 'permission:menu:create'])
     await flushPromises()
     const canvasTab = wrapper.findAll('[role="tab"]').find((tab) => tab.text().includes('Canvas'))
     await canvasTab?.trigger('click')
@@ -318,7 +393,11 @@ describe('MenuManagement', () => {
   it('locks protected structure, status, and deletion while keeping presentation fields editable', async () => {
     updateMenuMock.mockResolvedValue({ id: userPageID })
     getMenusMock.mockResolvedValue(menuCatalog(protectedMenuTree()))
-    const wrapper = mountPage(pinia, ['permission:menu:update', 'permission:menu:delete'])
+    const wrapper = mountPage(pinia, [
+      'permission:menu:list',
+      'permission:menu:update',
+      'permission:menu:delete',
+    ])
     await flushPromises()
 
     expect(wrapper.get(`[data-testid="status-${userPageID}"]`).attributes('disabled')).toBeDefined()
@@ -343,7 +422,7 @@ describe('MenuManagement', () => {
 
   it('stores an IconSelect value as a string and previews it with AppDIcon', async () => {
     createMenuMock.mockResolvedValue({ id: 9 })
-    const wrapper = mountPage(pinia, ['permission:menu:create'])
+    const wrapper = mountPage(pinia, ['permission:menu:list', 'permission:menu:create'])
     await flushPromises()
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
@@ -364,7 +443,7 @@ describe('MenuManagement', () => {
 
   it('forces action menus hidden without displaying a visibility control', async () => {
     createMenuMock.mockResolvedValue({ id: 9 })
-    const wrapper = mountPage(pinia, ['permission:menu:create'])
+    const wrapper = mountPage(pinia, ['permission:menu:list', 'permission:menu:create'])
     await flushPromises()
     await wrapper.get('[data-testid="add-child-2"]').trigger('click')
     await flushPromises()
@@ -393,7 +472,7 @@ describe('MenuManagement', () => {
   })
 
   it('lets the menu dialog size itself to the form content', async () => {
-    const wrapper = mountPage(pinia, ['permission:menu:create'])
+    const wrapper = mountPage(pinia, ['permission:menu:list', 'permission:menu:create'])
     await flushPromises()
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
@@ -405,7 +484,7 @@ describe('MenuManagement', () => {
 
   it('clears mutually exclusive field values when switching menu types', async () => {
     createMenuMock.mockResolvedValue({ id: 9 })
-    const wrapper = mountPage(pinia, ['permission:menu:create'])
+    const wrapper = mountPage(pinia, ['permission:menu:list', 'permission:menu:create'])
     await flushPromises()
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
@@ -434,7 +513,7 @@ describe('MenuManagement', () => {
   })
 
   it('uses text protocol fields with exact hints and clears incompatible values without deriving paths', async () => {
-    const wrapper = mountPage(pinia, ['permission:menu:create'])
+    const wrapper = mountPage(pinia, ['permission:menu:list', 'permission:menu:create'])
     await flushPromises()
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
@@ -469,7 +548,7 @@ describe('MenuManagement', () => {
   it('keeps code readonly on edit and excludes it from the update payload', async () => {
     updateMenuMock.mockResolvedValue({ id: 2 })
     getMenusMock.mockResolvedValueOnce(menuCatalog()).mockResolvedValueOnce(menuCatalog())
-    const wrapper = mountPage(pinia, ['permission:menu:update'])
+    const wrapper = mountPage(pinia, ['permission:menu:list', 'permission:menu:update'])
     await flushPromises()
     await wrapper.get(`[data-testid="edit-${userPageID}"]`).trigger('click')
     await flushPromises()
@@ -532,7 +611,11 @@ describe('MenuManagement', () => {
 
   it('filters parent options to valid directories and locks parent editing on edit', async () => {
     getMenusMock.mockResolvedValue(menuCatalog([rootWithEditableSubtree()]))
-    const wrapper = mountPage(pinia, ['permission:menu:create', 'permission:menu:update'])
+    const wrapper = mountPage(pinia, [
+      'permission:menu:list',
+      'permission:menu:create',
+      'permission:menu:update',
+    ])
     await flushPromises()
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
@@ -565,7 +648,11 @@ describe('MenuManagement', () => {
     getMenusMock.mockResolvedValueOnce(mutableCatalog).mockResolvedValue(mutableCatalog)
     updateMenuStatusMock.mockResolvedValue({ id: 3, isEnabled: YesNo.Yes })
     deleteMenuMock.mockResolvedValue({ id: 3 })
-    const wrapper = mountPage(pinia, ['permission:menu:update', 'permission:menu:delete'])
+    const wrapper = mountPage(pinia, [
+      'permission:menu:list',
+      'permission:menu:update',
+      'permission:menu:delete',
+    ])
     await flushPromises()
     await wrapper.get(`[data-testid="status-${userActionID}"]`).trigger('click')
     await flushPromises()
@@ -599,10 +686,12 @@ function mountPage(pinia: Pinia, permissions: string[]): VueWrapper {
     menuTree: [],
     permissionCodes: permissions,
   })
-  return mount(MenuManagement, {
+  const wrapper = mount(MenuManagement, {
     attachTo: document.body,
     global: { plugins: [ElementPlus, appI18n, pinia] },
   })
+  mountedWrappers.push(wrapper)
+  return wrapper
 }
 
 // Stable fixture IDs shared by every menu tree helper below.
@@ -660,6 +749,7 @@ function menuTree(): ManagedMenuNode[] {
       platformName: 'Admin',
       parentId: null,
       menuType: 'directory',
+      ...menuRowDisplay('directory'),
       name: '系统管理',
       code: 'system',
       i18nKey: 'navigation.system',
@@ -680,6 +770,7 @@ function menuTree(): ManagedMenuNode[] {
           platformName: 'Admin',
           parentId: 1,
           menuType: 'page',
+          ...menuRowDisplay('page'),
           name: '用户管理',
           code: 'user:account:view',
           i18nKey: 'navigation.userAccount',
@@ -700,6 +791,13 @@ function menuTree(): ManagedMenuNode[] {
               platformName: 'Admin',
               parentId: 2,
               menuType: 'action',
+              ...menuRowDisplay('action'),
+              presentation: {
+                ...menuRowDisplay('action').presentation,
+                statusLabel: '已禁用',
+                statusActionLabel: '启用',
+                visibilityLabel: '隐藏',
+              },
               name: '修改用户',
               code: 'user:account:update',
               i18nKey: null,
@@ -723,6 +821,7 @@ function menuTree(): ManagedMenuNode[] {
 
 function menuCatalog(menuTreeValue: ManagedMenuNode[] = menuTree()): MenuCatalogResponse {
   return {
+    allowedRootTypes: ['directory', 'page'],
     platforms: [
       { id: 1, code: 'admin', name: 'Admin', isEnabled: YesNo.Yes },
       { id: 2, code: 'canvas', name: 'Canvas', isEnabled: YesNo.No },
@@ -741,6 +840,7 @@ function canvasMenuTree(): ManagedMenuNode[] {
       platformName: 'Canvas',
       parentId: null,
       menuType: 'page',
+      ...menuRowDisplay('page'),
       name: 'Test',
       code: 'canvas:test:view',
       i18nKey: 'navigation.test',
@@ -766,7 +866,18 @@ function protectedMenuTree(): ManagedMenuNode[] {
   return [
     {
       ...root,
-      children: [{ ...root.children[0], isProtected: YesNo.Yes }],
+      children: [
+        {
+          ...root.children[0],
+          isProtected: YesNo.Yes,
+          actions: { ...root.children[0].actions, status: false, delete: false },
+          presentation: {
+            ...root.children[0].presentation,
+            protectionReason: '受保护菜单',
+            statusReason: '受保护菜单',
+          },
+        },
+      ],
     },
   ]
 }
@@ -780,6 +891,7 @@ function rootWithEditableSubtree(): ManagedMenuNode {
     platformName: 'Admin',
     parentId: null,
     menuType: 'directory',
+    ...menuRowDisplay('directory'),
     name: '可编辑目录',
     code: 'reports',
     i18nKey: 'navigation.system',
@@ -800,6 +912,7 @@ function rootWithEditableSubtree(): ManagedMenuNode {
         platformName: 'Admin',
         parentId: editableDirectoryID,
         menuType: 'page',
+        ...menuRowDisplay('page'),
         name: '可编辑页面',
         code: 'reports:view',
         i18nKey: 'navigation.permissionMenu',
