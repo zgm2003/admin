@@ -88,6 +88,12 @@ const columns = computed<TableColumn<CacheGeneration>[]>(() => [
   { key: 'status', prop: 'status', label: t('cacheGeneration.status'), width: 130 },
   { prop: 'pendingCount', label: t('cacheGeneration.pendingCount'), width: 120 },
   {
+    key: 'redisVersion',
+    prop: 'latestPublishedGeneration',
+    label: t('cacheGeneration.redisVersion'),
+    width: 120,
+  },
+  {
     key: 'lastError',
     prop: 'lastError',
     label: t('cacheGeneration.lastError'),
@@ -100,7 +106,7 @@ const columns = computed<TableColumn<CacheGeneration>[]>(() => [
     label: t('cacheGeneration.latestPublishedAt'),
     width: 190,
   },
-  { key: 'actions', prop: 'namespace', label: t('cacheGeneration.details'), width: 100 },
+  { key: 'actions', prop: 'namespace', label: t('cacheGeneration.details'), width: 140 },
 ])
 const pagination = computed<TablePaginationState>(() => ({
   currentPage: page.value,
@@ -128,6 +134,10 @@ function statusTagType(status: CacheGenerationStatus) {
 }
 function displayTime(value: string | null): string {
   return value === null ? '-' : formatTime(value)
+}
+function displayRedisVersion(row: CacheGeneration): string {
+  if (row.status !== 'ready' || row.latestPublishedGeneration === null) return '-'
+  return String(row.latestPublishedGeneration)
 }
 function rowKey(row: CacheGeneration): string {
   return `${row.namespace}:${row.scopeKey}`
@@ -208,7 +218,7 @@ onMounted(() => {
         {{ t(displayNamespace(row.namespace)) }}
       </template>
       <template #cell-scopeKey="{ row }: { row: CacheGeneration }">
-        <template v-if="displayScope(row.namespace, row.scopeKey).kind === 'platform'">
+        <template v-if="displayScope(row.namespace, row.scopeKey).kind === 'storage'">
           {{ t(displayScope(row.namespace, row.scopeKey).labelKey, { value: row.scopeKey }) }}
         </template>
         <template v-else-if="displayScope(row.namespace, row.scopeKey).kind === 'unknown'">
@@ -231,6 +241,9 @@ onMounted(() => {
       <template #cell-latestPublishedAt="{ row }: { row: CacheGeneration }">{{
         displayTime(row.latestPublishedAt)
       }}</template>
+      <template #cell-redisVersion="{ row }: { row: CacheGeneration }">
+        {{ displayRedisVersion(row) }}
+      </template>
       <template #cell-actions="{ row }: { row: CacheGeneration }">
         <el-button data-testid="cache-generation-detail" text :icon="View" @click="openDetail(row)">
           {{ t('cacheGeneration.details') }}

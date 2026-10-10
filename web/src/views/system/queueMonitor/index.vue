@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
+import { Loading } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import { grantQueueMonitor, QUEUE_MONITOR_UI_URL } from '@/api/system/queueMonitor'
@@ -11,6 +12,7 @@ const loading = ref(false)
 const loaded = ref(false)
 const failed = ref(false)
 const frameFailed = ref(false)
+const frameLoading = ref(false)
 let timer: ReturnType<typeof setInterval> | undefined
 
 function clearRenewal(): void {
@@ -33,6 +35,7 @@ async function grant(): Promise<void> {
     await grantQueueMonitor()
     loaded.value = true
     frameFailed.value = false
+    frameLoading.value = true
     startRenewal()
   } catch {
     loaded.value = false
@@ -43,7 +46,11 @@ async function grant(): Promise<void> {
   }
 }
 function onFrameError(): void {
+  frameLoading.value = false
   frameFailed.value = true
+}
+function onFrameLoad(): void {
+  frameLoading.value = false
 }
 function onVisibilityChange(): void {
   if (document.hidden) clearRenewal()
@@ -83,13 +90,24 @@ function stop(): void {
         t('system.queueMonitor.retry')
       }}</el-button>
     </div>
-    <iframe
-      v-else
-      class="queue-monitor-frame"
-      :src="QUEUE_MONITOR_UI_URL"
-      :title="t('system.queueMonitor.title')"
-      @error="onFrameError"
-    />
+    <div v-else class="queue-monitor-frame-shell">
+      <iframe
+        class="queue-monitor-frame"
+        :src="QUEUE_MONITOR_UI_URL"
+        :title="t('system.queueMonitor.title')"
+        @error="onFrameError"
+        @load="onFrameLoad"
+      />
+      <div
+        v-if="frameLoading"
+        class="queue-monitor-frame-loading"
+        role="status"
+        data-testid="queue-monitor-frame-loading"
+      >
+        <el-icon class="is-loading" :size="24"><Loading /></el-icon>
+        <span>{{ t('system.queueMonitor.loading') }}</span>
+      </div>
+    </div>
   </AppPage>
 </template>
 
@@ -105,6 +123,23 @@ function stop(): void {
   min-height: 560px;
   border: 1px solid var(--el-border-color-light);
   background: #fff;
+}
+.queue-monitor-frame-shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 560px;
+}
+.queue-monitor-frame-loading {
+  position: absolute;
+  inset: 1px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-bg-color);
 }
 .queue-monitor-state {
   display: grid;

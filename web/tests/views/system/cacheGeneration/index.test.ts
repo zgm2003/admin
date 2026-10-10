@@ -92,13 +92,18 @@ describe('cache generation page', () => {
       '配置项',
       '作用范围',
       '状态',
-      '待同步事件',
+      '待同步数量',
+      'Redis 版本',
       '最近错误',
       '最近同步时间',
       '同步详情',
     ]) {
       expect(columnLabels).toContain(label)
     }
+    const detailColumn = table
+      .props('columns')
+      .find((column: { key?: string }) => column.key === 'actions')
+    expect(detailColumn?.width).toBe(140)
   })
 
   it('renders semantic status tags with text and formats nullable values', async () => {

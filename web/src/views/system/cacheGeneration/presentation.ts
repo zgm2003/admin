@@ -24,13 +24,13 @@ export function displayNamespace(namespace: string): string {
 
 export type ScopeDisplay =
   | { kind: 'global'; labelKey: 'cacheGeneration.scopeGlobal' }
-  | { kind: 'platform'; labelKey: 'cacheGeneration.scopePlatform'; value: string }
+  | { kind: 'storage'; labelKey: 'cacheGeneration.scopeStorageConfig'; value: string }
   | { kind: 'unknown'; labelKey: 'cacheGeneration.scopeUnknown'; value: string }
 
 export function displayScope(namespace: string, scopeKey: string): ScopeDisplay {
   if (scopeKey === 'global') return { kind: 'global', labelKey: 'cacheGeneration.scopeGlobal' }
   if (namespace === 'storage.cosconfig' && /^\d+$/.test(scopeKey)) {
-    return { kind: 'platform', labelKey: 'cacheGeneration.scopePlatform', value: scopeKey }
+    return { kind: 'storage', labelKey: 'cacheGeneration.scopeStorageConfig', value: scopeKey }
   }
   return { kind: 'unknown', labelKey: 'cacheGeneration.scopeUnknown', value: scopeKey }
 }

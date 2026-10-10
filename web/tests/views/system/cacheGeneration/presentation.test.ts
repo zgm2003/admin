@@ -20,8 +20,8 @@ describe('cache generation presentation', () => {
       labelKey: 'cacheGeneration.scopeGlobal',
     })
     expect(displayScope('storage.cosconfig', '2')).toEqual({
-      kind: 'platform',
-      labelKey: 'cacheGeneration.scopePlatform',
+      kind: 'storage',
+      labelKey: 'cacheGeneration.scopeStorageConfig',
       value: '2',
     })
     expect(displayScope('message.mail', 'custom')).toEqual({

@@ -28,6 +28,9 @@ describe('queue monitor page', () => {
     const src = frame.attributes('src')
     expect(src).toBe('/api/admin/v1/system/queuemonitor/ui/')
     expect(src).not.toContain('token')
+    expect(wrapper.find('[data-testid="queue-monitor-frame-loading"]').exists()).toBe(true)
+    await frame.trigger('load')
+    expect(wrapper.find('[data-testid="queue-monitor-frame-loading"]').exists()).toBe(false)
 
     await vi.advanceTimersByTimeAsync(45_000)
     expect(api.grantQueueMonitor).toHaveBeenCalledTimes(2)
