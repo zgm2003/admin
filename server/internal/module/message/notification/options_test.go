@@ -12,8 +12,14 @@ import (
 )
 
 func TestOptionsOwnLocalizedValuesWithoutDependencies(t *testing.T) {
-	zh := notificationOptions(i18n.WithLocale(context.Background(), i18n.ZhCN))
-	en := notificationOptions(i18n.WithLocale(context.Background(), i18n.EnUS))
+	zh, err := notificationOptions(i18n.WithLocale(context.Background(), i18n.ZhCN))
+	if err != nil {
+		t.Fatal(err)
+	}
+	en, err := notificationOptions(i18n.WithLocale(context.Background(), i18n.EnUS))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(zh.Variants) != 4 || len(zh.Priorities) != 2 || len(en.Variants) != 4 {
 		t.Fatalf("option sizes: %#v / %#v", zh, en)
 	}

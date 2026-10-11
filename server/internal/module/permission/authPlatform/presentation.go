@@ -1,6 +1,7 @@
 package authplatform
 
 import (
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/option"
 	"admin/server/internal/shared/yesno"
 	"context"
@@ -19,9 +20,12 @@ type platformPresentation struct {
 	DeleteReason     string                     `json:"deleteReason"`
 }
 
-func newPlatformPresentation(ctx context.Context, value Platform, loginTypes []LoginType) platformPresentation {
+func newPlatformPresentation(ctx context.Context, value Platform, loginTypes []LoginType) (platformPresentation, error) {
 	labels := make([]option.Option[LoginType], 0, len(loginTypes))
-	options := loginTypeOptions(ctx)
+	options, err := loginTypeOptions(ctx)
+	if err != nil {
+		return platformPresentation{}, err
+	}
 	for _, loginType := range loginTypes {
 		label := string(loginType)
 		for _, candidate := range options {
@@ -35,15 +39,27 @@ func newPlatformPresentation(ctx context.Context, value Platform, loginTypes []L
 	sessionLabel := fmt.Sprint(value.MaxSessions)
 	switch {
 	case value.MaxSessions == 0:
-		sessionLabel = option.New(ctx, 0, "不限", "Unlimited").Label
+		sessionLabel, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyAuthPlatformMaxSessionsUnlimited, nil)
+		if err != nil {
+			return platformPresentation{}, err
+		}
 	case value.MaxSessions == 1:
-		sessionLabel = option.New(ctx, 1, "单会话", "Single session").Label
+		sessionLabel, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyAuthPlatformMaxSessionsSingle, nil)
+		if err != nil {
+			return platformPresentation{}, err
+		}
 	case value.MaxSessions > 1:
-		sessionLabel = option.New(ctx, 2, fmt.Sprintf("最多 %d 个", value.MaxSessions), fmt.Sprintf("Up to %d", value.MaxSessions)).Label
+		sessionLabel, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyAuthPlatformMaxSessionsMany, map[string]string{"count": fmt.Sprintf("%d", value.MaxSessions)})
+		if err != nil {
+			return platformPresentation{}, err
+		}
 	}
 	reason := ""
 	if value.IsBuiltin == yesno.Yes {
-		reason = option.New(ctx, 1, "内置认证平台不可删除", "Built-in authentication platforms cannot be deleted").Label
+		reason, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyAuthPlatformDeleteReasonBuiltin, nil)
+		if err != nil {
+			return platformPresentation{}, err
+		}
 	}
-	return platformPresentation{LoginTypes: labels, MaxSessionsLabel: sessionLabel, DeleteReason: reason}
+	return platformPresentation{LoginTypes: labels, MaxSessionsLabel: sessionLabel, DeleteReason: reason}, nil
 }

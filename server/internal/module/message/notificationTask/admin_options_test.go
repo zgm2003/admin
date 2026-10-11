@@ -8,8 +8,14 @@ import (
 )
 
 func TestAdminOptionsOwnLocalizedValues(t *testing.T) {
-	zh := adminOptions(i18n.WithLocale(context.Background(), i18n.ZhCN))
-	en := adminOptions(i18n.WithLocale(context.Background(), i18n.EnUS))
+	zh, err := adminOptions(i18n.WithLocale(context.Background(), i18n.ZhCN))
+	if err != nil {
+		t.Fatal(err)
+	}
+	en, err := adminOptions(i18n.WithLocale(context.Background(), i18n.EnUS))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(zh.Statuses) != 7 || len(en.Statuses) != 7 {
 		t.Fatalf("catalog sizes: %#v / %#v", zh, en)
 	}

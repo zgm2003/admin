@@ -77,7 +77,12 @@ func (h *Handler) Summary(c *gin.Context) {
 	response.OK(c, http.StatusOK, toSummaryResponse(value))
 }
 func (h *Handler) Options(c *gin.Context) {
-	response.OK(c, http.StatusOK, notificationOptions(c.Request.Context()))
+	result, err := notificationOptions(c.Request.Context())
+	if err != nil {
+		response.Fail(c, apperror.DependencyUnavailable(err))
+		return
+	}
+	response.OK(c, http.StatusOK, result)
 }
 func (h *Handler) Read(c *gin.Context)   { h.mutateID(c, h.service.Read) }
 func (h *Handler) Delete(c *gin.Context) { h.mutateID(c, h.service.Delete) }

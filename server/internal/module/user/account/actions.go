@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"admin/server/internal/module/permission/role"
-	"admin/server/internal/shared/option"
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -33,7 +33,12 @@ type actorFacts struct {
 }
 
 func accountActions(ctx context.Context, actorID int64, facts actorFacts, target ListItem) (Actions, ActionLabels) {
-	label := func(zh, en string) string { return option.New(ctx, "", zh, en).Label }
+	label := func(zh, en string) string {
+		if i18n.LocaleFromContext(ctx) == i18n.EnUS {
+			return en
+		}
+		return zh
+	}
 	actions := Actions{Update: true, Status: true, Delete: true, Authorize: true}
 	labels := ActionLabels{Update: label("编辑", "Edit"), Status: label("启用", "Enable"), Delete: label("删除用户", "Delete user"), Authorize: label("分配角色", "Assign roles")}
 	if target.IsEnabled == yesno.Yes {

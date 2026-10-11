@@ -3,7 +3,7 @@ package operationlog
 import (
 	"context"
 
-	"admin/server/internal/shared/option"
+	"admin/server/internal/shared/i18n"
 )
 
 // Action codes stay in audit facts. Labels are derived for the current request,
@@ -13,7 +13,10 @@ func actionLabel(ctx context.Context, action string) string {
 	if !found {
 		return action
 	}
-	return option.New(ctx, action, labels.zh, labels.en).Label
+	if i18n.LocaleFromContext(ctx) == i18n.EnUS {
+		return labels.en
+	}
+	return labels.zh
 }
 
 var actionLabels = map[string]struct{ zh, en string }{

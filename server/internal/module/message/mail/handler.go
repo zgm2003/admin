@@ -22,11 +22,21 @@ type Handler struct{ service *Service }
 func NewHandler(service *Service) *Handler { return &Handler{service: service} }
 
 func (h *Handler) PageInit(ctx *gin.Context) {
-	response.OK(ctx, http.StatusOK, PageInit(ctx.Request.Context()))
+	result, err := PageInit(ctx.Request.Context())
+	if err != nil {
+		response.Fail(ctx, apperror.DependencyUnavailable(err))
+		return
+	}
+	response.OK(ctx, http.StatusOK, result)
 }
 
 func (h *Handler) Options(ctx *gin.Context) {
-	response.OK(ctx, http.StatusOK, Options(ctx.Request.Context()))
+	result, err := Options(ctx.Request.Context())
+	if err != nil {
+		response.Fail(ctx, apperror.DependencyUnavailable(err))
+		return
+	}
+	response.OK(ctx, http.StatusOK, result)
 }
 
 func (h *Handler) Test(ctx *gin.Context) {

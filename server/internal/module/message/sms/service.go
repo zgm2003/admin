@@ -44,7 +44,11 @@ func NewService(stores Stores, keys *secretkey.KeyRing) *Service {
 
 // PageInit returns the four fixed scenes for the admin page bootstrap.
 func (s *Service) PageInit(ctx context.Context) (PageInitResult, error) {
-	catalog := Options(ctx).Scenes
+	options, err := Options(ctx)
+	if err != nil {
+		return PageInitResult{}, err
+	}
+	catalog := options.Scenes
 	scenes := make([]SceneOption, 0, len(catalog))
 	for _, fixed := range catalog {
 		scenes = append(scenes, SceneOption{Scene: fixed.Value, Name: fixed.Label, VariableKeys: fixed.VariableKeys})

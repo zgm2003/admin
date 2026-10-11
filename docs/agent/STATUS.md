@@ -17,6 +17,13 @@
 - 真实验证：六个固定 Redis pattern 均 remaining=0；无关菜单、角色菜单、配置 generation/outbox 全行哈希前后相同，无孤立 role_menu，重复执行后 PostgreSQL 事实、菜单版本、Redis 定向计数与菜单 state 完全不变。只清理字典缓存，未重置 Session/Access/发送额度或其他缓存。`docs/database/current.sql` 已通过 `pg_dump --schema-only --schema=public --no-owner --no-acl` 从真实库刷新（118,794 字节），SHA256 `DC8804B9C14F9AD91B27C0D70B8EFDE5009754789EE60121ED183422F12381DD`，无字典表或业务数据。
 - 本次迁移另运行 `go test ./cmd/remove-system-dictionary ./internal/module/permission/state -count=1`，两包通过；迁移及快照/状态更新的 `git diff --check` 通过。未重复运行上一代码整改轮全量 Go/前端套件，未做浏览器验收或第三方发送，未 commit/fetch/pull/push、停服或启动服务；API/Worker 保持停止，由维护者启动新版。
 
+## 后端 options 文案统一进入 i18n catalog（2026-10-11，全项目迁移完成）
+
+- `server/internal/shared/option` 新增 `NewLocalized`：业务模块以稳定 `MessageKey` 投影 `{value,label}`，翻译 key 缺失时返回错误，不回退为 key 或另一语言。
+- 邮件、短信、用户联系/会话/登录日志、系统设置、通知/通知任务、Scheduler、认证平台、菜单和配置缓存代际的 options 及 enum presentation 文案均改为请求语言 catalog 投影；数字/字符串枚举值、tone、默认值、接口路径和 JSON 形状不变。catalog 缺 key 不静默回退，HTTP handler 统一返回依赖错误。
+- 操作日志、账号和角色动作标签属于行为描述而非 enum option，已移除 `option.New` 并继续按请求语言生成；未知操作保留原值，既有权限动作和业务保护不变。全仓 `server/internal/module` 已无 `option.New` 业务调用。
+- 验证：`gofmt`、`go vet ./...`、`go build ./...`、`go test -p 1 ./... -count=1`（全包通过）、共享 i18n/option/architecture 定向测试和 `git diff --check` 通过；未提交 Git。
+
 ### 本轮实施前审查记录（保留）
 
 - 维护者已将目标从删除字典管理扩大为全项目责任边界整改：后端集中拥有业务枚举、合法值、业务限制、状态转换和本地化业务文案，前端消费后端结果并承担交互与展示，不再手工维护第二份业务事实。已进一步明确前端整改：API 只保留类型和接口调用，request 提供 `get/post/put/patch/delete` 泛型门面，取消逐接口 DTO 运行时解析及重复业务规则；表单做好 rules，页面做好组件交互；撤销页面 500 行/组件 400 行强制拆分，自有样式统一 SCSS，按交互职责和复用拆组件，不按行数凑文件。具体逐模块契约与施工分批仍需评审，不凭总体方向直接批量改接口或业务代码。

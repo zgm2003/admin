@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/option"
 )
 
@@ -11,17 +12,19 @@ type notificationOptionResponse struct {
 	Priorities []option.Option[Priority] `json:"priorities"`
 }
 
-func notificationOptions(ctx context.Context) notificationOptionResponse {
-	return notificationOptionResponse{
-		Variants: []option.Option[Variant]{
-			option.New(ctx, VariantInfo, "信息", "Info"),
-			option.New(ctx, VariantSuccess, "成功", "Success"),
-			option.New(ctx, VariantWarning, "警告", "Warning"),
-			option.New(ctx, VariantError, "错误", "Error"),
-		},
-		Priorities: []option.Option[Priority]{
-			option.New(ctx, PriorityNormal, "普通", "Normal"),
-			option.New(ctx, PriorityUrgent, "紧急", "Urgent"),
-		},
+func notificationOptions(ctx context.Context) (notificationOptionResponse, error) {
+	variants, err := option.ManyLocalized(ctx, []option.LocalizedEntry[Variant]{
+		{Value: VariantInfo, Key: i18n.KeyNotificationVariantInfo}, {Value: VariantSuccess, Key: i18n.KeyNotificationVariantSuccess},
+		{Value: VariantWarning, Key: i18n.KeyNotificationVariantWarning}, {Value: VariantError, Key: i18n.KeyNotificationVariantError},
+	})
+	if err != nil {
+		return notificationOptionResponse{}, err
 	}
+	priorities, err := option.ManyLocalized(ctx, []option.LocalizedEntry[Priority]{
+		{Value: PriorityNormal, Key: i18n.KeyNotificationPriorityNormal}, {Value: PriorityUrgent, Key: i18n.KeyNotificationPriorityUrgent},
+	})
+	if err != nil {
+		return notificationOptionResponse{}, err
+	}
+	return notificationOptionResponse{Variants: variants, Priorities: priorities}, nil
 }

@@ -41,7 +41,11 @@ func changeLogListResponse(ctx context.Context, value ChangeLogPage) phoneChange
 }
 
 func actionLabel(ctx context.Context, action ChangeAction) string {
-	for _, item := range adminOptions(ctx).Actions {
+	options, err := adminOptions(ctx)
+	if err != nil {
+		return strconv.Itoa(int(action))
+	}
+	for _, item := range options.Actions {
 		if item.Value == action {
 			return item.Label
 		}

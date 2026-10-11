@@ -58,7 +58,12 @@ func (h *Handler) GetSchedule(c *gin.Context) {
 	response.OK(c, http.StatusOK, scheduleDTO(row))
 }
 func (h *Handler) Options(c *gin.Context) {
-	response.OK(c, http.StatusOK, h.service.Options(c.Request.Context()))
+	result, err := h.service.Options(c.Request.Context())
+	if err != nil {
+		response.Fail(c, apperror.DependencyUnavailable(err))
+		return
+	}
+	response.OK(c, http.StatusOK, result)
 }
 func (h *Handler) CreateSchedule(c *gin.Context) {
 	actor, ok := h.actor(c)

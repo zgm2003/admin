@@ -96,14 +96,25 @@ func IsPublishState(value string) bool {
 	}
 }
 
-func listItemResponse(ctx context.Context, item Item) listItem {
-	label, tone, hint := statusDisplay(ctx, item.Status)
+func listItemResponse(ctx context.Context, item Item) (listItem, error) {
+	label, tone, hint, err := statusDisplay(ctx, item.Status)
+	if err != nil {
+		return listItem{}, err
+	}
+	namespace, err := namespaceLabel(ctx, item.Namespace)
+	if err != nil {
+		return listItem{}, err
+	}
+	scope, err := scopeLabel(ctx, item.Namespace, item.ScopeKey)
+	if err != nil {
+		return listItem{}, err
+	}
 	var published *int64
 	if item.Status == StatusReady {
 		published = item.LatestPublishedGeneration
 	}
 	return listItem{
-		NamespaceLabel: namespaceLabel(ctx, item.Namespace), ScopeLabel: scopeLabel(ctx, item.Namespace, item.ScopeKey),
+		NamespaceLabel: namespace, ScopeLabel: scope,
 		StatusLabel: label, StatusTone: tone, StatusHint: hint, PublishedVersion: published,
 		Namespace:                 item.Namespace,
 		ScopeKey:                  item.ScopeKey,
@@ -116,13 +127,17 @@ func listItemResponse(ctx context.Context, item Item) listItem {
 		LatestPublishedGeneration: item.LatestPublishedGeneration,
 		LatestPublishedAt:         item.LatestPublishedAt,
 		UpdatedAt:                 item.UpdatedAt,
-	}
+	}, nil
 }
 
-func listResultResponse(ctx context.Context, result ListResult) listResponse {
+func listResultResponse(ctx context.Context, result ListResult) (listResponse, error) {
 	items := make([]listItem, 0, len(result.Items))
 	for _, item := range result.Items {
-		items = append(items, listItemResponse(ctx, item))
+		value, err := listItemResponse(ctx, item)
+		if err != nil {
+			return listResponse{}, err
+		}
+		items = append(items, value)
 	}
-	return listResponse{List: items, Total: result.Total, Page: result.Page, PageSize: result.PageSize}
+	return listResponse{List: items, Total: result.Total, Page: result.Page, PageSize: result.PageSize}, nil
 }

@@ -1,6 +1,7 @@
 package loginlog
 
 import (
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/option"
 	"context"
 )
@@ -10,9 +11,22 @@ type loginLogAdminOptions struct {
 	LoginTypes []option.Option[LoginType] `json:"loginTypes"`
 }
 
-func adminOptions(ctx context.Context) loginLogAdminOptions {
-	return loginLogAdminOptions{
-		EventTypes: []option.Option[EventType]{option.New(ctx, EventRegister, "注册", "Registration"), option.New(ctx, EventLogin, "登录", "Login"), option.New(ctx, EventLogout, "退出登录", "Logout")},
-		LoginTypes: []option.Option[LoginType]{option.New(ctx, LoginPassword, "密码", "Password"), option.New(ctx, LoginEmail, "邮箱验证码", "Email code"), option.New(ctx, LoginPhone, "手机验证码", "Phone code")},
+func adminOptions(ctx context.Context) (loginLogAdminOptions, error) {
+	eventTypes, err := option.ManyLocalized(ctx, []option.LocalizedEntry[EventType]{
+		{Value: EventRegister, Key: i18n.KeyUserLoginEventRegister},
+		{Value: EventLogin, Key: i18n.KeyUserLoginEventLogin},
+		{Value: EventLogout, Key: i18n.KeyUserLoginEventLogout},
+	})
+	if err != nil {
+		return loginLogAdminOptions{}, err
 	}
+	loginTypes, err := option.ManyLocalized(ctx, []option.LocalizedEntry[LoginType]{
+		{Value: LoginPassword, Key: i18n.KeyLoginTypePassword},
+		{Value: LoginEmail, Key: i18n.KeyLoginTypeEmail},
+		{Value: LoginPhone, Key: i18n.KeyLoginTypePhone},
+	})
+	if err != nil {
+		return loginLogAdminOptions{}, err
+	}
+	return loginLogAdminOptions{EventTypes: eventTypes, LoginTypes: loginTypes}, nil
 }

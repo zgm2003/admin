@@ -1,7 +1,7 @@
 package menu
 
 import (
-	"admin/server/internal/shared/option"
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 	"context"
 )
@@ -37,9 +37,13 @@ func newMenuActions(item ManagedMenu, ancestorDisabled bool) menuActions {
 	return menuActions{Update: true, Status: canStatus, Delete: !item.IsProtected, AddChild: len(children) > 0, AllowedChildTypes: children}
 }
 
-func newMenuPresentation(ctx context.Context, item ManagedMenu) menuPresentation {
+func newMenuPresentation(ctx context.Context, item ManagedMenu) (menuPresentation, error) {
 	value := menuPresentation{TypeLabel: string(item.MenuType), TypeTone: "info", VisibilityLabel: "隐藏", VisibilityTone: "info", StatusLabel: "已禁用", StatusTone: "info"}
-	for _, candidate := range menuTypeOptions(ctx) {
+	typeOptions, err := menuTypeOptions(ctx)
+	if err != nil {
+		return menuPresentation{}, err
+	}
+	for _, candidate := range typeOptions {
 		if candidate.Value == item.MenuType {
 			value.TypeLabel = candidate.Label
 			break
@@ -53,20 +57,41 @@ func newMenuPresentation(ctx context.Context, item ManagedMenu) menuPresentation
 	case TypeAction:
 		value.TypeTone = "warning"
 	}
-	value.VisibilityLabel = option.New(ctx, 0, "隐藏", "Hidden").Label
+	value.VisibilityLabel, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyMenuVisibilityHidden, nil)
+	if err != nil {
+		return menuPresentation{}, err
+	}
 	if item.IsHidden == yesno.No {
-		value.VisibilityLabel = option.New(ctx, 0, "显示", "Visible").Label
+		value.VisibilityLabel, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyMenuVisibilityVisible, nil)
+		if err != nil {
+			return menuPresentation{}, err
+		}
 		value.VisibilityTone = "success"
 	}
-	value.StatusLabel = option.New(ctx, 0, "已禁用", "Disabled").Label
-	value.StatusActionLabel = option.New(ctx, 0, "启用", "Enable").Label
+	value.StatusLabel, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyMenuStatusDisabled, nil)
+	if err != nil {
+		return menuPresentation{}, err
+	}
+	value.StatusActionLabel, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyMenuActionEnable, nil)
+	if err != nil {
+		return menuPresentation{}, err
+	}
 	if item.IsEnabled == yesno.Yes {
-		value.StatusLabel = option.New(ctx, 1, "已启用", "Enabled").Label
+		value.StatusLabel, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyMenuStatusEnabled, nil)
+		if err != nil {
+			return menuPresentation{}, err
+		}
 		value.StatusTone = "success"
-		value.StatusActionLabel = option.New(ctx, 1, "禁用", "Disable").Label
+		value.StatusActionLabel, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyMenuActionDisable, nil)
+		if err != nil {
+			return menuPresentation{}, err
+		}
 	}
 	if item.IsProtected {
-		value.ProtectionReason = option.New(ctx, 1, "受保护菜单不可删除或禁用，仍可编辑展示信息和新增子节点", "Protected menus cannot be deleted or disabled; display information and child nodes remain editable").Label
+		value.ProtectionReason, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyMenuProtectedReason, nil)
+		if err != nil {
+			return menuPresentation{}, err
+		}
 	}
-	return value
+	return value, nil
 }

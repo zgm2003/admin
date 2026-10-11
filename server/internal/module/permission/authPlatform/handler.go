@@ -143,5 +143,10 @@ func (h *Handler) Policy(context *gin.Context) {
 }
 
 func (h *Handler) FormOptions(c *gin.Context) {
-	response.OK(c, http.StatusOK, adminOptions(c.Request.Context()))
+	result, err := adminOptions(c.Request.Context())
+	if err != nil {
+		response.Fail(c, dependencyUnavailable(err))
+		return
+	}
+	response.OK(c, http.StatusOK, result)
 }

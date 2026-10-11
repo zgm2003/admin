@@ -1,27 +1,33 @@
 package option
 
 import (
-	"admin/server/internal/shared/i18n"
 	"context"
-	"encoding/json"
 	"testing"
+
+	"admin/server/internal/shared/i18n"
 )
 
-func TestLocalizedOptionPreservesNumericAndStringValues(t *testing.T) {
-	ctx := i18n.WithLocale(context.Background(), i18n.EnUS)
-	data, err := json.Marshal(New(ctx, 0, "未知", "Unknown"))
-	if err != nil {
-		t.Fatal(err)
+func TestNewLocalizedUsesTheRequestedCatalogLocale(t *testing.T) {
+	for _, test := range []struct {
+		locale i18n.Locale
+		want   string
+	}{
+		{locale: i18n.ZhCN, want: "待发送"},
+		{locale: i18n.EnUS, want: "Pending"},
+	} {
+		ctx := i18n.WithLocale(context.Background(), test.locale)
+		got, err := NewLocalized(ctx, 1, i18n.MessageKey("mail.options.status.pending"), nil)
+		if err != nil {
+			t.Fatalf("NewLocalized(%q) error = %v", test.locale, err)
+		}
+		if got.Value != 1 || got.Label != test.want {
+			t.Fatalf("NewLocalized(%q) = %+v, want label %q", test.locale, got, test.want)
+		}
 	}
-	if string(data) != `{"value":0,"label":"Unknown"}` {
-		t.Fatalf("numeric option=%s", data)
-	}
-	zh := i18n.WithLocale(context.Background(), i18n.ZhCN)
-	value := New(zh, "openai", "OpenAI", "OpenAI")
-	if value.Value != "openai" || value.Label != "OpenAI" {
-		t.Fatalf("string option=%+v", value)
-	}
-	if New(zh, 1, "男", "Male").Label != "男" {
-		t.Fatal("Chinese label lost")
+}
+
+func TestNewLocalizedRejectsMissingCatalogKeys(t *testing.T) {
+	if _, err := NewLocalized(context.Background(), "pending", i18n.MessageKey("mail.options.missing"), nil); err == nil {
+		t.Fatal("NewLocalized accepted a missing catalog key")
 	}
 }

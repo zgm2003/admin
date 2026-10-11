@@ -9,7 +9,10 @@ import (
 )
 
 func TestManagedMenuOwnsPresentationAndActions(t *testing.T) {
-	body := newMenuCatalogResponse(context.Background(), Catalog{MenuTree: []ManagedMenu{{ID: 1, MenuType: TypePage, IsProtected: true, IsEnabled: yesno.Yes}}})
+	body, err := newMenuCatalogResponse(context.Background(), Catalog{MenuTree: []ManagedMenu{{ID: 1, MenuType: TypePage, IsProtected: true, IsEnabled: yesno.Yes}}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	raw, _ := json.Marshal(body)
 	var decoded struct {
 		AllowedRootTypes []Type `json:"allowedRootTypes"`
@@ -38,7 +41,10 @@ func TestManagedMenuOwnsPresentationAndActions(t *testing.T) {
 
 func TestMenuCapabilitiesPreserveProtectedEditingAndParentRules(t *testing.T) {
 	ctx := i18n.WithLocale(context.Background(), i18n.EnUS)
-	body := newMenuCatalogResponse(ctx, Catalog{MenuTree: []ManagedMenu{{ID: 1, MenuType: TypeDirectory, IsEnabled: yesno.No, Children: []ManagedMenu{{ID: 2, MenuType: TypePage, IsEnabled: yesno.No, IsProtected: true}}}}})
+	body, err := newMenuCatalogResponse(ctx, Catalog{MenuTree: []ManagedMenu{{ID: 1, MenuType: TypeDirectory, IsEnabled: yesno.No, Children: []ManagedMenu{{ID: 2, MenuType: TypePage, IsEnabled: yesno.No, IsProtected: true}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	root, child := body.MenuTree[0], body.MenuTree[0].Children[0]
 	if !root.Actions.AddChild || len(root.Actions.AllowedChildTypes) != 2 || !root.Actions.Status {
 		t.Fatalf("directory capabilities: %#v", root)
@@ -46,15 +52,24 @@ func TestMenuCapabilitiesPreserveProtectedEditingAndParentRules(t *testing.T) {
 	if !child.Actions.Update || !child.Actions.AddChild || child.Actions.Status || child.Actions.Delete || child.Presentation.StatusReason != "Enable parent menus first" {
 		t.Fatalf("protected child: %#v", child)
 	}
-	enabledParent := newManagedMenuResponse(ctx, ManagedMenu{MenuType: TypePage, IsProtected: true, IsEnabled: yesno.No}, false)
+	enabledParent, err := newManagedMenuResponse(ctx, ManagedMenu{MenuType: TypePage, IsProtected: true, IsEnabled: yesno.No}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !enabledParent.Actions.Status {
 		t.Fatal("protected disabled page can still be enabled")
 	}
-	action := newManagedMenuResponse(ctx, ManagedMenu{MenuType: TypeAction}, false)
+	action, err := newManagedMenuResponse(ctx, ManagedMenu{MenuType: TypeAction}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if action.Actions.AddChild || len(action.Actions.AllowedChildTypes) != 0 || action.Presentation.TypeLabel != "Action permission" {
 		t.Fatalf("action: %#v", action)
 	}
-	unknown := newMenuPresentation(ctx, ManagedMenu{MenuType: "future"})
+	unknown, err := newMenuPresentation(ctx, ManagedMenu{MenuType: "future"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if unknown.TypeLabel != "future" || unknown.TypeTone != "info" {
 		t.Fatalf("unknown type guessed: %#v", unknown)
 	}

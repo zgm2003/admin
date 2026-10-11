@@ -7,8 +7,14 @@ import (
 )
 
 func TestMenuOptionsUseWriteRules(t *testing.T) {
-	zh := formOptions(i18n.WithLocale(context.Background(), i18n.ZhCN))
-	en := formOptions(i18n.WithLocale(context.Background(), i18n.EnUS))
+	zh, err := formOptions(i18n.WithLocale(context.Background(), i18n.ZhCN))
+	if err != nil {
+		t.Fatal(err)
+	}
+	en, err := formOptions(i18n.WithLocale(context.Background(), i18n.EnUS))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(zh.MenuTypes) != 3 || zh.MenuTypes[0].Value != TypeDirectory || zh.MenuTypes[0].Label == en.MenuTypes[0].Label {
 		t.Fatal("menu types are not localized")
 	}

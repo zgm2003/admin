@@ -1,6 +1,7 @@
 package menu
 
 import (
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/option"
 	"context"
 	"sort"
@@ -22,20 +23,26 @@ type menuFormOptions struct {
 	Constraints menuFormConstraints   `json:"constraints"`
 }
 
-func formOptions(ctx context.Context) menuFormOptions {
+func formOptions(ctx context.Context) (menuFormOptions, error) {
 	reserved := make([]string, 0, len(staticPagePaths))
 	for path := range staticPagePaths {
 		reserved = append(reserved, path)
 	}
 	sort.Strings(reserved)
-	return menuFormOptions{MenuTypes: menuTypeOptions(ctx), Constraints: menuFormConstraints{
+	menuTypes, err := menuTypeOptions(ctx)
+	if err != nil {
+		return menuFormOptions{}, err
+	}
+	return menuFormOptions{MenuTypes: menuTypes, Constraints: menuFormConstraints{
 		CodePattern: menuCodePattern.String(), I18nKeyPattern: menuI18nKeyPattern.String(), PathPattern: menuPathPattern.String(), ComponentPathPattern: menuComponentPathPattern.String(),
 		NameMaxLength: menuTextMaxRunes, CodeMaxLength: menuTextMaxRunes, I18nKeyMaxLength: menuTextMaxRunes, PathMaxLength: menuPathMaxRunes, ReservedPagePaths: reserved,
-	}}
+	}}, nil
 }
 
-func menuTypeOptions(ctx context.Context) []option.Option[Type] {
-	return []option.Option[Type]{
-		option.New(ctx, TypeDirectory, "目录", "Directory"), option.New(ctx, TypePage, "页面", "Page"), option.New(ctx, TypeAction, "按钮权限", "Action permission"),
-	}
+func menuTypeOptions(ctx context.Context) ([]option.Option[Type], error) {
+	return option.ManyLocalized(ctx, []option.LocalizedEntry[Type]{
+		{Value: TypeDirectory, Key: i18n.KeyMenuTypeDirectory},
+		{Value: TypePage, Key: i18n.KeyMenuTypePage},
+		{Value: TypeAction, Key: i18n.KeyMenuTypeAction},
+	})
 }

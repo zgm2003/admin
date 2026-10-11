@@ -37,7 +37,12 @@ func (h *Handler) PageInit(c *gin.Context) {
 }
 
 func (h *Handler) Options(c *gin.Context) {
-	response.OK(c, http.StatusOK, Options(c.Request.Context()))
+	result, err := Options(c.Request.Context())
+	if err != nil {
+		response.Fail(c, apperror.DependencyUnavailable(err))
+		return
+	}
+	response.OK(c, http.StatusOK, result)
 }
 
 func (h *Handler) Test(c *gin.Context) {

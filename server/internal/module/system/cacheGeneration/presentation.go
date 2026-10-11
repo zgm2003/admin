@@ -1,6 +1,7 @@
 package cachegeneration
 
 import (
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/option"
 	"context"
 	"fmt"
@@ -11,65 +12,70 @@ type adminOptions struct {
 	PublishStates []option.Option[string] `json:"publishStates"`
 }
 
-func formOptions(ctx context.Context) adminOptions {
-	return adminOptions{PublishStates: []option.Option[string]{
-		option.New(ctx, PublishStateReady, "已发布", "Published"),
-		option.New(ctx, PublishStatePending, "待发布", "Pending"),
-		option.New(ctx, PublishStateRetrying, "重试中", "Retrying"),
-	}}
+func formOptions(ctx context.Context) (adminOptions, error) {
+	states, err := option.ManyLocalized(ctx, []option.LocalizedEntry[string]{
+		{Value: PublishStateReady, Key: i18n.KeyCachePublishReady}, {Value: PublishStatePending, Key: i18n.KeyCachePublishPending}, {Value: PublishStateRetrying, Key: i18n.KeyCachePublishRetrying},
+	})
+	if err != nil {
+		return adminOptions{}, err
+	}
+	return adminOptions{PublishStates: states}, nil
 }
 
-func namespaceLabel(ctx context.Context, value string) string {
+func namespaceLabel(ctx context.Context, value string) (string, error) {
+	key := i18n.MessageKey("")
 	switch value {
 	case "system.setting":
-		return option.New(ctx, value, "系统设置", "System settings").Label
+		key = i18n.KeyCacheNamespaceSystem
 	case "message.mail":
-		return option.New(ctx, value, "邮件服务", "Mail service").Label
+		key = i18n.KeyCacheNamespaceMail
 	case "message.sms":
-		return option.New(ctx, value, "短信服务", "SMS service").Label
+		key = i18n.KeyCacheNamespaceSMS
 	case "storage.cosconfig":
-		return option.New(ctx, value, "对象存储配置", "Object storage configuration").Label
+		key = i18n.KeyCacheNamespaceCOS
 	default:
-		return value
+		return value, nil
 	}
+	return i18n.Translate(i18n.LocaleFromContext(ctx), key, nil)
 }
 
-func scopeLabel(ctx context.Context, namespace, scope string) string {
+func scopeLabel(ctx context.Context, namespace, scope string) (string, error) {
 	if scope == "global" {
-		return option.New(ctx, scope, "全局", "Global").Label
+		return i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyCacheScopeGlobal, nil)
 	}
 	if namespace == "storage.cosconfig" {
 		if id, err := strconv.ParseInt(scope, 10, 64); err == nil && id > 0 {
-			return fmt.Sprintf(option.New(ctx, scope, "对象存储配置 %s", "Object storage configuration %s").Label, scope)
+			return i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyCacheScopeCOS, map[string]string{"scope": scope})
 		}
 	}
-	return fmt.Sprintf(option.New(ctx, scope, "其他范围（%s）", "Other scope (%s)").Label, scope)
+	label, err := i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyCacheScopeOther, map[string]string{"scope": scope})
+	return fmt.Sprintf("%s", label), err
 }
 
-func statusDisplay(ctx context.Context, value string) (label, tone, hint string) {
+func statusDisplay(ctx context.Context, value string) (label, tone, hint string, err error) {
 	tone = "info"
 	switch value {
 	case StatusReady:
-		label = option.New(ctx, value, "就绪", "Ready").Label
+		label, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyCacheStatusReady, nil)
 		tone = "success"
 	case StatusPending:
-		label = option.New(ctx, value, "待发布", "Pending").Label
+		label, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyCacheStatusPending, nil)
 		tone = "warning"
 	case StatusRetrying:
-		label = option.New(ctx, value, "重试中", "Retrying").Label
+		label, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyCacheStatusRetrying, nil)
 		tone = "danger"
 	case StatusInvalidating:
-		label = option.New(ctx, value, "变更中", "Invalidating").Label
+		label, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyCacheStatusInvalidating, nil)
 		tone = "warning"
 	case StatusMissing:
-		label = option.New(ctx, value, "等待缓存重建", "Waiting for cache rebuild").Label
+		label, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyCacheStatusMissing, nil)
 		tone = "warning"
-		hint = option.New(ctx, value, "Redis 状态为空，访问配置时会按现有协议自动重建。", "Redis state is empty; configuration access rebuilds it using the existing protocol.").Label
+		hint, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyCacheStatusMissingHint, nil)
 	case StatusCorrupt:
-		label = option.New(ctx, value, "状态损坏", "Corrupt").Label
+		label, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyCacheStatusCorrupt, nil)
 		tone = "danger"
 	case StatusUnavailable:
-		label = option.New(ctx, value, "Redis 不可用", "Redis unavailable").Label
+		label, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyCacheStatusUnavailable, nil)
 		tone = "danger"
 	default:
 		label = value

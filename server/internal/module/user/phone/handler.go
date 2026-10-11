@@ -110,5 +110,10 @@ func parseChangeLogQuery(values url.Values) (pagination.Request, error) {
 }
 
 func (h *Handler) FormOptions(c *gin.Context) {
-	response.OK(c, http.StatusOK, adminOptions(c.Request.Context()))
+	result, err := adminOptions(c.Request.Context())
+	if err != nil {
+		response.Fail(c, apperror.DependencyUnavailable(err))
+		return
+	}
+	response.OK(c, http.StatusOK, result)
 }

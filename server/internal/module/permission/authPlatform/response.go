@@ -68,8 +68,12 @@ func newListResponse(ctx context.Context, items []ListItem, total int64, page, p
 		if err != nil {
 			return listResponse{}, err
 		}
+		presentation, err := newPlatformPresentation(ctx, value, loginTypes)
+		if err != nil {
+			return listResponse{}, err
+		}
 		list = append(list, listItemResponse{
-			Presentation: newPlatformPresentation(ctx, value, loginTypes), Actions: platformActions{Update: true, Status: true, Delete: value.IsBuiltin == yesno.No},
+			Presentation: presentation, Actions: platformActions{Update: true, Status: true, Delete: value.IsBuiltin == yesno.No},
 			ID: value.ID, Code: value.Code, Name: value.Name, LoginTypes: loginTypes, PolicyVersion: value.PolicyVersion,
 			AccessTTLSeconds: value.AccessTTLSeconds, RefreshTTLSeconds: value.RefreshTTLSeconds,
 			SessionCacheTTLSeconds: value.SessionCacheTTLSeconds, AccessCacheTTLSeconds: value.AccessCacheTTLSeconds,

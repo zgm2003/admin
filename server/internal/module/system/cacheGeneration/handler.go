@@ -34,11 +34,21 @@ func (h *Handler) List(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, http.StatusOK, listResultResponse(c.Request.Context(), result))
+	body, err := listResultResponse(c.Request.Context(), result)
+	if err != nil {
+		response.Fail(c, apperror.DependencyUnavailable(err))
+		return
+	}
+	response.OK(c, http.StatusOK, body)
 }
 
 func (h *Handler) FormOptions(c *gin.Context) {
-	response.OK(c, http.StatusOK, formOptions(c.Request.Context()))
+	body, err := formOptions(c.Request.Context())
+	if err != nil {
+		response.Fail(c, apperror.DependencyUnavailable(err))
+		return
+	}
+	response.OK(c, http.StatusOK, body)
 }
 
 func parseListQuery(values url.Values) (ListQuery, error) {

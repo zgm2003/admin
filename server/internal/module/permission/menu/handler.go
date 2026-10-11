@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/response"
 	"admin/server/internal/shared/validate"
 	"admin/server/internal/shared/yesno"
@@ -47,7 +48,12 @@ func (h *Handler) List(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	response.OK(context, http.StatusOK, newMenuCatalogResponse(context.Request.Context(), catalog))
+	body, err := newMenuCatalogResponse(context.Request.Context(), catalog)
+	if err != nil {
+		response.Fail(context, apperror.DependencyUnavailable(err))
+		return
+	}
+	response.OK(context, http.StatusOK, body)
 }
 
 func (h *Handler) Create(context *gin.Context) {
@@ -133,5 +139,10 @@ func (h *Handler) Delete(context *gin.Context) {
 }
 
 func (h *Handler) FormOptions(c *gin.Context) {
-	response.OK(c, http.StatusOK, formOptions(c.Request.Context()))
+	result, err := formOptions(c.Request.Context())
+	if err != nil {
+		response.Fail(c, apperror.DependencyUnavailable(err))
+		return
+	}
+	response.OK(c, http.StatusOK, result)
 }

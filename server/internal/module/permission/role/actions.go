@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"admin/server/internal/shared/option"
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -24,7 +24,12 @@ type ActionLabels struct {
 }
 
 func roleActions(ctx context.Context, item ListItem) (Actions, ActionLabels) {
-	label := func(zh, en string) string { return option.New(ctx, "", zh, en).Label }
+	label := func(zh, en string) string {
+		if i18n.LocaleFromContext(ctx) == i18n.EnUS {
+			return en
+		}
+		return zh
+	}
 	actions := Actions{Update: !IsSystemCode(item.Code), Status: item.Code != CodeSuperAdmin && !(item.IsDefault == yesno.Yes && item.IsEnabled == yesno.Yes), SetDefault: item.Code != CodeSuperAdmin && item.IsDefault != yesno.Yes && item.IsEnabled == yesno.Yes, Delete: !IsSystemCode(item.Code) && item.IsDefault != yesno.Yes && item.UserCount == 0, Authorize: item.Code != CodeSuperAdmin}
 	labels := ActionLabels{Update: label("编辑", "Edit"), Status: label("启用", "Enable"), SetDefault: label("设为默认", "Set as default"), Delete: label("删除", "Delete"), Authorize: label("授权", "Authorize")}
 	if item.IsEnabled == yesno.Yes {

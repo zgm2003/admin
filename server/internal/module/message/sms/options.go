@@ -3,11 +3,13 @@ package sms
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	smslog "admin/server/internal/module/message/sms/log"
 	policy "admin/server/internal/module/message/sms/rateLimitPolicy"
 	rule "admin/server/internal/module/message/sms/recipientRule"
 	"admin/server/internal/module/message/sms/template"
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/option"
 )
 
@@ -40,38 +42,93 @@ type OptionsResult struct {
 }
 
 // Options is code-only and has no PostgreSQL, Redis, or configuration dependency.
-func Options(ctx context.Context) OptionsResult {
+func Options(ctx context.Context) (OptionsResult, error) {
 	result := OptionsResult{
 		RateLimitConstraints: policy.Constraints(),
 		Scenes:               make([]localizedSceneOption, 0, 4),
-		Statuses: []statusOption{
-			{option.New(ctx, smslog.StatusPending, "待发送", "Pending"), "info"},
-			{option.New(ctx, smslog.StatusSent, "已发送", "Sent"), "success"},
-			{option.New(ctx, smslog.StatusFailed, "发送失败", "Failed"), "danger"},
-		},
-		RuleScopes:          []option.Option[rule.Scope]{option.New(ctx, rule.ScopePhone, "手机号", "Phone number"), option.New(ctx, rule.ScopePrefix, "号段", "Phone prefix")},
-		RuleActions:         []actionOption{{option.New(ctx, rule.ActionAllow, "允许", "Allow"), "success"}, {option.New(ctx, rule.ActionDeny, "拒绝", "Deny"), "danger"}},
-		RateLimitPolicies:   make([]option.Option[string], 0, 2),
-		RateLimitModes:      []option.Option[string]{option.New(ctx, policy.ModeBusiness, "业务发送", "Business sending")},
-		RateLimitDimensions: []option.Option[string]{option.New(ctx, policy.DimensionPhone, "认证平台 + 手机号", "Authentication platform + phone number")},
+		Statuses:             make([]statusOption, 0, 3),
+		RuleScopes:           make([]option.Option[rule.Scope], 0, 2),
+		RuleActions:          make([]actionOption, 0, 2),
+		RateLimitPolicies:    make([]option.Option[string], 0, 2),
+		RateLimitModes:       make([]option.Option[string], 0, 1),
+		RateLimitDimensions:  make([]option.Option[string], 0, 1),
 	}
-	result.RuleDefaults.Scope, result.RuleDefaults.Action = rule.ScopePhone, rule.ActionDeny
-	for _, fixed := range template.FixedCatalog() {
-		en := fixed.Scene
-		switch fixed.Scene {
-		case template.SceneLogin:
-			en = "Login verification code"
-		case template.SceneForget:
-			en = "Password recovery"
-		case template.SceneBindPhone:
-			en = "Bind or change phone"
-		case template.SceneChangePassword:
-			en = "Change password"
+	for _, item := range []struct {
+		value smslog.Status
+		key   i18n.MessageKey
+		tone  string
+	}{
+		{smslog.StatusPending, i18n.KeySMSOptionStatusPending, "info"},
+		{smslog.StatusSent, i18n.KeySMSOptionStatusSent, "success"},
+		{smslog.StatusFailed, i18n.KeySMSOptionStatusFailed, "danger"},
+	} {
+		localized, err := option.NewLocalized(ctx, item.value, item.key, nil)
+		if err != nil {
+			return OptionsResult{}, err
 		}
-		result.Scenes = append(result.Scenes, localizedSceneOption{option.New(ctx, fixed.Scene, fixed.Name, en), append([]string(nil), fixed.VariableKeys...)})
+		result.Statuses = append(result.Statuses, statusOption{Option: localized, Tone: item.tone})
+	}
+	for _, item := range []struct {
+		value rule.Scope
+		key   i18n.MessageKey
+	}{
+		{rule.ScopePhone, i18n.KeySMSOptionScopePhone},
+		{rule.ScopePrefix, i18n.KeySMSOptionScopePrefix},
+	} {
+		localized, err := option.NewLocalized(ctx, item.value, item.key, nil)
+		if err != nil {
+			return OptionsResult{}, err
+		}
+		result.RuleScopes = append(result.RuleScopes, localized)
+	}
+	for _, item := range []struct {
+		value rule.Action
+		key   i18n.MessageKey
+		tone  string
+	}{
+		{rule.ActionAllow, i18n.KeySMSOptionActionAllow, "success"},
+		{rule.ActionDeny, i18n.KeySMSOptionActionDeny, "danger"},
+	} {
+		localized, err := option.NewLocalized(ctx, item.value, item.key, nil)
+		if err != nil {
+			return OptionsResult{}, err
+		}
+		result.RuleActions = append(result.RuleActions, actionOption{Option: localized, Tone: item.tone})
+	}
+	localizedMode, err := option.NewLocalized(ctx, policy.ModeBusiness, i18n.KeySMSOptionRateLimitMode, nil)
+	if err != nil {
+		return OptionsResult{}, err
+	}
+	result.RateLimitModes = append(result.RateLimitModes, localizedMode)
+	localizedDimension, err := option.NewLocalized(ctx, policy.DimensionPhone, i18n.KeySMSOptionRateLimitDimension, nil)
+	if err != nil {
+		return OptionsResult{}, err
+	}
+	result.RateLimitDimensions = append(result.RateLimitDimensions, localizedDimension)
+	result.RuleDefaults.Scope, result.RuleDefaults.Action = rule.ScopePhone, rule.ActionDeny
+	sceneKeys := map[string]i18n.MessageKey{
+		template.SceneLogin:          i18n.KeySMSOptionSceneLogin,
+		template.SceneForget:         i18n.KeySMSOptionSceneForget,
+		template.SceneBindPhone:      i18n.KeySMSOptionSceneBindPhone,
+		template.SceneChangePassword: i18n.KeySMSOptionSceneChangePassword,
+	}
+	for _, fixed := range template.FixedCatalog() {
+		key, ok := sceneKeys[fixed.Scene]
+		if !ok {
+			return OptionsResult{}, fmt.Errorf("sms scene %q has no localized label key", fixed.Scene)
+		}
+		localized, err := option.NewLocalized(ctx, fixed.Scene, key, nil)
+		if err != nil {
+			return OptionsResult{}, err
+		}
+		result.Scenes = append(result.Scenes, localizedSceneOption{Option: localized, VariableKeys: append([]string(nil), fixed.VariableKeys...)})
 	}
 	for _, fixed := range policy.FixedPolicies() {
-		result.RateLimitPolicies = append(result.RateLimitPolicies, option.New(ctx, fixed.Key, fmt.Sprintf("业务手机号发送 · %d 秒窗口", fixed.WindowSeconds), fmt.Sprintf("Business phone sending · %ds window", fixed.WindowSeconds)))
+		localized, err := option.NewLocalized(ctx, fixed.Key, i18n.KeySMSOptionRateLimitPolicy, map[string]string{"windowSeconds": strconv.Itoa(fixed.WindowSeconds)})
+		if err != nil {
+			return OptionsResult{}, err
+		}
+		result.RateLimitPolicies = append(result.RateLimitPolicies, localized)
 	}
-	return result
+	return result, nil
 }

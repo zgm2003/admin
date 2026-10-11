@@ -41,12 +41,19 @@ func TestPlatformPresentationLocaleAndRawFallback(t *testing.T) {
 		sessions int16
 		label    string
 	}{{0, "Unlimited"}, {1, "Single session"}, {4, "Up to 4"}, {-1, "-1"}} {
-		value := newPlatformPresentation(ctx, Platform{MaxSessions: test.sessions}, []LoginType{LoginTypeEmail, "future"})
+		value, err := newPlatformPresentation(ctx, Platform{MaxSessions: test.sessions}, []LoginType{LoginTypeEmail, "future"})
+		if err != nil {
+			t.Fatal(err)
+		}
 		if value.MaxSessionsLabel != test.label || value.LoginTypes[0].Label != "Email code" || value.LoginTypes[1].Label != "future" {
 			t.Fatalf("presentation: %#v", value)
 		}
 	}
-	if adminOptions(ctx).NameMaxBytes != MaximumNameBytes {
+	options, err := adminOptions(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.NameMaxBytes != MaximumNameBytes {
 		t.Fatal("name byte constraint drift")
 	}
 }
