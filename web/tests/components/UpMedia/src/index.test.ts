@@ -323,20 +323,22 @@ describe('UpMedia', () => {
     expect(wrapper.emitted('uploaded')?.at(-1)).toEqual([[{ fileId: 1, objectKey: 'a.png' }]])
   })
 
-  it('renders dedicated avatar actions instead of the generic square uploader', () => {
+  it('uses the same square picker for empty and populated image fields', async () => {
     const empty = mountComponent({ modelValue: '', ruleCode: 'avatar', variant: 'avatar' })
-    expect(empty.find('.avatar-uploader').exists()).toBe(true)
-    expect(empty.find('.avatar-uploader .el-upload').exists()).toBe(true)
-    expect(empty.find('.avatar-uploader-icon').exists()).toBe(true)
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    await empty.get('[data-testid="up-media-upload"]').trigger('click')
+    expect(click).toHaveBeenCalledOnce()
 
     const filled = mountComponent({
       modelValue: 'avatar/alice.png',
       ruleCode: 'avatar',
       variant: 'avatar',
     })
-    expect(filled.find('.avatar-uploader').exists()).toBe(true)
-    expect(filled.find('.up-media__avatar-clear').exists()).toBe(true)
-    expect(filled.find('.up-media__trigger').exists()).toBe(false)
+    await flushPromises()
+    await filled.get('[data-testid="up-media-upload"]').trigger('click')
+    expect(click).toHaveBeenCalledTimes(2)
+    expect(filled.find('.up-media__clear').exists()).toBe(true)
+    click.mockRestore()
   })
 
   it('restores the preview URL for an existing object key after reload', async () => {

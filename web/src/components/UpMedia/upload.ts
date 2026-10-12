@@ -15,14 +15,14 @@ export class DirectUploadError extends Error {
   }
 }
 
-function contentType(file: File): string {
+function contentType(file: Pick<File, 'name' | 'type'>): string {
   if (file.name.toLowerCase().endsWith('.xlsx'))
     return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   // Windows may identify CSV as an Excel MIME type, or leave File.type empty.
   return file.name.toLowerCase().endsWith('.csv') ? 'text/csv' : file.type.toLowerCase()
 }
 
-function accepts(file: File, accept: string): boolean {
+export function acceptsMediaFile(file: Pick<File, 'name' | 'type'>, accept: string): boolean {
   const choices = accept
     .toLowerCase()
     .split(',')
@@ -60,7 +60,7 @@ export async function uploadMediaFiles(
     if (signal.aborted || !isCurrent()) throw new DOMException('Upload cancelled', 'AbortError')
   }
   checkCurrent()
-  if (files.length === 0 || files.some((file) => !accepts(file, accept)))
+  if (files.length === 0 || files.some((file) => !acceptsMediaFile(file, accept)))
     throw new DirectUploadError('invalidType')
   const credentials = await requestUploadCredentials(
     ruleCode,

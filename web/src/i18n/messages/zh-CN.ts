@@ -1226,8 +1226,11 @@ export const zhCN = {
   'storage.file.deleteAccepted': '删除已受理',
   'storage.file.previewUnavailable': '无法预览此文件，请下载查看',
   'storage.file.selectTitle': '选择我的文件',
-  'storage.file.chooseAvatar': '从我的文件选择',
-  'storage.file.selectedAvatar': '已选择：{name}，保存资料后生效',
+  'components.upMedia.chooseFromFiles': '从我的文件选择',
+  'components.upMedia.uploadAvatar': '上传头像',
+  'components.upMedia.replaceAvatar': '更换头像',
+  'components.upMedia.avatarPreview': '头像预览',
+  'user.profile.avatarPending': '保存资料后生效',
 } as const
 
 export type AppMessageKey = keyof typeof zhCN

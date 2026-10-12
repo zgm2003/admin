@@ -5,6 +5,10 @@ export interface UpMediaProps {
   variant?: 'default' | 'avatar' | 'file'
   fileLabel?: string
   uploadDisabled?: boolean
+  /** Show the personal file library entry after the caller checks its permissions. */
+  allowFileLibrary?: boolean
+  /** Pass the field's backend selection purpose, for example avatar. */
+  fileLibraryPurpose?: string
   accept?: string
   disabled?: boolean
   clearable?: boolean

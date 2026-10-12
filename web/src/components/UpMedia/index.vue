@@ -1,22 +1,25 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { CircleCloseFilled, Picture, Plus } from '@element-plus/icons-vue'
-import type { UploadRequestOptions } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
-import type { CompletedFile } from '@/api/storage/file'
+import type { CompletedFile, StorageFile } from '@/api/storage/file'
 import { requestObjectURL } from '@/api/storage/upload'
-import { uploadMediaFiles, DirectUploadError, sameMediaValue } from './upload'
+import { uploadMediaFiles, DirectUploadError, sameMediaValue, acceptsMediaFile } from './upload'
 import type { UpMediaProps, PreviewState, MediaFileItem } from './types'
 import FileList from './components/FileList/index.vue'
 
 defineOptions({ name: 'UpMedia' })
+
+const FileSelectDialog = defineAsyncComponent(() => import('@/components/FileSelectDialog/index.vue'))
 
 const props = withDefaults(defineProps<UpMediaProps>(), {
   multiple: false,
   variant: 'default',
   fileLabel: '',
   uploadDisabled: false,
+  allowFileLibrary: false,
+  fileLibraryPurpose: '',
   accept: 'image/*',
   disabled: false,
   clearable: true,
@@ -28,11 +31,15 @@ const emit = defineEmits<{
   'preview-change': [value: string]
   'uploading-change': [value: boolean]
   uploaded: [value: CompletedFile[]]
+  selected: [file: StorageFile]
 }>()
 const { t } = useI18n()
 const inputRef = ref<HTMLInputElement>()
 const loading = ref(false)
 const uploadError = ref('')
+const libraryVisible = ref(false)
+const libraryFile = ref<StorageFile | null>(null)
+const displayFileLabel = computed(() => props.fileLabel || libraryFile.value?.fileName || '')
 let emittedModel: string | string[] | null = null
 const previews = ref<Record<string, PreviewState>>({})
 let nextRequestId = 0
@@ -85,6 +92,12 @@ const displayItems = computed<MediaFileItem[]>(() =>
 const avatarItem = computed(() => displayItems.value[0])
 
 watch(
+  [() => props.disabled, () => props.allowFileLibrary, () => props.fileLibraryPurpose, loading],
+  () => { libraryVisible.value = false },
+  { flush: 'sync' },
+)
+
+watch(
   () => avatarItem.value?.previewUrl ?? '',
   (previewUrl) => emit('preview-change', previewUrl),
   { immediate: true },
@@ -132,6 +145,7 @@ async function resolvePreview(objectKey: string, force = false): Promise<string>
 watch(
   values,
   (next) => {
+    if (libraryFile.value && !next.includes(libraryFile.value.objectKey)) libraryFile.value = null
     for (const key of refreshedImages) if (!next.includes(key)) refreshedImages.delete(key)
     const retained: Record<string, PreviewState> = {}
     for (const objectKey of next) {
@@ -169,14 +183,31 @@ async function onFileChange(event: Event): Promise<void> {
   await uploadSelected(selected)
 }
 
-async function onAvatarUpload(options: UploadRequestOptions): Promise<void> {
-  await uploadSelected([options.file])
+function openLibrary(): void {
+  if (props.allowFileLibrary && !props.disabled && !loading.value) libraryVisible.value = true
+}
+
+function selectFromLibrary(file: StorageFile): void {
+  if (!active || !libraryVisible.value || !props.allowFileLibrary || props.disabled || loading.value) return
+  libraryVisible.value = false
+  uploadError.value = ''
+  if (!acceptsMediaFile({ name: file.fileName, type: file.mimeType }, props.accept)) {
+    uploadError.value = t('components.upMedia.invalidType')
+    return
+  }
+  if (props.multiple && values.value.includes(file.objectKey)) return
+  const next = props.multiple ? [...values.value, file.objectKey] : file.objectKey
+  libraryFile.value = file
+  emittedModel = next
+  emit('selected', file)
+  emit('update:modelValue', next)
 }
 
 async function uploadSelected(selected: File[]): Promise<boolean> {
   if (props.disabled || props.uploadDisabled || loading.value || selected.length === 0) return false
   emittedModel = null
   uploadError.value = ''
+  libraryFile.value = null
   const sequence = ++uploadSequence
   const current = () =>
     active && sequence === uploadSequence && !props.disabled && !props.uploadDisabled
@@ -247,6 +278,7 @@ async function uploadSelected(selected: File[]): Promise<boolean> {
 function clearAt(index: number): void {
   if (props.disabled || loading.value) return
   uploadError.value = ''
+  libraryFile.value = null
   const next = values.value.filter((_value, itemIndex) => itemIndex !== index)
   const removed = values.value[index]
   if (removed) {
@@ -283,45 +315,11 @@ async function downloadFile(objectKey: string): Promise<void> {
 
 <template>
   <div
-    v-if="variant === 'avatar'"
-    v-loading="loading"
-    class="up-media up-media--avatar"
-    :class="{ 'is-disabled': disabled, 'is-loading': loading }"
-    :style="{ '--up-media-avatar-size': width }"
-    data-testid="up-media-avatar"
-  >
-    <el-upload
-      class="avatar-uploader"
-      :show-file-list="false"
-      :accept="accept"
-      :disabled="disabled || uploadDisabled || loading"
-      :http-request="onAvatarUpload"
-    >
-      <img
-        v-if="avatarItem?.previewUrl"
-        :src="avatarItem.previewUrl"
-        class="avatar"
-        alt=""
-        @error="handlePreviewError(avatarItem.objectKey)"
-      />
-      <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
-    </el-upload>
-    <button
-      v-if="clearable && avatarItem && !disabled && !loading"
-      type="button"
-      class="up-media__avatar-clear"
-      :aria-label="t('components.upMedia.clear')"
-      @click="clearAt(0)"
-    >
-      <CircleCloseFilled />
-    </button>
-    <p v-if="uploadError" class="up-media__error" role="alert">{{ uploadError }}</p>
-  </div>
-  <div
-    v-else
     v-loading="loading"
     class="up-media"
-    :class="{ 'is-disabled': disabled, 'is-loading': loading }"
+    :class="{ 'up-media--avatar': variant === 'avatar', 'is-disabled': disabled, 'is-loading': loading }"
+    :style="{ '--up-media-avatar-size': width }"
+    :data-testid="variant === 'avatar' ? 'up-media-avatar' : undefined"
   >
     <input
       ref="inputRef"
@@ -333,10 +331,55 @@ async function downloadFile(objectKey: string): Promise<void> {
       :disabled="disabled || uploadDisabled || loading"
       @change="onFileChange"
     />
+    <template v-if="variant === 'avatar'">
+      <div v-loading="avatarItem?.pending" class="up-media__avatar-preview">
+        <img
+          v-if="avatarItem?.previewUrl"
+          :src="avatarItem.previewUrl"
+          class="avatar"
+          :alt="t('components.upMedia.avatarPreview')"
+          @error="handlePreviewError(avatarItem.objectKey)"
+        />
+        <Picture v-else class="up-media__placeholder" aria-hidden="true" />
+      </div>
+      <div class="up-media__avatar-content">
+        <div class="up-media__actions">
+          <el-button
+            data-testid="up-media-avatar-upload"
+            type="primary"
+            plain
+            :disabled="disabled || uploadDisabled || loading"
+            @click="openPicker"
+          >{{ t(avatarItem ? 'components.upMedia.replaceAvatar' : 'components.upMedia.uploadAvatar') }}</el-button>
+          <el-button
+            v-if="allowFileLibrary"
+            data-testid="up-media-library"
+            type="primary"
+            plain
+            :disabled="disabled || loading"
+            @click="openLibrary"
+          >{{ t('components.upMedia.chooseFromFiles') }}</el-button>
+          <el-button
+            v-if="clearable && avatarItem"
+            data-testid="up-media-avatar-clear"
+            type="danger"
+            link
+            :disabled="disabled || loading"
+            @click="clearAt(0)"
+          >{{ t('components.upMedia.clearFile') }}</el-button>
+        </div>
+        <p v-if="displayFileLabel" class="up-media__name" :title="displayFileLabel">{{ displayFileLabel }}</p>
+        <div v-if="$slots.tip" class="up-media__tip"><slot name="tip" /></div>
+        <p v-if="avatarItem?.failed" class="up-media__preview-error" role="status">
+          {{ t('components.upMedia.resolveFailed') }}
+          <el-button link type="primary" @click="resolvePreview(avatarItem.objectKey, true)">{{ t('components.upMedia.retry') }}</el-button>
+        </p>
+      </div>
+    </template>
     <FileList
-      v-if="variant === 'file'"
+      v-else-if="variant === 'file'"
       :items="displayItems"
-      :label="fileLabel"
+      :label="displayFileLabel"
       :disabled="disabled"
       :upload-disabled="uploadDisabled"
       :loading="loading"
@@ -391,7 +434,22 @@ async function downloadFile(objectKey: string): Promise<void> {
         <Plus />
       </button>
     </template>
+    <div v-if="variant !== 'avatar' && allowFileLibrary" class="up-media__actions">
+      <el-button
+        data-testid="up-media-library"
+        type="primary"
+        plain
+        :disabled="disabled || loading"
+        @click="openLibrary"
+      >{{ t('components.upMedia.chooseFromFiles') }}</el-button>
+    </div>
     <p v-if="uploadError" class="up-media__error" role="alert">{{ uploadError }}</p>
+    <FileSelectDialog
+      v-if="libraryVisible"
+      v-model="libraryVisible"
+      :purpose="fileLibraryPurpose"
+      @select="selectFromLibrary"
+    />
   </div>
 </template>
 

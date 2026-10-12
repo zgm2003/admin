@@ -1,5 +1,12 @@
 # 项目状态
 
+## 我的文件上传完成请求体修复（2026-10-12，代码与定向验证完成）
+
+- 截图中凭证和 COS PUT 成功、complete 返回 400 的根因是请求体契约错配：后端 RequireEmptyBody 要求完全空体，前端却发送 `{}`，Axios 序列化后在 Handler 校验阶段被拒绝。completeFileUpload 现传 undefined，不发送请求体，保留取消信号；本轮只改前端生产代码，无后端行为、数据库、权限或缓存协议变化。
+- 纠正 API mock 的旧断言，新增真实 request.ts/Axios adapter 回归，确认带/不带信号均无序列化请求体且完成 DTO 保真；补 Gin Handler 契约测试，覆盖空体接受、非空/畸形体拒绝且不调用 Service，以及身份、Request Context 和上传权限绑定。
+- 实际运行 `pnpm vitest run tests/api/storage/file.test.ts tests/api/storage/fileRequest.test.ts tests/components/UpMedia/src/index.test.ts tests/views/storage/file/index.test.ts tests/utils/request.test.ts --pool=threads --maxWorkers=1`：5 文件 81 项通过；受影响前端文件 Prettier、ESLint、`pnpm build`（含 vue-tsc）通过。Go 新测试 gofmt、`go test ./internal/module/storage/file -run '^TestCompleteHandler' -count=1`、`go test ./internal/module/storage/file ./internal/shared/validate -count=1` 和相同两包 `go vet` 通过；前端回归先失败后修复通过。
+- 未运行全仓测试或真实浏览器/COS 上传验收，Axios adapter 测试不代表真实网络上传；构建保留既有富文本大 chunk 提示。没有启动/停止 API/Worker、执行迁移或提交 Git；刷新新版前端后重新选择文件上传即可，本轮不需要重启后端。
+
 ## 我的文件页面与菜单收口（2026-10-12，代码、菜单修正与定向验证完成）
 
 - 维护者截图中的三个“默认100MB”来自同一条上传规则的 `avatar/file/setting` 编码，非三个 COS 配置。原 options 查询展开全部编码，页面默认取到 avatar；现后端按普通文件 `file`、头像 `avatar` 精确匹配，不回退到其他用途，未知用途返回明确参数错误。查询移回 uploadRule Repository，当前平台、规则和 COS 配置均需有效启用；每次 options 最多一条 SELECT，不改变凭证/对象访问的缓存热路径。

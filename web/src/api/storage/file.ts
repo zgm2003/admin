@@ -55,11 +55,9 @@ export function getFile(id: number): Promise<StorageFile> {
   return request.get<StorageFile>(`/api/v1/storage/file/${id}`)
 }
 export function completeFileUpload(id: number, signal?: AbortSignal): Promise<CompletedFile> {
-  return request.post<CompletedFile>(
-    `/api/v1/storage/file/${id}/complete`,
-    {},
-    { ...(signal ? { signal } : {}) },
-  )
+  return request.post<CompletedFile>(`/api/v1/storage/file/${id}/complete`, undefined, {
+    ...(signal ? { signal } : {}),
+  })
 }
 export function getFileURL(
   id: number,

@@ -17,7 +17,15 @@ it('completes a single file with cancellation signal and returns confirmed key',
   const data = { fileId: 8, objectKey: 'final/key' }
   vi.mocked(request.post).mockResolvedValue(data)
   expect(await api.completeFileUpload(8, signal)).toBe(data)
-  expect(request.post).toHaveBeenCalledWith('/api/v1/storage/file/8/complete', {}, { signal })
+  expect(request.post).toHaveBeenCalledWith('/api/v1/storage/file/8/complete', undefined, {
+    signal,
+  })
+})
+it('completes without a JSON request body when no signal is supplied', async () => {
+  const data = { fileId: 8, objectKey: 'final/key' }
+  vi.mocked(request.post).mockResolvedValue(data)
+  expect(await api.completeFileUpload(8)).toBe(data)
+  expect(request.post).toHaveBeenCalledWith('/api/v1/storage/file/8/complete', undefined, {})
 })
 it('requests an attachment URL separately from delete acceptance', async () => {
   await api.getFileURL(8, 'attachment')

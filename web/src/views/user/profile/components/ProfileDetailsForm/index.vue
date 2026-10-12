@@ -2,7 +2,6 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import FileSelectDialog from '@/components/FileSelectDialog/index.vue'
 import { usePermissionStore } from '@/store/permission'
 import type { StorageFile, CompletedFile } from '@/api/storage/file'
 import type { UpdateAccountProfileInput } from '@/api/user/profile'
@@ -42,7 +41,6 @@ const canUploadAvatar = computed(
     access.hasPermission('storage:object:upload') &&
     access.hasPermission('storage:file:detail'),
 )
-const selectorVisible = ref(false)
 const avatarKey = ref(props.profileForm.avatar)
 const selectedName = ref('')
 
@@ -162,23 +160,19 @@ function updateGender(value: UpdateAccountProfileInput['gender']): void {
               :model-value="avatarKey"
               rule-code="avatar"
               variant="avatar"
-              width="178px"
+              width="88px"
               :disabled="!canUpdateProfile"
               :upload-disabled="!canUploadAvatar"
+              :allow-file-library="canSelectFile"
+              file-library-purpose="avatar"
+              :file-label="selectedName"
+              @selected="selectFile"
               @uploaded="avatarUploaded"
               @update:model-value="updateAvatar"
               @preview-change="emit('avatarPreviewChange', $event)"
-            />
-            <el-button
-              v-if="canSelectFile"
-              type="primary"
-              data-testid="profile-choose-file"
-              @click="selectorVisible = true"
-              >{{ t('storage.file.chooseAvatar') }}</el-button
             >
-            <span v-if="selectedName">{{
-              t('storage.file.selectedAvatar', { name: selectedName })
-            }}</span>
+              <template v-if="selectedName" #tip>{{ t('user.profile.avatarPending') }}</template>
+            </UpMedia>
           </el-form-item>
         </el-col>
         <el-col :xs="24" :sm="12">
@@ -215,7 +209,6 @@ function updateGender(value: UpdateAccountProfileInput['gender']): void {
         }}</el-button>
       </div>
     </el-form>
-    <FileSelectDialog v-model="selectorVisible" purpose="avatar" @select="selectFile" />
   </section>
 </template>
 

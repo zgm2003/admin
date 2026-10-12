@@ -1275,6 +1275,9 @@ export const enUS = {
   'storage.file.deleteAccepted': 'Deletion accepted',
   'storage.file.previewUnavailable': 'Preview is unavailable. Download to view this file.',
   'storage.file.selectTitle': 'Select My File',
-  'storage.file.chooseAvatar': 'Choose from My Files',
-  'storage.file.selectedAvatar': 'Selected: {name}. Save your profile to apply.',
+  'components.upMedia.chooseFromFiles': 'Choose from My Files',
+  'components.upMedia.uploadAvatar': 'Upload avatar',
+  'components.upMedia.replaceAvatar': 'Replace avatar',
+  'components.upMedia.avatarPreview': 'Avatar preview',
+  'user.profile.avatarPending': 'Save your profile to apply.',
 } satisfies Record<AppMessageKey, string>
