@@ -39,10 +39,11 @@ func parsePositiveInt(values url.Values, key string) (int, error) {
 		if character < '0' || character > '9' {
 			return 0, apperror.InvalidRequest(fmt.Errorf("%s must be a positive base-10 integer", key))
 		}
-		value = value*10 + int(character-'0')
-		if value < 0 {
+		digit := int(character - '0')
+		if value > (int(^uint(0)>>1)-digit)/10 {
 			return 0, apperror.InvalidRequest(fmt.Errorf("%s is too large", key))
 		}
+		value = value*10 + digit
 	}
 	if value < 1 {
 		return 0, apperror.InvalidRequest(fmt.Errorf("%s must be a positive integer", key))

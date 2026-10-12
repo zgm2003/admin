@@ -27,6 +27,7 @@ vi.mock('vue', async (importOriginal) => ({
 }))
 vi.mock('@/App.vue', () => ({ default: {} }))
 vi.mock('@/i18n', () => ({
+  installElementPlusLocale: vi.fn(),
   appI18n: { name: 'i18n' },
   initializeLocale: appHarness.initializeLocale,
 }))

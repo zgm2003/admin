@@ -8,6 +8,7 @@ import (
 
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
+	"admin/server/internal/shared/pagination"
 	"gorm.io/gorm"
 )
 
@@ -104,12 +105,15 @@ func (s *Service) Execute(ctx context.Context, id, actor int64) (Job, error) {
 	})
 	return job, mapSchedulerError(err)
 }
-func (s *Service) ListJobs(ctx context.Context, q JobQuery) ([]Job, error) {
-	if q.Limit < 1 || q.Limit > 100 || q.BeforeID < 0 || (q.ScheduleID != nil && *q.ScheduleID <= 0) {
-		return nil, apperror.InvalidRequest(errors.New("scheduler job query is invalid"))
+func (s *Service) ListJobs(ctx context.Context, q JobQuery) (pagination.Result[Job], error) {
+	if q.Page < 1 || q.PageSize < 1 || q.PageSize > 100 || (q.Page-1) > int(^uint(0)>>1)/q.PageSize || (q.ScheduleID != nil && *q.ScheduleID <= 0) {
+		return pagination.Result[Job]{}, apperror.InvalidRequest(errors.New("scheduler job query is invalid"))
 	}
-	rows, err := s.repository.ListJobs(ctx, q)
-	return rows, mapSchedulerError(err)
+	rows, total, err := s.repository.ListJobs(ctx, q)
+	if err != nil {
+		return pagination.Result[Job]{}, mapSchedulerError(err)
+	}
+	return pagination.Result[Job]{List: rows, Total: total, Page: q.Page, PageSize: q.PageSize}, nil
 }
 func (s *Service) GetJob(ctx context.Context, id int64) (Job, error) {
 	row, err := s.repository.GetJob(ctx, id)

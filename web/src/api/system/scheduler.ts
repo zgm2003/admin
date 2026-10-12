@@ -1,3 +1,4 @@
+import type { PageResult } from '@/types/pagination'
 import { request } from '@/utils/request'
 import type { BackendOption, StatusOption } from '@/types/option'
 export type JobStatus = number
@@ -80,12 +81,12 @@ export async function listSchedules(beforeId = 0): Promise<Schedule[]> {
 export interface JobQuery {
   scheduleId: number
   status?: JobStatus
-  beforeId?: number
-  limit?: number
+  page: number
+  pageSize: number
 }
 
-export async function listJobs(query: JobQuery): Promise<Job[]> {
-  return request.get<Job[]>('/api/admin/v1/system/scheduler/job', { params: query })
+export async function listJobs(query: JobQuery): Promise<PageResult<Job>> {
+  return request.get<PageResult<Job>>('/api/admin/v1/system/scheduler/job', { params: query })
 }
 
 export async function listRuns(jobId: number): Promise<Run[]> {

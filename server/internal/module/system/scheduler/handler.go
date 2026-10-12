@@ -8,6 +8,7 @@ import (
 
 	auth "admin/server/internal/module/auth/login"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/response"
 	"admin/server/internal/shared/validate"
 	"github.com/gin-gonic/gin"
@@ -37,7 +38,10 @@ func (h *Handler) actor(c *gin.Context) (int64, bool) {
 }
 func (h *Handler) ListSchedule(c *gin.Context) {
 	beforeID, limit, err := historyPaging(c)
-	if err != nil { response.Fail(c, err); return }
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
 	rows, err := h.service.ListSchedules(c.Request.Context(), ScheduleQuery{Limit: limit, BeforeID: beforeID})
 	if err != nil {
 		response.Fail(c, err)
@@ -190,20 +194,27 @@ func (h *Handler) ListJobs(c *gin.Context) {
 			return
 		}
 	}
-    beforeID, limit, err := historyPaging(c)
-    if err != nil { response.Fail(c, err); return }
-    var scheduleID *int64
-    if value, supplied := c.GetQuery("scheduleId"); supplied {
-        parsed, parseErr := strconv.ParseInt(value, 10, 64)
-        if parseErr != nil || parsed <= 0 { response.Fail(c, apperror.InvalidRequest(errors.New("scheduler schedule filter is invalid"))); return }
-        scheduleID = &parsed
-    }
-    rows, err := h.service.ListJobs(c.Request.Context(), JobQuery{Limit: limit, BeforeID: beforeID, ScheduleID: scheduleID, Status: status})
+	paging, err := pagination.ParseRequest(c.Request.URL.Query())
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, http.StatusOK, rowsToJobResponse(rows))
+	var scheduleID *int64
+	if c.Request.URL.Query().Has("scheduleId") {
+		value := c.Query("scheduleId")
+		parsed, parseErr := strconv.ParseInt(value, 10, 64)
+		if parseErr != nil || parsed <= 0 {
+			response.Fail(c, apperror.InvalidRequest(errors.New("scheduler schedule filter is invalid")))
+			return
+		}
+		scheduleID = &parsed
+	}
+	rows, err := h.service.ListJobs(c.Request.Context(), JobQuery{Page: paging.Page, PageSize: paging.PageSize, ScheduleID: scheduleID, Status: status})
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, pagination.Result[jobResponse]{List: rowsToJobResponse(rows.List), Total: rows.Total, Page: rows.Page, PageSize: rows.PageSize})
 }
 func (h *Handler) GetJob(c *gin.Context) {
 	id, err := parseID(c)
@@ -263,21 +274,28 @@ func parseID(c *gin.Context) (int64, error) {
 	}
 	return value, nil
 }
+
 // Administration lists use a bounded, newest-first cursor query.
 func historyPaging(c *gin.Context) (int64, int, error) {
- beforeID := int64(0)
- if raw, supplied := c.GetQuery("beforeId"); supplied {
-  value, err := strconv.ParseInt(raw, 10, 64)
-  if err != nil || value < 0 { return 0,0,apperror.InvalidRequest(errors.New("scheduler cursor is invalid")) }
-  beforeID = value
- }
- limit := 50
- if raw, supplied := c.GetQuery("limit"); supplied {
-  value, err := strconv.Atoi(raw)
-  if err != nil || value < 1 || value > 100 { return 0,0,apperror.InvalidRequest(errors.New("scheduler limit is invalid")) }
-  limit = value
- }
- return beforeID,limit,nil
+	beforeID := int64(0)
+	if c.Request.URL.Query().Has("beforeId") {
+		raw := c.Query("beforeId")
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value < 0 {
+			return 0, 0, apperror.InvalidRequest(errors.New("scheduler cursor is invalid"))
+		}
+		beforeID = value
+	}
+	limit := 50
+	if c.Request.URL.Query().Has("limit") {
+		raw := c.Query("limit")
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 1 || value > 100 {
+			return 0, 0, apperror.InvalidRequest(errors.New("scheduler limit is invalid"))
+		}
+		limit = value
+	}
+	return beforeID, limit, nil
 }
 
 func queryID(c *gin.Context, key string) int64 {

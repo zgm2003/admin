@@ -63,6 +63,7 @@ func TestParseRequestValidatesOnlyThePaginationFields(t *testing.T) {
 		{"page": {"1", "2"}, "pageSize": {"20"}},
 		{"page": {""}, "pageSize": {"20"}},
 		{"page": {"0"}, "pageSize": {"20"}},
+		{"page": {"18446744073709551617"}, "pageSize": {"20"}},
 		{"page": {"1"}, "pageSize": {"101"}},
 	} {
 		if _, err := pagination.ParseRequest(values); err == nil {

@@ -1,3 +1,6 @@
+import type { App } from 'vue'
+import { provideGlobalConfig } from 'element-plus/es/components/config-provider/index'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { createI18n } from 'vue-i18n'
 import type { Language } from 'element-plus/es/locale'
 import enUs from 'element-plus/es/locale/lang/en'
@@ -46,4 +49,19 @@ export function initializeLocale(): AppLocale {
 
 export function elementPlusLocaleFor(locale: AppLocale): Language {
   return locale === 'en-US' ? enUs : zhCn
+}
+
+// Install outside component setup: both service dialogs and component providers
+// inherit one reactive locale from the application's context.
+export function installElementPlusLocale(app: App): void {
+  provideGlobalConfig(
+    {
+      get locale() {
+        return elementPlusLocaleFor(appI18n.global.locale.value === 'en-US' ? 'en-US' : 'zh-CN')
+      },
+    },
+    app,
+    true,
+  )
+  app.use(ElMessageBox)
 }

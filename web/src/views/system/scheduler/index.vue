@@ -6,7 +6,7 @@ import { ElNotification } from 'element-plus/es/components/notification/index'
 import { useI18n } from 'vue-i18n'
 import { usePermissionStore } from '@/store/permission'
 import { formatTime } from '@/utils/datetime'
-import type { TableColumn } from '@/components/AppTable'
+import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import {
   createSchedule,
   deleteSchedule,
@@ -35,7 +35,29 @@ const options = ref<SchedulerOptions | null>(null)
 let loadSequence = 0
 const loading = ref(false)
 const loadError = ref('')
-const activeTab = ref<'schedules' | 'jobs'>('schedules')
+const selectedPlanID = ref<number | ''>('')
+const visibleSchedules = computed(() =>
+  selectedPlanID.value === ''
+    ? schedules.value
+    : schedules.value.filter((row) => row.id === selectedPlanID.value),
+)
+const planOptions = computed(() =>
+  schedules.value.map((row) => ({ value: row.id, label: row.name })),
+)
+const schedulesHaveMore = ref(false)
+const jobsVisible = ref(false)
+const selectedSchedule = ref<Schedule | null>(null)
+const jobsLoading = ref(false)
+const jobsError = ref('')
+const jobsPage = ref(1)
+const jobsPageSize = ref(20)
+const jobsTotal = ref(0)
+const jobsPagination = computed<TablePaginationState>(() => ({
+  currentPage: jobsPage.value,
+  pageSize: jobsPageSize.value,
+  total: jobsTotal.value,
+}))
+let jobsSequence = 0
 const jobStatus = ref<'' | JobStatus>('')
 const dialogVisible = ref(false)
 const editing = ref<Schedule | null>(null)
@@ -53,6 +75,7 @@ const form = ref({
 const detailVisible = ref(false)
 const selectedJob = ref<Job | null>(null)
 const canList = computed(() => access.hasPermission('system:scheduler:list'))
+const canDetail = computed(() => access.hasPermission('system:scheduler:detail'))
 const canCreate = computed(() => access.hasPermission('system:scheduler:create'))
 const canUpdate = computed(() => access.hasPermission('system:scheduler:update'))
 const canStatus = computed(() => access.hasPermission('system:scheduler:status'))
@@ -77,7 +100,7 @@ const scheduleColumns = computed<TableColumn<Schedule>[]>(() => [
   { prop: 'cronExpression', label: t('scheduler.cron'), width: 180 },
   { prop: 'timezone', label: t('scheduler.timezone'), width: 150 },
   { key: 'status', prop: 'id', label: t('scheduler.status'), width: 100 },
-  { key: 'actions', prop: 'id', label: t('scheduler.actions'), width: 330 },
+  { key: 'actions', prop: 'id', label: t('scheduler.actions'), width: 300 },
 ])
 const jobColumns = computed<TableColumn<Job>[]>(() => [
   { prop: 'id', label: t('scheduler.id'), width: 90 },
@@ -93,7 +116,16 @@ const state = computed<'loading' | 'error' | 'empty' | 'success'>(() =>
     ? 'loading'
     : loadError.value
       ? 'error'
-      : (activeTab.value === 'schedules' ? schedules.value.length : jobs.value.length) === 0
+      : visibleSchedules.value.length === 0
+        ? 'empty'
+        : 'success',
+)
+const jobsState = computed<'loading' | 'error' | 'empty' | 'success'>(() =>
+  jobsLoading.value
+    ? 'loading'
+    : jobsError.value
+      ? 'error'
+      : jobs.value.length === 0
         ? 'empty'
         : 'success',
 )
@@ -102,11 +134,12 @@ const taskOptions = computed(() => tasks.value.filter((item) => item.adminCreata
 function taskDisplayName(type: string): string {
   return resolveTaskDisplayName(type, tasks.value)
 }
-async function load(): Promise<void> {
+async function load(append = false): Promise<void> {
   const sequence = ++loadSequence
   if (!canList.value) {
     options.value = null
     schedules.value = []
+    jobsVisible.value = false
     jobs.value = []
     loading.value = false
     return
@@ -119,23 +152,69 @@ async function load(): Promise<void> {
       if (sequence !== loadSequence) return
       options.value = result
     }
-    if (activeTab.value === 'schedules') {
-      const result = await listSchedules()
-      if (sequence === loadSequence) schedules.value = result
-    } else {
-      const result = await listJobs(0, jobStatus.value === '' ? undefined : jobStatus.value)
-      if (sequence === loadSequence) jobs.value = result
-    }
+    const beforeID = append ? (schedules.value.at(-1)?.id ?? 0) : 0
+    const result = await listSchedules(beforeID)
+    if (sequence !== loadSequence) return
+    schedules.value = append ? [...schedules.value, ...result] : result
+    schedulesHaveMore.value = result.length === 100
+    if (jobsVisible.value) await loadJobs()
   } catch (error: unknown) {
     if (sequence === loadSequence) {
-      schedules.value = []
-      jobs.value = []
+      if (!append) schedules.value = []
       loadError.value = error instanceof Error ? error.message : t('scheduler.loadFailed')
     }
   } finally {
     if (sequence === loadSequence) loading.value = false
   }
 }
+async function loadJobs(): Promise<void> {
+  const sequence = ++jobsSequence
+  const scheduleID = selectedSchedule.value?.id
+  if (!jobsVisible.value || scheduleID === undefined || !canList.value) return
+  jobs.value = []
+  jobsLoading.value = true
+  jobsError.value = ''
+  try {
+    const result = await listJobs({
+      scheduleId: scheduleID,
+      page: jobsPage.value,
+      pageSize: jobsPageSize.value,
+      ...(jobStatus.value === '' ? {} : { status: jobStatus.value }),
+    })
+    if (
+      sequence !== jobsSequence ||
+      !jobsVisible.value ||
+      selectedSchedule.value?.id !== scheduleID
+    )
+      return
+    jobs.value = result.list
+    jobsTotal.value = result.total
+  } catch (error: unknown) {
+    if (sequence === jobsSequence)
+      jobsError.value = error instanceof Error ? error.message : t('scheduler.loadFailed')
+  } finally {
+    if (sequence === jobsSequence) jobsLoading.value = false
+  }
+}
+function openJobs(row: Schedule): void {
+  if (!canList.value) return
+  selectedSchedule.value = row
+  jobStatus.value = ''
+  jobsPage.value = 1
+  jobsTotal.value = 0
+  jobsVisible.value = true
+  void loadJobs()
+}
+watch(jobsVisible, (visible) => {
+  if (!visible) {
+    jobsSequence++
+    jobsLoading.value = false
+    jobs.value = []
+    detailVisible.value = false
+    selectedJob.value = null
+  }
+})
+
 function openCreate(): void {
   if (options.value === null) return
   editing.value = null
@@ -272,14 +351,17 @@ function openJob(row: Job): void {
   selectedJob.value = row
   detailVisible.value = true
 }
-function changeTab(value: string): void {
-  activeTab.value = value === 'jobs' ? 'jobs' : 'schedules'
-  void load()
-}
 function changeJobStatus(value: string | number | boolean | null | undefined): void {
   jobStatus.value = typeof value === 'number' && Number.isFinite(value) ? value : ''
-  void load()
+  jobsPage.value = 1
+  void loadJobs()
 }
+function updateJobsPagination(next: TablePaginationState): void {
+  jobsPage.value = next.pageSize === jobsPageSize.value ? next.currentPage : 1
+  jobsPageSize.value = next.pageSize
+  void loadJobs()
+}
+
 watch(
   [locale, canList],
   () => {
@@ -290,27 +372,33 @@ watch(
 )
 onBeforeUnmount(() => {
   loadSequence++
+  jobsSequence++
 })
 </script>
 
 <template>
   <AppPage class="scheduler-page">
-    <el-tabs :model-value="activeTab" @update:model-value="changeTab">
-      <el-tab-pane name="schedules" :label="t('scheduler.schedules')" />
-      <el-tab-pane name="jobs" :label="t('scheduler.jobs')" />
-    </el-tabs>
     <AppTable
-      v-if="activeTab === 'schedules'"
       :columns="scheduleColumns"
-      :data="schedules"
+      :data="visibleSchedules"
       :loading="loading"
       :result-state="state"
       :status-message="loadError"
       row-key="id"
-      @refresh="load"
+      @refresh="load()"
     >
-      <template #toolbar-left
-        ><el-button
+      <template #toolbar-left>
+        <el-select-v2
+          v-model="selectedPlanID"
+          data-testid="schedule-plan-filter"
+          class="scheduler-plan-filter"
+          :options="planOptions"
+          :placeholder="t('scheduler.allPlans')"
+          :value-on-clear="''"
+          clearable
+          filterable
+        />
+        <el-button
           v-if="canCreate && taskOptions.length > 0"
           type="primary"
           :icon="CirclePlus"
@@ -335,6 +423,12 @@ onBeforeUnmount(() => {
       </template>
       <template #cell-actions="{ row }: { row: Schedule }"
         ><el-space
+          ><el-button
+            :data-testid="`schedule-jobs-${row.id}`"
+            type="primary"
+            link
+            @click="openJobs(row)"
+            >{{ t('scheduler.jobs') }}</el-button
           ><el-button v-if="canUpdate" type="primary" link @click="openEdit(row)">{{
             t('scheduler.edit')
           }}</el-button
@@ -357,59 +451,71 @@ onBeforeUnmount(() => {
         ></template
       >
     </AppTable>
-    <AppTable
-      v-else
-      :columns="jobColumns"
-      :data="jobs"
-      :loading="loading"
-      :result-state="state"
-      :status-message="loadError"
-      row-key="id"
-      @refresh="load"
+    <el-button v-if="schedulesHaveMore" type="primary" :loading="loading" @click="load(true)">{{
+      t('scheduler.loadMorePlans')
+    }}</el-button>
+    <AppDialog
+      v-model="jobsVisible"
+      :title="t('scheduler.planJobs', { name: selectedSchedule?.name ?? '' })"
+      width="1100px"
+      height="650px"
     >
-      <template #toolbar-left
-        ><el-select-v2
-          class="scheduler-job-status-filter"
-          :model-value="jobStatus"
-          :options="jobStatusOptions"
-          :placeholder="t('scheduler.allStatus')"
-          :value-on-clear="''"
-          clearable
-          @update:model-value="changeJobStatus"
-      /></template>
-      <template #cell-taskType="{ row }: { row: Job }">
-        <el-tooltip :content="row.taskType" placement="top">
-          <span>{{ taskDisplayName(row.taskType) }}</span>
-        </el-tooltip>
-      </template>
-      <template #cell-trigger="{ row }: { row: Job }">
-        <el-tooltip :content="row.triggerSource" placement="top">
-          <span>{{ resolveOptionLabel(row.triggerSource, triggerSources) }}</span>
-        </el-tooltip>
-      </template>
-      <template #cell-status="{ row }: { row: Job }"
-        ><el-tag :type="jobStatusPresentation(row.status)?.tone ?? 'info'">{{
-          resolveOptionLabel(row.status, jobStatusOptions)
-        }}</el-tag></template
+      <AppTable
+        :columns="jobColumns"
+        :data="jobs"
+        :loading="jobsLoading"
+        :result-state="jobsState"
+        :status-message="jobsError"
+        :pagination="jobsPagination"
+        @update:pagination="updateJobsPagination"
+        row-key="id"
+        @refresh="loadJobs()"
       >
-      <template #cell-createdAt="{ row }: { row: Job }">
-        <span>{{ formatTime(row.createdAt) }}</span>
-      </template>
-      <template #cell-actions="{ row }: { row: Job }"
-        ><el-space
-          ><el-button type="primary" link @click="openJob(row)">{{
-            t('scheduler.detail')
-          }}</el-button
-          ><el-button
-            v-if="canRetry && row.actions.retry"
-            type="warning"
-            link
-            @click="retry(row)"
-            >{{ t('scheduler.retry') }}</el-button
-          ></el-space
-        ></template
-      >
-    </AppTable>
+        <template #toolbar-left
+          ><el-select-v2
+            data-testid="schedule-job-status"
+            class="scheduler-job-status-filter"
+            :model-value="jobStatus"
+            :options="jobStatusOptions"
+            :placeholder="t('scheduler.allStatus')"
+            :value-on-clear="''"
+            clearable
+            @update:model-value="changeJobStatus"
+        /></template>
+        <template #cell-taskType="{ row }: { row: Job }">
+          <el-tooltip :content="row.taskType" placement="top">
+            <span>{{ taskDisplayName(row.taskType) }}</span>
+          </el-tooltip>
+        </template>
+        <template #cell-trigger="{ row }: { row: Job }">
+          <el-tooltip :content="row.triggerSource" placement="top">
+            <span>{{ resolveOptionLabel(row.triggerSource, triggerSources) }}</span>
+          </el-tooltip>
+        </template>
+        <template #cell-status="{ row }: { row: Job }"
+          ><el-tag :type="jobStatusPresentation(row.status)?.tone ?? 'info'">{{
+            resolveOptionLabel(row.status, jobStatusOptions)
+          }}</el-tag></template
+        >
+        <template #cell-createdAt="{ row }: { row: Job }">
+          <span>{{ formatTime(row.createdAt) }}</span>
+        </template>
+        <template #cell-actions="{ row }: { row: Job }"
+          ><el-space
+            ><el-button v-if="canDetail" type="primary" link @click="openJob(row)">{{
+              t('scheduler.detail')
+            }}</el-button
+            ><el-button
+              v-if="canRetry && row.actions.retry"
+              type="warning"
+              link
+              @click="retry(row)"
+              >{{ t('scheduler.retry') }}</el-button
+            ></el-space
+          ></template
+        >
+      </AppTable>
+    </AppDialog>
     <AppDialog
       v-model="dialogVisible"
       :title="editing === null ? t('scheduler.create') : t('scheduler.edit')"
@@ -455,8 +561,9 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped lang="scss">
-.scheduler-job-status-filter {
-  width: 160px;
+.scheduler-job-status-filter,
+.scheduler-plan-filter {
+  width: 200px;
 }
 
 .scheduler-cron-custom-input {

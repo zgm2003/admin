@@ -585,9 +585,8 @@ func (r *Repository) CreateRetryJob(ctx context.Context, jobID int64, actor *int
 	return newJob, err
 }
 
-func (r *Repository) ListJobs(ctx context.Context, query JobQuery) ([]Job, error) {
-	db := r.db.WithContext(ctx)
-	limit := normalizeLimit(query.Limit)
+func (r *Repository) ListJobs(ctx context.Context, query JobQuery) ([]Job, int64, error) {
+	db := r.db.WithContext(ctx).Model(&Job{})
 	if query.ScheduleID != nil {
 		db = db.Where("schedule_id=?", *query.ScheduleID)
 	}
@@ -597,12 +596,13 @@ func (r *Repository) ListJobs(ctx context.Context, query JobQuery) ([]Job, error
 	if query.TaskType != "" {
 		db = db.Where("task_type=?", query.TaskType)
 	}
-	if query.BeforeID > 0 {
-		db = db.Where("(created_at, id) < (SELECT created_at, id FROM system_scheduler_job WHERE id = ?)", query.BeforeID)
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
 	}
-	var rows []Job
-	err := db.Order("created_at DESC, id DESC").Limit(limit).Find(&rows).Error
-	return rows, err
+	rows := make([]Job, 0)
+	err := db.Order("created_at DESC, id DESC").Offset((query.Page - 1) * query.PageSize).Limit(query.PageSize).Find(&rows).Error
+	return rows, total, err
 }
 
 func (r *Repository) GetJob(ctx context.Context, id int64) (Job, error) {

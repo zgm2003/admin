@@ -5,7 +5,7 @@ import ElementPlus, { ElConfigProvider } from 'element-plus'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import App from '@/App.vue'
-import { appI18n, elementPlusLocaleFor, setLocale } from '@/i18n'
+import { appI18n, elementPlusLocaleFor, setLocale, installElementPlusLocale } from '@/i18n'
 import { pinia } from '@/store'
 
 describe('application locale provider', () => {
@@ -14,20 +14,38 @@ describe('application locale provider', () => {
     setNavigatorOnline(true)
   })
 
-  afterEach(() => setNavigatorOnline(true))
+  afterEach(() => {
+    ElMessageBox.close()
+    document.body.innerHTML = ''
+    setNavigatorOnline(true)
+  })
 
   it('localizes programmatic confirmation buttons and follows language changes', async () => {
-    const wrapper = mount(App, { global: { plugins: [pinia, appI18n], stubs: { RouterView: true } } })
-    for (const [locale, confirm, cancel] of [['zh-CN', '确定', '取消'], ['en-US', 'OK', 'Cancel']] as const) {
+    const wrapper = mount(App, {
+      global: { plugins: [pinia, appI18n, installElementPlusLocale], stubs: { RouterView: true } },
+    })
+    for (const [locale, confirm, cancel] of [
+      ['zh-CN', '确定', '取消'],
+      ['en-US', 'OK', 'Cancel'],
+    ] as const) {
       setLocale(locale)
       await nextTick()
       const pending = ElMessageBox.confirm('Message', 'Title').catch(() => undefined)
       await nextTick()
-      expect(document.querySelector('.el-message-box__btns')?.textContent).toContain(confirm)
-      expect(document.querySelector('.el-message-box__btns')?.textContent).toContain(cancel)
-      document.querySelector<HTMLButtonElement>('.el-message-box__btns .el-button:not(.el-button--primary)')?.click()
+      expect(
+        Array.from(document.querySelectorAll('.el-message-box__btns')).at(-1)?.textContent,
+      ).toContain(confirm)
+      expect(
+        Array.from(document.querySelectorAll('.el-message-box__btns')).at(-1)?.textContent,
+      ).toContain(cancel)
+      Array.from(
+        document.querySelectorAll<HTMLButtonElement>(
+          '.el-message-box__btns .el-button:not(.el-button--primary)',
+        ),
+      )
+        .at(-1)
+        ?.click()
       await pending
-      ElMessageBox.close()
     }
     wrapper.unmount()
   })

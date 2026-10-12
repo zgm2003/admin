@@ -6,7 +6,7 @@ import 'element-plus/theme-chalk/dark/css-vars.css'
 import 'element-plus/theme-chalk/display.css'
 
 import App from './App.vue'
-import { appI18n, initializeLocale } from './i18n'
+import { appI18n, initializeLocale, installElementPlusLocale } from './i18n'
 import { router } from './router'
 import { installRouteLoadRecovery } from './router/routeLoadRecovery'
 import { pinia } from './store'
@@ -17,4 +17,4 @@ initializeLocale()
 installPermissionGuard(router)
 installRouteLoadRecovery(router)
 
-createApp(App).use(pinia).use(router).use(appI18n).mount('#app')
+createApp(App).use(pinia).use(router).use(appI18n).use(installElementPlusLocale).mount('#app')

@@ -10,9 +10,9 @@ beforeEach(() => vi.resetAllMocks())
 describe('thin API HTTP contract', () => {
   it('passes a numeric zero status instead of dropping a backend enum value', async () => {
     vi.mocked(request.get).mockResolvedValue([])
-    await api.listJobs(0, 0)
+    await api.listJobs({ scheduleId: 42, page: 1, pageSize: 20, status: 0 })
     expect(request.get).toHaveBeenCalledWith('/api/admin/v1/system/scheduler/job', {
-      params: { afterId: 0, limit: 100, status: 0 },
+      params: { scheduleId: 42, page: 1, pageSize: 20, status: 0 },
     })
   })
   it('listSchedules preserves the HTTP contract and backend data', async () => {
@@ -22,7 +22,7 @@ describe('thin API HTTP contract', () => {
     const result = await api.listSchedules(afterId)
     expect(result).toBe(dataFromServer)
     expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/system/scheduler/schedule', {
-      params: { afterId, limit: 100 },
+      params: { beforeId: afterId, limit: 100 },
     })
   })
   it('listSchedules propagates request failures unchanged', async () => {
@@ -32,22 +32,30 @@ describe('thin API HTTP contract', () => {
     await expect(api.listSchedules(afterId)).rejects.toBe(error)
   })
   it('listJobs preserves the HTTP contract and backend data', async () => {
-    const afterId: Parameters<typeof api.listJobs>[0] = 1
-    const status: Parameters<typeof api.listJobs>[1] = 1
+    const query: Parameters<typeof api.listJobs>[0] = {
+      scheduleId: 42,
+      page: 2,
+      status: 1,
+      pageSize: 20,
+    }
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.get).mockResolvedValue(dataFromServer)
-    const result = await api.listJobs(afterId, status)
+    const result = await api.listJobs(query)
     expect(result).toBe(dataFromServer)
     expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/system/scheduler/job', {
-      params: { afterId, limit: 100, ...(status !== undefined ? { status } : {}) },
+      params: query,
     })
   })
   it('listJobs propagates request failures unchanged', async () => {
-    const afterId: Parameters<typeof api.listJobs>[0] = 1
-    const status: Parameters<typeof api.listJobs>[1] = 1
+    const query: Parameters<typeof api.listJobs>[0] = {
+      scheduleId: 42,
+      page: 2,
+      status: 1,
+      pageSize: 20,
+    }
     const error = new Error('request failed')
     vi.mocked(request.get).mockRejectedValue(error)
-    await expect(api.listJobs(afterId, status)).rejects.toBe(error)
+    await expect(api.listJobs(query)).rejects.toBe(error)
   })
   it('listRuns preserves the HTTP contract and backend data', async () => {
     const jobId: Parameters<typeof api.listRuns>[0] = 1

@@ -103,15 +103,15 @@ type ScheduleQuery struct {
 	Status   *ScheduleStatus
 	TaskType string
 	Limit    int
-	BeforeID  int64
+	BeforeID int64
 }
 
 type JobQuery struct {
 	ScheduleID *int64
 	Status     *JobStatus
 	TaskType   string
-	Limit      int
-	BeforeID    int64
+	Page       int
+	PageSize   int
 }
 
 type RunQuery struct {
