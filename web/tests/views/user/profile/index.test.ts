@@ -112,28 +112,44 @@ describe('account profile permissions', () => {
   })
 
   it('clearing a pending avatar selection removes its file ID from the save request', async () => {
-    const wrapper=mountPage(['user:profile:update','storage:file:list','storage:file:detail'])
+    const wrapper = mountPage(['user:profile:update', 'storage:file:list', 'storage:file:detail'])
     await flushPromises()
-    wrapper.findComponent(UpMedia).vm.$emit('selected',{id:9,fileName:'a.png',objectKey:'source.png',mimeType:'image/png',sizeBytes:5,category:'image',createdAt:'2026-10-12T00:00:00Z'})
+    wrapper.findComponent(UpMedia).vm.$emit('selected', {
+      id: 9,
+      fileName: 'a.png',
+      objectKey: 'source.png',
+      mimeType: 'image/png',
+      sizeBytes: 5,
+      category: 'image',
+      createdAt: '2026-10-12T00:00:00Z',
+    })
     await flushPromises()
-    wrapper.findComponent(UpMedia).vm.$emit('update:modelValue','')
+    await wrapper.get('.up-media__clear').trigger('click')
     await flushPromises()
     updateAccountProfile.mockRejectedValueOnce(new Error('retry'))
-    await wrapper.get('[data-testid="account-profile-save"]').trigger('click');await flushPromises()
+    await wrapper.get('[data-testid="account-profile-save"]').trigger('click')
+    await flushPromises()
     expect(updateAccountProfile.mock.calls[0]?.[0].avatarFileId).toBeUndefined()
     expect(updateAccountProfile.mock.calls[0]?.[0].avatarRequestKey).toBeUndefined()
+    expect(updateAccountProfile.mock.calls[0]?.[0].avatar).toBe('')
   })
 
   it.each([
-    { permissions: ['user:profile:update', 'storage:file:list', 'storage:file:detail'], allowed: true },
+    {
+      permissions: ['user:profile:update', 'storage:file:list', 'storage:file:detail'],
+      allowed: true,
+    },
     { permissions: ['user:profile:update', 'storage:file:list'], allowed: false },
     { permissions: ['storage:file:list', 'storage:file:detail'], allowed: false },
-  ])('controls the shared file library using profile and file permissions: $permissions', async ({ permissions, allowed }) => {
-    const wrapper = mountPage(permissions)
-    await flushPromises()
-    expect(wrapper.getComponent(UpMedia).props('allowFileLibrary')).toBe(allowed)
-    expect(wrapper.find('[data-testid="profile-choose-file"]').exists()).toBe(false)
-  })
+  ])(
+    'controls the shared file library using profile and file permissions: $permissions',
+    async ({ permissions, allowed }) => {
+      const wrapper = mountPage(permissions)
+      await flushPromises()
+      expect(wrapper.getComponent(UpMedia).props('allowFileLibrary')).toBe(allowed)
+      expect(wrapper.find('[data-testid="profile-choose-file"]').exists()).toBe(false)
+    },
+  )
 
   it.each([
     { permissions: ['user:profile:update'], save: true, password: false },

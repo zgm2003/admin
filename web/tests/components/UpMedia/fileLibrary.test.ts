@@ -17,7 +17,9 @@ vi.mock('@/api/storage/file', () => ({
 }))
 vi.mock('@/api/storage/upload', () => ({
   requestUploadCredentials: vi.fn(),
-  requestObjectURL: vi.fn().mockResolvedValue({ url: 'https://cdn.example/photo.png', expiresAt: null }),
+  requestObjectURL: vi
+    .fn()
+    .mockResolvedValue({ url: 'https://cdn.example/photo.png', expiresAt: null }),
 }))
 
 const photo: fileAPI.StorageFile = {
@@ -83,7 +85,7 @@ it('keeps the library opt-in and does not load file options or lists before it o
 
 it('selects an existing file without uploading and returns both the key and file metadata', async () => {
   const wrapper = media({
-    variant: 'avatar',
+    variant: 'image',
     allowFileLibrary: true,
     fileLibraryPurpose: 'avatar',
     uploadDisabled: true,
@@ -102,16 +104,24 @@ it('selects an existing file without uploading and returns both the key and file
   expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([''])
 })
 
-it.each(['default', 'file'] as const)('appends library selections for multiple %s media', async (variant) => {
-  const wrapper = media({ modelValue: ['old.png'], multiple: true, variant, allowFileLibrary: true })
-  await openLibrary(wrapper)
-  await selectPhoto()
-  expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['old.png', 'file/photo.png']])
-  await wrapper.setProps({ modelValue: ['old.png', 'file/photo.png'] })
-  await openLibrary(wrapper)
-  await selectPhoto()
-  expect(wrapper.emitted('update:modelValue')).toHaveLength(1)
-})
+it.each(['image', 'file', 'button'] as const)(
+  'appends library selections for multiple %s media',
+  async (variant) => {
+    const wrapper = media({
+      modelValue: ['old.png'],
+      multiple: true,
+      variant,
+      allowFileLibrary: true,
+    })
+    await openLibrary(wrapper)
+    await selectPhoto()
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['old.png', 'file/photo.png']])
+    await wrapper.setProps({ modelValue: ['old.png', 'file/photo.png'] })
+    await openLibrary(wrapper)
+    await selectPhoto()
+    expect(wrapper.emitted('update:modelValue')).toHaveLength(1)
+  },
+)
 
 it('rejects a library file that does not match the field accept constraint', async () => {
   const wrapper = media({ variant: 'file', allowFileLibrary: true, accept: '.xlsx' })
@@ -133,13 +143,15 @@ it('blocks selection when disabled and closes an open library if the capability 
   expect(wrapper.emitted('selected')).toBeUndefined()
 })
 
-it.each(['default', 'avatar', 'file'] as const)(
+it.each(['image', 'video'] as const)(
   'keeps a square upload entry above the optional library button for %s',
   async (variant) => {
     const wrapper = media({ variant, allowFileLibrary: true })
     const upload = wrapper.get('[data-testid="up-media-upload"]')
     const library = wrapper.get('[data-testid="up-media-library"]')
-    expect(upload.element.compareDocumentPosition(library.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(
+      upload.element.compareDocumentPosition(library.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
     expect(library.text()).toBe('选择我的文件')
     expect(library.find('svg').exists()).toBe(false)
     expect(wrapper.text()).not.toMatch(/上传头像|更换头像|选择头像/u)
@@ -151,11 +163,27 @@ it.each(['default', 'avatar', 'file'] as const)(
   },
 )
 
+it.each(['file', 'button'] as const)(
+  'uses compact upload and library buttons without a square for %s',
+  async (variant) => {
+    const wrapper = media({ variant, allowFileLibrary: true })
+    expect(wrapper.get('[data-testid="up-media-upload"]').text()).toBe('上传文件')
+    expect(wrapper.find('.up-media__trigger').exists()).toBe(false)
+    expect(wrapper.find('.up-media__uploads').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="up-media-library"]').text()).toBe('选择我的文件')
+    await openLibrary(wrapper)
+    await selectPhoto()
+    expect(wrapper.emitted('selected')).toEqual([[photo]])
+  },
+)
+
 it('localizes the generic upload and library controls', async () => {
   const wrapper = media({ allowFileLibrary: true })
   expect(wrapper.get('[data-testid="up-media-upload"]').attributes('aria-label')).toBe('选择文件')
   setLocale('en-US')
   await flushPromises()
   expect(wrapper.get('[data-testid="up-media-library"]').text()).toBe('Choose My Files')
-  expect(wrapper.get('[data-testid="up-media-upload"]').attributes('aria-label')).toBe('Select file')
+  expect(wrapper.get('[data-testid="up-media-upload"]').attributes('aria-label')).toBe(
+    'Select file',
+  )
 })

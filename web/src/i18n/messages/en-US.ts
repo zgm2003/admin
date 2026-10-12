@@ -867,6 +867,7 @@ export const enUS = {
   'user.profile.avatar': 'Avatar',
   'components.upMedia.select': 'Select file',
   'components.upMedia.clear': 'Clear uploaded media',
+  'components.upMedia.chooseFromFiles': 'Choose My Files',
   'components.upMedia.uploadFailed': 'File upload failed',
   'user.profile.birthday': 'Birthday',
   'user.profile.gender': 'Gender',
@@ -1275,9 +1276,4 @@ export const enUS = {
   'storage.file.deleteAccepted': 'Deletion accepted',
   'storage.file.previewUnavailable': 'Preview is unavailable. Download to view this file.',
   'storage.file.selectTitle': 'Select My File',
-  'components.upMedia.chooseFromFiles': 'Choose from My Files',
-  'components.upMedia.uploadAvatar': 'Upload avatar',
-  'components.upMedia.replaceAvatar': 'Replace avatar',
-  'components.upMedia.avatarPreview': 'Avatar preview',
-  'user.profile.avatarPending': 'Save your profile to apply.',
 } satisfies Record<AppMessageKey, string>

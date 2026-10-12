@@ -42,7 +42,6 @@ const canUploadAvatar = computed(
     access.hasPermission('storage:file:detail'),
 )
 const avatarKey = ref(props.profileForm.avatar)
-const selectedName = ref('')
 
 const form = reactive<UpdateAccountProfileInput>({ ...props.profileForm })
 watch(
@@ -51,9 +50,6 @@ watch(
     Object.assign(form, value)
     if (value.avatarFileId === undefined) {
       avatarKey.value = value.avatar
-      selectedName.value = ''
-    }
-    if (value.avatarFileId === undefined) {
       delete form.avatarFileId
       delete form.avatarRequestKey
     }
@@ -72,7 +68,6 @@ function updateAvatar(value: string | string[]): void {
     form.avatar = ''
     delete form.avatarFileId
     delete form.avatarRequestKey
-    selectedName.value = ''
     emit('update:profileForm', { ...form })
   }
 }
@@ -81,7 +76,6 @@ function selectFile(file: StorageFile): void {
   form.avatarFileId = file.id
   form.avatarRequestKey = crypto.randomUUID()
   avatarKey.value = file.objectKey
-  selectedName.value = file.fileName
   emit('update:profileForm', { ...form })
 }
 function avatarUploaded(items: CompletedFile[]): void {
@@ -91,7 +85,6 @@ function avatarUploaded(items: CompletedFile[]): void {
   form.avatarFileId = file.fileId
   form.avatarRequestKey = crypto.randomUUID()
   avatarKey.value = file.objectKey
-  selectedName.value = file.objectKey.split('/').at(-1) ?? ''
   emit('update:profileForm', { ...form })
 }
 
@@ -160,19 +153,15 @@ function updateGender(value: UpdateAccountProfileInput['gender']): void {
               :model-value="avatarKey"
               rule-code="avatar"
               variant="avatar"
-              width="88px"
               :disabled="!canUpdateProfile"
               :upload-disabled="!canUploadAvatar"
               :allow-file-library="canSelectFile"
               file-library-purpose="avatar"
-              :file-label="selectedName"
               @selected="selectFile"
               @uploaded="avatarUploaded"
               @update:model-value="updateAvatar"
               @preview-change="emit('avatarPreviewChange', $event)"
-            >
-              <template v-if="selectedName" #tip>{{ t('user.profile.avatarPending') }}</template>
-            </UpMedia>
+            />
           </el-form-item>
         </el-col>
         <el-col :xs="24" :sm="12">

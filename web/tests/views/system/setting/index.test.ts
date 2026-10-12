@@ -404,7 +404,7 @@ describe('system setting page', () => {
     const media = dialog.getComponent(UpMedia)
     expect(media.props()).toMatchObject({
       ruleCode: 'setting',
-      variant: 'avatar',
+      variant: 'image',
       uploadDisabled: true,
       disabled: false,
     })
@@ -821,7 +821,7 @@ function fixturePresentation(row: Partial<SystemSetting> = {}): SettingPresentat
     'app.brand.default_avatar': {
       valueTypeLocked: true,
       refreshBrand: true,
-      mediaVariant: 'avatar',
+      mediaVariant: 'image',
       mediaAccept: '.png,.jpg,.jpeg,.gif,.webp',
       actions: { status: false, delete: false },
     },

@@ -1,4 +1,4 @@
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -6,6 +6,7 @@ import { appI18n } from '@/i18n'
 import { requestObjectURL, requestUploadCredentials } from '@/api/storage/upload'
 import { completeFileUpload } from '@/api/storage/file'
 import UpMedia from '@/components/UpMedia/index.vue'
+import type { UpMediaProps } from '@/components/UpMedia/types'
 
 vi.mock('@/api/storage/upload', () => ({
   requestUploadCredentials: vi.fn(),
@@ -323,8 +324,8 @@ describe('UpMedia', () => {
     expect(wrapper.emitted('uploaded')?.at(-1)).toEqual([[{ fileId: 1, objectKey: 'a.png' }]])
   })
 
-  it('uses the same square picker for empty and populated image fields', async () => {
-    const empty = mountComponent({ modelValue: '', ruleCode: 'avatar', variant: 'avatar' })
+  it('uploads from an empty image square and previews or replaces an existing image', async () => {
+    const empty = mountComponent({ modelValue: '', ruleCode: 'avatar', variant: 'image' })
     const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
     await empty.get('[data-testid="up-media-upload"]').trigger('click')
     expect(click).toHaveBeenCalledOnce()
@@ -332,12 +333,59 @@ describe('UpMedia', () => {
     const filled = mountComponent({
       modelValue: 'avatar/alice.png',
       ruleCode: 'avatar',
-      variant: 'avatar',
+      variant: 'image',
     })
     await flushPromises()
-    await filled.get('[data-testid="up-media-upload"]').trigger('click')
+    await filled.get('.up-media__preview').trigger('click')
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid="up-media-preview-image"]')).not.toBeNull()
+    expect(click).toHaveBeenCalledOnce()
+    await filled.get('[data-testid="up-media-replace"]').trigger('click')
     expect(click).toHaveBeenCalledTimes(2)
     expect(filled.find('.up-media__clear').exists()).toBe(true)
+    click.mockRestore()
+  })
+
+  it('shows video thumbnails and opens a player without treating video as an image', async () => {
+    const wrapper = mountComponent({ modelValue: 'video/clip.mp4', ruleCode: 'file', variant: 'video' })
+    await flushPromises()
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect(wrapper.get('video').attributes()).toMatchObject({ preload: 'metadata', muted: '' })
+    expect(wrapper.get('input').attributes('accept')).toBe('video/*')
+    await wrapper.get('.up-media__preview').trigger('click')
+    await flushPromises()
+    const player = new DOMWrapper(document.body).get('[data-testid="up-media-preview-video"]')
+    expect(player.attributes('controls')).toBeDefined()
+    expect(player.attributes('autoplay')).toBeUndefined()
+    await wrapper.setProps({ modelValue: '' })
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid="up-media-preview-video"]')).toBeNull()
+  })
+
+  it('keeps a button upload free of attachments and signed preview requests', async () => {
+    const wrapper = mountComponent({ modelValue: ['old.pdf'], ruleCode: 'file', variant: 'button', multiple: true })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="up-media-upload"]').text()).toBe('上传文件')
+    expect(wrapper.find('[data-testid="up-media-file"]').exists()).toBe(false)
+    expect(objectURLMock).not.toHaveBeenCalled()
+    expect(wrapper.get('input').attributes('accept')).toBe('')
+    credentialsMock.mockResolvedValue({ items: [{ fileId: 12, uploadUrl: 'https://cos.example/pdf', objectKey: 'new.pdf', method: 'PUT', headers: {}, expiresAt: '2030-01-01T00:00:00Z' }] })
+    await chooseFiles(wrapper, [new File(['pdf'], 'report.pdf', { type: 'application/pdf' })])
+    expect(wrapper.emitted('uploaded')?.at(-1)).toEqual([[{fileId: 12, objectKey: 'new.pdf', publicUrl: undefined}]])
+    expect(objectURLMock).not.toHaveBeenCalled()
+  })
+
+  it('replaces one attachment while retaining the other attachments and original filenames', async () => {
+    const wrapper = mountComponent({ modelValue: ['old.pdf', 'other.pdf'], ruleCode: 'file', variant: 'file', multiple: true })
+    await flushPromises()
+    credentialsMock.mockResolvedValue({items: [{fileId: 13, uploadUrl: 'https://cos.example/replacement', objectKey: 'new.pdf', method: 'PUT', headers: {}, expiresAt: '2030-01-01T00:00:00Z'}]})
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    await wrapper.get('[data-testid="up-media-replace"]').trigger('click')
+    await chooseFiles(wrapper, [new File(['pdf'], 'report.pdf', {type: 'application/pdf'})])
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['new.pdf', 'other.pdf']])
+    await wrapper.setProps({modelValue: ['new.pdf', 'other.pdf']})
+    expect(wrapper.text()).toContain('report.pdf')
+    expect(wrapper.find('.up-media__trigger').exists()).toBe(false)
     click.mockRestore()
   })
 
@@ -349,12 +397,14 @@ describe('UpMedia', () => {
     const wrapper = mountComponent({
       modelValue: 'avatar/alice.png',
       ruleCode: 'avatar',
-      variant: 'avatar',
+      variant: 'image',
     })
     await flushPromises()
 
     expect(requestObjectURL).toHaveBeenCalledWith('avatar/alice.png')
-    expect(wrapper.get('.avatar').attributes('src')).toBe('https://cdn.example/avatar/alice.png')
+    expect(wrapper.get('.up-media__preview img').attributes('src')).toBe(
+      'https://cdn.example/avatar/alice.png',
+    )
     expect(wrapper.emitted('preview-change')?.at(-1)).toEqual([
       'https://cdn.example/avatar/alice.png',
     ])
@@ -391,7 +441,7 @@ describe('UpMedia', () => {
     const wrapper = mountComponent({
       modelValue: 'avatar/old.png',
       ruleCode: 'avatar',
-      variant: 'avatar',
+      variant: 'image',
     })
     await wrapper.setProps({ modelValue: 'avatar/new.png' })
     newResponse.resolve({ url: 'https://cdn.example/new.png', expiresAt: null })
@@ -399,7 +449,9 @@ describe('UpMedia', () => {
     oldResponse.resolve({ url: 'https://cdn.example/old.png', expiresAt: null })
     await flushPromises()
 
-    expect(wrapper.get('.avatar').attributes('src')).toBe('https://cdn.example/new.png')
+    expect(wrapper.get('.up-media__preview img').attributes('src')).toBe(
+      'https://cdn.example/new.png',
+    )
   })
 
   it('does not poll expired private URLs and refreshes only after image failure', async () => {
@@ -415,31 +467,33 @@ describe('UpMedia', () => {
     const wrapper = mountComponent({
       modelValue: 'avatar/private.png',
       ruleCode: 'avatar',
-      variant: 'avatar',
+      variant: 'image',
     })
     await flushPromises()
     await new Promise((resolve) => setTimeout(resolve, 25))
     expect(objectURLMock).toHaveBeenCalledTimes(1)
 
-    await wrapper.get('.avatar').trigger('error')
+    await wrapper.get('.up-media__preview img').trigger('error')
     await flushPromises()
     expect(objectURLMock).toHaveBeenCalledTimes(2)
-    expect(wrapper.get('.avatar').attributes('src')).toBe('https://cos.example/refreshed')
+    expect(wrapper.get('.up-media__preview img').attributes('src')).toBe(
+      'https://cos.example/refreshed',
+    )
   })
 
   it('stops retrying a persistently broken image', async () => {
     const wrapper = mountComponent({
       modelValue: 'avatar/broken.png',
       ruleCode: 'avatar',
-      variant: 'avatar',
+      variant: 'image',
     })
     await flushPromises()
-    await wrapper.get('.avatar').trigger('error')
+    await wrapper.get('.up-media__preview img').trigger('error')
     await flushPromises()
-    await wrapper.get('.avatar').trigger('error')
+    await wrapper.get('.up-media__preview img').trigger('error')
     await flushPromises()
     expect(objectURLMock).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('.avatar').exists()).toBe(false)
+    expect(wrapper.find('.up-media__preview img').exists()).toBe(false)
   })
 
   it('resolves a fresh file URL at download time instead of using an expired signature', async () => {
@@ -475,16 +529,7 @@ describe('UpMedia', () => {
   })
 })
 
-function mountComponent(props: {
-  modelValue: string | string[]
-  ruleCode: string
-  multiple?: boolean
-  variant?: 'default' | 'avatar' | 'file'
-  fileLabel?: string
-  accept?: string
-  disabled?: boolean
-  uploadDisabled?: boolean
-}) {
+function mountComponent(props: UpMediaProps) {
   const wrapper = mount(UpMedia, { props, global: { plugins: [ElementPlus, appI18n] } })
   wrappers.push(wrapper)
   return wrapper

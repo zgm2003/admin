@@ -7,13 +7,10 @@ defineProps<{
   items: MediaFileItem[]
   label: string
   disabled: boolean
-  uploadDisabled: boolean
   loading: boolean
   clearable: boolean
-  multiple: boolean
 }>()
 const emit = defineEmits<{
-  select: []
   clear: [index: number]
   download: [key: string]
   retry: [key: string]
@@ -49,14 +46,6 @@ const { t } = useI18n()
           >{{ t('components.upMedia.download') }}</el-button
         >
         <el-button
-          v-if="!multiple"
-          link
-          type="primary"
-          :disabled="disabled || uploadDisabled || loading"
-          @click="emit('select')"
-          >{{ t('components.upMedia.replace') }}</el-button
-        >
-        <el-button
           v-if="clearable"
           data-testid="up-media-file-clear"
           link
@@ -67,13 +56,6 @@ const { t } = useI18n()
         >
       </div>
     </div>
-    <el-button
-      v-if="multiple || items.length === 0"
-      data-testid="up-media-file-select"
-      :disabled="disabled || uploadDisabled || loading"
-      @click="emit('select')"
-      >{{ t('components.upMedia.select') }}</el-button
-    >
   </div>
 </template>
 

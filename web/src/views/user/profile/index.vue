@@ -104,6 +104,12 @@ function applyProfile(profile: AccountProfile): void {
   currentPhone.value = profile.phone
 }
 
+function updateProfileForm(value: UpdateAccountProfileInput): void {
+  Object.assign(profileForm, value)
+  if (value.avatarFileId === undefined) delete profileForm.avatarFileId
+  if (value.avatarRequestKey === undefined) delete profileForm.avatarRequestKey
+}
+
 async function loadProfile(): Promise<void> {
   loading.value = true
   loadError.value = ''
@@ -315,7 +321,7 @@ onBeforeUnmount(stopPasswordCountdown)
         :can-update-profile="canUpdateProfile"
         :can-update-email="canUpdateEmail"
         :can-update-phone="canUpdatePhone"
-        @update:profile-form="Object.assign(profileForm, $event)"
+        @update:profile-form="updateProfileForm"
         @save="saveProfile"
         @email-action="emailDialogVisible = true"
         @phone-action="phoneDialogVisible = true"

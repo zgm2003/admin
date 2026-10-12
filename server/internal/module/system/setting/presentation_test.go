@@ -61,3 +61,30 @@ func TestCreateResponseOwnsPresentation(t *testing.T) {
 		t.Fatalf("incorrect create response %#v", row)
 	}
 }
+
+func TestMediaPresentationUsesGenericDisplayVariants(t *testing.T) {
+	tests := []struct {
+		name string
+		key string
+		value string
+		variant string
+	}{
+		{"empty default avatar", BrandDefaultAvatarKey, "", "image"},
+		{"Excel template", sharedsetting.MailRecipientRuleImportTemplateObjectKey, "setting/template.xlsx", "file"},
+		{"generic image", "app.assets.image", "setting/image.JPG", "image"},
+		{"generic video", "app.assets.video", "setting/video.MP4", "video"},
+		{"empty generic media", "app.assets.file", "", "file"},
+		{"generic document", "app.assets.file", "setting/file.pdf", "file"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			response := itemResponse(Record{Key: test.key, Value: test.value, ValueType: ValueTypeMedia})
+			if response.Presentation.MediaVariant != test.variant {
+				t.Fatalf("mediaVariant=%q want %q", response.Presentation.MediaVariant, test.variant)
+			}
+			if response.Presentation.MediaRuleCode != "setting" {
+				t.Fatalf("changed upload rule %q", response.Presentation.MediaRuleCode)
+			}
+		})
+	}
+}

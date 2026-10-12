@@ -101,6 +101,9 @@ it('uploads with the backend-selected rule without a technical purpose selector'
   await flushPromises()
   expect(wrapper.find('.file-browser__purpose').exists()).toBe(false)
   expect(wrapper.findComponent({ name: 'UpMedia' }).props('ruleCode')).toBe('file')
+  expect(wrapper.findComponent({ name: 'UpMedia' }).props('variant')).toBe('button')
+  expect(wrapper.get('[data-testid="up-media-upload"]').text()).toBe('上传文件')
+  expect(wrapper.find('.up-media__trigger').exists()).toBe(false)
   expect(wrapper.get('[data-testid="file-upload-limit"]').text()).toBe('单个文件最大 100 MB')
 })
 it('shows a clear unavailable hint instead of guessing another upload rule', async () => {
