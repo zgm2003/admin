@@ -14,7 +14,7 @@ import (
 	"admin/server/internal/module/storage/cosConfig"
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 	storagecos "admin/server/internal/storage/cos"
 	"gorm.io/gorm"
@@ -24,10 +24,10 @@ import (
 func newConfigService(t *testing.T, db *gorm.DB, keys *secretkey.KeyRing) *cosconfig.Service {
 	t.Helper()
 	repository := cosconfig.NewRepository(db)
-	repository.SetGenerations(cachegeneration.NewRepository(db))
+	repository.SetGenerations(configcache.NewRepository(db))
 	service := cosconfig.NewService(repository, keys, nil)
 	// 该 helper 只用于构造 COS 配置事实；Create 在 states 为 nil 时跳过同步发布，由 relay/repair 恢复。
-	service.SetGenerations(cachegeneration.NewRepository(db), nil)
+	service.SetGenerations(configcache.NewRepository(db), nil)
 	return service
 }
 
@@ -226,8 +226,8 @@ func TestObjectURLReadyRouteAndRuntimeUseZeroPostgresSelects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	generations := cachegeneration.NewRepository(db)
-	states := cachegeneration.NewStore(client)
+	generations := configcache.NewRepository(db)
+	states := configcache.NewStore(client)
 	configRepository := cosconfig.NewRepository(db)
 	configRepository.SetGenerations(generations)
 	configCache := cosconfig.NewCache(client)
@@ -243,16 +243,16 @@ func TestObjectURLReadyRouteAndRuntimeUseZeroPostgresSelects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	configScope, err := cachegeneration.NewScope("storage.cosconfig", fmt.Sprintf("%d", configID))
+	configScope, err := configcache.NewScope("storage.cosconfig", fmt.Sprintf("%d", configID))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtimeKey, err := cachegeneration.SnapshotKey(configScope, 1, "runtime")
+	runtimeKey, err := configcache.SnapshotKey(configScope, 1, "runtime")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_ = client.DeleteMany(context.Background(), []string{cachegeneration.StateKey(configScope), runtimeKey})
+		_ = client.DeleteMany(context.Background(), []string{configcache.StateKey(configScope), runtimeKey})
 	})
 
 	platformID := insertPlatform(t, db, ctx, "admin", yesno.Yes)

@@ -9,7 +9,7 @@ import (
 
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -36,9 +36,9 @@ func (f *fakeRepository) FindActive(context.Context) (Model, error) {
 	return f.row, nil
 }
 
-func (f *fakeRepository) Create(_ context.Context, value *Model, expected int64, _ time.Time) (cachegeneration.MutationResult, error) {
+func (f *fakeRepository) Create(_ context.Context, value *Model, expected int64, _ time.Time) (configcache.MutationResult, error) {
 	if f.writeErr != nil {
-		return cachegeneration.MutationResult{}, f.writeErr
+		return configcache.MutationResult{}, f.writeErr
 	}
 	f.created = *value
 	f.row = *value
@@ -47,9 +47,9 @@ func (f *fakeRepository) Create(_ context.Context, value *Model, expected int64,
 	return changedMutation(expected), nil
 }
 
-func (f *fakeRepository) Update(_ context.Context, value *Model, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
+func (f *fakeRepository) Update(_ context.Context, value *Model, expected int64, now time.Time) (configcache.MutationResult, error) {
 	if f.writeErr != nil {
-		return cachegeneration.MutationResult{}, f.writeErr
+		return configcache.MutationResult{}, f.writeErr
 	}
 	f.updated = *value
 	f.row = *value
@@ -67,9 +67,9 @@ func (f *fakeRepository) UpdateTestResult(_ context.Context, id int64, at time.T
 	return nil
 }
 
-func (f *fakeRepository) Delete(_ context.Context, id int64, expected int64, _ time.Time) (cachegeneration.MutationResult, error) {
+func (f *fakeRepository) Delete(_ context.Context, id int64, expected int64, _ time.Time) (configcache.MutationResult, error) {
 	if f.writeErr != nil {
-		return cachegeneration.MutationResult{}, f.writeErr
+		return configcache.MutationResult{}, f.writeErr
 	}
 	f.deletedID = id
 	f.found = false
@@ -82,7 +82,7 @@ type fakeRuntime struct {
 	err        error
 }
 
-func (f *fakeRuntime) Mutate(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+func (f *fakeRuntime) Mutate(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 	f.calls++
 	if f.err != nil {
 		return f.err
@@ -97,8 +97,8 @@ func (f *fakeRuntime) Mutate(ctx context.Context, change func(context.Context, i
 	return err
 }
 
-func changedMutation(expected int64) cachegeneration.MutationResult {
-	return cachegeneration.MutationResult{Changed: true, Generation: expected + 1, OutboxID: expected}
+func changedMutation(expected int64) configcache.MutationResult {
+	return configcache.MutationResult{Changed: true, Generation: expected + 1, OutboxID: expected}
 }
 
 func newTestService(t *testing.T, repository *fakeRepository, runtime RuntimeCoordinator) *Service {

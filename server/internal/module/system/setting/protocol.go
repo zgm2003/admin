@@ -3,14 +3,14 @@ package setting
 import (
 	"time"
 
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
 )
 
 // settingGenerationScope 是 system/setting 固定使用的 generation scope；
 // 集成测试可替换为隔离 scope，不随请求变化。
-var settingGenerationScope = cachegeneration.Scope{Namespace: "system.setting", ScopeKey: "global"}
+var settingGenerationScope = configcache.Scope{Namespace: "system.setting", ScopeKey: "global"}
 
 const (
 	PermissionView   = "system:setting:view"

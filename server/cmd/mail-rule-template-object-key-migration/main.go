@@ -27,7 +27,7 @@ import (
 	systemsetting "admin/server/internal/module/system/setting"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/secretkey"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
 	storagecos "admin/server/internal/storage/cos"
@@ -171,8 +171,8 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("storage key unavailable")
 	}
-	generations := cachegeneration.NewRepository(db)
-	states := cachegeneration.NewStore(redis)
+	generations := configcache.NewRepository(db)
+	states := configcache.NewStore(redis)
 	settingRepo := systemsetting.NewRepository(db)
 	settingRepo.SetGenerations(generations)
 	settings := systemsetting.NewService(settingRepo)

@@ -15,7 +15,7 @@ import (
 	projectconfig "admin/server/internal/config"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 )
@@ -134,7 +134,7 @@ func TestRateLimitStoreTwoInstancesUseOneColdFillAndHotReadsAvoidPostgres(t *tes
 	repository := &countingPolicyRepository{}
 	first := newRateLimitTestStore(t, repository, database, firstClient, scope)
 	second := newRateLimitStore(repository, secondClient)
-	second.SetGenerations(cachegeneration.NewRepository(database), cachegeneration.NewStore(secondClient))
+	second.SetGenerations(configcache.NewRepository(database), configcache.NewStore(secondClient))
 	second.scope = scope
 
 	leaderEntered := make(chan struct{})
@@ -202,7 +202,7 @@ func TestRateLimitStoreRebuildsCorruptSnapshot(t *testing.T) {
 	client := openRateLimitRedis(t)
 	repository := &countingPolicyRepository{}
 	store := newRateLimitTestStore(t, repository, database, client, scope)
-	key, _ := cachegeneration.SnapshotKey(scope, 1, "ratelimit:1")
+	key, _ := configcache.SnapshotKey(scope, 1, "ratelimit:1")
 	if err := client.SetString(ctx, key, `{"schemaVersion":1,"generation":1,"platformId":1,"policies":{},"version":1}`, time.Minute); err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestRateLimitStoreRedisFailureFailsClosedWithoutPostgres(t *testing.T) {
 	client := openRateLimitRedis(t)
 	repository := &countingPolicyRepository{}
 	store := newRateLimitStore(repository, client)
-	store.SetGenerations(cachegeneration.NewRepository(database), cachegeneration.NewStore(client))
+	store.SetGenerations(configcache.NewRepository(database), configcache.NewStore(client))
 	store.scope = scope
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
@@ -258,11 +258,11 @@ func TestRateLimitStoreDropsOldFillWhenGenerationAdvances(t *testing.T) {
 	if err != nil || len(catalog.Policies) != 2 {
 		t.Fatalf("catalog after generation advance=%+v err=%v", catalog, err)
 	}
-	oldKey, _ := cachegeneration.SnapshotKey(scope, 1, "ratelimit:1")
+	oldKey, _ := configcache.SnapshotKey(scope, 1, "ratelimit:1")
 	if _, found, err := client.GetString(ctx, oldKey); err != nil || found {
 		t.Fatalf("old snapshot found=%v err=%v", found, err)
 	}
-	newKey, _ := cachegeneration.SnapshotKey(scope, 2, "ratelimit:1")
+	newKey, _ := configcache.SnapshotKey(scope, 2, "ratelimit:1")
 	if _, found, err := client.GetString(ctx, newKey); err != nil || !found {
 		t.Fatalf("new snapshot found=%v err=%v", found, err)
 	}
@@ -317,19 +317,19 @@ func openRateLimitRedis(t *testing.T) *projectredis.Client {
 	return client
 }
 
-func newRateLimitTestScope(t *testing.T, database *gorm.DB, ctx context.Context) cachegeneration.Scope {
+func newRateLimitTestScope(t *testing.T, database *gorm.DB, ctx context.Context) configcache.Scope {
 	t.Helper()
-	scope := cachegeneration.Scope{Namespace: "message.mail", ScopeKey: fmt.Sprintf("test-%d", time.Now().UnixNano())}
+	scope := configcache.Scope{Namespace: "message.mail", ScopeKey: fmt.Sprintf("test-%d", time.Now().UnixNano())}
 	now := time.Now().UTC()
 	if err := database.WithContext(ctx).Exec(`
-INSERT INTO system_config_cache_generation(namespace,scope_key,generation,created_at,updated_at)
+INSERT INTO system_config_cache_state(namespace,scope_key,generation,created_at,updated_at)
 VALUES (?,?,1,?,?)`, scope.Namespace, scope.ScopeKey, now, now).Error; err != nil {
 		t.Fatal(err)
 	}
 	return scope
 }
 
-func newRateLimitTestStore(t *testing.T, repository policyLoader, database *gorm.DB, client *projectredis.Client, scope cachegeneration.Scope) *rateLimitPolicyStore {
+func newRateLimitTestStore(t *testing.T, repository policyLoader, database *gorm.DB, client *projectredis.Client, scope configcache.Scope) *rateLimitPolicyStore {
 	t.Helper()
 	keys := rateLimitCacheTestKeys(t, scope)
 	if err := client.DeleteMany(context.Background(), keys); err != nil {
@@ -337,7 +337,7 @@ func newRateLimitTestStore(t *testing.T, repository policyLoader, database *gorm
 	}
 	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), keys) })
 	store := newRateLimitStore(repository, client)
-	store.SetGenerations(cachegeneration.NewRepository(database), cachegeneration.NewStore(client))
+	store.SetGenerations(configcache.NewRepository(database), configcache.NewStore(client))
 	store.scope = scope
 	if _, err := store.states.Reconcile(context.Background(), scope, 1); err != nil {
 		t.Fatal(err)
@@ -345,18 +345,18 @@ func newRateLimitTestStore(t *testing.T, repository policyLoader, database *gorm
 	return store
 }
 
-func rateLimitCacheTestKeys(t *testing.T, scope cachegeneration.Scope) []string {
+func rateLimitCacheTestKeys(t *testing.T, scope configcache.Scope) []string {
 	t.Helper()
-	stateKey := cachegeneration.StateKey(scope)
+	stateKey := configcache.StateKey(scope)
 	keys := []string{stateKey}
 	for generation := int64(1); generation <= 4; generation++ {
 		for platformID := int64(1); platformID <= 2; platformID++ {
 			variant := fmt.Sprintf("ratelimit:%d", platformID)
-			snapshot, err := cachegeneration.SnapshotKey(scope, generation, variant)
+			snapshot, err := configcache.SnapshotKey(scope, generation, variant)
 			if err != nil {
 				t.Fatal(err)
 			}
-			fill, err := cachegeneration.FillKey(scope, generation, variant)
+			fill, err := configcache.FillKey(scope, generation, variant)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -375,14 +375,14 @@ func rateLimitFillKeys(scope, target string) []string {
 	return []string{fmt.Sprintf("%skey:%x", prefix, targetHash), prefix + "slots", prefix + "starts"}
 }
 
-func advanceRateLimitGeneration(ctx context.Context, database *gorm.DB, scope cachegeneration.Scope, expected int64) (cachegeneration.MutationResult, error) {
-	result := cachegeneration.MutationResult{}
+func advanceRateLimitGeneration(ctx context.Context, database *gorm.DB, scope configcache.Scope, expected int64) (configcache.MutationResult, error) {
+	result := configcache.MutationResult{}
 	err := database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		event, err := cachegeneration.NewRepository(database).AdvanceTx(ctx, tx, scope, expected, time.Now().UTC())
+		event, err := configcache.NewRepository(database).AdvanceTx(ctx, tx, scope, expected, time.Now().UTC())
 		if err != nil {
 			return err
 		}
-		result = cachegeneration.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
+		result = configcache.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
 		return nil
 	})
 	return result, err

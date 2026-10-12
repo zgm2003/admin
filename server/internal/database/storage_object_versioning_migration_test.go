@@ -13,8 +13,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// storageObjectVersioningNamespace 必须同时满足 Go cacheGeneration namespacePattern 与
-// PostgreSQL ck_system_config_cache_generation_namespace（同一正则，禁止大写）。
+// storageObjectVersioningNamespace 必须同时满足 Go configCache namespacePattern 与
+// PostgreSQL ck_system_config_cache_state_namespace（同一正则，禁止大写）。
 const storageObjectVersioningNamespace = "storage.cosconfig"
 
 const storageObjectVersioningKeyA = "avatar/2026/08/31/6e7e53334a6da066b130a89cc3f69535.png"
@@ -34,7 +34,7 @@ func TestStorageObjectVersioningMigration(t *testing.T) {
 	assertStorageObjectVersioningClearedReferences(t, db, ctx)
 	assertStorageObjectVersioningConstraintBehaviour(t, db, ctx)
 
-	adminVersion, canvasVersion := readCacheGenerationMenuVersions(t, db, ctx)
+	adminVersion, canvasVersion := readConfigCacheMenuVersions(t, db, ctx)
 	if adminVersion != 7 || canvasVersion != 3 {
 		t.Fatalf("menu versions admin=%d canvas=%d want 7/3", adminVersion, canvasVersion)
 	}
@@ -55,7 +55,7 @@ func TestStorageObjectVersioningMigration(t *testing.T) {
 	assertStorageObjectVersioningGenerations(t, db, ctx, 1)
 	assertSystemSettingGeneration(t, db, ctx, 2, 1)
 	assertStorageObjectVersioningClearedReferences(t, db, ctx)
-	adminVersion, canvasVersion = readCacheGenerationMenuVersions(t, db, ctx)
+	adminVersion, canvasVersion = readConfigCacheMenuVersions(t, db, ctx)
 	if adminVersion != 7 || canvasVersion != 3 {
 		t.Fatalf("menu versions after re-run admin=%d canvas=%d want 7/3", adminVersion, canvasVersion)
 	}
@@ -175,7 +175,7 @@ func assertStorageObjectVersioningGenerations(t *testing.T, db *gorm.DB, ctx con
 	t.Helper()
 	for _, scopeKey := range []string{"10", "11", "12"} {
 		var generation int64
-		if err := db.WithContext(ctx).Raw(`SELECT generation FROM system_config_cache_generation WHERE namespace=? AND scope_key=?`, storageObjectVersioningNamespace, scopeKey).Scan(&generation).Error; err != nil {
+		if err := db.WithContext(ctx).Raw(`SELECT generation FROM system_config_cache_state WHERE namespace=? AND scope_key=?`, storageObjectVersioningNamespace, scopeKey).Scan(&generation).Error; err != nil {
 			t.Fatal(err)
 		}
 		if generation != wantStoredGeneration {
@@ -190,7 +190,7 @@ func assertStorageObjectVersioningGenerations(t *testing.T, db *gorm.DB, ctx con
 		}
 	}
 	var total int64
-	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM system_config_cache_generation WHERE namespace=?`, storageObjectVersioningNamespace).Scan(&total).Error; err != nil {
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM system_config_cache_state WHERE namespace=?`, storageObjectVersioningNamespace).Scan(&total).Error; err != nil {
 		t.Fatal(err)
 	}
 	if total != 3 {
@@ -201,7 +201,7 @@ func assertStorageObjectVersioningGenerations(t *testing.T, db *gorm.DB, ctx con
 func assertSystemSettingGeneration(t *testing.T, db *gorm.DB, ctx context.Context, wantGeneration int64, wantOutbox int64) {
 	t.Helper()
 	var generation int64
-	if err := db.WithContext(ctx).Raw(`SELECT generation FROM system_config_cache_generation WHERE namespace='system.setting' AND scope_key='global'`).Scan(&generation).Error; err != nil {
+	if err := db.WithContext(ctx).Raw(`SELECT generation FROM system_config_cache_state WHERE namespace='system.setting' AND scope_key='global'`).Scan(&generation).Error; err != nil {
 		t.Fatal(err)
 	}
 	if generation != wantGeneration {
@@ -248,7 +248,7 @@ func assertStorageObjectVersioningRolledBack(t *testing.T, db *gorm.DB, ctx cont
 	assertColumnExists(t, db, ctx, "storage_cos_config", "bucket")
 	assertColumnExists(t, db, ctx, "storage_upload_rule_code", "platform_id")
 	var generationRows int64
-	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM system_config_cache_generation WHERE namespace=?`, storageObjectVersioningNamespace).Scan(&generationRows).Error; err != nil {
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM system_config_cache_state WHERE namespace=?`, storageObjectVersioningNamespace).Scan(&generationRows).Error; err != nil {
 		t.Fatal(err)
 	}
 	if generationRows != 0 {
@@ -464,16 +464,16 @@ func openStorageObjectVersioningSchema(t *testing.T) (*gorm.DB, context.Context)
 			avatar VARCHAR(512) NOT NULL DEFAULT '',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
-		`CREATE TABLE system_config_cache_generation (
+		`CREATE TABLE system_config_cache_state (
 			namespace VARCHAR(128) NOT NULL,
 			scope_key VARCHAR(128) NOT NULL,
 			generation BIGINT NOT NULL DEFAULT 1,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			CONSTRAINT pk_system_config_cache_generation PRIMARY KEY (namespace, scope_key),
-			CONSTRAINT ck_system_config_cache_generation_namespace CHECK (namespace ~ '^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$'),
-			CONSTRAINT ck_system_config_cache_generation_scope_key CHECK (scope_key ~ '^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$'),
-			CONSTRAINT ck_system_config_cache_generation_value CHECK (generation >= 1))`,
+			CONSTRAINT pk_system_config_cache_state PRIMARY KEY (namespace, scope_key),
+			CONSTRAINT ck_system_config_cache_state_namespace CHECK (namespace ~ '^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$'),
+			CONSTRAINT ck_system_config_cache_state_scope_key CHECK (scope_key ~ '^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$'),
+			CONSTRAINT ck_system_config_cache_state_value CHECK (generation >= 1))`,
 		`CREATE TABLE system_config_cache_outbox (
 			id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
 			namespace VARCHAR(128) NOT NULL,
@@ -488,7 +488,7 @@ func openStorageObjectVersioningSchema(t *testing.T) (*gorm.DB, context.Context)
 			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			CONSTRAINT uq_system_config_cache_outbox_generation UNIQUE (namespace, scope_key, generation),
-			CONSTRAINT fk_system_config_cache_outbox_generation FOREIGN KEY (namespace, scope_key) REFERENCES system_config_cache_generation(namespace, scope_key),
+			CONSTRAINT fk_system_config_cache_outbox_generation FOREIGN KEY (namespace, scope_key) REFERENCES system_config_cache_state(namespace, scope_key),
 			CONSTRAINT ck_system_config_cache_outbox_namespace CHECK (namespace ~ '^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$'),
 			CONSTRAINT ck_system_config_cache_outbox_scope_key CHECK (scope_key ~ '^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$'),
 			CONSTRAINT ck_system_config_cache_outbox_generation_value CHECK (generation >= 1),
@@ -526,7 +526,7 @@ func seedStorageObjectVersioningFixture(t *testing.T, db *gorm.DB, ctx context.C
 		`INSERT INTO user_profile (user_id, avatar, created_at, updated_at) VALUES
 			(169, '` + storageObjectVersioningKeyA + `', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 			(718, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-		`INSERT INTO system_config_cache_generation (namespace, scope_key, generation) VALUES ('system.setting', 'global', 1)`,
+		`INSERT INTO system_config_cache_state (namespace, scope_key, generation) VALUES ('system.setting', 'global', 1)`,
 	} {
 		if err := db.WithContext(ctx).Exec(statement).Error; err != nil {
 			t.Fatalf("seed storage object versioning fixture: %v", err)

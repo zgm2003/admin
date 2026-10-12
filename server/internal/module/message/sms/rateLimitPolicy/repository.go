@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -13,13 +13,13 @@ import (
 
 type Repository struct {
 	db          *gorm.DB
-	generations *cachegeneration.Repository
-	scope       cachegeneration.Scope
+	generations *configcache.Repository
+	scope       configcache.Scope
 }
 
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 
-func (r *Repository) SetGenerations(repository *cachegeneration.Repository, scope cachegeneration.Scope) {
+func (r *Repository) SetGenerations(repository *configcache.Repository, scope configcache.Scope) {
 	r.generations = repository
 	r.scope = scope
 }
@@ -71,23 +71,23 @@ SELECT id, code, name FROM permission_auth_platform
 	}, nil
 }
 
-func (r *Repository) UpdatePolicy(ctx context.Context, platformID int64, key string, limit, windowSeconds int, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
+func (r *Repository) UpdatePolicy(ctx context.Context, platformID int64, key string, limit, windowSeconds int, expected int64, now time.Time) (configcache.MutationResult, error) {
 	if r == nil || r.db == nil || r.generations == nil {
-		return cachegeneration.MutationResult{}, fmt.Errorf("sms rate limit generation dependencies are not configured")
+		return configcache.MutationResult{}, fmt.Errorf("sms rate limit generation dependencies are not configured")
 	}
 	if err := r.scope.Validate(); err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
-	mutation := cachegeneration.MutationResult{}
+	mutation := configcache.MutationResult{}
 	err := r.db.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		var rows []Model
 		if err := transaction.WithContext(ctx).Where("platform_id = ?", platformID).
 			Clauses(clause.Locking{Strength: "UPDATE"}).Order("policy_key").Find(&rows).Error; err != nil {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, err)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, err)
 		}
 		policies, err := validatePolicyRows(platformID, rows)
 		if err != nil {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, err)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, err)
 		}
 		var current Model
 		for _, policy := range policies {
@@ -97,7 +97,7 @@ func (r *Repository) UpdatePolicy(ctx context.Context, platformID int64, key str
 			}
 		}
 		if current.Key == "" {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, gorm.ErrRecordNotFound)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, gorm.ErrRecordNotFound)
 		}
 		if current.Limit == limit && current.WindowSeconds == windowSeconds {
 			return nil
@@ -106,20 +106,20 @@ func (r *Repository) UpdatePolicy(ctx context.Context, platformID int64, key str
 			Where("platform_id = ? AND policy_key = ?", platformID, key).
 			Updates(map[string]any{"limit_count": limit, "window_seconds": windowSeconds, "updated_at": now})
 		if result.Error != nil {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, result.Error)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, result.Error)
 		}
 		if result.RowsAffected != 1 {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, gorm.ErrRecordNotFound)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, gorm.ErrRecordNotFound)
 		}
 		event, err := r.generations.AdvanceTx(ctx, transaction, r.scope, expected, now)
 		if err != nil {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, err)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, err)
 		}
-		mutation = cachegeneration.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
+		mutation = configcache.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
 		return nil
 	})
 	if err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
 	return mutation, nil
 }

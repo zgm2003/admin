@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"admin/server/internal/shared/apperror"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
 )
@@ -21,7 +21,7 @@ func TestXlsxImportIsAtomicAndRechecksExistingRules(t *testing.T) {
 	db, ctx := openServiceDatabase(t)
 	s := NewService(configuredRepository(db))
 	generation := int64(1)
-	s.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+	s.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 		result, err := change(ctx, generation)
 		if err == nil && result.Changed {
 			generation = result.Generation
@@ -65,7 +65,7 @@ func TestXlsxImportIsAtomicAndRechecksExistingRules(t *testing.T) {
 func TestXlsxImportRefusesFileDuplicatesInvalidRowsAndRuntimeFailure(t *testing.T) {
 	db, ctx := openServiceDatabase(t)
 	s := NewService(configuredRepository(db))
-	s.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(context.Context, func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+	s.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(context.Context, func(context.Context, int64) (configcache.MutationResult, error)) error {
 		return errors.New("redis failure")
 	}))
 	for _, content := range []string{importHeader + "email,a@example.com,deny,valid,,1\n", importHeader + "domain,@qq.com,deny,invalid,,1\n", importHeader + "email,A@example.com,deny,one,,1\nemail,a@example.com,deny,two,,1\n"} {
@@ -85,7 +85,7 @@ func TestXlsxImportRollsBackEarlierBatchesWhenALaterBatchFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := NewService(configuredRepository(db))
-	s.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+	s.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 		_, err := change(ctx, 1)
 		return err
 	}))
@@ -102,7 +102,7 @@ func TestXlsxImportRollsBackEarlierBatchesWhenALaterBatchFails(t *testing.T) {
 		t.Fatal("late constraint failure accepted")
 	}
 	var valid bool
-	if err := db.Raw(`SELECT (SELECT count(*)=0 FROM message_mail_recipient_rule) AND (SELECT count(*)=0 FROM system_config_cache_outbox) AND (SELECT generation=1 FROM system_config_cache_generation WHERE namespace='message.mail' AND scope_key='global')`).Scan(&valid).Error; err != nil || !valid {
+	if err := db.Raw(`SELECT (SELECT count(*)=0 FROM message_mail_recipient_rule) AND (SELECT count(*)=0 FROM system_config_cache_outbox) AND (SELECT generation=1 FROM system_config_cache_state WHERE namespace='message.mail' AND scope_key='global')`).Scan(&valid).Error; err != nil || !valid {
 		t.Fatalf("rollback valid=%v err=%v", valid, err)
 	}
 }
@@ -110,7 +110,7 @@ func TestXlsxImportRollsBackEarlierBatchesWhenALaterBatchFails(t *testing.T) {
 func TestXlsxImportMapsConcurrentDuplicateAndDoesNotWriteOtherRows(t *testing.T) {
 	db, ctx := openServiceDatabase(t)
 	s := NewService(configuredRepository(db))
-	s.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+	s.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 		// Another writer wins after preview/recheck, before our transaction.
 		now := time.Now().UTC()
 		row := Model{Scope: ScopeEmail, Pattern: "race@example.com", Action: ActionDeny, Name: "competitor", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}

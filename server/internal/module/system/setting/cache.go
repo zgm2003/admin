@@ -11,7 +11,7 @@ import (
 
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/cacheFill"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
 )
@@ -29,8 +29,8 @@ var ErrSnapshotCorrupt = errors.New("setting snapshot is corrupt")
 // Cache 只访问 Redis：state 读取、带 generation 的不可变快照与 cacheFill 准入。
 type Cache struct {
 	client *projectredis.Client
-	store  *cachegeneration.Store
-	scope  cachegeneration.Scope
+	store  *configcache.Store
+	scope  configcache.Scope
 	ttl    time.Duration
 }
 
@@ -42,7 +42,7 @@ func NewCache(client *projectredis.Client) *Cache {
 }
 
 // SetStateStore 由显式装配注入只读 state store。
-func (c *Cache) SetStateStore(store *cachegeneration.Store) {
+func (c *Cache) SetStateStore(store *configcache.Store) {
 	c.store = store
 }
 
@@ -53,9 +53,9 @@ func (c *Cache) ValidateDependencies() error {
 	return c.scope.Validate()
 }
 
-func (c *Cache) ReadState(ctx context.Context) (cachegeneration.State, bool, error) {
+func (c *Cache) ReadState(ctx context.Context) (configcache.State, bool, error) {
 	if c == nil || c.store == nil {
-		return cachegeneration.State{}, false, fmt.Errorf("setting cache state store is not configured")
+		return configcache.State{}, false, fmt.Errorf("setting cache state store is not configured")
 	}
 	return c.store.Read(ctx, c.scope)
 }
@@ -64,7 +64,7 @@ func (c *Cache) GetRecord(ctx context.Context, generation int64, key string) (Re
 	if c == nil || c.client == nil {
 		return Record{}, false, fmt.Errorf("setting cache is not configured")
 	}
-	snapshotKey, err := cachegeneration.SnapshotKey(c.scope, generation, recordVariant(key))
+	snapshotKey, err := configcache.SnapshotKey(c.scope, generation, recordVariant(key))
 	if err != nil {
 		return Record{}, false, err
 	}
@@ -90,7 +90,7 @@ func (c *Cache) PutRecord(ctx context.Context, generation int64, row Record) err
 	if err != nil {
 		return err
 	}
-	snapshotKey, err := cachegeneration.SnapshotKey(c.scope, generation, recordVariant(row.Key))
+	snapshotKey, err := configcache.SnapshotKey(c.scope, generation, recordVariant(row.Key))
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (c *Cache) GetBrand(ctx context.Context, generation int64) (BrandSettings, 
 	if c == nil || c.client == nil {
 		return BrandSettings{}, false, fmt.Errorf("setting cache is not configured")
 	}
-	snapshotKey, err := cachegeneration.SnapshotKey(c.scope, generation, brandSnapshotVariant)
+	snapshotKey, err := configcache.SnapshotKey(c.scope, generation, brandSnapshotVariant)
 	if err != nil {
 		return BrandSettings{}, false, err
 	}
@@ -127,7 +127,7 @@ func (c *Cache) PutBrand(ctx context.Context, generation int64, brand BrandSetti
 	if err != nil {
 		return err
 	}
-	snapshotKey, err := cachegeneration.SnapshotKey(c.scope, generation, brandSnapshotVariant)
+	snapshotKey, err := configcache.SnapshotKey(c.scope, generation, brandSnapshotVariant)
 	if err != nil {
 		return err
 	}
@@ -139,11 +139,11 @@ func (c *Cache) TryFill(ctx context.Context, generation int64, variant string) (
 	if c == nil || c.client == nil {
 		return nil, fmt.Errorf("setting cache is not configured")
 	}
-	target, err := cachegeneration.FillKey(c.scope, generation, variant)
+	target, err := configcache.FillKey(c.scope, generation, variant)
 	if err != nil {
 		return nil, err
 	}
-	return cachefill.Try(ctx, c.client.UniversalClient(), cachegeneration.StateKey(c.scope), target)
+	return cachefill.Try(ctx, c.client.UniversalClient(), configcache.StateKey(c.scope), target)
 }
 
 // TryRepair 为 state missing/corrupt 的权威修复申请跨实例单 leader 准入。
@@ -151,7 +151,7 @@ func (c *Cache) TryRepair(ctx context.Context, variant string) (*cachefill.Lease
 	if c == nil || c.client == nil {
 		return nil, fmt.Errorf("setting cache is not configured")
 	}
-	return cachefill.Try(ctx, c.client.UniversalClient(), cachegeneration.StateKey(c.scope), "repair:"+variant)
+	return cachefill.Try(ctx, c.client.UniversalClient(), configcache.StateKey(c.scope), "repair:"+variant)
 }
 
 func recordVariant(key string) string { return "setting:" + key }

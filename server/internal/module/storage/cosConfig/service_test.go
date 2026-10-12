@@ -13,7 +13,7 @@ import (
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 	"admin/server/internal/storage/cos"
 	"gorm.io/gorm"
@@ -34,8 +34,8 @@ func (t *recordingConnectionTester) TestConnection(_ context.Context, credential
 func newTestService(t *testing.T, db *gorm.DB, keys *secretkey.KeyRing, tester cos.ConnectionTester) *Service {
 	t.Helper()
 	client := testRedisClient(t)
-	generations := cachegeneration.NewRepository(db)
-	states := cachegeneration.NewStore(client)
+	generations := configcache.NewRepository(db)
+	states := configcache.NewStore(client)
 	cache := NewCache(client)
 	cache.SetStateStore(states)
 	repository := NewRepository(db)

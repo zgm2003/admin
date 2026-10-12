@@ -19,7 +19,7 @@ import (
 	"admin/server/internal/module/permission/menu"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -132,7 +132,7 @@ func TestServicePlatformCreateRollsBackBothGenerationsWhenSecondAdvanceFails(t *
 	connection, ctx := openAuthenticationPlatformDatabase(t)
 	preparePlatformSessionSchema(t, connection.GORM, ctx)
 	redisClient := openPlatformRedis(t)
-	generations := cachegeneration.NewRepository(connection.GORM)
+	generations := configcache.NewRepository(connection.GORM)
 	mailScope, smsScope := platformRateLimitScopes()
 	repository := authplatform.NewRepository(connection.GORM)
 	repository.SetRateLimitPolicyLifecycle(
@@ -200,7 +200,7 @@ func TestServicePlatformCreateRollsBackMailLeaseWhenSMSLeaseIsBusy(t *testing.T)
 		t.Fatal("platform creation succeeded while the SMS generation lease was busy")
 	}
 	mailState, found, readErr := states.Read(ctx, mailScope)
-	if readErr != nil || !found || mailState.State != cachegeneration.StateReady || mailState.Generation != 1 {
+	if readErr != nil || !found || mailState.State != configcache.StateReady || mailState.Generation != 1 {
 		t.Fatalf("mail state after partial acquire = %+v found=%v err=%v", mailState, found, readErr)
 	}
 }
@@ -592,17 +592,17 @@ func waitForPolicyInvalidating(t *testing.T, redisClient *projectredis.Client, c
 	t.Fatalf("policy %s did not become invalidating", code)
 }
 
-func configurePlatformRateLimitGenerations(t *testing.T, ctx context.Context, service *authplatform.Service, db *gorm.DB, redisClient *projectredis.Client) (*cachegeneration.Repository, *cachegeneration.Store) {
+func configurePlatformRateLimitGenerations(t *testing.T, ctx context.Context, service *authplatform.Service, db *gorm.DB, redisClient *projectredis.Client) (*configcache.Repository, *configcache.Store) {
 	t.Helper()
 	mailScope, smsScope := platformRateLimitScopes()
-	for _, scope := range []cachegeneration.Scope{mailScope, smsScope} {
-		if err := redisClient.Delete(ctx, cachegeneration.StateKey(scope)); err != nil {
+	for _, scope := range []configcache.Scope{mailScope, smsScope} {
+		if err := redisClient.Delete(ctx, configcache.StateKey(scope)); err != nil {
 			t.Fatal(err)
 		}
 	}
-	generations := cachegeneration.NewRepository(db)
-	states := cachegeneration.NewStore(redisClient)
-	for _, scope := range []cachegeneration.Scope{mailScope, smsScope} {
+	generations := configcache.NewRepository(db)
+	states := configcache.NewStore(redisClient)
+	for _, scope := range []configcache.Scope{mailScope, smsScope} {
 		generation, err := generations.Current(ctx, scope)
 		if err != nil {
 			t.Fatal(err)
@@ -611,18 +611,18 @@ func configurePlatformRateLimitGenerations(t *testing.T, ctx context.Context, se
 			t.Fatal(err)
 		}
 	}
-	service.SetRateLimitCacheGenerations(generations, states, mailScope, smsScope)
+	service.SetRateLimitConfigCaches(generations, states, mailScope, smsScope)
 	return generations, states
 }
 
-func platformRateLimitScopes() (cachegeneration.Scope, cachegeneration.Scope) {
-	return cachegeneration.Scope{Namespace: "message.mail", ScopeKey: "global"}, cachegeneration.Scope{Namespace: "message.sms", ScopeKey: "global"}
+func platformRateLimitScopes() (configcache.Scope, configcache.Scope) {
+	return configcache.Scope{Namespace: "message.mail", ScopeKey: "global"}, configcache.Scope{Namespace: "message.sms", ScopeKey: "global"}
 }
 
-func assertRateLimitLifecycleFacts(t *testing.T, db *gorm.DB, ctx context.Context, generations *cachegeneration.Repository, platformID, expectedGeneration int64, expectedPolicies int64) {
+func assertRateLimitLifecycleFacts(t *testing.T, db *gorm.DB, ctx context.Context, generations *configcache.Repository, platformID, expectedGeneration int64, expectedPolicies int64) {
 	t.Helper()
 	mailScope, smsScope := platformRateLimitScopes()
-	for _, scope := range []cachegeneration.Scope{mailScope, smsScope} {
+	for _, scope := range []configcache.Scope{mailScope, smsScope} {
 		generation, err := generations.Current(ctx, scope)
 		if err != nil || generation != expectedGeneration {
 			t.Fatalf("generation %s/%s = %d,%v want %d", scope.Namespace, scope.ScopeKey, generation, err, expectedGeneration)

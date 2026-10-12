@@ -4,16 +4,16 @@ import { View } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import {
-  getCacheGenerations,
-  getCacheGenerationOptions,
-  type CacheGeneration,
-  type CacheGenerationPublishState,
-} from '@/api/system/cacheGeneration'
+  getConfigCacheStatuses,
+  getConfigCacheStatusOptions,
+  type ConfigCacheStatus,
+  type ConfigCacheStatusPublishState,
+} from '@/api/system/configCacheStatus'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { usePermissionStore } from '@/store/permission'
 import { formatTime } from '@/utils/datetime'
-import CacheGenerationDetailDialog from './components/CacheGenerationDetailDialog/index.vue'
+import ConfigCacheStatusDetailDialog from './components/ConfigCacheStatusDetailDialog/index.vue'
 import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 
 const { t, locale } = useI18n()
@@ -22,21 +22,21 @@ const {
   error: optionsError,
   loading: optionsLoading,
   reload: reloadOptions,
-} = useLocalizedOptions(getCacheGenerationOptions, () => ({ publishStates: [] }))
+} = useLocalizedOptions(getConfigCacheStatusOptions, () => ({ publishStates: [] }))
 const access = usePermissionStore()
-const rows = ref<CacheGeneration[]>([])
+const rows = ref<ConfigCacheStatus[]>([])
 const loading = ref(false)
 const loadError = ref('')
 const keyword = ref('')
-const publishState = ref<'' | CacheGenerationPublishState>('')
+const publishState = ref<'' | ConfigCacheStatusPublishState>('')
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 const detailVisible = ref(false)
-const selectedRow = ref<CacheGeneration | null>(null)
-interface CacheGenerationSearchModel {
+const selectedRow = ref<ConfigCacheStatus | null>(null)
+interface ConfigCacheStatusSearchModel {
   keyword: string
-  publishState: '' | CacheGenerationPublishState
+  publishState: '' | ConfigCacheStatusPublishState
 }
 
 let sequence = 0
@@ -46,7 +46,7 @@ onBeforeUnmount(() => {
   sequence++
 })
 
-const canList = computed(() => access.hasPermission('system:cacheGeneration:list'))
+const canList = computed(() => access.hasPermission('system:configCacheStatus:list'))
 watch([locale, canList], () => {
   sequence++
   rows.value = []
@@ -57,7 +57,7 @@ watch([locale, canList], () => {
   detailVisible.value = false
   if (canList.value) void load()
 })
-const searchModel = computed<SearchFormModel<CacheGenerationSearchModel>>({
+const searchModel = computed<SearchFormModel<ConfigCacheStatusSearchModel>>({
   get: () => ({ keyword: keyword.value, publishState: publishState.value }),
   set: (value) => {
     keyword.value = typeof value.keyword === 'string' ? value.keyword : ''
@@ -65,26 +65,26 @@ const searchModel = computed<SearchFormModel<CacheGenerationSearchModel>>({
   },
 })
 const publishStateOptions = computed(() => options.value.publishStates)
-const searchFields = computed<SearchField<CacheGenerationSearchModel>[]>(() => [
+const searchFields = computed<SearchField<ConfigCacheStatusSearchModel>[]>(() => [
   {
     key: 'keyword',
     type: 'input',
     resetValue: '',
-    label: t('cacheGeneration.keyword'),
-    placeholder: t('cacheGeneration.searchPlaceholder'),
+    label: t('configCacheStatus.keyword'),
+    placeholder: t('configCacheStatus.searchPlaceholder'),
     clearable: true,
-    testId: 'cache-generation-keyword',
+    testId: 'config-cache-status-keyword',
   },
   {
     key: 'publishState',
     type: 'select-v2',
     resetValue: '',
-    label: t('cacheGeneration.publishState'),
-    placeholder: t('cacheGeneration.allStates'),
+    label: t('configCacheStatus.publishState'),
+    placeholder: t('configCacheStatus.allStates'),
     options: publishStateOptions.value,
     disabled: optionsLoading.value || optionsError.value !== '',
     clearable: true,
-    testId: 'cache-generation-publish-state',
+    testId: 'config-cache-status-publish-state',
   },
 ])
 const state = computed<'loading' | 'error' | 'empty' | 'success'>(() =>
@@ -96,31 +96,31 @@ const state = computed<'loading' | 'error' | 'empty' | 'success'>(() =>
         ? 'empty'
         : 'success',
 )
-const columns = computed<TableColumn<CacheGeneration>[]>(() => [
-  { prop: 'namespace', label: t('cacheGeneration.namespace'), minWidth: 180 },
-  { prop: 'scopeKey', label: t('cacheGeneration.scopeKey'), minWidth: 140 },
-  { key: 'status', prop: 'status', label: t('cacheGeneration.status'), width: 130 },
-  { prop: 'pendingCount', label: t('cacheGeneration.pendingCount'), width: 120 },
+const columns = computed<TableColumn<ConfigCacheStatus>[]>(() => [
+  { prop: 'namespace', label: t('configCacheStatus.namespace'), minWidth: 180 },
+  { prop: 'scopeKey', label: t('configCacheStatus.scopeKey'), minWidth: 140 },
+  { key: 'status', prop: 'status', label: t('configCacheStatus.status'), width: 130 },
+  { prop: 'pendingCount', label: t('configCacheStatus.pendingCount'), width: 120 },
   {
     key: 'redisVersion',
     prop: 'latestPublishedGeneration',
-    label: t('cacheGeneration.redisVersion'),
+    label: t('configCacheStatus.redisVersion'),
     width: 120,
   },
   {
     key: 'lastError',
     prop: 'lastError',
-    label: t('cacheGeneration.lastError'),
+    label: t('configCacheStatus.lastError'),
     minWidth: 200,
     overflowTooltip: true,
   },
   {
     key: 'latestPublishedAt',
     prop: 'latestPublishedAt',
-    label: t('cacheGeneration.latestPublishedAt'),
+    label: t('configCacheStatus.latestPublishedAt'),
     width: 190,
   },
-  { key: 'actions', prop: 'namespace', label: t('cacheGeneration.details'), width: 140 },
+  { key: 'actions', prop: 'namespace', label: t('configCacheStatus.details'), width: 140 },
 ])
 const pagination = computed<TablePaginationState>(() => ({
   currentPage: page.value,
@@ -131,13 +131,13 @@ const pagination = computed<TablePaginationState>(() => ({
 function displayTime(value: string | null): string {
   return value === null ? '-' : formatTime(value)
 }
-function displayRedisVersion(row: CacheGeneration): string {
+function displayRedisVersion(row: ConfigCacheStatus): string {
   return row.publishedVersion === null ? '-' : String(row.publishedVersion)
 }
-function rowKey(row: CacheGeneration): string {
+function rowKey(row: ConfigCacheStatus): string {
   return `${row.namespace}:${row.scopeKey}`
 }
-function openDetail(row: CacheGeneration): void {
+function openDetail(row: ConfigCacheStatus): void {
   selectedRow.value = row
   detailVisible.value = true
 }
@@ -149,7 +149,7 @@ async function load(): Promise<void> {
   loading.value = true
   loadError.value = ''
   try {
-    const result = await getCacheGenerations({
+    const result = await getConfigCacheStatuses({
       page: page.value,
       pageSize: pageSize.value,
       ...(keyword.value.trim() ? { keyword: keyword.value.trim() } : {}),
@@ -163,7 +163,7 @@ async function load(): Promise<void> {
     if (accepted()) {
       rows.value = []
       total.value = 0
-      loadError.value = t('cacheGeneration.loadFailed')
+      loadError.value = t('configCacheStatus.loadFailed')
     }
   } finally {
     if (accepted()) loading.value = false
@@ -191,10 +191,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <AppPage class="cache-generation-page">
+  <AppPage class="config-cache-status-page">
     <el-alert
       v-if="optionsError"
-      :title="t('cacheGeneration.loadFailed')"
+      :title="t('configCacheStatus.loadFailed')"
       type="error"
       :closable="false"
       show-icon
@@ -207,8 +207,8 @@ onMounted(() => {
       :fields="searchFields"
       :query-label="t('search.query')"
       :reset-label="t('search.reset')"
-      query-test-id="cache-generation-search"
-      reset-test-id="cache-generation-reset"
+      query-test-id="config-cache-status-search"
+      reset-test-id="config-cache-status-reset"
       @query="search"
       @reset="reset"
     />
@@ -221,48 +221,55 @@ onMounted(() => {
       :status-message="loadError"
       :row-key="rowKey"
       :pagination="pagination"
-      :aria-label="t('cacheGeneration.title')"
+      :aria-label="t('configCacheStatus.title')"
       :refresh-label="t('appTable.refresh')"
       @refresh="load"
       @update:pagination="updatePagination"
     >
-      <template #cell-namespace="{ row }: { row: CacheGeneration }">
+      <template #cell-namespace="{ row }: { row: ConfigCacheStatus }">
         {{ row.namespaceLabel }}
       </template>
-      <template #cell-scopeKey="{ row }: { row: CacheGeneration }">
+      <template #cell-scopeKey="{ row }: { row: ConfigCacheStatus }">
         {{ row.scopeLabel }}
       </template>
-      <template #cell-status="{ row }: { row: CacheGeneration }">
+      <template #cell-status="{ row }: { row: ConfigCacheStatus }">
         <el-tooltip v-if="row.statusHint" :content="row.statusHint">
-          <el-tag :type="row.statusTone" data-testid="cache-generation-status">
+          <el-tag :type="row.statusTone" data-testid="config-cache-status-status">
             {{ row.statusLabel }}
           </el-tag>
         </el-tooltip>
-        <el-tag v-else :type="row.statusTone" data-testid="cache-generation-status">
+        <el-tag v-else :type="row.statusTone" data-testid="config-cache-status-status">
           {{ row.statusLabel }}
         </el-tag>
       </template>
-      <template #cell-latestPublishedAt="{ row }: { row: CacheGeneration }">{{
+      <template #cell-latestPublishedAt="{ row }: { row: ConfigCacheStatus }">{{
         displayTime(row.latestPublishedAt)
       }}</template>
-      <template #cell-redisVersion="{ row }: { row: CacheGeneration }">
+      <template #cell-redisVersion="{ row }: { row: ConfigCacheStatus }">
         {{ displayRedisVersion(row) }}
       </template>
-      <template #cell-actions="{ row }: { row: CacheGeneration }">
-        <el-button data-testid="cache-generation-detail" text :icon="View" @click="openDetail(row)">
-          {{ t('cacheGeneration.details') }}
+      <template #cell-actions="{ row }: { row: ConfigCacheStatus }">
+        <el-button
+          data-testid="config-cache-status-detail"
+          text
+          :icon="View"
+          @click="openDetail(row)"
+        >
+          {{ t('configCacheStatus.details') }}
         </el-button>
       </template>
       <template #empty
-        ><el-empty data-testid="cache-generation-empty" :description="t('cacheGeneration.empty')"
+        ><el-empty
+          data-testid="config-cache-status-empty"
+          :description="t('configCacheStatus.empty')"
       /></template>
     </AppTable>
-    <CacheGenerationDetailDialog v-model="detailVisible" :row="selectedRow" />
+    <ConfigCacheStatusDetailDialog v-model="detailVisible" :row="selectedRow" />
   </AppPage>
 </template>
 
 <style scoped lang="scss">
-.cache-generation-page__error {
+.config-cache-status-page__error {
   display: inline-block;
   max-width: 100%;
   overflow: hidden;

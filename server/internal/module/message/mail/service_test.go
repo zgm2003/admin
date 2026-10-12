@@ -341,7 +341,7 @@ func openMailServiceDatabase(t *testing.T) (*gorm.DB, context.Context) {
 			updated_at TIMESTAMPTZ NOT NULL,
 			deleted_at TIMESTAMPTZ
 		);
-		CREATE TABLE system_config_cache_generation (
+		CREATE TABLE system_config_cache_state (
 			namespace VARCHAR(128) NOT NULL,
 			scope_key VARCHAR(128) NOT NULL,
 			generation BIGINT NOT NULL,
@@ -363,9 +363,9 @@ func openMailServiceDatabase(t *testing.T) (*gorm.DB, context.Context) {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE (namespace, scope_key, generation),
-			FOREIGN KEY (namespace, scope_key) REFERENCES system_config_cache_generation(namespace, scope_key)
+			FOREIGN KEY (namespace, scope_key) REFERENCES system_config_cache_state(namespace, scope_key)
 		);
-		INSERT INTO system_config_cache_generation(namespace, scope_key, generation)
+		INSERT INTO system_config_cache_state(namespace, scope_key, generation)
 		VALUES ('message.mail', 'global', 1);
 	`).Error; err != nil {
 		t.Fatal(err)

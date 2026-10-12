@@ -1,4 +1,4 @@
-package cachegeneration
+package configcachestatus
 
 import (
 	"context"
@@ -27,7 +27,7 @@ SELECT
   COALESCE(pending.last_error, '') AS last_error,
   published.latest_published_generation AS latest_published_generation,
   published.latest_published_at AS latest_published_at
-FROM system_config_cache_generation AS g
+FROM system_config_cache_state AS g
 LEFT JOIN LATERAL (
   SELECT
     count(*) AS pending_count,

@@ -9,7 +9,7 @@ import (
 	"unicode/utf8"
 
 	"admin/server/internal/shared/apperror"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
@@ -28,7 +28,7 @@ func (s *Service) SetRuntimeCoordinator(runtime RuntimeCoordinator) {
 
 // mutate runs one write and invalidates the runtime snapshot after success when
 // a coordinator is wired, mirroring the template and config services.
-func (s *Service) mutate(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+func (s *Service) mutate(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 	if s.runtime == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("sms runtime coordinator is unavailable"))
 	}
@@ -73,7 +73,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Safe, error) {
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	if err := s.mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	if err := s.mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.Create(writeContext, &value, expected, now)
 	}); err != nil {
 		return Safe{}, s.writeError(err)
@@ -117,7 +117,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (Safe
 	current.IsEnabled = input.IsEnabled
 
 	now := time.Now().UTC()
-	if err := s.mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	if err := s.mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.Update(writeContext, &current, expected, now)
 	}); err != nil {
 		return Safe{}, s.writeError(err)
@@ -136,7 +136,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, status yesno.Value
 		return apperror.DependencyUnavailable(fmt.Errorf("sms recipient rule repository: %w", err))
 	}
 	now := time.Now().UTC()
-	if err := s.mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	if err := s.mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.UpdateStatus(writeContext, id, int16(status), expected, now)
 	}); err != nil {
 		return apperror.DependencyUnavailable(err)
@@ -151,7 +151,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return apperror.DependencyUnavailable(fmt.Errorf("sms recipient rule repository: %w", err))
 	}
 	now := time.Now().UTC()
-	if err := s.mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	if err := s.mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.Delete(writeContext, id, expected, now)
 	}); err != nil {
 		return apperror.DependencyUnavailable(err)

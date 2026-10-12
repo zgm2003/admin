@@ -51,8 +51,8 @@ func TestSettingMediaTypeMigrationPreservesValuesAndIsIdempotent(t *testing.T) {
 	if err := db.WithContext(ctx).Raw(`SELECT
  (SELECT count(*)=2 FROM system_setting WHERE value_type=5) AND
  (SELECT value_type=1 FROM system_setting WHERE setting_key='app.brand.title_zh_cn') AND
- (SELECT generation=14 FROM system_config_cache_generation WHERE namespace='system.setting') AND
- (SELECT generation=3 FROM system_config_cache_generation WHERE namespace='message.mail') AND
+ (SELECT generation=14 FROM system_config_cache_state WHERE namespace='system.setting') AND
+ (SELECT generation=3 FROM system_config_cache_state WHERE namespace='message.mail') AND
  (SELECT count(*)=1 FROM system_config_cache_outbox WHERE namespace='system.setting' AND generation=14)`).Scan(&valid).Error; err != nil || !valid {
 		t.Fatalf("valid=%v err=%v", valid, err)
 	}
@@ -76,7 +76,7 @@ func TestSettingMediaTypeMigrationRejectsBadFactsAndRollsBack(t *testing.T) {
 		`UPDATE system_setting SET value='https://example.com/file.csv' WHERE setting_key='message.mail.recipient_rule.import_template_object_key'`,
 		`UPDATE system_setting SET value_type=2 WHERE setting_key='app.brand.default_avatar'`,
 		`DELETE FROM system_setting WHERE setting_key='app.brand.default_avatar'`,
-		`DELETE FROM system_config_cache_generation WHERE namespace='system.setting'`,
+		`DELETE FROM system_config_cache_state WHERE namespace='system.setting'`,
 	} {
 		t.Run(statement, func(t *testing.T) {
 			db, ctx := mediaTypeFixture(t)

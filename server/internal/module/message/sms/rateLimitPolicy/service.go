@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"admin/server/internal/shared/apperror"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"gorm.io/gorm"
 )
 
@@ -52,7 +52,7 @@ func (s *Service) Update(ctx context.Context, platformID int64, key string, limi
 		return PlatformResponse{}, apperror.DependencyUnavailable(fmt.Errorf("sms rate limit repository: %w", err))
 	}
 
-	if err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	if err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.UpdatePolicy(writeContext, platformID, key, limit, windowSeconds, expected, time.Now().UTC())
 	}); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

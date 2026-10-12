@@ -11,7 +11,7 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database/testschema"
 	projectredis "admin/server/internal/redis"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
 )
@@ -42,10 +42,10 @@ func TestSyncMailStateMonotonicIdempotentAndMutationGuard(t *testing.T) {
 		t.Fatal("test Redis connection unavailable")
 	}
 	defer client.Close()
-	scope := cachegeneration.Scope{Namespace: "test.mailnumeric", ScopeKey: fmt.Sprintf("%d", time.Now().UnixNano())}
-	key := cachegeneration.StateKey(scope)
+	scope := configcache.Scope{Namespace: "test.mailnumeric", ScopeKey: fmt.Sprintf("%d", time.Now().UnixNano())}
+	key := configcache.StateKey(scope)
 	t.Cleanup(func() { _ = client.Delete(context.Background(), key) })
-	store := cachegeneration.NewStore(client)
+	store := configcache.NewStore(client)
 	if err := syncMailState(ctx, store, scope, 3); err != nil {
 		t.Fatal(err)
 	}
@@ -115,11 +115,11 @@ func postgresFixture(t *testing.T) (*pgx.Conn, context.Context) {
 	}
 	t.Cleanup(func() { _ = conn.Close(context.Background()) })
 	_, err = conn.Exec(ctx, `CREATE TABLE message_mail_recipient_rule(id bigint PRIMARY KEY,scope varchar(16) NOT NULL,pattern text NOT NULL,action varchar(16) NOT NULL,name text NOT NULL,remark text NOT NULL,is_enabled smallint NOT NULL,created_at timestamptz NOT NULL,updated_at timestamptz NOT NULL,deleted_at timestamptz);
-CREATE TABLE system_config_cache_generation(namespace text,scope_key text,generation bigint,created_at timestamptz,updated_at timestamptz);
+CREATE TABLE system_config_cache_state(namespace text,scope_key text,generation bigint,created_at timestamptz,updated_at timestamptz);
 CREATE TABLE permission_auth_platform(id bigint,menu_version bigint);
 CREATE TABLE system_config_cache_outbox(id bigint,namespace text,scope_key text,generation bigint,attempts int,available_at timestamptz,created_at timestamptz,updated_at timestamptz,published_at timestamptz,lock_token text);
 INSERT INTO message_mail_recipient_rule VALUES (2,'domain','example.test','deny','deleted','keep',0,'2026-01-01','2026-01-02','2026-01-03'),(1,'email','a@example.test','allow','active','keep',1,'2026-01-01','2026-01-02',NULL);
-INSERT INTO system_config_cache_generation VALUES ('message.mail','global',3,'2026-01-01','2026-01-02'),('system.setting','global',8,'2026-01-01','2026-01-02'),('message.mail','other',9,'2026-01-01','2026-01-02');
+INSERT INTO system_config_cache_state VALUES ('message.mail','global',3,'2026-01-01','2026-01-02'),('system.setting','global',8,'2026-01-01','2026-01-02'),('message.mail','other',9,'2026-01-01','2026-01-02');
 INSERT INTO permission_auth_platform VALUES (1,7),(2,5);
 INSERT INTO system_config_cache_outbox VALUES (1,'message.mail','global',3,1,'2026-01-01','2026-01-01','2026-01-02',NULL,'secret-test-token');`)
 	if err != nil {
@@ -150,7 +150,7 @@ func TestPostgresSnapshotNormalizesLegacyAndPreservesEveryFact(t *testing.T) {
 	if after.ScopeType != "smallint" || after.ActionType != "smallint" || after.RuleFactsHash != before.RuleFactsHash || after.ControlHash != before.ControlHash || after.MailOutboxHash != before.MailOutboxHash {
 		t.Fatalf("migration snapshot drift: before=%+v after=%+v", before, after)
 	}
-	for _, tc := range []struct{ sql, field string }{{`UPDATE message_mail_recipient_rule SET remark='changed' WHERE id=2`, "rule"}, {`UPDATE permission_auth_platform SET menu_version=menu_version+1 WHERE id=2`, "control"}, {`UPDATE system_config_cache_generation SET generation=generation+1 WHERE scope_key='other'`, "control"}, {`UPDATE system_config_cache_outbox SET lock_token='different'`, "outbox"}} {
+	for _, tc := range []struct{ sql, field string }{{`UPDATE message_mail_recipient_rule SET remark='changed' WHERE id=2`, "rule"}, {`UPDATE permission_auth_platform SET menu_version=menu_version+1 WHERE id=2`, "control"}, {`UPDATE system_config_cache_state SET generation=generation+1 WHERE scope_key='other'`, "control"}, {`UPDATE system_config_cache_outbox SET lock_token='different'`, "outbox"}} {
 		prev, err := inspectPostgres(ctx, db, false)
 		if err != nil {
 			t.Fatal(err)
@@ -184,7 +184,7 @@ func TestPostgresSnapshotEmptyRowsAndMalformedInput(t *testing.T) {
 		{"numeric spelling in legacy", `UPDATE message_mail_recipient_rule SET scope='0' WHERE id=2`, false},
 		{"null scope", `ALTER TABLE message_mail_recipient_rule ALTER COLUMN scope DROP NOT NULL; UPDATE message_mail_recipient_rule SET scope=NULL WHERE id=2`, false},
 		{"mixed columns", `ALTER TABLE message_mail_recipient_rule ALTER COLUMN scope TYPE smallint USING CASE scope WHEN 'email' THEN 0 ELSE 1 END`, false},
-		{"missing generation", `DELETE FROM system_config_cache_generation WHERE namespace='message.mail' AND scope_key='global'`, false},
+		{"missing generation", `DELETE FROM system_config_cache_state WHERE namespace='message.mail' AND scope_key='global'`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db, ctx := postgresFixture(t)

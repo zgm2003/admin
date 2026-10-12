@@ -9,7 +9,7 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database/testschema"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
@@ -43,7 +43,7 @@ ON message_sms_recipient_rule(scope, pattern, action) WHERE deleted_at IS NULL;`
 		t.Fatal(err)
 	}
 	if err := db.WithContext(ctx).Exec(`
-CREATE TABLE system_config_cache_generation(
+CREATE TABLE system_config_cache_state(
  namespace varchar(128) NOT NULL, scope_key varchar(128) NOT NULL, generation bigint NOT NULL,
  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(namespace,scope_key));
@@ -54,8 +54,8 @@ CREATE TABLE system_config_cache_outbox(
  locked_until timestamptz, lock_token varchar(64), last_error varchar(512) NOT NULL DEFAULT '',
  published_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
  UNIQUE(namespace,scope_key,generation),
- FOREIGN KEY(namespace,scope_key) REFERENCES system_config_cache_generation(namespace,scope_key));
-INSERT INTO system_config_cache_generation(namespace,scope_key,generation) VALUES ('message.sms','global',1);`).Error; err != nil {
+ FOREIGN KEY(namespace,scope_key) REFERENCES system_config_cache_state(namespace,scope_key));
+INSERT INTO system_config_cache_state(namespace,scope_key,generation) VALUES ('message.sms','global',1);`).Error; err != nil {
 		t.Fatal(err)
 	}
 	return db, ctx
@@ -63,7 +63,7 @@ INSERT INTO system_config_cache_generation(namespace,scope_key,generation) VALUE
 
 func newSMSRuleRepository(db *gorm.DB) *Repository {
 	repository := NewRepository(db)
-	repository.SetGenerations(cachegeneration.NewRepository(db), cachegeneration.Scope{Namespace: "message.sms", ScopeKey: "global"})
+	repository.SetGenerations(configcache.NewRepository(db), configcache.Scope{Namespace: "message.sms", ScopeKey: "global"})
 	return repository
 }
 

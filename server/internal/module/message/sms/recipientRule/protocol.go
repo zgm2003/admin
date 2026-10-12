@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"admin/server/internal/secretkey"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/phone"
 	"admin/server/internal/shared/yesno"
 )
@@ -102,15 +102,15 @@ type UpdateInput struct {
 type repository interface {
 	List(context.Context) ([]Model, error)
 	FindByID(context.Context, int64) (Model, error)
-	Create(context.Context, *Model, int64, time.Time) (cachegeneration.MutationResult, error)
-	Update(context.Context, *Model, int64, time.Time) (cachegeneration.MutationResult, error)
-	UpdateStatus(context.Context, int64, int16, int64, time.Time) (cachegeneration.MutationResult, error)
-	Delete(context.Context, int64, int64, time.Time) (cachegeneration.MutationResult, error)
+	Create(context.Context, *Model, int64, time.Time) (configcache.MutationResult, error)
+	Update(context.Context, *Model, int64, time.Time) (configcache.MutationResult, error)
+	UpdateStatus(context.Context, int64, int16, int64, time.Time) (configcache.MutationResult, error)
+	Delete(context.Context, int64, int64, time.Time) (configcache.MutationResult, error)
 }
 
 // RuntimeCoordinator invalidates the SMS runtime snapshot after a write.
 type RuntimeCoordinator interface {
-	Mutate(context.Context, func(context.Context, int64) (cachegeneration.MutationResult, error)) error
+	Mutate(context.Context, func(context.Context, int64) (configcache.MutationResult, error)) error
 }
 
 func safeOf(value Model) Safe {

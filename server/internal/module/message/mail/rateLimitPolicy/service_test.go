@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"admin/server/internal/shared/apperror"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 )
 
 type serviceRepositoryStub struct {
 	catalog      Catalog
 	catalogs     []Catalog
-	result       cachegeneration.MutationResult
+	result       configcache.MutationResult
 	err          error
 	expected     int64
 	updatedInput Input
@@ -27,7 +27,7 @@ func (r *serviceRepositoryStub) ListAll(context.Context) ([]Catalog, error) {
 	return r.catalogs, r.err
 }
 
-func (r *serviceRepositoryStub) Update(_ context.Context, _ int64, input Input, expected int64, _ time.Time) (Catalog, cachegeneration.MutationResult, error) {
+func (r *serviceRepositoryStub) Update(_ context.Context, _ int64, input Input, expected int64, _ time.Time) (Catalog, configcache.MutationResult, error) {
 	r.expected = expected
 	r.updatedInput = input
 	return r.catalog, r.result, r.err
@@ -39,7 +39,7 @@ type runtimeCoordinatorStub struct {
 	err        error
 }
 
-func (r *runtimeCoordinatorStub) Mutate(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+func (r *runtimeCoordinatorStub) Mutate(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 	r.calls++
 	if r.err != nil {
 		return r.err
@@ -58,7 +58,7 @@ func TestServiceUpdateUsesMailGenerationAndLastWriteWins(t *testing.T) {
 	input := Input{Key: "business_email_minute", Limit: 2, WindowSeconds: 120}
 	repository := &serviceRepositoryStub{
 		catalog: Catalog{PlatformID: 1, Policies: fixedPoliciesWithTimestamp(time.Now().UTC())},
-		result:  cachegeneration.MutationResult{Changed: true, Generation: 8, OutboxID: 12},
+		result:  configcache.MutationResult{Changed: true, Generation: 8, OutboxID: 12},
 	}
 	runtime := &runtimeCoordinatorStub{generation: 7}
 	service := NewService(repository)

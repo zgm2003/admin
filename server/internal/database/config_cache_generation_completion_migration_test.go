@@ -13,11 +13,11 @@ import (
 
 var completionScopes = []string{"system.dictionary", "message.mail", "message.sms"}
 
-func TestConfigCacheGenerationCompletionMigrationIsAtomicAndIdempotent(t *testing.T) {
-	db, ctx := openConfigCacheGenerationCompletionSchema(t, "success")
+func TestConfigCacheCompletionMigrationIsAtomicAndIdempotent(t *testing.T) {
+	db, ctx := openConfigCacheCompletionSchema(t, "success")
 	beforePolicies := readCompletionPolicyFacts(t, db, ctx)
 	beforeSecurity := readCompletionSecurityFacts(t, db, ctx)
-	script := readConfigCacheGenerationCompletionMigration(t)
+	script := readConfigCacheCompletionMigration(t)
 
 	if err := db.WithContext(ctx).Exec(script).Error; err != nil {
 		t.Fatalf("execute completion migration: %v", err)
@@ -34,7 +34,7 @@ func TestConfigCacheGenerationCompletionMigrationIsAtomicAndIdempotent(t *testin
 	}
 }
 
-func TestConfigCacheGenerationCompletionMigrationRejectsIncompletePolicyCatalogs(t *testing.T) {
+func TestConfigCacheCompletionMigrationRejectsIncompletePolicyCatalogs(t *testing.T) {
 	tests := []struct {
 		name  string
 		query string
@@ -44,7 +44,7 @@ func TestConfigCacheGenerationCompletionMigrationRejectsIncompletePolicyCatalogs
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			db, ctx := openConfigCacheGenerationCompletionSchema(t, "missing_"+test.name)
+			db, ctx := openConfigCacheCompletionSchema(t, "missing_"+test.name)
 			if err := db.WithContext(ctx).Exec(test.query).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -53,7 +53,7 @@ func TestConfigCacheGenerationCompletionMigrationRejectsIncompletePolicyCatalogs
 	}
 }
 
-func TestConfigCacheGenerationCompletionMigrationRejectsInvalidOrDuplicatePolicyKeys(t *testing.T) {
+func TestConfigCacheCompletionMigrationRejectsInvalidOrDuplicatePolicyKeys(t *testing.T) {
 	tests := []struct {
 		name  string
 		query string
@@ -75,7 +75,7 @@ FROM message_sms_rate_limit_policy WHERE platform_id=1 AND policy_key='business_
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			db, ctx := openConfigCacheGenerationCompletionSchema(t, test.name)
+			db, ctx := openConfigCacheCompletionSchema(t, test.name)
 			if err := db.WithContext(ctx).Exec(test.query).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -84,7 +84,7 @@ FROM message_sms_rate_limit_policy WHERE platform_id=1 AND policy_key='business_
 	}
 }
 
-func TestConfigCacheGenerationCompletionMigrationRejectsInvalidPolicyValues(t *testing.T) {
+func TestConfigCacheCompletionMigrationRejectsInvalidPolicyValues(t *testing.T) {
 	tests := []struct {
 		name  string
 		query string
@@ -94,7 +94,7 @@ func TestConfigCacheGenerationCompletionMigrationRejectsInvalidPolicyValues(t *t
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			db, ctx := openConfigCacheGenerationCompletionSchema(t, "value_"+test.name)
+			db, ctx := openConfigCacheCompletionSchema(t, "value_"+test.name)
 			if err := db.WithContext(ctx).Exec(test.query).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -103,14 +103,14 @@ func TestConfigCacheGenerationCompletionMigrationRejectsInvalidPolicyValues(t *t
 	}
 }
 
-func TestConfigCacheGenerationCompletionMigrationRequiresGenerationTables(t *testing.T) {
-	db, ctx := openConfigCacheGenerationCompletionSchema(t, "missing_generation")
+func TestConfigCacheCompletionMigrationRequiresGenerationTables(t *testing.T) {
+	db, ctx := openConfigCacheCompletionSchema(t, "missing_generation")
 	beforePolicies := readCompletionPolicyFacts(t, db, ctx)
 	beforeSecurity := readCompletionSecurityFacts(t, db, ctx)
-	if err := db.WithContext(ctx).Exec(`DROP TABLE system_config_cache_outbox; DROP TABLE system_config_cache_generation`).Error; err != nil {
+	if err := db.WithContext(ctx).Exec(`DROP TABLE system_config_cache_outbox; DROP TABLE system_config_cache_state`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(ctx).Exec(readConfigCacheGenerationCompletionMigration(t)).Error; err == nil {
+	if err := db.WithContext(ctx).Exec(readConfigCacheCompletionMigration(t)).Error; err == nil {
 		t.Fatal("completion migration succeeded without generation tables")
 	}
 	assertCompletionRevisionColumnsPresent(t, db, ctx)
@@ -127,7 +127,7 @@ func assertCompletionMigrationRejected(t *testing.T, db *gorm.DB, ctx context.Co
 	beforePolicies := readCompletionPolicyFacts(t, db, ctx)
 	beforeSecurity := readCompletionSecurityFacts(t, db, ctx)
 	beforeGeneration := readCompletionGenerationFacts(t, db, ctx)
-	err := db.WithContext(ctx).Exec(readConfigCacheGenerationCompletionMigration(t)).Error
+	err := db.WithContext(ctx).Exec(readConfigCacheCompletionMigration(t)).Error
 	if err == nil {
 		t.Fatal("completion migration accepted invalid policy facts")
 	}
@@ -170,7 +170,7 @@ SELECT generation.generation,
        (SELECT count(*) FROM system_config_cache_outbox AS outbox
          WHERE outbox.namespace=generation.namespace AND outbox.scope_key=generation.scope_key
            AND outbox.generation=generation.generation) AS outbox
-FROM system_config_cache_generation AS generation
+FROM system_config_cache_state AS generation
 WHERE generation.namespace=? AND generation.scope_key='global'`, namespace).Scan(&row).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -244,14 +244,14 @@ func readCompletionGenerationFacts(t *testing.T, db *gorm.DB, ctx context.Contex
 	var facts string
 	if err := db.WithContext(ctx).Raw(`
 SELECT concat(
-  (SELECT string_agg(namespace || '/' || scope_key || ':' || generation, ',' ORDER BY namespace,scope_key) FROM system_config_cache_generation), '#',
+  (SELECT string_agg(namespace || '/' || scope_key || ':' || generation, ',' ORDER BY namespace,scope_key) FROM system_config_cache_state), '#',
   (SELECT string_agg(namespace || '/' || scope_key || ':' || generation || ':' || (published_at IS NOT NULL)::int, ',' ORDER BY id) FROM system_config_cache_outbox))`).Scan(&facts).Error; err != nil {
 		t.Fatal(err)
 	}
 	return facts
 }
 
-func readConfigCacheGenerationCompletionMigration(t *testing.T) string {
+func readConfigCacheCompletionMigration(t *testing.T) string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(repoRoot(t), "docs", "database", "2026-09-17-config-cache-generation-completion.sql"))
 	if err != nil {
@@ -260,7 +260,7 @@ func readConfigCacheGenerationCompletionMigration(t *testing.T) string {
 	return string(data)
 }
 
-func openConfigCacheGenerationCompletionSchema(t *testing.T, suffix string) (*gorm.DB, context.Context) {
+func openConfigCacheCompletionSchema(t *testing.T, suffix string) (*gorm.DB, context.Context) {
 	t.Helper()
 	db, ctx := testschema.Open(t, mustPostgresDSN(t), "test_config_cache_generation_completion_"+suffix)
 	statements := []string{
@@ -284,17 +284,17 @@ func openConfigCacheGenerationCompletionSchema(t *testing.T, suffix string) (*go
  CONSTRAINT pk_message_sms_rate_limit_policy PRIMARY KEY(platform_id,policy_key),
  CONSTRAINT ck_message_sms_rate_limit_policy_revision CHECK(revision >= 1))`,
 		`CREATE INDEX ix_message_sms_rate_limit_policy_platform_revision ON message_sms_rate_limit_policy(platform_id,revision)`,
-		`CREATE TABLE system_config_cache_generation (
+		`CREATE TABLE system_config_cache_state (
  namespace varchar(128) NOT NULL, scope_key varchar(128) NOT NULL, generation bigint NOT NULL,
  created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
- CONSTRAINT pk_system_config_cache_generation PRIMARY KEY(namespace,scope_key))`,
+ CONSTRAINT pk_system_config_cache_state PRIMARY KEY(namespace,scope_key))`,
 		`CREATE TABLE system_config_cache_outbox (
  id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, namespace varchar(128) NOT NULL, scope_key varchar(128) NOT NULL,
  generation bigint NOT NULL, attempts integer NOT NULL DEFAULT 0, available_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
  locked_until timestamptz, lock_token varchar(64), last_error varchar(512) NOT NULL DEFAULT '', published_at timestamptz,
  created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
  CONSTRAINT uq_system_config_cache_outbox_generation UNIQUE(namespace,scope_key,generation),
- CONSTRAINT fk_system_config_cache_outbox_generation FOREIGN KEY(namespace,scope_key) REFERENCES system_config_cache_generation(namespace,scope_key))`,
+ CONSTRAINT fk_system_config_cache_outbox_generation FOREIGN KEY(namespace,scope_key) REFERENCES system_config_cache_state(namespace,scope_key))`,
 		`INSERT INTO permission_auth_platform(id,code,is_enabled,menu_version,policy_version) VALUES (1,'admin',1,7,11),(2,'canvas',1,3,5)`,
 		`INSERT INTO permission_access_version(user_id,version,created_at,updated_at) VALUES (10,13,'2026-09-01 00:00:00+00','2026-09-02 00:00:00+00')`,
 		`INSERT INTO user_session(id,user_id,version,created_at,updated_at) VALUES (20,10,17,'2026-09-01 00:00:00+00','2026-09-03 00:00:00+00')`,
@@ -309,7 +309,7 @@ func openConfigCacheGenerationCompletionSchema(t *testing.T, suffix string) (*go
  (1,'business_phone_10m','business','platform_phone',5,600,3,'2026-09-05 02:00:00+00','2026-09-06 02:00:00+00'),
  (2,'business_phone_minute','business','platform_phone',2,60,4,'2026-09-05 03:00:00+00','2026-09-06 03:00:00+00'),
  (2,'business_phone_10m','business','platform_phone',8,600,5,'2026-09-05 04:00:00+00','2026-09-06 04:00:00+00')`,
-		`INSERT INTO system_config_cache_generation(namespace,scope_key,generation) VALUES ('system.setting','global',4)`,
+		`INSERT INTO system_config_cache_state(namespace,scope_key,generation) VALUES ('system.setting','global',4)`,
 		`INSERT INTO system_config_cache_outbox(namespace,scope_key,generation,published_at) VALUES ('system.setting','global',2,'2026-09-07 00:00:00+00')`,
 	}
 	for _, statement := range statements {

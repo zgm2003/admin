@@ -11,7 +11,7 @@ import (
 
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/cacheFill"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 )
 
 const (
@@ -22,7 +22,7 @@ const (
 )
 
 var (
-	smsRateLimitGenerationScope = cachegeneration.Scope{Namespace: "message.sms", ScopeKey: "global"}
+	smsRateLimitGenerationScope = configcache.Scope{Namespace: "message.sms", ScopeKey: "global"}
 	errSnapshotCorrupt          = errors.New("sms rate limit snapshot is corrupt")
 	errGenerationAdvanced       = errors.New("sms cache generation advanced during rate limit fill")
 )
@@ -43,9 +43,9 @@ type policySnapshot struct {
 
 type RedisStore struct {
 	redis       *projectredis.Client
-	generations *cachegeneration.Repository
-	states      *cachegeneration.Store
-	scope       cachegeneration.Scope
+	generations *configcache.Repository
+	states      *configcache.Store
+	scope       configcache.Scope
 	ttl         time.Duration
 	readBudget  time.Duration
 	waitStep    time.Duration
@@ -61,7 +61,7 @@ func NewStore(redis *projectredis.Client) *RedisStore {
 	}
 }
 
-func (s *RedisStore) SetGenerations(repository *cachegeneration.Repository, store *cachegeneration.Store) {
+func (s *RedisStore) SetGenerations(repository *configcache.Repository, store *configcache.Store) {
 	s.generations = repository
 	s.states = store
 }
@@ -112,43 +112,43 @@ func smsRateLimitVariant(platformID int64) (string, error) {
 	return fmt.Sprintf("ratelimit:%d", platformID), nil
 }
 
-func (s *RedisStore) readyState(ctx context.Context, deadline time.Time, platformID int64, variant string, load func(context.Context) (Catalog, error)) (cachegeneration.State, bool, error) {
+func (s *RedisStore) readyState(ctx context.Context, deadline time.Time, platformID int64, variant string, load func(context.Context) (Catalog, error)) (configcache.State, bool, error) {
 	if err := ctx.Err(); err != nil {
-		return cachegeneration.State{}, false, err
+		return configcache.State{}, false, err
 	}
 	state, found, err := s.states.Read(ctx, s.scope)
 	if err != nil {
-		if errors.Is(err, cachegeneration.ErrStateCorrupt) {
+		if errors.Is(err, configcache.ErrStateCorrupt) {
 			if repairErr := s.recoverState(ctx, platformID, variant, load); repairErr != nil {
 				if errors.Is(repairErr, errGenerationAdvanced) {
-					return cachegeneration.State{}, true, nil
+					return configcache.State{}, true, nil
 				}
-				return cachegeneration.State{}, false, errors.Join(err, repairErr)
+				return configcache.State{}, false, errors.Join(err, repairErr)
 			}
-			return cachegeneration.State{}, true, nil
+			return configcache.State{}, true, nil
 		}
-		return cachegeneration.State{}, false, err
+		return configcache.State{}, false, err
 	}
 	if !found {
 		if repairErr := s.recoverState(ctx, platformID, variant, load); repairErr != nil {
 			if errors.Is(repairErr, errGenerationAdvanced) {
-				return cachegeneration.State{}, true, nil
+				return configcache.State{}, true, nil
 			}
-			return cachegeneration.State{}, false, errors.Join(cachegeneration.ErrStateMissing, repairErr)
+			return configcache.State{}, false, errors.Join(configcache.ErrStateMissing, repairErr)
 		}
-		return cachegeneration.State{}, true, nil
+		return configcache.State{}, true, nil
 	}
-	if state.State == cachegeneration.StateInvalidating {
+	if state.State == configcache.StateInvalidating {
 		if s.now().Add(s.waitStep).After(deadline) {
-			return cachegeneration.State{}, false, fmt.Errorf("sms cache state is invalidating")
+			return configcache.State{}, false, fmt.Errorf("sms cache state is invalidating")
 		}
 		if err := s.wait(ctx, s.waitStep); err != nil {
-			return cachegeneration.State{}, false, err
+			return configcache.State{}, false, err
 		}
-		return cachegeneration.State{}, true, nil
+		return configcache.State{}, true, nil
 	}
-	if state.State != cachegeneration.StateReady {
-		return cachegeneration.State{}, false, fmt.Errorf("sms cache state is invalid")
+	if state.State != configcache.StateReady {
+		return configcache.State{}, false, fmt.Errorf("sms cache state is invalid")
 	}
 	return state, false, nil
 }
@@ -178,7 +178,7 @@ func (s *RedisStore) fill(ctx context.Context, generation, platformID int64, var
 }
 
 func (s *RedisStore) recoverState(ctx context.Context, platformID int64, variant string, load func(context.Context) (Catalog, error)) error {
-	lease, err := cachefill.Try(ctx, s.redis.UniversalClient(), cachegeneration.StateKey(s.scope), "repair:"+variant)
+	lease, err := cachefill.Try(ctx, s.redis.UniversalClient(), configcache.StateKey(s.scope), "repair:"+variant)
 	if err != nil {
 		return err
 	}
@@ -206,15 +206,15 @@ func (s *RedisStore) recoverState(ctx context.Context, platformID int64, variant
 }
 
 func (s *RedisStore) tryFill(ctx context.Context, generation int64, variant string) (*cachefill.Lease, error) {
-	target, err := cachegeneration.FillKey(s.scope, generation, variant)
+	target, err := configcache.FillKey(s.scope, generation, variant)
 	if err != nil {
 		return nil, err
 	}
-	return cachefill.Try(ctx, s.redis.UniversalClient(), cachegeneration.StateKey(s.scope), target)
+	return cachefill.Try(ctx, s.redis.UniversalClient(), configcache.StateKey(s.scope), target)
 }
 
 func (s *RedisStore) read(ctx context.Context, generation, platformID int64, variant string) (Catalog, bool, error) {
-	key, err := cachegeneration.SnapshotKey(s.scope, generation, variant)
+	key, err := configcache.SnapshotKey(s.scope, generation, variant)
 	if err != nil {
 		return Catalog{}, false, err
 	}
@@ -238,7 +238,7 @@ func (s *RedisStore) write(ctx context.Context, generation int64, variant string
 	if err != nil {
 		return err
 	}
-	key, err := cachegeneration.SnapshotKey(s.scope, generation, variant)
+	key, err := configcache.SnapshotKey(s.scope, generation, variant)
 	if err != nil {
 		return err
 	}
@@ -250,7 +250,7 @@ func (s *RedisStore) confirmReadyGeneration(ctx context.Context, generation int6
 	if err != nil {
 		return err
 	}
-	if !found || state.State != cachegeneration.StateReady || state.Generation != generation {
+	if !found || state.State != configcache.StateReady || state.Generation != generation {
 		return fmt.Errorf("%w: expected generation %d", errGenerationAdvanced, generation)
 	}
 	return nil

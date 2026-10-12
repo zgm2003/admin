@@ -1,4 +1,4 @@
-package cachegeneration
+package configcache
 
 import (
 	"context"
@@ -46,7 +46,7 @@ func (r *Repository) Current(ctx context.Context, scope Scope) (int64, error) {
 	}
 	var generation int64
 	if err := r.db.WithContext(ctx).Raw(
-		`SELECT generation FROM system_config_cache_generation WHERE namespace = ? AND scope_key = ?`,
+		`SELECT generation FROM system_config_cache_state WHERE namespace = ? AND scope_key = ?`,
 		scope.Namespace, scope.ScopeKey).Scan(&generation).Error; err != nil {
 		return 0, fmt.Errorf("read cache generation: %w", err)
 	}
@@ -75,7 +75,7 @@ func (r *Repository) AdvanceTx(ctx context.Context, tx *gorm.DB, scope Scope, ex
 	statement := tx.WithContext(ctx)
 	var current int64
 	if err := statement.Raw(
-		`SELECT generation FROM system_config_cache_generation WHERE namespace = ? AND scope_key = ? FOR UPDATE`,
+		`SELECT generation FROM system_config_cache_state WHERE namespace = ? AND scope_key = ? FOR UPDATE`,
 		scope.Namespace, scope.ScopeKey).Scan(&current).Error; err != nil {
 		return Event{}, fmt.Errorf("lock cache generation: %w", err)
 	}
@@ -88,7 +88,7 @@ func (r *Repository) AdvanceTx(ctx context.Context, tx *gorm.DB, scope Scope, ex
 
 	next := current + 1
 	result := statement.Exec(
-		`UPDATE system_config_cache_generation SET generation = ?, updated_at = ? WHERE namespace = ? AND scope_key = ?`,
+		`UPDATE system_config_cache_state SET generation = ?, updated_at = ? WHERE namespace = ? AND scope_key = ?`,
 		next, now, scope.Namespace, scope.ScopeKey)
 	if result.Error != nil {
 		return Event{}, fmt.Errorf("advance cache generation: %w", result.Error)
@@ -109,7 +109,7 @@ func (r *Repository) AdvanceTx(ctx context.Context, tx *gorm.DB, scope Scope, ex
 }
 
 // InitializeTx 使用调用方事务为一个尚无 generation 行的动态 scope 建立 generation=1 与同代 outbox。
-// 只有主键冲突（pk_system_config_cache_generation）被映射为 ErrGenerationAlreadyExists；
+// 只有主键冲突（pk_system_config_cache_state）被映射为 ErrGenerationAlreadyExists；
 // outbox 唯一约束或其它 23505 属于 schema/事务事实异常，必须原样上抛，不能伪装成"已初始化"。
 func (r *Repository) InitializeTx(ctx context.Context, tx *gorm.DB, scope Scope, now time.Time) (Event, error) {
 	if r == nil {
@@ -127,13 +127,13 @@ func (r *Repository) InitializeTx(ctx context.Context, tx *gorm.DB, scope Scope,
 
 	statement := tx.WithContext(ctx)
 	result := statement.Exec(
-		`INSERT INTO system_config_cache_generation (namespace, scope_key, generation, created_at, updated_at)
+		`INSERT INTO system_config_cache_state (namespace, scope_key, generation, created_at, updated_at)
 		 VALUES (?, ?, 1, ?, ?)`,
 		scope.Namespace, scope.ScopeKey, now, now)
 	if result.Error != nil {
 		var postgresError *pgconn.PgError
 		if errors.As(result.Error, &postgresError) && postgresError.Code == "23505" &&
-			postgresError.ConstraintName == "pk_system_config_cache_generation" {
+			postgresError.ConstraintName == "pk_system_config_cache_state" {
 			return Event{}, fmt.Errorf("%w: %s/%s", ErrGenerationAlreadyExists, scope.Namespace, scope.ScopeKey)
 		}
 		return Event{}, fmt.Errorf("initialize cache generation: %w", result.Error)

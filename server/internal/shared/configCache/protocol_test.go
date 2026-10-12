@@ -1,4 +1,4 @@
-package cachegeneration
+package configcache
 
 import (
 	"strings"

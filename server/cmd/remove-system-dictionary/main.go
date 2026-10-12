@@ -129,7 +129,7 @@ func readPlatforms(ctx context.Context, conn *pgx.Conn) ([]platformFact, error) 
 func preservedCacheFacts(ctx context.Context, conn *pgx.Conn) (string, error) {
 	var generations, outbox string
 	err := conn.QueryRow(ctx, `SELECT
- coalesce((SELECT jsonb_agg(to_jsonb(t) ORDER BY namespace,scope_key)::text FROM system_config_cache_generation t WHERE NOT(namespace='system.dictionary' AND scope_key='global')),'[]'),
+ coalesce((SELECT jsonb_agg(to_jsonb(t) ORDER BY namespace,scope_key)::text FROM system_config_cache_state t WHERE NOT(namespace='system.dictionary' AND scope_key='global')),'[]'),
  coalesce((SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM system_config_cache_outbox t WHERE NOT(namespace='system.dictionary' AND scope_key='global')),'[]')`).Scan(&generations, &outbox)
 	if err != nil {
 		return "", fmt.Errorf("read preserved generation/outbox audit failed")
@@ -161,7 +161,7 @@ func verifyPostgres(ctx context.Context, conn *pgx.Conn, before []platformFact) 
 		}
 	}
 	var clean bool
-	err = conn.QueryRow(ctx, `SELECT to_regclass('system_dictionary') IS NULL AND to_regclass('system_dictionary_item') IS NULL AND NOT EXISTS(SELECT 1 FROM system_config_cache_generation WHERE namespace='system.dictionary' AND scope_key='global') AND NOT EXISTS(SELECT 1 FROM system_config_cache_outbox WHERE namespace='system.dictionary' AND scope_key='global')`).Scan(&clean)
+	err = conn.QueryRow(ctx, `SELECT to_regclass('system_dictionary') IS NULL AND to_regclass('system_dictionary_item') IS NULL AND NOT EXISTS(SELECT 1 FROM system_config_cache_state WHERE namespace='system.dictionary' AND scope_key='global') AND NOT EXISTS(SELECT 1 FROM system_config_cache_outbox WHERE namespace='system.dictionary' AND scope_key='global')`).Scan(&clean)
 	if err != nil || !clean {
 		return nil, fmt.Errorf("dictionary PostgreSQL removal verification failed")
 	}

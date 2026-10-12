@@ -14,12 +14,12 @@ import (
 	"admin/server/internal/config"
 	permissionstate "admin/server/internal/module/permission/state"
 	projectredis "admin/server/internal/redis"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
 )
 
-var settingScope = cachegeneration.Scope{Namespace: "system.setting", ScopeKey: "global"}
+var settingScope = configcache.Scope{Namespace: "system.setting", ScopeKey: "global"}
 
 func main() {
 	if err := runMain(); err != nil {
@@ -70,7 +70,7 @@ func runMain() error {
  WHERE code='admin' AND is_enabled=1 AND deleted_at IS NULL`).Scan(&platformID, &menuVersion); err != nil {
 		return fmt.Errorf("active Admin menu version unavailable")
 	}
-	if err := db.QueryRow(ctx, `SELECT generation FROM system_config_cache_generation
+	if err := db.QueryRow(ctx, `SELECT generation FROM system_config_cache_state
  WHERE namespace='system.setting' AND scope_key='global'`).Scan(&settingGeneration); err != nil {
 		return fmt.Errorf("system.setting/global generation unavailable")
 	}
@@ -80,20 +80,20 @@ func runMain() error {
 	}
 	defer func() { _ = client.Close() }()
 	menus := permissionstate.NewMenuStore(client)
-	states := cachegeneration.NewStore(client)
+	states := configcache.NewStore(client)
 	if mode == "sync" {
 		if err := syncMenuState(ctx, menus, platformID, menuVersion); err != nil {
 			return err
 		}
 		previous, found, err := states.Read(ctx, settingScope)
-		if err != nil || (found && previous.State != cachegeneration.StateReady) {
+		if err != nil || (found && previous.State != configcache.StateReady) {
 			return fmt.Errorf("setting state corrupt or currently mutating; rerun after the writer finishes")
 		}
 		if found && previous.Generation > settingGeneration {
 			return fmt.Errorf("setting Redis generation is ahead of PostgreSQL; refusing downgrade")
 		}
 		result, err := states.Reconcile(ctx, settingScope, settingGeneration)
-		if err != nil || result == cachegeneration.PublishSkippedInvalidating {
+		if err != nil || result == configcache.PublishSkippedInvalidating {
 			return fmt.Errorf("setting state publication failed; rerun this maintenance command")
 		}
 	}
@@ -102,7 +102,7 @@ func runMain() error {
 	if menuErr != nil || settingErr != nil {
 		return fmt.Errorf("Redis state inspection failed")
 	}
-	if mode == "sync" && (!menuFound || !settingFound || menuState.State != permissionstate.StateReady || menuState.Version != menuVersion || settingState.State != cachegeneration.StateReady || settingState.Generation != settingGeneration) {
+	if mode == "sync" && (!menuFound || !settingFound || menuState.State != permissionstate.StateReady || menuState.Version != menuVersion || settingState.State != configcache.StateReady || settingState.Generation != settingGeneration) {
 		return fmt.Errorf("PostgreSQL/Redis state verification failed")
 	}
 	// Omit tokens and cache payloads from the audit output.

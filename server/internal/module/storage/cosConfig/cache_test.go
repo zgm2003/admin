@@ -12,7 +12,7 @@ import (
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -98,7 +98,7 @@ func TestRuntimeReadRepairsMissingStateFromPostgres(t *testing.T) {
 		t.Fatalf("runtime = %+v", runtime)
 	}
 	state, found, err := service.states.Read(ctx, mustConfigScope(t, id))
-	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 1 {
+	if err != nil || !found || state.State != configcache.StateReady || state.Generation != 1 {
 		t.Fatalf("repaired state = %+v found=%v err=%v", state, found, err)
 	}
 }
@@ -111,13 +111,13 @@ func TestRuntimeColdAndHotPostgresSelectBudgetsAcrossInstances(t *testing.T) {
 	id := createRuntimeConfig(t, ctx, first, "assets")
 
 	secondClient := testRedisClient(t)
-	secondStates := cachegeneration.NewStore(secondClient)
+	secondStates := configcache.NewStore(secondClient)
 	secondCache := NewCache(secondClient)
 	secondCache.SetStateStore(secondStates)
 	secondRepository := NewRepository(db)
-	secondRepository.SetGenerations(cachegeneration.NewRepository(db))
+	secondRepository.SetGenerations(configcache.NewRepository(db))
 	second := NewService(secondRepository, mustKeys(t, "q"), &recordingConnectionTester{})
-	second.SetGenerations(cachegeneration.NewRepository(db), secondStates)
+	second.SetGenerations(configcache.NewRepository(db), secondStates)
 	second.SetCache(secondCache)
 	second.readBudget = 10 * time.Second
 
@@ -160,7 +160,7 @@ func TestRuntimeReadRebuildsCorruptSnapshot(t *testing.T) {
 	service := newTestService(t, db, mustKeys(t, "c"), &recordingConnectionTester{})
 	id := createRuntimeConfig(t, ctx, service, "assets")
 	scope := mustConfigScope(t, id)
-	snapshotKey, err := cachegeneration.SnapshotKey(scope, 1, runtimeSnapshotVariant)
+	snapshotKey, err := configcache.SnapshotKey(scope, 1, runtimeSnapshotVariant)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,14 +186,14 @@ func TestRuntimeInvalidatingExhaustsBudgetWithoutPostgres(t *testing.T) {
 	db, ctx := openConfigDatabase(t)
 	repository := &fakeConfigRepository{}
 	client := testRedisClient(t)
-	generations := cachegeneration.NewRepository(db)
-	states := cachegeneration.NewStore(client)
+	generations := configcache.NewRepository(db)
+	states := configcache.NewStore(client)
 	cache := NewCache(client)
 	cache.SetStateStore(states)
 	service := NewService(repository, mustKeys(t, "i"), &recordingConnectionTester{})
 	service.SetGenerations(generations, states)
 	service.SetCache(cache)
-	scope, err := cachegeneration.NewScope(cosConfigGenerationNamespace, "5")
+	scope, err := configcache.NewScope(cosConfigGenerationNamespace, "5")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestRuntimeRedisFailureFailsClosed(t *testing.T) {
 	repository := &fakeConfigRepository{}
 	broken := closedRedisClient(t)
 	service := NewService(repository, mustKeys(t, "f"), &recordingConnectionTester{})
-	service.SetGenerations(cachegeneration.NewRepository(db), cachegeneration.NewStore(broken))
+	service.SetGenerations(configcache.NewRepository(db), configcache.NewStore(broken))
 	service.SetCache(NewCache(broken))
 	_, err := service.Runtime(ctx, 6)
 	if appCode(err) != apperror.CodeDependencyUnavailable {
@@ -248,11 +248,11 @@ func TestMutationNoOpRestoresReadyWithoutAdvancingGeneration(t *testing.T) {
 	db, ctx := openConfigDatabase(t)
 	repository := &fakeConfigRepository{}
 	service := newFakeService(t, db, repository)
-	scope, err := cachegeneration.NewScope(cosConfigGenerationNamespace, "9")
+	scope, err := configcache.NewScope(cosConfigGenerationNamespace, "9")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cachegeneration.NewRepository(db).InitializeTx(ctx, db, scope, time.Now().UTC()); err != nil {
+	if _, err := configcache.NewRepository(db).InitializeTx(ctx, db, scope, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.states.Reconcile(ctx, scope, 1); err != nil {
@@ -265,12 +265,12 @@ func TestMutationNoOpRestoresReadyWithoutAdvancingGeneration(t *testing.T) {
 	if repository.updateCalls != 1 {
 		t.Fatalf("update calls = %d want 1", repository.updateCalls)
 	}
-	generation, err := cachegeneration.NewRepository(db).Current(ctx, scope)
+	generation, err := configcache.NewRepository(db).Current(ctx, scope)
 	if err != nil || generation != 1 {
 		t.Fatalf("generation = %d,%v want 1", generation, err)
 	}
 	state, found, err := service.states.Read(ctx, scope)
-	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 1 {
+	if err != nil || !found || state.State != configcache.StateReady || state.Generation != 1 {
 		t.Fatalf("state after no-op = %+v found=%v err=%v", state, found, err)
 	}
 }
@@ -280,17 +280,17 @@ func TestMutationPublishFailureStillReportsBusinessSuccess(t *testing.T) {
 	db, ctx := openConfigDatabase(t)
 	client := testRedisClient(t)
 	scopeKey := "11"
-	scope, err := cachegeneration.NewScope(cosConfigGenerationNamespace, scopeKey)
+	scope, err := configcache.NewScope(cosConfigGenerationNamespace, scopeKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	generations := cachegeneration.NewRepository(db)
+	generations := configcache.NewRepository(db)
 	if _, err := generations.InitializeTx(ctx, db, scope, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
 	repository := &fakeConfigRepository{findByIDRow: Current{Model: Model{ID: 11, IsEnabled: yesno.Yes, CurrentVersion: 1}}}
 	service := NewService(repository, mustKeys(t, "p"), &recordingConnectionTester{})
-	service.SetGenerations(generations, cachegeneration.NewStore(client))
+	service.SetGenerations(generations, configcache.NewStore(client))
 	service.SetCache(NewCache(client))
 	if _, err := service.states.Reconcile(ctx, scope, 1); err != nil {
 		t.Fatal(err)
@@ -303,7 +303,7 @@ func TestMutationPublishFailureStillReportsBusinessSuccess(t *testing.T) {
 	repository.onUpdate = func() {
 		_ = client.DeleteMany(context.Background(), []string{"config-cache:state:v1:storage.cosconfig:" + scopeKey})
 	}
-	repository.updateResult = cachegeneration.MutationResult{Changed: true, Generation: 2, OutboxID: 1}
+	repository.updateResult = configcache.MutationResult{Changed: true, Generation: 2, OutboxID: 1}
 	if err := service.Update(ctx, 11, UpdateInput{Name: "Main", Bucket: "assets", Region: "ap-guangzhou"}); err != nil {
 		t.Fatalf("mutation returned failure despite committed PostgreSQL write: %v", err)
 	}
@@ -321,17 +321,17 @@ func TestMutationUncertainCommitUsesAuthoritativeGeneration(t *testing.T) {
 	db, ctx := openConfigDatabase(t)
 	client := testRedisClient(t)
 	scopeKey := "12"
-	scope, err := cachegeneration.NewScope(cosConfigGenerationNamespace, scopeKey)
+	scope, err := configcache.NewScope(cosConfigGenerationNamespace, scopeKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	generations := cachegeneration.NewRepository(db)
+	generations := configcache.NewRepository(db)
 	if _, err := generations.InitializeTx(ctx, db, scope, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
 	repository := &fakeConfigRepository{findByIDRow: Current{Model: Model{ID: 12, IsEnabled: yesno.Yes, CurrentVersion: 1}}}
 	service := NewService(repository, mustKeys(t, "u"), &recordingConnectionTester{})
-	service.SetGenerations(generations, cachegeneration.NewStore(client))
+	service.SetGenerations(generations, configcache.NewStore(client))
 	service.SetCache(NewCache(client))
 	if _, err := service.states.Reconcile(ctx, scope, 1); err != nil {
 		t.Fatal(err)
@@ -347,7 +347,7 @@ func TestMutationUncertainCommitUsesAuthoritativeGeneration(t *testing.T) {
 		t.Fatal("uncertain mutation should surface the business error")
 	}
 	state, found, err := service.states.Read(ctx, scope)
-	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != 2 {
+	if err != nil || !found || state.State != configcache.StateReady || state.Generation != 2 {
 		t.Fatalf("state = %+v found=%v err=%v want ready at authoritative generation", state, found, err)
 	}
 }
@@ -357,14 +357,14 @@ func TestMutationBudgetExhaustionReturnsDependencyBusy(t *testing.T) {
 	db, ctx := openConfigDatabase(t)
 	repository := &fakeConfigRepository{
 		findByIDRow: Current{Model: Model{ID: 13, IsEnabled: yesno.Yes, CurrentVersion: 1}},
-		updateErr:   cachegeneration.ErrGenerationChanged,
+		updateErr:   configcache.ErrGenerationChanged,
 	}
 	service := newFakeService(t, db, repository)
-	scope, err := cachegeneration.NewScope(cosConfigGenerationNamespace, "13")
+	scope, err := configcache.NewScope(cosConfigGenerationNamespace, "13")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cachegeneration.NewRepository(db).InitializeTx(ctx, db, scope, time.Now().UTC()); err != nil {
+	if _, err := configcache.NewRepository(db).InitializeTx(ctx, db, scope, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.states.Reconcile(ctx, scope, 1); err != nil {
@@ -391,7 +391,7 @@ func TestMutationRedisErrorDoesNotWritePostgres(t *testing.T) {
 	broken := closedRedisClient(t)
 	repository := &fakeConfigRepository{findByIDRow: Current{Model: Model{ID: 14, IsEnabled: yesno.Yes, CurrentVersion: 1}}}
 	service := NewService(repository, mustKeys(t, "w"), &recordingConnectionTester{})
-	service.SetGenerations(cachegeneration.NewRepository(db), cachegeneration.NewStore(broken))
+	service.SetGenerations(configcache.NewRepository(db), configcache.NewStore(broken))
 	service.SetCache(NewCache(broken))
 	if err := service.Update(ctx, 14, UpdateInput{Name: "Main", Bucket: "assets", Region: "ap-guangzhou"}); appCode(err) != apperror.CodeDependencyUnavailable {
 		t.Fatalf("redis failure error = %s want dependency unavailable", appCause(err))
@@ -423,11 +423,11 @@ func appCause(err error) string {
 func newFakeService(t *testing.T, db *gorm.DB, repository repository) *Service {
 	t.Helper()
 	client := testRedisClient(t)
-	states := cachegeneration.NewStore(client)
+	states := configcache.NewStore(client)
 	cache := NewCache(client)
 	cache.SetStateStore(states)
 	service := NewService(repository, mustKeys(t, "s"), &recordingConnectionTester{})
-	service.SetGenerations(cachegeneration.NewRepository(db), states)
+	service.SetGenerations(configcache.NewRepository(db), states)
 	service.SetCache(cache)
 	service.readBudget = 10 * time.Second
 	return service
@@ -456,8 +456,8 @@ type fakeConfigRepository struct {
 	mutex             sync.Mutex
 	findByIDRow       Current
 	findByIDErr       error
-	createResult      cachegeneration.MutationResult
-	updateResult      cachegeneration.MutationResult
+	createResult      configcache.MutationResult
+	updateResult      configcache.MutationResult
 	updateErr         error
 	onUpdate          func()
 	updateCalls       int
@@ -475,10 +475,10 @@ func (f *fakeConfigRepository) FindByID(context.Context, int64) (Current, error)
 	defer f.mutex.Unlock()
 	return f.findByIDRow, f.findByIDErr
 }
-func (f *fakeConfigRepository) Create(context.Context, *Model, Version) (cachegeneration.MutationResult, error) {
+func (f *fakeConfigRepository) Create(context.Context, *Model, Version) (configcache.MutationResult, error) {
 	return f.createResult, nil
 }
-func (f *fakeConfigRepository) Update(context.Context, int64, UpdateValues, int64, time.Time) (cachegeneration.MutationResult, error) {
+func (f *fakeConfigRepository) Update(context.Context, int64, UpdateValues, int64, time.Time) (configcache.MutationResult, error) {
 	f.mutex.Lock()
 	f.updateCalls++
 	onUpdate := f.onUpdate
@@ -490,11 +490,11 @@ func (f *fakeConfigRepository) Update(context.Context, int64, UpdateValues, int6
 	}
 	return result, err
 }
-func (f *fakeConfigRepository) UpdateStatus(context.Context, int64, yesno.Value, int64, time.Time) (cachegeneration.MutationResult, error) {
-	return cachegeneration.MutationResult{}, nil
+func (f *fakeConfigRepository) UpdateStatus(context.Context, int64, yesno.Value, int64, time.Time) (configcache.MutationResult, error) {
+	return configcache.MutationResult{}, nil
 }
-func (f *fakeConfigRepository) MarkDeleted(context.Context, int64, int64, time.Time) (cachegeneration.MutationResult, error) {
-	return cachegeneration.MutationResult{}, nil
+func (f *fakeConfigRepository) MarkDeleted(context.Context, int64, int64, time.Time) (configcache.MutationResult, error) {
+	return configcache.MutationResult{}, nil
 }
 func (f *fakeConfigRepository) CountRuleReferences(context.Context, int64) (int64, error) {
 	return 0, nil

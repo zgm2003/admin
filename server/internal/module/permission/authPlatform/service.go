@@ -12,7 +12,7 @@ import (
 	"admin/server/internal/module/auth/state"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/apperror"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
 	"golang.org/x/sync/singleflight"
@@ -112,10 +112,10 @@ type Service struct {
 	deleteSessionSnapshot SessionSnapshotDeleter
 	logger                *slog.Logger
 	deployment            Deployment
-	rateLimitGenerations  *cachegeneration.Repository
-	rateLimitStates       *cachegeneration.Store
-	mailRateLimitScope    cachegeneration.Scope
-	smsRateLimitScope     cachegeneration.Scope
+	rateLimitGenerations  *configcache.Repository
+	rateLimitStates       *configcache.Store
+	mailRateLimitScope    configcache.Scope
+	smsRateLimitScope     configcache.Scope
 }
 
 type SessionSnapshotDeleter func(context.Context, string, int64) error
@@ -128,15 +128,15 @@ const (
 type rateLimitGenerationMutation struct {
 	bases  RateLimitGenerationBases
 	events RateLimitGenerationEvents
-	mail   *cachegeneration.Lease
-	sms    *cachegeneration.Lease
+	mail   *configcache.Lease
+	sms    *configcache.Lease
 }
 
 func NewService(repository *Repository, policies *PolicyStore, redis *projectredis.Client, authStates *authstate.Store, authInvalidator *authstate.Invalidator, deleteSessionSnapshot SessionSnapshotDeleter, logger *slog.Logger, deployment Deployment) *Service {
 	return &Service{repository: repository, policyReader: repository, policies: policies, redis: redis, authStates: authStates, authInvalidator: authInvalidator, deleteSessionSnapshot: deleteSessionSnapshot, logger: logger, deployment: deployment}
 }
 
-func (s *Service) SetRateLimitCacheGenerations(repository *cachegeneration.Repository, store *cachegeneration.Store, mailScope, smsScope cachegeneration.Scope) {
+func (s *Service) SetRateLimitConfigCaches(repository *configcache.Repository, store *configcache.Store, mailScope, smsScope configcache.Scope) {
 	s.rateLimitGenerations = repository
 	s.rateLimitStates = store
 	s.mailRateLimitScope = mailScope
@@ -734,12 +734,12 @@ func (s *Service) beginRateLimitGenerationMutation(ctx context.Context) (*rateLi
 	}
 }
 
-func (s *Service) acquireRateLimitGenerationLease(ctx context.Context, scope cachegeneration.Scope, expected int64) (*cachegeneration.Lease, error) {
+func (s *Service) acquireRateLimitGenerationLease(ctx context.Context, scope configcache.Scope, expected int64) (*configcache.Lease, error) {
 	lease, err := s.rateLimitStates.Acquire(ctx, scope, expected)
 	if err == nil {
 		return lease, nil
 	}
-	if !errors.Is(err, cachegeneration.ErrStateMissing) && !errors.Is(err, cachegeneration.ErrStateCorrupt) {
+	if !errors.Is(err, configcache.ErrStateMissing) && !errors.Is(err, configcache.ErrStateCorrupt) {
 		return nil, err
 	}
 	if _, reconcileErr := s.rateLimitStates.Reconcile(ctx, scope, expected); reconcileErr != nil {
@@ -749,7 +749,7 @@ func (s *Service) acquireRateLimitGenerationLease(ctx context.Context, scope cac
 }
 
 func isRateLimitGenerationRace(err error) bool {
-	return errors.Is(err, cachegeneration.ErrUpdating) || errors.Is(err, cachegeneration.ErrGenerationChanged)
+	return errors.Is(err, configcache.ErrUpdating) || errors.Is(err, configcache.ErrGenerationChanged)
 }
 
 func waitForRateLimitGenerationRetry(ctx context.Context, deadline time.Time) error {
@@ -774,11 +774,11 @@ func waitForRateLimitGenerationRetry(ctx context.Context, deadline time.Time) er
 func (s *Service) startRateLimitGenerationRenewal(parent context.Context, mutation *rateLimitGenerationMutation) (context.Context, func()) {
 	ctx, cancel := context.WithCancelCause(parent)
 	var waitGroup sync.WaitGroup
-	for _, lease := range []*cachegeneration.Lease{mutation.mail, mutation.sms} {
+	for _, lease := range []*configcache.Lease{mutation.mail, mutation.sms} {
 		waitGroup.Add(1)
-		go func(active *cachegeneration.Lease) {
+		go func(active *configcache.Lease) {
 			defer waitGroup.Done()
-			ticker := time.NewTicker(cachegeneration.MutationRenewInterval)
+			ticker := time.NewTicker(configcache.MutationRenewInterval)
 			defer ticker.Stop()
 			for {
 				select {
@@ -851,7 +851,7 @@ func (s *Service) publishRateLimitGenerationMutation(ctx context.Context, mutati
 	s.publishRateLimitGenerationLease(ctx, mutation.sms, mutation.events.SMS, smsGeneration)
 }
 
-func (s *Service) publishRateLimitGenerationLease(ctx context.Context, lease *cachegeneration.Lease, event cachegeneration.Event, generation int64) {
+func (s *Service) publishRateLimitGenerationLease(ctx context.Context, lease *configcache.Lease, event configcache.Event, generation int64) {
 	if err := lease.Commit(ctx, generation); err != nil {
 		s.logRateLimitGenerationFailure("publish authentication platform rate limit generation failed", event.Scope, generation, event.ID, err)
 		return
@@ -865,7 +865,7 @@ func (s *Service) publishRateLimitGenerationLease(ctx context.Context, lease *ca
 	}
 }
 
-func (s *Service) logRateLimitGenerationFailure(message string, scope cachegeneration.Scope, generation, outboxID int64, err error) {
+func (s *Service) logRateLimitGenerationFailure(message string, scope configcache.Scope, generation, outboxID int64, err error) {
 	if s.logger == nil {
 		return
 	}

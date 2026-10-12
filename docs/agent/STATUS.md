@@ -1,5 +1,11 @@
 # 项目状态
 
+## 配置缓存状态跨层改名（2026-10-11，代码与迁移交付）
+
+- 管理业务名称统一为“配置缓存状态”/`configCacheStatus`：Go 模块、共享包、管理 API、RBAC 权限、菜单 path/componentPath/code/i18nKey、前端 API/页面、测试和双语文案已同步；主表目标为 `system_config_cache_state`。
+- `generation` 列、outbox 表、Redis `config-cache:state:v1` key、状态值、快照和租约协议保持原语义，仅作为内部缓存一致性协议字段。
+- 新增 `docs/database/2026-10-11-system-config-cache-status.sql/.ps1` 幂等 forward migration；保留菜单 ID 与角色授权，按实际变化每个平台最多递增一次 `menu_version`，runner 二次执行校验 generation/outbox/menu facts 不变。未执行真实数据库迁移、Redis 清理或 Git 提交。
+
 ## 当前工作：全项目后端业务归责与前端减法（2026-10-10，代码整改、全量验证与真实离线迁移完成）
 
 - 维护者已明确要求一口气实施全项目整改，不停留在计划。按所属 Go 模块集中拥有枚举、候选项、本地化标签、默认值、约束、业务保护和状态动作；前端保留明确 DTO、即时表单 rules、交互/展示和浏览器运输。数字/字符串 value 原类型保真；新增业务值不由前端 parser/名单拦截。

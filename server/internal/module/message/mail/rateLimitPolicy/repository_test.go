@@ -8,7 +8,7 @@ import (
 
 	"admin/server/internal/config"
 	"admin/server/internal/database/testschema"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 )
@@ -16,7 +16,7 @@ import (
 func TestRepositoryUpdateAdvancesMailGenerationWithoutRevision(t *testing.T) {
 	database, ctx := openRepositoryDatabase(t)
 	repository := NewRepository(database)
-	repository.SetGenerations(cachegeneration.NewRepository(database), cachegeneration.Scope{Namespace: "message.mail", ScopeKey: "global"})
+	repository.SetGenerations(configcache.NewRepository(database), configcache.Scope{Namespace: "message.mail", ScopeKey: "global"})
 	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 
 	catalog, mutation, err := repository.Update(ctx, 1, Input{Key: "business_email_minute", Limit: 2, WindowSeconds: 120}, 1, now)
@@ -41,7 +41,7 @@ func TestRepositoryUpdateAdvancesMailGenerationWithoutRevision(t *testing.T) {
 func TestRepositoryNoOpDoesNotAdvanceMailGeneration(t *testing.T) {
 	database, ctx := openRepositoryDatabase(t)
 	repository := NewRepository(database)
-	repository.SetGenerations(cachegeneration.NewRepository(database), cachegeneration.Scope{Namespace: "message.mail", ScopeKey: "global"})
+	repository.SetGenerations(configcache.NewRepository(database), configcache.Scope{Namespace: "message.mail", ScopeKey: "global"})
 	catalog, mutation, err := repository.Update(ctx, 1, Input{Key: "business_email_minute", Limit: 1, WindowSeconds: 60}, 1, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
@@ -153,7 +153,7 @@ INSERT INTO message_mail_rate_limit_policy VALUES
 (1,'business_email_10m','business','platform_email',5,600,now(),now()),
 (2,'business_email_minute','business','platform_email',1,60,now(),now()),
 (2,'business_email_10m','business','platform_email',5,600,now(),now());
-CREATE TABLE system_config_cache_generation(
+CREATE TABLE system_config_cache_state(
  namespace varchar(128) NOT NULL, scope_key varchar(128) NOT NULL, generation bigint NOT NULL,
  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(namespace,scope_key));
@@ -164,8 +164,8 @@ CREATE TABLE system_config_cache_outbox(
  locked_until timestamptz, lock_token varchar(64), last_error varchar(512) NOT NULL DEFAULT '',
  published_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
  UNIQUE(namespace,scope_key,generation),
- FOREIGN KEY(namespace,scope_key) REFERENCES system_config_cache_generation(namespace,scope_key));
-INSERT INTO system_config_cache_generation(namespace,scope_key,generation) VALUES ('message.mail','global',1);`).Error; err != nil {
+ FOREIGN KEY(namespace,scope_key) REFERENCES system_config_cache_state(namespace,scope_key));
+INSERT INTO system_config_cache_state(namespace,scope_key,generation) VALUES ('message.mail','global',1);`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := database.WithContext(ctx).Exec(`INSERT INTO permission_auth_platform(id, code, name) VALUES (1, 'admin', 'Admin'), (2, 'canvas', 'Canvas')`).Error; err != nil {
@@ -176,7 +176,7 @@ INSERT INTO system_config_cache_generation(namespace,scope_key,generation) VALUE
 
 func currentMailGeneration(t *testing.T, database *gorm.DB, ctx context.Context) int64 {
 	t.Helper()
-	generation, err := cachegeneration.NewRepository(database).Current(ctx, cachegeneration.Scope{Namespace: "message.mail", ScopeKey: "global"})
+	generation, err := configcache.NewRepository(database).Current(ctx, configcache.Scope{Namespace: "message.mail", ScopeKey: "global"})
 	if err != nil {
 		t.Fatal(err)
 	}

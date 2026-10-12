@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 )
 
 const PermissionUpdate = "message:mail:rate-limit:update"
@@ -27,7 +27,7 @@ type Store interface {
 }
 
 type RuntimeCoordinator interface {
-	Mutate(context.Context, func(context.Context, int64) (cachegeneration.MutationResult, error)) error
+	Mutate(context.Context, func(context.Context, int64) (configcache.MutationResult, error)) error
 }
 
 type Snapshot struct {

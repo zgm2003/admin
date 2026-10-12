@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"admin/server/internal/shared/apperror"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"gorm.io/gorm"
 )
 
@@ -43,9 +43,9 @@ func (f *fakeRepository) FindPlatform(_ context.Context, platformID int64) (Cata
 	return Catalog{}, ErrPlatformNotFound
 }
 
-func (f *fakeRepository) UpdatePolicy(_ context.Context, platformID int64, key string, limit, windowSeconds int, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
+func (f *fakeRepository) UpdatePolicy(_ context.Context, platformID int64, key string, limit, windowSeconds int, expected int64, now time.Time) (configcache.MutationResult, error) {
 	if f.updateErr != nil {
-		return cachegeneration.MutationResult{}, f.updateErr
+		return configcache.MutationResult{}, f.updateErr
 	}
 	f.updatedKey, f.updatedLimit, f.updatedWin, f.expected = key, limit, windowSeconds, expected
 	for catalogIndex := range f.catalogs {
@@ -56,16 +56,16 @@ func (f *fakeRepository) UpdatePolicy(_ context.Context, platformID int64, key s
 			policy := &f.catalogs[catalogIndex].Policies[policyIndex]
 			if policy.Key == key {
 				if policy.Limit == limit && policy.WindowSeconds == windowSeconds {
-					return cachegeneration.MutationResult{}, nil
+					return configcache.MutationResult{}, nil
 				}
 				policy.Limit = limit
 				policy.WindowSeconds = windowSeconds
 				policy.UpdatedAt = now
-				return cachegeneration.MutationResult{Changed: true, Generation: expected + 1, OutboxID: expected}, nil
+				return configcache.MutationResult{Changed: true, Generation: expected + 1, OutboxID: expected}, nil
 			}
 		}
 	}
-	return cachegeneration.MutationResult{}, gorm.ErrRecordNotFound
+	return configcache.MutationResult{}, gorm.ErrRecordNotFound
 }
 
 func (f *fakeRepository) ProvisionDefaults(_ context.Context, platformID int64, _ time.Time) error {
@@ -97,7 +97,7 @@ type fakeRuntime struct {
 	err        error
 }
 
-func (f *fakeRuntime) Mutate(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+func (f *fakeRuntime) Mutate(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 	f.calls++
 	if f.err != nil {
 		return f.err

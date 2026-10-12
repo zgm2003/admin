@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
@@ -14,13 +14,13 @@ import (
 
 type Repository struct {
 	db          *gorm.DB
-	generations *cachegeneration.Repository
-	scope       cachegeneration.Scope
+	generations *configcache.Repository
+	scope       configcache.Scope
 }
 
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 
-func (r *Repository) SetGenerations(repository *cachegeneration.Repository, scope cachegeneration.Scope) {
+func (r *Repository) SetGenerations(repository *configcache.Repository, scope configcache.Scope) {
 	r.generations = repository
 	r.scope = scope
 }
@@ -41,9 +41,9 @@ func (r *Repository) FindByID(ctx context.Context, id int64) (Model, error) {
 	return value, nil
 }
 
-func (r *Repository) Create(ctx context.Context, value *Model, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
+func (r *Repository) Create(ctx context.Context, value *Model, expected int64, now time.Time) (configcache.MutationResult, error) {
 	if value == nil {
-		return cachegeneration.MutationResult{}, fmt.Errorf("sms recipient rule is required")
+		return configcache.MutationResult{}, fmt.Errorf("sms recipient rule is required")
 	}
 	originalID := value.ID
 	result, err := r.mutate(ctx, expected, now, func(tx *gorm.DB) (bool, error) {
@@ -55,9 +55,9 @@ func (r *Repository) Create(ctx context.Context, value *Model, expected int64, n
 	return result, err
 }
 
-func (r *Repository) Update(ctx context.Context, value *Model, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
+func (r *Repository) Update(ctx context.Context, value *Model, expected int64, now time.Time) (configcache.MutationResult, error) {
 	if value == nil || value.ID < 1 {
-		return cachegeneration.MutationResult{}, fmt.Errorf("sms recipient rule is invalid")
+		return configcache.MutationResult{}, fmt.Errorf("sms recipient rule is invalid")
 	}
 	return r.mutate(ctx, expected, now, func(tx *gorm.DB) (bool, error) {
 		current, err := lockRule(ctx, tx, value.ID)
@@ -82,7 +82,7 @@ func (r *Repository) Update(ctx context.Context, value *Model, expected int64, n
 	})
 }
 
-func (r *Repository) UpdateStatus(ctx context.Context, id int64, status int16, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
+func (r *Repository) UpdateStatus(ctx context.Context, id int64, status int16, expected int64, now time.Time) (configcache.MutationResult, error) {
 	return r.mutate(ctx, expected, now, func(tx *gorm.DB) (bool, error) {
 		current, err := lockRule(ctx, tx, id)
 		if err != nil {
@@ -104,7 +104,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, status int16, e
 	})
 }
 
-func (r *Repository) Delete(ctx context.Context, id int64, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
+func (r *Repository) Delete(ctx context.Context, id int64, expected int64, now time.Time) (configcache.MutationResult, error) {
 	return r.mutate(ctx, expected, now, func(tx *gorm.DB) (bool, error) {
 		if _, err := lockRule(ctx, tx, id); err != nil {
 			return false, err
@@ -122,31 +122,31 @@ func (r *Repository) Delete(ctx context.Context, id int64, expected int64, now t
 	})
 }
 
-func (r *Repository) mutate(ctx context.Context, expected int64, now time.Time, apply func(*gorm.DB) (bool, error)) (cachegeneration.MutationResult, error) {
+func (r *Repository) mutate(ctx context.Context, expected int64, now time.Time, apply func(*gorm.DB) (bool, error)) (configcache.MutationResult, error) {
 	if r == nil || r.db == nil || r.generations == nil {
-		return cachegeneration.MutationResult{}, fmt.Errorf("sms recipient rule generation dependencies are not configured")
+		return configcache.MutationResult{}, fmt.Errorf("sms recipient rule generation dependencies are not configured")
 	}
 	if err := r.scope.Validate(); err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
-	result := cachegeneration.MutationResult{}
+	result := configcache.MutationResult{}
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		changed, err := apply(tx)
 		if err != nil {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, err)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, err)
 		}
 		if !changed {
 			return nil
 		}
 		event, err := r.generations.AdvanceTx(ctx, tx, r.scope, expected, now)
 		if err != nil {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, err)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, err)
 		}
-		result = cachegeneration.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
+		result = configcache.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
 		return nil
 	})
 	if err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
 	return result, nil
 }

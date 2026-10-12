@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
@@ -41,8 +41,8 @@ type RateLimitGenerationBases struct {
 }
 
 type RateLimitGenerationEvents struct {
-	Mail cachegeneration.Event
-	SMS  cachegeneration.Event
+	Mail configcache.Event
+	SMS  configcache.Event
 }
 
 type RateLimitPolicyLifecycle func(context.Context, *gorm.DB, int64, RateLimitGenerationBases, time.Time) (RateLimitGenerationEvents, error)

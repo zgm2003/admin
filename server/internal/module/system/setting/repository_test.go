@@ -12,7 +12,7 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database/testschema"
 	projectredis "admin/server/internal/redis"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
@@ -22,7 +22,7 @@ func TestRepositoryMutationAdvancesGenerationWithOutbox(t *testing.T) {
 	db, ctx := openSettingDatabase(t)
 	seedSettingRow(t, db, ctx, numericSettingRow("auth.captcha.ttl_minutes", "2", yesno.No))
 	repository := NewRepository(db)
-	repository.SetGenerations(cachegeneration.NewRepository(db))
+	repository.SetGenerations(configcache.NewRepository(db))
 	now := time.Now().UTC()
 
 	result, err := repository.Update(ctx, "auth.captcha.ttl_minutes", Record{
@@ -50,7 +50,7 @@ func TestRepositoryMutationNoOpKeepsGenerationAndOutbox(t *testing.T) {
 	db, ctx := openSettingDatabase(t)
 	seedSettingRow(t, db, ctx, numericSettingRow("auth.captcha.ttl_minutes", "2", yesno.No))
 	repository := NewRepository(db)
-	repository.SetGenerations(cachegeneration.NewRepository(db))
+	repository.SetGenerations(configcache.NewRepository(db))
 
 	result, err := repository.UpdateStatus(ctx, "auth.captcha.ttl_minutes", yesno.Yes, 1, time.Now().UTC())
 	if err != nil {
@@ -67,7 +67,7 @@ func TestRepositoryMutationRollsBackGenerationOnConflict(t *testing.T) {
 	db, ctx := openSettingDatabase(t)
 	seedSettingRow(t, db, ctx, numericSettingRow("auth.captcha.ttl_minutes", "2", yesno.No))
 	repository := NewRepository(db)
-	repository.SetGenerations(cachegeneration.NewRepository(db))
+	repository.SetGenerations(configcache.NewRepository(db))
 	now := time.Now().UTC()
 
 	_, err := repository.Create(ctx, &Record{
@@ -84,12 +84,12 @@ func TestRepositoryMutationRejectsStaleLeaseBaseGeneration(t *testing.T) {
 	db, ctx := openSettingDatabase(t)
 	seedSettingRow(t, db, ctx, numericSettingRow("auth.captcha.ttl_minutes", "2", yesno.No))
 	repository := NewRepository(db)
-	repository.SetGenerations(cachegeneration.NewRepository(db))
+	repository.SetGenerations(configcache.NewRepository(db))
 
 	_, err := repository.Update(ctx, "auth.captcha.ttl_minutes", Record{
 		Key: "auth.captcha.ttl_minutes", Value: "5", ValueType: ValueTypeNumber, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.No, UpdatedAt: time.Now().UTC(),
 	}, 2)
-	if !errors.Is(err, cachegeneration.ErrGenerationChanged) {
+	if !errors.Is(err, configcache.ErrGenerationChanged) {
 		t.Fatalf("Update() error = %v want ErrGenerationChanged", err)
 	}
 	assertSettingGeneration(t, db, ctx, "global", 1)
@@ -107,7 +107,7 @@ func TestRepositoryBrandMutationAdvancesGenerationOnce(t *testing.T) {
 		seedSettingRow(t, db, ctx, row)
 	}
 	repository := NewRepository(db)
-	repository.SetGenerations(cachegeneration.NewRepository(db))
+	repository.SetGenerations(configcache.NewRepository(db))
 
 	result, err := repository.UpdateBrand(ctx, BrandSettings{TitleZhCN: "新标题", TitleEnUS: "NEW", DefaultAvatar: ""}, 1, now.Add(time.Minute))
 	if err != nil {
@@ -150,9 +150,9 @@ type settingGenerationHarness struct {
 	ctx         context.Context
 	db          *gorm.DB
 	client      *projectredis.Client
-	scope       cachegeneration.Scope
-	store       *cachegeneration.Store
-	generations *cachegeneration.Repository
+	scope       configcache.Scope
+	store       *configcache.Store
+	generations *configcache.Repository
 	cache       *Cache
 }
 
@@ -160,7 +160,7 @@ func openSettingGenerationHarness(t *testing.T) settingGenerationHarness {
 	t.Helper()
 	scopeKey := "test-" + time.Now().UTC().Format("20060102150405.000000000")
 	db, ctx := openSettingSchema(t, "test_system_setting_generation", scopeKey)
-	scope, err := cachegeneration.NewScope("system.setting", scopeKey)
+	scope, err := configcache.NewScope("system.setting", scopeKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,10 +170,10 @@ func openSettingGenerationHarness(t *testing.T) settingGenerationHarness {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_ = client.Delete(context.Background(), cachegeneration.StateKey(scope))
+		_ = client.Delete(context.Background(), configcache.StateKey(scope))
 		_ = client.Close()
 	})
-	store := cachegeneration.NewStore(client)
+	store := configcache.NewStore(client)
 	if _, err := store.Reconcile(ctx, scope, 1); err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func openSettingGenerationHarness(t *testing.T) settingGenerationHarness {
 	cache.SetStateStore(store)
 	return settingGenerationHarness{
 		ctx: ctx, db: db, client: client, scope: scope, store: store,
-		generations: cachegeneration.NewRepository(db),
+		generations: configcache.NewRepository(db),
 		cache:       cache,
 	}
 }
@@ -240,14 +240,14 @@ CREATE TABLE system_setting (
 	deleted_at TIMESTAMPTZ
 );
 CREATE UNIQUE INDEX ux_system_setting_key_active ON system_setting(setting_key) WHERE deleted_at IS NULL;
-CREATE TABLE system_config_cache_generation (
+CREATE TABLE system_config_cache_state (
 	namespace VARCHAR(128) NOT NULL,
 	scope_key VARCHAR(128) NOT NULL,
 	generation BIGINT NOT NULL DEFAULT 1,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY (namespace, scope_key),
-	CONSTRAINT ck_system_config_cache_generation_value CHECK (generation >= 1)
+	CONSTRAINT ck_system_config_cache_state_value CHECK (generation >= 1)
 );
 CREATE TABLE system_config_cache_outbox (
 	id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
@@ -264,7 +264,7 @@ CREATE TABLE system_config_cache_outbox (
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	CONSTRAINT uq_system_config_cache_outbox_generation UNIQUE (namespace, scope_key, generation),
 	CONSTRAINT fk_system_config_cache_outbox_generation
-		FOREIGN KEY (namespace, scope_key) REFERENCES system_config_cache_generation(namespace, scope_key),
+		FOREIGN KEY (namespace, scope_key) REFERENCES system_config_cache_state(namespace, scope_key),
 	CONSTRAINT ck_system_config_cache_outbox_published_lock
 		CHECK (published_at IS NULL OR (locked_until IS NULL AND lock_token IS NULL))
 );
@@ -272,7 +272,7 @@ CREATE TABLE system_config_cache_outbox (
 		t.Fatalf("prepare setting schema: %v", err)
 	}
 	if err := db.WithContext(ctx).Exec(
-		`INSERT INTO system_config_cache_generation (namespace, scope_key, generation) VALUES ('system.setting', ?, 1)`,
+		`INSERT INTO system_config_cache_state (namespace, scope_key, generation) VALUES ('system.setting', ?, 1)`,
 		scopeKey).Error; err != nil {
 		t.Fatalf("seed setting generation: %v", err)
 	}
@@ -297,7 +297,7 @@ func assertSettingGeneration(t *testing.T, db *gorm.DB, ctx context.Context, sco
 	t.Helper()
 	var generation int64
 	if err := db.WithContext(ctx).Raw(
-		`SELECT generation FROM system_config_cache_generation WHERE namespace = 'system.setting' AND scope_key = ?`,
+		`SELECT generation FROM system_config_cache_state WHERE namespace = 'system.setting' AND scope_key = ?`,
 		scopeKey).Scan(&generation).Error; err != nil {
 		t.Fatal(err)
 	}

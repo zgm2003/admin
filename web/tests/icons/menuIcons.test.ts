@@ -20,8 +20,8 @@ describe('menu icons', () => {
     expect(menuIcons['lucide:list-checks'].label).toBe('任务队列')
   })
 
-  it('resolves the cache generation icon used by the cache migration', () => {
+  it('resolves the config cache status icon used by the cache migration', () => {
     expect(isMenuIconName('lucide:database-zap')).toBe(true)
-    expect(menuIcons['lucide:database-zap'].label).toBe('配置缓存代际')
+    expect(menuIcons['lucide:database-zap'].label).toBe('配置缓存状态')
   })
 })

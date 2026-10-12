@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -13,13 +13,13 @@ import (
 
 type Repository struct {
 	db          *gorm.DB
-	generations *cachegeneration.Repository
-	scope       cachegeneration.Scope
+	generations *configcache.Repository
+	scope       configcache.Scope
 }
 
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 
-func (r *Repository) SetGenerations(repository *cachegeneration.Repository, scope cachegeneration.Scope) {
+func (r *Repository) SetGenerations(repository *configcache.Repository, scope configcache.Scope) {
 	r.generations = repository
 	r.scope = scope
 }
@@ -101,23 +101,23 @@ func (r *Repository) ListAll(ctx context.Context) ([]Catalog, error) {
 	return result, nil
 }
 
-func (r *Repository) Update(ctx context.Context, platformID int64, input Input, expected int64, now time.Time) (Catalog, cachegeneration.MutationResult, error) {
+func (r *Repository) Update(ctx context.Context, platformID int64, input Input, expected int64, now time.Time) (Catalog, configcache.MutationResult, error) {
 	if r == nil || r.db == nil || r.generations == nil {
-		return Catalog{}, cachegeneration.MutationResult{}, fmt.Errorf("mail rate limit generation dependencies are not configured")
+		return Catalog{}, configcache.MutationResult{}, fmt.Errorf("mail rate limit generation dependencies are not configured")
 	}
 	if err := r.scope.Validate(); err != nil {
-		return Catalog{}, cachegeneration.MutationResult{}, err
+		return Catalog{}, configcache.MutationResult{}, err
 	}
 	var catalog Catalog
-	mutation := cachegeneration.MutationResult{}
+	mutation := configcache.MutationResult{}
 	err := r.db.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		var rows []Model
 		if err := transaction.WithContext(ctx).Where("platform_id = ?", platformID).Clauses(clause.Locking{Strength: "UPDATE"}).Order("policy_key ASC").Find(&rows).Error; err != nil {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, err)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, err)
 		}
 		current, err := buildCatalog(platformID, rows)
 		if err != nil {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, err)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, err)
 		}
 		policyIndex := -1
 		for index := range current.Policies {
@@ -127,7 +127,7 @@ func (r *Repository) Update(ctx context.Context, platformID int64, input Input, 
 			}
 		}
 		if policyIndex < 0 {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, gorm.ErrRecordNotFound)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, gorm.ErrRecordNotFound)
 		}
 		policy := current.Policies[policyIndex]
 		if policy.Limit == input.Limit && policy.WindowSeconds == input.WindowSeconds {
@@ -139,24 +139,24 @@ func (r *Repository) Update(ctx context.Context, platformID int64, input Input, 
 			"updated_at": now,
 		})
 		if query.Error != nil {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, query.Error)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, query.Error)
 		}
 		if query.RowsAffected != 1 {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, gorm.ErrRecordNotFound)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, gorm.ErrRecordNotFound)
 		}
 		current.Policies[policyIndex].Limit = input.Limit
 		current.Policies[policyIndex].WindowSeconds = input.WindowSeconds
 		current.Policies[policyIndex].UpdatedAt = now
 		event, err := r.generations.AdvanceTx(ctx, transaction, r.scope, expected, now)
 		if err != nil {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, err)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, err)
 		}
 		catalog = current
-		mutation = cachegeneration.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
+		mutation = configcache.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
 		return nil
 	})
 	if err != nil {
-		return Catalog{}, cachegeneration.MutationResult{}, err
+		return Catalog{}, configcache.MutationResult{}, err
 	}
 	return catalog, mutation, nil
 }

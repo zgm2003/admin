@@ -10,7 +10,7 @@ import (
 
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -120,8 +120,8 @@ func (s *Service) Save(ctx context.Context, input Input) (Safe, error) {
 	if s.runtime == nil {
 		return Safe{}, apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	if err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
-		var result cachegeneration.MutationResult
+	if err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
+		var result configcache.MutationResult
 		var saveErr error
 		saved, result, saveErr = s.repository.Save(writeContext, values, expected, time.Now().UTC())
 		return result, saveErr
@@ -135,7 +135,7 @@ func (s *Service) Delete(ctx context.Context) error {
 	if s.runtime == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.Delete(writeContext, expected, time.Now().UTC())
 	})
 	if mapped := mapMutationError(err); mapped != nil {

@@ -13,7 +13,7 @@ import (
 	mailtemplate "admin/server/internal/module/message/mail/template"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/cacheFill"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 
 	"gorm.io/gorm"
@@ -28,12 +28,12 @@ const (
 )
 
 var (
-	mailGenerationScope       = cachegeneration.Scope{Namespace: "message.mail", ScopeKey: "global"}
+	mailGenerationScope       = configcache.Scope{Namespace: "message.mail", ScopeKey: "global"}
 	ErrRuntimeSnapshotCorrupt = errors.New("mail runtime snapshot is corrupt")
 	ErrMailGenerationAdvanced = errors.New("mail cache generation advanced during fill")
 )
 
-func CacheGenerationScope() cachegeneration.Scope { return mailGenerationScope }
+func ConfigCacheScope() configcache.Scope { return mailGenerationScope }
 
 type runtimeSnapshot struct {
 	SchemaVersion int             `json:"schemaVersion"`
@@ -89,9 +89,9 @@ type runtimeRepository interface {
 type runtimeStore struct {
 	repository  runtimeRepository
 	redis       *projectredis.Client
-	generations *cachegeneration.Repository
-	states      *cachegeneration.Store
-	scope       cachegeneration.Scope
+	generations *configcache.Repository
+	states      *configcache.Store
+	scope       configcache.Scope
 	logger      *slog.Logger
 	ttl         time.Duration
 
@@ -107,7 +107,7 @@ func newRuntimeStore(repository runtimeRepository, redis *projectredis.Client) *
 	return &runtimeStore{
 		repository: repository, redis: redis, scope: mailGenerationScope,
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)), ttl: mailSnapshotTTL,
-		renewInterval: cachegeneration.MutationRenewInterval,
+		renewInterval: configcache.MutationRenewInterval,
 		readBudget:    mailReadBudget, writeBudget: mailWriteBudget, waitStep: mailWaitStep,
 		now: time.Now, wait: waitForMailCache,
 	}
@@ -117,7 +117,7 @@ func NewRuntimeStore(stores *Stores, redis *projectredis.Client) *runtimeStore {
 	return newRuntimeStore(stores, redis)
 }
 
-func (s *runtimeStore) SetGenerations(repository *cachegeneration.Repository, store *cachegeneration.Store) {
+func (s *runtimeStore) SetGenerations(repository *configcache.Repository, store *configcache.Store) {
 	s.generations = repository
 	s.states = store
 }
@@ -209,43 +209,43 @@ func (s *runtimeStore) Current(ctx context.Context, scene string) (VerifyCodeRea
 	return s.LoadReadiness(ctx, scene)
 }
 
-func (s *runtimeStore) readyState(ctx context.Context, deadline time.Time, repair func() error) (cachegeneration.State, bool, error) {
+func (s *runtimeStore) readyState(ctx context.Context, deadline time.Time, repair func() error) (configcache.State, bool, error) {
 	if err := ctx.Err(); err != nil {
-		return cachegeneration.State{}, false, err
+		return configcache.State{}, false, err
 	}
 	state, found, err := s.states.Read(ctx, s.scope)
 	if err != nil {
-		if errors.Is(err, cachegeneration.ErrStateCorrupt) {
+		if errors.Is(err, configcache.ErrStateCorrupt) {
 			if repairErr := repair(); repairErr != nil {
 				if errors.Is(repairErr, ErrMailGenerationAdvanced) {
-					return cachegeneration.State{}, true, nil
+					return configcache.State{}, true, nil
 				}
-				return cachegeneration.State{}, false, errors.Join(err, repairErr)
+				return configcache.State{}, false, errors.Join(err, repairErr)
 			}
-			return cachegeneration.State{}, true, nil
+			return configcache.State{}, true, nil
 		}
-		return cachegeneration.State{}, false, err
+		return configcache.State{}, false, err
 	}
 	if !found {
 		if repairErr := repair(); repairErr != nil {
 			if errors.Is(repairErr, ErrMailGenerationAdvanced) {
-				return cachegeneration.State{}, true, nil
+				return configcache.State{}, true, nil
 			}
-			return cachegeneration.State{}, false, errors.Join(cachegeneration.ErrStateMissing, repairErr)
+			return configcache.State{}, false, errors.Join(configcache.ErrStateMissing, repairErr)
 		}
-		return cachegeneration.State{}, true, nil
+		return configcache.State{}, true, nil
 	}
-	if state.State == cachegeneration.StateInvalidating {
+	if state.State == configcache.StateInvalidating {
 		if s.now().Add(s.waitStep).After(deadline) {
-			return cachegeneration.State{}, false, fmt.Errorf("mail cache state is invalidating")
+			return configcache.State{}, false, fmt.Errorf("mail cache state is invalidating")
 		}
 		if err := s.wait(ctx, s.waitStep); err != nil {
-			return cachegeneration.State{}, false, err
+			return configcache.State{}, false, err
 		}
-		return cachegeneration.State{}, true, nil
+		return configcache.State{}, true, nil
 	}
-	if state.State != cachegeneration.StateReady {
-		return cachegeneration.State{}, false, fmt.Errorf("mail cache state is invalid")
+	if state.State != configcache.StateReady {
+		return configcache.State{}, false, fmt.Errorf("mail cache state is invalid")
 	}
 	return state, false, nil
 }
@@ -355,19 +355,19 @@ func (s *runtimeStore) recoverReadinessState(ctx context.Context, scene, variant
 }
 
 func (s *runtimeStore) tryFill(ctx context.Context, generation int64, variant string) (*cachefill.Lease, error) {
-	target, err := cachegeneration.FillKey(s.scope, generation, variant)
+	target, err := configcache.FillKey(s.scope, generation, variant)
 	if err != nil {
 		return nil, err
 	}
-	return cachefill.Try(ctx, s.redis.UniversalClient(), cachegeneration.StateKey(s.scope), target)
+	return cachefill.Try(ctx, s.redis.UniversalClient(), configcache.StateKey(s.scope), target)
 }
 
 func (s *runtimeStore) tryRepair(ctx context.Context, variant string) (*cachefill.Lease, error) {
-	return cachefill.Try(ctx, s.redis.UniversalClient(), cachegeneration.StateKey(s.scope), "repair:"+variant)
+	return cachefill.Try(ctx, s.redis.UniversalClient(), configcache.StateKey(s.scope), "repair:"+variant)
 }
 
 func (s *runtimeStore) readRuntimeSnapshot(ctx context.Context, generation int64, scene, variant string) (runtimeSnapshot, bool, error) {
-	key, err := cachegeneration.SnapshotKey(s.scope, generation, variant)
+	key, err := configcache.SnapshotKey(s.scope, generation, variant)
 	if err != nil {
 		return runtimeSnapshot{}, false, err
 	}
@@ -393,7 +393,7 @@ func (s *runtimeStore) putRuntimeSnapshot(ctx context.Context, variant string, s
 	if err != nil {
 		return err
 	}
-	key, err := cachegeneration.SnapshotKey(s.scope, snapshot.Generation, variant)
+	key, err := configcache.SnapshotKey(s.scope, snapshot.Generation, variant)
 	if err != nil {
 		return err
 	}
@@ -401,7 +401,7 @@ func (s *runtimeStore) putRuntimeSnapshot(ctx context.Context, variant string, s
 }
 
 func (s *runtimeStore) readReadinessSnapshot(ctx context.Context, generation int64, variant string) (VerifyCodeReadiness, bool, error) {
-	key, err := cachegeneration.SnapshotKey(s.scope, generation, variant)
+	key, err := configcache.SnapshotKey(s.scope, generation, variant)
 	if err != nil {
 		return VerifyCodeReadiness{}, false, err
 	}
@@ -424,7 +424,7 @@ func (s *runtimeStore) putReadinessSnapshot(ctx context.Context, variant string,
 	if err != nil {
 		return err
 	}
-	key, err := cachegeneration.SnapshotKey(s.scope, snapshot.Generation, variant)
+	key, err := configcache.SnapshotKey(s.scope, snapshot.Generation, variant)
 	if err != nil {
 		return err
 	}
@@ -483,13 +483,13 @@ func (s *runtimeStore) confirmReadyGeneration(ctx context.Context, generation in
 	if err != nil {
 		return err
 	}
-	if !found || state.State != cachegeneration.StateReady || state.Generation != generation {
+	if !found || state.State != configcache.StateReady || state.Generation != generation {
 		return fmt.Errorf("%w: expected generation %d", ErrMailGenerationAdvanced, generation)
 	}
 	return nil
 }
 
-func (s *runtimeStore) Mutate(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+func (s *runtimeStore) Mutate(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 	if err := s.configured(); err != nil || change == nil {
 		if err == nil {
 			err = fmt.Errorf("mail runtime mutation callback is missing")
@@ -505,7 +505,7 @@ func (s *runtimeStore) Mutate(ctx context.Context, change func(context.Context, 
 		switch {
 		case err == nil:
 			return nil
-		case errors.Is(err, cachegeneration.ErrUpdating), errors.Is(err, cachegeneration.ErrGenerationChanged):
+		case errors.Is(err, configcache.ErrUpdating), errors.Is(err, configcache.ErrGenerationChanged):
 			if !s.now().Before(deadline) {
 				return fmt.Errorf("mail mutation budget exhausted: %w", err)
 			}
@@ -518,7 +518,7 @@ func (s *runtimeStore) Mutate(ctx context.Context, change func(context.Context, 
 	}
 }
 
-func (s *runtimeStore) mutateOnce(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+func (s *runtimeStore) mutateOnce(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 	base, err := s.generations.Current(ctx, s.scope)
 	if err != nil {
 		return err
@@ -546,12 +546,12 @@ func (s *runtimeStore) mutateOnce(ctx context.Context, change func(context.Conte
 	return nil
 }
 
-func (s *runtimeStore) acquireLease(ctx context.Context, base int64) (*cachegeneration.Lease, error) {
+func (s *runtimeStore) acquireLease(ctx context.Context, base int64) (*configcache.Lease, error) {
 	lease, err := s.states.Acquire(ctx, s.scope, base)
 	if err == nil {
 		return lease, nil
 	}
-	if !errors.Is(err, cachegeneration.ErrStateMissing) && !errors.Is(err, cachegeneration.ErrStateCorrupt) {
+	if !errors.Is(err, configcache.ErrStateMissing) && !errors.Is(err, configcache.ErrStateCorrupt) {
 		return nil, err
 	}
 	if _, reconcileErr := s.states.Reconcile(ctx, s.scope, base); reconcileErr != nil {
@@ -560,7 +560,7 @@ func (s *runtimeStore) acquireLease(ctx context.Context, base int64) (*cachegene
 	return s.states.Acquire(ctx, s.scope, base)
 }
 
-func (s *runtimeStore) startRenewal(parent context.Context, lease *cachegeneration.Lease) (context.Context, func()) {
+func (s *runtimeStore) startRenewal(parent context.Context, lease *configcache.Lease) (context.Context, func()) {
 	ctx, cancel := context.WithCancelCause(parent)
 	done := make(chan struct{})
 	go func() {
@@ -585,7 +585,7 @@ func (s *runtimeStore) startRenewal(parent context.Context, lease *cachegenerati
 	}
 }
 
-func (s *runtimeStore) finishFailedMutation(ctx context.Context, lease *cachegeneration.Lease, base int64, applyErr error) error {
+func (s *runtimeStore) finishFailedMutation(ctx context.Context, lease *configcache.Lease, base int64, applyErr error) error {
 	current, readErr := s.generations.Current(ctx, s.scope)
 	if readErr != nil {
 		return errors.Join(applyErr, readErr)
@@ -594,7 +594,7 @@ func (s *runtimeStore) finishFailedMutation(ctx context.Context, lease *cachegen
 		if err := lease.Commit(ctx, current); err != nil {
 			s.logGenerationFailure("publish mail generation after uncertain commit failed", current, 0, err)
 		}
-		if errors.Is(applyErr, cachegeneration.ErrMutationRolledBack) {
+		if errors.Is(applyErr, configcache.ErrMutationRolledBack) {
 			return applyErr
 		}
 		return nil
@@ -734,6 +734,6 @@ func (s *runtimeStore) logGenerationFailure(message string, generation, outboxID
 		"scopeKey", s.scope.ScopeKey,
 		"generation", generation,
 		"outboxId", outboxID,
-		"errorClass", cachegeneration.ErrorClass(err),
+		"errorClass", configcache.ErrorClass(err),
 	)
 }

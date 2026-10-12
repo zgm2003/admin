@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 )
 
 const (
@@ -103,7 +103,7 @@ type ListResponse struct {
 type repository interface {
 	ListPlatforms(context.Context) ([]Catalog, error)
 	FindPlatform(context.Context, int64) (Catalog, error)
-	UpdatePolicy(context.Context, int64, string, int, int, int64, time.Time) (cachegeneration.MutationResult, error)
+	UpdatePolicy(context.Context, int64, string, int, int, int64, time.Time) (configcache.MutationResult, error)
 	ProvisionDefaults(context.Context, int64, time.Time) error
 	DeleteForPlatform(context.Context, int64) error
 }
@@ -115,7 +115,7 @@ type Store interface {
 }
 
 type RuntimeCoordinator interface {
-	Mutate(context.Context, func(context.Context, int64) (cachegeneration.MutationResult, error)) error
+	Mutate(context.Context, func(context.Context, int64) (configcache.MutationResult, error)) error
 }
 
 func policyResponseOf(value Model) PolicyResponse {

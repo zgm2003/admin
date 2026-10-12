@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -39,5 +39,5 @@ type Safe struct {
 }
 
 type RuntimeCoordinator interface {
-	Mutate(context.Context, func(context.Context, int64) (cachegeneration.MutationResult, error)) error
+	Mutate(context.Context, func(context.Context, int64) (configcache.MutationResult, error)) error
 }

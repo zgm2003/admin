@@ -148,7 +148,7 @@ SMS 收件规则与发送日志的手机号采用与邮件地址一致的明文�
 不得依赖单进程唯一状态或无界缓存；缓存、限流、队列和失效协议必须明确跨实例一致性、故障闭合和回源上限。
 跨模块 spec/plan 必须记录容量假设、热点查询预算、缓存更新策略和并发验证方式。
 
-### 配置缓存代际
+### 配置缓存状态
 
 配置型缓存统一使用 PostgreSQL generation + durable outbox、Redis tokenized mutation lease、
 `ready/invalidating` state、generation 不可变 snapshot 和 `shared/cacheFill` 有界冷回源。固定 scopes 为：
@@ -168,7 +168,9 @@ generation 只承担缓存代际，不是管理员乐观锁。普通管理 CRUD 
 `permission_access_version.version`、Session/authority generation、验证码、限流计数和队列状态保持原有事实归属，
 不得迁入配置 generation 表。
 
-配置缓存代际页面保持原有页面标题、API 路径、Go 模块、数据库表、Redis namespace 和权限码；用户界面只将
+配置缓存状态页面使用 `system/configCacheStatus`、`/api/admin/v1/system/config-cache-status`、
+`system:configCacheStatus:view/list` 和 `navigation.systemConfigCacheStatus`；数据库主表为
+`system_config_cache_state`。用户界面只将
 固定 namespace/scope/status 映射为中文，并把 generation、outbox 计数和内部坐标放入只读详情。Redis state
 缺失表示可由现有 cold-fill 协议重建的 `missing`，不等同于 PostgreSQL 数据丢失；`corrupt` 和
 `unavailable` 仍按异常状态展示。

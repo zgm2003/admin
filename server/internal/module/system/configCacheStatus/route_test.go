@@ -1,4 +1,4 @@
-package cachegeneration
+package configcachestatus
 
 import (
 	"net/http"
@@ -26,7 +26,7 @@ func TestRouteRequiresAuthenticationAndListPermission(t *testing.T) {
 	router := gin.New()
 	RegisterRoutes(router.Group(""), NewHandler(&stubService{result: ListResult{Page: 1, PageSize: 20}}), authenticate, requirePermission)
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/system/cachegeneration", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/system/config-cache-status", nil))
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())

@@ -15,7 +15,7 @@ import (
 	"admin/server/internal/module/message/sms/template"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/cacheFill"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -30,13 +30,13 @@ const (
 )
 
 var (
-	smsGenerationScope        = cachegeneration.Scope{Namespace: "message.sms", ScopeKey: "global"}
+	smsGenerationScope        = configcache.Scope{Namespace: "message.sms", ScopeKey: "global"}
 	ErrRuntimeSnapshotCorrupt = errors.New("sms runtime snapshot is corrupt")
 	ErrReadinessCorrupt       = errors.New("sms readiness snapshot is corrupt")
 	ErrSMSGenerationAdvanced  = errors.New("sms cache generation advanced during fill")
 )
 
-func CacheGenerationScope() cachegeneration.Scope { return smsGenerationScope }
+func ConfigCacheScope() configcache.Scope { return smsGenerationScope }
 
 // ConfiguredConfig is the encrypted runtime view of the SMS configuration.
 // Credentials stay encrypted in Redis and are decrypted only immediately before
@@ -119,9 +119,9 @@ type readinessPayload struct {
 // codecs. Business loaders remain explicit at the call site.
 type RuntimeCache struct {
 	redis       *projectredis.Client
-	generations *cachegeneration.Repository
-	states      *cachegeneration.Store
-	scope       cachegeneration.Scope
+	generations *configcache.Repository
+	states      *configcache.Store
+	scope       configcache.Scope
 	logger      *slog.Logger
 
 	runtimeTTL    time.Duration
@@ -139,13 +139,13 @@ func NewRuntimeCache(redis *projectredis.Client) *RuntimeCache {
 		redis: redis, scope: smsGenerationScope,
 		logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 		runtimeTTL: runtimeSnapshotTTL, readinessTTL: readinessTTL,
-		renewInterval: cachegeneration.MutationRenewInterval,
+		renewInterval: configcache.MutationRenewInterval,
 		readBudget:    smsReadBudget, writeBudget: smsWriteBudget, waitStep: smsWaitStep,
 		now: time.Now, wait: waitForSMSCache,
 	}
 }
 
-func (c *RuntimeCache) SetGenerations(repository *cachegeneration.Repository, store *cachegeneration.Store) {
+func (c *RuntimeCache) SetGenerations(repository *configcache.Repository, store *configcache.Store) {
 	c.generations = repository
 	c.states = store
 }
@@ -241,43 +241,43 @@ func readinessVariant(scene string) (string, error) {
 	return "readiness:" + scene, nil
 }
 
-func (c *RuntimeCache) readyState(ctx context.Context, deadline time.Time, repair func() error) (cachegeneration.State, bool, error) {
+func (c *RuntimeCache) readyState(ctx context.Context, deadline time.Time, repair func() error) (configcache.State, bool, error) {
 	if err := ctx.Err(); err != nil {
-		return cachegeneration.State{}, false, err
+		return configcache.State{}, false, err
 	}
 	state, found, err := c.states.Read(ctx, c.scope)
 	if err != nil {
-		if errors.Is(err, cachegeneration.ErrStateCorrupt) {
+		if errors.Is(err, configcache.ErrStateCorrupt) {
 			if repairErr := repair(); repairErr != nil {
 				if errors.Is(repairErr, ErrSMSGenerationAdvanced) {
-					return cachegeneration.State{}, true, nil
+					return configcache.State{}, true, nil
 				}
-				return cachegeneration.State{}, false, errors.Join(err, repairErr)
+				return configcache.State{}, false, errors.Join(err, repairErr)
 			}
-			return cachegeneration.State{}, true, nil
+			return configcache.State{}, true, nil
 		}
-		return cachegeneration.State{}, false, err
+		return configcache.State{}, false, err
 	}
 	if !found {
 		if repairErr := repair(); repairErr != nil {
 			if errors.Is(repairErr, ErrSMSGenerationAdvanced) {
-				return cachegeneration.State{}, true, nil
+				return configcache.State{}, true, nil
 			}
-			return cachegeneration.State{}, false, errors.Join(cachegeneration.ErrStateMissing, repairErr)
+			return configcache.State{}, false, errors.Join(configcache.ErrStateMissing, repairErr)
 		}
-		return cachegeneration.State{}, true, nil
+		return configcache.State{}, true, nil
 	}
-	if state.State == cachegeneration.StateInvalidating {
+	if state.State == configcache.StateInvalidating {
 		if c.now().Add(c.waitStep).After(deadline) {
-			return cachegeneration.State{}, false, fmt.Errorf("sms cache state is invalidating")
+			return configcache.State{}, false, fmt.Errorf("sms cache state is invalidating")
 		}
 		if err := c.wait(ctx, c.waitStep); err != nil {
-			return cachegeneration.State{}, false, err
+			return configcache.State{}, false, err
 		}
-		return cachegeneration.State{}, true, nil
+		return configcache.State{}, true, nil
 	}
-	if state.State != cachegeneration.StateReady {
-		return cachegeneration.State{}, false, fmt.Errorf("sms cache state is invalid")
+	if state.State != configcache.StateReady {
+		return configcache.State{}, false, fmt.Errorf("sms cache state is invalid")
 	}
 	return state, false, nil
 }
@@ -388,19 +388,19 @@ func (c *RuntimeCache) recoverReadinessState(ctx context.Context, scene, variant
 }
 
 func (c *RuntimeCache) tryFill(ctx context.Context, generation int64, variant string) (*cachefill.Lease, error) {
-	target, err := cachegeneration.FillKey(c.scope, generation, variant)
+	target, err := configcache.FillKey(c.scope, generation, variant)
 	if err != nil {
 		return nil, err
 	}
-	return cachefill.Try(ctx, c.redis.UniversalClient(), cachegeneration.StateKey(c.scope), target)
+	return cachefill.Try(ctx, c.redis.UniversalClient(), configcache.StateKey(c.scope), target)
 }
 
 func (c *RuntimeCache) tryRepair(ctx context.Context, variant string) (*cachefill.Lease, error) {
-	return cachefill.Try(ctx, c.redis.UniversalClient(), cachegeneration.StateKey(c.scope), "repair:"+variant)
+	return cachefill.Try(ctx, c.redis.UniversalClient(), configcache.StateKey(c.scope), "repair:"+variant)
 }
 
 func (c *RuntimeCache) read(ctx context.Context, generation int64) (RuntimeFacts, bool, error) {
-	key, err := cachegeneration.SnapshotKey(c.scope, generation, runtimeSnapshotVariant)
+	key, err := configcache.SnapshotKey(c.scope, generation, runtimeSnapshotVariant)
 	if err != nil {
 		return RuntimeFacts{}, false, err
 	}
@@ -420,7 +420,7 @@ func (c *RuntimeCache) write(ctx context.Context, generation int64, facts Runtim
 	if err != nil {
 		return err
 	}
-	key, err := cachegeneration.SnapshotKey(c.scope, generation, runtimeSnapshotVariant)
+	key, err := configcache.SnapshotKey(c.scope, generation, runtimeSnapshotVariant)
 	if err != nil {
 		return err
 	}
@@ -428,7 +428,7 @@ func (c *RuntimeCache) write(ctx context.Context, generation int64, facts Runtim
 }
 
 func (c *RuntimeCache) readReadiness(ctx context.Context, generation int64, variant string) (VerifyCodeReadiness, bool, error) {
-	key, err := cachegeneration.SnapshotKey(c.scope, generation, variant)
+	key, err := configcache.SnapshotKey(c.scope, generation, variant)
 	if err != nil {
 		return VerifyCodeReadiness{}, false, err
 	}
@@ -444,7 +444,7 @@ func (c *RuntimeCache) writeReadiness(ctx context.Context, generation int64, var
 	if err != nil {
 		return err
 	}
-	key, err := cachegeneration.SnapshotKey(c.scope, generation, variant)
+	key, err := configcache.SnapshotKey(c.scope, generation, variant)
 	if err != nil {
 		return err
 	}
@@ -456,7 +456,7 @@ func (c *RuntimeCache) confirmReadyGeneration(ctx context.Context, generation in
 	if err != nil {
 		return err
 	}
-	if !found || state.State != cachegeneration.StateReady || state.Generation != generation {
+	if !found || state.State != configcache.StateReady || state.Generation != generation {
 		return fmt.Errorf("%w: expected generation %d", ErrSMSGenerationAdvanced, generation)
 	}
 	return nil
@@ -464,7 +464,7 @@ func (c *RuntimeCache) confirmReadyGeneration(ctx context.Context, generation in
 
 // Mutate serializes one business transaction against the shared SMS scope.
 // The callback owns PostgreSQL business writes plus AdvanceTx/outbox.
-func (c *RuntimeCache) Mutate(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+func (c *RuntimeCache) Mutate(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 	if err := c.configured(); err != nil || change == nil {
 		if err == nil {
 			err = fmt.Errorf("sms runtime mutation callback is missing")
@@ -480,7 +480,7 @@ func (c *RuntimeCache) Mutate(ctx context.Context, change func(context.Context, 
 		switch {
 		case err == nil:
 			return nil
-		case errors.Is(err, cachegeneration.ErrUpdating), errors.Is(err, cachegeneration.ErrGenerationChanged):
+		case errors.Is(err, configcache.ErrUpdating), errors.Is(err, configcache.ErrGenerationChanged):
 			if !c.now().Before(deadline) {
 				return fmt.Errorf("sms mutation budget exhausted: %w", err)
 			}
@@ -493,7 +493,7 @@ func (c *RuntimeCache) Mutate(ctx context.Context, change func(context.Context, 
 	}
 }
 
-func (c *RuntimeCache) mutateOnce(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+func (c *RuntimeCache) mutateOnce(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 	base, err := c.generations.Current(ctx, c.scope)
 	if err != nil {
 		return err
@@ -521,12 +521,12 @@ func (c *RuntimeCache) mutateOnce(ctx context.Context, change func(context.Conte
 	return nil
 }
 
-func (c *RuntimeCache) acquireLease(ctx context.Context, base int64) (*cachegeneration.Lease, error) {
+func (c *RuntimeCache) acquireLease(ctx context.Context, base int64) (*configcache.Lease, error) {
 	lease, err := c.states.Acquire(ctx, c.scope, base)
 	if err == nil {
 		return lease, nil
 	}
-	if !errors.Is(err, cachegeneration.ErrStateMissing) && !errors.Is(err, cachegeneration.ErrStateCorrupt) {
+	if !errors.Is(err, configcache.ErrStateMissing) && !errors.Is(err, configcache.ErrStateCorrupt) {
 		return nil, err
 	}
 	if _, reconcileErr := c.states.Reconcile(ctx, c.scope, base); reconcileErr != nil {
@@ -535,7 +535,7 @@ func (c *RuntimeCache) acquireLease(ctx context.Context, base int64) (*cachegene
 	return c.states.Acquire(ctx, c.scope, base)
 }
 
-func (c *RuntimeCache) startRenewal(parent context.Context, lease *cachegeneration.Lease) (context.Context, func()) {
+func (c *RuntimeCache) startRenewal(parent context.Context, lease *configcache.Lease) (context.Context, func()) {
 	ctx, cancel := context.WithCancelCause(parent)
 	done := make(chan struct{})
 	go func() {
@@ -560,7 +560,7 @@ func (c *RuntimeCache) startRenewal(parent context.Context, lease *cachegenerati
 	}
 }
 
-func (c *RuntimeCache) finishFailedMutation(ctx context.Context, lease *cachegeneration.Lease, base int64, applyErr error) error {
+func (c *RuntimeCache) finishFailedMutation(ctx context.Context, lease *configcache.Lease, base int64, applyErr error) error {
 	current, readErr := c.generations.Current(ctx, c.scope)
 	if readErr != nil {
 		return errors.Join(applyErr, readErr)
@@ -569,7 +569,7 @@ func (c *RuntimeCache) finishFailedMutation(ctx context.Context, lease *cachegen
 		if err := lease.Commit(ctx, current); err != nil {
 			c.logGenerationFailure("publish sms generation after uncertain commit failed", current, 0, err)
 		}
-		if errors.Is(applyErr, cachegeneration.ErrMutationRolledBack) {
+		if errors.Is(applyErr, configcache.ErrMutationRolledBack) {
 			return applyErr
 		}
 		return nil
@@ -922,6 +922,6 @@ func (c *RuntimeCache) logGenerationFailure(message string, generation, outboxID
 		"scopeKey", c.scope.ScopeKey,
 		"generation", generation,
 		"outboxId", outboxID,
-		"errorClass", cachegeneration.ErrorClass(err),
+		"errorClass", configcache.ErrorClass(err),
 	)
 }

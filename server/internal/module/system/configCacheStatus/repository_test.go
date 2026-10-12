@@ -1,4 +1,4 @@
-package cachegeneration
+package configcachestatus
 
 import (
 	"context"
@@ -14,8 +14,8 @@ import (
 )
 
 func TestRepositoryListAggregatesOutboxAndFilters(t *testing.T) {
-	db, ctx := openCacheGenerationDatabase(t)
-	seedCacheGenerationRows(t, db, ctx)
+	db, ctx := openConfigCacheDatabase(t)
+	seedConfigCacheRows(t, db, ctx)
 	repository := NewRepository(db)
 
 	items, total, err := repository.List(ctx, ListQuery{Page: 1, PageSize: 20})
@@ -91,7 +91,7 @@ func TestRepositoryListAggregatesOutboxAndFilters(t *testing.T) {
 	}
 }
 
-func openCacheGenerationDatabase(t *testing.T) (*gorm.DB, context.Context) {
+func openConfigCacheDatabase(t *testing.T) (*gorm.DB, context.Context) {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("integration test")
@@ -110,7 +110,7 @@ func openCacheGenerationDatabase(t *testing.T) (*gorm.DB, context.Context) {
 	}
 	db, ctx := testschema.Open(t, settings.PostgresDSN, "test_system_cache_generation_admin")
 	if err := db.WithContext(ctx).Exec(`
-CREATE TABLE system_config_cache_generation (
+CREATE TABLE system_config_cache_state (
 	namespace VARCHAR(128) NOT NULL,
 	scope_key VARCHAR(128) NOT NULL,
 	generation BIGINT NOT NULL DEFAULT 1,
@@ -139,10 +139,10 @@ CREATE TABLE system_config_cache_outbox (
 	return db, ctx
 }
 
-func seedCacheGenerationRows(t *testing.T, db *gorm.DB, ctx context.Context) {
+func seedConfigCacheRows(t *testing.T, db *gorm.DB, ctx context.Context) {
 	t.Helper()
 	statements := []string{
-		`INSERT INTO system_config_cache_generation (namespace, scope_key, generation, created_at, updated_at) VALUES
+		`INSERT INTO system_config_cache_state (namespace, scope_key, generation, created_at, updated_at) VALUES
 			('system.setting', 'global', 12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 			('system.dictionary', 'global', 5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 			('system.mail', 'runtime', 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),

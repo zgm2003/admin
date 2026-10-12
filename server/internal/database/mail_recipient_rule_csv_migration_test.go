@@ -19,11 +19,11 @@ CREATE TABLE permission_menu (id bigserial PRIMARY KEY, platform_id bigint NOT N
 CREATE UNIQUE INDEX menu_code_active ON permission_menu(platform_id,code) WHERE deleted_at IS NULL;
 CREATE TABLE system_setting (id bigserial PRIMARY KEY, setting_key varchar(128) NOT NULL, value text NOT NULL, value_type smallint NOT NULL, description varchar(512) NOT NULL DEFAULT '', is_enabled smallint NOT NULL, is_builtin smallint NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz);
 CREATE UNIQUE INDEX setting_key_active ON system_setting(setting_key) WHERE deleted_at IS NULL;
-CREATE TABLE system_config_cache_generation (namespace varchar(128) NOT NULL, scope_key varchar(128) NOT NULL, generation bigint NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(namespace,scope_key));
+CREATE TABLE system_config_cache_state (namespace varchar(128) NOT NULL, scope_key varchar(128) NOT NULL, generation bigint NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(namespace,scope_key));
 CREATE TABLE system_config_cache_outbox (id bigserial PRIMARY KEY, namespace varchar(128) NOT NULL, scope_key varchar(128) NOT NULL, generation bigint NOT NULL, attempts integer NOT NULL DEFAULT 0, available_at timestamptz NOT NULL, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, published_at timestamptz, UNIQUE(namespace,scope_key,generation));
 INSERT INTO permission_auth_platform(id,code,menu_version) VALUES (1,'admin',14),(2,'canvas',1);
 INSERT INTO permission_menu(platform_id,menu_type,name,code,i18n_key,path,component_path) VALUES (1,'page','Mail','message:mail:view','navigation.mail','/message/mail','message/mail');
-INSERT INTO system_config_cache_generation(namespace,scope_key,generation) VALUES ('system.setting','global',13),('message.mail','global',3);
+INSERT INTO system_config_cache_state(namespace,scope_key,generation) VALUES ('system.setting','global',13),('message.mail','global',3);
 `).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func csvMigrationSnapshot(t *testing.T, db *gorm.DB, ctx context.Context) string
  'platforms',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM permission_auth_platform p),
  'menus',(SELECT jsonb_agg(to_jsonb(m) ORDER BY id) FROM permission_menu m),
  'settings',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM system_setting s),
- 'generations',(SELECT jsonb_agg(to_jsonb(g) ORDER BY namespace,scope_key) FROM system_config_cache_generation g),
+ 'generations',(SELECT jsonb_agg(to_jsonb(g) ORDER BY namespace,scope_key) FROM system_config_cache_state g),
  'outbox',(SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM system_config_cache_outbox o))::text`).Scan(&snapshot).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -65,8 +65,8 @@ func TestMailRuleCSVMigrationSeedsOnlyAdminAndIsIdempotent(t *testing.T) {
  (SELECT menu_version=1 FROM permission_auth_platform WHERE code='canvas') AND
  (SELECT count(*)=2 FROM permission_menu m JOIN permission_menu p ON p.id=m.parent_id WHERE m.code IN ('message:mail:rule:import','message:mail:rule:export') AND m.platform_id=1 AND p.code='message:mail:view' AND m.menu_type='action' AND m.is_hidden=1 AND m.is_enabled=1 AND m.path IS NULL AND m.component_path IS NULL AND m.icon IS NULL AND m.i18n_key IS NULL) AND
  (SELECT count(*)=1 FROM system_setting WHERE setting_key='message.mail.recipient_rule.import_template_url' AND value='' AND value_type=1 AND is_enabled=1 AND is_builtin=1) AND
- (SELECT generation=14 FROM system_config_cache_generation WHERE namespace='system.setting') AND
- (SELECT generation=3 FROM system_config_cache_generation WHERE namespace='message.mail') AND
+ (SELECT generation=14 FROM system_config_cache_state WHERE namespace='system.setting') AND
+ (SELECT generation=3 FROM system_config_cache_state WHERE namespace='message.mail') AND
  (SELECT count(*)=1 FROM system_config_cache_outbox WHERE namespace='system.setting' AND generation=14)`).Scan(&valid).Error; err != nil || !valid {
 		t.Fatalf("seed valid=%v err=%v", valid, err)
 	}

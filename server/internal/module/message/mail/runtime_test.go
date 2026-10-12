@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 
 	"gorm.io/gorm"
@@ -63,8 +63,8 @@ func TestRuntimeMutationNoOpRestoresReadyWithoutAdvancingGeneration(t *testing.T
 	client := openMailReadinessRedis(t)
 	store := newMailCacheTestStore(t, database, readyMailRepository(0), client)
 
-	if err := store.Mutate(ctx, func(context.Context, int64) (cachegeneration.MutationResult, error) {
-		return cachegeneration.MutationResult{}, nil
+	if err := store.Mutate(ctx, func(context.Context, int64) (configcache.MutationResult, error) {
+		return configcache.MutationResult{}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestRuntimeMutationPublishesCommittedGenerationAndMarksOutbox(t *testing.T)
 	client := openMailReadinessRedis(t)
 	store := newMailCacheTestStore(t, database, readyMailRepository(0), client)
 
-	if err := store.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	if err := store.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return advanceMailGeneration(writeContext, database, expected)
 	}); err != nil {
 		t.Fatal(err)
@@ -99,10 +99,10 @@ func TestRuntimeMutationKnownRollbackRestoresBaseGeneration(t *testing.T) {
 	store := newMailCacheTestStore(t, database, readyMailRepository(0), client)
 	forced := errors.New("forced transaction rollback")
 
-	err := store.Mutate(ctx, func(context.Context, int64) (cachegeneration.MutationResult, error) {
-		return cachegeneration.MutationResult{}, errors.Join(cachegeneration.ErrMutationRolledBack, forced)
+	err := store.Mutate(ctx, func(context.Context, int64) (configcache.MutationResult, error) {
+		return configcache.MutationResult{}, errors.Join(configcache.ErrMutationRolledBack, forced)
 	})
-	if !errors.Is(err, forced) || !errors.Is(err, cachegeneration.ErrMutationRolledBack) {
+	if !errors.Is(err, forced) || !errors.Is(err, configcache.ErrMutationRolledBack) {
 		t.Fatalf("mutation error = %v", err)
 	}
 	assertMailGenerationState(t, ctx, database, store, 1)
@@ -114,11 +114,11 @@ func TestRuntimeMutationUncertainCommitPublishesAuthoritativeGeneration(t *testi
 	store := newMailCacheTestStore(t, database, readyMailRepository(0), client)
 	forced := errors.New("connection reset after commit")
 
-	err := store.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	err := store.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		if _, err := advanceMailGeneration(writeContext, database, expected); err != nil {
-			return cachegeneration.MutationResult{}, err
+			return configcache.MutationResult{}, err
 		}
-		return cachegeneration.MutationResult{}, forced
+		return configcache.MutationResult{}, forced
 	})
 	if err != nil {
 		t.Fatalf("uncertain committed mutation returned an error: %v", err)
@@ -134,20 +134,20 @@ func TestRuntimeMutationPublishFailureReturnsBusinessSuccess(t *testing.T) {
 	client := openMailReadinessRedis(t)
 	store := newMailCacheTestStore(t, database, readyMailRepository(0), client)
 
-	err := store.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	err := store.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		result, err := advanceMailGeneration(writeContext, database, expected)
 		if err != nil {
-			return cachegeneration.MutationResult{}, err
+			return configcache.MutationResult{}, err
 		}
 		if err := client.Close(); err != nil {
-			return cachegeneration.MutationResult{}, err
+			return configcache.MutationResult{}, err
 		}
 		return result, nil
 	})
 	if err != nil {
 		t.Fatalf("committed mutation returned Redis publication failure: %v", err)
 	}
-	generation, err := cachegeneration.NewRepository(database).Current(ctx, mailGenerationScope)
+	generation, err := configcache.NewRepository(database).Current(ctx, mailGenerationScope)
 	if err != nil || generation != 2 {
 		t.Fatalf("PostgreSQL generation = %d, %v; want 2", generation, err)
 	}
@@ -180,11 +180,11 @@ func TestRuntimeMutationRetryBudgetIsBounded(t *testing.T) {
 		now = now.Add(mailWaitStep)
 		return nil
 	}
-	err = store.Mutate(ctx, func(context.Context, int64) (cachegeneration.MutationResult, error) {
+	err = store.Mutate(ctx, func(context.Context, int64) (configcache.MutationResult, error) {
 		callbackCalls++
-		return cachegeneration.MutationResult{}, nil
+		return configcache.MutationResult{}, nil
 	})
-	if !errors.Is(err, cachegeneration.ErrUpdating) {
+	if !errors.Is(err, configcache.ErrUpdating) {
 		t.Fatalf("mutation error = %v, want ErrUpdating", err)
 	}
 	if waits != 25 || callbackCalls != 0 {
@@ -212,14 +212,14 @@ func validRuntimeSnapshot(generation int64) runtimeSnapshot {
 	}
 }
 
-func advanceMailGeneration(ctx context.Context, database *gorm.DB, expected int64) (cachegeneration.MutationResult, error) {
-	result := cachegeneration.MutationResult{}
+func advanceMailGeneration(ctx context.Context, database *gorm.DB, expected int64) (configcache.MutationResult, error) {
+	result := configcache.MutationResult{}
 	err := database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		event, err := cachegeneration.NewRepository(database).AdvanceTx(ctx, tx, mailGenerationScope, expected, time.Now().UTC())
+		event, err := configcache.NewRepository(database).AdvanceTx(ctx, tx, mailGenerationScope, expected, time.Now().UTC())
 		if err != nil {
 			return err
 		}
-		result = cachegeneration.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
+		result = configcache.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
 		return nil
 	})
 	return result, err
@@ -227,12 +227,12 @@ func advanceMailGeneration(ctx context.Context, database *gorm.DB, expected int6
 
 func assertMailGenerationState(t *testing.T, ctx context.Context, database *gorm.DB, store *runtimeStore, want int64) {
 	t.Helper()
-	generation, err := cachegeneration.NewRepository(database).Current(ctx, mailGenerationScope)
+	generation, err := configcache.NewRepository(database).Current(ctx, mailGenerationScope)
 	if err != nil || generation != want {
 		t.Fatalf("PostgreSQL generation = %d, %v; want %d", generation, err, want)
 	}
 	state, found, err := store.states.Read(ctx, mailGenerationScope)
-	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != want {
+	if err != nil || !found || state.State != configcache.StateReady || state.Generation != want {
 		t.Fatalf("Redis state = %+v, found=%v, err=%v; want ready %d", state, found, err, want)
 	}
 }

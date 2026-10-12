@@ -14,7 +14,7 @@ import (
 	projectconfig "admin/server/internal/config"
 	"admin/server/internal/database/testschema"
 	projectredis "admin/server/internal/redis"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 )
@@ -50,7 +50,7 @@ func openSMSGenerationDatabase(t *testing.T) (*gorm.DB, context.Context) {
 	}
 	database, ctx := testschema.Open(t, settings.PostgresDSN, "test_sms_runtime_generation")
 	if err := database.WithContext(ctx).Exec(`
-CREATE TABLE system_config_cache_generation(
+CREATE TABLE system_config_cache_state(
  namespace varchar(128) NOT NULL, scope_key varchar(128) NOT NULL, generation bigint NOT NULL,
  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(namespace,scope_key));
@@ -61,8 +61,8 @@ CREATE TABLE system_config_cache_outbox(
  locked_until timestamptz, lock_token varchar(64), last_error varchar(512) NOT NULL DEFAULT '',
  published_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
  UNIQUE(namespace,scope_key,generation),
- FOREIGN KEY(namespace,scope_key) REFERENCES system_config_cache_generation(namespace,scope_key));
-INSERT INTO system_config_cache_generation(namespace,scope_key,generation) VALUES ('message.sms','global',1);`).Error; err != nil {
+ FOREIGN KEY(namespace,scope_key) REFERENCES system_config_cache_state(namespace,scope_key));
+INSERT INTO system_config_cache_state(namespace,scope_key,generation) VALUES ('message.sms','global',1);`).Error; err != nil {
 		t.Fatal(err)
 	}
 	return database, ctx
@@ -76,7 +76,7 @@ func newSMSCacheTestStore(t *testing.T, database *gorm.DB, client *projectredis.
 	}
 	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), keys) })
 	cache := NewRuntimeCache(client)
-	cache.SetGenerations(cachegeneration.NewRepository(database), cachegeneration.NewStore(client))
+	cache.SetGenerations(configcache.NewRepository(database), configcache.NewStore(client))
 	generation, err := cache.generations.Current(context.Background(), smsGenerationScope)
 	if err != nil {
 		t.Fatal(err)
@@ -89,13 +89,13 @@ func newSMSCacheTestStore(t *testing.T, database *gorm.DB, client *projectredis.
 
 func secondSMSCacheTestStore(database *gorm.DB, client *projectredis.Client) *RuntimeCache {
 	cache := NewRuntimeCache(client)
-	cache.SetGenerations(cachegeneration.NewRepository(database), cachegeneration.NewStore(client))
+	cache.SetGenerations(configcache.NewRepository(database), configcache.NewStore(client))
 	return cache
 }
 
 func smsCacheTestKeys(t *testing.T) []string {
 	t.Helper()
-	stateKey := cachegeneration.StateKey(smsGenerationScope)
+	stateKey := configcache.StateKey(smsGenerationScope)
 	keys := []string{stateKey}
 	variants := []string{runtimeSnapshotVariant}
 	for _, scene := range []string{"login", "forget", "bind_phone", "change_password"} {
@@ -103,11 +103,11 @@ func smsCacheTestKeys(t *testing.T) []string {
 	}
 	for generation := int64(1); generation <= 8; generation++ {
 		for _, variant := range variants {
-			snapshot, err := cachegeneration.SnapshotKey(smsGenerationScope, generation, variant)
+			snapshot, err := configcache.SnapshotKey(smsGenerationScope, generation, variant)
 			if err != nil {
 				t.Fatal(err)
 			}
-			fill, err := cachegeneration.FillKey(smsGenerationScope, generation, variant)
+			fill, err := configcache.FillKey(smsGenerationScope, generation, variant)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -215,8 +215,8 @@ func TestRuntimeAndReadinessUseOneGenerationWithSeparateVariants(t *testing.T) {
 	if err != nil || !ready.Ready || ready.TTLMinutes != 5 {
 		t.Fatalf("readiness=%+v err=%v", ready, err)
 	}
-	runtimeKey, _ := cachegeneration.SnapshotKey(smsGenerationScope, 1, runtimeSnapshotVariant)
-	readinessKey, _ := cachegeneration.SnapshotKey(smsGenerationScope, 1, "readiness:login")
+	runtimeKey, _ := configcache.SnapshotKey(smsGenerationScope, 1, runtimeSnapshotVariant)
+	readinessKey, _ := configcache.SnapshotKey(smsGenerationScope, 1, "readiness:login")
 	if _, found, err := client.GetString(ctx, runtimeKey); err != nil || !found {
 		t.Fatalf("runtime snapshot found=%v err=%v", found, err)
 	}
@@ -229,7 +229,7 @@ func TestRuntimeCacheCorruptSnapshotIsRebuilt(t *testing.T) {
 	database, ctx := openSMSGenerationDatabase(t)
 	client := openSMSRuntimeRedis(t)
 	cache := newSMSCacheTestStore(t, database, client)
-	key, _ := cachegeneration.SnapshotKey(smsGenerationScope, 1, runtimeSnapshotVariant)
+	key, _ := configcache.SnapshotKey(smsGenerationScope, 1, runtimeSnapshotVariant)
 	corrupt := `{"schemaVersion":1,"generation":1,"configured":true}`
 	if err := client.SetString(ctx, key, corrupt, time.Minute); err != nil {
 		t.Fatal(err)
@@ -290,11 +290,11 @@ func TestRuntimeCacheDropsOldFillWhenGenerationAdvances(t *testing.T) {
 	if err != nil || !facts.Configured {
 		t.Fatalf("facts after generation advance=%+v err=%v", facts, err)
 	}
-	oldKey, _ := cachegeneration.SnapshotKey(smsGenerationScope, 1, runtimeSnapshotVariant)
+	oldKey, _ := configcache.SnapshotKey(smsGenerationScope, 1, runtimeSnapshotVariant)
 	if _, found, err := client.GetString(ctx, oldKey); err != nil || found {
 		t.Fatalf("old snapshot found=%v err=%v", found, err)
 	}
-	newKey, _ := cachegeneration.SnapshotKey(smsGenerationScope, 2, runtimeSnapshotVariant)
+	newKey, _ := configcache.SnapshotKey(smsGenerationScope, 2, runtimeSnapshotVariant)
 	if _, found, err := client.GetString(ctx, newKey); err != nil || !found {
 		t.Fatalf("new snapshot found=%v err=%v", found, err)
 	}
@@ -303,8 +303,8 @@ func TestRuntimeCacheDropsOldFillWhenGenerationAdvances(t *testing.T) {
 func TestRuntimeMutationNoOpRestoresReadyWithoutAdvancingGeneration(t *testing.T) {
 	database, ctx := openSMSGenerationDatabase(t)
 	cache := newSMSCacheTestStore(t, database, openSMSRuntimeRedis(t))
-	if err := cache.Mutate(ctx, func(context.Context, int64) (cachegeneration.MutationResult, error) {
-		return cachegeneration.MutationResult{}, nil
+	if err := cache.Mutate(ctx, func(context.Context, int64) (configcache.MutationResult, error) {
+		return configcache.MutationResult{}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -318,20 +318,20 @@ func TestRuntimeMutationPublishFailureReturnsBusinessSuccessAndLeavesOutboxPendi
 	database, ctx := openSMSGenerationDatabase(t)
 	client := openSMSRuntimeRedis(t)
 	cache := newSMSCacheTestStore(t, database, client)
-	err := cache.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	err := cache.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		result, advanceErr := advanceSMSGeneration(writeContext, database, expected)
 		if advanceErr != nil {
-			return cachegeneration.MutationResult{}, advanceErr
+			return configcache.MutationResult{}, advanceErr
 		}
 		if closeErr := client.Close(); closeErr != nil {
-			return cachegeneration.MutationResult{}, closeErr
+			return configcache.MutationResult{}, closeErr
 		}
 		return result, nil
 	})
 	if err != nil {
 		t.Fatalf("committed mutation returned Redis publication failure: %v", err)
 	}
-	generation, err := cachegeneration.NewRepository(database).Current(ctx, smsGenerationScope)
+	generation, err := configcache.NewRepository(database).Current(ctx, smsGenerationScope)
 	if err != nil || generation != 2 {
 		t.Fatalf("PostgreSQL generation=%d err=%v, want 2", generation, err)
 	}
@@ -362,11 +362,11 @@ func TestRuntimeMutationRetryBudgetIsBounded(t *testing.T) {
 		now = now.Add(smsWaitStep)
 		return nil
 	}
-	err = cache.Mutate(ctx, func(context.Context, int64) (cachegeneration.MutationResult, error) {
+	err = cache.Mutate(ctx, func(context.Context, int64) (configcache.MutationResult, error) {
 		callbackCalls++
-		return cachegeneration.MutationResult{}, nil
+		return configcache.MutationResult{}, nil
 	})
-	if !errors.Is(err, cachegeneration.ErrUpdating) {
+	if !errors.Is(err, configcache.ErrUpdating) {
 		t.Fatalf("mutation error=%v, want ErrUpdating", err)
 	}
 	if waits != 25 || callbackCalls != 0 {
@@ -374,14 +374,14 @@ func TestRuntimeMutationRetryBudgetIsBounded(t *testing.T) {
 	}
 }
 
-func advanceSMSGeneration(ctx context.Context, database *gorm.DB, expected int64) (cachegeneration.MutationResult, error) {
-	result := cachegeneration.MutationResult{}
+func advanceSMSGeneration(ctx context.Context, database *gorm.DB, expected int64) (configcache.MutationResult, error) {
+	result := configcache.MutationResult{}
 	err := database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		event, err := cachegeneration.NewRepository(database).AdvanceTx(ctx, tx, smsGenerationScope, expected, time.Now().UTC())
+		event, err := configcache.NewRepository(database).AdvanceTx(ctx, tx, smsGenerationScope, expected, time.Now().UTC())
 		if err != nil {
 			return err
 		}
-		result = cachegeneration.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
+		result = configcache.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
 		return nil
 	})
 	return result, err
@@ -389,12 +389,12 @@ func advanceSMSGeneration(ctx context.Context, database *gorm.DB, expected int64
 
 func assertSMSGenerationState(t *testing.T, ctx context.Context, database *gorm.DB, cache *RuntimeCache, want int64) {
 	t.Helper()
-	generation, err := cachegeneration.NewRepository(database).Current(ctx, smsGenerationScope)
+	generation, err := configcache.NewRepository(database).Current(ctx, smsGenerationScope)
 	if err != nil || generation != want {
 		t.Fatalf("PostgreSQL generation=%d err=%v, want %d", generation, err, want)
 	}
 	state, found, err := cache.states.Read(ctx, smsGenerationScope)
-	if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != want {
+	if err != nil || !found || state.State != configcache.StateReady || state.Generation != want {
 		t.Fatalf("Redis state=%+v found=%v err=%v, want ready %d", state, found, err, want)
 	}
 }

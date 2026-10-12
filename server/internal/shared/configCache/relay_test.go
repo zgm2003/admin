@@ -1,4 +1,4 @@
-package cachegeneration
+package configcache
 
 import (
 	"context"
@@ -246,7 +246,7 @@ func TestRelayRunOnceRecoversExpiredClaimWithoutDowngradingState(t *testing.T) {
 	})
 
 	if err := db.WithContext(ctx).Exec(
-		`INSERT INTO system_config_cache_generation (namespace, scope_key, generation, created_at, updated_at)
+		`INSERT INTO system_config_cache_state (namespace, scope_key, generation, created_at, updated_at)
 		 VALUES (?, ?, 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
 		scope.Namespace, scope.ScopeKey).Error; err != nil {
 		t.Fatal(err)
@@ -307,7 +307,7 @@ func TestRelayTwoInstancesPublishSingleEventOnce(t *testing.T) {
 	})
 
 	if err := db.WithContext(ctx).Exec(
-		`INSERT INTO system_config_cache_generation (namespace, scope_key, generation, created_at, updated_at)
+		`INSERT INTO system_config_cache_state (namespace, scope_key, generation, created_at, updated_at)
 		 VALUES (?, ?, 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
 		scope.Namespace, scope.ScopeKey).Error; err != nil {
 		t.Fatal(err)

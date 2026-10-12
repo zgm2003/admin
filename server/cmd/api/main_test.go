@@ -22,7 +22,7 @@ import (
 	"admin/server/internal/module/permission/role"
 	"admin/server/internal/module/storage/cosConfig"
 	"admin/server/internal/module/storage/uploadRule"
-	systemcachegeneration "admin/server/internal/module/system/cacheGeneration"
+	systemconfigcachestatus "admin/server/internal/module/system/configCacheStatus"
 	"admin/server/internal/module/system/operationLog"
 	"admin/server/internal/module/user/account"
 	usersession "admin/server/internal/module/user/session"
@@ -397,22 +397,22 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	router := buildRouter(routerDependencies{
-		CORSOrigin:      "http://localhost:16300",
-		Logger:          logger,
-		Health:          health.NewHandler(readyService{}),
-		Auth:            auth.NewHandler(apiAuthService{}, false),
-		AuthPlatform:    authplatform.NewHandler(apiAuthPlatformService{}),
-		Permission:      permission.NewHandler(apiAccessService{}),
-		Menu:            menu.NewHandler(apiMenuService{}),
-		Role:            role.NewHandler(apiRoleService{}),
-		User:            account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
-		COSConfig:       cosconfig.NewHandler(cosconfig.NewService(nil, nil, nil)),
-		UploadRule:      uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil, nil, nil)),
-		OperationLog:    operationlog.NewHandler(apiOperationLogService{}),
-		CacheGeneration: systemcachegeneration.NewHandler(apiCacheGenerationService{}),
-		SessionAdmin:    usersession.NewSessionAdminHandler(apiSessionAdminService{}, apiSessionActor),
-		AuthOrigin:      auth.RequireOrigin("http://localhost:16300"),
-		Authenticate:    auth.Authenticate(apiAuthService{}),
+		CORSOrigin:        "http://localhost:16300",
+		Logger:            logger,
+		Health:            health.NewHandler(readyService{}),
+		Auth:              auth.NewHandler(apiAuthService{}, false),
+		AuthPlatform:      authplatform.NewHandler(apiAuthPlatformService{}),
+		Permission:        permission.NewHandler(apiAccessService{}),
+		Menu:              menu.NewHandler(apiMenuService{}),
+		Role:              role.NewHandler(apiRoleService{}),
+		User:              account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
+		COSConfig:         cosconfig.NewHandler(cosconfig.NewService(nil, nil, nil)),
+		UploadRule:        uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil, nil, nil)),
+		OperationLog:      operationlog.NewHandler(apiOperationLogService{}),
+		ConfigCacheStatus: systemconfigcachestatus.NewHandler(apiConfigCacheStatusService{}),
+		SessionAdmin:      usersession.NewSessionAdminHandler(apiSessionAdminService{}, apiSessionActor),
+		AuthOrigin:        auth.RequireOrigin("http://localhost:16300"),
+		Authenticate:      auth.Authenticate(apiAuthService{}),
 		RequirePermission: func(string) gin.HandlerFunc {
 			return func(context *gin.Context) { context.Next() }
 		},
@@ -479,8 +479,8 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"DELETE /api/admin/v1/user/session/:id":                   1,
 		"DELETE /api/admin/v1/user/session":                       1,
 		"GET /api/admin/v1/system/operationlog":                   1,
-		"GET /api/admin/v1/system/cachegeneration":                1,
-		"GET /api/admin/v1/system/cachegeneration/options":        1,
+		"GET /api/admin/v1/system/config-cache-status":            1,
+		"GET /api/admin/v1/system/config-cache-status/options":    1,
 		"GET /api/admin/v1/user/loginlog":                         1,
 		"GET /api/admin/v1/user/loginlog/page-init":               1,
 		"GET /api/admin/v1/storage/cosconfig":                     1,
@@ -621,33 +621,33 @@ func TestRunDoesNotMutatePersistentStateDuringStartup(t *testing.T) {
 	}
 }
 
-type apiCacheGenerationService struct{}
+type apiConfigCacheStatusService struct{}
 
-func (apiCacheGenerationService) List(context.Context, systemcachegeneration.ListQuery) (systemcachegeneration.ListResult, error) {
-	return systemcachegeneration.ListResult{Items: []systemcachegeneration.Item{}, Page: 1, PageSize: 20}, nil
+func (apiConfigCacheStatusService) List(context.Context, systemconfigcachestatus.ListQuery) (systemconfigcachestatus.ListResult, error) {
+	return systemconfigcachestatus.ListResult{Items: []systemconfigcachestatus.Item{}, Page: 1, PageSize: 20}, nil
 }
 
-func TestCacheGenerationRouteRequiresListPermission(t *testing.T) {
+func TestConfigCacheStatusRouteRequiresListPermission(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	checkedCode := ""
 	router := buildRouter(routerDependencies{
-		CORSOrigin:      "http://localhost:16300",
-		Logger:          logger,
-		Health:          health.NewHandler(readyService{}),
-		Auth:            auth.NewHandler(apiAuthService{}, false),
-		AuthPlatform:    authplatform.NewHandler(apiAuthPlatformService{}),
-		Permission:      permission.NewHandler(apiAccessService{}),
-		Menu:            menu.NewHandler(apiMenuService{}),
-		Role:            role.NewHandler(apiRoleService{}),
-		User:            account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
-		COSConfig:       cosconfig.NewHandler(cosconfig.NewService(nil, nil, nil)),
-		UploadRule:      uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil, nil, nil)),
-		OperationLog:    operationlog.NewHandler(apiOperationLogService{}),
-		CacheGeneration: systemcachegeneration.NewHandler(apiCacheGenerationService{}),
-		SessionAdmin:    usersession.NewSessionAdminHandler(apiSessionAdminService{}, apiSessionActor),
-		AuthOrigin:      auth.RequireOrigin("http://localhost:16300"),
-		Authenticate:    auth.Authenticate(apiAuthService{}),
+		CORSOrigin:        "http://localhost:16300",
+		Logger:            logger,
+		Health:            health.NewHandler(readyService{}),
+		Auth:              auth.NewHandler(apiAuthService{}, false),
+		AuthPlatform:      authplatform.NewHandler(apiAuthPlatformService{}),
+		Permission:        permission.NewHandler(apiAccessService{}),
+		Menu:              menu.NewHandler(apiMenuService{}),
+		Role:              role.NewHandler(apiRoleService{}),
+		User:              account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
+		COSConfig:         cosconfig.NewHandler(cosconfig.NewService(nil, nil, nil)),
+		UploadRule:        uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil, nil, nil)),
+		OperationLog:      operationlog.NewHandler(apiOperationLogService{}),
+		ConfigCacheStatus: systemconfigcachestatus.NewHandler(apiConfigCacheStatusService{}),
+		SessionAdmin:      usersession.NewSessionAdminHandler(apiSessionAdminService{}, apiSessionActor),
+		AuthOrigin:        auth.RequireOrigin("http://localhost:16300"),
+		Authenticate:      auth.Authenticate(apiAuthService{}),
 		RequirePermission: func(code string) gin.HandlerFunc {
 			return func(c *gin.Context) {
 				checkedCode = code
@@ -656,7 +656,7 @@ func TestCacheGenerationRouteRequiresListPermission(t *testing.T) {
 		},
 	})
 
-	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/system/cachegeneration", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/system/config-cache-status", nil)
 	request.Header[authclient.PlatformHeader] = []string{"admin"}
 	request.Header[authclient.DeviceIDHeader] = []string{"550e8400-e29b-41d4-a716-446655440000"}
 	request.Header["Authorization"] = []string{"Bearer test-token"}
@@ -666,8 +666,8 @@ func TestCacheGenerationRouteRequiresListPermission(t *testing.T) {
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("status = %d body = %s want 403", recorder.Code, recorder.Body.String())
 	}
-	if checkedCode != systemcachegeneration.PermissionList {
-		t.Fatalf("permission code = %q want %q", checkedCode, systemcachegeneration.PermissionList)
+	if checkedCode != systemconfigcachestatus.PermissionList {
+		t.Fatalf("permission code = %q want %q", checkedCode, systemconfigcachestatus.PermissionList)
 	}
 }
 
@@ -677,10 +677,10 @@ func TestRunWiresSharedConfigGenerationDependencies(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := string(content)
-	if got := strings.Count(source, ":= cachegeneration.NewRepository(postgres.GORM)"); got != 1 {
+	if got := strings.Count(source, ":= configcache.NewRepository(postgres.GORM)"); got != 1 {
 		t.Fatalf("shared generation repository constructor count = %d want 1", got)
 	}
-	if got := strings.Count(source, "cachegeneration.NewStore(redisClient)"); got != 1 {
+	if got := strings.Count(source, "configcache.NewStore(redisClient)"); got != 1 {
 		t.Fatalf("shared generation store constructor count = %d want 1", got)
 	}
 	for _, fragment := range []string{
@@ -691,7 +691,7 @@ func TestRunWiresSharedConfigGenerationDependencies(t *testing.T) {
 		"mailRateLimitStore.SetGenerations(configGenerationRepository, configGenerationStore)",
 		"smsRuntimeCache.SetGenerations(configGenerationRepository, configGenerationStore)",
 		"smsRateLimitStore.SetGenerations(configGenerationRepository, configGenerationStore)",
-		"authPlatformService.SetRateLimitCacheGenerations(configGenerationRepository, configGenerationStore, mailGenerationScope, smsGenerationScope)",
+		"authPlatformService.SetRateLimitConfigCaches(configGenerationRepository, configGenerationStore, mailGenerationScope, smsGenerationScope)",
 		"cosConfigRepository.SetGenerations(configGenerationRepository)",
 		"cosConfigCache.SetStateStore(configGenerationStore)",
 		"cosConfigService.SetGenerations(configGenerationRepository, configGenerationStore)",

@@ -13,12 +13,12 @@ import (
 
 	"admin/server/internal/config"
 	projectredis "admin/server/internal/redis"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
 )
 
-var smsScope = cachegeneration.Scope{Namespace: "message.sms", ScopeKey: "global"}
+var smsScope = configcache.Scope{Namespace: "message.sms", ScopeKey: "global"}
 
 type report struct {
 	RuleScopeType   string `json:"ruleScopeType"`
@@ -91,7 +91,7 @@ func runMain() error {
 		return errors.New("Redis connection failed")
 	}
 	defer redis.Close()
-	store := cachegeneration.NewStore(redis)
+	store := configcache.NewStore(redis)
 	if mode == "sync" {
 		if err := syncState(ctx, store, report.Generation); err != nil {
 			return err
@@ -104,7 +104,7 @@ func runMain() error {
 	if found {
 		report.RedisState, report.RedisGeneration = state.State, state.Generation
 	}
-	if mode == "sync" && (!found || state.State != cachegeneration.StateReady || state.Generation != report.Generation) {
+	if mode == "sync" && (!found || state.State != configcache.StateReady || state.Generation != report.Generation) {
 		return errors.New("SMS Redis state verification failed")
 	}
 	return json.NewEncoder(os.Stdout).Encode(report)
@@ -146,10 +146,10 @@ func inspectPostgres(ctx context.Context, db *pgx.Conn, numericRequired bool) (r
 	if numericRequired && !out.PlaintextSchema {
 		return out, errors.New("SMS plaintext columns are not complete")
 	}
-	if err := tx.QueryRow(ctx, `SELECT generation FROM system_config_cache_generation WHERE namespace='message.sms' AND scope_key='global'`).Scan(&out.Generation); err != nil || out.Generation < 1 {
+	if err := tx.QueryRow(ctx, `SELECT generation FROM system_config_cache_state WHERE namespace='message.sms' AND scope_key='global'`).Scan(&out.Generation); err != nil || out.Generation < 1 {
 		return out, errors.New("message.sms/global generation unavailable")
 	}
-	if err := tx.QueryRow(ctx, `SELECT md5(jsonb_build_object('otherGenerations',(SELECT COALESCE(jsonb_agg(to_jsonb(g) ORDER BY namespace,scope_key),'[]'::jsonb) FROM system_config_cache_generation g WHERE NOT(namespace='message.sms' AND scope_key='global')),'platforms',(SELECT COALESCE(jsonb_agg(jsonb_build_object('id',id,'menu_version',menu_version) ORDER BY id),'[]'::jsonb) FROM permission_auth_platform),'mailGeneration',(SELECT generation FROM system_config_cache_generation WHERE namespace='message.mail' AND scope_key='global'))::text)`).Scan(&out.ControlHash); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT md5(jsonb_build_object('otherGenerations',(SELECT COALESCE(jsonb_agg(to_jsonb(g) ORDER BY namespace,scope_key),'[]'::jsonb) FROM system_config_cache_state g WHERE NOT(namespace='message.sms' AND scope_key='global')),'platforms',(SELECT COALESCE(jsonb_agg(jsonb_build_object('id',id,'menu_version',menu_version) ORDER BY id),'[]'::jsonb) FROM permission_auth_platform),'mailGeneration',(SELECT generation FROM system_config_cache_state WHERE namespace='message.mail' AND scope_key='global'))::text)`).Scan(&out.ControlHash); err != nil {
 		return out, errors.New("control audit facts unavailable")
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -158,19 +158,19 @@ func inspectPostgres(ctx context.Context, db *pgx.Conn, numericRequired bool) (r
 	return out, nil
 }
 
-func syncState(ctx context.Context, store *cachegeneration.Store, generation int64) error {
+func syncState(ctx context.Context, store *configcache.Store, generation int64) error {
 	previous, found, err := store.Read(ctx, smsScope)
 	if err != nil {
 		return errors.New("SMS Redis state unavailable")
 	}
-	if found && previous.State != cachegeneration.StateReady {
+	if found && previous.State != configcache.StateReady {
 		return errors.New("SMS Redis mutation is active; retry after writer finishes")
 	}
 	if found && previous.Generation > generation {
 		return errors.New("SMS Redis generation is ahead; refusing downgrade")
 	}
 	result, err := store.Reconcile(ctx, smsScope, generation)
-	if err != nil || result == cachegeneration.PublishSkippedInvalidating {
+	if err != nil || result == configcache.PublishSkippedInvalidating {
 		return errors.New("SMS Redis publication failed")
 	}
 	return nil

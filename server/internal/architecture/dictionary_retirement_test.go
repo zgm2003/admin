@@ -26,7 +26,7 @@ func TestDictionaryRetirementAndStaticOptionOwnership(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, forbidden := range []string{"gorm", "redis", "cacheGeneration", "repository.", "gin-gonic", "shared/response"} {
+		for _, forbidden := range []string{"gorm", "redis", "configCache", "repository.", "gin-gonic", "shared/response"} {
 			if strings.Contains(string(data), forbidden) {
 				t.Fatalf("%s static options has infrastructure/HTTP dependency %s", module, forbidden)
 			}

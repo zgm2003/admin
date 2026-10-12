@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"admin/server/internal/shared/apperror"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	sharedemail "admin/server/internal/shared/email"
 	"admin/server/internal/shared/i18n"
 	sharedsetting "admin/server/internal/shared/setting"
@@ -94,7 +94,7 @@ func (s *Service) Create(ctx context.Context, input Input) (int64, error) {
 	if s.runtime == nil {
 		return 0, apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	if err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	if err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.Create(writeContext, value, expected, now)
 	}); err != nil {
 		return 0, wrapRepository(err)
@@ -113,7 +113,7 @@ func (s *Service) Update(ctx context.Context, id int64, input Input) error {
 	if s.runtime == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	err = wrapRepository(s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	err = wrapRepository(s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.Update(writeContext, id, map[string]any{
 			"scope": input.Scope, "pattern": pattern, "action": input.Action, "name": input.Name,
 			"remark": input.Remark, "is_enabled": input.IsEnabled,
@@ -129,7 +129,7 @@ func (s *Service) SetStatus(ctx context.Context, id int64, enabled yesno.Value) 
 	if s.runtime == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	err := wrapRepository(s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	err := wrapRepository(s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.UpdateStatus(writeContext, id, enabled, expected, time.Now().UTC())
 	}))
 	return err
@@ -139,7 +139,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	if s.runtime == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	return wrapRepository(s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	return wrapRepository(s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.Delete(writeContext, id, expected, time.Now().UTC())
 	}))
 }

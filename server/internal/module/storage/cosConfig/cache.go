@@ -12,7 +12,7 @@ import (
 
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/cacheFill"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -31,7 +31,7 @@ var ErrGenerationAdvanced = errors.New("COS config cache generation advanced dur
 // Cache 只访问 Redis：state 读取、generation 不可变快照与 cacheFill 准入。
 type Cache struct {
 	client *projectredis.Client
-	store  *cachegeneration.Store
+	store  *configcache.Store
 	ttl    time.Duration
 }
 
@@ -43,17 +43,17 @@ func NewCache(client *projectredis.Client) *Cache {
 }
 
 // SetStateStore 由显式装配注入只读 state store。
-func (c *Cache) SetStateStore(store *cachegeneration.Store) {
+func (c *Cache) SetStateStore(store *configcache.Store) {
 	c.store = store
 }
 
-func (c *Cache) ReadState(ctx context.Context, id int64) (cachegeneration.State, bool, error) {
+func (c *Cache) ReadState(ctx context.Context, id int64) (configcache.State, bool, error) {
 	if c == nil || c.store == nil {
-		return cachegeneration.State{}, false, fmt.Errorf("COS config cache state store is not configured")
+		return configcache.State{}, false, fmt.Errorf("COS config cache state store is not configured")
 	}
 	scope, err := runtimeScope(id)
 	if err != nil {
-		return cachegeneration.State{}, false, err
+		return configcache.State{}, false, err
 	}
 	return c.store.Read(ctx, scope)
 }
@@ -66,7 +66,7 @@ func (c *Cache) GetRuntime(ctx context.Context, id, generation int64) (RuntimeCo
 	if err != nil {
 		return RuntimeConfig{}, false, err
 	}
-	snapshotKey, err := cachegeneration.SnapshotKey(scope, generation, runtimeSnapshotVariant)
+	snapshotKey, err := configcache.SnapshotKey(scope, generation, runtimeSnapshotVariant)
 	if err != nil {
 		return RuntimeConfig{}, false, err
 	}
@@ -96,7 +96,7 @@ func (c *Cache) PutRuntime(ctx context.Context, id, generation int64, config Run
 	if err != nil {
 		return err
 	}
-	snapshotKey, err := cachegeneration.SnapshotKey(scope, generation, runtimeSnapshotVariant)
+	snapshotKey, err := configcache.SnapshotKey(scope, generation, runtimeSnapshotVariant)
 	if err != nil {
 		return err
 	}
@@ -112,11 +112,11 @@ func (c *Cache) TryFill(ctx context.Context, id, generation int64) (*cachefill.L
 	if err != nil {
 		return nil, err
 	}
-	target, err := cachegeneration.FillKey(scope, generation, runtimeSnapshotVariant)
+	target, err := configcache.FillKey(scope, generation, runtimeSnapshotVariant)
 	if err != nil {
 		return nil, err
 	}
-	return cachefill.Try(ctx, c.client.UniversalClient(), cachegeneration.StateKey(scope), target)
+	return cachefill.Try(ctx, c.client.UniversalClient(), configcache.StateKey(scope), target)
 }
 
 // TryRepair 为 state missing/corrupt 的权威修复申请跨实例单 leader 准入。
@@ -128,14 +128,14 @@ func (c *Cache) TryRepair(ctx context.Context, id int64) (*cachefill.Lease, erro
 	if err != nil {
 		return nil, err
 	}
-	return cachefill.Try(ctx, c.client.UniversalClient(), cachegeneration.StateKey(scope), "repair:"+strconv.FormatInt(id, 10))
+	return cachefill.Try(ctx, c.client.UniversalClient(), configcache.StateKey(scope), "repair:"+strconv.FormatInt(id, 10))
 }
 
-func runtimeScope(id int64) (cachegeneration.Scope, error) {
+func runtimeScope(id int64) (configcache.Scope, error) {
 	if id < 1 {
-		return cachegeneration.Scope{}, fmt.Errorf("COS config id is invalid")
+		return configcache.Scope{}, fmt.Errorf("COS config id is invalid")
 	}
-	return cachegeneration.NewScope(cosConfigGenerationNamespace, strconv.FormatInt(id, 10))
+	return configcache.NewScope(cosConfigGenerationNamespace, strconv.FormatInt(id, 10))
 }
 
 type runtimeVersionPayload struct {

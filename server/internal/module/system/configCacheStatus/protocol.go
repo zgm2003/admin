@@ -1,4 +1,4 @@
-package cachegeneration
+package configcachestatus
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	PermissionView = "system:cacheGeneration:view"
-	PermissionList = "system:cacheGeneration:list"
+	PermissionView = "system:configCacheStatus:view"
+	PermissionList = "system:configCacheStatus:list"
 )
 
 // publishState 是 PostgreSQL 侧的发布状态；Redis state 由 Service 合成。

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"admin/server/internal/shared/apperror"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -82,7 +82,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 	if s.runtime == nil {
 		return apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
 	}
-	err = s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	err = s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.Update(writeContext, id, input.Scene, map[string]any{
 			"name": strings.TrimSpace(input.Name), "subject": strings.TrimSpace(input.Subject), "content": strings.TrimSpace(input.Content),
 			"tencent_template_id": input.TencentTemplateID, "variable_keys": variableKeys, "example_variables": examples,
@@ -111,7 +111,7 @@ func (s *Service) SetStatus(ctx context.Context, id int64, enabled yesno.Value) 
 			return apperror.InvalidRequest(err)
 		}
 	}
-	err = s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	err = s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.UpdateStatus(writeContext, id, enabled, expected, time.Now().UTC())
 	})
 	if mapped := mapMutationError(err); mapped != nil {

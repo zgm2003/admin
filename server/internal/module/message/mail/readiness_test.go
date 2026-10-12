@@ -12,7 +12,7 @@ import (
 
 	"admin/server/internal/config"
 	projectredis "admin/server/internal/redis"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
@@ -150,8 +150,8 @@ func TestMailCacheRuntimeAndReadinessUseOneGenerationWithSeparateVariants(t *tes
 	if err != nil || runtime.Generation != 1 || runtime.Config.ID != 1 {
 		t.Fatalf("runtime = %+v, %v", runtime, err)
 	}
-	readinessKey, _ := cachegeneration.SnapshotKey(mailGenerationScope, 1, "readiness:"+SceneLogin)
-	runtimeKey, _ := cachegeneration.SnapshotKey(mailGenerationScope, 1, "runtime:"+SceneLogin)
+	readinessKey, _ := configcache.SnapshotKey(mailGenerationScope, 1, "readiness:"+SceneLogin)
+	runtimeKey, _ := configcache.SnapshotKey(mailGenerationScope, 1, "runtime:"+SceneLogin)
 	readinessRaw, readinessFound, readinessErr := client.GetString(ctx, readinessKey)
 	runtimeRaw, runtimeFound, runtimeErr := client.GetString(ctx, runtimeKey)
 	if readinessErr != nil || runtimeErr != nil || !readinessFound || !runtimeFound {
@@ -169,7 +169,7 @@ func TestMailReadinessTwoInstancesUseOneColdFillLeaderAndHotHitsAvoidPostgres(t 
 	repository := readyMailRepository(20 * time.Millisecond)
 	firstStore := newMailCacheTestStore(t, database, repository, firstClient)
 	secondStore := newRuntimeStore(repository, secondClient)
-	secondStore.SetGenerations(cachegeneration.NewRepository(database), cachegeneration.NewStore(secondClient))
+	secondStore.SetGenerations(configcache.NewRepository(database), configcache.NewStore(secondClient))
 
 	start := make(chan struct{})
 	errorsFound := make(chan error, 8)
@@ -216,7 +216,7 @@ func TestMailReadinessCorruptSnapshotIsRebuilt(t *testing.T) {
 	client := openMailReadinessRedis(t)
 	repository := readyMailRepository(0)
 	store := newMailCacheTestStore(t, database, repository, client)
-	key, _ := cachegeneration.SnapshotKey(mailGenerationScope, 1, "readiness:"+SceneLogin)
+	key, _ := configcache.SnapshotKey(mailGenerationScope, 1, "readiness:"+SceneLogin)
 	if err := client.SetString(ctx, key, `{"schemaVersion":1,"generation":1,"ready":true,"ttlMinutes":5,"extra":true}`, time.Minute); err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestMailReadinessRedisFailureFailsClosedWithoutPostgres(t *testing.T) {
 	}
 	repository := readyMailRepository(0)
 	store := newRuntimeStore(repository, client)
-	store.SetGenerations(cachegeneration.NewRepository(database), cachegeneration.NewStore(client))
+	store.SetGenerations(configcache.NewRepository(database), configcache.NewStore(client))
 
 	if _, err := store.LoadReadiness(ctx, SceneLogin); err == nil {
 		t.Fatal("closed Redis client was accepted")
@@ -272,11 +272,11 @@ func TestMailReadinessDropsOldFillWhenGenerationAdvances(t *testing.T) {
 	if err != nil || !ready.Ready {
 		t.Fatalf("readiness after generation advance = %+v, %v", ready, err)
 	}
-	oldKey, _ := cachegeneration.SnapshotKey(mailGenerationScope, 1, "readiness:"+SceneLogin)
+	oldKey, _ := configcache.SnapshotKey(mailGenerationScope, 1, "readiness:"+SceneLogin)
 	if _, found, err := client.GetString(ctx, oldKey); err != nil || found {
 		t.Fatalf("old generation snapshot found=%v err=%v", found, err)
 	}
-	newKey, _ := cachegeneration.SnapshotKey(mailGenerationScope, 2, "readiness:"+SceneLogin)
+	newKey, _ := configcache.SnapshotKey(mailGenerationScope, 2, "readiness:"+SceneLogin)
 	if _, found, err := client.GetString(ctx, newKey); err != nil || !found {
 		t.Fatalf("new generation snapshot found=%v err=%v", found, err)
 	}
@@ -318,7 +318,7 @@ func openMailGenerationDatabase(t *testing.T) (*gorm.DB, context.Context) {
 	t.Helper()
 	database, ctx := openMailRepositoryDatabase(t)
 	if err := database.WithContext(ctx).Exec(`
-CREATE TABLE system_config_cache_generation(
+CREATE TABLE system_config_cache_state(
  namespace varchar(128) NOT NULL, scope_key varchar(128) NOT NULL, generation bigint NOT NULL,
  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(namespace,scope_key));
@@ -329,8 +329,8 @@ CREATE TABLE system_config_cache_outbox(
  locked_until timestamptz, lock_token varchar(64), last_error varchar(512) NOT NULL DEFAULT '',
  published_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
  UNIQUE(namespace,scope_key,generation),
- FOREIGN KEY(namespace,scope_key) REFERENCES system_config_cache_generation(namespace,scope_key));
-INSERT INTO system_config_cache_generation(namespace,scope_key,generation) VALUES ('message.mail','global',1);`).Error; err != nil {
+ FOREIGN KEY(namespace,scope_key) REFERENCES system_config_cache_state(namespace,scope_key));
+INSERT INTO system_config_cache_state(namespace,scope_key,generation) VALUES ('message.mail','global',1);`).Error; err != nil {
 		t.Fatal(err)
 	}
 	return database, ctx
@@ -344,7 +344,7 @@ func newMailCacheTestStore(t *testing.T, database *gorm.DB, repository runtimeRe
 	}
 	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), keys) })
 	store := newRuntimeStore(repository, client)
-	store.SetGenerations(cachegeneration.NewRepository(database), cachegeneration.NewStore(client))
+	store.SetGenerations(configcache.NewRepository(database), configcache.NewStore(client))
 	generation, err := store.generations.Current(context.Background(), mailGenerationScope)
 	if err != nil {
 		t.Fatal(err)
@@ -357,11 +357,11 @@ func newMailCacheTestStore(t *testing.T, database *gorm.DB, repository runtimeRe
 
 func mailCacheTestKeys(t *testing.T) []string {
 	t.Helper()
-	keys := []string{cachegeneration.StateKey(mailGenerationScope)}
+	keys := []string{configcache.StateKey(mailGenerationScope)}
 	for generation := int64(1); generation <= 8; generation++ {
 		for _, scene := range []string{SceneLogin, SceneForget, SceneBindEmail, SceneChangePassword} {
 			for _, variant := range []string{"runtime:" + scene, "readiness:" + scene} {
-				snapshot, err := cachegeneration.SnapshotKey(mailGenerationScope, generation, variant)
+				snapshot, err := configcache.SnapshotKey(mailGenerationScope, generation, variant)
 				if err != nil {
 					t.Fatal(err)
 				}

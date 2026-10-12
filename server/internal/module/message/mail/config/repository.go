@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 
 	"gorm.io/gorm"
@@ -13,13 +13,13 @@ import (
 
 type Repository struct {
 	db          *gorm.DB
-	generations *cachegeneration.Repository
-	scope       cachegeneration.Scope
+	generations *configcache.Repository
+	scope       configcache.Scope
 }
 
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 
-func (r *Repository) SetGenerations(repository *cachegeneration.Repository, scope cachegeneration.Scope) {
+func (r *Repository) SetGenerations(repository *configcache.Repository, scope configcache.Scope) {
 	r.generations = repository
 	r.scope = scope
 }
@@ -30,7 +30,7 @@ func (r *Repository) Find(ctx context.Context) (Model, error) {
 	return value, err
 }
 
-func (r *Repository) Save(ctx context.Context, values map[string]any, expected int64, now time.Time) (Model, cachegeneration.MutationResult, error) {
+func (r *Repository) Save(ctx context.Context, values map[string]any, expected int64, now time.Time) (Model, configcache.MutationResult, error) {
 	var saved Model
 	result, err := r.mutate(ctx, expected, now, func(tx *gorm.DB) (bool, error) {
 		row, found, err := lockActiveConfig(ctx, tx)
@@ -70,12 +70,12 @@ func (r *Repository) Save(ctx context.Context, values map[string]any, expected i
 		return true, nil
 	})
 	if err != nil {
-		return Model{}, cachegeneration.MutationResult{}, err
+		return Model{}, configcache.MutationResult{}, err
 	}
 	return saved, result, nil
 }
 
-func (r *Repository) Delete(ctx context.Context, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
+func (r *Repository) Delete(ctx context.Context, expected int64, now time.Time) (configcache.MutationResult, error) {
 	return r.mutate(ctx, expected, now, func(tx *gorm.DB) (bool, error) {
 		row, found, err := lockActiveConfig(ctx, tx)
 		if err != nil {
@@ -110,31 +110,31 @@ func (r *Repository) RecordTestResult(ctx context.Context, at time.Time, summary
 	return nil
 }
 
-func (r *Repository) mutate(ctx context.Context, expected int64, now time.Time, apply func(*gorm.DB) (bool, error)) (cachegeneration.MutationResult, error) {
+func (r *Repository) mutate(ctx context.Context, expected int64, now time.Time, apply func(*gorm.DB) (bool, error)) (configcache.MutationResult, error) {
 	if r == nil || r.db == nil || r.generations == nil {
-		return cachegeneration.MutationResult{}, fmt.Errorf("mail config generation dependencies are not configured")
+		return configcache.MutationResult{}, fmt.Errorf("mail config generation dependencies are not configured")
 	}
 	if err := r.scope.Validate(); err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
-	result := cachegeneration.MutationResult{}
+	result := configcache.MutationResult{}
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		changed, err := apply(tx)
 		if err != nil {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, err)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, err)
 		}
 		if !changed {
 			return nil
 		}
 		event, err := r.generations.AdvanceTx(ctx, tx, r.scope, expected, now)
 		if err != nil {
-			return fmt.Errorf("%w: %w", cachegeneration.ErrMutationRolledBack, err)
+			return fmt.Errorf("%w: %w", configcache.ErrMutationRolledBack, err)
 		}
-		result = cachegeneration.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
+		result = configcache.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
 		return nil
 	})
 	if err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
 	return result, nil
 }

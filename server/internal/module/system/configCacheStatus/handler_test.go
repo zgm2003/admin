@@ -1,4 +1,4 @@
-package cachegeneration
+package configcachestatus
 
 import (
 	"context"
@@ -76,10 +76,10 @@ func TestHandlerListReturnsStrictResponseShape(t *testing.T) {
 		Total: 1, Page: 1, PageSize: 20,
 	}}
 	router := gin.New()
-	router.GET("/system/cachegeneration", NewHandler(stub).List)
+	router.GET("/system/config-cache-status", NewHandler(stub).List)
 
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/system/cachegeneration?publishState=ready", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/system/config-cache-status?publishState=ready", nil))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
 	}
@@ -128,10 +128,10 @@ func TestHandlerListReturnsStrictResponseShape(t *testing.T) {
 func TestHandlerListRejectsInvalidQuery(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.GET("/system/cachegeneration", NewHandler(&stubService{}).List)
+	router.GET("/system/config-cache-status", NewHandler(&stubService{}).List)
 
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/system/cachegeneration?publishState=invalid", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/system/config-cache-status?publishState=invalid", nil))
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
 	}

@@ -1,7 +1,7 @@
 package recipientrule
 
 import (
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -92,7 +92,7 @@ func TestRecipientRuleHandlersRequireStrictNumericEnumsAndPresence(t *testing.T)
 func TestXlsxImportPersistsNumericEnumsAndExportsStableTextTokens(t *testing.T) {
 	database, ctx := openServiceDatabase(t)
 	service := NewService(configuredRepository(database))
-	service.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+	service.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 		_, err := change(ctx, 1)
 		return err
 	}))

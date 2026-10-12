@@ -2,7 +2,7 @@ package recipientrule
 
 import (
 	"admin/server/internal/shared/apperror"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/i18n"
 	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
@@ -110,7 +110,7 @@ func (s *Service) ImportXlsx(ctx context.Context, input XlsxImportInput) (XlsxIm
 		data := *row.Data
 		values[index] = Model{Scope: data.Scope, Pattern: data.Pattern, Action: data.Action, Name: data.Name, Remark: data.Remark, IsEnabled: data.IsEnabled, CreatedAt: now, UpdatedAt: now}
 	}
-	err = s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
+	err = s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.CreateBatch(writeContext, values, expected, now)
 	})
 	var pgErr *pgconn.PgError

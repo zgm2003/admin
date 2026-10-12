@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
@@ -25,12 +25,12 @@ const currentVersionJoin = "JOIN storage_cos_config_version AS current_version O
 // Repository 只访问 PostgreSQL：逻辑配置、不可变物理版本与 generation/outbox 事实。
 type Repository struct {
 	db          *gorm.DB
-	generations *cachegeneration.Repository
+	generations *configcache.Repository
 }
 
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 
-func (r *Repository) SetGenerations(repository *cachegeneration.Repository) {
+func (r *Repository) SetGenerations(repository *configcache.Repository) {
 	r.generations = repository
 }
 
@@ -51,8 +51,8 @@ func (r *Repository) ValidateDependencies() error {
 	return nil
 }
 
-func (r *Repository) generationScope(id int64) (cachegeneration.Scope, error) {
-	return cachegeneration.NewScope(cosConfigGenerationNamespace, strconv.FormatInt(id, 10))
+func (r *Repository) generationScope(id int64) (configcache.Scope, error) {
+	return configcache.NewScope(cosConfigGenerationNamespace, strconv.FormatInt(id, 10))
 }
 
 func quietDB(db *gorm.DB) *gorm.DB {
@@ -123,14 +123,14 @@ func lockByID(db *gorm.DB, id int64) (Current, error) {
 }
 
 // Create 在同一事务内写入逻辑配置、version 1 与 generation 1/outbox 1，并返回机械提交结果。
-func (r *Repository) Create(ctx context.Context, model *Model, version Version) (cachegeneration.MutationResult, error) {
+func (r *Repository) Create(ctx context.Context, model *Model, version Version) (configcache.MutationResult, error) {
 	if err := r.configured(); err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
 	if r.generations == nil {
-		return cachegeneration.MutationResult{}, fmt.Errorf("COS config generation repository is not configured")
+		return configcache.MutationResult{}, fmt.Errorf("COS config generation repository is not configured")
 	}
-	result := cachegeneration.MutationResult{}
+	result := configcache.MutationResult{}
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		quiet := quietDB(tx)
 		model.CurrentVersion = 1
@@ -150,11 +150,11 @@ func (r *Repository) Create(ctx context.Context, model *Model, version Version) 
 		if err != nil {
 			return fmt.Errorf("initialize COS config generation: %w", err)
 		}
-		result = cachegeneration.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
+		result = configcache.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
 		return nil
 	})
 	if err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
 	return result, nil
 }
@@ -215,15 +215,15 @@ type UpdateValues struct {
 }
 
 // Update 在调用方可见的一个事务内锁定逻辑行、计算真实变化、必要时新增物理版本，最后推进 generation。
-func (r *Repository) Update(ctx context.Context, id int64, values UpdateValues, baseGeneration int64, now time.Time) (cachegeneration.MutationResult, error) {
+func (r *Repository) Update(ctx context.Context, id int64, values UpdateValues, baseGeneration int64, now time.Time) (configcache.MutationResult, error) {
 	if err := r.prepareMutation(id, baseGeneration); err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
 	scope, err := r.generationScope(id)
 	if err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
-	result := cachegeneration.MutationResult{}
+	result := configcache.MutationResult{}
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		current, err := lockByID(tx.WithContext(ctx), id)
 		if err != nil {
@@ -267,24 +267,24 @@ func (r *Repository) Update(ctx context.Context, id int64, values UpdateValues, 
 		if err != nil {
 			return err
 		}
-		result = cachegeneration.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
+		result = configcache.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
 		return nil
 	})
 	if err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
 	return result, nil
 }
 
-func (r *Repository) UpdateStatus(ctx context.Context, id int64, value yesno.Value, baseGeneration int64, now time.Time) (cachegeneration.MutationResult, error) {
+func (r *Repository) UpdateStatus(ctx context.Context, id int64, value yesno.Value, baseGeneration int64, now time.Time) (configcache.MutationResult, error) {
 	if err := r.prepareMutation(id, baseGeneration); err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
 	scope, err := r.generationScope(id)
 	if err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
-	result := cachegeneration.MutationResult{}
+	result := configcache.MutationResult{}
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		current, err := lockByID(tx.WithContext(ctx), id)
 		if err != nil {
@@ -305,24 +305,24 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, value yesno.Val
 		if err != nil {
 			return err
 		}
-		result = cachegeneration.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
+		result = configcache.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
 		return nil
 	})
 	if err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
 	return result, nil
 }
 
-func (r *Repository) MarkDeleted(ctx context.Context, id int64, baseGeneration int64, now time.Time) (cachegeneration.MutationResult, error) {
+func (r *Repository) MarkDeleted(ctx context.Context, id int64, baseGeneration int64, now time.Time) (configcache.MutationResult, error) {
 	if err := r.prepareMutation(id, baseGeneration); err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
 	scope, err := r.generationScope(id)
 	if err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
-	result := cachegeneration.MutationResult{}
+	result := configcache.MutationResult{}
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if _, err := lockByID(tx.WithContext(ctx), id); err != nil {
 			return err
@@ -339,11 +339,11 @@ func (r *Repository) MarkDeleted(ctx context.Context, id int64, baseGeneration i
 		if err != nil {
 			return err
 		}
-		result = cachegeneration.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
+		result = configcache.MutationResult{Changed: true, Generation: event.Generation, OutboxID: event.ID}
 		return nil
 	})
 	if err != nil {
-		return cachegeneration.MutationResult{}, err
+		return configcache.MutationResult{}, err
 	}
 	return result, nil
 }

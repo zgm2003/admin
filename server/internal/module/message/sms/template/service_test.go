@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"admin/server/internal/shared/apperror"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -42,9 +42,9 @@ func (f *fakeRepository) FindByID(_ context.Context, id int64) (Model, error) {
 	return Model{}, gorm.ErrRecordNotFound
 }
 
-func (f *fakeRepository) Update(_ context.Context, value *Model, expected int64, now time.Time) (cachegeneration.MutationResult, error) {
+func (f *fakeRepository) Update(_ context.Context, value *Model, expected int64, now time.Time) (configcache.MutationResult, error) {
 	if f.writeErr != nil {
-		return cachegeneration.MutationResult{}, f.writeErr
+		return configcache.MutationResult{}, f.writeErr
 	}
 	f.updatedID = value.ID
 	f.updated = *value
@@ -52,9 +52,9 @@ func (f *fakeRepository) Update(_ context.Context, value *Model, expected int64,
 	return templateMutation(expected), nil
 }
 
-func (f *fakeRepository) UpdateStatus(_ context.Context, id int64, status int16, expected int64, _ time.Time) (cachegeneration.MutationResult, error) {
+func (f *fakeRepository) UpdateStatus(_ context.Context, id int64, status int16, expected int64, _ time.Time) (configcache.MutationResult, error) {
 	if f.writeErr != nil {
-		return cachegeneration.MutationResult{}, f.writeErr
+		return configcache.MutationResult{}, f.writeErr
 	}
 	f.statusID = id
 	f.status = status
@@ -63,7 +63,7 @@ func (f *fakeRepository) UpdateStatus(_ context.Context, id int64, status int16,
 
 type passthroughRuntime struct{ generation int64 }
 
-func (r *passthroughRuntime) Mutate(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+func (r *passthroughRuntime) Mutate(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 	if r.generation == 0 {
 		r.generation = 1
 	}
@@ -74,8 +74,8 @@ func (r *passthroughRuntime) Mutate(ctx context.Context, change func(context.Con
 	return err
 }
 
-func templateMutation(expected int64) cachegeneration.MutationResult {
-	return cachegeneration.MutationResult{Changed: true, Generation: expected + 1, OutboxID: expected}
+func templateMutation(expected int64) configcache.MutationResult {
+	return configcache.MutationResult{Changed: true, Generation: expected + 1, OutboxID: expected}
 }
 
 func newMutationService(repository repository) *Service {

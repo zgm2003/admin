@@ -1,4 +1,4 @@
-package cachegeneration
+package configcachestatus
 
 import (
 	"context"

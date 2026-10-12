@@ -43,7 +43,7 @@ import (
 	"admin/server/internal/module/realtime"
 	"admin/server/internal/module/storage/cosConfig"
 	"admin/server/internal/module/storage/uploadRule"
-	systemcachegeneration "admin/server/internal/module/system/cacheGeneration"
+	systemconfigcachestatus "admin/server/internal/module/system/configCacheStatus"
 	"admin/server/internal/module/system/operationLog"
 	"admin/server/internal/module/system/queueMonitor"
 	"admin/server/internal/module/system/scheduler"
@@ -57,7 +57,7 @@ import (
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/secretkey"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/i18n"
 	storagecos "admin/server/internal/storage/cos"
 	storagemail "admin/server/internal/storage/mail"
@@ -87,7 +87,7 @@ type routerDependencies struct {
 	UploadRule        *uploadrule.Handler
 	OperationLog      *operationlog.Handler
 	Setting           *systemsetting.Handler
-	CacheGeneration   *systemcachegeneration.Handler
+	ConfigCacheStatus *systemconfigcachestatus.Handler
 	QueueMonitor      *queuemonitor.Handler
 	QueueMonitorUI    http.Handler
 	LoginLog          *loginlog.Handler
@@ -206,23 +206,23 @@ func run(logger *slog.Logger) error {
 
 	healthService := health.NewService(postgres, redisClient)
 	userRepository := account.NewRepository(postgres.GORM)
-	configGenerationRepository := cachegeneration.NewRepository(postgres.GORM)
-	configGenerationStore := cachegeneration.NewStore(redisClient)
+	configGenerationRepository := configcache.NewRepository(postgres.GORM)
+	configGenerationStore := configcache.NewStore(redisClient)
 	settingRepository := systemsetting.NewRepository(postgres.GORM)
 	settingRepository.SetGenerations(configGenerationRepository)
 	settingService := systemsetting.NewService(settingRepository)
 	settingCache := systemsetting.NewCache(redisClient)
 	settingCache.SetStateStore(configGenerationStore)
 	settingService.SetCache(settingCache)
-	cacheGenerationService := systemcachegeneration.NewService(systemcachegeneration.NewRepository(postgres.GORM), configGenerationStore)
+	configCacheService := systemconfigcachestatus.NewService(systemconfigcachestatus.NewRepository(postgres.GORM), configGenerationStore)
 	settingService.SetGenerations(configGenerationRepository, configGenerationStore)
 	settingService.SetLogger(logger)
 	profileRepository := profile.NewRepository(postgres.GORM)
 	sessionRepository := usersession.NewRepository(postgres.GORM)
 	authPlatformRepository := authplatform.NewRepository(postgres.GORM)
 	mailRateLimitRepository := ratelimitpolicy.NewRepository(postgres.GORM)
-	mailGenerationScope := messagemail.CacheGenerationScope()
-	smsGenerationScope := messagesms.CacheGenerationScope()
+	mailGenerationScope := messagemail.ConfigCacheScope()
+	smsGenerationScope := messagesms.ConfigCacheScope()
 	authPlatformRepository.SetRateLimitPolicyLifecycle(
 		func(ctx context.Context, tx *gorm.DB, platformID int64, expected authplatform.RateLimitGenerationBases, now time.Time) (authplatform.RateLimitGenerationEvents, error) {
 			if err := ratelimitpolicy.NewRepository(tx).ProvisionDefaults(ctx, platformID); err != nil {
@@ -266,7 +266,7 @@ func run(logger *slog.Logger) error {
 		CookieSecure: settings.Auth.CookieSecure, CORSOrigin: settings.CORSOrigin,
 		TrustedProxyMode: settings.TrustedProxyMode, TrustedProxyCount: len(settings.TrustedProxies),
 	})
-	authPlatformService.SetRateLimitCacheGenerations(configGenerationRepository, configGenerationStore, mailGenerationScope, smsGenerationScope)
+	authPlatformService.SetRateLimitConfigCaches(configGenerationRepository, configGenerationStore, mailGenerationScope, smsGenerationScope)
 	authService := auth.NewService(
 		userRepository,
 		roleRepository,
@@ -305,7 +305,7 @@ func run(logger *slog.Logger) error {
 	loginLogService := loginlog.NewService(loginlog.NewRepository(postgres.GORM))
 	mailStores := messagemail.NewStores(postgres.GORM)
 	mailLimiter := messagemail.NewRedisLimiter(redisClient.UniversalClient())
-	mailRateLimitRepository.SetGenerations(configGenerationRepository, messagemail.CacheGenerationScope())
+	mailRateLimitRepository.SetGenerations(configGenerationRepository, messagemail.ConfigCacheScope())
 	mailRateLimitStore := ratelimitpolicy.NewStore(mailRateLimitRepository, redisClient)
 	mailRateLimitStore.SetGenerations(configGenerationRepository, configGenerationStore)
 	mailRateLimitService := ratelimitpolicy.NewService(mailRateLimitRepository)
@@ -313,9 +313,9 @@ func run(logger *slog.Logger) error {
 	mailRuntimeStore.SetGenerations(configGenerationRepository, configGenerationStore)
 	mailRuntimeStore.SetLogger(logger)
 	mailRateLimitService.SetRuntimeCoordinator(mailRuntimeStore)
-	mailStores.Config.SetGenerations(configGenerationRepository, messagemail.CacheGenerationScope())
-	mailStores.Template.SetGenerations(configGenerationRepository, messagemail.CacheGenerationScope())
-	mailStores.RecipientRule.SetGenerations(configGenerationRepository, messagemail.CacheGenerationScope())
+	mailStores.Config.SetGenerations(configGenerationRepository, messagemail.ConfigCacheScope())
+	mailStores.Template.SetGenerations(configGenerationRepository, messagemail.ConfigCacheScope())
+	mailStores.RecipientRule.SetGenerations(configGenerationRepository, messagemail.ConfigCacheScope())
 	mailRecipientRuleRepository := mailStores.RecipientRule
 	mailRecipientRuleService := recipientrule.NewService(mailRecipientRuleRepository)
 	mailService := messagemail.NewService(mailStores, keys, storagemail.NewTencentSESClient(nil), mailRecipientRuleService, mailLimiter, mailRateLimitStore)
@@ -332,18 +332,18 @@ func run(logger *slog.Logger) error {
 	smsRuntimeCache.SetGenerations(configGenerationRepository, configGenerationStore)
 	smsRuntimeCache.SetLogger(logger)
 	smsConfigRepository := smsconfig.NewRepository(postgres.GORM)
-	smsConfigRepository.SetGenerations(configGenerationRepository, messagesms.CacheGenerationScope())
+	smsConfigRepository.SetGenerations(configGenerationRepository, messagesms.ConfigCacheScope())
 	smsConfigService := smsconfig.NewService(smsConfigRepository, keys, smsRuntimeCache)
 	smsTemplateRepository := smstemplate.NewRepository(postgres.GORM)
-	smsTemplateRepository.SetGenerations(configGenerationRepository, messagesms.CacheGenerationScope())
+	smsTemplateRepository.SetGenerations(configGenerationRepository, messagesms.ConfigCacheScope())
 	smsTemplateService := smstemplate.NewService(smsTemplateRepository)
 	smsTemplateService.SetRuntimeCoordinator(smsRuntimeCache)
 	smsRecipientRuleRepository := smsrecipientrule.NewRepository(postgres.GORM)
-	smsRecipientRuleRepository.SetGenerations(configGenerationRepository, messagesms.CacheGenerationScope())
+	smsRecipientRuleRepository.SetGenerations(configGenerationRepository, messagesms.ConfigCacheScope())
 	smsRecipientRuleService := smsrecipientrule.NewService(smsRecipientRuleRepository)
 	smsRecipientRuleService.SetRuntimeCoordinator(smsRuntimeCache)
 	smsRateLimitRepository := smsratelimitpolicy.NewRepository(postgres.GORM)
-	smsRateLimitRepository.SetGenerations(configGenerationRepository, messagesms.CacheGenerationScope())
+	smsRateLimitRepository.SetGenerations(configGenerationRepository, messagesms.ConfigCacheScope())
 	smsRateLimitStore := smsratelimitpolicy.NewStore(redisClient)
 	smsRateLimitStore.SetGenerations(configGenerationRepository, configGenerationStore)
 	smsRateLimitService := smsratelimitpolicy.NewService(smsRateLimitRepository, smsRateLimitStore)
@@ -463,7 +463,7 @@ func run(logger *slog.Logger) error {
 		UploadRule:        uploadrule.NewHandler(uploadRuleService),
 		OperationLog:      operationlog.NewHandler(operationLogService),
 		Setting:           systemsetting.NewHandler(settingService),
-		CacheGeneration:   systemcachegeneration.NewHandler(cacheGenerationService),
+		ConfigCacheStatus: systemconfigcachestatus.NewHandler(configCacheService),
 		QueueMonitor:      queuemonitor.NewHandler(queueMonitorService, settings.Auth.CookieSecure, queuemonitor.SubjectFromContext),
 		QueueMonitorUI:    queuemonitor.NewGateway(queueMonitorService, queueMonitorUI),
 		LoginLog:          loginlog.NewHandler(loginLogService),
@@ -629,8 +629,8 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	if dependencies.Setting != nil {
 		systemsetting.RegisterRoutes(adminRoutes, dependencies.Setting, dependencies.Authenticate, dependencies.RequirePermission)
 	}
-	if dependencies.CacheGeneration != nil {
-		systemcachegeneration.RegisterRoutes(adminRoutes, dependencies.CacheGeneration, dependencies.Authenticate, dependencies.RequirePermission)
+	if dependencies.ConfigCacheStatus != nil {
+		systemconfigcachestatus.RegisterRoutes(adminRoutes, dependencies.ConfigCacheStatus, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.QueueMonitor != nil {
 		queuemonitor.RegisterGrantRoute(adminRoutes, dependencies.QueueMonitor, dependencies.AuthOrigin, dependencies.Authenticate, dependencies.RequirePermission)

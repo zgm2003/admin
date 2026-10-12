@@ -26,7 +26,7 @@ CREATE TABLE message_mail_recipient_rule (
  CONSTRAINT message_mail_recipient_rule_action_check CHECK(action IN ('allow','deny')));
 CREATE UNIQUE INDEX ux_message_mail_rule_scope_pattern_action_active
  ON message_mail_recipient_rule(scope,pattern,action) WHERE deleted_at IS NULL;
-CREATE TABLE system_config_cache_generation (
+CREATE TABLE system_config_cache_state (
  namespace varchar(128) NOT NULL, scope_key varchar(128) NOT NULL, generation bigint NOT NULL,
  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(namespace,scope_key));
@@ -35,7 +35,7 @@ CREATE TABLE system_config_cache_outbox (
  generation bigint NOT NULL, attempts integer NOT NULL DEFAULT 0,
  available_at timestamptz NOT NULL, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL,
  published_at timestamptz, UNIQUE(namespace,scope_key,generation));
-INSERT INTO system_config_cache_generation(namespace,scope_key,generation)
+INSERT INTO system_config_cache_state(namespace,scope_key,generation)
  VALUES ('message.mail','global',3),('message.sms','global',7),('system.setting','global',17);
 INSERT INTO message_mail_recipient_rule(scope,pattern,action,name,remark,is_enabled,deleted_at) VALUES
  ('email','user@example.com','allow','email allow','keep details',1,NULL),
@@ -63,7 +63,7 @@ func mailRuleNumericSnapshot(t *testing.T, db *gorm.DB, ctx context.Context) str
 	var result string
 	if err := db.WithContext(ctx).Raw(`SELECT jsonb_build_object(
  'rules',(SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM message_mail_recipient_rule r),
- 'generation',(SELECT jsonb_agg(to_jsonb(g) ORDER BY namespace,scope_key) FROM system_config_cache_generation g),
+ 'generation',(SELECT jsonb_agg(to_jsonb(g) ORDER BY namespace,scope_key) FROM system_config_cache_state g),
  'outbox',(SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM system_config_cache_outbox o),
  'types',(SELECT jsonb_agg(format_type(atttypid,atttypmod) ORDER BY attnum) FROM pg_attribute WHERE attrelid='message_mail_recipient_rule'::regclass AND attnum>0 AND NOT attisdropped),
  'checks',(SELECT jsonb_agg(pg_get_constraintdef(oid) ORDER BY conname) FROM pg_constraint WHERE conrelid='message_mail_recipient_rule'::regclass))::text`).Scan(&result).Error; err != nil {
@@ -86,9 +86,9 @@ func TestMailRuleNumericMigrationPreservesRulesAndAdvancesOnlyMailOnce(t *testin
 	if err := db.WithContext(ctx).Raw(`SELECT
  (SELECT count(*)=2 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='message_mail_recipient_rule' AND column_name IN ('scope','action') AND data_type='smallint' AND is_nullable='NO' AND column_default IS NULL) AND
  (SELECT jsonb_agg(jsonb_build_array(scope,action) ORDER BY id)='[[0,1],[0,0],[1,1],[1,0],[0,0]]'::jsonb FROM message_mail_recipient_rule) AND
- (SELECT generation=4 FROM system_config_cache_generation WHERE namespace='message.mail') AND
- (SELECT generation=7 FROM system_config_cache_generation WHERE namespace='message.sms') AND
- (SELECT generation=17 FROM system_config_cache_generation WHERE namespace='system.setting') AND
+ (SELECT generation=4 FROM system_config_cache_state WHERE namespace='message.mail') AND
+ (SELECT generation=7 FROM system_config_cache_state WHERE namespace='message.sms') AND
+ (SELECT generation=17 FROM system_config_cache_state WHERE namespace='system.setting') AND
  (SELECT count(*)=1 FROM system_config_cache_outbox) AND
  (SELECT count(*)=1 FROM system_config_cache_outbox WHERE namespace='message.mail' AND scope_key='global' AND generation=4)
 `).Scan(&valid).Error; err != nil || !valid {
@@ -127,7 +127,7 @@ func TestMailRuleNumericMigrationRejectsSourceDriftAtomically(t *testing.T) {
 	for _, test := range []struct{ name, setup string }{
 		{"unknown scope", `ALTER TABLE message_mail_recipient_rule DROP CONSTRAINT message_mail_recipient_rule_scope_check; UPDATE message_mail_recipient_rule SET scope='unknown' WHERE id=1;`},
 		{"unknown action", `ALTER TABLE message_mail_recipient_rule DROP CONSTRAINT message_mail_recipient_rule_action_check; UPDATE message_mail_recipient_rule SET action='unknown' WHERE id=5;`},
-		{"missing generation", `DELETE FROM system_config_cache_generation WHERE namespace='message.mail';`},
+		{"missing generation", `DELETE FROM system_config_cache_state WHERE namespace='message.mail';`},
 		{"missing unique index", `DROP INDEX ux_message_mail_rule_scope_pattern_action_active;`},
 		{"mixed types", `ALTER TABLE message_mail_recipient_rule DROP CONSTRAINT message_mail_recipient_rule_scope_check; ALTER TABLE message_mail_recipient_rule ALTER COLUMN scope TYPE smallint USING CASE scope WHEN 'email' THEN 0 ELSE 1 END;`},
 	} {

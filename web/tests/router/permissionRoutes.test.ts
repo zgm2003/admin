@@ -17,7 +17,7 @@ const testViews: PageModuleMap = {
   '../views/permission/menu/index.vue': async () => ({ default: TestView }),
   '../views/permission/role/index.vue': async () => ({ default: TestView }),
   '../views/system/operationLog/index.vue': async () => ({ default: TestView }),
-  '../views/system/cacheGeneration/index.vue': async () => ({ default: TestView }),
+  '../views/system/configCacheStatus/index.vue': async () => ({ default: TestView }),
   '../views/storage/object/index.vue': async () => ({ default: TestView }),
   '../views/message/mail/index.vue': async () => ({ default: TestView }),
 }
@@ -195,16 +195,20 @@ describe('access route registration', () => {
       router,
       [
         directory('system', [
-          page('system:cacheGeneration:view', '/system/cacheGeneration', 'system/cacheGeneration'),
+          page(
+            'system:configCacheStatus:view',
+            '/system/configCacheStatus',
+            'system/configCacheStatus',
+          ),
         ]),
       ],
       testViews,
     )
 
-    expect(router.hasRoute('access:system:cacheGeneration:view')).toBe(true)
-    const resolved = router.resolve('/system/cacheGeneration')
-    expect(resolved.name).toBe('access:system:cacheGeneration:view')
-    expect(resolved.meta.i18nKey).toBe('navigation.systemCacheGeneration')
+    expect(router.hasRoute('access:system:configCacheStatus:view')).toBe(true)
+    const resolved = router.resolve('/system/configCacheStatus')
+    expect(resolved.name).toBe('access:system:configCacheStatus:view')
+    expect(resolved.meta.i18nKey).toBe('navigation.systemConfigCacheStatus')
 
     cleanup()
     expect(accessRoutes(router)).toHaveLength(0)
@@ -285,7 +289,7 @@ function pageI18nKey(code: string): string {
     'user:loginLog:view': 'navigation.userLoginLog',
     'permission:menu:view': 'navigation.permissionMenu',
     'permission:role:view': 'navigation.permissionRole',
-    'system:cacheGeneration:view': 'navigation.systemCacheGeneration',
+    'system:configCacheStatus:view': 'navigation.systemConfigCacheStatus',
   }
   return keys[code] ?? 'navigation.userAccount'
 }

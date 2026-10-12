@@ -11,7 +11,7 @@ import (
 
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/shared/cacheFill"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 )
 
 const (
@@ -22,7 +22,7 @@ const (
 )
 
 var (
-	mailRateLimitGenerationScope = cachegeneration.Scope{Namespace: "message.mail", ScopeKey: "global"}
+	mailRateLimitGenerationScope = configcache.Scope{Namespace: "message.mail", ScopeKey: "global"}
 	errRateLimitSnapshotCorrupt  = errors.New("mail rate limit policy snapshot is corrupt")
 	errRateLimitGenerationMoved  = errors.New("mail cache generation advanced during rate limit fill")
 )
@@ -187,9 +187,9 @@ type policyLoader interface {
 type rateLimitPolicyStore struct {
 	repository  policyLoader
 	redis       *projectredis.Client
-	generations *cachegeneration.Repository
-	states      *cachegeneration.Store
-	scope       cachegeneration.Scope
+	generations *configcache.Repository
+	states      *configcache.Store
+	scope       configcache.Scope
 	ttl         time.Duration
 	readBudget  time.Duration
 	waitStep    time.Duration
@@ -213,7 +213,7 @@ func NewStore(repository *Repository, redis *projectredis.Client) *rateLimitPoli
 	return NewRateLimitPolicyStore(repository, redis)
 }
 
-func (s *rateLimitPolicyStore) SetGenerations(repository *cachegeneration.Repository, store *cachegeneration.Store) {
+func (s *rateLimitPolicyStore) SetGenerations(repository *configcache.Repository, store *configcache.Store) {
 	s.generations = repository
 	s.states = store
 }
@@ -261,43 +261,43 @@ func rateLimitVariant(platformID int64) (string, error) {
 	return fmt.Sprintf("ratelimit:%d", platformID), nil
 }
 
-func (s *rateLimitPolicyStore) readyState(ctx context.Context, deadline time.Time, variant string, platformID int64) (cachegeneration.State, bool, error) {
+func (s *rateLimitPolicyStore) readyState(ctx context.Context, deadline time.Time, variant string, platformID int64) (configcache.State, bool, error) {
 	if err := ctx.Err(); err != nil {
-		return cachegeneration.State{}, false, err
+		return configcache.State{}, false, err
 	}
 	state, found, err := s.states.Read(ctx, s.scope)
 	if err != nil {
-		if errors.Is(err, cachegeneration.ErrStateCorrupt) {
+		if errors.Is(err, configcache.ErrStateCorrupt) {
 			if repairErr := s.recoverState(ctx, variant, platformID); repairErr != nil {
 				if errors.Is(repairErr, errRateLimitGenerationMoved) {
-					return cachegeneration.State{}, true, nil
+					return configcache.State{}, true, nil
 				}
-				return cachegeneration.State{}, false, errors.Join(err, repairErr)
+				return configcache.State{}, false, errors.Join(err, repairErr)
 			}
-			return cachegeneration.State{}, true, nil
+			return configcache.State{}, true, nil
 		}
-		return cachegeneration.State{}, false, err
+		return configcache.State{}, false, err
 	}
 	if !found {
 		if repairErr := s.recoverState(ctx, variant, platformID); repairErr != nil {
 			if errors.Is(repairErr, errRateLimitGenerationMoved) {
-				return cachegeneration.State{}, true, nil
+				return configcache.State{}, true, nil
 			}
-			return cachegeneration.State{}, false, errors.Join(cachegeneration.ErrStateMissing, repairErr)
+			return configcache.State{}, false, errors.Join(configcache.ErrStateMissing, repairErr)
 		}
-		return cachegeneration.State{}, true, nil
+		return configcache.State{}, true, nil
 	}
-	if state.State == cachegeneration.StateInvalidating {
+	if state.State == configcache.StateInvalidating {
 		if s.now().Add(s.waitStep).After(deadline) {
-			return cachegeneration.State{}, false, fmt.Errorf("mail cache state is invalidating")
+			return configcache.State{}, false, fmt.Errorf("mail cache state is invalidating")
 		}
 		if err := s.wait(ctx, s.waitStep); err != nil {
-			return cachegeneration.State{}, false, err
+			return configcache.State{}, false, err
 		}
-		return cachegeneration.State{}, true, nil
+		return configcache.State{}, true, nil
 	}
-	if state.State != cachegeneration.StateReady {
-		return cachegeneration.State{}, false, fmt.Errorf("mail cache state is invalid")
+	if state.State != configcache.StateReady {
+		return configcache.State{}, false, fmt.Errorf("mail cache state is invalid")
 	}
 	return state, false, nil
 }
@@ -327,7 +327,7 @@ func (s *rateLimitPolicyStore) fill(ctx context.Context, generation, platformID 
 }
 
 func (s *rateLimitPolicyStore) recoverState(ctx context.Context, variant string, platformID int64) error {
-	lease, err := cachefill.Try(ctx, s.redis.UniversalClient(), cachegeneration.StateKey(s.scope), "repair:"+variant)
+	lease, err := cachefill.Try(ctx, s.redis.UniversalClient(), configcache.StateKey(s.scope), "repair:"+variant)
 	if err != nil {
 		return err
 	}
@@ -355,15 +355,15 @@ func (s *rateLimitPolicyStore) recoverState(ctx context.Context, variant string,
 }
 
 func (s *rateLimitPolicyStore) tryFill(ctx context.Context, generation int64, variant string) (*cachefill.Lease, error) {
-	target, err := cachegeneration.FillKey(s.scope, generation, variant)
+	target, err := configcache.FillKey(s.scope, generation, variant)
 	if err != nil {
 		return nil, err
 	}
-	return cachefill.Try(ctx, s.redis.UniversalClient(), cachegeneration.StateKey(s.scope), target)
+	return cachefill.Try(ctx, s.redis.UniversalClient(), configcache.StateKey(s.scope), target)
 }
 
 func (s *rateLimitPolicyStore) read(ctx context.Context, generation, platformID int64, variant string) (RateLimitCatalog, bool, error) {
-	key, err := cachegeneration.SnapshotKey(s.scope, generation, variant)
+	key, err := configcache.SnapshotKey(s.scope, generation, variant)
 	if err != nil {
 		return RateLimitCatalog{}, false, err
 	}
@@ -387,7 +387,7 @@ func (s *rateLimitPolicyStore) write(ctx context.Context, generation int64, vari
 	if err != nil {
 		return err
 	}
-	key, err := cachegeneration.SnapshotKey(s.scope, generation, variant)
+	key, err := configcache.SnapshotKey(s.scope, generation, variant)
 	if err != nil {
 		return err
 	}
@@ -399,7 +399,7 @@ func (s *rateLimitPolicyStore) confirmReadyGeneration(ctx context.Context, gener
 	if err != nil {
 		return err
 	}
-	if !found || state.State != cachegeneration.StateReady || state.Generation != generation {
+	if !found || state.State != configcache.StateReady || state.Generation != generation {
 		return fmt.Errorf("%w: expected generation %d", errRateLimitGenerationMoved, generation)
 	}
 	return nil

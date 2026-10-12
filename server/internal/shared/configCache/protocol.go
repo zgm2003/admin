@@ -1,8 +1,8 @@
-// Package cachegeneration implements the stable, mechanical cache-generation
+// Package configcache implements the stable, mechanical cache-generation
 // protocol shared by configuration caches: scope coordinates, deterministic
 // Redis keys and a strict state codec. It owns no business snapshot; callers
 // keep ownership of their payloads.
-package cachegeneration
+package configcache
 
 import (
 	"encoding/json"

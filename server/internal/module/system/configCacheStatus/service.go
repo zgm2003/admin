@@ -1,4 +1,4 @@
-package cachegeneration
+package configcachestatus
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"unicode/utf8"
 
 	"admin/server/internal/shared/apperror"
-	sharedgeneration "admin/server/internal/shared/cacheGeneration"
+	sharedgeneration "admin/server/internal/shared/configCache"
 )
 
 type repository interface {

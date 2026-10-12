@@ -98,7 +98,7 @@ func readSchedulerMigrationFacts(t *testing.T, db *gorm.DB) schedulerMigrationFa
 	}{
 		{`SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema() AND table_name IN ('system_scheduler_schedule','system_scheduler_job','system_scheduler_run')`, &facts.Tables},
 		{`SELECT COALESCE(string_agg(setting_key||'='||value||':'||value_type||':'||is_enabled||':'||is_builtin,','),'') FROM system_setting WHERE deleted_at IS NULL AND setting_key='system.scheduler.history_retention_days'`, &facts.Setting},
-		{`SELECT generation FROM system_config_cache_generation WHERE namespace='system.setting' AND scope_key='global'`, &facts.Generation},
+		{`SELECT generation FROM system_config_cache_state WHERE namespace='system.setting' AND scope_key='global'`, &facts.Generation},
 		{`SELECT count(*) FROM system_config_cache_outbox WHERE namespace='system.setting' AND scope_key='global'`, &facts.Outbox},
 		{`SELECT count(*) FROM permission_menu WHERE platform_id=1 AND deleted_at IS NULL AND code LIKE 'system:scheduler:%'`, &facts.Menus},
 		{`SELECT count(*) FROM permission_role_menu rm JOIN permission_menu m ON m.id=rm.menu_id WHERE rm.deleted_at IS NULL AND m.code LIKE 'system:scheduler:%'`, &facts.Grants},

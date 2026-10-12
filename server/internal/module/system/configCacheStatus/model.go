@@ -1,4 +1,4 @@
-package cachegeneration
+package configcachestatus
 
 import "time"
 
@@ -10,7 +10,7 @@ type generationModel struct {
 	UpdatedAt  time.Time `gorm:"column:updated_at;type:timestamptz;not null"`
 }
 
-func (generationModel) TableName() string { return "system_config_cache_generation" }
+func (generationModel) TableName() string { return "system_config_cache_state" }
 
 type outboxModel struct {
 	ID          int64      `gorm:"column:id;primaryKey"`

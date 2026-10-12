@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"admin/server/internal/shared/apperror"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"gorm.io/gorm"
 )
 
 type serviceRepository interface {
 	List(context.Context, int64) (Catalog, error)
 	ListAll(context.Context) ([]Catalog, error)
-	Update(context.Context, int64, Input, int64, time.Time) (Catalog, cachegeneration.MutationResult, error)
+	Update(context.Context, int64, Input, int64, time.Time) (Catalog, configcache.MutationResult, error)
 }
 
 type Service struct {
@@ -57,8 +57,8 @@ func (s *Service) Update(ctx context.Context, platformID int64, input Input) (Ca
 		return Catalog{}, unavailable(fmt.Errorf("mail runtime coordinator is unavailable"))
 	}
 	var catalog Catalog
-	err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (cachegeneration.MutationResult, error) {
-		var mutation cachegeneration.MutationResult
+	err := s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
+		var mutation configcache.MutationResult
 		var updateErr error
 		catalog, mutation, updateErr = s.repository.Update(writeContext, platformID, input, expected, time.Now().UTC())
 		return mutation, updateErr

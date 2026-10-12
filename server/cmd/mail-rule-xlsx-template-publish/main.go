@@ -23,7 +23,7 @@ import (
 	systemsetting "admin/server/internal/module/system/setting"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/secretkey"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
 	storagecos "admin/server/internal/storage/cos"
@@ -32,7 +32,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-var settingScope = cachegeneration.Scope{Namespace: "system.setting", ScopeKey: "global"}
+var settingScope = configcache.Scope{Namespace: "system.setting", ScopeKey: "global"}
 
 func parseMode(args []string) (string, bool, error) {
 	f := flag.NewFlagSet("mail-rule-xlsx-template-publish", flag.ContinueOnError)
@@ -79,8 +79,8 @@ func runMain() error {
 	if err != nil {
 		return errors.New("storage key unavailable")
 	}
-	generations := cachegeneration.NewRepository(db)
-	states := cachegeneration.NewStore(redis)
+	generations := configcache.NewRepository(db)
+	states := configcache.NewStore(redis)
 	settingRepo := systemsetting.NewRepository(db)
 	settingRepo.SetGenerations(generations)
 	settings := systemsetting.NewService(settingRepo)
@@ -122,7 +122,7 @@ func runMain() error {
 	}
 	ready := func(ctx context.Context, generation int64) error {
 		state, found, err := states.Read(ctx, settingScope)
-		if err != nil || !found || state.State != cachegeneration.StateReady || state.Generation != generation {
+		if err != nil || !found || state.State != configcache.StateReady || state.Generation != generation {
 			return errors.New("setting Redis generation is not ready")
 		}
 		return nil
@@ -154,11 +154,11 @@ func runMain() error {
 		},
 		sync: func(ctx context.Context, generation int64) error {
 			state, found, err := states.Read(ctx, settingScope)
-			if err != nil || (found && (state.State != cachegeneration.StateReady || state.Generation > generation)) {
+			if err != nil || (found && (state.State != configcache.StateReady || state.Generation > generation)) {
 				return errors.New("setting Redis state unavailable or another mutation is active; retry after it finishes")
 			}
 			result, err := states.Reconcile(ctx, settingScope, generation)
-			if err != nil || result == cachegeneration.PublishSkippedInvalidating {
+			if err != nil || result == configcache.PublishSkippedInvalidating {
 				return errors.New("PostgreSQL committed but Redis publication incomplete; rerun with manifest")
 			}
 			if err := ready(ctx, generation); err != nil {
@@ -236,11 +236,11 @@ func inspectFacts(ctx context.Context, db *gorm.DB, settings *systemsetting.Repo
 	if err != nil {
 		return f, errors.New("setting upload rule unavailable")
 	}
-	if err := db.WithContext(ctx).Raw("SELECT namespace,scope_key,generation FROM system_config_cache_generation ORDER BY namespace,scope_key").Scan(&f.Generations).Error; err != nil || settingGeneration(f) < 1 {
+	if err := db.WithContext(ctx).Raw("SELECT namespace,scope_key,generation FROM system_config_cache_state ORDER BY namespace,scope_key").Scan(&f.Generations).Error; err != nil || settingGeneration(f) < 1 {
 		return f, errors.New("configuration generations unavailable")
 	}
 	control := `SELECT md5(jsonb_build_object(
- 'otherGenerations',(SELECT COALESCE(jsonb_agg(to_jsonb(g) ORDER BY namespace,scope_key),'[]'::jsonb) FROM system_config_cache_generation g WHERE NOT(namespace='system.setting' AND scope_key='global')),
+ 'otherGenerations',(SELECT COALESCE(jsonb_agg(to_jsonb(g) ORDER BY namespace,scope_key),'[]'::jsonb) FROM system_config_cache_state g WHERE NOT(namespace='system.setting' AND scope_key='global')),
  'platforms',(SELECT COALESCE(jsonb_agg(jsonb_build_object('id',id,'menuVersion',menu_version) ORDER BY id),'[]'::jsonb) FROM permission_auth_platform),
  'mailRules',(SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY id),'[]'::jsonb) FROM message_mail_recipient_rule r))::text)`
 	if err := db.WithContext(ctx).Raw(control).Scan(&f.ControlHash).Error; err != nil {

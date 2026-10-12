@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 )
 
@@ -52,5 +52,5 @@ func safeOf(value Model) (Safe, error) {
 }
 
 type RuntimeCoordinator interface {
-	Mutate(context.Context, func(context.Context, int64) (cachegeneration.MutationResult, error)) error
+	Mutate(context.Context, func(context.Context, int64) (configcache.MutationResult, error)) error
 }

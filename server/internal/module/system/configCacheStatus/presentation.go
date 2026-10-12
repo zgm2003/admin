@@ -1,4 +1,4 @@
-package cachegeneration
+package configcachestatus
 
 import (
 	"admin/server/internal/shared/i18n"

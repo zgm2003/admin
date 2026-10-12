@@ -1,4 +1,4 @@
-package cachegeneration
+package configcachestatus
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"admin/server/internal/shared/apperror"
-	sharedgeneration "admin/server/internal/shared/cacheGeneration"
+	sharedgeneration "admin/server/internal/shared/configCache"
 )
 
 type fakeRepository struct {

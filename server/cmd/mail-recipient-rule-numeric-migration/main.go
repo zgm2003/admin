@@ -4,7 +4,7 @@ package main
 import (
 	"admin/server/internal/config"
 	projectredis "admin/server/internal/redis"
-	cachegeneration "admin/server/internal/shared/cacheGeneration"
+	configcache "admin/server/internal/shared/configCache"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-var mailScope = cachegeneration.Scope{Namespace: "message.mail", ScopeKey: "global"}
+var mailScope = configcache.Scope{Namespace: "message.mail", ScopeKey: "global"}
 
 type report struct {
 	ScopeType           string `json:"scopeType"`
@@ -89,7 +89,7 @@ func runMain() error {
 		return errors.New("Redis connection failed")
 	}
 	defer func() { _ = client.Close() }()
-	store := cachegeneration.NewStore(client)
+	store := configcache.NewStore(client)
 	if mode == "sync" {
 		if err := syncMailState(ctx, store, mailScope, r.MailGeneration); err != nil {
 			return err
@@ -103,11 +103,11 @@ func runMain() error {
 	if found {
 		r.MailState = state.State
 		r.MailStateGeneration = state.Generation
-		if state.State == cachegeneration.StateInvalidating {
+		if state.State == configcache.StateInvalidating {
 			r.MailStateGeneration = state.BaseGeneration
 		}
 	}
-	if mode == "sync" && (!found || state.State != cachegeneration.StateReady || state.Generation != r.MailGeneration) {
+	if mode == "sync" && (!found || state.State != configcache.StateReady || state.Generation != r.MailGeneration) {
 		return errors.New("mail Redis state verification failed")
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(r); err != nil {
@@ -151,11 +151,11 @@ func inspectPostgres(ctx context.Context, db *pgx.Conn, numericRequired bool) (r
 	if err := tx.QueryRow(ctx, factsQuery).Scan(&r.RowCount, &r.RuleFactsHash); err != nil {
 		return r, errors.New("recipient-rule audit facts unavailable")
 	}
-	if err := tx.QueryRow(ctx, `SELECT generation FROM system_config_cache_generation WHERE namespace='message.mail' AND scope_key='global'`).Scan(&r.MailGeneration); err != nil || r.MailGeneration < 1 {
+	if err := tx.QueryRow(ctx, `SELECT generation FROM system_config_cache_state WHERE namespace='message.mail' AND scope_key='global'`).Scan(&r.MailGeneration); err != nil || r.MailGeneration < 1 {
 		return r, errors.New("message.mail generation unavailable")
 	}
 	const controlQuery = `SELECT md5(jsonb_build_object(
- 'generation',(SELECT COALESCE(jsonb_agg(to_jsonb(g) ORDER BY namespace,scope_key),'[]'::jsonb) FROM system_config_cache_generation g WHERE NOT(namespace='message.mail' AND scope_key='global')),
+ 'generation',(SELECT COALESCE(jsonb_agg(to_jsonb(g) ORDER BY namespace,scope_key),'[]'::jsonb) FROM system_config_cache_state g WHERE NOT(namespace='message.mail' AND scope_key='global')),
  'platform',(SELECT COALESCE(jsonb_agg(jsonb_build_object('id',id,'menu_version',menu_version) ORDER BY id),'[]'::jsonb) FROM permission_auth_platform))::text)`
 	if err := tx.QueryRow(ctx, controlQuery).Scan(&r.ControlHash); err != nil {
 		return r, errors.New("control audit facts unavailable")
@@ -169,7 +169,7 @@ func inspectPostgres(ctx context.Context, db *pgx.Conn, numericRequired bool) (r
 	return r, nil
 }
 
-func syncMailState(ctx context.Context, store *cachegeneration.Store, scope cachegeneration.Scope, generation int64) error {
+func syncMailState(ctx context.Context, store *configcache.Store, scope configcache.Scope, generation int64) error {
 	if generation < 1 {
 		return errors.New("authoritative generation is invalid")
 	}
@@ -177,18 +177,18 @@ func syncMailState(ctx context.Context, store *cachegeneration.Store, scope cach
 	if err != nil {
 		return errors.New("mail Redis state is corrupt or unavailable")
 	}
-	if found && previous.State != cachegeneration.StateReady {
+	if found && previous.State != configcache.StateReady {
 		return errors.New("mail Redis mutation is active; rerun after the writer finishes")
 	}
 	if found && previous.Generation > generation {
 		return errors.New("mail Redis generation is ahead of PostgreSQL; refusing downgrade")
 	}
 	result, err := store.Reconcile(ctx, scope, generation)
-	if err != nil || result == cachegeneration.PublishSkippedInvalidating {
+	if err != nil || result == configcache.PublishSkippedInvalidating {
 		return errors.New("mail Redis state publication failed; rerun this maintenance command")
 	}
 	current, found, err := store.Read(ctx, scope)
-	if err != nil || !found || current.State != cachegeneration.StateReady || current.Generation != generation {
+	if err != nil || !found || current.State != configcache.StateReady || current.Generation != generation {
 		return errors.New("mail Redis state verification failed")
 	}
 	return nil

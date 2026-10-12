@@ -46,8 +46,8 @@ func TestMailRuleTemplateObjectKeyMigrationPreservesIDAndIsIdempotent(t *testing
 	if err := db.WithContext(ctx).Raw(`SELECT
  (SELECT count(*)=0 FROM system_setting WHERE setting_key='message.mail.recipient_rule.import_template_url') AND
  (SELECT id=? AND value=? AND value_type=1 AND is_builtin=1 AND is_enabled=1 FROM system_setting WHERE setting_key='message.mail.recipient_rule.import_template_object_key') AND
- (SELECT generation=15 FROM system_config_cache_generation WHERE namespace='system.setting') AND
- (SELECT generation=3 FROM system_config_cache_generation WHERE namespace='message.mail') AND
+ (SELECT generation=15 FROM system_config_cache_state WHERE namespace='system.setting') AND
+ (SELECT generation=3 FROM system_config_cache_state WHERE namespace='message.mail') AND
  (SELECT count(*)=1 FROM system_config_cache_outbox WHERE namespace='system.setting' AND generation=15)`, beforeID, templateMigrationObjectKey).Scan(&valid).Error; err != nil || !valid {
 		t.Fatalf("valid=%v err=%v", valid, err)
 	}

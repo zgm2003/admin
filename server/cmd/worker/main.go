@@ -21,7 +21,7 @@ import (
 	systemsetting "admin/server/internal/module/system/setting"
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 
 	"github.com/hibiken/asynq"
 	"github.com/joho/godotenv"
@@ -114,13 +114,13 @@ func run(logger *slog.Logger) error {
 	notificationProcessor = notificationtask.NewProcessor(postgres.GORM, realtimeRepository, batchJobWriter, func(db *gorm.DB) permissionnotification.Reader {
 		return permissionnotification.NewRepository(db)
 	})
-	configGenerationRepository := cachegeneration.NewRepository(postgres.GORM)
-	configGenerationStore := cachegeneration.NewStore(redisClient)
-	settingService, err := buildWorkerSettingService(postgres.GORM, redisClient, configGenerationRepository, configGenerationStore, logger)
+	configCacheRepository := configcache.NewRepository(postgres.GORM)
+	configCacheStore := configcache.NewStore(redisClient)
+	settingService, err := buildWorkerSettingService(postgres.GORM, redisClient, configCacheRepository, configCacheStore, logger)
 	if err != nil {
 		return err
 	}
-	configRelay := cachegeneration.NewRelay(configGenerationRepository, configGenerationStore, logger)
+	configRelay := configcache.NewRelay(configCacheRepository, configCacheStore, logger)
 	realtimeRelay := realtime.NewRelay(realtimeRepository, redisClient, logger)
 	realtimeRetention := realtime.NewRetentionService(realtimeRepository, settingService)
 	notificationRetention := notification.NewRetentionService(notificationRepository, settingService)
@@ -150,7 +150,7 @@ func run(logger *slog.Logger) error {
 	})
 }
 
-func buildWorkerSettingService(db *gorm.DB, redisClient *projectredis.Client, generations *cachegeneration.Repository, states *cachegeneration.Store, logger *slog.Logger) (*systemsetting.Service, error) {
+func buildWorkerSettingService(db *gorm.DB, redisClient *projectredis.Client, generations *configcache.Repository, states *configcache.Store, logger *slog.Logger) (*systemsetting.Service, error) {
 	if db == nil || redisClient == nil || generations == nil || states == nil {
 		return nil, errors.New("worker setting cache generation dependencies are required")
 	}

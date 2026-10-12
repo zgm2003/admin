@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/shared/cacheGeneration"
+	"admin/server/internal/shared/configCache"
 	"admin/server/internal/shared/yesno"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -140,7 +140,7 @@ func TestXlsxExportRouteUsesIndependentPermission(t *testing.T) {
 
 func TestXlsxExportDoesNotMutateMailGeneration(t *testing.T) {
 	db, service, router := exportRouter(t)
-	service.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context, int64) (cachegeneration.MutationResult, error)) error {
+	service.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 		_, err := change(ctx, 1)
 		return err
 	}))
@@ -148,12 +148,12 @@ func TestXlsxExportDoesNotMutateMailGeneration(t *testing.T) {
 		t.Fatal(err)
 	}
 	var before int64
-	if err := db.Raw("SELECT generation FROM system_config_cache_generation WHERE namespace='message.mail' AND scope_key='global'").Scan(&before).Error; err != nil {
+	if err := db.Raw("SELECT generation FROM system_config_cache_state WHERE namespace='message.mail' AND scope_key='global'").Scan(&before).Error; err != nil {
 		t.Fatal(err)
 	}
 	_, _ = exportData(t, router)
 	var after int64
-	if err := db.Raw("SELECT generation FROM system_config_cache_generation WHERE namespace='message.mail' AND scope_key='global'").Scan(&after).Error; err != nil {
+	if err := db.Raw("SELECT generation FROM system_config_cache_state WHERE namespace='message.mail' AND scope_key='global'").Scan(&after).Error; err != nil {
 		t.Fatal(err)
 	}
 	if before != after {
