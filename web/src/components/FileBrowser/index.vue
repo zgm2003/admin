@@ -35,10 +35,8 @@ const page = ref(1),
   pageSize = ref(20),
   total = ref(0)
 const loading = ref(false),
-  error = ref(''),
-  ruleCode = ref('')
+  error = ref('')
 const uploadedKeys = ref<string[]>([])
-const uploadBusy = ref(false)
 const previewVisible = ref(false),
   previewURL = ref(''),
   previewName = ref(''),
@@ -61,6 +59,7 @@ const fields = computed<SearchField<{ keyword: string; category: string }>[]>(()
     key: 'keyword',
     type: 'input',
     label: t('storage.file.fileName'),
+    placeholder: t('storage.file.fileNamePlaceholder'),
     resetValue: '',
     testId: 'file-keyword',
   },
@@ -68,6 +67,7 @@ const fields = computed<SearchField<{ keyword: string; category: string }>[]>(()
     key: 'category',
     type: 'select-v2',
     label: t('storage.file.category'),
+    placeholder: t('storage.file.categoryPlaceholder'),
     options: options.value?.categories ?? [],
     resetValue: '',
     testId: 'file-category',
@@ -80,9 +80,17 @@ const columns = computed<TableColumn<StorageFile>[]>(() => [
   { prop: 'createdAt', label: t('storage.file.createdAt'), width: 180 },
   { key: 'actions', label: t('storage.file.actions'), width: 240 },
 ])
-const uploadRule = computed(() =>
-  options.value?.uploadRules.find((item) => item.value === ruleCode.value),
-)
+const uploadRule = computed(() => options.value?.uploadRules[0])
+const uploadLimit = computed(() => {
+  if (!uploadRule.value) return ''
+  const bytes = uploadRule.value.maxFileSizeBytes
+  const [divisor, unit]: [number, string] =
+    bytes >= 1024 * 1024 ? [1024 * 1024, 'MB'] : bytes >= 1024 ? [1024, 'KB'] : [1, 'B']
+  const size = new Intl.NumberFormat(locale.value, { maximumFractionDigits: 2 }).format(
+    bytes / divisor,
+  )
+  return t('storage.file.uploadLimit', { size: `${size} ${unit}` })
+})
 async function load(): Promise<void> {
   const current = ++sequence
   controller?.abort()
@@ -102,8 +110,6 @@ async function load(): Promise<void> {
       const data = await getFileOptions(props.purpose, signal)
       if (current !== sequence) return
       options.value = data
-      if (!data.uploadRules.some((item) => item.value === ruleCode.value))
-        ruleCode.value = data.uploadRules[0]?.value ?? ''
     }
     const result = await listFiles(
       { page: page.value, pageSize: pageSize.value, ...query.value, purpose: props.purpose },
@@ -241,25 +247,19 @@ onBeforeUnmount(() => {
     >
       <template #toolbar-left>
         <template v-if="canUpload && canList">
-          <el-select-v2
-            v-if="options && options.uploadRules.length"
-            v-model="ruleCode"
-            :options="options.uploadRules"
-            :disabled="uploadBusy"
-            class="file-browser__purpose"
-            :placeholder="t('storage.file.uploadPurpose')"
-          />
           <UpMedia
             v-if="uploadRule"
             v-model="uploadedKeys"
-            :rule-code="ruleCode"
+            :rule-code="uploadRule.value"
             variant="file"
             :accept="uploadRule.accept"
             multiple
             :clearable="false"
             @uploaded="uploaded"
-            @uploading-change="uploadBusy = $event"
           />
+          <span v-if="uploadRule" class="file-browser__hint" data-testid="file-upload-limit">{{
+            uploadLimit
+          }}</span>
           <span v-else-if="options" class="file-browser__hint">{{
             t('storage.file.noUploadRule')
           }}</span>

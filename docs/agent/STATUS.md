@@ -1,13 +1,23 @@
 # 项目状态
 
-## 当前工作：云服务“我的文件”（2026-10-12，方案确认，实施计划已编写，未实施）
+## 我的文件页面与菜单收口（2026-10-12，代码、菜单修正与定向验证完成）
+
+- 维护者截图中的三个“默认100MB”来自同一条上传规则的 `avatar/file/setting` 编码，非三个 COS 配置。原 options 查询展开全部编码，页面默认取到 avatar；现后端按普通文件 `file`、头像 `avatar` 精确匹配，不回退到其他用途，未知用途返回明确参数错误。查询移回 uploadRule Repository，当前平台、规则和 COS 配置均需有效启用；每次 options 最多一条 SELECT，不改变凭证/对象访问的缓存热路径。
+- `FileBrowser` 保留复用 `AppSearch`、`AppTable`、`UpMedia`、`AppDialog`，删除上传用途下拉及其状态/样式；补文件名和类型搜索中英文 placeholder，消费后端匹配规则并展示文件大小限制，B/KB/MB 不将小限制四舍五入成 0 MB。删除二次确认、真实分页、本人隔离及独立权限保持不变；没有新增表、字段或权限。
+- 已直接修正真实 PostgreSQL Admin 菜单 id=4283 的 icon 为 `lucide:file-stack`。一次性维护程序在忽略的 server/tmp 内调用现有 Menu Service，沿 Repository 事务与 token lease 发布；Admin menu_version 18→19，Redis 核对 ready/19。重复执行保持 19；Canvas menu_version 保持 1，认证 policy_version、菜单 ID/路径/授权及非 icon 字段保持不变。仅改数据、无 DDL，不需要重导 schema-only 快照。
+- 菜单执行前后 JSON、授权摘要和维护源码已落审计：`%LOCALAPPDATA%\Admin\maintenance\storage-file-menu-icon\20261012-083823.708965300` 与 `20261012-083835.576241800`。只读 check 首先确认 icon 未配置，修正与重复执行后 check 成功；临时源码及目录经审计哈希核对后已删除，没有在 server/cmd 增加一次性入口。
+- 先失败后通过：前端缺 placeholder、遗留用途下拉、小限制显示 0 MB；后端同规则多 code 展开、file 缺失却返回其他用途、未知 purpose 未拒绝。实际运行 `go test ./internal/module/storage/uploadRule ./internal/module/storage/file ./internal/module/permission/menu ./internal/module/permission/state -count=1`、相同包 `go vet`、`go test ./cmd/api ./cmd/bootstrap-admin ./cmd/worker -count=1`、`go build ./...` 均通过；三个 cmd 入口清理后的编译与入口测试已收尾。
+- 前端 `pnpm vitest run tests/views/storage/file/index.test.ts tests/components/FileSelectDialog.test.ts tests/components/UpMedia/src/index.test.ts tests/api/storage/file.test.ts tests/icons/menuIcons.test.ts --pool=threads --maxWorkers=1` 5 文件 37 项通过；受影响文件 ESLint、Prettier、`pnpm check:architecture`（0 findings）、`pnpm build`（含 vue-tsc）和 `git diff --check` 通过。构建保留既有富文本大 chunk 提示；未运行全仓测试、浏览器验收或真实 COS 上传。没有启动/停止后端，也没有提交 Git；维护者需自行重启新版后端再刷新页面。
+
+## 云服务“我的文件”（2026-10-12，代码与真实数据库迁移已落地）
 
 - 维护者确认：云服务新增“我的文件”；仅当前用户/认证平台本人文件，不做管理员全部文件。本人上传、分页搜索/筛选、预览、下载、删除，以及复用文件选择弹窗选取头像；新增一张 storage_file 表，复用现有 COS 配置/版本、上传规则与 scheduler 任务表。
 - 头像采用 COS 服务端复制的独立对象，用户头像字段保存副本 Key；删除文件库原图不影响头像，更换头像不影响原图。副本归属/幂等/清理记录复用同一新表，不增加引用表；本期不改品牌图/模板共享资源，历史对象不猜用户归属。
 - 后端拥有归属、上传完成 HEAD 校验、暂存对象提升、图片条件、双语 options、删除及复制故障收敛；前端只负责展示、即时校验和交互，thin API、SCSS、纯文字有 type 操作与删除二次确认。
 - 权限：新页面 storage:file:view，独立 storage:file:list/detail/delete；申请/完成上传复用 storage:object:upload，头像更新保持 user:profile:update 并核对本人文件读取权限。菜单与授权经离线幂等 forward migration，平台菜单版本和 Redis 权限协议保持现有机制。
 - 容量基线：百万用户/多实例，本人页默认20最多100，COUNT+SELECT最多2条SQL；owner/time部分索引，预览按需签名、不逐行HEAD、不扫描整个Bucket；删除/过期上传和未采用头像副本有持久意图，分批清理和跨实例验证，不引入无界回源缓存。
-- 应维护者要求编写详细本地计划 docs/local-work/2026-10-12-my-file-plan.md（Git忽略、不提交；只有明确要求继续此计划时读取），包含6项实施任务、表/接口/权限/文件责任地图、失败测试与迁移验收。已核对现有上传组件、COS接口、profile路由与DTO；本轮只文档，无代码/真实迁移/服务启动，无运行时测试。后端由维护者自行启动。
+- 后续已实现 `storage/file` 后端模块、文件浏览组件、文件选择弹窗和头像保存复制链路，并由主 Agent 直接执行真实迁移：`pwsh -NoProfile -File docs/database/2026-10-12-storage-file.ps1 -OldServicesStopped` 连续两次成功，`-CheckOnly` 成功。核对 storage_file 存在、4 个菜单节点（1 page/3 action）、4 项默认授权和 1 个 storage.file.scan 计划；Admin menu_version 17→18，复跑不递增，Canvas 保持 1，原 33 项角色授权及摘要保持不变。schema 快照已刷新；此处不把此前缺少的完整实现验证补写为通过。
+- 迁移审计位于 `%LOCALAPPDATA%\Admin\maintenance\storage-file\20261012-153247-585` 和 `20261012-153414-510`。本期仍由维护者自行启动后端；不自动启动 API/Worker。
 
 ## 定时任务字段与索引收口（2026-10-12，代码、真实迁移与新版服务启动完成）
 
@@ -37,7 +47,7 @@
 - 程序式 ElMessageBox 独立于组件 Provider，应用入口显式安装服务上下文与响应式 Element Plus locale；避免在页面逐个写中文按钮或增加业务请求工具。
 - 定向验证：scheduler/shared pagination 的 Go 测试通过；前端 6 文件 44 项测试通过，覆盖分页、筛选回第一页、旧请求隔离和中文/英文确认按钮；pnpm build、pnpm lint、pnpm check:architecture（0 findings）、改动源码 Prettier 与 git diff --check 通过；go vet ./... 与 go build ./... 通过。未运行真实浏览器自动化验收。扩展 go test -p 1 ./... -count=1 最终未通过，发现 internal/database 的多项历史迁移测试依赖已改名的 system_config_cache_generation 表而失败；不能宣称后端全量测试通过，此项另行收口，本轮不恢复旧业务表。
 
-## 下期需求：COS“我的文件”（维护者确认本期仅核对和记录，2026-10-12）
+## 需求来源：COS“我的文件”（2026-10-12，实施前讨论记录，当前交付见上文）
 
 - 当前只有 COS 配置、物理版本、上传规则、PUT 直传凭证和 object-url；没有文件管理表/上传完成登记，object key 包含 platform/rule/config/physical version，不包含 userId。当前 STATUS/design/architecture 没有已确认的文件库待办；不能把已有对象按 key 推断成某个用户的历史文件。
 - 下期建立具名 storage/file 模块与 storage_file 表，保存用户/认证平台归属、object key、物理配置版本、原始文件名、MIME、大小、ETag、上传状态及时间。签发凭证登记待完成上传；客户端 PUT 后由后端核对 COS HEAD，再幂等登记为可见文件；失败/未完成不混入“我的文件”。浏览器提交的 userId 或“上传成功”不能作为事实来源。

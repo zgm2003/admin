@@ -24,6 +24,24 @@ type UploadTarget struct {
 	AccessMode                          string
 }
 
+type fileUploadOptionRow struct {
+	Code, Name                          string
+	MaxFileSizeBytes                    int64
+	AllowedExtensions, AllowedMimeTypes StringArray
+}
+
+func (r *Repository) FileUploadOptions(ctx context.Context, platformID int64, code string) ([]fileUploadOptionRow, error) {
+	rows := make([]fileUploadOptionRow, 0, 1)
+	err := r.db.WithContext(ctx).Table("storage_upload_rule r").
+		Select("k.code,r.name,r.max_file_size_bytes,r.allowed_extensions,r.allowed_mime_types").
+		Joins("JOIN storage_upload_rule_code k ON k.rule_id=r.id AND k.deleted_at IS NULL").
+		Joins("JOIN storage_cos_config c ON c.id=r.cos_config_id AND c.is_enabled=1 AND c.deleted_at IS NULL").
+		Joins("JOIN permission_auth_platform p ON p.id=r.platform_id AND p.is_enabled=1 AND p.deleted_at IS NULL").
+		Where("r.platform_id=? AND r.is_enabled=1 AND r.deleted_at IS NULL AND k.code=?", platformID, code).
+		Scan(&rows).Error
+	return rows, err
+}
+
 func (r *Repository) PlatformEnabled(ctx context.Context, id int64) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Table("permission_auth_platform").Where("id = ? AND is_enabled = 1 AND deleted_at IS NULL", id).Count(&count).Error

@@ -2,7 +2,9 @@ package uploadrule
 
 import (
 	"admin/server/internal/module/auth/login"
+	"admin/server/internal/shared/apperror"
 	"context"
+	"errors"
 	"strings"
 	"time"
 )
@@ -33,17 +35,21 @@ func (s *Service) FindFileUploadTarget(ctx context.Context, platformID int64, co
 	return s.repository.FindUploadTarget(ctx, platformID, code)
 }
 func (s *Service) FileUploadOptions(ctx context.Context, platformID int64, purpose string) ([]FileUploadOption, error) {
-	var rows []struct {
-		Code, Name                          string
-		MaxFileSizeBytes                    int64
-		AllowedExtensions, AllowedMimeTypes StringArray
+	// 编码是调用场景的后端契约，不是让文件库用户选择的存储配置。
+	code := "file"
+	switch purpose {
+	case "":
+	case "avatar":
+		code = "avatar"
+	default:
+		return nil, apperror.InvalidRequest(errors.New("unsupported file upload purpose"))
 	}
-	query := s.repository.db.WithContext(ctx).Table("storage_upload_rule r").Select("k.code,r.name,r.max_file_size_bytes,r.allowed_extensions,r.allowed_mime_types").Joins("JOIN storage_upload_rule_code k ON k.rule_id=r.id AND k.deleted_at IS NULL").Joins("JOIN storage_cos_config c ON c.id=r.cos_config_id AND c.is_enabled=1 AND c.deleted_at IS NULL").Where("r.platform_id=? AND r.is_enabled=1 AND r.deleted_at IS NULL", platformID)
-	if purpose == "avatar" {
-		query = query.Where("k.code='avatar'")
+	if platformID < 1 {
+		return nil, apperror.InvalidRequest(errors.New("invalid file upload platform"))
 	}
-	if e := query.Order("k.code").Scan(&rows).Error; e != nil {
-		return nil, e
+	rows, err := s.repository.FileUploadOptions(ctx, platformID, code)
+	if err != nil {
+		return nil, err
 	}
 	out := make([]FileUploadOption, 0, len(rows))
 	for _, row := range rows {

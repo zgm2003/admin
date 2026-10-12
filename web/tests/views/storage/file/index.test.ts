@@ -35,6 +35,7 @@ function page(codes = ['storage:file:list', 'storage:file:detail', 'storage:file
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  appI18n.global.locale.value = 'zh-CN'
   vi.mocked(api.getFileOptions).mockResolvedValue({
     categories: [{ value: 'image', label: '图片' }],
     uploadRules: [],
@@ -64,6 +65,58 @@ it('requests paginated own files and resets filters to the first page', async ()
     expect.objectContaining({ page: 1, keyword: 'photo', category: 'image' }),
     expect.any(AbortSignal),
   )
+})
+it('uses shared search and table components with localized search placeholders', async () => {
+  const wrapper = page()
+  await flushPromises()
+  expect(wrapper.findComponent({ name: 'AppSearch' }).exists()).toBe(true)
+  expect(wrapper.findComponent({ name: 'AppTable' }).exists()).toBe(true)
+  expect(wrapper.get('input[data-testid="file-keyword"]').attributes('placeholder')).toBe(
+    '请输入文件名',
+  )
+  expect(wrapper.findComponent({ name: 'AppSearch' }).props('fields')).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ key: 'category', placeholder: '请选择文件类型' }),
+    ]),
+  )
+  appI18n.global.locale.value = 'en-US'
+  await flushPromises()
+  expect(wrapper.get('input[data-testid="file-keyword"]').attributes('placeholder')).toBe(
+    'Enter a file name',
+  )
+  expect(wrapper.findComponent({ name: 'AppSearch' }).props('fields')).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ key: 'category', placeholder: 'Select a file type' }),
+    ]),
+  )
+})
+it('uploads with the backend-selected rule without a technical purpose selector', async () => {
+  vi.mocked(api.getFileOptions).mockResolvedValue({
+    categories: [{ value: 'image', label: '图片' }],
+    uploadRules: [
+      { value: 'file', label: '默认100MB', accept: '.png,image/png', maxFileSizeBytes: 104857600 },
+    ],
+  })
+  const wrapper = page(['storage:file:list', 'storage:object:upload'])
+  await flushPromises()
+  expect(wrapper.find('.file-browser__purpose').exists()).toBe(false)
+  expect(wrapper.findComponent({ name: 'UpMedia' }).props('ruleCode')).toBe('file')
+  expect(wrapper.get('[data-testid="file-upload-limit"]').text()).toBe('单个文件最大 100 MB')
+})
+it('shows a clear unavailable hint instead of guessing another upload rule', async () => {
+  const wrapper = page(['storage:file:list', 'storage:object:upload'])
+  await flushPromises()
+  expect(wrapper.findComponent({ name: 'UpMedia' }).exists()).toBe(false)
+  expect(wrapper.text()).toContain('当前平台尚未配置可用上传规则')
+})
+it('displays small upload limits without rounding them down to zero MB', async () => {
+  vi.mocked(api.getFileOptions).mockResolvedValue({
+    categories: [],
+    uploadRules: [{ value: 'file', label: 'Small files', accept: '', maxFileSizeBytes: 512 }],
+  })
+  const wrapper = page(['storage:file:list', 'storage:object:upload'])
+  await flushPromises()
+  expect(wrapper.get('[data-testid="file-upload-limit"]').text()).toBe('单个文件最大 512 B')
 })
 it('does not request own files without independent list permission', async () => {
   page(['storage:file:view'])

@@ -2,9 +2,6 @@
   display: grid;
   gap: 16px;
   min-width: 0;
-  &__purpose {
-    width: 200px;
-  }
   &__hint {
     color: var(--admin-text-soft);
   }
