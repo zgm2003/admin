@@ -15,11 +15,16 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 | --- | --- | --- |
 | Web | `web/src/main.ts`、`web/src/views` | 页面、动态路由、状态和 API 调用 |
 | API | `server/cmd/api/main.go` | 配置、依赖装配、全局 Middleware、HTTP 服务 |
+| 管理员初始化 | `server/cmd/bootstrap-admin/main.go` | 显式创建首个超级管理员，不随服务启动执行 |
 | 业务模块 | `server/internal/module/*` | 各域的 Handler、Service、Repository、Model、Schema 和测试 |
 | 数据库 | `server/internal/database` | PostgreSQL 连接与结构准备边界 |
 | Redis | `server/internal/redis`、模块内 Redis 文件 | 连接、会话/权限缓存和失效协调 |
 | Queue | `server/internal/queue` | Asynq 客户端/服务端封装，不导入业务模块 |
 | Worker | `server/cmd/worker/main.go` | 注册任务并按任务 Handler -> Service -> Repository 消费 |
+
+`server/cmd` 只保留 `api`、`bootstrap-admin`、`worker` 三个入口。已完成的一次性迁移和模板发布命令已清理；
+历史 SQL、执行记录和 runner 仅作为审计档案，依赖已删除命令的历史 runner 不再支持直接重跑。新的数据库
+变更应基于当前 PostgreSQL 编写独立 forward migration。
 
 当前模块目录包括：`auth`、`health`、`permission`、`user`、`message`、`storage`、`system`。目录存在不代表
 所有业务都已完成，状态以 `STATUS.md` 和测试为准。
