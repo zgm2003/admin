@@ -10,11 +10,12 @@ import (
 )
 
 const (
-	ValueTypeString = 1
-	ValueTypeNumber = 2
-	ValueTypeBool   = 3
-	ValueTypeJSON   = 4
-	ValueTypeMedia  = 5
+	ValueTypeString      = 1
+	ValueTypeNumber      = 2
+	ValueTypeBool        = 3
+	ValueTypeJSON        = 4
+	ValueTypeMediaFile   = 5
+	ValueTypeMediaVisual = 6
 
 	AuthCaptchaTTLKey                        = "auth.captcha.ttl_minutes"
 	AuthCaptchaSlidePaddingKey               = "auth.captcha.slide_padding"

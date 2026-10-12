@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -70,6 +70,7 @@ watch(
       isEnabled: value.isEnabled,
     }
     testEmail.value = value.fromEmail
+    void nextTick(() => formRef.value?.clearValidate())
   },
   { immediate: true },
 )
@@ -187,6 +188,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
       ref="formRef"
       :model="form"
       :rules="rules"
+      :validate-on-rule-change="false"
       label-width="120px"
       class="mail-form"
       @submit.prevent="save"

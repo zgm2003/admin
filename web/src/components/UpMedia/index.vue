@@ -12,7 +12,6 @@ import {
   ZoomIn,
   ZoomOut,
 } from '@element-plus/icons-vue'
-import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { useI18n } from 'vue-i18n'
 
 import type { CompletedFile, StorageFile } from '@/api/storage/file'
@@ -57,12 +56,14 @@ const square = computed(() => props.variant === 'image' || props.variant === 'vi
 const acceptedTypes = computed(() => props.accept ?? (square.value ? `${props.variant}/*` : ''))
 const previewKey = ref('')
 const videoVisible = computed({
-  get: () => props.variant === 'video' && !!previewKey.value,
+  get: () => previewItem.value?.kind === 'video' && !!previewKey.value,
   set: (visible: boolean) => {
     if (!visible) previewKey.value = ''
   },
 })
-const imageItems = computed(() => displayItems.value.filter((item) => !!item.previewUrl))
+const imageItems = computed(() =>
+  displayItems.value.filter((item) => item.kind === 'image' && !!item.previewUrl),
+)
 const imageIndex = computed(() =>
   Math.max(
     0,
@@ -75,7 +76,6 @@ const previewItem = computed(() =>
 const downloading = ref(false)
 const downloadError = ref('')
 let downloadController: AbortController | null = null
-let confirmingClear = false
 let emittedModel: string | string[] | null = null
 const previews = ref<Record<string, PreviewState>>({})
 let nextRequestId = 0
@@ -124,6 +124,7 @@ const values = computed(() =>
 const displayItems = computed<MediaFileItem[]>(() =>
   values.value.map((objectKey) => ({
     objectKey,
+    kind: mediaKind(objectKey),
     fileName:
       props.fileLabel || fileNames.value[objectKey] || objectKey.split('/').at(-1) || objectKey,
     previewUrl: previews.value[objectKey]?.url ?? '',
@@ -135,6 +136,14 @@ const displayItems = computed<MediaFileItem[]>(() =>
   })),
 )
 const firstItem = computed(() => displayItems.value[0])
+
+function mediaKind(objectKey: string): MediaFileItem['kind'] {
+  if (!square.value) return 'file'
+  // Only chooses the HTML preview element; upload and business rules remain server-owned.
+  if (/\.(mp4|webm|mov|m4v|ogv)$/i.test(objectKey)) return 'video'
+  if (/\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(objectKey)) return 'image'
+  return props.variant === 'video' ? 'video' : 'image'
+}
 
 watch(
   [
@@ -350,33 +359,10 @@ async function uploadSelected(selected: File[]): Promise<boolean> {
   }
 }
 
-async function clearAt(index: number): Promise<void> {
-  if (!props.clearable || props.disabled || loading.value || confirmingClear) return
+function clearAt(index: number): void {
+  if (!active || !props.clearable || props.disabled || loading.value) return
   const removed = values.value[index]
   if (!removed) return
-  const before = [...values.value]
-  confirmingClear = true
-  try {
-    await ElMessageBox.confirm(
-      t('components.upMedia.clearConfirm', {
-        name: displayItems.value[index]?.fileName ?? removed,
-      }),
-      t('confirm.title'),
-      { type: 'warning' },
-    )
-  } catch {
-    return
-  } finally {
-    confirmingClear = false
-  }
-  if (
-    !active ||
-    props.disabled ||
-    loading.value ||
-    !props.clearable ||
-    !sameMediaValue(values.value, before)
-  )
-    return
   uploadError.value = ''
   previewKey.value = ''
   const next = values.value.filter((_value, itemIndex) => itemIndex !== index)
@@ -463,7 +449,7 @@ async function downloadFile(objectKey: string): Promise<void> {
       <div v-for="(item, index) in displayItems" :key="item.objectKey" class="up-media__item">
         <div v-loading="item.pending" class="up-media__preview">
           <img
-            v-if="item.previewUrl && variant === 'image'"
+            v-if="item.previewUrl && item.kind === 'image'"
             :src="item.previewUrl"
             :alt="item.fileName"
             @error="handlePreviewError(item.objectKey)"
@@ -477,7 +463,7 @@ async function downloadFile(objectKey: string): Promise<void> {
             @error="handlePreviewError(item.objectKey)"
           />
           <component
-            :is="variant === 'video' ? VideoCamera : Picture"
+            :is="item.kind === 'video' ? VideoCamera : Picture"
             v-else
             class="up-media__placeholder"
             aria-hidden="true"
@@ -552,7 +538,7 @@ async function downloadFile(objectKey: string): Promise<void> {
     <p v-if="uploadError" class="up-media__error" role="alert">{{ uploadError }}</p>
     <p v-if="downloadError" class="up-media__error" role="alert">{{ downloadError }}</p>
     <el-image-viewer
-      v-if="variant === 'image' && previewKey && previewItem?.previewUrl"
+      v-if="previewItem?.kind === 'image' && previewKey && previewItem.previewUrl"
       :url-list="imageItems.map((item) => item.previewUrl)"
       :initial-index="imageIndex"
       :show-progress="multiple"

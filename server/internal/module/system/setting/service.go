@@ -126,7 +126,7 @@ func (s *Service) UpdateBrand(ctx context.Context, brand BrandSettings) error {
 	if utf8.RuneCountInString(brand.TitleZhCN) == 0 || utf8.RuneCountInString(brand.TitleZhCN) > brandTitleMaxRunes || utf8.RuneCountInString(brand.TitleEnUS) == 0 || utf8.RuneCountInString(brand.TitleEnUS) > brandTitleMaxRunes {
 		return apperror.InvalidRequest(fmt.Errorf("brand title is invalid"))
 	}
-	if err := validateInput(BrandDefaultAvatarKey, brand.DefaultAvatar, ValueTypeMedia, ""); err != nil {
+	if err := validateInput(BrandDefaultAvatarKey, brand.DefaultAvatar, ValueTypeMediaVisual, ""); err != nil {
 		return apperror.InvalidRequest(err)
 	}
 	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (configcache.MutationResult, error) {
@@ -680,14 +680,14 @@ func validateInput(key, value string, valueType int, description string) error {
 			return fmt.Errorf("brand title must be a non-empty string of at most 128 characters")
 		}
 	case BrandDefaultAvatarKey:
-		if valueType != ValueTypeMedia {
+		if valueType != ValueTypeMediaVisual {
 			return fmt.Errorf("default avatar must use the media value type")
 		}
 		if !validBrandAvatar(value) {
 			return fmt.Errorf("default avatar must be an image storage object key")
 		}
 	case sharedsetting.MailRecipientRuleImportTemplateObjectKey:
-		if valueType != ValueTypeMedia {
+		if valueType != ValueTypeMediaFile {
 			return fmt.Errorf("template must use the media value type")
 		}
 		if value != "" && (objectkey.Validate(value) != nil || !strings.HasSuffix(value, ".xlsx")) {
@@ -733,8 +733,10 @@ func validSettingValue(value string, valueType int) bool {
 		return value == "0" || value == "1" || value == "true" || value == "false"
 	case ValueTypeJSON:
 		return json.Valid([]byte(value))
-	case ValueTypeMedia:
+	case ValueTypeMediaFile:
 		return value == "" || objectkey.Validate(value) == nil
+	case ValueTypeMediaVisual:
+		return value == "" || (objectkey.Validate(value) == nil && visualMediaVariant(value) != "")
 	default:
 		return false
 	}

@@ -34,13 +34,13 @@ func TestMailRuleTemplateSettingAcceptsOnlyXlsxObjectKeys(t *testing.T) {
 func TestMailRuleTemplateCacheRejectsOldFileFormats(t *testing.T) {
 	key := "setting/.admin-storage/v2/p1/r1/c1/v1/2026/10/08/0123456789abcdef0123456789abcdef.xlsx"
 	now := time.Now().UTC()
-	row := Record{ID: 13, Key: sharedsetting.MailRecipientRuleImportTemplateObjectKey, Value: key, ValueType: ValueTypeMedia, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	row := Record{ID: 13, Key: sharedsetting.MailRecipientRuleImportTemplateObjectKey, Value: key, ValueType: ValueTypeMediaFile, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	encoded, err := encodeRecordPayload(1, row)
 	if err != nil {
 		t.Fatalf("valid Excel media record cannot be cached: %v", err)
 	}
 	decoded, err := decodeRecordPayload(encoded)
-	if err != nil || decoded.Value != key || decoded.ValueType != ValueTypeMedia {
+	if err != nil || decoded.Value != key || decoded.ValueType != ValueTypeMediaFile {
 		t.Fatalf("media record roundtrip failed: %+v, %v", decoded, err)
 	}
 	for _, suffix := range []string{".csv", ".xls", ".xlsm"} {

@@ -19,7 +19,7 @@ func TestSettingResponseOwnsEditorConstraintsAndActions(t *testing.T) {
 		{sharedsetting.MessageNotificationRetentionDaysKey, ValueTypeNumber, 30, 3650, "number", true},
 		{sharedsetting.RealtimeEventRetentionDaysKey, ValueTypeNumber, 1, 30, "number", true},
 		{sharedsetting.SchedulerHistoryRetentionDaysKey, ValueTypeNumber, 7, 3650, "number", true},
-		{BrandDefaultAvatarKey, ValueTypeMedia, 0, 0, "media", true},
+		{BrandDefaultAvatarKey, ValueTypeMediaVisual, 0, 0, "media", true},
 		{"custom.key", ValueTypeJSON, 0, 0, "json", false},
 	}
 	for _, test := range tests {
@@ -64,21 +64,24 @@ func TestCreateResponseOwnsPresentation(t *testing.T) {
 
 func TestMediaPresentationUsesGenericDisplayVariants(t *testing.T) {
 	tests := []struct {
-		name    string
-		key     string
-		value   string
-		variant string
+		name      string
+		key       string
+		value     string
+		variant   string
+		valueType int
 	}{
-		{"empty default avatar", BrandDefaultAvatarKey, "", "image"},
-		{"Excel template", sharedsetting.MailRecipientRuleImportTemplateObjectKey, "setting/template.xlsx", "file"},
-		{"generic image", "app.assets.image", "setting/image.JPG", "image"},
-		{"generic video", "app.assets.video", "setting/video.MP4", "video"},
-		{"empty generic media", "app.assets.file", "", "file"},
-		{"generic document", "app.assets.file", "setting/file.pdf", "file"},
+		{"empty default avatar", BrandDefaultAvatarKey, "", "image", 6},
+		{"Excel template", sharedsetting.MailRecipientRuleImportTemplateObjectKey, "setting/template.xlsx", "file", 5},
+		{"generic image", "app.assets.image", "setting/image.JPG", "image", 6},
+		{"generic video", "app.assets.video", "setting/video.MP4", "video", 6},
+		{"empty visual media", "app.assets.visual", "", "image", 6},
+		{"empty file media", "app.assets.file", "", "file", 5},
+		{"generic document", "app.assets.file", "setting/file.pdf", "file", 5},
+		{"image used as attachment", "app.assets.file", "setting/image.png", "file", 5},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			response := itemResponse(Record{Key: test.key, Value: test.value, ValueType: ValueTypeMedia})
+			response := itemResponse(Record{Key: test.key, Value: test.value, ValueType: test.valueType})
 			if response.Presentation.MediaVariant != test.variant {
 				t.Fatalf("mediaVariant=%q want %q", response.Presentation.MediaVariant, test.variant)
 			}

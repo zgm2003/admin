@@ -92,7 +92,6 @@ export const zhCN = {
   'components.upMedia.preview': '预览',
   'components.upMedia.previewUnavailable': '暂时无法预览此文件',
   'components.upMedia.downloadFailed': '文件下载失败，请重试',
-  'components.upMedia.clearConfirm': '确定清除“{name}”的当前选择吗？文件库中的原文件会保留。',
   'components.upMedia.zoomIn': '放大',
   'components.upMedia.zoomOut': '缩小',
   'components.upMedia.fit': '切换适应尺寸',

@@ -38,8 +38,16 @@ const editor = computed(
     props.valueTypeOptions.find((option) => option.value === form.value.valueType)?.editor ??
     presentation.value.editor,
 )
-const mediaAccept = computed(() => presentation.value.mediaAccept)
-const mediaVariant = computed(() => presentation.value.mediaVariant)
+const selectedType = computed(() =>
+  props.valueTypeOptions.find((option) => option.value === form.value.valueType),
+)
+const mediaPresentation = computed(() =>
+  props.editing?.valueType === form.value.valueType
+    ? presentation.value
+    : (selectedType.value ?? presentation.value),
+)
+const mediaAccept = computed(() => mediaPresentation.value.mediaAccept)
+const mediaVariant = computed(() => mediaPresentation.value.mediaVariant)
 const allowEmpty = computed(() =>
   props.editing?.valueType === form.value.valueType
     ? presentation.value.allowEmpty

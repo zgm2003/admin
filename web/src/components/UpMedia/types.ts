@@ -25,6 +25,7 @@ export interface PreviewState {
 }
 
 export interface MediaFileItem {
+  kind: 'image' | 'video' | 'file'
   objectKey: string
   fileName: string
   previewUrl: string

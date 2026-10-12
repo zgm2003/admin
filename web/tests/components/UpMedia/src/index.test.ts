@@ -20,6 +20,21 @@ const objectURLMock = vi.mocked(requestObjectURL)
 const wrappers: VueWrapper[] = []
 
 describe('UpMedia', () => {
+  it('previews a video selected in an image/video square as a video', async () => {
+    const wrapper = mountComponent({
+      ruleCode: 'setting',
+      variant: 'image',
+      accept: 'image/*,video/*',
+      modelValue: 'setting/clip.mp4',
+    })
+    await flushPromises()
+    expect(wrapper.find('.up-media__preview video').exists()).toBe(true)
+    expect(wrapper.find('.up-media__preview img').exists()).toBe(false)
+    await wrapper.get('[data-testid="up-media-preview"]').trigger('click')
+    await flushPromises()
+    expect(document.querySelector('[data-testid="up-media-preview-video"]')).not.toBeNull()
+    expect(wrapper.findComponent({ name: 'ElImageViewer' }).exists()).toBe(false)
+  })
   afterEach(() => {
     for (const wrapper of wrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
@@ -427,18 +442,40 @@ describe('UpMedia', () => {
     click.mockRestore()
   })
 
-  it('confirms clearing and does not clear a new binding after a late confirmation', async () => {
-    const pending = deferred<Awaited<ReturnType<typeof ElMessageBox.confirm>>>()
-    const confirm = vi.spyOn(ElMessageBox, 'confirm').mockReturnValueOnce(pending.promise)
-    const wrapper = mountComponent({ modelValue: 'old.png', ruleCode: 'avatar' })
-    await wrapper.get('.up-media__clear').trigger('click')
-    expect(confirm).toHaveBeenCalledOnce()
-    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
-    await wrapper.setProps({ modelValue: 'new.png' })
-    pending.resolve(Object.assign('confirm' as const, { value: '', action: 'confirm' as const }))
+  it.each(['image', 'video', 'file'] as const)(
+    'clears the pending %s value immediately without confirmation or network requests',
+    async (variant) => {
+      const confirm = vi.spyOn(ElMessageBox, 'confirm')
+      const wrapper = mountComponent({ modelValue: 'old.png', ruleCode: 'file', variant })
+      await flushPromises()
+      objectURLMock.mockClear()
+      await wrapper
+        .get(variant === 'file' ? '[data-testid="up-media-file-clear"]' : '.up-media__clear')
+        .trigger('click')
+      expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([''])
+      expect(confirm).not.toHaveBeenCalled()
+      expect(fetch).not.toHaveBeenCalled()
+      expect(objectURLMock).not.toHaveBeenCalled()
+      expect(credentialsMock).not.toHaveBeenCalled()
+      expect(completeMock).not.toHaveBeenCalled()
+    },
+  )
+
+  it('removes only the selected item from multiple pending values without confirmation', async () => {
+    const confirm = vi.spyOn(ElMessageBox, 'confirm')
+    const wrapper = mountComponent({
+      modelValue: ['first.pdf', 'second.pdf'],
+      ruleCode: 'file',
+      variant: 'file',
+      multiple: true,
+    })
     await flushPromises()
-    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
-    confirm.mockRestore()
+    await wrapper.findAll('[data-testid="up-media-file-clear"]')[0]!.trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['second.pdf']])
+    expect(confirm).not.toHaveBeenCalled()
+    await wrapper.setProps({ modelValue: ['second.pdf'] })
+    await wrapper.get('[data-testid="up-media-file-clear"]').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([[]])
   })
 
   it('downloads from the image viewer using a fresh URL and a local Blob', async () => {

@@ -50,7 +50,7 @@ func valueEditor(valueType int) string {
 		return "boolean"
 	case ValueTypeJSON:
 		return "json"
-	case ValueTypeMedia:
+	case ValueTypeMediaFile, ValueTypeMediaVisual:
 		return "media"
 	default:
 		return "text"
@@ -61,13 +61,12 @@ func presentationFor(row Record) settingPresentation {
 	p := settingPresentation{Editor: valueEditor(row.ValueType), AllowEmpty: validSettingValue("", row.ValueType),
 		MediaRuleCode: "setting", MediaVariant: "file",
 		Actions: settingActions{Status: !isRequiredSetting(row.Key), Delete: row.IsBuiltin == yesno.No && !isRequiredSetting(row.Key)}}
-	if row.ValueType == ValueTypeMedia {
-		switch strings.ToLower(path.Ext(row.Value)) {
-		case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".svg":
+	if row.ValueType == ValueTypeMediaVisual {
+		p.MediaVariant = visualMediaVariant(row.Value)
+		if p.MediaVariant == "" {
 			p.MediaVariant = "image"
-		case ".mp4", ".webm", ".mov", ".m4v", ".ogv":
-			p.MediaVariant = "video"
 		}
+		p.MediaAccept = ".png,.jpg,.jpeg,.gif,.webp,.avif,.bmp,.svg,.mp4,.webm,.mov,.m4v,.ogv"
 	}
 	if bounds, ok := retentionLimits[row.Key]; ok {
 		p.Minimum = &bounds.Minimum
@@ -92,4 +91,15 @@ func presentationFor(row Record) settingPresentation {
 		p.MediaAccept = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 	}
 	return p
+}
+
+func visualMediaVariant(value string) string {
+	switch strings.ToLower(path.Ext(value)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".svg":
+		return "image"
+	case ".mp4", ".webm", ".mov", ".m4v", ".ogv":
+		return "video"
+	default:
+		return ""
+	}
 }

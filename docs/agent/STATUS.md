@@ -1,10 +1,23 @@
 # 项目状态
 
-## 当前工作：UpMedia 四种展示模式整改（2026-10-12）
+## 上传暂存清除、系统设置媒体类型与邮件校验修复（2026-10-12，代码、真实迁移与定向验证完成）
+
+- 按维护者最新要求覆盖上一轮清除约定：UpMedia 删除/清除只同步移除本地待保存选择，不弹二次确认、不调用保存或文件删除接口，不影响“我的文件”原件；文件库真正删除仍保留确认。覆盖单/多值、个人头像、设置媒体及禁用/上传中交互。
+- 系统设置值类型拆为 5=媒体-文件（按钮和附件行）、6=媒体-图片/视频（正方形）；默认头像使用 6 且仅允许图片，Excel 模板保持 5。后端拥有类型校验、双语 options、展示形态和格式限制，前端按 DTO 展示；混合媒体由公共组件按格式选择图片/视频预览元素。不增加表、字段、权限或上传热路径查询；沿用百万用户/多实例下既有配置版本与 outbox 失效协议，不清 Redis、不逐行访问 COS。
+- 邮件配置误报根因是 Element Plus 在异步 options 或语言变化导致 rules 更新时自动校验尚未回填的表单。已关闭规则变化自动校验，配置回填后清除旧校验，保留保存/失焦规则；真实组件回归验证合法多级域名邮箱、中文别名和 TTL=5，以及无效草稿切换语言后保存仍被拦截。另修复 Vitest 中 async-validator 的 CJS/default 互操作造成无效输入漏检，测试环境内联 Element Plus/async-validator，两个新增用例均完成失败到通过验证。
+- 已执行 `& './docs/database/2026-10-12-system-setting-media-kinds.ps1'`：首次迁移 1 条默认头像记录，generation 18→19，保留 ID、对象键及其他业务字段；最终版再次执行为 0 条变化、19→19，runner 内二次执行不变。迁移使用原子 DO block、锁等待上限、写前备份和前后审计；测试覆盖强制失败时 DDL/数据/版本/outbox 回滚，以及迁移后新建的 5 类图片附件不会被复跑误改。真实结构已导出 current.sql。审计备份位于 `%LOCALAPPDATA%\Admin\backups\system-setting-media-kinds\20261012-191943-606` 和 `20261012-192635-234`。
+- 实际前端验证：`pnpm vitest run tests/views/message/mail/index.test.ts tests/components/UpMedia/src/index.test.ts tests/components/UpMedia/fileLibrary.test.ts tests/views/user/profile/index.test.ts tests/views/system/setting/index.test.ts tests/views/storage/file/index.test.ts vite.config.test.ts --pool=threads --maxWorkers=1`，7 文件 160 项通过；`pnpm build`（含 vue-tsc）、受影响 Vue/TS/测试 ESLint、Prettier、`pnpm check:architecture`（0 findings）及 `git diff --check` 通过。
+- 实际后端验证：受影响 Go 文件已 gofmt；`go test ./internal/module/system/setting ./internal/module/message/mail/recipientRule ./internal/shared/i18n ./internal/shared/setting -count=1`、`go test ./internal/database -run '^TestSettingMediaKinds' -count=1`、`go vet ./internal/module/system/setting ./internal/module/message/mail/recipientRule ./internal/shared/i18n ./internal/shared/setting ./internal/database`、`go build ./...` 均通过。
+- 未运行全仓测试、真实浏览器/COS 验收；构建保留既有富文本大 chunk 提示。没有启动/停止后端或提交 Git；维护者自行重启新版后端并刷新前端加载新契约。
+
+## UpMedia 四种展示模式整改（2026-10-12，代码与定向验证完成）
 
 - 维护者确认图片 image / 视频 video 使用正方形，文件 file 使用按钮和附件列表，按钮 button 只提供上传入口并交给页面展示结果；文件库选择独立开关，公共组件不出现头像业务文案。
 - 范围：UpMedia、FileBrowser、个人中心、设置展示 DTO 与中英文文案；共用签名直传/完成登记/文件选择流程，沿用既有权限，不增加数据库结构。百万用户/多实例基线下不增加上传热路径查询或缓存，设置展示分类使用代码和既有对象键，不逐行查询 COS。
 - 按维护者最新截图：正方形悬停显示预览/删除图标，图片复用 Element Plus 查看器和下载，视频使用播放器；附件行保留图标/文件名/下载/清除，不增加逐项替换入口。删除/清除二次确认只移除当前字段选择，不删除文件库原件。验收包括单/多文件、取消、部分失败、文件库开关和用途、签名失效和下载失败、头像清空与幂等保存；不启动/停止后端，不使用子代理或 computer use。
+- 已实现四模式与原始文件名展示，文件库页通过 button 模式和 uploaded 事件刷新，个人中心使用 image；设置展示模式由后端 presentation DTO 返回，不在前端重算。图片查看器下载重新取得签名并通过 Blob 保存，保留预览到签名刷新结束；失败可重试，切换绑定或卸载取消旧下载。视频按需挂载播放器、关闭卸载；清除确认晚到时核对原绑定，避免清除新值。稳定规则已同步 design.md。
+- 实际验证：`pnpm vitest run tests/components/UpMedia/src/index.test.ts tests/components/UpMedia/fileLibrary.test.ts tests/components/FileSelectDialog.test.ts tests/views/user/profile/index.test.ts tests/views/system/setting/index.test.ts tests/views/storage/file/index.test.ts --pool=forks --maxWorkers=1`：6 文件 95 项通过；随后补下载网络/HTTP 失败重试、绑定变化取消回归，单独重跑 `pnpm vitest run tests/components/UpMedia/src/index.test.ts --pool=forks --maxWorkers=1`：29 项通过。`pnpm build`（含 vue-tsc）、追加测试后的 `pnpm typecheck`、受影响 Vue/TS/测试 ESLint 和 Prettier、`pnpm check:architecture`（0 findings）、`git diff --check` 通过；后端 `go test ./internal/module/system/setting -count=1` 与同包 `go vet` 通过，Go 文件已 gofmt。
+- 未运行全仓测试、真实浏览器视觉验收或真实 COS 下载；Blob 下载需要 COS 的 GET CORS 配置，网络 mock 不代表真实云端验收。构建保留既有富文本大 chunk 提示。本轮无数据库/RBAC 变化，不需要迁移；维护者自行重启后端加载新的设置展示 DTO 并刷新前端。没有启动/停止 API/Worker 或提交 Git。
 
 ## 我的文件上传完成请求体修复（2026-10-12，代码与定向验证完成）
 

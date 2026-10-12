@@ -95,8 +95,6 @@ export const enUS = {
   'components.upMedia.preview': 'Preview',
   'components.upMedia.previewUnavailable': 'This file cannot be previewed right now',
   'components.upMedia.downloadFailed': 'Failed to download the file. Try again.',
-  'components.upMedia.clearConfirm':
-    'Clear the current selection of “{name}”? The original in My Files will be kept.',
   'components.upMedia.zoomIn': 'Zoom in',
   'components.upMedia.zoomOut': 'Zoom out',
   'components.upMedia.fit': 'Toggle fit size',

@@ -16,6 +16,8 @@ export interface SettingPresentation {
   actions: { status: boolean; delete: boolean }
 }
 export interface SettingTypeOption {
+  mediaVariant: SettingPresentation['mediaVariant']
+  mediaAccept: string
   allowEmpty: boolean
   value: number
   label: string

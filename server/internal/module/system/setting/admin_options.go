@@ -14,8 +14,10 @@ type settingAdminOptions struct {
 
 type settingValueOption struct {
 	option.Option[int]
-	Editor     string `json:"editor"`
-	AllowEmpty bool   `json:"allowEmpty"`
+	Editor       string `json:"editor"`
+	AllowEmpty   bool   `json:"allowEmpty"`
+	MediaVariant string `json:"mediaVariant"`
+	MediaAccept  string `json:"mediaAccept"`
 }
 
 func adminOptions(ctx context.Context) (settingAdminOptions, error) {
@@ -24,7 +26,8 @@ func adminOptions(ctx context.Context) (settingAdminOptions, error) {
 		{Value: ValueTypeNumber, Key: i18n.KeySettingValueTypeNumber},
 		{Value: ValueTypeBool, Key: i18n.KeySettingValueTypeBool},
 		{Value: ValueTypeJSON, Key: i18n.KeySettingValueTypeJSON},
-		{Value: ValueTypeMedia, Key: i18n.KeySettingValueTypeMedia},
+		{Value: ValueTypeMediaFile, Key: i18n.KeySettingValueTypeMediaFile},
+		{Value: ValueTypeMediaVisual, Key: i18n.KeySettingValueTypeMediaVisual},
 	}
 	options, err := option.ManyLocalized(ctx, entries)
 	if err != nil {
@@ -32,7 +35,8 @@ func adminOptions(ctx context.Context) (settingAdminOptions, error) {
 	}
 	valueTypes := make([]settingValueOption, 0, len(options))
 	for _, item := range options {
-		valueTypes = append(valueTypes, settingValueOption{Option: item, Editor: valueEditor(item.Value), AllowEmpty: validSettingValue("", item.Value)})
+		p := presentationFor(Record{ValueType: item.Value})
+		valueTypes = append(valueTypes, settingValueOption{Option: item, Editor: p.Editor, AllowEmpty: p.AllowEmpty, MediaVariant: p.MediaVariant, MediaAccept: p.MediaAccept})
 	}
 	return settingAdminOptions{ValueTypes: valueTypes, DefaultValueType: ValueTypeString, DefaultPresentation: presentationFor(Record{ValueType: ValueTypeString})}, nil
 }

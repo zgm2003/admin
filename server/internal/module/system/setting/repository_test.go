@@ -102,7 +102,7 @@ func TestRepositoryBrandMutationAdvancesGenerationOnce(t *testing.T) {
 	for _, row := range []Model{
 		{Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 		{Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMedia, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMediaVisual, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 	} {
 		seedSettingRow(t, db, ctx, row)
 	}

@@ -28,11 +28,12 @@ var dedicatedSettingKeys = []string{
 }
 
 const (
-	ValueTypeString = sharedsetting.ValueTypeString
-	ValueTypeNumber = sharedsetting.ValueTypeNumber
-	ValueTypeBool   = sharedsetting.ValueTypeBool
-	ValueTypeJSON   = sharedsetting.ValueTypeJSON
-	ValueTypeMedia  = sharedsetting.ValueTypeMedia
+	ValueTypeString      = sharedsetting.ValueTypeString
+	ValueTypeNumber      = sharedsetting.ValueTypeNumber
+	ValueTypeBool        = sharedsetting.ValueTypeBool
+	ValueTypeJSON        = sharedsetting.ValueTypeJSON
+	ValueTypeMediaFile   = sharedsetting.ValueTypeMediaFile
+	ValueTypeMediaVisual = sharedsetting.ValueTypeMediaVisual
 )
 
 const (

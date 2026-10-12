@@ -52,14 +52,38 @@ func TestBrandFieldsUseStrictScalarAndImageContracts(t *testing.T) {
 		}
 	}
 	for _, value := range []string{"https://example.com/avatar.png", "avatar/legacy.png", strings.TrimSuffix(settingImageKey, ".png") + ".csv"} {
-		if err := validateInput(BrandDefaultAvatarKey, value, 5, ""); err == nil {
+		if err := validateInput(BrandDefaultAvatarKey, value, 6, ""); err == nil {
 			t.Fatalf("invalid avatar accepted: %q", value)
 		}
 	}
 	for _, value := range []string{"", settingImageKey, strings.Replace(settingImageKey, "setting/", "avatar/", 1)} {
-		if err := validateInput(BrandDefaultAvatarKey, value, 5, ""); err != nil {
+		if err := validateInput(BrandDefaultAvatarKey, value, 6, ""); err != nil {
 			t.Fatalf("valid avatar rejected: %v", err)
 		}
+	}
+}
+
+func TestVisualMediaValueTypeRejectsDocumentsAndSurvivesCache(t *testing.T) {
+	for _, suffix := range []string{".png", ".mp4", ".webm"} {
+		key := strings.TrimSuffix(settingImageKey, ".png") + suffix
+		if err := validateInput("app.assets.visual", key, 6, ""); err != nil {
+			t.Fatal(err)
+		}
+		row := Record{Key: "app.assets.visual", Value: key, ValueType: 6, IsEnabled: yesno.Yes}
+		raw, err := encodeRecordPayload(1, row)
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoded, err := decodeRecordPayload(raw)
+		if err != nil || decoded.ValueType != 6 || decoded.Value != key {
+			t.Fatalf("decoded=%+v err=%v", decoded, err)
+		}
+	}
+	if validSettingValue(strings.TrimSuffix(settingImageKey, ".png")+".pdf", 6) {
+		t.Fatal("document accepted as visual media")
+	}
+	if err := validateInput(BrandDefaultAvatarKey, settingImageKey, 5, ""); err == nil {
+		t.Fatal("avatar accepted file type")
 	}
 }
 

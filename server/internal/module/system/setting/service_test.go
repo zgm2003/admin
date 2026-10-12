@@ -288,7 +288,7 @@ func TestServiceReadsAndAtomicallyUpdatesBrandSettings(t *testing.T) {
 	repo := &fakeRepository{rows: map[string]Record{
 		BrandTitleZhCNKey:     {Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
 		BrandTitleEnUSKey:     {Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
-		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMedia, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMediaVisual, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
 	}}
 	harness := openSettingGenerationHarness(t)
 	service := harness.service(repo)
@@ -887,7 +887,7 @@ func TestServiceBrandUsesSingleSnapshotVariant(t *testing.T) {
 	fake := &fakeRepository{rows: map[string]Record{
 		BrandTitleZhCNKey:     {Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
 		BrandTitleEnUSKey:     {Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
-		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMedia, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMediaVisual, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
 	}}
 	service := harness.service(fake)
 

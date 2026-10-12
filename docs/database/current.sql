@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict ctc0BzvgkpfjBabQsfYJxwdCeWGckpqZz5fWgHitxghQ1OoCffV8QKUQOgJqy15
+\restrict AdminCurrentSchemaSnapshot
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -1497,7 +1497,7 @@ CREATE TABLE public.system_setting (
     CONSTRAINT ck_system_setting_is_builtin CHECK ((is_builtin = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_system_setting_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_system_setting_key CHECK (((setting_key)::text ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'::text)),
-    CONSTRAINT ck_system_setting_value_type CHECK ((value_type = ANY (ARRAY[1, 2, 3, 4, 5])))
+    CONSTRAINT ck_system_setting_value_type CHECK ((value_type = ANY (ARRAY[1, 2, 3, 4, 5, 6])))
 );
 
 
@@ -1505,7 +1505,7 @@ CREATE TABLE public.system_setting (
 -- Name: COLUMN system_setting.value_type; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.system_setting.value_type IS '配置值类型：1=字符串，2=数字，3=布尔，4=JSON，5=媒体对象键';
+COMMENT ON COLUMN public.system_setting.value_type IS '1=字符串, 2=数字, 3=布尔, 4=JSON, 5=媒体-文件对象键, 6=媒体-图片/视频对象键';
 
 
 --
@@ -3364,5 +3364,5 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 -- PostgreSQL database dump complete
 --
 
-\unrestrict ctc0BzvgkpfjBabQsfYJxwdCeWGckpqZz5fWgHitxghQ1OoCffV8QKUQOgJqy15
+\unrestrict AdminCurrentSchemaSnapshot
 

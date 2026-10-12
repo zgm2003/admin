@@ -15,8 +15,11 @@ func TestAdminOptionsOwnLocalizedValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(zh.ValueTypes) != 5 || len(en.ValueTypes) != 5 {
+	if len(zh.ValueTypes) != 6 || len(en.ValueTypes) != 6 {
 		t.Fatalf("catalog sizes: %#v / %#v", zh, en)
+	}
+	if zh.ValueTypes[4].Label != "媒体-文件" || zh.ValueTypes[5].Label != "媒体-图片/视频" {
+		t.Fatalf("media type labels: %#v", zh.ValueTypes)
 	}
 	if zh.ValueTypes[0].Value != 1 || en.ValueTypes[0].Value != zh.ValueTypes[0].Value {
 		t.Fatal("option value changed")

@@ -178,7 +178,7 @@ func (p recordPayload) record() Record {
 }
 
 func encodeRecordPayload(generation int64, row Record) (string, error) {
-	if generation < 1 || row.Key == "" || (row.ValueType == ValueTypeMedia && !validSettingValue(row.Value, ValueTypeMedia)) {
+	if generation < 1 || row.Key == "" || ((row.ValueType == ValueTypeMediaFile || row.ValueType == ValueTypeMediaVisual) && !validSettingValue(row.Value, row.ValueType)) {
 		return "", fmt.Errorf("setting snapshot payload is invalid")
 	}
 	if row.Key == sharedsetting.MailRecipientRuleImportTemplateObjectKey && validateInput(row.Key, row.Value, row.ValueType, row.Description) != nil {
@@ -210,10 +210,10 @@ func decodeRecordPayload(raw string) (recordPayload, error) {
 	if payload.Generation < 1 || payload.Key == "" {
 		return recordPayload{}, fmt.Errorf("%w: setting snapshot coordinates are invalid", ErrSnapshotCorrupt)
 	}
-	if payload.ValueType < ValueTypeString || payload.ValueType > ValueTypeMedia {
+	if payload.ValueType < ValueTypeString || payload.ValueType > ValueTypeMediaVisual {
 		return recordPayload{}, fmt.Errorf("%w: setting snapshot value type is invalid", ErrSnapshotCorrupt)
 	}
-	if payload.ValueType == ValueTypeMedia && !validSettingValue(payload.Value, ValueTypeMedia) {
+	if (payload.ValueType == ValueTypeMediaFile || payload.ValueType == ValueTypeMediaVisual) && !validSettingValue(payload.Value, payload.ValueType) {
 		return recordPayload{}, fmt.Errorf("%w: setting media object key is invalid", ErrSnapshotCorrupt)
 	}
 	if payload.Key == sharedsetting.MailRecipientRuleImportTemplateObjectKey && validateInput(payload.Key, payload.Value, payload.ValueType, payload.Description) != nil {

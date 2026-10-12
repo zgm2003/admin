@@ -105,6 +105,57 @@ describe('mail service page', () => {
     document.body.innerHTML = ''
   })
 
+  it('does not retain empty-form errors when options load before valid config', async () => {
+    const config = deferred<mailApi.MailConfig>()
+    vi.mocked(mailApi.getMailConfig).mockReturnValueOnce(config.promise)
+    const wrapper = mountPage(['message:mail:list', 'message:mail:config:update'])
+    await flushPromises()
+    expect(getMailConfigOptions).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(wrapper.findAll('.mail-form .is-validating')).toHaveLength(0))
+    expect(wrapper.findAll('.mail-form .el-form-item.is-error')).toHaveLength(0)
+    config.resolve({
+      configured: true,
+      region: 'ap-guangzhou',
+      endpoint: '',
+      fromEmail: 'manager@email.zgm2003.cn',
+      fromName: '智域云阁',
+      replyTo: '',
+      ttlMinutes: 5,
+      isEnabled: YesNo.Yes,
+      lastTestAt: null,
+      lastTestError: '',
+    })
+    await flushPromises()
+    expect(mailConfigInputValues(wrapper)).toContain('manager@email.zgm2003.cn')
+    expect(wrapper.findAll('.mail-form .el-form-item.is-error')).toHaveLength(0)
+    await wrapper.get('[data-testid="mail-config-save"]').trigger('click')
+    await flushPromises()
+    expect(mailApi.saveMailConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ fromEmail: 'manager@email.zgm2003.cn', ttlMinutes: 5 }),
+    )
+  })
+
+  it('does not validate an untouched draft on locale changes but rejects invalid input on save', async () => {
+    const wrapper = mountPage(['message:mail:list', 'message:mail:config:update'])
+    await flushPromises()
+    const fields = wrapper.findAllComponents({ name: 'ElFormItem' })
+    const email = fields.find((field) => field.props('prop') === 'fromEmail')
+    const name = fields.find((field) => field.props('prop') === 'fromName')
+    if (!email || !name) throw new Error('mail fields missing')
+    await email.get('input').setValue('invalid-email')
+    await name.get('input').setValue('')
+    setLocale('en-US')
+    await flushPromises()
+    await vi.waitFor(() => expect(wrapper.findAll('.mail-form .is-validating')).toHaveLength(0))
+    expect(wrapper.findAll('.mail-form .el-form-item.is-error')).toHaveLength(0)
+    await wrapper.get('[data-testid="mail-config-save"]').trigger('click')
+    await flushPromises()
+    await vi.waitFor(() =>
+      expect(wrapper.findAll('.mail-form .el-form-item.is-error')).toHaveLength(2),
+    )
+    expect(mailApi.saveMailConfig).not.toHaveBeenCalled()
+  })
+
   it('does not save a changed config status when confirmation is cancelled', async () => {
     const wrapper = mountPage(['message:mail:list', 'message:mail:config:update'])
     await flushPromises()

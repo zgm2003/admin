@@ -132,7 +132,8 @@ const (
 	KeySettingValueTypeNumber           MessageKey = "setting.options.valueType.number"
 	KeySettingValueTypeBool             MessageKey = "setting.options.valueType.bool"
 	KeySettingValueTypeJSON             MessageKey = "setting.options.valueType.json"
-	KeySettingValueTypeMedia            MessageKey = "setting.options.valueType.media"
+	KeySettingValueTypeMediaFile        MessageKey = "setting.options.valueType.mediaFile"
+	KeySettingValueTypeMediaVisual      MessageKey = "setting.options.valueType.mediaVisual"
 	KeyAuthPlatformLoginEmail           MessageKey = "authPlatform.options.loginType.email"
 	KeyAuthPlatformLoginPhone           MessageKey = "authPlatform.options.loginType.phone"
 	KeyAuthPlatformLoginPassword        MessageKey = "authPlatform.options.loginType.password"
@@ -353,7 +354,8 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySettingValueTypeNumber:            "数字",
 		KeySettingValueTypeBool:              "布尔",
 		KeySettingValueTypeJSON:              "JSON",
-		KeySettingValueTypeMedia:             "媒体",
+		KeySettingValueTypeMediaFile:         "媒体-文件",
+		KeySettingValueTypeMediaVisual:       "媒体-图片/视频",
 		KeyAuthPlatformLoginEmail:            "邮箱验证码",
 		KeyAuthPlatformLoginPhone:            "手机验证码",
 		KeyAuthPlatformLoginPassword:         "密码",
@@ -586,7 +588,8 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySettingValueTypeNumber:            "Number",
 		KeySettingValueTypeBool:              "Boolean",
 		KeySettingValueTypeJSON:              "JSON",
-		KeySettingValueTypeMedia:             "Media",
+		KeySettingValueTypeMediaFile:         "Media - File",
+		KeySettingValueTypeMediaVisual:       "Media - Image/Video",
 		KeyAuthPlatformLoginEmail:            "Email code",
 		KeyAuthPlatformLoginPhone:            "Phone code",
 		KeyAuthPlatformLoginPassword:         "Password",

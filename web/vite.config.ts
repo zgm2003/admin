@@ -105,6 +105,7 @@ export function createViteConfig(mode: string): ViteUserConfig {
     },
     test: {
       environment: 'jsdom',
+      server: { deps: { inline: [/element-plus/, /async-validator/] } },
       include: ['tests/**/*.{test,spec}.{ts,tsx,js,jsx}', 'vite.config.test.ts'],
       pool: 'threads',
       maxWorkers: 1,

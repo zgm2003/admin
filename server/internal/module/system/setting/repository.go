@@ -218,7 +218,7 @@ func (r *Repository) UpdateBrand(ctx context.Context, brand BrandSettings, expec
 
 func brandValueType(key string) int {
 	if key == BrandDefaultAvatarKey {
-		return ValueTypeMedia
+		return ValueTypeMediaVisual
 	}
 	return ValueTypeString
 }

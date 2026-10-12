@@ -43,7 +43,7 @@ const mediaAvatar = settingRow({
   id: 3,
   key: 'app.brand.default_avatar',
   value: '',
-  valueType: 5,
+  valueType: 6,
   isBuiltin: YesNo.Yes,
 })
 const mediaXlsx = settingRow({
@@ -66,11 +66,54 @@ describe('system setting page', () => {
     setLocale('zh-CN')
     vi.mocked(optionsAPI.getSettingOptions).mockResolvedValue({
       valueTypes: [
-        { value: 1, label: '字符串', editor: 'text', allowEmpty: true },
-        { value: 2, label: '数字', editor: 'number', allowEmpty: false },
-        { value: 3, label: '布尔值', editor: 'boolean', allowEmpty: false },
-        { value: 4, label: 'JSON', editor: 'json', allowEmpty: false },
-        { value: 5, label: '媒体', editor: 'media', allowEmpty: true },
+        {
+          value: 1,
+          label: '字符串',
+          editor: 'text',
+          allowEmpty: true,
+          mediaVariant: 'file',
+          mediaAccept: '',
+        },
+        {
+          value: 2,
+          label: '数字',
+          editor: 'number',
+          allowEmpty: false,
+          mediaVariant: 'file',
+          mediaAccept: '',
+        },
+        {
+          value: 3,
+          label: '布尔值',
+          editor: 'boolean',
+          allowEmpty: false,
+          mediaVariant: 'file',
+          mediaAccept: '',
+        },
+        {
+          value: 4,
+          label: 'JSON',
+          editor: 'json',
+          allowEmpty: false,
+          mediaVariant: 'file',
+          mediaAccept: '',
+        },
+        {
+          value: 5,
+          label: '媒体-文件',
+          editor: 'media',
+          allowEmpty: true,
+          mediaVariant: 'file',
+          mediaAccept: '',
+        },
+        {
+          value: 6,
+          label: '媒体-图片/视频',
+          editor: 'media',
+          allowEmpty: true,
+          mediaVariant: 'image',
+          mediaAccept: 'image/*,video/*',
+        },
       ],
       defaultValueType: 1,
       defaultPresentation: fixturePresentation(),
@@ -136,7 +179,16 @@ describe('system setting page', () => {
 
   it('honors backend empty rules and create-result brand refresh without interpreting keys', async () => {
     vi.mocked(optionsAPI.getSettingOptions).mockResolvedValue({
-      valueTypes: [{ value: 88, label: '后端文本', editor: 'text', allowEmpty: true }],
+      valueTypes: [
+        {
+          value: 88,
+          label: '后端文本',
+          editor: 'text',
+          allowEmpty: true,
+          mediaVariant: 'file',
+          mediaAccept: '',
+        },
+      ],
       defaultValueType: 88,
       defaultPresentation: { ...fixturePresentation(), allowEmpty: true },
     })
@@ -242,7 +294,16 @@ describe('system setting page', () => {
       pageSize: 20,
     })
     vi.mocked(optionsAPI.getSettingOptions).mockResolvedValue({
-      valueTypes: [{ value: 99, label: '后端新类型', editor: 'number', allowEmpty: false }],
+      valueTypes: [
+        {
+          value: 99,
+          label: '后端新类型',
+          editor: 'number',
+          allowEmpty: false,
+          mediaVariant: 'file',
+          mediaAccept: '',
+        },
+      ],
       defaultValueType: 99,
       defaultPresentation: presentation,
     })
@@ -365,7 +426,7 @@ describe('system setting page', () => {
     const dialog = wrapper.getComponent({ name: 'SettingDialog' })
     const select = dialog.getComponent({ name: 'ElSelectV2' })
     expect(select.props('options')).toContainEqual(
-      expect.objectContaining({ label: '媒体', value: 5 }),
+      expect.objectContaining({ label: '媒体-文件', value: 5 }),
     )
     await setBodyValue('setting-form-key', 'app.assets.custom')
     select.vm.$emit('update:modelValue', 5)
@@ -389,6 +450,31 @@ describe('system setting page', () => {
     })
   })
 
+  it('switches media upload shapes using backend type options in a new setting', async () => {
+    const wrapper = mountPage([
+      'system:setting:list',
+      'system:setting:create',
+      'storage:object:upload',
+    ])
+    await flushPromises()
+    await wrapper.get('[data-testid="setting-create"]').trigger('click')
+    const dialog = wrapper.getComponent({ name: 'SettingDialog' })
+    const select = dialog.getComponent({ name: 'ElSelectV2' })
+    select.vm.$emit('update:modelValue', 6)
+    await nextTick()
+    expect(dialog.getComponent(UpMedia).props()).toMatchObject({
+      variant: 'image',
+      accept: 'image/*,video/*',
+    })
+    expect(dialog.getComponent(UpMedia).find('.up-media__trigger').exists()).toBe(true)
+    select.vm.$emit('update:modelValue', 5)
+    await nextTick()
+    expect(dialog.getComponent(UpMedia).props('variant')).toBe('file')
+    expect(
+      dialog.getComponent(UpMedia).find('.el-button[data-testid="up-media-upload"]').exists(),
+    ).toBe(true)
+  })
+
   it('edits builtin media in the common dialog and allows clearing without upload permission', async () => {
     vi.mocked(settingAPI.getSettings).mockResolvedValue({
       list: [{ ...mediaAvatar, value: uploadedImage }],
@@ -408,16 +494,45 @@ describe('system setting page', () => {
       uploadDisabled: true,
       disabled: false,
     })
-    media.vm.$emit('update:modelValue', '')
-    await nextTick()
+    await media.get('.up-media__clear').trigger('click')
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+    expect(settingAPI.updateSetting).not.toHaveBeenCalled()
+    expect(media.props('modelValue')).toBe('')
     await clickBody('setting-save')
     await flushPromises()
     expect(settingAPI.updateSetting).toHaveBeenCalledWith(mediaAvatar.key, {
       value: '',
-      valueType: 5,
+      valueType: 6,
       description: mediaAvatar.description,
     })
     expect(settingAPI.deleteSetting).not.toHaveBeenCalled()
+  })
+
+  it('uses the image square for an empty default avatar and the file button for an Excel template', async () => {
+    vi.mocked(settingAPI.getSettings).mockResolvedValue({
+      list: [mediaAvatar, mediaXlsx],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage([
+      'system:setting:list',
+      'system:setting:update',
+      'storage:object:upload',
+    ])
+    await flushPromises()
+    await wrapper.findAll('[data-testid="setting-update"]')[0]!.trigger('click')
+    let media = wrapper.getComponent({ name: 'SettingDialog' }).getComponent(UpMedia)
+    expect(media.props('variant')).toBe('image')
+    expect(media.find('.up-media__trigger').exists()).toBe(true)
+    expect(media.find('.el-button[data-testid="up-media-upload"]').exists()).toBe(false)
+    wrapper.getComponent({ name: 'SettingDialog' }).vm.$emit('update:modelValue', false)
+    await nextTick()
+    await wrapper.findAll('[data-testid="setting-update"]')[1]!.trigger('click')
+    media = wrapper.getComponent({ name: 'SettingDialog' }).getComponent(UpMedia)
+    expect(media.props('variant')).toBe('file')
+    expect(media.find('.up-media__trigger').exists()).toBe(false)
+    expect(media.find('[data-testid="up-media-upload"]').exists()).toBe(true)
   })
 
   it('edits titles in advanced settings and refreshes runtime brand values', async () => {
@@ -814,6 +929,7 @@ function fixturePresentation(row: Partial<SystemSetting> = {}): SettingPresentat
     [3, 'boolean'],
     [4, 'json'],
     [5, 'media'],
+    [6, 'media'],
   ])
   common.editor = types.get(row.valueType ?? 1) ?? 'text'
   common.allowEmpty = common.editor === 'media'
