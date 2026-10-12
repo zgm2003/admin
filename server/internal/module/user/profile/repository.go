@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"admin/server/internal/module/auth/login"
+	storagefile "admin/server/internal/module/storage/file"
 	"admin/server/internal/module/user/account"
+	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/yesno"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
@@ -91,4 +95,69 @@ func mapAccountWriteError(err error) error {
 		}
 	}
 	return fmt.Errorf("update personal account: %w", err)
+}
+
+func (r *Repository) UpdatePreservingAvatar(ctx context.Context, userID int64, username string, birthday *time.Time, gender int16, expectedAvatar string, now time.Time, identities ...auth.Identity) (Value, error) {
+	var updated Value
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var id int64
+		if err := tx.Raw("SELECT id FROM user_account WHERE id=? AND deleted_at IS NULL AND is_enabled=1 FOR UPDATE", userID).Scan(&id).Error; err != nil {
+			return err
+		}
+		if id == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		current, err := NewRepository(tx).Find(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if expectedAvatar != "" && current.Avatar != expectedAvatar {
+			return apperror.Conflict(i18n.KeyConflict, nil, fmt.Errorf("avatar changed or requires an owned file selection"))
+		}
+		updated, err = NewRepository(tx).Update(ctx, userID, username, birthday, gender, expectedAvatar, now)
+		if err != nil {
+			return err
+		}
+		if expectedAvatar == "" && current.Avatar != "" && len(identities) > 0 {
+			return storagefile.RetireAvatarTx(ctx, tx, identities[0], current.Avatar, now)
+		}
+		return nil
+	})
+	return updated, err
+}
+
+// UpdateWithAvatar adopts an independently copied avatar in the same transaction
+// as the profile write. The user row serializes competing profile updates.
+func (r *Repository) UpdateWithAvatar(ctx context.Context, identity auth.Identity, username string, birthday *time.Time, gender int16, copied storagefile.AvatarCopy, requestKey string, now time.Time) (Value, error) {
+	var updated Value
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var user struct{ ID int64 }
+		if err := tx.Raw("SELECT id FROM user_account WHERE id=? AND deleted_at IS NULL AND is_enabled=1 FOR UPDATE", identity.UserID).Scan(&user).Error; err != nil {
+			return err
+		}
+		if user.ID == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		current, err := NewRepository(tx).Find(ctx, identity.UserID)
+		if err != nil {
+			return err
+		}
+		already, err := storagefile.AdoptAvatarTx(ctx, tx, identity, copied.ID, copied.ObjectKey, requestKey, now)
+		if err != nil {
+			return err
+		}
+		if already {
+			updated = current
+			return nil
+		}
+		updated, err = NewRepository(tx).Update(ctx, identity.UserID, username, birthday, gender, copied.ObjectKey, now)
+		if err != nil {
+			return err
+		}
+		if current.Avatar != "" && current.Avatar != copied.ObjectKey {
+			return storagefile.RetireAvatarTx(ctx, tx, identity, current.Avatar, now)
+		}
+		return nil
+	})
+	return updated, err
 }

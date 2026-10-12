@@ -11,6 +11,8 @@ export interface AccountProfile {
 }
 
 export interface UpdateAccountProfileInput {
+  avatarFileId?: number
+  avatarRequestKey?: string
   username: string
   avatar: string
   birthday: string | null

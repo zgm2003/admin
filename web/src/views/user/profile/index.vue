@@ -96,6 +96,8 @@ const passwordIdentityOptions = computed<Array<{ label: string; value: PasswordC
 function applyProfile(profile: AccountProfile): void {
   profileForm.username = profile.username
   profileForm.avatar = profile.avatar
+  delete profileForm.avatarFileId
+  delete profileForm.avatarRequestKey
   profileForm.birthday = profile.birthday
   profileForm.gender = profile.gender
   currentEmail.value = profile.email

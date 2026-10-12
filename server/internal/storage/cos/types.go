@@ -29,7 +29,8 @@ type PutResult struct {
 	Headers map[string]string
 }
 type GetRequest struct {
-	ObjectKey string
+	ObjectKey          string
+	ContentDisposition string
 }
 type GetResult struct {
 	URL       string
@@ -38,4 +39,20 @@ type GetResult struct {
 type Presigner interface {
 	PresignPut(context.Context, Credentials, PutRequest) (PutResult, error)
 	PresignGet(context.Context, Credentials, GetRequest) (GetResult, error)
+}
+
+type ObjectInfo struct {
+	Key, MIME, ETag string
+	Size            int64
+}
+type CopyRequest struct {
+	SourceKey, TargetKey, SourceETag string
+	PublicRead                       bool
+}
+type ObjectClient interface {
+	Presigner
+	HeadObject(context.Context, Credentials, string) (ObjectInfo, error)
+	CopyObject(context.Context, Credentials, Credentials, CopyRequest) (ObjectInfo, error)
+	DeleteObject(context.Context, Credentials, string) error
+	ReadObject(context.Context, Credentials, string, string, int64) ([]byte, error)
 }

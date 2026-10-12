@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"admin/server/internal/module/auth/login"
+	storagefile "admin/server/internal/module/storage/file"
 	"admin/server/internal/module/user/account"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
@@ -14,16 +16,34 @@ import (
 )
 
 type Input struct {
-	Username string
-	Birthday *time.Time
-	Gender   int16
-	Avatar   string
+	Username         string
+	Birthday         *time.Time
+	Gender           int16
+	Avatar           string
+	PlatformID       int64
+	AvatarFileID     *int64
+	AvatarRequestKey string
+	Identity         auth.Identity
 }
 
 type Service struct {
-	repository *Repository
-	now        func() time.Time
+	repository  *Repository
+	now         func() time.Time
+	avatars     avatarCopier
+	permissions avatarPermissionChecker
 }
+
+type avatarCopier interface {
+	PrepareAvatar(context.Context, auth.Identity, int64, string) (storagefile.AvatarCopy, error)
+}
+
+func (s *Service) SetAvatarCopier(copier avatarCopier) { s.avatars = copier }
+
+type avatarPermissionChecker interface {
+	Allowed(context.Context, auth.Identity, string) (bool, error)
+}
+
+func (s *Service) SetAvatarPermissions(checker avatarPermissionChecker) { s.permissions = checker }
 
 func NewService(repository *Repository) *Service {
 	return &Service{repository: repository, now: time.Now}
@@ -54,7 +74,32 @@ func (s *Service) Update(ctx context.Context, actorUserID, targetUserID int64, i
 	if !validGender(input.Gender) {
 		return Value{}, apperror.InvalidRequest(fmt.Errorf("gender is invalid"))
 	}
-	updated, err := s.repository.Update(ctx, targetUserID, username, input.Birthday, input.Gender, input.Avatar, s.now().UTC().Truncate(time.Microsecond))
+	if input.AvatarFileID != nil {
+		if s.avatars == nil || s.permissions == nil || input.PlatformID <= 0 {
+			return Value{}, apperror.DependencyUnavailable(fmt.Errorf("avatar copy dependencies unavailable"))
+		}
+		identity := input.Identity
+		if identity.UserID != actorUserID || identity.PlatformID != input.PlatformID {
+			return Value{}, apperror.InvalidRequest(fmt.Errorf("avatar identity mismatch"))
+		}
+		allowed, err := s.permissions.Allowed(ctx, identity, "storage:file:detail")
+		if err != nil {
+			return Value{}, err
+		}
+		if !allowed {
+			return Value{}, apperror.Forbidden(fmt.Errorf("file detail permission required"))
+		}
+		copied, err := s.avatars.PrepareAvatar(ctx, identity, *input.AvatarFileID, input.AvatarRequestKey)
+		if err != nil {
+			return Value{}, err
+		}
+		updated, err := s.repository.UpdateWithAvatar(ctx, identity, username, input.Birthday, input.Gender, copied, input.AvatarRequestKey, s.now().UTC().Truncate(time.Microsecond))
+		if err != nil {
+			return Value{}, mapRepositoryError(err)
+		}
+		return updated, nil
+	}
+	updated, err := s.repository.UpdatePreservingAvatar(ctx, targetUserID, username, input.Birthday, input.Gender, input.Avatar, s.now().UTC().Truncate(time.Microsecond), input.Identity)
 	if err != nil {
 		return Value{}, mapRepositoryError(err)
 	}
@@ -62,6 +107,13 @@ func (s *Service) Update(ctx context.Context, actorUserID, targetUserID int64, i
 }
 
 func mapRepositoryError(err error) error {
+	var public *apperror.Error
+	if errors.As(err, &public) {
+		return public
+	}
+	if errors.Is(err, storagefile.ErrConflict) {
+		return apperror.Conflict(i18n.KeyConflict, nil, err)
+	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return &apperror.Error{HTTPStatus: http.StatusNotFound, Code: account.CodeUserNotFound, MessageKey: i18n.KeyUserNotFound, Cause: err}
 	}

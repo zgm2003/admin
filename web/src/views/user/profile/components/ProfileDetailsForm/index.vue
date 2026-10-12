@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import FileSelectDialog from '@/components/FileSelectDialog/index.vue'
+import { usePermissionStore } from '@/store/permission'
+import type { StorageFile, CompletedFile } from '@/api/storage/file'
 import type { UpdateAccountProfileInput } from '@/api/user/profile'
 
 interface Props {
@@ -26,11 +29,37 @@ const emit = defineEmits<{
   avatarPreviewChange: [url: string]
 }>()
 const { t } = useI18n()
+const access = usePermissionStore()
+const canSelectFile = computed(
+  () =>
+    props.canUpdateProfile &&
+    access.hasPermission('storage:file:list') &&
+    access.hasPermission('storage:file:detail'),
+)
+const canUploadAvatar = computed(
+  () =>
+    props.canUpdateProfile &&
+    access.hasPermission('storage:object:upload') &&
+    access.hasPermission('storage:file:detail'),
+)
+const selectorVisible = ref(false)
+const avatarKey = ref(props.profileForm.avatar)
+const selectedName = ref('')
 
 const form = reactive<UpdateAccountProfileInput>({ ...props.profileForm })
 watch(
   () => props.profileForm,
-  (value) => Object.assign(form, value),
+  (value) => {
+    Object.assign(form, value)
+    if (value.avatarFileId === undefined) {
+      avatarKey.value = value.avatar
+      selectedName.value = ''
+    }
+    if (value.avatarFileId === undefined) {
+      delete form.avatarFileId
+      delete form.avatarRequestKey
+    }
+  },
   { deep: true },
 )
 function updateUsername(value: string): void {
@@ -40,7 +69,31 @@ function updateUsername(value: string): void {
 
 function updateAvatar(value: string | string[]): void {
   if (typeof value !== 'string') return
-  form.avatar = value
+  avatarKey.value = value
+  if (value === '') {
+    form.avatar = ''
+    delete form.avatarFileId
+    delete form.avatarRequestKey
+    selectedName.value = ''
+    emit('update:profileForm', { ...form })
+  }
+}
+function selectFile(file: StorageFile): void {
+  form.avatar = ''
+  form.avatarFileId = file.id
+  form.avatarRequestKey = crypto.randomUUID()
+  avatarKey.value = file.objectKey
+  selectedName.value = file.fileName
+  emit('update:profileForm', { ...form })
+}
+function avatarUploaded(items: CompletedFile[]): void {
+  const file = items[0]
+  if (!file) return
+  form.avatar = ''
+  form.avatarFileId = file.fileId
+  form.avatarRequestKey = crypto.randomUUID()
+  avatarKey.value = file.objectKey
+  selectedName.value = file.objectKey.split('/').at(-1) ?? ''
   emit('update:profileForm', { ...form })
 }
 
@@ -106,14 +159,26 @@ function updateGender(value: UpdateAccountProfileInput['gender']): void {
         <el-col :xs="24" :sm="12">
           <el-form-item :label="t('user.profile.avatar')">
             <UpMedia
-              :model-value="form.avatar"
+              :model-value="avatarKey"
               rule-code="avatar"
               variant="avatar"
               width="178px"
               :disabled="!canUpdateProfile"
+              :upload-disabled="!canUploadAvatar"
+              @uploaded="avatarUploaded"
               @update:model-value="updateAvatar"
               @preview-change="emit('avatarPreviewChange', $event)"
             />
+            <el-button
+              v-if="canSelectFile"
+              type="primary"
+              data-testid="profile-choose-file"
+              @click="selectorVisible = true"
+              >{{ t('storage.file.chooseAvatar') }}</el-button
+            >
+            <span v-if="selectedName">{{
+              t('storage.file.selectedAvatar', { name: selectedName })
+            }}</span>
           </el-form-item>
         </el-col>
         <el-col :xs="24" :sm="12">
@@ -150,6 +215,7 @@ function updateGender(value: UpdateAccountProfileInput['gender']): void {
         }}</el-button>
       </div>
     </el-form>
+    <FileSelectDialog v-model="selectorVisible" purpose="avatar" @select="selectFile" />
   </section>
 </template>
 

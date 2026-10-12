@@ -67,6 +67,19 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
+	if input.AvatarFileID != nil {
+		identity, ok := auth.IdentityFromContext(c)
+		if !ok || identity.UserID != actor || identity.PlatformID <= 0 {
+			response.Fail(c, apperror.Unauthorized(fmt.Errorf("avatar identity is missing")))
+			return
+		}
+		input.PlatformID = identity.PlatformID
+		input.Identity = identity
+	}
+	if identity, ok := auth.IdentityFromContext(c); ok {
+		input.PlatformID = identity.PlatformID
+		input.Identity = identity
+	}
 	projectmiddleware.SetAccessLogOperation(c, "user.profile.update", actor, actor)
 	updated, err := h.profile.Update(c.Request.Context(), actor, actor, input)
 	if err != nil {

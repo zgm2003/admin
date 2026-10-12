@@ -4,12 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { appI18n } from '@/i18n'
 import { requestObjectURL, requestUploadCredentials } from '@/api/storage/upload'
+import { completeFileUpload } from '@/api/storage/file'
 import UpMedia from '@/components/UpMedia/index.vue'
 
 vi.mock('@/api/storage/upload', () => ({
   requestUploadCredentials: vi.fn(),
   requestObjectURL: vi.fn(),
 }))
+vi.mock('@/api/storage/file', () => ({ completeFileUpload: vi.fn() }))
+const completeMock = vi.mocked(completeFileUpload)
 const credentialsMock = vi.mocked(requestUploadCredentials)
 const objectURLMock = vi.mocked(requestObjectURL)
 const wrappers: VueWrapper[] = []
@@ -21,6 +24,11 @@ describe('UpMedia', () => {
   })
   beforeEach(() => {
     vi.clearAllMocks()
+    completeMock.mockImplementation(async (id) => {
+      const response = await credentialsMock.mock.results.at(-1)?.value
+      const item = response.items.find((entry: { fileId: number }) => entry.fileId === id)
+      return { fileId: id, objectKey: item.objectKey, publicUrl: item.publicUrl }
+    })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
     objectURLMock.mockResolvedValue({ url: 'https://cdn.example/existing.png', expiresAt: null })
   })
@@ -29,6 +37,7 @@ describe('UpMedia', () => {
     credentialsMock.mockResolvedValue({
       items: [
         {
+          fileId: 7,
           uploadUrl: 'https://cos.example/upload',
           objectKey: 'avatar/2026/08/30/a.png',
           method: 'PUT',
@@ -49,6 +58,26 @@ describe('UpMedia', () => {
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['avatar/2026/08/30/a.png'])
   })
 
+  it('does not publish a successful PUT until backend completion succeeds', async () => {
+    credentialsMock.mockResolvedValue({
+      items: [
+        {
+          fileId: 9,
+          uploadUrl: 'https://cos.example/put',
+          objectKey: 'final.png',
+          method: 'PUT',
+          headers: {},
+          expiresAt: '2030-01-01T00:00:00Z',
+        },
+      ],
+    })
+    completeMock.mockRejectedValueOnce(new Error('HEAD mismatch'))
+    const wrapper = mountComponent({ modelValue: '', ruleCode: 'avatar' })
+    await chooseFiles(wrapper, [new File(['image'], 'a.png', { type: 'image/png' })])
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper.emitted('uploaded')).toBeUndefined()
+  })
+
   it('renders XLSX as a file attachment instead of requesting an image preview', async () => {
     const wrapper = mountComponent({
       modelValue: 'setting/template.xlsx',
@@ -67,6 +96,7 @@ describe('UpMedia', () => {
     credentialsMock.mockResolvedValue({
       items: [
         {
+          fileId: 7,
           uploadUrl: 'https://cos.example/upload',
           objectKey: 'setting/template.xlsx',
           method: 'PUT',
@@ -83,13 +113,17 @@ describe('UpMedia', () => {
       accept: '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     })
     await chooseFiles(wrapper, [new File(['header'], 'template.xlsx', { type: '' })])
-    expect(credentialsMock).toHaveBeenCalledWith('setting', [
-      {
-        fileName: 'template.xlsx',
-        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        fileSizeBytes: 6,
-      },
-    ])
+    expect(credentialsMock).toHaveBeenCalledWith(
+      'setting',
+      [
+        {
+          fileName: 'template.xlsx',
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          fileSizeBytes: 6,
+        },
+      ],
+      expect.any(AbortSignal),
+    )
     expect(wrapper.emitted('uploading-change')).toContainEqual([true])
     expect(wrapper.emitted('uploading-change')?.at(-1)).toEqual([false])
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['setting/template.xlsx'])
@@ -117,6 +151,7 @@ describe('UpMedia', () => {
     credentialsMock.mockResolvedValue({
       items: [
         {
+          fileId: 7,
           uploadUrl: 'https://cos.example/upload',
           objectKey: 'setting/image.png',
           method: 'PUT',
@@ -171,6 +206,7 @@ describe('UpMedia', () => {
     pending.resolve({
       items: [
         {
+          fileId: 7,
           uploadUrl: 'https://cos.example/upload',
           objectKey: 'setting/template.xlsx',
           method: 'PUT',
@@ -202,6 +238,7 @@ describe('UpMedia', () => {
     pending.resolve({
       items: [
         {
+          fileId: 7,
           uploadUrl: 'https://cos.example/upload',
           objectKey: 'setting/uploaded.xlsx',
           method: 'PUT',
@@ -220,6 +257,7 @@ describe('UpMedia', () => {
     credentialsMock.mockResolvedValue({
       items: [
         {
+          fileId: 7,
           uploadUrl: 'https://cos.example/a',
           objectKey: 'gallery/a.png',
           method: 'PUT',
@@ -227,6 +265,7 @@ describe('UpMedia', () => {
           expiresAt: '2026-08-30T00:10:00Z',
         },
         {
+          fileId: 8,
           uploadUrl: 'https://cos.example/b',
           objectKey: 'gallery/b.png',
           method: 'PUT',
@@ -249,6 +288,39 @@ describe('UpMedia', () => {
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([
       ['gallery/old.png', 'gallery/a.png', 'gallery/b.png'],
     ])
+  })
+
+  it('retains confirmed files when a later file fails completion', async () => {
+    credentialsMock.mockResolvedValue({
+      items: [
+        {
+          fileId: 1,
+          uploadUrl: 'https://cos.example/a',
+          objectKey: 'a.png',
+          method: 'PUT',
+          headers: {},
+          expiresAt: '2030-01-01T00:00:00Z',
+        },
+        {
+          fileId: 2,
+          uploadUrl: 'https://cos.example/b',
+          objectKey: 'b.png',
+          method: 'PUT',
+          headers: {},
+          expiresAt: '2030-01-01T00:00:00Z',
+        },
+      ],
+    })
+    completeMock
+      .mockResolvedValueOnce({ fileId: 1, objectKey: 'a.png' })
+      .mockRejectedValueOnce(new Error('complete failed'))
+    const wrapper = mountComponent({ modelValue: ['old.png'], ruleCode: 'gallery', multiple: true })
+    await chooseFiles(wrapper, [
+      new File(['a'], 'a.png', { type: 'image/png' }),
+      new File(['b'], 'b.png', { type: 'image/png' }),
+    ])
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['old.png', 'a.png']])
+    expect(wrapper.emitted('uploaded')?.at(-1)).toEqual([[{ fileId: 1, objectKey: 'a.png' }]])
   })
 
   it('renders dedicated avatar actions instead of the generic square uploader', () => {
@@ -290,6 +362,7 @@ describe('UpMedia', () => {
     credentialsMock.mockResolvedValue({
       items: [
         {
+          fileId: 7,
           uploadUrl: 'https://cos.example/upload',
           objectKey: 'avatar/.admin-storage/v2/private.png',
           method: 'PUT',

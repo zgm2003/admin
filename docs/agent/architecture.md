@@ -47,6 +47,7 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 | `message/notificationTask` | `message/notificationTask` | `message_notification_task*` |
 | 无独立页面 | `realtime` | `realtime_event*`、`realtime_retention_state` |
 | `storage/object` | `storage/cosConfig`、`storage/uploadRule`、`storage/upload` | `storage_cos_config`、`storage_upload_rule*` |
+| `storage/file` | `storage/file`（头像保存协作 `user/profile`） | `storage_file`、既有 `system_scheduler_*` |
 | `system/operationLog` | `system/operationLog` | `system_operation_log` |
 
 复合代码模块统一使用 lower camel case；数据库仍使用 snake_case，HTTP API 仍使用小写资源段。Mail 是聚合

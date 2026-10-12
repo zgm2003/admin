@@ -230,6 +230,11 @@ const (
 
 var catalogs = map[Locale]map[MessageKey]string{
 	ZhCN: {
+		"storage.file.category.image":        "图片",
+		"storage.file.category.video":        "视频",
+		"storage.file.category.audio":        "音频",
+		"storage.file.category.document":     "文档",
+		"storage.file.category.other":        "其他",
 		"options.userGender.0":               "未知",
 		"options.userGender.1":               "男",
 		"options.userGender.2":               "女",
@@ -458,6 +463,11 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyMenuParentDisabledReason:          "请先启用父级菜单",
 	},
 	EnUS: {
+		"storage.file.category.image":        "Images",
+		"storage.file.category.video":        "Videos",
+		"storage.file.category.audio":        "Audio",
+		"storage.file.category.document":     "Documents",
+		"storage.file.category.other":        "Other",
 		"options.userGender.0":               "Unknown",
 		"options.userGender.1":               "Male",
 		"options.userGender.2":               "Female",

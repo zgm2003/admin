@@ -7,6 +7,7 @@ export interface UploadFileInput {
 }
 
 export interface UploadCredentialItem {
+  fileId: number
   uploadUrl: string
   objectKey: string
   method: 'PUT'
@@ -27,11 +28,12 @@ export interface ObjectURLResult {
 export async function requestUploadCredentials(
   ruleCode: string,
   files: UploadFileInput[],
+  signal?: AbortSignal,
 ): Promise<UploadCredentialResponse> {
-  return request.post<UploadCredentialResponse>('/api/v1/storage/upload-credential', {
-    ruleCode,
-    files,
-  })
+  const data = { ruleCode, files }
+  return signal
+    ? request.post<UploadCredentialResponse>('/api/v1/storage/upload-credential', data, { signal })
+    : request.post<UploadCredentialResponse>('/api/v1/storage/upload-credential', data)
 }
 
 export async function requestObjectURL(

@@ -42,6 +42,7 @@ import (
 	"admin/server/internal/module/permission/state"
 	"admin/server/internal/module/realtime"
 	"admin/server/internal/module/storage/cosConfig"
+	storagefile "admin/server/internal/module/storage/file"
 	"admin/server/internal/module/storage/uploadRule"
 	systemconfigcachestatus "admin/server/internal/module/system/configCacheStatus"
 	"admin/server/internal/module/system/operationLog"
@@ -85,6 +86,7 @@ type routerDependencies struct {
 	Email             *useremail.Handler
 	COSConfig         *cosconfig.Handler
 	UploadRule        *uploadrule.Handler
+	File              *storagefile.Handler
 	OperationLog      *operationlog.Handler
 	Setting           *systemsetting.Handler
 	ConfigCacheStatus *systemconfigcachestatus.Handler
@@ -371,6 +373,7 @@ func run(logger *slog.Logger) error {
 	emailService := useremail.NewService(useremail.NewRepository(postgres.GORM), mailService, verificationStore, useremail.NewAuthorityCoordinator(authStateStore, authInvalidator))
 	permissionRepository := permission.NewRepository(postgres.GORM)
 	permissionService := permission.NewService(permissionRepository, accessStateStore, permission.NewSnapshotCache(redisClient), permission.NewLocalSnapshotCache(1024), logger, menuStateStore)
+	profileService.SetAvatarPermissions(permissionService)
 	operationLogRepository := operationlog.NewRepository(postgres.GORM)
 	operationLogService := operationlog.NewService(operationLogRepository)
 	realtimeRepository := realtime.NewRepository(postgres.GORM)
@@ -384,6 +387,9 @@ func run(logger *slog.Logger) error {
 	notificationRepository := notification.NewRepository(postgres.GORM, realtimeRepository)
 	notificationService := notification.NewService(notificationRepository, settingService)
 	schedulerRepository := scheduler.NewRepository(postgres.GORM)
+	fileService := storagefile.NewService(storagefile.NewRepository(postgres.GORM, schedulerRepository), keys, cosClient, cosConfigService, uploadRuleService)
+	uploadRuleService.SetFileRegistrar(fileService)
+	profileService.SetAvatarCopier(fileService)
 	notificationDefinition := scheduler.NotificationBatchDefinition(nil)
 	batchJobWriter, err := scheduler.NewBatchJobWriter(schedulerRepository, notificationDefinition)
 	if err != nil {
@@ -393,7 +399,7 @@ func run(logger *slog.Logger) error {
 		return permissionnotification.NewRepository(db)
 	})
 	notificationTaskService := notificationtask.NewService(notificationTaskRepository)
-	schedulerCatalog, err := scheduler.NewTaskCatalog(append(scheduler.BuiltinDefinitions(nil, nil, nil), notificationDefinition)...)
+	schedulerCatalog, err := scheduler.NewTaskCatalog(append(scheduler.BuiltinDefinitions(nil, nil, nil), notificationDefinition, storagefile.CleanupDefinition(fileService), storagefile.ScanDefinition(fileService))...)
 	if err != nil {
 		return err
 	}
@@ -461,6 +467,7 @@ func run(logger *slog.Logger) error {
 		}),
 		COSConfig:         cosconfig.NewHandler(cosConfigService),
 		UploadRule:        uploadrule.NewHandler(uploadRuleService),
+		File:              storagefile.NewHandler(fileService),
 		OperationLog:      operationlog.NewHandler(operationLogService),
 		Setting:           systemsetting.NewHandler(settingService),
 		ConfigCacheStatus: systemconfigcachestatus.NewHandler(configCacheService),
@@ -606,6 +613,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	cosconfig.RegisterRoutes(adminRoutes, dependencies.COSConfig, dependencies.Authenticate, dependencies.RequirePermission)
 	uploadrule.RegisterRoutes(adminRoutes, dependencies.UploadRule, dependencies.Authenticate, dependencies.RequirePermission)
 	uploadrule.RegisterCredentialRoute(sharedRoutes, dependencies.UploadRule, dependencies.Authenticate, dependencies.RequirePermission)
+	if dependencies.File != nil {
+		storagefile.RegisterRoutes(sharedRoutes, dependencies.File, dependencies.Authenticate, dependencies.RequirePermission)
+	}
 	loginlog.RegisterRoutes(adminRoutes, dependencies.LoginLog, dependencies.Authenticate, dependencies.RequirePermission)
 	if dependencies.Mail != nil {
 		mailRoutes := adminRoutes.Group("/message/mail")

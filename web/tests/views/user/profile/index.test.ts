@@ -10,6 +10,7 @@ import * as emailAPI from '@/api/user/email'
 import * as phoneAPI from '@/api/user/phone'
 import { getUserProfileOptions } from '@/api/user/profileOptions'
 import ProfilePage from '@/views/user/profile/index.vue'
+import FileSelectDialog from '@/components/FileSelectDialog/index.vue'
 import UpMedia from '@/components/UpMedia/index.vue'
 import ProfileHero from '@/views/user/profile/components/ProfileHero/index.vue'
 import { usePermissionStore } from '@/store/permission'
@@ -83,6 +84,45 @@ describe('account profile permissions', () => {
   afterEach(() => {
     for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
+  })
+
+  it('keeps file selection local and submits the file ID with a stable copy request key', async () => {
+    const wrapper = mountPage(['user:profile:update', 'storage:file:list', 'storage:file:detail'])
+    await flushPromises()
+    wrapper.findComponent(FileSelectDialog).vm.$emit('select', {
+      id: 9,
+      fileName: 'a.png',
+      objectKey: 'source.png',
+      mimeType: 'image/png',
+      sizeBytes: 5,
+      category: 'image',
+      createdAt: '2026-10-12T00:00:00Z',
+    })
+    await flushPromises()
+    expect(updateAccountProfile).not.toHaveBeenCalled()
+    updateAccountProfile.mockRejectedValueOnce(new Error('retry'))
+    await wrapper.get('[data-testid="account-profile-save"]').trigger('click')
+    await flushPromises()
+    const input = updateAccountProfile.mock.calls[0]?.[0]
+    expect(input).toMatchObject({ avatarFileId: 9, avatar: '' })
+    expect(input?.avatarRequestKey).toMatch(/^[0-9a-f-]{36}$/)
+    updateAccountProfile.mockRejectedValueOnce(new Error('retry'))
+    await wrapper.get('[data-testid="account-profile-save"]').trigger('click')
+    await flushPromises()
+    expect(updateAccountProfile.mock.calls[1]?.[0].avatarRequestKey).toBe(input?.avatarRequestKey)
+  })
+
+  it('clearing a pending avatar selection removes its file ID from the save request', async () => {
+    const wrapper=mountPage(['user:profile:update','storage:file:list','storage:file:detail'])
+    await flushPromises()
+    wrapper.findComponent(FileSelectDialog).vm.$emit('select',{id:9,fileName:'a.png',objectKey:'source.png',mimeType:'image/png',sizeBytes:5,category:'image',createdAt:'2026-10-12T00:00:00Z'})
+    await flushPromises()
+    wrapper.findComponent(UpMedia).vm.$emit('update:modelValue','')
+    await flushPromises()
+    updateAccountProfile.mockRejectedValueOnce(new Error('retry'))
+    await wrapper.get('[data-testid="account-profile-save"]').trigger('click');await flushPromises()
+    expect(updateAccountProfile.mock.calls[0]?.[0].avatarFileId).toBeUndefined()
+    expect(updateAccountProfile.mock.calls[0]?.[0].avatarRequestKey).toBeUndefined()
   })
 
   it.each([
@@ -207,12 +247,17 @@ describe('account profile permissions', () => {
     expect(wrapper.getComponent(ProfileHero).props('avatarUrl')).toBe(
       'https://cdn.example/avatar/old.png',
     )
-    media.vm.$emit('update:modelValue', 'avatar/new.png')
+    media.vm.$emit('uploaded', [{ fileId: 9, objectKey: 'avatar/source.png' }])
+    media.vm.$emit('update:modelValue', 'avatar/source.png')
     await wrapper.get('[data-testid="account-profile-save"]').trigger('click')
     await flushPromises()
 
     expect(updateAccountProfile).toHaveBeenCalledWith(
-      expect.objectContaining({ avatar: 'avatar/new.png' }),
+      expect.objectContaining({
+        avatar: '',
+        avatarFileId: 9,
+        avatarRequestKey: expect.any(String),
+      }),
     )
     expect(useAuthStore().user?.avatar).toBe('avatar/new.png')
   })

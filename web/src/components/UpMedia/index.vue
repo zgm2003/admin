@@ -4,6 +4,7 @@ import { CircleCloseFilled, Picture, Plus } from '@element-plus/icons-vue'
 import type { UploadRequestOptions } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
+import type { CompletedFile } from '@/api/storage/file'
 import { requestObjectURL } from '@/api/storage/upload'
 import { uploadMediaFiles, DirectUploadError, sameMediaValue } from './upload'
 import type { UpMediaProps, PreviewState, MediaFileItem } from './types'
@@ -26,6 +27,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: string | string[]]
   'preview-change': [value: string]
   'uploading-change': [value: boolean]
+  uploaded: [value: CompletedFile[]]
 }>()
 const { t } = useI18n()
 const inputRef = ref<HTMLInputElement>()
@@ -181,6 +183,7 @@ async function uploadSelected(selected: File[]): Promise<boolean> {
   const controller = new AbortController()
   uploadController = controller
   loading.value = true
+  const confirmed: CompletedFile[] = []
   try {
     const uploaded = await uploadMediaFiles(
       props.ruleCode,
@@ -188,6 +191,7 @@ async function uploadSelected(selected: File[]): Promise<boolean> {
       props.accept,
       controller.signal,
       current,
+      (item) => confirmed.push(item),
     )
     if (!current()) return false
     const first = uploaded[0]
@@ -212,12 +216,21 @@ async function uploadSelected(selected: File[]): Promise<boolean> {
     }
     previews.value = nextPreviews
     emittedModel = next
+    emit('uploaded', uploaded)
     emit('update:modelValue', next)
     for (const item of uploaded) {
       if (!item.publicUrl) void resolvePreview(item.objectKey, true)
     }
     return true
   } catch (error: unknown) {
+    if (current() && confirmed.length > 0) {
+      const next = props.multiple
+        ? [...values.value, ...confirmed.map((item) => item.objectKey)]
+        : confirmed[0]!.objectKey
+      emittedModel = next
+      emit('uploaded', confirmed)
+      emit('update:modelValue', next)
+    }
     if (current())
       uploadError.value = t(
         `components.upMedia.${error instanceof DirectUploadError ? error.reason : 'uploadFailed'}`,

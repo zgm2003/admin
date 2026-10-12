@@ -16,12 +16,17 @@ import (
 	notificationtask "admin/server/internal/module/message/notificationTask"
 	permissionnotification "admin/server/internal/module/permission/notification"
 	"admin/server/internal/module/realtime"
+	"admin/server/internal/module/storage/cosConfig"
+	storagefile "admin/server/internal/module/storage/file"
+	"admin/server/internal/module/storage/uploadRule"
 	"admin/server/internal/module/system/operationLog"
 	"admin/server/internal/module/system/scheduler"
 	systemsetting "admin/server/internal/module/system/setting"
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
+	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/configCache"
+	storagecos "admin/server/internal/storage/cos"
 
 	"github.com/hibiken/asynq"
 	"github.com/joho/godotenv"
@@ -116,6 +121,21 @@ func run(logger *slog.Logger) error {
 	})
 	configCacheRepository := configcache.NewRepository(postgres.GORM)
 	configCacheStore := configcache.NewStore(redisClient)
+	keys, err := secretkey.New(os.Getenv("APP_SECRET"))
+	if err != nil {
+		return fmt.Errorf("derive Worker storage keys: %w", err)
+	}
+	cosClient := storagecos.NewClient(nil)
+	cosRepository := cosconfig.NewRepository(postgres.GORM)
+	cosRepository.SetGenerations(configCacheRepository)
+	cosService := cosconfig.NewService(cosRepository, keys, cosClient)
+	cosCache := cosconfig.NewCache(redisClient)
+	cosCache.SetStateStore(configCacheStore)
+	cosService.SetCache(cosCache)
+	cosService.SetGenerations(configCacheRepository, configCacheStore)
+	cosService.SetLogger(logger)
+	uploadService := uploadrule.NewService(uploadrule.NewRepository(postgres.GORM), keys, cosClient, cosService, uploadrule.NewRouteCache(redisClient))
+	fileService := storagefile.NewService(storagefile.NewRepository(postgres.GORM, schedulerRepository), keys, cosClient, cosService, uploadService)
 	settingService, err := buildWorkerSettingService(postgres.GORM, redisClient, configCacheRepository, configCacheStore, logger)
 	if err != nil {
 		return err
@@ -125,7 +145,7 @@ func run(logger *slog.Logger) error {
 	realtimeRetention := realtime.NewRetentionService(realtimeRepository, settingService)
 	notificationRetention := notification.NewRetentionService(notificationRepository, settingService)
 	historyCleaner := scheduler.NewHistoryCleaner(schedulerRepository, settingService)
-	catalog, err := scheduler.NewTaskCatalog(append(scheduler.BuiltinDefinitions(realtimeRetention, notificationRetention, historyCleaner), notificationDefinition)...)
+	catalog, err := scheduler.NewTaskCatalog(append(scheduler.BuiltinDefinitions(realtimeRetention, notificationRetention, historyCleaner), notificationDefinition, storagefile.CleanupDefinition(fileService), storagefile.ScanDefinition(fileService))...)
 	if err != nil {
 		return err
 	}

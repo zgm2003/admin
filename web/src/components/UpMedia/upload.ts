@@ -1,4 +1,5 @@
-import { requestUploadCredentials, type UploadCredentialItem } from '@/api/storage/upload'
+import { completeFileUpload, type CompletedFile } from '@/api/storage/file'
+import { requestUploadCredentials } from '@/api/storage/upload'
 
 export function sameMediaValue(left: string | string[], right: string | string[]): boolean {
   return Array.isArray(left) && Array.isArray(right)
@@ -53,7 +54,8 @@ export async function uploadMediaFiles(
   accept: string,
   signal: AbortSignal,
   isCurrent: () => boolean,
-): Promise<UploadCredentialItem[]> {
+  onCompleted?: (item: CompletedFile) => void,
+): Promise<CompletedFile[]> {
   const checkCurrent = () => {
     if (signal.aborted || !isCurrent()) throw new DOMException('Upload cancelled', 'AbortError')
   }
@@ -67,9 +69,11 @@ export async function uploadMediaFiles(
       contentType: contentType(file),
       fileSizeBytes: file.size,
     })),
+    signal,
   )
   checkCurrent()
   if (credentials.items.length !== files.length) throw new DirectUploadError('uploadFailed')
+  const completed: CompletedFile[] = []
   for (const [index, item] of credentials.items.entries()) {
     checkCurrent()
     const file = files[index]
@@ -87,7 +91,12 @@ export async function uploadMediaFiles(
       throw new DirectUploadError('uploadFailed')
     }
     if (!response.ok) throw new DirectUploadError('uploadFailed')
+    checkCurrent()
+    const confirmed = await completeFileUpload(item.fileId, signal)
+    checkCurrent()
+    completed.push(confirmed)
+    onCompleted?.(confirmed)
   }
   checkCurrent()
-  return credentials.items
+  return completed
 }

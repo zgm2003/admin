@@ -2,6 +2,7 @@ package profile
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"strings"
 	"time"
 	"unicode"
@@ -11,10 +12,12 @@ import (
 )
 
 type updateRequest struct {
-	Username string  `json:"username"`
-	Birthday *string `json:"birthday"`
-	Gender   int16   `json:"gender"`
-	Avatar   string  `json:"avatar"`
+	Username         string  `json:"username"`
+	Birthday         *string `json:"birthday"`
+	Gender           int16   `json:"gender"`
+	Avatar           string  `json:"avatar"`
+	AvatarFileID     *int64  `json:"avatarFileId"`
+	AvatarRequestKey string  `json:"avatarRequestKey"`
 }
 
 func (r updateRequest) input() (Input, error) {
@@ -30,10 +33,20 @@ func (r updateRequest) input() (Input, error) {
 		birthday = &parsed
 	}
 	avatar := strings.TrimSpace(r.Avatar)
+	if r.AvatarFileID != nil {
+		if *r.AvatarFileID <= 0 || avatar != "" {
+			return Input{}, apperror.InvalidRequest(fmt.Errorf("avatar selection is invalid"))
+		}
+		if _, err := uuid.Parse(r.AvatarRequestKey); err != nil || len(r.AvatarRequestKey) != 36 {
+			return Input{}, apperror.InvalidRequest(fmt.Errorf("avatar request key is invalid"))
+		}
+	} else if r.AvatarRequestKey != "" {
+		return Input{}, apperror.InvalidRequest(fmt.Errorf("avatar file is required"))
+	}
 	if avatar != "" && (len(avatar) > 512 || !strings.HasPrefix(avatar, "avatar/") || strings.Contains(avatar, "..") || strings.ContainsAny(avatar, "\\\r\n\t") || strings.IndexFunc(avatar, unicode.IsControl) >= 0) {
 		return Input{}, apperror.InvalidRequest(fmt.Errorf("avatar is invalid"))
 	}
-	return Input{Username: r.Username, Birthday: birthday, Gender: r.Gender, Avatar: avatar}, nil
+	return Input{Username: r.Username, Birthday: birthday, Gender: r.Gender, Avatar: avatar, AvatarFileID: r.AvatarFileID, AvatarRequestKey: r.AvatarRequestKey}, nil
 }
 
 type passwordRequest struct {

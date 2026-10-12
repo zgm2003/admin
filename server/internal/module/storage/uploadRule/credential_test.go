@@ -99,13 +99,14 @@ func TestIssueCredentialsValidatesAndSignsPlatformRule(t *testing.T) {
 	}
 	runtimeSource := &fixedRuntimeSource{config: runtime}
 	service := NewService(NewRepository(db), keys, signer, runtimeSource, nil)
+	service.SetFileRegistrar(&fixtureRegistrar{})
 	rule := validCreate(platformID, configID, []string{"avatar", "article-cover"}, yesno.Yes)
 	rule.AccessMode = "public"
 	if _, err := service.Create(ctx, rule); err != nil {
 		t.Fatal(err)
 	}
 	before := time.Now().UTC()
-	result, err := service.IssueCredentials(ctx, auth.Identity{PlatformID: platformID}, CredentialInput{RuleCode: "article-cover", Files: []FileInput{{FileName: "photo.PNG", ContentType: "image/png", FileSizeBytes: 100}, {FileName: "cover.PNG", ContentType: "image/png", FileSizeBytes: 100}}})
+	result, err := service.IssueCredentials(ctx, auth.Identity{UserID: 1, PlatformID: platformID}, CredentialInput{RuleCode: "article-cover", Files: []FileInput{{FileName: "photo.PNG", ContentType: "image/png", FileSizeBytes: 100}, {FileName: "cover.PNG", ContentType: "image/png", FileSizeBytes: 100}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +114,7 @@ func TestIssueCredentialsValidatesAndSignsPlatformRule(t *testing.T) {
 		t.Fatalf("result=%+v requests=%+v", result, signer.requests)
 	}
 	item := result.Items[0]
-	if item.Method != "PUT" || !strings.HasPrefix(item.ObjectKey, "article-cover/.admin-storage/v2/") || strings.Contains(item.ObjectKey, "photo") || !strings.HasSuffix(item.ObjectKey, ".png") || item.PublicURL == nil || !strings.HasPrefix(*item.PublicURL, "https://cdn.example.com/article-cover/") {
+	if item.Method != "PUT" || !strings.HasPrefix(item.ObjectKey, "article-cover/.admin-storage/v2/") || strings.Contains(item.ObjectKey, "photo") || !strings.HasSuffix(item.ObjectKey, ".png") || item.PublicURL != nil || item.FileID < 1 || signer.requests[0].ObjectKey == item.ObjectKey || !strings.HasPrefix(signer.requests[0].ObjectKey, ".staging/") {
 		t.Fatalf("item=%+v", item)
 	}
 	coordinates, err := objectkey.Parse(item.ObjectKey)
@@ -123,13 +124,13 @@ func TestIssueCredentialsValidatesAndSignsPlatformRule(t *testing.T) {
 	if item.ExpiresAt.Before(before.Add(9*time.Minute+50*time.Second)) || item.ExpiresAt.After(time.Now().UTC().Add(10*time.Minute+time.Second)) {
 		t.Fatalf("expiresAt=%v", item.ExpiresAt)
 	}
-	if signer.credentials.SecretID != "secret-id" || signer.credentials.SecretKey != "secret-key" || signer.requests[0].ContentLength != 100 || !signer.requests[0].PublicRead {
+	if signer.credentials.SecretID != "secret-id" || signer.credentials.SecretKey != "secret-key" || signer.requests[0].ContentLength != 100 || signer.requests[0].PublicRead {
 		t.Fatalf("credentials=%+v request=%+v", signer.credentials, signer.requests[0])
 	}
 	if runtimeSource.calls != 1 {
 		t.Fatalf("runtime calls=%d want 1", runtimeSource.calls)
 	}
-	if _, err := service.IssueCredentials(ctx, auth.Identity{PlatformID: otherPlatformID}, CredentialInput{RuleCode: "avatar", Files: []FileInput{{FileName: "photo.png", ContentType: "image/png", FileSizeBytes: 100}}}); appCode(err) != apperror.CodeNotFound {
+	if _, err := service.IssueCredentials(ctx, auth.Identity{UserID: 1, PlatformID: otherPlatformID}, CredentialInput{RuleCode: "avatar", Files: []FileInput{{FileName: "photo.png", ContentType: "image/png", FileSizeBytes: 100}}}); appCode(err) != apperror.CodeNotFound {
 		t.Fatalf("cross-platform error=%v", err)
 	}
 }
@@ -148,6 +149,7 @@ func TestIssueCredentialsRejectsRuleViolations(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := NewService(NewRepository(db), keys, &recordingSigner{}, &fixedRuntimeSource{config: runtime}, nil)
+	service.SetFileRegistrar(&fixtureRegistrar{})
 	rule := validCreate(platformID, configID, []string{"avatar"}, yesno.Yes)
 	rule.MaxFileSizeBytes = 100
 	if _, err := service.Create(ctx, rule); err != nil {
@@ -155,7 +157,7 @@ func TestIssueCredentialsRejectsRuleViolations(t *testing.T) {
 	}
 	invalid := []CredentialInput{{RuleCode: "avatar", Files: nil}, {RuleCode: "avatar", Files: []FileInput{{FileName: "../photo.png", ContentType: "image/png", FileSizeBytes: 1}}}, {RuleCode: "avatar", Files: []FileInput{{FileName: "photo.jpg", ContentType: "image/png", FileSizeBytes: 1}}}, {RuleCode: "avatar", Files: []FileInput{{FileName: "photo.png", ContentType: "text/plain", FileSizeBytes: 1}}}, {RuleCode: "avatar", Files: []FileInput{{FileName: "photo.png", ContentType: "image/png", FileSizeBytes: 101}}}}
 	for _, input := range invalid {
-		if _, err := service.IssueCredentials(ctx, auth.Identity{PlatformID: platformID}, input); appCode(err) != apperror.CodeInvalidRequest {
+		if _, err := service.IssueCredentials(ctx, auth.Identity{UserID: 1, PlatformID: platformID}, input); appCode(err) != apperror.CodeInvalidRequest {
 			t.Fatalf("input=%+v error=%v", input, err)
 		}
 	}
@@ -190,7 +192,7 @@ func TestObjectURLUsesImmutableRouteAndHistoricalPublicVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := service.ObjectURL(ctx, auth.Identity{PlatformID: platformID}, key)
+	result, err := service.ObjectURL(ctx, auth.Identity{UserID: 1, PlatformID: platformID}, key)
 	if err != nil || result.URL != oldDomain+"/"+key || result.ExpiresAt != nil {
 		t.Fatalf("public result=%+v error=%v", result, err)
 	}
@@ -201,18 +203,18 @@ func TestObjectURLUsesImmutableRouteAndHistoricalPublicVersion(t *testing.T) {
 	if err := cache.client.Delete(ctx, routeKey); err != nil {
 		t.Fatal(err)
 	}
-	result, err = service.ObjectURL(ctx, auth.Identity{PlatformID: platformID}, key)
+	result, err = service.ObjectURL(ctx, auth.Identity{UserID: 1, PlatformID: platformID}, key)
 	if err != nil || result.URL != oldDomain+"/"+key {
 		t.Fatalf("soft-deleted route result=%+v error=%v", result, err)
 	}
-	if _, err := service.ObjectURL(ctx, auth.Identity{PlatformID: otherPlatformID}, key); appCode(err) != apperror.CodeForbidden {
+	if _, err := service.ObjectURL(ctx, auth.Identity{UserID: 1, PlatformID: otherPlatformID}, key); appCode(err) != apperror.CodeForbidden {
 		t.Fatalf("cross-platform error=%v", err)
 	}
 	tampered := strings.Replace(key, fmt.Sprintf("/c%d/", configID), fmt.Sprintf("/c%d/", configID+1), 1)
-	if _, err := service.ObjectURL(ctx, auth.Identity{PlatformID: platformID}, tampered); appCode(err) != apperror.CodeInvalidRequest {
+	if _, err := service.ObjectURL(ctx, auth.Identity{UserID: 1, PlatformID: platformID}, tampered); appCode(err) != apperror.CodeInvalidRequest {
 		t.Fatalf("tampered coordinates error=%v", err)
 	}
-	if _, err := service.ObjectURL(ctx, auth.Identity{PlatformID: platformID}, "avatar/2026/09/17/legacy.png"); appCode(err) != apperror.CodeInvalidRequest {
+	if _, err := service.ObjectURL(ctx, auth.Identity{UserID: 1, PlatformID: platformID}, "avatar/2026/09/17/legacy.png"); appCode(err) != apperror.CodeInvalidRequest {
 		t.Fatalf("legacy key error=%v", err)
 	}
 }
@@ -270,12 +272,12 @@ func TestObjectURLReadyRouteAndRuntimeUseZeroPostgresSelects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.ObjectURL(ctx, auth.Identity{PlatformID: platformID}, key); err != nil {
+	if _, err := service.ObjectURL(ctx, auth.Identity{UserID: 1, PlatformID: platformID}, key); err != nil {
 		t.Fatalf("warm object URL: %v", err)
 	}
 
 	counter.Reset()
-	result, err := service.ObjectURL(ctx, auth.Identity{PlatformID: platformID}, key)
+	result, err := service.ObjectURL(ctx, auth.Identity{UserID: 1, PlatformID: platformID}, key)
 	if err != nil || result.URL != domain+"/"+key {
 		t.Fatalf("hot object URL = %+v, %v", result, err)
 	}
@@ -317,7 +319,7 @@ func TestObjectURLPresignsPrivateHistoricalVersionAndFailsClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := service.ObjectURL(ctx, auth.Identity{PlatformID: platformID}, key)
+	result, err := service.ObjectURL(ctx, auth.Identity{UserID: 1, PlatformID: platformID}, key)
 	if err != nil || result.URL != signer.getResult.URL || result.ExpiresAt == nil || !result.ExpiresAt.Equal(expiresAt) {
 		t.Fatalf("private result=%+v error=%v", result, err)
 	}
@@ -326,11 +328,28 @@ func TestObjectURLPresignsPrivateHistoricalVersionAndFailsClosed(t *testing.T) {
 	}
 
 	missingVersion := strings.Replace(key, "/v1/", "/v9/", 1)
-	if _, err := service.ObjectURL(ctx, auth.Identity{PlatformID: platformID}, missingVersion); appCode(err) != apperror.CodeNotFound {
+	if _, err := service.ObjectURL(ctx, auth.Identity{UserID: 1, PlatformID: platformID}, missingVersion); appCode(err) != apperror.CodeNotFound {
 		t.Fatalf("missing version error=%v", err)
 	}
 	signer.getErr = errors.New("sign failed")
-	if _, err := service.ObjectURL(ctx, auth.Identity{PlatformID: platformID}, key); appCode(err) != apperror.CodeDependencyUnavailable {
+	if _, err := service.ObjectURL(ctx, auth.Identity{UserID: 1, PlatformID: platformID}, key); appCode(err) != apperror.CodeDependencyUnavailable {
 		t.Fatalf("sign failure error=%v", err)
+	}
+}
+
+type fixtureRegistrar struct{ next int64 }
+
+func (r *fixtureRegistrar) RegisterUpload(_ context.Context, id auth.Identity, in FileRegistration) (int64, error) {
+	if id.UserID < 1 || in.ObjectKey == in.UploadObjectKey {
+		return 0, errors.New("invalid registration")
+	}
+	r.next++
+	return r.next, nil
+}
+func (r *fixtureRegistrar) AuthorizeObject(context.Context, auth.Identity, string) error { return nil }
+func TestCredentialBatchIsBounded(t *testing.T) {
+	s := NewService(nil, nil, nil, nil, nil)
+	if _, e := s.IssueCredentials(context.Background(), auth.Identity{UserID: 1, PlatformID: 1}, CredentialInput{RuleCode: "avatar", Files: make([]FileInput, 101)}); appCode(e) != apperror.CodeInvalidRequest {
+		t.Fatalf("batch accepted: %v", e)
 	}
 }

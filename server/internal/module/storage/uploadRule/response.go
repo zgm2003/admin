@@ -43,6 +43,7 @@ type statusResponse struct {
 }
 type emptyResponse struct{}
 type CredentialItem struct {
+	FileID    int64             `json:"fileId"`
 	UploadURL string            `json:"uploadUrl"`
 	ObjectKey string            `json:"objectKey"`
 	Method    string            `json:"method"`

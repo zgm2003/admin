@@ -21,6 +21,7 @@ import (
 )
 
 type Service struct {
+	fileRegistrar   FileRegistrar
 	repository      *Repository
 	keys            *secretkey.KeyRing
 	signer          storagecos.Presigner
@@ -60,7 +61,7 @@ func (s *Service) SetRouteCache(cache *RouteCache) { s.routeCache = cache }
 
 func (s *Service) ValidateDependencies() error {
 	if s == nil || s.repository == nil || s.keys == nil || s.signer == nil || s.configRuntime == nil ||
-		s.routeCache == nil || s.routeCache.client == nil || s.routeSource == nil {
+		s.routeCache == nil || s.routeCache.client == nil || s.routeSource == nil || s.fileRegistrar == nil {
 		return fmt.Errorf("upload rule route and signing dependencies are not configured")
 	}
 	return nil
@@ -338,7 +339,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 }
 
 func (s *Service) IssueCredentials(ctx context.Context, identity auth.Identity, input CredentialInput) (CredentialResponse, error) {
-	if identity.PlatformID < 1 || strings.TrimSpace(input.RuleCode) == "" || len(input.Files) == 0 {
+	if identity.PlatformID < 1 || identity.UserID < 1 || strings.TrimSpace(input.RuleCode) == "" || len(input.Files) == 0 || len(input.Files) > 100 {
 		return CredentialResponse{}, invalid(fmt.Errorf("credential request invalid"))
 	}
 	target, err := s.repository.FindUploadTarget(ctx, identity.PlatformID, strings.TrimSpace(input.RuleCode))
@@ -373,17 +374,27 @@ func (s *Service) IssueCredentials(ctx context.Context, identity auth.Identity, 
 		if err != nil {
 			return CredentialResponse{}, dependency(err)
 		}
-		signed, err := s.signer.PresignPut(ctx, credentials, storagecos.PutRequest{ObjectKey: key, ContentType: strings.ToLower(strings.TrimSpace(file.ContentType)), ContentLength: file.FileSizeBytes, PublicRead: target.AccessMode == "public"})
+		if s.fileRegistrar == nil {
+			return CredentialResponse{}, dependency(fmt.Errorf("file registration unavailable"))
+		}
+		temporaryKey, e := objectkey.Generate(target.Code, objectkey.Coordinates{PlatformID: target.PlatformID, RuleID: target.RuleID, CosConfigID: target.CosConfigID, Version: runtime.CurrentVersion}, ext, now)
+		if e != nil {
+			return CredentialResponse{}, dependency(e)
+		}
+		temporaryKey = ".staging/" + temporaryKey
+		fileID, e := s.fileRegistrar.RegisterUpload(ctx, identity, FileRegistration{CosConfigID: target.CosConfigID, ConfigVersion: runtime.CurrentVersion, UploadRuleID: target.RuleID, RuleCode: target.Code, ObjectKey: key, UploadObjectKey: temporaryKey, OriginalName: file.FileName, MimeType: strings.ToLower(strings.TrimSpace(file.ContentType)), SizeBytes: file.FileSizeBytes, ExpiresAt: now.Add(storagecos.PresignValidity)})
+		if e != nil {
+			return CredentialResponse{}, e
+		}
+		signed, err := s.signer.PresignPut(ctx, credentials, storagecos.PutRequest{ObjectKey: temporaryKey, ContentType: strings.ToLower(strings.TrimSpace(file.ContentType)), ContentLength: file.FileSizeBytes, PublicRead: false})
 		if err != nil {
 			return CredentialResponse{}, dependency(err)
 		}
-		item := CredentialItem{UploadURL: signed.URL, ObjectKey: key, Method: http.MethodPut, Headers: signed.Headers, ExpiresAt: now.Add(storagecos.PresignValidity)}
+		item := CredentialItem{FileID: fileID, UploadURL: signed.URL, ObjectKey: key, Method: http.MethodPut, Headers: signed.Headers, ExpiresAt: now.Add(storagecos.PresignValidity)}
 		if target.AccessMode == "public" {
 			if version.BucketDomain == nil || strings.TrimSpace(*version.BucketDomain) == "" {
 				return CredentialResponse{}, conflict(fmt.Errorf("public bucket domain unavailable"))
 			}
-			public := publicObjectURL(*version.BucketDomain, key)
-			item.PublicURL = &public
 		}
 		items = append(items, item)
 	}
@@ -393,6 +404,11 @@ func (s *Service) IssueCredentials(ctx context.Context, identity auth.Identity, 
 func (s *Service) ObjectURL(ctx context.Context, identity auth.Identity, objectKey string) (ObjectURLResult, error) {
 	if identity.PlatformID < 1 {
 		return ObjectURLResult{}, invalid(fmt.Errorf("object URL request invalid"))
+	}
+	if s.fileRegistrar != nil {
+		if e := s.fileRegistrar.AuthorizeObject(ctx, identity, objectKey); e != nil {
+			return ObjectURLResult{}, e
+		}
 	}
 	coordinates, err := objectkey.Parse(strings.TrimSpace(objectKey))
 	if err != nil {
