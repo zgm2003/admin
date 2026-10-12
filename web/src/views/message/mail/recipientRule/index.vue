@@ -118,7 +118,16 @@ function edit(row: MailRule): void {
 
 async function toggle(row: MailRule): Promise<void> {
   try {
-    await updateMailRuleStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
+    const next = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
+    await ElMessageBox.confirm(
+      t('confirm.status', {
+        name: row.name,
+        status: t(next === YesNo.Yes ? 'mail.status.enabled' : 'mail.status.disabled'),
+      }),
+      t('confirm.title'),
+      { type: 'warning' },
+    )
+    await updateMailRuleStatus(row.id, next)
     emit('refresh')
   } catch {
     // request.ts owns API error notifications.
@@ -127,7 +136,7 @@ async function toggle(row: MailRule): Promise<void> {
 
 async function remove(row: MailRule): Promise<void> {
   try {
-    await ElMessageBox.confirm(t('mail.deleteRuleConfirm'))
+    await ElMessageBox.confirm(t('mail.deleteRuleConfirm'), t('confirm.title'), { type: 'warning' })
     await deleteMailRule(row.id)
     ElMessage.success(t('mail.deleted'))
     emit('refresh')
@@ -140,13 +149,26 @@ async function saveRule(): Promise<void> {
   const { scope, action } = form.value
   if (scope === undefined || action === undefined || props.options === null) return
   const input: MailRuleInput = { ...form.value, scope, action }
+  const target = editing.value
   saving.value = true
   try {
-    if (editing.value) await updateMailRule(editing.value.id, input)
+    if (target && input.isEnabled !== target.isEnabled) {
+      await ElMessageBox.confirm(
+        t('confirm.status', {
+          name: target.name,
+          status: t(input.isEnabled === YesNo.Yes ? 'mail.status.enabled' : 'mail.status.disabled'),
+        }),
+        t('confirm.title'),
+        { type: 'warning' },
+      )
+    }
+    if (target) await updateMailRule(target.id, input)
     else await createMailRule(input)
     ElMessage.success(t('mail.updated'))
     dialog.value = false
     emit('refresh')
+  } catch {
+    // Cancellation sends no request; request.ts owns API error notifications.
   } finally {
     saving.value = false
   }

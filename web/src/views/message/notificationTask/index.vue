@@ -316,7 +316,9 @@ async function remove(row: taskApi.NotificationTaskListItem): Promise<void> {
   busyIDs.value = [...busyIDs.value, row.id]
   errorMessage.value = ''
   try {
-    await ElMessageBox.confirm(t('notificationTask.deleteConfirm'), t('notificationTask.delete'))
+    await ElMessageBox.confirm(t('notificationTask.deleteConfirm'), t('notificationTask.delete'), {
+      type: 'warning',
+    })
     await taskApi.deleteNotificationTask(row.id)
     ElNotification.success({ title: t('notificationTask.deleteSuccess') })
     await load()
@@ -342,9 +344,17 @@ async function command(
   errorMessage.value = ''
   try {
     if (action === 'submit')
-      await ElMessageBox.confirm(t('notificationTask.submitConfirm'), t('notificationTask.submit'))
+      await ElMessageBox.confirm(
+        t('notificationTask.submitConfirm'),
+        t('notificationTask.submit'),
+        { type: 'warning' },
+      )
     if (action === 'cancel')
-      await ElMessageBox.confirm(t('notificationTask.cancelConfirm'), t('notificationTask.cancel'))
+      await ElMessageBox.confirm(
+        t('notificationTask.cancelConfirm'),
+        t('notificationTask.cancel'),
+        { type: 'warning' },
+      )
     const result = await taskApi.commandNotificationTask(row.id, action)
     ElNotification.success({ title: t(`notificationTask.${action}Success`) })
     await load()

@@ -112,13 +112,24 @@ async function loadRegionOptions(): Promise<void> {
 
 async function save(): Promise<void> {
   if (!canSave.value) return
+  const payload = { ...form.value }
   saving.value = true
   try {
+    if (props.config.configured && payload.isEnabled !== props.config.isEnabled) {
+      await ElMessageBox.confirm(
+        t('confirm.status', {
+          name: t('sms.title'),
+          status: t(payload.isEnabled === YesNo.Yes ? 'sms.status.enabled' : 'sms.status.disabled'),
+        }),
+        t('confirm.title'),
+        { type: 'warning' },
+      )
+    }
     await smsApi.saveSmsConfig({
-      ...form.value,
-      smsSdkAppId: form.value.smsSdkAppId.trim(),
-      signName: form.value.signName.trim(),
-      endpoint: form.value.endpoint.trim(),
+      ...payload,
+      smsSdkAppId: payload.smsSdkAppId.trim(),
+      signName: payload.signName.trim(),
+      endpoint: payload.endpoint.trim(),
     })
     ElMessage.success(t('sms.saved'))
     emit('saved')
@@ -131,7 +142,7 @@ async function save(): Promise<void> {
 
 async function remove(): Promise<void> {
   try {
-    await ElMessageBox.confirm(t('sms.deleteConfirm'))
+    await ElMessageBox.confirm(t('sms.deleteConfirm'), t('confirm.title'), { type: 'warning' })
     await smsApi.deleteSmsConfig()
     ElMessage.success(t('sms.deleted'))
     emit('deleted')

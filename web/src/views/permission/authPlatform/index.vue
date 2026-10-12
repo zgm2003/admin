@@ -488,7 +488,7 @@ watch(
           <el-button
             v-if="canStatus && row.actions.status"
             text
-            type="warning"
+            :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
             data-testid="auth-platform-status"
             @click="toggleStatus(row)"
             >{{

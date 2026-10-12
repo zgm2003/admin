@@ -1,6 +1,13 @@
 import type { AppMessageKey } from './zh-CN'
 
 export const enUS = {
+  'confirm.title': 'Confirm action',
+  'confirm.status': 'Change the status of “{name}” to “{status}”?',
+  'confirm.delete': 'Delete “{name}”? This action cannot be undone.',
+  'confirm.read': 'Mark “{name}” as read?',
+  'confirm.readAll': 'Mark all notifications as read?',
+  'confirm.execute': 'Run “{name}” now?',
+  'confirm.retry': 'Retry job #{id}?',
   'appTable.ariaLabel': 'Data table',
   'appTable.refresh': 'Refresh',
   'appTable.requestFailed': 'Request failed',

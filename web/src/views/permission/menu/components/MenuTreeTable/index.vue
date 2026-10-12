@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { YesNo } from '@/enums/yesNo'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CirclePlus, Refresh } from '@element-plus/icons-vue'
@@ -277,7 +278,7 @@ function updateKeyword(value: string): void {
             v-if="canUpdate"
             :data-testid="`status-${row.id}`"
             text
-            type="warning"
+            :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
             :disabled="!row.actions.status"
             :title="row.presentation.statusReason || undefined"
             @click="emit('status', row)"

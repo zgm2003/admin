@@ -325,16 +325,35 @@ async function save(): Promise<void> {
 }
 async function toggle(row: SystemSetting): Promise<void> {
   if (!canStatus.value || !row.presentation.actions.status) return
-  await updateSettingStatus(row.key, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
-  await load()
+  const next = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
+  try {
+    await ElMessageBox.confirm(
+      t('confirm.status', {
+        name: row.key,
+        status: t(next === YesNo.Yes ? 'setting.status.enabled' : 'setting.status.disabled'),
+      }),
+      t('confirm.title'),
+      { type: 'warning' },
+    )
+    if (!pageMounted || !canStatus.value) return
+    await updateSettingStatus(row.key, next)
+    await load()
+  } catch {
+    // Cancellation sends no request; request.ts owns API error notifications.
+  }
 }
 async function remove(row: SystemSetting): Promise<void> {
   if (!row.presentation.actions.delete || !canDelete.value) return
-  await ElMessageBox.confirm(t('setting.deleteConfirm'), t('setting.deleteTitle'), {
-    type: 'warning',
-  })
-  await deleteSetting(row.key)
-  await load()
+  try {
+    await ElMessageBox.confirm(t('confirm.delete', { name: row.key }), t('setting.deleteTitle'), {
+      type: 'warning',
+    })
+    if (!pageMounted || !canDelete.value) return
+    await deleteSetting(row.key)
+    await load()
+  } catch {
+    // Cancellation sends no request; request.ts owns API error notifications.
+  }
 }
 function typeLabel(value: SettingValueType): string {
   return valueTypeOptions.value.find((item) => item.value === value)?.label ?? String(value)
@@ -441,6 +460,7 @@ onMounted(() => {
             <el-button
               v-if="canStatus && row.presentation.actions.status"
               data-testid="setting-status-toggle"
+              :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
               text
               @click="toggle(row)"
               >{{

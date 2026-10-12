@@ -1,3 +1,4 @@
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { createPinia, setActivePinia } from 'pinia'
@@ -120,6 +121,9 @@ const wrappers: VueWrapper[] = []
 describe('SMS management page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue(
+      'confirm' as unknown as Awaited<ReturnType<typeof ElMessageBox.confirm>>,
+    )
     setLocale('zh-CN')
     vi.mocked(smsApi.getSmsOptions)
       .mockReset()
@@ -165,6 +169,19 @@ describe('SMS management page', () => {
   afterEach(() => {
     for (const wrapper of wrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
+  })
+
+  it('does not save a changed config status when confirmation is cancelled', async () => {
+    const wrapper = mountPage(['message:sms:list', 'message:sms:config:update'])
+    await flushPromises()
+    const status = wrapper.findComponent({ name: 'ElSwitch' })
+    expect(status.exists()).toBe(true)
+    status.vm.$emit('update:modelValue', YesNo.No)
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    await wrapper.get('[data-testid="sms-config-save"]').trigger('click')
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
+    expect(smsApi.saveSmsConfig).not.toHaveBeenCalled()
   })
 
   it('requires list permission before rendering tabs or loading control-plane data', async () => {
@@ -360,6 +377,10 @@ describe('SMS management page', () => {
     const status = wrapper
       .findAllComponents({ name: 'ElSwitch' })
       .find((item) => item.attributes('data-testid') === 'sms-template-status')
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('close')
+    status?.vm.$emit('change', YesNo.No)
+    await flushPromises()
+    expect(smsApi.updateSmsTemplateStatus).not.toHaveBeenCalled()
     status?.vm.$emit('change', YesNo.No)
     await flushPromises()
     expect(smsApi.updateSmsTemplateStatus).toHaveBeenCalledWith(1, YesNo.No)
@@ -397,6 +418,10 @@ describe('SMS management page', () => {
     const status = wrapper
       .findAllComponents({ name: 'ElSwitch' })
       .find((item) => item.attributes('data-testid') === 'sms-rule-status-2')
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('close')
+    status?.vm.$emit('change', YesNo.No)
+    await flushPromises()
+    expect(smsApi.updateSmsRuleStatus).not.toHaveBeenCalled()
     status?.vm.$emit('change', YesNo.No)
     await flushPromises()
     expect(smsApi.updateSmsRuleStatus).toHaveBeenCalledWith(2, YesNo.No)

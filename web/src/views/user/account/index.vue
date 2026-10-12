@@ -463,7 +463,7 @@ onMounted(() => {
             <el-tooltip v-if="canStatus" :content="row.actionLabels.status"
               ><el-button
                 text
-                type="warning"
+                :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
                 :disabled="!row.actions.status || mutating"
                 @click="changeStatus(row)"
                 >{{

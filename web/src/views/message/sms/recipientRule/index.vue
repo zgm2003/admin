@@ -94,17 +94,30 @@ async function save(): Promise<void> {
   const pattern = form.value.pattern.trim()
   const name = form.value.name.trim()
   if (name === '' || (editingID.value === null && pattern === '')) return
+  const targetID = editingID.value
+  const payload = { ...form.value }
+  const original = props.rules.find((row) => row.id === targetID)
   saving.value = true
   try {
-    if (editingID.value === null) {
-      await smsApi.createSmsRule({ ...form.value, scope, action, pattern, name })
+    if (original && payload.isEnabled !== original.isEnabled) {
+      await ElMessageBox.confirm(
+        t('confirm.status', {
+          name: original.name,
+          status: t(payload.isEnabled === YesNo.Yes ? 'sms.status.enabled' : 'sms.status.disabled'),
+        }),
+        t('confirm.title'),
+        { type: 'warning' },
+      )
+    }
+    if (targetID === null) {
+      await smsApi.createSmsRule({ ...payload, scope, action, pattern, name })
     } else {
-      await smsApi.updateSmsRule(editingID.value, {
+      await smsApi.updateSmsRule(targetID, {
         scope,
         action,
         name,
-        remark: form.value.remark.trim(),
-        isEnabled: form.value.isEnabled,
+        remark: payload.remark.trim(),
+        isEnabled: payload.isEnabled,
         ...(pattern === '' ? {} : { pattern }),
       })
     }
@@ -120,6 +133,14 @@ async function save(): Promise<void> {
 
 async function toggle(row: smsApi.SmsRule, value: YesNoValue): Promise<void> {
   try {
+    await ElMessageBox.confirm(
+      t('confirm.status', {
+        name: row.name,
+        status: t(value === YesNo.Yes ? 'sms.status.enabled' : 'sms.status.disabled'),
+      }),
+      t('confirm.title'),
+      { type: 'warning' },
+    )
     await smsApi.updateSmsRuleStatus(row.id, value)
     emit('refresh')
   } catch {
@@ -129,7 +150,7 @@ async function toggle(row: smsApi.SmsRule, value: YesNoValue): Promise<void> {
 
 async function remove(row: smsApi.SmsRule): Promise<void> {
   try {
-    await ElMessageBox.confirm(t('sms.ruleDeleteConfirm'))
+    await ElMessageBox.confirm(t('sms.ruleDeleteConfirm'), t('confirm.title'), { type: 'warning' })
     await smsApi.deleteSmsRule(row.id)
     ElMessage.success(t('sms.ruleDeleted'))
     emit('refresh')

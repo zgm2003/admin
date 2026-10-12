@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Bell, Link } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -31,7 +32,16 @@ function domain(link: string): string {
   }
 }
 async function openItem(item: NotificationRecent): Promise<void> {
-  if (!item.isRead && canRead.value) await notification.markRead(item.id).catch(() => undefined)
+  if (!item.isRead && canRead.value) {
+    try {
+      await ElMessageBox.confirm(t('confirm.read', { name: item.title }), t('confirm.title'), {
+        type: 'warning',
+      })
+      await notification.markRead(item.id)
+    } catch {
+      return
+    }
+  }
   if (item.linkType === 'external') {
     window.open(item.link, '_blank', 'noopener,noreferrer')
     return
@@ -61,8 +71,13 @@ async function viewAll(): Promise<void> {
     ElMessage.error(t('notification.linkUnavailable'))
   }
 }
-function readAll(): void {
-  void notification.markAllRead().catch(() => undefined)
+async function readAll(): Promise<void> {
+  try {
+    await ElMessageBox.confirm(t('confirm.readAll'), t('confirm.title'), { type: 'warning' })
+    await notification.markAllRead()
+  } catch {
+    // Cancellation sends no request; request.ts owns API error notifications.
+  }
 }
 function retry(): void {
   void notification.load().catch(() => undefined)

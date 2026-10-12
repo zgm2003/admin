@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import { useI18n } from 'vue-i18n'
@@ -93,6 +94,14 @@ async function save(): Promise<void> {
 
 async function toggle(row: smsApi.SmsTemplate, value: YesNoValue): Promise<void> {
   try {
+    await ElMessageBox.confirm(
+      t('confirm.status', {
+        name: row.name,
+        status: t(value === YesNo.Yes ? 'sms.status.enabled' : 'sms.status.disabled'),
+      }),
+      t('confirm.title'),
+      { type: 'warning' },
+    )
     await smsApi.updateSmsTemplateStatus(row.id, value)
     emit('refresh')
   } catch {

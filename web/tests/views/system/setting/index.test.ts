@@ -109,6 +109,31 @@ describe('system setting page', () => {
     document.body.innerHTML = ''
   })
 
+  it.each(['cancel', 'close'])('does not change status when confirmation is %s', async (action) => {
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(action)
+    const wrapper = mountPage(['system:setting:list', 'system:setting:status'])
+    await flushPromises()
+    await wrapper.get('[data-testid="setting-status-toggle"]').trigger('click')
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
+    expect(settingAPI.updateSettingStatus).not.toHaveBeenCalled()
+  })
+
+  it('waits for status confirmation and gives the operation a warning type', async () => {
+    const pending = deferred<Awaited<ReturnType<typeof ElMessageBox.confirm>>>()
+    vi.mocked(ElMessageBox.confirm).mockReturnValueOnce(pending.promise)
+    const wrapper = mountPage(['system:setting:list', 'system:setting:status'])
+    await flushPromises()
+    const button = wrapper.get('[data-testid="setting-status-toggle"]')
+    expect(button.classes()).toContain('el-button--warning')
+    await button.trigger('click')
+    await flushPromises()
+    expect(settingAPI.updateSettingStatus).not.toHaveBeenCalled()
+    pending.resolve('confirm' as unknown as Awaited<ReturnType<typeof ElMessageBox.confirm>>)
+    await flushPromises()
+    expect(settingAPI.updateSettingStatus).toHaveBeenCalledOnce()
+  })
+
   it('honors backend empty rules and create-result brand refresh without interpreting keys', async () => {
     vi.mocked(optionsAPI.getSettingOptions).mockResolvedValue({
       valueTypes: [{ value: 88, label: '后端文本', editor: 'text', allowEmpty: true }],

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import { useI18n } from 'vue-i18n'
@@ -109,7 +110,16 @@ async function copyHtml(): Promise<void> {
 
 async function toggle(row: MailTemplate): Promise<void> {
   try {
-    await updateMailTemplateStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
+    const next = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
+    await ElMessageBox.confirm(
+      t('confirm.status', {
+        name: row.name,
+        status: t(next === YesNo.Yes ? 'mail.status.enabled' : 'mail.status.disabled'),
+      }),
+      t('confirm.title'),
+      { type: 'warning' },
+    )
+    await updateMailTemplateStatus(row.id, next)
     emit('refresh')
   } catch {
     // request.ts owns API error notifications.

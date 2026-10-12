@@ -1,3 +1,4 @@
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus from 'element-plus'
@@ -13,6 +14,8 @@ vi.mock('@/api/system/scheduler', async (importOriginal) => ({
   listSchedules: vi.fn(),
   listJobs: vi.fn(),
   retryJob: vi.fn(),
+  setScheduleStatus: vi.fn(),
+  deleteSchedule: vi.fn(),
 }))
 
 const options: api.SchedulerOptions = {
@@ -55,22 +58,69 @@ function mountPage(codes: string[]): VueWrapper {
   return wrapper
 }
 async function openJobs(wrapper: VueWrapper): Promise<void> {
-  const tab = wrapper.findAll('[role="tab"]').find((item) => item.text() === '执行记录')
-  if (!tab) throw new Error('jobs tab missing')
-  await tab.trigger('click')
+  expect(wrapper.findComponent({ name: 'ElTabs' }).exists()).toBe(false)
+  await wrapper.get('[data-testid="schedule-jobs-42"]').trigger('click')
   await flushPromises()
 }
 
 describe('backend-owned scheduler presentation and actions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue(
+      'confirm' as unknown as Awaited<ReturnType<typeof ElMessageBox.confirm>>,
+    )
     setLocale('zh-CN')
     vi.mocked(api.getSchedulerOptions).mockResolvedValue(options)
-    vi.mocked(api.listSchedules).mockResolvedValue([])
+    vi.mocked(api.listSchedules).mockResolvedValue([{ id: 42, name: 'Cleanup', description: '', taskType: 'cleanup', cronExpression: '*/5 * * * *', timezone: 'UTC', params: {}, isEnabled: true, status: 2, actions: { delete: true }, nextRunAt: null, builtinKey: '', createdAt: timestamp, updatedAt: timestamp }])
     vi.mocked(api.listJobs).mockResolvedValue([job(1, 51, true), job(2, 99, false)])
     vi.mocked(api.retryJob).mockResolvedValue(job(3, 51, false))
   })
   afterEach(() => wrappers.splice(0).forEach((wrapper) => wrapper.unmount()))
+
+  it('only requests execution history after selecting a plan and filters the main table', async () => {
+    const wrapper = mountPage(['system:scheduler:list'])
+    await flushPromises()
+    expect(api.listJobs).not.toHaveBeenCalled()
+    await openJobs(wrapper)
+    expect(api.listJobs).toHaveBeenCalledWith({ scheduleId: 42, beforeId: 0, limit: 20 })
+  })
+
+  it.each([true, false])(
+    'confirms status changes from enabled=%s before sending a request',
+    async (isEnabled) => {
+      const schedule: api.Schedule = {
+        id: 42,
+        name: 'Cleanup',
+        description: '',
+        taskType: 'cleanup',
+        cronExpression: '*/5 * * * *',
+        timezone: 'UTC',
+        params: {},
+        isEnabled,
+        status: 1,
+        actions: { delete: true },
+        nextRunAt: null,
+        builtinKey: '',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }
+      vi.mocked(api.listSchedules).mockResolvedValue([schedule])
+      vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+      const wrapper = mountPage(['system:scheduler:list', 'system:scheduler:status'])
+      await flushPromises()
+      const button = wrapper
+        .findAll('button')
+        .find((button) => button.text() === (isEnabled ? '停用' : '启用'))
+      expect(button).toBeDefined()
+      await button?.trigger('click')
+      await flushPromises()
+      expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
+      expect(api.setScheduleStatus).not.toHaveBeenCalled()
+      await button?.trigger('click')
+      await flushPromises()
+      expect(api.setScheduleStatus).toHaveBeenCalledWith(42, !isEnabled)
+    },
+  )
 
   it('uses backend labels and raw unknown values and intersects retry actions with Access', async () => {
     const wrapper = mountPage(['system:scheduler:list', 'system:scheduler:retry'])
@@ -98,8 +148,8 @@ describe('backend-owned scheduler presentation and actions', () => {
     const wrapper = mountPage(['system:scheduler:list'])
     await flushPromises()
     await openJobs(wrapper)
-    wrapper.findComponent({ name: 'ElSelectV2' }).vm.$emit('update:modelValue', 0)
+    wrapper.getComponent('[data-testid="schedule-job-status"]').vm.$emit('update:modelValue', 0)
     await flushPromises()
-    expect(api.listJobs).toHaveBeenLastCalledWith(0, 0)
+    expect(api.listJobs).toHaveBeenLastCalledWith({ scheduleId: 42, status: 0, beforeId: 0, limit: 20 })
   })
 })

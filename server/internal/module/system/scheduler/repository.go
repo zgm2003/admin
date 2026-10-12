@@ -179,11 +179,11 @@ func (r *Repository) ListSchedules(ctx context.Context, query ScheduleQuery) ([]
 	if query.TaskType != "" {
 		db = db.Where("task_type=?", query.TaskType)
 	}
-	if query.AfterID > 0 {
-		db = db.Where("id > ?", query.AfterID)
+	if query.BeforeID > 0 {
+		db = db.Where("(created_at, id) < (SELECT created_at, id FROM system_scheduler_schedule WHERE id = ?)", query.BeforeID)
 	}
 	var rows []Schedule
-	err := db.Order("id ASC").Limit(limit).Find(&rows).Error
+	err := db.Order("created_at DESC, id DESC").Limit(limit).Find(&rows).Error
 	for index := range rows {
 		rows[index].normalize()
 	}
@@ -597,11 +597,11 @@ func (r *Repository) ListJobs(ctx context.Context, query JobQuery) ([]Job, error
 	if query.TaskType != "" {
 		db = db.Where("task_type=?", query.TaskType)
 	}
-	if query.AfterID > 0 {
-		db = db.Where("id>?", query.AfterID)
+	if query.BeforeID > 0 {
+		db = db.Where("(created_at, id) < (SELECT created_at, id FROM system_scheduler_job WHERE id = ?)", query.BeforeID)
 	}
 	var rows []Job
-	err := db.Order("id ASC").Limit(limit).Find(&rows).Error
+	err := db.Order("created_at DESC, id DESC").Limit(limit).Find(&rows).Error
 	return rows, err
 }
 

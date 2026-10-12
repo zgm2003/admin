@@ -1,3 +1,4 @@
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus from 'element-plus'
@@ -31,6 +32,9 @@ const mountedWrappers: VueWrapper[] = []
 describe('notification center', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue(
+      'confirm' as unknown as Awaited<ReturnType<typeof ElMessageBox.confirm>>,
+    )
     setLocale('zh-CN')
     vi.mocked(catalogApi.getNotificationOptions).mockResolvedValue({
       variants: [
@@ -50,6 +54,33 @@ describe('notification center', () => {
     for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
   })
+
+  it.each(['cancel', 'close'])(
+    'cancelled %s confirmation leaves notifications unchanged',
+    async (action) => {
+      listNotifications.mockResolvedValue({ items: [row()], nextBeforeId: null })
+      const wrapper = mountPage([
+        'message:notification:list',
+        'message:notification:read',
+        'message:notification:delete',
+      ])
+      await flushPromises()
+      for (const testId of [
+        'notification-read-1',
+        'notification-read-all',
+        'notification-delete-1',
+      ]) {
+        vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(action)
+        await wrapper.get(`[data-testid="${testId}"]`).trigger('click')
+        await flushPromises()
+      }
+      expect(ElMessageBox.confirm).toHaveBeenCalledTimes(3)
+      expect(api.readNotification).not.toHaveBeenCalled()
+      expect(api.readAllNotifications).not.toHaveBeenCalled()
+      expect(api.deleteNotification).not.toHaveBeenCalled()
+      expect(wrapper.find('[data-testid="notification-delete-1"]').exists()).toBe(true)
+    },
+  )
 
   it('does not load without list permission', async () => {
     const wrapper = mountPage([])

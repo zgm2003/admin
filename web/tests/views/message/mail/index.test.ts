@@ -1,3 +1,4 @@
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus from 'element-plus'
@@ -45,6 +46,9 @@ vi.mock('@/api/storage/upload', () => ({ requestObjectURL: vi.fn() }))
 describe('mail service page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue(
+      'confirm' as unknown as Awaited<ReturnType<typeof ElMessageBox.confirm>>,
+    )
     vi.mocked(mailApi.getMailRuleImportTemplate).mockReset().mockResolvedValue({ objectKey: '' })
     vi.mocked(requestObjectURL)
       .mockReset()
@@ -99,6 +103,19 @@ describe('mail service page', () => {
   afterEach(() => {
     for (const wrapper of wrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
+  })
+
+  it('does not save a changed config status when confirmation is cancelled', async () => {
+    const wrapper = mountPage(['message:mail:list', 'message:mail:config:update'])
+    await flushPromises()
+    const status = wrapper.findComponent({ name: 'ElSwitch' })
+    expect(status.exists()).toBe(true)
+    status.vm.$emit('update:modelValue', YesNo.No)
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    await wrapper.get('[data-testid="mail-config-save"]').trigger('click')
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
+    expect(mailApi.saveMailConfig).not.toHaveBeenCalled()
   })
 
   it('consumes new backend rule values and sends their numeric values unchanged', async () => {
@@ -502,6 +519,11 @@ describe('mail service page', () => {
 
     const toggle = wrapper.findAll('.el-switch')[1]
     expect(toggle.exists()).toBe(true)
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(mailApi.updateMailRuleStatus).not.toHaveBeenCalled()
+    expect(toggle.classes()).toContain('is-checked')
     await toggle.trigger('click')
     await flushPromises()
 

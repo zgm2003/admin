@@ -1,4 +1,11 @@
 export const zhCN = {
+  'confirm.title': '操作确认',
+  'confirm.status': '确定将“{name}”的状态改为“{status}”吗？',
+  'confirm.delete': '确定删除“{name}”吗？此操作不可撤销。',
+  'confirm.read': '确定将“{name}”标记为已读吗？',
+  'confirm.readAll': '确定将所有通知标记为已读吗？',
+  'confirm.execute': '确定立即执行“{name}”吗？',
+  'confirm.retry': '确定重试任务 #{id} 吗？',
   'appTable.ariaLabel': '数据表格',
   'appTable.refresh': '刷新',
   'appTable.requestFailed': '请求失败',

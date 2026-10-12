@@ -13,9 +13,13 @@ export async function saveExistingRule(
   mutable: Omit<Parameters<typeof updateUploadRule>[1], 'isEnabled'>,
   t: Translate,
 ): Promise<void> {
-  if (canUpdateStatus && form.isEnabled === YesNo.Yes) {
+  if (canUpdateStatus) {
     await ElMessageBox.confirm(
-      t('storage.confirmEnabledRuleReplacement'),
+      t(
+        form.isEnabled === YesNo.Yes
+          ? 'storage.confirmEnabledRuleReplacement'
+          : 'storage.confirmStatus',
+      ),
       t('storage.status.label'),
       {
         type: 'warning',

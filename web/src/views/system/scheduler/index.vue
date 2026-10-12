@@ -212,29 +212,61 @@ async function save(): Promise<void> {
 }
 async function toggle(row: Schedule): Promise<void> {
   if (!canStatus.value) return
-  await setScheduleStatus(row.id, !row.isEnabled)
-  await load()
+  const next = !row.isEnabled
+  try {
+    await ElMessageBox.confirm(
+      t('confirm.status', {
+        name: row.name,
+        status: t(next ? 'scheduler.enable' : 'scheduler.disable'),
+      }),
+      t('confirm.title'),
+      { type: 'warning' },
+    )
+    if (!canStatus.value) return
+    await setScheduleStatus(row.id, next)
+    await load()
+  } catch {
+    // Cancellation sends no request; request.ts owns API error notifications.
+  }
 }
 async function remove(row: Schedule): Promise<void> {
   if (!row.actions.delete || !canDelete.value) return
-  await ElMessageBox.confirm(t('scheduler.deleteConfirm'), t('scheduler.deleteTitle'), {
-    type: 'warning',
-  })
-  await deleteSchedule(row.id)
-  await load()
-  ElNotification.success({ title: t('scheduler.deleted') })
+  try {
+    await ElMessageBox.confirm(t('scheduler.deleteConfirm'), t('scheduler.deleteTitle'), {
+      type: 'warning',
+    })
+    await deleteSchedule(row.id)
+    await load()
+    ElNotification.success({ title: t('scheduler.deleted') })
+  } catch {
+    // Cancellation sends no request; request.ts owns API error notifications.
+  }
 }
 async function execute(row: Schedule): Promise<void> {
   if (!canExecute.value) return
-  await executeSchedule(row.id)
-  await load()
-  ElNotification.success({ title: t('scheduler.executed') })
+  try {
+    await ElMessageBox.confirm(t('confirm.execute', { name: row.name }), t('confirm.title'), {
+      type: 'warning',
+    })
+    await executeSchedule(row.id)
+    await load()
+    ElNotification.success({ title: t('scheduler.executed') })
+  } catch {
+    // Cancellation sends no request; request.ts owns API error notifications.
+  }
 }
 async function retry(row: Job): Promise<void> {
   if (!canRetry.value || !row.actions.retry) return
-  await retryJob(row.id)
-  await load()
-  ElNotification.success({ title: t('scheduler.retried') })
+  try {
+    await ElMessageBox.confirm(t('confirm.retry', { id: row.id }), t('confirm.title'), {
+      type: 'warning',
+    })
+    await retryJob(row.id)
+    await load()
+    ElNotification.success({ title: t('scheduler.retried') })
+  } catch {
+    // Cancellation sends no request; request.ts owns API error notifications.
+  }
 }
 function openJob(row: Job): void {
   selectedJob.value = row

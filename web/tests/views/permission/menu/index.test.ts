@@ -1,3 +1,4 @@
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { getMenuOptions } from '@/api/permission/menuOptions'
 import { menuOptionsFixture, menuRowDisplay } from './fixtures'
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
@@ -654,8 +655,17 @@ describe('MenuManagement', () => {
       'permission:menu:delete',
     ])
     await flushPromises()
+    const statusConfirm = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValueOnce('cancel')
     await wrapper.get(`[data-testid="status-${userActionID}"]`).trigger('click')
     await flushPromises()
+    expect(statusConfirm).toHaveBeenCalledOnce()
+    expect(updateMenuStatusMock).not.toHaveBeenCalled()
+    statusConfirm.mockResolvedValueOnce(
+      'confirm' as unknown as Awaited<ReturnType<typeof ElMessageBox.confirm>>,
+    )
+    await wrapper.get(`[data-testid="status-${userActionID}"]`).trigger('click')
+    await flushPromises()
+    statusConfirm.mockRestore()
     expect(updateMenuStatusMock).toHaveBeenCalledWith(userActionID, YesNo.Yes)
     expect(getMenusMock).toHaveBeenCalledTimes(2)
 

@@ -268,7 +268,12 @@ onMounted(() => {
         {{ displayRedisVersion(row) }}
       </template>
       <template #cell-actions="{ row }: { row: ConfigCacheStatus }">
-        <el-button data-testid="config-cache-status-detail" text @click="openDetail(row)">
+        <el-button
+          data-testid="config-cache-status-detail"
+          text
+          type="primary"
+          @click="openDetail(row)"
+        >
           {{ t('configCacheStatus.details') }}
         </el-button>
       </template>

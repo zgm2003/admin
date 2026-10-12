@@ -92,7 +92,7 @@ const { t } = useI18n()
         <el-button
           v-if="props.can('storage:cosConfig:status')"
           text
-          type="warning"
+          :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
           @click="emit('status', row)"
         >
           {{ row.isEnabled === YesNo.Yes ? t('storage.disable') : t('storage.enable') }}

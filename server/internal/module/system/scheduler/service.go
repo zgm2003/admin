@@ -21,7 +21,7 @@ func NewService(repository *Repository, catalog TaskCatalog) *Service {
 	return &Service{repository: repository, catalog: catalog, now: time.Now}
 }
 func (s *Service) ListSchedules(ctx context.Context, q ScheduleQuery) ([]Schedule, error) {
-	if q.Limit < 1 || q.Limit > 100 || q.AfterID < 0 {
+	if q.Limit < 1 || q.Limit > 100 || q.BeforeID < 0 {
 		return nil, apperror.InvalidRequest(errors.New("scheduler schedule query is invalid"))
 	}
 	rows, err := s.repository.ListSchedules(ctx, q)
@@ -105,7 +105,7 @@ func (s *Service) Execute(ctx context.Context, id, actor int64) (Job, error) {
 	return job, mapSchedulerError(err)
 }
 func (s *Service) ListJobs(ctx context.Context, q JobQuery) ([]Job, error) {
-	if q.Limit < 1 || q.Limit > 100 || q.AfterID < 0 {
+	if q.Limit < 1 || q.Limit > 100 || q.BeforeID < 0 || (q.ScheduleID != nil && *q.ScheduleID <= 0) {
 		return nil, apperror.InvalidRequest(errors.New("scheduler job query is invalid"))
 	}
 	rows, err := s.repository.ListJobs(ctx, q)

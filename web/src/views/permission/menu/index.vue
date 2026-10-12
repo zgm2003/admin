@@ -197,13 +197,18 @@ async function changeStatus(node: ManagedMenuNode): Promise<void> {
   if (!canUpdate.value || !node.actions.status) return
   const nextValue = node.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
   try {
-    if (nextValue === YesNo.No) {
-      await ElMessageBox.confirm(t('menu.confirm.disableMessage'), t('menu.confirm.disableTitle'), {
+    await ElMessageBox.confirm(
+      t('confirm.status', {
+        name: node.name,
+        status: t(nextValue === YesNo.Yes ? 'menu.enable' : 'menu.disable'),
+      }),
+      t('confirm.title'),
+      {
         confirmButtonText: t('menu.confirm.confirm'),
         cancelButtonText: t('menu.confirm.cancel'),
         type: 'warning',
-      })
-    }
+      },
+    )
     await updateMenuStatus(node.id, nextValue)
     await reloadMenus()
     notifyMutation('menu.success.statusChanged')

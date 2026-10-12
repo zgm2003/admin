@@ -1,4 +1,5 @@
 import { nextTick } from 'vue'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { mount } from '@vue/test-utils'
 import ElementPlus, { ElConfigProvider } from 'element-plus'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -14,6 +15,22 @@ describe('application locale provider', () => {
   })
 
   afterEach(() => setNavigatorOnline(true))
+
+  it('localizes programmatic confirmation buttons and follows language changes', async () => {
+    const wrapper = mount(App, { global: { plugins: [pinia, appI18n], stubs: { RouterView: true } } })
+    for (const [locale, confirm, cancel] of [['zh-CN', '确定', '取消'], ['en-US', 'OK', 'Cancel']] as const) {
+      setLocale(locale)
+      await nextTick()
+      const pending = ElMessageBox.confirm('Message', 'Title').catch(() => undefined)
+      await nextTick()
+      expect(document.querySelector('.el-message-box__btns')?.textContent).toContain(confirm)
+      expect(document.querySelector('.el-message-box__btns')?.textContent).toContain(cancel)
+      document.querySelector<HTMLButtonElement>('.el-message-box__btns .el-button:not(.el-button--primary)')?.click()
+      await pending
+      ElMessageBox.close()
+    }
+    wrapper.unmount()
+  })
 
   it('updates Element Plus locale and pagination text without remounting', async () => {
     const wrapper = mount(App, {

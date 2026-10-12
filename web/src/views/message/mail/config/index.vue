@@ -112,11 +112,26 @@ async function save(): Promise<void> {
   if (!constraints.value || regionOptionsLoading.value || regionOptionsError.value !== '') return
   if (!(await formRef.value?.validate().catch(() => false))) return
 
+  const payload = { ...form.value }
   saving.value = true
   try {
-    await mailApi.saveMailConfig(form.value)
+    if (props.config.configured && payload.isEnabled !== props.config.isEnabled) {
+      await ElMessageBox.confirm(
+        t('confirm.status', {
+          name: t('mail.title'),
+          status: t(
+            payload.isEnabled === YesNo.Yes ? 'mail.status.enabled' : 'mail.status.disabled',
+          ),
+        }),
+        t('confirm.title'),
+        { type: 'warning' },
+      )
+    }
+    await mailApi.saveMailConfig(payload)
     ElMessage.success(t('mail.saved'))
     emit('saved')
+  } catch {
+    // Cancellation sends no request; request.ts owns API error notifications.
   } finally {
     saving.value = false
   }
@@ -147,7 +162,7 @@ async function sendTest(): Promise<void> {
 
 async function remove(): Promise<void> {
   try {
-    await ElMessageBox.confirm(t('mail.deleteConfirm'))
+    await ElMessageBox.confirm(t('mail.deleteConfirm'), t('confirm.title'), { type: 'warning' })
     await mailApi.deleteMailConfig()
     ElMessage.success(t('mail.deleted'))
     emit('deleted')

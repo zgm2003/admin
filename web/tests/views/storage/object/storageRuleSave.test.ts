@@ -66,10 +66,10 @@ describe('atomic upload rule saving', () => {
     expect(updateUploadRule).toHaveBeenCalledOnce()
     expect(updateUploadRuleStatus).not.toHaveBeenCalled()
   })
-  it('sends disabled status in the same write without replacement confirmation', async () => {
+  it('confirms disabled status before the atomic write', async () => {
     await saveExistingRule(7, { ...form, isEnabled: YesNo.No }, true, mutable, t)
     expect(updateUploadRule).toHaveBeenCalledExactlyOnceWith(7, { ...mutable, isEnabled: YesNo.No })
-    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+    expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
   })
   it('confirms enabled creation even with no stale list row', async () => {
     await saveNewRule(form, { ...form }, t)

@@ -2,6 +2,7 @@
 import { ArrowUpRight, CheckCheck } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
@@ -152,6 +153,9 @@ function reset(): void {
 }
 async function markRead(item: NotificationItem): Promise<void> {
   try {
+    await ElMessageBox.confirm(t('confirm.read', { name: item.title }), t('confirm.title'), {
+      type: 'warning',
+    })
     await store.markRead(item.id)
     if (unreadOnly.value === 'unread') rows.value = rows.value.filter((row) => row.id !== item.id)
     else item.isRead = true
@@ -161,6 +165,7 @@ async function markRead(item: NotificationItem): Promise<void> {
 }
 async function markAllRead(): Promise<void> {
   try {
+    await ElMessageBox.confirm(t('confirm.readAll'), t('confirm.title'), { type: 'warning' })
     await store.markAllRead()
     if (unreadOnly.value === 'unread') {
       rows.value = []
@@ -172,6 +177,9 @@ async function markAllRead(): Promise<void> {
 }
 async function remove(item: NotificationItem): Promise<void> {
   try {
+    await ElMessageBox.confirm(t('confirm.delete', { name: item.title }), t('confirm.title'), {
+      type: 'warning',
+    })
     await store.remove(item.id)
     rows.value = rows.value.filter((row) => row.id !== item.id)
   } catch {

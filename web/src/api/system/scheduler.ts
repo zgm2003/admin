@@ -71,16 +71,21 @@ export interface SchedulerOptions {
   cronPresets: BackendOption<string>[]
 }
 
-export async function listSchedules(afterId = 0): Promise<Schedule[]> {
+export async function listSchedules(beforeId = 0): Promise<Schedule[]> {
   return request.get<Schedule[]>('/api/admin/v1/system/scheduler/schedule', {
-    params: { afterId, limit: 100 },
+    params: { beforeId, limit: 100 },
   })
 }
 
-export async function listJobs(afterId = 0, status?: JobStatus): Promise<Job[]> {
-  return request.get<Job[]>('/api/admin/v1/system/scheduler/job', {
-    params: { afterId, limit: 100, ...(status !== undefined ? { status } : {}) },
-  })
+export interface JobQuery {
+  scheduleId: number
+  status?: JobStatus
+  beforeId?: number
+  limit?: number
+}
+
+export async function listJobs(query: JobQuery): Promise<Job[]> {
+  return request.get<Job[]>('/api/admin/v1/system/scheduler/job', { params: query })
 }
 
 export async function listRuns(jobId: number): Promise<Run[]> {
