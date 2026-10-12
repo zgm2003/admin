@@ -7,6 +7,9 @@ export type ConfigCacheStatusPublishState = string
 export interface ConfigCacheStatus {
   namespaceLabel: string
   scopeLabel: string
+  scopeName: string
+  scopeDeleted: boolean
+  scopeMissing: boolean
   statusLabel: string
   statusTone: 'success' | 'warning' | 'danger' | 'info'
   statusHint: string

@@ -46,7 +46,7 @@ const columns = computed<TableColumn<smsApi.SmsRule>[]>(() => [
   { key: 'action', prop: 'action', label: t('sms.ruleAction'), width: 100 },
   { prop: 'name', label: t('sms.name'), minWidth: 160 },
   { prop: 'remark', label: t('sms.remark'), minWidth: 160, overflowTooltip: true },
-  { key: 'status', prop: 'id', label: t('sms.enabled'), width: 100 },
+  { key: 'status', prop: 'id', label: t('sms.status.label'), width: 100 },
   {
     key: 'actions',
     prop: 'id',
@@ -172,6 +172,9 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
       <template #cell-status="{ row }: { row: smsApi.SmsRule }">
         <el-switch
           :model-value="row.isEnabled"
+          inline-prompt
+          :active-text="t('sms.status.enabled')"
+          :inactive-text="t('sms.status.disabled')"
           :data-testid="`sms-rule-status-${row.id}`"
           :active-value="YesNo.Yes"
           :inactive-value="YesNo.No"
@@ -262,7 +265,7 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
             :placeholder="t('sms.remarkPlaceholder')"
           />
         </el-form-item>
-        <el-form-item :label="t('sms.enabled')">
+        <el-form-item :label="t('sms.status.label')">
           <el-switch
             v-model="form.isEnabled"
             :active-value="YesNo.Yes"

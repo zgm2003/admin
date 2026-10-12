@@ -349,7 +349,7 @@ describe('RoleManagement', () => {
     await flushPromises()
     expect(getRolePermissionsMock).toHaveBeenCalledWith(3)
     expect(document.body.textContent).toContain('测试员 (tester)')
-    expect(document.body.textContent).toContain('已禁用')
+    expect(document.body.textContent).toContain('停用')
     expect(
       document.body.querySelector('[data-testid="role-permission-platform-tabs"]')?.textContent,
     ).toContain('Admin')

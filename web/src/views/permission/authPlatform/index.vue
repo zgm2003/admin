@@ -464,8 +464,8 @@ watch(
         ><el-tag size="small" :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">{{
           t(
             row.isEnabled === YesNo.Yes
-              ? 'permission.authPlatform.enabled'
-              : 'permission.authPlatform.disabled',
+              ? 'permission.authPlatform.status.enabled'
+              : 'permission.authPlatform.status.disabled',
           )
         }}</el-tag></template
       >

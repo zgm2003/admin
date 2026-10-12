@@ -18,6 +18,9 @@ vi.mock('@/api/system/configCacheStatus', () => ({
 const readyRow: ConfigCacheStatus = {
   namespaceLabel: '系统设置',
   scopeLabel: '全局',
+  scopeName: '',
+  scopeDeleted: false,
+  scopeMissing: false,
   statusLabel: '就绪',
   statusTone: 'success',
   statusHint: '',
@@ -36,6 +39,9 @@ const readyRow: ConfigCacheStatus = {
 }
 const retryingRow: ConfigCacheStatus = {
   namespaceLabel: '短信服务',
+  scopeName: '',
+  scopeDeleted: false,
+  scopeMissing: false,
   scopeLabel: '全局',
   statusLabel: '重试中',
   statusTone: 'danger',
@@ -210,6 +216,29 @@ describe('cache generation page', () => {
     expect(wrapper.text()).toContain('重试中')
     expect(wrapper.text()).toContain('等待缓存重建')
     expect(wrapper.text()).toContain('dependency-unavailable: redis unavailable')
+  })
+
+  it('shows the COS configuration name and explicitly marks deleted records', async () => {
+    vi.mocked(configCacheStatusAPI.getConfigCacheStatuses).mockResolvedValueOnce({
+      list: [
+        {
+          ...readyRow,
+          namespace: 'storage.cosconfig',
+          scopeKey: '7',
+          scopeLabel: '对象存储配置 7',
+          scopeName: '历史 COS',
+          scopeDeleted: true,
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const wrapper = mountPage(['system:configCacheStatus:list'])
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('历史 COS')
+    expect(wrapper.text()).toContain('已删除')
   })
 
   it('opens technical details without changing the page identity', async () => {

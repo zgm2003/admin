@@ -122,7 +122,7 @@ defineExpose({ validate: () => formRef.value?.validate() })
                 <el-radio value="public">{{ t('storage.public') }}</el-radio>
               </el-radio-group>
             </el-form-item>
-            <el-form-item :label="t('storage.status')">
+            <el-form-item :label="t('storage.status.label')">
               <el-radio-group
                 v-model="form.isEnabled"
                 data-testid="storage-rule-status"

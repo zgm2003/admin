@@ -34,7 +34,7 @@ const columns = computed<TableColumn<smsApi.SmsTemplate>[]>(() => [
   { key: 'name', prop: 'name', label: t('sms.name'), minWidth: 180 },
   { prop: 'tencentTemplateId', label: t('sms.tencentTemplateId'), minWidth: 150 },
   { key: 'parameters', prop: 'id', label: t('sms.parameters'), minWidth: 170 },
-  { key: 'status', prop: 'id', label: t('sms.enabled'), width: 100 },
+  { key: 'status', prop: 'id', label: t('sms.status.label'), width: 100 },
   {
     key: 'actions',
     prop: 'id',
@@ -127,6 +127,9 @@ async function toggle(row: smsApi.SmsTemplate, value: YesNoValue): Promise<void>
       <template #cell-status="{ row }: { row: smsApi.SmsTemplate }">
         <el-switch
           :model-value="row.isEnabled"
+          inline-prompt
+          :active-text="t('sms.status.enabled')"
+          :inactive-text="t('sms.status.disabled')"
           data-testid="sms-template-status"
           :active-value="YesNo.Yes"
           :inactive-value="YesNo.No"

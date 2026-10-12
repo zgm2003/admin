@@ -342,7 +342,7 @@ async function changeStatus(row: UserListItem): Promise<void> {
   const next = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
   const message = t(next === YesNo.No ? 'user.disableConfirm' : 'user.enableConfirm')
   try {
-    await ElMessageBox.confirm(message, t('user.status'), { type: 'warning' })
+    await ElMessageBox.confirm(message, t('user.status.label'), { type: 'warning' })
     mutating.value = true
     await updateUserStatus(row.id, next)
     await loadUsers()
@@ -436,7 +436,7 @@ onMounted(() => {
       </template>
       <template #cell-status="{ row }: { row: UserListItem }"
         ><el-tag v-if="row.id > 0" :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">{{
-          t(row.isEnabled === YesNo.Yes ? 'user.enabled' : 'user.disabled')
+          t(row.isEnabled === YesNo.Yes ? 'user.status.enabled' : 'user.status.disabled')
         }}</el-tag></template
       >
       <template #cell-phone="{ row }: { row: UserListItem }">
@@ -467,7 +467,7 @@ onMounted(() => {
                 :disabled="!row.actions.status || mutating"
                 @click="changeStatus(row)"
                 >{{
-                  row.isEnabled === YesNo.Yes ? t('user.disabled') : t('user.enabled')
+                  row.isEnabled === YesNo.Yes ? t('user.status.disabled') : t('user.status.enabled')
                 }}</el-button
               ></el-tooltip
             >

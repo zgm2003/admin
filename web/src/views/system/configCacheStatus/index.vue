@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { View } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -230,7 +229,27 @@ onMounted(() => {
         {{ row.namespaceLabel }}
       </template>
       <template #cell-scopeKey="{ row }: { row: ConfigCacheStatus }">
-        {{ row.scopeLabel }}
+        <template v-if="row.namespace === 'storage.cosconfig'">
+          <span>
+            {{ row.scopeName || row.scopeLabel }}
+          </span>
+          <span v-if="row.scopeName" class="config-cache-status-page__scope-id"
+            >#{{ row.scopeKey }}</span
+          >
+          <el-tag
+            v-if="row.scopeDeleted || row.scopeMissing"
+            size="small"
+            type="info"
+            data-testid="config-cache-status-cos-deleted"
+          >
+            {{
+              row.scopeMissing
+                ? t('configCacheStatus.cosConfigMissing')
+                : t('configCacheStatus.cosConfigDeleted')
+            }}
+          </el-tag>
+        </template>
+        <span v-else>{{ row.scopeLabel }}</span>
       </template>
       <template #cell-status="{ row }: { row: ConfigCacheStatus }">
         <el-tooltip v-if="row.statusHint" :content="row.statusHint">
@@ -249,12 +268,7 @@ onMounted(() => {
         {{ displayRedisVersion(row) }}
       </template>
       <template #cell-actions="{ row }: { row: ConfigCacheStatus }">
-        <el-button
-          data-testid="config-cache-status-detail"
-          text
-          :icon="View"
-          @click="openDetail(row)"
-        >
+        <el-button data-testid="config-cache-status-detail" text @click="openDetail(row)">
           {{ t('configCacheStatus.details') }}
         </el-button>
       </template>
@@ -276,5 +290,10 @@ onMounted(() => {
   text-overflow: ellipsis;
   vertical-align: bottom;
   white-space: nowrap;
+}
+
+.config-cache-status-page__scope-id {
+  margin-left: 6px;
+  color: var(--el-text-color-secondary);
 }
 </style>

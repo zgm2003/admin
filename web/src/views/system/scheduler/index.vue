@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { CirclePlus, Delete, Edit, VideoPlay } from '@element-plus/icons-vue'
+import { CirclePlus } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
 import { useI18n } from 'vue-i18n'
@@ -303,7 +303,7 @@ onBeforeUnmount(() => {
       </template>
       <template #cell-actions="{ row }: { row: Schedule }"
         ><el-space
-          ><el-button v-if="canUpdate" type="primary" link :icon="Edit" @click="openEdit(row)">{{
+          ><el-button v-if="canUpdate" type="primary" link @click="openEdit(row)">{{
             t('scheduler.edit')
           }}</el-button
           ><el-button
@@ -312,18 +312,13 @@ onBeforeUnmount(() => {
             link
             @click="toggle(row)"
             >{{ row.isEnabled ? t('scheduler.disable') : t('scheduler.enable') }}</el-button
-          ><el-button
-            v-if="canExecute"
-            type="success"
-            link
-            :icon="VideoPlay"
-            @click="execute(row)"
-            >{{ t('scheduler.execute') }}</el-button
+          ><el-button v-if="canExecute" type="success" link @click="execute(row)">{{
+            t('scheduler.execute')
+          }}</el-button
           ><el-button
             v-if="canDelete && row.actions.delete"
             type="danger"
             link
-            :icon="Delete"
             @click="remove(row)"
             >{{ t('scheduler.delete') }}</el-button
           ></el-space

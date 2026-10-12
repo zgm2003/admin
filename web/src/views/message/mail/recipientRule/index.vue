@@ -76,7 +76,7 @@ const columns = computed<TableColumn<MailRule>[]>(() => [
   { prop: 'action', label: t('mail.action'), width: 120 },
   { prop: 'name', label: t('mail.name'), minWidth: 160 },
   { prop: 'remark', label: t('mail.remark'), minWidth: 200, overflowTooltip: true },
-  { key: 'enabled', prop: 'isEnabled', label: t('mail.enabled'), width: 100 },
+  { key: 'enabled', prop: 'isEnabled', label: t('mail.status.label'), width: 100 },
   { key: 'actions', prop: 'id', label: t('mail.actions'), width: 200, fixed: 'right' },
 ])
 
@@ -244,6 +244,9 @@ async function exportRules(): Promise<void> {
       <template #cell-enabled="{ row }: { row: MailRule }">
         <el-switch
           :model-value="row.isEnabled"
+          inline-prompt
+          :active-text="t('mail.status.enabled')"
+          :inactive-text="t('mail.status.disabled')"
           :active-value="YesNo.Yes"
           :inactive-value="YesNo.No"
           :disabled="!canStatus"
@@ -341,7 +344,7 @@ async function exportRules(): Promise<void> {
             :placeholder="t('mail.ruleRemarkPlaceholder')"
           />
         </el-form-item>
-        <el-form-item :label="t('mail.enabled')">
+        <el-form-item :label="t('mail.status.enabled')">
           <el-switch
             v-model="form.isEnabled"
             :active-value="YesNo.Yes"

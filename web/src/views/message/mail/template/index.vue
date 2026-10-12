@@ -41,7 +41,7 @@ const columns = computed<TableColumn<MailTemplate>[]>(() => [
   { prop: 'subject', label: t('mail.subject'), minWidth: 190, overflowTooltip: true },
   { key: 'templateId', prop: 'tencentTemplateId', label: t('mail.templateId'), width: 180 },
   { key: 'variables', prop: 'id', label: t('mail.variables'), minWidth: 180 },
-  { key: 'status', prop: 'id', label: t('mail.status'), width: 100 },
+  { key: 'status', prop: 'id', label: t('mail.status.label'), width: 100 },
   {
     key: 'actions',
     prop: 'id',
@@ -169,6 +169,9 @@ async function saveTemplate(): Promise<void> {
       <template #cell-status="{ row }: { row: MailTemplate }">
         <el-switch
           :model-value="row.isEnabled"
+          inline-prompt
+          :active-text="t('mail.status.enabled')"
+          :inactive-text="t('mail.status.disabled')"
           :active-value="YesNo.Yes"
           :inactive-value="YesNo.No"
           :disabled="!canStatus"

@@ -22,7 +22,7 @@ describe('RolePermissionMatrix', () => {
     expect(wrapper.text()).toContain('permission:role:list')
     expect(wrapper.text()).toContain('新增角色')
     expect(wrapper.text()).toContain('permission:role:create')
-    expect(wrapper.text()).toContain('已禁用')
+    expect(wrapper.text()).toContain('停用')
   })
 
   it('reports a partially selected group', () => {

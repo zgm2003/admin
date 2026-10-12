@@ -26,8 +26,15 @@ SELECT
   COALESCE(pending.latest_attempts, 0) AS latest_attempts,
   COALESCE(pending.last_error, '') AS last_error,
   published.latest_published_generation AS latest_published_generation,
-  published.latest_published_at AS latest_published_at
+  published.latest_published_at AS latest_published_at,
+  cos.name AS scope_name,
+  cos.id IS NOT NULL AS scope_exists,
+  cos.deleted_at IS NOT NULL AS scope_deleted
 FROM system_config_cache_state AS g
+LEFT JOIN storage_cos_config AS cos
+  ON cos.id = CASE WHEN g.namespace = 'storage.cosconfig' AND g.scope_key ~ '^[1-9][0-9]{0,18}$'
+    THEN CASE WHEN g.scope_key::numeric <= 9223372036854775807 THEN g.scope_key::bigint END
+  END
 LEFT JOIN LATERAL (
   SELECT
     count(*) AS pending_count,
@@ -71,6 +78,9 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Item, int64, 
 		LastError                 string
 		LatestPublishedGeneration *int64
 		LatestPublishedAt         *time.Time
+		ScopeName                 *string
+		ScopeExists               bool
+		ScopeDeleted              bool
 	}
 	if err := r.db.WithContext(ctx).Raw(rowsSQL+` ORDER BY namespace ASC, scope_key ASC LIMIT ? OFFSET ?`, listArgs...).Scan(&rows).Error; err != nil {
 		return nil, 0, fmt.Errorf("list cache generations: %w", err)
@@ -88,7 +98,12 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Item, int64, 
 			LastError:                 row.LastError,
 			LatestPublishedGeneration: row.LatestPublishedGeneration,
 			LatestPublishedAt:         row.LatestPublishedAt,
+			ScopeDeleted:              row.ScopeDeleted,
+			ScopeMissing:              row.Namespace == "storage.cosconfig" && !row.ScopeExists,
 		})
+		if row.ScopeName != nil {
+			items[len(items)-1].ScopeName = *row.ScopeName
+		}
 	}
 	return items, total, nil
 }
@@ -98,8 +113,8 @@ func listConditions(query ListQuery) (string, []any) {
 	args := make([]any, 0, 3)
 	if query.Keyword != "" {
 		pattern := "%" + escapeLike(query.Keyword) + "%"
-		conditions = append(conditions, `(g.namespace LIKE ? ESCAPE '\' OR g.scope_key LIKE ? ESCAPE '\')`)
-		args = append(args, pattern, pattern)
+		conditions = append(conditions, `(g.namespace LIKE ? ESCAPE '\' OR g.scope_key LIKE ? ESCAPE '\' OR COALESCE(cos.name, '') LIKE ? ESCAPE '\')`)
+		args = append(args, pattern, pattern, pattern)
 	}
 	switch query.PublishState {
 	case PublishStateReady:

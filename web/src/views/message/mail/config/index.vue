@@ -249,7 +249,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
 
       <el-row :gutter="20">
         <el-col :xs="24" :md="12">
-          <el-form-item :label="t('mail.enabled')">
+          <el-form-item :label="t('mail.status.enabled')">
             <el-switch
               v-model="form.isEnabled"
               :active-value="YesNo.Yes"

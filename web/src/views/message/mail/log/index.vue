@@ -83,7 +83,7 @@ const searchFields = computed<SearchField<MailLogSearchModel>[]>(() => [
     key: 'status',
     type: 'select-v2',
     resetValue: '',
-    label: t('mail.status'),
+    label: t('mail.status.label'),
     placeholder: t('mail.allStatuses'),
     options: statusOptions.value,
     width: 130,
@@ -105,7 +105,7 @@ const columns = computed<TableColumn<MailLog>[]>(() => [
   { key: 'username', prop: 'username', label: t('mail.associatedUser'), width: 130 },
   { prop: 'toEmail', label: t('mail.recipient'), minWidth: 210, overflowTooltip: true },
   { key: 'scene', prop: 'scene', label: t('mail.scene'), width: 150 },
-  { key: 'status', prop: 'status', label: t('mail.status'), width: 110 },
+  { key: 'status', prop: 'status', label: t('mail.status.label'), width: 110 },
   { key: 'latency', prop: 'latencyMs', label: t('mail.latency'), width: 110 },
   { key: 'sentAt', prop: 'sentAt', label: t('mail.sentAt'), minWidth: 180 },
   { key: 'actions', prop: 'id', label: t('mail.actions'), width: 100, fixed: 'right' },
@@ -229,7 +229,7 @@ async function inspect(row: MailLog): Promise<void> {
         <el-descriptions-item :label="t('mail.scene')">{{
           sceneText(detail.log.scene)
         }}</el-descriptions-item>
-        <el-descriptions-item :label="t('mail.status')">{{
+        <el-descriptions-item :label="t('mail.status.label')">{{
           statusText(detail.log.status)
         }}</el-descriptions-item>
         <el-descriptions-item label="Request ID"

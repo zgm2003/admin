@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowUpRight, Check, CheckCheck, Trash2 } from 'lucide-vue-next'
+import { ArrowUpRight, CheckCheck } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
@@ -276,7 +276,6 @@ onMounted(() => void load())
           <el-button
             v-if="!row.isRead && canRead"
             :data-testid="`notification-read-${row.id}`"
-            :icon="Check"
             text
             type="primary"
             @click="markRead(row)"
@@ -286,7 +285,6 @@ onMounted(() => void load())
           <el-button
             v-if="canDelete"
             :data-testid="`notification-delete-${row.id}`"
-            :icon="Trash2"
             text
             type="danger"
             @click="remove(row)"

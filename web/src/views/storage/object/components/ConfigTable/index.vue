@@ -71,7 +71,9 @@ const { t } = useI18n()
     </template>
     <template #cell-status="{ row }">
       <el-tag size="small" :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">
-        {{ row.isEnabled === YesNo.Yes ? t('storage.enabled') : t('storage.disabled') }}
+        {{
+          row.isEnabled === YesNo.Yes ? t('storage.status.enabled') : t('storage.status.disabled')
+        }}
       </el-tag>
     </template>
     <template #cell-actions="{ row }">

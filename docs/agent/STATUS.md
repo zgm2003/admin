@@ -1,10 +1,19 @@
 # 项目状态
 
+## 配置状态身份展示与管理列表规范（2026-10-12，代码与定向验证完成）
+
+- 配置缓存状态查询关联 COS 名称（含软删除行），DTO 明确名称/已删除/不存在；列表显示名称和 ID，已删除或不存在记录有明确标记，关键字支持名称查询。
+- 保留缓存状态/outbox 历史事实及待同步数量，不改 Redis 一致性协议，不执行数据清理或新增迁移；管理员低频分页读使用两次 PostgreSQL 查询，不新增请求热路径读库或逐行名称查询，COS 按主键关联。
+- 全项目表格操作列移除按钮图标；启用类状态列统一“状态”，值统一“启用/停用”，状态翻译统一归入业务域 `.status.label/enabled/disabled`，其他任务/同步状态保持业务含义。
+- 验证：`go test -p 1 ./internal/module/system/configCacheStatus ./internal/module/permission/menu ./internal/module/system/scheduler ./internal/shared/i18n -count=1`、COS 非数字/越界 ID 定向回归和 `go vet ./internal/module/system/configCacheStatus ./internal/shared/i18n` 通过；测试数据库使用隔离 schema。
+- 前端 `vitest --pool=forks --maxWorkers=1`：COS 页面 9 项、i18n 10 项、受影响页面 14 文件/201 项通过；`pnpm build`（包含 vue-tsc）、`pnpm lint`、`pnpm check:architecture`（0 findings）和 `git diff --check` 通过。20 个操作插槽扫描无图标；菜单树操作列额外检查无图标。初次页面回归发现 `.status` 文本与 `.status.enabled/disabled` 层级冲突，改为 `.status.label` 后双语回归通过。
+- 未运行全仓测试或浏览器人工验收；threads 批量测试长时间无输出，已终止本轮测试进程并使用 forks 完成定向回归。构建仅保留既有富文本大 chunk 提示。未启动/停止业务服务、未执行迁移/Redis 清理、未提交 Git；维护者重启新版 API 后刷新前端验收。
+
 ## 配置缓存状态跨层改名（2026-10-11，代码与迁移交付）
 
 - 管理业务名称统一为“配置缓存状态”/`configCacheStatus`：Go 模块、共享包、管理 API、RBAC 权限、菜单 path/componentPath/code/i18nKey、前端 API/页面、测试和双语文案已同步；主表目标为 `system_config_cache_state`。
 - `generation` 列、outbox 表、Redis `config-cache:state:v1` key、状态值、快照和租约协议保持原语义，仅作为内部缓存一致性协议字段。
-- 新增 `docs/database/2026-10-11-system-config-cache-status.sql/.ps1` 幂等 forward migration；保留菜单 ID 与角色授权，按实际变化每个平台最多递增一次 `menu_version`，runner 二次执行校验 generation/outbox/menu facts 不变。未执行真实数据库迁移、Redis 清理或 Git 提交。
+- 新增 `docs/database/2026-10-11-system-config-cache-status.sql/.ps1` 幂等 forward migration；保留菜单 ID 与角色授权，按实际变化每个平台最多递增一次 `menu_version`，runner 二次执行校验 generation/outbox/menu facts 不变。2026-10-12 维护者确认旧服务停止后执行真实迁移，菜单契约/表约束/FK 和二次幂等验证通过；未清理 Redis、未提交 Git。
 
 ## 当前工作：全项目后端业务归责与前端减法（2026-10-10，代码整改、全量验证与真实离线迁移完成）
 

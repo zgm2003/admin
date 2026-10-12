@@ -203,7 +203,7 @@ describe('user management', () => {
     expect(texts.join(' ')).toContain('分配角色')
     const dangerous = wrapper
       .findAll('button')
-      .filter((button) => ['已禁用', '删除用户', '分配角色'].includes(button.text()))
+      .filter((button) => ['停用', '删除用户', '分配角色'].includes(button.text()))
     expect(dangerous.every((button) => button.attributes('disabled') !== undefined)).toBe(true)
   })
 
@@ -590,7 +590,7 @@ describe('user management', () => {
   it('confirms status and delete consequences then refreshes the applied page', async () => {
     const wrapper = mountPage(['user:account:status', 'user:account:delete'], 9)
     await flushPromises()
-    await findAriaButton(wrapper, '已禁用').trigger('click')
+    await findAriaButton(wrapper, '停用').trigger('click')
     await flushPromises()
     expect(ElMessageBox.confirm).toHaveBeenCalledWith(
       expect.stringContaining('重新登录'),

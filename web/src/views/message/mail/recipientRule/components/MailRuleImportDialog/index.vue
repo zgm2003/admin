@@ -90,7 +90,7 @@ function displayValues(row: MailRuleXlsxRow): string {
             String(data.action),
           data.name,
           data.remark,
-          t(data.isEnabled === YesNo.Yes ? 'mail.enabled' : 'mail.disabled'),
+          t(data.isEnabled === YesNo.Yes ? 'mail.status.enabled' : 'mail.status.disabled'),
         ]
   ).join(' | ')
 }

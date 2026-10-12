@@ -31,11 +31,11 @@ export function createConfigSearchFields(t: Translate): SearchField<StorageConfi
       key: 'status',
       type: 'select-v2',
       resetValue: '',
-      label: t('storage.status'),
+      label: t('storage.status.label'),
       placeholder: t('storage.allStatus'),
       options: [
-        { label: t('storage.enabled'), value: YesNo.Yes },
-        { label: t('storage.disabled'), value: YesNo.No },
+        { label: t('storage.status.enabled'), value: YesNo.Yes },
+        { label: t('storage.status.disabled'), value: YesNo.No },
       ],
       width: 170,
     },
@@ -79,11 +79,11 @@ export function createRuleSearchFields(
       key: 'status',
       type: 'select-v2',
       resetValue: '',
-      label: t('storage.status'),
+      label: t('storage.status.label'),
       placeholder: t('storage.allStatus'),
       options: [
-        { label: t('storage.enabled'), value: YesNo.Yes },
-        { label: t('storage.disabled'), value: YesNo.No },
+        { label: t('storage.status.enabled'), value: YesNo.Yes },
+        { label: t('storage.status.disabled'), value: YesNo.No },
       ],
       width: 170,
     },
@@ -96,7 +96,7 @@ export function createConfigColumns(t: Translate): TableColumn<CosConfig>[] {
     { prop: 'bucket', label: t('storage.bucket'), minWidth: 190 },
     { prop: 'region', label: t('storage.region'), width: 150 },
     { key: 'credentials', prop: 'id', label: t('storage.credentials'), width: 130 },
-    { key: 'status', prop: 'id', label: t('storage.status'), width: 110 },
+    { key: 'status', prop: 'id', label: t('storage.status.label'), width: 110 },
     { key: 'actions', prop: 'id', label: t('storage.actions'), width: 310 },
   ]
 }
@@ -107,7 +107,7 @@ export function createRuleColumns(t: Translate): TableColumn<UploadRule>[] {
     { prop: 'platformName', label: t('storage.platform'), width: 150 },
     { prop: 'cosConfigName', label: t('storage.config'), width: 170 },
     { key: 'codes', prop: 'codes', label: t('storage.code'), minWidth: 220 },
-    { key: 'status', prop: 'id', label: t('storage.status'), width: 110 },
+    { key: 'status', prop: 'id', label: t('storage.status.label'), width: 110 },
     { key: 'actions', prop: 'id', label: t('storage.actions'), width: 250 },
   ]
 }

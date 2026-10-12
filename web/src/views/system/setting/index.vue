@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { CirclePlus, Delete, Edit, Switch } from '@element-plus/icons-vue'
+import { CirclePlus } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
 import { useI18n } from 'vue-i18n'
@@ -115,11 +115,11 @@ const searchFields = computed<SearchField<SettingSearchModel>[]>(() => [
     key: 'status',
     type: 'select-v2',
     resetValue: '',
-    label: t('setting.status'),
+    label: t('setting.status.label'),
     placeholder: t('setting.allStatuses'),
     options: [
-      { label: t('setting.enabled'), value: YesNo.Yes },
-      { label: t('setting.disabled'), value: YesNo.No },
+      { label: t('setting.status.enabled'), value: YesNo.Yes },
+      { label: t('setting.status.disabled'), value: YesNo.No },
     ],
     clearable: true,
     testId: 'setting-status-filter',
@@ -146,7 +146,7 @@ const columns = computed<TableColumn<SystemSetting>[]>(() => [
     minWidth: 220,
     overflowTooltip: true,
   },
-  { key: 'status', prop: 'isEnabled', label: t('setting.status'), width: 110 },
+  { key: 'status', prop: 'isEnabled', label: t('setting.status.label'), width: 110 },
   { key: 'actions', prop: 'key', label: t('setting.actions'), width: 230, fixed: 'right' },
 ])
 const pagination = computed<TablePaginationState>(() => ({
@@ -421,7 +421,11 @@ onMounted(() => {
           }}</template>
           <template #cell-status="{ row }: { row: SystemSetting }">
             <el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">
-              {{ row.isEnabled === YesNo.Yes ? t('setting.enabled') : t('setting.disabled') }}
+              {{
+                row.isEnabled === YesNo.Yes
+                  ? t('setting.status.enabled')
+                  : t('setting.status.disabled')
+              }}
             </el-tag>
           </template>
           <template #cell-actions="{ row }: { row: SystemSetting }">
@@ -431,7 +435,6 @@ onMounted(() => {
               :disabled="formOptions === null || optionsLoading"
               text
               type="primary"
-              :icon="Edit"
               @click="openEdit(row)"
               >{{ t('setting.edit') }}</el-button
             >
@@ -439,7 +442,6 @@ onMounted(() => {
               v-if="canStatus && row.presentation.actions.status"
               data-testid="setting-status-toggle"
               text
-              :icon="Switch"
               @click="toggle(row)"
               >{{
                 row.isEnabled === YesNo.Yes ? t('setting.disable') : t('setting.enable')
@@ -450,7 +452,6 @@ onMounted(() => {
               data-testid="setting-delete"
               text
               type="danger"
-              :icon="Delete"
               @click="remove(row)"
               >{{ t('setting.delete') }}</el-button
             >

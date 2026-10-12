@@ -322,7 +322,9 @@ async function saveRule(): Promise<void> {
 }
 async function toggleConfig(row: CosConfig): Promise<void> {
   try {
-    await ElMessageBox.confirm(t('storage.confirmStatus'), t('storage.status'), { type: 'warning' })
+    await ElMessageBox.confirm(t('storage.confirmStatus'), t('storage.status.label'), {
+      type: 'warning',
+    })
     await updateCosConfigStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
     await loadConfigs()
   } catch {
@@ -340,7 +342,7 @@ async function toggleRule(row: UploadRule): Promise<void> {
       )
     await ElMessageBox.confirm(
       t(replacesEnabled ? 'storage.confirmEnabledRuleReplacement' : 'storage.confirmStatus'),
-      t('storage.status'),
+      t('storage.status.label'),
       { type: 'warning' },
     )
     await updateUploadRuleStatus(row.id, next)

@@ -42,6 +42,9 @@ type ListQuery struct {
 type Item struct {
 	Namespace                 string
 	ScopeKey                  string
+	ScopeName                 string
+	ScopeDeleted              bool
+	ScopeMissing              bool
 	Generation                int64
 	Status                    string
 	PendingCount              int64
@@ -63,6 +66,9 @@ type ListResult struct {
 type listItem struct {
 	NamespaceLabel            string     `json:"namespaceLabel"`
 	ScopeLabel                string     `json:"scopeLabel"`
+	ScopeName                 string     `json:"scopeName"`
+	ScopeDeleted              bool       `json:"scopeDeleted"`
+	ScopeMissing              bool       `json:"scopeMissing"`
 	StatusLabel               string     `json:"statusLabel"`
 	StatusTone                string     `json:"statusTone"`
 	StatusHint                string     `json:"statusHint"`
@@ -115,6 +121,7 @@ func listItemResponse(ctx context.Context, item Item) (listItem, error) {
 	}
 	return listItem{
 		NamespaceLabel: namespace, ScopeLabel: scope,
+		ScopeName: item.ScopeName, ScopeDeleted: item.ScopeDeleted, ScopeMissing: item.ScopeMissing,
 		StatusLabel: label, StatusTone: tone, StatusHint: hint, PublishedVersion: published,
 		Namespace:                 item.Namespace,
 		ScopeKey:                  item.ScopeKey,
