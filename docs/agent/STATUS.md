@@ -1,14 +1,16 @@
 # 项目状态
 
-## 定时任务字段与索引收口（2026-10-12，代码和隔离验证完成，业务迁移待授权）
+## 定时任务字段与索引收口（2026-10-12，代码、真实迁移与新版服务启动完成）
 
 - 按维护者确认执行：保留 schedule/job/run 与状态数值，状态文案改为待执行/排队中/执行中/执行成功/执行失败/已取消；退出 job.queue/timeout_seconds/worker_id 与 run.result_summary，Worker 归属保留在 run。
 - 契约：run DTO 删除 resultSummary；任务队列/超时仍由代码 TaskDefinition 决定，max_attempts 保留；后端按请求语言生成已知错误分类的安全诊断文案，不透出原始异常。既有 API URL、菜单、权限、Redis/队列 envelope 不变。
 - 代码已完成：Model/Repository/Worker/DTO 与前端 Run 类型移除四个字段，CompleteRun 退出空摘要参数；自动重试成功清除 job 旧错误，失败 run 保留历史。中文/英文状态与安全错误提示在所属后端生成；无菜单或权限变更。
 - 容量与索引：保留现有索引中的事实唯一约束，删除 job(id,attempt_count)、run(job_id,attempt_no DESC) 和 run(finished_at,id) 三个冗余/无用途索引；补 status=2 的 publish_lease_until/id 部分索引，代表性历史数据 EXPLAIN 验证空队列扫描不会随历史记录增长。管理分页仍 count+page 两条 SQL，不新增缓存或逐行查询。
-- 交付 docs/database/2026-10-12-scheduler-cleanup.sql/.ps1。维护者停止 API/Worker 后执行 -OldServicesStopped：核对其他数据库客户端为 0，备份并完整读取校验归档/记录 SHA256，单事务迁移与 5 秒锁等待上限，非空 result_summary 或不兼容新索引拒绝并回滚；核对三表记录数/结构，成功后导出真实 current.sql。数据库已提交但后续校验/快照失败会非零退出并在 audit.json 明示，不伪报成功。
+- 交付 docs/database/2026-10-12-scheduler-cleanup.sql/.ps1。维护者停止 API/Worker 后执行 -OldServicesStopped：拒绝服务连接、活动查询和事务；仅允许无事务、无锁的 Navicat 空闲连接，备份并完整读取校验归档/记录 SHA256，单事务迁移与 5 秒锁等待上限，非空 result_summary 或不兼容新索引拒绝并回滚；核对三表记录数/结构，成功后导出真实 current.sql。数据库已提交但后续校验/快照失败会非零退出并在 audit.json 明示，不伪报成功。
 - 验证：go test ./internal/module/system/scheduler ./internal/module/message/notificationTask ./internal/shared/i18n -count=1、相同包 go vet、go build ./cmd/api ./cmd/worker 通过；前端 3 文件 30 项 Vitest、pnpm build、改动源文件 ESLint/Prettier、pnpm check:architecture（0 findings）通过。SQL 在隔离 schema 验证历史/Worker 归属保留、重复执行、两类拒绝回滚、自动/手动重试与双语错误；3 万条历史数据的排队恢复 EXPLAIN 使用新索引，无 Seq Scan。
-- 完整 runner 在独立临时数据库首次与重复执行均 exit 0，审计 postgresCommitted/verified/snapshotUpdated=true，记录数保持 1→1；临时数据库已删除，仅在临时目录导出快照。审计目录为 %LOCALAPPDATA%/Admin/maintenance/scheduler-cleanup/20261012-121749-741 与 20261012-121752-087。实际业务库只运行 -CheckOnly：四个旧字段和三个旧索引仍在，新索引尚不存在；current.sql 未改，迁移/新版服务启动等待维护者授权。
+- 完整 runner 在独立临时数据库首次与重复执行均 exit 0，审计 postgresCommitted/verified/snapshotUpdated=true，记录数保持 1→1；临时数据库已删除，仅在临时目录导出快照。审计目录为 %LOCALAPPDATA%/Admin/maintenance/scheduler-cleanup/20261012-121749-741 与 20261012-121752-087。维护者授权代执行后，2026-10-12 13:27 在真实 admin/public 完成首次迁移及重复执行，两次均 exit 0，审计 postgresCommitted/verified/snapshotUpdated=true；3 个计划、19746 个 job、19750 个 run 前后不变，旧字段/索引均为 0，新索引存在。真实备份与审计目录为 %LOCALAPPDATA%/Admin/maintenance/scheduler-cleanup/20261012-132707-815、20261012-132718-695；current.sql 已从真实库刷新，并保留数据库原有配置状态表约束名称。三个 Navicat 连接经核对为空闲、无事务、无锁，未断开客户端。新版 API PID 38600、Worker PID 31596 从 %LOCALAPPDATA%/Admin/runtime/scheduler-cleanup-20261012-132554 启动，/health 与 /ready 均 HTTP 200，PostgreSQL/Redis up；Worker 启动后 job/run 已分别增长至 19750/19754，未见 fatal/panic 或缺表/缺列错误。
+- 维护者要求后端自行启动；已停止本次由 Agent 启动的 API PID 38600 和 Worker PID 31596，并核对进程退出。以后不代启动后端；上述健康与任务增长记录仅代表停止前验证结果。
+- 真实迁移后重新运行 go test ./internal/module/system/scheduler ./internal/module/message/notificationTask ./internal/shared/i18n -count=1，三个包均通过；新版 api.exe/worker.exe 构建通过，git diff --check 通过。
 - 未运行浏览器自动化和本轮后端全量测试；上一轮扩展全量测试在历史 database migration 用例失败（依赖已退出的 system_config_cache_generation），不宣称全量通过，本轮不恢复旧表。
 
 ## 定时任务结构只读审查（2026-10-12，讨论结果，未实施迁移）
