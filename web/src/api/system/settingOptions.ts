@@ -11,7 +11,7 @@ export interface SettingPresentation {
   warnOnDecrease: boolean
   refreshBrand: boolean
   mediaAccept: string
-  mediaVariant: 'avatar' | 'default' | 'file'
+  mediaVariant: 'image' | 'video' | 'file' | 'button'
   mediaRuleCode: string
   actions: { status: boolean; delete: boolean }
 }

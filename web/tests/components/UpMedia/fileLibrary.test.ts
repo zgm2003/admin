@@ -1,6 +1,7 @@
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus from 'element-plus'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import * as fileAPI from '@/api/storage/file'
@@ -35,6 +36,9 @@ const wrappers: VueWrapper[] = []
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue(
+    Object.assign('confirm' as const, { value: '', action: 'confirm' as const }),
+  )
   setLocale('zh-CN')
   vi.mocked(fileAPI.getFileOptions).mockResolvedValue({ categories: [], uploadRules: [] })
   vi.mocked(fileAPI.listFiles).mockResolvedValue({ list: [photo], total: 1, page: 1, pageSize: 20 })
@@ -42,6 +46,7 @@ beforeEach(() => {
 afterEach(() => {
   wrappers.splice(0).forEach((wrapper) => wrapper.unmount())
   document.body.innerHTML = ''
+  vi.restoreAllMocks()
   setLocale('zh-CN')
 })
 
@@ -101,6 +106,7 @@ it('selects an existing file without uploading and returns both the key and file
   expect(wrapper.emitted('uploaded')).toBeUndefined()
   await wrapper.setProps({ modelValue: 'file/photo.png' })
   await wrapper.get('.up-media__clear').trigger('click')
+  await flushPromises()
   expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([''])
 })
 
@@ -157,7 +163,9 @@ it.each(['image', 'video'] as const)(
     expect(wrapper.text()).not.toMatch(/上传头像|更换头像|选择头像/u)
     await wrapper.setProps({ modelValue: 'file/photo.png' })
     await flushPromises()
-    expect(wrapper.find('[data-testid="up-media-upload"]').exists()).toBe(true)
+    expect(wrapper.find('.up-media__item').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="up-media-preview"]').exists()).toBe(true)
+    await wrapper.setProps({ modelValue: '' })
     await wrapper.setProps({ disabled: true })
     expect(wrapper.get('[data-testid="up-media-upload"]').attributes('disabled')).toBeDefined()
   },

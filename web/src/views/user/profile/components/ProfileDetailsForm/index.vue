@@ -152,7 +152,7 @@ function updateGender(value: UpdateAccountProfileInput['gender']): void {
             <UpMedia
               :model-value="avatarKey"
               rule-code="avatar"
-              variant="avatar"
+              variant="image"
               :disabled="!canUpdateProfile"
               :upload-disabled="!canUploadAvatar"
               :allow-file-library="canSelectFile"

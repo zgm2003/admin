@@ -1,6 +1,18 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
-import { CircleCloseFilled, Picture, Plus } from '@element-plus/icons-vue'
+import {
+  Delete,
+  Download,
+  FullScreen,
+  Picture,
+  Plus,
+  RefreshLeft,
+  RefreshRight,
+  VideoCamera,
+  ZoomIn,
+  ZoomOut,
+} from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { useI18n } from 'vue-i18n'
 
 import type { CompletedFile, StorageFile } from '@/api/storage/file'
@@ -16,13 +28,13 @@ const FileSelectDialog = defineAsyncComponent(
 )
 
 const props = withDefaults(defineProps<UpMediaProps>(), {
+  modelValue: '',
   multiple: false,
-  variant: 'default',
+  variant: 'image',
   fileLabel: '',
   uploadDisabled: false,
   allowFileLibrary: false,
   fileLibraryPurpose: '',
-  accept: 'image/*',
   disabled: false,
   clearable: true,
   width: '112px',
@@ -40,8 +52,30 @@ const inputRef = ref<HTMLInputElement>()
 const loading = ref(false)
 const uploadError = ref('')
 const libraryVisible = ref(false)
-const libraryFile = ref<StorageFile | null>(null)
-const displayFileLabel = computed(() => props.fileLabel || libraryFile.value?.fileName || '')
+const fileNames = ref<Record<string, string>>({})
+const square = computed(() => props.variant === 'image' || props.variant === 'video')
+const acceptedTypes = computed(() => props.accept ?? (square.value ? `${props.variant}/*` : ''))
+const previewKey = ref('')
+const videoVisible = computed({
+  get: () => props.variant === 'video' && !!previewKey.value,
+  set: (visible: boolean) => {
+    if (!visible) previewKey.value = ''
+  },
+})
+const imageItems = computed(() => displayItems.value.filter((item) => !!item.previewUrl))
+const imageIndex = computed(() =>
+  Math.max(
+    0,
+    imageItems.value.findIndex((item) => item.objectKey === previewKey.value),
+  ),
+)
+const previewItem = computed(() =>
+  displayItems.value.find((item) => item.objectKey === previewKey.value),
+)
+const downloading = ref(false)
+const downloadError = ref('')
+let downloadController: AbortController | null = null
+let confirmingClear = false
 let emittedModel: string | string[] | null = null
 const previews = ref<Record<string, PreviewState>>({})
 let nextRequestId = 0
@@ -56,6 +90,8 @@ watch(
     () => props.uploadDisabled,
     () => props.ruleCode,
     () => props.modelValue,
+    () => props.variant,
+    acceptedTypes,
   ] as const,
   (next, previous) => {
     if (
@@ -63,7 +99,9 @@ watch(
       sameMediaValue(next[3], emittedModel) &&
       next[0] === previous[0] &&
       next[1] === previous[1] &&
-      next[2] === previous[2]
+      next[2] === previous[2] &&
+      next[4] === previous[4] &&
+      next[5] === previous[5]
     ) {
       emittedModel = null
       return
@@ -73,6 +111,9 @@ watch(
     uploadController?.abort()
     loading.value = false
     uploadError.value = ''
+    downloadError.value = ''
+    downloadController?.abort()
+    previewKey.value = ''
   },
   { deep: true, flush: 'sync' },
 )
@@ -83,6 +124,8 @@ const values = computed(() =>
 const displayItems = computed<MediaFileItem[]>(() =>
   values.value.map((objectKey) => ({
     objectKey,
+    fileName:
+      props.fileLabel || fileNames.value[objectKey] || objectKey.split('/').at(-1) || objectKey,
     previewUrl: previews.value[objectKey]?.url ?? '',
     pending: previews.value[objectKey]?.pending ?? false,
     failed:
@@ -99,7 +142,8 @@ watch(
     () => props.allowFileLibrary,
     () => props.fileLibraryPurpose,
     () => props.ruleCode,
-    () => props.accept,
+    acceptedTypes,
+    () => props.variant,
     () => props.modelValue,
     loading,
   ],
@@ -116,7 +160,7 @@ watch(
 )
 
 async function resolvePreview(objectKey: string, force = false): Promise<string> {
-  if (!active) return ''
+  if (!active || props.variant === 'button') return ''
   const current = previews.value[objectKey]
   if (current?.pending) return ''
   if (
@@ -130,7 +174,7 @@ async function resolvePreview(objectKey: string, force = false): Promise<string>
   previews.value = {
     ...previews.value,
     [objectKey]: {
-      url: force ? '' : (current?.url ?? ''),
+      url: current?.url ?? '',
       expiresAt: current?.expiresAt ?? null,
       requestId,
       pending: true,
@@ -155,9 +199,17 @@ async function resolvePreview(objectKey: string, force = false): Promise<string>
 }
 
 watch(
-  values,
-  (next) => {
-    if (libraryFile.value && !next.includes(libraryFile.value.objectKey)) libraryFile.value = null
+  [values, () => props.variant],
+  ([next]) => {
+    previewKey.value = ''
+    if (props.variant === 'button') {
+      previews.value = {}
+      fileNames.value = {}
+      return
+    }
+    fileNames.value = Object.fromEntries(
+      Object.entries(fileNames.value).filter(([key]) => next.includes(key)),
+    )
     for (const key of refreshedImages) if (!next.includes(key)) refreshedImages.delete(key)
     const retained: Record<string, PreviewState> = {}
     for (const objectKey of next) {
@@ -178,6 +230,7 @@ onBeforeUnmount(() => {
   active = false
   uploadSequence++
   uploadController?.abort()
+  downloadController?.abort()
   nextRequestId += 1
   previews.value = {}
 })
@@ -210,13 +263,13 @@ function selectFromLibrary(file: StorageFile): void {
     return
   libraryVisible.value = false
   uploadError.value = ''
-  if (!acceptsMediaFile({ name: file.fileName, type: file.mimeType }, props.accept)) {
+  if (!acceptsMediaFile({ name: file.fileName, type: file.mimeType }, acceptedTypes.value)) {
     uploadError.value = t('components.upMedia.invalidType')
     return
   }
   if (props.multiple && values.value.includes(file.objectKey)) return
   const next = props.multiple ? [...values.value, file.objectKey] : file.objectKey
-  libraryFile.value = file
+  if (props.variant !== 'button') fileNames.value[file.objectKey] = file.fileName
   emittedModel = next
   emit('selected', file)
   emit('update:modelValue', next)
@@ -226,7 +279,6 @@ async function uploadSelected(selected: File[]): Promise<boolean> {
   if (props.disabled || props.uploadDisabled || loading.value || selected.length === 0) return false
   emittedModel = null
   uploadError.value = ''
-  libraryFile.value = null
   const sequence = ++uploadSequence
   const current = () =>
     active && sequence === uploadSequence && !props.disabled && !props.uploadDisabled
@@ -238,10 +290,14 @@ async function uploadSelected(selected: File[]): Promise<boolean> {
     const uploaded = await uploadMediaFiles(
       props.ruleCode,
       selected,
-      props.accept,
+      acceptedTypes.value,
       controller.signal,
       current,
-      (item) => confirmed.push(item),
+      (item) => {
+        if (props.variant !== 'button')
+          fileNames.value[item.objectKey] = selected[confirmed.length]?.name ?? item.objectKey
+        confirmed.push(item)
+      },
     )
     if (!current()) return false
     const first = uploaded[0]
@@ -256,7 +312,7 @@ async function uploadSelected(selected: File[]): Promise<boolean> {
         if (existing) nextPreviews[objectKey] = existing
       }
     }
-    for (const item of uploaded) {
+    for (const item of props.variant === 'button' ? [] : uploaded) {
       nextPreviews[item.objectKey] = {
         url: item.publicUrl ?? '',
         expiresAt: null,
@@ -268,7 +324,7 @@ async function uploadSelected(selected: File[]): Promise<boolean> {
     emittedModel = next
     emit('uploaded', uploaded)
     emit('update:modelValue', next)
-    for (const item of uploaded) {
+    for (const item of props.variant === 'button' ? [] : uploaded) {
       if (!item.publicUrl) void resolvePreview(item.objectKey, true)
     }
     return true
@@ -294,18 +350,51 @@ async function uploadSelected(selected: File[]): Promise<boolean> {
   }
 }
 
-function clearAt(index: number): void {
-  if (props.disabled || loading.value) return
-  uploadError.value = ''
-  libraryFile.value = null
-  const next = values.value.filter((_value, itemIndex) => itemIndex !== index)
+async function clearAt(index: number): Promise<void> {
+  if (!props.clearable || props.disabled || loading.value || confirmingClear) return
   const removed = values.value[index]
+  if (!removed) return
+  const before = [...values.value]
+  confirmingClear = true
+  try {
+    await ElMessageBox.confirm(
+      t('components.upMedia.clearConfirm', {
+        name: displayItems.value[index]?.fileName ?? removed,
+      }),
+      t('confirm.title'),
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  } finally {
+    confirmingClear = false
+  }
+  if (
+    !active ||
+    props.disabled ||
+    loading.value ||
+    !props.clearable ||
+    !sameMediaValue(values.value, before)
+  )
+    return
+  uploadError.value = ''
+  previewKey.value = ''
+  const next = values.value.filter((_value, itemIndex) => itemIndex !== index)
   if (removed) {
     const nextPreviews = { ...previews.value }
     delete nextPreviews[removed]
     previews.value = nextPreviews
   }
+  delete fileNames.value[removed]
   emit('update:modelValue', props.multiple ? next : '')
+}
+
+async function openPreview(objectKey: string): Promise<void> {
+  if (loading.value || !square.value) return
+  const variant = props.variant
+  const url = await resolvePreview(objectKey)
+  if (url && active && props.variant === variant && values.value.includes(objectKey))
+    previewKey.value = objectKey
 }
 
 function handlePreviewError(objectKey: string): void {
@@ -320,15 +409,36 @@ function handlePreviewError(objectKey: string): void {
 }
 
 async function downloadFile(objectKey: string): Promise<void> {
-  const url = await resolvePreview(objectKey, true)
-  if (!url || !active || !values.value.includes(objectKey)) return
-  const link = document.createElement('a')
-  link.href = url
-  link.download = props.fileLabel || objectKey.split('/').at(-1) || 'download'
-  link.rel = 'noopener noreferrer'
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
+  if (downloading.value) return
+  const controller = new AbortController()
+  downloadController = controller
+  downloading.value = true
+  downloadError.value = ''
+  let blobURL = ''
+  try {
+    const url = await resolvePreview(objectKey, true)
+    if (!url || !active || controller.signal.aborted || !values.value.includes(objectKey)) return
+    const response = await fetch(url, { signal: controller.signal })
+    if (!response.ok) throw new Error('Download failed')
+    const blob = await response.blob()
+    if (!active || controller.signal.aborted || !values.value.includes(objectKey)) return
+    // A download attribute on a cross-origin COS URL can open the image instead of downloading.
+    blobURL = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = blobURL
+    link.download =
+      displayItems.value.find((item) => item.objectKey === objectKey)?.fileName || 'download'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  } catch {
+    if (active && !controller.signal.aborted)
+      downloadError.value = t('components.upMedia.downloadFailed')
+  } finally {
+    if (blobURL) URL.revokeObjectURL(blobURL)
+    downloading.value = false
+    downloadController = null
+  }
 }
 </script>
 
@@ -336,7 +446,7 @@ async function downloadFile(objectKey: string): Promise<void> {
   <div
     v-loading="loading"
     class="up-media"
-    :class="{ 'is-disabled': disabled, 'is-loading': loading }"
+    :class="{ 'is-disabled': disabled, 'is-loading': loading, 'up-media--square': square }"
     :style="{ '--up-media-size': width }"
   >
     <input
@@ -344,44 +454,61 @@ async function downloadFile(objectKey: string): Promise<void> {
       data-testid="up-media-input"
       class="up-media__input"
       type="file"
-      :accept="accept"
+      :accept="acceptedTypes"
       :multiple="multiple"
       :disabled="disabled || uploadDisabled || loading"
       @change="onFileChange"
     />
-    <div class="up-media__uploads">
-      <template v-if="variant !== 'file'">
-        <div v-for="(item, index) in displayItems" :key="item.objectKey" class="up-media__item">
+    <div v-if="square" class="up-media__uploads">
+      <div v-for="(item, index) in displayItems" :key="item.objectKey" class="up-media__item">
+        <div v-loading="item.pending" class="up-media__preview">
+          <img
+            v-if="item.previewUrl && variant === 'image'"
+            :src="item.previewUrl"
+            :alt="item.fileName"
+            @error="handlePreviewError(item.objectKey)"
+          />
+          <video
+            v-else-if="item.previewUrl"
+            :src="item.previewUrl"
+            muted
+            playsinline
+            preload="metadata"
+            @error="handlePreviewError(item.objectKey)"
+          />
+          <component
+            :is="variant === 'video' ? VideoCamera : Picture"
+            v-else
+            class="up-media__placeholder"
+            aria-hidden="true"
+          />
+        </div>
+        <div class="up-media__actions">
           <button
-            v-loading="item.pending"
             type="button"
-            :data-testid="!multiple ? 'up-media-upload' : undefined"
-            class="up-media__preview"
-            :disabled="disabled || uploadDisabled || loading || multiple"
-            :aria-label="t('components.upMedia.select')"
-            @click="openPicker"
+            data-testid="up-media-preview"
+            :aria-label="t('components.upMedia.preview')"
+            :title="t('components.upMedia.preview')"
+            :disabled="loading || item.pending"
+            @click="openPreview(item.objectKey)"
           >
-            <img
-              v-if="item.previewUrl"
-              :src="item.previewUrl"
-              alt=""
-              @error="handlePreviewError(item.objectKey)"
-            />
-            <Picture v-else class="up-media__placeholder" aria-hidden="true" />
+            <ZoomIn aria-hidden="true" />
           </button>
           <button
-            v-if="clearable && !disabled && !loading"
+            v-if="clearable && !disabled"
             type="button"
             class="up-media__clear"
             :aria-label="t('components.upMedia.clear')"
+            :title="t('components.upMedia.clear')"
+            :disabled="loading"
             @click="clearAt(index)"
           >
-            <CircleCloseFilled aria-hidden="true" />
+            <Delete aria-hidden="true" />
           </button>
         </div>
-      </template>
+      </div>
       <button
-        v-if="variant === 'file' || multiple || displayItems.length === 0"
+        v-if="multiple || displayItems.length === 0"
         type="button"
         data-testid="up-media-upload"
         class="up-media__trigger"
@@ -392,28 +519,132 @@ async function downloadFile(objectKey: string): Promise<void> {
         <Plus aria-hidden="true" />
       </button>
     </div>
-    <el-button
-      v-if="allowFileLibrary"
-      data-testid="up-media-library"
-      class="up-media__library"
-      type="primary"
-      plain
-      :disabled="disabled || loading"
-      @click="openLibrary"
-      >{{ t('components.upMedia.chooseFromFiles') }}</el-button
-    >
+    <div class="up-media__controls">
+      <el-button
+        v-if="!square"
+        data-testid="up-media-upload"
+        type="primary"
+        :disabled="disabled || uploadDisabled || loading"
+        @click="openPicker"
+        >{{ t('components.upMedia.upload') }}</el-button
+      >
+      <el-button
+        v-if="allowFileLibrary"
+        data-testid="up-media-library"
+        class="up-media__library"
+        type="primary"
+        plain
+        :disabled="disabled || loading"
+        @click="openLibrary"
+        >{{ t('components.upMedia.chooseFromFiles') }}</el-button
+      >
+    </div>
     <FileList
       v-if="variant === 'file' && displayItems.length > 0"
       :items="displayItems"
-      :label="displayFileLabel"
       :disabled="disabled"
-      :loading="loading"
+      :loading="loading || downloading"
       :clearable="clearable"
       @clear="clearAt"
       @download="downloadFile"
       @retry="(key) => resolvePreview(key, true)"
     />
     <p v-if="uploadError" class="up-media__error" role="alert">{{ uploadError }}</p>
+    <p v-if="downloadError" class="up-media__error" role="alert">{{ downloadError }}</p>
+    <el-image-viewer
+      v-if="variant === 'image' && previewKey && previewItem?.previewUrl"
+      :url-list="imageItems.map((item) => item.previewUrl)"
+      :initial-index="imageIndex"
+      :show-progress="multiple"
+      teleported
+      @close="previewKey = ''"
+      @switch="(index: number) => (previewKey = imageItems[index]?.objectKey ?? '')"
+      @error="handlePreviewError(previewKey)"
+    >
+      <template #toolbar="{ actions, reset }">
+        <div class="up-media__viewer-toolbar" data-testid="up-media-preview-image">
+          <button
+            type="button"
+            :aria-label="t('components.upMedia.zoomOut')"
+            :title="t('components.upMedia.zoomOut')"
+            @click="actions('zoomOut')"
+          >
+            <ZoomOut />
+          </button>
+          <button
+            type="button"
+            :aria-label="t('components.upMedia.zoomIn')"
+            :title="t('components.upMedia.zoomIn')"
+            @click="actions('zoomIn')"
+          >
+            <ZoomIn />
+          </button>
+          <button
+            type="button"
+            :aria-label="t('components.upMedia.fit')"
+            :title="t('components.upMedia.fit')"
+            @click="reset"
+          >
+            <FullScreen />
+          </button>
+          <button
+            type="button"
+            :aria-label="t('components.upMedia.rotateLeft')"
+            :title="t('components.upMedia.rotateLeft')"
+            @click="actions('anticlockwise')"
+          >
+            <RefreshLeft />
+          </button>
+          <button
+            type="button"
+            :aria-label="t('components.upMedia.rotateRight')"
+            :title="t('components.upMedia.rotateRight')"
+            @click="actions('clockwise')"
+          >
+            <RefreshRight />
+          </button>
+          <button
+            type="button"
+            data-testid="up-media-viewer-download"
+            :disabled="downloading"
+            :aria-label="t('components.upMedia.download')"
+            :title="t('components.upMedia.download')"
+            @click="downloadFile(previewKey)"
+          >
+            <Download />
+          </button>
+        </div>
+      </template>
+      <template #viewer-error
+        ><el-empty :description="t('components.upMedia.previewUnavailable')"
+      /></template>
+      <p v-if="downloadError" class="up-media__viewer-error" role="alert">{{ downloadError }}</p>
+    </el-image-viewer>
+    <AppDialog
+      v-if="videoVisible"
+      v-model="videoVisible"
+      :title="t('components.upMedia.preview')"
+      width="800px"
+      height="auto"
+    >
+      <video
+        v-if="previewItem?.previewUrl"
+        data-testid="up-media-preview-video"
+        class="up-media__player"
+        :src="previewItem.previewUrl"
+        controls
+        playsinline
+        preload="metadata"
+        @error="handlePreviewError(previewKey)"
+      />
+      <el-empty v-else :description="t('components.upMedia.previewUnavailable')" />
+      <p v-if="downloadError" class="up-media__error" role="alert">{{ downloadError }}</p>
+      <template #footer
+        ><el-button type="primary" :disabled="downloading" @click="downloadFile(previewKey)">{{
+          t('components.upMedia.download')
+        }}</el-button></template
+      >
+    </AppDialog>
     <FileSelectDialog
       v-if="libraryVisible"
       v-model="libraryVisible"

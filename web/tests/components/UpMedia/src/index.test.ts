@@ -1,5 +1,6 @@
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { appI18n } from '@/i18n'
@@ -21,6 +22,8 @@ const wrappers: VueWrapper[] = []
 describe('UpMedia', () => {
   afterEach(() => {
     for (const wrapper of wrappers.splice(0)) wrapper.unmount()
+    document.body.innerHTML = ''
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
   beforeEach(() => {
@@ -324,7 +327,7 @@ describe('UpMedia', () => {
     expect(wrapper.emitted('uploaded')?.at(-1)).toEqual([[{ fileId: 1, objectKey: 'a.png' }]])
   })
 
-  it('uploads from an empty image square and previews or replaces an existing image', async () => {
+  it('uploads from an empty square and exposes only preview and delete on filled squares', async () => {
     const empty = mountComponent({ modelValue: '', ruleCode: 'avatar', variant: 'image' })
     const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
     await empty.get('[data-testid="up-media-upload"]').trigger('click')
@@ -336,23 +339,28 @@ describe('UpMedia', () => {
       variant: 'image',
     })
     await flushPromises()
-    await filled.get('.up-media__preview').trigger('click')
+    await filled.get('[data-testid="up-media-preview"]').trigger('click')
     await flushPromises()
     expect(document.body.querySelector('[data-testid="up-media-preview-image"]')).not.toBeNull()
     expect(click).toHaveBeenCalledOnce()
-    await filled.get('[data-testid="up-media-replace"]').trigger('click')
-    expect(click).toHaveBeenCalledTimes(2)
+    expect(filled.find('[data-testid="up-media-replace"]').exists()).toBe(false)
+    expect(filled.find('.up-media__actions').exists()).toBe(true)
     expect(filled.find('.up-media__clear').exists()).toBe(true)
     click.mockRestore()
   })
 
   it('shows video thumbnails and opens a player without treating video as an image', async () => {
-    const wrapper = mountComponent({ modelValue: 'video/clip.mp4', ruleCode: 'file', variant: 'video' })
+    const wrapper = mountComponent({
+      modelValue: 'video/clip.mp4',
+      ruleCode: 'file',
+      variant: 'video',
+    })
     await flushPromises()
     expect(wrapper.find('img').exists()).toBe(false)
-    expect(wrapper.get('video').attributes()).toMatchObject({ preload: 'metadata', muted: '' })
+    expect(wrapper.get('video').attributes('preload')).toBe('metadata')
+    expect(wrapper.get<HTMLVideoElement>('video').element.muted).toBe(true)
     expect(wrapper.get('input').attributes('accept')).toBe('video/*')
-    await wrapper.get('.up-media__preview').trigger('click')
+    await wrapper.get('[data-testid="up-media-preview"]').trigger('click')
     await flushPromises()
     const player = new DOMWrapper(document.body).get('[data-testid="up-media-preview-video"]')
     expect(player.attributes('controls')).toBeDefined()
@@ -363,30 +371,182 @@ describe('UpMedia', () => {
   })
 
   it('keeps a button upload free of attachments and signed preview requests', async () => {
-    const wrapper = mountComponent({ modelValue: ['old.pdf'], ruleCode: 'file', variant: 'button', multiple: true })
+    const wrapper = mountComponent({
+      modelValue: ['old.pdf'],
+      ruleCode: 'file',
+      variant: 'button',
+      multiple: true,
+    })
     await flushPromises()
     expect(wrapper.get('[data-testid="up-media-upload"]').text()).toBe('上传文件')
     expect(wrapper.find('[data-testid="up-media-file"]').exists()).toBe(false)
     expect(objectURLMock).not.toHaveBeenCalled()
     expect(wrapper.get('input').attributes('accept')).toBe('')
-    credentialsMock.mockResolvedValue({ items: [{ fileId: 12, uploadUrl: 'https://cos.example/pdf', objectKey: 'new.pdf', method: 'PUT', headers: {}, expiresAt: '2030-01-01T00:00:00Z' }] })
+    credentialsMock.mockResolvedValue({
+      items: [
+        {
+          fileId: 12,
+          uploadUrl: 'https://cos.example/pdf',
+          objectKey: 'new.pdf',
+          method: 'PUT',
+          headers: {},
+          expiresAt: '2030-01-01T00:00:00Z',
+        },
+      ],
+    })
     await chooseFiles(wrapper, [new File(['pdf'], 'report.pdf', { type: 'application/pdf' })])
-    expect(wrapper.emitted('uploaded')?.at(-1)).toEqual([[{fileId: 12, objectKey: 'new.pdf', publicUrl: undefined}]])
+    expect(wrapper.emitted('uploaded')?.at(-1)).toEqual([
+      [{ fileId: 12, objectKey: 'new.pdf', publicUrl: undefined }],
+    ])
     expect(objectURLMock).not.toHaveBeenCalled()
   })
 
-  it('replaces one attachment while retaining the other attachments and original filenames', async () => {
-    const wrapper = mountComponent({ modelValue: ['old.pdf', 'other.pdf'], ruleCode: 'file', variant: 'file', multiple: true })
+  it('replaces a single attachment from the upload button and shows its original filename', async () => {
+    const wrapper = mountComponent({ modelValue: 'old.pdf', ruleCode: 'file', variant: 'file' })
     await flushPromises()
-    credentialsMock.mockResolvedValue({items: [{fileId: 13, uploadUrl: 'https://cos.example/replacement', objectKey: 'new.pdf', method: 'PUT', headers: {}, expiresAt: '2030-01-01T00:00:00Z'}]})
+    credentialsMock.mockResolvedValue({
+      items: [
+        {
+          fileId: 13,
+          uploadUrl: 'https://cos.example/replacement',
+          objectKey: 'new.pdf',
+          method: 'PUT',
+          headers: {},
+          expiresAt: '2030-01-01T00:00:00Z',
+        },
+      ],
+    })
     const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
-    await wrapper.get('[data-testid="up-media-replace"]').trigger('click')
-    await chooseFiles(wrapper, [new File(['pdf'], 'report.pdf', {type: 'application/pdf'})])
-    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['new.pdf', 'other.pdf']])
-    await wrapper.setProps({modelValue: ['new.pdf', 'other.pdf']})
+    await wrapper.get('[data-testid="up-media-upload"]').trigger('click')
+    await chooseFiles(wrapper, [new File(['pdf'], 'report.pdf', { type: 'application/pdf' })])
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['new.pdf'])
+    await wrapper.setProps({ modelValue: 'new.pdf' })
     expect(wrapper.text()).toContain('report.pdf')
     expect(wrapper.find('.up-media__trigger').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="up-media-replace"]').exists()).toBe(false)
     click.mockRestore()
+  })
+
+  it('confirms clearing and does not clear a new binding after a late confirmation', async () => {
+    const pending = deferred<Awaited<ReturnType<typeof ElMessageBox.confirm>>>()
+    const confirm = vi.spyOn(ElMessageBox, 'confirm').mockReturnValueOnce(pending.promise)
+    const wrapper = mountComponent({ modelValue: 'old.png', ruleCode: 'avatar' })
+    await wrapper.get('.up-media__clear').trigger('click')
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    await wrapper.setProps({ modelValue: 'new.png' })
+    pending.resolve(Object.assign('confirm' as const, { value: '', action: 'confirm' as const }))
+    await flushPromises()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    confirm.mockRestore()
+  })
+
+  it('downloads from the image viewer using a fresh URL and a local Blob', async () => {
+    const blob = new Blob(['image'], { type: 'image/png' })
+    vi.mocked(fetch).mockResolvedValue({ ok: true, blob: async () => blob } as Response)
+    const createURL = vi.fn().mockReturnValue('blob:download-image')
+    const revokeURL = vi.fn()
+    vi.stubGlobal(
+      'URL',
+      Object.assign(class extends URL {}, {
+        createObjectURL: createURL,
+        revokeObjectURL: revokeURL,
+      }),
+    )
+    const clicked: string[] = []
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicked.push(this.href)
+    })
+    const wrapper = mountComponent({
+      modelValue: 'image/photo.png',
+      ruleCode: 'file',
+      variant: 'image',
+    })
+    await flushPromises()
+    await wrapper.get('[data-testid="up-media-preview"]').trigger('click')
+    await flushPromises()
+    await new DOMWrapper(document.body)
+      .get('[data-testid="up-media-viewer-download"]')
+      .trigger('click')
+    await flushPromises()
+    expect(objectURLMock).toHaveBeenCalledTimes(2)
+    expect(fetch).toHaveBeenCalledWith(
+      'https://cdn.example/existing.png',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(createURL).toHaveBeenCalledWith(blob)
+    expect(clicked).toEqual(['blob:download-image'])
+    expect(revokeURL).toHaveBeenCalledWith('blob:download-image')
+    click.mockRestore()
+  })
+
+  it.each(['network', 'http'])(
+    'shows a recoverable %s download failure in the viewer',
+    async (reason) => {
+      const createURL = vi.fn().mockReturnValue('blob:retry-download')
+      vi.stubGlobal(
+        'URL',
+        Object.assign(class extends URL {}, {
+          createObjectURL: createURL,
+          revokeObjectURL: vi.fn(),
+        }),
+      )
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+      if (reason === 'network')
+        vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Network error'))
+      else vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 403 } as Response)
+      const wrapper = mountComponent({
+        modelValue: 'image/photo.png',
+        ruleCode: 'file',
+        variant: 'image',
+      })
+      await flushPromises()
+      await wrapper.get('[data-testid="up-media-preview"]').trigger('click')
+      await flushPromises()
+      const download = new DOMWrapper(document.body).get('[data-testid="up-media-viewer-download"]')
+      await download.trigger('click')
+      await flushPromises()
+      expect(new DOMWrapper(document.body).get('.up-media__viewer-error').text()).toBe(
+        '文件下载失败，请重试',
+      )
+      expect(download.attributes('disabled')).toBeUndefined()
+      expect(createURL).not.toHaveBeenCalled()
+      expect(click).not.toHaveBeenCalled()
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        blob: async () => new Blob(['image']),
+      } as Response)
+      await download.trigger('click')
+      await flushPromises()
+      expect(document.body.querySelector('.up-media__viewer-error')).toBeNull()
+      expect(createURL).toHaveBeenCalledOnce()
+      expect(click).toHaveBeenCalledOnce()
+    },
+  )
+
+  it('cancels a pending download when the binding changes and ignores its late response', async () => {
+    const response = deferred<Response>()
+    vi.mocked(fetch).mockReturnValueOnce(response.promise)
+    const createURL = vi.fn()
+    vi.stubGlobal(
+      'URL',
+      Object.assign(class extends URL {}, { createObjectURL: createURL, revokeObjectURL: vi.fn() }),
+    )
+    const wrapper = mountComponent({ modelValue: 'old.pdf', ruleCode: 'file', variant: 'file' })
+    await flushPromises()
+    await wrapper.get('[data-testid="up-media-download"]').trigger('click')
+    await flushPromises()
+    const signal = vi.mocked(fetch).mock.calls[0]?.[1]?.signal
+    expect(signal?.aborted).toBe(false)
+    await wrapper.setProps({ modelValue: 'new.pdf' })
+    expect(signal?.aborted).toBe(true)
+    response.resolve({ ok: true, blob: async () => new Blob(['old']) } as Response)
+    await flushPromises()
+    expect(createURL).not.toHaveBeenCalled()
+    expect(wrapper.find('.up-media__error').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="up-media-download"]').attributes('disabled')).toBeUndefined()
   })
 
   it('restores the preview URL for an existing object key after reload', async () => {
@@ -497,6 +657,17 @@ describe('UpMedia', () => {
   })
 
   it('resolves a fresh file URL at download time instead of using an expired signature', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(['xlsx']),
+    } as Response)
+    vi.stubGlobal(
+      'URL',
+      Object.assign(class extends URL {}, {
+        createObjectURL: vi.fn().mockReturnValue('blob:download-file'),
+        revokeObjectURL: vi.fn(),
+      }),
+    )
     objectURLMock
       .mockResolvedValueOnce({
         url: 'https://cos.example/expired',
@@ -522,7 +693,11 @@ describe('UpMedia', () => {
       await wrapper.get('[data-testid="up-media-download"]').trigger('click')
       await flushPromises()
       expect(objectURLMock).toHaveBeenCalledTimes(2)
-      expect(clicked).toEqual(['https://cos.example/fresh'])
+      expect(fetch).toHaveBeenCalledWith(
+        'https://cos.example/fresh',
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      )
+      expect(clicked).toEqual(['blob:download-file'])
     } finally {
       click.mockRestore()
     }

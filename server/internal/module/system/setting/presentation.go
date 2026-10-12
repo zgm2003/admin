@@ -1,6 +1,9 @@
 package setting
 
 import (
+	"path"
+	"strings"
+
 	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
 )
@@ -58,6 +61,14 @@ func presentationFor(row Record) settingPresentation {
 	p := settingPresentation{Editor: valueEditor(row.ValueType), AllowEmpty: validSettingValue("", row.ValueType),
 		MediaRuleCode: "setting", MediaVariant: "file",
 		Actions: settingActions{Status: !isRequiredSetting(row.Key), Delete: row.IsBuiltin == yesno.No && !isRequiredSetting(row.Key)}}
+	if row.ValueType == ValueTypeMedia {
+		switch strings.ToLower(path.Ext(row.Value)) {
+		case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".svg":
+			p.MediaVariant = "image"
+		case ".mp4", ".webm", ".mov", ".m4v", ".ogv":
+			p.MediaVariant = "video"
+		}
+	}
 	if bounds, ok := retentionLimits[row.Key]; ok {
 		p.Minimum = &bounds.Minimum
 		p.Maximum = &bounds.Maximum
@@ -74,7 +85,7 @@ func presentationFor(row Record) settingPresentation {
 	case BrandDefaultAvatarKey:
 		p.ValueTypeLocked = true
 		p.RefreshBrand = true
-		p.MediaVariant = "avatar"
+		p.MediaVariant = "image"
 		p.MediaAccept = ".png,.jpg,.jpeg,.gif,.webp"
 	case sharedsetting.MailRecipientRuleImportTemplateObjectKey:
 		p.ValueTypeLocked = true

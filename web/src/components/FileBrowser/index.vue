@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
@@ -36,7 +36,6 @@ const page = ref(1),
   total = ref(0)
 const loading = ref(false),
   error = ref('')
-const uploadedKeys = ref<string[]>([])
 const previewVisible = ref(false),
   previewURL = ref(''),
   previewName = ref(''),
@@ -194,9 +193,6 @@ async function remove(row: StorageFile): Promise<void> {
 }
 function uploaded(items: CompletedFile[]): void {
   if (items.length) void load()
-  void nextTick(() => {
-    uploadedKeys.value = []
-  })
 }
 watch(canDetail, (allowed) => {
   if (!allowed) previewVisible.value = false
@@ -249,9 +245,8 @@ onBeforeUnmount(() => {
         <template v-if="canUpload && canList">
           <UpMedia
             v-if="uploadRule"
-            v-model="uploadedKeys"
             :rule-code="uploadRule.value"
-            variant="file"
+            variant="button"
             :accept="uploadRule.accept"
             multiple
             :clearable="false"

@@ -39,14 +39,7 @@ const editor = computed(
     presentation.value.editor,
 )
 const mediaAccept = computed(() => presentation.value.mediaAccept)
-// File preview classification is browser presentation, not upload acceptance.
-const mediaVariant = computed(() =>
-  presentation.value.mediaVariant === 'avatar'
-    ? 'avatar'
-    : /\.(?:png|jpg|jpeg|gif|webp)$/u.test(form.value.value)
-      ? 'default'
-      : presentation.value.mediaVariant,
-)
+const mediaVariant = computed(() => presentation.value.mediaVariant)
 const allowEmpty = computed(() =>
   props.editing?.valueType === form.value.valueType
     ? presentation.value.allowEmpty

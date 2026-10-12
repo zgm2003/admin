@@ -64,9 +64,9 @@ func TestCreateResponseOwnsPresentation(t *testing.T) {
 
 func TestMediaPresentationUsesGenericDisplayVariants(t *testing.T) {
 	tests := []struct {
-		name string
-		key string
-		value string
+		name    string
+		key     string
+		value   string
 		variant string
 	}{
 		{"empty default avatar", BrandDefaultAvatarKey, "", "image"},

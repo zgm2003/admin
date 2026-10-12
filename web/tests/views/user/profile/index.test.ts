@@ -1,5 +1,6 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus, { ElMessage } from 'element-plus'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -43,6 +44,9 @@ const mountedWrappers: VueWrapper[] = []
 describe('account profile permissions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue(
+      Object.assign('confirm' as const, { value: '', action: 'confirm' as const }),
+    )
     setLocale('zh-CN')
     getUserProfileOptionsMock.mockResolvedValue({
       genders: [
@@ -83,6 +87,7 @@ describe('account profile permissions', () => {
   afterEach(() => {
     for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
     document.body.innerHTML = ''
+    vi.restoreAllMocks()
   })
 
   it('keeps file selection local and submits the file ID with a stable copy request key', async () => {

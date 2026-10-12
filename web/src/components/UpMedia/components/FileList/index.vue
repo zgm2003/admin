@@ -5,7 +5,6 @@ import type { MediaFileItem } from '@/components/UpMedia/types'
 
 defineProps<{
   items: MediaFileItem[]
-  label: string
   disabled: boolean
   loading: boolean
   clearable: boolean
@@ -28,7 +27,7 @@ const { t } = useI18n()
     >
       <el-icon class="media-file__icon"><Document /></el-icon>
       <div class="media-file__info">
-        <strong>{{ label || item.objectKey.split('/').at(-1) }}</strong>
+        <strong :title="item.fileName">{{ item.fileName }}</strong>
         <span v-if="item.failed" role="alert">{{ t('components.upMedia.resolveFailed') }}</span>
         <span v-else-if="item.pending">{{ t('components.upMedia.resolving') }}</span>
       </div>
@@ -61,6 +60,9 @@ const { t } = useI18n()
 
 <style scoped lang="scss">
 .media-files {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   width: 100%;
   min-width: 0;
 }

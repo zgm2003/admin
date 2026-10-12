@@ -1,8 +1,10 @@
+export type UpMediaVariant = 'image' | 'video' | 'file' | 'button'
+
 export interface UpMediaProps {
-  modelValue: string | string[]
+  modelValue?: string | string[]
   ruleCode: string
   multiple?: boolean
-  variant?: 'default' | 'avatar' | 'file'
+  variant?: UpMediaVariant
   fileLabel?: string
   uploadDisabled?: boolean
   /** Show the personal file library entry after the caller checks its permissions. */
@@ -24,6 +26,7 @@ export interface PreviewState {
 
 export interface MediaFileItem {
   objectKey: string
+  fileName: string
   previewUrl: string
   pending: boolean
   failed: boolean
