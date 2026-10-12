@@ -26,7 +26,7 @@ func (s *executionRepositoryStub) ClaimRun(_ context.Context, _ int64, attempt i
 	s.run = Run{JobID: s.job.ID, AttemptNo: attempt, StartedAt: now}
 	return s.run, s.job, nil
 }
-func (s *executionRepositoryStub) CompleteRun(context.Context, int64, int, string, time.Time, string) error {
+func (s *executionRepositoryStub) CompleteRun(context.Context, int64, int, string, time.Time) error {
 	s.completed++
 	return nil
 }

@@ -158,6 +158,14 @@ const (
 	KeyNotificationTaskLinkNone         MessageKey = "notificationTask.options.link.none"
 	KeyNotificationTaskLinkInternal     MessageKey = "notificationTask.options.link.internal"
 	KeyNotificationTaskLinkExternal     MessageKey = "notificationTask.options.link.external"
+	KeySchedulerErrorTimeout            MessageKey = "scheduler.error.timeout"
+	KeySchedulerErrorCanceled           MessageKey = "scheduler.error.canceled"
+	KeySchedulerErrorTaskFailed         MessageKey = "scheduler.error.taskFailed"
+	KeySchedulerErrorUnknownTask        MessageKey = "scheduler.error.unknownTask"
+	KeySchedulerErrorInvalidPayload     MessageKey = "scheduler.error.invalidPayload"
+	KeySchedulerErrorWorkerLost         MessageKey = "scheduler.error.workerLost"
+	KeySchedulerErrorPublish            MessageKey = "scheduler.error.publish"
+	KeySchedulerErrorTransportLost      MessageKey = "scheduler.error.transportLost"
 	KeySchedulerJobScheduled            MessageKey = "scheduler.options.jobStatus.scheduled"
 	KeySchedulerJobQueued               MessageKey = "scheduler.options.jobStatus.queued"
 	KeySchedulerJobRunning              MessageKey = "scheduler.options.status.running"
@@ -355,7 +363,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyNotificationPriorityUrgent:        "紧急",
 		KeyNotificationTaskStatusDraft:       "草稿",
 		KeyNotificationTaskStatusScheduled:   "待定时发送",
-		KeyNotificationTaskStatusQueued:      "已排队",
+		KeyNotificationTaskStatusQueued:      "排队中",
 		KeyNotificationTaskStatusProcessing:  "发送中",
 		KeyNotificationTaskStatusCompleted:   "已完成",
 		KeyNotificationTaskStatusFailed:      "失败",
@@ -366,13 +374,21 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyNotificationTaskLinkNone:          "无链接",
 		KeyNotificationTaskLinkInternal:      "站内链接",
 		KeyNotificationTaskLinkExternal:      "外部链接",
-		KeySchedulerJobScheduled:             "已调度",
-		KeySchedulerJobQueued:                "已排队",
+		KeySchedulerErrorTimeout:             "任务超过允许的执行时间",
+		KeySchedulerErrorCanceled:            "任务执行被中断",
+		KeySchedulerErrorTaskFailed:          "任务执行失败，请检查任务配置与依赖服务",
+		KeySchedulerErrorUnknownTask:         "任务类型未注册，请检查 API 与 Worker 的部署版本",
+		KeySchedulerErrorInvalidPayload:      "任务参数与当前任务定义不匹配",
+		KeySchedulerErrorWorkerLost:          "执行节点未在规定时间内完成，本次执行已结束",
+		KeySchedulerErrorPublish:             "任务投递失败，请检查队列服务",
+		KeySchedulerErrorTransportLost:       "队列任务投递超时，系统已安排重新投递",
+		KeySchedulerJobScheduled:             "待执行",
+		KeySchedulerJobQueued:                "排队中",
 		KeySchedulerJobRunning:               "执行中",
-		KeySchedulerJobCompleted:             "已完成",
-		KeySchedulerJobFailed:                "失败",
+		KeySchedulerJobCompleted:             "执行成功",
+		KeySchedulerJobFailed:                "执行失败",
 		KeySchedulerJobCanceled:              "已取消",
-		KeySchedulerRunSucceeded:             "成功",
+		KeySchedulerRunSucceeded:             "执行成功",
 		KeySchedulerScheduleDisabled:         "停用",
 		KeySchedulerScheduleEnabled:          "启用",
 		KeySchedulerTriggerCron:              "定时触发",
@@ -586,10 +602,18 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyNotificationTaskLinkNone:          "No link",
 		KeyNotificationTaskLinkInternal:      "Internal",
 		KeyNotificationTaskLinkExternal:      "External",
-		KeySchedulerJobScheduled:             "Scheduled",
-		KeySchedulerJobQueued:                "Queued",
+		KeySchedulerErrorTimeout:             "The task exceeded its allowed execution time",
+		KeySchedulerErrorCanceled:            "Task execution was interrupted",
+		KeySchedulerErrorTaskFailed:          "Task execution failed; check the task configuration and dependent services",
+		KeySchedulerErrorUnknownTask:         "Task type is not registered; check the API and Worker deployment versions",
+		KeySchedulerErrorInvalidPayload:      "Task parameters do not match the current task definition",
+		KeySchedulerErrorWorkerLost:          "The worker did not finish within its execution lease; this attempt has ended",
+		KeySchedulerErrorPublish:             "Task delivery failed; check the queue service",
+		KeySchedulerErrorTransportLost:       "Queue delivery expired; the task has been scheduled for delivery again",
+		KeySchedulerJobScheduled:             "Pending",
+		KeySchedulerJobQueued:                "In queue",
 		KeySchedulerJobRunning:               "Running",
-		KeySchedulerJobCompleted:             "Completed",
+		KeySchedulerJobCompleted:             "Succeeded",
 		KeySchedulerJobFailed:                "Failed",
 		KeySchedulerJobCanceled:              "Canceled",
 		KeySchedulerRunSucceeded:             "Succeeded",

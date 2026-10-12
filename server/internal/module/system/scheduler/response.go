@@ -77,19 +77,18 @@ func jobDTO(row Job) jobResponse {
 }
 
 type runResponse struct {
-	ID            int64      `json:"id"`
-	JobID         int64      `json:"jobId"`
-	AttemptNo     int        `json:"attemptNo"`
-	Status        RunStatus  `json:"status"`
-	WorkerID      string     `json:"workerId"`
-	StartedAt     time.Time  `json:"startedAt"`
-	FinishedAt    *time.Time `json:"finishedAt"`
-	DurationMS    *int64     `json:"durationMs"`
-	ErrorClass    string     `json:"errorClass"`
-	ErrorMessage  string     `json:"errorMessage"`
-	ResultSummary string     `json:"resultSummary"`
+	ID           int64      `json:"id"`
+	JobID        int64      `json:"jobId"`
+	AttemptNo    int        `json:"attemptNo"`
+	Status       RunStatus  `json:"status"`
+	WorkerID     string     `json:"workerId"`
+	StartedAt    time.Time  `json:"startedAt"`
+	FinishedAt   *time.Time `json:"finishedAt"`
+	DurationMS   *int64     `json:"durationMs"`
+	ErrorClass   string     `json:"errorClass"`
+	ErrorMessage string     `json:"errorMessage"`
 }
 
 func runDTO(row Run) runResponse {
-	return runResponse{row.ID, row.JobID, row.AttemptNo, row.Status, row.WorkerID, row.StartedAt, row.FinishedAt, row.DurationMS, row.ErrorClass, row.ErrorMessage, row.ResultSummary}
+	return runResponse{row.ID, row.JobID, row.AttemptNo, row.Status, row.WorkerID, row.StartedAt, row.FinishedAt, row.DurationMS, row.ErrorClass, row.ErrorMessage}
 }

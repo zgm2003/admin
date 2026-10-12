@@ -80,7 +80,6 @@ function run(id: number, jobId: number, workerId: string): Run {
     durationMs: 1000,
     errorClass: '',
     errorMessage: '',
-    resultSummary: '',
   }
 }
 

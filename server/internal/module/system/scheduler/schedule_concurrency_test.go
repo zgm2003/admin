@@ -103,9 +103,9 @@ CREATE TABLE system_scheduler_job (
  schedule_id BIGINT NULL, task_type TEXT NOT NULL, payload JSONB NOT NULL,
  trigger_source TEXT NOT NULL, source_key TEXT NULL, scheduled_at TIMESTAMPTZ NOT NULL,
  available_at TIMESTAMPTZ NOT NULL, status SMALLINT NOT NULL, attempt_count INTEGER NOT NULL,
- max_attempts INTEGER NOT NULL, queue TEXT NOT NULL, timeout_seconds INTEGER NOT NULL,
+ max_attempts INTEGER NOT NULL,
  publish_token TEXT NULL, publish_lease_until TIMESTAMPTZ NULL, run_token TEXT NULL,
- run_lease_until TIMESTAMPTZ NULL, worker_id TEXT NULL, retry_of_job_id BIGINT NULL,
+ run_lease_until TIMESTAMPTZ NULL, retry_of_job_id BIGINT NULL,
  triggered_by BIGINT NULL, error_class TEXT NOT NULL, last_error TEXT NOT NULL,
  completed_at TIMESTAMPTZ NULL, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL
 );
@@ -128,15 +128,15 @@ INSERT INTO system_scheduler_schedule VALUES (1,'example','{}',NULL);
 		t.Fatal(err)
 	}
 	if err := tx.Exec(`INSERT INTO system_scheduler_job(
-schedule_id,task_type,payload,trigger_source,scheduled_at,available_at,status,attempt_count,max_attempts,queue,timeout_seconds,error_class,last_error,created_at,updated_at
-) VALUES (1,'example','{}','cron',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,1,0,1,'default',30,'','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`).Error; err != nil {
+schedule_id,task_type,payload,trigger_source,scheduled_at,available_at,status,attempt_count,max_attempts,error_class,last_error,created_at,updated_at
+) VALUES (1,'example','{}','cron',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,1,0,1,'','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`).Error; err != nil {
 		t.Fatal(err)
 	}
 
 	done := make(chan error, 1)
 	go func() {
 		_, err := NewRepository(db).CreateManualJob(ctx, 1, 7, time.Now().UTC(), func(schedule Schedule, now time.Time) (Job, error) {
-			return Job{TaskType: schedule.TaskType, Payload: json.RawMessage(`{}`), TriggerSource: TriggerManual, ScheduledAt: now, AvailableAt: now, Status: JobScheduled, MaxAttempts: 1, Queue: "default", TimeoutSeconds: 30, CreatedAt: now, UpdatedAt: now}, nil
+			return Job{TaskType: schedule.TaskType, Payload: json.RawMessage(`{}`), TriggerSource: TriggerManual, ScheduledAt: now, AvailableAt: now, Status: JobScheduled, MaxAttempts: 1, CreatedAt: now, UpdatedAt: now}, nil
 		})
 		done <- err
 	}()
@@ -165,16 +165,16 @@ CREATE TABLE system_scheduler_job (
  schedule_id BIGINT NULL, task_type TEXT NOT NULL, payload JSONB NOT NULL,
  trigger_source TEXT NOT NULL, source_key TEXT NULL, scheduled_at TIMESTAMPTZ NOT NULL,
  available_at TIMESTAMPTZ NOT NULL, status SMALLINT NOT NULL, attempt_count INTEGER NOT NULL,
- max_attempts INTEGER NOT NULL, queue TEXT NOT NULL, timeout_seconds INTEGER NOT NULL,
+ max_attempts INTEGER NOT NULL,
  publish_token TEXT NULL, publish_lease_until TIMESTAMPTZ NULL, run_token TEXT NULL,
- run_lease_until TIMESTAMPTZ NULL, worker_id TEXT NULL, retry_of_job_id BIGINT NULL,
+ run_lease_until TIMESTAMPTZ NULL, retry_of_job_id BIGINT NULL,
  triggered_by BIGINT NULL, error_class TEXT NOT NULL, last_error TEXT NOT NULL,
  completed_at TIMESTAMPTZ NULL, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL
 );
 INSERT INTO system_scheduler_schedule VALUES (1,NULL);
 INSERT INTO system_scheduler_job(
-schedule_id,task_type,payload,trigger_source,scheduled_at,available_at,status,attempt_count,max_attempts,queue,timeout_seconds,error_class,last_error,completed_at,created_at,updated_at
-) VALUES (1,'example','{}','manual',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,5,1,2,'default',30,'provider','failed',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+schedule_id,task_type,payload,trigger_source,scheduled_at,available_at,status,attempt_count,max_attempts,error_class,last_error,completed_at,created_at,updated_at
+) VALUES (1,'example','{}','manual',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,5,1,2,'provider','failed',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
 `).Error; err != nil {
 		t.Fatal(err)
 	}

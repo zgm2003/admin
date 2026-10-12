@@ -28,13 +28,10 @@ CREATE TABLE system_scheduler_job (
   status SMALLINT NOT NULL,
   attempt_count INTEGER NOT NULL,
   max_attempts INTEGER NOT NULL,
-  queue VARCHAR(64) NOT NULL,
-  timeout_seconds INTEGER NOT NULL,
   publish_token VARCHAR(64) NULL,
   publish_lease_until TIMESTAMPTZ NULL,
   run_token VARCHAR(64) NULL,
   run_lease_until TIMESTAMPTZ NULL,
-  worker_id VARCHAR(128) NULL,
   retry_of_job_id BIGINT NULL,
   triggered_by BIGINT NULL,
   error_class VARCHAR(64) NOT NULL,
@@ -47,8 +44,8 @@ CREATE TABLE system_scheduler_job (
 	}
 	if err := db.WithContext(ctx).Exec(`
 INSERT INTO system_scheduler_job (
-  id,task_type,payload,trigger_source,scheduled_at,available_at,status,attempt_count,max_attempts,queue,timeout_seconds,error_class,last_error,created_at,updated_at
-) VALUES (1,'example','{}','manual',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,1,0,1,'default',30,'','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`).Error; err != nil {
+  id,task_type,payload,trigger_source,scheduled_at,available_at,status,attempt_count,max_attempts,error_class,last_error,created_at,updated_at
+) VALUES (1,'example','{}','manual',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,1,0,1,'','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -56,7 +53,7 @@ INSERT INTO system_scheduler_job (
 	if err != nil {
 		t.Fatalf("GetJob() error = %v", err)
 	}
-	if job.ID != 1 || job.SourceKey != "" || job.PublishToken != "" || job.RunToken != "" || job.WorkerID != "" {
+	if job.ID != 1 || job.SourceKey != "" || job.PublishToken != "" || job.RunToken != "" {
 		t.Fatalf("job = %+v", job)
 	}
 }

@@ -101,7 +101,7 @@ func (s *Service) Execute(ctx context.Context, id, actor int64) (Job, error) {
 		if !ok {
 			return Job{}, ErrUnknownTaskType
 		}
-		return Job{TaskType: schedule.TaskType, Payload: append([]byte(nil), schedule.Params...), TriggerSource: TriggerManual, SourceKey: fmt.Sprintf("manual:%d:%d", schedule.ID, now.UnixNano()), ScheduledAt: now, AvailableAt: now, Status: JobScheduled, MaxAttempts: definition.MaxAttempts, Queue: definition.Queue, TimeoutSeconds: int(definition.Timeout / time.Second), CreatedAt: now, UpdatedAt: now}, nil
+		return Job{TaskType: schedule.TaskType, Payload: append([]byte(nil), schedule.Params...), TriggerSource: TriggerManual, SourceKey: fmt.Sprintf("manual:%d:%d", schedule.ID, now.UnixNano()), ScheduledAt: now, AvailableAt: now, Status: JobScheduled, MaxAttempts: definition.MaxAttempts, CreatedAt: now, UpdatedAt: now}, nil
 	})
 	return job, mapSchedulerError(err)
 }
@@ -113,18 +113,43 @@ func (s *Service) ListJobs(ctx context.Context, q JobQuery) (pagination.Result[J
 	if err != nil {
 		return pagination.Result[Job]{}, mapSchedulerError(err)
 	}
+	for i := range rows {
+		if rows[i].LastError != "" || rows[i].ErrorClass != "" {
+			rows[i].LastError, err = executionErrorMessage(ctx, rows[i].ErrorClass)
+			if err != nil {
+				return pagination.Result[Job]{}, err
+			}
+		}
+	}
 	return pagination.Result[Job]{List: rows, Total: total, Page: q.Page, PageSize: q.PageSize}, nil
 }
 func (s *Service) GetJob(ctx context.Context, id int64) (Job, error) {
 	row, err := s.repository.GetJob(ctx, id)
-	return row, mapSchedulerError(err)
+	if err != nil {
+		return Job{}, mapSchedulerError(err)
+	}
+	if row.LastError != "" || row.ErrorClass != "" {
+		row.LastError, err = executionErrorMessage(ctx, row.ErrorClass)
+	}
+	return row, err
 }
 func (s *Service) ListRuns(ctx context.Context, q RunQuery) ([]Run, error) {
 	if q.JobID <= 0 || q.Limit < 1 || q.Limit > 100 {
 		return nil, apperror.InvalidRequest(errors.New("scheduler run query is invalid"))
 	}
 	rows, err := s.repository.ListRuns(ctx, q)
-	return rows, mapSchedulerError(err)
+	if err != nil {
+		return nil, mapSchedulerError(err)
+	}
+	for i := range rows {
+		if rows[i].ErrorMessage != "" || rows[i].ErrorClass != "" {
+			rows[i].ErrorMessage, err = executionErrorMessage(ctx, rows[i].ErrorClass)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return rows, nil
 }
 func (s *Service) Retry(ctx context.Context, id, actor int64) (Job, error) {
 	if id <= 0 || actor <= 0 {

@@ -191,7 +191,7 @@ func (r *Repository) ListSchedules(ctx context.Context, query ScheduleQuery) ([]
 }
 
 func (r *Repository) CreateJobTx(ctx context.Context, tx *gorm.DB, job *Job) error {
-	if tx == nil || job == nil || job.TaskType == "" || job.MaxAttempts < 1 || job.Queue == "" || job.TimeoutSeconds < 1 {
+	if tx == nil || job == nil || job.TaskType == "" || job.MaxAttempts < 1 {
 		return ErrInvalidSchedule
 	}
 	if len(job.Payload) == 0 {
@@ -201,8 +201,8 @@ func (r *Repository) CreateJobTx(ctx context.Context, tx *gorm.DB, job *Job) err
 		return ErrInvalidPayload
 	}
 	err := tx.WithContext(ctx).Raw(`INSERT INTO system_scheduler_job(
-schedule_id,task_type,payload,trigger_source,source_key,scheduled_at,available_at,status,attempt_count,max_attempts,queue,timeout_seconds,retry_of_job_id,triggered_by,error_class,last_error,created_at,updated_at)
-VALUES(?,?,?::jsonb,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`, job.ScheduleID, job.TaskType, string(job.Payload), job.TriggerSource, nullableString(job.SourceKey), job.ScheduledAt, job.AvailableAt, job.Status, job.AttemptCount, job.MaxAttempts, job.Queue, job.TimeoutSeconds, job.RetryOfJobID, job.TriggeredBy, job.ErrorClass, job.LastError, job.CreatedAt, job.UpdatedAt).Scan(&job.ID).Error
+schedule_id,task_type,payload,trigger_source,source_key,scheduled_at,available_at,status,attempt_count,max_attempts,retry_of_job_id,triggered_by,error_class,last_error,created_at,updated_at)
+VALUES(?,?,?::jsonb,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`, job.ScheduleID, job.TaskType, string(job.Payload), job.TriggerSource, nullableString(job.SourceKey), job.ScheduledAt, job.AvailableAt, job.Status, job.AttemptCount, job.MaxAttempts, job.RetryOfJobID, job.TriggeredBy, job.ErrorClass, job.LastError, job.CreatedAt, job.UpdatedAt).Scan(&job.ID).Error
 	if err != nil {
 		return mapRepositoryError(err)
 	}
@@ -275,7 +275,7 @@ func (w *BatchJobWriter) CreateBatchJobTx(ctx context.Context, tx *gorm.DB, task
 		return err
 	}
 	definition := w.definition
-	job := Job{TaskType: definition.Type, Payload: payload, TriggerSource: TriggerBusiness, SourceKey: fmt.Sprintf("notificationTask:%d:%d", taskID, batchNo), ScheduledAt: availableAt, AvailableAt: availableAt, Status: JobScheduled, MaxAttempts: definition.MaxAttempts, Queue: definition.Queue, TimeoutSeconds: int(definition.Timeout / time.Second), CreatedAt: now, UpdatedAt: now}
+	job := Job{TaskType: definition.Type, Payload: payload, TriggerSource: TriggerBusiness, SourceKey: fmt.Sprintf("notificationTask:%d:%d", taskID, batchNo), ScheduledAt: availableAt, AvailableAt: availableAt, Status: JobScheduled, MaxAttempts: definition.MaxAttempts, CreatedAt: now, UpdatedAt: now}
 	return w.repository.CreateJobTx(ctx, tx, &job)
 }
 
@@ -419,7 +419,7 @@ func (r *Repository) ClaimRun(ctx context.Context, jobID int64, expectedAttempt 
 		}
 		attempt := job.AttemptCount + 1
 		finished := now.Add(lease)
-		result := tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status=? AND publish_token=?", jobID, JobQueued, dispatchToken).Updates(map[string]any{"status": JobRunning, "attempt_count": attempt, "publish_token": nil, "publish_lease_until": nil, "run_token": token, "run_lease_until": finished, "worker_id": workerID, "updated_at": now})
+		result := tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status=? AND publish_token=?", jobID, JobQueued, dispatchToken).Updates(map[string]any{"status": JobRunning, "attempt_count": attempt, "publish_token": nil, "publish_lease_until": nil, "run_token": token, "run_lease_until": finished, "updated_at": now})
 		if result.Error != nil {
 			return result.Error
 		}
@@ -439,25 +439,21 @@ func (r *Repository) ClaimRun(ctx context.Context, jobID int64, expectedAttempt 
 		job.PublishLeaseUntil = nil
 		job.RunToken = token
 		job.RunLeaseUntil = &finished
-		job.WorkerID = workerID
 		return nil
 	})
 	return run, job, err
 }
 
-func (r *Repository) CompleteRun(ctx context.Context, jobID int64, attempt int, token string, now time.Time, summary string) error {
-	if len(summary) > 1024 {
-		summary = summary[:1024]
-	}
+func (r *Repository) CompleteRun(ctx context.Context, jobID int64, attempt int, token string, now time.Time) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		res := tx.WithContext(ctx).Model(&Run{}).Where("job_id=? AND attempt_no=? AND status=?", jobID, attempt, RunRunning).Updates(map[string]any{"status": RunSucceeded, "finished_at": now, "duration_ms": gorm.Expr("GREATEST(0, EXTRACT(EPOCH FROM (? - started_at))*1000)::bigint", now), "result_summary": summary, "updated_at": now})
+		res := tx.WithContext(ctx).Model(&Run{}).Where("job_id=? AND attempt_no=? AND status=?", jobID, attempt, RunRunning).Updates(map[string]any{"status": RunSucceeded, "finished_at": now, "duration_ms": gorm.Expr("GREATEST(0, EXTRACT(EPOCH FROM (? - started_at))*1000)::bigint", now), "updated_at": now})
 		if res.Error != nil {
 			return res.Error
 		}
 		if res.RowsAffected != 1 {
 			return ErrClaimLost
 		}
-		res = tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status=? AND run_token=?", jobID, JobRunning, token).Updates(map[string]any{"status": JobCompleted, "run_token": nil, "run_lease_until": nil, "completed_at": now, "updated_at": now})
+		res = tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status=? AND run_token=?", jobID, JobRunning, token).Updates(map[string]any{"status": JobCompleted, "run_token": nil, "run_lease_until": nil, "error_class": "", "last_error": "", "completed_at": now, "updated_at": now})
 		if res.Error != nil {
 			return res.Error
 		}
@@ -522,7 +518,7 @@ func (r *Repository) RecoverExpiredRuns(ctx context.Context, now time.Time, limi
 			if result.Error != nil {
 				return result.Error
 			}
-			updates := map[string]any{"status": JobFailed, "run_token": nil, "run_lease_until": nil, "worker_id": "", "error_class": "worker-lost", "last_error": "worker execution lease expired", "completed_at": now, "updated_at": now}
+			updates := map[string]any{"status": JobFailed, "run_token": nil, "run_lease_until": nil, "error_class": "worker-lost", "last_error": "worker execution lease expired", "completed_at": now, "updated_at": now}
 			if job.AttemptCount < job.MaxAttempts {
 				updates["status"] = JobScheduled
 				updates["available_at"] = now
@@ -575,7 +571,6 @@ func (r *Repository) CreateRetryJob(ctx context.Context, jobID int64, actor *int
 		newJob.PublishLeaseUntil = nil
 		newJob.RunToken = ""
 		newJob.RunLeaseUntil = nil
-		newJob.WorkerID = ""
 		newJob.ErrorClass = ""
 		newJob.LastError = ""
 		newJob.CreatedAt = now

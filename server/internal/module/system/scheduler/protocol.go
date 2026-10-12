@@ -39,13 +39,10 @@ type Job struct {
 	Status            JobStatus
 	AttemptCount      int
 	MaxAttempts       int
-	Queue             string
-	TimeoutSeconds    int
 	PublishToken      string
 	PublishLeaseUntil *time.Time
 	RunToken          string
 	RunLeaseUntil     *time.Time
-	WorkerID          string
 	RetryOfJobID      *int64
 	TriggeredBy       *int64
 	ErrorClass        string
@@ -58,19 +55,18 @@ type Job struct {
 func (Job) TableName() string { return "system_scheduler_job" }
 
 type Run struct {
-	ID            int64
-	JobID         int64
-	AttemptNo     int
-	Status        RunStatus
-	WorkerID      string
-	StartedAt     time.Time
-	FinishedAt    *time.Time
-	DurationMS    *int64
-	ErrorClass    string
-	ErrorMessage  string
-	ResultSummary string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID           int64
+	JobID        int64
+	AttemptNo    int
+	Status       RunStatus
+	WorkerID     string
+	StartedAt    time.Time
+	FinishedAt   *time.Time
+	DurationMS   *int64
+	ErrorClass   string
+	ErrorMessage string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 func (Run) TableName() string { return "system_scheduler_run" }

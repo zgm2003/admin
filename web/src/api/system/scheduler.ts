@@ -51,7 +51,6 @@ export interface Run {
   durationMs: number | null
   errorClass: string
   errorMessage: string
-  resultSummary: string
 }
 
 export interface TaskOption {

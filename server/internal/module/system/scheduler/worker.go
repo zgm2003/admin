@@ -12,7 +12,7 @@ import (
 type executionRepository interface {
 	GetJob(context.Context, int64) (Job, error)
 	ClaimRun(context.Context, int64, int, string, string, string, time.Time, time.Duration) (Run, Job, error)
-	CompleteRun(context.Context, int64, int, string, time.Time, string) error
+	CompleteRun(context.Context, int64, int, string, time.Time) error
 	FailRun(context.Context, int64, int, string, string, string, *time.Time, time.Time) error
 }
 
@@ -68,7 +68,7 @@ func (e *Executor) Execute(ctx context.Context, envelope JobEnvelope) error {
 	err = definition.Execute(executionCtx, ExecutionContext{JobID: claimed.ID, Attempt: claimed.AttemptCount, MaxAttempts: claimed.MaxAttempts, TaskType: claimed.TaskType, Payload: append([]byte(nil), claimed.Payload...), ScheduledAt: claimed.ScheduledAt, StartedAt: run.StartedAt})
 	finished := e.now().UTC()
 	if err == nil {
-		return e.repository.CompleteRun(ctx, claimed.ID, claimed.AttemptCount, token, finished, "")
+		return e.repository.CompleteRun(ctx, claimed.ID, claimed.AttemptCount, token, finished)
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()

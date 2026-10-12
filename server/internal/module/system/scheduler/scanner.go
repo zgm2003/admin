@@ -66,6 +66,6 @@ func (s *Scanner) RunOnce(ctx context.Context, now time.Time) (int, error) {
 			return Job{}, err
 		}
 		frozen := append(json.RawMessage(nil), payload...)
-		return Job{TaskType: schedule.TaskType, Payload: frozen, TriggerSource: TriggerCron, SourceKey: fmt.Sprintf("schedule:%d:%d", schedule.ID, scheduledAt.UnixNano()), ScheduledAt: scheduledAt.UTC(), AvailableAt: now.UTC(), Status: JobScheduled, MaxAttempts: definition.MaxAttempts, Queue: definition.Queue, TimeoutSeconds: int(definition.Timeout / time.Second), CreatedAt: now.UTC(), UpdatedAt: now.UTC()}, nil
+		return Job{TaskType: schedule.TaskType, Payload: frozen, TriggerSource: TriggerCron, SourceKey: fmt.Sprintf("schedule:%d:%d", schedule.ID, scheduledAt.UnixNano()), ScheduledAt: scheduledAt.UTC(), AvailableAt: now.UTC(), Status: JobScheduled, MaxAttempts: definition.MaxAttempts, CreatedAt: now.UTC(), UpdatedAt: now.UTC()}, nil
 	})
 }

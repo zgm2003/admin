@@ -1,11 +1,30 @@
 # 项目状态
 
-## 当前工作：定时任务按计划分页查看与确认框语言（2026-10-12）
+## 定时任务字段与索引收口（2026-10-12，代码和隔离验证完成，业务迁移待授权）
+
+- 按维护者确认执行：保留 schedule/job/run 与状态数值，状态文案改为待执行/排队中/执行中/执行成功/执行失败/已取消；退出 job.queue/timeout_seconds/worker_id 与 run.result_summary，Worker 归属保留在 run。
+- 契约：run DTO 删除 resultSummary；任务队列/超时仍由代码 TaskDefinition 决定，max_attempts 保留；后端按请求语言生成已知错误分类的安全诊断文案，不透出原始异常。既有 API URL、菜单、权限、Redis/队列 envelope 不变。
+- 代码已完成：Model/Repository/Worker/DTO 与前端 Run 类型移除四个字段，CompleteRun 退出空摘要参数；自动重试成功清除 job 旧错误，失败 run 保留历史。中文/英文状态与安全错误提示在所属后端生成；无菜单或权限变更。
+- 容量与索引：保留现有索引中的事实唯一约束，删除 job(id,attempt_count)、run(job_id,attempt_no DESC) 和 run(finished_at,id) 三个冗余/无用途索引；补 status=2 的 publish_lease_until/id 部分索引，代表性历史数据 EXPLAIN 验证空队列扫描不会随历史记录增长。管理分页仍 count+page 两条 SQL，不新增缓存或逐行查询。
+- 交付 docs/database/2026-10-12-scheduler-cleanup.sql/.ps1。维护者停止 API/Worker 后执行 -OldServicesStopped：核对其他数据库客户端为 0，备份并完整读取校验归档/记录 SHA256，单事务迁移与 5 秒锁等待上限，非空 result_summary 或不兼容新索引拒绝并回滚；核对三表记录数/结构，成功后导出真实 current.sql。数据库已提交但后续校验/快照失败会非零退出并在 audit.json 明示，不伪报成功。
+- 验证：go test ./internal/module/system/scheduler ./internal/module/message/notificationTask ./internal/shared/i18n -count=1、相同包 go vet、go build ./cmd/api ./cmd/worker 通过；前端 3 文件 30 项 Vitest、pnpm build、改动源文件 ESLint/Prettier、pnpm check:architecture（0 findings）通过。SQL 在隔离 schema 验证历史/Worker 归属保留、重复执行、两类拒绝回滚、自动/手动重试与双语错误；3 万条历史数据的排队恢复 EXPLAIN 使用新索引，无 Seq Scan。
+- 完整 runner 在独立临时数据库首次与重复执行均 exit 0，审计 postgresCommitted/verified/snapshotUpdated=true，记录数保持 1→1；临时数据库已删除，仅在临时目录导出快照。审计目录为 %LOCALAPPDATA%/Admin/maintenance/scheduler-cleanup/20261012-121749-741 与 20261012-121752-087。实际业务库只运行 -CheckOnly：四个旧字段和三个旧索引仍在，新索引尚不存在；current.sql 未改，迁移/新版服务启动等待维护者授权。
+- 未运行浏览器自动化和本轮后端全量测试；上一轮扩展全量测试在历史 database migration 用例失败（依赖已退出的 system_config_cache_generation），不宣称全量通过，本轮不恢复旧表。
+
+## 定时任务结构只读审查（2026-10-12，讨论结果，未实施迁移）
+
+- 核对生产调用链与真实 PostgreSQL pg_catalog/pg_stat/EXPLAIN。schedule/job/run 分别承担计划、持久任务和执行尝试；notificationTask 业务批次也使用 job，六个任务状态均有实际分支，三表暂不合并。
+- 字段候选：job.queue/timeout_seconds 当前只写入，Publisher/Executor 实际使用 TaskDefinition；run.result_summary 的唯一生产成功调用传空串，真实库全部为空。可按代码配置事实来源退出这些字段；max_attempts 参与业务重试和恢复不可一起删除。错误文本当前多数只传分类码，需改善公开诊断内容，不能直接透出原始异常。
+- 确认冗余索引：job(id,attempt_count) 唯一性被 id 主键覆盖；run(job_id,attempt_no DESC) 与唯一索引(job_id,attempt_no) 可合并使用 B-tree 反向扫描；run(finished_at,id) 终态部分索引未被当前按 job_id 清理流程使用。删除前分别核对依赖并使用 forward migration。
+- 优先索引问题：RecoverExpiredQueued 每轮查询 status=2 的 publish_lease_until，现有 publish_lease 索引只覆盖 status=1。真实库约 1.96 万条 job 时相同过滤/排序的 EXPLAIN 已走 Seq Scan；需为 status=2 的过期投递恢复补匹配的部分索引，并复查 status=1 旧索引实际必要性。不能凭 idx_scan=0 删除唯一约束或断言所有索引无用。
+- 计划+状态分页现有索引只有(schedule_id,created_at DESC,id DESC)，状态靠过滤；大历史量且频繁筛选时评估(schedule_id,status,created_at DESC,id DESC)，由代表性数据的执行计划验证，不因用户总数大就给仅 3 个计划过度加索引。
+
+## 定时任务按计划分页查看与确认框语言（代码与定向验证完成）（2026-10-12）
 
 - 移除全量执行记录页签，主页面仅计划表；计划下拉选择当前已加载计划，可按游标加载更多计划；每行“执行记录”打开该计划的 AppDialog/AppTable，保留真实运行状态筛选、详情和独立 retry/detail 权限。
 - 管理列表按 created_at DESC、id DESC 返回，计划使用 beforeId 与时间/ID 元组游标；执行记录使用 page/pageSize 和 list/total/page/pageSize 契约，默认每页 20、上限 100，AppTable 显示总数和页码，状态/计划/每页条数变更回第一页；Job HTTP 查询接入 scheduleId，不在前端裁剪全局记录。百万级用户容量下此接口是低频管理员查询，记录每页 COUNT + SELECT 共 2 条 PostgreSQL 查询，按计划索引缩小扫描范围；深页 OFFSET 和精确 COUNT 随该计划历史量增长，沿用既有终态历史清理限制数据量，不进入用户请求热路径。计划每批 100、1 条 SELECT，既有 schedule/job 列表索引可复用，无请求热路径配置读库、无进程缓存或 Redis 协议变化。
 - 程序式 ElMessageBox 独立于组件 Provider，应用入口显式安装服务上下文与响应式 Element Plus locale；避免在页面逐个写中文按钮或增加业务请求工具。
-- 验证中：隔离 schema 中计划过滤、时间/ID 倒序、稳定翻页及 malformed/越界查询回归通过；最终页面/双语/构建检查完成后回填。
+- 定向验证：scheduler/shared pagination 的 Go 测试通过；前端 6 文件 44 项测试通过，覆盖分页、筛选回第一页、旧请求隔离和中文/英文确认按钮；pnpm build、pnpm lint、pnpm check:architecture（0 findings）、改动源码 Prettier 与 git diff --check 通过；go vet ./... 与 go build ./... 通过。未运行真实浏览器自动化验收。扩展 go test -p 1 ./... -count=1 最终未通过，发现 internal/database 的多项历史迁移测试依赖已改名的 system_config_cache_generation 表而失败；不能宣称后端全量测试通过，此项另行收口，本轮不恢复旧业务表。
 
 ## 下期需求：COS“我的文件”（维护者确认本期仅核对和记录，2026-10-12）
 

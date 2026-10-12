@@ -59,9 +59,9 @@ func TestSchedulerOptionsAuthenticatedLocalizedWithoutRepository(t *testing.T) {
 		if envelope.Data.Tasks == nil || len(envelope.Data.JobStatuses) != 6 || len(envelope.Data.RunStatuses) != 3 || len(envelope.Data.CronPresets) != 10 {
 			t.Fatalf("options = %+v", envelope.Data)
 		}
-		want := "已调度"
+		want := "待执行"
 		if locale == i18n.EnUS {
-			want = "Scheduled"
+			want = "Pending"
 		}
 		if envelope.Data.JobStatuses[0].Label != want || envelope.Data.JobStatuses[0].Value != 1 {
 			t.Fatalf("localized numeric statuses = %+v", envelope.Data.JobStatuses)
