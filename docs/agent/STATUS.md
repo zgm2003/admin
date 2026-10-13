@@ -1,5 +1,27 @@
 # 项目状态
 
+## 当前工作：支付体系分步建设（2026-10-13，第一步金额基础完成）
+
+- 维护者明确先完成支付体系，再建设 AI 体系；当前施工只覆盖支付，不并行新增 AI 模块或修改 Canvas。
+- 参考旧 `admin_back_go/internal/module/payment`、`payment/wallet`、`internal/shared/money` 与 `admin_front_ts` 支付页面。旧钱包以 `user_id` 唯一归属；沿用同一账户一个钱包的业务基础，订单和流水记录来源认证平台，不自行建立每个平台一份余额。
+- 分步顺序：①金额表示与转换；②钱包与不可删除账本；③支付配置与充值套餐；④充值订单、支付宝 Web/H5、验签回调及入账；⑤订单查询、超时关单与故障恢复；⑥个人充值/账单、管理页面及兑换码。每步完成定向验证后推进下一步，具体接口、权限和迁移随对应工作单元固定。
+- 当前一步契约：`server/internal/shared/money` 只负责金额表示与精确转换；钱包采用人民币 8 位小数的 int64 units（1 元=100000000 units），支付通道金额采用整数分（1 分=1000000 units）。HTTP 钱包金额使用十进制字符串，不用 float、JavaScript number 或静默舍入传递余额；支付通道字符串固定两位小数。
+- 本步接口：`CentsToUnits`、`ParseRMBUnits`、`FormatRMBUnits`、`ParseRMBCents`、`FormatRMBCents`；非法格式、负值、超出精度及 int64 溢出返回明确错误。模块不写钱包、不持久化、不新增 API/权限或数据库表。
+- 容量与验证：沿用百万用户、多实例基线；金额转换不访问 PostgreSQL/Redis，不建立缓存。钱包写入后续必须使用 PostgreSQL 行锁、来源唯一约束及同事务账本，不把 Redis 当余额事实；配置后续复用 generation/outbox 和有界冷回源。每阶段核对查询预算与双实例并发、幂等及失败回滚，本步先覆盖最小金额、最大金额、畸形输入、精度与溢出。
+- 工作区原有 `docs/agent/STATUS.md` 修改与未跟踪 `canvas/` 由其他工作产生，保留；不自动提交或启动/停止后端。当前未执行生产数据库迁移，未宣称支付功能已上线。
+- 本步已完成金额实现与 7 个定向测试（含表驱动边界用例）；先运行 `go test ./internal/shared/money -count=1`，因金额生产包缺失失败，再实现并通过。实际执行 `gofmt -w internal/shared/money/units.go internal/shared/money/units_test.go`、`go test ./internal/shared/money -count=1`、`go vet ./internal/shared/money`、`go build ./internal/shared/money` 均 exit 0。
+- 下一步：固定钱包/不可删除账本的 DTO、权限和 PostgreSQL 事务契约，核对真实库后交付幂等迁移及并发测试。AI、支付宝真实支付/回调、生产迁移、全仓测试/构建未在本步执行；此前全仓架构门禁与迁移 fixture 失败不由本步金额定向验证覆盖。
+
+## Canvas 前端第一阶段 Auth 重建（2026-10-13，代码与联调验证完成）
+
+- 按维护者确认在 `canvas/` 独立重建 React 19 + Vite 前端；本阶段只接入 Canvas 平台认证和工作台入口，不恢复旧 Canvas 代码。后续参考 `D:\github-project\infinite-canvas` 的业务功能将按模块搬运；MCP/本地 Agent 暂不纳入本阶段。
+- 新增严格 HTTP envelope 请求层、Canvas `X-Auth-Platform`/`X-Device-ID` 头、内存 access token、HttpOnly refresh cookie、并发 401 refresh 合并、终态会话清理和错误透传。新增密码/邮箱/手机登录策略消费、滑块验证码、验证码倒计时、退出登录和响应式登录页；认证成功后进入工作台占位页。
+- AI 渠道当前不接 Admin 供应商接口，后续仍按参考项目本地配置搬运；Admin 供应商功能完成后只替换 Canvas 配置 API/store，不改变认证边界。
+- 本地开发默认使用 Vite `/api` 代理；因 API 当前 `RequireOrigin` 白名单仍是 `http://localhost:16300`，代理将上游 Origin 固定为该值。生产部署必须把实际 Canvas Origin 加入 API 的 CORS/Origin 配置，不能依赖本地代理。
+- 实际验证：`cd canvas; pnpm test`（3 个文件、15 项通过）、`pnpm typecheck` 通过、`pnpm build` 通过；Playwright 真实浏览器验证 `http://localhost:16302/login` 页面渲染、`/api/v1/auth/login-config` 经代理返回 200、Canvas 请求头正确、未登录 refresh 返回 401 后停留登录页。未使用真实账号完成登录，未修改后端、数据库或权限；开发服务器由 Agent 启动，交付前保持运行于 `http://localhost:16302/`。
+- 追加修复登出请求边界：`/api/v1/auth/logout` 现在携带当前 Canvas access token，但仍禁止自动 refresh；服务端会话撤销失败时前端仍在 finally 清理本地状态。回归测试覆盖 Bearer 头、无 refresh 和退出后状态清理。
+- 按维护者反馈将 Canvas 前端目录对齐当前 `web` 契约：API 使用 `src/api/auth/login.ts`，认证常量使用 `src/auth`，请求层使用 `src/utils/request.ts`，状态使用 `src/store`，路由使用 `src/router/index.tsx`，页面使用 `src/views`，HTTP 错误类型使用 `src/types/http.ts`；测试镜像到 `tests/utils`、`tests/store`、`tests/views`。删除 `services`、`stores`、`pages`、根级 runtime 目录，未改变认证行为。
+
 ## 我的文件预览交互整改（2026-10-13，代码与定向验证完成）
 
 - 图片预览改为与 `UpMedia` 一致的全屏 `el-image-viewer`，提供缩放、适应、旋转和下载工具栏，不再使用居中的 `AppDialog` 图片预览。
