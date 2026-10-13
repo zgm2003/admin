@@ -41,6 +41,10 @@ beforeEach(() => {
     uploadRules: [],
   })
   vi.mocked(api.listFiles).mockResolvedValue({ list: [row], total: 42, page: 1, pageSize: 20 })
+  vi.mocked(api.getFileURL).mockResolvedValue({
+    url: 'https://files.example.test/photo.png',
+    expiresAt: '2099-01-01T00:00:00Z',
+  })
 })
 afterEach(() => wrappers.splice(0).forEach((w) => w.unmount()))
 it('requests paginated own files and resets filters to the first page', async () => {
@@ -50,8 +54,8 @@ it('requests paginated own files and resets filters to the first page', async ()
     { page: 1, pageSize: 20, keyword: '', category: '', purpose: '' },
     expect.any(AbortSignal),
   )
-  const table = wrapper.findComponent({ name: 'AppTable' })
-  table.vm.$emit('update:pagination', { currentPage: 2, pageSize: 20, total: 42 })
+  const pagination = wrapper.findComponent({ name: 'ElPagination' })
+  pagination.vm.$emit('current-change', 2)
   await flushPromises()
   expect(api.listFiles).toHaveBeenLastCalledWith(
     expect.objectContaining({ page: 2 }),
@@ -66,11 +70,14 @@ it('requests paginated own files and resets filters to the first page', async ()
     expect.any(AbortSignal),
   )
 })
-it('uses shared search and table components with localized search placeholders', async () => {
+it('uses shared search and renders file cards with localized search placeholders', async () => {
   const wrapper = page()
   await flushPromises()
   expect(wrapper.findComponent({ name: 'AppSearch' }).exists()).toBe(true)
-  expect(wrapper.findComponent({ name: 'AppTable' }).exists()).toBe(true)
+  expect(wrapper.findComponent({ name: 'AppTable' }).exists()).toBe(false)
+  expect(wrapper.find('.file-browser__grid').exists()).toBe(true)
+  expect(wrapper.get('[data-testid="file-card-7"]').text()).toContain('photo.png')
+  expect(wrapper.get('[data-testid="file-card-7"]').text()).toContain('图片')
   expect(wrapper.get('input[data-testid="file-keyword"]').attributes('placeholder')).toBe(
     '请输入文件名',
   )
@@ -89,6 +96,71 @@ it('uses shared search and table components with localized search placeholders',
       expect.objectContaining({ key: 'category', placeholder: 'Select a file type' }),
     ]),
   )
+})
+it('shows media-aware card previews and keeps actions on the card', async () => {
+  vi.mocked(api.listFiles).mockResolvedValueOnce({
+    list: [
+      row,
+      { ...row, id: 8, fileName: 'clip.mp4', mimeType: 'video/mp4', category: 'video' },
+      { ...row, id: 9, fileName: 'report.pdf', mimeType: 'application/pdf', category: 'document' },
+    ],
+    total: 3,
+    page: 1,
+    pageSize: 20,
+  })
+  const wrapper = page()
+  await flushPromises()
+  expect(
+    wrapper.get('[data-testid="file-card-7"] .file-browser__thumbnail').attributes('data-kind'),
+  ).toBe('image')
+  expect(
+    wrapper.get('[data-testid="file-card-8"] .file-browser__thumbnail').attributes('data-kind'),
+  ).toBe('video')
+  expect(
+    wrapper.get('[data-testid="file-card-9"] .file-browser__thumbnail').attributes('data-kind'),
+  ).toBe('file')
+  expect(wrapper.get('[data-testid="file-preview-7"]')).toBeTruthy()
+  expect(wrapper.get('[data-testid="file-download-7"]')).toBeTruthy()
+  expect(api.getFileURL).toHaveBeenCalledWith(7, 'inline', expect.any(AbortSignal))
+  expect(api.getFileURL).toHaveBeenCalledWith(8, 'inline', expect.any(AbortSignal))
+})
+it('opens image previews in the fullscreen image viewer', async () => {
+  vi.mocked(api.getFileURL).mockResolvedValue({
+    url: 'https://files.example.test/photo.png',
+    expiresAt: '2099-01-01T00:00:00Z',
+  })
+  const wrapper = page()
+  await flushPromises()
+  await wrapper.get('[data-testid="file-preview-7"]').trigger('click')
+  await flushPromises()
+  expect(wrapper.findComponent({ name: 'ElImageViewer' }).exists()).toBe(true)
+  expect(wrapper.findComponent({ name: 'AppDialog' }).exists()).toBe(false)
+  expect(wrapper.findComponent({ name: 'ElImageViewer' }).props('urlList')).toEqual([
+    'https://files.example.test/photo.png',
+  ])
+})
+it('opens non-media files in an iframe preview', async () => {
+  const file = {
+    ...row,
+    id: 10,
+    fileName: 'manual.pdf',
+    mimeType: 'application/pdf',
+    category: 'document',
+  }
+  vi.mocked(api.listFiles).mockResolvedValueOnce({ list: [file], total: 1, page: 1, pageSize: 20 })
+  vi.mocked(api.getFileURL).mockResolvedValue({
+    url: 'https://files.example.test/manual.pdf',
+    expiresAt: '2099-01-01T00:00:00Z',
+  })
+  const wrapper = page()
+  await flushPromises()
+  await wrapper.get('[data-testid="file-preview-10"]').trigger('click')
+  await flushPromises()
+  const frame = document.body.querySelector<HTMLIFrameElement>('[data-testid="file-preview-frame"]')
+  expect(frame).not.toBeNull()
+  expect(frame?.getAttribute('src')).toBe('https://files.example.test/manual.pdf')
+  expect(frame?.getAttribute('title')).toBe('manual.pdf')
+  expect(wrapper.findComponent({ name: 'ElImageViewer' }).exists()).toBe(false)
 })
 it('uploads with the backend-selected rule without a technical purpose selector', async () => {
   vi.mocked(api.getFileOptions).mockResolvedValue({
@@ -141,6 +213,7 @@ it('canceled delete sends no request and operations have explicit types and no i
 })
 it('ignores a late page response after a newer page request', async () => {
   let resolve: (value: Awaited<ReturnType<typeof api.listFiles>>) => void = () => {}
+  vi.mocked(api.listFiles).mockResolvedValueOnce({ list: [row], total: 42, page: 1, pageSize: 20 })
   vi.mocked(api.listFiles).mockReturnValueOnce(
     new Promise((r) => {
       resolve = r
@@ -148,13 +221,79 @@ it('ignores a late page response after a newer page request', async () => {
   )
   const wrapper = page()
   await flushPromises()
+  wrapper.findComponent({ name: 'ElPagination' }).vm.$emit('current-change', 2)
+  await flushPromises()
   wrapper
-    .findComponent({ name: 'AppTable' })
-    .vm.$emit('update:pagination', { currentPage: 2, pageSize: 20, total: 42 })
+    .findComponent({ name: 'AppSearch' })
+    .vm.$emit('query', { keyword: 'latest', category: '' })
   await flushPromises()
   resolve({ list: [{ ...row, fileName: 'stale' }], total: 42, page: 1, pageSize: 20 })
   await flushPromises()
-  expect(
-    wrapper.findComponent(FileBrowser).findComponent({ name: 'AppTable' }).props('data'),
-  ).toEqual([row])
+  expect(wrapper.findComponent(FileBrowser).findAll('[data-testid^="file-card-"]')).toHaveLength(1)
+  expect(wrapper.find('[data-testid="file-card-7"]').exists()).toBe(true)
+  expect(wrapper.get('[data-testid="file-card-7"]').text()).not.toContain('stale')
+})
+
+it('cancels old thumbnails on paging without letting late responses consume the new queue', async () => {
+  vi.mocked(api.listFiles)
+    .mockResolvedValueOnce({
+      list: Array.from({ length: 6 }, (_, index) => ({ ...row, id: index + 1 })),
+      total: 42,
+      page: 1,
+      pageSize: 20,
+    })
+    .mockResolvedValueOnce({
+      list: Array.from({ length: 6 }, (_, index) => ({ ...row, id: index + 20 })),
+      total: 42,
+      page: 2,
+      pageSize: 20,
+    })
+  const pending = new Map<number, (value: api.FileURL) => void>()
+  vi.mocked(api.getFileURL).mockImplementation(
+    (id) => new Promise((resolve) => pending.set(id, resolve)),
+  )
+  const wrapper = page()
+  await flushPromises()
+  expect(api.getFileURL).toHaveBeenCalledTimes(4)
+  const oldSignals = vi.mocked(api.getFileURL).mock.calls.map((call) => call[2])
+  wrapper.findComponent({ name: 'ElPagination' }).vm.$emit('current-change', 2)
+  await flushPromises()
+  expect(oldSignals.every((signal) => signal?.aborted)).toBe(true)
+  expect(api.getFileURL).toHaveBeenCalledTimes(8)
+  const signed = (id: number): api.FileURL => ({
+    url: `https://files.example.test/${id}.png`,
+    expiresAt: '2099-01-01T00:00:00Z',
+  })
+  for (const id of [1, 2, 3, 4]) pending.get(id)?.(signed(id))
+  await flushPromises()
+  expect(api.getFileURL).toHaveBeenCalledTimes(8)
+  pending.get(20)?.(signed(20))
+  await flushPromises()
+  expect(api.getFileURL).toHaveBeenCalledWith(24, 'inline', expect.any(AbortSignal))
+  pending.get(24)?.(signed(24))
+  await flushPromises()
+  expect(wrapper.get('[data-testid="file-card-24"] img').attributes('src')).toBe(
+    'https://files.example.test/24.png',
+  )
+  expect(wrapper.find('[data-testid="file-card-1"]').exists()).toBe(false)
+})
+
+it('keeps keyboard preview separate from card selection', async () => {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  usePermissionStore().applySnapshot({
+    roleCodes: [],
+    menuTree: [],
+    permissionCodes: ['storage:file:list', 'storage:file:detail'],
+  })
+  const wrapper = mount(FileBrowser, {
+    props: { selection: true },
+    global: { plugins: [pinia, ElementPlus, appI18n] },
+  })
+  wrappers.push(wrapper)
+  await flushPromises()
+  await wrapper.get('[data-testid="file-preview-7"]').trigger('keydown', { key: 'Enter' })
+  expect(wrapper.emitted('select')).toBeUndefined()
+  await wrapper.get('[data-testid="file-card-7"]').trigger('keydown', { key: 'Enter' })
+  expect(wrapper.emitted('select')).toEqual([[row]])
 })

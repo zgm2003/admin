@@ -1,5 +1,21 @@
 # 项目状态
 
+## 我的文件预览交互整改（2026-10-13，代码与定向验证完成）
+
+- 图片预览改为与 `UpMedia` 一致的全屏 `el-image-viewer`，提供缩放、适应、旋转和下载工具栏，不再使用居中的 `AppDialog` 图片预览。
+- 视频/音频继续使用媒体控件；PDF、文本及其他普通文件在带标题的响应式 `AppDialog` 中使用签名 URL 的 iframe 预览，保留单独下载操作和详情权限检查。
+- 新增图片查看器与 iframe 预览回归测试，覆盖 Teleport 内容、签名 URL、关闭链路和文件类型分支；未改后端接口、数据库、权限或 COS 协议。
+- 实际验证：`pnpm vitest run tests/views/storage/file/index.test.ts tests/components/FileSelectDialog.test.ts tests/components/UpMedia/fileLibrary.test.ts --pool=threads --maxWorkers=1`，3 文件 26 项通过；`pnpm typecheck`、受影响文件 ESLint、`pnpm check:architecture`（0 findings）、`pnpm build` 和 `git diff --check` 通过。构建保留既有富文本大 chunk 提示。
+- 未启动后端、未运行真实浏览器/COS 视觉验收，未提交 Git；维护者刷新前端后可验收截图中的全屏图片查看器和文件 iframe 预览。
+
+## 云服务“我的文件”卡片网格（2026-10-13，代码与定向验证完成）
+
+- 按维护者确认将“我的文件”从表格改为卡片网格；保留 `AppSearch`、上传、刷新、预览、下载、删除、真实分页、搜索、权限和文件选择弹窗，不改后端接口、数据库或权限协议。
+- 图片/视频使用缩略区域，普通文件使用文件图标；卡片显示文件名、类型、大小和上传时间，操作区桌面端悬停显示、触屏常显，删除继续二次确认。分页、权限撤销、组件卸载和翻页会取消缩略图请求，最多并发 4 个且不让旧请求污染新页面。
+- 卡片选择模式支持整卡点击及键盘 Enter/Space；操作按钮阻止选择事件冒泡。刷新按钮使用文件页独立定位符，操作按钮保持纯文字且无装饰图标。样式集中在 `FileBrowser.scss`，使用现有主题变量和响应式布局。
+- 实际验证：`pnpm vitest run tests/views/storage/file/index.test.ts tests/components/FileSelectDialog.test.ts tests/components/UpMedia/fileLibrary.test.ts --pool=threads --maxWorkers=1`，3 文件 24 项通过；`pnpm typecheck`、受影响文件 ESLint、`pnpm check:architecture`（0 findings）、`pnpm build` 和 `git diff --check` 通过。构建保留既有富文本大 chunk 提示。
+- 未启动后端、未运行真实浏览器/COS 视觉验收、未修改后端/数据库/RBAC，未提交 Git；维护者刷新前端即可查看卡片布局。
+
 ## 上传暂存清除、系统设置媒体类型与邮件校验修复（2026-10-12，代码、真实迁移与定向验证完成）
 
 - 按维护者最新要求覆盖上一轮清除约定：UpMedia 删除/清除只同步移除本地待保存选择，不弹二次确认、不调用保存或文件删除接口，不影响“我的文件”原件；文件库真正删除仍保留确认。覆盖单/多值、个人头像、设置媒体及禁用/上传中交互。

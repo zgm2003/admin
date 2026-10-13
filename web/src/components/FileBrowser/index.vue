@@ -1,5 +1,18 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, type Component } from 'vue'
+import {
+  Document,
+  Download,
+  FullScreen,
+  Headset,
+  Picture,
+  Refresh,
+  RefreshLeft,
+  RefreshRight,
+  VideoCamera,
+  ZoomIn,
+  ZoomOut,
+} from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
@@ -13,7 +26,6 @@ import {
   type FileOptions,
 } from '@/api/storage/file'
 import type { CompletedFile } from '@/api/storage/file'
-import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import type { SearchField } from '@/components/AppSearch'
 import { formatTime } from '@/utils/datetime'
 const props = withDefaults(
@@ -40,19 +52,16 @@ const previewVisible = ref(false),
   previewURL = ref(''),
   previewName = ref(''),
   previewCategory = ref(''),
+  previewRow = ref<StorageFile | null>(null),
   previewLoading = ref(false)
 let sequence = 0,
   previewSequence = 0
 let controller: AbortController | null = null,
   previewController: AbortController | null = null
-const pagination = computed<TablePaginationState>(() => ({
-  currentPage: page.value,
-  pageSize: pageSize.value,
-  total: total.value,
-}))
-const resultState = computed(() =>
-  loading.value ? 'loading' : error.value ? 'error' : rows.value.length ? 'success' : 'empty',
-)
+const thumbnailURLs = ref<Record<number, string>>({})
+const thumbnailLoading = ref<Record<number, boolean>>({})
+const thumbnailControllers = new Map<number, AbortController>()
+const thumbnailQueue: StorageFile[] = []
 const fields = computed<SearchField<{ keyword: string; category: string }>[]>(() => [
   {
     key: 'keyword',
@@ -72,13 +81,6 @@ const fields = computed<SearchField<{ keyword: string; category: string }>[]>(()
     testId: 'file-category',
   },
 ])
-const columns = computed<TableColumn<StorageFile>[]>(() => [
-  { prop: 'fileName', label: t('storage.file.fileName'), minWidth: 220 },
-  { prop: 'category', label: t('storage.file.category'), width: 110 },
-  { prop: 'sizeBytes', label: t('storage.file.size'), width: 120 },
-  { prop: 'createdAt', label: t('storage.file.createdAt'), width: 180 },
-  { key: 'actions', label: t('storage.file.actions'), width: 240 },
-])
 const uploadRule = computed(() => options.value?.uploadRules[0])
 const uploadLimit = computed(() => {
   if (!uploadRule.value) return ''
@@ -93,6 +95,7 @@ const uploadLimit = computed(() => {
 async function load(): Promise<void> {
   const current = ++sequence
   controller?.abort()
+  clearThumbnails()
   controller = new AbortController()
   if (!props.active || !canList.value) {
     rows.value = []
@@ -134,10 +137,78 @@ function search(value: { keyword: string; category: string }): void {
   page.value = 1
   void load()
 }
-function paginate(value: TablePaginationState): void {
-  page.value = value.pageSize === pageSize.value ? value.currentPage : 1
-  pageSize.value = value.pageSize
+function paginate(currentPage: number): void {
+  page.value = currentPage
   void load()
+}
+function changePageSize(nextPageSize: number): void {
+  page.value = 1
+  pageSize.value = nextPageSize
+  void load()
+}
+function thumbnailURL(row: StorageFile): string {
+  return thumbnailURLs.value[row.id] ?? ''
+}
+function thumbnailKind(row: StorageFile): 'image' | 'video' | 'file' {
+  if (row.category === 'image') return 'image'
+  if (row.category === 'video') return 'video'
+  return 'file'
+}
+function categoryIcon(category: string): Component {
+  if (category === 'image') return Picture
+  if (category === 'video') return VideoCamera
+  if (category === 'audio') return Headset
+  return Document
+}
+function categoryLabel(category: string): string {
+  return options.value?.categories.find((item) => item.value === category)?.label ?? category
+}
+function invalidateThumbnail(id: number): void {
+  const next = { ...thumbnailURLs.value }
+  delete next[id]
+  thumbnailURLs.value = next
+}
+function clearThumbnails(): void {
+  thumbnailControllers.forEach((request) => request.abort())
+  thumbnailControllers.clear()
+  thumbnailQueue.splice(0)
+  thumbnailURLs.value = {}
+  thumbnailLoading.value = {}
+}
+async function ensureThumbnail(row: StorageFile): Promise<void> {
+  if (
+    !props.active ||
+    !canList.value ||
+    !canDetail.value ||
+    loading.value ||
+    (row.category !== 'image' && row.category !== 'video')
+  )
+    return
+  if (thumbnailURL(row) || thumbnailLoading.value[row.id]) return
+  if (thumbnailControllers.size >= 4) {
+    if (!thumbnailQueue.some((item) => item.id === row.id)) thumbnailQueue.push(row)
+    return
+  }
+  const request = new AbortController()
+  thumbnailControllers.set(row.id, request)
+  thumbnailLoading.value = { ...thumbnailLoading.value, [row.id]: true }
+  try {
+    const result = await getFileURL(row.id, 'inline', request.signal)
+    if (thumbnailControllers.get(row.id) === request && !request.signal.aborted) {
+      thumbnailURLs.value = { ...thumbnailURLs.value, [row.id]: result.url }
+    }
+  } catch {
+    /* request layer owns error notification */
+  } finally {
+    if (thumbnailControllers.get(row.id) === request) {
+      thumbnailControllers.delete(row.id)
+      const next = { ...thumbnailLoading.value }
+      delete next[row.id]
+      thumbnailLoading.value = next
+      const queued = thumbnailQueue.shift()
+      if (queued !== undefined && !request.signal.aborted) void ensureThumbnail(queued)
+    }
+  }
 }
 async function preview(row: StorageFile): Promise<void> {
   if (!canDetail.value) return
@@ -148,6 +219,7 @@ async function preview(row: StorageFile): Promise<void> {
   previewURL.value = ''
   previewName.value = row.fileName
   previewCategory.value = row.category
+  previewRow.value = row
   previewLoading.value = true
   try {
     const result = await getFileURL(row.id, 'inline', previewController.signal)
@@ -157,6 +229,16 @@ async function preview(row: StorageFile): Promise<void> {
   } finally {
     if (current === previewSequence) previewLoading.value = false
   }
+}
+function closePreview(): void {
+  previewVisible.value = false
+}
+function handlePreviewError(): void {
+  previewURL.value = ''
+}
+async function downloadPreview(): Promise<void> {
+  const row = previewRow.value
+  if (row) await download(row)
 }
 async function download(row: StorageFile): Promise<void> {
   if (!canDetail.value) return
@@ -194,8 +276,21 @@ async function remove(row: StorageFile): Promise<void> {
 function uploaded(items: CompletedFile[]): void {
   if (items.length) void load()
 }
+watch(
+  rows,
+  (items) => {
+    clearThumbnails()
+    items.forEach((item) => void ensureThumbnail(item))
+  },
+  { flush: 'post' },
+)
 watch(canDetail, (allowed) => {
-  if (!allowed) previewVisible.value = false
+  if (!allowed) {
+    previewVisible.value = false
+    clearThumbnails()
+  } else {
+    rows.value.forEach((item) => void ensureThumbnail(item))
+  }
 })
 watch(previewVisible, (visible) => {
   if (!visible) {
@@ -203,6 +298,7 @@ watch(previewVisible, (visible) => {
     previewController?.abort()
     previewLoading.value = false
     previewURL.value = ''
+    previewRow.value = null
   }
 })
 watch(
@@ -219,6 +315,7 @@ onBeforeUnmount(() => {
   previewSequence++
   controller?.abort()
   previewController?.abort()
+  clearThumbnails()
 })
 </script>
 <template>
@@ -230,19 +327,9 @@ onBeforeUnmount(() => {
       @query="search"
       @reset="search"
     />
-    <AppTable
-      :data="rows"
-      :columns="columns"
-      :pagination="pagination"
-      :loading="loading"
-      :result-state="resultState"
-      :status-message="error"
-      row-key="id"
-      @update:pagination="paginate"
-      @refresh="load"
-    >
-      <template #toolbar-left>
-        <template v-if="canUpload && canList">
+    <div v-if="canList" class="file-browser__toolbar">
+      <div class="file-browser__toolbar-left">
+        <template v-if="canUpload">
           <UpMedia
             v-if="uploadRule"
             :rule-code="uploadRule.value"
@@ -259,56 +346,194 @@ onBeforeUnmount(() => {
             t('storage.file.noUploadRule')
           }}</span>
         </template>
-      </template>
-      <template #cell-category="{ row }: { row: StorageFile }">{{
-        options?.categories.find((item) => item.value === row.category)?.label ?? row.category
-      }}</template>
-      <template #cell-sizeBytes="{ row }: { row: StorageFile }"
-        >{{ new Intl.NumberFormat(locale).format(row.sizeBytes) }} B</template
+      </div>
+      <el-button
+        type="primary"
+        :icon="Refresh"
+        :loading="loading"
+        data-testid="file-refresh"
+        @click="load"
+        >{{ t('appTable.refresh') }}</el-button
       >
-      <template #cell-createdAt="{ row }: { row: StorageFile }">{{
-        formatTime(row.createdAt)
-      }}</template>
-      <template #cell-actions="{ row }: { row: StorageFile }">
-        <el-button
-          v-if="selection && canDetail"
-          type="primary"
-          link
-          :data-testid="`file-select-${row.id}`"
-          @click="emit('select', row)"
-          >{{ t('storage.file.select') }}</el-button
+    </div>
+    <div class="file-browser__surface" :aria-busy="loading">
+      <el-skeleton v-if="loading" :rows="4" animated />
+      <div v-else-if="error" class="file-browser__error" role="alert">{{ error }}</div>
+      <el-empty v-else-if="!rows.length" :description="t('appTable.empty')" />
+      <div v-else class="file-browser__grid">
+        <article
+          v-for="row in rows"
+          :key="row.id"
+          class="file-browser__card"
+          :class="{ 'is-selectable': selection && canDetail }"
+          :data-testid="'file-card-' + row.id"
+          :tabindex="selection && canDetail ? 0 : undefined"
+          @click="selection && canDetail ? emit('select', row) : undefined"
+          @keydown.enter.self="selection && canDetail ? emit('select', row) : undefined"
+          @keydown.space.self.prevent="selection && canDetail ? emit('select', row) : undefined"
         >
-        <el-button
-          v-if="canDetail"
-          type="primary"
-          link
-          :data-testid="`file-preview-${row.id}`"
-          @click="preview(row)"
-          >{{ t('storage.file.preview') }}</el-button
-        >
-        <el-button v-if="canDetail" type="primary" link @click="download(row)">{{
-          t('storage.file.download')
-        }}</el-button>
-        <el-button
-          v-if="canDelete"
-          type="danger"
-          link
-          :data-testid="`file-delete-${row.id}`"
-          @click="remove(row)"
-          >{{ t('storage.file.delete') }}</el-button
-        >
+          <div
+            class="file-browser__thumbnail"
+            :data-kind="thumbnailKind(row)"
+            :class="{ 'is-loading': thumbnailLoading[row.id] }"
+          >
+            <img
+              v-if="thumbnailURL(row) && row.category === 'image'"
+              :src="thumbnailURL(row)"
+              :alt="row.fileName"
+              loading="lazy"
+              @error="invalidateThumbnail(row.id)"
+            />
+            <video
+              v-else-if="thumbnailURL(row) && row.category === 'video'"
+              :src="thumbnailURL(row)"
+              muted
+              playsinline
+              preload="metadata"
+            />
+            <el-icon v-else :size="42"><component :is="categoryIcon(row.category)" /></el-icon>
+          </div>
+          <div class="file-browser__card-body">
+            <p class="file-browser__name" :title="row.fileName">{{ row.fileName }}</p>
+            <p class="file-browser__meta">
+              <span>{{ categoryLabel(row.category) }}</span>
+              <span>{{ new Intl.NumberFormat(locale).format(row.sizeBytes) }} B</span>
+            </p>
+            <p class="file-browser__time">{{ formatTime(row.createdAt) }}</p>
+          </div>
+          <div class="file-browser__actions" @click.stop>
+            <el-button
+              v-if="selection && canDetail"
+              type="primary"
+              link
+              :data-testid="'file-select-' + row.id"
+              @click="emit('select', row)"
+              >{{ t('storage.file.select') }}</el-button
+            >
+            <el-button
+              v-if="canDetail"
+              type="primary"
+              link
+              :data-testid="'file-preview-' + row.id"
+              @click="preview(row)"
+              >{{ t('storage.file.preview') }}</el-button
+            >
+            <el-button
+              v-if="canDetail"
+              type="primary"
+              link
+              :data-testid="'file-download-' + row.id"
+              @click="download(row)"
+              >{{ t('storage.file.download') }}</el-button
+            >
+            <el-button
+              v-if="canDelete"
+              type="danger"
+              link
+              :data-testid="'file-delete-' + row.id"
+              @click="remove(row)"
+              >{{ t('storage.file.delete') }}</el-button
+            >
+          </div>
+        </article>
+      </div>
+    </div>
+    <div v-if="total > 0" class="file-browser__pagination">
+      <el-pagination
+        background
+        layout="total, sizes, prev, pager, next"
+        :current-page="page"
+        :page-size="pageSize"
+        :page-sizes="[20, 50, 100]"
+        :total="total"
+        @current-change="paginate"
+        @size-change="changePageSize"
+      />
+    </div>
+    <el-image-viewer
+      v-if="previewVisible && previewCategory === 'image' && previewURL"
+      :url-list="[previewURL]"
+      :initial-index="0"
+      teleported
+      @close="closePreview"
+      @error="handlePreviewError"
+    >
+      <template #toolbar="{ actions, reset }">
+        <div class="file-browser__viewer-toolbar" data-testid="file-preview-image">
+          <button
+            type="button"
+            :aria-label="t('components.upMedia.zoomOut')"
+            :title="t('components.upMedia.zoomOut')"
+            @click="actions('zoomOut')"
+          >
+            <ZoomOut />
+          </button>
+          <button
+            type="button"
+            :aria-label="t('components.upMedia.zoomIn')"
+            :title="t('components.upMedia.zoomIn')"
+            @click="actions('zoomIn')"
+          >
+            <ZoomIn />
+          </button>
+          <button
+            type="button"
+            :aria-label="t('components.upMedia.fit')"
+            :title="t('components.upMedia.fit')"
+            @click="reset"
+          >
+            <FullScreen />
+          </button>
+          <button
+            type="button"
+            :aria-label="t('components.upMedia.rotateLeft')"
+            :title="t('components.upMedia.rotateLeft')"
+            @click="actions('anticlockwise')"
+          >
+            <RefreshLeft />
+          </button>
+          <button
+            type="button"
+            :aria-label="t('components.upMedia.rotateRight')"
+            :title="t('components.upMedia.rotateRight')"
+            @click="actions('clockwise')"
+          >
+            <RefreshRight />
+          </button>
+          <button
+            type="button"
+            data-testid="file-preview-download"
+            :aria-label="t('components.upMedia.download')"
+            :title="t('components.upMedia.download')"
+            @click="downloadPreview"
+          >
+            <Download />
+          </button>
+        </div>
       </template>
-    </AppTable>
-    <AppDialog v-model="previewVisible" :title="previewName" width="800px">
+      <template #viewer-error
+        ><el-empty :description="t('storage.file.previewUnavailable')"
+      /></template>
+    </el-image-viewer>
+    <AppDialog
+      v-if="previewVisible && (previewCategory !== 'image' || !previewURL)"
+      v-model="previewVisible"
+      :title="previewName"
+      width="min(1100px, 90vw)"
+      height="min(760px, 82vh)"
+      body-padding="0"
+    >
       <div v-loading="previewLoading" class="file-browser__preview">
-        <img
-          v-if="previewURL && previewCategory === 'image'"
-          :src="previewURL"
-          :alt="previewName"
-          @error="previewURL = ''"
-        />
-        <video v-else-if="previewURL && previewCategory === 'video'" :src="previewURL" controls />
+        <video v-if="previewURL && previewCategory === 'video'" :src="previewURL" controls />
         <audio v-else-if="previewURL && previewCategory === 'audio'" :src="previewURL" controls />
+        <iframe
+          v-else-if="previewURL"
+          data-testid="file-preview-frame"
+          class="file-browser__frame"
+          :src="previewURL"
+          :title="previewName"
+          referrerpolicy="no-referrer"
+        />
         <el-empty v-else-if="!previewLoading" :description="t('storage.file.previewUnavailable')" />
       </div>
     </AppDialog>
