@@ -1,16 +1,59 @@
 # 项目状态
 
-## 当前工作：支付体系分步建设（2026-10-13，第一步金额基础完成）
+## Canvas 个人中心前端与共享接口接入（2026-10-13，代码与自动化验证完成）
+
+- 个人中心位于 `canvas/src/views/user/profile`，按 `views -> api/user -> utils/request` 接入资料读取/保存、后端性别选项、首次设密、原密码改密、验证码改密和邮箱/手机绑定换绑；换绑提交当前身份与新身份两份 proof，不通过资料接口修改身份。
+- Access Store 与动态路由接入隐藏根 page `user:profile:view`，工作台仅在获得页面授权后显示个人中心入口；读取、保存、改密及身份动作独立检查，不由 action 推导页面。头像使用共享签名上传/完成/预览接口，资料保存保留 adoption request key 以便失败重试；规则固定 `avatar`，按 Canvas 平台查找，不回退 Admin 或通用 `canvas` 规则。
+- 收尾复现并修复原密码改密迟到响应清除新登录的问题：只在组件仍挂载、仍为 authenticated、用户 ID 和 access token 均与请求开始一致时清除会话并跳转登录；回归覆盖离开页面、切换账号、同账号新会话及正常改密跳转。
+- 实际验证：`pnpm exec vitest run tests/views/user/profile/flows.test.tsx --pool=threads --maxWorkers=1`（9 项）、`pnpm test`（8 文件/38 项）、`pnpm build`（含 `tsc --noEmit`）均通过；后端 `go test ./cmd/api -run '^TestCanvasPersonalRoutes' -count=1`、`go test ./internal/module/user/profile ./internal/module/user/email ./internal/module/user/phone -count=1`、`go vet ./cmd/api ./internal/module/user/profile ./internal/module/user/email ./internal/module/user/phone`、`go build ./cmd/api` 均通过，`git diff --check` 通过。
+- 未做浏览器真实账号验收、真实邮件/SMS 发送或 COS 上传；Canvas avatar 规则与角色授权由维护者自行配置。本轮未改数据库、菜单、用户/角色授权、上传规则或 Redis，未提交 Git，保留并行支付等改动。项目库、无限画布与生成工作流迁移尚未完成，不将个人中心交付等同于参考项目功能全部搬运完成。
+
+## Canvas 个人中心菜单补齐（2026-10-13，仅菜单数据完成）
+
+- 按维护者截图反馈，补 Canvas 隐藏根 page `user:profile:view`（id=4289，`/user/profile`、`user/profile`、`layout.user.profile`），下挂读取资料、修改资料、修改密码、绑定/换绑邮箱、绑定/换绑手机 5 个 action（id=4290–4294）；权限码沿用 Admin 的 `user:profile:detail/update`、`user:password:update`、`user:email:update`、`user:phone:update`。不挂在 Canvas 工作台下。
+- 仅写 `permission_menu` 和 Canvas `menu_version`；未新增或修改角色/用户授权、用户 access version、上传规则，不操作 Redis。维护者自行授权并重建缓存。执行时 Canvas menu_version 4→5，Admin 保持20；同事务重复执行无变化，无关事实摘要保持 `41eee28752428e21c46fc151fad2ac69`。
+- 新增 `docs/database/2026-10-13-canvas-profile-menu.sql` 与 `server/internal/database/canvas_profile_menu_migration_test.go`；`go test ./internal/database -run '^TestCanvasProfileMenu' -count=1` 通过，覆盖节点形状、幂等、路由/动作父节点冲突回滚及不触碰授权/上传配置。真实菜单备份完整读取通过，事务执行与重复核验成功；审计目录 `%LOCALAPPDATA%/Admin/maintenance/canvas-profile-menu/20261013-165952-008`。
+- 本轮未实现 Canvas 个人中心前端或接口联调，菜单存在不代表页面功能已完成。维护者已明确停止 Redis 收尾；之前 auth-upload runner 的提交确认、批量租约和 Redis 重启恢复审查问题尚未修复，不再复跑该 runner。合法多角色校验回归已通过，但重启恢复回归仍失败；不将旧执行成功记录当作维护程序故障边界全部通过。未提交 Git，保留并行支付等改动。
+
+## Canvas 通用权限容器与独立上传规则（2026-10-13，正常迁移完成；Redis 收尾已按维护者要求停止）
+
+- 按维护者确认新增 Canvas 平台隐藏根 page `canvas:workspace:view`，路径 `/canvas/workspace`、componentPath `canvas/workspace`、i18nKey `navigation.canvasWorkspace`；其下只新增现有共享 action `storage:object:upload`。不新增上传页面、不改通用 RBAC 规则，保留原 `canvas:test:view/button` 节点和所有无关授权。Canvas 工作台组件移至对应 `canvas/src/views/canvas/workspace/index.tsx`，补 Admin 中英文目录文案。
+- `registered_user` 只授予 Canvas upload action，不授予容器 page；双实例 Access Service/Redis client 验证 action 进入 `permissionCodes`，父 page 不进入 `menuTree`。上传凭证与上传完成接口继续使用既有权限，身份、规则和对象平台由后端校验。个人资料页面、Canvas Access 前端接入与实际上传交互不在本轮交付内。
+- 新增 Canvas 独立上传规则（id=5、platform_id=2、编码 `canvas`），首次 seed 复制 Admin 活动 `file` 规则的 COS 配置 id=1、104857600 字节限制、扩展名/MIME 与 public 模式；后续两平台规则独立编辑，不回退到 Admin，不复跑覆盖已编辑规则。无 DDL、无新表、无 COS I/O，schema-only `current.sql` 本轮无需刷新。
+- 交付 `docs/database/2026-10-13-canvas-auth-upload.sql/.ps1`：写前完整归档备份/哈希、短锁等待、单 PostgreSQL 事务、菜单和有效用户 tokenized Redis 失效租约与续期、提交后条件发布；部分失败审计明确记录提交状态。`-RecoverFrom` 只接受本迁移审计，校验数据库、Redis 实例与 SQL 哈希，拒绝活跃租约/异常版本，不清 Session、额度或 Redis 全库。
+- 真实迁移于 2026-10-13 15:57 +08:00 成功，随后重复执行成功，两个审计均 `PostgresCommitted/RedisSynchronized/Verified=true`。page/action id=4287/4288，Canvas menu_version 1→2，Admin 保持19，policy_version 保持3/1；有效普通用户67/718的 access version 21→22、3→4，复跑不递增。无关菜单/规则/授权全行摘要前后保持一致；未停止或重启 API/Worker。
+- 真实备份与审计：`%LOCALAPPDATA%/Admin/maintenance/canvas-auth-upload/20261013-155637-336`、`20261013-155924-541`；首次备份 SHA256 `237685C89AA3CB7A595CA6952837BC69169FE45B578A3F108FA9B43903581623`。临时数据库与 Redis DB15 独立验证完整 runner 首次/重复执行、状态丢失后恢复及双实例 Access，生产 Redis DB0 未清理。
+- 实际检查：新增 Go 测试 gofmt；`go test ./internal/database -run '^TestCanvasAuthUpload' -count=1`、`go test ./internal/module/permission/access ./internal/module/permission/state ./internal/module/storage/uploadRule -count=1`、同范围 `go vet`、`go build ./cmd/api ./cmd/worker` 均通过。Canvas `pnpm test`（3文件15项）、`pnpm build`（含 tsc）通过；Admin `pnpm vitest run tests/i18n/index.test.ts --pool=threads --maxWorkers=1`（10项）、`pnpm check:architecture`（0 findings）、`pnpm typecheck` 通过。未运行全仓测试、真实账号上传/头像/COS 验收或 Admin 全构建；未提交 Git，保留并行支付/money/secretkey 文档与代码改动。
+
+## 当前工作：支付体系分步建设（2026-10-13，支付配置代码与定向验证完成，真实迁移待执行）
+
+- 当前仅实施 `payment/config`：逻辑渠道与不可变凭据版本、Admin 配置页面和独立 page/actions、维护者离线迁移；不展开套餐、订单、回调、钱包、AI 或 Canvas。工作区中已有并行 Canvas 改动保留。
+- 当前配置切片已完成：`server/internal/module/payment/config` 分层实现、`server/internal/payment/alipay` GoPay v1.5.118 内容模式、独立 payment 派生密钥/AES-GCM、Admin `web/src/views/payment/config` 与 typed API、双语文案、配置缓存状态和脱敏操作日志；菜单路径/组件为 `/payment/config` / `payment/config`，page `payment:config:view` 与 `list/detail/create/update/status/delete/test` actions 独立，新版本发布使用 update，不自动授予注册用户管理动作。
+- 按旧项目恢复三证书 CRT/PEM 文件导入和空白凭据保留；支持完整混合根包、含中间证书的叶文件、PKCS1/PKCS8 PEM 或原始 base64 私钥。证书 SN 由 SDK 选择，本地检查只验证输入、有效期、身份与 key-match，不将客户端初始化误报为实时连通/付款成功。保留已批准字段，不引入证书路径、证书管理表或 AI 字段。
+- `payment.config/global` 复用 generation/outbox 与 mutation lease；目录和指定凭据版本快照 256KiB、TTL 5 分钟，Redis 命中不读 PG，读取/follower 500ms、获准 leader 4 秒；共享 Redis socket I/O 尊重 context deadline。写前与 Redis 使用同一 envelope 编码预算，版本位数增长超限也事务回滚；损坏/缺失/null/重复字段及错误 notify URL 闭合修复，双实例代际竞争不得返回旧 repair 快照。
+- 交付维护者执行的 `docs/database/2026-10-13-payment-config.sql/.ps1`：两表、菜单目录/page/actions 与 generation seed；精确检查 identity/default、列/CHECK、PK/FK、活动唯一索引、trigger/function 漂移；backup/hash 与 pre-COMMIT Expected/outcome 审计，未知提交沿新连接/恢复入口核对，endpoint/DB 身份不绑定 Redis run_id；恢复/回放要求实际支付 schema 存在且禁止临时首次建表假验证。不新增支付定时任务，提交后 outbox 使用既有 Worker relay。
+- 最新定向验证 `go test -p 1 ./internal/module/payment/... ./internal/payment/alipay ./internal/secretkey ./internal/redis ./internal/shared/cacheFill ./internal/shared/configCache ./internal/module/permission/state ./internal/module/permission/access ./internal/module/system/operationLog ./internal/module/system/configCacheStatus ./cmd/api -count=1` 全部通过；额外并发发布测试 `-count=3` 通过。集成使用隔离 PG schema/测试 Redis DB，覆盖首次/重放、漂移、回滚、跨实例、committed-pending/通用 relay、本地慢 RESP、runner ACL 发布失败与恢复、模拟提交确认丢失及 run_id/状态丢失、缺 schema 恢复拒绝；没有实际重启 Redis 或故障注入真实 COMMIT 链路。
+- 后端 `go vet ./...`、`go build ./...` 通过。`go test -p 1 ./... -count=1` 未全绿：storage/file 既有 Service 分层门禁、architecture/database 历史迁移 fixture 及并行 Canvas runner 失败；支付并发用例在全仓负载下出现固定等待预算耗尽，现只允许明确竞争错误后的幂等重试，定向 3 次及最终相关范围通过，不扩大生产超时。未修无关失败或宣称全仓通过。
+- 前端 `pnpm vitest run tests/api/payment/config.test.ts tests/views/payment/config/index.test.ts tests/i18n/index.test.ts --pool=threads --maxWorkers=1` 3 文件 22 项通过；`pnpm typecheck`、受影响 Prettier/ESLint、`pnpm check:architecture`（0 findings）、`pnpm build` 通过，保留既有富文本大 chunk 提示。补证书导入错误不覆盖草稿、确认中权限撤销/重复操作、committed-pending 刷新但不伪报成功；未运行全仓前端测试或真实浏览器账号验收。
+- PowerShell 语法检查通过；最终 `psql --no-psqlrc --set=ON_ERROR_STOP=1` 的 `BEGIN READ ONLY` 确认真实 public 无两张支付表、支付菜单为 0、Admin/Canvas menu_version=20/5。未执行真实支付 migration、未导出 current.sql、未启停服务、未 Git 提交；先由维护者执行本配置迁移并验收，再按一步一资源继续固定套餐，尚未实现支付下单/回调或 AI。
 
 - 维护者明确先完成支付体系，再建设 AI 体系；当前施工只覆盖支付，不并行新增 AI 模块或修改 Canvas。
 - 参考旧 `admin_back_go/internal/module/payment`、`payment/wallet`、`internal/shared/money` 与 `admin_front_ts` 支付页面。旧钱包以 `user_id` 唯一归属；沿用同一账户一个钱包的业务基础，订单和流水记录来源认证平台，不自行建立每个平台一份余额。
-- 分步顺序：①金额表示与转换；②钱包与不可删除账本；③支付配置与充值套餐；④充值订单、支付宝 Web/H5、验签回调及入账；⑤订单查询、超时关单与故障恢复；⑥个人充值/账单、管理页面及兑换码。每步完成定向验证后推进下一步，具体接口、权限和迁移随对应工作单元固定。
+- 维护者已确认支付方案，并补充允许负余额；后续按支付配置/套餐 → 钱包/统一订单/回调/个人入口 → 巡检恢复/关单 → 兑换码 → 全体验收逐步施工。新增或改变已批准字段和参数仍须先说明，不并行扩大到 AI 或 Canvas。
 - 当前一步契约：`server/internal/shared/money` 只负责金额表示与精确转换；钱包采用人民币 8 位小数的 int64 units（1 元=100000000 units），支付通道金额采用整数分（1 分=1000000 units）。HTTP 钱包金额使用十进制字符串，不用 float、JavaScript number 或静默舍入传递余额；支付通道字符串固定两位小数。
-- 本步接口：`CentsToUnits`、`ParseRMBUnits`、`FormatRMBUnits`、`ParseRMBCents`、`FormatRMBCents`；非法格式、负值、超出精度及 int64 溢出返回明确错误。模块不写钱包、不持久化、不新增 API/权限或数据库表。
+- 本步接口：`ParseRMBUnits`、`FormatRMBUnits` 现支持有符号余额和完整 int64 范围；`CentsToUnits`、`ParseRMBCents`、`FormatRMBCents` 仍只转换非负通道金额，所属业务模块拒绝零充值面额。非法格式、超出精度及 int64 溢出返回明确错误。模块不写钱包、不持久化、不新增 API/权限或数据库表。
 - 容量与验证：沿用百万用户、多实例基线；金额转换不访问 PostgreSQL/Redis，不建立缓存。钱包写入后续必须使用 PostgreSQL 行锁、来源唯一约束及同事务账本，不把 Redis 当余额事实；配置后续复用 generation/outbox 和有界冷回源。每阶段核对查询预算与双实例并发、幂等及失败回滚，本步先覆盖最小金额、最大金额、畸形输入、精度与溢出。
 - 工作区原有 `docs/agent/STATUS.md` 修改与未跟踪 `canvas/` 由其他工作产生，保留；不自动提交或启动/停止后端。当前未执行生产数据库迁移，未宣称支付功能已上线。
 - 本步已完成金额实现与 7 个定向测试（含表驱动边界用例）；先运行 `go test ./internal/shared/money -count=1`，因金额生产包缺失失败，再实现并通过。实际执行 `gofmt -w internal/shared/money/units.go internal/shared/money/units_test.go`、`go test ./internal/shared/money -count=1`、`go vet ./internal/shared/money`、`go build ./internal/shared/money` 均 exit 0。
-- 下一步：固定钱包/不可删除账本的 DTO、权限和 PostgreSQL 事务契约，核对真实库后交付幂等迁移及并发测试。AI、支付宝真实支付/回调、生产迁移、全仓测试/构建未在本步执行；此前全仓架构门禁与迁移 fixture 失败不由本步金额定向验证覆盖。
+- 维护者明确本轮先写计划，并确认固定套餐、等额入账。已创建忽略的本地评审文件 `docs/local-work/2026-10-13-payment-spec.md`、`docs/local-work/2026-10-13-payment-plan.md`，仅本支付任务允许后续读取，不扫描其他本地计划。推荐核心 7 表、兑换码另加 2 表，合并旧充值单/支付订单，保留历史凭据版本；钱包/流水不预加 AI 冻结/消费字段。各表逐列用途、类型/空值、FK/CHECK/索引、权限与任务预算均在草案，尚未创建真实对象。
+- 真实 PostgreSQL 已通过 `psql --no-psqlrc --set=ON_ERROR_STOP=1` 的 `BEGIN READ ONLY` 查询核对 pg_catalog、information_schema 与现有配置：`admin/public` 无 payment/ai 表；Admin/Canvas id=1/2、menu_version=19/1，已有 4 个有效 Scheduler 计划。SDK 缓存源码核对 GoPay v1.5.118 支持证书内容初始化/验签，不需要共享本地证书路径；本轮没有 DDL、数据/Redis 写入或服务启停。
+- 建议只新增 `payment.order.reconcile` 一个周期巡检计划，复用现有 schedule/job/run；六个支付管理页面加独立“我的钱包/充值中心”，回调详情放订单内。默认角色仅获得个人 page/actions，管理动作不自动授予；首次离线菜单/角色增量和 Redis 版本恢复必须可审计幂等。订单30分钟、巡检每分钟及通道/租约预算是待评审值，不是已启用配置。
+- 维护者进一步明确：支付通道最多 Alipay/WeChat Pay 两种，provider、environment、pay_method 等封闭枚举统一数字。已逐列审查九表及 Go/API/选项草案：provider=1支付宝/2微信，environment=1沙箱/2生产，payMethod=1PC网页/2H5；payMethods 改 SMALLINT[]，回调 error_code 改 SMALLINT NULL，流水来源和内部确认来源用具名数值类型。原有订单/回调/兑换码状态保留数值，过期投影固定为4而不写库。外部原始 tradeStatus、订单/商户标识、技术 key 和 ISO币种保留字符串并解释用途；后端统一 options/校验/SDK映射，前端消费数字，不维护第二份值域。微信2只分配稳定标识，首期拒绝未实现配置和调用。本轮仍仅修正文档，未执行迁移或继续业务代码。
+- 本轮类型一致性补查覆盖数据库列、Go 输入与 DTO、静态 options、指纹、SDK分支和错误投影；payMethods 以 SMALLINT[] 精确集合 CHECK 拒绝空/NULL/多维/重复/未知值，写前按数字升序规范化。JSON body 枚举只接受数字，GET query/环境变量文本经严格整数解析后校验。SDK 核对 seller_id 是真实收款商户标识，保留其字符串身份字段与回调校验，不因旧适配器未使用就删除。
+- 本次验证：支付草案中的旧 VARCHAR/TEXT[] 枚举与 Go string 输入声明已定向核对退出，`git diff --check` 通过；真实 PostgreSQL 只读 VALUES 验证 payMethods 集合约束，11 个合法/非法样例全部匹配预期（含空、重复、NULL、多维、未知值）。仅校验表达式，未建表/约束或运行实现测试，不将文档检查视为业务完成。
+- 维护者允许余额为负数：已同步本地 spec/plan 与 design.md 的稳定产品约定，取消钱包/历史余额非负限制，去掉“累计充值等于余额”的推断；充值按原余额加正额，前余额允许负数，不加欠款、授信或透支开关字段。负余额不自动定义未来 AI 消费准入或无限透支。
+- 金额代码本轮完成失败测试→修复→通过：`gofmt -w internal/shared/money/units.go internal/shared/money/units_test.go`、`go test ./internal/shared/money -count=1`、`go vet ./internal/shared/money`、`go build ./internal/shared/money` 均 exit 0；新增负余额/MinInt64/负数溢出与往返用例。`go test ./internal/shared/money -fuzz '^FuzzRMBUnitsRoundTrip$' -fuzztime=5s -parallel=1` 通过，执行 33784 次。真实 PostgreSQL READ ONLY VALUES 校验 8 个负余额充值/归零/转正/int64 边界样例，8/8 符合预期，仅表达式验证，无 DDL 或数据写入。
+- 下一步按已批准计划实施 P1 配置/套餐。本轮只修改金额包和相关计划/产品/状态文档，保留 Canvas、前端文案及其他现有改动；未建支付表、未执行生产迁移、支付宝真实支付、全仓测试/构建或 Git 提交。此前全仓架构门禁与迁移 fixture 失败仍需核实，不由金额定向验证覆盖。
 
 ## Canvas 前端第一阶段 Auth 重建（2026-10-13，代码与联调验证完成）
 

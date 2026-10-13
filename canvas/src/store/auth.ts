@@ -120,6 +120,12 @@ export class AuthStore {
     this.update({ status: 'authenticated', user, error: '' })
   }
 
+  async reloadUser(): Promise<void> {
+    const token = this.client.getAccessToken()
+    const user = await this.api.getCurrentUser()
+    if (this.state.status === 'authenticated' && this.client.getAccessToken() === token) this.update({ user })
+  }
+
   private setCredential(credential: AccessCredential): void {
     if (credential.accessToken.trim() === '') throw new Error('access token is empty')
     this.client.setAccessToken(credential.accessToken)

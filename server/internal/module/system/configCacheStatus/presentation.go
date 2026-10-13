@@ -33,6 +33,8 @@ func namespaceLabel(ctx context.Context, value string) (string, error) {
 		key = i18n.KeyCacheNamespaceSMS
 	case "storage.cosconfig":
 		key = i18n.KeyCacheNamespaceCOS
+	case "payment.config":
+		key = i18n.KeyCacheNamespacePayment
 	default:
 		return value, nil
 	}

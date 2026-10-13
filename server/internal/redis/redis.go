@@ -18,6 +18,8 @@ func Open(ctx context.Context, redisURL string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse Redis URL: %w", err)
 	}
+	// Request/cacheFill deadlines must bound socket I/O, not only pool waits.
+	options.ContextTimeoutEnabled = true
 
 	client := goredis.NewClient(options)
 	if err := client.Ping(ctx).Err(); err != nil {

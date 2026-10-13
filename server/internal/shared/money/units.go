@@ -14,7 +14,7 @@ const (
 	UnitsPerCent int64 = 1_000_000
 )
 
-var ErrInvalidAmount = errors.New("amount must be non-negative and within decimal precision and int64 range")
+var ErrInvalidAmount = errors.New("amount has invalid syntax, sign, decimal precision or int64 range")
 
 // CentsToUnits converts payment cents to wallet units without rounding or overflow.
 func CentsToUnits(cents int64) (int64, error) {
@@ -24,22 +24,28 @@ func CentsToUnits(cents int64) (int64, error) {
 	return cents * UnitsPerCent, nil
 }
 
-// ParseRMBUnits accepts unsigned ASCII decimals with at most eight fractional digits.
-// Whitespace, signs, exponent notation and rounding are not accepted.
+// ParseRMBUnits accepts signed ASCII decimals with at most eight fractional digits.
+// A leading minus is allowed for negative balances; plus, whitespace and rounding are not.
 func ParseRMBUnits(value string) (int64, error) {
-	return parseDecimal(value, 8)
+	return parseDecimal(value, 8, true)
 }
 
 // ParseRMBCents accepts unsigned ASCII decimals with at most two fractional digits.
 func ParseRMBCents(value string) (int64, error) {
-	return parseDecimal(value, 2)
+	return parseDecimal(value, 2, false)
 }
 
-func parseDecimal(value string, precision int) (int64, error) {
+func parseDecimal(value string, precision int, allowNegative bool) (int64, error) {
+	negative := allowNegative && strings.HasPrefix(value, "-")
+	limit := uint64(math.MaxInt64)
+	if negative {
+		value = value[1:]
+		limit++ // MinInt64 has one more unit of magnitude than MaxInt64.
+	}
 	if value == "" {
 		return 0, ErrInvalidAmount
 	}
-	var amount int64
+	var amount uint64
 	decimal := false
 	fractionDigits := 0
 	for index := 0; index < len(value); index++ {
@@ -60,33 +66,43 @@ func parseDecimal(value string, precision int) (int64, error) {
 				return 0, ErrInvalidAmount
 			}
 		}
-		digit := int64(character - '0')
-		if amount > (math.MaxInt64-digit)/10 {
+		digit := uint64(character - '0')
+		if amount > (limit-digit)/10 {
 			return 0, ErrInvalidAmount
 		}
 		amount = amount*10 + digit
 	}
 	for fractionDigits < precision {
-		if amount > math.MaxInt64/10 {
+		if amount > limit/10 {
 			return 0, ErrInvalidAmount
 		}
 		amount *= 10
 		fractionDigits++
 	}
-	return amount, nil
+	if negative {
+		if amount == uint64(math.MaxInt64)+1 {
+			return math.MinInt64, nil
+		}
+		return -int64(amount), nil
+	}
+	return int64(amount), nil
 }
 
 // FormatRMBUnits returns a canonical RMB decimal without trailing fractional zeros.
 func FormatRMBUnits(units int64) (string, error) {
+	sign := ""
+	whole, remainder := units/UnitsPerRMB, units%UnitsPerRMB
 	if units < 0 {
-		return "", ErrInvalidAmount
+		sign = "-"
+		// Negate only the divided components, never the full MinInt64 balance.
+		whole, remainder = -whole, -remainder
 	}
-	whole := strconv.FormatInt(units/UnitsPerRMB, 10)
-	fraction := strings.TrimRight(strconv.FormatInt(units%UnitsPerRMB+UnitsPerRMB, 10)[1:], "0")
+	wholeText := sign + strconv.FormatInt(whole, 10)
+	fraction := strings.TrimRight(strconv.FormatInt(remainder+UnitsPerRMB, 10)[1:], "0")
 	if fraction == "" {
-		return whole, nil
+		return wholeText, nil
 	}
-	return whole + "." + fraction, nil
+	return wholeText + "." + fraction, nil
 }
 
 // FormatRMBCents returns the exact two-decimal RMB amount required by payment APIs.

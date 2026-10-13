@@ -18,9 +18,11 @@ const (
 	mailRecipientPurpose     = "admin:message:mail-recipient-hmac:v1"
 	smsEncryptionPurpose     = "admin:message:sms-encryption:v1"
 	smsRecipientPurpose      = "admin:message:sms-recipient-hmac:v1"
+	paymentEncryptionPurpose = "admin:payment:credential-encryption:v1"
 )
 
 type KeyRing struct {
+	paymentEncryptionKey    []byte
 	jwtSigningKey           []byte
 	refreshTokenHMACKey     []byte
 	storageEncryptionKey    []byte
@@ -69,7 +71,12 @@ func New(rootSecret string) (*KeyRing, error) {
 		return nil, fmt.Errorf("derive sms recipient HMAC key: %w", err)
 	}
 
+	paymentEncryptionKey, err := hkdf.Key(sha256.New, []byte(rootSecret), nil, paymentEncryptionPurpose, keyLength)
+	if err != nil {
+		return nil, fmt.Errorf("derive payment encryption key: %w", err)
+	}
 	return &KeyRing{
+		paymentEncryptionKey:    paymentEncryptionKey,
 		jwtSigningKey:           jwtSigningKey,
 		refreshTokenHMACKey:     refreshTokenHMACKey,
 		storageEncryptionKey:    storageEncryptionKey,
@@ -82,6 +89,9 @@ func New(rootSecret string) (*KeyRing, error) {
 }
 
 func (k *KeyRing) MailEncryptionKey() []byte { return append([]byte(nil), k.mailEncryptionKey...) }
+func (k *KeyRing) PaymentEncryptionKey() []byte {
+	return append([]byte(nil), k.paymentEncryptionKey...)
+}
 
 func (k *KeyRing) StorageEncryptionKey() []byte {
 	return append([]byte(nil), k.storageEncryptionKey...)

@@ -10,7 +10,8 @@ export interface RequestClientOptions {
 
 export interface RequestClient {
   get<T>(path: string, options?: RequestOptions): Promise<T>
-  post<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T>
+  post<T, D = unknown>(path: string, body?: D, options?: RequestOptions): Promise<T>
+  put<T, D = unknown>(path: string, body?: D, options?: RequestOptions): Promise<T>
   setAccessToken(token: string): void
   getAccessToken(): string
   clearAccessToken(): void
@@ -55,7 +56,7 @@ export function createRequestClient(options: RequestClientOptions): RequestClien
   let accessToken = options.initialAccessToken ?? ''
   let refreshPromise: Promise<string> | null = null
 
-  const send = async <T>(path: string, method: 'GET' | 'POST', body: unknown, requestOptions: RequestOptions | undefined, retry: boolean): Promise<T> => {
+  const send = async <T>(path: string, method: 'GET' | 'POST' | 'PUT', body: unknown, requestOptions: RequestOptions | undefined, retry: boolean): Promise<T> => {
     const url = (baseUrl === '' ? new URL(path, window.location.origin) : new URL(path, baseUrl)).toString()
     const headers = new Headers(requestOptions?.headers)
     headers.set('Accept', 'application/json')
@@ -137,6 +138,7 @@ export function createRequestClient(options: RequestClientOptions): RequestClien
   return {
     get: <T>(path: string, requestOptions?: RequestOptions) => send<T>(path, 'GET', undefined, requestOptions, false),
     post: <T>(path: string, body?: unknown, requestOptions?: RequestOptions) => send<T>(path, 'POST', body, requestOptions, false),
+    put: <T>(path: string, body?: unknown, requestOptions?: RequestOptions) => send<T>(path, 'PUT', body, requestOptions, false),
     setAccessToken: (token) => { accessToken = token },
     getAccessToken: () => accessToken,
     clearAccessToken: () => { accessToken = '' },

@@ -26,7 +26,7 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 历史 SQL、执行记录和 runner 仅作为审计档案，依赖已删除命令的历史 runner 不再支持直接重跑。新的数据库
 变更应基于当前 PostgreSQL 编写独立 forward migration。
 
-当前模块目录包括：`auth`、`health`、`permission`、`user`、`message`、`storage`、`system`。目录存在不代表
+当前模块目录包括：`auth`、`health`、`permission`、`user`、`message`、`payment`、`storage`、`system`。目录存在不代表
 所有业务都已完成，状态以 `STATUS.md` 和测试为准。
 
 ## 业务身份与跨层定位
@@ -54,6 +54,7 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 | `storage/object` | `storage/cosConfig`、`storage/uploadRule`、`storage/upload` | `storage_cos_config`、`storage_upload_rule*` |
 | `storage/file` | `storage/file`（头像保存协作 `user/profile`） | `storage_file`、既有 `system_scheduler_*` |
 | `system/operationLog` | `system/operationLog` | `system_operation_log` |
+| `payment/config` | `payment/config` | `payment_config`、`payment_config_version`（代码与迁移已交付，真实库待维护者执行） |
 
 复合代码模块统一使用 lower camel case；数据库仍使用 snake_case，HTTP API 仍使用小写资源段。Mail 是聚合
 页面，后端按表资源拆为 `message/mail/config`、`template`、`log`、`logVerification`、`rateLimitPolicy`、
@@ -163,6 +164,15 @@ SMS 收件规则与发送日志的手机号采用与邮件地址一致的明文�
 - `message.mail/global`
 - `message.sms/global`
 - `storage.cosconfig/<configId>`
+- `payment.config/global`
+
+支付配置代码位于 `payment/config`；管理 API `/api/admin/v1/payment/config`、page/action
+`payment:config:view/list/detail/create/update/status/delete/test` 与目录导航 `navigation.paymentConfig` 对齐。
+`payment_config_version` 按 `(config_id,version)` 保存不可改凭据；Redis 使用 catalog 和
+`credential:<configId>:<version>` variants，私钥只缓存密文，5 分钟 TTL、闭合 DTO、256KiB 编码上限。
+follower/Redis 读预算 500ms，获准的跨实例 cacheFill leader 使用原始请求下的 4 秒工作预算；Redis I/O
+尊重 context deadline。初始化不执行 DDL/seed；两表与 Admin 菜单由维护者离线 migration 落地，
+提交后缓存恢复复用 Worker 通用 outbox relay，本配置阶段不增加 Scheduler 任务。
 
 API 内各模块显式复用同一个 generation Repository/Store，但保留本模块的 snapshot codec、业务 Repository 和
 Service，不引入通用 CacheManager、运行时注册器或跨模块隐式 hook。ready 命中不读取 PostgreSQL；Redis I/O
@@ -188,6 +198,13 @@ generation 只承担缓存代际，不是管理员乐观锁。普通管理 CRUD 
 `storage_upload_rule_code` 规范化维护并允许跨规则重复。新 object key 自描述 platform/rule/config/physical
 version，读取时仍与 PostgreSQL rule route 事实交叉校验。公开对象返回 Bucket Domain URL；私有对象只向已认证
 用户返回短期签名 GET URL，不由 Go API 代理对象内容。
+
+Canvas 全局上传能力复用 `POST /api/v1/storage/upload-credential` 和 `storage:object:upload` action；
+该 action 属于 Canvas 平台隐藏根 page `canvas:workspace:view`（`/canvas/workspace`、
+`canvas/workspace`、`navigation.canvasWorkspace`），组件为 `canvas/src/views/canvas/workspace/index.tsx`。
+普通角色仅获得 action，不获得父 page；菜单管理中可维护该容器的后续通用能力，但不因上传授权注册页面。
+Canvas 上传规则编码为 `canvas`，按认证身份 `PlatformID` 查询 `storage_upload_rule` 与编码关系；
+首次规则 seed 从 Admin 当前 `file` 规则复制限制，后续管理员编辑互相独立，不双向同步、不重跑覆盖。
 
 项目尚未上线期间，维护者批准的破坏性变更直接切换新契约；运行时代码不保留旧 DTO、旧字段、旧 Redis 协议、
 旧权限码或旧对象格式的双读、双写和回退。一次性 Redis 清理由 migration runner 使用固定 pattern 执行，禁止

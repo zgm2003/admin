@@ -34,6 +34,7 @@ import (
 	smsratelimitpolicy "admin/server/internal/module/message/sms/rateLimitPolicy"
 	smsrecipientrule "admin/server/internal/module/message/sms/recipientRule"
 	smstemplate "admin/server/internal/module/message/sms/template"
+	paymentconfig "admin/server/internal/module/payment/config"
 	"admin/server/internal/module/permission/access"
 	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
@@ -70,6 +71,7 @@ import (
 )
 
 type routerDependencies struct {
+	PaymentConfig     *paymentconfig.Handler
 	CORSOrigin        string
 	TrustedProxies    []string
 	Logger            *slog.Logger
@@ -210,6 +212,11 @@ func run(logger *slog.Logger) error {
 	userRepository := account.NewRepository(postgres.GORM)
 	configGenerationRepository := configcache.NewRepository(postgres.GORM)
 	configGenerationStore := configcache.NewStore(redisClient)
+	paymentConfigRepository := paymentconfig.NewRepository(postgres.GORM)
+	paymentConfigRepository.SetGenerations(configGenerationRepository)
+	paymentConfigService := paymentconfig.NewService(paymentConfigRepository, keys)
+	paymentConfigService.SetGenerations(configGenerationRepository, configGenerationStore)
+	paymentConfigService.SetCache(paymentconfig.NewCache(redisClient, configGenerationStore))
 	settingRepository := systemsetting.NewRepository(postgres.GORM)
 	settingRepository.SetGenerations(configGenerationRepository)
 	settingService := systemsetting.NewService(settingRepository)
@@ -412,6 +419,7 @@ func run(logger *slog.Logger) error {
 		runtimeDependency{name: "message.sms/global rate-limit", validate: smsRateLimitStore.ValidateDependencies},
 		runtimeDependency{name: "permission.authPlatform mail/sms generation", validate: authPlatformService.ValidateRateLimitCacheDependencies},
 		runtimeDependency{name: "storage.cosconfig/<positive config id>", validate: cosConfigService.ValidateDependencies},
+		runtimeDependency{name: "payment.config/global", validate: paymentConfigService.ValidateDependencies},
 		runtimeDependency{name: "storage.object-route/v2", validate: uploadRuleService.ValidateDependencies},
 		runtimeDependency{name: "realtime.ticket Redis", validate: func() error {
 			if realtimeTickets == nil {
@@ -466,6 +474,7 @@ func run(logger *slog.Logger) error {
 			return useremail.Actor{UserID: identity.UserID, SessionID: identity.SessionID, PlatformID: identity.PlatformID, Platform: identity.Platform, ClientIP: client.ClientIP}, ok && clientOK
 		}),
 		COSConfig:         cosconfig.NewHandler(cosConfigService),
+		PaymentConfig:     paymentconfig.NewHandler(paymentConfigService),
 		UploadRule:        uploadrule.NewHandler(uploadRuleService),
 		File:              storagefile.NewHandler(fileService),
 		OperationLog:      operationlog.NewHandler(operationLogService),
@@ -587,6 +596,15 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	}
 	authplatform.RegisterPublicRoutes(sharedRoutes, dependencies.AuthPlatform)
 	permission.RegisterRoutes(sharedRoutes, dependencies.Permission, dependencies.Authenticate)
+	if dependencies.Account != nil {
+		profile.RegisterRoutes(sharedRoutes, dependencies.Account, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.Email != nil {
+		useremail.RegisterSelfRoutes(sharedRoutes, dependencies.Email, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.Phone != nil {
+		userphone.RegisterSelfRoutes(sharedRoutes, dependencies.Phone, dependencies.Authenticate, dependencies.RequirePermission)
+	}
 	if dependencies.Realtime != nil {
 		realtime.RegisterRoutes(sharedRoutes, router, dependencies.Realtime, dependencies.AuthOrigin, dependencies.Authenticate)
 	}
@@ -599,6 +617,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 
 	adminRoutes := router.Group("/api/admin/v1")
 	adminRoutes.Use(authclient.Require(), authclient.RequireAdminPlatform())
+	if dependencies.PaymentConfig != nil {
+		paymentconfig.RegisterRoutes(adminRoutes, dependencies.PaymentConfig, dependencies.Authenticate, dependencies.RequirePermission)
+	}
 	authplatform.RegisterManagementRoutes(adminRoutes, dependencies.AuthPlatform, dependencies.Authenticate, dependencies.RequirePermission)
 	menu.RegisterRoutes(adminRoutes, dependencies.Menu, dependencies.Authenticate, dependencies.RequirePermission)
 	role.RegisterRoutes(adminRoutes, dependencies.Role, dependencies.Authenticate, dependencies.RequirePermission)

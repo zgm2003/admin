@@ -1,6 +1,7 @@
 package operationlog
 
 import (
+	"admin/server/internal/shared/validate"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -10,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +25,11 @@ const maxSummaryBytes = 32 * 1024
 // request-summary fields for routes whose business key would otherwise be
 // masked by the global sanitizer (for example the literal "key" field name).
 var routeParamSummaryAliases = map[string]map[string]string{
+	http.MethodPost + " /api/admin/v1/payment/config/:id/version":                     {"id": "configId"},
+	http.MethodPost + " /api/admin/v1/payment/config/:id/test":                        {"id": "configId"},
+	http.MethodPut + " /api/admin/v1/payment/config/:id":                              {"id": "configId"},
+	http.MethodPatch + " /api/admin/v1/payment/config/:id/status":                     {"id": "configId"},
+	http.MethodDelete + " /api/admin/v1/payment/config/:id":                           {"id": "configId"},
 	http.MethodPut + " /api/admin/v1/message/mail/rate-limit-policy/:platformId/:key": {"key": "policyRef", "platformId": "platformRef"},
 	http.MethodPut + " /api/admin/v1/message/sms/rate-limit-policy/:platformId/:key":  {"key": "policyRef", "platformId": "platformRef"},
 }
@@ -65,6 +72,13 @@ func Middleware(logger *slog.Logger, enqueuer Enqueuer) gin.HandlerFunc {
 		var requestData JSON
 		if rule.CaptureRequest {
 			requestData = readRequestSummary(ginContext, aliases)
+		}
+		if len(aliases) > 0 {
+			object := map[string]any{}
+			if len(requestData) > 0 {
+				_ = json.Unmarshal(requestData, &object)
+			}
+			requestData = projectedSummary(ginContext, object, aliases)
 		}
 		captureWriter := &summaryWriter{ResponseWriter: ginContext.Writer}
 		ginContext.Writer = captureWriter
@@ -214,8 +228,10 @@ func readRequestSummary(context *gin.Context, aliases map[string]string) JSON {
 	return sanitized
 }
 
-func projectedSummary(context *gin.Context, _ map[string]any, aliases map[string]string) JSON {
-	object := make(map[string]any, len(aliases))
+func projectedSummary(context *gin.Context, object map[string]any, aliases map[string]string) JSON {
+	if object == nil {
+		object = make(map[string]any, len(aliases))
+	}
 	projected := projectAliases(context, object, aliases)
 	if reencoded, err := json.Marshal(projected); err == nil {
 		if sanitized, sanitizeErr := SanitizeJSON(reencoded); sanitizeErr == nil {
@@ -227,6 +243,14 @@ func projectedSummary(context *gin.Context, _ map[string]any, aliases map[string
 
 func projectAliases(context *gin.Context, object map[string]any, aliases map[string]string) map[string]any {
 	for param, summaryField := range aliases {
+		if summaryField == "configId" {
+			delete(object, summaryField)
+			id, err := validate.ParsePositiveInt64(context.Param(param), param)
+			if err == nil {
+				object[summaryField] = strconv.FormatInt(id, 10)
+			}
+			continue
+		}
 		object[summaryField] = context.Param(param)
 	}
 	return object
@@ -270,6 +294,9 @@ func sanitizeValue(field string, value interface{}) interface{} {
 }
 
 func isSensitiveField(field string) bool {
+	if strings.HasSuffix(strings.ToLower(field), "pem") {
+		return true
+	}
 	normalized := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(field, "-", ""), "_", ""))
 	for _, sensitive := range []string{"password", "confirmpassword", "accesstoken", "refreshtoken", "authorization", "cookie", "secret", "key", "code", "templatevariables", "toemail", "verificationcode", "ciphertext", "phone", "account", "pattern"} {
 		if normalized == sensitive || strings.Contains(normalized, sensitive) {

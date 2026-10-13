@@ -9,3 +9,10 @@ func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.
 	userRoutes.PUT("/phone", authenticate, requirePermission(PermissionUpdate), handler.BindOrChange)
 	userRoutes.GET("/account/:id/phone-change-log", authenticate, requirePermission(PermissionDetail), handler.ListChangeLogs)
 }
+
+// RegisterSelfRoutes excludes management queries for other accounts.
+func RegisterSelfRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
+	userRoutes := routes.Group("/user")
+	userRoutes.POST("/phone/send-code", authenticate, requirePermission(PermissionUpdate), handler.SendCode)
+	userRoutes.PUT("/phone", authenticate, requirePermission(PermissionUpdate), handler.BindOrChange)
+}

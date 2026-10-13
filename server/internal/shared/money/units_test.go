@@ -33,9 +33,11 @@ func TestParseRMBUnitsPreservesExactDecimalAmounts(t *testing.T) {
 
 func TestParseRMBUnitsRejectsMalformedPrecisionAndOverflow(t *testing.T) {
 	for _, input := range []string{
-		"", " ", " 1", "1 ", "+1", "-1", "-0", ".01", "1.", "1..00",
+		"", " ", " 1", "1 ", "+1", ".01", "1.", "1..00",
 		"1e3", "1E-8", "NaN", "Inf", "1,000", "1_000", "1/2", "１.００", "١",
 		"0.000000001", "1.000000000", "92233720368.54775808", "92233720369", "18446744073709551616",
+		"-", "--1", "-+1", "-.01", "-1.", "- 1", "-1 ", "-1e3", "-0.000000001",
+		"-92233720368.54775809", "-92233720369", "-18446744073709551616",
 	} {
 		t.Run(input, func(t *testing.T) {
 			got, err := money.ParseRMBUnits(input)
@@ -64,12 +66,66 @@ func TestFormatRMBUnitsReturnsCanonicalExactStrings(t *testing.T) {
 			t.Fatalf("FormatRMBUnits(%d) = %q, %v; want %q", tc.input, got, err, tc.want)
 		}
 	}
-	for _, input := range []int64{-1, math.MinInt64} {
-		got, err := money.FormatRMBUnits(input)
-		if got != "" || !errors.Is(err, money.ErrInvalidAmount) {
-			t.Fatalf("FormatRMBUnits(%d) = %q, %v; want empty and ErrInvalidAmount", input, got, err)
+}
+
+func TestParseRMBUnitsAcceptsNegativeBalances(t *testing.T) {
+	for _, tc := range []struct {
+		input string
+		want  int64
+	}{
+		{"-0", 0},
+		{"-0.00000000", 0},
+		{"-0.00000001", -1},
+		{"-0.01", -1_000_000},
+		{"-1", -100_000_000},
+		{"-001.23000000", -123_000_000},
+		{"-123.45678901", -12_345_678_901},
+		{"-92233720368.54775807", -math.MaxInt64},
+		{"-92233720368.54775808", math.MinInt64},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			got, err := money.ParseRMBUnits(tc.input)
+			if err != nil || got != tc.want {
+				t.Fatalf("ParseRMBUnits(%q) = %d, %v; want %d", tc.input, got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestFormatRMBUnitsPreservesNegativeBalances(t *testing.T) {
+	for _, tc := range []struct {
+		input int64
+		want  string
+	}{
+		{-1, "-0.00000001"},
+		{-1_000_000, "-0.01"},
+		{-100_000_000, "-1"},
+		{-123_000_000, "-1.23"},
+		{-12_345_678_901, "-123.45678901"},
+		{-math.MaxInt64, "-92233720368.54775807"},
+		{math.MinInt64, "-92233720368.54775808"},
+	} {
+		got, err := money.FormatRMBUnits(tc.input)
+		if err != nil || got != tc.want {
+			t.Fatalf("FormatRMBUnits(%d) = %q, %v; want %q", tc.input, got, err, tc.want)
 		}
 	}
+}
+
+func FuzzRMBUnitsRoundTrip(f *testing.F) {
+	for _, units := range []int64{0, 1, -1, 123_456_789, -123_456_789, math.MinInt64, math.MaxInt64} {
+		f.Add(units)
+	}
+	f.Fuzz(func(t *testing.T, units int64) {
+		formatted, err := money.FormatRMBUnits(units)
+		if err != nil {
+			t.Fatalf("FormatRMBUnits(%d): %v", units, err)
+		}
+		parsed, err := money.ParseRMBUnits(formatted)
+		if err != nil || parsed != units {
+			t.Fatalf("round trip %d through %q = %d, %v", units, formatted, parsed, err)
+		}
+	})
 }
 
 func TestCentsToUnitsRejectsOverflowBeforeMultiplication(t *testing.T) {

@@ -201,6 +201,8 @@ const (
 	KeyCacheNamespaceMail               MessageKey = "configCacheStatus.options.namespace.mail"
 	KeyCacheNamespaceSMS                MessageKey = "configCacheStatus.options.namespace.sms"
 	KeyCacheNamespaceCOS                MessageKey = "configCacheStatus.options.namespace.cos"
+	KeyCacheNamespacePayment            MessageKey = "configCacheStatus.options.namespace.payment"
+	KeyPaymentConfigCommittedPending    MessageKey = "payment.config.committedPending"
 	KeyCacheScopeGlobal                 MessageKey = "configCacheStatus.options.scope.global"
 	KeyCacheScopeCOS                    MessageKey = "configCacheStatus.options.scope.cos"
 	KeyCacheScopeOther                  MessageKey = "configCacheStatus.options.scope.other"
@@ -231,6 +233,8 @@ const (
 
 var catalogs = map[Locale]map[MessageKey]string{
 	ZhCN: {
+		KeyPaymentConfigCommittedPending:     "支付配置已提交，但缓存发布未完成；请刷新核对，后台任务将重试同步",
+		KeyCacheNamespacePayment:             "支付配置",
 		"storage.file.category.image":        "图片",
 		"storage.file.category.video":        "视频",
 		"storage.file.category.audio":        "音频",
@@ -465,6 +469,8 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyMenuParentDisabledReason:          "请先启用父级菜单",
 	},
 	EnUS: {
+		KeyPaymentConfigCommittedPending:     "Payment configuration was committed but cache publication is pending. Refresh before retrying; the worker will synchronize it.",
+		KeyCacheNamespacePayment:             "Payment configuration",
 		"storage.file.category.image":        "Images",
 		"storage.file.category.video":        "Videos",
 		"storage.file.category.audio":        "Audio",

@@ -12,6 +12,12 @@ type RouteRule struct {
 }
 
 var routeRules = []RouteRule{
+	{http.MethodPost, "/api/admin/v1/payment/config", "payment", "payment.config.create", false, true},
+	{http.MethodPost, "/api/admin/v1/payment/config/:id/version", "payment", "payment.config.version", false, true},
+	{http.MethodPut, "/api/admin/v1/payment/config/:id", "payment", "payment.config.update", true, true},
+	{http.MethodPatch, "/api/admin/v1/payment/config/:id/status", "payment", "payment.config.status", true, true},
+	{http.MethodDelete, "/api/admin/v1/payment/config/:id", "payment", "payment.config.delete", false, true},
+	{http.MethodPost, "/api/admin/v1/payment/config/:id/test", "payment", "payment.config.test", false, true},
 	{http.MethodPost, "/api/admin/v1/permission/authplatform", "authPlatform", "authPlatform.create", true, true},
 	{http.MethodPut, "/api/admin/v1/permission/authplatform/:id", "authPlatform", "authPlatform.update", true, true},
 	{http.MethodPatch, "/api/admin/v1/permission/authplatform/:id/status", "authPlatform", "authPlatform.status", true, true},

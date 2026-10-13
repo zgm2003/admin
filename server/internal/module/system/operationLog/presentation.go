@@ -20,6 +20,12 @@ func actionLabel(ctx context.Context, action string) string {
 }
 
 var actionLabels = map[string]struct{ zh, en string }{
+	"payment.config.create":      {"新增支付配置", "Create payment configuration"},
+	"payment.config.update":      {"编辑支付配置", "Edit payment configuration"},
+	"payment.config.version":     {"更新支付凭据", "Publish payment credentials"},
+	"payment.config.status":      {"启停支付配置", "Change payment configuration status"},
+	"payment.config.delete":      {"删除支付配置", "Delete payment configuration"},
+	"payment.config.test":        {"本地支付配置校验", "Validate payment configuration locally"},
 	"authPlatform.create":        {"新增认证平台", "Create authentication platform"},
 	"authPlatform.update":        {"编辑认证平台", "Edit authentication platform"},
 	"authPlatform.status":        {"修改认证平台状态", "Change authentication platform status"},

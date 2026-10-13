@@ -22,6 +22,7 @@ function fakeClient(overrides: Partial<RequestClient> = {}): RequestClient {
   return {
     get: vi.fn(),
     post: vi.fn(),
+    put: vi.fn(),
     setAccessToken: vi.fn(),
     getAccessToken: vi.fn(() => ''),
     clearAccessToken: vi.fn(),
