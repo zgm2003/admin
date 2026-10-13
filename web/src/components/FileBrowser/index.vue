@@ -163,6 +163,9 @@ function categoryIcon(category: string): Component {
 function categoryLabel(category: string): string {
   return options.value?.categories.find((item) => item.value === category)?.label ?? category
 }
+function canPreview(row: StorageFile): boolean {
+  return row.category === 'image' || row.category === 'video' || row.category === 'audio'
+}
 function invalidateThumbnail(id: number): void {
   const next = { ...thumbnailURLs.value }
   delete next[id]
@@ -211,7 +214,7 @@ async function ensureThumbnail(row: StorageFile): Promise<void> {
   }
 }
 async function preview(row: StorageFile): Promise<void> {
-  if (!canDetail.value) return
+  if (!canDetail.value || !canPreview(row)) return
   const current = ++previewSequence
   previewController?.abort()
   previewController = new AbortController()
@@ -411,7 +414,7 @@ onBeforeUnmount(() => {
               >{{ t('storage.file.select') }}</el-button
             >
             <el-button
-              v-if="canDetail"
+              v-if="canDetail && canPreview(row)"
               type="primary"
               link
               :data-testid="'file-preview-' + row.id"
@@ -516,7 +519,7 @@ onBeforeUnmount(() => {
       /></template>
     </el-image-viewer>
     <AppDialog
-      v-if="previewVisible && (previewCategory !== 'image' || !previewURL)"
+      v-if="previewVisible && (previewCategory === 'video' || previewCategory === 'audio')"
       v-model="previewVisible"
       :title="previewName"
       width="min(1100px, 90vw)"
@@ -526,14 +529,6 @@ onBeforeUnmount(() => {
       <div v-loading="previewLoading" class="file-browser__preview">
         <video v-if="previewURL && previewCategory === 'video'" :src="previewURL" controls />
         <audio v-else-if="previewURL && previewCategory === 'audio'" :src="previewURL" controls />
-        <iframe
-          v-else-if="previewURL"
-          data-testid="file-preview-frame"
-          class="file-browser__frame"
-          :src="previewURL"
-          :title="previewName"
-          referrerpolicy="no-referrer"
-        />
         <el-empty v-else-if="!previewLoading" :description="t('storage.file.previewUnavailable')" />
       </div>
     </AppDialog>

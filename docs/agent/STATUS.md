@@ -3,10 +3,10 @@
 ## 我的文件预览交互整改（2026-10-13，代码与定向验证完成）
 
 - 图片预览改为与 `UpMedia` 一致的全屏 `el-image-viewer`，提供缩放、适应、旋转和下载工具栏，不再使用居中的 `AppDialog` 图片预览。
-- 视频/音频继续使用媒体控件；PDF、文本及其他普通文件在带标题的响应式 `AppDialog` 中使用签名 URL 的 iframe 预览，保留单独下载操作和详情权限检查。
-- 新增图片查看器与 iframe 预览回归测试，覆盖 Teleport 内容、签名 URL、关闭链路和文件类型分支；未改后端接口、数据库、权限或 COS 协议。
-- 实际验证：`pnpm vitest run tests/views/storage/file/index.test.ts tests/components/FileSelectDialog.test.ts tests/components/UpMedia/fileLibrary.test.ts --pool=threads --maxWorkers=1`，3 文件 26 项通过；`pnpm typecheck`、受影响文件 ESLint、`pnpm check:architecture`（0 findings）、`pnpm build` 和 `git diff --check` 通过。构建保留既有富文本大 chunk 提示。
-- 未启动后端、未运行真实浏览器/COS 视觉验收，未提交 Git；维护者刷新前端后可验收截图中的全屏图片查看器和文件 iframe 预览。
+- 视频/音频继续使用媒体控件；PDF、文本及其他普通文件不显示预览入口，只保留下载和删除，避免 COS 响应头或浏览器内嵌策略导致空白弹窗。
+- 图片查看器回归验证全屏模式与签名 URL；普通文件回归验证隐藏预览、保留下载且不请求 inline 签名。复用文件选择弹窗与上传文件库回归同时通过；未改后端接口、数据库、权限或 COS 协议。
+- 实际验证：`pnpm vitest run tests/views/storage/file/index.test.ts tests/components/FileSelectDialog.test.ts tests/components/UpMedia/fileLibrary.test.ts --pool=threads --maxWorkers=1`，3 文件 26 项通过；受影响文件 ESLint、Prettier、`pnpm check:architecture`（0 findings）、`pnpm build`（含 vue-tsc 类型检查）和 `git diff --check` 通过。构建保留既有富文本大 chunk 提示。
+- 未启动后端、未运行全仓测试或真实浏览器/COS 视觉验收，未提交 Git；维护者刷新前端后可验收全屏图片查看器，以及普通文件的下载、删除操作。
 
 ## 云服务“我的文件”卡片网格（2026-10-13，代码与定向验证完成）
 

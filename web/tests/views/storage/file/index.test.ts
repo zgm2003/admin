@@ -139,7 +139,7 @@ it('opens image previews in the fullscreen image viewer', async () => {
     'https://files.example.test/photo.png',
   ])
 })
-it('opens non-media files in an iframe preview', async () => {
+it('does not offer preview for non-media files and keeps download available', async () => {
   const file = {
     ...row,
     id: 10,
@@ -154,12 +154,9 @@ it('opens non-media files in an iframe preview', async () => {
   })
   const wrapper = page()
   await flushPromises()
-  await wrapper.get('[data-testid="file-preview-10"]').trigger('click')
-  await flushPromises()
-  const frame = document.body.querySelector<HTMLIFrameElement>('[data-testid="file-preview-frame"]')
-  expect(frame).not.toBeNull()
-  expect(frame?.getAttribute('src')).toBe('https://files.example.test/manual.pdf')
-  expect(frame?.getAttribute('title')).toBe('manual.pdf')
+  expect(wrapper.find('[data-testid="file-preview-10"]').exists()).toBe(false)
+  expect(wrapper.find('[data-testid="file-download-10"]').exists()).toBe(true)
+  expect(api.getFileURL).not.toHaveBeenCalled()
   expect(wrapper.findComponent({ name: 'ElImageViewer' }).exists()).toBe(false)
 })
 it('uploads with the backend-selected rule without a technical purpose selector', async () => {
