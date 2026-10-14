@@ -180,7 +180,7 @@ func TestCatalogWriteBudgetMatchesSnapshotEncoding(t *testing.T) {
 	r.SetGenerations(cache.NewRepository(db))
 	m, v := testRecord()
 	m.Name = strings.Repeat("&", 128)
-	if _, err := r.Create(ctx, m, v, 1); err == nil {
+	if _, err := r.Create(ctx, m, v, 2); err == nil {
 		t.Fatal("write accepted catalog that cannot be encoded below 256KiB")
 	}
 	var n int64

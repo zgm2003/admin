@@ -201,7 +201,8 @@ version，读取时仍与 PostgreSQL rule route 事实交叉校验。公开对�
 
 Canvas 全局上传能力复用 `POST /api/v1/storage/upload-credential` 和 `storage:object:upload` action；
 该 action 属于 Canvas 平台隐藏根 page `canvas:workspace:view`（`/canvas/workspace`、
-`canvas/workspace`、`navigation.canvasWorkspace`），组件为 `canvas/src/views/canvas/workspace/index.tsx`。
+`canvas/workspace`、`navigation.canvasWorkspace`）。该节点是全局权限容器；Canvas 前端直接复用参考项目的
+画布与项目界面，不为上传单独创建工作区或上传页面。
 普通角色仅获得 action，不获得父 page；菜单管理中可维护该容器的后续通用能力，但不因上传授权注册页面。
 Canvas 上传规则编码为 `canvas`，按认证身份 `PlatformID` 查询 `storage_upload_rule` 与编码关系；
 首次规则 seed 从 Admin 当前 `file` 规则复制限制，后续管理员编辑互相独立，不双向同步、不重跑覆盖。

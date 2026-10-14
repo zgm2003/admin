@@ -332,6 +332,8 @@ export default {
         config: "Settings",
     },
     topNav: {
+        profile: "Profile",
+        logout: "Log out",
         openMenu: "Open navigation menu",
         menu: "Navigation menu",
         navigation: "Navigation",

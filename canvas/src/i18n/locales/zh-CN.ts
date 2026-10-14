@@ -332,6 +332,8 @@ export default {
         config: "配置",
     },
     topNav: {
+        profile: "个人中心",
+        logout: "退出登录",
         openMenu: "打开导航菜单",
         menu: "导航菜单",
         navigation: "导航",

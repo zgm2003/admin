@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, test } from "vitest";
 import type { AiConfig, ModelCapability } from "../src/stores/use-config-store";
 import type { CanvasNodeData } from "../src/types/canvas";
 

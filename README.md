@@ -78,6 +78,17 @@ pnpm dev
 
 本地页面为 `http://localhost:16300`，API 为 `http://localhost:16301`。Vite 使用固定端口并开启 `strictPort`，端口被占用时会明确退出，不会自动切换。
 
+Canvas 对外前端直接复用 `D:\github-project\infinite-canvas\web`，接入本项目的 Canvas 平台认证：
+
+```powershell
+cd D:\admin\canvas
+pnpm install
+pnpm dev
+```
+
+访问 `http://localhost:16302`；本地 `/api` 代理到 `http://localhost:16301`。运行 `pnpm test` 验证认证、个人中心和
+画布逻辑，运行 `pnpm build` 执行类型检查及生产构建。AI 渠道和画布素材暂时沿用参考项目的本地配置与存储。
+
 API 和 Worker 启动时都不会执行数据库迁移、数据预设或回填。首次启动或数据库结构变化前，必须由维护者先
 执行已确认的 forward migration，再启动 API 和 Worker；带日期的 `docs/database/2026-*.sql` 只保留为历史
 执行记录，不作为当前 schema 的默认来源。

@@ -168,7 +168,7 @@ Canvas 上传规则由 Admin 管理，使用 Canvas 的 `platform_id` 和 `canva
 
 同一用户账户的余额允许为负数。余额与流水历史前后余额使用有符号整数和精确金额字符串，不归零、不隐藏负号；充值套餐、支付订单和兑换码面额仍必须为正数，充值按原余额加实际入账金额执行。不得把余额当作累计充值统计，或重复增加欠款余额、授信额度、透支开关字段。允许负余额不自动决定负余额用户的消费准入或无限透支规则，AI阶段按实际需求另行确认。
 
-支付配置先沿用旧项目支付宝证书模式：三份证书支持本地 CRT/PEM 文件导入或粘贴；创建时填写私钥，发布新版本时空白凭据表示保留，普通编辑仅改名称/排序。通道 code/provider/environment/appId/sellerId 创建后固定，同一通道的凭据版本不可编辑或删除。provider=1支付宝/2微信保留、environment=1沙箱/2生产、payMethod=1PC网页/2H5；首期只有支付宝可配置。回调输入 HTTPS 模板 `/api/v1/payment/callback/alipay/{configId}/{version}`，服务端按创建后的坐标保存完整 URL；此阶段没有实际回调入口。本地配置校验不是实时支付或通道连通测试，不返回密钥、密文或原始证书。
+支付配置先沿用旧项目支付宝证书模式：三份证书支持本地 CRT/PEM 文件导入或粘贴；创建时填写私钥，发布新版本时空白凭据表示保留，普通编辑仅改名称/排序。provider/environment/appId/sellerId 创建后固定，同一通道的凭据版本不可编辑或删除。provider=1支付宝/2微信保留、environment=1沙箱/2生产、payMethod=1PC网页/2H5；首期只有支付宝可配置。回调输入 HTTPS 模板 `/api/v1/payment/callback/alipay/{configId}/{version}`，服务端按创建后的坐标保存完整 URL；此阶段没有实际回调入口。本地配置校验不是实时支付或通道连通测试，不返回密钥、密文或原始证书。
 
 支付配置使用数据库 ID 关联，不再要求管理员填写内部编码；provider/environment/appId/sellerId 创建后固定，同一通道的凭据版本不可编辑或删除。
 

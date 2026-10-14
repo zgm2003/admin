@@ -16,6 +16,8 @@ import (
 
 func TestConfigMaintenanceRunnerReplayAndPartialFailure(t *testing.T) {
 	db, ctx := configFixture(t, false)
+	runConfigSQL(t, db, ctx)
+	seedLegacyConfig(t, db, ctx)
 	// Runner includes compilation, backup and several recovery invocations; keep
 	// it bounded independently of the short single-query fixture setup budget.
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
@@ -60,7 +62,7 @@ func TestConfigMaintenanceRunnerReplayAndPartialFailure(t *testing.T) {
 		r.DeleteMany(work, []string{marker, "config-cache:state:v1:payment.config:global", "authz:menu-state:v1:1"})
 		r.Close()
 	})
-	content, err := os.ReadFile("../../../../../docs/database/2026-10-13-payment-config.ps1")
+	content, err := os.ReadFile("../../../../../docs/database/2026-10-14-payment-config-remove-code.ps1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +89,7 @@ func TestConfigMaintenanceRunnerReplayAndPartialFailure(t *testing.T) {
 		t.Fatalf("build helper: %s %v", out, err)
 	}
 	auditRoot := t.TempDir()
-	sqlPath, err := filepath.Abs("../../../../../docs/database/2026-10-13-payment-config.sql")
+	sqlPath, err := filepath.Abs("../../../../../docs/database/2026-10-14-payment-config-remove-code.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

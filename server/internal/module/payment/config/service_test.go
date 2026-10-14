@@ -155,6 +155,13 @@ func TestServiceCredentialSafetyAndVersionLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := fields["code"]; exists {
+		t.Fatal("management DTO still exposes internal code")
+	}
 	for _, secret := range []string{in.PrivateKey, in.AppCertPEM, "privateKeyCiphertext", "appCertPEM"} {
 		if strings.Contains(string(raw), secret) {
 			t.Fatal("credential leaked in management DTO")
@@ -171,7 +178,7 @@ func TestServiceCredentialSafetyAndVersionLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	g, _ := s.generations.Current(ctx, configScope)
-	if g != 2 {
+	if g != 3 {
 		t.Fatalf("no-op generation %d", g)
 	}
 	if err = s.Update(ctx, id, MetadataInput{"Updated", 3}); err != nil {

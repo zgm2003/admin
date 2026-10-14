@@ -24,7 +24,7 @@ func TestPublishVersionRollsBackWhenCatalogWouldExceedEncodingCap(t *testing.T) 
 	models := []Model{}
 	versions := []Version{}
 	rows := []CatalogItem{}
-	for n := int64(1); n <= 1000; n++ {
+	for n := int64(1); n <= 1100; n++ {
 		app := fmt.Sprint(n)
 		models = append(models, Model{ID: n, Name: "a", Provider: 1, Environment: 1, AppID: app, SellerID: "20880001", CurrentVersion: 9, CreatedAt: now, UpdatedAt: now})
 		rows = append(rows, CatalogItem{ID: n, Name: "a", Provider: 1, Environment: 1, AppID: app, SellerID: "20880001", CurrentVersion: 9})
@@ -56,7 +56,7 @@ func TestPublishVersionRollsBackWhenCatalogWouldExceedEncodingCap(t *testing.T) 
 	r.SetGenerations(cache.NewRepository(db))
 	v := versions[0]
 	v.PayMethods = PayMethods{2}
-	if _, err := r.PublishVersion(ctx, 1, v, 1, now); err == nil {
+	if _, err := r.PublishVersion(ctx, 1, v, 2, now); err == nil {
 		t.Fatal("9 to 10 version growth accepted an uncacheable catalog")
 	}
 	c, err := r.FindByID(ctx, 1)
@@ -139,7 +139,7 @@ func TestConfigMigrationConstraintsAndReplay(t *testing.T) {
 	if codeColumns != 0 {
 		t.Fatalf("payment_config still exposes removed code column: %d", codeColumns)
 	}
-	for q, want := range map[string]int64{`SELECT menu_version FROM permission_auth_platform WHERE id=1`: 20, `SELECT menu_version FROM permission_auth_platform WHERE id=2`: 2, `SELECT count(*) FROM permission_menu WHERE code LIKE 'payment:%'`: 8, `SELECT generation FROM system_config_cache_state WHERE namespace='payment.config' AND scope_key='global'`: 1, `SELECT count(*) FROM system_config_cache_outbox`: 1} {
+	for q, want := range map[string]int64{`SELECT menu_version FROM permission_auth_platform WHERE id=1`: 20, `SELECT menu_version FROM permission_auth_platform WHERE id=2`: 2, `SELECT count(*) FROM permission_menu WHERE code LIKE 'payment:%'`: 8, `SELECT generation FROM system_config_cache_state WHERE namespace='payment.config' AND scope_key='global'`: 2, `SELECT count(*) FROM system_config_cache_outbox`: 2} {
 		var got int64
 		if err := db.WithContext(ctx).Raw(q).Scan(&got).Error; err != nil || got != want {
 			t.Fatalf("%s got %d want %d: %v", q, got, want, err)
@@ -148,8 +148,8 @@ func TestConfigMigrationConstraintsAndReplay(t *testing.T) {
 	r := NewRepository(db)
 	r.SetGenerations(cache.NewRepository(db))
 	m, v := testRecord()
-	res, err := r.Create(ctx, m, v, 1)
-	if err != nil || res.Generation != 2 {
+	res, err := r.Create(ctx, m, v, 2)
+	if err != nil || res.Generation != 3 {
 		t.Fatalf("create %v %+v", err, res)
 	}
 	for _, sql := range []string{`UPDATE payment_config SET provider=3`, `UPDATE payment_config SET provider=2`, `UPDATE payment_config SET app_id='other'`, `UPDATE payment_config SET current_version=99`, `UPDATE payment_config_version SET app_cert_pem='other'`, `DELETE FROM payment_config_version`, `TRUNCATE payment_config_version`, `UPDATE payment_config SET is_enabled=2`} {
@@ -160,7 +160,7 @@ func TestConfigMigrationConstraintsAndReplay(t *testing.T) {
 	runRemoveCodeSQL(t, db, ctx)
 	var generation int64
 	db.WithContext(ctx).Raw(`SELECT generation FROM system_config_cache_state WHERE namespace='payment.config'`).Scan(&generation)
-	if generation != 2 {
+	if generation != 3 {
 		t.Fatal("replay changed runtime generation")
 	}
 	for _, literal := range []string{"ARRAY[]::smallint[]", "ARRAY[1,1]::smallint[]", "ARRAY[1,NULL]::smallint[]", "ARRAY[3]::smallint[]", "ARRAY[[1,2]]::smallint[]"} {
@@ -178,30 +178,30 @@ func TestConfigRepositoryMetadataAndVersionNoOp(t *testing.T) {
 	r := NewRepository(db)
 	r.SetGenerations(cache.NewRepository(db))
 	m, v := testRecord()
-	if _, err := r.Create(ctx, m, v, 1); err != nil {
+	if _, err := r.Create(ctx, m, v, 2); err != nil {
 		t.Fatal(err)
 	}
 	current, err := r.FindByID(ctx, m.ID)
 	if err != nil || current.Credential.NotifyURL == v.NotifyURL {
 		t.Fatal("template persisted instead of concrete URL")
 	}
-	res, err := r.UpdateMetadata(ctx, m.ID, MetadataInput{m.Name, 0}, 2, time.Now())
+	res, err := r.UpdateMetadata(ctx, m.ID, MetadataInput{m.Name, 0}, 3, time.Now())
 	if err != nil || res.Changed {
 		t.Fatalf("metadata no-op %+v %v", res, err)
 	}
-	res, err = r.UpdateMetadata(ctx, m.ID, MetadataInput{"Changed", 9}, 2, time.Now())
-	if err != nil || res.Generation != 3 {
+	res, err = r.UpdateMetadata(ctx, m.ID, MetadataInput{"Changed", 9}, 3, time.Now())
+	if err != nil || res.Generation != 4 {
 		t.Fatalf("metadata %+v %v", res, err)
 	}
 	same := current.Credential
-	res, err = r.PublishVersion(ctx, m.ID, same, 3, time.Now())
+	res, err = r.PublishVersion(ctx, m.ID, same, 4, time.Now())
 	if err != nil || res.Changed {
 		t.Fatalf("credential no-op %+v %v", res, err)
 	}
 	same.PayMethods = PayMethods{payment.PayMethodH5}
 	same.NotifyURL = v.NotifyURL
-	res, err = r.PublishVersion(ctx, m.ID, same, 3, time.Now())
-	if err != nil || res.Generation != 4 {
+	res, err = r.PublishVersion(ctx, m.ID, same, 4, time.Now())
+	if err != nil || res.Generation != 5 {
 		t.Fatalf("rotation %+v %v", res, err)
 	}
 	current, err = r.FindByID(ctx, m.ID)
@@ -219,13 +219,95 @@ func TestConfigRepositoryMetadataAndVersionNoOp(t *testing.T) {
 	if err != nil || len(rows) != 1 || rows[0].Config.CurrentVersion != rows[0].Credential.Version {
 		t.Fatalf("list current version mismatch: %+v %v", rows, err)
 	}
+	for _, keyword := range []string{"Changed", "20260001", "20880001"} {
+		q := ListQuery{Page: 1, PageSize: 20, Keyword: keyword}
+		count, err := r.Count(ctx, q)
+		if err != nil || count != 1 {
+			t.Fatalf("search %q count=%d: %v", keyword, count, err)
+		}
+		matches, err := r.List(ctx, q)
+		if err != nil || len(matches) != 1 || matches[0].Config.ID != m.ID {
+			t.Fatalf("search %q returned wrong config: %+v %v", keyword, matches, err)
+		}
+	}
+}
+func seedLegacyConfig(t *testing.T, db *gorm.DB, ctx context.Context) {
+	t.Helper()
+	if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return tx.Exec(`INSERT INTO payment_config(id,code,name,provider,environment,app_id,seller_id,current_version) VALUES(100,'legacy_alipay','Legacy channel',1,1,'20260001','20880001',1); INSERT INTO payment_config_version(config_id,version,private_key_ciphertext,app_cert_pem,alipay_cert_pem,root_cert_pem,notify_url,pay_methods) VALUES(100,1,'local-cipher','app','alipay','root','https://pay.example.test/api/v1/payment/callback/alipay/100/1',ARRAY[1,2]::smallint[])`).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+func paymentFactsDigest(t *testing.T, db *gorm.DB, ctx context.Context) string {
+	t.Helper()
+	var digest string
+	if err := db.WithContext(ctx).Raw(`SELECT md5(jsonb_build_object('configs',(SELECT jsonb_agg(to_jsonb(c)-'code' ORDER BY id) FROM payment_config c),'versions',(SELECT jsonb_agg(to_jsonb(v) ORDER BY config_id,version) FROM payment_config_version v))::text)`).Scan(&digest).Error; err != nil {
+		t.Fatal(err)
+	}
+	return digest
+}
+func TestRemoveCodeMigrationPreservesRecordsAndReplays(t *testing.T) {
+	db, ctx := configFixture(t, false)
+	runConfigSQL(t, db, ctx)
+	seedLegacyConfig(t, db, ctx)
+	before := paymentFactsDigest(t, db, ctx)
+	runRemoveCodeSQL(t, db, ctx)
+	if after := paymentFactsDigest(t, db, ctx); after != before {
+		t.Fatal("migration changed payment identities or credential versions")
+	}
+	for i := 0; i < 2; i++ {
+		runRemoveCodeSQL(t, db, ctx)
+	}
+	for query, want := range map[string]int64{
+		`SELECT generation FROM system_config_cache_state WHERE namespace='payment.config' AND scope_key='global'`: 2,
+		`SELECT count(*) FROM system_config_cache_outbox`:                                                          2,
+		`SELECT menu_version FROM permission_auth_platform WHERE id=1`:                                             20,
+		`SELECT menu_version FROM permission_auth_platform WHERE id=2`:                                             2,
+	} {
+		var got int64
+		if err := db.WithContext(ctx).Raw(query).Scan(&got).Error; err != nil || got != want {
+			t.Fatalf("replay %s = %d want %d: %v", query, got, want, err)
+		}
+	}
+	if err := db.WithContext(ctx).Exec(`UPDATE payment_config SET name='Renamed' WHERE id=100`).Error; err != nil {
+		t.Fatal("metadata update still references removed code", err)
+	}
+	if err := db.WithContext(ctx).Exec(`UPDATE payment_config SET app_id='20260002' WHERE id=100`).Error; err == nil {
+		t.Fatal("migration removed application identity protection")
+	}
+}
+func TestRemoveCodeMigrationRollsBackOnPartialFailure(t *testing.T) {
+	for name, failure := range map[string]string{
+		"dependent view":  `CREATE VIEW code_consumer AS SELECT code FROM payment_config`,
+		"outbox conflict": `INSERT INTO system_config_cache_outbox(namespace,scope_key,generation,available_at,created_at,updated_at) VALUES('payment.config','global',2,now(),now(),now())`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			db, ctx := configFixture(t, false)
+			runConfigSQL(t, db, ctx)
+			seedLegacyConfig(t, db, ctx)
+			before := paymentFactsDigest(t, db, ctx)
+			if err := db.WithContext(ctx).Exec(failure).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return tx.Exec(removeCodeSQL(t)).Error }); err == nil {
+				t.Fatal("migration ignored dependency or outbox failure")
+			}
+			var code, generation int64
+			db.WithContext(ctx).Raw(`SELECT count(*) FROM pg_attribute WHERE attrelid='payment_config'::regclass AND attname='code' AND NOT attisdropped`).Scan(&code)
+			db.WithContext(ctx).Raw(`SELECT generation FROM system_config_cache_state WHERE namespace='payment.config' AND scope_key='global'`).Scan(&generation)
+			if code != 1 || generation != 1 || paymentFactsDigest(t, db, ctx) != before {
+				t.Fatalf("partial upgrade persisted: code=%d generation=%d", code, generation)
+			}
+		})
+	}
 }
 func TestConfigMigrationRejectsAlteredConstraint(t *testing.T) {
 	db, ctx := configDB(t)
 	if err := db.WithContext(ctx).Exec(`ALTER TABLE payment_config DROP CONSTRAINT ck_payment_config_provider; ALTER TABLE payment_config ADD CONSTRAINT ck_payment_config_provider CHECK(provider IN (1,2,3))`).Error; err != nil {
 		t.Fatal(err)
 	}
-	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return tx.Exec(configSQL(t)).Error })
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return tx.Exec(removeCodeSQL(t)).Error })
 	if err == nil {
 		t.Fatal("altered provider check silently accepted")
 	}
@@ -248,7 +330,7 @@ func TestConfigMigrationRejectsProtectionDrift(t *testing.T) {
 			if err := db.WithContext(ctx).Exec(sql).Error; err != nil {
 				t.Fatal(err)
 			}
-			if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return tx.Exec(configSQL(t)).Error }); err == nil {
+			if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return tx.Exec(removeCodeSQL(t)).Error }); err == nil {
 				t.Fatal("schema drift accepted")
 			}
 		})
