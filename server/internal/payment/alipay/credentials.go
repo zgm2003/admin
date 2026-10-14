@@ -167,48 +167,63 @@ func ValidateCredentials(ctx context.Context, c Credentials, now time.Time) (Cer
 	if err := ctx.Err(); err != nil {
 		return CertificateSummary{}, err
 	}
-	if !numericIdentity(c.AppID) || !numericIdentity(c.SellerID) || !c.Environment.Valid() {
-		return CertificateSummary{}, fmt.Errorf("application, seller or environment invalid")
+	if !numericIdentity(c.AppID) {
+		return CertificateSummary{}, ErrAppIDInvalid
+	}
+	if !numericIdentity(c.SellerID) {
+		return CertificateSummary{}, ErrSellerIDInvalid
+	}
+	if !c.Environment.Valid() {
+		return CertificateSummary{}, ErrEnvironmentInvalid
 	}
 	a, err := parseCertificates(c.AppCertPEM, true)
 	if err != nil {
-		return CertificateSummary{}, err
+		return CertificateSummary{}, fmt.Errorf("%w: %v", ErrAppCertificateInvalid, err)
 	}
 	b, err := parseCertificates(c.AlipayCertPEM, true)
 	if err != nil {
-		return CertificateSummary{}, err
+		return CertificateSummary{}, fmt.Errorf("%w: %v", ErrAlipayCertificateInvalid, err)
 	}
 	roots, err := parseCertificates(c.RootCertPEM, false)
 	if err != nil {
-		return CertificateSummary{}, err
+		return CertificateSummary{}, fmt.Errorf("%w: %v", ErrRootCertificateInvalid, err)
 	}
 	key, err := parsePrivateKey(c.PrivateKey)
 	if err != nil {
-		return CertificateSummary{}, err
+		return CertificateSummary{}, fmt.Errorf("%w: %v", ErrPrivateKeyInvalid, err)
 	}
 	cn := a[0].Subject.CommonName
 	if cn != c.AppID && cn != c.SellerID+"-"+c.AppID {
-		return CertificateSummary{}, fmt.Errorf("application certificate identity mismatch")
+		return CertificateSummary{}, ErrAppCertificateIdentity
 	}
 	public, ok := a[0].PublicKey.(*rsa.PublicKey)
 	if !ok || public.N.Cmp(key.N) != 0 || public.E != key.E {
-		return CertificateSummary{}, fmt.Errorf("private key does not match application certificate")
+		return CertificateSummary{}, ErrPrivateKeyMismatch
 	}
 	// This is the reference project's local configuration check, not PKI trust
 	// authentication or merchant ownership proof. The SDK uses complete bundles
 	// to derive SNs; historical root self-signatures are not re-authenticated.
 	for _, r := range roots {
-		if !r.IsCA || now.Before(r.NotBefore) || !now.Before(r.NotAfter) {
-			return CertificateSummary{}, fmt.Errorf("root certificate purpose or validity invalid")
+		if !r.IsCA {
+			return CertificateSummary{}, ErrRootCertificateInvalid
+		}
+		if now.Before(r.NotBefore) || !now.Before(r.NotAfter) {
+			return CertificateSummary{}, ErrRootCertificateValidity
 		}
 	}
-	for _, leaf := range []*x509.Certificate{a[0], b[0]} {
+	for index, leaf := range []*x509.Certificate{a[0], b[0]} {
 		pk, ok := leaf.PublicKey.(*rsa.PublicKey)
 		if !ok || pk.N.BitLen() < 2048 || leaf.IsCA || leaf.KeyUsage&x509.KeyUsageDigitalSignature == 0 {
-			return CertificateSummary{}, fmt.Errorf("signing certificate purpose invalid")
+			if index == 0 {
+				return CertificateSummary{}, ErrAppCertificateInvalid
+			}
+			return CertificateSummary{}, ErrAlipayCertificateInvalid
 		}
 		if now.Before(leaf.NotBefore) || !now.Before(leaf.NotAfter) {
-			return CertificateSummary{}, fmt.Errorf("signing certificate validity invalid")
+			if index == 0 {
+				return CertificateSummary{}, ErrAppCertificateValidity
+			}
+			return CertificateSummary{}, ErrAlipayCertificateValidity
 		}
 	}
 	if err := ctx.Err(); err != nil {

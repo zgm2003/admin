@@ -6,6 +6,7 @@ import (
 	"admin/server/internal/shared/yesno"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -18,6 +19,8 @@ const (
 	MaxSnapshotBytes   = 256 * 1024
 	NotifyPathTemplate = "/api/v1/payment/callback/alipay/{configId}/{version}"
 )
+
+var errNotifyURLInvalid = errors.New("notifyUrl must use HTTPS and the exact callback template")
 
 type CreateInput struct {
 	Name, AppID, SellerID                                         string
@@ -66,12 +69,12 @@ func validateCreate(v CreateInput) error {
 }
 func resolveNotifyURL(template string, id, version int64) (string, error) {
 	if id < 1 || version < 1 || len(template) > 2048 || strings.TrimSpace(template) != template {
-		return "", fmt.Errorf("notifyUrl invalid")
+		return "", errNotifyURLInvalid
 	}
 	raw := strings.ReplaceAll(strings.ReplaceAll(template, "{configId}", strconv.FormatInt(id, 10)), "{version}", strconv.FormatInt(version, 10))
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawPath != "" || u.Opaque != "" || !strings.HasSuffix(template, NotifyPathTemplate) || u.Path != fmt.Sprintf("/api/v1/payment/callback/alipay/%d/%d", id, version) {
-		return "", fmt.Errorf("notifyUrl must use HTTPS and the exact callback template")
+		return "", errNotifyURLInvalid
 	}
 	return u.String(), nil
 }

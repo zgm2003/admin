@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormRules, UploadFile, UploadUserFile } from 'element-plus'
 import type { PaymentConfigOptions } from '@/api/payment/config'
 import type { ConfigDialogMode, ConfigForm } from './types'
 const props = defineProps<{
@@ -17,6 +17,11 @@ const { t } = useI18n()
 const formRef = ref<FormInstance>()
 const credentialFields = ['privateKey', 'appCertPEM', 'alipayCertPEM', 'rootCertPEM'] as const
 type CertificateField = 'appCertPEM' | 'alipayCertPEM' | 'rootCertPEM'
+const importFiles = ref<Record<CertificateField, UploadUserFile[]>>({
+  appCertPEM: [],
+  alipayCertPEM: [],
+  rootCertPEM: [],
+})
 const importErrors = ref<Record<CertificateField, string>>({
   appCertPEM: '',
   alipayCertPEM: '',
@@ -42,11 +47,9 @@ let importEpoch = 0
 function clearImportError(field: (typeof credentialFields)[number]) {
   if (field !== 'privateKey') importErrors.value[field] = ''
 }
-async function importCertificate(field: CertificateField, event: Event) {
-  const input = event.target
-  if (!(input instanceof HTMLInputElement)) return
-  const file = input.files?.[0]
-  input.value = ''
+async function importCertificate(field: CertificateField, uploadFile: UploadFile) {
+  const file = uploadFile.raw
+  importFiles.value[field] = []
   if (file === undefined || props.submitting || !visible.value) return
   const sequence = ++importSequence[field]
   const epoch = importEpoch
@@ -109,7 +112,39 @@ const rules = computed<FormRules<ConfigForm>>(() => {
     result.sellerId = result.appId
   }
   if (props.mode !== 'edit') {
-    result.notifyUrl = [required]
+    result.notifyUrl = [
+      required,
+      {
+        validator: (_rule, value: unknown, callback) => {
+          const template = props.options.notifyPathTemplate
+          const message = () => new Error(t('payment.config.notifyRule', { template }))
+          if (typeof value !== 'string' || value.trim() !== value || !value.endsWith(template)) {
+            callback(message())
+            return
+          }
+          try {
+            const path = template.replace('{configId}', '1').replace('{version}', '1')
+            const url = new URL(value.replace('{configId}', '1').replace('{version}', '1'))
+            if (
+              !value.startsWith('https://') ||
+              url.hostname === '' ||
+              url.username !== '' ||
+              url.password !== '' ||
+              value.includes('?') ||
+              value.includes('#') ||
+              url.pathname !== path
+            ) {
+              callback(message())
+              return
+            }
+            callback()
+          } catch {
+            callback(message())
+          }
+        },
+        trigger: 'blur',
+      },
+    ]
     result.payMethods = [
       {
         type: 'array',
@@ -127,6 +162,7 @@ const rules = computed<FormRules<ConfigForm>>(() => {
 })
 watch(visible, async (open) => {
   importEpoch++
+  importFiles.value = { appCertPEM: [], alipayCertPEM: [], rootCertPEM: [] }
   importErrors.value = { appCertPEM: '', alipayCertPEM: '', rootCertPEM: '' }
   importNames.value = { appCertPEM: '', alipayCertPEM: '', rootCertPEM: '' }
   importing.value = { appCertPEM: false, alipayCertPEM: false, rootCertPEM: false }
@@ -246,29 +282,11 @@ async function save() {
           :prop="field"
           :label="t(`payment.config.${field}`)"
         >
-          <div v-if="field !== 'privateKey'" class="payment-config-form__import">
-            <label class="payment-config-form__file">
-              <span>{{ t('payment.config.importCertificate') }}</span>
-              <input
-                type="file"
-                accept=".crt,.pem"
-                :disabled="submitting || importing[field]"
-                :data-testid="`payment-config-import-${field}`"
-                @change="importCertificate(field, $event)"
-              />
-            </label>
-            <span>{{ importing[field] ? t('payment.config.importing') : importNames[field] }}</span>
-            <span
-              v-if="importErrors[field]"
-              role="alert"
-              class="payment-config-form__import-error"
-              >{{ importErrors[field] }}</span
-            >
-          </div>
           <el-input
             v-model="form[field]"
             type="textarea"
-            :rows="4"
+            :autosize="{ minRows: 4, maxRows: 8 }"
+            clearable
             :placeholder="
               field === 'privateKey'
                 ? props.mode === 'create'
@@ -288,6 +306,28 @@ async function save() {
             "
             @input="clearImportError(field)"
           />
+          <div v-if="field !== 'privateKey'" class="payment-config-form__import">
+            <el-upload
+              v-model:file-list="importFiles[field]"
+              accept=".crt,.pem"
+              :auto-upload="false"
+              :show-file-list="false"
+              :disabled="submitting || importing[field]"
+              :data-testid="`payment-config-import-${field}`"
+              :on-change="(file: UploadFile) => importCertificate(field, file)"
+            >
+              <el-button :disabled="submitting || importing[field]" :loading="importing[field]">
+                {{ t('payment.config.importCertificate') }}
+              </el-button>
+            </el-upload>
+            <span>{{ importing[field] ? t('payment.config.importing') : importNames[field] }}</span>
+            <span
+              v-if="importErrors[field]"
+              role="alert"
+              class="payment-config-form__import-error"
+              >{{ importErrors[field] }}</span
+            >
+          </div>
         </el-form-item>
       </template>
     </el-form>
@@ -325,26 +365,8 @@ async function save() {
     align-items: center;
     gap: 8px;
     width: 100%;
-    margin-bottom: 8px;
+    margin-top: 8px;
     overflow-wrap: anywhere;
-  }
-  &__file {
-    position: relative;
-    display: inline-flex;
-    padding: 0 12px;
-    border: 1px solid var(--el-border-color);
-    border-radius: var(--el-border-radius-base);
-    cursor: pointer;
-    input {
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      width: 100%;
-      cursor: pointer;
-    }
-    &:focus-within {
-      outline: 2px solid var(--el-color-primary);
-    }
   }
   &__import-error {
     color: var(--el-color-danger);

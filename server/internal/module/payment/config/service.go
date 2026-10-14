@@ -54,7 +54,6 @@ func (s *Service) ValidateDependencies() error {
 	}
 	return s.repository.ValidateDependencies()
 }
-func invalid(err error) error    { return apperror.InvalidRequest(err) }
 func dependency(err error) error { return apperror.DependencyUnavailable(err) }
 func mapError(err error) error {
 	switch {

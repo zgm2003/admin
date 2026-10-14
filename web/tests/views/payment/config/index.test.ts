@@ -173,6 +173,33 @@ it('metadata edit saves only name and sort order, without reuploading credential
   await flushPromises()
   expect(api.updatePaymentConfig).toHaveBeenCalledWith(7, { name: 'Renamed', sortOrder: 0 })
 })
+it('validates the server-provided HTTPS callback template before submitting credentials', async () => {
+  permissions(['payment:config:list', 'payment:config:update'])
+  const w = await page()
+  await w.get('[data-testid="payment-config-version"]').trigger('click')
+  await flushPromises()
+  const input = w.get('input[data-testid="payment-config-notify-url"]')
+  for (const invalid of [
+    'http://abc',
+    'https://pay.example.test',
+    row.notifyUrlTemplate + '?token=secret',
+  ]) {
+    await input.setValue(invalid)
+    await w.get('[data-testid="payment-config-save"]').trigger('click')
+    await flushPromises()
+    expect(api.publishPaymentConfigVersion).not.toHaveBeenCalled()
+    await vi.waitFor(() => {
+      const message = w.get('.el-form-item__error').text()
+      expect(message).toContain('HTTPS')
+      expect(message).toContain('{configId}/{version}')
+    })
+  }
+  await input.setValue(row.notifyUrlTemplate)
+  vi.mocked(api.publishPaymentConfigVersion).mockResolvedValue({})
+  await w.get('[data-testid="payment-config-save"]').trigger('click')
+  await flushPromises()
+  expect(api.publishPaymentConfigVersion).toHaveBeenCalledOnce()
+})
 it('clears stale rows on failed refresh', async () => {
   permissions(['payment:config:list'])
   const w = await page()
@@ -251,7 +278,7 @@ async function certificateFile(
   const file = new File([content], name, { type: 'application/x-pem-file' })
   Object.defineProperty(file, 'text', { value: async () => content })
   if (size !== undefined) Object.defineProperty(file, 'size', { value: size })
-  const input = w.get(`[data-testid="payment-config-import-${field}"]`)
+  const input = w.get(`[data-testid="payment-config-import-${field}"] input[type="file"]`)
   Object.defineProperty(input.element, 'files', { configurable: true, value: [file] })
   await input.trigger('change')
   await flushPromises()
@@ -280,6 +307,19 @@ it('imports the three reference certificates locally, preserves numeric methods 
     notifyUrl: row.notifyUrlTemplate,
     payMethods: [1, 2],
   })
+})
+it('uses Element Plus textareas and import buttons for certificate entry', async () => {
+  permissions(['payment:config:list', 'payment:config:update'])
+  const w = await page()
+  await w.get('[data-testid="payment-config-version"]').trigger('click')
+  await flushPromises()
+  for (const field of ['appCertPEM', 'alipayCertPEM', 'rootCertPEM']) {
+    const input = w.get(`textarea[data-testid="payment-config-${field}"]`)
+    await input.setValue('certificate draft')
+    expect((input.element as HTMLTextAreaElement).value).toBe('certificate draft')
+    const importer = w.get(`[data-testid="payment-config-import-${field}"]`)
+    expect(importer.get('button').text()).toBe('导入证书文件')
+  }
 })
 it('rejects oversized or malformed imported files without losing an existing draft', async () => {
   permissions(['payment:config:list', 'payment:config:update'])

@@ -203,6 +203,22 @@ const (
 	KeyCacheNamespaceCOS                MessageKey = "configCacheStatus.options.namespace.cos"
 	KeyCacheNamespacePayment            MessageKey = "configCacheStatus.options.namespace.payment"
 	KeyPaymentConfigCommittedPending    MessageKey = "payment.config.committedPending"
+
+	KeyPaymentConfigNotifyURLInvalid               MessageKey = "payment.config.notifyURLInvalid"
+	KeyPaymentConfigAppIDInvalid                   MessageKey = "payment.config.appIDInvalid"
+	KeyPaymentConfigSellerIDInvalid                MessageKey = "payment.config.sellerIDInvalid"
+	KeyPaymentConfigEnvironmentInvalid             MessageKey = "payment.config.environmentInvalid"
+	KeyPaymentConfigPrivateKeyInvalid              MessageKey = "payment.config.privateKeyInvalid"
+	KeyPaymentConfigAppCertInvalid                 MessageKey = "payment.config.appCertInvalid"
+	KeyPaymentConfigAlipayCertInvalid              MessageKey = "payment.config.alipayCertInvalid"
+	KeyPaymentConfigRootCertInvalid                MessageKey = "payment.config.rootCertInvalid"
+	KeyPaymentConfigAppCertIdentityMismatch        MessageKey = "payment.config.appCertIdentityMismatch"
+	KeyPaymentConfigPrivateKeyMismatch             MessageKey = "payment.config.privateKeyMismatch"
+	KeyPaymentConfigAppCertValidityInvalid         MessageKey = "payment.config.appCertValidityInvalid"
+	KeyPaymentConfigAlipayCertValidityInvalid      MessageKey = "payment.config.alipayCertValidityInvalid"
+	KeyPaymentConfigRootCertValidityInvalid        MessageKey = "payment.config.rootCertValidityInvalid"
+	KeyPaymentConfigCredentialInitializationFailed MessageKey = "payment.config.credentialInitializationFailed"
+
 	KeyCacheScopeGlobal                 MessageKey = "configCacheStatus.options.scope.global"
 	KeyCacheScopeCOS                    MessageKey = "configCacheStatus.options.scope.cos"
 	KeyCacheScopeOther                  MessageKey = "configCacheStatus.options.scope.other"
@@ -233,7 +249,23 @@ const (
 
 var catalogs = map[Locale]map[MessageKey]string{
 	ZhCN: {
-		KeyPaymentConfigCommittedPending:     "支付配置已提交，但缓存发布未完成；请刷新核对，后台任务将重试同步",
+		KeyPaymentConfigCommittedPending: "支付配置已提交，但缓存发布未完成；请刷新核对，后台任务将重试同步",
+
+		KeyPaymentConfigNotifyURLInvalid:               "回调地址（notifyUrl）必须使用 HTTPS，格式为 https://HOST/api/v1/payment/callback/alipay/{configId}/{version}，不得包含账号、查询参数或片段",
+		KeyPaymentConfigAppIDInvalid:                   "APPID（appId）须为 1–64 位数字，请从支付宝平台完整复制",
+		KeyPaymentConfigSellerIDInvalid:                "绑定的商家账号 PID（sellerId）须为 1–64 位数字，请从支付宝平台完整复制",
+		KeyPaymentConfigEnvironmentInvalid:             "支付环境（environment）无效，请选择沙箱或生产环境",
+		KeyPaymentConfigPrivateKeyInvalid:              "应用私钥（privateKey）格式无效，请完整粘贴至少 2048 位的 RSA 私钥，支持 PKCS1/PKCS8 PEM 或原始 Base64",
+		KeyPaymentConfigAppCertInvalid:                 "应用公钥证书（appCertPEM）无效，请导入完整的 RSA2 CRT/PEM 证书文件",
+		KeyPaymentConfigAlipayCertInvalid:              "支付宝公钥证书（alipayCertPEM）无效，请导入完整的 RSA2 CRT/PEM 证书文件",
+		KeyPaymentConfigRootCertInvalid:                "支付宝根证书（rootCertPEM）无效，请导入完整的根证书文件，勿拆分或修改证书包",
+		KeyPaymentConfigAppCertIdentityMismatch:        "应用公钥证书（appCertPEM）与 APPID 或 PID 不匹配，请使用当前应用的证书",
+		KeyPaymentConfigPrivateKeyMismatch:             "应用私钥（privateKey）与应用公钥证书（appCertPEM）不匹配，请使用同一密钥对",
+		KeyPaymentConfigAppCertValidityInvalid:         "应用公钥证书（appCertPEM）已过期或尚未生效，请使用当前有效证书",
+		KeyPaymentConfigAlipayCertValidityInvalid:      "支付宝公钥证书（alipayCertPEM）已过期或尚未生效，请从支付宝平台下载当前有效证书",
+		KeyPaymentConfigRootCertValidityInvalid:        "支付宝根证书（rootCertPEM）已过期或尚未生效，请从支付宝平台下载当前有效根证书包",
+		KeyPaymentConfigCredentialInitializationFailed: "支付宝凭据初始化失败，请检查应用私钥、应用公钥证书、支付宝公钥证书和根证书包是否完整且相互匹配",
+
 		KeyCacheNamespacePayment:             "支付配置",
 		"storage.file.category.image":        "图片",
 		"storage.file.category.video":        "视频",
@@ -469,7 +501,23 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyMenuParentDisabledReason:          "请先启用父级菜单",
 	},
 	EnUS: {
-		KeyPaymentConfigCommittedPending:     "Payment configuration was committed but cache publication is pending. Refresh before retrying; the worker will synchronize it.",
+		KeyPaymentConfigCommittedPending: "Payment configuration was committed but cache publication is pending. Refresh before retrying; the worker will synchronize it.",
+
+		KeyPaymentConfigNotifyURLInvalid:               "Callback URL (notifyUrl) must use HTTPS and the template https://HOST/api/v1/payment/callback/alipay/{configId}/{version}, without credentials, query parameters, or fragments.",
+		KeyPaymentConfigAppIDInvalid:                   "APPID (appId) must contain 1–64 digits. Copy the complete value from Alipay.",
+		KeyPaymentConfigSellerIDInvalid:                "Linked merchant account PID (sellerId) must contain 1–64 digits. Copy the complete value from Alipay.",
+		KeyPaymentConfigEnvironmentInvalid:             "Payment environment (environment) is invalid. Select sandbox or production.",
+		KeyPaymentConfigPrivateKeyInvalid:              "Application private key (privateKey) is invalid. Paste a complete RSA key of at least 2048 bits, in PKCS1/PKCS8 PEM or raw Base64 format.",
+		KeyPaymentConfigAppCertInvalid:                 "Application certificate (appCertPEM) is invalid. Import a complete RSA2 CRT/PEM certificate file.",
+		KeyPaymentConfigAlipayCertInvalid:              "Alipay public certificate (alipayCertPEM) is invalid. Import a complete RSA2 CRT/PEM certificate file.",
+		KeyPaymentConfigRootCertInvalid:                "Alipay root certificates (rootCertPEM) are invalid. Import the complete root certificate bundle without splitting or editing it.",
+		KeyPaymentConfigAppCertIdentityMismatch:        "Application certificate (appCertPEM) does not match APPID or PID. Use the certificate for this application.",
+		KeyPaymentConfigPrivateKeyMismatch:             "Application private key (privateKey) does not match the application certificate (appCertPEM). Use the same key pair.",
+		KeyPaymentConfigAppCertValidityInvalid:         "Application certificate (appCertPEM) has expired or is not yet valid. Use a currently valid certificate.",
+		KeyPaymentConfigAlipayCertValidityInvalid:      "Alipay public certificate (alipayCertPEM) has expired or is not yet valid. Download a currently valid certificate from Alipay.",
+		KeyPaymentConfigRootCertValidityInvalid:        "Alipay root certificates (rootCertPEM) have expired or are not yet valid. Download a currently valid root bundle from Alipay.",
+		KeyPaymentConfigCredentialInitializationFailed: "Alipay credential initialization failed. Check that the application private key, application certificate, Alipay certificate, and root bundle are complete and compatible.",
+
 		KeyCacheNamespacePayment:             "Payment configuration",
 		"storage.file.category.image":        "Images",
 		"storage.file.category.video":        "Videos",

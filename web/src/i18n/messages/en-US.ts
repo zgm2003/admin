@@ -14,7 +14,7 @@ export const enUS = {
   'payment.config.status': 'Status',
   'payment.config.payMethods': 'Pay methods',
   'payment.config.notifyUrl': 'Callback URL template',
-  'payment.config.privateKey': 'Application private key (PEM)',
+  'payment.config.privateKey': 'Application private key',
   'payment.config.appCertPEM': 'Application certificate',
   'payment.config.alipayCertPEM': 'Alipay certificate',
   'payment.config.rootCertPEM': 'Alipay root certificates',
@@ -23,7 +23,8 @@ export const enUS = {
   'payment.config.namePlaceholder': 'e.g. Production Alipay primary',
   'payment.config.appIdPlaceholder': 'Enter the Alipay APPID (digits only)',
   'payment.config.sellerIdPlaceholder': 'Enter the bound merchant account (PID, digits only)',
-  'payment.config.privateKeyPlaceholder': 'Enter the Alipay RSA2 application private key (PEM)',
+  'payment.config.privateKeyPlaceholder':
+    'Enter the complete Alipay RSA2 application private key (PEM or raw Base64)',
   'payment.config.privateKeyRetainPlaceholder':
     'Leave blank to retain the current application private key',
   'payment.config.appCertPEMPlaceholder':
@@ -53,6 +54,8 @@ export const enUS = {
   'payment.config.required': 'This field is required',
   'payment.config.tooLong': 'Value is too long',
   'payment.config.identityRule': 'Enter the numeric identity without removing leading zeros.',
+  'payment.config.notifyRule':
+    'Enter the complete HTTPS callback URL template: https://HOST{template}',
   'payment.config.retainHint':
     'Leave credentials blank to retain existing content. Edit name and sort order separately.',
   'payment.config.importCertificate': 'Import certificate file',

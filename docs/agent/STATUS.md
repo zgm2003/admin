@@ -1,5 +1,12 @@
 # 项目状态
 
+## 支付配置字段错误与证书输入修复（2026-10-14，代码与自动化验证完成）
+
+- 定位创建请求的首个失败为 `notifyUrl=http://abc` 不满足已确认的 HTTPS 回调模板。配置模块对回调地址、APPID/PID、私钥格式、三类证书格式/有效期、应用身份和密钥匹配返回固定双语字段提示；保留 HTTP 400、`code=10001`、`data=null`，不回显输入或第三方解析错误。创建、更新凭据与本地校验共享映射，取消/超时保留依赖错误语义。
+- 私钥与三类证书使用 Element Plus 自动高度文本域，三类证书保留本地 CRT/PEM 导入按钮；通过 `el-upload` 关闭自动上传，仅读取浏览器文件，清理临时文件列表。保留空白凭据沿用与导入失败不覆盖草稿，补回调模板即时校验与中英文 placeholder；私钥文案明确支持 PEM/原始 Base64。
+- 实际验证：新增后端回归先复现通用错误，前端回归先复现无效回调提交和旧导入控件；修复后 `go test -p 1 ./internal/module/payment/... ./internal/payment/alipay ./internal/shared/i18n ./internal/shared/response -count=1`、同范围 `go vet`、`go build ./...` 通过。`pnpm vitest run tests/views/payment/config/index.test.ts tests/i18n/index.test.ts --pool=threads --maxWorkers=1`（2 文件/22 项）、受影响文件 ESLint/Prettier、`pnpm check:architecture`（0 findings）、`pnpm build`（含 vue-tsc）、`git diff --check` 通过；构建保留大 chunk 提示。
+- 用户粘贴的私钥末尾 `=a` 不符合 Base64，支付宝公钥叶证书到期日为 2026-03-14；需重新完整复制私钥、下载有效证书并填写 `https://HOST/api/v1/payment/callback/alipay/{configId}/{version}`。未保存用户私钥、执行真实库迁移或服务启停，未跑全仓测试或浏览器真实账号/支付验收；本轮不新增迁移，不提交 Git。
+
 ## Canvas 参考前端迁移收尾（2026-10-14，代码与前端验证完成）
 
 - `canvas` 直接复用 `D:\github-project\infinite-canvas\web` 的画布、项目、素材、图片/视频生成、提示词、插件和本地 AI 渠道；按相对路径核对参考项目 174 个 src 文件与 9 个 public 资源，均无缺失。参考项目未修改，AI 渠道和画布媒体仍保留参考项目的本地配置/IndexedDB 行为，供应商管理和画布媒体 COS 迁移未实施。
