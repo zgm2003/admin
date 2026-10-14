@@ -49,6 +49,9 @@ func TestConfigActionRoutesAreIndependent(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || len(out.Data.Providers) != 1 || out.Data.Providers[0].Value != 1 {
 		t.Fatal("options advertised unsupported capability")
 	}
+	if out.Data.Defaults.NotifyURL != "https://HOST/api/v1/payment/callback/alipay/{configId}/{version}" {
+		t.Fatalf("creation options do not prefill callback URL: %q", out.Data.Defaults.NotifyURL)
+	}
 }
 
 func TestConfigCreateReportsInvalidNotifyURLWithoutEchoingInput(t *testing.T) {

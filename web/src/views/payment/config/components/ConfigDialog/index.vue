@@ -128,6 +128,7 @@ const rules = computed<FormRules<ConfigForm>>(() => {
             if (
               !value.startsWith('https://') ||
               url.hostname === '' ||
+              url.hostname.toLowerCase() === 'host' ||
               url.username !== '' ||
               url.password !== '' ||
               value.includes('?') ||
@@ -272,7 +273,7 @@ async function save() {
           ><el-input
             v-model="form.notifyUrl"
             :maxlength="options.limits.notifyUrl"
-            :placeholder="`https://HOST${options.notifyPathTemplate}`"
+            :placeholder="options.defaults.notifyUrl"
             data-testid="payment-config-notify-url"
         /></el-form-item>
         <p class="payment-config-form__hint">{{ t('payment.config.notifyHint') }}</p>

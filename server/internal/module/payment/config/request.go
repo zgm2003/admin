@@ -73,6 +73,9 @@ func resolveNotifyURL(template string, id, version int64) (string, error) {
 	}
 	raw := strings.ReplaceAll(strings.ReplaceAll(template, "{configId}", strconv.FormatInt(id, 10)), "{version}", strconv.FormatInt(version, 10))
 	u, err := url.Parse(raw)
+	if err == nil && strings.EqualFold(u.Hostname(), "HOST") {
+		return "", errNotifyURLInvalid
+	}
 	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawPath != "" || u.Opaque != "" || !strings.HasSuffix(template, NotifyPathTemplate) || u.Path != fmt.Sprintf("/api/v1/payment/callback/alipay/%d/%d", id, version) {
 		return "", errNotifyURLInvalid
 	}

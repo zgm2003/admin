@@ -19,6 +19,14 @@ func TestNotifyURLTemplateBindsCoordinates(t *testing.T) {
 		}
 	}
 }
+
+func TestNotifyURLRequiresReplacingHostPlaceholder(t *testing.T) {
+	for _, host := range []string{"HOST", "host:443"} {
+		if _, err := resolveNotifyURL("https://"+host+NotifyPathTemplate, 42, 1); err == nil {
+			t.Fatalf("accepted unchanged callback host placeholder %q", host)
+		}
+	}
+}
 func TestCreateRequestNeedsOnlyPaymentIdentityAndCredentials(t *testing.T) {
 	var r createRequest
 	raw := `{"name":"支付宝沙箱","provider":1,"environment":1,"appId":"20260001","sellerId":"20880001","privateKey":"key","appCertPEM":"app","alipayCertPEM":"alipay","rootCertPEM":"root","notifyUrl":"https://pay.example.test/api/v1/payment/callback/alipay/{configId}/{version}","payMethods":[2,1],"sortOrder":0,"isEnabled":0}`

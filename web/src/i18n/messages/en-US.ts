@@ -55,7 +55,7 @@ export const enUS = {
   'payment.config.tooLong': 'Value is too long',
   'payment.config.identityRule': 'Enter the numeric identity without removing leading zeros.',
   'payment.config.notifyRule':
-    'Enter the complete HTTPS callback URL template: https://HOST{template}',
+    'Enter the complete HTTPS callback URL template: https://HOST{template}, replacing HOST with the backend public domain.',
   'payment.config.retainHint':
     'Leave credentials blank to retain existing content. Edit name and sort order separately.',
   'payment.config.importCertificate': 'Import certificate file',
@@ -64,7 +64,7 @@ export const enUS = {
     'Use a nonempty CRT/PEM certificate file with complete PEM content, up to {max} bytes.',
   'payment.config.importFailed': 'Could not read the certificate file. Select it again.',
   'payment.config.notifyHint':
-    'Use HTTPS and retain the channel ID and version placeholders; the server stores the resolved URL.',
+    'Replace HOST with the backend public domain and keep the callback path. The complete URL is generated when saved.',
   'payment.config.scopeHint':
     'This page manages channels and credentials only. Recharge and callbacks will follow.',
   'payment.config.noList': 'You do not have permission to list configurations.',

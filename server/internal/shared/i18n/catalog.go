@@ -251,7 +251,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 	ZhCN: {
 		KeyPaymentConfigCommittedPending: "支付配置已提交，但缓存发布未完成；请刷新核对，后台任务将重试同步",
 
-		KeyPaymentConfigNotifyURLInvalid:               "回调地址（notifyUrl）必须使用 HTTPS，格式为 https://HOST/api/v1/payment/callback/alipay/{configId}/{version}，不得包含账号、查询参数或片段",
+		KeyPaymentConfigNotifyURLInvalid:               "回调地址（notifyUrl）必须使用 HTTPS，格式为 https://HOST/api/v1/payment/callback/alipay/{configId}/{version}，请将 HOST 替换为后端公网域名，不得包含账号、查询参数或片段",
 		KeyPaymentConfigAppIDInvalid:                   "APPID（appId）须为 1–64 位数字，请从支付宝平台完整复制",
 		KeyPaymentConfigSellerIDInvalid:                "绑定的商家账号 PID（sellerId）须为 1–64 位数字，请从支付宝平台完整复制",
 		KeyPaymentConfigEnvironmentInvalid:             "支付环境（environment）无效，请选择沙箱或生产环境",
@@ -503,7 +503,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 	EnUS: {
 		KeyPaymentConfigCommittedPending: "Payment configuration was committed but cache publication is pending. Refresh before retrying; the worker will synchronize it.",
 
-		KeyPaymentConfigNotifyURLInvalid:               "Callback URL (notifyUrl) must use HTTPS and the template https://HOST/api/v1/payment/callback/alipay/{configId}/{version}, without credentials, query parameters, or fragments.",
+		KeyPaymentConfigNotifyURLInvalid:               "Callback URL (notifyUrl) must use HTTPS and the template https://HOST/api/v1/payment/callback/alipay/{configId}/{version}. Replace HOST with the backend's public domain; do not include credentials, query parameters, or fragments.",
 		KeyPaymentConfigAppIDInvalid:                   "APPID (appId) must contain 1–64 digits. Copy the complete value from Alipay.",
 		KeyPaymentConfigSellerIDInvalid:                "Linked merchant account PID (sellerId) must contain 1–64 digits. Copy the complete value from Alipay.",
 		KeyPaymentConfigEnvironmentInvalid:             "Payment environment (environment) is invalid. Select sandbox or production.",

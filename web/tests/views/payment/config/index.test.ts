@@ -76,7 +76,14 @@ const options: api.PaymentConfigOptions = {
     { value: 0, label: '停用' },
     { value: 1, label: '启用' },
   ],
-  defaults: { provider: 1, environment: 1, payMethods: [1, 2], sortOrder: 0, isEnabled: 0 },
+  defaults: {
+    provider: 1,
+    environment: 1,
+    payMethods: [1, 2],
+    sortOrder: 0,
+    isEnabled: 0,
+    notifyUrl: 'https://HOST/api/v1/payment/callback/alipay/{configId}/{version}',
+  },
   limits: {
     name: 128,
     identity: 64,
@@ -134,6 +141,16 @@ it('renders localized placeholders for payment identifiers and credential inputs
   const w = await page()
   await w.get('[data-testid="payment-config-create"]').trigger('click')
   await flushPromises()
+  const notifyInput = w.get<HTMLInputElement>('input[data-testid="payment-config-notify-url"]')
+  expect(notifyInput.element.value).toBe(
+    'https://HOST/api/v1/payment/callback/alipay/{configId}/{version}',
+  )
+  await notifyInput.setValue(row.notifyUrlTemplate)
+  setLocale('en-US')
+  await flushPromises()
+  expect(notifyInput.element.value).toBe(row.notifyUrlTemplate)
+  setLocale('zh-CN')
+  await flushPromises()
   expect(w.find('[data-testid="payment-config-code"]').exists()).toBe(false)
   expect(w.text()).not.toContain('编码')
   expect(w.text()).toContain('APPID')
@@ -179,9 +196,11 @@ it('validates the server-provided HTTPS callback template before submitting cred
   await w.get('[data-testid="payment-config-version"]').trigger('click')
   await flushPromises()
   const input = w.get('input[data-testid="payment-config-notify-url"]')
+  expect((input.element as HTMLInputElement).value).toBe(row.notifyUrlTemplate)
   for (const invalid of [
     'http://abc',
     'https://pay.example.test',
+    'https://HOST/api/v1/payment/callback/alipay/{configId}/{version}',
     row.notifyUrlTemplate + '?token=secret',
   ]) {
     await input.setValue(invalid)

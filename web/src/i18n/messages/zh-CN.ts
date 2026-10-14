@@ -46,13 +46,15 @@ export const zhCN = {
   'payment.config.required': '请填写此字段',
   'payment.config.tooLong': '内容超出长度限制',
   'payment.config.identityRule': '填写数字身份标识，保留前导零',
-  'payment.config.notifyRule': '请填写完整的 HTTPS 回调地址模板：https://HOST{template}',
+  'payment.config.notifyRule':
+    '请填写完整的 HTTPS 回调地址模板：https://HOST{template}，并将 HOST 替换为后端公网域名',
   'payment.config.retainHint': '空白私钥或证书表示保留当前内容；名称与排序请在编辑中修改',
   'payment.config.importCertificate': '导入证书文件',
   'payment.config.importing': '正在读取证书',
   'payment.config.importInvalid': '证书文件须为非空 CRT/PEM，包含完整证书内容且不超过 {max} 字节',
   'payment.config.importFailed': '证书文件读取失败，请重新选择',
-  'payment.config.notifyHint': '填写 HTTPS 地址并保留渠道 ID 与版本模板；服务端替换后保存完整地址',
+  'payment.config.notifyHint':
+    '只需将 HOST 替换为后端公网域名，保留后面的回调路径；保存时自动生成完整地址',
   'payment.config.scopeHint': '当前只维护支付渠道与凭据，充值与支付回调将在后续阶段接入',
   'payment.config.noList': '当前没有配置列表查询权限',
   'payment.config.deleteConfirm': '确定删除渠道“{name}”？历史凭据版本会保留',
