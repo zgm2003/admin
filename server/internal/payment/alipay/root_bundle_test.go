@@ -1,9 +1,11 @@
 package alipay
 
 import (
+	"admin/server/internal/module/payment"
 	"context"
 	"crypto/x509"
 	"encoding/base64"
+	"errors"
 	sdk "github.com/go-pay/gopay/alipay"
 	"os"
 	"testing"
@@ -33,10 +35,14 @@ func TestAlipayOfficialCertificateBundlesUseSDKRSA2Selection(t *testing.T) {
 	if err != nil || client.AliPayRootCertSN != want {
 		t.Fatalf("SDK root selection: %q %q %v", client.AliPayRootCertSN, want, err)
 	}
-	// Historical SDK leaves prove format, not current validity.
 	c.AlipayCertPEM = string(ali)
-	if _, err := ValidateCredentials(context.Background(), c, time.Now()); err == nil {
-		t.Fatal("expired public fixture accepted as current")
+	if client, err := NewClient(context.Background(), c, time.Now()); err != nil || client.IsProd {
+		t.Fatalf("official sandbox public bundle rejected: %v", err)
+	}
+	// Historical sandbox public certificates must never weaken production checks.
+	c.Environment = payment.EnvironmentProduction
+	if _, err := ValidateCredentials(context.Background(), c, time.Now()); !errors.Is(err, ErrAlipayCertificateValidity) {
+		t.Fatalf("expired public fixture accepted in production: %v", err)
 	}
 }
 

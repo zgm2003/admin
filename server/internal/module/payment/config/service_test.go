@@ -125,6 +125,41 @@ func newServiceTest(t *testing.T, db *gorm.DB, ctx context.Context) (*Service, *
 	s.SetGenerations(g, cache.NewStore(client))
 	return s, client
 }
+
+func TestSandboxExpiredAlipayCredentialLifecycle(t *testing.T) {
+	db, ctx := configDB(t)
+	isolateRedisScope(t, db, ctx)
+	s, redis := newServiceTest(t, db, ctx)
+	t.Cleanup(func() { redis.Delete(ctx, cache.StateKey(configScope)) })
+	input := validInput(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	s.now = func() time.Time { return now }
+	input.AlipayCertPEM = configCertificateWithWindow(t, input.AlipayCertPEM, input.PrivateKey, now.Add(-2*time.Hour), now.Add(-time.Hour))
+	id, err := s.Create(ctx, input)
+	if err != nil {
+		t.Fatalf("sandbox create: %v", err)
+	}
+	got, err := s.Get(ctx, id)
+	if err != nil || !got.Actions.Status {
+		t.Fatalf("sandbox enable action: %v", err)
+	}
+	if err := s.ValidateLocal(ctx, id); err != nil {
+		t.Fatalf("sandbox local validation: %v", err)
+	}
+	if err := s.UpdateStatus(ctx, id, yesno.Yes); err != nil {
+		t.Fatalf("sandbox enable: %v", err)
+	}
+	if err := s.PublishVersion(ctx, id, VersionInput{AlipayCertPEM: &input.AlipayCertPEM, NotifyURL: input.NotifyURL, PayMethods: []payment.PayMethod{payment.PayMethodH5}}); err != nil {
+		t.Fatalf("sandbox credential publication: %v", err)
+	}
+	got, err = s.Get(ctx, id)
+	if err != nil || got.CurrentVersion != 2 || got.IsEnabled != yesno.Yes || !got.Certificates.Alipay.NotAfter.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("sandbox version lifecycle: %v", err)
+	}
+	if err := s.ValidateLocal(ctx, id); err != nil {
+		t.Fatalf("sandbox new version validation: %v", err)
+	}
+}
 func isolateRedisScope(t *testing.T, db *gorm.DB, ctx context.Context) {
 	t.Helper()
 	old := configScope

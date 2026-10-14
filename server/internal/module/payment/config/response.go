@@ -74,9 +74,6 @@ func safeValue(ctx context.Context, c Current, now time.Time) (SafeValue, error)
 	if m.IsEnabled == 1 {
 		status = option.New(ctx, m.IsEnabled, "启用", "Enabled").Label
 	}
-	valid := now.Before(certs.App.NotAfter) && now.Before(certs.Alipay.NotAfter)
-	for _, root := range certs.Roots {
-		valid = valid && now.Before(root.NotAfter)
-	}
+	valid := alipay.ValidateCertificateValidity(m.Environment, certs, now) == nil
 	return SafeValue{ID: m.ID, Name: m.Name, Provider: m.Provider, Environment: m.Environment, AppID: m.AppID, SellerID: m.SellerID, CurrentVersion: m.CurrentVersion, SortOrder: m.SortOrder, IsEnabled: m.IsEnabled, NotifyURL: v.NotifyURL, NotifyURLTemplate: template, PayMethods: append([]payment.PayMethod(nil), v.PayMethods...), CredentialConfigured: v.PrivateKeyCiphertext != "", Certificates: certs, Actions: Actions{Update: true, Status: m.IsEnabled == yesno.Yes || valid, Delete: true, Test: true}, Presentation: Presentation{provider, environment, methods, status}, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
 }

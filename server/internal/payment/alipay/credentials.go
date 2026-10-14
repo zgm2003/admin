@@ -104,6 +104,33 @@ func InspectCertificates(app, ali, root string) (CertificateSummary, error) {
 	}
 	return out, nil
 }
+
+// ValidateCertificateValidity is shared by credential checks and management actions.
+// Alipay's sandbox can distribute expired public certificates; only that expiry
+// is tolerated. Production, activation dates, application and root dates stay strict.
+func ValidateCertificateValidity(environment payment.Environment, certs CertificateSummary, now time.Time) error {
+	if !environment.Valid() {
+		return ErrEnvironmentInvalid
+	}
+	validAt := func(cert CertificateInfo, allowExpired bool) bool {
+		return cert.NotBefore.Before(cert.NotAfter) && !now.Before(cert.NotBefore) && (allowExpired || now.Before(cert.NotAfter))
+	}
+	if len(certs.Roots) == 0 {
+		return ErrRootCertificateInvalid
+	}
+	for _, root := range certs.Roots {
+		if !validAt(root, false) {
+			return ErrRootCertificateValidity
+		}
+	}
+	if !validAt(certs.App, false) {
+		return ErrAppCertificateValidity
+	}
+	if !validAt(certs.Alipay, environment == payment.EnvironmentSandbox) {
+		return ErrAlipayCertificateValidity
+	}
+	return nil
+}
 func numericIdentity(raw string) bool {
 	if len(raw) == 0 || len(raw) > 64 {
 		return false
@@ -203,13 +230,12 @@ func ValidateCredentials(ctx context.Context, c Credentials, now time.Time) (Cer
 	// This is the reference project's local configuration check, not PKI trust
 	// authentication or merchant ownership proof. The SDK uses complete bundles
 	// to derive SNs; historical root self-signatures are not re-authenticated.
+	summary := CertificateSummary{App: certificateInfo(a[0]), Alipay: certificateInfo(b[0]), Roots: make([]CertificateInfo, 0, len(roots))}
 	for _, r := range roots {
 		if !r.IsCA {
 			return CertificateSummary{}, ErrRootCertificateInvalid
 		}
-		if now.Before(r.NotBefore) || !now.Before(r.NotAfter) {
-			return CertificateSummary{}, ErrRootCertificateValidity
-		}
+		summary.Roots = append(summary.Roots, certificateInfo(r))
 	}
 	for index, leaf := range []*x509.Certificate{a[0], b[0]} {
 		pk, ok := leaf.PublicKey.(*rsa.PublicKey)
@@ -219,15 +245,12 @@ func ValidateCredentials(ctx context.Context, c Credentials, now time.Time) (Cer
 			}
 			return CertificateSummary{}, ErrAlipayCertificateInvalid
 		}
-		if now.Before(leaf.NotBefore) || !now.Before(leaf.NotAfter) {
-			if index == 0 {
-				return CertificateSummary{}, ErrAppCertificateValidity
-			}
-			return CertificateSummary{}, ErrAlipayCertificateValidity
-		}
+	}
+	if err := ValidateCertificateValidity(c.Environment, summary, now); err != nil {
+		return CertificateSummary{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return CertificateSummary{}, err
 	}
-	return InspectCertificates(c.AppCertPEM, c.AlipayCertPEM, c.RootCertPEM)
+	return summary, nil
 }

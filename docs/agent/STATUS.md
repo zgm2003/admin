@@ -1,5 +1,29 @@
 # 项目状态
 
+## 支付沙盒真实创建、查询与验签（2026-10-14，真实网关验证完成）
+
+- 按维护者要求读取其指定的原始沙盒凭据 JSON，用当前 NewClient 和 GoPay v1.5.118 实际请求 `https://openapi-sandbox.dl.alipaydev.com/gateway.do`；探针强制仅访问该沙盒主机，使用标准 HTTPS 服务端校验、禁用重定向和调试内容输出。支付宝公钥叶证书真实到期时间为 `2026-03-14T03:25:43Z`，日期确已过，但本轮真实响应仍使用同一证书 SN，且可以用该证书的公钥通过验签，确认沙盒兼容规则并非只让配置保存。
+- 首次 `alipay.trade.precreate` 返回 HTTP 200 / code 10000 和二维码，独立验签通过；未扫码/付款时 query/close 返回已验签的 `40004 / ACQ.TRADE_NOT_EXIST`，只证明预创建与查询接口签名可用，不能据此声称已经形成可查交易。预创建设置 1 分钟超时，没有执行付款。
+- 维护者随后提供沙盒买家用户 ID，创建 0.01 元待付款交易 `CERTCHECK20261014133900a4d87630`：`alipay.trade.create` → 10000；首次 `alipay.trade.query` → 10000 / WAIT_BUYER_PAY；`alipay.trade.close` → 10000；再次 query → 10000 / TRADE_CLOSED。四次均 HTTP 200、SDK 自动验签通过、按原始响应单独进行 RSA2 验签通过、返回证书 SN 与本地一致，商户订单号/支付宝交易号前后对应。未调用支付、扣款或退款接口，订单关闭已真实确认。
+- 实际命令：临时本地探针 `go test ./internal/payment/alipay -run '^TestLocalSandboxGatewayCertificate$' -count=1 -v` 两次通过，分别验证预创建与买家交易闭环；第二次网关调用耗时约 2.75 秒。凭据只从原文件读取，不复制私钥、买家 ID 或完整请求/响应到仓库和日志；临时探针已删除，仅新增本状态记录，未修改运行时代码、表/字段、业务数据库/Redis或服务状态，未提交 Git。本轮不重新运行全仓测试/构建，未验证支付成功到账、异步回调或生产环境。
+
+## 支付沙盒过期公钥证书兼容（2026-10-14，修复与隔离验证完成）
+
+- 根因是当前自有 `ValidateCredentials` 对沙盒支付宝公钥证书也做严格到期拦截，早于 SDK 初始化和网关请求；SDK 沙盒/生产开关原本正确，本轮不修改环境映射。按维护者授权，仅兼容沙盒支付宝公钥叶证书过期，仍拒绝尚未生效、无效日期区间，应用/根证书以及生产支付宝证书保持严格有效期校验，格式、RSA 强度、用途、身份、私钥匹配和 SDK 验签不放宽。
+- `server/internal/payment/alipay/credentials.go` 提供共享有效期规则，`server/internal/module/payment/config/response.go` 同步启用动作判断；新增、换版、本地校验与启用通过现有 NewClient 入口统一生效。原始证书、包内中间证书与实际到期时间保持不变，不加表、字段、菜单、权限或迁移；稳定规则已记录到 `design.md`。
+- 回归先确认失败：沙盒过期公钥新增被拒绝、沙盒启用动作禁用，以及尚未生效证书错误显示可启用；最小实现后通过。补 11 项凭据时间/环境边界、10 项管理动作边界、隔离 PostgreSQL/Redis 的创建→本地校验→启用→换版生命周期；官方公钥双证书包沙盒 SDK 初始化通过，生产仍明确拒绝过期叶证书。保留此前三证书独立导入/完整替换与 PC/H5 网关选择回归。
+- 使用维护者指定的原始沙盒 JSON 通过真实 Handler→Service→Repository 在自动清理的隔离 schema 新增，返回 HTTP 201 / code 0；随后详情启用动作、本地校验、启用、凭据新版本和再次校验均通过，同一凭据改为生产仍返回公钥有效期错误。仅从原文件读取，不将私钥或请求内容写入仓库/日志；临时本地探针已删除，未向支付宝发出请求。
+- 实际验证：`go test -p 1 ./internal/module/payment/... ./internal/payment/alipay ./internal/shared/i18n ./internal/shared/response -count=1`、同范围 `go vet`、`go build ./...` 通过；`pnpm vitest run tests/views/payment/config/index.test.ts tests/api/payment/config.test.ts --pool=threads --maxWorkers=1`（2 文件/17 项）、受影响前端测试 ESLint/Prettier、Go 文件 gofmt 检查及 `git diff --check` 通过。
+- 未跑全仓 Go/Vitest 测试、前端整构建或真实支付/到账/公网回调联调；未修改业务 public schema 或运行时 Redis DB0、未启停服务、未提交 Git，保留原有未跟踪目录。已运行的后端仍需重启加载新代码，本地 HTTPS 回调地址可保存不代表支付宝可从公网访问。
+
+## 支付证书字段与 SDK 环境核对（2026-10-14，诊断与定向测试完成）
+
+- 对维护者指定的本地请求 JSON 只提取公开证书元信息，使用 Windows X509Certificate2 独立解析：`appCertPEM` 为新申请的应用证书，2026-10-14 生效、2027-10-19 到期；`alipayCertPEM` 含支付宝叶证书（2026-03-14 到期）和中间证书（2024-08-01 到期）。截图所示 `appPublicCert.crt` 位于应用公钥证书栏，与请求的 `appCertPEM` 对应；不能把应用证书的有效期套到支付宝证书字段。
+- 加强前端诊断回归：新增/换版使用三份不同内容并核对界面标签和提交字段，另测同一文件名重导入单证书完整替换旧双证书包。相关 2 文件/17 项通过，未复现字段互换、自动增加中间证书或拼接旧内容；测试只使用本地假证书结构，不保存维护者的凭据。
+- 对照旧项目 `order_service.go` 与 `alipay/gateway.go`：旧版 `IsSandbox=(environment==sandbox)` 后传 `!IsSandbox`，当前 `environment=1` 对 SDK 同样传 `isProd=false`，`2` 传 true。直接通过当前 NewClient 与 GoPay 生成 PC/H5 支付 URL，沙盒均为 `openapi-sandbox.dl.alipaydev.com/gateway.do`，生产均为 `openapi.alipay.com/gateway.do`，四个组合通过；仅本地生成地址，没有发出下单或付款请求。
+- 当前错误在自有 `ValidateCredentials` 返回，发生于 SDK 客户端初始化和任何网关请求之前；不是生产网关返回，也没有证据表明 SDK 环境传反。旧版没有同等的本地证书有效期拦截；沙盒策略是否兼容过期支付宝证书仍待维护者确认，本轮未放宽生产或沙盒校验。
+- 实际验证：`go test ./internal/payment/alipay -run 'TestLocalValidationAndSDKContentMode|TestSDKPaymentURLsUseConfiguredEnvironment' -count=1 -v`、`go vet ./internal/payment/alipay`、`pnpm vitest run tests/views/payment/config/index.test.ts tests/api/payment/config.test.ts --pool=threads --maxWorkers=1`、测试文件 ESLint/Prettier 与 `git diff --check` 通过。只增加/加强测试与状态记录，未改运行时代码、数据库/Redis、服务状态或 Git 历史；未跑全仓测试/构建、真实浏览器文件选择与支付联调，保留原有未跟踪目录。
+
 ## 支付回调模板默认填入（2026-10-14，定向验证中）
 
 - 旧项目实际使用固定公共接口 `POST /api/payment/callbacks/alipay`，管理员填写完整通知地址；当前 `{configId}/{version}` 是历史凭据定位设计，不是支付宝要求。当前项目尚无支付订单与回调处理，模板替换不代表回调已接通。

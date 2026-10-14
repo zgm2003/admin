@@ -302,27 +302,91 @@ async function certificateFile(
   await input.trigger('change')
   await flushPromises()
 }
-it('imports the three reference certificates locally, preserves numeric methods and retains blank credentials', async () => {
+it.each(['create', 'version'] as const)(
+  '%s submits distinct imported certificates in their own labeled fields without adding certificate blocks',
+  async (mode) => {
+    permissions(['payment:config:list', 'payment:config:create', 'payment:config:update'])
+    vi.mocked(api.createPaymentConfig).mockResolvedValue({ id: 8 })
+    vi.mocked(api.publishPaymentConfigVersion).mockResolvedValue({})
+    const w = await page()
+    await w.get(`[data-testid="payment-config-${mode}"]`).trigger('click')
+    await flushPromises()
+    if (mode === 'create') {
+      await w.get('[data-testid="payment-config-name"]').setValue('Local fixture')
+      await w.get('[data-testid="payment-config-app-id"]').setValue('20260001')
+      await w.get('[data-testid="payment-config-seller-id"]').setValue('20880001')
+      await w.get('[data-testid="payment-config-private-key"]').setValue('local-fixture-key')
+      await w.get('[data-testid="payment-config-notify-url"]').setValue(row.notifyUrlTemplate)
+    }
+    const certificates = {
+      appCertPEM: '-----BEGIN CERTIFICATE-----\nYXBw\n-----END CERTIFICATE-----',
+      alipayCertPEM:
+        '-----BEGIN CERTIFICATE-----\nYWxpcGF5\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\naW50ZXJtZWRpYXRl\n-----END CERTIFICATE-----',
+      rootCertPEM: '-----BEGIN CERTIFICATE-----\ncm9vdA==\n-----END CERTIFICATE-----',
+    }
+    const fields = [
+      ['appCertPEM', '应用公钥证书'],
+      ['alipayCertPEM', '支付宝公钥证书'],
+      ['rootCertPEM', '支付宝根证书'],
+    ] as const
+    for (const [field, label] of fields) {
+      const input = w.get(`textarea[data-testid="payment-config-${field}"]`)
+      expect(input.element.closest('.el-form-item')?.querySelector('label')?.textContent).toBe(
+        label,
+      )
+      await certificateFile(w, field, `${field}.crt`, certificates[field])
+    }
+    for (const [field] of fields) {
+      expect(
+        w.get<HTMLTextAreaElement>(`textarea[data-testid="payment-config-${field}"]`).element.value,
+      ).toBe(certificates[field])
+    }
+    await w.get('[data-testid="payment-config-save"]').trigger('click')
+    await flushPromises()
+    const credentials = {
+      ...certificates,
+      privateKey: mode === 'create' ? 'local-fixture-key' : null,
+      notifyUrl: row.notifyUrlTemplate,
+      payMethods: [1, 2],
+    }
+    if (mode === 'create') {
+      expect(api.createPaymentConfig).toHaveBeenCalledExactlyOnceWith({
+        ...credentials,
+        name: 'Local fixture',
+        provider: 1,
+        environment: 1,
+        appId: '20260001',
+        sellerId: '20880001',
+        sortOrder: 0,
+        isEnabled: 0,
+      })
+    } else {
+      expect(api.publishPaymentConfigVersion).toHaveBeenCalledExactlyOnceWith(7, credentials)
+    }
+  },
+)
+it('reimporting a single certificate replaces the previous bundle instead of retaining or appending it', async () => {
   permissions(['payment:config:list', 'payment:config:update'])
   vi.mocked(api.publishPaymentConfigVersion).mockResolvedValue({})
   const w = await page()
   await w.get('[data-testid="payment-config-version"]').trigger('click')
   await flushPromises()
-  const pem = '-----BEGIN CERTIFICATE-----\nZml4dHVyZQ==\n-----END CERTIFICATE-----'
-  for (const field of ['appCertPEM', 'alipayCertPEM', 'rootCertPEM']) {
-    await certificateFile(w, field, `${field}.crt`, pem)
-    expect(
-      (w.get(`textarea[data-testid="payment-config-${field}"]`).element as HTMLTextAreaElement)
-        .value,
-    ).toBe(pem)
-  }
+  const oldBundle =
+    '-----BEGIN CERTIFICATE-----\nb2xk\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\naW50ZXJtZWRpYXRl\n-----END CERTIFICATE-----'
+  const replacement = '-----BEGIN CERTIFICATE-----\nbmV3\n-----END CERTIFICATE-----'
+  await certificateFile(w, 'alipayCertPEM', 'alipay.crt', oldBundle)
+  await certificateFile(w, 'alipayCertPEM', 'alipay.crt', replacement)
+  expect(
+    w.get<HTMLTextAreaElement>('textarea[data-testid="payment-config-alipayCertPEM"]').element
+      .value,
+  ).toBe(replacement)
   await w.get('[data-testid="payment-config-save"]').trigger('click')
   await flushPromises()
-  expect(api.publishPaymentConfigVersion).toHaveBeenCalledWith(7, {
+  expect(api.publishPaymentConfigVersion).toHaveBeenCalledExactlyOnceWith(7, {
     privateKey: null,
-    appCertPEM: pem,
-    alipayCertPEM: pem,
-    rootCertPEM: pem,
+    appCertPEM: null,
+    alipayCertPEM: replacement,
+    rootCertPEM: null,
     notifyUrl: row.notifyUrlTemplate,
     payMethods: [1, 2],
   })

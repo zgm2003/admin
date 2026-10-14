@@ -1,6 +1,7 @@
 package config
 
 import (
+	"admin/server/internal/module/payment"
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
@@ -175,7 +176,10 @@ func TestConfigCreateDistinguishesCertificateValidityAndMismatch(t *testing.T) {
 		change                  func(*CreateInput)
 	}{
 		{"expired application", "payment.config.appCertValidityInvalid", "appCertPEM", func(c *CreateInput) { c.AppCertPEM = expire(c.AppCertPEM) }},
-		{"expired Alipay", "payment.config.alipayCertValidityInvalid", "alipayCertPEM", func(c *CreateInput) { c.AlipayCertPEM = expire(c.AlipayCertPEM) }},
+		{"expired production Alipay", "payment.config.alipayCertValidityInvalid", "alipayCertPEM", func(c *CreateInput) {
+			c.Environment = payment.EnvironmentProduction
+			c.AlipayCertPEM = expire(c.AlipayCertPEM)
+		}},
 		{"expired root", "payment.config.rootCertValidityInvalid", "rootCertPEM", func(c *CreateInput) { c.RootCertPEM = expire(c.RootCertPEM) }},
 		{"application identity", "payment.config.appCertIdentityMismatch", "APPID", func(c *CreateInput) { c.AppID = "20269999" }},
 		{"private key mismatch", "payment.config.privateKeyMismatch", "privateKey", func(c *CreateInput) { c.PrivateKey = validInput(t).PrivateKey }},
