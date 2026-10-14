@@ -1,31 +1,66 @@
-import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
-import { resolve } from 'node:path'
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import react from "@vitejs/plugin-react";
+import { defineConfig, type Plugin } from "vite";
+
+import { parseChangelog } from "./src/lib/release";
+
+const webDir = dirname(fileURLToPath(import.meta.url));
+const localVersion = readFileSync(resolve(webDir, "VERSION"), "utf8").trim() || "dev";
+const localChangelog = readFileSync(resolve(webDir, "CHANGELOG.md"), "utf8");
+
+// Expose /plugins/index.json with local plugin files from public/plugins.
+// The frontend can discover and list them when enabled; development reads the directory live, while builds emit a static registry.
+function localPluginsManifest(): Plugin {
+    const pluginsDir = resolve(webDir, "public/plugins");
+    const listLocalPlugins = () => {
+        try {
+            return readdirSync(pluginsDir)
+                .filter((file) => file.endsWith(".js"))
+                .sort()
+                .map((file) => `/plugins/${file}`);
+        } catch {
+            return [];
+        }
+    };
+    return {
+        name: "local-plugins-manifest",
+        configureServer(server) {
+            server.middlewares.use("/plugins/index.json", (_req, res) => {
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify(listLocalPlugins()));
+            });
+        },
+        generateBundle() {
+            this.emitFile({ type: "asset", fileName: "plugins/index.json", source: JSON.stringify(listLocalPlugins()) });
+        },
+    };
+}
 
 export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: { '@': resolve(__dirname, 'src') },
-  },
-  server: {
-    host: 'localhost',
-    port: 16302,
-    strictPort: true,
-    proxy: {
-      '/api': {
-        target: process.env.VITE_API_BASE_URL ?? 'http://localhost:16301',
-        changeOrigin: true,
-        // The API currently has the Admin local origin in its allow-list. The
-        // proxy keeps local Canvas requests same-origin in the browser while
-        // preserving that explicit server-side origin check.
-        headers: { Origin: process.env.VITE_AUTH_ORIGIN ?? 'http://localhost:16300' },
-        ws: true,
-      },
+    base: process.env.VITE_BASE || "/",
+    plugins: [react(), localPluginsManifest()],
+    server: {
+        host: "localhost",
+        port: 16302,
+        strictPort: true,
+        proxy: {
+            "/api": {
+                target: process.env.VITE_API_BASE_URL || "http://localhost:16301",
+                changeOrigin: true,
+                headers: { Origin: process.env.VITE_AUTH_ORIGIN || "http://localhost:16300" },
+                ws: true,
+            },
+        },
     },
-  },
-  test: {
-    environment: 'jsdom',
-    setupFiles: ['./tests/setup.ts'],
-    include: ['tests/**/*.{test,spec}.{ts,tsx}'],
-  },
-})
+    resolve: {
+        alias: {
+            "@": resolve(webDir, "src"),
+        },
+    },
+    define: {
+        __APP_VERSION__: JSON.stringify(localVersion),
+        __APP_RELEASES__: JSON.stringify(parseChangelog(localChangelog)),
+    },
+});

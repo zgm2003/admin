@@ -173,7 +173,7 @@ func TestRuntimeLeaderRetainsWorkBudgetAndFollowerIsBounded(t *testing.T) {
 
 func TestCatalogWriteBudgetMatchesSnapshotEncoding(t *testing.T) {
 	db, ctx := configDB(t)
-	if err := db.WithContext(ctx).Exec(`INSERT INTO payment_config(code,name,provider,environment,app_id,seller_id,current_version) SELECT 'local_'||n,repeat('&',128),1,1,n::text,'20880001',1 FROM generate_series(1,349)n; INSERT INTO payment_config_version(config_id,version,private_key_ciphertext,app_cert_pem,alipay_cert_pem,root_cert_pem,notify_url,pay_methods) SELECT id,1,'x','a','b','c','https://pay.example.test/api/v1/payment/callback/alipay/'||id||'/1',ARRAY[1]::smallint[] FROM payment_config`).Error; err != nil {
+	if err := db.WithContext(ctx).Exec(`INSERT INTO payment_config(name,provider,environment,app_id,seller_id,current_version) SELECT repeat('&',128),1,1,n::text,'20880001',1 FROM generate_series(1,349)n; INSERT INTO payment_config_version(config_id,version,private_key_ciphertext,app_cert_pem,alipay_cert_pem,root_cert_pem,notify_url,pay_methods) SELECT id,1,'x','a','b','c','https://pay.example.test/api/v1/payment/callback/alipay/'||id||'/1',ARRAY[1]::smallint[] FROM payment_config`).Error; err != nil {
 		t.Fatal(err)
 	}
 	r := NewRepository(db)

@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-var ErrIdentityConflict = errors.New("payment configuration code or application already exists")
+var ErrIdentityConflict = errors.New("payment application already exists")
 var configScope = cache.Scope{Namespace: "payment.config", ScopeKey: "global"}
 
 type Repository struct {
@@ -36,14 +36,14 @@ func quiet(db *gorm.DB) *gorm.DB {
 }
 func mapDatabaseError(err error) error {
 	var pg *pgconn.PgError
-	if errors.As(err, &pg) && pg.Code == "23505" && (pg.ConstraintName == "ux_payment_config_code_active" || pg.ConstraintName == "ux_payment_config_app_active") {
+	if errors.As(err, &pg) && pg.Code == "23505" && pg.ConstraintName == "ux_payment_config_app_active" {
 		return ErrIdentityConflict
 	}
 	return err
 }
 func filter(db *gorm.DB, q ListQuery) *gorm.DB {
 	if q.Keyword != "" {
-		db = db.Where("name ILIKE ? OR code ILIKE ? OR app_id ILIKE ?", "%"+q.Keyword+"%", "%"+q.Keyword+"%", "%"+q.Keyword+"%")
+		db = db.Where("name ILIKE ? OR app_id ILIKE ? OR seller_id ILIKE ?", "%"+q.Keyword+"%", "%"+q.Keyword+"%", "%"+q.Keyword+"%")
 	}
 	if q.IsEnabled != nil {
 		db = db.Where("is_enabled=?", *q.IsEnabled)
@@ -95,7 +95,7 @@ func (r *Repository) CatalogFacts(ctx context.Context) ([]CatalogItem, error) {
 }
 func catalogFacts(ctx context.Context, db *gorm.DB) ([]CatalogItem, error) {
 	rows := []CatalogItem{}
-	err := db.WithContext(ctx).Table("payment_config").Select("id,code,name,provider,environment,app_id,seller_id,current_version,sort_order,is_enabled").Where("deleted_at IS NULL").Order("sort_order,id").Limit(MaxSnapshotBytes/128 + 1).Scan(&rows).Error
+	err := db.WithContext(ctx).Table("payment_config").Select("id,name,provider,environment,app_id,seller_id,current_version,sort_order,is_enabled").Where("deleted_at IS NULL").Order("sort_order,id").Limit(MaxSnapshotBytes/128 + 1).Scan(&rows).Error
 	if len(rows) > MaxSnapshotBytes/128 {
 		return nil, fmt.Errorf("payment catalog size limit exceeded")
 	}

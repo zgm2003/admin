@@ -23,7 +23,6 @@ vi.mock('@/api/payment/config', () => ({
 }))
 const row: api.PaymentConfig = {
   id: 7,
-  code: 'alipay_main',
   name: 'Main',
   provider: 1,
   environment: 1,
@@ -79,7 +78,6 @@ const options: api.PaymentConfigOptions = {
   ],
   defaults: { provider: 1, environment: 1, payMethods: [1, 2], sortOrder: 0, isEnabled: 0 },
   limits: {
-    code: 64,
     name: 128,
     identity: 64,
     notifyUrl: 2048,
@@ -130,6 +128,39 @@ it('uses backend presentation and exact action permissions', async () => {
   expect(w.text()).toContain('服务端通道')
   expect(w.text()).toContain('服务端环境')
   expect(w.find('[data-testid="payment-config-edit"]').exists()).toBe(false)
+})
+it('renders localized placeholders for payment identifiers and credential inputs', async () => {
+  permissions(['payment:config:list', 'payment:config:create'])
+  const w = await page()
+  await w.get('[data-testid="payment-config-create"]').trigger('click')
+  await flushPromises()
+  expect(w.find('[data-testid="payment-config-code"]').exists()).toBe(false)
+  expect(w.text()).not.toContain('编码')
+  expect(w.text()).toContain('APPID')
+  expect(w.text()).toContain('绑定的商家账号（PID）')
+  expect(w.text()).toContain('配置名称')
+  expect(w.text()).not.toContain('应用名称')
+  expect(w.get('input[placeholder="例如：支付宝生产主配置"]').attributes('placeholder')).toBe(
+    '例如：支付宝生产主配置',
+  )
+  expect(w.get('input[placeholder="请输入支付宝 APPID（纯数字）"]').attributes('placeholder')).toBe(
+    '请输入支付宝 APPID（纯数字）',
+  )
+  expect(
+    w.get('input[placeholder="请输入绑定的商家账号（PID，纯数字）"]').attributes('placeholder'),
+  ).toBe('请输入绑定的商家账号（PID，纯数字）')
+  expect(
+    w.get('textarea[data-testid="payment-config-private-key"]').attributes('placeholder'),
+  ).toContain('RSA2')
+  expect(
+    w.get('textarea[data-testid="payment-config-appCertPEM"]').attributes('placeholder'),
+  ).toContain('PEM')
+  expect(
+    w.get('textarea[data-testid="payment-config-alipayCertPEM"]').attributes('placeholder'),
+  ).toContain('PEM')
+  expect(
+    w.get('textarea[data-testid="payment-config-rootCertPEM"]').attributes('placeholder'),
+  ).toContain('PEM')
 })
 it('metadata edit saves only name and sort order, without reuploading credentials', async () => {
   permissions(['payment:config:list', 'payment:config:update'])

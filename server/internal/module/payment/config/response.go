@@ -24,7 +24,6 @@ type Presentation struct {
 }
 type SafeValue struct {
 	ID                   int64                     `json:"id"`
-	Code                 string                    `json:"code"`
 	Name                 string                    `json:"name"`
 	Provider             payment.Provider          `json:"provider"`
 	Environment          payment.Environment       `json:"environment"`
@@ -79,5 +78,5 @@ func safeValue(ctx context.Context, c Current, now time.Time) (SafeValue, error)
 	for _, root := range certs.Roots {
 		valid = valid && now.Before(root.NotAfter)
 	}
-	return SafeValue{ID: m.ID, Code: m.Code, Name: m.Name, Provider: m.Provider, Environment: m.Environment, AppID: m.AppID, SellerID: m.SellerID, CurrentVersion: m.CurrentVersion, SortOrder: m.SortOrder, IsEnabled: m.IsEnabled, NotifyURL: v.NotifyURL, NotifyURLTemplate: template, PayMethods: append([]payment.PayMethod(nil), v.PayMethods...), CredentialConfigured: v.PrivateKeyCiphertext != "", Certificates: certs, Actions: Actions{Update: true, Status: m.IsEnabled == yesno.Yes || valid, Delete: true, Test: true}, Presentation: Presentation{provider, environment, methods, status}, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
+	return SafeValue{ID: m.ID, Name: m.Name, Provider: m.Provider, Environment: m.Environment, AppID: m.AppID, SellerID: m.SellerID, CurrentVersion: m.CurrentVersion, SortOrder: m.SortOrder, IsEnabled: m.IsEnabled, NotifyURL: v.NotifyURL, NotifyURLTemplate: template, PayMethods: append([]payment.PayMethod(nil), v.PayMethods...), CredentialConfigured: v.PrivateKeyCiphertext != "", Certificates: certs, Actions: Actions{Update: true, Status: m.IsEnabled == yesno.Yes || valid, Delete: true, Test: true}, Presentation: Presentation{provider, environment, methods, status}, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
 }

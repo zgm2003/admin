@@ -4,12 +4,11 @@ export const enUS = {
   'navigation.payment': 'Payments',
   'navigation.paymentConfig': 'Payment configuration',
   'payment.config.channel': 'Channel',
-  'payment.config.code': 'Code',
-  'payment.config.name': 'Name',
+  'payment.config.name': 'Config Name',
   'payment.config.provider': 'Provider',
   'payment.config.environment': 'Environment',
-  'payment.config.appId': 'Application ID',
-  'payment.config.sellerId': 'Seller ID',
+  'payment.config.appId': 'APPID',
+  'payment.config.sellerId': 'Bound merchant account (PID)',
   'payment.config.currentVersion': 'Credential version',
   'payment.config.sortOrder': 'Sort order',
   'payment.config.status': 'Status',
@@ -19,7 +18,20 @@ export const enUS = {
   'payment.config.appCertPEM': 'Application certificate',
   'payment.config.alipayCertPEM': 'Alipay certificate',
   'payment.config.rootCertPEM': 'Alipay root certificates',
-  'payment.config.keyword': 'Name / code / application ID',
+  'payment.config.keyword': 'Config name / APPID / PID',
+  'payment.config.keywordPlaceholder': 'Enter config name, APPID, or PID',
+  'payment.config.namePlaceholder': 'e.g. Production Alipay primary',
+  'payment.config.appIdPlaceholder': 'Enter the Alipay APPID (digits only)',
+  'payment.config.sellerIdPlaceholder': 'Enter the bound merchant account (PID, digits only)',
+  'payment.config.privateKeyPlaceholder': 'Enter the Alipay RSA2 application private key (PEM)',
+  'payment.config.privateKeyRetainPlaceholder':
+    'Leave blank to retain the current application private key',
+  'payment.config.appCertPEMPlaceholder':
+    'Paste the application certificate PEM, or import a .crt/.pem file',
+  'payment.config.alipayCertPEMPlaceholder':
+    'Paste the Alipay public certificate PEM, or import a .crt/.pem file',
+  'payment.config.rootCertPEMPlaceholder':
+    'Paste the Alipay root certificate PEM, or import a .crt/.pem file',
   'payment.config.actions': 'Actions',
   'payment.config.create': 'Create',
   'payment.config.edit': 'Edit',
@@ -40,8 +52,6 @@ export const enUS = {
   'payment.config.requestFailed': 'Request failed',
   'payment.config.required': 'This field is required',
   'payment.config.tooLong': 'Value is too long',
-  'payment.config.codeRule':
-    'Start with a lowercase letter; use lowercase letters, digits and underscores.',
   'payment.config.identityRule': 'Enter the numeric identity without removing leading zeros.',
   'payment.config.retainHint':
     'Leave credentials blank to retain existing content. Edit name and sort order separately.',

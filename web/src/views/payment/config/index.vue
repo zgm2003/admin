@@ -33,7 +33,14 @@ const filters = ref<SearchFormModel<{ keyword: string; status: number | '' }>>({
   status: '',
 })
 const searchFields = computed<SearchField<{ keyword: string; status: number | '' }>[]>(() => [
-  { key: 'keyword', type: 'input', label: t('payment.config.keyword'), resetValue: '', width: 260 },
+  {
+    key: 'keyword',
+    type: 'input',
+    label: t('payment.config.keyword'),
+    placeholder: t('payment.config.keywordPlaceholder'),
+    resetValue: '',
+    width: 260,
+  },
   {
     key: 'status',
     type: 'select-v2',
@@ -78,7 +85,6 @@ let detailSequence = 0
 let alive = true
 function emptyForm(): ConfigForm {
   return {
-    code: '',
     name: '',
     provider: 0,
     environment: 0,
@@ -157,7 +163,6 @@ function openEdit(row: PaymentConfig, mode: 'edit' | 'version'): void {
     return
   form.value = {
     ...emptyForm(),
-    code: row.code,
     name: row.name,
     provider: row.provider,
     environment: row.environment,
@@ -378,8 +383,7 @@ onBeforeUnmount(() => {
       >
       <template #cell-identity="{ row }: { row: PaymentConfig }"
         ><div class="payment-config-page__identity">
-          <strong>{{ row.name }}</strong
-          ><code>{{ row.code }}</code>
+          <strong>{{ row.name }}</strong>
         </div></template
       >
       <template #cell-provider="{ row }: { row: PaymentConfig }"
@@ -486,9 +490,6 @@ onBeforeUnmount(() => {
           <el-descriptions-item :label="t('payment.config.name')">{{
             detail.name
           }}</el-descriptions-item>
-          <el-descriptions-item :label="t('payment.config.code')">{{
-            detail.code
-          }}</el-descriptions-item>
           <el-descriptions-item :label="t('payment.config.provider')"
             >{{ detail.presentation.provider }} /
             {{ detail.presentation.environment }}</el-descriptions-item
@@ -545,10 +546,6 @@ onBeforeUnmount(() => {
     flex-direction: column;
     align-items: flex-start;
     gap: 6px;
-    code {
-      color: var(--el-text-color-secondary);
-      font-size: 12px;
-    }
   }
   &__tags {
     display: flex;

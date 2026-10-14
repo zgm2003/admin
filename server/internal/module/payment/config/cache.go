@@ -23,7 +23,6 @@ var errGenerationAdvanced = errors.New("payment generation advanced")
 
 type CatalogItem struct {
 	ID             int64               `json:"id"`
-	Code           string              `json:"code"`
 	Name           string              `json:"name"`
 	Provider       payment.Provider    `json:"provider"`
 	Environment    payment.Environment `json:"environment"`
@@ -103,7 +102,7 @@ func validateSnapshot(p snapshot) error {
 		}
 		ids := map[int64]bool{}
 		for _, m := range p.Catalog {
-			if m.ID < 1 || ids[m.ID] || !codePattern.MatchString(m.Code) || validateMetadata(MetadataInput{m.Name, m.SortOrder}) != nil || !identityPattern.MatchString(m.AppID) || !identityPattern.MatchString(m.SellerID) || !m.Provider.Supported() || !m.Environment.Valid() || !yesno.IsValid(m.IsEnabled) || m.CurrentVersion < 1 {
+			if m.ID < 1 || ids[m.ID] || validateMetadata(MetadataInput{m.Name, m.SortOrder}) != nil || !identityPattern.MatchString(m.AppID) || !identityPattern.MatchString(m.SellerID) || !m.Provider.Supported() || !m.Environment.Valid() || !yesno.IsValid(m.IsEnabled) || m.CurrentVersion < 1 {
 				return errSnapshotCorrupt
 			}
 			ids[m.ID] = true

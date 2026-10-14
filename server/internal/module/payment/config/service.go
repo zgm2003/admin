@@ -126,7 +126,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (int64, error) {
 		return 0, dependency(err)
 	}
 	now := s.now().UTC()
-	m := &Model{Code: in.Code, Name: strings.TrimSpace(in.Name), Provider: in.Provider, Environment: in.Environment, AppID: in.AppID, SellerID: in.SellerID, SortOrder: in.SortOrder, IsEnabled: in.IsEnabled, CreatedAt: now, UpdatedAt: now}
+	m := &Model{Name: strings.TrimSpace(in.Name), Provider: in.Provider, Environment: in.Environment, AppID: in.AppID, SellerID: in.SellerID, SortOrder: in.SortOrder, IsEnabled: in.IsEnabled, CreatedAt: now, UpdatedAt: now}
 	v := Version{PrivateKeyCiphertext: ciphertext, AppCertPEM: strings.TrimSpace(in.AppCertPEM), AlipayCertPEM: strings.TrimSpace(in.AlipayCertPEM), RootCertPEM: strings.TrimSpace(in.RootCertPEM), NotifyURL: in.NotifyURL, PayMethods: PayMethods(methods), CreatedAt: now, UpdatedAt: now}
 	if err = validateVersionSize(v); err != nil {
 		return 0, invalid(err)

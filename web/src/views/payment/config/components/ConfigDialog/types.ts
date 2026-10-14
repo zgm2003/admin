@@ -1,7 +1,6 @@
 import type { YesNo } from '@/enums/yesNo'
 export type ConfigDialogMode = 'create' | 'edit' | 'version'
 export interface ConfigForm {
-  code: string
   name: string
   provider: number
   environment: number

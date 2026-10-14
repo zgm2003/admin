@@ -1,5 +1,11 @@
 # 项目状态
 
+## Canvas 请求层统一响应与错误通知（2026-10-14，代码与自动化验证完成）
+
+- Canvas `src/utils/request.ts` 统一处理精确 `code/data/message` envelope、HTTP/网络/取消/协议错误、401 刷新、匿名探测、登录凭据内联例外和 RBAC 错误通知；不再把代理返回的 HTML/空响应泄露为 `API response must be JSON`。500、网络、协议、403、404、429 等均映射为用户可读语义，取消请求不通知，并对共享刷新失败去重一次。
+- 新增 `HttpError` 与 Sonner `Toaster`；请求层支持显式 `successMessage`，成功响应由请求层统一解包并可统一提示。登录、个人资料、身份绑定和改密页面移除接口错误重复展示，只保留登录凭据内联、表单校验和重试/局部状态。
+- 实际验证：`pnpm exec vitest run tests/utils/request.test.ts --pool=threads --maxWorkers=1`（13 项）、受影响登录/个人中心测试（3 文件/16 项）、`pnpm typecheck`、`pnpm test`（8 文件/45 项）、`pnpm build` 均通过，`git diff --check` 通过。未做真实浏览器账号验收；未改数据库、权限、上传规则或 Redis，未提交 Git。
+
 ## Canvas 个人中心前端与共享接口接入（2026-10-13，代码与自动化验证完成）
 
 - 个人中心位于 `canvas/src/views/user/profile`，按 `views -> api/user -> utils/request` 接入资料读取/保存、后端性别选项、首次设密、原密码改密、验证码改密和邮箱/手机绑定换绑；换绑提交当前身份与新身份两份 proof，不通过资料接口修改身份。
@@ -36,6 +42,8 @@
 - 后端 `go vet ./...`、`go build ./...` 通过。`go test -p 1 ./... -count=1` 未全绿：storage/file 既有 Service 分层门禁、architecture/database 历史迁移 fixture 及并行 Canvas runner 失败；支付并发用例在全仓负载下出现固定等待预算耗尽，现只允许明确竞争错误后的幂等重试，定向 3 次及最终相关范围通过，不扩大生产超时。未修无关失败或宣称全仓通过。
 - 前端 `pnpm vitest run tests/api/payment/config.test.ts tests/views/payment/config/index.test.ts tests/i18n/index.test.ts --pool=threads --maxWorkers=1` 3 文件 22 项通过；`pnpm typecheck`、受影响 Prettier/ESLint、`pnpm check:architecture`（0 findings）、`pnpm build` 通过，保留既有富文本大 chunk 提示。补证书导入错误不覆盖草稿、确认中权限撤销/重复操作、committed-pending 刷新但不伪报成功；未运行全仓前端测试或真实浏览器账号验收。
 - PowerShell 语法检查通过；最终 `psql --no-psqlrc --set=ON_ERROR_STOP=1` 的 `BEGIN READ ONLY` 确认真实 public 无两张支付表、支付菜单为 0、Admin/Canvas menu_version=20/5。未执行真实支付 migration、未导出 current.sql、未启停服务、未 Git 提交；先由维护者执行本配置迁移并验收，再按一步一资源继续固定套餐，尚未实现支付下单/回调或 AI。
+- 追加 UI 术语与 CRUD 规范：支付配置按支付宝官方截图使用 `APPID`、`绑定的商家账号（PID）`，不显示含义不准确的“应用 ID/商户 ID”；新增、换版、证书、私钥、URL、筛选关键字均补齐中英文 locale placeholder。`$admin-crud` 已加入 placeholder 与官方协议术语的强制检查项，并要求对应前端回归覆盖。
+- 按维护者确认移除支付配置内部编码：创建表单、API DTO、Model、缓存快照、列表搜索和详情均不再使用 `code`；配置以数据库 ID 关联，搜索保留配置名称、APPID、PID。新增 `docs/database/2026-10-14-payment-config-remove-code.sql` 处理已落地旧表的幂等删除列、索引、CHECK 和 guard 更新；旧迁移的空库结构也同步为无编码。真实库已只读确认当前仍有 `payment_config.code`，尚未执行升级迁移。
 
 - 维护者明确先完成支付体系，再建设 AI 体系；当前施工只覆盖支付，不并行新增 AI 模块或修改 Canvas。
 - 参考旧 `admin_back_go/internal/module/payment`、`payment/wallet`、`internal/shared/money` 与 `admin_front_ts` 支付页面。旧钱包以 `user_id` 唯一归属；沿用同一账户一个钱包的业务基础，订单和流水记录来源认证平台，不自行建立每个平台一份余额。

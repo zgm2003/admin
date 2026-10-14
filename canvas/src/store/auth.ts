@@ -1,6 +1,7 @@
 import type { AccessCredential, AuthApi, CurrentUser, LoginConfig, LoginInput } from '@/api/auth/login'
 import { createAuthApi } from '@/api/auth/login'
 import type { RequestClient } from '@/utils/request'
+import { HttpError } from '@/types/http'
 
 export type AuthStatus = 'unknown' | 'loading' | 'anonymous' | 'authenticated' | 'error'
 
@@ -139,7 +140,7 @@ export class AuthStore {
 }
 
 function isUnauthorized(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === 10002
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 10002 || error instanceof HttpError && error.httpStatus === 401
 }
 
 function errorMessage(error: unknown): string {

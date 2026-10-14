@@ -25,10 +25,9 @@ func TestPublishVersionRollsBackWhenCatalogWouldExceedEncodingCap(t *testing.T) 
 	versions := []Version{}
 	rows := []CatalogItem{}
 	for n := int64(1); n <= 1000; n++ {
-		code := fmt.Sprintf("local_%d", n)
 		app := fmt.Sprint(n)
-		models = append(models, Model{ID: n, Code: code, Name: "a", Provider: 1, Environment: 1, AppID: app, SellerID: "20880001", CurrentVersion: 9, CreatedAt: now, UpdatedAt: now})
-		rows = append(rows, CatalogItem{ID: n, Code: code, Name: "a", Provider: 1, Environment: 1, AppID: app, SellerID: "20880001", CurrentVersion: 9})
+		models = append(models, Model{ID: n, Name: "a", Provider: 1, Environment: 1, AppID: app, SellerID: "20880001", CurrentVersion: 9, CreatedAt: now, UpdatedAt: now})
+		rows = append(rows, CatalogItem{ID: n, Name: "a", Provider: 1, Environment: 1, AppID: app, SellerID: "20880001", CurrentVersion: 9})
 		versions = append(versions, Version{ConfigID: n, Version: 9, PrivateKeyCiphertext: "x", AppCertPEM: "a", AlipayCertPEM: "b", RootCertPEM: "c", NotifyURL: fmt.Sprintf("https://pay.example.test/api/v1/payment/callback/alipay/%d/9", n), PayMethods: PayMethods{1}, CreatedAt: now, UpdatedAt: now})
 	}
 	raw, _ := json.Marshal(snapshot{SchemaVersion: 1, Generation: int64(^uint64(0) >> 1), Variant: "catalog", Catalog: rows})
@@ -95,6 +94,7 @@ INSERT INTO permission_auth_platform VALUES(1,'admin',19,now(),NULL),(2,'canvas'
 	}
 	if migrate {
 		runConfigSQL(t, db, ctx)
+		runRemoveCodeSQL(t, db, ctx)
 	}
 	return db, ctx
 }
@@ -112,13 +112,33 @@ func runConfigSQL(t *testing.T, db *gorm.DB, ctx context.Context) {
 		t.Fatal(err)
 	}
 }
+func removeCodeSQL(t *testing.T) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("../../../../../docs/database/2026-10-14-payment-config-remove-code.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
+}
+func runRemoveCodeSQL(t *testing.T, db *gorm.DB, ctx context.Context) {
+	t.Helper()
+	if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return tx.Exec(removeCodeSQL(t)).Error }); err != nil {
+		t.Fatal(err)
+	}
+}
 func testRecord() (*Model, Version) {
 	now := time.Now().UTC()
-	return &Model{Code: "alipay_main", Name: "Local channel", Provider: 1, Environment: 1, AppID: "20260001", SellerID: "20880001", CurrentVersion: 1, CreatedAt: now, UpdatedAt: now}, Version{PrivateKeyCiphertext: "payment:v1:cipher", AppCertPEM: "app", AlipayCertPEM: "ali", RootCertPEM: "root", NotifyURL: "https://pay.example.test" + NotifyPathTemplate, PayMethods: PayMethods{1, 2}, CreatedAt: now, UpdatedAt: now}
+	return &Model{Name: "Local channel", Provider: 1, Environment: 1, AppID: "20260001", SellerID: "20880001", CurrentVersion: 1, CreatedAt: now, UpdatedAt: now}, Version{PrivateKeyCiphertext: "payment:v1:cipher", AppCertPEM: "app", AlipayCertPEM: "ali", RootCertPEM: "root", NotifyURL: "https://pay.example.test" + NotifyPathTemplate, PayMethods: PayMethods{1, 2}, CreatedAt: now, UpdatedAt: now}
 }
 func TestConfigMigrationConstraintsAndReplay(t *testing.T) {
 	db, ctx := configDB(t)
-	runConfigSQL(t, db, ctx)
+	var codeColumns int64
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='payment_config' AND column_name='code'`).Scan(&codeColumns).Error; err != nil {
+		t.Fatal(err)
+	}
+	if codeColumns != 0 {
+		t.Fatalf("payment_config still exposes removed code column: %d", codeColumns)
+	}
 	for q, want := range map[string]int64{`SELECT menu_version FROM permission_auth_platform WHERE id=1`: 20, `SELECT menu_version FROM permission_auth_platform WHERE id=2`: 2, `SELECT count(*) FROM permission_menu WHERE code LIKE 'payment:%'`: 8, `SELECT generation FROM system_config_cache_state WHERE namespace='payment.config' AND scope_key='global'`: 1, `SELECT count(*) FROM system_config_cache_outbox`: 1} {
 		var got int64
 		if err := db.WithContext(ctx).Raw(q).Scan(&got).Error; err != nil || got != want {
@@ -137,7 +157,7 @@ func TestConfigMigrationConstraintsAndReplay(t *testing.T) {
 			t.Fatalf("accepted %s", sql)
 		}
 	}
-	runConfigSQL(t, db, ctx)
+	runRemoveCodeSQL(t, db, ctx)
 	var generation int64
 	db.WithContext(ctx).Raw(`SELECT generation FROM system_config_cache_state WHERE namespace='payment.config'`).Scan(&generation)
 	if generation != 2 {
@@ -214,9 +234,9 @@ func TestConfigMigrationRejectsProtectionDrift(t *testing.T) {
 	for name, sql := range map[string]string{
 		"missing identity":        `ALTER TABLE payment_config ALTER COLUMN id DROP IDENTITY`,
 		"wrong default":           `ALTER TABLE payment_config ALTER COLUMN is_enabled SET DEFAULT 1`,
-		"nonunique index":         `DROP INDEX ux_payment_config_code_active; CREATE INDEX ux_payment_config_code_active ON payment_config(code) WHERE deleted_at IS NULL`,
+		"nonunique index":         `DROP INDEX ux_payment_config_app_active; CREATE INDEX ux_payment_config_app_active ON payment_config(provider,environment,app_id) WHERE deleted_at IS NULL`,
 		"wrong index columns":     `DROP INDEX ux_payment_config_app_active; CREATE UNIQUE INDEX ux_payment_config_app_active ON payment_config(name) WHERE deleted_at IS NULL`,
-		"index predicate":         `DROP INDEX ux_payment_config_code_active; CREATE UNIQUE INDEX ux_payment_config_code_active ON payment_config(code)`,
+		"index predicate":         `DROP INDEX ux_payment_config_app_active; CREATE UNIQUE INDEX ux_payment_config_app_active ON payment_config(provider,environment,app_id)`,
 		"missing version FK":      `ALTER TABLE payment_config_version DROP CONSTRAINT fk_payment_config_version_config`,
 		"wrong current FK":        `ALTER TABLE payment_config DROP CONSTRAINT fk_payment_config_current_version; ALTER TABLE payment_config ADD CONSTRAINT fk_payment_config_current_version FOREIGN KEY(id,id) REFERENCES payment_config_version(config_id,version) DEFERRABLE INITIALLY DEFERRED`,
 		"disabled identity guard": `ALTER TABLE payment_config DISABLE TRIGGER payment_config_identity_guard`,

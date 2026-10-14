@@ -14,7 +14,6 @@ export interface CertificateInfo {
 }
 export interface PaymentConfig {
   id: number
-  code: string
   name: string
   provider: number
   environment: number
@@ -55,7 +54,6 @@ export interface PaymentConfigOptions {
     sortOrder: number
   }
   limits: {
-    code: number
     name: number
     identity: number
     notifyUrl: number
@@ -67,7 +65,6 @@ export interface PaymentConfigOptions {
   notifyPathTemplate: string
 }
 export interface CreatePaymentConfigInput {
-  code: string
   name: string
   provider: number
   environment: number

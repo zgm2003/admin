@@ -5,6 +5,16 @@ export class ProtocolError extends Error {
   }
 }
 
+export class HttpError extends Error {
+  readonly httpStatus: number
+
+  constructor(httpStatus: number, message: string) {
+    super(message)
+    this.name = 'HttpError'
+    this.httpStatus = httpStatus
+  }
+}
+
 export class ApiError extends Error {
   readonly code: number
   readonly httpStatus: number

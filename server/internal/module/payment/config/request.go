@@ -20,7 +20,7 @@ const (
 )
 
 type CreateInput struct {
-	Code, Name, AppID, SellerID                                   string
+	Name, AppID, SellerID                                         string
 	Provider                                                      payment.Provider
 	Environment                                                   payment.Environment
 	PrivateKey, AppCertPEM, AlipayCertPEM, RootCertPEM, NotifyURL string
@@ -43,7 +43,6 @@ type ListQuery struct {
 	IsEnabled      *yesno.Value
 }
 
-var codePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 var identityPattern = regexp.MustCompile(`^[0-9]{1,64}$`)
 
 func validateMetadata(v MetadataInput) error {
@@ -53,7 +52,7 @@ func validateMetadata(v MetadataInput) error {
 	return nil
 }
 func validateCreate(v CreateInput) error {
-	if !codePattern.MatchString(v.Code) || !v.Provider.Supported() || !v.Environment.Valid() || !yesno.IsValid(v.IsEnabled) {
+	if !v.Provider.Supported() || !v.Environment.Valid() || !yesno.IsValid(v.IsEnabled) {
 		return fmt.Errorf("configuration identity or flags invalid")
 	}
 	if err := validateMetadata(MetadataInput{v.Name, v.SortOrder}); err != nil {
@@ -90,7 +89,6 @@ func notifyTemplate(raw string, id, version int64) (string, error) {
 }
 
 type createRequest struct {
-	Code          *string              `json:"code"`
 	Name          *string              `json:"name"`
 	Provider      *payment.Provider    `json:"provider"`
 	Environment   *payment.Environment `json:"environment"`
@@ -107,10 +105,10 @@ type createRequest struct {
 }
 
 func (r createRequest) input() (CreateInput, error) {
-	if r.Code == nil || r.Name == nil || r.Provider == nil || r.Environment == nil || r.AppID == nil || r.SellerID == nil || r.PrivateKey == nil || r.AppCertPEM == nil || r.AlipayCertPEM == nil || r.RootCertPEM == nil || r.NotifyURL == nil || r.SortOrder == nil || r.IsEnabled == nil {
+	if r.Name == nil || r.Provider == nil || r.Environment == nil || r.AppID == nil || r.SellerID == nil || r.PrivateKey == nil || r.AppCertPEM == nil || r.AlipayCertPEM == nil || r.RootCertPEM == nil || r.NotifyURL == nil || r.SortOrder == nil || r.IsEnabled == nil {
 		return CreateInput{}, fmt.Errorf("every creation field required")
 	}
-	v := CreateInput{*r.Code, *r.Name, *r.AppID, *r.SellerID, *r.Provider, *r.Environment, *r.PrivateKey, *r.AppCertPEM, *r.AlipayCertPEM, *r.RootCertPEM, *r.NotifyURL, r.PayMethods, *r.SortOrder, *r.IsEnabled}
+	v := CreateInput{*r.Name, *r.AppID, *r.SellerID, *r.Provider, *r.Environment, *r.PrivateKey, *r.AppCertPEM, *r.AlipayCertPEM, *r.RootCertPEM, *r.NotifyURL, r.PayMethods, *r.SortOrder, *r.IsEnabled}
 	err := validateCreate(v)
 	if err != nil {
 		return CreateInput{}, err

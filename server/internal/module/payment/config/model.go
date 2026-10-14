@@ -13,7 +13,6 @@ import (
 
 type Model struct {
 	ID             int64               `gorm:"column:id;primaryKey;autoIncrement"`
-	Code           string              `gorm:"column:code;type:varchar(64);not null"`
 	Name           string              `gorm:"column:name;type:varchar(128);not null"`
 	Provider       payment.Provider    `gorm:"column:provider;type:smallint;not null"`
 	Environment    payment.Environment `gorm:"column:environment;type:smallint;not null"`

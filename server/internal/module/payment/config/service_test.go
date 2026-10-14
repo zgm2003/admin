@@ -99,7 +99,7 @@ func validInput(t *testing.T) CreateInput {
 		}
 		return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
 	}
-	return CreateInput{Code: "alipay_main", Name: "Local channel", Provider: 1, Environment: 1, AppID: "20260001", SellerID: "20880001", PrivateKey: string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(appKey)})), AppCertPEM: cert(2, "20880001-20260001", appKey), AlipayCertPEM: cert(3, "Local Alipay", aliKey), RootCertPEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})), NotifyURL: "https://pay.example.test" + NotifyPathTemplate, PayMethods: []payment.PayMethod{1}}
+	return CreateInput{Name: "Local channel", Provider: 1, Environment: 1, AppID: "20260001", SellerID: "20880001", PrivateKey: string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(appKey)})), AppCertPEM: cert(2, "20880001-20260001", appKey), AlipayCertPEM: cert(3, "Local Alipay", aliKey), RootCertPEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})), NotifyURL: "https://pay.example.test" + NotifyPathTemplate, PayMethods: []payment.PayMethod{1}}
 }
 
 func newServiceTest(t *testing.T, db *gorm.DB, ctx context.Context) (*Service, *projectredis.Client) {
@@ -192,7 +192,7 @@ func TestServiceCredentialSafetyAndVersionLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	bad := in
-	bad.Code = "bad"
+	bad.AppID = "not-numeric"
 	bad.PrivateKey = "invalid"
 	if _, err = s.Create(ctx, bad); err == nil {
 		t.Fatal("bad credentials persisted")

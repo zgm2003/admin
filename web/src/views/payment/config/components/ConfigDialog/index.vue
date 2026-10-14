@@ -97,15 +97,6 @@ const rules = computed<FormRules<ConfigForm>>(() => {
     ]
   }
   if (props.mode === 'create') {
-    result.code = [
-      required,
-      {
-        pattern: /^[a-z][a-z0-9_]*$/,
-        max: props.options.limits.code,
-        message: t('payment.config.codeRule'),
-        trigger: 'blur',
-      },
-    ]
     result.appId = [
       required,
       {
@@ -187,12 +178,6 @@ async function save() {
       @submit.prevent="save"
     >
       <div v-if="mode === 'create'" class="payment-config-form__grid">
-        <el-form-item prop="code" :label="t('payment.config.code')"
-          ><el-input
-            v-model="form.code"
-            :maxlength="options.limits.code"
-            data-testid="payment-config-code"
-        /></el-form-item>
         <el-form-item :label="t('payment.config.provider')"
           ><el-select-v2
             v-model="form.provider"
@@ -212,12 +197,14 @@ async function save() {
           ><el-input
             v-model="form.appId"
             :maxlength="options.limits.identity"
+            :placeholder="t('payment.config.appIdPlaceholder')"
             data-testid="payment-config-app-id"
         /></el-form-item>
         <el-form-item prop="sellerId" :label="t('payment.config.sellerId')"
           ><el-input
             v-model="form.sellerId"
             :maxlength="options.limits.identity"
+            :placeholder="t('payment.config.sellerIdPlaceholder')"
             data-testid="payment-config-seller-id"
         /></el-form-item>
       </div>
@@ -226,6 +213,7 @@ async function save() {
           ><el-input
             v-model="form.name"
             :maxlength="options.limits.name"
+            :placeholder="t('payment.config.namePlaceholder')"
             data-testid="payment-config-name"
         /></el-form-item>
         <el-form-item prop="sortOrder" :label="t('payment.config.sortOrder')"
@@ -281,6 +269,13 @@ async function save() {
             v-model="form[field]"
             type="textarea"
             :rows="4"
+            :placeholder="
+              field === 'privateKey'
+                ? props.mode === 'create'
+                  ? t('payment.config.privateKeyPlaceholder')
+                  : t('payment.config.privateKeyRetainPlaceholder')
+                : t(`payment.config.${field}Placeholder`)
+            "
             autocomplete="off"
             spellcheck="false"
             :data-testid="
