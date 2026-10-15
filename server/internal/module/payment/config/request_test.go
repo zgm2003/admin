@@ -3,9 +3,43 @@ package config
 import (
 	"admin/server/internal/module/payment"
 	"encoding/json"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 )
+
+func TestListQueryPaginationBoundaries(t *testing.T) {
+	query, err := parseListQuery(url.Values{"page": {"101"}, "pageSize": {"100"}})
+	if err != nil || query.Page != 101 || query.PageSize != 100 {
+		t.Fatalf("valid pagination rejected or changed: %+v %v", query, err)
+	}
+	for _, test := range []struct{ name, query string }{
+		{"missing", ""},
+		{"missing page", "pageSize=20"},
+		{"missing page size", "page=1"},
+		{"empty page", "page=&pageSize=20"},
+		{"duplicate page", "page=1&page=2&pageSize=20"},
+		{"duplicate page size", "page=1&pageSize=20&pageSize=50"},
+		{"zero page", "page=0&pageSize=20"},
+		{"zero page size", "page=1&pageSize=0"},
+		{"negative page", "page=-1&pageSize=20"},
+		{"malformed page size", "page=1&pageSize=abc"},
+		{"page size limit", "page=1&pageSize=101"},
+		{"integer overflow", "page=18446744073709551616&pageSize=20"},
+		{"offset overflow", "page=" + strconv.Itoa(int(^uint(0)>>1)) + "&pageSize=20"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			values, err := url.ParseQuery(test.query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := parseListQuery(values); err == nil {
+				t.Fatal("invalid pagination accepted at request boundary")
+			}
+		})
+	}
+}
 
 func TestNotifyURLTemplateBindsCoordinates(t *testing.T) {
 	template := "https://pay.example.test/api/v1/payment/callback/alipay/{configId}/{version}"

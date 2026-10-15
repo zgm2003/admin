@@ -70,9 +70,6 @@ func mapError(err error) error {
 	}
 }
 func (s *Service) List(ctx context.Context, q ListQuery) (pagination.Result[SafeValue], error) {
-	if q.Page < 1 || q.PageSize < 1 || q.PageSize > 100 || (q.Page-1) > int(^uint(0)>>1)/q.PageSize {
-		return pagination.Result[SafeValue]{}, invalid(fmt.Errorf("pagination invalid"))
-	}
 	n, err := s.repository.Count(ctx, q)
 	if err != nil {
 		return pagination.Result[SafeValue]{}, mapError(err)
@@ -83,7 +80,7 @@ func (s *Service) List(ctx context.Context, q ListQuery) (pagination.Result[Safe
 	}
 	values := make([]SafeValue, 0, len(rows))
 	for _, r := range rows {
-		v, err := safeValue(ctx, r, s.now())
+		v, err := safeValue(ctx, r)
 		if err != nil {
 			return pagination.Result[SafeValue]{}, dependency(err)
 		}
@@ -99,7 +96,7 @@ func (s *Service) Get(ctx context.Context, id int64) (SafeValue, error) {
 	if err != nil {
 		return SafeValue{}, mapError(err)
 	}
-	v, err := safeValue(ctx, c, s.now())
+	v, err := safeValue(ctx, c)
 	if err != nil {
 		return SafeValue{}, dependency(err)
 	}
@@ -117,7 +114,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (int64, error) {
 		return 0, invalid(err)
 	}
 	credentials := alipay.Credentials{AppID: in.AppID, SellerID: in.SellerID, Environment: in.Environment, PrivateKey: in.PrivateKey, AppCertPEM: in.AppCertPEM, AlipayCertPEM: in.AlipayCertPEM, RootCertPEM: in.RootCertPEM}
-	if _, err := alipay.NewClient(ctx, credentials, s.now()); err != nil {
+	if _, err := alipay.NewClient(ctx, credentials); err != nil {
 		return 0, invalid(err)
 	}
 	ciphertext, err := secretkey.EncryptPaymentValue(s.keys.PaymentEncryptionKey(), strings.TrimSpace(in.PrivateKey))
@@ -187,7 +184,7 @@ func (s *Service) PublishVersion(ctx context.Context, id int64, in VersionInput)
 		replace(&cred.AppCertPEM, in.AppCertPEM)
 		replace(&cred.AlipayCertPEM, in.AlipayCertPEM)
 		replace(&cred.RootCertPEM, in.RootCertPEM)
-		if _, err := alipay.NewClient(work, cred, s.now()); err != nil {
+		if _, err := alipay.NewClient(work, cred); err != nil {
 			return cache.MutationResult{}, invalid(err)
 		}
 		v := c.Credential
@@ -220,7 +217,7 @@ func (s *Service) ValidateLocal(ctx context.Context, id int64) error {
 	if err != nil {
 		return dependency(err)
 	}
-	_, err = alipay.NewClient(ctx, cred, s.now())
+	_, err = alipay.NewClient(ctx, cred)
 	if err != nil {
 		return invalid(err)
 	}

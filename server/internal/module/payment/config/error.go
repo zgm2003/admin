@@ -38,12 +38,6 @@ func invalid(err error) error {
 		key = i18n.KeyPaymentConfigAppCertIdentityMismatch
 	case errors.Is(err, alipay.ErrPrivateKeyMismatch):
 		key = i18n.KeyPaymentConfigPrivateKeyMismatch
-	case errors.Is(err, alipay.ErrAppCertificateValidity):
-		key = i18n.KeyPaymentConfigAppCertValidityInvalid
-	case errors.Is(err, alipay.ErrAlipayCertificateValidity):
-		key = i18n.KeyPaymentConfigAlipayCertValidityInvalid
-	case errors.Is(err, alipay.ErrRootCertificateValidity):
-		key = i18n.KeyPaymentConfigRootCertValidityInvalid
 	case errors.Is(err, alipay.ErrClientInitialization), errors.Is(err, alipay.ErrCertificateInitialization):
 		key = i18n.KeyPaymentConfigCredentialInitializationFailed
 	}

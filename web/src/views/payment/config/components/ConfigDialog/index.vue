@@ -281,53 +281,68 @@ async function save() {
           v-for="field in credentialFields"
           :key="field"
           :prop="field"
-          :label="t(`payment.config.${field}`)"
         >
-          <el-input
-            v-model="form[field]"
-            type="textarea"
-            :autosize="{ minRows: 4, maxRows: 8 }"
-            clearable
-            :placeholder="
-              field === 'privateKey'
-                ? props.mode === 'create'
-                  ? t('payment.config.privateKeyPlaceholder')
-                  : t('payment.config.privateKeyRetainPlaceholder')
-                : t(`payment.config.${field}Placeholder`)
-            "
-            autocomplete="off"
-            spellcheck="false"
-            :data-testid="
-              field === 'privateKey' ? 'payment-config-private-key' : `payment-config-${field}`
-            "
-            :maxlength="
-              field === 'privateKey'
-                ? options.limits.privateKeyBytes
-                : options.limits.certificateBytes
-            "
-            @input="clearImportError(field)"
-          />
-          <div v-if="field !== 'privateKey'" class="payment-config-form__import">
-            <el-upload
-              v-model:file-list="importFiles[field]"
-              accept=".crt,.pem"
-              :auto-upload="false"
-              :show-file-list="false"
-              :disabled="submitting || importing[field]"
-              :data-testid="`payment-config-import-${field}`"
-              :on-change="(file: UploadFile) => importCertificate(field, file)"
-            >
-              <el-button :disabled="submitting || importing[field]" :loading="importing[field]">
-                {{ t('payment.config.importCertificate') }}
-              </el-button>
-            </el-upload>
-            <span>{{ importing[field] ? t('payment.config.importing') : importNames[field] }}</span>
-            <span
-              v-if="importErrors[field]"
-              role="alert"
-              class="payment-config-form__import-error"
-              >{{ importErrors[field] }}</span
-            >
+          <template #label>
+            <span class="payment-config-form__credential-label">
+              <span class="payment-config-form__credential-label-text">
+                {{ t(`payment.config.${field}`) }}
+              </span>
+              <el-upload
+                v-if="field !== 'privateKey'"
+                v-model:file-list="importFiles[field]"
+                accept=".crt,.pem"
+                :auto-upload="false"
+                :show-file-list="false"
+                :disabled="submitting || importing[field]"
+                :data-testid="`payment-config-import-${field}`"
+                :on-change="(file: UploadFile) => importCertificate(field, file)"
+              >
+                <el-button
+                  size="small"
+                  :disabled="submitting || importing[field]"
+                  :loading="importing[field]"
+                >
+                  {{ t('payment.config.importCertificate') }}
+                </el-button>
+              </el-upload>
+            </span>
+          </template>
+          <div class="payment-config-form__credential-entry">
+            <el-input
+              v-model="form[field]"
+              type="textarea"
+              :autosize="{ minRows: 4, maxRows: 8 }"
+              clearable
+              :placeholder="
+                field === 'privateKey'
+                  ? props.mode === 'create'
+                    ? t('payment.config.privateKeyPlaceholder')
+                    : t('payment.config.privateKeyRetainPlaceholder')
+                  : t(`payment.config.${field}Placeholder`)
+              "
+              autocomplete="off"
+              spellcheck="false"
+              :data-testid="
+                field === 'privateKey' ? 'payment-config-private-key' : `payment-config-${field}`
+              "
+              :maxlength="
+                field === 'privateKey'
+                  ? options.limits.privateKeyBytes
+                  : options.limits.certificateBytes
+              "
+              @input="clearImportError(field)"
+            />
+            <div v-if="field !== 'privateKey'" class="payment-config-form__import">
+              <span>{{
+                importing[field] ? t('payment.config.importing') : importNames[field]
+              }}</span>
+              <span
+                v-if="importErrors[field]"
+                role="alert"
+                class="payment-config-form__import-error"
+                >{{ importErrors[field] }}</span
+              >
+            </div>
           </div>
         </el-form-item>
       </template>
@@ -362,12 +377,19 @@ async function save() {
   }
   &__import {
     display: flex;
-    flex-wrap: wrap;
+    gap: 8px;
+    overflow-wrap: anywhere;
+  }
+  &__credential-entry {
+    width: 100%;
+  }
+  &__credential-label {
+    display: inline-flex;
     align-items: center;
     gap: 8px;
-    width: 100%;
-    margin-top: 8px;
-    overflow-wrap: anywhere;
+  }
+  &__credential-label-text {
+    display: inline-block;
   }
   &__import-error {
     color: var(--el-color-danger);

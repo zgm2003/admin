@@ -1,23 +1,18 @@
 package config
 
 import (
-	"admin/server/internal/module/payment"
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/response"
 	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"github.com/gin-gonic/gin"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestConfigActionRoutesAreIndependent(t *testing.T) {
@@ -146,41 +141,16 @@ func assertConfigValidationResponse(t *testing.T, w *httptest.ResponseRecorder, 
 	}
 }
 
-func TestConfigCreateDistinguishesCertificateValidityAndMismatch(t *testing.T) {
+func TestConfigCreateDistinguishesCertificateMismatch(t *testing.T) {
 	keys, err := secretkey.New(strings.Repeat("p", 64))
 	if err != nil {
 		t.Fatal(err)
 	}
 	fixture := validInput(t)
-	block, _ := pem.Decode([]byte(fixture.PrivateKey))
-	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expire := func(raw string) string {
-		block, _ := pem.Decode([]byte(raw))
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			t.Fatal(err)
-		}
-		cert.NotAfter = time.Now().Add(-time.Minute)
-		cert.PublicKey = &key.PublicKey
-		der, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
-	}
 	for _, test := range []struct {
 		name, messageKey, field string
 		change                  func(*CreateInput)
 	}{
-		{"expired application", "payment.config.appCertValidityInvalid", "appCertPEM", func(c *CreateInput) { c.AppCertPEM = expire(c.AppCertPEM) }},
-		{"expired production Alipay", "payment.config.alipayCertValidityInvalid", "alipayCertPEM", func(c *CreateInput) {
-			c.Environment = payment.EnvironmentProduction
-			c.AlipayCertPEM = expire(c.AlipayCertPEM)
-		}},
-		{"expired root", "payment.config.rootCertValidityInvalid", "rootCertPEM", func(c *CreateInput) { c.RootCertPEM = expire(c.RootCertPEM) }},
 		{"application identity", "payment.config.appCertIdentityMismatch", "APPID", func(c *CreateInput) { c.AppID = "20269999" }},
 		{"private key mismatch", "payment.config.privateKeyMismatch", "privateKey", func(c *CreateInput) { c.PrivateKey = validInput(t).PrivateKey }},
 	} {

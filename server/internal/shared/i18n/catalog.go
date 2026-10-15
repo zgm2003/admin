@@ -214,9 +214,6 @@ const (
 	KeyPaymentConfigRootCertInvalid                MessageKey = "payment.config.rootCertInvalid"
 	KeyPaymentConfigAppCertIdentityMismatch        MessageKey = "payment.config.appCertIdentityMismatch"
 	KeyPaymentConfigPrivateKeyMismatch             MessageKey = "payment.config.privateKeyMismatch"
-	KeyPaymentConfigAppCertValidityInvalid         MessageKey = "payment.config.appCertValidityInvalid"
-	KeyPaymentConfigAlipayCertValidityInvalid      MessageKey = "payment.config.alipayCertValidityInvalid"
-	KeyPaymentConfigRootCertValidityInvalid        MessageKey = "payment.config.rootCertValidityInvalid"
 	KeyPaymentConfigCredentialInitializationFailed MessageKey = "payment.config.credentialInitializationFailed"
 
 	KeyCacheScopeGlobal                 MessageKey = "configCacheStatus.options.scope.global"
@@ -261,9 +258,6 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyPaymentConfigRootCertInvalid:                "支付宝根证书（rootCertPEM）无效，请导入完整的根证书文件，勿拆分或修改证书包",
 		KeyPaymentConfigAppCertIdentityMismatch:        "应用公钥证书（appCertPEM）与 APPID 或 PID 不匹配，请使用当前应用的证书",
 		KeyPaymentConfigPrivateKeyMismatch:             "应用私钥（privateKey）与应用公钥证书（appCertPEM）不匹配，请使用同一密钥对",
-		KeyPaymentConfigAppCertValidityInvalid:         "应用公钥证书（appCertPEM）已过期或尚未生效，请使用当前有效证书",
-		KeyPaymentConfigAlipayCertValidityInvalid:      "支付宝公钥证书（alipayCertPEM）已过期或尚未生效，请从支付宝平台下载当前有效证书",
-		KeyPaymentConfigRootCertValidityInvalid:        "支付宝根证书（rootCertPEM）已过期或尚未生效，请从支付宝平台下载当前有效根证书包",
 		KeyPaymentConfigCredentialInitializationFailed: "支付宝凭据初始化失败，请检查应用私钥、应用公钥证书、支付宝公钥证书和根证书包是否完整且相互匹配",
 
 		KeyCacheNamespacePayment:             "支付配置",
@@ -513,9 +507,6 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyPaymentConfigRootCertInvalid:                "Alipay root certificates (rootCertPEM) are invalid. Import the complete root certificate bundle without splitting or editing it.",
 		KeyPaymentConfigAppCertIdentityMismatch:        "Application certificate (appCertPEM) does not match APPID or PID. Use the certificate for this application.",
 		KeyPaymentConfigPrivateKeyMismatch:             "Application private key (privateKey) does not match the application certificate (appCertPEM). Use the same key pair.",
-		KeyPaymentConfigAppCertValidityInvalid:         "Application certificate (appCertPEM) has expired or is not yet valid. Use a currently valid certificate.",
-		KeyPaymentConfigAlipayCertValidityInvalid:      "Alipay public certificate (alipayCertPEM) has expired or is not yet valid. Download a currently valid certificate from Alipay.",
-		KeyPaymentConfigRootCertValidityInvalid:        "Alipay root certificates (rootCertPEM) have expired or are not yet valid. Download a currently valid root bundle from Alipay.",
 		KeyPaymentConfigCredentialInitializationFailed: "Alipay credential initialization failed. Check that the application private key, application certificate, Alipay certificate, and root bundle are complete and compatible.",
 
 		KeyCacheNamespacePayment:             "Payment configuration",

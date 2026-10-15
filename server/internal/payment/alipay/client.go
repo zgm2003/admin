@@ -6,12 +6,11 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	sdk "github.com/go-pay/gopay/alipay"
-	"time"
 )
 
 // NewClient initializes certificate content mode without filesystem paths or I/O.
-func NewClient(ctx context.Context, c Credentials, now time.Time) (*sdk.Client, error) {
-	if _, err := ValidateCredentials(ctx, c, now); err != nil {
+func NewClient(ctx context.Context, c Credentials) (*sdk.Client, error) {
+	if _, err := ValidateCredentials(ctx, c); err != nil {
 		return nil, err
 	}
 	key, err := parsePrivateKey(c.PrivateKey)

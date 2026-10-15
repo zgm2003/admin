@@ -331,9 +331,11 @@ it.each(['create', 'version'] as const)(
     ] as const
     for (const [field, label] of fields) {
       const input = w.get(`textarea[data-testid="payment-config-${field}"]`)
-      expect(input.element.closest('.el-form-item')?.querySelector('label')?.textContent).toBe(
-        label,
-      )
+      expect(
+        input.element
+          .closest('.el-form-item')
+          ?.querySelector('.payment-config-form__credential-label-text')?.textContent?.trim(),
+      ).toBe(label)
       await certificateFile(w, field, `${field}.crt`, certificates[field])
     }
     for (const [field] of fields) {
@@ -402,6 +404,20 @@ it('uses Element Plus textareas and import buttons for certificate entry', async
     expect((input.element as HTMLTextAreaElement).value).toBe('certificate draft')
     const importer = w.get(`[data-testid="payment-config-import-${field}"]`)
     expect(importer.get('button').text()).toBe('导入证书文件')
+  }
+})
+it('places certificate import controls beside each certificate label', async () => {
+  permissions(['payment:config:list', 'payment:config:update'])
+  const w = await page()
+  await w.get('[data-testid="payment-config-version"]').trigger('click')
+  await flushPromises()
+  for (const field of ['appCertPEM', 'alipayCertPEM', 'rootCertPEM']) {
+    const input = w.get(`textarea[data-testid="payment-config-${field}"]`)
+    const item = input.element.closest('.el-form-item')
+    expect(item?.querySelector('.el-form-item__label')?.querySelector(
+      `[data-testid="payment-config-import-${field}"]`,
+    )).not.toBeNull()
+    expect(item?.querySelector('.payment-config-form__credential-entry--with-import')).toBeNull()
   }
 })
 it('rejects oversized or malformed imported files without losing an existing draft', async () => {

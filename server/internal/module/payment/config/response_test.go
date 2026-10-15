@@ -33,7 +33,7 @@ func configCertificateWithWindow(t *testing.T, raw, privateKey string, start, en
 	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
 }
 
-func TestConfigStatusActionUsesEnvironmentCertificateValidity(t *testing.T) {
+func TestConfigStatusActionDoesNotUseCertificateDates(t *testing.T) {
 	fixture := validInput(t)
 	now := time.Now().UTC().Truncate(time.Second)
 	for _, test := range []struct {
@@ -41,23 +41,15 @@ func TestConfigStatusActionUsesEnvironmentCertificateValidity(t *testing.T) {
 		environment payment.Environment
 		field       string
 		start, end  time.Time
-		enabled     yesno.Value
-		want        bool
 	}{
-		{"sandbox expired Alipay can enable", payment.EnvironmentSandbox, "alipay", now.Add(-2 * time.Hour), now.Add(-time.Hour), yesno.No, true},
-		{"production expired Alipay cannot enable", payment.EnvironmentProduction, "alipay", now.Add(-2 * time.Hour), now.Add(-time.Hour), yesno.No, false},
-		{"production expired enabled can disable", payment.EnvironmentProduction, "alipay", now.Add(-2 * time.Hour), now.Add(-time.Hour), yesno.Yes, true},
-		{"sandbox Alipay expiry boundary can enable", payment.EnvironmentSandbox, "alipay", now.Add(-time.Hour), now, yesno.No, true},
-		{"production Alipay expiry boundary cannot enable", payment.EnvironmentProduction, "alipay", now.Add(-time.Hour), now, yesno.No, false},
-		{"sandbox future Alipay cannot enable", payment.EnvironmentSandbox, "alipay", now.Add(time.Hour), now.Add(2 * time.Hour), yesno.No, false},
-		{"sandbox future application cannot enable", payment.EnvironmentSandbox, "app", now.Add(time.Hour), now.Add(2 * time.Hour), yesno.No, false},
-		{"sandbox future root cannot enable", payment.EnvironmentSandbox, "root", now.Add(time.Hour), now.Add(2 * time.Hour), yesno.No, false},
-		{"sandbox expired application cannot enable", payment.EnvironmentSandbox, "app", now.Add(-2 * time.Hour), now.Add(-time.Hour), yesno.No, false},
-		{"sandbox expired root cannot enable", payment.EnvironmentSandbox, "root", now.Add(-2 * time.Hour), now.Add(-time.Hour), yesno.No, false},
+		{"expired Alipay production", payment.EnvironmentProduction, "alipay", now.Add(-2 * time.Hour), now.Add(-time.Hour)},
+		{"future application production", payment.EnvironmentProduction, "app", now.Add(time.Hour), now.Add(2 * time.Hour)},
+		{"expired root production", payment.EnvironmentProduction, "root", now.Add(-2 * time.Hour), now.Add(-time.Hour)},
+		{"future Alipay sandbox", payment.EnvironmentSandbox, "alipay", now.Add(time.Hour), now.Add(2 * time.Hour)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			current := Current{
-				Config:     Model{ID: 1, Provider: payment.ProviderAlipay, Environment: test.environment, IsEnabled: test.enabled},
+				Config:     Model{ID: 1, Provider: payment.ProviderAlipay, Environment: test.environment, IsEnabled: yesno.No},
 				Credential: Version{Version: 1, AppCertPEM: fixture.AppCertPEM, AlipayCertPEM: fixture.AlipayCertPEM, RootCertPEM: fixture.RootCertPEM, NotifyURL: "https://pay.example.test/api/v1/payment/callback/alipay/1/1", PayMethods: PayMethods{payment.PayMethodWeb}},
 			}
 			field := &current.Credential.AlipayCertPEM
@@ -68,12 +60,12 @@ func TestConfigStatusActionUsesEnvironmentCertificateValidity(t *testing.T) {
 				field = &current.Credential.RootCertPEM
 			}
 			*field = configCertificateWithWindow(t, *field, fixture.PrivateKey, test.start, test.end)
-			got, err := safeValue(context.Background(), current, now)
+			got, err := safeValue(context.Background(), current)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got.Actions.Status != test.want {
-				t.Fatalf("status action: got %v, want %v", got.Actions.Status, test.want)
+			if !got.Actions.Status {
+				t.Fatal("certificate date disabled the status action")
 			}
 			if test.field == "alipay" && !got.Certificates.Alipay.NotAfter.Equal(test.end) {
 				t.Fatal("management DTO changed the original certificate validity")

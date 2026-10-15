@@ -8,7 +8,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"errors"
 	"math/big"
 	"net/url"
 	"testing"
@@ -41,16 +40,16 @@ func certificateFixture(t *testing.T) Credentials {
 }
 func TestLocalValidationAndSDKContentMode(t *testing.T) {
 	c := certificateFixture(t)
-	summaries, err := ValidateCredentials(context.Background(), c, time.Now())
+	summaries, err := ValidateCredentials(context.Background(), c)
 	if err != nil || summaries.App.SerialNumber != "2" {
 		t.Fatalf("validate: %+v %v", summaries, err)
 	}
-	client, err := NewClient(context.Background(), c, time.Now())
+	client, err := NewClient(context.Background(), c)
 	if err != nil || client.IsProd || client.AppCertSN == "" || client.AliPayRootCertSN == "" {
 		t.Fatalf("SDK content mode failed: %v", err)
 	}
 	c.Environment = payment.EnvironmentProduction
-	client, err = NewClient(context.Background(), c, time.Now())
+	client, err = NewClient(context.Background(), c)
 	if err != nil || !client.IsProd {
 		t.Fatal("wrong SDK environment")
 	}
@@ -58,17 +57,17 @@ func TestLocalValidationAndSDKContentMode(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			bad := c
 			change(&bad)
-			if _, err := ValidateCredentials(context.Background(), bad, time.Now()); err == nil {
+			if _, err := ValidateCredentials(context.Background(), bad); err == nil {
 				t.Fatal("invalid credentials accepted")
 			}
 		})
 	}
-	if _, err := ValidateCredentials(context.Background(), c, time.Now().Add(72*time.Hour)); err == nil {
-		t.Fatal("expired certificate accepted")
+	if _, err := NewClient(context.Background(), c); err != nil {
+		t.Fatalf("certificate dates incorrectly blocked credentials: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := NewClient(ctx, c, time.Now()); err == nil {
+	if _, err := NewClient(ctx, c); err == nil {
 		t.Fatal("canceled input accepted")
 	}
 }
@@ -86,7 +85,7 @@ func TestSDKPaymentURLsUseConfiguredEnvironment(t *testing.T) {
 		t.Run(environment.name, func(t *testing.T) {
 			input := credentials
 			input.Environment = environment.value
-			client, err := NewClient(context.Background(), input, time.Now())
+			client, err := NewClient(context.Background(), input)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -138,7 +137,7 @@ func certificateWithWindow(t *testing.T, raw, privateKey string, start, end time
 	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
 }
 
-func TestSandboxCompatibilityOnlyAllowsExpiredAlipayCertificate(t *testing.T) {
+func TestCertificateDatesDoNotBlockCredentials(t *testing.T) {
 	fixture := certificateFixture(t)
 	now := time.Now().UTC().Truncate(time.Second)
 	for _, test := range []struct {
@@ -146,19 +145,16 @@ func TestSandboxCompatibilityOnlyAllowsExpiredAlipayCertificate(t *testing.T) {
 		environment payment.Environment
 		field       string
 		start, end  time.Time
-		want        error
 	}{
-		{"sandbox expired Alipay", payment.EnvironmentSandbox, "alipay", now.Add(-2 * time.Hour), now.Add(-time.Hour), nil},
-		{"production expired Alipay", payment.EnvironmentProduction, "alipay", now.Add(-2 * time.Hour), now.Add(-time.Hour), ErrAlipayCertificateValidity},
-		{"sandbox Alipay expiry boundary", payment.EnvironmentSandbox, "alipay", now.Add(-time.Hour), now, nil},
-		{"production Alipay expiry boundary", payment.EnvironmentProduction, "alipay", now.Add(-time.Hour), now, ErrAlipayCertificateValidity},
-		{"sandbox future Alipay", payment.EnvironmentSandbox, "alipay", now.Add(time.Hour), now.Add(2 * time.Hour), ErrAlipayCertificateValidity},
-		{"sandbox Alipay activation boundary", payment.EnvironmentSandbox, "alipay", now, now.Add(time.Hour), nil},
-		{"sandbox invalid Alipay window", payment.EnvironmentSandbox, "alipay", now.Add(-time.Hour), now.Add(-2 * time.Hour), ErrAlipayCertificateValidity},
-		{"sandbox expired application", payment.EnvironmentSandbox, "app", now.Add(-2 * time.Hour), now.Add(-time.Hour), ErrAppCertificateValidity},
-		{"sandbox future application", payment.EnvironmentSandbox, "app", now.Add(time.Hour), now.Add(2 * time.Hour), ErrAppCertificateValidity},
-		{"sandbox expired root", payment.EnvironmentSandbox, "root", now.Add(-2 * time.Hour), now.Add(-time.Hour), ErrRootCertificateValidity},
-		{"sandbox future root", payment.EnvironmentSandbox, "root", now.Add(time.Hour), now.Add(2 * time.Hour), ErrRootCertificateValidity},
+		{"sandbox expired Alipay", payment.EnvironmentSandbox, "alipay", now.Add(-2 * time.Hour), now.Add(-time.Hour)},
+		{"production expired Alipay", payment.EnvironmentProduction, "alipay", now.Add(-2 * time.Hour), now.Add(-time.Hour)},
+		{"sandbox future Alipay", payment.EnvironmentSandbox, "alipay", now.Add(time.Hour), now.Add(2 * time.Hour)},
+		{"production future Alipay", payment.EnvironmentProduction, "alipay", now.Add(time.Hour), now.Add(2 * time.Hour)},
+		{"sandbox invalid Alipay date range", payment.EnvironmentSandbox, "alipay", now.Add(-time.Hour), now.Add(-2 * time.Hour)},
+		{"production expired application", payment.EnvironmentProduction, "app", now.Add(-2 * time.Hour), now.Add(-time.Hour)},
+		{"production future application", payment.EnvironmentProduction, "app", now.Add(time.Hour), now.Add(2 * time.Hour)},
+		{"production expired root", payment.EnvironmentProduction, "root", now.Add(-2 * time.Hour), now.Add(-time.Hour)},
+		{"production future root", payment.EnvironmentProduction, "root", now.Add(time.Hour), now.Add(2 * time.Hour)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			input := fixture
@@ -171,21 +167,22 @@ func TestSandboxCompatibilityOnlyAllowsExpiredAlipayCertificate(t *testing.T) {
 				field = &input.RootCertPEM
 			}
 			*field = certificateWithWindow(t, *field, input.PrivateKey, test.start, test.end)
-			summary, err := ValidateCredentials(context.Background(), input, now)
-			if !errors.Is(err, test.want) {
-				t.Fatalf("validation: got %v, want %v", err, test.want)
+			summary, err := ValidateCredentials(context.Background(), input)
+			if err != nil {
+				t.Fatalf("certificate dates blocked credentials: %v", err)
 			}
-			client, err := NewClient(context.Background(), input, now)
-			if !errors.Is(err, test.want) {
-				t.Fatalf("SDK initialization: got %v, want %v", err, test.want)
+			client, err := NewClient(context.Background(), input)
+			if err != nil {
+				t.Fatalf("certificate dates blocked SDK initialization: %v", err)
 			}
-			if test.want == nil {
-				if client.IsProd || !summary.Alipay.NotAfter.Equal(test.end) {
-					t.Fatal("sandbox environment or original certificate validity was changed")
-				}
-				if client.AppCertSN == "" || client.AliPayRootCertSN == "" {
-					t.Fatal("certificate content mode was not initialized")
-				}
+			if client.IsProd != (test.environment == payment.EnvironmentProduction) {
+				t.Fatal("SDK environment was changed")
+			}
+			if test.field == "alipay" && !summary.Alipay.NotAfter.Equal(test.end) {
+				t.Fatal("certificate date metadata was changed")
+			}
+			if client.AppCertSN == "" || client.AliPayRootCertSN == "" {
+				t.Fatal("certificate content mode was not initialized")
 			}
 		})
 	}

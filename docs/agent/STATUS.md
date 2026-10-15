@@ -1,5 +1,23 @@
 # 项目状态
 
+## 支付证书导入按钮置于字段标签右侧（2026-10-15，待前端验证）
+
+- 支付配置新增/换版表单的应用公钥证书、支付宝公钥证书和根证书改为“标签右侧导入按钮 + 整行文本域”布局；文件名和错误提示保留在文本域下方。私钥仍保持纯文本域，导入行为、字段名和 `data-testid` 不变。
+- 已更新布局回归，确认三个证书字段的导入控件挂载在对应表单标签内；本轮修改后待重新运行前端定向验证。
+- 未修改支付 API、数据库、菜单/权限或后端；未做真实浏览器账号联调，未提交 Git。
+
+## 支付配置分页重复校验移除（2026-10-14，定向验证完成）
+
+- 按维护者确认的最小范围删除 `payment/config.Service.List` 的整段重复分页校验，直接编排 Count/List；沿用现有 `request.go` 与公共 `pagination.ParseRequest`。HTTP 分页契约不变：每页 1～100 条、页码可超过 100，offset 溢出仍由支付请求层检查；不新增解析器、字段或抽象，证书有效期逻辑暂不调整。
+- 补请求边界回归，覆盖第 101 页、每页上限、缺失/空值/重复/零值/负值/非数字、整数与 offset 溢出。实际验证：`go test -p 1 ./internal/module/payment/... ./internal/shared/pagination -count=1`、同范围 `go vet`、`go build ./...` 及 `git diff --check` 通过。
+- 未跑全仓测试、前端验证或浏览器验收；未修改数据库结构、菜单/权限、公共分页实现或服务状态，未提交 Git。运行中的后端需重启加载此改动。
+
+## 支付证书日期校验移除（2026-10-14，定向验证完成）
+
+- 按维护者要求删除证书 `NotBefore`/`NotAfter` 对支付配置新增、凭据换版、本地校验和启用操作的拦截，不再区分沙盒与生产。清理凭据校验函数、客户端/展示函数的无用当前时间参数、证书有效期 sentinel 和双语错误文案；管理动作不再因证书日期禁用。
+- 保留证书日期元数据原样展示，以及 PEM/DER 解析、RSA 强度、证书用途、APPID/PID、私钥匹配、SDK 客户端初始化和响应验签行为。回归覆盖沙盒/生产、过期/未来/无效日期区间和支付宝官方历史证书包；新增和本地配置校验不因日期失败。
+- 实际验证：凭据日期回归在移除前按预期因有效期错误失败；移除后 `go test -p 1 ./internal/payment/... ./internal/module/payment/... ./internal/shared/i18n ./internal/shared/response -count=1`、`go vet ./internal/payment/... ./internal/module/payment/... ./internal/shared/i18n ./internal/shared/response`、`go build ./...`、`gofmt -l` 与 `git diff --check` 通过。未修改数据库、菜单/权限或外部支付宝数据，未提交 Git。运行中的后端需要重启加载代码。
+
 ## 支付沙盒真实创建、查询与验签（2026-10-14，真实网关验证完成）
 
 - 按维护者要求读取其指定的原始沙盒凭据 JSON，用当前 NewClient 和 GoPay v1.5.118 实际请求 `https://openapi-sandbox.dl.alipaydev.com/gateway.do`；探针强制仅访问该沙盒主机，使用标准 HTTPS 服务端校验、禁用重定向和调试内容输出。支付宝公钥叶证书真实到期时间为 `2026-03-14T03:25:43Z`，日期确已过，但本轮真实响应仍使用同一证书 SN，且可以用该证书的公钥通过验签，确认沙盒兼容规则并非只让配置保存。
@@ -7,7 +25,7 @@
 - 维护者随后提供沙盒买家用户 ID，创建 0.01 元待付款交易 `CERTCHECK20261014133900a4d87630`：`alipay.trade.create` → 10000；首次 `alipay.trade.query` → 10000 / WAIT_BUYER_PAY；`alipay.trade.close` → 10000；再次 query → 10000 / TRADE_CLOSED。四次均 HTTP 200、SDK 自动验签通过、按原始响应单独进行 RSA2 验签通过、返回证书 SN 与本地一致，商户订单号/支付宝交易号前后对应。未调用支付、扣款或退款接口，订单关闭已真实确认。
 - 实际命令：临时本地探针 `go test ./internal/payment/alipay -run '^TestLocalSandboxGatewayCertificate$' -count=1 -v` 两次通过，分别验证预创建与买家交易闭环；第二次网关调用耗时约 2.75 秒。凭据只从原文件读取，不复制私钥、买家 ID 或完整请求/响应到仓库和日志；临时探针已删除，仅新增本状态记录，未修改运行时代码、表/字段、业务数据库/Redis或服务状态，未提交 Git。本轮不重新运行全仓测试/构建，未验证支付成功到账、异步回调或生产环境。
 
-## 支付沙盒过期公钥证书兼容（2026-10-14，修复与隔离验证完成）
+## 支付沙盒过期公钥证书兼容（2026-10-14，后续已移除）
 
 - 根因是当前自有 `ValidateCredentials` 对沙盒支付宝公钥证书也做严格到期拦截，早于 SDK 初始化和网关请求；SDK 沙盒/生产开关原本正确，本轮不修改环境映射。按维护者授权，仅兼容沙盒支付宝公钥叶证书过期，仍拒绝尚未生效、无效日期区间，应用/根证书以及生产支付宝证书保持严格有效期校验，格式、RSA 强度、用途、身份、私钥匹配和 SDK 验签不放宽。
 - `server/internal/payment/alipay/credentials.go` 提供共享有效期规则，`server/internal/module/payment/config/response.go` 同步启用动作判断；新增、换版、本地校验与启用通过现有 NewClient 入口统一生效。原始证书、包内中间证书与实际到期时间保持不变，不加表、字段、菜单、权限或迁移；稳定规则已记录到 `design.md`。

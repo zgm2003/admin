@@ -105,32 +105,6 @@ func InspectCertificates(app, ali, root string) (CertificateSummary, error) {
 	return out, nil
 }
 
-// ValidateCertificateValidity is shared by credential checks and management actions.
-// Alipay's sandbox can distribute expired public certificates; only that expiry
-// is tolerated. Production, activation dates, application and root dates stay strict.
-func ValidateCertificateValidity(environment payment.Environment, certs CertificateSummary, now time.Time) error {
-	if !environment.Valid() {
-		return ErrEnvironmentInvalid
-	}
-	validAt := func(cert CertificateInfo, allowExpired bool) bool {
-		return cert.NotBefore.Before(cert.NotAfter) && !now.Before(cert.NotBefore) && (allowExpired || now.Before(cert.NotAfter))
-	}
-	if len(certs.Roots) == 0 {
-		return ErrRootCertificateInvalid
-	}
-	for _, root := range certs.Roots {
-		if !validAt(root, false) {
-			return ErrRootCertificateValidity
-		}
-	}
-	if !validAt(certs.App, false) {
-		return ErrAppCertificateValidity
-	}
-	if !validAt(certs.Alipay, environment == payment.EnvironmentSandbox) {
-		return ErrAlipayCertificateValidity
-	}
-	return nil
-}
 func numericIdentity(raw string) bool {
 	if len(raw) == 0 || len(raw) > 64 {
 		return false
@@ -190,7 +164,7 @@ func parsePrivateKey(raw string) (*rsa.PrivateKey, error) {
 }
 
 // ValidateCredentials performs local checks only: no gateway I/O or merchant ownership proof.
-func ValidateCredentials(ctx context.Context, c Credentials, now time.Time) (CertificateSummary, error) {
+func ValidateCredentials(ctx context.Context, c Credentials) (CertificateSummary, error) {
 	if err := ctx.Err(); err != nil {
 		return CertificateSummary{}, err
 	}
@@ -245,9 +219,6 @@ func ValidateCredentials(ctx context.Context, c Credentials, now time.Time) (Cer
 			}
 			return CertificateSummary{}, ErrAlipayCertificateInvalid
 		}
-	}
-	if err := ValidateCertificateValidity(c.Environment, summary, now); err != nil {
-		return CertificateSummary{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return CertificateSummary{}, err

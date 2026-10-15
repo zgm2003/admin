@@ -126,12 +126,13 @@ func newServiceTest(t *testing.T, db *gorm.DB, ctx context.Context) (*Service, *
 	return s, client
 }
 
-func TestSandboxExpiredAlipayCredentialLifecycle(t *testing.T) {
+func TestExpiredAlipayCredentialLifecycle(t *testing.T) {
 	db, ctx := configDB(t)
 	isolateRedisScope(t, db, ctx)
 	s, redis := newServiceTest(t, db, ctx)
 	t.Cleanup(func() { redis.Delete(ctx, cache.StateKey(configScope)) })
 	input := validInput(t)
+	input.Environment = payment.EnvironmentProduction
 	now := time.Now().UTC().Truncate(time.Second)
 	s.now = func() time.Time { return now }
 	input.AlipayCertPEM = configCertificateWithWindow(t, input.AlipayCertPEM, input.PrivateKey, now.Add(-2*time.Hour), now.Add(-time.Hour))
