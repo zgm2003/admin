@@ -1,0 +1,74 @@
+package rechargepackage
+
+import (
+	"admin/server/internal/shared/yesno"
+	"encoding/json"
+	"net/url"
+	"testing"
+)
+
+func TestCreateRequestParsesAmountAsExactPositiveCents(t *testing.T) {
+	for _, test := range []struct {
+		raw, wantCode, wantAmount string
+	}{
+		{`{"code":"starter","name":"Starter","amount":"10.50","badge":"Popular","sortOrder":1,"isEnabled":0}`, "starter", "10.50"},
+		{`{"code":"whole","name":"Whole","amount":"10","sortOrder":0,"isEnabled":1}`, "whole", "10"},
+	} {
+		var request createRequest
+		if err := json.Unmarshal([]byte(test.raw), &request); err != nil {
+			t.Fatal(err)
+		}
+		input, err := request.input()
+		if err != nil || input.Code != test.wantCode || input.AmountCents != 1050 && test.wantAmount == "10.50" {
+			t.Fatalf("input=%+v err=%v", input, err)
+		}
+		if test.wantAmount == "10" && input.AmountCents != 1000 {
+			t.Fatalf("amount cents=%d", input.AmountCents)
+		}
+	}
+}
+
+func TestCreateRequestRejectsInvalidAmountAndEnums(t *testing.T) {
+	for _, raw := range []string{
+		`{"code":"x","name":"X","amount":"","sortOrder":0,"isEnabled":0}`,
+		`{"code":"x","name":"X","amount":"0","sortOrder":0,"isEnabled":0}`,
+		`{"code":"x","name":"X","amount":"-1","sortOrder":0,"isEnabled":0}`,
+		`{"code":"x","name":"X","amount":"1.001","sortOrder":0,"isEnabled":0}`,
+		`{"code":"x","name":"X","amount":"1","sortOrder":0,"isEnabled":"1"}`,
+		`{"code":"x","name":"X","amount":"1","sortOrder":0,"isEnabled":2}`,
+	} {
+		var request createRequest
+		if err := json.Unmarshal([]byte(raw), &request); err != nil {
+			continue
+		}
+		if _, err := request.input(); err == nil {
+			t.Fatalf("accepted invalid request %s", raw)
+		}
+	}
+}
+
+func TestMetadataRequestDoesNotAcceptImmutableFields(t *testing.T) {
+	var request updateRequest
+	if err := json.Unmarshal([]byte(`{"name":"Updated","amount":"2.00","badge":null,"sortOrder":3,"isEnabled":1}`), &request); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := request.input(); err != nil {
+		t.Fatalf("metadata rejected: %v", err)
+	}
+}
+
+func TestListQueryIsStrict(t *testing.T) {
+	q, err := parseListQuery(url.Values{"page": {"1"}, "pageSize": {"20"}, "isEnabled": {"1"}})
+	if err != nil || q.Page != 1 || q.PageSize != 20 || q.IsEnabled == nil || *q.IsEnabled != yesno.Yes {
+		t.Fatalf("query=%+v err=%v", q, err)
+	}
+	for _, values := range []url.Values{
+		{"page": {"1"}, "pageSize": {"20"}, "unknown": {"x"}},
+		{"page": {"1", "2"}, "pageSize": {"20"}},
+		{"page": {"1"}, "pageSize": {"20"}, "isEnabled": {"01"}},
+	} {
+		if _, err := parseListQuery(values); err == nil {
+			t.Fatalf("accepted invalid query: %v", values)
+		}
+	}
+}

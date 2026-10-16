@@ -16,6 +16,7 @@ import (
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/health"
+	callbackevent "admin/server/internal/module/payment/callbackEvent"
 	"admin/server/internal/module/permission/access"
 	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
@@ -31,6 +32,24 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+func TestBuildRouterRegistersPaymentProviderOutsideUserAuthentication(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := buildRouter(routerDependencies{
+		CORSOrigin:        "http://localhost:16300",
+		Logger:            slog.New(slog.NewTextHandler(io.Discard, nil)),
+		PaymentCallback:   callbackevent.NewHandler(nil),
+		Authenticate:      func(c *gin.Context) { c.Next() },
+		RequirePermission: func(string) gin.HandlerFunc { return func(c *gin.Context) { c.Next() } },
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/payment/callback/alipay/1/1", strings.NewReader("sign_type=RSA2"))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable || response.Body.String() != "failure" {
+		t.Fatalf("provider route status=%d body=%q", response.Code, response.Body.String())
+	}
+}
 
 type fakeRealtimeSubscriber struct {
 	ready  chan struct{}

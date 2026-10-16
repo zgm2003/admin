@@ -34,7 +34,12 @@ import (
 	smsratelimitpolicy "admin/server/internal/module/message/sms/rateLimitPolicy"
 	smsrecipientrule "admin/server/internal/module/message/sms/recipientRule"
 	smstemplate "admin/server/internal/module/message/sms/template"
+	callbackevent "admin/server/internal/module/payment/callbackEvent"
 	paymentconfig "admin/server/internal/module/payment/config"
+	paymentorder "admin/server/internal/module/payment/order"
+	rechargepackage "admin/server/internal/module/payment/rechargePackage"
+	paymenttransaction "admin/server/internal/module/payment/transaction"
+	paymentwallet "admin/server/internal/module/payment/wallet"
 	"admin/server/internal/module/permission/access"
 	"admin/server/internal/module/permission/authPlatform"
 	"admin/server/internal/module/permission/menu"
@@ -56,6 +61,7 @@ import (
 	userphone "admin/server/internal/module/user/phone"
 	profile "admin/server/internal/module/user/profile"
 	usersession "admin/server/internal/module/user/session"
+	"admin/server/internal/payment/alipay"
 	"admin/server/internal/queue"
 	projectredis "admin/server/internal/redis"
 	"admin/server/internal/secretkey"
@@ -71,51 +77,56 @@ import (
 )
 
 type routerDependencies struct {
-	PaymentConfig     *paymentconfig.Handler
-	CORSOrigin        string
-	TrustedProxies    []string
-	Logger            *slog.Logger
-	Health            *health.Handler
-	Auth              *auth.Handler
-	Captcha           *authcaptcha.Handler
-	AuthPlatform      *authplatform.Handler
-	Permission        *permission.Handler
-	Menu              *menu.Handler
-	Role              *role.Handler
-	User              *account.Handler
-	Account           *profile.Handler
-	Phone             *userphone.Handler
-	Email             *useremail.Handler
-	COSConfig         *cosconfig.Handler
-	UploadRule        *uploadrule.Handler
-	File              *storagefile.Handler
-	OperationLog      *operationlog.Handler
-	Setting           *systemsetting.Handler
-	ConfigCacheStatus *systemconfigcachestatus.Handler
-	QueueMonitor      *queuemonitor.Handler
-	QueueMonitorUI    http.Handler
-	LoginLog          *loginlog.Handler
-	Mail              *messagemail.Handler
-	MailConfig        *mailconfig.Handler
-	MailTemplate      *mailtemplate.Handler
-	MailLog           *maillog.Handler
-	MailRateLimit     *ratelimitpolicy.Handler
-	MailRecipientRule *recipientrule.Handler
-	SMS               *messagesms.Handler
-	SMSConfig         *smsconfig.Handler
-	SMSTemplate       *smstemplate.Handler
-	SMSLog            *smslog.Handler
-	SMSRateLimit      *smsratelimitpolicy.Handler
-	SMSRecipientRule  *smsrecipientrule.Handler
-	Realtime          *realtime.Handler
-	Notification      *notification.Handler
-	NotificationTask  *notificationtask.Handler
-	Scheduler         *scheduler.Handler
-	OperationEnqueuer operationlog.Enqueuer
-	SessionAdmin      *usersession.SessionAdminHandler
-	AuthOrigin        gin.HandlerFunc
-	Authenticate      gin.HandlerFunc
-	RequirePermission func(string) gin.HandlerFunc
+	PaymentConfig      *paymentconfig.Handler
+	PaymentPackage     *rechargepackage.Handler
+	PaymentOrder       *paymentorder.Handler
+	PaymentWallet      *paymentwallet.Handler
+	PaymentTransaction *paymenttransaction.Handler
+	PaymentCallback    *callbackevent.Handler
+	CORSOrigin         string
+	TrustedProxies     []string
+	Logger             *slog.Logger
+	Health             *health.Handler
+	Auth               *auth.Handler
+	Captcha            *authcaptcha.Handler
+	AuthPlatform       *authplatform.Handler
+	Permission         *permission.Handler
+	Menu               *menu.Handler
+	Role               *role.Handler
+	User               *account.Handler
+	Account            *profile.Handler
+	Phone              *userphone.Handler
+	Email              *useremail.Handler
+	COSConfig          *cosconfig.Handler
+	UploadRule         *uploadrule.Handler
+	File               *storagefile.Handler
+	OperationLog       *operationlog.Handler
+	Setting            *systemsetting.Handler
+	ConfigCacheStatus  *systemconfigcachestatus.Handler
+	QueueMonitor       *queuemonitor.Handler
+	QueueMonitorUI     http.Handler
+	LoginLog           *loginlog.Handler
+	Mail               *messagemail.Handler
+	MailConfig         *mailconfig.Handler
+	MailTemplate       *mailtemplate.Handler
+	MailLog            *maillog.Handler
+	MailRateLimit      *ratelimitpolicy.Handler
+	MailRecipientRule  *recipientrule.Handler
+	SMS                *messagesms.Handler
+	SMSConfig          *smsconfig.Handler
+	SMSTemplate        *smstemplate.Handler
+	SMSLog             *smslog.Handler
+	SMSRateLimit       *smsratelimitpolicy.Handler
+	SMSRecipientRule   *smsrecipientrule.Handler
+	Realtime           *realtime.Handler
+	Notification       *notification.Handler
+	NotificationTask   *notificationtask.Handler
+	Scheduler          *scheduler.Handler
+	OperationEnqueuer  operationlog.Enqueuer
+	SessionAdmin       *usersession.SessionAdminHandler
+	AuthOrigin         gin.HandlerFunc
+	Authenticate       gin.HandlerFunc
+	RequirePermission  func(string) gin.HandlerFunc
 }
 
 type runtimeDependency struct {
@@ -217,6 +228,23 @@ func run(logger *slog.Logger) error {
 	paymentConfigService := paymentconfig.NewService(paymentConfigRepository, keys)
 	paymentConfigService.SetGenerations(configGenerationRepository, configGenerationStore)
 	paymentConfigService.SetCache(paymentconfig.NewCache(redisClient, configGenerationStore))
+	paymentPackageRepository := rechargepackage.NewRepository(postgres.GORM)
+	paymentPackageService := rechargepackage.NewService(paymentPackageRepository)
+	paymentWalletRepository := paymentwallet.NewRepository(postgres.GORM)
+	paymentWalletService := paymentwallet.NewService(paymentWalletRepository)
+	paymentTransactionRepository := paymenttransaction.NewRepository(postgres.GORM)
+	paymentTransactionService := paymenttransaction.NewService(paymentTransactionRepository)
+	paymentOrderRepository := paymentorder.NewRepository(postgres.GORM)
+	paymentOrderService := paymentorder.NewService(paymentOrderRepository)
+	paymentOrderService.SetRuntime(paymentConfigService, paymentPackageService, settings.PaymentEnvironment)
+	paymentOrderService.SetReturnOrigins(settings.PaymentReturnOrigins)
+	paymentOrderService.SetCheckout(func(ctx context.Context, credentials alipay.Credentials, input alipay.CheckoutInput) (string, error) {
+		return alipay.Checkout(ctx, credentials, input)
+	})
+	paymentCallbackRepository := callbackevent.NewRepository(postgres.GORM)
+	paymentCallbackService := callbackevent.NewService(paymentCallbackRepository)
+	paymentCallbackService.SetRuntime(paymentConfigService, settings.PaymentEnvironment)
+	paymentCallbackService.SetConfirmer(paymentOrderService)
 	settingRepository := systemsetting.NewRepository(postgres.GORM)
 	settingRepository.SetGenerations(configGenerationRepository)
 	settingService := systemsetting.NewService(settingRepository)
@@ -406,7 +434,7 @@ func run(logger *slog.Logger) error {
 		return permissionnotification.NewRepository(db)
 	})
 	notificationTaskService := notificationtask.NewService(notificationTaskRepository)
-	schedulerCatalog, err := scheduler.NewTaskCatalog(append(scheduler.BuiltinDefinitions(nil, nil, nil), notificationDefinition, storagefile.CleanupDefinition(fileService), storagefile.ScanDefinition(fileService))...)
+	schedulerCatalog, err := scheduler.NewTaskCatalog(append(scheduler.BuiltinDefinitions(nil, nil, nil), notificationDefinition, scheduler.PaymentReconcileDefinition(nil), storagefile.CleanupDefinition(fileService), storagefile.ScanDefinition(fileService))...)
 	if err != nil {
 		return err
 	}
@@ -473,33 +501,38 @@ func run(logger *slog.Logger) error {
 			client, clientOK := authclient.FromContext(context)
 			return useremail.Actor{UserID: identity.UserID, SessionID: identity.SessionID, PlatformID: identity.PlatformID, Platform: identity.Platform, ClientIP: client.ClientIP}, ok && clientOK
 		}),
-		COSConfig:         cosconfig.NewHandler(cosConfigService),
-		PaymentConfig:     paymentconfig.NewHandler(paymentConfigService),
-		UploadRule:        uploadrule.NewHandler(uploadRuleService),
-		File:              storagefile.NewHandler(fileService),
-		OperationLog:      operationlog.NewHandler(operationLogService),
-		Setting:           systemsetting.NewHandler(settingService),
-		ConfigCacheStatus: systemconfigcachestatus.NewHandler(configCacheService),
-		QueueMonitor:      queuemonitor.NewHandler(queueMonitorService, settings.Auth.CookieSecure, queuemonitor.SubjectFromContext),
-		QueueMonitorUI:    queuemonitor.NewGateway(queueMonitorService, queueMonitorUI),
-		LoginLog:          loginlog.NewHandler(loginLogService),
-		Mail:              messagemail.NewHandler(mailService),
-		MailConfig:        mailconfig.NewHandler(mailConfigService),
-		MailTemplate:      mailtemplate.NewHandler(mailTemplateService),
-		MailLog:           maillog.NewHandler(mailLogService),
-		MailRateLimit:     ratelimitpolicy.NewHandler(mailRateLimitService),
-		MailRecipientRule: recipientrule.NewHandler(mailRecipientRuleService),
-		SMS:               messagesms.NewHandler(smsService),
-		SMSConfig:         smsconfig.NewHandler(smsConfigService),
-		SMSTemplate:       smstemplate.NewHandler(smsTemplateService),
-		SMSLog:            smslog.NewHandler(smsLogService),
-		SMSRateLimit:      smsratelimitpolicy.NewHandler(smsRateLimitService),
-		SMSRecipientRule:  smsrecipientrule.NewHandler(smsRecipientRuleService),
-		Realtime:          realtimeHandler,
-		Notification:      notification.NewHandler(notificationService),
-		NotificationTask:  notificationtask.NewHandler(notificationTaskService),
-		Scheduler:         scheduler.NewHandler(schedulerService),
-		OperationEnqueuer: operationLogEnqueuer,
+		COSConfig:          cosconfig.NewHandler(cosConfigService),
+		PaymentConfig:      paymentconfig.NewHandler(paymentConfigService),
+		PaymentPackage:     rechargepackage.NewHandler(paymentPackageService),
+		PaymentOrder:       paymentorder.NewHandler(paymentOrderService),
+		PaymentWallet:      paymentwallet.NewHandler(paymentWalletService),
+		PaymentTransaction: paymenttransaction.NewHandler(paymentTransactionService),
+		PaymentCallback:    callbackevent.NewHandler(paymentCallbackService),
+		UploadRule:         uploadrule.NewHandler(uploadRuleService),
+		File:               storagefile.NewHandler(fileService),
+		OperationLog:       operationlog.NewHandler(operationLogService),
+		Setting:            systemsetting.NewHandler(settingService),
+		ConfigCacheStatus:  systemconfigcachestatus.NewHandler(configCacheService),
+		QueueMonitor:       queuemonitor.NewHandler(queueMonitorService, settings.Auth.CookieSecure, queuemonitor.SubjectFromContext),
+		QueueMonitorUI:     queuemonitor.NewGateway(queueMonitorService, queueMonitorUI),
+		LoginLog:           loginlog.NewHandler(loginLogService),
+		Mail:               messagemail.NewHandler(mailService),
+		MailConfig:         mailconfig.NewHandler(mailConfigService),
+		MailTemplate:       mailtemplate.NewHandler(mailTemplateService),
+		MailLog:            maillog.NewHandler(mailLogService),
+		MailRateLimit:      ratelimitpolicy.NewHandler(mailRateLimitService),
+		MailRecipientRule:  recipientrule.NewHandler(mailRecipientRuleService),
+		SMS:                messagesms.NewHandler(smsService),
+		SMSConfig:          smsconfig.NewHandler(smsConfigService),
+		SMSTemplate:        smstemplate.NewHandler(smsTemplateService),
+		SMSLog:             smslog.NewHandler(smsLogService),
+		SMSRateLimit:       smsratelimitpolicy.NewHandler(smsRateLimitService),
+		SMSRecipientRule:   smsrecipientrule.NewHandler(smsRecipientRuleService),
+		Realtime:           realtimeHandler,
+		Notification:       notification.NewHandler(notificationService),
+		NotificationTask:   notificationtask.NewHandler(notificationTaskService),
+		Scheduler:          scheduler.NewHandler(schedulerService),
+		OperationEnqueuer:  operationLogEnqueuer,
 		SessionAdmin: usersession.NewSessionAdminHandler(sessionService, func(context *gin.Context) (usersession.Actor, bool) {
 			identity, ok := auth.IdentityFromContext(context)
 			return usersession.Actor{UserID: identity.UserID, SessionID: identity.SessionID}, ok
@@ -588,6 +621,10 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	if dependencies.QueueMonitorUI != nil {
 		queuemonitor.RegisterUIRoutes(router, dependencies.QueueMonitorUI)
 	}
+	providerRoutes := router.Group("/api/v1")
+	if dependencies.PaymentCallback != nil {
+		callbackevent.RegisterProviderRoutes(providerRoutes, dependencies.PaymentCallback)
+	}
 	sharedRoutes := router.Group("/api/v1")
 	sharedRoutes.Use(authclient.Require())
 	auth.RegisterRoutes(sharedRoutes, dependencies.Auth, dependencies.AuthOrigin, dependencies.Authenticate)
@@ -611,6 +648,15 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	if dependencies.Notification != nil {
 		notification.RegisterRoutes(sharedRoutes, dependencies.Notification, dependencies.Authenticate, dependencies.RequirePermission)
 	}
+	if dependencies.PaymentWallet != nil {
+		paymentwallet.RegisterPersonalRoutes(sharedRoutes, dependencies.PaymentWallet, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.PaymentTransaction != nil {
+		paymenttransaction.RegisterPersonalRoutes(sharedRoutes, dependencies.PaymentTransaction, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.PaymentOrder != nil {
+		paymentorder.RegisterPersonalRoutes(sharedRoutes, dependencies.PaymentOrder, dependencies.Authenticate, dependencies.RequirePermission)
+	}
 	if dependencies.Setting != nil {
 		systemsetting.RegisterPublicRoutes(sharedRoutes, dependencies.Setting)
 	}
@@ -619,6 +665,21 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	adminRoutes.Use(authclient.Require(), authclient.RequireAdminPlatform())
 	if dependencies.PaymentConfig != nil {
 		paymentconfig.RegisterRoutes(adminRoutes, dependencies.PaymentConfig, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.PaymentPackage != nil {
+		rechargepackage.RegisterRoutes(adminRoutes, dependencies.PaymentPackage, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.PaymentOrder != nil {
+		paymentorder.RegisterAdminRoutes(adminRoutes, dependencies.PaymentOrder, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.PaymentWallet != nil {
+		paymentwallet.RegisterAdminRoutes(adminRoutes, dependencies.PaymentWallet, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.PaymentTransaction != nil {
+		paymenttransaction.RegisterRoutes(adminRoutes, dependencies.PaymentTransaction, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.PaymentCallback != nil {
+		callbackevent.RegisterAdminRoutes(adminRoutes, dependencies.PaymentCallback, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	authplatform.RegisterManagementRoutes(adminRoutes, dependencies.AuthPlatform, dependencies.Authenticate, dependencies.RequirePermission)
 	menu.RegisterRoutes(adminRoutes, dependencies.Menu, dependencies.Authenticate, dependencies.RequirePermission)

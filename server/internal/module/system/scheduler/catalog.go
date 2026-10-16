@@ -34,6 +34,30 @@ func NotificationBatchDefinition(execute TaskExecutor) TaskDefinition {
 	}, Execute: execute}
 }
 
+// PaymentReconcileDefinition describes the fixed payment recovery task. The
+// API process registers the shape for scheduler visibility; the Worker passes
+// the real reconciler executor.
+func PaymentReconcileDefinition(execute TaskExecutor) TaskDefinition {
+	if execute == nil {
+		execute = func(context.Context, ExecutionContext) error {
+			return errors.New("payment reconcile executor is unavailable")
+		}
+	}
+	return TaskDefinition{
+		Type:               "payment.order.reconcile",
+		DisplayName:        "支付订单巡检",
+		DisplayNameEnglish: "Payment order reconciliation",
+		BuiltinKey:         "payment.order.reconcile",
+		DefaultParams:      json.RawMessage(`{}`),
+		ValidateParams:     validateEmptyObject,
+		Queue:              "maintenance",
+		Timeout:            60 * time.Second,
+		MaxAttempts:        3,
+		Backoff:            publishBackoff,
+		Execute:            execute,
+	}
+}
+
 type TaskCatalog struct {
 	definitions map[string]TaskDefinition
 }

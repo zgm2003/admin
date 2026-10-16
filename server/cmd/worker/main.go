@@ -14,6 +14,10 @@ import (
 	"admin/server/internal/database"
 	"admin/server/internal/module/message/notification"
 	notificationtask "admin/server/internal/module/message/notificationTask"
+	callbackevent "admin/server/internal/module/payment/callbackEvent"
+	paymentconfig "admin/server/internal/module/payment/config"
+	paymentorder "admin/server/internal/module/payment/order"
+	rechargepackage "admin/server/internal/module/payment/rechargePackage"
 	permissionnotification "admin/server/internal/module/permission/notification"
 	"admin/server/internal/module/realtime"
 	"admin/server/internal/module/storage/cosConfig"
@@ -125,6 +129,23 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("derive Worker storage keys: %w", err)
 	}
+	paymentConfigRepository := paymentconfig.NewRepository(postgres.GORM)
+	paymentConfigRepository.SetGenerations(configCacheRepository)
+	paymentConfigService := paymentconfig.NewService(paymentConfigRepository, keys)
+	paymentConfigService.SetGenerations(configCacheRepository, configCacheStore)
+	paymentConfigService.SetCache(paymentconfig.NewCache(redisClient, configCacheStore))
+	paymentOrderRepository := paymentorder.NewRepository(postgres.GORM)
+	paymentOrderService := paymentorder.NewService(paymentOrderRepository)
+	paymentOrderService.SetRuntime(paymentConfigService, rechargepackage.NewService(rechargepackage.NewRepository(postgres.GORM)), settings.PaymentEnvironment)
+	paymentCallbackService := callbackevent.NewService(callbackevent.NewRepository(postgres.GORM))
+	paymentCallbackService.SetRuntime(paymentConfigService, settings.PaymentEnvironment)
+	paymentCallbackService.SetConfirmer(paymentOrderService)
+	paymentReconciler := paymentorder.NewReconciler(paymentOrderRepository, paymentConfigService, paymentOrderService, nil, settings.PaymentEnvironment)
+	paymentReconciler.SetPendingRecovery(paymentCallbackService)
+	paymentReconciler.SetChannelLimiter(paymentorder.NewRedisChannelLimiter(redisClient.UniversalClient()))
+	paymentDefinition := scheduler.PaymentReconcileDefinition(func(ctx context.Context, _ scheduler.ExecutionContext) error {
+		return paymentReconciler.Run(ctx)
+	})
 	cosClient := storagecos.NewClient(nil)
 	cosRepository := cosconfig.NewRepository(postgres.GORM)
 	cosRepository.SetGenerations(configCacheRepository)
@@ -145,7 +166,7 @@ func run(logger *slog.Logger) error {
 	realtimeRetention := realtime.NewRetentionService(realtimeRepository, settingService)
 	notificationRetention := notification.NewRetentionService(notificationRepository, settingService)
 	historyCleaner := scheduler.NewHistoryCleaner(schedulerRepository, settingService)
-	catalog, err := scheduler.NewTaskCatalog(append(scheduler.BuiltinDefinitions(realtimeRetention, notificationRetention, historyCleaner), notificationDefinition, storagefile.CleanupDefinition(fileService), storagefile.ScanDefinition(fileService))...)
+	catalog, err := scheduler.NewTaskCatalog(append(scheduler.BuiltinDefinitions(realtimeRetention, notificationRetention, historyCleaner), notificationDefinition, paymentDefinition, storagefile.CleanupDefinition(fileService), storagefile.ScanDefinition(fileService))...)
 	if err != nil {
 		return err
 	}

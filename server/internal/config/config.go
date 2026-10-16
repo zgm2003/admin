@@ -7,20 +7,23 @@ import (
 	"strconv"
 	"strings"
 
+	"admin/server/internal/module/payment"
 	"github.com/jackc/pgx/v5"
 	goredis "github.com/redis/go-redis/v9"
 )
 
 type API struct {
-	HTTPAddr         string
-	PostgresDSN      string
-	RedisURL         string
-	CORSOrigin       string
-	AppSecret        string
-	TrustedProxies   []string
-	TrustedProxyMode string
-	Auth             Auth
-	Realtime         Realtime
+	HTTPAddr             string
+	PostgresDSN          string
+	RedisURL             string
+	CORSOrigin           string
+	AppSecret            string
+	TrustedProxies       []string
+	TrustedProxyMode     string
+	Auth                 Auth
+	Realtime             Realtime
+	PaymentEnvironment   payment.Environment
+	PaymentReturnOrigins []string
 }
 
 type Auth struct {
@@ -34,8 +37,9 @@ type Realtime struct {
 }
 
 type Worker struct {
-	PostgresDSN string
-	RedisURL    string
+	PostgresDSN        string
+	RedisURL           string
+	PaymentEnvironment payment.Environment
 }
 
 type LookupEnv func(string) (string, bool)
@@ -80,18 +84,84 @@ func LoadAPI(lookupEnv LookupEnv) (API, error) {
 	if err != nil {
 		return API{}, err
 	}
+	paymentEnvironment, err := loadPaymentEnvironment(lookupEnv)
+	if err != nil {
+		return API{}, err
+	}
+	paymentReturnOrigins, err := loadPaymentReturnOrigins(lookupEnv)
+	if err != nil {
+		return API{}, err
+	}
 
 	return API{
-		HTTPAddr:         httpAddr,
-		PostgresDSN:      postgresDSN,
-		RedisURL:         redisURL,
-		CORSOrigin:       corsOrigin,
-		AppSecret:        appSecret,
-		TrustedProxies:   trustedProxies,
-		TrustedProxyMode: trustedProxyMode,
-		Auth:             auth,
-		Realtime:         realtime,
+		HTTPAddr:             httpAddr,
+		PostgresDSN:          postgresDSN,
+		RedisURL:             redisURL,
+		CORSOrigin:           corsOrigin,
+		AppSecret:            appSecret,
+		TrustedProxies:       trustedProxies,
+		TrustedProxyMode:     trustedProxyMode,
+		Auth:                 auth,
+		Realtime:             realtime,
+		PaymentEnvironment:   paymentEnvironment,
+		PaymentReturnOrigins: paymentReturnOrigins,
 	}, nil
+}
+
+func loadPaymentEnvironment(lookupEnv LookupEnv) (payment.Environment, error) {
+	raw, ok := lookupEnv("PAYMENT_ENVIRONMENT")
+	if !ok || raw == "" {
+		return 0, fmt.Errorf("PAYMENT_ENVIRONMENT is required")
+	}
+	environment, err := payment.ParseEnvironment(raw)
+	if err != nil {
+		return 0, fmt.Errorf("PAYMENT_ENVIRONMENT: invalid value")
+	}
+	return environment, nil
+}
+
+// loadPaymentReturnOrigins accepts an empty value so a deployment can keep
+// read-only wallet/history and callback handling available while purchases are
+// explicitly unavailable until a browser origin is configured.
+func loadPaymentReturnOrigins(lookupEnv LookupEnv) ([]string, error) {
+	raw, ok := lookupEnv("PAYMENT_RETURN_ORIGINS")
+	if !ok || strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	parts := strings.Split(raw, ",")
+	origins := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value == "" || len(value) > 2048 || strings.ContainsAny(value, "?#") {
+			return nil, fmt.Errorf("PAYMENT_RETURN_ORIGINS: invalid origin")
+		}
+		parsed, err := url.Parse(value)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.User != nil || parsed.Path != "" || parsed.RawPath != "" || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || parsed.Opaque != "" {
+			return nil, fmt.Errorf("PAYMENT_RETURN_ORIGINS: invalid origin")
+		}
+		scheme := strings.ToLower(parsed.Scheme)
+		if scheme != "http" && scheme != "https" || strings.ContainsAny(parsed.Host, "\\/\t\r\n @*") {
+			return nil, fmt.Errorf("PAYMENT_RETURN_ORIGINS: invalid origin")
+		}
+		hostname := parsed.Hostname()
+		if hostname == "" || strings.HasSuffix(parsed.Host, ":") {
+			return nil, fmt.Errorf("PAYMENT_RETURN_ORIGINS: invalid origin")
+		}
+		if port := parsed.Port(); port != "" {
+			portNumber, portErr := strconv.Atoi(port)
+			if portErr != nil || portNumber < 1 || portNumber > 65535 {
+				return nil, fmt.Errorf("PAYMENT_RETURN_ORIGINS: invalid origin")
+			}
+		}
+		origin := scheme + "://" + strings.ToLower(parsed.Host)
+		if _, exists := seen[origin]; exists {
+			return nil, fmt.Errorf("PAYMENT_RETURN_ORIGINS: duplicate origin")
+		}
+		seen[origin] = struct{}{}
+		origins = append(origins, origin)
+	}
+	return origins, nil
 }
 
 func LoadWorker(lookupEnv LookupEnv) (Worker, error) {
@@ -103,8 +173,12 @@ func LoadWorker(lookupEnv LookupEnv) (Worker, error) {
 	if err != nil {
 		return Worker{}, err
 	}
+	paymentEnvironment, err := loadPaymentEnvironment(lookupEnv)
+	if err != nil {
+		return Worker{}, err
+	}
 
-	return Worker{PostgresDSN: postgresDSN, RedisURL: redisURL}, nil
+	return Worker{PostgresDSN: postgresDSN, RedisURL: redisURL, PaymentEnvironment: paymentEnvironment}, nil
 }
 
 func loadPostgresDSN(lookupEnv LookupEnv) (string, error) {

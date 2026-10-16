@@ -1,6 +1,8 @@
 package config
 
 import (
+	"admin/server/internal/payment/alipay"
+	"admin/server/internal/secretkey"
 	cache "admin/server/internal/shared/configCache"
 	"context"
 	"errors"
@@ -21,6 +23,24 @@ func (s *Service) Credential(ctx context.Context, id, version int64) (BoundCrede
 		return BoundCredential{}, err
 	}
 	return *p.Credential, nil
+}
+
+// Credentials resolves one immutable credential version into the provider
+// representation used by the checkout/query adapters. The ciphertext never
+// leaves this service in a response DTO.
+func (s *Service) Credentials(ctx context.Context, id, version int64) (alipay.Credentials, error) {
+	bound, err := s.Credential(ctx, id, version)
+	if err != nil {
+		return alipay.Credentials{}, err
+	}
+	if s.keys == nil {
+		return alipay.Credentials{}, errors.New("payment encryption key missing")
+	}
+	privateKey, err := secretkey.DecryptPaymentValue(s.keys.PaymentEncryptionKey(), bound.Version.PrivateKeyCiphertext)
+	if err != nil {
+		return alipay.Credentials{}, err
+	}
+	return alipay.Credentials{AppID: bound.AppID, SellerID: bound.SellerID, Environment: bound.Environment, PrivateKey: privateKey, AppCertPEM: bound.Version.AppCertPEM, AlipayCertPEM: bound.Version.AlipayCertPEM, RootCertPEM: bound.Version.RootCertPEM, NotifyURL: bound.Version.NotifyURL}, nil
 }
 func (s *Service) readSnapshot(ctx context.Context, variant string) (snapshot, error) {
 	if s.cache == nil || s.cache.client == nil || s.cache.states == nil {

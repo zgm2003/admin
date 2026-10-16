@@ -55,6 +55,11 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 | `storage/file` | `storage/file`（头像保存协作 `user/profile`） | `storage_file`、既有 `system_scheduler_*` |
 | `system/operationLog` | `system/operationLog` | `system_operation_log` |
 | `payment/config` | `payment/config` | `payment_config`、`payment_config_version`（代码与迁移已交付，真实库待维护者执行） |
+| `payment/rechargePackage` | `payment/rechargePackage` | `payment_recharge_package` |
+| `payment/order`、`payment/recharge` | `payment/order` | `payment_order` |
+| `payment/wallet`、`payment/myWallet` | `payment/wallet` | `payment_wallet` |
+| `payment/transaction` | `payment/transaction` | `payment_transaction` |
+| `payment/order` callback tab | `payment/callbackEvent` | `payment_callback_event` |
 
 复合代码模块统一使用 lower camel case；数据库仍使用 snake_case，HTTP API 仍使用小写资源段。Mail 是聚合
 页面，后端按表资源拆为 `message/mail/config`、`template`、`log`、`logVerification`、`rateLimitPolicy`、
@@ -166,7 +171,11 @@ SMS 收件规则与发送日志的手机号采用与邮件地址一致的明文�
 - `storage.cosconfig/<configId>`
 - `payment.config/global`
 
-支付配置代码位于 `payment/config`；管理 API `/api/admin/v1/payment/config`、page/action
+支付配置代码位于 `payment/config`；订单、钱包、流水、套餐和回调的管理/本人投影分别由
+`payment/order`、`payment/wallet`、`payment/transaction`、`payment/rechargePackage` 和
+`payment/callbackEvent` 提供，统一在 `server/cmd/api/main.go` 显式装配。公开支付宝回调
+`/api/v1/payment/callback/alipay/:configId/:version` 不经过用户鉴权；其余支付 API 依赖当前身份和精确动作权限。
+管理 API `/api/admin/v1/payment/config`、page/action
 `payment:config:view/list/detail/create/update/status/delete/test` 与目录导航 `navigation.paymentConfig` 对齐。
 `payment_config_version` 按 `(config_id,version)` 保存不可改凭据；Redis 使用 catalog 和
 `credential:<configId>:<version>` variants，私钥只缓存密文，5 分钟 TTL、闭合 DTO、256KiB 编码上限。

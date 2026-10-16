@@ -1,5 +1,14 @@
 # 项目状态
 
+## 支付订单与回调后端续建（2026-10-16，进行中）
+
+- 继续维护者指定的 `2026-10-13-payment-plan.md` / `payment-spec.md`，沿当前工作区推进 P2，不自动提交、迁移业务库或启停服务；已有未跟踪订单、钱包、流水、套餐和支付宝适配器均保留。退款、AI 扣费、预扣和管理员任意加款不在本期范围，余额保持有符号精确金额。
+- 本轮目标：修正订单/回调编译与事实分类、稳定去重、指定环境隔离、可信证据和成功入账的事务一致性；补 Provider 字面响应和输入边界测试；本人钱包/流水与管理字段隔离。数据流保持 Handler → Service → Repository → PostgreSQL，验签在 Service 调用指定历史凭据完成。当前已补齐本人钱包、充值中心、管理订单、管理钱包和管理流水页面，页面只消费后端投影，个人页不展示管理身份字段。
+- 权限映射保持独立：订单管理 `payment:order:list/detail`、本人 `payment:recharge:list/detail/create/pay`，钱包管理 `payment:wallet:list/detail`、本人 `payment:myWallet:detail/list`；回调审计 `payment:callbackEvent:list/detail` 独立于订单读取。公开 Provider 入口 `/api/v1/payment/callback/alipay/:configId/:version` 不使用用户鉴权、平台头或浏览器 Origin。尚未实现的 sync/close 不暴露假能力，待 P3 共享租约/通道预算完成后接入。
+- 初始验证：`go test ./internal/module/payment/order ./internal/module/payment/callbackEvent -count=1` 复现回调分页 orderID 的 int/int64 编译错误；订单集成测试连接本地 PostgreSQL 127.0.0.1:5432 被拒。先运行不依赖服务的回归，保留真实隔离事务与并发测试，环境不可用不得标为通过。百万账户容量假设沿批准 Spec；钱包单读 ≤1 SELECT、列表 count+page ≤2 SELECT、Redis 不可确认不回源猜配置；本轮不宣称容量或真实到账验收通过。
+- 决策：用户要求沿现有工作区继续，因此不创建新 worktree、不移动未提交改动；长期进度只记本文件，不回写历史计划勾选。生产购买继续等 P3 恢复能力和完整验收后开放。
+- 继续工作单元：P3 订单巡检已加入 `payment.order.reconcile` 内置 Scheduler 定义；订单 Repository 使用 `FOR UPDATE SKIP LOCKED`、15 秒 token 租约和 CAS 推进/关单，Reconciler 先查单并优先可信入账，过期未支付才尝试关单，失败保留下次核实时间。API/Worker 已显式注册任务，Worker 读取 `PAYMENT_ENVIRONMENT` 并使用历史凭据版本。尚未接入离线 schedule seed、Redis 通道共享限流和真实 PostgreSQL/支付宝回归；不新增兑换码或退款能力。
+
 ## 支付证书导入按钮置于字段标签右侧（2026-10-15，待前端验证）
 
 - 支付配置新增/换版表单的应用公钥证书、支付宝公钥证书和根证书改为“标签右侧导入按钮 + 整行文本域”布局；文件名和错误提示保留在文本域下方。私钥仍保持纯文本域，导入行为、字段名和 `data-testid` 不变。

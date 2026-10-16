@@ -41,9 +41,12 @@ CORS_ORIGIN=http://localhost:16300
 TRUSTED_PROXIES=none
 APP_SECRET=replace_with_at_least_64_random_characters_before_running_api_server
 AUTH_COOKIE_SECURE=0
+
+PAYMENT_ENVIRONMENT=1
+PAYMENT_RETURN_ORIGINS=https://app.example.com
 ```
 
-API 使用以上全部七项。`TRUSTED_PROXIES` 必须明确填写 `none` 或逗号分隔的 IP/CIDR；`APP_SECRET` 必须是至少 64 个 ASCII 字符的随机值；`AUTH_COOKIE_SECURE` 在本地 HTTP 使用 `0`，HTTPS 使用 `1`。Worker 只读取 `POSTGRES_DSN` 和 `REDIS_URL`。变量缺失、为空或格式错误时进程会明确退出，不提供默认地址。
+API 使用以上变量；`PAYMENT_ENVIRONMENT` 必须显式填写 `1`（沙箱）或 `2`（生产），不提供默认值。`PAYMENT_RETURN_ORIGINS` 可留空，留空时购买明确不可用。`TRUSTED_PROXIES` 必须明确填写 `none` 或逗号分隔的 IP/CIDR；`APP_SECRET` 必须是至少 64 个 ASCII 字符的随机值；`AUTH_COOKIE_SECURE` 在本地 HTTP 使用 `0`，HTTPS 使用 `1`。Worker 只读取 `POSTGRES_DSN` 和 `REDIS_URL`。变量缺失、为空或格式错误时进程会明确退出，不提供默认地址。
 
 前端读取 `web/.env`：
 
