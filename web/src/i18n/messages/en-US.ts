@@ -115,8 +115,6 @@ export const enUS = {
   'payment.order.personalTitle': 'My recharge orders',
   'payment.order.pay': 'Continue payment',
   'payment.order.checkoutUnavailable': 'Payment is currently unavailable. Try again later.',
-  'payment.order.returnUrl': 'Payment return URL',
-  'payment.order.returnUrlPlaceholder': 'Use an HTTPS URL from the configured allowlist',
   'payment.order.package': 'Recharge package',
   'payment.order.packagePlaceholder': 'Select a recharge package',
   'payment.order.payMethod': 'Payment method',

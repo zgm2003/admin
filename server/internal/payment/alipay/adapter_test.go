@@ -114,6 +114,15 @@ func TestCheckoutRejectsInvalidInputWithoutDefaultingMethod(t *testing.T) {
 	}
 }
 
+func TestCheckoutRejectsMalformedReturnURL(t *testing.T) {
+	credentials, _ := adapterCredentials(t)
+	for _, raw := range []string{"https://:443/paid", "https://*.example.test/paid", "https://app.example.test:/paid", "https://app.example.test:0/paid", "https://app.example.test:65536/paid"} {
+		if _, err := Checkout(context.Background(), credentials, CheckoutInput{OrderNo: "ORDER-001", Subject: "Recharge", AmountCents: 100, Method: payment.PayMethodWeb, ReturnURL: raw}); err == nil {
+			t.Errorf("malformed return URL accepted: %q", raw)
+		}
+	}
+}
+
 func TestVerifyNotifyVerifiesRSA2AndParsesTrustedPaymentFacts(t *testing.T) {
 	credentials, alipayKey := adapterCredentials(t)
 	values := signedNotifyValues(t, alipayKey, url.Values{

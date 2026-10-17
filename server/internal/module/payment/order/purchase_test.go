@@ -16,7 +16,6 @@ func productionServiceFixture(repo *createRepositoryStub) *Service {
 	runtime.catalog[0].Environment = payment.EnvironmentProduction
 	runtime.credential.Environment = payment.EnvironmentProduction
 	service.runtime = runtime
-	service.environment = payment.EnvironmentProduction
 	return service
 }
 
@@ -27,7 +26,7 @@ func TestProductionPurchasesStayClosedUntilRecoveryIsDelivered(t *testing.T) {
 	repo := &createRepositoryStub{}
 	service := productionServiceFixture(repo)
 	options, err := service.Options(ctx)
-	if err != nil || len(options.PayMethods) != 2 || len(options.Packages) != 1 || options.Available {
+	if err != nil || len(options.PayMethods) != 0 || len(options.Packages) != 1 || options.Available {
 		t.Errorf("production options=%+v err=%v", options, err)
 	}
 	got, err := service.Create(ctx, actor, input)
@@ -35,7 +34,7 @@ func TestProductionPurchasesStayClosedUntilRecoveryIsDelivered(t *testing.T) {
 	if !errors.As(err, &public) || public.Code != apperror.CodeDependencyUnavailable || got.URL != "" || repo.created != nil {
 		t.Errorf("production create=%+v persisted=%v err=%v", got, repo.created != nil, err)
 	}
-	readRepo := &orderReadRepository{rows: []Model{validReadOrder()}}
+	readRepo := &orderReadRepository{rows: []Model{validReadOrder()}, environment: payment.EnvironmentProduction}
 	row := &readRepo.rows[0]
 	row.ConfigID, row.ConfigVersion, row.PayMethod = 3, 4, int16(payment.PayMethodWeb)
 	row.ReturnURL = input.ReturnURL
@@ -54,7 +53,6 @@ func TestProductionPurchasesStayClosedUntilRecoveryIsDelivered(t *testing.T) {
 func TestProductionPurchaseGateDoesNotBlockHistoricalSettlement(t *testing.T) {
 	repo := &confirmerStub{}
 	service := NewService(repo)
-	service.environment = payment.EnvironmentProduction
 	proof := validConfirmation()
 	proof.Environment = payment.EnvironmentProduction
 	got, err := service.Confirm(context.Background(), proof, nil)

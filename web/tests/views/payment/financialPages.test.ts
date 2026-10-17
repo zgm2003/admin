@@ -194,12 +194,28 @@ it('does not offer checkout when backend marks recharge unavailable', async () =
   expect(wrapper.text()).toContain('支付入口当前不可用')
 })
 
-it('removes URL fragments from the default payment return URL', async () => {
-  window.history.replaceState({}, '', '/payment/recharge?from=test#private-fragment')
+it('submits the current route as returnUrl without asking the user to configure it', async () => {
+  vi.mocked(orderApi.getRechargeOptions).mockResolvedValue({
+    payMethods: [{ value: 1, label: 'PC' }],
+    packages: [{ id: 1, name: 'Starter', amount: '10.00' }],
+    available: true,
+  })
+  vi.mocked(orderApi.createRecharge).mockResolvedValue({
+    order,
+    checkout: 'https://pay.example.test/checkout',
+  })
   permissions(['payment:recharge:create'])
   const wrapper = await page(RechargePage)
-  const input = wrapper.get<HTMLInputElement>('[data-testid="payment-recharge-return-url"]')
-  expect(input.element.value).toBe(`${window.location.origin}/payment/recharge?from=test`)
+  window.history.replaceState({}, '', '/payment/recharge?from=test#private-fragment')
+  await wrapper.get('[data-testid="payment-recharge-create"]').trigger('click')
+  await flushPromises()
+  expect(orderApi.createRecharge).toHaveBeenCalledWith({
+    requestId: expect.any(String),
+    packageId: 1,
+    payMethod: 1,
+    returnUrl: `${window.location.origin}/payment/recharge?from=test`,
+  })
+  expect(wrapper.find('[data-testid="payment-recharge-return-url"]').exists()).toBe(false)
 })
 
 it('uses a platform-specific placeholder in management filters', async () => {

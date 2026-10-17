@@ -4,15 +4,24 @@ import (
 	"context"
 	"errors"
 
+	"admin/server/internal/module/payment"
 	"gorm.io/gorm"
 )
 
-func (r *Repository) FindByRequest(ctx context.Context, userID, platformID int64, requestID string) (Model, error) {
+// OrderRecord includes the immutable channel environment without per-row I/O.
+type OrderRecord struct {
+	Model
+	ConfigEnvironment payment.Environment `gorm:"column:config_environment"`
+}
+
+func (r *Repository) FindByRequest(ctx context.Context, userID, platformID int64, requestID string) (OrderRecord, error) {
 	if r == nil || r.db == nil || userID < 1 || platformID < 1 || requestID == "" {
-		return Model{}, errors.New("payment order request lookup input invalid")
+		return OrderRecord{}, errors.New("payment order request lookup input invalid")
 	}
-	var row Model
-	err := r.db.WithContext(ctx).Where("user_id = ? AND platform_id = ? AND request_id = ?", userID, platformID, requestID).First(&row).Error
+	var row OrderRecord
+	err := r.db.WithContext(ctx).Table("payment_order").Select("payment_order.*, pc.environment AS config_environment").
+		Joins("JOIN payment_config pc ON pc.id = payment_order.config_id").
+		Where("payment_order.user_id = ? AND payment_order.platform_id = ? AND payment_order.request_id = ?", userID, platformID, requestID).Take(&row).Error
 	return row, err
 }
 
@@ -29,14 +38,15 @@ func (r *Repository) Create(ctx context.Context, row *Model) error {
 	return nil
 }
 
-func (r *Repository) Find(ctx context.Context, id int64) (Model, error) {
+func (r *Repository) Find(ctx context.Context, id int64) (OrderRecord, error) {
 	if r == nil || r.db == nil || id < 1 {
-		return Model{}, errors.New("payment order lookup input invalid")
+		return OrderRecord{}, errors.New("payment order lookup input invalid")
 	}
-	var row Model
-	err := r.db.WithContext(ctx).First(&row, id).Error
+	var row OrderRecord
+	err := r.db.WithContext(ctx).Table("payment_order").Select("payment_order.*, pc.environment AS config_environment").
+		Joins("JOIN payment_config pc ON pc.id = payment_order.config_id").Where("payment_order.id = ?", id).Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return Model{}, ErrOrderNotFound
+		return OrderRecord{}, ErrOrderNotFound
 	}
 	return row, err
 }
@@ -60,14 +70,16 @@ func (r *Repository) Count(ctx context.Context, query ListQuery) (int64, error) 
 	return total, err
 }
 
-func (r *Repository) List(ctx context.Context, query ListQuery) ([]Model, error) {
+func (r *Repository) List(ctx context.Context, query ListQuery) ([]OrderRecord, error) {
 	if r == nil || r.db == nil || query.Page < 1 || query.PageSize < 1 || query.PageSize > 100 {
 		return nil, errors.New("payment order pagination invalid")
 	}
-	rows := make([]Model, 0)
-	db := orderQuery(r.db.WithContext(ctx).Table("payment_order"), query)
+	rows := make([]OrderRecord, 0)
+	db := orderQuery(r.db.WithContext(ctx).Table("payment_order"), query).
+		Select("payment_order.*, pc.environment AS config_environment").
+		Joins("LEFT JOIN payment_config pc ON pc.id = payment_order.config_id")
 	if !query.Personal {
-		db = db.Select("payment_order.*, ua.username AS username, ap.code AS platform_code").
+		db = db.Select("payment_order.*, pc.environment AS config_environment, ua.username AS username, ap.code AS platform_code").
 			Joins("LEFT JOIN user_account ua ON ua.id = payment_order.user_id").
 			Joins("LEFT JOIN permission_auth_platform ap ON ap.id = payment_order.platform_id")
 	}

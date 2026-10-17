@@ -147,7 +147,7 @@ func newEventFixture(t *testing.T) eventFixture {
 	repo := &eventRepositoryStub{orderID: 11}
 	confirmer := &eventConfirmerStub{repository: repo}
 	service := NewService(repo)
-	service.SetRuntime(eventRuntimeStub{credentials: credentials}, payment.EnvironmentSandbox)
+	service.SetRuntime(eventRuntimeStub{credentials: credentials})
 	service.SetConfirmer(confirmer)
 	service.now = func() time.Time { return now }
 	return eventFixture{service, repo, confirmer, credentials, key}
@@ -310,12 +310,13 @@ func TestSettlementInvariantIsNotMisclassifiedAsBalanceOverflow(t *testing.T) {
 	}
 }
 
-func TestReceiveRejectsMissingAndCrossEnvironmentBeforeAudit(t *testing.T) {
-	for _, deployed := range []payment.Environment{0, payment.EnvironmentProduction} {
+func TestReceiveRejectsInvalidCredentialEnvironmentBeforeAudit(t *testing.T) {
+	for _, environment := range []payment.Environment{0, 3} {
 		f := newEventFixture(t)
-		f.service.environment = deployed
+		f.credentials.Environment = environment
+		f.service.SetRuntime(eventRuntimeStub{credentials: f.credentials})
 		if _, err := f.service.Receive(context.Background(), 3, 4, f.signed(t, nil)); err == nil {
-			t.Fatalf("environment %d accepted sandbox evidence", deployed)
+			t.Fatalf("invalid credential environment %d accepted", environment)
 		}
 		if f.repo.creates != 0 || f.confirmer.calls != 0 {
 			t.Fatal("wrong environment persisted or credited")

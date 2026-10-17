@@ -26,14 +26,14 @@ func (r *createRepositoryStub) Confirm(context.Context, ConfirmedPayment, *int64
 	return SettlementResult{}, errors.New("unused")
 }
 
-func (r *createRepositoryStub) FindByRequest(context.Context, int64, int64, string) (Model, error) {
+func (r *createRepositoryStub) FindByRequest(context.Context, int64, int64, string) (OrderRecord, error) {
 	if r.findErr != nil {
-		return Model{}, r.findErr
+		return OrderRecord{}, r.findErr
 	}
 	if r.existing == nil {
-		return Model{}, gorm.ErrRecordNotFound
+		return OrderRecord{}, gorm.ErrRecordNotFound
 	}
-	return *r.existing, nil
+	return OrderRecord{Model: *r.existing, ConfigEnvironment: payment.EnvironmentSandbox}, nil
 }
 
 func (r *createRepositoryStub) Create(_ context.Context, row *Model) error {
@@ -74,8 +74,7 @@ func createServiceFixture(repo *createRepositoryStub) *Service {
 	service.SetRuntime(createRuntimeStub{
 		catalog:    []paymentconfig.CatalogItem{{ID: 3, Name: "Sandbox channel", Provider: payment.ProviderAlipay, Environment: payment.EnvironmentSandbox, AppID: "20260001", SellerID: "20880001", CurrentVersion: 4, IsEnabled: yesno.Yes}},
 		credential: paymentconfig.BoundCredential{ConfigID: 3, Provider: payment.ProviderAlipay, AppID: "20260001", SellerID: "20880001", Environment: payment.EnvironmentSandbox, Version: paymentconfig.CredentialVersion{ConfigID: 3, Version: 4, NotifyURL: "https://pay.example.test/callback", PayMethods: paymentconfig.PayMethods{payment.PayMethodWeb, payment.PayMethodH5}}},
-	}, createPackageStub{rows: []rechargepackage.CatalogItem{{ID: 8, Name: "100 credits", AmountCents: 1000}}}, payment.EnvironmentSandbox)
-	service.SetReturnOrigins([]string{"https://app.example.test"})
+	}, createPackageStub{rows: []rechargepackage.CatalogItem{{ID: 8, Name: "100 credits", AmountCents: 1000}}})
 	service.SetCheckout(func(context.Context, alipay.Credentials, alipay.CheckoutInput) (string, error) {
 		return "https://pay.example.test/checkout", nil
 	})

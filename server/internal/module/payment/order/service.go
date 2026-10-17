@@ -29,14 +29,12 @@ var (
 )
 
 type Service struct {
-	repository  repository
-	runtime     runtime
-	packages    packageCatalog
-	environment payment.Environment
-	origins     []string
-	checkout    checkoutFunc
-	now         func() time.Time
-	newOrderNo  func(time.Time) (string, error)
+	repository repository
+	runtime    runtime
+	packages   packageCatalog
+	checkout   checkoutFunc
+	now        func() time.Time
+	newOrderNo func(time.Time) (string, error)
 }
 
 func NewService(repository repository) *Service {
@@ -54,24 +52,20 @@ type packageCatalog interface {
 }
 
 type createRepository interface {
-	FindByRequest(context.Context, int64, int64, string) (Model, error)
+	FindByRequest(context.Context, int64, int64, string) (OrderRecord, error)
 	Create(context.Context, *Model) error
 }
 
 type listRepository interface {
 	Count(context.Context, ListQuery) (int64, error)
-	List(context.Context, ListQuery) ([]Model, error)
-	Find(context.Context, int64) (Model, error)
+	List(context.Context, ListQuery) ([]OrderRecord, error)
+	Find(context.Context, int64) (OrderRecord, error)
 }
 
 type checkoutFunc func(context.Context, alipay.Credentials, alipay.CheckoutInput) (string, error)
 
-func (s *Service) SetRuntime(value runtime, packages packageCatalog, environment payment.Environment) {
-	s.runtime, s.packages, s.environment = value, packages, environment
-}
-
-func (s *Service) SetReturnOrigins(origins []string) {
-	s.origins = append([]string(nil), origins...)
+func (s *Service) SetRuntime(value runtime, packages packageCatalog) {
+	s.runtime, s.packages = value, packages
 }
 
 func (s *Service) SetCheckout(value checkoutFunc) { s.checkout = value }
@@ -80,7 +74,7 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 	if err := ctx.Err(); err != nil {
 		return Options{}, apperror.DependencyUnavailable(err)
 	}
-	if s == nil || s.runtime == nil || s.packages == nil || !s.environment.Valid() {
+	if s == nil || s.runtime == nil || s.packages == nil {
 		return Options{}, apperror.DependencyUnavailable(errors.New("payment options dependencies missing"))
 	}
 	catalog, err := s.runtime.Catalog(ctx)
@@ -90,7 +84,7 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 	methods := make(map[payment.PayMethod]struct{})
 	available := false
 	for _, item := range catalog {
-		if item.IsEnabled != yesno.Yes || item.Provider != payment.ProviderAlipay || item.Environment != s.environment || item.CurrentVersion < 1 {
+		if item.IsEnabled != yesno.Yes || item.Provider != payment.ProviderAlipay || !checkoutEnvironment(item.Environment) || item.CurrentVersion < 1 {
 			continue
 		}
 		available = true
@@ -128,13 +122,13 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 		}
 		values = append(values, PackageOption{ID: item.ID, Name: item.Name, Amount: amount})
 	}
-	return Options{PayMethods: orderedMethods, Packages: values, Available: s.purchasesAvailable() && available && len(s.origins) > 0 && len(orderedMethods) > 0 && len(values) > 0}, nil
+	return Options{PayMethods: orderedMethods, Packages: values, Available: available && len(orderedMethods) > 0 && len(values) > 0}, nil
 }
 
-// Production checkout stays closed until P3 recovery and close verification
-// have been delivered. This gate never applies to trusted historical settlement.
-func (s *Service) purchasesAvailable() bool {
-	return s != nil && s.environment == payment.EnvironmentSandbox && len(s.origins) > 0
+// Production checkout remains closed pending production payment acceptance.
+// Trusted historical settlement is independent of this checkout gate.
+func checkoutEnvironment(environment payment.Environment) bool {
+	return environment == payment.EnvironmentSandbox
 }
 
 func (s *Service) List(ctx context.Context, query ListQuery) (pagination.Result[SafeValue], error) {
@@ -164,7 +158,7 @@ func (s *Service) List(ctx context.Context, query ListQuery) (pagination.Result[
 		if query.Personal && (row.UserID != query.UserID || row.PlatformID != query.PlatformID) {
 			return pagination.Result[SafeValue]{}, apperror.NotFound(ErrOrderNotFound)
 		}
-		value, valueErr := safeValue(ctx, row, s.now().UTC(), s.purchasesAvailable())
+		value, valueErr := safeValue(ctx, row.Model, s.now().UTC(), checkoutEnvironment(row.ConfigEnvironment))
 		if valueErr != nil {
 			return pagination.Result[SafeValue]{}, apperror.DependencyUnavailable(valueErr)
 		}
@@ -191,7 +185,7 @@ func (s *Service) Get(ctx context.Context, id int64) (SafeValue, error) {
 		}
 		return SafeValue{}, apperror.DependencyUnavailable(err)
 	}
-	value, err := safeValue(ctx, row, s.now().UTC(), s.purchasesAvailable())
+	value, err := safeValue(ctx, row.Model, s.now().UTC(), checkoutEnvironment(row.ConfigEnvironment))
 	if err != nil {
 		return SafeValue{}, apperror.DependencyUnavailable(err)
 	}
@@ -222,7 +216,7 @@ func (s *Service) GetForIdentity(ctx context.Context, actor auth.Identity, id in
 	if row.UserID != actor.UserID || row.PlatformID != actor.PlatformID {
 		return SafeValue{}, apperror.NotFound(ErrOrderNotFound)
 	}
-	value, err := safeValue(ctx, row, s.now().UTC(), s.purchasesAvailable())
+	value, err := safeValue(ctx, row.Model, s.now().UTC(), checkoutEnvironment(row.ConfigEnvironment))
 	if err != nil {
 		return SafeValue{}, apperror.DependencyUnavailable(err)
 	}
@@ -235,9 +229,6 @@ func (s *Service) Pay(ctx context.Context, actor auth.Identity, id int64) (Check
 	}
 	if id < 1 {
 		return Checkout{}, apperror.InvalidRequest(errors.New("order id invalid"))
-	}
-	if !s.purchasesAvailable() {
-		return Checkout{}, apperror.DependencyUnavailable(errors.New("payment purchases unavailable"))
 	}
 	if s == nil || s.repository == nil {
 		return Checkout{}, apperror.DependencyUnavailable(errors.New("payment order repository missing"))
@@ -266,11 +257,8 @@ func (s *Service) Create(ctx context.Context, actor auth.Identity, input CreateI
 	if err := validateCreateInput(input); err != nil {
 		return Checkout{}, apperror.InvalidRequest(err)
 	}
-	if s == nil || s.repository == nil || s.runtime == nil || s.packages == nil || !s.environment.Valid() {
+	if s == nil || s.repository == nil || s.runtime == nil || s.packages == nil {
 		return Checkout{}, apperror.DependencyUnavailable(errors.New("payment order create dependencies missing"))
-	}
-	if !s.purchasesAvailable() {
-		return Checkout{}, apperror.DependencyUnavailable(errors.New("payment purchases unavailable"))
 	}
 	repo, ok := s.repository.(createRepository)
 	if !ok {
@@ -308,7 +296,7 @@ func (s *Service) Create(ctx context.Context, actor auth.Identity, input CreateI
 	var selected paymentconfig.CatalogItem
 	channelAvailable := false
 	for _, candidate := range catalog {
-		if candidate.IsEnabled == yesno.Yes && candidate.Provider == payment.ProviderAlipay && candidate.Environment == s.environment && candidate.CurrentVersion > 0 {
+		if candidate.IsEnabled == yesno.Yes && candidate.Provider == payment.ProviderAlipay && checkoutEnvironment(candidate.Environment) && candidate.CurrentVersion > 0 {
 			channelAvailable = true
 			bound, err := s.runtime.Credential(ctx, candidate.ID, candidate.CurrentVersion)
 			if err != nil {
@@ -331,13 +319,13 @@ func (s *Service) Create(ctx context.Context, actor auth.Identity, input CreateI
 	if err != nil {
 		return Checkout{}, apperror.DependencyUnavailable(err)
 	}
-	if bound.Environment != s.environment {
+	if !checkoutEnvironment(bound.Environment) {
 		return Checkout{}, apperror.DependencyUnavailable(errors.New("payment environment mismatch"))
 	}
 	if !containsPayMethod(bound.Version.PayMethods, input.PayMethod) {
 		return Checkout{}, apperror.InvalidRequest(errors.New("payment method unavailable"))
 	}
-	if _, err := parseReturnURL(input.ReturnURL, s.origins); err != nil {
+	if _, err := parseReturnURL(input.ReturnURL); err != nil {
 		return Checkout{}, apperror.InvalidRequest(err)
 	}
 	now := s.now().UTC()
@@ -358,28 +346,29 @@ func (s *Service) Create(ctx context.Context, actor auth.Identity, input CreateI
 	return s.checkoutRow(ctx, *row, credentials)
 }
 
-func (s *Service) checkoutExisting(ctx context.Context, row Model) (Checkout, error) {
-	if row.UserID < 1 || row.Status < StatusPending || row.Status > StatusClosed {
+func (s *Service) checkoutExisting(ctx context.Context, row OrderRecord) (Checkout, error) {
+	model := row.Model
+	if model.UserID < 1 || model.Status < StatusPending || model.Status > StatusClosed {
 		return Checkout{}, apperror.DependencyUnavailable(errors.New("stored payment order is invalid"))
 	}
-	value, err := safeValue(ctx, row, s.now().UTC(), s.purchasesAvailable())
+	value, err := safeValue(ctx, model, s.now().UTC(), checkoutEnvironment(row.ConfigEnvironment))
 	if err != nil {
 		return Checkout{}, apperror.DependencyUnavailable(err)
 	}
-	if row.Status != StatusPending || !row.ExpiresAt.After(s.now().UTC()) {
+	if model.Status != StatusPending || !model.ExpiresAt.After(s.now().UTC()) {
 		return Checkout{Order: value}, nil
 	}
 	if s.runtime == nil {
 		return Checkout{}, apperror.DependencyUnavailable(errors.New("payment runtime missing"))
 	}
-	credentials, bound, err := s.credentials(ctx, row.ConfigID, row.ConfigVersion)
+	credentials, bound, err := s.credentials(ctx, model.ConfigID, model.ConfigVersion)
 	if err != nil {
 		return Checkout{}, apperror.DependencyUnavailable(err)
 	}
-	if bound.Environment != s.environment {
+	if bound.Environment != row.ConfigEnvironment || !checkoutEnvironment(bound.Environment) {
 		return Checkout{}, apperror.DependencyUnavailable(errors.New("payment environment mismatch"))
 	}
-	return s.checkoutRow(ctx, row, credentials)
+	return s.checkoutRow(ctx, model, credentials)
 }
 
 func (s *Service) credentials(ctx context.Context, configID, version int64) (alipay.Credentials, paymentconfig.BoundCredential, error) {
@@ -404,7 +393,7 @@ func (s *Service) credentials(ctx context.Context, configID, version int64) (ali
 }
 
 func (s *Service) checkoutRow(ctx context.Context, row Model, credentials alipay.Credentials) (Checkout, error) {
-	value, err := safeValue(ctx, row, s.now().UTC(), s.purchasesAvailable())
+	value, err := safeValue(ctx, row, s.now().UTC(), checkoutEnvironment(credentials.Environment))
 	if err != nil {
 		return Checkout{}, apperror.DependencyUnavailable(err)
 	}
@@ -451,12 +440,6 @@ func (s *Service) Confirm(ctx context.Context, payment ConfirmedPayment, callbac
 	}
 	if s == nil || s.repository == nil {
 		return SettlementResult{}, apperror.DependencyUnavailable(errors.New("payment order repository missing"))
-	}
-	if !s.environment.Valid() {
-		return SettlementResult{}, apperror.DependencyUnavailable(errors.New("payment deployment environment missing"))
-	}
-	if payment.Environment != s.environment {
-		return SettlementResult{}, apperror.InvalidRequest(ErrConfigMismatch)
 	}
 	result, err := s.repository.Confirm(ctx, payment, callbackEventID, s.now().UTC())
 	if err != nil {

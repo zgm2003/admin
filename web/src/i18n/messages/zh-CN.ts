@@ -111,8 +111,6 @@ export const zhCN = {
   'payment.order.personalTitle': '我的充值订单',
   'payment.order.pay': '继续支付',
   'payment.order.checkoutUnavailable': '支付入口当前不可用，请稍后重试',
-  'payment.order.returnUrl': '支付完成回跳地址',
-  'payment.order.returnUrlPlaceholder': '请输入已配置白名单内的 HTTPS 地址',
   'payment.order.package': '充值套餐',
   'payment.order.packagePlaceholder': '请选择充值套餐',
   'payment.order.payMethod': '支付方式',

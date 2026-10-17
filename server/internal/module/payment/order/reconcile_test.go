@@ -12,15 +12,15 @@ import (
 	"admin/server/internal/payment/alipay"
 )
 
-func testReconciler(repository reconcileRepository, runtime reconcileRuntime, confirmer reconcileConfirmer, gateway reconcileGateway, environment payment.Environment) *Reconciler {
-	r := NewReconciler(repository, runtime, confirmer, gateway, environment)
+func testReconciler(repository reconcileRepository, runtime reconcileRuntime, confirmer reconcileConfirmer, gateway reconcileGateway) *Reconciler {
+	r := NewReconciler(repository, runtime, confirmer, gateway)
 	r.SetPendingRecovery(&pendingRecoveryStub{})
 	r.SetChannelLimiter(&channelLimiterStub{})
 	return r
 }
 
 func TestReconcilerRejectsMissingDistributedControls(t *testing.T) {
-	r := NewReconciler(&reconcileRepositoryStub{}, reconcileRuntimeStub{}, &reconcileConfirmerStub{}, &reconcileGatewayStub{}, payment.EnvironmentSandbox)
+	r := NewReconciler(&reconcileRepositoryStub{}, reconcileRuntimeStub{}, &reconcileConfirmerStub{}, &reconcileGatewayStub{})
 	if err := r.Run(context.Background()); err == nil {
 		t.Fatal("missing pending recovery and limiter accepted")
 	}
@@ -127,7 +127,7 @@ func TestReconcilerClosesExpiredOrderOnlyAfterUnpaidQuery(t *testing.T) {
 	repository := &reconcileRepositoryStub{claims: []ClaimedOrder{claimedFixture(now)}}
 	gateway := &reconcileGatewayStub{trade: alipay.Trade{OrderNo: "PO202610160000000000000001", TradeNo: "T-1", AppID: "app", Status: "WAIT_BUYER_PAY", AmountCents: 1000}, closeTrade: alipay.Trade{OrderNo: "PO202610160000000000000001", TradeNo: "T-1", AppID: "app"}}
 	confirmer := &reconcileConfirmerStub{}
-	reconciler := testReconciler(repository, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, confirmer, gateway, payment.EnvironmentSandbox)
+	reconciler := testReconciler(repository, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, confirmer, gateway)
 	reconciler.now = func() time.Time { return now }
 	if err := reconciler.Run(context.Background()); err != nil {
 		t.Fatalf("Run() error = %v", err)
@@ -142,7 +142,7 @@ func TestReconcilerSettlesPaidQueryBeforeConsideringExpiry(t *testing.T) {
 	repository := &reconcileRepositoryStub{claims: []ClaimedOrder{claimedFixture(now)}}
 	gateway := &reconcileGatewayStub{trade: alipay.Trade{OrderNo: "PO202610160000000000000001", TradeNo: "T-1", AppID: "app", Status: "TRADE_SUCCESS", AmountCents: 1000}}
 	confirmer := &reconcileConfirmerStub{}
-	reconciler := testReconciler(repository, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, confirmer, gateway, payment.EnvironmentSandbox)
+	reconciler := testReconciler(repository, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, confirmer, gateway)
 	reconciler.now = func() time.Time { return now }
 	if err := reconciler.Run(context.Background()); err != nil {
 		t.Fatalf("Run() error = %v", err)
@@ -155,7 +155,7 @@ func TestReconcilerSettlesPaidQueryBeforeConsideringExpiry(t *testing.T) {
 func TestReconcilerRetainsLeaseOnProviderFailureAndSchedulesBackoff(t *testing.T) {
 	now := time.Date(2026, 10, 16, 1, 0, 0, 0, time.UTC)
 	repository := &reconcileRepositoryStub{claims: []ClaimedOrder{claimedFixture(now)}}
-	reconciler := testReconciler(repository, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, &reconcileGatewayErrorStub{}, payment.EnvironmentSandbox)
+	reconciler := testReconciler(repository, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, &reconcileGatewayErrorStub{})
 	reconciler.now = func() time.Time { return now }
 	if err := reconciler.Run(context.Background()); err == nil {
 		t.Fatal("provider failure returned nil")
@@ -185,7 +185,7 @@ func TestReconcilerRejectsUnpaidAndClosedMismatchedFacts(t *testing.T) {
 				}
 				gateway := &reconcileGatewayStub{trade: trade}
 				confirmer := &reconcileConfirmerStub{}
-				r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", SellerID: "seller", Environment: payment.EnvironmentSandbox}}, confirmer, gateway, payment.EnvironmentSandbox)
+				r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", SellerID: "seller", Environment: payment.EnvironmentSandbox}}, confirmer, gateway)
 				if err := r.Run(context.Background()); err == nil {
 					t.Fatal("mismatched provider facts accepted")
 				}
@@ -201,7 +201,7 @@ func TestReconcilerRejectsMismatchedCloseResponse(t *testing.T) {
 	now := time.Now().UTC()
 	repo := &reconcileRepositoryStub{claims: []ClaimedOrder{claimedFixture(now)}}
 	gateway := &reconcileGatewayStub{trade: alipay.Trade{OrderNo: claimedFixture(now).OrderNo, TradeNo: "T-1", AppID: "app", Status: "WAIT_BUYER_PAY", AmountCents: 1000}, closeTrade: alipay.Trade{OrderNo: "ANOTHER", TradeNo: "T-2", AppID: "app"}}
-	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, gateway, payment.EnvironmentSandbox)
+	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, gateway)
 	if err := r.Run(context.Background()); err == nil || repo.closed != 0 || len(repo.advanced) != 1 {
 		t.Fatalf("close response accepted: closed=%d next=%v err=%v", repo.closed, repo.advanced, err)
 	}
@@ -229,7 +229,7 @@ func TestReconcilerStartsEveryClaimImmediately(t *testing.T) {
 			return alipay.Trade{}, ctx.Err()
 		}
 	}}
-	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, gateway, payment.EnvironmentSandbox)
+	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, gateway)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	done := make(chan error, 1)
@@ -252,7 +252,7 @@ func TestReconcilerStartsEveryClaimImmediately(t *testing.T) {
 func TestReconcilerRecoversPendingCallbacksBeforeOrderChecks(t *testing.T) {
 	repo := &reconcileRepositoryStub{}
 	recovery := &pendingRecoveryStub{}
-	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, &reconcileGatewayStub{}, payment.EnvironmentSandbox)
+	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, &reconcileGatewayStub{})
 	r.SetPendingRecovery(recovery)
 	if err := r.Run(context.Background()); err != nil {
 		t.Fatal(err)
@@ -267,7 +267,7 @@ func TestReconcilerReportsPendingRecoveryFailureAndStillProcessesOrders(t *testi
 	repo := &reconcileRepositoryStub{claims: []ClaimedOrder{claimedFixture(now)}}
 	recovery := &pendingRecoveryStub{err: errors.New("pending recovery unavailable")}
 	gateway := &reconcileGatewayStub{trade: alipay.Trade{OrderNo: claimedFixture(now).OrderNo, TradeNo: "T-1", AppID: "app", Status: "TRADE_SUCCESS", AmountCents: 1000}}
-	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, gateway, payment.EnvironmentSandbox)
+	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, gateway)
 	r.SetPendingRecovery(recovery)
 	if err := r.Run(context.Background()); err == nil || recovery.calls != 1 {
 		t.Fatalf("recovery failure hidden: %v", err)
@@ -301,7 +301,7 @@ func TestReconcilerChannelAdmissionFailureNeverCallsProvider(t *testing.T) {
 	now := time.Now().UTC()
 	repo := &reconcileRepositoryStub{claims: []ClaimedOrder{claimedFixture(now)}}
 	gateway := &reconcileGatewayStub{}
-	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, gateway, payment.EnvironmentSandbox)
+	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, gateway)
 	limiter := &channelLimiterStub{reserveErr: errors.New("Redis unavailable")}
 	r.SetChannelLimiter(limiter)
 	if err := r.Run(context.Background()); err == nil {
@@ -317,7 +317,7 @@ func TestReconcilerPaidProofSurvivesChannelReleaseFailure(t *testing.T) {
 	repo := &reconcileRepositoryStub{claims: []ClaimedOrder{claimedFixture(now)}}
 	gateway := &reconcileGatewayStub{trade: alipay.Trade{OrderNo: claimedFixture(now).OrderNo, TradeNo: "T-1", AppID: "app", Status: "TRADE_SUCCESS", AmountCents: 1000}}
 	confirmer := &reconcileConfirmerStub{}
-	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, confirmer, gateway, payment.EnvironmentSandbox)
+	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, confirmer, gateway)
 	limiter := &channelLimiterStub{releaseErr: errors.New("Redis release unavailable")}
 	r.SetChannelLimiter(limiter)
 	if err := r.Run(context.Background()); err == nil {
@@ -334,7 +334,7 @@ func TestReconcilerCancellationStillReleasesChannelSlot(t *testing.T) {
 	defer cancel()
 	repo := &reconcileRepositoryStub{claims: []ClaimedOrder{claimedFixture(now)}}
 	gateway := &reconcileGatewayStub{queryHook: func(context.Context, string) (alipay.Trade, error) { cancel(); return alipay.Trade{}, context.Canceled }}
-	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, gateway, payment.EnvironmentSandbox)
+	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, gateway)
 	limiter := &channelLimiterStub{}
 	r.SetChannelLimiter(limiter)
 	if err := r.Run(ctx); err == nil {
@@ -354,7 +354,7 @@ func TestReconcilerStopsBeforeCloseWhenRenewalLosesLease(t *testing.T) {
 		return nil
 	}}
 	gateway := &reconcileGatewayStub{trade: alipay.Trade{OrderNo: claimedFixture(now).OrderNo, TradeNo: "T-1", AppID: "app", Status: "WAIT_BUYER_PAY", AmountCents: 1000}}
-	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, gateway, payment.EnvironmentSandbox)
+	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, gateway)
 	if err := r.Run(context.Background()); !errors.Is(err, ErrReconcileLeaseLost) {
 		t.Fatalf("lease loss=%v", err)
 	}

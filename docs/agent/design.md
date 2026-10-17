@@ -176,6 +176,8 @@ Canvas 上传规则由 Admin 管理，使用 Canvas 的 `platform_id` 和 `canva
 
 支付回调已接入独立 Provider 路由 `/api/v1/payment/callback/alipay/:configId/:version`，不经过用户鉴权；服务端只保留闭合验签事实并在同一事务内编排订单入账。P3 恢复与巡检完成前，生产环境购买保持关闭。
 
+支付环境以后台支付配置的 `environment` 为唯一来源，下单选择已启用的可用配置，已有订单回调/查单始终绑定原 `configId/configVersion`；API/Worker 不读取 `PAYMENT_ENVIRONMENT`。完整 HTTPS `notifyUrl` 继续在支付配置页面维护，与前端地址和 CORS 无关。充值页面在提交时自动取当前页面 URL（保留路径/query、去掉 fragment）作为 `returnUrl`，后端校验绝对 HTTP(S) URL 格式后作为支付宝下单参数传递，不再提供手填回跳地址或读取 `PAYMENT_RETURN_ORIGINS`；到账仍只能来自验签回调或可信查单，不根据浏览器回跳参数加款。生产购买保护门暂时保留，按订单关联配置的环境判断，不借本次配置收口开放生产支付。
+
 ## 定时任务
 
 主页面只展示计划表，提供计划下拉筛选；每行“执行记录”打开该计划的弹窗表格，按创建时间倒序、同一时间按 ID 倒序，使用后端分页与总数，不混合展示其他计划记录。执行状态保持后端提供的真实生命周期选项；切换状态、计划或每页条数回到第一页。详情和重试分别受独立动作权限控制，重试能力与后端 actions 交叉检查。程序式确认框的确定/取消按钮跟随应用语言。

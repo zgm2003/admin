@@ -23,9 +23,10 @@ import (
 )
 
 type orderReadRepository struct {
-	rows  []Model
-	query ListQuery
-	calls int
+	rows        []Model
+	environment payment.Environment
+	query       ListQuery
+	calls       int
 }
 
 func (*orderReadRepository) Confirm(context.Context, ConfirmedPayment, *int64, time.Time) (SettlementResult, error) {
@@ -36,12 +37,18 @@ func (r *orderReadRepository) Count(_ context.Context, query ListQuery) (int64, 
 	r.calls++
 	return int64(len(r.rows)), nil
 }
-func (r *orderReadRepository) List(_ context.Context, query ListQuery) ([]Model, error) {
+func (r *orderReadRepository) List(_ context.Context, query ListQuery) ([]OrderRecord, error) {
 	r.query = query
 	r.calls++
-	return r.rows, nil
+	rows := make([]OrderRecord, 0, len(r.rows))
+	for _, row := range r.rows {
+		rows = append(rows, OrderRecord{Model: row, ConfigEnvironment: r.environment})
+	}
+	return rows, nil
 }
-func (r *orderReadRepository) Find(context.Context, int64) (Model, error) { return r.rows[0], nil }
+func (r *orderReadRepository) Find(context.Context, int64) (OrderRecord, error) {
+	return OrderRecord{Model: r.rows[0], ConfigEnvironment: r.environment}, nil
+}
 
 func validReadOrder() Model {
 	return Model{ID: 1, OrderNo: "ORDER-1", UserID: 7, PlatformID: 1, PackageName: "Credits", AmountCents: 300, Status: StatusPending, ExpiresAt: time.Now().Add(time.Hour)}
@@ -164,17 +171,15 @@ func TestOrderRoutesRequireExactActionNotPagePermission(t *testing.T) {
 	}
 }
 
-func TestPurchaseOptionsRequireReturnOriginsAndLocalizedNumericMethods(t *testing.T) {
+func TestPurchaseOptionsUseConfiguredChannelsAndLocalizedNumericMethods(t *testing.T) {
 	service := createServiceFixture(&createRepositoryStub{})
-	service.SetReturnOrigins(nil)
 	got, err := service.Options(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Available {
-		t.Fatal("purchase advertised without return origins")
+	if !got.Available {
+		t.Fatal("configured sandbox checkout is unavailable")
 	}
-	service.SetReturnOrigins([]string{"https://app.example.test"})
 	for _, locale := range []i18n.Locale{i18n.ZhCN, i18n.EnUS} {
 		got, err = service.Options(i18n.WithLocale(context.Background(), locale))
 		if err != nil {

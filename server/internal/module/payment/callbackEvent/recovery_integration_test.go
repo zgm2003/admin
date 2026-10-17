@@ -9,7 +9,6 @@ import (
 
 	settings "admin/server/internal/config"
 	"admin/server/internal/database/testschema"
-	"admin/server/internal/module/payment"
 	"admin/server/internal/module/payment/order"
 	"github.com/joho/godotenv"
 )
@@ -43,7 +42,7 @@ INSERT INTO payment_wallet VALUES(7,-7000000000,CURRENT_TIMESTAMP,CURRENT_TIMEST
 	}
 	f := newEventFixture(t)
 	service := NewService(NewRepository(db))
-	service.SetRuntime(eventRuntimeStub{credentials: f.credentials}, payment.EnvironmentSandbox)
+	service.SetRuntime(eventRuntimeStub{credentials: f.credentials})
 	service.SetConfirmer(&eventConfirmerStub{err: errors.New("injected settlement outage")})
 	service.now = f.service.now
 	if _, err := service.Receive(ctx, 3, 4, f.signed(t, nil)); err == nil {
@@ -57,7 +56,6 @@ INSERT INTO payment_wallet VALUES(7,-7000000000,CURRENT_TIMESTAMP,CURRENT_TIMEST
 		t.Fatalf("event not recoverable: %+v", before)
 	}
 	settlement := order.NewService(order.NewRepository(db))
-	settlement.SetRuntime(nil, nil, payment.EnvironmentSandbox)
 	service.SetConfirmer(settlement)
 	now := service.now().Add(time.Minute)
 	service.now = func() time.Time { return now }

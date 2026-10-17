@@ -56,14 +56,13 @@ type reconcileGateway interface {
 }
 
 type Reconciler struct {
-	repository  reconcileRepository
-	runtime     reconcileRuntime
-	confirmer   reconcileConfirmer
-	gateway     reconcileGateway
-	pending     pendingCallbackRecovery
-	limiter     channelLimiter
-	environment payment.Environment
-	now         func() time.Time
+	repository reconcileRepository
+	runtime    reconcileRuntime
+	confirmer  reconcileConfirmer
+	gateway    reconcileGateway
+	pending    pendingCallbackRecovery
+	limiter    channelLimiter
+	now        func() time.Time
 }
 
 func (r *Reconciler) SetPendingRecovery(value pendingCallbackRecovery) {
@@ -78,11 +77,11 @@ func (r *Reconciler) SetChannelLimiter(value channelLimiter) {
 	}
 }
 
-func NewReconciler(repository reconcileRepository, runtime reconcileRuntime, confirmer reconcileConfirmer, gateway reconcileGateway, environment payment.Environment) *Reconciler {
+func NewReconciler(repository reconcileRepository, runtime reconcileRuntime, confirmer reconcileConfirmer, gateway reconcileGateway) *Reconciler {
 	if gateway == nil {
 		gateway = alipayGateway{}
 	}
-	return &Reconciler{repository: repository, runtime: runtime, confirmer: confirmer, gateway: gateway, environment: environment, now: time.Now}
+	return &Reconciler{repository: repository, runtime: runtime, confirmer: confirmer, gateway: gateway, now: time.Now}
 }
 
 type alipayGateway struct{}
@@ -102,7 +101,7 @@ type channelCallResult struct {
 func (r *Reconciler) providerCall(ctx context.Context, credentials alipay.Credentials, call func(context.Context) (alipay.Trade, error)) channelCallResult {
 	ioCtx, cancel := context.WithTimeout(ctx, reconcileIOBudget)
 	defer cancel()
-	release, err := r.limiter.Reserve(ioCtx, r.environment, credentials.AppID)
+	release, err := r.limiter.Reserve(ioCtx, credentials.Environment, credentials.AppID)
 	if err != nil {
 		return channelCallResult{callErr: err}
 	}
@@ -124,7 +123,7 @@ func (r *Reconciler) Run(ctx context.Context) error {
 	if ctx == nil {
 		return errors.New("payment reconcile context is required")
 	}
-	if r == nil || r.repository == nil || r.runtime == nil || r.confirmer == nil || r.gateway == nil || r.pending == nil || r.limiter == nil || !r.environment.Valid() {
+	if r == nil || r.repository == nil || r.runtime == nil || r.confirmer == nil || r.gateway == nil || r.pending == nil || r.limiter == nil {
 		return errors.New("payment reconcile dependencies are missing")
 	}
 	workCtx, cancel := context.WithTimeout(ctx, reconcileWorkBudget)
@@ -182,7 +181,7 @@ func (r *Reconciler) process(ctx context.Context, claimed ClaimedOrder, now time
 	if err != nil {
 		return r.deferOrder(ctx, claimed, now, err)
 	}
-	if credentials.Environment != r.environment || credentials.AppID == "" {
+	if !credentials.Environment.Valid() || credentials.AppID == "" {
 		return r.deferOrder(ctx, claimed, now, ErrConfigMismatch)
 	}
 	if err := r.repository.RenewCheck(ctx, claimed.ID, claimed.Token, r.clockNow(), reconcileLease); err != nil {
@@ -208,7 +207,7 @@ func (r *Reconciler) process(ctx context.Context, claimed ClaimedOrder, now time
 		if trade.TradeNo == "" || trade.AmountCents < 1 || trade.AppID != credentials.AppID {
 			return r.deferOrder(ctx, claimed, now, ErrAmountMismatch)
 		}
-		_, err := r.confirmer.Confirm(ctx, ConfirmedPayment{ConfigID: claimed.ConfigID, ConfigVersion: claimed.ConfigVersion, Environment: r.environment, OrderNo: trade.OrderNo, TradeNo: trade.TradeNo, AppID: trade.AppID, SellerID: trade.SellerID, ProofSource: ProofSourceQuery, AmountCents: trade.AmountCents, Status: trade.Status, PaidAt: trade.PaidAt}, nil)
+		_, err := r.confirmer.Confirm(ctx, ConfirmedPayment{ConfigID: claimed.ConfigID, ConfigVersion: claimed.ConfigVersion, Environment: credentials.Environment, OrderNo: trade.OrderNo, TradeNo: trade.TradeNo, AppID: trade.AppID, SellerID: trade.SellerID, ProofSource: ProofSourceQuery, AmountCents: trade.AmountCents, Status: trade.Status, PaidAt: trade.PaidAt}, nil)
 		if err != nil {
 			return r.deferOrder(ctx, claimed, now, errors.Join(err, query.releaseErr))
 		}

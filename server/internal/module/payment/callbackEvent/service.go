@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"time"
 
-	"admin/server/internal/module/payment"
 	"admin/server/internal/module/payment/order"
 	"admin/server/internal/payment/alipay"
 	"admin/server/internal/shared/apperror"
@@ -39,19 +38,16 @@ type repository interface {
 }
 
 type Service struct {
-	repository  repository
-	runtime     runtime
-	confirmer   confirmer
-	environment payment.Environment
-	now         func() time.Time
+	repository repository
+	runtime    runtime
+	confirmer  confirmer
+	now        func() time.Time
 }
 
 func NewService(repository repository) *Service {
 	return &Service{repository: repository, now: time.Now}
 }
-func (s *Service) SetRuntime(value runtime, environment payment.Environment) {
-	s.runtime, s.environment = value, environment
-}
+func (s *Service) SetRuntime(value runtime)     { s.runtime = value }
 func (s *Service) SetConfirmer(value confirmer) { s.confirmer = value }
 
 type ReceiveResult struct {
@@ -75,14 +71,14 @@ func (s *Service) Receive(ctx context.Context, configID, version int64, values u
 	if configID < 1 || version < 1 {
 		return ReceiveResult{}, apperror.InvalidRequest(errors.New("payment callback coordinates invalid"))
 	}
-	if s == nil || s.repository == nil || s.runtime == nil || s.confirmer == nil || !s.environment.Valid() {
+	if s == nil || s.repository == nil || s.runtime == nil || s.confirmer == nil {
 		return ReceiveResult{}, apperror.DependencyUnavailable(errors.New("payment callback dependencies missing"))
 	}
 	credentials, err := s.runtime.Credentials(ctx, configID, version)
 	if err != nil {
 		return ReceiveResult{}, apperror.DependencyUnavailable(err)
 	}
-	if credentials.Environment != s.environment || !validFact(credentials.AppID, 64) || !validFact(credentials.SellerID, 64) {
+	if !credentials.Environment.Valid() || !validFact(credentials.AppID, 64) || !validFact(credentials.SellerID, 64) {
 		return ReceiveResult{}, apperror.DependencyUnavailable(order.ErrConfigMismatch)
 	}
 	notify, err := alipay.VerifyNotify(ctx, credentials, values)

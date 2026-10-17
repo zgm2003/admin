@@ -18,7 +18,7 @@ type pendingRepository interface {
 // verification. The settlement transaction locks the event, order and wallet;
 // concurrent deliveries/recovery jobs therefore need no second event lease.
 func (s *Service) RecoverPending(ctx context.Context) error {
-	if ctx == nil || s == nil || s.repository == nil || s.runtime == nil || s.confirmer == nil || !s.environment.Valid() {
+	if ctx == nil || s == nil || s.repository == nil || s.runtime == nil || s.confirmer == nil {
 		return errors.New("payment callback recovery dependencies missing")
 	}
 	repo, ok := s.repository.(pendingRepository)
@@ -73,7 +73,7 @@ func (s *Service) recoverEvent(ctx context.Context, row Model) error {
 	if err != nil {
 		return err
 	}
-	if credentials.Environment != s.environment || !validFact(credentials.AppID, 64) || !validFact(credentials.SellerID, 64) {
+	if !credentials.Environment.Valid() || !validFact(credentials.AppID, 64) || !validFact(credentials.SellerID, 64) {
 		return errors.New("payment callback recovery environment or identity mismatch")
 	}
 	payload := stored.Payload

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"admin/server/internal/module/payment"
 	"reflect"
 	"strings"
 	"testing"
@@ -177,27 +176,25 @@ func TestLoadAPIRejectsInvalidRealtimeLimits(t *testing.T) {
 }
 
 func TestLoadWorker(t *testing.T) {
-	t.Run("loads PostgreSQL, Redis, and payment environment", func(t *testing.T) {
+	t.Run("loads PostgreSQL and Redis", func(t *testing.T) {
 		got, err := LoadWorker(lookup(map[string]string{
-			"POSTGRES_DSN":        validPostgresDSN,
-			"REDIS_URL":           validRedisURL,
-			"PAYMENT_ENVIRONMENT": "1",
+			"POSTGRES_DSN": validPostgresDSN,
+			"REDIS_URL":    validRedisURL,
 		}))
 		if err != nil {
 			t.Fatalf("LoadWorker() error = %v", err)
 		}
 
-		if got.PostgresDSN != validPostgresDSN || got.RedisURL != validRedisURL || got.PaymentEnvironment != payment.EnvironmentSandbox {
+		if got.PostgresDSN != validPostgresDSN || got.RedisURL != validRedisURL {
 			t.Fatalf("LoadWorker() = %+v", got)
 		}
 	})
 
-	for _, key := range []string{"POSTGRES_DSN", "REDIS_URL", "PAYMENT_ENVIRONMENT"} {
+	for _, key := range []string{"POSTGRES_DSN", "REDIS_URL"} {
 		t.Run("rejects missing "+key, func(t *testing.T) {
 			values := map[string]string{
-				"POSTGRES_DSN":        validPostgresDSN,
-				"REDIS_URL":           validRedisURL,
-				"PAYMENT_ENVIRONMENT": "1",
+				"POSTGRES_DSN": validPostgresDSN,
+				"REDIS_URL":    validRedisURL,
 			}
 			delete(values, key)
 
@@ -209,14 +206,13 @@ func TestLoadWorker(t *testing.T) {
 
 func validAPIValues() map[string]string {
 	return map[string]string{
-		"HTTP_ADDR":           ":16301",
-		"POSTGRES_DSN":        validPostgresDSN,
-		"REDIS_URL":           validRedisURL,
-		"CORS_ORIGIN":         "http://localhost:16300",
-		"APP_SECRET":          strings.Repeat("s", 64),
-		"AUTH_COOKIE_SECURE":  "0",
-		"TRUSTED_PROXIES":     "none",
-		"PAYMENT_ENVIRONMENT": "1",
+		"HTTP_ADDR":          ":16301",
+		"POSTGRES_DSN":       validPostgresDSN,
+		"REDIS_URL":          validRedisURL,
+		"CORS_ORIGIN":        "http://localhost:16300",
+		"APP_SECRET":         strings.Repeat("s", 64),
+		"AUTH_COOKIE_SECURE": "0",
+		"TRUSTED_PROXIES":    "none",
 	}
 }
 

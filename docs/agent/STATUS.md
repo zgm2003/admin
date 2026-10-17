@@ -1,5 +1,12 @@
 # 项目状态
 
+## 支付运行配置收口与自动回跳（2026-10-17，实现与定向验证完成）
+
+- 按维护者要求移除 API/Worker 的 `PAYMENT_ENVIRONMENT` 与 `PAYMENT_RETURN_ORIGINS` 配置字段、加载校验和装配依赖，同时清理 `.env.example`、本地 `.env` 和 README 的重复配置。支付环境以后台支付配置为唯一来源；完整 HTTPS `notifyUrl` 仍由支付配置页面维护，与前端 Origin/CORS 无关。
+- 个人充值页取消手填回跳地址，在创建订单提交时自动取当前页面 URL（保留路径/query、去掉 fragment）作为 `returnUrl`，通过订单快照传给支付宝 `return_url`；后端只校验绝对 HTTP(S) URL 格式，不新增回跳白名单配置，不根据回跳参数入账。
+- 订单列表/详情/幂等查询通过原 SQL 联表读取配置环境，不增加逐行配置查询，列表仍为 count + page 两次数据库查询；历史回调、恢复和巡检按订单绑定的配置/凭据版本选择 SDK 环境，Redis 限流坐标继续按真实凭据的 environment/appId 隔离，沿用跨实例状态/快照/租约协议。默认百万用户/多实例容量假设不变；生产下单保护门保留，本次不开放生产支付、不迁移表或菜单、不改变负余额/不退款约定。
+- 回归先复现无 env 启动失败、回调/巡检全局环境依赖、挂载时地址固化以及不完整 URL 被接受；修补后 `go test -p 1 ./internal/config ./internal/module/payment/... ./internal/payment/alipay -count=1`（含隔离 PostgreSQL/Redis 集成）通过，前端 `pnpm vitest run tests/api/payment tests/views/payment tests/i18n/index.test.ts --pool=threads --maxWorkers=1`（11 文件/47 项）通过。`go vet ./internal/config ./internal/module/payment/... ./internal/payment/alipay ./cmd/api ./cmd/worker`、`go build ./...`、`pnpm build`（含 vue-tsc）、`pnpm check:architecture`（0 findings）、受影响前端文件 Prettier/ESLint、Go 文件 gofmt 与 `git diff --check` 均通过；独立只读审查无阻塞发现。构建仍有既有大 chunk 提示；本轮未重跑全仓测试，未做真实付款/到账/公网回调或 Worker 消费验收，未提交 Git。
+
 ## 支付兑换码与个人充值入口（2026-10-17，实现已接入，部署与到账验收待完成）
 
 - 本期已接入固定套餐等额充值、钱包/统一订单/流水、支付宝 Web/H5 配置与回调事实、订单巡检、兑换码生成/作废/兑换和个人钱包入口；这不代表部署与真实到账验收完成。不做退款、AI 扣费、预扣/冻结或管理员任意加款；钱包余额继续允许完整有符号 `int64`，充值只增加余额。

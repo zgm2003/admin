@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"admin/server/internal/module/payment"
@@ -44,31 +45,24 @@ func validateCreateInput(input CreateInput) error {
 	if input.PackageID < 1 || (input.PayMethod != payment.PayMethodWeb && input.PayMethod != payment.PayMethodH5) {
 		return fmt.Errorf("packageId or payMethod invalid")
 	}
-	if _, err := parseReturnURL(input.ReturnURL, nil); err != nil {
+	if _, err := parseReturnURL(input.ReturnURL); err != nil {
 		return err
 	}
 	return nil
 }
 
-func parseReturnURL(raw string, allowedOrigins []string) (*url.URL, error) {
+func parseReturnURL(raw string) (*url.URL, error) {
 	if len(raw) == 0 || len(raw) > 2048 || strings.TrimSpace(raw) != raw {
 		return nil, fmt.Errorf("returnUrl invalid")
 	}
 	parsed, err := url.Parse(raw)
-	if err != nil || parsed.User != nil || parsed.Fragment != "" || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "https" && parsed.Scheme != "http") {
+	if err != nil || parsed.User != nil || strings.Contains(raw, "#") || parsed.Opaque != "" || parsed.Scheme == "" || parsed.Hostname() == "" || strings.ContainsAny(parsed.Host, "\\/\t\r\n @*") || strings.HasSuffix(parsed.Host, ":") || (parsed.Scheme != "https" && parsed.Scheme != "http") {
 		return nil, fmt.Errorf("returnUrl invalid")
 	}
-	if len(allowedOrigins) > 0 {
-		origin := parsed.Scheme + "://" + parsed.Host
-		matched := false
-		for _, allowed := range allowedOrigins {
-			if origin == allowed {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return nil, fmt.Errorf("returnUrl origin is not allowed")
+	if port := parsed.Port(); port != "" {
+		number, err := strconv.Atoi(port)
+		if err != nil || number < 1 || number > 65535 {
+			return nil, fmt.Errorf("returnUrl invalid")
 		}
 	}
 	return parsed, nil

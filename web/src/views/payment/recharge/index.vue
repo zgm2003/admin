@@ -26,7 +26,6 @@ const submitting = ref(false)
 const formError = ref('')
 const selectedPackage = ref<number | undefined>(undefined)
 const selectedMethod = ref<number | undefined>(undefined)
-const returnUrl = ref('')
 const checkout = ref<Checkout | null>(null)
 const checkoutVisible = ref(false)
 let sequence = 0
@@ -76,11 +75,6 @@ async function loadOptions(): Promise<void> {
     const firstMethod = options.value.payMethods[0]
     selectedPackage.value = firstPackage?.id
     selectedMethod.value = firstMethod?.value
-    if (returnUrl.value === '') {
-      const url = new URL(window.location.href)
-      url.hash = ''
-      returnUrl.value = url.href
-    }
   } catch (error: unknown) {
     options.value = null
     optionsError.value = message(error, t('payment.order.optionsUnavailable'))
@@ -125,18 +119,16 @@ async function create(): Promise<void> {
     selectedMethod.value === undefined
   )
     return
-  if (returnUrl.value.trim() === '') {
-    formError.value = t('payment.order.returnUrlPlaceholder')
-    return
-  }
   submitting.value = true
   formError.value = ''
   try {
+    const returnUrl = new URL(window.location.href)
+    returnUrl.hash = ''
     const result = await api.createRecharge({
       requestId: newRequestID(),
       packageId: selectedPackage.value,
       payMethod: selectedMethod.value,
-      returnUrl: returnUrl.value.trim(),
+      returnUrl: returnUrl.href,
     })
     checkout.value = result
     checkoutVisible.value = true
@@ -230,13 +222,6 @@ onBeforeUnmount(() => {
             />
           </el-form-item>
         </div>
-        <el-form-item :label="t('payment.order.returnUrl')">
-          <el-input
-            v-model="returnUrl"
-            :placeholder="t('payment.order.returnUrlPlaceholder')"
-            data-testid="payment-recharge-return-url"
-          />
-        </el-form-item>
         <el-alert v-if="formError" :title="formError" type="error" :closable="false" />
         <el-button
           type="primary"

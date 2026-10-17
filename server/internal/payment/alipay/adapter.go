@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -273,9 +274,18 @@ func validateOrderNo(ctx context.Context, orderNo string) error {
 }
 
 func parseReturnURL(raw string) (*url.URL, error) {
-	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" || (parsed.Scheme != "https" && parsed.Scheme != "http") {
+	if raw == "" || len(raw) > 2048 || strings.TrimSpace(raw) != raw {
 		return nil, errors.New("return URL invalid")
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme == "" || parsed.Hostname() == "" || parsed.User != nil || strings.Contains(raw, "#") || parsed.Opaque != "" || strings.ContainsAny(parsed.Host, "\\/\t\r\n @*") || strings.HasSuffix(parsed.Host, ":") || (parsed.Scheme != "https" && parsed.Scheme != "http") {
+		return nil, errors.New("return URL invalid")
+	}
+	if port := parsed.Port(); port != "" {
+		number, err := strconv.Atoi(port)
+		if err != nil || number < 1 || number > 65535 {
+			return nil, errors.New("return URL invalid")
+		}
 	}
 	return parsed, nil
 }

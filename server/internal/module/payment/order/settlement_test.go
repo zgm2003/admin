@@ -58,36 +58,23 @@ func TestServiceConfirmPassesValidatedEvidenceToRepository(t *testing.T) {
 	repository := &confirmerStub{}
 	proof := validConfirmation()
 	service := NewService(repository)
-	service.environment = payment.EnvironmentSandbox
 	got, err := service.Confirm(context.Background(), proof, nil)
 	if err != nil || repository.calls != 1 || got.OrderID != 1 || got.TransactionID != 2 || got.BalanceUnits != -7_000_000_000 {
 		t.Fatalf("result=%+v calls=%d err=%v", got, repository.calls, err)
 	}
 }
 
-func TestServiceConfirmRejectsMissingOrMismatchedEnvironmentBeforeRepository(t *testing.T) {
-	for _, test := range []struct {
-		name            string
-		deployed, proof payment.Environment
-	}{
-		{"missing deployment", 0, payment.EnvironmentSandbox},
-		{"missing evidence environment", payment.EnvironmentSandbox, 0},
-		{"sandbox proof in production", payment.EnvironmentProduction, payment.EnvironmentSandbox},
-		{"production proof in sandbox", payment.EnvironmentSandbox, payment.EnvironmentProduction},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			repo := &confirmerStub{}
-			service := NewService(repo)
-			service.environment = test.deployed
-			proof := validConfirmation()
-			proof.Environment = test.proof
-			if _, err := service.Confirm(context.Background(), proof, nil); err == nil {
-				t.Fatal("mismatched environment reached settlement")
-			}
-			if repo.calls != 0 {
-				t.Fatal("repository called for wrong payment environment")
-			}
-		})
+func TestServiceConfirmRejectsInvalidEvidenceEnvironmentBeforeRepository(t *testing.T) {
+	for _, environment := range []payment.Environment{0, 3} {
+		repo := &confirmerStub{}
+		proof := validConfirmation()
+		proof.Environment = environment
+		if _, err := NewService(repo).Confirm(context.Background(), proof, nil); err == nil {
+			t.Fatal("invalid environment reached settlement")
+		}
+		if repo.calls != 0 {
+			t.Fatal("repository called without a valid payment environment")
+		}
 	}
 }
 
