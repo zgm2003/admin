@@ -65,6 +65,9 @@ function getCurrentTab(): RouteTab | null {
   if (menuPage !== null) {
     return { path: route.path, i18nKey: menuPage.i18nKey, affix: false }
   }
+  if (route.path === '/payment/walletPortal') {
+    return { path: route.path, i18nKey: 'payment.wallet.pageTitle', affix: false }
+  }
   if (route.path !== '/dashboard') return null
   const matched = [...route.matched].reverse().find((record) => record.name === 'dashboard')
   if (matched === undefined) {

@@ -1102,6 +1102,12 @@ export const enUS = {
   'layout.header.logout': 'Sign out',
   'layout.user.title': 'Account menu',
   'layout.user.profile': 'Personal center',
+  'layout.user.wallet': 'Wallet',
+  'payment.wallet.pageTitle': 'Wallet',
+  'payment.wallet.eyebrow': 'ACCOUNT FUNDS',
+  'payment.wallet.managementIntro':
+    'View your balance, redeem codes, and recharge history in one place.',
+  'payment.wallet.noAccess': 'No wallet features are available',
   'user.profile.basicTitle': 'Basic profile',
   'user.profile.tabProfile': 'Profile',
   'user.profile.tabSecurity': 'Security',

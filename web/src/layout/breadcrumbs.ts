@@ -17,6 +17,9 @@ export function resolveBreadcrumbs(
   if (routePath === '/dashboard') {
     return [{ path: '/dashboard', i18nKey: 'navigation.dashboard' }]
   }
+  if (routePath === '/payment/walletPortal') {
+    return [{ path: routePath, i18nKey: 'payment.wallet.pageTitle' }]
+  }
   const stack: SearchEntry[] = menuTree
     .slice()
     .reverse()

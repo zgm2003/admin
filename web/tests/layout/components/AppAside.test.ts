@@ -75,6 +75,7 @@ describe('AppAside profile access', () => {
 
   it('shows the profile entry only with profile-view permission and always keeps logout', async () => {
     const { access, wrapper } = mountAside([])
+    expect(document.body.querySelector('[data-testid="aside-account-wallet"]')).not.toBeNull()
     expect(document.body.querySelector('[data-testid="aside-account-profile"]')).toBeNull()
     expect(document.body.querySelector('[data-testid="aside-account-logout"]')).not.toBeNull()
 
@@ -82,6 +83,13 @@ describe('AppAside profile access', () => {
     await wrapper.vm.$nextTick()
     expect(document.body.querySelector('[data-testid="aside-account-profile"]')).not.toBeNull()
     expect(document.body.querySelector('[data-testid="aside-account-logout"]')).not.toBeNull()
+  })
+
+  it('opens wallet management for every authenticated sidebar user', async () => {
+    const { router, wrapper } = mountAside([])
+    wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'wallet')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/payment/walletPortal')
   })
 
   it('opens the dynamic profile URL without depending on its generated route name', async () => {

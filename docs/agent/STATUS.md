@@ -1,5 +1,11 @@
 # 项目状态
 
+## 钱包入口聚合与个人支付菜单隐藏（2026-10-17，前端实现完成）
+
+- 侧栏账户菜单新增始终显示的“钱包”入口，固定跳转 `/payment/walletPortal`；入口不使用权限 `v-if`。钱包页使用 `el-tabs` 聚合个人钱包与充值中心，两个 Tab 分别只在 `payment:myWallet:view`、`payment:recharge:view` 存在时显示，原 API/action 权限不变。
+- 个人钱包聚合页采用深青绿资金主题、余额/充值/流水分区和窄屏适配；新增中英文文案、面包屑与路由标签支持。新增 forward migration `docs/database/2026-10-17-payment-personal-pages-hidden.sql`，将充值中心和我的钱包 page 节点设为隐藏并按实际变化递增菜单版本，未执行真实数据库迁移。
+- 定向验证：`pnpm vitest run --pool=threads --maxWorkers=1 tests/views/payment/wallet.test.ts tests/layout/components/AppAside.test.ts tests/router/permissionRoutes.test.ts`（3 文件/21 项）通过；`pnpm typecheck`、受影响文件 ESLint、`pnpm build`、`git diff --check` 通过。构建仍有既有大 chunk 警告；未做浏览器视觉截图验收，未执行新菜单迁移。
+
 ## 支付证书导入文件名布局（2026-10-17，定向验证完成）
 
 - 支付配置新增/换版表单的证书导入文件名已从文本域下方移到“导入证书文件”按钮右侧；标签行可收缩，文件名单行省略并保留完整 `title`，三类证书和中英文/窄屏布局一致。私钥字段不显示导入文件名。

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowUp, Monitor, SwitchButton, User } from '@element-plus/icons-vue'
+import { ArrowUp, Monitor, SwitchButton, User, Wallet } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -87,6 +87,10 @@ function handleAccountCommand(command: string | number | object): void {
     void router.push('/user/profile')
     return
   }
+  if (command === 'wallet') {
+    void router.push('/payment/walletPortal')
+    return
+  }
   throw new Error(`Unsupported account command: ${String(command)}`)
 }
 </script>
@@ -142,6 +146,9 @@ function handleAccountCommand(command: string | number | object): void {
         </button>
         <template #dropdown>
           <el-dropdown-menu>
+            <el-dropdown-item data-testid="aside-account-wallet" :icon="Wallet" command="wallet">
+              {{ t('layout.user.wallet') }}
+            </el-dropdown-item>
             <el-dropdown-item
               v-if="canOpenProfile"
               data-testid="aside-account-profile"
@@ -165,5 +172,4 @@ function handleAccountCommand(command: string | number | object): void {
     </div>
   </aside>
 </template>
-
 <style scoped src="./AppAside.scss" lang="scss"></style>
