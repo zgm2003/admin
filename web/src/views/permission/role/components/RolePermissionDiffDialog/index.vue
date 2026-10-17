@@ -10,7 +10,6 @@ const props = defineProps<{
   addedLabels: string[]
   removedLabels: string[]
   saving: boolean
-  error: string
 }>()
 
 const emit = defineEmits<{
@@ -33,7 +32,7 @@ const hasRemoved = computed(() => props.removedLabels.length > 0)
       <strong>{{ t('role.permission.confirmTitle') }}</strong>
     </template>
 
-    <el-alert v-if="error" :title="error" type="error" show-icon />
+    
     <div class="role-permission-diff">
       <section class="role-permission-diff__section">
         <div class="role-permission-diff__title">

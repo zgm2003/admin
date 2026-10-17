@@ -5,7 +5,6 @@ import type { UserFormState } from '@/views/user/account/components/types'
 
 const props = defineProps<{
   editingUser: UserListItem | null
-  editError: string
   editSaving: boolean
   usernameValid: boolean
   usernameMaxLength: number | undefined
@@ -24,7 +23,7 @@ const { t } = useI18n()
     width="min(520px, 94vw)"
     append-to-body
   >
-    <el-alert v-if="props.editError" :title="props.editError" type="error" /><el-form
+    <el-form
       label-position="top"
       ><el-form-item :label="t('user.email')"
         ><el-input

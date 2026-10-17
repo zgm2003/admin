@@ -26,7 +26,8 @@ const { t } = useI18n()
   >
     <div class="role-dialog-scroll">
       <div v-if="props.roleLoading">{{ t('user.roleLoadFailed') }}</div>
-      <el-alert v-if="props.roleError" :title="props.roleError" type="error" show-icon /><template
+      <el-alert v-if="props.roleError" :title="props.roleError" type="error" show-icon />
+      <template
         v-if="props.roleData"
       >
         <el-space class="role-dialog-toolbar" wrap :size="8">

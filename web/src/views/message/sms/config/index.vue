@@ -170,13 +170,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
 
 <template>
   <div class="sms-config">
-    <el-alert
-      v-if="regionOptionsError"
-      :title="regionOptionsError"
-      type="error"
-      :closable="false"
-      show-icon
-    />
+    <div v-if="regionOptionsError"><el-button type="primary" plain @click="loadRegionOptions">{{ t('appTable.refresh') }}</el-button></div>
     <el-form :model="form" label-width="120px" class="sms-config__form" @submit.prevent="save">
       <el-row :gutter="16">
         <el-col :xs="24" :md="12">

@@ -20,7 +20,6 @@ const loading = ref(false)
 const loadError = ref('')
 const detail = ref<Wallet | null>(null)
 const detailLoading = ref(false)
-const detailError = ref('')
 const detailVisible = ref(false)
 let sequence = 0
 let alive = true
@@ -40,11 +39,6 @@ const columns = computed<TableColumn<Wallet>[]>(() => [
   { key: 'actions', label: t('payment.order.actions'), width: 100, fixed: 'right' },
 ])
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message !== ''
-    ? error.message
-    : t('payment.wallet.loadFailed')
-}
 function state(): 'loading' | 'error' | 'empty' | 'success' {
   if (loading.value) return 'loading'
   if (loadError.value) return 'error'
@@ -61,11 +55,11 @@ async function load(): Promise<void> {
       rows.value = result.list
       total.value = result.total
     }
-  } catch (error: unknown) {
+  } catch {
     if (alive && current === sequence) {
       rows.value = []
       total.value = 0
-      loadError.value = errorMessage(error)
+      loadError.value = t('payment.wallet.loadFailed')
     }
   } finally {
     if (alive && current === sequence) loading.value = false
@@ -82,12 +76,11 @@ async function openDetail(row: Wallet): Promise<void> {
   if (!canDetail.value) return
   detailVisible.value = true
   detailLoading.value = true
-  detailError.value = ''
   detail.value = null
   try {
     detail.value = await api.getWallet(row.userId)
-  } catch (error: unknown) {
-    detailError.value = errorMessage(error)
+  } catch {
+    detailVisible.value = false
   } finally {
     detailLoading.value = false
   }
@@ -110,7 +103,7 @@ onBeforeUnmount(() => {
 
 <template>
   <AppPage class="payment-wallet-page">
-    <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
+    
     <AppTable
       :columns="columns"
       :data="rows"
@@ -139,7 +132,7 @@ onBeforeUnmount(() => {
 
     <AppDialog v-model="detailVisible" :title="t('payment.wallet.detail')" width="520px">
       <el-skeleton v-if="detailLoading" :rows="4" animated />
-      <el-alert v-else-if="detailError" :title="detailError" type="error" :closable="false" />
+      
       <el-descriptions v-else-if="detail" :column="1" border>
         <el-descriptions-item :label="t('payment.wallet.userId')">{{
           detail.userId

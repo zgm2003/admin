@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
+import { ElNotification } from 'element-plus/es/components/notification/index'
 import { CirclePlus } from '@element-plus/icons-vue'
 import * as api from '@/api/payment/config'
 import type { PaymentConfig, PaymentConfigOptions, PaymentConfigQuery } from '@/api/payment/config'
@@ -24,9 +25,7 @@ const rows = ref<PaymentConfig[]>([])
 const total = ref(0)
 const query = ref<PaymentConfigQuery>({ page: 1, pageSize: 20 })
 const loading = ref(false)
-const loadError = ref('')
-const mutationError = ref('')
-const success = ref('')
+const loadFailed = ref(false)
 const busyID = ref<number | null>(null)
 const filters = ref<SearchFormModel<{ keyword: string; status: number | '' }>>({
   keyword: '',
@@ -76,7 +75,6 @@ const dialogVisible = ref(false)
 const dialogMode = ref<ConfigDialogMode>('create')
 const editingID = ref<number | null>(null)
 const submitting = ref(false)
-const dialogError = ref('')
 const form = ref<ConfigForm>(emptyForm())
 const detailVisible = ref(false)
 const detail = ref<PaymentConfig | null>(null)
@@ -100,27 +98,24 @@ function emptyForm(): ConfigForm {
     rootCertPEM: '',
   }
 }
-function message(cause: unknown): string {
-  return cause instanceof Error ? cause.message : t('payment.config.requestFailed')
-}
 async function load(): Promise<void> {
   if (!canList.value) return
   const current = ++sequence
   const language = locale.value
   const accepted = () => alive && current === sequence && language === locale.value && canList.value
   loading.value = true
-  loadError.value = ''
+  loadFailed.value = false
   try {
     const data = await api.getPaymentConfigs(query.value)
     if (accepted()) {
       rows.value = data.list
       total.value = data.total
     }
-  } catch (cause: unknown) {
+  } catch {
     if (accepted()) {
       rows.value = []
       total.value = 0
-      loadError.value = message(cause)
+      loadFailed.value = true
     }
   } finally {
     if (current === sequence) loading.value = false
@@ -155,7 +150,6 @@ function openCreate(): void {
   form.value = { ...emptyForm(), ...defaults, payMethods: [...defaults.payMethods] }
   editingID.value = null
   dialogMode.value = 'create'
-  dialogError.value = ''
   dialogVisible.value = true
 }
 function openEdit(row: PaymentConfig, mode: 'edit' | 'version'): void {
@@ -175,7 +169,6 @@ function openEdit(row: PaymentConfig, mode: 'edit' | 'version'): void {
   }
   editingID.value = row.id
   dialogMode.value = mode
-  dialogError.value = ''
   dialogVisible.value = true
 }
 function cancel(): void {
@@ -191,8 +184,6 @@ async function save(): Promise<void> {
   )
     return
   submitting.value = true
-  dialogError.value = ''
-  success.value = ''
   try {
     if (dialogMode.value === 'create') {
       await api.createPaymentConfig({ ...form.value, payMethods: [...form.value.payMethods] })
@@ -213,14 +204,12 @@ async function save(): Promise<void> {
     }
     if (alive) {
       dialogVisible.value = false
-      success.value = t('payment.config.saved')
+      ElNotification.success({ title: t('payment.config.saved') })
       await load()
     }
-  } catch (cause: unknown) {
-    if (alive) {
-      dialogError.value = message(cause)
-      await load()
-    }
+  } catch {
+    // request.ts owns the API error notification; keep the dialog editable.
+    if (alive) await load()
   } finally {
     submitting.value = false
   }
@@ -229,15 +218,14 @@ async function showDetail(row: PaymentConfig): Promise<void> {
   if (!canDetail.value) return
   const current = ++detailSequence
   busyID.value = row.id
-  mutationError.value = ''
   try {
     const value = await api.getPaymentConfig(row.id)
     if (alive && current === detailSequence && canDetail.value) {
       detail.value = value
       detailVisible.value = true
     }
-  } catch (cause: unknown) {
-    if (alive) mutationError.value = message(cause)
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     busyID.value = null
   }
@@ -277,8 +265,6 @@ async function act(row: PaymentConfig, action: 'status' | 'delete' | 'test'): Pr
       }
     }
     if (!alive || !access.hasPermission(permission)) return
-    mutationError.value = ''
-    success.value = ''
     if (action === 'status')
       await api.updatePaymentConfigStatus(
         row.id,
@@ -287,14 +273,13 @@ async function act(row: PaymentConfig, action: 'status' | 'delete' | 'test'): Pr
     else if (action === 'delete') await api.deletePaymentConfig(row.id)
     else await api.testPaymentConfig(row.id)
     if (alive) {
-      success.value = t(action === 'test' ? 'payment.config.validated' : 'payment.config.saved')
+      ElNotification.success({
+        title: t(action === 'test' ? 'payment.config.validated' : 'payment.config.saved'),
+      })
       await load()
     }
-  } catch (cause: unknown) {
-    if (alive) {
-      mutationError.value = message(cause)
-      await load()
-    }
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     busyID.value = null
   }
@@ -303,7 +288,6 @@ watch(dialogVisible, (open) => {
   if (!open) {
     form.value = emptyForm()
     editingID.value = null
-    dialogError.value = ''
   }
 })
 watch(
@@ -314,7 +298,7 @@ watch(
     rows.value = []
     total.value = 0
     loading.value = false
-    loadError.value = ''
+    loadFailed.value = false
     detailVisible.value = false
     detail.value = null
     if (canList.value) void load()
@@ -342,17 +326,6 @@ onBeforeUnmount(() => {
       @query="search"
       @reset="reset"
     />
-    <el-alert v-if="optionsError" :title="optionsError" type="error" :closable="false"
-      ><el-button text @click="reloadOptions">{{ t('payment.config.retry') }}</el-button></el-alert
-    >
-    <el-alert
-      v-if="mutationError"
-      :title="mutationError"
-      type="error"
-      closable
-      @close="mutationError = ''"
-    />
-    <el-alert v-if="success" :title="success" type="success" closable @close="success = ''" />
     <el-alert
       v-if="!canList"
       :title="t('payment.config.noList')"
@@ -365,8 +338,7 @@ onBeforeUnmount(() => {
       :loading="loading"
       :pagination="pagination"
       :row-key="(row: PaymentConfig) => String(row.id)"
-      :result-state="loadError ? 'error' : loading ? 'loading' : rows.length ? 'success' : 'empty'"
-      :status-message="loadError"
+      :result-state="loadFailed ? 'error' : loading ? 'loading' : rows.length ? 'success' : 'empty'"
       @refresh="load"
       @update:pagination="changePagination"
     >
@@ -381,6 +353,9 @@ onBeforeUnmount(() => {
           >{{ t('payment.config.create') }}</el-button
         ></template
       >
+      <template #toolbar-right>
+        <el-button v-if="optionsError" @click="reloadOptions">{{ t('payment.config.retry') }}</el-button>
+      </template>
       <template #cell-identity="{ row }: { row: PaymentConfig }"
         ><div class="payment-config-page__identity">
           <strong>{{ row.name }}</strong>
@@ -475,7 +450,6 @@ onBeforeUnmount(() => {
       :mode="dialogMode"
       :options="options"
       :submitting="submitting || optionsLoading"
-      :error="dialogError"
       @save="save"
       @cancel="cancel"
     />

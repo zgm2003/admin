@@ -49,5 +49,6 @@ export function useStorageOptions() {
     cosRegionOptions,
     storageOptionsError,
     storageOptionsLoading,
+    reload: load,
   }
 }

@@ -56,7 +56,6 @@ const keyword = ref('')
 const statusFilter = ref<'' | YesNo>('')
 const loading = ref(false)
 const loadError = ref('')
-const mutationError = ref('')
 const searchModel = computed<SearchFormModel<AuthPlatformSearchModel>>({
   get: () => ({ keyword: keyword.value, status: statusFilter.value }),
   set: (value) => {
@@ -120,8 +119,8 @@ async function loadPage(): Promise<void> {
     if (!accepted()) return
     rows.value = result.list
     total.value = result.total
-  } catch (error: unknown) {
-    if (accepted()) loadError.value = errorMessage(error, 'permission.authPlatform.loadFailed')
+  } catch {
+    if (accepted()) loadError.value = t('permission.authPlatform.loadFailed')
   } finally {
     if (request === listRequest) loading.value = false
   }
@@ -172,7 +171,6 @@ function openCreate(): void {
   dialogMode.value = 'create'
   editingPlatform.value = null
   Object.assign(form.value, createAuthPlatformForm(formOptions.value.defaults))
-  mutationError.value = ''
   dialogVisible.value = true
 }
 
@@ -181,7 +179,6 @@ function openEdit(platform: AuthPlatformListItem): void {
   dialogMode.value = 'edit'
   editingPlatform.value = platform
   Object.assign(form.value, editAuthPlatformForm(platform))
-  mutationError.value = ''
   dialogVisible.value = true
 }
 
@@ -201,7 +198,6 @@ async function submit(): Promise<void> {
       return
   }
   submitting.value = true
-  mutationError.value = ''
   try {
     if (dialogMode.value === 'create') {
       await createAuthPlatform(createAuthPlatformInput(form.value))
@@ -218,8 +214,8 @@ async function submit(): Promise<void> {
           : 'permission.authPlatform.success.updated',
       ),
     })
-  } catch (error: unknown) {
-    mutationError.value = errorMessage(error, 'permission.authPlatform.mutationFailed')
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     submitting.value = false
   }
@@ -233,8 +229,8 @@ async function toggleStatus(platform: AuthPlatformListItem): Promise<void> {
     await updateAuthPlatformStatus(platform.id, next)
     await loadPage()
     ElNotification.success({ title: t('permission.authPlatform.success.status') })
-  } catch (error: unknown) {
-    mutationError.value = errorMessage(error, 'permission.authPlatform.mutationFailed')
+  } catch {
+    // request.ts owns the API error notification.
   }
 }
 
@@ -247,8 +243,8 @@ async function remove(platform: AuthPlatformListItem): Promise<void> {
     if (query.value.page > maxPage) query.value = { ...query.value, page: maxPage }
     await loadPage()
     ElNotification.success({ title: t('permission.authPlatform.success.deleted') })
-  } catch (error: unknown) {
-    mutationError.value = errorMessage(error, 'permission.authPlatform.mutationFailed')
+  } catch {
+    // request.ts owns the API error notification.
   }
 }
 
@@ -264,8 +260,8 @@ async function confirmAction(
       type: 'warning',
     })
     return true
-  } catch (error: unknown) {
-    return error !== 'cancel' && error !== 'close' ? false : false
+  } catch {
+    return false
   }
 }
 
@@ -290,13 +286,6 @@ function restoreDefaultTTL(): void {
     sessionCacheTTLSeconds: defaults.sessionCacheTTLSeconds,
     accessCacheTTLSeconds: defaults.accessCacheTTLSeconds,
   })
-}
-
-function errorMessage(
-  error: unknown,
-  fallbackKey: 'permission.authPlatform.loadFailed' | 'permission.authPlatform.mutationFailed',
-): string {
-  return error instanceof Error && error.message !== '' ? error.message : t(fallbackKey)
 }
 
 watch(
@@ -327,20 +316,14 @@ watch(
       @reset="reset"
     />
 
-    <el-alert v-if="loadError" :title="loadError" type="error" show-icon />
-    <el-alert
-      v-if="mutationError"
-      :title="mutationError"
-      type="error"
-      show-icon
-      closable
-      @close="mutationError = ''"
-    />
+    
+    
 
     <AppTable
       class="auth-platform-table"
       :columns="tableColumns"
       :data="rows"
+      :result-state="loadError ? 'error' : loading ? 'loading' : rows.length ? 'success' : 'empty'"
       :loading="loading"
       :pagination="tablePagination"
       :aria-label="t('permission.authPlatform.title')"

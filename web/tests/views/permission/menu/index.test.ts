@@ -593,7 +593,7 @@ describe('MenuManagement', () => {
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
     await flushPromises()
     expect(createMenuMock).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('页面权限码必须以 :view 结尾')
+    expect(bodyGet('[data-testid="menu-form-error"]').text()).toContain('页面权限码必须以 :view 结尾')
   })
 
   it('blocks action codes ending with view before creating a menu', async () => {
@@ -607,7 +607,7 @@ describe('MenuManagement', () => {
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
     await flushPromises()
     expect(createMenuMock).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('按钮权限码不能以 :view 结尾')
+    expect(bodyGet('[data-testid="menu-form-error"]').text()).toContain('按钮权限码不能以 :view 结尾')
   })
 
   it('filters parent options to valid directories and locks parent editing on edit', async () => {
@@ -686,7 +686,9 @@ describe('MenuManagement', () => {
     await flushPromises()
     expect(getMenusMock).not.toHaveBeenCalled()
     expect(wrapper.get('[data-testid="menu-table"]').text()).toContain('用户管理')
-    expect(wrapper.get('[data-testid="menu-mutation-error"]').text()).toContain('update failed')
+    expect(wrapper.text()).not.toContain('update failed')
+    expect(bodyFind('[data-testid="menu-form-error"]').exists()).toBe(false)
+    expect(bodyFind('[data-testid="menu-mutation-error"]').exists()).toBe(false)
   })
 })
 

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CirclePlus, Download, Search } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
+import { ElNotification } from 'element-plus/es/components/notification/index'
 
 import * as api from '@/api/payment/redeemCode'
 import type {
@@ -44,12 +45,9 @@ const selected = ref<RedeemCode[]>([])
 const total = ref(0)
 const loading = ref(false)
 const loadError = ref('')
-const mutationError = ref('')
-const success = ref('')
 const lookupValue = ref('')
 const lookupLoading = ref(false)
 const detail = ref<RedeemCode | null>(null)
-const detailError = ref('')
 const detailVisible = ref(false)
 const generateVisible = ref(false)
 const generateSubmitting = ref(false)
@@ -90,11 +88,6 @@ const columns = computed<TableColumn<RedeemCode>[]>(() => [
   { key: 'usedBy', label: t('payment.redeemCode.usedBy'), width: 100 },
   { key: 'actions', label: t('payment.redeemCode.actions'), width: 250, fixed: 'right' },
 ])
-function message(error: unknown): string {
-  return error instanceof Error && error.message !== ''
-    ? error.message
-    : t('payment.redeemCode.requestFailed')
-}
 function statusLabel(value: number): string {
   return options.value?.statuses.find((item) => item.value === value)?.label ?? String(value)
 }
@@ -134,11 +127,11 @@ async function load(): Promise<void> {
       rows.value = result.list
       total.value = result.total
     }
-  } catch (error: unknown) {
+  } catch {
     if (alive && current === sequence) {
       rows.value = []
       total.value = 0
-      loadError.value = message(error)
+      loadError.value = t('payment.redeemCode.requestFailed')
     }
   } finally {
     if (alive && current === sequence) loading.value = false
@@ -169,10 +162,10 @@ async function generate(input: GenerateRedeemCodeInput): Promise<void> {
   generateSubmitting.value = true
   try {
     generateResult.value = await api.generateRedeemCodeBatch(input)
-    success.value = t('payment.redeemCode.generated')
+    ElNotification.success({ title: t('payment.redeemCode.generated') })
     await load()
-  } catch (error: unknown) {
-    mutationError.value = message(error)
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     generateSubmitting.value = false
   }
@@ -181,11 +174,10 @@ async function openDetail(row: RedeemCode): Promise<void> {
   if (!canDetail.value) return
   detailVisible.value = true
   detail.value = null
-  detailError.value = ''
   try {
     detail.value = await api.getRedeemCode(row.id)
-  } catch (error: unknown) {
-    detailError.value = message(error)
+  } catch {
+    detailVisible.value = false
   }
 }
 async function lookup(): Promise<void> {
@@ -193,12 +185,11 @@ async function lookup(): Promise<void> {
   if (code === '' || lookupLoading.value || !canDetail.value) return
   lookupLoading.value = true
   detail.value = null
-  detailError.value = ''
   detailVisible.value = true
   try {
     detail.value = await api.lookupRedeemCode(code)
-  } catch (error: unknown) {
-    detailError.value = message(error)
+  } catch {
+    detailVisible.value = false
   } finally {
     lookupLoading.value = false
   }
@@ -242,9 +233,9 @@ async function exportRows(rowsToExport: RedeemCode[]): Promise<void> {
   try {
     const values = await api.exportRedeemCodes(rowsToExport.map((row) => row.id))
     downloadCsv(values)
-    success.value = t('payment.redeemCode.exported')
-  } catch (error: unknown) {
-    mutationError.value = message(error)
+    ElNotification.success({ title: t('payment.redeemCode.exported') })
+  } catch {
+    // request.ts owns the API error notification.
   }
 }
 async function voidRows(rowsToVoid: RedeemCode[]): Promise<void> {
@@ -261,10 +252,10 @@ async function voidRows(rowsToVoid: RedeemCode[]): Promise<void> {
   }
   try {
     await api.voidRedeemCodes(ids)
-    success.value = t('payment.redeemCode.voided')
+    ElNotification.success({ title: t('payment.redeemCode.voided') })
     await load()
-  } catch (error: unknown) {
-    mutationError.value = message(error)
+  } catch {
+    // request.ts owns the API error notification.
   }
 }
 watch(
@@ -298,17 +289,9 @@ onBeforeUnmount(() => {
       @query="searchList"
       @reset="reset"
     />
-    <el-alert v-if="optionsError" :title="optionsError" type="error" :closable="false">
-      <el-button text @click="reloadOptions">{{ t('payment.redeemCode.retry') }}</el-button>
-    </el-alert>
-    <el-alert
-      v-if="mutationError"
-      :title="mutationError"
-      type="error"
-      closable
-      @close="mutationError = ''"
-    />
-    <el-alert v-if="success" :title="success" type="success" closable @close="success = ''" />
+    <div v-if="optionsError"><el-button text @click="reloadOptions">{{ t('payment.redeemCode.retry') }}</el-button></div>
+    
+    
     <AppTable
       :columns="columns"
       :data="rows"
@@ -402,8 +385,8 @@ onBeforeUnmount(() => {
       @submit="generate"
     />
     <AppDialog v-model="detailVisible" :title="t('payment.redeemCode.detail')" width="680px">
-      <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" />
-      <el-skeleton v-else-if="detail === null" :rows="3" animated />
+      
+      <el-skeleton v-if="detail === null" :rows="3" animated />
       <el-descriptions v-else :column="2" border>
         <el-descriptions-item :label="t('payment.redeemCode.code')">{{
           detail.codeMask

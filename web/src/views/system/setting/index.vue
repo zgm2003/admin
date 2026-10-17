@@ -367,18 +367,9 @@ onMounted(() => {
 
 <template>
   <AppPage class="setting-page">
-    <el-alert
-      v-if="optionsError"
-      data-testid="setting-options-error"
-      :title="t('setting.loadFailed')"
-      type="error"
-      :closable="false"
-      show-icon
-    >
-      <el-button data-testid="setting-options-retry" @click="reloadOptions">{{
+    <div v-if="optionsError" data-testid="setting-options-error"><el-button data-testid="setting-options-retry" @click="reloadOptions">{{
         t('appTable.refresh')
-      }}</el-button>
-    </el-alert>
+      }}</el-button></div>
     <el-tabs v-model="activeTab" class="setting-page__tabs">
       <el-tab-pane name="advanced" :label="t('setting.advancedTitle')">
         <el-alert

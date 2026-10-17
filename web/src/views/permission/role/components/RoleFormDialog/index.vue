@@ -5,7 +5,6 @@ import type { RoleFormState } from '@/views/permission/role/components/types'
 
 const props = defineProps<{
   editing: boolean
-  mutationError: string
   submitting: boolean
   formValid: boolean
   nameMaxLength: number | undefined
@@ -23,7 +22,7 @@ const { t } = useI18n()
     width="520px"
     append-to-body
   >
-    <el-alert v-if="props.mutationError" :title="props.mutationError" type="error" />
+    
     <el-form label-position="top">
       <el-form-item :label="t('role.form.code')">
         <el-input v-model="form.code" :disabled="props.editing" />

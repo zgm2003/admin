@@ -139,9 +139,9 @@ async function load(): Promise<void> {
     if (current !== listSequence) return
     rows.value = result.list
     pagination.total = result.total
-  } catch (error) {
+  } catch {
     if (current === listSequence)
-      errorMessage.value = error instanceof Error ? error.message : t('notificationTask.loadFailed')
+      errorMessage.value = t('notificationTask.loadFailed')
   } finally {
     if (current === listSequence) loading.value = false
   }
@@ -205,9 +205,9 @@ async function loadDetail(id: number, mode: 'edit' | 'detail'): Promise<void> {
         ensureSelectedTargets(row.audienceType, row.targetIds)
       }
     }
-  } catch (error) {
+  } catch {
     if (isCurrentDialogRequest(current, id, mode))
-      dialogError.value = error instanceof Error ? error.message : t('notificationTask.loadFailed')
+      dialogError.value = t('notificationTask.loadFailed')
   } finally {
     if (isCurrentDialogRequest(current, id, mode)) dialogLoading.value = false
   }
@@ -298,9 +298,9 @@ async function save(): Promise<void> {
     ElNotification.success({ title: t('notificationTask.saveSuccess') })
     if (currentDialog === dialogSequence) updateDialogOpen(false)
     await load()
-  } catch (error) {
+  } catch {
     if (currentDialog === dialogSequence)
-      dialogError.value = error instanceof Error ? error.message : t('notificationTask.loadFailed')
+      dialogError.value = t('notificationTask.loadFailed')
   } finally {
     saving.value = false
   }
@@ -324,7 +324,7 @@ async function remove(row: taskApi.NotificationTaskListItem): Promise<void> {
     await load()
   } catch (error: unknown) {
     if (error !== 'cancel' && error !== 'close')
-      errorMessage.value = error instanceof Error ? error.message : t('notificationTask.loadFailed')
+      errorMessage.value = t('notificationTask.loadFailed')
   } finally {
     busyIDs.value = busyIDs.value.filter((id) => id !== row.id)
   }
@@ -362,7 +362,7 @@ async function command(
       await loadDetail(result.id, 'edit')
   } catch (error: unknown) {
     if (error !== 'cancel' && error !== 'close')
-      errorMessage.value = error instanceof Error ? error.message : t('notificationTask.loadFailed')
+      errorMessage.value = t('notificationTask.loadFailed')
   } finally {
     busyIDs.value = busyIDs.value.filter((id) => id !== row.id)
   }
@@ -404,11 +404,9 @@ onMounted(() => void load())
 
 <template>
   <AppPage>
-    <el-alert v-if="optionsError" :title="optionsError" type="error" :closable="false" show-icon>
-      <el-button data-testid="notification-task-options-retry" link @click="reloadOptions">{{
+    <div v-if="optionsError"><el-button data-testid="notification-task-options-retry" link @click="reloadOptions">{{
         t('notificationTask.retry')
-      }}</el-button>
-    </el-alert>
+      }}</el-button></div>
     <NotificationTaskSearch
       v-model="searchModel"
       :audience-options="audienceOptions"

@@ -35,7 +35,6 @@ const keyword = ref('')
 const statusFilter = ref<'' | YesNo>('')
 const loading = ref(false)
 const loadError = ref('')
-const mutationError = ref('')
 
 const searchModel = computed<SearchFormModel<RoleSearchModel>>({
   get: () => ({ keyword: keyword.value, status: statusFilter.value }),
@@ -87,17 +86,11 @@ async function loadFormOptions(): Promise<void> {
   formOptionsError.value = ''
   try {
     formOptions.value = await getRoleFormOptions()
-  } catch (error: unknown) {
-    formOptionsError.value = errorMessage(error)
+  } catch {
+    formOptionsError.value = t('role.loadFailed')
   }
 }
 
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message !== '') {
-    return error.message
-  }
-  return t('role.mutationFailed')
-}
 
 async function loadRoles(): Promise<boolean> {
   loading.value = true
@@ -108,8 +101,8 @@ async function loadRoles(): Promise<boolean> {
     rows.value = result.list
     total.value = result.total
     return true
-  } catch (error: unknown) {
-    loadError.value = errorMessage(error)
+  } catch {
+    loadError.value = t('role.loadFailed')
     return false
   } finally {
     loading.value = false
@@ -160,7 +153,6 @@ function openCreate(): void {
   dialogMode.value = 'create'
   editingRole.value = null
   form.value = { code: '', name: '' }
-  mutationError.value = ''
   dialogVisible.value = true
 }
 
@@ -169,7 +161,6 @@ function openEdit(role: RoleListItem): void {
   dialogMode.value = 'edit'
   editingRole.value = role
   form.value = { code: role.code, name: role.name }
-  mutationError.value = ''
   dialogVisible.value = true
 }
 
@@ -185,7 +176,6 @@ async function submitForm(): Promise<void> {
   }
 
   submitting.value = true
-  mutationError.value = ''
 
   try {
     if (dialogMode.value === 'create') {
@@ -206,8 +196,8 @@ async function submitForm(): Promise<void> {
         dialogMode.value === 'create' ? 'role.success.created' : 'role.success.updated'
       ElNotification.success({ title: t(successKey) })
     }
-  } catch (error: unknown) {
-    mutationError.value = errorMessage(error)
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     submitting.value = false
   }
@@ -227,10 +217,8 @@ async function changeStatus(role: RoleListItem): Promise<void> {
     await updateRoleStatus(role.id, next)
     await loadRoles()
     ElNotification.success({ title: t('role.success.status') })
-  } catch (error: unknown) {
-    if (error !== 'cancel' && error !== 'close') {
-      mutationError.value = errorMessage(error)
-    }
+  } catch {
+    // Cancellation stays silent; request.ts owns API error notifications.
   }
 }
 
@@ -246,10 +234,8 @@ async function makeDefault(role: RoleListItem): Promise<void> {
     await setDefaultRole(role.id)
     await loadRoles()
     ElNotification.success({ title: t('role.success.default') })
-  } catch (error: unknown) {
-    if (error !== 'cancel' && error !== 'close') {
-      mutationError.value = errorMessage(error)
-    }
+  } catch {
+    // Cancellation stays silent; request.ts owns API error notifications.
   }
 }
 
@@ -268,10 +254,8 @@ async function removeRole(role: RoleListItem): Promise<void> {
 
     await loadRoles()
     ElNotification.success({ title: t('role.success.deleted') })
-  } catch (error: unknown) {
-    if (error !== 'cancel' && error !== 'close') {
-      mutationError.value = errorMessage(error)
-    }
+  } catch {
+    // Cancellation stays silent; request.ts owns API error notifications.
   }
 }
 
@@ -293,9 +277,7 @@ onMounted(() => {
 
 <template>
   <AppPage class="role-page">
-    <el-alert v-if="formOptionsError" :title="formOptionsError" type="error" show-icon>
-      <el-button text @click="loadFormOptions">{{ t('role.retry') }}</el-button>
-    </el-alert>
+    <div v-if="formOptionsError"><el-button text @click="loadFormOptions">{{ t('role.retry') }}</el-button></div>
     <AppSearch
       v-model="searchModel"
       class="role-filters management-page__filters"
@@ -308,24 +290,14 @@ onMounted(() => {
       @reset="reset"
     />
 
-    <el-alert v-if="loadError" :title="loadError" type="error" show-icon>
-      <el-button text @click="loadRoles">
-        {{ t('role.retry') }}
-      </el-button>
-    </el-alert>
-    <el-alert
-      v-if="mutationError"
-      :title="mutationError"
-      type="error"
-      show-icon
-      closable
-      @close="mutationError = ''"
-    />
+    
+    
 
     <AppTable
       class="role-table"
       :columns="tableColumns"
       :data="rows"
+      :result-state="loadError ? 'error' : loading ? 'loading' : rows.length ? 'success' : 'empty'"
       :loading="loading"
       :pagination="tablePagination"
       :aria-label="t('role.title')"
@@ -416,7 +388,6 @@ onMounted(() => {
       v-model="dialogVisible"
       v-model:form="form"
       :editing="dialogMode === 'edit'"
-      :mutation-error="mutationError"
       :submitting="submitting"
       :form-valid="formValid"
       :name-max-length="formOptions?.nameMaxLength"

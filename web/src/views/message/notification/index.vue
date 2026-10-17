@@ -127,12 +127,10 @@ async function load(append = false): Promise<void> {
     if (current !== sequence) return
     rows.value = append ? [...rows.value, ...result.items] : result.items
     nextBeforeId.value = result.nextBeforeId
-  } catch (error: unknown) {
+  } catch {
     if (current === sequence)
       loadError.value =
-        error instanceof Error && error.message !== ''
-          ? error.message
-          : t('notification.loadFailed')
+        t('notification.loadFailed')
   } finally {
     if (current === sequence) loading.value = false
   }
@@ -211,13 +209,11 @@ onMounted(() => void load())
       @reset="reset"
     />
 
-    <el-alert v-if="optionsError" :title="optionsError" type="error" :closable="false" show-icon>
-      <el-button link @click="reloadOptions">{{ t('notification.refresh') }}</el-button>
-    </el-alert>
+    <div v-if="optionsError"><el-button link @click="reloadOptions">{{ t('notification.refresh') }}</el-button></div>
 
     <el-empty v-if="!canList" :description="t('notification.noPermission')" />
     <template v-else>
-      <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
+      
       <el-skeleton
         v-if="loading && rows.length === 0"
         data-testid="notification-loading"
@@ -229,6 +225,7 @@ onMounted(() => void load())
         data-testid="notification-table"
         :columns="columns"
         :data="rows"
+      :result-state="loadError ? 'error' : loading ? 'loading' : rows.length ? 'success' : 'empty'"
         row-key="id"
         :aria-label="t('notification.center')"
         :refresh-label="t('notification.refresh')"

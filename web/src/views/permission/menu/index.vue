@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
-import { Refresh } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -67,9 +66,6 @@ const activePlatform = computed(() => {
   return platforms.value.find((platform) => platform.id === activePlatformID.value) ?? null
 })
 
-function publicErrorMessage(error: unknown): string {
-  return error instanceof Error && error.message !== '' ? error.message : t('menu.loadFailed')
-}
 
 const editingProtected = computed(
   () => dialogMode.value === 'edit' && form.value.isProtected === YesNo.Yes,
@@ -181,8 +177,8 @@ async function submitForm(): Promise<void> {
     await reloadMenus()
     closeDialog()
     notifyMutation('menu.success.updated')
-  } catch (error: unknown) {
-    mutationError.value = publicErrorMessage(error)
+  } catch {
+    // request.ts owns the API error notification; keep the dialog available for another attempt.
   }
 }
 
@@ -214,7 +210,7 @@ async function changeStatus(node: ManagedMenuNode): Promise<void> {
     notifyMutation('menu.success.statusChanged')
   } catch (error: unknown) {
     if (error === 'cancel' || error === 'close') return
-    mutationError.value = publicErrorMessage(error)
+    // request.ts owns the API error notification.
   }
 }
 
@@ -231,7 +227,7 @@ async function removeNode(node: ManagedMenuNode): Promise<void> {
     notifyMutation('menu.success.deleted')
   } catch (error: unknown) {
     if (error === 'cancel' || error === 'close') return
-    mutationError.value = publicErrorMessage(error)
+    // request.ts owns the API error notification.
   }
 }
 
@@ -255,7 +251,7 @@ async function rebuildAccessCacheNow(): Promise<void> {
     })
   } catch (error: unknown) {
     if (error === 'cancel' || error === 'close') return
-    mutationError.value = publicErrorMessage(error)
+    // request.ts owns the API error notification.
   } finally {
     rebuildingAccessCache.value = false
   }
@@ -286,8 +282,8 @@ async function loadMenus(platformID?: number): Promise<void> {
     platforms.value = result.platforms
     activePlatformID.value = selectedPlatform.id
     menus.value = result.menuTree
-  } catch (error: unknown) {
-    if (accepted()) loadError.value = publicErrorMessage(error)
+  } catch {
+    if (accepted()) loadError.value = t('menu.loadFailed')
   } finally {
     if (request === listRequest) loading.value = false
   }
@@ -331,16 +327,7 @@ watch(
 
 <template>
   <AppPage class="menu-management-page" :aria-label="t('menu.title')">
-    <el-alert
-      v-if="optionsError"
-      data-testid="menu-options-error"
-      :title="t('menu.loadFailed')"
-      type="error"
-      :closable="false"
-      show-icon
-    >
-      <el-button @click="reloadOptions">{{ t('menu.retry') }}</el-button>
-    </el-alert>
+    <div v-if="optionsError" data-testid="menu-options-error"><el-button @click="reloadOptions">{{ t('menu.retry') }}</el-button></div>
     <el-tabs
       v-if="platforms.length > 0"
       v-model="activePlatformID"
@@ -361,29 +348,7 @@ watch(
       </el-tab-pane>
     </el-tabs>
     <div class="menu-management__content">
-      <el-alert
-        v-if="loadError !== ''"
-        data-testid="menu-load-error"
-        type="error"
-        :title="loadError"
-        :closable="false"
-        show-icon
-      >
-        <template #default>
-          <el-button size="small" :icon="Refresh" @click="reloadMenus">
-            {{ t('menu.retry') }}
-          </el-button>
-        </template>
-      </el-alert>
-
-      <el-alert
-        v-if="mutationError !== ''"
-        data-testid="menu-mutation-error"
-        type="error"
-        :title="mutationError"
-        :closable="false"
-        show-icon
-      />
+      <div v-if="loadError !== ''" data-testid="menu-load-error"><el-button type="primary" plain @click="reloadMenus">{{ t('menu.retry') }}</el-button></div>
 
       <MenuTreeTable
         :menus="menus"

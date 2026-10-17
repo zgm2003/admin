@@ -133,9 +133,9 @@ async function load(): Promise<void> {
     const result = await getLoginLogs(query.value)
     rows.value = result.list
     total.value = result.total
-  } catch (error: unknown) {
+  } catch {
     loadError.value =
-      error instanceof Error && error.message !== '' ? error.message : t('loginLog.loadFailed')
+      t('loginLog.loadFailed')
   } finally {
     loading.value = false
   }
@@ -195,13 +195,12 @@ onMounted(() => {
       @query="search"
       @reset="reset"
     />
-    <el-alert v-if="optionsError" :title="optionsError" type="error" :closable="false" show-icon>
-      <el-button link @click="reloadOptions">{{ t('loginLog.refresh') }}</el-button>
-    </el-alert>
-    <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
+    <div v-if="optionsError"><el-button link @click="reloadOptions">{{ t('loginLog.refresh') }}</el-button></div>
+    
     <AppTable
       :columns="columns"
       :data="rows"
+      :result-state="loadError ? 'error' : loading ? 'loading' : rows.length ? 'success' : 'empty'"
       :loading="loading"
       :pagination="pagination"
       :aria-label="t('loginLog.title')"

@@ -6,6 +6,7 @@ import * as api from '@/api/payment/config'
 import { appI18n, setLocale } from '@/i18n'
 import { pinia } from '@/store'
 import { usePermissionStore } from '@/store/permission'
+import { ApiError } from '@/utils/request'
 import Page from '@/views/payment/config/index.vue'
 vi.mock('element-plus/es/components/message-box/index', () => ({
   ElMessageBox: { confirm: vi.fn(), install: vi.fn() },
@@ -189,6 +190,27 @@ it('metadata edit saves only name and sort order, without reuploading credential
   await w.get('[data-testid="payment-config-save"]').trigger('click')
   await flushPromises()
   expect(api.updatePaymentConfig).toHaveBeenCalledWith(7, { name: 'Renamed', sortOrder: 0 })
+  expect(w.find('.el-alert--success').exists()).toBe(false)
+  const notifications = document.body.querySelectorAll('.el-notification')
+  expect(notifications).toHaveLength(1)
+  expect(notifications[0]?.textContent).toContain(appI18n.global.t('payment.config.saved'))
+})
+it('keeps a failed save editable without repeating the request error inside the page or dialog', async () => {
+  permissions(['payment:config:list', 'payment:config:update'])
+  vi.mocked(api.updatePaymentConfig).mockRejectedValueOnce(new ApiError(10001, '保存被拒绝'))
+  const w = await page()
+  await w.get('[data-testid="payment-config-edit"]').trigger('click')
+  await flushPromises()
+  await w.get('[data-testid="payment-config-name"]').setValue('My draft')
+  await w.get('[data-testid="payment-config-save"]').trigger('click')
+  await flushPromises()
+  expect(w.text()).not.toContain('保存被拒绝')
+  expect(w.find('.el-alert--error').exists()).toBe(false)
+  expect(w.get<HTMLInputElement>('[data-testid="payment-config-name"]').element.value).toBe('My draft')
+  expect(w.get('[data-testid="payment-config-save"]').attributes('disabled')).toBeUndefined()
+  await w.get('[data-testid="payment-config-save"]').trigger('click')
+  await flushPromises()
+  expect(api.updatePaymentConfig).toHaveBeenCalledTimes(2)
 })
 it('validates the server-provided HTTPS callback template before submitting credentials', async () => {
   permissions(['payment:config:list', 'payment:config:update'])
@@ -225,7 +247,8 @@ it('clears stale rows on failed refresh', async () => {
   vi.mocked(api.getPaymentConfigs).mockRejectedValue(new Error('offline'))
   await w.getComponent({ name: 'AppTable' }).vm.$emit('refresh')
   await flushPromises()
-  expect(w.text()).toContain('offline')
+  expect(w.text()).not.toContain('offline')
+  expect(w.getComponent({ name: 'AppTable' }).props('resultState')).toBe('error')
   expect(w.text()).not.toContain('服务端通道')
 })
 it('blocks writes after permission revocation while a confirmation is open', async () => {
@@ -279,7 +302,7 @@ it('refreshes committed-pending data without claiming success or dropping creden
   })
   await w.get('[data-testid="payment-config-save"]').trigger('click')
   await flushPromises()
-  expect(w.text()).toContain('配置已提交，缓存同步待恢复')
+  expect(w.text()).not.toContain('配置已提交，缓存同步待恢复')
   expect(w.text()).toContain('v2')
   expect(w.text()).not.toContain('保存成功')
   expect(

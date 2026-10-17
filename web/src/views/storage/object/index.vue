@@ -72,6 +72,7 @@ const {
   cosRegionOptions,
   storageOptionsError,
   storageOptionsLoading,
+  reload: loadStorageOptions,
 } = useStorageOptions()
 const {
   allExtensionsSelected,
@@ -145,9 +146,6 @@ const ruleSearchFields = computed(() =>
 )
 const configColumns = computed(() => createConfigColumns(t))
 const ruleColumns = computed(() => createRuleColumns(t))
-function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : t('storage.loadFailed')
-}
 async function loadConfigs(): Promise<void> {
   loading.value = true
   loadError.value = ''
@@ -155,8 +153,8 @@ async function loadConfigs(): Promise<void> {
     const page = await listCosConfigs(configQuery.value)
     configs.value = page.list
     configTotal.value = page.total
-  } catch (error: unknown) {
-    loadError.value = errorMessage(error)
+  } catch {
+    loadError.value = t('storage.loadFailed')
   } finally {
     loading.value = false
   }
@@ -171,8 +169,8 @@ async function loadRules(): Promise<void> {
     const page = await listUploadRules(ruleQuery.value)
     rules.value = page.list
     ruleTotal.value = page.total
-  } catch (error: unknown) {
-    loadError.value = errorMessage(error)
+  } catch {
+    loadError.value = t('storage.loadFailed')
   } finally {
     loading.value = false
   }
@@ -390,14 +388,8 @@ watch(cosRegionOptions, (options) => {
 
 <template>
   <AppPage class="storage-page">
-    <el-alert v-if="loadError" :title="loadError" type="error" show-icon />
-    <el-alert
-      v-if="storageOptionsError"
-      :title="storageOptionsError"
-      type="error"
-      show-icon
-      :closable="false"
-    />
+    
+    <div v-if="storageOptionsError"><el-button type="primary" plain @click="loadStorageOptions">{{ t('appTable.refresh') }}</el-button></div>
     <el-tabs v-model="activeTab" @tab-change="switchTab">
       <el-tab-pane name="config" :label="t('storage.configTab')" data-testid="storage-config-tab">
         <ConfigTable

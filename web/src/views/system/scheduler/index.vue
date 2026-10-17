@@ -158,10 +158,10 @@ async function load(append = false): Promise<void> {
     schedules.value = append ? [...schedules.value, ...result] : result
     schedulesHaveMore.value = result.length === 100
     if (jobsVisible.value) await loadJobs()
-  } catch (error: unknown) {
+  } catch {
     if (sequence === loadSequence) {
       if (!append) schedules.value = []
-      loadError.value = error instanceof Error ? error.message : t('scheduler.loadFailed')
+      loadError.value = t('scheduler.loadFailed')
     }
   } finally {
     if (sequence === loadSequence) loading.value = false
@@ -189,9 +189,9 @@ async function loadJobs(): Promise<void> {
       return
     jobs.value = result.list
     jobsTotal.value = result.total
-  } catch (error: unknown) {
+  } catch {
     if (sequence === jobsSequence)
-      jobsError.value = error instanceof Error ? error.message : t('scheduler.loadFailed')
+      jobsError.value = t('scheduler.loadFailed')
   } finally {
     if (sequence === jobsSequence) jobsLoading.value = false
   }

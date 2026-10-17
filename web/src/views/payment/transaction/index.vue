@@ -24,7 +24,6 @@ const total = ref(0)
 const loading = ref(false)
 const loadError = ref('')
 const detail = ref<Transaction | null>(null)
-const detailError = ref('')
 const detailVisible = ref(false)
 let sequence = 0
 let alive = true
@@ -63,11 +62,6 @@ const columns = computed<TableColumn<Transaction>[]>(() => [
   { key: 'createdAt', label: t('payment.transaction.createdAt'), minWidth: 180 },
   { key: 'actions', label: t('payment.order.actions'), width: 90, fixed: 'right' },
 ])
-function message(error: unknown): string {
-  return error instanceof Error && error.message !== ''
-    ? error.message
-    : t('payment.transaction.loadFailed')
-}
 function source(value: number): string {
   if (value === 1) return t('payment.transaction.payment')
   if (value === 2) return t('payment.transaction.redeemCode')
@@ -103,11 +97,11 @@ async function load(): Promise<void> {
       rows.value = result.list
       total.value = result.total
     }
-  } catch (error: unknown) {
+  } catch {
     if (alive && current === sequence) {
       rows.value = []
       total.value = 0
-      loadError.value = message(error)
+      loadError.value = t('payment.transaction.loadFailed')
     }
   } finally {
     if (alive && current === sequence) loading.value = false
@@ -132,11 +126,10 @@ async function openDetail(row: Transaction): Promise<void> {
   if (!canDetail.value) return
   detailVisible.value = true
   detail.value = null
-  detailError.value = ''
   try {
     detail.value = await api.getTransaction(row.id)
-  } catch (error: unknown) {
-    detailError.value = message(error)
+  } catch {
+    detailVisible.value = false
   }
 }
 watch(
@@ -194,8 +187,8 @@ onBeforeUnmount(() => {
       <template #empty><el-empty :description="t('payment.transaction.empty')" /></template>
     </AppTable>
     <AppDialog v-model="detailVisible" :title="t('payment.transaction.title')" width="620px">
-      <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" />
-      <el-descriptions v-else-if="detail" :column="2" border>
+      
+      <el-descriptions v-if="detail" :column="2" border>
         <el-descriptions-item :label="t('payment.transaction.transactionNo')">{{
           detail.transactionNo
         }}</el-descriptions-item>

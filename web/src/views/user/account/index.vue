@@ -53,14 +53,12 @@ const loading = ref(false)
 const roleOptionsLoading = ref(false)
 const loadError = ref('')
 const roleOptionsError = ref('')
-const mutationError = ref('')
 const mutating = ref(false)
 
 const editVisible = ref(false)
 const editingUser = ref<UserListItem | null>(null)
 const userForm = ref<UserFormState>({ username: '' })
 const editSaving = ref(false)
-const editError = ref('')
 
 const roleDialogVisible = ref(false)
 const roleTarget = ref<UserListItem | null>(null)
@@ -102,8 +100,8 @@ async function loadFormOptions(): Promise<void> {
   formOptionsError.value = ''
   try {
     formOptions.value = await getUserFormOptions()
-  } catch (error: unknown) {
-    formOptionsError.value = errorMessage(error, 'user.loadFailed')
+  } catch {
+    formOptionsError.value = t('user.loadFailed')
   }
 }
 
@@ -121,9 +119,6 @@ const searchModel = computed<SearchFormModel<UserSearchModel>>({
 })
 const searchFields = computed(() => userSearchFields(t, roleOptions.value))
 
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message !== '' ? error.message : t(fallback)
-}
 async function loadUsers(): Promise<boolean> {
   if (loading.value) return false
   loading.value = true
@@ -133,8 +128,8 @@ async function loadUsers(): Promise<boolean> {
     rows.value = result.list
     total.value = result.total
     return true
-  } catch (error: unknown) {
-    loadError.value = errorMessage(error, 'user.loadFailed')
+  } catch {
+    loadError.value = t('user.loadFailed')
     return false
   } finally {
     loading.value = false
@@ -146,8 +141,8 @@ async function loadRoleOptions(): Promise<void> {
   roleOptionsError.value = ''
   try {
     roleOptions.value = (await getUserRoleOptions()).roles
-  } catch (error: unknown) {
-    roleOptionsError.value = errorMessage(error, 'user.roleLoadFailed')
+  } catch {
+    roleOptionsError.value = t('user.roleLoadFailed')
   } finally {
     roleOptionsLoading.value = false
   }
@@ -189,7 +184,6 @@ function openEdit(row: UserListItem): void {
   if (!canUpdate.value || !row.actions.update) return
   editingUser.value = row
   userForm.value = { username: row.username }
-  editError.value = ''
   editVisible.value = true
 }
 async function saveEdit(): Promise<void> {
@@ -203,7 +197,6 @@ async function saveEdit(): Promise<void> {
   )
     return
   editSaving.value = true
-  editError.value = ''
   try {
     const result = await updateUser(target.id, {
       username: normalizedUsernameValue.value,
@@ -213,8 +206,8 @@ async function saveEdit(): Promise<void> {
       editVisible.value = false
       ElNotification.success({ title: t('user.updateSuccess') })
     }
-  } catch (error: unknown) {
-    editError.value = errorMessage(error, 'user.saveFailed')
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     editSaving.value = false
   }
@@ -271,9 +264,9 @@ async function openRoles(row: UserListItem): Promise<void> {
     }
     roleData.value = data
     selectedRoleIDs.value = [...data.roleIds]
-  } catch (error: unknown) {
+  } catch {
     if (isCurrentRoleDialog(sequence, targetID))
-      roleError.value = errorMessage(error, 'user.roleLoadFailed')
+      roleError.value = t('user.roleLoadFailed')
   } finally {
     if (isCurrentRoleDialog(sequence, targetID)) roleLoading.value = false
   }
@@ -317,9 +310,8 @@ async function saveRoles(): Promise<void> {
       closeRoleDialog()
       ElNotification.success({ title: t('user.rolesSuccess') })
     }
-  } catch (error: unknown) {
-    if (isCurrentRoleDialog(sequence, targetID))
-      roleError.value = errorMessage(error, 'user.saveFailed')
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     roleSaving.value = false
   }
@@ -347,9 +339,8 @@ async function changeStatus(row: UserListItem): Promise<void> {
     await updateUserStatus(row.id, next)
     await loadUsers()
     ElNotification.success({ title: t('user.statusSuccess') })
-  } catch (error: unknown) {
-    if (error !== 'cancel' && error !== 'close')
-      mutationError.value = errorMessage(error, 'user.saveFailed')
+  } catch {
+    // Cancellation stays silent; request.ts owns API error notifications.
   } finally {
     mutating.value = false
   }
@@ -367,9 +358,8 @@ async function removeUser(row: UserListItem): Promise<void> {
     if (query.value.page > maxPage) query.value = { ...query.value, page: maxPage }
     await loadUsers()
     ElNotification.success({ title: t('user.deleteSuccess') })
-  } catch (error: unknown) {
-    if (error !== 'cancel' && error !== 'close')
-      mutationError.value = errorMessage(error, 'user.saveFailed')
+  } catch {
+    // Cancellation stays silent; request.ts owns API error notifications.
   } finally {
     mutating.value = false
   }
@@ -384,9 +374,7 @@ onMounted(() => {
 
 <template>
   <AppPage class="user-management">
-    <el-alert v-if="formOptionsError" :title="formOptionsError" type="error" show-icon>
-      <el-button text @click="loadFormOptions">{{ t('user.reset') }}</el-button>
-    </el-alert>
+    <div v-if="formOptionsError"><el-button text @click="loadFormOptions">{{ t('user.reset') }}</el-button></div>
     <AppSearch
       v-model="searchModel"
       class="user-filters management-page__filters"
@@ -398,23 +386,12 @@ onMounted(() => {
       @query="search"
       @reset="reset"
     />
-    <el-alert v-if="roleOptionsError" :title="roleOptionsError" type="error" show-icon /><el-alert
-      v-if="loadError"
-      :title="loadError"
-      type="error"
-      show-icon
-    /><el-alert
-      v-if="mutationError"
-      :title="mutationError"
-      type="error"
-      show-icon
-      closable
-      @close="mutationError = ''"
-    />
+    <div v-if="roleOptionsError"><el-button type="primary" plain @click="loadRoleOptions">{{ t('user.refresh') }}</el-button></div>
     <AppTable
       class="user-table"
       :columns="tableColumns"
       :data="rows"
+      :result-state="loadError ? 'error' : loading ? 'loading' : rows.length ? 'success' : 'empty'"
       :loading="loading"
       :pagination="tablePagination"
       :aria-label="t('user.title')"
@@ -500,7 +477,6 @@ onMounted(() => {
       v-model="editVisible"
       v-model:form="userForm"
       :editing-user="editingUser"
-      :edit-error="editError"
       :edit-saving="editSaving"
       :username-valid="usernameValid"
       :username-max-length="formOptions?.usernameMaxLength"
@@ -510,8 +486,9 @@ onMounted(() => {
       :model-value="roleDialogVisible"
       :selected-role-i-ds="selectedRoleIDs"
       :role-data="roleData"
-      :role-loading="roleLoading"
       :role-error="roleError"
+      :role-loading="roleLoading"
+      
       :role-saving="roleSaving"
       @update:model-value="updateRoleDialogVisible"
       @update:selected-role-i-ds="updateSelectedRoleIDs"

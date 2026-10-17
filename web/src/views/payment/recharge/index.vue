@@ -23,7 +23,6 @@ const query = ref({ page: 1, pageSize: 20 })
 const loading = ref(false)
 const loadError = ref('')
 const submitting = ref(false)
-const formError = ref('')
 const selectedPackage = ref<number | undefined>(undefined)
 const selectedMethod = ref<number | undefined>(undefined)
 const checkout = ref<Checkout | null>(null)
@@ -51,9 +50,6 @@ const columns = computed<TableColumn<RechargeOrder>[]>(() => [
   { key: 'expiresAt', label: t('payment.order.expiresAt'), minWidth: 180 },
   { key: 'actions', label: t('payment.order.actions'), width: 130, fixed: 'right' },
 ])
-function message(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message !== '' ? error.message : fallback
-}
 function statusType(status: number): 'success' | 'warning' | 'info' {
   return status === 2 ? 'success' : status === 3 ? 'info' : 'warning'
 }
@@ -75,9 +71,9 @@ async function loadOptions(): Promise<void> {
     const firstMethod = options.value.payMethods[0]
     selectedPackage.value = firstPackage?.id
     selectedMethod.value = firstMethod?.value
-  } catch (error: unknown) {
+  } catch {
     options.value = null
-    optionsError.value = message(error, t('payment.order.optionsUnavailable'))
+    optionsError.value = t('payment.order.optionsUnavailable')
   } finally {
     optionsLoading.value = false
   }
@@ -93,11 +89,11 @@ async function loadOrders(): Promise<void> {
       orders.value = result.list
       total.value = result.total
     }
-  } catch (error: unknown) {
+  } catch {
     if (alive && current === sequence) {
       orders.value = []
       total.value = 0
-      loadError.value = message(error, t('payment.order.loadFailed'))
+      loadError.value = t('payment.order.loadFailed')
     }
   } finally {
     if (alive && current === sequence) loading.value = false
@@ -120,7 +116,6 @@ async function create(): Promise<void> {
   )
     return
   submitting.value = true
-  formError.value = ''
   try {
     const returnUrl = new URL(window.location.href)
     returnUrl.hash = ''
@@ -133,8 +128,8 @@ async function create(): Promise<void> {
     checkout.value = result
     checkoutVisible.value = true
     await loadOrders()
-  } catch (error: unknown) {
-    formError.value = message(error, t('payment.order.requestFailed'))
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     submitting.value = false
   }
@@ -142,12 +137,11 @@ async function create(): Promise<void> {
 async function pay(row: RechargeOrder): Promise<void> {
   if (!canPay.value || submitting.value || !row.actions.pay) return
   submitting.value = true
-  formError.value = ''
   try {
     checkout.value = await api.payRecharge(row.id)
     checkoutVisible.value = true
-  } catch (error: unknown) {
-    formError.value = message(error, t('payment.order.requestFailed'))
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     submitting.value = false
   }
@@ -185,13 +179,7 @@ onBeforeUnmount(() => {
       <template #header
         ><span>{{ t('navigation.paymentRecharge') }}</span></template
       >
-      <el-alert
-        v-if="optionsError"
-        :title="optionsError"
-        type="error"
-        :closable="false"
-        show-icon
-      />
+      <div v-if="optionsError"><el-button type="primary" plain @click="loadOptions">{{ t('appTable.refresh') }}</el-button></div>
       <el-alert
         v-if="options && !options.available"
         :title="t('payment.order.checkoutUnavailable')"
@@ -222,7 +210,7 @@ onBeforeUnmount(() => {
             />
           </el-form-item>
         </div>
-        <el-alert v-if="formError" :title="formError" type="error" :closable="false" />
+        
         <el-button
           type="primary"
           :loading="submitting"
@@ -233,7 +221,7 @@ onBeforeUnmount(() => {
         >
       </el-form>
     </el-card>
-    <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
+    
     <AppTable
       v-if="canList"
       :columns="columns"

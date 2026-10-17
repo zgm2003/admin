@@ -8,7 +8,6 @@ const props = defineProps<{
   mode: ConfigDialogMode
   options: PaymentConfigOptions
   submitting: boolean
-  error: string
 }>()
 const visible = defineModel<boolean>({ required: true })
 const form = defineModel<ConfigForm>('form', { required: true })
@@ -197,7 +196,6 @@ async function save() {
     :close-on-press-escape="!submitting"
     :show-close="!submitting"
   >
-    <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
     <el-alert
       v-if="mode === 'version'"
       :title="t('payment.config.retainHint')"

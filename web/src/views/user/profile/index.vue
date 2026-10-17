@@ -115,9 +115,9 @@ async function loadProfile(): Promise<void> {
   loadError.value = ''
   try {
     applyProfile(await getAccountProfile())
-  } catch (error: unknown) {
+  } catch {
     loadError.value =
-      error instanceof Error && error.message !== '' ? error.message : t('user.profile.loadFailed')
+      t('user.profile.loadFailed')
   } finally {
     loading.value = false
   }
@@ -275,7 +275,7 @@ onBeforeUnmount(stopPasswordCountdown)
 
 <template>
   <section class="account-profile" data-testid="account-profile-page">
-    <el-alert v-if="loadError" type="error" :title="loadError" :closable="false" show-icon />
+    <div v-if="loadError"><el-button type="primary" plain @click="loadProfile">{{ t('appTable.refresh') }}</el-button></div>
 
     <ProfileHero
       :name="heroName"

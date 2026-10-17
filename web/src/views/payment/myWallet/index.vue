@@ -46,9 +46,6 @@ const columns = computed<TableColumn<PersonalTransaction>[]>(() => [
   { prop: 'balanceAfter', label: t('payment.transaction.balanceAfter'), width: 140 },
   { key: 'createdAt', label: t('payment.transaction.createdAt'), minWidth: 180 },
 ])
-function message(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message !== '' ? error.message : fallback
-}
 function transactionSource(value: number): string {
   if (value === 1) return t('payment.transaction.payment')
   if (value === 2) return t('payment.transaction.redeemCode')
@@ -65,9 +62,9 @@ async function loadWallet(): Promise<void> {
   walletError.value = ''
   try {
     wallet.value = await getMyWallet()
-  } catch (error: unknown) {
+  } catch {
     wallet.value = null
-    walletError.value = message(error, t('payment.wallet.loadFailed'))
+    walletError.value = t('payment.wallet.loadFailed')
   } finally {
     walletLoading.value = false
   }
@@ -83,11 +80,11 @@ async function loadTransactions(): Promise<void> {
       rows.value = result.list
       total.value = result.total
     }
-  } catch (error: unknown) {
+  } catch {
     if (alive && current === sequence) {
       rows.value = []
       total.value = 0
-      loadError.value = message(error, t('payment.transaction.loadFailed'))
+      loadError.value = t('payment.transaction.loadFailed')
     }
   } finally {
     if (alive && current === sequence) loading.value = false
@@ -112,7 +109,7 @@ async function redeem(): Promise<void> {
     redeemCode.value = ''
     await Promise.all([loadWallet(), loadTransactions()])
   } catch (error: unknown) {
-    redeemError.value = message(error, t('payment.redeemCode.requestFailed'))
+    // request.ts owns the API error notification.
   } finally {
     redeemSubmitting.value = false
   }
@@ -143,7 +140,7 @@ onBeforeUnmount(() => {
 
 <template>
   <AppPage class="payment-my-wallet-page">
-    <el-alert v-if="walletError" :title="walletError" type="error" :closable="false" show-icon />
+    <div v-if="walletError"><el-button type="primary" plain @click="loadWallet">{{ t('appTable.refresh') }}</el-button></div>
     <el-card class="payment-my-wallet-page__summary" shadow="never">
       <template #header>
         <div class="payment-my-wallet-page__summary-header">
@@ -204,7 +201,7 @@ onBeforeUnmount(() => {
         >
       </template>
     </AppDialog>
-    <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
+    
     <AppTable
       v-if="canList"
       :columns="columns"

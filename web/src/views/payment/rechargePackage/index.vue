@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CirclePlus } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
+import { ElNotification } from 'element-plus/es/components/notification/index'
 
 import * as api from '@/api/payment/rechargePackage'
 import type {
@@ -48,8 +49,6 @@ const filters = ref<SearchFormModel<{ keyword: string; isEnabled: YesNo | '' }>>
 })
 const loading = ref(false)
 const loadError = ref('')
-const mutationError = ref('')
-const success = ref('')
 const busyID = ref<number | null>(null)
 const dialogVisible = ref(false)
 const editingID = ref<number | null>(null)
@@ -98,11 +97,6 @@ const columns = computed<TableColumn<RechargePackage>[]>(() => [
   { key: 'actions', label: t('payment.rechargePackage.actions'), width: 230, fixed: 'right' },
 ])
 
-function message(error: unknown): string {
-  return error instanceof Error && error.message !== ''
-    ? error.message
-    : t('payment.rechargePackage.requestFailed')
-}
 function state(): 'loading' | 'error' | 'empty' | 'success' {
   if (loading.value) return 'loading'
   if (loadError.value) return 'error'
@@ -119,11 +113,11 @@ async function load(): Promise<void> {
       rows.value = result.list
       total.value = result.total
     }
-  } catch (error: unknown) {
+  } catch {
     if (alive && current === sequence) {
       rows.value = []
       total.value = 0
-      loadError.value = message(error)
+      loadError.value = t('payment.rechargePackage.requestFailed')
     }
   } finally {
     if (alive && current === sequence) loading.value = false
@@ -209,10 +203,10 @@ async function save(): Promise<void> {
       await api.updateRechargePackage(editingID.value, input)
     }
     dialogVisible.value = false
-    success.value = t('payment.rechargePackage.saved')
+    ElNotification.success({ title: t('payment.rechargePackage.saved') })
     await load()
   } catch (error: unknown) {
-    formError.value = message(error)
+    // request.ts owns the API error notification.
   } finally {
     submitting.value = false
   }
@@ -230,17 +224,16 @@ async function mutate(row: RechargePackage, action: 'status' | 'delete'): Promis
     return
   }
   busyID.value = row.id
-  mutationError.value = ''
   try {
     if (action === 'status') {
       await api.updateRechargePackageStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
     } else {
       await api.deleteRechargePackage(row.id)
     }
-    success.value = t('payment.rechargePackage.saved')
+    ElNotification.success({ title: t('payment.rechargePackage.saved') })
     await load()
-  } catch (error: unknown) {
-    mutationError.value = message(error)
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     busyID.value = null
   }
@@ -280,11 +273,9 @@ onBeforeUnmount(() => {
       @query="search"
       @reset="reset"
     />
-    <el-alert v-if="optionsError" :title="optionsError" type="error" :closable="false">
-      <el-button text @click="reloadOptions">{{ t('payment.rechargePackage.retry') }}</el-button>
-    </el-alert>
-    <el-alert v-if="mutationError" :title="mutationError" type="error" closable @close="mutationError = ''" />
-    <el-alert v-if="success" :title="success" type="success" closable @close="success = ''" />
+    <div v-if="optionsError"><el-button text @click="reloadOptions">{{ t('payment.rechargePackage.retry') }}</el-button></div>
+    
+    
     <AppTable
       :columns="columns"
       :data="rows"

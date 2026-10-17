@@ -22,7 +22,6 @@ const props = defineProps<{
   submitting: boolean
   canSave: boolean
   canUpload: boolean
-  error: string
   valueTypeOptions: SettingTypeOption[]
 }>()
 
@@ -141,14 +140,7 @@ function save(): void {
     :close-on-press-escape="!submitting"
     :close-on-click-modal="!submitting"
   >
-    <el-alert
-      v-if="error"
-      :title="error"
-      type="error"
-      :closable="false"
-      show-icon
-      class="setting-submit-error"
-    />
+    
     <el-form label-position="top" @submit.prevent="save">
       <el-form-item :label="t('setting.key')">
         <el-input

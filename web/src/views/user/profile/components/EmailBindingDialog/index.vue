@@ -17,7 +17,6 @@ const nextResendSeconds = ref(0)
 const sendingCurrent = ref(false)
 const sendingNext = ref(false)
 const saving = ref(false)
-const errorMessage = ref('')
 const timers = new Set<number>()
 const changing = computed(() => props.currentEmail !== '')
 const canSubmit = computed(
@@ -43,13 +42,12 @@ function startCountdown(value: typeof currentResendSeconds, seconds: number): vo
 async function sendCurrent(): Promise<void> {
   if (sendingCurrent.value || currentResendSeconds.value > 0) return
   sendingCurrent.value = true
-  errorMessage.value = ''
   try {
     const result = await sendEmailCode({ target: 'current' })
     currentChallengeID.value = result.challengeId
     startCountdown(currentResendSeconds, result.resendAfterSeconds)
-  } catch (error: unknown) {
-    errorMessage.value = error instanceof Error ? error.message : t('user.identity.sendFailed')
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     sendingCurrent.value = false
   }
@@ -59,13 +57,12 @@ async function sendNext(): Promise<void> {
   const email = form.nextEmail.trim()
   if (sendingNext.value || nextResendSeconds.value > 0 || email === '') return
   sendingNext.value = true
-  errorMessage.value = ''
   try {
     const result = await sendEmailCode({ target: 'next', email })
     nextChallengeID.value = result.challengeId
     startCountdown(nextResendSeconds, result.resendAfterSeconds)
-  } catch (error: unknown) {
-    errorMessage.value = error instanceof Error ? error.message : t('user.identity.sendFailed')
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     sendingNext.value = false
   }
@@ -74,7 +71,6 @@ async function sendNext(): Promise<void> {
 async function submit(): Promise<void> {
   if (!canSubmit.value || saving.value) return
   saving.value = true
-  errorMessage.value = ''
   try {
     const input = {
       nextEmail: form.nextEmail.trim(),
@@ -91,8 +87,8 @@ async function submit(): Promise<void> {
     emit('updated', result.email)
     visible.value = false
     ElMessage.success(t('user.identity.emailSaved'))
-  } catch (error: unknown) {
-    errorMessage.value = error instanceof Error ? error.message : t('user.identity.saveFailed')
+  } catch {
+    // request.ts owns the API error notification.
   } finally {
     saving.value = false
   }
@@ -106,7 +102,6 @@ function reset(): void {
   nextChallengeID.value = ''
   currentResendSeconds.value = 0
   nextResendSeconds.value = 0
-  errorMessage.value = ''
   for (const timer of timers) window.clearInterval(timer)
   timers.clear()
 }
@@ -124,7 +119,7 @@ onBeforeUnmount(reset)
     width="min(520px, 94vw)"
     append-to-body
   >
-    <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" show-icon />
+    
     <el-form label-position="top" @submit.prevent="submit">
       <template v-if="changing">
         <el-form-item :label="t('user.identity.currentEmail')">

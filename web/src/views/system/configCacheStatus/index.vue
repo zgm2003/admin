@@ -191,15 +191,7 @@ onMounted(() => {
 
 <template>
   <AppPage class="config-cache-status-page">
-    <el-alert
-      v-if="optionsError"
-      :title="t('configCacheStatus.loadFailed')"
-      type="error"
-      :closable="false"
-      show-icon
-    >
-      <el-button @click="reloadOptions">{{ t('appTable.refresh') }}</el-button>
-    </el-alert>
+    <div v-if="optionsError"><el-button @click="reloadOptions">{{ t('appTable.refresh') }}</el-button></div>
     <AppSearch
       v-model="searchModel"
       class="management-page__filters"

@@ -34,7 +34,6 @@ const statsLoading = ref(false)
 const mutating = ref(false)
 const loadError = ref('')
 const statsError = ref('')
-const mutationError = ref('')
 interface SessionSearchModel {
   username: string
   platform: string
@@ -101,10 +100,6 @@ const searchFields = computed<SearchField<SessionSearchModel>[]>(() => [
   },
 ])
 
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message !== '' ? error.message : t(fallback)
-}
-
 async function loadSessions(): Promise<boolean> {
   if (listLoading.value) return false
   listLoading.value = true
@@ -115,8 +110,8 @@ async function loadSessions(): Promise<boolean> {
     total.value = result.total
     selectedIDs.value = []
     return true
-  } catch (error: unknown) {
-    loadError.value = errorMessage(error, 'session.loadFailed')
+  } catch {
+    loadError.value = t('session.loadFailed')
     return false
   } finally {
     listLoading.value = false
@@ -130,8 +125,8 @@ async function loadStats(): Promise<boolean> {
   try {
     stats.value = await getSessionStats()
     return true
-  } catch (error: unknown) {
-    statsError.value = errorMessage(error, 'session.loadFailed')
+  } catch {
+    statsError.value = t('session.loadFailed')
     return false
   } finally {
     statsLoading.value = false
@@ -200,14 +195,13 @@ function canceled(error: unknown): boolean {
 async function revokeOne(row: SessionItem): Promise<void> {
   if (!selectable(row) || mutating.value) return
   mutating.value = true
-  mutationError.value = ''
   try {
     await ElMessageBox.confirm(t('session.revokeConfirm'), t('session.revoke'), { type: 'warning' })
     await revokeSession(row.id)
     await reloadAuthoritativeData()
     ElNotification.success({ title: t('session.revokeSuccess') })
   } catch (error: unknown) {
-    if (!canceled(error)) mutationError.value = errorMessage(error, 'session.revokeFailed')
+    if (canceled(error)) return
   } finally {
     mutating.value = false
   }
@@ -216,7 +210,6 @@ async function revokeOne(row: SessionItem): Promise<void> {
 async function revokeSelected(): Promise<void> {
   if (!canRevoke.value || selectedIDs.value.length === 0 || mutating.value) return
   mutating.value = true
-  mutationError.value = ''
   try {
     await ElMessageBox.confirm(t('session.revokeConfirm'), t('session.batchRevoke'), {
       type: 'warning',
@@ -225,7 +218,7 @@ async function revokeSelected(): Promise<void> {
     await reloadAuthoritativeData()
     ElNotification.success({ title: t('session.revokeSuccess') })
   } catch (error: unknown) {
-    if (!canceled(error)) mutationError.value = errorMessage(error, 'session.revokeFailed')
+    if (canceled(error)) return
   } finally {
     mutating.value = false
   }
@@ -261,7 +254,7 @@ onMounted(() => {
         </div>
       </el-col>
     </el-row>
-    <el-alert v-if="statsError" :title="statsError" type="error" :closable="false" show-icon />
+    <div v-if="statsError"><el-button type="primary" plain @click="loadStats">{{ t('session.refresh') }}</el-button></div>
 
     <AppSearch
       v-model="searchModel"
@@ -275,18 +268,10 @@ onMounted(() => {
       @reset="reset"
     />
 
-    <el-alert v-if="optionsError" :title="optionsError" type="error" :closable="false" show-icon>
-      <el-button link @click="reloadOptions">{{ t('session.refresh') }}</el-button>
-    </el-alert>
+    <div v-if="optionsError"><el-button link @click="reloadOptions">{{ t('session.refresh') }}</el-button></div>
 
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
-    <el-alert
-      v-if="mutationError"
-      :title="mutationError"
-      type="error"
-      :closable="false"
-      show-icon
-    />
+    
     <div v-if="listLoading" data-testid="session-loading" :aria-label="t('session.loading')">
       <el-skeleton :rows="6" animated />
     </div>

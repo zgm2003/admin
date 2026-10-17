@@ -29,7 +29,6 @@ const loading = ref(false)
 const loadError = ref('')
 const detail = ref<RechargeOrder | null>(null)
 const detailVisible = ref(false)
-const detailError = ref('')
 const callbackRows = ref<CallbackEvent[]>([])
 const callbackTotal = ref(0)
 const callbackLoading = ref(false)
@@ -83,9 +82,6 @@ const callbackColumns = computed<TableColumn<CallbackEvent>[]>(() => [
   { key: 'tradeStatus', label: t('payment.callback.tradeStatus'), minWidth: 140 },
   { key: 'createdAt', label: t('payment.callback.createdAt'), minWidth: 180 },
 ])
-function message(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message !== '' ? error.message : fallback
-}
 function positive(raw: string): number | undefined {
   const value = raw.trim()
   if (!/^\d+$/.test(value) || Number(value) < 1 || !Number.isSafeInteger(Number(value)))
@@ -119,11 +115,11 @@ async function load(): Promise<void> {
       rows.value = result.list
       total.value = result.total
     }
-  } catch (error: unknown) {
+  } catch {
     if (alive && current === sequence) {
       rows.value = []
       total.value = 0
-      loadError.value = message(error, t('payment.order.loadFailed'))
+      loadError.value = t('payment.order.loadFailed')
     }
   } finally {
     if (alive && current === sequence) loading.value = false
@@ -148,14 +144,13 @@ async function openDetail(row: RechargeOrder): Promise<void> {
   if (!canDetail.value) return
   detailVisible.value = true
   detail.value = null
-  detailError.value = ''
   callbackRows.value = []
   callbackTotal.value = 0
   try {
     detail.value = await api.getOrder(row.id)
     if (canCallbackList.value) await loadCallbacks(row.id)
-  } catch (error: unknown) {
-    detailError.value = message(error, t('payment.order.loadFailed'))
+  } catch {
+    detailVisible.value = false
   }
 }
 async function loadCallbacks(orderId = detail.value?.id): Promise<void> {
@@ -166,10 +161,10 @@ async function loadCallbacks(orderId = detail.value?.id): Promise<void> {
     const result = await callbackApi.getOrderCallbackEvents(orderId, callbackQuery.value)
     callbackRows.value = result.list
     callbackTotal.value = result.total
-  } catch (error: unknown) {
+  } catch {
     callbackRows.value = []
     callbackTotal.value = 0
-    callbackError.value = message(error, t('payment.callback.loadFailed'))
+    callbackError.value = t('payment.callback.loadFailed')
   } finally {
     callbackLoading.value = false
   }
@@ -186,8 +181,8 @@ async function openCallback(row: CallbackEvent): Promise<void> {
   try {
     callbackDetail.value = await callbackApi.getOrderCallbackEvent(detail.value.id, row.id)
     callbackDetailVisible.value = true
-  } catch (error: unknown) {
-    callbackError.value = message(error, t('payment.callback.loadFailed'))
+  } catch {
+    callbackError.value = t('payment.callback.loadFailed')
   }
 }
 watch(
@@ -246,7 +241,7 @@ onBeforeUnmount(() => {
     </AppTable>
 
     <AppDialog v-model="detailVisible" :title="t('payment.order.detail')" width="920px">
-      <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" />
+      
       <template v-if="detail">
         <el-descriptions :column="3" border>
           <el-descriptions-item :label="t('payment.order.orderNo')">{{
@@ -272,10 +267,11 @@ onBeforeUnmount(() => {
         </el-descriptions>
         <div v-if="canCallbackList" class="payment-order-page__callbacks">
           <el-divider content-position="left">{{ t('payment.order.callbackEvents') }}</el-divider>
-          <el-alert v-if="callbackError" :title="callbackError" type="error" :closable="false" />
+          
           <AppTable
             :columns="callbackColumns"
             :data="callbackRows"
+            :result-state="callbackError ? 'error' : callbackLoading ? 'loading' : callbackRows.length ? 'success' : 'empty'"
             :loading="callbackLoading"
             :pagination="callbackPagination"
             :row-key="(row: CallbackEvent) => String(row.id)"
