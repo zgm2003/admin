@@ -281,15 +281,20 @@ async function save() {
           v-for="field in credentialFields"
           :key="field"
           :prop="field"
+          class="payment-config-form__credential-item"
         >
           <template #label>
             <span class="payment-config-form__credential-label">
-              <span class="payment-config-form__credential-label-text">
+              <span
+                class="payment-config-form__credential-label-text"
+                :title="t(`payment.config.${field}`)"
+              >
                 {{ t(`payment.config.${field}`) }}
               </span>
               <el-upload
                 v-if="field !== 'privateKey'"
                 v-model:file-list="importFiles[field]"
+                class="payment-config-form__import-control"
                 accept=".crt,.pem"
                 :auto-upload="false"
                 :show-file-list="false"
@@ -305,6 +310,13 @@ async function save() {
                   {{ t('payment.config.importCertificate') }}
                 </el-button>
               </el-upload>
+              <span
+                v-if="field !== 'privateKey' && (importing[field] || importNames[field])"
+                class="payment-config-form__import-name"
+                :title="importNames[field] || undefined"
+              >
+                {{ importing[field] ? t('payment.config.importing') : importNames[field] }}
+              </span>
             </span>
           </template>
           <div class="payment-config-form__credential-entry">
@@ -333,9 +345,6 @@ async function save() {
               @input="clearImportError(field)"
             />
             <div v-if="field !== 'privateKey'" class="payment-config-form__import">
-              <span>{{
-                importing[field] ? t('payment.config.importing') : importNames[field]
-              }}</span>
               <span
                 v-if="importErrors[field]"
                 role="alert"
@@ -384,12 +393,36 @@ async function save() {
     width: 100%;
   }
   &__credential-label {
-    display: inline-flex;
+    display: flex;
     align-items: center;
+    width: 100%;
+    min-width: 0;
     gap: 8px;
   }
   &__credential-label-text {
-    display: inline-block;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  &__import-control {
+    flex: 0 0 auto;
+  }
+  &__import-name {
+    flex: 1 1 0;
+    min-width: 40px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :deep(.payment-config-form__credential-item.el-form-item--label-top > .el-form-item__label) {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
   }
   &__import-error {
     color: var(--el-color-danger);

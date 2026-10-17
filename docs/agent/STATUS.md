@@ -1,5 +1,10 @@
 # 项目状态
 
+## 支付证书导入文件名布局（2026-10-17，定向验证完成）
+
+- 支付配置新增/换版表单的证书导入文件名已从文本域下方移到“导入证书文件”按钮右侧；标签行可收缩，文件名单行省略并保留完整 `title`，三类证书和中英文/窄屏布局一致。私钥字段不显示导入文件名。
+- 新增页面回归覆盖新增与换版三类证书的文件名位置、完整名称和文本域不重复展示；实际验证 `pnpm vitest run tests/views/payment/config/index.test.ts --pool=threads --maxWorkers=1`（17 项）、受影响文件 Prettier/ESLint、`pnpm typecheck`、`pnpm build`、Playwright 桌面/390px 中英文 24 项像素布局检查均通过；构建保留既有大 chunk 提示，未提交 Git。
+
 ## 支付运行配置收口与自动回跳（2026-10-17，实现与定向验证完成）
 
 - 按维护者要求移除 API/Worker 的 `PAYMENT_ENVIRONMENT` 与 `PAYMENT_RETURN_ORIGINS` 配置字段、加载校验和装配依赖，同时清理 `.env.example`、本地 `.env` 和 README 的重复配置。支付环境以后台支付配置为唯一来源；完整 HTTPS `notifyUrl` 仍由支付配置页面维护，与前端 Origin/CORS 无关。

@@ -334,7 +334,8 @@ it.each(['create', 'version'] as const)(
       expect(
         input.element
           .closest('.el-form-item')
-          ?.querySelector('.payment-config-form__credential-label-text')?.textContent?.trim(),
+          ?.querySelector('.payment-config-form__credential-label-text')
+          ?.textContent?.trim(),
       ).toBe(label)
       await certificateFile(w, field, `${field}.crt`, certificates[field])
     }
@@ -414,12 +415,44 @@ it('places certificate import controls beside each certificate label', async () 
   for (const field of ['appCertPEM', 'alipayCertPEM', 'rootCertPEM']) {
     const input = w.get(`textarea[data-testid="payment-config-${field}"]`)
     const item = input.element.closest('.el-form-item')
-    expect(item?.querySelector('.el-form-item__label')?.querySelector(
-      `[data-testid="payment-config-import-${field}"]`,
-    )).not.toBeNull()
+    expect(
+      item
+        ?.querySelector('.el-form-item__label')
+        ?.querySelector(`[data-testid="payment-config-import-${field}"]`),
+    ).not.toBeNull()
     expect(item?.querySelector('.payment-config-form__credential-entry--with-import')).toBeNull()
   }
 })
+it.each(['create', 'version'] as const)(
+  '%s places each imported filename immediately after its import button with the full name available',
+  async (mode) => {
+    permissions(['payment:config:list', 'payment:config:create', 'payment:config:update'])
+    const w = await page()
+    await w.get(`[data-testid="payment-config-${mode}"]`).trigger('click')
+    await flushPromises()
+    for (const field of ['appCertPEM', 'alipayCertPEM', 'rootCertPEM']) {
+      const filename = `${field}-${'long-certificate-name-'.repeat(12)}.crt`
+      await certificateFile(
+        w,
+        field,
+        filename,
+        '-----BEGIN CERTIFICATE-----\nY2VydA==\n-----END CERTIFICATE-----',
+      )
+      const importer = w.get(`[data-testid="payment-config-import-${field}"]`)
+      const item = importer.element.closest('.el-form-item')
+      const name = item
+        ?.querySelector('.el-form-item__label')
+        ?.querySelector('.payment-config-form__import-name')
+      expect(name).not.toBeNull()
+      expect(name?.textContent?.trim()).toBe(filename)
+      expect(name?.getAttribute('title')).toBe(filename)
+      expect(importer.element.nextElementSibling).toBe(name)
+      expect(
+        item?.querySelector('.payment-config-form__credential-entry')?.textContent,
+      ).not.toContain(filename)
+    }
+  },
+)
 it('rejects oversized or malformed imported files without losing an existing draft', async () => {
   permissions(['payment:config:list', 'payment:config:update'])
   const w = await page()
