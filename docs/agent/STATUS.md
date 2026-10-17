@@ -1,13 +1,15 @@
 # 项目状态
 
-## 支付兑换码与个人充值入口（2026-10-17，代码完成，真实迁移待维护者执行）
+## 支付兑换码与个人充值入口（2026-10-17，实现已接入，部署与到账验收待完成）
 
-- 已完成本期支付范围：固定套餐等额充值、钱包/统一订单/流水、支付宝 Web/H5 配置与回调事实、订单巡检、兑换码生成/作废/兑换和个人钱包入口。不做退款、AI 扣费、预扣/冻结或管理员任意加款；钱包余额继续允许完整有符号 `int64`，充值只增加余额。
+- 本期已接入固定套餐等额充值、钱包/统一订单/流水、支付宝 Web/H5 配置与回调事实、订单巡检、兑换码生成/作废/兑换和个人钱包入口；这不代表部署与真实到账验收完成。不做退款、AI 扣费、预扣/冻结或管理员任意加款；钱包余额继续允许完整有符号 `int64`，充值只增加余额。
 - P4 兑换码后端、交易来源 DTO、API 装配、管理员兑换码页面与个人钱包兑换入口已接入；管理员支持分页/批次/状态筛选、详情、精确查询、生成、作废和 CSV 导出，注册用户只获得独立钱包兑换动作，不获得管理页面动作。中英文 i18n、API/页面回归已补齐。
-- 新增 `docs/database/2026-10-17-payment-redeem-code-menu.sql/.ps1`。SQL 只写 Admin 菜单、动作、个人钱包兑换授权和注册用户 access version；runner 要求 API/Worker 停止，先备份并校验归档，再执行事务，批量（500 条）CAS 重建菜单/受影响用户 Redis ready-state，拒绝把 Redis 更高版本降级，校验提交后事实并重放 SQL；Redis 或读回失败返回非零并保留 `result.json`，可安全重复执行。`permission/state.MenuStore.RebuildReadyState` 为维护 runner 提供独立菜单版本同步入口。
-- 未执行真实 PostgreSQL migration、Redis 同步、服务启停或 Git 提交；未读取沙盒凭据文件。维护者执行菜单 runner 前必须先完成 P2/P4 schema migration，并在服务保持停止时保留审计目录。
-- 验证证据：兑换码菜单 PowerShell AST 解析通过；runner 使用无效本地端口运行 `-CheckOnly` 时先成功编译嵌入 Go helper，随后在连接阶段退出，未执行 SQL；`TestPaymentRedeemCodeMenuRunnerHelperCompiles` 通过。`PAYMENT_ENVIRONMENT=1 go test ./internal/database -run '^TestPayment(OrderWallet|RedeemCode|RedeemCodeMenuMigration)' -count=1 -v` 通过；支付模块/支付宝/密钥/权限 state 定向测试通过；`go vet ./...`、`go build ./...` 通过。
-- 前端 `pnpm vitest run tests/api/payment/redeemCode.test.ts tests/views/payment/redeemCode.test.ts --pool=threads --maxWorkers=1`（2 文件/6 项）、`pnpm typecheck`、`pnpm check:architecture`、`pnpm build`、受影响文件 Prettier/ESLint 均通过；构建保留既有大 chunk 警告。全量 `go test ./...` 仍被既有 `internal/architecture` Service 分层门禁及 `internal/database` 历史迁移 fixture 失败阻塞，未将其标为全仓通过。
+- 维护工具为 `docs/database/2026-10-17-payment-redeem-code-menu.sql/.ps1`。SQL 只写 Admin 菜单、动作、个人钱包兑换授权和注册用户 access version，并拒绝重复个人兑换 action。runner 要求显式 `-ServicesStopped`，public 目标额外拒绝其他客户端；支持 `-Schema`，对同一 schema 备份并完整读取校验，提交前持久化 before/after 事实与带 SHA256 的流式用户 manifest。Redis 菜单/用户 ready-state 按 500 条批量发布，精确解析 `int64` 后以原始 payload CAS，拒绝损坏、invalidating、更高版本或竞争更新，整批失败不部分写入。
+- PostgreSQL 提交状态、Redis 同步状态、验证结论和失败阶段同步写入 `result.json` 与外层 `audit.json`；Redis 发布失败非零退出。维护者保持停服后，使用新审计目录及 `-RecoverFrom TARGET/result.json` 核对原数据库/schema、Redis endpoint、SQL、备份和版本 manifest，只恢复已提交的 Redis 发布，不重跑 SQL、不再次递增版本。提交结果未知时也按预提交事实核实，无法匹配则拒绝。`-CheckOnly` 在只读事务中验证逐 code 唯一性、目录/page/action 形状、父子关系、路由冲突、授权与 Redis 版本，既不修复数据库也不写 Redis。
+- 本轮只在自动清理的隔离 schema 和专属 Redis 测试 key 中执行回归；未执行真实 public migration、业务 Redis 同步、服务启停或 Git 提交；未读取沙盒凭据文件。维护者执行菜单 runner 前必须先完成 P2/P4 schema migration，并在服务保持停止时保留完整审计目录。生产/沙盒真实支付到账、百万级容量仍未验收。
+- 定向验证：`PAYMENT_ENVIRONMENT=1 go test -p 1 ./internal/database -run '^TestPaymentRedeemCodeMenu(Runner|Migration)' -count=1 -v` 通过，覆盖菜单 SQL 幂等、冲突回滚、缺失页面授权、重复个人 action，以及 runner 的 PG 提交/Redis 故障恢复、未知提交核实、错误目标/损坏状态拒绝、零用户、1001 用户多批 manifest、非幂等 replay 保护及 PowerShell wrapper 恢复/check-only。新增六项菜单结构损坏的只读拒绝测试先复现误报，修补后全部通过；独立只读复核确认该缺口已解决。PowerShell AST、`go fmt ./...`、`go vet ./...`、`go build ./...`、`git diff --check` 已有本轮通过记录。
+- 全量验证：`PAYMENT_ENVIRONMENT=1 go test -p 1 ./... -count=1` 非零退出，77 个包通过、2 个包共 22 项顶层测试失败。支付全部模块、支付宝、金额、密钥及全部 permission 模块通过；剩余为既有 `internal/architecture/TestBackendSourceBoundaries`（`storage/file/service.go` 的 `ValidateDependencies` 分层检查）与 `internal/database` 21 项历史迁移/runner fixture（Canvas、旧配置缓存、邮件、短信、通知、字典、存储、调度、设置）。未修改这些无关模块，未将全仓标为通过；完整本地日志为 `server/tmp/payment-verification-20261017.log`。
+- 前轮前端证据：`pnpm vitest run tests/api/payment/redeemCode.test.ts tests/views/payment/redeemCode.test.ts --pool=threads --maxWorkers=1`（2 文件/6 项）、`pnpm typecheck`、`pnpm check:architecture`、`pnpm build`、受影响文件 Prettier/ESLint 均通过；构建保留既有大 chunk 警告。本轮未修改前端，未重复运行这些命令。
 
 ## 支付订单与回调后端续建（2026-10-16，进行中）
 

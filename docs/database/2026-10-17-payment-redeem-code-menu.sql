@@ -115,6 +115,9 @@ BEGIN
          OR icon IS DISTINCT FROM 'lucide:circle-dollar-sign' OR is_enabled<>1 OR is_hidden<>0)) THEN
         RAISE EXCEPTION 'personal wallet page has incompatible shape';
     END IF;
+    IF (SELECT count(*) FROM permission_menu WHERE platform_id=admin_id AND code='payment:myWallet:redeem' AND deleted_at IS NULL) > 1 THEN
+        RAISE EXCEPTION 'personal wallet redeem action is duplicated';
+    END IF;
     IF EXISTS (SELECT 1 FROM permission_menu WHERE platform_id=admin_id AND code='payment:myWallet:redeem' AND deleted_at IS NULL) THEN
         SELECT id INTO node_id FROM permission_menu
          WHERE platform_id=admin_id AND code='payment:myWallet:redeem' AND deleted_at IS NULL;

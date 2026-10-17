@@ -79,33 +79,57 @@ func (s *Store) InstallReadyIfMissing(ctx context.Context, version Version) (Sta
 }
 
 // RebuildReadyState synchronizes ready access states with database versions.
-// A state currently held by a mutation lease is left untouched and reported as updating.
+// A mutation lease, corrupt state or higher version aborts the whole batch.
+// Go validates int64 versions exactly; Lua only compares the observed raw values
+// so cjson's double precision cannot turn adjacent large versions into equals.
 func (s *Store) RebuildReadyState(ctx context.Context, versions []Version) error {
 	normalized, err := normalizeVersions(versions)
 	if err != nil {
 		return err
 	}
 	keys := make([]string, len(normalized))
-	args := make([]any, 0, len(normalized))
 	for index, version := range normalized {
+		keys[index] = s.key(version.UserID)
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	observed, err := s.redis.UniversalClient().MGet(ctx, keys...).Result()
+	if err != nil {
+		return fmt.Errorf("read access states for rebuild: %w", err)
+	}
+	args := make([]any, 0, 3*len(normalized))
+	for index, version := range normalized {
+		found, raw := "0", ""
+		if observed[index] != nil {
+			var ok bool
+			raw, ok = observed[index].(string)
+			if !ok {
+				return fmt.Errorf("access state payload type is invalid")
+			}
+			current, err := decodeState(raw)
+			if err != nil {
+				return fmt.Errorf("access state is corrupt: %w", err)
+			}
+			if current.State != StateReady {
+				return ErrUpdating
+			}
+			if current.Version > version.Version {
+				return ErrVersionChanged
+			}
+			found = "1"
+		}
 		payload, err := encodeState(State{SchemaVersion: SchemaVersion, State: StateReady, Version: version.Version})
 		if err != nil {
 			return err
 		}
-		keys[index] = s.key(version.UserID)
-		args = append(args, payload)
-	}
-	if len(keys) == 0 {
-		return nil
+		args = append(args, found, raw, payload)
 	}
 	result, err := s.redis.EvalString(ctx, rebuildReadyStateScript, keys, args...)
 	if err != nil {
 		return err
 	}
-	if result == "updating" {
-		return ErrUpdating
-	}
-	if result == "newer" {
+	if result == "changed" {
 		return ErrVersionChanged
 	}
 	if result != "rebuilt" {
@@ -178,21 +202,15 @@ return 'repaired'
 `
 
 const rebuildReadyStateScript = `
-for _, key in ipairs(KEYS) do
-  local current = redis.call('GET', key)
-  if current then
-    local ok, decoded = pcall(cjson.decode, current)
-    if ok and decoded.state == 'invalidating' then return 'updating' end
-  end
-end
 for index, key in ipairs(KEYS) do
   local current = redis.call('GET', key)
-  local desired = cjson.decode(ARGV[index])
-  if current then
-    local ok, decoded = pcall(cjson.decode, current)
-    if ok and decoded.state == 'ready' and tonumber(decoded.version) > tonumber(desired.version) then return 'newer' end
+  local offset = (index - 1) * 3
+  if ARGV[offset + 1] == '0' then
+    if current then return 'changed' end
+  elseif current ~= ARGV[offset + 2] then
+    return 'changed'
   end
 end
-for index, key in ipairs(KEYS) do redis.call('SET', key, ARGV[index]) end
+for index, key in ipairs(KEYS) do redis.call('SET', key, ARGV[index * 3]) end
 return 'rebuilt'
 `
