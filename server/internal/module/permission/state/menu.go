@@ -29,6 +29,19 @@ func NewMenuStore(r *projectredis.Client) *MenuStore {
 	return &MenuStore{state: &Store{redis: r, keyPrefix: menuStatePrefix}}
 }
 
+// RebuildReadyState publishes the database-confirmed menu version without
+// changing the user access-state namespace. Maintainer migrations use this
+// after committing menu facts while services are stopped.
+func (m *MenuStore) RebuildReadyState(ctx context.Context, platformID, version int64) error {
+	if m == nil || m.state == nil || m.state.redis == nil {
+		return fmt.Errorf("rebuild menu state requires a store")
+	}
+	if platformID < 1 || version < 1 {
+		return fmt.Errorf("menu version is invalid")
+	}
+	return m.state.RebuildReadyState(ctx, []Version{{UserID: platformID, Version: version}})
+}
+
 func (m *MenuStore) Current(ctx context.Context, platformID int64, load func(context.Context, int64) (int64, error)) (versionResult int64, resultErr error) {
 	if m == nil || m.state == nil || m.state.redis == nil || platformID < 1 {
 		return 0, fmt.Errorf("menu version dependencies missing")

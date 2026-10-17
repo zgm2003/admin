@@ -113,8 +113,12 @@ func TestAdminTransactionJSONKeepsIdentityAndNullableOrder(t *testing.T) {
 		if row["userId"] != float64(42) || row["platformId"] != float64(2) || row["amount"] != "0.00000001" || row["balanceBefore"] != "-0.00000001" || row["balanceAfter"] != "0" {
 			t.Fatalf("admin row = %v", row)
 		}
-		if _, ok := row["redeemCodeId"]; ok {
-			t.Fatal("not-yet-implemented redeemCodeId exposed")
+		if source.redeemCodeID == nil {
+			if _, ok := row["redeemCodeId"]; ok {
+				t.Fatal("nil redeemCodeId should be omitted")
+			}
+		} else if row["redeemCodeId"] != float64(*source.redeemCodeID) {
+			t.Fatalf("redeemCodeId = %v, want %d", row["redeemCodeId"], *source.redeemCodeID)
 		}
 	}
 }

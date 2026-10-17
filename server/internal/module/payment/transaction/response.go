@@ -26,6 +26,7 @@ type Value struct {
 	PlatformID   int64  `json:"platformId"`
 	PlatformCode string `json:"platformCode"`
 	OrderID      *int64 `json:"orderId"`
+	RedeemCodeID *int64 `json:"redeemCodeId,omitempty"`
 }
 
 func value(_ context.Context, row Model) (Value, error) {
@@ -56,7 +57,7 @@ func value(_ context.Context, row Model) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	return Value{PersonalValue: PersonalValue{ID: row.ID, TransactionNo: row.TransactionNo, SourceType: source, Amount: amount, BalanceBefore: before, BalanceAfter: after, CreatedAt: row.CreatedAt}, UserID: row.UserID, Username: row.Username, PlatformID: row.PlatformID, PlatformCode: row.PlatformCode, OrderID: row.OrderID}, nil
+	return Value{PersonalValue: PersonalValue{ID: row.ID, TransactionNo: row.TransactionNo, SourceType: source, Amount: amount, BalanceBefore: before, BalanceAfter: after, CreatedAt: row.CreatedAt}, UserID: row.UserID, Username: row.Username, PlatformID: row.PlatformID, PlatformCode: row.PlatformCode, OrderID: row.OrderID, RedeemCodeID: row.RedeemCodeID}, nil
 }
 
 type Page struct {

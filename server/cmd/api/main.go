@@ -38,6 +38,7 @@ import (
 	paymentconfig "admin/server/internal/module/payment/config"
 	paymentorder "admin/server/internal/module/payment/order"
 	rechargepackage "admin/server/internal/module/payment/rechargePackage"
+	redeemcode "admin/server/internal/module/payment/redeemCode"
 	paymenttransaction "admin/server/internal/module/payment/transaction"
 	paymentwallet "admin/server/internal/module/payment/wallet"
 	"admin/server/internal/module/permission/access"
@@ -83,6 +84,7 @@ type routerDependencies struct {
 	PaymentWallet      *paymentwallet.Handler
 	PaymentTransaction *paymenttransaction.Handler
 	PaymentCallback    *callbackevent.Handler
+	PaymentRedeemCode  *redeemcode.Handler
 	CORSOrigin         string
 	TrustedProxies     []string
 	Logger             *slog.Logger
@@ -245,6 +247,8 @@ func run(logger *slog.Logger) error {
 	paymentCallbackService := callbackevent.NewService(paymentCallbackRepository)
 	paymentCallbackService.SetRuntime(paymentConfigService, settings.PaymentEnvironment)
 	paymentCallbackService.SetConfirmer(paymentOrderService)
+	paymentRedeemRepository := redeemcode.NewRepository(postgres.GORM)
+	paymentRedeemService := redeemcode.NewService(paymentRedeemRepository, keys, redeemcode.NewRedisLimiter(redisClient.UniversalClient()))
 	settingRepository := systemsetting.NewRepository(postgres.GORM)
 	settingRepository.SetGenerations(configGenerationRepository)
 	settingService := systemsetting.NewService(settingRepository)
@@ -508,6 +512,7 @@ func run(logger *slog.Logger) error {
 		PaymentWallet:      paymentwallet.NewHandler(paymentWalletService),
 		PaymentTransaction: paymenttransaction.NewHandler(paymentTransactionService),
 		PaymentCallback:    callbackevent.NewHandler(paymentCallbackService),
+		PaymentRedeemCode:  redeemcode.NewHandler(paymentRedeemService),
 		UploadRule:         uploadrule.NewHandler(uploadRuleService),
 		File:               storagefile.NewHandler(fileService),
 		OperationLog:       operationlog.NewHandler(operationLogService),
@@ -657,6 +662,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	if dependencies.PaymentOrder != nil {
 		paymentorder.RegisterPersonalRoutes(sharedRoutes, dependencies.PaymentOrder, dependencies.Authenticate, dependencies.RequirePermission)
 	}
+	if dependencies.PaymentRedeemCode != nil {
+		redeemcode.RegisterPersonalRoutes(sharedRoutes, dependencies.PaymentRedeemCode, dependencies.Authenticate, dependencies.RequirePermission)
+	}
 	if dependencies.Setting != nil {
 		systemsetting.RegisterPublicRoutes(sharedRoutes, dependencies.Setting)
 	}
@@ -680,6 +688,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	}
 	if dependencies.PaymentCallback != nil {
 		callbackevent.RegisterAdminRoutes(adminRoutes, dependencies.PaymentCallback, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.PaymentRedeemCode != nil {
+		redeemcode.RegisterAdminRoutes(adminRoutes, dependencies.PaymentRedeemCode, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	authplatform.RegisterManagementRoutes(adminRoutes, dependencies.AuthPlatform, dependencies.Authenticate, dependencies.RequirePermission)
 	menu.RegisterRoutes(adminRoutes, dependencies.Menu, dependencies.Authenticate, dependencies.RequirePermission)

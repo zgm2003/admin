@@ -84,6 +84,9 @@ func validateGenerate(in GenerateInput) (GenerateInput, error) {
 	return in, nil
 }
 func (s *Service) Generate(ctx context.Context, actor int64, in GenerateInput) (GenerateResult, error) {
+	if ctx == nil {
+		return GenerateResult{}, apperror.InvalidRequest(ErrInvalidInput)
+	}
 	if e := s.ready(); e != nil {
 		return GenerateResult{}, e
 	}
@@ -94,11 +97,14 @@ func (s *Service) Generate(ctx context.Context, actor int64, in GenerateInput) (
 	if e != nil {
 		return GenerateResult{}, apperror.InvalidRequest(e)
 	}
+	now := time.Now().UTC()
+	if in.ExpiresAt != nil && !in.ExpiresAt.After(now) {
+		return GenerateResult{}, apperror.InvalidRequest(ErrInvalidInput)
+	}
 	no, e := batchNo()
 	if e != nil {
 		return GenerateResult{}, mapError(e)
 	}
-	now := time.Now().UTC()
 	batch := Batch{BatchNo: no, RequestID: in.RequestID, RequestFingerprint: fingerprint(in), AmountCents: in.AmountCents, Quantity: in.Quantity, ExpiresAt: in.ExpiresAt, CreatedBy: actor, CreatedAt: now, UpdatedAt: now}
 	if in.Remark != "" {
 		batch.Remark = &in.Remark
@@ -167,6 +173,9 @@ func (s *Service) project(r Model, now time.Time) (Value, error) {
 	return Value{ID: r.ID, BatchID: r.BatchID, BatchNo: r.BatchNo, CodeMask: maskCode(code), Status: status, Amount: amount, ExpiresAt: r.ExpiresAt, UsedBy: r.UsedBy, UsedAt: r.UsedAt, CreatedAt: r.CreatedAt, Actions: Actions{Void: status == StatusUnused, Export: true}}, nil
 }
 func (s *Service) List(ctx context.Context, q ListQuery) (pagination.Result[Value], error) {
+	if ctx == nil {
+		return pagination.Result[Value]{}, apperror.InvalidRequest(ErrInvalidInput)
+	}
 	if e := s.ready(); e != nil {
 		return pagination.Result[Value]{}, e
 	}
@@ -189,6 +198,9 @@ func (s *Service) List(ctx context.Context, q ListQuery) (pagination.Result[Valu
 	return pagination.Result[Value]{List: out, Total: total, Page: q.Page, PageSize: q.PageSize}, nil
 }
 func (s *Service) Get(ctx context.Context, id int64) (Value, error) {
+	if ctx == nil {
+		return Value{}, apperror.InvalidRequest(ErrInvalidInput)
+	}
 	if e := s.ready(); e != nil {
 		return Value{}, e
 	}
@@ -206,6 +218,9 @@ func (s *Service) Get(ctx context.Context, id int64) (Value, error) {
 	return v, nil
 }
 func (s *Service) Lookup(ctx context.Context, raw string) (Value, error) {
+	if ctx == nil {
+		return Value{}, apperror.InvalidRequest(ErrInvalidInput)
+	}
 	if e := s.ready(); e != nil {
 		return Value{}, e
 	}
@@ -240,6 +255,9 @@ func validateIDs(ids []int64, limit int) error {
 	return nil
 }
 func (s *Service) Void(ctx context.Context, ids []int64) error {
+	if ctx == nil {
+		return apperror.InvalidRequest(ErrInvalidInput)
+	}
 	if e := s.ready(); e != nil {
 		return e
 	}
@@ -252,6 +270,9 @@ func (s *Service) Void(ctx context.Context, ids []int64) error {
 	return nil
 }
 func (s *Service) Export(ctx context.Context, ids []int64) ([]ExportValue, error) {
+	if ctx == nil {
+		return nil, apperror.InvalidRequest(ErrInvalidInput)
+	}
 	if e := s.ready(); e != nil {
 		return nil, e
 	}
@@ -281,6 +302,9 @@ func invalidRedemption(e error) bool {
 	return errors.Is(e, ErrInvalidInput) || errors.Is(e, gorm.ErrRecordNotFound) || errors.Is(e, ErrCodeUnavailable) || errors.Is(e, ErrCodeExpired)
 }
 func (s *Service) Redeem(ctx context.Context, userID, platformID int64, raw string) (Redemption, error) {
+	if ctx == nil {
+		return Redemption{}, apperror.InvalidRequest(ErrInvalidInput)
+	}
 	if e := s.ready(); e != nil {
 		return Redemption{}, e
 	}

@@ -105,6 +105,9 @@ func (s *Store) RebuildReadyState(ctx context.Context, versions []Version) error
 	if result == "updating" {
 		return ErrUpdating
 	}
+	if result == "newer" {
+		return ErrVersionChanged
+	}
 	if result != "rebuilt" {
 		return fmt.Errorf("rebuild access state returned %q", result)
 	}
@@ -180,6 +183,14 @@ for _, key in ipairs(KEYS) do
   if current then
     local ok, decoded = pcall(cjson.decode, current)
     if ok and decoded.state == 'invalidating' then return 'updating' end
+  end
+end
+for index, key in ipairs(KEYS) do
+  local current = redis.call('GET', key)
+  local desired = cjson.decode(ARGV[index])
+  if current then
+    local ok, decoded = pcall(cjson.decode, current)
+    if ok and decoded.state == 'ready' and tonumber(decoded.version) > tonumber(desired.version) then return 'newer' end
   end
 end
 for index, key in ipairs(KEYS) do redis.call('SET', key, ARGV[index]) end

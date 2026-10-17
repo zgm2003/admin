@@ -70,6 +70,25 @@ func TestStoreRebuildReadyStateRejectsActiveMutation(t *testing.T) {
 	}
 }
 
+func TestStoreRebuildReadyStateRejectsNewerVersion(t *testing.T) {
+	client := openAccessStateRedis(t)
+	store := NewStore(client)
+	ctx := context.Background()
+	key := StateKey(91004)
+	t.Cleanup(func() { _ = client.Delete(context.Background(), key) })
+	_ = client.Delete(ctx, key)
+	if err := client.SetString(ctx, key, `{"schemaVersion":2,"state":"ready","version":9}`, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RebuildReadyState(ctx, []Version{{UserID: 91004, Version: 6}}); !errors.Is(err, ErrVersionChanged) {
+		t.Fatalf("RebuildReadyState() error = %v, want ErrVersionChanged", err)
+	}
+	state, found, err := store.Read(ctx, 91004)
+	if err != nil || !found || state.Version != 9 {
+		t.Fatalf("newer state = %+v found=%v err=%v", state, found, err)
+	}
+}
+
 func openAccessStateRedis(t *testing.T) *projectredis.Client {
 	t.Helper()
 	if testing.Short() {

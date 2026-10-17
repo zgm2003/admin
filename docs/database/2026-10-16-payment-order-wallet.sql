@@ -188,6 +188,15 @@ CREATE TABLE IF NOT EXISTS payment_callback_event (
         jsonb_typeof(payload) = 'object'
         AND payload ?& ARRAY['notifyId','orderNo','tradeNo','tradeStatus','appId','sellerId','totalAmount','paidAt']
         AND (payload - ARRAY['notifyId','orderNo','tradeNo','tradeStatus','appId','sellerId','totalAmount','paidAt']::text[]) = '{}'::jsonb
+        AND (jsonb_typeof(payload->'notifyId') = 'null' OR (jsonb_typeof(payload->'notifyId') = 'string' AND octet_length(payload->>'notifyId') BETWEEN 1 AND 128 AND payload->>'notifyId' ~ '^[!-~]+$' AND payload->>'notifyId' !~ '[&=]'))
+        AND jsonb_typeof(payload->'orderNo') = 'string' AND payload->>'orderNo' ~ '^[A-Za-z0-9_-]{1,32}$'
+        AND (jsonb_typeof(payload->'tradeNo') = 'null' OR (jsonb_typeof(payload->'tradeNo') = 'string' AND octet_length(payload->>'tradeNo') BETWEEN 1 AND 64 AND payload->>'tradeNo' ~ '^[!-~]+$' AND payload->>'tradeNo' !~ '[&=]'))
+        AND jsonb_typeof(payload->'tradeStatus') = 'string' AND octet_length(payload->>'tradeStatus') BETWEEN 1 AND 64 AND payload->>'tradeStatus' ~ '^[!-~]+$' AND payload->>'tradeStatus' !~ '[&=]'
+        AND jsonb_typeof(payload->'appId') = 'string' AND octet_length(payload->>'appId') BETWEEN 1 AND 64 AND payload->>'appId' ~ '^[!-~]+$' AND payload->>'appId' !~ '[&=]'
+        AND jsonb_typeof(payload->'sellerId') = 'string' AND octet_length(payload->>'sellerId') BETWEEN 1 AND 64 AND payload->>'sellerId' ~ '^[!-~]+$' AND payload->>'sellerId' !~ '[&=]'
+        AND jsonb_typeof(payload->'totalAmount') = 'string' AND payload->>'totalAmount' ~ '^[0-9]+\.[0-9]{2}$'
+        AND (payload->>'totalAmount')::numeric BETWEEN 0.01 AND 9223372036854.00
+        AND (jsonb_typeof(payload->'paidAt') = 'null' OR (jsonb_typeof(payload->'paidAt') = 'string' AND octet_length(payload->>'paidAt') BETWEEN 1 AND 64 AND payload->>'paidAt' ~ '^[0-9T:.+Z-]+$'))
     ),
     CONSTRAINT ck_payment_callback_event_status CHECK (process_status IN (1,2,3,4)),
     CONSTRAINT ck_payment_callback_event_error CHECK (error_code IS NULL OR error_code BETWEEN 1 AND 9)
@@ -272,7 +281,7 @@ BEGIN
         ('payment_order','payment_order_identity','payment_order_identity_guard',19,'BEFORE UPDATE','ROW'),
         ('payment_callback_event','payment_callback_event_identity','payment_callback_event_identity_guard',19,'BEFORE UPDATE','ROW')
     ) AS triggers(table_name,trigger_name,function_name,trigger_type,events,level) LOOP
-        IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid=item.table_name::regclass AND tgname=item.trigger_name) THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid=to_regclass(format('%I.%I',current_schema(),item.table_name)) AND tgname=item.trigger_name) THEN
             IF current_setting('payment.order_wallet_replay',true)='on' THEN
                 RAISE EXCEPTION 'payment guard trigger missing: %',item.trigger_name;
             END IF;
@@ -280,7 +289,7 @@ BEGIN
         END IF;
         IF NOT EXISTS (
             SELECT 1 FROM pg_trigger t
-            WHERE t.tgrelid=item.table_name::regclass AND t.tgname=item.trigger_name
+            WHERE t.tgrelid=to_regclass(format('%I.%I',current_schema(),item.table_name)) AND t.tgname=item.trigger_name
               AND NOT t.tgisinternal AND t.tgenabled='O' AND t.tgtype=item.trigger_type
               AND t.tgfoid=to_regprocedure(format('%I.%I()',current_schema(),item.function_name))
               AND t.tgqual IS NULL AND t.tgnargs=0 AND t.tgattr=''::int2vector
@@ -386,6 +395,15 @@ BEGIN
         jsonb_typeof(payload) = 'object'
         AND payload ?& ARRAY['notifyId','orderNo','tradeNo','tradeStatus','appId','sellerId','totalAmount','paidAt']
         AND (payload - ARRAY['notifyId','orderNo','tradeNo','tradeStatus','appId','sellerId','totalAmount','paidAt']::text[]) = '{}'::jsonb
+        AND (jsonb_typeof(payload->'notifyId') = 'null' OR (jsonb_typeof(payload->'notifyId') = 'string' AND octet_length(payload->>'notifyId') BETWEEN 1 AND 128 AND payload->>'notifyId' ~ '^[!-~]+$' AND payload->>'notifyId' !~ '[&=]'))
+        AND jsonb_typeof(payload->'orderNo') = 'string' AND payload->>'orderNo' ~ '^[A-Za-z0-9_-]{1,32}$'
+        AND (jsonb_typeof(payload->'tradeNo') = 'null' OR (jsonb_typeof(payload->'tradeNo') = 'string' AND octet_length(payload->>'tradeNo') BETWEEN 1 AND 64 AND payload->>'tradeNo' ~ '^[!-~]+$' AND payload->>'tradeNo' !~ '[&=]'))
+        AND jsonb_typeof(payload->'tradeStatus') = 'string' AND octet_length(payload->>'tradeStatus') BETWEEN 1 AND 64 AND payload->>'tradeStatus' ~ '^[!-~]+$' AND payload->>'tradeStatus' !~ '[&=]'
+        AND jsonb_typeof(payload->'appId') = 'string' AND octet_length(payload->>'appId') BETWEEN 1 AND 64 AND payload->>'appId' ~ '^[!-~]+$' AND payload->>'appId' !~ '[&=]'
+        AND jsonb_typeof(payload->'sellerId') = 'string' AND octet_length(payload->>'sellerId') BETWEEN 1 AND 64 AND payload->>'sellerId' ~ '^[!-~]+$' AND payload->>'sellerId' !~ '[&=]'
+        AND jsonb_typeof(payload->'totalAmount') = 'string' AND payload->>'totalAmount' ~ '^[0-9]+\.[0-9]{2}$'
+        AND (payload->>'totalAmount')::numeric BETWEEN 0.01 AND 9223372036854.00
+        AND (jsonb_typeof(payload->'paidAt') = 'null' OR (jsonb_typeof(payload->'paidAt') = 'string' AND octet_length(payload->>'paidAt') BETWEEN 1 AND 64 AND payload->>'paidAt' ~ '^[0-9T:.+Z-]+$'))
     ),
     CONSTRAINT ck_payment_callback_event_status CHECK (process_status IN (1,2,3,4)),
     CONSTRAINT ck_payment_callback_event_error CHECK (error_code IS NULL OR error_code BETWEEN 1 AND 9)$definition$)
@@ -432,13 +450,7 @@ BEGIN
                       AND pg_get_constraintdef(c.oid)=pg_get_constraintdef(e.oid)
                  )
            ) THEN
-            RAISE EXCEPTION 'payment primary/check constraint contract differs: %, actual_pkey_count=%, pkey_match=%, actual_check_count=%, expected_check_count=%, unmatched_check=%',
-              item.table_name,
-              (SELECT count(*) FROM pg_constraint WHERE conrelid=actual AND contype='p'),
-              EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conrelid=actual AND c.contype='p' AND c.conname=item.table_name||'_pkey' AND c.conkey=ARRAY[1]::smallint[] AND c.convalidated AND NOT c.condeferrable AND NOT c.condeferred AND c.conislocal AND c.connoinherit),
-              (SELECT count(*) FROM pg_constraint WHERE conrelid=actual AND contype='c'),
-              (SELECT count(*) FROM pg_constraint WHERE conrelid=expected AND contype='c'),
-              EXISTS (SELECT 1 FROM pg_constraint e WHERE e.conrelid=expected AND e.contype='c' AND NOT EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conrelid=actual AND c.contype='c' AND c.conname=e.conname AND c.conkey=e.conkey AND c.convalidated AND NOT c.condeferrable AND NOT c.condeferred AND c.conislocal AND NOT c.connoinherit AND pg_get_constraintdef(c.oid)=pg_get_constraintdef(e.oid)));
+            RAISE EXCEPTION 'payment primary/check constraint contract differs: %',item.table_name;
         END IF;
         FOR index_item IN SELECT * FROM (VALUES
                 ('payment_recharge_package','ux_payment_recharge_package_code_active',true,$index$(code) WHERE deleted_at IS NULL$index$),

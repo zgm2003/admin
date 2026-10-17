@@ -67,8 +67,7 @@ BEGIN
             ('payment_redeem_code_batch','payment_redeem_batch_truncate_guard','payment_redeem_batch_guard'),
             ('payment_redeem_code','payment_redeem_code_guard','payment_redeem_code_guard'),
             ('payment_redeem_code','payment_redeem_code_truncate_guard','payment_redeem_code_guard'),
-            ('payment_transaction','payment_transaction_immutable_guard','payment_transaction_immutable_guard'),
-            ('payment_transaction','payment_transaction_immutable_truncate_guard','payment_transaction_immutable_guard')
+            ('payment_transaction','payment_transaction_immutable','payment_transaction_immutable_guard')
         ) AS expected(table_name,trigger_name,function_name) LOOP
             IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid=item.table_name::regclass AND tgname=item.trigger_name)
                OR to_regprocedure(item.function_name||'()') IS NULL THEN
@@ -258,7 +257,6 @@ BEGIN
 END $guard$),
         ('payment_transaction_immutable_guard', $guard$
 BEGIN
-    IF TG_OP IN ('DELETE','TRUNCATE') THEN RAISE EXCEPTION 'payment transactions cannot be physically removed'; END IF;
     RAISE EXCEPTION 'payment transactions are immutable';
 END $guard$)
     ) AS expected(name,body) LOOP
@@ -278,8 +276,7 @@ BEGIN
         ('payment_redeem_code_batch','payment_redeem_batch_truncate_guard','payment_redeem_batch_guard',34,'TRUNCATE','STATEMENT'),
         ('payment_redeem_code','payment_redeem_code_guard','payment_redeem_code_guard',27,'UPDATE OR DELETE','ROW'),
         ('payment_redeem_code','payment_redeem_code_truncate_guard','payment_redeem_code_guard',34,'TRUNCATE','STATEMENT'),
-        ('payment_transaction','payment_transaction_immutable_guard','payment_transaction_immutable_guard',27,'UPDATE OR DELETE','ROW'),
-        ('payment_transaction','payment_transaction_immutable_truncate_guard','payment_transaction_immutable_guard',34,'TRUNCATE','STATEMENT')
+        ('payment_transaction','payment_transaction_immutable','payment_transaction_immutable_guard',18,'UPDATE','STATEMENT')
     ) AS expected(table_name,trigger_name,function_name,trigger_type,events,granularity) LOOP
         IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid=item.table_name::regclass AND tgname=item.trigger_name) THEN
             EXECUTE format('CREATE TRIGGER %I BEFORE %s ON %I FOR EACH %s EXECUTE FUNCTION %I()',item.trigger_name,item.events,item.table_name,item.granularity,item.function_name);

@@ -146,7 +146,7 @@ func TestRedeemSuccessProjectsExactPersonalFacts(t *testing.T) {
 	l := &fakeLimiter{}
 	s := serviceForTest(t, r, l)
 	v, e := s.Redeem(context.Background(), 1, 2, "ABCDEFGHJKLMNPQRSTUV")
-	if e != nil || v.Amount != "3.00" || v.Balance != "-7.00" || l.invalid {
+	if e != nil || v.Amount != "3" || v.Balance != "-7" || l.invalid {
 		t.Fatalf("%+v %v", v, e)
 	}
 }

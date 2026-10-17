@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import * as redeemApi from '@/api/payment/redeemCode'
 import { getMyTransactions } from '@/api/payment/transaction'
 import type { PersonalTransaction } from '@/api/payment/transaction'
 import { getMyWallet } from '@/api/payment/wallet'
@@ -9,11 +10,13 @@ import type { MyWallet } from '@/api/payment/wallet'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { usePermissionStore } from '@/store/permission'
 import { formatTime } from '@/utils/datetime'
+import AppDialog from '@/components/AppDialog/index.vue'
 
 const { t, locale } = useI18n()
 const access = usePermissionStore()
 const canDetail = computed(() => access.hasPermission('payment:myWallet:detail'))
 const canList = computed(() => access.hasPermission('payment:myWallet:list'))
+const canRedeem = computed(() => access.hasPermission('payment:myWallet:redeem'))
 const wallet = ref<MyWallet | null>(null)
 const walletLoading = ref(false)
 const walletError = ref('')
@@ -22,6 +25,11 @@ const total = ref(0)
 const query = ref({ page: 1, pageSize: 20 })
 const loading = ref(false)
 const loadError = ref('')
+const redeemVisible = ref(false)
+const redeemCode = ref('')
+const redeemSubmitting = ref(false)
+const redeemError = ref('')
+const redeemResult = ref<redeemApi.RedeemResult | null>(null)
 let sequence = 0
 let alive = true
 
@@ -85,6 +93,30 @@ async function loadTransactions(): Promise<void> {
     if (alive && current === sequence) loading.value = false
   }
 }
+function openRedeem(): void {
+  if (!canRedeem.value) return
+  redeemCode.value = ''
+  redeemError.value = ''
+  redeemResult.value = null
+  redeemVisible.value = true
+}
+async function redeem(): Promise<void> {
+  if (redeemSubmitting.value || redeemCode.value.trim() === '') {
+    if (redeemCode.value.trim() === '') redeemError.value = t('payment.redeemCode.codeRequired')
+    return
+  }
+  redeemSubmitting.value = true
+  redeemError.value = ''
+  try {
+    redeemResult.value = await redeemApi.redeemWalletCode(redeemCode.value.trim())
+    redeemCode.value = ''
+    await Promise.all([loadWallet(), loadTransactions()])
+  } catch (error: unknown) {
+    redeemError.value = message(error, t('payment.redeemCode.requestFailed'))
+  } finally {
+    redeemSubmitting.value = false
+  }
+}
 function updatePagination(value: TablePaginationState): void {
   query.value = {
     page: value.pageSize === query.value.pageSize ? value.currentPage : 1,
@@ -113,9 +145,19 @@ onBeforeUnmount(() => {
   <AppPage class="payment-my-wallet-page">
     <el-alert v-if="walletError" :title="walletError" type="error" :closable="false" show-icon />
     <el-card class="payment-my-wallet-page__summary" shadow="never">
-      <template #header
-        ><span>{{ t('payment.wallet.myTitle') }}</span></template
-      >
+      <template #header>
+        <div class="payment-my-wallet-page__summary-header">
+          <span>{{ t('payment.wallet.myTitle') }}</span>
+          <el-button
+            v-if="canRedeem"
+            type="primary"
+            data-testid="payment-wallet-redeem"
+            @click="openRedeem"
+          >
+            {{ t('payment.redeemCode.redeem') }}
+          </el-button>
+        </div>
+      </template>
       <el-skeleton v-if="walletLoading" :rows="2" animated />
       <el-empty v-else-if="wallet === null" :description="t('payment.wallet.noWallet')" />
       <el-descriptions v-else :column="2" border>
@@ -127,6 +169,41 @@ onBeforeUnmount(() => {
         }}</el-descriptions-item>
       </el-descriptions>
     </el-card>
+    <AppDialog v-model="redeemVisible" :title="t('payment.redeemCode.redeemTitle')" width="520px">
+      <el-form label-position="top" @submit.prevent="redeem">
+        <el-form-item :label="t('payment.redeemCode.code')">
+          <el-input
+            v-model="redeemCode"
+            autocomplete="off"
+            :placeholder="t('payment.redeemCode.codePlaceholder')"
+            data-testid="payment-wallet-redeem-code"
+            @keyup.enter="redeem"
+          />
+        </el-form-item>
+        <el-alert v-if="redeemError" :title="redeemError" type="error" :closable="false" />
+        <el-alert
+          v-if="redeemResult"
+          :title="t('payment.redeemCode.redeemSuccess')"
+          type="success"
+          :closable="false"
+        >
+          <p>{{ t('payment.redeemCode.redeemAmount', { amount: redeemResult.amount }) }}</p>
+          <p>{{ t('payment.redeemCode.redeemBalance', { balance: redeemResult.balance }) }}</p>
+        </el-alert>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="redeemSubmitting" @click="redeemVisible = false">{{
+          t('payment.redeemCode.close')
+        }}</el-button>
+        <el-button
+          type="primary"
+          :loading="redeemSubmitting"
+          data-testid="payment-wallet-redeem-submit"
+          @click="redeem"
+          >{{ t('payment.redeemCode.redeem') }}</el-button
+        >
+      </template>
+    </AppDialog>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
     <AppTable
       v-if="canList"
@@ -162,6 +239,12 @@ onBeforeUnmount(() => {
 }
 .payment-my-wallet-page__summary {
   max-width: 720px;
+}
+.payment-my-wallet-page__summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .payment-my-wallet-page__balance {
   font-size: 24px;

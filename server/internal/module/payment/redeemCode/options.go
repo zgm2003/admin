@@ -6,6 +6,9 @@ import (
 )
 
 func (s *Service) Options(ctx context.Context) (Options, error) {
+	if ctx == nil {
+		return Options{}, mapError(ErrInvalidInput)
+	}
 	if err := ctx.Err(); err != nil {
 		return Options{}, mapError(err)
 	}
