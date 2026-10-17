@@ -9,8 +9,6 @@ import (
 	"net/http"
 )
 
-var ErrCodeConflict = errors.New("recharge package code already exists")
-
 func invalid(err error) error {
 	var public *apperror.Error
 	if errors.As(err, &public) {
@@ -33,8 +31,6 @@ func mapError(err error) error {
 		return err
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		return apperror.NotFound(err)
-	case errors.Is(err, ErrCodeConflict):
-		return apperror.Conflict(i18n.KeyConflict, nil, err)
 	default:
 		return dependency(err)
 	}

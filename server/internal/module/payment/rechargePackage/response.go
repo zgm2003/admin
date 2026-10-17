@@ -22,7 +22,6 @@ type Presentation struct {
 
 type SafeValue struct {
 	ID           int64        `json:"id"`
-	Code         string       `json:"code"`
 	Name         string       `json:"name"`
 	Amount       string       `json:"amount"`
 	Badge        *string      `json:"badge"`
@@ -36,7 +35,6 @@ type SafeValue struct {
 
 type AvailablePackage struct {
 	ID          int64
-	Code        string
 	Name        string
 	AmountCents int64
 	Badge       *string
@@ -44,7 +42,7 @@ type AvailablePackage struct {
 }
 
 func safeValue(ctx context.Context, row Model) (SafeValue, error) {
-	if row.ID < 1 || validateCode(row.Code) != nil || validateName(row.Name) != nil || validateAmountCents(row.AmountCents) != nil || validateFlags(row.IsEnabled) != nil {
+	if row.ID < 1 || validateName(row.Name) != nil || validateAmountCents(row.AmountCents) != nil || validateFlags(row.IsEnabled) != nil {
 		return SafeValue{}, fmt.Errorf("stored recharge package is invalid")
 	}
 	badge, err := normalizeBadge(row.Badge)
@@ -60,7 +58,7 @@ func safeValue(ctx context.Context, row Model) (SafeValue, error) {
 		status = option.New(ctx, row.IsEnabled, "启用", "Enabled").Label
 	}
 	return SafeValue{
-		ID: row.ID, Code: row.Code, Name: row.Name, Amount: amount, Badge: badge,
+		ID: row.ID, Name: row.Name, Amount: amount, Badge: badge,
 		SortOrder: row.SortOrder, IsEnabled: row.IsEnabled,
 		Actions:      Actions{Update: true, Status: true, Delete: true},
 		Presentation: Presentation{Status: status}, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
@@ -68,7 +66,7 @@ func safeValue(ctx context.Context, row Model) (SafeValue, error) {
 }
 
 func availablePackage(row CatalogItem) AvailablePackage {
-	return AvailablePackage{ID: row.ID, Code: row.Code, Name: row.Name, AmountCents: row.AmountCents, Badge: copyString(row.Badge), SortOrder: row.SortOrder}
+	return AvailablePackage{ID: row.ID, Name: row.Name, AmountCents: row.AmountCents, Badge: copyString(row.Badge), SortOrder: row.SortOrder}
 }
 
 func copyString(value *string) *string {

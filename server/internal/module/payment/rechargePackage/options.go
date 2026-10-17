@@ -9,7 +9,6 @@ import (
 )
 
 type Limits struct {
-	Code          int    `json:"code"`
 	Name          int    `json:"name"`
 	Badge         int    `json:"badge"`
 	AmountScale   int    `json:"amountScale"`
@@ -48,6 +47,6 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 			option.New(ctx, yesno.Yes, "启用", "Enabled"),
 		},
 		Defaults: Defaults{SortOrder: 0, IsEnabled: yesno.No},
-		Limits:   Limits{Code: MaxCodeLength, Name: MaxNameLength, Badge: MaxBadgeLength, AmountScale: 2, MinimumAmount: "0.01", MaximumAmount: maximum, SortMinimum: -2147483648, SortMaximum: 2147483647},
+		Limits:   Limits{Name: MaxNameLength, Badge: MaxBadgeLength, AmountScale: 2, MinimumAmount: "0.01", MaximumAmount: maximum, SortMinimum: -2147483648, SortMaximum: 2147483647},
 	}, nil
 }

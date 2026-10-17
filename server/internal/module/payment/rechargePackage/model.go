@@ -9,7 +9,6 @@ import (
 
 type Model struct {
 	ID          int64          `gorm:"column:id;primaryKey;autoIncrement"`
-	Code        string         `gorm:"column:code;type:varchar(64);not null"`
 	Name        string         `gorm:"column:name;type:varchar(128);not null"`
 	AmountCents int64          `gorm:"column:amount_cents;not null"`
 	Badge       *string        `gorm:"column:badge;type:varchar(32)"`

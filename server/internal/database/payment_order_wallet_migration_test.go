@@ -30,7 +30,7 @@ func TestPaymentOrderWalletMigrationIsIdempotentAndEnforcesFacts(t *testing.T) {
 	}
 
 	if err := db.WithContext(ctx).Exec(`
-INSERT INTO payment_recharge_package(code,name,amount_cents,is_enabled) VALUES('credits','Credits',100,1);
+INSERT INTO payment_recharge_package(name,amount_cents,is_enabled) VALUES('Credits',100,1);
 INSERT INTO payment_wallet(user_id,balance_units) VALUES(7,-1000000000);
 INSERT INTO payment_order(order_no,user_id,platform_id,package_id,package_name,amount_cents,config_id,config_version,pay_method,request_id,request_fingerprint,return_url,status,expires_at)
 VALUES('PO20261016000000000000000001',7,1,1,'Credits',100,1,1,1,'00000000-0000-4000-8000-000000000001',decode(repeat('01',32),'hex'),'https://app.example.test/return',1,CURRENT_TIMESTAMP + interval '1 hour');
@@ -151,8 +151,7 @@ func TestPaymentOrderWalletMigrationProtectsImmutableFactsAndSignedBalances(t *t
 		"callback credential":                  `UPDATE payment_callback_event SET config_version=2 WHERE id=1`,
 		"callback dedupe":                      `UPDATE payment_callback_event SET dedupe_key=decode(repeat('03',32),'hex') WHERE id=1`,
 		"callback relink":                      `UPDATE payment_callback_event SET order_id=NULL WHERE id=1`,
-		"package code":                         `UPDATE payment_recharge_package SET code='changed' WHERE id=1`,
-		"package amount overflow":              `INSERT INTO payment_recharge_package(code,name,amount_cents) VALUES('overflow','Overflow',9223372036855)`,
+		"package amount overflow":              `INSERT INTO payment_recharge_package(name,amount_cents) VALUES('Overflow',9223372036855)`,
 		"transaction before balance underflow": `INSERT INTO payment_transaction(transaction_no,user_id,platform_id,amount_units,balance_after_units,order_id) VALUES('PT-underflow',7,1,1,-9223372036854775808,2)`,
 		"transaction missing wallet":           `INSERT INTO payment_transaction(transaction_no,user_id,platform_id,amount_units,balance_after_units,order_id) VALUES('PT-no-wallet',8,1,1,1,2)`,
 		"callback incomplete payload":          `INSERT INTO payment_callback_event(config_id,config_version,dedupe_key,payload,process_status) VALUES(1,1,decode(repeat('04',32),'hex'),'{}',1)`,
@@ -214,7 +213,7 @@ func seedPaymentOrderWalletFacts(t *testing.T, db *gorm.DB, ctx context.Context)
 	if err := db.WithContext(ctx).Exec(`
 INSERT INTO user_account(id) VALUES(8);
 INSERT INTO payment_config_version(config_id,version) VALUES(1,2);
-INSERT INTO payment_recharge_package(code,name,amount_cents,is_enabled) VALUES('credits','Credits',300,1);
+INSERT INTO payment_recharge_package(name,amount_cents,is_enabled) VALUES('Credits',300,1);
 INSERT INTO payment_wallet(user_id,balance_units) VALUES(7,-700000000);
 INSERT INTO payment_order(order_no,user_id,platform_id,package_id,package_name,amount_cents,config_id,config_version,pay_method,request_id,request_fingerprint,return_url,status,provider_trade_no,expires_at,paid_at,credited_at)
 VALUES('PO-1',7,1,1,'Credits',300,1,1,1,'00000000-0000-4000-8000-000000000001',decode(repeat('01',32),'hex'),'https://app.example.test/return',2,'TRADE-1',CURRENT_TIMESTAMP+interval '1 hour',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),

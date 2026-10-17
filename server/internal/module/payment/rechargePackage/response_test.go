@@ -12,7 +12,7 @@ import (
 
 func TestSafeValueUsesDecimalAmountAndLocalizedActions(t *testing.T) {
 	badge := "Popular"
-	row := Model{ID: 2, Code: "starter", Name: "Starter", AmountCents: 1234, Badge: &badge, IsEnabled: yesno.Yes, CreatedAt: time.Unix(1, 0).UTC(), UpdatedAt: time.Unix(2, 0).UTC()}
+	row := Model{ID: 2, Name: "Starter", AmountCents: 1234, Badge: &badge, IsEnabled: yesno.Yes, CreatedAt: time.Unix(1, 0).UTC(), UpdatedAt: time.Unix(2, 0).UTC()}
 	for _, test := range []struct {
 		locale i18n.Locale
 		label  string
@@ -23,14 +23,14 @@ func TestSafeValueUsesDecimalAmountAndLocalizedActions(t *testing.T) {
 			t.Fatalf("value=%+v err=%v", value, err)
 		}
 		raw, err := json.Marshal(value)
-		if err != nil || !strings.Contains(string(raw), `"amount":"12.34"`) || strings.Contains(string(raw), `"amountCents"`) {
+		if err != nil || !strings.Contains(string(raw), `"amount":"12.34"`) || strings.Contains(string(raw), `"amountCents"`) || strings.Contains(string(raw), `"code"`) {
 			t.Fatalf("transport amount is not a decimal string: %s %v", raw, err)
 		}
 	}
 }
 
 func TestSafeValueRejectsCorruptRowsAndPreservesNullBadge(t *testing.T) {
-	row := Model{ID: 1, Code: "starter", Name: "Starter", AmountCents: 1, IsEnabled: yesno.No}
+	row := Model{ID: 1, Name: "Starter", AmountCents: 1, IsEnabled: yesno.No}
 	value, err := safeValue(context.Background(), row)
 	if err != nil || value.Badge != nil {
 		t.Fatalf("null badge: %+v %v", value, err)

@@ -50,9 +50,9 @@ func TestHandlerRejectsUnknownAndMalformedPackageFields(t *testing.T) {
 	router := gin.New()
 	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(&Service{}), func(c *gin.Context) { c.Next() }, func(string) gin.HandlerFunc { return func(c *gin.Context) { c.Next() } })
 	for _, route := range []struct{ method, path, body string }{
-		{"POST", "", `{"code":"starter","name":"Starter","amount":"1.00","sortOrder":0,"isEnabled":"1"}`},
+		{"POST", "", `{"code":"starter","name":"Starter","amount":"1.00","sortOrder":0,"isEnabled":0}`},
 		{"POST", "", `{"code":"starter","name":"Starter","amount":"1.00","sortOrder":0,"isEnabled":0,"extra":true}`},
-		{"PUT", "/1", `{"code":"starter","name":"Starter","amount":"1.00","badge":null,"sortOrder":0}`},
+		{"PUT", "/1", `{"name":"Starter","amount":"1.00","badge":null,"sortOrder":0}`},
 		{"PATCH", "/1/status", `{"isEnabled":"1"}`},
 		{"DELETE", "/1", `{}`},
 		{"GET", "?page=1&pageSize=20&isEnabled=01", ""},

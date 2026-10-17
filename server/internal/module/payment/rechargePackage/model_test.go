@@ -10,7 +10,7 @@ func TestModelMapsThePaymentRechargePackageContract(t *testing.T) {
 	if (Model{}).TableName() != "payment_recharge_package" {
 		t.Fatalf("table name=%q", (Model{}).TableName())
 	}
-	for _, field := range []string{"Code", "Name", "AmountCents", "Badge", "SortOrder", "IsEnabled", "CreatedAt", "UpdatedAt", "DeletedAt"} {
+	for _, field := range []string{"Name", "AmountCents", "Badge", "SortOrder", "IsEnabled", "CreatedAt", "UpdatedAt", "DeletedAt"} {
 		if _, ok := modelType.FieldByName(field); !ok {
 			t.Fatalf("missing model field %s", field)
 		}

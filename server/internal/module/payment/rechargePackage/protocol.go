@@ -3,7 +3,6 @@ package rechargepackage
 import (
 	"fmt"
 	"math"
-	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -14,7 +13,6 @@ import (
 
 const (
 	MaxSnapshotBytes = 256 * 1024
-	MaxCodeLength    = 64
 	MaxNameLength    = 128
 	MaxBadgeLength   = 32
 	MaxCatalogItems  = 1000
@@ -22,7 +20,6 @@ const (
 
 var (
 	packageScope = mustScope()
-	codePattern  = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 )
 
 func mustScope() configcache.Scope {
@@ -31,14 +28,6 @@ func mustScope() configcache.Scope {
 		panic(err)
 	}
 	return scope
-}
-
-func validateCode(value string) error {
-	value = strings.TrimSpace(value)
-	if len(value) < 1 || len(value) > MaxCodeLength || !codePattern.MatchString(value) {
-		return fmt.Errorf("code is invalid")
-	}
-	return nil
 }
 
 func validateName(value string) error {

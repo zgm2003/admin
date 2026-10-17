@@ -9,17 +9,17 @@ import (
 
 func TestCreateRequestParsesAmountAsExactPositiveCents(t *testing.T) {
 	for _, test := range []struct {
-		raw, wantCode, wantAmount string
+		raw, wantAmount string
 	}{
-		{`{"code":"starter","name":"Starter","amount":"10.50","badge":"Popular","sortOrder":1,"isEnabled":0}`, "starter", "10.50"},
-		{`{"code":"whole","name":"Whole","amount":"10","sortOrder":0,"isEnabled":1}`, "whole", "10"},
+		{`{"name":"Starter","amount":"10.50","badge":"Popular","sortOrder":1,"isEnabled":0}`, "10.50"},
+		{`{"name":"Whole","amount":"10","sortOrder":0,"isEnabled":1}`, "10"},
 	} {
 		var request createRequest
 		if err := json.Unmarshal([]byte(test.raw), &request); err != nil {
 			t.Fatal(err)
 		}
 		input, err := request.input()
-		if err != nil || input.Code != test.wantCode || input.AmountCents != 1050 && test.wantAmount == "10.50" {
+		if err != nil || input.AmountCents != 1050 && test.wantAmount == "10.50" {
 			t.Fatalf("input=%+v err=%v", input, err)
 		}
 		if test.wantAmount == "10" && input.AmountCents != 1000 {
@@ -30,12 +30,12 @@ func TestCreateRequestParsesAmountAsExactPositiveCents(t *testing.T) {
 
 func TestCreateRequestRejectsInvalidAmountAndEnums(t *testing.T) {
 	for _, raw := range []string{
-		`{"code":"x","name":"X","amount":"","sortOrder":0,"isEnabled":0}`,
-		`{"code":"x","name":"X","amount":"0","sortOrder":0,"isEnabled":0}`,
-		`{"code":"x","name":"X","amount":"-1","sortOrder":0,"isEnabled":0}`,
-		`{"code":"x","name":"X","amount":"1.001","sortOrder":0,"isEnabled":0}`,
-		`{"code":"x","name":"X","amount":"1","sortOrder":0,"isEnabled":"1"}`,
-		`{"code":"x","name":"X","amount":"1","sortOrder":0,"isEnabled":2}`,
+		`{"name":"X","amount":"","sortOrder":0,"isEnabled":0}`,
+		`{"name":"X","amount":"0","sortOrder":0,"isEnabled":0}`,
+		`{"name":"X","amount":"-1","sortOrder":0,"isEnabled":0}`,
+		`{"name":"X","amount":"1.001","sortOrder":0,"isEnabled":0}`,
+		`{"name":"X","amount":"1","sortOrder":0,"isEnabled":"1"}`,
+		`{"name":"X","amount":"1","sortOrder":0,"isEnabled":2}`,
 	} {
 		var request createRequest
 		if err := json.Unmarshal([]byte(raw), &request); err != nil {

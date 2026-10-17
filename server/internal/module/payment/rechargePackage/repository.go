@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"admin/server/internal/shared/yesno"
-	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
@@ -17,7 +16,7 @@ func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 func packageFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 	if query.Keyword != "" {
 		like := "%" + query.Keyword + "%"
-		db = db.Where("code ILIKE ? OR name ILIKE ?", like, like)
+		db = db.Where("name ILIKE ?", like)
 	}
 	if query.IsEnabled != nil {
 		db = db.Where("is_enabled = ?", *query.IsEnabled)
@@ -58,7 +57,7 @@ func (r *Repository) Create(ctx context.Context, row *Model) error {
 		return errors.New("recharge package database missing")
 	}
 	if err := r.db.WithContext(ctx).Create(row).Error; err != nil {
-		return mapPackageDatabaseError(err)
+		return err
 	}
 	return nil
 }
@@ -71,7 +70,7 @@ func (r *Repository) Update(ctx context.Context, id int64, input UpdateInput, no
 		"name": input.Name, "amount_cents": input.AmountCents, "badge": input.Badge, "sort_order": input.SortOrder, "updated_at": now,
 	})
 	if result.Error != nil {
-		return mapPackageDatabaseError(result.Error)
+		return result.Error
 	}
 	if result.RowsAffected != 1 {
 		return gorm.ErrRecordNotFound
@@ -85,7 +84,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, value yesno.Val
 	}
 	result := r.db.WithContext(ctx).Model(&Model{}).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]any{"is_enabled": value, "updated_at": now})
 	if result.Error != nil {
-		return mapPackageDatabaseError(result.Error)
+		return result.Error
 	}
 	if result.RowsAffected != 1 {
 		return gorm.ErrRecordNotFound
@@ -112,7 +111,7 @@ func (r *Repository) Catalog(ctx context.Context) ([]CatalogItem, error) {
 		return nil, errors.New("recharge package database missing")
 	}
 	rows := make([]CatalogItem, 0)
-	err := r.db.WithContext(ctx).Model(&Model{}).Select("id,code,name,amount_cents,badge,sort_order").Where("deleted_at IS NULL AND is_enabled = 1").Order("sort_order ASC, id ASC").Limit(MaxCatalogItems + 1).Find(&rows).Error
+	err := r.db.WithContext(ctx).Model(&Model{}).Select("id,name,amount_cents,badge,sort_order").Where("deleted_at IS NULL AND is_enabled = 1").Order("sort_order ASC, id ASC").Limit(MaxCatalogItems + 1).Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -120,12 +119,4 @@ func (r *Repository) Catalog(ctx context.Context) ([]CatalogItem, error) {
 		return nil, errors.New("recharge package catalog too large")
 	}
 	return rows, nil
-}
-
-func mapPackageDatabaseError(err error) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		return ErrCodeConflict
-	}
-	return err
 }

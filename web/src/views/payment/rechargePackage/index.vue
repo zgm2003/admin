@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { FormInstance, FormRules } from 'element-plus'
 import { CirclePlus } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
@@ -24,7 +25,6 @@ const { options, loading: optionsLoading, error: optionsError, reload: reloadOpt
   useLocalizedOptions<RechargePackageOptions | null>(api.getRechargePackageOptions, () => null)
 
 interface FormState {
-  code: string
   name: string
   amount: string
   badge: string
@@ -33,7 +33,6 @@ interface FormState {
 }
 
 const emptyForm = (): FormState => ({
-  code: '',
   name: '',
   amount: '',
   badge: '',
@@ -55,6 +54,11 @@ const editingID = ref<number | null>(null)
 const submitting = ref(false)
 const formError = ref('')
 const form = ref<FormState>(emptyForm())
+const formRef = ref<FormInstance>()
+const formRules = computed<FormRules<FormState>>(() => ({
+  name: [{ required: true, whitespace: true, message: t('payment.rechargePackage.nameRule'), trigger: 'blur' }],
+  amount: [{ required: true, whitespace: true, message: t('payment.rechargePackage.amountRequired'), trigger: 'blur' }],
+}))
 let sequence = 0
 let alive = true
 
@@ -88,7 +92,6 @@ const searchFields = computed<SearchField<{ keyword: string; isEnabled: YesNo | 
   },
 ])
 const columns = computed<TableColumn<RechargePackage>[]>(() => [
-  { prop: 'code', label: t('payment.rechargePackage.code'), width: 150 },
   { prop: 'name', label: t('payment.rechargePackage.name'), minWidth: 180 },
   { prop: 'amount', label: t('payment.rechargePackage.amount'), width: 130 },
   { prop: 'badge', label: t('payment.rechargePackage.badge'), width: 140 },
@@ -155,7 +158,6 @@ function openEdit(row: RechargePackage): void {
   if (!canUpdate.value || !row.actions.update) return
   editingID.value = row.id
   form.value = {
-    code: row.code,
     name: row.name,
     amount: row.amount,
     badge: row.badge ?? '',
@@ -167,11 +169,8 @@ function openEdit(row: RechargePackage): void {
 }
 function validateForm(): string {
   const value = form.value
-  if (editingID.value === null && !/^[a-z][a-z0-9_-]{0,63}$/.test(value.code.trim())) {
-    return t('payment.rechargePackage.codeRule')
-  }
-  if (value.name.trim() === '' || value.name.trim().length > (options.value?.limits.name ?? 128)) {
-    return t('payment.rechargePackage.nameRule')
+  if (value.name.trim().length > (options.value?.limits.name ?? 128)) {
+    return t('payment.rechargePackage.nameTooLong')
   }
   if (!/^\d+(\.\d{1,2})?$/.test(value.amount.trim()) || Number(value.amount) <= 0) {
     return t('payment.rechargePackage.amountRule')
@@ -183,6 +182,11 @@ function validateForm(): string {
 }
 async function save(): Promise<void> {
   if (submitting.value || options.value === null) return
+  try {
+    await formRef.value?.validate()
+  } catch {
+    return
+  }
   const error = validateForm()
   if (error) {
     formError.value = error
@@ -198,7 +202,7 @@ async function save(): Promise<void> {
       sortOrder: form.value.sortOrder,
     }
     if (editingID.value === null) {
-      await api.createRechargePackage({ ...input, code: form.value.code.trim(), isEnabled: form.value.isEnabled })
+      await api.createRechargePackage({ ...input, isEnabled: form.value.isEnabled })
     } else {
       await api.updateRechargePackage(editingID.value, input)
     }
@@ -317,14 +321,11 @@ onBeforeUnmount(() => {
     </AppTable>
 
     <AppDialog v-model="dialogVisible" :title="t(editingID === null ? 'payment.rechargePackage.createTitle' : 'payment.rechargePackage.editTitle')" width="560px">
-      <el-form label-position="top" class="payment-recharge-package-form" @submit.prevent="save">
-        <el-form-item :label="t('payment.rechargePackage.code')">
-          <el-input v-model="form.code" :disabled="editingID !== null" :placeholder="t('payment.rechargePackage.codePlaceholder')" data-testid="payment-recharge-package-code" />
-        </el-form-item>
-        <el-form-item :label="t('payment.rechargePackage.name')">
+      <el-form ref="formRef" :model="form" :rules="formRules" label-position="top" class="payment-recharge-package-form" @submit.prevent="save">
+        <el-form-item prop="name" :label="t('payment.rechargePackage.name')">
           <el-input v-model="form.name" :placeholder="t('payment.rechargePackage.namePlaceholder')" data-testid="payment-recharge-package-name" />
         </el-form-item>
-        <el-form-item :label="t('payment.rechargePackage.amount')">
+        <el-form-item prop="amount" :label="t('payment.rechargePackage.amount')">
           <el-input v-model="form.amount" inputmode="decimal" :placeholder="t('payment.rechargePackage.amountPlaceholder')" data-testid="payment-recharge-package-amount" />
         </el-form-item>
         <el-form-item :label="t('payment.rechargePackage.badge')">

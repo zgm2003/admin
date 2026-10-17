@@ -9,7 +9,6 @@ export interface NumericOption<T extends number = number> {
 
 export interface RechargePackage {
   id: number
-  code: string
   name: string
   amount: string
   badge: string | null
@@ -30,7 +29,6 @@ export interface RechargePackageOptions {
   statuses: Array<NumericOption<YesNo>>
   defaults: { sortOrder: number; isEnabled: YesNo }
   limits: {
-    code: number
     name: number
     badge: number
     amountScale: number
@@ -42,7 +40,6 @@ export interface RechargePackageOptions {
 }
 
 export interface CreateRechargePackageInput {
-  code: string
   name: string
   amount: string
   badge: string | null

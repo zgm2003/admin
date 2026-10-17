@@ -23,7 +23,6 @@ type repository interface {
 
 type CatalogItem struct {
 	ID          int64
-	Code        string
 	Name        string
 	AmountCents int64
 	Badge       *string
@@ -87,7 +86,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		return 0, invalid(err)
 	}
 	now := s.now().UTC()
-	row := &Model{Code: strings.TrimSpace(input.Code), Name: strings.TrimSpace(input.Name), AmountCents: input.AmountCents, Badge: badge, SortOrder: input.SortOrder, IsEnabled: input.IsEnabled, CreatedAt: now, UpdatedAt: now}
+	row := &Model{Name: strings.TrimSpace(input.Name), AmountCents: input.AmountCents, Badge: badge, SortOrder: input.SortOrder, IsEnabled: input.IsEnabled, CreatedAt: now, UpdatedAt: now}
 	if err := s.repository.Create(ctx, row); err != nil {
 		return 0, mapError(err)
 	}

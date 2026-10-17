@@ -13,7 +13,6 @@ import (
 )
 
 type CreateInput struct {
-	Code        string
 	Name        string
 	AmountCents int64
 	Badge       *string
@@ -35,7 +34,6 @@ type ListQuery struct {
 }
 
 type createRequest struct {
-	Code      *string      `json:"code"`
 	Name      *string      `json:"name"`
 	Amount    *string      `json:"amount"`
 	Badge     *string      `json:"badge"`
@@ -44,14 +42,14 @@ type createRequest struct {
 }
 
 func (r createRequest) input() (CreateInput, error) {
-	if r.Code == nil || r.Name == nil || r.Amount == nil || r.SortOrder == nil || r.IsEnabled == nil {
-		return CreateInput{}, fmt.Errorf("code, name, amount, sortOrder and isEnabled are required")
+	if r.Name == nil || r.Amount == nil || r.SortOrder == nil || r.IsEnabled == nil {
+		return CreateInput{}, fmt.Errorf("name, amount, sortOrder and isEnabled are required")
 	}
 	cents, err := parseAmount(*r.Amount)
 	if err != nil {
 		return CreateInput{}, err
 	}
-	input := CreateInput{Code: strings.TrimSpace(*r.Code), Name: strings.TrimSpace(*r.Name), AmountCents: cents, Badge: r.Badge, SortOrder: *r.SortOrder, IsEnabled: *r.IsEnabled}
+	input := CreateInput{Name: strings.TrimSpace(*r.Name), AmountCents: cents, Badge: r.Badge, SortOrder: *r.SortOrder, IsEnabled: *r.IsEnabled}
 	if err := validateCreate(input); err != nil {
 		return CreateInput{}, err
 	}
@@ -110,9 +108,6 @@ type statusRequest struct {
 }
 
 func validateCreate(input CreateInput) error {
-	if err := validateCode(input.Code); err != nil {
-		return err
-	}
 	if err := validateUpdate(UpdateInput{input.Name, input.AmountCents, input.Badge, input.SortOrder}); err != nil {
 		return err
 	}
