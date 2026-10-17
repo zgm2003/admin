@@ -1,6 +1,12 @@
 @use './variables' as *;
 @use './managementPages';
 
+// Request notifications are the single surface for API errors and must sit
+// above dialogs, drawers, and the application shell.
+.el-notification {
+  z-index: 6000 !important;
+}
+
 :root {
   --admin-page: var(--el-bg-color-page);
   --admin-surface: var(--el-bg-color);
