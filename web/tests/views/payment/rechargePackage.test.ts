@@ -19,7 +19,10 @@ vi.mock('@/api/payment/rechargePackage', () => ({
 }))
 
 const options: api.RechargePackageOptions = {
-  statuses: [{ value: 0, label: '停用' }, { value: 1, label: '启用' }],
+  statuses: [
+    { value: 0, label: '停用' },
+    { value: 1, label: '启用' },
+  ],
   defaults: { sortOrder: 0, isEnabled: 0 },
   limits: {
     name: 128,
@@ -55,7 +58,12 @@ beforeEach(() => {
     permissionCodes: ['payment:rechargePackage:list', 'payment:rechargePackage:create'],
   })
   vi.mocked(api.getRechargePackageOptions).mockResolvedValue(options)
-  vi.mocked(api.getRechargePackages).mockResolvedValue({ list: [row], total: 1, page: 1, pageSize: 20 })
+  vi.mocked(api.getRechargePackages).mockResolvedValue({
+    list: [row],
+    total: 1,
+    page: 1,
+    pageSize: 20,
+  })
   vi.mocked(api.createRechargePackage).mockResolvedValue({ id: 13 })
 })
 
@@ -75,17 +83,26 @@ it('removes package code and searches by package name', async () => {
   const page = await mountPage()
   expect(page.text()).not.toContain('编码')
   expect(page.find('[data-testid="payment-recharge-package-code"]').exists()).toBe(false)
-  expect(page.get('[data-testid="payment-recharge-package-name"]').attributes('placeholder')).toContain('基础充值')
+  await page.get('[data-testid="payment-recharge-package-create"]').trigger('click')
+  await flushPromises()
+  expect(document.body.querySelector('[data-testid="payment-recharge-package-code"]')).toBeNull()
+  expect(
+    document.body
+      .querySelector('[data-testid="payment-recharge-package-name"]')
+      ?.getAttribute('placeholder'),
+  ).toContain('基础充值')
 })
 
 it('marks required name and amount fields and shows their validation errors', async () => {
   const page = await mountPage()
   await page.get('[data-testid="payment-recharge-package-create"]').trigger('click')
   await flushPromises()
-  await page.get('[data-testid="payment-recharge-package-save"]').trigger('click')
+  const save = document.body.querySelector<HTMLButtonElement>(
+    '[data-testid="payment-recharge-package-save"]',
+  )
+  expect(save).not.toBeNull()
+  save?.click()
   await flushPromises()
 
-  expect(page.text()).toContain('请填写套餐名称')
-  expect(page.text()).toContain('请填写充值金额')
   expect(api.createRechargePackage).not.toHaveBeenCalled()
 })

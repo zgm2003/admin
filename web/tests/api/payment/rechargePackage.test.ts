@@ -10,12 +10,24 @@ vi.mock('@/utils/request', () => ({
 beforeEach(() => vi.resetAllMocks())
 
 it('uses ID-based recharge package CRUD and preserves decimal strings', async () => {
-  const input = { name: 'Starter', amount: '10.00', badge: null, sortOrder: 0, isEnabled: 1 as const }
+  const input = {
+    name: 'Starter',
+    amount: '10.00',
+    badge: null,
+    sortOrder: 0,
+    isEnabled: 1 as const,
+  }
   await api.createRechargePackage(input)
-  expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/payment/rechargepackage', input)
+  expect(request.post).toHaveBeenCalledExactlyOnceWith(
+    '/api/admin/v1/payment/rechargepackage',
+    input,
+  )
   const update = { name: 'Starter plus', amount: '20.00', badge: null, sortOrder: 0 }
   await api.updateRechargePackage(7, update)
-  expect(request.put).toHaveBeenExactlyOnceWith('/api/admin/v1/payment/rechargepackage/7', update)
+  expect(request.put).toHaveBeenCalledExactlyOnceWith(
+    '/api/admin/v1/payment/rechargepackage/7',
+    update,
+  )
 })
 
 it('forwards list failures without reshaping the response', async () => {

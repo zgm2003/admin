@@ -21,8 +21,12 @@ import AppDialog from '@/components/AppDialog/index.vue'
 
 const { t, locale } = useI18n()
 const access = usePermissionStore()
-const { options, loading: optionsLoading, error: optionsError, reload: reloadOptions } =
-  useLocalizedOptions<RechargePackageOptions | null>(api.getRechargePackageOptions, () => null)
+const {
+  options,
+  loading: optionsLoading,
+  error: optionsError,
+  reload: reloadOptions,
+} = useLocalizedOptions<RechargePackageOptions | null>(api.getRechargePackageOptions, () => null)
 
 interface FormState {
   name: string
@@ -56,8 +60,22 @@ const formError = ref('')
 const form = ref<FormState>(emptyForm())
 const formRef = ref<FormInstance>()
 const formRules = computed<FormRules<FormState>>(() => ({
-  name: [{ required: true, whitespace: true, message: t('payment.rechargePackage.nameRule'), trigger: 'blur' }],
-  amount: [{ required: true, whitespace: true, message: t('payment.rechargePackage.amountRequired'), trigger: 'blur' }],
+  name: [
+    {
+      required: true,
+      whitespace: true,
+      message: t('payment.rechargePackage.nameRule'),
+      trigger: 'blur',
+    },
+  ],
+  amount: [
+    {
+      required: true,
+      whitespace: true,
+      message: t('payment.rechargePackage.amountRequired'),
+      trigger: 'blur',
+    },
+  ],
 }))
 let sequence = 0
 let alive = true
@@ -209,14 +227,17 @@ async function save(): Promise<void> {
     dialogVisible.value = false
     ElNotification.success({ title: t('payment.rechargePackage.saved') })
     await load()
-  } catch (error: unknown) {
+  } catch {
     // request.ts owns the API error notification.
   } finally {
     submitting.value = false
   }
 }
 async function mutate(row: RechargePackage, action: 'status' | 'delete'): Promise<void> {
-  const allowed = action === 'status' ? canStatus.value && row.actions.status : canDelete.value && row.actions.delete
+  const allowed =
+    action === 'status'
+      ? canStatus.value && row.actions.status
+      : canDelete.value && row.actions.delete
   if (!allowed || busyID.value !== null) return
   try {
     await ElMessageBox.confirm(
@@ -230,7 +251,10 @@ async function mutate(row: RechargePackage, action: 'status' | 'delete'): Promis
   busyID.value = row.id
   try {
     if (action === 'status') {
-      await api.updateRechargePackageStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
+      await api.updateRechargePackageStatus(
+        row.id,
+        row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes,
+      )
     } else {
       await api.deleteRechargePackage(row.id)
     }
@@ -277,9 +301,10 @@ onBeforeUnmount(() => {
       @query="search"
       @reset="reset"
     />
-    <div v-if="optionsError"><el-button text @click="reloadOptions">{{ t('payment.rechargePackage.retry') }}</el-button></div>
-    
-    
+    <div v-if="optionsError">
+      <el-button text @click="reloadOptions">{{ t('payment.rechargePackage.retry') }}</el-button>
+    </div>
+
     <AppTable
       :columns="columns"
       :data="rows"
@@ -305,35 +330,90 @@ onBeforeUnmount(() => {
         </el-button>
       </template>
       <template #cell-status="{ row }: { row: RechargePackage }">
-        <el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">{{ row.presentation.status }}</el-tag>
+        <el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">{{
+          row.presentation.status
+        }}</el-tag>
       </template>
       <template #cell-actions="{ row }: { row: RechargePackage }">
-        <el-button v-if="canUpdate && row.actions.update" link type="primary" :disabled="busyID !== null" @click="openEdit(row)">
+        <el-button
+          v-if="canUpdate && row.actions.update"
+          link
+          type="primary"
+          :disabled="busyID !== null"
+          @click="openEdit(row)"
+        >
           {{ t('payment.rechargePackage.edit') }}
         </el-button>
-        <el-button v-if="canStatus && row.actions.status" link type="primary" :disabled="busyID !== null" @click="mutate(row, 'status')">
+        <el-button
+          v-if="canStatus && row.actions.status"
+          link
+          type="primary"
+          :disabled="busyID !== null"
+          @click="mutate(row, 'status')"
+        >
           {{ t('payment.rechargePackage.toggleStatus') }}
         </el-button>
-        <el-button v-if="canDelete && row.actions.delete" link type="danger" :disabled="busyID !== null" @click="mutate(row, 'delete')">
+        <el-button
+          v-if="canDelete && row.actions.delete"
+          link
+          type="danger"
+          :disabled="busyID !== null"
+          @click="mutate(row, 'delete')"
+        >
           {{ t('payment.rechargePackage.delete') }}
         </el-button>
       </template>
     </AppTable>
 
-    <AppDialog v-model="dialogVisible" :title="t(editingID === null ? 'payment.rechargePackage.createTitle' : 'payment.rechargePackage.editTitle')" width="560px">
-      <el-form ref="formRef" :model="form" :rules="formRules" label-position="top" class="payment-recharge-package-form" @submit.prevent="save">
+    <AppDialog
+      v-model="dialogVisible"
+      :title="
+        t(
+          editingID === null
+            ? 'payment.rechargePackage.createTitle'
+            : 'payment.rechargePackage.editTitle',
+        )
+      "
+      width="560px"
+    >
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="formRules"
+        label-position="top"
+        class="payment-recharge-package-form"
+        @submit.prevent="save"
+      >
         <el-form-item prop="name" :label="t('payment.rechargePackage.name')">
-          <el-input v-model="form.name" :placeholder="t('payment.rechargePackage.namePlaceholder')" data-testid="payment-recharge-package-name" />
+          <el-input
+            v-model="form.name"
+            :placeholder="t('payment.rechargePackage.namePlaceholder')"
+            data-testid="payment-recharge-package-name"
+          />
         </el-form-item>
         <el-form-item prop="amount" :label="t('payment.rechargePackage.amount')">
-          <el-input v-model="form.amount" inputmode="decimal" :placeholder="t('payment.rechargePackage.amountPlaceholder')" data-testid="payment-recharge-package-amount" />
+          <el-input
+            v-model="form.amount"
+            inputmode="decimal"
+            :placeholder="t('payment.rechargePackage.amountPlaceholder')"
+            data-testid="payment-recharge-package-amount"
+          />
         </el-form-item>
         <el-form-item :label="t('payment.rechargePackage.badge')">
-          <el-input v-model="form.badge" :placeholder="t('payment.rechargePackage.badgePlaceholder')" data-testid="payment-recharge-package-badge" />
+          <el-input
+            v-model="form.badge"
+            :placeholder="t('payment.rechargePackage.badgePlaceholder')"
+            data-testid="payment-recharge-package-badge"
+          />
         </el-form-item>
         <div class="payment-recharge-package-form__grid">
           <el-form-item :label="t('payment.rechargePackage.sortOrder')">
-            <el-input-number v-model="form.sortOrder" :min="options?.limits.sortMinimum" :max="options?.limits.sortMaximum" controls-position="right" />
+            <el-input-number
+              v-model="form.sortOrder"
+              :min="options?.limits.sortMinimum"
+              :max="options?.limits.sortMaximum"
+              controls-position="right"
+            />
           </el-form-item>
           <el-form-item v-if="editingID === null" :label="t('payment.rechargePackage.status')">
             <el-select-v2 v-model="form.isEnabled" :options="options?.statuses ?? []" />
@@ -342,8 +422,16 @@ onBeforeUnmount(() => {
         <el-alert v-if="formError" :title="formError" type="error" :closable="false" />
       </el-form>
       <template #footer>
-        <el-button :disabled="submitting" @click="dialogVisible = false">{{ t('payment.rechargePackage.cancel') }}</el-button>
-        <el-button type="primary" :loading="submitting" data-testid="payment-recharge-package-save" @click="save">{{ t('payment.rechargePackage.save') }}</el-button>
+        <el-button :disabled="submitting" @click="dialogVisible = false">{{
+          t('payment.rechargePackage.cancel')
+        }}</el-button>
+        <el-button
+          type="primary"
+          :loading="submitting"
+          data-testid="payment-recharge-package-save"
+          @click="save"
+          >{{ t('payment.rechargePackage.save') }}</el-button
+        >
       </template>
     </AppDialog>
   </AppPage>

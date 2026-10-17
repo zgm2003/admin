@@ -56,7 +56,9 @@ export interface UpdateRechargePackageInput {
 
 const base = '/api/admin/v1/payment/rechargepackage'
 
-export function getRechargePackages(query: RechargePackageQuery): Promise<PageResult<RechargePackage>> {
+export function getRechargePackages(
+  query: RechargePackageQuery,
+): Promise<PageResult<RechargePackage>> {
   return request.get<PageResult<RechargePackage>>(base, { params: query })
 }
 
@@ -68,9 +70,7 @@ export function getRechargePackageOptions(): Promise<RechargePackageOptions> {
   return request.get<RechargePackageOptions>(`${base}/options`)
 }
 
-export function createRechargePackage(
-  input: CreateRechargePackageInput,
-): Promise<{ id: number }> {
+export function createRechargePackage(input: CreateRechargePackageInput): Promise<{ id: number }> {
   return request.post<{ id: number }, CreateRechargePackageInput>(base, input)
 }
 
