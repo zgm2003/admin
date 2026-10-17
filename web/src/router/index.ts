@@ -42,7 +42,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'payment/walletPortal',
         name: 'wallet-portal',
-        component: () => import('@/views/payment/wallet/index.vue'),
+        component: () => import('@/views/payment/walletPortal/index.vue'),
         meta: {
           requiresAuth: true,
           i18nKey: 'payment.wallet.pageTitle',

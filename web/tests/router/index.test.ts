@@ -54,6 +54,17 @@ describe('router', () => {
     expect(router.resolve('/permission/menu').meta.i18nKey).toBeUndefined()
   })
 
+  it('opens the account wallet URL with the personal wallet tabs page', async () => {
+    const router = createAppRouter(createMemoryHistory())
+    const { default: WalletPortal } = await import('@/views/payment/walletPortal/index.vue')
+
+    await router.push('/payment/walletPortal')
+
+    const route = router.currentRoute.value
+    expect(route.meta.requiresAuth).toBe(true)
+    expect(route.matched.at(-1)?.components?.default).toBe(WalletPortal)
+  })
+
   it('registers and guards a dynamic menu page with its exact permission after loading access', async () => {
     setAuthenticated()
     const router = createAppRouter(createMemoryHistory())

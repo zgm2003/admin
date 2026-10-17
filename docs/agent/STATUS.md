@@ -1,10 +1,18 @@
 # 项目状态
 
-## 钱包入口聚合与个人支付菜单隐藏（2026-10-17，前端实现完成）
+## 钱包入口路由组件纠正（2026-10-17，定向验证完成）
+
+- 个人资料上方“钱包”入口的 `/payment/walletPortal` 曾误加载 `payment/wallet/index.vue` 管理钱包列表；现已改为既有 `payment/walletPortal/index.vue`，通过 `el-tabs` 聚合“我的钱包”和“充值中心”，两个 Tab 沿用各自 page/action 权限。不改管理钱包页、权限协议或数据库。
+- 新增真实路由导航回归：`router.push('/payment/walletPortal')` 后必须解析到聚合页组件并保留认证要求；先确认旧实现因加载管理组件失败，再修复。实际运行 `pnpm vitest run tests/router/index.test.ts tests/router/permissionRoutes.test.ts tests/layout/components/AppAside.test.ts tests/views/payment/wallet.test.ts --pool=threads --maxWorkers=1`（4 文件/36 项）、`pnpm typecheck`、两个受影响 TypeScript 文件 ESLint/Prettier 与 `git diff --check` 均通过。
+- 本轮未运行全仓测试、生产构建或浏览器联调，未执行迁移或启停服务，未提交 Git；保留前一轮 `STATUS.md` 中的迁移执行记录。
+
+## 钱包入口聚合与个人支付菜单隐藏（2026-10-17，前端实现与菜单迁移完成）
 
 - 侧栏账户菜单新增始终显示的“钱包”入口，固定跳转 `/payment/walletPortal`；入口不使用权限 `v-if`。钱包页使用 `el-tabs` 聚合个人钱包与充值中心，两个 Tab 分别只在 `payment:myWallet:view`、`payment:recharge:view` 存在时显示，原 API/action 权限不变。
-- 个人钱包聚合页采用深青绿资金主题、余额/充值/流水分区和窄屏适配；新增中英文文案、面包屑与路由标签支持。新增 forward migration `docs/database/2026-10-17-payment-personal-pages-hidden.sql`，将充值中心和我的钱包 page 节点设为隐藏并按实际变化递增菜单版本，未执行真实数据库迁移。
-- 定向验证：`pnpm vitest run --pool=threads --maxWorkers=1 tests/views/payment/wallet.test.ts tests/layout/components/AppAside.test.ts tests/router/permissionRoutes.test.ts`（3 文件/21 项）通过；`pnpm typecheck`、受影响文件 ESLint、`pnpm build`、`git diff --check` 通过。构建仍有既有大 chunk 警告；未做浏览器视觉截图验收，未执行新菜单迁移。
+- 个人钱包聚合页采用深青绿资金主题、余额/充值/流水分区和窄屏适配；新增中英文文案、面包屑与路由标签支持。forward migration `docs/database/2026-10-17-payment-personal-pages-hidden.sql` 已由维护者授权执行，将充值中心和我的钱包 page 节点设为隐藏并按实际变化递增菜单版本。
+- 前端既有定向验证：`pnpm vitest run --pool=threads --maxWorkers=1 tests/views/payment/wallet.test.ts tests/layout/components/AppAside.test.ts tests/router/permissionRoutes.test.ts`（3 文件/21 项）通过；`pnpm typecheck`、受影响文件 ESLint、`pnpm build`、`git diff --check` 通过。构建仍有既有大 chunk 警告；未做浏览器视觉截图验收。
+- 数据库执行核验（2026-10-17 22:54 +08:00）：真实 `admin.public` 的 Admin 平台 ID=1；菜单 ID 4334/4335 的 `payment:recharge:view`、`payment:myWallet:view` 均由 `is_hidden=0` 改为 `1`，`menu_version` 由 23 升至 24。首次 `psql -X -w -v ON_ERROR_STOP=1 -f` 执行成功但提示 `SET LOCAL` 缺少事务块；随后使用 `--single-transaction` 复跑无警告，完整目标页面记录与菜单版本均未再次变化，幂等核验通过。
+- Redis 原 `authz:menu-state:v1:1` 为 ready/23，已按完整旧值 CAS 定向同步为 ready/24；最终 PostgreSQL 只读事务及 Redis GET 均确认两个启用 page 已隐藏、版本一致。未删除快照、未修改用户授权/认证策略或其他 Redis key，临时探针已移除；本次仅 DML，不更新 schema-only 的 `current.sql`。本轮未重跑前后端全仓测试、未启停服务或做浏览器联调，未提交 Git。
 
 ## 支付证书导入文件名布局（2026-10-17，定向验证完成）
 
