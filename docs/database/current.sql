@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict AdminCurrentSchemaSnapshot
+\restrict E2OGrYmQHI6urhZlrUaUxOJJfOcHu9WMMehOyLWKik31RxIUSjIj1FHXjAC87D3
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -31,6 +31,150 @@ CREATE SCHEMA public;
 --
 
 COMMENT ON SCHEMA public IS 'standard public schema';
+
+
+--
+-- Name: payment_callback_event_identity_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.payment_callback_event_identity_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$BEGIN
+            IF ROW(NEW.id,NEW.config_id,NEW.config_version,NEW.dedupe_key,NEW.payload,NEW.created_at)
+                IS DISTINCT FROM ROW(OLD.id,OLD.config_id,OLD.config_version,OLD.dedupe_key,OLD.payload,OLD.created_at)
+                OR (OLD.order_id IS NOT NULL AND NEW.order_id IS DISTINCT FROM OLD.order_id)
+                OR (OLD.process_status=2 AND NEW.process_status<>2) THEN
+                RAISE EXCEPTION 'payment callback evidence is immutable';
+            END IF;
+            RETURN NEW;
+        END$$;
+
+
+--
+-- Name: payment_config_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.payment_config_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      IF TG_OP='DELETE' OR TG_OP='TRUNCATE' THEN RAISE EXCEPTION 'payment configuration facts cannot be physically removed'; END IF;
+      IF ROW(NEW.id,NEW.provider,NEW.environment,NEW.app_id,NEW.seller_id,NEW.created_at)
+         IS DISTINCT FROM ROW(OLD.id,OLD.provider,OLD.environment,OLD.app_id,OLD.seller_id,OLD.created_at)
+         OR NEW.current_version < OLD.current_version THEN RAISE EXCEPTION 'payment configuration identity is immutable'; END IF;
+      RETURN NEW;
+    END $$;
+
+
+--
+-- Name: payment_config_version_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.payment_config_version_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN RAISE EXCEPTION 'payment credential versions are immutable'; END $$;
+
+
+--
+-- Name: payment_fact_no_delete_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.payment_fact_no_delete_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$BEGIN
+            RAISE EXCEPTION 'payment financial facts cannot be physically removed';
+        END$$;
+
+
+--
+-- Name: payment_order_identity_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.payment_order_identity_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$BEGIN
+            IF ROW(NEW.id,NEW.order_no,NEW.user_id,NEW.platform_id,NEW.package_id,NEW.package_name,NEW.amount_cents,NEW.config_id,NEW.config_version,NEW.pay_method,NEW.request_id,NEW.request_fingerprint,NEW.return_url,NEW.expires_at,NEW.created_at)
+                IS DISTINCT FROM ROW(OLD.id,OLD.order_no,OLD.user_id,OLD.platform_id,OLD.package_id,OLD.package_name,OLD.amount_cents,OLD.config_id,OLD.config_version,OLD.pay_method,OLD.request_id,OLD.request_fingerprint,OLD.return_url,OLD.expires_at,OLD.created_at) THEN
+                RAISE EXCEPTION 'payment order purchase facts are immutable';
+            END IF;
+            IF (OLD.status=2 AND ROW(NEW.status,NEW.provider_trade_no,NEW.paid_at,NEW.credited_at,NEW.closed_at) IS DISTINCT FROM ROW(OLD.status,OLD.provider_trade_no,OLD.paid_at,OLD.credited_at,OLD.closed_at))
+                OR (OLD.status=3 AND NEW.status NOT IN (2,3))
+                OR (OLD.closed_at IS NOT NULL AND NEW.closed_at IS DISTINCT FROM OLD.closed_at)
+                OR (OLD.provider_trade_no IS NOT NULL AND NEW.provider_trade_no IS DISTINCT FROM OLD.provider_trade_no) THEN
+                RAISE EXCEPTION 'payment order final facts cannot be rewritten';
+            END IF;
+            RETURN NEW;
+        END$$;
+
+
+--
+-- Name: payment_recharge_package_identity_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.payment_recharge_package_identity_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$BEGIN
+            IF ROW(NEW.id,NEW.code,NEW.created_at) IS DISTINCT FROM ROW(OLD.id,OLD.code,OLD.created_at) THEN
+                RAISE EXCEPTION 'payment recharge package identity is immutable';
+            END IF;
+            RETURN NEW;
+        END$$;
+
+
+--
+-- Name: payment_redeem_batch_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.payment_redeem_batch_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'payment redeem batches are immutable';
+END $$;
+
+
+--
+-- Name: payment_redeem_code_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.payment_redeem_code_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF TG_OP IN ('DELETE','TRUNCATE') THEN RAISE EXCEPTION 'payment redeem codes cannot be physically removed'; END IF;
+    IF TG_OP='UPDATE' AND (ROW(NEW.id,NEW.batch_id,NEW.code_hash,NEW.code_ciphertext,NEW.created_at)
+       IS DISTINCT FROM ROW(OLD.id,OLD.batch_id,OLD.code_hash,OLD.code_ciphertext,OLD.created_at)
+       OR (OLD.status<>1) OR (NEW.status NOT IN (2,3))) THEN
+        RAISE EXCEPTION 'payment redeem code identity or terminal state is immutable';
+    END IF;
+    RETURN NEW;
+END $$;
+
+
+--
+-- Name: payment_transaction_immutable_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.payment_transaction_immutable_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$BEGIN
+            RAISE EXCEPTION 'payment transactions are immutable';
+        END$$;
+
+
+--
+-- Name: payment_wallet_identity_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.payment_wallet_identity_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$BEGIN
+            IF ROW(NEW.user_id,NEW.created_at) IS DISTINCT FROM ROW(OLD.user_id,OLD.created_at) THEN
+                RAISE EXCEPTION 'payment wallet identity is immutable';
+            END IF;
+            RETURN NEW;
+        END$$;
 
 
 SET default_tablespace = '';
@@ -787,6 +931,319 @@ CREATE SEQUENCE public.message_sms_template_id_seq
 --
 
 ALTER SEQUENCE public.message_sms_template_id_seq OWNED BY public.message_sms_template.id;
+
+
+--
+-- Name: payment_callback_event; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payment_callback_event (
+    id bigint NOT NULL,
+    config_id bigint NOT NULL,
+    config_version bigint NOT NULL,
+    dedupe_key bytea NOT NULL,
+    order_id bigint,
+    payload jsonb NOT NULL,
+    process_status smallint NOT NULL,
+    error_code smallint,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT ck_payment_callback_event_dedupe CHECK ((octet_length(dedupe_key) = 32)),
+    CONSTRAINT ck_payment_callback_event_error CHECK (((error_code IS NULL) OR ((error_code >= 1) AND (error_code <= 9)))),
+    CONSTRAINT ck_payment_callback_event_payload CHECK (((jsonb_typeof(payload) = 'object'::text) AND (payload ?& ARRAY['notifyId'::text, 'orderNo'::text, 'tradeNo'::text, 'tradeStatus'::text, 'appId'::text, 'sellerId'::text, 'totalAmount'::text, 'paidAt'::text]) AND ((payload - ARRAY['notifyId'::text, 'orderNo'::text, 'tradeNo'::text, 'tradeStatus'::text, 'appId'::text, 'sellerId'::text, 'totalAmount'::text, 'paidAt'::text]) = '{}'::jsonb) AND ((jsonb_typeof((payload -> 'notifyId'::text)) = 'null'::text) OR ((jsonb_typeof((payload -> 'notifyId'::text)) = 'string'::text) AND ((octet_length((payload ->> 'notifyId'::text)) >= 1) AND (octet_length((payload ->> 'notifyId'::text)) <= 128)) AND ((payload ->> 'notifyId'::text) ~ '^[!-~]+$'::text) AND ((payload ->> 'notifyId'::text) !~ '[&=]'::text))) AND (jsonb_typeof((payload -> 'orderNo'::text)) = 'string'::text) AND ((payload ->> 'orderNo'::text) ~ '^[A-Za-z0-9_-]{1,32}$'::text) AND ((jsonb_typeof((payload -> 'tradeNo'::text)) = 'null'::text) OR ((jsonb_typeof((payload -> 'tradeNo'::text)) = 'string'::text) AND ((octet_length((payload ->> 'tradeNo'::text)) >= 1) AND (octet_length((payload ->> 'tradeNo'::text)) <= 64)) AND ((payload ->> 'tradeNo'::text) ~ '^[!-~]+$'::text) AND ((payload ->> 'tradeNo'::text) !~ '[&=]'::text))) AND (jsonb_typeof((payload -> 'tradeStatus'::text)) = 'string'::text) AND ((octet_length((payload ->> 'tradeStatus'::text)) >= 1) AND (octet_length((payload ->> 'tradeStatus'::text)) <= 64)) AND ((payload ->> 'tradeStatus'::text) ~ '^[!-~]+$'::text) AND ((payload ->> 'tradeStatus'::text) !~ '[&=]'::text) AND (jsonb_typeof((payload -> 'appId'::text)) = 'string'::text) AND ((octet_length((payload ->> 'appId'::text)) >= 1) AND (octet_length((payload ->> 'appId'::text)) <= 64)) AND ((payload ->> 'appId'::text) ~ '^[!-~]+$'::text) AND ((payload ->> 'appId'::text) !~ '[&=]'::text) AND (jsonb_typeof((payload -> 'sellerId'::text)) = 'string'::text) AND ((octet_length((payload ->> 'sellerId'::text)) >= 1) AND (octet_length((payload ->> 'sellerId'::text)) <= 64)) AND ((payload ->> 'sellerId'::text) ~ '^[!-~]+$'::text) AND ((payload ->> 'sellerId'::text) !~ '[&=]'::text) AND (jsonb_typeof((payload -> 'totalAmount'::text)) = 'string'::text) AND ((payload ->> 'totalAmount'::text) ~ '^[0-9]+\.[0-9]{2}$'::text) AND ((((payload ->> 'totalAmount'::text))::numeric >= 0.01) AND (((payload ->> 'totalAmount'::text))::numeric <= 9223372036854.00)) AND ((jsonb_typeof((payload -> 'paidAt'::text)) = 'null'::text) OR ((jsonb_typeof((payload -> 'paidAt'::text)) = 'string'::text) AND ((octet_length((payload ->> 'paidAt'::text)) >= 1) AND (octet_length((payload ->> 'paidAt'::text)) <= 64)) AND ((payload ->> 'paidAt'::text) ~ '^[0-9T:.+Z-]+$'::text))))),
+    CONSTRAINT ck_payment_callback_event_status CHECK ((process_status = ANY (ARRAY[1, 2, 3, 4])))
+);
+
+
+--
+-- Name: payment_callback_event_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.payment_callback_event ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.payment_callback_event_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: payment_config; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payment_config (
+    id bigint NOT NULL,
+    name character varying(128) NOT NULL,
+    provider smallint NOT NULL,
+    environment smallint NOT NULL,
+    app_id character varying(64) NOT NULL,
+    seller_id character varying(64) NOT NULL,
+    current_version bigint NOT NULL,
+    sort_order integer DEFAULT 0 NOT NULL,
+    is_enabled smallint DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_payment_config_app_id CHECK (((app_id)::text ~ '^[0-9]{1,64}$'::text)),
+    CONSTRAINT ck_payment_config_current_version CHECK ((current_version > 0)),
+    CONSTRAINT ck_payment_config_environment CHECK ((environment = ANY (ARRAY[1, 2]))),
+    CONSTRAINT ck_payment_config_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_payment_config_name CHECK ((btrim((name)::text) <> ''::text)),
+    CONSTRAINT ck_payment_config_provider CHECK ((provider = ANY (ARRAY[1, 2]))),
+    CONSTRAINT ck_payment_config_seller_id CHECK (((seller_id)::text ~ '^[0-9]{1,64}$'::text))
+);
+
+
+--
+-- Name: payment_config_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.payment_config ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.payment_config_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: payment_config_version; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payment_config_version (
+    config_id bigint NOT NULL,
+    version bigint NOT NULL,
+    private_key_ciphertext text NOT NULL,
+    app_cert_pem text NOT NULL,
+    alipay_cert_pem text NOT NULL,
+    root_cert_pem text NOT NULL,
+    notify_url character varying(2048) NOT NULL,
+    pay_methods smallint[] NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT ck_payment_config_version_alipay_cert CHECK (((octet_length(alipay_cert_pem) >= 1) AND (octet_length(alipay_cert_pem) <= 65536))),
+    CONSTRAINT ck_payment_config_version_app_cert CHECK (((octet_length(app_cert_pem) >= 1) AND (octet_length(app_cert_pem) <= 65536))),
+    CONSTRAINT ck_payment_config_version_key CHECK (((octet_length(private_key_ciphertext) >= 1) AND (octet_length(private_key_ciphertext) <= 32768))),
+    CONSTRAINT ck_payment_config_version_notify_url CHECK ((((notify_url)::text ~~ 'https://%'::text) AND ((notify_url)::text ~~ ((('%/api/v1/payment/callback/alipay/'::text || (config_id)::text) || '/'::text) || (version)::text)) AND (POSITION(('?'::text) IN (notify_url)) = 0) AND (POSITION(('#'::text) IN (notify_url)) = 0))),
+    CONSTRAINT ck_payment_config_version_pay_methods CHECK ((((pay_methods = ARRAY[(1)::smallint]) OR (pay_methods = ARRAY[(2)::smallint])) OR (pay_methods = ARRAY[(1)::smallint, (2)::smallint]))),
+    CONSTRAINT ck_payment_config_version_root_cert CHECK (((octet_length(root_cert_pem) >= 1) AND (octet_length(root_cert_pem) <= 65536))),
+    CONSTRAINT ck_payment_config_version_version CHECK ((version > 0))
+);
+
+
+--
+-- Name: payment_order; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payment_order (
+    id bigint NOT NULL,
+    order_no character varying(32) NOT NULL,
+    user_id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    package_id bigint NOT NULL,
+    package_name character varying(128) NOT NULL,
+    amount_cents bigint NOT NULL,
+    config_id bigint NOT NULL,
+    config_version bigint NOT NULL,
+    pay_method smallint NOT NULL,
+    request_id uuid NOT NULL,
+    request_fingerprint bytea NOT NULL,
+    return_url character varying(2048) NOT NULL,
+    status smallint NOT NULL,
+    provider_trade_no character varying(64),
+    expires_at timestamp with time zone NOT NULL,
+    paid_at timestamp with time zone,
+    credited_at timestamp with time zone,
+    closed_at timestamp with time zone,
+    next_check_at timestamp with time zone,
+    check_token uuid,
+    check_lease_until timestamp with time zone,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT ck_payment_order_amount CHECK (((amount_cents >= 1) AND (amount_cents <= '9223372036854'::bigint))),
+    CONSTRAINT ck_payment_order_order_no CHECK (((order_no)::text ~ '^[A-Za-z0-9_-]{1,32}$'::text)),
+    CONSTRAINT ck_payment_order_package_name CHECK ((btrim((package_name)::text) <> ''::text)),
+    CONSTRAINT ck_payment_order_pay_method CHECK ((pay_method = ANY (ARRAY[1, 2]))),
+    CONSTRAINT ck_payment_order_request_fingerprint CHECK ((octet_length(request_fingerprint) = 32)),
+    CONSTRAINT ck_payment_order_return_url CHECK ((((return_url)::text ~~ 'http://%'::text) OR ((return_url)::text ~~ 'https://%'::text))),
+    CONSTRAINT ck_payment_order_state_times CHECK ((((status = 1) AND (paid_at IS NULL) AND (credited_at IS NULL) AND (closed_at IS NULL)) OR ((status = 2) AND (credited_at IS NOT NULL)) OR ((status = 3) AND (closed_at IS NOT NULL) AND (paid_at IS NULL) AND (credited_at IS NULL)))),
+    CONSTRAINT ck_payment_order_status CHECK ((status = ANY (ARRAY[1, 2, 3])))
+);
+
+
+--
+-- Name: payment_order_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.payment_order ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.payment_order_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: payment_recharge_package; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payment_recharge_package (
+    id bigint NOT NULL,
+    code character varying(64) NOT NULL,
+    name character varying(128) NOT NULL,
+    amount_cents bigint NOT NULL,
+    badge character varying(32),
+    sort_order integer DEFAULT 0 NOT NULL,
+    is_enabled smallint DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ck_payment_recharge_package_amount CHECK (((amount_cents >= 1) AND (amount_cents <= '9223372036854'::bigint))),
+    CONSTRAINT ck_payment_recharge_package_code CHECK (((code)::text ~ '^[a-z][a-z0-9_]{0,63}$'::text)),
+    CONSTRAINT ck_payment_recharge_package_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_payment_recharge_package_name CHECK ((btrim((name)::text) <> ''::text)),
+    CONSTRAINT ck_payment_recharge_package_sort CHECK ((sort_order >= 0))
+);
+
+
+--
+-- Name: payment_recharge_package_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.payment_recharge_package ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.payment_recharge_package_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: payment_redeem_code; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payment_redeem_code (
+    id bigint NOT NULL,
+    batch_id bigint CONSTRAINT payment_redeem_code_batch_id_not_null1 NOT NULL,
+    code_hash bytea NOT NULL,
+    code_ciphertext text NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
+    used_by bigint,
+    used_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT ck_payment_redeem_code_ciphertext CHECK (((octet_length(code_ciphertext) >= 1) AND (octet_length(code_ciphertext) <= 131072))),
+    CONSTRAINT ck_payment_redeem_code_hash CHECK ((octet_length(code_hash) = 32)),
+    CONSTRAINT ck_payment_redeem_code_status CHECK ((status = ANY (ARRAY[1, 2, 3]))),
+    CONSTRAINT ck_payment_redeem_code_used_state CHECK ((((status = ANY (ARRAY[1, 3])) AND (used_by IS NULL) AND (used_at IS NULL)) OR ((status = 2) AND (used_by IS NOT NULL) AND (used_at IS NOT NULL))))
+);
+
+
+--
+-- Name: payment_redeem_code_batch; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payment_redeem_code_batch (
+    id bigint NOT NULL,
+    batch_no character varying(32) NOT NULL,
+    request_id uuid NOT NULL,
+    request_fingerprint bytea NOT NULL,
+    amount_cents bigint NOT NULL,
+    quantity integer NOT NULL,
+    expires_at timestamp with time zone,
+    remark character varying(255),
+    created_by bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT ck_payment_redeem_batch_amount CHECK (((amount_cents >= 1) AND (amount_cents <= '9223372036854'::bigint))),
+    CONSTRAINT ck_payment_redeem_batch_fingerprint CHECK ((octet_length(request_fingerprint) = 32)),
+    CONSTRAINT ck_payment_redeem_batch_no CHECK (((batch_no)::text ~ '^[A-Za-z0-9_-]{1,32}$'::text)),
+    CONSTRAINT ck_payment_redeem_batch_quantity CHECK (((quantity >= 1) AND (quantity <= 1000))),
+    CONSTRAINT ck_payment_redeem_batch_remark CHECK (((remark IS NULL) OR (btrim((remark)::text) <> ''::text)))
+);
+
+
+--
+-- Name: payment_redeem_code_batch_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.payment_redeem_code_batch ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.payment_redeem_code_batch_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: payment_redeem_code_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.payment_redeem_code ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.payment_redeem_code_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: payment_transaction; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payment_transaction (
+    id bigint NOT NULL,
+    transaction_no character varying(32) NOT NULL,
+    user_id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    amount_units bigint NOT NULL,
+    balance_after_units bigint NOT NULL,
+    order_id bigint,
+    redeem_code_id bigint,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT ck_payment_transaction_amount CHECK ((amount_units > 0)),
+    CONSTRAINT ck_payment_transaction_balance CHECK (((balance_after_units)::numeric >= ((- '9223372036854775808'::numeric) + (amount_units)::numeric))),
+    CONSTRAINT ck_payment_transaction_source_xor CHECK (((order_id IS NOT NULL) <> (redeem_code_id IS NOT NULL)))
+);
+
+
+--
+-- Name: payment_transaction_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.payment_transaction ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.payment_transaction_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: payment_wallet; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payment_wallet (
+    user_id bigint NOT NULL,
+    balance_units bigint DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
 
 
 --
@@ -2010,11 +2467,83 @@ ALTER TABLE ONLY public.message_sms_template
 
 
 --
+-- Name: payment_callback_event payment_callback_event_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_callback_event
+    ADD CONSTRAINT payment_callback_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_config payment_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_config
+    ADD CONSTRAINT payment_config_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_order payment_order_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_order
+    ADD CONSTRAINT payment_order_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_recharge_package payment_recharge_package_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_recharge_package
+    ADD CONSTRAINT payment_recharge_package_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_redeem_code_batch payment_redeem_code_batch_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_redeem_code_batch
+    ADD CONSTRAINT payment_redeem_code_batch_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_redeem_code payment_redeem_code_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_redeem_code
+    ADD CONSTRAINT payment_redeem_code_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_transaction payment_transaction_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_transaction
+    ADD CONSTRAINT payment_transaction_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_wallet payment_wallet_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_wallet
+    ADD CONSTRAINT payment_wallet_pkey PRIMARY KEY (user_id);
+
+
+--
 -- Name: permission_auth_platform permission_auth_platform_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_auth_platform
     ADD CONSTRAINT permission_auth_platform_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_config_version pk_payment_config_version; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_config_version
+    ADD CONSTRAINT pk_payment_config_version PRIMARY KEY (config_id, version);
 
 
 --
@@ -2375,6 +2904,76 @@ CREATE INDEX ix_message_sms_log_status_id_desc ON public.message_sms_log USING b
 
 
 --
+-- Name: ix_payment_callback_event_order; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_payment_callback_event_order ON public.payment_callback_event USING btree (order_id, created_at DESC, id DESC);
+
+
+--
+-- Name: ix_payment_callback_event_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_payment_callback_event_pending ON public.payment_callback_event USING btree (created_at, id) WHERE (process_status = 1);
+
+
+--
+-- Name: ix_payment_order_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_payment_order_created ON public.payment_order USING btree (created_at DESC, id DESC);
+
+
+--
+-- Name: ix_payment_order_reconcile_check; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_payment_order_reconcile_check ON public.payment_order USING btree (next_check_at, id) WHERE ((status = 1) AND (next_check_at IS NOT NULL));
+
+
+--
+-- Name: ix_payment_order_reconcile_expiry; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_payment_order_reconcile_expiry ON public.payment_order USING btree (expires_at, id) WHERE (status = 1);
+
+
+--
+-- Name: ix_payment_order_user_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_payment_order_user_created ON public.payment_order USING btree (user_id, created_at DESC, id DESC);
+
+
+--
+-- Name: ix_payment_redeem_code_batch; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_payment_redeem_code_batch ON public.payment_redeem_code USING btree (batch_id, id);
+
+
+--
+-- Name: ix_payment_redeem_code_used_by; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_payment_redeem_code_used_by ON public.payment_redeem_code USING btree (used_by, used_at DESC, id DESC) WHERE (status = 2);
+
+
+--
+-- Name: ix_payment_transaction_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_payment_transaction_created ON public.payment_transaction USING btree (created_at DESC, id DESC);
+
+
+--
+-- Name: ix_payment_transaction_user_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_payment_transaction_user_created ON public.payment_transaction USING btree (user_id, created_at DESC, id DESC);
+
+
+--
 -- Name: ix_permission_auth_platform_code_history_prefix; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2732,6 +3331,90 @@ CREATE UNIQUE INDEX ux_message_sms_template_scene ON public.message_sms_template
 
 
 --
+-- Name: ux_payment_callback_event_dedupe; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_payment_callback_event_dedupe ON public.payment_callback_event USING btree (config_id, config_version, dedupe_key);
+
+
+--
+-- Name: ux_payment_config_app_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_payment_config_app_active ON public.payment_config USING btree (provider, environment, app_id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_payment_order_order_no; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_payment_order_order_no ON public.payment_order USING btree (order_no);
+
+
+--
+-- Name: ux_payment_order_provider_trade; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_payment_order_provider_trade ON public.payment_order USING btree (config_id, provider_trade_no) WHERE (provider_trade_no IS NOT NULL);
+
+
+--
+-- Name: ux_payment_order_request; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_payment_order_request ON public.payment_order USING btree (user_id, platform_id, request_id);
+
+
+--
+-- Name: ux_payment_recharge_package_code_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_payment_recharge_package_code_active ON public.payment_recharge_package USING btree (code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_payment_redeem_batch_no; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_payment_redeem_batch_no ON public.payment_redeem_code_batch USING btree (batch_no);
+
+
+--
+-- Name: ux_payment_redeem_batch_request; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_payment_redeem_batch_request ON public.payment_redeem_code_batch USING btree (created_by, request_id);
+
+
+--
+-- Name: ux_payment_redeem_code_hash; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_payment_redeem_code_hash ON public.payment_redeem_code USING btree (code_hash);
+
+
+--
+-- Name: ux_payment_transaction_no; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_payment_transaction_no ON public.payment_transaction USING btree (transaction_no);
+
+
+--
+-- Name: ux_payment_transaction_order; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_payment_transaction_order ON public.payment_transaction USING btree (order_id) WHERE (order_id IS NOT NULL);
+
+
+--
+-- Name: ux_payment_transaction_redeem_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_payment_transaction_redeem_code ON public.payment_transaction USING btree (redeem_code_id) WHERE (redeem_code_id IS NOT NULL);
+
+
+--
 -- Name: ux_permission_auth_platform_code_active; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2921,6 +3604,125 @@ CREATE UNIQUE INDEX ux_user_session_refresh_token_hash ON public.user_session US
 
 
 --
+-- Name: payment_callback_event payment_callback_event_identity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_callback_event_identity BEFORE UPDATE ON public.payment_callback_event FOR EACH ROW EXECUTE FUNCTION public.payment_callback_event_identity_guard();
+
+
+--
+-- Name: payment_callback_event payment_callback_event_no_delete; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_callback_event_no_delete BEFORE DELETE OR TRUNCATE ON public.payment_callback_event FOR EACH STATEMENT EXECUTE FUNCTION public.payment_fact_no_delete_guard();
+
+
+--
+-- Name: payment_config payment_config_identity_guard; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_config_identity_guard BEFORE DELETE OR UPDATE ON public.payment_config FOR EACH ROW EXECUTE FUNCTION public.payment_config_guard();
+
+
+--
+-- Name: payment_config payment_config_truncate_guard; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_config_truncate_guard BEFORE TRUNCATE ON public.payment_config FOR EACH STATEMENT EXECUTE FUNCTION public.payment_config_guard();
+
+
+--
+-- Name: payment_config_version payment_config_version_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_config_version_immutable BEFORE DELETE OR UPDATE OR TRUNCATE ON public.payment_config_version FOR EACH STATEMENT EXECUTE FUNCTION public.payment_config_version_guard();
+
+
+--
+-- Name: payment_order payment_order_identity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_order_identity BEFORE UPDATE ON public.payment_order FOR EACH ROW EXECUTE FUNCTION public.payment_order_identity_guard();
+
+
+--
+-- Name: payment_order payment_order_no_delete; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_order_no_delete BEFORE DELETE OR TRUNCATE ON public.payment_order FOR EACH STATEMENT EXECUTE FUNCTION public.payment_fact_no_delete_guard();
+
+
+--
+-- Name: payment_recharge_package payment_recharge_package_identity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_recharge_package_identity BEFORE UPDATE ON public.payment_recharge_package FOR EACH ROW EXECUTE FUNCTION public.payment_recharge_package_identity_guard();
+
+
+--
+-- Name: payment_recharge_package payment_recharge_package_no_delete; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_recharge_package_no_delete BEFORE DELETE OR TRUNCATE ON public.payment_recharge_package FOR EACH STATEMENT EXECUTE FUNCTION public.payment_fact_no_delete_guard();
+
+
+--
+-- Name: payment_redeem_code_batch payment_redeem_batch_guard; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_redeem_batch_guard BEFORE DELETE OR UPDATE ON public.payment_redeem_code_batch FOR EACH ROW EXECUTE FUNCTION public.payment_redeem_batch_guard();
+
+
+--
+-- Name: payment_redeem_code_batch payment_redeem_batch_truncate_guard; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_redeem_batch_truncate_guard BEFORE TRUNCATE ON public.payment_redeem_code_batch FOR EACH STATEMENT EXECUTE FUNCTION public.payment_redeem_batch_guard();
+
+
+--
+-- Name: payment_redeem_code payment_redeem_code_guard; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_redeem_code_guard BEFORE DELETE OR UPDATE ON public.payment_redeem_code FOR EACH ROW EXECUTE FUNCTION public.payment_redeem_code_guard();
+
+
+--
+-- Name: payment_redeem_code payment_redeem_code_truncate_guard; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_redeem_code_truncate_guard BEFORE TRUNCATE ON public.payment_redeem_code FOR EACH STATEMENT EXECUTE FUNCTION public.payment_redeem_code_guard();
+
+
+--
+-- Name: payment_transaction payment_transaction_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_transaction_immutable BEFORE UPDATE ON public.payment_transaction FOR EACH STATEMENT EXECUTE FUNCTION public.payment_transaction_immutable_guard();
+
+
+--
+-- Name: payment_transaction payment_transaction_no_delete; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_transaction_no_delete BEFORE DELETE OR TRUNCATE ON public.payment_transaction FOR EACH STATEMENT EXECUTE FUNCTION public.payment_fact_no_delete_guard();
+
+
+--
+-- Name: payment_wallet payment_wallet_identity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_wallet_identity BEFORE UPDATE ON public.payment_wallet FOR EACH ROW EXECUTE FUNCTION public.payment_wallet_identity_guard();
+
+
+--
+-- Name: payment_wallet payment_wallet_no_delete; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER payment_wallet_no_delete BEFORE DELETE OR TRUNCATE ON public.payment_wallet FOR EACH STATEMENT EXECUTE FUNCTION public.payment_fact_no_delete_guard();
+
+
+--
 -- Name: system_operation_log fk_audit_operation_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3070,6 +3872,142 @@ ALTER TABLE ONLY public.message_sms_log_verification
 
 ALTER TABLE ONLY public.message_sms_rate_limit_policy
     ADD CONSTRAINT fk_message_sms_rate_limit_policy_platform FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id);
+
+
+--
+-- Name: payment_callback_event fk_payment_callback_event_order; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_callback_event
+    ADD CONSTRAINT fk_payment_callback_event_order FOREIGN KEY (order_id) REFERENCES public.payment_order(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_callback_event fk_payment_callback_event_version; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_callback_event
+    ADD CONSTRAINT fk_payment_callback_event_version FOREIGN KEY (config_id, config_version) REFERENCES public.payment_config_version(config_id, version) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_config fk_payment_config_current_version; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_config
+    ADD CONSTRAINT fk_payment_config_current_version FOREIGN KEY (id, current_version) REFERENCES public.payment_config_version(config_id, version) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+
+
+--
+-- Name: payment_config_version fk_payment_config_version_config; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_config_version
+    ADD CONSTRAINT fk_payment_config_version_config FOREIGN KEY (config_id) REFERENCES public.payment_config(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_order fk_payment_order_config; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_order
+    ADD CONSTRAINT fk_payment_order_config FOREIGN KEY (config_id) REFERENCES public.payment_config(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_order fk_payment_order_package; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_order
+    ADD CONSTRAINT fk_payment_order_package FOREIGN KEY (package_id) REFERENCES public.payment_recharge_package(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_order fk_payment_order_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_order
+    ADD CONSTRAINT fk_payment_order_platform FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_order fk_payment_order_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_order
+    ADD CONSTRAINT fk_payment_order_user FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_order fk_payment_order_version; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_order
+    ADD CONSTRAINT fk_payment_order_version FOREIGN KEY (config_id, config_version) REFERENCES public.payment_config_version(config_id, version) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_redeem_code_batch fk_payment_redeem_batch_creator; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_redeem_code_batch
+    ADD CONSTRAINT fk_payment_redeem_batch_creator FOREIGN KEY (created_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_redeem_code fk_payment_redeem_code_batch; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_redeem_code
+    ADD CONSTRAINT fk_payment_redeem_code_batch FOREIGN KEY (batch_id) REFERENCES public.payment_redeem_code_batch(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_redeem_code fk_payment_redeem_code_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_redeem_code
+    ADD CONSTRAINT fk_payment_redeem_code_user FOREIGN KEY (used_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_transaction fk_payment_transaction_order; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_transaction
+    ADD CONSTRAINT fk_payment_transaction_order FOREIGN KEY (order_id) REFERENCES public.payment_order(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_transaction fk_payment_transaction_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_transaction
+    ADD CONSTRAINT fk_payment_transaction_platform FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_transaction fk_payment_transaction_redeem_code; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_transaction
+    ADD CONSTRAINT fk_payment_transaction_redeem_code FOREIGN KEY (redeem_code_id) REFERENCES public.payment_redeem_code(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_transaction fk_payment_transaction_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_transaction
+    ADD CONSTRAINT fk_payment_transaction_user FOREIGN KEY (user_id) REFERENCES public.payment_wallet(user_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_wallet fk_payment_wallet_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_wallet
+    ADD CONSTRAINT fk_payment_wallet_user FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
 
 
 --
@@ -3364,5 +4302,5 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 -- PostgreSQL database dump complete
 --
 
-\unrestrict AdminCurrentSchemaSnapshot
+\unrestrict E2OGrYmQHI6urhZlrUaUxOJJfOcHu9WMMehOyLWKik31RxIUSjIj1FHXjAC87D3
 
