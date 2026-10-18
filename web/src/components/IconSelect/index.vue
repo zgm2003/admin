@@ -1,3 +1,4 @@
+<!-- 组件：图标选择器 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { menuIcons, type MenuIconName } from '@/icons/menuIcons'

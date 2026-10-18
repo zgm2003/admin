@@ -1,3 +1,4 @@
+<!-- 页面：工作台 -->
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { Check, Monitor, Refresh, Warning } from '@element-plus/icons-vue'

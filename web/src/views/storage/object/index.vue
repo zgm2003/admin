@@ -1,3 +1,4 @@
+<!-- 页面：对象存储 -->
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'

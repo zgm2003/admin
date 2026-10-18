@@ -1,3 +1,4 @@
+<!-- 组件：个人中心资料详情与编辑表单 -->
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

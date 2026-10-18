@@ -1,3 +1,4 @@
+<!-- 页面：充值套餐 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

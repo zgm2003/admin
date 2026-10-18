@@ -1,3 +1,4 @@
+<!-- 组件：个人中心密码设置与修改表单 -->
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

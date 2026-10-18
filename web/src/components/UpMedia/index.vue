@@ -1,3 +1,4 @@
+<!-- 组件：媒体上传 -->
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import {

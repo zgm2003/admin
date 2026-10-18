@@ -1,3 +1,4 @@
+<!-- 组件：短信服务 - 短信模板 -->
 <script setup lang="ts">
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { computed, ref, watch } from 'vue'

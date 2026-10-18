@@ -1,3 +1,4 @@
+<!-- 组件：认证平台新建与编辑弹窗 -->
 <script setup lang="ts">
 import { toRefs } from 'vue'
 import { CircleHelp, RotateCcw } from 'lucide-vue-next'

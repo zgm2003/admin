@@ -1,3 +1,4 @@
+<!-- 组件：搜索表单 -->
 <script
   setup
   lang="ts"

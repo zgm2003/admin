@@ -1,3 +1,4 @@
+<!-- 组件：用户角色分配弹窗 -->
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { YesNo } from '@/enums/yesNo'

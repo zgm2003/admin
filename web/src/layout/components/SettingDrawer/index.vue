@@ -1,3 +1,4 @@
+<!-- 组件：界面设置抽屉 -->
 <script setup lang="ts">
 import { Check, Close, Moon, RefreshRight, Setting, Sunny } from '@element-plus/icons-vue'
 import { computed, markRaw, ref } from 'vue'

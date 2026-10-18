@@ -1,3 +1,4 @@
+<!-- 组件：我的文件选择弹窗 -->
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import FileBrowser from '@/components/FileBrowser/index.vue'

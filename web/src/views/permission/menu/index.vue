@@ -1,3 +1,4 @@
+<!-- 页面：菜单管理 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'

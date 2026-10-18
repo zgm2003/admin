@@ -1,3 +1,4 @@
+<!-- 组件：认证页语言与主题工具栏 -->
 <script setup lang="ts">
 import { Check, Moon, Sunny } from '@element-plus/icons-vue'
 import { computed } from 'vue'

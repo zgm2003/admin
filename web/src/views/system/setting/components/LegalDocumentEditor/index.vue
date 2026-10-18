@@ -1,3 +1,4 @@
+<!-- 组件：用户协议与隐私政策富文本编辑器 -->
 <script lang="ts">
 export const legalDocumentToolbarKeys = [
   'bold',

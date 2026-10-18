@@ -1,3 +1,4 @@
+<!-- 组件：邮件模板富文本编辑器 -->
 <script setup lang="ts">
 import { onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import type { IDomEditor } from '@wangeditor-next/editor'

@@ -1,3 +1,4 @@
+<!-- 组件：个人中心头像与资料概览 -->
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'

@@ -1,3 +1,4 @@
+<!-- 组件：用户邮箱与手机号变更记录弹窗 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

@@ -1,3 +1,4 @@
+<!-- 组件：邮件收件规则导入弹窗 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'

@@ -1,3 +1,4 @@
+<!-- 组件：通用弹窗 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, useId, watch } from 'vue'
 import {

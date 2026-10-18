@@ -1,3 +1,4 @@
+<!-- 组件：我的文件浏览器 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch, type Component } from 'vue'
 import {

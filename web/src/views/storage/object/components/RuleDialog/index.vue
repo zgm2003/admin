@@ -1,3 +1,4 @@
+<!-- 组件：对象存储上传规则新建与编辑弹窗 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

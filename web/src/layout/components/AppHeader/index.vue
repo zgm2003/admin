@@ -1,3 +1,4 @@
+<!-- 组件：顶部导航栏 -->
 <script setup lang="ts">
 import { Menu, Setting } from '@element-plus/icons-vue'
 import { ref } from 'vue'

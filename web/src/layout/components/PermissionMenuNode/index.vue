@@ -1,3 +1,4 @@
+<!-- 组件：权限菜单节点 -->
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 

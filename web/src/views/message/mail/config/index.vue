@@ -1,3 +1,4 @@
+<!-- 组件：邮件服务 - 邮件配置 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'

@@ -1,3 +1,4 @@
+<!-- 组件：网络状态提示 -->
 <script setup lang="ts">
 import { RefreshCw, WifiOff } from 'lucide-vue-next'
 import { computed } from 'vue'

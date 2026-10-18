@@ -1,3 +1,4 @@
+<!-- 组件：通知任务列表表格 -->
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'

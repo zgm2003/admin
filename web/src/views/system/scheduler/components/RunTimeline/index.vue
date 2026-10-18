@@ -1,3 +1,4 @@
+<!-- 组件：定时任务执行时间线 -->
 <script setup lang="ts">
 import type { Run } from '@/api/system/scheduler'
 import type { StatusOption } from '@/types/option'

@@ -1,3 +1,4 @@
+<!-- 组件：系统设置项编辑弹窗 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import UpMedia from '@/components/UpMedia/index.vue'

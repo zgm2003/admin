@@ -1,3 +1,4 @@
+<!-- 组件：用户邮箱与手机号变更记录入口 -->
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 

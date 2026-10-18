@@ -1,3 +1,4 @@
+<!-- 组件：侧边栏 -->
 <script setup lang="ts">
 import { ArrowUp, Monitor, SwitchButton, User, Wallet } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'

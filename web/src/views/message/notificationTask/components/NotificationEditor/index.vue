@@ -1,3 +1,4 @@
+<!-- 组件：通知内容编辑器 -->
 <script lang="ts">
 export const notificationToolbarKeys = [
   'bold',

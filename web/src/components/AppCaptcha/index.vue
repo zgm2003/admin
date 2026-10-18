@@ -1,3 +1,4 @@
+<!-- 组件：滑块验证码 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { Slide as GoCaptchaSlide } from 'go-captcha-vue'

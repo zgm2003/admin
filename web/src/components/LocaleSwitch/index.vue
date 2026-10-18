@@ -1,3 +1,4 @@
+<!-- 组件：语言切换 -->
 <script setup lang="ts">
 import { Languages } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'

@@ -1,3 +1,4 @@
+<!-- 组件：页面路由标签栏 -->
 <script setup lang="ts">
 import {
   CircleClose,

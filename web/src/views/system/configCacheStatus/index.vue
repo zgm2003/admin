@@ -1,3 +1,4 @@
+<!-- 页面：配置缓存状态 -->
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

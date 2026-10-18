@@ -1,3 +1,4 @@
+<!-- 组件：邮件服务 - 限流策略 -->
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'

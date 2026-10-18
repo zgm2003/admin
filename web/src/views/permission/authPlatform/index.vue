@@ -1,3 +1,4 @@
+<!-- 页面：认证平台 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { CirclePlus } from '@element-plus/icons-vue'

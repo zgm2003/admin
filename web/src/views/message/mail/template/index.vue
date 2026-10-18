@@ -1,3 +1,4 @@
+<!-- 组件：邮件服务 - 邮件模板 -->
 <script setup lang="ts">
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { computed, defineAsyncComponent, ref, watch } from 'vue'

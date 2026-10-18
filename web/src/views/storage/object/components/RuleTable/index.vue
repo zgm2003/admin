@@ -1,3 +1,4 @@
+<!-- 组件：对象存储上传规则表格 -->
 <script setup lang="ts">
 import { CirclePlus } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'

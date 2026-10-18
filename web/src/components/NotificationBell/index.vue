@@ -1,3 +1,4 @@
+<!-- 组件：通知铃铛 -->
 <script setup lang="ts">
 import { Bell, Link } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'

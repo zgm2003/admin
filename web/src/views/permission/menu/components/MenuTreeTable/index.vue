@@ -1,3 +1,4 @@
+<!-- 组件：菜单树形表格 -->
 <script setup lang="ts">
 import { YesNo } from '@/enums/yesNo'
 import { computed, ref, watch } from 'vue'

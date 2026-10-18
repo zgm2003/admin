@@ -1,3 +1,4 @@
+<!-- 页面：通知中心 -->
 <script setup lang="ts">
 import { ArrowUpRight, CheckCheck } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'

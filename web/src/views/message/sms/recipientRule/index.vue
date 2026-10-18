@@ -1,3 +1,4 @@
+<!-- 组件：短信服务 - 收件规则 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'

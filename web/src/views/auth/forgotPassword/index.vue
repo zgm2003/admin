@@ -1,3 +1,4 @@
+<!-- 页面：找回密码 -->
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { CircleCheckFilled, Lock, User } from '@element-plus/icons-vue'

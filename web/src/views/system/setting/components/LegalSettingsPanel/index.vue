@@ -1,3 +1,4 @@
+<!-- 组件：协议与隐私设置面板 -->
 <script setup lang="ts">
 import { Check } from '@element-plus/icons-vue'
 import { defineAsyncComponent, ref } from 'vue'

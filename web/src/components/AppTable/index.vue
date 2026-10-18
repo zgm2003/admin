@@ -1,3 +1,4 @@
+<!-- 组件：通用数据表格 -->
 <script setup lang="ts" generic="Row extends TableRow">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'

@@ -1,3 +1,4 @@
+<!-- 组件：个人中心手机号绑定与换绑弹窗 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus/es/components/message/index'

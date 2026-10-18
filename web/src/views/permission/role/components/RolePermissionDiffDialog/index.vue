@@ -1,3 +1,4 @@
+<!-- 组件：角色权限变更确认弹窗 -->
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'

@@ -1,3 +1,4 @@
+<!-- 组件：动态图标 -->
 <script setup lang="ts">
 defineOptions({ name: 'AppDIcon', inheritAttrs: false })
 

@@ -1,3 +1,4 @@
+<!-- 页面：会话管理 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'

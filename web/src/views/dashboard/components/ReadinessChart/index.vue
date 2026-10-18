@@ -1,3 +1,4 @@
+<!-- 组件：服务健康状态图表 -->
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { PieChart } from 'echarts/charts'

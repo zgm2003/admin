@@ -1,3 +1,4 @@
+<!-- 组件：应用根组件 -->
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'

@@ -1,3 +1,4 @@
+<!-- 页面：个人中心 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'

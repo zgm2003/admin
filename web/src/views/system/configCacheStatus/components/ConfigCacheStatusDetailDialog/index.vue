@@ -1,3 +1,4 @@
+<!-- 组件：配置缓存状态详情弹窗 -->
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 

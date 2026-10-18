@@ -1,3 +1,4 @@
+<!-- 组件：用户资料编辑弹窗 -->
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { UserListItem } from '@/api/user/account'

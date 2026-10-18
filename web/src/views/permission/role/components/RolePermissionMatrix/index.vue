@@ -1,3 +1,4 @@
+<!-- 组件：角色页面与操作权限矩阵 -->
 <script setup lang="ts">
 import { computed, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'

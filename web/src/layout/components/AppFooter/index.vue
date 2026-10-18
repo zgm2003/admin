@@ -1,3 +1,4 @@
+<!-- 组件：页脚 -->
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 

@@ -1,3 +1,4 @@
+<!-- 组件：上传文件列表 -->
 <script setup lang="ts">
 import { Document } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'

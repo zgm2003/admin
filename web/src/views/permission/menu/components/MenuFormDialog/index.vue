@@ -1,3 +1,4 @@
+<!-- 组件：菜单新建与编辑弹窗 -->
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
