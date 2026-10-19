@@ -44,7 +44,7 @@ const searchFields = computed<SearchField<{ keyword: string; status: number | ''
   {
     key: 'status',
     type: 'select-v2',
-    label: t('payment.config.status'),
+    label: t('payment.config.status.label'),
     resetValue: '',
     options: options.value === null ? [] : options.value.statuses,
     width: 160,
@@ -68,7 +68,7 @@ const columns = computed<TableColumn<PaymentConfig>[]>(() => [
   { prop: 'appId', label: t('payment.config.appId'), minWidth: 165 },
   { key: 'version', label: t('payment.config.currentVersion'), width: 115 },
   { key: 'methods', label: t('payment.config.payMethods'), minWidth: 130 },
-  { key: 'status', label: t('payment.config.status'), width: 100 },
+  { key: 'status', label: t('payment.config.status.label'), width: 100 },
   { prop: 'sortOrder', label: t('payment.config.sortOrder'), width: 80 },
   { key: 'actions', label: t('payment.config.actions'), minWidth: 340, fixed: 'right' },
 ])
@@ -250,14 +250,22 @@ async function act(row: PaymentConfig, action: 'status' | 'delete' | 'test'): Pr
     )
   )
     return
+  const nextStatus = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
   busyID.value = row.id
   try {
     if (action !== 'test') {
       try {
         await ElMessageBox.confirm(
-          t(action === 'delete' ? 'payment.config.deleteConfirm' : 'payment.config.statusConfirm', {
-            name: row.name,
-          }),
+          action === 'delete'
+            ? t('payment.config.deleteConfirm', { name: row.name })
+            : t('confirm.status', {
+                name: row.name,
+                status: t(
+                  nextStatus === YesNo.Yes
+                    ? 'payment.config.status.enabled'
+                    : 'payment.config.status.disabled',
+                ),
+              }),
           t('confirm.title'),
           { type: 'warning' },
         )
@@ -266,11 +274,7 @@ async function act(row: PaymentConfig, action: 'status' | 'delete' | 'test'): Pr
       }
     }
     if (!alive || !access.hasPermission(permission)) return
-    if (action === 'status')
-      await api.updatePaymentConfigStatus(
-        row.id,
-        row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes,
-      )
+    if (action === 'status') await api.updatePaymentConfigStatus(row.id, nextStatus)
     else if (action === 'delete') await api.deletePaymentConfig(row.id)
     else await api.testPaymentConfig(row.id)
     if (alive) {
@@ -319,7 +323,6 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <AppPage class="payment-config-page">
-    <el-alert :title="t('payment.config.scopeHint')" type="info" :closable="false" />
     <AppSearch
       v-model="filters"
       :fields="searchFields"
@@ -355,7 +358,9 @@ onBeforeUnmount(() => {
         ></template
       >
       <template #toolbar-right>
-        <el-button v-if="optionsError" @click="reloadOptions">{{ t('payment.config.retry') }}</el-button>
+        <el-button v-if="optionsError" @click="reloadOptions">{{
+          t('payment.config.retry')
+        }}</el-button>
       </template>
       <template #cell-identity="{ row }: { row: PaymentConfig }"
         ><div class="payment-config-page__identity">
@@ -418,11 +423,13 @@ onBeforeUnmount(() => {
         <el-button
           v-if="canStatus && row.actions.status"
           link
-          type="primary"
+          :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
           :disabled="busyID !== null"
           data-testid="payment-config-status"
           @click="act(row, 'status')"
-          >{{ t('payment.config.toggleStatus') }}</el-button
+          >{{
+            row.isEnabled === YesNo.Yes ? t('payment.config.disable') : t('payment.config.enable')
+          }}</el-button
         >
         <el-button
           v-if="canTest && row.actions.test"

@@ -52,7 +52,7 @@ describe('frontend i18n', () => {
   it('translates grouped status labels and values without losing nested keys', () => {
     for (const locale of ['zh-CN', 'en-US'] as const) {
       setLocale(locale)
-      for (const domain of ['storage', 'user', 'setting', 'mail', 'sms']) {
+      for (const domain of ['storage', 'user', 'setting', 'mail', 'sms', 'payment.config']) {
         expect(appI18n.global.t(`${domain}.status.label`)).toBe(
           locale === 'zh-CN' ? '状态' : 'Status',
         )

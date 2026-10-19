@@ -1,5 +1,11 @@
 # 项目状态
 
+## 支付配置页过期提示与状态操作文案（2026-10-19，定向验证完成）
+
+- 移除支付配置页“充值与支付回调将在后续阶段接入”的过期 info 提示；状态操作按当前值明确显示“启用/停用”，分别使用 success/warning，并在确认框展示目标状态。状态列继续消费后端按语言投影的 `presentation.status`，其值遵循 `0=停用、1=启用`，不由前端重复计算。
+- 状态字段统一使用 `payment.config.status.label/enabled/disabled`；补齐中英文回归，覆盖提示移除、启停方向、颜色、目标确认、取消/关闭、权限和请求失败。同步更新过期的支付回调设计描述。
+- 验证：`pnpm vitest run tests/views/payment/config/index.test.ts tests/api/payment/config.test.ts tests/i18n/index.test.ts --pool=threads --maxWorkers=1`（3 文件/42 项）通过；`pnpm build`（含 vue-tsc）、受影响文件 ESLint/Prettier、`pnpm check:architecture` 与 `git diff --check` 通过。构建仍有既有 >500 kB chunk 警告；未运行全量前端测试、真实支付/回调或服务联调，未提交 Git。
+
 ## 平台 API 显式隔离（2026-10-18，代码与迁移完成，待启动联调）
 
 - 已获维护者批准：取消 `/api/v1`，Admin 使用 `/api/admin/v1`，Canvas 使用 `/api/canvas/v1`；每个业务模块独立声明 `RegisterAdminRoutes` / `RegisterCanvasRoutes`，不得用两个包装函数调用同一份路由清单。新平台必须显式新增注册入口；内部 Handler/Service/Repository 仅按真实业务复用。

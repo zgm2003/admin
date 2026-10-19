@@ -226,7 +226,7 @@ async function save() {
             :options="options.environments"
             data-testid="payment-config-environment"
         /></el-form-item>
-        <el-form-item :label="t('payment.config.status')"
+        <el-form-item :label="t('payment.config.status.label')"
           ><el-select-v2 v-model="form.isEnabled" :options="options.statuses"
         /></el-form-item>
         <el-form-item prop="appId" :label="t('payment.config.appId')"

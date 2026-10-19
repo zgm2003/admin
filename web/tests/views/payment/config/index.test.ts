@@ -3,7 +3,8 @@ import ElementPlus from 'element-plus'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as api from '@/api/payment/config'
-import { appI18n, setLocale } from '@/i18n'
+import { appI18n, setLocale, type AppLocale } from '@/i18n'
+import { YesNo } from '@/enums/yesNo'
 import { pinia } from '@/store'
 import { usePermissionStore } from '@/store/permission'
 import { ApiError } from '@/utils/request'
@@ -33,7 +34,8 @@ const row: api.PaymentConfig = {
   sortOrder: 0,
   isEnabled: 0,
   notifyUrl: 'https://pay.example.test/api/admin/v1/payment/callback/alipay/7/1',
-  notifyUrlTemplate: 'https://pay.example.test/api/admin/v1/payment/callback/alipay/{configId}/{version}',
+  notifyUrlTemplate:
+    'https://pay.example.test/api/admin/v1/payment/callback/alipay/{configId}/{version}',
   payMethods: [1, 2],
   credentialConfigured: true,
   certificates: {
@@ -135,7 +137,176 @@ it('uses backend presentation and exact action permissions', async () => {
   const w = await page()
   expect(w.text()).toContain('服务端通道')
   expect(w.text()).toContain('服务端环境')
+  expect(w.text()).toContain('服务端状态')
   expect(w.find('[data-testid="payment-config-edit"]').exists()).toBe(false)
+})
+it.each(['zh-CN', 'en-US'] as const)(
+  '%s does not show obsolete payment construction notices',
+  async (locale) => {
+    setLocale(locale)
+    permissions(['payment:config:list'])
+    const w = await page()
+    expect(w.find('.el-alert--info').exists()).toBe(false)
+  },
+)
+const statusCases: {
+  locale: AppLocale
+  current: YesNo
+  currentLabel: string
+  actionLabel: string
+  buttonType: 'success' | 'warning'
+  next: YesNo
+  nextLabel: string
+  nextActionLabel: string
+  confirmation: string
+}[] = [
+  {
+    locale: 'zh-CN',
+    current: YesNo.No,
+    currentLabel: '停用',
+    actionLabel: '启用',
+    buttonType: 'success',
+    next: YesNo.Yes,
+    nextLabel: '启用',
+    nextActionLabel: '停用',
+    confirmation: '确定将“Main”的状态改为“启用”吗？',
+  },
+  {
+    locale: 'zh-CN',
+    current: YesNo.Yes,
+    currentLabel: '启用',
+    actionLabel: '停用',
+    buttonType: 'warning',
+    next: YesNo.No,
+    nextLabel: '停用',
+    nextActionLabel: '启用',
+    confirmation: '确定将“Main”的状态改为“停用”吗？',
+  },
+  {
+    locale: 'en-US',
+    current: YesNo.No,
+    currentLabel: 'Disabled',
+    actionLabel: 'Enable',
+    buttonType: 'success',
+    next: YesNo.Yes,
+    nextLabel: 'Enabled',
+    nextActionLabel: 'Disable',
+    confirmation: 'Change the status of “Main” to “Enabled”?',
+  },
+  {
+    locale: 'en-US',
+    current: YesNo.Yes,
+    currentLabel: 'Enabled',
+    actionLabel: 'Disable',
+    buttonType: 'warning',
+    next: YesNo.No,
+    nextLabel: 'Disabled',
+    nextActionLabel: 'Enable',
+    confirmation: 'Change the status of “Main” to “Disabled”?',
+  },
+]
+it.each(statusCases)(
+  '$locale presents and confirms the explicit $actionLabel action before sending $next',
+  async ({
+    locale,
+    current,
+    currentLabel,
+    actionLabel,
+    buttonType,
+    next,
+    nextLabel,
+    nextActionLabel,
+    confirmation,
+  }) => {
+    setLocale(locale)
+    permissions(['payment:config:list', 'payment:config:status'])
+    vi.mocked(api.getPaymentConfigs).mockResolvedValue({
+      list: [
+        { ...row, isEnabled: current, presentation: { ...row.presentation, status: currentLabel } },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    let confirm: (() => void) | undefined
+    vi.mocked(ElMessageBox.confirm).mockImplementation(
+      () =>
+        new Promise<Awaited<ReturnType<typeof ElMessageBox.confirm>>>((resolve) => {
+          confirm = () =>
+            resolve('confirm' as unknown as Awaited<ReturnType<typeof ElMessageBox.confirm>>)
+        }),
+    )
+    vi.mocked(api.updatePaymentConfigStatus).mockResolvedValue({ id: row.id, isEnabled: next })
+    const w = await page()
+    const button = w.get('[data-testid="payment-config-status"]')
+    expect(button.text()).toBe(actionLabel)
+    expect(button.classes()).toContain(`el-button--${buttonType}`)
+    expect(button.find('svg').exists()).toBe(false)
+    await button.trigger('click')
+    expect(ElMessageBox.confirm).toHaveBeenCalledExactlyOnceWith(
+      confirmation,
+      locale === 'zh-CN' ? '操作确认' : 'Confirm action',
+      { type: 'warning' },
+    )
+    expect(api.updatePaymentConfigStatus).not.toHaveBeenCalled()
+    expect(w.text()).toContain(currentLabel)
+    vi.mocked(api.getPaymentConfigs).mockResolvedValue({
+      list: [{ ...row, isEnabled: next, presentation: { ...row.presentation, status: nextLabel } }],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    confirm?.()
+    await flushPromises()
+    expect(api.updatePaymentConfigStatus).toHaveBeenCalledExactlyOnceWith(row.id, next)
+    expect(w.get('[data-testid="payment-config-status"]').text()).toBe(nextActionLabel)
+  },
+)
+it.each(['cancel', 'close'])(
+  'does not write or optimistically change status when confirmation is dismissed by %s',
+  async (reason) => {
+    permissions(['payment:config:list', 'payment:config:status'])
+    vi.mocked(ElMessageBox.confirm).mockRejectedValue(reason)
+    const w = await page()
+    await w.get('[data-testid="payment-config-status"]').trigger('click')
+    await flushPromises()
+    expect(api.updatePaymentConfigStatus).not.toHaveBeenCalled()
+    expect(api.getPaymentConfigs).toHaveBeenCalledOnce()
+    expect(w.text()).toContain('服务端状态')
+    expect(w.get('[data-testid="payment-config-status"]').attributes('disabled')).toBeUndefined()
+  },
+)
+it.each([
+  { codes: ['payment:config:list'], allowed: true },
+  { codes: ['payment:config:list', 'payment:config:status'], allowed: false },
+])(
+  'requires both status permission and backend action availability ($allowed)',
+  async ({ codes, allowed }) => {
+    permissions(codes)
+    vi.mocked(api.getPaymentConfigs).mockResolvedValue({
+      list: [{ ...row, actions: { ...row.actions, status: allowed } }],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    const w = await page()
+    expect(w.find('[data-testid="payment-config-status"]').exists()).toBe(false)
+  },
+)
+it('retains the original status and restores the action if the status request fails', async () => {
+  permissions(['payment:config:list', 'payment:config:status'])
+  vi.mocked(ElMessageBox.confirm).mockResolvedValue(
+    Object.assign('confirm' as const, { value: '', action: 'confirm' as const }),
+  )
+  vi.mocked(api.updatePaymentConfigStatus).mockRejectedValue(new Error('status request failed'))
+  const w = await page()
+  await w.get('[data-testid="payment-config-status"]').trigger('click')
+  await flushPromises()
+  expect(api.updatePaymentConfigStatus).toHaveBeenCalledExactlyOnceWith(row.id, YesNo.Yes)
+  expect(api.getPaymentConfigs).toHaveBeenCalledOnce()
+  expect(w.text()).toContain('服务端状态')
+  expect(w.get('[data-testid="payment-config-status"]').attributes('disabled')).toBeUndefined()
+  expect(w.text()).not.toContain('status request failed')
 })
 it('renders localized placeholders for payment identifiers and credential inputs', async () => {
   permissions(['payment:config:list', 'payment:config:create'])
@@ -206,7 +377,9 @@ it('keeps a failed save editable without repeating the request error inside the 
   await flushPromises()
   expect(w.text()).not.toContain('保存被拒绝')
   expect(w.find('.el-alert--error').exists()).toBe(false)
-  expect(w.get<HTMLInputElement>('[data-testid="payment-config-name"]').element.value).toBe('My draft')
+  expect(w.get<HTMLInputElement>('[data-testid="payment-config-name"]').element.value).toBe(
+    'My draft',
+  )
   expect(w.get('[data-testid="payment-config-save"]').attributes('disabled')).toBeUndefined()
   await w.get('[data-testid="payment-config-save"]').trigger('click')
   await flushPromises()
