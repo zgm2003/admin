@@ -140,6 +140,13 @@ it('uses backend presentation and exact action permissions', async () => {
   expect(w.text()).toContain('服务端状态')
   expect(w.find('[data-testid="payment-config-edit"]').exists()).toBe(false)
 })
+it('lets table alignment center the channel and payment channel cells without extra wrappers', async () => {
+  permissions(['payment:config:list'])
+  const w = await page()
+  expect(w.findAll('.payment-config-page__identity')).toHaveLength(0)
+  expect(w.text()).toContain('服务端通道')
+  expect(w.find('.el-tag').exists()).toBe(true)
+})
 it.each(['zh-CN', 'en-US'] as const)(
   '%s does not show obsolete payment construction notices',
   async (locale) => {

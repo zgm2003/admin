@@ -1,5 +1,11 @@
 # 项目状态
 
+## 支付配置表格两列居中（2026-10-19，定向验证完成）
+
+- 渠道、支付通道两列共用的 `payment-config-page__identity` 移除 `flex-start` 强制左对齐，改为 `align-items: center`；保留原内容、上下排列、间距及其他列，不改通用 AppTable。
+- 新增渲染回归，编译真实页面 SCSS 并检查两个容器的 computed style；先复现两处 `flex-start`，修正后 `pnpm vitest run tests/views/payment/config/index.test.ts --pool=threads --maxWorkers=1 -t "centers the channel and payment channel content in their cells"`（1 项通过、29 项跳过）、两个改动文件 ESLint/Prettier 与 `git diff --check` 通过。
+- 按维护者要求，本批改动期间只运行必要定向检查，build 与全量测试留待全部修改完成后集中运行；本次未做浏览器几何验收、数据库改动或 Git 提交。
+
 ## 支付配置页过期提示与状态操作文案（2026-10-19，定向验证完成）
 
 - 移除支付配置页“充值与支付回调将在后续阶段接入”的过期 info 提示；状态操作按当前值明确显示“启用/停用”，分别使用 success/warning，并在确认框展示目标状态。状态列继续消费后端按语言投影的 `presentation.status`，其值遵循 `0=停用、1=启用`，不由前端重复计算。

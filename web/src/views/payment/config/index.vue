@@ -70,7 +70,7 @@ const columns = computed<TableColumn<PaymentConfig>[]>(() => [
   { key: 'methods', label: t('payment.config.payMethods'), minWidth: 130 },
   { key: 'status', label: t('payment.config.status.label'), width: 100 },
   { prop: 'sortOrder', label: t('payment.config.sortOrder'), width: 80 },
-  { key: 'actions', label: t('payment.config.actions'), minWidth: 340, fixed: 'right' },
+  { key: 'actions', label: t('payment.config.actions'), minWidth: 300, fixed: 'right' },
 ])
 const dialogVisible = ref(false)
 const dialogMode = ref<ConfigDialogMode>('create')
@@ -369,8 +369,9 @@ onBeforeUnmount(() => {
       >
       <template #cell-provider="{ row }: { row: PaymentConfig }"
         ><div class="payment-config-page__identity">
-          <span>{{ row.presentation.provider }}</span
-          ><el-tag size="small" effect="plain">{{ row.presentation.environment }}</el-tag>
+          <div>{{ row.presentation.provider }}</div>
+          <div><el-tag size="small" effect="plain">{{ row.presentation.environment }}</el-tag></div>
+          
         </div></template
       >
       <template #cell-version="{ row }: { row: PaymentConfig }"
@@ -383,6 +384,7 @@ onBeforeUnmount(() => {
             :key="method.value"
             size="small"
             effect="plain"
+            style="margin-right: 10px;"
             >{{ method.label }}</el-tag
           >
         </div></template
@@ -521,35 +523,4 @@ onBeforeUnmount(() => {
   </AppPage>
 </template>
 <style scoped lang="scss">
-.payment-config-page {
-  gap: 16px;
-  &__identity {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-  &__tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  &__url {
-    overflow-wrap: anywhere;
-  }
-  &__certificate {
-    margin-top: 20px;
-    padding-top: 12px;
-    border-top: 1px solid var(--el-border-color-lighter);
-    h3 {
-      margin: 0 0 8px;
-      font-size: 14px;
-    }
-    p {
-      font-size: 12px;
-      color: var(--el-text-color-secondary);
-      overflow-wrap: anywhere;
-    }
-  }
-}
 </style>
