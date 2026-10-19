@@ -49,15 +49,18 @@ func FromContext(context *gin.Context) (Client, bool) {
 	return client, ok
 }
 
-func RequireAdminPlatform() gin.HandlerFunc {
+func RequirePlatform(platform string) gin.HandlerFunc {
+	if err := ValidatePlatform(platform); err != nil {
+		panic(err)
+	}
 	return func(context *gin.Context) {
 		client, ok := FromContext(context)
 		if !ok {
 			response.Fail(context, apperror.Internal(fmt.Errorf("authentication client context is missing")))
 			return
 		}
-		if client.Platform != "admin" {
-			response.Fail(context, apperror.Forbidden(fmt.Errorf("authentication platform cannot access admin API")))
+		if client.Platform != platform {
+			response.Fail(context, apperror.Forbidden(fmt.Errorf("authentication platform cannot access this API")))
 			return
 		}
 		context.Next()

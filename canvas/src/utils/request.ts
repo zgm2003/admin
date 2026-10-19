@@ -35,16 +35,16 @@ export interface ApiEnvelope<T> {
 }
 
 const noBearerPaths = new Set([
-  '/api/v1/auth/login-config',
-  '/api/v1/auth/captcha',
-  '/api/v1/auth/send-code',
-  '/api/v1/auth/login',
-  '/api/v1/auth/password/forgot',
-  '/api/v1/auth/password/reset',
-  '/api/v1/auth/refresh',
+  '/api/canvas/v1/auth/login-config',
+  '/api/canvas/v1/auth/captcha',
+  '/api/canvas/v1/auth/send-code',
+  '/api/canvas/v1/auth/login',
+  '/api/canvas/v1/auth/password/forgot',
+  '/api/canvas/v1/auth/password/reset',
+  '/api/canvas/v1/auth/refresh',
 ])
 
-const noRefreshPaths = new Set([...noBearerPaths, '/api/v1/auth/logout'])
+const noRefreshPaths = new Set([...noBearerPaths, '/api/canvas/v1/auth/logout'])
 
 export function createRequestClient(options: RequestClientOptions): RequestClient {
   const fetchImpl = options.fetchImpl ?? fetch
@@ -85,7 +85,7 @@ export function createRequestClient(options: RequestClientOptions): RequestClien
       requestOptions?.signal?.throwIfAborted()
       return send<T>(path, method, body, requestOptions, true)
     }
-    if (response.status === 401 && (requestPath === '/api/v1/auth/refresh' || !noRefreshPaths.has(requestPath))) {
+    if (response.status === 401 && (requestPath === '/api/canvas/v1/auth/refresh' || !noRefreshPaths.has(requestPath))) {
       accessToken = ''
       options.onUnauthorized?.()
     }
@@ -94,7 +94,7 @@ export function createRequestClient(options: RequestClientOptions): RequestClien
     requestOptions?.signal?.throwIfAborted()
     if (envelope.code !== 0) throw new ApiError(envelope.code, envelope.message.trim() || '请求失败，请稍后重试', response.status)
     if (!response.ok) throw httpError(response.status)
-    if ((requestPath === '/api/v1/auth/login' || requestPath === '/api/v1/auth/refresh') && !isAccessCredential(envelope.data)) {
+    if ((requestPath === '/api/canvas/v1/auth/login' || requestPath === '/api/canvas/v1/auth/refresh') && !isAccessCredential(envelope.data)) {
       throw new ProtocolError('登录凭据响应异常，请重新登录')
     }
     if (requestOptions?.successMessage) {
@@ -106,7 +106,7 @@ export function createRequestClient(options: RequestClientOptions): RequestClien
 
   const coordinatedRefresh = (): Promise<string> => {
     if (refreshPromise === null) {
-      refreshPromise = send<{ accessToken: string }>('/api/v1/auth/refresh', 'POST', undefined, undefined, true).then((credential) => credential.accessToken)
+      refreshPromise = send<{ accessToken: string }>('/api/canvas/v1/auth/refresh', 'POST', undefined, undefined, true).then((credential) => credential.accessToken)
       refreshPromise.finally(() => { refreshPromise = null }).catch(() => undefined)
     }
     return refreshPromise
@@ -119,8 +119,8 @@ export function createRequestClient(options: RequestClientOptions): RequestClien
       if (isCanceled(cause, requestOptions?.signal)) throw cause
       const error = cause instanceof Error ? cause : new Error('请求失败，请稍后重试')
       const requestPath = new URL(path, baseUrl || window.location.origin).pathname
-      const inlineLoginError = requestPath === '/api/v1/auth/login' && error instanceof ApiError && error.code === 10002
-      const anonymousProbe = requestPath === '/api/v1/auth/refresh' && (error instanceof ApiError || error instanceof HttpError) && error.httpStatus === 401
+      const inlineLoginError = requestPath === '/api/canvas/v1/auth/login' && error instanceof ApiError && error.code === 10002
+      const anonymousProbe = requestPath === '/api/canvas/v1/auth/refresh' && (error instanceof ApiError || error instanceof HttpError) && error.httpStatus === 401
       if (!inlineLoginError && !anonymousProbe && !reportedErrors.has(error)) {
         reportedErrors.add(error)
         toast.error(error.message)

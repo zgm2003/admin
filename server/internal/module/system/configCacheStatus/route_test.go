@@ -24,7 +24,7 @@ func TestRouteRequiresAuthenticationAndListPermission(t *testing.T) {
 	}
 
 	router := gin.New()
-	RegisterRoutes(router.Group(""), NewHandler(&stubService{result: ListResult{Page: 1, PageSize: 20}}), authenticate, requirePermission)
+	RegisterAdminRoutes(router.Group(""), NewHandler(&stubService{result: ListResult{Page: 1, PageSize: 20}}), authenticate, requirePermission)
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/system/config-cache-status", nil))
 

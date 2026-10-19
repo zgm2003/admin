@@ -34,7 +34,7 @@ describe('operation logs', () => {
     expect(wrapper.get('.operation-log-page').classes()).toContain('management-page')
     await wrapper.get('[data-testid="operation-log-user-id"]').setValue('7')
     await wrapper.get('[data-testid="operation-log-action"]').setValue('user.update')
-    await wrapper.get('[data-testid="operation-log-route"]').setValue('/api/v1/users')
+    await wrapper.get('[data-testid="operation-log-route"]').setValue('/api/admin/v1/users')
     wrapper.findComponent({ name: 'ElSelectV2' }).vm.$emit('update:modelValue', YesNo.No)
     wrapper
       .findComponent({ name: 'ElDatePicker' })
@@ -46,7 +46,7 @@ describe('operation logs', () => {
       pageSize: 20,
       userId: 7,
       action: 'user.update',
-      route: '/api/v1/users',
+      route: '/api/admin/v1/users',
       isSuccess: YesNo.No,
       from: '2026-08-20T00:00:00+08:00',
       to: '2026-08-21T00:00:00+08:00',

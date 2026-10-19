@@ -2,11 +2,12 @@ package authplatform
 
 import "github.com/gin-gonic/gin"
 
-func RegisterPublicRoutes(routes *gin.RouterGroup, handler *Handler) {
+func RegisterCanvasRoutes(routes *gin.RouterGroup, handler *Handler) {
 	routes.GET("/auth/policy", handler.Policy)
 }
 
-func RegisterManagementRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
+func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
+	routes.GET("/auth/policy", handler.Policy)
 	routes.GET("/permission/authplatform/options", authenticate, handler.FormOptions)
 	routes.GET("/permission/authplatform", authenticate, requirePermission(PermissionList), handler.List)
 	routes.GET("/permission/authplatform/deployment", authenticate, requirePermission(PermissionList), handler.Deployment)

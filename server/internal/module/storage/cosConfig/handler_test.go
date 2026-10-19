@@ -56,7 +56,7 @@ func TestRoutesUseExactCOSConfigPermissions(t *testing.T) {
 	permissions := make([]string, 0)
 	pass := func(context *gin.Context) { context.Next() }
 	router := gin.New()
-	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(&configHTTPService{}), pass, func(code string) gin.HandlerFunc {
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(&configHTTPService{}), pass, func(code string) gin.HandlerFunc {
 		permissions = append(permissions, code)
 		return pass
 	})
@@ -131,7 +131,7 @@ func configRouter(t *testing.T) (*configHTTPService, *gin.Engine) {
 	service := &configHTTPService{}
 	router := gin.New()
 	pass := func(context *gin.Context) { context.Next() }
-	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(service), pass, func(string) gin.HandlerFunc { return pass })
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(service), pass, func(string) gin.HandlerFunc { return pass })
 	return service, router
 }
 

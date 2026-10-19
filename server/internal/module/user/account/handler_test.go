@@ -87,7 +87,7 @@ func TestHandlerUserUpdateLogsProfileOperationWithoutPhone(t *testing.T) {
 	router := gin.New()
 	router.Use(projectmiddleware.AccessLog(logger))
 	pass := func(context *gin.Context) { context.Next() }
-	account.RegisterRoutes(router.Group("/api/admin/v1"), account.NewHandler(service, func(*gin.Context) (int64, bool) { return 41, true }), pass, func(string) gin.HandlerFunc { return pass })
+	account.RegisterAdminRoutes(router.Group("/api/admin/v1"), account.NewHandler(service, func(*gin.Context) (int64, bool) { return 41, true }), pass, func(string) gin.HandlerFunc { return pass })
 	request := httptest.NewRequest(http.MethodPut, "/api/admin/v1/user/account/7", strings.NewReader(`{"username":"alice"}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
@@ -149,7 +149,7 @@ func TestRegisterRoutesUsesExactUserPermissions(t *testing.T) {
 	router := gin.New()
 	permissions := make([]string, 0)
 	pass := func(context *gin.Context) { context.Next() }
-	account.RegisterRoutes(router.Group("/api/admin/v1"), account.NewHandler(&userHTTPService{}, func(*gin.Context) (int64, bool) { return 41, true }), pass, func(code string) gin.HandlerFunc {
+	account.RegisterAdminRoutes(router.Group("/api/admin/v1"), account.NewHandler(&userHTTPService{}, func(*gin.Context) (int64, bool) { return 41, true }), pass, func(code string) gin.HandlerFunc {
 		permissions = append(permissions, code)
 		return pass
 	})
@@ -214,7 +214,7 @@ func serveUserRequest(t *testing.T, service *userHTTPService, method, path, body
 	router := gin.New()
 	pass := func(context *gin.Context) { context.Next() }
 	actorReader := func(*gin.Context) (int64, bool) { return 41, actor }
-	account.RegisterRoutes(router.Group("/api/admin/v1"), account.NewHandler(service, actorReader), pass, func(string) gin.HandlerFunc { return pass })
+	account.RegisterAdminRoutes(router.Group("/api/admin/v1"), account.NewHandler(service, actorReader), pass, func(string) gin.HandlerFunc { return pass })
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
 	if body != "" {
 		request.Header.Set("Content-Type", "application/json")

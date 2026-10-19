@@ -11,7 +11,7 @@ func TestRoutesBindIndependentDetailCreateAndUpdatePermissions(t *testing.T) {
 	mw := func(c *gin.Context) { c.Next() }
 	require := func(code string) gin.HandlerFunc { codes = append(codes, code); return mw }
 	r := gin.New()
-	RegisterRoutes(r.Group("/api/admin/v1"), NewHandler(NewService(&taskRepositoryStub{})), mw, require)
+	RegisterAdminRoutes(r.Group("/api/admin/v1"), NewHandler(NewService(&taskRepositoryStub{})), mw, require)
 	want := []string{PermissionList, PermissionCreate, PermissionUpdate, PermissionUpdate, PermissionDetail, PermissionCreate, PermissionUpdate, PermissionDelete, PermissionSubmit, PermissionCancel, PermissionCopy}
 	if len(codes) != len(want) {
 		t.Fatalf("codes=%v", codes)

@@ -238,7 +238,7 @@ func registerTestRoutes(router *gin.Engine, profile profileService, password pas
 		c.Set("authclient.client", authclient.Client{Platform: "admin", ClientIP: "127.0.0.1"})
 		c.Next()
 	}
-	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(profile, password, actor), func(c *gin.Context) {
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(profile, password, actor), func(c *gin.Context) {
 		identity(c)
 		pass(c)
 	}, func(code string) gin.HandlerFunc {

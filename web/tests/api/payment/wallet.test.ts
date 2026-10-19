@@ -11,7 +11,7 @@ beforeEach(() => vi.resetAllMocks())
 
 it('keeps personal and admin wallet projections on separate endpoints', async () => {
   await api.getMyWallet()
-  expect(request.get).toHaveBeenCalledWith('/api/v1/payment/wallet')
+  expect(request.get).toHaveBeenCalledWith('/api/admin/v1/payment/wallet/me')
   await api.getWallets({ page: 1, pageSize: 20 })
   expect(request.get).toHaveBeenCalledWith('/api/admin/v1/payment/wallet', {
     params: { page: 1, pageSize: 20 },

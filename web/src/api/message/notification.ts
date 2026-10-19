@@ -41,21 +41,21 @@ export interface NotificationQuery {
 }
 
 export async function getNotificationSummary(): Promise<NotificationSummary> {
-  return request.get<NotificationSummary>('/api/v1/message/notification/summary')
+  return request.get<NotificationSummary>('/api/admin/v1/message/notification/summary')
 }
 
 export async function listNotifications(params: NotificationQuery): Promise<NotificationList> {
-  return request.get<NotificationList>('/api/v1/message/notification', { params })
+  return request.get<NotificationList>('/api/admin/v1/message/notification', { params })
 }
 
 export async function readNotification(id: number): Promise<void> {
-  return request.patch<void>(`/api/v1/message/notification/${id}/read`, undefined)
+  return request.patch<void>(`/api/admin/v1/message/notification/${id}/read`, undefined)
 }
 
 export async function readAllNotifications(): Promise<void> {
-  return request.patch<void>('/api/v1/message/notification/read-all', undefined)
+  return request.patch<void>('/api/admin/v1/message/notification/read-all', undefined)
 }
 
 export async function deleteNotification(id: number): Promise<void> {
-  return request.delete<void>(`/api/v1/message/notification/${id}`)
+  return request.delete<void>(`/api/admin/v1/message/notification/${id}`)
 }

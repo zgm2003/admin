@@ -21,7 +21,7 @@ import (
 
 func TestPasswordRegistrationRouteIsNotExposed(t *testing.T) {
 	service := &stubAuthenticationService{registered: Registered{UserID: 1, Username: "admin", Email: "admin@example.com"}}
-	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/register", `{"username":"admin","email":"admin@example.com","password":"password","confirmPassword":"password"}`, nil, false)
+	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/register", `{"username":"admin","email":"admin@example.com","password":"password","confirmPassword":"password"}`, nil, false)
 	if responseRecorder.Code != http.StatusNotFound {
 		t.Fatalf("password registration status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -31,7 +31,7 @@ func TestLoginReturnsCredentialAndSecureRefreshCookie(t *testing.T) {
 	fixedNow := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
 	refreshTTL := 14 * 24 * time.Hour
 	service := &stubAuthenticationService{credential: Credential{AccessToken: "access", ExpiresIn: 900, RefreshToken: "refresh", RefreshExpiresAt: fixedNow.Add(refreshTTL), IsNewUser: true}}
-	responseRecorder := serveAuthRouteAt(t, service, http.MethodPost, "/api/v1/auth/login", `{"loginType":"password","loginAccount":"admin@example.com","password":"password"}`, nil, true, fixedNow)
+	responseRecorder := serveAuthRouteAt(t, service, http.MethodPost, "/api/admin/v1/auth/login", `{"loginType":"password","loginAccount":"admin@example.com","password":"password"}`, nil, true, fixedNow)
 	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusOK, 0, []string{"accessToken", "expiresIn", "isNewUser", "passwordSetRequired"})
 	assertEnvelopeDataJSON(t, responseRecorder, `{"accessToken":"access","expiresIn":900,"isNewUser":true,"passwordSetRequired":false}`)
 	assertRefreshCookie(t, responseRecorder, "refresh", true, int(refreshTTL.Seconds()), fixedNow.Add(refreshTTL))
@@ -45,14 +45,14 @@ func TestLoginRejectsMissingAndMismatchedCredentialFields(t *testing.T) {
 		`{"loginType":"email","loginAccount":"admin@example.com"}`,
 	} {
 		service := &stubAuthenticationService{credential: Credential{RefreshExpiresAt: time.Now().Add(time.Hour)}}
-		responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/login", body, nil, false)
+		responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/login", body, nil, false)
 		assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusBadRequest, apperror.CodeInvalidRequest, nil)
 	}
 }
 
 func TestCodeLoginRequiresChallengeID(t *testing.T) {
 	service := &stubAuthenticationService{}
-	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/login", `{"loginType":"email","loginAccount":"admin@example.com","code":"123456"}`, nil, false)
+	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/login", `{"loginType":"email","loginAccount":"admin@example.com","code":"123456"}`, nil, false)
 	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusBadRequest, apperror.CodeInvalidRequest, nil)
 	if service.loginInput.LoginAccount != "" {
 		t.Fatalf("code login without challengeId reached service: %+v", service.loginInput)
@@ -66,7 +66,7 @@ func TestSendCodeRejectsMissingRequiredFields(t *testing.T) {
 		`{"account":"admin@example.com","loginType":"email"}`,
 	} {
 		service := &stubAuthenticationService{}
-		responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/send-code", body, nil, false)
+		responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/send-code", body, nil, false)
 		assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusBadRequest, apperror.CodeInvalidRequest, nil)
 		if service.sendCodeCalls != 0 {
 			t.Fatalf("body %s reached service", body)
@@ -76,7 +76,7 @@ func TestSendCodeRejectsMissingRequiredFields(t *testing.T) {
 
 func TestSendCodeReturnsChallengeExpiryAndResendWindow(t *testing.T) {
 	service := &stubAuthenticationService{sendCodeResult: SendCodeResult{ChallengeID: "challenge-1", ExpiresAt: time.Date(2026, time.September, 7, 10, 5, 0, 0, time.UTC), ResendAfterSeconds: 60}}
-	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/send-code", `{"account":"admin@example.com","loginType":"email","scene":"login"}`, nil, false)
+	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/send-code", `{"account":"admin@example.com","loginType":"email","scene":"login"}`, nil, false)
 	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusOK, 0, []string{"challengeId", "expiresAt", "resendAfterSeconds"})
 	assertEnvelopeDataJSON(t, responseRecorder, `{"challengeId":"challenge-1","expiresAt":"2026-09-07T10:05:00Z","resendAfterSeconds":60}`)
 }
@@ -84,7 +84,7 @@ func TestSendCodeReturnsChallengeExpiryAndResendWindow(t *testing.T) {
 func TestSendCodeRejectsOversizedChallengeID(t *testing.T) {
 	service := &stubAuthenticationService{}
 	body := `{"account":"admin@example.com","loginType":"email","scene":"login","challengeId":"` + strings.Repeat("a", 129) + `"}`
-	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/send-code", body, nil, false)
+	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/send-code", body, nil, false)
 	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusBadRequest, apperror.CodeInvalidRequest, nil)
 	if service.sendCodeCalls != 0 {
 		t.Fatal("oversized challenge id reached service")
@@ -95,7 +95,7 @@ func TestLoginConfigUsesLowerCamelCaseOptionFields(t *testing.T) {
 	service := &stubAuthenticationService{loginConfig: authplatform.LoginConfig{
 		LoginTypes: []authplatform.LoginTypeOption{{Value: authplatform.LoginTypePassword}},
 	}}
-	responseRecorder := serveAuthRoute(t, service, http.MethodGet, "/api/v1/auth/login-config", "", nil, false)
+	responseRecorder := serveAuthRoute(t, service, http.MethodGet, "/api/admin/v1/auth/login-config", "", nil, false)
 	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusOK, 0, []string{"loginTypes", "allowRegister"})
 	var envelope struct {
 		Data struct {
@@ -114,20 +114,20 @@ func TestLoginAcceptsOnlyLoginTypeAndAccount(t *testing.T) {
 	service := &stubAuthenticationService{credential: Credential{
 		AccessToken: "access", ExpiresIn: 900, RefreshToken: "refresh", RefreshExpiresAt: time.Now().Add(time.Hour),
 	}}
-	success := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/login", `{"loginType":"password","loginAccount":" Admin@Example.COM ","password":"password"}`, nil, false)
+	success := serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/login", `{"loginType":"password","loginAccount":" Admin@Example.COM ","password":"password"}`, nil, false)
 	assertEnvelopeKeysAndCode(t, success, http.StatusOK, 0, []string{"accessToken", "expiresIn", "isNewUser", "passwordSetRequired"})
 	if service.loginInput.LoginAccount != " Admin@Example.COM " || service.loginInput.LoginType != authplatform.LoginTypePassword {
 		t.Fatalf("handler changed login input before service: %+v", service.loginInput)
 	}
 
-	legacy := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"password"}`, nil, false)
+	legacy := serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/login", `{"username":"admin","password":"password"}`, nil, false)
 	assertEnvelopeKeysAndCode(t, legacy, http.StatusBadRequest, apperror.CodeInvalidRequest, nil)
 }
 
 func TestRefreshRejectsEveryNonEmptyBody(t *testing.T) {
 	for _, body := range []string{" ", "{}", `{"value":1}`} {
 		service := &stubAuthenticationService{}
-		responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/refresh", body, &http.Cookie{Name: refreshCookieName("admin"), Value: "refresh"}, false)
+		responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/refresh", body, &http.Cookie{Name: refreshCookieName("admin"), Value: "refresh"}, false)
 		if responseRecorder.Code != http.StatusBadRequest || service.refreshCalls != 0 {
 			t.Errorf("body %q status=%d calls=%d", body, responseRecorder.Code, service.refreshCalls)
 		}
@@ -137,7 +137,7 @@ func TestRefreshRejectsEveryNonEmptyBody(t *testing.T) {
 func TestRefreshRotatesCookieWithRemainingLifetime(t *testing.T) {
 	fixedNow := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
 	service := &stubAuthenticationService{credential: Credential{AccessToken: "new-access", ExpiresIn: 900, RefreshToken: "new-refresh", RefreshExpiresAt: fixedNow.Add(30 * time.Minute)}}
-	responseRecorder := serveAuthRouteAt(t, service, http.MethodPost, "/api/v1/auth/refresh", "", &http.Cookie{Name: refreshCookieName("admin"), Value: "old-refresh"}, false, fixedNow)
+	responseRecorder := serveAuthRouteAt(t, service, http.MethodPost, "/api/admin/v1/auth/refresh", "", &http.Cookie{Name: refreshCookieName("admin"), Value: "old-refresh"}, false, fixedNow)
 	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusOK, 0, []string{"accessToken", "expiresIn", "isNewUser", "passwordSetRequired"})
 	assertRefreshCookie(t, responseRecorder, "new-refresh", false, 1800, fixedNow.Add(30*time.Minute))
 	if service.refreshInput.RefreshToken != "old-refresh" {
@@ -151,10 +151,10 @@ func TestLogoutExpiresCookieEvenWhenRedisDeleteFails(t *testing.T) {
 		logoutErr:            apperror.DependencyUnavailable(errors.New("redis down")),
 	}
 	headers := map[string]string{"Authorization": "Bearer token"}
-	responseRecorder := serveAuthRouteWithHeaders(t, service, http.MethodPost, "/api/v1/auth/logout", "", &http.Cookie{Name: refreshCookieName("admin"), Value: "refresh"}, false, time.Now(), headers)
+	responseRecorder := serveAuthRouteWithHeaders(t, service, http.MethodPost, "/api/admin/v1/auth/logout", "", &http.Cookie{Name: refreshCookieName("admin"), Value: "refresh"}, false, time.Now(), headers)
 	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusServiceUnavailable, apperror.CodeDependencyUnavailable, nil)
 	cookies := responseRecorder.Result().Cookies()
-	if len(cookies) != 1 || cookies[0].Name != refreshCookieName("admin") || cookies[0].MaxAge >= 0 || cookies[0].Path != refreshCookiePath || !cookies[0].HttpOnly {
+	if len(cookies) != 1 || cookies[0].Name != refreshCookieName("admin") || cookies[0].MaxAge >= 0 || cookies[0].Path != refreshCookiePath("admin") || !cookies[0].HttpOnly {
 		t.Fatalf("expired cookie = %+v", cookies)
 	}
 }
@@ -167,7 +167,7 @@ func TestLogoutExpiresOnlySelectedPlatformCookie(t *testing.T) {
 		"Authorization":           "Bearer token",
 		authclient.PlatformHeader: "app",
 	}
-	responseRecorder := serveAuthRouteWithHeaders(t, service, http.MethodPost, "/api/v1/auth/logout", "", &http.Cookie{Name: refreshCookieName("app"), Value: "refresh"}, false, time.Now(), headers)
+	responseRecorder := serveAuthRouteWithHeaders(t, service, http.MethodPost, "/api/admin/v1/auth/logout", "", &http.Cookie{Name: refreshCookieName("app"), Value: "refresh"}, false, time.Now(), headers)
 	assertEnvelopeKeysAndCode(t, responseRecorder, http.StatusOK, 0, nil)
 	cookies := responseRecorder.Result().Cookies()
 	if len(cookies) != 1 || cookies[0].Name != refreshCookieName("app") || cookies[0].MaxAge >= 0 {
@@ -191,14 +191,14 @@ func TestMeReturnsClosedCurrentUserShape(t *testing.T) {
 				current:              user.Current{ID: 1, Username: "admin", Email: "admin@example.com", Phone: test.phone, Avatar: "avatar/profile.png"},
 			}
 			headers := map[string]string{"Authorization": "Bearer token"}
-			responseRecorder := serveAuthRouteWithHeaders(t, service, http.MethodGet, "/api/v1/auth/me", "", nil, false, time.Now(), headers)
+			responseRecorder := serveAuthRouteWithHeaders(t, service, http.MethodGet, "/api/admin/v1/auth/me", "", nil, false, time.Now(), headers)
 			assertEnvelopeDataJSON(t, responseRecorder, test.wantJSON)
 		})
 	}
 }
 
 func TestAuthHandlersRejectUnknownJSONFields(t *testing.T) {
-	for _, route := range []string{"/api/v1/auth/login", "/api/v1/auth/password/forgot"} {
+	for _, route := range []string{"/api/admin/v1/auth/login", "/api/admin/v1/auth/password/forgot"} {
 		service := &stubAuthenticationService{}
 		body := `{"email":"admin@example.com","password":"password","unknown":true}`
 		responseRecorder := serveAuthRoute(t, service, http.MethodPost, route, body, nil, false)
@@ -210,8 +210,8 @@ func TestAuthHandlersRejectUnknownJSONFields(t *testing.T) {
 
 func TestAuthHandlersPassExactClientMetadata(t *testing.T) {
 	service := &stubAuthenticationService{registered: Registered{UserID: 1}, credential: Credential{AccessToken: "access", ExpiresIn: 900, RefreshToken: "refresh", RefreshExpiresAt: time.Now().Add(time.Hour)}}
-	serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/login", `{"loginType":"password","loginAccount":"admin@example.com","password":"password"}`, nil, false)
-	serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/refresh", "", &http.Cookie{Name: refreshCookieName("admin"), Value: "refresh"}, false)
+	serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/login", `{"loginType":"password","loginAccount":"admin@example.com","password":"password"}`, nil, false)
+	serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/refresh", "", &http.Cookie{Name: refreshCookieName("admin"), Value: "refresh"}, false)
 	want := authclient.Client{Platform: "admin", DeviceID: "550e8400-e29b-41d4-a716-446655440000", ClientIP: "192.0.2.1", UserAgent: ""}
 	for name, got := range map[string]authclient.Client{
 		"login":   service.loginInput.Client,
@@ -225,7 +225,7 @@ func TestAuthHandlersPassExactClientMetadata(t *testing.T) {
 
 func TestForgotPasswordRejectsMissingRequiredFields(t *testing.T) {
 	service := &stubAuthenticationService{}
-	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/password/forgot", `{}`, nil, false)
+	responseRecorder := serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/password/forgot", `{}`, nil, false)
 	if responseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -237,7 +237,7 @@ func TestForgotPasswordRejectsMissingRequiredFields(t *testing.T) {
 func TestForgotPasswordReturnsChallengeExpiryAndResendWindow(t *testing.T) {
 	fixedNow := time.Date(2026, time.September, 8, 9, 0, 0, 0, time.UTC)
 	service := &stubAuthenticationService{sendCodeResult: SendCodeResult{ChallengeID: "challenge-1", ExpiresAt: fixedNow.Add(5 * time.Minute), ResendAfterSeconds: 60}}
-	responseRecorder := serveAuthRouteAt(t, service, http.MethodPost, "/api/v1/auth/password/forgot", `{"account":"user@example.com","loginType":"email"}`, nil, false, fixedNow)
+	responseRecorder := serveAuthRouteAt(t, service, http.MethodPost, "/api/admin/v1/auth/password/forgot", `{"account":"user@example.com","loginType":"email"}`, nil, false, fixedNow)
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -253,11 +253,11 @@ func TestForgotAndResetPasswordUseStrictIdentityDTOs(t *testing.T) {
 		path string
 		body string
 	}{
-		{path: "/api/v1/auth/password/forgot", body: `{"email":"user@example.com"}`},
-		{path: "/api/v1/auth/password/forgot", body: `{"account":"user@example.com","loginType":"password"}`},
-		{path: "/api/v1/auth/password/reset", body: `{"account":"user@example.com","loginType":"email","challengeId":"","code":"123456","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`},
-		{path: "/api/v1/auth/password/reset", body: `{"account":"user@example.com","loginType":"email","challengeId":"challenge-1","code":"12345","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`},
-		{path: "/api/v1/auth/password/reset", body: `{"account":"user@example.com","loginType":"email","challengeId":"challenge-1","code":"１２３４５６","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`},
+		{path: "/api/admin/v1/auth/password/forgot", body: `{"email":"user@example.com"}`},
+		{path: "/api/admin/v1/auth/password/forgot", body: `{"account":"user@example.com","loginType":"password"}`},
+		{path: "/api/admin/v1/auth/password/reset", body: `{"account":"user@example.com","loginType":"email","challengeId":"","code":"123456","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`},
+		{path: "/api/admin/v1/auth/password/reset", body: `{"account":"user@example.com","loginType":"email","challengeId":"challenge-1","code":"12345","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`},
+		{path: "/api/admin/v1/auth/password/reset", body: `{"account":"user@example.com","loginType":"email","challengeId":"challenge-1","code":"１２３４５６","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`},
 	} {
 		recorder := serveAuthRoute(t, service, http.MethodPost, test.path, test.body, nil, false)
 		if recorder.Code != http.StatusBadRequest {
@@ -274,7 +274,7 @@ func TestForgotAndResetPasswordUseStrictIdentityDTOs(t *testing.T) {
 			account = "15671628271"
 		}
 		forgotBody := fmt.Sprintf(`{"account":%q,"loginType":%q}`, account, loginType)
-		if recorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/password/forgot", forgotBody, nil, false); recorder.Code != http.StatusOK {
+		if recorder := serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/password/forgot", forgotBody, nil, false); recorder.Code != http.StatusOK {
 			t.Fatalf("forgot %s status=%d body=%s", loginType, recorder.Code, recorder.Body)
 		}
 		if service.forgotInput.Account != account || string(service.forgotInput.LoginType) != loginType {
@@ -282,7 +282,7 @@ func TestForgotAndResetPasswordUseStrictIdentityDTOs(t *testing.T) {
 		}
 
 		resetBody := fmt.Sprintf(`{"account":%q,"loginType":%q,"challengeId":"challenge-1","code":"123456","newPassword":"NewPassw0rd!","confirmPassword":"NewPassw0rd!"}`, account, loginType)
-		if recorder := serveAuthRoute(t, service, http.MethodPost, "/api/v1/auth/password/reset", resetBody, nil, false); recorder.Code != http.StatusOK {
+		if recorder := serveAuthRoute(t, service, http.MethodPost, "/api/admin/v1/auth/password/reset", resetBody, nil, false); recorder.Code != http.StatusOK {
 			t.Fatalf("reset %s status=%d body=%s", loginType, recorder.Code, recorder.Body)
 		}
 		if service.resetInput.Account != account || string(service.resetInput.LoginType) != loginType || service.resetInput.ChallengeID != "challenge-1" {
@@ -294,8 +294,8 @@ func TestForgotAndResetPasswordUseStrictIdentityDTOs(t *testing.T) {
 func TestPlatformRefreshCookiesDoNotOverwriteEachOther(t *testing.T) {
 	fixedNow := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
 	service := &stubAuthenticationService{credential: Credential{AccessToken: "access", ExpiresIn: 900, RefreshToken: "refresh", RefreshExpiresAt: fixedNow.Add(time.Hour)}}
-	admin := serveAuthRouteAt(t, service, http.MethodPost, "/api/v1/auth/login", `{"loginType":"password","loginAccount":"admin@example.com","password":"password"}`, nil, false, fixedNow)
-	if got := admin.Result().Cookies()[0].Name; got != "admin_refresh_admin" {
+	admin := serveAuthRouteAt(t, service, http.MethodPost, "/api/admin/v1/auth/login", `{"loginType":"password","loginAccount":"admin@example.com","password":"password"}`, nil, false, fixedNow)
+	if got := admin.Result().Cookies()[0].Name; got != "auth_refresh_admin" {
 		t.Fatalf("admin cookie = %q", got)
 	}
 
@@ -303,15 +303,15 @@ func TestPlatformRefreshCookiesDoNotOverwriteEachOther(t *testing.T) {
 	handler := NewHandler(service, false)
 	handler.now = func() time.Time { return fixedNow }
 	router := gin.New()
-	apiRoutes := router.Group("/api/v1", authclient.Require())
-	RegisterRoutes(apiRoutes, handler, RequireOrigin("http://localhost:16300"), Authenticate(service))
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"loginType":"password","loginAccount":"admin@example.com","password":"password"}`))
+	apiRoutes := router.Group("/api/admin/v1", authclient.Require())
+	RegisterAdminRoutes(apiRoutes, handler, RequireOrigin("http://localhost:16300"), Authenticate(service))
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/auth/login", strings.NewReader(`{"loginType":"password","loginAccount":"admin@example.com","password":"password"}`))
 	request.Header.Set("Origin", "http://localhost:16300")
 	request.Header[authclient.PlatformHeader] = []string{"app"}
 	request.Header[authclient.DeviceIDHeader] = []string{"550e8400-e29b-41d4-a716-446655440000"}
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
-	if got := recorder.Result().Cookies()[0].Name; got != "admin_refresh_app" {
+	if got := recorder.Result().Cookies()[0].Name; got != "auth_refresh_app" {
 		t.Fatalf("app cookie = %q", got)
 	}
 }
@@ -409,8 +409,8 @@ func serveAuthRouteWithHeaders(t *testing.T, service *stubAuthenticationService,
 	handler := NewHandler(service, secure)
 	handler.now = func() time.Time { return now }
 	router := gin.New()
-	apiRoutes := router.Group("/api/v1", authclient.Require())
-	RegisterRoutes(apiRoutes, handler, RequireOrigin("http://localhost:16300"), Authenticate(service))
+	apiRoutes := router.Group("/api/admin/v1", authclient.Require())
+	RegisterAdminRoutes(apiRoutes, handler, RequireOrigin("http://localhost:16300"), Authenticate(service))
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
 	request.Header.Set("Origin", "http://localhost:16300")
 	request.Header.Set("Content-Type", "application/json")
@@ -487,7 +487,7 @@ func assertRefreshCookie(t *testing.T, responseRecorder *httptest.ResponseRecord
 		t.Fatalf("cookies = %+v", cookies)
 	}
 	cookie := cookies[0]
-	if cookie.Name != refreshCookieName("admin") || cookie.Value != value || cookie.Path != refreshCookiePath || cookie.Domain != "" || !cookie.HttpOnly || cookie.SameSite != http.SameSiteLaxMode || cookie.Secure != secure || cookie.MaxAge != maxAge || !cookie.Expires.Equal(expires) {
+	if cookie.Name != refreshCookieName("admin") || cookie.Value != value || cookie.Path != refreshCookiePath("admin") || cookie.Domain != "" || !cookie.HttpOnly || cookie.SameSite != http.SameSiteLaxMode || cookie.Secure != secure || cookie.MaxAge != maxAge || !cookie.Expires.Equal(expires) {
 		t.Fatalf("refresh cookie = %+v", cookie)
 	}
 }

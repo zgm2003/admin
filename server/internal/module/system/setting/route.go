@@ -2,15 +2,15 @@ package setting
 
 import "github.com/gin-gonic/gin"
 
-func RegisterPublicRoutes(routes *gin.RouterGroup, handler *Handler) {
+func RegisterCanvasRoutes(routes *gin.RouterGroup, handler *Handler) {
 	routes.GET("/system/setting/legal/:document", handler.LegalDocument)
 }
 
-func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
+func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
 	routes.GET("/system/setting/options", authenticate, handler.FormOptions)
 	routes.GET("/system/setting", authenticate, requirePermission(PermissionList), handler.List)
 	routes.GET("/system/setting/brand", authenticate, handler.Brand)
-	routes.GET("/system/setting/legal/:document", authenticate, handler.LegalDocument)
+	routes.GET("/system/setting/legal/:document", handler.LegalDocument)
 	routes.PUT("/system/setting/legal/:document", authenticate, requirePermission(PermissionUpdate), handler.UpdateLegalDocument)
 	routes.GET("/system/setting/:key", authenticate, requirePermission(PermissionDetail), handler.Detail)
 	routes.POST("/system/setting", authenticate, requirePermission(PermissionCreate), handler.Create)

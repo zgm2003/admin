@@ -45,7 +45,7 @@ it('does not reshape secret-code requests or responses', async () => {
 
 it('uses the personal wallet redemption endpoint', async () => {
   await api.redeemWalletCode('ABCD2345EFGHJKLMNPQR')
-  expect(request.post).toHaveBeenCalledWith('/api/v1/payment/wallet/redemption', {
+  expect(request.post).toHaveBeenCalledWith('/api/admin/v1/payment/wallet/redemption', {
     code: 'ABCD2345EFGHJKLMNPQR',
   })
 })

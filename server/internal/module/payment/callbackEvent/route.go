@@ -7,7 +7,7 @@ const (
 	PermissionDetail = "payment:callbackEvent:detail"
 )
 
-func RegisterProviderRoutes(routes *gin.RouterGroup, handler *Handler) {
+func RegisterAdminProviderRoutes(routes *gin.RouterGroup, handler *Handler) {
 	routes.POST("/payment/callback/alipay/:configId/:version", handler.Provider)
 }
 

@@ -61,7 +61,7 @@ export interface CaptchaAnswer {
 }
 
 export async function getCaptcha(): Promise<CaptchaChallenge> {
-  return request.get<CaptchaChallenge>('/api/v1/auth/captcha')
+  return request.get<CaptchaChallenge>('/api/admin/v1/auth/captcha')
 }
 
 export interface CurrentUser {
@@ -74,11 +74,11 @@ export interface CurrentUser {
 }
 
 export async function login(input: LoginInput): Promise<AccessCredential> {
-  return request.post<AccessCredential>('/api/v1/auth/login', input)
+  return request.post<AccessCredential>('/api/admin/v1/auth/login', input)
 }
 
 export async function getLoginConfig(): Promise<LoginConfig> {
-  return request.get<LoginConfig>('/api/v1/auth/login-config')
+  return request.get<LoginConfig>('/api/admin/v1/auth/login-config')
 }
 
 export async function sendLoginCode(
@@ -88,7 +88,7 @@ export async function sendLoginCode(
   challengeId?: string,
   captcha?: { captchaId: string; captchaAnswer: CaptchaAnswer },
 ): Promise<SendCodeResult> {
-  return request.post<SendCodeResult>('/api/v1/auth/send-code', {
+  return request.post<SendCodeResult>('/api/admin/v1/auth/send-code', {
     account,
     loginType,
     scene,
@@ -112,7 +112,7 @@ export async function forgotPassword(
   loginType: 'email' | 'phone',
   captcha?: { captchaId: string; captchaAnswer: CaptchaAnswer },
 ): Promise<SendCodeResult> {
-  return request.post<SendCodeResult>('/api/v1/auth/password/forgot', {
+  return request.post<SendCodeResult>('/api/admin/v1/auth/password/forgot', {
     account,
     loginType,
     captchaId: captcha?.captchaId,
@@ -121,7 +121,7 @@ export async function forgotPassword(
 }
 
 export async function resetPassword(input: ResetPasswordInput): Promise<void> {
-  return request.post<void>('/api/v1/auth/password/reset', input)
+  return request.post<void>('/api/admin/v1/auth/password/reset', input)
 }
 
 export async function refresh(): Promise<AccessCredential> {
@@ -129,9 +129,9 @@ export async function refresh(): Promise<AccessCredential> {
 }
 
 export async function logout(): Promise<void> {
-  return request.post<void>('/api/v1/auth/logout', undefined)
+  return request.post<void>('/api/admin/v1/auth/logout', undefined)
 }
 
 export async function getCurrentUser(): Promise<CurrentUser> {
-  return request.get<CurrentUser>('/api/v1/auth/me')
+  return request.get<CurrentUser>('/api/admin/v1/auth/me')
 }

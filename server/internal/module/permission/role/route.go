@@ -2,7 +2,7 @@ package role
 
 import "github.com/gin-gonic/gin"
 
-func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
+func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
 	routes.GET("/permission/role/options", authenticate, handler.FormOptions)
 	routes.GET("/permission/role", authenticate, requirePermission(PermissionList), handler.List)
 	routes.POST("/permission/role", authenticate, requirePermission(PermissionCreate), handler.Create)

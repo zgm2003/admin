@@ -25,7 +25,7 @@ func TestBrandDisplayRouteRequiresAuthenticationWithoutSettingPermission(t *test
 	}
 
 	router := gin.New()
-	RegisterRoutes(router.Group(""), NewHandler(detailHandlerService{brand: BrandSettings{
+	RegisterAdminRoutes(router.Group(""), NewHandler(detailHandlerService{brand: BrandSettings{
 		TitleZhCN: "智澜", TitleEnUS: "ZHILAN",
 	}}), authenticate, requirePermission)
 	recorder := httptest.NewRecorder()
@@ -61,11 +61,11 @@ func TestLegalDocumentRoutesSeparatePublicReadFromProtectedUpdate(t *testing.T) 
 	}}
 	router := gin.New()
 	handler := NewHandler(service)
-	RegisterPublicRoutes(router.Group("/api/v1"), handler)
-	RegisterRoutes(router.Group("/api/admin/v1"), handler, authenticate, requirePermission)
+	RegisterCanvasRoutes(router.Group("/api/canvas/v1"), handler)
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), handler, authenticate, requirePermission)
 
 	publicRecorder := httptest.NewRecorder()
-	router.ServeHTTP(publicRecorder, httptest.NewRequest(http.MethodGet, "/api/v1/system/setting/legal/privacyPolicy", nil))
+	router.ServeHTTP(publicRecorder, httptest.NewRequest(http.MethodGet, "/api/canvas/v1/system/setting/legal/privacyPolicy", nil))
 	if publicRecorder.Code != http.StatusOK {
 		t.Fatalf("public status=%d body=%s", publicRecorder.Code, publicRecorder.Body.String())
 	}

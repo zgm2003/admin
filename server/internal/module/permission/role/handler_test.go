@@ -138,7 +138,7 @@ func TestRoleRoutesBindExactPermissions(t *testing.T) {
 	router := gin.New()
 	permissions := make([]string, 0)
 	pass := func(context *gin.Context) { context.Next() }
-	role.RegisterRoutes(router.Group("/api/admin/v1"), role.NewHandler(&roleHTTPService{}), pass, func(code string) gin.HandlerFunc {
+	role.RegisterAdminRoutes(router.Group("/api/admin/v1"), role.NewHandler(&roleHTTPService{}), pass, func(code string) gin.HandlerFunc {
 		permissions = append(permissions, code)
 		return pass
 	})
@@ -213,7 +213,7 @@ func serveRoleRequest(t *testing.T, service *roleHTTPService, method, path strin
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	pass := func(context *gin.Context) { context.Next() }
-	role.RegisterRoutes(router.Group("/api/admin/v1"), role.NewHandler(service), pass, func(string) gin.HandlerFunc { return pass })
+	role.RegisterAdminRoutes(router.Group("/api/admin/v1"), role.NewHandler(service), pass, func(string) gin.HandlerFunc { return pass })
 	request := httptest.NewRequest(method, path, bytes.NewReader(body))
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")

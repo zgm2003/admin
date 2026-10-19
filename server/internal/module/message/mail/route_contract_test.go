@@ -19,12 +19,12 @@ func TestResourceModulesRegisterTheCompleteMailSurfaceOnce(t *testing.T) {
 	pass := func(ctx *gin.Context) { ctx.Next() }
 	requirePermission := func(string) gin.HandlerFunc { return pass }
 
-	mail.RegisterRoutes(group, mail.NewHandler(nil), pass, requirePermission)
-	mailconfig.RegisterRoutes(group, mailconfig.NewHandler(nil), pass, requirePermission)
-	mailtemplate.RegisterRoutes(group, mailtemplate.NewHandler(nil), pass, requirePermission)
-	maillog.RegisterRoutes(group, maillog.NewHandler(nil), pass, requirePermission)
-	ratelimitpolicy.RegisterRoutes(group, ratelimitpolicy.NewHandler(nil), pass, requirePermission)
-	recipientrule.RegisterRoutes(group, recipientrule.NewHandler(nil), pass, requirePermission)
+	mail.RegisterAdminRoutes(group, mail.NewHandler(nil), pass, requirePermission)
+	mailconfig.RegisterAdminRoutes(group, mailconfig.NewHandler(nil), pass, requirePermission)
+	mailtemplate.RegisterAdminRoutes(group, mailtemplate.NewHandler(nil), pass, requirePermission)
+	maillog.RegisterAdminRoutes(group, maillog.NewHandler(nil), pass, requirePermission)
+	ratelimitpolicy.RegisterAdminRoutes(group, ratelimitpolicy.NewHandler(nil), pass, requirePermission)
+	recipientrule.RegisterAdminRoutes(group, recipientrule.NewHandler(nil), pass, requirePermission)
 
 	want := map[string]int{
 		"GET /api/admin/v1/message/mail/page-init":                          1,

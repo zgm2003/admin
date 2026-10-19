@@ -231,7 +231,7 @@ func TestMenuRoutesBindExactPermissionsInMiddlewareOrder(t *testing.T) {
 			context.Next()
 		}
 	}
-	menu.RegisterRoutes(router.Group("/api/admin/v1"), menu.NewHandler(service), authenticate, requirePermission)
+	menu.RegisterAdminRoutes(router.Group("/api/admin/v1"), menu.NewHandler(service), authenticate, requirePermission)
 	wantPermissions := []string{menu.PermissionList, menu.PermissionCreate, menu.PermissionUpdate, menu.PermissionDelete}
 	if !reflect.DeepEqual(registeredPermissions, []string{menu.PermissionList, menu.PermissionCreate, menu.PermissionUpdate, menu.PermissionUpdate, menu.PermissionDelete, menu.PermissionRebuildAccessCache}) {
 		t.Fatalf("registered permissions = %v", registeredPermissions)
@@ -293,7 +293,7 @@ func TestMenuRoutesStopBeforeHandlerOnAuthenticationOrPermissionFailure(t *testi
 			service := &menuHTTPService{listResult: menu.Catalog{Platforms: []menu.PlatformOption{}, MenuTree: []menu.ManagedMenu{}}}
 			gin.SetMode(gin.TestMode)
 			router := gin.New()
-			menu.RegisterRoutes(router.Group("/api/admin/v1"), menu.NewHandler(service), test.auth, func(string) gin.HandlerFunc { return test.permission })
+			menu.RegisterAdminRoutes(router.Group("/api/admin/v1"), menu.NewHandler(service), test.auth, func(string) gin.HandlerFunc { return test.permission })
 			recorder := httptest.NewRecorder()
 			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/permission/menu", nil))
 			assertMenuEnvelope(t, recorder, test.wantStatus, test.wantCode)
@@ -366,7 +366,7 @@ func serveMenuRequest(t *testing.T, service *menuHTTPService, method, path strin
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	pass := func(context *gin.Context) { context.Next() }
-	menu.RegisterRoutes(router.Group("/api/admin/v1"), menu.NewHandler(service), pass, func(string) gin.HandlerFunc { return pass })
+	menu.RegisterAdminRoutes(router.Group("/api/admin/v1"), menu.NewHandler(service), pass, func(string) gin.HandlerFunc { return pass })
 	request := httptest.NewRequest(method, path, bytes.NewReader(body))
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")

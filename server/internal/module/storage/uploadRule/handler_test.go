@@ -50,14 +50,26 @@ func (*ruleHTTPService) Delete(context.Context, int64) error                    
 
 func TestRoutesUseExactUploadRulePermissions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	permissions := []string{}
-	pass := func(c *gin.Context) { c.Next() }
-	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(&ruleHTTPService{}), pass, func(code string) gin.HandlerFunc { permissions = append(permissions, code); return pass })
-	RegisterCredentialRoute(router.Group("/api/v1"), NewHandler(&ruleHTTPService{}), pass, func(code string) gin.HandlerFunc { permissions = append(permissions, code); return pass })
-	want := []string{PermissionList, PermissionList, PermissionCreate, PermissionDetail, PermissionUpdate, PermissionStatus, PermissionStatus, PermissionDelete, "storage:object:upload"}
-	if !reflect.DeepEqual(permissions, want) {
-		t.Fatalf("permissions=%v want=%v", permissions, want)
+	for _, platform := range []struct {
+		name     string
+		register func(*gin.RouterGroup, *Handler, gin.HandlerFunc, func(string) gin.HandlerFunc)
+		want     []string
+	}{
+		{"admin", RegisterAdminRoutes, []string{PermissionList, PermissionList, PermissionCreate, PermissionDetail, PermissionUpdate, PermissionStatus, PermissionStatus, PermissionDelete, "storage:object:upload"}},
+		{"canvas", RegisterCanvasRoutes, []string{"storage:object:upload"}},
+	} {
+		t.Run(platform.name, func(t *testing.T) {
+			router := gin.New()
+			permissions := []string{}
+			pass := func(c *gin.Context) { c.Next() }
+			platform.register(router.Group("/api/"+platform.name+"/v1"), NewHandler(&ruleHTTPService{}), pass, func(code string) gin.HandlerFunc {
+				permissions = append(permissions, code)
+				return pass
+			})
+			if !reflect.DeepEqual(permissions, platform.want) {
+				t.Fatalf("permissions=%v want=%v", permissions, platform.want)
+			}
+		})
 	}
 }
 
@@ -72,13 +84,13 @@ func TestObjectURLRouteRequiresAuthenticationWithoutUploadPermission(t *testing.
 		c.Next()
 	}
 	permissions := []string{}
-	RegisterCredentialRoute(router.Group("/api/v1"), NewHandler(service), authenticated, func(code string) gin.HandlerFunc {
+	RegisterCanvasRoutes(router.Group("/api/canvas/v1"), NewHandler(service), authenticated, func(code string) gin.HandlerFunc {
 		permissions = append(permissions, code)
 		return func(c *gin.Context) { c.Next() }
 	})
 
 	body := `{"objectKey":"avatar/.admin-storage/v2/p7/r2/c3/v1/2026/09/17/6e7e53334a6da066b130a89cc3f69535.png"}`
-	recorder := ruleJSON(router, http.MethodPost, "/api/v1/storage/object-url", body)
+	recorder := ruleJSON(router, http.MethodPost, "/api/canvas/v1/storage/object-url", body)
 	if recorder.Code != http.StatusOK || authCalls != 1 || service.objectKey == "" {
 		t.Fatalf("status=%d authCalls=%d key=%q body=%s", recorder.Code, authCalls, service.objectKey, recorder.Body.String())
 	}
@@ -94,7 +106,7 @@ func TestObjectURLRouteRequiresAuthenticationWithoutUploadPermission(t *testing.
 		`{"ruleCode":"avatar","objectKey":"avatar/.admin-storage/v2/p7/r2/c3/v1/2026/09/17/6e7e53334a6da066b130a89cc3f69535.png"}`,
 		body + `{}`,
 	} {
-		response := ruleJSON(router, http.MethodPost, "/api/v1/storage/object-url", invalidBody)
+		response := ruleJSON(router, http.MethodPost, "/api/canvas/v1/storage/object-url", invalidBody)
 		if response.Code != http.StatusBadRequest {
 			t.Fatalf("invalid body=%s status=%d response=%s", invalidBody, response.Code, response.Body.String())
 		}
@@ -105,8 +117,8 @@ func TestObjectURLHandlerRejectsMissingIdentity(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	pass := func(c *gin.Context) { c.Next() }
-	RegisterCredentialRoute(router.Group("/api/v1"), NewHandler(&ruleHTTPService{}), pass, func(string) gin.HandlerFunc { return pass })
-	recorder := ruleJSON(router, http.MethodPost, "/api/v1/storage/object-url", `{"objectKey":"avatar/.admin-storage/v2/p1/r2/c3/v1/2026/09/17/6e7e53334a6da066b130a89cc3f69535.png"}`)
+	RegisterCanvasRoutes(router.Group("/api/canvas/v1"), NewHandler(&ruleHTTPService{}), pass, func(string) gin.HandlerFunc { return pass })
+	recorder := ruleJSON(router, http.MethodPost, "/api/canvas/v1/storage/object-url", `{"objectKey":"avatar/.admin-storage/v2/p1/r2/c3/v1/2026/09/17/6e7e53334a6da066b130a89cc3f69535.png"}`)
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
@@ -167,7 +179,7 @@ func ruleRouter() (*ruleHTTPService, *gin.Engine) {
 	s := &ruleHTTPService{}
 	r := gin.New()
 	pass := func(c *gin.Context) { c.Next() }
-	RegisterRoutes(r.Group("/api/admin/v1"), NewHandler(s), pass, func(string) gin.HandlerFunc { return pass })
+	RegisterAdminRoutes(r.Group("/api/admin/v1"), NewHandler(s), pass, func(string) gin.HandlerFunc { return pass })
 	return s, r
 }
 func ruleJSON(r *gin.Engine, m, p, b string) *httptest.ResponseRecorder {

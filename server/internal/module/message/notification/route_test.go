@@ -11,7 +11,7 @@ func TestRoutesBindExactNotificationPermissionsAndStaticReadAll(t *testing.T) {
 	middleware := func(string) gin.HandlerFunc { return func(c *gin.Context) { c.Next() } }
 	require := func(code string) gin.HandlerFunc { codes = append(codes, code); return middleware(code) }
 	router := gin.New()
-	RegisterRoutes(router.Group("/api/v1"), NewHandler(mailboxServiceStub{}), middleware("auth"), require)
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(mailboxServiceStub{}), middleware("auth"), require)
 	want := []string{PermissionList, PermissionList, PermissionList, PermissionRead, PermissionRead, PermissionDelete}
 	if len(codes) != len(want) {
 		t.Fatalf("codes=%v", codes)
@@ -23,7 +23,7 @@ func TestRoutesBindExactNotificationPermissionsAndStaticReadAll(t *testing.T) {
 	}
 	var readAll bool
 	for _, route := range router.Routes() {
-		if route.Path == "/api/v1/message/notification/read-all" && route.Method == "PATCH" {
+		if route.Path == "/api/admin/v1/message/notification/read-all" && route.Method == "PATCH" {
 			readAll = true
 		}
 	}

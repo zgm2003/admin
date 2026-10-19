@@ -19,8 +19,8 @@ describe('canvas request client', () => {
       fetchImpl: fetchMock,
     })
 
-    await client.get('/api/v1/auth/policy')
-    expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:3000/api/v1/auth/policy')
+    await client.get('/api/canvas/v1/auth/policy')
+    expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:3000/api/canvas/v1/auth/policy')
   })
 
   it('sends canvas identity headers and unwraps the exact API envelope', async () => {
@@ -34,7 +34,7 @@ describe('canvas request client', () => {
       fetchImpl: fetchMock,
     })
 
-    await expect(client.get<{ code: string }>('/api/v1/auth/policy')).resolves.toEqual({ code: 'canvas' })
+    await expect(client.get<{ code: string }>('/api/canvas/v1/auth/policy')).resolves.toEqual({ code: 'canvas' })
     const [, init] = fetchMock.mock.calls[0]
     expect(new Headers(init?.headers).get('X-Auth-Platform')).toBe('canvas')
     expect(new Headers(init?.headers).get('X-Device-ID')).toBe('550e8400-e29b-41d4-a716-446655440000')
@@ -52,7 +52,7 @@ describe('canvas request client', () => {
       fetchImpl: fetchMock,
     })
 
-    await expect(client.get('/api/v1/auth/me')).rejects.toBeInstanceOf(ProtocolError)
+    await expect(client.get('/api/canvas/v1/auth/me')).rejects.toBeInstanceOf(ProtocolError)
   })
 
   it('keeps login business errors available to the login page', async () => {
@@ -66,7 +66,7 @@ describe('canvas request client', () => {
       fetchImpl: fetchMock,
     })
 
-    await expect(client.post('/api/v1/auth/login', { loginType: 'password' })).rejects.toMatchObject({
+    await expect(client.post('/api/canvas/v1/auth/login', { loginType: 'password' })).rejects.toMatchObject({
       code: 10002,
       httpStatus: 401,
       message: '凭据错误',
@@ -85,17 +85,17 @@ describe('canvas request client', () => {
       initialAccessToken: 'active-token',
     })
 
-    await expect(client.post('/api/v1/auth/logout')).rejects.toMatchObject({ code: 10002 })
+    await expect(client.post('/api/canvas/v1/auth/logout')).rejects.toMatchObject({ code: 10002 })
     const [, init] = fetchMock.mock.calls[0]
     expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer active-token')
-    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/api/v1/auth/refresh'))).toBe(false)
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/api/canvas/v1/auth/refresh'))).toBe(false)
   })
 
   it('shares one refresh request across concurrent 401 responses and retries both calls', async () => {
     let protectedCalls = 0
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = String(input)
-      if (url.endsWith('/api/v1/auth/refresh')) {
+      if (url.endsWith('/api/canvas/v1/auth/refresh')) {
         return response({
           code: 0,
           data: { accessToken: 'fresh-token', expiresIn: 300, isNewUser: false, passwordSetRequired: false },
@@ -114,16 +114,16 @@ describe('canvas request client', () => {
       initialAccessToken: 'stale-token',
     })
 
-    await expect(Promise.all([client.get('/api/v1/protected/a'), client.get('/api/v1/protected/b')])).resolves.toEqual([
+    await expect(Promise.all([client.get('/api/canvas/v1/protected/a'), client.get('/api/canvas/v1/protected/b')])).resolves.toEqual([
       { ok: true },
       { ok: true },
     ])
-    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/api/v1/auth/refresh'))).toHaveLength(1)
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/api/canvas/v1/auth/refresh'))).toHaveLength(1)
   })
 
   it('clears access and calls onUnauthorized when refresh fails', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
-      if (String(input).endsWith('/api/v1/auth/refresh')) {
+      if (String(input).endsWith('/api/canvas/v1/auth/refresh')) {
         return response({ code: 10002, data: null, message: '会话已失效' }, 401)
       }
       return response({ code: 10002, data: null, message: 'expired' }, 401)
@@ -138,7 +138,7 @@ describe('canvas request client', () => {
       onUnauthorized,
     })
 
-    await expect(client.get('/api/v1/protected')).rejects.toMatchObject({ code: 10002 })
+    await expect(client.get('/api/canvas/v1/protected')).rejects.toMatchObject({ code: 10002 })
     expect(client.getAccessToken()).toBe('')
     expect(onUnauthorized).toHaveBeenCalledOnce()
   })

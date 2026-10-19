@@ -77,9 +77,9 @@ func TestPolicyReturnsOnlyThePublicContract(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	service := &platformHTTPService{}
 	router := gin.New()
-	routes := router.Group("/api/v1", authclient.Require())
-	authplatform.RegisterPublicRoutes(routes, authplatform.NewHandler(service))
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/auth/policy", nil)
+	routes := router.Group("/api/canvas/v1", authclient.Require())
+	authplatform.RegisterCanvasRoutes(routes, authplatform.NewHandler(service))
+	request := httptest.NewRequest(http.MethodGet, "/api/canvas/v1/auth/policy", nil)
 	request.Header[authclient.PlatformHeader] = []string{"admin"}
 	request.Header[authclient.DeviceIDHeader] = []string{"550e8400-e29b-41d4-a716-446655440000"}
 	recorder := httptest.NewRecorder()
@@ -96,10 +96,10 @@ func TestPolicyRejectsInvalidClientBeforeService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	service := &platformHTTPService{}
 	router := gin.New()
-	routes := router.Group("/api/v1", authclient.Require())
-	authplatform.RegisterPublicRoutes(routes, authplatform.NewHandler(service))
+	routes := router.Group("/api/canvas/v1", authclient.Require())
+	authplatform.RegisterCanvasRoutes(routes, authplatform.NewHandler(service))
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/auth/policy", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/canvas/v1/auth/policy", nil))
 	if recorder.Code != http.StatusBadRequest || service.policyCalls != 0 {
 		t.Fatalf("status=%d calls=%d body=%s", recorder.Code, service.policyCalls, recorder.Body)
 	}
@@ -204,7 +204,7 @@ func TestManagementRoutesUseAuthenticationPlatformPermissions(t *testing.T) {
 	router := gin.New()
 	permissions := make([]string, 0)
 	pass := func(context *gin.Context) { context.Next() }
-	authplatform.RegisterManagementRoutes(router.Group("/api/admin/v1"), authplatform.NewHandler(&platformHTTPService{}), pass, func(code string) gin.HandlerFunc {
+	authplatform.RegisterAdminRoutes(router.Group("/api/admin/v1"), authplatform.NewHandler(&platformHTTPService{}), pass, func(code string) gin.HandlerFunc {
 		permissions = append(permissions, code)
 		return pass
 	})
@@ -227,7 +227,7 @@ func managementRouter(t *testing.T) (*platformHTTPService, *gin.Engine) {
 	service := &platformHTTPService{}
 	router := gin.New()
 	routes := router.Group("/api/admin/v1")
-	authplatform.RegisterManagementRoutes(routes, authplatform.NewHandler(service), func(context *gin.Context) { context.Next() }, func(string) gin.HandlerFunc {
+	authplatform.RegisterAdminRoutes(routes, authplatform.NewHandler(service), func(context *gin.Context) { context.Next() }, func(string) gin.HandlerFunc {
 		return func(context *gin.Context) { context.Next() }
 	})
 	return service, router

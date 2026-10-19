@@ -59,6 +59,27 @@ type realtimeSessionValidatorStub struct {
 	calls int
 }
 
+func TestAdminWebSocketRejectsCanvasTicket(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	redisClient, _ := openRealtimeTicketRedis(t)
+	now := time.Now().UTC()
+	service := NewService(NewTicketStore(redisClient), &realtimeSessionValidatorStub{}, nil, 1)
+	raw, _, err := service.IssueTicket(context.Background(), auth.Identity{UserID: 10, SessionID: 20, PlatformID: 2, Platform: "canvas", Version: 3, AccessExpiresAt: now.Add(time.Minute)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := gin.New()
+	handler := NewHandler(service, NewConnectionSet(10, 3), "http://localhost:16300")
+	router.GET("/api/admin/v1/realtime/ws", handler.AdminWebSocket)
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/realtime/ws?ticket="+raw, nil)
+	request.Header.Set("Origin", "http://localhost:16300")
+	out := httptest.NewRecorder()
+	router.ServeHTTP(out, request)
+	if out.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", out.Code, out.Body)
+	}
+}
+
 func (s *realtimeSessionValidatorStub) ValidateRealtimeSession(context.Context, string, int64, int64, int64) error {
 	s.calls++
 	return s.err
@@ -78,10 +99,10 @@ func TestRouteIssuesTicketAndWebSocketHandlesPingAndReuse(t *testing.T) {
 	server := httptest.NewServer(router)
 	defer server.Close()
 	handler := NewHandler(service, connections, allowedOrigin)
-	shared := router.Group("/api/v1", authclient.Require())
-	RegisterRoutes(shared, router, handler, auth.RequireOrigin(allowedOrigin), auth.Authenticate(realtimeAuthStub{identity: identity}))
+	shared := router.Group("/api/admin/v1", authclient.Require())
+	RegisterAdminRoutes(shared, router, handler, auth.RequireOrigin(allowedOrigin), auth.Authenticate(realtimeAuthStub{identity: identity}))
 
-	request, _ := http.NewRequest(http.MethodPost, server.URL+"/api/v1/realtime/ticket", nil)
+	request, _ := http.NewRequest(http.MethodPost, server.URL+"/api/admin/v1/realtime/ticket", nil)
 	request.Header.Set("Origin", allowedOrigin)
 	request.Header.Set("Authorization", "Bearer token")
 	request.Header.Set(authclient.PlatformHeader, "admin")
@@ -106,7 +127,7 @@ func TestRouteIssuesTicketAndWebSocketHandlesPingAndReuse(t *testing.T) {
 	if envelope.Data.ExpiresAt.IsZero() {
 		t.Fatal("ticket expiresAt is required")
 	}
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/v1/realtime/ws?ticket=" + envelope.Data.Ticket
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/admin/v1/realtime/ws?ticket=" + envelope.Data.Ticket
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": []string{allowedOrigin}}})
@@ -156,8 +177,8 @@ func TestWebSocketRejectsWrongOriginBeforeConsumingTicket(t *testing.T) {
 	router := gin.New()
 	server := httptest.NewServer(router)
 	defer server.Close()
-	RegisterRoutes(router.Group("/api/v1"), router, NewHandler(service, NewConnectionSet(10, 3), server.URL), func(c *gin.Context) { c.Next() }, func(c *gin.Context) { c.Next() })
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/v1/realtime/ws?ticket=" + raw
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), router, NewHandler(service, NewConnectionSet(10, 3), server.URL), func(c *gin.Context) { c.Next() }, func(c *gin.Context) { c.Next() })
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/admin/v1/realtime/ws?ticket=" + raw
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if _, response, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": []string{"https://wrong.example"}}}); err == nil || response == nil || response.StatusCode != http.StatusForbidden {

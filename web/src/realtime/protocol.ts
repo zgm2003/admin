@@ -51,7 +51,7 @@ export function buildRealtimeWebSocketURL(
   location: Pick<Location, 'protocol' | 'host'> | URL = window.location,
 ): URL {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const url = new URL(`${protocol}//${location.host}/api/v1/realtime/ws`)
+  const url = new URL(`${protocol}//${location.host}/api/admin/v1/realtime/ws`)
   url.searchParams.set('ticket', ticket)
   return url
 }

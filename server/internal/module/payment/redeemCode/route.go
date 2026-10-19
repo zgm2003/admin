@@ -21,8 +21,6 @@ func RegisterAdminRoutes(routes *gin.RouterGroup, h *Handler, authenticate gin.H
 	g.POST("/lookup", authenticate, requirePermission(PermissionDetail), h.Lookup)
 	g.POST("/export", authenticate, requirePermission(PermissionExport), h.Export)
 	g.PATCH("/void", authenticate, requirePermission(PermissionVoid), h.Void)
-}
 
-func RegisterPersonalRoutes(routes *gin.RouterGroup, h *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
 	routes.POST("/payment/wallet/redemption", authenticate, requirePermission(PersonalRedeem), h.Redeem)
 }

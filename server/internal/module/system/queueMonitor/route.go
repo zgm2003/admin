@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterGrantRoute(routes *gin.RouterGroup, handler *Handler, origin, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
+func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, origin, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
 	routes.POST("/system/queuemonitor/grant", origin, authenticate, requirePermission(PermissionList), handler.Grant)
 }
 

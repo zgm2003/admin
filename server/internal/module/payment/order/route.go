@@ -17,13 +17,11 @@ func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, authenticate
 	group := routes.Group("/payment/order")
 	group.GET("", authenticate, requirePermission(PermissionList), handler.List)
 	group.GET("/:id", authenticate, requirePermission(PermissionDetail), handler.Get)
-}
 
-func RegisterPersonalRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
-	group := routes.Group("/payment/recharge")
-	group.GET("/options", authenticate, requirePermission(PersonalCreate), handler.Options)
-	group.GET("", authenticate, requirePermission(PersonalList), handler.PersonalList)
-	group.GET("/:id", authenticate, requirePermission(PersonalDetail), handler.PersonalGet)
-	group.POST("", authenticate, requirePermission(PersonalCreate), handler.Create)
-	group.POST("/:id/pay", authenticate, requirePermission(PersonalPay), handler.Pay)
+	personal := routes.Group("/payment/recharge")
+	personal.GET("/options", authenticate, requirePermission(PersonalCreate), handler.Options)
+	personal.GET("", authenticate, requirePermission(PersonalList), handler.PersonalList)
+	personal.GET("/:id", authenticate, requirePermission(PersonalDetail), handler.PersonalGet)
+	personal.POST("", authenticate, requirePermission(PersonalCreate), handler.Create)
+	personal.POST("/:id/pay", authenticate, requirePermission(PersonalPay), handler.Pay)
 }

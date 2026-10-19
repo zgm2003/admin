@@ -25,7 +25,7 @@ func exportRouter(t *testing.T) (*gorm.DB, *Service, *gin.Engine) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	pass := func(ctx *gin.Context) { ctx.Next() }
-	RegisterRoutes(router.Group(""), NewHandler(service), pass, func(string) gin.HandlerFunc { return pass })
+	RegisterAdminRoutes(router.Group(""), NewHandler(service), pass, func(string) gin.HandlerFunc { return pass })
 	return db, service, router
 }
 
@@ -122,7 +122,7 @@ func TestXlsxExportRouteUsesIndependentPermission(t *testing.T) {
 	router := gin.New()
 	authenticated := false
 	permission := ""
-	RegisterRoutes(router.Group(""), NewHandler(nil), func(ctx *gin.Context) {
+	RegisterAdminRoutes(router.Group(""), NewHandler(nil), func(ctx *gin.Context) {
 		authenticated = true
 		ctx.Next()
 	}, func(code string) gin.HandlerFunc {

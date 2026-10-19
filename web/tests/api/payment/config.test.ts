@@ -12,7 +12,7 @@ it('preserves numeric enums and explicit null credential replacement', async () 
     appCertPEM: null,
     alipayCertPEM: null,
     rootCertPEM: null,
-    notifyUrl: 'https://pay.example.test/api/v1/payment/callback/alipay/{configId}/{version}',
+    notifyUrl: 'https://pay.example.test/api/admin/v1/payment/callback/alipay/{configId}/{version}',
     payMethods: [2, 1],
   }
   const returned = { newField: 99 }

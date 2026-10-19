@@ -6,5 +6,5 @@ export interface NotificationOptions {
 }
 
 export function getNotificationOptions(): Promise<NotificationOptions> {
-  return request.get<NotificationOptions>('/api/v1/message/notification/options')
+  return request.get<NotificationOptions>('/api/admin/v1/message/notification/options')
 }

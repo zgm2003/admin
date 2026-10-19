@@ -8,12 +8,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestRegisterGrantRouteBindsListPermission(t *testing.T) {
+func TestRegisterAdminRoutesBindsListPermission(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	group := router.Group("/api/admin/v1")
 	gotPermission := ""
-	RegisterGrantRoute(group, NewHandler(nil, false, nil), func(c *gin.Context) { c.Next() }, func(c *gin.Context) { c.Next() }, func(code string) gin.HandlerFunc {
+	RegisterAdminRoutes(group, NewHandler(nil, false, nil), func(c *gin.Context) { c.Next() }, func(c *gin.Context) { c.Next() }, func(code string) gin.HandlerFunc {
 		gotPermission = code
 		return func(c *gin.Context) { c.AbortWithStatus(http.StatusNoContent) }
 	})

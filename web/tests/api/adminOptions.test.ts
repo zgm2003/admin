@@ -14,7 +14,7 @@ describe('backend-owned admin options', () => {
     [getSessionOptions, '/api/admin/v1/user/session/options'],
     [getLoginLogOptions, '/api/admin/v1/user/loginlog/options'],
     [getNotificationTaskOptions, '/api/admin/v1/message/notificationtask/options'],
-    [getNotificationOptions, '/api/v1/message/notification/options'],
+    [getNotificationOptions, '/api/admin/v1/message/notification/options'],
   ] as const)('passes the options DTO through from %s', async (load, url) => {
     const options = { serverAdded: true, statuses: [{ value: 99, label: 'Future state' }] }
     vi.mocked(request.get).mockResolvedValue(options)

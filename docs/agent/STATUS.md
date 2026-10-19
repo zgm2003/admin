@@ -1,5 +1,25 @@
 # 项目状态
 
+## 平台 API 显式隔离（2026-10-18，代码与迁移完成，待启动联调）
+
+- 已获维护者批准：取消 `/api/v1`，Admin 使用 `/api/admin/v1`，Canvas 使用 `/api/canvas/v1`；每个业务模块独立声明 `RegisterAdminRoutes` / `RegisterCanvasRoutes`，不得用两个包装函数调用同一份路由清单。新平台必须显式新增注册入口；内部 Handler/Service/Repository 仅按真实业务复用。
+- 工作区开始时干净。现状盘点覆盖 `cmd/api/main.go`、模块路由、认证/刷新 Cookie、Access、前端请求与 WebSocket、真实 PostgreSQL 只读查询。平台 Admin/Canvas 均启用；Canvas 当前仅有 workspace/profile 两个隐藏 page，以及 upload、profile detail/update、password、email、phone 六个 action。个人账户和钱包仍遵守既有全局业务归属，不借路由改名复制数据或授权。
+- 目标映射：Admin 保留管理、本人钱包/充值/兑换、通知/实时、本人文件等现有能力；Canvas 显式注册登录/策略/验证码、Access、个人资料/改密/邮箱/手机号、上传凭据/对象 URL/上传完成和公开法律文档，不批量开放 Admin 管理或当前无权限事实/调用方的支付、通知、文件管理 API。双方 action 权限码不变，认证/Access 仍绑定当前平台。
+- 冲突处理：Admin 本人钱包读取调整为 `GET /api/admin/v1/payment/wallet/me`，管理列表仍为 `GET /api/admin/v1/payment/wallet`；法律文档同路径保留匿名净化 HTML 读取，管理写入继续认证并检查 `system:setting:update`。支付通道由 Admin 管理，Provider 回调归属 `/api/admin/v1/payment/callback/alipay/:configId/:version`，使用支付签名而非客户端身份；不建立 Canvas 支付接口。
+- 认证映射：路由组固定平台，`X-Auth-Platform` 只做严格一致性校验，Token 与 Session 继续校验相同平台；Refresh Cookie 按平台隔离名称和 `/api/<platform>/v1/auth` 路径。百万用户/多实例容量契约不变：平台分组不增加 PostgreSQL 查询、缓存来源或无界回源，Redis/PG 故障继续失败闭合。
+- 切换影响：旧客户端 Refresh Cookie 的 Path 为 `/api/v1/auth`，新平台路由不会收到旧 Cookie；已签发 Access Token 到期后用户需重新登录。为遵守不保留共享旧接口的决定，不提供旧 Refresh 路由兼容桥。
+- 支付切换边界：SQL 只改本地凭据版本，不会改写已发给支付商的旧订单通知地址；旧 `/api/v1` 回调在新服务中返回 404。SQL 和 runner 均拒绝仍绑定旧回调路径的待支付订单；必须先通过可信查单结清或关闭旧单，再停机迁移。前后端应在同一维护窗口切换，不混用旧客户端与新 API。
+- 执行清单：路由隔离回归、模块独立注册、认证/实时边界、前端 Admin/Canvas 前缀同步、回调地址幂等迁移及维护者 runner、架构文档更新均已完成。Canvas allowlist 覆盖登录/Access/个人资料/上传/法律文档，明确不继承 Admin 管理能力；业务模块只保留显式平台注册入口，健康检查除外。
+- 本轮验证：API 路由测试通过；受影响 Go 模块包的路由定向命令通过（部分包无匹配测试）；路由实现阶段 `go fmt ./...`、`go vet ./...`、`go build ./...` 通过。新增旧订单保护后，受影响的 runner/config 包再次通过 `gofmt`、`go vet -p 1 ./cmd/migrate-platform-routes ./internal/module/payment/config` 和 `go build -p 1 ./cmd/migrate-platform-routes ./internal/module/payment/config`。Web `pnpm build` 和 `pnpm check:architecture` 通过；Canvas `pnpm build` 及修改相关 21 项 Vitest 通过。Web 修改相关 18 个测试文件中 17 个通过，1 个操作日志错误态用例因页面/AppTable 文案预期不一致失败，未改动该页面逻辑。
+- 迁移保护补充采用失败测试先行：先复现待支付旧回调订单被错误迁移，再实现 SQL 表锁/事务拒绝与 runner 订单计数预检。最终实际执行 `go test -p 1 ./cmd/migrate-platform-routes ./internal/module/payment/config -run 'TestPreflight|TestPlatformCallbackMigration|TestConfigMigrationConstraintsAndReplay' -count=1 -timeout=3m -v` 通过，覆盖预检拒绝/放行、未结旧单回滚、已支付/已关闭订单迁移、无版本、幂等重放、不可变事实及缓存 refill、outbox 冲突回滚；仅写隔离测试 schema。
+- 全量验证仍有失败：此前全量 Go 测试报告含 `architecture.TestBackendSourceBoundaries`、若干历史 schema/migration 集成用例失败，以及 `system/scheduler`、`system/setting` 测试各运行 11 分钟后超时；支付配置和上传规则的路由回归项已由本轮定向测试通过。全量 Web Vitest 为 17 failed、1190 passed，另有 worker 超时；独立 HEAD 前端基线因测试 mock 初始化失败，不能据此判定这些失败为基线问题。未执行全量 Canvas Vitest。
+- 收尾环境：一轮迁移复跑因长时间无输出而中止，之后降低 Go 编译并发的最终定向命令已通过。构建生成的 `canvas/tsconfig.tsbuildinfo` 已恢复本轮构建前内容；现有 `.git/index.lock` 未删除。本轮忽略目录 `server/tmp/platform-route-head-baseline`、`server/tmp/canvasRunnerTest-2488559521` 和测试日志 `server/tmp/platform-route-go-tests.log` 的清理被执行策略拦截，尚保留，未纳入交付文件。
+- 维护者明确授权“迁移”后，于 2026-10-18 23:26:45 +08:00 对本机 `admin.public` 执行 `docs/database/2026-10-18-platform-api-routes.ps1 -ServicesStopped`。执行前核实本项目 API/Worker 未运行、16301 端口未监听、PostgreSQL 无其他客户端会话、Redis 客户端仅有本次探针；旧回调凭据版本 1 条、旧回调待支付订单 0 笔、PG/Redis 均为 generation 3。
+- 首次 runner 成功将 1 条回调切为 `/api/admin/v1/payment/callback/alipay/1/1`，CHECK 已验证、不可变触发器保持启用；generation/outbox 由 3/3 变为 4/4，Redis `payment.config/global` 为 ready/4，固定 state key 数量仍为 1。随后同命令复跑成功，迁移行数为 0，generation/outbox 与受保护摘要均未再次变化。两份审计的 `postgresCommitted`、`redisSynchronized`、`verified` 全为 true，SQL SHA256 与执行文件一致。
+- 审计根目录为 `%LOCALAPPDATA%/Admin/maintenance/platform-api-routes/`：首次 `20261018-232434-198-bda54fbd37cb472a8e408de63479b96d/audit.json`，重放 `20261018-232707-106-de80ad9db12a40ddb656b134fcdb303a/audit.json`；首次目录另有 `replay-check.json`。独立只读复核确认旧回调为 0、新回调为 1、旧待支付订单为 0，凭据非 URL 字段、支付配置、订单、菜单和平台事实摘要与迁移前一致。
+- 2026-10-18 23:32:45 +08:00 使用真实 PostgreSQL 18.6 的 `pg_dump --schema-only --no-owner --no-privileges --schema=public --no-password` 导出并更新 `docs/database/current.sql`，复制后 SHA256 与审计目录中的原始导出一致；Git diff 仅回调 CHECK 一行变化，无业务数据或其他结构漂移。初次快照导出被探针的空 `PGSERVICEFILE` 拒绝，去掉该空覆盖后导出通过，未影响已成功的迁移。首次审计目录另存 `independent-check.txt`，包含结构、事实、Redis 状态和独立比对通过结果；临时只读探针源码已移除。
+- API/Worker 保持停止，未自动启动、未修改订单状态、未删除 Redis key 或执行 Git 提交。新增 outbox 事件 1 条仍待 Worker relay 标记发布，Redis 代际已同步，不需要人工篡改 outbox；启动新代码后可由既有幂等 relay 正常处理。本次不重跑前后端全仓测试/构建，未做浏览器联调，前述全量失败不因迁移而视为解决。
+
 ## 钱包入口路由组件纠正（2026-10-17，定向验证完成）
 
 - 个人资料上方“钱包”入口的 `/payment/walletPortal` 曾误加载 `payment/wallet/index.vue` 管理钱包列表；现已改为既有 `payment/walletPortal/index.vue`，通过 `el-tabs` 聚合“我的钱包”和“充值中心”，两个 Tab 沿用各自 page/action 权限。不改管理钱包页、权限协议或数据库。

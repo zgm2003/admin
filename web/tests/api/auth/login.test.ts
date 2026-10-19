@@ -25,7 +25,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.get).mockResolvedValue(dataFromServer)
     const result = await api.getCaptcha()
     expect(result).toBe(dataFromServer)
-    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/v1/auth/captcha')
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/auth/captcha')
   })
   it('getCaptcha propagates request failures unchanged', async () => {
     const error = new Error('request failed')
@@ -42,7 +42,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.post).mockResolvedValue(dataFromServer)
     const result = await api.login(input)
     expect(result).toBe(dataFromServer)
-    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/v1/auth/login', input)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/auth/login', input)
   })
   it('login propagates request failures unchanged', async () => {
     const input: Parameters<typeof api.login>[0] = {
@@ -59,7 +59,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.get).mockResolvedValue(dataFromServer)
     const result = await api.getLoginConfig()
     expect(result).toBe(dataFromServer)
-    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/v1/auth/login-config')
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/auth/login-config')
   })
   it('getLoginConfig propagates request failures unchanged', async () => {
     const error = new Error('request failed')
@@ -79,7 +79,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.post).mockResolvedValue(dataFromServer)
     const result = await api.sendLoginCode(account, loginType, scene, challengeId, captcha)
     expect(result).toBe(dataFromServer)
-    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/v1/auth/send-code', {
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/auth/send-code', {
       account,
       loginType,
       scene,
@@ -114,7 +114,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.post).mockResolvedValue(dataFromServer)
     const result = await api.forgotPassword(account, loginType, captcha)
     expect(result).toBe(dataFromServer)
-    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/v1/auth/password/forgot', {
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/auth/password/forgot', {
       account,
       loginType,
       captchaId: captcha?.captchaId,
@@ -145,7 +145,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.post).mockResolvedValue(dataFromServer)
     const result = await api.resetPassword(input)
     expect(result).toBe(dataFromServer)
-    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/v1/auth/password/reset', input)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/auth/password/reset', input)
   })
   it('resetPassword propagates request failures unchanged', async () => {
     const input: Parameters<typeof api.resetPassword>[0] = {
@@ -165,7 +165,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.post).mockResolvedValue(dataFromServer)
     const result = await api.logout()
     expect(result).toBe(dataFromServer)
-    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/v1/auth/logout', undefined)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/auth/logout', undefined)
   })
   it('logout propagates request failures unchanged', async () => {
     const error = new Error('request failed')
@@ -177,7 +177,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.get).mockResolvedValue(dataFromServer)
     const result = await api.getCurrentUser()
     expect(result).toBe(dataFromServer)
-    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/v1/auth/me')
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/auth/me')
   })
   it('getCurrentUser propagates request failures unchanged', async () => {
     const error = new Error('request failed')

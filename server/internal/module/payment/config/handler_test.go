@@ -19,7 +19,7 @@ func TestConfigActionRoutesAreIndependent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := NewHandler(NewService(nil, nil))
 	router := gin.New()
-	RegisterRoutes(router.Group("/api/admin/v1"), handler, func(c *gin.Context) { c.Next() }, func(code string) gin.HandlerFunc {
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), handler, func(c *gin.Context) { c.Next() }, func(code string) gin.HandlerFunc {
 		return func(c *gin.Context) {
 			if code != "payment:config:view" {
 				response.Fail(c, apperror.Forbidden(nil))
@@ -45,7 +45,7 @@ func TestConfigActionRoutesAreIndependent(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || len(out.Data.Providers) != 1 || out.Data.Providers[0].Value != 1 {
 		t.Fatal("options advertised unsupported capability")
 	}
-	if out.Data.Defaults.NotifyURL != "https://HOST/api/v1/payment/callback/alipay/{configId}/{version}" {
+	if out.Data.Defaults.NotifyURL != "https://HOST/api/admin/v1/payment/callback/alipay/{configId}/{version}" {
 		t.Fatalf("creation options do not prefill callback URL: %q", out.Data.Defaults.NotifyURL)
 	}
 }
@@ -174,7 +174,7 @@ func TestConfigCreateDistinguishesCertificateMismatch(t *testing.T) {
 func TestConfigHandlerRejectsMalformedWithoutRepository(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(NewService(nil, nil)), func(c *gin.Context) { c.Next() }, func(string) gin.HandlerFunc { return func(c *gin.Context) { c.Next() } })
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(NewService(nil, nil)), func(c *gin.Context) { c.Next() }, func(string) gin.HandlerFunc { return func(c *gin.Context) { c.Next() } })
 	for _, r := range []struct{ method, path, body string }{{"POST", "", `{"provider":"1"}`}, {"POST", "", `{"provider":1,"provider":2}`}, {"POST", "/1/version", `{"notifyUrl":"x","payMethods":[1]}`}, {"PUT", "/1", `{"name":"x","sortOrder":0,"provider":1}`}, {"PUT", "/0", `{}`}, {"PATCH", "/1/status", `{"isEnabled":"1"}`}, {"DELETE", "/1", `{}`}, {"GET", "?page=1&pageSize=20&isEnabled=01", ``}} {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest(r.method, "/api/admin/v1/payment/config"+r.path, bytes.NewBufferString(r.body)))

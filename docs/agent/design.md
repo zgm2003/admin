@@ -168,13 +168,13 @@ Canvas 上传规则由 Admin 管理，使用 Canvas 的 `platform_id` 和 `canva
 
 同一用户账户的余额允许为负数。余额与流水历史前后余额使用有符号整数和精确金额字符串，不归零、不隐藏负号；充值套餐、支付订单和兑换码面额仍必须为正数，充值按原余额加实际入账金额执行。不得把余额当作累计充值统计，或重复增加欠款余额、授信额度、透支开关字段。允许负余额不自动决定负余额用户的消费准入或无限透支规则，AI阶段按实际需求另行确认。
 
-支付配置先沿用旧项目支付宝证书模式：三份证书支持本地 CRT/PEM 文件导入或粘贴；创建时填写私钥，发布新版本时空白凭据表示保留，普通编辑仅改名称/排序。provider/environment/appId/sellerId 创建后固定，同一通道的凭据版本不可编辑或删除。provider=1支付宝/2微信保留、environment=1沙箱/2生产、payMethod=1PC网页/2H5；首期只有支付宝可配置。回调输入 HTTPS 模板 `/api/v1/payment/callback/alipay/{configId}/{version}`，服务端按创建后的坐标保存完整 URL；此阶段没有实际回调入口。本地配置校验不是实时支付或通道连通测试，不返回密钥、密文或原始证书。
+支付配置先沿用旧项目支付宝证书模式：三份证书支持本地 CRT/PEM 文件导入或粘贴；创建时填写私钥，发布新版本时空白凭据表示保留，普通编辑仅改名称/排序。provider/environment/appId/sellerId 创建后固定，同一通道的凭据版本不可编辑或删除。provider=1支付宝/2微信保留、environment=1沙箱/2生产、payMethod=1PC网页/2H5；首期只有支付宝可配置。回调输入 HTTPS 模板 `/api/admin/v1/payment/callback/alipay/{configId}/{version}`，服务端按创建后的坐标保存完整 URL；此阶段没有实际回调入口。本地配置校验不是实时支付或通道连通测试，不返回密钥、密文或原始证书。
 
 支付配置使用数据库 ID 关联，不再要求管理员填写内部编码；provider/environment/appId/sellerId 创建后固定，同一通道的凭据版本不可编辑或删除。
 
 证书 `NotBefore`/`NotAfter` 仅作为证书元信息展示，不参与新增、凭据换版、本地配置校验或启用操作的拦截。支付凭据校验只检查 PEM/DER 格式、RSA 强度、证书用途、APPID/PID 身份、私钥与应用证书匹配，并要求 SDK 成功初始化及使用配置证书验签；不改写入库证书内容。本地校验通过不代表下单、到账或公网回调已联通。
 
-支付回调已接入独立 Provider 路由 `/api/v1/payment/callback/alipay/:configId/:version`，不经过用户鉴权；服务端只保留闭合验签事实并在同一事务内编排订单入账。P3 恢复与巡检完成前，生产环境购买保持关闭。
+支付回调已接入独立 Provider 路由 `/api/admin/v1/payment/callback/alipay/:configId/:version`，不经过用户鉴权；服务端只保留闭合验签事实并在同一事务内编排订单入账。P3 恢复与巡检完成前，生产环境购买保持关闭。
 
 支付环境以后台支付配置的 `environment` 为唯一来源，下单选择已启用的可用配置，已有订单回调/查单始终绑定原 `configId/configVersion`；API/Worker 不读取 `PAYMENT_ENVIRONMENT`。完整 HTTPS `notifyUrl` 继续在支付配置页面维护，与前端地址和 CORS 无关。充值页面在提交时自动取当前页面 URL（保留路径/query、去掉 fragment）作为 `returnUrl`，后端校验绝对 HTTP(S) URL 格式后作为支付宝下单参数传递，不再提供手填回跳地址或读取 `PAYMENT_RETURN_ORIGINS`；到账仍只能来自验签回调或可信查单，不根据浏览器回跳参数加款。生产购买保护门暂时保留，按订单关联配置的环境判断，不借本次配置收口开放生产支付。
 

@@ -11,7 +11,7 @@ beforeEach(() => vi.resetAllMocks())
 
 it('keeps the personal transaction projection free of admin fields', async () => {
   await api.getMyTransactions({ page: 1, pageSize: 20 })
-  expect(request.get).toHaveBeenCalledWith('/api/v1/payment/wallet/transaction', {
+  expect(request.get).toHaveBeenCalledWith('/api/admin/v1/payment/wallet/transaction', {
     params: { page: 1, pageSize: 20 },
   })
   await api.getTransactions({ page: 1, pageSize: 20, userId: 8 })

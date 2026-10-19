@@ -39,13 +39,13 @@ func TestCompleteHandlerRequiresAnActuallyEmptyBody(t *testing.T) {
 			id := auth.Identity{UserID: 3, PlatformID: 1}
 			var permission string
 			router := gin.New()
-			RegisterRoutes(router.Group("/api/v1"), NewHandler(service), func(c *gin.Context) {
+			RegisterCanvasRoutes(router.Group("/api/canvas/v1"), NewHandler(service), func(c *gin.Context) {
 				c.Set("auth.identity", id)
 				c.Next()
 			}, func(code string) gin.HandlerFunc {
 				return func(c *gin.Context) { permission = code; c.Next() }
 			})
-			request := httptest.NewRequest(http.MethodPost, "/api/v1/storage/file/8/complete", strings.NewReader(body))
+			request := httptest.NewRequest(http.MethodPost, "/api/canvas/v1/storage/file/8/complete", strings.NewReader(body))
 			request.Header.Set("Content-Type", "application/json")
 			request = request.WithContext(context.WithValue(request.Context(), completionContextKey{}, "request-context"))
 			recorder := httptest.NewRecorder()

@@ -16,7 +16,7 @@ func (routeHandlerStub) BindOrChange(*gin.Context) {}
 func TestRegisterRoutesRequiresAuthenticationAndExactPhonePermission(t *testing.T) {
 	seen := make([]string, 0, 3)
 	router := gin.New()
-	RegisterRoutes(router.Group("/api/admin/v1"), &Handler{}, func(c *gin.Context) {
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), &Handler{}, func(c *gin.Context) {
 		seen = append(seen, "authenticate")
 		c.Next()
 	}, func(code string) gin.HandlerFunc {

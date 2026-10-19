@@ -34,7 +34,7 @@ func TestListRejectsInvalidPaginationAndSuccessCode(t *testing.T) {
 	} {
 		service := &fakeOperationLogService{}
 		router := gin.New()
-		RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(service), func(context *gin.Context) { context.Next() }, func(string) gin.HandlerFunc { return func(context *gin.Context) { context.Next() } })
+		RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(service), func(context *gin.Context) { context.Next() }, func(string) gin.HandlerFunc { return func(context *gin.Context) { context.Next() } })
 		recorder := httptest.NewRecorder()
 		router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
 		if recorder.Code != http.StatusBadRequest {
@@ -46,7 +46,7 @@ func TestListRejectsInvalidPaginationAndSuccessCode(t *testing.T) {
 func TestListReturnsTypedEnvelope(t *testing.T) {
 	service := &fakeOperationLogService{result: ListResult{List: []Item{{RequestID: "request-1", Action: "user.update"}}, Total: 1, Page: 1, PageSize: 20}}
 	router := gin.New()
-	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(service), func(context *gin.Context) { context.Next() }, func(string) gin.HandlerFunc { return func(context *gin.Context) { context.Next() } })
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(service), func(context *gin.Context) { context.Next() }, func(string) gin.HandlerFunc { return func(context *gin.Context) { context.Next() } })
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/system/operationlog?page=1&pageSize=20", nil))
 	if recorder.Code != http.StatusOK {
@@ -67,7 +67,7 @@ func TestRegisterRoutesRequiresOperationLogListPermission(t *testing.T) {
 	}
 	router := gin.New()
 	var permission string
-	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(&fakeOperationLogService{}), func(context *gin.Context) { context.Next() }, func(value string) gin.HandlerFunc {
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(&fakeOperationLogService{}), func(context *gin.Context) { context.Next() }, func(value string) gin.HandlerFunc {
 		permission = value
 		return func(context *gin.Context) { context.Next() }
 	})

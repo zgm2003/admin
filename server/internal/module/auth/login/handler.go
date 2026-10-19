@@ -16,7 +16,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const refreshCookiePath = "/api/v1/auth"
+func refreshCookiePath(platform string) string {
+	return "/api/" + platform + "/v1/auth"
+}
 
 type authenticationService interface {
 	Register(context.Context, RegisterInput) (Registered, error)
@@ -278,7 +280,7 @@ func (h *Handler) setRefreshCookie(context *gin.Context, platform string, creden
 	http.SetCookie(context.Writer, &http.Cookie{
 		Name:     refreshCookieName(platform),
 		Value:    credential.RefreshToken,
-		Path:     refreshCookiePath,
+		Path:     refreshCookiePath(platform),
 		Expires:  credential.RefreshExpiresAt.UTC(),
 		MaxAge:   maxAge,
 		HttpOnly: true,
@@ -291,7 +293,7 @@ func (h *Handler) setRefreshCookie(context *gin.Context, platform string, creden
 func (h *Handler) expireRefreshCookie(context *gin.Context, platform string) {
 	http.SetCookie(context.Writer, &http.Cookie{
 		Name:     refreshCookieName(platform),
-		Path:     refreshCookiePath,
+		Path:     refreshCookiePath(platform),
 		Expires:  time.Unix(1, 0).UTC(),
 		MaxAge:   -1,
 		HttpOnly: true,
@@ -301,7 +303,7 @@ func (h *Handler) expireRefreshCookie(context *gin.Context, platform string) {
 }
 
 func refreshCookieName(platform string) string {
-	return "admin_refresh_" + platform
+	return "auth_refresh_" + platform
 }
 
 func writeCredential(context *gin.Context, credential Credential) {

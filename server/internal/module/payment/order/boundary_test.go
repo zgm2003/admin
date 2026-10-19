@@ -132,8 +132,7 @@ func TestUnimplementedOperationsAreNotAdvertisedOrRegistered(t *testing.T) {
 	require := func(string) gin.HandlerFunc { return pass }
 	handler := NewHandler(NewService(nil))
 	RegisterAdminRoutes(router.Group("/api/admin/v1"), handler, pass, require)
-	RegisterPersonalRoutes(router.Group("/api/v1"), handler, pass, require)
-	for _, route := range []string{"/api/admin/v1/payment/order/1/sync", "/api/admin/v1/payment/order/1/close", "/api/v1/payment/recharge/1/sync", "/api/v1/payment/recharge/1/close"} {
+	for _, route := range []string{"/api/admin/v1/payment/order/1/sync", "/api/admin/v1/payment/order/1/close", "/api/admin/v1/payment/recharge/1/sync", "/api/admin/v1/payment/recharge/1/close"} {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest("POST", route, nil))
 		if w.Code != 404 {
@@ -158,10 +157,9 @@ func TestOrderRoutesRequireExactActionNotPagePermission(t *testing.T) {
 	}
 	handler := NewHandler(NewService(nil))
 	RegisterAdminRoutes(router.Group("/api/admin/v1"), handler, pass, require)
-	RegisterPersonalRoutes(router.Group("/api/v1"), handler, pass, require)
 	for _, item := range []struct{ method, path string }{
 		{"GET", "/api/admin/v1/payment/order"}, {"GET", "/api/admin/v1/payment/order/1"},
-		{"GET", "/api/v1/payment/recharge/options"}, {"GET", "/api/v1/payment/recharge"}, {"GET", "/api/v1/payment/recharge/1"}, {"POST", "/api/v1/payment/recharge"}, {"POST", "/api/v1/payment/recharge/1/pay"},
+		{"GET", "/api/admin/v1/payment/recharge/options"}, {"GET", "/api/admin/v1/payment/recharge"}, {"GET", "/api/admin/v1/payment/recharge/1"}, {"POST", "/api/admin/v1/payment/recharge"}, {"POST", "/api/admin/v1/payment/recharge/1/pay"},
 	} {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest(item.method, item.path, nil))

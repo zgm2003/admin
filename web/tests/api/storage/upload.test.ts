@@ -17,7 +17,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.post).mockResolvedValue(dataFromServer)
     const result = await api.requestUploadCredentials(ruleCode, files)
     expect(result).toBe(dataFromServer)
-    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/v1/storage/upload-credential', {
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/storage/upload-credential', {
       ruleCode,
       files,
     })
@@ -40,7 +40,7 @@ describe('thin API HTTP contract', () => {
     const result = await api.requestObjectURL(objectKey, signal)
     expect(result).toBe(dataFromServer)
     expect(request.post).toHaveBeenCalledExactlyOnceWith(
-      '/api/v1/storage/object-url',
+      '/api/admin/v1/storage/object-url',
       { objectKey },
       { ...(signal ? { signal } : {}) },
     )

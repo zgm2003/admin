@@ -2,7 +2,7 @@ package loginlog
 
 import "github.com/gin-gonic/gin"
 
-func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
+func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
 	group := routes.Group("/user/loginlog")
 	group.GET("/options", authenticate, handler.FormOptions)
 	group.GET("/page-init", authenticate, requirePermission(PermissionList), handler.PageInit)

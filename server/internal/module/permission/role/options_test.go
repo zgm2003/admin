@@ -14,7 +14,7 @@ import (
 func TestRoleFormOptionsIsAuthOnlyAndDependencyFree(t *testing.T) {
 	router := gin.New()
 	authenticated := false
-	role.RegisterRoutes(router.Group("/api/admin/v1"), role.NewHandler(nil), func(ctx *gin.Context) { authenticated = true }, func(string) gin.HandlerFunc {
+	role.RegisterAdminRoutes(router.Group("/api/admin/v1"), role.NewHandler(nil), func(ctx *gin.Context) { authenticated = true }, func(string) gin.HandlerFunc {
 		return func(ctx *gin.Context) { ctx.AbortWithStatus(http.StatusForbidden) }
 	})
 	recorder := httptest.NewRecorder()

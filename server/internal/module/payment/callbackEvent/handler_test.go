@@ -53,10 +53,10 @@ func TestProviderCallbackIsAnonymousExactTextAndNotOperationPayload(t *testing.T
 	router := gin.New()
 	logs := &callbackLogEnqueuer{}
 	router.Use(operationlog.Middleware(slog.New(slog.NewTextHandler(io.Discard, nil)), logs))
-	protected := router.Group("/api/v1")
+	protected := router.Group("/api/admin/v1")
 	protected.Use(authclient.Require())
 	protected.GET("/protected", func(c *gin.Context) { c.Status(200) })
-	RegisterProviderRoutes(router.Group("/api/v1"), NewHandler(f.service))
+	RegisterAdminProviderRoutes(router.Group("/api/admin/v1"), NewHandler(f.service))
 	form := f.signed(t, func(v url.Values) { v.Set("passback_params", "TOKEN=PRIVATE_TOKEN") })
 	for _, test := range []struct {
 		name string
@@ -68,7 +68,7 @@ func TestProviderCallbackIsAnonymousExactTextAndNotOperationPayload(t *testing.T
 				form.Set("sign", "INVALID_SIGNATURE")
 				body = form.Encode()
 			}
-			req := httptest.NewRequest("POST", "/api/v1/payment/callback/alipay/3/4", strings.NewReader(body))
+			req := httptest.NewRequest("POST", "/api/admin/v1/payment/callback/alipay/3/4", strings.NewReader(body))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
@@ -118,8 +118,8 @@ func TestProviderCallbackRejectsTransportAmbiguityBeforeService(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			service := &callbackHTTPService{}
 			router := gin.New()
-			RegisterProviderRoutes(router.Group("/api/v1"), NewHandler(service))
-			req := httptest.NewRequest("POST", "/api/v1/payment/callback/alipay"+test.path, strings.NewReader(test.body))
+			RegisterAdminProviderRoutes(router.Group("/api/admin/v1"), NewHandler(service))
+			req := httptest.NewRequest("POST", "/api/admin/v1/payment/callback/alipay"+test.path, strings.NewReader(test.body))
 			req.Header.Set("Content-Type", test.contentType)
 			if test.encoding != "" {
 				req.Header.Set("Content-Encoding", test.encoding)
@@ -141,10 +141,10 @@ func TestProviderCallbackPreservesRequestContextAndSanitizesErrors(t *testing.T)
 	gin.SetMode(gin.TestMode)
 	service := &callbackHTTPService{receiveErr: apperror.DependencyUnavailable(errors.New("PRIVATE_TOKEN SQL DSN"))}
 	router := gin.New()
-	RegisterProviderRoutes(router.Group("/api/v1"), NewHandler(service))
+	RegisterAdminProviderRoutes(router.Group("/api/admin/v1"), NewHandler(service))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	req := httptest.NewRequest("POST", "/api/v1/payment/callback/alipay/3/4", strings.NewReader("sign=x")).WithContext(ctx)
+	req := httptest.NewRequest("POST", "/api/admin/v1/payment/callback/alipay/3/4", strings.NewReader("sign=x")).WithContext(ctx)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)

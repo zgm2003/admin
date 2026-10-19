@@ -625,56 +625,42 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	if dependencies.QueueMonitorUI != nil {
 		queuemonitor.RegisterUIRoutes(router, dependencies.QueueMonitorUI)
 	}
-	providerRoutes := router.Group("/api/v1")
+	// Provider callbacks and browser WebSockets authenticate by signature/ticket,
+	// not by client headers. They still belong to one explicit platform.
+	adminTransports := router.Group("/api/admin/v1")
 	if dependencies.PaymentCallback != nil {
-		callbackevent.RegisterProviderRoutes(providerRoutes, dependencies.PaymentCallback)
+		callbackevent.RegisterAdminProviderRoutes(adminTransports, dependencies.PaymentCallback)
 	}
-	sharedRoutes := router.Group("/api/v1")
-	sharedRoutes.Use(authclient.Require())
-	auth.RegisterRoutes(sharedRoutes, dependencies.Auth, dependencies.AuthOrigin, dependencies.Authenticate)
+	adminRoutes := router.Group("/api/admin/v1", authclient.Require(), authclient.RequirePlatform("admin"))
+	auth.RegisterAdminRoutes(adminRoutes, dependencies.Auth, dependencies.AuthOrigin, dependencies.Authenticate)
 	if dependencies.Captcha != nil {
-		authcaptcha.RegisterRoutes(sharedRoutes, dependencies.Captcha, dependencies.AuthOrigin)
+		authcaptcha.RegisterAdminRoutes(adminRoutes, dependencies.Captcha, dependencies.AuthOrigin)
 	}
-	authplatform.RegisterPublicRoutes(sharedRoutes, dependencies.AuthPlatform)
-	permission.RegisterRoutes(sharedRoutes, dependencies.Permission, dependencies.Authenticate)
+	authplatform.RegisterAdminRoutes(adminRoutes, dependencies.AuthPlatform, dependencies.Authenticate, dependencies.RequirePermission)
+	permission.RegisterAdminRoutes(adminRoutes, dependencies.Permission, dependencies.Authenticate)
+	menu.RegisterAdminRoutes(adminRoutes, dependencies.Menu, dependencies.Authenticate, dependencies.RequirePermission)
+	role.RegisterAdminRoutes(adminRoutes, dependencies.Role, dependencies.Authenticate, dependencies.RequirePermission)
+	account.RegisterAdminRoutes(adminRoutes, dependencies.User, dependencies.Authenticate, dependencies.RequirePermission)
 	if dependencies.Account != nil {
-		profile.RegisterRoutes(sharedRoutes, dependencies.Account, dependencies.Authenticate, dependencies.RequirePermission)
-	}
-	if dependencies.Email != nil {
-		useremail.RegisterSelfRoutes(sharedRoutes, dependencies.Email, dependencies.Authenticate, dependencies.RequirePermission)
+		profile.RegisterAdminRoutes(adminRoutes, dependencies.Account, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.Phone != nil {
-		userphone.RegisterSelfRoutes(sharedRoutes, dependencies.Phone, dependencies.Authenticate, dependencies.RequirePermission)
+		userphone.RegisterAdminRoutes(adminRoutes, dependencies.Phone, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.Email != nil {
+		useremail.RegisterAdminRoutes(adminRoutes, dependencies.Email, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.Realtime != nil {
-		realtime.RegisterRoutes(sharedRoutes, router, dependencies.Realtime, dependencies.AuthOrigin, dependencies.Authenticate)
+		realtime.RegisterAdminRoutes(adminRoutes, router, dependencies.Realtime, dependencies.AuthOrigin, dependencies.Authenticate)
 	}
 	if dependencies.Notification != nil {
-		notification.RegisterRoutes(sharedRoutes, dependencies.Notification, dependencies.Authenticate, dependencies.RequirePermission)
+		notification.RegisterAdminRoutes(adminRoutes, dependencies.Notification, dependencies.Authenticate, dependencies.RequirePermission)
 	}
-	if dependencies.PaymentWallet != nil {
-		paymentwallet.RegisterPersonalRoutes(sharedRoutes, dependencies.PaymentWallet, dependencies.Authenticate, dependencies.RequirePermission)
-	}
-	if dependencies.PaymentTransaction != nil {
-		paymenttransaction.RegisterPersonalRoutes(sharedRoutes, dependencies.PaymentTransaction, dependencies.Authenticate, dependencies.RequirePermission)
-	}
-	if dependencies.PaymentOrder != nil {
-		paymentorder.RegisterPersonalRoutes(sharedRoutes, dependencies.PaymentOrder, dependencies.Authenticate, dependencies.RequirePermission)
-	}
-	if dependencies.PaymentRedeemCode != nil {
-		redeemcode.RegisterPersonalRoutes(sharedRoutes, dependencies.PaymentRedeemCode, dependencies.Authenticate, dependencies.RequirePermission)
-	}
-	if dependencies.Setting != nil {
-		systemsetting.RegisterPublicRoutes(sharedRoutes, dependencies.Setting)
-	}
-
-	adminRoutes := router.Group("/api/admin/v1")
-	adminRoutes.Use(authclient.Require(), authclient.RequireAdminPlatform())
 	if dependencies.PaymentConfig != nil {
-		paymentconfig.RegisterRoutes(adminRoutes, dependencies.PaymentConfig, dependencies.Authenticate, dependencies.RequirePermission)
+		paymentconfig.RegisterAdminRoutes(adminRoutes, dependencies.PaymentConfig, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.PaymentPackage != nil {
-		rechargepackage.RegisterRoutes(adminRoutes, dependencies.PaymentPackage, dependencies.Authenticate, dependencies.RequirePermission)
+		rechargepackage.RegisterAdminRoutes(adminRoutes, dependencies.PaymentPackage, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.PaymentOrder != nil {
 		paymentorder.RegisterAdminRoutes(adminRoutes, dependencies.PaymentOrder, dependencies.Authenticate, dependencies.RequirePermission)
@@ -683,7 +669,7 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 		paymentwallet.RegisterAdminRoutes(adminRoutes, dependencies.PaymentWallet, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.PaymentTransaction != nil {
-		paymenttransaction.RegisterRoutes(adminRoutes, dependencies.PaymentTransaction, dependencies.Authenticate, dependencies.RequirePermission)
+		paymenttransaction.RegisterAdminRoutes(adminRoutes, dependencies.PaymentTransaction, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.PaymentCallback != nil {
 		callbackevent.RegisterAdminRoutes(adminRoutes, dependencies.PaymentCallback, dependencies.Authenticate, dependencies.RequirePermission)
@@ -691,58 +677,71 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	if dependencies.PaymentRedeemCode != nil {
 		redeemcode.RegisterAdminRoutes(adminRoutes, dependencies.PaymentRedeemCode, dependencies.Authenticate, dependencies.RequirePermission)
 	}
-	authplatform.RegisterManagementRoutes(adminRoutes, dependencies.AuthPlatform, dependencies.Authenticate, dependencies.RequirePermission)
-	menu.RegisterRoutes(adminRoutes, dependencies.Menu, dependencies.Authenticate, dependencies.RequirePermission)
-	role.RegisterRoutes(adminRoutes, dependencies.Role, dependencies.Authenticate, dependencies.RequirePermission)
-	account.RegisterRoutes(adminRoutes, dependencies.User, dependencies.Authenticate, dependencies.RequirePermission)
-	profile.RegisterRoutes(adminRoutes, dependencies.Account, dependencies.Authenticate, dependencies.RequirePermission)
-	if dependencies.Phone != nil {
-		userphone.RegisterRoutes(adminRoutes, dependencies.Phone, dependencies.Authenticate, dependencies.RequirePermission)
-	}
-	if dependencies.Email != nil {
-		useremail.RegisterRoutes(adminRoutes, dependencies.Email, dependencies.Authenticate, dependencies.RequirePermission)
-	}
-	cosconfig.RegisterRoutes(adminRoutes, dependencies.COSConfig, dependencies.Authenticate, dependencies.RequirePermission)
-	uploadrule.RegisterRoutes(adminRoutes, dependencies.UploadRule, dependencies.Authenticate, dependencies.RequirePermission)
-	uploadrule.RegisterCredentialRoute(sharedRoutes, dependencies.UploadRule, dependencies.Authenticate, dependencies.RequirePermission)
+	cosconfig.RegisterAdminRoutes(adminRoutes, dependencies.COSConfig, dependencies.Authenticate, dependencies.RequirePermission)
+	uploadrule.RegisterAdminRoutes(adminRoutes, dependencies.UploadRule, dependencies.Authenticate, dependencies.RequirePermission)
 	if dependencies.File != nil {
-		storagefile.RegisterRoutes(sharedRoutes, dependencies.File, dependencies.Authenticate, dependencies.RequirePermission)
+		storagefile.RegisterAdminRoutes(adminRoutes, dependencies.File, dependencies.Authenticate, dependencies.RequirePermission)
 	}
-	loginlog.RegisterRoutes(adminRoutes, dependencies.LoginLog, dependencies.Authenticate, dependencies.RequirePermission)
+	loginlog.RegisterAdminRoutes(adminRoutes, dependencies.LoginLog, dependencies.Authenticate, dependencies.RequirePermission)
 	if dependencies.Mail != nil {
 		mailRoutes := adminRoutes.Group("/message/mail")
-		messagemail.RegisterRoutes(mailRoutes, dependencies.Mail, dependencies.Authenticate, dependencies.RequirePermission)
-		mailconfig.RegisterRoutes(mailRoutes, dependencies.MailConfig, dependencies.Authenticate, dependencies.RequirePermission)
-		mailtemplate.RegisterRoutes(mailRoutes, dependencies.MailTemplate, dependencies.Authenticate, dependencies.RequirePermission)
-		maillog.RegisterRoutes(mailRoutes, dependencies.MailLog, dependencies.Authenticate, dependencies.RequirePermission)
-		ratelimitpolicy.RegisterRoutes(mailRoutes, dependencies.MailRateLimit, dependencies.Authenticate, dependencies.RequirePermission)
-		recipientrule.RegisterRoutes(mailRoutes, dependencies.MailRecipientRule, dependencies.Authenticate, dependencies.RequirePermission)
+		messagemail.RegisterAdminRoutes(mailRoutes, dependencies.Mail, dependencies.Authenticate, dependencies.RequirePermission)
+		mailconfig.RegisterAdminRoutes(mailRoutes, dependencies.MailConfig, dependencies.Authenticate, dependencies.RequirePermission)
+		mailtemplate.RegisterAdminRoutes(mailRoutes, dependencies.MailTemplate, dependencies.Authenticate, dependencies.RequirePermission)
+		maillog.RegisterAdminRoutes(mailRoutes, dependencies.MailLog, dependencies.Authenticate, dependencies.RequirePermission)
+		ratelimitpolicy.RegisterAdminRoutes(mailRoutes, dependencies.MailRateLimit, dependencies.Authenticate, dependencies.RequirePermission)
+		recipientrule.RegisterAdminRoutes(mailRoutes, dependencies.MailRecipientRule, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.SMS != nil {
 		smsRoutes := adminRoutes.Group("/message/sms")
-		messagesms.RegisterRoutes(smsRoutes, dependencies.SMS, dependencies.Authenticate, dependencies.RequirePermission)
-		smsconfig.RegisterRoutes(smsRoutes, dependencies.SMSConfig, dependencies.Authenticate, dependencies.RequirePermission)
-		smstemplate.RegisterRoutes(smsRoutes, dependencies.SMSTemplate, dependencies.Authenticate, dependencies.RequirePermission)
-		smslog.RegisterRoutes(smsRoutes, dependencies.SMSLog, dependencies.Authenticate, dependencies.RequirePermission)
-		smsratelimitpolicy.RegisterRoutes(smsRoutes, dependencies.SMSRateLimit, dependencies.Authenticate, dependencies.RequirePermission)
-		smsrecipientrule.RegisterRoutes(smsRoutes, dependencies.SMSRecipientRule, dependencies.Authenticate, dependencies.RequirePermission)
+		messagesms.RegisterAdminRoutes(smsRoutes, dependencies.SMS, dependencies.Authenticate, dependencies.RequirePermission)
+		smsconfig.RegisterAdminRoutes(smsRoutes, dependencies.SMSConfig, dependencies.Authenticate, dependencies.RequirePermission)
+		smstemplate.RegisterAdminRoutes(smsRoutes, dependencies.SMSTemplate, dependencies.Authenticate, dependencies.RequirePermission)
+		smslog.RegisterAdminRoutes(smsRoutes, dependencies.SMSLog, dependencies.Authenticate, dependencies.RequirePermission)
+		smsratelimitpolicy.RegisterAdminRoutes(smsRoutes, dependencies.SMSRateLimit, dependencies.Authenticate, dependencies.RequirePermission)
+		smsrecipientrule.RegisterAdminRoutes(smsRoutes, dependencies.SMSRecipientRule, dependencies.Authenticate, dependencies.RequirePermission)
 	}
-	operationlog.RegisterRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
+	operationlog.RegisterAdminRoutes(adminRoutes, dependencies.OperationLog, dependencies.Authenticate, dependencies.RequirePermission)
 	if dependencies.Setting != nil {
-		systemsetting.RegisterRoutes(adminRoutes, dependencies.Setting, dependencies.Authenticate, dependencies.RequirePermission)
+		systemsetting.RegisterAdminRoutes(adminRoutes, dependencies.Setting, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.ConfigCacheStatus != nil {
-		systemconfigcachestatus.RegisterRoutes(adminRoutes, dependencies.ConfigCacheStatus, dependencies.Authenticate, dependencies.RequirePermission)
+		systemconfigcachestatus.RegisterAdminRoutes(adminRoutes, dependencies.ConfigCacheStatus, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.QueueMonitor != nil {
-		queuemonitor.RegisterGrantRoute(adminRoutes, dependencies.QueueMonitor, dependencies.AuthOrigin, dependencies.Authenticate, dependencies.RequirePermission)
+		queuemonitor.RegisterAdminRoutes(adminRoutes, dependencies.QueueMonitor, dependencies.AuthOrigin, dependencies.Authenticate, dependencies.RequirePermission)
 	}
-	usersession.RegisterSessionAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
+	usersession.RegisterAdminRoutes(adminRoutes, dependencies.SessionAdmin, dependencies.Authenticate, dependencies.RequirePermission)
 	if dependencies.NotificationTask != nil {
-		notificationtask.RegisterRoutes(adminRoutes, dependencies.NotificationTask, dependencies.Authenticate, dependencies.RequirePermission)
+		notificationtask.RegisterAdminRoutes(adminRoutes, dependencies.NotificationTask, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.Scheduler != nil {
-		scheduler.RegisterRoutes(adminRoutes, dependencies.Scheduler, dependencies.Authenticate, dependencies.RequirePermission)
+		scheduler.RegisterAdminRoutes(adminRoutes, dependencies.Scheduler, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+
+	// Canvas is an independent allow-list, never a replay of the Admin list.
+	canvasRoutes := router.Group("/api/canvas/v1", authclient.Require(), authclient.RequirePlatform("canvas"))
+	auth.RegisterCanvasRoutes(canvasRoutes, dependencies.Auth, dependencies.AuthOrigin, dependencies.Authenticate)
+	if dependencies.Captcha != nil {
+		authcaptcha.RegisterCanvasRoutes(canvasRoutes, dependencies.Captcha, dependencies.AuthOrigin)
+	}
+	authplatform.RegisterCanvasRoutes(canvasRoutes, dependencies.AuthPlatform)
+	permission.RegisterCanvasRoutes(canvasRoutes, dependencies.Permission, dependencies.Authenticate)
+	if dependencies.Account != nil {
+		profile.RegisterCanvasRoutes(canvasRoutes, dependencies.Account, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.Email != nil {
+		useremail.RegisterCanvasRoutes(canvasRoutes, dependencies.Email, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.Phone != nil {
+		userphone.RegisterCanvasRoutes(canvasRoutes, dependencies.Phone, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	uploadrule.RegisterCanvasRoutes(canvasRoutes, dependencies.UploadRule, dependencies.Authenticate, dependencies.RequirePermission)
+	if dependencies.File != nil {
+		storagefile.RegisterCanvasRoutes(canvasRoutes, dependencies.File, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.Setting != nil {
+		systemsetting.RegisterCanvasRoutes(canvasRoutes, dependencies.Setting)
 	}
 	return router
 }

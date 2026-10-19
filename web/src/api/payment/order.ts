@@ -44,23 +44,23 @@ export interface OrderQuery extends PageRequest {
 }
 
 export function getRechargeOptions(): Promise<RechargeOptions> {
-  return request.get<RechargeOptions>('/api/v1/payment/recharge/options')
+  return request.get<RechargeOptions>('/api/admin/v1/payment/recharge/options')
 }
 
 export function getMyRechargeOrders(query: PageRequest): Promise<PageResult<RechargeOrder>> {
-  return request.get<PageResult<RechargeOrder>>('/api/v1/payment/recharge', { params: query })
+  return request.get<PageResult<RechargeOrder>>('/api/admin/v1/payment/recharge', { params: query })
 }
 
 export function getMyRechargeOrder(id: number): Promise<RechargeOrder> {
-  return request.get<RechargeOrder>(`/api/v1/payment/recharge/${id}`)
+  return request.get<RechargeOrder>(`/api/admin/v1/payment/recharge/${id}`)
 }
 
 export function createRecharge(input: CreateRechargeInput): Promise<Checkout> {
-  return request.post<Checkout, CreateRechargeInput>('/api/v1/payment/recharge', input)
+  return request.post<Checkout, CreateRechargeInput>('/api/admin/v1/payment/recharge', input)
 }
 
 export function payRecharge(id: number): Promise<Checkout> {
-  return request.post<Checkout>(`/api/v1/payment/recharge/${id}/pay`)
+  return request.post<Checkout>(`/api/admin/v1/payment/recharge/${id}/pay`)
 }
 
 export function getOrders(query: OrderQuery): Promise<PageResult<RechargeOrder>> {

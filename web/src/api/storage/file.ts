@@ -40,22 +40,22 @@ export function listFiles(
   input: FileListInput,
   signal?: AbortSignal,
 ): Promise<PageResult<StorageFile>> {
-  return request.get<PageResult<StorageFile>>('/api/v1/storage/file', {
+  return request.get<PageResult<StorageFile>>('/api/admin/v1/storage/file', {
     params: input,
     ...(signal ? { signal } : {}),
   })
 }
 export function getFileOptions(purpose = '', signal?: AbortSignal): Promise<FileOptions> {
-  return request.get<FileOptions>('/api/v1/storage/file/options', {
+  return request.get<FileOptions>('/api/admin/v1/storage/file/options', {
     params: { purpose },
     ...(signal ? { signal } : {}),
   })
 }
 export function getFile(id: number): Promise<StorageFile> {
-  return request.get<StorageFile>(`/api/v1/storage/file/${id}`)
+  return request.get<StorageFile>(`/api/admin/v1/storage/file/${id}`)
 }
 export function completeFileUpload(id: number, signal?: AbortSignal): Promise<CompletedFile> {
-  return request.post<CompletedFile>(`/api/v1/storage/file/${id}/complete`, undefined, {
+  return request.post<CompletedFile>(`/api/admin/v1/storage/file/${id}/complete`, undefined, {
     ...(signal ? { signal } : {}),
   })
 }
@@ -65,9 +65,9 @@ export function getFileURL(
   signal?: AbortSignal,
 ): Promise<FileURL> {
   return signal
-    ? request.post<FileURL>(`/api/v1/storage/file/${id}/url`, { disposition }, { signal })
-    : request.post<FileURL>(`/api/v1/storage/file/${id}/url`, { disposition })
+    ? request.post<FileURL>(`/api/admin/v1/storage/file/${id}/url`, { disposition }, { signal })
+    : request.post<FileURL>(`/api/admin/v1/storage/file/${id}/url`, { disposition })
 }
 export function deleteFile(id: number): Promise<{ accepted: true }> {
-  return request.delete<{ accepted: true }>(`/api/v1/storage/file/${id}`)
+  return request.delete<{ accepted: true }>(`/api/admin/v1/storage/file/${id}`)
 }

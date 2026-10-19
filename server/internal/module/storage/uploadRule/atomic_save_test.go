@@ -32,7 +32,7 @@ func TestAtomicUpdateRequiresStatusPermissionWhenSupplied(t *testing.T) {
 		service := &ruleHTTPService{}
 		router := gin.New()
 		seen := []string{}
-		RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(service), func(c *gin.Context) { c.Next() }, func(code string) gin.HandlerFunc {
+		RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(service), func(c *gin.Context) { c.Next() }, func(code string) gin.HandlerFunc {
 			return func(c *gin.Context) {
 				seen = append(seen, code)
 				if code == PermissionStatus && !allowStatus {
@@ -162,7 +162,7 @@ func TestAtomicUpdateKeepsStrictBodyValidationAndFieldOnlyPermission(t *testing.
 	// Case-folded JSON names must not bypass status authorization.
 	router := gin.New()
 	service := &ruleHTTPService{}
-	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(service), func(c *gin.Context) { c.Next() }, func(code string) gin.HandlerFunc {
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(service), func(c *gin.Context) { c.Next() }, func(code string) gin.HandlerFunc {
 		return func(c *gin.Context) {
 			if code == PermissionStatus {
 				c.AbortWithStatus(http.StatusForbidden)

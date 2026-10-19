@@ -12,7 +12,7 @@ const base = {
 describe('realtime protocol', () => {
   it('builds a same-origin WebSocket URL without losing the ticket', () => {
     expect(buildRealtimeWebSocketURL('a b', new URL('https://admin.test/x')).toString()).toBe(
-      'wss://admin.test/api/v1/realtime/ws?ticket=a+b',
+      'wss://admin.test/api/admin/v1/realtime/ws?ticket=a+b',
     )
   })
 

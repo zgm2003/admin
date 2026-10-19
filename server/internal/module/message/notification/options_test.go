@@ -42,7 +42,7 @@ func TestOptionsRouteRequiresIndependentListAction(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	var codes []string
-	RegisterRoutes(router.Group("/api/v1"), NewHandler(nil), func(c *gin.Context) { c.Next() }, func(code string) gin.HandlerFunc {
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(nil), func(c *gin.Context) { c.Next() }, func(code string) gin.HandlerFunc {
 		codes = append(codes, code)
 		return func(c *gin.Context) {
 			if c.Request.Header.Get("X-Test-Allow") != code {
@@ -54,7 +54,7 @@ func TestOptionsRouteRequiresIndependentListAction(t *testing.T) {
 		}
 	})
 	for _, allow := range []string{"message:notification:view", PermissionList} {
-		request := httptest.NewRequest(http.MethodGet, "/api/v1/message/notification/options", nil)
+		request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/message/notification/options", nil)
 		request.Header.Set("X-Test-Allow", allow)
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, request)

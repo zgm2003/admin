@@ -75,7 +75,7 @@ func TestListResponseKeepsStrictEnvelopeAndActionCode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	repository := &presentationRepository{items: []Item{{ID: 7, Action: "user.update", RequestData: JSON(`{"redacted":"***"}`), ResponseData: JSON(`{"code":0}`)}}}
 	router := gin.New()
-	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(NewService(repository)), func(c *gin.Context) {
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(NewService(repository)), func(c *gin.Context) {
 		c.Request = c.Request.WithContext(i18n.WithLocale(c.Request.Context(), i18n.EnUS))
 		c.Next()
 	}, func(string) gin.HandlerFunc { return func(c *gin.Context) { c.Next() } })

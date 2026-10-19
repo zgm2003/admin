@@ -31,7 +31,7 @@ it.each([true, false])(
     )
     const signal = withSignal ? new AbortController().signal : undefined
     expect(await completeFileUpload(8, signal)).toBe(confirmed)
-    expect(received?.url).toBe('/api/v1/storage/file/8/complete')
+    expect(received?.url).toBe('/api/admin/v1/storage/file/8/complete')
     expect(received?.method).toBe('post')
     expect(received?.data).toBeUndefined()
     expect(received?.signal).toBe(signal)

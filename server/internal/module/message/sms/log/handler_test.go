@@ -27,7 +27,7 @@ func TestDetailRouteNeedsOnlyLogID(t *testing.T) {
 	service := &handlerServiceTest{}
 	router := gin.New()
 	pass := func(ctx *gin.Context) { ctx.Next() }
-	RegisterRoutes(router.Group("/api/admin/v1/message/sms"), NewHandler(service), pass, func(string) gin.HandlerFunc { return pass })
+	RegisterAdminRoutes(router.Group("/api/admin/v1/message/sms"), NewHandler(service), pass, func(string) gin.HandlerFunc { return pass })
 
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/message/sms/log/7", nil))
@@ -40,7 +40,7 @@ func TestRegisterRoutesBindsExactLogPermissions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	seen := make(map[string]int, 2)
 	router := gin.New()
-	RegisterRoutes(router.Group("/api/admin/v1/message/sms"), NewHandler(&handlerServiceTest{}),
+	RegisterAdminRoutes(router.Group("/api/admin/v1/message/sms"), NewHandler(&handlerServiceTest{}),
 		func(c *gin.Context) { c.Next() },
 		func(code string) gin.HandlerFunc {
 			return func(c *gin.Context) {

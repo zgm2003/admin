@@ -2,7 +2,7 @@ package session
 
 import "github.com/gin-gonic/gin"
 
-func RegisterSessionAdminRoutes(routes *gin.RouterGroup, handler *SessionAdminHandler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
+func RegisterAdminRoutes(routes *gin.RouterGroup, handler *SessionAdminHandler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
 	routes.GET("/user/session/options", authenticate, handler.FormOptions)
 	routes.GET("/user/session", authenticate, requirePermission(PermissionList), handler.List)
 	routes.GET("/user/session/stats", authenticate, requirePermission(PermissionList), handler.Stats)

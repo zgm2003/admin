@@ -21,7 +21,7 @@ func TestSMSOptionsAuthenticatedLocalizedAndNumeric(t *testing.T) {
 			}
 			c.Request = c.Request.WithContext(i18n.WithLocale(c.Request.Context(), locale))
 		}
-		RegisterRoutes(router.Group("/sms"), NewHandler(&Service{}), auth, func(string) gin.HandlerFunc {
+		RegisterAdminRoutes(router.Group("/sms"), NewHandler(&Service{}), auth, func(string) gin.HandlerFunc {
 			return func(c *gin.Context) { c.AbortWithStatus(http.StatusForbidden) }
 		})
 		unauthorized := httptest.NewRecorder()

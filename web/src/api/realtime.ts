@@ -6,5 +6,5 @@ export interface RealtimeTicket {
 }
 
 export async function requestRealtimeTicket(): Promise<RealtimeTicket> {
-  return request.post<RealtimeTicket>('/api/v1/realtime/ticket', undefined)
+  return request.post<RealtimeTicket>('/api/admin/v1/realtime/ticket', undefined)
 }

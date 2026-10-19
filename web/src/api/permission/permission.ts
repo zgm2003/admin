@@ -21,5 +21,5 @@ export interface PermissionSnapshot {
 }
 
 export async function getPermission(): Promise<PermissionSnapshot> {
-  return request.get<PermissionSnapshot>('/api/v1/access')
+  return request.get<PermissionSnapshot>('/api/admin/v1/access')
 }

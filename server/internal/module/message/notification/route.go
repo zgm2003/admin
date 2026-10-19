@@ -12,7 +12,7 @@ func BasePermissionCodes() []string {
 	return []string{"message:notification:view", PermissionList, PermissionRead, PermissionDelete}
 }
 
-func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
+func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
 	routes.GET("/message/notification", authenticate, requirePermission(PermissionList), handler.List)
 	routes.GET("/message/notification/summary", authenticate, requirePermission(PermissionList), handler.Summary)
 	routes.GET("/message/notification/options", authenticate, requirePermission(PermissionList), handler.Options)

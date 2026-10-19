@@ -103,7 +103,7 @@ export function exportRedeemCodes(ids: number[]): Promise<RedeemCodeExport[]> {
 }
 
 export function redeemWalletCode(code: string): Promise<RedeemResult> {
-  return request.post<RedeemResult, { code: string }>('/api/v1/payment/wallet/redemption', {
+  return request.post<RedeemResult, { code: string }>('/api/admin/v1/payment/wallet/redemption', {
     code,
   })
 }

@@ -35,7 +35,7 @@ export function getTransaction(id: number): Promise<Transaction> {
 }
 
 export function getMyTransactions(query: PageRequest): Promise<PageResult<PersonalTransaction>> {
-  return request.get<PageResult<PersonalTransaction>>('/api/v1/payment/wallet/transaction', {
+  return request.get<PageResult<PersonalTransaction>>('/api/admin/v1/payment/wallet/transaction', {
     params: query,
   })
 }

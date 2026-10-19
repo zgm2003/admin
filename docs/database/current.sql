@@ -1028,7 +1028,7 @@ CREATE TABLE public.payment_config_version (
     CONSTRAINT ck_payment_config_version_alipay_cert CHECK (((octet_length(alipay_cert_pem) >= 1) AND (octet_length(alipay_cert_pem) <= 65536))),
     CONSTRAINT ck_payment_config_version_app_cert CHECK (((octet_length(app_cert_pem) >= 1) AND (octet_length(app_cert_pem) <= 65536))),
     CONSTRAINT ck_payment_config_version_key CHECK (((octet_length(private_key_ciphertext) >= 1) AND (octet_length(private_key_ciphertext) <= 32768))),
-    CONSTRAINT ck_payment_config_version_notify_url CHECK ((((notify_url)::text ~~ 'https://%'::text) AND ((notify_url)::text ~~ ((('%/api/v1/payment/callback/alipay/'::text || (config_id)::text) || '/'::text) || (version)::text)) AND (POSITION(('?'::text) IN (notify_url)) = 0) AND (POSITION(('#'::text) IN (notify_url)) = 0))),
+    CONSTRAINT ck_payment_config_version_notify_url CHECK (((notify_url)::text ~ (((('^https://[^/?#@]+/api/admin/v1/payment/callback/alipay/'::text || config_id) || '/'::text) || version) || '$'::text))),
     CONSTRAINT ck_payment_config_version_pay_methods CHECK ((((pay_methods = ARRAY[(1)::smallint]) OR (pay_methods = ARRAY[(2)::smallint])) OR (pay_methods = ARRAY[(1)::smallint, (2)::smallint]))),
     CONSTRAINT ck_payment_config_version_root_cert CHECK (((octet_length(root_cert_pem) >= 1) AND (octet_length(root_cert_pem) <= 65536))),
     CONSTRAINT ck_payment_config_version_version CHECK ((version > 0))

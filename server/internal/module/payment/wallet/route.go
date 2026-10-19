@@ -13,8 +13,6 @@ func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, authenticate
 	group := routes.Group("/payment/wallet")
 	group.GET("", authenticate, requirePermission(PermissionList), handler.AdminList)
 	group.GET("/:userId", authenticate, requirePermission(PermissionDetail), handler.AdminDetail)
-}
 
-func RegisterPersonalRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
-	routes.GET("/payment/wallet", authenticate, requirePermission(PersonalDetail), handler.Current)
+	routes.GET("/payment/wallet/me", authenticate, requirePermission(PersonalDetail), handler.Current)
 }

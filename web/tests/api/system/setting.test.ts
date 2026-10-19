@@ -71,7 +71,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.get).mockResolvedValue(dataFromServer)
     const result = await api.getPublicLegalDocument(kind)
     expect(result).toBe(dataFromServer)
-    expect(request.get).toHaveBeenCalledExactlyOnceWith(`/api/v1/system/setting/legal/${kind}`)
+    expect(request.get).toHaveBeenCalledExactlyOnceWith(`/api/admin/v1/system/setting/legal/${kind}`)
   })
   it('getPublicLegalDocument propagates request failures unchanged', async () => {
     const kind: Parameters<typeof api.getPublicLegalDocument>[0] = 'userAgreement'

@@ -29,14 +29,14 @@ func TestRulesMatchOnlyExplicitMutations(t *testing.T) {
 	if rule, ok := FindRule(http.MethodPut, "/api/admin/v1/user/account/:id"); !ok || rule.Action != "user.update" {
 		t.Fatalf("user update rule = %+v,%v", rule, ok)
 	}
-	if _, ok := FindRule(http.MethodPut, "/api/v1/users/:id"); ok {
+	if _, ok := FindRule(http.MethodPut, "/api/admin/v1/users/:id"); ok {
 		t.Fatal("legacy user update rule remains registered")
 	}
 	for _, route := range []string{
-		"/api/v1/auth/register",
-		"/api/v1/auth/login",
-		"/api/v1/auth/refresh",
-		"/api/v1/auth/logout",
+		"/api/admin/v1/auth/register",
+		"/api/admin/v1/auth/login",
+		"/api/admin/v1/auth/refresh",
+		"/api/admin/v1/auth/logout",
 	} {
 		if _, ok := FindRule(http.MethodPost, route); ok {
 			t.Fatalf("authentication route %s must not be operation logged", route)
@@ -51,7 +51,7 @@ func TestRulesMatchOnlyExplicitMutations(t *testing.T) {
 	if rule, ok := FindRule(http.MethodPost, "/api/admin/v1/user/password"); !ok || rule.Action != "user.password.update" || rule.Module != "user" || !rule.CaptureRequest || !rule.CaptureResponse {
 		t.Fatalf("password update rule = %+v,%v", rule, ok)
 	}
-	for _, route := range []string{"/api/admin/v1/user/account", "/api/v1/access", "/api/admin/v1/user/account/:id/role", "/api/admin/v1/user/profile"} {
+	for _, route := range []string{"/api/admin/v1/user/account", "/api/admin/v1/access", "/api/admin/v1/user/account/:id/role", "/api/admin/v1/user/profile"} {
 		if _, ok := FindRule(http.MethodGet, route); ok {
 			t.Fatalf("read route %s was registered as operation", route)
 		}
@@ -130,7 +130,7 @@ func TestUploadRuleMutationRulesExcludeCredentialIssuance(t *testing.T) {
 			t.Fatalf("rule=%+v ok=%v", rule, ok)
 		}
 	}
-	if _, ok := FindRule(http.MethodPost, "/api/v1/storage/upload-credential"); ok {
+	if _, ok := FindRule(http.MethodPost, "/api/admin/v1/storage/upload-credential"); ok {
 		t.Fatal("credential issuance must not be operation logged")
 	}
 }

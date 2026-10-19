@@ -2,7 +2,7 @@ package scheduler
 
 import "github.com/gin-gonic/gin"
 
-func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, require func(string) gin.HandlerFunc) {
+func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, require func(string) gin.HandlerFunc) {
 	routes.GET("/system/scheduler/options", authenticate, handler.Options)
 	routes.GET("/system/scheduler/schedule", authenticate, require(PermissionList), handler.ListSchedule)
 	routes.GET("/system/scheduler/schedule/:id", authenticate, require(PermissionDetail), handler.GetSchedule)

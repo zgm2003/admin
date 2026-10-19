@@ -42,12 +42,12 @@ func TestListQueryPaginationBoundaries(t *testing.T) {
 }
 
 func TestNotifyURLTemplateBindsCoordinates(t *testing.T) {
-	template := "https://pay.example.test/api/v1/payment/callback/alipay/{configId}/{version}"
+	template := "https://pay.example.test/api/admin/v1/payment/callback/alipay/{configId}/{version}"
 	got, err := resolveNotifyURL(template, 42, 3)
-	if err != nil || got != "https://pay.example.test/api/v1/payment/callback/alipay/42/3" {
+	if err != nil || got != "https://pay.example.test/api/admin/v1/payment/callback/alipay/42/3" {
 		t.Fatalf("%q %v", got, err)
 	}
-	for _, url := range []string{"", "http://pay.example.test/api/v1/payment/callback/alipay/{configId}/{version}", "https://user:pass@pay.example.test/api/v1/payment/callback/alipay/{configId}/{version}", strings.Replace(template, "alipay", "wechat", 1), template + "?token=secret", strings.Replace(template, "{version}", "1", 1)} {
+	for _, url := range []string{"", "https://pay.example.test/api/v1/payment/callback/alipay/{configId}/{version}", "https://pay.example.test/api/canvas/v1/payment/callback/alipay/{configId}/{version}", "http://pay.example.test/api/admin/v1/payment/callback/alipay/{configId}/{version}", "https://user:pass@pay.example.test/api/admin/v1/payment/callback/alipay/{configId}/{version}", strings.Replace(template, "alipay", "wechat", 1), template + "?token=secret", strings.Replace(template, "{version}", "1", 1)} {
 		if _, err := resolveNotifyURL(url, 42, 1); err == nil {
 			t.Fatalf("accepted %q", url)
 		}
@@ -63,7 +63,7 @@ func TestNotifyURLRequiresReplacingHostPlaceholder(t *testing.T) {
 }
 func TestCreateRequestNeedsOnlyPaymentIdentityAndCredentials(t *testing.T) {
 	var r createRequest
-	raw := `{"name":"支付宝沙箱","provider":1,"environment":1,"appId":"20260001","sellerId":"20880001","privateKey":"key","appCertPEM":"app","alipayCertPEM":"alipay","rootCertPEM":"root","notifyUrl":"https://pay.example.test/api/v1/payment/callback/alipay/{configId}/{version}","payMethods":[2,1],"sortOrder":0,"isEnabled":0}`
+	raw := `{"name":"支付宝沙箱","provider":1,"environment":1,"appId":"20260001","sellerId":"20880001","privateKey":"key","appCertPEM":"app","alipayCertPEM":"alipay","rootCertPEM":"root","notifyUrl":"https://pay.example.test/api/admin/v1/payment/callback/alipay/{configId}/{version}","payMethods":[2,1],"sortOrder":0,"isEnabled":0}`
 	if err := json.Unmarshal([]byte(raw), &r); err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestCreateRequestNeedsOnlyPaymentIdentityAndCredentials(t *testing.T) {
 }
 func TestVersionRequestRequiresExplicitRetainFields(t *testing.T) {
 	var r versionRequest
-	if err := json.Unmarshal([]byte(`{"privateKey":null,"appCertPEM":null,"alipayCertPEM":null,"rootCertPEM":null,"notifyUrl":"https://pay.example.test/api/v1/payment/callback/alipay/{configId}/{version}","payMethods":[2,1]}`), &r); err != nil {
+	if err := json.Unmarshal([]byte(`{"privateKey":null,"appCertPEM":null,"alipayCertPEM":null,"rootCertPEM":null,"notifyUrl":"https://pay.example.test/api/admin/v1/payment/callback/alipay/{configId}/{version}","payMethods":[2,1]}`), &r); err != nil {
 		t.Fatal(err)
 	}
 	v, err := r.input()

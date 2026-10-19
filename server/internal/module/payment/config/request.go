@@ -17,7 +17,7 @@ import (
 
 const (
 	MaxSnapshotBytes   = 256 * 1024
-	NotifyPathTemplate = "/api/v1/payment/callback/alipay/{configId}/{version}"
+	NotifyPathTemplate = "/api/admin/v1/payment/callback/alipay/{configId}/{version}"
 )
 
 var errNotifyURLInvalid = errors.New("notifyUrl must use HTTPS and the exact callback template")
@@ -76,14 +76,14 @@ func resolveNotifyURL(template string, id, version int64) (string, error) {
 	if err == nil && strings.EqualFold(u.Hostname(), "HOST") {
 		return "", errNotifyURLInvalid
 	}
-	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawPath != "" || u.Opaque != "" || !strings.HasSuffix(template, NotifyPathTemplate) || u.Path != fmt.Sprintf("/api/v1/payment/callback/alipay/%d/%d", id, version) {
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawPath != "" || u.Opaque != "" || !strings.HasSuffix(template, NotifyPathTemplate) || u.Path != fmt.Sprintf("/api/admin/v1/payment/callback/alipay/%d/%d", id, version) {
 		return "", errNotifyURLInvalid
 	}
 	return u.String(), nil
 }
 func notifyTemplate(raw string, id, version int64) (string, error) {
 	u, err := url.Parse(raw)
-	if err != nil || u.Path != fmt.Sprintf("/api/v1/payment/callback/alipay/%d/%d", id, version) {
+	if err != nil || u.Path != fmt.Sprintf("/api/admin/v1/payment/callback/alipay/%d/%d", id, version) {
 		return "", fmt.Errorf("stored callback coordinates invalid")
 	}
 	template := u.Scheme + "://" + u.Host + NotifyPathTemplate

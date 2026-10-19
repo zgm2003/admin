@@ -84,7 +84,7 @@ func TestRequireAdminPlatformAllowsOnlyAdmin(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 			calls := 0
 			router := gin.New()
-			router.Use(authclient.Require(), authclient.RequireAdminPlatform())
+			router.Use(authclient.Require(), authclient.RequirePlatform("admin"))
 			router.GET("/", func(context *gin.Context) {
 				calls++
 				context.Status(http.StatusNoContent)

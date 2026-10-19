@@ -11,4 +11,4 @@ export interface PermissionMenuNode {
   children: PermissionMenuNode[]
 }
 export interface PermissionSnapshot { roleCodes: string[]; permissionCodes: string[]; menuTree: PermissionMenuNode[] }
-export const getPermission = (client: RequestClient): Promise<unknown> => client.get<unknown>('/api/v1/access')
+export const getPermission = (client: RequestClient): Promise<unknown> => client.get<unknown>('/api/canvas/v1/access')

@@ -74,8 +74,9 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 `docs/database/2026-10-10-remove-system-dictionary.ps1 -OldServicesStopped`，不是 API/Worker 启动行为。
 系统设置的用户协议与隐私政策使用 `app.legal.user_agreement`、`app.legal.privacy_policy` 两个内置字符串配置，
 复用 `system.setting/global` generation 缓存。后台读取与更新端点为
-`/api/admin/v1/system/setting/legal/:document`，更新使用 `system:setting:update`；登录页通过匿名只读端点
-`/api/v1/system/setting/legal/:document` 获取服务端净化后的单份 HTML，不按语言派生其他 key 或 DTO 字段。
+`/api/admin/v1/system/setting/legal/:document`，更新使用 `system:setting:update`；Admin 与 Canvas 登录页分别通过
+`/api/admin/v1/system/setting/legal/:document`、`/api/canvas/v1/system/setting/legal/:document` 匿名读取服务端
+净化后的单份 HTML，不按语言派生其他 key 或 DTO 字段。匿名读取仍校验对应平台客户端元数据。
 
 菜单 page 的 `componentPath` 精确对应 Views 页面，`path = "/" + componentPath`；菜单 `code` 与页面和动作
 权限各自对应，`i18nKey` 必须在中英文翻译中可解析。公共登录/找回密码页按静态认证路由处理，不强行创建
@@ -84,7 +85,8 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 认证平台归属“权限与认证”：管理 API 为 `/api/admin/v1/permission/authplatform`，页面/动作权限为
 `permission:authPlatform:view/list/create/update/status/delete`（各自独立声明，不自动推导）。导航翻译使用
 `navigation.permissionAuthPlatform`，页面文案使用 `permission.authPlatform.*`。`auth/login` 消费平台策略，
-公共策略端点 `/api/v1/auth/policy` 不变；前端 `src/auth/platform.ts` 只是当前客户端平台标识，不是管理模块。
+公开策略端点分别为 `/api/admin/v1/auth/policy` 和 `/api/canvas/v1/auth/policy`；前端 `src/auth/platform.ts`
+只是当前客户端平台标识，不是管理模块。
 本次归属改名不改变平台 ID、策略内容、策略版本或 `auth:policy:v2:*` Redis key，不重置现有会话。
 
 修改业务名称时沿 Views -> API -> Module -> TableName -> 菜单/权限 -> i18n 核对全部引用；数据库中的菜单
@@ -174,7 +176,9 @@ SMS 收件规则与发送日志的手机号采用与邮件地址一致的明文�
 支付配置代码位于 `payment/config`；订单、钱包、流水、套餐和回调的管理/本人投影分别由
 `payment/order`、`payment/wallet`、`payment/transaction`、`payment/rechargePackage` 和
 `payment/callbackEvent` 提供，统一在 `server/cmd/api/main.go` 显式装配。公开支付宝回调
-`/api/v1/payment/callback/alipay/:configId/:version` 不经过用户鉴权；其余支付 API 依赖当前身份和精确动作权限。
+`/api/admin/v1/payment/callback/alipay/:configId/:version` 不经过用户鉴权；其余支付 API 依赖当前身份和精确动作权限。
+路由前缀切换的离线迁移只调整本地凭据 URL，不改写支付商已收到的订单；SQL 和维护者 runner 均拒绝仍绑定旧回调
+的待支付订单。必须先通过可信查单结清或关闭旧订单，再停机执行迁移与缓存代际同步，不提供旧共享回调兼容路由。
 管理 API `/api/admin/v1/payment/config`、page/action
 `payment:config:view/list/detail/create/update/status/delete/test` 与目录导航 `navigation.paymentConfig` 对齐。
 `payment_config_version` 按 `(config_id,version)` 保存不可改凭据；Redis 使用 catalog 和
@@ -208,7 +212,7 @@ generation 只承担缓存代际，不是管理员乐观锁。普通管理 CRUD 
 version，读取时仍与 PostgreSQL rule route 事实交叉校验。公开对象返回 Bucket Domain URL；私有对象只向已认证
 用户返回短期签名 GET URL，不由 Go API 代理对象内容。
 
-Canvas 全局上传能力复用 `POST /api/v1/storage/upload-credential` 和 `storage:object:upload` action；
+Canvas 全局上传能力复用 `POST /api/canvas/v1/storage/upload-credential` 和 `storage:object:upload` action；
 该 action 属于 Canvas 平台隐藏根 page `canvas:workspace:view`（`/canvas/workspace`、
 `canvas/workspace`、`navigation.canvasWorkspace`）。该节点是全局权限容器；Canvas 前端直接复用参考项目的
 画布与项目界面，不为上传单独创建工作区或上传页面。
@@ -227,7 +231,7 @@ PostgreSQL 是通知和 durable realtime event 的唯一事实来源。业务事
 `realtime:user:v1:<platformID>:<userID>` 或 `realtime:platform:v1:<platformID>`。Redis Pub/Sub 只是低延迟运输，
 丢失后客户端使用 PostgreSQL cursor resume 恢复，不能把 Redis 消息当业务事实。
 
-客户端先从认证 HTTP 端点取得 Redis 原子单次消费 ticket，再连接 `/api/v1/realtime/ws`；连接身份固定为
+客户端先从认证 HTTP 端点取得 Redis 原子单次消费 ticket，再连接 `/api/admin/v1/realtime/ws`；连接身份固定为
 `(platformId,userId,sessionId)`，Access 到期、Session/平台/用户失效或 Subscriber 故障会关闭连接。每个浏览器账号
 使用 BroadcastChannel leader 维持一个 socket；帧按 connection epoch 串行处理，cursor 只在服务端
 `realtime.resumed.v1` 或完成 `resyncRequired` 后推进，旧连接不能修改新账号状态。每连接发送队列上限 128，慢消费者
@@ -276,7 +280,13 @@ HTTP -> global middleware -> route middleware -> Handler
 ```
 
 - 全局 Middleware 在 API 入口统一处理 request ID、CORS、访问日志、操作日志、Recovery 和语言。
-- `/api/v1` 承载共享认证/Access 接口；`/api/admin/v1` 额外要求 Admin 平台标识。
+- `/api/admin/v1` 承载 Admin 接口；`/api/canvas/v1` 承载 Canvas 接口；不保留共享业务前缀。
+- 模块在各自 `route.go` 显式声明 `RegisterAdminRoutes` / `RegisterCanvasRoutes`；只有该平台有真实能力时才新增入口。
+  两份路由清单独立维护，不通过包装函数转发同一清单；Handler/Service/Repository 可按业务语义复用。
+  新平台在模块新增独立注册函数，并在 `cmd/api/main.go` 显式装配，不能根据数据库平台记录自动开放 API。
+- 每个平台路由组严格比对 URL 平台与 `X-Auth-Platform`，Token/Session 继续绑定相同平台；Refresh Cookie 使用
+  `auth_refresh_<platform>` 和 `/api/<platform>/v1/auth` Path。Provider 回调和 WebSocket 不要求客户端头，分别使用
+  支付签名和一次性票据认证，但仍只绑定明确的 Admin 路由；WebSocket 额外拒绝非 Admin 平台票据。
 - Router 只声明路径、中间件和 Handler。Handler 将 `c.Request.Context()` 传入 Service，并输出统一 envelope。
 - Service 编排业务规则、状态变化、事务意图和外部依赖顺序。Repository 通过 `WithContext(ctx)` 访问
   PostgreSQL；Model 只映射表结构。

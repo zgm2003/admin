@@ -39,7 +39,7 @@ func TestRegisterRoutesBindsExactConfigPermissions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	seen := make(map[string]int, 3)
-	RegisterRoutes(router.Group("/api/admin/v1/message/sms"), NewHandler(&stubService{}),
+	RegisterAdminRoutes(router.Group("/api/admin/v1/message/sms"), NewHandler(&stubService{}),
 		func(c *gin.Context) { c.Next() },
 		func(code string) gin.HandlerFunc {
 			return func(c *gin.Context) {

@@ -15,7 +15,7 @@ func TestActionRoutesRemainIndependentAndOptionsOnlyAuthenticate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	seen := ""
-	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(&Service{}), func(c *gin.Context) { c.Next() }, func(action string) gin.HandlerFunc {
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(&Service{}), func(c *gin.Context) { c.Next() }, func(action string) gin.HandlerFunc {
 		return func(c *gin.Context) {
 			seen = action
 			response.Fail(c, apperror.Forbidden(nil))
@@ -48,7 +48,7 @@ func TestActionRoutesRemainIndependentAndOptionsOnlyAuthenticate(t *testing.T) {
 func TestHandlerRejectsUnknownAndMalformedPackageFields(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(&Service{}), func(c *gin.Context) { c.Next() }, func(string) gin.HandlerFunc { return func(c *gin.Context) { c.Next() } })
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(&Service{}), func(c *gin.Context) { c.Next() }, func(string) gin.HandlerFunc { return func(c *gin.Context) { c.Next() } })
 	for _, route := range []struct{ method, path, body string }{
 		{"POST", "", `{"code":"starter","name":"Starter","amount":"1.00","sortOrder":0,"isEnabled":0}`},
 		{"POST", "", `{"code":"starter","name":"Starter","amount":"1.00","sortOrder":0,"isEnabled":0,"extra":true}`},

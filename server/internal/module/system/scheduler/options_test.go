@@ -21,7 +21,7 @@ func TestSchedulerOptionsAuthenticatedLocalizedWithoutRepository(t *testing.T) {
 			}
 			c.Request = c.Request.WithContext(i18n.WithLocale(c.Request.Context(), locale))
 		}
-		RegisterRoutes(router.Group(""), NewHandler(NewService(nil, TaskCatalog{})), auth, func(string) gin.HandlerFunc {
+		RegisterAdminRoutes(router.Group(""), NewHandler(NewService(nil, TaskCatalog{})), auth, func(string) gin.HandlerFunc {
 			return func(c *gin.Context) { c.AbortWithStatus(http.StatusForbidden) }
 		})
 		unauthorized := httptest.NewRecorder()

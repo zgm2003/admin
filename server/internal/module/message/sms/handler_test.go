@@ -31,7 +31,7 @@ func TestAdminTestResponseIncludesFinalStatus(t *testing.T) {
 		ctx.Next()
 	})
 	pass := func(ctx *gin.Context) { ctx.Next() }
-	RegisterRoutes(router.Group("/api/admin/v1/message/sms"), NewHandler(adminServiceTest{}), pass, func(string) gin.HandlerFunc { return pass })
+	RegisterAdminRoutes(router.Group("/api/admin/v1/message/sms"), NewHandler(adminServiceTest{}), pass, func(string) gin.HandlerFunc { return pass })
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/message/sms/test", strings.NewReader(`{"toPhone":"15671628271","scene":"login"}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -54,7 +54,7 @@ func TestRegisterRoutesBindsExactAggregatePermissions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	seen := make(map[string]int, 2)
 	router := gin.New()
-	RegisterRoutes(router.Group("/api/admin/v1/message/sms"), NewHandler(adminServiceTest{}),
+	RegisterAdminRoutes(router.Group("/api/admin/v1/message/sms"), NewHandler(adminServiceTest{}),
 		func(c *gin.Context) { c.Next() },
 		func(code string) gin.HandlerFunc {
 			return func(c *gin.Context) {

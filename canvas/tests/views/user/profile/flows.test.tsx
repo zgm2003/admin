@@ -11,9 +11,9 @@ beforeEach(async () => {
   authStore.setAuthenticated({ accessToken: 'token', expiresIn: 3600, isNewUser: false, passwordSetRequired: false }, { ...profile, passwordSetRequired: false })
   permissionStore.reset()
   vi.spyOn(request, 'get').mockImplementation(async path => {
-    if (path === '/api/v1/access') return { roleCodes: [], permissionCodes: codes, menuTree: [{ code: 'user:profile:view', menuType: 'page', path: '/user/profile', componentPath: 'user/profile', i18nKey: 'layout.user.profile', icon: null, isHidden: 1, children: [] }] }
+    if (path === '/api/canvas/v1/access') return { roleCodes: [], permissionCodes: codes, menuTree: [{ code: 'user:profile:view', menuType: 'page', path: '/user/profile', componentPath: 'user/profile', i18nKey: 'layout.user.profile', icon: null, isHidden: 1, children: [] }] }
     if (path.endsWith('/options')) return { genders: [{ value: 0, label: '未设置' }] }
-    if (path === '/api/v1/auth/me') return authStore.state.user
+    if (path === '/api/canvas/v1/auth/me') return authStore.state.user
     return profile
   })
   await permissionStore.load()
@@ -33,7 +33,7 @@ describe('Personal center security and partial failures', () => {
     fireEvent.change(screen.getByLabelText('新密码'), { target: { value: 'NewPassword123!' } })
     fireEvent.change(screen.getByLabelText('确认新密码'), { target: { value: 'NewPassword123!' } })
     fireEvent.click(screen.getByRole('button', { name: '修改密码' }))
-    await waitFor(() => expect(request.post).toHaveBeenCalledWith('/api/v1/user/password', expect.anything()))
+    await waitFor(() => expect(request.post).toHaveBeenCalledWith('/api/canvas/v1/user/password', expect.anything()))
     if (unmount) view.unmount()
     authStore.setAuthenticated({ accessToken, expiresIn: 3600, isNewUser: false, passwordSetRequired: false }, { ...profile, userId, passwordSetRequired: false })
     await act(async () => { complete(); await Promise.resolve() })
@@ -55,14 +55,14 @@ describe('Personal center security and partial failures', () => {
     const put = vi.spyOn(request, 'put').mockResolvedValue({ email: 'next@example.com' })
     mount(); await screen.findByLabelText('用户名'); fireEvent.click(screen.getByRole('button', { name: '更换邮箱' }))
     fireEvent.click(screen.getByRole('button', { name: '发送当前邮箱验证码' }))
-    await waitFor(() => expect(request.post).toHaveBeenCalledWith('/api/v1/user/email/send-code', { target: 'current' }))
+    await waitFor(() => expect(request.post).toHaveBeenCalledWith('/api/canvas/v1/user/email/send-code', { target: 'current' }))
     fireEvent.change(screen.getByLabelText('当前邮箱验证码'), { target: { value: '123456' } })
     fireEvent.change(screen.getByLabelText('新邮箱'), { target: { value: 'next@example.com' } })
     fireEvent.click(screen.getByRole('button', { name: '发送新邮箱验证码' }))
-    await waitFor(() => expect(request.post).toHaveBeenCalledWith('/api/v1/user/email/send-code', { target: 'next', email: 'next@example.com', challengeId: undefined }))
+    await waitFor(() => expect(request.post).toHaveBeenCalledWith('/api/canvas/v1/user/email/send-code', { target: 'next', email: 'next@example.com', challengeId: undefined }))
     fireEvent.change(screen.getByLabelText('新邮箱验证码'), { target: { value: '654321' } })
     fireEvent.click(screen.getByRole('button', { name: '确认更换' }))
-    await waitFor(() => expect(put).toHaveBeenCalledWith('/api/v1/user/email', { nextEmail: 'next@example.com', nextChallengeId: 'proof', nextCode: '654321', currentChallengeId: 'proof', currentCode: '123456' }))
+    await waitFor(() => expect(put).toHaveBeenCalledWith('/api/canvas/v1/user/email', { nextEmail: 'next@example.com', nextChallengeId: 'proof', nextCode: '654321', currentChallengeId: 'proof', currentCode: '123456' }))
     expect(await screen.findByText('next@example.com')).toBeInTheDocument()
   })
   it('keeps a successful save visible if refreshing identity fails', async () => {
@@ -77,11 +77,11 @@ describe('Personal center security and partial failures', () => {
     const put = vi.spyOn(request, 'put').mockResolvedValue({})
     mount(); await screen.findByLabelText('用户名'); fireEvent.click(screen.getByRole('button', { name: '验证码修改' }))
     expect(screen.queryByLabelText('当前密码')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: '发送密码验证码' }))
-    await waitFor(() => expect(request.post).toHaveBeenCalledWith('/api/v1/user/password/send-code', { loginType: 'email' }))
+    await waitFor(() => expect(request.post).toHaveBeenCalledWith('/api/canvas/v1/user/password/send-code', { loginType: 'email' }))
     fireEvent.change(screen.getByLabelText('密码验证码'), { target: { value: '123456' } })
     fireEvent.change(screen.getByLabelText('新密码'), { target: { value: 'Password123!' } }); fireEvent.change(screen.getByLabelText('确认新密码'), { target: { value: 'Password123!' } })
     fireEvent.click(screen.getByRole('button', { name: '修改密码' }))
-    await waitFor(() => expect(put).toHaveBeenCalledWith('/api/v1/user/password/by-code', { loginType: 'email', challengeId: 'password-proof', code: '123456', newPassword: 'Password123!', confirmPassword: 'Password123!' }))
+    await waitFor(() => expect(put).toHaveBeenCalledWith('/api/canvas/v1/user/password/by-code', { loginType: 'email', challengeId: 'password-proof', code: '123456', newPassword: 'Password123!', confirmPassword: 'Password123!' }))
     expect(await screen.findByText('密码已修改')).toBeInTheDocument(); expect(authStore.state.status).toBe('authenticated')
   })
   it('retains an avatar adoption key on retry and clears it after success', async () => {

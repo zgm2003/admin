@@ -13,7 +13,7 @@ const (
 	PermissionCopy   = "message:notificationTask:copy"
 )
 
-func RegisterRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, require func(string) gin.HandlerFunc) {
+func RegisterAdminRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, require func(string) gin.HandlerFunc) {
 	r.GET("/message/notificationtask/options", auth, h.FormOptions)
 	r.GET("/message/notificationtask", auth, require(PermissionList), h.List)
 	r.GET("/message/notificationtask/create/option/:kind", auth, require(PermissionCreate), h.Option)

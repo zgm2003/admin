@@ -15,7 +15,7 @@ func TestRegisterRoutesRequiresProfilePermissions(t *testing.T) {
 
 	seen := make([]string, 0, 4)
 	router := gin.New()
-	RegisterRoutes(
+	RegisterAdminRoutes(
 		router.Group("/api/admin/v1"),
 		&Handler{},
 		func(context *gin.Context) {

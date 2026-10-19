@@ -32,8 +32,8 @@ const row: api.PaymentConfig = {
   currentVersion: 1,
   sortOrder: 0,
   isEnabled: 0,
-  notifyUrl: 'https://pay.example.test/api/v1/payment/callback/alipay/7/1',
-  notifyUrlTemplate: 'https://pay.example.test/api/v1/payment/callback/alipay/{configId}/{version}',
+  notifyUrl: 'https://pay.example.test/api/admin/v1/payment/callback/alipay/7/1',
+  notifyUrlTemplate: 'https://pay.example.test/api/admin/v1/payment/callback/alipay/{configId}/{version}',
   payMethods: [1, 2],
   credentialConfigured: true,
   certificates: {
@@ -83,7 +83,7 @@ const options: api.PaymentConfigOptions = {
     payMethods: [1, 2],
     sortOrder: 0,
     isEnabled: 0,
-    notifyUrl: 'https://HOST/api/v1/payment/callback/alipay/{configId}/{version}',
+    notifyUrl: 'https://HOST/api/admin/v1/payment/callback/alipay/{configId}/{version}',
   },
   limits: {
     name: 128,
@@ -94,7 +94,7 @@ const options: api.PaymentConfigOptions = {
     sortMinimum: -2147483648,
     sortMaximum: 2147483647,
   },
-  notifyPathTemplate: '/api/v1/payment/callback/alipay/{configId}/{version}',
+  notifyPathTemplate: '/api/admin/v1/payment/callback/alipay/{configId}/{version}',
 }
 let wrapper: VueWrapper | undefined
 beforeEach(() => {
@@ -144,7 +144,7 @@ it('renders localized placeholders for payment identifiers and credential inputs
   await flushPromises()
   const notifyInput = w.get<HTMLInputElement>('input[data-testid="payment-config-notify-url"]')
   expect(notifyInput.element.value).toBe(
-    'https://HOST/api/v1/payment/callback/alipay/{configId}/{version}',
+    'https://HOST/api/admin/v1/payment/callback/alipay/{configId}/{version}',
   )
   await notifyInput.setValue(row.notifyUrlTemplate)
   setLocale('en-US')
@@ -222,7 +222,7 @@ it('validates the server-provided HTTPS callback template before submitting cred
   for (const invalid of [
     'http://abc',
     'https://pay.example.test',
-    'https://HOST/api/v1/payment/callback/alipay/{configId}/{version}',
+    'https://HOST/api/admin/v1/payment/callback/alipay/{configId}/{version}',
     row.notifyUrlTemplate + '?token=secret',
   ]) {
     await input.setValue(invalid)

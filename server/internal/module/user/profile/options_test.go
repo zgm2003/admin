@@ -20,7 +20,7 @@ func TestOptionsAreLocalizedAuthenticatedAndStatic(t *testing.T) {
 			c.Next()
 		})
 		permissionCalls := 0
-		RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(NewService(nil), nil, nil),
+		RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(NewService(nil), nil, nil),
 			func(c *gin.Context) {
 				if c.GetHeader("Authorization") != "Bearer fixture" {
 					c.AbortWithStatus(http.StatusUnauthorized)

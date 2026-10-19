@@ -159,8 +159,8 @@ func serveAccessRoute(t *testing.T, service *currentAccessService, authorization
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	permission.RegisterRoutes(router.Group("/api/v1", authclient.Require()), permission.NewHandler(service), auth.Authenticate(accessAuthService{}))
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/access", nil)
+	permission.RegisterAdminRoutes(router.Group("/api/admin/v1", authclient.Require()), permission.NewHandler(service), auth.Authenticate(accessAuthService{}))
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/access", nil)
 	if authorization != "" {
 		request.Header.Set("Authorization", authorization)
 	}

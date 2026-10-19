@@ -56,7 +56,7 @@ func adapterCredentials(t *testing.T) (Credentials, *rsa.PrivateKey) {
 	}
 	return Credentials{
 		AppID: "20260001", SellerID: "20880001", Environment: payment.EnvironmentSandbox,
-		NotifyURL:  "https://pay.example.test/api/v1/payment/callback/alipay/1/1",
+		NotifyURL:  "https://pay.example.test/api/admin/v1/payment/callback/alipay/1/1",
 		PrivateKey: string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(appKey)})),
 		AppCertPEM: makeLeaf(2, "20260001", appKey), AlipayCertPEM: makeLeaf(3, "Alipay Fixture", aliKey),
 		RootCertPEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootDER})),

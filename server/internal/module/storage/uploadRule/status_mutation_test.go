@@ -151,7 +151,7 @@ func TestStatusPatchUsesStatusPermissionWithoutFieldUpdatePermission(t *testing.
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	permissions := []string{}
-	RegisterRoutes(router.Group("/api/admin/v1"), NewHandler(&ruleHTTPService{}), func(c *gin.Context) { c.Next() }, func(code string) gin.HandlerFunc {
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(&ruleHTTPService{}), func(c *gin.Context) { c.Next() }, func(code string) gin.HandlerFunc {
 		return func(c *gin.Context) {
 			permissions = append(permissions, code)
 			if code != PermissionStatus {

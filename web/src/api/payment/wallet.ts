@@ -17,7 +17,7 @@ export interface Wallet {
 }
 
 export function getMyWallet(): Promise<MyWallet> {
-  return request.get<MyWallet>('/api/v1/payment/wallet')
+  return request.get<MyWallet>('/api/admin/v1/payment/wallet/me')
 }
 
 export function getWallet(userId: number): Promise<Wallet> {

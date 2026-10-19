@@ -17,7 +17,7 @@ it('sends only the fixed recharge create contract', async () => {
     returnUrl: 'https://app.example.test/paid',
   }
   await api.createRecharge(input)
-  expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/v1/payment/recharge', input)
+  expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/payment/recharge', input)
   await api.payRecharge(9)
-  expect(request.post).toHaveBeenCalledWith('/api/v1/payment/recharge/9/pay')
+  expect(request.post).toHaveBeenCalledWith('/api/admin/v1/payment/recharge/9/pay')
 })

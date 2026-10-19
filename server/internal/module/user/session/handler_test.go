@@ -39,7 +39,7 @@ func TestSessionRoutesUseExactPermissions(t *testing.T) {
 	router := gin.New()
 	service := &fakeSessionAdminService{}
 	var permissions []string
-	RegisterSessionAdminRoutes(router.Group("/api/admin/v1"), NewSessionAdminHandler(service, testActor), func(context *gin.Context) {
+	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewSessionAdminHandler(service, testActor), func(context *gin.Context) {
 		context.Next()
 	}, func(permission string) gin.HandlerFunc {
 		permissions = append(permissions, permission)

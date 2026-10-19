@@ -74,7 +74,7 @@ func TestXlsxImportRoutesRequireIndependentActionBeforeBinding(t *testing.T) {
 			router := gin.New()
 			authenticated := false
 			permission := ""
-			RegisterRoutes(router.Group(""), NewHandler(nil), func(ctx *gin.Context) {
+			RegisterAdminRoutes(router.Group(""), NewHandler(nil), func(ctx *gin.Context) {
 				authenticated = true
 				ctx.Next()
 			}, func(code string) gin.HandlerFunc {
@@ -93,7 +93,7 @@ func TestXlsxImportHandlerRejectsMalformedRequestsWithExactEnvelope(t *testing.T
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	pass := func(ctx *gin.Context) { ctx.Next() }
-	RegisterRoutes(router.Group(""), NewHandler(NewService(nil)), pass, func(string) gin.HandlerFunc { return pass })
+	RegisterAdminRoutes(router.Group(""), NewHandler(NewService(nil)), pass, func(string) gin.HandlerFunc { return pass })
 	for _, path := range []string{"/recipient-rule/import/preview", "/recipient-rule/import"} {
 		for _, body := range []string{
 			"", "{}", "null", "[]", `{"content":null}`, `{"content":12}`, `{"content":"x","extra":1}`, `{"content":"x","content":"y"}`, `{"content":"x"} {}`,

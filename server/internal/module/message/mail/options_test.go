@@ -21,7 +21,7 @@ func TestMailOptionsAuthenticatedLocalizedAndNumeric(t *testing.T) {
 			}
 			c.Request = c.Request.WithContext(i18n.WithLocale(c.Request.Context(), locale))
 		}
-		RegisterRoutes(router.Group("/mail"), NewHandler(&Service{}), auth, func(string) gin.HandlerFunc {
+		RegisterAdminRoutes(router.Group("/mail"), NewHandler(&Service{}), auth, func(string) gin.HandlerFunc {
 			return func(c *gin.Context) { c.AbortWithStatus(http.StatusForbidden) }
 		})
 		unauthorized := httptest.NewRecorder()

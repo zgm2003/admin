@@ -13,7 +13,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.get).mockResolvedValue(dataFromServer)
     const result = await api.getNotificationSummary()
     expect(result).toBe(dataFromServer)
-    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/v1/message/notification/summary')
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/notification/summary')
   })
   it('getNotificationSummary propagates request failures unchanged', async () => {
     const error = new Error('request failed')
@@ -26,7 +26,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.get).mockResolvedValue(dataFromServer)
     const result = await api.listNotifications(params)
     expect(result).toBe(dataFromServer)
-    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/v1/message/notification', { params })
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/message/notification', { params })
   })
   it('listNotifications propagates request failures unchanged', async () => {
     const params: Parameters<typeof api.listNotifications>[0] = {}
@@ -41,7 +41,7 @@ describe('thin API HTTP contract', () => {
     const result = await api.readNotification(id)
     expect(result).toBe(dataFromServer)
     expect(request.patch).toHaveBeenCalledExactlyOnceWith(
-      `/api/v1/message/notification/${id}/read`,
+      `/api/admin/v1/message/notification/${id}/read`,
       undefined,
     )
   })
@@ -57,7 +57,7 @@ describe('thin API HTTP contract', () => {
     const result = await api.readAllNotifications()
     expect(result).toBe(dataFromServer)
     expect(request.patch).toHaveBeenCalledExactlyOnceWith(
-      '/api/v1/message/notification/read-all',
+      '/api/admin/v1/message/notification/read-all',
       undefined,
     )
   })
@@ -72,7 +72,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.delete).mockResolvedValue(dataFromServer)
     const result = await api.deleteNotification(id)
     expect(result).toBe(dataFromServer)
-    expect(request.delete).toHaveBeenCalledExactlyOnceWith(`/api/v1/message/notification/${id}`)
+    expect(request.delete).toHaveBeenCalledExactlyOnceWith(`/api/admin/v1/message/notification/${id}`)
   })
   it('deleteNotification propagates request failures unchanged', async () => {
     const id: Parameters<typeof api.deleteNotification>[0] = 1

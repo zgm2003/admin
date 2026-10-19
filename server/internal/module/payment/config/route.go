@@ -13,7 +13,7 @@ const (
 	PermissionTest   = "payment:config:test"
 )
 
-func RegisterRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, require func(string) gin.HandlerFunc) {
+func RegisterAdminRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, require func(string) gin.HandlerFunc) {
 	g := r.Group("/payment/config")
 	g.GET("/options", auth, h.Options)
 	g.GET("", auth, require(PermissionList), h.List)

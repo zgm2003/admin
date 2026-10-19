@@ -55,7 +55,7 @@ export async function updateBrandSettings(input: BrandSettings): Promise<void> {
 }
 
 export async function getPublicLegalDocument(kind: LegalDocumentKind): Promise<LegalDocument> {
-  return request.get<LegalDocument>(`/api/v1/system/setting/legal/${kind}`)
+  return request.get<LegalDocument>(`/api/admin/v1/system/setting/legal/${kind}`)
 }
 
 export async function getLegalDocument(kind: LegalDocumentKind): Promise<LegalDocument> {

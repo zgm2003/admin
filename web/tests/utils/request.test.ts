@@ -110,7 +110,7 @@ describe('createRequestClient', () => {
     expect(() => createRequestClient('  ')).toThrow(ProtocolError)
   })
 
-  it.each(['/api/v1/auth/login', '/api/v1/auth/refresh'])(
+  it.each(['/api/admin/v1/auth/login', '/api/admin/v1/auth/refresh'])(
     'validates authentication credentials at the transport boundary for %s',
     async (url) => {
       const adapter: AxiosAdapter = async (config) =>
@@ -204,7 +204,7 @@ describe('createRequestClient', () => {
         message: '用户名已存在',
       })
 
-    await expect(client.post('/api/v1/protected', undefined, { adapter })).rejects.toMatchObject({
+    await expect(client.post('/api/admin/v1/protected', undefined, { adapter })).rejects.toMatchObject({
       code: 10005,
     })
     expect(ElNotification.error).toHaveBeenCalledOnce()
@@ -214,7 +214,7 @@ describe('createRequestClient', () => {
     const client = createRequestClient('http://localhost:16301')
 
     await expect(
-      client.post('/api/v1/auth/refresh', undefined, {
+      client.post('/api/admin/v1/auth/refresh', undefined, {
         adapter: failureAdapter(401, {
           code: 10002,
           data: null,
@@ -229,7 +229,7 @@ describe('createRequestClient', () => {
     const client = createRequestClient('http://localhost:16301')
 
     await expect(
-      client.post('/api/v1/auth/login', undefined, {
+      client.post('/api/admin/v1/auth/login', undefined, {
         adapter: failureAdapter(401, {
           code: 10002,
           data: null,
@@ -244,7 +244,7 @@ describe('createRequestClient', () => {
     const client = createRequestClient('http://localhost:16301')
 
     await expect(
-      client.post('/api/v1/auth/login', undefined, {
+      client.post('/api/admin/v1/auth/login', undefined, {
         adapter: failureAdapter(403, {
           code: 10002,
           data: null,
@@ -264,7 +264,7 @@ describe('createRequestClient', () => {
       })
     const client = createRequestClient('http://localhost:16301')
 
-    await expect(client.post('/api/v1/auth/login', undefined, { adapter })).rejects.toMatchObject({
+    await expect(client.post('/api/admin/v1/auth/login', undefined, { adapter })).rejects.toMatchObject({
       code: 10002,
     })
     expect(ElNotification.error).not.toHaveBeenCalled()
@@ -329,7 +329,7 @@ describe('createRequestClient', () => {
   it('does not notify an intermediate 401 that is recovered by Refresh', async () => {
     let refreshed = false
     const adapter: AxiosAdapter = async (config) => {
-      if (config.url === '/api/v1/auth/refresh') {
+      if (config.url === '/api/admin/v1/auth/refresh') {
         refreshed = true
         return successResponse(config, {
           code: 0,
@@ -347,7 +347,7 @@ describe('createRequestClient', () => {
     }
     const client = createRequestClient('http://localhost:16301', adapter)
 
-    await client.get('/api/v1/protected')
+    await client.get('/api/admin/v1/protected')
   })
 
   it('adds the in-memory bearer token to protected requests', async () => {
@@ -364,7 +364,7 @@ describe('createRequestClient', () => {
     }
     const client = createRequestClient('http://localhost:16301', adapter)
 
-    await client.get('/api/v1/protected')
+    await client.get('/api/admin/v1/protected')
     expect(authorization).toBe('Bearer memory-token')
   })
 
@@ -377,7 +377,7 @@ describe('createRequestClient', () => {
     }
     const client = createRequestClient('http://localhost:16301', adapter)
 
-    await client.get('/api/v1/protected')
+    await client.get('/api/admin/v1/protected')
 
     expect(acceptLanguage).toBe('en-US')
   })
@@ -397,7 +397,7 @@ describe('createRequestClient', () => {
     }
     const client = createRequestClient('http://localhost:16301', adapter)
 
-    await client.get('/api/v1/protected')
+    await client.get('/api/admin/v1/protected')
 
     expect(headers.get('Accept-Language')).toBe('zh-CN')
     expect(headers.get('X-Auth-Platform')).toBe('admin')
@@ -410,7 +410,7 @@ describe('createRequestClient', () => {
     let refreshLanguage = ''
     let refreshed = false
     const adapter: AxiosAdapter = async (config) => {
-      if (config.url === '/api/v1/auth/refresh') {
+      if (config.url === '/api/admin/v1/auth/refresh') {
         refreshLanguage = AxiosHeaders.from(config.headers).get('Accept-Language')?.toString() ?? ''
         refreshed = true
         return successResponse(config, {
@@ -429,7 +429,7 @@ describe('createRequestClient', () => {
     }
     const client = createRequestClient('http://localhost:16301', adapter)
 
-    await client.get('/api/v1/protected')
+    await client.get('/api/admin/v1/protected')
 
     expect(refreshLanguage).toBe('en-US')
   })
@@ -439,7 +439,7 @@ describe('createRequestClient', () => {
     let protectedCalls = 0
     let refreshed = false
     const adapter: AxiosAdapter = async (config) => {
-      if (config.url === '/api/v1/auth/refresh') {
+      if (config.url === '/api/admin/v1/auth/refresh') {
         refreshCalls += 1
         refreshed = true
         return successResponse(config, {
@@ -463,9 +463,9 @@ describe('createRequestClient', () => {
     const client = createRequestClient('http://localhost:16301', adapter)
 
     await Promise.all([
-      client.get('/api/v1/protected/1'),
-      client.get('/api/v1/protected/2'),
-      client.get('/api/v1/protected/3'),
+      client.get('/api/admin/v1/protected/1'),
+      client.get('/api/admin/v1/protected/2'),
+      client.get('/api/admin/v1/protected/3'),
     ])
     expect(refreshCalls).toBe(1)
     expect(protectedCalls).toBe(6)
@@ -475,15 +475,15 @@ describe('createRequestClient', () => {
     let refreshCalls = 0
     const onUnauthorized = vi.fn()
     const adapter: AxiosAdapter = async (config) => {
-      if (config.url === '/api/v1/auth/refresh') refreshCalls += 1
+      if (config.url === '/api/admin/v1/auth/refresh') refreshCalls += 1
       throw apiFailure(config, 401, 10002, '未登录或登录已失效')
     }
     const client = createRequestClient('http://localhost:16301', adapter, onUnauthorized)
 
     const results = await Promise.allSettled([
-      client.get('/api/v1/protected/1'),
-      client.get('/api/v1/protected/2'),
-      client.get('/api/v1/protected/3'),
+      client.get('/api/admin/v1/protected/1'),
+      client.get('/api/admin/v1/protected/2'),
+      client.get('/api/admin/v1/protected/3'),
     ])
 
     expect(results.every((result) => result.status === 'rejected')).toBe(true)
@@ -496,12 +496,12 @@ describe('createRequestClient', () => {
     let refreshCalls = 0
     const onUnauthorized = vi.fn()
     const adapter: AxiosAdapter = async (config) => {
-      if (config.url === '/api/v1/auth/refresh') refreshCalls += 1
+      if (config.url === '/api/admin/v1/auth/refresh') refreshCalls += 1
       throw apiFailure(config, 403, 10003, '没有访问权限')
     }
     const client = createRequestClient('http://localhost:16301', adapter, onUnauthorized)
 
-    await expect(client.get('/api/v1/protected')).rejects.toMatchObject({
+    await expect(client.get('/api/admin/v1/protected')).rejects.toMatchObject({
       code: 10003,
       httpStatus: 403,
     })
@@ -512,7 +512,7 @@ describe('createRequestClient', () => {
   it('retries each original request at most once', async () => {
     let protectedCalls = 0
     const adapter: AxiosAdapter = async (config) => {
-      if (config.url === '/api/v1/auth/refresh') {
+      if (config.url === '/api/admin/v1/auth/refresh') {
         return successResponse(config, {
           code: 0,
           data: {
@@ -528,20 +528,20 @@ describe('createRequestClient', () => {
       throw apiFailure(config, 401, 10002, '未登录或登录已失效')
     }
     const client = createRequestClient('http://localhost:16301', adapter)
-    await expect(client.get('/api/v1/protected')).rejects.toMatchObject({ code: 10002 })
+    await expect(client.get('/api/admin/v1/protected')).rejects.toMatchObject({ code: 10002 })
     expect(protectedCalls).toBe(2)
   })
 
   it('does not refresh login refresh or logout requests', async () => {
     let refreshCalls = 0
     const adapter: AxiosAdapter = async (config) => {
-      if (config.url === '/api/v1/auth/refresh') {
+      if (config.url === '/api/admin/v1/auth/refresh') {
         refreshCalls += 1
       }
       throw apiFailure(config, 401, 10002, '未登录或登录已失效')
     }
     const client = createRequestClient('http://localhost:16301', adapter)
-    for (const url of ['/api/v1/auth/login', '/api/v1/auth/refresh', '/api/v1/auth/logout']) {
+    for (const url of ['/api/admin/v1/auth/login', '/api/admin/v1/auth/refresh', '/api/admin/v1/auth/logout']) {
       await expect(client.post(url)).rejects.toMatchObject({ code: 10002 })
     }
     expect(refreshCalls).toBe(1)
@@ -559,7 +559,7 @@ describe('createRequestClient', () => {
       throw apiFailure(config, 401, 10002, '未登录或登录已失效')
     }
     const client = createRequestClient('http://localhost:16301', adapter)
-    await expect(client.get('/api/v1/protected')).rejects.toMatchObject({ code: 10002 })
+    await expect(client.get('/api/admin/v1/protected')).rejects.toMatchObject({ code: 10002 })
     expect(store.status).toBe('anonymous')
     expect(store.accessToken).toBe('')
   })
@@ -578,13 +578,13 @@ describe('createRequestClient', () => {
   ])('sets error after a refresh $name', async ({ refreshResult }) => {
     const store = useAuthStore(pinia)
     const adapter: AxiosAdapter = async (config) => {
-      if (config.url === '/api/v1/auth/refresh') {
+      if (config.url === '/api/admin/v1/auth/refresh') {
         return refreshResult(config)
       }
       throw apiFailure(config, 401, 10002, '未登录或登录已失效')
     }
     const client = createRequestClient('http://localhost:16301', adapter)
-    await expect(client.get('/api/v1/protected')).rejects.toBeDefined()
+    await expect(client.get('/api/admin/v1/protected')).rejects.toBeDefined()
     expect(store.status).toBe('error')
     expect(store.errorMessage).not.toBe('')
   })

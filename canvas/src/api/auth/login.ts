@@ -65,21 +65,21 @@ export interface CaptchaAnswer {
 
 export function createAuthApi(client: RequestClient) {
   return {
-    getLoginConfig: () => client.get<LoginConfig>('/api/v1/auth/login-config'),
-    getPolicy: () => client.get<PublicPolicy>('/api/v1/auth/policy'),
-    getCaptcha: () => client.get<CaptchaChallenge>('/api/v1/auth/captcha'),
+    getLoginConfig: () => client.get<LoginConfig>('/api/canvas/v1/auth/login-config'),
+    getPolicy: () => client.get<PublicPolicy>('/api/canvas/v1/auth/policy'),
+    getCaptcha: () => client.get<CaptchaChallenge>('/api/canvas/v1/auth/captcha'),
     sendLoginCode: (account: string, loginType: 'email' | 'phone', captcha?: CaptchaAnswer) =>
-      client.post<SendCodeResult>('/api/v1/auth/send-code', {
+      client.post<SendCodeResult>('/api/canvas/v1/auth/send-code', {
         account,
         loginType,
         scene: 'login',
         captchaId: captcha?.captchaId,
         captchaAnswer: captcha?.captchaAnswer,
       }),
-    login: (input: LoginInput) => client.post<AccessCredential>('/api/v1/auth/login', input),
-    refresh: () => client.post<AccessCredential>('/api/v1/auth/refresh'),
-    getCurrentUser: () => client.get<CurrentUser>('/api/v1/auth/me'),
-    logout: () => client.post<void>('/api/v1/auth/logout'),
+    login: (input: LoginInput) => client.post<AccessCredential>('/api/canvas/v1/auth/login', input),
+    refresh: () => client.post<AccessCredential>('/api/canvas/v1/auth/refresh'),
+    getCurrentUser: () => client.get<CurrentUser>('/api/canvas/v1/auth/me'),
+    logout: () => client.post<void>('/api/canvas/v1/auth/logout'),
   }
 }
 

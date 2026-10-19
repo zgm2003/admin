@@ -12,7 +12,7 @@ const (
 	PermissionDelete = "payment:rechargePackage:delete"
 )
 
-func RegisterRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
+func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
 	group := routes.Group("/payment/rechargepackage")
 	group.GET("/options", authenticate, handler.Options)
 	group.GET("", authenticate, requirePermission(PermissionList), handler.List)

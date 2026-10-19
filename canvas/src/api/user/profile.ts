@@ -8,12 +8,12 @@ export interface PasswordCodeInput { loginType: 'email' | 'phone'; challengeId: 
 export interface CodeResult { challengeId: string; expiresAt: string; resendAfterSeconds: number }
 export function createProfileApi(client: RequestClient) {
   return {
-    get: (signal?: AbortSignal) => client.get<Profile>('/api/v1/user/profile', { signal }),
-    options: (signal?: AbortSignal) => client.get<ProfileOptions>('/api/v1/user/profile/options', { signal }),
-    update: (input: ProfileInput, signal?: AbortSignal) => client.put<Profile & { updatedAt: string }, ProfileInput>('/api/v1/user/profile', input, { signal }),
-    changePassword: (input: PasswordInput) => client.post<void, PasswordInput>('/api/v1/user/password', input),
-    setPassword: (input: Omit<PasswordInput, 'currentPassword'>) => client.post<void>('/api/v1/user/password/set', input),
-    sendPasswordCode: (loginType: 'email' | 'phone') => client.post<CodeResult>('/api/v1/user/password/send-code', { loginType }),
-    changePasswordByCode: (input: PasswordCodeInput) => client.put<void, PasswordCodeInput>('/api/v1/user/password/by-code', input),
+    get: (signal?: AbortSignal) => client.get<Profile>('/api/canvas/v1/user/profile', { signal }),
+    options: (signal?: AbortSignal) => client.get<ProfileOptions>('/api/canvas/v1/user/profile/options', { signal }),
+    update: (input: ProfileInput, signal?: AbortSignal) => client.put<Profile & { updatedAt: string }, ProfileInput>('/api/canvas/v1/user/profile', input, { signal }),
+    changePassword: (input: PasswordInput) => client.post<void, PasswordInput>('/api/canvas/v1/user/password', input),
+    setPassword: (input: Omit<PasswordInput, 'currentPassword'>) => client.post<void>('/api/canvas/v1/user/password/set', input),
+    sendPasswordCode: (loginType: 'email' | 'phone') => client.post<CodeResult>('/api/canvas/v1/user/password/send-code', { loginType }),
+    changePasswordByCode: (input: PasswordCodeInput) => client.put<void, PasswordCodeInput>('/api/canvas/v1/user/password/by-code', input),
   }
 }

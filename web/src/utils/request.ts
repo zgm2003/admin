@@ -19,8 +19,8 @@ import { ApiError, ProtocolError, type ApiResponse } from '@/types/http'
 export { ApiError, ProtocolError } from '@/types/http'
 
 const envelopeKeys = ['code', 'data', 'message']
-const noBearerPaths = new Set(['/api/v1/auth/login', '/api/v1/auth/refresh'])
-const noRefreshPaths = new Set([...noBearerPaths, '/api/v1/auth/logout'])
+const noBearerPaths = new Set(['/api/admin/v1/auth/login', '/api/admin/v1/auth/refresh'])
+const noRefreshPaths = new Set([...noBearerPaths, '/api/admin/v1/auth/logout'])
 
 interface AuthRequestConfig extends InternalAxiosRequestConfig {
   authRetried?: boolean
@@ -171,7 +171,7 @@ async function performRefresh(
   onUnauthorized: () => void,
 ): Promise<AccessCredential> {
   try {
-    const response = await rawClient.post<unknown>('/api/v1/auth/refresh', undefined, {
+    const response = await rawClient.post<unknown>('/api/admin/v1/auth/refresh', undefined, {
       withCredentials: true,
     })
     const credential = unwrapSuccessEnvelope(response.data)
@@ -206,7 +206,7 @@ function notifyRequestError(error: unknown): void {
 }
 
 function isLoginCredentialFailure(path: string, error: unknown): boolean {
-  return path === '/api/v1/auth/login' && error instanceof ApiError && error.code === 10002
+  return path === '/api/admin/v1/auth/login' && error instanceof ApiError && error.code === 10002
 }
 
 function applyClientHeaders(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {

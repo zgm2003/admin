@@ -42,7 +42,7 @@ func (h *Handler) Ticket(c *gin.Context) {
 	}{raw, expiresAt})
 }
 
-func (h *Handler) WebSocket(c *gin.Context) {
+func (h *Handler) AdminWebSocket(c *gin.Context) {
 	if c.GetHeader("Origin") != h.origin {
 		c.Status(http.StatusForbidden)
 		return
@@ -50,6 +50,10 @@ func (h *Handler) WebSocket(c *gin.Context) {
 	subject, err := h.service.ConsumeTicket(c.Request.Context(), c.Query("ticket"))
 	if err != nil {
 		c.Status(http.StatusUnauthorized)
+		return
+	}
+	if subject.PlatformCode != "admin" {
+		c.Status(http.StatusForbidden)
 		return
 	}
 	conn, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{

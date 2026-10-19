@@ -13,7 +13,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.get).mockResolvedValue(dataFromServer)
     const result = await api.getPermission()
     expect(result).toBe(dataFromServer)
-    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/v1/access')
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/access')
   })
   it('getPermission propagates request failures unchanged', async () => {
     const error = new Error('request failed')

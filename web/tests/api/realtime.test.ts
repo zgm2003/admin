@@ -13,7 +13,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.post).mockResolvedValue(dataFromServer)
     const result = await api.requestRealtimeTicket()
     expect(result).toBe(dataFromServer)
-    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/v1/realtime/ticket', undefined)
+    expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/realtime/ticket', undefined)
   })
   it('requestRealtimeTicket propagates request failures unchanged', async () => {
     const error = new Error('request failed')

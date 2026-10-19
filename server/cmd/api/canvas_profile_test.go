@@ -28,16 +28,16 @@ func TestCanvasPersonalRoutesRequireExactActions(t *testing.T) {
 		},
 	})
 	for _, route := range []struct{ method, path, code string }{
-		{"GET", "/api/v1/user/profile", "user:profile:detail"},
-		{"PUT", "/api/v1/user/profile", "user:profile:update"},
-		{"POST", "/api/v1/user/password", "user:password:update"},
-		{"POST", "/api/v1/user/password/set", "user:password:update"},
-		{"POST", "/api/v1/user/password/send-code", "user:password:update"},
-		{"PUT", "/api/v1/user/password/by-code", "user:password:update"},
-		{"POST", "/api/v1/user/email/send-code", "user:email:update"},
-		{"PUT", "/api/v1/user/email", "user:email:update"},
-		{"POST", "/api/v1/user/phone/send-code", "user:phone:update"},
-		{"PUT", "/api/v1/user/phone", "user:phone:update"},
+		{"GET", "/api/canvas/v1/user/profile", "user:profile:detail"},
+		{"PUT", "/api/canvas/v1/user/profile", "user:profile:update"},
+		{"POST", "/api/canvas/v1/user/password", "user:password:update"},
+		{"POST", "/api/canvas/v1/user/password/set", "user:password:update"},
+		{"POST", "/api/canvas/v1/user/password/send-code", "user:password:update"},
+		{"PUT", "/api/canvas/v1/user/password/by-code", "user:password:update"},
+		{"POST", "/api/canvas/v1/user/email/send-code", "user:email:update"},
+		{"PUT", "/api/canvas/v1/user/email", "user:email:update"},
+		{"POST", "/api/canvas/v1/user/phone/send-code", "user:phone:update"},
+		{"PUT", "/api/canvas/v1/user/phone", "user:phone:update"},
 	} {
 		seen = seen[:0]
 		req := httptest.NewRequest(route.method, route.path, nil)
@@ -49,7 +49,7 @@ func TestCanvasPersonalRoutesRequireExactActions(t *testing.T) {
 			t.Fatalf("%s %s status=%d middleware=%v", route.method, route.path, out.Code, seen)
 		}
 	}
-	for _, path := range []string{"/api/v1/user/account/7/email-change-log", "/api/v1/user/account/7/phone-change-log", "/api/v1/user/account"} {
+	for _, path := range []string{"/api/canvas/v1/user/account/7/email-change-log", "/api/canvas/v1/user/account/7/phone-change-log", "/api/canvas/v1/user/account"} {
 		out := httptest.NewRecorder()
 		req := httptest.NewRequest("GET", path, nil)
 		req.Header.Set(authclient.PlatformHeader, "canvas")

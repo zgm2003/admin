@@ -13,7 +13,7 @@ const (
 	PermissionDelete = "storage:cosConfig:delete"
 )
 
-func RegisterRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, req func(string) gin.HandlerFunc) {
+func RegisterAdminRoutes(r *gin.RouterGroup, h *Handler, auth gin.HandlerFunc, req func(string) gin.HandlerFunc) {
 	g := r.Group("/storage/cosconfig")
 	g.GET("/options", auth, h.Options)
 	g.GET("", auth, req(PermissionList), h.List)

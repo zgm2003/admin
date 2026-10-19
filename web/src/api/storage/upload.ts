@@ -32,8 +32,8 @@ export async function requestUploadCredentials(
 ): Promise<UploadCredentialResponse> {
   const data = { ruleCode, files }
   return signal
-    ? request.post<UploadCredentialResponse>('/api/v1/storage/upload-credential', data, { signal })
-    : request.post<UploadCredentialResponse>('/api/v1/storage/upload-credential', data)
+    ? request.post<UploadCredentialResponse>('/api/admin/v1/storage/upload-credential', data, { signal })
+    : request.post<UploadCredentialResponse>('/api/admin/v1/storage/upload-credential', data)
 }
 
 export async function requestObjectURL(
@@ -41,7 +41,7 @@ export async function requestObjectURL(
   signal?: AbortSignal,
 ): Promise<ObjectURLResult> {
   return request.post<ObjectURLResult>(
-    '/api/v1/storage/object-url',
+    '/api/admin/v1/storage/object-url',
     { objectKey },
     { ...(signal ? { signal } : {}) },
   )

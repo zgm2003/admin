@@ -26,6 +26,7 @@ import (
 	systemconfigcachestatus "admin/server/internal/module/system/configCacheStatus"
 	"admin/server/internal/module/system/operationLog"
 	"admin/server/internal/module/user/account"
+	"admin/server/internal/module/user/profile"
 	usersession "admin/server/internal/module/user/session"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
@@ -42,7 +43,7 @@ func TestBuildRouterRegistersPaymentProviderOutsideUserAuthentication(t *testing
 		Authenticate:      func(c *gin.Context) { c.Next() },
 		RequirePermission: func(string) gin.HandlerFunc { return func(c *gin.Context) { c.Next() } },
 	})
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/payment/callback/alipay/1/1", strings.NewReader("sign_type=RSA2"))
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/v1/payment/callback/alipay/1/1", strings.NewReader("sign_type=RSA2"))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -239,6 +240,7 @@ func TestBuildRouterDoesNotRegisterExampleTask(t *testing.T) {
 		Permission:        permission.NewHandler(apiAccessService{}),
 		Menu:              menu.NewHandler(apiMenuService{}),
 		Role:              role.NewHandler(apiRoleService{}),
+		Account:           &profile.Handler{},
 		User:              account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
 		COSConfig:         cosconfig.NewHandler(cosconfig.NewService(nil, nil, nil)),
 		UploadRule:        uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil, nil, nil)),
@@ -399,7 +401,7 @@ func TestRouteSetDiffRejectsUnexpectedRoutes(t *testing.T) {
 	remaining, unexpected := routeSetDiff([]gin.RouteInfo{
 		{Method: http.MethodGet, Path: "/health"},
 		{Method: http.MethodGet, Path: "/health"},
-		{Method: http.MethodGet, Path: "/api/v1/unexpected"},
+		{Method: http.MethodGet, Path: "/api/canvas/v1/unexpected"},
 	}, map[string]int{
 		"GET /health": 1,
 		"GET /ready":  1,
@@ -407,7 +409,7 @@ func TestRouteSetDiffRejectsUnexpectedRoutes(t *testing.T) {
 	if remaining["GET /ready"] != 1 {
 		t.Fatalf("missing route count = %d", remaining["GET /ready"])
 	}
-	if !reflect.DeepEqual(unexpected, []string{"GET /health", "GET /api/v1/unexpected"}) {
+	if !reflect.DeepEqual(unexpected, []string{"GET /health", "GET /api/canvas/v1/unexpected"}) {
 		t.Fatalf("unexpected routes = %#v", unexpected)
 	}
 }
@@ -424,6 +426,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		Permission:        permission.NewHandler(apiAccessService{}),
 		Menu:              menu.NewHandler(apiMenuService{}),
 		Role:              role.NewHandler(apiRoleService{}),
+		Account:           &profile.Handler{},
 		User:              account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
 		COSConfig:         cosconfig.NewHandler(cosconfig.NewService(nil, nil, nil)),
 		UploadRule:        uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil, nil, nil)),
@@ -438,6 +441,25 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 	})
 
 	want := map[string]int{
+		"GET /api/admin/v1/auth/policy":                     1,
+		"GET /api/admin/v1/auth/login-config":               1,
+		"POST /api/admin/v1/auth/send-code":                 1,
+		"POST /api/admin/v1/auth/login":                     1,
+		"POST /api/admin/v1/auth/refresh":                   1,
+		"POST /api/admin/v1/auth/logout":                    1,
+		"POST /api/admin/v1/auth/password/forgot":           1,
+		"POST /api/admin/v1/auth/password/reset":            1,
+		"GET /api/admin/v1/auth/me":                         1,
+		"GET /api/admin/v1/access":                          1,
+		"POST /api/admin/v1/storage/upload-credential":      1,
+		"POST /api/admin/v1/storage/object-url":             1,
+		"GET /api/canvas/v1/user/profile/options":           1,
+		"GET /api/canvas/v1/user/profile":                   1,
+		"PUT /api/canvas/v1/user/profile":                   1,
+		"POST /api/canvas/v1/user/password":                 1,
+		"POST /api/canvas/v1/user/password/set":             1,
+		"POST /api/canvas/v1/user/password/send-code":       1,
+		"PUT /api/canvas/v1/user/password/by-code":          1,
 		"GET /api/admin/v1/user/profile/options":            1,
 		"GET /api/admin/v1/permission/authplatform/options": 1,
 		"GET /api/admin/v1/user/session/options":            1,
@@ -446,17 +468,17 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 
 		"GET /health":                                             1,
 		"GET /ready":                                              1,
-		"GET /api/v1/auth/policy":                                 1,
-		"GET /api/v1/auth/login-config":                           1,
-		"POST /api/v1/auth/send-code":                             1,
-		"POST /api/v1/auth/login":                                 1,
-		"POST /api/v1/auth/refresh":                               1,
-		"POST /api/v1/auth/logout":                                1,
-		"POST /api/v1/auth/password/forgot":                       1,
-		"POST /api/v1/auth/password/reset":                        1,
-		"GET /api/v1/auth/me":                                     1,
-		"GET /api/v1/access":                                      1,
-		"POST /api/v1/storage/upload-credential":                  1,
+		"GET /api/canvas/v1/auth/policy":                          1,
+		"GET /api/canvas/v1/auth/login-config":                    1,
+		"POST /api/canvas/v1/auth/send-code":                      1,
+		"POST /api/canvas/v1/auth/login":                          1,
+		"POST /api/canvas/v1/auth/refresh":                        1,
+		"POST /api/canvas/v1/auth/logout":                         1,
+		"POST /api/canvas/v1/auth/password/forgot":                1,
+		"POST /api/canvas/v1/auth/password/reset":                 1,
+		"GET /api/canvas/v1/auth/me":                              1,
+		"GET /api/canvas/v1/access":                               1,
+		"POST /api/canvas/v1/storage/upload-credential":           1,
 		"GET /api/admin/v1/permission/authplatform":               1,
 		"GET /api/admin/v1/permission/authplatform/deployment":    1,
 		"GET /api/admin/v1/user/profile":                          1,
@@ -516,7 +538,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"PUT /api/admin/v1/storage/uploadrule/:id":                1,
 		"PATCH /api/admin/v1/storage/uploadrule/:id/status":       1,
 		"DELETE /api/admin/v1/storage/uploadrule/:id":             1,
-		"POST /api/v1/storage/object-url":                         1,
+		"POST /api/canvas/v1/storage/object-url":                  1,
 	}
 	remaining, unexpected := routeSetDiff(router.Routes(), want)
 	if len(unexpected) != 0 {
@@ -532,13 +554,13 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		method string
 		path   string
 	}{
-		{method: http.MethodGet, path: "/api/v1/auth-platforms"},
-		{method: http.MethodGet, path: "/api/v1/menus"},
-		{method: http.MethodGet, path: "/api/v1/roles"},
-		{method: http.MethodGet, path: "/api/v1/users"},
-		{method: http.MethodGet, path: "/api/v1/sessions"},
-		{method: http.MethodGet, path: "/api/v1/operation-logs"},
-		{method: http.MethodPost, path: "/api/v1/example-tasks"},
+		{method: http.MethodGet, path: "/api/canvas/v1/auth-platforms"},
+		{method: http.MethodGet, path: "/api/canvas/v1/menus"},
+		{method: http.MethodGet, path: "/api/canvas/v1/roles"},
+		{method: http.MethodGet, path: "/api/canvas/v1/users"},
+		{method: http.MethodGet, path: "/api/canvas/v1/sessions"},
+		{method: http.MethodGet, path: "/api/canvas/v1/operation-logs"},
+		{method: http.MethodPost, path: "/api/canvas/v1/example-tasks"},
 		{method: http.MethodPost, path: "/api/admin/v1/example-tasks"},
 	} {
 		request := httptest.NewRequest(oldRoute.method, oldRoute.path, nil)
@@ -570,7 +592,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		method string
 		path   string
 	}{
-		{method: http.MethodGet, path: "/api/v1/access"},
+		{method: http.MethodGet, path: "/api/admin/v1/access"},
 		{method: http.MethodGet, path: "/api/admin/v1/permission/menu"},
 	} {
 		recorder = httptest.NewRecorder()
@@ -659,6 +681,7 @@ func TestConfigCacheStatusRouteRequiresListPermission(t *testing.T) {
 		Permission:        permission.NewHandler(apiAccessService{}),
 		Menu:              menu.NewHandler(apiMenuService{}),
 		Role:              role.NewHandler(apiRoleService{}),
+		Account:           &profile.Handler{},
 		User:              account.NewHandler(apiUserService{}, func(*gin.Context) (int64, bool) { return 1, true }),
 		COSConfig:         cosconfig.NewHandler(cosconfig.NewService(nil, nil, nil)),
 		UploadRule:        uploadrule.NewHandler(uploadrule.NewService(nil, nil, nil, nil, nil)),
