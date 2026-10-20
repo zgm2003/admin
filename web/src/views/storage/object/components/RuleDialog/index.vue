@@ -51,7 +51,6 @@ defineExpose({ validate: () => formRef.value?.validate() })
     v-model="visible"
     :title="props.editing ? t('storage.editRule') : t('storage.addRule')"
     width="min(760px, 94vw)"
-    height="min(72vh, 720px)"
     :append-to-body="false"
   >
     <el-form

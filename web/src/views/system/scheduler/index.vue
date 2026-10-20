@@ -191,8 +191,7 @@ async function loadJobs(): Promise<void> {
     jobs.value = result.list
     jobsTotal.value = result.total
   } catch {
-    if (sequence === jobsSequence)
-      jobsError.value = t('scheduler.loadFailed')
+    if (sequence === jobsSequence) jobsError.value = t('scheduler.loadFailed')
   } finally {
     if (sequence === jobsSequence) jobsLoading.value = false
   }
@@ -459,7 +458,6 @@ onBeforeUnmount(() => {
       v-model="jobsVisible"
       :title="t('scheduler.planJobs', { name: selectedSchedule?.name ?? '' })"
       width="1100px"
-      height="650px"
     >
       <AppTable
         :columns="jobColumns"

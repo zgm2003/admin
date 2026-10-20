@@ -4,9 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, useId, w
 import {
   DEFAULT_APP_DIALOG_MOBILE_WIDTH,
   filterAppDialogAttrs,
-  resolveAppDialogAlignCenter,
   resolveAppDialogBodyPadding,
-  resolveAppDialogContentHeight,
   resolveAppDialogDraggable,
   resolveAppDialogPadding,
   resolveAppDialogWidth,
@@ -23,7 +21,6 @@ const props = withDefaults(
     description?: string
     width?: AppDialogSize
     mobileWidth?: AppDialogSize
-    height?: AppDialogSize
     bodyPadding?: AppDialogSize
     headerPadding?: AppDialogSize
     footerPadding?: AppDialogSize
@@ -33,7 +30,7 @@ const props = withDefaults(
     draggable?: boolean
     top?: string
     showClose?: boolean
-    alignCenter?: boolean
+    center?: boolean
     closeOnPressEscape?: boolean
   }>(),
   {
@@ -42,7 +39,6 @@ const props = withDefaults(
     description: '',
     width: undefined,
     mobileWidth: DEFAULT_APP_DIALOG_MOBILE_WIDTH,
-    height: 500,
     bodyPadding: undefined,
     headerPadding: undefined,
     footerPadding: undefined,
@@ -52,7 +48,7 @@ const props = withDefaults(
     draggable: undefined,
     top: '5vh',
     showClose: true,
-    alignCenter: false,
+    center: true,
     closeOnPressEscape: true,
   },
 )
@@ -117,6 +113,7 @@ const resolvedTitle = computed(() =>
   props.showHeader ? props.title : props.ariaLabel || props.title,
 )
 const bodyStyle = computed(() => ({
+  boxSizing: 'border-box' as const,
   padding: resolveAppDialogBodyPadding({
     isMobile: isMobile.value,
     bodyPadding: props.bodyPadding,
@@ -135,7 +132,7 @@ const bodyStyle = computed(() => ({
     :draggable="resolveAppDialogDraggable({ isMobile, draggable })"
     :top="top"
     :show-close="showClose"
-    :align-center="resolveAppDialogAlignCenter({ isMobile, alignCenter })"
+    :align-center="center"
     :close-on-press-escape="closeOnPressEscape"
     :aria-label="ariaLabel || undefined"
     :aria-describedby="description ? descriptionId : undefined"
@@ -154,39 +151,61 @@ const bodyStyle = computed(() => ({
       </div>
       <span v-else :id="titleId" :class="[titleClass, 'app-dialog__sr-only']">{{ ariaLabel }}</span>
     </template>
-    <div class="app-dialog__body app-dialog__body--scroll">
-      <el-scrollbar :height="resolveAppDialogContentHeight(height)" class="app-dialog__scrollbar">
-        <div class="app-dialog__content" :style="bodyStyle"><slot /></div>
-      </el-scrollbar>
-    </div>
+    <el-scrollbar class="app-dialog__scrollbar">
+      <div class="app-dialog__content" :style="bodyStyle"><slot /></div>
+    </el-scrollbar>
     <template v-if="$slots.footer" #footer><slot name="footer" /></template>
   </el-dialog>
 </template>
 
 <style scoped lang="scss">
+// ElDialog teleports its root without this component's scope attribute.
+// Keep root selectors explicitly namespaced; slot/content styles remain scoped.
+:global(.el-dialog.app-dialog) {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+:global(.app-dialog > .el-dialog__header),
+:global(.app-dialog > .el-dialog__footer) {
+  flex-shrink: 0;
+}
+:global(.app-dialog > .el-dialog__body) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+:global(.app-dialog--header-hidden > .el-dialog__header) {
+  display: none;
+}
+:global(.app-dialog--custom-header-padding > .el-dialog__header) {
+  padding: var(--app-dialog-header-padding);
+}
+:global(.app-dialog--custom-footer-padding > .el-dialog__footer) {
+  padding: var(--app-dialog-footer-padding);
+}
+:global(.app-dialog > .el-dialog__footer) {
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
 .app-dialog {
-  :deep(.el-dialog__body) {
-    padding: 0;
-  }
-  &--header-hidden :deep(.el-dialog__header) {
-    display: none;
-  }
-  &--custom-header-padding :deep(.el-dialog__header) {
-    padding: var(--app-dialog-header-padding);
-  }
-  &--custom-footer-padding :deep(.el-dialog__footer) {
-    padding: var(--app-dialog-footer-padding);
-  }
-  :deep(.el-dialog__footer) {
-    border-top: 1px solid var(--el-border-color-lighter);
-  }
-  &__body,
   &__content,
   &__header-content,
   &__scrollbar {
     width: 100%;
   }
-  &__body--scroll :deep(.el-scrollbar__wrap) {
+  &__scrollbar {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
+  }
+  &__scrollbar :deep(.el-scrollbar__wrap) {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
     overflow-x: hidden;
   }
   &__sr-only {
@@ -199,16 +218,6 @@ const bodyStyle = computed(() => ({
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
-  }
-}
-@media (max-width: 768px) {
-  .app-dialog {
-    :deep(.el-dialog) {
-      margin: 3vh auto !important;
-      left: 0 !important;
-      right: 0 !important;
-      transform: none !important;
-    }
   }
 }
 </style>

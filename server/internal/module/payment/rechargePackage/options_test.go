@@ -14,4 +14,7 @@ func TestOptionsAreStaticAndExposeExactLimits(t *testing.T) {
 	if options.Limits.MaximumAmount == "" || options.Limits.MinimumAmount != "0.01" {
 		t.Fatalf("amount limits=%+v", options.Limits)
 	}
+	if options.Limits.SortMinimum != 0 || options.Limits.SortMaximum != 2147483647 {
+		t.Fatalf("sort limits do not match PostgreSQL: %+v", options.Limits)
+	}
 }

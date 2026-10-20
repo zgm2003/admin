@@ -287,10 +287,13 @@ describe('authentication platform page', () => {
     await wrapper.get('[data-testid="auth-platform-update"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('.app-dialog__body--scroll').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="auth-platform-form"]').classes()).toContain(
-      'auth-platform-form-scroll',
-    )
+    expect(wrapper.find('.app-dialog__scrollbar').exists()).toBe(true)
+    expect(
+      wrapper
+        .findComponent({ name: 'AppDialog' })
+        .findComponent({ name: 'ElScrollbar' })
+        .props('height'),
+    ).toBe('')
     expect(wrapper.find('[data-testid="auth-platform-form"] .el-row').exists()).toBe(true)
     expect(wrapper.findAllComponents({ name: 'ElCol' }).length).toBeGreaterThanOrEqual(8)
     expect(wrapper.get('[data-testid="auth-platform-code"]').attributes('disabled')).toBeDefined()

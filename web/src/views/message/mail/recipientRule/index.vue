@@ -318,10 +318,11 @@ async function exportRules(): Promise<void> {
       @imported="emit('refresh')"
     />
 
-    <el-dialog
+    <AppDialog
       v-model="dialog"
       :title="editing ? t('mail.editRule') : t('mail.createRule')"
       width="min(560px, 94vw)"
+      :append-to-body="false"
       destroy-on-close
     >
       <el-form :model="form" label-position="top">
@@ -381,7 +382,7 @@ async function exportRules(): Promise<void> {
           t('mail.save')
         }}</el-button>
       </template>
-    </el-dialog>
+    </AppDialog>
   </div>
 </template>
 

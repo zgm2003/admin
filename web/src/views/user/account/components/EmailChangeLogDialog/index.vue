@@ -51,7 +51,6 @@ const phoneColumns = computed<TableColumn<PhoneChangeLogItem>[]>(() => [
     :model-value="props.modelValue"
     :title="`${t('user.identityChangeTitle')} · ${props.username}`"
     width="1100px"
-    height="560px"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <el-tabs v-model="activeTab" stretch>

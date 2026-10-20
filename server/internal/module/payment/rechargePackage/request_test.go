@@ -72,3 +72,19 @@ func TestListQueryIsStrict(t *testing.T) {
 		}
 	}
 }
+
+func TestPackageSortOrderMatchesDatabaseRange(t *testing.T) {
+	for _, sortOrder := range []int32{-1, -2147483648} {
+		if err := validateCreate(CreateInput{Name: "Package", AmountCents: 100, SortOrder: sortOrder, IsEnabled: yesno.No}); err == nil {
+			t.Fatalf("create accepted negative sortOrder %d", sortOrder)
+		}
+		if err := validateUpdate(UpdateInput{Name: "Package", AmountCents: 100, SortOrder: sortOrder}); err == nil {
+			t.Fatalf("update accepted negative sortOrder %d", sortOrder)
+		}
+	}
+	for _, sortOrder := range []int32{0, 2147483647} {
+		if err := validateUpdate(UpdateInput{Name: "Package", AmountCents: 100, SortOrder: sortOrder}); err != nil {
+			t.Fatalf("update rejected valid sortOrder %d: %v", sortOrder, err)
+		}
+	}
+}

@@ -13,7 +13,7 @@ function select(file: StorageFile): void {
 }
 </script>
 <template>
-  <AppDialog v-model="visible" :title="t('storage.file.selectTitle')" width="1000px" height="650px"
+  <AppDialog v-model="visible" :title="t('storage.file.selectTitle')" width="1000px"
     ><FileBrowser v-if="visible" :purpose="purpose" selection @select="select"
   /></AppDialog>
 </template>

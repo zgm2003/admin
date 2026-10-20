@@ -524,7 +524,6 @@ onBeforeUnmount(() => {
       v-model="previewVisible"
       :title="previewName"
       width="min(1100px, 90vw)"
-      height="min(760px, 82vh)"
       body-padding="0"
     >
       <div v-loading="previewLoading" class="file-browser__preview">

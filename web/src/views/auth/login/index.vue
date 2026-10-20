@@ -444,7 +444,6 @@ async function submit(): Promise<void> {
       :title="legalDocumentTitle"
       width="760px"
       mobile-width="calc(100vw - 28px)"
-      height="min(68vh, 640px)"
     >
       <el-skeleton v-if="legalDocumentLoading" :rows="8" animated />
       <el-alert

@@ -118,6 +118,9 @@ func validateCreate(input CreateInput) error {
 }
 
 func validateUpdate(input UpdateInput) error {
+	if input.SortOrder < 0 {
+		return fmt.Errorf("sortOrder must be non-negative")
+	}
 	if err := validateName(input.Name); err != nil {
 		return err
 	}

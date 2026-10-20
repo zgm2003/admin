@@ -31,7 +31,7 @@ const {
 
 interface FormState {
   name: string
-  amount: string
+  amount: number | null | undefined
   badge: string
   sortOrder: number
   isEnabled: YesNo
@@ -39,7 +39,7 @@ interface FormState {
 
 const emptyForm = (): FormState => ({
   name: '',
-  amount: '',
+  amount: undefined,
   badge: '',
   sortOrder: 0,
   isEnabled: YesNo.No,
@@ -71,8 +71,8 @@ const formRules = computed<FormRules<FormState>>(() => ({
   ],
   amount: [
     {
+      type: 'number',
       required: true,
-      whitespace: true,
       message: t('payment.rechargePackage.amountRequired'),
       trigger: 'blur',
     },
@@ -178,7 +178,7 @@ function openEdit(row: RechargePackage): void {
   editingID.value = row.id
   form.value = {
     name: row.name,
-    amount: row.amount,
+    amount: Number(row.amount),
     badge: row.badge ?? '',
     sortOrder: row.sortOrder,
     isEnabled: row.isEnabled,
@@ -191,7 +191,13 @@ function validateForm(): string {
   if (value.name.trim().length > (options.value?.limits.name ?? 128)) {
     return t('payment.rechargePackage.nameTooLong')
   }
-  if (!/^\d+(\.\d{1,2})?$/.test(value.amount.trim()) || Number(value.amount) <= 0) {
+  if (
+    typeof value.amount !== 'number' ||
+    !Number.isFinite(value.amount) ||
+    options.value === null ||
+    value.amount < Number(options.value.limits.minimumAmount) ||
+    value.amount > Number(options.value.limits.maximumAmount)
+  ) {
     return t('payment.rechargePackage.amountRule')
   }
   if (value.badge.trim().length > (options.value?.limits.badge ?? 32)) {
@@ -200,9 +206,17 @@ function validateForm(): string {
   return ''
 }
 async function save(): Promise<void> {
-  if (submitting.value || options.value === null) return
+  if (
+    submitting.value ||
+    options.value === null ||
+    optionsLoading.value ||
+    optionsError.value !== '' ||
+    formRef.value === undefined ||
+    (editingID.value === null ? !canCreate.value : !canUpdate.value)
+  )
+    return
   try {
-    await formRef.value?.validate()
+    await formRef.value.validate()
   } catch {
     return
   }
@@ -211,12 +225,19 @@ async function save(): Promise<void> {
     formError.value = error
     return
   }
+  if (
+    submitting.value ||
+    !dialogVisible.value ||
+    typeof form.value.amount !== 'number' ||
+    (editingID.value === null ? !canCreate.value : !canUpdate.value)
+  )
+    return
   submitting.value = true
   formError.value = ''
   try {
     const input = {
       name: form.value.name.trim(),
-      amount: form.value.amount.trim(),
+      amount: form.value.amount.toFixed(options.value.limits.amountScale),
       badge: form.value.badge.trim() || null,
       sortOrder: form.value.sortOrder,
     }
@@ -376,11 +397,15 @@ onBeforeUnmount(() => {
         )
       "
       width="560px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="!submitting"
+      :show-close="!submitting"
     >
       <el-form
         ref="formRef"
         :model="form"
         :rules="formRules"
+        :disabled="submitting"
         label-position="top"
         class="payment-recharge-package-form"
         @submit.prevent="save"
@@ -393,9 +418,13 @@ onBeforeUnmount(() => {
           />
         </el-form-item>
         <el-form-item prop="amount" :label="t('payment.rechargePackage.amount')">
-          <el-input
+          <el-input-number
             v-model="form.amount"
-            inputmode="decimal"
+            :min="options ? Number(options.limits.minimumAmount) : undefined"
+            :max="options ? Number(options.limits.maximumAmount) : undefined"
+            :precision="options?.limits.amountScale"
+            :step="options ? 10 ** -options.limits.amountScale : undefined"
+            controls-position="right"
             :placeholder="t('payment.rechargePackage.amountPlaceholder')"
             data-testid="payment-recharge-package-amount"
           />
@@ -413,6 +442,8 @@ onBeforeUnmount(() => {
               v-model="form.sortOrder"
               :min="options?.limits.sortMinimum"
               :max="options?.limits.sortMaximum"
+              :precision="0"
+              :value-on-clear="options?.defaults.sortOrder"
               controls-position="right"
             />
           </el-form-item>
@@ -442,10 +473,16 @@ onBeforeUnmount(() => {
 .payment-recharge-package-page {
   min-width: 0;
 }
-.payment-recharge-package-form__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+.payment-recharge-package-form {
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 16px;
+  }
+  :deep(.el-input-number),
+  :deep(.el-select-v2) {
+    width: 100%;
+  }
 }
 @media (max-width: 680px) {
   .payment-recharge-package-form__grid {

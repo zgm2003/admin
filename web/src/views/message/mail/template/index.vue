@@ -204,7 +204,6 @@ async function saveTemplate(): Promise<void> {
       width="min(1080px, 96vw)"
       body-padding="0"
       class="mail-template-dialog"
-      height="700px"
     >
       <el-form class="mail-template-form" :model="form" label-position="top">
         <section class="mail-template-form__meta">

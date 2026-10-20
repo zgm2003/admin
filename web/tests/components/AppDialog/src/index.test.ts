@@ -1,11 +1,15 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { ref } from 'vue'
 
 import AppDialog from '@/components/AppDialog/index.vue'
 
 describe('AppDialog', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
   it('renders slots and emits controlled close state', async () => {
     const visible = ref(true)
     const wrapper = mount(AppDialog, {
@@ -28,8 +32,10 @@ describe('AppDialog', () => {
     expect(document.body.textContent).toContain('Custom header')
     expect(document.body.textContent).toContain('Content')
     expect(document.body.textContent).toContain('Save')
-    expect(document.body.querySelector<HTMLElement>('.el-scrollbar__wrap')?.style.height).toBe(
-      '500px',
+    expect(document.body.querySelector<HTMLElement>('.el-scrollbar__wrap')?.style.height).toBe('')
+    expect(wrapper.findComponent({ name: 'ElDialog' }).props('alignCenter')).toBe(true)
+    expect(document.body.querySelector<HTMLElement>('.app-dialog__content')?.style.boxSizing).toBe(
+      'border-box',
     )
     expect(document.body.querySelector('.el-dialog__footer')).not.toBeNull()
     wrapper.findComponent({ name: 'ElDialog' }).vm.$emit('update:modelValue', false)
@@ -43,7 +49,7 @@ describe('AppDialog', () => {
     trigger.focus()
     const wrapper = mount(AppDialog, {
       attachTo: document.body,
-      props: { modelValue: false, height: 560, description: 'Edit details' },
+      props: { modelValue: false, description: 'Edit details' },
       global: { plugins: [ElementPlus] },
     })
     await wrapper.setProps({ modelValue: true })
@@ -55,5 +61,34 @@ describe('AppDialog', () => {
     await flushPromises()
     expect(document.activeElement).toBe(trigger)
     wrapper.unmount()
+    trigger.remove()
+  })
+
+  it('can opt out of viewport centering without centering header and footer text', async () => {
+    const wrapper = mount(AppDialog, {
+      props: { modelValue: true, center: false, top: '8vh' },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    const dialog = wrapper.findComponent({ name: 'ElDialog' })
+    expect(dialog.props('alignCenter')).toBe(false)
+    expect(dialog.props('center')).toBe(false)
+    expect(dialog.props('top')).toBe('8vh')
+    await wrapper.setProps({ center: true })
+    expect(dialog.props('alignCenter')).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('centers on narrow viewports too', async () => {
+    const width = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+    const wrapper = mount(AppDialog, {
+      props: { modelValue: true },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'ElDialog' }).props('alignCenter')).toBe(true)
+    wrapper.unmount()
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
   })
 })

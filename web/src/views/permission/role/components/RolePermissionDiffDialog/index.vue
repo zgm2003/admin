@@ -23,7 +23,7 @@ const hasRemoved = computed(() => props.removedLabels.length > 0)
 </script>
 
 <template>
-  <el-dialog
+  <AppDialog
     v-model="visible"
     class="role-permission-diff-dialog"
     width="min(560px, 94vw)"
@@ -33,7 +33,6 @@ const hasRemoved = computed(() => props.removedLabels.length > 0)
       <strong>{{ t('role.permission.confirmTitle') }}</strong>
     </template>
 
-    
     <div class="role-permission-diff">
       <section class="role-permission-diff__section">
         <div class="role-permission-diff__title">
@@ -82,7 +81,7 @@ const hasRemoved = computed(() => props.removedLabels.length > 0)
         {{ t('role.confirm.confirm') }}
       </el-button>
     </template>
-  </el-dialog>
+  </AppDialog>
 </template>
 
 <style scoped lang="scss">

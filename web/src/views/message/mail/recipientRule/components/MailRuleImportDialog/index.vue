@@ -276,7 +276,6 @@ function changePage(next: TablePaginationState): void {
     v-model="visible"
     :title="t('mail.ruleXlsx.importTitle')"
     width="min(1000px, 96vw)"
-    height="560px"
     :show-close="!saving"
     :close-on-press-escape="!saving"
     :close-on-click-modal="false"

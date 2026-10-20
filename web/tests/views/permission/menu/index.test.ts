@@ -478,7 +478,8 @@ describe('MenuManagement', () => {
     await wrapper.get('[data-testid="add-root-menu"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.findComponent({ name: 'AppDialog' }).props('height')).toBe(500)
+    expect(wrapper.findComponent({ name: 'AppDialog' }).props('height')).toBeUndefined()
+    expect(wrapper.findComponent({ name: 'AppDialog' }).props('center')).toBe(true)
     expect(wrapper.findComponent({ name: 'ElRow' }).exists()).toBe(true)
     expect(wrapper.findAllComponents({ name: 'ElCol' }).length).toBeGreaterThan(0)
   })
@@ -593,7 +594,9 @@ describe('MenuManagement', () => {
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
     await flushPromises()
     expect(createMenuMock).not.toHaveBeenCalled()
-    expect(bodyGet('[data-testid="menu-form-error"]').text()).toContain('页面权限码必须以 :view 结尾')
+    expect(bodyGet('[data-testid="menu-form-error"]').text()).toContain(
+      '页面权限码必须以 :view 结尾',
+    )
   })
 
   it('blocks action codes ending with view before creating a menu', async () => {
@@ -607,7 +610,9 @@ describe('MenuManagement', () => {
     await bodyGet('[data-testid="menu-form-submit"]').trigger('click')
     await flushPromises()
     expect(createMenuMock).not.toHaveBeenCalled()
-    expect(bodyGet('[data-testid="menu-form-error"]').text()).toContain('按钮权限码不能以 :view 结尾')
+    expect(bodyGet('[data-testid="menu-form-error"]').text()).toContain(
+      '按钮权限码不能以 :view 结尾',
+    )
   })
 
   it('filters parent options to valid directories and locks parent editing on edit', async () => {

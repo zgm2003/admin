@@ -74,7 +74,6 @@ const setFormField = <K extends keyof NotificationTaskFormModel>(
     :model-value="props.modelValue"
     :title="props.title"
     width="760px"
-    :height="props.readonly ? 'min(460px, 64vh)' : '70vh'"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div v-if="props.loading" class="notification-task-form__state">

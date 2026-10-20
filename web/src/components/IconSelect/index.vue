@@ -70,7 +70,7 @@ function handleItemKeydown(event: KeyboardEvent, name: MenuIconName): void {
       <el-input v-model="search" clearable placeholder="搜索图标" />
       <el-text type="info" size="small">{{ filteredIcons.length }} 个图标</el-text>
     </div>
-    <el-scrollbar v-if="filteredIcons.length > 0" height="500px" class="icon-select-scroll">
+    <div v-if="filteredIcons.length > 0" class="icon-select-scroll">
       <div class="icon-select-grid">
         <div
           v-for="icon in filteredIcons"
@@ -87,7 +87,7 @@ function handleItemKeydown(event: KeyboardEvent, name: MenuIconName): void {
           <span>{{ icon.label }}</span>
         </div>
       </div>
-    </el-scrollbar>
+    </div>
     <el-empty v-else :description="emptyText" :image-size="100" />
   </AppDialog>
 </template>

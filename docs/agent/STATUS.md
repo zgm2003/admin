@@ -1,5 +1,14 @@
 # 项目状态
 
+## 充值套餐与 AppDialog 自适应弹窗（2026-10-20，实现与定向验证完成）
+
+- 充值套餐表单金额改用 `el-input-number`，排序范围与后端约束统一；新增/编辑保存保留精度、阻止重复提交，并补齐失败重试与权限保护回归。
+- `AppDialog` 移除固定内容高度，默认 `center` 居中，整体最高 `90vh`，仅正文滚动且标题/底部操作保持可见；业务弹窗移除自有 `height` 和嵌套滚动容器，补充浏览器几何回归。
+- 按维护者授权执行既有 `docs/database/2026-10-17-payment-recharge-package-code.sql`：移除旧 `code` 列、唯一索引、约束及 identity guard，并从真实库刷新 `current.sql`。迁移备份位于 `%LOCALAPPDATA%/Admin/backups/payment-recharge-package-code-20261019-214640/package-before-rows.dump`；2026-10-20 只读复核确认表当前 0 行、遗留对象为 0、删除保护仍启用、排序约束为 `sort_order >= 0`，`pg_restore --list` 可读取备份，同目录 `verification.json` 保存结构复核和备份 SHA256。
+- 前端验证：`pnpm build`（含 vue-tsc）通过，仍提示富文本大 chunk；AppDialog/充值套餐 `pnpm vitest run tests/components/AppDialog/src/dialog.test.ts tests/components/AppDialog/src/index.test.ts tests/views/payment/rechargePackage.test.ts --pool=threads --maxWorkers=1` 为 3 文件/16 项通过；认证平台/菜单两项弹窗布局定向回归通过。`playwright-cli -s=dialog-qa run-code --filename=web/tests/browser/appDialogGeometry.mjs` 为 5 个视口的长短内容共 10 组、隐藏 header/footer 和关闭居中场景通过；修正回归脚本入口为 CLI 可直接求值的函数声明。受影响源码及浏览器夹具 Prettier/ESLint、`pnpm check:architecture` 通过。
+- 后端验证：`go test -p 1 ./internal/module/payment/rechargePackage -count=1 -timeout=2m -v`（11 项）、`go test -p 1 ./internal/database -run '^TestPaymentRechargePackageCodeMigration' -count=1 -timeout=2m -v`（真实 PostgreSQL 隔离 schema 中迁移两次，创建/更新/启用成功）、`go vet -p 1 ./internal/module/payment/rechargePackage`、`go build -p 1 ./...` 通过；修改 Go 文件的 `gofmt -l` 与 `git diff --check` 无输出。
+- 未完成项与风险：全量 `pnpm vitest run --pool=threads --maxWorkers=1` 已显示设置、支付配置、邮件、角色、菜单、操作日志、通知和会话页面断言失败，在菜单用例长时间无输出后仅终止本次测试进程，未生成完整汇总，不能算通过，也未完成这些失败与本次变更的归因。本轮不再重跑全量；未运行全量 Go 测试或真实登录后的套餐 HTTP 浏览器联调。两份 Markdown 的 Prettier 检查仍告警，经读取 HEAD 内容复核，两者原本均未格式化，未批量重排历史条目。未重启 API/Worker、未操作 Redis 或提交 Git；保留维护者对支付配置页 CSS 的删除。
+
 ## 支付配置表格两列居中（2026-10-19，定向验证完成）
 
 - 渠道、支付通道两列共用的 `payment-config-page__identity` 移除 `flex-start` 强制左对齐，改为 `align-items: center`；保留原内容、上下排列、间距及其他列，不改通用 AppTable。

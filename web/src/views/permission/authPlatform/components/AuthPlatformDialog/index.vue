@@ -35,11 +35,7 @@ const { t } = useI18n()
     width="800px"
     :append-to-body="false"
   >
-    <el-form
-      label-position="top"
-      class="auth-platform-form auth-platform-form-scroll"
-      data-testid="auth-platform-form"
-    >
+    <el-form label-position="top" class="auth-platform-form" data-testid="auth-platform-form">
       <div class="auth-platform-form-section">
         <h3>{{ t('permission.authPlatform.form.basicSection') }}</h3>
         <el-row :gutter="16" class="auth-platform-form-grid auth-platform-form-grid--basic">

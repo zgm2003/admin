@@ -2,7 +2,6 @@ export const DEFAULT_APP_DIALOG_WIDTH = '720px'
 export const DEFAULT_APP_DIALOG_MOBILE_WIDTH = '94vw'
 export const DEFAULT_APP_DIALOG_BODY_PADDING = '20px'
 export const DEFAULT_APP_DIALOG_MOBILE_BODY_PADDING = '12px 16px'
-export const DEFAULT_APP_DIALOG_CONTENT_HEIGHT = '500px'
 
 export type AppDialogSize = string | number
 
@@ -22,10 +21,6 @@ export function resolveAppDialogWidth(params: {
     : (toCssLength(params.width) ?? DEFAULT_APP_DIALOG_WIDTH)
 }
 
-export function resolveAppDialogContentHeight(height?: AppDialogSize): string {
-  return toCssLength(height) ?? DEFAULT_APP_DIALOG_CONTENT_HEIGHT
-}
-
 export function resolveAppDialogBodyPadding(params: {
   isMobile: boolean
   bodyPadding?: AppDialogSize
@@ -38,13 +33,6 @@ export function resolveAppDialogBodyPadding(params: {
 
 export function resolveAppDialogPadding(padding?: AppDialogSize): string | undefined {
   return toCssLength(padding)
-}
-
-export function resolveAppDialogAlignCenter(params: {
-  isMobile: boolean
-  alignCenter?: boolean
-}): boolean {
-  return params.isMobile ? false : Boolean(params.alignCenter)
 }
 
 export function resolveAppDialogDraggable(params: {

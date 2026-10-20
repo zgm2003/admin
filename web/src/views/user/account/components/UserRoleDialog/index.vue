@@ -22,15 +22,12 @@ const { t } = useI18n()
     class="user-role-dialog"
     :title="t('user.assignRolesTitle')"
     width="min(680px, 94vw)"
-    height="min(62vh, 620px)"
     append-to-body
   >
     <div class="role-dialog-scroll">
       <div v-if="props.roleLoading">{{ t('user.roleLoadFailed') }}</div>
       <el-alert v-if="props.roleError" :title="props.roleError" type="error" show-icon />
-      <template
-        v-if="props.roleData"
-      >
+      <template v-if="props.roleData">
         <el-space class="role-dialog-toolbar" wrap :size="8">
           <el-button
             :disabled="props.roleLoading || props.roleSaving"

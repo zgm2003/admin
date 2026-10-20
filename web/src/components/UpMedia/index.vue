@@ -612,7 +612,6 @@ async function downloadFile(objectKey: string): Promise<void> {
       v-model="videoVisible"
       :title="t('components.upMedia.preview')"
       width="800px"
-      height="auto"
     >
       <video
         v-if="previewItem?.previewUrl"

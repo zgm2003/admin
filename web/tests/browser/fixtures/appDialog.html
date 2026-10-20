@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />
+  <title>AppDialog geometry regression</title>
+  <div id="app"></div>
+  <script type="module">
+    import { createApp, h, ref } from 'vue'
+    import ElementPlus from 'element-plus'
+    import 'element-plus/dist/index.css'
+    import AppDialog from '@/components/AppDialog/index.vue'
+
+    const count = ref(2)
+    const center = ref(true)
+    const footer = ref(true)
+    const header = ref(true)
+    window.dialogQA = { count, center, footer, header }
+    createApp({
+      setup: () => () =>
+        h(
+          AppDialog,
+          {
+            modelValue: true,
+            title: '弹窗验收',
+            center: center.value,
+            showHeader: header.value,
+            ariaLabel: '弹窗验收',
+            width: 560,
+          },
+          {
+            default: () =>
+              Array.from({ length: count.value }, (_, index) =>
+                h('p', { style: 'margin:0 0 16px;line-height:24px' }, `内容 ${index + 1}`),
+              ),
+            ...(footer.value ? { footer: () => h('button', {}, '保存') } : {}),
+          },
+        ),
+    })
+      .use(ElementPlus)
+      .mount('#app')
+  </script>
+</html>

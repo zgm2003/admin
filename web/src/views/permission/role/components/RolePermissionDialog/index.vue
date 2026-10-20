@@ -161,7 +161,6 @@ async function save(): Promise<void> {
     v-model="visible"
     class="role-permission-dialog"
     width="min(1040px, 94vw)"
-    height="min(62vh, 620px)"
     append-to-body
   >
     <template #header>

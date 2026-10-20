@@ -31,6 +31,9 @@ PascalCase，CSS class 与测试定位符使用 kebab-case。
   `web/src/api/<module>.ts`，经过 `web/src/utils/request.ts`。
 - 优先使用已有 `AppDialog`、`AppTable`、`Search`、`DIcon`、`IconSelect`。只有多个真实页面已经复用且交互
   稳定时才新增公共组件。
+- `AppDialog` 按内容自适应高度，整个弹窗最高 `90vh`；超出时仅正文内部滚动，标题与底部操作保留可见。
+  业务弹窗不再指定 `height` 或嵌套固定高度滚动区。`center` 默认开启，表示视窗水平/垂直居中，不改变标题或
+  按钮对齐；特殊场景可用 `:center="false"` 配合 `top`。
 - 所有下拉选择使用 `el-select-v2` 的 `options` 数据契约，不使用 `el-select`/`el-option` 子节点；选项文案走
   所属后端模块按请求语言输出的 label（界面按钮/提示仍走前端 i18n），值保持 DTO 原类型；多选、可创建和
   禁用状态不得在迁移中降级。
