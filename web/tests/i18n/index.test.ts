@@ -49,28 +49,24 @@ describe('frontend i18n', () => {
     expect(isAppMessageKey('navigation.unknown')).toBe(false)
   })
 
-  it('translates grouped status labels and values without losing nested keys', () => {
+  it('translates grouped status labels without losing nested keys', () => {
     for (const locale of ['zh-CN', 'en-US'] as const) {
       setLocale(locale)
       for (const domain of ['storage', 'user', 'setting', 'mail', 'sms', 'payment.config']) {
         expect(appI18n.global.t(`${domain}.status.label`)).toBe(
           locale === 'zh-CN' ? '状态' : 'Status',
         )
-        expect(appI18n.global.t(`${domain}.status.enabled`)).toBe(
-          locale === 'zh-CN' ? '启用' : 'Enabled',
-        )
-        expect(appI18n.global.t(`${domain}.status.disabled`)).toBe(
-          locale === 'zh-CN' ? '停用' : 'Disabled',
-        )
       }
-      for (const domain of ['role', 'permission.authPlatform']) {
-        expect(appI18n.global.t(`${domain}.status.enabled`)).toBe(
-          locale === 'zh-CN' ? '启用' : 'Enabled',
-        )
-        expect(appI18n.global.t(`${domain}.status.disabled`)).toBe(
-          locale === 'zh-CN' ? '停用' : 'Disabled',
-        )
-      }
+    }
+  })
+
+  it('uses only two shared enable and disable keys for actions and statuses', () => {
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      setLocale(locale)
+      expect(appI18n.global.t('common.enable')).toBe(locale === 'zh-CN' ? '启用' : 'Enable')
+      expect(appI18n.global.t('common.disable')).toBe(locale === 'zh-CN' ? '停用' : 'Disable')
+      expect(isAppMessageKey('common.enabled')).toBe(false)
+      expect(isAppMessageKey('common.disabled')).toBe(false)
     }
   })
 

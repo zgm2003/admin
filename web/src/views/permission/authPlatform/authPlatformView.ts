@@ -27,8 +27,8 @@ export function authPlatformSearchFields(t: Translate): SearchField<AuthPlatform
       label: t('permission.authPlatform.statusLabel'),
       placeholder: t('permission.authPlatform.status.all'),
       options: [
-        { label: t('permission.authPlatform.status.enabled'), value: YesNo.Yes },
-        { label: t('permission.authPlatform.status.disabled'), value: YesNo.No },
+        { label: t('common.enable'), value: YesNo.Yes },
+        { label: t('common.disable'), value: YesNo.No },
       ],
       width: 160,
       testId: 'auth-platform-status-filter',

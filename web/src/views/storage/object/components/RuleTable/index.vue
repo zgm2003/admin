@@ -81,7 +81,7 @@ const { t } = useI18n()
     <template #cell-status="{ row }">
       <el-tag size="small" :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">
         {{
-          row.isEnabled === YesNo.Yes ? t('storage.status.enabled') : t('storage.status.disabled')
+          row.isEnabled === YesNo.Yes ? t('common.enable') : t('common.disable')
         }}
       </el-tag>
     </template>
@@ -96,7 +96,7 @@ const { t } = useI18n()
           :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
           @click="emit('status', row)"
         >
-          {{ row.isEnabled === YesNo.Yes ? t('storage.disable') : t('storage.enable') }}
+          {{ row.isEnabled === YesNo.Yes ? t('common.disable') : t('common.enable') }}
         </el-button>
         <el-button
           v-if="props.can('storage:uploadRule:delete')"

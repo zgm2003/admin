@@ -119,8 +119,8 @@ const searchFields = computed<SearchField<SettingSearchModel>[]>(() => [
     label: t('setting.status.label'),
     placeholder: t('setting.allStatuses'),
     options: [
-      { label: t('setting.status.enabled'), value: YesNo.Yes },
-      { label: t('setting.status.disabled'), value: YesNo.No },
+      { label: t('common.enable'), value: YesNo.Yes },
+      { label: t('common.disable'), value: YesNo.No },
     ],
     clearable: true,
     testId: 'setting-status-filter',
@@ -331,7 +331,7 @@ async function toggle(row: SystemSetting): Promise<void> {
     await ElMessageBox.confirm(
       t('confirm.status', {
         name: row.key,
-        status: t(next === YesNo.Yes ? 'setting.status.enabled' : 'setting.status.disabled'),
+        status: t(next === YesNo.Yes ? 'common.enable' : 'common.disable'),
       }),
       t('confirm.title'),
       { type: 'warning' },
@@ -437,8 +437,8 @@ onMounted(() => {
             <el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">
               {{
                 row.isEnabled === YesNo.Yes
-                  ? t('setting.status.enabled')
-                  : t('setting.status.disabled')
+                  ? t('common.enable')
+                  : t('common.disable')
               }}
             </el-tag>
           </template>
@@ -459,7 +459,7 @@ onMounted(() => {
               text
               @click="toggle(row)"
               >{{
-                row.isEnabled === YesNo.Yes ? t('setting.disable') : t('setting.enable')
+                row.isEnabled === YesNo.Yes ? t('common.disable') : t('common.enable')
               }}</el-button
             >
             <el-button

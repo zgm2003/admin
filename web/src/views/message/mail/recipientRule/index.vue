@@ -123,7 +123,7 @@ async function toggle(row: MailRule): Promise<void> {
     await ElMessageBox.confirm(
       t('confirm.status', {
         name: row.name,
-        status: t(next === YesNo.Yes ? 'mail.status.enabled' : 'mail.status.disabled'),
+        status: t(next === YesNo.Yes ? 'common.enable' : 'common.disable'),
       }),
       t('confirm.title'),
       { type: 'warning' },
@@ -157,7 +157,7 @@ async function saveRule(): Promise<void> {
       await ElMessageBox.confirm(
         t('confirm.status', {
           name: target.name,
-          status: t(input.isEnabled === YesNo.Yes ? 'mail.status.enabled' : 'mail.status.disabled'),
+          status: t(input.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable'),
         }),
         t('confirm.title'),
         { type: 'warning' },
@@ -268,8 +268,8 @@ async function exportRules(): Promise<void> {
         <el-switch
           :model-value="row.isEnabled"
           inline-prompt
-          :active-text="t('mail.status.enabled')"
-          :inactive-text="t('mail.status.disabled')"
+          :active-text="t('common.enable')"
+          :inactive-text="t('common.disable')"
           :active-value="YesNo.Yes"
           :inactive-value="YesNo.No"
           :disabled="!canStatus"
@@ -368,7 +368,7 @@ async function exportRules(): Promise<void> {
             :placeholder="t('mail.ruleRemarkPlaceholder')"
           />
         </el-form-item>
-        <el-form-item :label="t('mail.status.enabled')">
+        <el-form-item :label="t('common.enable')">
           <el-switch
             v-model="form.isEnabled"
             :active-value="YesNo.Yes"

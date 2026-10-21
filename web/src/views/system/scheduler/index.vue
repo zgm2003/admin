@@ -296,7 +296,7 @@ async function toggle(row: Schedule): Promise<void> {
     await ElMessageBox.confirm(
       t('confirm.status', {
         name: row.name,
-        status: t(next ? 'scheduler.enable' : 'scheduler.disable'),
+        status: t(next ? 'common.enable' : 'common.disable'),
       }),
       t('confirm.title'),
       { type: 'warning' },
@@ -437,7 +437,7 @@ onBeforeUnmount(() => {
             :type="row.isEnabled ? 'warning' : 'success'"
             link
             @click="toggle(row)"
-            >{{ row.isEnabled ? t('scheduler.disable') : t('scheduler.enable') }}</el-button
+            >{{ row.isEnabled ? t('common.disable') : t('common.enable') }}</el-button
           ><el-button v-if="canExecute" type="success" link @click="execute(row)">{{
             t('scheduler.execute')
           }}</el-button

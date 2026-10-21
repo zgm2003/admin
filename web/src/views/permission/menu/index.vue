@@ -196,7 +196,7 @@ async function changeStatus(node: ManagedMenuNode): Promise<void> {
     await ElMessageBox.confirm(
       t('confirm.status', {
         name: node.name,
-        status: t(nextValue === YesNo.Yes ? 'menu.enable' : 'menu.disable'),
+        status: t(nextValue === YesNo.Yes ? 'common.enable' : 'common.disable'),
       }),
       t('confirm.title'),
       {

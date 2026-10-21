@@ -120,7 +120,7 @@ async function save(): Promise<void> {
       await ElMessageBox.confirm(
         t('confirm.status', {
           name: t('sms.title'),
-          status: t(payload.isEnabled === YesNo.Yes ? 'sms.status.enabled' : 'sms.status.disabled'),
+          status: t(payload.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable'),
         }),
         t('confirm.title'),
         { type: 'warning' },

@@ -262,8 +262,8 @@ async function act(row: PaymentConfig, action: 'status' | 'delete' | 'test'): Pr
                 name: row.name,
                 status: t(
                   nextStatus === YesNo.Yes
-                    ? 'payment.config.status.enabled'
-                    : 'payment.config.status.disabled',
+                    ? 'common.enable'
+                    : 'common.disable',
                 ),
               }),
           t('confirm.title'),
@@ -429,7 +429,7 @@ onBeforeUnmount(() => {
           data-testid="payment-config-status"
           @click="act(row, 'status')"
           >{{
-            row.isEnabled === YesNo.Yes ? t('payment.config.disable') : t('payment.config.enable')
+            row.isEnabled === YesNo.Yes ? t('common.disable') : t('common.enable')
           }}</el-button
         >
         <el-button

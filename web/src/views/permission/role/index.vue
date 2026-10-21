@@ -212,7 +212,7 @@ async function changeStatus(role: RoleListItem): Promise<void> {
     next === YesNo.Yes
       ? t('role.confirm.enableMessage', { count: role.userCount })
       : t('role.confirm.disableMessage', { count: role.userCount })
-  const title = t(next === YesNo.Yes ? 'role.action.enable' : 'role.action.disable')
+  const title = t(next === YesNo.Yes ? 'common.enable' : 'common.disable')
 
   try {
     await ElMessageBox.confirm(message, title, { type: 'warning' })
@@ -319,7 +319,7 @@ onMounted(() => {
       </template>
       <template #cell-status="{ row }: { row: RoleListItem }">
         <el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">
-          {{ t(row.isEnabled === YesNo.Yes ? 'role.status.enabled' : 'role.status.disabled') }}
+          {{ t(row.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable') }}
         </el-tag>
       </template>
       <template #cell-createdAt="{ row }: { row: RoleListItem }">{{
@@ -347,7 +347,7 @@ onMounted(() => {
                 :disabled="!row.actions.status"
                 @click="changeStatus(row)"
                 >{{
-                  row.isEnabled === YesNo.Yes ? t('role.action.disable') : t('role.action.enable')
+                  row.isEnabled === YesNo.Yes ? t('common.disable') : t('common.enable')
                 }}</el-button
               >
             </el-tooltip>

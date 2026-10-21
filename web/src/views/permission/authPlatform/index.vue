@@ -448,8 +448,8 @@ watch(
         ><el-tag size="small" :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">{{
           t(
             row.isEnabled === YesNo.Yes
-              ? 'permission.authPlatform.status.enabled'
-              : 'permission.authPlatform.status.disabled',
+              ? 'common.enable'
+              : 'common.disable',
           )
         }}</el-tag></template
       >
@@ -478,8 +478,8 @@ watch(
             >{{
               t(
                 row.isEnabled === YesNo.Yes
-                  ? 'permission.authPlatform.disable'
-                  : 'permission.authPlatform.enable',
+                  ? 'common.disable'
+                  : 'common.enable',
               )
             }}</el-button
           >

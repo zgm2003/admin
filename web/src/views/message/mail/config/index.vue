@@ -122,7 +122,7 @@ async function save(): Promise<void> {
         t('confirm.status', {
           name: t('mail.title'),
           status: t(
-            payload.isEnabled === YesNo.Yes ? 'mail.status.enabled' : 'mail.status.disabled',
+            payload.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable',
           ),
         }),
         t('confirm.title'),
@@ -266,7 +266,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
 
       <el-row :gutter="20">
         <el-col :xs="24" :md="12">
-          <el-form-item :label="t('mail.status.enabled')">
+          <el-form-item :label="t('common.enable')">
             <el-switch
               v-model="form.isEnabled"
               :active-value="YesNo.Yes"

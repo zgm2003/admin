@@ -414,7 +414,7 @@ onMounted(() => {
       </template>
       <template #cell-status="{ row }: { row: UserListItem }"
         ><el-tag v-if="row.id > 0" :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">{{
-          t(row.isEnabled === YesNo.Yes ? 'user.status.enabled' : 'user.status.disabled')
+          t(row.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable')
         }}</el-tag></template
       >
       <template #cell-phone="{ row }: { row: UserListItem }">
@@ -445,7 +445,7 @@ onMounted(() => {
                 :disabled="!row.actions.status || mutating"
                 @click="changeStatus(row)"
                 >{{
-                  row.isEnabled === YesNo.Yes ? t('user.status.disabled') : t('user.status.enabled')
+                  row.isEnabled === YesNo.Yes ? t('common.disable') : t('common.enable')
                 }}</el-button
               ></el-tooltip
             >

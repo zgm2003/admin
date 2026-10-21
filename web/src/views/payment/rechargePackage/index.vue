@@ -373,7 +373,13 @@ onBeforeUnmount(() => {
           :disabled="busyID !== null"
           @click="mutate(row, 'status')"
         >
-          {{ t('payment.rechargePackage.toggleStatus') }}
+          {{
+            t(
+              row.isEnabled === YesNo.Yes
+                ? 'common.disable'
+                : 'common.enable',
+            )
+          }}
         </el-button>
         <el-button
           v-if="canDelete && row.actions.delete"

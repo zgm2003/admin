@@ -45,8 +45,8 @@ export function userSearchFields(
       label: t('user.status.label'),
       placeholder: t('user.allStatus'),
       options: [
-        { label: t('user.status.enabled'), value: YesNo.Yes },
-        { label: t('user.status.disabled'), value: YesNo.No },
+        { label: t('common.enable'), value: YesNo.Yes },
+        { label: t('common.disable'), value: YesNo.No },
       ],
       width: 190,
     },

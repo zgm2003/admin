@@ -139,6 +139,40 @@ it('marks required name and amount fields and shows their validation errors', as
   })
 })
 
+it.each([
+  ['zh-CN', 0, '启用'],
+  ['zh-CN', 1, '停用'],
+  ['en-US', 0, 'Enable'],
+  ['en-US', 1, 'Disable'],
+] as const)(
+  'shows the next status action in %s when the package is enabled=%s',
+  async (language, isEnabled, expectedLabel) => {
+    setLocale(language)
+    usePermissionStore(pinia).applySnapshot({
+      roleCodes: [],
+      menuTree: [],
+      permissionCodes: ['payment:rechargePackage:list', 'payment:rechargePackage:status'],
+    })
+    vi.mocked(api.getRechargePackages).mockResolvedValue({
+      list: [
+        {
+          ...row,
+          isEnabled,
+          presentation: { status: isEnabled === 1 ? '启用' : '停用' },
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+
+    const page = await mountPage()
+    const action = page.findAll('button').find((button) => button.text().trim() === expectedLabel)
+
+    expect(action).toBeDefined()
+  },
+)
+
 it('uses a bounded input-number and submits a precise money string on create', async () => {
   const page = await openCreate()
   const amount = page

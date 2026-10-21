@@ -104,7 +104,7 @@ async function save(): Promise<void> {
       await ElMessageBox.confirm(
         t('confirm.status', {
           name: original.name,
-          status: t(payload.isEnabled === YesNo.Yes ? 'sms.status.enabled' : 'sms.status.disabled'),
+          status: t(payload.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable'),
         }),
         t('confirm.title'),
         { type: 'warning' },
@@ -137,7 +137,7 @@ async function toggle(row: smsApi.SmsRule, value: YesNoValue): Promise<void> {
     await ElMessageBox.confirm(
       t('confirm.status', {
         name: row.name,
-        status: t(value === YesNo.Yes ? 'sms.status.enabled' : 'sms.status.disabled'),
+        status: t(value === YesNo.Yes ? 'common.enable' : 'common.disable'),
       }),
       t('confirm.title'),
       { type: 'warning' },
@@ -195,8 +195,8 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
         <el-switch
           :model-value="row.isEnabled"
           inline-prompt
-          :active-text="t('sms.status.enabled')"
-          :inactive-text="t('sms.status.disabled')"
+          :active-text="t('common.enable')"
+          :inactive-text="t('common.disable')"
           :data-testid="`sms-rule-status-${row.id}`"
           :active-value="YesNo.Yes"
           :inactive-value="YesNo.No"

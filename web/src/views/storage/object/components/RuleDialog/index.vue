@@ -128,8 +128,8 @@ defineExpose({ validate: () => formRef.value?.validate() })
                 data-testid="storage-rule-status"
                 :disabled="props.editing && !props.canUpdateStatus"
               >
-                <el-radio :value="YesNo.Yes">{{ t('storage.enable') }}</el-radio>
-                <el-radio :value="YesNo.No">{{ t('storage.disable') }}</el-radio>
+                <el-radio :value="YesNo.Yes">{{ t('common.enable') }}</el-radio>
+                <el-radio :value="YesNo.No">{{ t('common.disable') }}</el-radio>
               </el-radio-group>
             </el-form-item>
           </div>

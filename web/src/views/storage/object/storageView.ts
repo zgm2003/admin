@@ -34,8 +34,8 @@ export function createConfigSearchFields(t: Translate): SearchField<StorageConfi
       label: t('storage.status.label'),
       placeholder: t('storage.allStatus'),
       options: [
-        { label: t('storage.status.enabled'), value: YesNo.Yes },
-        { label: t('storage.status.disabled'), value: YesNo.No },
+        { label: t('common.enable'), value: YesNo.Yes },
+        { label: t('common.disable'), value: YesNo.No },
       ],
       width: 170,
     },
@@ -82,8 +82,8 @@ export function createRuleSearchFields(
       label: t('storage.status.label'),
       placeholder: t('storage.allStatus'),
       options: [
-        { label: t('storage.status.enabled'), value: YesNo.Yes },
-        { label: t('storage.status.disabled'), value: YesNo.No },
+        { label: t('common.enable'), value: YesNo.Yes },
+        { label: t('common.disable'), value: YesNo.No },
       ],
       width: 170,
     },
