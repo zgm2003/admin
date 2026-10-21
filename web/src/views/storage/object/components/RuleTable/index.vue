@@ -38,8 +38,6 @@ const { t } = useI18n()
   <AppSearch
     v-model="model"
     :fields="props.fields"
-    :query-label="t('storage.search')"
-    :reset-label="t('storage.reset')"
     query-test-id="storage-rule-search"
     reset-test-id="storage-rule-reset"
     @query="emit('query')"
@@ -57,7 +55,6 @@ const { t } = useI18n()
     :loading="props.loading"
     :pagination="props.pagination"
     :aria-label="t('storage.rulesTab')"
-    :refresh-label="t('storage.refresh')"
     @refresh="emit('refresh')"
     @update:pagination="emit('pagination', $event)"
   >
@@ -88,7 +85,7 @@ const { t } = useI18n()
     <template #cell-actions="{ row }">
       <el-space wrap :size="4">
         <el-button v-if="props.canUpdate" text type="primary" @click="emit('open', row)">
-          {{ t('storage.edit') }}
+          {{ t('common.edit') }}
         </el-button>
         <el-button
           v-if="props.can('storage:uploadRule:status')"
@@ -104,7 +101,7 @@ const { t } = useI18n()
           type="danger"
           @click="emit('delete', row)"
         >
-          {{ t('storage.delete') }}
+          {{ t('common.delete') }}
         </el-button>
       </el-space>
     </template>

@@ -198,13 +198,13 @@ const { t } = useI18n()
       </div>
     </el-form>
     <template #footer>
-      <el-button @click="visible = false">{{ t('permission.authPlatform.cancel') }}</el-button>
+      <el-button @click="visible = false">{{ t('common.cancel') }}</el-button>
       <el-button
         type="primary"
         :loading="submitting"
         :disabled="!formValid"
         @click="emit('save')"
-        >{{ t('permission.authPlatform.save') }}</el-button
+        >{{ t('common.save') }}</el-button
       >
     </template>
   </AppDialog>

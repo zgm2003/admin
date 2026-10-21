@@ -49,7 +49,7 @@ const columns = computed<TableColumn<MailRateLimitPolicy>[]>(() => [
   { key: 'dimension', prop: 'dimension', label: t('mail.rateLimit.dimension'), minWidth: 180 },
   { key: 'limit', prop: 'key', label: t('mail.rateLimit.limit'), width: 190 },
   { key: 'window', prop: 'key', label: t('mail.rateLimit.window'), width: 190 },
-  { key: 'actions', prop: 'key', label: t('mail.actions'), width: 140, fixed: 'right' },
+  { key: 'actions', prop: 'key', label: t('common.actions'), width: 140, fixed: 'right' },
 ])
 
 function policyId(policy: Pick<MailRateLimitPolicy, 'platformId' | 'key'>): string {
@@ -122,7 +122,6 @@ async function save(policy: MailRateLimitPolicy): Promise<void> {
       row-key="rowId"
       :loading="loading"
       :aria-label="t('mail.rateLimitsTab')"
-      :refresh-label="t('mail.refresh')"
       @refresh="emit('refresh')"
     >
       <template #cell-platform="{ row }: { row: MailRateLimitPolicy | undefined }">

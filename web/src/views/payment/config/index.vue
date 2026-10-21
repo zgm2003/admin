@@ -44,7 +44,7 @@ const searchFields = computed<SearchField<{ keyword: string; status: number | ''
   {
     key: 'status',
     type: 'select-v2',
-    label: t('payment.config.status.label'),
+    label: t('common.status'),
     resetValue: '',
     options: options.value === null ? [] : options.value.statuses,
     width: 160,
@@ -68,9 +68,9 @@ const columns = computed<TableColumn<PaymentConfig>[]>(() => [
   { prop: 'appId', label: t('payment.config.appId'), minWidth: 165 },
   { key: 'version', label: t('payment.config.currentVersion'), width: 115 },
   { key: 'methods', label: t('payment.config.payMethods'), minWidth: 130 },
-  { key: 'status', label: t('payment.config.status.label'), width: 100 },
-  { prop: 'sortOrder', label: t('payment.config.sortOrder'), width: 80 },
-  { key: 'actions', label: t('payment.config.actions'), minWidth: 300, fixed: 'right' },
+  { key: 'status', label: t('common.status'), width: 100 },
+  { prop: 'sortOrder', label: t('common.sortOrder'), width: 80 },
+  { key: 'actions', label: t('common.actions'), minWidth: 300, fixed: 'right' },
 ])
 const dialogVisible = ref(false)
 const dialogMode = ref<ConfigDialogMode>('create')
@@ -359,7 +359,7 @@ onBeforeUnmount(() => {
       >
       <template #toolbar-right>
         <el-button v-if="optionsError" @click="reloadOptions">{{
-          t('payment.config.retry')
+          t('common.retry')
         }}</el-button>
       </template>
       <template #cell-identity="{ row }: { row: PaymentConfig }">
@@ -401,7 +401,7 @@ onBeforeUnmount(() => {
           :disabled="busyID !== null"
           data-testid="payment-config-detail"
           @click="showDetail(row)"
-          >{{ t('payment.config.detail') }}</el-button
+          >{{ t('common.detail') }}</el-button
         >
         <el-button
           v-if="canUpdate && row.actions.update"
@@ -410,7 +410,7 @@ onBeforeUnmount(() => {
           :disabled="optionsLoading || options === null || submitting"
           data-testid="payment-config-edit"
           @click="openEdit(row, 'edit')"
-          >{{ t('payment.config.edit') }}</el-button
+          >{{ t('common.edit') }}</el-button
         >
         <el-button
           v-if="canUpdate && row.actions.update"
@@ -448,7 +448,7 @@ onBeforeUnmount(() => {
           :disabled="busyID !== null"
           data-testid="payment-config-delete"
           @click="act(row, 'delete')"
-          >{{ t('payment.config.delete') }}</el-button
+          >{{ t('common.delete') }}</el-button
         >
       </template>
     </AppTable>
@@ -464,7 +464,7 @@ onBeforeUnmount(() => {
     />
     <AppDialog
       v-model="detailVisible"
-      :title="t('payment.config.detail')"
+      :title="t('common.detail')"
       width="760px"
       :append-to-body="false"
     >

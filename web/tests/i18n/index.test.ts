@@ -49,14 +49,10 @@ describe('frontend i18n', () => {
     expect(isAppMessageKey('navigation.unknown')).toBe(false)
   })
 
-  it('translates grouped status labels without losing nested keys', () => {
+  it('translates the shared status label in both languages', () => {
     for (const locale of ['zh-CN', 'en-US'] as const) {
       setLocale(locale)
-      for (const domain of ['storage', 'user', 'setting', 'mail', 'sms', 'payment.config']) {
-        expect(appI18n.global.t(`${domain}.status.label`)).toBe(
-          locale === 'zh-CN' ? '状态' : 'Status',
-        )
-      }
+      expect(appI18n.global.t('common.status')).toBe(locale === 'zh-CN' ? '状态' : 'Status')
     }
   })
 
@@ -67,6 +63,46 @@ describe('frontend i18n', () => {
       expect(appI18n.global.t('common.disable')).toBe(locale === 'zh-CN' ? '停用' : 'Disable')
       expect(isAppMessageKey('common.enabled')).toBe(false)
       expect(isAppMessageKey('common.disabled')).toBe(false)
+    }
+  })
+
+  it('provides shared labels for stable cross-page actions and table metadata', () => {
+    const expected = {
+      'common.status': ['状态', 'Status'],
+      'common.actions': ['操作', 'Actions'],
+      'common.edit': ['编辑', 'Edit'],
+      'common.save': ['保存', 'Save'],
+      'common.cancel': ['取消', 'Cancel'],
+      'common.close': ['关闭', 'Close'],
+      'common.delete': ['删除', 'Delete'],
+      'common.retry': ['重试', 'Retry'],
+      'common.refresh': ['刷新', 'Refresh'],
+      'common.search': ['查询', 'Search'],
+      'common.reset': ['重置', 'Reset'],
+      'common.detail': ['详情', 'Details'],
+      'common.remark': ['备注', 'Remark'],
+      'common.createdAt': ['创建时间', 'Created at'],
+      'common.updatedAt': ['更新时间', 'Updated at'],
+      'common.sortOrder': ['排序', 'Sort order'],
+      'common.allStatuses': ['全部状态', 'All statuses'],
+      'common.expand': ['展开', 'Expand'],
+      'common.collapse': ['收起', 'Collapse'],
+      'common.selectAll': ['全选', 'Select all'],
+      'common.clear': ['清空', 'Clear'],
+      'common.download': ['下载', 'Download'],
+      'common.preview': ['预览', 'Preview'],
+      'common.confirm': ['确认', 'Confirm'],
+    } as const
+
+    for (const [locale, index] of [
+      ['zh-CN', 0],
+      ['en-US', 1],
+    ] as const) {
+      setLocale(locale)
+      for (const [key, values] of Object.entries(expected)) {
+        expect(isAppMessageKey(key), key).toBe(true)
+        expect(appI18n.global.t(key), key).toBe(values[index])
+      }
     }
   })
 
@@ -103,11 +139,11 @@ describe('frontend i18n', () => {
       'permission.userRoles',
       'user.title',
       'user.keyword',
-      'user.status.label',
+      'common.status',
       'user.role',
-      'user.search',
-      'user.reset',
-      'user.refresh',
+      'common.search',
+      'common.reset',
+      'common.refresh',
       'user.enableConfirm',
       'user.disableConfirm',
       'user.deleteConfirm',
@@ -131,7 +167,7 @@ describe('frontend i18n', () => {
       'permission.authPlatformStatus',
       'permission.authPlatformDelete',
       'permission.authPlatform.title',
-      'permission.authPlatform.search',
+      'common.search',
       'permission.authPlatform.form.basicSection',
       'permission.authPlatform.form.tokenSection',
       'permission.authPlatform.form.policySection',

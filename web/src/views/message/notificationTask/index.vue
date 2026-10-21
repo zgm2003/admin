@@ -317,7 +317,7 @@ async function remove(row: taskApi.NotificationTaskListItem): Promise<void> {
   busyIDs.value = [...busyIDs.value, row.id]
   errorMessage.value = ''
   try {
-    await ElMessageBox.confirm(t('notificationTask.deleteConfirm'), t('notificationTask.delete'), {
+    await ElMessageBox.confirm(t('notificationTask.deleteConfirm'), t('common.delete'), {
       type: 'warning',
     })
     await taskApi.deleteNotificationTask(row.id)
@@ -406,7 +406,7 @@ onMounted(() => void load())
 <template>
   <AppPage>
     <div v-if="optionsError"><el-button data-testid="notification-task-options-retry" link @click="reloadOptions">{{
-        t('notificationTask.retry')
+        t('common.retry')
       }}</el-button></div>
     <NotificationTaskSearch
       v-model="searchModel"

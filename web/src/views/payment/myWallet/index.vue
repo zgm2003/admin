@@ -45,7 +45,7 @@ const columns = computed<TableColumn<PersonalTransaction>[]>(() => [
   { prop: 'amount', label: t('payment.transaction.amount'), width: 130 },
   { prop: 'balanceBefore', label: t('payment.transaction.balanceBefore'), width: 140 },
   { prop: 'balanceAfter', label: t('payment.transaction.balanceAfter'), width: 140 },
-  { key: 'createdAt', label: t('payment.transaction.createdAt'), minWidth: 180 },
+  { key: 'createdAt', label: t('common.createdAt'), minWidth: 180 },
 ])
 function transactionSource(value: number): string {
   if (value === 1) return t('payment.transaction.payment')
@@ -109,7 +109,7 @@ async function redeem(): Promise<void> {
     redeemResult.value = await redeemApi.redeemWalletCode(redeemCode.value.trim())
     redeemCode.value = ''
     await Promise.all([loadWallet(), loadTransactions()])
-  } catch (error: unknown) {
+  } catch {
     // request.ts owns the API error notification.
   } finally {
     redeemSubmitting.value = false
@@ -141,7 +141,7 @@ onBeforeUnmount(() => {
 
 <template>
   <AppPage class="payment-my-wallet-page">
-    <div v-if="walletError"><el-button type="primary" plain @click="loadWallet">{{ t('appTable.refresh') }}</el-button></div>
+    <div v-if="walletError"><el-button type="primary" plain @click="loadWallet">{{ t('common.refresh') }}</el-button></div>
     <el-card class="payment-my-wallet-page__summary" shadow="never">
       <template #header>
         <div class="payment-my-wallet-page__summary-header">
@@ -191,7 +191,7 @@ onBeforeUnmount(() => {
       </el-form>
       <template #footer>
         <el-button :disabled="redeemSubmitting" @click="redeemVisible = false">{{
-          t('payment.redeemCode.close')
+          t('common.close')
         }}</el-button>
         <el-button
           type="primary"

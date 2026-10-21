@@ -171,18 +171,26 @@ describe('SMS management page', () => {
     document.body.innerHTML = ''
   })
 
-  it('does not save a changed config status when confirmation is cancelled', async () => {
-    const wrapper = mountPage(['message:sms:list', 'message:sms:config:update'])
-    await flushPromises()
-    const status = wrapper.findComponent({ name: 'ElSwitch' })
-    expect(status.exists()).toBe(true)
-    status.vm.$emit('update:modelValue', YesNo.No)
-    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
-    await wrapper.get('[data-testid="sms-config-save"]').trigger('click')
-    await flushPromises()
-    expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
-    expect(smsApi.saveSmsConfig).not.toHaveBeenCalled()
-  })
+  it.each(['zh-CN', 'en-US'] as const)(
+    'does not save a changed config status when confirmation is cancelled in %s',
+    async (locale) => {
+      setLocale(locale)
+      const wrapper = mountPage(['message:sms:list', 'message:sms:config:update'])
+      await flushPromises()
+      const status = wrapper.findComponent({ name: 'ElSwitch' })
+      expect(status.exists()).toBe(true)
+      status.vm.$emit('update:modelValue', YesNo.No)
+      vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+      await wrapper.get('[data-testid="sms-config-save"]').trigger('click')
+      await flushPromises()
+      expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
+      const message = vi.mocked(ElMessageBox.confirm).mock.calls[0]?.[0]
+      expect(message).toContain(locale === 'zh-CN' ? '短信服务' : 'SMS service')
+      expect(message).toContain(locale === 'zh-CN' ? '停用' : 'Disable')
+      expect(message).not.toContain('sms.title')
+      expect(smsApi.saveSmsConfig).not.toHaveBeenCalled()
+    },
+  )
 
   it('requires list permission before rendering tabs or loading control-plane data', async () => {
     const denied = mountPage(['message:sms:view'])

@@ -156,18 +156,26 @@ describe('mail service page', () => {
     expect(mailApi.saveMailConfig).not.toHaveBeenCalled()
   })
 
-  it('does not save a changed config status when confirmation is cancelled', async () => {
-    const wrapper = mountPage(['message:mail:list', 'message:mail:config:update'])
-    await flushPromises()
-    const status = wrapper.findComponent({ name: 'ElSwitch' })
-    expect(status.exists()).toBe(true)
-    status.vm.$emit('update:modelValue', YesNo.No)
-    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
-    await wrapper.get('[data-testid="mail-config-save"]').trigger('click')
-    await flushPromises()
-    expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
-    expect(mailApi.saveMailConfig).not.toHaveBeenCalled()
-  })
+  it.each(['zh-CN', 'en-US'] as const)(
+    'does not save a changed config status when confirmation is cancelled in %s',
+    async (locale) => {
+      setLocale(locale)
+      const wrapper = mountPage(['message:mail:list', 'message:mail:config:update'])
+      await flushPromises()
+      const status = wrapper.findComponent({ name: 'ElSwitch' })
+      expect(status.exists()).toBe(true)
+      status.vm.$emit('update:modelValue', YesNo.No)
+      vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+      await wrapper.get('[data-testid="mail-config-save"]').trigger('click')
+      await flushPromises()
+      expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
+      const message = vi.mocked(ElMessageBox.confirm).mock.calls[0]?.[0]
+      expect(message).toContain(locale === 'zh-CN' ? '邮件服务' : 'Mail service')
+      expect(message).toContain(locale === 'zh-CN' ? '停用' : 'Disable')
+      expect(message).not.toContain('mail.title')
+      expect(mailApi.saveMailConfig).not.toHaveBeenCalled()
+    },
+  )
 
   it('consumes new backend rule values and sends their numeric values unchanged', async () => {
     const options = mailOptions()

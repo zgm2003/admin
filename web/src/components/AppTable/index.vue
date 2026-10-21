@@ -93,7 +93,7 @@ const paginationLayout = computed(() =>
 const pageSizes = computed(() => (isMobile.value ? [20, 50] : [20, 50, 100]))
 const tableHeaderCellStyle = { background: 'var(--el-fill-color-light)' }
 const resolvedAriaLabel = computed(() => props.ariaLabel ?? t('appTable.ariaLabel'))
-const resolvedRefreshLabel = computed(() => props.refreshLabel ?? t('appTable.refresh'))
+const resolvedRefreshLabel = computed(() => props.refreshLabel ?? t('common.refresh'))
 const resolvedErrorMessage = computed(() => props.statusMessage || t('appTable.requestFailed'))
 const resolvedEmptyMessage = computed(() => props.statusMessage || t('appTable.empty'))
 

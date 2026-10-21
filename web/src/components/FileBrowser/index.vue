@@ -357,7 +357,7 @@ onBeforeUnmount(() => {
         :loading="loading"
         data-testid="file-refresh"
         @click="load"
-        >{{ t('appTable.refresh') }}</el-button
+        >{{ t('common.refresh') }}</el-button
       >
     </div>
     <div class="file-browser__surface" :aria-busy="loading">
@@ -420,7 +420,7 @@ onBeforeUnmount(() => {
               link
               :data-testid="'file-preview-' + row.id"
               @click="preview(row)"
-              >{{ t('storage.file.preview') }}</el-button
+              >{{ t('common.preview') }}</el-button
             >
             <el-button
               v-if="canDetail"
@@ -428,7 +428,7 @@ onBeforeUnmount(() => {
               link
               :data-testid="'file-download-' + row.id"
               @click="download(row)"
-              >{{ t('storage.file.download') }}</el-button
+              >{{ t('common.download') }}</el-button
             >
             <el-button
               v-if="canDelete"
@@ -436,7 +436,7 @@ onBeforeUnmount(() => {
               link
               :data-testid="'file-delete-' + row.id"
               @click="remove(row)"
-              >{{ t('storage.file.delete') }}</el-button
+              >{{ t('common.delete') }}</el-button
             >
           </div>
         </article>
@@ -507,8 +507,8 @@ onBeforeUnmount(() => {
           <button
             type="button"
             data-testid="file-preview-download"
-            :aria-label="t('components.upMedia.download')"
-            :title="t('components.upMedia.download')"
+            :aria-label="t('common.download')"
+            :title="t('common.download')"
             @click="downloadPreview"
           >
             <Download />

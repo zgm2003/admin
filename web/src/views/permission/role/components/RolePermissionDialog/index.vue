@@ -194,26 +194,26 @@ async function save(): Promise<void> {
                   type="info"
                   effect="plain"
                 >
-                  {{ t('role.permission.disabled') }}
+                  {{ t('common.disable') }}
                 </el-tag>
               </span>
             </template>
           </el-tab-pane>
         </el-tabs>
         <el-space class="permission-toolbar" wrap :size="8">
-          <el-button @click="selectAll">{{ t('role.permission.selectAll') }}</el-button>
-          <el-button @click="clear">{{ t('role.permission.clear') }}</el-button>
+          <el-button @click="selectAll">{{ t('common.selectAll') }}</el-button>
+          <el-button @click="clear">{{ t('common.clear') }}</el-button>
         </el-space>
         <RolePermissionMatrix v-model="selectedEffectiveMenuIDs" :groups="groups" />
       </template>
       <el-alert v-else-if="error" :title="error" type="error" show-icon>
-        <el-button text @click="loadPermissions">{{ t('role.retry') }}</el-button>
+        <el-button text @click="loadPermissions">{{ t('common.retry') }}</el-button>
       </el-alert>
       <div v-else>{{ t('role.permission.empty') }}</div>
     </div>
 
     <template #footer>
-      <el-button @click="visible = false">{{ t('role.form.cancel') }}</el-button>
+      <el-button @click="visible = false">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" :disabled="data === null || saving" @click="prepareSave">
         {{ t('role.permission.save') }}
       </el-button>

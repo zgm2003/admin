@@ -71,7 +71,7 @@ onBeforeUnmount(() => {
           <span>{{ resolveOptionLabel(job.triggerSource, options?.triggerSources ?? []) }}</span>
         </el-tooltip>
       </el-descriptions-item>
-      <el-descriptions-item :label="$t('scheduler.status')">
+      <el-descriptions-item :label="$t('common.status')">
         <el-tag
           :type="
             options?.jobStatuses.find((option) => option.value === job?.status)?.tone ?? 'info'
@@ -82,7 +82,7 @@ onBeforeUnmount(() => {
       <el-descriptions-item :label="$t('scheduler.attempt')"
         >{{ job.attemptCount }}/{{ job.maxAttempts }}</el-descriptions-item
       >
-      <el-descriptions-item :label="$t('scheduler.createdAt')">{{
+      <el-descriptions-item :label="$t('common.createdAt')">{{
         formatTime(job.createdAt)
       }}</el-descriptions-item>
       <el-descriptions-item :label="$t('scheduler.scheduledAt')">{{

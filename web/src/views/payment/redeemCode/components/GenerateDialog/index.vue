@@ -146,7 +146,7 @@ watch(
             data-testid="payment-redeem-code-expires-at"
           />
         </el-form-item>
-        <el-form-item :label="t('payment.redeemCode.remark')">
+        <el-form-item :label="t('common.remark')">
           <el-input
             v-model="form.remark"
             type="textarea"
@@ -175,9 +175,7 @@ watch(
       />
     </template>
     <template #footer>
-      <el-button :disabled="submitting" @click="close">{{
-        t('payment.redeemCode.close')
-      }}</el-button>
+      <el-button :disabled="submitting" @click="close">{{ t('common.close') }}</el-button>
       <el-button
         v-if="result === null"
         type="primary"

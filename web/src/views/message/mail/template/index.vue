@@ -43,11 +43,11 @@ const columns = computed<TableColumn<MailTemplate>[]>(() => [
   { prop: 'subject', label: t('mail.subject'), minWidth: 190, overflowTooltip: true },
   { key: 'templateId', prop: 'tencentTemplateId', label: t('mail.templateId'), width: 180 },
   { key: 'variables', prop: 'id', label: t('mail.variables'), minWidth: 180 },
-  { key: 'status', prop: 'id', label: t('mail.status.label'), width: 100 },
+  { key: 'status', prop: 'id', label: t('common.status'), width: 100 },
   {
     key: 'actions',
     prop: 'id',
-    label: t('mail.actions'),
+    label: t('common.actions'),
     width: 100,
     fixed: 'right',
     hidden: !props.canUpdate,
@@ -152,7 +152,6 @@ async function saveTemplate(): Promise<void> {
       :data="templates"
       :loading="loading"
       :aria-label="t('mail.templatesTab')"
-      :refresh-label="t('mail.refresh')"
       @refresh="emit('refresh')"
     >
       <template #toolbar-left>
@@ -191,7 +190,7 @@ async function saveTemplate(): Promise<void> {
       </template>
       <template #cell-actions="{ row }: { row: MailTemplate }">
         <el-button data-testid="mail-template-edit" text type="primary" @click="edit(row)">
-          {{ t('mail.edit') }}
+          {{ t('common.edit') }}
         </el-button>
       </template>
       <template #empty>
@@ -280,7 +279,7 @@ async function saveTemplate(): Promise<void> {
         <div class="mail-template-dialog__footer">
           <el-button @click="copyHtml">{{ t('mail.copyHtml') }}</el-button>
           <div>
-            <el-button @click="dialog = false">{{ t('mail.cancel') }}</el-button>
+            <el-button @click="dialog = false">{{ t('common.cancel') }}</el-button>
             <el-button type="primary" :loading="saving" @click="saveTemplate">{{
               t('mail.save')
             }}</el-button>

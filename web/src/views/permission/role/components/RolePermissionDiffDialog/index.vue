@@ -75,10 +75,10 @@ const hasRemoved = computed(() => props.removedLabels.length > 0)
 
     <template #footer>
       <el-button :disabled="saving" @click="visible = false">
-        {{ t('role.confirm.cancel') }}
+        {{ t('common.cancel') }}
       </el-button>
       <el-button type="primary" :loading="saving" @click="emit('confirm')">
-        {{ t('role.confirm.confirm') }}
+        {{ t('common.confirm') }}
       </el-button>
     </template>
   </AppDialog>

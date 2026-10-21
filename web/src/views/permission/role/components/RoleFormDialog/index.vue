@@ -34,7 +34,7 @@ const { t } = useI18n()
     </el-form>
     <template #footer>
       <el-button @click="visible = false">
-        {{ t('role.form.cancel') }}
+        {{ t('common.cancel') }}
       </el-button>
       <el-button
         type="primary"
@@ -42,7 +42,7 @@ const { t } = useI18n()
         :disabled="!props.formValid"
         @click="emit('save')"
       >
-        {{ t('role.form.submit') }}
+        {{ t('common.save') }}
       </el-button>
     </template>
   </AppDialog>

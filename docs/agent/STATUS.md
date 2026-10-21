@@ -1,5 +1,14 @@
 # 项目状态
 
+## 公共界面文案收敛（2026-10-21，定向验证完成）
+
+- 按维护者确认统一基础按钮、通用表头与筛选文案到 `common.*`，同步页面、私有组件、公共组件及中英文词库；不保留旧 key 别名，不拆分 enable/enabled 或 disable/disabled。
+- 公共词条共 26 个（含已有启用/停用），删除 194 个重复旧词条，移除 48 处与公共搜索/表格默认值相同的 label 传参；保留显式自定义文案能力和语言切换响应。修复邮件/短信状态确认使用不存在的 `mail.title` / `sms.title`，改为复用已有服务名称；清理钱包兑换处理中的未使用 catch 变量。
+- 保留业务状态、特殊删除确认、校验与错误提示；只改前端文案引用，不改变 API、DTO、权限、数据库与缓存协议，新增 HTTP/PostgreSQL/Redis 查询预算均为 0。
+- 验证：`pnpm vitest run tests/i18n/index.test.ts tests/components/AppSearch/index.test.ts tests/components/AppTable/src/index.test.ts tests/views/payment/rechargePackage.test.ts tests/views/permission/role/components/RolePermissionMatrix.test.ts tests/views/permission/menu/index.test.ts tests/views/message/notificationTask/NotificationTaskTable.test.ts tests/views/user/account/userRules.test.ts --pool=threads --maxWorkers=1`（8 文件/85 项）；i18n/钱包组合（2 文件/15 项）；邮件/短信 `-t 'changed config status when confirmation is cancelled'`（4 项通过、65 项跳过）。共覆盖 11 个文件、92 个不同用例，公共词条缺失与确认框原始 key 均先复现失败后修复通过。
+- `pnpm typecheck`、改动 TS/Vue 文件的 `pnpm exec eslint @files --max-warnings 0`、`pnpm check:architecture`（0 baseline findings）与 `git diff --check` 通过。一次性双语保真/静态引用检查覆盖 1754 个字面量翻译调用，缺失 key 和旧词条引用均为 0。`design.md` 已同步当前公共文案规则。
+- `pnpm exec prettier --check @files` 仍在 26 个页面文件告警，逐个与 HEAD 对照均存在既有格式问题；本次未为消除这些告警全文件重排。按维护者要求未运行全量测试或 build；未做真实浏览器验收、数据库操作或 Git 提交。
+
 ## 多页面错误态展示修复（2026-10-21，定向验证完成）
 
 - 系统设置、邮件配置、通知、会话、操作日志、菜单和角色页面统一向 `AppTable` 传递加载失败文案；修复系统设置弹窗缺少错误态展示及多个页面失败后仅显示重试按钮的问题。会话列表加载失败时不再同时展示“暂无会话”空态；支付配置页移除多余的 identity 包装节点。

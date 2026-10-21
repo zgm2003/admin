@@ -184,7 +184,7 @@ onBeforeUnmount(reset)
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="visible = false">{{ t('user.cancel') }}</el-button>
+      <el-button @click="visible = false">{{ t('common.cancel') }}</el-button>
       <el-button
         data-testid="profile-email-submit"
         type="primary"
@@ -192,7 +192,7 @@ onBeforeUnmount(reset)
         :disabled="!canSubmit"
         @click="submit"
       >
-        {{ t('user.save') }}
+        {{ t('common.save') }}
       </el-button>
     </template>
   </AppDialog>

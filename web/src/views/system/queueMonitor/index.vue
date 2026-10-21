@@ -79,7 +79,7 @@ function stop(): void {
     <div v-else-if="failed" class="queue-monitor-state">
       <p>{{ t('system.queueMonitor.grantFailed') }}</p>
       <el-button type="primary" :loading="loading" @click="grant">{{
-        t('system.queueMonitor.retry')
+        t('common.retry')
       }}</el-button>
     </div>
     <div v-else-if="!loaded" class="queue-monitor-state">
@@ -88,7 +88,7 @@ function stop(): void {
     <div v-else-if="frameFailed" class="queue-monitor-state">
       <p>{{ t('system.queueMonitor.loadFailed') }}</p>
       <el-button type="primary" :loading="loading" @click="grant">{{
-        t('system.queueMonitor.retry')
+        t('common.retry')
       }}</el-button>
     </div>
     <div v-else class="queue-monitor-frame-shell">

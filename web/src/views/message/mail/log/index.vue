@@ -84,8 +84,8 @@ const searchFields = computed<SearchField<MailLogSearchModel>[]>(() => [
     key: 'status',
     type: 'select-v2',
     resetValue: '',
-    label: t('mail.status.label'),
-    placeholder: t('mail.allStatuses'),
+    label: t('common.status'),
+    placeholder: t('common.allStatuses'),
     options: statusOptions.value,
     width: 130,
     testId: 'mail-log-status',
@@ -106,10 +106,10 @@ const columns = computed<TableColumn<MailLog>[]>(() => [
   { key: 'username', prop: 'username', label: t('mail.associatedUser'), width: 130 },
   { prop: 'toEmail', label: t('mail.recipient'), minWidth: 210, overflowTooltip: true },
   { key: 'scene', prop: 'scene', label: t('mail.scene'), width: 150 },
-  { key: 'status', prop: 'status', label: t('mail.status.label'), width: 110 },
+  { key: 'status', prop: 'status', label: t('common.status'), width: 110 },
   { key: 'latency', prop: 'latencyMs', label: t('mail.latency'), width: 110 },
   { key: 'sentAt', prop: 'sentAt', label: t('mail.sentAt'), minWidth: 180 },
-  { key: 'actions', prop: 'id', label: t('mail.actions'), width: 100, fixed: 'right' },
+  { key: 'actions', prop: 'id', label: t('common.actions'), width: 100, fixed: 'right' },
 ])
 const pagination = computed<TablePaginationState>(() => ({
   currentPage: props.page,
@@ -185,7 +185,6 @@ async function inspect(row: MailLog): Promise<void> {
       :loading="loading"
       :pagination="pagination"
       :aria-label="t('mail.logsTab')"
-      :refresh-label="t('mail.refresh')"
       @refresh="emit('refresh')"
       @update:pagination="(next: TablePaginationState) => emit('pageChange', next)"
     >
@@ -209,7 +208,7 @@ async function inspect(row: MailLog): Promise<void> {
       }}</template>
       <template #cell-actions="{ row }: { row: MailLog }">
         <el-button text type="primary" @click="inspect(row)">
-          {{ t('mail.detail') }}
+          {{ t('common.detail') }}
         </el-button>
       </template>
       <template #empty>
@@ -230,7 +229,7 @@ async function inspect(row: MailLog): Promise<void> {
         <el-descriptions-item :label="t('mail.scene')">{{
           sceneText(detail.log.scene)
         }}</el-descriptions-item>
-        <el-descriptions-item :label="t('mail.status.label')">{{
+        <el-descriptions-item :label="t('common.status')">{{
           statusText(detail.log.status)
         }}</el-descriptions-item>
         <el-descriptions-item label="Request ID"

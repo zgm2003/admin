@@ -173,7 +173,7 @@ function searchLogs(filter: MailLogFilter): void {
 
 <template>
   <AppPage class="mail-page">
-    <div v-if="optionsError"><el-button type="primary" plain @click="loadOptions">{{ t('appTable.refresh') }}</el-button></div>
+    <div v-if="optionsError"><el-button type="primary" plain @click="loadOptions">{{ t('common.refresh') }}</el-button></div>
     <el-tabs v-model="activeTab" class="mail-tabs">
       <el-tab-pane
         v-for="tab in visibleTabs"
@@ -182,7 +182,7 @@ function searchLogs(filter: MailLogFilter): void {
         :label="tab.label"
         lazy
       >
-        <div v-if="errors[tab.name]"><el-button type="primary" plain @click="load(tab.name)">{{ t('appTable.refresh') }}</el-button></div>
+        <div v-if="errors[tab.name]"><el-button type="primary" plain @click="load(tab.name)">{{ t('common.refresh') }}</el-button></div>
         <MailConfigTab
           v-if="tab.name === 'config'"
           :config="config"

@@ -130,6 +130,29 @@ describe('AppSearch', () => {
     expect(wrapper.text()).toContain('Reset')
   })
 
+  it('preserves explicit labels and restores shared defaults when overrides are removed', async () => {
+    const wrapper = mount(AppSearch, {
+      props: {
+        modelValue: { keyword: '' },
+        fields: fields.slice(0, 1),
+        queryLabel: '查找订单',
+        resetLabel: '清除订单筛选',
+      },
+      global: { plugins: [ElementPlus, appI18n] },
+    })
+
+    setLocale('en-US')
+    await nextTick()
+    expect(wrapper.findAll('button').map((button) => button.text())).toEqual([
+      '查找订单',
+      '清除订单筛选',
+    ])
+
+    await wrapper.setProps({ queryLabel: undefined, resetLabel: undefined })
+    expect(wrapper.findAll('button').map((button) => button.text())).toEqual(['Search', 'Reset'])
+    wrapper.unmount()
+  })
+
   it('supports date-range as a public field type', () => {
     expect(dateRangeType).toBe('date-range')
   })

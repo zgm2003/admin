@@ -6,10 +6,7 @@ defineEmits<{ 'update:modelValue': [value: boolean] }>()
 </script>
 
 <template>
-  <AppDialog
-    :model-value="modelValue"
-    :title="$t(schedule ? 'scheduler.edit' : 'scheduler.create')"
-  >
+  <AppDialog :model-value="modelValue" :title="$t(schedule ? 'common.edit' : 'scheduler.create')">
     <slot />
   </AppDialog>
 </template>

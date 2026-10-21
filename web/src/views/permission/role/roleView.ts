@@ -24,8 +24,8 @@ export function roleSearchFields(t: Translate): SearchField<RoleSearchModel>[] {
       key: 'status',
       type: 'select-v2',
       resetValue: '',
-      label: t('role.statusLabel'),
-      placeholder: t('role.status.all'),
+      label: t('common.status'),
+      placeholder: t('common.allStatuses'),
       options: [
         { label: t('common.enable'), value: YesNo.Yes },
         { label: t('common.disable'), value: YesNo.No },
@@ -40,11 +40,11 @@ export function roleTableColumns(t: Translate): TableColumn<RoleListItem>[] {
     { prop: 'name', label: t('role.column.name'), minWidth: 150 },
     { prop: 'code', label: t('role.column.code'), minWidth: 170 },
     { key: 'default', prop: 'id', label: t('role.column.default'), width: 100 },
-    { key: 'status', prop: 'id', label: t('role.column.status'), width: 100 },
+    { key: 'status', prop: 'id', label: t('common.status'), width: 100 },
     { prop: 'userCount', label: t('role.column.users'), width: 100 },
     { prop: 'permissionCount', label: t('role.column.permissions'), width: 130 },
-    { prop: 'createdAt', label: t('role.column.createdAt'), minWidth: 190 },
-    { prop: 'updatedAt', label: t('role.column.updatedAt'), minWidth: 190 },
-    { key: 'actions', prop: 'id', label: t('role.column.actions'), width: 360 },
+    { prop: 'createdAt', label: t('common.createdAt'), minWidth: 190 },
+    { prop: 'updatedAt', label: t('common.updatedAt'), minWidth: 190 },
+    { key: 'actions', prop: 'id', label: t('common.actions'), width: 360 },
   ]
 }

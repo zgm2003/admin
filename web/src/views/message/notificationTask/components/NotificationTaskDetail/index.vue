@@ -77,7 +77,7 @@ function displayTime(value: string | null): string {
             : displayTime(task.scheduledAt)
         }}
       </el-descriptions-item>
-      <el-descriptions-item :label="t('notificationTask.createdAt')">
+      <el-descriptions-item :label="t('common.createdAt')">
         {{ displayTime(task.createdAt) }}
       </el-descriptions-item>
       <el-descriptions-item

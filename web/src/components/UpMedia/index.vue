@@ -474,8 +474,8 @@ async function downloadFile(objectKey: string): Promise<void> {
           <button
             type="button"
             data-testid="up-media-preview"
-            :aria-label="t('components.upMedia.preview')"
-            :title="t('components.upMedia.preview')"
+            :aria-label="t('common.preview')"
+            :title="t('common.preview')"
             :disabled="loading || item.pending"
             @click="openPreview(item.objectKey)"
           >
@@ -485,8 +485,8 @@ async function downloadFile(objectKey: string): Promise<void> {
             v-if="clearable && !disabled"
             type="button"
             class="up-media__clear"
-            :aria-label="t('components.upMedia.clear')"
-            :title="t('components.upMedia.clear')"
+            :aria-label="t('common.delete')"
+            :title="t('common.delete')"
             :disabled="loading"
             @click="clearAt(index)"
           >
@@ -594,8 +594,8 @@ async function downloadFile(objectKey: string): Promise<void> {
             type="button"
             data-testid="up-media-viewer-download"
             :disabled="downloading"
-            :aria-label="t('components.upMedia.download')"
-            :title="t('components.upMedia.download')"
+            :aria-label="t('common.download')"
+            :title="t('common.download')"
             @click="downloadFile(previewKey)"
           >
             <Download />
@@ -610,7 +610,7 @@ async function downloadFile(objectKey: string): Promise<void> {
     <AppDialog
       v-if="videoVisible"
       v-model="videoVisible"
-      :title="t('components.upMedia.preview')"
+      :title="t('common.preview')"
       width="800px"
     >
       <video
@@ -627,7 +627,7 @@ async function downloadFile(objectKey: string): Promise<void> {
       <p v-if="downloadError" class="up-media__error" role="alert">{{ downloadError }}</p>
       <template #footer
         ><el-button type="primary" :disabled="downloading" @click="downloadFile(previewKey)">{{
-          t('components.upMedia.download')
+          t('common.download')
         }}</el-button></template
       >
     </AppDialog>

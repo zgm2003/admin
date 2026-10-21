@@ -42,13 +42,13 @@ const { t } = useI18n()
         ><el-input v-model="form.username" :maxlength="props.usernameMaxLength" /></el-form-item
     ></el-form>
     <template #footer
-      ><el-button @click="visible = false">{{ t('user.cancel') }}</el-button
+      ><el-button @click="visible = false">{{ t('common.cancel') }}</el-button
       ><el-button
         type="primary"
         :loading="props.editSaving"
         :disabled="!props.usernameValid"
         @click="emit('save')"
-        >{{ t('user.save') }}</el-button
+        >{{ t('common.save') }}</el-button
       ></template
     >
   </AppDialog>

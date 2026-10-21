@@ -67,8 +67,6 @@ const fields = computed<SearchField<NotificationTaskSearchModel>[]>(() => [
     v-model="model"
     class="management-page__filters"
     :fields="fields"
-    :query-label="t('search.query')"
-    :reset-label="t('search.reset')"
     query-test-id="notification-task-search"
     reset-test-id="notification-task-reset"
     @query="emit('query')"

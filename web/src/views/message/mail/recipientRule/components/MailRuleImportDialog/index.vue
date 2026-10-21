@@ -384,7 +384,7 @@ function changePage(next: TablePaginationState): void {
         :disabled="saving"
         data-testid="mail-rule-import-cancel"
         @click="visible = false"
-        >{{ t('mail.cancel') }}</el-button
+        >{{ t('common.cancel') }}</el-button
       >
       <el-button
         type="primary"

@@ -79,8 +79,8 @@ const searchFields = computed<SearchField<SmsLogSearchModel>[]>(() => [
     key: 'status',
     type: 'select-v2',
     resetValue: '',
-    label: t('sms.statusLabel'),
-    placeholder: t('sms.allStatuses'),
+    label: t('common.status'),
+    placeholder: t('common.allStatuses'),
     options: statusOptions.value,
     width: 140,
     testId: 'sms-log-status',
@@ -100,13 +100,13 @@ const columns = computed<TableColumn<smsApi.SmsLog>[]>(() => [
   { prop: 'platform', label: t('sms.platform'), width: 120 },
   { key: 'scene', prop: 'scene', label: t('sms.sceneLabel'), minWidth: 150 },
   { prop: 'toPhone', label: t('sms.phone'), width: 170 },
-  { key: 'status', prop: 'status', label: t('sms.statusLabel'), width: 100 },
+  { key: 'status', prop: 'status', label: t('common.status'), width: 100 },
   { key: 'sentAt', prop: 'sentAt', label: t('sms.sentAt'), minWidth: 180 },
   { prop: 'errorSummary', label: t('sms.error'), minWidth: 180, overflowTooltip: true },
   {
     key: 'actions',
     prop: 'id',
-    label: t('sms.actions'),
+    label: t('common.actions'),
     width: 90,
     fixed: 'right',
     hidden: !props.canDetail,
@@ -179,7 +179,6 @@ async function showDetail(row: smsApi.SmsLog): Promise<void> {
       :loading="loading"
       :pagination="pagination"
       :aria-label="t('sms.tab.logs')"
-      :refresh-label="t('sms.refresh')"
       @refresh="emit('refresh')"
       @update:pagination="emit('pageChange', $event)"
     >
@@ -202,7 +201,7 @@ async function showDetail(row: smsApi.SmsLog): Promise<void> {
           :loading="detailLoading"
           @click="showDetail(row)"
         >
-          {{ t('sms.detail') }}
+          {{ t('common.detail') }}
         </el-button>
       </template>
       <template #empty>

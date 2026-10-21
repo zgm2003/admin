@@ -74,7 +74,7 @@ const columns = computed<TableColumn<RechargeOrder>[]>(() => [
   { prop: 'amount', label: t('payment.order.amount'), width: 120 },
   { key: 'status', label: t('payment.order.status'), width: 150 },
   { key: 'expiresAt', label: t('payment.order.expiresAt'), minWidth: 180 },
-  { key: 'actions', label: t('payment.order.actions'), width: 100, fixed: 'right' },
+  { key: 'actions', label: t('common.actions'), width: 100, fixed: 'right' },
 ])
 const callbackColumns = computed<TableColumn<CallbackEvent>[]>(() => [
   { prop: 'id', label: t('payment.callback.id'), width: 90 },
@@ -208,8 +208,6 @@ onBeforeUnmount(() => {
       v-model="filters"
       class="management-page__filters"
       :fields="searchFields"
-      :query-label="t('payment.order.search')"
-      :reset-label="t('payment.order.reset')"
       @query="search"
       @reset="reset"
     />

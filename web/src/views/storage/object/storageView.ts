@@ -31,8 +31,8 @@ export function createConfigSearchFields(t: Translate): SearchField<StorageConfi
       key: 'status',
       type: 'select-v2',
       resetValue: '',
-      label: t('storage.status.label'),
-      placeholder: t('storage.allStatus'),
+      label: t('common.status'),
+      placeholder: t('common.allStatuses'),
       options: [
         { label: t('common.enable'), value: YesNo.Yes },
         { label: t('common.disable'), value: YesNo.No },
@@ -79,8 +79,8 @@ export function createRuleSearchFields(
       key: 'status',
       type: 'select-v2',
       resetValue: '',
-      label: t('storage.status.label'),
-      placeholder: t('storage.allStatus'),
+      label: t('common.status'),
+      placeholder: t('common.allStatuses'),
       options: [
         { label: t('common.enable'), value: YesNo.Yes },
         { label: t('common.disable'), value: YesNo.No },
@@ -96,8 +96,8 @@ export function createConfigColumns(t: Translate): TableColumn<CosConfig>[] {
     { prop: 'bucket', label: t('storage.bucket'), minWidth: 190 },
     { prop: 'region', label: t('storage.region'), width: 150 },
     { key: 'credentials', prop: 'id', label: t('storage.credentials'), width: 130 },
-    { key: 'status', prop: 'id', label: t('storage.status.label'), width: 110 },
-    { key: 'actions', prop: 'id', label: t('storage.actions'), width: 310 },
+    { key: 'status', prop: 'id', label: t('common.status'), width: 110 },
+    { key: 'actions', prop: 'id', label: t('common.actions'), width: 310 },
   ]
 }
 
@@ -107,7 +107,7 @@ export function createRuleColumns(t: Translate): TableColumn<UploadRule>[] {
     { prop: 'platformName', label: t('storage.platform'), width: 150 },
     { prop: 'cosConfigName', label: t('storage.config'), width: 170 },
     { key: 'codes', prop: 'codes', label: t('storage.code'), minWidth: 220 },
-    { key: 'status', prop: 'id', label: t('storage.status.label'), width: 110 },
-    { key: 'actions', prop: 'id', label: t('storage.actions'), width: 250 },
+    { key: 'status', prop: 'id', label: t('common.status'), width: 110 },
+    { key: 'actions', prop: 'id', label: t('common.actions'), width: 250 },
   ]
 }

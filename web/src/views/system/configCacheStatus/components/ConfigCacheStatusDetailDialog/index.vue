@@ -40,7 +40,7 @@ function displayTime(value: string | null): string {
       <el-descriptions-item :label="t('configCacheStatus.detailLatestPublishedAt')">
         {{ displayTime(props.row.latestPublishedAt) }}
       </el-descriptions-item>
-      <el-descriptions-item :label="t('configCacheStatus.detailUpdatedAt')">
+      <el-descriptions-item :label="t('common.updatedAt')">
         {{ displayTime(props.row.updatedAt) }}
       </el-descriptions-item>
     </el-descriptions>

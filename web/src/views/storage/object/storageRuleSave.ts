@@ -20,7 +20,7 @@ export async function saveExistingRule(
           ? 'storage.confirmEnabledRuleReplacement'
           : 'storage.confirmStatus',
       ),
-      t('storage.status.label'),
+      t('common.status'),
       {
         type: 'warning',
       },
@@ -38,13 +38,9 @@ export async function saveNewRule(
   t: Translate,
 ): Promise<void> {
   if (form.isEnabled === YesNo.Yes) {
-    await ElMessageBox.confirm(
-      t('storage.confirmEnabledRuleReplacement'),
-      t('storage.status.label'),
-      {
-        type: 'warning',
-      },
-    )
+    await ElMessageBox.confirm(t('storage.confirmEnabledRuleReplacement'), t('common.status'), {
+      type: 'warning',
+    })
   }
   await createUploadRule(mutable)
 }

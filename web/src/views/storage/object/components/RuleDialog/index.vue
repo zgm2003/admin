@@ -122,7 +122,7 @@ defineExpose({ validate: () => formRef.value?.validate() })
                 <el-radio value="public">{{ t('storage.public') }}</el-radio>
               </el-radio-group>
             </el-form-item>
-            <el-form-item :label="t('storage.status.label')">
+            <el-form-item :label="t('common.status')">
               <el-radio-group
                 v-model="form.isEnabled"
                 data-testid="storage-rule-status"
@@ -163,7 +163,7 @@ defineExpose({ validate: () => formRef.value?.validate() })
                   :model-value="props.allExtensionsSelected"
                   :indeterminate="props.someExtensionsSelected"
                   @change="props.toggleAllExtensions"
-                  >{{ t('storage.selectAll') }}</el-checkbox
+                  >{{ t('common.selectAll') }}</el-checkbox
                 ></template
               >
             </el-select-v2>
@@ -194,7 +194,7 @@ defineExpose({ validate: () => formRef.value?.validate() })
                   :model-value="props.allMimeTypesSelected"
                   :indeterminate="props.someMimeTypesSelected"
                   @change="props.toggleAllMimeTypes"
-                  >{{ t('storage.selectAll') }}</el-checkbox
+                  >{{ t('common.selectAll') }}</el-checkbox
                 ></template
               >
             </el-select-v2>
@@ -202,7 +202,7 @@ defineExpose({ validate: () => formRef.value?.validate() })
           ></el-col
         >
         <el-col :xs="24"
-          ><el-form-item :label="t('storage.remark')"
+          ><el-form-item :label="t('common.remark')"
             ><el-input
               v-model="form.remark"
               type="textarea"
@@ -212,12 +212,12 @@ defineExpose({ validate: () => formRef.value?.validate() })
       </el-row>
     </el-form>
     <template #footer
-      ><el-button @click="visible = false">{{ t('storage.cancel') }}</el-button
+      ><el-button @click="visible = false">{{ t('common.cancel') }}</el-button
       ><el-button
         type="primary"
         :disabled="props.optionsLoading || props.optionsUnavailable"
         @click="emit('save')"
-        >{{ t('storage.save') }}</el-button
+        >{{ t('common.save') }}</el-button
       ></template
     >
   </AppDialog>

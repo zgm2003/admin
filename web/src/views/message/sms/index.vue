@@ -159,14 +159,14 @@ onBeforeUnmount(() => {
   <AppPage class="sms-page" data-testid="sms-page">
     <el-empty v-if="!canList" :description="t('sms.listPermissionRequired')" />
     <template v-else>
-      <div v-if="catalogError"><el-button type="primary" plain @click="loadCatalog">{{ t('sms.retry') }}</el-button></div>
+      <div v-if="catalogError"><el-button type="primary" plain @click="loadCatalog">{{ t('common.retry') }}</el-button></div>
       <el-tabs v-model="activeTab" class="sms-tabs">
         <el-tab-pane v-for="tab in visibleTabs" :key="tab.name" :name="tab.name" :label="tab.label">
           <div class="sms-panel">
             <div v-if="errors[tab.name]" class="sms-panel__error" role="alert">
               <span>{{ t('sms.loadFailed') }}</span>
               <el-button data-testid="sms-tab-retry" type="primary" plain @click="load()">
-                {{ t('sms.retry') }}
+                {{ t('common.retry') }}
               </el-button>
             </div>
             <SmsConfigTab

@@ -100,17 +100,17 @@ const scheduleColumns = computed<TableColumn<Schedule>[]>(() => [
   { prop: 'taskType', label: t('scheduler.taskType'), minWidth: 220 },
   { prop: 'cronExpression', label: t('scheduler.cron'), width: 180 },
   { prop: 'timezone', label: t('scheduler.timezone'), width: 150 },
-  { key: 'status', prop: 'id', label: t('scheduler.status'), width: 100 },
-  { key: 'actions', prop: 'id', label: t('scheduler.actions'), width: 300 },
+  { key: 'status', prop: 'id', label: t('common.status'), width: 100 },
+  { key: 'actions', prop: 'id', label: t('common.actions'), width: 300 },
 ])
 const jobColumns = computed<TableColumn<Job>[]>(() => [
   { prop: 'id', label: t('scheduler.id'), width: 90 },
   { prop: 'taskType', label: t('scheduler.taskType'), minWidth: 220 },
   { key: 'trigger', prop: 'triggerSource', label: t('scheduler.trigger'), width: 120 },
-  { key: 'status', prop: 'status', label: t('scheduler.status'), width: 120 },
+  { key: 'status', prop: 'status', label: t('common.status'), width: 120 },
   { prop: 'attemptCount', label: t('scheduler.attempt'), width: 100 },
-  { prop: 'createdAt', label: t('scheduler.createdAt'), width: 180 },
-  { key: 'actions', prop: 'id', label: t('scheduler.actions'), width: 160 },
+  { prop: 'createdAt', label: t('common.createdAt'), width: 180 },
+  { key: 'actions', prop: 'id', label: t('common.actions'), width: 160 },
 ])
 const state = computed<'loading' | 'error' | 'empty' | 'success'>(() =>
   loading.value
@@ -430,7 +430,7 @@ onBeforeUnmount(() => {
             @click="openJobs(row)"
             >{{ t('scheduler.jobs') }}</el-button
           ><el-button v-if="canUpdate" type="primary" link @click="openEdit(row)">{{
-            t('scheduler.edit')
+            t('common.edit')
           }}</el-button
           ><el-button
             v-if="canStatus"
@@ -446,7 +446,7 @@ onBeforeUnmount(() => {
             type="danger"
             link
             @click="remove(row)"
-            >{{ t('scheduler.delete') }}</el-button
+            >{{ t('common.delete') }}</el-button
           ></el-space
         ></template
       >
@@ -476,7 +476,7 @@ onBeforeUnmount(() => {
             class="scheduler-job-status-filter"
             :model-value="jobStatus"
             :options="jobStatusOptions"
-            :placeholder="t('scheduler.allStatus')"
+            :placeholder="t('common.allStatuses')"
             :value-on-clear="''"
             clearable
             @update:model-value="changeJobStatus"
@@ -502,14 +502,14 @@ onBeforeUnmount(() => {
         <template #cell-actions="{ row }: { row: Job }"
           ><el-space
             ><el-button v-if="canDetail" type="primary" link @click="openJob(row)">{{
-              t('scheduler.detail')
+              t('common.detail')
             }}</el-button
             ><el-button
               v-if="canRetry && row.actions.retry"
               type="warning"
               link
               @click="retry(row)"
-              >{{ t('scheduler.retry') }}</el-button
+              >{{ t('common.retry') }}</el-button
             ></el-space
           ></template
         >
@@ -517,7 +517,7 @@ onBeforeUnmount(() => {
     </AppDialog>
     <AppDialog
       v-model="dialogVisible"
-      :title="editing === null ? t('scheduler.create') : t('scheduler.edit')"
+      :title="editing === null ? t('scheduler.create') : t('common.edit')"
       width="600px"
       @close="dialogVisible = false"
     >
@@ -545,7 +545,7 @@ onBeforeUnmount(() => {
           ><el-input v-model="form.timezone" /></el-form-item
         ><template #footer
           ><el-button type="primary" :loading="submitting" @click="save">{{
-            t('scheduler.save')
+            t('common.save')
           }}</el-button></template
         ></el-form
       >

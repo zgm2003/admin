@@ -235,7 +235,7 @@ function save(): void {
     </el-form>
     <template #footer>
       <el-button :disabled="submitting" @click="visible = false">{{
-        t('setting.cancel')
+        t('common.cancel')
       }}</el-button>
       <el-button
         data-testid="setting-save"
@@ -244,7 +244,7 @@ function save(): void {
         :disabled="uploading || !canSave"
         @click="save"
       >
-        {{ t('setting.save') }}
+        {{ t('common.save') }}
       </el-button>
     </template>
   </AppDialog>

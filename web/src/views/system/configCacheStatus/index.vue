@@ -80,7 +80,7 @@ const searchFields = computed<SearchField<ConfigCacheStatusSearchModel>[]>(() =>
     type: 'select-v2',
     resetValue: '',
     label: t('configCacheStatus.publishState'),
-    placeholder: t('configCacheStatus.allStates'),
+    placeholder: t('common.allStatuses'),
     options: publishStateOptions.value,
     disabled: optionsLoading.value || optionsError.value !== '',
     clearable: true,
@@ -99,7 +99,7 @@ const state = computed<'loading' | 'error' | 'empty' | 'success'>(() =>
 const columns = computed<TableColumn<ConfigCacheStatus>[]>(() => [
   { prop: 'namespace', label: t('configCacheStatus.namespace'), minWidth: 180 },
   { prop: 'scopeKey', label: t('configCacheStatus.scopeKey'), minWidth: 140 },
-  { key: 'status', prop: 'status', label: t('configCacheStatus.status'), width: 130 },
+  { key: 'status', prop: 'status', label: t('common.status'), width: 130 },
   { prop: 'pendingCount', label: t('configCacheStatus.pendingCount'), width: 120 },
   {
     key: 'redisVersion',
@@ -192,13 +192,11 @@ onMounted(() => {
 
 <template>
   <AppPage class="config-cache-status-page">
-    <div v-if="optionsError"><el-button @click="reloadOptions">{{ t('appTable.refresh') }}</el-button></div>
+    <div v-if="optionsError"><el-button @click="reloadOptions">{{ t('common.refresh') }}</el-button></div>
     <AppSearch
       v-model="searchModel"
       class="management-page__filters"
       :fields="searchFields"
-      :query-label="t('search.query')"
-      :reset-label="t('search.reset')"
       query-test-id="config-cache-status-search"
       reset-test-id="config-cache-status-reset"
       @query="search"
@@ -214,7 +212,6 @@ onMounted(() => {
       :row-key="rowKey"
       :pagination="pagination"
       :aria-label="t('configCacheStatus.title')"
-      :refresh-label="t('appTable.refresh')"
       @refresh="load"
       @update:pagination="updatePagination"
     >

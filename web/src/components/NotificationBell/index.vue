@@ -114,7 +114,7 @@ function retry(): void {
     </div>
     <div v-else-if="notification.errorMessage" class="notification-bell__state">
       <span>{{ notification.errorMessage }}</span
-      ><el-button link type="primary" @click="retry">{{ t('notification.retry') }}</el-button>
+      ><el-button link type="primary" @click="retry">{{ t('common.retry') }}</el-button>
     </div>
     <div v-else-if="notification.recent.length === 0" class="notification-bell__state">
       {{ t('notification.empty') }}

@@ -60,8 +60,8 @@ const columns = computed<TableColumn<Transaction>[]>(() => [
   { key: 'sourceType', label: t('payment.transaction.sourceType'), width: 120 },
   { prop: 'amount', label: t('payment.transaction.amount'), width: 130 },
   { prop: 'balanceAfter', label: t('payment.transaction.balanceAfter'), width: 140 },
-  { key: 'createdAt', label: t('payment.transaction.createdAt'), minWidth: 180 },
-  { key: 'actions', label: t('payment.order.actions'), width: 90, fixed: 'right' },
+  { key: 'createdAt', label: t('common.createdAt'), minWidth: 180 },
+  { key: 'actions', label: t('common.actions'), width: 90, fixed: 'right' },
 ])
 function source(value: number): string {
   if (value === 1) return t('payment.transaction.payment')
@@ -156,7 +156,6 @@ onBeforeUnmount(() => {
       class="management-page__filters"
       :fields="searchFields"
       :query-label="t('payment.transaction.title')"
-      :reset-label="t('search.reset')"
       @query="search"
       @reset="reset"
     />
@@ -217,7 +216,7 @@ onBeforeUnmount(() => {
         <el-descriptions-item :label="t('payment.transaction.orderId')">{{
           detail.orderId ?? '-'
         }}</el-descriptions-item>
-        <el-descriptions-item :label="t('payment.transaction.createdAt')">{{
+        <el-descriptions-item :label="t('common.createdAt')">{{
           formatTime(detail.createdAt)
         }}</el-descriptions-item>
       </el-descriptions>

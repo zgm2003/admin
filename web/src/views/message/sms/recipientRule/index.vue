@@ -46,12 +46,12 @@ const columns = computed<TableColumn<smsApi.SmsRule>[]>(() => [
   { key: 'scope', prop: 'scope', label: t('sms.ruleScope'), width: 120 },
   { key: 'action', prop: 'action', label: t('sms.ruleAction'), width: 100 },
   { prop: 'name', label: t('sms.name'), minWidth: 160 },
-  { prop: 'remark', label: t('sms.remark'), minWidth: 160, overflowTooltip: true },
-  { key: 'status', prop: 'id', label: t('sms.status.label'), width: 100 },
+  { prop: 'remark', label: t('common.remark'), minWidth: 160, overflowTooltip: true },
+  { key: 'status', prop: 'id', label: t('common.status'), width: 100 },
   {
     key: 'actions',
     prop: 'id',
-    label: t('sms.actions'),
+    label: t('common.actions'),
     minWidth: 150,
     fixed: 'right',
     hidden: !hasRowActions.value,
@@ -168,7 +168,6 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
       :data="rules"
       :loading="loading"
       :aria-label="t('sms.tab.rules')"
-      :refresh-label="t('sms.refresh')"
       @refresh="emit('refresh')"
     >
       <template #toolbar-left>
@@ -212,7 +211,7 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
           type="primary"
           @click="edit(row)"
         >
-          {{ t('sms.edit') }}
+          {{ t('common.edit') }}
         </el-button>
         <el-button
           v-if="canDelete"
@@ -221,7 +220,7 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
           type="danger"
           @click="remove(row)"
         >
-          {{ t('sms.delete') }}
+          {{ t('common.delete') }}
         </el-button>
       </template>
       <template #empty>
@@ -278,7 +277,7 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
             :placeholder="t('sms.namePlaceholder')"
           />
         </el-form-item>
-        <el-form-item :label="t('sms.remark')">
+        <el-form-item :label="t('common.remark')">
           <el-input
             v-model="form.remark"
             data-testid="sms-rule-remark"
@@ -287,7 +286,7 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
             :placeholder="t('sms.remarkPlaceholder')"
           />
         </el-form-item>
-        <el-form-item :label="t('sms.status.label')">
+        <el-form-item :label="t('common.status')">
           <el-switch
             v-model="form.isEnabled"
             :active-value="YesNo.Yes"
@@ -296,9 +295,9 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('user.cancel') }}</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button data-testid="sms-rule-save" type="primary" :loading="saving" @click="save">
-          {{ t('sms.save') }}
+          {{ t('common.save') }}
         </el-button>
       </template>
     </AppDialog>

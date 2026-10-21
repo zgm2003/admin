@@ -49,7 +49,7 @@ const columns = computed<TableColumn<RechargeOrder>[]>(() => [
   { prop: 'amount', label: t('payment.order.amount'), width: 120 },
   { key: 'status', label: t('payment.order.status'), width: 150 },
   { key: 'expiresAt', label: t('payment.order.expiresAt'), minWidth: 180 },
-  { key: 'actions', label: t('payment.order.actions'), width: 130, fixed: 'right' },
+  { key: 'actions', label: t('common.actions'), width: 130, fixed: 'right' },
 ])
 function statusType(status: number): 'success' | 'warning' | 'info' {
   return status === 2 ? 'success' : status === 3 ? 'info' : 'warning'
@@ -180,7 +180,7 @@ onBeforeUnmount(() => {
       <template #header
         ><span>{{ t('navigation.paymentRecharge') }}</span></template
       >
-      <div v-if="optionsError"><el-button type="primary" plain @click="loadOptions">{{ t('appTable.refresh') }}</el-button></div>
+      <div v-if="optionsError"><el-button type="primary" plain @click="loadOptions">{{ t('common.refresh') }}</el-button></div>
       <el-alert
         v-if="options && !options.available"
         :title="t('payment.order.checkoutUnavailable')"

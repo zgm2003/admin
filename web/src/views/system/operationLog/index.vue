@@ -249,8 +249,6 @@ onBeforeUnmount(() => {
       v-model="searchModel"
       class="operation-log-filters management-page__filters"
       :fields="searchFields"
-      :query-label="t('operationLog.search')"
-      :reset-label="t('operationLog.reset')"
       query-test-id="operation-log-search"
       reset-test-id="operation-log-reset"
       @query="search"
@@ -269,7 +267,6 @@ onBeforeUnmount(() => {
       :status-message="loadError"
       :pagination="tablePagination"
       :aria-label="t('operationLog.title')"
-      :refresh-label="t('operationLog.refresh')"
       @refresh="loadLogs"
       @update:pagination="updateTablePagination"
     >

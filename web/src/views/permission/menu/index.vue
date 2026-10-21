@@ -200,8 +200,8 @@ async function changeStatus(node: ManagedMenuNode): Promise<void> {
       }),
       t('confirm.title'),
       {
-        confirmButtonText: t('menu.confirm.confirm'),
-        cancelButtonText: t('menu.confirm.cancel'),
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
         type: 'warning',
       },
     )
@@ -218,8 +218,8 @@ async function removeNode(node: ManagedMenuNode): Promise<void> {
   if (!canDelete.value || !node.actions.delete) return
   try {
     await ElMessageBox.confirm(t('menu.confirm.deleteMessage'), t('menu.confirm.deleteTitle'), {
-      confirmButtonText: t('menu.confirm.confirm'),
-      cancelButtonText: t('menu.confirm.cancel'),
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
       type: 'warning',
     })
     await deleteMenu(node.id)
@@ -237,8 +237,8 @@ async function rebuildAccessCacheNow(): Promise<void> {
       t('menu.confirm.rebuildAccessCacheMessage'),
       t('menu.confirm.rebuildAccessCacheTitle'),
       {
-        confirmButtonText: t('menu.confirm.confirm'),
-        cancelButtonText: t('menu.confirm.cancel'),
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
         type: 'warning',
       },
     )
@@ -331,7 +331,7 @@ watch(
   <AppPage class="menu-management-page" :aria-label="t('menu.title')">
     <div v-if="optionsError" data-testid="menu-options-error">
       <el-alert :title="optionsError" type="error" :closable="false" show-icon />
-      <el-button @click="reloadOptions">{{ t('menu.retry') }}</el-button>
+      <el-button @click="reloadOptions">{{ t('common.retry') }}</el-button>
     </div>
     <el-tabs
       v-if="platforms.length > 0"
@@ -346,7 +346,7 @@ watch(
             <span>{{ platform.name }}</span>
             <code>{{ platform.code }}</code>
             <el-tag v-if="platform.isEnabled === YesNo.No" size="small" type="info" effect="plain">
-              {{ t('menu.platform.disabled') }}
+              {{ t('common.disable') }}
             </el-tag>
           </span>
         </template>
@@ -355,7 +355,7 @@ watch(
     <div class="menu-management__content">
       <div v-if="loadError !== ''" data-testid="menu-load-error">
         <el-alert :title="loadError" type="error" :closable="false" show-icon />
-        <el-button type="primary" plain @click="reloadMenus">{{ t('menu.retry') }}</el-button>
+        <el-button type="primary" plain @click="reloadMenus">{{ t('common.retry') }}</el-button>
       </div>
 
       <MenuTreeTable

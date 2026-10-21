@@ -335,7 +335,7 @@ async function changeStatus(row: UserListItem): Promise<void> {
   const next = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
   const message = t(next === YesNo.No ? 'user.disableConfirm' : 'user.enableConfirm')
   try {
-    await ElMessageBox.confirm(message, t('user.status.label'), { type: 'warning' })
+    await ElMessageBox.confirm(message, t('common.status'), { type: 'warning' })
     mutating.value = true
     await updateUserStatus(row.id, next)
     await loadUsers()
@@ -375,19 +375,17 @@ onMounted(() => {
 
 <template>
   <AppPage class="user-management">
-    <div v-if="formOptionsError"><el-button text @click="loadFormOptions">{{ t('user.reset') }}</el-button></div>
+    <div v-if="formOptionsError"><el-button text @click="loadFormOptions">{{ t('common.reset') }}</el-button></div>
     <AppSearch
       v-model="searchModel"
       class="user-filters management-page__filters"
       :fields="searchFields"
-      :query-label="t('user.search')"
-      :reset-label="t('user.reset')"
       query-test-id="user-search"
       reset-test-id="user-reset"
       @query="search"
       @reset="reset"
     />
-    <div v-if="roleOptionsError"><el-button type="primary" plain @click="loadRoleOptions">{{ t('user.refresh') }}</el-button></div>
+    <div v-if="roleOptionsError"><el-button type="primary" plain @click="loadRoleOptions">{{ t('common.refresh') }}</el-button></div>
     <AppTable
       class="user-table"
       :columns="tableColumns"
@@ -396,7 +394,6 @@ onMounted(() => {
       :loading="loading"
       :pagination="tablePagination"
       :aria-label="t('user.title')"
-      :refresh-label="t('user.refresh')"
       @refresh="loadUsers"
       @update:pagination="updateTablePagination"
     >
@@ -435,7 +432,7 @@ onMounted(() => {
                 type="primary"
                 :disabled="!row.actions.update"
                 @click="openEdit(row)"
-                >{{ t('user.edit') }}</el-button
+                >{{ t('common.edit') }}</el-button
               ></el-tooltip
             >
             <el-tooltip v-if="canStatus" :content="row.actionLabels.status"

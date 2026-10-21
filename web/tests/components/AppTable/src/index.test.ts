@@ -161,10 +161,16 @@ describe('AppTable', () => {
       global: { plugins: [ElementPlus, appI18n] },
     })
     expect(wrapper.text()).toContain('暂无数据')
+    expect(wrapper.get('[data-testid="app-table-refresh"]').text()).toBe('刷新')
 
     setLocale('en-US')
     await wrapper.vm.$nextTick()
     expect(wrapper.text()).toContain('No data')
     expect(wrapper.get('[data-testid="app-table-refresh"]').text()).toContain('Refresh')
+    await wrapper.setProps({ refreshLabel: '重新加载记录' })
+    expect(wrapper.get('[data-testid="app-table-refresh"]').text()).toBe('重新加载记录')
+    await wrapper.setProps({ refreshLabel: undefined })
+    expect(wrapper.get('[data-testid="app-table-refresh"]').text()).toBe('Refresh')
+    wrapper.unmount()
   })
 })

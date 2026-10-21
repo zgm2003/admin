@@ -76,9 +76,9 @@ const columns = computed<TableColumn<MailRule>[]>(() => [
   { key: 'pattern', prop: 'pattern', label: t('mail.rule'), minWidth: 220 },
   { prop: 'action', label: t('mail.action'), width: 120 },
   { prop: 'name', label: t('mail.name'), minWidth: 160 },
-  { prop: 'remark', label: t('mail.remark'), minWidth: 200, overflowTooltip: true },
-  { key: 'enabled', prop: 'isEnabled', label: t('mail.status.label'), width: 100 },
-  { key: 'actions', prop: 'id', label: t('mail.actions'), width: 200, fixed: 'right' },
+  { prop: 'remark', label: t('common.remark'), minWidth: 200, overflowTooltip: true },
+  { key: 'enabled', prop: 'isEnabled', label: t('common.status'), width: 100 },
+  { key: 'actions', prop: 'id', label: t('common.actions'), width: 200, fixed: 'right' },
 ])
 
 watch(editing, (value) => {
@@ -229,7 +229,6 @@ async function exportRules(): Promise<void> {
       :data="rules"
       :loading="loading"
       :aria-label="t('mail.rulesTab')"
-      :refresh-label="t('mail.refresh')"
       @refresh="emit('refresh')"
     >
       <template #toolbar-left>
@@ -278,7 +277,7 @@ async function exportRules(): Promise<void> {
       </template>
       <template #cell-actions="{ row }: { row: MailRule }">
         <el-button v-if="canUpdate" text type="primary" @click="edit(row)">
-          {{ t('mail.edit') }}
+          {{ t('common.edit') }}
         </el-button>
         <el-button v-if="canDelete" text type="danger" @click="remove(row)">
           {{ t('mail.delete') }}
@@ -360,7 +359,7 @@ async function exportRules(): Promise<void> {
         <el-form-item :label="t('mail.name')">
           <el-input v-model="form.name" :placeholder="t('mail.ruleNamePlaceholder')" />
         </el-form-item>
-        <el-form-item :label="t('mail.remark')">
+        <el-form-item :label="t('common.remark')">
           <el-input
             v-model="form.remark"
             type="textarea"
@@ -377,7 +376,7 @@ async function exportRules(): Promise<void> {
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialog = false">{{ t('mail.cancel') }}</el-button>
+        <el-button @click="dialog = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="saving" @click="saveRule">{{
           t('mail.save')
         }}</el-button>

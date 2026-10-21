@@ -32,9 +32,9 @@ const { t } = useI18n()
           <el-button
             :disabled="props.roleLoading || props.roleSaving"
             @click="emit('select-all')"
-            >{{ t('user.selectAll') }}</el-button
+            >{{ t('common.selectAll') }}</el-button
           ><el-button :disabled="props.roleLoading || props.roleSaving" @click="emit('clear')">{{
-            t('user.clear')
+            t('common.clear')
           }}</el-button>
         </el-space>
         <el-checkbox-group
@@ -55,13 +55,13 @@ const { t } = useI18n()
       </template>
     </div>
     <template #footer
-      ><el-button @click="visible = false">{{ t('user.cancel') }}</el-button
+      ><el-button @click="visible = false">{{ t('common.cancel') }}</el-button
       ><el-button
         type="primary"
         :loading="props.roleSaving"
         :disabled="props.roleData === null || props.roleLoading || props.roleSaving"
         @click="emit('save')"
-        >{{ t('user.save') }}</el-button
+        >{{ t('common.save') }}</el-button
       ></template
     >
   </AppDialog>

@@ -41,10 +41,10 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const resolvedQueryLabel = computed(() => props.queryLabel ?? t('search.query'))
-const resolvedResetLabel = computed(() => props.resetLabel ?? t('search.reset'))
-const resolvedExpandLabel = computed(() => props.expandLabel ?? t('search.expand'))
-const resolvedCollapseLabel = computed(() => props.collapseLabel ?? t('search.collapse'))
+const resolvedQueryLabel = computed(() => props.queryLabel ?? t('common.search'))
+const resolvedResetLabel = computed(() => props.resetLabel ?? t('common.reset'))
+const resolvedExpandLabel = computed(() => props.expandLabel ?? t('common.expand'))
+const resolvedCollapseLabel = computed(() => props.collapseLabel ?? t('common.collapse'))
 
 const form = shallowRef<TModel>({ ...props.modelValue })
 const collapsed = ref(false)

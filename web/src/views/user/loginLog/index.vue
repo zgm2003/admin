@@ -120,7 +120,7 @@ const columns = computed<TableColumn<LoginLogItem>[]>(() => [
   { prop: 'platform', label: t('loginLog.platform'), width: 120 },
   { key: 'event', prop: 'id', label: t('loginLog.eventType'), width: 110 },
   { key: 'loginType', prop: 'id', label: t('loginLog.loginType'), width: 120 },
-  { key: 'status', prop: 'id', label: t('loginLog.status'), width: 100 },
+  { key: 'status', prop: 'id', label: t('common.status'), width: 100 },
   { prop: 'clientIp', label: t('loginLog.clientIp'), minWidth: 140 },
   { prop: 'reasonCode', label: t('loginLog.reason'), minWidth: 160, overflowTooltip: true },
   { prop: 'createdAt', label: t('loginLog.createdAt'), minWidth: 190 },
@@ -189,14 +189,12 @@ onMounted(() => {
       v-model="searchModel"
       class="management-page__filters"
       :fields="searchFields"
-      :query-label="t('loginLog.search')"
-      :reset-label="t('loginLog.reset')"
       query-test-id="login-log-search"
       reset-test-id="login-log-reset"
       @query="search"
       @reset="reset"
     />
-    <div v-if="optionsError"><el-button link @click="reloadOptions">{{ t('loginLog.refresh') }}</el-button></div>
+    <div v-if="optionsError"><el-button link @click="reloadOptions">{{ t('common.refresh') }}</el-button></div>
     
     <AppTable
       :columns="columns"
@@ -205,7 +203,6 @@ onMounted(() => {
       :loading="loading"
       :pagination="pagination"
       :aria-label="t('loginLog.title')"
-      :refresh-label="t('loginLog.refresh')"
       @refresh="load"
       @update:pagination="updatePagination"
     >

@@ -298,7 +298,7 @@ async function submit(): Promise<void> {
               :icon="RefreshRight"
               @click="retryInitialization"
             >
-              {{ t('auth.login.configRetry') }}
+              {{ t('common.retry') }}
             </el-button>
           </div>
 

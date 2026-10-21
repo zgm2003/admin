@@ -127,7 +127,7 @@ defineExpose({ validate: () => formRef.value?.validate() })
               @blur="props.validateUrlField('bucketDomain')" /></el-form-item
         ></el-col>
         <el-col :xs="24"
-          ><el-form-item :label="t('storage.remark')"
+          ><el-form-item :label="t('common.remark')"
             ><el-input
               v-model="form.remark"
               type="textarea"
@@ -137,12 +137,12 @@ defineExpose({ validate: () => formRef.value?.validate() })
       </el-row>
     </el-form>
     <template #footer>
-      <el-button @click="visible = false">{{ t('storage.cancel') }}</el-button>
+      <el-button @click="visible = false">{{ t('common.cancel') }}</el-button>
       <el-button
         type="primary"
         :disabled="props.optionsLoading || props.optionsUnavailable"
         @click="emit('save')"
-        >{{ t('storage.save') }}</el-button
+        >{{ t('common.save') }}</el-button
       >
     </template>
   </AppDialog>

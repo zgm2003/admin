@@ -89,7 +89,7 @@ const setFormField = <K extends keyof NotificationTaskFormModel>(
         link
         type="primary"
         @click="emit('retry', props.taskId, props.readonly ? 'detail' : 'edit')"
-        >{{ t('notificationTask.retry') }}</el-button
+        >{{ t('common.retry') }}</el-button
       >
     </div>
     <NotificationTaskDetail
@@ -228,14 +228,14 @@ const setFormField = <K extends keyof NotificationTaskFormModel>(
       </div>
     </el-form>
     <template #footer>
-      <el-button @click="close">{{ t('notificationTask.close') }}</el-button>
+      <el-button @click="close">{{ t('common.close') }}</el-button>
       <el-button
         v-if="!props.readonly"
         type="primary"
         :loading="props.saving"
         @click="emit('save')"
       >
-        {{ t('notificationTask.save') }}
+        {{ t('common.save') }}
       </el-button>
     </template>
   </AppDialog>

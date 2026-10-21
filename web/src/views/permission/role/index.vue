@@ -244,7 +244,7 @@ async function makeDefault(role: RoleListItem): Promise<void> {
 async function removeRole(role: RoleListItem): Promise<void> {
   if (!canDelete.value || !role.actions.delete) return
   try {
-    await ElMessageBox.confirm(t('role.confirm.deleteMessage'), t('role.action.delete'), {
+    await ElMessageBox.confirm(t('role.confirm.deleteMessage'), t('common.delete'), {
       type: 'warning',
     })
     await deleteRole(role.id)
@@ -280,14 +280,12 @@ onMounted(() => {
 <template>
   <AppPage class="role-page">
     <div v-if="formOptionsError">
-      <el-button text @click="loadFormOptions">{{ t('role.retry') }}</el-button>
+      <el-button text @click="loadFormOptions">{{ t('common.retry') }}</el-button>
     </div>
     <AppSearch
       v-model="searchModel"
       class="role-filters management-page__filters"
       :fields="searchFields"
-      :query-label="t('role.search')"
-      :reset-label="t('role.reset')"
       query-test-id="role-search"
       reset-test-id="role-reset"
       @query="search"
@@ -303,7 +301,6 @@ onMounted(() => {
       :loading="loading"
       :pagination="tablePagination"
       :aria-label="t('role.title')"
-      :refresh-label="t('role.refresh')"
       @refresh="loadRoles"
       @update:pagination="updateTablePagination"
     >
@@ -337,7 +334,7 @@ onMounted(() => {
                 type="primary"
                 :disabled="!row.actions.update"
                 @click="openEdit(row)"
-                >{{ t('role.action.edit') }}</el-button
+                >{{ t('common.edit') }}</el-button
               >
             </el-tooltip>
             <el-tooltip v-if="canStatus" :content="row.actionLabels.status">
@@ -375,7 +372,7 @@ onMounted(() => {
                 type="danger"
                 :disabled="!row.actions.delete"
                 @click="removeRole(row)"
-                >{{ t('role.action.delete') }}</el-button
+                >{{ t('common.delete') }}</el-button
               >
             </el-tooltip>
           </el-space>

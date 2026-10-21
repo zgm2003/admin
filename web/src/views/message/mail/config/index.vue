@@ -120,7 +120,7 @@ async function save(): Promise<void> {
     if (props.config.configured && payload.isEnabled !== props.config.isEnabled) {
       await ElMessageBox.confirm(
         t('confirm.status', {
-          name: t('mail.title'),
+          name: t('navigation.mail'),
           status: t(
             payload.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable',
           ),
@@ -181,7 +181,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
     <div v-if="regionOptionsError">
       <el-alert :title="regionOptionsError" type="error" :closable="false" show-icon />
       <el-button type="primary" plain @click="loadRegionOptions">{{
-        t('appTable.refresh')
+        t('common.refresh')
       }}</el-button>
     </div>
     <el-form

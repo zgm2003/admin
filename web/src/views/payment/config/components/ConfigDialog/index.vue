@@ -226,7 +226,7 @@ async function save() {
             :options="options.environments"
             data-testid="payment-config-environment"
         /></el-form-item>
-        <el-form-item :label="t('payment.config.status.label')"
+        <el-form-item :label="t('common.status')"
           ><el-select-v2 v-model="form.isEnabled" :options="options.statuses"
         /></el-form-item>
         <el-form-item prop="appId" :label="t('payment.config.appId')"
@@ -252,7 +252,7 @@ async function save() {
             :placeholder="t('payment.config.namePlaceholder')"
             data-testid="payment-config-name"
         /></el-form-item>
-        <el-form-item prop="sortOrder" :label="t('payment.config.sortOrder')"
+        <el-form-item prop="sortOrder" :label="t('common.sortOrder')"
           ><el-input-number
             v-model="form.sortOrder"
             :min="options.limits.sortMinimum"
@@ -356,16 +356,14 @@ async function save() {
       </template>
     </el-form>
     <template #footer
-      ><el-button :disabled="submitting" @click="emit('cancel')">{{
-        t('payment.config.cancel')
-      }}</el-button
+      ><el-button :disabled="submitting" @click="emit('cancel')">{{ t('common.cancel') }}</el-button
       ><el-button
         type="primary"
         :loading="submitting"
         :disabled="importBusy || Object.values(importErrors).some(Boolean)"
         data-testid="payment-config-save"
         @click="save"
-        >{{ t('payment.config.save') }}</el-button
+        >{{ t('common.save') }}</el-button
       ></template
     >
   </AppDialog>

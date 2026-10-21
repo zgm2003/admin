@@ -309,8 +309,6 @@ watch(
       v-model="searchModel"
       class="auth-platform-filters management-page__filters"
       :fields="searchFields"
-      :query-label="t('permission.authPlatform.search')"
-      :reset-label="t('permission.authPlatform.reset')"
       query-test-id="auth-platform-search"
       reset-test-id="auth-platform-reset"
       @query="search"
@@ -328,7 +326,6 @@ watch(
       :loading="loading"
       :pagination="tablePagination"
       :aria-label="t('permission.authPlatform.title')"
-      :refresh-label="t('permission.authPlatform.refresh')"
       @refresh="refresh"
       @update:pagination="updateTablePagination"
     >
@@ -467,7 +464,7 @@ watch(
             type="primary"
             data-testid="auth-platform-update"
             @click="openEdit(row)"
-            >{{ t('permission.authPlatform.edit') }}</el-button
+            >{{ t('common.edit') }}</el-button
           >
           <el-button
             v-if="canStatus && row.actions.status"
@@ -489,7 +486,7 @@ watch(
             type="danger"
             data-testid="auth-platform-delete"
             @click="remove(row)"
-            >{{ t('permission.authPlatform.delete') }}</el-button
+            >{{ t('common.delete') }}</el-button
           >
         </template></template
       >

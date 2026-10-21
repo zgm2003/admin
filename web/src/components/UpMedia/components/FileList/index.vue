@@ -34,7 +34,7 @@ const { t } = useI18n()
       </div>
       <div class="media-file__actions">
         <el-button v-if="item.failed" link type="primary" @click="emit('retry', item.objectKey)">{{
-          t('components.upMedia.retry')
+          t('common.retry')
         }}</el-button>
         <el-button
           v-else
@@ -43,7 +43,7 @@ const { t } = useI18n()
           type="primary"
           :disabled="item.pending || loading || !item.previewUrl"
           @click="emit('download', item.objectKey)"
-          >{{ t('components.upMedia.download') }}</el-button
+          >{{ t('common.download') }}</el-button
         >
         <el-button
           v-if="clearable"

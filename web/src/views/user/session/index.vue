@@ -52,10 +52,10 @@ const tableColumns = computed<TableColumn<SessionItem>[]>(() => [
   { key: 'device', prop: 'id', label: t('session.column.device'), minWidth: 250 },
   { prop: 'clientIp', label: t('session.column.ip'), minWidth: 130 },
   { prop: 'userAgent', label: t('session.column.userAgent'), minWidth: 180, overflowTooltip: true },
-  { key: 'createdAt', prop: 'id', label: t('session.column.createdAt'), minWidth: 180 },
+  { key: 'createdAt', prop: 'id', label: t('common.createdAt'), minWidth: 180 },
   { key: 'expiresAt', prop: 'id', label: t('session.column.expiresAt'), minWidth: 180 },
-  { key: 'status', prop: 'id', label: t('session.statusLabel'), width: 100 },
-  { key: 'actions', prop: 'id', label: t('session.column.actions'), width: 120 },
+  { key: 'status', prop: 'id', label: t('common.status'), width: 100 },
+  { key: 'actions', prop: 'id', label: t('common.actions'), width: 120 },
 ])
 
 const canRevoke = computed(() => access.hasPermission('user:session:revoke'))
@@ -98,8 +98,8 @@ const searchFields = computed<SearchField<SessionSearchModel>[]>(() => [
     key: 'status',
     type: 'select-v2',
     resetValue: '',
-    label: t('session.statusLabel'),
-    placeholder: t('session.allStatuses'),
+    label: t('common.status'),
+    placeholder: t('common.allStatuses'),
     options: catalog.value.statuses,
     width: 160,
     testId: 'session-status',
@@ -261,15 +261,13 @@ onMounted(() => {
       </el-col>
     </el-row>
     <div v-if="statsError">
-      <el-button type="primary" plain @click="loadStats">{{ t('session.refresh') }}</el-button>
+      <el-button type="primary" plain @click="loadStats">{{ t('common.refresh') }}</el-button>
     </div>
 
     <AppSearch
       v-model="searchModel"
       class="session-filters management-page__filters"
       :fields="searchFields"
-      :query-label="t('session.search')"
-      :reset-label="t('session.reset')"
       query-test-id="session-search"
       reset-test-id="session-reset"
       @query="search"
@@ -278,7 +276,7 @@ onMounted(() => {
 
     <div v-if="optionsError">
       <el-alert :title="optionsError" type="error" :closable="false" show-icon />
-      <el-button link @click="reloadOptions">{{ t('session.refresh') }}</el-button>
+      <el-button link @click="reloadOptions">{{ t('common.refresh') }}</el-button>
     </div>
 
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
@@ -296,7 +294,6 @@ onMounted(() => {
       :selection-selectable="selectable"
       :pagination="tablePagination"
       :aria-label="t('session.title')"
-      :refresh-label="t('session.refresh')"
       @refresh="reloadAuthoritativeData"
       @selection-change="selectionChanged"
       @update:pagination="updateTablePagination"

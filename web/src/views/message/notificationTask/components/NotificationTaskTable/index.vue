@@ -40,12 +40,12 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
   { prop: 'title', label: t('notificationTask.title'), minWidth: 180 },
   { prop: 'platformName', label: t('notificationTask.platform'), minWidth: 140 },
   { prop: 'audienceType', label: t('notificationTask.audienceLabel'), width: 110 },
-  { prop: 'status', label: t('notificationTask.statusLabel'), width: 110 },
+  { prop: 'status', label: t('common.status'), width: 110 },
   { prop: 'generatedCount', label: t('notificationTask.generatedCount'), width: 120 },
   { prop: 'scheduledAt', label: t('notificationTask.scheduledAt'), minWidth: 170 },
   { prop: 'submittedAt', label: t('notificationTask.submittedAt'), minWidth: 170 },
   { prop: 'completedAt', label: t('notificationTask.completedAt'), minWidth: 170 },
-  { key: 'actions', label: t('notificationTask.actions'), width: 300 },
+  { key: 'actions', label: t('common.actions'), width: 300 },
 ])
 </script>
 
@@ -109,7 +109,7 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         link
         type="primary"
         @click.stop="emit('detail', row)"
-        >{{ t('notificationTask.detail') }}</el-button
+        >{{ t('common.detail') }}</el-button
       >
       <el-button
         v-if="row.actions.edit && can('message:notificationTask:update')"
@@ -118,7 +118,7 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         type="warning"
         :disabled="busyIds?.includes(row.id)"
         @click.stop="emit('edit', row)"
-        >{{ t('notificationTask.edit') }}</el-button
+        >{{ t('common.edit') }}</el-button
       >
       <el-button
         v-if="row.actions.delete && can('message:notificationTask:delete')"
@@ -127,7 +127,7 @@ const columns = computed<TableColumn<NotificationTaskListItem>[]>(() => [
         type="danger"
         :disabled="busyIds?.includes(row.id)"
         @click.stop="emit('remove', row)"
-        >{{ t('notificationTask.delete') }}</el-button
+        >{{ t('common.delete') }}</el-button
       >
       <el-button
         v-if="row.actions.submit && can('message:notificationTask:submit')"

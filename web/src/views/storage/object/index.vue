@@ -321,7 +321,7 @@ async function saveRule(): Promise<void> {
 }
 async function toggleConfig(row: CosConfig): Promise<void> {
   try {
-    await ElMessageBox.confirm(t('storage.confirmStatus'), t('storage.status.label'), {
+    await ElMessageBox.confirm(t('storage.confirmStatus'), t('common.status'), {
       type: 'warning',
     })
     await updateCosConfigStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
@@ -341,7 +341,7 @@ async function toggleRule(row: UploadRule): Promise<void> {
       )
     await ElMessageBox.confirm(
       t(replacesEnabled ? 'storage.confirmEnabledRuleReplacement' : 'storage.confirmStatus'),
-      t('storage.status.label'),
+      t('common.status'),
       { type: 'warning' },
     )
     await updateUploadRuleStatus(row.id, next)
@@ -360,7 +360,7 @@ async function testConfigConnection(row: CosConfig): Promise<void> {
 }
 async function removeConfig(row: CosConfig): Promise<void> {
   try {
-    await ElMessageBox.confirm(t('storage.confirmDelete'), t('storage.delete'), { type: 'warning' })
+    await ElMessageBox.confirm(t('storage.confirmDelete'), t('common.delete'), { type: 'warning' })
     await deleteCosConfig(row.id)
     await loadConfigs()
   } catch {
@@ -369,7 +369,7 @@ async function removeConfig(row: CosConfig): Promise<void> {
 }
 async function removeRule(row: UploadRule): Promise<void> {
   try {
-    await ElMessageBox.confirm(t('storage.confirmDelete'), t('storage.delete'), { type: 'warning' })
+    await ElMessageBox.confirm(t('storage.confirmDelete'), t('common.delete'), { type: 'warning' })
     await deleteUploadRule(row.id)
     await loadRules()
   } catch {
@@ -390,7 +390,7 @@ watch(cosRegionOptions, (options) => {
 <template>
   <AppPage class="storage-page">
     
-    <div v-if="storageOptionsError"><el-button type="primary" plain @click="loadStorageOptions">{{ t('appTable.refresh') }}</el-button></div>
+    <div v-if="storageOptionsError"><el-button type="primary" plain @click="loadStorageOptions">{{ t('common.refresh') }}</el-button></div>
     <el-tabs v-model="activeTab" @tab-change="switchTab">
       <el-tab-pane name="config" :label="t('storage.configTab')" data-testid="storage-config-tab">
         <ConfigTable

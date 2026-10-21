@@ -68,8 +68,8 @@ const searchFields = computed<SearchField<NotificationSearchModel>[]>(() => [
     key: 'unreadOnly',
     type: 'select-v2',
     resetValue: '',
-    label: t('notification.columnStatus'),
-    placeholder: t('notification.allStatuses'),
+    label: t('common.status'),
+    placeholder: t('common.allStatuses'),
     options: [{ label: t('notification.unread'), value: 'unread' }],
     clearable: true,
     width: 150,
@@ -107,14 +107,14 @@ const columns = computed<TableColumn<NotificationItem>[]>(() => [
   { key: 'title', prop: 'title', label: t('notification.columnTitle'), minWidth: 260 },
   { key: 'variant', prop: 'variant', label: t('notification.columnVariant'), width: 100 },
   { key: 'priority', prop: 'priority', label: t('notification.columnPriority'), width: 100 },
-  { key: 'isRead', prop: 'isRead', label: t('notification.columnStatus'), width: 100 },
+  { key: 'isRead', prop: 'isRead', label: t('common.status'), width: 100 },
   {
     key: 'publishedAt',
     prop: 'publishedAt',
     label: t('notification.columnPublishedAt'),
     width: 190,
   },
-  { key: 'actions', prop: 'id', label: t('notification.columnActions'), width: 190 },
+  { key: 'actions', prop: 'id', label: t('common.actions'), width: 190 },
 ])
 
 async function load(append = false): Promise<void> {
@@ -216,7 +216,7 @@ onMounted(() => void load())
 
     <div v-if="optionsError">
       <el-alert :title="optionsError" type="error" :closable="false" show-icon />
-      <el-button link @click="reloadOptions">{{ t('notification.refresh') }}</el-button>
+      <el-button link @click="reloadOptions">{{ t('common.refresh') }}</el-button>
     </div>
 
     <el-empty v-if="!canList" :description="t('notification.noPermission')" />
@@ -238,7 +238,6 @@ onMounted(() => void load())
         :status-message="loadError"
         row-key="id"
         :aria-label="t('notification.center')"
-        :refresh-label="t('notification.refresh')"
         @refresh="reload"
       >
         <template #toolbar-left>
@@ -304,7 +303,7 @@ onMounted(() => void load())
             type="danger"
             @click="remove(row)"
           >
-            {{ t('notification.delete') }}
+            {{ t('common.delete') }}
           </el-button>
         </template>
         <template #expand="{ row }: { row: NotificationItem }">

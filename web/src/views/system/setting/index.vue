@@ -116,8 +116,8 @@ const searchFields = computed<SearchField<SettingSearchModel>[]>(() => [
     key: 'status',
     type: 'select-v2',
     resetValue: '',
-    label: t('setting.status.label'),
-    placeholder: t('setting.allStatuses'),
+    label: t('common.status'),
+    placeholder: t('common.allStatuses'),
     options: [
       { label: t('common.enable'), value: YesNo.Yes },
       { label: t('common.disable'), value: YesNo.No },
@@ -147,8 +147,8 @@ const columns = computed<TableColumn<SystemSetting>[]>(() => [
     minWidth: 220,
     overflowTooltip: true,
   },
-  { key: 'status', prop: 'isEnabled', label: t('setting.status.label'), width: 110 },
-  { key: 'actions', prop: 'key', label: t('setting.actions'), width: 230, fixed: 'right' },
+  { key: 'status', prop: 'isEnabled', label: t('common.status'), width: 110 },
+  { key: 'actions', prop: 'key', label: t('common.actions'), width: 230, fixed: 'right' },
 ])
 const pagination = computed<TablePaginationState>(() => ({
   currentPage: page.value,
@@ -371,7 +371,7 @@ onMounted(() => {
     <div v-if="optionsError" data-testid="setting-options-error">
       <el-alert :title="t('setting.loadFailed')" type="error" :closable="false" show-icon />
       <el-button data-testid="setting-options-retry" @click="reloadOptions">{{
-        t('appTable.refresh')
+        t('common.refresh')
       }}</el-button>
     </div>
     <el-tabs v-model="activeTab" class="setting-page__tabs">
@@ -397,8 +397,6 @@ onMounted(() => {
           v-model="searchModel"
           class="management-page__filters"
           :fields="searchFields"
-          :query-label="t('search.query')"
-          :reset-label="t('search.reset')"
           query-test-id="setting-search"
           reset-test-id="setting-reset"
           @query="search"
@@ -415,7 +413,6 @@ onMounted(() => {
           row-key="id"
           :pagination="pagination"
           :aria-label="t('setting.title')"
-          :refresh-label="t('appTable.refresh')"
           @refresh="load"
           @update:pagination="updatePagination"
         >
@@ -468,7 +465,7 @@ onMounted(() => {
               text
               type="danger"
               @click="remove(row)"
-              >{{ t('setting.delete') }}</el-button
+              >{{ t('common.delete') }}</el-button
             >
           </template>
           <template #empty>

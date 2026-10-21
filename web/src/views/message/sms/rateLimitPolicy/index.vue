@@ -71,7 +71,7 @@ const columns = computed<TableColumn<PolicyRow>[]>(() => [
   { key: 'dimension', prop: 'dimension', label: t('sms.rateLimit.dimension'), minWidth: 170 },
   { key: 'limit', prop: 'key', label: t('sms.limit'), width: 190 },
   { key: 'window', prop: 'key', label: t('sms.windowSeconds'), width: 210 },
-  { key: 'actions', prop: 'key', label: t('sms.actions'), width: 120, fixed: 'right' },
+  { key: 'actions', prop: 'key', label: t('common.actions'), width: 120, fixed: 'right' },
 ])
 
 function policyID(platformID: number, key: SmsRateLimitPolicy['key']): string {
@@ -162,7 +162,6 @@ async function save(policy: PolicyRow): Promise<void> {
       row-key="rowId"
       :loading="loading"
       :aria-label="t('sms.tab.policies')"
-      :refresh-label="t('sms.refresh')"
       @refresh="emit('refresh')"
     >
       <template #cell-platform="{ row }: { row: PolicyRow | undefined }">
@@ -218,7 +217,7 @@ async function save(policy: PolicyRow): Promise<void> {
           :data-testid="`sms-rate-save-${row.platformId}-${row.key}`"
           @click="save(row)"
         >
-          {{ t('sms.save') }}
+          {{ t('common.save') }}
         </el-button>
       </template>
       <template #empty>

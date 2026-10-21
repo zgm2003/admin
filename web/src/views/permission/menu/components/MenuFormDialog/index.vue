@@ -116,7 +116,7 @@ function selectMenuIcon(value: MenuIconName): void {
         />
       </el-form-item>
 
-      <el-form-item :label="t('menu.form.remark')">
+      <el-form-item :label="t('common.remark')">
         <el-input
           v-model="form.remark"
           data-testid="menu-form-remark"
@@ -184,14 +184,14 @@ function selectMenuIcon(value: MenuIconName): void {
                 data-testid="menu-form-clear-icon"
                 :disabled="props.editingProtected"
                 @click="form.icon = null"
-                >{{ t('menu.form.clearIcon') }}</el-button
+                >{{ t('common.clear') }}</el-button
               >
             </el-button-group>
           </el-form-item>
         </el-col>
 
         <el-col :xs="24" :sm="12">
-          <el-form-item :label="t('menu.form.sortOrder')">
+          <el-form-item :label="t('common.sortOrder')">
             <el-input-number
               v-model="form.sortOrder"
               data-testid="menu-form-sort-order"
@@ -228,7 +228,7 @@ function selectMenuIcon(value: MenuIconName): void {
 
       <el-row v-else :gutter="24" class="menu-form__grid">
         <el-col :xs="24" :sm="12">
-          <el-form-item :label="t('menu.form.sortOrder')">
+          <el-form-item :label="t('common.sortOrder')">
             <el-input-number
               v-model="form.sortOrder"
               data-testid="menu-form-sort-order"
@@ -252,7 +252,7 @@ function selectMenuIcon(value: MenuIconName): void {
     <template #footer>
       <div class="menu-form-actions">
         <el-button data-testid="menu-form-cancel" @click="emit('close')"
-          >{{ t('menu.form.cancel') }}
+          >{{ t('common.cancel') }}
         </el-button>
         <el-button
           data-testid="menu-form-submit"
@@ -260,7 +260,7 @@ function selectMenuIcon(value: MenuIconName): void {
           :disabled="!props.canSubmitForm"
           @click="emit('save')"
         >
-          {{ t('menu.form.submit') }}
+          {{ t('common.save') }}
         </el-button>
       </div>
     </template>

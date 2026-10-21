@@ -73,8 +73,8 @@ const searchFields = computed<SearchField<{ batchId: string; status: number | ''
   {
     key: 'status',
     type: 'select-v2',
-    label: t('payment.redeemCode.status'),
-    placeholder: t('payment.redeemCode.allStatuses'),
+    label: t('common.status'),
+    placeholder: t('common.allStatuses'),
     resetValue: '',
     options: options.value?.statuses ?? [],
     width: 160,
@@ -84,10 +84,10 @@ const columns = computed<TableColumn<RedeemCode>[]>(() => [
   { prop: 'batchNo', label: t('payment.redeemCode.batchNo'), width: 170 },
   { prop: 'codeMask', label: t('payment.redeemCode.code'), minWidth: 220 },
   { prop: 'amount', label: t('payment.redeemCode.amount'), width: 120 },
-  { key: 'status', label: t('payment.redeemCode.status'), width: 110 },
+  { key: 'status', label: t('common.status'), width: 110 },
   { key: 'expiresAt', label: t('payment.redeemCode.expiresAt'), width: 180 },
   { key: 'usedBy', label: t('payment.redeemCode.usedBy'), width: 100 },
-  { key: 'actions', label: t('payment.redeemCode.actions'), width: 250, fixed: 'right' },
+  { key: 'actions', label: t('common.actions'), width: 250, fixed: 'right' },
 ])
 function statusLabel(value: number): string {
   return options.value?.statuses.find((item) => item.value === value)?.label ?? String(value)
@@ -285,12 +285,10 @@ onBeforeUnmount(() => {
       v-model="filters"
       class="management-page__filters"
       :fields="searchFields"
-      :query-label="t('search.query')"
-      :reset-label="t('search.reset')"
       @query="searchList"
       @reset="reset"
     />
-    <div v-if="optionsError"><el-button text @click="reloadOptions">{{ t('payment.redeemCode.retry') }}</el-button></div>
+    <div v-if="optionsError"><el-button text @click="reloadOptions">{{ t('common.retry') }}</el-button></div>
     
     
     <AppTable
@@ -362,7 +360,7 @@ onBeforeUnmount(() => {
       <template #cell-usedBy="{ row }: { row: RedeemCode }">{{ row.usedBy ?? '-' }}</template>
       <template #cell-actions="{ row }: { row: RedeemCode }">
         <el-button v-if="canDetail" link type="primary" @click="openDetail(row)">{{
-          t('payment.redeemCode.detail')
+          t('common.detail')
         }}</el-button>
         <el-button
           v-if="canExport && row.actions.export"
@@ -385,7 +383,7 @@ onBeforeUnmount(() => {
       :result="generateResult"
       @submit="generate"
     />
-    <AppDialog v-model="detailVisible" :title="t('payment.redeemCode.detail')" width="680px">
+    <AppDialog v-model="detailVisible" :title="t('common.detail')" width="680px">
       
       <el-skeleton v-if="detail === null" :rows="3" animated />
       <el-descriptions v-else :column="2" border>
@@ -398,7 +396,7 @@ onBeforeUnmount(() => {
         <el-descriptions-item :label="t('payment.redeemCode.amount')">{{
           detail.amount
         }}</el-descriptions-item>
-        <el-descriptions-item :label="t('payment.redeemCode.status')"
+        <el-descriptions-item :label="t('common.status')"
           ><el-tag :type="statusType(detail.status)">{{
             statusLabel(detail.status)
           }}</el-tag></el-descriptions-item
@@ -412,7 +410,7 @@ onBeforeUnmount(() => {
         <el-descriptions-item :label="t('payment.redeemCode.usedAt')">{{
           detail.usedAt ? formatTime(detail.usedAt) : '-'
         }}</el-descriptions-item>
-        <el-descriptions-item :label="t('payment.redeemCode.createdAt')">{{
+        <el-descriptions-item :label="t('common.createdAt')">{{
           formatTime(detail.createdAt)
         }}</el-descriptions-item>
       </el-descriptions>

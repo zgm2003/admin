@@ -36,11 +36,11 @@ const columns = computed<TableColumn<smsApi.SmsTemplate>[]>(() => [
   { key: 'name', prop: 'name', label: t('sms.name'), minWidth: 180 },
   { prop: 'tencentTemplateId', label: t('sms.tencentTemplateId'), minWidth: 150 },
   { key: 'parameters', prop: 'id', label: t('sms.parameters'), minWidth: 170 },
-  { key: 'status', prop: 'id', label: t('sms.status.label'), width: 100 },
+  { key: 'status', prop: 'id', label: t('common.status'), width: 100 },
   {
     key: 'actions',
     prop: 'id',
-    label: t('sms.actions'),
+    label: t('common.actions'),
     width: 100,
     fixed: 'right',
     hidden: !props.canUpdate,
@@ -118,7 +118,6 @@ async function toggle(row: smsApi.SmsTemplate, value: YesNoValue): Promise<void>
       :data="templates"
       :loading="loading"
       :aria-label="t('sms.tab.templates')"
-      :refresh-label="t('sms.refresh')"
       @refresh="emit('refresh')"
     >
       <template #cell-name="{ row }: { row: smsApi.SmsTemplate }">
@@ -149,7 +148,7 @@ async function toggle(row: smsApi.SmsTemplate, value: YesNoValue): Promise<void>
       </template>
       <template #cell-actions="{ row }: { row: smsApi.SmsTemplate }">
         <el-button data-testid="sms-template-edit" text type="primary" @click="edit(row)">
-          {{ t('sms.edit') }}
+          {{ t('common.edit') }}
         </el-button>
       </template>
       <template #empty>
@@ -220,9 +219,9 @@ async function toggle(row: smsApi.SmsTemplate, value: YesNoValue): Promise<void>
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('user.cancel') }}</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button data-testid="sms-template-save" type="primary" :loading="saving" @click="save">
-          {{ t('sms.save') }}
+          {{ t('common.save') }}
         </el-button>
       </template>
     </AppDialog>

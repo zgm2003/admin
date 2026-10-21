@@ -99,7 +99,7 @@ function updateKeyword(value: string): void {
         :loading="loading"
         @click="emit('refresh')"
       >
-        {{ t('menu.refresh') }}
+        {{ t('common.refresh') }}
       </el-button>
       <el-button
         v-if="canRebuildAccessCache"
@@ -160,7 +160,7 @@ function updateKeyword(value: string): void {
       />
 
       <el-table-column
-        :label="t('menu.column.remark')"
+        :label="t('common.remark')"
         min-width="220"
         align="center"
         header-align="center"
@@ -214,7 +214,7 @@ function updateKeyword(value: string): void {
 
       <el-table-column
         prop="sortOrder"
-        :label="t('menu.column.sortOrder')"
+        :label="t('common.sortOrder')"
         width="88"
         align="center"
         header-align="center"
@@ -233,12 +233,7 @@ function updateKeyword(value: string): void {
         </template>
       </el-table-column>
 
-      <el-table-column
-        :label="t('menu.column.status')"
-        width="104"
-        align="center"
-        header-align="center"
-      >
+      <el-table-column :label="t('common.status')" width="104" align="center" header-align="center">
         <template #default="{ row }: { row: ManagedMenuNode }">
           <span :data-menu-enabled="row.isEnabled">
             <el-tag :type="row.presentation.statusTone" size="small" effect="plain">
@@ -249,7 +244,7 @@ function updateKeyword(value: string): void {
       </el-table-column>
 
       <el-table-column
-        :label="t('menu.column.actions')"
+        :label="t('common.actions')"
         :width="280"
         fixed="right"
         align="center"
@@ -273,7 +268,7 @@ function updateKeyword(value: string): void {
             type="primary"
             @click="emit('edit', row)"
           >
-            {{ t('menu.edit') }}
+            {{ t('common.edit') }}
           </el-button>
           <el-button
             v-if="canUpdate"
@@ -295,7 +290,7 @@ function updateKeyword(value: string): void {
             :title="row.presentation.protectionReason || undefined"
             @click="emit('delete', row)"
           >
-            {{ t('menu.delete') }}
+            {{ t('common.delete') }}
           </el-button>
         </template>
       </el-table-column>

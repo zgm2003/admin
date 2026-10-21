@@ -17,10 +17,10 @@ export function userTableColumns(t: Translate): TableColumn<UserListItem>[] {
     { prop: 'email', label: t('user.email'), minWidth: 210 },
     { prop: 'phone', label: t('user.phone'), minWidth: 170 },
     { key: 'roles', prop: 'id', label: t('user.roles'), minWidth: 240 },
-    { key: 'status', prop: 'id', label: t('user.status.label'), width: 100 },
-    { prop: 'createdAt', label: t('user.createdAt'), minWidth: 190 },
-    { prop: 'updatedAt', label: t('user.updatedAt'), minWidth: 190 },
-    { key: 'actions', prop: 'id', label: t('user.actions'), width: 500 },
+    { key: 'status', prop: 'id', label: t('common.status'), width: 100 },
+    { prop: 'createdAt', label: t('common.createdAt'), minWidth: 190 },
+    { prop: 'updatedAt', label: t('common.updatedAt'), minWidth: 190 },
+    { key: 'actions', prop: 'id', label: t('common.actions'), width: 500 },
   ]
 }
 
@@ -42,8 +42,8 @@ export function userSearchFields(
       key: 'status',
       type: 'select-v2',
       resetValue: '',
-      label: t('user.status.label'),
-      placeholder: t('user.allStatus'),
+      label: t('common.status'),
+      placeholder: t('common.allStatuses'),
       options: [
         { label: t('common.enable'), value: YesNo.Yes },
         { label: t('common.disable'), value: YesNo.No },

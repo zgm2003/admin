@@ -119,7 +119,7 @@ async function save(): Promise<void> {
     if (props.config.configured && payload.isEnabled !== props.config.isEnabled) {
       await ElMessageBox.confirm(
         t('confirm.status', {
-          name: t('sms.title'),
+          name: t('navigation.sms'),
           status: t(payload.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable'),
         }),
         t('confirm.title'),
@@ -171,7 +171,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
 
 <template>
   <div class="sms-config">
-    <div v-if="regionOptionsError"><el-button type="primary" plain @click="loadRegionOptions">{{ t('appTable.refresh') }}</el-button></div>
+    <div v-if="regionOptionsError"><el-button type="primary" plain @click="loadRegionOptions">{{ t('common.refresh') }}</el-button></div>
     <el-form :model="form" label-width="120px" class="sms-config__form" @submit.prevent="save">
       <el-row :gutter="16">
         <el-col :xs="24" :md="12">
@@ -255,7 +255,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
           </el-form-item>
         </el-col>
         <el-col :xs="24" :md="12">
-          <el-form-item :label="t('sms.status.label')">
+          <el-form-item :label="t('common.status')">
             <el-switch
               v-model="form.isEnabled"
               :active-value="YesNo.Yes"
@@ -300,7 +300,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
       </el-row>
       <div class="sms-config__actions">
         <el-button v-if="canDelete && config.configured" type="danger" @click="remove">
-          {{ t('sms.delete') }}
+          {{ t('common.delete') }}
         </el-button>
         <span />
         <el-button
@@ -311,7 +311,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
           :disabled="!canSave"
           @click="save"
         >
-          {{ t('sms.save') }}
+          {{ t('common.save') }}
         </el-button>
       </div>
     </el-form>

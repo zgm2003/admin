@@ -35,9 +35,9 @@ const columns = computed<TableColumn<Wallet>[]>(() => [
   { prop: 'username', label: t('payment.wallet.username'), minWidth: 160, overflowTooltip: true },
   { prop: 'currency', label: t('payment.wallet.currency'), width: 90 },
   { prop: 'balance', label: t('payment.wallet.balance'), width: 140 },
-  { key: 'createdAt', label: t('payment.wallet.createdAt'), minWidth: 180 },
-  { key: 'updatedAt', label: t('payment.wallet.updatedAt'), minWidth: 180 },
-  { key: 'actions', label: t('payment.order.actions'), width: 100, fixed: 'right' },
+  { key: 'createdAt', label: t('common.createdAt'), minWidth: 180 },
+  { key: 'updatedAt', label: t('common.updatedAt'), minWidth: 180 },
+  { key: 'actions', label: t('common.actions'), width: 100, fixed: 'right' },
 ])
 
 function state(): 'loading' | 'error' | 'empty' | 'success' {
@@ -147,10 +147,10 @@ onBeforeUnmount(() => {
         <el-descriptions-item :label="t('payment.wallet.balance')">{{
           detail.balance
         }}</el-descriptions-item>
-        <el-descriptions-item :label="t('payment.wallet.createdAt')">{{
+        <el-descriptions-item :label="t('common.createdAt')">{{
           formatTime(detail.createdAt)
         }}</el-descriptions-item>
-        <el-descriptions-item :label="t('payment.wallet.updatedAt')">{{
+        <el-descriptions-item :label="t('common.updatedAt')">{{
           formatTime(detail.updatedAt)
         }}</el-descriptions-item>
       </el-descriptions>

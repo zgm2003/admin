@@ -276,7 +276,7 @@ onBeforeUnmount(stopPasswordCountdown)
 
 <template>
   <section class="account-profile" data-testid="account-profile-page">
-    <div v-if="loadError"><el-button type="primary" plain @click="loadProfile">{{ t('appTable.refresh') }}</el-button></div>
+    <div v-if="loadError"><el-button type="primary" plain @click="loadProfile">{{ t('common.refresh') }}</el-button></div>
 
     <ProfileHero
       :name="heroName"

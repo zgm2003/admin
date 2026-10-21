@@ -103,8 +103,8 @@ const searchFields = computed<SearchField<{ keyword: string; isEnabled: YesNo | 
   {
     key: 'isEnabled',
     type: 'select-v2',
-    label: t('payment.rechargePackage.status'),
-    placeholder: t('payment.rechargePackage.allStatuses'),
+    label: t('common.status'),
+    placeholder: t('common.allStatuses'),
     resetValue: '',
     options: options.value?.statuses ?? [],
     width: 160,
@@ -114,9 +114,9 @@ const columns = computed<TableColumn<RechargePackage>[]>(() => [
   { prop: 'name', label: t('payment.rechargePackage.name'), minWidth: 180 },
   { prop: 'amount', label: t('payment.rechargePackage.amount'), width: 130 },
   { prop: 'badge', label: t('payment.rechargePackage.badge'), width: 140 },
-  { prop: 'sortOrder', label: t('payment.rechargePackage.sortOrder'), width: 90 },
-  { key: 'status', label: t('payment.rechargePackage.status'), width: 110 },
-  { key: 'actions', label: t('payment.rechargePackage.actions'), width: 230, fixed: 'right' },
+  { prop: 'sortOrder', label: t('common.sortOrder'), width: 90 },
+  { key: 'status', label: t('common.status'), width: 110 },
+  { key: 'actions', label: t('common.actions'), width: 230, fixed: 'right' },
 ])
 
 function state(): 'loading' | 'error' | 'empty' | 'success' {
@@ -317,14 +317,11 @@ onBeforeUnmount(() => {
     <AppSearch
       v-model="filters"
       class="management-page__filters"
-      :fields="searchFields"
-      :query-label="t('search.query')"
-      :reset-label="t('search.reset')"
-      @query="search"
+      :fields="searchFields"      @query="search"
       @reset="reset"
     />
     <div v-if="optionsError">
-      <el-button text @click="reloadOptions">{{ t('payment.rechargePackage.retry') }}</el-button>
+      <el-button text @click="reloadOptions">{{ t('common.retry') }}</el-button>
     </div>
 
     <AppTable
@@ -364,7 +361,7 @@ onBeforeUnmount(() => {
           :disabled="busyID !== null"
           @click="openEdit(row)"
         >
-          {{ t('payment.rechargePackage.edit') }}
+          {{ t('common.edit') }}
         </el-button>
         <el-button
           v-if="canStatus && row.actions.status"
@@ -388,7 +385,7 @@ onBeforeUnmount(() => {
           :disabled="busyID !== null"
           @click="mutate(row, 'delete')"
         >
-          {{ t('payment.rechargePackage.delete') }}
+          {{ t('common.delete') }}
         </el-button>
       </template>
     </AppTable>
@@ -443,7 +440,7 @@ onBeforeUnmount(() => {
           />
         </el-form-item>
         <div class="payment-recharge-package-form__grid">
-          <el-form-item :label="t('payment.rechargePackage.sortOrder')">
+          <el-form-item :label="t('common.sortOrder')">
             <el-input-number
               v-model="form.sortOrder"
               :min="options?.limits.sortMinimum"
@@ -453,7 +450,7 @@ onBeforeUnmount(() => {
               controls-position="right"
             />
           </el-form-item>
-          <el-form-item v-if="editingID === null" :label="t('payment.rechargePackage.status')">
+          <el-form-item v-if="editingID === null" :label="t('common.status')">
             <el-select-v2 v-model="form.isEnabled" :options="options?.statuses ?? []" />
           </el-form-item>
         </div>
@@ -461,14 +458,14 @@ onBeforeUnmount(() => {
       </el-form>
       <template #footer>
         <el-button :disabled="submitting" @click="dialogVisible = false">{{
-          t('payment.rechargePackage.cancel')
+          t('common.cancel')
         }}</el-button>
         <el-button
           type="primary"
           :loading="submitting"
           data-testid="payment-recharge-package-save"
           @click="save"
-          >{{ t('payment.rechargePackage.save') }}</el-button
+          >{{ t('common.save') }}</el-button
         >
       </template>
     </AppDialog>
