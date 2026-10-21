@@ -43,6 +43,12 @@ const canList = computed(() => access.hasPermission('message:notification:list')
 const canRead = computed(() => access.hasPermission('message:notification:read'))
 const canDelete = computed(() => access.hasPermission('message:notification:delete'))
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error && error.message !== ''
+    ? error.message
+    : t('notification.loadFailed')
+}
+
 interface NotificationSearchModel {
   unreadOnly: '' | 'unread'
   variant: NotificationVariant | ''
@@ -128,10 +134,8 @@ async function load(append = false): Promise<void> {
     if (current !== sequence) return
     rows.value = append ? [...rows.value, ...result.items] : result.items
     nextBeforeId.value = result.nextBeforeId
-  } catch {
-    if (current === sequence)
-      loadError.value =
-        t('notification.loadFailed')
+  } catch (error: unknown) {
+    if (current === sequence) loadError.value = errorMessage(error)
   } finally {
     if (current === sequence) loading.value = false
   }
@@ -210,11 +214,13 @@ onMounted(() => void load())
       @reset="reset"
     />
 
-    <div v-if="optionsError"><el-button link @click="reloadOptions">{{ t('notification.refresh') }}</el-button></div>
+    <div v-if="optionsError">
+      <el-alert :title="optionsError" type="error" :closable="false" show-icon />
+      <el-button link @click="reloadOptions">{{ t('notification.refresh') }}</el-button>
+    </div>
 
     <el-empty v-if="!canList" :description="t('notification.noPermission')" />
     <template v-else>
-      
       <el-skeleton
         v-if="loading && rows.length === 0"
         data-testid="notification-loading"
@@ -226,7 +232,10 @@ onMounted(() => void load())
         data-testid="notification-table"
         :columns="columns"
         :data="rows"
-      :result-state="loadError ? 'error' : loading ? 'loading' : rows.length ? 'success' : 'empty'"
+        :result-state="
+          loadError ? 'error' : loading ? 'loading' : rows.length ? 'success' : 'empty'
+        "
+        :status-message="loadError"
         row-key="id"
         :aria-label="t('notification.center')"
         :refresh-label="t('notification.refresh')"

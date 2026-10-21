@@ -87,11 +87,11 @@ async function loadFormOptions(): Promise<void> {
   formOptionsError.value = ''
   try {
     formOptions.value = await getRoleFormOptions()
-  } catch {
-    formOptionsError.value = t('role.loadFailed')
+  } catch (error: unknown) {
+    formOptionsError.value =
+      error instanceof Error && error.message ? error.message : t('appTable.requestFailed')
   }
 }
-
 
 async function loadRoles(): Promise<boolean> {
   loading.value = true
@@ -102,8 +102,9 @@ async function loadRoles(): Promise<boolean> {
     rows.value = result.list
     total.value = result.total
     return true
-  } catch {
-    loadError.value = t('role.loadFailed')
+  } catch (error: unknown) {
+    loadError.value =
+      error instanceof Error && error.message ? error.message : t('appTable.requestFailed')
     return false
   } finally {
     loading.value = false
@@ -278,7 +279,9 @@ onMounted(() => {
 
 <template>
   <AppPage class="role-page">
-    <div v-if="formOptionsError"><el-button text @click="loadFormOptions">{{ t('role.retry') }}</el-button></div>
+    <div v-if="formOptionsError">
+      <el-button text @click="loadFormOptions">{{ t('role.retry') }}</el-button>
+    </div>
     <AppSearch
       v-model="searchModel"
       class="role-filters management-page__filters"
@@ -291,14 +294,12 @@ onMounted(() => {
       @reset="reset"
     />
 
-    
-    
-
     <AppTable
       class="role-table"
       :columns="tableColumns"
       :data="rows"
       :result-state="loadError ? 'error' : loading ? 'loading' : rows.length ? 'success' : 'empty'"
+      :status-message="loadError"
       :loading="loading"
       :pagination="tablePagination"
       :aria-label="t('role.title')"

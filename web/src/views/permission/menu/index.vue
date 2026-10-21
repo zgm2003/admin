@@ -67,7 +67,6 @@ const activePlatform = computed(() => {
   return platforms.value.find((platform) => platform.id === activePlatformID.value) ?? null
 })
 
-
 const editingProtected = computed(
   () => dialogMode.value === 'edit' && form.value.isProtected === YesNo.Yes,
 )
@@ -283,8 +282,10 @@ async function loadMenus(platformID?: number): Promise<void> {
     platforms.value = result.platforms
     activePlatformID.value = selectedPlatform.id
     menus.value = result.menuTree
-  } catch {
-    if (accepted()) loadError.value = t('menu.loadFailed')
+  } catch (error: unknown) {
+    if (accepted())
+      loadError.value =
+        error instanceof Error && error.message ? error.message : t('menu.loadFailed')
   } finally {
     if (request === listRequest) loading.value = false
   }
@@ -328,7 +329,10 @@ watch(
 
 <template>
   <AppPage class="menu-management-page" :aria-label="t('menu.title')">
-    <div v-if="optionsError" data-testid="menu-options-error"><el-button @click="reloadOptions">{{ t('menu.retry') }}</el-button></div>
+    <div v-if="optionsError" data-testid="menu-options-error">
+      <el-alert :title="optionsError" type="error" :closable="false" show-icon />
+      <el-button @click="reloadOptions">{{ t('menu.retry') }}</el-button>
+    </div>
     <el-tabs
       v-if="platforms.length > 0"
       v-model="activePlatformID"
@@ -349,7 +353,10 @@ watch(
       </el-tab-pane>
     </el-tabs>
     <div class="menu-management__content">
-      <div v-if="loadError !== ''" data-testid="menu-load-error"><el-button type="primary" plain @click="reloadMenus">{{ t('menu.retry') }}</el-button></div>
+      <div v-if="loadError !== ''" data-testid="menu-load-error">
+        <el-alert :title="loadError" type="error" :closable="false" show-icon />
+        <el-button type="primary" plain @click="reloadMenus">{{ t('menu.retry') }}</el-button>
+      </div>
 
       <MenuTreeTable
         :menus="menus"

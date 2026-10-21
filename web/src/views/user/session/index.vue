@@ -59,6 +59,11 @@ const tableColumns = computed<TableColumn<SessionItem>[]>(() => [
 ])
 
 const canRevoke = computed(() => access.hasPermission('user:session:revoke'))
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error && error.message !== '' ? error.message : t('session.loadFailed')
+}
+
 const platformStats = computed(() =>
   Object.entries(stats.value.platforms).sort(([left], [right]) => left.localeCompare(right)),
 )
@@ -111,8 +116,8 @@ async function loadSessions(): Promise<boolean> {
     total.value = result.total
     selectedIDs.value = []
     return true
-  } catch {
-    loadError.value = t('session.loadFailed')
+  } catch (error: unknown) {
+    loadError.value = errorMessage(error)
     return false
   } finally {
     listLoading.value = false
@@ -126,8 +131,8 @@ async function loadStats(): Promise<boolean> {
   try {
     stats.value = await getSessionStats()
     return true
-  } catch {
-    statsError.value = t('session.loadFailed')
+  } catch (error: unknown) {
+    statsError.value = errorMessage(error)
     return false
   } finally {
     statsLoading.value = false
@@ -255,7 +260,9 @@ onMounted(() => {
         </div>
       </el-col>
     </el-row>
-    <div v-if="statsError"><el-button type="primary" plain @click="loadStats">{{ t('session.refresh') }}</el-button></div>
+    <div v-if="statsError">
+      <el-button type="primary" plain @click="loadStats">{{ t('session.refresh') }}</el-button>
+    </div>
 
     <AppSearch
       v-model="searchModel"
@@ -269,16 +276,19 @@ onMounted(() => {
       @reset="reset"
     />
 
-    <div v-if="optionsError"><el-button link @click="reloadOptions">{{ t('session.refresh') }}</el-button></div>
+    <div v-if="optionsError">
+      <el-alert :title="optionsError" type="error" :closable="false" show-icon />
+      <el-button link @click="reloadOptions">{{ t('session.refresh') }}</el-button>
+    </div>
 
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
-    
+
     <div v-if="listLoading" data-testid="session-loading" :aria-label="t('session.loading')">
       <el-skeleton :rows="6" animated />
     </div>
-    <el-empty v-else-if="rows.length === 0" :description="t('session.empty')" />
+    <el-empty v-else-if="!loadError && rows.length === 0" :description="t('session.empty')" />
     <AppTable
-      v-else
+      v-else-if="rows.length > 0"
       data-testid="session-table"
       :columns="tableColumns"
       :data="rows"

@@ -24,6 +24,7 @@ const props = defineProps<{
   canSave: boolean
   canUpload: boolean
   valueTypeOptions: SettingTypeOption[]
+  error?: string
 }>()
 
 const visible = defineModel<boolean>({ required: true })
@@ -141,7 +142,15 @@ function save(): void {
     :close-on-press-escape="!submitting"
     :close-on-click-modal="!submitting"
   >
-    
+    <el-alert
+      v-if="error"
+      data-testid="setting-submit-error"
+      class="setting-submit-error"
+      :title="error"
+      type="error"
+      :closable="false"
+      show-icon
+    />
     <el-form label-position="top" @submit.prevent="save">
       <el-form-item :label="t('setting.key')">
         <el-input

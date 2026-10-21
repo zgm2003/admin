@@ -1,5 +1,11 @@
 # 项目状态
 
+## 多页面错误态展示修复（2026-10-21，定向验证完成）
+
+- 系统设置、邮件配置、通知、会话、操作日志、菜单和角色页面统一向 `AppTable` 传递加载失败文案；修复系统设置弹窗缺少错误态展示及多个页面失败后仅显示重试按钮的问题。会话列表加载失败时不再同时展示“暂无会话”空态；支付配置页移除多余的 identity 包装节点。
+- 定向验证：相关 8 个页面测试（8 文件/192 项）、`pnpm typecheck`、受影响文件 ESLint/Prettier、`pnpm check:architecture`（0 baseline findings）、`pnpm build`、`git diff --check` 均通过。构建保留既有 rich-editor chunk 大于 500 kB 警告。
+- 未运行全量 Vitest；未提交 Git。
+
 ## 充值套餐与 AppDialog 自适应弹窗（2026-10-20，实现与定向验证完成）
 
 - 充值套餐表单金额改用 `el-input-number`，排序范围与后端约束统一；新增/编辑保存保留精度、阻止重复提交，并补齐失败重试与权限保护回归。

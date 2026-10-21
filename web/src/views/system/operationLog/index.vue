@@ -137,7 +137,6 @@ const tableColumns = computed<TableColumn<OperationLogItem>[]>(() => [
   { key: 'createdAt', prop: 'id', label: t('operationLog.column.createdAt'), minWidth: 180 },
 ])
 
-
 async function loadLogs(): Promise<boolean> {
   const request = ++requestSequence
   rows.value = []
@@ -156,10 +155,11 @@ async function loadLogs(): Promise<boolean> {
     rows.value = result.list
     total.value = result.total
     return true
-  } catch {
+  } catch (error: unknown) {
     if (request !== requestSequence || !canList.value || locale.value !== requestLocale)
       return false
-    loadError.value = t('operationLog.loadFailed')
+    loadError.value =
+      error instanceof Error && error.message ? error.message : t('operationLog.loadFailed')
     return false
   } finally {
     if (request === requestSequence) loading.value = false
@@ -257,7 +257,6 @@ onBeforeUnmount(() => {
       @reset="reset"
     />
 
-    
     <div v-if="loading" data-testid="operation-log-loading" :aria-label="t('operationLog.loading')">
       <el-skeleton :rows="6" animated />
     </div>
@@ -267,6 +266,7 @@ onBeforeUnmount(() => {
       :columns="tableColumns"
       :data="rows"
       :result-state="loadError ? 'error' : loading ? 'loading' : rows.length ? 'success' : 'empty'"
+      :status-message="loadError"
       :pagination="tablePagination"
       :aria-label="t('operationLog.title')"
       :refresh-label="t('operationLog.refresh')"

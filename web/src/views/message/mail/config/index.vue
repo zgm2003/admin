@@ -178,7 +178,12 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
 
 <template>
   <div class="config-tab">
-    <div v-if="regionOptionsError"><el-button type="primary" plain @click="loadRegionOptions">{{ t('appTable.refresh') }}</el-button></div>
+    <div v-if="regionOptionsError">
+      <el-alert :title="regionOptionsError" type="error" :closable="false" show-icon />
+      <el-button type="primary" plain @click="loadRegionOptions">{{
+        t('appTable.refresh')
+      }}</el-button>
+    </div>
     <el-form
       ref="formRef"
       :model="form"

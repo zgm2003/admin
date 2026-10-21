@@ -362,16 +362,15 @@ onBeforeUnmount(() => {
           t('payment.config.retry')
         }}</el-button>
       </template>
-      <template #cell-identity="{ row }: { row: PaymentConfig }"
-        ><div class="payment-config-page__identity">
-          <strong>{{ row.name }}</strong>
-        </div></template
-      >
+      <template #cell-identity="{ row }: { row: PaymentConfig }">
+        <strong>{{ row.name }}</strong>
+      </template>
       <template #cell-provider="{ row }: { row: PaymentConfig }"
-        ><div class="payment-config-page__identity">
+        ><div>
           <div>{{ row.presentation.provider }}</div>
-          <div><el-tag size="small" effect="plain">{{ row.presentation.environment }}</el-tag></div>
-          
+          <div>
+            <el-tag size="small" effect="plain">{{ row.presentation.environment }}</el-tag>
+          </div>
         </div></template
       >
       <template #cell-version="{ row }: { row: PaymentConfig }"
@@ -384,7 +383,7 @@ onBeforeUnmount(() => {
             :key="method.value"
             size="small"
             effect="plain"
-            style="margin-right: 10px;"
+            style="margin-right: 10px"
             >{{ method.label }}</el-tag
           >
         </div></template
@@ -522,5 +521,4 @@ onBeforeUnmount(() => {
     </AppDialog>
   </AppPage>
 </template>
-<style scoped lang="scss">
-</style>
+<style scoped lang="scss"></style>
