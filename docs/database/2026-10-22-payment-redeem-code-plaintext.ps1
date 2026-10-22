@@ -14,6 +14,7 @@
 param(
     [switch]$CheckOnly,
     [switch]$ServicesStopped,
+    [switch]$AllowIdleNavicat,
     [ValidatePattern('^[a-z][a-z0-9_]{0,62}$')][string]$Schema = 'public',
     [string]$AuditDirectory
 )
@@ -24,7 +25,7 @@ $oldDsn = $env:POSTGRES_DSN
 $oldSecret = $env:APP_SECRET
 $oldApp = $env:PGAPPNAME
 $auditPath = $null
-$audit = [ordered]@{ migration='payment-redeem-code-plaintext'; startedAt=[DateTime]::UtcNow.ToString('o'); postgresCommitState='notStarted'; verified=$false }
+$audit = [ordered]@{ migration='payment-redeem-code-plaintext'; startedAt=[DateTime]::UtcNow.ToString('o'); allowIdleNavicat=[bool]$AllowIdleNavicat; postgresCommitState='notStarted'; verified=$false }
 function Query([string]$Sql) {
     $output = @(& psql -X -w -q -A -t --dbname $script:cliDsn -v ON_ERROR_STOP=1 -c ("BEGIN READ ONLY; SET LOCAL search_path TO `"$Schema`",pg_catalog; SET LOCAL statement_timeout='15s'; " + $Sql + '; ROLLBACK;') 2>&1)
     if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL 只读检查失败。' }
@@ -61,7 +62,11 @@ SELECT jsonb_build_object('schema',current_schema(),
     if ($before.schema -ne $Schema) { throw '目标 schema 不匹配。' }
     if ($CheckOnly) { $before | ConvertTo-Json; return }
     if (-not $ServicesStopped) { throw '先停止 API/Worker，再传入 -ServicesStopped。' }
-    $clients = Query "SELECT jsonb_build_object('count',count(*)) FROM pg_stat_activity WHERE datname=current_database() AND backend_type='client backend' AND pid<>pg_backend_pid()"
+    $clientFilter = ''
+    # 仅按维护者显式选择允许已确认无事务的 Navicat 空闲连接。
+    # 活跃查询、idle in transaction、API/Worker 和其他客户端仍然阻止迁移。
+    if ($AllowIdleNavicat) { $clientFilter = " AND NOT (application_name='Navicat' AND state='idle' AND xact_start IS NULL)" }
+    $clients = Query ("SELECT jsonb_build_object('count',count(*)) FROM pg_stat_activity WHERE datname=current_database() AND backend_type='client backend' AND pid<>pg_backend_pid()" + $clientFilter)
     if ($Schema -eq 'public' -and $clients.count -ne 0) { throw '业务库仍有其他连接；未迁移，请先停止服务和数据库客户端。' }
     if ([string]::IsNullOrWhiteSpace($AuditDirectory)) { $AuditDirectory = Join-Path $env:LOCALAPPDATA ('Admin/maintenance/redeem-plaintext/' + [Guid]::NewGuid().ToString('N')) }
     $AuditDirectory = [IO.Path]::GetFullPath($AuditDirectory)

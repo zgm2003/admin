@@ -1,6 +1,6 @@
 # 项目状态
 
-## 当前工作：兑换码改为明文事实（2026-10-22）
+## 兑换码改为明文事实（2026-10-22，代码与真实迁移完成）
 
 - 纠正上一轮只改展示、仍保留加密存储的误解：`payment_redeem_code.code` 是唯一兑换码字段，旧 `code_hash`、`code_ciphertext` 及配套约束/索引退场；生成、列表、详情、精确查询、导出和兑换统一使用完整码，运行时不再依赖兑换码密钥。
 - 按维护者反馈将列表“复制”按钮移至右侧操作列，兑换码列只显示完整码；详情与生成结果的复制入口保持。
@@ -8,7 +8,8 @@
 - 容量假设仍为百万用户、多实例：精确查询/兑换使用 code 全局唯一 B-tree 索引，列表仍 count + page 两次 SQL，无逐行解密或额外缓存。Redis 用户维度限流及 code→wallet 锁顺序不变；并发/幂等和事务回滚由定向 PostgreSQL 测试验证。
 - 真实库只读核验：1 条兑换码/1 个批次，旧两列、hash 唯一索引及不可变触发器均存在。维护者已确认现在停 API/Worker，一并备份及迁移。新 forward SQL、同名 PowerShell runner 和离线 Go 转换命令无损转换旧码，失败全事务回滚，不由业务进程执行 DDL。
 - 定向验证已通过：兑换码/secretkey 单元测试，完整码 List/Detail HTTP 契约、生成重放、真实 PostgreSQL 新迁移的保真/幂等/回滚/空表/8 并发只入账一次；独立离线转换测试覆盖错误密钥、错误 HMAC 和规范码验证。实际命令包括 `go test ./internal/database -run TestPaymentRedeemPlaintext -count=1`、`go test ../docs/database/2026-10-22-payment-redeem-code-plaintext/main.go ../docs/database/2026-10-22-payment-redeem-code-plaintext/main_test.go -count=1`、`go vet ./internal/module/payment/redeemCode ./internal/secretkey ./cmd/api`，以及前端兑换码 API/页面/i18n 共 3 文件/19 项 Vitest、`pnpm typecheck`、受影响前端文件 ESLint、Prettier 和 `git diff --check`。
-- 真实迁移暂未执行：已按维护者授权停止原 `go run ./cmd/api` 和 `go run ./cmd/worker`，runner 在备份和写入前发现 3 个 Navicat idle 连接，拒绝继续；未删列、未改历史数据，等待维护者断开 Navicat 后备份、迁移、刷新快照并恢复服务。不执行全量 build/测试或 Git 提交。
+- 真实迁移已执行（2026-10-22 10:47 +08:00）：命令 `.\docs\database\2026-10-22-payment-redeem-code-plaintext.ps1 -ServicesStopped -AllowIdleNavicat` 成功提交并幂等复跑；执行前只读复核已无其他客户端连接。原 1 条兑换码无损回填为 `code VARCHAR(20) NOT NULL`，旧两列/检查约束/hash 索引已删除；格式 CHECK、code 唯一索引及两项防篡改/防删除触发器均已核验。首次转换 1 条、二次转换 0 条，批次/状态/交易/钱包事实摘要及结构摘要保持不变。备份及审计位于 `%LOCALAPPDATA%/Admin/maintenance/redeem-plaintext/36b393fae99645f39f21d71d894f388c/`（`before.dump`、`audit.json`），已用 pg_restore 完整读取检查归档；未输出真实兑换码或密钥。
+- 已从真实 PostgreSQL schema-only 导出 `docs/database/current.sql`；diff 仅涉及本次兑换码字段/约束/索引/guard 和 pg_dump restrict 标记。无需 Redis 失效或清理。API/Worker 已通过隐藏后台 `go run` 启动新代码：API PID 29144 的 `/health`、`/ready` 均成功（PostgreSQL/Redis up），Worker PID 42680 已记录 Starting processing；服务验证已追加到同目录 `audit.json`。本轮未执行真实兑换/入账或浏览器验收，未运行全量 build/测试，未提交 Git。
 
 ## 公共界面文案收敛（2026-10-21，定向验证完成）
 
