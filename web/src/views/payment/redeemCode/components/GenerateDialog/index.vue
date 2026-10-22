@@ -25,19 +25,19 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 interface FormState {
-  amount: string
+  amount: number | null | undefined
   quantity: number
   expiresAt: string | null
   remark: string
 }
 
-const form = ref<FormState>({ amount: '', quantity: 1, expiresAt: null, remark: '' })
+const form = ref<FormState>({ amount: undefined, quantity: 1, expiresAt: null, remark: '' })
 const error = ref('')
 const codeText = computed(() => props.result?.codes.join('\n') ?? '')
 
 function reset(): void {
   form.value = {
-    amount: props.options?.limits.minimumAmount ?? '',
+    amount: props.options ? Number(props.options.limits.minimumAmount) : undefined,
     quantity: props.options?.defaults.quantity ?? 1,
     expiresAt: null,
     remark: '',
@@ -47,11 +47,9 @@ function reset(): void {
 function validate(): string {
   const limits = props.options?.limits
   if (limits === undefined) return t('payment.redeemCode.optionsUnavailable')
-  if (!/^\d+(\.\d{1,2})?$/.test(form.value.amount.trim())) {
-    return t('payment.redeemCode.amountRule')
-  }
-  const amount = Number(form.value.amount)
+  const amount = form.value.amount
   if (
+    typeof amount !== 'number' ||
     !Number.isFinite(amount) ||
     amount <= 0 ||
     amount < Number(limits.minimumAmount) ||
@@ -82,10 +80,11 @@ function submit(): void {
     error.value = validation
     return
   }
+  if (typeof form.value.amount !== 'number' || props.options === null) return
   error.value = ''
   emit('submit', {
     requestId: requestID(),
-    amount: form.value.amount.trim(),
+    amount: form.value.amount.toFixed(props.options.limits.amountScale),
     quantity: form.value.quantity,
     expiresAt: form.value.expiresAt,
     remark: form.value.remark.trim(),
@@ -128,9 +127,14 @@ watch(
       >
         <div class="payment-redeem-code-generate-form__grid">
           <el-form-item :label="t('payment.redeemCode.amount')">
-            <el-input
+            <el-input-number
               v-model="form.amount"
-              inputmode="decimal"
+              :min="options ? Number(options.limits.minimumAmount) : undefined"
+              :max="options ? Number(options.limits.maximumAmount) : undefined"
+              :precision="options?.limits.amountScale"
+              :step="options ? 10 ** -options.limits.amountScale : undefined"
+              controls-position="right"
+              style="width: 100%"
               :placeholder="t('payment.redeemCode.amountPlaceholder')"
               data-testid="payment-redeem-code-amount"
             />
@@ -141,6 +145,7 @@ watch(
               :min="1"
               :max="options?.limits.maxBatchQuantity"
               controls-position="right"
+              style="width: 100%"
               data-testid="payment-redeem-code-quantity"
             />
           </el-form-item>
@@ -151,7 +156,7 @@ watch(
             type="datetime"
             value-format="YYYY-MM-DDTHH:mm:ssZ"
             :placeholder="t('payment.redeemCode.expiresAtPlaceholder')"
-            class="payment-redeem-code-generate-form__date"
+            style="width: 100%"
             data-testid="payment-redeem-code-expires-at"
           />
         </el-form-item>
@@ -209,9 +214,6 @@ watch(
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-}
-.payment-redeem-code-generate-form__date {
-  width: 100%;
 }
 .payment-redeem-code-generate__hint {
   margin: 16px 0 8px;

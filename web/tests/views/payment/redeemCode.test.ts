@@ -1,6 +1,6 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import type { Component } from 'vue'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElInputNumber } from 'element-plus'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import * as redeemApi from '@/api/payment/redeemCode'
@@ -8,6 +8,7 @@ import { appI18n, setLocale } from '@/i18n'
 import { pinia } from '@/store'
 import { usePermissionStore } from '@/store/permission'
 import RedeemCodePage from '@/views/payment/redeemCode/index.vue'
+import GenerateDialog from '@/views/payment/redeemCode/components/GenerateDialog/index.vue'
 import MyWalletPage from '@/views/payment/myWallet/index.vue'
 import * as walletApi from '@/api/payment/wallet'
 import * as transactionApi from '@/api/payment/transaction'
@@ -154,6 +155,46 @@ it('copies plaintext codes from the generation result', async () => {
     .querySelector<HTMLButtonElement>('[data-testid="payment-redeem-code-copy-result"]')
     ?.click()
   expect(clipboardWriteText).toHaveBeenCalledWith('ABCD2345EFGHJKLMNPQRS')
+})
+
+it('uses a right-controlled amount number input and submits a decimal string', async () => {
+  permissions(['payment:redeemCode:view', 'payment:redeemCode:list', 'payment:redeemCode:generate'])
+  const wrapper = await page(RedeemCodePage)
+  await wrapper.get('[data-testid="payment-redeem-code-generate"]').trigger('click')
+  await flushPromises()
+  const amount = wrapper.getComponent(GenerateDialog).getComponent(ElInputNumber)
+  expect(amount.props('min')).toBe(0.01)
+  expect(amount.props('precision')).toBe(2)
+  expect(amount.props('controlsPosition')).toBe('right')
+  await amount.get('input').setValue('12.3')
+  await amount.get('input').trigger('change')
+  document.body
+    .querySelector<HTMLButtonElement>('[data-testid="payment-redeem-code-submit"]')
+    ?.click()
+  await flushPromises()
+  expect(redeemApi.generateRedeemCodeBatch).toHaveBeenCalledWith({
+    requestId: expect.any(String),
+    amount: '12.30',
+    quantity: 1,
+    expiresAt: null,
+    remark: '',
+  })
+})
+
+it('does not generate codes when the amount number input is cleared', async () => {
+  permissions(['payment:redeemCode:view', 'payment:redeemCode:list', 'payment:redeemCode:generate'])
+  const wrapper = await page(RedeemCodePage)
+  await wrapper.get('[data-testid="payment-redeem-code-generate"]').trigger('click')
+  await flushPromises()
+  const amount = wrapper.getComponent(GenerateDialog).getComponent(ElInputNumber)
+  await amount.get('input').setValue('')
+  await amount.get('input').trigger('change')
+  document.body
+    .querySelector<HTMLButtonElement>('[data-testid="payment-redeem-code-submit"]')
+    ?.click()
+  await flushPromises()
+  expect(redeemApi.generateRedeemCodeBatch).not.toHaveBeenCalled()
+  expect(document.body.textContent).toContain(appI18n.global.t('payment.redeemCode.amountRule'))
 })
 
 it('offers personal redemption only with the dedicated action', async () => {
