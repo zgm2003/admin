@@ -432,14 +432,14 @@ onBeforeUnmount(() => {
             data-testid="payment-recharge-package-amount"
           />
         </el-form-item>
-        <el-form-item :label="t('payment.rechargePackage.badge')">
-          <el-input
-            v-model="form.badge"
-            :placeholder="t('payment.rechargePackage.badgePlaceholder')"
-            data-testid="payment-recharge-package-badge"
-          />
-        </el-form-item>
         <div class="payment-recharge-package-form__grid">
+          <el-form-item :label="t('payment.rechargePackage.badge')">
+            <el-input
+              v-model="form.badge"
+              :placeholder="t('payment.rechargePackage.badgePlaceholder')"
+              data-testid="payment-recharge-package-badge"
+            />
+          </el-form-item>
           <el-form-item :label="t('common.sortOrder')">
             <el-input-number
               v-model="form.sortOrder"
@@ -450,10 +450,10 @@ onBeforeUnmount(() => {
               controls-position="right"
             />
           </el-form-item>
-          <el-form-item v-if="editingID === null" :label="t('common.status')">
-            <el-select-v2 v-model="form.isEnabled" :options="options?.statuses ?? []" />
-          </el-form-item>
         </div>
+        <el-form-item v-if="editingID === null" :label="t('common.status')">
+          <el-select-v2 v-model="form.isEnabled" :options="options?.statuses ?? []" />
+        </el-form-item>
         <el-alert v-if="formError" :title="formError" type="error" :closable="false" />
       </el-form>
       <template #footer>

@@ -121,6 +121,38 @@ it('removes package code and searches by package name', async () => {
   ).toContain('基础充值')
 })
 
+it.each(['create', 'edit'] as const)(
+  'groups badge and sort order in the same two-column row on %s',
+  async (mode) => {
+    usePermissionStore(pinia).applySnapshot({
+      roleCodes: [],
+      menuTree: [],
+      permissionCodes: [
+        'payment:rechargePackage:list',
+        'payment:rechargePackage:create',
+        'payment:rechargePackage:update',
+      ],
+    })
+    const page = await mountPage()
+    const button =
+      mode === 'create'
+        ? page.get('[data-testid="payment-recharge-package-create"]')
+        : page.findAll('button').find((item) => item.text() === '编辑')
+    expect(button).toBeDefined()
+    await button?.trigger('click')
+    await flushPromises()
+
+    const badge = document.body.querySelector('[data-testid="payment-recharge-package-badge"]')
+    const grid = badge?.closest('.el-form-item')?.parentElement
+    expect(grid?.classList.contains('payment-recharge-package-form__grid')).toBe(true)
+    const fields = grid?.querySelectorAll(':scope > .el-form-item')
+    expect(fields).toHaveLength(2)
+    expect(fields?.[0]?.textContent).toContain('展示标记')
+    expect(fields?.[1]?.textContent).toContain('排序')
+    expect(fields?.[1]?.querySelector('.el-input-number')).not.toBeNull()
+  },
+)
+
 it('marks required name and amount fields and shows their validation errors', async () => {
   const page = await mountPage()
   await page.get('[data-testid="payment-recharge-package-create"]').trigger('click')

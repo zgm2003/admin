@@ -169,6 +169,17 @@ it('renders only personal wallet and transaction projections', async () => {
   expect(wrapper.text()).not.toContain('用户 ID')
 })
 
+it('keeps the transaction title and right-side refresh in the same toolbar', async () => {
+  permissions(['payment:myWallet:list'])
+  const wrapper = await page(MyWalletPage)
+  const toolbar = wrapper.get('.app-table__toolbar')
+  expect(toolbar.get('.app-table__toolbar-left h2').text()).toBe('资金流水')
+  const refresh = toolbar.get('.app-table__toolbar-right [data-testid="app-table-refresh"]')
+  await refresh.trigger('click')
+  await flushPromises()
+  expect(transactionApi.getMyTransactions).toHaveBeenCalledTimes(2)
+})
+
 it('loads management transactions only with the list action', async () => {
   permissions(['payment:transaction:list'])
   const wrapper = await page(TransactionPage)
