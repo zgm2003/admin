@@ -109,7 +109,7 @@ const jobColumns = computed<TableColumn<Job>[]>(() => [
   { key: 'trigger', prop: 'triggerSource', label: t('scheduler.trigger'), width: 120 },
   { key: 'status', prop: 'status', label: t('common.status'), width: 120 },
   { prop: 'attemptCount', label: t('scheduler.attempt'), width: 100 },
-  { prop: 'createdAt', label: t('common.createdAt'), width: 180 },
+  { prop: 'createdAt', label: t('common.createdAt'), width: 240 },
   { key: 'actions', prop: 'id', label: t('common.actions'), width: 160 },
 ])
 const state = computed<'loading' | 'error' | 'empty' | 'success'>(() =>
@@ -457,9 +457,11 @@ onBeforeUnmount(() => {
     <AppDialog
       v-model="jobsVisible"
       :title="t('scheduler.planJobs', { name: selectedSchedule?.name ?? '' })"
-      width="1100px"
+      width="min(1400px, 94vw)"
+      body-padding="0"
     >
       <AppTable
+        class="scheduler-job-history"
         :columns="jobColumns"
         :data="jobs"
         :loading="jobsLoading"
@@ -560,6 +562,27 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped lang="scss">
+.scheduler-job-history {
+  padding: 20px 20px 0;
+
+  :deep(.app-table__pagination) {
+    position: sticky;
+    z-index: 2;
+    bottom: 0;
+    padding: 12px 0 20px;
+    border-top: 1px solid var(--el-border-color-lighter);
+    background: var(--el-dialog-bg-color, var(--el-bg-color));
+  }
+
+  @media (max-width: 768px) {
+    padding: 12px 16px 0;
+
+    :deep(.app-table__pagination) {
+      padding-bottom: 12px;
+    }
+  }
+}
+
 .scheduler-job-status-filter,
 .scheduler-plan-filter {
   width: 200px;

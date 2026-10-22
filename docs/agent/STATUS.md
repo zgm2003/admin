@@ -1,5 +1,22 @@
 # 项目状态
 
+## 定时任务执行记录分页可见性（2026-10-22，定向验证完成）
+
+- 只读核对现有失败任务 `38142`：检查当次该计划共 1642 条记录，77 条更新记录排在它前面，“全部状态”第 4 页包含此任务，失败筛选总数为 1；没有漏查失败数据。“全部状态”只取消状态条件，仍使用每页 20 条的后端分页与创建时间倒序。
+- 浏览器以满 20 条的真实页面复现：1920×945 视口下，分页顶部为 1055.625px，正文可视底部仅 881.75px，分页入口被长列表推到屏外。经维护者确认，只给当前执行记录 AppTable 增加局部 sticky 底栏与响应式留白，保持公共组件、API、排序、权限和数据不变，不设置固定内容高度或新增嵌套滚动区。
+- 一次性浏览器验证通过：中英 × 4 视口下分页在顶部/中部/底部滚动时常驻、末行无遮挡、时间完整显示；第 4 页失败记录、状态切换/清空、50/100 条、空态、错误及重试均通过。完成桌面/移动截图检查；中文分页夹具补齐正式 ConfigProvider 后重跑通过。
+- 按维护者反馈收敛范围，新增 HTML 夹具和专用 MJS 已移出项目，归档至 `%LOCALAPPDATA%/Admin/maintenance/scheduler-pagination-check/20261022-215310-001/`；项目内不保留专用测试页面。业务代码只修改 Scheduler Vue 的局部布局，`design.md` 已同步稳定交互。
+- 实际验证：定向 `pnpm vitest run tests/views/system/scheduler/index.test.ts tests/views/system/scheduler/JobDetailDialog.test.ts tests/views/system/scheduler/presentation.test.ts --pool=threads --maxWorkers=1`（3 文件/11 项）、`pnpm typecheck`、`pnpm check:architecture`（0 findings）、受影响前端文件 ESLint/Prettier、`git diff --check` 通过。浏览器命令为归档前的 `playwright-cli -s=scheduler-footer-qa --raw run-code --filename=tests/browser/schedulerHistoryGeometry.mjs`。未运行全量测试或生产 build，未做真实登录后的端到端验收；本轮未新增/改写任务记录、操作 Redis、重启服务或提交 Git。
+
+## 定时任务执行记录加宽与真实失败样本（2026-10-22，定向验证完成）
+
+- 按维护者确认的局部方案，执行记录弹窗从 1100px 改为 `min(1400px, 94vw)`，创建时间列从 180px 改为 240px；保留公共弹窗的移动端宽度与表格内部滚动，不改公共组件、接口或权限。
+- 使用一次性真实 Scheduler 页面浏览器几何回归：修复前中文时间文本宽 167.83px、可用宽 154px，精确复现裁切；修复后可用宽 214px。中英两种语言、1920/1280/1024/390 四种视口共 8 场景均验证完整时分秒与弹窗不出屏，并检查了桌面截图；夹具及脚本后续已按维护者要求移出项目，位置见上条。
+- 经维护者明确授权，以只读事务核对真实本地 `admin/public` Scheduler 表、列、CHECK/FK/索引、目标计划与管理员后，使用忽略区临时维护工具经 `Repository.CreateManualJob` 新增一条待执行的手动任务。任务 `38142` 属于支付订单巡检计划 `8`，仅带测试标记的非法参数，`max_attempts=1`；唯一 source key 保证同一意图不重复插入，不写入伪造的 failed/job/run 历史。
+- 2026-10-22 18:27:49 +08:00，现有 `worker-13952` 真实消费并生成 run `38184`：job status=5、run status=3、attempt=1，错误分类 `invalid-payload`，在支付执行器调用前失败。Service 的该计划失败分页已核对包含此任务，公开中文原因为“任务参数与当前任务定义不匹配”；原计划业务配置 SHA256 前后一致。样本保留供维护者查看，无 DDL、历史记录修改、服务启停或缓存清理。
+- 审计目录为 `%LOCALAPPDATA%/Admin/maintenance/scheduler-failure-fixture/20261022-181947-879/`，保留 intent、真实结构与计划快照、created/verified JSON、维护源码和 SHA256；临时工具位于被忽略的 `server/tmp/schedulerFailureFixture`，不新增正式接口或测试任务类型。实际执行该工具的 inspect/create/verify 模式，验证真实 Worker 结果；工具定向 `go vet` 通过，未导出结构快照（无结构变更）。
+- 前端实际验证：`playwright-cli -s=scheduler-qa --raw run-code --filename=tests/browser/schedulerHistoryGeometry.mjs`；`pnpm vitest run tests/views/system/scheduler/index.test.ts tests/views/system/scheduler/JobDetailDialog.test.ts tests/views/system/scheduler/presentation.test.ts --pool=threads --maxWorkers=1`（3 文件/11 项）；受影响文件 Prettier/ESLint、`pnpm typecheck`、`pnpm check:architecture`（0 findings）均通过。未运行全量测试或生产 build，未做真实登录后的浏览器接口联调或支付调用；未提交 Git。
+
 ## 定时任务选项加载失败修复（2026-10-22，定向验证完成）
 
 - 根因：API 已注册 `payment.order.reconcile`、`storage.file.cleanup` 和 `storage.file.scan`，但缺少对应 `scheduler.tasks.*` 中英文词条；Options 翻译失败被映射为 HTTP 503/code 10006。页面先读取 Options 再读取计划列表，因此显示“定时任务加载失败 / 服务暂未就绪”，并非返回了空计划。
