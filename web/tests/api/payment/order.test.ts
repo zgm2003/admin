@@ -21,3 +21,14 @@ it('sends only the fixed recharge create contract', async () => {
   await api.payRecharge(9)
   expect(request.post).toHaveBeenCalledWith('/api/admin/v1/payment/recharge/9/pay')
 })
+
+it('preserves custom recharge amounts as strings without inventing a package', async () => {
+  const input: api.CreateRechargeInput = {
+    requestId: '00000000-0000-4000-8000-000000000002',
+    amount: '12.30',
+    payMethod: 1,
+    returnUrl: 'https://app.example.test/paid',
+  }
+  await api.createRecharge(input)
+  expect(request.post).toHaveBeenCalledExactlyOnceWith('/api/admin/v1/payment/recharge', input)
+})

@@ -87,6 +87,7 @@ const columns = computed<TableColumn<RedeemCode>[]>(() => [
   { key: 'status', label: t('common.status'), width: 110 },
   { key: 'expiresAt', label: t('payment.redeemCode.expiresAt'), width: 180 },
   { key: 'usedBy', label: t('payment.redeemCode.usedBy'), width: 100 },
+  { prop: 'remark', label: t('common.remark'), minWidth: 180, overflowTooltip: true },
   { key: 'actions', label: t('common.actions'), width: 250, fixed: 'right' },
 ])
 function statusLabel(value: number): string {
@@ -208,10 +209,11 @@ function selectRows(value: RedeemCode[]): void {
 }
 function csvCell(value: string | number | null): string {
   const text = value === null ? '' : String(value)
-  return `"${text.replaceAll('"', '""')}"`
+  const escaped = /^\s*[=+@-]/.test(text) ? `'${text}` : text
+  return `"${escaped.replaceAll('"', '""')}"`
 }
 function downloadCsv(values: api.RedeemCodeExport[]): void {
-  const header = ['batchNo', 'code', 'amount', 'status', 'expiresAt', 'usedBy', 'usedAt']
+  const header = ['batchNo', 'code', 'amount', 'status', 'expiresAt', 'usedBy', 'usedAt', 'remark']
   const lines = values.map((value) =>
     [
       value.batchNo,
@@ -221,6 +223,7 @@ function downloadCsv(values: api.RedeemCodeExport[]): void {
       value.expiresAt,
       value.usedBy,
       value.usedAt,
+      value.remark,
     ]
       .map(csvCell)
       .join(','),
@@ -367,6 +370,9 @@ onBeforeUnmount(() => {
         row.expiresAt ? formatTime(row.expiresAt) : '-'
       }}</template>
       <template #cell-usedBy="{ row }: { row: RedeemCode }">{{ row.usedBy ?? '-' }}</template>
+      <template #cell-remark="{ row }: { row: RedeemCode }">
+        <span :data-testid="`payment-redeem-code-remark-${row.id}`">{{ row.remark ?? '—' }}</span>
+      </template>
       <template #cell-actions="{ row }: { row: RedeemCode }">
         <el-button
           link
@@ -434,6 +440,13 @@ onBeforeUnmount(() => {
         <el-descriptions-item :label="t('common.createdAt')">{{
           formatTime(detail.createdAt)
         }}</el-descriptions-item>
+        <el-descriptions-item :label="t('common.remark')" :span="2">
+          <span
+            data-testid="payment-redeem-code-detail-remark"
+            class="payment-redeem-code-page__remark"
+            >{{ detail.remark ?? '—' }}</span
+          >
+        </el-descriptions-item>
       </el-descriptions>
     </AppDialog>
   </AppPage>
@@ -449,6 +462,10 @@ onBeforeUnmount(() => {
 .payment-redeem-code-page__code {
   font-family: var(--el-font-family-monospace);
   letter-spacing: 0.04em;
+}
+.payment-redeem-code-page__remark {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 768px) {
   .payment-redeem-code-page :deep(.el-input) {

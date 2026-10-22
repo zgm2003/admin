@@ -33,7 +33,8 @@ beforeEach(() => {
     available: false,
     packages: [],
     payMethods: [],
-  } as never)
+    limits: { minimumAmount: '10.00', maximumAmount: '999999.99', amountScale: 2 },
+  })
   vi.mocked(orderApi.getMyRechargeOrders).mockResolvedValue({
     list: [],
     total: 0,
@@ -76,6 +77,44 @@ it('keeps both authorized tabs inside the wallet page', async () => {
   wrapper = mount(WalletManagement, { global: { plugins: [ElementPlus, appI18n] } })
   await flushPromises()
   expect(wrapper.find('[data-testid="wallet-tab-my-wallet"]').exists()).toBe(true)
-  expect(wrapper.find('[data-testid="wallet-tab-recharge"]').exists()).toBe(true)
+  expect(wrapper.find('#tab-recharge').exists()).toBe(true)
   expect(wrapper.find('[data-testid="wallet-tab-panel-my-wallet"]').exists()).toBe(true)
+})
+
+it('removes the decorative hero and switches from the balance card to recharge', async () => {
+  usePermissionStore().applySnapshot({
+    roleCodes: [],
+    menuTree: [],
+    permissionCodes: [
+      'payment:myWallet:view',
+      'payment:myWallet:detail',
+      'payment:recharge:view',
+      'payment:recharge:create',
+    ],
+  })
+  wrapper = mount(WalletManagement, { global: { plugins: [ElementPlus, appI18n] } })
+  await flushPromises()
+  expect(wrapper.find('.wallet-page__hero').exists()).toBe(false)
+  expect(wrapper.text()).toContain('12.00')
+  await wrapper.get('[data-testid="payment-wallet-recharge"]').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('#tab-recharge').attributes('aria-selected')).toBe('true')
+})
+
+it('updates the active tab if its page permission is revoked', async () => {
+  const permission = usePermissionStore()
+  permission.applySnapshot({
+    roleCodes: [],
+    menuTree: [],
+    permissionCodes: ['payment:myWallet:view', 'payment:recharge:view'],
+  })
+  wrapper = mount(WalletManagement, { global: { plugins: [ElementPlus, appI18n] } })
+  await flushPromises()
+  permission.applySnapshot({
+    roleCodes: [],
+    menuTree: [],
+    permissionCodes: ['payment:recharge:view'],
+  })
+  await flushPromises()
+  expect(wrapper.get('#tab-recharge').attributes('aria-selected')).toBe('true')
 })

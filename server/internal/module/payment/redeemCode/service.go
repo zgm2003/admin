@@ -152,7 +152,7 @@ func (s *Service) project(r Model, now time.Time) (Value, error) {
 		return Value{}, e
 	}
 	status := projectedStatus(r, now)
-	return Value{ID: r.ID, BatchID: r.BatchID, BatchNo: r.BatchNo, Code: code, Status: status, Amount: amount, ExpiresAt: r.ExpiresAt, UsedBy: r.UsedBy, UsedAt: r.UsedAt, CreatedAt: r.CreatedAt, Actions: Actions{Void: status == StatusUnused, Export: true}}, nil
+	return Value{ID: r.ID, BatchID: r.BatchID, BatchNo: r.BatchNo, Code: code, Status: status, Amount: amount, Remark: r.Remark, ExpiresAt: r.ExpiresAt, UsedBy: r.UsedBy, UsedAt: r.UsedAt, CreatedAt: r.CreatedAt, Actions: Actions{Void: status == StatusUnused, Export: true}}, nil
 }
 func (s *Service) List(ctx context.Context, q ListQuery) (pagination.Result[Value], error) {
 	if ctx == nil {

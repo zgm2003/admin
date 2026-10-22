@@ -13,10 +13,12 @@ import { usePermissionStore } from '@/store/permission'
 import { formatTime } from '@/utils/datetime'
 import AppDialog from '@/components/AppDialog/index.vue'
 
+const emit = defineEmits<{ recharge: [] }>()
 const { t, locale } = useI18n()
 const access = usePermissionStore()
 const canDetail = computed(() => access.hasPermission('payment:myWallet:detail'))
 const canList = computed(() => access.hasPermission('payment:myWallet:list'))
+const canRecharge = computed(() => access.hasPermission('payment:recharge:view'))
 const canRedeem = computed(() => access.hasPermission('payment:myWallet:redeem'))
 const wallet = ref<MyWallet | null>(null)
 const walletLoading = ref(false)
@@ -32,6 +34,7 @@ const redeemSubmitting = ref(false)
 const redeemError = ref('')
 const redeemResult = ref<redeemApi.RedeemResult | null>(null)
 let sequence = 0
+let walletSequence = 0
 let alive = true
 
 const pagination = computed<TablePaginationState>(() => ({
@@ -59,15 +62,19 @@ function state(): 'loading' | 'error' | 'empty' | 'success' {
 }
 async function loadWallet(): Promise<void> {
   if (!canDetail.value) return
+  const current = ++walletSequence
   walletLoading.value = true
   walletError.value = ''
   try {
-    wallet.value = await getMyWallet()
+    const result = await getMyWallet()
+    if (alive && current === walletSequence && canDetail.value) wallet.value = result
   } catch {
-    wallet.value = null
-    walletError.value = t('payment.wallet.loadFailed')
+    if (alive && current === walletSequence) {
+      wallet.value = null
+      walletError.value = t('payment.wallet.loadFailed')
+    }
   } finally {
-    walletLoading.value = false
+    if (alive && current === walletSequence) walletLoading.value = false
   }
 }
 async function loadTransactions(): Promise<void> {
@@ -99,7 +106,8 @@ function openRedeem(): void {
   redeemVisible.value = true
 }
 async function redeem(): Promise<void> {
-  if (redeemSubmitting.value || redeemCode.value.trim() === '') {
+  if (!canRedeem.value || redeemSubmitting.value) return
+  if (redeemCode.value.trim() === '') {
     if (redeemCode.value.trim() === '') redeemError.value = t('payment.redeemCode.codeRequired')
     return
   }
@@ -126,6 +134,11 @@ watch(
   [canDetail, canList, locale],
   () => {
     sequence++
+    walletSequence++
+    wallet.value = null
+    walletError.value = ''
+    walletLoading.value = false
+    loading.value = false
     rows.value = []
     total.value = 0
     if (canDetail.value) void loadWallet()
@@ -136,37 +149,43 @@ watch(
 onBeforeUnmount(() => {
   alive = false
   sequence++
+  walletSequence++
 })
 </script>
 
 <template>
   <AppPage class="payment-my-wallet-page">
-    <div v-if="walletError"><el-button type="primary" plain @click="loadWallet">{{ t('common.refresh') }}</el-button></div>
-    <el-card class="payment-my-wallet-page__summary" shadow="never">
-      <template #header>
-        <div class="payment-my-wallet-page__summary-header">
-          <span>{{ t('payment.wallet.myTitle') }}</span>
-          <el-button
-            v-if="canRedeem"
-            type="primary"
-            data-testid="payment-wallet-redeem"
-            @click="openRedeem"
-          >
-            {{ t('payment.redeemCode.redeem') }}
-          </el-button>
+    <section v-if="canDetail || canRecharge || canRedeem" class="payment-my-wallet-page__summary">
+      <div v-if="canDetail" class="payment-my-wallet-page__funds">
+        <span class="payment-my-wallet-page__label">{{ t('payment.wallet.myBalance') }}</span>
+        <el-skeleton v-if="walletLoading" :rows="1" animated />
+        <div v-else-if="walletError" role="status">
+          <span>{{ walletError }}</span>
+          <el-button link type="primary" @click="loadWallet">{{ t('common.refresh') }}</el-button>
         </div>
-      </template>
-      <el-skeleton v-if="walletLoading" :rows="2" animated />
-      <el-empty v-else-if="wallet === null" :description="t('payment.wallet.noWallet')" />
-      <el-descriptions v-else :column="2" border>
-        <el-descriptions-item :label="t('payment.wallet.myBalance')">
+        <p v-else-if="wallet" class="payment-my-wallet-page__amount">
           <strong class="payment-my-wallet-page__balance">{{ wallet.balance }}</strong>
-        </el-descriptions-item>
-        <el-descriptions-item :label="t('payment.wallet.myCurrency')">{{
-          wallet.currency
-        }}</el-descriptions-item>
-      </el-descriptions>
-    </el-card>
+          <span class="payment-my-wallet-page__currency">{{ wallet.currency }}</span>
+        </p>
+        <p v-else class="payment-my-wallet-page__label">{{ t('payment.wallet.noWallet') }}</p>
+      </div>
+      <div class="payment-my-wallet-page__actions">
+        <el-button
+          v-if="canRecharge"
+          type="primary"
+          data-testid="payment-wallet-recharge"
+          @click="emit('recharge')"
+        >
+          {{ t('navigation.paymentRecharge') }}
+        </el-button>
+        <el-button v-if="canRedeem" data-testid="payment-wallet-redeem" @click="openRedeem">
+          {{ t('payment.redeemCode.redeem') }}
+        </el-button>
+      </div>
+    </section>
+    <h2 v-if="canList" class="payment-my-wallet-page__section-title">
+      {{ t('payment.transaction.title') }}
+    </h2>
     <AppDialog v-model="redeemVisible" :title="t('payment.redeemCode.redeemTitle')" width="520px">
       <el-form label-position="top" @submit.prevent="redeem">
         <el-form-item :label="t('payment.redeemCode.code')">
@@ -202,7 +221,7 @@ onBeforeUnmount(() => {
         >
       </template>
     </AppDialog>
-    
+
     <AppTable
       v-if="canList"
       :columns="columns"
@@ -236,16 +255,48 @@ onBeforeUnmount(() => {
   gap: 16px;
 }
 .payment-my-wallet-page__summary {
-  max-width: 720px;
-}
-.payment-my-wallet-page__summary-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 24px;
+  background: var(--el-fill-color-extra-light);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--el-border-radius-base);
+}
+.payment-my-wallet-page__funds {
+  min-width: 0;
+}
+.payment-my-wallet-page__label,
+.payment-my-wallet-page__currency {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+.payment-my-wallet-page__amount {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
   gap: 12px;
+  margin: 8px 0 0;
 }
 .payment-my-wallet-page__balance {
-  font-size: 24px;
-  color: var(--el-color-primary);
+  color: var(--el-text-color-primary);
+  font-size: clamp(26px, 4vw, 36px);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.payment-my-wallet-page__actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.payment-my-wallet-page__actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+.payment-my-wallet-page__section-title {
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-weight: 600;
 }
 </style>

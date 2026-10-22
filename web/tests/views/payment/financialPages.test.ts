@@ -125,7 +125,8 @@ beforeEach(() => {
   vi.mocked(orderApi.getOrder).mockResolvedValue(order)
   vi.mocked(orderApi.getRechargeOptions).mockResolvedValue({
     payMethods: [{ value: 1, label: 'PC' }],
-    packages: [{ id: 1, name: 'Starter', amount: '10.00' }],
+    packages: [{ id: 1, name: 'Starter', amount: '10.00', badge: '热门' }],
+    limits: { minimumAmount: '10.00', maximumAmount: '999999.99', amountScale: 2 },
     available: false,
   })
   vi.mocked(orderApi.getMyRechargeOrders).mockResolvedValue({
@@ -199,7 +200,8 @@ it('does not offer checkout when backend marks recharge unavailable', async () =
 it('submits the current route as returnUrl without asking the user to configure it', async () => {
   vi.mocked(orderApi.getRechargeOptions).mockResolvedValue({
     payMethods: [{ value: 1, label: 'PC' }],
-    packages: [{ id: 1, name: 'Starter', amount: '10.00' }],
+    packages: [{ id: 1, name: 'Starter', amount: '10.00', badge: '热门' }],
+    limits: { minimumAmount: '10.00', maximumAmount: '999999.99', amountScale: 2 },
     available: true,
   })
   vi.mocked(orderApi.createRecharge).mockResolvedValue({
@@ -225,4 +227,162 @@ it('uses a platform-specific placeholder in management filters', async () => {
   const wrapper = await page(OrderPage)
   const placeholders = wrapper.findAll('input').map((input) => input.attributes('placeholder'))
   expect(placeholders).toContain('请输入平台 ID')
+})
+
+function rechargeOptions(packages = [{ id: 1, name: 'Starter', amount: '5.00', badge: '热门' }]) {
+  return {
+    packages,
+    payMethods: [{ value: 1, label: 'PC' }],
+    available: true,
+    limits: { minimumAmount: '10.00', maximumAmount: '999999.99', amountScale: 2 },
+  }
+}
+
+it('shows selectable package cards including badges and does not apply the custom minimum to packages', async () => {
+  vi.mocked(orderApi.getRechargeOptions).mockResolvedValue(rechargeOptions())
+  vi.mocked(orderApi.createRecharge).mockResolvedValue({ order, checkout: '' })
+  permissions(['payment:recharge:create'])
+  const wrapper = await page(RechargePage)
+  const card = wrapper.get('[data-testid="payment-recharge-package-1"]')
+  expect(card.attributes('role')).toBe('radio')
+  expect(card.attributes('aria-checked')).toBe('true')
+  expect(card.text()).toContain('热门')
+  expect(card.text()).toContain('5.00')
+  await wrapper.get('[data-testid="payment-recharge-create"]').trigger('click')
+  expect(orderApi.createRecharge).toHaveBeenCalledWith(expect.objectContaining({ packageId: 1 }))
+})
+
+it('selects custom recharge with the keyboard and submits the scaled amount without packageId', async () => {
+  vi.mocked(orderApi.getRechargeOptions).mockResolvedValue(rechargeOptions())
+  vi.mocked(orderApi.createRecharge).mockResolvedValue({ order, checkout: '' })
+  permissions(['payment:recharge:create'])
+  const wrapper = await page(RechargePage)
+  await wrapper
+    .get('[data-testid="payment-recharge-package-1"]')
+    .trigger('keydown', { key: 'ArrowRight' })
+  expect(wrapper.get('[data-testid="payment-recharge-custom"]').attributes('aria-checked')).toBe(
+    'true',
+  )
+  const amount = wrapper.getComponent({ name: 'ElInputNumber' })
+  expect(amount.props('controlsPosition')).toBe('right')
+  expect(amount.props('min')).toBe(10)
+  amount.vm.$emit('update:modelValue', 12.3)
+  await flushPromises()
+  expect(wrapper.get('[data-testid="payment-recharge-total"]').text()).toContain('12.30')
+  await wrapper.get('[data-testid="payment-recharge-create"]').trigger('click')
+  expect(orderApi.createRecharge).toHaveBeenCalledWith({
+    requestId: expect.any(String),
+    amount: '12.30',
+    payMethod: 1,
+    returnUrl: window.location.href,
+  })
+})
+
+it('allows custom recharge without packages, blocks empty amounts and clamps bounds', async () => {
+  vi.mocked(orderApi.getRechargeOptions).mockResolvedValue(rechargeOptions([]))
+  permissions(['payment:recharge:create'])
+  const wrapper = await page(RechargePage)
+  expect(wrapper.text()).toContain('暂无充值套餐')
+  const amount = wrapper.getComponent({ name: 'ElInputNumber' })
+  for (const value of [undefined, null]) {
+    amount.vm.$emit('update:modelValue', value)
+    await flushPromises()
+    expect(
+      wrapper.get('[data-testid="payment-recharge-create"]').attributes('disabled'),
+    ).toBeDefined()
+    await wrapper.get('form').trigger('submit')
+  }
+  for (const [value, expected] of [
+    [9, 10],
+    [1000000, 999999.99],
+  ]) {
+    amount.vm.$emit('update:modelValue', value)
+    await flushPromises()
+    expect(amount.props('modelValue')).toBe(expected)
+  }
+  expect(orderApi.createRecharge).not.toHaveBeenCalled()
+})
+
+it('prevents duplicate recharge submissions and leaves a failed request retryable', async () => {
+  vi.mocked(orderApi.getRechargeOptions).mockResolvedValue(rechargeOptions())
+  let rejectRequest: (reason: Error) => void = () => undefined
+  vi.mocked(orderApi.createRecharge).mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        rejectRequest = reject
+      }),
+  )
+  permissions(['payment:recharge:create'])
+  const wrapper = await page(RechargePage)
+  await wrapper.get('form').trigger('submit')
+  await wrapper.get('form').trigger('submit')
+  expect(orderApi.createRecharge).toHaveBeenCalledOnce()
+  rejectRequest(new Error('request layer notified'))
+  await flushPromises()
+  expect(
+    wrapper.get('[data-testid="payment-recharge-create"]').attributes('disabled'),
+  ).toBeUndefined()
+})
+
+it('ignores old recharge options after locale changes or create permission is revoked', async () => {
+  let finishOld: (value: orderApi.RechargeOptions) => void = () => undefined
+  vi.mocked(orderApi.getRechargeOptions).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishOld = resolve
+      }),
+  )
+  vi.mocked(orderApi.getRechargeOptions).mockResolvedValue(
+    rechargeOptions([{ id: 2, name: 'Current', amount: '20.00', badge: 'New' }]),
+  )
+  permissions(['payment:recharge:create'])
+  const wrapper = await page(RechargePage)
+  setLocale('en-US')
+  await flushPromises()
+  finishOld(rechargeOptions())
+  await flushPromises()
+  expect(wrapper.find('[data-testid="payment-recharge-package-1"]').exists()).toBe(false)
+  expect(wrapper.find('[data-testid="payment-recharge-package-2"]').exists()).toBe(true)
+  permissions([])
+  await flushPromises()
+  expect(wrapper.find('[data-testid="payment-recharge-create"]').exists()).toBe(false)
+})
+
+it('does not load options or create a recharge without its action permission', async () => {
+  permissions(['payment:recharge:view', 'payment:recharge:list'])
+  const wrapper = await page(RechargePage)
+  expect(orderApi.getRechargeOptions).not.toHaveBeenCalled()
+  expect(wrapper.find('[data-testid="payment-recharge-create"]').exists()).toBe(false)
+})
+
+it('keeps an uncertain request id on retry and changes it when the recharge intent changes', async () => {
+  vi.mocked(orderApi.getRechargeOptions).mockResolvedValue(rechargeOptions())
+  vi.mocked(orderApi.createRecharge).mockRejectedValue(new Error('request layer notified'))
+  permissions(['payment:recharge:create'])
+  const wrapper = await page(RechargePage)
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  const first = vi.mocked(orderApi.createRecharge).mock.calls[0]?.[0]
+  expect(first?.requestId).toEqual(expect.any(String))
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(vi.mocked(orderApi.createRecharge).mock.calls[1]?.[0]).toEqual(first)
+  await wrapper.get('[data-testid="payment-recharge-custom"]').trigger('click')
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  const changed = vi.mocked(orderApi.createRecharge).mock.calls[2]?.[0]
+  expect(changed?.requestId).not.toBe(first?.requestId)
+  expect(changed).toMatchObject({ amount: '10.00' })
+})
+
+it('shows a retryable options error without exposing a usable payment action', async () => {
+  vi.mocked(orderApi.getRechargeOptions).mockRejectedValueOnce(new Error('request layer notified'))
+  vi.mocked(orderApi.getRechargeOptions).mockResolvedValue(rechargeOptions([]))
+  permissions(['payment:recharge:create'])
+  const wrapper = await page(RechargePage)
+  expect(wrapper.text()).toContain('充值选项暂不可用')
+  expect(wrapper.find('[data-testid="payment-recharge-create"]').exists()).toBe(false)
+  await wrapper.get('button').trigger('click')
+  await flushPromises()
+  expect(wrapper.find('[data-testid="payment-recharge-amount"]').exists()).toBe(true)
 })

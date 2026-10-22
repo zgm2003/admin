@@ -33,6 +33,7 @@ type Value struct {
 	Code      string     `json:"code"`
 	Status    Status     `json:"status"`
 	Amount    string     `json:"amount"`
+	Remark    *string    `json:"remark"`
 	ExpiresAt *time.Time `json:"expiresAt"`
 	UsedBy    *int64     `json:"usedBy"`
 	UsedAt    *time.Time `json:"usedAt"`

@@ -104,7 +104,7 @@ func (r *Repository) List(ctx context.Context, q ListQuery, now time.Time) ([]Mo
 		return nil, 0, e
 	}
 	rows := make([]Model, 0)
-	e := redeemQuery(r.db.WithContext(ctx), q, now).Select("c.*,b.batch_no,b.amount_cents,b.expires_at").Order("c.created_at DESC,c.id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Scan(&rows).Error
+	e := redeemQuery(r.db.WithContext(ctx), q, now).Select("c.*,b.batch_no,b.amount_cents,b.expires_at,b.remark").Order("c.created_at DESC,c.id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Scan(&rows).Error
 	return rows, total, e
 }
 func (r *Repository) Get(ctx context.Context, id int64) (Model, error) {
@@ -118,7 +118,7 @@ func (r *Repository) get(ctx context.Context, where string, value any) (Model, e
 	if e := r.available(); e != nil {
 		return row, e
 	}
-	err := r.db.WithContext(ctx).Table("payment_redeem_code c").Joins("JOIN payment_redeem_code_batch b ON b.id=c.batch_id").Select("c.*,b.batch_no,b.amount_cents,b.expires_at").Where(where, value).Take(&row).Error
+	err := r.db.WithContext(ctx).Table("payment_redeem_code c").Joins("JOIN payment_redeem_code_batch b ON b.id=c.batch_id").Select("c.*,b.batch_no,b.amount_cents,b.expires_at,b.remark").Where(where, value).Take(&row).Error
 	return row, err
 }
 func (r *Repository) Export(ctx context.Context, ids []int64) ([]Model, error) {
@@ -126,7 +126,7 @@ func (r *Repository) Export(ctx context.Context, ids []int64) ([]Model, error) {
 		return nil, e
 	}
 	rows := make([]Model, 0)
-	e := r.db.WithContext(ctx).Table("payment_redeem_code c").Joins("JOIN payment_redeem_code_batch b ON b.id=c.batch_id").Select("c.*,b.batch_no,b.amount_cents,b.expires_at").Where("c.id IN ?", ids).Order("c.id ASC").Scan(&rows).Error
+	e := r.db.WithContext(ctx).Table("payment_redeem_code c").Joins("JOIN payment_redeem_code_batch b ON b.id=c.batch_id").Select("c.*,b.batch_no,b.amount_cents,b.expires_at,b.remark").Where("c.id IN ?", ids).Order("c.id ASC").Scan(&rows).Error
 	if e == nil && len(rows) != len(ids) {
 		return nil, gorm.ErrRecordNotFound
 	}

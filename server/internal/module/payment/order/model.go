@@ -7,7 +7,7 @@ type Model struct {
 	OrderNo            string     `gorm:"column:order_no;type:varchar(32);not null"`
 	UserID             int64      `gorm:"column:user_id;not null"`
 	PlatformID         int64      `gorm:"column:platform_id;not null"`
-	PackageID          int64      `gorm:"column:package_id;not null"`
+	PackageID          *int64     `gorm:"column:package_id"`
 	PackageName        string     `gorm:"column:package_name;type:varchar(128);not null"`
 	AmountCents        int64      `gorm:"column:amount_cents;not null"`
 	ConfigID           int64      `gorm:"column:config_id;not null"`

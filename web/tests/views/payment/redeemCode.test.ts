@@ -33,6 +33,7 @@ const row = {
   code: 'ABCD2345EFGHJKLMNPQRS',
   status: 1,
   amount: '10.00',
+  remark: '活动赠送',
   expiresAt: null,
   usedBy: null,
   usedAt: null,
@@ -155,6 +156,72 @@ it('copies plaintext codes from the generation result', async () => {
     .querySelector<HTMLButtonElement>('[data-testid="payment-redeem-code-copy-result"]')
     ?.click()
   expect(clipboardWriteText).toHaveBeenCalledWith('ABCD2345EFGHJKLMNPQRS')
+})
+
+it.each(['活动赠送', null])('shows batch remark %s in the list and detail', async (remark) => {
+  permissions(['payment:redeemCode:view', 'payment:redeemCode:list', 'payment:redeemCode:detail'])
+  const value = { ...row, remark }
+  vi.mocked(redeemApi.getRedeemCodes).mockResolvedValue({
+    list: [value],
+    total: 1,
+    page: 1,
+    pageSize: 20,
+  })
+  vi.mocked(redeemApi.getRedeemCode).mockResolvedValue(value)
+  const wrapper = await page(RedeemCodePage)
+  expect(wrapper.get('[data-testid="payment-redeem-code-remark-1"]').text()).toBe(remark ?? '—')
+  const detailButton = wrapper.findAll('button').find((button) => button.text() === '详情')
+  expect(detailButton).toBeDefined()
+  await detailButton?.trigger('click')
+  await flushPromises()
+  expect(
+    document
+      .querySelector('[data-testid="payment-redeem-code-detail-remark"]')
+      ?.textContent?.trim(),
+  ).toBe(remark ?? '—')
+})
+
+it('includes quoted batch remarks and empty null remarks in the downloaded CSV', async () => {
+  permissions(['payment:redeemCode:view', 'payment:redeemCode:list', 'payment:redeemCode:export'])
+  vi.mocked(redeemApi.exportRedeemCodes).mockResolvedValue([
+    { ...row, remark: '活动,"赠送"\n第二行' },
+    { ...row, id: 2, remark: null },
+    { ...row, id: 3, remark: '=HYPERLINK("https://example.test")' },
+  ])
+  const createObjectURL = vi.fn((_blob: Blob) => 'blob:redeem-code-export')
+  const revokeObjectURL = vi.fn()
+  vi.stubGlobal(
+    'URL',
+    class extends URL {
+      static createObjectURL = createObjectURL
+      static revokeObjectURL = revokeObjectURL
+    },
+  )
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+  try {
+    const wrapper = await page(RedeemCodePage)
+    const exportButton = wrapper.findAll('button').find((button) => button.text() === '导出')
+    expect(exportButton).toBeDefined()
+    await exportButton?.trigger('click')
+    await flushPromises()
+    const blob = createObjectURL.mock.calls[0]?.[0]
+    expect(blob).toBeInstanceOf(Blob)
+    if (blob === undefined) throw new Error('CSV download did not create a blob')
+    const csv = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsText(blob)
+    })
+    expect(csv).toContain('"usedAt","remark"')
+    expect(csv).toContain('"活动,""赠送""\n第二行"')
+    expect(csv.split('\r\n').at(-2)).toMatch(/,""$/)
+    expect(csv).toContain('"\'=HYPERLINK(""https://example.test"")"')
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:redeem-code-export')
+  } finally {
+    click.mockRestore()
+    vi.unstubAllGlobals()
+  }
 })
 
 it('uses a right-controlled amount number input and submits a decimal string', async () => {

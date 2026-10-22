@@ -39,6 +39,7 @@ type Model struct {
 	ExpiresAt   *time.Time `gorm:"->;column:expires_at"`
 	BatchNo     string     `gorm:"->;column:batch_no"`
 	AmountCents int64      `gorm:"->;column:amount_cents"`
+	Remark      *string    `gorm:"->;column:remark"`
 }
 
 func (Model) TableName() string { return "payment_redeem_code" }

@@ -22,6 +22,7 @@ const (
 	RealtimeEventRetentionDaysKey            = "realtime.event.retention_days"
 	MessageNotificationRetentionDaysKey      = "message.notification.retention_days"
 	SchedulerHistoryRetentionDaysKey         = "system.scheduler.history_retention_days"
+	PaymentRechargeMinimumAmountKey          = "payment.recharge.minimum_amount"
 	MailRecipientRuleImportTemplateObjectKey = "message.mail.recipient_rule.import_template_object_key"
 )
 

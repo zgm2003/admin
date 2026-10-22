@@ -26,7 +26,7 @@ func (r *Repository) FindByRequest(ctx context.Context, userID, platformID int64
 }
 
 func (r *Repository) Create(ctx context.Context, row *Model) error {
-	if r == nil || r.db == nil || row == nil || row.UserID < 1 || row.PlatformID < 1 || row.PackageID < 1 || row.ConfigID < 1 || row.ConfigVersion < 1 || row.AmountCents < 1 || row.OrderNo == "" || row.RequestID == "" || len(row.RequestFingerprint) != 32 || row.Status != StatusPending || row.ExpiresAt.IsZero() || row.CreatedAt.IsZero() || row.UpdatedAt.IsZero() {
+	if r == nil || r.db == nil || row == nil || row.UserID < 1 || row.PlatformID < 1 || (row.PackageID != nil && *row.PackageID < 1) || row.ConfigID < 1 || row.ConfigVersion < 1 || row.AmountCents < 1 || row.OrderNo == "" || row.RequestID == "" || len(row.RequestFingerprint) != 32 || row.Status != StatusPending || row.ExpiresAt.IsZero() || row.CreatedAt.IsZero() || row.UpdatedAt.IsZero() {
 		return errors.New("payment order create input invalid")
 	}
 	if err := r.db.WithContext(ctx).Create(row).Error; err != nil {

@@ -18,6 +18,7 @@ func TestCreateUsesConfiguredChannelAndRequestReturnURLWithoutDeploymentSettings
 			fixture := createServiceFixture(repo)
 			service := NewService(repo)
 			service.runtime, service.packages = fixture.runtime, fixture.packages
+			service.SetSettings(fixture.settings)
 			service.now, service.newOrderNo = fixture.now, fixture.newOrderNo
 			var gotCredentials alipay.Credentials
 			var gotInput alipay.CheckoutInput

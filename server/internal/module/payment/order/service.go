@@ -19,6 +19,7 @@ import (
 	"admin/server/internal/shared/money"
 	"admin/server/internal/shared/option"
 	"admin/server/internal/shared/pagination"
+	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -32,6 +33,7 @@ type Service struct {
 	repository repository
 	runtime    runtime
 	packages   packageCatalog
+	settings   sharedsetting.Reader
 	checkout   checkoutFunc
 	now        func() time.Time
 	newOrderNo func(time.Time) (string, error)
@@ -77,6 +79,10 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 	if s == nil || s.runtime == nil || s.packages == nil {
 		return Options{}, apperror.DependencyUnavailable(errors.New("payment options dependencies missing"))
 	}
+	limits, err := s.rechargeLimits(ctx)
+	if err != nil {
+		return Options{}, err
+	}
 	catalog, err := s.runtime.Catalog(ctx)
 	if err != nil {
 		return Options{}, apperror.DependencyUnavailable(err)
@@ -120,9 +126,9 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 		if formatErr != nil {
 			return Options{}, apperror.DependencyUnavailable(formatErr)
 		}
-		values = append(values, PackageOption{ID: item.ID, Name: item.Name, Amount: amount})
+		values = append(values, PackageOption{ID: item.ID, Name: item.Name, Amount: amount, Badge: item.Badge})
 	}
-	return Options{PayMethods: orderedMethods, Packages: values, Available: available && len(orderedMethods) > 0 && len(values) > 0}, nil
+	return Options{PayMethods: orderedMethods, Packages: values, Available: available && len(orderedMethods) > 0, Limits: limits}, nil
 }
 
 // Production checkout remains closed pending production payment acceptance.
@@ -275,19 +281,35 @@ func (s *Service) Create(ctx context.Context, actor auth.Identity, input CreateI
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return Checkout{}, apperror.DependencyUnavailable(err)
 	}
-	packages, err := s.packages.Catalog(ctx)
-	if err != nil {
-		return Checkout{}, apperror.DependencyUnavailable(err)
-	}
-	var selectedPackage rechargepackage.CatalogItem
-	for _, candidate := range packages {
-		if candidate.ID == input.PackageID {
-			selectedPackage = candidate
-			break
+	var packageID *int64
+	packageName := "Custom recharge"
+	amountCents := input.AmountCents
+	if input.PackageID > 0 {
+		packages, err := s.packages.Catalog(ctx)
+		if err != nil {
+			return Checkout{}, apperror.DependencyUnavailable(err)
+		}
+		for _, candidate := range packages {
+			if candidate.ID == input.PackageID {
+				id := candidate.ID
+				packageID, packageName, amountCents = &id, candidate.Name, candidate.AmountCents
+				break
+			}
+		}
+		if packageID == nil || amountCents < 1 || packageName == "" {
+			return Checkout{}, apperror.NotFound(errors.New("recharge package not available"))
+		}
+	} else {
+		minimum, err := s.minimumRechargeCents(ctx)
+		if err != nil {
+			return Checkout{}, err
+		}
+		if amountCents < minimum {
+			return Checkout{}, apperror.InvalidRequest(errors.New("custom recharge amount below minimum"))
 		}
 	}
-	if selectedPackage.ID < 1 || selectedPackage.AmountCents < 1 {
-		return Checkout{}, apperror.NotFound(errors.New("recharge package not available"))
+	if _, err := money.CentsToUnits(amountCents); err != nil {
+		return Checkout{}, apperror.DependencyUnavailable(err)
 	}
 	catalog, err := s.runtime.Catalog(ctx)
 	if err != nil {
@@ -333,7 +355,7 @@ func (s *Service) Create(ctx context.Context, actor auth.Identity, input CreateI
 	if err != nil {
 		return Checkout{}, apperror.DependencyUnavailable(err)
 	}
-	row := &Model{OrderNo: orderNo, UserID: actor.UserID, PlatformID: actor.PlatformID, PackageID: selectedPackage.ID, PackageName: selectedPackage.Name, AmountCents: selectedPackage.AmountCents, ConfigID: selected.ID, ConfigVersion: selected.CurrentVersion, PayMethod: int16(input.PayMethod), RequestID: input.RequestID, RequestFingerprint: fingerprint, ReturnURL: input.ReturnURL, Status: StatusPending, ExpiresAt: now.Add(30 * time.Minute), NextCheckAt: pointerTime(now.Add(time.Minute)), CreatedAt: now, UpdatedAt: now}
+	row := &Model{OrderNo: orderNo, UserID: actor.UserID, PlatformID: actor.PlatformID, PackageID: packageID, PackageName: packageName, AmountCents: amountCents, ConfigID: selected.ID, ConfigVersion: selected.CurrentVersion, PayMethod: int16(input.PayMethod), RequestID: input.RequestID, RequestFingerprint: fingerprint, ReturnURL: input.ReturnURL, Status: StatusPending, ExpiresAt: now.Add(30 * time.Minute), NextCheckAt: pointerTime(now.Add(time.Minute)), CreatedAt: now, UpdatedAt: now}
 	if err := repo.Create(ctx, row); err != nil {
 		if concurrent, lookupErr := repo.FindByRequest(ctx, actor.UserID, actor.PlatformID, input.RequestID); lookupErr == nil {
 			if !equalFingerprint(concurrent.RequestFingerprint, fingerprint) {

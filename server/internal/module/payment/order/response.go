@@ -57,5 +57,12 @@ func safeValue(ctx context.Context, row Model, now time.Time, purchaseAvailable 
 			statusLabel = "Closed"
 		}
 	}
-	return SafeValue{ID: row.ID, OrderNo: row.OrderNo, PackageName: row.PackageName, Amount: amount, Status: row.Status, StatusLabel: statusLabel, ExpiresAt: row.ExpiresAt, PaidAt: row.PaidAt, CreditedAt: row.CreditedAt, ClosedAt: row.ClosedAt, Actions: actions}, nil
+	packageName := row.PackageName
+	if row.PackageID == nil {
+		packageName = "自定义充值"
+		if i18n.LocaleFromContext(ctx) == i18n.EnUS {
+			packageName = "Custom recharge"
+		}
+	}
+	return SafeValue{ID: row.ID, OrderNo: row.OrderNo, PackageName: packageName, Amount: amount, Status: row.Status, StatusLabel: statusLabel, ExpiresAt: row.ExpiresAt, PaidAt: row.PaidAt, CreditedAt: row.CreditedAt, ClosedAt: row.ClosedAt, Actions: actions}, nil
 }

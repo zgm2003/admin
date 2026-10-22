@@ -27,6 +27,9 @@ const (
 	settingFillWait    = 20 * time.Millisecond
 	settingWriteBudget = 500 * time.Millisecond
 	settingWriteWait   = 20 * time.Millisecond
+
+	paymentRechargeMinimumAmountMinimum = 1
+	paymentRechargeMinimumAmountMaximum = 92233720368
 )
 
 // ErrGenerationAdvanced 表示回源期间 generation 已变化：必须丢弃结果并重试完整读流程。
@@ -293,6 +296,9 @@ func (s *Service) UpdateStatus(ctx context.Context, key string, status yesno.Val
 
 func (s *Service) Delete(ctx context.Context, key string) error {
 	key = strings.TrimSpace(key)
+	if isRequiredSetting(key) {
+		return apperror.Conflict("error.conflict", nil, fmt.Errorf("required setting cannot be deleted"))
+	}
 	row, err := s.repository.Find(ctx, key)
 	if errors.Is(err, ErrNotFound) {
 		return apperror.NotFound(err)
@@ -300,7 +306,7 @@ func (s *Service) Delete(ctx context.Context, key string) error {
 	if err != nil {
 		return apperror.DependencyUnavailable(err)
 	}
-	if row.IsBuiltin == yesno.Yes || isRequiredSetting(key) {
+	if row.IsBuiltin == yesno.Yes {
 		return apperror.Conflict("error.conflict", nil, fmt.Errorf("builtin setting cannot be deleted"))
 	}
 	return s.mutate(ctx, func(mutationCtx context.Context, expected int64) (configcache.MutationResult, error) {
@@ -693,6 +699,10 @@ func validateInput(key, value string, valueType int, description string) error {
 		if value != "" && (objectkey.Validate(value) != nil || !strings.HasSuffix(value, ".xlsx")) {
 			return fmt.Errorf("template must be an XLSX storage object key, not a URL")
 		}
+	case sharedsetting.PaymentRechargeMinimumAmountKey:
+		if valueType != ValueTypeNumber || len(value) > 11 || strings.IndexFunc(value, func(r rune) bool { return r < '0' || r > '9' }) >= 0 || !integerInRange(value, paymentRechargeMinimumAmountMinimum, paymentRechargeMinimumAmountMaximum) {
+			return fmt.Errorf("minimum recharge amount must be an integer from 1 to 92233720368 yuan")
+		}
 	case sharedsetting.MessageNotificationRetentionDaysKey:
 		bounds := retentionLimits[key]
 		if valueType != ValueTypeNumber || !integerInRange(value, bounds.Minimum, bounds.Maximum) {
@@ -714,7 +724,7 @@ func validateInput(key, value string, valueType int, description string) error {
 
 func isRequiredSetting(key string) bool {
 	_, legal := legalDocumentKindForKey(key)
-	return legal || key == BrandTitleZhCNKey || key == BrandTitleEnUSKey || key == BrandDefaultAvatarKey || key == sharedsetting.MailRecipientRuleImportTemplateObjectKey || key == sharedsetting.MessageNotificationRetentionDaysKey || key == sharedsetting.RealtimeEventRetentionDaysKey || key == sharedsetting.SchedulerHistoryRetentionDaysKey
+	return legal || key == BrandTitleZhCNKey || key == BrandTitleEnUSKey || key == BrandDefaultAvatarKey || key == sharedsetting.MailRecipientRuleImportTemplateObjectKey || key == sharedsetting.MessageNotificationRetentionDaysKey || key == sharedsetting.RealtimeEventRetentionDaysKey || key == sharedsetting.SchedulerHistoryRetentionDaysKey || key == sharedsetting.PaymentRechargeMinimumAmountKey
 }
 
 func integerInRange(value string, minimum, maximum int) bool {

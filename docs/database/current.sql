@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Hr9BGAqzAZeiFxcbjj9oO2bjIJO9yJTEWQ0du6BwhMFYJW35i6zl5daJ4hjLHVz
+\restrict hYLWD3cRASsVaXNjdmvjWvFblbdxDqmea42TtUWfMlvPmaZdfp7E17hGr5bg0ie
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -1033,7 +1033,7 @@ CREATE TABLE public.payment_order (
     order_no character varying(32) NOT NULL,
     user_id bigint NOT NULL,
     platform_id bigint NOT NULL,
-    package_id bigint NOT NULL,
+    package_id bigint,
     package_name character varying(128) NOT NULL,
     amount_cents bigint NOT NULL,
     config_id bigint NOT NULL,
@@ -1055,6 +1055,7 @@ CREATE TABLE public.payment_order (
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT ck_payment_order_amount CHECK (((amount_cents >= 1) AND (amount_cents <= '9223372036854'::bigint))),
     CONSTRAINT ck_payment_order_order_no CHECK (((order_no)::text ~ '^[A-Za-z0-9_-]{1,32}$'::text)),
+    CONSTRAINT ck_payment_order_package_id CHECK (((package_id IS NULL) OR (package_id > 0))),
     CONSTRAINT ck_payment_order_package_name CHECK ((btrim((package_name)::text) <> ''::text)),
     CONSTRAINT ck_payment_order_pay_method CHECK ((pay_method = ANY (ARRAY[1, 2]))),
     CONSTRAINT ck_payment_order_request_fingerprint CHECK ((octet_length(request_fingerprint) = 32)),
@@ -1062,6 +1063,13 @@ CREATE TABLE public.payment_order (
     CONSTRAINT ck_payment_order_state_times CHECK ((((status = 1) AND (paid_at IS NULL) AND (credited_at IS NULL) AND (closed_at IS NULL)) OR ((status = 2) AND (credited_at IS NOT NULL)) OR ((status = 3) AND (closed_at IS NOT NULL) AND (paid_at IS NULL) AND (credited_at IS NULL)))),
     CONSTRAINT ck_payment_order_status CHECK ((status = ANY (ARRAY[1, 2, 3])))
 );
+
+
+--
+-- Name: COLUMN payment_order.package_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.payment_order.package_id IS '套餐充值关联套餐；自定义金额充值为 NULL，金额在订单中冻结';
 
 
 --
@@ -1939,6 +1947,11 @@ CREATE TABLE public.system_setting (
     CONSTRAINT ck_system_setting_is_builtin CHECK ((is_builtin = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_system_setting_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_system_setting_key CHECK (((setting_key)::text ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'::text)),
+    CONSTRAINT ck_system_setting_recharge_minimum_amount CHECK ((((setting_key)::text <> 'payment.recharge.minimum_amount'::text) OR
+CASE
+    WHEN (value ~ '^[0-9]{1,11}$'::text) THEN (((value)::numeric >= (1)::numeric) AND ((value)::numeric <= ('92233720368'::bigint)::numeric) AND (value_type = 2) AND (is_enabled = 1) AND (is_builtin = 1) AND (deleted_at IS NULL))
+    ELSE false
+END)),
     CONSTRAINT ck_system_setting_value_type CHECK ((value_type = ANY (ARRAY[1, 2, 3, 4, 5, 6])))
 );
 
@@ -4273,5 +4286,5 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Hr9BGAqzAZeiFxcbjj9oO2bjIJO9yJTEWQ0du6BwhMFYJW35i6zl5daJ4hjLHVz
+\unrestrict hYLWD3cRASsVaXNjdmvjWvFblbdxDqmea42TtUWfMlvPmaZdfp7E17hGr5bg0ie
 

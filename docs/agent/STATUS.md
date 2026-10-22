@@ -1,5 +1,20 @@
 # 项目状态
 
+## 钱包卡片与自定义充值（2026-10-22，代码与真实迁移完成）
+
+- 已确认范围：保留我的钱包/充值中心 Tab，移除大横幅；余额卡与充值/兑换入口集中；套餐使用可选卡片展示名称、金额和徽章，自定义金额单独输入并显示应付金额；兑换码批次备注进入列表/详情/导出。
+- 契约：`POST /api/admin/v1/payment/recharge` 仅接受套餐 `packageId` 或自定义金额字符串 `amount` 二选一，沿用 requestId/payMethod/returnUrl；已有套餐请求与幂等指纹不变。自定义订单 `package_id` 为 NULL（不造假套餐/0 外键），金额冻结，后续回调与查单继续按订单校验入账。
+- `payment.recharge.minimum_amount` 为系统内置、不可停用/删除的数值配置，单位元、初值 10，限定正整数范围 1..92233720368；约束自定义充值，不改变后台套餐定价。Options 输出 minimumAmount/maximumAmount/amountScale 和套餐 badge，后端每次新建自定义订单重新校验。
+- 权限不变：钱包 view/detail/list/redeem、充值 view/list/create/pay 与兑换码 list/detail/export 各自独立；系统配置沿用 system:setting 既有动作权限。
+- 容量：百万用户/多实例，最低金额读取复用 system.setting/global generation+Redis snapshot 与有界冷填充，命中不读 PostgreSQL，故障闭合且无本地默认值；新订单仍为幂等查重+一次插入，兑换码备注复用既有 batch JOIN，无逐行查询和新索引。
+- 执行顺序：①金额二选一/幂等/金额上下限失败测试和实现；②系统配置校验、展示及幂等 forward migration；③备注投影与界面；④钱包与充值卡片交互及双语；⑤集中定向 Go/Vitest、类型/格式检查与变更审查。并发验证覆盖同 requestId 自定义金额冲突与只生成/入账一次；迁移覆盖 NULL 外键、保留旧单、幂等复跑和失败回滚。
+- 工作区起始干净（前一轮弹窗修改已由维护者保留）；未提交 Git，未回退既有改动。钱包/充值页面、订单与系统设置、兑换码备注实现完成；`design.md` 和 `architecture.md` 已同步稳定交互及契约。
+- 真实迁移于 2026-10-22 15:48 +08:00 执行：停止已核验的项目 API（29144/46044；当时无 Worker），运行 `.\docs\database\2026-10-22-payment-custom-recharge.ps1 -ServicesStopped -AllowIdleNavicat`。首次预检连接超时且未执行 SQL，重试成功提交并幂等复跑；只放行无事务的空闲 Navicat 连接，未终止其他客户端。原 0 条订单及金融摘要不变，package_id 允许 NULL，原套餐外键与两个保护触发器保留，新增正数/NULL 检查和最低金额配置约束；最低值 10，generation/outbox 从 19 增至 20，二次执行所有核验事实不变。
+- 备份和审计：`%LOCALAPPDATA%/Admin/backups/payment-custom-recharge-20261022-154841-7ab0d264d64142e9a2c9c442c7a1fd9c/`，含四张受影响表的 `before.dump`、SHA256、`audit.json` 及服务日志。`pg_restore --list` 和 `pg_restore --file=NUL` 均通过，SHA256 复核一致；从真实 PostgreSQL 使用 `pg_dump --schema-only --schema=public --no-owner --no-privileges` 刷新 `docs/database/current.sql`，diff 仅本次目标对象与 restrict 标记。
+- 新代码已隐藏后台恢复 API PID 43256、Worker PID 25596；真实 outbox generation=20 已 published，未删除 Redis key。检查期间出现 PostgreSQL 连接和 Worker Redis I/O 超时、一次 `/ready` 503；完成定向检查后连续三轮 `/health`、`/ready` 均返回成功（PostgreSQL/Redis up），实际结果已追加到 audit。短时复查不代表已完成长时间稳定性验证，本机依赖超时仍应观察。
+- 后端实际验证通过：`go test ./internal/database -run '^TestPaymentCustomRecharge|^TestPaymentRedeemBatchRemarkAcrossAdminReads$' -count=1 -timeout=2m`；`go test ./internal/module/payment/order ./internal/module/payment/redeemCode -count=1 -timeout=2m`；设置定向 `go test ./internal/module/system/setting -run 'TestRechargeMinimumSetting|TestRequiredSetting|TestRetentionSetting|TestSettingResponseOwnsEditor|TestServiceBuiltinCannotDelete' -count=1 -timeout=90s`；`go vet ./internal/module/payment/order ./internal/module/payment/redeemCode ./internal/module/system/setting ./cmd/api`；修改 Go 文件 `gofmt -l` 无输出。PostgreSQL 测试覆盖保真、幂等、失败回滚、约束漂移、8 并发只创建/入账一次及备注真实 JOIN。
+- 前端实际验证通过：`pnpm vitest run tests/api/payment/order.test.ts tests/api/payment/redeemCode.test.ts tests/views/payment/wallet.test.ts tests/views/payment/financialPages.test.ts tests/views/payment/redeemCode.test.ts tests/i18n/index.test.ts --pool=threads --maxWorkers=1`（6 文件/46 项），受影响前端文件 ESLint/Prettier、`pnpm typecheck`、`pnpm check:architecture`（0 baseline findings）和 `git diff --check`。按维护者要求未运行全量测试或 build，未做真实登录后的浏览器视觉验收、真实充值或扣款。
+
 ## 兑换码改为明文事实（2026-10-22，代码与真实迁移完成）
 
 - 纠正上一轮只改展示、仍保留加密存储的误解：`payment_redeem_code.code` 是唯一兑换码字段，旧 `code_hash`、`code_ciphertext` 及配套约束/索引退场；生成、列表、详情、精确查询、导出和兑换统一使用完整码，运行时不再依赖兑换码密钥。

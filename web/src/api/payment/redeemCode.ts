@@ -13,6 +13,7 @@ export interface RedeemCode {
   code: string
   status: number
   amount: string
+  remark: string | null
   expiresAt: string | null
   usedBy: number | null
   usedAt: string | null

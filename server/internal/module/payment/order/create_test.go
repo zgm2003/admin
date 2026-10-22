@@ -11,6 +11,7 @@ import (
 	paymentconfig "admin/server/internal/module/payment/config"
 	rechargepackage "admin/server/internal/module/payment/rechargePackage"
 	"admin/server/internal/payment/alipay"
+	sharedsetting "admin/server/internal/shared/setting"
 	"admin/server/internal/shared/yesno"
 	"gorm.io/gorm"
 )
@@ -71,6 +72,7 @@ func (r createPackageStub) Catalog(context.Context) ([]rechargepackage.CatalogIt
 
 func createServiceFixture(repo *createRepositoryStub) *Service {
 	service := NewService(repo)
+	service.SetSettings(rechargeSettingsStub{row: sharedsetting.Record{Key: sharedsetting.PaymentRechargeMinimumAmountKey, Value: "10", ValueType: sharedsetting.ValueTypeNumber, IsEnabled: yesno.Yes}})
 	service.SetRuntime(createRuntimeStub{
 		catalog:    []paymentconfig.CatalogItem{{ID: 3, Name: "Sandbox channel", Provider: payment.ProviderAlipay, Environment: payment.EnvironmentSandbox, AppID: "20260001", SellerID: "20880001", CurrentVersion: 4, IsEnabled: yesno.Yes}},
 		credential: paymentconfig.BoundCredential{ConfigID: 3, Provider: payment.ProviderAlipay, AppID: "20260001", SellerID: "20880001", Environment: payment.EnvironmentSandbox, Version: paymentconfig.CredentialVersion{ConfigID: 3, Version: 4, NotifyURL: "https://pay.example.test/callback", PayMethods: paymentconfig.PayMethods{payment.PayMethodWeb, payment.PayMethodH5}}},
@@ -102,7 +104,7 @@ func TestCreateUsesServerPackageAndHistoricalCredentialSnapshot(t *testing.T) {
 }
 
 func TestCreateReplaysSameRequestAndRejectsDifferentFingerprint(t *testing.T) {
-	base := Model{ID: 10, OrderNo: "PO2026101503000000000000000001", UserID: 7, PlatformID: 1, PackageID: 8, PackageName: "100 credits", AmountCents: 1000, ConfigID: 3, ConfigVersion: 4, PayMethod: int16(payment.PayMethodWeb), RequestID: "00000000-0000-4000-8000-000000000001", RequestFingerprint: requestFingerprint(CreateInput{RequestID: "00000000-0000-4000-8000-000000000001", PackageID: 8, PayMethod: payment.PayMethodWeb, ReturnURL: "https://app.example.test/paid"}), ReturnURL: "https://app.example.test/paid", Status: StatusPending, ExpiresAt: time.Date(2026, 10, 15, 3, 30, 0, 0, time.UTC), CreatedAt: time.Date(2026, 10, 15, 3, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 10, 15, 3, 0, 0, 0, time.UTC)}
+	base := Model{ID: 10, OrderNo: "PO2026101503000000000000000001", UserID: 7, PlatformID: 1, PackageID: ptrInt64(8), PackageName: "100 credits", AmountCents: 1000, ConfigID: 3, ConfigVersion: 4, PayMethod: int16(payment.PayMethodWeb), RequestID: "00000000-0000-4000-8000-000000000001", RequestFingerprint: requestFingerprint(CreateInput{RequestID: "00000000-0000-4000-8000-000000000001", PackageID: 8, PayMethod: payment.PayMethodWeb, ReturnURL: "https://app.example.test/paid"}), ReturnURL: "https://app.example.test/paid", Status: StatusPending, ExpiresAt: time.Date(2026, 10, 15, 3, 30, 0, 0, time.UTC), CreatedAt: time.Date(2026, 10, 15, 3, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 10, 15, 3, 0, 0, 0, time.UTC)}
 	t.Run("same input replays", func(t *testing.T) {
 		repo := &createRepositoryStub{existing: &base}
 		service := createServiceFixture(repo)

@@ -22,7 +22,8 @@ export interface RechargeOrder {
 
 export interface RechargeOptions {
   payMethods: NumericOption[]
-  packages: Array<{ id: number; name: string; amount: string }>
+  packages: Array<{ id: number; name: string; amount: string; badge: string | null }>
+  limits: { minimumAmount: string; maximumAmount: string; amountScale: number }
   available: boolean
 }
 
@@ -31,12 +32,11 @@ export interface Checkout {
   checkout: string
 }
 
-export interface CreateRechargeInput {
+export type CreateRechargeInput = {
   requestId: string
-  packageId: number
   payMethod: number
   returnUrl: string
-}
+} & ({ packageId: number; amount?: never } | { amount: string; packageId?: never })
 
 export interface OrderQuery extends PageRequest {
   userId?: number

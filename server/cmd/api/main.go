@@ -257,6 +257,7 @@ func run(logger *slog.Logger) error {
 	configCacheService := systemconfigcachestatus.NewService(systemconfigcachestatus.NewRepository(postgres.GORM), configGenerationStore)
 	settingService.SetGenerations(configGenerationRepository, configGenerationStore)
 	settingService.SetLogger(logger)
+	paymentOrderService.SetSettings(settingService)
 	profileRepository := profile.NewRepository(postgres.GORM)
 	sessionRepository := usersession.NewRepository(postgres.GORM)
 	authPlatformRepository := authplatform.NewRepository(postgres.GORM)
