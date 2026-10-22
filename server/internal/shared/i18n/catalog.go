@@ -194,6 +194,9 @@ const (
 	KeySchedulerTaskRealtimeCleanup     MessageKey = "scheduler.tasks.realtime.retention.cleanup"
 	KeySchedulerTaskNotificationCleanup MessageKey = "scheduler.tasks.message.notification.retention.cleanup"
 	KeySchedulerTaskHistoryCleanup      MessageKey = "scheduler.tasks.system.scheduler.history.cleanup"
+	KeySchedulerTaskPaymentReconcile    MessageKey = "scheduler.tasks.payment.order.reconcile"
+	KeySchedulerTaskFileCleanup         MessageKey = "scheduler.tasks.storage.file.cleanup"
+	KeySchedulerTaskFileScan            MessageKey = "scheduler.tasks.storage.file.scan"
 	KeyCachePublishReady                MessageKey = "configCacheStatus.options.publishState.ready"
 	KeyCachePublishPending              MessageKey = "configCacheStatus.options.publishState.pending"
 	KeyCachePublishRetrying             MessageKey = "configCacheStatus.options.publishState.retrying"
@@ -446,6 +449,9 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySchedulerTaskRealtimeCleanup:      "实时事件历史清理",
 		KeySchedulerTaskNotificationCleanup:  "站内通知历史清理",
 		KeySchedulerTaskHistoryCleanup:       "调度器历史清理",
+		KeySchedulerTaskPaymentReconcile:     "支付订单巡检",
+		KeySchedulerTaskFileCleanup:          "文件对象清理",
+		KeySchedulerTaskFileScan:             "文件清理巡检",
 		KeyCachePublishReady:                 "已发布",
 		KeyCachePublishPending:               "待发布",
 		KeyCachePublishRetrying:              "重试中",
@@ -695,6 +701,9 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySchedulerTaskRealtimeCleanup:      "Realtime event history cleanup",
 		KeySchedulerTaskNotificationCleanup:  "Notification history cleanup",
 		KeySchedulerTaskHistoryCleanup:       "Scheduler history cleanup",
+		KeySchedulerTaskPaymentReconcile:     "Payment order reconciliation",
+		KeySchedulerTaskFileCleanup:          "File object cleanup",
+		KeySchedulerTaskFileScan:             "File cleanup scan",
 		KeyCachePublishReady:                 "Published",
 		KeyCachePublishPending:               "Pending",
 		KeyCachePublishRetrying:              "Retrying",

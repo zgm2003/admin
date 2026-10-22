@@ -1,5 +1,13 @@
 # 项目状态
 
+## 定时任务选项加载失败修复（2026-10-22，定向验证完成）
+
+- 根因：API 已注册 `payment.order.reconcile`、`storage.file.cleanup` 和 `storage.file.scan`，但缺少对应 `scheduler.tasks.*` 中英文词条；Options 翻译失败被映射为 HTTP 503/code 10006。页面先读取 Options 再读取计划列表，因此显示“定时任务加载失败 / 服务暂未就绪”，并非返回了空计划。
+- 最小修复：只补齐三类任务的词条常量和中英文文案，不改前端、权限、数据库、队列或错误闭合协议；Options 仍不访问 PostgreSQL/Redis，新增 I/O 查询预算为 0。
+- 回归覆盖 API 完整任务组合及逐任务的中英 16 个子场景，经过真实 Router/Handler/Service，Repository 为 nil；修复前精确复现三类任务及完整组合的 503，修复后全部通过。
+- 实际验证：`go test ./cmd/api -run '^TestSchedulerOptionsLocalizesRegisteredTasksWithoutDependencies$' -count=1 -timeout=90s`、`go test -short -p 1 ./cmd/api ./internal/module/system/scheduler ./internal/shared/i18n -count=1 -timeout=2m`、相同三包 `go vet`、`go build ./cmd/api ./cmd/worker` 均通过。
+- 排查时当前 `/health`、`/ready` 均返回成功（PostgreSQL/Redis up），仅代表当次健康状态。未运行全量测试、前端构建或真实登录浏览器验收；未操作数据库/Redis、未重启服务、未提交 Git。维护者需重启 API 后刷新页面，运行中旧进程不会自动加载新词条。
+
 ## 钱包卡片与自定义充值（2026-10-22，代码与真实迁移完成）
 
 - 已确认范围：保留我的钱包/充值中心 Tab，移除大横幅；余额卡与充值/兑换入口集中；套餐使用可选卡片展示名称、金额和徽章，自定义金额单独输入并显示应付金额；兑换码批次备注进入列表/详情/导出。
