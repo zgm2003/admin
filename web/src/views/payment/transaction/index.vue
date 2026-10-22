@@ -155,7 +155,7 @@ onBeforeUnmount(() => {
       v-model="filters"
       class="management-page__filters"
       :fields="searchFields"
-      :query-label="t('payment.transaction.title')"
+      :query-label="t('common.search')"
       @query="search"
       @reset="reset"
     />

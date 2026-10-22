@@ -82,7 +82,7 @@ const searchFields = computed<SearchField<{ batchId: string; status: number | ''
 ])
 const columns = computed<TableColumn<RedeemCode>[]>(() => [
   { prop: 'batchNo', label: t('payment.redeemCode.batchNo'), width: 170 },
-  { prop: 'codeMask', label: t('payment.redeemCode.code'), minWidth: 220 },
+  { key: 'code', label: t('payment.redeemCode.code'), minWidth: 260 },
   { prop: 'amount', label: t('payment.redeemCode.amount'), width: 120 },
   { key: 'status', label: t('common.status'), width: 110 },
   { key: 'expiresAt', label: t('payment.redeemCode.expiresAt'), width: 180 },
@@ -97,6 +97,14 @@ function statusType(value: number): 'success' | 'info' | 'warning' | 'danger' {
   if (value === 2) return 'info'
   if (value === 3) return 'danger'
   return 'warning'
+}
+async function copyCode(code: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(code)
+    ElNotification.success({ title: t('payment.redeemCode.copied') })
+  } catch {
+    ElNotification.error({ title: t('payment.redeemCode.copyFailed') })
+  }
 }
 function state(): 'loading' | 'error' | 'empty' | 'success' {
   if (loading.value) return 'loading'
@@ -288,9 +296,10 @@ onBeforeUnmount(() => {
       @query="searchList"
       @reset="reset"
     />
-    <div v-if="optionsError"><el-button text @click="reloadOptions">{{ t('common.retry') }}</el-button></div>
-    
-    
+    <div v-if="optionsError">
+      <el-button text @click="reloadOptions">{{ t('common.retry') }}</el-button>
+    </div>
+
     <AppTable
       :columns="columns"
       :data="rows"
@@ -359,6 +368,13 @@ onBeforeUnmount(() => {
       }}</template>
       <template #cell-usedBy="{ row }: { row: RedeemCode }">{{ row.usedBy ?? '-' }}</template>
       <template #cell-actions="{ row }: { row: RedeemCode }">
+        <el-button
+          link
+          type="primary"
+          :data-testid="`payment-redeem-code-copy-${row.id}`"
+          @click="copyCode(row.code)"
+          >{{ t('payment.redeemCode.copy') }}</el-button
+        >
         <el-button v-if="canDetail" link type="primary" @click="openDetail(row)">{{
           t('common.detail')
         }}</el-button>
@@ -373,6 +389,9 @@ onBeforeUnmount(() => {
           t('payment.redeemCode.void')
         }}</el-button>
       </template>
+      <template #cell-code="{ row }: { row: RedeemCode }">
+        <span class="payment-redeem-code-page__code">{{ row.code }}</span>
+      </template>
       <template #empty><el-empty :description="t('payment.redeemCode.empty')" /></template>
     </AppTable>
 
@@ -384,12 +403,14 @@ onBeforeUnmount(() => {
       @submit="generate"
     />
     <AppDialog v-model="detailVisible" :title="t('common.detail')" width="680px">
-      
       <el-skeleton v-if="detail === null" :rows="3" animated />
       <el-descriptions v-else :column="2" border>
-        <el-descriptions-item :label="t('payment.redeemCode.code')">{{
-          detail.codeMask
-        }}</el-descriptions-item>
+        <el-descriptions-item :label="t('payment.redeemCode.code')">
+          <span class="payment-redeem-code-page__code">{{ detail.code }}</span>
+          <el-button link type="primary" @click="copyCode(detail.code)">
+            {{ t('payment.redeemCode.copy') }}
+          </el-button>
+        </el-descriptions-item>
         <el-descriptions-item :label="t('payment.redeemCode.batchNo')">{{
           detail.batchNo
         }}</el-descriptions-item>
@@ -424,6 +445,10 @@ onBeforeUnmount(() => {
 }
 .payment-redeem-code-page :deep(.el-input) {
   width: 230px;
+}
+.payment-redeem-code-page__code {
+  font-family: var(--el-font-family-monospace);
+  letter-spacing: 0.04em;
 }
 @media (max-width: 768px) {
   .payment-redeem-code-page :deep(.el-input) {

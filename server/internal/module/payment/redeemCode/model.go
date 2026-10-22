@@ -28,18 +28,17 @@ type Batch struct {
 func (Batch) TableName() string { return "payment_redeem_code_batch" }
 
 type Model struct {
-	ID             int64      `gorm:"column:id;primaryKey;autoIncrement"`
-	BatchID        int64      `gorm:"column:batch_id"`
-	CodeHash       []byte     `gorm:"column:code_hash"`
-	CodeCiphertext string     `gorm:"column:code_ciphertext"`
-	Status         Status     `gorm:"column:status"`
-	UsedBy         *int64     `gorm:"column:used_by"`
-	UsedAt         *time.Time `gorm:"column:used_at"`
-	CreatedAt      time.Time  `gorm:"column:created_at"`
-	UpdatedAt      time.Time  `gorm:"column:updated_at"`
-	ExpiresAt      *time.Time `gorm:"->;column:expires_at"`
-	BatchNo        string     `gorm:"->;column:batch_no"`
-	AmountCents    int64      `gorm:"->;column:amount_cents"`
+	ID          int64      `gorm:"column:id;primaryKey;autoIncrement"`
+	BatchID     int64      `gorm:"column:batch_id"`
+	Code        string     `gorm:"column:code"`
+	Status      Status     `gorm:"column:status"`
+	UsedBy      *int64     `gorm:"column:used_by"`
+	UsedAt      *time.Time `gorm:"column:used_at"`
+	CreatedAt   time.Time  `gorm:"column:created_at"`
+	UpdatedAt   time.Time  `gorm:"column:updated_at"`
+	ExpiresAt   *time.Time `gorm:"->;column:expires_at"`
+	BatchNo     string     `gorm:"->;column:batch_no"`
+	AmountCents int64      `gorm:"->;column:amount_cents"`
 }
 
 func (Model) TableName() string { return "payment_redeem_code" }

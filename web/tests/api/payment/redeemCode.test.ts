@@ -21,10 +21,10 @@ it('keeps admin redeem-code endpoints and numeric filters', async () => {
   expect(request.get).toHaveBeenCalledWith('/api/admin/v1/payment/redeemcode/9')
 })
 
-it('does not reshape secret-code requests or responses', async () => {
-  await api.lookupRedeemCode('ABCD2345EFGHJKLMNPQR')
+it('does not reshape redeem-code requests or responses', async () => {
+  await api.lookupRedeemCode('ABCD2345EFGHJKLMNPQRS')
   expect(request.post).toHaveBeenCalledWith('/api/admin/v1/payment/redeemcode/lookup', {
-    code: 'ABCD2345EFGHJKLMNPQR',
+    code: 'ABCD2345EFGHJKLMNPQRS',
   })
   const input = {
     requestId: '00000000-0000-4000-8000-000000000001',
@@ -44,8 +44,8 @@ it('does not reshape secret-code requests or responses', async () => {
 })
 
 it('uses the personal wallet redemption endpoint', async () => {
-  await api.redeemWalletCode('ABCD2345EFGHJKLMNPQR')
+  await api.redeemWalletCode('ABCD2345EFGHJKLMNPQRS')
   expect(request.post).toHaveBeenCalledWith('/api/admin/v1/payment/wallet/redemption', {
-    code: 'ABCD2345EFGHJKLMNPQR',
+    code: 'ABCD2345EFGHJKLMNPQRS',
   })
 })

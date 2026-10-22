@@ -1,5 +1,15 @@
 # 项目状态
 
+## 当前工作：兑换码改为明文事实（2026-10-22）
+
+- 纠正上一轮只改展示、仍保留加密存储的误解：`payment_redeem_code.code` 是唯一兑换码字段，旧 `code_hash`、`code_ciphertext` 及配套约束/索引退场；生成、列表、详情、精确查询、导出和兑换统一使用完整码，运行时不再依赖兑换码密钥。
+- 按维护者反馈将列表“复制”按钮移至右侧操作列，兑换码列只显示完整码；详情与生成结果的复制入口保持。
+- 权限和入口不变：管理员 `payment:redeemCode:list/detail/generate/void/export` 分别控制对应操作，个人兑换保持 `payment:myWallet:redeem`。保留状态、批次、请求幂等指纹、用户和交易关联，不丢弃历史兑换码。
+- 容量假设仍为百万用户、多实例：精确查询/兑换使用 code 全局唯一 B-tree 索引，列表仍 count + page 两次 SQL，无逐行解密或额外缓存。Redis 用户维度限流及 code→wallet 锁顺序不变；并发/幂等和事务回滚由定向 PostgreSQL 测试验证。
+- 真实库只读核验：1 条兑换码/1 个批次，旧两列、hash 唯一索引及不可变触发器均存在。维护者已确认现在停 API/Worker，一并备份及迁移。新 forward SQL、同名 PowerShell runner 和离线 Go 转换命令无损转换旧码，失败全事务回滚，不由业务进程执行 DDL。
+- 定向验证已通过：兑换码/secretkey 单元测试，完整码 List/Detail HTTP 契约、生成重放、真实 PostgreSQL 新迁移的保真/幂等/回滚/空表/8 并发只入账一次；独立离线转换测试覆盖错误密钥、错误 HMAC 和规范码验证。实际命令包括 `go test ./internal/database -run TestPaymentRedeemPlaintext -count=1`、`go test ../docs/database/2026-10-22-payment-redeem-code-plaintext/main.go ../docs/database/2026-10-22-payment-redeem-code-plaintext/main_test.go -count=1`、`go vet ./internal/module/payment/redeemCode ./internal/secretkey ./cmd/api`，以及前端兑换码 API/页面/i18n 共 3 文件/19 项 Vitest、`pnpm typecheck`、受影响前端文件 ESLint、Prettier 和 `git diff --check`。
+- 真实迁移暂未执行：已按维护者授权停止原 `go run ./cmd/api` 和 `go run ./cmd/worker`，runner 在备份和写入前发现 3 个 Navicat idle 连接，拒绝继续；未删列、未改历史数据，等待维护者断开 Navicat 后备份、迁移、刷新快照并恢复服务。不执行全量 build/测试或 Git 提交。
+
 ## 公共界面文案收敛（2026-10-21，定向验证完成）
 
 - 按维护者确认统一基础按钮、通用表头与筛选文案到 `common.*`，同步页面、私有组件、公共组件及中英文词库；不保留旧 key 别名，不拆分 enable/enabled 或 disable/disabled。

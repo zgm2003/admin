@@ -10,7 +10,7 @@ export interface RedeemCode {
   id: number
   batchId: number
   batchNo: string
-  codeMask: string
+  code: string
   status: number
   amount: string
   expiresAt: string | null

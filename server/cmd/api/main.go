@@ -247,7 +247,7 @@ func run(logger *slog.Logger) error {
 	paymentCallbackService.SetRuntime(paymentConfigService)
 	paymentCallbackService.SetConfirmer(paymentOrderService)
 	paymentRedeemRepository := redeemcode.NewRepository(postgres.GORM)
-	paymentRedeemService := redeemcode.NewService(paymentRedeemRepository, keys, redeemcode.NewRedisLimiter(redisClient.UniversalClient()))
+	paymentRedeemService := redeemcode.NewService(paymentRedeemRepository, redeemcode.NewRedisLimiter(redisClient.UniversalClient()))
 	settingRepository := systemsetting.NewRepository(postgres.GORM)
 	settingRepository.SetGenerations(configGenerationRepository)
 	settingService := systemsetting.NewService(settingRepository)

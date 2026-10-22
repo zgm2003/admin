@@ -27,7 +27,7 @@ type Handler struct{ service handlerService }
 
 func NewHandler(s handlerService) *Handler { return &Handler{service: s} }
 
-// Reject noncanonical query transports before body binding. Secret codes are
+// Reject noncanonical query transports before body binding. Redeem codes are
 // accepted only in a JSON body, never in a URL/query or a path parameter.
 func bodyRequest(c *gin.Context) bool {
 	if c.Request.URL.RawQuery != "" {
@@ -36,7 +36,7 @@ func bodyRequest(c *gin.Context) bool {
 	}
 	return true
 }
-func secretResponse(c *gin.Context) {
+func noStoreResponse(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	c.Header("Pragma", "no-cache")
 }
@@ -75,7 +75,7 @@ func (h *Handler) Generate(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	secretResponse(c)
+	noStoreResponse(c)
 	response.OK(c, http.StatusCreated, v)
 }
 func (h *Handler) List(c *gin.Context) {
@@ -94,6 +94,7 @@ func (h *Handler) List(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
+	noStoreResponse(c)
 	response.OK(c, http.StatusOK, v)
 }
 func (h *Handler) Get(c *gin.Context) {
@@ -110,6 +111,7 @@ func (h *Handler) Get(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
+	noStoreResponse(c)
 	response.OK(c, http.StatusOK, v)
 }
 func (h *Handler) Lookup(c *gin.Context) {
@@ -128,7 +130,7 @@ func (h *Handler) Lookup(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	secretResponse(c)
+	noStoreResponse(c)
 	response.OK(c, http.StatusOK, v)
 }
 func (h *Handler) Void(c *gin.Context) {
@@ -164,7 +166,7 @@ func (h *Handler) Export(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	secretResponse(c)
+	noStoreResponse(c)
 	response.OK(c, http.StatusOK, v)
 }
 func (h *Handler) Redeem(c *gin.Context) {
@@ -188,6 +190,6 @@ func (h *Handler) Redeem(c *gin.Context) {
 		response.Fail(c, e)
 		return
 	}
-	secretResponse(c)
+	noStoreResponse(c)
 	response.OK(c, http.StatusOK, row)
 }

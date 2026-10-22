@@ -29,7 +29,7 @@ const row = {
   id: 1,
   batchId: 2,
   batchNo: 'RBABC',
-  codeMask: 'ABCD************NPQR',
+  code: 'ABCD2345EFGHJKLMNPQRS',
   status: 1,
   amount: '10.00',
   expiresAt: null,
@@ -60,8 +60,14 @@ const options = {
 }
 
 let wrappers: VueWrapper[] = []
+const clipboardWriteText = vi.fn()
 beforeEach(() => {
   vi.resetAllMocks()
+  clipboardWriteText.mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: clipboardWriteText },
+  })
   setLocale('zh-CN')
   usePermissionStore(pinia).reset()
   vi.mocked(redeemApi.getRedeemCodeOptions).mockResolvedValue(options)
@@ -74,7 +80,7 @@ beforeEach(() => {
   vi.mocked(redeemApi.generateRedeemCodeBatch).mockResolvedValue({
     batchId: 2,
     batchNo: 'RBABC',
-    codes: ['ABCD2345EFGHJKLMNPQR'],
+    codes: ['ABCD2345EFGHJKLMNPQRS'],
   })
   vi.mocked(redeemApi.redeemWalletCode).mockResolvedValue({
     transactionId: 11,
@@ -110,15 +116,44 @@ async function page(component: Component): Promise<VueWrapper> {
   return wrapper
 }
 
-it('loads masked codes and only exposes generation with its action permission', async () => {
+it('loads plaintext codes with copy actions and only exposes generation with its action permission', async () => {
   permissions(['payment:redeemCode:view', 'payment:redeemCode:list', 'payment:redeemCode:generate'])
   const wrapper = await page(RedeemCodePage)
   expect(redeemApi.getRedeemCodes).toHaveBeenCalledOnce()
-  expect(wrapper.text()).toContain('ABCD************NPQR')
+  expect(wrapper.text()).toContain('ABCD2345EFGHJKLMNPQRS')
+  expect(wrapper.find('[data-testid="payment-redeem-code-copy-1"]').exists()).toBe(true)
+  const headers = wrapper.findAll('.el-table__header-wrapper th')
+  const actionsIndex = headers.findIndex((header) => header.text() === '操作')
+  const codeIndex = headers.findIndex((header) => header.text() === '兑换码')
+  expect(actionsIndex).toBeGreaterThanOrEqual(0)
+  expect(codeIndex).toBeGreaterThanOrEqual(0)
+  const cells = wrapper.findAll('.el-table__body-wrapper tbody tr')[0]?.findAll('td') ?? []
+  expect(cells[actionsIndex]?.find('[data-testid="payment-redeem-code-copy-1"]').exists()).toBe(
+    true,
+  )
+  expect(cells[codeIndex]?.text()).toBe(row.code)
+  expect(cells[codeIndex]?.find('button').exists()).toBe(false)
+  await wrapper.get('[data-testid="payment-redeem-code-copy-1"]').trigger('click')
+  expect(clipboardWriteText).toHaveBeenCalledWith('ABCD2345EFGHJKLMNPQRS')
   expect(wrapper.find('[data-testid="payment-redeem-code-generate"]').exists()).toBe(true)
   permissions(['payment:redeemCode:view', 'payment:redeemCode:list'])
   await flushPromises()
   expect(wrapper.find('[data-testid="payment-redeem-code-generate"]').exists()).toBe(false)
+})
+
+it('copies plaintext codes from the generation result', async () => {
+  permissions(['payment:redeemCode:view', 'payment:redeemCode:list', 'payment:redeemCode:generate'])
+  const wrapper = await page(RedeemCodePage)
+  await wrapper.get('[data-testid="payment-redeem-code-generate"]').trigger('click')
+  await flushPromises()
+  document.body
+    .querySelector<HTMLButtonElement>('[data-testid="payment-redeem-code-submit"]')
+    ?.click()
+  await flushPromises()
+  document.body
+    .querySelector<HTMLButtonElement>('[data-testid="payment-redeem-code-copy-result"]')
+    ?.click()
+  expect(clipboardWriteText).toHaveBeenCalledWith('ABCD2345EFGHJKLMNPQRS')
 })
 
 it('offers personal redemption only with the dedicated action', async () => {
@@ -134,7 +169,7 @@ it('redeems through the personal endpoint and refreshes wallet projections', asy
   const code = document.querySelector<HTMLInputElement>('.el-dialog input')
   expect(code).not.toBeNull()
   if (code === null) return
-  code.value = 'ABCD2345EFGHJKLMNPQR'
+  code.value = 'ABCD2345EFGHJKLMNPQRS'
   code.dispatchEvent(new Event('input', { bubbles: true }))
   const submit = document.querySelector<HTMLButtonElement>(
     '[data-testid="payment-wallet-redeem-submit"]',
@@ -142,7 +177,7 @@ it('redeems through the personal endpoint and refreshes wallet projections', asy
   expect(submit).not.toBeNull()
   submit?.click()
   await flushPromises()
-  expect(redeemApi.redeemWalletCode).toHaveBeenCalledWith('ABCD2345EFGHJKLMNPQR')
+  expect(redeemApi.redeemWalletCode).toHaveBeenCalledWith('ABCD2345EFGHJKLMNPQRS')
   expect(vi.mocked(walletApi.getMyWallet).mock.calls.length).toBeGreaterThanOrEqual(2)
   expect(vi.mocked(transactionApi.getMyTransactions).mock.calls.length).toBeGreaterThanOrEqual(2)
 })

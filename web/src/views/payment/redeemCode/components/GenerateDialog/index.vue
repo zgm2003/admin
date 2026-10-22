@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ElNotification } from 'element-plus/es/components/notification/index'
 
 import AppDialog from '@/components/AppDialog/index.vue'
 import type {
@@ -90,6 +91,14 @@ function submit(): void {
     remark: form.value.remark.trim(),
   })
 }
+async function copyCode(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(codeText.value)
+    ElNotification.success({ title: t('payment.redeemCode.copied') })
+  } catch {
+    ElNotification.error({ title: t('payment.redeemCode.copyFailed') })
+  }
+}
 function close(): void {
   if (props.submitting) return
   emit('update:modelValue', false)
@@ -165,7 +174,7 @@ watch(
         type="success"
         :closable="false"
       />
-      <p class="payment-redeem-code-generate__hint">{{ t('payment.redeemCode.secretHint') }}</p>
+      <p class="payment-redeem-code-generate__hint">{{ t('payment.redeemCode.resultHint') }}</p>
       <el-input
         :model-value="codeText"
         type="textarea"
@@ -176,6 +185,13 @@ watch(
     </template>
     <template #footer>
       <el-button :disabled="submitting" @click="close">{{ t('common.close') }}</el-button>
+      <el-button
+        v-if="result !== null"
+        type="primary"
+        data-testid="payment-redeem-code-copy-result"
+        @click="copyCode"
+        >{{ t('payment.redeemCode.copy') }}</el-button
+      >
       <el-button
         v-if="result === null"
         type="primary"

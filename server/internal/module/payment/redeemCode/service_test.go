@@ -2,7 +2,6 @@ package redeemcode
 
 import (
 	"admin/server/internal/module/payment/transaction"
-	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
 	"context"
 	"errors"
@@ -46,7 +45,7 @@ func (f *fakeRepository) Get(context.Context, int64) (Model, error) {
 	}
 	return Model{}, f.err
 }
-func (f *fakeRepository) Lookup(context.Context, []byte) (Model, error) {
+func (f *fakeRepository) Lookup(context.Context, string) (Model, error) {
 	f.calls++
 	if len(f.rows) > 0 {
 		return f.rows[0], f.err
@@ -58,7 +57,7 @@ func (f *fakeRepository) Export(context.Context, []int64) ([]Model, error) {
 	return f.rows, f.err
 }
 func (f *fakeRepository) Void(context.Context, []int64, time.Time) error { f.calls++; return f.err }
-func (f *fakeRepository) Redeem(context.Context, int64, int64, []byte, time.Time) (transaction.Model, error) {
+func (f *fakeRepository) Redeem(context.Context, int64, int64, string, time.Time) (transaction.Model, error) {
 	f.calls++
 	return f.redeem, f.err
 }
@@ -81,11 +80,7 @@ func (f *fakeLimiter) Reserve(ctx context.Context, user int64) (func(context.Con
 }
 func serviceForTest(t *testing.T, r *fakeRepository, l *fakeLimiter) *Service {
 	t.Helper()
-	k, e := secretkey.New(strings.Repeat("z", 64))
-	if e != nil {
-		t.Fatal(e)
-	}
-	return NewService(r, k, l)
+	return NewService(r, l)
 }
 func errorCode(t *testing.T, e error) int {
 	t.Helper()
@@ -150,11 +145,27 @@ func TestRedeemSuccessProjectsExactPersonalFacts(t *testing.T) {
 		t.Fatalf("%+v %v", v, e)
 	}
 }
-func TestCorruptCiphertextFailsInsteadOfEmptyMask(t *testing.T) {
-	r := &fakeRepository{rows: []Model{{ID: 1, BatchID: 1, Status: StatusUnused, AmountCents: 100, CodeCiphertext: "bad"}}}
+func TestInvalidStoredCodeFailsInsteadOfEmptyValue(t *testing.T) {
+	r := &fakeRepository{rows: []Model{{ID: 1, BatchID: 1, Status: StatusUnused, AmountCents: 100, Code: "bad"}}}
 	s := serviceForTest(t, r, &fakeLimiter{})
 	if _, e := s.List(context.Background(), ListQuery{Page: 1, PageSize: 10}); errorCode(t, e) != apperror.CodeDependencyUnavailable {
 		t.Fatal(e)
+	}
+}
+
+func TestListProjectsPlaintextCodeForAuthorizedAdminView(t *testing.T) {
+	code := "ABCDEFGHJKLMNPQRSTUV"
+	repository := &fakeRepository{rows: []Model{{
+		ID: 1, BatchID: 2, BatchNo: "RBABC", Code: code,
+		Status: StatusUnused, AmountCents: 100,
+	}}}
+	service := NewService(repository, &fakeLimiter{})
+	result, err := service.List(context.Background(), ListQuery{Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.List) != 1 || result.List[0].Code != code {
+		t.Fatalf("plaintext code = %#v", result.List)
 	}
 }
 func TestIDsRejectEmptyDuplicateAndOverLimit(t *testing.T) {

@@ -173,6 +173,8 @@ it('loads management transactions only with the list action', async () => {
   const wrapper = await page(TransactionPage)
   expect(transactionApi.getTransactions).toHaveBeenCalledOnce()
   expect(wrapper.text()).toContain('fixture-user')
+  expect(wrapper.findAll('button').some((button) => button.text() === '查询')).toBe(true)
+  expect(wrapper.findAll('button').some((button) => button.text() === '资金流水')).toBe(false)
   expect(wrapper.findAll('button').some((button) => button.text() === '查看')).toBe(false)
 })
 

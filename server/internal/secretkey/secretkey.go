@@ -7,26 +7,22 @@ import (
 )
 
 const (
-	keyLength                   = 32
-	minimumRootLength           = 64
-	rootSecretPlaceholder       = "replace_with_at_least_64_random_characters_before_running_api_server"
-	jwtSigningPurpose           = "admin:auth:jwt-signing:v1"
-	refreshHMACPurpose          = "admin:auth:refresh-token-hmac:v1"
-	storageEncryptionPurpose    = "admin:storage:cos-encryption:v1"
-	mailEncryptionPurpose       = "admin:message:mail-encryption:v1"
-	verificationCodePurpose     = "admin:auth:verification-code-hmac:v1"
-	mailRecipientPurpose        = "admin:message:mail-recipient-hmac:v1"
-	smsEncryptionPurpose        = "admin:message:sms-encryption:v1"
-	smsRecipientPurpose         = "admin:message:sms-recipient-hmac:v1"
-	paymentEncryptionPurpose    = "admin:payment:credential-encryption:v1"
-	redeemCodeEncryptionPurpose = "admin:payment:redeem-code-encryption:v1"
-	redeemCodeHMACPurpose       = "admin:payment:redeem-code-hmac:v1"
+	keyLength                = 32
+	minimumRootLength        = 64
+	rootSecretPlaceholder    = "replace_with_at_least_64_random_characters_before_running_api_server"
+	jwtSigningPurpose        = "admin:auth:jwt-signing:v1"
+	refreshHMACPurpose       = "admin:auth:refresh-token-hmac:v1"
+	storageEncryptionPurpose = "admin:storage:cos-encryption:v1"
+	mailEncryptionPurpose    = "admin:message:mail-encryption:v1"
+	verificationCodePurpose  = "admin:auth:verification-code-hmac:v1"
+	mailRecipientPurpose     = "admin:message:mail-recipient-hmac:v1"
+	smsEncryptionPurpose     = "admin:message:sms-encryption:v1"
+	smsRecipientPurpose      = "admin:message:sms-recipient-hmac:v1"
+	paymentEncryptionPurpose = "admin:payment:credential-encryption:v1"
 )
 
 type KeyRing struct {
 	paymentEncryptionKey    []byte
-	redeemCodeEncryptionKey []byte
-	redeemCodeHMACKey       []byte
 	jwtSigningKey           []byte
 	refreshTokenHMACKey     []byte
 	storageEncryptionKey    []byte
@@ -79,18 +75,8 @@ func New(rootSecret string) (*KeyRing, error) {
 	if err != nil {
 		return nil, fmt.Errorf("derive payment encryption key: %w", err)
 	}
-	redeemCodeEncryptionKey, err := hkdf.Key(sha256.New, []byte(rootSecret), nil, redeemCodeEncryptionPurpose, keyLength)
-	if err != nil {
-		return nil, fmt.Errorf("derive redeem code encryption key: %w", err)
-	}
-	redeemCodeHMACKey, err := hkdf.Key(sha256.New, []byte(rootSecret), nil, redeemCodeHMACPurpose, keyLength)
-	if err != nil {
-		return nil, fmt.Errorf("derive redeem code HMAC key: %w", err)
-	}
 	return &KeyRing{
 		paymentEncryptionKey:    paymentEncryptionKey,
-		redeemCodeEncryptionKey: redeemCodeEncryptionKey,
-		redeemCodeHMACKey:       redeemCodeHMACKey,
 		jwtSigningKey:           jwtSigningKey,
 		refreshTokenHMACKey:     refreshTokenHMACKey,
 		storageEncryptionKey:    storageEncryptionKey,
@@ -101,11 +87,6 @@ func New(rootSecret string) (*KeyRing, error) {
 		smsRecipientHMACKey:     smsRecipientHMACKey,
 	}, nil
 }
-
-func (k *KeyRing) RedeemCodeEncryptionKey() []byte {
-	return append([]byte(nil), k.redeemCodeEncryptionKey...)
-}
-func (k *KeyRing) RedeemCodeHMACKey() []byte { return append([]byte(nil), k.redeemCodeHMACKey...) }
 
 func (k *KeyRing) MailEncryptionKey() []byte { return append([]byte(nil), k.mailEncryptionKey...) }
 func (k *KeyRing) PaymentEncryptionKey() []byte {

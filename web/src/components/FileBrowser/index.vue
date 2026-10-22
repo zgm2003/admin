@@ -357,7 +357,7 @@ onBeforeUnmount(() => {
         :loading="loading"
         data-testid="file-refresh"
         @click="load"
-        >{{ t('common.refresh') }}</el-button
+         >{{ t('common.refresh') }}</el-button
       >
     </div>
     <div class="file-browser__surface" :aria-busy="loading">

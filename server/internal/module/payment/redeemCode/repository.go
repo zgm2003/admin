@@ -110,8 +110,8 @@ func (r *Repository) List(ctx context.Context, q ListQuery, now time.Time) ([]Mo
 func (r *Repository) Get(ctx context.Context, id int64) (Model, error) {
 	return r.get(ctx, "c.id = ?", id)
 }
-func (r *Repository) Lookup(ctx context.Context, hash []byte) (Model, error) {
-	return r.get(ctx, "c.code_hash = ?", hash)
+func (r *Repository) Lookup(ctx context.Context, code string) (Model, error) {
+	return r.get(ctx, "c.code = ?", code)
 }
 func (r *Repository) get(ctx context.Context, where string, value any) (Model, error) {
 	var row Model
@@ -163,17 +163,17 @@ func (r *Repository) Void(ctx context.Context, ids []int64, now time.Time) error
 
 // Lock order is redeem code -> wallet. Amount and expiry come only from its
 // immutable batch inside this transaction, never from a prior lookup/client.
-func (r *Repository) Redeem(ctx context.Context, userID, platformID int64, hash []byte, now time.Time) (transaction.Model, error) {
+func (r *Repository) Redeem(ctx context.Context, userID, platformID int64, code string, now time.Time) (transaction.Model, error) {
 	var out transaction.Model
 	if e := r.available(); e != nil {
 		return out, e
 	}
-	if userID < 1 || platformID < 1 || len(hash) != 32 {
+	if userID < 1 || platformID < 1 || len(code) != 20 {
 		return out, ErrInvalidInput
 	}
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var row Model
-		if e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("code_hash = ?", hash).First(&row).Error; e != nil {
+		if e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("code = ?", code).First(&row).Error; e != nil {
 			return e
 		}
 		var batch Batch

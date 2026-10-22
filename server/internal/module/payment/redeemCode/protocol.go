@@ -1,8 +1,6 @@
 package redeemcode
 
 import (
-	"admin/server/internal/secretkey"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -32,7 +30,7 @@ type Value struct {
 	ID        int64      `json:"id"`
 	BatchID   int64      `json:"batchId"`
 	BatchNo   string     `json:"batchNo"`
-	CodeMask  string     `json:"codeMask"`
+	Code      string     `json:"code"`
 	Status    Status     `json:"status"`
 	Amount    string     `json:"amount"`
 	ExpiresAt *time.Time `json:"expiresAt"`
@@ -48,7 +46,6 @@ type Actions struct {
 
 type ExportValue struct {
 	Value
-	Code string `json:"code"`
 }
 type Redemption struct {
 	TransactionID int64     `json:"transactionId"`
@@ -128,10 +125,14 @@ func newCode() (string, error) {
 	}
 	return string(out), nil
 }
-func hashCode(key []byte, code string) []byte {
-	h := hmac.New(sha256.New, key)
-	h.Write([]byte(code))
-	return h.Sum(nil)
+
+// Stored codes are canonical facts; malformed data must not be normalized silently.
+func storedCode(code string) (string, error) {
+	canonical, err := normalizeCode(code)
+	if err != nil || canonical != code {
+		return "", ErrInvariant
+	}
+	return code, nil
 }
 func fingerprint(in GenerateInput) []byte {
 	payload, _ := json.Marshal(struct {
@@ -156,13 +157,4 @@ func requestUUID(raw string) (string, error) {
 		return "", fmt.Errorf("requestId invalid")
 	}
 	return id.String(), nil
-}
-func maskCode(code string) string {
-	if len(code) <= 4 {
-		return "****"
-	}
-	return code[:4] + strings.Repeat("*", len(code)-8) + code[len(code)-4:]
-}
-func encryptCode(keys *secretkey.KeyRing, code string) (string, error) {
-	return secretkey.EncryptRedeemCodeValue(keys.RedeemCodeEncryptionKey(), code)
 }

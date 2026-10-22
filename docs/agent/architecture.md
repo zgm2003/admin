@@ -341,3 +341,7 @@ PostgreSQL (权限事实) -> Redis (access version/快照) -> 进程内有界快
 | 前端路由和 Access | `web/src/router`、`web/src/store`、`web/src/api/permission` |
 | 公共请求和错误 | `web/src/utils/request.ts` |
 | 页面行为 | 对应 `web/src/views/<domain>` 及镜像测试 `web/tests` |
+
+### 兑换码明文协议
+
+`payment_redeem_code.code VARCHAR(20) NOT NULL` 是兑换码唯一事实，格式 CHECK 和全局唯一 B-tree 索引支持精确查询与并发兑换；不保留 hash/ciphertext 双写或密钥依赖。列表/详情 DTO 统一输出 `code`，响应保持 no-store。生成请求的 `request_fingerprint` 仅用于幂等比较，继续保留，与旧兑换码 hash 无关。批次不可变、兑换码身份不可变/禁止物理删除和交易来源唯一约束保持；兑换事务仍按 code→wallet 加锁，限流仍由 Redis 跨实例执行，无本地兜底。旧密文仅由显式离线迁移命令校验并转换，随后删除旧列；API/Worker 不运行迁移代码。

@@ -2,7 +2,6 @@ package redeemcode
 
 import (
 	"context"
-	"crypto/hmac"
 	"errors"
 
 	"strings"
@@ -10,7 +9,6 @@ import (
 	"unicode/utf8"
 
 	"admin/server/internal/module/payment/transaction"
-	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
 	"admin/server/internal/shared/i18n"
 	"admin/server/internal/shared/money"
@@ -33,10 +31,10 @@ type repository interface {
 	CreateBatch(context.Context, Batch, []Model, time.Time) (Batch, []Model, error)
 	List(context.Context, ListQuery, time.Time) ([]Model, int64, error)
 	Get(context.Context, int64) (Model, error)
-	Lookup(context.Context, []byte) (Model, error)
+	Lookup(context.Context, string) (Model, error)
 	Export(context.Context, []int64) ([]Model, error)
 	Void(context.Context, []int64, time.Time) error
-	Redeem(context.Context, int64, int64, []byte, time.Time) (transaction.Model, error)
+	Redeem(context.Context, int64, int64, string, time.Time) (transaction.Model, error)
 }
 
 // Reserve is user-scoped (not platform-scoped), cross-instance and fail closed.
@@ -48,15 +46,14 @@ type Limiter interface {
 
 type Service struct {
 	repository repository
-	keys       *secretkey.KeyRing
 	limiter    Limiter
 }
 
-func NewService(r repository, k *secretkey.KeyRing, l Limiter) *Service {
-	return &Service{repository: r, keys: k, limiter: l}
+func NewService(r repository, l Limiter) *Service {
+	return &Service{repository: r, limiter: l}
 }
 func (s *Service) ready() error {
-	if s == nil || s.repository == nil || s.keys == nil {
+	if s == nil || s.repository == nil {
 		return apperror.DependencyUnavailable(errors.New("redeem service missing dependencies"))
 	}
 	return nil
@@ -123,11 +120,7 @@ func (s *Service) Generate(ctx context.Context, actor int64, in GenerateInput) (
 			continue
 		}
 		seen[code] = struct{}{}
-		ciphertext, e := encryptCode(s.keys, code)
-		if e != nil {
-			return GenerateResult{}, mapError(e)
-		}
-		rows = append(rows, Model{CodeHash: hashCode(s.keys.RedeemCodeHMACKey(), code), CodeCiphertext: ciphertext, Status: StatusUnused, CreatedAt: now, UpdatedAt: now})
+		rows = append(rows, Model{Code: code, Status: StatusUnused, CreatedAt: now, UpdatedAt: now})
 	}
 	batch, rows, e = s.repository.CreateBatch(ctx, batch, rows, now)
 	if e != nil {
@@ -135,24 +128,13 @@ func (s *Service) Generate(ctx context.Context, actor int64, in GenerateInput) (
 	}
 	codes := make([]string, 0, len(rows))
 	for _, r := range rows {
-		code, e := s.plaintext(r)
+		code, e := storedCode(r.Code)
 		if e != nil {
 			return GenerateResult{}, mapError(e)
 		}
 		codes = append(codes, code)
 	}
 	return GenerateResult{BatchID: batch.ID, BatchNo: batch.BatchNo, Codes: codes}, nil
-}
-func (s *Service) plaintext(r Model) (string, error) {
-	code, e := secretkey.DecryptRedeemCodeValue(s.keys.RedeemCodeEncryptionKey(), r.CodeCiphertext)
-	if e != nil {
-		return "", ErrInvariant
-	}
-	canonical, e := normalizeCode(code)
-	if e != nil || canonical != code || !hmac.Equal(hashCode(s.keys.RedeemCodeHMACKey(), code), r.CodeHash) {
-		return "", ErrInvariant
-	}
-	return code, nil
 }
 func (s *Service) project(r Model, now time.Time) (Value, error) {
 	if r.ID < 1 || r.BatchID < 1 || r.Status < StatusUnused || r.Status > StatusVoided || r.AmountCents < 1 {
@@ -161,7 +143,7 @@ func (s *Service) project(r Model, now time.Time) (Value, error) {
 	if (r.Status == StatusUsed) != (r.UsedBy != nil && r.UsedAt != nil) || (r.Status != StatusUsed && (r.UsedBy != nil || r.UsedAt != nil)) {
 		return Value{}, ErrInvariant
 	}
-	code, e := s.plaintext(r)
+	code, e := storedCode(r.Code)
 	if e != nil {
 		return Value{}, e
 	}
@@ -170,7 +152,7 @@ func (s *Service) project(r Model, now time.Time) (Value, error) {
 		return Value{}, e
 	}
 	status := projectedStatus(r, now)
-	return Value{ID: r.ID, BatchID: r.BatchID, BatchNo: r.BatchNo, CodeMask: maskCode(code), Status: status, Amount: amount, ExpiresAt: r.ExpiresAt, UsedBy: r.UsedBy, UsedAt: r.UsedAt, CreatedAt: r.CreatedAt, Actions: Actions{Void: status == StatusUnused, Export: true}}, nil
+	return Value{ID: r.ID, BatchID: r.BatchID, BatchNo: r.BatchNo, Code: code, Status: status, Amount: amount, ExpiresAt: r.ExpiresAt, UsedBy: r.UsedBy, UsedAt: r.UsedAt, CreatedAt: r.CreatedAt, Actions: Actions{Void: status == StatusUnused, Export: true}}, nil
 }
 func (s *Service) List(ctx context.Context, q ListQuery) (pagination.Result[Value], error) {
 	if ctx == nil {
@@ -228,7 +210,7 @@ func (s *Service) Lookup(ctx context.Context, raw string) (Value, error) {
 	if e != nil {
 		return Value{}, apperror.InvalidRequest(e)
 	}
-	r, e := s.repository.Lookup(ctx, hashCode(s.keys.RedeemCodeHMACKey(), code))
+	r, e := s.repository.Lookup(ctx, code)
 	if e != nil {
 		return Value{}, mapError(e)
 	}
@@ -290,11 +272,7 @@ func (s *Service) Export(ctx context.Context, ids []int64) ([]ExportValue, error
 		if e != nil {
 			return nil, mapError(e)
 		}
-		code, e := s.plaintext(r)
-		if e != nil {
-			return nil, mapError(e)
-		}
-		values = append(values, ExportValue{Value: v, Code: code})
+		values = append(values, ExportValue{Value: v})
 	}
 	return values, nil
 }
@@ -326,7 +304,7 @@ func (s *Service) Redeem(ctx context.Context, userID, platformID int64, raw stri
 		e = ErrInvalidInput
 	}
 	if e == nil {
-		row, e = s.repository.Redeem(work, userID, platformID, hashCode(s.keys.RedeemCodeHMACKey(), code), time.Now().UTC())
+		row, e = s.repository.Redeem(work, userID, platformID, code, time.Now().UTC())
 	}
 	// Still use the inbound parent context for this final I/O: the work timeout
 	// never turns a failed release/count into a silent success.
