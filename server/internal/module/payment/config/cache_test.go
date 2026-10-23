@@ -121,7 +121,7 @@ func TestSnapshotRejectsIncompleteOrInvalidFacts(t *testing.T) {
 			}
 		})
 	}
-	duplicate := strings.Replace(original, `"schemaVersion":1`, `"schemaVersion":1,"schemaVersion":1`, 1)
+	duplicate := strings.Replace(original, `"schemaVersion":2`, `"schemaVersion":2,"schemaVersion":2`, 1)
 	r.SetString(ctx, key, duplicate, snapshotTTL)
 	if _, hit, err := c.get(ctx, g, variant); hit || !errors.Is(err, errSnapshotCorrupt) {
 		t.Fatal("duplicate field accepted")

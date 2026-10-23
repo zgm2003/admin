@@ -50,11 +50,12 @@ func TestRuntimeSnapshotCodecRoundTripAndRejections(t *testing.T) {
 		name    string
 		payload string
 	}{
+		{"legacy enabled field", strings.Replace(raw, `"status":`, `"isEnabled":`, 1)},
 		{"unknown field", strings.Replace(raw, `{`, `{"extra":1,`, 1)},
-		{"duplicate field", strings.Replace(raw, `"schemaVersion":1`, `"schemaVersion":1,"schemaVersion":1`, 1)},
+		{"duplicate field", strings.Replace(raw, `"schemaVersion":2`, `"schemaVersion":2,"schemaVersion":2`, 1)},
 		{"trailing data", raw + "{}"},
 		{"not an object", `[]`},
-		{"schema version", strings.Replace(raw, `"schemaVersion":1`, `"schemaVersion":2`, 1)},
+		{"schema version", strings.Replace(raw, `"schemaVersion":2`, `"schemaVersion":3`, 1)},
 		{"empty ciphertext", strings.Replace(raw, `"secretIdCiphertext":"v1:cipher-id"`, `"secretIdCiphertext":""`, 1)},
 		{"invalid enabled flag", strings.Replace(raw, `"status":1`, `"status":9`, 1)},
 		{"empty versions", strings.Replace(raw, `"versions":[`, `"versions":[],"ignored":[`, 1)},
@@ -165,7 +166,7 @@ func TestRuntimeReadRebuildsCorruptSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := testRedisClient(t)
-	if err := client.SetString(ctx, snapshotKey, `{"schemaVersion":1,"generation":1}`, time.Minute); err != nil {
+	if err := client.SetString(ctx, snapshotKey, `{"schemaVersion":2,"generation":1}`, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	runtime, err := service.Runtime(ctx, id)

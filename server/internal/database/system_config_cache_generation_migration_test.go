@@ -126,7 +126,7 @@ func assertConfigCacheMenuShape(t *testing.T, db *gorm.DB, ctx context.Context) 
 		ComponentPath *string
 		Icon          *string
 		SortOrder     int
-		IsEnabled     int
+		Status        int
 		IsHidden      int
 	}
 	if err := db.WithContext(ctx).Raw(`SELECT id, parent_id, name, menu_type, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden FROM permission_menu WHERE platform_id=1 AND code='system:configCacheStatus:view' AND deleted_at IS NULL`).Scan(&page).Error; err != nil {
@@ -137,7 +137,7 @@ func assertConfigCacheMenuShape(t *testing.T, db *gorm.DB, ctx context.Context) 
 		page.Path == nil || *page.Path != "/system/configCacheStatus" ||
 		page.ComponentPath == nil || *page.ComponentPath != "system/configCacheStatus" ||
 		page.Icon == nil || *page.Icon != "lucide:database-zap" ||
-		page.SortOrder != 91 || page.IsEnabled != 1 || page.IsHidden != 0 {
+		page.SortOrder != 91 || page.Status != 1 || page.IsHidden != 0 {
 		t.Fatalf("unexpected page shape: %+v", page)
 	}
 
@@ -149,7 +149,7 @@ func assertConfigCacheMenuShape(t *testing.T, db *gorm.DB, ctx context.Context) 
 		Path          *string
 		ComponentPath *string
 		Icon          *string
-		IsEnabled     int
+		Status        int
 		IsHidden      int
 	}
 	if err := db.WithContext(ctx).Raw(`SELECT parent_id, name, menu_type, i18n_key, path, component_path, icon, is_enabled, is_hidden FROM permission_menu WHERE platform_id=1 AND code='system:configCacheStatus:list' AND deleted_at IS NULL`).Scan(&action).Error; err != nil {
@@ -157,7 +157,7 @@ func assertConfigCacheMenuShape(t *testing.T, db *gorm.DB, ctx context.Context) 
 	}
 	if action.ParentID != page.ID || action.Name != "查看配置缓存状态" || action.MenuType != "action" ||
 		action.I18nKey != nil || action.Path != nil || action.ComponentPath != nil || action.Icon != nil ||
-		action.IsEnabled != 1 || action.IsHidden != 1 {
+		action.Status != 1 || action.IsHidden != 1 {
 		t.Fatalf("unexpected action shape: %+v", action)
 	}
 }

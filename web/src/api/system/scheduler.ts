@@ -1,3 +1,4 @@
+import { YesNo } from '@/enums/yesNo'
 import type { PageResult } from '@/types/pagination'
 import { request } from '@/utils/request'
 import type { BackendOption, StatusOption } from '@/types/option'
@@ -12,8 +13,7 @@ export interface Schedule {
   cronExpression: string
   timezone: string
   params: Record<string, unknown>
-  status: boolean
-  status: number
+  status: YesNo
   actions: { delete: boolean }
   nextRunAt: string | null
   builtinKey: string
@@ -105,7 +105,7 @@ export async function createSchedule(input: {
   cronExpression: string
   timezone: string
   params: Record<string, unknown>
-  status: boolean
+  status: YesNo
 }): Promise<Schedule> {
   return request.post<Schedule>('/api/admin/v1/system/scheduler/schedule', input)
 }
@@ -123,7 +123,7 @@ export async function updateSchedule(
   return request.put<Schedule>(`/api/admin/v1/system/scheduler/schedule/${id}`, input)
 }
 
-export async function setScheduleStatus(id: number, status: boolean): Promise<void> {
+export async function setScheduleStatus(id: number, status: YesNo): Promise<void> {
   return request.patch<void>(`/api/admin/v1/system/scheduler/schedule/${id}/status`, { status })
 }
 

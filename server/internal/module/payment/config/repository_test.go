@@ -30,7 +30,7 @@ func TestPublishVersionRollsBackWhenCatalogWouldExceedEncodingCap(t *testing.T) 
 		rows = append(rows, CatalogItem{ID: n, Name: "a", Provider: 1, Environment: 1, AppID: app, SellerID: "20880001", CurrentVersion: 9})
 		versions = append(versions, Version{ConfigID: n, Version: 9, PrivateKeyCiphertext: "x", AppCertPEM: "a", AlipayCertPEM: "b", RootCertPEM: "c", NotifyURL: fmt.Sprintf("https://pay.example.test/api/admin/v1/payment/callback/alipay/%d/9", n), PayMethods: PayMethods{1}, CreatedAt: now, UpdatedAt: now})
 	}
-	raw, _ := json.Marshal(snapshot{SchemaVersion: 1, Generation: int64(^uint64(0) >> 1), Variant: "catalog", Catalog: rows})
+	raw, _ := json.Marshal(snapshot{SchemaVersion: snapshotSchemaVersion, Generation: int64(^uint64(0) >> 1), Variant: "catalog", Catalog: rows})
 	remaining := MaxSnapshotBytes - len(raw)
 	if remaining < 0 || remaining > 127*len(rows) {
 		t.Fatalf("boundary fixture no longer fits: base %d remaining %d", len(raw), remaining)

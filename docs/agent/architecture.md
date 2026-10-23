@@ -347,3 +347,9 @@ PostgreSQL (权限事实) -> Redis (access version/快照) -> 进程内有界快
 ### 兑换码明文协议
 
 `payment_redeem_code.code VARCHAR(20) NOT NULL` 是兑换码唯一事实，格式 CHECK 和全局唯一 B-tree 索引支持精确查询与并发兑换；不保留 hash/ciphertext 双写或密钥依赖。列表/详情 DTO 统一输出 `code`，响应保持 no-store。生成请求的 `request_fingerprint` 仅用于幂等比较，继续保留，与旧兑换码 hash 无关。批次不可变、兑换码身份不可变/禁止物理删除和交易来源唯一约束保持；兑换事务仍按 code→wallet 加锁，限流仍由 Redis 跨实例执行，无本地兜底。旧密文仅由显式离线迁移命令校验并转换，随后删除旧列；API/Worker 不运行迁移代码。
+
+### 二值维护状态契约
+
+16 张维护表统一使用 PostgreSQL `status`、Go `Status`、JSON/TypeScript `status`，保持 SMALLINT + CHECK 与 0=停用、1=启用；不保留 is_enabled/isEnabled 兼容别名。任务执行、订单等生命周期 status 保持各自枚举，不混同二值维护状态。Scheduler 计划只保留一个数值状态，不再并存 boolean 与派生数字。
+
+字段协议变化须同步缓存 payload schema；认证 user state schema=2，session state/snapshot schema 不变，保留原 generation。认证平台 policy 使用 v3 namespace/schema=3；配置业务快照升级 schema，但 config-cache state、PostgreSQL generation/outbox、menu/access version 与验证码/限流/队列 key 不变。一次性迁移必须停掉旧 API/Worker，并经固定范围维护命令备份、升级用户状态和移除过期配置快照后再恢复；运行时不接受旧 DTO 或猜测状态。

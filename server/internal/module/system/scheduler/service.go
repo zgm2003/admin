@@ -36,7 +36,7 @@ func (s *Service) GetSchedule(ctx context.Context, id int64) (Schedule, error) {
 	return row, mapSchedulerError(err)
 }
 func (s *Service) CreateSchedule(ctx context.Context, input ScheduleInput, actor int64) (Schedule, error) {
-	if actor <= 0 {
+	if actor <= 0 || (input.Status != ScheduleDisabled && input.Status != ScheduleEnabled) {
 		return Schedule{}, apperror.InvalidRequest(errors.New("scheduler actor is invalid"))
 	}
 	definition, ok := s.catalog.Lookup(input.TaskType)
@@ -65,7 +65,7 @@ func (s *Service) UpdateSchedule(ctx context.Context, id int64, input ScheduleIn
 		return Schedule{}, err
 	}
 	input.TaskType = current.TaskType
-	input.Enabled = current.Status == 1
+	input.Status = current.Status
 	if _, err = ParseCron(input.CronExpression); err != nil {
 		return Schedule{}, apperror.InvalidRequest(err)
 	}
@@ -78,11 +78,11 @@ func (s *Service) UpdateSchedule(ctx context.Context, id int64, input ScheduleIn
 	row, err := s.repository.UpdateSchedule(ctx, id, input, &actor, s.now().UTC())
 	return row, mapSchedulerError(err)
 }
-func (s *Service) SetStatus(ctx context.Context, id int64, enabled bool, actor int64) error {
-	if id <= 0 || actor <= 0 {
+func (s *Service) SetStatus(ctx context.Context, id int64, status ScheduleStatus, actor int64) error {
+	if id <= 0 || actor <= 0 || (status != ScheduleDisabled && status != ScheduleEnabled) {
 		return apperror.InvalidRequest(errors.New("scheduler status input is invalid"))
 	}
-	return mapSchedulerError(s.repository.SetScheduleEnabled(ctx, id, enabled, &actor, s.now().UTC()))
+	return mapSchedulerError(s.repository.SetScheduleStatus(ctx, id, status, &actor, s.now().UTC()))
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {

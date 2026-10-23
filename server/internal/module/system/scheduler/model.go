@@ -1,16 +1,17 @@
 package scheduler
 
 import (
+	"admin/server/internal/shared/yesno"
 	"context"
 	"encoding/json"
 	"time"
 )
 
-type ScheduleStatus int16
+type ScheduleStatus = yesno.Value
 
 const (
-	ScheduleDisabled ScheduleStatus = 1
-	ScheduleEnabled  ScheduleStatus = 2
+	ScheduleDisabled ScheduleStatus = yesno.No
+	ScheduleEnabled  ScheduleStatus = yesno.Yes
 )
 
 type JobStatus int16

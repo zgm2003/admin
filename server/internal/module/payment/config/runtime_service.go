@@ -124,7 +124,7 @@ func (s *Service) fillSnapshot(ctx, admission context.Context, generation int64,
 		}
 		return p, true, nil
 	}
-	p := snapshot{SchemaVersion: 1, Generation: generation, Variant: variant}
+	p := snapshot{SchemaVersion: snapshotSchemaVersion, Generation: generation, Variant: variant}
 	if variant == "catalog" {
 		p.Catalog, err = s.repository.CatalogFacts(work)
 	} else {

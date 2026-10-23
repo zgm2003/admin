@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	policySchemaVersion = 2
+	policySchemaVersion = 3
 	policyLoadLockTTL   = 5 * time.Second
 )
 
@@ -36,11 +36,11 @@ func NewPolicyStore(redis *projectredis.Client) *PolicyStore {
 }
 
 func PolicyKey(code string) string {
-	return "auth:policy:v2:" + code
+	return "auth:policy:v3:" + code
 }
 
 func (s *PolicyStore) loadLockKey(code string) string {
-	return "auth:policy:load-lock:v2:" + code
+	return "auth:policy:load-lock:v3:" + code
 }
 
 // policyLoadLock is a tokenized, 5-second distributed lock used to ensure only

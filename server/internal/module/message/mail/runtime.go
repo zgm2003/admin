@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	mailCacheSchemaVersion = 2
+	mailCacheSchemaVersion = 3
 	mailSnapshotTTL        = 10 * time.Minute
 	mailReadBudget         = 500 * time.Millisecond
 	mailWriteBudget        = 500 * time.Millisecond
@@ -55,7 +55,7 @@ type runtimeConfig struct {
 	FromName            string      `json:"fromName"`
 	ReplyTo             *string     `json:"replyTo"`
 	TTLMinutes          int16       `json:"ttlMinutes"`
-	Status           yesno.Value `json:"status"`
+	Status              yesno.Value `json:"status"`
 	CreatedAt           time.Time   `json:"createdAt"`
 	UpdatedAt           time.Time   `json:"updatedAt"`
 }

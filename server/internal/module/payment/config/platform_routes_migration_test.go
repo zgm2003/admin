@@ -63,7 +63,7 @@ func TestPlatformCallbackMigrationPreservesVersionsAndReplays(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := validateSnapshot(snapshot{SchemaVersion: 1, Generation: beforeGen + 1, Variant: credentialVariant(100, 1), Credential: &credential}); err != nil {
+	if err := validateSnapshot(snapshot{SchemaVersion: snapshotSchemaVersion, Generation: beforeGen + 1, Variant: credentialVariant(100, 1), Credential: &credential}); err != nil {
 		t.Fatalf("migrated credential cannot refill runtime cache: %v", err)
 	}
 	digest, generation, events := platformMigrationFacts(t, db, ctx)

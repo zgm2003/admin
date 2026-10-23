@@ -12,6 +12,7 @@ import (
 
 const (
 	SchemaVersion     = 1
+	UserSchemaVersion = 2
 	StateReady        = "ready"
 	StateInvalidating = "invalidating"
 )
@@ -27,7 +28,7 @@ type UserState struct {
 	State         string  `json:"state"`
 	UserID        int64   `json:"userId"`
 	Generation    string  `json:"generation"`
-	Status     bool    `json:"status"`
+	Status        bool    `json:"status"`
 	Deleted       bool    `json:"deleted"`
 	MutationToken *string `json:"mutationToken"`
 }
@@ -44,7 +45,7 @@ type SessionsState struct {
 type UserFact struct {
 	UserID     int64
 	Generation string
-	Status  bool
+	Status     bool
 	Deleted    bool
 }
 
@@ -101,7 +102,7 @@ func validateSessionsFact(fact SessionsFact) error {
 }
 
 func validateUserState(expectedUserID int64, state UserState) error {
-	if state.SchemaVersion != SchemaVersion || state.UserID != expectedUserID {
+	if state.SchemaVersion != UserSchemaVersion || state.UserID != expectedUserID {
 		return fmt.Errorf("authentication user state identity is invalid")
 	}
 	if err := validateUserFact(state.Fact()); err != nil {

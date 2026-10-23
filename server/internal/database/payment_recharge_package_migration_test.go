@@ -73,7 +73,7 @@ func TestPaymentRechargePackageCodeMigrationIsIdempotentAndPreservesRows(t *test
 		t.Fatalf("preserved row=%q err=%v", name, err)
 	}
 	service := rechargepackage.NewService(rechargepackage.NewRepository(db))
-	id, err := service.Create(ctx, rechargepackage.CreateInput{Name: "New package", AmountCents: 1001, IsEnabled: yesno.No})
+	id, err := service.Create(ctx, rechargepackage.CreateInput{Name: "New package", AmountCents: 1001, Status: yesno.No})
 	if err != nil || id <= 1 {
 		t.Fatalf("create after migration: id=%d err=%v", id, err)
 	}
@@ -84,7 +84,7 @@ func TestPaymentRechargePackageCodeMigrationIsIdempotentAndPreservesRows(t *test
 		t.Fatalf("enable after migration: %v", err)
 	}
 	var saved rechargepackage.Model
-	if err := db.WithContext(ctx).First(&saved, id).Error; err != nil || saved.AmountCents != 1234 || saved.IsEnabled != yesno.Yes {
+	if err := db.WithContext(ctx).First(&saved, id).Error; err != nil || saved.AmountCents != 1234 || saved.Status != yesno.Yes {
 		t.Fatalf("saved package: %#v err=%v", saved, err)
 	}
 }

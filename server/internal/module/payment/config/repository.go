@@ -239,7 +239,7 @@ func checkCatalogSize(ctx context.Context, db *gorm.DB) error {
 		return err
 	}
 	// Same encoder and envelope as Redis, with worst-case generation digit count.
-	raw, err := json.Marshal(snapshot{SchemaVersion: 1, Generation: int64(^uint64(0) >> 1), Variant: "catalog", Catalog: rows})
+	raw, err := json.Marshal(snapshot{SchemaVersion: snapshotSchemaVersion, Generation: int64(^uint64(0) >> 1), Variant: "catalog", Catalog: rows})
 	if err != nil {
 		return err
 	}

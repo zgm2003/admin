@@ -47,18 +47,12 @@ func (r *Repository) CreateSchedule(ctx context.Context, input ScheduleInput, ac
 	if err != nil {
 		return Schedule{}, err
 	}
-	status := ScheduleDisabled
-	if input.Enabled {
-		status = ScheduleEnabled
-	}
 	var row Schedule
 	query := `INSERT INTO system_scheduler_schedule(name,description,task_type,cron_expression,timezone,params,status,next_run_at,created_by,updated_by,created_at,updated_at)
 	VALUES(?,?,?,?,?,?::jsonb,?, ?,?,?,?,?) RETURNING *`
-	if err := r.db.WithContext(ctx).Raw(query, input.Name, input.Description, input.TaskType, input.CronExpression, input.Timezone, string(input.Params), boolToInt(input.Enabled), nullableNext(status, next), actor, actor, now, now).Scan(&row).Error; err != nil {
+	if err := r.db.WithContext(ctx).Raw(query, input.Name, input.Description, input.TaskType, input.CronExpression, input.Timezone, string(input.Params), input.Status, nullableNext(input.Status, next), actor, actor, now, now).Scan(&row).Error; err != nil {
 		return Schedule{}, mapRepositoryError(err)
 	}
-	row.Status = status
-	row.Status = int16(boolToInt(input.Enabled))
 	return row, nil
 }
 
@@ -79,7 +73,7 @@ func (r *Repository) UpdateSchedule(ctx context.Context, id int64, input Schedul
 	var row Schedule
 	result := r.db.WithContext(ctx).Model(&Schedule{}).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]any{
 		"name": input.Name, "description": input.Description, "cron_expression": input.CronExpression, "timezone": input.Timezone,
-		"params": string(input.Params), "status": boolToInt(input.Enabled), "next_run_at": nullableNextBool(input.Enabled, next), "updated_by": actor, "updated_at": now,
+		"params": string(input.Params), "status": input.Status, "next_run_at": nullableNext(input.Status, next), "updated_by": actor, "updated_at": now,
 	})
 	if result.Error != nil {
 		return Schedule{}, mapRepositoryError(result.Error)
@@ -90,12 +84,11 @@ func (r *Repository) UpdateSchedule(ctx context.Context, id int64, input Schedul
 	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&row).Error; err != nil {
 		return Schedule{}, err
 	}
-	row.normalize()
 	return row, nil
 }
 
-func (r *Repository) SetScheduleEnabled(ctx context.Context, id int64, enabled bool, actor *int64, now time.Time) error {
-	if id <= 0 {
+func (r *Repository) SetScheduleStatus(ctx context.Context, id int64, status ScheduleStatus, actor *int64, now time.Time) error {
+	if id <= 0 || (status != ScheduleDisabled && status != ScheduleEnabled) {
 		return ErrInvalidSchedule
 	}
 	if now.IsZero() {
@@ -110,14 +103,14 @@ func (r *Repository) SetScheduleEnabled(ctx context.Context, id int64, enabled b
 			return err
 		}
 		var next *time.Time
-		if enabled {
+		if status == ScheduleEnabled {
 			value, err := nextRun(row.CronExpression, row.Timezone, now)
 			if err != nil {
 				return err
 			}
 			next = &value
 		}
-		result := tx.WithContext(ctx).Model(&Schedule{}).Where("id=? AND deleted_at IS NULL", id).Updates(map[string]any{"status": boolToInt(enabled), "next_run_at": next, "updated_by": actor, "updated_at": now})
+		result := tx.WithContext(ctx).Model(&Schedule{}).Where("id=? AND deleted_at IS NULL", id).Updates(map[string]any{"status": status, "next_run_at": next, "updated_by": actor, "updated_at": now})
 		if result.Error != nil {
 			return result.Error
 		}
@@ -166,7 +159,6 @@ func (r *Repository) DeleteSchedule(ctx context.Context, id int64, now time.Time
 func (r *Repository) GetSchedule(ctx context.Context, id int64) (Schedule, error) {
 	var row Schedule
 	err := r.db.WithContext(ctx).Where("id=? AND deleted_at IS NULL", id).First(&row).Error
-	row.normalize()
 	return row, err
 }
 
@@ -174,7 +166,7 @@ func (r *Repository) ListSchedules(ctx context.Context, query ScheduleQuery) ([]
 	limit := normalizeLimit(query.Limit)
 	db := r.db.WithContext(ctx).Where("deleted_at IS NULL")
 	if query.Status != nil {
-		db = db.Where("status=?", boolToInt(*query.Status == ScheduleEnabled))
+		db = db.Where("status=?", *query.Status)
 	}
 	if query.TaskType != "" {
 		db = db.Where("task_type=?", query.TaskType)
@@ -184,9 +176,6 @@ func (r *Repository) ListSchedules(ctx context.Context, query ScheduleQuery) ([]
 	}
 	var rows []Schedule
 	err := db.Order("created_at DESC, id DESC").Limit(limit).Find(&rows).Error
-	for index := range rows {
-		rows[index].normalize()
-	}
 	return rows, err
 }
 
@@ -228,7 +217,6 @@ func (r *Repository) CreateManualJob(ctx context.Context, scheduleID, actor int6
 		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id=? AND deleted_at IS NULL", scheduleID).Take(&schedule).Error; err != nil {
 			return err
 		}
-		schedule.normalize()
 		built, err := builder(schedule, now.UTC())
 		if err != nil {
 			return err
@@ -304,7 +292,6 @@ func (r *Repository) CreateDueJobs(ctx context.Context, now time.Time, limit int
 		}
 		for index := range rows {
 			row := rows[index]
-			row.normalize()
 			scheduledAt := *row.NextRunAt
 			next, err := nextFutureRun(row.CronExpression, row.Timezone, now)
 			if err != nil {
@@ -637,6 +624,9 @@ func (r *Repository) CleanupTerminalHistory(ctx context.Context, cutoff time.Tim
 }
 
 func validateScheduleInput(input ScheduleInput) error {
+	if input.Status != ScheduleDisabled && input.Status != ScheduleEnabled {
+		return ErrInvalidSchedule
+	}
 	if strings.TrimSpace(input.Name) == "" || strings.TrimSpace(input.TaskType) == "" || strings.TrimSpace(input.Timezone) == "" || strings.TrimSpace(input.CronExpression) == "" {
 		return ErrInvalidSchedule
 	}
@@ -680,18 +670,6 @@ func nullableNext(status ScheduleStatus, value time.Time) *time.Time {
 	}
 	return &value
 }
-func nullableNextBool(enabled bool, value time.Time) *time.Time {
-	if !enabled {
-		return nil
-	}
-	return &value
-}
-func boolToInt(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
-}
 func nullableString(value string) any {
 	if strings.TrimSpace(value) == "" {
 		return nil
@@ -726,17 +704,6 @@ func mapRepositoryError(err error) error {
 		return fmt.Errorf("%w: %w", ErrConflict, err)
 	}
 	return err
-}
-
-func (s *Schedule) normalize() {
-	if s == nil {
-		return
-	}
-	if s.Status == 1 {
-		s.Status = ScheduleEnabled
-	} else {
-		s.Status = ScheduleDisabled
-	}
 }
 
 var ErrConflict = errors.New("scheduler conflict")

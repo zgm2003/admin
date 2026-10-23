@@ -32,7 +32,7 @@ func TestCacheRecordPayloadRoundTripsWithStrictCoordinates(t *testing.T) {
 }
 
 func TestCacheRecordPayloadRejectsUnknownDuplicateAndInvalidFields(t *testing.T) {
-	valid := `{"schemaVersion":1,"generation":12,"id":7,"key":"auth.captcha.ttl_minutes","value":"2","valueType":2,"description":"","status":1,"isBuiltin":1,"createdAt":"2026-09-16T00:00:00Z","updatedAt":"2026-09-16T00:00:00Z"}`
+	valid := `{"schemaVersion":2,"generation":12,"id":7,"key":"auth.captcha.ttl_minutes","value":"2","valueType":2,"description":"","status":1,"isBuiltin":1,"createdAt":"2026-09-16T00:00:00Z","updatedAt":"2026-09-16T00:00:00Z"}`
 	if _, err := decodeRecordPayload(valid); err != nil {
 		t.Fatalf("valid payload rejected: %v", err)
 	}
@@ -41,10 +41,11 @@ func TestCacheRecordPayloadRejectsUnknownDuplicateAndInvalidFields(t *testing.T)
 		name    string
 		payload string
 	}{
+		{"legacy enabled field", strings.Replace(valid, `"status":`, `"isEnabled":`, 1)},
 		{"unknown field", strings.Replace(valid, `"id":7`, `"id":7,"extra":true`, 1)},
 		{"duplicate field", strings.Replace(valid, `"value":"2"`, `"value":"2","value":"3"`, 1)},
 		{"trailing content", valid + ` {}`},
-		{"wrong schema version", strings.Replace(valid, `"schemaVersion":1`, `"schemaVersion":2`, 1)},
+		{"wrong schema version", strings.Replace(valid, `"schemaVersion":2`, `"schemaVersion":3`, 1)},
 		{"zero generation", strings.Replace(valid, `"generation":12`, `"generation":0`, 1)},
 		{"empty key", strings.Replace(valid, `"key":"auth.captcha.ttl_minutes"`, `"key":""`, 1)},
 		{"invalid value type", strings.Replace(valid, `"valueType":2`, `"valueType":9`, 1)},
@@ -62,7 +63,7 @@ func TestCacheRecordPayloadRejectsUnknownDuplicateAndInvalidFields(t *testing.T)
 }
 
 func TestCacheBrandPayloadRejectsUnknownAndInvalidFields(t *testing.T) {
-	valid := `{"schemaVersion":1,"generation":12,"titleZhCN":"智澜","titleEnUS":"ZHILAN","defaultAvatar":""}`
+	valid := `{"schemaVersion":2,"generation":12,"titleZhCN":"智澜","titleEnUS":"ZHILAN","defaultAvatar":""}`
 	if _, err := decodeBrandPayload(valid); err != nil {
 		t.Fatalf("valid brand payload rejected: %v", err)
 	}

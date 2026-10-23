@@ -30,7 +30,7 @@ type CatalogItem struct {
 	SellerID       string              `json:"sellerId"`
 	CurrentVersion int64               `json:"currentVersion"`
 	SortOrder      int32               `json:"sortOrder"`
-	Status      yesno.Value         `json:"status"`
+	Status         yesno.Value         `json:"status"`
 }
 type BoundCredential struct {
 	ConfigID    int64               `json:"configId"`
@@ -54,6 +54,9 @@ type CredentialVersion struct {
 	CreatedAt            time.Time  `json:"createdAt"`
 	UpdatedAt            time.Time  `json:"updatedAt"`
 }
+
+const snapshotSchemaVersion = 2
+
 type snapshot struct {
 	SchemaVersion int              `json:"schemaVersion"`
 	Generation    int64            `json:"generation"`
@@ -80,7 +83,7 @@ func (c *Cache) get(ctx context.Context, generation int64, variant string) (snap
 	var p snapshot
 	decoder := json.NewDecoder(bytes.NewBufferString(raw))
 	decoder.DisallowUnknownFields()
-	if len(raw) > MaxSnapshotBytes || decoder.Decode(&p) != nil || decoder.Decode(&struct{}{}) != io.EOF || p.SchemaVersion != 1 || p.Generation != generation || p.Variant != variant {
+	if len(raw) > MaxSnapshotBytes || decoder.Decode(&p) != nil || decoder.Decode(&struct{}{}) != io.EOF || p.SchemaVersion != snapshotSchemaVersion || p.Generation != generation || p.Variant != variant {
 		return snapshot{}, false, errSnapshotCorrupt
 	}
 	if err := validateSnapshot(p); err != nil {

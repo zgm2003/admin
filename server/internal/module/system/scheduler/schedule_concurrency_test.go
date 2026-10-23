@@ -52,7 +52,7 @@ INSERT INTO system_scheduler_schedule VALUES (1,NULL,'0 * * * *','UTC',0,NULL,NU
 				if operation == "delete" {
 					done <- repo.DeleteSchedule(ctx, 1, now)
 				} else {
-					done <- repo.SetScheduleEnabled(ctx, 1, true, nil, now)
+					done <- repo.SetScheduleStatus(ctx, 1, ScheduleEnabled, nil, now)
 				}
 			}()
 			waitScheduleWriterBlocked(t, ctx, db, pid)

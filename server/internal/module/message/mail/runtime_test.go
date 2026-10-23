@@ -36,11 +36,12 @@ func TestRuntimeSnapshotCodecPreservesCiphertextAndRejectsMalformedPayloads(t *t
 	}
 
 	for name, payload := range map[string]string{
-		"unknown field":   strings.Replace(raw, `{`, `{"extra":true,`, 1),
-		"duplicate field": strings.Replace(raw, `"generation":3`, `"generation":3,"generation":4`, 1),
-		"trailing value":  raw + `{}`,
-		"wrong schema":    strings.Replace(raw, `"schemaVersion":2`, `"schemaVersion":1`, 1),
-		"zero generation": strings.Replace(raw, `"generation":3`, `"generation":0`, 1),
+		"legacy enabled field": strings.Replace(raw, `"status":`, `"isEnabled":`, 1),
+		"unknown field":        strings.Replace(raw, `{`, `{"extra":true,`, 1),
+		"duplicate field":      strings.Replace(raw, `"generation":3`, `"generation":3,"generation":4`, 1),
+		"trailing value":       raw + `{}`,
+		"wrong schema":         strings.Replace(raw, `"schemaVersion":3`, `"schemaVersion":1`, 1),
+		"zero generation":      strings.Replace(raw, `"generation":3`, `"generation":0`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := decodeRuntimeSnapshot(payload); !errors.Is(err, ErrRuntimeSnapshotCorrupt) {

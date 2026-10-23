@@ -94,7 +94,7 @@ describe('thin API HTTP contract', () => {
       cronExpression: 'sample',
       timezone: 'sample',
       params: {},
-      status: false,
+      status: 0,
     }
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.post).mockResolvedValue(dataFromServer)
@@ -113,7 +113,7 @@ describe('thin API HTTP contract', () => {
       cronExpression: 'sample',
       timezone: 'sample',
       params: {},
-      status: false,
+      status: 0,
     }
     const error = new Error('request failed')
     vi.mocked(request.post).mockRejectedValue(error)
@@ -152,7 +152,7 @@ describe('thin API HTTP contract', () => {
   })
   it('setScheduleStatus preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.setScheduleStatus>[0] = 1
-    const status: Parameters<typeof api.setScheduleStatus>[1] = false
+    const status: Parameters<typeof api.setScheduleStatus>[1] = 0
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.patch).mockResolvedValue(dataFromServer)
     const result = await api.setScheduleStatus(id, status)
@@ -164,7 +164,7 @@ describe('thin API HTTP contract', () => {
   })
   it('setScheduleStatus propagates request failures unchanged', async () => {
     const id: Parameters<typeof api.setScheduleStatus>[0] = 1
-    const status: Parameters<typeof api.setScheduleStatus>[1] = false
+    const status: Parameters<typeof api.setScheduleStatus>[1] = 0
     const error = new Error('request failed')
     vi.mocked(request.patch).mockRejectedValue(error)
     await expect(api.setScheduleStatus(id, status)).rejects.toBe(error)

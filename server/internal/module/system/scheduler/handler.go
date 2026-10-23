@@ -80,9 +80,9 @@ func (h *Handler) CreateSchedule(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	input, err := req.input()
+	input, err := req.input(true)
 	if err != nil {
-		response.Fail(c, err)
+		response.Fail(c, apperror.InvalidRequest(err))
 		return
 	}
 	row, err := h.service.CreateSchedule(c.Request.Context(), input, actor)
@@ -107,9 +107,9 @@ func (h *Handler) UpdateSchedule(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	input, err := req.input()
+	input, err := req.input(false)
 	if err != nil {
-		response.Fail(c, err)
+		response.Fail(c, apperror.InvalidRequest(err))
 		return
 	}
 	row, err := h.service.UpdateSchedule(c.Request.Context(), id, input, actor)
@@ -134,7 +134,11 @@ func (h *Handler) Status(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	if err = h.service.SetStatus(c.Request.Context(), id, req.Status, actor); err != nil {
+	if req.Status == nil {
+		response.Fail(c, apperror.InvalidRequest(ErrInvalidSchedule))
+		return
+	}
+	if err = h.service.SetStatus(c.Request.Context(), id, *req.Status, actor); err != nil {
 		response.Fail(c, err)
 		return
 	}

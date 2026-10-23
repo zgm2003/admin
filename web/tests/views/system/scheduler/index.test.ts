@@ -86,8 +86,7 @@ describe('backend-owned scheduler presentation and actions', () => {
         cronExpression: '*/5 * * * *',
         timezone: 'UTC',
         params: {},
-        status: true,
-        status: 2,
+        status: 1,
         actions: { delete: true },
         nextRunAt: null,
         builtinKey: '',
@@ -220,7 +219,7 @@ describe('backend-owned scheduler presentation and actions', () => {
     })
   })
 
-  it.each([true, false])(
+  it.each([1, 0] as const)(
     'confirms status changes from enabled=%s before sending a request',
     async (status) => {
       const schedule: api.Schedule = {
@@ -232,7 +231,6 @@ describe('backend-owned scheduler presentation and actions', () => {
         timezone: 'UTC',
         params: {},
         status,
-        status: 1,
         actions: { delete: true },
         nextRunAt: null,
         builtinKey: '',
@@ -253,7 +251,7 @@ describe('backend-owned scheduler presentation and actions', () => {
       expect(api.setScheduleStatus).not.toHaveBeenCalled()
       await button?.trigger('click')
       await flushPromises()
-      expect(api.setScheduleStatus).toHaveBeenCalledWith(42, !status)
+      expect(api.setScheduleStatus).toHaveBeenCalledWith(42, status === 1 ? 0 : 1)
     },
   )
 

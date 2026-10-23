@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict hYLWD3cRASsVaXNjdmvjWvFblbdxDqmea42TtUWfMlvPmaZdfp7E17hGr5bg0ie
+\restrict 70MCGG2ajXYXJGWBDqHpoWmRckyH9ksrk0ZqU4UtqAsBGMWbMOlMgJtoogp54AJ
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -275,13 +275,13 @@ CREATE TABLE public.message_mail_config (
     from_name character varying(128) NOT NULL,
     reply_to character varying(254),
     ttl_minutes smallint NOT NULL,
-    is_enabled smallint DEFAULT 0 NOT NULL,
+    status smallint DEFAULT 0 NOT NULL,
     last_test_at timestamp with time zone,
     last_test_error character varying(512) DEFAULT ''::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
-    CONSTRAINT message_mail_config_is_enabled_check CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT message_mail_config_status_check CHECK ((status = ANY (ARRAY[0, 1]))),
     CONSTRAINT message_mail_config_ttl_minutes_check CHECK (((ttl_minutes >= 1) AND (ttl_minutes <= 60)))
 );
 
@@ -415,13 +415,13 @@ CREATE TABLE public.message_mail_recipient_rule (
     action smallint NOT NULL,
     name character varying(128) NOT NULL,
     remark character varying(512) DEFAULT ''::character varying NOT NULL,
-    is_enabled smallint DEFAULT 1 NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
     CONSTRAINT message_mail_recipient_rule_action_check CHECK ((action = ANY (ARRAY[0, 1]))),
-    CONSTRAINT message_mail_recipient_rule_is_enabled_check CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
-    CONSTRAINT message_mail_recipient_rule_scope_check CHECK ((scope = ANY (ARRAY[0, 1])))
+    CONSTRAINT message_mail_recipient_rule_scope_check CHECK ((scope = ANY (ARRAY[0, 1]))),
+    CONSTRAINT message_mail_recipient_rule_status_check CHECK ((status = ANY (ARRAY[0, 1])))
 );
 
 
@@ -455,15 +455,15 @@ CREATE TABLE public.message_mail_template (
     subject character varying(255) NOT NULL,
     tencent_template_id integer,
     example_variables jsonb NOT NULL,
-    is_enabled smallint DEFAULT 1 NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
     content text NOT NULL,
     variable_keys jsonb NOT NULL,
     CONSTRAINT ck_message_mail_template_variable_keys CHECK (((jsonb_typeof(variable_keys) = 'array'::text) AND (jsonb_array_length(variable_keys) >= 2))),
-    CONSTRAINT message_mail_template_is_enabled_check CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
-    CONSTRAINT message_mail_template_scene_check CHECK (((scene)::text = ANY ((ARRAY['login'::character varying, 'forget'::character varying, 'bind_email'::character varying, 'change_password'::character varying])::text[])))
+    CONSTRAINT message_mail_template_scene_check CHECK (((scene)::text = ANY ((ARRAY['login'::character varying, 'forget'::character varying, 'bind_email'::character varying, 'change_password'::character varying])::text[]))),
+    CONSTRAINT message_mail_template_status_check CHECK ((status = ANY (ARRAY[0, 1])))
 );
 
 
@@ -709,13 +709,13 @@ CREATE TABLE public.message_sms_config (
     region character varying(64) NOT NULL,
     endpoint character varying(255),
     ttl_minutes smallint NOT NULL,
-    is_enabled smallint DEFAULT 0 NOT NULL,
+    status smallint DEFAULT 0 NOT NULL,
     last_test_at timestamp with time zone,
     last_test_error character varying(512) DEFAULT ''::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
-    CONSTRAINT ck_message_sms_config_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_message_sms_config_status CHECK ((status = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_message_sms_config_ttl_minutes CHECK (((ttl_minutes >= 1) AND (ttl_minutes <= 60)))
 );
 
@@ -851,12 +851,12 @@ CREATE TABLE public.message_sms_recipient_rule (
     action smallint NOT NULL,
     name character varying(128) NOT NULL,
     remark character varying(512) DEFAULT ''::character varying NOT NULL,
-    is_enabled smallint DEFAULT 1 NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
     pattern character varying(32) NOT NULL,
-    CONSTRAINT ck_message_sms_recipient_rule_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ck_message_sms_recipient_rule_status CHECK ((status = ANY (ARRAY[0, 1]))),
     CONSTRAINT message_sms_recipient_rule_action_check CHECK ((action = ANY (ARRAY[0, 1]))),
     CONSTRAINT message_sms_recipient_rule_pattern_check CHECK ((((scope = 0) AND ((pattern)::text ~ '^[+]861[3-9][0-9]{9}$'::text)) OR ((scope = 1) AND ((pattern)::text ~ '^[+]86[0-9]{3,10}$'::text)))),
     CONSTRAINT message_sms_recipient_rule_scope_check CHECK ((scope = ANY (ARRAY[0, 1])))
@@ -893,12 +893,12 @@ CREATE TABLE public.message_sms_template (
     tencent_template_id character varying(64) DEFAULT ''::character varying NOT NULL,
     variable_keys jsonb CONSTRAINT message_sms_template_parameter_keys_not_null NOT NULL,
     example_variables jsonb NOT NULL,
-    is_enabled smallint DEFAULT 0 NOT NULL,
+    status smallint DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     content text NOT NULL,
-    CONSTRAINT ck_message_sms_template_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_message_sms_template_scene CHECK (((scene)::text = ANY ((ARRAY['login'::character varying, 'forget'::character varying, 'bind_phone'::character varying, 'change_password'::character varying])::text[]))),
+    CONSTRAINT ck_message_sms_template_status CHECK ((status = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_message_sms_template_variable_keys CHECK (((jsonb_typeof(variable_keys) = 'array'::text) AND (jsonb_array_length(variable_keys) >= 2)))
 );
 
@@ -971,17 +971,17 @@ CREATE TABLE public.payment_config (
     seller_id character varying(64) NOT NULL,
     current_version bigint NOT NULL,
     sort_order integer DEFAULT 0 NOT NULL,
-    is_enabled smallint DEFAULT 0 NOT NULL,
+    status smallint DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
     CONSTRAINT ck_payment_config_app_id CHECK (((app_id)::text ~ '^[0-9]{1,64}$'::text)),
     CONSTRAINT ck_payment_config_current_version CHECK ((current_version > 0)),
     CONSTRAINT ck_payment_config_environment CHECK ((environment = ANY (ARRAY[1, 2]))),
-    CONSTRAINT ck_payment_config_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_payment_config_name CHECK ((btrim((name)::text) <> ''::text)),
     CONSTRAINT ck_payment_config_provider CHECK ((provider = ANY (ARRAY[1, 2]))),
-    CONSTRAINT ck_payment_config_seller_id CHECK (((seller_id)::text ~ '^[0-9]{1,64}$'::text))
+    CONSTRAINT ck_payment_config_seller_id CHECK (((seller_id)::text ~ '^[0-9]{1,64}$'::text)),
+    CONSTRAINT ck_payment_config_status CHECK ((status = ANY (ARRAY[0, 1])))
 );
 
 
@@ -1096,14 +1096,14 @@ CREATE TABLE public.payment_recharge_package (
     amount_cents bigint NOT NULL,
     badge character varying(32),
     sort_order integer DEFAULT 0 NOT NULL,
-    is_enabled smallint DEFAULT 0 NOT NULL,
+    status smallint DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
     CONSTRAINT ck_payment_recharge_package_amount CHECK (((amount_cents >= 1) AND (amount_cents <= '9223372036854'::bigint))),
-    CONSTRAINT ck_payment_recharge_package_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_payment_recharge_package_name CHECK ((btrim((name)::text) <> ''::text)),
-    CONSTRAINT ck_payment_recharge_package_sort CHECK ((sort_order >= 0))
+    CONSTRAINT ck_payment_recharge_package_sort CHECK ((sort_order >= 0)),
+    CONSTRAINT ck_payment_recharge_package_status CHECK ((status = ANY (ARRAY[0, 1])))
 );
 
 
@@ -1269,7 +1269,7 @@ CREATE TABLE public.permission_auth_platform (
     bind_ip smallint NOT NULL,
     max_sessions smallint NOT NULL,
     allow_register smallint NOT NULL,
-    is_enabled smallint NOT NULL,
+    status smallint NOT NULL,
     is_builtin smallint NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -1283,7 +1283,6 @@ CREATE TABLE public.permission_auth_platform (
     CONSTRAINT ck_permission_auth_platform_bind_ip CHECK ((bind_ip = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_permission_auth_platform_code CHECK (((code)::text ~ '^[a-z][a-z0-9_]{1,48}$'::text)),
     CONSTRAINT ck_permission_auth_platform_is_builtin CHECK ((is_builtin = ANY (ARRAY[0, 1]))),
-    CONSTRAINT ck_permission_auth_platform_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_permission_auth_platform_login_types CHECK (((jsonb_typeof(login_types) = 'array'::text) AND ((jsonb_array_length(login_types) >= 1) AND (jsonb_array_length(login_types) <= 3)) AND (login_types <@ '["email", "phone", "password"]'::jsonb) AND (jsonb_array_length(login_types) = ((
 CASE
     WHEN (login_types @> '["email"]'::jsonb) THEN 1
@@ -1301,7 +1300,8 @@ END)))),
     CONSTRAINT ck_permission_auth_platform_menu_version CHECK ((menu_version >= 1)),
     CONSTRAINT ck_permission_auth_platform_policy_version CHECK ((policy_version >= 1)),
     CONSTRAINT ck_permission_auth_platform_refresh_ttl_seconds CHECK (((refresh_ttl_seconds >= 60) AND (refresh_ttl_seconds <= 31536000))),
-    CONSTRAINT ck_permission_auth_platform_session_cache_ttl_seconds CHECK (((session_cache_ttl_seconds >= 60) AND (session_cache_ttl_seconds <= 86400)))
+    CONSTRAINT ck_permission_auth_platform_session_cache_ttl_seconds CHECK (((session_cache_ttl_seconds >= 60) AND (session_cache_ttl_seconds <= 86400))),
+    CONSTRAINT ck_permission_auth_platform_status CHECK ((status = ANY (ARRAY[0, 1])))
 );
 
 
@@ -1337,7 +1337,7 @@ CREATE TABLE public.permission_menu (
     path character varying(255),
     icon character varying(128),
     sort_order integer DEFAULT 0 CONSTRAINT rbac_menu_sort_order_not_null NOT NULL,
-    is_enabled smallint DEFAULT 1 CONSTRAINT rbac_menu_is_enabled_not_null NOT NULL,
+    status smallint DEFAULT 1 CONSTRAINT rbac_menu_status_not_null NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_menu_created_at_not_null NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_menu_updated_at_not_null NOT NULL,
     deleted_at timestamp with time zone,
@@ -1346,10 +1346,10 @@ CREATE TABLE public.permission_menu (
     name character varying(128) CONSTRAINT rbac_menu_name_not_null NOT NULL,
     platform_id bigint CONSTRAINT rbac_menu_platform_id_not_null NOT NULL,
     remark character varying(512),
-    CONSTRAINT ck_rbac_menu_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_rbac_menu_is_hidden CHECK ((is_hidden = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_rbac_menu_shape CHECK (((btrim((name)::text) <> ''::text) AND ((((menu_type)::text = 'directory'::text) AND (i18n_key IS NOT NULL) AND (path IS NULL) AND (component_path IS NULL)) OR (((menu_type)::text = 'page'::text) AND (i18n_key IS NOT NULL) AND (path IS NOT NULL) AND (btrim((path)::text) <> ''::text) AND (component_path IS NOT NULL) AND (btrim((component_path)::text) <> ''::text)) OR (((menu_type)::text = 'action'::text) AND (i18n_key IS NULL) AND (path IS NULL) AND (component_path IS NULL) AND (icon IS NULL) AND (is_hidden = 1))))),
     CONSTRAINT ck_rbac_menu_sort_order CHECK ((sort_order >= 0)),
+    CONSTRAINT ck_rbac_menu_status CHECK ((status = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_rbac_menu_type CHECK (((menu_type)::text = ANY ((ARRAY['directory'::character varying, 'page'::character varying, 'action'::character varying])::text[])))
 );
 
@@ -1363,12 +1363,12 @@ CREATE TABLE public.permission_role (
     code character varying(64) CONSTRAINT rbac_role_code_not_null NOT NULL,
     name character varying(64) CONSTRAINT rbac_role_name_not_null NOT NULL,
     is_default smallint DEFAULT 0 CONSTRAINT rbac_role_is_default_not_null NOT NULL,
-    is_enabled smallint DEFAULT 1 CONSTRAINT rbac_role_is_enabled_not_null NOT NULL,
+    status smallint DEFAULT 1 CONSTRAINT rbac_role_status_not_null NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_role_created_at_not_null NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT rbac_role_updated_at_not_null NOT NULL,
     deleted_at timestamp with time zone,
     CONSTRAINT ck_rbac_role_is_default CHECK ((is_default = ANY (ARRAY[0, 1]))),
-    CONSTRAINT ck_rbac_role_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1])))
+    CONSTRAINT ck_rbac_role_status CHECK ((status = ANY (ARRAY[0, 1])))
 );
 
 
@@ -1571,14 +1571,14 @@ CREATE TABLE public.storage_cos_config (
     app_id character varying(32) NOT NULL,
     secret_id_ciphertext text NOT NULL,
     secret_key_ciphertext text NOT NULL,
-    is_enabled smallint DEFAULT 1 NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
     remark character varying(512) DEFAULT ''::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
     current_version bigint NOT NULL,
     CONSTRAINT ck_storage_cos_config_current_version CHECK ((current_version >= 1)),
-    CONSTRAINT ck_storage_cos_config_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1])))
+    CONSTRAINT ck_storage_cos_config_status CHECK ((status = ANY (ARRAY[0, 1])))
 );
 
 
@@ -1685,14 +1685,14 @@ CREATE TABLE public.storage_upload_rule (
     allowed_extensions text[] NOT NULL,
     allowed_mime_types text[] NOT NULL,
     access_mode character varying(16) DEFAULT 'private'::character varying NOT NULL,
-    is_enabled smallint DEFAULT 1 NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
     remark character varying(512) DEFAULT ''::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
     CONSTRAINT ck_storage_upload_rule_access_mode CHECK (((access_mode)::text = ANY ((ARRAY['private'::character varying, 'public'::character varying])::text[]))),
-    CONSTRAINT ck_storage_upload_rule_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
-    CONSTRAINT ck_storage_upload_rule_max_file_size CHECK ((max_file_size_bytes > 0))
+    CONSTRAINT ck_storage_upload_rule_max_file_size CHECK ((max_file_size_bytes > 0)),
+    CONSTRAINT ck_storage_upload_rule_status CHECK ((status = ANY (ARRAY[0, 1])))
 );
 
 
@@ -1897,7 +1897,7 @@ CREATE TABLE public.system_scheduler_schedule (
     cron_expression character varying(128) NOT NULL,
     timezone character varying(64) DEFAULT 'Asia/Shanghai'::character varying NOT NULL,
     params jsonb DEFAULT '{}'::jsonb NOT NULL,
-    is_enabled smallint DEFAULT 1 NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
     next_run_at timestamp with time zone,
     builtin_key character varying(128),
     created_by bigint,
@@ -1907,9 +1907,9 @@ CREATE TABLE public.system_scheduler_schedule (
     deleted_at timestamp with time zone,
     CONSTRAINT ck_system_scheduler_schedule_builtin_key CHECK (((builtin_key IS NULL) OR (btrim((builtin_key)::text) <> ''::text))),
     CONSTRAINT ck_system_scheduler_schedule_cron CHECK ((btrim((cron_expression)::text) <> ''::text)),
-    CONSTRAINT ck_system_scheduler_schedule_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_system_scheduler_schedule_name CHECK ((btrim((name)::text) <> ''::text)),
     CONSTRAINT ck_system_scheduler_schedule_params CHECK ((jsonb_typeof(params) = 'object'::text)),
+    CONSTRAINT ck_system_scheduler_schedule_status CHECK ((status = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_system_scheduler_schedule_task_type CHECK ((btrim((task_type)::text) <> ''::text)),
     CONSTRAINT ck_system_scheduler_schedule_timezone CHECK ((btrim((timezone)::text) <> ''::text))
 );
@@ -1939,19 +1939,19 @@ CREATE TABLE public.system_setting (
     value text NOT NULL,
     value_type smallint NOT NULL,
     description character varying(512) DEFAULT ''::character varying NOT NULL,
-    is_enabled smallint DEFAULT 1 NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
     is_builtin smallint DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
     CONSTRAINT ck_system_setting_is_builtin CHECK ((is_builtin = ANY (ARRAY[0, 1]))),
-    CONSTRAINT ck_system_setting_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_system_setting_key CHECK (((setting_key)::text ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'::text)),
     CONSTRAINT ck_system_setting_recharge_minimum_amount CHECK ((((setting_key)::text <> 'payment.recharge.minimum_amount'::text) OR
 CASE
-    WHEN (value ~ '^[0-9]{1,11}$'::text) THEN (((value)::numeric >= (1)::numeric) AND ((value)::numeric <= ('92233720368'::bigint)::numeric) AND (value_type = 2) AND (is_enabled = 1) AND (is_builtin = 1) AND (deleted_at IS NULL))
+    WHEN (value ~ '^[0-9]{1,11}$'::text) THEN (((value)::numeric >= (1)::numeric) AND ((value)::numeric <= ('92233720368'::bigint)::numeric) AND (value_type = 2) AND (status = 1) AND (is_builtin = 1) AND (deleted_at IS NULL))
     ELSE false
 END)),
+    CONSTRAINT ck_system_setting_status CHECK ((status = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_system_setting_value_type CHECK ((value_type = ANY (ARRAY[1, 2, 3, 4, 5, 6])))
 );
 
@@ -1991,13 +1991,13 @@ CREATE TABLE public.user_account (
     username character varying(64) NOT NULL,
     email character varying(254) NOT NULL,
     password_hash character varying(255) NOT NULL,
-    is_enabled smallint DEFAULT 1 NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
     phone character varying(32),
-    CONSTRAINT ck_user_account_is_enabled CHECK ((is_enabled = ANY (ARRAY[0, 1]))),
-    CONSTRAINT ck_user_account_phone_e164 CHECK (((phone IS NULL) OR ((phone)::text ~ '^\+861[3-9][0-9]{9}$'::text)))
+    CONSTRAINT ck_user_account_phone_e164 CHECK (((phone IS NULL) OR ((phone)::text ~ '^\+861[3-9][0-9]{9}$'::text))),
+    CONSTRAINT ck_user_account_status CHECK ((status = ANY (ARRAY[0, 1])))
 );
 
 
@@ -3028,10 +3028,10 @@ CREATE INDEX ix_realtime_event_user_resume ON public.realtime_event USING btree 
 
 
 --
--- Name: ix_storage_cos_config_enabled_created_at; Type: INDEX; Schema: public; Owner: -
+-- Name: ix_storage_cos_config_status_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX ix_storage_cos_config_enabled_created_at ON public.storage_cos_config USING btree (is_enabled, created_at DESC) WHERE (deleted_at IS NULL);
+CREATE INDEX ix_storage_cos_config_status_created_at ON public.storage_cos_config USING btree (status, created_at DESC) WHERE (deleted_at IS NULL);
 
 
 --
@@ -3063,10 +3063,10 @@ CREATE INDEX ix_storage_upload_rule_code_rule ON public.storage_upload_rule_code
 
 
 --
--- Name: ix_storage_upload_rule_config_enabled_created_at; Type: INDEX; Schema: public; Owner: -
+-- Name: ix_storage_upload_rule_config_status_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX ix_storage_upload_rule_config_enabled_created_at ON public.storage_upload_rule USING btree (cos_config_id, is_enabled, created_at DESC) WHERE (deleted_at IS NULL);
+CREATE INDEX ix_storage_upload_rule_config_status_created_at ON public.storage_upload_rule USING btree (cos_config_id, status, created_at DESC) WHERE (deleted_at IS NULL);
 
 
 --
@@ -3126,10 +3126,10 @@ CREATE INDEX ix_system_scheduler_job_terminal_cleanup ON public.system_scheduler
 
 
 --
--- Name: ix_system_scheduler_schedule_due; Type: INDEX; Schema: public; Owner: -
+-- Name: ix_system_scheduler_schedule_due_status; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX ix_system_scheduler_schedule_due ON public.system_scheduler_schedule USING btree (next_run_at, id) WHERE ((deleted_at IS NULL) AND (is_enabled = 1));
+CREATE INDEX ix_system_scheduler_schedule_due_status ON public.system_scheduler_schedule USING btree (next_run_at, id) WHERE ((deleted_at IS NULL) AND (status = 1));
 
 
 --
@@ -3140,10 +3140,10 @@ CREATE INDEX ix_system_scheduler_schedule_task_type ON public.system_scheduler_s
 
 
 --
--- Name: ix_system_setting_enabled_key; Type: INDEX; Schema: public; Owner: -
+-- Name: ix_system_setting_status_key; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX ix_system_setting_enabled_key ON public.system_setting USING btree (is_enabled, setting_key) WHERE (deleted_at IS NULL);
+CREATE INDEX ix_system_setting_status_key ON public.system_setting USING btree (status, setting_key) WHERE (deleted_at IS NULL);
 
 
 --
@@ -3518,10 +3518,10 @@ CREATE UNIQUE INDEX ux_storage_upload_rule_code_rule_code ON public.storage_uplo
 
 
 --
--- Name: ux_storage_upload_rule_platform_enabled; Type: INDEX; Schema: public; Owner: -
+-- Name: ux_storage_upload_rule_platform_status; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX ux_storage_upload_rule_platform_enabled ON public.storage_upload_rule USING btree (platform_id) WHERE ((is_enabled = 1) AND (deleted_at IS NULL));
+CREATE UNIQUE INDEX ux_storage_upload_rule_platform_status ON public.storage_upload_rule USING btree (platform_id) WHERE ((status = 1) AND (deleted_at IS NULL));
 
 
 --
@@ -4286,5 +4286,5 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 -- PostgreSQL database dump complete
 --
 
-\unrestrict hYLWD3cRASsVaXNjdmvjWvFblbdxDqmea42TtUWfMlvPmaZdfp7E17hGr5bg0ie
+\unrestrict 70MCGG2ajXYXJGWBDqHpoWmRckyH9ksrk0ZqU4UtqAsBGMWbMOlMgJtoogp54AJ
 

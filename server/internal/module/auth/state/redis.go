@@ -184,7 +184,7 @@ func (s *Store) repairExact(ctx context.Context, key, corruptPayload, readyPaylo
 
 func userStateFromFact(fact UserFact, state string, token *string) UserState {
 	return UserState{
-		SchemaVersion: SchemaVersion, State: state, UserID: fact.UserID, Generation: fact.Generation,
+		SchemaVersion: UserSchemaVersion, State: state, UserID: fact.UserID, Generation: fact.Generation,
 		Status: fact.Status, Deleted: fact.Deleted, MutationToken: token,
 	}
 }

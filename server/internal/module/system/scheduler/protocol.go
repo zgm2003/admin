@@ -14,8 +14,7 @@ type Schedule struct {
 	CronExpression string
 	Timezone       string
 	Params         json.RawMessage
-	Status      int16          `gorm:"column:status"`
-	Status         ScheduleStatus `gorm:"-"`
+	Status         ScheduleStatus `gorm:"column:status"`
 	NextRunAt      *time.Time
 	BuiltinKey     *string
 	CreatedBy      *int64
@@ -92,7 +91,7 @@ type ScheduleInput struct {
 	CronExpression string
 	Timezone       string
 	Params         json.RawMessage
-	Enabled        bool
+	Status         ScheduleStatus
 }
 
 type ScheduleQuery struct {

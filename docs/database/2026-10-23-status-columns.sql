@@ -6,6 +6,10 @@ SET LOCAL statement_timeout = '30s';
 DO $migration$
 DECLARE
     item record;
+    old_exists boolean;
+    new_exists boolean;
+    target_oid oid;
+    target_column smallint;
 BEGIN
     PERFORM pg_advisory_xact_lock(hashtextextended('schema.status_columns.2026-10-23', 0));
     FOR item IN
@@ -28,6 +32,19 @@ BEGIN
             ('payment_recharge_package')
         ) AS tables(table_name)
     LOOP
+        target_oid := to_regclass(format('%I.%I',current_schema(),item.table_name));
+        IF target_oid IS NULL THEN RAISE EXCEPTION 'required table % is missing',item.table_name; END IF;
+        EXECUTE format('LOCK TABLE %I.%I IN ACCESS EXCLUSIVE MODE',current_schema(),item.table_name);
+        SELECT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=target_oid AND attname='is_enabled' AND NOT attisdropped),
+               EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=target_oid AND attname='status' AND NOT attisdropped)
+          INTO old_exists,new_exists;
+        IF old_exists AND new_exists THEN RAISE EXCEPTION 'table % contains both is_enabled and status',item.table_name; END IF;
+        IF NOT old_exists AND NOT new_exists THEN RAISE EXCEPTION 'table % has no binary status column',item.table_name; END IF;
+        SELECT attnum INTO target_column FROM pg_attribute WHERE attrelid=target_oid AND attname=CASE WHEN old_exists THEN 'is_enabled' ELSE 'status' END AND atttypid='smallint'::regtype AND attnotnull AND NOT attisdropped;
+        IF target_column IS NULL THEN RAISE EXCEPTION 'table % status must be SMALLINT NOT NULL',item.table_name; END IF;
+        IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=target_oid AND contype='c' AND convalidated AND conkey=ARRAY[target_column]) THEN
+            RAISE EXCEPTION 'table % requires a validated binary status CHECK',item.table_name;
+        END IF;
         IF EXISTS (
             SELECT 1 FROM information_schema.columns
             WHERE table_schema = current_schema() AND table_name = item.table_name AND column_name = 'is_enabled'
@@ -88,12 +105,10 @@ BEGIN
             JOIN pg_class t ON t.oid = c.conrelid
             JOIN pg_namespace n ON n.oid = t.relnamespace
             WHERE n.nspname = current_schema() AND t.relname = item.table_name AND c.conname = item.old_name
-        ) AND NOT EXISTS (
-            SELECT 1 FROM pg_constraint c
-            JOIN pg_class t ON t.oid = c.conrelid
-            JOIN pg_namespace n ON n.oid = t.relnamespace
-            WHERE n.nspname = current_schema() AND t.relname = item.table_name AND c.conname = item.new_name
         ) THEN
+            IF EXISTS(SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname=current_schema() AND t.relname=item.table_name AND c.conname=item.new_name) THEN
+                RAISE EXCEPTION 'constraint rename conflict on %.%',item.table_name,item.new_name;
+            END IF;
             EXECUTE format('ALTER TABLE %I.%I RENAME CONSTRAINT %I TO %I', current_schema(), item.table_name, item.old_name, item.new_name);
         END IF;
     END LOOP;
@@ -113,9 +128,16 @@ BEGIN
             ('system_setting', 'ix_system_setting_enabled_key', 'ix_system_setting_status_key')
         ) AS indexes(table_name, old_name, new_name)
     LOOP
-        IF to_regclass(format('%I.%I', current_schema(), item.old_name)) IS NOT NULL
-           AND to_regclass(format('%I.%I', current_schema(), item.new_name)) IS NULL THEN
+        IF to_regclass(format('%I.%I', current_schema(), item.old_name)) IS NOT NULL THEN
+            IF to_regclass(format('%I.%I', current_schema(), item.new_name)) IS NOT NULL THEN
+                RAISE EXCEPTION 'index rename conflict: %',item.new_name;
+            END IF;
+            IF NOT EXISTS(SELECT 1 FROM pg_index WHERE indexrelid=to_regclass(format('%I.%I',current_schema(),item.old_name)) AND indrelid=to_regclass(format('%I.%I',current_schema(),item.table_name)) AND indisvalid) THEN
+                RAISE EXCEPTION 'source index % has unexpected ownership or is invalid',item.old_name;
+            END IF;
             EXECUTE format('ALTER INDEX %I.%I RENAME TO %I', current_schema(), item.old_name, item.new_name);
+        ELSIF NOT EXISTS(SELECT 1 FROM pg_index WHERE indexrelid=to_regclass(format('%I.%I',current_schema(),item.new_name)) AND indrelid=to_regclass(format('%I.%I',current_schema(),item.table_name)) AND indisvalid) THEN
+            RAISE EXCEPTION 'required index % is missing or invalid',item.new_name;
         END IF;
     END LOOP;
 END

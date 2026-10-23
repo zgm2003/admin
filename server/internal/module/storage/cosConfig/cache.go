@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	runtimePayloadSchemaVersion = 1
+	runtimePayloadSchemaVersion = 2
 	runtimeSnapshotTTL          = 5 * time.Minute
 	runtimeSnapshotVariant      = "runtime"
 )
@@ -154,7 +154,7 @@ type runtimePayload struct {
 	SecretIDCiphertext  string                  `json:"secretIdCiphertext"`
 	SecretKeyCiphertext string                  `json:"secretKeyCiphertext"`
 	CurrentVersion      int64                   `json:"currentVersion"`
-	Status           yesno.Value             `json:"status"`
+	Status              yesno.Value             `json:"status"`
 	Deleted             bool                    `json:"deleted"`
 	Versions            []runtimeVersionPayload `json:"versions"`
 }

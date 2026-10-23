@@ -40,7 +40,7 @@ func TestAdminRBACBaselineMigration(t *testing.T) {
 func TestAdminRBACBaselineMigrationRejectsCanvasConflict(t *testing.T) {
 	db, ctx := openRBACMigrationSchema(t)
 	fixture := createRBACMigrationFixture(t, db, ctx)
-	if err := db.WithContext(ctx).Create(&menu.Menu{PlatformID: fixture.canvasID, MenuType: menu.TypePage, Name: "Existing", Code: "canvas:test:list", I18nKey: rbacStringPointer("navigation.test"), Path: rbacStringPointer("/other"), ComponentPath: rbacStringPointer("other"), IsEnabled: yesno.Yes, IsHidden: yesno.No}).Error; err != nil {
+	if err := db.WithContext(ctx).Create(&menu.Menu{PlatformID: fixture.canvasID, MenuType: menu.TypePage, Name: "Existing", Code: "canvas:test:list", I18nKey: rbacStringPointer("navigation.test"), Path: rbacStringPointer("/other"), ComponentPath: rbacStringPointer("other"), Status: yesno.Yes, IsHidden: yesno.No}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.WithContext(ctx).Exec(readRBACBaselineMigration(t)).Error; err == nil || !strings.Contains(strings.ToLower(err.Error()), "canvas") {
@@ -97,40 +97,40 @@ func openRBACMigrationSchema(t *testing.T) (*gorm.DB, context.Context) {
 func createRBACMigrationFixture(t *testing.T, db *gorm.DB, ctx context.Context) rbacMigrationFixture {
 	t.Helper()
 	var admin authplatform.Platform
-	canvas := authplatform.Platform{Code: "canvas", Name: "Canvas", LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1, AccessTTLSeconds: 900, RefreshTTLSeconds: 900, SessionCacheTTLSeconds: 900, AccessCacheTTLSeconds: 900, BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 10, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.No}
+	canvas := authplatform.Platform{Code: "canvas", Name: "Canvas", LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1, AccessTTLSeconds: 900, RefreshTTLSeconds: 900, SessionCacheTTLSeconds: 900, AccessCacheTTLSeconds: 900, BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 10, AllowRegister: yesno.Yes, Status: yesno.Yes, IsBuiltin: yesno.No}
 	if err := db.WithContext(ctx).Table("auth_platform").Where("code = ?", "admin").Take(&admin).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.WithContext(ctx).Table("auth_platform").Create(&canvas).Error; err != nil {
 		t.Fatal(err)
 	}
-	root := menu.Menu{PlatformID: admin.ID, MenuType: menu.TypeDirectory, Name: "Account", Code: "account", I18nKey: rbacStringPointer("navigation.account"), IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	root := menu.Menu{PlatformID: admin.ID, MenuType: menu.TypeDirectory, Name: "Account", Code: "account", I18nKey: rbacStringPointer("navigation.account"), Status: yesno.Yes, IsHidden: yesno.No}
 	if err := db.WithContext(ctx).Create(&root).Error; err != nil {
 		t.Fatal(err)
 	}
-	accessRoot := menu.Menu{PlatformID: admin.ID, MenuType: menu.TypeDirectory, Name: "Permission", Code: "access", I18nKey: rbacStringPointer("navigation.access"), IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	accessRoot := menu.Menu{PlatformID: admin.ID, MenuType: menu.TypeDirectory, Name: "Permission", Code: "access", I18nKey: rbacStringPointer("navigation.access"), Status: yesno.Yes, IsHidden: yesno.No}
 	if err := db.WithContext(ctx).Create(&accessRoot).Error; err != nil {
 		t.Fatal(err)
 	}
 	menuPath, menuComponent := "/access/menus", "access/menus"
-	menuPage := menu.Menu{PlatformID: admin.ID, ParentID: &accessRoot.ID, MenuType: menu.TypePage, Name: "Menu Management", Code: "permission:menu:list", I18nKey: rbacStringPointer("navigation.accessMenus"), Path: &menuPath, ComponentPath: &menuComponent, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	menuPage := menu.Menu{PlatformID: admin.ID, ParentID: &accessRoot.ID, MenuType: menu.TypePage, Name: "Menu Management", Code: "permission:menu:list", I18nKey: rbacStringPointer("navigation.accessMenus"), Path: &menuPath, ComponentPath: &menuComponent, Status: yesno.Yes, IsHidden: yesno.No}
 	if err := db.WithContext(ctx).Create(&menuPage).Error; err != nil {
 		t.Fatal(err)
 	}
 	path, component := "/test", "test"
-	canvasPage := menu.Menu{PlatformID: canvas.ID, MenuType: menu.TypePage, Name: "Canvas Test", Code: "canvas:test", I18nKey: rbacStringPointer("navigation.test"), Path: &path, ComponentPath: &component, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	canvasPage := menu.Menu{PlatformID: canvas.ID, MenuType: menu.TypePage, Name: "Canvas Test", Code: "canvas:test", I18nKey: rbacStringPointer("navigation.test"), Path: &path, ComponentPath: &component, Status: yesno.Yes, IsHidden: yesno.No}
 	if err := db.WithContext(ctx).Create(&canvasPage).Error; err != nil {
 		t.Fatal(err)
 	}
-	canvasAction := menu.Menu{PlatformID: canvas.ID, ParentID: &canvasPage.ID, MenuType: menu.TypeAction, Name: "Canvas Button", Code: "canvas:test:button", IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
+	canvasAction := menu.Menu{PlatformID: canvas.ID, ParentID: &canvasPage.ID, MenuType: menu.TypeAction, Name: "Canvas Button", Code: "canvas:test:button", Status: yesno.Yes, IsHidden: yesno.Yes}
 	if err := db.WithContext(ctx).Create(&canvasAction).Error; err != nil {
 		t.Fatal(err)
 	}
-	user := account.User{Username: "migration_user", Email: "migration@example.com", PasswordHash: "hash", IsEnabled: yesno.Yes}
+	user := account.User{Username: "migration_user", Email: "migration@example.com", PasswordHash: "hash", Status: yesno.Yes}
 	if err := db.WithContext(ctx).Create(&user).Error; err != nil {
 		t.Fatal(err)
 	}
-	storedRole := role.Role{Code: "migration_role", Name: "Migration Role", IsDefault: yesno.Yes, IsEnabled: yesno.Yes}
+	storedRole := role.Role{Code: "migration_role", Name: "Migration Role", IsDefault: yesno.Yes, Status: yesno.Yes}
 	if err := db.WithContext(ctx).Create(&storedRole).Error; err != nil {
 		t.Fatal(err)
 	}

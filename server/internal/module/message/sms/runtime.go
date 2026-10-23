@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	runtimeCacheSchemaVersion = 2
+	runtimeCacheSchemaVersion = 3
 	runtimeSnapshotVariant    = "runtime"
 	runtimeSnapshotTTL        = 10 * time.Minute
 	readinessTTL              = 10 * time.Minute
@@ -49,7 +49,7 @@ type ConfiguredConfig struct {
 	Region              string
 	Endpoint            string
 	TTLMinutes          int
-	Status           yesno.Value
+	Status              yesno.Value
 }
 
 type TemplateFact struct {
@@ -57,15 +57,15 @@ type TemplateFact struct {
 	TencentTemplateID string
 	VariableKeys      []string
 	ExampleVariables  map[string]string
-	Status         yesno.Value
+	Status            yesno.Value
 }
 
 type RuleFact struct {
-	ID        int64
-	Scope     recipientRule.Scope
-	Action    recipientRule.Action
-	Pattern   string
-	Status yesno.Value
+	ID      int64
+	Scope   recipientRule.Scope
+	Action  recipientRule.Action
+	Pattern string
+	Status  yesno.Value
 }
 
 // RuntimeFacts is everything the sending path needs, loaded from PostgreSQL.
@@ -87,7 +87,7 @@ type runtimeSnapshot struct {
 	Region              string                 `json:"region"`
 	Endpoint            string                 `json:"endpoint"`
 	TTLMinutes          int                    `json:"ttlMinutes"`
-	Status           int16                  `json:"status"`
+	Status              int16                  `json:"status"`
 	Templates           map[string]templateRow `json:"templates"`
 	Rules               []ruleRow              `json:"rules"`
 }
@@ -97,15 +97,15 @@ type templateRow struct {
 	TencentTemplateID string            `json:"tencentTemplateId"`
 	VariableKeys      []string          `json:"variableKeys"`
 	ExampleVariables  map[string]string `json:"exampleVariables"`
-	Status         int16             `json:"status"`
+	Status            int16             `json:"status"`
 }
 
 type ruleRow struct {
-	ID        int64  `json:"id"`
-	Scope     int16  `json:"scope"`
-	Action    int16  `json:"action"`
-	Pattern   string `json:"pattern"`
-	Status int16  `json:"status"`
+	ID      int64  `json:"id"`
+	Scope   int16  `json:"scope"`
+	Action  int16  `json:"action"`
+	Pattern string `json:"pattern"`
+	Status  int16  `json:"status"`
 }
 
 type readinessPayload struct {

@@ -40,7 +40,7 @@ func (runtimeTemplateSourceTest) List(context.Context) ([]template.Model, error)
 			ID: int64(index + 1), Scene: fixed.Scene, Name: fixed.Name, TencentTemplateID: "123456",
 			VariableKeys:     json.RawMessage(`["code","ttl_minutes"]`),
 			ExampleVariables: json.RawMessage(`{"code":"123456","ttl_minutes":"5"}`),
-			Status:        yesno.Yes, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+			Status:           yesno.Yes, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 		})
 	}
 	return rows, nil
@@ -58,7 +58,7 @@ func validRuntimeSnapshotForTest() runtimeSnapshot {
 			TencentTemplateID: "123456",
 			VariableKeys:      append([]string(nil), fixed.VariableKeys...),
 			ExampleVariables:  map[string]string{"code": "123456", "ttl_minutes": "5"},
-			Status:         int16(yesno.Yes),
+			Status:            int16(yesno.Yes),
 		}
 	}
 	return runtimeSnapshot{
@@ -71,7 +71,7 @@ func validRuntimeSnapshotForTest() runtimeSnapshot {
 		SignName:            "sign",
 		Region:              "ap-guangzhou",
 		TTLMinutes:          5,
-		Status:           int16(yesno.Yes),
+		Status:              int16(yesno.Yes),
 		Templates:           templates,
 		Rules: []ruleRow{{
 			ID: 1, Scope: int16(recipientRule.ScopePhone), Action: int16(recipientRule.ActionDeny),
@@ -87,7 +87,7 @@ func TestDecodeRuntimeSnapshotRejectsInvalidSceneSet(t *testing.T) {
 		Name: "test", TencentTemplateID: "123456",
 		VariableKeys:     []string{"code", "ttl_minutes"},
 		ExampleVariables: map[string]string{"code": "123456", "ttl_minutes": "5"},
-		Status:        int16(yesno.Yes),
+		Status:           int16(yesno.Yes),
 	}
 	raw, err := json.Marshal(snapshot)
 	if err != nil {
@@ -135,12 +135,13 @@ func TestRuntimeSnapshotCodecIsStrictAndPreservesPlaintextPattern(t *testing.T) 
 	}
 
 	for name, payload := range map[string]string{
-		"unknown field":       strings.Replace(raw, `{`, `{"extra":true,`, 1),
-		"duplicate field":     strings.Replace(raw, `"generation":7`, `"generation":7,"generation":8`, 1),
-		"trailing value":      raw + `{}`,
-		"wrong schema":        strings.Replace(raw, `"schemaVersion":2`, `"schemaVersion":1`, 1),
-		"wrong generation":    strings.Replace(raw, `"generation":7`, `"generation":8`, 1),
-		"missing fixed scene": strings.Replace(raw, `"forget":`, `"unknown":`, 1),
+		"legacy enabled field": strings.Replace(raw, `"status":`, `"isEnabled":`, 1),
+		"unknown field":        strings.Replace(raw, `{`, `{"extra":true,`, 1),
+		"duplicate field":      strings.Replace(raw, `"generation":7`, `"generation":7,"generation":8`, 1),
+		"trailing value":       raw + `{}`,
+		"wrong schema":         strings.Replace(raw, `"schemaVersion":3`, `"schemaVersion":1`, 1),
+		"wrong generation":     strings.Replace(raw, `"generation":7`, `"generation":8`, 1),
+		"missing fixed scene":  strings.Replace(raw, `"forget":`, `"unknown":`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := decodeRuntimeSnapshot(payload, 7); !errors.Is(err, ErrRuntimeSnapshotCorrupt) {

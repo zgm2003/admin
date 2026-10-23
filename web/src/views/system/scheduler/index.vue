@@ -1,5 +1,6 @@
 <!-- 页面：定时任务 -->
 <script setup lang="ts">
+import { YesNo } from '@/enums/yesNo'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { CirclePlus } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
@@ -63,7 +64,8 @@ const jobStatus = ref<'' | JobStatus>('')
 const dialogVisible = ref(false)
 const editing = ref<Schedule | null>(null)
 const submitting = ref(false)
-const form = ref({
+type ScheduleForm = Parameters<typeof createSchedule>[0] & { cronPreset: string }
+const form = ref<ScheduleForm>({
   name: '',
   description: '',
   taskType: '',
@@ -71,7 +73,7 @@ const form = ref({
   cronPreset: CUSTOM_CRON_VALUE,
   timezone: '',
   params: {} as Record<string, unknown>,
-  status: true,
+  status: YesNo.Yes,
 })
 const detailVisible = ref(false)
 const selectedJob = ref<Job | null>(null)
@@ -230,7 +232,7 @@ function openCreate(): void {
     ),
     timezone: options.value.defaults.timezone,
     params: first?.defaultParams ?? {},
-    status: true,
+    status: YesNo.Yes,
   }
   dialogVisible.value = true
 }
@@ -291,12 +293,12 @@ async function save(): Promise<void> {
 }
 async function toggle(row: Schedule): Promise<void> {
   if (!canStatus.value) return
-  const next = !row.status
+  const next = row.status === YesNo.Yes ? YesNo.No : YesNo.Yes
   try {
     await ElMessageBox.confirm(
       t('confirm.status', {
         name: row.name,
-        status: t(next ? 'common.enable' : 'common.disable'),
+        status: t(next === YesNo.Yes ? 'common.enable' : 'common.disable'),
       }),
       t('confirm.title'),
       { type: 'warning' },
@@ -434,10 +436,10 @@ onBeforeUnmount(() => {
           }}</el-button
           ><el-button
             v-if="canStatus"
-            :type="row.status ? 'warning' : 'success'"
+            :type="row.status === YesNo.Yes ? 'warning' : 'success'"
             link
             @click="toggle(row)"
-            >{{ row.status ? t('common.disable') : t('common.enable') }}</el-button
+            >{{ row.status === YesNo.Yes ? t('common.disable') : t('common.enable') }}</el-button
           ><el-button v-if="canExecute" type="success" link @click="execute(row)">{{
             t('scheduler.execute')
           }}</el-button

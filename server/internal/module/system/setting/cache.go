@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	cachePayloadSchemaVersion = 1
+	cachePayloadSchemaVersion = 2
 	cacheSnapshotTTL          = 5 * time.Minute
 	brandSnapshotVariant      = "brand"
 )
@@ -164,7 +164,7 @@ type recordPayload struct {
 	Value         string      `json:"value"`
 	ValueType     int         `json:"valueType"`
 	Description   string      `json:"description"`
-	Status     yesno.Value `json:"status"`
+	Status        yesno.Value `json:"status"`
 	IsBuiltin     yesno.Value `json:"isBuiltin"`
 	CreatedAt     time.Time   `json:"createdAt"`
 	UpdatedAt     time.Time   `json:"updatedAt"`
