@@ -23,7 +23,11 @@ const (
 	MessageNotificationRetentionDaysKey      = "message.notification.retention_days"
 	SchedulerHistoryRetentionDaysKey         = "system.scheduler.history_retention_days"
 	PaymentRechargeMinimumAmountKey          = "payment.recharge.minimum_amount"
+	PaymentOrderExpiryMinutesKey             = "payment.order.expiry_minutes"
 	MailRecipientRuleImportTemplateObjectKey = "message.mail.recipient_rule.import_template_object_key"
+
+	PaymentOrderExpiryMinutesMinimum = 1
+	PaymentOrderExpiryMinutesMaximum = 1440
 )
 
 type Record struct {

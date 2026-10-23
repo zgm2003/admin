@@ -350,12 +350,16 @@ func (s *Service) Create(ctx context.Context, actor auth.Identity, input CreateI
 	if _, err := parseReturnURL(input.ReturnURL); err != nil {
 		return Checkout{}, apperror.InvalidRequest(err)
 	}
+	lifetime, err := s.orderLifetime(ctx)
+	if err != nil {
+		return Checkout{}, err
+	}
 	now := s.now().UTC()
 	orderNo, err := s.newOrderNo(now)
 	if err != nil {
 		return Checkout{}, apperror.DependencyUnavailable(err)
 	}
-	row := &Model{OrderNo: orderNo, UserID: actor.UserID, PlatformID: actor.PlatformID, PackageID: packageID, PackageName: packageName, AmountCents: amountCents, ConfigID: selected.ID, ConfigVersion: selected.CurrentVersion, PayMethod: int16(input.PayMethod), RequestID: input.RequestID, RequestFingerprint: fingerprint, ReturnURL: input.ReturnURL, Status: StatusPending, ExpiresAt: now.Add(30 * time.Minute), NextCheckAt: pointerTime(now.Add(time.Minute)), CreatedAt: now, UpdatedAt: now}
+	row := &Model{OrderNo: orderNo, UserID: actor.UserID, PlatformID: actor.PlatformID, PackageID: packageID, PackageName: packageName, AmountCents: amountCents, ConfigID: selected.ID, ConfigVersion: selected.CurrentVersion, PayMethod: int16(input.PayMethod), RequestID: input.RequestID, RequestFingerprint: fingerprint, ReturnURL: input.ReturnURL, Status: StatusPending, ExpiresAt: now.Add(lifetime), NextCheckAt: pointerTime(now.Add(time.Minute)), CreatedAt: now, UpdatedAt: now}
 	if err := repo.Create(ctx, row); err != nil {
 		if concurrent, lookupErr := repo.FindByRequest(ctx, actor.UserID, actor.PlatformID, input.RequestID); lookupErr == nil {
 			if !equalFingerprint(concurrent.RequestFingerprint, fingerprint) {

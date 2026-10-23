@@ -189,6 +189,8 @@ follower/Redis 读预算 500ms，获准的跨实例 cacheFill leader 使用原�
 
 充值创建请求的 `packageId` 与金额字符串 `amount` 二选一；套餐旧请求指纹保持不变，自定义金额按整数分归一化后参与幂等指纹。自定义订单 `payment_order.package_id` 为 NULL，金额冻结在原订单，不创建占位套餐。最低自定义金额从既有 `system.setting/global` generation 快照读取，缺失或异常失败闭合，不增加每请求 PostgreSQL 配置查询或进程内默认值；后端 Options 输出金额上下限、精度与套餐徽章。配置变化只影响新建自定义订单，不影响旧订单重放或可信入账。兑换码管理员备注投影复用既有批次 JOIN，不增加逐行查询或冗余列。
 
+支付订单有效期同样复用 `system.setting/global` 的 Record 快照：新建套餐/自定义订单读取 `payment.order.expiry_minutes`（1..1440，seed 为 30），缓存命中不访问 PostgreSQL，缺失、停用、类型/范围异常均拒绝新建，不猜默认值。现有订单直接使用已冻结的 expires_at，重放不重读当前有效期。巡检在 Service 将到期前的 next_check_at 截断到 expires_at，继续由 Repository 的既有两个 pending 部分索引优先领取到期订单；到期失败保留退避与 token/lease，避免同轮重复领取，无新索引、热路径配置表查询或本地缓存。
+
 API 内各模块显式复用同一个 generation Repository/Store，但保留本模块的 snapshot codec、业务 Repository 和
 Service，不引入通用 CacheManager、运行时注册器或跨模块隐式 hook。ready 命中不读取 PostgreSQL；Redis I/O
 失败或 500ms 预算耗尽时失败闭合。PostgreSQL 提交后同步发布失败不否认已提交业务，pending outbox 由 Worker

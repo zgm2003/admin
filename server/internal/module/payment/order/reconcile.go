@@ -228,7 +228,7 @@ func (r *Reconciler) process(ctx context.Context, claimed ClaimedOrder, now time
 	if trade.Status != "WAIT_BUYER_PAY" {
 		return r.deferOrder(ctx, claimed, now, errors.New("payment provider status is not actionable"))
 	}
-	if !claimed.ExpiresAt.After(now) {
+	if !claimed.ExpiresAt.After(r.clockNow()) {
 		if err := r.repository.RenewCheck(ctx, claimed.ID, claimed.Token, r.clockNow(), reconcileLease); err != nil {
 			return err
 		}
@@ -257,6 +257,11 @@ func (r *Reconciler) closeClaimed(ctx context.Context, claimed ClaimedOrder, now
 func (r *Reconciler) deferOrder(ctx context.Context, claimed ClaimedOrder, now time.Time, cause error) error {
 	now = r.clockNow()
 	next := nextCheckAt(now, claimed.CreatedAt)
+	// Reach expiry without an extra polling delay. Once expired, retain normal
+	// retry backoff so a failing trade is not reclaimed repeatedly in this run.
+	if claimed.ExpiresAt.After(now) && next.After(claimed.ExpiresAt) {
+		next = claimed.ExpiresAt
+	}
 	if err := r.repository.AdvanceCheck(ctx, claimed.ID, claimed.Token, next, now); err != nil {
 		return errors.Join(cause, err)
 	}

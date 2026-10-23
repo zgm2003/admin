@@ -75,6 +75,12 @@ func presentationFor(row Record) settingPresentation {
 		p.WarnOnDecrease = true
 	}
 	switch row.Key {
+	case sharedsetting.PaymentOrderExpiryMinutesKey:
+		minimum, maximum := sharedsetting.PaymentOrderExpiryMinutesMinimum, sharedsetting.PaymentOrderExpiryMinutesMaximum
+		p.Editor = "number"
+		p.Minimum, p.Maximum = &minimum, &maximum
+		p.ValueTypeLocked = true
+		p.AllowEmpty = false
 	case sharedsetting.PaymentRechargeMinimumAmountKey:
 		minimum, maximum := paymentRechargeMinimumAmountMinimum, paymentRechargeMinimumAmountMaximum
 		p.Editor = "number"

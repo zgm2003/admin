@@ -703,6 +703,10 @@ func validateInput(key, value string, valueType int, description string) error {
 		if valueType != ValueTypeNumber || len(value) > 11 || strings.IndexFunc(value, func(r rune) bool { return r < '0' || r > '9' }) >= 0 || !integerInRange(value, paymentRechargeMinimumAmountMinimum, paymentRechargeMinimumAmountMaximum) {
 			return fmt.Errorf("minimum recharge amount must be an integer from 1 to 92233720368 yuan")
 		}
+	case sharedsetting.PaymentOrderExpiryMinutesKey:
+		if valueType != ValueTypeNumber || len(value) > 4 || strings.IndexFunc(value, func(r rune) bool { return r < '0' || r > '9' }) >= 0 || !integerInRange(value, sharedsetting.PaymentOrderExpiryMinutesMinimum, sharedsetting.PaymentOrderExpiryMinutesMaximum) {
+			return fmt.Errorf("payment order expiry must be an integer from 1 to 1440 minutes")
+		}
 	case sharedsetting.MessageNotificationRetentionDaysKey:
 		bounds := retentionLimits[key]
 		if valueType != ValueTypeNumber || !integerInRange(value, bounds.Minimum, bounds.Maximum) {
@@ -724,7 +728,7 @@ func validateInput(key, value string, valueType int, description string) error {
 
 func isRequiredSetting(key string) bool {
 	_, legal := legalDocumentKindForKey(key)
-	return legal || key == BrandTitleZhCNKey || key == BrandTitleEnUSKey || key == BrandDefaultAvatarKey || key == sharedsetting.MailRecipientRuleImportTemplateObjectKey || key == sharedsetting.MessageNotificationRetentionDaysKey || key == sharedsetting.RealtimeEventRetentionDaysKey || key == sharedsetting.SchedulerHistoryRetentionDaysKey || key == sharedsetting.PaymentRechargeMinimumAmountKey
+	return legal || key == BrandTitleZhCNKey || key == BrandTitleEnUSKey || key == BrandDefaultAvatarKey || key == sharedsetting.MailRecipientRuleImportTemplateObjectKey || key == sharedsetting.MessageNotificationRetentionDaysKey || key == sharedsetting.RealtimeEventRetentionDaysKey || key == sharedsetting.SchedulerHistoryRetentionDaysKey || key == sharedsetting.PaymentRechargeMinimumAmountKey || key == sharedsetting.PaymentOrderExpiryMinutesKey
 }
 
 func integerInRange(value string, minimum, maximum int) bool {

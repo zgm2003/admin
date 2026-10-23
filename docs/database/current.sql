@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 70MCGG2ajXYXJGWBDqHpoWmRckyH9ksrk0ZqU4UtqAsBGMWbMOlMgJtoogp54AJ
+\restrict RPnBl9iZrJfpY3pa4pTsKpWYwoDh7yAJELDlYhi5WM3MgpMRRicc5XPx6FejLBM
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -1946,6 +1946,11 @@ CREATE TABLE public.system_setting (
     deleted_at timestamp with time zone,
     CONSTRAINT ck_system_setting_is_builtin CHECK ((is_builtin = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_system_setting_key CHECK (((setting_key)::text ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'::text)),
+    CONSTRAINT ck_system_setting_payment_order_expiry CHECK ((((setting_key)::text <> 'payment.order.expiry_minutes'::text) OR
+CASE
+    WHEN (value ~ '^[0-9]{1,4}$'::text) THEN (((value)::integer >= 1) AND ((value)::integer <= 1440) AND (value_type = 2) AND (status = 1) AND (is_builtin = 1) AND (deleted_at IS NULL))
+    ELSE false
+END)),
     CONSTRAINT ck_system_setting_recharge_minimum_amount CHECK ((((setting_key)::text <> 'payment.recharge.minimum_amount'::text) OR
 CASE
     WHEN (value ~ '^[0-9]{1,11}$'::text) THEN (((value)::numeric >= (1)::numeric) AND ((value)::numeric <= ('92233720368'::bigint)::numeric) AND (value_type = 2) AND (status = 1) AND (is_builtin = 1) AND (deleted_at IS NULL))
@@ -4286,5 +4291,5 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 70MCGG2ajXYXJGWBDqHpoWmRckyH9ksrk0ZqU4UtqAsBGMWbMOlMgJtoogp54AJ
+\unrestrict RPnBl9iZrJfpY3pa4pTsKpWYwoDh7yAJELDlYhi5WM3MgpMRRicc5XPx6FejLBM
 

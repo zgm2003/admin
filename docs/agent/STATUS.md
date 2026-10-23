@@ -1,5 +1,24 @@
 # 项目状态
 
+## 支付有效期可配置与到期巡检（2026-10-23，代码、验证和真实迁移完成）
+
+- 已获维护者确认：支付有效期加入系统设置，默认 30 分钟；新订单冻结 expires_at，已有订单到期时间不变；到期检查不再被到期前的查单排期推迟，通道失败仍退避。
+- 实现完成：payment/order 新订单通过现有 Settings Reader 读取有效期，缺失、停用、错误类型/键/格式/范围时拒绝创建，不猜 30 分钟默认值；套餐和自定义充值均适用，重放不读取新设置。system/setting 统一拥有数字编辑器范围和不可停用/删除结论，复用 system:setting 动作权限，无新接口、前端代码或 DTO 字段。临近到期时将下次检查截到 expires_at，查询中跨过到期时间改按当前时钟判断关单。
+- 迁移 `docs/database/2026-10-23-payment-order-expiry.sql` 已完成：seed 为 30，1..1440 分钟，添加具名 CHECK 并检查结构漂移，保留已有合法设置值与自定义说明。只修正尚未在到期后重试且没有活动租约的旧 pending 排期；不改既有 expires_at、支付状态、金额或入账事实。真实变化同事务推进设置 generation/outbox，重放不写数据；非法存量、状态缺失、outbox 冲突整体回滚。PostgreSQL 规范化 CHECK 的 BETWEEN 再解析分组差异已由回放测试发现并改用显式上下界比较，随后测试通过。
+- 容量保持百万用户/多实例基线：每笔新订单增加一次既有 generation/Redis 设置读取，命中不查 PostgreSQL，冷回源有界且故障闭合；没有新本地缓存。巡检继续使用现有 pending 部分索引、8 并发/20 批次/50 秒预算与 token/lease；到期前排期截断到 expires_at，到期失败继续退避，避免同轮重复消费同一订单。验证覆盖幂等重放、迁移幂等、并发领取和到期失败退避。
+- 实际通过：新增失败测试先复现固定时长、缺配置仍创建、越过到期排期及查询期间跨过到期后继续延期，再修复；`go test -p 1 ./internal/module/payment/order ./internal/module/system/setting -run 'Test(CreateFreezesConfiguredExpiry|CreateExpiry|ReconcilerSchedulesNoLater|ReconcilerClosesWhenExpiry|ExpiryDeadline|OrderExpiry)' -count=1 -timeout=2m`；相同两模块及 shared/setting 的完整 `go test -p 1 ... -count=1 -timeout=3m`（含真实 PostgreSQL/Redis 隔离集成）；三包 `go vet -p 1`；`go build -p 1 ./cmd/api ./cmd/worker`；所有修改 Go 文件 gofmt 与新旧文件空白检查。未运行全仓测试、前端测试/构建或真实支付/登录浏览器验收；没有自动启停服务。
+- 经维护者明确指令“迁移”，于 2026-10-23 21:16 +08:00 在线执行：四表备份及 pg_restore 目录/完整载荷、SQL/备份 SHA256 再校验通过，执行前原设置事实、generation/outbox 与订单摘要均匹配备份。`psql -X -v ON_ERROR_STOP=1 --single-transaction --file migration.sql` 成功并幂等复跑：新增设置 value=30、value_type=2、status=1、is_builtin=1，旧排期修正 0 条；原 12 条设置完整行摘要及订单事实（排除 next_check_at/updated_at）前后一致。generation 21 -> 22，仅增加一个 outbox（id=54），Worker 已发布（published=true、attempts=1）；重复执行设置内容/时间、订单事实、约束、generation/outbox 数量保持不变。
+- 备份与审计目录为 `%LOCALAPPDATA%/Admin/maintenance/payment-order-expiry/20261023-202738-631/`，ACL 限当前用户与 SYSTEM；含 `before.dump`、备份校验、结构检查、迁移与 SHA256、一次性执行脚本 `execute.ps1`、before/after/replayed JSON、订单事实 CSV、执行日志及 audit.json。已从真实 PostgreSQL 使用 `pg_dump --schema-only --schema public --no-owner --no-privileges` 刷新 `docs/database/current.sql`，差异仅新增支付有效期 CHECK 与导出 restrict 标记。未清理 Redis；尚未做真实充值/浏览器验收，本轮未重复运行已通过的 Go/前端检查。维护者需自行重启 API/Worker 加载新代码，此后通过设置修改有效期无需重启。
+- 工作区保留上一轮未提交的说明修正 SQL、测试和 STATUS；不提交 Git、不操作历史、不启停 API/Worker。当前真实订单 1 已为关闭状态（status=3，updated_at=2026-10-23 15:08:57 +08:00），不是本轮人工改状态。
+
+## 系统设置内置说明中文修正（2026-10-23，真实数据已修正）
+
+- 原因是 `system_setting.description` 留存旧默认文案，列表和详情按数据库原样返回；不是前端语言切换失效。真实只读核对发现 6 条英文说明及 1 条带 Admin 的混合说明，包含默认头像、中英文品牌标题、滑块偏差、验证码有效期及协议/隐私文档说明。
+- 新增 `docs/database/2026-10-23-setting-builtin-descriptions.sql`，只修改精确键、内置且未删除、说明仍等于旧默认值的行；保留维护者自定义说明。按键排序加行锁，与说明变更同事务推进 `system.setting/global` generation 并写 durable outbox；无匹配行时不写入，缓存状态缺失、代际溢出或 outbox 冲突均整体回滚。不改配置键、值、值类型、状态、归属或业务规则，无 DDL、前后端运行时代码或启动迁移。
+- 先用失败测试复现，再通过真实 PostgreSQL 隔离 schema 验证七项中文说明、其他业务字段不变、自定义/删除/非内置/未知键保留、幂等及并发重放、三种缓存错误原子回滚。实际通过：`go test -p 1 ./internal/module/system/setting -run '^TestSettingBuiltinDescriptionMigration' -count=1 -timeout=90s`（4 项顶层测试）、同包 `go vet -p 1`、gofmt 与变更空白检查。未运行全仓测试/构建或真实登录浏览器验收。
+- 经维护者明确授权备份并在线执行：7 条说明已修正，完整行事实 SHA256（排除 description/updated_at）前后一致，其余 5 条说明与时间不变；generation 20 -> 21，仅增加一个 outbox，Worker 已发布（published=true、attempts=1）。真实重复执行保持设置内容、时间、generation 和 outbox 数量不变。没有启停 API/Worker、清理 Redis、修改订单/余额或提交 Git。
+- 备份与审计：`%LOCALAPPDATA%/Admin/maintenance/setting-descriptions/20261023-151828-084/`，ACL 限当前用户与 SYSTEM；含三张相关表的自定义格式 `before.dump`、目录/完整载荷校验、迁移和备份 SHA256、before/after/replayed JSON 与执行日志。首次目录校验的 PowerShell 参数展开错误发生在数据库修改前，修正参数后验证通过，随后才执行迁移。无结构变化，不刷新 current.sql。
+
 ## 过期充值订单缺失交易关单（2026-10-23，代码与定向验证完成；真实复查受 PostgreSQL 停止阻塞）
 
 - 目标订单 1（`PO20261022081132c0955c4a46`）创建于 2026-10-22 16:11:32 +08:00，16:41:32 到期。此前只读实查支付宝沙盒返回 `40004 / ACQ.TRADE_NOT_EXIST` 且订单号匹配；SDK 在业务错误处提前返回，旧适配器将其折叠为通用查询失败，巡检每五分钟继续重试，没有到期终止分支。没有支付回调或到账证据，不是已付款未入账。

@@ -72,7 +72,18 @@ func (r createPackageStub) Catalog(context.Context) ([]rechargepackage.CatalogIt
 
 func createServiceFixture(repo *createRepositoryStub) *Service {
 	service := NewService(repo)
-	service.SetSettings(rechargeSettingsStub{row: sharedsetting.Record{Key: sharedsetting.PaymentRechargeMinimumAmountKey, Value: "10", ValueType: sharedsetting.ValueTypeNumber, Status: yesno.Yes}})
+	service.SetSettings(orderSettingsFunc(func(ctx context.Context, key string) (sharedsetting.Record, error) {
+		if err := ctx.Err(); err != nil {
+			return sharedsetting.Record{}, err
+		}
+		value := "10"
+		if key == expirySettingKey {
+			value = "30"
+		} else if key != sharedsetting.PaymentRechargeMinimumAmountKey {
+			return sharedsetting.Record{}, errors.New("unknown setting")
+		}
+		return sharedsetting.Record{Key: key, Value: value, ValueType: sharedsetting.ValueTypeNumber, Status: yesno.Yes}, nil
+	}))
 	service.SetRuntime(createRuntimeStub{
 		catalog:    []paymentconfig.CatalogItem{{ID: 3, Name: "Sandbox channel", Provider: payment.ProviderAlipay, Environment: payment.EnvironmentSandbox, AppID: "20260001", SellerID: "20880001", CurrentVersion: 4, Status: yesno.Yes}},
 		credential: paymentconfig.BoundCredential{ConfigID: 3, Provider: payment.ProviderAlipay, AppID: "20260001", SellerID: "20880001", Environment: payment.EnvironmentSandbox, Version: paymentconfig.CredentialVersion{ConfigID: 3, Version: 4, NotifyURL: "https://pay.example.test/callback", PayMethods: paymentconfig.PayMethods{payment.PayMethodWeb, payment.PayMethodH5}}},
