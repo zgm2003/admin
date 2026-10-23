@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestUpgradeUserPreservesIdentityAndGeneration(t *testing.T) {
@@ -33,5 +34,16 @@ func TestUpgradeUserPreservesIdentityAndGeneration(t *testing.T) {
 	}
 	if _, err := upgradeUser("auth:user-state:43", raw); err == nil {
 		t.Fatal("identity mismatch accepted")
+	}
+}
+
+func TestBackupTTLPreservesPersistentAndMissingSentinels(t *testing.T) {
+	for _, test := range []struct {
+		duration time.Duration
+		want     int64
+	}{{-1, -1}, {-2, -2}, {1500 * time.Millisecond, 1500}, {0, 0}} {
+		if got := backupTTLMilliseconds(test.duration); got != test.want {
+			t.Fatalf("TTL %v = %d, want %d", test.duration, got, test.want)
+		}
 	}
 }

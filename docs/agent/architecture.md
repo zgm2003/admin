@@ -22,7 +22,7 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 | Queue | `server/internal/queue` | Asynq 客户端/服务端封装，不导入业务模块 |
 | Worker | `server/cmd/worker/main.go` | 注册任务并按任务 Handler -> Service -> Repository 消费 |
 
-`server/cmd` 只保留 `api`、`bootstrap-admin`、`worker` 三个入口。已完成的一次性迁移和模板发布命令已清理；
+业务运行/初始化入口为 api、bootstrap-admin、worker；一次性维护命令只由对应 runner 显式调用，不进入 API/Worker 启动。当前字段迁移附带 migrate-status-columns，清理时必须同步维护其 runner。已完成的旧迁移和模板发布命令已清理；
 历史 SQL、执行记录和 runner 仅作为审计档案，依赖已删除命令的历史 runner 不再支持直接重跑。新的数据库
 变更应基于当前 PostgreSQL 编写独立 forward migration。
 

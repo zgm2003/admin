@@ -191,7 +191,7 @@ func run(mode, audit string) error {
 		if err != nil {
 			return errors.New("read Redis TTL failed")
 		}
-		if err := encoder.Encode(map[string]any{"key": key, "value": raw, "ttlMilliseconds": ttl.Milliseconds()}); err != nil {
+		if err := encoder.Encode(map[string]any{"key": key, "value": raw, "ttlMilliseconds": backupTTLMilliseconds(ttl)}); err != nil {
 			return errors.New("write Redis backup failed")
 		}
 		if err := backup.Sync(); err != nil {
@@ -249,6 +249,14 @@ func run(mode, audit string) error {
 		}
 	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]int{"userStatesUpgraded": changed, "obsoleteSnapshotsDeleted": deleted})
+}
+
+// go-redis represents PTTL -1/-2 as duration sentinels, not milliseconds.
+func backupTTLMilliseconds(ttl time.Duration) int64 {
+	if ttl < 0 {
+		return int64(ttl)
+	}
+	return ttl.Milliseconds()
 }
 
 func scan(ctx context.Context, client *redis.Client, pattern string, visit func(string) error) error {

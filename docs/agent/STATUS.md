@@ -1,13 +1,27 @@
 # 项目状态
 
-## 二值启用状态统一为 status（2026-10-23，进行中）
+## 定时任务内置计划时区统一（2026-10-23，真实数据已修正）
 
-- 范围：16 张维护表的 is_enabled 改为 status，Go/JSON/TypeScript 同步；值保持 0=停用、1=启用，不改变订单、任务执行等生命周期状态。调度器去掉 boolean 与派生 status 的双重表示。
-- 当前代码已有字段替换；本轮修复调度器数字类型、缺失/非法输入校验，补迁移幂等、冲突回滚测试及固定范围缓存升级工具。配置 payload 升级 schema，认证用户缓存保留 user generation，会话与限流 key 不动。
-- 维护者已明确授权由 Agent 备份数据库、暂停本地 API/Worker、执行迁移并恢复。只有检查通过后执行；目前尚未停服或迁移真实业务表。
-- 容量保持百万用户/多实例基线：不新增热路径 PostgreSQL 查询、无本地兜底；配置快照仍按原 generation 及有界 fill 恢复。停机窗口内只扫描固定缓存 namespace，迁移不改变 generation/outbox/menu/access version。
-- 已实际通过：模块编译检查、前端 typecheck、Scheduler API/页面 29 项测试；新增测试已复现并修复调度器 status=2/-1/null/缺失被接受的问题。真实 PostgreSQL 测试最初受本机依赖超时影响，串行重跑中；缓存版本测试期望正在同步。
-- 下一步：完成真实 PostgreSQL 回归和全量验证，执行带审计备份的 forward migration 与重复执行校验，恢复服务并验证健康及关键状态输出。不自动提交 Git。
+- 截图中的差异来自真实计划配置，不是浏览器日期格式：文件清理巡检（7）与支付订单巡检（8）存为 UTC，其余三条为 Asia/Shanghai；当前数据库字段默认值及后端 options 默认值本来就是 Asia/Shanghai。未通过前端替换文字掩盖差异，也未修改全局时间格式。
+- 新增 docs/database/2026-10-23-scheduler-builtin-timezone.sql，只修正这两种内置任务仍为 UTC 且 Cron 为每分钟的活动计划；行锁、事务与前置检查防止改写其他任务或意外移动自定义 Cron 的触发点。保留其他显式时区、已删除计划、next_run_at、启停状态、参数与全部历史。重复执行不重写 updated_at；无 DDL、缓存清理或启动迁移，current.sql 无需刷新。
+- 已先复现回归失败，再通过真实 PostgreSQL 隔离测试覆盖定向修正、幂等重放、Cron/任务类型冲突整体回滚、管理员显式时区保留，以及跨日/跨年每分钟触发时间等价。测试文件：server/internal/module/system/scheduler/timezone_migration_test.go。
+- 2026-10-23 10:58:31 +08:00 已在线事务执行并提交，实际五条活动计划均为 Asia/Shanghai；锁内核对两条 next_run_at 和其余业务字段不变、重复执行无变化、保留失败 job 38142/run 38184 完整内容不变。未暂停或重启 API/Worker，也未修改前端、Redis 或 Git 历史。
+- 备份与审计：%LOCALAPPDATA%/Admin/maintenance/scheduler-timezone/20261023-105732-312/，ACL 仅当前用户与 SYSTEM；含 pg_dump 计划表备份、pg_restore --list、SQL/备份 SHA256 与事务验收日志。首次审计脚本引用语法错误发生在迁移前，事务已回滚并确认两条仍为 UTC；修正为内联 SQL 后成功，原失败脚本与日志保留。
+- 实际通过：`go test -p 1 ./internal/module/system/scheduler -run 'TestScheduler(TimezoneMigration|MinuteTimezoneCorrection|Options)' -count=1 -timeout=90s`（包含五项顶层测试）、`go vet -p 1 ./internal/module/system/scheduler`、gofmt 检查与 `git diff --check`。最后复跑前清除了只读查询命令遗留在该子进程的 PGOPTIONS，避免隔离测试建 schema 被只读事务设置误拦；未改测试来绕过错误。
+- 2026-10-23 11:18:01 +08:00 两条修正后的任务均有真实成功 run（41902/41903，status=2），next_run_at 正常推进至 11:19；/ready 返回 code=0、PostgreSQL/Redis up，结果保存为审计目录 live-runs-after.json。本轮不重跑已知有既有失败的全量 Go/Vitest，也不宣称整体测试全绿；未做真实登录后的浏览器端到端验收。
+
+## 二值启用状态统一为 status（2026-10-23，真实迁移完成；Worker 依赖告警待处理）
+
+- 真实 public 库的 16 张维护表已将 is_enabled 重命名为 status；Go/JSON/TypeScript 同步，保持 0=停用、1=启用。没有兼容双列，不修改订单、job/run 等生命周期枚举。Scheduler 去掉 boolean 与派生数字的双重表示，使用 shared/yesno，并修复编辑 DTO 不应要求创建专用 taskType/status 的问题。
+- 迁移：docs/database/2026-10-23-status-columns.sql；同名 PowerShell runner 与 server/cmd/migrate-status-columns 固定范围维护命令。迁移保持列值、默认值、CHECK、索引和业务数据；冲突整体回滚、重复执行无副作用。current.sql 已从真实 PostgreSQL 18.6 schema-only 刷新。
+- 已按维护者授权执行：停服前 pg_dump 自定义格式备份及 pg_restore --list 检查；2026-10-23 10:22:45 +08:00 暂停原 API。此时原 Worker 已不在运行，并非本轮主动终止。停服后再次备份、事务迁移、Redis 定向升级/清理、只读对账、SQL 幂等复跑和再次对账完成。停服前首次备份命令的 PowerShell 原生命令参数展开错误已纠正，该失败发生在停服/DDL 前。
+- 审计与备份：%LOCALAPPDATA%/Admin/maintenance/status-columns/20261023-102009-721/；目录 ACL 仅当前用户与 SYSTEM。包含 before-pause.dump、migration/before.dump、归档目录检查、before/after/replayed.json、SQL/备份 SHA256、Redis 原值备份及执行日志。首次与重复执行的 16 表完整数据摘要、config-cache state/outbox、Access 版本及平台内 menu_version 事实一致；数据摘要使用逐行 SHA256，避免随百万用户数量增长的内存聚合。
+- 缓存：认证 user state schema=2（保留 generation；session schema/快照不变），policy namespace/schema=v3/3；setting/COS/payment payload=2，mail/SMS payload=3。实际升级 2 个用户状态，移除 2 个旧配置快照；未 FLUSH、未重置额度/验证码/会话/队列，也未修改 PostgreSQL generation/outbox/menu/access version。热路径无新增 PostgreSQL 查询，保持原有有界填充和故障闭合。
+- 服务：已恢复编译后的 server/tmp/status-runtime/api.exe（PID 47460，端口 16301）及 worker.exe（PID 42656）；10:28:25 +08:00 的 /health 与 /ready 均 code=0，PostgreSQL/Redis up。Worker 10:27:59 已开始消费，并出现真实任务处理日志；随后持续出现 Asynq Redis i/o timeout，且 PostgreSQL 也有慢查询。不能据“进程存在”宣称 Worker 已稳定恢复；未擅自重启 Redis、改超时或清队列。服务日志及 runtime-after.json 位于审计目录，后续需单独排查依赖稳定性。
+- 恢复后只读核对：16 个 status 列均存在；保留失败 job 38142/run 38184 的完整摘要与停服迁移后相同，没有新增、重试或改写该样本。
+- 实际通过：新增失败测试先复现非法/缺失状态及编辑 DTO 错误后修复；定向 go test -vet=off -p 1（维护命令、status migration 的真实 PostgreSQL 幂等/冲突回滚、Scheduler 状态/过滤/编辑、auth user schema）；setting/COS/mail/SMS codec/snapshot 定向测试；9 个受影响包 go vet -p 1；API/Worker/维护命令 go build -p 1；pnpm build（含 typecheck）；Scheduler API/页面/详情/presentation 共 4 文件 32 项；受影响前端 ESLint、Prettier 与前端架构检查 0 findings。
+- 审计补充：维护备份已修正 go-redis PTTL -1/-2 哨兵的毫秒序列化，补充单测；本次原始 Redis 备份保持不变，永久 ready 用户/策略状态的 TTL 解释见审计目录 migration/redis-backup-ttl-note.json。
+- 非全量绿：全量 Go 检查观察到历史迁移夹具与当前 Model/status、旧 config-cache generation 表名不一致、既有 Storage Service 访问 repository.db 的边界问题，以及本机 Redis/PostgreSQL 超时；在包边界保留清理后停止遍历。全量 Vitest 观察到 setting/金融页/英文状态确认/requestFeedback 等契约断言失败，内存压力下中止。日志分别在 server/tmp/status-full-tests.log 与 %TEMP%/admin-status-web-checks.log；未重写历史 SQL 或扩大修复范围，未做真实登录浏览器端到端验收。没有 Git 提交、暂存、历史重写或 Redis 服务重启。
 
 ## 定时任务执行记录分页可见性（2026-10-22，定向验证完成）
 
