@@ -4,6 +4,7 @@ import (
 	"admin/server/internal/module/payment"
 	"admin/server/internal/shared/money"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -56,6 +57,7 @@ var (
 	ErrUnsupportedPayMethod = errors.New("alipay payment method unsupported")
 	ErrCheckoutGateway      = errors.New("alipay checkout unavailable")
 	ErrQueryGateway         = errors.New("alipay query unavailable")
+	ErrTradeNotFound        = errors.New("alipay trade not found")
 	ErrCloseGateway         = errors.New("alipay close unavailable")
 	ErrTradeInvalid         = errors.New("alipay trade response invalid")
 	ErrNotifyInvalid        = errors.New("alipay notification invalid")
@@ -120,17 +122,42 @@ func queryWithClient(ctx context.Context, credentials Credentials, client *sdk.C
 	if err := validateOrderNo(ctx, orderNo); err != nil {
 		return Trade{}, err
 	}
-	response, err := client.TradeQuery(ctx, gopay.BodyMap{"out_trade_no": orderNo})
+	// TradeQuery returns business errors before verifying their signatures. Keep
+	// the original JSON so absence is authenticated just like a successful trade.
+	var response struct {
+		Response json.RawMessage `json:"alipay_trade_query_response"`
+		CertSN   string          `json:"alipay_cert_sn"`
+		Sign     string          `json:"sign"`
+	}
+	err := client.PostAliPayAPISelfV2(ctx, gopay.BodyMap{
+		"biz_content": gopay.BodyMap{"out_trade_no": orderNo},
+	}, "alipay.trade.query", &response)
 	if err != nil {
 		if ctx.Err() != nil {
 			return Trade{}, ctx.Err()
 		}
 		return Trade{}, ErrQueryGateway
 	}
-	if response == nil || response.Response == nil {
+	if err := ctx.Err(); err != nil {
+		return Trade{}, err
+	}
+	if len(response.Response) == 0 || response.Sign == "" || response.CertSN != client.AliPayPublicCertSN {
 		return Trade{}, ErrTradeInvalid
 	}
-	value := response.Response
+	valid, err := sdk.VerifySyncSignWithCert([]byte(credentials.AlipayCertPEM), string(response.Response), response.Sign)
+	if err != nil || !valid {
+		return Trade{}, ErrTradeInvalid
+	}
+	var value sdk.TradeQuery
+	if err := json.Unmarshal(response.Response, &value); err != nil {
+		return Trade{}, ErrTradeInvalid
+	}
+	if value.Code == "40004" && value.SubCode == "ACQ.TRADE_NOT_EXIST" && value.OutTradeNo == orderNo {
+		return Trade{}, ErrTradeNotFound
+	}
+	if value.Code != "10000" {
+		return Trade{}, ErrQueryGateway
+	}
 	if value.OutTradeNo != orderNo || value.TradeNo == "" || value.TradeStatus == "" {
 		return Trade{}, ErrTradeInvalid
 	}

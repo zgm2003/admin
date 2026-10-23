@@ -137,6 +137,54 @@ func TestReconcilerClosesExpiredOrderOnlyAfterUnpaidQuery(t *testing.T) {
 	}
 }
 
+func TestReconcilerClosesMissingTradeOnlyAtExpiry(t *testing.T) {
+	now := time.Date(2026, 10, 23, 4, 0, 0, 0, time.UTC)
+	for _, scenario := range []struct {
+		name         string
+		expires      time.Time
+		wantClosed   int
+		wantDeferred int
+	}{
+		{"expired", now.Add(-time.Minute), 1, 0},
+		{"expiry boundary", now, 1, 0},
+		{"not expired", now.Add(time.Minute), 0, 1},
+		{"missing expiry", time.Time{}, 0, 1},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			claim := claimedFixture(now)
+			claim.ExpiresAt = scenario.expires
+			repo := &reconcileRepositoryStub{claims: []ClaimedOrder{claim}}
+			gateway := &reconcileGatewayStub{queryHook: func(context.Context, string) (alipay.Trade, error) {
+				return alipay.Trade{}, fmt.Errorf("verified query: %w", alipay.ErrTradeNotFound)
+			}}
+			confirmer := &reconcileConfirmerStub{}
+			r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, confirmer, gateway)
+			r.now = func() time.Time { return now }
+			if err := r.Run(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if repo.closed != scenario.wantClosed || len(repo.advanced) != scenario.wantDeferred || gateway.queryCall != 1 || gateway.closeCall != 0 || confirmer.called != 0 {
+				t.Fatalf("closed=%d deferred=%d query=%d close=%d confirmed=%d", repo.closed, len(repo.advanced), gateway.queryCall, gateway.closeCall, confirmer.called)
+			}
+		})
+	}
+}
+
+func TestReconcilerMissingTradePreservesLimiterFailure(t *testing.T) {
+	now := time.Now().UTC()
+	repo := &reconcileRepositoryStub{claims: []ClaimedOrder{claimedFixture(now)}}
+	gateway := &reconcileGatewayStub{queryHook: func(context.Context, string) (alipay.Trade, error) {
+		return alipay.Trade{}, alipay.ErrTradeNotFound
+	}}
+	r := testReconciler(repo, reconcileRuntimeStub{credentials: alipay.Credentials{AppID: "app", Environment: payment.EnvironmentSandbox}}, &reconcileConfirmerStub{}, gateway)
+	r.now = func() time.Time { return now }
+	releaseErr := errors.New("release failed")
+	r.SetChannelLimiter(&channelLimiterStub{releaseErr: releaseErr})
+	if err := r.Run(context.Background()); !errors.Is(err, releaseErr) || repo.closed != 1 || len(repo.advanced) != 0 {
+		t.Fatalf("trusted missing-trade fact lost: closed=%d deferred=%d err=%v", repo.closed, len(repo.advanced), err)
+	}
+}
+
 func TestReconcilerSettlesPaidQueryBeforeConsideringExpiry(t *testing.T) {
 	now := time.Date(2026, 10, 16, 1, 0, 0, 0, time.UTC)
 	repository := &reconcileRepositoryStub{claims: []ClaimedOrder{claimedFixture(now)}}

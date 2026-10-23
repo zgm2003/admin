@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -356,6 +357,69 @@ func TestQueryRejectsMismatchedOrderAndMalformedAmount(t *testing.T) {
 		if _, err := queryWithClient(context.Background(), credentials, client, "ORDER-001"); err == nil {
 			t.Fatalf("invalid query response accepted: %s", inner)
 		}
+	}
+}
+
+func TestQueryMapsSignedTradeNotFound(t *testing.T) {
+	credentials, alipayKey := adapterCredentials(t)
+	client, err := NewClient(context.Background(), credentials)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner, _ := json.Marshal(map[string]string{
+		"code":         "40004",
+		"msg":          "Business Failed",
+		"sub_code":     "ACQ.TRADE_NOT_EXIST",
+		"sub_msg":      "交易不存在",
+		"out_trade_no": "ORDER-001",
+	})
+	payload := signedQueryResponse(t, credentials, alipayKey, inner)
+	client.GetHttpClient().SetTransport(transportFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(payload)), Request: req}, nil
+	}))
+	if _, err := queryWithClient(context.Background(), credentials, client, "ORDER-001"); !errors.Is(err, ErrTradeNotFound) {
+		t.Fatalf("trade-not-found response error = %v", err)
+	}
+}
+
+func TestQueryRejectsUntrustedTradeNotFound(t *testing.T) {
+	credentials, alipayKey := adapterCredentials(t)
+	for _, scenario := range []string{"unsigned", "tampered", "wrong certificate", "wrong order", "missing order", "other code", "other subcode"} {
+		t.Run(scenario, func(t *testing.T) {
+			client, err := NewClient(context.Background(), credentials)
+			if err != nil {
+				t.Fatal(err)
+			}
+			value := map[string]string{"code": "40004", "sub_code": "ACQ.TRADE_NOT_EXIST", "sub_msg": "trade absent", "out_trade_no": "ORDER-001"}
+			if scenario == "wrong order" {
+				value["out_trade_no"] = "OTHER"
+			}
+			if scenario == "missing order" {
+				delete(value, "out_trade_no")
+			}
+			if scenario == "other code" {
+				value["code"] = "20000"
+			}
+			if scenario == "other subcode" {
+				value["sub_code"] = "ACQ.SYSTEM_ERROR"
+			}
+			inner, _ := json.Marshal(value)
+			payload := signedQueryResponse(t, credentials, alipayKey, inner)
+			switch scenario {
+			case "unsigned":
+				payload = fmt.Sprintf(`{"alipay_trade_query_response":%s,"alipay_cert_sn":%q}`, inner, client.AliPayPublicCertSN)
+			case "tampered":
+				payload = strings.Replace(payload, "trade absent", "tampered absence", 1)
+			case "wrong certificate":
+				payload = strings.Replace(payload, client.AliPayPublicCertSN, "OTHER-CERTIFICATE", 1)
+			}
+			client.GetHttpClient().SetTransport(transportFunc(func(req *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(payload)), Request: req}, nil
+			}))
+			if _, err := queryWithClient(context.Background(), credentials, client, "ORDER-001"); err == nil || errors.Is(err, ErrTradeNotFound) {
+				t.Fatalf("untrusted missing-trade fact accepted: %v", err)
+			}
+		})
 	}
 }
 

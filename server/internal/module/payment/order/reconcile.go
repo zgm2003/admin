@@ -190,6 +190,12 @@ func (r *Reconciler) process(ctx context.Context, claimed ClaimedOrder, now time
 	query := r.providerCall(ctx, credentials, func(ioCtx context.Context) (alipay.Trade, error) {
 		return r.gateway.Query(ioCtx, credentials, claimed.OrderNo)
 	})
+	if errors.Is(query.callErr, alipay.ErrTradeNotFound) {
+		if !claimed.ExpiresAt.IsZero() && !claimed.ExpiresAt.After(r.clockNow()) {
+			return errors.Join(r.closeClaimed(ctx, claimed, now), query.releaseErr)
+		}
+		return r.deferOrder(ctx, claimed, now, query.releaseErr)
+	}
 	if query.callErr != nil {
 		return r.deferOrder(ctx, claimed, now, errors.Join(query.callErr, query.releaseErr))
 	}
